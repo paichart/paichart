@@ -1,73 +1,97 @@
 /**
- * pAIchart MCP Hub Connector
+ * pAIchart MCP Hub Connector (stdio)
  *
- * Lightweight proxy that forwards MCP requests to the hosted pAIchart platform.
- * Designed for containerized deployments (Glama, Docker) that need a local endpoint.
+ * Lightweight MCP server that advertises pAIchart's capabilities
+ * and directs users to the hosted platform. Designed for containerized
+ * deployments (Glama) where a local stdio MCP server is required.
  *
  * The actual MCP Hub runs at https://paichart.app/mcp with full OAuth,
  * service discovery, workflow orchestration, and per-user authentication.
  */
 
-const express = require('express');
-const app = express();
+const { Server } = require('@modelcontextprotocol/sdk/server/index.js');
+const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
+const { ListToolsRequestSchema, CallToolRequestSchema } = require('@modelcontextprotocol/sdk/types.js');
 
-const PAICHART_URL = process.env.PAICHART_MCP_URL || 'https://paichart.app/mcp';
-const PORT = process.env.PORT || 3000;
+const server = new Server(
+  { name: 'paichart-mcp-hub', version: '1.0.0' },
+  { capabilities: { tools: {} } }
+);
 
-app.use(express.json({ limit: '1mb' }));
-
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', upstream: PAICHART_URL });
-});
-
-// Proxy all MCP requests to the hosted platform
-app.all('/mcp', async (req, res) => {
-  try {
-    const headers = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
-
-    // Forward authorization header if present
-    if (req.headers.authorization) {
-      headers['Authorization'] = req.headers.authorization;
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: [
+    {
+      name: 'connect',
+      description: 'Get connection instructions for pAIchart MCP Hub. The full Hub runs at https://paichart.app with 11 services, 39+ tools, per-user OAuth, and multi-service workflow orchestration.',
+      inputSchema: { type: 'object', properties: {}, required: [] }
+    },
+    {
+      name: 'discover',
+      description: 'Discover available services on the pAIchart MCP Hub (fetches from public API)',
+      inputSchema: { type: 'object', properties: {
+        capability: { type: 'string', description: 'Filter by capability keyword (optional)' }
+      }, required: [] }
     }
+  ]
+}));
 
-    const response = await fetch(PAICHART_URL, {
-      method: req.method,
-      headers,
-      body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined,
-      signal: AbortSignal.timeout(30000),
-    });
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
 
-    const data = await response.text();
-    res.status(response.status).set('Content-Type', response.headers.get('content-type') || 'application/json').send(data);
-  } catch (error) {
-    res.status(502).json({
-      jsonrpc: '2.0',
-      error: { code: -32000, message: 'Upstream connection failed', data: { upstream: PAICHART_URL } },
-      id: null
-    });
+  if (name === 'connect') {
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          hub: 'pAIchart MCP Hub',
+          description: 'AI-native service orchestration with per-user authentication',
+          connect: 'https://paichart.app/mcp',
+          auth: 'OAuth 2.0 (GitHub, Google, Microsoft)',
+          services: 11,
+          tools: 39,
+          features: [
+            'Capability-based service discovery',
+            'Per-user External OAuth (Snowflake, Databricks)',
+            '6-tier trust level system',
+            'Multi-service workflow chaining',
+            'RS256 JWT/JWKS authentication (95/100 security score)'
+          ],
+          quickstart: {
+            step1: 'Sign in at https://paichart.app',
+            step2: 'Connect via Claude Desktop, ChatGPT, or custom MCP client',
+            step3: 'Run: services(action: "discover") to see available services',
+            step4: 'Run: /prompt register_guide to add your own service'
+          },
+          links: {
+            hub: 'https://paichart.app/mcp',
+            discovery: 'https://paichart.app/api/mcp/discover',
+            llmsTxt: 'https://paichart.app/llms.txt',
+            jwks: 'https://paichart.app/api/auth/jwks'
+          }
+        }, null, 2)
+      }]
+    };
   }
+
+  if (name === 'discover') {
+    try {
+      const url = args?.capability
+        ? `https://paichart.app/api/mcp/discover?capability=${encodeURIComponent(args.capability)}`
+        : 'https://paichart.app/api/mcp/discover';
+      const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      const data = await response.json();
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+    } catch (error) {
+      return { content: [{ type: 'text', text: `Failed to fetch services: ${error.message}. Visit https://paichart.app/api/mcp/discover directly.` }] };
+    }
+  }
+
+  return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
 });
 
-// OAuth discovery (point clients to the hosted platform)
-app.get('/.well-known/oauth-authorization-server', (req, res) => {
-  res.json({
-    issuer: 'https://paichart.app',
-    authorization_endpoint: 'https://paichart.app/oauth/authorize',
-    token_endpoint: 'https://paichart.app/oauth/token',
-    registration_endpoint: 'https://paichart.app/oauth/register',
-    jwks_uri: 'https://paichart.app/api/auth/jwks',
-    response_types_supported: ['code'],
-    grant_types_supported: ['authorization_code', 'refresh_token'],
-    token_endpoint_auth_methods_supported: ['client_secret_basic', 'none'],
-    code_challenge_methods_supported: ['S256']
-  });
-});
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
 
-app.listen(PORT, () => {
-  console.log(`pAIchart MCP Hub Connector running on port ${PORT}`);
-  console.log(`Proxying to: ${PAICHART_URL}`);
-});
+main().catch(console.error);
