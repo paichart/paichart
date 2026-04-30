@@ -13,20 +13,23 @@ Engineers maintaining or building MCP servers. Each chapter assumes familiarity 
 | 1 | Tools that teach themselves | Planned | ~10 min |
 | 2 | [Ten UX + Three Plumbing Standards](02-the-ten-gold-standards.md) | **Published** | ~20 min |
 | 3 | [Smoke tests for MCP tools](03-smoke-tests-as-living-documentation.md) | **Published** | ~12 min |
-| 4 | The silent parameter stripping bug — and the three-layer rule | Planned | ~10 min |
-| 5 | Transport boundaries are where types go to die | Planned | ~12 min |
-| 6 | Designing and evolving tools: JSDoc + the 7-layer lifecycle | Planned | ~15 min |
-| 7 | From single tool to multi-service hub *(optional)* | Planned | ~15 min |
+| 4 | [The silent parameter stripping bug — and the three-layer rule](04-three-layer-parameter-rule.md) | **Published** | ~12 min |
+| 5 | [Transport boundaries are where types go to die](05-transport-boundaries.md) | **Published** | ~12 min |
+| 6 | [Designing and evolving tools: JSDoc + the 7-layer lifecycle](06-jsdoc-and-seven-layer-lifecycle.md) | **Published** | ~15 min |
+| 7 | [Tool consolidation: a case study (28 tools → 10)](07-tool-consolidation-case-study.md) | **Published** | ~13 min |
+| 8 | From single tool to multi-service hub *(optional)* | Planned | ~15 min |
 
 ## Reading paths
 
 - **"I have ten minutes"** — Read Chapter 2 only. It carries the highest signal density.
 - **"I'm building a tool tomorrow"** — Read Chapter 2 → Chapter 4 → Chapter 6.
+- **"I'm fighting silent failures"** — Chapters 4 and 5 are the bug-class pair.
+- **"I want to redesign my tool surface"** — Chapter 6 (architecture) → Chapter 7 (consolidation case study).
 - **"I want to understand the philosophy"** — Read in order.
 
 ## Status
 
-Chapters 2 and 3 are published. Chapter 2 is the spine of the series; Chapter 3 is its testable companion. Remaining chapters are in drafting; this README will be updated as each lands.
+Chapters 2–7 are published. Chapter 2 is the spine of the series; Chapter 3 is its testable companion; Chapters 4 and 5 cover the two silent-failure bug classes; Chapter 6 is the architectural overview; Chapter 7 is a worked case study of pAIchart's own consolidation. Chapters 1 and 8 are planned; this README will be updated as each lands.
 
 ## Conventions used in this series
 
