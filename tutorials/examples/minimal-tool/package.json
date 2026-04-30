@@ -1,0 +1,13 @@
+{
+  "name": "weather-minimal",
+  "version": "1.0.0",
+  "description": "Minimal MCP weather tool — Chapter 2 baseline example",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "license": "MIT"
+}

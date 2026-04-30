@@ -1,0 +1,13 @@
+{
+  "name": "weather-gold-standard",
+  "version": "1.0.0",
+  "description": "Gold-standard MCP weather tool — Chapter 2 worked example",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "license": "MIT"
+}
