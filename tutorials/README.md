@@ -12,7 +12,7 @@ Engineers maintaining or building MCP servers. Each chapter assumes familiarity 
 |---|---|---|---|
 | 1 | Tools that teach themselves | Planned | ~10 min |
 | 2 | [Ten UX + Three Plumbing Standards](02-the-ten-gold-standards.md) | **Published** | ~20 min |
-| 3 | Smoke tests as living documentation | Planned | ~12 min |
+| 3 | [Smoke tests for MCP tools](03-smoke-tests-as-living-documentation.md) | **Published** | ~12 min |
 | 4 | The silent parameter stripping bug — and the three-layer rule | Planned | ~10 min |
 | 5 | Transport boundaries are where types go to die | Planned | ~12 min |
 | 6 | Designing and evolving tools: JSDoc + the 7-layer lifecycle | Planned | ~15 min |
@@ -26,7 +26,7 @@ Engineers maintaining or building MCP servers. Each chapter assumes familiarity 
 
 ## Status
 
-Chapter 2 is published and represents the spine of the series. Subsequent chapters are in drafting; this README will be updated as each lands.
+Chapters 2 and 3 are published. Chapter 2 is the spine of the series; Chapter 3 is its testable companion. Remaining chapters are in drafting; this README will be updated as each lands.
 
 ## Conventions used in this series
 
