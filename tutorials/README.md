@@ -19,6 +19,12 @@ Engineers maintaining or building MCP servers. Each chapter assumes familiarity 
 | 7 | [Tool consolidation: a case study (28 tools → 10)](07-tool-consolidation-case-study.md) | **Published** | ~13 min |
 | 8 | [From single tool to multi-service hub](08-from-tool-to-hub.md) *(optional)* | **Published** | ~13 min |
 
+## Reference
+
+| Document | Purpose |
+|---|---|
+| [Gold Standards Specification](gold-standards-spec.md) | The universal spec for the thirteen standards. Definitions, success criteria, failure modes, grading rubric (A+ through D), self-audit checklist. Use this to grade your own tools or to teach a team the criteria without going through the tutorial chapters. Companion to Chapter 2; same definitions, reference shape rather than narrative. |
+
 ## Reading paths
 
 - **"I have ten minutes"** — Read Chapter 2 only. It carries the highest signal density.
