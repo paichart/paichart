@@ -470,7 +470,17 @@ const PARAMETER_ALIAS_MAPPINGS = {
 };
 ```
 
-**This standard also covers malformed-format normalisation** — for example, automatically detecting and stripping known wrong-format prefixes like `pov-`/`task-` (which come from `fetch`-style resource IDs accidentally pasted into actions that expect bare CUIDs).
+**This standard also covers malformed-format normalisation** — for example, detecting known wrong-format prefixes like `pov-`/`task-` (which come from `fetch`-style resource IDs accidentally pasted into actions that expect bare CUIDs).
+
+**Design rule — auto-strip vs reject + suggest**:
+
+The two recovery options for a malformed input are not equivalent. Pick based on whether the underlying meaning is unambiguous:
+
+- **Auto-correct silently (with warning in `_meta`)** when the meaning is unambiguous. Examples: `snake_case` → `camelCase`, JSON-string args → object, `city_name` → `city` alias. There is exactly one possible interpretation, and rejecting wastes a turn for nothing the AI client could not have known.
+- **Reject with a corrective suggestion** when ambiguity is possible. Example: a `pov-cmxyz...` ID. Could be a stale fetch-result that's now wrong-pov, a typo, or a paste from the right place. Auto-stripping silently could operate on a different POV than the user meant; the cost of that silent miss is worse than the cost of an extra turn.
+- **Reject with a *type-mismatch* error (no suggestion)** when the prefix detected doesn't match the parameter's type. Example: `task-cmxyz...` passed as `povId`. The bare CUID inside is likely a *task* CUID, not a *POV* CUID; auto-suggesting the bare CUID would silently substitute a different resource type, leading to a downstream lookup against the wrong table. The right behaviour is to flag the type mismatch explicitly and direct the caller to find a real POV ID.
+
+The principle: normalise where the meaning is unambiguous; reject where ambiguity exists; reject *without* a CUID suggestion when the prefix tells you the underlying resource is the wrong type.
 
 **Success criteria**:
 - A single normalisation function per tool entry point
