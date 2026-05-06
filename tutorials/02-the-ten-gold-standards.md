@@ -21,14 +21,6 @@ The standards are derived from real failure modes: tools that AI clients consist
 
 ---
 
-## How to read the examples
-
-Code samples in this chapter use a project-management domain (`pov`, `task`, `project`) as concrete substrate. The patterns are domain-agnostic — substitute your own entity names. Where a snippet shows `project(action: "pov.list", ...)`, mentally translate to `<your_consolidated_tool>(action: "<your_collection>.list", ...)`.
-
-Most examples are drawn from a production MCP server that ships against Claude Desktop, ChatGPT, and Claude mobile. Tool-name forms reflect that server's post-consolidation surface (see *Background* below). The patterns themselves predate consolidation and apply equally to non-consolidated tools.
-
----
-
 ## Background: the audit and the consolidation
 
 In late 2025, an audit scored every tool in a 28-tool MCP server against three axes — description quality, error handling, response structure. The audit produced a ranked list. Tools at the top consistently exhibited the same patterns; tools at the bottom consistently lacked them. The patterns were not invented — they were observed, then promoted to standards.
