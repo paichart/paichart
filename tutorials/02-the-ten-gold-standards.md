@@ -21,18 +21,6 @@ The standards are derived from real failure modes: tools that AI clients consist
 
 ---
 
-## Background: the audit and the consolidation
-
-In late 2025, an audit scored every tool in a 28-tool MCP server against three axes — description quality, error handling, response structure. The audit produced a ranked list. Tools at the top consistently exhibited the same patterns; tools at the bottom consistently lacked them. The patterns were not invented — they were observed, then promoted to standards.
-
-In March 2026, that same server consolidated most of its 28 tools into 6 action-based tools (`project`, `perform`, `analytics`, `template`, `services`, `registry`) using an `entity.verb` sub-action convention. The remaining 4 tools (`search`, `fetch`, `prompt_command`, `list_prompts`) stayed as standalone tools because their semantics did not benefit from grouping. The audit findings transferred unchanged to the consolidated surface: a description is a description regardless of how many sub-actions sit behind the tool name.
-
-A separate February 2026 cleanup of the same server identified a different category of failure on the same surface: tools registered in some configuration files but not others (ghost tools), annotations referencing non-existent tools, dead helper methods totalling 356 lines, and 139 stale documentation references across 36 files. The discipline that emerged from that cleanup — atomically updating every layer of the tool pipeline when a tool changes — is covered in Chapter 6 and underpins Gold Standards 11 and 13. The audit and the cleanup describe the same underlying problem from two angles: the audit asked "is this tool well-presented?", and the cleanup asked "is this tool consistently registered?".
-
-The standards below are those audit findings, with the consolidated surface used in examples.
-
----
-
 ## A note on the example syntax
 
 Many examples in this chapter use forms like:
@@ -686,7 +674,7 @@ For each tool in your server, answer the thirteen questions:
 12. Is parameter normalisation applied at a single transport-boundary function, before validation?
 13. Is the handler's JSDoc the canonical source for parameter names, types, defaults, and examples?
 
-A tool meeting twelve or thirteen standards is graded **A**. Ten or eleven is **A−**. Seven to nine is **B+**. The goal is not the grade — it is the consistent observation that A-graded tools recur in successful client traces, while lower-graded tools recur in support traces. (The audit dataset behind these grades is described in the *Background* section.)
+A tool meeting twelve or thirteen standards is graded **A**. Ten or eleven is **A−**. Seven to nine is **B+**. The goal is not the grade — it is the consistent observation that A-graded tools recur in successful client traces, while lower-graded tools recur in support traces.
 
 ---
 
