@@ -19,6 +19,8 @@ Each standard is structured as: definition, minimal example, why it matters, che
 
 The standards are derived from real failure modes: tools that AI clients consistently called incorrectly, errors that surfaced as opaque "tool execution failed" messages, parameters that disappeared between transport and handler, and recurring mistakes that the tool's own response format *could* have prevented but did not.
 
+**These standards are universal.** They apply to any MCP server, regardless of platform, team, or domain — they are not pAIchart-specific. Example code in this chapter uses one production server's tool surface as concrete substrate, but the patterns themselves are domain-agnostic; substitute your own entity names where the examples show `pov`, `task`, or `project`. For the universal-vs-platform-specific breakdown of each individual standard, see [Where these standards come from](#where-these-standards-come-from) near the end of the chapter. For the practical audit-and-apply workflow against your own server, see [Applying these standards to your own server](#applying-these-standards-to-your-own-server).
+
 ---
 
 ## A note on the example syntax
