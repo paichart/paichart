@@ -41,6 +41,27 @@ The standards below are those audit findings, with the consolidated surface used
 
 ---
 
+## A note on the example syntax
+
+Many examples in this chapter use forms like:
+
+```
+project(action: "task.list", povId: "...")
+perform(action: "task.create", povId: "...", title: "...")
+```
+
+This is the consolidated form pAIchart uses. Three things to know to read it:
+
+1. The first identifier (`project`, `perform`) is the **tool name** — what the AI client sees in `tools/list`. There are six such consolidated tools (`project`, `perform`, `analytics`, `template`, `services`, `registry`) plus four standalone tools (`search`, `fetch`, `prompt_command`, `list_prompts`).
+2. `action` is a **regular parameter**, not part of the tool name. Each consolidated tool routes internally to a sub-handler based on the action value. The AI client sees a small fixed set of tools; the richness lives in the action enum behind each one.
+3. Sub-actions use **entity.verb** form — `pov.list`, `task.create`, `agent.execute`. The part before the dot is the entity; the part after is the operation.
+
+For the purposes of this chapter, you can read these as if they were single tool names. `perform(action: "task.create", ...)` is mentally the same as `create_task(...)` would be on a non-consolidated server. The patterns this chapter teaches apply to either shape — the syntax is the form pAIchart happens to use, not a precondition for the standards.
+
+Why this shape exists — token efficiency, naming consistency, and permission flexibility — is the subject of [Chapter 7 — Tool Consolidation](07-tool-consolidation-case-study.md), a case study walking through pAIchart's collapse from 28 tools to 10.
+
+---
+
 # Part A — Ten UX Standards
 
 ## Gold Standard 1 — Description UX
@@ -403,6 +424,20 @@ A note on adoption: `_meta.tool` and `_meta.timestamp` are uniformly applied acr
 
 **Checklist**: every success response has `_meta` · includes `tool` (consolidated name), `timestamp`, `nextSteps` · `action` is a sibling field, not packed into `tool` · `nextSteps` are context-aware (use real IDs) · resource-type tools have type-specific guidance.
 
+### Critical implementation rule: `content.text` must mirror `_meta.nextSteps` for empty/error states
+
+A handler can be structurally compliant with GS3, GS4, GS7, and GS9 — populating `_meta.nextSteps` correctly for every state — and still ship a dead-end user experience if the *formatter* that builds `content.text` discards the empty-state guidance. Many MCP clients render `content[0].text` prominently and treat `_meta` as hidden plumbing. A response with `content.text: "No tasks found."` and `_meta.nextSteps: ["Adjust filters", "Create task: ..."]` looks compliant in code review and broken in production.
+
+The rule:
+
+- The handler builds `_meta.nextSteps` (per GS4, GS7, GS9).
+- The formatter (or whichever code constructs `content.text`) must surface those `nextSteps` in the human-readable text — typically as a `💡 Suggestions:\n  • <step>\n  • <step>` block appended to the base message.
+- A formatter that builds `content.text` independently of `_meta.nextSteps` is a defect, regardless of how clean each side looks in isolation.
+
+**How to audit**: for each formatter function in your codebase that produces empty-state text, confirm it accepts the metadata/context object and uses `nextSteps` from it. A formatter signature that takes only the data array (no metadata) is a smell.
+
+**Pair with**: a smoke test that issues a deliberately-failing call, asserts on `content[0].text` directly (not `_meta`), and confirms the corrective hint is present in the human-readable channel.
+
 ---
 
 ## Gold Standard 10 — Action Handler Response Structure
@@ -660,6 +695,79 @@ For each tool in your server, answer the thirteen questions:
 13. Is the handler's JSDoc the canonical source for parameter names, types, defaults, and examples?
 
 A tool meeting twelve or thirteen standards is graded **A**. Ten or eleven is **A−**. Seven to nine is **B+**. The goal is not the grade — it is the consistent observation that A-graded tools recur in successful client traces, while lower-graded tools recur in support traces. (The audit dataset behind these grades is described in the *Background* section.)
+
+---
+
+## Applying these standards to your own server
+
+The standards are useful as a checklist; they're more useful as a workflow. Here is the procedure for taking a server you've built and bringing it to A− or better, in roughly the order that pays off fastest.
+
+### 1. Inventory your tool surface
+
+List every tool your server exposes via `tools/list`. For a small server this is a one-line `grep`; for a larger one, copy the JSON response from a live `tools/list` call into a working file.
+
+### 2. Score each tool against the self-audit
+
+Run the 13 self-audit questions from the section above against each tool. Note the score per tool. A spreadsheet is fine; a markdown table is fine; a sticky note is fine.
+
+### 3. Pick the lowest-scoring tool that's most-called
+
+Two factors matter: how broken it is, and how often AI clients reach for it. The lowest-scoring most-called tool is the highest-leverage fix. If you don't have call-frequency data, pick the tool you'd be most embarrassed to demo.
+
+### 4. Apply standards in priority order
+
+Use the *Implementation Priority for Part A* table earlier in the chapter. GS10 (action handler envelope) leads — it's a 5-minute fix that closes the most visible breakage. GS3 + GS8 cluster next; errors are where AI clients spend the most attention.
+
+### 5. Add smoke tests
+
+For every standard you applied, add a smoke test that exercises the new behaviour. Chapter 3 walks through the format. Test 5 from Chapter 3 (round-trip recovery — wrong call → corrective error → right call) is the single most useful pattern; if you only add one test per tool, make it that one.
+
+### 6. Re-score, repeat
+
+Run the self-audit again on the upgraded tool. Move to the next-lowest-scoring tool. Stop when every tool is A− or better.
+
+That's the whole loop. A small server (3–5 tools) finishes in a weekend. A medium one (10–20 tools) takes about a week of focused work. A large one (30+) is a multi-month project, but the highest-leverage fixes still pay off in the first day.
+
+---
+
+## Creating your own pattern
+
+The thirteen standards in this chapter are general — they apply to any MCP tool surface. Your codebase will have its own conventions on top: domain-specific error categories, response field names, ID formats, authorisation models. Those domain-specific patterns deserve documentation in the same shape as the standards above.
+
+A short template for your own internal "Pattern" doc:
+
+```
+# <Your Pattern Name> Pattern
+
+**Type**: Excellence Pattern (extends gold-standards spec)
+**Confidence**: <%>
+**Domain**: <where this applies, e.g., "agent execution lifecycle">
+**Companion to**: gold-standards spec (universal)
+
+## What this pattern covers
+
+<one paragraph: what falls under this pattern that the universal standards don't address>
+
+## Standards specific to this domain
+
+### Pattern-specific standard 1 — <name>
+[same shape as a gold standard: definition, criteria, examples, checklist]
+
+### Pattern-specific standard 2 — <name>
+[same shape]
+
+## Cross-references to gold standards
+
+| This pattern's standard | Reinforces gold standard |
+|---|---|
+| <standard 1> | GS<N> |
+
+## Implementation reference
+
+<file paths in your codebase, code samples, who to ask for help>
+```
+
+The pattern of patterns: every team eventually has a domain-specific gold-standards document of its own. The universal thirteen are the foundation; your patterns are the layer above. As long as your patterns are auditable (clear criteria, clear failure modes, an audit checklist), they're as legitimate as any of the standards in this chapter.
 
 ---
 
