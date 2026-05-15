@@ -623,6 +623,7 @@ The dispatch boundary is the right primary layer because: (a) it has access to p
 - Per-handler `safeParse` blocks instead of dispatch-level: every new action requires touching the handler; future handlers added without the block reintroduce the gap
 - Schema is enforced but a `.transform()` non-idempotency causes a second-pass parse to reject already-transformed data (rare; verify if double-validating)
 - Smoke tests exercise the schema in isolation (`schema.safeParse(payload)`) instead of the deployed tool through the transport, masking the bypass
+- **Action allowlists in non-validation surfaces drift silently** (added v1.2 — see Provenance). The validation layer is one site where actions are enumerated; production codebases typically have several more — routing maps (which actions go through which dispatcher), risk classification sets (which actions need approval), discovery/fuzzy-match sets (which actions appear in "did you mean" suggestions), activity-logging taxonomies. When a new action is added to the validation layer but not to these other surfaces, the action works on direct dispatch but degrades on derivative paths. The worst variant: an action missing from a routing map falls through to a no-op stub that returns success without executing — a "silent success" that's worse than a loud failure. See the GS14 audit guidance below for the multi-surface grep.
 
 **How to find this in your own server**:
 
@@ -630,6 +631,23 @@ The dispatch boundary is the right primary layer because: (a) it has access to p
 2. Map your entry paths: how does a request reach a handler from HTTP? From the MCP server? From any other source?
 3. For each path, find where (if anywhere) the schema runs.
 4. If two paths share handlers and only one path runs the schema, you have a bypass. Add dispatch-boundary `safeParse`.
+5. **(v1.2)** Grep for ALL named action lists across your codebase — not just the validation map. Common sites: routing maps, risk classification sets, discovery/suggestion lists, logging taxonomy maps, fallback-action hard-codes. For each list, check whether your full action surface is represented. Missing entries on non-validation lists won't fail loudly; they degrade specific code paths silently. (See the audit recipe below for a concrete worked example.)
+
+**v1.2 — the multi-surface allowlist audit (added 2026-05-16)**
+
+The 2026-05-15 round of this discovery surfaced the *primary* bypass — a single P0 site where validation didn't run. v1.1 of this spec described the fix in terms of "the dispatch boundary". Subsequent cross-domain audit (parallel commissions to MCP architecture + MCP hub specialists) found that the *primary* bypass was correctly fixed but there were **additional allowlist sites the validation review hadn't reached** — routing maps, risk classification sets, and discovery surfaces. These additional sites don't cause security bypasses (the dispatch-boundary `safeParse` still enforces validation) but they cause **functional silent-degradation**: action absent from a routing map → request routes to a no-op stub → operation reported as successful, mutates nothing.
+
+When auditing a real codebase, expect 5–10 named action enumerations, not 1. The dispatch-boundary `safeParse` from the GS14 base standard closes the security gap. The multi-surface alignment check closes the silent-degradation gap. Both audits are necessary; neither alone is sufficient.
+
+**Multi-surface audit grep** (universal recipe — adapt file paths to your codebase):
+```bash
+# Find every place an action is hardcoded by enumerating its peers (e.g., your
+# 'pov.create' or 'user.delete' will appear in 5-10 sites). Each output line
+# is a candidate site that needs to know about every action.
+grep -rn "'<peer.action.1>'.*'<peer.action.2>'" lib/ app/ src/ --include='*.ts' --include='*.js'
+```
+
+For pAIchart's MCP surface, the 2026-05-16 audit identified 10 sites across 5 files. The full per-domain inventory is maintained in the project's bug-class registry; the universal lesson is: **the validation layer is rarely the only place actions are enumerated**.
 
 ---
 
@@ -739,6 +757,8 @@ The thirteen original standards were extracted from a production audit of a 28-t
 
 **GS14 was added in v1.1 (2026-05-15)** after a production smoke test discovered a transport-path bypass in a newly-deployed action: the schema had eight independent guards (injection refines, DoS caps, strict mode, empty-update refine) but none of them fired because the MCP transport path called the handler directly without invoking the schema. Five rounds of specialist review (schema design, handler architecture, transaction integrity, MCP tool registration, validation engineering) had all passed; the smoke test found the bypass in seconds. The discovery → handler-level hotfix → fleet audit → router-level structural fix lifecycle is documented in [Chapter 9 — Hardening MCP Tools](https://github.com/paichart/paichart/blob/main/tutorials/09-hardening-mcp-tools.md) of the public series.
 
+**v1.2 (2026-05-16)** added the multi-surface-allowlist failure mode after a follow-on audit. The day after the v1.1 fix shipped, two specialists (MCP architecture + MCP hub) ran a parallel sweep and found the validation-layer fix had closed the security gap correctly, but several *other* action enumerations elsewhere in the codebase had silently drifted from the validation list — routing maps, risk classification sets, discovery/suggestion lists. None caused security defects; one (a routing map) caused a P1 silent-degradation where AI-recommended actions fell through to a no-op stub that returned success without executing. The v1.1 wording about "the dispatch boundary" remains correct as the *security* prescription; v1.2 adds the multi-surface audit as the *correctness* prescription. The two are layered: schema enforcement closes the security gap; multi-surface alignment closes the silent-degradation gap. Both audits are needed.
+
 For one production server's specific application of these standards — file paths, code references, the dispatcher pattern that ties pAIchart's tool surface together — pAIchart maintains an internal implementation reference that is not part of this public series. The universal definitions, criteria, and grading rubric in this document are the same ones it derives from.
 
 For tutorial-style introduction with worked examples, see [Chapter 2](https://github.com/paichart/paichart/blob/main/tutorials/02-the-ten-gold-standards.md) and [Chapter 9](https://github.com/paichart/paichart/blob/main/tutorials/09-hardening-mcp-tools.md) of the public MCP Tool Excellence series.
@@ -747,12 +767,13 @@ For tutorial-style introduction with worked examples, see [Chapter 2](https://gi
 
 # Document metadata
 
-**Version**: 1.1
+**Version**: 1.2
 **Created**: 2026-05-05
-**Last updated**: 2026-05-15 (added GS14 — Schema Enforcement at Dispatch Boundary; updated grading rubric to add F-grade for multi-path bypass; renumbered self-audit to 15 questions)
+**Last updated**: 2026-05-16 (extended GS14 with the multi-surface-allowlist failure mode and audit recipe; clarified the layered prescription — dispatch-boundary safeParse closes the security gap, multi-surface alignment closes the silent-degradation gap)
 **Status**: Authoritative spec for the gold standards. The pAIchart implementation reference and the public tutorial chapters both derive their definitions from this spec.
 **Confidence**: 99% (production-validated; same definitions as the implementation reference and the public tutorial)
 
 **Changelog**:
+- 1.2 (2026-05-16): Extended GS14 with a new failure mode — action allowlists in non-validation surfaces (routing maps, risk classification sets, discovery/suggestion lists) drift silently from the validation list and cause silent-degradation on derivative paths. Added the multi-surface audit recipe. Provenance updated. Triggered by a parallel cross-domain specialist audit that ran the day after v1.1 shipped and found the validation-layer fix had closed the security gap but other action enumerations had silently drifted; one (a routing map) caused a P1 silent-success-no-op on AI-recommendation execution. The v1.1 "dispatch boundary" prescription remains correct for *security*; v1.2 adds multi-surface alignment as the *correctness* layer.
 - 1.1 (2026-05-15): Added GS14. Triggered by production discovery of a transport-path schema-enforcement bypass on a multi-path MCP server. Smoke-test driven; specialist review did not catch it. See GS14's "How to find this in your own server" section and Chapter 9 of the tutorial series.
 - 1.0 (2026-05-05): Initial release with GS1–13 + cross-cutting rule.
