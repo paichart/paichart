@@ -14,11 +14,11 @@
 
 ## What this document is
 
-The canonical specification of the thirteen gold standards for MCP tools. Each standard has a definition, success criteria, and failure modes. The document is platform-agnostic by design — there are no file paths, no specific code references, no team conventions. Replace any concrete example name (`get_weather`, `pov.list`) with whatever applies to your domain.
+The canonical specification of the fourteen gold standards for MCP tools. Each standard has a definition, success criteria, and failure modes. The document is platform-agnostic by design — there are no file paths, no specific code references, no team conventions. Replace any concrete example name (`get_weather`, `pov.list`) with whatever applies to your domain.
 
 Three sections:
 
-1. **The thirteen standards** — Part A (UX, GS1–10) + Part B (Plumbing, GS11–13)
+1. **The fourteen standards** — Part A (UX, GS1–10) + Part B (Plumbing, GS11–14)
 2. **Cross-cutting implementation rules** — how the standards interact (e.g., the *content.text mirrors _meta* rule)
 3. **Grading rubric** — A+/A/A−/B+ etc. for assessing a tool against the spec
 
@@ -543,6 +543,96 @@ When the JSDoc and the schema disagree, the JSDoc is the canonical answer.
 
 ---
 
+## Gold Standard 14 — Schema Enforcement at the Dispatch Boundary
+
+Defining a schema and enforcing a schema are two different things. A schema is enforced only when something explicitly invokes it at runtime — `.safeParse(...)`, `.parse(...)`, or the equivalent for your validator. A tool that has a complete schema but no caller that invokes it has *zero* runtime guards, regardless of how thorough the schema looks in code review.
+
+This becomes a security concern in multi-path architectures where one entry path enforces the schema and another path doesn't. The typical pattern: an HTTP REST API path runs the schema upstream; an MCP transport path (Claude Desktop, ChatGPT) calls the handler directly without invoking the schema. Same handler, two security postures.
+
+**The pipeline**:
+
+```
+HTTP entry            POST /api/.../action
+                            │
+                            ▼
+                      validateRequest()  ← schema runs here
+                            │
+                            ▼
+                      Router.route(action, parameters)
+                            │
+                            ▼
+                      handle<Action>(parameters)
+
+MCP transport entry   MCP server (stdio / SSE)
+                            │
+                            ▼
+                      transport-action-handler.*  ← only checks action enum
+                            │
+                            ▼
+                      Router.route(action, parameters)
+                            │
+                            ▼
+                      handle<Action>(parameters)
+```
+
+If `validateRequest()` is the *only* place the schema runs, the MCP-transport path is unprotected.
+
+**The standard**: schema enforcement happens at the dispatch boundary (the router that maps action name to handler), not in `validateRequest()` alone, and not in each handler. One place, looked up by action name:
+
+```typescript
+async route(action, parameters, user, actionId) {
+  const schema = ParameterSchemas[action];
+  if (schema) {
+    const parsed = schema.safeParse(parameters);
+    if (!parsed.success) {
+      throw new Error(`${action} validation failed: ${formatErrors(parsed.error)}`);
+    }
+    parameters = parsed.data;   // transformed data passes downstream
+  }
+  // ... per-action dispatch ...
+}
+```
+
+What this closes:
+- Strict mode (unknown-key rejection)
+- All `.refine()` guards (empty-update checks, business-rule checks)
+- Injection refines on text fields
+- DoS caps on arrays
+- Enum-from-source-of-truth validation
+- All `.transform()` chains (snake_case → camelCase normalisation, null → undefined, etc.)
+
+**Defense-in-depth layers**:
+
+| Layer | Where | What it does |
+|-------|-------|--------------|
+| Transport entry | REST route handler, MCP server's action-enum check | Cheap early rejection (body size, action name, JSON shape). Not the right place for per-action schema validation. |
+| **Dispatch boundary** | The router that dispatches action → handler | **Primary line of defense.** Single `safeParse` block; adopts every action by name. |
+| Handler entry | First lines of `handle<Action>` | Defense in depth. Optional once the router enforces; worth retaining if handlers are reachable from non-router callers (test mocks, scripted maintenance). |
+
+The dispatch boundary is the right primary layer because: (a) it has access to per-action context (schema-by-name lookup); (b) adopting a new action requires zero per-action enforcement code; (c) the single source of truth is greppable.
+
+**Success criteria**:
+- Every action with a parameter schema in your validation map is enforced before its handler runs, on every entry path
+- A grep of `safeParse(` (or your validator's equivalent) in the dispatch layer returns *exactly one* invocation that handles all actions, not N per-handler invocations
+- Smoke tests against the *deployed* server confirm each schema guard fires (empty body rejected, injection rejected, DoS cap fires, strict mode rejects surplus keys)
+- If you intend to double-validate (upstream + dispatch), every transform on every schema is idempotent on its own output (`normalizeAliases`, `stripDangerousKeys`, `null→undefined` all qualify; verify custom transforms)
+
+**Failure modes**:
+- Schema defined but never invoked: handler accepts anything that doesn't crash type-coercion
+- Multiple entry paths sharing one handler, with only one path enforcing the schema (the "transport-path bypass")
+- Per-handler `safeParse` blocks instead of dispatch-level: every new action requires touching the handler; future handlers added without the block reintroduce the gap
+- Schema is enforced but a `.transform()` non-idempotency causes a second-pass parse to reject already-transformed data (rare; verify if double-validating)
+- Smoke tests exercise the schema in isolation (`schema.safeParse(payload)`) instead of the deployed tool through the transport, masking the bypass
+
+**How to find this in your own server**:
+
+1. Grep for `safeParse(` and `parse(` on your validation map. Count occurrences in each layer.
+2. Map your entry paths: how does a request reach a handler from HTTP? From the MCP server? From any other source?
+3. For each path, find where (if anywhere) the schema runs.
+4. If two paths share handlers and only one path runs the schema, you have a bypass. Add dispatch-boundary `safeParse`.
+
+---
+
 # Cross-Cutting Implementation Rules
 
 Rules that span multiple standards and govern how they interact.
@@ -584,8 +674,9 @@ When upgrading a tool to gold standard:
 | P10 | GS11 — Three-Layer Parameter Update | discipline, not time |
 | P11 | GS12 — Parameter Normalisation | 30–60 min one-time per server |
 | P12 | GS13 — JSDoc as Source of Truth | discipline, not time |
+| P13 | GS14 — Schema Enforcement at Dispatch Boundary | 30–60 min one-time per server; **promote earlier if your server has more than one entry path sharing handlers** |
 
-GS10 leads because a missing envelope causes the most visible breakage. GS3 and GS8 cluster next because errors are where AI clients spend the most attention.
+GS10 leads because a missing envelope causes the most visible breakage. GS3 and GS8 cluster next because errors are where AI clients spend the most attention. GS14 is listed last by default but should be triaged **immediately** for any server with multi-path architecture (REST + MCP transport, REST + queue worker, etc.) — the cost of the bypass is a class of security defect that all the other standards cannot compensate for.
 
 ---
 
@@ -595,21 +686,24 @@ Use this to assess any tool against the spec.
 
 | Grade | Criteria |
 |---|---|
-| **A+** | All 13 standards met + the cross-cutting `content.text mirrors _meta` rule + innovative enhancements |
-| **A** | 11–13 standards met + cross-cutting rule satisfied |
-| **A−** | 10 standards met + cross-cutting rule satisfied |
-| **B+** | 8–9 standards met OR all 13 with cross-cutting rule violated |
+| **A+** | All 14 standards met + the cross-cutting `content.text mirrors _meta` rule + innovative enhancements |
+| **A** | 12–14 standards met + cross-cutting rule satisfied + **GS14 must be met for any multi-path server** |
+| **A−** | 11 standards met + cross-cutting rule satisfied + **GS14 must be met for any multi-path server** |
+| **B+** | 8–10 standards met OR all 14 with cross-cutting rule violated |
 | **B** | 6–7 standards met + baseline compliance |
 | **B−** | 4–5 standards met + baseline compliance |
 | **C+** | 1–3 standards met + baseline compliance |
 | **C** | Baseline compliance only (the tool works, errors are returned as MCP envelopes) |
 | **D** | Major gaps in baseline (errors thrown, no `_meta`, dead-end response text) |
+| **F** | Multi-path server with the transport-path bypass (GS14 not met). Schema definition without schema enforcement is a security defect that overrides UX grading; the tool grades F regardless of other standards. |
 
-**Note**: GS10 is platform-specific in its concrete form; for non-pAIchart servers, score GS10 as "consistent action-handler envelope across the surface" rather than the literal `actionId/action/status/result` field names.
+**Notes**:
+- GS10 is platform-specific in its concrete form; for non-pAIchart servers, score GS10 as "consistent action-handler envelope across the surface" rather than the literal `actionId/action/status/result` field names.
+- The **F** grade is reserved for security defect of GS14 omission on multi-path servers. A tool that meets every other standard but has a transport-path bypass is functionally a tool with no validation at all on the bypass path — the standards aren't compensating each other; they're orthogonal.
 
 ---
 
-# Self-Audit (13 Questions)
+# Self-Audit (14 Questions)
 
 For each tool in your server, answer:
 
@@ -631,26 +725,34 @@ For each tool in your server, answer:
 11. When you last added a parameter, did you update all three layers (tool schema, validation schema, handler)?
 12. Is parameter normalisation applied at a single transport-boundary function, before validation?
 13. Is the handler's JSDoc the canonical source for parameter names, types, defaults, and examples?
+14. If your server has more than one entry path sharing handlers (REST + MCP transport, REST + queue worker, etc.): is the validation schema enforced at the *dispatch boundary*, not in the handler body or only in one entry path? Can you grep for `safeParse(` in the dispatch layer and find exactly one invocation that handles every action by name?
 
 **Plus the cross-cutting rule:**
 
-14. Does the formatter that builds `content.text` for empty/error states surface `_meta.nextSteps` in the human-readable channel?
+15. Does the formatter that builds `content.text` for empty/error states surface `_meta.nextSteps` in the human-readable channel?
 
 ---
 
 # Provenance
 
-The thirteen standards were extracted from a production audit of a 28-tool MCP server (December 2025). The audit scored every tool on description quality, error handling, and response shape; the patterns this spec documents are what the highest-scoring tools had in common. Subsequent additions (GS11–13, the cross-cutting rule) emerged from cleanup work and bug-class triage in early-to-mid 2026.
+The thirteen original standards were extracted from a production audit of a 28-tool MCP server (December 2025). The audit scored every tool on description quality, error handling, and response shape; the patterns this spec documents are what the highest-scoring tools had in common. Subsequent additions (GS11–13, the cross-cutting rule) emerged from cleanup work and bug-class triage in early-to-mid 2026.
+
+**GS14 was added in v1.1 (2026-05-15)** after a production smoke test discovered a transport-path bypass in a newly-deployed action: the schema had eight independent guards (injection refines, DoS caps, strict mode, empty-update refine) but none of them fired because the MCP transport path called the handler directly without invoking the schema. Five rounds of specialist review (schema design, handler architecture, transaction integrity, MCP tool registration, validation engineering) had all passed; the smoke test found the bypass in seconds. The discovery → handler-level hotfix → fleet audit → router-level structural fix lifecycle is documented in [Chapter 9 — Hardening MCP Tools](https://github.com/paichart/paichart/blob/main/tutorials/09-hardening-mcp-tools.md) of the public series.
 
 For one production server's specific application of these standards — file paths, code references, the dispatcher pattern that ties pAIchart's tool surface together — pAIchart maintains an internal implementation reference that is not part of this public series. The universal definitions, criteria, and grading rubric in this document are the same ones it derives from.
 
-For tutorial-style introduction with worked examples, see [Chapter 2](https://github.com/paichart/paichart/blob/main/tutorials/02-the-ten-gold-standards.md) of the public MCP Tool Excellence series.
+For tutorial-style introduction with worked examples, see [Chapter 2](https://github.com/paichart/paichart/blob/main/tutorials/02-the-ten-gold-standards.md) and [Chapter 9](https://github.com/paichart/paichart/blob/main/tutorials/09-hardening-mcp-tools.md) of the public MCP Tool Excellence series.
 
 ---
 
 # Document metadata
 
-**Version**: 1.0
+**Version**: 1.1
 **Created**: 2026-05-05
-**Status**: Authoritative spec for the gold standards. The pAIchart implementation reference and Chapter 2 tutorial both derive their definitions from this spec.
+**Last updated**: 2026-05-15 (added GS14 — Schema Enforcement at Dispatch Boundary; updated grading rubric to add F-grade for multi-path bypass; renumbered self-audit to 15 questions)
+**Status**: Authoritative spec for the gold standards. The pAIchart implementation reference and the public tutorial chapters both derive their definitions from this spec.
 **Confidence**: 99% (production-validated; same definitions as the implementation reference and the public tutorial)
+
+**Changelog**:
+- 1.1 (2026-05-15): Added GS14. Triggered by production discovery of a transport-path schema-enforcement bypass on a multi-path MCP server. Smoke-test driven; specialist review did not catch it. See GS14's "How to find this in your own server" section and Chapter 9 of the tutorial series.
+- 1.0 (2026-05-05): Initial release with GS1–13 + cross-cutting rule.
