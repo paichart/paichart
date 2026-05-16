@@ -3,6 +3,7 @@
 **Audience**: Engineers shipping MCP tools to production. You've defined Zod (or equivalent) schemas for your action parameters. You believe those schemas are protecting your handlers.
 **Prerequisite**: Chapter 4 (Three-Layer Parameter Rule) and Chapter 3 (Smoke Tests). Familiarity with Zod's `.safeParse`, `.refine`, `.transform`.
 **Reading time**: ~18 minutes.
+**Companion reference**: [MCP Tool Layered Architecture Specification](mcp-tool-layered-architecture-spec.md) — the full four-layer mental model (Server / Tool / Dispatcher / Handler) this chapter's defense-in-depth pattern is a subset of. Read alongside if you want the per-layer assignment of every common security control.
 
 ---
 
@@ -245,6 +246,8 @@ For most MCP servers, **router-level enforcement is sufficient and the right pri
 
 The transport-entry layer is *also* the right place for cheap rejections (action name not in the allowlist, body exceeds a size cap, malformed JSON). It is not the right place for schema-detail validation — that responsibility belongs to the router because the router has access to per-action context.
 
+For the full layered decomposition (transport entry, tool definition, dispatcher/router, handler) and a per-layer assignment of every common security control — authentication, schema enforcement, prototype-pollution strip, resource authorization, transaction integrity — see the [MCP Tool Layered Architecture Specification](mcp-tool-layered-architecture-spec.md). The three-layer table above is the security-focused subset; the layered spec is the full architectural map.
+
 ---
 
 ## The smoke test that catches this
@@ -336,6 +339,45 @@ If your MCP server has more than one entry path sharing handlers, run this audit
 - If you intend to double-validate (REST upstream + router-level), confirm every transform on every schema is idempotent on its own output.
 - `normalizeAliases`, `stripDangerousKeys`, `null→undefined` are all idempotent by construction. Custom transforms (e.g., string-to-Date coercion) may not be — test them.
 
+**7. Audit your runtime gates for symmetric coverage.**
+- For each handler that accepts a URL, file path, or network address, list whether it runs a runtime check (SSRF, path-traversal, DNS-rebinding) — separately from the schema check.
+- If `update` runs the gate but `register` doesn't (or vice versa), you have an asymmetric defense. Lift the inline check into a shared helper and call it from every site that persists or fetches that field.
+- For the `register` direction specifically: does the runtime gate have an *exemption mechanism*? If it keys off an existing DB record, register has no record to match — the gate has to either run unconditionally or refuse with no exemption. Document whichever you choose.
+
+**8. Audit your administrative escape valves.**
+- For every seeded-allowlist entry (first-party internal services using loopback addresses, trusted upstream APIs, etc.), confirm there is a seed script that writes the record via direct ORM access — *not* via the user-facing tool.
+- A missing seed script means: if that record is ever deleted (manual cleanup, accidental delete, DB restore from an older snapshot), there is no recovery path that respects your new runtime gate. The only way back is either to weaken the gate or to write the seed script under pressure.
+- Match the seed-script file list against the allowlist constant. Gaps are operational risk, not security risk — file them as follow-ups.
+
+---
+
+## When the schema can't reach the threat
+
+GS14 closes the dispatch-boundary bypass: every action validates its schema, every path runs the validator. But some threats are *fundamentally outside the schema's reach*.
+
+The clearest case: SSRF. A URL field with `.url()` plus a `.refine(u => u.startsWith('https://'))` passes Zod cleanly. But the hostname `service.example.com` may resolve at fetch time to `169.254.169.254` (AWS metadata), `127.0.0.1` (loopback), or an RFC 1918 private address. The schema has no DNS resolver. The runtime fetch hits the internal target.
+
+Two consequences for hardening:
+
+**1. Runtime gates are not a sign of weak schema design.** When a threat depends on DNS state, network policy, environment, or on-disk content, you need a runtime check at the handler boundary (Layer 4) — not a fancier refine. The schema's job ends where static validation ends.
+
+**2. Symmetric coverage matters.** If your `update` action has a runtime SSRF check but `register` doesn't, you have an asymmetric defense. An attacker who can register a service has persisted an attacker-controlled internal-IP record in your registry; the gap is "detection delayed, not prevented." Audit your handlers as a group: does *every* path that persists or fetches a URL run the runtime gate?
+
+**3. Where the exemption lives shapes your operational story.** A runtime SSRF gate often has an *exemption list* — first-party internal services that legitimately use loopback addresses (Docker containers on `127.0.0.1:31xx`). The exempt check has two shapes:
+
+- *Match against the already-loaded DB record* (cheap, idempotent — fine for `update` paths)
+- *Match against caller-supplied name* (fragile — user-controlled input could spoof exempt names)
+
+For `register` paths there is no DB record yet, so option 1 is unavailable and option 2 is unsafe. The right architectural choice: **register has no exemption, full stop**. The user-facing path always runs the full check. First-party services with loopback endpoints register via a **seed script that writes directly via the ORM**, bypassing the handler entirely.
+
+This is not a leak in the design. It is the design working correctly:
+
+- The user-facing tool path correctly refuses to register a localhost endpoint.
+- The seed script becomes the documented administrative escape valve.
+- Sysadmin runbooks need to know which path to use; otherwise they'll try the tool, hit the rejection, and report it as a bug.
+
+The hardening checklist below has an item for this audit.
+
 ---
 
 ## What this isn't
@@ -373,6 +415,7 @@ For your own server: when you next ship a new action, the smoke test in step 4 s
 - Chapter 4 — *The Three-Layer Parameter Rule*: the static-definition counterpart to this chapter's runtime-enforcement story.
 - Chapter 5 — *Transport Boundaries*: where the transport-path bypass shows up at a different layer (parameter coercion across stdio/SSE).
 - [Gold Standards Specification](gold-standards-spec.md) — **GS14 (Schema Enforcement at the Dispatch Boundary)** is the universal codification of this chapter's pattern.
+- [MCP Tool Layered Architecture Specification](mcp-tool-layered-architecture-spec.md) — the full four-layer mental model (Server / Tool / Dispatcher / Handler) with per-layer security-control assignment. Companion reference for the "defense-in-depth pattern" section above.
 
 ---
 
