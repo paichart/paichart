@@ -750,7 +750,7 @@ For each tool in your server, answer the fifteen questions:
 12. Is parameter normalisation applied at a single transport-boundary function, before validation?
 13. Is the handler's JSDoc the canonical source for parameter names, types, defaults, and examples?
 
-A tool meeting twelve or fifteen standards is graded **A**. Ten or eleven is **A−**. Seven to nine is **B+**. The goal is not the grade — it is the consistent observation that A-graded tools recur in successful client traces, while lower-graded tools recur in support traces.
+A tool meeting fourteen or fifteen standards is graded **A**. Eleven to thirteen is **A−**. Eight to ten is **B+**. The goal is not the grade — it is the consistent observation that A-graded tools recur in successful client traces, while lower-graded tools recur in support traces.
 
 ---
 
@@ -823,7 +823,7 @@ A short template for your own internal "Pattern" doc:
 <file paths in your codebase, code samples, who to ask for help>
 ```
 
-The pattern of patterns: every team eventually has a domain-specific gold-standards document of its own. The universal thirteen are the foundation; your patterns are the layer above. As long as your patterns are auditable (clear criteria, clear failure modes, an audit checklist), they're as legitimate as any of the standards in this chapter.
+The pattern of patterns: every team eventually has a domain-specific gold-standards document of its own. The universal fifteen are the foundation; your patterns are the layer above. As long as your patterns are auditable (clear criteria, clear failure modes, an audit checklist), they're as legitimate as any of the standards in this chapter.
 
 ---
 

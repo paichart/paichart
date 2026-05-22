@@ -5,7 +5,7 @@
 **Audience**: Anyone reviewing or grading an MCP tool surface — including Claude when grading a customer's tools, external auditors, and engineers writing their first MCP server
 
 **Companion documents**:
-- For tutorial-style introduction with worked examples: [Chapter 2 — Ten UX + Three Plumbing Standards](02-the-ten-gold-standards.md)
+- For tutorial-style introduction with worked examples: [Chapter 2 — Ten UX + Five Plumbing Standards](02-the-ten-gold-standards.md)
 - For the full series index: [tutorials/README.md](README.md)
 
 (There is also a pAIchart-internal implementation reference that maps each standard to specific files in the pAIchart codebase. It is not part of this public series; the universal definitions, criteria, and grading rubric in this document are the same ones it derives from.)
@@ -398,7 +398,7 @@ interface ActionHandlerResponse {
 
 ---
 
-# Part B — The Three Plumbing Standards
+# Part B — The Five Plumbing Standards
 
 The wiring underneath the UX surface. These can be excerpted into a separate plumbing primer; a reader can adopt all of Part A without touching Part B and still ship measurably better tools.
 
@@ -805,7 +805,7 @@ For each tool in your server, answer:
 
 # Provenance
 
-The thirteen original standards were extracted from a production audit of a 28-tool MCP server (December 2025). The audit scored every tool on description quality, error handling, and response shape; the patterns this spec documents are what the highest-scoring tools had in common. Subsequent additions (GS11–13, the cross-cutting rule) emerged from cleanup work and bug-class triage in early-to-mid 2026.
+The original thirteen standards were extracted from a production audit of a 28-tool MCP server (December 2025). The audit scored every tool on description quality, error handling, and response shape; the patterns this spec documents are what the highest-scoring tools had in common. Subsequent additions emerged from cleanup work and bug-class triage in early-to-mid 2026 (GS11–13 cross-cutting rule), Wave 7 architectural review (GS14 — dispatch-boundary schema enforcement, May 2026), and the MCP Hub Domain Testing pilot (GS15 — self-grading tool responses, May 22, 2026).
 
 **GS14 was added in v1.1 (2026-05-15)** after a production smoke test discovered a transport-path bypass in a newly-deployed action: the schema had eight independent guards (injection refines, DoS caps, strict mode, empty-update refine) but none of them fired because the MCP transport path called the handler directly without invoking the schema. Five rounds of specialist review (schema design, handler architecture, transaction integrity, MCP tool registration, validation engineering) had all passed; the smoke test found the bypass in seconds. The discovery → handler-level hotfix → fleet audit → router-level structural fix lifecycle is documented in [Chapter 9 — Hardening MCP Tools](https://github.com/paichart/paichart/blob/main/tutorials/09-hardening-mcp-tools.md) of the public series.
 
