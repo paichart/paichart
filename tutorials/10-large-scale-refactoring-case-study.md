@@ -124,7 +124,7 @@ Plan v1 → 4 parallel specialist reviews → Plan v2 with traceability matrix �
 
 **Case-study example**: Wave 7 Plan v1 proposed a `get mcpServer()` property shim on the server class so existing routes wouldn't need rewiring. Round 1 architectural-review-specialist flagged this as CRIT-1: "the shim is a transient construct that will outlive its purpose." Plan v2 folded the finding as `C-CROSS-2: no property shim; direct rewire of all 17 `this.mcpServer.X` references to `this.mcpCore.mcpServer.X`." That was a 3-hour sed-rewire instead of a shim that would have been a 6-month cleanup TODO. The specialist round caught it before any code was written.
 
-The specialist review pattern also surfaced **two PRE-EXISTING production bugs** during Round 1 (C-PRE-1 notifications fall-through, C-PRE-2 ping dispatch-reject — see Standard 7). These would have been moved verbatim into the new module without the review — fix-while-moving became a sub-phase explicitly because the reviews surfaced them.
+The specialist review pattern also surfaced **two PRE-EXISTING production bugs** during Round 1 (C-PRE-1 dispatch fall-through, C-PRE-2 registration mismatch — see Standard 7). These would have been moved verbatim into the new module without the review — fix-while-moving became a sub-phase explicitly because the reviews surfaced them.
 
 **Checklist**:
 - [ ] Plan v1 written and circulated
@@ -282,7 +282,7 @@ Convention: prefix these fixes as `Phase X.0a` (or `Phase X.0b`, etc.) — they 
 
 ```
 Wave 7 sub-phase order:
-- 7.0a — PRE-EXISTING fix #1 (notifications/message + notifications/progress fall-through)
+- 7.0a — PRE-EXISTING fixes (2 spec-compliance gaps — see Standard 7)
 - 7.0b — PRE-EXISTING dead-code drop (setupSDKSessionServer, 37 LOC)
 - 7.1  — Extraction begins
 ```
