@@ -1,4 +1,4 @@
-# Chapter 2 — Ten UX + Three Plumbing Standards for MCP Tools
+# Chapter 2 — Ten UX + Five Plumbing Standards for MCP Tools
 
 **Audience**: Engineers building or maintaining MCP tools.
 **Prerequisite**: Familiarity with the MCP tool definition shape (`name`, `description`, `inputSchema`, handler).
@@ -8,12 +8,12 @@
 
 ## What this chapter teaches
 
-Thirteen concrete standards — extracted from a production audit of MCP tool implementations — that move a tool from *technically working* to *reliably callable by AI clients without external documentation*.
+Fifteen concrete standards — extracted from a production audit of MCP tool implementations — that move a tool from *technically working* to *reliably callable by AI clients without external documentation*.
 
 The standards split into two parts:
 
 - **Part A — Ten UX standards** (Gold Standards 1–10): how the tool *presents itself* to AI clients through descriptions, errors, response metadata, and response shape. This is the user-facing surface.
-- **Part B — Three Plumbing standards** (Gold Standards 11–13): how the tool's internals are wired so the UX surface is correct by construction. These can be excerpted into a separate plumbing primer; a reader can adopt Part A first and reach Part B later.
+- **Part B — Five Plumbing standards** (Gold Standards 11–15): how the tool's internals are wired so the UX surface is correct by construction. These can be excerpted into a separate plumbing primer; a reader can adopt Part A first and reach Part B later.
 
 Each standard is structured as: definition, minimal example, why it matters, checklist.
 
@@ -499,7 +499,7 @@ GS10 leads because a missing envelope causes the most visible breakage. GS3 and 
 
 ---
 
-# Part B — Three Plumbing Standards
+# Part B — Five Plumbing Standards
 
 > Part B is structured as a separable concern. The three standards below sit *below* the UX surface — they govern how the tool's internals are wired so the UX standards in Part A produce correct output. A reader can adopt all of Part A without touching Part B and still ship measurably better tools. Part B can be excerpted into a standalone plumbing primer if this chapter runs long.
 
@@ -631,9 +631,81 @@ Why it matters: every drift between schema and handler is a future GS11 bug. Anc
 
 ---
 
+## Gold Standard 14 — Schema Enforcement at the Dispatch Boundary
+
+Defining a schema and enforcing a schema are two different things. A schema is enforced only when something explicitly invokes it at runtime — `.safeParse(...)`, `.parse(...)`, or the equivalent. A tool with a complete schema but no caller invoking it has *zero* runtime guards regardless of how thorough the schema looks in code review.
+
+This becomes a security concern in multi-path architectures where one entry path enforces the schema and another doesn't. The typical pattern: an HTTP REST API path runs the schema upstream; an MCP transport path (Claude Desktop, ChatGPT) calls the handler directly without invoking the schema. Same handler, two security postures.
+
+The standard: schema enforcement lives at the **dispatch boundary** (the router that maps action name to handler), not upstream in `validateRequest()` alone, and not down in each handler. One place, looked up by action name:
+
+```typescript
+async route(action, parameters, user, actionId) {
+  const schema = ParameterSchemas[action];
+  if (schema) {
+    const parsed = schema.safeParse(parameters);
+    if (!parsed.success) {
+      throw new Error(`${action} validation failed: ${formatErrors(parsed.error)}`);
+    }
+    parameters = parsed.data;   // transformed data passes downstream
+  }
+  // ... per-action dispatch ...
+}
+```
+
+Why it matters: with one entry path running validation upstream and another bypassing it, the same handler has different security postures depending on which client called it. Closing both paths at the dispatch boundary makes the action-name → schema mapping a single audit point. Every new action gets validated by registration alone; no per-handler `safeParse` calls scattered through the codebase to keep in sync.
+
+This standard is closely paired with GS11 (Three-Layer Parameter Update). GS11 prevents drift across the *three artifacts* (schema, handler, JSDoc); GS14 prevents drift across the *two entry paths* (HTTP and MCP transport). Both are about making the schema actually fire.
+
+**Checklist**: the dispatch boundary explicitly invokes `safeParse` per action · both transport entries (HTTP + MCP) route through the same dispatch boundary · grep for `safeParse` finds the call inside the dispatcher · adding a new action only requires registering it in the schema map.
+
+---
+
+## Gold Standard 15 — Self-Grading Tool Responses
+
+A tool's *successful* response should include a `qualityAssessment` (or domain-equivalent) field that grades the quality of the result and explains what would improve it. This is different from error responses (GS3, GS7). The tool succeeded — but the quality of what it returned can vary, and the AI client benefits from knowing whether the result is reference-quality or barely acceptable.
+
+```typescript
+// A tool that grades itself:
+return {
+  result: { ... },
+  qualityAssessment: {
+    grade: 'A',                                  // A+ / A / A- / B+ / etc.
+    schemaQuality: 'full',                       // domain-specific quality dimension
+    toolsWithSchema: 4,                          // observable signal
+    totalTools: 4,                               // observable signal
+    message: 'All tools have full parameter schemas - excellent AI client compatibility'
+  }
+};
+
+// The same tool against a lower-quality input:
+return {
+  result: { ... },
+  qualityAssessment: {
+    grade: 'C',
+    schemaQuality: 'names-only',
+    toolsWithSchema: 0,
+    totalTools: 3,
+    message: 'Tools have names but no inputSchema — AI clients must guess parameter shapes. Register with full schemas to upgrade to grade A.'
+  }
+};
+```
+
+The grade is computed from observable response data, not a static label. The message names what would raise the grade — improvement guidance, not just a verdict.
+
+Why it matters: AI clients consuming the tool's output can route based on quality. *"If grade < B, ask user for confirmation before using the result."* Tools that grade their own output enable confidence-aware integration without separate "is this a good service" round-trips. The pattern is particularly useful for inspector-style tools — health checks, registry queries, audit reports — whose result quality varies with caller-supplied input.
+
+The pattern emerged from the pAIchart MCP Hub's `registry(action: "tools", service_name: "...")` handler, which grades the quality of a registered service's tool surface. Surfaced during the 2026-05-22 Hub Domain Testing pilot as a candidate worth promoting to other tools. The key insight: *the protocol is self-implementing via the tool's own response* — the grading rubric and the tool that returns the grade are the same thing.
+
+**When to apply**: any tool whose result quality varies with input. Less applicable when output is invariant (a `get_weather` tool returns the same temperature regardless of "quality"). Inspector tools, registry queries, schema validators, audit/lint reports — these are the natural homes.
+
+**Checklist**: response includes a `qualityAssessment` (or domain-equivalent) field in the `result`, not buried in `_meta` · the field has a `grade` and a `message` · the message names what would raise the grade · the assessment is computed, not a static label · the grading is honest (the tool gives itself a C when it deserves a C).
+
+---
+
 ## Where these standards come from
 
-Most of the thirteen are best practice that applies to any AI-callable tool, not pAIchart-specific patterns. The table below names the origin and the portability of each:
+Most of the fifteen are best practice that applies to any AI-callable tool, not pAIchart-specific patterns. The table below names the origin and the portability of each:
 
 | Standard | Origin | Portability |
 |---|---|---|
@@ -650,14 +722,16 @@ Most of the thirteen are best practice that applies to any AI-callable tool, not
 | GS11 Three-Layer Parameter Update | Common Zod pitfall | Universal where Zod (or equivalent) validation is used |
 | GS12 Parameter Normalisation | Multi-client transport reality | Universal |
 | GS13 JSDoc as Source of Truth | Best practice — drift prevention | Universal |
+| GS14 Schema Enforcement at Dispatch Boundary | Multi-path security — one schema, two entry paths | Universal |
+| GS15 Self-Grading Tool Responses | Surfaced from MCP Hub `registry(action: "tools")` qualityAssessment field, 2026-05-22 | Universal (inspector-style tools) |
 
-Eleven of the thirteen are universal. GS6 is situational; GS10 carries a pAIchart-specific envelope shape, but the underlying concern (a consistent action-handler response structure) is universal. The chapter's contribution is the curation — identifying *which* best practices reliably move tools from "works" to "usable without external documentation", and naming them so they can be audited.
+Thirteen of the fifteen are universal. GS6 is situational; GS10 carries a pAIchart-specific envelope shape, but the underlying concern (a consistent action-handler response structure) is universal. The chapter's contribution is the curation — identifying *which* best practices reliably move tools from "works" to "usable without external documentation", and naming them so they can be audited.
 
 ---
 
 ## Self-audit
 
-For each tool in your server, answer the thirteen questions:
+For each tool in your server, answer the fifteen questions:
 
 **Part A (UX):**
 1. Does the description include `WHEN TO USE` (with `❌` cases) and `EXAMPLES` with results?
@@ -676,7 +750,7 @@ For each tool in your server, answer the thirteen questions:
 12. Is parameter normalisation applied at a single transport-boundary function, before validation?
 13. Is the handler's JSDoc the canonical source for parameter names, types, defaults, and examples?
 
-A tool meeting twelve or thirteen standards is graded **A**. Ten or eleven is **A−**. Seven to nine is **B+**. The goal is not the grade — it is the consistent observation that A-graded tools recur in successful client traces, while lower-graded tools recur in support traces.
+A tool meeting twelve or fifteen standards is graded **A**. Ten or eleven is **A−**. Seven to nine is **B+**. The goal is not the grade — it is the consistent observation that A-graded tools recur in successful client traces, while lower-graded tools recur in support traces.
 
 ---
 
@@ -714,7 +788,7 @@ That's the whole loop. A small server (3–5 tools) finishes in a weekend. A med
 
 ## Creating your own pattern
 
-The thirteen standards in this chapter are general — they apply to any MCP tool surface. Your codebase will have its own conventions on top: domain-specific error categories, response field names, ID formats, authorisation models. Those domain-specific patterns deserve documentation in the same shape as the standards above.
+The fifteen standards in this chapter are general — they apply to any MCP tool surface. Your codebase will have its own conventions on top: domain-specific error categories, response field names, ID formats, authorisation models. Those domain-specific patterns deserve documentation in the same shape as the standards above.
 
 A short template for your own internal "Pattern" doc:
 
@@ -761,7 +835,7 @@ Chapter 3 covers smoke tests as living documentation — how a sequenced test pl
 
 ## Provenance
 
-The thirteen standards apply to any MCP server. They were extracted from pAIchart's own tool surface and remain in continuous use there. The Hub's own tools (`services`, `registry`, and the consolidated workflow actions under `services(action: "workflow.*")`) are themselves audited against the same standards.
+The fifteen standards apply to any MCP server. They were extracted from pAIchart's own tool surface and remain in continuous use there. The Hub's own tools (`services`, `registry`, and the consolidated workflow actions under `services(action: "workflow.*")`) are themselves audited against the same standards.
 
 - pAIchart Hub overview: <https://paichart.app>
 - Source repository: <https://github.com/paichart/paichart>

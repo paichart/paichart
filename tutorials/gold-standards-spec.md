@@ -14,11 +14,11 @@
 
 ## What this document is
 
-The canonical specification of the fourteen gold standards for MCP tools. Each standard has a definition, success criteria, and failure modes. The document is platform-agnostic by design — there are no file paths, no specific code references, no team conventions. Replace any concrete example name (`get_weather`, `pov.list`) with whatever applies to your domain.
+The canonical specification of the fifteen gold standards for MCP tools. Each standard has a definition, success criteria, and failure modes. The document is platform-agnostic by design — there are no file paths, no specific code references, no team conventions. Replace any concrete example name (`get_weather`, `pov.list`) with whatever applies to your domain.
 
 Three sections:
 
-1. **The fourteen standards** — Part A (UX, GS1–10) + Part B (Plumbing, GS11–14)
+1. **The fifteen standards** — Part A (UX, GS1–10) + Part B (Plumbing, GS11–15)
 2. **Cross-cutting implementation rules** — how the standards interact (e.g., the *content.text mirrors _meta* rule)
 3. **Grading rubric** — A+/A/A−/B+ etc. for assessing a tool against the spec
 
@@ -648,6 +648,58 @@ grep -rn "'<peer.action.1>'.*'<peer.action.2>'" lib/ app/ src/ --include='*.ts' 
 ```
 
 For pAIchart's MCP surface, the 2026-05-16 audit identified 10 sites across 5 files. The full per-domain inventory is maintained in the project's bug-class registry; the universal lesson is: **the validation layer is rarely the only place actions are enumerated**.
+
+---
+
+## Gold Standard 15 — Self-Grading Tool Responses
+
+A tool's successful response should include a `qualityAssessment` (or domain-equivalent) field that grades the QUALITY of the result and explains what would improve it.
+
+This is different from error responses (GS3, GS7). The tool **succeeded** — but the quality of what it returned can vary, and the AI client benefits from knowing whether the result is reference-quality or barely acceptable.
+
+```typescript
+// A tool that grades itself:
+return {
+  result: { ... },
+  qualityAssessment: {
+    grade: 'A',                                  // A+ / A / A- / B+ / etc.
+    schemaQuality: 'full',                       // domain-specific quality dimension
+    toolsWithSchema: 4,                          // observable signal
+    totalTools: 4,                               // observable signal
+    message: 'All tools have full parameter schemas - excellent AI client compatibility'
+  }
+};
+
+// The same tool against a lower-quality input:
+return {
+  result: { ... },
+  qualityAssessment: {
+    grade: 'C',
+    schemaQuality: 'names-only',
+    toolsWithSchema: 0,
+    totalTools: 3,
+    message: 'Tools have names but no inputSchema — AI clients must guess parameter shapes. Register with full schemas to upgrade to grade A.'
+  }
+};
+```
+
+**Why it matters**: AI clients consuming the tool's output can route based on quality — *"if grade < B, ask user for confirmation before using the result"*. Tools that grade their own output enable confidence-aware integration without separate "is this a good service" round-trips.
+
+**Success criteria**:
+- ☐ Response includes a `qualityAssessment` (or domain-equivalent) field in the `result`, not in `_meta`
+- ☐ The field has a `grade` (categorical) AND a `message` (human-readable explanation)
+- ☐ The message names what would raise the grade (improvement guidance)
+- ☐ The assessment is computed from observable response data (not a static label)
+
+**Failure modes**:
+- Tool returns same response shape regardless of result quality — caller can't tell good from borderline
+- Tool grades quality but doesn't explain how to improve — assessment is meaningless to caller
+- Tool grades self too generously (always A) — assessment loses signal value
+- Assessment lives in `_meta` instead of `result` — client treats it as plumbing not actionable signal
+
+**Real-world example**: An MCP Hub `registry(action: "tools", service_name: "...")` handler returns a `qualityAssessment` graded against the registered service's schema quality. A service with full `inputSchema` for every tool gets grade A; one with name-only entries gets grade C with explicit upgrade guidance. The grade is computed from observable input (the `tools` array shape), not a static label.
+
+**When to apply**: any tool whose result quality varies with caller-supplied input — health checks, registry inspectors, audit/lint queries, validation reports. Less applicable when output is invariant (e.g., a `get_weather` tool returns the same temperature regardless of "quality").
 
 ---
 
