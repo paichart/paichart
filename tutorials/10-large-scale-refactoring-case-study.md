@@ -85,7 +85,7 @@ Before drafting an extraction plan, you write a Phase 0 inventory document. It e
 ## Methods in scope
 | Method | LOC | Callers | Production hits/14d | Hazards |
 |---|---:|---|---:|---|
-| processMCPRequest | 611 | R11 only (mcp-transport-routes.ts) | 3182 | hot path, mutable mcpServer state |
+| processMCPRequest | 611 | R11 only (mcp-transport-routes.ts) | hot path (high traffic) | mutable mcpServer state |
 | setupMCPServer | 42 | constructor | once at boot | lazy-init, dual-location promptCommandHandler read |
 | setupSDKSessionServer | 37 | ZERO | ZERO (14d) | DEAD CODE |
 | initializeAuthContext | 36 | start() | once at boot | depends on setupMCPServer completing first (D-H6) |
@@ -289,11 +289,11 @@ Wave 7 sub-phase order:
 
 **What happens when you skip it**: you move buggy code verbatim into a new module. Two months later, when someone fixes the bug, the git history says "fix shipped in module mcp-core.ts" — but the bug actually existed before the extraction. Attribution breaks.
 
-**Case-study example**: Wave 7 Round 1 review surfaced two PRE-EXISTING MCP-spec compliance bugs:
-- **C-PRE-1**: `notifications/message` + `notifications/progress` were in `VALID_MCP_METHODS` but the switch only handled `notifications/initialized`. The other two fell through to default and emitted JSON-RPC result responses, violating JSON-RPC 2.0 §4.1.
-- **C-PRE-2**: `ping` was in `MCP_PUBLIC_METHODS` (auth-public) but missing from `VALID_MCP_METHODS` (dispatch), so MCP clients calling `ping` got `-32601 method not found` instead of an empty result per MCP spec §6.4.
+**Case-study example**: Wave 7 Round 1 review surfaced two PRE-EXISTING MCP-spec compliance issues:
+- **C-PRE-1**: a method-dispatch fall-through where two notification methods were listed in the dispatch allowlist but only one had an explicit case branch — the other two fell through to default and returned the wrong response shape.
+- **C-PRE-2**: a registration-mismatch where a method was marked auth-public but missing from the dispatch allowlist, so clients calling it got a "method not found" error instead of the spec-required empty result.
 
-Both fixed in Phase 7.0a, before Phase 7.1 extraction began. The Phase 7.1 + 7.2 extraction commits moved already-correct code, not buggy code.
+Both classes of bug are typical of stale dual-source-of-truth dispatch tables — the kind of compliance gap that surfaces only when a thorough spec reviewer reads the dispatch switch alongside the auth allowlist. Both fixed in Phase 7.0a, before Phase 7.1 extraction began. The Phase 7.1 + 7.2 extraction commits moved already-correct code, not buggy code.
 
 **Checklist**:
 - [ ] Specialist reviews explicitly invited to surface PRE-EXISTING concerns
@@ -483,14 +483,14 @@ When you delete a method body (because it moved to a new module), don't leave th
 ```javascript
 // processMCPRequest() EXTRACTED to lib/mcp/server/mcp-core.ts:MCPCoreManager.processRequest()
 // in Wave 7 Phase 7.2 (2026-05-21). Verbatim port — 611 LOC → ~480 LOC TS
-// (parseResourceUri sub-helper + VALID_MCP_METHODS import). Hot path 3182
-// hits/14d. Server class delegates via _buildRouteContext.processMCPRequest.
+// (parseResourceUri sub-helper + VALID_MCP_METHODS import). Hot path
+// (high traffic). Server class delegates via _buildRouteContext.processMCPRequest.
 ```
 
 **Why this pattern**:
 - 6 months later, someone greps the server class for `processMCPRequest` to find where it lives. Without the stub, they conclude it's been deleted. With the stub, they know exactly where to look.
 - The "verbatim port" note plus the LOC delta tells a reviewer "this was a careful move, not a rewrite."
-- The "Hot path 3182 hits/14d" note signals to the next refactor that this method's location matters.
+- The "Hot path (high traffic)" note signals to the next refactor that this method's location matters.
 
 **Antipattern**: leaving the deleted code as a comment block. That's archaeology of the wrong kind — actual deleted code in comments rots.
 
