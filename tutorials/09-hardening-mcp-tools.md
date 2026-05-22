@@ -380,6 +380,42 @@ The hardening checklist below has an item for this audit.
 
 ---
 
+## When a threat is latent — fix-now-prevent-100%-future-exposure
+
+GS14 hardens *today's* threats. But a class of threats deserves the same fix discipline even when no current MCP client can exploit them: **latent threats riding the transport-direction roadmap**.
+
+The clearest case: **reflected XSS in MCP response text**. Today, Claude Desktop and ChatGPT render MCP tool responses as plain text. A handler that echoes `❌ POV NOT FOUND: "${searchTerm}"` and receives `searchTerm = '<script>alert(1)</script>'` produces a response body containing the literal script string — but no current MCP client interprets it.
+
+So the threat is real, the vector exists, and yet the exploit is zero. Easy to defer.
+
+The reason to fix it anyway: **MCP transport direction is streamable-HTTP**. The 2026 MCP roadmap explicitly moves toward browser-based MCP clients (SEP-1442, SEP-2567). Today no exploitable HTML-render path. Tomorrow's MCP clients will render markdown→HTML. Fixing now prevents 100% of future exposure, at the cost of one cheap output-side escape per response site.
+
+This is a different fix economics from GS14's dispatch boundary:
+
+| | GS14 dispatch enforcement | Latent-threat hardening |
+|---|---|---|
+| Threat status | **Active** — bypass exploitable in current MCP transport | **Latent** — no current client can exploit |
+| Fix cost | One router-level call site | Per echo-site sanitization wrap (potentially dozens) |
+| Detection | Smoke test catches today | Smoke test passes today; specialist sweep needed |
+| Severity ladder | CRITICAL → ship now | MEDIUM-HIGH latent → ship this week |
+| Bypass paths | Single boundary | Multi-path (helpers + inline interpolation + JSON.stringify) |
+
+The hardening discipline is the same: **don't wait for an MCP client to render HTML before adding output-side escape**. The cost grows with the codebase. Adding 135 sanitize calls retroactively (one production case) is significantly more expensive than adding the first 11 when the bug class was discovered.
+
+Three operating rules for latent threats:
+
+**1. Severity by audience-breadth × frequency, not exploit-availability.** Per the security severity framework: even when the active exploit is zero, the *audience* of future-vulnerable clients can be enormous. A stored-XSS vector that fires whenever an admin views an audit log is HIGH-severity-when-it-fires, regardless of whether anyone views the log today.
+
+**2. The "fix now" rule applies to families, not instances.** If your codebase has 100 echo sites and you've only audited 11, ship the audit AND a regression guard (CI grep) that catches new sites. The bug class lives in the *pattern*; eradication is by registry entry + detection command, not by one-shot fix.
+
+**3. The two-axis grep catches "Path 2" Plan-busters.** Echo sites cluster in two axes: well-known helper functions AND inline `throw new Error(\`...\${user_input}\`)` outside helpers. A first-pass inventory that only sweeps the helper axis misses ~80% of sites (production case: 11 sites in Plan v1 → ~135 sites in Plan v2 after specialist review surfaced 5 bypass paths). Always sweep both axes before scoping the fix.
+
+**Real-world example (May 2026)**: a domain testing pilot found `<script>alert(1)</script>` echoed in a "POV NOT FOUND" error. Claude Desktop renders plain text, so no active exploit. The team sanitized the helper site as a first pass, then a boundary-contract specialist found inline `error: \`...\${userInput}\`` sites in workflow handlers, ChatGPT connector JSON.stringify paths, internal service router throws — bringing scope from 11 sites in 3 files to ~135 sites in 14 files. Same day: defense-in-depth shipped (L1 schema rejection + L4 output escape) + URL-scheme allowlist for markdown links + new BC71 bug-class registry entry + CI source-grep regression guard.
+
+The fix cost was 6 focused hours. The cost of finding it after a single MCP client lands HTML rendering would be measured in incident-response hours plus customer trust.
+
+---
+
 ## What this isn't
 
 - This is not about CSRF, authentication, or authorisation. Those are separate layers. This chapter assumes auth already happened correctly; the bypass is in *what the authenticated request is allowed to do*.
