@@ -56,6 +56,7 @@
   - **MCP Endpoint**: `https://paichart.app/mcp`
   - **JWKS**: `https://paichart.app/api/auth/jwks`
   - **Documentation**: Provided as a resource (or use /prompt list) in AI Clent
+  - **Demo User Privacy**: [PRIVACY-DEMO.md](./PRIVACY-DEMO.md) — what a demo account holds, what it can do, 30-day auto-deletion
 
   ## Keywords
 
