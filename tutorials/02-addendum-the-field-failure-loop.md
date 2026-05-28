@@ -138,9 +138,27 @@ A response that passes GS3's original checklist can fail every line above. That 
 
 ---
 
+## Outcome
+
+The loop closed on the implementation and is mid-flight on the standard — which is the honest shape of continuous improvement.
+
+**Layer 1 — shipped and verified in production.** The service that failed, plus the two siblings sharing its HTTP-client pattern, received all four resilience rules: a per-request timeout capped below the caller's ceiling, retries extended to timeout/connection errors (not only HTTP 5xx), keep-alive disabled so an idled-out socket can't be reused, and — most consequentially for the *next* incident — per-call latency logging. The original failing workflow now completes end to end, and the once-silent services emit a line per upstream call:
+
+```
+[service] upstream OK <endpoint> <ms>      (and on failure: upstream FAILED <endpoint> <ms>: <code>)
+```
+
+That last rule matters most: the failure that took a deep-access agent to reproduce would now be visible in the service's own logs. The field agent still can't escalate — but the humans maintaining the service can finally see what it sees.
+
+**Layer 2 — partly done.** The team's internal companion pattern (the domain-specific gold-standards doc the chapter's "Creating your own pattern" section anticipates) gained an *Upstream-Call Resilience* standard — the durable, checklist form of the four rules. The platform-signal refinements that would let the *field agent* recover on its own — timing-aware `retryable`, honouring-or-rejecting the caller's `timeout`, and a health hint that admits its own blindness — are identified and queued. Naming them as "not yet done" is part of the honesty: a loop that only reports its successes isn't a loop, it's a press release.
+
+So one field failure — captured and contextualised by a human, reproduced by a deeper agent — hardened three services and produced two standard updates: one internal, and the public case study you are reading.
+
+---
+
 ## Provenance
 
-This addendum documents a single incident on 2026-05-28: a transient stale-keep-alive timeout in an external data service, reported from a mobile MCP client, reproduced and root-caused via repository and production access, and decomposed into a service-implementation fix and a set of platform-signal refinements. The platform-signal half is the slower, ongoing work — which is the honest state of any continuous-improvement mechanism: the patches ship first, the standard catches up.
+This addendum documents a single incident on 2026-05-28: a transient stale-keep-alive timeout in an external data service, reported from a mobile MCP client, reproduced and root-caused via repository and production access, and decomposed into a service-implementation fix (shipped and verified — see Outcome above) and a set of platform-signal refinements (queued).
 
 The pattern of the loop — capture, contextualise, reproduce-and-distrust, decompose, feed-the-standard — is universal. The specifics (an energy-data service, a 30-second ceiling) are the substrate, not the lesson.
 
