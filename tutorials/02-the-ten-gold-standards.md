@@ -837,6 +837,8 @@ Chapter 3 covers smoke tests as living documentation — how a sequenced test pl
 
 The fifteen standards apply to any MCP server. They were extracted from pAIchart's own tool surface and remain in continuous use there. The Hub's own tools (`services`, `registry`, and the consolidated workflow actions under `services(action: "workflow.*")`) are themselves audited against the same standards.
 
+"In continuous use" also means continuously revised by contact with the field. For a worked example of one such revision — a real incident in which a tool's error response met GS3 and GS7 on paper yet led an AI client to a wrong conclusion, and the loop that turned it into a standard refinement — see [Addendum: The Field-Failure Loop](02-addendum-the-field-failure-loop.md). It is the reactive counterpart to the proactive audit loop in *Applying these standards to your own server* above.
+
 - pAIchart Hub overview: <https://paichart.app>
 - Source repository: <https://github.com/paichart/paichart>
 
