@@ -125,6 +125,40 @@ The rule of thumb that falls out of all of it: **when in doubt, ship the fact, i
 
 ---
 
+## Postscript — the same lens, one day later
+
+A day after this work landed, a follow-on bug surfaced and the lens caught a verdict in the team's *own* response surface — the kind of audit the chapter sidestepped: **the lens isn't only for new signals you're designing; apply it to existing ones too.**
+
+The follow-on was small. The platform's background health probe had been counting a `404` from a service's `/health` route as a *failure*, even though many MCP services legitimately don't expose REST `/health` (they answer with 404). That was quietly pinning those services' `successRate` EMAs to near-zero. Fixing the probe — treating any HTTP response under 500 as "the server answered" — was a straightforward correctness pass. But once those EMAs were no longer fed contaminated data, an *older* signal turned out to be reading wrong.
+
+The health response's `recommendation: "use" | "avoid"` field — shipped long before this chapter's lens existed — was binary: `use` if and only if the service was healthy *and* its `successRate >= 90`; otherwise `avoid`. After the probe fix, an external service's EMA started climbing out of its phantom-failure hole. At about 83% — clearly recovering, with the realtime ping reporting healthy — the response still came back:
+
+```json
+"recommendation": "avoid",
+"nextSteps": ["⚠️ Service has low success rate: 83.3%",
+              "Consider using a more reliable service", ...]
+```
+
+A live-up service was being prescribed "avoid." Same failure mode as the original incident, on a different surface.
+
+Run it through the lens:
+
+- A *verdict* ("avoid", "use something else") layered on a fact (the EMA percentage).
+- An *unvalidated threshold* (90% cutoff — same shape as the transient/persistent thresholds we deferred earlier).
+- A *contaminated input* — the EMA still carrying recent phantom failures, plus a permanent `errorCount` counter that never resets.
+- *Contradicting a live fact* — the realtime probe in the same response said the service was up *right now*.
+
+The fix wasn't to remove the field — that's a contract change for unclear gain. The fix was to make the verdict honest: **a live-up service is never `"avoid"`** (the live signal overrides the stale EMA), and the low-EMA prose was reframed from prescription ("use a more reliable service") to fact (state the rate, with the EMA caveat; surface `discover(minSuccessRate)` as a *client-chosen* filter instead of a platform instruction). The threshold itself stays an unvalidated tunable, tracked alongside the original deferred verdict.
+
+Two lessons land, both compounding the originals:
+
+1. **Verdicts rot.** A verdict that was reasonable at ship time becomes wrong when its inputs change — a related fix, a contamination, a drift in the underlying distribution. The lens is an audit you *reapply* when surrounding signals move.
+2. **Live signals beat stale ones.** When a response carries both a current observation and an aggregated history, the verdict on top must not let the stale signal contradict the live one. If the fact stack isn't coherent, the verdict will be wrong some of the time.
+
+The right answer to "this verdict is misleading" isn't always deletion. Sometimes it's making the verdict's inputs honest, reframing what the response prescribes versus what it states, and keeping the unvalidated threshold on a track to be earned.
+
+---
+
 ## What's next
 
 This chapter and the Chapter 2 addendum are a pair: the addendum is the *diagnostic* loop (how a field failure surfaces a gap), and this one is the *design* discipline (how you decide what to do about it). Chapter 9 (Hardening MCP Tools) is the proactive counterpart — the standards that stop a class of these from reaching the field in the first place.
@@ -134,6 +168,8 @@ This chapter and the Chapter 2 addendum are a pair: the addendum is the *diagnos
 ## Provenance
 
 The work described here was carried out on 2026-05-29, as the platform-signal half of the 2026-05-28 field-failure incident documented in the [Chapter 2 Addendum](02-addendum-the-field-failure-loop.md). The message fix, the `timeout` contract, and the recent-success-rate fact shipped to pAIchart's MCP hub; the transient/persistent verdict was deferred with the reasoning above, and the connection-evict idea was rejected. The internal companion to this chapter is a *Signal Design* protocol (the fact-vs-verdict lens, applied during design review) and the *Upstream-Call Resilience* standard in the team's domain gold-standards doc.
+
+A follow-on on 2026-05-30 surfaced and fixed the health probe's 404-as-failure miscount and, via the lens, an older `recommendation: "use" | "avoid"` verdict that the probe fix exposed as misleading on live-up services with recovering EMAs (commit `228fa920`). The Postscript above documents that second pass.
 
 The lens — fact vs. verdict, weighted by blast radius — is universal. The specifics (an energy-data service, a 30-second ceiling, an exponential moving average) are the substrate, not the lesson.
 
