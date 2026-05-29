@@ -12,6 +12,7 @@ Engineers maintaining or building MCP servers. Each chapter assumes familiarity 
 |---|---|---|---|
 | 1 | [Tools that teach themselves](01-tools-that-teach-themselves.md) | **Published** | ~10 min |
 | 2 | [Ten UX + Three Plumbing Standards](02-the-ten-gold-standards.md) | **Published** | ~20 min |
+| 2a | [Addendum: The Field-Failure Loop](02-addendum-the-field-failure-loop.md) | **Published** | ~12 min |
 | 3 | [Smoke tests for MCP tools](03-smoke-tests-as-living-documentation.md) | **Published** | ~12 min |
 | 4 | [The silent parameter stripping bug — and the three-layer rule](04-three-layer-parameter-rule.md) | **Published** | ~12 min |
 | 5 | [Transport boundaries are where types go to die](05-transport-boundaries.md) | **Published** | ~12 min |
@@ -19,6 +20,8 @@ Engineers maintaining or building MCP servers. Each chapter assumes familiarity 
 | 7 | [Tool consolidation: a case study (28 tools → 10)](07-tool-consolidation-case-study.md) | **Published** | ~13 min |
 | 8 | [From single tool to multi-service hub](08-from-tool-to-hub.md) *(optional)* | **Published** | ~13 min |
 | 9 | [Hardening MCP tools: when schema definition isn't schema enforcement](09-hardening-mcp-tools.md) | **Published** | ~18 min |
+| 10 | [Large-scale refactoring: a 4-day, 4500→1000 LOC case study](10-large-scale-refactoring-case-study.md) | **Published** | ~25 min |
+| 11 | [Error recovery signals: fact vs. verdict](11-error-recovery-signals.md) | **Published** | ~14 min |
 
 ## Reference
 
@@ -32,12 +35,14 @@ Engineers maintaining or building MCP servers. Each chapter assumes familiarity 
 - **"I'm building a tool tomorrow"** — Read Chapter 2 → Chapter 4 → Chapter 6.
 - **"I'm about to ship to production"** — Read Chapter 2 → Chapter 9 → Chapter 3. Hardening before smoke before release.
 - **"I'm fighting silent failures"** — Chapters 4 and 5 are the bug-class pair; Chapter 9 is the runtime-enforcement counterpart.
+- **"My error responses are misleading clients"** — Chapter 2 Addendum (the field-failure loop — how the gap surfaces) → Chapter 11 (fact vs. verdict — how to decide what to put in the response).
 - **"I want to redesign my tool surface"** — Chapter 6 (architecture) → Chapter 7 (consolidation case study).
+- **"I'm planning a big refactor"** — Chapter 6 (architecture) → Chapter 10 (a 4-day large-scale refactoring case study).
 - **"I want to understand the philosophy"** — Read in order.
 
 ## Status
 
-All 9 chapters are published. Chapter 1 is the gentle entry point; Chapter 2 is the spine; Chapter 3 is its testable companion; Chapters 4 and 5 cover the two silent-failure bug classes; Chapter 6 is the architectural overview; Chapter 7 is a worked case study of pAIchart's own consolidation; Chapter 8 (optional) covers the transition from a single MCP server to a multi-service hub; Chapter 9 closes the most subtle gap in multi-path MCP servers — schema defined but not runtime-enforced on every entry path.
+All eleven chapters are published, plus the Chapter 2 addendum. Chapter 1 is the gentle entry point; Chapter 2 is the spine, with an addendum (the field-failure loop) on keeping a standard honest against production; Chapter 3 is its testable companion; Chapters 4 and 5 cover the two silent-failure bug classes; Chapter 6 is the architectural overview; Chapter 7 is a worked case study of pAIchart's own consolidation; Chapter 8 (optional) covers the transition from a single MCP server to a multi-service hub; Chapter 9 closes the most subtle gap in multi-path MCP servers — schema defined but not runtime-enforced on every entry path; Chapter 10 is a 4-day large-scale refactoring case study; Chapter 11 is the signal-design discipline — fact vs. verdict — for what a tool tells an AI client about a failure.
 
 ## Conventions used in this series
 
