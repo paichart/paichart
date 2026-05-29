@@ -36,6 +36,8 @@ User (Claude Desktop / ChatGPT)
 | EODHD | Financial market data | Service account |
 | Browser Automation | Web scraping, screenshots, PDFs | Service account |
 | Notifications | Email, Slack, webhooks | Service account |
+| Alpha Vantage | Financial data — 113 tools (equities, forex, crypto, indicators) | Service account |
+| Token Validator | JWT/JWKS integration & trust-level debugging | ✅ Per-user JWT |
 
 ## Register Your MCP Service
 
