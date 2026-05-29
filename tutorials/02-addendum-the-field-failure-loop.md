@@ -140,7 +140,7 @@ A response that passes GS3's original checklist can fail every line above. That 
 
 ## Outcome
 
-The loop closed on the implementation and is mid-flight on the standard — which is the honest shape of continuous improvement.
+The loop closed on the implementation and on the signals the team chose to ship — with one refinement deliberately *withheld*, which turned out to be the most instructive part.
 
 **Layer 1 — shipped and verified in production.** The service that failed, plus the two siblings sharing its HTTP-client pattern, received all four resilience rules: a per-request timeout capped below the caller's ceiling, retries extended to timeout/connection errors (not only HTTP 5xx), keep-alive disabled so an idled-out socket can't be reused, and — most consequentially for the *next* incident — per-call latency logging. The original failing workflow now completes end to end, and the once-silent services emit a line per upstream call:
 
@@ -150,20 +150,22 @@ The loop closed on the implementation and is mid-flight on the standard — whic
 
 That last rule matters most: the failure that took a deep-access agent to reproduce would now be visible in the service's own logs. The field agent still can't escalate — but the humans maintaining the service can finally see what it sees.
 
-**Layer 2 — in progress.** The team's internal companion pattern (the domain-specific gold-standards doc the chapter's "Creating your own pattern" section anticipates) gained an *Upstream-Call Resilience* standard — the durable, checklist form of the four rules. The first platform-signal refinement shipped too: the timeout error no longer steers clients to the blind health check — it now states that transient timeouts usually clear, advises a short delay before retrying, and warns that a green `/health` ping does *not* mean the call will succeed (the GS3 "recovery steps must be trustworthy, not merely present" refinement, made concrete). The two deeper refinements that would let the *field agent* recover fully on its own — a signal that distinguishes a transient blip from a persistent failure, and an honest contract for the caller's `timeout` — are identified, tracked, and deliberately not rushed. Naming what's still undone is part of the honesty: a loop that only reports its successes isn't a loop, it's a press release.
+**Layer 2 — shipped, with one deliberate deferral.** The team's internal companion pattern (the domain-specific gold-standards doc the chapter's "Creating your own pattern" section anticipates) gained an *Upstream-Call Resilience* standard — the durable, checklist form of the four rules. Three platform-signal refinements then shipped and were verified in production: (1) the timeout error no longer steers clients to the blind health check — it states that transient timeouts usually clear, advises a short delay, and warns that a green `/health` does *not* mean the call will succeed (the GS3 "recovery steps must be trustworthy, not merely present" refinement, made concrete); (2) the `timeout` contract is now honest — the caller's value is applied (clamped to a hard cap) instead of accepted-and-ignored, and the response reports what was actually applied; (3) on a failure, the response carries the service's *recent success rate* — a fact the client can reason from.
 
-So one field failure — captured and contextualised by a human, reproduced by a deeper agent — hardened three services and produced two standard updates: one internal, and the public case study you are reading.
+The fourth refinement — a flag that *tells* the client a failure is transient or persistent — was the most valuable-sounding, and it was **deliberately not shipped**. That signal would be an unvalidated verdict (a heuristic over a moving average), and on a surface every client reads, a wrong verdict re-creates the exact failure this incident was about: confident, silent, wrong. So the team shipped the *fact* (the recent success rate) and deferred the *verdict* until there is production data to validate it. That call — *ship facts, earn verdicts* — became its own standard: a public chapter ([Chapter 11 — Error Recovery Signals: Fact vs. Verdict](11-error-recovery-signals.md)) and an internal signal-design review protocol. Naming what was deliberately withheld, and why, is the honest part: a loop that only reports its successes isn't a loop, it's a press release.
+
+So one field failure — captured and contextualised by a human, reproduced by a deeper agent — hardened three services and produced four standard updates: two internal (the *Upstream-Call Resilience* pattern and the *Signal Design* review protocol) and two public chapters (this case study and [Chapter 11](11-error-recovery-signals.md)).
 
 ---
 
 ## Provenance
 
-This addendum documents a single incident on 2026-05-28: a transient stale-keep-alive timeout in an external data service, reported from a mobile MCP client, reproduced and root-caused via repository and production access, and decomposed into a service-implementation fix (shipped and verified — see Outcome above) and a set of platform-signal refinements (queued).
+This addendum documents a single incident on 2026-05-28: a transient stale-keep-alive timeout in an external data service, reported from a mobile MCP client, reproduced and root-caused via repository and production access, and decomposed into a service-implementation fix (shipped and verified) and a set of platform-signal refinements — three shipped and verified in production, with a fourth (a transient-vs-persistent verdict) deliberately deferred as an unvalidated heuristic. See Outcome above.
 
 The pattern of the loop — capture, contextualise, reproduce-and-distrust, decompose, feed-the-standard — is universal. The specifics (an energy-data service, a 30-second ceiling) are the substrate, not the lesson.
 
 - pAIchart Hub overview: <https://paichart.app>
-- Companion: [Chapter 2 — Ten Gold Standards](02-the-ten-gold-standards.md) · [Chapter 9 — Hardening MCP Tools](09-hardening-mcp-tools.md)
+- Companion: [Chapter 2 — Ten Gold Standards](02-the-ten-gold-standards.md) · [Chapter 11 — Error Recovery Signals: Fact vs. Verdict](11-error-recovery-signals.md) · [Chapter 9 — Hardening MCP Tools](09-hardening-mcp-tools.md)
 
 ---
 
