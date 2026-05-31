@@ -1,10 +1,19 @@
-# pAIchart — MCP Hub Platform
+# pAIchart — AI-Native Delivery Management + MCP Hub
 
-**AI Service Orchestration with Per-User Authentication**
+pAIchart is an MCP hub for AI-native delivery management — POVs, tasks, and phases you drive in natural language — plus a registry of external MCP services you can discover, call, and orchestrate into multi-service workflows.
 
-pAIchart is a MCP service mesh where AI discovers MCP servers, composes & orchestrates multi-service workflows. Users can self-register services and connect agents or AI clients to any MCP service through a single Hub with trust-level authentication, per-user OAuth passthrough, and multi-service workflows.
+Users can self-register services and connect agents or AI clients to any MCP service through a single Hub with trust-level authentication, per-user OAuth passthrough, and multi-service workflows.
 
 ## What pAIchart Does
+
+### Delivery management (the core)
+
+- **POVs → Phases → Tasks** — run proof-of-value engagements as structured, AI-readable delivery plans
+- **Natural-language operation** — ask "Which of my POVs are at risk?" or "show open tasks for BlackEye" — no UI required
+- **AI agents on your work** — configure, assign, and execute agents against delivery tasks
+- **Portfolio analytics** — health, insights, and execution metrics across your POVs
+
+### MCP service hub
 
 - **Free Service Registration** — Comprehensive guides available via "/prompt list" or as MCP resources
 - **Service Discovery** — AI agents find services by capability, not by name
@@ -20,9 +29,12 @@ pAIchart is a MCP service mesh where AI discovers MCP servers, composes & orches
 ```
 User (Claude Desktop / ChatGPT)
   → Authenticates to pAIchart Hub
-  → Discovers services by capability
-  → Hub determines trust level, forwards JWT if authorized
-  → External service validates JWT via JWKS
+  → Asks in natural language, e.g.
+      • "Which of my POVs are at risk?"        → project / analytics tools answer directly
+      • "Screenshot the dashboard and email it" → Hub composes a multi-service workflow
+  → For external service calls:
+      → Hub discovers services by capability, determines trust level, forwards JWT if authorized
+      → External service validates JWT via JWKS
   → Operations execute as the authenticated user
 ```
 
@@ -68,4 +80,4 @@ Services that support External OAuth (like Snowflake, Databricks) get per-user a
 
 ## Keywords
 
-`mcp` `mcp-hub` `mcp-server` `mcp-orchestration` `model-context-protocol` `ai-services` `service-discovery` `external-oauth` `jwks` `per-service-audience` `rfc8707` `per-user-authentication` `workflow-orchestration` `error-recovery` `mcp-tutorials` `claude-desktop` `chatgpt` `snowflake`
+`mcp` `mcp-hub` `mcp-server` `mcp-orchestration` `model-context-protocol` `ai-native` `delivery-management` `proof-of-value` `pov` `task-management` `project-management` `ai-services` `service-discovery` `external-oauth` `jwks` `per-service-audience` `rfc8707` `per-user-authentication` `workflow-orchestration` `error-recovery` `mcp-tutorials` `claude-desktop` `chatgpt` `snowflake`
