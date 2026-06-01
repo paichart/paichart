@@ -22,6 +22,7 @@ Engineers maintaining or building MCP servers. Each chapter assumes familiarity 
 | 9 | [Hardening MCP tools: when schema definition isn't schema enforcement](09-hardening-mcp-tools.md) | **Published** | ~18 min |
 | 10 | [Large-scale refactoring: a 4-day, 4500→1000 LOC case study](10-large-scale-refactoring-case-study.md) | **Published** | ~25 min |
 | 11 | [Error recovery signals: fact vs. verdict](11-error-recovery-signals.md) | **Published** | ~14 min |
+| 12 | [The entry point that loads itself: `initialize.instructions` under Tool Search](12-initialize-instructions-entry-point.md) | **Published** | ~12 min |
 
 ## Reference
 
@@ -42,7 +43,7 @@ Engineers maintaining or building MCP servers. Each chapter assumes familiarity 
 
 ## Status
 
-All eleven chapters are published, plus the Chapter 2 addendum. Chapter 1 is the gentle entry point; Chapter 2 is the spine, with an addendum (the field-failure loop) on keeping a standard honest against production; Chapter 3 is its testable companion; Chapters 4 and 5 cover the two silent-failure bug classes; Chapter 6 is the architectural overview; Chapter 7 is a worked case study of pAIchart's own consolidation; Chapter 8 (optional) covers the transition from a single MCP server to a multi-service hub; Chapter 9 closes the most subtle gap in multi-path MCP servers — schema defined but not runtime-enforced on every entry path; Chapter 10 is a 4-day large-scale refactoring case study; Chapter 11 is the signal-design discipline — fact vs. verdict — for what a tool tells an AI client about a failure.
+All twelve chapters are published, plus the Chapter 2 addendum. Chapter 1 is the gentle entry point; Chapter 2 is the spine, with an addendum (the field-failure loop) on keeping a standard honest against production; Chapter 3 is its testable companion; Chapters 4 and 5 cover the two silent-failure bug classes; Chapter 6 is the architectural overview; Chapter 7 is a worked case study of pAIchart's own consolidation; Chapter 8 (optional) covers the transition from a single MCP server to a multi-service hub; Chapter 9 closes the most subtle gap in multi-path MCP servers — schema defined but not runtime-enforced on every entry path; Chapter 10 is a 4-day large-scale refactoring case study; Chapter 11 is the signal-design discipline — fact vs. verdict — for what a tool tells an AI client about a failure; Chapter 12 is the session-start orientation problem — making your server's entry point discoverable under client-side deferred tool loading.
 
 ## Conventions used in this series
 

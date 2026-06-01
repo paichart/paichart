@@ -68,7 +68,7 @@ Services that support External OAuth (like Snowflake, Databricks) get per-user a
 
 ## Learn
 
-- **MCP Tool Excellence** — an 11-chapter tutorial series on building MCP tools AI clients can call without external documentation, extracted from pAIchart's own production audits: [tutorials/README.md](tutorials/README.md)
+- **MCP Tool Excellence** — a 12-chapter tutorial series on building MCP tools AI clients can call without external documentation, extracted from pAIchart's own production audits: [tutorials/README.md](tutorials/README.md)
 
 ## Links
 
