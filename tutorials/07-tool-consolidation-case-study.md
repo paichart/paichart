@@ -210,6 +210,44 @@ The handlers themselves did not move. `handleListPOVs`, `handleGetPOVDetails`, e
 
 ---
 
+## How four descriptions became one
+
+The token saving in Problem 1 isn't hand-waving, and it isn't achieved by cutting detail. It comes from merging four tool descriptions into one in a way that *removes repetition, not capability*. The `project` tool is the cleanest example — it absorbed four old tools (`list_povs`, `get_pov_details`, `list_tasks`, `get_task_context`), each of which had a full Chapter-2-compliant description.
+
+The numbers, measured from the actual descriptions:
+
+| Description | Tokens (approx) |
+|---|---|
+| `list_povs` | 354 |
+| `get_pov_details` | 407 |
+| `list_tasks` | 428 |
+| `get_task_context` | 458 |
+| **Four separate descriptions** | **~1,646** |
+| **Consolidated `project` description** | **~421** |
+| **Reduction** | **74%** |
+
+Seventy-four percent, for this tool family — higher than the ~50% whole-surface average, because these four tools cross-referenced each other heavily and that's exactly the kind of text that disappears on merge.
+
+**And critically — accuracy was preserved.** Every action still has its own line in the `EXAMPLES` block, its own entry in the `RETURNS` shape, its own row in the `ACTIONS` list. Nothing about *what each action does* was lost. What got cut wasn't per-action detail. It was three kinds of repetition:
+
+1. **Four `WHEN TO USE` blocks became one.** Each old tool opened with its own ✅/❌ framing. The consolidated tool has a single `Yes / No` block covering the whole entity.
+
+2. **Inter-tool cross-references vanished.** This is the big one. The old descriptions spent real tokens pointing at each other:
+   - `list_povs`: *"First step before `get_pov_details`"*, *"Already know POV name (use `get_pov_details` directly)"*
+   - `get_pov_details`: *"Just browsing POVs (use `list_povs` instead)"*
+   - `list_tasks`: *"First step before `get_task_context`"*, *"Deep task analysis (use `get_task_context` instead)"*
+   - `get_task_context`: *"Just need task list (use `list_tasks` instead)"*
+
+   Once these four are one tool, you don't tell the AI client to switch tools — it's the same tool, a different `action`. Every one of those cross-references collapses into a single five-step `WORKFLOW` block that shows the sequence once: `pov.list → pov.details → task.list → task.context → perform`.
+
+3. **Four `SEE ALSO` blocks became one.** The shared "see also `perform` / `analytics` / `search`" pointers were written four times; now once.
+
+The mechanism, stated plainly: **consolidation de-duplicates the shared framing and deletes the now-pointless "use the other tool instead" cross-references, while keeping every action's specific examples and return shapes intact.** That's why the surface reads as accurate as before in a quarter of the tokens. It's Gold Standard 1 (Description UX) applied one level up — the same discipline that makes a single tool's description good makes a consolidated tool's description *efficient*.
+
+(`perform` saw the same effect at larger scale — fourteen actions' worth of merged framing — but the cross-reference collapse is easiest to see in `project`'s four.)
+
+---
+
 ## The metrics — before and after
 
 Approximate, in pAIchart's specific environment. Numbers will vary on other servers depending on description verbosity and the descriptions' adherence to Chapter 2's standards.
