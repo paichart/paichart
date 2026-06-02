@@ -1,4 +1,4 @@
-# Chapter 7 — Tool Consolidation: A Case Study (28 Tools → 10)
+# Chapter 7 — Tool Consolidation: A Case Study (26 Tools → 10)
 
 **Audience**: Engineers thinking about an MCP tool surface that's grown beyond easy comprehension — too many tools, inconsistent naming, per-request token overhead getting expensive.
 **Prerequisite**: Chapter 6 (the 7-layer lifecycle) gives you the mental model. Chapters 4 and 5 are the bug classes that consolidation can incidentally make better. None are strictly required.
@@ -8,7 +8,7 @@
 
 ## What this chapter teaches
 
-A walk-through of an architectural decision we made on pAIchart's MCP server in March 2026: collapsing 28 individual tools into 10 (six action-routed plus four standalone).
+A walk-through of an architectural decision we made on pAIchart's MCP server in March 2026: collapsing 26 individual tools into 10 (six action-routed plus four standalone).
 
 The chapter covers the starting point, the three forces that made consolidation worth doing, the decision criteria, the mapping itself, and the metrics we observed. It doubles as a tour of pAIchart's current tool surface — when the chapter mentions `project(action: "pov.list")`, that's a real tool you can call against the production server today.
 
@@ -16,9 +16,9 @@ The chapter covers the starting point, the three forces that made consolidation 
 
 ---
 
-## The starting point — 28 tools
+## The starting point — 26 tools
 
-In late 2025, pAIchart's MCP server exposed 28 distinct tools. Each was registered, schema'd, security-tiered, and routed individually. The naming reflected the order in which features had been added, not any consistent vocabulary. The list looked roughly like this:
+By early 2026, pAIchart's MCP server exposed 26 distinct tools. Each was registered, schema'd, security-tiered, and routed individually. The naming reflected the order in which features had been added, not any consistent vocabulary. The list looked like this:
 
 ```
 list_povs                  list_tasks
@@ -33,13 +33,10 @@ get_workflow_status        cancel_workflow
 list_workflow_executions   register_service
 update_service             delete_service
 list_my_services           get_service_tools
-list_browser_templates     get_browser_template_details
-validate_browser_template_parameters
-create_browser_automation_task
 list_prompts               prompt_command
 ```
 
-Each one was technically working. AI clients could call them. The surface was the result of three years of incremental feature addition — every new feature got its own tool name, and nobody had ever stopped to harmonise them.
+Each one was technically working. AI clients could call them. The surface was the result of incremental feature addition — every new feature got its own tool name, and nobody had ever stopped to harmonise them. (The count had drifted in the high-20s for months; browser automation, for instance, had already moved out to its own MCP service reachable via `call_service`, which is why it isn't in this list.)
 
 The trouble was that the surface had three mutually-reinforcing problems.
 
@@ -49,7 +46,7 @@ The trouble was that the surface had three mutually-reinforcing problems.
 
 Every tool definition is sent to the AI client on every `tools/list` request. The AI client uses these definitions to decide which tool to call. That means tool definitions occupy context window space on every conversation turn.
 
-The pre-consolidation tool definitions, fully fleshed out with the description-UX standards from Chapter 2 (`WHEN TO USE`, `EXAMPLES`, `SEE ALSO`, `WORKFLOW`), came in at roughly 700–900 tokens each. Twenty-eight of them produced approximately **22,000 tokens of overhead per turn** in pAIchart's environment.
+The pre-consolidation tool definitions, fully fleshed out with the description-UX standards from Chapter 2 (`WHEN TO USE`, `EXAMPLES`, `SEE ALSO`, `WORKFLOW`), came in at roughly 700–900 tokens each. Twenty-six of them produced approximately **22,000 tokens of overhead per turn** in pAIchart's environment.
 
 That number is workable but expensive. On a 200,000-token model context, 22k for tool definitions alone is more than ten percent of the budget — and it's paid every turn, regardless of whether the AI client uses any of those tools that turn. Most turns don't use most tools; the budget is paying for visibility, not value.
 
@@ -152,7 +149,6 @@ For developers familiar with the pre-consolidation surface, the migration looked
 | `analyze_team_performance` | `analytics(action: "team.performance")` |
 | `list_agent_templates` | `template(action: "list")` |
 | `get_agent_template_details` | `template(action: "details")` |
-| `list_browser_templates` | `template(action: "list", category: "browser")` |
 | `discover_services` | `services(action: "discover")` |
 | `call_service` | `services(action: "call")` |
 | `get_service_health` | `services(action: "health")` |
@@ -163,7 +159,7 @@ For developers familiar with the pre-consolidation surface, the migration looked
 | `get_service_tools` | `registry(action: "tools")` |
 | `search`, `fetch`, `prompt_command`, `list_prompts` | (unchanged — left standalone) |
 
-Browser-automation tools deserve special mention: `list_browser_templates`, `get_browser_template_details`, `validate_browser_template_parameters`, and `create_browser_automation_task` were absorbed into the agent-template surface. Browser templates are now listed via `template(action: "list", category: "browser")`; their parameters are surfaced via `template(action: "details", templateId)`; execution is via `perform(action: "agent.execute")` after `perform(action: "agent.assign")`. The browser-specific tool names are no longer exposed.
+Browser automation deserves a note, because it's the reason the count was 26 and not higher. The browser tools (`list_browser_templates`, `create_browser_automation_task`, and friends) had already been moved *out* of this server into a standalone browser-automation MCP service before the consolidation, reachable via `call_service` and, post-consolidation, via `services(action: "call")`. They were never part of the 26-tool surface that got consolidated — they were an earlier, separate piece of the same broader rationalisation.
 
 ---
 
@@ -214,12 +210,12 @@ Approximate, in pAIchart's specific environment. Numbers will vary on other serv
 
 | Metric | Before | After | Change |
 |---|---|---|---|
-| Total tools registered | 28 | 10 | −18 (−64%) |
+| Total tools registered | 26 | 10 | −16 (−62%) |
 | Per-turn token overhead (tool definitions) | ~22,000 | ~11,000 | ~−50% |
-| Lines in `tool-security.js` | 28 entries | 10 entries | −64% |
-| Lines in `tool-annotations.js` | 28 entries | 10 entries | −64% |
-| Lines in tool registration arrays (Layer 6) | ~28 | ~10 | −64% |
-| Number of distinct security-tier rules | 28 | 10 (+ handler-level for action-specific) | dependency-shifted |
+| Lines in `tool-security.js` | 26 entries | 10 entries | −62% |
+| Lines in `tool-annotations.js` | 26 entries | 10 entries | −62% |
+| Lines in tool registration arrays (Layer 6) | ~26 | ~10 | −62% |
+| Number of distinct security-tier rules | 26 | 10 (+ handler-level for action-specific) | dependency-shifted |
 | AI-client tool-call accuracy on first try | (baseline) | improved (no precise metric) | qualitative |
 
 Two things to flag about these numbers. First, the per-turn token overhead is approximate — exact counts depend on how the AI client tokenises individual tool names, descriptions, and JSON schemas, and the model's tokeniser specifics matter. Treat ~22k → ~11k as the order of magnitude in our environment; the directional 50% reduction is real but the precise figures are estimates, not measurements published from the model provider's side.
