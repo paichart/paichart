@@ -52,6 +52,12 @@ The implementation cost is the discovery layer itself: a registry (database tabl
 
 The honest cost: services need a way to *describe* their capabilities. Free-text won't do — different authors will use different words for the same thing. pAIchart uses a categorical taxonomy (`category` + `capabilities` array) plus substring search across service name and description. Designing that taxonomy is real work; getting it wrong shows up as discovery returning the wrong services.
 
+### The hub eats its own cooking
+
+One design choice worth surfacing, because it's a useful pattern in its own right: **pAIchart's own first-party tools are registered in the hub as internal services.** The consolidated `project` and `perform` tools from Chapter 7 aren't a special case bolted onto the hub — they're registered as an internal service (`paichart-project-service`) discoverable through the same `services(action: "discover")` call as any third-party service, and callable through the same `services(action: "call")` path. The only difference is the transport: internal services route in-process (no HTTP hop, no network auth, health verified by a startup registration check) rather than over the wire. The platform consumes itself through its own registry.
+
+This unlocks a subtler pattern — **interface segregation by consumer**. The same underlying capability can present *different surfaces to different audiences through the one registry*. pAIchart's direct `project` tool (what an AI client sees in `tools/list`) exposes a deliberately lean set of actions tuned for token economy. The internal service registration of the same capability exposes a *richer* set — additional read actions that the workflow engine and other internal services compose into multi-step flows, but which would only bloat the AI client's tool enum if exposed there. One capability, two surfaces, segregated by who's calling. The hub registry is what makes that split expressible rather than requiring two separate codebases.
+
 ---
 
 ## Multi-service workflow orchestration
