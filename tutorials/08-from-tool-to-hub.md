@@ -151,9 +151,9 @@ If you've followed the series this far, the Hub is the live example of every pat
 
 Three places to look if you want to go deeper:
 
-- **The platform itself** — connect Claude Desktop, ChatGPT, or any MCP client to `https://paichart.app` and run `services(action: "discover")` against the live hub.
-- **The repository** — `github.com/paichart/paichart` is open. The hub orchestration code, the discovery layer, the registration tooling, and the OAuth proxy implementation are all there.
-- **The internal documentation** — the patterns referenced throughout this series (`patterns/oauth-token-minting-not-passthrough.md`, `patterns/identity-preserving-token-forwarding-pattern.md`, `domain/mcp/mcp-hub-workflow-orchestration-reference.md`) are in `.claude/knowledge/` in the repository.
+- **The platform itself** — connect Claude Desktop, ChatGPT, or any MCP client to `https://paichart.app/mcp` and run `services(action: "discover")` against the live hub.
+- **The tutorial series** — `github.com/paichart/paichart` hosts this series, freely shared under CC-BY. (pAIchart's platform code is not open source — the repository is the tutorials, not the application.)
+- **The patterns** — the engineering patterns referenced throughout this series (OAuth token minting vs. passthrough, identity-preserving token forwarding, the hub orchestration reference) are pAIchart-internal notes; the chapters quote the parts that matter, so you don't need the originals to apply them.
 
 ---
 
@@ -162,15 +162,6 @@ Three places to look if you want to go deeper:
 This is the last planned chapter in the series. Chapter 1 — the gentle entry point — is also drafted; you can read it if you came in cold from this chapter and want to start over with the foundational framing.
 
 If the series is useful and you spot gaps, the canonical place to file them is the GitHub repository's issues page. The patterns the series documents are themselves still evolving; the next iteration of any of these chapters depends partly on what readers actually run into when they apply them.
-
----
-
-## Provenance
-
-pAIchart's Hub architecture is documented across several knowledge-base files (`agents/mcp-hub-specialist.md`, `discoveries/mcp-hub-discovery.md`, `domain/mcp/mcp-hub-workflow-orchestration-reference.md`). The External OAuth pattern is documented in `patterns/oauth-token-minting-not-passthrough.md`. The first 90-day key rotation cited in the chapter is real and scheduled for April 2026.
-
-- pAIchart Hub overview: <https://paichart.app>
-- Source repository: <https://github.com/paichart/paichart>
 
 ---
 
