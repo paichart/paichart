@@ -79,9 +79,11 @@ The pre-consolidation surface forced AI clients to learn each tool name as a fac
 
 Every tool had its own entry in the security tier file (Layer 2 in Chapter 6's vocabulary). When a permission decision spanned multiple operations — "admins can view agent templates AND see results of agent runs" — the rule had to be written twice, once per tool.
 
-When an action wanted to be admin-only inside an otherwise-authenticated tool (the `pov.create` action being the canonical example), there was no clean way to express it. Either the entire enclosing tool became admin (excluding the legitimate authenticated use cases) or every authenticated user could create POVs (which was wrong).
+When an action wanted to be admin-only inside an otherwise-authenticated tool (`pov.create` and `pov.update` are the live examples — both are admin-gated, while the rest of `perform` is open to any authenticated user), there was no clean way to express it. Either the entire enclosing tool became admin (excluding the legitimate authenticated use cases) or every authenticated user could create and edit POVs (which was wrong).
 
 The pre-consolidation surface conflated two different axes — *which tool you can see* and *which actions within a tool you can perform* — into one axis: tool visibility. The two-layer permission model from Chapter 6 was technically possible but uncomfortable to express on the existing surface.
+
+Consolidation resolved this cleanly, and it's a benefit worth calling out rather than just a cost avoided. After consolidation, the `perform` tool sits in the AUTHENTICATED tier (every logged-in user sees it), and the two admin-only actions enforce their own role check inside the handler — `pov.create` and `pov.update` reject non-admins; the other twelve actions don't. Tool-level visibility and per-action authorization became two independent axes instead of one overloaded one. That separation was awkward-to-impossible on the flat 26-tool surface and is straightforward on the consolidated one.
 
 ---
 
@@ -98,7 +100,7 @@ project(action: "task.context")
 perform(action: "pov.create")
 perform(action: "task.create")
 perform(action: "task.update")
-... (13 actions total under perform)
+... (14 actions total under perform)
 
 analytics(action: "recommendations.get")
 analytics(action: "team.performance")
@@ -118,11 +120,13 @@ registry(action: "list")
 
 Six consolidated tools. Each one routed by action. Plus four tools that didn't benefit from grouping (`search`, `fetch`, `prompt_command`, `list_prompts`) and were left standalone.
 
+Worth stating plainly, because it's the part that surprises people: **nothing was removed.** The six consolidated tools expose **34 actions** between them (project 4, perform 14, analytics 2, template 2, services 7, registry 5). Add the four standalone tools and the surface still does everything it did before. Consolidation didn't shrink capability — it reorganised 26 flat tool names into 10 tools exposing 34 actions. What the AI client *sees* in `tools/list` dropped from 26 entries to 10; what it can *do* stayed whole. The token saving (next section) comes entirely from the smaller `tools/list`, not from cutting features.
+
 The decision criteria for *what to consolidate*:
 
 - **Same entity** — all four `project` actions return data about projects (POVs and tasks). They share parameter shapes and authentication concerns.
 - **Same security tier** — `template(action: "list")` and `template(action: "details")` are both ADMIN-only. Consolidating them under `template` means a single entry in the security file.
-- **Action enum is small enough to be readable** — `perform` exposes thirteen actions, which is at the edge of comfortable. More than that and the description's `[WHICH ACTION DO I USE?]` block (Chapter 2 GS5) starts hurting more than helping.
+- **Action enum is small enough to be readable** — `perform` exposes fourteen actions, which is at the edge of comfortable. More than that and the description's `[WHICH ACTION DO I USE?]` block (Chapter 2 GS5) starts hurting more than helping.
 - **The actions form a workflow** — `services` exposes `discover` → `call` → `health` and `workflow.execute` → `workflow.status`. The grouping reflects how an AI client actually uses these in sequence.
 
 The decision criteria for *what to leave standalone*:
@@ -198,6 +202,8 @@ class ProjectDispatcher {
 
 No business logic. Just routing. The `perform` tool is slightly different — it binds directly to the existing `TaskActionHandler.handle()` rather than introducing a dispatcher class, because `TaskActionHandler` already routed by sub-action internally. Functionally equivalent; structurally simpler.
 
+The routing happens at two distinct scopes, and confusing them is the most common misreading of a consolidated surface. The MCP server **registers the bare tool name** — `toolHandlers.set('project', …)`, `toolHandlers.set('perform', …)`. That bare name is what appears in `tools/list`; that's why the client sees 10 entries, not 34. The `action` value lives *inside* the call arguments, and the dispatcher reads it to pick a handler. So `project(action: "pov.list")` is the *invocation form an AI client uses* — it is not a registered tool name. There is no tool called `project(action: "pov.list")` anywhere in the registry; there is a tool called `project` that receives `{ action: "pov.list", ... }`. Keeping that distinction straight is what makes the token math (10 visible names) and the dispatch (34 reachable actions) both true at once.
+
 ### Per-action handlers (Layer 4, mostly unchanged)
 
 The handlers themselves did not move. `handleListPOVs`, `handleGetPOVDetails`, etc. continued to live in `sdk-native-basic-tools.js`. The dispatcher simply called them with the destructured parameters. This was the most important property of the migration: **no business logic moved**. If the consolidation had required rewriting handlers, the work would have been five or ten times bigger and the risk of regression correspondingly larger.
@@ -210,7 +216,8 @@ Approximate, in pAIchart's specific environment. Numbers will vary on other serv
 
 | Metric | Before | After | Change |
 |---|---|---|---|
-| Total tools registered | 26 | 10 | −16 (−62%) |
+| Total tools registered (visible in `tools/list`) | 26 | 10 | −16 (−62%) |
+| Actions reachable | 26 | 34 | capability preserved |
 | Per-turn token overhead (tool definitions) | ~22,000 | ~11,000 | ~−50% |
 | Lines in `tool-security.js` | 26 entries | 10 entries | −62% |
 | Lines in `tool-annotations.js` | 26 entries | 10 entries | −62% |
@@ -228,7 +235,7 @@ Second, the "AI-client tool-call accuracy on first try" improvement is qualitati
 
 Two things are honest to flag.
 
-**The action enum is wide.** `perform` has thirteen actions. `services` has seven. `registry` has five. The AI client has to read the `[WHICH ACTION DO I USE?]` block in the description to pick the right one. For most cases this is fine — the block is structured as a decision tree (Chapter 2 GS5). For cases at the edges of the enum, the AI client occasionally picks an adjacent action and the call fails for the wrong reason. The fix is sharper decision-tree language; the cost is real but manageable.
+**The action enum is wide.** `perform` has fourteen actions. `services` has seven. `registry` has five. The AI client has to read the `[WHICH ACTION DO I USE?]` block in the description to pick the right one. For most cases this is fine — the block is structured as a decision tree (Chapter 2 GS5). For cases at the edges of the enum, the AI client occasionally picks an adjacent action and the call fails for the wrong reason. The fix is sharper decision-tree language; the cost is real but manageable.
 
 **Action-specific parameters are now optional in the schema.** When `project` declares `povId` as optional (because `pov.details` requires it but `task.list` doesn't), the schema is technically permissive of nonsensical combinations like `project(action: "task.list", povId: "...", taskId: "...")`. Validation has to happen at the action-handler level, not just at schema parse time. The per-action handlers handle this — they reject calls with the wrong fields — but the *schema* is no longer an accurate description of valid combinations. For very strict tooling that derives from the schema (auto-generated documentation, parameter validators), the consolidation surfaces have to be accompanied by per-action validation schemas.
 
