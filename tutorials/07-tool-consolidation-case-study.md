@@ -8,9 +8,11 @@
 
 ## What this chapter teaches
 
-A walk-through of an architectural decision we made on pAIchart's MCP server in March 2026: collapsing 28 individual tools into 10 (six action-routed plus four standalone). Not a how-to — the specifics are pAIchart's. A case study, with the goal of showing what the costs and benefits looked like for one team and what trade-offs we accepted.
+A walk-through of an architectural decision we made on pAIchart's MCP server in March 2026: collapsing 28 individual tools into 10 (six action-routed plus four standalone).
 
 The chapter covers the starting point, the three forces that made consolidation worth doing, the decision criteria, the mapping itself, and the metrics we observed. It doubles as a tour of pAIchart's current tool surface — when the chapter mentions `project(action: "pov.list")`, that's a real tool you can call against the production server today.
+
+**This is a case study, not a how-to.** The specific tool names, the mapping table, and the token numbers are pAIchart's. What transfers to your situation is the *decision framework*: the three forces that justify consolidation, the criteria for what to merge versus leave standalone, and the costs you accept in return. If you're weighing consolidation for your own surface, the [When to do this on your own server](#when-to-do-this-on-your-own-server) section at the end is the practical test. For the `entity(action: "verb")` syntax used throughout, see [Chapter 2's note on the example syntax](02-the-ten-gold-standards.md#a-note-on-the-example-syntax).
 
 ---
 
@@ -228,15 +230,13 @@ Second, the "AI-client tool-call accuracy on first try" improvement is qualitati
 
 ## What it cost
 
-Three things are honest to flag.
+Two things are honest to flag.
 
 **The action enum is wide.** `perform` has thirteen actions. `services` has seven. `registry` has five. The AI client has to read the `[WHICH ACTION DO I USE?]` block in the description to pick the right one. For most cases this is fine — the block is structured as a decision tree (Chapter 2 GS5). For cases at the edges of the enum, the AI client occasionally picks an adjacent action and the call fails for the wrong reason. The fix is sharper decision-tree language; the cost is real but manageable.
 
 **Action-specific parameters are now optional in the schema.** When `project` declares `povId` as optional (because `pov.details` requires it but `task.list` doesn't), the schema is technically permissive of nonsensical combinations like `project(action: "task.list", povId: "...", taskId: "...")`. Validation has to happen at the action-handler level, not just at schema parse time. The per-action handlers handle this — they reject calls with the wrong fields — but the *schema* is no longer an accurate description of valid combinations. For very strict tooling that derives from the schema (auto-generated documentation, parameter validators), the consolidation surfaces have to be accompanied by per-action validation schemas.
 
-**Standalone tools become invisible to future hardening passes.** The consolidation produces two categories — six dispatcher-routed tools and four standalone (`search`, `fetch`, `prompt_command`, `list_prompts`). Subsequent architectural work naturally targets the dispatchers, because they are the new structure the consolidation introduced — and the standalone tools, untouched by the refactor, become an unenumerated class that a grep for dispatchers does not surface. The first concrete instance arrived two months later: a rollout that added schema enforcement at the dispatch boundary (Chapter 9's GS14) wired the five consolidated dispatchers and missed the standalone tools entirely. The validator's schema-lookup table was scoped to a `CONSOLIDATED_SCHEMAS` registry; the standalone tools' schemas lived in a separate `TOOL_SCHEMAS` registry and were silently unenforced until a deployed-server smoke test caught it. The fix is a single fallback line in the lookup. The lesson is structural — the category boundary the consolidation creates needs to be a named axis of any future audit, not an artifact that gets forgotten.
-
-None of these costs is fatal. All three are worth knowing about before you decide.
+Neither cost is fatal. Both are worth knowing about before you decide.
 
 ---
 
