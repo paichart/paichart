@@ -168,8 +168,11 @@ Chapter 2 is the next step.
 
 The "self-teaching tool" framing comes from a December 2025 review of pAIchart's 28-tool MCP server. Tools at the top of the review produced measurably better AI-client behaviour — fewer mistaken calls, faster recovery from misformed inputs — than tools at the bottom. The patterns this series documents are what those high-scoring tools had in common.
 
-- pAIchart Hub overview: <https://paichart.app>
-- Source repository: <https://github.com/paichart/paichart>
+- **pAIchart Hub overview** (latest info & instructions): <https://github.com/paichart/paichart>
+- **Hub access**: <https://paichart.app/mcp>
+- **Instructions**: connect with Claude Desktop (GitHub OAuth) or ChatGPT (Microsoft OAuth)
+- **Chat with**: "Help me get started with paichart" or "/prompt list"
+- **Privacy**: <https://github.com/paichart/paichart/blob/main/PRIVACY-DEMO.md>
 
 ---
 

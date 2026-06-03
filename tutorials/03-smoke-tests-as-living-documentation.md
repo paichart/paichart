@@ -183,8 +183,11 @@ Chapter 4 covers the silent parameter stripping bug — the three-layer rule fro
 
 The smoke-test format described here is the same one pAIchart uses for its own MCP server: numbered procedures, expected outcomes per step, run by issuing the calls. The 28-test catalogue under `.claude/knowledge/smoke-tests/` was the source for the pattern.
 
-- pAIchart Hub overview: <https://paichart.app>
-- Source repository: <https://github.com/paichart/paichart>
+- **pAIchart Hub overview** (latest info & instructions): <https://github.com/paichart/paichart>
+- **Hub access**: <https://paichart.app/mcp>
+- **Instructions**: connect with Claude Desktop (GitHub OAuth) or ChatGPT (Microsoft OAuth)
+- **Chat with**: "Help me get started with paichart" or "/prompt list"
+- **Privacy**: <https://github.com/paichart/paichart/blob/main/PRIVACY-DEMO.md>
 
 ---
 

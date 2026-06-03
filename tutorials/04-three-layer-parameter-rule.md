@@ -201,8 +201,11 @@ Chapter 5 covers a related but distinct bug class: transport boundary argument c
 
 The three-layer rule was extracted from a production pipeline test failure on pAIchart's MCP server (early 2026). A new parameter had been added to the tool schema and the handler, but not to the validation schema in between; the parameter was silently stripped, and the failure surfaced only when an end-to-end pipeline test exercised it. The pattern that emerged from the post-mortem is documented in `.claude/knowledge/patterns/mcp-parameter-three-layer-pattern.md`.
 
-- pAIchart Hub overview: <https://paichart.app>
-- Source repository: <https://github.com/paichart/paichart>
+- **pAIchart Hub overview** (latest info & instructions): <https://github.com/paichart/paichart>
+- **Hub access**: <https://paichart.app/mcp>
+- **Instructions**: connect with Claude Desktop (GitHub OAuth) or ChatGPT (Microsoft OAuth)
+- **Chat with**: "Help me get started with paichart" or "/prompt list"
+- **Privacy**: <https://github.com/paichart/paichart/blob/main/PRIVACY-DEMO.md>
 
 ---
 

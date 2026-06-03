@@ -272,8 +272,11 @@ Chapter 6 is the architectural chapter. It covers the seven layers a tool touche
 
 The transport-boundary bug class was eradicated from pAIchart in February 2026 — 13 sites fixed across 22 files, with `ensureObject` standardised as the boundary helper. The pattern is documented in `.claude/knowledge/patterns/transport-boundary-argument-coercion-pattern.md`, and the eradication followed the bug-class-eradication protocol in the same knowledge base.
 
-- pAIchart Hub overview: <https://paichart.app>
-- Source repository: <https://github.com/paichart/paichart>
+- **pAIchart Hub overview** (latest info & instructions): <https://github.com/paichart/paichart>
+- **Hub access**: <https://paichart.app/mcp>
+- **Instructions**: connect with Claude Desktop (GitHub OAuth) or ChatGPT (Microsoft OAuth)
+- **Chat with**: "Help me get started with paichart" or "/prompt list"
+- **Privacy**: <https://github.com/paichart/paichart/blob/main/PRIVACY-DEMO.md>
 
 ---
 

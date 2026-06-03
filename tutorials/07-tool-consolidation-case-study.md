@@ -303,8 +303,11 @@ Chapter 8 (optional) covers the bridge from a single MCP server to a multi-servi
 
 The consolidation described here was carried out in March 2026 (Part 1 — embedded server, March 6; Part 2 — protocol server, March 7). The plan documents are in `.claude/knowledge/domain/mcp/tool-consolidation-plan.md`, `.claude/knowledge/domain/mcp/tool-consolidation-part2-plan.md`, and `.claude/knowledge/domain/mcp/tool-consolidation-embedded-completion.md`. The post-consolidation reference is `.claude/knowledge/domain/mcp/tool-architecture-reference.md` (v2.0).
 
-- pAIchart Hub overview: <https://paichart.app>
-- Source repository: <https://github.com/paichart/paichart>
+- **pAIchart Hub overview** (latest info & instructions): <https://github.com/paichart/paichart>
+- **Hub access**: <https://paichart.app/mcp>
+- **Instructions**: connect with Claude Desktop (GitHub OAuth) or ChatGPT (Microsoft OAuth)
+- **Chat with**: "Help me get started with paichart" or "/prompt list"
+- **Privacy**: <https://github.com/paichart/paichart/blob/main/PRIVACY-DEMO.md>
 
 ---
 

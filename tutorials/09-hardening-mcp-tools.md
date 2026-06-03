@@ -469,8 +469,11 @@ The pattern is universal — it applies to any system with multiple entry paths 
 
 GS14 (Schema Enforcement at the Dispatch Boundary) was added to the [Gold Standards Specification](gold-standards-spec.md) at v1.1 as the universal codification of this pattern.
 
-- pAIchart Hub overview: <https://paichart.app>
-- Source repository: <https://github.com/paichart/paichart>
+- **pAIchart Hub overview** (latest info & instructions): <https://github.com/paichart/paichart>
+- **Hub access**: <https://paichart.app/mcp>
+- **Instructions**: connect with Claude Desktop (GitHub OAuth) or ChatGPT (Microsoft OAuth)
+- **Chat with**: "Help me get started with paichart" or "/prompt list"
+- **Privacy**: <https://github.com/paichart/paichart/blob/main/PRIVACY-DEMO.md>
 
 ---
 

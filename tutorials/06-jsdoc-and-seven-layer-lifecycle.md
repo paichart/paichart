@@ -308,8 +308,11 @@ Chapter 7 (optional) covers the bridge from a single MCP server to a multi-servi
 
 The 7-layer pipeline is documented in `.claude/knowledge/patterns/mcp-tool-lifecycle-pattern.md`. The Feb 2026 cleanup numbers (139 stale doc references across 36 files, 356 lines of dead helper code, etc.) are from that file's *Anti-Patterns* section, which captures the actual findings of the cleanup session. The two verification scripts cited here are real, in `/scripts/`.
 
-- pAIchart Hub overview: <https://paichart.app>
-- Source repository: <https://github.com/paichart/paichart>
+- **pAIchart Hub overview** (latest info & instructions): <https://github.com/paichart/paichart>
+- **Hub access**: <https://paichart.app/mcp>
+- **Instructions**: connect with Claude Desktop (GitHub OAuth) or ChatGPT (Microsoft OAuth)
+- **Chat with**: "Help me get started with paichart" or "/prompt list"
+- **Privacy**: <https://github.com/paichart/paichart/blob/main/PRIVACY-DEMO.md>
 
 ---
 

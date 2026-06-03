@@ -164,7 +164,11 @@ This addendum documents a single incident on 2026-05-28: a transient stale-keep-
 
 The pattern of the loop — capture, contextualise, reproduce-and-distrust, decompose, feed-the-standard — is universal. The specifics (an energy-data service, a 30-second ceiling) are the substrate, not the lesson.
 
-- pAIchart Hub overview: <https://paichart.app>
+- **pAIchart Hub overview** (latest info & instructions): <https://github.com/paichart/paichart>
+- **Hub access**: <https://paichart.app/mcp>
+- **Instructions**: connect with Claude Desktop (GitHub OAuth) or ChatGPT (Microsoft OAuth)
+- **Chat with**: "Help me get started with paichart" or "/prompt list"
+- **Privacy**: <https://github.com/paichart/paichart/blob/main/PRIVACY-DEMO.md>
 - Companion: [Chapter 2 — Ten Gold Standards](02-the-ten-gold-standards.md) · [Chapter 11 — Error Recovery Signals: Fact vs. Verdict](11-error-recovery-signals.md) · [Chapter 9 — Hardening MCP Tools](09-hardening-mcp-tools.md)
 
 ---
