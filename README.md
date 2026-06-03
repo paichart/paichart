@@ -2,7 +2,7 @@
 
 pAIchart is an MCP hub for AI-native delivery management — POVs, tasks, and phases you drive in natural language — plus a registry of external MCP services you can discover, call, and orchestrate into multi-service workflows.
 
-Users can self-register services and connect agents or AI clients to any MCP service through a single Hub with trust-level authentication, per-user OAuth passthrough, and multi-service workflows.
+Anyone can self-register a service; agents and AI clients then reach all of them through a single Hub with trust-level authentication and per-user OAuth passthrough.
 
 ## What pAIchart Does
 
@@ -20,22 +20,39 @@ Users can self-register services and connect agents or AI clients to any MCP ser
 - **Multi-Service Workflows** — Chain services sequentially, in parallel, or conditionally with variable passing
 - **Per-User Authentication** — Each user's operations run as themselves via External OAuth (validated with Snowflake)
 - **Trust Level System** — 6-tier security model controls token forwarding (INTERNAL → TRUSTED → OWNER → TEAM_MEMBER → SCOPED → ANONYMOUS)
-- **JWKS Token Validation** — RS256 asymmetric cryptography, public key verification, 95/100 security score
+- **JWKS Token Validation** — RS256 asymmetric cryptography, public-key verification, no shared secrets
 - **Per-Service Audience Scoping** — Hub-minted access tokens carry a per-service audience (RFC 8707 resource indicators): each service receives a short-lived credential scoped to *only itself*, so a token leaked from one service can't be replayed against another. Services that validate it via JWKS can accept pAIchart-issued identity instead of static API keys in URLs.
 - **Trustworthy Error-Recovery Signals** — When a service call fails, the Hub returns *facts* an AI client can act on — the honoured timeout, the service's recent success rate, and recovery guidance that never points at a blind health check — rather than unvalidated verdicts that can mislead. Built so the client recovers on its own; see the [Error Recovery Signals](tutorials/11-error-recovery-signals.md) case study.
 
-## How It Works
+## Get Started
+
+pAIchart is a hosted MCP hub — nothing to install. Point your AI client at the endpoint, authenticate, and start asking in natural language.
+
+- **Hub access**: `https://paichart.app/mcp`
+- **Connect with**: Claude Desktop (GitHub OAuth) or ChatGPT (Microsoft OAuth)
+- **First thing to say**: *"Help me get started with paichart"* — or run `/prompt list` to see every guided workflow
+- **Privacy**: [PRIVACY-DEMO.md](./PRIVACY-DEMO.md) — what a demo account holds, what it can do, 30-day auto-deletion
+
+Once you're connected, try:
+
+- *"Which of my POVs are at risk?"* — delivery analytics, answered directly
+- *"Discover services"* — browse the registry by capability
+- *"Run the prompt `energy_operations_optimizer`"* — correlates weather forecasts with energy data into operational recommendations, a multi-service workflow across two live services
+
+## Under the Hood
+
+Every request is either answered directly or composed into a workflow across services — and every external call runs as *you*, never as a shared platform account:
 
 ```
-User (Claude Desktop / ChatGPT)
-  → Authenticates to pAIchart Hub
-  → Asks in natural language, e.g.
-      • "Which of my POVs are at risk?"        → project / analytics tools answer directly
-      • "Screenshot the dashboard and email it" → Hub composes a multi-service workflow
-  → For external service calls:
-      → Hub discovers services by capability, determines trust level, forwards JWT if authorized
-      → External service validates JWT via JWKS
-  → Operations execute as the authenticated user
+You (Claude Desktop / ChatGPT)
+  → authenticate to the pAIchart Hub
+  → ask in natural language, e.g.
+      • "Which of my POVs are at risk?"            → project / analytics tools answer directly
+      • "Texas energy mix + this week's weather"   → Hub composes a multi-service workflow
+  → for external service calls:
+      → Hub discovers services by capability, determines trust level, mints a per-service JWT
+      → the external service validates it via JWKS — no shared API keys
+  → operations execute as the authenticated user
 ```
 
 ## Live Services
@@ -73,11 +90,10 @@ Services that support External OAuth (like Snowflake, Databricks) get per-user a
 ## Links
 
 - **Platform**: [paichart.app](https://paichart.app)
-- **MCP Endpoint**: `https://paichart.app/mcp`
 - **JWKS**: `https://paichart.app/api/auth/jwks`
-- **Documentation**: Provided as a resource (or use /prompt list) in your AI Client
+- **Documentation**: provided as an MCP resource (or run `/prompt list`) in your AI client
 - **Demo User Privacy**: [PRIVACY-DEMO.md](./PRIVACY-DEMO.md) — what a demo account holds, what it can do, 30-day auto-deletion
 
 ## Keywords
 
-`mcp` `mcp-hub` `mcp-server` `mcp-orchestration` `model-context-protocol` `ai-native` `delivery-management` `proof-of-value` `pov` `task-management` `project-management` `ai-services` `service-discovery` `external-oauth` `jwks` `per-service-audience` `rfc8707` `per-user-authentication` `workflow-orchestration` `error-recovery` `mcp-tutorials` `claude-desktop` `chatgpt` `snowflake`
+`mcp` `mcp-hub` `mcp-server` `mcp-orchestration` `model-context-protocol` `ai-native` `delivery-management` `proof-of-value` `pov` `task-management` `project-management` `ai-services` `service-discovery` `external-oauth` `jwks` `per-service-audience` `rfc8707` `per-user-authentication` `workflow-orchestration` `error-recovery` `mcp-tutorials` `claude-desktop` `chatgpt` `snowflake` `context7`
