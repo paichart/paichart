@@ -839,8 +839,11 @@ The fifteen standards apply to any MCP server. They were extracted from pAIchart
 
 "In continuous use" also means continuously revised by contact with the field. For a worked example of one such revision — a real incident in which a tool's error response met GS3 and GS7 on paper yet led an AI client to a wrong conclusion, and the loop that turned it into a standard refinement — see [Addendum: The Field-Failure Loop](02-addendum-the-field-failure-loop.md). It is the reactive counterpart to the proactive audit loop in *Applying these standards to your own server* above.
 
-- pAIchart Hub overview: <https://paichart.app>
-- Source repository: <https://github.com/paichart/paichart>
+- **pAIchart Hub overview** (latest info & instructions): <https://github.com/paichart/paichart>
+- **Hub access**: <https://paichart.app/mcp>
+- **Instructions**: connect with Claude Desktop (GitHub OAuth) or ChatGPT (Microsoft OAuth)
+- **Chat with**: "Help me get started with paichart" or "/prompt list"
+- **Privacy**: <https://github.com/paichart/paichart/blob/main/PRIVACY-DEMO.md>
 
 ---
 
