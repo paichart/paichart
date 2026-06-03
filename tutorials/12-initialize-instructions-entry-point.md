@@ -132,6 +132,24 @@ We left the `_meta` in place — it's spec-safe, zero-cost, and forward-compatib
 4. **Two transports means two places to forget a spec field.** Single-source the value so the paths can't drift, then pin it with a parity test.
 5. **Verify your levers are load-bearing.** The server-side `alwaysLoad` hint is inert today; we found out by testing, not by assuming.
 
+---
+
+## Provenance
+
+The `initialize.instructions` analysis is grounded in pAIchart's own MCP server: the single-source `getServerInstructions()`, the hand-rolled HTTP transport path that drifts from the SDK, and the transport-parity gate added after the split-brain was found (mid-2026).
+
+- **pAIchart Hub overview** (latest info & instructions): <https://github.com/paichart/paichart>
+- **Hub access**: <https://paichart.app/mcp>
+- **Instructions**: connect with Claude Desktop (GitHub OAuth) or ChatGPT (Microsoft OAuth)
+- **Chat with**: "Help me get started with paichart" or "/prompt list"
+- **Privacy**: <https://github.com/paichart/paichart/blob/main/PRIVACY-DEMO.md>
+
+---
+
+## License
+
+This chapter is published under [Creative Commons Attribution 4.0 International (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/). You are free to share and adapt the material with attribution.
+
 The smallest framing: deferred loading didn't take your server away from users. It just stopped introducing you. The `initialize` instructions are your introduction — make them count, and make sure they actually ship on every path.
 
 ---

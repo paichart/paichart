@@ -165,6 +165,18 @@ If the series is useful and you spot gaps, the canonical place to file them is t
 
 ---
 
+## Provenance
+
+The hub patterns in this chapter — capability-based discovery, multi-service workflow orchestration, and per-user identity via External OAuth — run in production on pAIchart's live Hub, the worked example throughout. The example services are pAIchart's; the architecture is general to any hub.
+
+- **pAIchart Hub overview** (latest info & instructions): <https://github.com/paichart/paichart>
+- **Hub access**: <https://paichart.app/mcp>
+- **Instructions**: connect with Claude Desktop (GitHub OAuth) or ChatGPT (Microsoft OAuth)
+- **Chat with**: "Help me get started with paichart" or "/prompt list"
+- **Privacy**: <https://github.com/paichart/paichart/blob/main/PRIVACY-DEMO.md>
+
+---
+
 ## License
 
 This chapter is published under [Creative Commons Attribution 4.0 International (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/). You are free to share and adapt the material with attribution.

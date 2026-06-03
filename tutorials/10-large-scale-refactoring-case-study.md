@@ -611,3 +611,21 @@ By Wave 7 (the largest single extraction in the case study, 645 LOC moved), the 
 If your refactor surfaces a discipline that's not in this chapter — write it up. The patterns in Part A and Part B came from observed failures, not from theory. The 14th standard for your project is the one you needed but didn't have. The case-study repository has a `feedback_*.md` memory pattern for exactly this — capture the lesson in a structured note so the next person doesn't relearn it.
 
 The 13 standards in this chapter are universal. The 14th (or 20th, or 50th) is yours.
+
+---
+
+## Provenance
+
+This case study traces a real refactor of pAIchart's MCP HTTP server — `mcp-server-http-clean.js`, taken from 4,518 to roughly 1,013 lines across seven waves (early-to-mid 2026). The wave cadence, the quartet gate, and the process-trace discipline are drawn from those waves, not from theory.
+
+- **pAIchart Hub overview** (latest info & instructions): <https://github.com/paichart/paichart>
+- **Hub access**: <https://paichart.app/mcp>
+- **Instructions**: connect with Claude Desktop (GitHub OAuth) or ChatGPT (Microsoft OAuth)
+- **Chat with**: "Help me get started with paichart" or "/prompt list"
+- **Privacy**: <https://github.com/paichart/paichart/blob/main/PRIVACY-DEMO.md>
+
+---
+
+## License
+
+This chapter is published under [Creative Commons Attribution 4.0 International (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/). You are free to share and adapt the material with attribution.
