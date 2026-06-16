@@ -1,0 +1,35 @@
+{
+  "_comment": "Verified live registration descriptor for the context7-docs service, captured 2026-06-16 from registry(action:'tools') on paichart.app BEFORE it was deleted (steve.terry@paichart.com, ADMIN). This is the simulated read-only device/ansible service for the network-provisioning UAT spike. Run 1 uses this inline; Run 2 hosts it at a GitHub raw URL the Harvester fetches via scrape_page. category 'ai-intelligence' is auto-approving -> register lands ACTIVE immediately (gating condition verified). See SPIKE-PLAN.md + network-provisioning-pipeline.md R1.",
+  "name": "context7-docs",
+  "endpoint": "https://mcp.context7.com/mcp",
+  "category": "ai-intelligence",
+  "version": "1.0.0",
+  "capabilities": {
+    "tools": [
+      {
+        "name": "resolve-library-id",
+        "description": "Resolve a library name into a Context7-compatible library ID. Call this first before query-docs.",
+        "inputSchema": {
+          "type": "object",
+          "required": ["libraryName", "query"],
+          "properties": {
+            "libraryName": { "type": "string", "description": "Library name to search for (e.g. 'react', 'prisma', 'next.js')" },
+            "query": { "type": "string", "description": "The user's question or task, used to rank results by relevance" }
+          }
+        }
+      },
+      {
+        "name": "query-docs",
+        "description": "Fetch focused documentation for a library using its Context7-compatible ID. Use resolve-library-id first to get the ID.",
+        "inputSchema": {
+          "type": "object",
+          "required": ["libraryId", "query"],
+          "properties": {
+            "libraryId": { "type": "string", "description": "Context7-compatible library ID from resolve-library-id (e.g. '/mongodb/docs', '/vercel/next.js')" },
+            "query": { "type": "string", "description": "The question or task to get relevant documentation for" }
+          }
+        }
+      }
+    ]
+  }
+}
