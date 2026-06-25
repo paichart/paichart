@@ -3,7 +3,7 @@
   "name": "ceos-lab-readonly",
   "endpoint": "https://ceos-lab.paichart.app/mcp",
   "category": "automation",
-  "version": "0.1.0-phase4",
+  "version": "0.1.0",
   "capabilities": {
     "transport": "streamable-http",
     "tools": [
