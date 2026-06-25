@@ -9,10 +9,12 @@
     "tools": [
       {
         "name": "list_devices",
-        "description": "List devices in the lab inventory (hosts, groups, platform metadata). Read-only. Call this first to discover device names before fetch_data.",
+        "description": "List network devices and inventory (devices, groups, or both). Read-only. Call this first to discover device names before fetch_data.",
         "inputSchema": {
           "type": "object",
           "properties": {
+            "query_type": { "type": "string", "enum": ["devices", "groups", "all"], "default": "all", "description": "Inventory data to return: 'devices', 'groups', or 'all'" },
+            "details": { "type": "boolean", "default": false, "description": "Return full device attributes (for a devices query)" },
             "filter_name": { "type": "string", "description": "Filter by inventory device name (e.g. 'ceos1')" },
             "filter_hostname": { "type": "string", "description": "Filter by hostname / IP" },
             "filter_group": { "type": "string", "description": "Filter by group (e.g. 'arista_eos')" },
