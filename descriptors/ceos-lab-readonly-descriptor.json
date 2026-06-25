@@ -1,0 +1,58 @@
+{
+  "_comment": "Phase-4 real-device validation descriptor for the network-provisioning pipeline. The Harvester FETCHES this from its raw GitHub URL (https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json) — put that URL in the pipeline task description. It points at sydasif/nornir-mcp-server fronting a 2-node Arista cEOS lab on prod, reachable at the STABLE named cloudflared tunnel ceos-lab.paichart.app (systemd service on prod → localhost:3107). Declares the READ-ONLY harvest subset ONLY: list_devices + fetch_data(NAPALM getters). The service ALSO physically exposes Netmiko show_commands (free-text) + apply_config (mutating) — deliberately NOT declared, so the pipeline never sees or calls them (descriptor-level restriction, not service-level R1 enforcement). HONEST CAVEAT: nornir-mcp authenticates to the device with STATIC creds, NOT the JWKS-forwarded identity WS4 R2a mandates — so this is NOT WS4-conformant. It validates the COGNITION pipeline (harvest -> design -> change-package vs REAL EOS) + R9-at-the-wire, not the identity contract. Rig + runbook: copov15 .claude/knowledge/pipelines/network-provisioning/phase4-ceos-rig/.",
+  "name": "ceos-lab-readonly",
+  "endpoint": "https://ceos-lab.paichart.app/mcp",
+  "category": "automation",
+  "version": "0.1.0-phase4",
+  "capabilities": {
+    "transport": "streamable-http",
+    "tools": [
+      {
+        "name": "list_devices",
+        "description": "List devices in the lab inventory (hosts, groups, platform metadata). Read-only. Call this first to discover device names before fetch_data.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "filter_name": { "type": "string", "description": "Filter by inventory device name (e.g. 'ceos1')" },
+            "filter_hostname": { "type": "string", "description": "Filter by hostname / IP" },
+            "filter_group": { "type": "string", "description": "Filter by group (e.g. 'arista_eos')" },
+            "filter_platform": { "type": "string", "description": "Filter by platform (e.g. 'eos')" }
+          }
+        }
+      },
+      {
+        "name": "fetch_data",
+        "description": "Execute one or more READ-ONLY NAPALM getters against the EOS devices and return structured state (running-config, interfaces, facts, BGP neighbors, etc.). This is the Phase-0 harvest surface. Read-only by construction — NAPALM getters never mutate device state.",
+        "inputSchema": {
+          "type": "object",
+          "required": ["getters"],
+          "properties": {
+            "getters": {
+              "type": "array",
+              "description": "NAPALM getter names to run (short form, no 'get_' prefix). All entries are read-only EOS getters.",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "enum": [
+                  "config", "facts", "interfaces", "interfaces_ip", "interfaces_counters",
+                  "lldp_neighbors", "lldp_neighbors_detail", "bgp_neighbors", "bgp_config",
+                  "environment", "arp_table", "mac_address_table", "ntp_servers",
+                  "snmp_information", "users", "optics", "network_instances"
+                ]
+              }
+            },
+            "getters_options": {
+              "type": "object",
+              "description": "Optional per-getter options, e.g. {\"config\": {\"retrieve\": \"running\"}}.",
+              "additionalProperties": true
+            },
+            "filter_name": { "type": "string", "description": "Restrict to one inventory device name (e.g. 'ceos1')" },
+            "filter_hostname": { "type": "string", "description": "Restrict by hostname / IP" },
+            "filter_group": { "type": "string", "description": "Restrict by group" },
+            "filter_platform": { "type": "string", "description": "Restrict by platform" }
+          }
+        }
+      }
+    ]
+  }
+}
