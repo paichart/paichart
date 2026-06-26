@@ -1,6 +1,6 @@
 # pAIchart — AI-Native Delivery Management + MCP Hub
 
-pAIchart is an MCP hub for AI-native delivery management — POVs, tasks, and phases you drive in natural language — plus a registry of external MCP services you can discover, call, and orchestrate into multi-service workflows.
+pAIchart is an MCP hub for AI-native delivery management — POVs, tasks, and phases you drive in natural language — plus a registry of external MCP services you can discover, call, and orchestrate into multi-service workflows, and autonomous multi-specialist pipelines that turn an objective into a reviewed deliverable.
 
 Anyone can self-register a service; agents and AI clients then reach all of them through a single Hub with trust-level authentication and per-user OAuth passthrough.
 
@@ -23,6 +23,13 @@ Anyone can self-register a service; agents and AI clients then reach all of them
 - **JWKS Token Validation** — RS256 asymmetric cryptography, public-key verification, no shared secrets
 - **Per-Service Audience Scoping** — Hub-minted access tokens carry a per-service audience (RFC 8707 resource indicators): each service receives a short-lived credential scoped to *only itself*, so a token leaked from one service can't be replayed against another. Services that validate it via JWKS can accept pAIchart-issued identity instead of static API keys in URLs.
 - **Trustworthy Error-Recovery Signals** — When a service call fails, the Hub returns *facts* an AI client can act on — the honoured timeout, the service's recent success rate, and recovery guidance that never points at a blind health check — rather than unvalidated verdicts that can mislead. Built so the client recovers on its own; see the [Error Recovery Signals](tutorials/11-error-recovery-signals.md) case study.
+
+### Autonomous pipelines (the Pipeline Harness)
+
+Give pAIchart a one-line objective and it orchestrates a team of specialist agents into a reviewed, decision-grade deliverable — decompose into typed tasks, wire dependencies, chain each agent's full output to the next, quality-gate every step, synthesize the result. You provide direction; the agents provide labor.
+
+- **Network Provisioning** — turn *"add a Loopback0 per switch and advertise it into BGP"* into an **approved-but-unapplied change package**: the pipeline self-provisions a read-only device service from a descriptor, harvests the device's real running state, designs the change, authors per-device config + validation + rollback, and an independent reviewer gates it. **It never actuates** — apply stays human-gated; device output is sanitized before any reasoner reads it and secrets are redacted from the artifact. → [example change report](examples/network-provisioning-change-report.md)
+- **Artifact Synthesis** — turn source material (git history, execution logs, external MCP services) into a publishable deliverable (case study, post-mortem, quarterly recap) via a harvest → author → review pipeline.
 
 ## Get Started
 
@@ -96,4 +103,4 @@ Services that support External OAuth (like Snowflake, Databricks) get per-user a
 
 ## Keywords
 
-`mcp` `mcp-hub` `mcp-server` `mcp-orchestration` `model-context-protocol` `ai-native` `delivery-management` `proof-of-value` `pov` `task-management` `project-management` `ai-services` `service-discovery` `external-oauth` `jwks` `per-service-audience` `rfc8707` `per-user-authentication` `workflow-orchestration` `error-recovery` `mcp-tutorials` `claude-desktop` `chatgpt` `snowflake` `context7`
+`mcp` `mcp-hub` `mcp-server` `mcp-orchestration` `model-context-protocol` `ai-native` `delivery-management` `proof-of-value` `pov` `task-management` `project-management` `ai-services` `service-discovery` `external-oauth` `jwks` `per-service-audience` `rfc8707` `per-user-authentication` `workflow-orchestration` `error-recovery` `mcp-tutorials` `claude-desktop` `chatgpt` `snowflake` `context7` `pipeline-harness` `autonomous-agents` `network-provisioning` `change-management`
