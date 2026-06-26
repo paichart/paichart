@@ -15,7 +15,7 @@ Anyone can self-register a service; agents and AI clients then reach all of them
 
 ### MCP service hub
 
-- **Free Service Registration** — Comprehensive guides available via "/prompt list" or as MCP resources
+- **Free Service Registration** — Comprehensive guides available via `list_prompts()` or as MCP resources
 - **Service Discovery** — AI agents find services by capability, not by name
 - **Multi-Service Workflows** — Chain services sequentially, in parallel, or conditionally with variable passing
 - **Per-User Authentication** — Each user's operations run as themselves via External OAuth (validated with Snowflake)
@@ -31,13 +31,15 @@ Give pAIchart a one-line objective and it orchestrates a team of specialist agen
 - **Network Provisioning** — turn *"add a Loopback0 per switch and advertise it into BGP"* into an **approved-but-unapplied change package**: the pipeline self-provisions a read-only device service from a descriptor, harvests the device's real running state, designs the change, authors per-device config + validation + rollback, and an independent reviewer gates it. **It never actuates** — apply stays human-gated; device output is sanitized before any reasoner reads it and secrets are redacted from the artifact. → [example change report](examples/network-provisioning-change-report.md)
 - **Artifact Synthesis** — turn source material (git history, execution logs, external MCP services) into a publishable deliverable (case study, post-mortem, quarterly recap) via a harvest → author → review pipeline.
 
+Both run on the same harness — for the full how-to, see the in-product **`HOWTO-use-pipeline-harness`** guide (run `list_prompts()` in your AI client to find it).
+
 ## Get Started
 
 pAIchart is a hosted MCP hub — nothing to install. Point your AI client at the endpoint, authenticate, and start asking in natural language.
 
 - **Hub access**: `https://paichart.app/mcp`
 - **Connect with**: Claude Desktop (GitHub OAuth) or ChatGPT (Microsoft OAuth)
-- **First thing to say**: *"Help me get started with paichart"* — or run `/prompt list` to see every guided workflow
+- **First thing to say**: *"Help me get started with paichart"* — or run `list_prompts()` to see every guided workflow
 - **Privacy**: [PRIVACY-DEMO.md](./PRIVACY-DEMO.md) — what a demo account holds, what it can do, 30-day auto-deletion
 
 Once you're connected, try:
@@ -98,7 +100,7 @@ Services that support External OAuth (like Snowflake, Databricks) get per-user a
 
 - **Platform**: [paichart.app](https://paichart.app)
 - **JWKS**: `https://paichart.app/api/auth/jwks`
-- **Documentation**: provided as an MCP resource (or run `/prompt list`) in your AI client
+- **Documentation**: provided as an MCP resource (or run `list_prompts()`) in your AI client
 - **Demo User Privacy**: [PRIVACY-DEMO.md](./PRIVACY-DEMO.md) — what a demo account holds, what it can do, 30-day auto-deletion
 
 ## Keywords
