@@ -79,6 +79,8 @@ You (Claude Desktop / ChatGPT)
 
 ## Register Your MCP Service
 
+New to this? Run the **`HOWTO-register-service`** guide (`list_prompts()` in your AI client to find it) — a step-by-step walkthrough from a basic registration to Grade-A tool schemas, access control, and trust levels.
+
 Any MCP service can register with the Hub in one command:
 
 ```
