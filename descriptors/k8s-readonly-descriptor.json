@@ -1,0 +1,50 @@
+{
+  "name": "k8s-rig-readonly",
+  "description": "Read-only Kubernetes state harvest for a kind cluster: list_resources / get_resource (allowlisted kinds) + list_secret_names (metadata only, never values). Read-only by construction (verb-enum + RBAC). Out-of-policy calls return isError, not a throw. Rig service; static SA creds (not JWKS).",
+  "endpoint": "https://ceos-lab.paichart.app/mcp",
+  "category": "automation",
+  "capabilities": {
+    "tools": [
+      {
+        "name": "list_resources",
+        "description": "List a resource KIND in a namespace (read-only).",
+        "inputSchema": {
+          "type": "object",
+          "required": ["resourceType", "namespace"],
+          "additionalProperties": false,
+          "properties": {
+            "resourceType": { "type": "string", "enum": ["pods", "services", "configmaps", "endpoints", "resourcequotas", "limitranges", "serviceaccounts", "deployments", "replicasets", "statefulsets", "daemonsets", "ingresses", "networkpolicies", "horizontalpodautoscalers", "poddisruptionbudgets"] },
+            "namespace": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", "maxLength": 253 },
+            "labelSelector": { "type": "string", "maxLength": 256 }
+          }
+        }
+      },
+      {
+        "name": "get_resource",
+        "description": "Get a single namespaced resource (read-only).",
+        "inputSchema": {
+          "type": "object",
+          "required": ["resourceType", "namespace", "name"],
+          "additionalProperties": false,
+          "properties": {
+            "resourceType": { "type": "string", "enum": ["pods", "services", "configmaps", "endpoints", "resourcequotas", "limitranges", "serviceaccounts", "deployments", "replicasets", "statefulsets", "daemonsets", "ingresses", "networkpolicies", "horizontalpodautoscalers", "poddisruptionbudgets"] },
+            "namespace": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", "maxLength": 253 },
+            "name": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", "maxLength": 253 }
+          }
+        }
+      },
+      {
+        "name": "list_secret_names",
+        "description": "List Secret NAMES + key names in a namespace — metadata only, never values.",
+        "inputSchema": {
+          "type": "object",
+          "required": ["namespace"],
+          "additionalProperties": false,
+          "properties": {
+            "namespace": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", "maxLength": 253 }
+          }
+        }
+      }
+    ]
+  }
+}
