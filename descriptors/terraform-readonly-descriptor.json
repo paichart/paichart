@@ -1,0 +1,35 @@
+{
+  "name": "terraform-rig-readonly",
+  "description": "Read-only Terraform state harvest for the prod workspace: state_list (resource addresses) + state_pull (a resource's current state, redacted by the state's own sensitive_attributes). Read-only by construction — both RENDER saved state and launch NO providers (zero code-exec, zero state lock); no plan/apply/destroy/import/console exists on this surface. Out-of-policy calls return isError, not a throw. Phase-4 LocalStack rig; static creds (not JWKS).",
+  "endpoint": "https://ceos-lab.paichart.app/mcp",
+  "category": "automation",
+  "capabilities": {
+    "tools": [
+      {
+        "name": "state_list",
+        "description": "List resource ADDRESSES in a workspace (read-only, zero-provider).",
+        "inputSchema": {
+          "type": "object",
+          "required": ["workspace"],
+          "additionalProperties": false,
+          "properties": {
+            "workspace": { "type": "string", "enum": ["prod"] }
+          }
+        }
+      },
+      {
+        "name": "state_pull",
+        "description": "Pull a resource's current state by address, redacted by the state's own sensitive_attributes (read-only, zero-provider). Never returns secret values or raw state.",
+        "inputSchema": {
+          "type": "object",
+          "required": ["workspace", "address"],
+          "additionalProperties": false,
+          "properties": {
+            "workspace": { "type": "string", "enum": ["prod"] },
+            "address": { "type": "string", "maxLength": 256 }
+          }
+        }
+      }
+    ]
+  }
+}
