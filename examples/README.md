@@ -5,6 +5,7 @@ Worked artifacts produced by pAIchart's **Pipeline Harness** — the agentic lay
 | Example | Pipeline | What it shows |
 |---|---|---|
 | [network-provisioning-change-report.md](./network-provisioning-change-report.md) | Network Provisioning | An **approved-but-unapplied** network change package generated from a live device's real running state |
+| [network-provisioning-ptp-change-report.md](./network-provisioning-ptp-change-report.md) | Network Provisioning | A **second** network example — a **PTP boundary-clock timing** change — designed against the switches' **already-modified** running state (a prior change applied on the devices), with the harvested running-config included as an appendix |
 | [kubernetes-gitops-change-report.md](./kubernetes-gitops-change-report.md) | Kubernetes / GitOps | A **declarative GitOps** change package (HPA + resource limits) from live cluster state — including an honest **NEEDS-REVISION** review that gates on a real traceability gap |
 | [terraform-iac-change-report.md](./terraform-iac-change-report.md) | Terraform / Cloud IaC | An **approved-but-unapplied HCL change package (a PR)** from real Terraform state — S3 hardening (versioning + public-access-block) — with the **layered defense shown**: a secret-shaped tag **redacted** and a prompt-injection tag **refused** |
 
