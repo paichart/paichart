@@ -8,6 +8,7 @@ Worked artifacts produced by pAIchart's **Pipeline Harness** — the agentic lay
 | [network-provisioning-ptp-change-report.md](./network-provisioning-ptp-change-report.md) | Network Provisioning | A **second** network example — a **PTP boundary-clock timing** change — designed against the switches' **already-modified** running state (a prior change applied on the devices), with the harvested running-config included as an appendix |
 | [kubernetes-gitops-change-report.md](./kubernetes-gitops-change-report.md) | Kubernetes / GitOps | A **declarative GitOps** change package (HPA + resource limits) from live cluster state — including an honest **NEEDS-REVISION** review that gates on a real traceability gap |
 | [terraform-iac-change-report.md](./terraform-iac-change-report.md) | Terraform / Cloud IaC | An **approved-but-unapplied HCL change package (a PR)** from real Terraform state — S3 hardening (versioning + public-access-block) — with the **layered defense shown**: a secret-shaped tag **redacted** and a prompt-injection tag **refused** |
+| [artifact-synthesis-case-study.md](./artifact-synthesis-case-study.md) | Artifact Synthesis | A **customer delivery case study**, synthesized from *this engagement's own execution history* — the four change packages above narrated into one story, leading with the change that was **correctly blocked at review** |
 
 ---
 
@@ -78,3 +79,13 @@ See the report's **Guard Verification** addendum for the full result.
 - **Secret-dense state never enters the LLM.** The read-only service renders state and redacts by the state's own `sensitive_attributes`; only resource shape + addresses leave it.
 
 **Honest scope:** validated against **LocalStack** (a sandbox AWS), not a real cloud account. It exercises the full cognition pipeline + pAIchart's read-only floor + its output guards (untrusted-output sanitize, artifact secret redaction) against real Terraform state. The service authenticates with a static credential rather than pAIchart's per-user JWKS identity — the latter is the production identity contract for a customer-governed service.
+
+---
+
+## Artifact Synthesis — delivery case study
+
+Unlike the four change reports above, this pipeline doesn't touch infrastructure at all — it turns **source material into a written deliverable**. Here the source is *this very engagement's own execution history*: the four completed pipeline runs. The result ([artifact-synthesis-case-study.md](./artifact-synthesis-case-study.md)) is a polished **customer delivery case study** narrating what pAIchart delivered across network, Kubernetes, and cloud IaC — via a harvest → author → review pipeline (Artifact Harvester → Editorial Writer → Publication Reviewer).
+
+**How confidence scores work — and why the case study leads with a *failure*.** A pipeline's score is not an opaque verdict; it's the **arithmetic mean of its independently-scored specialist children** (harvest, design, author, review), gated at a fixed **85/100** threshold — so any "approved" is traceable to the specific gates that substantiate it. The proof the gate is real: the Kubernetes HPA change scored **NEEDS-REVISION (72/100)** and the reviewer *refused to approve it*, because its resource values were **assumed** rather than **evidenced**. The case study opens its trust section with that blocked change, not the approvals — a reviewer that only ever says "yes" proves nothing.
+
+**A note on the customer.** "Meridian Capital" is a **fictional demo customer** used to exercise the platform end-to-end; there is no real client entity. Notably, the synthesis pipeline **flagged this itself** — in its own self-critique it noted the client-facing legal entity should be confirmed before any external release (it also disclosed it worked from execution *summaries* rather than verbatim configs). That honest self-flagging is the same trust posture the change reports demonstrate, turned on its own output. The published file here is trimmed to the customer-facing case study; the full run — including the pipeline's self-flagged gaps — is retained immutably in the run's own artifacts.
