@@ -1,7 +1,7 @@
 {
   "name": "k8s-rig-readonly",
   "description": "Read-only Kubernetes state harvest for a kind cluster: list_resources / get_resource (allowlisted kinds) + list_secret_names (metadata only, never values). Read-only by construction (verb-enum + RBAC). Out-of-policy calls return isError, not a throw. Rig service; static SA creds (not JWKS).",
-  "endpoint": "https://ceos-lab.paichart.app/mcp",
+  "endpoint": "https://k8s-lab.paichart.app/mcp",
   "category": "automation",
   "capabilities": {
     "tools": [
