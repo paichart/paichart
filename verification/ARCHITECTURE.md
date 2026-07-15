@@ -56,9 +56,10 @@ explicit version stamps, so drift is visible rather than silent.
 ## Decision log (version-stamped)
 
 - `pov-program` v1.0.1 — approval gates are type APPROVAL and **born IN_PROGRESS** (a single human
-  release call); an earlier draft used ACTION, and one missed reference was corrected in the same
-  version ("bonus catch" class: prose drift is treated as a defect).
-- `pov-program` v1.0.2 — PLAN-SPAWN creates any **requirements-named approval-gate nodes** from the
+  release call); an earlier draft used ACTION.
+- `pov-program` v1.0.2 — one reference v1.0.1 missed was aligned to the APPROVAL wording here
+  ("bonus catch" class: prose drift is treated as a defect). Also: PLAN-SPAWN creates any
+  **requirements-named approval-gate nodes** from the
   Architect's DAG: template-less APPROVAL, born IN_PROGRESS, assignee set to the plan's named
   approver, wired with the DAG's edges. The plan gate remains the mandatory floor. The Architect emits
   gate nodes **only when requirements name per-domain/per-team approvers** — it is explicitly

@@ -76,9 +76,10 @@ where silent composition would be most damaging. The failure mode this round ori
 
 - Protocol: `pov-program` v1.0.6+ (root-vs-casualty escalation semantics; v1.0.7 adds the coverage
   facts verified in VT-05/VT-06).
-- CI pins (run on every commit): `test:cc7-contract-guard` (12 assertions — contract guard + the
-  can-never-run marking, cone walk, retrigger wiring, terminal predicates unchanged) plus a
-  database-level behavioral test reproducing this round's topology end-to-end (11 assertions,
-  including refusal idempotency and the parked-gate exclusion).
+- CI pin (run on every commit): `test:cc7-contract-guard` (12 assertions — contract guard + the
+  can-never-run marking, cone walk, retrigger wiring, terminal predicates unchanged).
+- Behavioral round (database-level, re-run on any protocol or engine change to this path — not part
+  of per-commit CI): reproduces this round's topology end-to-end (11 assertions, including refusal
+  idempotency and the parked-gate exclusion).
 - Residual: a program-level watchdog for hang classes with *no* event anchor is deliberately deferred
   (no such class is known); the trigger to build it is documented.
