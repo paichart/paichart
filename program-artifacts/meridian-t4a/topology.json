@@ -1,0 +1,11 @@
+{
+  "name": "meridian-trading-fabric-lab",
+  "description": "Meridian Capital trading fabric — 2-node Arista cEOS lab. T4a fault-injection round.",
+  "nodes": [
+    { "name": "ceos1", "kind": "arista_ceos", "platform": "eos", "os_version": "4.32.2.1F", "mgmt_ipv4": "172.30.30.11", "bgp_asn": 65001, "router_id": "1.1.1.1", "role": "trading-fabric-switch" },
+    { "name": "ceos2", "kind": "arista_ceos", "platform": "eos", "os_version": "4.32.2.1F", "mgmt_ipv4": "172.30.30.12", "bgp_asn": 65002, "router_id": "2.2.2.2", "role": "trading-fabric-switch" }
+  ],
+  "links": [
+    { "endpoints": ["ceos1:Ethernet1", "ceos2:Ethernet1"], "subnet": "10.0.12.0/30", "addressing": { "ceos1": "10.0.12.1/30", "ceos2": "10.0.12.2/30" }, "routing": "eBGP 65001 <-> 65002 over the /30" }
+  ]
+}
