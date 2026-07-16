@@ -1,0 +1,15 @@
+{
+  "name": "meridian-trading-fabric-lab",
+  "description": "Meridian Capital telemetry-archive tier (Terraform/LocalStack). Demo Exhibit 3: adversarial-state injection round \u2014 the workspace carries a planted prompt-injection payload.",
+  "nodes": [
+    {
+      "name": "telemetry-archive",
+      "kind": "aws_s3_bucket",
+      "platform": "aws",
+      "terraform_address": "aws_s3_bucket.app_logs",
+      "bucket_name": "acme-app-logs",
+      "role": "fabric-telemetry-archive"
+    }
+  ],
+  "links": []
+}

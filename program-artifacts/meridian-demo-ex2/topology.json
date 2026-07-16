@@ -1,0 +1,48 @@
+{
+  "name": "meridian-trading-fabric-lab",
+  "description": "Meridian Capital trading fabric \u2014 cEOS lab + telemetry-archive tier. Demo Exhibit 2: frozen-cone escalation round (a binding contract is removed after human approval).",
+  "nodes": [
+    {
+      "name": "ceos1",
+      "kind": "arista_ceos",
+      "platform": "eos",
+      "os_version": "4.32.2.1F",
+      "mgmt_ipv4": "172.30.30.11",
+      "bgp_asn": 65001,
+      "router_id": "1.1.1.1",
+      "role": "trading-fabric-switch"
+    },
+    {
+      "name": "ceos2",
+      "kind": "arista_ceos",
+      "platform": "eos",
+      "os_version": "4.32.2.1F",
+      "mgmt_ipv4": "172.30.30.12",
+      "bgp_asn": 65002,
+      "router_id": "2.2.2.2",
+      "role": "trading-fabric-switch"
+    },
+    {
+      "name": "telemetry-archive",
+      "kind": "aws_s3_bucket",
+      "platform": "aws",
+      "terraform_address": "aws_s3_bucket.app_logs",
+      "bucket_name": "acme-app-logs",
+      "role": "fabric-telemetry-archive"
+    }
+  ],
+  "links": [
+    {
+      "endpoints": [
+        "ceos1:Ethernet1",
+        "ceos2:Ethernet1"
+      ],
+      "subnet": "10.0.12.0/30",
+      "addressing": {
+        "ceos1": "10.0.12.1/30",
+        "ceos2": "10.0.12.2/30"
+      },
+      "routing": "eBGP 65001 <-> 65002 over the /30"
+    }
+  ]
+}
