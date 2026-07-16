@@ -72,6 +72,25 @@ human escalation with healthy work preserved — under the exact fault (post-app
 where silent composition would be most damaging. The failure mode this round originally exposed
 (permanent hang) is fixed and pinned.
 
+## See it live
+
+A curated, permanent version of this exact round runs in the public demo POV **"pAIchart Verified
+Delivery — Live Exhibits (Meridian Trading Fabric)"** as **Exhibit 2**. A read-only demo account can
+open:
+
+- **The commentary** (stable landing point): the *Results & Cross-Reference* phase → *"Exhibit 2
+  results — the frozen cone, escalated with attribution"* → the assessment task. It lists the observed
+  machine facts and points at the artifacts below.
+- **The machine record** (untouched): the *Program Runs* phase → stage *"Program: Exhibit 2
+  frozen-cone escalation"* — the refused Terraform leg (FAILED / `cannotRun`), both cone casualties
+  (FAILED / `blockedByUpstreamFailure`), the completed network leg, and the program's escalation
+  comment naming the root leg.
+
+The demo run reproduced this document's expected observables exactly, with one honest addition: the
+surviving network leg's own reviewer independently gated it needs-revision/35 on genuine validation
+issues — so the escalation comment blocks on that leg too, not only on the stripped one. The gate
+graded the work in front of it.
+
 ## Enforcement
 
 - Protocol: `pov-program` v1.0.6+ (root-vs-casualty escalation semantics; v1.0.7 adds the coverage
