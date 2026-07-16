@@ -72,6 +72,11 @@ explicit version stamps, so drift is visible rather than silent.
 - `pov-program` v1.0.7 — release gate consumes the coverage FACTS (`chainCapablePredecessors`,
   `degradedPredecessors`) instead of a raw predecessor count that could false-block on gates and
   false-pass on missing deliverables.
+- `pov-program` v1.0.8 — truncation-hygiene prose only (additive; the release/escalation semantics above
+  are unchanged): the program's synthesis reaches its completion promptly and keeps its final summary
+  lean, so the platform's terminal turn is unlikely to hit the output-token ceiling before completing.
 - `pipeline-orchestrator` v3.9.0 — duplicate-halt stamps a structured fact; program legs with settled
   terminal outcomes (escalated / duplicate-halted) are terminalized by the platform at persist time so
-  programs block on outcomes instead of hanging on open legs.
+  programs block on outcomes instead of hanging on open legs. (Platform note: a synthesis turn that
+  truncates at the output-token ceiling is now auto-recovered — retried with headroom, and the residual
+  escalated rather than hung — so a truncation never silently blocks a program.)
