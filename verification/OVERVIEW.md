@@ -41,6 +41,8 @@ by a Program Architect that produces a plan and a binding **interface contract**
 human approval gate releases the cascade; domain pipelines run in parallel against the shared contract;
 a program integration reviewer checks cross-pipeline conformance; and release is stamped as a
 deterministic machine fact (`programReleasable`) that a **human** converts into a release decision.
+→ `tests/VT-06-green-run-validation.md` (the end-to-end green path), `tests/VT-01-contract-guard.md`
+(the binding-contract guard), `tests/VT-04-negative-quality-gate.md` (the release AND-rule).
 
 The failure semantics are the part we verify hardest:
 
@@ -51,6 +53,7 @@ The failure semantics are the part we verify hardest:
 - A child whose deliverable **goes missing** is detected by structured coverage facts
   (`chainCapablePredecessors`, `degradedPredecessors`) consumed by a deterministic release gate — a
   count that "looks complete" cannot mask a missing deliverable.
+  → `tests/VT-05-coverage-block.md`
 - A child that **escalates** (its own analysis found something a human must decide) is completed with
   its escalated facts so the program blocks on the outcome rather than hanging on an open task.
 - Hostile content inside **harvested customer state** (injected instructions, secret-shaped values) is
