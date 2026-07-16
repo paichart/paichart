@@ -1,0 +1,70 @@
+{
+  "name": "meridian-trading-fabric-telemetry-authz",
+  "description": "Meridian Capital trading fabric — telemetry-archive authorization tier. The 2-node Arista cEOS fabric exports telemetry from dedicated per-switch exporter loopbacks; the cloud archive tier must authorize writes from EXACTLY the fabric's exporter address range. The exporter addresses are NOT specified here: they are SELECTED by the network design from state harvested off the live devices, and the range the cloud tier must authorize is DERIVED from that selection. This is why the cloud tier cannot be designed until the network design exists — a genuine runtime interdependency (DAG-sequenced program).",
+  "nodes": [
+    {
+      "name": "ceos1",
+      "kind": "arista_ceos",
+      "platform": "eos",
+      "os_version": "4.32.2.1F",
+      "mgmt_ipv4": "172.30.30.11",
+      "bgp_asn": 65001,
+      "router_id": "1.1.1.1",
+      "role": "trading-fabric-switch + telemetry-exporter"
+    },
+    {
+      "name": "ceos2",
+      "kind": "arista_ceos",
+      "platform": "eos",
+      "os_version": "4.32.2.1F",
+      "mgmt_ipv4": "172.30.30.12",
+      "bgp_asn": 65002,
+      "router_id": "2.2.2.2",
+      "role": "trading-fabric-switch + telemetry-exporter"
+    },
+    {
+      "name": "telemetry-archive",
+      "kind": "aws_s3_bucket",
+      "platform": "aws",
+      "terraform_address": "aws_s3_bucket.app_logs",
+      "bucket_name": "acme-app-logs",
+      "workspace": "prod",
+      "role": "fabric-telemetry-archive",
+      "authorization": "s3:PutObject MUST be restricted to the fabric's telemetry-exporter aggregate — a RUNTIME value produced by the network design (see telemetryExport)"
+    }
+  ],
+  "links": [
+    {
+      "endpoints": ["ceos1:Ethernet1", "ceos2:Ethernet1"],
+      "subnet": "10.0.12.0/30",
+      "addressing": { "ceos1": "10.0.12.1/30", "ceos2": "10.0.12.2/30" },
+      "routing": "eBGP 65001 <-> 65002 over the /30 — EXISTING, do not renumber"
+    },
+    {
+      "endpoints": ["ceos1:telemetry-exporter", "telemetry-archive"],
+      "kind": "logical",
+      "purpose": "telemetry export from ceos1's NEW exporter loopback lands in the archive bucket — IN SCOPE (the bucket policy must authorize this source)"
+    },
+    {
+      "endpoints": ["ceos2:telemetry-exporter", "telemetry-archive"],
+      "kind": "logical",
+      "purpose": "telemetry export from ceos2's NEW exporter loopback lands in the archive bucket — IN SCOPE"
+    }
+  ],
+  "telemetryExport": {
+    "exporterPool": "10.99.0.0/24",
+    "exporterInterfaceConvention": "a free Loopback interface on each switch",
+    "addressUniqueness": "fabric-wide — exporter addresses are advertised /32s, so a duplicate across switches is a real BGP conflict",
+    "existingAllocations": "NOT LISTED HERE — the pool already has scattered, asymmetric allocations on both switches. They are discoverable ONLY by harvesting the live devices (interface state and BGP network statements both show them).",
+    "selectedExporterAddresses": "RUNTIME — one free /32 per switch, SELECTED by the network design from what is actually free at harvest time.",
+    "derivedExporterAggregate": "RUNTIME — the smallest prefix covering BOTH selected addresses, DERIVED by the network design. This is the value the cloud tier must authorize. It is a product of the design, not a lookup: a naive lowest-free selection summarizes into an aggregate that COVERS existing allocations (an authorization widening the design must reject), so the design must choose a pair that summarizes cleanly.",
+    "_whyThisIsUnarguablyRuntime": "The objective test: WOULD THIS VALUE CHANGE IF THE RIG WERE REBUILT? Yes — the scatter of existing allocations is re-randomized per build, so the free set changes, so the clean pair changes, so the derived aggregate changes. A value that changes per build CANNOT be pinned in a static design artifact or agreed up front in an interface contract. No Program Architect can know it: the Architect reads only this file and requirements.md and has NO device-state access. Contrast T3, where every constant WAS knowable up front and the legs therefore ran in PARALLEL."
+  },
+  "interdependency": {
+    "kind": "runtime",
+    "dag": "network-pipeline (ceos) -> terraform-pipeline (telemetry-archive)",
+    "chainedValue": "the DERIVED exporter aggregate (plus the selected per-switch /32s, for audit)",
+    "mechanism": "the terraform leg's dependencyIds include its own approval gate AND the network sibling pipeline; the context-chainer PIPELINE-predecessor branch chains the network leg's report.md into the terraform leg's §6; the F18 settledness predicate holds the terraform leg until the network deliverable is fully persisted, so it can never design against a half-built address plan.",
+    "direction_note": "network is UPSTREAM by necessity, not preference. This rig's cloud tier is S3-only (aws_s3_bucket.app_logs + random_password.db_master; no VPC/subnet exists), so terraform produces no runtime output the network design would need to match. Note also that the program NEVER APPLIES, so no leg can mint a new system-assigned id (subnet id, ARN of an uncreated resource) — every runtime value must derive from EXISTING harvested state."
+  }
+}
