@@ -27,7 +27,9 @@ facts* (child outcomes, reviewer verdicts, coverage facts, MIN confidence), not 
 
 ## Expected observables
 
-- Each child quality gate: `outcome: approved`, reviewer score ≥ 85.
+- Each child quality gate: `outcome: approved`. (The reviewer score is recorded alongside as a fact;
+  since 2026-07-18 it is not a gate input — the recorded run predates that and also cleared the
+  then-active ≥ 85 bar.)
 - Coverage facts on the synthesis nodes: `predecessors === chainCapablePredecessors`,
   `degradedPredecessors: 0`, `notChained: []` — every chain-capable predecessor chained its real
   `report.md`.

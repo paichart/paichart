@@ -49,8 +49,9 @@ Two claims under test, together:
   not recomputed — the value post-dates plan approval).
 - `derivationContainment` in the network leg's run record: `checked: true, violations: []`, with the
   harvest and package artifacts named as sources.
-- Both leg quality gates `approved` ≥ 85; integration reviewer `APPROVED, blocking issues: none`;
-  program `programReleasable: true`.
+- Both leg quality gates `approved`; integration reviewer `APPROVED, blocking issues: none`;
+  program `programReleasable: true`. (Reviewer scores are recorded facts beside the outcomes — 92/94
+  on this run; since 2026-07-18 the score is not a gate input at any tier.)
 
 ## Observed (2026-07-18 clean pass)
 
