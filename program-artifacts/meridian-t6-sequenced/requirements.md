@@ -53,7 +53,12 @@ terraform leg, **not** the interface contract.
 - **Select** one free `/32` per switch from `10.99.0.0/24` for a new telemetry-exporter loopback:
   - the address must be free **fabric-wide** (not allocated on either switch);
   - use a free `Loopback` interface on each switch.
-- **Derive** the **smallest aggregate prefix covering both selected addresses**, subject to:
+- **Derive** the **smallest aggregate prefix covering both selected addresses** — the prefix length MUST
+  equal the minimal covering prefix (two adjacent addresses summarize to a `/31`, NOT a `/30`; four to a
+  `/30`, and so on). **Show the computation** in the deliverable: the two selected `/32`s, the common
+  binary prefix, the resulting prefix length, and the address range the aggregate covers. A prefix
+  looser than the minimum is a REJECTABLE defect even when it covers no existing allocation, because it
+  authorizes addresses no exporter uses. Subject also to:
   - **the aggregate MUST NOT cover any address already allocated** to an existing loopback on either
     switch (it becomes the archive's write allowlist — covering a foreign address is an authorization
     widening);
@@ -108,6 +113,11 @@ terraform leg, **not** the interface contract.
   1. the terraform policy's `aws:SourceIp` value **exactly equals** the aggregate the network leg
      derived (the chained value — not a guess, not a recomputation);
   2. that aggregate **covers both** selected exporter `/32`s;
+  2b. that aggregate is **MINIMAL** — its prefix length EQUALS the smallest prefix covering the two
+     selected `/32`s (recompute it: adjacent pair ⇒ `/31`). A looser prefix (e.g. `/30` for an adjacent
+     pair) is a **REJECT** even though it covers no existing allocation — it authorizes unused addresses.
+     Verify against the computation the network leg was required to show; do not take the stated prefix
+     length on trust;
   3. that aggregate **covers no existing allocation** on either switch (no authorization widening) and
      is not `0.0.0.0/0`;
   4. **chaining coverage**: `predecessors === chainCapablePredecessors`, `degradedPredecessors === 0`,
