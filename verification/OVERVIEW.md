@@ -64,6 +64,8 @@ The failure semantics are the part we verify hardest:
   findings as verified-against-evidence or accepted-from-claims. A derivation that swallows a
   pre-existing allocation, or whose arithmetic doesn't cover its own members, is a structured
   violation fact in the run record. (Pinned: `test-derivation-containment`.)
+  → `tests/VT-09-sequenced-legs-evidence-flow.md` (the sequenced-legs green pass, earned through the
+  five adversarial rounds that built this stack)
 - A program parked at its human approval gate **stays parked indefinitely** — nothing queues behind an
   unreleased gate, and no timeout mechanism misfires against it.
 

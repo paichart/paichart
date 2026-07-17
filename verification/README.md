@@ -36,6 +36,7 @@ its claim is downgraded accordingly — no silent asterisks.
 |---|---|---|
 | VT-01 | `tests/VT-01-contract-guard.md` | A pipeline child **cannot execute without its binding interface contract** — refused loudly, never silently composed |
 | VT-02 | `tests/VT-02-frozen-cone-escalation.md` | A program with a non-runnable leg **escalates to a human**; it never hangs and never silently composes a partial deliverable |
+| VT-09 | `tests/VT-09-sequenced-legs-evidence-flow.md` | A value that did not exist at plan time flows verbatim across sequenced pipelines, **machine-checked against harvested ground truth at every tier** — the green pass earned through five adversarial rounds |
 | VT-03 | `tests/VT-03-gate-park.md` | A program parked at its human approval gate **stays parked indefinitely** — nothing queues, no timeout misfires |
 | VT-04 | `tests/VT-04-negative-quality-gate.md` | A **needs-revision child blocks release**, keyed on the outcome fact — a high reviewer score cannot rescue it |
 | VT-05 | `tests/VT-05-coverage-block.md` | A **missing deliverable is caught by structured coverage facts**, not a raw count (defect-found-and-fixed) |
