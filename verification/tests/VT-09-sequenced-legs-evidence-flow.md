@@ -81,7 +81,8 @@ the tier below it, and each is pinned by a regression test carrying the incident
 
 ## See it live
 
-The curated machine record for this round lives in the live-exhibit POV as **Exhibit 5** (the
-*Program Runs* phase → the Run 7 program stage), alongside its brief in the Guided Tour phase and
-the sequenced-legs commentary. The exhibit environment is being finalized; the walkthrough pointers
-re-link on publication.
+The curated machine record for this round lives in the live-exhibit POV as **Exhibit 5**: the
+*Program Runs* phase → the root task *"Exhibit 5 — sequenced legs: network → terraform runtime
+chaining"* with its program stage and two pipeline stages (the run's record, untouched), alongside
+its brief in the Guided Tour phase and the sequenced-legs commentary. The environment was re-curated
+and published the same day; this walkthrough is current.

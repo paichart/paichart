@@ -44,7 +44,7 @@ behind the gate has zero executions; (2) **the F16 negative control** — the ca
 (VT-02) never touches an unreleased gate or the tasks parked behind it, because its event anchor is a
 *refused execution attempt*, and an awaiting-human gate never attempts one.
 
-> **Note (2026-07-18)**: the live-exhibit environment is being re-cut — the current exhibit POV has been serving as the proving ground for an expanded verification round (evidence-flow hardening), and a freshly curated demo environment will replace it. The exhibit walkthroughs below describe the curated runs and will re-link when the refreshed environment is published.
+> **Note (2026-07-18, re-cut complete)**: the exhibit POV has been re-curated — the verification-round proving-ground runs are removed, and the evidence-flow round's clean pass is installed as **Exhibit 5** (VT-09). The walkthrough below is current.
 
 **Permanent live exhibit:** the demo POV **"pAIchart Verified Delivery — Live Exhibits"** carries
 **Exhibit 4**, a program deliberately left at its gate forever (the machine even titled the gate
