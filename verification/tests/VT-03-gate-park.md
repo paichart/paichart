@@ -1,6 +1,6 @@
 # VT-03 — A program parked at its human approval gate stays parked indefinitely; nothing queues, nothing misfires
 
-**Status**: VERIFIED 2026-07-16 (32-minute monitored window) + a permanent live exhibit | Re-verify trigger: any change to the stale-execution sweep or the can-never-run event anchor
+**Status**: VERIFIED 2026-07-16 (32-minute monitored window) + a permanent live exhibit; **RE-VERIFIED 2026-07-18** after the stale-execution sweep was rebuilt (two-tier, envelope-derived thresholds — the named re-verify trigger fired): the parked exhibit remains untouched — gate open, every leg unstarted, zero failure marks. The immunity is structural, not coincidental: the sweep operates on execution records, and a parked program's tasks have none to act on. | Re-verify trigger: any change to the stale-execution sweep or the can-never-run event anchor
 **Layer**: program
 **Round type**: functional (negative control)
 
@@ -43,6 +43,8 @@ once: (1) a parked program forms no timeout-zombie — there is nothing to flip,
 behind the gate has zero executions; (2) **the F16 negative control** — the can-never-run machinery
 (VT-02) never touches an unreleased gate or the tasks parked behind it, because its event anchor is a
 *refused execution attempt*, and an awaiting-human gate never attempts one.
+
+> **Note (2026-07-18)**: the live-exhibit environment is being re-cut — the current exhibit POV has been serving as the proving ground for an expanded verification round (evidence-flow hardening), and a freshly curated demo environment will replace it. The exhibit walkthroughs below describe the curated runs and will re-link when the refreshed environment is published.
 
 **Permanent live exhibit:** the demo POV **"pAIchart Verified Delivery — Live Exhibits"** carries
 **Exhibit 4**, a program deliberately left at its gate forever (the machine even titled the gate

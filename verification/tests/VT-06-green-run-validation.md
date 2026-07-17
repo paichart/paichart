@@ -49,6 +49,8 @@ on the pre-fix build (VT-05, F18). Engine-computed `programConfidence: 45` = MIN
 45). (T4f's terraform leg escalated on unrelated rig drift, so its own headline was a correct
 *block* — but every green-path fact above was validated on its healthy leg and the coverage machinery.)
 
+> **Note (2026-07-18)**: the live-exhibit environment is being re-cut — the current exhibit POV has been serving as the proving ground for an expanded verification round (evidence-flow hardening), and a freshly curated demo environment will replace it. The exhibit walkthroughs below describe the curated runs and will re-link when the refreshed environment is published.
+
 **Curated green run — Demo Exhibit 1 (2026-07-16, program `cmrmr35q2…`), the clean end-to-end:** both
 legs approved / 92; program integration reviewer VERDICT APPROVED, no blocking issues, confidence 93;
 coverage facts `chainCapablePredecessors: 2 / degradedPredecessors: 0 / notChained: []`;

@@ -82,6 +82,8 @@ their own round.
 
 ## See it live
 
+> **Note (2026-07-18)**: the live-exhibit environment is being re-cut — the current exhibit POV has been serving as the proving ground for an expanded verification round (evidence-flow hardening), and a freshly curated demo environment will replace it. The exhibit walkthroughs below describe the curated runs and will re-link when the refreshed environment is published.
+
 A curated version of this round runs in the public demo POV **"pAIchart Verified Delivery — Live
 Exhibits (Meridian Trading Fabric)"** as **Exhibit 3**. A read-only demo account can open:
 

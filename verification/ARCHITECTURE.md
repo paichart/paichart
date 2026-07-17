@@ -52,6 +52,17 @@ explicit version stamps, so drift is visible rather than silent.
 6. **Failure propagation**: a child that can never run is marked terminal with its reason, its
    downstream cone is marked with attribution, and the parent is retriggered to escalate — hangs are
    treated as defects, and every known hang class is anchored to a platform event, not a timer.
+7. **Evidence-flow verification** (added after an adversarial round in which three successive LLM
+   review tiers approved a defective derived value at rising confidence — because the evidence needed
+   to catch it had been dropped upstream): any value an agent DERIVES from harvested customer state
+   must carry its evidence forward — the harvest emits a structured allocations block, the design
+   declares its derivations with their intended members, the package quotes the evidence verbatim with
+   named provenance, and reviewers must grade every finding as verified-against-evidence or
+   accepted-from-claims. Independently, the platform recomputes derivation containment
+   **mechanically, anchored to the harvest artifact itself** — never the package's copy, which a
+   follow-up round proved can be fabricated — and stamps the result as a structured fact
+   (`derivationContainment`) in the run record. A mute or half-completed harness run is likewise
+   terminalized with attribution rather than persisting as a silent success.
 
 ## Decision log (version-stamped)
 
@@ -75,6 +86,18 @@ explicit version stamps, so drift is visible rather than silent.
 - `pov-program` v1.0.8 — truncation-hygiene prose only (additive; the release/escalation semantics above
   are unchanged): the program's synthesis reaches its completion promptly and keeps its final summary
   lean, so the platform's terminal turn is unlikely to hit the output-token ceiling before completing.
+- `network-provisioning` v1.2.0 / `pov-program` v1.0.9 — the evidence-flow contract (see safety
+  stack item 7): structured harvest-allocations and derived-values blocks, verbatim provenance-quoted
+  evidence in the change package (mandatory when derivations exist, forbidden otherwise — an
+  over-applied evidence section proved to invite invention), reviewer finding-grading
+  (verified-against-evidence vs accepted-from-claims), the harvest as the authority wherever the
+  package's copy disagrees, and the integration reviewer retrieving the legs' structured facts by
+  tool rather than expecting them in chained prose. (Platform notes, same round: the per-call
+  connected-service timeout is now genuinely bound at the SDK boundary — the advertised ceiling and
+  the enforced ceiling are the same number, regression-pinned; the stale-run sweep is two-tier and
+  derived from the execution envelope so a legitimately long run can never be swept mid-flight; and a
+  harness run that produces no output and no child-stage handoff is terminalized with attribution
+  instead of hanging as a silent success.)
 - `pipeline-orchestrator` v3.9.0 — duplicate-halt stamps a structured fact; program legs with settled
   terminal outcomes (escalated / duplicate-halted) are terminalized by the platform at persist time so
   programs block on outcomes instead of hanging on open legs. (Platform note: a synthesis turn that

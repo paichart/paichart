@@ -58,6 +58,12 @@ The failure semantics are the part we verify hardest:
   its escalated facts so the program blocks on the outcome rather than hanging on an open task.
 - Hostile content inside **harvested customer state** (injected instructions, secret-shaped values) is
   surfaced and refused, not obeyed. → `tests/VT-07-adversarial-state-injection.md`
+- A value an agent **derives from harvested customer state** (a covering CIDR, a range) is checked
+  **mechanically against the harvest itself** — never against the package's own retelling of it,
+  which an adversarial round proved can be fabricated — and every reviewer tier must grade its
+  findings as verified-against-evidence or accepted-from-claims. A derivation that swallows a
+  pre-existing allocation, or whose arithmetic doesn't cover its own members, is a structured
+  violation fact in the run record. (Pinned: `test-derivation-containment`.)
 - A program parked at its human approval gate **stays parked indefinitely** — nothing queues behind an
   unreleased gate, and no timeout mechanism misfires against it.
 
