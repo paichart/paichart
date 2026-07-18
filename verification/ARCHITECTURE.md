@@ -63,6 +63,23 @@ explicit version stamps, so drift is visible rather than silent.
    follow-up round proved can be fabricated — and stamps the result as a structured fact
    (`derivationContainment`) in the run record. A mute or half-completed harness run is likewise
    terminalized with attribution rather than persisting as a silent success.
+8. **Facts-gated release — confidence numbers carry no gate authority** (added after a calibration
+   study found two reviewers handed byte-identical defective inputs returned opposite verdicts at
+   45 and 92 — the confidence number carries verdict *direction*, not correctness): every release
+   and approval gate, at every tier, keys on verdict direction and mechanical facts only —
+   child outcomes, reviewer verdicts, chained-coverage facts, derivation-containment facts —
+   never on a confidence threshold. Confidence numbers are still recorded, as facts for humans and
+   for calibration, but no `>= N` conjunct exists anywhere in the gate semantics. Companion
+   contracts keep the inputs honest: an authoring agent may not self-verify or self-score its own
+   package (removing the copyable wrong answer a reviewer might echo), and a reviewer must
+   construct its verification itself before reading any package prose about verification. A
+   pipeline that runs with no reviewer in its roster cannot borrow this machinery's credibility:
+   its approval derives from mechanical trust facts alone and is stamped `reviewerPresent: false`
+   — "ran clean, no QA gate", visibly distinct from a QA-vetted approval — and a roster that
+   *should* have carried a reviewer (its protocol mandates one) is a defect, never a pass. And
+   when a pipeline cannot run at all, bailing is a first-class contract: the agent stamps the
+   machine-readable reason, the platform terminalizes it at persist time with transitive root
+   attribution — the failure narrative traces to the first non-casualty, not the nearest victim.
 
 ## Decision log (version-stamped)
 
@@ -103,3 +120,25 @@ explicit version stamps, so drift is visible rather than silent.
   programs block on outcomes instead of hanging on open legs. (Platform note: a synthesis turn that
   truncates at the output-token ceiling is now auto-recovered — retried with headroom, and the residual
   escalated rather than hung — so a truncation never silently blocks a program.)
+- `pipeline-orchestrator` v3.9.1 / `pov-program` v1.0.12 — the bail contract: an agent whose pipeline
+  can never run as configured stamps the machine-readable reason instead of guessing or fabricating;
+  the platform terminalizes it at persist time, marks its downstream cone, and the program's
+  escalation follows the failure **transitively to the first non-casualty** — a bailed leg is itself
+  a casualty of the leg that escalated, and the narrative names the root, not the nearest victim.
+- `network-provisioning` v1.2.1–v1.2.2 / `kubernetes-gitops` & `terraform-iac` v1.0.3 /
+  `pov-program` v1.0.10 / `pipeline-orchestrator` (same sweep) — confidence numbers OUT of gate
+  semantics at every tier (see safety stack item 8): gates key on verdict direction + mechanical
+  facts (including a new derivation-containment conjunct at the program release gate); scores remain
+  recorded facts. Same round: anti-theater authoring contracts — the change-package author carries
+  ONLY the structured evidence blocks verbatim (never the design's own containment conclusion — a
+  plausible verification narrative in a package is a copyable wrong answer), and the reviewer
+  constructs its containment check itself, emitted before reading any package verification prose.
+- `pov-program` v1.0.13 — superseding a persisted child is a state-channel act: the harness stamps
+  the machine-readable disposal reason and the platform terminalizes the child; disposal by retitling
+  or comment is forbidden (nothing consumes it — an inert row would block the program's
+  all-children-terminal check indefinitely), and disposal must precede any dependent wiring.
+- `pipeline-orchestrator` v3.9.2 — a pipeline whose roster carries no reviewer gains a **defined**
+  approval rule (see safety stack item 8): mechanical trust facts only, provenance-stamped
+  `reviewerPresent: false`, with a roster-defect rule (a protocol that mandates a reviewer arriving
+  without one is `needs-revision`, never a clean pass) and a misroute guard (a domain pipeline that
+  lost its protocol token cannot clean-completion-approve past its mandated QA gate).
