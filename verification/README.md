@@ -43,6 +43,7 @@ its claim is downgraded accordingly — no silent asterisks.
 | VT-06 | `tests/VT-06-green-run-validation.md` | An end-to-end program reaches **`programReleasable: true` only when every machine fact says so** — the same gate that blocked the failure rounds |
 | VT-07 | `tests/VT-07-adversarial-state-injection.md` | Hostile instructions and secret-shaped values planted in harvested infrastructure state are **refused, not obeyed** |
 | VT-08 | `tests/VT-08-policy-claims-audit.md` | The protocol's **own policy claims verified against the running system** — including a safety guard found structurally blind |
+| VT-10 | `tests/VT-10-confidence-demotion-green-pass.md` | Release gated on **facts, not confidence scores** — after a calibration study proved reviewer confidence carries verdict direction rather than correctness, a program reaches releasable on mechanical containment facts + independent recomputation, zero interventions |
 
 Supporting documents: `OVERVIEW.md` (what the engine is, every claim linked to its proof),
 `ARCHITECTURE.md` (the design invariants and decision log), `METHODOLOGY.md` (how the testing regime
