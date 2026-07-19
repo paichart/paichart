@@ -15,6 +15,19 @@ recomputation. This test verifies the whole regime end-to-end on a healthy run: 
 emitted, surfaced, retrieved, and **cited in the release computation** — and a program reaches
 `programReleasable: true` with no confidence threshold anywhere in the chain.
 
+## One principle, applied twice
+
+Both halves of this regime come from a single rule: **the model never self-certifies what it cannot
+reliably do.** A reviewer's confidence score is the model grading its own correctness — the
+calibration study proved it can't (it approved a real defect at 92/100). Subnet arithmetic is the
+same class of thing: a `/31` prefix covers exactly two addresses — `10.99.0.0` and `10.99.0.1` — so a
+design that picks `.1` and `.2` and claims `10.99.0.0/31` covers both is *wrong*, because `.2` falls
+outside that block. An LLM reviewer approved that exact error at confidence 92; a deterministic check
+rejects it every time. So the platform lets the model **design** the addressing and **reason** about
+the change, but the arithmetic that gates release is recomputed **in code, against harvested ground
+truth — never taken on the model's word.** Confidence out of the gate and containment checked in code
+are the same decision.
+
 ## Method
 
 1. Run the two-pipeline sequenced program (network provisioning → Terraform IaC) against the live
