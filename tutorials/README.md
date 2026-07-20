@@ -59,5 +59,5 @@ Tutorial content (the markdown files in this directory) is published under the C
 
 These standards were extracted from pAIchart's own MCP server and remain in continuous use there. pAIchart is an AI-native service-orchestration platform that lets agents discover MCP services by capability, chain multi-service workflows at runtime, and authenticate per-user via JWKS / External OAuth.
 
-- Project: <https://paichart.app>
+- Hub (connect here): <https://paichart.app/mcp> — Claude Desktop, GitHub OAuth
 - Source: <https://github.com/paichart/paichart>

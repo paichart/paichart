@@ -85,5 +85,5 @@ date above reflects the most recent change.
 
 ---
 
-_Questions about this statement: **privacy@paichart.com** • Platform:
-[paichart.app](https://paichart.app)_
+_Questions about this statement: **privacy@paichart.com** • Hub (connect here):
+[paichart.app/mcp](https://paichart.app/mcp) — Claude Desktop, GitHub OAuth_
