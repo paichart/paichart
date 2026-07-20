@@ -1,6 +1,6 @@
 # pAIchart — Intent-Driven, Human-Gated Change Synthesis
 
-Across network, cloud, and Kubernetes — on an open MCP hub, tracked as structured delivery. Give pAIchart a one-line objective and it synthesizes a reviewed, **approved-but-unapplied change package**. It never actuates.
+Across network, cloud, and Kubernetes — on an open MCP hub, tracked as structured delivery. Give pAIchart a one-line objective and it synthesizes a reviewed, **approved change package your team applies idempotently** — out-of-band, with a rollback. pAIchart designs and reviews the change; it never applies it.
 
 State the intent in plain language; pAIchart's delivery engine harvests your live systems, designs the change, authors the per-vendor config + validation + rollback, and an independent reviewer gates it. What comes back is a change you *approve* — you don't author it, and nothing is applied until a human says so. The expertise a multi-vendor change used to demand shifts from **authoring across every system** to **approving one reviewed result**.
 
@@ -20,11 +20,11 @@ Give pAIchart a one-line objective and it orchestrates a team of specialist agen
 
 A single **pipeline** handles one domain. A **program** is a pipeline of pipelines — how one intent spans *multiple* domains and hands a real value from one to the next. The flagship shape is a **sequenced, cross-domain program**: e.g. *"the switches export from new dedicated addresses; the cloud archive bucket authorises exactly the range covering them"* runs the network pipeline first, then feeds its **actual derived address range** into a cloud-IaC pipeline — the policy authorises exactly what the network design produced, with no human reconciling the two by hand. One intent, configuration in several vendors' languages, none of it hand-written.
 
-Every run ends the same way: a reviewed change package you approve. **It never actuates** — device/cluster/state access is read-only, output is sanitized before any reasoner reads it, secrets are redacted from the artifact, and *apply* stays a separate, human-gated step.
+Every run ends the same way: a reviewed change package you approve, then apply on your own terms. pAIchart never applies it for you — device/cluster/state access is read-only, output is sanitized before any reasoner reads it, secrets are redacted from the artifact, and *apply* stays a separate, human-gated step.
 
-- **Network Provisioning** — turn *"add a Loopback0 per switch and advertise it into BGP"* into an **approved-but-unapplied change package**: the pipeline self-provisions a read-only device service from a descriptor, harvests the device's real running state, designs the change, authors per-device config + validation + rollback, and an independent reviewer gates it. → [example change report](examples/network-provisioning-change-report.md)
+- **Network Provisioning** — turn *"add a Loopback0 per switch and advertise it into BGP"* into an **approved change package the provisioning team applies idempotently**: the pipeline self-provisions a read-only device service from a descriptor, harvests the device's real running state, designs the change, authors per-device config + validation + rollback, and an independent reviewer gates it. → [example change report](examples/network-provisioning-change-report.md)
 - **Kubernetes / GitOps** — turn *"add an HPA and resource requests/limits to the orders-api Deployment"* into a **declarative GitOps change package** (a kustomize overlay) from live cluster state, with offline validation (`kubeconform` / `kustomize build` / OPA — never `kubectl diff`) and rollback. Read-only + RBAC-scoped; secret *names* surface, values never leave the cluster. Apply is a GitOps-reconcile / human-gated step. → [example change report](examples/kubernetes-gitops-change-report.md) *(includes an earned **NEEDS-REVISION** — the reviewer refusing to approve what it couldn't verify)*
-- **Terraform / Cloud IaC** — turn *"add versioning and a public-access-block to the acme-app-logs S3 bucket"* into an **approved-but-unapplied HCL change package (a PR)** from real Terraform state (a scoped `state pull` — no providers launched, no state lock), with `terraform validate` / `plan` / `tflint` / OPA expected-facts and rollback. Apply is the team's governed `terraform apply`. → [example change report](examples/terraform-iac-change-report.md) *(shows the layered defense: a secret-shaped tag **redacted**, a prompt-injection tag **refused**)*
+- **Terraform / Cloud IaC** — turn *"add versioning and a public-access-block to the acme-app-logs S3 bucket"* into an **approved HCL change package (a PR) the team applies** from real Terraform state (a scoped `state pull` — no providers launched, no state lock), with `terraform validate` / `plan` / `tflint` / OPA expected-facts and rollback. Apply is the team's governed `terraform apply`. → [example change report](examples/terraform-iac-change-report.md) *(shows the layered defense: a secret-shaped tag **redacted**, a prompt-injection tag **refused**)*
 - **Artifact Synthesis** — turn source material (git history, execution logs, a POV's own delivery history, external MCP services) into a publishable deliverable (case study, post-mortem, quarterly recap) via a harvest → author → review pipeline. → [example case study](examples/artifact-synthesis-case-study.md)
 
 Every kind runs on the same harness — for the full how-to, see the in-product **`HOWTO-use-pipeline-harness`** guide (run `list_prompts()` in your AI client to find it). For a narrative walkthrough of a real cross-domain program and how its correctness is machine-checked, see the [coordinated-infrastructure-change case study](case-studies/coordinated-infra-change.md).
@@ -75,13 +75,13 @@ Every request is either answered directly, synthesized into a change package by 
 You (Claude Desktop / ChatGPT)
   → authenticate to the pAIchart Hub
   → state intent in natural language, e.g.
-      • "Provision a Loopback0 per switch, advertise into BGP"  → engine: harvest → design → author → review → change package (never applied)
+      • "Provision a Loopback0 per switch, advertise into BGP"  → engine: harvest → design → author → review → change package (your team applies)
       • "Which of my POVs are at risk?"                         → project / analytics tools answer directly
       • "Texas energy mix + this week's weather"                → Hub composes a multi-service workflow
   → for external / live-system access (incl. the engine's harvest):
       → Hub discovers services by capability, determines trust level, mints a per-service JWT
       → the external service validates it via JWKS — no shared API keys
-  → operations execute as the authenticated user; the engine never actuates — apply stays human-gated
+  → operations execute as the authenticated user; pAIchart designs and reviews — your team applies, idempotently and out-of-band
 ```
 
 ## Live Services
