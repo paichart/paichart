@@ -167,7 +167,7 @@ This study is drawn from real runs of a sequenced network-provisioning → cloud
 - **The sequenced-legs run** (a value that didn't exist at plan time, machine-checked against harvested ground truth): <https://github.com/paichart/paichart/blob/main/verification/tests/VT-09-sequenced-legs-evidence-flow.md>
 - **The facts-not-confidence release** (the subnet-check regime, the green pass): <https://github.com/paichart/paichart/blob/main/verification/tests/VT-10-confidence-demotion-green-pass.md>
 - **Companion case study** (what the engine buys you — the shift from authoring to approving): [You Approve; You Don't Author](you-approve-you-dont-author.md)
-- **pAIchart**: <https://paichart.app> · connect via the hub at <https://paichart.app/mcp> — Claude Desktop signs in with GitHub OAuth, ChatGPT with Microsoft OAuth
+- **pAIchart**: connect via the hub at <https://paichart.app/mcp> — Claude Desktop signs in with GitHub OAuth (ChatGPT with Microsoft OAuth)
 
 The specific numbers (six harvested allocations, the 92-vs-45 review scores, the address examples) are from these runs in this lab; they'll differ in another environment, but the *shape* — harvest, design, sequence, mechanically check, release on facts, escalate honestly — is the reusable part.
 

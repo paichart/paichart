@@ -121,7 +121,7 @@ Services that support External OAuth (like Snowflake, Databricks) get per-user a
 
 ## Links
 
-- **Platform**: [paichart.app](https://paichart.app)
+- **Hub (connect here)**: [paichart.app/mcp](https://paichart.app/mcp) — Claude Desktop, GitHub OAuth
 - **JWKS**: `https://paichart.app/api/auth/jwks`
 - **Documentation**: provided as an MCP resource (or run `list_prompts()`) in your AI client
 - **Demo User Privacy**: [PRIVACY-DEMO.md](./PRIVACY-DEMO.md) — what a demo account holds, what it can do, 30-day auto-deletion
