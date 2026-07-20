@@ -116,7 +116,7 @@ Services that support External OAuth (like Snowflake, Databricks) get per-user a
 
 ## Learn
 
-- **Coordinated Infrastructure Change** — a narrative case study of a real cross-domain program (network → cloud), and how its correctness is machine-checked rather than trusted: [case-studies/coordinated-infra-change.md](case-studies/coordinated-infra-change.md)
+- **Case studies** — two narrative walkthroughs of the same real cross-domain program (network → cloud): [Coordinated Infrastructure Change, Checked by Machine](case-studies/coordinated-infra-change.md) (*can you trust it* — how correctness is machine-checked, not trusted) and [You Approve; You Don't Author](case-studies/you-approve-you-dont-author.md) (*what it buys you* — one intent, configs in several vendors' languages, none hand-written). See [case-studies/README.md](case-studies/README.md).
 - **MCP Tool Excellence** — a 12-chapter tutorial series on building MCP tools AI clients can call without external documentation, extracted from pAIchart's own production audits: [tutorials/README.md](tutorials/README.md)
 
 ## Links
