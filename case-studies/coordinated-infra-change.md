@@ -122,6 +122,16 @@ No output was produced that looked like success. The machine said *no*, said *wh
 
 ---
 
+## So how do you know it's correct?
+
+Step back from the subnet arithmetic — that's one property. The question a serious reviewer should ask of any system like this is broader: how do you know the *whole* change is right? The honest answer is that the engine doesn't claim the AI is correct. It makes the change **checkable and reversible — and checks it with things that aren't the AI.**
+
+Four properties do the work. The change is **grounded** — built on the harvested live state, not an assumption; a plan built on hallucinated state is wrong before it starts. It's **deterministic** — the same harvested state and objective produce the same package, which is the precondition for verifying it at all (a non-deterministic design gives you nothing stable to check). Every property a computer *can* check — range containment, coverage, cross-domain consistency, and syntactic validity through the domain's own validators (`terraform validate`, `terraform plan`, device config parsers) — *is* checked by deterministic code, not by a confidence score. And correctness is defined **operationally**: the package carries the exact validation commands and expected output that prove each change worked, plus a rollback for each device.
+
+Under all of it sits the real safety net: **the engine never applies the change.** It emits an approved-but-unapplied plan, which an **idempotent**, convergent executor applies out-of-band — a `terraform apply`, a GitOps reconcile, or a human running the validated commands — driving actual state to desired state and doing nothing when re-run. A deterministic plan, machine-checked, applied idempotently, with a rollback in hand: a wrong plan costs a review cycle, not an outage.
+
+And the bound, because it's what makes the rest credible: the engine proves the *checkable* properties. It does **not** prove the objective itself was right — ask for the wrong policy and you get a correct package for the wrong policy — and it can't check a property nobody thought to check. That's why there's still an independent review and a human release gate. The claim is never "the AI is correct." It's narrower and stronger: the change is grounded, machine-checked on everything checkable, operationally testable, reversible, and it refuses when it can't be sure. That is the whole difference between this and pasting a config into a chatbot and applying what comes back — the same underlying model, a completely different trust surface. The harness around the model is the product; the model is a component.
+
 ## When this shape fits your own changes
 
 The specific tools here are pAIchart's. The shape transfers. Reach for this kind of coordinated, machine-checked planning when:
