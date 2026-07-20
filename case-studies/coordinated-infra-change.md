@@ -141,6 +141,12 @@ Under all of it sits the real safety net: **the engine never applies the change.
 
 And the bound, because it's what makes the rest credible: the engine proves the *checkable* properties. It does **not** prove the objective itself was right — ask for the wrong policy and you get a correct package for the wrong policy — and it can't check a property nobody thought to check. That's why there's still an independent review and a human release gate. The claim is never "the AI is correct." It's narrower and stronger: the change is grounded, machine-checked on everything checkable, operationally testable, reversible, and it refuses when it can't be sure. That is the whole difference between this and pasting a config into a chatbot and applying what comes back — the same underlying model, a completely different trust surface. The harness around the model is the product; the model is a component.
 
+## What it changes: you approve, you don't author
+
+Look at what a person actually did in this run — and what they didn't. They stated the objective in plain language and pointed the engine at the environment. The two inputs are just **intent** (`requirements.md`) and the **topology as data** (`topology.json`) — neither is device configuration. Everything device-specific (the Arista switch config, the Terraform policy) was *generated*, and the human's role was to **approve** it, not to write it.
+
+In the vocabulary most banks and carriers already run on: you still own the **High-Level Design** — the *what and why* — and the **change-approval** gate: the RFC and the CAB. What the engine takes off your plate is the **Low-Level Design** — the per-vendor config that today needs an Arista expert *and* an AWS expert *and* a Cisco expert to author, plus the legwork of reading each device's live state by hand. One domain-literate approver replaces a bench of per-vendor authors, and their judgement is *sharpened*, not replaced, because the mechanical parts (the subnet math, the containment) are already machine-checked. The honest limit is the same as everywhere here: you still need someone who can *approve* — read it, judge it matches intent, own the release. You no longer need someone who can *write* it, in every vendor's language, or gather the state to write it against. (That shift — from authoring to approving — is powerful enough to deserve its own study.)
+
 ## When this shape fits your own changes
 
 The specific tools here are pAIchart's. The shape transfers. Reach for this kind of coordinated, machine-checked planning when:
