@@ -138,6 +138,7 @@ The real generated configuration in this study (the Arista EOS switch config and
 
 - **Verification pack** (each claim linked to its proof): <https://github.com/paichart/paichart/tree/main/verification>
 - **Companion case study** (why you can trust the generated change): [A Coordinated Infrastructure Change, Checked by Machine](coordinated-infra-change.md) — the same program, seen through the machine checks, the honest failures, and the reversibility.
+- **Companion case study** (how it's built — the DAG, the review tiers, and scale, with the internals named): [Inside a Multi-Domain Program](inside-a-multi-domain-program.md)
 - **pAIchart**: connect via the hub at <https://paichart.app/mcp> — Claude Desktop signs in with GitHub OAuth (ChatGPT with Microsoft OAuth)
 
 ---
