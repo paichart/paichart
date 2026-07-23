@@ -1,6 +1,7 @@
-# Meridian Capital — Telemetry-Archive Authorization: Program Requirements
-
-Iteration: T6 (multi-domain, multi-team, **SEQUENCED** — runtime interdependency) · 2026-07-17
+# Program Requirements
+- POV: pAIchart Verified Delivery — Live Exhibits
+- Phase: Network + Cloud sequenced change
+- Iteration: T6 (multi-domain, multi-team, **SEQUENCED** — runtime interdependency) · 2026-07-23
 
 ## Program scope
 
