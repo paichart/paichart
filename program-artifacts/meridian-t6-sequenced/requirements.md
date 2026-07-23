@@ -40,10 +40,16 @@ terraform leg, **not** the interface contract.
 
 ## Approvals (multi-team — one gate per domain, plus the program plan gate)
 
+The team for this project (or pov) have been provisioned and are the following;
+- Owner is Steve Terry steve.terry@paichart.com
+- Project Manager is Brian Wilson brian@example.com
+- Network Engineer is Josh Allen josh.allen@paichart.com
+- Cloud Engineer is Jacob Wilcox jacob.wilcox@paichart.com
+
 - The **network change** requires its own approval before the network pipeline may run.
-  Approver: **Steve Terry** (network engineering).
+  Approver: **Josh Allen** (network engineering).
 - The **cloud IaC change** requires its own approval before the terraform pipeline may run.
-  Approver: **Steve Terry** (cloud platform).
+  Approver: **Jacob Wilcox** (cloud platform).
 - The terraform pipeline waits on **BOTH** its own gate **AND** the network pipeline (the DAG edge).
 
 ## Pipeline 1 objective — network provisioning (UPSTREAM)
