@@ -62,6 +62,13 @@ refusal of a single step, is the claim.
 - **Cascade provenance** (this round's second surface): the leg was queued by the dependency
   reactor with `triggeredBy` naming the domain approval gate — which was released from the **GUI
   Approve button**, on a platform where gate completion is dependency-enforced on every surface.
+- **Mechanical-containment fact** (the code-arithmetic backstop): the platform's
+  derivation-containment enrichment runs regardless of outcome and stamps a structured fact. On
+  the escalation path it must read `checked: false, reason: "no-derived-values-block"` — the
+  checker found no emitted derivation to verify, which is a fact, not a skip. The harvested
+  evidence block (including the colliding allocation) must be present and parseable, proving the
+  checker was ARMED: had the design emitted the unsafe aggregate instead of refusing, the
+  `kind: "cidr"` code checker would have flagged the violation mechanically.
 
 ## Results
 
@@ -77,6 +84,21 @@ the human decision. The pino chain reads gate-click → core completion → reac
 (`triggeredBy` = the gate) → engine → CREATE → children → SYNTHESIZE → `AGENT_STAMPED_CANNOT_RUN`
 → F20 escalation — one unbroken provenance line from a human's button press to a human decision
 request.
+
+### Branch-coverage note (post-run audit, 2026-07-25)
+
+The platform's collision defense has two branches: **(a)** the LLM self-detects and refuses to
+emit — this round's path, where the collision determination is the model's own reasoning
+(fail-safe: a wrong claim can only false-escalate, never false-release); **(b)** the LLM emits the
+unsafe value anyway and the **code checker** (`kind: "cidr"` containment arithmetic) flags it
+mechanically, blocking release on the structured fact. The post-run audit verified branch (b)
+stood armed but structurally unreached: the SYNTHESIZE artifact carries
+`derivationContainment: { checked: false, reason: "no-derived-values-block" }` with both source
+children resolved, and the harvest response contains the `## Harvested Allocations` block naming
+`10.99.0.3/32` — evidence in place, checker loaded, nothing emitted to check. Branch (b)'s live
+verification is VT-09's territory (the green evidence-flow round, where derived values ARE
+emitted and machine-checked at every tier). This round verifies branch (a) plus branch (b)'s
+readiness.
 
 ## Conclusion
 
