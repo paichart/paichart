@@ -41,8 +41,7 @@ terraform leg, **not** the interface contract.
 ## Approvals (multi-team — one gate per domain, plus the program plan gate)
 
 The team for this project (or pov) have been provisioned and are the following;
-- Owner is Steve Terry steve.terry@paichart.com
-- Project Manager is Brian Wilson brian@example.com
+- Project Manager is Steve Terry steve.terry@paichart.com
 - Network Engineer is Josh Allen josh.allen@paichart.com
 - Cloud Engineer is Jacob Wilcox jacob.wilcox@paichart.com
 
