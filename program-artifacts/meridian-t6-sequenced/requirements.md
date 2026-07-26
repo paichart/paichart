@@ -130,6 +130,17 @@ The team for this project (or pov) have been provisioned and are the following;
 
 - Each change package must include deterministic validation with expected outputs (network: exact
   `show` commands; terraform: expected `terraform validate`/`plan` count facts) and a rollback plan.
+  - **"Deterministic" means a reviewer can run it and compare, without judgement.** Every validation
+    step is an **exact command** plus its **exact expected output** — the literal text or count you
+    expect back. Prose such as "verify the loopback is up", "confirm BGP advertises the aggregate", or
+    "check the policy is correct" is a **REJECTABLE defect**, not a validation step: two reviewers
+    could disagree on whether it passed. Write `show ip interface brief | include Loopback14` and the
+    exact line it must return, not "check the interface".
+  - **Ship every artefact your validation cites.** If a step invokes a policy/rule file (OPA, Conftest,
+    tflint config, a test fixture), the change package must **include that file's complete, runnable
+    contents**. Citing a check you did not ship is unrunnable, so it is not validation. Run 10 was
+    blocked for exactly this — naming OPA/Conftest checks without shipping the rule files. Run 13's
+    network leg was blocked for the prose variant of the same defect.
 - **Apply is out-of-band and human-gated in both domains.** This program produces approved change
   packages only — never applied changes.
 - The **program integration reviewer (Node C)** verifies, from structured facts:
