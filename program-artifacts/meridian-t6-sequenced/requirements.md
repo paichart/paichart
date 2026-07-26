@@ -68,6 +68,23 @@ The team for this project (or pov) have been provisioned and are the following;
   - **the aggregate MUST NOT cover any address already allocated** to an existing loopback on either
     switch (it becomes the archive's write allowlist — covering a foreign address is an authorization
     widening);
+  - **Re-selection FIRST, escalation LAST.** If a candidate pair's minimal aggregate covers an existing
+    allocation, that rules out *that pair* — not the pool. **Select a different pair and recompute.**
+    Escalate ONLY after establishing that no clean pair exists **anywhere** in `10.99.0.0/24`, and name
+    in the escalation which candidates you tested. "Impossible" concluded from a handful of candidates
+    is a **defect, not an escalation** — it blocks the downstream cloud leg on a false premise.
+  - **Where to look first**: an *aligned adjacent* free pair (`.4/.5`, `.6/.7`, `.8/.9`, `.16/.17`, …)
+    summarizes to a `/31` spanning exactly those two addresses, so it can collide only if one of the two
+    is itself allocated. In a sparsely-allocated pool such a pair almost always exists — test these
+    before concluding anything.
+  - ⚠️ **Known failure mode — boundary-straddling pairs.** `.1/.2` do NOT summarize to a `/31`: they
+    straddle a `/31` boundary, so their minimal cover is `10.99.0.0/30` (`.0–.3`), which swallows a
+    neighbouring allocation at `.3`. A `/31` covers an **aligned** pair only (`.0/.1`, `.2/.3`, `.4/.5`,
+    …) — verify alignment by binary arithmetic, never by eyeballing adjacency. Runs 5 and 6 lost on this
+    directly; run 12 compounded it by testing only pairs anchored at `.1` and declaring the pool too
+    fragmented while `.4/.5` was free the whole time.
+  - **Verify member-by-member** before publishing: every selected `/32` is inside your aggregate, and no
+    harvested allocation is.
   - if no clean pair exists in the pool, **escalate** via `task.comment` rather than widening.
 - Configure the new exporter loopbacks and advertise the **aggregate** into BGP (`network` statement
   for the aggregate; no redistribution).
