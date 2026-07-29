@@ -1,7 +1,13 @@
 # Program Requirements
 - POV: pAIchart Verified Delivery — Live Exhibits
 - Phase: Network + Cloud sequenced change
-- Iteration: T6 (multi-domain, multi-team, **SEQUENCED** — runtime interdependency) · 2026-07-23
+- Iteration: T6.1 (multi-domain, multi-team, **SEQUENCED** — runtime interdependency) · 2026-07-23
+
+> **Revision T6.1 (2026-07-28)**: adds the **consuming-leg containment-attribution** property
+> (Pipeline 2 objective + Acceptance) so a downstream IaC leg's
+> `derivationContainment: { checked: false }` is recognized as a *satisfied* state, not a blocking
+> miss. Spec change only — see the **Enforcement note** in Acceptance for the paired protocol change
+> required to make the program gate self-certify.
 
 ## Program scope
 
@@ -91,6 +97,13 @@ The team for this project (or pov) have been provisioned and are the following;
 - **The deliverable MUST publish, explicitly and prominently**: the **derived aggregate** (the value the
   cloud tier consumes) and the **selected per-switch `/32`s** (for audit), plus the reasoning for the
   choice. These are the chained inputs the downstream leg depends on.
+- **This is the derivation of record.** Because this leg *emits* the derivation, it is the leg whose
+  `derivationContainment` MUST be machine-checked: synthesis is expected to stamp
+  `{ checked: true, violations: [] }` (the derived aggregate covers exactly the two selected `/32`s and
+  no harvested allocation). The downstream leg does **not** re-derive; containment for the consumed
+  value is discharged **here** and re-verified at the program tier by Node C (see Acceptance). A
+  `checked: true` here is a **precondition** for treating the downstream leg's `checked: false` as
+  satisfied.
 
 ## Pipeline 2 objective — cloud IaC (Terraform, DOWNSTREAM)
 
@@ -108,6 +121,19 @@ The team for this project (or pov) have been provisioned and are the following;
 - Emit a declarative **HCL diff as a PR** — never imperative CLI, never an applied change.
 - `aws_s3_bucket.app_logs` and its policy are the **only** targets; any out-of-scope drift found in
   state must be flagged, never silently absorbed.
+- **Containment is NOT machine-verified in this leg — and that is correct.** This leg **re-emits the
+  chained aggregate verbatim in a `## Derived Values` block** (as required above), so a derived block
+  **is** present. What it lacks is a parseable `## Harvested Allocations` (CIDR) block, because it
+  harvests Terraform state, not an address pool — there is no foreign-allocation set to test the
+  derived value's containment against. Its leg-level `derivationContainment` therefore legitimately
+  reads `{ checked: false, reason: "harvest-block-missing-or-unparseable" }`. This is an **expected,
+  satisfied state** — not a defect and not a release blocker (see Acceptance → *Consuming-leg
+  containment attribution*).
+- **Do NOT fabricate a `## Harvested Allocations` block** (invent foreign allocations) to make the
+  per-leg checker return `checked: true`: it would be a hollow check — this leg has no allocation pool
+  of its own, and it is forbidden from recomputing the aggregate (Node C check 1). Containment for the
+  value you consume is discharged upstream (Pipeline 1, machine-checked against the real pool) and
+  re-verified at the program tier by Node C (checks 1, 2, 2b, 3).
 
 ## Design constraints — split across the contract and the DAG
 
@@ -159,3 +185,41 @@ The team for this project (or pov) have been provisioned and are the following;
      (`source: 'report.md'`), not a fallback and not nothing.
 - Note these checks are **properties, not hardcoded values** — they stay valid when the rig's scatter is
   re-randomized. That is deliberate: the round must not depend on a magic expected string.
+- **Consuming-leg containment attribution (release property).** For a downstream *consuming* leg
+  (`terraform-iac`), a `derivationContainment` of
+  `{ checked: false, reason: "harvest-block-missing-or-unparseable" }` — i.e. a derived block **is**
+  present but the leg's own harvest yields no parseable CIDR allocation set — is a **SATISFIED
+  acceptance state, NOT a blocking miss** — provided **all** of the following hold:
+  1. the upstream *deriving* leg (network provisioning) stamped
+     `derivationContainment: { checked: true, violations: [] }` on the derivation it emitted;
+  2. Node C checks 1, 2, 2b and 3 (above) pass on the chained aggregate — i.e. the consumed value's
+     containment properties are re-verified at the program tier; and
+  3. chaining coverage (Node C check 4) confirms the consuming leg received the **real** upstream
+     deliverable (`source: 'report.md'`), not a fallback.
+
+  **Rationale.** An IaC leg re-emits the chained aggregate but has **no allocation pool of its own to
+  check it against**: it harvests state, not addresses, and it is *forbidden* from recomputing the
+  aggregate. Its containment obligation is discharged upstream (P1, machine-checked against the real
+  pool) and at the program tier (Node C). Treating its `harvest-block-missing-or-unparseable` as a
+  defect **double-counts an obligation already met** and blocks a run that is, in fact, correct. A
+  program run in this configuration is **RELEASABLE**.
+
+  **Enforcement note (paired protocol change — this clause is spec-only).** `requirements.md` is read
+  by the *agents*, not by the derivation-containment enrichment or the program-gate taxonomy, which are
+  platform/protocol code. For the program gate to **self-certify** (`programReleasable: true`) rather
+  than park, the protocol's containment taxonomy must be updated so that
+  `reason: "harvest-block-missing-or-unparseable"` is **non-blocking for a consuming leg** when
+  conditions (1)–(3) above hold **AND** the leg is downstream of a `checked: true` deriving sibling —
+  the DAG-position guard that separates a legitimate consumer from a deriving leg whose CIDR harvest
+  is genuinely broken (both stamp the same reason string). Note this must NOT be applied to
+  `no-derived-values-block`, which is a *different* state (no derived block at all) and is the
+  refusal/silent-drop fail-safe.
+  The observed program-tier verdict this applies to: Node C APPROVED (0 blocking), program
+  `qualityGate.outcome: needs-revision` / `programReleasable: false` driven **solely** by the
+  terraform leg's `checked: false`.
+
+  **Status: ENFORCEMENT SHIPPED (2026-07-29).** pov-program protocol v1.0.18 reclassifies
+  `harvest-block-missing-or-unparseable` per the above, keyed on two platform facts — the reason
+  string plus a new `derivationContainment.upstreamContainment.green` stamp (the enrichment's
+  transcription of this leg's `report.md` predecessors' containment). Release in this configuration
+  is therefore a machine-gated `programReleasable: true`, no longer a documented human decision.
