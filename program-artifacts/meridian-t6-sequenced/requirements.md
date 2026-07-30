@@ -1,8 +1,20 @@
 # Program Requirements
 - POV: pAIchart Verified Delivery — Live Exhibits
 - Phase: Network + Cloud sequenced change
-- Iteration: T6.1 (multi-domain, multi-team, **SEQUENCED** — runtime interdependency) · 2026-07-23
+- Iteration: T6.2 (multi-domain, multi-team, **SEQUENCED** — runtime interdependency) · 2026-07-23
 
+> **Revision T6.2 (2026-07-30)** — corrections after auditing Run 15, which was a **FALSE PASS**
+> (`programReleasable: true` while shipping a non-minimal aggregate). Four changes, three of them
+> repairing damage this document caused:
+> 1. Pipeline 1 no longer publishes the checker's pass condition — it was a measurable bar *weaker* than
+>    the minimality requirement beside it, and the leg met it while violating the requirement.
+> 2. Acceptance: check numbers are FIXED and a new clause may not take one (T6.1's clause was renumbered
+>    into slot 2b, deleting the minimality check, which is how the `/30` shipped).
+> 3. Acceptance: expected values in this file are reference data, never evidence — a tier restating one
+>    is not a check (Node C asserted a field that was absent from the artifact).
+> 4. The enforcement status was an overclaim and is corrected; the consuming-leg exception has never
+>    fired.
+>
 > **Revision T6.1 (2026-07-28)**: adds the **consuming-leg containment-attribution** property
 > (Pipeline 2 objective + Acceptance) so a downstream IaC leg's
 > `derivationContainment: { checked: false }` is recognized as a *satisfied* state, not a blocking
@@ -128,9 +140,14 @@ The team for this project (or pov) have been provisioned and are the following;
   **is** present. What it lacks is a parseable `## Harvested Allocations` (CIDR) block, because it
   harvests Terraform state, not an address pool — there is no foreign-allocation set to test the
   derived value's containment against. Its leg-level `derivationContainment` therefore legitimately
-  reads `{ checked: false, reason: "harvest-block-missing-or-unparseable" }`. This is an **expected,
-  satisfied state** — not a defect and not a release blocker (see Acceptance → *Consuming-leg
-  containment attribution*).
+  reads `checked: false`. This is an **expected, satisfied state** — not a defect and not a release
+  blocker (see Acceptance → *Consuming-leg containment attribution*).
+  **Which `reason` accompanies it varies by run, and BOTH are legitimate for this leg** (observed
+  directly): `harvest-block-missing-or-unparseable` when the Author emitted the `## Derived Values`
+  block restating the chained aggregate (Run 14), and `no-derived-values-block` when it did not
+  (Run 15). Same protocol, same objective, different run. Do not treat either string as the expected
+  one, and do not adjust your output to produce a particular reason code — the reason is a
+  consequence of what you legitimately emit, never a target.
 - **Do NOT fabricate a `## Harvested Allocations` block** (invent foreign allocations) to make the
   per-leg checker return `checked: true`: it would be a hollow check — this leg has no allocation pool
   of its own, and it is forbidden from recomputing the aggregate (Node C check 1). Containment for the
@@ -187,13 +204,30 @@ The team for this project (or pov) have been provisioned and are the following;
      (`source: 'report.md'`), not a fallback and not nothing.
 - Note these checks are **properties, not hardcoded values** — they stay valid when the rig's scatter is
   re-randomized. That is deliberate: the round must not depend on a magic expected string.
+- ⚠️ **The check numbers above are FIXED. A new clause may not take one.** Checks 1, 2, 2b, 3 and 4 are
+  referenced by number from elsewhere in this document and from the protocol; renumbering, merging, or
+  substituting one silently deletes it. **Run 15 (2026-07-29) is the incident**: the T6.1 consuming-leg
+  clause was added to this file, and Node C renumbered it into slot **2b** — the minimality check — which
+  it then never performed. A non-minimal `/30` shipped as a result. If a new requirement needs a number,
+  it APPENDS (5, 6, …). Check 2b is minimality, permanently.
+- ⚠️ **Expected values stated in this document are reference data, NOT evidence.** Where this file names
+  a reason code, a stamp shape, or an expected state, it is describing the round's INTENT so a human can
+  read the run — it is never an observation, and restating it is never a check. A tier must retrieve the
+  actual value and construct its own finding. **Run 15 is the incident here too**: Node C asserted
+  `upstreamContainment.green:true` — quoting this file's expected state — for a field that was **absent
+  from the artifact entirely**. "The requirements say this is expected" is not a passing check at any
+  tier.
 - **Consuming-leg containment attribution (release property).** For a downstream *consuming* leg
   (`terraform-iac`), a `derivationContainment` of
   `{ checked: false, reason: "harvest-block-missing-or-unparseable" }` — i.e. a derived block **is**
   present but the leg's own harvest yields no parseable CIDR allocation set — is a **SATISFIED
   acceptance state, NOT a blocking miss** — provided **all** of the following hold:
   1. the upstream *deriving* leg (network provisioning) stamped
-     `derivationContainment: { checked: true, violations: [] }` on the derivation it emitted;
+     `derivationContainment: { checked: true, violations: [] }` on the derivation it emitted.
+     Since 2026-07-30 that conjunct also carries MINIMALITY: `prefix-not-minimal` is a mechanical
+     violation class, so a loose aggregate upstream now populates `violations` and denies the
+     consumer's benign state automatically. The consumer path is therefore protected by the same
+     arithmetic as the producer — it no longer depends on Node C's check 2b surviving;
   2. Node C checks 1, 2, 2b and 3 (above) pass on the chained aggregate — i.e. the consumed value's
      containment properties are re-verified at the program tier; and
   3. chaining coverage (Node C check 4) confirms the consuming leg received the **real** upstream
@@ -220,8 +254,27 @@ The team for this project (or pov) have been provisioned and are the following;
   `qualityGate.outcome: needs-revision` / `programReleasable: false` driven **solely** by the
   terraform leg's `checked: false`.
 
-  **Status: ENFORCEMENT SHIPPED (2026-07-29).** pov-program protocol v1.0.18 reclassifies
-  `harvest-block-missing-or-unparseable` per the above, keyed on two platform facts — the reason
-  string plus a new `derivationContainment.upstreamContainment.green` stamp (the enrichment's
-  transcription of this leg's `report.md` predecessors' containment). Release in this configuration
-  is therefore a machine-gated `programReleasable: true`, no longer a documented human decision.
+  **Status (corrected 2026-07-30): SHIPPED BUT NEVER YET EXERCISED — do not read this as "working".**
+  pov-program v1.0.18 reclassifies `harvest-block-missing-or-unparseable` per the above, keyed on two
+  platform facts: the reason string plus a `derivationContainment.upstreamContainment.green` stamp
+  (the enrichment's transcription of this leg's `report.md` predecessors' containment). An earlier
+  version of this note claimed release here was "therefore a machine-gated `programReleasable: true`".
+  That was an overclaim. What is actually true:
+
+  - **The exception has never once fired.** Run 14 blocked (pre-change). Run 15 carried **no**
+    `upstreamContainment` at all — the stamp's upstream lookup matched the wrong artifact name and
+    silently resolved nothing (fixed 2026-07-30: the predecessor's containment is now carried on the
+    chaining edge, so the lookup no longer exists to get wrong).
+  - **It covers only one of the two reason strings the Author produces.** Run 14's consuming leg emitted
+    a `## Derived Values` block (⇒ `harvest-block-missing-or-unparseable`); Run 15's did not
+    (⇒ `no-derived-values-block`, which the exception cannot match). Same protocol, same objective,
+    different run. So whether the mechanical path is even reachable on a given run currently depends on
+    non-deterministic Author behaviour.
+  - **Run 15's `programReleasable: true` is NOT evidence this works.** It cleared via the gate's
+    judgement branch, against this protocol's own stated example, while also shipping a non-minimal
+    aggregate (see Pipeline 1). It must not be cited as a green sequenced run.
+
+  Until the exception is observed firing on a run whose stamp carries
+  `upstreamContainment.green: true`, release in this configuration remains a **documented human
+  decision** per this clause — with the machine facts as inputs, not the verdict.
+  Full record: `copov15 cline_docs/follow-ups/derivation-applicable-structural-gate-2026-07-30.md`.
