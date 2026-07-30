@@ -49,6 +49,7 @@ its claim is downgraded accordingly — no silent asterisks.
 | VT-08 | `tests/VT-08-policy-claims-audit.md` | The protocol's **own policy claims verified against the running system** — including a safety guard found structurally blind |
 | VT-10 | `tests/VT-10-confidence-demotion-green-pass.md` | Release gated on **facts, not confidence scores** — after a calibration study proved reviewer confidence carries verdict direction rather than correctness, a program reaches releasable on mechanical containment facts + independent recomputation, zero interventions |
 | VT-12 | `tests/VT-12-false-pass-nonminimal-aggregate.md` | **DEFECT ROUND (the failure is the finding)** — a program self-certified `programReleasable: true` while shipping an **authorization widening**; five tiers passed it, and the requirements edit meant to help is what caused it. Minimality is now mechanical; the fix is verified by replay against the real artifact |
+| VT-13 | `tests/VT-13-containment-conjunct-blocking-direction.md` | ⏳ **PRE-REGISTERED, NOT YET RUN** — the derivation conjunct BLOCKS and the block is attributable to it. Requested 2026-07-18, never written; every run to date exercised only the passing direction. Observables fixed before execution |
 
 Supporting documents: `OVERVIEW.md` (what the engine is, every claim linked to its proof),
 `ARCHITECTURE.md` (the design invariants and decision log), `METHODOLOGY.md` (how the testing regime
