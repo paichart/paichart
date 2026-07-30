@@ -30,6 +30,9 @@ run the green-path round first (VT-06), then pick one failure round and re-injec
 If a document's test cannot be reproduced outside our environment, the document says so explicitly and
 its claim is downgraded accordingly — no silent asterisks.
 
+
+> ⚠️ **VT-06 should be read alongside VT-12.** VT-06's claim — release only when every machine fact says so — holds *literally*: on VT-12's round every machine fact did say so. What failed was the **coverage** of that fact set. Minimality was checked in exactly one place (a requirements clause) and a prose edit removed it, so the gate followed a complete-looking set of facts to a wrong verdict. A green `programReleasable` bounds what was CHECKED, never what is CORRECT.
+
 ## Index
 
 | # | Document | Claim under test |
@@ -45,6 +48,7 @@ its claim is downgraded accordingly — no silent asterisks.
 | VT-07 | `tests/VT-07-adversarial-state-injection.md` | Hostile instructions and secret-shaped values planted in harvested infrastructure state are **refused, not obeyed** |
 | VT-08 | `tests/VT-08-policy-claims-audit.md` | The protocol's **own policy claims verified against the running system** — including a safety guard found structurally blind |
 | VT-10 | `tests/VT-10-confidence-demotion-green-pass.md` | Release gated on **facts, not confidence scores** — after a calibration study proved reviewer confidence carries verdict direction rather than correctness, a program reaches releasable on mechanical containment facts + independent recomputation, zero interventions |
+| VT-12 | `tests/VT-12-false-pass-nonminimal-aggregate.md` | **DEFECT ROUND (the failure is the finding)** — a program self-certified `programReleasable: true` while shipping an **authorization widening**; five tiers passed it, and the requirements edit meant to help is what caused it. Minimality is now mechanical; the fix is verified by replay against the real artifact |
 
 Supporting documents: `OVERVIEW.md` (what the engine is, every claim linked to its proof),
 `ARCHITECTURE.md` (the design invariants and decision log), `METHODOLOGY.md` (how the testing regime
