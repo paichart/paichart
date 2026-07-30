@@ -98,12 +98,14 @@ The team for this project (or pov) have been provisioned and are the following;
   cloud tier consumes) and the **selected per-switch `/32`s** (for audit), plus the reasoning for the
   choice. These are the chained inputs the downstream leg depends on.
 - **This is the derivation of record.** Because this leg *emits* the derivation, it is the leg whose
-  `derivationContainment` MUST be machine-checked: synthesis is expected to stamp
-  `{ checked: true, violations: [] }` (the derived aggregate covers exactly the two selected `/32`s and
-  no harvested allocation). The downstream leg does **not** re-derive; containment for the consumed
-  value is discharged **here** and re-verified at the program tier by Node C (see Acceptance). A
-  `checked: true` here is a **precondition** for treating the downstream leg's `checked: false` as
-  satisfied.
+  `derivationContainment` is machine-checked. The downstream leg does **not** re-derive; containment
+  for the consumed value is discharged **here** and re-verified at the program tier by Node C (see
+  Acceptance).
+  ⚠️ **The machine check is a floor, not the bar.** It verifies membership and non-overlap; it does
+  **not** relieve you of the minimality requirement above, and a clean mechanical result is not
+  evidence your aggregate is correct. Run 15 (2026-07-29) shipped `10.99.0.8/30` for members `.8`/`.9`
+  — mechanically clean, and a REJECT: the minimal cover is `/31`, so the policy authorized two
+  addresses no exporter uses. Satisfy the requirements; do not target the checker.
 
 ## Pipeline 2 objective — cloud IaC (Terraform, DOWNSTREAM)
 
