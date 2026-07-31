@@ -98,6 +98,24 @@ since it has never been observed:
    of the consuming-leg exception, if it happens.
 7. Whether the derived aggregate is minimal (it should be — that is what "no violation" means here).
 
+**Added 2026-07-31, BEFORE Run 17 — the consumed-value comparison (acceptance check 1, now mechanical).**
+Since the last round, `## Consumed Values` became a contract on both consuming protocols
+(terraform-iac / kubernetes-gitops 1.0.4) and the platform compares each declared value against the
+upstream's stamped `derivedValues`, carried on the chaining edge. That comparison has NEVER executed —
+the contract did not exist when any prior run was authored. Capture, in EITHER branch:
+
+8. Does the consuming leg's stamp carry `consumedValues`? Absence means the Author did not emit the
+   block, so the comparison did not run — that is a COVERAGE gap, not a pass, and must be recorded as
+   such rather than read as "no mismatch found".
+9. If present: does it match the upstream's `derivedValues`, and is `violations[]` free of
+   `consumed-value-mismatch`? A clean match is the first live evidence that check 1 is mechanical.
+10. If a `consumed-value-mismatch` DOES appear, it is a genuine finding about the run, not a defect in
+    the check — the leg declared a value its upstream never derived. Grade the leg, not the checker.
+
+⚠️ These were fixed before Run 17 executed, like the rest of this document. The reason that matters
+here specifically: a comparison firing for the first time is exactly the situation where it is easiest
+to declare success from whatever happens.
+
 **Both branches.** The run must not contain evidence that any tier was told what to expect: no tier
 should cite an expected reason code, stamp shape, or verdict from `requirements.md` as though it were
 an observation (VT-12 D3). A recital is a finding regardless of the branch.
