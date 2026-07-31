@@ -1,7 +1,9 @@
 # VT-13 — the derivationContainment conjunct BLOCKS, and the block is attributable to that conjunct
 
-**Status**: ⏳ **PRE-REGISTERED, NOT YET RUN.** Observables below were fixed and committed BEFORE
-execution. Results section is deliberately empty. | Re-verify trigger: a change to
+**Status**: 🟡 **STILL OPEN after Run 16 (2026-07-31).** The round executed against the observables
+below, which were fixed and committed BEFORE execution (`bf52160`). It landed on **Branch B** — no
+violation occurred — so the blocking direction remains unverified. Run 16 must NOT be recorded as this
+VT passing; it did, however, produce three other first-time live proofs (see Results). | Re-verify trigger: a change to
 `checkDerivationContainment`'s violation classes, or to the pov-program Step-5 formula.
 **Layer**: program
 **Round type**: functional (uninjected — see *Why nothing is injected*)
@@ -102,12 +104,93 @@ an observation (VT-12 D3). A recital is a finding regardless of the branch.
 
 ## Results
 
-*Not yet run. To be completed at execution time, against the observables above — not retrofitted.*
+**Run 16, 2026-07-31** (program `cms86wtlb0007yxacoca6xlwv`, stage `VT-13: containment conjunct
+blocking direction (Run 16)`, pinned to `bf52160`). Zero interventions beyond the three human gate
+releases. **Branch B: no violation occurred.**
+
+### The derivation was correct, and mechanically confirmed so
+
+P1 derived `10.99.0.64/31` for members `.64`/`.65`. Those differ only in the final bit, so `/31` is
+**exactly** the minimal cover — no looser, no unused addresses authorized. Stamp:
+
+```json
+{ "checked": true, "violations": [], "harvestedCount": 6, "derivedCount": 1 }
+```
+
+`prefix-not-minimal` was **armed** (shipped 2026-07-30) and returned clean, so this is a verified pass
+rather than an unchecked one. Independently confirmed: no harvested allocation falls in `.64–.65`
+(taken this build: ceos1 `.9/.27/.30`, ceos2 `.2/.8/.18`), and P2's policy authorizes
+`aws:SourceIp = 10.99.0.64/31` — byte-identical to P1's value, no widening.
+
+Program verdict: `programReleasable: true`, `qualityGate.outcome: approved`, Node C APPROVED / 0
+blocking, confidence 90/92.
+
+### Observable-by-observable
+
+| Observable | Result |
+|---|---|
+| **A1–A5** (violation blocks, attributably) | ❌ **not exercised** — no violation occurred |
+| **B6** — `upstreamContainment.green: true` | ✅ **FIRST LIVE FIRING** |
+| **B7** — aggregate minimal | ✅ `/31`, mechanically confirmed |
+| **Both branches** — no tier recites expected values as observed | ✅ **PASSED** |
+
+### Three things proven live for the first time
+
+1. **CC3 works end to end.** P2's stamp carried
+   `upstreamContainment: { green: true, legs: [{ taskId: <P1>, checked: true, violations: 0 }] }`.
+   This is the exact field whose absence made the whole consuming-leg fix inert on Run 15 — the
+   chainer carried P1's stamp on the edge, the enrichment transcribed it, `green` computed correctly,
+   and `legs` names the right predecessor.
+2. **A7's `harvestedCount` rule decided a real run.** P2 stamped `no-derived-values-block` with
+   **no** `harvestedCount` (it harvested Terraform state, so no CIDR block parsed) ⇒ nothing to derive
+   ⇒ benign **by fact, not judgement**. That branch was pure LLM judgement until 2026-07-31.
+3. **T6.2's anti-contamination rules held.** Node C quoted the lean card's REAL rendered values —
+   `derivationContainment: NOT checked (no-derived-values-block)` and
+   `upstreamContainment: green (1 leg)` — and named the ACTUAL stamped reason. It never mentioned
+   `harvest-block-missing-or-unparseable`, the reason the spec's example describes. On Run 15 the same
+   tier asserted `green:true` for a field absent from the artifact. It read the artifact this time.
+
+### The consuming-leg exception STILL has not been the deciding branch
+
+`upstreamContainment.green` was `true` and correct, but it was **not what made this leg benign** —
+`harvestedCount` being absent was. The exception keyed on `green` lives on the
+`harvest-block-missing-or-unparseable` clause, and P2 landed on the other reason string again.
+
+**The reason string has now varied three runs running** for the same leg type: Run 14
+`harvest-block-missing-or-unparseable` (Author emitted a `## Derived Values` block), Runs 15 and 16
+`no-derived-values-block` (it did not). Anything keyed on that string alone is keyed on a coin flip.
+
+### DEFECT FOUND — Node C did not perform the minimality check (again)
+
+Grepped over Node C's full response: no `smallest`, no `minimal covering`, no `prefix length`, no
+`2b`, **no numbered requirements at all**. It structured its review as its own sections 1–9 and simply
+did not adopt the spec's numbering.
+
+This is a **different failure from Run 15** — that one renumbered a new clause *into* slot 2b; this
+one never used the scheme — with the **same outcome: no tier verified minimality**. T6.2's
+"a numbered check may not be renumbered, merged or substituted" and v1.0.19's equivalent Node C rule
+**did not take effect**: both forbid *displacing* a numbered check, and neither compels *adopting* the
+numbering in the first place.
+
+Minimality was nonetheless correct on this run, and correct *for a reason that does not depend on
+Node C*: `prefix-not-minimal` is mechanical. **That is the finding.** The prose guard failed twice in
+two runs; the arithmetic guard held. It also implies the remaining prose-only Node C checks (1, 2, 3,
+4) are equally optional in practice — they happen to have been performed here, in Node C's own
+numbering, but nothing enforces that they are.
 
 ## Conclusion
 
-*Pending. The claim is currently **UNVERIFIED**; the blocking direction of the derivation conjunct has
-no live evidence and has had none since the conjunct shipped on 2026-07-18.*
+**The claim remains UNVERIFIED.** The blocking direction of the derivation conjunct has still never
+fired on a live run, and has had no evidence since the conjunct shipped 2026-07-18. Run 16 is recorded
+here as an honest Branch-B result, **not** as a pass.
+
+What Run 16 DOES establish, live and uninjected: CC3's edge-carry and the `upstreamContainment` stamp
+work end to end; A7's `harvestedCount` fact decides the no-derivation branch without judgement; and the
+T6.2 anti-contamination rules changed Node C's behaviour in exactly the way they were written to.
+
+What it also establishes, unwelcomely: **a numbered check in a requirements document is not binding on
+a reviewer.** Minimality has now gone unverified by Node C on two consecutive runs, by two different
+mechanisms. Only mechanisation held.
 
 ## Enforcement
 
@@ -122,6 +205,16 @@ no live evidence and has had none since the conjunct shipped on 2026-07-18.*
 - `scripts/replay-containment.ts` — replays the shipping enrichment against any completed leg;
   confirmed that Run 15's P1 now yields `prefix-not-minimal` and would have blocked.
 
-**Known residual, with trigger**: replay proves a violating stamp is *produced*; only this VT proves the
-gate *acts* on it. Trigger to act: the first run in which any leg stamps a violation — that run must be
-graded against this document, whether or not it was launched for this purpose.
+**Known residuals, each with its trigger**
+
+- **The blocking direction is still unproven.** Replay proves a violating stamp is *produced*; only
+  this VT proves the gate *acts* on it. Trigger: the first run in which any leg stamps a violation —
+  that run must be graded against this document, whether or not it was launched for this purpose.
+- **The consuming-leg exception has never been the deciding branch.** `upstreamContainment.green` has
+  now fired correctly (Run 16) but the clause that consumes it did not apply, because the reason
+  string landed elsewhere for the third run running. Trigger: the first run whose consuming leg stamps
+  `harvest-block-missing-or-unparseable` **with** `green: true`.
+- **A numbered requirements check is not binding on a reviewer** (Run 16 defect, above). The
+  prohibition on displacing a check does not compel adopting the numbering. Trigger: any run where a
+  prose-only Node C check materially decides an outcome — until then, treat every prose-only check as
+  advisory and mechanise anything load-bearing.
