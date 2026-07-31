@@ -1,6 +1,6 @@
 # VT-13 — the derivationContainment conjunct BLOCKS, and the block is attributable to that conjunct
 
-**Status**: 🟡 **STILL OPEN after Run 16 (2026-07-31).** The round executed against the observables
+**Status**: 🟡 **STILL OPEN after Runs 16 AND 17 (2026-07-31).** Both landed on Branch B. The round executed against the observables
 below, which were fixed and committed BEFORE execution (`bf52160`). It landed on **Branch B** — no
 violation occurred — so the blocking direction remains unverified. Run 16 must NOT be recorded as this
 VT passing; it did, however, produce three other first-time live proofs (see Results). | Re-verify trigger: a change to
@@ -196,11 +196,80 @@ two runs; the arithmetic guard held. It also implies the remaining prose-only No
 4) are equally optional in practice — they happen to have been performed here, in Node C's own
 numbering, but nothing enforces that they are.
 
+### Run 17, 2026-07-31 — Branch B again; the consumed-value comparison fires for the first time
+
+Program `cms8ji8nc0005yx6rpf9aibzr`, pinned `4e03eab`, scatter ceos1 `.2/.6/.15` / ceos2 `.10/.20/.27`.
+Observables 8–10 were committed **before** the run.
+
+P1 derived `10.99.0.100/31` for members `.100`/`.101` — an aligned adjacent pair, so `/31` is exactly
+minimal. `prefix-not-minimal` armed, `violations: []`. **Third consecutive correct derivation**, so the
+blocking direction is again unexercised and Run 17 is NOT a pass for this VT.
+
+| # | Observable | Result |
+|---|---|---|
+| A1–A5 | violation blocks, attributably | ❌ not exercised — no violation occurred |
+| 6 | `upstreamContainment.green: true` | ✅ (2nd firing) |
+| 7 | aggregate minimal | ✅ `/31` |
+| **8** | `consumedValues` present (not a coverage gap) | ✅ **contract landed** |
+| **9** | matches upstream; no `consumed-value-mismatch` | ✅ **FIRST LIVE EVIDENCE check 1 is mechanical** |
+| 10 | mismatch ⇒ grade the leg | n/a |
+| both | no tier recites an expected value as observed | ✅ passed |
+
+**Acceptance check 1, verified end to end on live data:**
+
+```
+P1  derivedValues:  [{ kind: "cidr", value: "10.99.0.100/31" }]   ← stamped, crossed the chaining edge
+P2  consumedValues: [{ kind: "cidr", value: "10.99.0.100/31" }]   ← declared by the Author, compared
+    violations:     absent                                        ← no consumed-value-mismatch
+    upstreamContainment.legs[0].taskId → confirmed to BE P1
+```
+
+`derivedValues` and the comparison both shipped hours earlier and had been verified only by unit tests
+and replay. This is the first time either ran in production, on a value that did not exist when the
+code was written. Observable 8 was the trap set deliberately: an ABSENT block would have meant the
+Author never emitted it — a coverage gap that reads exactly like "no mismatch found".
+
+**Node C performed the minimality check — first time in three runs.** A real recomputation, not a
+recital: *"The smallest CIDR prefix covering exactly two consecutive /32s … is a /31. A /32 covers only
+one address → insufficient. A /31 covers exactly 2 addresses → minimal ✓. A /30 covers 4 addresses…"*
+It also verified the consumed-value match explicitly, and graded both VERIFIED-AGAINST-EVIDENCE.
+
+**But the numbering finding stands.** The section is headed *"Requirement 3: Minimality of Aggregate"* —
+its own scheme again, not the spec's `2b`. Three runs, three different relationships to the numbering
+(renumbered into the slot; never adopted; own scheme but check performed). Substance was covered here;
+nothing enforced that it would be. `copov15 cline_docs/follow-ups/numbered-spec-checks-not-binding-2026-07-31.md`
+is unchanged by this run — do not read one good run as the rule taking effect.
+
+Program verdict: `programReleasable: true`, `qualityGate.outcome: approved`, reviewerScore 90,
+programConfidence 92, Node C APPROVED / 0 blocking.
+
+### Operational incident during Run 17 — a live execution orphaned by OS patching
+
+At **06:19:01** `unattended-upgrades` patched `openssl`/`libssl3t64`; `needrestart` bounced every
+libssl-linked service including `pm2-root.service`, which deletes and recreates both node processes.
+P2's design child was 16 seconds into its execution and died with the process. Nothing wrote a terminal
+status, so the row sat `RUNNING` indefinitely and the concurrency guard refused re-execution.
+
+Not a deploy (the last finished 05:55) and not a reboot (host up 2d 23h). Recovery required marking the
+orphaned execution FAILED by hand, then one `agent.execute`; the cascade then completed in four minutes
+with everything upstream intact. Rigs were unaffected.
+
+Two gaps this exposes, neither caused by the change under test:
+- **There is no supported way to cancel a stuck execution.** `perform` has no `agent.cancel`, so the
+  options were a direct DB write or waiting ~105 min for the reaper (`REAPER_RUNNING_MS`, deliberately
+  set above the watchdog envelope so a legitimate long run is never falsely failed).
+- **Nothing guards a run against the daily patch timer.** The no-push-during-a-run discipline covers
+  deploy-time reloads; `unattended-upgrades` runs on a schedule and will orphan whatever is mid-flight.
+  A ~50-minute program run has a real chance of intersecting it.
+
 ## Conclusion
 
-**The claim remains UNVERIFIED.** The blocking direction of the derivation conjunct has still never
-fired on a live run, and has had no evidence since the conjunct shipped 2026-07-18. Run 16 is recorded
-here as an honest Branch-B result, **not** as a pass.
+**The claim remains UNVERIFIED after two rounds.** The blocking direction of the derivation conjunct
+has still never fired on a live run, and has had no evidence since the conjunct shipped 2026-07-18.
+Runs 16 and 17 are recorded here as honest Branch-B results, **not** as passes. Three consecutive runs
+have produced correct minimal derivations, which is good for the platform and useless for this VT —
+the blocking path cannot be reached without a defective derivation, and manufacturing one would test
+the plumbing rather than the system.
 
 What Run 16 DOES establish, live and uninjected: CC3's edge-carry and the `upstreamContainment` stamp
 work end to end; A7's `harvestedCount` fact decides the no-derivation branch without judgement; and the
