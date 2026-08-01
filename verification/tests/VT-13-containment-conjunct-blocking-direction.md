@@ -350,6 +350,35 @@ and precisely stated: we need a violation on a leg whose **own reviewer approved
 the only thing dissenting. That is harder to obtain honestly than it sounds, because the leg reviewer
 is now catching this class.
 
+#### DECIDED 2026-08-01 — observables 4 and 5 are ONE scenario, and it must be injected
+
+They are not two gaps. Both require the identical condition: **a violation on a leg whose own reviewer
+approved**. Satisfy that and 4 and 5 fall together; fail it and neither can be reached.
+
+The structural point, which took Run 18 to see clearly:
+
+> The conjunct exists as a **backstop for when a reviewer misses**. So the scenario this VT demands
+> only arises when a tier *fails*. Waiting for it uninjected means waiting for a specific reviewer
+> failure — which has happened **once in eighteen runs** (Run 15), and is now less likely, because
+> Run 18 shows the leg reviewer catching this class.
+
+So the method changes, and the honest framing changes with it:
+
+- **Inject the reviewer's MISS, not the violation.** Edit the author's aggregate *after* its own
+  reviewer has approved the good package. The violation is then computed genuinely by shipping code
+  from the edited artifact; what is simulated is the tier failure, which is exactly the real-world
+  condition the conjunct guards. This reproduces the Run 15 shape rather than fabricating a verdict.
+- **Do NOT weaken observable 4** to accept an over-determined block. Run 18 blocked with three
+  sufficient causes and attributes to none of them; accepting that would retire the VT without
+  answering its question.
+- **The watcher is fixed and vendored** at `copov15 scripts/verification/vt13-inject.py`. Its Run-18
+  failure (newline-split over multi-line artifact content) is documented in the file, and it now exits
+  non-zero rather than proceeding if the aggregate cannot be located — an inert injection reported as
+  a successful one is the worst available outcome for this VT.
+
+**Trigger**: the next scheduled program run. This does not warrant a run of its own — it costs a
+watcher and one artifact edit on a run that would happen anyway.
+
 ## Conclusion
 
 **The claim remains UNVERIFIED after three rounds.** The blocking direction of the derivation conjunct
