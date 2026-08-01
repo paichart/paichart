@@ -1,6 +1,7 @@
 # VT-13 — the derivationContainment conjunct BLOCKS, and the block is attributable to that conjunct
 
-**Status**: 🟡 **STILL OPEN after Runs 16 AND 17 (2026-07-31).** Both landed on Branch B. The round executed against the observables
+**Status**: 🟡 **STILL OPEN after Runs 16, 17 AND 18.** Run 18 (2026-08-01) is the strongest round: the FIRST genuine, uninjected `prefix-not-minimal` violation (P1 declared `10.99.0.16/29` where the minimal cover is `/31`), the program blocked, and `upstreamContainment.green:false` was observed for the first time. Not a pass — the block is over-determined (both legs red, Node C NEEDS-REVISION), so observable 4's attribution requirement is unmet. Prior status line follows.
+**Was**: 🟡 **STILL OPEN after Runs 16 AND 17 (2026-07-31).** Both landed on Branch B. The round executed against the observables
 below, which were fixed and committed BEFORE execution (`bf52160`). It landed on **Branch B** — no
 violation occurred — so the blocking direction remains unverified. Run 16 must NOT be recorded as this
 VT passing; it did, however, produce three other first-time live proofs (see Results). | Re-verify trigger: a change to
@@ -262,10 +263,98 @@ Two gaps this exposes, neither caused by the change under test:
   deploy-time reloads; `unattended-upgrades` runs on a schedule and will orphan whatever is mid-flight.
   A ~50-minute program run has a real chance of intersecting it.
 
+### Run 18, 2026-08-01 — a GENUINE violation at last; the class fires, attribution stays confounded
+
+Program `cmsa5uue6000fyxety3qedvdu` (**Westpac** POV — the verification POV had become too cluttered
+to read), stage `cmsa5x7lu000tyxetkx3nekca`, pinned `2d86fcd`. Rig rebuilt 2026-08-01: scatter ceos1
+`.4/.5/.14` / ceos2 `.2/.27/.30`, deliberately re-rolled once because the first draw's clean answer
+was byte-identical to Run 14's `10.99.0.4/31`.
+
+**An injection was prepared and DID NOT FIRE. It was not needed.**
+
+This round was set up to inject the Run 15 error deliberately (widen the author's aggregate after its
+own reviewer had approved, so the leg stayed green while containment dissented). The watcher crashed
+before its `UPDATE` — verified, zero `INJECTED` lines — because it split `psql` output on newlines
+while artifact content is itself multi-line, so its content variable held one line fragment and the
+`/31` regex found nothing. It failed loudly only because `m.group(0)` threw on `None`; written one
+line more defensively it would have silently never fired and been reported as "injected".
+
+**P1 then produced the violation unaided.** It selected `.16`/`.17` and declared `10.99.0.16/29` — an
+**eight-address block for two exporters**, where the minimal cover is `/31`:
+
+```json
+{ "checked": true, "harvestedCount": 6, "derivedCount": 1,
+  "derivedValues": [ { "kind": "cidr", "value": "10.99.0.16/29" } ],
+  "violations": [ { "reason": "prefix-not-minimal",
+                    "derived": "10.99.0.16/29", "minimalPrefixLength": 31 } ] }
+```
+
+**First live firing of `prefix-not-minimal` on a real agent error.** Every prior sighting was a replay
+against Run 15's persisted artifact.
+
+**P2's stamp is the more valuable half — the exception was correctly DENIED:**
+
+```json
+{ "checked": false, "reason": "no-derived-values-block",
+  "consumedValues": [ { "kind": "cidr", "value": "10.99.0.16/29" } ],
+  "upstreamContainment": { "green": false,
+    "legs": [ { "taskId": "cmsa615of0015yxeu9hd3r3uh", "checked": true, "violations": 1 } ] } }
+```
+
+- **`green: false`** — the ALL-predecessors rule working as designed. P2's `checked:false` would have
+  been benign against a clean upstream; because its predecessor carries a violation, the consuming-leg
+  exception does **not** apply. Run 14 showed the permissive direction of this stamp; this is the first
+  time the **restrictive** direction has been observed.
+- **`consumedValues` == P1's `derivedValues`, exactly.** Check 1 held under stress: P2 consumed the
+  wrong value **verbatim**, with no recompute and no further widening. The mechanism transports
+  faithfully even when what it transports is wrong — which is exactly what it claims to do.
+
+**Program: `programReleasable: false`**, confidence 78, gate `needs-revision`/72.
+
+| Node | Outcome | Score |
+|---|---|---|
+| Architect | approved | 88 |
+| P1 Network | **needs-revision** | 78 |
+| P2 Terraform | **needs-revision** | 72 |
+| Node C | **NEEDS-REVISION** | 72 (3 blocking) |
+
+The synthesis names the defect precisely: *"selected /32s 10.99.0.16 & .17 differ only in last bit →
+minimal aggregate is /31, stated /29 is non-minimal."* **Contrast Run 15**, where this identical
+defect class passed all five tiers. Every tier caught it this time.
+
+#### Why this is still NOT a pass
+
+Observable 4 requires the derivation conjunct to be **visibly load-bearing**, and explicitly excludes
+a `false` produced by a red `qualityGate.outcome` or a rejected Node C. Here the block is
+**over-determined**: both legs are `needs-revision` AND Node C is NEEDS-REVISION AND the violation
+exists. The violation is *named* among the reasons, but nothing isolates it — remove it and the
+program still blocks on the other two conjuncts.
+
+Observable 5 is likewise unexercised: it requires the leg's own reviewer to have **approved**. P1's
+reviewer caught the widening (78, needs-revision), which is good news about the system and bad news
+for this VT.
+
+| # | Observable | Result |
+|---|---|---|
+| 1 | violation present, reason named | ✅ **first genuine occurrence** |
+| 2 | lean card renders it | ✅ (synthesis read it) |
+| 3 | `programReleasable: false` | ✅ |
+| 4 | attribution — conjunct load-bearing | ❌ **over-determined** |
+| 5 | not waved through by leg approval | ❌ leg did not approve |
+| 6 | `upstreamContainment.green` | ✅ **`false` — restrictive direction, first sighting** |
+| 8 | `consumedValues` present | ✅ |
+| 9 | matches upstream | ✅ verbatim, on a wrong value |
+
+**Status: VT-13 remains OPEN** — but this is its strongest round, and the remaining gap is now narrow
+and precisely stated: we need a violation on a leg whose **own reviewer approved**, so the conjunct is
+the only thing dissenting. That is harder to obtain honestly than it sounds, because the leg reviewer
+is now catching this class.
+
 ## Conclusion
 
-**The claim remains UNVERIFIED after two rounds.** The blocking direction of the derivation conjunct
-has still never fired on a live run, and has had no evidence since the conjunct shipped 2026-07-18.
+**The claim remains UNVERIFIED after three rounds.** The blocking direction of the derivation conjunct
+has still never fired as the *isolated* cause on a live run. Run 18 (2026-08-01) produced the first
+genuine violation and the program did block — but over-determined, so attribution remains unproven.
 Runs 16 and 17 are recorded here as honest Branch-B results, **not** as passes. Three consecutive runs
 have produced correct minimal derivations, which is good for the platform and useless for this VT —
 the blocking path cannot be reached without a defective derivation, and manufacturing one would test
