@@ -444,7 +444,35 @@ produced a clean run recorded as a blocking-direction test — the worst availab
 | 9 | matches upstream | ✅ `10.99.0.0/31` verbatim |
 
 **Status: VT-13 remains OPEN.** Five consecutive rounds without a violation to block on. The gap is
-unchanged and now has a known instrument — a working injector — which is the next task.
+unchanged, and the instrument for closing it now works.
+
+#### The instrument, and the honesty rules that govern it
+
+The blocking direction cannot be reached by waiting: it requires a tier to fail, and the tiers keep
+succeeding. So it is **manufactured**, under a rule that keeps the evidence meaningful:
+
+> **Inject the mistake, never the verdict.**
+
+The injector edits **one value in an agent's own output** — the error an agent could plausibly make,
+or that an injected prompt could smuggle in. Everything downstream is the shipping system: the parse,
+the arithmetic, the violation class, the lean card, the gate, Node C. Writing the *fact* directly
+(`violations: [...]`) would prove only that the gate reads a field; corrupting the *input* proves the
+chain.
+
+It edits only **after the leg's own reviewer has approved**, so the leg still reports APPROVED while
+containment dissents — otherwise the reviewer catches it, the leg goes red, and the program blocks for
+the wrong reason. That is exactly the over-determination that stopped Run 18 counting.
+
+Three rules bind the rounds it serves:
+
+1. An injected round is **labelled injected**, here and in the run's task description.
+2. A round where the injector **did not fire is a CLEAN round**, and is never recorded as a
+   blocking-direction test. Runs 18 and 20 are recorded that way above for precisely this reason.
+3. Injection manufactures the **failure**, never the **pass**. A fabricated green result would make
+   this pack worthless.
+
+Operating manual (invocation, refusal semantics, dry-run procedure):
+`copov15 scripts/verification/README.md`.
 
 ## Conclusion
 
