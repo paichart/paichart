@@ -1,6 +1,7 @@
 # VT-13 — the derivationContainment conjunct BLOCKS, and the block is attributable to that conjunct
 
-**Status**: 🟡 **STILL OPEN after Runs 16, 17 AND 18.** Run 18 (2026-08-01) is the strongest round: the FIRST genuine, uninjected `prefix-not-minimal` violation (P1 declared `10.99.0.16/29` where the minimal cover is `/31`), the program blocked, and `upstreamContainment.green:false` was observed for the first time. Not a pass — the block is over-determined (both legs red, Node C NEEDS-REVISION), so observable 4's attribution requirement is unmet. Prior status line follows.
+**Status**: 🟡 **STILL OPEN after Runs 16-20.** Runs 19/20 (2026-08-02) landed the `asn` kind live — Run 20 is a clean pass carrying real AS numbers across the DAG edge — but produced no violation, so the blocking direction is unexercised for a fifth round. An injector was built and REFUSED to fire rather than guess; diagnosis is the next task. Prior status follows.
+**Was**: 🟡 **STILL OPEN after Runs 16, 17 AND 18.** Run 18 (2026-08-01) is the strongest round: the FIRST genuine, uninjected `prefix-not-minimal` violation (P1 declared `10.99.0.16/29` where the minimal cover is `/31`), the program blocked, and `upstreamContainment.green:false` was observed for the first time. Not a pass — the block is over-determined (both legs red, Node C NEEDS-REVISION), so observable 4's attribution requirement is unmet. Prior status line follows.
 **Was**: 🟡 **STILL OPEN after Runs 16 AND 17 (2026-07-31).** Both landed on Branch B. The round executed against the observables
 below, which were fixed and committed BEFORE execution (`bf52160`). It landed on **Branch B** — no
 violation occurred — so the blocking direction remains unverified. Run 16 must NOT be recorded as this
@@ -378,6 +379,72 @@ So the method changes, and the honest framing changes with it:
 
 **Trigger**: the next scheduled program run. This does not warrant a run of its own — it costs a
 watcher and one artifact edit on a run that would happen anyway.
+
+### Runs 19 & 20, 2026-08-02 — the `asn` kind lands live; blocking direction still unexercised
+
+Two rounds in the **Westpac** POV against protocol `network-provisioning v1.2.3` / `pov-program
+v1.0.23`, both with a freshly re-randomized scatter.
+
+**Run 19** (`cmsb0uja90003yxzt8ly1r12o`) — parked, and the reason was a platform defect rather than a
+derivation fault. P1 derived the exactly-minimal `10.99.0.6/31` and its own reviewer approved at
+**92**, yet the leg stamped `no-derived-values-block` with `harvestedCount: 6` — which the A7 taxonomy
+reads as *"harvested a pool, emitted no derivation ⇒ REFUSED ⇒ BLOCKING"*. `programReleasable: false`
+on a leg that did everything right.
+
+Cause: the protocol asks **Phase 1 (Design)** to emit `## Derived Values`; the platform read it from
+the **Author**. The fact existed only when the Author happened to re-emit a block the protocol asked a
+different child to produce — Run 18's did, Run 19's referenced it in prose instead. A **third** route
+to the run-14 false park: not a reason string, not a data shape, but *which child the reader looks
+at*. Fixed in `copov15 b8a72f2d`; recorded in
+`cline_docs/follow-ups/derived-values-block-read-from-wrong-child-2026-08-02.md`.
+
+**Run 20** (`cmsb7fn8i0003yxrgefvnylz4`) — **clean pass, and the round that proves the `asn` kind end
+to end on live data.**
+
+```json
+P1: { "checked": true, "violations": [],
+      "harvestedCount": 6, "harvestedByKind": { "asn": 2, "cidr": 6 },
+      "derivedValues": [ {"kind":"cidr","value":"10.99.0.0/31"},
+                         {"kind":"asn","value":"65001"},
+                         {"kind":"asn","value":"65002"} ] }
+
+P2: { "checked": false, "reason": "no-derived-values-block",
+      "consumedValues": [ {"kind":"cidr","value":"10.99.0.0/31"} ],
+      "upstreamContainment": { "green": true, "legs": [ {"checked": true, "violations": 0} ] } }
+
+Program: programReleasable: TRUE, qualityGate approved / 92
+```
+
+Six things verified live in one round: the **harvester emits `kind:"asn"`** unprompted; the
+**per-kind census** with `harvestedCount` CIDR-only; **ASN containment passing** on legitimately
+harvested values; the **derived-block read fix** (`derivedSource` = the Design child, leg `checked`
+rather than falsely refused); the **consumed-value comparison** matching across the edge; and
+`upstreamContainment.green: true` — the *permissive* direction of the consuming-leg exception, seen
+only once before.
+
+#### Still NOT a pass for this VT, and the reason is unchanged
+
+An injection was prepared to force the blocking direction (add one non-harvested ASN, `65100`, after
+the leg's reviewer approves — chosen because it fires **exactly one** class: absent from the harvest
+so `asn-not-member` fires, but inside RFC 6996 private space so `asn-reserved-range` does not).
+
+**It did not fire.** The watcher waited correctly for the reviewer, then **refused to inject** because
+it could not locate the fenced array in the artifact — and exited non-zero rather than guessing. The
+same regex matches that same artifact when tested offline, so the failure is environmental and not yet
+explained. Diagnosis deferred; the artifact is `result.json` on task `cmsb7r00x0049yxrgi58osm9q`.
+
+That refusal is the design working. An inert injection reported as a successful one would have
+produced a clean run recorded as a blocking-direction test — the worst available outcome for this VT.
+
+| # | Observable | Runs 19/20 |
+|---|---|---|
+| A1–A5 | violation blocks, attributably | ❌ not exercised — no violation occurred |
+| 6 | `upstreamContainment.green` | ✅ **true** on Run 20 (permissive direction) |
+| 8 | `consumedValues` present | ✅ |
+| 9 | matches upstream | ✅ `10.99.0.0/31` verbatim |
+
+**Status: VT-13 remains OPEN.** Five consecutive rounds without a violation to block on. The gap is
+unchanged and now has a known instrument — a working injector — which is the next task.
 
 ## Conclusion
 
