@@ -217,17 +217,31 @@ The team for this project (or pov) have been provisioned and are the following;
   `upstreamContainment.green:true` — quoting this file's expected state — for a field that was **absent
   from the artifact entirely**. "The requirements say this is expected" is not a passing check at any
   tier.
+- ⚠️ **Better still: do not name the measure at all where the requirement can be stated as a property.**
+  Declaring a stamp shape "reference data" limits the damage; omitting it removes the temptation. Every
+  agent reads this file, so a machine pass condition written here — `violations: []`, a `checked: true`,
+  a named violation class — is a **target an agent can aim at instead of the requirement**, and hitting
+  the target while missing the requirement is the whole failure mode (Run 15). State what must be TRUE;
+  let the platform own the string that reports it. *(Applied 2026-08-02: the consuming-leg clause below
+  previously named the producer's pass shape and a violation class; both removed.)*
+  **One naming is retained deliberately** — the consuming leg's own
+  `{ checked: false, reason: "harvest-block-missing-or-unparseable" }` — because that state is the
+  *subject* of the clause and cannot be identified without it. It is a state a leg legitimately lands
+  in, never a bar to clear: manufacturing it by fabricating a harvest block is explicitly a hollow
+  check (see the `checked: true` warning above and the paired protocol clause).
 - **Consuming-leg containment attribution (release property).** For a downstream *consuming* leg
   (`terraform-iac`), a `derivationContainment` of
   `{ checked: false, reason: "harvest-block-missing-or-unparseable" }` — i.e. a derived block **is**
   present but the leg's own harvest yields no parseable CIDR allocation set — is a **SATISFIED
   acceptance state, NOT a blocking miss** — provided **all** of the following hold:
-  1. the upstream *deriving* leg (network provisioning) stamped
-     `derivationContainment: { checked: true, violations: [] }` on the derivation it emitted.
-     Since 2026-07-30 that conjunct also carries MINIMALITY: `prefix-not-minimal` is a mechanical
-     violation class, so a loose aggregate upstream now populates `violations` and denies the
-     consumer's benign state automatically. The consumer path is therefore protected by the same
-     arithmetic as the producer — it no longer depends on Node C's check 2b surviving;
+  1. the upstream *deriving* leg (network provisioning) had the derivation it emitted **checked
+     mechanically against the real allocation pool, with no defect recorded**. Since 2026-07-30 that
+     same check also covers MINIMALITY, so a loose aggregate upstream denies the consumer's benign
+     state automatically: the consumer path is protected by the same arithmetic as the producer and no
+     longer depends on Node C's check 2b surviving. ⚠️ **The checker's pass shape and its reason codes
+     are deliberately NOT reproduced here** — this clause states what must be TRUE, never the string
+     that reports it. A pass shape written down is a target an agent can aim at *instead of* the
+     requirement;
   2. Node C checks 1, 2, 2b and 3 (above) pass on the chained aggregate — i.e. the consumed value's
      containment properties are re-verified at the program tier; and
   3. chaining coverage (Node C check 4) confirms the consuming leg received the **real** upstream
