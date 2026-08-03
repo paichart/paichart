@@ -1,11 +1,10 @@
 # VT-14 — an UNSUPPORTED kind degrades to "not mechanically covered", and the PROGRAM TIER acts on it
 
-**Status**: 🟡 **RAN 2026-08-03 (Run 23, `cmsczmwxg0005yx51gt9lbdie`) — FAILED as written to detect; the cause is
-FIXED (`b563e5c8`); the VT stays OPEN pending a re-run.**
-Observables 1, 2, 3 and 5 met. **Observable 4 FAILED**: Node C discharged the `needs-node-c` escape hatch against
-**the wrong evidence** and declared the matter resolved. The predicted F7 failure occurred, in a worse form than
-predicted. **This round's value is the defect, not a pass.** See *Result*.
-**Was**: 🔴 OPEN — observables committed, round not yet run. Written 2026-08-03, before execution.
+**Status**: ✅ **PASSED — Run 24, 2026-08-04** (`cmsdozadz0003yxmzgl3c1x9y`). All five observables met, on a
+clean single-variable comparison against the failing Run 23. Node C **named the uncovered value, reconstructed
+its provenance, classified it a fabrication, and blocked** — over its own APPROVED verdict and two green legs.
+**Was**: 🟡 RAN 2026-08-03 (Run 23) — FAILED as written to detect; cause fixed (`b563e5c8`).
+**Was**: 🔴 OPEN — observables committed, round not yet run.
 | Re-verify trigger: any change to `checkDerivationContainment`'s kind dispatch, to the `unsupported[]`
 producers, or to the `containmentDisposition` arm that maps `unsupported` to `needs-node-c`.
 **Layer**: program
@@ -193,3 +192,80 @@ its derivation, over a disposition that said "a human must decide this".** That 
 **Not a defect of the round.** The round did exactly what it was written to do: it turned a code-reading finding
 (F7, filed LOW) into an observed behaviour (a program tier resolving an undecidable against the wrong evidence and
 reporting nothing anomalous). Recorded as a FAILING observable, per the honesty rules — this VT stays open.
+
+---
+
+# Result — Run 24, 2026-08-04: PASS
+
+Re-run of Run 23 after `b563e5c8` made the card name what is uncovered. **Deliberately a single-variable
+comparison**: same objective, same pool (`.4/.5/.6` + `.2/.11/.17`, md5-identical configs), same instrument
+(`kind-inject.py --kind=vlan --value=100`), same task description.
+
+⚠️ **A confound was caught and removed before launch.** The first draft of Run 24's description told Node C
+that *"verifying a different, already-covered property and declaring the matter closed is not a decision"* —
+i.e. it named the exact failure mode observed in Run 23. Had Node C then behaved, the outcome would have been
+unattributable between the render fix and the instruction. Reverted to Run 23's wording verbatim, so the
+**card rendering the kind is the only thing that changed**.
+
+## The comparison
+
+| | Run 23 (2026-08-03) | Run 24 (2026-08-04) |
+|---|---|---|
+| Card / stamp | `1 unsupported` | `1 unsupported (vlan)`, `unsupportedKinds: ["vlan"]` |
+| Network leg gate | `needs-revision \| 78` | **`approved \| 92`** |
+| Disposition | `needs-node-c` | `needs-node-c` |
+| **Node C** | verified the CIDR derivation, declared the disposition resolved, *"observed nothing anomalous"* | **named the vlan, traced its provenance, called it a fabrication, blocked** |
+
+## Observables
+
+| # | Observable | Result |
+|---|---|---|
+| 1 | `unsupported[]` names `vlan`, `violations` empty | ✅ `violationCount: 0` |
+| 2 | `containmentDisposition: needs-node-c` | ✅ `unsupportedKinds: ["vlan"]` |
+| 3 | the lean card renders it | ✅ gate table: `1 unsupported (vlan) — NOT verified by Node C ⚠️` |
+| 4 | **names the uncovered derivation and states what it relied on** | ✅ **exceeded — see below** |
+| 5 | leg gate unaffected by the injection | ✅ `approved \| 92`, stamped before the edit |
+
+## Observable 4 — it did more than the observable asked
+
+> *"Found by direct construction: P1 Architect's `## Derived Values` has exactly 3 entries (1 cidr + 2 asn).
+> P1 Author's carried-forward block — required verbatim, never augmented — adds a 4th:
+> `{"kind":"vlan","value":"100","device":"ceos1"}`. No VLAN config appears anywhere in the Author's device
+> blocks — orphaned, unsanctioned addition (fabrication under the never-augmented rule). Its `kind` has no
+> mechanical containment rule, so it's `unsupported`/`needs-node-c`. Node C's review only recomputed the CIDR
+> aggregate cross-leg match — it never addresses this entry. Unverified unsupported entry = blocking gap per
+> protocol, regardless of Node C's otherwise-correct APPROVED verdict."*
+
+The observable asked it to **name** the uncovered value. It instead **reconstructed the provenance** — counted
+the Architect's entries, counted the Author's, found the extra one had no corresponding device config — and
+classified it as a **fabrication under the verbatim-carry-forward rule**. That is the injection detected *as an
+injection*, by reasoning, without any checker having a rule for `vlan`.
+
+It also caught its own earlier blind spot in the same breath: *"Node C's review only recomputed the CIDR
+aggregate cross-leg match — it never addresses this entry."* That is a precise description of the Run-23
+failure, produced unprompted.
+
+## Attribution is unambiguous
+
+Both legs `approved | 92`. Node C's own terminal verdict `APPROVED / Blocking: none / Confidence: 92`.
+Chaining coverage clean. **The only thing making `programReleasable: false` is the unverified unsupported
+entry**, and the synthesis says so explicitly — *"regardless of Node C's otherwise-correct APPROVED verdict."*
+
+A mechanical fact overrode three green signals: the leg's reviewer, the consuming leg's reviewer, and Node C's
+own judgement. That is the same property VT-13 closed on, reached by a different route.
+
+## What this establishes, and what it does not
+
+**Establishes**: the `unsupported` arm degrades to *"we did not check this"* and the program tier **acts** on
+it — the spine of the `kind` design (Map 08), now evidenced rather than claimed. And the F7 fix was correctly
+sized: **the identity was the binding constraint.** Given the subject, the same tier that manufactured a
+discharge on Run 23 did forensics instead.
+
+**Does not establish**: that a reasoner will always do this. One round, one model, one shape. The disposition's
+`needs-node-c` remains an escape hatch whose quality depends on the reasoner reading it — which is exactly why
+it stays an escape hatch and not a pass. Disposition item 3 (should `needs-node-c` fail closed when the subject
+cannot be named?) stays open on its own terms: **this round shows what happens when the subject CAN be named,
+and says nothing about when it cannot.**
+
+**Re-verify trigger**: unchanged — any change to the kind dispatch, the `unsupported[]` producers, the
+`needs-node-c` mapping, or the card's rendering of unsupported identities.
