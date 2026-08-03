@@ -1,6 +1,13 @@
 # VT-13 — the derivationContainment conjunct BLOCKS, and the block is attributable to that conjunct
 
-**Status**: 🟡 **STILL OPEN after Runs 16-20.** Runs 19/20 (2026-08-02) landed the `asn` kind live — Run 20 is a clean pass carrying real AS numbers across the DAG edge — but produced no violation, so the blocking direction is unexercised for a fifth round. An injector was built and REFUSED to fire rather than guess; diagnosis is the next task. Prior status follows.
+**Status**: ✅ **CLOSED — PASSED WITH A RECORDED CAVEAT, Run 22 (2026-08-02).** The conjunct blocked, and it did so
+while every other signal said release: the leg's own reviewer stamped `approved` at 92, Node C returned a terminal
+verdict of APPROVED with zero blocking issues at confidence 94, and the program refused anyway on the mechanical fact.
+Observables 1, 2, 3 and 5 are met outright. **Observable 4 is met in substance but not in isolation** — Node C names the
+conjunct as independent reason #1, but P2's reviewer separately returned needs-revision, so the program-level `false`
+carries two sufficient causes. The caveat is stated here rather than resolved, deliberately: see *Why this closes, and
+what it does not claim*. Prior status follows.
+**Was**: 🟡 **STILL OPEN after Runs 16-20.** Runs 19/20 (2026-08-02) landed the `asn` kind live — Run 20 is a clean pass carrying real AS numbers across the DAG edge — but produced no violation, so the blocking direction is unexercised for a fifth round. An injector was built and REFUSED to fire rather than guess; diagnosis is the next task. Prior status follows.
 **Was**: 🟡 **STILL OPEN after Runs 16, 17 AND 18.** Run 18 (2026-08-01) is the strongest round: the FIRST genuine, uninjected `prefix-not-minimal` violation (P1 declared `10.99.0.16/29` where the minimal cover is `/31`), the program blocked, and `upstreamContainment.green:false` was observed for the first time. Not a pass — the block is over-determined (both legs red, Node C NEEDS-REVISION), so observable 4's attribution requirement is unmet. Prior status line follows.
 **Was**: 🟡 **STILL OPEN after Runs 16 AND 17 (2026-07-31).** Both landed on Branch B. The round executed against the observables
 below, which were fixed and committed BEFORE execution (`bf52160`). It landed on **Branch B** — no
@@ -474,11 +481,114 @@ Three rules bind the rounds it serves:
 Operating manual (invocation, refusal semantics, dry-run procedure):
 `copov15 scripts/verification/README.md`.
 
+### Runs 21 & 22, 2026-08-02 — the instrument fails twice, then the conjunct blocks
+
+**Run 21** (program `cmsbev0fz0005yxacnwkdbv46`) is a **CLEAN round**. It was created as an injected round and the
+injection never happened, so it is recorded as clean — rule 2 above, applied to a round we wanted to count.
+
+Two defects in the injector's psql helper, the second introduced while fixing the first:
+
+1. Rows were split on `\n`. Any field containing a newline — an LLM-authored task title suffices — fragments the row,
+   and the caller then indexes `k[2]` on a 1-element list. It crashed with `IndexError` the moment the leg spawned its
+   children, and **died silently**: the leg carried on and the watcher was simply gone. This is the same defect the
+   Run-18 postmortem records for the *content* read; that fix never reached this helper.
+2. Switching to a `\x1e` record separator fixed that and broke the **single-row** case. `psql -R` prints the separator
+   *between* records, not after the last, so a one-row result returns `value\n` with no separator at all and the
+   trailing newline rides on the last field. Every id built from it matched nothing — silently. Run 21's legs query
+   returns exactly one row, so the watcher reported "nothing selectable" for the entire window while the leg finished
+   and stamped its fact.
+
+The regression check that cleared #2 was worthless: Run 20's query returns **two** rows, so the separator existed and
+the bug could not appear. **A two-row fixture cannot catch a one-row bug.** Both defects share one shape — a check that
+cannot fail — and both produced silence indistinguishable from "not ready yet".
+
+Run 21 is not wasted: its network leg stamped `checked: true, violations: []` over a derived block containing a
+genuinely harvested `{"kind":"asn","value":"65002"}` — a second independent confirmation of the ASN passing direction,
+this time with an ASN actually present in the derivation.
+
+**Run 22** (program `cmsbga50t006gyxacqfq1ojd7`, network leg `cmsbh2qq700djyxacogb739xk`) is the round that closes this
+VT. Instrument armed **before** launch and verified on both row shapes. It waited through the leg — logging `block seen
+… 2 of 4 still open`, following the block from the Design child to the Author child as that completed — and edited only
+once all four leg children were COMPLETED, i.e. after the leg's reviewer had approved the good package.
+
+```
+[asn] INJECTED asn 65100 (device ceos1) into artifact cmsbh93ty00gryxaco2uq6ufa
+      on task cmsbh70si004xyxaiuiuf2r64; rows=1
+```
+
+The leg was still IN_PROGRESS at that moment — its SYNTHESIZE had not run — so the enrichment read the edited block.
+What it stamped:
+
+```json
+"violations": [ { "reason": "asn-not-member", "derived": "65100", "kind": "asn", "device": "ceos1" } ],
+"derivedSource": "cmsbh70si004xyxaiuiuf2r64"
+```
+
+**One violation, one class.** `asn-reserved-range` did not fire — correct, 65100 is RFC 6996 private space — and
+`derivedSource` names the exact child the injector edited. The leg then stamped its own `qualityGate: approved, 92`.
+
+Node C's synthesis, verbatim on the decisive points:
+
+> *"programReleasable is false for two independent reasons. First, P1 derivationContainment reports a violation despite
+> P1 own reviewer approving at 92. Second, P2 own reviewer verdict is needs revision because the policy validation
+> section was not a runnable fact."*
+
+> *"Node C … returned terminal verdict APPROVED with zero blocking issues and confidence 94. Its own recomputation found
+> no collision and confirmed P2 consumed P1 aggregate verbatim. This verdict is advisory only and does not override the
+> mechanical violation on P1."*
+
+| # | Observable | Result |
+|---|---|---|
+| 1 | violation present, reason named | ✅ one entry, `asn-not-member`, `derivedSource` = the edited child |
+| 2 | lean card renders it | ✅ Node C read `checked with 1 violation` off the gate path |
+| 3 | `programReleasable: false` | ✅ |
+| 4 | attribution — conjunct load-bearing | 🟡 named as **independent reason #1**; not the sole cause (see caveat) |
+| 5 | not waved through by leg approval | ✅ **first live demonstration** — leg `approved \| 92`, violation stood, program blocked |
+
+### Why this closes, and what it does not claim
+
+Two of the three failure modes this VT explicitly rules out are now demonstrated **not** to occur:
+
+- *"a violating leg is nonetheless stamped `approved` at its own tier and the program follows the leg rather than the
+  mechanical fact"* — ruled out. The leg was green at 92 and the program refused it.
+- *"a violation is reported but does not change the verdict"* — ruled out. It changed the verdict against **two**
+  contrary signals: the leg's approval and Node C's own APPROVED-at-94 recomputation.
+
+The third — *"the program blocks for an unrelated reason and the conjunct is credited afterwards"* — is where the
+caveat sits, and it is **not** what happened here: the conjunct is stated as an independent sufficient reason on a leg
+that was otherwise green, not credited retrospectively for someone else's block. But P2's reviewer independently
+returned needs-revision, so the program-level `false` is not *uniquely* attributable to the conjunct.
+
+**The caveat, stated plainly: this round proves the conjunct is independently sufficient to block, and does not prove
+it was the only thing blocking.** A stricter round is available and was deliberately not chased — P2's needs-revision
+was *"the policy validation section was not a runnable fact"*, i.e. the open `validation-text-uncontained` defect. Fix
+that and P2 goes green, leaving the ASN violation as the sole cause. That is a better round; it is not a prerequisite
+for the claim this VT makes, and holding the VT open pending an unrelated defect fix would misrepresent what is already
+established.
+
+**What was NOT proven, and must not be read into this pass**: that the conjunct blocks when *no* other signal is red;
+that a violation of a class other than `asn-not-member` blocks (the arithmetic differs per kind); or that an
+**uninjected** violation blocks attributably — Run 18's genuine `prefix-not-minimal` remains the only uninjected
+violation to date, and it was over-determined.
+
 ## Conclusion
 
-**The claim remains UNVERIFIED after three rounds.** The blocking direction of the derivation conjunct
-has still never fired as the *isolated* cause on a live run. Run 18 (2026-08-01) produced the first
-genuine violation and the program did block — but over-determined, so attribution remains unproven.
+**VERIFIED, with the caveat recorded above (Run 22, 2026-08-02).** The conjunct blocks, and it blocks against contrary
+signals rather than merely alongside agreeable ones — a leg approved at 92 and a Node C verdict of APPROVED at 94 were
+both overridden by a single mechanical fact. What remains unproven is *sole* attribution: a second, unrelated leg was
+red in the same run.
+
+It took seven rounds, and the reason is worth keeping: **the blocking path cannot be reached by waiting, because the
+system kept working.** Five consecutive rounds produced correct derivations. The path was finally reached by
+manufacturing the input error — never the verdict — under the honesty rules above, and the two rounds before it were
+lost to defects in the *instrument*, not the system: an injector that crashed silently, and a "fix" whose regression
+test could not have caught its own bug.
+
+### The prior status, retained
+
+**The claim remained UNVERIFIED after three rounds.** The blocking direction of the derivation conjunct
+had still never fired as the *isolated* cause on a live run. Run 18 (2026-08-01) produced the first
+genuine violation and the program did block — but over-determined, so attribution remained unproven.
 Runs 16 and 17 are recorded here as honest Branch-B results, **not** as passes. Three consecutive runs
 have produced correct minimal derivations, which is good for the platform and useless for this VT —
 the blocking path cannot be reached without a defective derivation, and manufacturing one would test
