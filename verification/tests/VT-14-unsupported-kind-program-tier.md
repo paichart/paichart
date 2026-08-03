@@ -1,6 +1,10 @@
 # VT-14 — an UNSUPPORTED kind degrades to "not mechanically covered", and the PROGRAM TIER acts on it
 
-**Status**: 🔴 **OPEN — observables committed, round not yet run.** Written 2026-08-03, before execution.
+**Status**: ✅ **RAN 2026-08-03 (Run 23, `cmsczmwxg0005yx51gt9lbdie`) — and it FAILED in the way it was written to detect.**
+Observables 1, 2, 3 and 5 met. **Observable 4 FAILED**: Node C discharged the `needs-node-c` escape hatch against
+**the wrong evidence** and declared the matter resolved. The predicted F7 failure occurred, in a worse form than
+predicted. **This round's value is the defect, not a pass.** See *Result*.
+**Was**: 🔴 OPEN — observables committed, round not yet run. Written 2026-08-03, before execution.
 | Re-verify trigger: any change to `checkDerivationContainment`'s kind dispatch, to the `unsupported[]`
 producers, or to the `containmentDisposition` arm that maps `unsupported` to `needs-node-c`.
 **Layer**: program
@@ -111,3 +115,76 @@ count alone. If (b), that is the F7 gap made live, and the round's most valuable
 - The round is **labelled injected**, here and in the run's task description.
 - If the injector does not fire, this is a **CLEAN round**, never a pass.
 - Injection manufactures the **failure**, never the **pass**.
+
+
+---
+
+# Result — Run 23, 2026-08-03
+
+Program `cmsczmwxg0005yx51gt9lbdie` (POV Westpac, **Planning** phase — a verification round, not delivery work).
+Injected with `kind-inject.py --kind=vlan --value=100` into the network leg's Author child, after that leg's four
+children had all completed.
+
+## The trap was avoided, and the evidence says so
+
+`harvestedCount: 6`, `harvestedByKind: {cidr: 6, asn: 2}` — the harvest parsed, so `checkDerivationContainment`
+actually ran and the vlan value reached `unsupported[]`. Injected into a consuming leg it would have landed on
+`harvest-block-missing-or-unparseable` and exercised a different clause while looking like it worked.
+
+## Observable-by-observable
+
+| # | Observable | Result |
+|---|---|---|
+| 1 | `unsupported[]` names `vlan`, `violations` empty | ✅ `[{kind:"vlan", value:"100"}]`, `violationCount: 0` — **uncovered, not violating** |
+| 2 | `containmentDisposition: needs-node-c` | ✅ `reason: unsupported-not-mechanically-covered`, `unsupportedCount: 1` — **first live firing** |
+| 3 | the lean card renders it | ✅ Node C quoted it back verbatim: *"checked, 0 violations, 1 unsupported, disposition `needs-node-c`"* |
+| 4 | **Node C names the uncovered derivation and states what it relied on** | ❌ **FAILED — see below** |
+| 5 | the leg's own gate is unaffected by the injection | ✅ `needs-revision \| 78`, stamped by its reviewer before the edit |
+
+## Observable 4 — the finding
+
+Node C's synthesis, verbatim:
+
+> *"Node C terminal `VERDICT: APPROVED, Blocking: none, Confidence: 95` — its own enumerated-span check (span
+> {10.99.0.8,.9}) tested all 6 harvested allocs + both /32s, zero collisions, /31 minimal confirmed
+> VERIFIED-AGAINST-EVIDENCE. **This resolves Pipeline 1's needs-node-c disposition.**"*
+
+**The uncovered value was a VLAN. Node C discharged the hatch by re-verifying the CIDR derivation** — which was
+already mechanically covered, carried zero violations, and was never in question. It then recorded:
+
+> *"Verification note: observed nothing anomalous in any stamped fact/artifact/verdict reviewed."*
+
+It did the work it *could* do and reported the obligation met. It never named `vlan`, never said which value was
+uncovered, and never indicated it could not tell.
+
+**Why**: `unsupported` reaches the card as a bare COUNT with identities stripped (`lean-card-facts.js` renders
+`, N unsupported` — boundary-contract F7 / pipeline-harness F7). Node C was instructed to verify a derivation the
+card refuses to name. **An escape hatch that cannot say what escaped is not an escape hatch; it is a rubber stamp
+with extra steps.**
+
+## What saved this run, and why that is not reassuring
+
+`programReleasable: false` — but **for unrelated reasons**: both legs' own reviewers independently gated
+needs-revision on deterministic-validation defects (P1 a non-deterministic BGP validation step, P2 an OPA/Conftest
+check written as prose). The `needs-node-c` disposition was *cleared*, not blocking.
+
+**Had both legs been clean, this program would have released with an unverified value of an unimplemented kind in
+its derivation, over a disposition that said "a human must decide this".** That is precisely the *"degrades to
+`this is fine`"* failure the whole `kind` design exists to prevent (Map 08).
+
+## Disposition
+
+1. **Render `unsupported` identities on the card, not just a count** — the kinds at minimum, ideally
+   `kind:value`. Without it observable 4 is unsatisfiable by construction and this VT cannot pass. This promotes
+   F7 from LOW to the round's blocking finding.
+2. **`needs-node-c` must state WHAT is undecided.** The disposition already carries `unsupportedCount`; it should
+   carry the kinds. A hatch that names no subject invites resolution against whatever is nearest.
+3. **Consider whether `needs-node-c` should fail closed** when the tier cannot name the subject — i.e. block
+   rather than delegate, until (1) ships. Deliberate decision, not an obvious yes: it trades a false block for a
+   false release.
+4. Re-run this VT after (1). The instrument, the target constraint and the observables are proven; only the
+   render is missing.
+
+**Not a defect of the round.** The round did exactly what it was written to do: it turned a code-reading finding
+(F7, filed LOW) into an observed behaviour (a program tier resolving an undecidable against the wrong evidence and
+reporting nothing anomalous). Recorded as a FAILING observable, per the honesty rules — this VT stays open.
