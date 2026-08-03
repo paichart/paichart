@@ -1,6 +1,7 @@
 # VT-14 — an UNSUPPORTED kind degrades to "not mechanically covered", and the PROGRAM TIER acts on it
 
-**Status**: ✅ **RAN 2026-08-03 (Run 23, `cmsczmwxg0005yx51gt9lbdie`) — and it FAILED in the way it was written to detect.**
+**Status**: 🟡 **RAN 2026-08-03 (Run 23, `cmsczmwxg0005yx51gt9lbdie`) — FAILED as written to detect; the cause is
+FIXED (`b563e5c8`); the VT stays OPEN pending a re-run.**
 Observables 1, 2, 3 and 5 met. **Observable 4 FAILED**: Node C discharged the `needs-node-c` escape hatch against
 **the wrong evidence** and declared the matter resolved. The predicted F7 failure occurred, in a worse form than
 predicted. **This round's value is the defect, not a pass.** See *Result*.
@@ -174,16 +175,20 @@ its derivation, over a disposition that said "a human must decide this".** That 
 
 ## Disposition
 
-1. **Render `unsupported` identities on the card, not just a count** — the kinds at minimum, ideally
-   `kind:value`. Without it observable 4 is unsatisfiable by construction and this VT cannot pass. This promotes
-   F7 from LOW to the round's blocking finding.
-2. **`needs-node-c` must state WHAT is undecided.** The disposition already carries `unsupportedCount`; it should
-   carry the kinds. A hatch that names no subject invites resolution against whatever is nearest.
-3. **Consider whether `needs-node-c` should fail closed** when the tier cannot name the subject — i.e. block
-   rather than delegate, until (1) ships. Deliberate decision, not an obvious yes: it trades a false block for a
-   false release.
-4. Re-run this VT after (1). The instrument, the target constraint and the observables are proven; only the
-   render is missing.
+1. ✅ **DONE 2026-08-03 (`b563e5c8`)** — the card renders the kinds: `1 unsupported (vlan)`, deduped, capped at
+   three with `+N more`. Kinds not values: the line feeds a size-gated path (A5), and the kind is what tells a
+   reader whether the gap is one they can reason about at all.
+2. ✅ **DONE, same commit** — `containmentDisposition.inputs.unsupportedKinds` carries them too, so the fact and
+   the render agree rather than the render being the only place the identity exists.
+3. 🟡 **OPEN, and deliberately not closed by (1).** Should `needs-node-c` fail CLOSED when the tier cannot name
+   the subject? (1) makes the subject nameable, so the pressure is off — but the general rule is untouched: any
+   future undecidable whose subject the card cannot carry lands in the same shape. Trades a false block for a
+   false release; a decision, not an obvious yes.
+4. 🟡 **RE-RUN REQUIRED — this VT is not passable without it.** The instrument, the target constraint and the
+   observables are all proven; (1) makes observable 4 *satisfiable*, and nothing more. Whether Node C, shown
+   `1 unsupported (vlan)`, names the vlan and declines to resolve it against CIDR evidence is an empirical
+   question about a reasoner, and only a round can answer it. **Do not mark this VT passed on the strength of the
+   fix.**
 
 **Not a defect of the round.** The round did exactly what it was written to do: it turned a code-reading finding
 (F7, filed LOW) into an observed behaviour (a program tier resolving an undecidable against the wrong evidence and
