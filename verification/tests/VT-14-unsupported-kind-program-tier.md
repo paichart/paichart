@@ -179,10 +179,38 @@ its derivation, over a disposition that said "a human must decide this".** That 
    reader whether the gap is one they can reason about at all.
 2. ✅ **DONE, same commit** — `containmentDisposition.inputs.unsupportedKinds` carries them too, so the fact and
    the render agree rather than the render being the only place the identity exists.
-3. 🟡 **OPEN, and deliberately not closed by (1).** Should `needs-node-c` fail CLOSED when the tier cannot name
-   the subject? (1) makes the subject nameable, so the pressure is off — but the general rule is untouched: any
-   future undecidable whose subject the card cannot carry lands in the same shape. Trades a false block for a
-   false release; a decision, not an obvious yes.
+3. 🟡 **OPEN — reviewed 2026-08-04, DECIDED: change nothing yet.** Should `needs-node-c` fail CLOSED when the
+   tier cannot name the subject?
+
+   **Verified: the bare-unnameable state is not reachable today.** Both arms that produce `needs-node-c` carry a
+   locatable subject all the way to the card:
+
+   | Arm | Renders | Subject given to Node C |
+   |---|---|---|
+   | `unsupported-not-mechanically-covered` | `, N unsupported (vlan, …)` | the **kind** — and Run 24 proved kind alone was enough to locate it |
+   | `non-cidr-only-harvest-cannot-decide` | `containmentDisposition: needs-node-c (non-cidr-only-harvest-cannot-decide)` | the **question** — names the situation, though no value |
+
+   **And the case for acting is unmeasured.** `containmentDisposition` had existed ~15.5 hours when this was
+   reviewed (13 artifacts carried it). In that window `needs-node-c` fired 5 times, **all** arm 1 — and those 5
+   came from VT-13/VT-14 rounds that *deliberately injected* unsupported kinds, so the rate says nothing about
+   natural traffic. Arm 2 has fired **zero** times, which over that window is an **unmeasured zero, not evidence
+   of rarity**.
+
+   A fail-closed rule would trade a false release for a false block, and would make the *gate* depend on what the
+   *renderer* produced — coupling a chain that has already failed four times in this module. A contract test
+   asserting "the disposition identifies its subject" was considered and rejected as machinery for a path with no
+   observations; "identifies its subject" is also closer to a semantic judgement than a mechanical one, and a test
+   that cannot fail reads as a guard while asserting nothing.
+
+   **So this stays OPEN as a policy question rather than being closed by a mechanism.** Two triggers make it live —
+   revisit on either:
+   - **A new `needs-node-c` arm, or a new unsupported kind.** The question is only hypothetical while every arm
+     happens to carry a subject; a third arm is where that stops being true by luck.
+   - **`containmentDisposition` moving to a top-level key on `result.json`.** It reaches Node C today *only*
+     because it is assigned **nested inside** the fact (`derivation-containment-enrichment.ts:301`) and the fact is
+     on the `RESULT_JSON_SUMMARY_KEYS` whitelist. `containmentDisposition` is **not itself on that whitelist**, so
+     promoting it to a sibling would silently strip it — and arm 2 would render nothing at all, which IS the
+     bare-unnameable state this item is about.
 4. 🟡 **RE-RUN REQUIRED — this VT is not passable without it.** The instrument, the target constraint and the
    observables are all proven; (1) makes observable 4 *satisfiable*, and nothing more. Whether Node C, shown
    `1 unsupported (vlan)`, names the vlan and declines to resolve it against CIDR evidence is an empirical
