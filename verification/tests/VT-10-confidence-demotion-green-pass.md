@@ -1,8 +1,12 @@
 # VT-10 — Release gated on facts, not confidence scores: the green pass under the demoted-confidence regime
 
-**Status**: VERIFIED 2026-07-18 (live lab validation, written at test time) | Re-verify trigger:
-pov-program or any domain-protocol major bump; any change to the derivation-containment fact, the
-agent-results summary surfacing, or the program gate formula.
+**Status**: VERIFIED 2026-07-18 (live lab validation, written at test time); **RE-VERIFIED 2026-08-04**
+after the containment batch — the named trigger fired twice over (pov-program 1.0.29, network 1.2.4, and
+substantial changes to the derivation-containment fact itself). Run 25 reached `programReleasable: true`
+on mechanical facts with every new check armed and none firing. ⚠️ **This re-verification was written
+from stamped artifacts a day after the run, not at test time** — see the honesty note in that section.
+| Re-verify trigger: pov-program or any domain-protocol major bump; any change to the derivation-containment
+fact, the agent-results summary surfacing, or the program gate formula.
 
 ## Claim under test
 
@@ -84,3 +88,62 @@ which every one of those nets was armed — and none fired.
   execution-artifacts parity suite (summary-fact hoisting incl. pipeline artifacts).
 - Residual: the confidence numbers remain recorded facts; any future consumer that wants to *act*
   on them must first demonstrate calibration — the study that demoted them is the standing bar.
+
+
+---
+
+# Re-verification — Run 25, 2026-08-04
+
+**Task**: `cmsdt6tkx0003yxom1ncoraiy` — "Westpac sequenced telemetry-export authorization (Run 25)",
+COMPLETED 2026-08-03 22:36 UTC.
+
+⚠️ **Honesty note, and it is the reason this section exists in this form.** Every other round in this
+series was written up *at test time*, which is a standing rule here precisely because a reconstruction
+inherits the writer's hindsight. **This one was not.** It is reconstructed from stamped artifacts a day
+later. The facts below are machine-stamped and independently checkable, and nothing here is recalled
+rather than read — but this round committed no observables in advance, so it cannot carry the same weight
+as VT-01..VT-14. It is recorded as **evidence that the claim still holds**, not as a fresh test of it.
+
+## Why the trigger fired
+
+VT-10's re-verify trigger names *"pov-program or any domain-protocol major bump; any change to the
+derivation-containment fact"*. Between the original verification and this run, **all three** moved:
+
+- `pov-program` → 1.0.29, `network-provisioning` → 1.2.4, `terraform-iac`/`kubernetes-gitops` → 1.0.5,
+  `pipeline-orchestrator` → 1.4.0.
+- The containment fact gained a mechanised `consumed-value-mismatch` class, a new
+  `derived-value-orphaned` class, and `containmentDisposition` — a structured
+  `blocking | benign | needs-node-c` arm with its inputs carried alongside.
+
+A green pass therefore had to be re-demonstrated on a build where substantially more could block it.
+
+## Stamped facts
+
+```
+programReleasable        : true
+programConfidence        : 91      ·  confidenceScore: 88
+legs                     : network P1 + terraform-iac P2 — both APPROVED
+derived aggregate        : 10.99.0.0/31, MATCHING across both legs
+Node C integration review: APPROVED, 0 blocking
+```
+
+## What this does and does not show
+
+**Does**: the claim survives the containment batch. Release was reached on mechanical facts — matching
+derived aggregates across two independently-run legs, containment clean, an integration review with zero
+blocking issues — with every new check armed and **none of them firing**. The two legs agreeing on
+`10.99.0.0/31` is the load-bearing fact: the aggregate was derived twice, in different domains, and
+matched.
+
+**Does not**: prove the new checks work. A clean run exercises the *negative* path only — it shows they
+do not fire spuriously, which is a real and easily-underrated property (a containment class that blocks
+correct work is worse than none), but it is not evidence they block when they should. That evidence is
+VT-12 (`prefix-not-minimal`), VT-13 (the conjunct blocking while every other signal said release) and
+VT-14 (`unsupported` acted on at program tier) — all reached by **manufacturing the input error, never
+the verdict**.
+
+**Unresolved, and recorded rather than guessed**: this run's two legs are also the first legs under the
+new validation-shape constraint (fenced blocks per command; tables forbidden). The running tally in
+`cline_docs/follow-ups/session-residuals-2026-08-04.md` reads *"2 legs measured post-change, both green"*
+without naming which run produced them, so **whether these two are those two, or two more, cannot be
+settled without reading the artifacts.** Not counted here in either direction.
