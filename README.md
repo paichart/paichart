@@ -1,90 +1,142 @@
-# pAIchart — Intent-Driven, Human-Gated Change Synthesis
+# pAIchart — high-level design in, reviewed low-level design out
 
-Across network, cloud, and Kubernetes — on an open MCP hub, tracked as structured delivery. Give pAIchart a one-line objective and it synthesizes a reviewed, **approved change package your team applies idempotently** — out-of-band, with a rollback. pAIchart designs and reviews the change; it never applies it.
+Across network devices, Terraform, and Kubernetes — on an open MCP hub. Give pAIchart your **HLD** — a `requirements.md` and a `topology.json` at any fetchable location — and it returns a **reviewed low-level design**: per-device config, the exact commands that prove it worked, and a rollback. Your team applies it, idempotently and out of band. **pAIchart designs and reviews the change; it never applies it.**
 
-State the intent in plain language; pAIchart's delivery engine harvests your live systems, designs the change, authors the per-vendor config + validation + rollback, and an independent reviewer gates it. What comes back is a change you *approve* — you don't author it, and nothing is applied until a human says so. The expertise a multi-vendor change used to demand shifts from **authoring across every system** to **approving one reviewed result**.
+The LLD is the bottleneck it removes. Producing one today means a senior engineer reading live state across every box, writing config in each vendor's language, and hand-reconciling the values that cross domains. pAIchart does that work as a graph of specialist agents, checks it in three tiers, and hands you one reviewed result to approve. **You stop authoring across every system and start approving one package.**
 
-Three layers make that work, and they're one product, not three:
+## The DAG — the graph *is* the coordination
 
-- **The engine** — synthesizes the change from intent (the Pipeline Harness, below).
-- **The MCP Hub** — how the engine reaches your live systems *safely*: every harvest is a Hub call, authenticated per-service with no shared secrets. It's also an open registry anyone can self-register a service with, and orchestrate.
-- **Delivery management (POVs → Phases → Tasks)** — where the objectives, tasks, artifacts, and change packages are organized, analyzed, and governed.
+Airflow gives you a DAG of tasks. **pAIchart gives you a DAG of reviewed changes.**
 
-Agents and AI clients reach all of it through a single Hub with trust-level authentication and per-user OAuth passthrough.
+Every node is a domain pipeline — *harvest live state → design → author → review* — and every edge carries a value that **did not exist until runtime**. Legs with no edge between them run in parallel; a dependency edge forces order and hands the real derived value forward.
 
-## What pAIchart Does
+```
+                    ┌──▶ [firewall leg] ──┐
+[network leg] ──────┼──▶ [cloud leg] ─────┼──▶ [integration review] ──▶ release gate
+                    └──▶ [k8s leg] ───────┘
+     derived range                              checks all legs against
+     exists only after                          the one shared contract
+     this leg runs
+```
 
-### Change synthesis from intent — the delivery engine
+That's the difference between a graph and a script: the cloud leg authorises **exactly** the address range the network leg derived, because it was handed the real one — not a plausible one, and not a constant agreed in advance. No human reconciles the two.
 
-Give pAIchart a one-line objective and it orchestrates a team of specialist agents into a reviewed, decision-grade change — decompose into typed tasks, wire dependencies, chain each agent's full output to the next, quality-gate every step, synthesize the result. You provide direction; the agents provide labor.
+- **n legs**, parallel or sequenced, with context chaining and dependencies
+- **Three domains today** — network device, Terraform, Kubernetes — and the shape is extensible
+- **The graph is declared with the work**, in a single `PIPELINE` task — not in a separate scheduler you also have to operate
+- **Approval gates release from your AI client *or* the web UI**, over one common code path — the same execution, whichever door you came in
+- **Live state comes from your devices**, harvested read-only through per-device MCP servers
 
-A single **pipeline** handles one domain. A **program** is a pipeline of pipelines — how one intent spans *multiple* domains and hands a real value from one to the next. The flagship shape is a **sequenced, cross-domain program**: e.g. *"the switches export from new dedicated addresses; the cloud archive bucket authorises exactly the range covering them"* runs the network pipeline first, then feeds its **actual derived address range** into a cloud-IaC pipeline — the policy authorises exactly what the network design produced, with no human reconciling the two by hand. One intent, configuration in several vendors' languages, none of it hand-written.
+## The proof — we publish the rounds we failed
 
-Every run ends the same way: a reviewed change package you approve, then apply on your own terms. pAIchart never applies it for you — device/cluster/state access is read-only, output is sanitized before any reasoner reads it, secrets are redacted from the artifact, and *apply* stays a separate, human-gated step.
+Most of this category asks you to trust a demo. **14 verification documents**, each stating its expected observables *before* the run, then recording what actually happened.
 
-- **Network Provisioning** — turn *"add a Loopback0 per switch and advertise it into BGP"* into an **approved change package the provisioning team applies idempotently**: the pipeline self-provisions a read-only device service from a descriptor, harvests the device's real running state, designs the change, authors per-device config + validation + rollback, and an independent reviewer gates it. → [example change report](examples/network-provisioning-change-report.md)
-- **Kubernetes / GitOps** — turn *"add an HPA and resource requests/limits to the orders-api Deployment"* into a **declarative GitOps change package** (a kustomize overlay) from live cluster state, with offline validation (`kubeconform` / `kustomize build` / OPA — never `kubectl diff`) and rollback. Read-only + RBAC-scoped; secret *names* surface, values never leave the cluster. Apply is a GitOps-reconcile / human-gated step. → [example change report](examples/kubernetes-gitops-change-report.md) *(includes an earned **NEEDS-REVISION** — the reviewer refusing to approve what it couldn't verify)*
-- **Terraform / Cloud IaC** — turn *"add versioning and a public-access-block to the acme-app-logs S3 bucket"* into an **approved HCL change package (a PR) the team applies** from real Terraform state (a scoped `state pull` — no providers launched, no state lock), with `terraform validate` / `plan` / `tflint` / OPA expected-facts and rollback. Apply is the team's governed `terraform apply`. → [example change report](examples/terraform-iac-change-report.md) *(shows the layered defense: a secret-shaped tag **redacted**, a prompt-injection tag **refused**)*
-- **Artifact Synthesis** — turn source material (git history, execution logs, a POV's own delivery history, external MCP services) into a publishable deliverable (case study, post-mortem, quarterly recap) via a harvest → author → review pipeline. → [example case study](examples/artifact-synthesis-case-study.md)
+Including the ones that went wrong. **VT-12**: a program self-certified `programReleasable: true` while shipping an authorization widening. Five tiers passed it — and the requirements edit meant to help is what caused it. The defect is public, the root cause is public, the fix is public, and minimality is now checked in code rather than in prose.
 
-Every kind runs on the same harness — for the full how-to, see the in-product **`HOWTO-use-pipeline-harness`** guide (run `list_prompts()` in your AI client to find it). For a narrative walkthrough of a real cross-domain program and how its correctness is machine-checked, see the [coordinated-infrastructure-change case study](case-studies/coordinated-infra-change.md).
+Two more facts that shaped the design:
 
-### Reaching your live systems safely — the MCP service hub
+- **Two byte-identical review runs scored 45 and 92** on the same input. So confidence was demoted to a recorded fact at every tier, and the release gate decides on **verifiable facts alone — there is no confidence number in it.**
+- **A check that couldn't run is a block, not a pass.** "We couldn't verify it" never rounds up to "it's fine."
 
-The engine's harvest step is a Hub call, and the same machinery is open to anyone: register a service, discover it by capability, and orchestrate it — with per-user identity and no shared API keys in URLs.
+**The honest bound**: proven at two devices and six allocations. The scale analysis is architecture, not benchmarks — and it says so.
 
-- **Free Service Registration** — Comprehensive guides available via `list_prompts()` or as MCP resources
-- **Service Discovery** — AI agents find services by capability, not by name
-- **Multi-Service Workflows** — Chain services sequentially, in parallel, or conditionally with variable passing
-- **Per-User Authentication** — Each user's operations run as themselves via External OAuth (validated with Snowflake)
-- **Trust Level System** — 6-tier security model controls token forwarding (INTERNAL → TRUSTED → OWNER → TEAM_MEMBER → SCOPED → ANONYMOUS)
-- **JWKS Token Validation** — RS256 asymmetric cryptography, public-key verification, no shared secrets
-- **Per-Service Audience Scoping** — Hub-minted access tokens carry a per-service audience (RFC 8707 resource indicators): each service receives a short-lived credential scoped to *only itself*, so a token leaked from one service can't be replayed against another. Services that validate it via JWKS can accept pAIchart-issued identity instead of static API keys in URLs.
-- **Trustworthy Error-Recovery Signals** — When a service call fails, the Hub returns *facts* an AI client can act on — the honoured timeout, the service's recent success rate, and recovery guidance that never points at a blind health check — rather than unvalidated verdicts that can mislead. Built so the client recovers on its own; see the [Error Recovery Signals](tutorials/11-error-recovery-signals.md) case study.
+→ **[Verification pack](verification/)** · every claim linked to its machine record
 
-### Organizing and governing the work — POVs → Phases → Tasks
+## What it produces — four domains, one harness
 
-Where the engine's work lives and is governed: programs and pipelines are typed tasks inside a structured, AI-readable delivery plan, and their change packages, analytics, and history hang off it.
+- **Network Provisioning** — *"add a Loopback0 per switch and advertise it into BGP"* → an approved change package the provisioning team applies idempotently: self-provision a read-only device service from a descriptor, harvest real running state, design, author per-device config + validation + rollback, independent reviewer gates it. → [example change report](examples/network-provisioning-change-report.md)
+- **Kubernetes / GitOps** — *"add an HPA and resource requests/limits to the orders-api Deployment"* → a declarative kustomize overlay from live cluster state, validated offline (`kubeconform` / `kustomize build` / OPA — never `kubectl diff`). Read-only, RBAC-scoped; secret *names* surface, values never leave the cluster. → [example](examples/kubernetes-gitops-change-report.md) *(includes an earned **NEEDS-REVISION** — the reviewer refusing to approve what it couldn't verify)*
+- **Terraform / Cloud IaC** — *"add versioning and a public-access-block to the acme-app-logs bucket"* → an HCL change package as a PR, from a scoped `state pull` (no providers launched, no state lock), with `validate` / `plan` / `tflint` / OPA expected-facts and rollback. → [example](examples/terraform-iac-change-report.md) *(shows the layered defense: a secret-shaped tag **redacted**, a prompt-injection tag **refused**)*
+- **Artifact Synthesis** — source material (git history, execution logs, a POV's delivery history, external MCP services) → a publishable deliverable via harvest → author → review. → [example](examples/artifact-synthesis-case-study.md)
 
-- **POVs → Phases → Tasks** — run proof-of-value engagements as structured, AI-readable delivery plans
-- **Natural-language operation** — ask "Which of my POVs are at risk?" or "show open tasks for BlackEye" — no UI required
-- **AI agents on your work** — configure, assign, and execute agents against delivery tasks
-- **Portfolio analytics** — health, insights, and execution metrics across your POVs
+## How correctness is checked — three tiers, and a lower one can't be overruled
+
+**Tier 1 — arithmetic, in code.** Some correctness is pure set membership, and that belongs in a deterministic check rather than a reviewer's confidence. Every derived value is tagged with a **`kind`**, and the engine runs the arithmetic for that kind against the harvested evidence — never against the package's restated copy of it:
+
+- `cidr` — does the derived range cover exactly its declared members? Catches **too wide** (an already-allocated address swept in) and **too narrow** (a claimed member falling outside).
+- `asn` — is the AS number inside the private range, and is it actually free in the harvested state?
+
+**And when a `kind` isn't implemented, the platform says so.** It records the value as *not mechanically covered* and escalates it to the integration reviewer — it never counts an unchecked value as a passed one. That path is verified end-to-end in VT-14: the reviewer named the uncovered value, traced its provenance, found it had no device config behind it, and **blocked over two green legs and its own approval.**
+
+**Tier 2 — independent reviewers.** One per leg against its own contract, plus an integration reviewer across *all* legs against the shared contract — running the domain's own validators over the composed set (whole-topology [Batfish](https://batfish.org), `terraform plan`, `kubeconform`). It **consumes those validators; it does not reimplement them.**
+
+**Tier 3 — the release gate.** A deterministic AND: every leg approved **AND** no containment violation **AND** any unchecked value carries a benign reason **AND** the integration reviewer approved **AND** coverage complete. **No confidence number appears in it.**
+
+A Tier-1 violation blocks regardless of who approved above it.
+
+## Reaching your live systems safely — the MCP hub
+
+The harvest step is a Hub call, and the same machinery is open to anyone: register a service, discover it by capability, orchestrate it — with per-user identity and no shared API keys.
+
+- **Per-user authentication** — every external call runs as *you*, via OAuth (GitHub / Microsoft). No shared platform account.
+- **Tokens your services can verify themselves** — the Hub mints a short-lived token per call and publishes its **public key at a JWKS endpoint**. A service that supports JWKS validates the signature itself, so pAIchart-issued identity replaces static API keys in URLs and **no secret is ever shared between us**. Signing keys rotate on a 90-day cadence. *(Working today with Snowflake, per-user via External OAuth.)*
+- **Scoped to one service each** — every minted token carries a per-service audience (RFC 8707), so a token leaked from one service **cannot be replayed against another**.
+- **Trust levels** — a 6-tier model controls token forwarding (INTERNAL → TRUSTED → OWNER → TEAM_MEMBER → SCOPED → ANONYMOUS).
+- **Open registry** — any MCP service registers in one command; discovery is by capability, not name; workflows chain services sequentially, in parallel, or conditionally.
+
+## Running it — administration, observability, access
+
+- **Change the DAG definition or any agent's system prompt from the web app** — stored in the database, applied without a restart or redeploy.
+- **Full forensics** — every run's metadata and artifacts are browsable in the GUI: what each agent saw, what it produced, which checks ran, why a gate held.
+- **Multi-user** — RBAC and personal API keys.
+- **Model selection per agent** — choose from the current Claude family in a dropdown.
+
+## Organizing the work — POVs → Phases → Tasks
+
+Programs and pipelines are typed tasks inside a structured, AI-readable delivery plan; change packages, analytics, and history hang off it. Ask *"which of my POVs are at risk?"* and get an answer — no UI required.
 
 ## Get Started
 
-pAIchart is a hosted MCP hub — nothing to install. Point your AI client at the endpoint, authenticate, and start asking in natural language.
+pAIchart is a hosted MCP hub — nothing to install. Point your AI client at the endpoint, authenticate, and state the objective.
 
-- **Hub access**: `https://paichart.app/mcp`
-- **Connect with**: Claude Desktop (GitHub OAuth) or ChatGPT (Microsoft OAuth)
-- **First thing to say**: *"Help me get started with paichart"* — or run `list_prompts()` to see every guided workflow
+- **Hub**: `https://paichart.app/mcp`
+- **Connect with**: Claude Desktop (GitHub OAuth) or ChatGPT (Microsoft OAuth) — or use the web app
+- **First thing to say**: *"Help me get started with paichart"* — or run `list_prompts()` for every guided workflow
 - **Privacy**: [PRIVACY-DEMO.md](./PRIVACY-DEMO.md) — what a demo account holds, what it can do, 30-day auto-deletion
 
-Once you're connected, try:
+**To run a program**, you supply two files at any fetchable location (a GitHub repo works):
 
-- *"Provision a Loopback0 per switch and advertise it into BGP"* — the delivery engine harvests, designs, authors, and returns a reviewed change package to approve (see `HOWTO-use-pipeline-harness`)
+| File | What it is |
+|---|---|
+| `requirements.md` | your HLD — the objective and its constraints, in prose |
+| `topology.json` | the devices/targets in scope and how they connect |
+
+Then create one task, and the graph runs.
+
+Or start smaller:
+
+- *"Provision a Loopback0 per switch and advertise it into BGP"* — one pipeline, one domain, a reviewed package back
 - *"Which of my POVs are at risk?"* — delivery analytics, answered directly
 - *"Discover services"* — browse the registry by capability
-- *"Run the prompt `energy_operations_optimizer`"* — correlates weather forecasts with energy data into operational recommendations, a multi-service workflow across two live services
 
 ## Under the Hood
 
-Every request is either answered directly, synthesized into a change package by the engine, or composed into a workflow across services — and every external call runs as *you*, never as a shared platform account:
-
 ```
-You (Claude Desktop / ChatGPT)
+You (Claude Desktop / ChatGPT / web app)
   → authenticate to the pAIchart Hub
-  → state intent in natural language, e.g.
-      • "Provision a Loopback0 per switch, advertise into BGP"  → engine: harvest → design → author → review → change package (your team applies)
-      • "Which of my POVs are at risk?"                         → project / analytics tools answer directly
-      • "Texas energy mix + this week's weather"                → Hub composes a multi-service workflow
-  → for external / live-system access (incl. the engine's harvest):
-      → Hub discovers services by capability, determines trust level, mints a per-service JWT
-      → the external service validates it via JWKS — no shared API keys
-  → operations execute as the authenticated user; pAIchart designs and reviews — your team applies, idempotently and out-of-band
+  → one PIPELINE task, its title declaring the graph, pointing at your HLD
+      │
+      ├─▶ Program Architect designs the DAG + the interface contract every leg must honour
+      │
+      ├─▶ ⏸  PLAN GATE — a human releases it (AI client or GUI, one common code path)
+      │
+      ├─▶ legs execute: parallel where no edge joins them, sequenced where one does
+      │     each leg:  harvest (read-only, via per-device MCP) → design → author → review
+      │     each edge:  carries a real derived value forward, not an assumption
+      │
+      ├─▶ Tier 1 arithmetic in code · Tier 2 integration review over the composed set
+      │
+      └─▶ release gate — a deterministic AND, no confidence number
+              ↓
+    a reviewed LLD change package, in your AI client and the web GUI
+    your team applies it — idempotently, out of band, with the rollback
 ```
+
+Every external call runs as *you*, never as a shared platform account.
 
 ## Live Services
+
+The Hub's open registry. Device services are different — they're **self-provisioned per run from a descriptor and torn down after**, so pAIchart never stores your device credentials.
 
 | Service | Capability | Per-User Auth |
 |---------|-----------|---------------|
@@ -92,16 +144,12 @@ You (Claude Desktop / ChatGPT)
 | EIA | U.S. energy data analytics | Service account |
 | Weather | Real-time weather data | Service account |
 | EODHD | Financial market data | Service account |
+| Alpha Vantage | Financial data — 113 tools | Service account |
 | Browser Automation | Web scraping, screenshots, PDFs | Service account |
 | Notifications | Email, Slack, webhooks | Service account |
-| Alpha Vantage | Financial data — 113 tools (equities, forex, crypto, indicators) | Service account |
 | Token Validator | JWT/JWKS integration & trust-level debugging | ✅ Per-user JWT |
 
-## Register Your MCP Service
-
-New to this? Run the **`HOWTO-register-service`** guide (`list_prompts()` in your AI client to find it) — a step-by-step walkthrough from a basic registration to Grade-A tool schemas, access control, and trust levels.
-
-Any MCP service can register with the Hub in one command:
+Register your own in one command:
 
 ```
 registry(action: "register", {
@@ -112,20 +160,25 @@ registry(action: "register", {
 })
 ```
 
-Services that support External OAuth (like Snowflake, Databricks) get per-user authentication automatically.
+Run **`HOWTO-register-service`** (`list_prompts()`) for the walkthrough from basic registration to Grade-A tool schemas, access control, and trust levels.
 
 ## Learn
 
-- **Case studies** — three narrative walkthroughs of the same real cross-domain program (network → cloud): [Coordinated Infrastructure Change, Checked by Machine](case-studies/coordinated-infra-change.md) (*can you trust it* — how correctness is machine-checked, not trusted), [You Approve; You Don't Author](case-studies/you-approve-you-dont-author.md) (*what it buys you* — one intent, configs in several vendors' languages, none hand-written), and [Inside a Multi-Domain Program](case-studies/inside-a-multi-domain-program.md) (*how it's built* — the DAG, the review tiers, and how far it scales). See [case-studies/README.md](case-studies/README.md).
-- **MCP Tool Excellence** — a 12-chapter tutorial series on building MCP tools AI clients can call without external documentation, extracted from pAIchart's own production audits: [tutorials/README.md](tutorials/README.md)
+- **[Verification pack](verification/)** — 14 documents, each stating its expected observables before the run. **Including the rounds that failed.**
+- **Case studies** — three walkthroughs of the same real network→cloud program: [Checked by Machine](case-studies/coordinated-infra-change.md) (*can you trust it*), [You Approve; You Don't Author](case-studies/you-approve-you-dont-author.md) (*what it buys you*), [Inside a Multi-Domain Program](case-studies/inside-a-multi-domain-program.md) (*how it's built* — the DAG, the review tiers, how far it scales).
+- **MCP Tool Excellence** — a 12-chapter series on building MCP tools AI clients can call without external docs, extracted from pAIchart's own production audits: [tutorials/README.md](tutorials/README.md)
 
 ## Links
 
-- **Hub (connect here)**: [paichart.app/mcp](https://paichart.app/mcp) — Claude Desktop, GitHub OAuth
+- **Hub (connect here)**: [paichart.app/mcp](https://paichart.app/mcp)
 - **JWKS**: `https://paichart.app/api/auth/jwks`
-- **Documentation**: provided as an MCP resource (or run `list_prompts()`) in your AI client
-- **Demo User Privacy**: [PRIVACY-DEMO.md](./PRIVACY-DEMO.md) — what a demo account holds, what it can do, 30-day auto-deletion
+- **Verification**: [verification/](verification/)
+- **Documentation**: an MCP resource in your AI client, or `list_prompts()`
+
+## Credits
+
+Device harvesting builds on [`nornir-napalm-mcp`](https://github.com/sydasif/nornir-napalm-mcp) by [@sydasif](https://github.com/sydasif), used under the MIT licence, in a modified form.
 
 ## Keywords
 
-`mcp` `mcp-hub` `mcp-server` `mcp-orchestration` `model-context-protocol` `ai-native` `change-synthesis` `intent-driven` `human-gated` `network-provisioning` `kubernetes` `gitops` `terraform` `infrastructure-as-code` `multi-domain-automation` `pipeline-harness` `autonomous-agents` `change-management` `delivery-management` `proof-of-value` `pov` `ai-services` `service-discovery` `external-oauth` `jwks` `per-service-audience` `rfc8707` `per-user-authentication` `workflow-orchestration` `error-recovery` `mcp-tutorials` `claude-desktop` `chatgpt` `snowflake`
+`mcp` `mcp-hub` `mcp-server` `model-context-protocol` `dag` `directed-acyclic-graph` `multi-agent-orchestration` `low-level-design` `hld-to-lld` `change-synthesis` `intent-driven` `human-gated` `network-automation` `network-provisioning` `napalm` `nornir` `batfish` `kubernetes` `gitops` `terraform` `infrastructure-as-code` `multi-domain-automation` `verification` `deterministic-gate` `autonomous-agents` `change-management` `delivery-management` `pov` `service-discovery` `external-oauth` `jwks` `rfc8707` `per-user-authentication` `workflow-orchestration` `claude-desktop` `chatgpt` `snowflake`
