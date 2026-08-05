@@ -33,6 +33,15 @@ its claim is downgraded accordingly — no silent asterisks.
 
 > ⚠️ **VT-06 should be read alongside VT-12.** VT-06's claim — release only when every machine fact says so — holds *literally*: on VT-12's round every machine fact did say so. What failed was the **coverage** of that fact set. Minimality was checked in exactly one place (a requirements clause) and a prose edit removed it, so the gate followed a complete-looking set of facts to a wrong verdict. A green `programReleasable` bounds what was CHECKED, never what is CORRECT.
 
+---
+
+## 📣 Researchers: [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md)
+
+Three findings we think are interesting, one hypothesis we lack the statistical power to settle, and lab
+run data we will share. If you study multi-agent verification, LLM-as-judge reliability, or scalable
+oversight, that document names what we need and what we can offer.
+
+
 ## Index
 
 | # | Document | Claim under test |
