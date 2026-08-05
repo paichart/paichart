@@ -1,7 +1,7 @@
 # VT-06 — An end-to-end program releases only when every machine fact says so
 
 **Status**: VERIFIED 2026-07-16 (live lab validation + a curated demo exhibit) | Re-verify trigger: pov-program or pipeline-orchestrator major bump
-**Run record**: `cmrmr35q200doyx19u2ele1yk` &middot; 2026-07-16. Viewable in the platform by any account with access to the verification environment.
+**Run record**: `cmrmnadk70003yx196x3va1ij` &middot; 2026-07-15 &mdash; the **T4f green-run validation** round, which is this document's live evidence. The curated demo exhibit it also references is `cmrmr35q200doyx19u2ele1yk` &middot; 2026-07-16. Viewable in the platform by any account with access to the verification environment.
 *(Back-filled 2026-08-05, identified from **Exhibit 1** plus the Loopback7 detail, both of which appear here and in the task title. Rounds before VT-13 predate the practice of citing the task id in the document itself.)*
 
 **Layer**: program

@@ -1,7 +1,8 @@
 # VT-04 — A needs-revision child blocks the program release, keyed on OUTCOME not score
 
 **Status**: VERIFIED 2026-07-15 (two independent live occurrences) | Re-verify trigger: any change to the program release-gate AND-rule
-**Run record**: &#9888;&#65039; **not identified.** This round predates the practice of citing the task id, and the document names no exhibit number. 2026-07-15 and 07-16 carry 20 and 14 pipeline runs respectively, so the date alone does not resolve it. Left open rather than guessed &mdash; attributing a claim to the wrong run would be a worse defect than an unlinked one.
+**Run record**: `cmrlwk92b0005yxcybp433dbd` and `cmrm92y5a0003yxluro0rd0m7` &middot; both 2026-07-15 &mdash; the **T4b** rounds (`T4b-v2 failed-leg` and `T4b'-rerun`), matching this document's *"two independent live occurrences"*.
+*(Back-filled 2026-08-05, identified from the **T4b** designation this document cites twice, which both task titles carry.)*
 
 **Layer**: program
 **Round type**: functional (negative path)

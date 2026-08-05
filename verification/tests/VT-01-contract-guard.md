@@ -1,7 +1,8 @@
 # VT-01 — A program pipeline child cannot execute without its binding interface contract
 
 **Status**: VERIFIED 2026-07-15 (live production run on the fixed build) | Re-verify trigger: any change to the CC7 contract guard or the task-create hoist path
-**Run record**: &#9888;&#65039; **not identified.** This round predates the practice of citing the task id, and the document names no exhibit number. 2026-07-15 and 07-16 carry 20 and 14 pipeline runs respectively, so the date alone does not resolve it. Left open rather than guessed &mdash; attributing a claim to the wrong run would be a worse defect than an unlinked one.
+**Run record**: `cmrm92y5a0003yxluro0rd0m7` &middot; 2026-07-15 &mdash; the **T4b'-rerun** round.
+*(Back-filled 2026-08-05. Identified from the mechanism rather than the date: `INTERFACE_CONTRACT_MISSING` appears in exactly TWO runs in the entire record, and only this one falls on the date this document states. The same run is also cited by VT-04 &mdash; one round can be evidence for more than one claim, and this one carried both a contract refusal and a needs-revision child.)*
 
 **Layer**: program
 **Round type**: failure-injection
