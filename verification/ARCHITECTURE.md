@@ -39,6 +39,15 @@ explicit version stamps, so drift is visible rather than silent.
 
 ## Safety and anti-fabrication stack
 
+Every item below answers one question, and it is deliberately narrower than *"is the change correct?"* — no
+system can promise that, and a reviewer's confidence that it has is itself a failure mode measured here
+(item 8). The question is: **what entitles anyone to say it was checked?**
+
+Each item names a specific way that entitlement can be false — a claim nobody verified, a fact computed and
+then dropped before it reached the gate, a check that could not run and was read as a pass — and the
+mechanism that closes it. Where the honest answer is "nothing entitles us", the design says so and escalates
+rather than passing.
+
 1. **Planning, not actuating**: side-effecting work stays outside the loop; deliverables are
    approved-but-unapplied changes.
 2. **Bounded self-triggering**: reactor retrigger chains carry a per-harness generation budget.
