@@ -63,6 +63,17 @@ explicit version stamps, so drift is visible rather than silent.
    follow-up round proved can be fabricated — and stamps the result as a structured fact
    (`derivationContainment`) in the run record. A mute or half-completed harness run is likewise
    terminalized with attribution rather than persisting as a silent success.
+
+   *Extended 2026-08-02/04.* The containment engine dispatches on a declared `kind` (`cidr`, `asn`), and
+   the honest half matters as much as the check: a value whose kind the engine does not implement is
+   recorded as **not mechanically covered** and escalated to the integration reviewer — never counted as
+   a passed one — with the outcome stamped as a structured disposition (`blocking` / `benign` /
+   `needs-node-c`) carried alongside the fact. **Minimality** joined the mechanically-checked set after a
+   later and worse round than the one above: a program self-certified `programReleasable: true` while
+   shipping an authorization widening, and five tiers passed it, because minimality was asserted in
+   exactly one place — a requirements clause — and a prose edit removed it. The published record is
+   `tests/VT-12-false-pass-nonminimal-aggregate.md`. A green gate bounds what was **checked**, never what
+   is **correct**; the response was to move the property into code rather than to add another reviewer.
 8. **Facts-gated release — confidence numbers carry no gate authority** (added after a calibration
    study found two reviewers handed byte-identical defective inputs returned opposite verdicts at
    45 and 92 — the confidence number carries verdict *direction*, not correctness): every release
