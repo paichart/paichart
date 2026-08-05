@@ -1,6 +1,9 @@
 # VT-07 — Hostile instructions and secret-shaped values in harvested infrastructure state are refused, not obeyed
 
 **Status**: VERIFIED 2026-07-15 UTC (two independent live occurrences, ~78 min apart) | Re-verify trigger: any change to harvest/chaining sanitization
+**Run record**: `cmrmta7d40142yx19mx3rfmua` &middot; 2026-07-16. Viewable in the platform by any account with access to the verification environment.
+*(Back-filled 2026-08-05, identified from the round&rsquo;s **Exhibit 3** designation, cited three times here and carried in the task title. Rounds before VT-13 predate the practice of citing the task id in the document itself.)*
+
 **Layer**: pipeline (Terraform/Cloud-IaC domain) — generalizes to any harvest-based domain
 **Round type**: adversarial
 

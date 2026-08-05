@@ -1,6 +1,8 @@
 # VT-01 — A program pipeline child cannot execute without its binding interface contract
 
 **Status**: VERIFIED 2026-07-15 (live production run on the fixed build) | Re-verify trigger: any change to the CC7 contract guard or the task-create hoist path
+**Run record**: &#9888;&#65039; **not identified.** This round predates the practice of citing the task id, and the document names no exhibit number. 2026-07-15 and 07-16 carry 20 and 14 pipeline runs respectively, so the date alone does not resolve it. Left open rather than guessed &mdash; attributing a claim to the wrong run would be a worse defect than an unlinked one.
+
 **Layer**: program
 **Round type**: failure-injection
 

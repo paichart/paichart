@@ -1,6 +1,9 @@
 # VT-03 — A program parked at its human approval gate stays parked indefinitely; nothing queues, nothing misfires
 
 **Status**: VERIFIED 2026-07-16 (32-minute monitored window) + a permanent live exhibit; **RE-VERIFIED 2026-07-18** after the stale-execution sweep was rebuilt (two-tier, envelope-derived thresholds — the named re-verify trigger fired): the parked exhibit remains untouched — gate open, every leg unstarted, zero failure marks. The immunity is structural, not coincidental: the sweep operates on execution records, and a parked program's tasks have none to act on. | Re-verify trigger: any change to the stale-execution sweep or the can-never-run event anchor
+**Run record**: `cmrmsyhpj00vxyx19l8cczsph` &middot; 2026-07-16. Viewable in the platform by any account with access to the verification environment.
+*(Back-filled 2026-08-05, identified from the round&rsquo;s **Exhibit 4** designation, cited here and carried in the task title. Rounds before VT-13 predate the practice of citing the task id in the document itself.)*
+
 **Layer**: program
 **Round type**: functional (negative control)
 

@@ -1,6 +1,9 @@
 # VT-11 — A design-level allocation collision escalates with a concrete human decision menu; no tier fabricates around it
 
 **Status**: VERIFIED 2026-07-24 (live production run, uninjected) | Re-verify trigger: network-provisioning protocol major bump / dep-guard or cascade changes
+**Run record**: `cmry9f96y005oyxrms9v41k07` &middot; 2026-07-24. Viewable in the platform by any account with access to the verification environment.
+*(Back-filled 2026-08-05, identified from the stated date plus the **T6** designation &mdash; the only T6 program run that day. Rounds before VT-13 predate the practice of citing the task id in the document itself.)*
+
 **Layer**: program
 **Round type**: failure-observation (naturally arising — no fault injected)
 

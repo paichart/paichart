@@ -1,6 +1,9 @@
 # VT-02 — A program with a non-runnable leg escalates to a human; it never hangs and never silently composes
 
 **Status**: VERIFIED 2026-07-16 (live production run) | Re-verify trigger: pov-program protocol major bump
+**Run record**: `cmrmsr64e00s4yx192ywvegsh` &middot; 2026-07-16. Viewable in the platform by any account with access to the verification environment.
+*(Back-filled 2026-08-05, identified from the round&rsquo;s **Exhibit 2** designation, cited three times in this document and carried in the task title. Rounds before VT-13 predate the practice of citing the task id in the document itself.)*
+
 **Layer**: program
 **Round type**: failure-injection
 

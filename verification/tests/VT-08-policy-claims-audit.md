@@ -1,6 +1,8 @@
 # VT-08 — The protocol's own policy claims, verified against the running system
 
 **Status**: VERIFIED 2026-07-16 (3 of 4 claims pass; claim 4 surfaced a real defect, published) | Re-verify trigger: any change to the SYNTHESIZE fact-authority prose or the verdict-mismatch guard
+**Run record**: &#9888;&#65039; **not identified.** This round predates the practice of citing the task id, and the document names no exhibit number. 2026-07-15 and 07-16 carry 20 and 14 pipeline runs respectively, so the date alone does not resolve it. Left open rather than guessed &mdash; attributing a claim to the wrong run would be a worse defect than an unlinked one.
+
 **Layer**: program / platform
 **Round type**: policy-audit
 

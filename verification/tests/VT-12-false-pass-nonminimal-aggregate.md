@@ -3,6 +3,9 @@
 **Status**: DEFECT ROUND — the round FAILED and the failure is the finding. Fix VERIFIED on the real
 artifact 2026-07-30 (replay, not a re-run). | Re-verify trigger: the next sequenced program run; a
 `checkDerivationContainment` change; any edit to `requirements.md`'s numbered Node C checks.
+**Run record**: `cms5koexu0003yxmbn5jywv52` &middot; 2026-07-29. Viewable in the platform by any account with access to the verification environment.
+*(Back-filled 2026-08-05, identified from this document&rsquo;s own attribution of the false pass to **Run 15, 2026-07-29**, which the task title carries. Rounds before VT-13 predate the practice of citing the task id in the document itself.)*
+
 **Layer**: program
 **Round type**: functional (intended) → forensic audit (actual)
 

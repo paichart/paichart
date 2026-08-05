@@ -1,6 +1,8 @@
 # VT-05 — A missing deliverable is caught by structured coverage facts, not a raw predecessor count
 
 **Status**: VERIFIED 2026-07-16 (two live runs; defects found, fixed, and re-verified in VT-06) | Re-verify trigger: any change to the chainer coverage facts or the release-gate coverage consumer
+**Run record**: &#9888;&#65039; **not identified.** This round predates the practice of citing the task id, and the document names no exhibit number. 2026-07-15 and 07-16 carry 20 and 14 pipeline runs respectively, so the date alone does not resolve it. Left open rather than guessed &mdash; attributing a claim to the wrong run would be a worse defect than an unlinked one.
+
 **Layer**: program
 **Round type**: failure-injection
 

@@ -8,6 +8,9 @@ from stamped artifacts a day after the run, not at test time** — see the hones
 | Re-verify trigger: pov-program or any domain-protocol major bump; any change to the derivation-containment
 fact, the agent-results summary surfacing, or the program gate formula.
 
+**Run record**: `cmrq1nvs60005yxnk8ea5yl03` &middot; 2026-07-18. Viewable in the platform by any account with access to the verification environment.
+*(Back-filled 2026-08-05, identified from the task title, which names **VT-10** explicitly. Rounds before VT-13 predate the practice of citing the task id in the document itself.)*
+
 ## Claim under test
 
 After a reviewer-calibration study showed that a reviewer's numeric confidence carries **verdict

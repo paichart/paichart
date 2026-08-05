@@ -3,6 +3,9 @@
 **Status**: VERIFIED 2026-07-18 (live lab validation, the arc's clean pass after five adversarial
 rounds) | Re-verify trigger: network-provisioning or pov-program major bump; any change to the
 derivation-containment validator or its parser
+**Run record**: `cmrp5xebf0003yxmr3e9qfx98` &middot; 2026-07-17. Viewable in the platform by any account with access to the verification environment.
+*(Back-filled 2026-08-05, identified from the round&rsquo;s **Exhibit 5** designation, cited here and carried in the task title. Rounds before VT-13 predate the practice of citing the task id in the document itself.)*
+
 **Layer**: program (sequenced composition) + evidence-flow verification stack
 **Round type**: functional (green path), earned through failure rounds — see "The road here"
 
