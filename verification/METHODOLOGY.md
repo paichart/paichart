@@ -32,6 +32,30 @@ Where an injection turned out to be *too graceful* to exercise the target path (
 degraded cleanly instead of hard-failing), that is recorded and a sharper injection designed — the
 round is not declared passed on the wrong evidence.
 
+## Inject the mistake, never the verdict
+
+A round's setup text is read by the agents. Anything in the task description stating what the run
+*should conclude* is therefore an instruction, not a test condition — and a round contaminated that way
+produces a confident confirmation of the author's own guess, **indistinguishable from a genuine result**.
+Same artifacts, same gate, same report.
+
+So the rule is: inject a **defective input** and let the system reach its own verdict. Never write the
+expected finding into the setup.
+
+This is stated because we have breached it. Two rounds in the 2026-08 series carried expected-outcome
+text in their descriptions and were rewritten before launch; earlier, two of VT-12's rounds were affected
+before the rule was explicit. Every instance was caught by re-reading the description before starting —
+**which is luck, not process**.
+
+⚠️ **There is no mechanical guard for this today, and no way to detect it after the fact.** A
+contaminated run leaves no distinguishing trace, so the only defence is that the description is written
+before the run and can be re-read. A scoped design exists — detect outcome-shaped statements at task
+creation, stamp them as a fact on the run, and surface them at the human approval gate where they can
+actually be acted on — but it is **unbuilt, and its feasibility is unproven**: it is not yet known whether
+a mechanical check can separate an outcome claim from the legitimate values a real description carries
+(a pinned commit, a device name, an address range). Recorded here so the gap is visible rather than
+implied by its absence.
+
 ## Discovery-first, panel-designed fixes
 
 A defect worth fixing gets a **specialist design panel** (typically three independent domain
