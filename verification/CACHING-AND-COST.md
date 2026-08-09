@@ -12,8 +12,15 @@ we have measured, and — in the spirit of the rest of this pack — what we fou
 
 A pipeline agent's prompt is dominated by a **large, stable preamble**: the universal agent rules
 plus every orchestration protocol the harness may need to select between. Measured against the live
-platform on 2026-08-09, that preamble is **40,210 tokens** — and it is byte-identical on every
+platform on 2026-08-09, that preamble is **57,953 tokens** — and it is byte-identical on every
 pipeline execution.
+
+That number is model-specific, which is worth stating because it is the kind of detail that
+quietly invalidates a cost model. The same 160,334 characters tokenize to **57,953** tokens on
+Sonnet 5 (~2.77 chars/token) and **40,210** on Haiku 4.5 (~3.99) — a 44% difference for identical
+text. Pipeline executions run on Sonnet 5, so 57,953 is the operative figure. We report it because
+we got this wrong ourselves first: an internal measurement taken on Haiku was carried into a Sonnet
+workload for a day before a review caught it.
 
 Around it sits a small amount of genuinely variable content: the platform-resolved mode, the task's
 own context, the agent's template. On a typical run the stable part is the overwhelming majority of
@@ -67,7 +74,8 @@ boundary sits at the end of the assembled prompt, so the per-task content that f
 preamble prevents any two executions from matching.
 
 **Confirmed by direct experiment, 2026-08-09.** Two request shapes, each issued twice with differing
-task content, against the real preamble on the platform's default model:
+task content, against the real preamble. Run on Haiku 4.5, where the same preamble measures 40,210
+tokens — the experiment tests the *mechanism*, which is model-independent:
 
 | request shape | second call |
 |---|---|
