@@ -1,0 +1,72 @@
+{
+  "_TEMPLATE_README": [
+    "Copy to program-artifacts/<run-name>/topology.json and replace every {{PLACEHOLDER}}.",
+    "Delete keys that do not apply to your domain — but keep `interdependency` for ANY program",
+    "with more than one pipeline, and keep the `_why*` self-documenting convention.",
+    "",
+    "Audience: the Program Architect reads ONLY this file + requirements.md, and has NO live",
+    "state access. Anything it must know has to be here or in requirements.md. Anything it",
+    "CANNOT know must be declared runtime (see `interdependency`) so it does not guess."
+  ],
+
+  "name": "{{RUN_NAME — e.g. meridian-t6-sequenced}}",
+  "description": "{{One line: what this environment is and what the program will change}}",
+
+  "nodes": [
+    {
+      "name": "{{node1}}",
+      "kind": "{{switch|host|bucket|cluster}}",
+      "platform": "{{e.g. arista_eos}}",
+      "os_version": "{{version}}",
+      "mgmt_ipv4": "{{addr}}",
+      "bgp_asn": 65001,
+      "router_id": "{{addr}}",
+      "role": "{{what this node does in the change}}"
+    }
+  ],
+
+  "links": [
+    {
+      "endpoints": ["{{node1}}:{{iface}}", "{{node2}}:{{iface}}"],
+      "subnet": "{{cidr}}",
+      "addressing": { "{{node1}}": "{{addr}}", "{{node2}}": "{{addr}}" },
+      "routing": "{{protocol//notes}}"
+    }
+  ],
+
+  "_domainBlock_EXAMPLE_telemetryExport": {
+    "_note": [
+      "A domain-specific block. Rename/replace for your domain. What makes it a GOOD block is the",
+      "pattern below, not the field names: state the STATIC constraints as values, and state each",
+      "RUNTIME-DERIVED value explicitly as runtime — with a `_why` field saying why it cannot be",
+      "known up front. A value left ambiguous is a value an agent will guess."
+    ],
+    "exporterPool": "{{static constraint — a value that IS knowable up front}}",
+    "exporterInterfaceConvention": "{{static convention}}",
+    "addressUniqueness": "{{static rule}}",
+    "existingAllocations": "RUNTIME — discoverable only by harvesting the live devices",
+    "selectedExporterAddresses": "RUNTIME — selected by the design leg from live state",
+    "derivedExporterAggregate": "RUNTIME — derived by the design leg; chained downstream",
+    "_whyThisIsUnarguablyRuntime": "{{The objective test. Strongest form: the value changes on every environment rebuild, so it cannot be pinned in a static artifact or agreed in an interface contract, and the Program Architect structurally cannot know it.}}"
+  },
+
+  "interdependency": {
+    "_note": [
+      "KEEP THIS BLOCK for any multi-pipeline program. It is the machine-readable counterpart to",
+      "requirements.md's 'Why this is sequenced' section, and the two must agree.",
+      "",
+      "THE TEST that decides the value of `kind`:",
+      "  Is every value the downstream domain needs knowable BEFORE the upstream domain runs?",
+      "    yes -> 'parallel'   ... the values belong in the INTERFACE CONTRACT",
+      "    no  -> 'sequenced'  ... the value must ride a DAG EDGE (inter-pipeline chaining)",
+      "",
+      "Getting this wrong in the parallel direction is the expensive one: the downstream leg starts",
+      "with a value nobody could have known, and either guesses or stalls."
+    ],
+    "kind": "{{sequenced|parallel}}",
+    "dag": "{{e.g. pipeline-1 -> gate -> pipeline-2}}",
+    "chainedValue": "{{the value that crosses the edge, or null if parallel}}",
+    "mechanism": "{{'DAG edge (inter-pipeline chaining)' | 'interface contract'}}",
+    "direction_note": "{{which leg produces, which consumes, and what the consumer must NOT do — e.g. 'the consumer re-states the chained value and is forbidden from recomputing it'}}"
+  }
+}
