@@ -113,40 +113,28 @@ A registry of MCP services. Services register, are discovered by capability, and
 common surface with identity, authorization and auditing applied centrally. It is the *client* side of
 the picture above.
 
-### The delivery engine
+**Student projects in this directory use the hub, and only the hub.** Three operations cover it:
 
-The part that makes the hub interesting. Given a high-level objective and two design artifacts — a
-description of the target environment and a set of requirements — pAIchart produces a **reviewed
-low-level design**: the exact configuration to apply, the commands that prove it worked, and a
-rollback.
-
-It does this as a **graph of specialist agents**. Each node is a domain pipeline that runs
-*harvest live state → design → author → review*. Each edge carries a value that **did not exist until
-runtime** — for example, an address range selected from what was actually free on live devices, which
-a downstream cloud-policy agent must then authorize exactly.
-
-```
-                    ┌──▶ [firewall leg] ──┐
-[network leg] ──────┼──▶ [cloud leg] ─────┼──▶ [integration review] ──▶ human approval gate
-                    └──▶ [k8s leg] ───────┘
-   derived value                                checks every leg against
-   exists only after                            the one shared contract
-   this leg runs
+```javascript
+registry(action: "register", { name, description, endpoint, category })   // publish your service
+services(action: "discover")                                             // find services
+services(action: "call",     { targetService, tool, arguments })          // call a tool
 ```
 
-**It never applies the change.** The output is an approved-but-unapplied package; a human decides.
-That constraint is deliberate and shapes everything: the system's job is to be *right*, and to be
-*checkable*, not to be autonomous.
+What the hub adds on top of a bare MCP server, and why registering with one is worth doing:
 
-### Why that matters for a student project
+- **Identity** — it mints a short-lived signed token for *each call*, scoped to the specific service
+  being called. Your server verifies it. A token stolen from one service is useless against another.
+- **Discovery** — AI clients find services by capability rather than by hard-coded name.
+- **Audit and rate limiting** — applied centrally, so your service does not implement them.
 
-The platform is a working, instrumented environment where multi-agent behaviour can be **measured**
-rather than speculated about. Every run persists the full record — every tool call and its arguments,
-what each agent produced, which values crossed which edges, where output was truncated, what each
-reviewer concluded and with what confidence.
+### The delivery engine (context only — not needed for these projects)
 
-That is unusual. Most agentic-AI research is conducted on benchmarks; this is a real system doing real
-work with a complete forensic trail, including the runs that went wrong.
+pAIchart also runs multi-agent pipelines that turn a high-level objective into a reviewed
+infrastructure change, which a human then approves. It never applies changes itself.
+
+It is mentioned only because it is where the failure data offered in some briefs comes from — real runs
+where a reviewing model got things wrong. **You do not need to run or understand these pipelines.**
 
 ---
 
