@@ -22,6 +22,32 @@ against *real systems with real consequences* rather than a benchmark.
 Three tracks are offered. **Each is a complete thesis on its own.** They share the same build, so the
 choice can be deferred until the apparatus works.
 
+### The apparatus is smaller than it sounds — and useful on its own
+
+The project does **not** require running pAIchart's multi-agent delivery programs. The baseline is:
+
+```
+   AI client  ──▶  pAIchart MCP hub  ──▶  student's MCP server  ──▶  real device
+  (Claude Desktop,   identity, registry,      the thesis artifact       (cEOS in
+   ChatGPT, etc.)    audit, per-call token)                            containerlab)
+```
+
+**Register the server with the hub, connect an AI client, ask it about a live device.** That is the
+whole apparatus. It is reachable in the first third of the project, it demonstrates in thirty seconds,
+and — this matters for thesis risk — **it is a genuine contribution even if every experiment returns a
+null result.** No such server exists publicly today.
+
+Two consequences worth noting up front:
+
+- **Cost is low.** No agent pipelines to run; interaction is through an ordinary AI client the student
+  likely already has. Only Track C's larger sweeps need scripted API calls.
+- **The security work is exercised against something real.** The hub mints a short-lived, per-call
+  RS256 token with a per-service audience. The student's server therefore verifies *actual* tokens
+  from an *actual* issuer with real key rotation — not a mock they wrote themselves and can talk
+  themselves into trusting.
+
+The experiments then run on top of this baseline.
+
 ---
 
 ## Why this is worth doing
@@ -159,19 +185,26 @@ is the whole reason it is tractable.
 
 ## Indicative milestones
 
-| # | Milestone |
-|---|---|
-| 1 | Background survey; track selected; hypothesis and success criteria stated |
-| 2 | Lab running; one read tool reachable over HTTP transport, end-to-end |
-| 3 | **Identity verification enforced** — no token, wrong audience, and expired token all rejected |
-| 4 | Apparatus complete: full read tool surface + experimental harness |
-| 5 | Pilot experiment; instrumentation validated on a small sample |
-| 6 | Full experimental run; results analysed |
-| 7 | Thesis; optionally, a SEP or Interest Group contribution |
+| # | Milestone | |
+|---|---|---|
+| 1 | Background survey; track selected; hypothesis and success criteria stated | |
+| 2 | Lab running; one read tool reachable over HTTP transport | |
+| 3 | **Registered with the hub; an AI client reads a live device through it** | ⭐ the demo |
+| 4 | **Identity verification enforced** — no token, wrong audience, and expired token all rejected | gate |
+| 5 | Full read tool surface; authorization and secret redaction complete | |
+| 6 | Pilot experiment; instrumentation validated on a small sample | |
+| 7 | Full experimental run; results analysed | |
+| 8 | Thesis; optionally, a SEP or Interest Group contribution | |
 
-**Milestone 3 is a gate, not a stretch goal.** Device tooling is gratifying and identity verification
-is not, so the security half is the part that historically arrives as a stub in the final fortnight.
-Track B in particular is *about* the trust boundary — it cannot be evaluated on a server that has none.
+**Milestone 3 is the one to reach early.** It is the whole integration working end-to-end, it is
+demonstrable to a supervisor in half a minute, and from that point the project can only improve rather
+than fail outright. Everything after it is depth.
+
+**Milestone 4 is a gate, not a stretch goal.** Device tooling is gratifying and identity verification
+is not, so the security half is what historically arrives as a stub in the final fortnight. Track B in
+particular is *about* the trust boundary — it cannot be evaluated on a server that has none. Note that
+milestone 3 will appear to work *without* it, since an unverified token is simply an ignored one: the
+demo succeeding is not evidence the boundary exists.
 
 ---
 
@@ -179,8 +212,9 @@ Track B in particular is *about* the trust boundary — it cannot be evaluated o
 
 | Risk | Mitigation |
 |---|---|
-| Apparatus consumes the whole project, leaving no time to experiment | Milestones 1–4 are deliberately front-loaded and scoped; we supply lab, spec and fault corpus |
-| LLM API costs | Scope the experiment matrix at pilot stage (milestone 5), not after the full run; discuss budget early |
+| Apparatus consumes the whole project, leaving no time to experiment | The baseline is deliberately small — server, hub registration, AI client — and reachable by milestone 3; we supply lab, spec and fault corpus |
+| **The experiment returns nothing interesting** | The working integration at milestone 3 is itself a contribution — no such server exists publicly. The thesis has a floor |
+| LLM API costs | Low by design: no agent pipelines, interaction via an ordinary AI client. Only Track C's sweeps need scripted calls — scope that matrix at pilot stage (milestone 6), not after the full run |
 | Results are model-version specific | Test across at least two models; date the findings explicitly — this is a legitimate limitation, not a flaw |
 | MCP specification churn | Pin a version at the outset; record subsequent change as a finding — integrating with an evolving standard is itself an observation |
 | Intellectual property | Check the university's IP policy **before** starting, not at submission |
@@ -191,8 +225,9 @@ Track B in particular is *about* the trust boundary — it cannot be evaluated o
 
 - The **integration specification** and its conformance checklist
 - A **working lab** — containerlab topology and device configurations
-- A **platform account** and registered service, so identity forwarding is tested against a real hub
-  rather than a mock
+- A **platform account and hub registration**, so the server is reached by a real AI client through a
+  real broker — with genuine per-call token minting, key rotation and audit, not a mock. No
+  agent-pipeline runs are required, so there is no cost or scheduling dependency on us
 - **Fault-injection corpus and prior failure data** (Track A), and our adversarial-injection exhibit
   as prior art (Track B)
 - **Technical review at each milestone**, from the engineers who built the platform side
