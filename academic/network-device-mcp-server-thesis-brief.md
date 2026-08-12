@@ -2,7 +2,7 @@
 
 **Proposed by**: pAIchart · **Status**: open, unclaimed · **Last updated**: 2026-08-12
 **Suggested duration**: one masters project cycle (indicatively 6–9 months part-time)
-**Industry contact**: see [Supervision and support](#supervision-and-support)
+**Industry contact**: Steve Terry — <steve.terry@paichart.com>
 
 ---
 

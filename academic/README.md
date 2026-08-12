@@ -23,6 +23,6 @@ None of them sit on pAIchart's delivery path, so no student is working against o
 
 ## Enquiries
 
-Via the repository, or the contact route named in the brief. We are happy to talk to a supervisor
+**Steve Terry — <steve.terry@paichart.com>**. We are happy to talk to a supervisor
 before a student commits, and to adjust scope to fit a particular programme — a research masters and a
 coursework capstone want different shapes, and the briefs note where that changes things.
