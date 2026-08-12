@@ -47,6 +47,47 @@ they are the material the model reads when deciding **which** tool to call and *
 arguments**. A tool surface is therefore an interface design problem aimed at a probabilistic
 consumer, which is a genuinely unfamiliar kind of design work and an active research area.
 
+### MCP is industry infrastructure, under neutral governance
+
+This is not a vendor experiment, and that matters when judging whether work on it is worth a thesis.
+
+| | |
+|---|---|
+| **Origin** | Created by Anthropic, open-sourced November 2024 |
+| **Donated** | December 2025, to the **Agentic AI Foundation (AAIF)** — a directed fund under the **Linux Foundation**, co-founded by Anthropic, Block and OpenAI |
+| **Formal entity** | *Model Context Protocol a Series of LF Projects, LLC* |
+| **AAIF Steering Committee** | Includes Anthropic, OpenAI, Microsoft, Google and Amazon |
+| **Licensing** | Apache 2.0 for code and specification; CC BY 4.0 for documentation |
+| **Scale (early 2026)** | 10,000+ published servers; ~97 million downloads |
+| **Status** | v2 in development, with a public commitment to backward compatibility for existing v1 servers |
+
+By moving MCP to the Linux Foundation, the industry effectively declared that agentic infrastructure is
+**common ground that no single company should own** — the same pattern as Kubernetes or Linux itself.
+
+### How the specification actually evolves — and why a student can participate
+
+MCP's governance is deliberately open, and it has two properties that are unusually favourable to
+academic work:
+
+1. **Membership is held by individuals, not companies.** There are no reserved corporate seats;
+   maintainer status is earned on merit and attaches to the person, not their employer.
+2. **Specification changes go through public Specification Enhancement Proposals (SEPs)**, developed in
+   open **Working Groups** (which produce deliverables) and **Interest Groups** (which articulate
+   problems worth solving).
+
+The technical hierarchy is Contributors → Maintainers → Core Maintainers → Lead Maintainers,
+collectively the **MCP Steering Group**, with Core Maintainers meeting fortnightly and decisions
+recorded publicly.
+
+**What this means concretely for a thesis.** A well-evidenced finding about a gap in the protocol — say,
+that the specification offers no guidance on defending against attacker-controlled content returned by
+a server — is not merely a thesis chapter. It is raw material for an Interest Group discussion or a
+SEP, at exactly the moment v2 is being designed. A student's measured result can become a contribution
+to an international standard with Google, Microsoft, Amazon, OpenAI and Anthropic at the table.
+
+That is a rare thing to be able to offer, and it is genuine: the process is open, documented, and takes
+outside input by design.
+
 ### "Traditional" data sources are the hard case
 
 Wrapping a modern REST API is comparatively easy. The valuable and difficult sources are the ones that

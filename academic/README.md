@@ -15,11 +15,24 @@ None of them sit on pAIchart's delivery path, so no student is working against o
   platform side.
 - Where a brief overlaps something we are also building, it says so plainly.
 
+## Start here
+
+**[`CONCEPTS.md`](CONCEPTS.md)** — what MCP is, why it became Linux Foundation infrastructure, what
+pAIchart does, and why the AI–infrastructure boundary is where the hard problems now sit. Assumes no
+prior knowledge of networking or of our platform.
+
 ## Open briefs
 
-| Brief | Field | Status |
-|---|---|---|
-| [An MCP Server for Network Devices](network-device-mcp-server-thesis-brief.md) | Network automation · applied security · AI tooling | Open, unclaimed |
+Both briefs below describe the **same build** — an MCP server exposing live network devices to an AI
+system — framed for different disciplines. Pick by the student, not by the topic.
+
+| Brief | Suited to | Judged on | Status |
+|---|---|---|---|
+| [Trustworthy AI Access to Operational Infrastructure](ai-infrastructure-boundary-thesis-brief.md) | AI / ML / AI systems | A measured experiment in AI behaviour — three tracks: prompt-injection defence, LLM-vs-mechanical verification, tool-surface design | Open, unclaimed |
+| [An MCP Server for Network Devices](network-device-mcp-server-thesis-brief.md) | Network / systems / security engineering | Gap analysis and design against a real integration contract | Open, unclaimed |
+
+A working lab (a real two-node network on a laptop, free, up in two minutes), the integration
+specification, and a platform account are supplied either way.
 
 ## Enquiries
 
