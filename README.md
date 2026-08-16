@@ -51,7 +51,7 @@ See also the ones that went wrong. **VT-12**: a program self-certified `programR
 - Two byte-identical review runs scored 45 and 92 on the same input. So confidence was demoted to a recorded fact at every tier, and the release gate decides on verifiable facts alone — there is no confidence number in it.
 - A check that couldn't run is a block, not a pass. "We couldn't verify it" never rounds up to "it's fine."
 
-→ **[Verification pack](verification/)** · every claim linked to its machine record
+→ **[Verification pack](verification/)** · every claim linked to its machine record · **[Protocols](protocols/)** · the agent-facing contracts those runs are held against, published verbatim and byte-parity-checked against the platform seed
 
 ## Four domains, one harness
 
