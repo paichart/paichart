@@ -172,3 +172,25 @@ rather than passing.
   `reviewerPresent: false`, with a roster-defect rule (a protocol that mandates a reviewer arriving
   without one is `needs-revision`, never a clean pass) and a misroute guard (a domain pipeline that
   lost its protocol token cannot clean-completion-approve past its mandated QA gate).
+- `terraform-iac` v1.2.0 / `kubernetes-gitops` v1.2.0 / `network-provisioning` v1.3.1 — the
+  cross-port batch (2026-08-16, three-specialist panel; one of five candidate ports rejected and one
+  deferred precisely because their prose would have been undischargeable or counterfactual).
+  Terraform gains the full producing-side derivation-evidence contract — the structured blocks the
+  mechanical tier anchors to are now a **cross-domain contract**, no longer a network-only marker —
+  with a Terraform-honest pool boundary stated in the contract itself (the harvested pool is
+  state-file-scoped; absence from state is not absence in the cloud, so a clean containment result
+  is a floor over the harvested pool, never proof the cloud is clear). Kubernetes gains a
+  **baseline-scoped** drift clause: HALT on out-of-scope drift *if and only if* the config repo's
+  desired state was supplied — and where it was not, the package must say drift was **not
+  determinable** rather than imply it was checked (a confident "no drift detected" from a one-sided
+  read is the exact confident-wrong-signal failure item 8 exists to prevent). Network gains a
+  secret-hygiene clause (carry redaction placeholders forward verbatim; never reconstruct a
+  plausible credential — a fabricated secret in a rollback config is worse than a visibly incomplete
+  one). **Platform half, shipped first**: the disposition arithmetic was reclassified before the
+  contract extended — a harvested pool with nothing derived now **escalates rather than asserts
+  refusal** (the ambiguity between an audit-shaped objective and a real refusal is not the leg's to
+  decide), an **empty** parsed pool classifies benign with its own reason (no pool, no refusal
+  ambiguity), and a consuming leg with green upstream containment is discharged rather than blocked.
+  Verified live the same day: VT-15 — the ported contract bound on its first exposure, and the exact
+  green run that the two-week-earlier code would have false-blocked as a "refusal" passed with the
+  honest classification stamped.

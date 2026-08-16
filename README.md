@@ -44,7 +44,7 @@ A Tier-1 violation blocks regardless of who approved above it.
 
 ## The proof is we publish the rounds we failed
 
-Most of this category asks you to trust a demo. We provide **14 verification documents**, each stating its expected observables before the run, then recording what actually happened.
+Most of this category asks you to trust a demo. We provide **15 verification documents**, each stating its expected observables before the run, then recording what actually happened.
 
 See also the ones that went wrong. **VT-12**: a program self-certified `programReleasable: true` while shipping an authorization widening. Five tiers passed it, so minimality is now checked in code rather than in prose.
 
@@ -165,7 +165,7 @@ registry(action: "register", {
 
 ## Learn
 
-- **[Verification pack](verification/)** — 14 documents, each stating its expected observables before the run. **Including the rounds that failed.**
+- **[Verification pack](verification/)** — 15 documents, each stating its expected observables before the run. **Including the rounds that failed.**
 - **[Open questions](verification/OPEN-QUESTIONS.md)** — for researchers. Three findings we think are interesting (three reviewer tiers once approved a defect at *rising* confidence), one hypothesis we lack the power to settle, and lab run data we will share.
 - **Case studies** — three walkthroughs of the same real network→cloud program: [Checked by Machine](case-studies/coordinated-infra-change.md) (*can you trust it*), [You Approve; You Don't Author](case-studies/you-approve-you-dont-author.md) (*what it buys you*), [Inside a Multi-Domain Program](case-studies/inside-a-multi-domain-program.md) (*how it's built* — the DAG, the review tiers, how far it scales).
 - **MCP Tool Excellence** — a 12-chapter series on building MCP tools AI clients can call without external docs, extracted from pAIchart's own production audits: [tutorials/README.md](tutorials/README.md)
