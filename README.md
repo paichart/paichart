@@ -68,6 +68,7 @@ The harvest step is a Hub call, and the same machinery is open to anyone: regist
 - Tokens your services can verify themselves: the Hub mints a short-lived token per call and publishes its **public key at a JWKS endpoint**. A service that supports JWKS validates the signature itself, so pAIchart-issued identity replaces static API keys in URLs and **no secret is ever shared between us**. Signing keys rotate on a 90-day cadence. 
 - Scoped to one service each: every minted token carries a per-service audience (RFC 8707), so a token leaked from one service cannot be replayed against another.
 - Trust levels: a 6-tier model controls token forwarding (INTERNAL → TRUSTED → OWNER → TEAM_MEMBER → SCOPED → ANONYMOUS).
+- A fixed tool surface for agents: the execution loop calls six stable tools, permanently — a newly registered service becomes reachable to every agent through service calls, with no new tool schemas, no prompt changes, no redeploy.
 - Open registry: any MCP service registers in one command and defaults to private; discovery is by capability, not name; workflows chain services sequentially, in parallel, or conditionally.
 
 ## Administration, observability, access
@@ -79,7 +80,9 @@ The harvest step is a Hub call, and the same machinery is open to anyone: regist
 
 ## Organizing the work — POVs → Phases → Tasks
 
-Programs and pipelines are typed tasks inside a structured, AI-readable delivery plan; change packages, analytics, and history hang off it. Ask *"which of my POVs are at risk?"* and get an answer — no UI required.
+In most agent frameworks the orchestration graph is code — it exists only while the run exists. In pAIchart, every node of the DAG is a **task**: a durable record with status, dependencies, artifacts, and history, in the same delivery plan your team already works in. Programs and pipelines are just typed tasks, so the graph survives restarts, every agent's work is a browsable work item, and an approval gate is a task transition — the same one a human completing a task goes through, over one common code path.
+
+That's also why there is no separate scheduler to operate, and why forensics come for free: the workflow engine *is* the delivery plan. Ask *"which of my POVs are at risk?"* and get an answer — no UI required.
 
 ## Get Started
 
@@ -128,7 +131,7 @@ You (Claude Desktop / ChatGPT / web app)
     your team applies it — idempotently, out of band, with the rollback
 ```
 
-Every external call runs as *you*, never as a shared platform account.
+Every external call runs as *you*, never as a shared platform account — enforced below the agent, so even a prompt-injected agent cannot exceed the permissions of the user who asked.
 
 ## Live Services
 
