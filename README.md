@@ -32,7 +32,7 @@ That's the difference between a graph and a script: the cloud leg authorises exa
 Tier 1 — arithmetic, in code. Where appropriate pAIchart uses code to do a deterministic check rather than an LLM reviewer's confidence. Every derived value is tagged with a **`kind`**, and the engine runs the arithmetic for that kind against the harvested evidence — never against the package's restated copy of it:
 
 - `cidr` — does the derived range cover exactly its declared members? Catches **too wide** (an already-allocated address swept in) and **too narrow** (a claimed member falling outside).
-- `asn` — is the AS number inside the private range, and is it actually free in the harvested state?
+- `asn` — is the AS number inside the private range, and does the harvested state authorize it? The relation deliberately inverts here: the harvest is the **allowlist** — an AS number the design sets must be one the devices already run, or one the objective explicitly names.
 
 And when a `kind` isn't implemented, the platform says so. It records the value as *not mechanically covered* and escalates it to the integration reviewer — it never counts an unchecked value as a passed one. That path is verified end-to-end in VT-14: the reviewer named the uncovered value, traced its provenance, found it had no device config behind it, and blocked over two green legs and its own approval.
 
@@ -104,7 +104,7 @@ Then in an AI client ask to load the 'HOWTO-use-pov-program' prompt or in the GU
 See lots of examples in the shared pov in the gui or ask to 'list my povs and show me the details'
 Or start smaller:
 
-- *Use the HOTO-use-pipeline-harness then ask "Provision a Loopback0 per switch and advertise it into BGP"* — one pipeline, one domain, a reviewed package back
+- *Use the HOWTO-use-pipeline-harness prompt, then ask "Provision a Loopback0 per switch and advertise it into BGP"* — one pipeline, one domain, a reviewed package back
 - *"Which of my POVs are at risk?"* — delivery analytics, answered directly
 - *"Discover services"* — browse the registry by capability
 
