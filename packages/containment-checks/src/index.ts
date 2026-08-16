@@ -711,6 +711,9 @@ export interface ContainmentDisposition {
     harvestedCount?: number;
     harvestedByKind?: Record<string, number>;
     upstreamContainmentGreen?: boolean;
+    /** 2026-08-16 (cross-port ①): how many `## Consumed Values` entries the fact carries — the
+     *  consuming-leg discharge below keys on this; recorded so the discharge is auditable. */
+    consumedCount?: number;
     violationCount: number;
     unsupportedCount: number;
     /** F7 (VT-14 Run 23): WHICH kinds are uncovered. A `needs-node-c` that names no subject gets
@@ -739,12 +742,14 @@ export function computeContainmentDisposition(fact: Record<string, unknown>): Co
     ? fact.harvestedByKind as Record<string, number> : undefined;
   const uc = fact.upstreamContainment as { green?: boolean } | undefined;
   const upstreamContainmentGreen = uc && typeof uc.green === 'boolean' ? uc.green : undefined;
+  const consumedCount = Array.isArray(fact.consumedValues) ? fact.consumedValues.length : undefined;
 
   const inputs = {
     ...(reason !== undefined ? { reason } : {}),
     ...(harvestedCount !== undefined ? { harvestedCount } : {}),
     ...(harvestedByKind !== undefined ? { harvestedByKind } : {}),
     ...(upstreamContainmentGreen !== undefined ? { upstreamContainmentGreen } : {}),
+    ...(consumedCount !== undefined ? { consumedCount } : {}),
     violationCount: violations.length,
     unsupportedCount: unsupported.length,
     ...(unsupported.length ? { unsupportedKinds: Array.from(new Set(unsupported
@@ -767,8 +772,31 @@ export function computeContainmentDisposition(fact: Record<string, unknown>): Co
   if (!BENIGN_CANDIDATE_REASONS.has(reason)) return out('blocking', `unrecognised-reason:${reason}`);
 
   if (reason === 'no-derived-values-block') {
-    // A7 deriving test. PRESENT ⇒ harvested a pool and emitted nothing ⇒ refused/dropped ⇒ blocking.
-    if (harvestedCount !== undefined) return out('blocking', 'refusal-or-drop');
+    // CONSUMING-LEG DISCHARGE (2026-08-16, cross-port ① Shape B — pc-traced, ph-confirmed branch
+    // order): a leg that declared `## Consumed Values` and whose upstream containment is GREEN is a
+    // consuming leg, not a refusing one — before this arm existed, a consuming leg that ALSO emits a
+    // harvest block (the post-port tf shape) was unreachable from the harvest-missing exception
+    // below and landed blocking (the Tasman false-park, re-manufactured). Fails CLOSED like its
+    // sibling: benign ONLY on an explicit green:true; green:false is a dirty upstream and blocks
+    // (a discharge must never be weaker than the harvest-missing arm's same case). Clause-1
+    // dominance above means a consumed-value-mismatch violation blocks before this arm is reached.
+    const consumedPresent = consumedCount !== undefined && consumedCount > 0;
+    if (consumedPresent && upstreamContainmentGreen === true) {
+      return out('benign', 'consuming-leg-consumed-discharged');
+    }
+    if (consumedPresent && upstreamContainmentGreen === false) {
+      return out('blocking', 'consuming-leg-upstream-not-green');
+    }
+    // A7 deriving test, RECLASSIFIED (2026-08-16, cross-port ① Shape A — was `blocking
+    // 'refusal-or-drop'`): a pool harvested with nothing derived is a genuine AMBIGUITY between an
+    // audit-shaped objective (harvests addresses, derives none — the commonest tf intents: S3/IAM/
+    // tags) and a real refusal/dropped enumeration (VT-11, runs 2/3). Asserting "refusal" was the
+    // guess A7's mechanisation exists to remove — same call as the A4 residual below, so ESCALATE
+    // rather than decide. Fail-closed is preserved: needs-node-c is never releasable without Node C
+    // discharging it (VT-14 is the live proof of that path blocking over green legs).
+    if (harvestedCount !== undefined) {
+      return out('needs-node-c', 'harvested-pool-no-derivation-cannot-decide');
+    }
     // A4 residual (arch F3): harvestedCount is CIDR-ONLY, so a non-CIDR-only harvest stamps none and
     // would read benign — a refusal that releases. Indistinguishable from an audit leg on the stamp
     // alone, and guessing is the judgement A7 removed, so escalate rather than decide.

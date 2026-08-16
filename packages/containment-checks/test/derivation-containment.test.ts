@@ -578,11 +578,60 @@ test('D3: unsupported ⇒ needs-node-c, NOT a hard block (G5 — a boolean would
   assert(d.disposition === 'needs-node-c', JSON.stringify(d));
 });
 
-test('D4: A7 SPECIMEN A — refusal. harvestedCount PRESENT ⇒ blocking', () => {
+test('D4: A7 SPECIMEN A reclassified (cross-port ① Shape A, 2026-08-16) — pool harvested, nothing derived ⇒ needs-node-c, never benign', () => {
+  // Was `blocking 'refusal-or-drop'`. With harvest blocks a cross-domain contract, this shape is
+  // ambiguous between an audit objective (tf S3/IAM/tags harvesting VPC state) and a real refusal
+  // (VT-11, runs 2/3) — the disposition escalates instead of asserting refusal. Fail-closed holds:
+  // needs-node-c is never releasable without Node C discharging it.
   const d = computeContainmentDisposition({
     checked: false, reason: 'no-derived-values-block', harvestedCount: 6, harvestedByKind: { cidr: 6 },
   });
-  assert(d.disposition === 'blocking' && d.reason === 'refusal-or-drop', JSON.stringify(d));
+  assert(d.disposition === 'needs-node-c' && d.reason === 'harvested-pool-no-derivation-cannot-decide',
+    JSON.stringify(d));
+});
+
+test('D4b: consuming-leg discharge (cross-port ① Shape B) — consumedValues + upstream green ⇒ benign despite a harvested pool', () => {
+  // The post-port tf consuming shape: emits a harvest block (cross-domain contract), derives
+  // nothing, declares `## Consumed Values`, upstream containment green. Before this arm it was
+  // unreachable from the harvest-missing exception and landed blocking (Tasman false-park class).
+  const d = computeContainmentDisposition({
+    checked: false, reason: 'no-derived-values-block', harvestedCount: 6, harvestedByKind: { cidr: 6 },
+    consumedValues: [{ kind: 'cidr', value: '10.99.0.64/31' }],
+    upstreamContainment: { green: true },
+  });
+  assert(d.disposition === 'benign' && d.reason === 'consuming-leg-consumed-discharged', JSON.stringify(d));
+  assert((d.inputs as { consumedCount?: number }).consumedCount === 1, 'consumedCount recorded in inputs');
+});
+
+test('D4c: FAIL CLOSED — consuming shape with upstream green:false ⇒ blocking (never weaker than the sibling arm)', () => {
+  const d = computeContainmentDisposition({
+    checked: false, reason: 'no-derived-values-block', harvestedCount: 6,
+    consumedValues: [{ kind: 'cidr', value: '10.99.0.64/31' }],
+    upstreamContainment: { green: false },
+  });
+  assert(d.disposition === 'blocking' && d.reason === 'consuming-leg-upstream-not-green', JSON.stringify(d));
+});
+
+test('D4d: FAIL CLOSED — consumed declared but upstream ABSENT ⇒ falls to needs-node-c, never benign', () => {
+  // Defensive: the enrichment only stamps consumedValues when report.md predecessors exist, but the
+  // disposition is a pure function — an absent upstreamContainment must not discharge anything.
+  const d = computeContainmentDisposition({
+    checked: false, reason: 'no-derived-values-block', harvestedCount: 6,
+    consumedValues: [{ kind: 'cidr', value: '10.99.0.64/31' }],
+  });
+  assert(d.disposition === 'needs-node-c' && d.reason === 'harvested-pool-no-derivation-cannot-decide',
+    JSON.stringify(d));
+});
+
+test('D4e: CLAUSE-1 DOMINANCE — a consumed-value-mismatch violation blocks BEFORE the discharge arm', () => {
+  const d = computeContainmentDisposition({
+    checked: false, reason: 'no-derived-values-block', harvestedCount: 6,
+    consumedValues: [{ kind: 'cidr', value: '10.99.0.64/30' }],
+    upstreamContainment: { green: true },
+    violations: [{ reason: 'consumed-value-mismatch' }],
+  });
+  assert(d.disposition === 'blocking' && d.reason === 'violations',
+    `a green upstream must not mask a mismatch: ${JSON.stringify(d)}`);
 });
 
 test('D5: A7 SPECIMEN B — nothing to derive. harvestedCount ABSENT ⇒ benign', () => {
