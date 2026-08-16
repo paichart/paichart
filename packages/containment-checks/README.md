@@ -72,6 +72,30 @@ Also exported: consumed-value cross-checks for multi-leg DAGs (`checkConsumedVal
 declaration block?), and the CIDR/ASN primitives (`minimalCoveringPrefixLength`, `parseAsn`,
 `asnPolicyClass`, `harvestCounts`).
 
+## The disposition classifier
+
+`computeContainmentDisposition(fact)` turns the raw fact into a three-state classification —
+`blocking | benign | needs-node-c` — with its reason and the exact inputs it keyed on recorded in
+the output, so a consumer can audit the call rather than trust it. This does not contradict
+"what to do is the consumer's decision": the disposition is itself a deterministic fact (the same
+inputs always classify the same way), and the third state is the point — **`needs-node-c` means
+"a leg cannot honestly decide this; escalate to a judgement tier"**, which is a refusal to guess,
+not a verdict. Design choices worth knowing before you consume it:
+
+- **Fail-closed by construction**: violations dominate everything; an unrecognized reason is
+  blocking; the consuming-leg discharge requires an *explicit* green upstream — absence never
+  discharges.
+- **Ambiguity escalates instead of asserting** (v0.2.0): a harvested pool with nothing derived is
+  ambiguous between an audit-shaped objective and a real refusal — earlier versions asserted
+  "refusal ⇒ blocking", which false-blocked legitimate non-deriving runs once the evidence blocks
+  became a cross-domain contract. Now it classifies `needs-node-c`.
+- **Empty is not absent** (v0.2.1): a pool that *parsed with zero entries* ("looked, nothing in
+  scope") classifies benign with its own reason (`harvested-pool-empty`), distinct from
+  no-block-parsed (`nothing-to-derive`) — so "the contract was followed" and "the contract was
+  ignored" stay distinguishable even when both end green. The live round that proved this path,
+  including the counterfactual false-block it retired:
+  [VT-15](../../verification/tests/VT-15-cross-domain-evidence-contract.md).
+
 ## Test suite
 
 ```bash
@@ -82,7 +106,9 @@ npm test
 The suite ships the **incident fixtures**: the RUN-3 shape (the exact defect three LLM tiers
 approved) must yield its violation; the RUN-4 shape (fabricated package-side evidence) must yield
 none — anchoring to the harvest is the property under test. Plus parser discipline, minimality,
-ASN policy classes, and consumed-value mismatch taxonomies. The runner self-checks that every
+ASN policy classes, consumed-value mismatch taxonomies, and the disposition classifier's fail-closed
+pins (the rewritten refusal specimen, the consuming-leg discharge and both its fail-closed variants,
+clause-1 dominance, the empty-vs-absent pool distinction). The runner self-checks that every
 declared test executed.
 
 ## Scope and maintenance
