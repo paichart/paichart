@@ -590,6 +590,16 @@ test('D4: A7 SPECIMEN A reclassified (cross-port ① Shape A, 2026-08-16) — po
     JSON.stringify(d));
 });
 
+test('D4f: ZERO-ENTRY POOL ⇒ benign harvested-pool-empty — an empty pool has no refusal ambiguity', () => {
+  // The commonest cross-domain non-deriving shape (bucket/IAM/tag harvest: block parses as []).
+  // 0 and ABSENT stay distinct reasons (harvested-pool-empty vs nothing-to-derive) per the A7
+  // absent-vs-zero note; > 0 still escalates (D4).
+  const d = computeContainmentDisposition({
+    checked: false, reason: 'no-derived-values-block', harvestedCount: 0, harvestedByKind: {},
+  });
+  assert(d.disposition === 'benign' && d.reason === 'harvested-pool-empty', JSON.stringify(d));
+});
+
 test('D4b: consuming-leg discharge (cross-port ① Shape B) — consumedValues + upstream green ⇒ benign despite a harvested pool', () => {
   // The post-port tf consuming shape: emits a harvest block (cross-domain contract), derives
   // nothing, declares `## Consumed Values`, upstream containment green. Before this arm it was

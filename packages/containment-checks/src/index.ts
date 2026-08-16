@@ -794,6 +794,17 @@ export function computeContainmentDisposition(fact: Record<string, unknown>): Co
     // guess A7's mechanisation exists to remove — same call as the A4 residual below, so ESCALATE
     // rather than decide. Fail-closed is preserved: needs-node-c is never releasable without Node C
     // discharging it (VT-14 is the live proof of that path blocking over green legs).
+    //
+    // ZERO-ENTRY POOL (2026-08-16, step-3 pre-run resolution — the panel dispositioned Shape A for
+    // harvestedCount > 0 and never the 0 case): a block that PARSED and holds no cidr entries is
+    // "looked, and nothing existed in scope" — the commonest cross-domain non-deriving shape (a
+    // bucket/IAM/tag harvest has no addresses). The needs-node-c rationale is ambiguity, and an
+    // EMPTY pool has none: nothing existed to derive OR to refuse. Distinct reason so the two
+    // benign paths stay distinguishable (empty-pool vs no-pool-parsed) — collapsing absent/0 is
+    // the exact ambiguity A7's absent-vs-zero note forbids re-creating.
+    if (harvestedCount === 0) {
+      return out('benign', 'harvested-pool-empty');
+    }
     if (harvestedCount !== undefined) {
       return out('needs-node-c', 'harvested-pool-no-derivation-cannot-decide');
     }
