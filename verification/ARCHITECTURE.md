@@ -6,6 +6,11 @@ explicit version stamps, so drift is visible rather than silent.
 
 ## Execution model (pipeline layer)
 
+- **The orchestration state is the delivery plan itself**: every DAG node is a durable task record —
+  status, dependencies, artifacts, history — not an in-process graph object. Runs survive restarts,
+  every agent's step is an auditable work item, and an approval gate is a task transition over the
+  same code path a human completion takes. Every invariant below is enforced against this database
+  state, which is why none of them depends on an agent's cooperation.
 - **Three-mode lifecycle**: a harness run resolves to CREATE (decompose, wire the DAG, exit),
   ORCHESTRATE (children in flight — exit and wait), or SYNTHESIZE (all children terminal — gate,
   aggregate, complete). The mode is resolved **server-side from database state** and injected into the
@@ -100,6 +105,11 @@ rather than passing.
    when a pipeline cannot run at all, bailing is a first-class contract: the agent stamps the
    machine-readable reason, the platform terminalizes it at persist time with transitive root
    attribution — the failure narrative traces to the first non-casualty, not the nearest victim.
+9. **Caller-scoped tool authority**: every tool call an agent makes is authorized as the requesting
+   user, through fail-closed gates below the agent — no user context, no call; no platform-account
+   fallback. Item 7's adversarial rounds show hostile content being *refused*; this item bounds the
+   worst case where it isn't: a fully compromised agent still cannot read or write beyond what the
+   human who asked could. Prompt injection can degrade output quality; it cannot escalate authority.
 
 ## Decision log (version-stamped)
 
