@@ -2,7 +2,9 @@
 
 This document stays at the **invariant level**: behaviors guarded by regression pins or structural
 server-side checks. Version-specific protocol behaviors live in the decision log at the bottom with
-explicit version stamps, so drift is visible rather than silent.
+explicit version stamps, so drift is visible rather than silent — and since 2026-08-16 every stamped
+version has a readable primary source: the protocol texts are published verbatim in
+[`protocols/`](../protocols/), byte-parity-checked against the platform seed.
 
 ## Execution model (pipeline layer)
 

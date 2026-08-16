@@ -166,6 +166,7 @@ registry(action: "register", {
 ## Learn
 
 - **[Verification pack](verification/)** — 15 documents, each stating its expected observables before the run. **Including the rounds that failed.**
+- **[The protocols](protocols/)** — the exact agent-facing contracts the pack holds runs against, published verbatim and byte-parity-checked against the platform seed. Every version stamp in the decision log has a readable text here.
 - **[Open questions](verification/OPEN-QUESTIONS.md)** — for researchers. Three findings we think are interesting (three reviewer tiers once approved a defect at *rising* confidence), one hypothesis we lack the power to settle, and lab run data we will share.
 - **Case studies** — three walkthroughs of the same real network→cloud program: [Checked by Machine](case-studies/coordinated-infra-change.md) (*can you trust it*), [You Approve; You Don't Author](case-studies/you-approve-you-dont-author.md) (*what it buys you*), [Inside a Multi-Domain Program](case-studies/inside-a-multi-domain-program.md) (*how it's built* — the DAG, the review tiers, how far it scales).
 - **MCP Tool Excellence** — a 12-chapter series on building MCP tools AI clients can call without external docs, extracted from pAIchart's own production audits: [tutorials/README.md](tutorials/README.md)
