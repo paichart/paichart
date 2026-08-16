@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/descriptor.schema.json",
+  "title": "pAIchart device-service descriptor",
+  "description": "A descriptor hands a pAIchart pipeline a read-only MCP service to self-provision for one run (register -> read-only calls -> teardown). Contract: SPEC.md in this directory. Constraints mirror the platform's registry(action:'register') validation.",
+  "type": "object",
+  "required": ["name", "endpoint"],
+  "additionalProperties": true,
+  "properties": {
+    "_comment": {
+      "type": "string",
+      "description": "Free-prose provenance, caveats, rig notes. Encouraged."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Registry service name: lowercase kebab-case, unique at run time, reserved first-party names rejected."
+    },
+    "description": {
+      "type": "string",
+      "description": "What the service exposes and what it deliberately does not. Surfaced verbatim to discovering agents."
+    },
+    "endpoint": {
+      "type": "string",
+      "pattern": "^(https://|http://|mcp://)\\S+$",
+      "description": "The MCP endpoint URL. Use https:// - the platform reaches it from the internet; SSRF policy blocks private/metadata addresses."
+    },
+    "category": {
+      "type": "string",
+      "enum": ["ai-intelligence", "data-services", "automation", "monitoring", "communication", "security"],
+      "description": "Registry category. Drives the approval path: an auto-approving category lands ACTIVE immediately; a manually-approved one blocks an unattended run."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version. Platform default: 1.0.0."
+    },
+    "authType": {
+      "type": "string",
+      "enum": ["API_KEY", "BEARER_TOKEN", "OAUTH2", "HMAC", "NONE"],
+      "description": "How callers authenticate to your service."
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "transport": {
+          "type": "string",
+          "description": "Informative (e.g. streamable-http); the platform derives transport from the endpoint scheme."
+        },
+        "tools": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Declare ONLY the read-only subset. Undeclared tools are never seen or offered by the pipeline - an offer-surface restriction; read-only-by-construction on the service side is the actual enforcement (SPEC.md, 'The read-only contract').",
+          "items": { "$ref": "#/definitions/tool" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "tool": {
+      "type": "object",
+      "required": ["name", "description"],
+      "additionalProperties": true,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MCP tool name as your server exposes it."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the tool does, stated read-only where applicable. Agents choose tools by this text."
+        },
+        "inputSchema": {
+          "type": "object",
+          "description": "The tool's JSON Schema. Prefer tight schemas - enums and additionalProperties:false are themselves guards.",
+          "properties": {
+            "type": { "const": "object" }
+          }
+        }
+      }
+    }
+  }
+}

@@ -135,7 +135,7 @@ Every external call runs as *you*, never as a shared platform account — enforc
 
 ## Live Services
 
-The Hub's open registry. Device services are different — they're **self-provisioned per run from a descriptor and torn down after**, so pAIchart never stores your device credentials.
+The Hub's open registry. Device services are different — they're **self-provisioned per run from a descriptor and torn down after**, so pAIchart never stores your device credentials. The descriptor contract is open: **[spec + JSON Schema + four production-exercised examples](descriptors/SPEC.md)** — author one for your own gear and validate it before a run.
 
 | Service | Capability | Per-User Auth |
 |---------|-----------|---------------|
