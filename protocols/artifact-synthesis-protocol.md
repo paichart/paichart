@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 1.4.0.**
+> **Rendered verbatim from the pAIchart platform seed — version 1.4.1.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for

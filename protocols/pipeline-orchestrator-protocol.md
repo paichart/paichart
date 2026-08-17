@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 3.10.0.**
+> **Rendered verbatim from the pAIchart platform seed — version 3.11.0.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -11,11 +11,16 @@
 # Pipeline Orchestrator Protocol (System Default)
 
 ## When to Use
-This is the DEFAULT orchestration protocol. The Pipeline Harness reads it for any objective that does not match a domain-specific protocol trigger. If you are unsure which protocol to use, use this one.
+This is the DEFAULT orchestration base. The platform composes it into every Pipeline Harness prompt; when the task is bound to a domain protocol, that protocol appears after it as an `## Active Protocol` section and governs where they differ.
 
-## When NOT to Use
-- If the task description mentions producing a deliverable from unstructured source material (war stories, session history, research notes, logs) — use **artifact-synthesis-protocol** instead
-- If the task title explicitly names a different protocol (e.g., "protocol: artifact-synthesis") — use the named protocol
+## Your protocol binding
+
+Which protocol governs your run is a PLATFORM decision, not yours. Your task's protocol was resolved ONCE — from the `(protocol: <name>)` token in the task title at first execution — and stamped on the task; the stamp, not the title and not your judgment, determines what is composed into this prompt. Read your binding from the `Protocol binding:` line in the `## Harness Context (Platform-Resolved)` block:
+
+- `Protocol binding: <name>` → the `## Active Protocol: <name>` section below GOVERNS. This base applies where the active protocol is silent; the active protocol overrides the base where they differ.
+- `Protocol binding: base only` → this base is the whole rule set (the documented default for un-tokened pipelines).
+
+You never SELECT a protocol, never match one from "When to Use" prose, and never re-route yourself mid-run. If you believe your binding is WRONG for the objective (e.g. a network device change bound to no domain protocol), do NOT improvise under the wrong rules and do NOT quietly proceed with generic decomposition: stamp `metadata.cannotRun` with a one-line reason naming the protocol you believe should govern, post the same as a comment, and stop — the platform terminalizes the run for human re-route (delete-and-recreate with the corrected title token; the title is consumed only at first execution, so a completed-run's title edit moves nothing).
 
 ## Three-Mode Execution Model
 
@@ -255,7 +260,7 @@ First stamp the gate FACTS on yourself. Which case you are in is itself a FACT: 
   - In BOTH branches the confidence NUMBER is a recorded fact, not a gate input (2026-07-18 calibration: identical defect approved at 92 / blocked at 45 on equivalent inputs).
 - `"needs-revision"` — synthesized honestly, but the approval rule above did NOT pass. **Roster defect**: if the ACTIVE domain protocol MANDATES a reviewer/QA-gate (all three infra domains + artifact-synthesis do) and the roster has none, that is itself `needs-revision` — name the missing mandated reviewer. The no-reviewer approved path is legitimate ONLY for protocols that don't mandate one.
 
-⚠ MISROUTE GUARD: if your task title carries a domain token `(protocol: …)` yet you are running this GENERIC rule, a domain protocol that MANDATES a reviewer was mis-routed here (its token was dropped or altered at create). Do NOT clean-completion-approve: stamp `outcome: "needs-revision"`, name the missing mandated reviewer, escalate. The no-reviewer approved path exists ONLY for objectives where no domain protocol was in force.
+⚠ MISROUTE GUARD: if the `Protocol binding:` line in your Harness Context names a domain protocol yet this prompt contains NO `## Active Protocol:` section (composition degraded — the platform records the same event as a degradation fact on the execution), you are running GENERIC rules while bound to a domain protocol that MANDATES a reviewer. Do NOT clean-completion-approve: stamp `outcome: "needs-revision"`, name the missing mandated reviewer and the degraded binding, escalate. The same applies if your binding is `base only` while your task title carries a domain token `(protocol: …)` — resolution and title disagree; surface it, never absorb it. The no-reviewer approved path exists ONLY for objectives where no domain protocol was in force.
 
 `perform(action: "task.update", parameters: { taskId: "<your id>", metadata: { qualityGate: { reviewerScore: <score>, outcome: "approved" | "needs-revision", reviewerPresent: <true | false> } } })`
 
@@ -282,7 +287,7 @@ Post ONE final comment. The comment MUST start with the child-stage breadcrumb, 
 - <leaf child title> → `fetch(id: "artifact-<result.json id>")` (review only — `report.md` suppressed by Step 5a)
 - Your harness root → `fetch(id: "artifact-<your pipeline-index.json id>")` + `fetch(id: "artifact-{{HARNESS_REPORT_MD_ID}}")` ⭐ deliverable (extracted from <deliverable-producer child>)
 
-**Confidence:** <overall>/100 (avg of children: <math>)
+**Confidence:** <overall>/100 (the standard rule — avg of children: <math>)
 
 <short aggregated findings — 3-5 bullet points of key numbers only. Do NOT restate the leaf child's report contents; that's what the deliverable fetch is for. The comment is the INDEX, the deliverable is the DOCUMENT.>
 

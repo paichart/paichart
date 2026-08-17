@@ -196,3 +196,20 @@ rather than passing.
   Verified live the same day: VT-15 — the ported contract bound on its first exposure, and the exact
   green run that the two-week-earlier code would have false-blocked as a "refusal" passed with the
   honest classification stamped.
+- `pipeline-orchestrator` v3.11.0 / `network-provisioning` v1.3.2 / `kubernetes-gitops` v1.2.1 /
+  `terraform-iac` v1.2.1 / `pov-program` v1.1.0 / `artifact-synthesis` v1.4.1 — the **composed
+  injection** batch (2026-08-17, four-specialist panel + independent adversarial review; nine flip
+  blockers cleared before the switch). The platform now composes each agent's prompt as **base +
+  the one protocol its task is bound to** — the binding is a platform stamp resolved once from the
+  task title's `(protocol: <name>)` token at first execution, never a model-side selection.
+  Consequences carried into the texts: the base's protocol-routing prose is **deleted** (replaced
+  by a state-neutral binding section — an agent reads its binding from a platform-injected
+  `Protocol binding:` line); every domain fence's "fall back to the default orchestrator" is
+  replaced by **escalate-on-mismatch** (`metadata.cannotRun` + stop — a wrong binding is surfaced,
+  never absorbed); the base's Step-5 confidence aggregation is **named** ("the standard rule"), so
+  the three infra protocols' references to it resolve — and every delta→base textual dependence is
+  now a machine-checked anchor pair, bidirectionally count-pinned so a new unpaired reference fails
+  a test rather than dangling. A stamped protocol whose row is not live **hard-fails a program
+  harness by name** (the base carries no program-composition mechanics, so a silent base-only run
+  would fabricate a one-child "program") and degrades a leg harness to base-only with a recorded
+  degradation fact.

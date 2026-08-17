@@ -2,7 +2,12 @@
 
 These are the **exact texts injected into pipeline agents' system prompts** — the contracts the
 [verification pack](../verification/) holds runs against, rendered byte-for-byte from the platform
-seed. Nothing is edited for publication: internal cross-references, tool-call mechanics, and the
+seed. Since 2026-08-17 injection is **composed**: a running agent's prompt carries the
+orchestration base (`pipeline-orchestrator-protocol`) plus the **one** protocol its task is bound
+to — the binding is resolved by the platform from the task title's `(protocol: <name>)` token,
+once, at first execution, and stamped; it is never a model-side choice. So each file here is not
+just "available" to an agent — when bound, it is the governing half of that agent's prompt,
+verbatim. Nothing is edited for publication: internal cross-references, tool-call mechanics, and the
 scar tissue of dated incident clauses are all part of the record. The
 [ARCHITECTURE decision log](../verification/ARCHITECTURE.md) is the version history; every version
 stamp there now has a readable text here.
@@ -30,8 +35,11 @@ the user-facing `HOWTO-*` guides are prompt UX, reachable in any connected AI cl
 
 ## How to read one
 
-- The **routing description** at the top of each file is what the harness matches a task's intent
-  against — a protocol self-fences ("if the task is NOT this intent, ignore this protocol").
+- The **description** at the top of each file documents which title token binds it — binding is a
+  platform stamp, not model-side matching (2026-08-17; before that the harness matched intent
+  prose). A protocol still self-fences, but a fence no longer says "ignore this and fall back":
+  a wrong binding is an **escalation** — the agent stamps `metadata.cannotRun` and stops, and the
+  platform terminalizes the run for human re-route.
 - Dated clauses (*"2026-08-04, measured"*, *"run-4 incident"*) are earned, not decorative: nearly
   every load-bearing sentence exists because a published round failed without it. The
   [decision log](../verification/ARCHITECTURE.md) and the [VT index](../verification/README.md)
