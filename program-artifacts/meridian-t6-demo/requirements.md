@@ -307,7 +307,16 @@ section adds no numbered item and takes no check number.
     judgement branch, against this protocol's own stated example, while also shipping a non-minimal
     aggregate (see Pipeline 1). It must not be cited as a green sequenced run.
 
-  Until the exception is observed firing on a run whose stamp carries
-  `upstreamContainment.green: true`, release in this configuration remains a **documented human
-  decision** per this clause — with the machine facts as inputs, not the verdict.
-  Full record: `copov15 cline_docs/follow-ups/derivation-applicable-structural-gate-2026-07-30.md`.
+  **Update (2026-08-17): the machine-gated path has now been OBSERVED, green, on a live run** —
+  a consuming terraform leg carried the chained aggregate verbatim in `consumedValues`, stamped
+  `upstreamContainment.green: true`, its disposition classified **benign** (`checked-clean`), and
+  the program released `programReleasable: true` with no human-judgement branch. Precision about
+  WHICH mechanism: the v1.0.18 exception keyed on the literal
+  `harvest-block-missing-or-unparseable` reason string never itself fired — the successor
+  **containment-disposition taxonomy** (mechanised 2026-08-03, kind-aware since 2026-08-02)
+  classifies the consuming-leg state benign directly, which supersedes the string-keyed exception.
+  The concern this status note guarded — a correct consuming-leg run parked, or released only by
+  judgement — is resolved by that mechanism. The paragraph above is retained as the historical
+  record of why the machinery exists.
+  Full record: `copov15 cline_docs/follow-ups/derivation-applicable-structural-gate-2026-07-30.md`
+  and `copov15 cline_docs/reviews/demo-pov-design-2026-08-17/PHASE1-EXPECTATIONS.md`.
