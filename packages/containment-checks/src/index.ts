@@ -101,6 +101,10 @@ export interface ContainmentViolation {
   derived: string;
   /** The minimal prefix length that would have covered the declared members (prefix-not-minimal). */
   minimalPrefixLength?: number;
+  /** misaligned-prefix only: the canonical (host-bits-masked) form of a malformed derived CIDR —
+   *  the span every containment entry for that value was computed against. Stamped ONLY on
+   *  misaligned entries (size discipline: aligned artifacts stay byte-identical). */
+  canonical?: string;
   /** What the consuming leg declared it applied, when that matches nothing upstream derived. */
   consumed?: string;
   /** Which kind produced this violation. Present on non-cidr kinds; absent means cidr (legacy). */
@@ -163,7 +167,14 @@ export interface ContainmentViolation {
      * Run 24. It is an authoring slip far more often than an attack, so the FACT is
      * "declared and unused", never "malicious".
      */
-    | 'derived-value-orphaned';
+    | 'derived-value-orphaned'
+    /** misaligned-prefix: a derived CIDR whose address carries non-zero host bits under its own
+     *  declared length (10.99.0.4/29 — a valid /29 starts on an 8-boundary). MALFORMED: deployed
+     *  semantics mask host bits, so two readers can honestly compute two different spans from the
+     *  literal (run-1 2026-08-17: checker canonical .0-.7 vs Node C literal .4-.11 — disjoint
+     *  collision narratives in one record). The entry names the canonical form (`canonical`) so
+     *  every containment fact for the value reads against ONE declared span. Derived values only. */
+    | 'misaligned-prefix';
 }
 
 export interface DerivationContainmentFact {
@@ -414,6 +425,22 @@ function cidrRange(cidr: string): { lo: number; hi: number } | null {
   return { lo, hi };
 }
 
+/**
+ * misaligned-prefix helper (run-1 2026-08-17 class — review misaligned-prefix-class-2026-08-19):
+ * a derived CIDR whose literal address carries non-zero host bits under its own declared length
+ * (`10.99.0.4/29` — a /29 must start on an 8-boundary). Returns the CANONICAL dotted-quad form
+ * (host bits masked — the value's meaning on the wire: BGP/route installation mask host bits),
+ * or null when aligned / bare-address / unparseable. Bare addresses are /32 and cannot misalign.
+ */
+function misalignedCanonical(value: string, range: { lo: number; hi: number }): string | null {
+  const m = String(value).trim().match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})$/);
+  if (!m) return null;
+  const addr = (((Number(m[1]) << 24) | (Number(m[2]) << 16) | (Number(m[3]) << 8) | Number(m[4])) >>> 0);
+  if (addr === range.lo) return null;
+  const lo = range.lo;
+  return `${(lo >>> 24) & 255}.${(lo >>> 16) & 255}.${(lo >>> 8) & 255}.${lo & 255}/${m[5]}`;
+}
+
 /** True when range A is entirely inside range B. */
 function within(a: { lo: number; hi: number }, b: { lo: number; hi: number }): boolean {
   return a.lo >= b.lo && a.hi <= b.hi;
@@ -601,6 +628,20 @@ export function checkDerivationContainment(
     if (!dRange) {
       unsupported.push({ kind: 'cidr', value: asText(d.value) });
       continue;
+    }
+    // misaligned-prefix (run-1 2026-08-17): stamped FIRST among this value's violations so a
+    // head-truncated reader meets the naming entry before the containment entries computed
+    // against the canonical span. The canonical-span checks below still RUN unchanged — the
+    // canonical span is the deployed semantics, not a tainted premise (contrast the
+    // member-not-covered→prefix-not-minimal suppression, where minimality WOULD be computed over
+    // a broken premise). Two tiers told two collision stories about the same malformed /29
+    // (checker canonical .2/.3 vs Node C literal .9/.10) because nothing named which span the
+    // stamped facts used; this entry is that name. DERIVED values only — harvested interface
+    // addresses legitimately carry host bits, and a parseable-but-misaligned value must never
+    // land in unsupported[] (that downgrades blocking to needs-node-c).
+    const canonicalForm = misalignedCanonical(String(d.value), dRange);
+    if (canonicalForm !== null) {
+      violations.push({ derived: String(d.value), canonical: canonicalForm, reason: 'misaligned-prefix' });
     }
     const members = Array.isArray(d.members) ? d.members : [];
     // member-not-covered (run-5 arithmetic-error class): every declared member must sit INSIDE

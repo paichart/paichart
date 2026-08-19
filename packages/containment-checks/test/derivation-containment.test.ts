@@ -802,6 +802,33 @@ test('O7: usage count is measured, and the separation is what the design rests o
   assert(usageOutsideDerivedBlock(PKG, '100') === 0, 'an unused value appears zero times outside its block');
 });
 
+test('misaligned-prefix: run-1 replay — malformed /29 stamps the canonical form FIRST; canonical-span collisions .2/.3 only (never the literal span\'s .9/.10)', () => {
+  const r = checkDerivationContainment(
+    [
+      { kind: 'cidr', cidr: '10.99.0.2/32' }, { kind: 'cidr', cidr: '10.99.0.3/32' },
+      { kind: 'cidr', cidr: '10.99.0.9/32' }, { kind: 'cidr', cidr: '10.99.0.10/32' },
+    ],
+    [{ kind: 'cidr', value: '10.99.0.4/29', members: ['10.99.0.5/32', '10.99.0.6/32'] }],
+  );
+  const reasons = r.violations!.map(v => v.reason);
+  assert(reasons[0] === 'misaligned-prefix', 'stamped first');
+  assert(r.violations![0].canonical === '10.99.0.0/29', 'canonical named');
+  const covered = r.violations!.filter(v => v.reason === 'covered-not-member').map(v => v.harvested).sort();
+  assert(JSON.stringify(covered) === JSON.stringify(['10.99.0.2/32', '10.99.0.3/32']),
+    'canonical-span semantics: .2/.3 collide, .9/.10 do NOT');
+});
+
+test('misaligned-prefix: fires alone on an otherwise-clean misaligned value; aligned values never carry a canonical field', () => {
+  const alone = checkDerivationContainment([], [
+    { kind: 'cidr', value: '10.99.0.1/30', members: ['10.99.0.1/32', '10.99.0.2/32'] },
+  ]);
+  assert(alone.violations!.length === 1 && alone.violations![0].reason === 'misaligned-prefix', 'blocks alone');
+  const clean = checkDerivationContainment([], [
+    { kind: 'cidr', value: '10.99.0.4/30', members: ['10.99.0.5/32', '10.99.0.6/32'] },
+  ]);
+  assert(clean.violations!.length === 0 && !JSON.stringify(clean).includes('canonical'), 'aligned artifacts byte-identical');
+});
+
 // SELF-CHECK: every declared test executed (bottom-exit trap guard).
 const declared = (require('fs').readFileSync(__filename, 'utf-8').match(/^test\(/gm) || []).length;
 console.log(`\n📊 Results: ${passed} passed, ${failed} failed`);

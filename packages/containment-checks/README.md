@@ -35,7 +35,7 @@ the harvest artifact itself. The full record, including the failed rounds:
 
 | `kind` | Relation checked | The dangerous harvester error |
 |---|---|---|
-| `cidr` | a harvested allocation **⊆** the derived aggregate and **∉** its declared members ⇒ violation (`covered-not-member`); plus minimality (`prefix-not-minimal`: the aggregate is wider than its members require) | **under-listing** — a missed allocation is a missed collision |
+| `cidr` | a harvested allocation **⊆** the derived aggregate and **∉** its declared members ⇒ violation (`covered-not-member`); a declared member **outside** its own aggregate (`member-not-covered` — the derivation's arithmetic is wrong); minimality (`prefix-not-minimal`: the aggregate is wider than its members require); well-formedness (`misaligned-prefix`: non-zero host bits under the declared length — the entry names the `canonical` form every other check was computed against); a declared value the package then uses nowhere (`derived-value-orphaned`); and, for a consuming leg, the applied value must match what its upstream actually derived (`consumed-value-mismatch`, range-compared) | **under-listing** — a missed allocation is a missed collision |
 | `asn` | the derived AS number **∈** the harvested allowlist ⇒ required; plus private-range policy classification | **over-listing** — a spurious entry silently authorizes a value |
 
 Note the relation **inverts** between kinds — for `cidr` the harvest is the thing that must not be
