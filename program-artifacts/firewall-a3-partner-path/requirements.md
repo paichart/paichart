@@ -1,6 +1,6 @@
 # Program Requirements
-- POV: pAIchart Verified Delivery — Live Exhibits
-- Phase: Security policy path — sequenced change
+- POV: Autonomous Delivery Use Cases
+- Phase: Firewall Rules Change
 - Iteration: FW-A3.1 (three-domain path, **SEQUENCED**, transitive chaining) · 2026-08-21
 
 ---
