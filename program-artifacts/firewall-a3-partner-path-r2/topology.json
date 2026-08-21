@@ -1,0 +1,111 @@
+{
+  "name": "acme-partner-access-path-a3-r2",
+  "description": "Partner HTTPS access path with edge source-NAT, mapped onto the live lab: ceos1 is the edge policy hop (partner ACL + SNAT pool selection), a LocalStack security group is the dmz segmentation hop, ceos2 is the core policy hop. The edge hop translates the partner CIDR to a NAT pool it SELECTS at design time from free addresses in the fabric's 10.99.0.0/24 allocation pool (existing allocations are scattered and discoverable ONLY by harvesting the live devices). The dmz and core hops must match that POST-NAT pool — a value that does not exist until the edge design runs. That makes the interdependency runtime: the three pipelines are DAG-sequenced (edge -> dmz -> core) and each downstream leg chains the upstream leg's actual deliverable. R2 (2026-08-21): the lab now exposes BINDABLE policy ports — A3.1's reviewer correctly blocked on 'no partner-facing interface exists on ceos1' (the untrust zone was notional). Ethernet2/Ethernet3 added on both switches with role descriptions; bind ACLs to these.",
+  "path": "partner-internet -> ceos1(edge, SNAT) -> dmz-sg(LocalStack) -> ceos2(core) -> internal-app",
+  "nodes": [
+    {
+      "name": "ceos1",
+      "kind": "arista_ceos",
+      "platform": "eos",
+      "os_version": "4.32.2.1F",
+      "mgmt_ipv4": "172.30.30.11",
+      "team": "network-security",
+      "role": "edge policy hop: partner-facing ACL + source-NAT pool selection",
+      "zones": {
+        "untrust": "partner-internet side",
+        "dmz": "toward dmz-sg"
+      },
+      "sourceNat": {
+        "translate": "203.0.113.0/24 (partner CIDR, pre-NAT)",
+        "toPool": "RUNTIME — a free /30 or /31 SELECTED by the edge design from the 10.99.0.0/24 pool after harvesting the live allocations on both switches; must not collide with ANY existing allocation",
+        "poolTag": "PARTNER-SNAT-2026",
+        "consequence": "dmz-sg and ceos2 must match the POST-NAT pool, never the partner CIDR"
+      },
+      "policyInterfaces": {
+        "Ethernet3": "PARTNER-UPLINK (untrust zone) — bind the partner ingress ACL here",
+        "Ethernet2": "DMZ-SEGMENT (dmz zone) — egress toward dmz-sg"
+      }
+    },
+    {
+      "name": "dmz-sg",
+      "kind": "aws_security_group",
+      "platform": "aws",
+      "terraform_address": "aws_security_group.dmz_app",
+      "workspace": "prod",
+      "team": "cloud-platform",
+      "role": "dmz segmentation: ingress restricted to the POST-NAT pool",
+      "matches": "POST-NAT pool (chained from the ceos1 leg's deliverable), NOT 203.0.113.0/24"
+    },
+    {
+      "name": "ceos2",
+      "kind": "arista_ceos",
+      "platform": "eos",
+      "os_version": "4.32.2.1F",
+      "mgmt_ipv4": "172.30.30.12",
+      "team": "core-network",
+      "role": "core policy hop: dmz->inside ACL",
+      "zones": {
+        "dmz": "toward dmz-sg",
+        "inside": "internal-app side"
+      },
+      "matches": "POST-NAT pool (chained transitively via the dmz leg), NOT 203.0.113.0/24",
+      "policyInterfaces": {
+        "Ethernet2": "DMZ-SEGMENT (dmz zone) — bind the dmz->inside ACL here",
+        "Ethernet3": "INSIDE-APP (inside zone) — toward internal-app 10.20.0.10/32"
+      }
+    }
+  ],
+  "links": [
+    {
+      "endpoints": [
+        "partner-internet",
+        "ceos1:untrust"
+      ],
+      "flow": "partner ingress, pre-NAT source 203.0.113.0/24"
+    },
+    {
+      "endpoints": [
+        "ceos1:dmz",
+        "dmz-sg"
+      ],
+      "flow": "post-NAT source (the selected pool)"
+    },
+    {
+      "endpoints": [
+        "dmz-sg",
+        "ceos2:dmz"
+      ],
+      "flow": "post-NAT source"
+    },
+    {
+      "endpoints": [
+        "ceos2:inside",
+        "internal-app"
+      ],
+      "flow": "to 10.20.0.10/32 tcp/443"
+    },
+    {
+      "endpoints": [
+        "ceos1:Ethernet1",
+        "ceos2:Ethernet1"
+      ],
+      "subnet": "10.0.12.0/30",
+      "routing": "EXISTING eBGP 65001<->65002 — out of scope, do not modify"
+    }
+  ],
+  "endToEndFlow": {
+    "id": "partner-https",
+    "ingressSource": "203.0.113.0/24",
+    "postNatSource": "RUNTIME — the pool the edge design selects; dmz and core match THIS",
+    "destination": "10.20.0.10/32",
+    "protocol": "tcp",
+    "dport": 443,
+    "action": "permit",
+    "default": "deny + log at every hop"
+  },
+  "interdependency": {
+    "kind": "runtime",
+    "dag": "ceos1-edge-pipeline -> dmz-sg-pipeline -> ceos2-core-pipeline",
+    "whyNotContract": "the NAT pool is selected from addresses that are FREE in 10.99.0.0/24 at design time, discoverable only by harvesting the live devices — it is an OUTPUT of the edge design, not a value any Architect can agree up front. If it could be pre-agreed this would be the parallel shape."
+  }
+}
