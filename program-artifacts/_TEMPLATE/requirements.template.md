@@ -60,6 +60,21 @@ run.
 5. **Write properties, not hardcoded values**, wherever the environment can be rebuilt. If the rig
    re-randomizes, a magic expected string makes the round fail for the wrong reason.
 
+6. ⚠️ **State every existence assumption a leg's objective rests on.** If a target resource may be
+   ABSENT from harvested state (a security group not yet created, an object tracked under another
+   address), say so and name the expected shape ("the resource may not exist; CREATE is the
+   expected outcome"). An unstated existence assumption is resolved by the design at runtime as an
+   ambiguity — it costs retry generations, or worse, a guessed reconciliation.
+   *Earned: FW-A3.2/A3.3 — the same leg entered the retry band both rounds on exactly this
+   ambiguity; FW-A3.5 stated it and the leg ran clean first-pass (VT-18).*
+
+7. ⚠️ **A constraint that exists only by convention does not exist for the agents.** Agents can
+   honor any constraint observable in harvested facts or written here — nothing else. If a value is
+   forbidden by operating convention but legal against every harvested fact (a subnet's zero
+   address, a reserved-by-habit range), write the constraint or accept the value.
+   *Earned: FW-A3.3 selected a pool containing the /24 zero address — legal against the harvest,
+   off-convention, and invisible to every tier because the convention was written nowhere (VT-18).*
+
 ---
 
 ## Program scope
@@ -173,6 +188,13 @@ Keep all of the following — every line is an incident.
 
 - Note these checks are **properties, not hardcoded values** — they stay valid when the environment is
   rebuilt. That is deliberate: the round must not depend on a magic expected string.
+
+- ⚠️ **Require evidence where its READER looks, not only where it is convenient to write.** The
+  integration reviewer's chained context is the LEG deliverables — a program-level statement (the
+  producer's summary) is invisible to a check that reads legs. If a check requires a statement
+  (e.g. the apply-order declaration), require it IN EACH leg's objective so it appears in each leg's
+  report. *Earned: FW-A3.3 — Node C correctly rejected because the apply order appeared only in the
+  producer's deliverable, which its leg-scoped context could not see (VT-18).*
 
 ### {{Optional}} Consuming-leg attribution — when a downstream leg legitimately cannot self-check
 

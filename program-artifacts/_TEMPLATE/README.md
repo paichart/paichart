@@ -18,6 +18,12 @@ rm <run-name>/README.md
 Anything it must know has to be here. Anything it *cannot* know must be declared runtime, or it will
 guess.
 
+⚠️ **Every zone, interface, or attachment point a design must BIND to must physically exist on the
+target.** A notional zone with no port behind it produces a package the reviewer must block ("no
+bindable interface") — the topology file is a claim about what exists, and the run inherits its
+gaps. *Earned: FW-A3.1 — an untrust zone mapped to a nonexistent port parked the whole round; the
+agents correctly disclosed the impossibility rather than fabricating a binding (VT-18).*
+
 ## Why this template exists
 
 Before 2026-08-10 each run copy-forked the previous run's artifacts. Measured across the 13 runs then
