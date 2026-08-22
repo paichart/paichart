@@ -1,7 +1,7 @@
 {
   "name": "@paichart/containment-checks",
-  "version": "0.3.0",
-  "description": "Mechanical checks for LLM-derived infrastructure values: did a derived CIDR/ASN actually respect the harvested ground truth? Pure functions — text in, fact out; a value the engine cannot check is reported as not-mechanically-covered, never as clean.",
+  "version": "0.3.1",
+  "description": "Mechanical checks for LLM-derived infrastructure values: did a derived CIDR/ASN actually respect the harvested ground truth? Pure functions \u2014 text in, fact out; a value the engine cannot check is reported as not-mechanically-covered, never as clean.",
   "license": "MIT",
   "author": "paichart",
   "repository": {
@@ -11,7 +11,12 @@
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist", "src", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "tsx test/derivation-containment.test.ts",
@@ -23,7 +28,15 @@
     "typescript": "^5"
   },
   "keywords": [
-    "llm", "agents", "verification", "containment", "cidr", "asn",
-    "network-automation", "anti-fabrication", "derived-values", "mcp"
+    "llm",
+    "agents",
+    "verification",
+    "containment",
+    "cidr",
+    "asn",
+    "network-automation",
+    "anti-fabrication",
+    "derived-values",
+    "mcp"
   ]
 }

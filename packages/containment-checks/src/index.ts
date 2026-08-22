@@ -332,13 +332,39 @@ export function parseFencedJsonBlock<T>(text: string | null | undefined, marker:
   const after = text.slice(lastIdx);
   // First fenced block after the header: ```json ... ``` (json tag optional; tolerate ```JSON)
   const fence = after.match(/```(?:json)?\s*\n([\s\S]*?)```/i);
-  if (!fence) return null;
-  try {
-    const parsed = JSON.parse(fence[1]);
-    return Array.isArray(parsed) ? (parsed as T[]) : null;
-  } catch {
-    return null;
+  if (fence) {
+    try {
+      const parsed = JSON.parse(fence[1]);
+      if (Array.isArray(parsed)) return parsed as T[];
+    } catch {
+      /* fall through to the fence-inversion arm */
+    }
   }
+  // Fence-inversion fallback (FW-A3.4 live incident, 2026-08-22): the agent opened the ```json
+  // fence ONE LINE BEFORE the heading, swallowing the marker INSIDE the fence — so the first
+  // ``` after the marker is the CLOSING delimiter and the primary path sees no block (or parses
+  // the wrong span). Third live shape of the same format-variance class (R1 absent, R3 heading
+  // nested, R4 fence inverted) — corpus-earned per the mechanical-net second-path rule. Detect
+  // it structurally: an ODD count of fence delimiters before the marker means the marker sits
+  // inside an open fence; the JSON is then the span from the end of the marker's line to that
+  // fence's closing ```.
+  const fenceOpensBefore = (text.slice(0, lastIdx).match(/^\s*```/gm) || []).length;
+  if (fenceOpensBefore % 2 === 1) {
+    const markerLineEnd = after.indexOf('\n');
+    if (markerLineEnd !== -1) {
+      const inFence = after.slice(markerLineEnd + 1);
+      const close = inFence.match(/^([\s\S]*?)\n\s*```/);
+      if (close) {
+        try {
+          const parsed = JSON.parse(close[1]);
+          if (Array.isArray(parsed)) return parsed as T[];
+        } catch {
+          /* fall through to null */
+        }
+      }
+    }
+  }
+  return null;
 }
 
 /**
