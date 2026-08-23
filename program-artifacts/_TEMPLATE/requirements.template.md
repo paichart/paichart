@@ -75,6 +75,16 @@ run.
    *Earned: FW-A3.3 selected a pool containing the /24 zero address — legal against the harvest,
    off-convention, and invisible to every tier because the convention was written nowhere (VT-18).*
 
+8. ⚠️ **State the platform dialect for any protocol ABSENT from harvested state.** A config author
+   writing a protocol the target does not yet run has no harvested stanzas to imitate — it falls
+   back to the textbook dialect, which is often another vendor's, and a reviewer with the same
+   corpus gap approves it. If the target platform's syntax for the new protocol differs from the
+   textbook form, write the platform's tokens as reference data (rule 4 applies), or accept that
+   the first apply adjudicates them and may archive the round.
+   *Earned: IGP-T1 R1 (2026-08-23) — an Arista EOS package carried two IOS-isms
+   (`is-type level-2-only`, `metric-style wide`); the leg reviewer approved; the operator's EOS
+   config-session entry rejected both, and the round was archived at its first apply gate.*
+
 ---
 
 ## Program scope

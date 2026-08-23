@@ -180,6 +180,16 @@ evidence is leg-scoped; a program-level statement is invisible to it — *earned
 
 ## Design constraints — conventions made explicit (rule 7)
 
+- **Platform dialect (added after R1, 2026-08-23): every candidate config line must be valid
+  Arista EOS syntax for the platform in `topology.json` — the operator applies packages verbatim in
+  an EOS config session, and a rejected token archives the round.** Because IS-IS is ABSENT from
+  the harvested state, there are no live stanzas to imitate; the following EOS facts are reference
+  data (rule 4 — state them in the package, do not treat restating them as a check):
+  - EOS expresses level-2-only as `is-type level-2` (there is no `level-2-only` token).
+  - EOS IS-IS uses wide metrics unconditionally — there is NO `metric-style` command; the
+    contract's "wide" property is a platform default the package should STATE, not configure.
+  *Earned: IGP-T1 R1 — a package carried both IOS-isms, the leg reviewer approved it, and the
+  operator's config-session entry rejected both; the round was archived at G1.*
 - NET area is `49.0001` on all devices (private AFI 49, single area — operating convention).
 - The IS-IS instance identifier is identical on all three devices (convention; any consistent value).
 - Loopback0 remains passive under IS-IS, as it is under OSPF (convention carried over).
