@@ -1,0 +1,82 @@
+{
+  "name": "igp-migration-t1",
+  "description": "3-node Arista cEOS triangle running OSPF area 0 (brownfield baseline). The program migrates its IGP to IS-IS in four gated phases; each phase's package is human-applied out-of-band and the next phase re-harvests the applied live state.",
+
+  "nodes": [
+    {
+      "name": "ceos1",
+      "kind": "switch",
+      "platform": "arista_eos",
+      "os_version": "4.32.2.1F",
+      "mgmt_ipv4": "172.30.31.11",
+      "router_id": "1.1.1.1",
+      "loopback0": "1.1.1.1/32",
+      "role": "triangle corner; off-mesh traffic to ceos3 transits ceos2 under the baseline cost design"
+    },
+    {
+      "name": "ceos2",
+      "kind": "switch",
+      "platform": "arista_eos",
+      "os_version": "4.32.2.1F",
+      "mgmt_ipv4": "172.30.31.12",
+      "router_id": "2.2.2.2",
+      "loopback0": "2.2.2.2/32",
+      "role": "transit node — carries the ceos1<->ceos3 preferred path; the migration must preserve that"
+    },
+    {
+      "name": "ceos3",
+      "kind": "switch",
+      "platform": "arista_eos",
+      "os_version": "4.32.2.1F",
+      "mgmt_ipv4": "172.30.31.13",
+      "router_id": "3.3.3.3",
+      "loopback0": "3.3.3.3/32",
+      "role": "triangle corner; off-mesh traffic to ceos1 transits ceos2 under the baseline cost design"
+    }
+  ],
+
+  "links": [
+    {
+      "endpoints": ["ceos1:Ethernet1", "ceos2:Ethernet1"],
+      "subnet": "10.0.12.0/30",
+      "addressing": { "ceos1": "10.0.12.1", "ceos2": "10.0.12.2" },
+      "routing": "ospf 1, area 0.0.0.0, network point-to-point, ip ospf cost 10 (both ends)"
+    },
+    {
+      "endpoints": ["ceos2:Ethernet2", "ceos3:Ethernet1"],
+      "subnet": "10.0.23.0/30",
+      "addressing": { "ceos2": "10.0.23.1", "ceos3": "10.0.23.2" },
+      "routing": "ospf 1, area 0.0.0.0, network point-to-point, ip ospf cost 20 (both ends)"
+    },
+    {
+      "endpoints": ["ceos1:Ethernet2", "ceos3:Ethernet2"],
+      "subnet": "10.0.13.0/30",
+      "addressing": { "ceos1": "10.0.13.1", "ceos3": "10.0.13.2" },
+      "routing": "ospf 1, area 0.0.0.0, network point-to-point, ip ospf cost 40 (both ends) — deliberately the dispreferred path: 10+20 via ceos2 beats 40 direct"
+    }
+  ],
+
+  "igpBaseline": {
+    "_note": [
+      "The brownfield state the migration starts from. Static facts here are the authored rig",
+      "baseline; anything created DURING the program (applied phase state) is declared runtime",
+      "below and is discoverable only by harvesting the live devices after each gate's apply."
+    ],
+    "protocol": "ospf, process 1, single area 0.0.0.0 on every IGP interface",
+    "advertisedLoopbacks": "each device's Loopback0 /32, passive-interface Loopback0",
+    "interfaceNetworkType": "point-to-point on all three /30 links",
+    "costIntent": "explicit per-interface ip ospf cost (10 / 20 / 40 per the links above) expressing a deliberate transit-path preference — the migration must preserve every relative path ordering",
+    "bgp": "NONE — this network runs no BGP; the IGP is the only routing protocol",
+    "targetProtocolPresence": "IS-IS does NOT exist on any device at program start — P1's harvest finds none and CREATE is the expected outcome",
+    "appliedPhaseState": "RUNTIME — the live state after each gate's human apply (adjacencies formed, route sets, preference in effect). Re-harvested by each leg; never knowable from this file",
+    "_whyThisIsUnarguablyRuntime": "Applied phase state is created out-of-band by a human operator DURING the program, between legs. It does not exist when the Program Architect runs, changes at every gate, and can differ from intent (an apply can fail or partially take) — so it cannot be pinned in a static artifact or an interface contract, and must be read from the live devices each time."
+  },
+
+  "interdependency": {
+    "kind": "sequenced",
+    "dag": "plan-gate -> P1 (coexistence deploy) -> G1 (human apply) -> P2 (parity evidence) -> G2 (accept evidence) -> P3 (preference shift) -> G3 (human apply) -> P4 (OSPF removal) -> final gate (human apply)",
+    "chainedValue": "each leg's report (declared applied values + findings); the TRUTH of applied state rides the re-harvest, not the edge — legs compare the two",
+    "mechanism": "DAG edge (inter-pipeline chaining) + gate/apply/re-harvest loop",
+    "direction_note": "Every leg consumes the interface contract's constants (NETs, metrics, preference mechanism) as designed by the plan — legs restate them and are forbidden from re-deriving them. Each leg additionally consumes its predecessor's report via the DAG edge, and must verify the predecessor's declared applied state against its own live harvest rather than trusting either alone."
+  }
+}
