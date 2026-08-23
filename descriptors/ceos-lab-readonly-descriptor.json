@@ -1,10 +1,10 @@
 {
-  "_comment": "Phase-4 real-device validation descriptor for the network-provisioning pipeline. The Harvester FETCHES this from its raw GitHub URL (https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json) — put that URL in the pipeline task description. It points at sydasif/nornir-mcp-server fronting a 2-node Arista cEOS lab on prod, reachable at the STABLE named cloudflared tunnel ceos-lab.paichart.app (systemd service on prod → localhost:3107). Declares the READ-ONLY harvest subset ONLY: list_devices + fetch_data(NAPALM getters). The service ALSO physically exposes Netmiko show_commands (free-text) + apply_config (mutating) — deliberately NOT declared, so the pipeline never sees or calls them (descriptor-level restriction, not service-level R1 enforcement). HONEST CAVEAT: nornir-mcp authenticates to the device with STATIC creds, NOT the JWKS-forwarded identity WS4 R2a mandates — so this is NOT WS4-conformant. It validates the COGNITION pipeline (harvest -> design -> change-package vs REAL EOS) + R9-at-the-wire, not the identity contract. Rig + runbook: copov15 .claude/knowledge/pipelines/network-provisioning/phase4-ceos-rig/.",
+  "_comment": "Phase-4 real-device validation descriptor for the network-provisioning pipeline. The Harvester FETCHES this from its raw GitHub URL (https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json) — put that URL in the pipeline task description. It points at sydasif/nornir-mcp-server fronting a Arista cEOS lab (2-node or the igp-triangle 3-node variant) on prod, reachable at the STABLE named cloudflared tunnel ceos-lab.paichart.app (systemd service on prod → localhost:3107). Declares the READ-ONLY harvest subset: list_devices + fetch_data(NAPALM getters) + show_commands CONSTRAINED to an enumerated allowlist of state-read commands (added 2026-08-23 after IGP-T1 R6's P2 leg correctly ESCALATED: zero-tolerance route parity was unverifiable because NAPALM has no route-table/IGP-adjacency getter). The SERVICE's show_commands accepts arbitrary strings — the enum below is descriptor-level scoping, the same restriction model as the rest of this file (not service-level R1 enforcement). apply_config/backup_configs remain deliberately NOT declared. All allowlisted commands except 'show ip route isis' were live-verified on EOS 4.32.2.1F during the IGP-T1 window; 'show ip route' is the guaranteed superset fallback. HONEST CAVEAT: nornir-mcp authenticates to the device with STATIC creds, NOT the JWKS-forwarded identity WS4 R2a mandates — so this is NOT WS4-conformant. It validates the COGNITION pipeline (harvest -> design -> change-package vs REAL EOS) + R9-at-the-wire, not the identity contract. Rig + runbook: copov15 .claude/knowledge/pipelines/network-provisioning/phase4-ceos-rig/.",
   "name": "ceos-lab-readonly",
-  "description": "Read-only Arista EOS network-state harvest for the network-provisioning pipeline. Exposes list_devices and fetch_data (NAPALM getters: running-config, interfaces, facts, BGP neighbors, etc.) against a cEOS lab. Authenticates to devices with a static service credential (validation rig; not JWKS per-user identity). No preconditions; call fetch_data with one or more getter names.",
+  "description": "Read-only Arista EOS network-state harvest for the network-provisioning pipeline. Exposes list_devices, fetch_data (NAPALM getters: running-config, interfaces, facts, BGP neighbors, etc.), and show_commands restricted to an enumerated allowlist of state-read commands (route tables, OSPF/IS-IS neighbors, IS-IS hostname map) against a cEOS lab. Authenticates to devices with a static service credential (validation rig; not JWKS per-user identity). No preconditions; call fetch_data with getter names, or show_commands with allowlisted commands.",
   "endpoint": "https://ceos-lab.paichart.app/mcp",
   "category": "automation",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "capabilities": {
     "transport": "streamable-http",
     "tools": [
@@ -14,12 +14,37 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "query_type": { "type": "string", "enum": ["devices", "groups", "all"], "default": "all", "description": "Inventory data to return: 'devices', 'groups', or 'all'" },
-            "details": { "type": "boolean", "default": false, "description": "Return full device attributes (for a devices query)" },
-            "filter_name": { "type": "string", "description": "Filter by inventory device name (e.g. 'ceos1')" },
-            "filter_hostname": { "type": "string", "description": "Filter by hostname / IP" },
-            "filter_group": { "type": "string", "description": "Filter by group (e.g. 'arista_eos')" },
-            "filter_platform": { "type": "string", "description": "Filter by platform (e.g. 'eos')" }
+            "query_type": {
+              "type": "string",
+              "enum": [
+                "devices",
+                "groups",
+                "all"
+              ],
+              "default": "all",
+              "description": "Inventory data to return: 'devices', 'groups', or 'all'"
+            },
+            "details": {
+              "type": "boolean",
+              "default": false,
+              "description": "Return full device attributes (for a devices query)"
+            },
+            "filter_name": {
+              "type": "string",
+              "description": "Filter by inventory device name (e.g. 'ceos1')"
+            },
+            "filter_hostname": {
+              "type": "string",
+              "description": "Filter by hostname / IP"
+            },
+            "filter_group": {
+              "type": "string",
+              "description": "Filter by group (e.g. 'arista_eos')"
+            },
+            "filter_platform": {
+              "type": "string",
+              "description": "Filter by platform (e.g. 'eos')"
+            }
           }
         }
       },
@@ -28,7 +53,9 @@
         "description": "Execute one or more READ-ONLY NAPALM getters against the EOS devices and return structured state (running-config, interfaces, facts, BGP neighbors, etc.). This is the Phase-0 harvest surface. Read-only by construction — NAPALM getters never mutate device state.",
         "inputSchema": {
           "type": "object",
-          "required": ["getters"],
+          "required": [
+            "getters"
+          ],
           "properties": {
             "getters": {
               "type": "array",
@@ -37,10 +64,23 @@
               "items": {
                 "type": "string",
                 "enum": [
-                  "config", "facts", "interfaces", "interfaces_ip", "interfaces_counters",
-                  "lldp_neighbors", "lldp_neighbors_detail", "bgp_neighbors", "bgp_config",
-                  "environment", "arp_table", "mac_address_table", "ntp_servers",
-                  "snmp_information", "users", "optics", "network_instances"
+                  "config",
+                  "facts",
+                  "interfaces",
+                  "interfaces_ip",
+                  "interfaces_counters",
+                  "lldp_neighbors",
+                  "lldp_neighbors_detail",
+                  "bgp_neighbors",
+                  "bgp_config",
+                  "environment",
+                  "arp_table",
+                  "mac_address_table",
+                  "ntp_servers",
+                  "snmp_information",
+                  "users",
+                  "optics",
+                  "network_instances"
                 ]
               }
             },
@@ -49,10 +89,67 @@
               "description": "Optional per-getter options, e.g. {\"config\": {\"retrieve\": \"running\"}}.",
               "additionalProperties": true
             },
-            "filter_name": { "type": "string", "description": "Restrict to one inventory device name (e.g. 'ceos1')" },
-            "filter_hostname": { "type": "string", "description": "Restrict by hostname / IP" },
-            "filter_group": { "type": "string", "description": "Restrict by group" },
-            "filter_platform": { "type": "string", "description": "Restrict by platform" }
+            "filter_name": {
+              "type": "string",
+              "description": "Restrict to one inventory device name (e.g. 'ceos1')"
+            },
+            "filter_hostname": {
+              "type": "string",
+              "description": "Restrict by hostname / IP"
+            },
+            "filter_group": {
+              "type": "string",
+              "description": "Restrict by group"
+            },
+            "filter_platform": {
+              "type": "string",
+              "description": "Restrict by platform"
+            }
+          }
+        }
+      },
+      {
+        "name": "show_commands",
+        "description": "Execute READ-ONLY operational 'show' commands from the enumerated allowlist below and return raw CLI output. Added for route-table and IGP-adjacency state that NAPALM getters cannot retrieve (parity verification, neighbor baselines). Commands outside the allowlist are not part of this service's declared surface — do not send them.",
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "commands"
+          ],
+          "properties": {
+            "commands": {
+              "type": "array",
+              "minItems": 1,
+              "description": "Allowlisted read-only show commands to run on the filtered devices.",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "show ip route",
+                  "show ip route ospf",
+                  "show ip route isis",
+                  "show ip ospf neighbor",
+                  "show isis neighbor",
+                  "show isis hostname",
+                  "show ip ospf interface brief"
+                ]
+              }
+            },
+            "filter_name": {
+              "type": "string",
+              "description": "Restrict to one inventory device name (e.g. 'ceos1')"
+            },
+            "filter_hostname": {
+              "type": "string",
+              "description": "Restrict by hostname / IP"
+            },
+            "filter_group": {
+              "type": "string",
+              "description": "Restrict by group"
+            },
+            "filter_platform": {
+              "type": "string",
+              "description": "Restrict by platform"
+            }
           }
         }
       }
