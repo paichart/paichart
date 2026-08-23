@@ -227,6 +227,21 @@ evidence is leg-scoped; a program-level statement is invisible to it — *earned
 
   The strings `metric-style`, `passive-interface` (under router isis), and `level-2-only` must not
   appear anywhere in a candidate config.
+- **The preference knob's canonical EOS shape (added after R4, 2026-08-23; live-verified accepted
+  AND cleanly reversible in an EOS 4.32.2.1F config session): administrative distance for IS-IS is
+  configured under the ADDRESS-FAMILY context, not at the `router isis` top level — `distance
+  <value>` directly under `router isis <instance>` is INVALID input on this platform.** The
+  verified shape (renders as a `level-1`/`level-2` pair; `no distance <value>` reverts to the
+  115 default):
+
+  ```
+  router isis <instance>
+     address-family ipv4 unicast
+        distance <value>
+  ```
+
+  *Earned: IGP-T1 R4 — three successive plans placed the P3 knob at the top level, where the
+  platform rejects it; caught by an operator probe at the plan gate, before any leg ran.*
 - NET area is `49.0001` on all devices (private AFI 49, single area — operating convention).
 - The IS-IS instance identifier is identical on all three devices (convention; any consistent value).
 - Loopback0 remains passive under IS-IS, as it is under OSPF (convention carried over).
