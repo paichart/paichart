@@ -247,6 +247,17 @@ evidence is leg-scoped; a program-level statement is invisible to it — *earned
 - Loopback0 remains passive under IS-IS, as it is under OSPF (convention carried over).
 - No phase may change interface addressing, descriptions, or the management plane.
 
+## Reviewer view-layer note (added after R5, 2026-08-23)
+
+A `[NEUTRALIZED-…]` marker appearing in a reviewer's chained view of a package is a platform
+view-layer annotation applied at the chaining boundary — it is NOT evidence the marker exists in
+the document at rest (this domain's prose legitimately opens paragraphs with "System ID…", which
+the platform's injection screen can annotate in transit). Report such a marker as an observation
+naming its location; do not treat it as a blocking document defect. At-rest document hygiene is
+verified by the program tier and the human operator from the stored artifact.
+*Earned: IGP-T1 R5 — a clean package was blocked for a marker that existed only in the reviewer's
+view.*
+
 ## Acceptance
 
 - Each change package (P1, P3, P4) includes deterministic validation with expected outputs (rules

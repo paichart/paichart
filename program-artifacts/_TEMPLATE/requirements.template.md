@@ -103,6 +103,18 @@ run.
    literals + operator capture) and as prose by the next, whose reviewer correctly blocked it; the
    deterministic shape was never written anywhere, so craft variance decided the round.*
 
+10. ⚠️ **A `[NEUTRALIZED-…]` sanitizer marker seen in CHAINED context is a platform view-layer
+    annotation — it is not evidence the marker exists in the document itself.** The platform
+    sanitizes text at the boundary where one agent's output is chained into another's context, so
+    a reviewer's view can carry a neutralization marker that the at-rest deliverable does not.
+    A reviewer must report a marker as an OBSERVATION (naming where it appeared), never as a
+    blocking document defect; deliverable hygiene is verified against the at-rest artifact by the
+    program tier and the human operator, who can read the document as stored.
+    *Earned: IGP-T1 R5 — a clean package's "System IDs…" paragraph false-positived an injection
+    pattern at the chaining boundary; the reviewer, seeing the marker in its view, blocked a
+    document that contained no marker at rest. The round was archived on a defect that did not
+    exist.*
+
 ---
 
 ## Program scope
