@@ -197,8 +197,36 @@ evidence is leg-scoped; a program-level statement is invisible to it — *earned
   - EOS expresses level-2-only as `is-type level-2` (there is no `level-2-only` token).
   - EOS IS-IS uses wide metrics unconditionally — there is NO `metric-style` command; the
     contract's "wide" property is a platform default the package should STATE, not configure.
-  *Earned: IGP-T1 R1 — a package carried both IOS-isms, the leg reviewer approved it, and the
-  operator's config-session entry rejected both; the round was archived at G1.*
+  - IS-IS passive is INTERFACE-level (`isis passive` under the interface) — there is no
+    router-level `passive-interface` command under `router isis`.
+  *Earned: IGP-T1 R1 — a package carried IOS-isms, the leg reviewer approved it, and the
+  operator's config-session entry rejected them; the round was archived at G1. R3 re-emitted
+  `metric-style wide` and router-level `passive-interface` despite the negative rules above —
+  hence the exemplar below.*
+- **Canonical EOS stanza shape (added after R3, 2026-08-23; every line verified accepted in a live
+  EOS 4.32.2.1F config session): TRANSCRIBE this shape, substituting only the bracketed values.**
+  A candidate config whose IS-IS stanzas deviate from this shape in any token (beyond the
+  bracketed substitutions) is defective:
+
+  ```
+  router isis <instance>
+     net <NET>
+     is-type level-2
+     !
+     address-family ipv4 unicast
+  !
+  interface <Ethernet-interface>
+     isis enable <instance>
+     isis network point-to-point
+     isis metric <value>
+  !
+  interface Loopback0
+     isis enable <instance>
+     isis passive
+  ```
+
+  The strings `metric-style`, `passive-interface` (under router isis), and `level-2-only` must not
+  appear anywhere in a candidate config.
 - NET area is `49.0001` on all devices (private AFI 49, single area — operating convention).
 - The IS-IS instance identifier is identical on all three devices (convention; any consistent value).
 - Loopback0 remains passive under IS-IS, as it is under OSPF (convention carried over).

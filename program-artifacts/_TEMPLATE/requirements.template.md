@@ -84,6 +84,13 @@ run.
    *Earned: IGP-T1 R1 (2026-08-23) — an Arista EOS package carried two IOS-isms
    (`is-type level-2-only`, `metric-style wide`); the leg reviewer approved; the operator's EOS
    config-session entry rejected both, and the round was archived at its first apply gate.*
+   **Prefer a positive exemplar over a negative token rule.** "Command X does not exist on this
+   platform" is an omission-rule, and a generator's training prior re-inserts high-frequency
+   tokens past it. A complete platform-native exemplar stanza (verified live where an operator
+   can) converts generation into transcription, which holds. Keep the negative list too — it is
+   what a reviewer and an operator can grep.
+   *Earned: IGP-T1 R3 — with the negative dialect rules binding in its prompt, the author
+   re-emitted the exact banned token R1 died on; the round was archived at its quality gate.*
 
 9. ⚠️ **A validation target the harvest cannot see does not license prose.** When rule 1 demands a
    literal expected output for state the read-only service has no getter for, the author has two
