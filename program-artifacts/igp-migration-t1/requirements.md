@@ -152,6 +152,15 @@ evidence is leg-scoped; a program-level statement is invisible to it — *earned
   with OSPF per the contract's preference policy. Validation (per rule 1): exact commands + expected
   outputs proving IS-IS adjacency on each triangle link, and proving OSPF neighbor state is
   IDENTICAL to the pre-change harvest. Rollback: remove the IS-IS instance.
+  **The OSPF-unchanged check has a known harvest gap and a required deterministic shape (added
+  after R2, 2026-08-23): the read-only service cannot retrieve the OSPF adjacency table, and that
+  does NOT license prose.** The validation must instead (a) assert, as literal fenced expected
+  output, the STATIC fields of `show ip ospf neighbor` derivable from `topology.json` — every
+  adjacency's Neighbor ID, state `FULL`, and interface, per device (dynamic fields such as dead
+  time are excluded and named as excluded) — AND (b) mandate an operator-captured pre-change
+  baseline of the same command with a post-change byte-diff of those static fields. Descriptive
+  prose in place of either is a rejectable defect (rule 1). *Earned: IGP-T1 R2 — the author wrote
+  prose for exactly this check and the reviewer correctly blocked the package.*
 - **P2 — parity verification (evidence, not config).** Harvest live post-apply state; deliverable is
   a parity report: per device, the OSPF route set vs the IS-IS-available route set with next-hops,
   as retrieved output — plus the adjacency roster vs the contract's expectation. The report must

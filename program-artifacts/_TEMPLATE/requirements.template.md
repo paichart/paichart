@@ -85,6 +85,17 @@ run.
    (`is-type level-2-only`, `metric-style wide`); the leg reviewer approved; the operator's EOS
    config-session entry rejected both, and the round was archived at its first apply gate.*
 
+9. ⚠️ **A validation target the harvest cannot see does not license prose.** When rule 1 demands a
+   literal expected output for state the read-only service has no getter for, the author has two
+   deterministic paths and must take (and name) at least one: derive the literal expectation from
+   declared topology facts (identities, counts, states that are static by design — excluding and
+   naming the dynamic fields), and/or mandate an operator-captured pre-change baseline of the exact
+   command with a post-change byte-diff of the static fields. State the gap; never fabricate the
+   baseline, and never describe the check in prose.
+   *Earned: IGP-T1 R1+R2 — the same unharvestable check was handled well by one author (topology
+   literals + operator capture) and as prose by the next, whose reviewer correctly blocked it; the
+   deterministic shape was never written anywhere, so craft variance decided the round.*
+
 ---
 
 ## Program scope
