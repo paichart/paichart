@@ -122,8 +122,20 @@ The Program Architect derives these in the plan and they bind every leg:
 - Preference policy: **while both protocols run, OSPF-learned routes must remain preferred on every
   device**; P3 flips preference to IS-IS via a **single, seconds-reversible knob**, and the rollback
   for P3 is flipping it back.
-- `parityCriteria`: at G2, **every OSPF-learned prefix on every device is also available via IS-IS
-  with a next-hop identical to OSPF's** — tolerance for missing or extra prefixes is **zero**.
+- `parityCriteria`: at G2, **every prefix OSPF advertises is present in each device's IS-IS
+  link-state database, with a next-hop identical to the one OSPF resolves for it** — tolerance for
+  missing or extra prefixes is **zero**.
+  ⚠️ **Why the criterion is stated against the link-state database and NOT against the routing
+  table.** During coexistence this program deliberately keeps OSPF preferred, so IS-IS routes are
+  computed but never INSTALLED — and a routing-table view lists installed routes only. A criterion
+  phrased as "available via IS-IS in the RIB" is therefore unsatisfiable *precisely because the
+  phase succeeded*: it reads empty on a perfectly healthy fabric. The property that actually matters
+  — can IS-IS carry every prefix OSPF carries, to the same next-hop, the moment preference flips —
+  is observable in the link-state database throughout coexistence. State the PROPERTY; do not name
+  a measure the phase precludes.
+  *Earned: IGP-T1 R9 — P2 harvested correctly, compared harvest-vs-harvest correctly, and reported
+  parity FAILED for two prefixes whose reachability was demonstrably present in the IS-IS LSDB. The
+  leg was right about what it measured; the criterion was measuring the wrong thing.*
 
 ### ⚠️ Derivation clauses — the NET and metric derivations are computations, show them
 
@@ -166,8 +178,11 @@ evidence is leg-scoped; a program-level statement is invisible to it — *earned
   prose in place of either is a rejectable defect (rule 1). *Earned: IGP-T1 R2 — the author wrote
   prose for exactly this check and the reviewer correctly blocked the package.*
 - **P2 — parity verification (evidence, not config).** Harvest live post-apply state; deliverable is
-  a parity report: per device, the OSPF route set vs the IS-IS-available route set with next-hops,
-  as retrieved output — plus the adjacency roster vs the contract's expectation. The report must
+  a parity report: per device, the OSPF-advertised prefix set (with the next-hop OSPF resolves) vs
+  the prefixes present in the IS-IS link-state database (with their IS-IS next-hop), as retrieved
+  output — plus the adjacency roster vs the contract's expectation. Do NOT build the comparison from
+  installed-route views: while OSPF stays preferred, IS-IS routes do not install, so those views are
+  empty BY DESIGN and prove nothing either way (see `parityCriteria`). The report must
   compare **retrieved values against retrieved values** (harvest vs harvest), never against this
   document (rule 4). Any deviation from `parityCriteria` is stated as a finding with the exact
   retrieved evidence; a deviation means the correct outcome for the leg is to surface it, not to

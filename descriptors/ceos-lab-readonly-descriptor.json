@@ -4,7 +4,7 @@
   "description": "Read-only Arista EOS network-state harvest for the network-provisioning pipeline. Exposes list_devices, fetch_data (NAPALM getters: running-config, interfaces, facts, BGP neighbors, etc.), and show_commands restricted to an enumerated allowlist of state-read commands (route tables, OSPF/IS-IS neighbors, IS-IS hostname map) against a cEOS lab. Authenticates to devices with a static service credential (validation rig; not JWKS per-user identity). No preconditions; call fetch_data with getter names, or show_commands with allowlisted commands.",
   "endpoint": "https://ceos-lab.paichart.app/mcp",
   "category": "automation",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "capabilities": {
     "transport": "streamable-http",
     "tools": [
@@ -110,7 +110,7 @@
       },
       {
         "name": "show_commands",
-        "description": "Execute READ-ONLY operational 'show' commands from the enumerated allowlist below and return raw CLI output. Added for route-table and IGP-adjacency state that NAPALM getters cannot retrieve (parity verification, neighbor baselines). Commands outside the allowlist are not part of this service's declared surface — do not send them.",
+        "description": "Execute READ-ONLY operational 'show' commands from the enumerated allowlist below and return raw CLI output. Added for route-table, IGP-adjacency and link-state-database state that NAPALM getters cannot retrieve (parity verification, neighbour baselines). NOTE on parity during protocol coexistence: while one IGP is administratively preferred, the other's routes are computed but NOT installed, so routing-table views show them as absent even on a healthy fabric — the link-state database is where that evidence lives. Commands outside the allowlist are not part of this service's declared surface — do not send them.",
         "inputSchema": {
           "type": "object",
           "required": [
@@ -130,7 +130,9 @@
                   "show ip ospf neighbor",
                   "show isis neighbor",
                   "show isis hostname",
-                  "show ip ospf interface brief"
+                  "show ip ospf interface brief",
+                  "show isis database",
+                  "show isis database detail"
                 ]
               }
             },
