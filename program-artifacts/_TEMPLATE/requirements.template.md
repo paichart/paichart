@@ -87,10 +87,27 @@ run.
    **Prefer a positive exemplar over a negative token rule.** "Command X does not exist on this
    platform" is an omission-rule, and a generator's training prior re-inserts high-frequency
    tokens past it. A complete platform-native exemplar stanza (verified live where an operator
-   can) converts generation into transcription, which holds. Keep the negative list too — it is
-   what a reviewer and an operator can grep.
+   can) converts generation into TRANSCRIPTION. Keep the negative list too — it is what a
+   reviewer, an operator, and the platform's lint can all grep.
    *Earned: IGP-T1 R3 — with the negative dialect rules binding in its prompt, the author
    re-emitted the exact banned token R1 died on; the round was archived at its quality gate.*
+
+   🔴 **WRITE THE EXEMPLAR — BUT DO NOT RELY ON IT HOLDING.** This rule used to end "…converts
+   generation into transcription, WHICH HOLDS". That claim is now FALSIFIED and the correction is
+   the most useful thing on this page. On IGP-T1 R11 the exemplar was present, complete, and
+   BINDING in the leg's interface contract, under an explicit instruction to transcribe it — and
+   the author silently dropped two of its lines. Its reviewer, carrying the same completeness rule,
+   approved the package at 86/100 with no blocking issues. The omitted line left the routing
+   protocol INACTIVE while the config entered, committed and displayed cleanly.
+   Four guards were in force and all four were prose reaching a language model: the protocol rule,
+   the role-guidance rule, the exemplar itself, and the reviewer. All four were bypassed by the same
+   omission. What caught it was `dialect-lint`, which does not read.
+   **So the exemplar's real value is not that an agent obeys it — it is that it is the SPECIFICATION
+   the platform's lint checks against.** Nobody ever wrote "this line is required"; the lint derives
+   every required line by decomposing this block. A better exemplar therefore buys you a better
+   mechanical check, which is the part that actually holds. Write it carefully for that reason.
+   *Earned: IGP-T1 R11 (2026-08-25) — dialect-lint's first live run, catching what four prose
+   guards and one LLM reviewer had all passed.*
    **COMPLETENESS is half the rule, and the half that hides.** A required line of the exemplar that
    is ABSENT is as defective as a wrong token, and more dangerous: the config enters, commits and
    displays cleanly while the thing it configures stays INACTIVE. State completeness as a property —
