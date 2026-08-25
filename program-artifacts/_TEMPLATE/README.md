@@ -19,7 +19,8 @@ Anything it must know has to be here. Anything it *cannot* know must be declared
 guess.
 
 ⚠️ **Every zone, interface, or attachment point a design must BIND to must physically exist on the
-target.** A notional zone with no port behind it produces a package the reviewer must block ("no
+target** (the clause is restated in `topology.example.json` itself, where you are actually typing —
+it sat only here until 2026-08-25, which is the same near-miss it describes).** A notional zone with no port behind it produces a package the reviewer must block ("no
 bindable interface") — the topology file is a claim about what exists, and the run inherits its
 gaps. *Earned: FW-A3.1 — an untrust zone mapped to a nonexistent port parked the whole round; the
 agents correctly disclosed the impossibility rather than fabricating a binding (VT-18).*
@@ -60,6 +61,13 @@ requirement is the failure mode this whole template exists to prevent.
 
 Declaring such a string "reference data" limits the damage. Omitting it removes the temptation.
 
+⚠️ **It governs every channel an agent reads, not just this file.** Task descriptions, gate
+comments, and run notes are agent-readable contract too — the harness copies a task description
+straight into the Architect's prompt. Naming a prior round's specific defect token in any of them
+lets the agent satisfy the pointer instead of the property, and the round then evidences only "the
+agent avoided the line it was told about". *Earned: IGP-T1 R8 — superseded before its plan gate for
+exactly this, and re-run clean, which is the only reason its result was usable.*
+
 ## Curating this template
 
 When a run teaches something durable, it belongs **here**, not only in that run's instance — that is
@@ -69,3 +77,5 @@ Related platform-side guidance (in `copov15`):
 - `.claude/knowledge/pipelines/PROGRAM-USE-CASE-DESIGN-PLAYBOOK.md` — designing a program
 - `.claude/knowledge/pipelines/PROGRAM-HARNESS-USER-GUIDE.md` — running one
 - `.claude/knowledge/pipelines/PROGRAM-RUN-FORENSICS-GUIDE.md` — reading the result
+- `.claude/knowledge/pipelines/PROGRAM-OPERATOR-GATE-PLAYBOOK.md` — being the operator at the gates
+  (checking a package before you apply it, and what to write back when you reject one)

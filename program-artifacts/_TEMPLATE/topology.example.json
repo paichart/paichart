@@ -12,6 +12,17 @@
   "name": "{{RUN_NAME — e.g. meridian-t6-sequenced}}",
   "description": "{{One line: what this environment is and what the program will change}}",
 
+  "_BINDABLE_TARGETS": [
+    "⚠️ Every zone, interface, or attachment point a design must BIND to must PHYSICALLY EXIST on",
+    "the target. This file is a CLAIM about what exists, and the run inherits its gaps: a notional",
+    "zone with no port behind it produces a package the reviewer must block ('no bindable",
+    "interface'), and the round parks. Before you launch, walk each object you name below and",
+    "confirm a real thing answers to it on the device.",
+    "Earned: FW-A3.1 — an untrust zone mapped to a nonexistent port parked the whole round. The",
+    "agents behaved correctly: they disclosed the impossibility rather than fabricating a binding",
+    "(VT-18). The defect was in this file."
+  ],
+
   "nodes": [
     {
       "name": "{{node1}}",
