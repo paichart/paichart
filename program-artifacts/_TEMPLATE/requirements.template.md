@@ -91,6 +91,32 @@ run.
    what a reviewer and an operator can grep.
    *Earned: IGP-T1 R3 — with the negative dialect rules binding in its prompt, the author
    re-emitted the exact banned token R1 died on; the round was archived at its quality gate.*
+   **COMPLETENESS is half the rule, and the half that hides.** A required line of the exemplar that
+   is ABSENT is as defective as a wrong token, and more dangerous: the config enters, commits and
+   displays cleanly while the thing it configures stays INACTIVE. State completeness as a property —
+   "the shape must appear COMPLETE, every line, in order" — and name the mechanism, never the line a
+   prior round dropped.
+   *Earned: IGP-T1 R7 — an omitted line left the protocol disabled; the package was banned-token
+   clean and approved at 90/100 by a reviewer checking only the absence direction.*
+
+10. ⚠️ **Every validation step must be SATISFIABLE under the phase's own constraints.** Before you
+    write an expected output, ask: *can this pass, GIVEN what this phase is required to do?* A step
+    whose expected output is precluded by the phase's own requirement makes a CORRECT change look
+    failed — the operator then rolls back good work, or "fixes" it by violating the requirement.
+    Where a property can be observed several ways, state the PROPERTY and name an observable the
+    phase does not preclude.
+    *Earned: IGP-T1 R9 — a step required one protocol's routes to appear in the routing table while
+    the same phase required the OTHER protocol to stay preferred, which guarantees they never
+    install. The same defect recurred in that round's parity criterion, which compared installed
+    routes during deliberate coexistence and reported failure on a healthy fabric.*
+
+11. 🔴 **Writing rule 3 governs EVERY channel an agent reads — not just this file.** Task
+    descriptions, gate comments, and run notes are all agent-readable contract. Naming a prior
+    round's specific defect token there lets the agent satisfy the POINTER instead of the PROPERTY,
+    and a round that then passes evidences only "the agent avoided the line it was told about".
+    Name the property, name the mechanism, cite the earning round for provenance — never the token.
+    *Earned: a round was superseded before its plan gate for exactly this, and re-run clean, which
+    is the only reason its result was usable as evidence.*
 
 9. ⚠️ **A validation target the harvest cannot see does not license prose.** When rule 1 demands a
    literal expected output for state the read-only service has no getter for, the author has two

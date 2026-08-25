@@ -222,15 +222,8 @@ evidence is leg-scoped; a program-level statement is invisible to it — *earned
   operator's config-session entry rejected them; the round was archived at G1. R3 re-emitted
   `metric-style wide` and router-level `passive-interface` despite the negative rules above —
   hence the exemplar below.*
-- **Canonical EOS stanza shape (added after R3, 2026-08-23; every line verified accepted in a live
-  EOS 4.32.2.1F config session): TRANSCRIBE this shape, substituting only the bracketed values.**
-  A candidate config whose IS-IS stanzas deviate from this shape in any token (beyond the
-  bracketed substitutions) is defective — **and a shape line that is ABSENT is as defective as one
-  that is wrong.** The stanza must appear COMPLETE: every line, in order. Omission is the harder
-  failure to see, because a config missing a required line can still enter a config session with no
-  error, commit successfully, and display as configured in `show running-config`, while the protocol
-  it configures stays inactive. *Earned: IGP-T1 R7 — a package omitted one line of this shape and
-  produced exactly that outcome; it was approved by its reviewer with no blocking issues.*
+- **Canonical EOS stanza shape (every line verified accepted in a live EOS 4.32.2.1F config
+  session): TRANSCRIBE this shape, substituting only the bracketed values.**
 
   ```
   router isis <instance>
