@@ -99,9 +99,27 @@ run.
    the author silently dropped two of its lines. Its reviewer, carrying the same completeness rule,
    approved the package at 86/100 with no blocking issues. The omitted line left the routing
    protocol INACTIVE while the config entered, committed and displayed cleanly.
-   Four guards were in force and all four were prose reaching a language model: the protocol rule,
-   the role-guidance rule, the exemplar itself, and the reviewer. All four were bypassed by the same
-   omission. What caught it was `dialect-lint`, which does not read.
+   What caught it was `dialect-lint`, which does not read.
+
+   ⚠️ **One correction to that account, measured afterwards and worth more than the account itself.**
+   This page used to say four guards were in force — protocol rule, role guidance, the exemplar, the
+   reviewer — and that *all four* were prose that a language model bypassed. Three of those were
+   genuinely in the author's prompt. **The exemplar was not.** The contract was binding on the LEG,
+   but it was never delivered to the leg's own child tasks: the author received a harness-written
+   paraphrase of it in its brief, **missing 7 of the exemplar's 10 lines** — and the reviewer's brief
+   was missing 9 of 10. Measured across every archived leg that carried a contract, the same hole was
+   universal: **7 of 7 legs lossy, 0 of N children ever holding the contract.** So the author did not
+   ignore a complete exemplar; it faithfully transcribed an incomplete one. That is a mechanical
+   defect, and it has since been fixed — the contract is now inherited verbatim by every child on its
+   own structured channel, and briefs are forbidden from restating it.
+   **The transferable lesson is the one that cost us the misdiagnosis: before concluding that a model
+   ignored a rule, verify the rule was IN ITS PROMPT.** "Binding" is a property of a document; being
+   *present* is a property of a prompt, and the two drift apart silently. A guard you believe is in
+   force and that is merely absent produces evidence indistinguishable from a guard that was
+   disobeyed — and it argues for exactly the wrong fix (write the prose more forcefully) while the
+   real defect is that nothing was delivered.
+   The rest of the account stands, and so does the conclusion: the reviewer DID hold the complete
+   rule and still approved, and `dialect-lint` — which does not read — is what caught it.
    **So the exemplar's real value is not that an agent obeys it — it is that it is the SPECIFICATION
    the platform's lint checks against.** Nobody ever wrote "this line is required"; the lint derives
    every required line by decomposing this block. A better exemplar therefore buys you a better
