@@ -62,7 +62,14 @@ Systemic observations: three DIFFERENT guards each caught defects (operator appl
 leg harness synthesize, operator plan-gate probe, operator at-rest forensics); every fix, once made
 **transcription-grade**, held for the remainder of the campaign (the R6 author even self-repaired a
 design omission against the canonical exemplar); and the two failures that recurred did so past
-*prose* guards — the corpus evidence that earns the queued mechanical dialect-lint. Promotions
+*prose* guards — the corpus evidence that earned the mechanical dialect-lint. **It has since shipped
+and run: see VT-20, where on its first live round it caught two absent canonical lines in a package its
+own reviewer approved at 86/100.** VT-20 also refines this sentence's classification, and the refinement
+matters: measured afterwards, the SHORT NEGATIVE rules (banned tokens) *were* carried into the child
+briefs, so R1/R3 really were bypassed prose and this finding stands — but the LONG POSITIVE exemplar was
+NOT (3 of 10 canonical lines survived the brief), so the later transcription-completeness failures were a
+DELIVERY defect, not disobedience. An absent guard and a disobeyed guard produce identical evidence and
+demand opposite fixes; classify before concluding. Promotions
 shipped at wrap: network-provisioning protocol v1.4.0 (platform-dialect + unharvestable-target
 obligations, reviewer dialect lint — vendor-agnostic principles only; vendor token facts stay in
 the run's requirements).
