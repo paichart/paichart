@@ -1,7 +1,13 @@
 # VT-20 — a mechanical net catches what five prose guards and an approving reviewer missed; and the forensics behind it distinguish an ABSENT guard from a DISOBEYED one
 
-**Status**: VERIFIED 2026-08-26 | Re-verify trigger: dialect-lint contract shape change, interface-contract
-channel change, or network-provisioning protocol bump past v1.6.0
+**Status**: VERIFIED 2026-08-26, **UPDATED 2026-08-27** (see *Follow-through* at the end — the fix was
+re-tested on a full four-leg round, and two defects were found in the checker itself) | Re-verify
+trigger: dialect-lint contract shape change, interface-contract channel change, or
+network-provisioning protocol bump past v1.7.0
+
+⚠️ **Read the Follow-through section before citing this document's claim 1.** On its own, claim 1
+overstates how reliable the transcription check was at the time: it worked on this round partly by
+luck, and its false-positive behaviour was not yet known.
 **Layer**: platform (with a pipeline-tier round as the specimen)
 **Round type**: failure-injection (unplanned — a live round produced the defect)
 
@@ -121,3 +127,70 @@ Confirmed independently by the replay instrument: that child flips, its three si
 | `npm run replay:contract-propagation -- <legTaskId>` | read-only re-measurement of any leg, no run required |
 | `test-pipeline-context-render` CC7.4 | the produce-vs-observe scoping of the contract preamble (mutation-verified) |
 | `test-cc7-contract-guard` B1.4 | the contract throw stays outside every `try` — rewritten this round after it was found to be measuring a comment and passing under mutation |
+
+
+---
+
+## Follow-through (2026-08-27) — what a second, complete round changed
+
+VT-20 above records ONE leg of ONE round. IGP-T1 R12 ran the full four-leg migration the next day and
+materially changes three things. Recording them here rather than leaving VT-20 to read as settled.
+
+### 1. The delivery claim got much stronger
+
+R12 applied **four** change packages VERBATIM to the live devices with **zero config-syntax defects and
+zero device rejections**, and completed the migration to pure IS-IS on both nodes.
+
+| | R11 (this document) | R12 |
+|---|---|---|
+| Children holding the contract | 0 of 4 | **4 of 4, every leg** |
+| Canonical lines missing from the package | 2 | **0** |
+| Config lines rejected by the device | — | **0** |
+
+The open question after R11 was whether contract *delivery* alone fixes transcription, or whether the
+author must stop generating config text at all (a deterministic renderer was proposed). **Delivery
+alone fixed it**, and the renderer was dropped unbuilt. No author has yet been observed dropping a
+line while HOLDING the complete exemplar.
+
+### 2. Claim 1 needs a qualification this document could not have known
+
+The transcription check derives its required lines by splitting the contract's canonical stanza, and
+the Program Architect's output SHAPE is **non-deterministic across rounds** — R11 emitted it
+newline-separated, R12 emitted the same stanza slash-separated on one line. The splitter handled only
+newlines, so on R12 it produced ONE needle (`router isis`) that almost any IS-IS package contains: a
+confident clean pass over nothing, reported as `stanzasConsidered:1, needles:1, skipped:[]`.
+
+**So the "first live catch" recorded above happened partly by luck** — R11's round was newline-shaped.
+Caught pre-gate on R12 and fixed (separator tolerance; the separator is now emitted as a fact; a
+stanza that will not decompose is a NAMED skip, never a silent one-needle pass). Both live shapes are
+pinned as fixtures.
+
+### 3. The checker had two defects of its own, found by measuring its whole corpus
+
+Corpus measured 2026-08-27 — 8 persisted facts, **4 actually checked**, the entire population since the
+lint shipped. Of the two `MISSING` findings ever produced:
+
+- **R11 P1 — TRUE POSITIVE** (8 of 10 required lines present, 2 missing: the real defect).
+- **R12 P4 — FALSE POSITIVE.** An OSPF-*removal* leg, whose package correctly carries almost none of
+  the stanza and says so explicitly. **The leg reviewer approved it, correctly. The prose judgement
+  was right and the mechanical check was wrong.**
+
+A 50% false rate on findings. Small n — decisive about existence, weak about rates.
+
+Also confirmed live on that leg: a placeholder line degrades to its literal prefix, and the prefix from
+`net <NET>` matched OSPF `network 1.1.1.1/32 area 0.0.0.0`, reporting four NETs in a package containing
+none — **false PRESENCE**, the more dangerous direction, since it makes an absent required line look
+transcribed.
+
+Both fixed: prefix matching now requires a word boundary, and the fact carries `linesPresent` /
+`linesRequired` so a consumer can distinguish *high-but-incomplete* (a dropped line — a real defect)
+from *near-zero* (a leg that does not deploy this stanza). The check deliberately does **not** guess
+which it is looking at; it reports the counts and leaves intent to the consumer.
+
+### What this means for how much weight the mechanical net can carry
+
+The campaign's evidence has consistently favoured mechanical checks over prose ones. **R12 is the
+counter-example, and it should be read as one:** a checker with no notion of leg intent produced a
+confident false block on a clean package, and a human-style reviewer was the one that got it right.
+"Mechanical beats prose" is a tendency in this domain, **not a law** — and a guard's own first full
+round is exactly when to measure it rather than trust it.
