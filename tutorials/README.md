@@ -23,6 +23,7 @@ Engineers maintaining or building MCP servers. Each chapter assumes familiarity 
 | 10 | [Large-scale refactoring: a 4-day, 4500→1000 LOC case study](10-large-scale-refactoring-case-study.md) | **Published** | ~25 min |
 | 11 | [Error recovery signals: fact vs. verdict](11-error-recovery-signals.md) | **Published** | ~14 min |
 | 12 | [The entry point that loads itself: `initialize.instructions` under Tool Search](12-initialize-instructions-entry-point.md) | **Published** | ~12 min |
+| 13 | [Proxy and property: why your guards pass while your system fails](13-proxy-and-property.md) | **Draft** | ~16 min |
 
 ## Reference
 
