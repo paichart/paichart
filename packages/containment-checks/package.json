@@ -1,6 +1,6 @@
 {
   "name": "@paichart/containment-checks",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Mechanical checks for LLM-derived infrastructure values: did a derived CIDR/ASN actually respect the harvested ground truth? Pure functions \u2014 text in, fact out; a value the engine cannot check is reported as not-mechanically-covered, never as clean.",
   "license": "MIT",
   "author": "paichart",

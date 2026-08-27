@@ -679,10 +679,56 @@ test('D9: FAIL CLOSED — upstreamContainment ABSENT blocks, and says so disting
 });
 
 test('D10: hard-gap reasons block, including the two moved there by arch F1', () => {
-  for (const reason of ['enrichment-error', 'no-child-stage', 'no-harvest-child', 'no-author-child']) {
+  // `no-author-child` LEFT this set on 2026-08-27 — it is undecidable at leg tier, not a hard gap.
+  // See D10b/D10c/D10d. The three below are still genuinely "should have run and didn't".
+  for (const reason of ['enrichment-error', 'no-child-stage', 'no-harvest-child']) {
     const d = computeContainmentDisposition({ checked: false, reason });
     assert(d.disposition === 'blocking' && d.reason === 'hard-gap', `${reason}: ${JSON.stringify(d)}`);
   }
+});
+
+test('D10b: no-author-child escalates to needs-node-c with the SUBJECT NAMED', () => {
+  // The fix for IGP-T1 R12/R15: an evidence-only leg has no author child BY DESIGN, an authoring leg
+  // whose author failed to spawn has none BY FAILURE, and nothing at leg tier separates them.
+  // Escalate, do not decide. Panel record: containment-no-author-child-fork-2026-08-27.
+  const d = computeContainmentDisposition({ checked: false, reason: 'no-author-child' });
+  assert(d.disposition === 'needs-node-c', JSON.stringify(d));
+  // F7 (VT-14 Run 23): a needs-node-c naming no subject gets discharged against whatever evidence is
+  // nearest. The reason must say what is being asked, so this pin is on the STRING, not just the state.
+  assert(d.reason === 'no-author-child-leg-kind-undecidable', JSON.stringify(d));
+  // Raw reason retained in inputs so the disposition stays replay-auditable (Protocol 10).
+  assert((d.inputs as { reason?: string }).reason === 'no-author-child', JSON.stringify(d.inputs));
+});
+
+test('D10c: NEGATIVE CONTROL — no-author-child must NOT be benign, and must NOT be reachable as one', () => {
+  // The whole point of choosing needs-node-c over a benign skip: needs-node-c fails CLOSED on Node C
+  // inattention (VT-14 blocked over green legs), a benign pass does not. If a future edit adds
+  // 'no-author-child' to BENIGN_CANDIDATE_REASONS this fails, which is the intent.
+  const d = computeContainmentDisposition({ checked: false, reason: 'no-author-child' });
+  assert(d.disposition !== 'benign', `no-author-child must never be benign: ${JSON.stringify(d)}`);
+  assert(d.disposition !== 'blocking', `regressed to blocking — R12/R15 false-park returns: ${JSON.stringify(d)}`);
+});
+
+test('D10d: CONTRADICTION TRIPWIRE — no-author-child + derived values BLOCKS, never escalates', () => {
+  // A leg that derived values is not the ambiguous case: "evidence-only by design" is refuted by its
+  // own output. Escalating this to Node C would hand it the one shape it must not be asked to excuse.
+  const d = computeContainmentDisposition({
+    checked: false, reason: 'no-author-child',
+    derivedValues: [{ kind: 'cidr', value: '10.99.0.0/30' }],
+  });
+  assert(d.disposition === 'blocking' && d.reason === 'no-author-child-but-leg-derived-values', JSON.stringify(d));
+  // Ordering pin: the tripwire must sit BEFORE the escalation arm. An empty array is NOT a contradiction.
+  const empty = computeContainmentDisposition({ checked: false, reason: 'no-author-child', derivedValues: [] });
+  assert(empty.disposition === 'needs-node-c', `empty derivedValues is not a contradiction: ${JSON.stringify(empty)}`);
+});
+
+test('D10e: CLAUSE 1 DOMINANCE still outranks the new arms', () => {
+  // A violation beats everything, including the new escalation. Never reorder below an exception arm.
+  const d = computeContainmentDisposition({
+    checked: false, reason: 'no-author-child',
+    violations: [{ kind: 'cidr', class: 'member-not-covered' }],
+  });
+  assert(d.disposition === 'blocking' && d.reason === 'violations', JSON.stringify(d));
 });
 
 test('D11: G6 — an UNRECOGNISED reason falls through to blocking, visibly', () => {

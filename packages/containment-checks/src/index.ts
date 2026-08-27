@@ -797,8 +797,38 @@ const BENIGN_CANDIDATE_REASONS = new Set(['no-derived-values-block', 'harvest-bl
 
 /** Reasons that mean THE CHECK NEVER RAN. Always blocking (matches pov-program v1.0.24, arch F1). */
 const HARD_GAP_REASONS = new Set([
-  'enrichment-error', 'no-child-stage', 'no-harvest-child', 'no-author-child',
+  'enrichment-error', 'no-child-stage', 'no-harvest-child',
 ]);
+
+/**
+ * `no-author-child` is NOT a hard gap — it is UNDECIDABLE AT LEG TIER (2026-08-27).
+ *
+ * The bucket above conflates two states: a check that SHOULD have run and didn't (fail closed,
+ * correct) and a check STRUCTURALLY INAPPLICABLE to this leg's shape (fail closed, wrong). An
+ * EVIDENCE-ONLY leg — parity verification, a report, no config authored — has no author child BY
+ * DESIGN. An authoring leg whose author never spawned has none BY FAILURE. Identical fact, opposite
+ * meanings, and NOTHING OBSERVABLE AT LEG TIER SEPARATES THEM: deriving "no author was expected"
+ * from "no author exists" is circular, and is precisely the guess the mechanisation exists to remove.
+ *
+ * Measured cost of getting this wrong: IGP-T1 R12 and R15 both ran four APPROVED legs, Node C
+ * APPROVED, migration applied to real devices with zero disruption — and both stamped
+ * programReleasable:false on this arm alone. 2/2 completed runs, against zero observed instances of
+ * the true-failure case reaching here. Any program containing an evidence-only leg was structurally
+ * unreleasable regardless of work quality.
+ *
+ * So ESCALATE rather than decide — the third application of the pattern the A7 arm established on
+ * 2026-08-16 (`refusal-or-drop` -> `harvested-pool-no-derivation-cannot-decide`), for the identical
+ * ambiguity shape. This is NOT a benign pass: `needs-node-c` fails CLOSED on inattention (VT-14 —
+ * blocked over green legs until dispositioned); only an EXPLICIT, stamped, replay-auditable
+ * discharge releases. The sibling net dialect-lint already returns this same condition as a
+ * non-blocking named skip, so this also ends two nets disagreeing on one input.
+ *
+ * DELIBERATELY NOT in BENIGN_CANDIDATE_REASONS, and deliberately NOT reusing an existing reason
+ * string: F7 (VT-14 Run 23) showed a `needs-node-c` that names no subject gets discharged against
+ * whatever evidence is nearest. The reason below names what is being asked. Full record + the
+ * rejected `legKind` alternative: cline_docs/reviews/containment-no-author-child-fork-2026-08-27/
+ */
+const LEG_TIER_UNDECIDABLE_REASONS = new Set(['no-author-child']);
 
 export function computeContainmentDisposition(fact: Record<string, unknown>): ContainmentDisposition {
   const violations = Array.isArray(fact.violations) ? fact.violations : [];
@@ -836,6 +866,20 @@ export function computeContainmentDisposition(fact: Record<string, unknown>): Co
 
   if (reason === undefined) return out('blocking', 'no-reason-given');
   if (HARD_GAP_REASONS.has(reason)) return out('blocking', 'hard-gap');
+
+  // CONDITION 3 (contradiction tripwire) — ordered BEFORE the escalation below, deliberately. A leg
+  // that reached this arm yet carries derived values is NOT the ambiguous case: whatever it is, it
+  // derived, so "evidence-only by design" is refuted by its own output. Escalating that to Node C
+  // would hand it the one shape it must not be asked to excuse. Block, and say why.
+  if (LEG_TIER_UNDECIDABLE_REASONS.has(reason)
+      && Array.isArray(fact.derivedValues) && fact.derivedValues.length > 0) {
+    return out('blocking', 'no-author-child-but-leg-derived-values');
+  }
+
+  // Undecidable at leg tier — escalate to the program tier with the SUBJECT NAMED (F7).
+  if (LEG_TIER_UNDECIDABLE_REASONS.has(reason)) {
+    return out('needs-node-c', 'no-author-child-leg-kind-undecidable');
+  }
   if (!BENIGN_CANDIDATE_REASONS.has(reason)) return out('blocking', `unrecognised-reason:${reason}`);
 
   if (reason === 'no-derived-values-block') {
