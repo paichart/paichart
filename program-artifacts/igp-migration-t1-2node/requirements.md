@@ -124,7 +124,9 @@ The Program Architect derives these in the plan and they bind every leg:
   for P3 is flipping it back.
 - `parityCriteria`: at G2, **every prefix OSPF advertises is present in each device's IS-IS
   link-state database, with a next-hop identical to the one OSPF resolves for it** — tolerance for
-  missing or extra prefixes is **zero**.
+  missing or extra prefixes is **zero**. The IS-IS next-hop here is **derived** (see P2 below): a
+  link-state database carries reachability and metric, not a resolved next-hop. Deriving it is
+  correct and expected; presenting the derivation as a retrieved quote is not.
   ⚠️ **Why the criterion is stated against the link-state database and NOT against the routing
   table.** During coexistence this program deliberately keeps OSPF preferred, so IS-IS routes are
   computed but never INSTALLED — and a routing-table view lists installed routes only. A criterion
@@ -179,8 +181,26 @@ evidence is leg-scoped; a program-level statement is invisible to it — *earned
   prose for exactly this check and the reviewer correctly blocked the package.*
 - **P2 — parity verification (evidence, not config).** Harvest live post-apply state; deliverable is
   a parity report: per device, the OSPF-advertised prefix set (with the next-hop OSPF resolves) vs
-  the prefixes present in the IS-IS link-state database (with their IS-IS next-hop), as retrieved
-  output — plus the adjacency roster vs the contract's expectation. Do NOT build the comparison from
+  the prefixes present in the IS-IS link-state database (with their IS-IS next-hop) — plus the
+  adjacency roster vs the contract's expectation.
+  ⚠️ **DERIVED VALUES MUST BE LABELLED DERIVED — this criterion requires one.** A link-state
+  database carries reachability and metric entries keyed by system-ID; it does **not** carry a
+  resolved next-hop, which is an SPF/topology product. So the IS-IS next-hop in this report is
+  **derived, not retrieved**, and the report must say so and state the basis it was derived from.
+  Writing it as retrieved output — or asserting blanket "every value is a direct quote from tool
+  output" over a table that contains it — is a fabrication risk on the exact field this criterion
+  turns on, and a reviewer is right to block for it.
+  **The general rule, which applies to any protocol and any vendor:** where a criterion requires a
+  value the evidence source does not directly carry, the value is still legitimate — DERIVE it, then
+  label it derived and name what it was derived from. Never silently promote a derivation to a
+  quotation. Do not "solve" this by dropping the field or by switching to a source that happens to
+  print the word: derive, disclose, and let the reviewer judge the derivation.
+  *Earned: IGP-T1 R15 and R16 — both P2 legs presented an SPF-derived next-hop as a literal
+  link-state-database quote. On a 2-node/1-link topology the derived value is trivially correct
+  (one neighbour), which is exactly why it passed R15's reviewer unnoticed and why the claim was
+  invisible: the answer was right, only its stated provenance was wrong. R16's reviewer caught it
+  and blocked the leg. Note this requirement previously said "as retrieved output" here — the
+  analyst was doing what it was told.* Do NOT build the comparison from
   installed-route views: while OSPF stays preferred, IS-IS routes do not install, so those views are
   empty BY DESIGN and prove nothing either way (see `parityCriteria`). The report must
   compare **retrieved values against retrieved values** (harvest vs harvest), never against this
