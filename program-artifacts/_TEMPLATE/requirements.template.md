@@ -134,25 +134,6 @@ run.
    *Earned: IGP-T1 R7 — an omitted line left the protocol disabled; the package was banned-token
    clean and approved at 90/100 by a reviewer checking only the absence direction.*
 
-10. ⚠️ **Every validation step must be SATISFIABLE under the phase's own constraints.** Before you
-    write an expected output, ask: *can this pass, GIVEN what this phase is required to do?* A step
-    whose expected output is precluded by the phase's own requirement makes a CORRECT change look
-    failed — the operator then rolls back good work, or "fixes" it by violating the requirement.
-    Where a property can be observed several ways, state the PROPERTY and name an observable the
-    phase does not preclude.
-    *Earned: IGP-T1 R9 — a step required one protocol's routes to appear in the routing table while
-    the same phase required the OTHER protocol to stay preferred, which guarantees they never
-    install. The same defect recurred in that round's parity criterion, which compared installed
-    routes during deliberate coexistence and reported failure on a healthy fabric.*
-
-11. 🔴 **Writing rule 3 governs EVERY channel an agent reads — not just this file.** Task
-    descriptions, gate comments, and run notes are all agent-readable contract. Naming a prior
-    round's specific defect token there lets the agent satisfy the POINTER instead of the PROPERTY,
-    and a round that then passes evidences only "the agent avoided the line it was told about".
-    Name the property, name the mechanism, cite the earning round for provenance — never the token.
-    *Earned: a round was superseded before its plan gate for exactly this, and re-run clean, which
-    is the only reason its result was usable as evidence.*
-
 9. ⚠️ **A validation target the harvest cannot see does not license prose.** When rule 1 demands a
    literal expected output for state the read-only service has no getter for, the author has two
    deterministic paths and must take (and name) at least one: derive the literal expectation from
@@ -175,6 +156,57 @@ run.
     pattern at the chaining boundary; the reviewer, seeing the marker in its view, blocked a
     document that contained no marker at rest. The round was archived on a defect that did not
     exist.*
+
+11. ⚠️ **Every validation step must be SATISFIABLE under the phase's own constraints.** Before you
+    write an expected output, ask: *can this pass, GIVEN what this phase is required to do?* A step
+    whose expected output is precluded by the phase's own requirement makes a CORRECT change look
+    failed — the operator then rolls back good work, or "fixes" it by violating the requirement.
+    Where a property can be observed several ways, state the PROPERTY and name an observable the
+    phase does not preclude.
+    *Earned: IGP-T1 R9 — a step required one protocol's routes to appear in the routing table while
+    the same phase required the OTHER protocol to stay preferred, which guarantees they never
+    install. The same defect recurred in that round's parity criterion, which compared installed
+    routes during deliberate coexistence and reported failure on a healthy fabric.*
+
+12. 🔴 **Writing rule 3 governs EVERY channel an agent reads — not just this file.** Task
+    descriptions, gate comments, and run notes are all agent-readable contract. Naming a prior
+    round's specific defect token there lets the agent satisfy the POINTER instead of the PROPERTY,
+    and a round that then passes evidences only "the agent avoided the line it was told about".
+    Name the property, name the mechanism, cite the earning round for provenance — never the token.
+    *Earned: a round was superseded before its plan gate for exactly this, and re-run clean, which
+    is the only reason its result was usable as evidence.*
+
+13. ⚠️ **A value the evidence source does not directly carry must be labelled DERIVED, and its
+    basis named.** Where a criterion requires such a value, the value is still legitimate — DERIVE
+    it, then say it is derived and name what it was derived from. Never silently promote a
+    derivation to a quotation, and never assert a blanket "every value here is a direct quote from
+    tool output" over a table that contains one. Do NOT "solve" this by dropping the field or by
+    switching to a source that merely prints the word: derive, disclose, and let the reviewer judge
+    the derivation.
+    🔴 **Check THIS document first.** If a deliverable spec tells the author to present such a value
+    "as retrieved output", the author is doing what it was told and the defect is here, not in the
+    agent. A requirement that asks for a value its own named evidence source cannot supply is the
+    same class of defect as rule 11's unsatisfiable step.
+    *Earned: IGP-T1 R15 and R16 — a derived value presented as a literal quote from a source that
+    structurally cannot carry it. Where the topology makes the derivation trivially correct, the
+    answer is RIGHT and only its stated provenance is wrong, which is exactly the shape a reviewer
+    skims past: R16's reviewer blocked it, R15's did not and it shipped. The requirement itself had
+    said "as retrieved output".*
+
+14. ⚠️ **A numbered acceptance check keeps its NUMBER for the life of the program family, even
+    when its property is narrowed.** Rounds are compared against each other, and "check 2 passed" is
+    only meaningful if check 2 is the same check it was last round. When a topology or scope change
+    makes a check's original property unobservable, do not renumber, delete, or silently substitute:
+    keep the number, narrow the property HONESTLY, and state in the check itself that it is narrower
+    and what a pass now evidences. Renumbering makes every prior round's result uncitable;
+    substituting silently makes them wrong — a pass gets reported as evidence of a property nobody
+    checked.
+    *Earned: Run 15 (fabric expansion) — a new clause was added to a requirements file and the
+    reviewer renumbered it into the slot held by the minimality check, which it then never
+    performed; a non-minimal result shipped as approved. **A renumbering silently deletes a
+    check.** The narrowing half was earned on IGP-T1's 2-node topology, where a check written for a
+    richer fabric could not express its original property and kept its number with the narrowing
+    stated, so the round stayed comparable.*
 
 ---
 
