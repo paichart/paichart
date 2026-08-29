@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 1.2.2.**
+> **Rendered verbatim from the pAIchart platform seed — version 1.2.3.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -66,7 +66,7 @@ The read-only Terraform service is provisioned at run time, not pre-registered: 
 
 ## Harvest discipline — narrow reads; render state, never launch providers
 
-Each tool result is capped (~8 KB) before the Harvester reasons over it, so a whole-state `state pull` dumped unscoped is silently truncated and loses fields. The Harvester must issue **many narrow, address-scoped reads**: `state list` for the addresses, then a targeted `state pull` per needed address. Scope the harvest to the objective named in the task. **Harvest the resource SHAPE + addresses + drift, never secret VALUES** — the read-only service redacts by the state's own `sensitive_attributes`; never request raw state, and never run `plan`/`validate` (they launch providers = arbitrary code).
+Each tool result is capped (~8 KB) before the Harvester reasons over it, so a whole-state `state pull` dumped unscoped is silently truncated and loses fields. The Harvester must issue **many narrow, address-scoped reads**: `state list` for the addresses, then a targeted `state pull` per needed address. Scope the harvest to the objective named in the task. **Harvest the resource SHAPE + addresses + drift, never secret VALUES** — and do NOT assume the service redacts by the state's own `sensitive_attributes`: that is the CUSTOMER service's behaviour, not a platform guarantee, so treat any **secret** value you CAN see as one you must not restate — this does NOT touch the shape, addresses, and cidr/asn allocation values the `## Harvested Allocations` and `## Derived Values` blocks REQUIRE. The platform's own redaction runs at persist and is COARSE — it cannot be relied on for arbitrary state values, so never restate one expecting it to be caught. Never request raw state, and never run `plan`/`validate` (they launch providers = arbitrary code).
 
 ## Expected-denial handling — a denied read is the control working, NOT a failure
 
