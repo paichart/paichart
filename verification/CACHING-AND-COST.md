@@ -1,6 +1,6 @@
 # Token economics of an autonomous pipeline — what we cache, and what we don't
 
-**Last measured**: 2026-08-09 · Companion to `METHODOLOGY.md`
+**Last measured**: 2026-08-29 · Companion to `METHODOLOGY.md`
 
 Autonomous multi-agent delivery has an unusual cost shape, and most of what determines the bill is
 decided before a single token is generated. This document states what pAIchart does about it, what
@@ -44,8 +44,8 @@ Measured across 30 days of production execution:
 
 | tier | cache written per execution | cache read per execution | amortisation |
 |---|---:|---:|---:|
-| pipeline harness | ~103,000 tokens | ~1,035,000 tokens | **~10×** |
-| specialist agent | ~32,000 tokens | ~95,000 tokens | ~3× |
+| pipeline harness | ~89,000 tokens | ~918,000 tokens | **~10×** |
+| specialist agent | ~46,000 tokens | ~153,000 tokens | ~3× |
 
 Read the pipeline row as a statement about turns: an execution pays to establish its cache once, then
 reads it back about ten times over the course of its own reasoning. **That ratio is the turn count**
