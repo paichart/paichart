@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 3.11.0.**
+> **Rendered verbatim from the pAIchart platform seed — version 3.13.0.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -106,6 +106,7 @@ Important:
 - Create tasks in dependency order so each new task's `dependencyIds` refers to already-created child IDs.
 - Independent parallel tasks: `dependencyIds: []`.
 - Save every returned task ID from `result.task.id` — you'll use them in Step 5 and for wiring downstream deps.
+- **Do NOT restate the program interface contract in a description.** If your pipeline carries an interface contract, every ACTION child you create receives it AUTOMATICALLY and VERBATIM on its own structured channel, rendered as a BINDING block ahead of everything else. A summary of it in the brief is not a helpful reminder — it is a SECOND, LOSSY COPY that competes with the binding original, and the child cannot tell which one governs. Measured 2026-08-26 across every archived leg that carried a contract: the harness-written briefs lost most of the canonical stanza (**7 of 7 legs lossy**), and a config author faithfully following its brief omitted lines the contract specified in full. Name the contract ("honor the interface contract's platform dialect"); never paraphrase its content, and never retype a canonical stanza, banned-token list, or address/VLAN/ASN value into a brief.
 - **Descriptions state the objective and carry forward the plan's/requirements' own constraints — verbatim. Do NOT compose new acceptance criteria, thresholds, or verification gates that the active protocol or the requirements artifact does not state**: an invented constraint becomes a rule owned by nobody, and over-constraint is how a run reaches a false "impossible" (2026-08-11: a harness-invented "verify no /31 or /30 widening" gate — present in no protocol and no requirements — made a child reject a valid selection).
 
 ### Step 5: Assign Templates
@@ -217,11 +218,21 @@ Leave your status IN_PROGRESS. Exit.
 
 ### Step 2: Read Every Child's Results
 For each child task in your child stage:
-`project(action: "task.context", taskId: "<child id>")` — fetch the completion comment and artifacts. Do NOT use `verbose: true` (wastes tokens).
+**TWO CHANNELS, and confusing them is the failure mode this step exists to prevent.**
+- **Pointer channel** — `project(action: "task.context", taskId: "<child id>")` returns metadata, comments and activity. It NEVER returns an artifact BODY, and the `fetch(id:)` pointers in a completion comment are FOR HUMANS in Claude Desktop (`fetch` is a client tool, NOT on your agent surface — calling it fails with "tool not found"). Use this to sweep each child's posted confidence + summary. Do NOT add `verbose: true` here (wastes tokens).
+- **Body channel** — `perform(action: "agent.results", taskId: "<child id>", verbose: true, limit: 1)` is the ONLY route to a child's `result.json` / `report.md` contents. `verbose: true` is LOAD-BEARING: without it you get a ~3K lean card with no `finalResponse` at all. `limit: 1` bounds the envelope to the latest execution. If the body is truncated, page to the end with `read_more`.
 
-Extract the confidence score and summary each specialist posted via task.complete.
+Extract the confidence score and summary each specialist posted via task.complete (pointer channel is sufficient for that).
 
-**Reviewer/QA-gate child — read ONLY the terminal verdict block.** A reviewer's verdict is the terminal `## VERDICT:` block at the very END of its `result.json.finalResponse` (format canonical in the Change Reviewer role guidance). That terminal block supersedes ALL earlier prose: an issue raised earlier but NOT carried into the terminal `Blocking issues:` line was retracted and is NOT blocking — never resurrect it. If the fetched result is truncated and the terminal block is not visible, read the structured `reviewerVerdict` field near the TOP of `result.json` (same fact, truncation-safe), or page to the end with the `read_more` continuation — NEVER re-derive a verdict from mid-response prose.
+**Reviewer/QA-gate child — you MUST use the BODY channel, and a verdict you could not retrieve is NEVER an approval.**
+```
+perform(action: "agent.results", taskId: "<reviewer child id>", verbose: true, limit: 1)
+```
+A reviewer's verdict is the terminal `## VERDICT:` block at the very END of its `result.json.finalResponse` (format canonical in the Change Reviewer role guidance). That terminal block supersedes ALL earlier prose: an issue raised earlier but NOT carried into the terminal `Blocking issues:` line was retracted and is NOT blocking — never resurrect it.
+
+Two cheaper routes to the SAME fact, both truncation-safe: the structured `reviewerVerdict` field sits near the TOP of `result.json` (it precedes `finalResponse` by design), and the response card's `**Facts:**` line carries it in one line. If the body is truncated, page to the end with `read_more`. NEVER re-derive a verdict from mid-response prose.
+
+🔴 **If you cannot retrieve the verdict, you may NOT stamp `approved`.** Stamp `escalated`, say in your comment exactly which retrieval you attempted and what came back, and exit. A reviewer's silence is not consent, and an auto-summary showing `SUCCESS` describes the EXECUTION, never the VERDICT — a reviewer that ran cleanly and rejected the package is a SUCCESS execution with a NEEDS-REVISION verdict. *Earned 2026-08-25 (IGP-T1 R10): this step named `result.json.finalResponse` but no retrieval verb, and forbade the only flag that returns it; the harness called `task.context` four times, could not quote the verdict, and stamped `approved` over a NEEDS-REVISION with a blocking issue.*
 
 ### Step 3: Quality Gate
 For each child:
