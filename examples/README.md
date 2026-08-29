@@ -76,7 +76,7 @@ See the report's **Guard Verification** addendum for the full result.
 **The two things that make it trustworthy:**
 
 - **It never actuates.** The output is a change *to be applied* (an HCL PR); applying it is the team's governed `terraform apply` run — out-of-band and human-gated.
-- **Secret-dense state never enters the LLM.** The read-only service renders state and redacts by the state's own `sensitive_attributes`; only resource shape + addresses leave it.
+- **Secret-dense state should never enter the LLM — the customer's service owns that.** It renders state and is expected to redact by the state's own `sensitive_attributes`, so only resource shape + addresses leave it. **pAIchart does not verify this**; its own redaction is a coarse backstop on persisted artifacts, applied at write time.
 
 **Honest scope:** validated against **LocalStack** (a sandbox AWS), not a real cloud account. It exercises the full cognition pipeline + pAIchart's read-only floor + its output guards (untrusted-output sanitize, artifact secret redaction) against real Terraform state. The service authenticates with a static credential rather than pAIchart's per-user JWKS identity — the latter is the production identity contract for a customer-governed service.
 

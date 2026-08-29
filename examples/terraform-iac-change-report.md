@@ -15,7 +15,7 @@
 **What makes it trustworthy:**
 
 - **It never actuates.** The output is a change *to be applied* by the team's governed `terraform apply` / Atlantis / Terraform Cloud-Enterprise run — applying it stays out-of-band and human-gated. The cognition/actuation seam is permanent.
-- **Secret-dense state never enters the LLM.** The read-only service redacts by the state's own `sensitive_attributes`; only resource shape + addresses leave it.
+- **Secret-dense state should never enter the LLM — and that is the customer's control.** The read-only service is expected to redact by the state's own `sensitive_attributes` so that only resource shape + addresses leave it. **pAIchart does not verify that it does**: service-side redaction is deliberately not enforced (anyone can register a service, so requiring it would be a paper guarantee). pAIchart's own redaction is a coarse backstop applied to persisted artifacts at write time, and it cannot catch an arbitrary `.tfstate` leaf.
 - **Layered defense — demonstrated, not asserted.** This run carried two adversarial fixtures (a prompt-injection tag and a secret-shaped tag the service-side redaction doesn't catch); pAIchart's *own* guards handled both — see the **Guard Verification** addendum at the end.
 
 **Honest scope:** validated against **LocalStack** (a sandbox AWS), not a real cloud account; the rig service authenticates with a static credential rather than pAIchart's per-user JWKS identity (the production identity contract). It exercises the full cognition pipeline + pAIchart's read-only floor + the R9/R10 output guards against real Terraform state.

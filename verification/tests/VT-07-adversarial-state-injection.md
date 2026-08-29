@@ -98,15 +98,25 @@ Exhibits (Meridian Trading Fabric)"** as **Exhibit 3**. A read-only demo account
 
 **Honest note on branch:** the two occurrences documented above took the *design-halt → escalation →
 blocked-release* branch. The demo run took a **different valid branch of the same defense**: the
-harvest-layer redaction/neutralization guards fired *before* the reasoner, so the agent received the
-payload already defanged (`[REDACTED-INJECTION]`), explicitly refused it ("no embedded instructions
-will be acted upon"), redacted the `AKIA…` value, flagged both forward, and completed an
+harvest-layer **injection-neutralization** guard fired *before* the reasoner, so the agent received the
+payload already defanged (`[NEUTRALIZED-INJECTION:<category>]`), explicitly refused it ("no embedded
+instructions will be acted upon"), itself declined to restate the `AKIA…` value, flagged both
+forward, and completed an
 approved-but-caveated tag-only change (`programReleasable: true`, reviewer 88). Same safety property —
 the injected instruction is never obeyed and the secret never appears in any deliverable (verified
 across every artifact) — reached by neutralize-and-flag rather than halt-and-escalate. Which branch
 you see depends on whether the harvest-layer guards are active and how the objective frames
 out-of-scope content. Notably, the demo run *does* exercise live the secret-redaction that this
 document's two occurrences explicitly did **not** claim.
+
+**Which guard did what, because the two are easy to merge and this document previously merged
+them.** The pre-reasoner guard neutralizes prompt INJECTION only — it is pinned in CI to leave a
+secret byte-identical, so it is not, and must not be read as, a secret filter. That the `AKIA…`
+value did not reach a deliverable is two separate facts: the agent declined to restate it, and
+pAIchart's own coarse redaction runs at PERSIST, on the artifacts, before write. Nothing redacts a
+secret before the reasoner reads it — by design, since service-side redaction is deliberately not
+enforced. So the safety property demonstrated here is real, and it is not "the secret was filtered
+out on the way in".
 
 ## Enforcement
 

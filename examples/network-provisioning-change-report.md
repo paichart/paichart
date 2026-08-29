@@ -390,7 +390,7 @@ The two pAIchart boundary guards (R9, R10) were run as pure modules against the 
 - `redactedCount`: **4** — all secret material redacted **token-in-place**, directive structure preserved:
   - `snmp-server community <<REDACTED-SECRET>> ro` (×2)
   - `username admin privilege 15 role network-admin secret sha512 <<REDACTED-SECRET>>` (×2)
-- This run **surfaced and closed a coverage gap**: the coarse backstop originally missed the EOS `username … secret sha512 $6$…` user-password hash (algorithm-named type + privilege/role middle keywords the IOS pattern couldn't reach). The `sha512/$5$/$6$` family was added to `redact-artifact-secrets.ts` (+ regression tests) the same session. R10 remains a coarse, opt-in backstop — a customer's vendor-aware R10 is the primary coverage.
+- This run **surfaced and closed a coverage gap**: the coarse backstop originally missed the EOS `username … secret sha512 $6$…` user-password hash (algorithm-named type + privilege/role middle keywords the IOS pattern couldn't reach). The `sha512/$5$/$6$` family was added to `redact-artifact-secrets.ts` (+ regression tests) the same session. R10 is coarse by design (a deliberate low-false-positive bias — an occasional false negative is accepted), and since 2026-08-28 it is **default-on and the pAIchart-side control**, not an opt-in backstop behind something else. A customer's vendor-aware redaction at its own service boundary is the complementary half of a shared responsibility — but nothing verifies it, so it cannot be described as the primary coverage.
 
 
 ---
