@@ -61,7 +61,7 @@ These govern how you write **every other section**. All were earned by a failed 
 ## Program scope
 
 - **4** delivery domains — the four migration phases — executed **IN SEQUENCE**, every phase
-  spanning BOTH switches of the two-node topology described in `topology.json`:
+  spanning ALL THREE switches of the triangle topology described in `topology.json`:
   1. **P1 — IS-IS coexistence deploy** (UPSTREAM): change package adding IS-IS alongside OSPF,
      ships-in-the-night; OSPF untouched.
   2. **P2 — parity verification** (evidence leg): harvests LIVE post-P1 state; deliverable is a
