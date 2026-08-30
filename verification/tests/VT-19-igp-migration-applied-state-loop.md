@@ -175,7 +175,7 @@ claim in the one dimension the 2-node topology honestly disclaimed: **relative p
   IS-IS-translation rationale that could not have existed in the OSPF-era harvest (an anachronism
   as evidence of paraphrase) — and the program integration reviewer corroborated with that as the
   SOLE blocking issue while every other program-tier check passed across all four legs. The
-  program is parked at its final gate by explicit human choice: three phases applied and persisted,
+  program was parked at its final gate by explicit human choice (see close-out below): three phases applied and persisted,
   the point-of-no-return leg honestly blocked, the fabric stable in dual-IGP with IS-IS preferred
   and a seconds-reversible path back.
 - **Two operator-tier findings recorded**: P1's package mandated a byte-identical diff of a command
@@ -187,3 +187,26 @@ claim in the one dimension the 2-node topology honestly disclaimed: **relative p
 Caveats as above, plus: the operator applies were performed by the delegated AI operator over ssh
 to lab containers — the same out-of-band, human-gated lane a human engineer occupies; nothing in
 the authoring pipeline touched a device.
+
+## R19 close-out — the P4-Completion round and the honest completion (2026-08-31)
+
+The parked state above did not stand as the arc's ending; it stands as its pivot.
+
+- **P4-Completion round (fresh single-pipeline run, next day, against the *applied* world):** the
+  refused defect was named as the round's anti-pattern up front, and before applying, the operator
+  ran the exact test the defect demands — **all 21 rollback lines found character-for-character in
+  the leg's own harvest** (rollback ⊆ harvest). Applied spoke→spoke→hub with a validation gate
+  between each device: OSPF removed from all three, zero `O`-coded routes at every step, the IS-IS
+  route set byte-stable against baseline on static fields, persisted per the package's persistence
+  statement. The fabric is IS-IS-only; the migration the one-sentence objective asked for is done.
+- **The R19 program record was then closed, and it refused to launder itself.** With the
+  world-condition factually true, the human released the parked final gate. The program completed —
+  with the verdict **preserved**: `needs-revision`, `programReleasable: false`, and the extracted
+  root `report.md` opening with a NOT-RELEASED banner over the composed deliverable. A released
+  gate closes a record; it does not overwrite a reviewer's refusal. The completion round's approval
+  lives in its own, separate record — provenance intact in both directions.
+
+What this adds to the VT's claim: the refusal→remediation loop is not just a stop — it is a
+*resumable* stop whose remediation round inherits the defect as an explicit contract term, passes
+the mechanical form of the failed prose rule before apply, and leaves two unconflated records: one
+honestly failed, one honestly passed.
