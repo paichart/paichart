@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Run sheet: IGP-T1 triangle arc (R19 + P4-Completion), as-run record. Authored 2026-08-31. -->
+<title>IGP-T1 Triangle Run Sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<style>
+  :root {
+    --ground:      #f7f8fa;
+    --surface:     #ffffff;
+    --surface-alt: #eef1f5;
+    --ink:         #191d24;
+    --ink-soft:    #384250;
+    --muted:       #59636f;
+    --rule:        #dee3ea;
+    --rule-strong: #c3ccd7;
+    --accent:      #2d5c86;
+    --accent-soft: #e4edf5;
+    --good:        #2c6b4c;
+    --good-soft:   #e2f0e8;
+    --warn:        #86601a;
+    --warn-soft:   #f7eeda;
+    --bad:         #963931;
+    --bad-soft:    #f7e6e3;
+    --shadow:      0 1px 2px rgba(25, 29, 36, .05), 0 8px 24px -18px rgba(25, 29, 36, .35);
+
+    --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --sans:  "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --mono:  "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #13161b;
+      --surface:     #1a1e25;
+      --surface-alt: #21262e;
+      --ink:         #e7eaef;
+      --ink-soft:    #c3cad3;
+      --muted:       #949da9;
+      --rule:        #2c323b;
+      --rule-strong: #3d4551;
+      --accent:      #86b0d8;
+      --accent-soft: #1e2a36;
+      --good:        #74bd93;
+      --good-soft:   #16241d;
+      --warn:        #d3a755;
+      --warn-soft:   #262015;
+      --bad:         #dd857c;
+      --bad-soft:    #2a1a19;
+      --shadow:      0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -18px rgba(0, 0, 0, .8);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #13161b;
+    --surface:     #1a1e25;
+    --surface-alt: #21262e;
+    --ink:         #e7eaef;
+    --ink-soft:    #c3cad3;
+    --muted:       #949da9;
+    --rule:        #2c323b;
+    --rule-strong: #3d4551;
+    --accent:      #86b0d8;
+    --accent-soft: #1e2a36;
+    --good:        #74bd93;
+    --good-soft:   #16241d;
+    --warn:        #d3a755;
+    --warn-soft:   #262015;
+    --bad:         #dd857c;
+    --bad-soft:    #2a1a19;
+    --shadow:      0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -18px rgba(0, 0, 0, .8);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.62;
+    margin: 0;
+    padding: 0 24px 96px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 830px; margin: 0 auto; }
+
+  p { margin: 0 0 1em; max-width: 66ch; }
+  p:last-child { margin-bottom: 0; }
+
+  a { color: var(--accent); }
+
+  strong { font-weight: 600; }
+
+  code {
+    font-family: var(--mono);
+    font-size: .84em;
+    background: var(--surface-alt);
+    border-radius: 3px;
+    padding: .1em .35em;
+    color: var(--ink);
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    padding: 72px 0 28px;
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .eyebrow {
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 18px;
+  }
+
+  h1 {
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: clamp(38px, 6.5vw, 58px);
+    line-height: 1.02;
+    letter-spacing: -.022em;
+    margin: 0 0 20px;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    font-size: 20px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+    max-width: 60ch;
+    margin: 0;
+  }
+
+  /* ---------- result strip ---------- */
+
+  .strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin: 34px 0 0;
+  }
+
+  .strip div {
+    background: var(--surface);
+    padding: 16px 18px;
+  }
+
+  .strip dt {
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 7px;
+  }
+
+  .strip dd {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    margin: 0;
+    letter-spacing: -.02em;
+  }
+
+  .strip dd.ok { color: var(--good); }
+
+  /* ---------- sections ---------- */
+
+  section { margin: 64px 0 0; }
+
+  h2 {
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 27px;
+    letter-spacing: -.015em;
+    line-height: 1.2;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+
+  .sec-num {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 10px;
+    letter-spacing: .04em;
+  }
+
+  .sec-lede {
+    color: var(--muted);
+    font-size: 17px;
+    margin: 0 0 30px;
+    max-width: 62ch;
+  }
+
+  h3 {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 19px;
+    letter-spacing: -.008em;
+    margin: 38px 0 10px;
+  }
+
+  /* ---------- callout ---------- */
+
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 18px 22px;
+    margin: 26px 0;
+  }
+
+  .callout .label {
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  .callout p { max-width: 62ch; }
+
+  /* ---------- stage timeline ---------- */
+
+  .stages {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 8px;
+  }
+
+  .stage {
+    display: grid;
+    grid-template-columns: 74px 1fr;
+    gap: 22px;
+    padding: 20px 0;
+    border-top: 1px solid var(--rule);
+    align-items: start;
+  }
+
+  .stage:last-child { border-bottom: 1px solid var(--rule); }
+
+  .stage-key {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    padding-top: 2px;
+  }
+
+  .stage-key .who {
+    display: block;
+    font-family: var(--sans);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    margin-top: 6px;
+    line-height: 1.4;
+  }
+
+  .who.machine { color: var(--muted); }
+  .who.human   { color: var(--bad); }
+
+  .stage-body h4 {
+    font-family: var(--sans);
+    font-size: 17px;
+    font-weight: 600;
+    margin: 0 0 6px;
+  }
+
+  .stage-body p {
+    margin: 0;
+    font-size: 16px;
+    color: var(--ink-soft);
+  }
+
+  .stage-body p + p { margin-top: 8px; }
+
+  .outcome {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 10px !important;
+    padding-top: 9px;
+    border-top: 1px dotted var(--rule-strong);
+  }
+
+  /* ---------- signal cards ---------- */
+
+  .signal {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    box-shadow: var(--shadow);
+    margin: 0 0 20px;
+    overflow: hidden;
+  }
+
+  .signal-raw {
+    font-family: var(--mono);
+    font-size: 13.5px;
+    line-height: 1.7;
+    background: var(--surface-alt);
+    border-bottom: 1px solid var(--rule);
+    padding: 14px 20px;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--ink);
+  }
+
+  .signal-body { padding: 20px 22px 22px; }
+
+  .signal-body dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 82px 1fr;
+    gap: 8px 18px;
+    align-items: baseline;
+  }
+
+  .signal-body dt {
+    font-family: var(--sans);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding-top: 5px;
+  }
+
+  .signal-body dt.trap { color: var(--bad); }
+
+  .signal-body dd {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    max-width: 60ch;
+  }
+
+  .signal-body dd p { font-size: inherit; margin-bottom: .7em; }
+
+  /* ---------- tables ---------- */
+
+  .tablewrap { overflow-x: auto; margin: 22px 0; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 15px;
+    min-width: 480px;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 10px 14px 10px 0;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+
+  th {
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--rule-strong);
+    white-space: nowrap;
+  }
+
+  td.m, th.m {
+    font-family: var(--mono);
+    font-size: 13.5px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* ---------- pills ---------- */
+
+  .pill {
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 2px;
+    white-space: nowrap;
+    display: inline-block;
+  }
+
+  .pill.ok   { background: var(--good-soft); color: var(--good); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .pill.bad  { background: var(--bad-soft);  color: var(--bad);  }
+  .pill.info { background: var(--accent-soft); color: var(--accent); }
+
+  /* ---------- device output ---------- */
+
+  pre.device {
+    font-family: var(--mono);
+    font-size: 13.5px;
+    line-height: 1.75;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--rule-strong);
+    padding: 16px 20px;
+    overflow-x: auto;
+    margin: 20px 0;
+    color: var(--ink-soft);
+  }
+
+  pre.device b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- glossary ---------- */
+
+  .gloss {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .gloss dt {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 13px 18px 13px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .gloss dd {
+    margin: 0;
+    font-size: 16px;
+    color: var(--ink-soft);
+    padding: 13px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  footer {
+    margin-top: 72px;
+    padding-top: 22px;
+    border-top: 2px solid var(--ink);
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+  }
+
+  @media (max-width: 620px) {
+    body { font-size: 16px; padding: 0 18px 64px; }
+    .stage { grid-template-columns: 1fr; gap: 10px; }
+    .signal-body dl { grid-template-columns: 1fr; gap: 4px; }
+    .signal-body dt { padding-top: 10px; }
+    .gloss { grid-template-columns: 1fr; }
+    .gloss dt { border-bottom: none; padding-bottom: 0; }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    a, .pill { transition: color .15s ease, background .15s ease; }
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+</style>
+</head><body>
+
+<main>
+<header>
+  <h1>IGP-T1 Triangle Run Sheet</h1>
+  <p class="sec-lede">The as-run record of a complete routing-protocol migration &mdash; three live switches, five gated applies, one honest refusal, and the round that answered it. 2026-08-30/31.</p>
+</header>
+
+<h2>What this actually is</h2>
+<p>One sentence of intent &mdash; <em>migrate this three-switch network from OSPF to IS-IS without dropping traffic</em> &mdash; became a finished migration: planned by AI legs, checked by machine and by independent AI reviewers, <strong>applied by a human-delegated operator</strong>, on live devices, with every step's evidence preserved. This sheet is not a plan; it is the record of what happened, including the one thing that was refused and why the refusal was the system's best moment.</p>
+<p><strong>The one thing to hold onto:</strong> no agent touches a device. A leg produces a <em>change package</em> &mdash; the exact commands, the expected outputs, and a rollback. The operator reads it, verifies it, and pastes it. When this sheet says &ldquo;applied,&rdquo; a delegated operator did that, with the package's own validation steps as the acceptance test &mdash; and in one case, refused to.</p>
+
+<h2>The environment</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Thing</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td class="m">Fabric</td><td>3 Arista cEOS switches in a triangle: ceos1 &harr; ceos2 (cost 10), ceos2 &harr; ceos3 (cost 20), ceos1 &harr; ceos3 (cost 40). The unequal costs are the point: corner-to-corner traffic <em>prefers the two-hop path through ceos2</em> (10+20=30 beats 40) &mdash; a real path preference the migration must not break.</td></tr>
+<tr><td class="m">Host</td><td>A dedicated bare-metal lab machine (not the production server), kernel-matched to the one environment cEOS is proven to boot on. Worst case on this host is a lab rebuild, never an outage.</td></tr>
+<tr><td class="m">Starting state</td><td>OSPF area 0 everywhere, loopbacks advertised, zero IS-IS configuration (verified, not assumed, before launch).</td></tr>
+<tr><td class="m">Ending state</td><td>Pure IS-IS (instance CORE, level-2, wide metrics), OSPF process removed from all three devices, every route and every path preference preserved. Persisted.</td></tr>
+</tbody></table></div>
+
+<h2>The cast</h2>
+<p class="sec-lede">Same roles as every run of this engine. One of them is a person's judgment on loan.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Who</th><th>Does what</th><th>Can it touch a device?</th></tr></thead>
+<tbody>
+<tr><td class="m">Architect</td><td>Reads the topology + requirements once, derives the <strong>contract</strong>: the NET addresses (with the digit-by-digit derivation shown), the metric translation, the preference knob, the rules every leg obeys.</td><td>No</td></tr>
+<tr><td class="m">P1&ndash;P4</td><td>The four phase legs &mdash; coexistence deploy, parity verification, preference shift, OSPF removal. Each harvests live state read-only, authors its package, and is graded by its own reviewer before anything leaves the leg.</td><td>Read-only</td></tr>
+<tr><td class="m">Reviewer</td><td>Inside each leg. Returns APPROVED or NEEDS-REVISION with named blocking issues. In this arc, one of its refusals is the headline.</td><td>No</td></tr>
+<tr><td class="m">Node&nbsp;C</td><td>The program-wide integration reviewer: re-derives the cross-leg math itself and checks conformance from structured facts, never from a leg's word.</td><td>No</td></tr>
+<tr><td class="m">Machine checks</td><td>Deterministic code, not models: dialect lint (banned tokens + required canonical lines), evidence-block parsing, the release AND-gate. Immune to persuasion, including by the system's own reviewers.</td><td>No</td></tr>
+<tr><td class="m">Operator</td><td>The human-delegated hands (here: Claude, under Steve's delegation). Applies packages verbatim at gates, runs the package's own validation, captures evidence, persists. The only role that ever configures a device.</td><td><strong>Yes &mdash; and only this one</strong></td></tr>
+</tbody></table></div>
+
+<h2>The sequence, as it ran</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Step</th><th>What happened</th><th>Verdict / evidence</th></tr></thead>
+<tbody>
+<tr><td class="m">Plan</td><td>Architect derived the contract: per-device NETs with worked BCD derivations, 1:1 metric translation preserving the 30&lt;40 transit preference, the platform fact that EOS has no <span class="m">metric-style</span> command (stated as fact, not configured), a single seconds-reversible preference knob.</td><td class="ok">Approved at the plan gate</td></tr>
+<tr><td class="m">P1 &mdash; coexistence</td><td>Package added IS-IS alongside OSPF on all three (nothing OSPF touched). <strong>Applied</strong> in package order (transit first) with staged checkpoints: adjacencies empty &rarr; first pair up &rarr; full mesh, OSPF config byte-identical before/after, zero IS-IS routes installed (OSPF still preferred by design).</td><td class="ok">Approved; applied; 6/6 adjacencies; dialect lint clean (0 missing, 0 violations)</td></tr>
+<tr><td class="m">P2 &mdash; parity</td><td>Evidence leg, no config. Ran Dijkstra itself over the harvested IS-IS database &mdash; every computed value labelled <strong>DERIVED</strong> with the working shown &mdash; and compared against OSPF's real next-hops.</td><td class="ok">18/18 next-hop pairs match; 0 missing / 0 extra prefixes; both transit pairs preserved; confidence 96</td></tr>
+<tr><td class="m">P3 &mdash; preference shift</td><td>One knob (<span class="m">distance 90</span>), per device, independently reversible. <strong>Applied</strong> device-by-device, each step gated on its own checks. IS-IS routes installed at distance 90 &mdash; including the transit routes via ceos2 on both corners: <em>the path preference, now live in the forwarding plane</em>. OSPF adjacencies FULL throughout.</td><td class="ok">Approved; applied; preference proven in the RIB, not just on paper</td></tr>
+<tr><td class="m">P4 &mdash; OSPF removal</td><td>The point of no easy return &mdash; and <strong>the reviewer refused it</strong>. The package's rollback claimed to quote the harvested OSPF config verbatim, but its interface description lines carried IS-IS-era rationale text that could not have existed at harvest time: an anachronism proving the rollback was <em>reconstructed, not quoted</em>. Node C independently confirmed, as the sole blocking issue.</td><td class="bad">NEEDS-REVISION &mdash; not applied. The program parked at its final gate, dual-IGP, fully reversible.</td></tr>
+<tr><td class="m">P4-Completion</td><td>A fresh, single-pipeline round the next day, against the <em>applied</em> world, with the anachronism named as the round's anti-pattern. Before applying, the operator ran the test the defect demands: <strong>all 21 rollback lines found character-for-character in the leg's own harvest</strong>. Applied spoke&rarr;spoke&rarr;hub with a validation gate between each device.</td><td class="ok">Approved; rollback &sube; harvest 21/21; applied; OSPF gone from all three; IS-IS route set byte-stable; persisted</td></tr>
+</tbody></table></div>
+
+<h2>The refusal is the feature</h2>
+<p>Everything in P4's package worked except one property: the rollback's <em>provenance</em>. The commands would likely have executed; the math was fine. But a rollback for the leg that deletes the old protocol must be the old protocol's config <em>exactly as harvested</em> &mdash; a paraphrase is a guess wearing a quote's clothing, and the moment you need a rollback is exactly the moment you cannot afford a guess. The reviewer did not suspect this; it <strong>proved</strong> it, from an anachronism the author left behind. The system then did the only correct thing: stopped, said precisely why, and left the network in a stable, reversible state until a package existed that could pass a character-for-character test. The next day, one did.</p>
+<p><strong>What this buys a change-approval board:</strong> the refusal, the evidence, the parked-safe intermediate state, and the completion are all persisted records &mdash; not this document's claims. Ask for them.</p>
+
+<h2>Decoding the signals</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Signal</th><th>Means</th><th>Does not mean</th></tr></thead>
+<tbody>
+<tr><td class="m">approved</td><td>The leg's reviewer found no blocking issue in the package.</td><td>That anything was applied. Apply is always a separate human-gated act.</td></tr>
+<tr><td class="m">needs-revision</td><td>A named, evidence-backed blocking issue. The package must not be applied.</td><td>Failure of the run. In this arc it was the run's most valuable output.</td></tr>
+<tr><td class="m">DERIVED</td><td>A value the evidence source does not directly carry, computed and labelled with its working (e.g. SPF next-hops from a link-state database).</td><td>A quote from a device. Presenting a derivation as a quote is a defect this engine blocks on.</td></tr>
+<tr><td class="m">parked at a gate</td><td>The program is waiting for a human, in a stable state, on purpose.</td><td>Hung. Nothing in this engine hangs; it waits for people or it escalates.</td></tr>
+<tr><td class="m">dialect lint clean</td><td>Machine check: no banned vendor tokens, all required canonical lines present in the config blocks.</td><td>That the whole package is correct &mdash; it is one net among several.</td></tr>
+</tbody></table></div>
+
+<h2>Reading the device, if you want to check</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Question</th><th>Command</th><th>Healthy answer (end state)</th></tr></thead>
+<tbody>
+<tr><td>Is IS-IS up?</td><td class="m">show isis neighbor</td><td>Two UP L2 rows per device (full triangle).</td></tr>
+<tr><td>Is it carrying the routes?</td><td class="m">show ip route isis</td><td>Every remote loopback and link subnet, at distance 90 &mdash; and on both corners, the far corner reached <em>via ceos2</em>.</td></tr>
+<tr><td>Is OSPF really gone?</td><td class="m">show running-config | include ^router ospf</td><td>Nothing. (The neighbor table no longer even renders.)</td></tr>
+<tr><td>Would it survive a reboot?</td><td class="m">show running-config diffs startup-config</td><td>No diff &mdash; every applied phase was persisted after its gate.</td></tr>
+</tbody></table></div>
+
+<h2>Honest notes</h2>
+<p>The devices are lab containers, not production hardware; the operator applies were performed by a delegated AI over ssh &mdash; occupying the same out-of-band, human-gated lane a human engineer would, with the human owner delegating explicitly and every action evidenced. Two package defects were found <em>by the operator during applies</em> and are recorded as round findings (an unsatisfiable byte-diff clause in P1; the P4 rollback above): the tiers are good, and the gate is still an evidence step, not a rubber stamp. The rollback-verbatim property, having now failed once as prose, is queued to become a machine check &mdash; that pipeline (slip &rarr; catch &rarr; rule &rarr; code) is how every guard in this engine was born.</p>
+
+<h2>Glossary</h2>
+<div class="tablewrap"><table>
+<tbody>
+<tr><td class="m">ships-in-the-night</td><td>Running the old and new routing protocols side-by-side, with the old one preferred, until the new one is proven &mdash; the zero-disruption migration pattern.</td></tr>
+<tr><td class="m">change package</td><td>A leg's deliverable: exact config, exact validation commands with expected output, and a rollback. The only thing that ever reaches a device, via a human-gated apply.</td></tr>
+<tr><td class="m">NET / system-ID</td><td>IS-IS's node address, derived from each router's ID by a fixed digit-packing rule &mdash; shown digit-by-digit in the plan so a reviewer can recompute it.</td></tr>
+<tr><td class="m">administrative distance</td><td>The tie-breaker between routing protocols; the migration's one moving part (OSPF 110 vs IS-IS 115 &rarr; 90) &mdash; a single, seconds-reversible knob.</td></tr>
+<tr><td class="m">harvest</td><td>A read-only capture of live device state; the ground truth every design and every rollback must trace to.</td></tr>
+</tbody></table></div>
+
+<footer><p>Program records: POV &ldquo;Autonomous Delivery Use Cases&rdquo;, phase &ldquo;OSPF to ISIS Migration&rdquo; &mdash; R19 program task and the P4-Completion pipeline carry per-step comments, artifacts, and evidence archives. Public claims: verification pack VT-19 (R19 section). Inputs beside this file: <span class="m">topology.json</span>, <span class="m">requirements.md</span>.</p></footer>
+</main>
+
+</body></html>

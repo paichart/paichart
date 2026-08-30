@@ -79,3 +79,5 @@ Related platform-side guidance (in `copov15`):
 - `.claude/knowledge/pipelines/PROGRAM-RUN-FORENSICS-GUIDE.md` — reading the result
 - `.claude/knowledge/pipelines/PROGRAM-OPERATOR-GATE-PLAYBOOK.md` — being the operator at the gates
   (checking a package before you apply it, and what to write back when you reject one)
+
+**Run sheets**: a run directory may also carry a `run-sheet.html` — a self-contained, human-readable as-run record of the campaign it hosted (see `igp-migration-t1-triangle/` for the reference example). Optional; written after the arc concludes, from the persisted records.
