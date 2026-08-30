@@ -153,3 +153,37 @@ on the four real legs — the Guard-4/assessment split is sound as shipped.
 - The dual-stack (OSPFv3) variant of the source use-case is out of scope for this tier.
 - WS4 caveats of the rig (static service credential; descriptor-level read-only scoping) apply as
   in VT-18.
+
+## R19 — the triangle round (2026-08-30): path preference, applied and proven
+
+The 3-node triangle — shelved when it exceeded the shared production host and blocked on a kernel
+incompatibility — ran on a dedicated bare-metal lab host (kernel 6.8.0-138 native; the AaaWarmup
+kernel finding of 2026-08-24 was thereby confirmed on bare metal). The round extends this VT's
+claim in the one dimension the 2-node topology honestly disclaimed: **relative path preference**.
+
+- **Two more verified mid-program applies** (P1 coexistence at G1, P3 preference shift at G3):
+  packages applied verbatim via config sessions with captured diffs, validated by each package's
+  OWN deterministic steps, persisted per each package's persistence statement. The apply→re-harvest
+  loop ran twice in sequence on the same world.
+- **Path-preference preservation proven at three levels**: derived (P2's SPF over the harvested
+  LSDB, every non-retrieved value labelled DERIVED with the Dijkstra shown), evidenced (18/18
+  device-prefix next-hop pairs matching OSPF, both load-bearing transit pairs), and — after G3 —
+  **forwarding-plane-verified**: both corners install their far-corner routes at AD 90 via the
+  transit node, exactly as OSPF routed them (two-hop cost 30 beating the direct 40).
+- **P4 (OSPF removal) was correctly refused, twice independently**: the leg reviewer proved the
+  package's rollback was *reconstructed* rather than quoted — interface description lines carried
+  IS-IS-translation rationale that could not have existed in the OSPF-era harvest (an anachronism
+  as evidence of paraphrase) — and the program integration reviewer corroborated with that as the
+  SOLE blocking issue while every other program-tier check passed across all four legs. The
+  program is parked at its final gate by explicit human choice: three phases applied and persisted,
+  the point-of-no-return leg honestly blocked, the fabric stable in dual-IGP with IS-IS preferred
+  and a seconds-reversible path back.
+- **Two operator-tier findings recorded**: P1's package mandated a byte-identical diff of a command
+  carrying a per-second countdown column (an unsatisfiable check as written — its own field-level
+  form beside it was the correct shape, and P3's package used exactly that corrected form); and
+  the rollback-verbatim property, having now failed live as a prose-only rule on the leg where it
+  matters most, graduates to a mechanical-check candidate under this project's earned-leaf rule.
+
+Caveats as above, plus: the operator applies were performed by the delegated AI operator over ssh
+to lab containers — the same out-of-band, human-gated lane a human engineer occupies; nothing in
+the authoring pipeline touched a device.
