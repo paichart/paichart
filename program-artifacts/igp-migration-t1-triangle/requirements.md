@@ -163,7 +163,7 @@ The Program Architect derives these in the plan and they bind every leg:
 
 ## Per-phase objectives
 
-Every leg: harvest BOTH switches **read-only** via the service descriptor
+Every leg: harvest ALL THREE switches **read-only** via the service descriptor
 `https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json`
 — and **every leg's report must state, in that report, which phase it is, what the previous phase
 was expected to have applied, and what its harvest actually showed about that** (the reader of leg
