@@ -170,19 +170,21 @@ claim in the one dimension the 2-node topology honestly disclaimed: **relative p
   device-prefix next-hop pairs matching OSPF, both load-bearing transit pairs), and — after G3 —
   **forwarding-plane-verified**: both corners install their far-corner routes at AD 90 via the
   transit node, exactly as OSPF routed them (two-hop cost 30 beating the direct 40).
-- **P4 (OSPF removal) was correctly refused, twice independently**: the leg reviewer proved the
-  package's rollback was *reconstructed* rather than quoted — interface description lines carried
-  IS-IS-translation rationale that could not have existed in the OSPF-era harvest (an anachronism
-  as evidence of paraphrase) — and the program integration reviewer corroborated with that as the
-  SOLE blocking issue while every other program-tier check passed across all four legs. The
+- **P4 (OSPF removal) was refused — a refusal later PROVEN to be a false positive** (see the
+  2026-08-31 correction below): the leg reviewer judged the rollback's interface description lines
+  anachronistic and therefore *reconstructed* rather than quoted, and the program integration
+  reviewer echoed the same reading as the SOLE blocking issue while every other program-tier check
+  passed across all four legs. A subsequent corpus measurement ran the character-for-character
+  test: all 51 rollback lines, descriptions included, sit verbatim in the leg's own harvest — the
+  rationale text was in the lab's baseline configs from rig-build time. The
   program was parked at its final gate by explicit human choice (see close-out below): three phases applied and persisted,
   the point-of-no-return leg honestly blocked, the fabric stable in dual-IGP with IS-IS preferred
   and a seconds-reversible path back.
 - **Two operator-tier findings recorded**: P1's package mandated a byte-identical diff of a command
   carrying a per-second countdown column (an unsatisfiable check as written — its own field-level
   form beside it was the correct shape, and P3's package used exactly that corrected form); and
-  the rollback-verbatim property, having now failed live as a prose-only rule on the leg where it
-  matters most, graduates to a mechanical-check candidate under this project's earned-leaf rule.
+  the P4 refusal, initially logged here as the prose verbatim-rule's first live failure — a claim
+  the corpus measurement later overturned (correction below).
 
 Caveats as above, plus: the operator applies were performed by the delegated AI operator over ssh
 to lab containers — the same out-of-band, human-gated lane a human engineer occupies; nothing in
@@ -193,7 +195,7 @@ the authoring pipeline touched a device.
 The parked state above did not stand as the arc's ending; it stands as its pivot.
 
 - **P4-Completion round (fresh single-pipeline run, next day, against the *applied* world):** the
-  refused defect was named as the round's anti-pattern up front, and before applying, the operator
+  alleged defect was named as the round's anti-pattern up front, and before applying, the operator
   ran the exact test the defect demands — **all 21 rollback lines found character-for-character in
   the leg's own harvest** (rollback ⊆ harvest). Applied spoke→spoke→hub with a validation gate
   between each device: OSPF removed from all three, zero `O`-coded routes at every step, the IS-IS
@@ -207,6 +209,22 @@ The parked state above did not stand as the arc's ending; it stands as its pivot
   lives in its own, separate record — provenance intact in both directions.
 
 What this adds to the VT's claim: the refusal→remediation loop is not just a stop — it is a
-*resumable* stop whose remediation round inherits the defect as an explicit contract term, passes
-the mechanical form of the failed prose rule before apply, and leaves two unconflated records: one
-honestly failed, one honestly passed.
+*resumable* stop whose remediation round inherits the alleged defect as an explicit contract term,
+passes the mechanical form of the disputed property before apply, and leaves two unconflated
+records — one refused, one approved — each carrying its own evidence.
+
+## CORRECTION — the P4 refusal was a reviewer false positive (2026-08-31)
+
+The corpus measurement gating the proposed rollback-verbatim mechanical check ran that exact
+string test on the refused P4 package: **51/51 rollback lines verbatim in the leg's own harvest**,
+including all six "anachronistic" interface descriptions — which trace to the lab's baseline
+startup configs, authored at rig-build time. The reviewer, which by protocol design reads the
+package and not the raw harvest, stated in its own verdict that it could not re-verify against
+the source, then asserted the anachronism as proven; the program-tier reviewer echoed the same
+inference from the same text (correlation, not corroboration). The refusal was in the fail-safe
+direction and cost one day; the migration outcome is unaffected (the completion round's package
+was independently correct). Across the full 56-package archived corpus the measurement found
+**zero true rollback fabrications**, so the mechanical check ships as a recorded fact beside
+future packages, not a blocking rule. What this VT keeps from the episode: the park-and-complete
+mechanics worked exactly as designed around an honest-but-wrong verdict, and the system's own
+measure-the-corpus-first discipline is what caught its reviewer's error.
