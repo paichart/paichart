@@ -1,0 +1,59 @@
+# Logrotate configuration for pAIchart OAuth audit logs
+# Install to: /etc/logrotate.d/paichart-oauth
+#
+# Installation:
+#   sudo cp config/logrotate/paichart-oauth /etc/logrotate.d/paichart-oauth
+#   sudo chmod 644 /etc/logrotate.d/paichart-oauth
+#
+# Test configuration:
+#   sudo logrotate -d /etc/logrotate.d/paichart-oauth
+#
+# Force rotation (testing):
+#   sudo logrotate -f /etc/logrotate.d/paichart-oauth
+
+/var/log/paichart/oauth-audit.log {
+    # Rotate daily
+    daily
+
+    # Keep 30 days of logs
+    rotate 30
+
+    # Compress old logs (saves disk space)
+    compress
+
+    # Delay compression until next rotation (keeps most recent backup uncompressed)
+    delaycompress
+
+    # Don't rotate if log is empty
+    notifempty
+
+    # Don't error if log file is missing
+    missingok
+
+    # Create new log file with specified permissions
+    create 0640 root root
+
+    # Run scripts only once for all logs
+    sharedscripts
+
+    # After rotation, reload PM2 logs
+    postrotate
+        # Reload PM2 to pick up new log file
+        pm2 reloadLogs 2>/dev/null || true
+    endscript
+}
+
+# Alternative location if /var/log/paichart is not writable
+/tmp/paichart/oauth-audit.log {
+    daily
+    rotate 30
+    compress
+    delaycompress
+    notifempty
+    missingok
+    create 0640 root root
+    sharedscripts
+    postrotate
+        pm2 reloadLogs 2>/dev/null || true
+    endscript
+}

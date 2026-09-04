@@ -1,0 +1,49 @@
+# IGP-migration validation rig — 2-NODE OSPF area-0 brownfield baseline. Runs on PROD.
+# Sibling of igp-triangle/ (3-node, SHELVED — see below) and ../topology.clab.yml (2-node BGP/T6 lab).
+# AUTHORED 2026-08-24 for the OSPF→IS-IS migration arc (cline_docs/igp-migration-design-2026-08-21/).
+# DISPOSABLE — `containerlab destroy --cleanup` after the run.
+#
+# WHY 2 NODES, measured not assumed (2026-08-23/24):
+#   • 3 nodes on THIS host: ❌ impossible at any cap. ~1.7-2.0 GB/node dual-IGP x3 + ~2.0 GB non-rig
+#     exceeds 7.9 GB. High caps ⇒ kernel GLOBAL OOM (host down); sum-binding caps (1.2g) ⇒ memcg OOM
+#     starved EOS (ProcMgr agents killed, CLI dead, container still "Up").
+#   • 3 nodes OFF-HOST (VirtualBox VM, 16 GB): ❌ cEOS never completes boot there. Tested kernel
+#     7.0.0-29/30 AND 6.8.0-138 (prod's exact kernel), memory 1.2→2.5g, CPU 1.2→4, containerlab AND
+#     raw docker: every combination spins at >1300% CPU pegged at its memory cap. The differentiator
+#     is the VIRTUALISATION PLATFORM, not the kernel — the identical image boots in ~2 min on
+#     DigitalOcean KVM. Mechanism unproven; not worth further chase. igp-triangle/ is SHELVED for a
+#     future KVM host or a newer cEOS image.
+#   • 2 nodes on prod: ✅ 2 x 1.9g + nornir ≈ 3.95 GB of ~5.9 GB available → ~1.9 GB headroom, and
+#     the SUM is binding so a runaway node is container-OOM-killed before the host is.
+#
+# WHAT THIS COSTS: only the 3-node transit-path narrative (no path choice with one link). The full
+# four-phase migration story is intact: coexistence → parity → preference shift → OSPF removal.
+#
+# STILL MANDATORY: no push to main while up (next build runs on this host); memory watchdog for the
+# whole window; teardown = rig containers only, never cloudflared.
+
+name: igp2-ceos
+
+mgmt:
+  network: clab-igp2            # dedicated bridge (NOT clab-np, NOT clab-igp)
+  ipv4-subnet: 172.30.32.0/24   # distinct from the 2-node BGP lab (.30) and the shelved triangle (.31)
+
+topology:
+  kinds:
+    arista_ceos:
+      image: ceos:4.32.2.1F
+  nodes:
+    ceos1:
+      kind: arista_ceos
+      mgmt-ipv4: 172.30.32.11   # containerlab assigns this to Management0 — do NOT set it in the startup-config
+      startup-config: ceos1-startup.cfg
+      memory: 1.9g              # sum-binding: 2 x 1.9 + nornir ≈ 3.95 GB of ~5.9 GB
+      cpu: 1.5
+    ceos2:
+      kind: arista_ceos
+      mgmt-ipv4: 172.30.32.12
+      startup-config: ceos2-startup.cfg
+      memory: 1.9g
+      cpu: 1.5
+  links:
+    - endpoints: ["ceos1:eth1", "ceos2:eth1"]   # 10.0.12.0/30, ospf cost 10 both ends

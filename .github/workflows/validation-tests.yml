@@ -1,0 +1,39 @@
+name: Validation Tests
+
+# Fork-safe CI (Phase 4 of open-source readiness, 2026-09-04).
+#
+# This is the ONLY test workflow the public repo carries (deploy/rollback/uptime/status never
+# export), so on a fork it must run on EVERY code change — a contributor editing lib/auth/
+# token-manager.ts alone previously matched no path and got no CI at all.
+#
+# On the private origin (steveterryp/copov15) production-deploy.yml already runs this exact
+# reusable suite on every push to main before deploying, so a push-to-main run here would be
+# a duplicate 8–15 min job. The `if:` below skips exactly that case and nothing else: PRs,
+# other branches, and every other repository (forks, the public repo) run it.
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'cline_docs/**'
+      - '.claude/**'
+      - 'LICENSE'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'cline_docs/**'
+      - '.claude/**'
+      - 'LICENSE'
+
+# Least privilege: nothing here writes to the repo. Fork PRs get a read-only token regardless;
+# stating it keeps the public workflow honest.
+permissions:
+  contents: read
+
+jobs:
+  run-validation:
+    name: Run Validation Tests
+    # Skip ONLY: private origin + push + main (production-deploy runs the same suite there).
+    if: ${{ !(github.repository == 'steveterryp/copov15' && github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+    uses: ./.github/workflows/validation-reusable.yml

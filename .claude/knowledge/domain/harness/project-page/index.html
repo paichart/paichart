@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pAIchart Pipeline Harness — Goal-Directed Multi-Agent Delivery</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1a1a1a;
+    --muted: #6b6b6b;
+    --accent: #2a5f8f;
+    --accent-bg: #eef3f9;
+    --border: #e0e0e0;
+    --code-bg: #f5f5f5;
+    --success: #2d7a3f;
+    --warn: #b8860b;
+  }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Georgia, serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.65;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 24px 80px 24px;
+    font-size: 16px;
+  }
+  .mobile-notice {
+    background: #fef6e7;
+    color: #7a5a00;
+    padding: 8px 12px;
+    text-align: center;
+    font-size: 13px;
+    border-bottom: 1px solid #f0d998;
+    margin: 0 -24px 16px -24px;
+  }
+  @media (min-width: 900px) { .mobile-notice { display: none; } }
+  nav.topnav {
+    border-bottom: 1px solid var(--border);
+    padding: 12px 0;
+    margin-bottom: 32px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  nav.topnav a {
+    color: var(--accent);
+    text-decoration: none;
+    margin-right: 14px;
+  }
+  nav.topnav a:hover { text-decoration: underline; }
+  h1 {
+    font-size: 30px;
+    line-height: 1.25;
+    margin: 32px 0 8px 0;
+    font-weight: 700;
+  }
+  .subtitle {
+    font-size: 17px;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+  .authors {
+    font-size: 15px;
+    margin-bottom: 12px;
+  }
+  .authors span { margin-right: 12px; }
+  .resource-links {
+    margin: 20px 0 40px 0;
+  }
+  .resource-links a {
+    display: inline-block;
+    padding: 8px 16px;
+    margin: 0 8px 8px 0;
+    background: var(--accent-bg);
+    color: var(--accent);
+    text-decoration: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    border: 1px solid #c5d6e5;
+  }
+  .resource-links a:hover { background: #dde7f2; }
+  h2 {
+    font-size: 22px;
+    margin-top: 48px;
+    margin-bottom: 16px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 18px;
+    margin-top: 32px;
+    margin-bottom: 12px;
+  }
+  p { margin: 12px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-family: 'SF Mono', Consolas, 'Courier New', monospace;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.5;
+    border: 1px solid var(--border);
+  }
+  pre code { background: transparent; padding: 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 14px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--code-bg);
+    font-weight: 600;
+  }
+  tr:hover td { background: #fafafa; }
+  .check { color: var(--success); font-weight: 600; }
+  .cross { color: #999; }
+  .partial { color: var(--warn); }
+  .callout {
+    background: var(--accent-bg);
+    border-left: 3px solid var(--accent);
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 14px;
+  }
+  .callout strong { color: var(--accent); }
+
+  /* Demo stepper */
+  .demo {
+    background: #fafbfc;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 24px;
+    margin: 24px 0;
+  }
+  .demo-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .demo-controls button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  .demo-controls button:hover { background: #1f4e78; }
+  .demo-controls button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+  }
+  .step-counter {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: 'SF Mono', Consolas, monospace;
+  }
+  .step {
+    display: none;
+  }
+  .step.active { display: block; }
+  .step-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--accent);
+  }
+  .step-time {
+    float: right;
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: normal;
+  }
+  .step-body {
+    font-size: 14px;
+  }
+  .step-tool-call {
+    background: var(--code-bg);
+    padding: 10px 14px;
+    border-radius: 3px;
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 12px;
+    margin: 8px 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .step-result {
+    font-size: 13px;
+    color: var(--success);
+    margin-top: 6px;
+  }
+  .step-dots {
+    text-align: center;
+    margin-top: 16px;
+  }
+  .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ccc;
+    margin: 0 3px;
+    cursor: pointer;
+  }
+  .dot.active { background: var(--accent); }
+
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin: 20px 0;
+  }
+  @media (min-width: 700px) {
+    .metric-grid { grid-template-columns: repeat(4, 1fr); }
+  }
+  .metric {
+    background: var(--accent-bg);
+    padding: 14px 16px;
+    border-radius: 4px;
+    border: 1px solid #c5d6e5;
+  }
+  .metric-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+    display: block;
+  }
+  .metric-label {
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  footer {
+    margin-top: 80px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+  }
+  .bibtex {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 12px;
+    border-radius: 4px;
+    white-space: pre;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<div class="mobile-notice">Best viewed on desktop — the interactive demo and comparison tables benefit from a wider screen.</div>
+
+<nav class="topnav">
+  <a href="#demo">Demo</a>
+  <a href="#approach">Approach</a>
+  <a href="#architecture">Architecture</a>
+  <a href="#results">Results</a>
+  <a href="#security">Security</a>
+  <a href="#try">Try It</a>
+  <a href="#cite">Cite</a>
+</nav>
+
+<h1>pAIchart Pipeline Harness</h1>
+<div class="subtitle">Goal-Directed Multi-Agent Delivery for Domain-Scoped Outcomes</div>
+
+<div class="authors">
+  <span>Steve Terry</span> <span style="color:var(--muted)">(pAIchart)</span>
+</div>
+
+<div class="resource-links">
+  <a href="#">[Paper]</a>
+  <a href="https://paichart.app/mcp">[Live MCP Endpoint]</a>
+  <a href="https://paichart.app">[Platform]</a>
+  <a href="mailto:steve.terry@paichart.com">[Contact]</a>
+</div>
+
+<p>
+  Large language models are remarkably capable on isolated tasks. Producing structured, customer-facing deliverables —
+  security assessments, compliance audits, architecture reviews — requires something more than a capable base model.
+  It requires an <strong>orchestration layer</strong> that decides what to do, who should do it, how knowledge flows
+  between specialists, and whether the result is good enough.
+</p>
+
+<p>
+  The <strong>pAIchart Pipeline Harness</strong> is a production implementation of that orchestration layer. Given a
+  single sentence — <em>"Assess cloud security posture and produce remediation roadmap"</em> — the harness decomposes
+  the objective into typed specialist tasks, assigns the right specialist to each, wires dependencies, executes in
+  order with automatic context chaining, gates quality via confidence-scored completion loops, and reports
+  deliverables. No manual intervention.
+</p>
+
+<div class="callout">
+  <strong>Live system.</strong> Unlike most multi-agent orchestration papers, the primary artifact here is not a code
+  release or a benchmark. It is a <strong>running production server</strong> at
+  <code>https://paichart.app/mcp</code> that you can connect to directly from Claude Desktop, ChatGPT, Gemini, or any
+  MCP-compatible client. New users auto-register via GitHub OAuth with a demo role. See the <a href="#try">Try It</a>
+  section for the one-line configuration.
+</div>
+
+<h2 id="demo">Interactive Demo: Experiment 6 — Orchestrate Mode</h2>
+
+<p>
+  This trace shows Experiment 6 (Test G) from the paper: a 3-task orchestrate-mode pipeline completed in 228 seconds
+  with 100% task completion. The user created the tasks manually; the harness assigned templates, wired dependencies,
+  executed specialists in order, and reported results. Use the stepper to walk through what the harness does at each
+  turn.
+</p>
+
+<div class="demo">
+  <div class="demo-controls">
+    <button id="prev-btn" onclick="stepBack()">← Prev</button>
+    <div class="step-counter"><span id="step-num">1</span> / 9</div>
+    <button id="next-btn" onclick="stepForward()">Next →</button>
+  </div>
+
+  <div class="step active">
+    <div class="step-title">Step 1: User setup <span class="step-time">t = 0s</span></div>
+    <div class="step-body">
+      <p>User creates three tasks in a new stage on Pipeline Test Corp's POV. Each task has a description implying its role but no template assigned:</p>
+      <ul style="font-size:14px; margin-left:20px;">
+        <li><strong>Task 1:</strong> Design data migration strategy (implies ARCHITECT)</li>
+        <li><strong>Task 2:</strong> Audit data migration risks and compliance (implies REVIEWER)</li>
+        <li><strong>Task 3:</strong> Produce data migration executive briefing (implies DOCUMENTER)</li>
+      </ul>
+      <p>User then adds a fourth task with <code>type: PIPELINE</code>. The execution engine auto-assigns the Pipeline Harness template.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-title">Step 2: Mode detection <span class="step-time">t = 4s</span></div>
+    <div class="step-body">
+      <p>The harness begins execution. First call: enumerate siblings in its own stage.</p>
+      <div class="step-tool-call">project(action: "task.list", stageId: "cmnksp3rt0003yxhjhiaj8dky")</div>
+      <p>Result: 4 tasks in stage, filter out self → <strong>3 siblings</strong>. Mode detection result: <strong>ORCHESTRATE mode</strong>. The harness posts a status comment:</p>
+      <div class="step-result">"Mode: ORCHESTRATE. Found 3 sibling tasks."</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-title">Step 3: Template inference and assignment <span class="step-time">t = 14s</span></div>
+    <div class="step-body">
+      <p>The harness reads each sibling's description and infers the correct specialist template. For ambiguous cases it falls back to the type hierarchy (ARCHITECT → REVIEWER → ANALYST → DOCUMENTER).</p>
+      <div class="step-tool-call">perform(action: "agent.assign", taskId: "task-1", template: "Solution Architect")
+perform(action: "agent.assign", taskId: "task-2", template: "Security Analyst")
+perform(action: "agent.assign", taskId: "task-3", template: "Technical Writer")</div>
+      <div class="step-result">Template inference accuracy: 3/3 (100%)</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-title">Step 4: Dependency wiring <span class="step-time">t = 20s</span></div>
+    <div class="step-body">
+      <p>The harness reads Task 3's description (<em>"synthesize the data migration strategy and risk audit"</em>) and wires it to depend on Tasks 1 and 2. Task 2 references Task 1's output explicitly. The result is a linear chain.</p>
+      <div class="step-tool-call">perform(action: "task.update", taskId: "task-2", dependencyIds: ["task-1"])
+perform(action: "task.update", taskId: "task-3", dependencyIds: ["task-1", "task-2"])</div>
+      <div class="step-result">Topology: Task 1 → Task 2 → Task 3 (linear)</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-title">Step 5: Execute Task 1 — Solution Architect <span class="step-time">t = 20s → 68s</span></div>
+    <div class="step-body">
+      <p>The harness triggers Task 1. The Solution Architect runs on Haiku and produces a data migration architecture grounded in the POV's Australian customer context (Privacy Act 1988).</p>
+      <div class="step-tool-call">perform(action: "agent.execute", taskId: "task-1")</div>
+      <div class="step-result">SUCCESS. Confidence 88/100. Output: 26,148 characters. Duration: 48 seconds.</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-title">Step 6: Execute Task 2 — Security Analyst <span class="step-time">t = 68s → 148s</span></div>
+    <div class="step-body">
+      <p>Before execution, the <strong>context chainer</strong> (a pre-execution hook) reads Task 1's <code>result.json</code> and injects the complete output into Task 2's prompt as §6 Pipeline Context. The Security Analyst does not need to call any tools to discover Task 1's output — it is already there.</p>
+      <div class="step-tool-call">perform(action: "agent.execute", taskId: "task-2")</div>
+      <p>The analyst audits the architecture against APRA CPS 234 (Australian financial services operational resilience standard), producing a risk register with mitigations.</p>
+      <div class="step-result">SUCCESS. Confidence 85/100. Output: 31,204 characters. Duration: 80 seconds.</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-title">Step 7: Execute Task 3 — Technical Writer <span class="step-time">t = 148s → 220s</span></div>
+    <div class="step-body">
+      <p>Context chainer injects both Task 1 and Task 2's outputs into Task 3's prompt. The Technical Writer synthesizes a CTO-ready executive briefing with timeline, risk profile, and investment requirements.</p>
+      <div class="step-tool-call">perform(action: "agent.execute", taskId: "task-3")</div>
+      <div class="step-result">SUCCESS. Confidence 92/100. Output: 14,876 characters. Duration: 72 seconds.</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-title">Step 8: Self-completion verification <span class="step-time">t = 220s</span></div>
+    <div class="step-body">
+      <p>Before reporting success, the harness verifies that all sibling tasks are in COMPLETED state. This guard exists because an earlier test revealed a failure mode where rate-limited harnesses wrote celebratory summaries despite unfinished children.</p>
+      <div class="step-tool-call">project(action: "task.list", stageId: "cmnksp3rt0003yxhjhiaj8dky")</div>
+      <div class="step-result">All 3 siblings: COMPLETED. Proceeding to final report.</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-title">Step 9: Final summary <span class="step-time">t = 228s — complete</span></div>
+    <div class="step-body">
+      <p>The harness posts a final summary comment with confidence scores, deliverable references, and pipeline metrics, then marks its own task COMPLETED.</p>
+      <div class="step-result">
+        Pipeline complete: 3/3 siblings COMPLETED, 100% success rate.<br>
+        Confidence scores: 88, 85, 92 (avg 88.3).<br>
+        Template inference accuracy: 3/3.<br>
+        Total duration: <strong>228 seconds</strong>, zero manual intervention.
+      </div>
+    </div>
+  </div>
+
+  <div class="step-dots">
+    <span class="dot active" onclick="goToStep(0)"></span>
+    <span class="dot" onclick="goToStep(1)"></span>
+    <span class="dot" onclick="goToStep(2)"></span>
+    <span class="dot" onclick="goToStep(3)"></span>
+    <span class="dot" onclick="goToStep(4)"></span>
+    <span class="dot" onclick="goToStep(5)"></span>
+    <span class="dot" onclick="goToStep(6)"></span>
+    <span class="dot" onclick="goToStep(7)"></span>
+    <span class="dot" onclick="goToStep(8)"></span>
+  </div>
+</div>
+
+<h2 id="approach">Approach</h2>
+
+<p>
+  The Pipeline Harness addresses six capabilities we argue are essential for goal-directed autonomous delivery —
+  and which, to our knowledge, no existing system combines:
+</p>
+
+<table>
+  <tr><th>Capability</th><th>How we implement it</th></tr>
+  <tr><td><strong>1. Task decomposition</strong></td><td>A meta-agent (claude-sonnet-4-5) reads the POV context and decomposes a one-sentence objective into 3–7 typed tasks with explicit dependencies.</td></tr>
+  <tr><td><strong>2. Typed specialization</strong></td><td>8 functional types (ARCHITECT, BUILDER, ANALYST, REVIEWER, OPERATOR, DOCUMENTER, ORCHESTRATOR, GENERALIST) decoupled from domain categories. 17 specialist templates map to these types.</td></tr>
+  <tr><td><strong>3. Knowledge transfer</strong></td><td>A pre-execution hook injects complete predecessor output into successor prompts as structured markdown. No summarization, no "telephone game" degradation.</td></tr>
+  <tr><td><strong>4. Self-evaluation</strong></td><td>Every agent reports a confidence score (0–100). The harness uses these as quality gates: ≥70 accept, 50–69 retry with feedback, &lt;50 escalate.</td></tr>
+  <tr><td><strong>5. Persistence</strong></td><td>Bounded re-execution (max 2 retries per task) with hypothesis-driven feedback. Self-completion guard prevents false success reporting.</td></tr>
+  <tr><td><strong>6. Context awareness</strong></td><td>Every prompt is grounded in a persistent POV record — customer, objective, solution, team, compliance frameworks, execution history.</td></tr>
+</table>
+
+<h3>Comparison to Prior Work</h3>
+
+<p>
+  Table below compares the capability coverage of representative multi-agent systems. The Pipeline Harness is, to our
+  knowledge, the only system that combines all six.
+</p>
+
+<table>
+  <tr>
+    <th>Capability</th>
+    <th>CrewAI</th>
+    <th>LangGraph</th>
+    <th>AutoGen</th>
+    <th>Devin</th>
+    <th>Vivun</th>
+    <th style="background:var(--accent-bg)">Ours</th>
+  </tr>
+  <tr><td>Task decomposition</td><td class="partial">Partial</td><td class="cross">✗</td><td class="cross">✗</td><td class="cross">✗</td><td class="cross">✗</td><td class="check" style="background:var(--accent-bg)">✓</td></tr>
+  <tr><td>Typed specialization</td><td class="check">✓</td><td class="cross">✗</td><td class="cross">✗</td><td class="cross">✗</td><td class="cross">✗</td><td class="check" style="background:var(--accent-bg)">✓</td></tr>
+  <tr><td>Knowledge transfer</td><td class="cross">✗</td><td class="partial">Partial</td><td class="partial">Partial</td><td class="cross">✗</td><td class="cross">✗</td><td class="check" style="background:var(--accent-bg)">✓</td></tr>
+  <tr><td>Self-evaluation</td><td class="cross">✗</td><td class="cross">✗</td><td class="cross">✗</td><td class="cross">✗</td><td class="cross">✗</td><td class="check" style="background:var(--accent-bg)">✓</td></tr>
+  <tr><td>Persistence</td><td class="cross">✗</td><td class="partial">Partial</td><td class="cross">✗</td><td class="check">✓</td><td class="cross">✗</td><td class="check" style="background:var(--accent-bg)">✓</td></tr>
+  <tr><td>Context awareness</td><td class="cross">✗</td><td class="cross">✗</td><td class="cross">✗</td><td class="cross">✗</td><td class="partial">Partial</td><td class="check" style="background:var(--accent-bg)">✓</td></tr>
+  <tr style="font-weight:600"><td>All six together</td><td class="cross">✗</td><td class="cross">✗</td><td class="cross">✗</td><td class="cross">✗</td><td class="cross">✗</td><td class="check" style="background:var(--accent-bg)">✓</td></tr>
+</table>
+
+<h2 id="architecture">Architecture</h2>
+
+<h3>Dual-Mode Operation</h3>
+
+<p>
+  The harness operates in two auto-detected modes:
+</p>
+
+<ul>
+  <li><strong>CREATE mode.</strong> User gives the harness a one-line objective. The harness creates a new pipeline stage, decomposes the objective into typed tasks, assigns specialists, wires dependencies, and executes. Used when the user wants the harness to design the pipeline.</li>
+  <li><strong>ORCHESTRATE mode.</strong> User creates work tasks themselves and adds a PIPELINE task in the same stage. The harness detects the siblings, infers templates from task descriptions, wires dependencies, and executes. Used when the user designs structure and wants the harness to handle execution.</li>
+</ul>
+
+<p>
+  Mode detection is a simple rule: if the harness finds siblings in its own stage, it is in ORCHESTRATE mode. Otherwise
+  it is in CREATE mode. Both modes share the same execution engine, the same context chainer, the same confidence
+  loop, and the same self-completion guard.
+</p>
+
+<h3>Automatic Context Chaining</h3>
+
+<p>
+  When a task has dependencies, the execution engine invokes the context chainer as a <strong>pre-execution hook</strong>
+  before starting the LLM call:
+</p>
+
+<ol>
+  <li>For each dependency task, read the latest successful execution's <code>result.json</code></li>
+  <li>Extract <code>finalResponse</code>, <code>confidenceScore</code>, <code>qualityMetrics</code></li>
+  <li>Render as structured markdown in prompt section §6:
+    <pre><code>## Pipeline Context (from previous tasks)
+
+### Previous Task: Design data migration strategy
+- Agent Role: solution_architect
+- Confidence Score: 88/100
+
+**Output:**
+[complete 26K-character deliverable — no summarization]
+
+**Use the above output to inform your work. Build on
+what was produced — do not repeat or re-derive it.**</code></pre>
+  </li>
+</ol>
+
+<p>
+  The agent never knows context chaining is happening. It simply finds the relevant context already in its prompt.
+  This eliminates an entire class of coordination failures that arise when agents must explicitly fetch upstream
+  context — in our earlier design, omissions were common and context fidelity depended on prompt compliance. The
+  pre-execution hook removes agent behavior from the critical path entirely.
+</p>
+
+<h3>Two Execution Paths</h3>
+
+<p>
+  The same MCP actions are served through two different code paths:
+</p>
+
+<table>
+  <tr><th>Path</th><th>Language</th><th>Used by</th><th>Characteristics</th></tr>
+  <tr>
+    <td><strong>Embedded</strong></td>
+    <td>TypeScript (in-process)</td>
+    <td>Agent execution engine (harness + specialists)</td>
+    <td>No HTTP, no rate limiting, lean Prisma queries, JWT passed in-memory</td>
+  </tr>
+  <tr>
+    <td><strong>MCP Server</strong></td>
+    <td>JavaScript (external)</td>
+    <td>Claude Desktop, ChatGPT, Gemini, CLI clients</td>
+    <td>HTTP streamable, OAuth/API key auth, 300 req/min rate limiting, fuzzy matching, friendly error formatting</td>
+  </tr>
+</table>
+
+<p>
+  Handlers in the two paths are not duplicates — they serve different clients with different needs. The TypeScript
+  handlers are lean because agents send exact parameters and reason over raw errors. The JavaScript handlers are rich
+  because humans in Claude Desktop need fuzzy template matching and friendly errors.
+</p>
+
+<h2 id="results">Results</h2>
+
+<h3>Production Experiments</h3>
+
+<p>
+  We report seven production experiments progressing from manual proofs-of-concept through fully autonomous pipelines
+  with fault recovery and dual-mode validation. All experiments run against the live production infrastructure (no
+  simulated data, no synthetic POVs — some demo POVs but with realistic domain content).
+</p>
+
+<div class="metric-grid">
+  <div class="metric">
+    <span class="metric-value">488s</span>
+    <span class="metric-label">6-task CREATE pipeline (Exp 5)</span>
+  </div>
+  <div class="metric">
+    <span class="metric-value">228s</span>
+    <span class="metric-label">3-task ORCHESTRATE pipeline (Exp 6)</span>
+  </div>
+  <div class="metric">
+    <span class="metric-value">100%</span>
+    <span class="metric-label">Task completion rate</span>
+  </div>
+  <div class="metric">
+    <span class="metric-value">10/10</span>
+    <span class="metric-label">Template inference accuracy</span>
+  </div>
+</div>
+
+<h3>Emergent Behavior</h3>
+
+<p>
+  In Experiment 4 (cloud migration readiness, clean POV) the meta-agent produced two distinct behaviors that we did
+  not explicitly prompt:
+</p>
+
+<p><strong>Non-linear dependency graph.</strong> Rather than decomposing the objective into a linear chain, the agent
+reasoned about task independence and produced a graph with three parallel roots feeding into a synthesis task:</p>
+
+<pre><code>Task 1 (Infrastructure)  ─┐
+Task 2 (Security/AU)     ─┼─→ Task 4 (Strategy) → Task 6 (Report)
+Task 3 (Operational)     ─┘          ↓
+                          Task 5 (Cost-Benefit)</code></pre>
+
+<p>
+  The harness prompt describes only decomposition rules and constraints (3–7 tasks, typed specialists, explicit
+  dependencies). It does not describe parallel topologies, multi-predecessor synthesis, or dependency graph
+  optimization. The meta-agent produced these behaviors independently.
+</p>
+
+<p><strong>Cross-phase stage distribution.</strong> The agent created three new stages across two phases of the POV,
+mapping task kinds to POV lifecycle phases (assessments in Execution, synthesis in Review) without being told which
+phase to use for which purpose.</p>
+
+<p><strong>Regional framework propagation.</strong> The POV specified Australia. The Security task description
+explicitly referenced ASD Essential Eight, APRA CPS 234, and the Privacy Act 1988 — compliance frameworks specific to
+Australian financial services. The harness prompt does not enumerate regional frameworks; this emerged from context.</p>
+
+<h3>Concurrency Stress Test</h3>
+
+<p>
+  Experiment 7 tests the platform's behavior under ~20 simulated concurrent users across 5 workload patterns, using
+  Claude Code's experimental agent teams feature to spawn 5 independent Claude Code instances.
+</p>
+
+<table>
+  <tr><th>Teammate</th><th>Pattern</th><th>Calls</th><th>Failures</th><th>Degradation</th></tr>
+  <tr><td>Reader</td><td>Parallel reads (POV, tasks)</td><td>16/16</td><td>0</td><td>None</td></tr>
+  <tr><td>Writer</td><td>Create + update + comment + complete</td><td>20/20</td><td>0</td><td>None</td></tr>
+  <tr><td>Hub Operator</td><td>Discovery, health, registry, prompts</td><td>20/20</td><td>0</td><td>None</td></tr>
+  <tr><td>Searcher</td><td>Search + fetch with round-trip check</td><td>16/16</td><td>0</td><td>None</td></tr>
+  <tr><td>Chaos Agent</td><td>6 parallel mixed tool types</td><td>24/24</td><td>0</td><td>None</td></tr>
+  <tr style="font-weight:600"><td>Total</td><td></td><td>96/96</td><td>0</td><td>None</td></tr>
+</table>
+
+<p>
+  Zero failures, zero degradation, zero rate limit hits. Server-side metrics remained flat throughout the test:
+  heap 59MB constant, PostgreSQL active connections 1 constant across 30 sampling intervals. The test was run both
+  before and after the scalability architecture changes (connection pool sizing, rate limiter rationalization,
+  Map limit enforcement, TRUSTED_PROXY configuration) with identical 100/100 scores in both runs.
+</p>
+
+<h2 id="security">Security</h2>
+
+<p>
+  pAIchart is a remote multi-user MCP server. The
+  <a href="https://modelcontextprotocol.io/specification/draft/basic/security_best_practices">Anthropic MCP Security
+  Best Practices specification</a> enumerates a set of attack vectors with normative mitigations (MUST and SHOULD).
+  Because we are deployed in production with real authentication and real user data, we document compliance per
+  attack vector rather than claim blanket certification.
+</p>
+
+<table>
+  <tr><th>Attack vector</th><th>Our implementation</th></tr>
+  <tr>
+    <td><strong>Confused deputy</strong></td>
+    <td>OAuth proxy implements per-client consent stored server-side, state validation with exact matching, <code>__Host-</code> prefix cookies, exact redirect URI matching (no wildcards)</td>
+  </tr>
+  <tr>
+    <td><strong>Token passthrough</strong></td>
+    <td>MCP server mints own tokens with explicit audience binding. Does not forward external tokens to downstream services.</td>
+  </tr>
+  <tr>
+    <td><strong>SSRF</strong></td>
+    <td>Outbound traffic HTTPS-only, limited to allowlisted endpoints. Primary remote-server variant — not a local client exposure.</td>
+  </tr>
+  <tr>
+    <td><strong>Session hijacking</strong></td>
+    <td>Session IDs via <code>crypto.randomUUID()</code>, bound to user ID derived from JWT. All inbound requests verified via <code>requireAuth</code> middleware.</td>
+  </tr>
+  <tr>
+    <td><strong>Scope minimization</strong></td>
+    <td>Least-privilege default: new users auto-register with <code>DEMO_USER</code> role (demo POVs + personal sandbox). Elevated roles require out-of-band approval.</td>
+  </tr>
+  <tr>
+    <td><strong>Local compromise</strong></td>
+    <td>N/A — remote HTTP server, not a local stdio binary.</td>
+  </tr>
+</table>
+
+<h2 id="try">Try It</h2>
+
+<p>
+  You can connect to the live production server right now. Add this to your Claude Desktop or ChatGPT MCP configuration:
+</p>
+
+<pre><code>{
+  "mcpServers": {
+    "paichart": {
+      "url": "https://paichart.app/mcp"
+    }
+  }
+}</code></pre>
+
+<p>
+  First connection triggers GitHub OAuth. New users are auto-registered with the <code>DEMO_USER</code> role:
+  read access to demo POVs, read/write on a personal sandbox. Try these prompts:
+</p>
+
+<ul>
+  <li><em>"Show me the POVs available"</em></li>
+  <li><em>"Read the details of the Demo Financial Corp POV"</em></li>
+  <li><em>"Create a task on my personal sandbox POV that summarizes the cloud migration objective"</em></li>
+</ul>
+
+<p>
+  For elevated roles (standard <code>USER</code>, <code>ADMIN</code>) or questions about the harness, email
+  <a href="mailto:steve.terry@paichart.com">steve.terry@paichart.com</a> directly.
+</p>
+
+<h2 id="cite">Cite</h2>
+
+<div class="bibtex">@misc{paichart-harness-2026,
+  title        = {pAIchart Pipeline Harness: Goal-Directed Multi-Agent Delivery
+                  for Domain-Scoped Outcomes},
+  author       = {Terry, Steve},
+  year         = {2026},
+  note         = {Available at \url{https://paichart.com/harness}},
+  howpublished = {Production system at \url{https://paichart.app/mcp}}
+}</div>
+
+<footer>
+  Project page inspired by <a href="https://yoonholee.com/meta-harness/">Meta-Harness</a>.
+  Live system at <a href="https://paichart.app">paichart.app</a>.
+  Contact: <a href="mailto:steve.terry@paichart.com">steve.terry@paichart.com</a>.
+</footer>
+
+<script>
+  let currentStep = 0;
+  const totalSteps = 9;
+
+  function updateStep() {
+    document.querySelectorAll('.step').forEach((el, i) => {
+      el.classList.toggle('active', i === currentStep);
+    });
+    document.querySelectorAll('.dot').forEach((el, i) => {
+      el.classList.toggle('active', i === currentStep);
+    });
+    document.getElementById('step-num').textContent = currentStep + 1;
+    document.getElementById('prev-btn').disabled = (currentStep === 0);
+    document.getElementById('next-btn').disabled = (currentStep === totalSteps - 1);
+  }
+
+  function stepForward() {
+    if (currentStep < totalSteps - 1) {
+      currentStep++;
+      updateStep();
+    }
+  }
+  function stepBack() {
+    if (currentStep > 0) {
+      currentStep--;
+      updateStep();
+    }
+  }
+  function goToStep(n) {
+    currentStep = n;
+    updateStep();
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight') stepForward();
+    if (e.key === 'ArrowLeft') stepBack();
+  });
+
+  updateStep();
+</script>
+
+</body>
+</html>

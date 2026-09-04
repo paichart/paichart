@@ -1,0 +1,227 @@
+% Pipeline Harness — arxiv submission references
+% Numbered to match inline [N] citations in WHITEPAPER-ARXIV-v3.md
+% Entries marked TODO need URL/year/author verification before submission
+
+% --- Foundational LLM reasoning and agent loops ---
+
+@inproceedings{wei2022chain,
+  title     = {Chain-of-Thought Prompting Elicits Reasoning in Large Language Models},
+  author    = {Wei, Jason and Wang, Xuezhi and Schuurmans, Dale and Bosma, Maarten and Ichter, Brian and Xia, Fei and Chi, Ed H. and Le, Quoc V. and Zhou, Denny},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2022},
+  eprint    = {2201.11903},
+  archivePrefix = {arXiv}
+}
+
+@inproceedings{yao2023react,
+  title     = {{ReAct}: Synergizing Reasoning and Acting in Language Models},
+  author    = {Yao, Shunyu and Zhao, Jeffrey and Yu, Dian and Du, Nan and Shafran, Izhak and Narasimhan, Karthik and Cao, Yuan},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2023},
+  eprint    = {2210.03629},
+  archivePrefix = {arXiv}
+}
+
+@inproceedings{yao2023tree,
+  title     = {Tree of Thoughts: Deliberate Problem Solving with Large Language Models},
+  author    = {Yao, Shunyu and Yu, Dian and Zhao, Jeffrey and Shafran, Izhak and Griffiths, Thomas L. and Cao, Yuan and Narasimhan, Karthik},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2023},
+  eprint    = {2305.10601},
+  archivePrefix = {arXiv}
+}
+
+@misc{bai2022constitutional,
+  title  = {Constitutional {AI}: Harmlessness from {AI} Feedback},
+  author = {Bai, Yuntao and Kadavath, Saurav and Kundu, Sandipan and others},
+  year   = {2022},
+  eprint = {2212.08073},
+  archivePrefix = {arXiv},
+  note   = {Anthropic technical report}
+}
+
+% --- Multi-agent frameworks ---
+
+@misc{wu2023autogen,
+  title  = {{AutoGen}: Enabling Next-Gen {LLM} Applications via Multi-Agent Conversation},
+  author = {Wu, Qingyun and Bansal, Gagan and Zhang, Jieyu and Wu, Yiran and Li, Beibin and Zhu, Erkang and Jiang, Li and Zhang, Xiaoyun and Zhang, Shaokun and Liu, Jiale and Awadallah, Ahmed Hassan and White, Ryen W. and Burger, Doug and Wang, Chi},
+  year   = {2023},
+  eprint = {2308.08155},
+  archivePrefix = {arXiv}
+}
+
+@misc{crewai,
+  title        = {{CrewAI}: Framework for orchestrating role-playing autonomous {AI} agents},
+  author       = {{CrewAI Inc.}},
+  howpublished = {\url{https://docs.crewai.com}},
+  year         = {2024},
+  note         = {Accessed 2026-04-07}
+}
+
+@misc{langgraph,
+  title        = {{LangGraph}: Building stateful, multi-actor applications with {LLM}s},
+  author       = {{LangChain AI}},
+  howpublished = {\url{https://langchain-ai.github.io/langgraph/}},
+  year         = {2024},
+  note         = {Accessed 2026-04-07}
+}
+
+@misc{openai_swarm,
+  title        = {{Swarm}: Educational framework for ergonomic, lightweight multi-agent orchestration},
+  author       = {{OpenAI}},
+  howpublished = {\url{https://github.com/openai/swarm}},
+  year         = {2024},
+  note         = {Accessed 2026-04-07}
+}
+
+% --- Meta-harness and memory (related work cited in §2 and §3.3) ---
+
+@misc{lee2026metaharness,
+  title  = {Meta-Harness: Automated Optimization of Agent Harness Code via Agentic Code Search},
+  author = {Lee and others},
+  year   = {2026},
+  eprint = {2603.28052},
+  archivePrefix = {arXiv},
+  note   = {TODO: verify full author list and exact title before submission}
+}
+
+@misc{liu2026omnisimplemem,
+  title  = {{Omni-SimpleMem}: Autoresearch-Guided Discovery of Memory Architectures for Lifelong Multimodal Agents},
+  author = {Liu and others},
+  year   = {2026},
+  note   = {TODO: verify arxiv ID, full author list, and venue before submission. Cited for the +53\% F1 full-text-vs-summary memory result.}
+}
+
+@inproceedings{khattab2024dspy,
+  title     = {{DSPy}: Compiling Declarative Language Model Calls into Self-Improving Pipelines},
+  author    = {Khattab, Omar and Singhvi, Arnav and Maheshwari, Paridhi and Zhang, Zhiyuan and Santhanam, Keshav and Vardhamanan, Sri and Haq, Saiful and Sharma, Ashutosh and Joshi, Thomas T. and Moazam, Hanna and Miller, Heather and Zaharia, Matei and Potts, Christopher},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2024},
+  eprint    = {2310.03714},
+  archivePrefix = {arXiv}
+}
+
+% --- Autonomous coding agents ---
+
+@misc{cognition_devin,
+  title        = {Introducing Devin, the first {AI} software engineer},
+  author       = {{Cognition AI}},
+  howpublished = {\url{https://www.cognition.ai/blog/introducing-devin}},
+  year         = {2024},
+  note         = {Accessed 2026-04-07}
+}
+
+@misc{factory_ai,
+  title        = {Factory: Bringing autonomy to software engineering},
+  author       = {{Factory AI}},
+  howpublished = {\url{https://www.factory.ai}},
+  year         = {2024},
+  note         = {Accessed 2026-04-07}
+}
+
+@misc{cursor,
+  title        = {Cursor: The {AI} Code Editor},
+  author       = {{Anysphere Inc.}},
+  howpublished = {\url{https://cursor.com}},
+  year         = {2024},
+  note         = {Accessed 2026-04-07}
+}
+
+% --- Retrieval and context ---
+
+@inproceedings{lewis2020rag,
+  title     = {Retrieval-Augmented Generation for Knowledge-Intensive {NLP} Tasks},
+  author    = {Lewis, Patrick and Perez, Ethan and Piktus, Aleksandra and Petroni, Fabio and Karpukhin, Vladimir and Goyal, Naman and K{\"u}ttler, Heinrich and Lewis, Mike and Yih, Wen-tau and Rockt{\"a}schel, Tim and Riedel, Sebastian and Kiela, Douwe},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2020},
+  eprint    = {2005.11401},
+  archivePrefix = {arXiv}
+}
+
+@misc{gao2023rag_survey,
+  title  = {Retrieval-Augmented Generation for Large Language Models: A Survey},
+  author = {Gao, Yunfan and Xiong, Yun and Gao, Xinyu and Jia, Kangxiang and Pan, Jinliu and Bi, Yuxi and Dai, Yi and Sun, Jiawei and Wang, Meng and Wang, Haofen},
+  year   = {2023},
+  eprint = {2312.10997},
+  archivePrefix = {arXiv}
+}
+
+% --- POV automation and sales engineering ---
+
+@misc{vivun,
+  title        = {Vivun: {AI}-driven Presales Platform},
+  author       = {{Vivun Inc.}},
+  howpublished = {\url{https://www.vivun.com}},
+  year         = {2024},
+  note         = {Accessed 2026-04-07}
+}
+
+@misc{consensus,
+  title        = {{Consensus}: Interactive Demo Platform for Sales},
+  author       = {{Consensus Sales}},
+  howpublished = {\url{https://www.goconsensus.com}},
+  year         = {2024},
+  note         = {Accessed 2026-04-07}
+}
+
+@misc{demostack,
+  title        = {{Demostack}: Demo Experience Platform},
+  author       = {{Demostack Inc.}},
+  howpublished = {\url{https://www.demostack.com}},
+  year         = {2024},
+  note         = {Accessed 2026-04-07}
+}
+
+% --- MCP protocol and security ---
+
+@misc{mcp_spec,
+  title        = {Model Context Protocol Specification},
+  author       = {{Anthropic}},
+  howpublished = {\url{https://modelcontextprotocol.io/specification}},
+  year         = {2024},
+  note         = {Accessed 2026-04-07}
+}
+
+@misc{mcp_security,
+  title        = {{MCP} Security Best Practices},
+  author       = {{Anthropic}},
+  howpublished = {\url{https://modelcontextprotocol.io/specification/draft/basic/security_best_practices}},
+  year         = {2025},
+  note         = {Accessed 2026-04-07}
+}
+
+@misc{rfc7519,
+  author       = {Jones, M. and Bradley, J. and Sakimura, N.},
+  title        = {{JSON} Web Token ({JWT})},
+  howpublished = {RFC 7519},
+  year         = {2015},
+  publisher    = {Internet Engineering Task Force},
+  url          = {https://www.rfc-editor.org/rfc/rfc7519}
+}
+
+@misc{rfc7517,
+  author       = {Jones, M.},
+  title        = {{JSON} Web Key ({JWK})},
+  howpublished = {RFC 7517},
+  year         = {2015},
+  publisher    = {Internet Engineering Task Force},
+  url          = {https://www.rfc-editor.org/rfc/rfc7517}
+}
+
+@misc{rfc6749,
+  author       = {Hardt, D.},
+  title        = {The {OAuth} 2.0 Authorization Framework},
+  howpublished = {RFC 6749},
+  year         = {2012},
+  publisher    = {Internet Engineering Task Force},
+  url          = {https://www.rfc-editor.org/rfc/rfc6749}
+}
+
+@misc{rfc8707,
+  author       = {Campbell, B. and Bradley, J. and Jones, M.},
+  title        = {Resource Indicators for {OAuth} 2.0},
+  howpublished = {RFC 8707},
+  year         = {2020},
+  publisher    = {Internet Engineering Task Force},
+  url          = {https://www.rfc-editor.org/rfc/rfc8707}
+}

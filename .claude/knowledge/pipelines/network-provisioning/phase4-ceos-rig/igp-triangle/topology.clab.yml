@@ -1,0 +1,76 @@
+# IGP-migration validation rig — 3-node cEOS TRIANGLE, OSPF area-0 brownfield baseline.
+# Sibling of ../topology.clab.yml (the 2-node BGP/T6 lab). AUTHORED 2026-08-23 for the OSPF→IS-IS
+# migration arc (cline_docs/igp-migration-design-2026-08-21/).
+# DISPOSABLE — `containerlab destroy --cleanup` after the run.
+#
+# 🔴 WHERE THIS RUNS — REVISED 2026-08-24, both answers are measured, not assumed:
+#   • PROD (<PROD_HOST>): ❌ NO for 3 nodes. 3 dual-IGP cEOS (~1.7-2.0 GB each) + ~2.0 GB
+#     non-rig footprint exceeds the 7.9 GB host. Caps high enough to run = kernel GLOBAL OOM
+#     (host down 2026-08-23); caps low enough to be sum-binding (1.2g) = memcg OOM STARVED EOS
+#     (ProcMgr agents killed, CLI dead, container still "Up"). No cap value fits. 2-node does.
+#   • OFF-HOST (local VM, 16 GB): ✅ the intended home — BUT REQUIRES **kernel 6.8.x**.
+#     cEOS 4.32.2.1F boots on 6.8.0-138 and hangs forever in `AaaWarmup` (waiting on
+#     `Aaa Ssh ConfigAgent`) on 7.0.0-29. Same image/topology/configs; memory, CPU, inotify and
+#     cgroups all ruled out (the documented cgroup-v1 bug is pre-4.32.0F and does not apply).
+#     Not a publicly documented bug — our own empirical finding. Check `uname -r` BEFORE deploying.
+#   • Caps below are the PROD-profile numbers, retained for the record; the off-host working copy
+#     (~/igp-ceos-rig/) runs 2.5g/4cpu, which is what a 16 GB host should use.
+#
+# ⚠️ MEMORY — REVISED 2026-08-23 after a kernel global OOM took the prod host down during the
+# IGP-T1 R6 post-apply window (dual-IGP cEOS growth + program load).
+#
+# THE DEFECT IN THE OLD SIZING: caps were 1.8g x 3 = 5.4 GB of PERMITTED growth on a host whose
+# non-rig footprint is ~2 GB of 7.9 GB. The containers could therefore reach a host-fatal state
+# WITHOUT EVER VIOLATING THEIR OWN LIMITS — so the cgroup caps could not fire, and the kernel took
+# the GLOBAL oom path (host unreachable, sshd refusing handshakes) instead of the CONTAINER path
+# (one cEOS killed, rig degrades, prod survives). A per-container cap only protects the host when
+# the SUM of caps + everything else fits in RAM. It did not.
+#
+# REVISED BUDGET (measured 2026-08-23, rig down): non-rig footprint ~2.0 GB, ~5.9 GB available.
+#   3 x 1.2g = 3.6 GB + nornir ~0.4 GB = 4.0 GB rig ceiling -> ~1.9 GB headroom retained.
+# The sum is now BINDING: a runaway cEOS hits its own cap and is container-OOM-killed first.
+# Dual-IGP steady usage measured well under this; if a node is killed at 1.2g that is a FINDING
+# (record the real number), not a reason to raise the cap without re-doing this arithmetic.
+#
+# STILL MANDATORY: no push to main while up (build shares this RAM); memory watchdog running for
+# the whole window; teardown = rig containers only, never cloudflared.
+#
+# ONE lab at a time: distinct lab name (igp-ceos), bridge (clab-igp), and mgmt subnet
+# (172.30.31.0/24) mean this rig cannot collide with the 2-node lab even if both were up —
+# but do NOT run both: the memory table says the pair exceeds the safe envelope.
+
+name: igp-ceos
+
+mgmt:
+  network: clab-igp             # dedicated docker bridge for this lab (NOT clab-np)
+  ipv4-subnet: 172.30.31.0/24   # deterministic mgmt IPs -> static nornir inventory (see ./nornir/)
+
+topology:
+  kinds:
+    arista_ceos:
+      image: ceos:4.32.2.1F     # same image as the 2-node lab (already loaded on prod)
+  nodes:
+    ceos1:
+      kind: arista_ceos
+      mgmt-ipv4: 172.30.31.11   # containerlab assigns this to Management0 — do NOT also set it in the startup-config
+      startup-config: ceos1-startup.cfg
+      memory: 1.2g              # sum-binding guardrail (3 x 1.2 = 3.6 GB; see header)
+      cpu: 1.2
+    ceos2:
+      kind: arista_ceos
+      mgmt-ipv4: 172.30.31.12
+      startup-config: ceos2-startup.cfg
+      memory: 1.2g              # sum-binding guardrail (see header)
+      cpu: 1.2
+    ceos3:
+      kind: arista_ceos
+      mgmt-ipv4: 172.30.31.13
+      startup-config: ceos3-startup.cfg
+      memory: 1.2g              # sum-binding guardrail (see header)
+      cpu: 1.2
+  links:
+    # Full triangle — real multi-adjacency mesh + a transit-path story (OSPF costs in the
+    # startup-configs make ceos1→ceos3 prefer the 2-hop path VIA ceos2: 10+20=30 < 40 direct).
+    - endpoints: ["ceos1:eth1", "ceos2:eth1"]   # 10.0.12.0/30, ospf cost 10
+    - endpoints: ["ceos2:eth2", "ceos3:eth1"]   # 10.0.23.0/30, ospf cost 20
+    - endpoints: ["ceos1:eth2", "ceos3:eth2"]   # 10.0.13.0/30, ospf cost 40

@@ -1,0 +1,110 @@
+{
+  "name": "pAIchart MCP Hub",
+  "description": "AI-native service orchestration platform. Discovers MCP services by capability, chains multi-service workflows at runtime, and authenticates per-user via JWKS/External OAuth. 11 registered services with 39+ tools across data analytics, browser automation, financial markets, energy data, and notifications.",
+  "url": "https://paichart.app/mcp",
+  "version": "1.0.0",
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false,
+    "stateTransitionHistory": false
+  },
+  "skills": [
+    {
+      "id": "service-discovery",
+      "name": "MCP Service Discovery",
+      "description": "Find registered MCP services by capability, category, or description. Returns service metadata, tool schemas, and health status. Use: services(action: \"discover\")",
+      "tags": ["discovery", "registry", "catalog"],
+      "examples": [
+        "What services are available?",
+        "Find services with monitoring capabilities",
+        "Show me data analytics tools"
+      ]
+    },
+    {
+      "id": "workflow-orchestration",
+      "name": "Multi-Service Workflow Execution",
+      "description": "Chain multiple MCP services into sequential, parallel, or conditional workflows with variable passing between steps. Use: services(action: \"workflow.execute\")",
+      "tags": ["workflow", "orchestration", "chaining", "automation"],
+      "examples": [
+        "Get electricity prices for Texas and email me a summary",
+        "Scrape this page and send the results to Slack",
+        "Query Snowflake and create a notification with the results"
+      ]
+    },
+    {
+      "id": "service-registration",
+      "name": "MCP Service Registration",
+      "description": "Register new MCP services with the Hub via a single command. Automatic capability indexing, trust level assignment, and health monitoring. Use: registry(action: \"register\") or /prompt register_guide",
+      "tags": ["registration", "onboarding", "setup"],
+      "examples": [
+        "Register my MCP service at https://my-service.com/mcp",
+        "How do I add my service to the Hub?"
+      ]
+    },
+    {
+      "id": "snowflake-query",
+      "name": "Per-User Snowflake Query",
+      "description": "Execute read-only SQL queries on Snowflake data warehouse, authenticated as the requesting user via External OAuth. Every query is attributed to the real user in Snowflake audit logs.",
+      "tags": ["snowflake", "sql", "data-warehouse", "external-oauth", "per-user-auth"],
+      "examples": [
+        "Show me the top tables in my Snowflake warehouse",
+        "Run a query on the sales database",
+        "Describe the schema of the customers table"
+      ]
+    },
+    {
+      "id": "browser-automation",
+      "name": "Browser Automation",
+      "description": "Web scraping, screenshots, PDF generation, form filling, and JavaScript execution via Playwright.",
+      "tags": ["browser", "scraping", "screenshot", "pdf", "automation"],
+      "examples": [
+        "Take a screenshot of this webpage",
+        "Scrape the pricing table from competitor.com",
+        "Generate a PDF of this report"
+      ]
+    },
+    {
+      "id": "financial-data",
+      "name": "Financial Market Data",
+      "description": "Real-time stock quotes, historical OHLCV data, company fundamentals, and ticker search via EODHD and Alpha Vantage (113+ tools).",
+      "tags": ["finance", "stocks", "market-data", "quotes", "fundamentals"],
+      "examples": [
+        "Get the current price of AAPL",
+        "Show me Tesla's fundamentals",
+        "Compare historical prices of MSFT and GOOG"
+      ]
+    },
+    {
+      "id": "energy-data",
+      "name": "U.S. Energy Data Analytics",
+      "description": "Electricity generation, capacity, pricing, and energy storage opportunity analysis across all U.S. states via EIA data.",
+      "tags": ["energy", "electricity", "eia", "renewable", "storage"],
+      "examples": [
+        "Compare electricity prices between Texas and California",
+        "Find high-potential energy storage areas",
+        "Show the generation mix for New York"
+      ]
+    },
+    {
+      "id": "notifications",
+      "name": "Multi-Channel Notifications",
+      "description": "Send notifications via email (Brevo), Slack, and webhooks. Supports broadcast (multi-channel), escalation chains, and scheduled delivery.",
+      "tags": ["email", "slack", "notifications", "messaging"],
+      "examples": [
+        "Send an email summary to the team",
+        "Broadcast an alert to Slack and email",
+        "Schedule a notification for tomorrow"
+      ]
+    }
+  ],
+  "authentication": {
+    "schemes": ["bearer"],
+    "credentials": "Obtain via OAuth 2.0 (GitHub, Google, Microsoft) at https://paichart.app"
+  },
+  "provider": {
+    "organization": "pAIchart",
+    "url": "https://paichart.app"
+  },
+  "defaultInputModes": ["text"],
+  "defaultOutputModes": ["text"]
+}

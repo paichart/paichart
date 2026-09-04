@@ -1,0 +1,72 @@
+{
+  "extends": [
+    "next/core-web-vitals"
+  ],
+  "rules": {
+    "react/jsx-pascal-case": "error",
+    "react/display-name": "error",
+    "react/react-in-jsx-scope": "off",
+    "react/function-component-definition": "off",
+    "import/no-unresolved": "off"
+  },
+  "overrides": [
+    {
+      "files": [
+        "lib/**/*.ts",
+        "app/api/**/*.ts",
+        "server.ts",
+        "middleware.ts"
+      ],
+      "excludedFiles": [
+        "lib/hooks/**",
+        "lib/*/hooks/**",
+        "lib/contexts/**",
+        "lib/store/**",
+        "lib/database/dev-query-logger.ts",
+        "lib/database/test-mappers.ts"
+      ],
+      "rules": {
+        "no-console": "error"
+      }
+    },
+    {
+      "files": [
+        "components/**/*.tsx",
+        "app/(authenticated)/**/*.tsx"
+      ],
+      "rules": {
+        "no-console": ["warn", { "allow": ["warn", "error"] }]
+      }
+    },
+    {
+      "files": [
+        "mcp-server-v5.js",
+        "mcp-server-http-clean.js"
+      ],
+      "rules": {
+        "no-console": "error"
+      }
+    },
+    {
+      "files": [
+        "lib/**/*.js"
+      ],
+      "excludedFiles": [
+        "lib/events/database/dev-query-logger.js",
+        "lib/events/events/**",
+        "prisma/generated/**"
+      ],
+      "rules": {
+        "no-console": "warn"
+      }
+    },
+    {
+      "files": [
+        "lib/mcp/server/**/*.js"
+      ],
+      "rules": {
+        "no-console": "error"
+      }
+    }
+  ]
+}

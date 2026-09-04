@@ -1,0 +1,853 @@
+[
+  {
+    "name": "blocked-task-escalation",
+    "description": "Find blocked tasks and send escalation notifications.\n\nWHAT IT DOES:\n1. Lists all tasks with BLOCKED status\n2. Sends escalation notification chain (email -> slack after delay)\n\nWHEN TO USE:\n- Daily standup preparation\n- Bottleneck identification\n- Proactive issue resolution\n\nESCALATION PATH:\n- Immediate: Email to task owner\n- After 30 min: Slack to team channel\n\nEXAMPLE:\nservices({ action: \"workflow.execute\", workflowName: \"blocked-task-escalation\" })",
+    "category": "automation",
+    "status": "ACTIVE",
+    "steps": {
+      "steps": [
+        {
+          "tool": "project",
+          "service": "paichart-project-service",
+          "arguments": {
+            "limit": 20,
+            "action": "task.list",
+            "status": "BLOCKED"
+          }
+        },
+        {
+          "tool": "escalate",
+          "service": "notification-service",
+          "arguments": {
+            "message": {
+              "body": "Found {{step.0.output.totalCount}} blocked tasks requiring attention.",
+              "subject": "Blocked Tasks Alert",
+              "priority": "high"
+            },
+            "escalationPath": [
+              {
+                "channel": "email",
+                "recipients": [
+                  {
+                    "id": "owner",
+                    "address": "owner@company.com"
+                  }
+                ],
+                "delayMinutes": 0
+              },
+              {
+                "channel": "slack",
+                "recipients": [
+                  {
+                    "id": "team",
+                    "address": "#project-alerts"
+                  }
+                ],
+                "delayMinutes": 30
+              }
+            ],
+            "maxEscalations": 3
+          },
+          "dependsOn": [
+            0
+          ]
+        }
+      ],
+      "timeout": 45000,
+      "executionMode": "sequential",
+      "failureStrategy": "continue"
+    },
+    "triggers": {},
+    "schedule": null,
+    "createdBy": null
+  },
+  {
+    "name": "competitor-price-monitor",
+    "description": "Monitor competitor pricing and alert on changes.\n\nWHAT IT DOES:\n1. Scrapes competitor page for pricing data\n2. Sends Slack alert with current pricing info\n\nWHEN TO USE:\n- Daily competitive intelligence\n- Price change monitoring\n- Market research automation\n\nSELECTORS (customize for your target):\n- title: Product/service name selector\n- price: Price selector\n- currency: Currency indicator\n\nEXAMPLE:\nservices({ action: \"workflow.execute\", workflowName: \"competitor-price-monitor\" })",
+    "category": "intelligence",
+    "status": "ACTIVE",
+    "steps": {
+      "steps": [
+        {
+          "tool": "scrape_page",
+          "service": "browser-automation-service",
+          "arguments": {
+            "url": "https://example.com/pricing",
+            "waitFor": ".pricing-table",
+            "selectors": {
+              "price": ".price-value",
+              "title": ".product-title",
+              "currency": ".currency-symbol"
+            }
+          }
+        },
+        {
+          "tool": "send",
+          "service": "notification-service",
+          "arguments": {
+            "channel": "slack",
+            "message": {
+              "body": "Latest pricing data scraped successfully. Check dashboard for details.",
+              "subject": "Competitor Price Update",
+              "priority": "normal"
+            },
+            "recipients": [
+              {
+                "id": "channel",
+                "address": "#competitive-intel"
+              }
+            ]
+          },
+          "dependsOn": [
+            0
+          ]
+        }
+      ],
+      "timeout": 90000,
+      "executionMode": "sequential",
+      "failureStrategy": "stop"
+    },
+    "triggers": {},
+    "schedule": null,
+    "createdBy": null
+  },
+  {
+    "name": "cross-service-compute-bound-demo",
+    "description": "Two-step workflow that exercises real Snowflake compute end-to-end, complementing cross-service-identity-chain-demo. Step 1 validates the caller's JWT via token-validator-service. Step 2 issues a non-cacheable warehouse-bound query (uses RANDOM() so the Snowflake result cache cannot serve a stale answer). Requires `workflow.execute` with a `povId` where the caller has team membership on a POV that grants access to Snowflake Service.\n\nWhile the underlying Snowflake account has compute available, the second step returns a row count from the TPCH NATION sample table. While the account is suspended (billing, quota, or warehouse-paused), the second step returns a clean `Snowflake query error: <upstream message>` without misleading auth-flow hints — verifying both the identity chain (Step 1) and the upstream error-surfacing behavior (Step 2). Useful for: customer compute-path onboarding, regression testing the auth-suffix removal, and demonstrating the full end-to-end identity-and-compute pipeline.",
+    "category": "onboarding",
+    "status": "ACTIVE",
+    "steps": {
+      "steps": [
+        {
+          "tool": "verify_auth",
+          "service": "token-validator-service",
+          "arguments": {}
+        },
+        {
+          "tool": "run_snowflake_query",
+          "service": "Snowflake Service",
+          "arguments": {
+            "statement": "SELECT COUNT(*) AS c FROM SNOWFLAKE_SAMPLE_DATA.TPCH_SF1.NATION WHERE N_NATIONKEY > FLOOR(RANDOM() * 100)"
+          }
+        }
+      ],
+      "timeout": 30000,
+      "requires": [
+        "povId"
+      ],
+      "executionMode": "sequential",
+      "failureStrategy": "continue"
+    },
+    "triggers": {},
+    "schedule": null,
+    "createdBy": null
+  },
+  {
+    "name": "cross-service-identity-chain-demo",
+    "description": "Two-step workflow demonstrating per-user identity forwarding across an MCP service chain. Step 1 validates that this caller's JWT was forwarded and decoded correctly. Step 2 proves the same identity was preserved into a second service call (Snowflake metadata listing).\n\nRequires `workflow.execute` with a `povId` where the caller has team membership on a POV that grants access to Snowflake Service. Useful for: customer auth-flow onboarding, regression-testing the token-forwarding pipeline, and end-to-end smoke tests after Hub deploys.",
+    "category": "onboarding",
+    "status": "ACTIVE",
+    "steps": {
+      "steps": [
+        {
+          "tool": "verify_auth",
+          "retries": 0,
+          "service": "token-validator-service",
+          "arguments": {},
+          "retryDelay": 2000
+        },
+        {
+          "tool": "list_objects",
+          "retries": 0,
+          "service": "Snowflake Service",
+          "arguments": {
+            "objectType": "databases"
+          },
+          "retryDelay": 2000
+        }
+      ],
+      "timeout": 30000,
+      "requires": [
+        "povId"
+      ],
+      "executionMode": "sequential",
+      "failureStrategy": "rollback"
+    },
+    "triggers": {},
+    "schedule": null,
+    "createdBy": null
+  },
+  {
+    "name": "daily-energy-weather",
+    "description": "daily-operational-snapshot runs a coordinated multi-service pull of the latest grid and weather intelligence for Texas.\nIt retrieves current generation mix, capacity, and utilization from EIA alongside real-time conditions and a 5-day forecast.\nThe workflow correlates infrastructure status with weather drivers to identify operational risk or optimization windows.\nOutputs support daily decisions on maintenance timing, dispatch posture, and energy-intensive scheduling.",
+    "category": "general",
+    "status": "ACTIVE",
+    "steps": {
+      "steps": [
+        {
+          "tool": "get_generation_mix_by_state",
+          "service": "eia-service",
+          "arguments": {
+            "state": "TX",
+            "period": "latest"
+          },
+          "dependsOn": []
+        },
+        {
+          "tool": "get_capacity_utilization_by_state",
+          "service": "eia-service",
+          "arguments": {
+            "state": "TX",
+            "season": "both"
+          },
+          "dependsOn": []
+        },
+        {
+          "tool": "current_weather",
+          "service": "weather-service",
+          "arguments": {
+            "units": "imperial",
+            "location": "Austin,US"
+          },
+          "dependsOn": []
+        },
+        {
+          "tool": "forecast",
+          "service": "weather-service",
+          "arguments": {
+            "days": 5,
+            "units": "imperial",
+            "location": "Austin,US"
+          },
+          "dependsOn": []
+        }
+      ],
+      "timeout": 180000,
+      "executionMode": "sequential",
+      "failureStrategy": "stop"
+    },
+    "triggers": {
+      "manual": true
+    },
+    "schedule": null,
+    "createdBy": "cmh86xj81002tyxmi5k2qv1ls"
+  },
+  {
+    "name": "eodhd-service-multi-step-workflow",
+    "description": "⚠️ Template - Review and customize arguments before running.\n\nAutomated workflow combining 3 eodhd-service tools",
+    "category": "automation",
+    "status": "ACTIVE",
+    "steps": {
+      "steps": [
+        {
+          "tool": "get_eod_data",
+          "service": "eodhd-service",
+          "arguments": {
+            "to": "example",
+            "from": "example",
+            "symbol": "AAPL"
+          }
+        },
+        {
+          "tool": "get_live_quote",
+          "service": "eodhd-service",
+          "arguments": {
+            "symbol": "AAPL",
+            "_previousOutput": "{{step.0.output}}"
+          }
+        },
+        {
+          "tool": "search_ticker",
+          "service": "eodhd-service",
+          "arguments": {
+            "query": "example",
+            "_previousOutput": "{{step.1.output}}"
+          }
+        }
+      ],
+      "timeout": 60000,
+      "executionMode": "sequential",
+      "failureStrategy": "stop"
+    },
+    "triggers": {
+      "manual": true
+    },
+    "schedule": null,
+    "createdBy": "cmh86xj81002tyxmi5k2qv1ls"
+  },
+  {
+    "name": "jwks-validation-advanced-demo",
+    "description": "Complete JWKS validation with TypeScript, JavaScript, and Python examples (runs in parallel)",
+    "category": "testing",
+    "status": "ACTIVE",
+    "steps": {
+      "steps": [
+        {
+          "tool": "verify_auth",
+          "retries": 0,
+          "service": "token-validator-service",
+          "timeout": 10000,
+          "arguments": {
+            "testMessage": "TypeScript JWKS validation - ideal for Next.js/Node",
+            "codeLanguage": "typescript"
+          },
+          "retryDelay": 2000
+        },
+        {
+          "tool": "verify_auth",
+          "retries": 0,
+          "service": "token-validator-service",
+          "timeout": 10000,
+          "arguments": {
+            "testMessage": "JavaScript JWKS validation - ideal for browser/vanilla JS",
+            "codeLanguage": "javascript"
+          },
+          "retryDelay": 2000
+        },
+        {
+          "tool": "verify_auth",
+          "retries": 0,
+          "service": "token-validator-service",
+          "timeout": 10000,
+          "arguments": {
+            "testMessage": "Python JWKS validation - ideal for Flask/Django/FastAPI",
+            "codeLanguage": "python"
+          },
+          "retryDelay": 2000
+        }
+      ],
+      "timeout": 15000,
+      "executionMode": "parallel",
+      "failureStrategy": "continue"
+    },
+    "triggers": {},
+    "schedule": null,
+    "createdBy": null
+  },
+  {
+    "name": "pov-status-report",
+    "description": "Generate and send a POV status report to stakeholders.\n\nWHAT IT DOES:\n1. Lists all active POVs (IN_PROGRESS status)\n2. Gets detailed information for the first POV found\n3. Sends a summary email notification to the team\n\nWHEN TO USE:\n- Weekly status updates to management\n- Client meeting preparation\n- Portfolio health check\n\nVARIABLE CHAINING:\n- Step 2 uses {{step.0.output.data[0].id}} to get POV details\n- Step 3 uses {{step.1.output.title}} for the email subject\n\nEXAMPLE:\nservices({ action: \"workflow.execute\", workflowName: \"pov-status-report\" })",
+    "category": "reporting",
+    "status": "ACTIVE",
+    "steps": {
+      "steps": [
+        {
+          "tool": "project",
+          "service": "paichart-project-service",
+          "arguments": {
+            "limit": 10,
+            "action": "pov.list",
+            "status": "IN_PROGRESS"
+          }
+        },
+        {
+          "tool": "project",
+          "service": "paichart-project-service",
+          "arguments": {
+            "povId": "{{step.0.output.data[0].id}}",
+            "action": "pov.details"
+          },
+          "dependsOn": [
+            0
+          ]
+        },
+        {
+          "tool": "send",
+          "service": "notification-service",
+          "arguments": {
+            "channel": "email",
+            "message": {
+              "body": "POV: {{step.1.output.title}}\nCustomer: {{step.1.output.customerName}}\nStatus: {{step.1.output.status}}\nPriority: {{step.1.output.priority}}",
+              "subject": "POV Status Report: {{step.1.output.title}}",
+              "priority": "normal"
+            },
+            "recipients": [
+              {
+                "id": "stakeholder",
+                "name": "Team",
+                "address": "team@company.com"
+              }
+            ]
+          },
+          "dependsOn": [
+            1
+          ]
+        }
+      ],
+      "timeout": 60000,
+      "executionMode": "sequential",
+      "failureStrategy": "stop"
+    },
+    "triggers": {},
+    "schedule": null,
+    "createdBy": null
+  },
+  {
+    "name": "screenshot-documentation",
+    "description": "Capture screenshots and generate PDF documentation.\n\nWHAT IT DOES:\n1. Takes a full-page screenshot of the specified URL\n2. Generates a PDF version of the page\n\nWHEN TO USE:\n- Visual documentation of dashboards\n- Compliance evidence capture\n- Before/after comparison for changes\n- Client presentation materials\n\nEXAMPLE:\nservices({ action: \"workflow.execute\", workflowName: \"screenshot-documentation\" })",
+    "category": "documentation",
+    "status": "ACTIVE",
+    "steps": {
+      "steps": [
+        {
+          "tool": "take_screenshot",
+          "service": "browser-automation-service",
+          "arguments": {
+            "url": "https://paichart.app/dashboard",
+            "fullPage": true
+          }
+        },
+        {
+          "tool": "generate_pdf",
+          "service": "browser-automation-service",
+          "arguments": {
+            "url": "https://paichart.app/dashboard",
+            "pageSettings": {
+              "format": "A4",
+              "margin": {
+                "top": "1cm",
+                "left": "1cm",
+                "right": "1cm",
+                "bottom": "1cm"
+              },
+              "landscape": true
+            }
+          }
+        }
+      ],
+      "timeout": 120000,
+      "executionMode": "parallel",
+      "failureStrategy": "continue"
+    },
+    "triggers": {},
+    "schedule": null,
+    "createdBy": null
+  },
+  {
+    "name": "snowflake-token-test",
+    "description": "The owner of the service is <maintainer-email> and is also the owner of Cybersafe Technologies Fortigate with povId cmgalsigt010wyx39k3xyde7y so to enable token passing assign team membership",
+    "category": "automation",
+    "status": "ACTIVE",
+    "steps": {
+      "steps": [
+        {
+          "tool": "run_snowflake_query",
+          "retries": 0,
+          "service": "Snowflake Service",
+          "arguments": {
+            "statement": "SELECT N_NAME, N_REGIONKEY FROM SNOWFLAKE_SAMPLE_DATA.TPCH_SF1.NATION LIMIT 10"
+          },
+          "dependsOn": [],
+          "retryDelay": 2000
+        }
+      ],
+      "timeout": 60000,
+      "requires": [
+        "povId"
+      ],
+      "executionMode": "sequential",
+      "failureStrategy": "stop"
+    },
+    "triggers": {
+      "manual": true
+    },
+    "schedule": null,
+    "createdBy": "cmh86xj81002tyxmi5k2qv1ls"
+  },
+  {
+    "name": "task-completion-notify",
+    "description": "Mark a task complete and notify the team.\n\nWHAT IT DOES:\n1. Gets full task context (details, history, dependencies)\n2. Updates task status to COMPLETED\n3. Broadcasts notification to email and Slack\n\nWHEN TO USE:\n- Automated task completion workflows\n- Milestone achievement announcements\n- Team celebration triggers\n\nREQUIRES:\n- taskId parameter (or uses first task from recent list)\n\nEXAMPLE:\nservices({ action: \"workflow.execute\", workflowName: \"task-completion-notify\", taskId: \"cm...\" })",
+    "category": "automation",
+    "status": "ACTIVE",
+    "steps": {
+      "steps": [
+        {
+          "tool": "project",
+          "service": "paichart-project-service",
+          "arguments": {
+            "limit": 1,
+            "action": "task.list",
+            "status": "IN_PROGRESS"
+          }
+        },
+        {
+          "tool": "project",
+          "service": "paichart-project-service",
+          "arguments": {
+            "action": "task.context",
+            "taskId": "{{step.0.output.data[0].id}}",
+            "includeHistory": true
+          },
+          "dependsOn": [
+            0
+          ]
+        },
+        {
+          "tool": "perform",
+          "service": "paichart-project-service",
+          "arguments": {
+            "action": "task.complete",
+            "taskId": "{{step.0.output.data[0].id}}",
+            "parameters": {
+              "completionNotes": "Completed via workflow automation"
+            }
+          },
+          "dependsOn": [
+            1
+          ]
+        },
+        {
+          "tool": "broadcast",
+          "service": "notification-service",
+          "arguments": {
+            "message": {
+              "body": "Task \"{{step.1.output.task.title}}\" has been marked complete.\n\nPOV: {{step.1.output.pov.title}}\nPhase: {{step.1.output.phase.name}}",
+              "subject": "Task Completed: {{step.1.output.task.title}}",
+              "priority": "normal"
+            },
+            "channels": [
+              "email",
+              "slack"
+            ],
+            "recipients": {
+              "email": [
+                {
+                  "id": "team",
+                  "address": "team@company.com"
+                }
+              ],
+              "slack": [
+                {
+                  "id": "channel",
+                  "address": "#project-updates"
+                }
+              ]
+            }
+          },
+          "dependsOn": [
+            2
+          ]
+        }
+      ],
+      "timeout": 60000,
+      "executionMode": "sequential",
+      "failureStrategy": "rollback"
+    },
+    "triggers": {},
+    "schedule": null,
+    "createdBy": null
+  },
+  {
+    "name": "token-troubleshooting-demo",
+    "description": "Troubleshoot token validation with POV context - see how trust levels change",
+    "category": "onboarding",
+    "status": "ACTIVE",
+    "steps": {
+      "steps": [
+        {
+          "name": "get_povs",
+          "tool": "project",
+          "service": "paichart-project-service",
+          "timeout": 10000,
+          "arguments": {
+            "limit": 1,
+            "action": "pov.list"
+          }
+        },
+        {
+          "name": "validate_with_pov",
+          "tool": "verify_auth",
+          "service": "token-validator-service",
+          "timeout": 10000,
+          "arguments": {
+            "testMessage": "POV Context Test - Checking trust level with POV context",
+            "codeLanguage": "typescript"
+          }
+        }
+      ],
+      "timeout": 25000,
+      "executionMode": "sequential",
+      "failureStrategy": "continue"
+    },
+    "triggers": {},
+    "schedule": null,
+    "createdBy": null
+  },
+  {
+    "name": "trust-level-basic-demo",
+    "description": "Introduction to trust levels and token validation - start here",
+    "category": "onboarding",
+    "status": "ACTIVE",
+    "steps": {
+      "steps": [
+        {
+          "tool": "verify_auth",
+          "service": "token-validator-service",
+          "timeout": 10000,
+          "arguments": {
+            "testMessage": "Welcome! This shows your trust level and whether you receive tokens.",
+            "codeLanguage": "typescript"
+          }
+        }
+      ],
+      "timeout": 15000,
+      "executionMode": "sequential",
+      "failureStrategy": "continue"
+    },
+    "triggers": {},
+    "schedule": null,
+    "createdBy": null
+  },
+  {
+    "name": "weekly-pov-digest",
+    "description": "Generate weekly digest of all POVs by status.\n\nWHAT IT DOES:\n1. Lists IN_PROGRESS POVs\n2. Lists VALIDATION POVs (ready to close)\n3. Lists STALLED POVs (need attention)\n4. Takes screenshot of dashboard\n5. Sends consolidated digest email\n\nWHEN TO USE:\n- Weekly management reports\n- Monday morning status sync\n- Portfolio review meetings\n\nEXECUTION MODE: Parallel for status queries, then sequential for report\n\nEXAMPLE:\nservices({ action: \"workflow.execute\", workflowName: \"weekly-pov-digest\" })",
+    "category": "reporting",
+    "status": "ACTIVE",
+    "steps": {
+      "steps": [
+        {
+          "tool": "project",
+          "service": "paichart-project-service",
+          "arguments": {
+            "limit": 50,
+            "action": "pov.list",
+            "status": "IN_PROGRESS"
+          }
+        },
+        {
+          "tool": "project",
+          "service": "paichart-project-service",
+          "arguments": {
+            "limit": 20,
+            "action": "pov.list",
+            "status": "VALIDATION"
+          }
+        },
+        {
+          "tool": "project",
+          "service": "paichart-project-service",
+          "arguments": {
+            "limit": 20,
+            "action": "pov.list",
+            "status": "STALLED"
+          }
+        },
+        {
+          "tool": "take_screenshot",
+          "service": "browser-automation-service",
+          "arguments": {
+            "url": "https://paichart.app/dashboard",
+            "fullPage": true
+          },
+          "dependsOn": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "tool": "send",
+          "service": "notification-service",
+          "arguments": {
+            "channel": "email",
+            "message": {
+              "body": "Weekly POV Status Summary:\n\nIN_PROGRESS: Active POVs requiring attention\nVALIDATION: POVs ready to close\nSTALLED: POVs needing intervention\n\nDashboard screenshot attached. See pAIchart for full details.",
+              "subject": "Weekly POV Digest - Active Projects Report",
+              "priority": "normal"
+            },
+            "recipients": [
+              {
+                "id": "management",
+                "name": "Leadership Team",
+                "address": "leadership@company.com"
+              }
+            ]
+          },
+          "dependsOn": [
+            3
+          ]
+        }
+      ],
+      "timeout": 180000,
+      "executionMode": "sequential",
+      "failureStrategy": "continue"
+    },
+    "triggers": {},
+    "schedule": null,
+    "createdBy": null
+  },
+  {
+    "name": "browser-automation-service-alert-system",
+    "description": "Execute Browser Automation Service scrape_page and send notification alerts",
+    "category": "automation",
+    "status": "DEPRECATED",
+    "steps": {
+      "steps": [
+        {
+          "tool": "scrape_page",
+          "service": "Browser Automation Service",
+          "arguments": {
+            "url": "example",
+            "waitFor": "example",
+            "selectors": {},
+            "pagination": {}
+          }
+        },
+        {
+          "tool": "send",
+          "service": "Notification Service",
+          "arguments": {
+            "channel": "email",
+            "message": {
+              "body": "Result: {{step.0.output}}",
+              "subject": "Browser Automation Service Alert",
+              "priority": "normal"
+            }
+          }
+        }
+      ],
+      "timeout": 60000,
+      "executionMode": "sequential",
+      "failureStrategy": "stop"
+    },
+    "triggers": {
+      "manual": true
+    },
+    "schedule": null,
+    "createdBy": "cmh86xj81002tyxmi5k2qv1ls"
+  },
+  {
+    "name": "browser-automation-service-multi-step-workflow",
+    "description": "Automated workflow combining 3 Browser Automation Service tools",
+    "category": "automation",
+    "status": "DEPRECATED",
+    "steps": {
+      "steps": [
+        {
+          "tool": "scrape_page",
+          "service": "Browser Automation Service",
+          "arguments": {
+            "url": "https://example.com",
+            "waitFor": "example",
+            "selectors": {
+              "link": "a.primary",
+              "title": "h1",
+              "content": ".main-content"
+            },
+            "pagination": {}
+          }
+        },
+        {
+          "tool": "fill_form",
+          "service": "Browser Automation Service",
+          "arguments": {
+            "url": "https://example.com",
+            "submit": false,
+            "formData": {
+              "field1": "value1"
+            },
+            "fieldMappings": {
+              "key1": "#selector1"
+            },
+            "submitSelector": ".content",
+            "_previousOutput": "{{step.0.output}}"
+          }
+        },
+        {
+          "tool": "click_element",
+          "service": "Browser Automation Service",
+          "arguments": {
+            "url": "https://example.com",
+            "selector": "body",
+            "waitAfter": 0,
+            "screenshot": true,
+            "_previousOutput": "{{step.1.output}}"
+          }
+        }
+      ],
+      "timeout": 60000,
+      "executionMode": "sequential",
+      "failureStrategy": "stop"
+    },
+    "triggers": {
+      "manual": true
+    },
+    "schedule": null,
+    "createdBy": "cmh86xj81002tyxmi5k2qv1ls"
+  },
+  {
+    "name": "browser-automation-service-to-task",
+    "description": "Fetch data from Browser Automation Service and create tasks automatically",
+    "category": "automation",
+    "status": "DEPRECATED",
+    "steps": {
+      "steps": [
+        {
+          "tool": "scrape_page",
+          "service": "Browser Automation Service",
+          "arguments": {
+            "url": "https://example.com",
+            "waitFor": "example",
+            "selectors": {
+              "link": "a.primary",
+              "title": "h1",
+              "content": ".main-content"
+            },
+            "pagination": {}
+          }
+        },
+        {
+          "tool": "perform",
+          "service": "pAIchart Task Service",
+          "arguments": {
+            "title": "Data from Browser Automation Service",
+            "action": "task.create",
+            "description": "Auto-created from {{step.0.output}}"
+          }
+        }
+      ],
+      "timeout": 60000,
+      "executionMode": "sequential",
+      "failureStrategy": "stop"
+    },
+    "triggers": {
+      "manual": true
+    },
+    "schedule": null,
+    "createdBy": "cmh86xj81002tyxmi5k2qv1ls"
+  },
+  {
+    "name": "pov-workflow-showcase",
+    "description": "Explore POVs and tasks in parallel - demonstrates independent data gathering",
+    "category": "onboarding",
+    "status": "DEPRECATED",
+    "steps": {
+      "steps": [
+        {
+          "name": "get_povs",
+          "tool": "project",
+          "service": "paichart-project-service",
+          "timeout": 10000,
+          "arguments": {
+            "limit": 3
+          }
+        },
+        {
+          "name": "get_tasks",
+          "tool": "project",
+          "service": "paichart-project-service",
+          "timeout": 10000,
+          "arguments": {
+            "limit": 5
+          }
+        }
+      ],
+      "timeout": 15000,
+      "executionMode": "parallel",
+      "failureStrategy": "continue"
+    },
+    "triggers": {},
+    "schedule": null,
+    "createdBy": null
+  }
+]

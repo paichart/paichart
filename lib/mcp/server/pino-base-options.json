@@ -1,0 +1,14 @@
+{
+  "redact": {
+    "paths": [
+      "password", "verificationToken", "resetTokenHash",
+      "accessToken", "refreshToken", "token", "secret", "apiKey",
+      "access_token", "refresh_token", "client_secret", "code_verifier",
+      "*.password", "*.verificationToken", "*.token",
+      "*.access_token", "*.refresh_token", "*.client_secret", "*.code_verifier",
+      "body.client_secret", "body.refresh_token", "body.code_verifier", "body.code",
+      "req.headers.authorization", "req.headers.cookie"
+    ],
+    "censor": "[REDACTED]"
+  }
+}

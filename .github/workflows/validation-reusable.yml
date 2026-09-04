@@ -1,0 +1,177 @@
+name: Validation Tests (Reusable)
+
+on:
+  workflow_call:
+    outputs:
+      validation-passed:
+        description: "Whether all validation tests passed"
+        value: ${{ jobs.validation-summary.outputs.passed }}
+
+# Least privilege (fork-safe): nothing here writes to the repo.
+permissions:
+  contents: read
+
+jobs:
+  validation-tests:
+    name: Run Validation Test Suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # R6a (2026-08-19): the extracted deploy script is now lintable at all —
+      # the old ssh-heredoc never was. -S error keeps byte-parity with the
+      # heredoc body (one pre-existing SC2010 warning is deliberately untouched,
+      # R2/R3 — no cleanup in the extraction).
+      - name: Deploy script syntax + shellcheck
+        run: |
+          bash -n scripts/deploy/blue-green-deploy.sh
+          shellcheck -S error scripts/deploy/blue-green-deploy.sh
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run form field pattern tests
+        run: npm run test:form-patterns
+        continue-on-error: false
+
+      - name: Run enum parity tests
+        run: npm run test:enum-parity
+        continue-on-error: false
+
+      - name: Validate ID formats
+        run: npm run validate:id-format
+        continue-on-error: false
+
+      - name: Detect dual TS/JS drift
+        run: npm run validate:no-dual-files
+        continue-on-error: false
+
+      - name: Run all validation tests
+        run: npm run test:all-validation
+        continue-on-error: false
+
+      # BLOCKING gate (2026-05-26 demo-write fix, Protocol-2 R1): fails the deploy if any
+      # POV/child WRITE path could let a DEMO viewer's isDemo flag grant a write.
+      - name: Run demo-write coverage gate
+        run: npx ts-node scripts/test-demo-write-coverage.ts
+        continue-on-error: false
+
+      # BLOCKING gate (2026-06-13 resource-boundary contract, 93/93 reviewed): every embedded
+      # resource method must carry an authz classification; fabricate-identity patterns and
+      # the user-blind tenant-content cache must never return.
+      - name: Run resource-authz coverage gate
+        run: npx ts-node scripts/test-resource-authz-coverage.ts
+        continue-on-error: false
+
+      # TypeScript validation is already covered by:
+      # 1. npm run test:all-validation (uses ts-node with path aliases)
+      # 2. npm run build (Next.js production build validates all TypeScript)
+      # Removed redundant tsc check that failed due to missing path alias resolution
+
+  schema-consistency:
+    name: Schema Consistency Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check for UUID usage (should be CUID)
+        run: |
+          echo "Checking for .uuid() usage in validation files..."
+          if grep -r "\.uuid(" lib/validation/ lib/*/handlers/ --include="*.ts" | grep -v "node_modules" | grep -v "// "; then
+            echo "❌ Found .uuid() usage - should use .cuid()"
+            echo "See: /lib/validation/id-validation.ts"
+            exit 1
+          else
+            echo "✅ No .uuid() usage found"
+          fi
+
+      - name: Check for hardcoded Prisma enums
+        run: |
+          echo "Checking for hardcoded Prisma enums..."
+          ENUM_COUNT=$(grep -r 'z\.enum(' lib/validation/ --include="*.ts" 2>/dev/null | grep -v "// " | grep -v "Use instead" | wc -l || echo "0")
+          NATIVE_ENUM_COUNT=$(grep -r 'z\.nativeEnum(' lib/validation/ lib/*/handlers/ --include="*.ts" 2>/dev/null | wc -l || echo "0")
+
+          echo "📊 Hardcoded enums: $ENUM_COUNT"
+          echo "📊 Native enums: $NATIVE_ENUM_COUNT"
+
+          if [ "$NATIVE_ENUM_COUNT" -lt 15 ]; then
+            echo "⚠️  Warning: Low native enum usage (expected 15+)"
+            echo "   Consider migrating to z.nativeEnum()"
+            echo "   See: /lib/validation/enum-validation.ts"
+          else
+            echo "✅ Good native enum usage"
+          fi
+
+  boundary-tests:
+    name: Boundary Contract Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run boundary contract tests
+        run: npm run test:boundaries || echo "⚠️ Boundary tests skipped (Jest not configured)"
+        continue-on-error: true
+
+  validation-summary:
+    name: Validation Summary
+    runs-on: ubuntu-latest
+    needs: [validation-tests, schema-consistency]
+    if: always()
+    outputs:
+      passed: ${{ steps.check.outputs.passed }}
+
+    steps:
+      - name: Check if all jobs passed
+        id: check
+        run: |
+          echo "================================="
+          echo "🎯 Validation Test Suite Summary"
+          echo "================================="
+          echo ""
+          echo "Validation Tests: ${{ needs.validation-tests.result }}"
+          echo "Schema Consistency: ${{ needs.schema-consistency.result }}"
+          echo ""
+
+          if [ "${{ needs.validation-tests.result }}" == "success" ] && \
+             [ "${{ needs.schema-consistency.result }}" == "success" ]; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+            echo "✅ All validation checks passed!"
+            echo "✅ Safe to proceed with deployment"
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+            echo "❌ Validation checks failed!"
+            echo "❌ Deployment will be blocked"
+            exit 1
+          fi
+
+          echo "================================="

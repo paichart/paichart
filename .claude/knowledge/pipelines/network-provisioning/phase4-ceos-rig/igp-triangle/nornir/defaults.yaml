@@ -1,0 +1,5 @@
+---
+# Global defaults (group values override these). Kept minimal — creds live on the group.
+data:
+  lab: igp-migration-triangle
+  note: "Disposable 3-node OSPF->IS-IS migration rig — see ../README.md"

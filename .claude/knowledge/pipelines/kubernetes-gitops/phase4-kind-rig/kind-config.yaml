@@ -1,0 +1,9 @@
+# Phase-4 kind cluster for the kubernetes-gitops pipeline validation. DISPOSABLE.
+# 1 node (control-plane only) — enough to harvest real cluster state. ~1-1.5 GB RAM.
+# Create: kind create cluster --name k8s-rig --config kind-config.yaml
+# Destroy: kind delete cluster --name k8s-rig
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: k8s-rig
+nodes:
+  - role: control-plane

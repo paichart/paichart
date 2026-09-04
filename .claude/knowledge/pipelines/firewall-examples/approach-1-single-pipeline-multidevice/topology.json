@@ -1,0 +1,45 @@
+{
+  "name": "acme-partner-access-path-single-vendor",
+  "description": "ILLUSTRATIVE Approach-1 example (single pipeline, multi-device) for firewall-policy-use-case.md §3 Approach 1 — the SAME partner-HTTPS path, but all three firewalls are ONE vendor (PAN-OS) owned by ONE team. Modeled as a SINGLE network-provisioning pipeline (Harvest → Design → Author → Review), NOT a program: no Program Architect, no interface contract, no DAG of pipelines, no per-team gates. NOT runnable as-is (no live PAN-OS harvest service wired; the pan-os protocol is notional). Design worked-example.",
+  "path": "partner-internet -> edge-fw -> dmz-fw -> core-fw -> internal-app",
+  "singleVendor": "Palo Alto PAN-OS",
+  "singleTeam": "network-security",
+  "nodes": [
+    {
+      "name": "edge-fw",
+      "kind": "paloalto_panos",
+      "role": "perimeter-firewall",
+      "zones": ["untrust", "dmz"]
+    },
+    {
+      "name": "dmz-fw",
+      "kind": "paloalto_panos",
+      "role": "dmz-firewall",
+      "zones": ["dmz", "trust-dmz"]
+    },
+    {
+      "name": "core-fw",
+      "kind": "paloalto_panos",
+      "role": "core-firewall",
+      "zones": ["trust-dmz", "inside"]
+    }
+  ],
+  "domainProtocol": "network-provisioning (notional PAN-OS variant — one pipeline reads and designs all three devices)",
+  "harvestDescriptor": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/<panos-readonly-descriptor>.json (NOT YET PUBLISHED — illustrative; ONE descriptor, three device targets)",
+  "links": [
+    { "endpoints": ["partner-internet", "edge-fw:untrust"], "flow": "partner ingress (public)" },
+    { "endpoints": ["edge-fw:dmz", "dmz-fw:dmz"], "flow": "edge -> dmz" },
+    { "endpoints": ["dmz-fw:trust-dmz", "core-fw:trust-dmz"], "flow": "dmz -> core" },
+    { "endpoints": ["core-fw:inside", "internal-app"], "flow": "core -> internal app" }
+  ],
+  "endToEndFlow": {
+    "id": "partner-https",
+    "source": "203.0.113.0/24",
+    "destination": "10.20.0.10/32",
+    "protocol": "tcp",
+    "dport": 443,
+    "action": "permit",
+    "default": "deny",
+    "notes": "One vendor, one team → ONE pipeline. The end-to-end consistency (and any interdependency) is resolved INSIDE the single designer's context: one Design stage holds all three devices at once and produces the coherent rule set. Even a source-NAT — the exact thing that forces Approach 3 ACROSS vendors — is a non-issue here: the same designer picks the pool AND writes the downstream match rules in one design turn, so there is no cross-pipeline chaining to coordinate. Program machinery (contract, DAG, per-team gates) would be pure overhead."
+  }
+}

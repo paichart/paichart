@@ -1,0 +1,110 @@
+<style>
+.cap-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+.cap-table th { text-align: left; font-weight: 500; font-size: 12px; color: var(--color-text-secondary); padding: 8px 10px; border-bottom: 1.5px solid var(--color-border-secondary); letter-spacing: 0.02em; }
+.cap-table td { padding: 10px 10px; border-bottom: 0.5px solid var(--color-border-tertiary); vertical-align: top; color: var(--color-text-primary); line-height: 1.5; }
+.cap-table tr:last-child td { border-bottom: none; }
+.cap-table tr { cursor: pointer; transition: background 0.15s; }
+.cap-table tbody tr:hover { background: var(--color-background-secondary); }
+.cap-name { font-weight: 500; font-size: 14px; display: block; margin-bottom: 2px; }
+.cap-desc { font-size: 12px; color: var(--color-text-secondary); display: block; }
+.file-ref { font-family: var(--font-mono); font-size: 11.5px; color: var(--color-text-secondary); display: block; margin-bottom: 2px; }
+.pattern-pill { display: inline-block; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 10px; }
+.pp-purple { background: #EEEDFE; color: #3C3489; }
+.pp-teal { background: #E1F5EE; color: #085041; }
+.pp-amber { background: #FAEEDA; color: #633806; }
+.pp-coral { background: #FAECE7; color: #712B13; }
+@media (prefers-color-scheme: dark) {
+  .pp-purple { background: #3C3489; color: #CECBF6; }
+  .pp-teal { background: #085041; color: #9FE1CB; }
+  .pp-amber { background: #633806; color: #FAC775; }
+  .pp-coral { background: #712B13; color: #F5C4B3; }
+}
+.col-cap { width: 32%; }
+.col-comp { width: 23%; }
+.col-file { width: 28%; }
+.col-pat { width: 17%; }
+</style>
+<table class="cap-table">
+<thead>
+<tr>
+  <th class="col-cap">Capability</th>
+  <th class="col-comp">Component</th>
+  <th class="col-file">File / function</th>
+  <th class="col-pat">Pattern</th>
+</tr>
+</thead>
+<tbody>
+<tr onclick="sendPrompt('Explain the dual execution path in pAIchart — embedded vs MCP server')">
+  <td>
+    <span class="cap-name">Dual execution</span>
+    <span class="cap-desc">Same actions served in-process (agents) and over HTTP (external clients)</span>
+  </td>
+  <td>Task action handler, MCP HTTP server</td>
+  <td>
+    <span class="file-ref">agent-execute-handler.ts</span>
+    <span class="file-ref">sdk-native-advanced-tools.js</span>
+  </td>
+  <td><span class="pattern-pill pp-purple">#50</span></td>
+</tr>
+<tr onclick="sendPrompt('Explain context chaining between pipeline tasks in pAIchart')">
+  <td>
+    <span class="cap-name">Context chaining</span>
+    <span class="cap-desc">Full predecessor output injected as §6 into downstream specialists</span>
+  </td>
+  <td>Context chainer, execution engine</td>
+  <td>
+    <span class="file-ref">context-chainer.ts</span>
+    <span class="file-ref">agentExecutionEngine.ts</span>
+  </td>
+  <td><span class="pattern-pill pp-coral">&mdash;</span></td>
+</tr>
+<tr onclick="sendPrompt('Explain dependency enforcement and wiring in pAIchart pipelines')">
+  <td>
+    <span class="cap-name">Dependency enforcement</span>
+    <span class="cap-desc">Pre-execution check blocks tasks whose prerequisites are incomplete</span>
+  </td>
+  <td>Execute handler, task dependency model</td>
+  <td>
+    <span class="file-ref">agent-execute-handler.ts</span>
+    <span class="file-ref">TaskDependency (Prisma)</span>
+  </td>
+  <td><span class="pattern-pill pp-amber">#52</span></td>
+</tr>
+<tr onclick="sendPrompt('Explain PIPELINE auto-assign and the harness template in pAIchart')">
+  <td>
+    <span class="cap-name">Pipeline auto-assign</span>
+    <span class="cap-desc">PIPELINE-typed tasks auto-receive harness template with zero config</span>
+  </td>
+  <td>Execute handler, template seeder</td>
+  <td>
+    <span class="file-ref">agent-execute-handler.ts:124</span>
+    <span class="file-ref">seed-harness-template.ts</span>
+  </td>
+  <td><span class="pattern-pill pp-coral">&mdash;</span></td>
+</tr>
+<tr onclick="sendPrompt('Explain the CAS claim and orphan watchdog mechanisms in pAIchart')">
+  <td>
+    <span class="cap-name">Execution safety</span>
+    <span class="cap-desc">CAS claim prevents double-execution; watchdog cleans orphaned runs</span>
+  </td>
+  <td>Execution engine (poll loop + startup)</td>
+  <td>
+    <span class="file-ref">agentExecutionEngine.ts</span>
+    <span class="file-ref">CAS: PENDING→RUNNING</span>
+  </td>
+  <td><span class="pattern-pill pp-coral">&mdash;</span></td>
+</tr>
+<tr onclick="sendPrompt('Explain prompt section ownership — system vs user prompt in pAIchart agents')">
+  <td>
+    <span class="cap-name">Prompt assembly</span>
+    <span class="cap-desc">Template owns system prompt; engine owns §8 output requirements for all agents</span>
+  </td>
+  <td>Execution engine, harness template</td>
+  <td>
+    <span class="file-ref">agentExecutionEngine.ts</span>
+    <span class="file-ref">buildContextualInformation()</span>
+  </td>
+  <td><span class="pattern-pill pp-purple">#51</span></td>
+</tr>
+</tbody>
+</table>

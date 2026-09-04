@@ -1,0 +1,1260 @@
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "windows", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Country {
+  id        String       @id @default(cuid())
+  name      String       @unique
+  code      String       @unique
+  theatre   SalesTheatre
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  povs      POV[]
+  regions   Region[]
+  preferredUsers User[] @relation("UserPreferredCountry", map: "UserPreferredCountry")
+
+  @@index([theatre])
+}
+
+model Region {
+  id        String      @id @default(cuid())
+  name      String
+  type      RegionType?  // Optional: Allows custom region names without forced directional types
+  countryId String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  povs      POV[]
+  country   Country     @relation(fields: [countryId], references: [id], onDelete: Cascade)
+ preferredUsers User[]  @relation("UserPreferredRegion", map: "UserPreferredRegion")
+
+  @@unique([type, countryId])  // Null values ignored in unique constraint (Prisma behavior)
+  @@index([countryId])
+}
+
+model POV {
+  id              String           @id @default(cuid())
+  title           String           @db.VarChar(500)
+  description     String
+  status          POVStatus        @default(PROJECTED)
+  priority        Priority         @default(MEDIUM)
+  startDate       DateTime
+  endDate         DateTime
+  objective       String?
+  dealId          String?
+  opportunityName String?
+  revenue         Decimal?
+  forecastDate    DateTime?
+  customerName    String?
+  customerContact String?
+  partnerName     String?
+  partnerContact  String?
+  competitors     String[]
+  solution        String?
+  lastCrmSync     DateTime?
+  crmSyncStatus   String?
+  documents       Json?
+  featureRequests Json?
+  supportTickets  Json?
+  blockers        Json?
+  tags            String[]
+  estimatedBudget Decimal?
+  budgetDocument  String?
+  resources       Json?
+  salesTheatre    SalesTheatre
+  countryId       String
+  regionId        String?
+  ownerId         String
+  teamId          String?
+  templateId      String?
+  formData        Json?
+  metadata        Json?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  syncHistory     CRMSyncHistory[]
+  milestones      Milestone[]
+  country         Country          @relation(fields: [countryId], references: [id])
+  owner           User             @relation("POVOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  region          Region?          @relation(fields: [regionId], references: [id])
+  team            Team?            @relation(fields: [teamId], references: [id])
+  template        POVTemplate?     @relation("POVFromTemplate", fields: [templateId], references: [id])
+  kpis            POVKPI[]
+  launch          POVLaunch?
+  phases          Phase[]
+  workflows       Workflow[]
+  tasks           Task[]
+  
+  // MCP Integration Relationships
+  mcpInteractions MCPInteraction[]
+  mcpRecommendations MCPRecommendation[]
+  workflowExecutions MCPWorkflowExecution[]
+
+  @@index([status, priority])
+  @@index([ownerId])
+  @@index([teamId])
+  @@index([lastCrmSync])
+  @@index([countryId])
+  @@index([regionId])
+  @@index([salesTheatre])
+  @@index([templateId])
+}
+
+model POVTemplate {
+  id          String    @id @default(cuid())
+  name        String
+  description String
+  version     String?
+  status      String    @default("draft")
+  schema      Json
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   String?
+  povs        POV[]     @relation("POVFromTemplate")
+}
+
+model PhaseTemplate {
+  id          String    @id @default(cuid())
+  name        String    @db.VarChar(255)
+  description String?
+  type        PhaseType @default(PLANNING)
+  isDefault   Boolean   @default(false)
+  workflow    Json
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  phases      Phase[]
+}
+
+model Phase {
+  id          String         @id @default(cuid())
+  name        String
+  description String
+  type        PhaseType      @default(PLANNING)
+  startDate   DateTime
+  endDate     DateTime
+  order       Int
+  povId       String
+  templateId  String?
+  details     Json?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  pov         POV            @relation(fields: [povId], references: [id], onDelete: Cascade)
+  template    PhaseTemplate? @relation(fields: [templateId], references: [id])
+  stages      Stage[]
+  tasks       Task[]
+
+  @@index([povId])
+  @@index([templateId])
+  @@index([startDate, endDate])
+}
+
+model Stage {
+  id          String      @id @default(cuid())
+  phaseId     String
+  name        String
+  description String?
+  status      StageStatus @default(PENDING)
+  order       Int
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  phase       Phase       @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+
+  @@index([phaseId])
+  @@index([status])
+  @@map("stages")
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  taskId    String   @map("task_id")
+  userId    String   @map("user_id")
+  text      String
+  createdAt DateTime @default(now()) @map("created_at")
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
+
+model Attachment {
+  id         String   @id @default(cuid())
+  taskId     String   @map("task_id")
+  filename   String
+  fileSize   Int      @map("file_size")
+  fileType   String   @map("file_type")
+  storageUrl String   @map("storage_url")
+  createdAt  DateTime @default(now()) @map("created_at")
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("attachments")
+}
+
+model TaskActivity {
+  id        String   @id @default(cuid())
+  taskId    String   @map("task_id")
+  userId    String   @map("user_id")
+  action    String
+  timestamp DateTime @default(now())
+
+  // Rich activity details (2025-12-31 - 9 specialists, 88% confidence)
+  // @see /cline_docs/reviews/task-activity-rich-details-2025-12-31/
+  details   Json?    // Structured activity data (assignee names, old/new values, agent info)
+  metadata  Json?    // Audit trail (source, IP, user agent, request ID)
+
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])                // P0 Fix: Optimize task activity queries (Issue #5)
+  @@index([userId])                // P0 Fix: Optimize user activity queries (Issue #5)
+  @@index([timestamp])             // P0 Fix: Optimize recent activity queries (Issue #5)
+  @@index([taskId, timestamp])     // P0 Fix: Optimize task history queries (Issue #5)
+  @@map("task_activities")
+}
+
+model TaskDependency {
+  id          String   @id @default(cuid())
+  taskId      String
+  dependsOnId String
+  createdAt   DateTime @default(now())
+  
+  // Relations
+  task        Task     @relation("TaskDependencies", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn   Task     @relation("TaskDependents", fields: [dependsOnId], references: [id], onDelete: Cascade)
+  
+  @@unique([taskId, dependsOnId])
+  @@index([taskId])
+  @@index([dependsOnId])
+  @@map("task_dependencies")
+}
+
+model Task {
+  id          String         @id @default(cuid())
+  title       String
+  description String?
+  assigneeId  String?        @map("assignee_id")
+  teamId      String?        @map("team_id")
+  povId       String?        @map("pov_id")
+  phaseId     String?        @map("phase_id")
+  stageId     String?        @map("stage_id")
+  order       Int            @default(0)
+  dueDate     DateTime?      @map("due_date")
+  priority    TaskPriority   @default(MEDIUM)
+  status      TaskStatus     @default(OPEN)
+  type        TaskType       @default(ACTION) // New field for task type enum
+  metadata    Json?
+  
+  // AI-Driven Development Fields
+  agentRole       String?
+  prompt          String?        @db.Text
+  inputContext    Json?
+  outputArtifacts Json?
+  executionStatus ExecutionStatus? @default(PENDING)
+  agentLog        String?        @db.Text
+  maxRetries      Int?           @default(3)
+  timeout         Int?
+  
+  // Agent Template Integration
+  agentTemplateId String?
+  agentTemplate   AgentTemplate? @relation("TaskAgentTemplate", fields: [agentTemplateId], references: [id])
+  
+  // MCP Integration Fields
+  mcpContext      Json?             // MCP tool context and metadata
+  mcpToolId       String?           // Associated MCP tool identifier
+  mcpWorkflowId   String?           // MCP workflow execution ID
+  mcpMetadata     Json?             // MCP-specific metadata
+  
+  // Parent-Child Relationship
+  parentTaskId    String?
+  parentTask      Task?          @relation("SubTasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subTasks        Task[]         @relation("SubTasks")
+  
+  // Dependency Relationships
+  dependencies    TaskDependency[] @relation("TaskDependencies")
+  dependents      TaskDependency[] @relation("TaskDependents")
+  
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  attachments Attachment[]
+  comments    Comment[]
+  activities  TaskActivity[]
+  assignee    User?          @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  phase       Phase?         @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  pov         POV?           @relation(fields: [povId], references: [id], onDelete: Cascade)
+  stage       Stage?         @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  team        Team?          @relation(fields: [teamId], references: [id])
+  executions  AgentExecution[]
+  
+  // MCP Integration Relationships
+  mcpInteractions MCPInteraction[]
+  mcpRecommendations MCPRecommendation[]
+
+  @@index([stageId])
+  @@index([executionStatus])
+  @@index([parentTaskId])
+  @@index([povId, status])         // P0 Fix: Optimize POV-scoped task queries (Issue #5)
+  @@index([assigneeId, status])    // P0 Fix: Optimize user task queries (Issue #5)
+  @@index([phaseId, status])       // P0 Fix: Optimize phase task queries (Issue #5)
+  @@map("tasks")
+}
+
+model AgentExecution {
+  id              String          @id @default(cuid())
+  taskId          String
+  agentTemplateId String?
+  status          String
+  config          Json
+  context         Json
+  logs            String[]
+  startTime       DateTime?
+  endTime         DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  task            Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  agentTemplate   AgentTemplate?  @relation("ExecutionAgentTemplate", fields: [agentTemplateId], references: [id])
+  artifacts       AgentArtifact[]
+
+  @@index([taskId])
+  @@index([agentTemplateId])
+  @@index([status])
+  @@index([startTime])             // P0 Fix: Optimize date-range queries (Issue #5)
+  @@map("agent_executions")
+}
+
+model AgentArtifact {
+  id          String         @id @default(cuid())
+  executionId String
+  name        String
+  type        String
+  content     String
+  createdAt   DateTime       @default(now())
+  execution   AgentExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId])
+  @@map("agent_artifacts")
+}
+
+model Team {
+  id        String       @id @default(cuid())
+  name      String
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  povs      POV[]
+  members   TeamMember[]
+  tasks     Task[]
+}
+
+model KPITemplate {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  type          KPIType
+  isCustom      Boolean  @default(false)
+  defaultTarget Json?
+  calculation   String?
+  visualization String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  kpis          POVKPI[]
+}
+
+model AgentTemplate {
+  id              String            @id @default(cuid())
+  name            String
+  description     String?
+  category        AgentCategory     @default(GENERAL)
+  
+  // Agent Configuration
+  defaultRole     String            // Default agent role (e.g., "Senior Developer", "QA Engineer")
+  promptTemplate  String            @db.Text // Template for agent prompts with placeholders
+  capabilities    Json              // Agent capabilities and skills
+  constraints     Json              // Agent constraints and limitations
+  
+  // Execution Configuration
+  maxRetries      Int               @default(3)
+  timeout         Int               @default(300) // seconds
+  priority        AgentPriority     @default(MEDIUM)
+  
+  // Context and Metadata
+  inputSchema     Json?             // Expected input schema
+  outputSchema    Json?             // Expected output schema
+  contextTemplate Json?             // Template for context generation
+  metadata        Json?             // Additional template metadata
+  
+  // Template Management
+  version         String            @default("1.0.0")
+  status          AgentTemplateStatus @default(ACTIVE)
+  isDefault       Boolean           @default(false)
+  tags            String[]
+  
+  // Usage and Performance
+  usageCount      Int               @default(0)
+  successRate     Float?            // Success rate percentage
+  averageTime     Float?            // Average execution time
+  
+  // Relationships
+  tasks           Task[]            @relation("TaskAgentTemplate")
+  executions      AgentExecution[]  @relation("ExecutionAgentTemplate")
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  createdBy       String?
+
+  @@index([category])
+  @@index([status])
+  @@index([isDefault])
+  @@map("agent_templates")
+}
+
+model AgentPromptLibrary {
+  id              String            @id @default(cuid())
+  name            String
+  description     String?
+  category        AgentCategory
+  
+  // Prompt Configuration
+  promptText      String            @db.Text
+  variables       Json              // Available variables and their types
+  examples        Json              // Example inputs and outputs
+  
+  // Usage Context
+  useCase         String            // Specific use case description
+  complexity      AgentComplexity   @default(MEDIUM)
+  estimatedTime   Int?              // Estimated execution time in seconds
+  
+  // Quality and Performance
+  rating          Float?            // User rating 1-5
+  usageCount      Int               @default(0)
+  successRate     Float?
+  
+  // Template Management
+  version         String            @default("1.0.0")
+  status          AgentTemplateStatus @default(ACTIVE)
+  isPublic        Boolean           @default(false)
+  tags            String[]
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  createdBy       String?
+
+  @@index([category])
+  @@index([complexity])
+  @@index([status])
+  @@index([isPublic])
+  @@map("agent_prompt_library")
+}
+
+model POVKPI {
+  id         String       @id @default(cuid())
+  povId      String
+  templateId String?
+  name       String
+  target     Json
+  current    Json
+  history    Json         @default("[]")
+  weight     Float?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  pov        POV          @relation(fields: [povId], references: [id], onDelete: Cascade)
+  template   KPITemplate? @relation(fields: [templateId], references: [id])
+
+  @@index([povId])
+  @@index([templateId])
+}
+
+model CRMSyncHistory {
+  id        String   @id @default(cuid())
+  povId     String
+  status    String
+  details   Json?
+  createdAt DateTime @default(now())
+  pov       POV      @relation(fields: [povId], references: [id], onDelete: Cascade)
+
+  @@index([povId])
+  @@index([createdAt])
+}
+
+model POVLaunch {
+  id         String    @id @default(cuid())
+  povId      String    @unique
+  confirmed  Boolean   @default(false)
+  checklist  Json
+  launchedAt DateTime?
+  launchedBy String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  pov        POV       @relation(fields: [povId], references: [id], onDelete: Cascade)
+}
+
+model Milestone {
+  id          String          @id @default(cuid())
+  name        String
+  description String?
+  dueDate     DateTime
+  povId       String
+  status      MilestoneStatus @default(PENDING)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  pov         POV             @relation(fields: [povId], references: [id], onDelete: Cascade)
+
+  @@index([povId])
+  @@index([dueDate])
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  role      TeamRole @default(MEMBER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])   // Phase 0: POV validation performance (50-100ms → 2-5ms)
+  @@index([teamId])   // Phase 0: Team-based query performance
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  type      String
+  metadata  Json?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  message   String
+  type      String   @default("info")
+  actionUrl String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, read])          // P0 Fix: Optimize unread notification queries (Issue #5)
+  @@index([userId, createdAt])     // P0 Fix: Optimize recent notification queries (Issue #5)
+  @@map("notifications")
+}
+
+model RefreshToken {
+  id              String   @id @default(cuid())
+  token           String   @unique
+  userId          String
+
+  // OAuth 2.0 fields (Restart resilience - TODO design)
+  scope           String?  // OAuth scope (e.g., "read:user read:org")
+  audience        String?  // Token audience (Component 5)
+  clientId        String?  // OAuth client ID (chatgpt, claude-desktop, gemini)
+
+  // Security fields (Session validation - Fix 8 design)
+  provider        String?  // OAuth provider (github/microsoft/google)
+  sessionMetadata Json?    // Session tracking (IP, user-agent, suspicious activity)
+
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([userId, clientId])  // Per-client session tracking
+  @@index([userId, provider])  // Per-provider session tracking
+}
+
+model UserSettings {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  settings  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SupportRequest {
+  id          String                 @id @default(cuid())
+  userId      String
+  type        String
+  priority    SupportRequestPriority @default(MEDIUM)
+  subject     String
+  description String
+  status      SupportRequestStatus   @default(OPEN)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model FeatureRequest {
+  id           String               @id @default(cuid())
+  userId       String
+  category     String
+  impact       FeatureRequestImpact @default(MEDIUM)
+  title        String
+  description  String
+  businessCase String
+  isUrgent     Boolean              @default(false)
+  status       FeatureRequestStatus @default(PENDING)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id                  String           @id @default(cuid())
+  name                String
+  email               String           @unique
+  password            String?          // Make optional for OAuth users
+  role                UserRole         @default(USER)
+  status              UserStatus       @default(ACTIVE)
+  lastLogin           DateTime?
+  resetTokenHash      String?
+  resetTokenExpiry    DateTime?
+  verificationToken   String?          @map("verification_token")
+  isVerified          Boolean          @default(false) @map("is_verified")
+  verifiedAt          DateTime?        @map("verified_at")
+  // OAuth 2.0 fields for enterprise authentication
+  oauthProvider       String?          @map("oauth_provider")
+  oauthProviderId     String?          @map("oauth_provider_id")
+  avatarUrl           String?          @map("avatar_url")
+  organizationDomain  String?          @map("organization_domain")
+  lastLoginAt         DateTime?        @map("last_login_at")
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  customRoleId        String?
+  preferredSalesTheatre SalesTheatre?  @default(NORTH_AMERICA)
+  preferredCountryId  String?
+  preferredRegionId   String?
+  activities          Activity[]
+  featureRequests     FeatureRequest[]
+  ownedPOVs           POV[]            @relation("POVOwner")
+  refreshTokens       RefreshToken[]
+  supportRequests     SupportRequest[]
+  teamMembers         TeamMember[]
+  customRole          Role?            @relation(fields: [customRoleId], references: [id])
+  settings            UserSettings?
+  comments            Comment[]
+  notifications       Notification[]
+  taskActivities      TaskActivity[]
+  assignedTasks       Task[]           @relation("TaskAssignee")
+  preferredCountry    Country?         @relation("UserPreferredCountry", fields: [preferredCountryId], references: [id], onDelete: SetNull)
+  preferredRegion     Region?          @relation("UserPreferredRegion", fields: [preferredRegionId], references: [id], onDelete: SetNull)
+  workflowExecutions  MCPWorkflowExecution[]
+
+  @@unique([oauthProvider, oauthProviderId], name: "User_oauthProvider_oauthProviderId_unique")
+  @@index([oauthProvider, oauthProviderId], name: "User_oauth_provider_idx")
+  @@index([organizationDomain], name: "User_org_domain_idx")
+  @@index([email, oauthProvider], name: "User_email_oauth_idx")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  permissions String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]
+}
+
+model RolePermission {
+  id           String   @id @default(cuid())
+  role         UserRole
+  resourceType String
+  action       String
+  enabled      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([role, resourceType, action], name: "role_resourceType_action")
+  @@index([role])
+  @@map("role_permissions")
+}
+
+model CRMFieldMapping {
+  id          String   @id @default(cuid())
+  crmField    String   @unique
+  localField  String
+  transformer String?
+  isRequired  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model WorkflowStep {
+  id         String             @id @default(cuid())
+  name       String
+  order      Int
+  status     WorkflowStepStatus @default(PENDING)
+  role       String
+  workflowId String
+  metadata   Json?
+  comment    String?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  workflow   Workflow           @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+}
+
+model Workflow {
+  id        String         @id @default(cuid())
+  type      WorkflowType
+  status    WorkflowStatus @default(PENDING)
+  povId     String
+  metadata  Json?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  pov       POV            @relation(fields: [povId], references: [id], onDelete: Cascade)
+  steps     WorkflowStep[]
+
+  @@index([povId])
+}
+
+model SystemSettings {
+  id            String   @id
+  notifications Boolean  @default(true)
+  twoFactor     Boolean  @default(false)
+  darkMode      Boolean  @default(false)
+  updatedAt     DateTime @updatedAt
+}
+
+model CRMSettings {
+  id            String   @id @default(cuid())
+  apiUrl        String
+  apiKey        String
+  clientId      String
+  clientSecret  String
+  autoSync      Boolean  @default(true)
+  syncInterval  Int      @default(30)
+  retryAttempts Int      @default(3)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model CustomSchema {
+  id        String   @id @default(cuid())
+  name      String
+  schema    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum RegionType {
+  NORTH
+  SOUTH
+  EAST
+  WEST
+  CENTRAL
+}
+
+enum POVStatus {
+  PROJECTED
+  IN_PROGRESS
+  STALLED
+  VALIDATION
+  WON
+  LOST
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  BLOCKED
+}
+
+// New enum for task types
+enum TaskType {
+  ACTION
+  DECISION
+  MILESTONE
+  APPROVAL
+  DOCUMENT
+  BROWSER_AUTOMATION
+  WEB_SCRAPING
+  UI_TESTING
+  FORM_SUBMISSION
+  MCP_SERVICE_REGISTRATION
+  MCP_SERVICE_DISCOVERY
+  MCP_SERVICE_TEST
+  MCP_SERVICE_INTEGRATION
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum SupportRequestStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum FeatureRequestStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum MilestoneStatus {
+  PENDING
+  COMPLETED
+  OVERDUE
+}
+
+enum WorkflowStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum WorkflowStepStatus {
+  PENDING
+  IN_PROGRESS
+  APPROVED
+  REJECTED
+  SKIPPED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum SupportRequestPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum FeatureRequestImpact {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum UserRole {
+  USER
+  DEMO_USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum TeamRole {
+  PROJECT_MANAGER
+  SALES_ENGINEER
+  TECHNICAL_TEAM
+  MEMBER
+  ADMIN
+  OWNER
+}
+
+enum PhaseType {
+  PLANNING
+  EXECUTION
+  REVIEW
+}
+
+enum KPIType {
+  PERCENTAGE
+  NUMERIC
+  BOOLEAN
+  CUSTOM
+}
+
+enum WorkflowType {
+  POV_APPROVAL
+  PHASE_APPROVAL
+  TASK_APPROVAL
+  CUSTOM
+}
+
+enum SalesTheatre {
+  NORTH_AMERICA
+  LAC
+  EMEA
+  APJ
+}
+
+enum StageStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  BLOCKED
+}
+
+enum ExecutionStatus {
+  PENDING          // Initial state, waiting for dependencies
+  READY            // Dependencies met, ready for execution
+  RUNNING          // Task dispatched to agent, execution in progress
+  PENDING_REVIEW   // Requires manual/AI review (e.g., after code change)
+  REVIEW_APPROVED  // Review successful
+  REVIEW_REJECTED  // Review failed
+  SUCCESS          // Agent completed successfully
+  FAILED           // Agent failed, timed out, or review rejected
+}
+
+// MCP (Model Context Protocol) Integration Models
+
+model MCPTool {
+  id              String            @id @default(cuid())
+  name            String
+  description     String?
+  version         String
+  capabilities    Json              // Tool capabilities and supported operations
+  configuration   Json              // Tool configuration and settings
+  status          MCPToolStatus     @default(ACTIVE)
+  
+  // Authentication and Security
+  authType        MCPAuthType       @default(API_KEY)
+  credentials     Json              // Encrypted credentials
+  permissions     Json              // Tool permissions and access levels
+  
+  // Performance and Monitoring
+  lastHeartbeat   DateTime?
+  responseTime    Float?            // Average response time in ms
+  successRate     Float?            // Success rate percentage
+  errorCount      Int               @default(0)
+  
+  // Relationships
+  interactions    MCPInteraction[]
+  recommendations MCPRecommendation[]
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([status])
+  @@index([name])
+  // Phase A Performance: Composite indices for discovery queries (Dec 2025)
+  @@index([status, responseTime, successRate], name: "mcp_discovery_performance")
+  @@index([capabilities(ops: raw("jsonb_path_ops"))], type: Gin, name: "mcp_capability_search")
+  @@map("mcp_tools")
+}
+
+model MCPInteraction {
+  id              String            @id @default(cuid())
+  toolId          String
+  taskId          String?
+  povId           String?
+  
+  // Interaction Details
+  action          MCPAction
+  request         Json              // Original request payload
+  response        Json?             // Tool response
+  status          MCPInteractionStatus @default(PENDING)
+  
+  // Context and Metadata
+  context         Json?             // Interaction context
+  metadata        Json?             // Additional metadata
+  executionTime   Int?              // Execution time in ms
+  
+  // Error Handling
+  error           String?           // Error message if failed
+  retryCount      Int               @default(0)
+  maxRetries      Int               @default(3)
+
+  // Relationships
+  tool            MCPTool           @relation(fields: [toolId], references: [id])
+  task            Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  pov             POV?              @relation(fields: [povId], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([toolId])
+  @@index([taskId])
+  @@index([povId])
+  @@index([status])
+  @@index([action])
+  @@map("mcp_interactions")
+}
+
+model MCPWorkflow {
+  id              String            @id @default(cuid())
+  name            String            @unique  // Unique for lookup by name
+  description     String?
+  category        String?           // testing, deployment, analysis, automation
+  createdBy       String?           // userId who created
+
+  // Workflow Configuration
+  // steps contains full config: { steps, executionMode, failureStrategy, timeout }
+  steps           Json              // Workflow steps and configuration
+  triggers        Json              // Workflow triggers and conditions
+  schedule        Json?             // Scheduled execution configuration
+
+  // Execution State
+  status          MCPWorkflowStatus @default(ACTIVE)
+  lastExecution   DateTime?
+  nextExecution   DateTime?
+  executionCount  Int               @default(0)
+
+  // Performance Metrics
+  successRate     Float?
+  averageTime     Float?
+  errorRate       Float?
+
+  // Relationships
+  executions      MCPWorkflowExecution[]
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([status])
+  @@index([category])
+  @@map("mcp_workflows")
+}
+
+model MCPWorkflowExecution {
+  id              String            @id @default(cuid())
+
+  // Workflow Reference (optional for ad-hoc)
+  workflowId      String?           // NULLABLE for ad-hoc executions
+
+  // Execution Identity
+  userId          String            // Who triggered execution (REQUIRED)
+  povId           String?           // POV scope (optional)
+  executionMode   MCPExecutionMode  @default(AD_HOC)
+  workflowType    String?           // e.g., 'mcp_service_orchestration'
+
+  // Execution Details
+  status          MCPWorkflowExecutionStatus @default(RUNNING)
+  startTime       DateTime          @default(now())
+  endTime         DateTime?
+  duration        Int?              // Duration in ms
+
+  // Execution Data
+  input           Json?             // Input parameters
+  output          Json?             // Execution results
+  steps           Json?             // Step execution details (NULLABLE for incremental building)
+  metadata        Json?             // Additional context
+
+  // Error Handling
+  error           String?           // Error message if failed
+  failedStep      String?           // Step that failed
+
+  // Relationships (with explicit onDelete behavior)
+  workflow        MCPWorkflow?      @relation(fields: [workflowId], references: [id])
+  user            User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  pov             POV?              @relation(fields: [povId], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  // Indexes (10 total - 3 existing + 7 new)
+  @@index([workflowId])              // Existing
+  @@index([userId])                  // NEW
+  @@index([povId])                   // NEW
+  @@index([executionMode])           // NEW
+  @@index([workflowType])            // NEW
+  @@index([status])                  // Existing
+  @@index([startTime])               // Existing
+  @@index([userId, status])          // NEW - dashboard queries
+  @@index([povId, status])           // NEW - POV analytics
+  @@map("mcp_workflow_executions")
+}
+
+model MCPRecommendation {
+  id              String            @id @default(cuid())
+  toolId          String
+  taskId          String?
+  povId           String?
+  
+  // Recommendation Details
+  type            MCPRecommendationType
+  title           String
+  description     String
+  confidence      Float             // Confidence score 0-1
+  impact          MCPImpact         // Expected impact level
+  effort          MCPEffort         // Required effort level
+  
+  // Recommendation Data
+  actions         Json              // Recommended actions
+  parameters      Json              // Action parameters
+  context         Json              // Recommendation context
+  
+  // Status and Tracking
+  status          MCPRecommendationStatus @default(PENDING)
+  implementedAt   DateTime?
+  implementedBy   String?
+  feedback        Json?             // Implementation feedback
+
+  // Relationships
+  tool            MCPTool           @relation(fields: [toolId], references: [id])
+  task            Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  pov             POV?              @relation(fields: [povId], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([toolId])
+  @@index([taskId])
+  @@index([povId])
+  @@index([type])
+  @@index([status])
+  @@map("mcp_recommendations")
+}
+
+// MCP Enums
+
+enum MCPToolStatus {
+  ACTIVE
+  INACTIVE
+  ERROR
+  MAINTENANCE
+}
+
+enum MCPAuthType {
+  API_KEY
+  BEARER_TOKEN
+  OAUTH2
+  HMAC
+  NONE
+}
+
+enum MCPAction {
+  ANALYZE_TASK
+  OPTIMIZE_WORKFLOW
+  GENERATE_CONTENT
+  VALIDATE_DATA
+  PREDICT_OUTCOME
+  RECOMMEND_ACTION
+  AUTOMATE_PROCESS
+  MONITOR_PERFORMANCE
+  CREATE_TASK
+  UPDATE_TASK
+  DELETE_TASK
+  GET_CONTEXT
+  EXECUTE_WORKFLOW
+  GENERATE_REPORT
+}
+
+enum MCPInteractionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+  TIMEOUT
+}
+
+enum MCPWorkflowStatus {
+  ACTIVE
+  PAUSED
+  DISABLED
+  DEPRECATED    // For soft delete
+  ERROR
+}
+
+enum MCPWorkflowExecutionStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+  TIMEOUT
+}
+
+enum MCPRecommendationType {
+  OPTIMIZATION
+  AUTOMATION
+  QUALITY_IMPROVEMENT
+  RISK_MITIGATION
+  PERFORMANCE_ENHANCEMENT
+  COST_REDUCTION
+  WORKFLOW_IMPROVEMENT
+  RESOURCE_ALLOCATION
+}
+
+enum MCPImpact {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum MCPEffort {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum MCPRecommendationStatus {
+  PENDING
+  REVIEWED
+  APPROVED
+  IMPLEMENTED
+  REJECTED
+  EXPIRED
+}
+
+// Workflow execution mode for MCPWorkflowExecution
+enum MCPExecutionMode {
+  PREDEFINED    // Execution of a saved MCPWorkflow
+  AD_HOC        // On-demand orchestration without saved workflow
+}
+
+// Agent Template Enums
+
+enum AgentCategory {
+  GENERAL
+  DEVELOPMENT
+  TESTING
+  DOCUMENTATION
+  ANALYSIS
+  AUTOMATION
+  REVIEW
+  DEPLOYMENT
+  MONITORING
+  SECURITY
+  MCP_SERVICE_REGISTRY
+  MCP_SERVICE_DISCOVERY
+  MCP_SERVICE_INTEGRATION
+  MCP_SERVICE_QA
+  MCP_ORCHESTRATION
+}
+
+enum AgentPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum AgentTemplateStatus {
+  ACTIVE
+  INACTIVE
+  DEPRECATED
+  DRAFT
+}
+
+enum AgentComplexity {
+  SIMPLE
+  MEDIUM
+  COMPLEX
+  EXPERT
+}

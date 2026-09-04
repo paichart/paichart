@@ -1,0 +1,5 @@
+-- CreateEnum
+CREATE TYPE "TaskType" AS ENUM ('ACTION', 'DECISION', 'MILESTONE', 'APPROVAL', 'DOCUMENT');
+
+-- AlterTable
+ALTER TABLE "tasks" ADD COLUMN     "type" "TaskType" NOT NULL DEFAULT 'ACTION';

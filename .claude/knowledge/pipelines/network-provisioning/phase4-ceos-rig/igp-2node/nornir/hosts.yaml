@@ -1,0 +1,13 @@
+---
+# The two IGP 2-node cEOS devices, addressed by their containerlab mgmt IPs
+# (igp-2node/topology.clab.yml `mgmt-ipv4`, bridge clab-igp2 172.30.32.0/24).
+ceos1:
+  hostname: 172.30.32.11
+  platform: eos
+  groups:
+    - arista_eos
+ceos2:
+  hostname: 172.30.32.12
+  platform: eos
+  groups:
+    - arista_eos

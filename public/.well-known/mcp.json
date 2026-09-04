@@ -1,0 +1,77 @@
+{
+  "serverInfo": {
+    "name": "pAIchart MCP Hub",
+    "version": "1.0.0",
+    "description": "AI-native service orchestration platform with per-user authentication, capability-based discovery, and multi-service workflow chaining",
+    "homepage": "https://paichart.app"
+  },
+  "transport": {
+    "type": "streamable-http",
+    "url": "https://paichart.app/mcp"
+  },
+  "capabilities": {
+    "tools": true,
+    "resources": true,
+    "prompts": true
+  },
+  "protocolVersion": "2025-06-18",
+  "authentication": {
+    "schemes": ["bearer", "oauth2"],
+    "oauthProviders": ["github", "google", "microsoft"],
+    "jwksEndpoint": "https://paichart.app/api/auth/jwks"
+  },
+  "tools": {
+    "summary": "9 consolidated MCP tools covering service discovery, workflow orchestration, project management, analytics, and service registration",
+    "notable": [
+      "services — Discover, call, and orchestrate external MCP services",
+      "registry — Register, update, and manage your own services",
+      "project — Query POV and task data",
+      "perform — Execute task and agent operations",
+      "analytics — AI-powered recommendations and metrics",
+      "search — Natural language resource discovery",
+      "fetch — Retrieve web content",
+      "template — Agent template management",
+      "prompt_command — Execute built-in workflow guides"
+    ]
+  },
+  "resources": {
+    "summary": "MCP resources for service registry, workflows, and analytics",
+    "uris": [
+      "mcp://hub/services",
+      "mcp://hub/services/active",
+      "mcp://hub/workflows",
+      "mcp://hub/analytics",
+      "mcp://hub/services/category/ai-intelligence",
+      "mcp://hub/services/category/data-services",
+      "mcp://hub/services/category/automation",
+      "mcp://hub/services/category/monitoring"
+    ]
+  },
+  "prompts": {
+    "summary": "Built-in prompt templates for onboarding, service registration, and workflow orchestration",
+    "notable": [
+      "get_started — Interactive onboarding with role-based paths",
+      "register_guide — Step-by-step service registration tutorial",
+      "workflow_guide — Multi-service workflow orchestration guide"
+    ]
+  },
+  "services": {
+    "count": 11,
+    "categories": [
+      "data-analytics",
+      "browser-automation",
+      "communication",
+      "financial-data",
+      "energy-data",
+      "weather",
+      "security",
+      "ai-intelligence"
+    ]
+  },
+  "links": {
+    "hub": "https://paichart.app/mcp",
+    "jwks": "https://paichart.app/api/auth/jwks",
+    "llmsTxt": "https://paichart.app/llms.txt",
+    "agentCard": "https://paichart.app/.well-known/agent-card.json"
+  }
+}

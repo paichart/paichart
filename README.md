@@ -108,6 +108,28 @@ Or start smaller:
 - *"Which of my POVs are at risk?"* — delivery analytics, answered directly
 - *"Discover services"* — browse the registry by capability
 
+## Run it yourself
+
+The platform is open source under **Apache 2.0** — this repository carries the full source (web app + MCP
+server) alongside the protocols and verification pack. Self-hosting is seven commands on Node 20 + PostgreSQL 16:
+
+```bash
+git clone https://github.com/paichart/paichart && cd paichart && npm ci
+cp .env.example .env            # set DATABASE_URL and ADMIN_EMAIL; then:
+npm run jwt:keys >> .env         # RS256 signing keys
+ADMIN_EMAIL=you@example.com npm run db:seed   # schema, grants, first SUPER_ADMIN (password printed once), protocols
+npm run dev                      # web app  → http://localhost:3000
+npm run mcp:http:dev             # MCP hub  → http://localhost:8080/mcp
+```
+
+- [docs/RUNNING.md](docs/RUNNING.md) — the full first run, the two-process shape, roles, production notes
+- [docs/OAUTH-SETUP.md](docs/OAUTH-SETUP.md) — register your own GitHub / Google / Microsoft apps (optional; password login works without)
+- [docs/VERIFYING-SELF-HOST.md](docs/VERIFYING-SELF-HOST.md) — prove your install owns its identity: every token and OAuth document derives from **your** `APP_BASE_URL`, and tokens for anyone else's issuer are rejected
+- [CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md)
+
+The hosted service at paichart.app runs this same code. Server-management tooling (monitors, deploy, backups)
+is intentionally not part of the repository.
+
 ## Under the Hood
 
 ```
@@ -178,6 +200,7 @@ registry(action: "register", {
 - **JWKS**: `https://paichart.app/api/auth/jwks`
 - **Verification**: [verification/](verification/)
 - **Documentation**: an MCP resource in your AI client, or `list_prompts()`
+- **Source & self-hosting**: this repository — [docs/RUNNING.md](docs/RUNNING.md)
 
 ## Credits
 

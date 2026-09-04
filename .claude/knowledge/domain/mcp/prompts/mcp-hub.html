@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Hub — pAIchart Service Integration & Orchestration</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #0a0e1a;
+            --bg-card: rgba(17, 24, 39, 0.65);
+            --bg-card-hover: rgba(26, 34, 54, 0.85);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-muted: #94a3b8;
+            --accent-green: #34d399;
+            --accent-cyan: #22d3ee;
+            --accent-blue: #60a5fa;
+            --accent-pink: #f472b6;
+            --accent-orange: #fb923c;
+            --accent-yellow: #fbbf24;
+            --accent-red: #f87171;
+            --accent-teal: #2dd4bf;
+            --gradient-ai: linear-gradient(135deg, #34d399, #22d3ee);
+            --gradient-hero: linear-gradient(160deg, #0a0e1a 0%, #0f172a 40%, #0c1425 100%);
+            --font-body: 'DM Sans', system-ui, -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', 'Menlo', 'Courier New', monospace;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--gradient-hero);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* ── NAV ── */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(10, 14, 26, 0.75);
+            backdrop-filter: blur(24px) saturate(1.5);
+            -webkit-backdrop-filter: blur(24px) saturate(1.5);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            text-decoration: none;
+            transition: transform 0.2s ease;
+        }
+
+        .nav-logo:hover {
+            transform: scale(1.02);
+        }
+
+        .nav-logo svg {
+            width: 36px;
+            height: 36px;
+        }
+
+        .nav-wordmark {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.02em;
+        }
+
+        .nav-wordmark .ai {
+            background: var(--gradient-ai);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2.2rem;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: color 0.25s ease;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+        }
+
+        .nav-links a.active {
+            color: var(--accent-pink);
+        }
+
+        .nav-cta {
+            background: var(--gradient-ai);
+            color: #0a0e1a !important;
+            padding: 0.6rem 1.4rem;
+            border-radius: 8px;
+            font-weight: 700 !important;
+            font-size: 0.9rem !important;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .nav-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(52, 211, 153, 0.25);
+        }
+
+        /* ── HERO ── */
+        .hero {
+            padding: 9rem 2rem 4rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 700px 500px at 50% 30%, rgba(244, 114, 182, 0.08) 0%, transparent 70%),
+                radial-gradient(ellipse 500px 400px at 20% 60%, rgba(96, 165, 250, 0.06) 0%, transparent 70%),
+                radial-gradient(ellipse 500px 400px at 80% 50%, rgba(52, 211, 153, 0.05) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            background: rgba(244, 114, 182, 0.08);
+            border: 1px solid rgba(244, 114, 182, 0.25);
+            border-radius: 100px;
+            padding: 0.5rem 1.2rem;
+            margin-bottom: 1.8rem;
+            font-size: 0.85rem;
+            color: var(--accent-pink);
+            font-weight: 600;
+            box-shadow: 0 0 20px rgba(244, 114, 182, 0.1);
+        }
+
+        .hero-badge .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-pink);
+            box-shadow: 0 0 10px var(--accent-pink);
+            animation: pulse-dot 2.5s infinite cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(1.3); }
+        }
+
+        .hero h1 {
+            font-size: clamp(2.4rem, 5.5vw, 4rem);
+            font-weight: 800;
+            line-height: 1.15;
+            letter-spacing: -0.03em;
+            margin-bottom: 1.4rem;
+        }
+
+        .hero h1 .gradient-text {
+            background: linear-gradient(135deg, var(--accent-pink), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero .subtitle {
+            font-size: clamp(1.05rem, 2vw, 1.25rem);
+            color: var(--text-secondary);
+            max-width: 680px;
+            margin: 0 auto 3rem;
+            line-height: 1.7;
+        }
+
+        /* ── DIFFERENTIATOR ── */
+        .diff-section {
+            max-width: 860px;
+            margin: 0 auto 5rem;
+            padding: 0 2rem;
+            position: relative;
+            z-index: 10;
+        }
+
+        .diff-box {
+            display: grid;
+            grid-template-columns: 1fr 60px 1fr;
+            gap: 0;
+            align-items: center;
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .diff-side {
+            padding: 2.5rem 2rem;
+        }
+
+        .diff-side h3 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 0.8rem;
+        }
+
+        .diff-side p {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .diff-old {
+            background: rgba(0, 0, 0, 0.15);
+        }
+
+        .diff-old h3 {
+            color: var(--text-muted);
+        }
+
+        .diff-new h3 {
+            color: var(--accent-green);
+        }
+
+        .diff-arrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent-green);
+            font-size: 1.6rem;
+            font-weight: 700;
+            background: rgba(52, 211, 153, 0.05);
+            height: 100%;
+        }
+
+        /* ── SECTION COMMON ── */
+        .section-label {
+            text-align: center;
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--accent-pink);
+            margin-bottom: 0.8rem;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: clamp(2rem, 4vw, 2.6rem);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            margin-bottom: 1rem;
+        }
+
+        .section-subtitle {
+            text-align: center;
+            color: var(--text-secondary);
+            max-width: 640px;
+            margin: 0 auto 4rem;
+            font-size: 1.1rem;
+            line-height: 1.7;
+        }
+
+        /* ── SERVICES GRID ── */
+        .services-section {
+            padding: 5rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 10;
+        }
+
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .service-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 2rem;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .service-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .service-card:hover {
+            background: var(--bg-card-hover);
+            border-color: rgba(255, 255, 255, 0.15);
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+        }
+
+        .service-card:hover::before {
+            opacity: 1;
+        }
+
+        .service-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .service-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            flex-shrink: 0;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .service-name {
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-bottom: 0.2rem;
+        }
+
+        .service-type {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            display: inline-block;
+        }
+
+        .type-internal { background: rgba(52, 211, 153, 0.1); color: var(--accent-green); }
+        .type-external { background: rgba(244, 114, 182, 0.1); color: var(--accent-pink); }
+        .type-platform { background: rgba(96, 165, 250, 0.1); color: var(--accent-blue); }
+
+        .service-desc {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 1.2rem;
+        }
+
+        .service-tools-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+        }
+
+        .stool {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            padding: 0.25rem 0.6rem;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-secondary);
+            transition: background 0.2s ease;
+        }
+        
+        .service-card:hover .stool {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+        }
+
+        /* Service card accent colors */
+        .svc-notification .service-icon { background: rgba(96, 165, 250, 0.12); }
+        .svc-notification::before { background: linear-gradient(90deg, var(--accent-blue), transparent); }
+        
+        .svc-browser .service-icon { background: rgba(52, 211, 153, 0.12); }
+        .svc-browser::before { background: linear-gradient(90deg, var(--accent-green), transparent); }
+        
+        .svc-token .service-icon { background: rgba(251, 191, 36, 0.12); }
+        .svc-token::before { background: linear-gradient(90deg, var(--accent-yellow), transparent); }
+        
+        .svc-weather .service-icon { background: rgba(34, 211, 238, 0.12); }
+        .svc-weather::before { background: linear-gradient(90deg, var(--accent-cyan), transparent); }
+        
+        .svc-energy .service-icon { background: rgba(251, 146, 60, 0.12); }
+        .svc-energy::before { background: linear-gradient(90deg, var(--accent-orange), transparent); }
+        
+        .svc-stocks .service-icon { background: rgba(244, 114, 182, 0.12); }
+        .svc-stocks::before { background: linear-gradient(90deg, var(--accent-pink), transparent); }
+        
+        .svc-alpha .service-icon { background: rgba(248, 113, 113, 0.12); }
+        .svc-alpha::before { background: linear-gradient(90deg, var(--accent-red), transparent); }
+
+        /* ── USE CASES ── */
+        .usecases-section {
+            padding: 5rem 2rem;
+            max-width: 1060px;
+            margin: 0 auto;
+        }
+
+        .usecase {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 2.5rem;
+            margin-bottom: 1.5rem;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .usecase:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+            background: rgba(26, 34, 54, 0.75);
+        }
+
+        .usecase-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--accent-pink);
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            margin-bottom: 0.8rem;
+            display: inline-block;
+            background: rgba(244, 114, 182, 0.1);
+            padding: 0.3rem 0.8rem;
+            border-radius: 6px;
+        }
+
+        .usecase h3 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 0.8rem;
+            color: var(--text-primary);
+        }
+
+        .usecase p {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+            max-width: 800px;
+        }
+
+        .usecase-flow {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 1rem 1.2rem;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .flow-step {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+
+        .flow-arrow {
+            color: var(--accent-green);
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+
+        /* ── TRUST TIERS ── */
+        .trust-section {
+            padding: 5rem 2rem;
+            max-width: 960px;
+            margin: 0 auto;
+        }
+
+        .trust-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.2rem;
+        }
+
+        .trust-tier {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-subtle);
+            border-radius: 14px;
+            padding: 1.8rem 1.2rem;
+            text-align: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .trust-tier:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            transform: translateY(-4px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .trust-level {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            margin-bottom: 0.5rem;
+        }
+
+        .trust-name {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 0.6rem;
+            color: var(--text-primary);
+        }
+
+        .trust-token {
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 0.3rem 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            margin-top: 0.5rem;
+        }
+
+        .trust-yes { color: var(--accent-green); }
+        .trust-no { color: var(--accent-red); }
+
+        .tier-1:hover { box-shadow: 0 8px 30px rgba(52, 211, 153, 0.15); }
+        .tier-1 .trust-level, .tier-2 .trust-level { color: var(--accent-green); }
+        
+        .tier-3:hover { box-shadow: 0 8px 30px rgba(34, 211, 238, 0.15); }
+        .tier-3 .trust-level { color: var(--accent-cyan); }
+        
+        .tier-4:hover { box-shadow: 0 8px 30px rgba(96, 165, 250, 0.15); }
+        .tier-4 .trust-level { color: var(--accent-blue); }
+        
+        .tier-5 .trust-level, .tier-6 .trust-level { color: var(--text-muted); }
+
+        /* ── CTA ── */
+        .cta-section {
+            padding: 6rem 2rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .cta-section::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse 600px 400px at 50% 50%, rgba(244, 114, 182, 0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .cta-section h2 {
+            font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+            font-weight: 800;
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+        }
+
+        .cta-section p {
+            color: var(--text-secondary);
+            margin-bottom: 2.5rem;
+            font-size: 1.1rem;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 1.2rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-primary {
+            background: var(--gradient-ai);
+            color: #0a0e1a;
+            padding: 0.85rem 2.2rem;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 1rem;
+            text-decoration: none;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(52, 211, 153, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.02);
+            color: var(--text-primary);
+            padding: 0.85rem 2.2rem;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 1rem;
+            text-decoration: none;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: all 0.25s ease;
+        }
+
+        .btn-secondary:hover {
+            border-color: rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.06);
+            transform: translateY(-2px);
+        }
+
+        /* ── FOOTER ── */
+        footer {
+            padding: 3rem 2rem;
+            text-align: center;
+            border-top: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            background: rgba(10, 14, 26, 0.5);
+        }
+
+        footer a {
+            color: var(--accent-green);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+        
+        footer a:hover {
+            color: var(--accent-cyan);
+        }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 768px) {
+            nav { padding: 1rem 1.5rem; }
+            .nav-links { gap: 1rem; }
+            .nav-links a:not(.nav-cta) { display: none; }
+            
+            .hero { padding: 7rem 1.5rem 3rem; }
+            
+            .services-grid { grid-template-columns: 1fr; }
+            
+            .diff-box { grid-template-columns: 1fr; }
+            .diff-arrow { transform: rotate(90deg); padding: 1rem 0; background: transparent; }
+            
+            .trust-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+            
+            .usecase { padding: 1.8rem; }
+        }
+
+        @media (max-width: 480px) {
+            .trust-grid { grid-template-columns: 1fr; }
+            .cta-buttons { flex-direction: column; }
+            .btn-primary, .btn-secondary { width: 100%; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <a href="index.html" class="nav-logo">
+        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="32" cy="32" r="30" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+            <path d="M32 2 A30 30 0 0 1 53.21 10.79 L32 32 Z" fill="#f472b6" stroke="#1e293b" stroke-width="1.5"/>
+            <path d="M53.21 10.79 A30 30 0 0 1 62 32 L32 32 Z" fill="#ec4899" stroke="#1e293b" stroke-width="1.5"/>
+            <path d="M62 32 A30 30 0 0 1 53.21 53.21 L32 32 Z" fill="#f87171" stroke="#1e293b" stroke-width="1.5"/>
+            <path d="M53.21 53.21 A30 30 0 0 1 32 62 L32 32 Z" fill="#fb923c" stroke="#1e293b" stroke-width="1.5"/>
+            <path d="M32 62 A30 30 0 0 1 10.79 53.21 L32 32 Z" fill="#fbbf24" stroke="#1e293b" stroke-width="1.5"/>
+            <path d="M10.79 53.21 A30 30 0 0 1 2 32 L32 32 Z" fill="#34d399" stroke="#1e293b" stroke-width="1.5"/>
+            <path d="M2 32 A30 30 0 0 1 10.79 10.79 L32 32 Z" fill="#2dd4bf" stroke="#1e293b" stroke-width="1.5"/>
+            <path d="M10.79 10.79 A30 30 0 0 1 32 2 L32 32 Z" fill="#60a5fa" stroke="#1e293b" stroke-width="1.5"/>
+        </svg>
+        <span class="nav-wordmark">p<span class="ai">AI</span>chart</span>
+    </a>
+    <div class="nav-links">
+        <a href="index.html">Platform</a>
+        <a href="pov-story.html">POV Story</a>
+        <a href="mcp-hub.html" class="active">MCP Hub</a>
+        <a href="mailto:steve.terry@paichart.com?subject=pAIchart%20MCP%20Hub%20Inquiry" class="nav-cta">Get in Touch</a>
+    </div>
+</nav>
+
+<section class="hero">
+    <div class="hero-badge"><span class="dot"></span> MCP Hub — Service Integration Layer</div>
+    <h1>AI discovers services.<br><span class="gradient-text">AI composes workflows.</span></h1>
+    <p class="subtitle">The MCP Hub lets AI agents find, compose, and execute multi-service workflows dynamically — no pre-configuration, no rigid integrations. Just describe what you need.</p>
+</section>
+
+<div class="diff-section">
+    <div class="diff-box">
+        <div class="diff-side diff-old">
+            <h3>Traditional Automation</h3>
+            <p>Humans design workflows → Machines execute them. Rigid connectors. Manual configuration. Breaks when services change.</p>
+        </div>
+        <div class="diff-arrow">→</div>
+        <div class="diff-side diff-new">
+            <h3>MCP Hub</h3>
+            <p>AI discovers services → AI composes workflows → AI executes them. Workflows emerge from goals, not pre-configuration.</p>
+        </div>
+    </div>
+</div>
+
+<section class="services-section">
+    <div class="section-label">Live on the Hub</div>
+    <div class="section-title">9 services. Growing ecosystem.</div>
+    <p class="section-subtitle">Internal platform services, first-party Docker infrastructure, and registered external data services — all discoverable by AI.</p>
+
+    <div class="services-grid">
+
+        <div class="service-card svc-notification">
+            <div class="service-header">
+                <div class="service-icon">📧</div>
+                <div>
+                    <div class="service-name">Notification Service</div>
+                    <span class="service-type type-internal">Internal</span>
+                </div>
+            </div>
+            <div class="service-desc">Multi-channel routing for email (Brevo), Slack, and webhooks. Supports broadcast, escalation chains, and scheduled delivery.</div>
+            <div class="service-tools-list">
+                <span class="stool">send</span>
+                <span class="stool">broadcast</span>
+                <span class="stool">escalate</span>
+                <span class="stool">schedule</span>
+            </div>
+        </div>
+
+        <div class="service-card svc-browser">
+            <div class="service-header">
+                <div class="service-icon">🌐</div>
+                <div>
+                    <div class="service-name">Browser Automation</div>
+                    <span class="service-type type-internal">Internal</span>
+                </div>
+            </div>
+            <div class="service-desc">Playwright-powered web scraping, form filling, screenshots, and PDF generation. 5 concurrent browsers with session tracing.</div>
+            <div class="service-tools-list">
+                <span class="stool">scrape_page</span>
+                <span class="stool">take_screenshot</span>
+                <span class="stool">fill_form</span>
+                <span class="stool">generate_pdf</span>
+            </div>
+        </div>
+
+        <div class="service-card svc-token">
+            <div class="service-header">
+                <div class="service-icon">🔐</div>
+                <div>
+                    <div class="service-name">Token Validator</div>
+                    <span class="service-type type-internal">Security</span>
+                </div>
+            </div>
+            <div class="service-desc">JWT validation via JWKS endpoint. Explains trust levels, provides 11-step validation results, and generates copy-paste code examples.</div>
+            <div class="service-tools-list">
+                <span class="stool">verify_auth</span>
+            </div>
+        </div>
+
+        <div class="service-card svc-weather">
+            <div class="service-header">
+                <div class="service-icon">🌦️</div>
+                <div>
+                    <div class="service-name">Weather Service</div>
+                    <span class="service-type type-external">External</span>
+                </div>
+            </div>
+            <div class="service-desc">OpenWeatherMap-powered current conditions, 5-day forecasts, hourly data, and air quality monitoring with smart 10-minute caching.</div>
+            <div class="service-tools-list">
+                <span class="stool">current_weather</span>
+                <span class="stool">forecast</span>
+                <span class="stool">hourly_forecast</span>
+                <span class="stool">air_quality</span>
+            </div>
+        </div>
+
+        <div class="service-card svc-energy">
+            <div class="service-header">
+                <div class="service-icon">⚡</div>
+                <div>
+                    <div class="service-name">EIA Energy Service</div>
+                    <span class="service-type type-external">External</span>
+                </div>
+            </div>
+            <div class="service-desc">U.S. Energy Information Administration data — generation mix, capacity utilization, pricing comparisons, and energy storage opportunity analysis.</div>
+            <div class="service-tools-list">
+                <span class="stool">get_generation_mix_by_state</span>
+                <span class="stool">compare_retail_electricity_prices</span>
+                <span class="stool">find_high_potential_energy_storage_areas</span>
+            </div>
+        </div>
+
+        <div class="service-card svc-stocks">
+            <div class="service-header">
+                <div class="service-icon">📈</div>
+                <div>
+                    <div class="service-name">EODHD Markets</div>
+                    <span class="service-type type-external">External</span>
+                </div>
+            </div>
+            <div class="service-desc">End-of-day and real-time market data for stocks, ETFs, crypto, forex, and indices — with company fundamentals and ticker search.</div>
+            <div class="service-tools-list">
+                <span class="stool">get_eod_data</span>
+                <span class="stool">get_live_quote</span>
+                <span class="stool">get_fundamentals</span>
+                <span class="stool">search_ticker</span>
+            </div>
+        </div>
+
+        <div class="service-card svc-alpha">
+            <div class="service-header">
+                <div class="service-icon">💹</div>
+                <div>
+                    <div class="service-name">Alpha Vantage</div>
+                    <span class="service-type type-external">External</span>
+                </div>
+            </div>
+            <div class="service-desc">113+ financial data tools — equities, options, forex, crypto, commodities, economic indicators, and 40+ technical analysis indicators.</div>
+            <div class="service-tools-list">
+                <span class="stool">TOOL_LIST</span>
+                <span class="stool">TOOL_GET</span>
+                <span class="stool">TOOL_CALL</span>
+                <span class="stool">113+ tools via wrapper</span>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+<section class="usecases-section">
+    <div class="section-label">Real-World Use Cases</div>
+    <div class="section-title">Workflows that emerge from goals.</div>
+    <p class="section-subtitle">These aren't pre-built templates — they're examples of what AI composes when you describe what you need.</p>
+
+    <div class="usecase">
+        <div class="usecase-label">Cross-Service Intelligence</div>
+        <h3>Energy Operations Dashboard</h3>
+        <p>Correlate weather forecasts with EIA energy data to generate operational recommendations — maintenance windows, demand spike alerts, and backup generation planning. The prompt <code>energy_operations_optimizer</code> orchestrates this automatically.</p>
+        <div class="usecase-flow">
+            <span class="flow-step">weather-service → forecast</span>
+            <span class="flow-arrow">→</span>
+            <span class="flow-step">eia-service → generation_mix</span>
+            <span class="flow-arrow">→</span>
+            <span class="flow-step">AI correlation</span>
+            <span class="flow-arrow">→</span>
+            <span class="flow-step">Operational alerts</span>
+        </div>
+    </div>
+
+    <div class="usecase">
+        <div class="usecase-label">Market Intelligence</div>
+        <h3>Weather-Commodity Trading Signals</h3>
+        <p>Cross-reference weather data with commodity prices and energy production to identify short-term trading opportunities. Three services coordinated in a single workflow.</p>
+        <div class="usecase-flow">
+            <span class="flow-step">weather-service</span>
+            <span class="flow-arrow">→</span>
+            <span class="flow-step">eia-service</span>
+            <span class="flow-arrow">→</span>
+            <span class="flow-step">eodhd-service</span>
+            <span class="flow-arrow">→</span>
+            <span class="flow-step">Trading signals</span>
+        </div>
+    </div>
+
+    <div class="usecase">
+        <div class="usecase-label">Portfolio Automation</div>
+        <h3>POV Health Report → Stakeholder Notification</h3>
+        <p>Audit all active POVs, identify blocked tasks and risks, generate a dashboard screenshot, and email the report to management — hands-free weekly delivery.</p>
+        <div class="usecase-flow">
+            <span class="flow-step">project(action: 'task.list', status: 'BLOCKED')</span>
+            <span class="flow-arrow">→</span>
+            <span class="flow-step">browser → screenshot</span>
+            <span class="flow-arrow">→</span>
+            <span class="flow-step">notification → email</span>
+        </div>
+    </div>
+
+    <div class="usecase">
+        <div class="usecase-label">Developer Onboarding</div>
+        <h3>Register → Validate → Go Live</h3>
+        <p>External developers register their MCP service, test JWT integration with the token-validator, verify trust levels, and make their service discoverable — all within minutes.</p>
+        <div class="usecase-flow">
+            <span class="flow-step">registry(action: "register")</span>
+            <span class="flow-arrow">→</span>
+            <span class="flow-step">verify_auth</span>
+            <span class="flow-arrow">→</span>
+            <span class="flow-step">services(action: 'discover')</span>
+            <span class="flow-arrow">→</span>
+            <span class="flow-step">Live on Hub</span>
+        </div>
+    </div>
+</section>
+
+<section class="trust-section">
+    <div class="section-label">Security Architecture</div>
+    <div class="section-title">6-tier trust system.</div>
+    <p class="section-subtitle">Trust levels control whether services receive JWT tokens. Only verified relationships get credentials.</p>
+
+    <div class="trust-grid">
+        <div class="trust-tier tier-1">
+            <div class="trust-level">Level 1</div>
+            <div class="trust-name">Internal</div>
+            <div class="trust-token trust-yes">✓ Token</div>
+        </div>
+        <div class="trust-tier tier-2">
+            <div class="trust-level">Level 2</div>
+            <div class="trust-name">Trusted</div>
+            <div class="trust-token trust-yes">✓ Token</div>
+        </div>
+        <div class="trust-tier tier-3">
+            <div class="trust-level">Level 3</div>
+            <div class="trust-name">Owner</div>
+            <div class="trust-token trust-yes">✓ Token</div>
+        </div>
+        <div class="trust-tier tier-4">
+            <div class="trust-level">Level 4</div>
+            <div class="trust-name">Team Member</div>
+            <div class="trust-token trust-yes">✓ Token</div>
+        </div>
+        <div class="trust-tier tier-5">
+            <div class="trust-level">Level 5</div>
+            <div class="trust-name">Scoped</div>
+            <div class="trust-token trust-no">✗ No Token</div>
+        </div>
+        <div class="trust-tier tier-6">
+            <div class="trust-level">Level 6</div>
+            <div class="trust-name">Anonymous</div>
+            <div class="trust-token trust-no">✗ No Token</div>
+        </div>
+    </div>
+</section>
+
+<section class="cta-section">
+    <h2>Register your service on the Hub.</h2>
+    <p>Join the ecosystem — make your MCP service discoverable by AI agents across the platform.</p>
+    <div class="cta-buttons">
+        <a href="index.html" class="btn-primary">← Back to Platform</a>
+        <a href="mailto:steve.terry@paichart.com?subject=MCP%20Hub%20-%20Service%20Registration" class="btn-secondary">Register a Service</a>
+    </div>
+</section>
+
+<footer>
+    <p>© 2025–2026 <a href="https://paichart.app">pAIchart</a> · MCP Hub — AI-Native Service Orchestration · Sydney, Australia</p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,62 @@
+[
+  {
+    "name": "Browser Automation Service",
+    "description": "Playwright-based browser automation for web scraping, form filling, screenshots, and PDFs.\n\nWHEN TO USE:\n✅ Scrape competitor pricing or product data\n✅ Fill out web forms automatically (lead gen, registrations)\n✅ Capture screenshots for documentation or monitoring\n✅ Generate PDFs from web pages (reports, invoices)\n✅ Execute JavaScript for complex interactions\n✅ Debug browser sessions with trace recordings\n❌ Real-time browser control (use direct Playwright)\n❌ Long-running browser sessions >5 minutes\n\nAVAILABLE TOOLS:\n• scrape_page - Extract data with CSS selectors, supports pagination\n• fill_form - Automated form filling with field mappings\n• click_element - Click buttons/links with optional screenshot\n• take_screenshot - Full page or element screenshots\n• generate_pdf - Convert pages to PDF (A4/Letter/Legal)\n• run_script - Execute custom JavaScript\n• trace_session - Record browser sessions for debugging\n\nEXAMPLES (registry(action: 'tools') for full parameter schemas):\n• scrape_page — {url: '…/products', selectors: {title: 'h1.product-name', price: '.price'}}\n• take_screenshot — {url: 'https://example.com', fullPage: true}\n• fill_form — {url: '…/contact', fieldMappings: {name: '#name'}, formData: {name: 'John'}, submit: true}\n• generate_pdf — {url: '…/report', pageSettings: {format: 'A4', landscape: false}}\n\nWORKFLOW:\n1. services(action: \"discover\", capability: 'browser-automation') → Find this service\n2. services(action: \"health\", service_name: 'browser-automation-service') → Verify healthy\n3. services(action: \"call\", targetService: 'browser-automation-service', tool: 'scrape_page', ...) → Execute automation (you are here)\n\nSEE ALSO:\n• notification-service - Send alerts based on scraped data\n• services(action: \"health\") - Check service availability before automation"
+  },
+  {
+    "name": "Notification Service",
+    "description": "Multi-channel notification routing service for email (Brevo), Slack, and webhooks.\n\nWHEN TO USE:\n✅ Send task completion notifications to team members\n✅ Alert stakeholders when POV status changes\n✅ Broadcast announcements across multiple channels\n✅ Set up escalation chains for critical alerts\n✅ Schedule recurring status updates\n❌ Real-time chat (use direct Slack integration)\n❌ SMS notifications (not yet supported)\n\nAVAILABLE TOOLS:\n• send - Single channel notification (email/slack/webhook)\n• broadcast - Multi-channel simultaneous delivery\n• escalate - Time-based escalation with acknowledgment\n• schedule - Future delivery with optional recurrence\n\nEXAMPLES:\n• call_service(targetService: 'notification-service', tool: 'send', arguments: {channel: 'email', recipients: [{id: 'user1', address: 'john@company.com'}], message: {subject: 'Task Complete', body: 'Your task has been completed'}})\n• call_service(targetService: 'notification-service', tool: 'broadcast', arguments: {channels: ['email', 'slack'], message: {subject: 'POV Won!', body: 'Congratulations team!'}})\n\nWORKFLOW:\n1. discover_services(capability: 'notifications') → Find this service\n2. get_service_health(service_name: 'notification-service') → Verify healthy\n3. call_service(targetService: 'notification-service', tool: 'send', ...) → Send notification (you are here)\n\nSEE ALSO:\n• browser-automation-service - For web scraping and form filling\n• get_service_health - Check service availability before sending"
+  },
+  {
+    "name": "Snowflake Service",
+    "description": "Snowflake data warehouse access with read-only SQL queries, schema exploration, and object metadata. Supports JWKS-authenticated workflow execution for user-scoped audit trails. Calls require workflow.execute with a povId where the caller has team membership for identity forwarding."
+  },
+  {
+    "name": "alpha-vantage-market-data",
+    "description": "Official Alpha Vantage API MCP server providing 113+ financial data tools via wrapper pattern. Use TOOL_LIST to discover all tools, TOOL_GET for parameter schemas, TOOL_CALL to execute. Coverage: Real-time & historical equity prices (TIME_SERIES_DAILY, GLOBAL_QUOTE), options chains with Greeks (REALTIME_OPTIONS), fundamental data (INCOME_STATEMENT, BALANCE_SHEET, CASH_FLOW), forex/crypto (FX_DAILY, DIGITAL_CURRENCY_DAILY), commodities (WTI, GOLD_SILVER_SPOT), economic indicators (CPI, UNEMPLOYMENT, TREASURY_YIELD), 40+ technical indicators (RSI, MACD, BBANDS, SMA, EMA), news sentiment, and insider transactions. Serverless deployment on AWS Lambda."
+  },
+  {
+    "name": "cloudflare-service",
+    "description": "Cloudflare API access via Code Mode — the entire Cloudflare API (~2,500 endpoints across Workers, KV, R2, D1, DNS, Zero Trust, Radar, and more) exposed through just two tools that run generated JavaScript against the OpenAPI spec and the Cloudflare API client.\n\nWHEN TO USE:\n✅ Discover Cloudflare API endpoints for a product/capability (search)\n✅ Call any Cloudflare API endpoint (execute)\n✅ Inspect DNS, Workers, R2/KV/D1, Zero Trust, Radar, analytics\n\nFEATURES:\n- Token-efficient: 2 tools cover the whole API (Grade A schema cost)\n- search: query the OpenAPI spec for matching endpoints\n- execute: call cloudflare.request() against discovered endpoints\n- Account follows the API token (account-agnostic; scope read-only for safety)"
+  },
+  {
+    "name": "eia-service",
+    "description": "U.S. Energy Information Administration data analytics service. Provides electricity generation, capacity, pricing, and energy storage opportunity analysis across all U.S. states."
+  },
+  {
+    "name": "eodhd-service",
+    "description": "EOD Historical Data financial market intelligence service. Provides comprehensive market data for stocks, ETFs, crypto, forex, and indices with real-time quotes, fundamentals, and historical analysis.\n\nWHEN TO USE:\n✅ Get daily stock prices and historical OHLCV data\n✅ Real-time market quotes for any symbol\n✅ Search for ticker symbols by company name\n✅ Access company fundamentals and valuation metrics\n✅ Financial market analysis and research\n✅ Cross-correlate market data with weather and energy trends\n\nFEATURES:\n- Global coverage (stocks, ETFs, crypto, forex, indices)\n- Real-time quotes updated every minute\n- Historical data with adjusted closes\n- Company fundamentals (financials, valuation, statistics)\n- Symbol search and discovery\n- Smart caching (1m-7d TTL by data type)\n- Completes commodities intelligence stack (weather + energy + markets)"
+  },
+  {
+    "name": "google-secops-service",
+    "description": "Google Security Operations (Chronicle) SIEM — read-only threat detection, investigation, and hunting: natural-language event search, alerts, entity/IoC lookups, detection rules, threat intelligence, and investigations.\n\nWHEN TO USE:\n✅ Search security events in natural language\n✅ Retrieve and triage alerts\n✅ Look up an entity (IP / domain / hash / user) across telemetry\n✅ Get IoC matches and threat intelligence\n✅ Review detection rules and investigations\n\nFEATURES:\n- Chronicle SIEM over the caller's tenant (project/customer/region from config)\n- Read-only curated tool surface\n- Self-hosted, localhost-only, static GCP service-account auth"
+  },
+  {
+    "name": "pAIchart KPI Service",
+    "description": "KPI scoring, history, and evaluation for POVs. Read-only — provides scorecard data for dashboards and AI clients. 3 calculators: task-completion-rate, on-time-rate, stale-task-ratio."
+  },
+  {
+    "name": "pAIchart Project Service",
+    "description": "Unified access to POV and task data through the MCP Hub.\n\nTOOLS:\n• project - Read POV and task data (actions: pov.list, pov.details, pov.phases, task.list, task.context, task.details)\n• perform - Execute task/agent/POV/stage actions (13 sub-actions)\n\nEXAMPLES:\n• services(action: \"call\", targetService: \"paichart-project-service\", tool: \"project\", arguments: {action: \"pov.list\", status: \"IN_PROGRESS\"})\n• services(action: \"call\", targetService: \"paichart-project-service\", tool: \"project\", arguments: {action: \"pov.details\", povName: \"Acme Corp\"})\n• services(action: \"call\", targetService: \"paichart-project-service\", tool: \"project\", arguments: {action: \"task.list\", povId: \"clxyz123\", status: \"TODO\"})\n• services(action: \"call\", targetService: \"paichart-project-service\", tool: \"perform\", arguments: {action: \"task.complete\", taskId: \"clabc456\"})"
+  },
+  {
+    "name": "pAIchart Recommendation Engine",
+    "description": "Internal recommendation engine for data-driven task recommendations. Generates actionable recommendations based on stale tasks, unassigned work, approaching deadlines, and POV progress."
+  },
+  {
+    "name": "purple-ai-service",
+    "description": "SentinelOne Purple AI — read-only security operations: natural-language threat questions, PowerQuery analytics over the Singularity Data Lake, alert / vulnerability / asset triage, and external threat intelligence (IP / hash / domain / URL reputation).\n\nWHEN TO USE:\n✅ Ask a security question in natural language (purple_ai)\n✅ Run PowerQuery analytics over security telemetry\n✅ Triage alerts and vulnerabilities\n✅ Look up threat intel for an IP, file hash, or domain\n✅ Enumerate assets / inventory\n\nFEATURES:\n- Read-only (cannot mutate the SentinelOne account)\n- Natural-language + structured query surface\n- External threat-intel enrichment\n- Self-hosted, localhost-only, static-token auth"
+  },
+  {
+    "name": "token-validator-service",
+    "description": "Token Validator Service - Customer onboarding tool for external service developers. Validates JWT integration, explains trust levels (OWNER/TEAM_MEMBER/SCOPED/ANONYMOUS), demonstrates JWKS validation with 11-step results, provides copy-paste code examples (TypeScript/JavaScript/Python). Perfect for: New customer onboarding, trust level debugging, JWKS validation proof, support troubleshooting. Production-validated Component 5 (34ms JWKS validation, 100% success rate)."
+  },
+  {
+    "name": "trend-vision-one-service",
+    "description": "Trend Vision One (XDR) — read-only security telemetry: Workbench alerts and observed attack techniques, endpoint inventory, attack-surface (CREM) risk, cloud posture (CSPM), container vulnerabilities, threat intelligence (IoCs), email security, and IAM.\n\nWHEN TO USE:\n✅ Triage Workbench/XDR alerts and attack techniques\n✅ Inventory endpoints and attack surface (high-risk users, public IPs)\n✅ Review cloud posture + container vulnerabilities\n✅ Look up threat-intel IoCs\n\nFEATURES:\n- Read-only curated surface of the 60+ Trend Vision One tools\n- Self-hosted, localhost-only, static Trend API-key auth"
+  },
+  {
+    "name": "weather-service",
+    "description": "OpenWeatherMap-powered weather data service with smart caching. Provides current conditions, 5-day forecasts, hourly forecasts, and air quality data."
+  }
+]

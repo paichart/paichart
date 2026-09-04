@@ -1,0 +1,391 @@
+[
+  {
+    "name": "workbench_alerts_list",
+    "description": "List Trend Vision One Workbench Alerts",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "endDateTime": {
+          "description": "The end of the data retrieval range",
+          "type": "string"
+        },
+        "filter": {
+          "description": "\nstring <= 5000 characters\nExamples:\n\n    investigationStatus eq 'New' and contains(impactScopeEntityValue,'nimda') - Filters the list by alert status (exact match) and impacted entity (partial match).\n    impactScopeEntityValue eq 'nimda' - Filters the list by impacted entity (exact match)\n    indicatorValue eq '8.8.8.8' - Filters the list by detected indicator (exact match)\n\nFilter for retrieving a subset of the alert list.\n\nSupported fields:\nField \tDescription \tPossible values\nid \tThe unique identifier of an alert \tAny value\ninvestigationStatus (Deprecated) \tThe current status of the Workbench alert or investigation \tNew, In Progress, True Positive, False Positive, Benign True Positive, Closed\nstatus \tThe status of the case or investigation \tOpen, In Progress, Closed\ninvestigationResult \tThe findings of the case or investigation \tNo Findings, Noteworthy, True Positive, False Positive, Benign True Positive, Other Findings\nalertProvider \tSource of a Workbench alert \tSAE, TI\nmodelId \tID of the detection model that triggered the alert \tAny value\nmodel \tThe detection model that triggered the alert \tAny value\nmodelType \tThe type of detection model that triggered the alert \tpreset, custom\nseverity \tThe severity assigned to a model that triggered the alert \tcritical, high, medium, low\nimpactScopeEntityValue \tEntities affected within the company network \tAny value\nindicatorValue \tObjects found using root cause analysis or sweeping \tAny value\nincidentId \tThe unique identifier of an incident \tAny value\n\nSupported operators:\nOperator \tDescription\neq \tOperator 'equal to'\nand \tOperator 'and'\nor \tOperator 'or'\nnot \tOperator 'not'\n( ) \tSymbols for grouping operands with their correct operator.\ncontains \tOperator that allows you to search for a specified string in a field\n\nNote: Include this parameter in every request that generates paginated output.\n",
+          "type": "string"
+        },
+        "orderBy": {
+          "description": "the field to order by",
+          "enum": [
+            "id asc",
+            "id desc",
+            "caseId asc",
+            "caseId desc",
+            "name asc",
+            "name desc",
+            "status asc",
+            "status desc",
+            "investigationResult asc",
+            "investigationResult desc",
+            "modelId asc",
+            "modelId desc",
+            "model asc",
+            "model desc",
+            "score asc",
+            "score desc",
+            "severity asc",
+            "severity desc",
+            "createdDateTime asc",
+            "createdDateTime desc",
+            "updatedDateTime asc",
+            "updatedDateTime desc",
+            "firstInvestigatedDateTime asc",
+            "firstInvestigatedDateTime desc"
+          ],
+          "type": "string"
+        },
+        "startDateTime": {
+          "description": "The start of the data retrieval range",
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "workbench_alert_detail_get",
+    "description": "Displays information about the specified alert.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "alertId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "alertId"
+      ]
+    }
+  },
+  {
+    "name": "workbench_observed_attack_techniques_list",
+    "description": "List observed attack techniques",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "detectedEndDateTime": {
+          "description": "The end of the event detection data retrieval time range in ISO 8601 format.",
+          "type": "string"
+        },
+        "detectedStartDateTime": {
+          "description": "The start of the event detection data retrieval time range in ISO 8601 format.",
+          "type": "string"
+        },
+        "filter": {
+          "description": "\nstring <= 4000 characters\nExample: (riskLevel eq 'high') and (endpointName eq 'my-computer')\n\nFilter for retrieving a subset of the collected Observed Attack Techniques events. Include this parameter in every request that generates paginated output.\n\nImportant: The name of the containerName field might change depending on the products you purchase and the supported products in your region.\n\nSupported fields:\nField \tDescription\nuuid \tThe ID of an Observed Attack Techniques event.\nriskLevel \tThe severity of a detection. Possible values: undefined, info, low, medium, high, critical\nfilterName \tThe detection filter that triggered the event\nfilterMitreTacticId \tThe ID of the MITRE ATT&CK tactic associated with an event.\nfilterMitreTechniqueId \tThe ID of the MITRE ATT&CK technique or sub-technique associated with an event.\nendpointName \tThe name of an endpoint\nagentGuid \tThe ID of the installed agent\nendpointIp \tThe IP address of the endpoint\nproductCode \tProduct that generated the alert\ncontainerName \tThe name of the container.\n\nSupported operators:\nOperator \tDescription\neq \tOperator 'equal to'\nand \tOperator 'and'\nor \tOperator 'or'\nnot \tOperator 'not'\n() \tSymbols for grouping operands with their correct operator\n",
+          "type": "string"
+        },
+        "ingestedEndDateTime": {
+          "description": "The end of the data ingestion time range in ISO 8601 format.",
+          "type": "string"
+        },
+        "ingestedStartDateTime": {
+          "description": "The beginning of the data ingestion time range in ISO 8601 format.",
+          "type": "string"
+        },
+        "nextBatchToken": {
+          "description": "The token use to paginate. Used to retrieve the next page of information.",
+          "type": "string"
+        },
+        "top": {
+          "description": "The number of records to display per page.",
+          "enum": [
+            "50",
+            "100",
+            "200"
+          ],
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "endpoint_security_endpoints_list",
+    "description": "Displays a detailed list of your endpoints",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "filter": {
+          "description": "\nstring <= 1024 characters\nExample: not (osName eq 'Windows') and eppAgentAntiMalwareScans eq 'enabled'\n\nFilter for retrieving a subset of the endpoint information list.\n\nSupported fields:\n\nField\n\t\n\nDescription\n\t\n\nSupported values\n\nendpointName\n\t\n\nThe name of the endpoint.\n\t\n\nAny value\n\nagentGuid\n\t\n\nThe ID of the endpoint on the Trend Vision One platform.\n\t\n\nAny value\n\ntype\n\t\n\nThe type of endpoint.\n\t\n\ndesktop,server\n\nedrSensorAdvancedRiskTelemetryStatus\n\t\n\nThe status of the advanced risk telemetry on the endpoint.\n\t\n\nenabled,disabled,enabling,disabling,unknown\n\nedrSensorConnectivity\n\t\n\nThe connectivity of the sensor installed on the endpoint.\n\t\n\nconnected,disconnected\n\neppAgentProtectionManager\n\t\n\nThe name of your protection manager.\n\t\n\nAny value\n\neppAgentEndpointGroup\n\t\n\nThe name of the endpoint group.\n\t\n\nAny value\n\nosName\n\t\n\nThe operating system of the endpoint.\n\t\n\nAny value\n\nosPlatform\n\t\n\nThe platform of the operating system of the endpoint.\n\t\n\nwindows,mac,linux,unix,unknown\n\nserviceGatewayOrProxy\n\t\n\nThe endpoints routed through a Service Gateway or Proxy\n\t\n\nAny value that follows the format described in the 'serviceGatewayOrProxy' field\n\nosArchitecture\n\t\n\nThe type of operating system running on the endpoint.\n\t\n\nx86,x86_64,ppc64le,sparc,powerpc,aarch64\n\nversionControlPolicy\n\t\n\nThe name of the version control policy.\n\t\n\nAny value\n\nagentUpdateStatus\n\t\n\nThe status of the agent update policy.\n\t\n\nonSchedule,pause,disable,notSupported\n\nagentUpdatePolicy\n\t\n\nThe agent update policy version used for version control policy APIs.\n\t\n\nAny value\n\ncreditAllocatedLicenses\n\t\n\nThe features enabled on the endpoint\n\t\n\nEndpoint sensor detection and response,Advanced Endpoint Security,Advanced Server & Workload Protection,SAP Scanner for Trend Vision One - Endpoint Security (Pro)\n\nsecurityPolicy\n\t\n\nThe name of the security policy applied to the endpoint\n\t\n\nAny value\n\nsecurityPolicyOverriddenStatus\n\t\n\nWhether the endpoint security policy was overridden\n\t\n\nenabled,disabled\n\nedrSensorStatus\n\t\n\nThe status of the endpoint sensor detection and response.\n\t\n\nenabled,disabled,enabling,disabling,unknown\n\nedrSensorComponentUpdatePolicy\n\t\n\nThe version control update policy for the module/pattern of the sensor installed on the endpoint.\n\t\n\nnrepresents the latest version.n - xrepresents x snapshots prior (Example:n - 2).\n\nedrSensorComponentUpdateStatus\n\t\n\nThe status of the module/pattern updates of the sensor installed on the endpoint.\n\t\n\npause,onSchedule,notSupported\n\neppAgentStatus\n\t\n\nThe connectivity status of the endpoint protection agent.\n\t\n\non,off,unknown\n\neppAgentPolicyName\n\t\n\nThe name of a policy from your protection manager.\n\t\n\nAny value\n\nisolationStatus\n\t\n\nIndicates if an endpoint is isolated.\n\t\n\non,off,unknown\n\neppAgentComponentVersion\n\t\n\nThe agent component version.\n\t\n\noutdatedVersion,latestVersion,unknownVersions,controlledLatestVersion\n\neppAgentComponentUpdatePolicy\n\t\n\nThe update policy for the module/pattern of the agent installed on the endpoint.\n\t\n\nnrepresents the latest version.n - xrepresents x snapshots prior (Example:n - 2).\n\neppAgentComponentUpdateStatus\n\t\n\nThe status of the module/pattern updates of the agent installed on the endpoint.\n\t\n\npause,onSchedule,notSupported\n\n    eppAgentAntiMalwareScans\n\n    eppAgentBehaviorMonitoring\n\n    eppAgentPredictiveMachineLearning\n\n    eppAgentWebReputation\n\n    eppAgentSuspiciousConnectionSettings\n\n    eppAgentVulnerabilityProtection\n\n    eppAgentDeviceControl\n\n    eppAgentApplicationControl\n\n    eppAgentFirewall\n\n    eppAgentIntegratedEndpointSensor\n\n    eppAgentDataLossPrevention\n\n    eppAgentSmartFeedback\n\n    eppAgentAntiMalware\n\n    eppAgentActivityMonitoring\n\n    eppAgentIntrusionPreventionSystem\n\n    eppAgentLogInspection\n\n    eppAgentIntegrityMonitoring\n\n    eppAgentAgentSelfProtection\n\n    eppAgentSAPScanner\n\n    eppAgentSecurityAgentPasswordUnlock\n\n\t\n\nThe status of the features supported by the endpoint protection agent.\n\t\n\nenabled,disabled,notSupported\n\navailableActions\n\t\n\nAllows you to select the discoverable endpoints that may require attention.\n\t\n\n    immediateActionRequired: An issue occurred on the endpoint that requires user intervention.\n\n    unmanaged: The endpoints are discoverable on your network but do not have any available protection or sensor agent program installed.\n\n    sensorUpdateRequired: The endpoint has an older version of the Endpoint Sensor component installed (including Activity Monitoring and Apex One Endpoint Sensor) and should update to the latest Trend Vision One version.\n\n    sepMaintenanceRecommended: The Standard Endpoint Protection endpoint does not have XDR Endpoint Sensor. The Detection and Response feature is off.\n\n    a1MaintenanceRecommended: The Apex One endpoint does not have XDR Endpoint Sensor. The Detection and Response feature is off.\n\n    swpMaintenanceRecommended: The Server & Workload Protection endpoint does not have XDR Endpoint Sensor. The Detection and Response feature is off.\n\n    c1MaintenanceRecommended: The Cloud One endpoint does not have XDR Endpoint Sensor. The Detection and Response feature is off.\n\n    sensorDisabled: The Managed Endpoint and Detection and Response features are off. The endpoint has XDR Endpoint Sensor.\n\nsecurityDeployment\n\t\n\nAllows you to select the endpoints that have a protection or sensor agent installed.\n\t\n\n    managed: All endpoints on your network that have a protection or sensor agent installed\n\n    userProtection: All endpoints that have the Standard Endpoint Protection agent installed (includes endpoints that also have the Endpoint sensor detection and response feature enabled)\n\n    workloadProtection: All endpoints that have the Server & Workload agent installed (includes endpoints that also have the Endpoint sensor detection and response feature enabled)\n\n    sensorOnly: All endpoints that only have the Sensor agent installed (endpoints that are not protected by a Standard Endpoint Protection or Server & Workload Protection agent)\n\n    connectedEndpointProtection: All endpoints that have protection or sensor agent installed from a connected product.\n\nSupported operators:\nOperator \tDescription\neq \tOperator 'equal to'\nand \tOperator 'and'\nor \tOperator 'or'\nnot \tOperator 'not'\n() \tSymbols for grouping operands\n\nAdditional functions:\nFunction \tDescription \tNotes\nhassubset() \tChecks if the array contains a subset \tApplicable to creditAllocatedLicenses only\n\nNote:\n\n    for edrSensorStatus and edrSensorAdvancedRiskTelemetryStatus, When filtering for all xxabled endpoionts as the same as the UI, you can filter by status eq xxabled or status eq xxabling.\n    immediateActionRequired is mutually exclusive with other filters.\n    You can't use availableActions and securityDeployment together.\n    If a query contains both eppAgent<FeatureName> and eppComponentVersion, only one value of eppComponentVersion is included in the results.\n    availableActions and securityDeployment are not returned in response.\n\n",
+          "type": "string"
+        },
+        "orderBy": {
+          "description": "The field by which the results are sorted",
+          "enum": [
+            "agentGuid asc",
+            "agentGuid desc",
+            "eppAgentLastConnectedDateTime asc",
+            "eppAgentLastConnectedDateTime desc",
+            "eppAgentLastScannedDateTime asc",
+            "eppAgentLastScannedDateTime desc",
+            "edrSensorLastConnectedDateTime asc",
+            "edrSensorLastConnectedDateTime desc"
+          ],
+          "type": "string"
+        },
+        "skipToken": {
+          "description": "The token use to paginate. Used to retrieve the next page of information.",
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "crem_attack_surface_high_risk_users_list",
+    "description": "List high risk users",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "filter": {
+          "description": "\nstring <= 1024 characters\nExample: (userPrincipalName eq 'demo_account@visionone.trendmicro.com') or (userName eq 'demo_account')\n\nFilter for retrieving a subset of the at-risk users list.\n\nSupported fields and operators:\n\n    'id' - The ID of a user on the Trend Vision One platform.\n    'riskScore' - Risk score of a user.\n    'userPrincipalName' - String that identifies an account.\n    'userName' - User name.\n\nSupported fields:\nField \tDescription\nid \tThe ID of a user on the Trend Vision One platform.\nriskScore \tThe risk score of a user.\nuserPrincipalName \tString that identifies an account.\nuserName \tUser name\n\nSupported operators:\nOperator \tDescription\neq \tOperator 'equal to'.\nand \tOperator 'and'.\nor \tOperator 'or'.\nnot \tOperator 'not'.\n( ) \tSymbols for grouping operands.\ngt \tOperator 'greater than'.\nge \tOperator 'greater than or equal'.\nle \tOperator 'less than or equal'.\nlt \tOperator 'less than'.\n",
+          "type": "string"
+        },
+        "orderBy": {
+          "description": "The field by which the results are sorted",
+          "enum": [
+            "riskScore asc",
+            "riskScore desc",
+            "userName asc",
+            "userName desc"
+          ],
+          "type": "string"
+        },
+        "skipToken": {
+          "description": "The token use to paginate. Used to retrieve the next page of information.",
+          "type": "string"
+        },
+        "top": {
+          "description": "The number of records to display per page.",
+          "enum": [
+            "10",
+            "50",
+            "100",
+            "200",
+            "500",
+            "1000"
+          ],
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "crem_attack_surface_public_ips_list",
+    "description": "List discovered public IP addresses",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "filter": {
+          "description": "\nstring <= 1024 characters\nExamples:\n\n    (latestRiskScore ge 70) and (provider eq 'Amazon') -\n    hassubset(provider, ['Amazon']) -\n    hassubset(discoveredBy, ['Trend Micro Deep Security', 'Trend Vision One Agent']) - \n\nFilter for retrieving a subset of the public IP addresses list.\n\nSupported fields:\nField \tDescription \tSupported values\nipAddress \tThe public IP address \tAny value\nid \tThe ID of the IP address on the Trend Vision One platform. \tAny value\nprovider \tThe provider of the asset. You can only include one provider per query \tAny value\nlatestRiskScore \tThe most recent Risk Score of the IP address \tAny value\ncriticality \tThe criticality of the IP address \thigh, medium, low\ndiscoveredBy \tThe data sources that discovered the IP address \tThe values in the \"discoveredBy\" field when the request is successful.\n\nSupported operators:\nOperator \tDescription \tNotes\neq \tOperator 'equal to' \tNot applicable to discoveredBy\nand \tOperator 'and' \t-\nor \tOperator 'or' \t-\nnot \tOperator 'not' \t-\n() \tSymbols for grouping operands \t-\ngt \tOperator 'greater than' \tOnly applicable to: 'latestRiskScore','firstSeenDateTime','lastDetectedDateTime'\nge \tOperator 'greater than or equal' \tOnly applicable to: 'latestRiskScore','firstSeenDateTime','lastDetectedDateTime'\nle \tOperator 'less than or equal' \tOnly applicable to: 'latestRiskScore','firstSeenDateTime','lastDetectedDateTime'\nlt \tOperator 'less than' \tOnly applicable to: 'latestRiskScore','firstSeenDateTime','lastDetectedDateTime'\n\nAdditional functions:\nFunction \tDescription \tNotes\nstartswith() \tDetermines if the specified string begins with the specified characters \tOnly applicable to ipAddress\nhassubset() \tChecks if the array contains a subset \tApplicable to discoveredByonly\n",
+          "type": "string"
+        },
+        "orderBy": {
+          "description": "The field by which the results are sorted",
+          "enum": [
+            "latestRiskScore asc",
+            "latestRiskScore desc"
+          ],
+          "type": "string"
+        },
+        "skipToken": {
+          "description": "The token use to paginate. Used to retrieve the next page of information.",
+          "type": "string"
+        },
+        "top": {
+          "description": "The number of records to display per page.",
+          "enum": [
+            "10",
+            "50",
+            "100",
+            "200",
+            "500",
+            "1000"
+          ],
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "cloud_posture_accounts_list",
+    "description": "List CSPM Accounts.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "skipToken": {
+          "description": "The token use to paginate. Used to retrieve the next page of information.",
+          "type": "string"
+        },
+        "top": {
+          "description": "The number of records to display per page.",
+          "maximum": 200,
+          "minimum": 50,
+          "type": "number"
+        }
+      }
+    }
+  },
+  {
+    "name": "container_security_image_vulnerabilities_list",
+    "description": "Displays the container image vulnerabilities detected in Kubernetes and Amazon ECS clusters for your account",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "filter": {
+          "description": "\nstring <= 1024 characters\nExample: riskLevel eq 'high'\n\nThe filter for retrieving a subset of the image vulnerabilities list. Include this header in every request that generates paginated output.\n\nSupported fields and operators:\nField \tDescription \tAllowed values\nclusterType \tThe type of cluster \tkubernetes, amazonecs\nname \tThe name of the vulnerability \tAny value\nclusterId \tThe ID of the cluster \tAny value\nimageId \tThe The ID of the container image \tAny value\nriskLevel \tThe risk level of the vulnerability \thigh, medium, low\n\nSupported operators:\n\n    eq - Operator \"equal to\"\n    and - Operator \"and\"\n",
+          "type": "string"
+        },
+        "firstDetectedEndDateTime": {
+          "description": "The end time of the data retrieval range, represented in ISO 8601 format.",
+          "type": "string"
+        },
+        "firstDetectedStartDateTime": {
+          "description": "The start time of the data retrieval range, in ISO 8601 format.",
+          "type": "string"
+        },
+        "lastDetectedEndDateTime": {
+          "description": "The end time of the data retrieval range, represented in ISO 8601 format.",
+          "type": "string"
+        },
+        "lastDetectedStartDateTime": {
+          "description": "The start time of the data retrieval range, in ISO 8601 format.",
+          "type": "string"
+        },
+        "orderBy": {
+          "description": "The field by which the results are sorted",
+          "enum": [
+            "riskLevel desc",
+            "firstDetectedDateTime desc",
+            "lastDetectedDateTime desc"
+          ],
+          "type": "string"
+        },
+        "skipToken": {
+          "description": "The token use to paginate. Used to retrieve the next page of information.",
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "threatintel_suspicious_objects_list",
+    "description": "Retrieves information about domains, file SHA-1, file SHA-256, IP addresses, email addresses, or URLs in the Suspicious Object List",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "endDateTime": {
+          "description": "The end of the data retrieval range in ISO 8601 format",
+          "type": "string"
+        },
+        "filter": {
+          "description": "\nstring <= 4000 characters\nExample: type eq 'url' AND riskLevel eq 'high'\n\nFilter for retrieving a subset of the Suspicious Object List.\n\nSupported fields:\nField \tDescription \tPossible values\ntype \tThe type of a suspicious object \turl, domain, senderMailAddress, ip, fileSha1, fileSha256\nurl \tSuspicious URL \tAny value\ndomain \tSuspicious domain name \tAny value\nip \tSuspicious IP address \tAny value\nsenderMailAddress \tSuspicious email address \tAny value\nfileSha1 \tSHA1 hash associated to a suspicious file \tAny value\nfileSha256 \tSHA256 hash associated to a suspicious file \tAny value\nscanAction \tAction that connected products apply after detecting a suspicious object \tblock, log\nriskLevel \tRisk level of a suspicious object \thigh, medium, low\n\nSupported operators:\nOperator \tDescription\neq \tOperator 'equal to'\nand \tOperator 'and'\nor \tOperator 'or'\nnot \tOperator 'not'\n() \tSymbols for grouping operands with their correct operator\n",
+          "type": "string"
+        },
+        "orderBy": {
+          "description": "The field by which the results are sorted",
+          "enum": [
+            "riskLevel asc",
+            "riskLevel desc",
+            "lastModifiedDateTime asc",
+            "lastModifiedDateTime desc",
+            "expiredDateTime asc",
+            "expiredDateTime desc"
+          ],
+          "type": "string"
+        },
+        "startDateTime": {
+          "description": "The start of the data retrieval range in ISO 8601 format",
+          "type": "string"
+        },
+        "top": {
+          "description": "The number of records to display per page.",
+          "enum": [
+            "50",
+            "100",
+            "200"
+          ],
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "threatintel_feed_indicators_list",
+    "description": "Retrieves a list of IoCs from Trend Threat Intelligence Feed",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "endDateTime": {
+          "description": "The end of the data retrieval range in ISO 8601 format",
+          "type": "string"
+        },
+        "indicatorObjectFormat": {
+          "description": "The desired format for the query response",
+          "enum": [
+            "stixBundle",
+            "taxiiEnvelope"
+          ],
+          "type": "string"
+        },
+        "startDateTime": {
+          "description": "The start of the data retrieval range in ISO 8601 format",
+          "type": "string"
+        },
+        "top": {
+          "description": "The number of IoCs returned by a query (maximum 10,000)",
+          "enum": [
+            "1000",
+            "5000",
+            "10000"
+          ],
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "email_security_domains_list",
+    "description": "Returns all email domains managed by an email protection solution.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "top": {
+          "description": "The number of records to display per page.",
+          "maximum": 1000,
+          "minimum": 10,
+          "type": "number"
+        }
+      }
+    }
+  },
+  {
+    "name": "iam_accounts_list",
+    "description": "Displays users, groups, and invitations in the account",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "filter": {
+          "description": "\nstring <= 256 characters\nExample: status eq 'enabled' and authType eq 'local'\n\nFilter for retrieving a subset of the retrieved user list.\n\nSupported fields:\nField \tDescription\nid \tThe unique identifier of a user.\nemail \tThe email address of a user\nauthType \tThe type of the user account. Available values: local, saml, samlGroup\nstatus \tThe status of an account. Available values: enabled, disabled, invited\n\nSupported operators:\nOperator \tDescription\neq \tOperator 'equal to'\nand \tOperator 'and'\nor \tOperator 'or'\nnot \tOperator 'not'\n",
+          "type": "string"
+        },
+        "top": {
+          "description": "The number of records to display per page.",
+          "enum": [
+            "50",
+            "100",
+            "200"
+          ],
+          "type": "string"
+        }
+      }
+    }
+  }
+]

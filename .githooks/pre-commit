@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+#
+# Pre-commit hook — fast safety checks before allowing a commit.
+#
+# Installation: automatic via `npm install` (runs `git config core.hooksPath
+# .githooks` as part of the `prepare` script). If you cloned without running
+# npm install, activate manually: `git config core.hooksPath .githooks`.
+#
+# Current checks (in order, all must pass):
+#   1. Dual TS/JS drift detector — prevents the drift bug class that led to
+#      the 4-week silent shadowing incident (see dual-ts-js-drift-eradication
+#      review artifacts for the full story).
+#   2. Role-guidance Deliverable Contract validator — catches drift in agent
+#      role-guidance entries (added 2026-04-29 per #3 follow-up).
+#   3. Pipeline-protocol validator unit tests — 18 tests covering CREATE +
+#      ORCHESTRATE + SYNTHESIZE protocol-step validation (incl. A.4 forensic
+#      P-signal). Catches regressions on the validator's signal-generation
+#      logic before push.
+#   4. getReportMdDecision discriminated-union unit tests — 9 tests covering
+#      the four-axis matrix (PIPELINE+meta+source-success → upstream;
+#      PIPELINE+meta+source-not-success → produce:false; etc.). Catches
+#      regressions on the artifact-policy gate before push.
+##   5. gitleaks on STAGED changes — 2026-09-03 full-history audit found real
+#      credentials had entered the repo four ways; the recurring one was live
+#      values pasted into docs/session notes. This is the tripwire for that
+#      habit. Allowlist: .gitleaks.toml. CI backstop: secret-scan.yml.
+#      Requires the gitleaks binary (hard-fails if absent — a silently-skipped
+#      secret check is worse than no check, see validate:patterns rot story).
+#      Install: https://github.com/gitleaks/gitleaks/releases → ~/.local/bin
+#
+# Total runtime: ~3-4 seconds. If you need to add more checks, keep the
+# combined budget under ~10s — anything slower belongs in a pre-push hook
+# (slower-but-still-fast) or CI (anything > 30s).
+#
+# Bypass (use sparingly, name a reason): `git commit --no-verify`
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Check 1 — Dual TS/JS drift
+echo "pre-commit: checking for new dual TS/JS drift..."
+if ! bash "$REPO_ROOT/scripts/detect-dual-files.sh" > /dev/null 2>&1; then
+  echo ""
+  echo "✗ pre-commit FAILED: dual TS/JS drift detected"
+  echo ""
+  bash "$REPO_ROOT/scripts/detect-dual-files.sh" 2>&1 | tail -25
+  echo ""
+  echo "To bypass (not recommended): git commit --no-verify"
+  exit 1
+fi
+echo "pre-commit: ✓ no new dual drift"
+
+# Check 2 — Role-guidance Deliverable Contract
+echo "pre-commit: validating agent role-guidance Deliverable Contract..."
+if ! npm run --silent validate:role-guidance > /tmp/precommit-role-guidance.log 2>&1; then
+  echo ""
+  echo "✗ pre-commit FAILED: role-guidance validation"
+  echo ""
+  tail -25 /tmp/precommit-role-guidance.log
+  echo ""
+  echo "Full output: /tmp/precommit-role-guidance.log"
+  echo "To bypass (not recommended): git commit --no-verify"
+  exit 1
+fi
+echo "pre-commit: ✓ all role-guidance entries carry Deliverable Contract"
+
+# Check 2b — Role-guidance COVERAGE (every seeded defaultRole has an entry or a
+# documented generic exemption). Catches the silent generic-fallback gap found
+# 2026-06-16 (network-provisioning spike). See audit-role-guidance-coverage.ts.
+echo "pre-commit: validating agent role-guidance coverage..."
+if ! npm run --silent validate:role-guidance-coverage > /tmp/precommit-role-guidance-coverage.log 2>&1; then
+  echo ""
+  echo "✗ pre-commit FAILED: role-guidance coverage"
+  echo ""
+  tail -30 /tmp/precommit-role-guidance-coverage.log
+  echo ""
+  echo "Full output: /tmp/precommit-role-guidance-coverage.log"
+  echo "To bypass (not recommended): git commit --no-verify"
+  exit 1
+fi
+echo "pre-commit: ✓ every seeded role has guidance or a documented exemption"
+
+# Check 3 — Pipeline-protocol validator unit tests
+echo "pre-commit: running pipeline-protocol validator unit tests..."
+if ! npx ts-node --transpile-only scripts/test-pipeline-protocol-validator.ts > /tmp/precommit-protocol-validator.log 2>&1; then
+  echo ""
+  echo "✗ pre-commit FAILED: pipeline-protocol validator unit tests"
+  echo ""
+  tail -25 /tmp/precommit-protocol-validator.log
+  echo ""
+  echo "Full output: /tmp/precommit-protocol-validator.log"
+  echo "To bypass (not recommended): git commit --no-verify"
+  exit 1
+fi
+echo "pre-commit: ✓ pipeline-protocol validator tests pass"
+
+# Check 4 — getReportMdDecision discriminated-union unit tests
+echo "pre-commit: running getReportMdDecision policy-gate unit tests..."
+if ! npx ts-node --transpile-only scripts/test-report-md-decision.ts > /tmp/precommit-report-md-decision.log 2>&1; then
+  echo ""
+  echo "✗ pre-commit FAILED: report-md-decision unit tests"
+  echo ""
+  tail -25 /tmp/precommit-report-md-decision.log
+  echo ""
+  echo "Full output: /tmp/precommit-report-md-decision.log"
+  echo "To bypass (not recommended): git commit --no-verify"
+  exit 1
+fi
+echo "pre-commit: ✓ getReportMdDecision policy-gate tests pass"
+
+# Check 5 — Dead block-comment detector (2026-05-14)
+# Flags large /* ... */ comments containing executable-looking code, the
+# anti-pattern that fooled three fix attempts on 2026-05-13.
+echo "pre-commit: checking for dead block-comments..."
+if ! bash "$REPO_ROOT/scripts/detect-dead-block-comments.sh"; then
+  echo ""
+  echo "To bypass (not recommended): git commit --no-verify"
+  exit 1
+fi
+echo "pre-commit: ✓ no dead block-comments in staged changes"
+
+# Check 6 — Truncation tier-nesting invariant (Finding D, 2026-07-08)
+# Only runs when a file carrying one of the four tier constants is staged. Asserts the
+# nesting (Tier-1 8K <= Tier-2 50K <= Tier-3 128K/512K <= Tier-4 5MB) and the load-bearing
+# "Tier-2 preview >= Tier-1 LLM view" guarantee (which silently inverted once, pre-2026-07-04).
+if git diff --cached --name-only | grep -qE 'agentic-tool-loop\.ts|execution-artifacts\.ts|context-chainer\.ts|execution-terminal-persist\.ts'; then
+  echo "pre-commit: tier-constant file staged — running truncation tier-invariant test..."
+  if ! npx ts-node --transpile-only -r tsconfig-paths/register scripts/test-truncation-tier-invariant.ts > /tmp/precommit-tier-invariant.log 2>&1; then
+    echo ""
+    echo "✗ pre-commit FAILED: truncation tier-nesting invariant"
+    echo ""
+    tail -15 /tmp/precommit-tier-invariant.log
+    echo ""
+    echo "Full output: /tmp/precommit-tier-invariant.log"
+    echo "To bypass (not recommended): git commit --no-verify"
+    exit 1
+  fi
+  echo "pre-commit: ✓ truncation tier nesting invariant holds"
+fi
+
+
+# Check 5 — gitleaks on staged changes (secret tripwire)
+echo "pre-commit: scanning staged changes for secrets..."
+if ! command -v gitleaks > /dev/null 2>&1; then
+  echo ""
+  echo "✗ pre-commit FAILED: gitleaks binary not found in PATH"
+  echo "  Install: https://github.com/gitleaks/gitleaks/releases (8.30.1 known-good) → ~/.local/bin"
+  echo "  This check hard-fails on absence by design — a silently-skipped secret scan reads as a guard and asserts nothing."
+  echo ""
+  exit 1
+fi
+if ! gitleaks git --staged --config "$REPO_ROOT/.gitleaks.toml" --redact=80 --no-banner --exit-code 1; then
+  echo ""
+  echo "✗ pre-commit FAILED: gitleaks found a secret-shaped value in staged changes"
+  echo "  Real credential → remove it, rotate it, then commit."
+  echo "  Provably not a credential → add to .gitleaks.toml allowlist WITH the evidence comment."
+  echo ""
+  exit 1
+fi
+
+echo "pre-commit: all checks passed"
+exit 0

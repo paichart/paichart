@@ -1,0 +1,51 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Documents
+*.md text diff=markdown
+*.txt text
+*.sql text
+
+# Scripts
+*.js text
+*.ts text
+*.tsx text
+*.json text
+*.yml text
+*.yaml text
+
+# Graphics - treat as binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.svg text
+
+# Fonts - treat as binary
+*.ttf binary
+*.eot binary
+*.woff binary
+*.woff2 binary
+
+# Ignore files (like .gitignore) - text
+.gitignore text
+.gitattributes text
+.env.example text
+
+# Prisma
+*.prisma text
+
+# Configs
+*.config.js text
+*.config.ts text
+tailwind.config.ts text
+next.config.js text
+postcss.config.js text
+tsconfig.json text
+package.json text
+package-lock.json text
+
+# Don't allow people to merge these files from other repos
+package-lock.json merge=ours
+yarn.lock merge=ours
+pnpm-lock.yaml merge=ours

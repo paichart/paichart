@@ -1,0 +1,38 @@
+# Phase-4 real-device validation rig — network-provisioning pipeline.
+# 2-node Arista cEOS lab. Runs on PROD (<PROD_HOST>). DISPOSABLE — `containerlab destroy` after the run.
+#
+# Resourcing (measured 2026-06-25): prod has 6.1 GB RAM avail + 2 GB swap, 14 GB disk free, 4 vCPU.
+# The per-node memory/cpu caps below are guardrails so a runaway cEOS cannot starve paichart-mcp/web.
+# cEOS is a plain container (no KVM/cgroups-v1 needed); cgroups v2 + Docker 29.5.2 confirmed present.
+
+name: np-ceos
+
+mgmt:
+  network: clab-np              # dedicated docker bridge for this lab
+  ipv4-subnet: 172.30.30.0/24   # deterministic mgmt IPs -> static nornir inventory (no DHCP guesswork)
+
+topology:
+  kinds:
+    arista_ceos:
+      image: ceos:4.32.2.1F     # imported on prod 2026-06-26 from cEOS64-lab-4.32.2.1F.tar.xz (md5-verified)
+  nodes:
+    ceos1:
+      kind: arista_ceos
+      mgmt-ipv4: 172.30.30.11    # containerlab assigns this to Management0 — do NOT also set it in the startup-config
+      startup-config: ceos1-startup.cfg
+      memory: 2g                 # guardrail
+      cpu: 1.5
+    ceos2:
+      kind: arista_ceos
+      mgmt-ipv4: 172.30.30.12
+      startup-config: ceos2-startup.cfg
+      memory: 2g
+      cpu: 1.5
+  links:
+    - endpoints: ["ceos1:eth1", "ceos2:eth1"]   # back-to-back data link: Ethernet1 <-> Ethernet1
+    # FW-A3.2 (2026-08-21): two extra cross-links so security-policy legs have BINDABLE ports.
+    # Roles are assigned by interface descriptions in the startup-configs, not by wiring:
+    #   ceos1:eth2 + ceos2:eth2 = DMZ-SEGMENT · ceos1:eth3 = PARTNER-UPLINK (untrust) · ceos2:eth3 = INSIDE-APP.
+    # The A3.1 round's reviewer correctly blocked on "no partner-facing interface exists" — this closes it.
+    - endpoints: ["ceos1:eth2", "ceos2:eth2"]
+    - endpoints: ["ceos1:eth3", "ceos2:eth3"]

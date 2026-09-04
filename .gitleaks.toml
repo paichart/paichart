@@ -1,0 +1,49 @@
+# gitleaks config — working-tree + staged-diff secret scanning.
+#
+# WHY: 2026-09-03 full-history audit (gitleaks 8.30.1, 4,956 commits) found real
+# credentials had entered the repo through FOUR channels: a committed
+# .env.production (2025-09), hardcoded values in ecosystem.config.js and
+# hub-tools-handler.js (2025-07..09), committed debug artifacts (cookies.txt),
+# and — the recurring one — live values pasted into session notes / knowledge
+# docs. The first three are config gaps; the fourth is a habit, so it needs a
+# tripwire at commit time, not a .gitignore line.
+#
+# SCOPE: this config is used by `gitleaks dir .` (working tree) in CI and
+# `gitleaks git --staged` in .githooks/pre-commit. It is NOT run over history —
+# history is known-dirty and stays private; the public repo is a fresh-history
+# export (see cline_docs/reviews/open-source-readiness-2026-09-03/).
+#
+# ALLOWLIST RULE: every entry below is a value that was individually inspected
+# and is provably not a credential. Add to it only with the same evidence; a
+# new "false positive" you cannot explain is a finding, not noise.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Inspected non-secrets (2026-09-03 audit)"
+regexes = [
+  '''AKIA1234567890ABCD99''',                 # LocalStack rig fixture — the R10 redaction test's deliberately secret-shaped tag
+  '''eyJhbGciOiJub25lIn0\.[A-Za-z0-9_-]+\.''', # alg=none JWT — negative security-test input
+  '''8kLm3PqR5tUvWx2Y''',                     # SECURITY-REMEDIATION-GUIDE example password, stated as example in-text
+  '''admin:paichartlab''',                     # cEOS lab-rig default creds (private docker network, non-routable)
+  '''sk-1234567890abcdef''',                   # placeholder in rotation-plan prose
+  '''eyJvZmZzZXQiOjEwMH0=''',                  # base64 pagination cursor {"offset":100}
+  '''<REDACTED-[A-Z-]+>''',                    # our own redaction markers
+  # Truncated doc snippets: a value ending in "..." is a display fragment, not a
+  # credential (e.g. `eyJhbGciOiJIUzI1NiIs...` in curl examples). A full token
+  # never ends in three dots.
+  '''^\S+\.\.\.$''',
+  # Placeholder tokens in curl examples across cline_docs/docs/knowledge.
+  '''(?i)^(your_|\$?your|admin_token|user_token|demo_user|demo_token|invalid|jwt_token|\$jwt|\$token)''',
+  # test-security-invariants.ts synthetic "eyJ.<b64>.sig" fixtures (3 dot-separated stubs < 20 chars)
+  '''^eyJ\.[A-Za-z0-9]{1,12}\.[A-Za-z0-9]{1,4}$''',
+  '''^eyJhbGciOiJIUzI1NiJ9\.eyJleHAiOjE2MDAwMDAwMDB9\.''', # security-testing-guide fixture: {"alg":"HS256"}.{"exp":1600000000} (expired 2020, unsigned stub)
+  '''^c[a-z0-9]{24}$''',                     # CUID row ids (user/task ids in log excerpts) — identifiers, not credentials
+  '''^BGP/OSPF/''',                           # prose fragment in a review doc
+]
+paths = [
+  '''node_modules''',
+  '''package-lock\.json''',
+  '''\.next/''',
+]

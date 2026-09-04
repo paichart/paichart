@@ -1,2 +1,85 @@
 node_modules/
 dist/
+
+# --- merged from platform export ---
+# Dependencies
+/node_modules
+**/node_modules
+/.pnp
+.pnp.js
+# Testing
+/coverage
+# Next.js
+/.next/
+/out/
+/build
+.next
+# Production
+/build
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+.env.production
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+# IDE and editor files
+.idea
+.vscode
+*.swp
+*.swo
+*~
+# OS files
+.DS_Store
+Thumbs.db
+# Prisma
+# Migration scripts are now tracked in version control
+# /prisma/migrations/*
+# !/prisma/migrations/.keep
+# Database
+*.sqlite
+*.sqlite3
+*.db
+# Temporary files
+*.log
+*.tmp
+.temp
+.cache
+# Local SSL certificates
+*.pem
+*.key
+*.crt
+# Claude session files (user-specific)
+.claude-session
+.claude/scheduled_tasks.lock
+# Backup files
+*.bak
+*.backup
+backups/
+# Build output
+.vercel
+.turbo
+# Test files
+*.test.js.snap
+__snapshots__/
+# Misc
+.DS_Store
+*.pem
+next-env.d.ts
+tsconfig.tsbuildinfo
+navigation-captures/
+# Keep example files
+!.env.example
+# GitHub CLI (downloaded for local use)
+gh_2.46.0_linux_amd64*
+gh_*.tar.gz
+.env.production
+.keys/
+
+# export scratch (regenerated every export)
+.export-report.md

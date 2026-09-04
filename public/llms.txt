@@ -1,0 +1,59 @@
+# pAIchart MCP Hub
+
+> AI-native service orchestration platform. Discover MCP services by capability, chain multi-service workflows at runtime, and authenticate per-user via JWKS/External OAuth.
+
+pAIchart MCP Hub enables AI agents to discover, compose, and execute multi-service workflows dynamically. Unlike traditional automation platforms (Zapier, n8n) that require humans to pre-design every workflow, MCP Hub lets AI reason about goals and assemble the right services at runtime with per-user authentication, trust-level security, and business context awareness.
+
+## Getting Started
+- [Connect to pAIchart](https://paichart.app): Sign in with GitHub, Google, or Microsoft OAuth
+- [MCP Hub UI](https://paichart.app/mcp): Service registry, workflows, and management interface
+- [JWKS Endpoint](https://paichart.app/api/auth/jwks): Public key endpoint for JWT validation (RS256)
+
+Once connected via MCP (Claude Desktop, ChatGPT, or custom client), all documentation is available through built-in prompts and resources:
+- `/prompt list` — List all available workflow guides and tutorials
+- `/prompt register_guide` — Step-by-step service registration tutorial
+- `/prompt get_started` — Interactive onboarding with role-based paths
+- `/prompt workflow_guide` — Multi-service workflow orchestration guide
+- `services(action: "discover")` — Find services by capability or category
+- `registry(action: "register")` — Register your own MCP service (one command)
+- MCP Resources: `mcp://hub/services`, `mcp://hub/workflows`, `mcp://hub/analytics`
+
+## Key Capabilities
+- AI-native service discovery by capability (not by name)
+- Per-user JWT authentication via JWKS (RS256, 95/100 security score)
+- External OAuth for Snowflake, Databricks, Azure SQL (user's own identity, not stored credentials)
+- 6-tier trust level system (INTERNAL, TRUSTED, OWNER, TEAM_MEMBER, SCOPED, ANONYMOUS)
+- Multi-service workflow chaining (sequential, parallel, conditional execution modes)
+- Works with Claude Desktop, ChatGPT, and custom MCP clients
+- Runtime workflow composition (AI assembles workflows from goals, no pre-configuration)
+
+## Registered Services
+- Browser Automation: Web scraping, screenshots, PDFs, form filling via Playwright (7 tools)
+- Snowflake: SQL queries with per-user External OAuth authentication (3 tools)
+- EIA Energy Data: U.S. electricity generation, pricing, storage opportunity analysis (6 tools)
+- EODHD Financial: Real-time quotes, fundamentals, historical market data (4 tools)
+- Weather: Current conditions, forecasts, air quality via OpenWeatherMap (4 tools)
+- Notifications: Email (Brevo), Slack, webhooks with broadcast and escalation (4 tools)
+- Alpha Vantage: 113+ financial data tools via wrapper pattern (3 meta-tools)
+- KPI Service: Task completion rates, on-time rates, stale task ratios (internal)
+- Recommendation Engine: Data-driven task recommendations based on POV progress (internal)
+
+## MCP Protocol
+- Transport: Streamable HTTP (recommended for external), SSE (internal Docker services)
+- Authentication: OAuth 2.0 (GitHub, Google, Microsoft), API keys, JWT tokens
+- Service registration: One MCP command via registry(action: "register")
+- Service discovery: Query by capability via services(action: "discover")
+- Workflow execution: Chain services via services(action: "workflow.execute")
+
+## Architecture
+- MCP protocol standard (compatible with any MCP client)
+- Zero-overhead internal routing for platform services
+- POV-scoped business context (Proof of Value engagement tracking)
+- Docker-based service deployment (Gold Standard v2 pattern)
+- PostgreSQL + Prisma ORM backend
+- RS256 asymmetric JWT signing with JWKS endpoint
+
+## Optional
+- Trust Level System: How authentication decisions are made (accessible via MCP prompts once connected)
+- Gold Standard Service Pattern: Build production MCP services with Docker (accessible via MCP prompts)
+- Token Validator Service: Test your JWT integration before going live — call via services(action: "call", targetService: "token-validator-service", tool: "verify_auth")

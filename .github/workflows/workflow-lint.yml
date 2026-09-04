@@ -1,0 +1,70 @@
+# Workflow parse/lint guard — 2026-08-19 (morning-list #8b)
+#
+# WHY THIS EXISTS: production-deploy.yml carries `paths-ignore: ['.github/**']`,
+# so a workflow edit that BREAKS ITS OWN YAML/expression parse does not fail any
+# run — the workflow just silently stops firing (the only tell is `gh workflow
+# list` showing the FILE PATH instead of the name). Proven live 2026-08-18: an
+# oversized run-scalar (~23.9K-char proven-good ceiling) made production-deploy
+# unparseable and deploys silently stopped. This workflow has NO paths-ignore on
+# .github, so a broken workflow edit fails loudly at push time.
+#
+# NOTE: actionlint validates YAML parse + expressions/shellcheck; it does NOT
+# enforce GitHub's undocumented run-scalar size ceiling — keep long inline
+# scripts out of `run:` blocks regardless (extract to scripts/).
+name: Workflow Lint
+
+on:
+  push:
+    paths:
+      - '.github/workflows/**'
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+
+# Least privilege (fork-safe): nothing here writes to the repo.
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Run actionlint
+        # SHELLCHECK_OPTS scopes actionlint's EMBEDDED shellcheck to error
+        # severity — first run failed on pre-existing info-level SC2086 nits in
+        # other workflows' run blocks. This guard exists for parse/expression
+        # failures (the silent-deploy-death class), not retro style-linting;
+        # the deploy script itself gets its own shellcheck gate in
+        # validation-reusable.yml. NOTE the false-clean trap: without shellcheck
+        # in PATH, actionlint silently SKIPS this integration — local verification
+        # must have shellcheck installed to match the runner.
+        env:
+          SHELLCHECK_OPTS: -S error
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color
+
+      # Heuristic tripwire for GitHub's server-side run-scalar/expression ceiling
+      # (~21000 per the observed rejection; proven-good 23,918 raw / rejected 25,731).
+      # actionlint cannot check this — it is github.com behavior, not a schema rule.
+      # Threshold 20000 on the PARSED scalar leaves headroom below the observed cliff.
+      - name: Run-scalar size tripwire
+        run: |
+          python3 - <<'PY'
+          import glob, sys, yaml
+          LIMIT = 20000
+          bad = []
+          for f in sorted(glob.glob('.github/workflows/*.yml')):
+              doc = yaml.safe_load(open(f))
+              for jname, job in (doc.get('jobs') or {}).items():
+                  for i, step in enumerate(job.get('steps') or []):
+                      run = step.get('run')
+                      if isinstance(run, str) and len(run) > LIMIT:
+                          bad.append(f"{f} job={jname} step#{i} ({step.get('name','?')}): {len(run)} chars > {LIMIT}")
+          for b in bad:
+              print(f"::error::run-scalar near GitHub's parse ceiling: {b}")
+          sys.exit(1 if bad else 0)
+          PY

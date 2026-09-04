@@ -1,0 +1,51 @@
+{
+  "_comment": "ILLUSTRATIVE — the interface contract the Program Architect would compute for the Approach-3 (sequenced) program. NOTE the key difference from Approach 2: the contract carries only the invariants KNOWABLE UP FRONT (the customer intent, logging, naming, destination). The downstream match SOURCE is deliberately NOT here — it is a runtime value (the edge NAT pool) delivered by inter-pipeline chaining, not a contract constant. A pipeline child reaching execution without this contract still FAILS LOUD (INTERFACE_CONTRACT_MISSING); the DAG edges carry the runtime piece the contract cannot.",
+  "program": "acme-partner-access-path-nat",
+  "endToEndIntent": {
+    "id": "partner-https",
+    "ingressSource": "203.0.113.0/24",
+    "destination": "10.20.0.10/32",
+    "protocol": "tcp",
+    "dport": 443,
+    "action": "permit",
+    "_note": "This is the customer intent — knowable up front, so it IS in the contract. What each downstream hop actually MATCHES on the wire (the post-NAT source) is NOT here (see addressing)."
+  },
+  "defaultAction": "deny",
+  "addressing": {
+    "sourceNat": "at-edge-fw",
+    "matchAddressesArePreNat": false,
+    "postNatSource": "RUNTIME — chained from the edge-fw leg's report.md, NOT a contract constant",
+    "_note": "This is the crux of Approach 3. The edge SNATs the partner CIDR to a pool it picks from live edge state during design; dmz-sg and core-fw must match THAT pool. Because the pool is an output of the edge design, it cannot be resolved into a static contract constant — it rides the DAG edge (inter-pipeline chaining) instead. If it could be pre-agreed, this would be Approach 2."
+  },
+  "sequencing": {
+    "dag": "edge-fw -> dmz-sg -> core-fw",
+    "each downstream leg dependsOn": ["its own team gate", "the immediate upstream sibling pipeline"],
+    "chained": "the upstream leg's report.md (the chosen NAT pool + post-NAT flow) into the downstream leg's §6",
+    "settledness": "F18 predicate holds the downstream leg until the upstream deliverable is fully persisted",
+    "_note": "DESIGN order is edge-first (the NAT pool must be chosen before downstream can match it). This is NOT the apply order — see acceptance.applyOrderRecommended."
+  },
+  "logging": {
+    "profile": "central-siem",
+    "logAtEachHop": true,
+    "logDenies": true
+  },
+  "naming": {
+    "ruleTag": "PARTNER-HTTPS-2026",
+    "zoneMap": { "untrust": "internet", "dmz": "dmz", "inside": "internal" },
+    "natPoolTag": "PARTNER-SNAT-2026"
+  },
+  "consistency": {
+    "noAsymmetricHoles": "Every hop permits EXACTLY the flow for its correct source (edge: pre-NAT partner CIDR; dmz/core: the post-NAT pool) and denies anything broader; return traffic is the established/related session, never a separate broad inbound permit. Node C blocks the program if any leg widens the flow, matches the WRONG source stage (pre- vs post-NAT), or adds a return-path hole.",
+    "perDeviceSlice": {
+      "edge-fw": "untrust -> dmz permit for the flow (match pre-NAT partner CIDR) + source-NAT partner CIDR -> pool (tag PARTNER-SNAT-2026) + explicit deny + log. DELIVERABLE MUST publish the chosen pool (it is the chained input downstream needs).",
+      "dmz-sg": "aws_security_group.dmz_app ingress from the POST-NAT pool (chained from edge-fw) tcp/443; egress to 10.20.0.10/32 tcp/443; NO 0.0.0.0/0 and NO partner-CIDR ingress (that would be the pre-NAT source — wrong stage).",
+      "core-fw": "dmz -> inside ASA access-list line matching the POST-NAT pool -> app (+ explicit deny + log)."
+    }
+  },
+  "acceptance": {
+    "applyMode": "out-of-band, human-gated",
+    "applyOrderRecommended": ["core-fw", "dmz-sg", "edge-fw"],
+    "applyOrderVsDesignOrder": "DESIGN order is edge-first (NAT pool chosen first); APPLY order is core-first (innermost hop provisioned first so the outer hop is never opened before the inner hop is ready). These are DIFFERENT and both correct — a classic Approach-3 teaching point.",
+    "deliverable": "approved-but-unapplied change package per device"
+  }
+}

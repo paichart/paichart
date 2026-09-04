@@ -1,0 +1,566 @@
+[
+  {
+    "name": "search_security_events",
+    "description": "Search for security events in Chronicle SIEM using natural language.\n\n    Allows searching Chronicle event logs using natural language queries, which are\n    automatically translated into UDM queries for execution.\n\n    **Workflow Integration:**\n    - Ideal for deep investigation after an initial alert, case, or entity has been prioritized.\n    - Use it to retrieve detailed UDM event logs from Chronicle SIEM related to specific indicators\n      or activities, going beyond high-level summaries from other tools.\n    - Helps validate findings from other security platforms (SOAR, EDR, TI) by examining the\n      underlying log evidence.\n\n    **Use Cases:**\n    - Investigate specific activities or test hypotheses during incident analysis.\n    - Retrieve raw event logs related to specific indicators (IPs, domains, users, hosts)\n      or activities (e.g., logins, file modifications, network connections) within a\n      defined time window when granular detail is needed.\n\n    Examples of natural language queries for investigation:\n    - \"Show network connections involving IP 10.0.0.5 in the last 6 hours\"\n    - \"Find login events for user 'admin' yesterday\"\n    - \"List file modifications on host 'server1' today\"\n    - \"Search for DNS lookups to 'malicious.example.com' in the past 3 days\"\n\n    Note: When searching for email addresses, use only lowercase letters.\n\n    Args:\n        text (str): Natural language description of the events you want to find.\n        project_id (Optional[str]): Google Cloud project ID. Defaults to environment configuration.\n        customer_id (Optional[str]): Chronicle customer ID. Defaults to environment configuration.\n        hours_back (int): How many hours back from the current time to search. Used if start_time is not provided.\n        start_time (Optional[str]): Start time in ISO 8601 format (e.g. \"2023-01-01T00:00:00Z\"). Overrides hours_back.\n        end_time (Optional[str]): End time in ISO 8601 format. Defaults to current time if not provided.\n        max_events (int): Maximum number of event records to return. Defaults to 100.\n        region (Optional[str]): Chronicle region (e.g., \"us\", \"europe\"). Defaults to environment configuration.\n\n    Returns:\n        Dict[str, Any]: A dictionary containing:\n            - 'udm_query' (str | None): The translated UDM query used for the search, or None if translation failed.\n            - 'events' (Dict): A dictionary containing the search results:\n                - 'events' (List[Dict]): The list of UDM event records found.\n                - 'total_events' (int): The total number of events matching the query (may exceed `max_events`).\n                - 'error' (str | None): An error message if the search failed.\n\n    Next Steps (using MCP-enabled tools):\n        - Analyze the returned UDM event records for relevant details (e.g., specific commands executed, full connection details, file paths).\n        - Extract new indicators (IPs, domains, hashes, users) from the events.\n        - Use entity lookup tools (like `lookup_entity`) or threat intelligence tools\n          to enrich newly found indicators.\n        - Correlate findings with data from other security tools (e.g., EDR process details,\n          network flow data, cloud audit logs) via their respective MCP tools.\n        - Document findings in a relevant case management or ticketing system using an appropriate MCP tool.\n        - Use findings to inform response actions (e.g., blocking an IP, isolating a host) via SOAR or endpoint MCP tools.\n\n    **Troubleshooting & Iterative Searching:**\n\n    If your initial natural language search doesn't return the expected events, consider the following iterative steps:\n\n    1.  **Check the Translated Query:** Examine the `udm_query` field in the response. This shows how your natural language was translated into UDM. Does it accurately reflect your intent? Are the correct UDM fields being targeted?\n    2.  **Broaden the Search:**\n        *   **Remove Specific Event Types:** If you initially filtered by `metadata.event_type` (e.g., \"USER_LOGIN\"), try removing that constraint to search across all event types. Example: \"Find any events involving IP 1.2.3.4\" instead of \"Find login events involving IP 1.2.3.4\".\n        *   **Simplify the Query:** Reduce the complexity of your natural language query to focus on the core entity or activity.\n    3.  **Target Alternative UDM Fields:** Chronicle's UDM has many fields. If searching for an entity like a user or IP doesn't work with a simple query, the identifier might be in a less common field. Try specifying fields often used for:\n        *   **Users:** `principal.user.userid`, `target.user.userid`, `src.user.userid`, `network.email.from`, `network.email.to`, `about.user.userid`\n        *   **IPs:** `principal.ip`, `target.ip`, `src.ip`, `observer.ip`, `network.ip`, `about.ip`\n        *   **Hostnames:** `principal.hostname`, `target.hostname`, `src.hostname`, `about.hostname`\n        *   **URLs:** `target.url`, `about.url`\n        *   **Hashes:** `target.file.md5`, `target.file.sha1`, `target.file.sha256`, `principal.process.file.md5`, etc.\n        *   **Natural Language Example:** Instead of \"Events for user john.doe@example.com\", try \"Events where the target email address is john.doe@example.com\" or \"Events where the principal user ID is john.doe@example.com\".\n    4.  **Refine Time Window:** Ensure the `hours_back` parameter covers the expected timeframe of the events.\n    5.  **Consult UDM Schema:** If specific fields are known, referencing the Chronicle UDM schema can help formulate more precise natural language queries targeting those fields.\n\n    **Example Iteration:**\n\n    *   **Initial Query (Fails):** \"Find login events for user charlie.brown@cymbalgroup.com\"\n        *   *Returned `udm_query`: `metadata.event_type = \"USER_LOGIN\" user = \"charlie.brown@cymbalgroup.com\"`*\n        *   *Result: 0 events*\n    *   **Iteration 1 (Broaden):** \"Find any events where the user is 'charlie.brown@cymbalgroup.com'\"\n        *   *Returned `udm_query`: `email = \"charlie.brown@cymbalgroup.com\"`*\n        *   *Result: 6 events (Success!)* - This indicates the user identifier was primarily in an `email` field, not the generic `user` field, and removing the `USER_LOGIN` constraint helped.\n    ",
+    "inputSchema": {
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "project_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Id"
+        },
+        "customer_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Customer Id"
+        },
+        "hours_back": {
+          "default": 24,
+          "title": "Hours Back",
+          "type": "integer"
+        },
+        "start_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Time"
+        },
+        "end_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Time"
+        },
+        "max_events": {
+          "default": 100,
+          "title": "Max Events",
+          "type": "integer"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "search_security_eventsArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_security_alerts",
+    "description": "Get security alerts directly from Chronicle SIEM.\n\n    Retrieves a list of recent security alerts generated within Chronicle, based on\n    detection rules or other alert sources configured in the SIEM.\n\n    **Workflow Integration:**\n    - Use this for direct monitoring of SIEM alert activity, potentially identifying\n      issues before they are ingested or processed by other platforms (e.g., SOAR).\n    - Can be used as an initial step to get a sense of recent high-priority events\n      directly from the source SIEM.\n    - Contrast this with tools that list alerts associated with a specific case\n      in a case management or SOAR system.\n\n    **Use Cases:**\n    - Get a quick overview of recent, non-closed alerts generated by the SIEM.\n    - Monitor for specific high-severity alerts or rule triggers.\n    - Check for SIEM alerts that might not have corresponding cases yet in other systems.\n\n    Args:\n        project_id (Optional[str]): Google Cloud project ID. Defaults to environment configuration.\n        customer_id (Optional[str]): Chronicle customer ID. Defaults to environment configuration.\n        hours_back (int): How many hours to look back for alerts. Defaults to 24.\n        max_alerts (int): Maximum number of alerts to return. Defaults to 10.\n        status_filter (str): Query string to filter alerts by status (e.g., 'feedback_summary.status != \"CLOSED\"').\n                             Defaults to excluding closed alerts.\n        region (Optional[str]): Chronicle region (e.g., \"us\", \"europe\"). Defaults to environment configuration.\n\n    Returns:\n        str: A formatted string summarizing the retrieved security alerts, including rule name,\n             creation time, status, severity, and associated case ID (if available).\n             Returns 'No security alerts found...' if none match the criteria.\n\n    Next Steps (using MCP-enabled tools):\n        - Analyze the returned alerts for priority and relevance.\n        - For high-priority alerts, check if a corresponding case exists in your case management/SOAR system.\n        - If no Alerts are found, expand the filter for this tool by increasing the max_alerts incremently until you are confident there are no recent Alerts\n        - If no case exists, consider creating one or initiating investigation directly.\n        - Use entity lookup tools (like `lookup_entity`) on indicators found within the alert details.\n        - Use SIEM event search tools (like `search_security_events`) to find related raw logs.\n        - Correlate alert information with findings from other security tools (EDR, Cloud Posture, TI) via their MCP tools.\n    ",
+    "inputSchema": {
+      "properties": {
+        "project_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Id"
+        },
+        "customer_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Customer Id"
+        },
+        "hours_back": {
+          "default": 24,
+          "title": "Hours Back",
+          "type": "integer"
+        },
+        "max_alerts": {
+          "default": 10,
+          "title": "Max Alerts",
+          "type": "integer"
+        },
+        "status_filter": {
+          "default": "feedback_summary.status != \"CLOSED\"",
+          "title": "Status Filter",
+          "type": "string"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        }
+      },
+      "title": "get_security_alertsArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "lookup_entity",
+    "description": "Look up an entity (IP, domain, hash, user, etc.) in Chronicle SIEM for enrichment.\n\n    Provides a comprehensive summary of an entity's activity based on historical log data\n    within Chronicle over a specified time period. This tool queries Chronicle SIEM directly.\n    Chronicle automatically attempts to detect the entity type from the value provided.\n\n    **Workflow Integration:**\n    - Use this tool after identifying key entities (IPs, domains, users, hashes) from any source\n      (e.g., an alert, a SOAR case, threat intelligence report, cloud posture finding).\n    - Provides historical context and activity summary for an entity directly from SIEM logs.\n    - Complements information available in other security platforms (SOAR, EDR, Cloud Security)\n      by offering a log-centric perspective.\n\n    **Use Cases:**\n    - Quickly understand the context and prevalence of indicators (e.g., '192.168.1.1',\n      'evil.com', 'user@example.com', 'hashvalue') by examining SIEM log data.\n    - Reveal historical context, broader relationships, or activity patterns potentially\n      missed by other tools.\n    - Enrich entities identified in alerts, cases, or reports with SIEM-derived context.\n\n    **Output Summary:**\n    The summary includes information observed within the specified time window (`hours_back`):\n    - Primary entity details (type, first/last seen within the window).\n    - Related entities observed interacting with the primary entity in logs.\n    - Associated Chronicle alerts triggered involving the entity within the window.\n    - Timeline summary (event/alert counts over the specified period).\n    - Prevalence information (if available).\n\n    Args:\n        entity_value (str): Value to look up (e.g., IP address, domain name, file hash, username).\n        project_id (Optional[str]): Google Cloud project ID. Defaults to environment configuration.\n        customer_id (Optional[str]): Chronicle customer ID. Defaults to environment configuration.\n        hours_back (int): How many hours of historical data to consider for the summary. Defaults to 24.\n        region (Optional[str]): Chronicle region (e.g., \"us\", \"europe\"). Defaults to environment configuration.\n\n    Returns:\n        str: A formatted string summarizing the entity information found in Chronicle within the specified time window,\n             including first/last seen, related entities, and associated alerts.\n             Returns 'No information found...' if the entity is not found in the specified timeframe.\n\n    Example Usage:\n        lookup_entity(entity_value=\"198.51.100.10\", hours_back=72)\n\n    Next Steps (using MCP-enabled tools):\n        - Analyze the summary for suspicious patterns or relationships.\n        - If more detailed event logs are needed, use a tool to search SIEM events\n          (like `search_security_events`) targeting this entity's value.\n        - Correlate findings with data from other security tools (e.g., EDR IoAs, network alerts,\n          cloud posture findings, user risk scores) via their respective MCP tools.\n        - Document findings in a relevant case management or ticketing system using an appropriate MCP tool.\n    ",
+    "inputSchema": {
+      "properties": {
+        "entity_value": {
+          "title": "Entity Value",
+          "type": "string"
+        },
+        "project_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Id"
+        },
+        "customer_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Customer Id"
+        },
+        "hours_back": {
+          "default": 24,
+          "title": "Hours Back",
+          "type": "integer"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        }
+      },
+      "required": [
+        "entity_value"
+      ],
+      "title": "lookup_entityArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "list_security_rules",
+    "description": "List security detection rules configured in Chronicle SIEM, with support for pagination.\n\n    Retrieves the definitions of detection rules currently active or configured\n    within the Chronicle SIEM instance.\n\n\n\n    **Workflow Integration:**\n    - Useful for understanding the detection capabilities currently deployed in the SIEM.\n    - Can help identify the specific rule that generated a SIEM alert (obtained via SIEM alert tools\n      or from case management/SOAR system details).\n    - Provides context for rule tuning, development, or understanding alert logic.\n\n    **Use Cases:**\n    - Review the logic or scope of a specific detection rule identified from an alert.\n    - Audit the set of active detection rules within the SIEM.\n    - Understand which rules might be relevant to a particular threat scenario or TTP.\n\n    Args:\n        project_id (str): Google Cloud project ID (required).\n        customer_id (str): Chronicle customer ID (required).\n        region (str): Chronicle region (e.g., \"us\", \"europe\") (required).\n        page_size (int): Maximum number of rules to return. Defaults to 100. Max is 1000.\n        page_token (str | None): Page token for pagination.\n\n    Returns:\n        Dict[str, Any]: Raw response from the Chronicle API, typically containing a list\n                        of rule objects with their definitions and metadata. Returns an\n                        error structure if the API call fails.\n\n    Next Steps (using MCP-enabled tools):\n        - Analyze the rule definition (e.g., the YARA-L code) to understand its trigger conditions.\n        - Correlate rule details with specific alerts retrieved from the SIEM or case management system.\n        - Use insights for rule optimization, false positive analysis, or developing related detections.\n        - Document relevant rule information in associated cases using a case management tool.\n    ",
+    "inputSchema": {
+      "properties": {
+        "project_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Id"
+        },
+        "customer_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Customer Id"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        },
+        "page_size": {
+          "default": 100,
+          "title": "Page Size",
+          "type": "integer"
+        },
+        "page_token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page Token"
+        }
+      },
+      "title": "list_security_rulesArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_ioc_matches",
+    "description": "Get Indicators of Compromise (IoCs) matches from Chronicle SIEM.\n\n    Retrieves IoCs (e.g., malicious IPs, domains, hashes) from configured threat\n    intelligence feeds that have been observed matching events in Chronicle logs\n    within the specified time window.\n\n    **Workflow Integration:**\n    - Use this to proactively identify potential threats based on IoC matches within SIEM data,\n      potentially before specific detection rules trigger or cases are created in other systems.\n    - Can provide early warning signs or context during investigations initiated from alerts\n      or intelligence originating from any connected security tool (SIEM, EDR, TI platforms, etc.).\n    - Complements rule-based alerts by showing matches against known bad indicators from\n      threat intelligence feeds integrated with the SIEM.\n\n    **Use Cases:**\n    - Monitor for recent sightings of known malicious indicators within SIEM logs.\n    - Identify assets that may have interacted with known bad infrastructure or files, based on log evidence.\n    - Supplement investigations by checking if involved entities match known IoCs curated by threat intelligence sources.\n\n    Args:\n        project_id (Optional[str]): Google Cloud project ID. Defaults to environment configuration.\n        customer_id (Optional[str]): Chronicle customer ID. Defaults to environment configuration.\n        hours_back (int): How many hours back to look for IoC matches. Defaults to 24.\n        max_matches (int): Maximum number of IoC matches to return. Defaults to 20.\n        region (Optional[str]): Chronicle region (e.g., \"us\", \"europe\"). Defaults to environment configuration.\n\n    Returns:\n        str: A formatted string summarizing the IoC matches found, including the IoC type,\n             value, and the threat intelligence sources that identified it. Returns\n             'No IoC matches found...' if none are found in the time range.\n\n    Next Steps (using MCP-enabled tools):\n        - Investigate the assets or events associated with the matched IoCs.\n        - Use entity lookup tools to get broader context on the matched IoC value (IP, domain, hash).\n        - Use SIEM event search tools to find the specific events in logs that triggered the IoC match.\n        - Check if related cases exist in your case management/SOAR system or create one if the match indicates a significant threat.\n        - Correlate IoC match details with findings from other security tools (EDR, Network, Cloud) via their MCP tools.\n    ",
+    "inputSchema": {
+      "properties": {
+        "project_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Id"
+        },
+        "customer_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Customer Id"
+        },
+        "hours_back": {
+          "default": 24,
+          "title": "Hours Back",
+          "type": "integer"
+        },
+        "max_matches": {
+          "default": 20,
+          "title": "Max Matches",
+          "type": "integer"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        }
+      },
+      "title": "get_ioc_matchesArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_threat_intel",
+    "description": "Get answers to security questions using Chronicle's integrated Gemini model.\n\n    Leverages Gemini to answer general security domain questions or provide specific\n    threat intelligence summaries about threat actors, IOCs, CVEs, TTPs, and other\n    security topics based on Google's threat intelligence.\n\n    **Workflow Integration:**\n    - Use this tool anytime during an investigation to quickly get context or summaries\n      on specific threats, vulnerabilities, TTPs, or security concepts encountered\n      across any connected security tool (SIEM, SOAR, EDR, TI Platforms, etc.).\n    - Can provide valuable background information before diving deeper with more specific\n      investigation tools (e.g., entity lookup, event search, file analysis).\n    - Useful for understanding the potential impact or nature of a CVE identified by\n      any vulnerability management or security posture tool.\n\n    **Use Cases:**\n    - \"Summarize threat actor APT41.\"\n    - \"What is CVE-2024-23897?\"\n    - \"Explain the MITRE ATT&CK technique T1059.001.\"\n    - \"What are common persistence mechanisms on Linux?\"\n    - \"Tell me about the LockBit ransomware.\"\n\n    Args:\n        query (str): The security or threat intelligence question to ask Gemini.\n        project_id (Optional[str]): Google Cloud project ID. Defaults to environment configuration.\n        customer_id (Optional[str]): Chronicle customer ID. Defaults to environment configuration.\n        region (Optional[str]): Chronicle region (e.g., \"us\", \"europe\"). Defaults to environment configuration.\n\n    Returns:\n        str: A formatted answer generated by the Gemini model based on the query.\n             Returns an error message if the query fails.\n\n    Next Steps (using MCP-enabled tools):\n        - Use the provided summary or explanation to inform further investigation steps across relevant tools.\n        - If the query was about an indicator (IOC, CVE), consider using entity lookup or SIEM event search tools\n          to check for its presence or activity within your environment logs.\n        - Correlate the threat intelligence with specific alerts or findings from other security tools (EDR, Network, Cloud).\n        - Document relevant findings in the appropriate case management or ticketing system using an MCP tool.\n    ",
+    "inputSchema": {
+      "properties": {
+        "query": {
+          "title": "Query",
+          "type": "string"
+        },
+        "project_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Id"
+        },
+        "customer_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Customer Id"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "get_threat_intelArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "search_rule_alerts",
+    "description": "Search for alerts generated by detection rules across time range.\n\n    Retrieves alerts from all detection rules within specified time window.\n    Returns nested structure with alerts grouped by rule, including event\n    samples and metadata. Essential for alert monitoring and analysis.\n\n    **Workflow Integration:**\n    - Monitor alert activity across all detection rules.\n    - Identify high-noise rules requiring tuning.\n    - Track alert volume trends over time.\n    - Bulk export alerts for analysis or reporting.\n    - Correlate alerts with external security events.\n\n    **Use Cases:**\n    - \"Show me all rule alerts from the past 24 hours\"\n    - \"Which rules generated the most alerts this week?\"\n    - \"Export all alerts for compliance reporting\"\n    - \"Find all alerts during incident timeframe\"\n    - \"Identify rules with high false positive rates\"\n\n    **Response Structure:**\n    - Nested structure: ruleAlerts -> alerts\n    - Each ruleAlert contains rule metadata and alert list\n    - Alerts include detection time, event samples, metadata\n    - tooManyAlerts flag indicates result truncation\n\n    Args:\n        start_time (str): Start of time range (ISO format).\n                         Example: \"2024-01-01T00:00:00Z\"\n        end_time (str): End of time range (ISO format).\n                       Example: \"2024-01-02T00:00:00Z\"\n        max_alerts (Optional[int]): Maximum alerts to return. Default 10.\n        project_id (Optional[str]): Google Cloud project ID.\n        customer_id (Optional[str]): Chronicle customer ID.\n        region (Optional[str]): Chronicle region (e.g., \"us\", \"europe\").\n\n    Returns:\n        Dict[str, Any]: Dictionary containing:\n                       - ruleAlerts: List of rule alert groups\n                       - tooManyAlerts: Boolean truncation flag\n                       Returns error dict if API call fails.\n\n    Example Usage:\n        alerts = search_rule_alerts(\n            start_time=\"2024-01-01T00:00:00Z\",\n            end_time=\"2024-01-02T00:00:00Z\",\n            max_alerts=50,\n            project_id=\"my-project\",\n            customer_id=\"my-customer\",\n            region=\"us\"\n        )\n\n        # Process nested structure\n        for rule_alert in alerts.get(\"ruleAlerts\", []):\n            rule_name = rule_alert[\"ruleMetadata\"][\"properties\"][\"name\"]\n            alert_list = rule_alert[\"alerts\"]\n            print(f\"Rule: {rule_name}, Alerts: {len(alert_list)}\")\n\n    Next Steps (using MCP-enabled tools):\n        - Extract rule IDs and use `get_detection_rule` for details.\n        - Analyze high-volume rules for tuning opportunities.\n        - Use `get_rule_detections` for detailed detection history.\n        - Create exclusions with `create_rule_exclusion` for FPs.\n        - Correlate alerts with other security tool findings.\n        - Export results for reporting or SIEM integration.\n    ",
+    "inputSchema": {
+      "properties": {
+        "start_time": {
+          "title": "Start Time",
+          "type": "string"
+        },
+        "end_time": {
+          "title": "End Time",
+          "type": "string"
+        },
+        "max_alerts": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 10,
+          "title": "Max Alerts"
+        },
+        "project_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Id"
+        },
+        "customer_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Customer Id"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        }
+      },
+      "required": [
+        "start_time",
+        "end_time"
+      ],
+      "title": "search_rule_alertsArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "list_investigations",
+    "description": "List all investigations in Chronicle instance.\n\n    Retrieves a paginated list of all investigations with their status,\n    verdict, and confidence information. Supports pagination for large\n    result sets.\n\n    **Workflow Integration:**\n    - Use to get an overview of all active investigations\n    - Essential for monitoring investigation status across the environment\n    - Can be used to identify investigations that need attention\n    - Helps track investigation progress and outcomes\n\n    **Use Cases:**\n    - \"List all active investigations from the past week\"\n    - \"Show me all investigations with high confidence verdicts\"\n    - \"What investigations are currently in progress?\"\n    - \"Get an overview of recent investigation activity\"\n\n    Args:\n        page_size (int): Number of investigations to return per page.\n            Defaults to 50.\n        page_token (Optional[str]): Token for pagination. Use the\n            next_page_token from previous response to get next page.\n        project_id (Optional[str]): Google Cloud project ID. Defaults to\n            environment configuration.\n        customer_id (Optional[str]): Chronicle customer ID. Defaults to\n            environment configuration.\n        region (Optional[str]): Chronicle region (e.g., \"us\", \"europe\").\n            Defaults to environment configuration.\n\n    Returns:\n        Dict[str, Any]: Dictionary containing list of investigations with\n            their display names, status, verdict, confidence, and pagination\n            token. Returns error message if retrieval fails.\n\n    Next Steps (using MCP-enabled tools):\n        - Use `get_investigation` to get detailed info for specific\n          investigations\n        - Use `fetch_associated_investigations` to find investigations\n          linked to alerts or cases\n        - For investigations needing action, use alert or case management\n          tools\n        - Use entity lookup tools on indicators found in investigations\n    ",
+    "inputSchema": {
+      "properties": {
+        "page_size": {
+          "default": 50,
+          "title": "Page Size",
+          "type": "integer"
+        },
+        "page_token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page Token"
+        },
+        "project_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Id"
+        },
+        "customer_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Customer Id"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        }
+      },
+      "title": "list_investigationsArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_investigation",
+    "description": "Retrieve specific investigation by ID.\n\n    Gets detailed information for a specific investigation including status,\n    verdict, confidence, and associated metadata.\n\n    **Workflow Integration:**\n    - Use after listing investigations to get detailed information\n    - Essential for reviewing investigation findings and recommendations\n    - Can be used to check investigation progress and status\n    - Helps analysts understand automated analysis results\n\n    **Use Cases:**\n    - \"Get details for investigation inv_123\"\n    - \"What's the verdict for this investigation?\"\n    - \"Show me the confidence score for this investigation\"\n    - \"Retrieve investigation findings and recommendations\"\n\n    Args:\n        investigation_id (str): The unique identifier of the investigation\n            to retrieve.\n        project_id (Optional[str]): Google Cloud project ID. Defaults to\n            environment configuration.\n        customer_id (Optional[str]): Chronicle customer ID. Defaults to\n            environment configuration.\n        region (Optional[str]): Chronicle region (e.g., \"us\", \"europe\").\n            Defaults to environment configuration.\n\n    Returns:\n        Dict[str, Any]: Dictionary containing detailed investigation\n            information including display name, status, verdict, confidence,\n            and timestamps. Returns error message if retrieval fails.\n\n    Next Steps (using MCP-enabled tools):\n        - Based on verdict, use alert or case management tools to update\n          status\n        - Use `fetch_associated_investigations` to find related\n          investigations\n        - For high-confidence verdicts, consider creating cases or alerts\n        - Use entity lookup tools on indicators found in investigation\n    ",
+    "inputSchema": {
+      "properties": {
+        "investigation_id": {
+          "title": "Investigation Id",
+          "type": "string"
+        },
+        "project_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Id"
+        },
+        "customer_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Customer Id"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        }
+      },
+      "required": [
+        "investigation_id"
+      ],
+      "title": "get_investigationArguments",
+      "type": "object"
+    }
+  }
+]

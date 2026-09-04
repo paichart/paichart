@@ -1,0 +1,4 @@
+---
+data:
+  lab: igp-migration-2node
+  note: "Disposable 2-node OSPF->IS-IS migration rig — see ./README.md"

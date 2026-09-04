@@ -1,0 +1,154 @@
+# Public-export rules — ORDERED, first match wins. `+ ` includes, `- ` excludes. Globs: `*` (no slash), `**` (any).
+# Applied to `git ls-files` only, so untracked files (.env, keys, build output) can never cross by construction.
+# Decisions: cline_docs/reviews/open-source-readiness-2026-09-03/{PLAN,SCRIPT-TRIAGE,SEED-INVENTORY,CLAUDE-DIR-SCAN}.md
+# Anything not matched by a `+` is EXCLUDED (final rule). Edit the decision docs first, then this file.
+
+# ── Rule 1 (Steve): server management NEVER exports ─────────────────────────────
+- cline_docs/**
+- "cline_docs/**
+- infra/**
+- ops/**
+- temp-scripts/**
+- userInstructions/**
+- scripts/archive/**
+- scripts/deploy/**
+- scripts/mcp-tools-output/**
+- .github/workflows/production-deploy.yml
+- .github/workflows/production-rollback.yml
+- .github/workflows/docker-services-deploy.yml
+- .github/workflows/deployment-status.yml
+- .github/workflows/uptime.yml
+- .github/workflows/test-deployment.yml
+- .github/workflows/build-parity-dark-run.yml
+- .env.production.template
+- prisma/generated/**
+- **/*.backup.*
+- .claude/knowledge/branding/**
+- ecosystem.config.js.bak
+- docker-compose.yml
+- docker-compose.dev.yml
+- nginx-oauth-fix.conf
+- execute-node-upgrade.sh
+
+# ── scripts/: OPS + ARCHIVE classes (SCRIPT-TRIAGE.md). Tests that run NOWHERE are dropped by the
+# exporter's dynamic rule (scripts/test-* must be referenced by package.json, a workflow, or the hook).
+- scripts/WORKFLOW-CLEANUP-README.md
+- scripts/cleanup-demo-users.ts
+- scripts/create-production-indices.sh
+- scripts/dead-mans-switch.sh
+- scripts/docker-rollback.sh
+- scripts/docker-services.sh
+- scripts/enterprise-deploy.sh
+- scripts/enterprise-health-monitor.sh
+- scripts/mint-monitor-token.ts
+- scripts/monitor-email-delivery.sh
+- scripts/monitor-jwks-health.sh
+- scripts/monitor-oauth-logs.sh
+- scripts/monitor-trust-denials.sh
+- scripts/pm2-zero-downtime-reload.sh
+- scripts/regenerate-prisma-production.sh
+- scripts/security-validation-monitoring-enhancement.sh
+- scripts/send-health-email.js
+- scripts/setup-claude-health-agent.sh
+- scripts/analyze-pov-ownership.js
+- scripts/backfill-task-completed-at.ts
+- scripts/cleanup-orphan-teams.sh
+- scripts/cleanup-orphan-teams.sql
+- scripts/debug-test15.ts
+- scripts/fix-service-categories.ts
+- scripts/investigate-pov-access.ts
+- scripts/migrate-mcp-tool-names.ts
+- scripts/migrate-service-field-locations.sql
+- scripts/migrate-task-types.sql
+- scripts/repair-task-completed-at-drift.ts
+
+# ── services: pattern + ONE reference service (decision 1) ───────────────────────
++ services/weather-service/**
+- services/**
+
+# ── .claude/: ship ~2/3 (CLAUDE-DIR-SCAN.md); runbooks + incident diagnostics stay ──
+- .claude/knowledge/smoke-tests/**
+- .claude/knowledge/mcp-servers/**
+- .claude/knowledge/domain/operations/**
+- .claude/knowledge/domain/oauth/*diagnostic*
+- .claude/knowledge/domain/oauth/*quick-ref*
+- .claude/knowledge/domain/oauth/nginx-oauth-analysis*
+# domain/oauth: design docs ship; dated status/incident reports do not (design-vs-what-happened test)
++ .claude/knowledge/domain/oauth/oauth-architecture-clarification.md
++ .claude/knowledge/domain/oauth/oauth-audience-architecture.md
++ .claude/knowledge/domain/oauth/oauth-implementation-summary.md
++ .claude/knowledge/domain/oauth/oauth-multi-client-library.md
++ .claude/knowledge/domain/oauth/oauth-multi-provider-library.md
++ .claude/knowledge/domain/oauth/oauth-timeout-settings-explained.md
+- .claude/knowledge/domain/oauth/**
+- .claude/knowledge/protocols/forensic-security-investigation-protocol.md
+- .claude/knowledge/protocols/system-health-stress-test-protocol.md
+- .claude/knowledge/prompts/phase-3-jwt-deployment-readiness.md
++ .claude/knowledge/TODO1-mcp-spec-feature-gap-analysis.md
+- .claude/knowledge/*.md
+- .claude/claude_desktop_production_infrastructure.json
+- .claude/settings*.json
++ .claude/KNOWLEDGE-BASE-GUIDELINES.md
++ .claude/agents/**
++ .claude/knowledge/**
+- .claude/**
+
+# ── .github: the four fork-safe workflows + PR template (Phase 4) ─────────────────
++ .github/workflows/validation-tests.yml
++ .github/workflows/validation-reusable.yml
++ .github/workflows/workflow-lint.yml
++ .github/workflows/secret-scan.yml
++ .github/PULL_REQUEST_TEMPLATE.md
+- .github/**
+
+# ── docs: stranger-facing only ────────────────────────────────────────────────────
++ docs/RUNNING.md
++ docs/OAUTH-SETUP.md
++ docs/VERIFYING-SELF-HOST.md
+- docs/**
+
+# ── the application ───────────────────────────────────────────────────────────────
++ app/**
++ components/**
++ lib/**
++ middleware/**
++ middleware.ts
++ prisma/**
++ public/**
++ types/**
++ test/**
++ tests/**
++ config/**
++ scripts/**
++ server.ts
++ server.js
++ dev-server.js
++ mcp-server-v5.js
++ mcp-server-http-clean.js
++ ecosystem.config.js
++ package.json
++ package-lock.json
++ tsconfig.json
++ tsconfig.server.json
++ next.config.js
++ tailwind.config.ts
++ postcss.config.js
++ postcss.config.cjs
++ .eslintrc.json
++ .editorconfig
++ .gitattributes
++ .gitignore
++ .gitleaks.toml
++ .githooks/**
++ .env.example
++ LICENSE
+# README.md is OWNED by the public repo (the front-door narrative) — never exported; see --into.
+- README.md
+# CLAUDE.public.md is exported AS CLAUDE.md (the private CLAUDE.md carries prod procedures and never crosses).
++ CLAUDE.public.md
++ CONTRIBUTING.md
++ SECURITY.md
+
+# CLAUDE.md: a trimmed public variant is a follow-up (the private one carries prod procedures).
+- CLAUDE.md
+- **
