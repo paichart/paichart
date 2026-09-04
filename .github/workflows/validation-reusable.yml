@@ -24,10 +24,17 @@ jobs:
       # the old ssh-heredoc never was. -S error keeps byte-parity with the
       # heredoc body (one pre-existing SC2010 warning is deliberately untouched,
       # R2/R3 — no cleanup in the extraction).
-      - name: Deploy script syntax + shellcheck
+      # Fork-safe (2026-09-05): the deploy script is server management and never exports (open-source
+      # rule 1), so on the public repo this step must be a no-op, not a 127. Its FIRST public CI run
+      # failed here before the suite even started.
+      - name: Deploy script syntax + shellcheck (private origin only — the script does not export)
         run: |
-          bash -n scripts/deploy/blue-green-deploy.sh
-          shellcheck -S error scripts/deploy/blue-green-deploy.sh
+          if [ -f scripts/deploy/blue-green-deploy.sh ]; then
+            bash -n scripts/deploy/blue-green-deploy.sh
+            shellcheck -S error scripts/deploy/blue-green-deploy.sh
+          else
+            echo "scripts/deploy/blue-green-deploy.sh not present (public repo) — skipping"
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
@@ -37,6 +44,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # The private repo tracks prisma/generated/; the public export deliberately does not, so the
+      # client must be generated here. Idempotent on both. (No DB connection is made by generate.)
+      - name: Generate Prisma client
+        run: npx prisma generate
 
       - name: Run form field pattern tests
         run: npm run test:form-patterns
