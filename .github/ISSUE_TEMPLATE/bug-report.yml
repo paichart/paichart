@@ -1,0 +1,39 @@
+name: Bug report
+description: Something behaves wrongly in the web app, the MCP hub, or a pipeline run
+title: "[bug] "
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Include the MCP client (Claude Desktop, ChatGPT, GUI…) and the tool/action if relevant
+      placeholder: |
+        1.
+        2.
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options: [Self-hosted install, paichart.app (hosted), Both / not sure]
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit (self-host) or date/time UTC (hosted)
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines (redacted)
+      render: shell

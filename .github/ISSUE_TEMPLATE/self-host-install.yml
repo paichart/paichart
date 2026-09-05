@@ -1,0 +1,54 @@
+name: Self-host install problem
+description: Something in docs/RUNNING.md or docs/VERIFYING-SELF-HOST.md did not work on your machine
+title: "[self-host] "
+labels: [self-host]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If a documented step fails, that is a bug in the docs or the code — thank you for reporting it.
+        Please **do not** paste your `.env`, tokens, or the generated admin password.
+  - type: input
+    id: step
+    attributes:
+      label: Which step failed?
+      description: The command or numbered step from RUNNING.md / VERIFYING-SELF-HOST.md
+      placeholder: "RUNNING.md → `npm run db:seed`"
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Exact output
+      description: The command's output, trimmed to the failing part (redact hostnames/keys)
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: base
+    attributes:
+      label: APP_BASE_URL value (scheme + host only)
+      placeholder: "http://localhost:3000"
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Node / PostgreSQL / OS
+      placeholder: "Node 20.18, PostgreSQL 16, Ubuntu 24.04"
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit you are on
+      description: "`git rev-parse --short HEAD`"
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before filing
+      options:
+        - label: I ran `npm run test:public-base-url` and it passed (or I pasted its failure above)
+        - label: Both servers were running (web :3000 and MCP :8080) when the failing step needed them
