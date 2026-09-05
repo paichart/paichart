@@ -177,6 +177,19 @@ async function run() {
     store.destroy();
   });
 
+
+// Poll until `cond()` holds (deadline 3 s). The TTL tests used a fixed 40 ms sleep against a 10 ms TTL +
+// 5 ms interval — correct in isolation, flaky under CI load when timers slip (first public CI run,
+// 2026-09-05). Polling asserts the same property without betting on scheduler latency.
+async function waitUntil(cond: () => boolean, deadlineMs = 3000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < deadlineMs) {
+    if (cond()) return true;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  return cond();
+}
+
   // 5. TTL cleanup with fast interval — covers all 3 time-based stores
   await test('TTL cleanup expires stale sessions', async () => {
     const store = new SessionStore({
@@ -188,7 +201,7 @@ async function run() {
     store.setSession('s-stale', transportFixture(), contextFixture());
     assertEqual(store.getSessionCount(), 1, 'session registered');
     // Wait for TTL + interval to fire at least once
-    await new Promise((r) => setTimeout(r, 40));
+    await waitUntil(() => store.getSessionCount() === 0);
     assertEqual(store.getSessionCount(), 0, 'stale session cleaned by TTL interval');
     store.destroy();
   });
@@ -207,7 +220,7 @@ async function run() {
     // Fresh entry: createdAt now
     store.setOAuthRequest('state-fresh', oauthRequestFixture({ createdAt: Date.now() }));
     assertEqual(store.getOAuthRequestCount(), 2, 'both entries registered');
-    await new Promise((r) => setTimeout(r, 40));
+    await waitUntil(() => store.getOAuthRequestCount() === 0);
     assert(store.getOAuthRequest('state-stale') === undefined, 'stale OAuth request evicted');
     // Note: state-fresh's createdAt is also now older than 10ms after the wait — also evicted.
     // The key test: stale ones eviction is enforced by SessionStore, not caller setTimeouts.
@@ -227,7 +240,7 @@ async function run() {
     store.setAuthCode('pac_stale', authCodeFixture({ timestamp: Date.now() - 1000 }));
     store.setAuthCode('pac_fresh', authCodeFixture({ timestamp: Date.now() }));
     assertEqual(store.getAuthCodeCount(), 2, 'both auth codes registered');
-    await new Promise((r) => setTimeout(r, 40));
+    await waitUntil(() => store.getAuthCodeCount() === 0);
     assert(store.exchangeAuthCode('pac_stale') === null, 'stale auth code evicted');
     assertEqual(store.getAuthCodeCount(), 0, 'all auth codes past TTL evicted by internal loop');
     store.destroy();

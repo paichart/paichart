@@ -206,7 +206,23 @@ test(`Pattern: inlined ensureObject in service packages (floor=${MIN_INLINED_SER
   // Services under services/* are published MCP servers that can't share
   // lib/utils — each inlines its own defense-in-depth copy.
   const count = countInlinedEnsureObject('services');
-  console.log(`   (found ${count} service packages with inlined ensureObject)`);
+  // Fork-safe (2026-09-05): the public export ships ONE reference service (weather), so a fixed
+  // headcount floor asserts the private repo's inventory, not the property. When fewer service
+  // packages are present than the floor, assert the PROPERTY instead — every package that is
+  // there inlines the guard — and skip the private floors/baseline. (First public CI run failed here.)
+  const servicesDir = path.resolve(__dirname, '..', 'services');   // same base as countInlinedEnsureObject
+  const present = fs.existsSync(servicesDir)
+    ? fs.readdirSync(servicesDir).filter(n => fs.statSync(path.join(servicesDir, n)).isDirectory()).length  // statSync follows symlinks
+    : 0;
+  console.log(`   (found ${count} service packages with inlined ensureObject; ${present} service packages present)`);
+  if (present < MIN_INLINED_SERVICES) {
+    if (count !== present) {
+      throw new Error(`PROPERTY: ${count} of ${present} present service packages inline ensureObject — every published service package must`);
+    }
+    console.log(`   ↷ reduced service set (${present} < ${MIN_INLINED_SERVICES}) — property holds; private floor/baseline not applicable`);
+    layer1Passed++;
+    return;
+  }
   if (count < MIN_INLINED_SERVICES) {
     throw new Error(`CATASTROPHIC: only ${count} services with inlined ensureObject (absolute floor is ${MIN_INLINED_SERVICES})`);
   }
