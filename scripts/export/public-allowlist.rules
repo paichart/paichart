@@ -91,6 +91,25 @@
 - .claude/knowledge/*.md
 - .claude/claude_desktop_production_infrastructure.json
 - .claude/settings*.json
+# Domain pipeline knowledge stays private (Steve, 2026-09-06): the worked domains — firewall examples,
+# network provisioning, terraform-iac, kubernetes-gitops — are the operator's own material. The generic
+# harness guides at pipelines/*.md still ship.
+- .claude/knowledge/pipelines/firewall-examples/**
+- .claude/knowledge/pipelines/kubernetes-gitops/**
+- .claude/knowledge/pipelines/terraform-iac/**
+- .claude/knowledge/pipelines/network-provisioning/**
+# Harness domain: unpublished writing, run evidence, and business outreach stay private (Steve, 2026-09-06)
+- .claude/knowledge/domain/harness/WHITEPAPER-*
+- .claude/knowledge/domain/harness/archive/**
+- .claude/knowledge/domain/harness/ARXIV-SUBMISSION-CHECKLIST.md
+- .claude/knowledge/domain/harness/FIGURE-LIST.md
+- .claude/knowledge/domain/harness/*evidence*
+- .claude/knowledge/domain/harness/*WAR-STORIES*
+- .claude/knowledge/domain/harness/harvest-truncation-safety.md
+- .claude/knowledge/domain/harness/post-run7-empirical-findings.md
+- .claude/knowledge/domain/harness/EMAIL-*
+- .claude/knowledge/domain/harness/GUIDE-OUTREACH-RESEARCH.md
+- .claude/knowledge/domain/harness/MARKET-LANDSCAPE-*
 + .claude/KNOWLEDGE-BASE-GUIDELINES.md
 + .claude/agents/**
 + .claude/knowledge/**
