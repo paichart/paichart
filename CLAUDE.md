@@ -77,7 +77,6 @@ Example requests:
 - **Discovery Prompts**: `/.claude/knowledge/discoveries/` - Systematic investigation templates (40+)
 - **Implementation Patterns**: `/.claude/knowledge/patterns/` - Production-tested patterns (94%+ confidence)
 - **Workflow Protocols**: `/.claude/knowledge/protocols/` - Specialist review, discovery-first workflow
-- **Decision Frameworks**: `/.claude/knowledge/frameworks/` - Decision matrices, debugging methodologies
 - **Domain Knowledge**: `/.claude/knowledge/domain/` - Deep expertise (OAuth, testing, etc.)
 - **Domain Libraries**: `/.claude/knowledge/domain/<x>/<name>-library.md` - Depth evicted from specialists per Protocol 12 (25 libraries; greppable on demand, never auto-loaded; the agent file carries the pointer)
 - **Operational Guides**: `/.claude/knowledge/guides/` - Step-by-step procedures for managing system data and configuration
@@ -466,7 +465,6 @@ I need to work on [YOUR TASK]. Please use the discovery-scout sub-agent to run r
 **Purpose**: Decision framework for bumping `@modelcontextprotocol/sdk`. Coordinates spec-delta review, transport-hook detection, SessionStore API audit, and the required smoke tests.
 
 **Protocol**: `/.claude/knowledge/protocols/mcp-sdk-upgrade-protocol.md`
-**Backlog**: `/.claude/knowledge/TODO1-mcp-spec-feature-gap-analysis.md` (feature gap table)
 
 **When to Use**: A PR bumps the `@modelcontextprotocol/sdk` version, a new MCP spec is announced, or a "Tracked Item" trigger condition fires.
 

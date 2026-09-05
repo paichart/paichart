@@ -87,7 +87,12 @@
 - .claude/knowledge/protocols/forensic-security-investigation-protocol.md
 - .claude/knowledge/protocols/system-health-stress-test-protocol.md
 - .claude/knowledge/prompts/phase-3-jwt-deployment-readiness.md
-+ .claude/knowledge/TODO1-mcp-spec-feature-gap-analysis.md
+# Steve, 2026-09-06: frameworks, prompt sources, templates and any TODO-* note stay private
+- .claude/knowledge/frameworks/**
+- .claude/knowledge/prompts/**
+- .claude/knowledge/templates/**
+- .claude/templates/**
+- .claude/knowledge/**/TODO*
 - .claude/knowledge/*.md
 - .claude/claude_desktop_production_infrastructure.json
 - .claude/settings*.json
