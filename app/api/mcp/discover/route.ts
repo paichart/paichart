@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createRateLimiter } from '@/lib/middleware/rate-limit';
 import { mcpLogger } from '@/lib/logger';
+import { PUBLIC_BASE_URL } from '@/lib/auth/public-base-url';
 
 /**
  * GET /api/mcp/discover - Public MCP Hub service discovery endpoint
@@ -123,14 +124,14 @@ export async function GET(request: NextRequest) {
           version: '1.0.0',
           description:
             'AI-native service orchestration with per-user authentication, capability-based discovery, and multi-service workflow chaining',
-          url: 'https://paichart.app',
+          url: PUBLIC_BASE_URL,
         },
         services: publicServices,
         totalServices: publicServices.length,
         totalTools,
         authentication: {
           providers: ['github', 'google', 'microsoft'],
-          jwksEndpoint: 'https://paichart.app/api/auth/jwks',
+          jwksEndpoint: `${PUBLIC_BASE_URL}/api/auth/jwks`,
           protocol: 'OAuth 2.0 / Bearer JWT (RS256)',
         },
         capabilities: {
@@ -141,10 +142,10 @@ export async function GET(request: NextRequest) {
           trustLevels: ['INTERNAL', 'TRUSTED', 'OWNER', 'TEAM_MEMBER', 'SCOPED', 'ANONYMOUS'],
         },
         access: {
-          mcp: 'https://paichart.app/mcp',
-          llmsTxt: 'https://paichart.app/llms.txt',
-          mcpServerCard: 'https://paichart.app/.well-known/mcp.json',
-          agentCard: 'https://paichart.app/.well-known/agent-card.json',
+          mcp: `${PUBLIC_BASE_URL}/mcp`,
+          llmsTxt: `${PUBLIC_BASE_URL}/llms.txt`,
+          mcpServerCard: `${PUBLIC_BASE_URL}/.well-known/mcp.json`,
+          agentCard: `${PUBLIC_BASE_URL}/.well-known/agent-card.json`,
         },
         _filters: {
           category: category || null,

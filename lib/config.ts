@@ -1,3 +1,5 @@
+import { PUBLIC_BASE_URL } from '@/lib/auth/public-base-url';
+
 /**
  * Application configuration
  */
@@ -12,7 +14,7 @@ export const config = {
     name: 'PoV Manager' as const,
     version: '1.0.0' as const,
     description: 'Project management tool for Proof of Value trials' as const,
-    url: process.env.NEXT_PUBLIC_APP_URL || (process.env.NODE_ENV === 'production' ? 'https://paichart.app' : 'http://localhost:3000'),
+    url: process.env.NEXT_PUBLIC_APP_URL || PUBLIC_BASE_URL,  // D4-B: one base-URL derivation; NEXT_PUBLIC_APP_URL only for client-inlined overrides
   },
 
   server: {

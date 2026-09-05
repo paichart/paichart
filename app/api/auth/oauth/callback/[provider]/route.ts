@@ -19,6 +19,7 @@ import { hashRefreshToken } from '@/lib/crypto/hashing';
 import { UserRole } from '@/lib/types/auth';
 import { authLogger } from '@/lib/logger';
 import { trackActivity } from '@/lib/auth/audit';
+import { PUBLIC_BASE_URL } from '@/lib/auth/public-base-url';
 
 export async function GET(
   request: NextRequest,
@@ -32,7 +33,7 @@ export async function GET(
     const error = searchParams.get('error');
 
     // Use APP_BASE_URL for production redirects
-    const baseUrl = process.env.APP_BASE_URL || 'https://paichart.app';
+    const baseUrl = PUBLIC_BASE_URL;
 
     // Handle OAuth errors
     if (error) {
@@ -181,7 +182,7 @@ export async function GET(
   } catch (error) {
     authLogger.error({ provider: params.provider, err: error }, 'oauth callback failed');
 
-    const baseUrl = process.env.APP_BASE_URL || 'https://paichart.app';
+    const baseUrl = PUBLIC_BASE_URL;
     const errorRedirect = new URL('/auth/oauth/error', baseUrl);
     errorRedirect.searchParams.set('error', 'callback_failed');
     errorRedirect.searchParams.set('details', 'Authentication failed. Please try again.');

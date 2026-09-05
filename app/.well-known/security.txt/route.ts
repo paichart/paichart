@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { PUBLIC_BASE_URL } from '@/lib/auth/public-base-url';
 
 /**
  * GET /.well-known/security.txt  (RFC 9116)
@@ -12,7 +13,7 @@ export function GET() {
     'Contact: mailto:security@paichart.com',
     'Expires: 2027-05-27T00:00:00.000Z',
     'Preferred-Languages: en',
-    'Canonical: https://paichart.app/.well-known/security.txt',
+    `Canonical: ${PUBLIC_BASE_URL}/.well-known/security.txt`,
     '',
   ].join('\n');
 

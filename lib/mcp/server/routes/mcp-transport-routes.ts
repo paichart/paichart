@@ -46,6 +46,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { isProtectedMethod, MCP_PUBLIC_METHODS } from '../../../auth/mcp-method-classifier';
+import { PUBLIC_BASE_URL } from '../../../auth/public-base-url';
 
 import mcpLogger from '../mcp-logger';
 const { authLogger } = mcpLogger as { authLogger: { error: (...a: unknown[]) => void; info: (...a: unknown[]) => void; warn: (...a: unknown[]) => void; debug: (...a: unknown[]) => void; fatal: (...a: unknown[]) => void } };
@@ -258,7 +259,7 @@ function registerR11Post(ctx: RouteContext, authMiddleware: RequestHandler): voi
         }
 
         // RFC 6750: Add WWW-Authenticate header to indicate OAuth support available
-        res.setHeader('WWW-Authenticate', 'Bearer realm="paichart.app", charset="UTF-8"');
+        res.setHeader('WWW-Authenticate', `Bearer realm="${new URL(PUBLIC_BASE_URL).hostname}", charset="UTF-8"`);
 
         // Send regular JSON response for non-initialization requests
         if (response) {

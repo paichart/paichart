@@ -21,6 +21,7 @@
  */
 
 import type { Logger } from 'pino';
+import { PUBLIC_BASE_URL } from '../public-base-url';
 
 /** Generic transport-bag stored per MCP session. See @modelcontextprotocol/sdk/server/streamableHttp. */
 export type TransportData = {
@@ -191,6 +192,7 @@ const ALLOWED_OAUTH_REDIRECT_DOMAINS = Object.freeze([
   'glama.ai',
   'paichart.app',
   'paichart.com',
+  new URL(PUBLIC_BASE_URL).hostname,   // D4-B: the operator's own host (security-neutral — it is their host)
 ] as const);
 
 export class SessionStore {

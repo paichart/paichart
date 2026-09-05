@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getClientIP } from '@/lib/utils/client-ip';
+import { PUBLIC_BASE_URL } from '../lib/auth/public-base-url';
 
 // Simple in-memory store for request counts
 // In production, you'd want to use Redis or similar
@@ -134,7 +135,7 @@ export function requestThrottleMiddleware(req: NextRequest) {
     // For page routes, redirect to a rate limit page with information.
     // BC69: base on APP_BASE_URL, not req.url (Host-header-derived → poisonable
     // open-redirect). Same trust fix as lib/auth/middleware.ts TRUSTED_ORIGIN.
-    const baseOrigin = process.env.APP_BASE_URL || 'https://paichart.app';
+    const baseOrigin = PUBLIC_BASE_URL;  // canonical origin (D4-B)
     return NextResponse.redirect(new URL(`/rate-limited?retryAfter=${retryAfter}`, baseOrigin));
   }
 

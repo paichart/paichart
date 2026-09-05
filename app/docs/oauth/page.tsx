@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import Link from 'next/link';
+import { PUBLIC_BASE_URL } from '@/lib/auth/public-base-url';
 
 export const metadata: Metadata = {
   title: 'OAuth 2.0 Documentation',
@@ -38,7 +39,7 @@ export default function OAuthDocsPage() {
             </p>
             <div className="bg-muted p-4 rounded-lg mb-4">
               <code className="text-sm">
-                POST https://paichart.app/mcp
+                {`POST ${PUBLIC_BASE_URL}/mcp`}
               </code>
             </div>
             <p className="mb-3">
@@ -56,7 +57,7 @@ export default function OAuthDocsPage() {
             </p>
             <div className="bg-muted p-4 rounded-lg mb-4">
               <code className="text-sm">
-                GET https://paichart.app/.well-known/oauth-authorization-server
+                {`GET ${PUBLIC_BASE_URL}/.well-known/oauth-authorization-server`}
               </code>
             </div>
             <p>
@@ -108,7 +109,7 @@ export default function OAuthDocsPage() {
               <div>
                 <h3 className="text-lg font-semibold">Authorization Endpoint</h3>
                 <code className="text-sm bg-muted px-2 py-1 rounded">
-                  GET https://paichart.app/oauth/authorize
+                  {`GET ${PUBLIC_BASE_URL}/oauth/authorize`}
                 </code>
                 <p className="text-sm text-muted-foreground mt-1">
                   Redirects users to their chosen OAuth provider for authentication
@@ -118,7 +119,7 @@ export default function OAuthDocsPage() {
               <div>
                 <h3 className="text-lg font-semibold">Token Endpoint</h3>
                 <code className="text-sm bg-muted px-2 py-1 rounded">
-                  POST https://paichart.app/oauth/token
+                  {`POST ${PUBLIC_BASE_URL}/oauth/token`}
                 </code>
                 <p className="text-sm text-muted-foreground mt-1">
                   Exchanges authorization code for access token
@@ -128,7 +129,7 @@ export default function OAuthDocsPage() {
               <div>
                 <h3 className="text-lg font-semibold">Client Registration</h3>
                 <code className="text-sm bg-muted px-2 py-1 rounded">
-                  POST https://paichart.app/oauth/register
+                  {`POST ${PUBLIC_BASE_URL}/oauth/register`}
                 </code>
                 <p className="text-sm text-muted-foreground mt-1">
                   Dynamic client registration (optional)
@@ -189,7 +190,7 @@ export default function OAuthDocsPage() {
     {
       "type": "mcp",
       "server_label": "pAIchart",
-      "server_url": "https://paichart.app/mcp",
+      "server_url": "${PUBLIC_BASE_URL}/mcp",
       "require_approval": "never"
     }
   ]
@@ -209,7 +210,7 @@ export default function OAuthDocsPage() {
               <code className="text-sm">{`{
   "mcpServers": {
     "paichart": {
-      "url": "https://paichart.app/mcp",
+      "url": "${PUBLIC_BASE_URL}/mcp",
       "transport": {
         "type": "http"
       }
@@ -224,7 +225,7 @@ export default function OAuthDocsPage() {
             <h3 className="text-xl font-semibold mb-3">Claude.ai Browser Integration</h3>
             <p className="mb-3">OAuth is handled automatically when you:</p>
             <ol className="list-decimal pl-6 space-y-2 mb-4">
-              <li>Visit <a href="https://paichart.app" className="text-primary hover:underline">https://paichart.app</a></li>
+              <li>Visit <a href={PUBLIC_BASE_URL} className="text-primary hover:underline">{PUBLIC_BASE_URL}</a></li>
               <li>Click &quot;Connect to Claude&quot;</li>
               <li>Authorize the connection</li>
               <li>The MCP server will be available in your Claude.ai session</li>

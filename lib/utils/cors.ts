@@ -21,7 +21,8 @@ const CORS_ALLOWED_ORIGINS = new Set(
 );
 
 // BC54 FIX: Use trusted APP_BASE_URL instead of request host (Host header is spoofable)
-const TRUSTED_ORIGIN = (process.env.APP_BASE_URL || 'https://paichart.app').toLowerCase();
+import { PUBLIC_BASE_URL } from '../auth/public-base-url';
+const TRUSTED_ORIGIN = PUBLIC_BASE_URL.toLowerCase();  // canonical origin (D4-B); same fallback as before
 
 export function isAllowedOrigin(origin: string | null, requestUrl: URL): boolean {
   if (!origin) return false;

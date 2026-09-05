@@ -22,6 +22,7 @@ import {
 } from '../../types/auth';
 import { UserRole as PrismaUserRole, UserStatus as PrismaUserStatus } from '@prisma/client';
 import { defaultUserRole, registrationAllowed } from '../registration-policy';
+import { PUBLIC_BASE_URL } from '../public-base-url';
 import sanitizeHtml from 'sanitize-html';
 import { authLogger } from '@/lib/logger';
 import { oauthLogger } from './oauth-logger';
@@ -42,7 +43,7 @@ export class EnterpriseOAuthService {
   private readonly baseUrl: string;
 
   constructor() {
-    this.baseUrl = process.env.APP_BASE_URL || 'https://paichart.app';
+    this.baseUrl = PUBLIC_BASE_URL;  // canonical origin (D4-B)
   }
 
   /**

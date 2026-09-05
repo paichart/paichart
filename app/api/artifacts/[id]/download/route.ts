@@ -5,6 +5,7 @@ import { TokenPayload } from '@/lib/types/auth';
 import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import { safeContentDisposition } from '@/lib/utils/sanitize-filename';
 import { logger } from '@/lib/logger';
+import { PUBLIC_BASE_URL } from '@/lib/auth/public-base-url';
 
 /**
  * GET /api/artifacts/[id]/download
@@ -122,7 +123,7 @@ export async function GET(
     
     // BC22 + BC54 FIX: CORS with trusted origin check (uses APP_BASE_URL, not spoofable Host header)
     const origin = request.headers.get('origin');
-    const trustedOrigin = (process.env.APP_BASE_URL || 'https://paichart.app').toLowerCase();
+    const trustedOrigin = PUBLIC_BASE_URL.toLowerCase();
     if (origin && origin.toLowerCase() === trustedOrigin) {
       response.headers.set('Access-Control-Allow-Origin', origin);
       response.headers.set('Access-Control-Allow-Credentials', 'true');
@@ -148,7 +149,7 @@ export async function OPTIONS(request: NextRequest) {
 
   // BC22 + BC54 FIX: CORS with trusted origin check (uses APP_BASE_URL, not spoofable Host header)
   const origin = request.headers.get('origin');
-  const trustedOrigin = (process.env.APP_BASE_URL || 'https://paichart.app').toLowerCase();
+  const trustedOrigin = PUBLIC_BASE_URL.toLowerCase();
   if (origin && origin.toLowerCase() === trustedOrigin) {
     response.headers.set('Access-Control-Allow-Origin', origin);
     response.headers.set('Access-Control-Allow-Credentials', 'true');

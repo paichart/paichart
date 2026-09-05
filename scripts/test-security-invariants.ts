@@ -70,6 +70,14 @@ for (const f of [
   'lib/services/apiKeyService.ts', 'lib/mcp/server/tools/hub/audience-policy.js',
   'lib/mcp/server/routes/oauth-flow-routes.ts', 'lib/mcp/server/routes/oauth-discovery-routes.ts',
   'lib/auth/oauth/auth-manager.ts',
+  // D4 scope B (2026-09-06): every remaining server-side site derives from PUBLIC_BASE_URL
+  'lib/utils/cors.ts', 'middleware/request-throttle.ts', 'lib/auth/oauth/oauth-service.ts',
+  'app/api/auth/oauth/callback/[provider]/route.ts', 'app/api/artifacts/[id]/download/route.ts',
+  'lib/config.ts', 'app/api/mcp/discover/route.ts', 'lib/mcp/server/resources/hub-resources.js',
+  'lib/mcp/server/tools/chatgpt-connector-handler.js', 'app/.well-known/security.txt/route.ts',
+  'lib/mcp/server/config/server-config.js', 'lib/mcp/resource-manager-shared.js',
+  'lib/mcp/server/routes/mcp-transport-routes.ts', 'app/docs/oauth/page.tsx',
+  // (app/auth/oauth/success/page.tsx and the login page are CLIENT components — they cannot read APP_BASE_URL and stay as branding)
 ]) {
   check(`D4: no quoted prod-origin literal in ${f}`, !LITERAL.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
 }
