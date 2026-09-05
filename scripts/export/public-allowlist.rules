@@ -65,6 +65,9 @@
 # ── services: pattern + ONE reference service (decision 1) ───────────────────────
 + services/weather-service/**
 - services/**
+# their seed/registration scripts follow the same decision
++ scripts/seed-weather-service.ts
+- scripts/seed-*-service.ts
 
 # ── .claude/: ship ~2/3 (CLAUDE-DIR-SCAN.md); runbooks + incident diagnostics stay ──
 - .claude/knowledge/smoke-tests/**
