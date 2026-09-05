@@ -29,6 +29,10 @@
 import { PrismaClient } from '@prisma/client';
 import { AgentCategory, AgentComplexity, AgentTemplateStatus } from '@prisma/client';
 
+// Contact address shown inside seeded hub prompts. No personal address in code (open-source, 2026-09-06):
+// SUPPORT_CONTACT (the hosted deploy pins its value) → ADMIN_EMAIL (self-host) → the generic support box.
+const SUPPORT_CONTACT = process.env.SUPPORT_CONTACT || process.env.ADMIN_EMAIL || 'support@paichart.com';
+
 const prisma = new PrismaClient();
 
 interface OperationalPromptEntry {
@@ -643,7 +647,7 @@ services(action: "call", {
    { arguments: { url: "https://api.external.com/data" } }
    \`\`\`
 
-4. **If false positive** - Contact steve.terry@paichart.com for whitelist approval
+4. **If false positive** - Contact ${SUPPORT_CONTACT} for whitelist approval
 
 ---
 
@@ -770,7 +774,7 @@ registry(action: "tools", { service_name: "external-service" })
 
 ## 💬 Support
 
-**Security Questions**: steve.terry@paichart.com
+**Security Questions**: ${SUPPORT_CONTACT}
 **Report Vulnerabilities**: security@paichart.app
 **Documentation**: https://paichart.app/docs
 
@@ -1674,7 +1678,7 @@ async function myTool(args) {
 
 ## 💬 Support
 
-**Trust Level Questions**: steve.terry@paichart.com
+**Trust Level Questions**: ${SUPPORT_CONTACT}
 **Token Validation Issues**: Use token-validator service first
 **Documentation**: https://paichart.app/docs
 
@@ -3168,7 +3172,7 @@ category: "weather"  // Not a valid category
 
 3. **Check approval** (high-risk categories):
    - Security, payment, medical, government categories require admin approval
-   - Contact: steve.terry@paichart.com
+   - Contact: ${SUPPORT_CONTACT}
 
 ---
 
@@ -3418,7 +3422,7 @@ services(action: "workflow.execute", {
 
 ## 💬 Support
 
-**Registration Help**: steve.terry@paichart.com
+**Registration Help**: ${SUPPORT_CONTACT}
 **Documentation**: https://paichart.app/docs
 **API Status**: https://paichart.app/status
 
@@ -4758,7 +4762,7 @@ console.log('Available kids:', jwks.keys.map(k => k.kid));
 
 ## 💬 Support
 
-**Authentication Questions**: steve.terry@paichart.com
+**Authentication Questions**: ${SUPPORT_CONTACT}
 **JWKS Endpoint**: https://paichart.app/api/auth/jwks
 **Documentation**: https://paichart.app/docs
 

@@ -2,7 +2,7 @@
 
 > **Build JWT-Authenticated Services & Enable Cross-Tenant Communication**
 >
-> Version 3.0 | January 30, 2026 | **Reality post-U2: May 19, 2026** | Contact: steve.terry@paichart.com
+> Version 3.0 | January 30, 2026 | **Reality post-U2: May 19, 2026** | Contact: <maintainer-email>
 
 > **⚠️ POST-U2 (2026-05-19) UPDATE — read before implementing your validator**
 >
@@ -930,7 +930,7 @@ See `docker-mcp-service-gold-standard-v2.md` → "Use Case: Snowflake MCP Servic
 
 ## Support
 
-**Technical Support**: steve.terry@paichart.com
+**Technical Support**: <maintainer-email>
 **JWKS Endpoint**: https://paichart.app/api/auth/jwks
 **Documentation**: https://paichart.app/docs
 

@@ -49,8 +49,8 @@ const CANONICAL_DATA = {
     transport: 'streamable-http',
     category: 'security',
     serviceType: 'mcp_service',
-    ownerId: 'cmh86xj81002tyxmi5k2qv1ls',        // steve.terry@paichart.com
-    ownerEmail: 'steve.terry@paichart.com',
+    ownerId: 'cmh86xj81002tyxmi5k2qv1ls',        // <maintainer-email>
+    ownerEmail: '<maintainer-email>',
     healthCheck: '/health',
     timeout: 90000,
     maxExecutionTime: 90000,  // security queries (purple_ai/powerquery) can be slow; keep below the 300s hard cap

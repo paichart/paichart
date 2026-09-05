@@ -234,7 +234,7 @@ Simple and academic-looking is better than visually flashy.
 
 - [ ] Real name: Steve Terry
 - [ ] Affiliation: "pAIchart" or "Independent"
-- [ ] Email: `steve.terry@paichart.com` (confirmed working)
+- [ ] Email: `<maintainer-email>` (confirmed working)
 - [ ] ORCID: Create at `orcid.org` if you don't have one (5 minutes, free)
 
 ---

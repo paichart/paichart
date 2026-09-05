@@ -21,7 +21,7 @@
 | **Production platform** | [https://paichart.app](https://paichart.app) |
 | **Live MCP endpoint** (streamable HTTP) | [https://paichart.app/mcp](https://paichart.app/mcp) |
 | **Project page** (interactive demo + architecture diagrams) | [https://paichart.com/harness](https://paichart.com/harness) *(to be published alongside this paper)* |
-| **Corresponding author** | `steve.terry@paichart.com` |
+| **Corresponding author** | `<maintainer-email>` |
 
 **Reproducibility and access.** The pAIchart Pipeline Harness is deployed as a single-tenant, multi-user production platform intended as a Proof of Value demonstration for enterprise deployment — not a research prototype. Readers may inspect the system directly by connecting any MCP-compatible client (Claude Desktop, ChatGPT, Gemini, or a CLI) to `https://paichart.app/mcp` and authenticating via GitHub OAuth. New users are auto-registered with the `DEMO_USER` role, which grants read access to demo POVs and read/write access to a personal sandbox. Elevated roles (standard `USER`, `ADMIN`) are available by contacting the corresponding author.
 

@@ -117,7 +117,7 @@ export async function GET(
     // creating unbounded RefreshToken rows, leaking memory and bypassing
     // the BC52 hardening for the vast majority of users (Claude Desktop,
     // Claude Code, web GitHub/Microsoft all go through OAuth callback).
-    // Surfaced during BC73 post-soak audit when steve.terry@paichart.com
+    // Surfaced during BC73 post-soak audit when <maintainer-email>
     // had 2 RefreshTokens accumulating with no per-OAuth-callback cleanup.
     const MAX_SESSIONS = 10;
     // W11/CR-3: web rows only (provider != 'mcp') — don't evict a user's MCP refresh token.

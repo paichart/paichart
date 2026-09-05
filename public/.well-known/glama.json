@@ -2,7 +2,7 @@
   "$schema": "https://glama.ai/mcp/schemas/connector.json",
   "maintainers": [
     {
-      "email": "steve.terry@paichart.com"
+      "email": "<maintainer-email>"
     }
   ]
 }

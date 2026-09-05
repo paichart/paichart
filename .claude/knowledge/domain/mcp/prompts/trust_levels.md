@@ -835,7 +835,7 @@ async function myTool(args) {
 
 ## 💬 Support
 
-**Trust Level Questions**: steve.terry@paichart.com
+**Trust Level Questions**: <maintainer-email>
 **Token Validation Issues**: Use token-validator service first
 **Documentation**: https://paichart.app/docs
 

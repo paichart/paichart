@@ -319,7 +319,7 @@ services({
 **Approve or reject**:
 ```javascript
 // Via admin API (operator access required)
-// Approval process: Contact steve.terry@paichart.com
+// Approval process: Contact <maintainer-email>
 ```
 
 ---
@@ -474,7 +474,7 @@ registry(action: "update", {
 
 // 2. If false positive:
 // - Rename tool (avoid shell_, exec_, rm_, delete_)
-// - Contact steve.terry@paichart.com for whitelist approval
+// - Contact <maintainer-email> for whitelist approval
 
 // 3. See all blocked patterns:
 // [F] security_policy prompt
@@ -501,7 +501,7 @@ registry(action: "update", {
 - [G] **trust_levels** - Master trust level system
 - [H] **architecture** - Learn Hub internals
 
-**Contact**: steve.terry@paichart.com (for approvals, whitelist requests)
+**Contact**: <maintainer-email> (for approvals, whitelist requests)
 
 ---
 
@@ -856,7 +856,7 @@ services({ action: "workflow.execute", workflowName: "token-troubleshooting-demo
 
 ## 💬 Support & Community
 
-**Technical Support**: steve.terry@paichart.com
+**Technical Support**: <maintainer-email>
 **Documentation**: https://paichart.app/docs
 **API Status**: https://paichart.app/status
 

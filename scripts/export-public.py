@@ -29,7 +29,7 @@ from collections import Counter
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RULES = os.path.join(ROOT, 'scripts', 'export', 'public-allowlist.rules')
 PROD_IP = '<PROD_HOST>'
-PERSONAL = ['<maintainer-email>', '<maintainer-email>']
+PERSONAL = ['<maintainer-email>', '<maintainer-email>', '<maintainer-email>']  # the last is the operator's work address — docs mention it as the prod admin identity
 TEXT_EXT = {'.md', '.ts', '.tsx', '.js', '.mjs', '.cjs', '.json', '.yml', '.yaml', '.sh', '.txt', '.toml', '.py', '.sql', '.tf', '.conf', '.env', '.example', '.rules', '.css'}
 
 def glob_to_re(p):
@@ -220,7 +220,7 @@ def main():
     if a.init_git:
         subprocess.run(['git', 'init', '-q', '-b', 'main'], cwd=out, check=True)
         subprocess.run(['git', 'add', '-A'], cwd=out, check=True)
-        subprocess.run(['git', '-c', 'user.name=Steve Terry', '-c', 'user.email=steve.terry@paichart.com', 'commit', '-q', '-m', 'pAIchart — initial public release'], cwd=out, check=True)
+        subprocess.run(['git', '-c', 'user.name=Steve Terry', '-c', 'user.email=<maintainer-email>', 'commit', '-q', '-m', 'pAIchart — initial public release'], cwd=out, check=True)
         print('git: initialised with one commit (no remote, no push)')
     sys.exit(0 if leaks_ok else 1)
 

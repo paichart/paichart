@@ -3,7 +3,7 @@ const prisma = new PrismaClient();
 
 async function checkPOVs() {
   const user = await prisma.user.findUnique({
-    where: { email: 'steve.terry@paichart.com' }
+    where: { email: '<maintainer-email>' }
   });
 
   if (!user) {

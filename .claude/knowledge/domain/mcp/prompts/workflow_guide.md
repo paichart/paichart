@@ -1020,7 +1020,7 @@ steps: [
 
 ## 💬 Support
 
-**Workflow Questions**: steve.terry@paichart.com
+**Workflow Questions**: <maintainer-email>
 **Documentation**: https://paichart.app/docs
 **Interactive Builder**: `/prompt orchestrate_workflow`
 

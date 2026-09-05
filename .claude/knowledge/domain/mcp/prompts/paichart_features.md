@@ -788,7 +788,7 @@ UPDATE "AgentPromptLibrary" SET content = '...' WHERE name = 'my-prompt';
 
 ## 📞 Contact
 
-**Learn More**: steve.terry@paichart.com
+**Learn More**: <maintainer-email>
 **Documentation**: https://paichart.app/docs
 **Hub Info**: `/prompt get_started` or `services(action: "discover")`
 

@@ -944,7 +944,7 @@ console.log('Available kids:', jwks.keys.map(k => k.kid));
 
 ## 💬 Support
 
-**Authentication Questions**: steve.terry@paichart.com
+**Authentication Questions**: <maintainer-email>
 **JWKS Endpoint**: https://paichart.app/api/auth/jwks
 **Documentation**: https://paichart.app/docs
 

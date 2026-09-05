@@ -2,7 +2,7 @@
 
 > **Build MCP Services That Connect to the pAIchart AI Orchestration Hub**
 >
-> Version 1.4 | January 13, 2026 | Contact: steve.terry@paichart.com
+> Version 1.4 | January 13, 2026 | Contact: <maintainer-email>
 
 ---
 
@@ -646,7 +646,7 @@ registry(action: "delete")({
 
 ### Contact for Data Requests
 
-For data access requests or questions: **steve.terry@paichart.com**
+For data access requests or questions: **<maintainer-email>**
 
 ---
 
@@ -666,7 +666,7 @@ For data access requests or questions: **steve.terry@paichart.com**
 
 ## Support & Contact
 
-**Technical Support**: steve.terry@paichart.com
+**Technical Support**: <maintainer-email>
 **Documentation**: https://paichart.app/docs
 **API Status**: https://paichart.app/status
 

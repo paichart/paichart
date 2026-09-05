@@ -764,7 +764,7 @@ category: "weather"  // Not a valid category
 
 3. **Check approval** (high-risk categories):
    - Security, payment, medical, government categories require admin approval
-   - Contact: steve.terry@paichart.com
+   - Contact: <maintainer-email>
 
 ---
 
@@ -1015,7 +1015,7 @@ services(action: "workflow.execute", {
 
 ## 💬 Support
 
-**Registration Help**: steve.terry@paichart.com
+**Registration Help**: <maintainer-email>
 **Documentation**: https://paichart.app/docs
 **API Status**: https://paichart.app/status
 

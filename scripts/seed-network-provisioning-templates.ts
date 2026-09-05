@@ -136,7 +136,7 @@ const TEMPLATES: TemplateSeed[] = [
 // runtime (env-portable — ids differ per environment). Falls back to the 'system'
 // sentinel (a real User row; excluded from the orphan sweep) if the owner isn't
 // present, so a fresh environment never re-introduces an email-in-createdBy dangle.
-const SEED_OWNER_EMAIL = 'steve.terry@paichart.com';
+const SEED_OWNER_EMAIL = '<maintainer-email>';
 
 async function main() {
   console.log('Seeding network-provisioning templates...\n');

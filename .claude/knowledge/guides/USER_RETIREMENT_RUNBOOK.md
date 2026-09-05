@@ -73,13 +73,13 @@ is looked up by email so it's env-portable:
 BEGIN;
 -- Reassign target is looked up inline by email (env-portable — ids differ per environment).
 -- 1. POV ownership FIRST (else the POVs cascade-delete on user delete)
-UPDATE "POV" SET "ownerId"=(SELECT id FROM "User" WHERE email='steve.terry@paichart.com') WHERE "ownerId"=:'uid';
+UPDATE "POV" SET "ownerId"=(SELECT id FROM "User" WHERE email='<maintainer-email>') WHERE "ownerId"=:'uid';
 -- 2. clear the RESTRICT blocker (reassign or DELETE the rows)
-UPDATE mcp_workflow_executions SET "userId"=(SELECT id FROM "User" WHERE email='steve.terry@paichart.com') WHERE "userId"=:'uid';
+UPDATE mcp_workflow_executions SET "userId"=(SELECT id FROM "User" WHERE email='<maintainer-email>') WHERE "userId"=:'uid';
 -- 3. keep reassigned POVs' tasks assigned (else Task.assignee SetNulls to unassigned)
-UPDATE tasks SET assignee_id=(SELECT id FROM "User" WHERE email='steve.terry@paichart.com') WHERE assignee_id=:'uid';
+UPDATE tasks SET assignee_id=(SELECT id FROM "User" WHERE email='<maintainer-email>') WHERE assignee_id=:'uid';
 -- 4. reassign/null the non-FK dangling scalars
-UPDATE agent_templates    SET "createdBy"=(SELECT id FROM "User" WHERE email='steve.terry@paichart.com') WHERE "createdBy"=:'uid';
+UPDATE agent_templates    SET "createdBy"=(SELECT id FROM "User" WHERE email='<maintainer-email>') WHERE "createdBy"=:'uid';
 UPDATE mcp_recommendations SET "implementedBy"=NULL WHERE "implementedBy"=:'uid';
 -- 5. (if any) reassign/delete MCP services owned via JSON — handle per service
 -- 6. delete the user (Cascade cleans TeamMember/Comment/Activity/Notification/etc.)

@@ -2,7 +2,7 @@
 
 **Draft v1 (arxiv submission)** · 2026-04-06
 
-Steve Terry · pAIchart · `steve.terry@paichart.com`
+Steve Terry · pAIchart · `<maintainer-email>`
 
 **Live system:** `https://paichart.app/mcp` · **Project page:** `https://paichart.com/harness` · **Extended technical report:** `paichart.com/harness/extended`
 
@@ -212,7 +212,7 @@ The Pipeline Harness is deployed as a production multi-user system, not a resear
 
 **Live access.** Connect any MCP-compatible client to `https://paichart.app/mcp` and authenticate via GitHub OAuth. New users auto-register with `DEMO_USER` role: read access to demo POVs, read/write on a personal sandbox. To reproduce Experiment 6 (ORCHESTRATE mode), create a new stage on any accessible POV, add three tasks with descriptions implying ARCHITECT / REVIEWER / DOCUMENTER roles, add a fourth task with `type: PIPELINE`, and execute it. Expected result: the harness detects three siblings, assigns templates, wires dependencies, and executes the three specialists in 180-300 seconds.
 
-**Elevated access.** Standard `USER` role (write access to production POVs) and `ADMIN` role available by emailing `steve.terry@paichart.com`.
+**Elevated access.** Standard `USER` role (write access to production POVs) and `ADMIN` role available by emailing `<maintainer-email>`.
 
 **Source code.** Closed at the time of writing. Per-section source references in this paper cite specific files and line ranges in the reference technical report (paichart.com/harness/extended); source excerpts are available to reviewers on request. An open-source artifact repository containing the harness template definition, the execution engine core, and the context chainer is under consideration for a future release.
 

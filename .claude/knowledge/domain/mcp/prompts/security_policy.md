@@ -568,7 +568,7 @@ services(action: "call", {
    { arguments: { url: "https://api.external.com/data" } }
    ```
 
-4. **If false positive** - Contact steve.terry@paichart.com for whitelist approval
+4. **If false positive** - Contact <maintainer-email> for whitelist approval
 
 ---
 
@@ -695,7 +695,7 @@ registry(action: "tools", { service_name: "external-service" })
 
 ## 💬 Support
 
-**Security Questions**: steve.terry@paichart.com
+**Security Questions**: <maintainer-email>
 **Report Vulnerabilities**: security@paichart.app
 **Documentation**: https://paichart.app/docs
 

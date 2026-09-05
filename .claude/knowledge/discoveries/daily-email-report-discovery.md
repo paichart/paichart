@@ -13,7 +13,7 @@
 > | Claim in this doc (2025-09-30) | Current reality (authoritative) |
 > |---|---|
 > | Daily email sent **FROM production** via `/usr/local/bin/enterprise-health-monitor.sh` at 23:55 UTC | Production enterprise-health-monitor has **email DISABLED** ("Email functionality removed", 2026-01-24). Daily email now ships from **LOCAL Tier-3** `~/disaster-recovery/scripts/daily-summary.sh`; `BREVO_API_KEY` is **local-only**, never on prod. |
-> | Recipient `system@paichart.com` (line 10) | `steve.terry@paichart.com` (= `MCP_ADMIN_EMAIL`) |
+> | Recipient `system@paichart.com` (line 10) | `<maintainer-email>` (= `MCP_ADMIN_EMAIL`) |
 > | `daily-summary.sh:125-553`, `:174-197`, `:387` line-refs | File is now **1617 lines** — all line ranges below are STALE, re-grep by symbol. |
 > | `scripts/test-daily-email.sh` | **Does not exist** (removed). |
 >
@@ -43,7 +43,7 @@ This discovery documents the daily email reporting system implemented for pAIcha
 BREVO_API_KEY=xkeysib-[key]-2zSaQ2H09H8J3SMS
 BREVO_FROM_EMAIL=support@paichart.com
 BREVO_FROM_NAME=pAIchart Support
-MCP_ADMIN_EMAIL=steve.terry@paichart.com
+MCP_ADMIN_EMAIL=<maintainer-email>
 ```
 
 ## Implementation Components
@@ -149,7 +149,7 @@ MCP_ADMIN_EMAIL=steve.terry@paichart.com
 2. **Data Collection**: System metrics, security status, service health
 3. **Template Processing**: HTML email generation with current data
 4. **API Call**: Brevo API via HTTPS (bypasses SMTP blocking)
-5. **Delivery**: Professional email to steve.terry@paichart.com
+5. **Delivery**: Professional email to <maintainer-email>
 6. **Logging**: Success/failure tracking in system logs
 
 ## Integration Patterns

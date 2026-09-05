@@ -618,7 +618,7 @@ Deployment: Digital Ocean <PROD_HOST> (paichart.app)
   - Issued: 2025-09-06
   - Expires: 2025-12-05 (90-day validity)
   - Auto-renewal: Configured with certbot timer
-  - Email: steve.terry@paichart.com (pAIchart, Sydney, Australia)
+  - Email: <maintainer-email> (pAIchart, Sydney, Australia)
 - ✅ **HTTPS Enforcement**: Automatic HTTP→HTTPS redirects (301)
 - ✅ **SSL Configuration**: Modern TLS with secure cipher suites
 

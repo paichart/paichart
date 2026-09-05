@@ -1022,7 +1022,7 @@ const latency = Date.now() - pingStart;  // Real timing
 
 ## 💬 Support
 
-**Architecture Questions**: steve.terry@paichart.com
+**Architecture Questions**: <maintainer-email>
 **Documentation**: https://paichart.app/docs
 **Source Code**: Private (enterprise platform)
 

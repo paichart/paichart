@@ -75,8 +75,8 @@ const CANONICAL_DATA = {
     transport: 'streamable-http',
     category: 'automation',
     serviceType: 'mcp_service',
-    ownerId: 'cmh86xj81002tyxmi5k2qv1ls',        // steve.terry@paichart.com
-    ownerEmail: 'steve.terry@paichart.com',
+    ownerId: 'cmh86xj81002tyxmi5k2qv1ls',        // <maintainer-email>
+    ownerEmail: '<maintainer-email>',
     healthCheck: '/healthz',
     timeout: 60000,
     maxExecutionTime: 60000,

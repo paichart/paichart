@@ -22,7 +22,7 @@
 | **Use Case** | `pipeline_orchestration` |
 | **Estimated Time** | `10 minutes` |
 | **Version** | `2.0` |
-| **Created By** | `steve.terry@paichart.com` |
+| **Created By** | `<maintainer-email>` |
 
 ## Variables (JSON)
 

@@ -1,5 +1,5 @@
 {
-  "_comment": "Verified live registration descriptor for the context7-docs service, captured 2026-06-16 from registry(action:'tools') on paichart.app BEFORE it was deleted (steve.terry@paichart.com, ADMIN). This is the simulated read-only device/ansible service for the network-provisioning UAT spike. Run 1 uses this inline; Run 2 hosts it at a GitHub raw URL the Harvester fetches via scrape_page. category 'ai-intelligence' is auto-approving -> register lands ACTIVE immediately (gating condition verified). See SPIKE-PLAN.md + network-provisioning-pipeline.md R1.",
+  "_comment": "Verified live registration descriptor for the context7-docs service, captured 2026-06-16 from registry(action:'tools') on paichart.app BEFORE it was deleted (<maintainer-email>, ADMIN). This is the simulated read-only device/ansible service for the network-provisioning UAT spike. Run 1 uses this inline; Run 2 hosts it at a GitHub raw URL the Harvester fetches via scrape_page. category 'ai-intelligence' is auto-approving -> register lands ACTIVE immediately (gating condition verified). See SPIKE-PLAN.md + network-provisioning-pipeline.md R1.",
   "name": "context7-docs",
   "endpoint": "https://mcp.context7.com/mcp",
   "category": "ai-intelligence",

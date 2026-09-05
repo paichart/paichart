@@ -38,7 +38,7 @@ grep -nE "buildPOVAccessFilter" lib/mcp/server/tools/chatgpt-connector-handler.j
 grep -rnE "readServerResource\|getPOVDatabaseContent\|getTaskDatabaseContent" lib/services/mcp/ lib/mcp/embedded-server.ts 2>/dev/null | head -10
 ```
 
-Related: `cline_docs/follow-ups/embedded-mcp-role-flip-functional-test-2026-05-24.md` (✅ RESOLVED — live-verified via UAT MCP connection as steve.terry@paichart.com USER role, agent execution `cmpjdnr310001yx7j7z7fzic6` SUCCESS).
+Related: `cline_docs/follow-ups/embedded-mcp-role-flip-functional-test-2026-05-24.md` (✅ RESOLVED — live-verified via UAT MCP connection as <maintainer-email> USER role, agent execution `cmpjdnr310001yx7j7z7fzic6` SUCCESS).
 
 ---
 

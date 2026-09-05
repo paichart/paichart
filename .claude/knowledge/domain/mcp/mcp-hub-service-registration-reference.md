@@ -2,7 +2,7 @@
 
 > **Companion to**: `mcp-hub-integration-guide.md`
 >
-> **Version**: 1.4 | **Updated**: January 13, 2026 | **Contact**: steve.terry@paichart.com
+> **Version**: 1.4 | **Updated**: January 13, 2026 | **Contact**: <maintainer-email>
 
 ---
 

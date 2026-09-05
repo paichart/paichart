@@ -815,7 +815,7 @@ Production-validated March 2026. This documents the end-to-end configuration for
 
 ```
 User (Claude Desktop / ChatGPT)
-  │  authenticates as steve.terry@paichart.com
+  │  authenticates as <maintainer-email>
   ▼
 pAIchart Hub (mcp-server-http-clean.js)
   │  validates JWT, determines trust level
