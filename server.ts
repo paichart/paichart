@@ -12,6 +12,9 @@ const { errorCounter } = require('./lib/monitoring/error-counter');
 // TOP-LEVEL (not inside initializeServer, whose .catch() swallows errors and keeps serving).
 // Prod always sets it (deploy heredoc), so this is a no-op there.
 const { assertPublicBaseUrlConfigured } = require('./lib/auth/public-base-url');
+// E7 (2026-09-06): dev-only single-origin — the MCP/OAuth paths the MCP server advertises under
+// APP_BASE_URL are proxied to :8080 here, exactly as nginx does on prod (same rule; drift-tested).
+const { shouldProxy, proxyToMcp } = require('./lib/server/dev-mcp-proxy');
 if (process.env.NODE_ENV === 'production') {
   const { warnings: baseUrlWarnings } = assertPublicBaseUrlConfigured();
   for (const w of baseUrlWarnings) console.warn('[public-base-url]', w);
@@ -60,6 +63,7 @@ app.prepare().then(() => {
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
       const parsedUrl = parse(req.url!, true);
+      if (dev && shouldProxy(parsedUrl.pathname)) { proxyToMcp(req, res); return; }
       await handle(req, res, parsedUrl);
     } catch (err) {
       try { errorCounter.increment('ssr'); } catch {}

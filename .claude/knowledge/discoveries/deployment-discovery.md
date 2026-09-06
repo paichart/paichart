@@ -15,16 +15,31 @@ grep -c 'paichart\.app' .env.example                           # expect 0 — th
 grep -c 'DATABASE_URL=' package.json                           # expect 0 — mcp:http:dev used to hardcode one and silently ignore .env
 grep -c '"jwt:keys"' package.json                              # expect 1 — the RS256 generator a stranger needs (scripts/generate-jwt-keys.sh)
 ls docs/RUNNING.md docs/OAUTH-SETUP.md | wc -l                 # expect 2 — stranger-facing docs (every npm script they cite must exist)
+grep -c 'test:dev-mcp-proxy' package.json                         # expect 2 — script + its slot in test:all-validation (the nginx-rule drift guard, E7)
 grep -c 'migrate dev' scripts/seed-database.ts                 # expect 0 — D7 CLOSED 2026-09-04: db:seed is db push + idempotent seeds; a 'migrate dev' reappearing here re-opens the drift class
+grep -c "https://\${req.get('host')}" mcp-server-http-clean.js lib/mcp/server/routes/oauth-flow-routes.ts | grep -vc ':0$'   # expect 0 — E5 (2026-09-06): the proxy-pattern server callback sent to GitHub/Entra was built from the REQUEST Host with a hardcoded https:// — a self-host's MCP process sees Host=<ip>:8080, so the redirect_uri never matched the documented ${APP_BASE_URL}/oauth/callback; now derived from PUBLIC_BASE_URL (prod byte-identical: nginx forwards Host=paichart.app)
 ```
+
+```bash
+# Public-export tripwires (2026-09-06) — the projection's load-bearing rules, pinned.
+grep -c '^- cline_docs/\*\*' scripts/export/public-allowlist.rules                 # expect 1 — session artifacts NEVER export (Steve)
+grep -c '^+ .claude/knowledge/TODO' scripts/export/public-allowlist.rules          # expect 0 — every TODO* note is private; an exception here re-opens it
+python3 scripts/render-public-claude.py | grep -c DANGLING                          # expect 0 — the public CLAUDE.md cites only paths that survive the rules
+grep -l '<maintainer-email>' scripts/seed-protocol-prompts.ts scripts/seed-operational-prompts.ts scripts/seed-*-templates.ts | wc -l   # expect 0 — owner/contact come from SEED_OWNER_EMAIL / SUPPORT_CONTACT / ADMIN_EMAIL (prod pins the first two in the deploy heredoc)
+```
+**Re-export procedure** (`PLAN.md` §Published): `--out` → link node_modules + `prisma generate` → `npm run test:all-validation`
+on the export (background, ~15 min; **do not rebuild the export while it runs**) → green → `--into ~/paichart` → `git status`
+review → commit as Steve → push. Two public runs went red before this rule existed; seven went green first-try after it.
 
 ```bash
 # Template ↔ code parity (every key in .env.example must be read by SOME entrypoint; audit against ALL of them —
 # a lib/app-only scan wrongly flagged MCP_HTTP_PORT, which only mcp-server-http-clean.js reads).
 python3 - <<'PY'
 import re,subprocess
-cmd="grep -rhoE 'process\\.env\\.[A-Z][A-Z0-9_]+' lib app components server.ts server.js dev-server.js mcp-server-v5.js mcp-server-http-clean.js ecosystem.config.js scripts/*.ts scripts/*.js 2>/dev/null"
-used=set(re.findall(r'process\.env\.([A-Z][A-Z0-9_]+)',subprocess.run(cmd,shell=True,capture_output=True,text=True).stdout))
+# \benv\.X also counts: registration-policy.ts reads through an injectable `env` parameter (testability) — the
+# process.env-only form false-flagged DEFAULT_USER_ROLE + ALLOW_REGISTRATION on 2026-09-06.
+cmd="grep -rhoE '\\benv\\.[A-Z][A-Z0-9_]+' lib app components server.ts server.js dev-server.js mcp-server-v5.js mcp-server-http-clean.js ecosystem.config.js scripts/*.ts scripts/*.js 2>/dev/null"
+used=set(re.findall(r'env\.([A-Z][A-Z0-9_]+)',subprocess.run(cmd,shell=True,capture_output=True,text=True).stdout))
 keys=re.findall(r'^([A-Z][A-Z0-9_]+)=',open('.env.example').read(),re.M)
 print("unread template keys:",[k for k in keys if k not in used] or "none")   # expect none
 PY
@@ -37,12 +52,13 @@ boot path — record the result in `cline_docs/reviews/open-source-readiness-202
 git clone -q "$PWD" /tmp/cold-start && cd /tmp/cold-start
 createdb copov15_coldstart                      # EMPTY — the point is the empty-DB path
 cp .env.example .env && sed -i 's#^DATABASE_URL=.*#DATABASE_URL="postgresql://…/copov15_coldstart"#' .env
-npm run jwt:keys >> .env                        # then delete the two placeholder JWT_*_BASE64 lines
+npm run --silent jwt:keys >> .env               # --silent: E8 — npm's banner in .env breaks `source .env` (dotenv shrugs, bash executes it)
 npm ci && npx prisma db push && npx prisma generate && npm run db:indexes
 npm run dev &  npm run mcp:http:dev &           # two processes — that IS the finding B4 taught
 curl -s -o /dev/null -w '%{http_code}\n' --max-time 120 localhost:3000/api/health    # expect 200 (first hit compiles 15–20s — not a hang)
 curl -s -o /dev/null -w '%{http_code}\n' --max-time 300 localhost:3000/login         # expect 200
 curl -s localhost:8080/.well-known/oauth-authorization-server | grep -o '"issuer":"[^"]*"'   # expect the template's localhost, NOT paichart.app
+curl -s -o /dev/null -w '%{http_code}\n' localhost:3000/.well-known/oauth-authorization-server   # expect 200 — E7 dev proxy (server.ts → :8080); a 404 here means the two-port shape lost its single origin again
 curl -s -o /dev/null -w '%{http_code}\n' localhost:8080/mcp                           # expect 401 — auth posture intact with no token
 ```
 Pitfalls that cost time on 2026-09-04: kill the **node child**, not the `npm` wrapper (the child keeps the port →

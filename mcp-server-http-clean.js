@@ -87,7 +87,7 @@ const AUTH_CONSTANTS = require('./lib/auth/auth-constants');
 // D4 (2026-09-04): issuer/audiences/discovery URLs derive from APP_BASE_URL. In production the
 // server refuses to boot without it — a self-host at the fallback would advertise paichart.app
 // as its OAuth issuer (silent identity swap). Prod always sets it (deploy heredoc), so no-op there.
-const { MCP_FRONTDOOR_AUDIENCE, assertPublicBaseUrlConfigured } = require('./lib/auth/public-base-url');
+const { PUBLIC_BASE_URL, MCP_FRONTDOOR_AUDIENCE, assertPublicBaseUrlConfigured } = require('./lib/auth/public-base-url');
 if (process.env.NODE_ENV === 'production') {
   const { warnings: baseUrlWarnings } = assertPublicBaseUrlConfigured();
   for (const w of baseUrlWarnings) authLogger.warn({ component: 'public-base-url' }, w);
@@ -452,7 +452,7 @@ class CleanMCPHTTPServer {
     // per-connection client redirect URIs (e.g. chatgpt.com/connector/oauth/<id>)
     // that cannot be pre-registered in Azure AD.
     const serverCallbackUrl = process.env.OAUTH_CALLBACK_URL ||
-      `https://${req.get('host')}/oauth/callback`;
+      `${PUBLIC_BASE_URL}/oauth/callback`;
 
     // Generate server-side state for Microsoft (separate from client's state).
     // Mirrors GitHub proxy at line 2506.

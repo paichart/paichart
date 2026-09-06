@@ -409,7 +409,7 @@ function registerR7Authorize(ctx: RouteContext): void {
 
     // OAuth Proxy Pattern: use SERVER's own callback URL (not client's)
     const serverCallbackUrl = process.env.OAUTH_CALLBACK_URL ||
-      `https://${req.get('host')}/oauth/callback`;
+      `${PUBLIC_BASE_URL}/oauth/callback`;
 
     // Generate server-side state for GitHub (separate from client's state)
     const serverState = crypto.randomBytes(32).toString('hex');
@@ -565,7 +565,7 @@ function registerR8Callback(ctx: RouteContext): void {
       } = oauthRequest as Record<string, string | undefined> & { provider?: string };
 
       const serverCallbackUrl = process.env.OAUTH_CALLBACK_URL ||
-        `https://${req.get('host')}/oauth/callback`;
+        `${PUBLIC_BASE_URL}/oauth/callback`;
 
       let user: { id: string; email?: string; role?: string } | undefined;
 

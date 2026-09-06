@@ -22,7 +22,9 @@ npm ci
 
 cp .env.example .env
 #  → edit .env: set DATABASE_URL; leave everything else for now
-npm run jwt:keys >> .env          # RS256 signing key pair — appends the three JWT_* lines (nothing to replace)
+npm run --silent jwt:keys >> .env # RS256 signing key pair — appends the three JWT_* lines (nothing to replace).
+                                  # --silent matters: without it npm's "> jwt:keys" banner lands in .env too (harmless to the
+                                  # servers, but `source .env` then runs it as a command and creates a stray file)
 #  → OAUTH_STATE_SECRET: any strong random string (openssl rand -hex 32)
 #  → ANTHROPIC_API_KEY (or set a provider key per-user in Settings after login)
 
@@ -57,6 +59,23 @@ public-SaaS default). `ALLOW_REGISTRATION=false` closes sign-up entirely — `/r
 logins are refused — so only `/admin/users` creates accounts.
 
 First-request compiles in dev take 15–20 s per route; that is Next.js, not a hang.
+
+## Two ports, one origin — which URL is which
+The web app and `/api/*` are on **:3000**; everything MCP/OAuth runs in the second process on **:8080**, which
+binds **loopback only** (`MCP_HTTP_BIND_ALL=true` exposes it — only behind a reverse proxy or on a trusted
+network). `APP_BASE_URL` is the origin the MCP server *advertises*: every OAuth discovery URL and the 401 that
+starts a client's login point at `${APP_BASE_URL}/oauth/…`. So the MCP paths must be reachable **on the
+`APP_BASE_URL` origin**, and they are:
+
+- **in development** (`npm run dev`) the web server itself proxies `/mcp`, `/oauth/*` and `/.well-known/oauth-*`
+  to :8080 — the same rule nginx applies in production, drift-tested (`npm run test:dev-mcp-proxy`). Point
+  Claude Desktop / ChatGPT at `${APP_BASE_URL}/mcp` and it works with no nginx. If the MCP process is not
+  running you get a **502** naming the command to start it.
+- **in production** (`npm run start`) there is no built-in proxy — the reverse proxy in the last section owns
+  that routing, and `APP_BASE_URL` is its public origin.
+
+`localhost:8080` still answers directly in either shape (the Verify block uses it to prove the MCP process
+itself is up).
 
 Then prove the install owns its identity: [VERIFYING-SELF-HOST.md](VERIFYING-SELF-HOST.md) (5 minutes, all read-only except one API key).
 

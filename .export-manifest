@@ -1389,6 +1389,7 @@ lib/prompts/types.ts
 lib/prompts/usePrompts.ts
 lib/security/prompt-injection-prevention.ts
 lib/server-init.ts
+lib/server/dev-mcp-proxy.ts
 lib/services/agent-execution-create.ts
 lib/services/agent/function-registry.ts
 lib/services/agentArtifactPolicy.ts
@@ -1732,6 +1733,7 @@ scripts/test-contract-propagation-enrichment.ts
 scripts/test-cross-pov-isolation.ts
 scripts/test-demo-write-coverage.ts
 scripts/test-derivation-containment.ts
+scripts/test-dev-mcp-proxy.ts
 scripts/test-diagnostic-retry.ts
 scripts/test-dialect-lint-enrichment.ts
 scripts/test-dialect-lint.ts

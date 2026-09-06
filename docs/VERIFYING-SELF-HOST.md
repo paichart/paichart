@@ -6,7 +6,15 @@ Run it after first install, after changing `APP_BASE_URL`, and after upgrading.
 
 Everything derives from one variable, `APP_BASE_URL` (see [RUNNING.md](RUNNING.md) → "`APP_BASE_URL` is your
 identity"). Below, `BASE` means the exact value you set — e.g. `https://paichart.example.com`, or
-`http://localhost:3000` for a local check. Both servers must be running (web on 3000, MCP on 8080, or your proxy).
+`http://localhost:3000` for a local check — and `MCP` means where the MCP paths answer. In development the web
+server proxies them, and behind your reverse proxy nginx does, so **`MCP=$BASE` in both** (RUNNING.md → "Two
+ports, one origin"); use `http://localhost:8080` only to bypass the proxy and hit the MCP process directly
+(`npm run start` with no reverse proxy is the one shape where that is the *only* way). Both servers must be running.
+
+```bash
+BASE=http://localhost:3000; MCP=$BASE                     # dev, or behind the proxy
+# MCP=http://localhost:8080                               # direct to the MCP process (no proxy in front)
+```
 
 ## 1. Automated — the CI gate (30 s, no servers needed)
 
@@ -23,15 +31,15 @@ will be meaningful.
 ## 2. Discovery documents advertise YOUR origin
 
 ```bash
-curl -s $BASE/.well-known/oauth-authorization-server | python3 -m json.tool
-curl -s $BASE/.well-known/oauth-protected-resource    | python3 -m json.tool
+curl -s $MCP/.well-known/oauth-authorization-server | python3 -m json.tool
+curl -s $MCP/.well-known/oauth-protected-resource    | python3 -m json.tool
 ```
 
 Expected — every URL-valued field starts with `BASE`, no exceptions:
 
 | Document | Field | Must equal |
 |---|---|---|
-| authorization-server | `issuer` | `BASE` (RFC 8414 §3.3: must equal the origin you fetched it from) |
+| authorization-server | `issuer` | `BASE` (RFC 8414 §3.3: must equal the origin you fetched it from — true through the proxy; in the two-port shape it is the advertised origin, fetched from `MCP`) |
 | | `authorization_endpoint`, `token_endpoint`, `registration_endpoint` | `BASE/oauth/authorize`, `BASE/oauth/token`, `BASE/oauth/register` |
 | | `jwks_uri` | `BASE/mcp/.well-known/jwks.json` |
 | protected-resource | `resource` | `BASE/mcp` |
@@ -42,7 +50,7 @@ do **not** own — the point is that no foreign origin appears):
 
 ```bash
 for p in oauth-authorization-server oauth-protected-resource; do
-  curl -s $BASE/.well-known/$p | grep -oE 'https?://[^"/]+' | sort -u
+  curl -s $MCP/.well-known/$p | grep -oE 'https?://[^"/]+' | sort -u
 done
 # expect: ONE distinct origin, and it is BASE
 ```
@@ -50,7 +58,7 @@ done
 ## 3. The 401 that starts every MCP client's OAuth flow points home
 
 ```bash
-curl -s -D - -o /tmp/init.json -X POST $BASE/mcp \
+curl -s -D - -o /tmp/init.json -X POST $MCP/mcp \
   -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"verify","version":"0"}}}' \
   | grep -iE '^HTTP|www-authenticate|^link'
@@ -85,10 +93,10 @@ curl -s -o /dev/null -w '%{http_code}\n' $BASE/api/auth/me -H "Authorization: Be
 Prove a token minted for a *different* issuer is refused — sign one with your own key but the wrong claims
 (this is exactly what a token from another install, or from the public SaaS, looks like to you):
 ```bash
-npx ts-node -r tsconfig-paths/register -e "
+node -e "
 const { SignJWT, importPKCS8 } = require('jose');
 (async () => {
-  const pem = Buffer.from(process.env.JWT_PRIVATE_KEY_BASE64, 'base64').toString();
+  const pem = Buffer.from(process.env.JWT_PRIVATE_KEY_BASE64 || '', 'base64').toString();
   const key = await importPKCS8(pem, 'RS256');
   console.log(await new SignJWT({ sub: 'x', userId: 'x', email: 'x@example.com', role: 'ADMIN' })
     .setProtectedHeader({ alg: 'RS256', kid: process.env.JWT_KEY_ID })
@@ -98,12 +106,12 @@ const { SignJWT, importPKCS8 } = require('jose');
 curl -s -o /dev/null -w '%{http_code}\n' $BASE/api/auth/me -H "Authorization: Bearer $(cat /tmp/foreign.jwt)"
 # expect 401 — same key, wrong issuer/audience, rejected
 ```
-(**`set -a; . ./.env; set +a` first** — the one-liner reads `JWT_PRIVATE_KEY_BASE64` from your shell; without it the token is empty and a 401 proves nothing. Check the printed token is non-empty.)
+(**`set -a; . ./.env; set +a` first** — the one-liner reads `JWT_PRIVATE_KEY_BASE64` from your shell; without it the token is empty and a 401 proves nothing. Check the printed token is non-empty — `wc -c /tmp/foreign.jwt` should be several hundred. If sourcing prints `jwt:keys: command not found`, an npm banner line got appended to `.env` (see RUNNING.md — use `npm run --silent jwt:keys`); delete the lines starting with `>` and source again.)
 
 ## 5. Production refuses to run without an identity
 
 Both servers fail loud in `NODE_ENV=production` when `APP_BASE_URL` is unset. Prove it once — from the repo
-root (ts-node needs the project files), and with the variable set **empty** rather than unset: each server
+root (the servers need the project files), and with the variable set **empty** rather than unset: each server
 re-reads `.env` at startup, and dotenv never overrides a variable already present in the environment, so an
 empty value is the one way to hide your `.env` entry without editing the file. The module treats empty as absent.
 

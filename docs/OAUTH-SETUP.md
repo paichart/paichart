@@ -6,7 +6,7 @@ neither (password login works without any of this).
 | System | Purpose | Who registers the app | Env vars |
 |---|---|---|---|
 | **A. Web-app login** | "Sign in with GitHub / Google / Microsoft" on `/login` | you, one app per provider | `GITHUB_*`, `GOOGLE_*`, `MICROSOFT_*` |
-| **B. MCP OAuth** | Lets AI clients (Claude Desktop, ChatGPT, Gemini, Smithery…) connect to `/mcp` | you, **one GitHub App for all clients** | `MCP_CLI_GITHUB_CLIENT_ID/SECRET`, `OAUTH_STATE_SECRET` |
+| **B. MCP OAuth** | Lets AI clients (Claude Desktop, ChatGPT, Gemini, Smithery…) connect to `/mcp` | you, **one GitHub App** (Claude, Gemini, Smithery, …) **plus the Microsoft app from A** (ChatGPT) | `MCP_CLI_GITHUB_CLIENT_ID/SECRET`, `MICROSOFT_CLIENT_ID/SECRET`, `OAUTH_STATE_SECRET` |
 
 `APP_BASE_URL` must be your real public URL for either to work — every callback below is built from it.
 
@@ -28,8 +28,18 @@ New users created this way (and via `/register`) get `DEFAULT_USER_ROLE` — `US
 pAIchart is an OAuth 2.1 **authorization server + resource server** for MCP clients (RFC 8414 metadata,
 Dynamic Client Registration, PKCE, RFC 8707 resource indicators). Clients discover it from
 `${APP_BASE_URL}/.well-known/oauth-authorization-server`. Behind the scenes it authenticates the human
-with **GitHub** using the *proxy pattern*: the server does the GitHub exchange, so **one GitHub App serves
-every MCP client** — you never register per-client apps.
+with an upstream provider using the *proxy pattern*: the server does the upstream exchange with its own
+callback, so you never register per-client apps. Which provider depends on the client:
+
+| MCP client | Upstream provider | App you need |
+|---|---|---|
+| Claude Desktop / claude.ai, Gemini CLI, Smithery, anything else | **GitHub** | the GitHub App below (`MCP_CLI_GITHUB_*`) |
+| **ChatGPT** | **Microsoft** | the **same Entra app as web login** (`MICROSOFT_CLIENT_ID/SECRET` from section A) — see B.2 |
+
+The client is recognised from its `redirect_uri` host; `?provider=github|microsoft` on `/oauth/authorize`
+overrides the default (a mismatch is logged as a warning, not refused).
+
+### B.1 GitHub App (Claude, Gemini, Smithery, …)
 
 1. GitHub → Settings → Developer settings → **GitHub Apps** (an App, not an OAuth App) → New.
    - Callback URL: **`${APP_BASE_URL}/oauth/callback`** (the server's own — not per-client)
@@ -41,8 +51,29 @@ every MCP client** — you never register per-client apps.
    curl -s ${APP_BASE_URL}/.well-known/oauth-authorization-server | jq .issuer   # == APP_BASE_URL
    curl -s ${APP_BASE_URL}/.well-known/oauth-protected-resource | jq .resource   # == APP_BASE_URL/mcp
    ```
-5. In Claude Desktop / ChatGPT, add an MCP connector with URL `${APP_BASE_URL}/mcp` — the client will
+5. In Claude Desktop, add an MCP connector with URL `${APP_BASE_URL}/mcp` — the client will
    discover the metadata, register itself, and send the user through GitHub.
+
+### B.2 ChatGPT — Microsoft, not GitHub
+
+ChatGPT's connector is sent through **Microsoft Entra**, reusing `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET`
+from section A (there is no separate ChatGPT app). You may see `CHATGPT_MICROSOFT_CLIENT_ID` in the code: that is
+only the client identifier the hub hands back to ChatGPT at registration, and it falls back to `MICROSOFT_CLIENT_ID`
+— a self-host never needs to set it. Two consequences:
+
+1. **Register a second redirect URI on that Entra app**: `${APP_BASE_URL}/oauth/callback` (Web), alongside the
+   web-login callback `${APP_BASE_URL}/api/auth/oauth/callback/microsoft`. Entra only ever sees the server's
+   callback — ChatGPT's per-connection `chatgpt.com/connector/oauth/<id>` URIs are never registered anywhere.
+2. **Without the Microsoft app configured, ChatGPT cannot connect** even though Claude can — the browser is
+   redirected to `login.microsoftonline.com` with `client_id=undefined` and Microsoft shows an "application
+   not found" page. The tell in the MCP server log is `Microsoft OAuth: proxy pattern — redirecting to
+   Microsoft` whose `url` carries `client_id=undefined`.
+
+Scopes requested from Microsoft are fixed by the server: `openid profile email User.Read offline_access`
+(Microsoft Graph delegated permissions — `User.Read` is the only one that needs granting). The `common`
+endpoint is used, so personal and work accounts both work.
+
+Then in ChatGPT → Settings → Connectors → add `${APP_BASE_URL}/mcp`; the user is sent through Microsoft.
 
 Tokens are RS256, signed with the key from `npm run jwt:keys`, verifiable at `${APP_BASE_URL}/api/auth/jwks`.
 Audiences are per resource (`…/api` for web tokens, `…/mcp` for MCP tokens) and never interchangeable.
