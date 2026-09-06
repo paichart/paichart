@@ -78,7 +78,7 @@ export default function LoginPage() {
           </div>
           <div className="flex items-center justify-center gap-3 mt-3 text-xs text-muted-foreground">
             <a
-              href="https://paichart.app/api/auth/jwks"
+              href="/api/auth/jwks"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1 hover:text-foreground transition-colors"

@@ -12,6 +12,7 @@
 # Static tripwires — the template drift the 2026-09-04 cold-start found, pinned so it cannot silently return.
 grep -c '^APP_BASE_URL=' .env.example                          # expect 1 — it was defined TWICE (prod first; dotenv keeps the first → self-hosts advertised paichart.app as OAuth issuer)
 grep -c 'paichart\.app' .env.example                           # expect 0 — the template must point at localhost; prod values come from the deploy workflow
+grep -c 'paichart\.app' app/auth/oauth/success/page.tsx "app/(auth)/login/page.tsx" | grep -vc ':0$'   # expect 0 — E10: the post-login instruction sheet derives the MCP URL from window.location.origin (served from APP_BASE_URL via nginx / the dev proxy); a literal here sends self-host users to the SaaS
 grep -c 'DATABASE_URL=' package.json                           # expect 0 — mcp:http:dev used to hardcode one and silently ignore .env
 grep -c '"jwt:keys"' package.json                              # expect 1 — the RS256 generator a stranger needs (scripts/generate-jwt-keys.sh)
 ls docs/RUNNING.md docs/OAUTH-SETUP.md | wc -l                 # expect 2 — stranger-facing docs (every npm script they cite must exist)

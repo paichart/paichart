@@ -52,6 +52,11 @@ function OAuthSuccessPageContent() {
   const [showMCPConfig, setShowMCPConfig] = useState(false);
   const [showUserGuide, setShowUserGuide] = useState(false);
   const [showDetailedChatGPT, setShowDetailedChatGPT] = useState(false);
+  // The MCP URL shown to the user is THIS install's origin (APP_BASE_URL, which serves this page via
+  // nginx on prod and the dev proxy on a self-host) — never a literal. State + effect keeps SSR/CSR
+  // markup identical; the placeholder is replaced before anyone can copy it.
+  const [mcpUrl, setMcpUrl] = useState('<your-paichart-origin>/mcp');
+  useEffect(() => { setMcpUrl(`${window.location.origin}/mcp`); }, []);
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -318,7 +323,7 @@ function OAuthSuccessPageContent() {
       "args": [
         "-y",
         "mcp-remote",
-        "https://paichart.app/mcp",
+        "${mcpUrl}",
         "--header",
         "X-API-Key: YOUR_API_KEY"
       ]
@@ -385,7 +390,7 @@ function OAuthSuccessPageContent() {
                       <p className="text-green-700 font-mono font-bold mb-2">→ Step 4: Define pAIchart MCP Application</p>
                       <div className="bg-white border border-green-200 rounded-lg p-4 space-y-2 pl-4 mt-2">
                         <p className="text-slate-700"><span className="text-green-600 font-bold">•</span> Name: <code className="text-emerald-700 bg-slate-100 px-2 py-1 rounded">paichart</code> (or any name)</p>
-                        <p className="text-slate-700"><span className="text-green-600 font-bold">•</span> MCP Server URL: <code className="text-emerald-700 bg-slate-100 px-2 py-1 rounded text-xs">https://paichart.app/mcp</code></p>
+                        <p className="text-slate-700"><span className="text-green-600 font-bold">•</span> MCP Server URL: <code className="text-emerald-700 bg-slate-100 px-2 py-1 rounded text-xs">{mcpUrl}</code></p>
                         <p className="text-slate-700"><span className="text-green-600 font-bold">•</span> Authentication: <code className="text-emerald-700 bg-slate-100 px-2 py-1 rounded">OAuth</code></p>
                         <p className="text-slate-700 text-xs italic mt-2">(No optional settings needed)</p>
                       </div>
@@ -426,7 +431,7 @@ function OAuthSuccessPageContent() {
                   <div>
                     <p className="text-yellow-700 font-mono font-bold mb-2">→ Step 2: Add pAIchart Server</p>
                     <div className="bg-white border border-yellow-200 rounded-lg p-4 space-y-2 pl-4 mt-2">
-                      <p className="text-slate-700"><span className="text-yellow-600 font-bold">•</span> Endpoint: <code className="text-emerald-700 bg-slate-100 px-2 py-1 rounded text-xs">https://paichart.app/mcp</code></p>
+                      <p className="text-slate-700"><span className="text-yellow-600 font-bold">•</span> Endpoint: <code className="text-emerald-700 bg-slate-100 px-2 py-1 rounded text-xs">{mcpUrl}</code></p>
                       <p className="text-slate-700"><span className="text-yellow-600 font-bold">•</span> Authentication: <code className="text-emerald-700 bg-slate-100 px-2 py-1 rounded">OAuth 2.0 (GitHub)</code></p>
                     </div>
                   </div>
@@ -452,7 +457,7 @@ function OAuthSuccessPageContent() {
                     <p className="text-blue-700 font-mono font-bold mb-2">→ Step 2: Add New Connector</p>
                     <div className="bg-white border border-blue-200 rounded-lg p-4 space-y-2 pl-4 mt-2">
                       <p className="text-slate-700"><span className="text-blue-600 font-bold">•</span> Name: <code className="text-emerald-700 bg-slate-100 px-2 py-1 rounded">pAIchart MCP Hub</code></p>
-                      <p className="text-slate-700"><span className="text-blue-600 font-bold">•</span> Endpoint: <code className="text-emerald-700 bg-slate-100 px-2 py-1 rounded text-xs">https://paichart.app/mcp</code></p>
+                      <p className="text-slate-700"><span className="text-blue-600 font-bold">•</span> Endpoint: <code className="text-emerald-700 bg-slate-100 px-2 py-1 rounded text-xs">{mcpUrl}</code></p>
                       <p className="text-slate-700"><span className="text-blue-600 font-bold">•</span> Authentication: <code className="text-emerald-700 bg-slate-100 px-2 py-1 rounded">OAuth 2.0 (GitHub)</code></p>
                     </div>
                   </div>
