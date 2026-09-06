@@ -40,8 +40,9 @@ export const CreateUserSchema = z.object({
 
   // ✅ ENHANCEMENT: 12 chars (not 8), special char required.
   // OPTIONAL (2026-06-04): platform is OAuth-only for humans — admin-created users are
-  // pre-provisioned by email and link on first OAuth login, so the create dialog collects
-  // no password. When a password IS supplied the full strength chain runs; when omitted
+  // pre-provisioned by email and link on first OAuth login, so the create dialog's password is
+  // OPTIONAL (added 2026-09-07: a self-host with no OAuth provider and no mail key has no other
+  // way to give an account a password). When a password IS supplied the full strength chain runs; when omitted
   // Zod skips it (`.optional()` below). Service accounts are likewise passwordless.
   password: z.string()
     .min(12, 'Password must be at least 12 characters') // OWASP 2023

@@ -33,6 +33,19 @@ const userFormSchema = z.object({
   role: z.nativeEnum(UserRole),
   status: z.nativeEnum(UserStatus),
   customRoleId: z.string().optional(),
+  // Optional on create: a self-host with no OAuth provider (and no mail key, so no /register)
+  // has NO other way to give a new account a password. Blank = the user signs in with OAuth.
+  // Mirrors CreateUserSchema.password (12+, mixed classes) so the server never rejects what the
+  // form accepted; empty is stripped before submit.
+  password: z.string()
+    .min(12, 'Password must be at least 12 characters')
+    .max(128, 'Password too long')
+    .regex(/[A-Z]/, 'Password must contain an uppercase letter')
+    .regex(/[a-z]/, 'Password must contain a lowercase letter')
+    .regex(/[0-9]/, 'Password must contain a number')
+    .regex(/[^A-Za-z0-9]/, 'Password must contain a special character')
+    .optional()
+    .or(z.literal('')),
 });
 
 export type UserFormData = z.infer<typeof userFormSchema>;
@@ -92,7 +105,10 @@ export default function UserForm({
     setError(null);
     setIsLoading(true);
     try {
-      await onSubmit(data);
+      // Blank password = "will sign in with OAuth": send nothing rather than '' (the API's optional
+      // password runs the full strength chain on any string it receives).
+      const { password, ...rest } = data;
+      await onSubmit(password ? data : rest);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -177,6 +193,29 @@ export default function UserForm({
                   </FormItem>
                 )}
               />
+
+              {mode === 'create' && (
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          value={field.value ?? ''}
+                          type="password"
+                          autoComplete="new-password"
+                          disabled={isLoading}
+                          placeholder="Set one and the account can sign in now; blank = signs in with OAuth"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <FormField

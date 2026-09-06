@@ -21,6 +21,7 @@ interface CreateUserRequest {
   role: UserRole;
   status: UserStatus;
   password?: string;
+  isVerified?: boolean;
   customRoleId?: string;
 }
 
@@ -102,6 +103,10 @@ export async function createUserHandler(
       role: validated.role as UserRole,
       status: validated.status ?? UserStatus.ACTIVE, // honor form status; default ACTIVE when omitted
       password: validated.password,
+      // An admin who sets a password is vouching for the address — the account must be able to
+      // sign in at once (login refuses unverified users; email verification is the SELF-registration
+      // path and a self-host may have no mail key at all). No password = OAuth-link path, unchanged.
+      isVerified: validated.password ? true : undefined,
       customRoleId: validated.customRoleId ?? undefined, // honor form custom role (SUPER_ADMIN-gated below)
     };
 
