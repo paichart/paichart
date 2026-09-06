@@ -45,7 +45,11 @@ const nextConfig = {
             "object-src 'none'",
             "base-uri 'self'",
             "form-action 'self'",
-            "upgrade-insecure-requests",
+            // E11 (devext 2026-09-06): on a plain-http self-host this directive makes the
+            // browser fetch every asset over https:// → ERR_SSL_PROTOCOL_ERROR, blank UI.
+            // Dropped ONLY when APP_BASE_URL is explicitly http://; unset or https keeps it,
+            // so prod is byte-identical even if the env is not visible at build time.
+            ...(/^http:\/\//i.test(process.env.APP_BASE_URL || '') ? [] : ['upgrade-insecure-requests']),
           ].join('; '),
         },
       ],
