@@ -74,8 +74,11 @@ export function LoginForm() {
       // Invalidate auth cache to ensure fresh user data
       await queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
 
-      // Redirect to profile on successful login
-      router.push('/profile');
+      // Land on the per-client setup sheet (same page the OAuth callback uses) — on a self-host
+      // password login is the common path and this is where the install's MCP URL is shown.
+      const u = responseData.user || {};
+      const userParam = encodeURIComponent(JSON.stringify({ name: u.name || u.email || '', email: u.email || '', provider: 'password' }));
+      router.push(`/auth/oauth/success?user=${userParam}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign in');
     }

@@ -82,7 +82,7 @@ function OAuthSuccessPageContent() {
             <div className="animate-spin rounded-full h-12 w-12 border-2 border-emerald-500/20 border-t-emerald-500 mx-auto"></div>
             <div className="animate-ping absolute inset-0 rounded-full h-12 w-12 border-2 border-emerald-500/30 mx-auto"></div>
           </div>
-          <p className="mt-6 text-emerald-600 font-mono text-sm animate-pulse">Completing OAuth authentication...</p>
+          <p className="mt-6 text-emerald-600 font-mono text-sm animate-pulse">Completing sign-in...</p>
         </div>
       </div>
     );

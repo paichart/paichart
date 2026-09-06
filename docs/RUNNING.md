@@ -85,7 +85,7 @@ Then prove the install owns its identity: [VERIFYING-SELF-HOST.md](VERIFYING-SEL
 | Agent templates for POV work | `npm run db:agents` (generic roles) — domain pipelines have their own `scripts/seed-*-templates.ts` |
 | Phase templates | `npm run db:templates` |
 | An API key for Claude Desktop / ChatGPT | log in → Settings → API Keys (mints an RS256 first-party token); paste as `X-API-Key` |
-| Client configuration (Claude Desktop / ChatGPT / Gemini) | log in, then open **`${APP_BASE_URL}/auth/oauth/success`** — the per-client setup sheet, pre-filled with this install's MCP URL. OAuth logins land there automatically; password logins go to `/profile`, so visit it directly |
+| Client configuration (Claude Desktop / ChatGPT / Gemini) | log in, then open **`${APP_BASE_URL}/auth/oauth/success`** — the per-client setup sheet, pre-filled with this install's MCP URL; every login lands there |
 | Self-registration by email | **requires** `BREVO_API_KEY` (+ `BREVO_FROM_EMAIL`): the verification email is how a new user sets their password. Without a mail key, `/register` answers **503 with a clear message and inserts nothing** — create users in `/admin/users` instead (set a password there). OAuth sign-up needs no mail. Password *reset* is disabled by policy. |
 
 ## Verify
