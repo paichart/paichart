@@ -110,7 +110,7 @@ Or start smaller:
 
 ## Run it yourself
 
-The platform is open source under **Apache 2.0** — this repository carries the full source (web app + MCP
+The platform is source-available under the **Elastic License 2.0** (use it, modify it, self-host it — including commercially, inside your own organisation — and redistribute it; the one thing you may not do is offer it to third parties as a hosted or managed service) — this repository carries the full source (web app + MCP
 server) alongside the protocols and verification pack. Self-hosting is seven commands on Node 20 + PostgreSQL 16:
 
 ```bash

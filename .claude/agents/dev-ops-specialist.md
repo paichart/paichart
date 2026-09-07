@@ -294,7 +294,7 @@ lives here — not in a new specialist — until a public release produces recur
   DUPLICATE `APP_BASE_URL` (prod value first — dotenv keeps the first) for months; nothing else would have said so.
 - **Export boundary (Steve's rule)**: server management NEVER exports — `infra/`, monitors, dead-man's-switch,
   health email, `deploy/`, prod smoke tests. App code that touches ops services (`lib/email.ts`) ships env-driven.
-- **PUBLISHED 2026-09-04** — `paichart/paichart` (the existing front-door repo; Apache 2.0). Re-export = `export-public.py
+- **PUBLISHED 2026-09-04** — `paichart/paichart` (the existing front-door repo; Elastic License 2.0 since 2026-09-07, Apache 2.0 before). Re-export = `export-public.py
   --out` → full `test:all-validation` ON THE EXPORT (mandatory before any public push; never rebuild the export under a
   running chain) → `--into ~/paichart` → review → commit as Steve → push. Manifest propagates removals; guards refuse
   wrong-repo runs and >10% removals. **Next**: devext second-machine deployment — start from

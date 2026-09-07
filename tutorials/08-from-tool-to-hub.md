@@ -152,7 +152,7 @@ If you've followed the series this far, the Hub is the live example of every pat
 Three places to look if you want to go deeper:
 
 - **The platform itself** — connect Claude Desktop, ChatGPT, or any MCP client to `https://paichart.app/mcp` and run `services(action: "discover")` against the live hub.
-- **The tutorial series** — `github.com/paichart/paichart` hosts this series, freely shared under CC-BY. (pAIchart's platform code is not open source — the repository is the tutorials, not the application.)
+- **The tutorial series** — `github.com/paichart/paichart` hosts this series, freely shared under CC-BY. (pAIchart's platform code lives in the same repository, source-available under the Elastic License 2.0 — self-host and modify freely; not as a hosted service to third parties.)
 - **The patterns** — the engineering patterns referenced throughout this series (OAuth token minting vs. passthrough, identity-preserving token forwarding, the hub orchestration reference) are pAIchart-internal notes; the chapters quote the parts that matter, so you don't need the originals to apply them.
 
 ---

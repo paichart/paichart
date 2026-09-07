@@ -18,7 +18,7 @@ What it does, in order:
      that need judgment, not sed: remaining paichart.app hosts, CUIDs, company emails).
 Re-runnable. --out recreates a scratch dir. --into merges into an EXISTING checkout of the public repo
 (paichart/paichart, decision 2026-09-04): never overwrites README.md (the front door owns it), replaces
-LICENSE (Apache 2.0 decision), UNIONS .gitignore, writes CLAUDE.public.md as CLAUDE.md, and keeps
+LICENSE (Elastic License 2.0 — decision 2026-09-07, replaced Apache 2.0), UNIONS .gitignore, writes CLAUDE.public.md as CLAUDE.md, and keeps
 .export-manifest so a re-export also DELETES files that stopped crossing — but never touches files the
 public repo owns (anything not in the previous manifest). Refuses if an export path would overwrite a
 repo-owned file. It stages nothing: review `git status` there, then commit.
@@ -131,7 +131,7 @@ def main():
         (kept if inc else dropped).append(p)
         if not inc: why[reason] += 1
 
-    OVERWRITE_OK = {'LICENSE'}          # Apache 2.0 replaces the public repo's MIT (decision 2026-09-04)
+    OVERWRITE_OK = {'LICENSE'}          # ELv2 (2026-09-07) replaced Apache 2.0 (2026-09-04) which replaced the front-door repo's MIT
     MERGE = {'.gitignore'}              # union of lines
     RENAME = {'CLAUDE.public.md': 'CLAUDE.md'}
     if into:
