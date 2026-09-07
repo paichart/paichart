@@ -1089,6 +1089,7 @@ config/logrotate/paichart-oauth
 dev-server.js
 docs/OAUTH-SETUP.md
 docs/RUNNING.md
+docs/SELF-HOST-RUN-SHEET.md
 docs/VERIFYING-SELF-HOST.md
 ecosystem.config.js
 lib/admin/handlers/activity.ts

@@ -130,6 +130,7 @@
 
 # ── docs: stranger-facing only ────────────────────────────────────────────────────
 + docs/RUNNING.md
++ docs/SELF-HOST-RUN-SHEET.md
 + docs/OAUTH-SETUP.md
 + docs/VERIFYING-SELF-HOST.md
 - docs/**

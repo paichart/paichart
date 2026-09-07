@@ -122,6 +122,7 @@ npm run dev                      # web app  → http://localhost:3000
 npm run mcp:http:dev             # MCP hub  → http://localhost:8080/mcp
 ```
 
+- [docs/SELF-HOST-RUN-SHEET.md](docs/SELF-HOST-RUN-SHEET.md) — **start here**: every command from a bare Ubuntu machine to Claude Code talking to your own hub, in order
 - [docs/RUNNING.md](docs/RUNNING.md) — the full first run, the two-process shape, roles, production notes
 - [docs/OAUTH-SETUP.md](docs/OAUTH-SETUP.md) — register your own GitHub / Google / Microsoft apps (optional; password login works without)
 - [docs/VERIFYING-SELF-HOST.md](docs/VERIFYING-SELF-HOST.md) — prove your install owns its identity: every token and OAuth document derives from **your** `APP_BASE_URL`, and tokens for anyone else's issuer are rejected
