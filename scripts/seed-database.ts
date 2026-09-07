@@ -26,6 +26,9 @@ const steps: Array<[string, string]> = [
   ['"system" sentinel user (Activity FK target for system-attributed audit rows)', 'npx ts-node -r tsconfig-paths/register scripts/ensure-system-user.ts'],
   ['Sales theatres / countries (POV creation needs them)', 'node scripts/seed-geographical-data.js'],
   ['Pipeline-harness protocols', 'npx ts-node --project prisma/tsconfig.seed.json scripts/seed-protocol-prompts.ts'],
+  // E13 (devext 2026-09-07): the hub's own server instructions advertise `/prompt HOWTO-get-started` —
+  // without this step a self-host answers "Prompt not found" to its first suggested command.
+  ['Hub operational prompts (HOWTO-get-started, HOWTO-register-service, HOWTO-use-workflows, audits)', 'npx ts-node --project prisma/tsconfig.seed.json scripts/seed-operational-prompts.ts'],
 ];
 
 function main(): void {

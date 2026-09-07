@@ -31,7 +31,7 @@ npm run --silent jwt:keys >> .env # RS256 signing key pair — appends the three
 #  → ADMIN_EMAIL=you@example.com (your first login; ADMIN_PASSWORD optional — generated + printed once if unset)
 
 npm run db:seed                   # one shot, idempotent, safe to re-run: db push → generate → raw-SQL indexes →
-                                  # role grants → first SUPER_ADMIN → "system" sentinel → theatres/countries → protocols
+                                  # role grants → first SUPER_ADMIN → "system" sentinel → theatres/countries → protocols → hub prompts
 
 npm run dev                       # terminal 1 → http://localhost:3000
 npm run mcp:http:dev              # terminal 2 → http://localhost:8080/health
@@ -41,7 +41,7 @@ Log in at http://localhost:3000/login with `ADMIN_EMAIL` and the password you se
 works without any OAuth provider configured; OAuth providers are optional and covered in [OAUTH-SETUP.md](OAUTH-SETUP.md).
 
 The individual steps `db:seed` runs (`db:indexes`, `db:permissions`, `db:admin`, `db:system-user`,
-`seed:protocols`, `node scripts/seed-geographical-data.js`) can each be run alone; all are idempotent.
+`seed:protocols`, `node scripts/seed-geographical-data.js`, the hub-prompts seed `scripts/seed-operational-prompts.ts`) can each be run alone; all are idempotent.
 `db:permissions` never overwrites grants you changed in `/admin/permissions` (`-- --reset` restores the shipped
 defaults); `db:admin` never rotates an existing account's password (`-- --reset-password` does).
 
