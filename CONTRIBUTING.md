@@ -37,3 +37,7 @@ orchestration layers, so a few things up front.
 
 ## Security
 Please do not open public issues for vulnerabilities — see [SECURITY.md](SECURITY.md).
+
+## License of contributions
+This repository is licensed under the [Elastic License 2.0](LICENSE). By opening a pull request you agree that your
+contribution is licensed under the same terms, and that you have the right to grant that license.

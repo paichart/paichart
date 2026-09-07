@@ -1,5 +1,7 @@
 # pAIchart — high-level design in, reviewed low-level design out
 
+[![License: Elastic 2.0](https://img.shields.io/badge/license-Elastic--2.0-blue.svg)](LICENSE) — source-available: self-host, modify, redistribute; not as a hosted service to third parties.
+
 Across network devices, Terraform, and Kubernetes — on an open MCP hub. Give pAIchart a `requirements.md` and a `topology.json` at any fetchable location — and it returns a reviewed low-level design: per-device config, the exact commands that prove it worked, and a rollback. Your team applies it, idempotently and out of band. pAIchart designs and reviews the change; it never applies it.
 
 The LLD is the bottleneck it removes. Producing one today means a senior engineer reading live state across every box, writing config in each vendor's language, and hand-reconciling the values that cross domains. pAIchart does that work as a graph of specialist agents, checks it in three tiers, and hands you one reviewed result to approve. You stop authoring across every system and start approving one package.
