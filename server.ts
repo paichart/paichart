@@ -19,6 +19,13 @@ if (process.env.NODE_ENV === 'production') {
   const { warnings: baseUrlWarnings } = assertPublicBaseUrlConfigured();
   for (const w of baseUrlWarnings) console.warn('[public-base-url]', w);
 }
+// E14: operator endpoint allowlist — name every rejected entry at boot (the pure module has no logger).
+{
+  const { getEndpointAllowlistReport } = require('./lib/utils/endpoint-allowlist');
+  const rep = getEndpointAllowlistReport();
+  for (const r of rep.rejected) console.warn(`[${rep.envName}] ignored entry "${r.raw}": ${r.why}`);
+  if (rep.entries.length) console.warn(`[${rep.envName}] private endpoints admitted: ${rep.entries.join(', ')}`);
+}
 
 declare namespace NodeJS {
   interface ProcessEnv {

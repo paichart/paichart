@@ -36,8 +36,26 @@ for (const u of [
   'http://127.0.0.1/mcp',    // literal loopback
   'http://169.254.169.254/', // cloud metadata
   'http://10.0.0.5/',        // RFC1918
+  // 2026-09-07 (E14 panel, sec-ops P1 / validation F2 — HIGH, socket-proven): IPv6 literals that are IPv4 in
+  // disguise passed the gate because WHATWG URL serialises `[::ffff:127.0.0.1]` as `[::ffff:7f00:1]` and the old
+  // `::ffff:` branch only decoded the dotted form. Judged as the IPv4 they reach now.
+  'http://[::ffff:127.0.0.1]:3107/', // IPv4-mapped, dotted
+  'http://[::ffff:7f00:1]:3107/',    // IPv4-mapped, hex (what the parser actually emits)
+  'http://[::ffff:a9fe:a9fe]/',      // mapped cloud metadata
+  'http://[::ffff:c0a8:0001]/',      // mapped RFC1918
+  'http://[64:ff9b::7f00:1]/',       // NAT64 well-known prefix → loopback
+  'http://[::]/',                    // unspecified → loopback on Linux
+  'http://[::1]/',                   // IPv6 loopback
+  'http://[fe80::1]/',               // link-local
+  'http://[fd00::1]/',               // ULA
+  'http://localhost./',              // trailing dot defeated the exact-string hostname set
+  'http://LOCALHOST/',               // case
 ]) check(`SSRF blocks ${u}`, validateUrlSafety(u).safe === false);
 check('SSRF allows legit https', validateUrlSafety('https://api.example.com/mcp').safe === true);
+// Negative controls — the IPv6 path must not over-block public space
+check('SSRF allows public IPv6', validateUrlSafety('http://[2606:4700::1111]/').safe === true);
+check('SSRF allows mapped PUBLIC IPv4', validateUrlSafety('http://[::ffff:8.8.8.8]/').safe === true);
+check('SSRF allows FQDN with trailing dot', validateUrlSafety('http://example.com./').safe === true);
 
 // ── B. MA-1 — isDemo / reserved POV metadata is admin/system-only ──
 check('MA-1 non-admin isDemo dropped', !(sanitizePovMetadata({ isDemo: true, n: 1 }, { isAdmin: false }) as any).isDemo);

@@ -1509,6 +1509,7 @@ lib/utils/cn.ts
 lib/utils/cors.ts
 lib/utils/cuid-validation.js
 lib/utils/dateFormat.ts
+lib/utils/endpoint-allowlist.js
 lib/utils/ensure-object.ts
 lib/utils/fetch-utils.d.ts
 lib/utils/fetch-utils.ts
@@ -1761,6 +1762,7 @@ scripts/test-finalize-response.ts
 scripts/test-form-field-patterns.ts
 scripts/test-harness-mode-resolver.ts
 scripts/test-hub-discovery-caller-isolation.ts
+scripts/test-hub-endpoint-allowlist.ts
 scripts/test-hub-tool-guidance.ts
 scripts/test-injection-patterns.ts
 scripts/test-keep-best-selection.ts

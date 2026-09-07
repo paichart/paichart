@@ -92,6 +92,13 @@ if (process.env.NODE_ENV === 'production') {
   const { warnings: baseUrlWarnings } = assertPublicBaseUrlConfigured();
   for (const w of baseUrlWarnings) authLogger.warn({ component: 'public-base-url' }, w);
 }
+{
+  // E14: operator endpoint allowlist — name every rejected entry at boot (the pure module has no logger).
+  const { getEndpointAllowlistReport } = require('./lib/utils/endpoint-allowlist');
+  const rep = getEndpointAllowlistReport();
+  for (const r of rep.rejected) authLogger.warn({ component: 'endpoint-allowlist', entry: r.raw }, `${rep.envName}: ignored entry — ${r.why}`);
+  if (rep.entries.length) authLogger.warn({ component: 'endpoint-allowlist', entries: rep.entries }, `${rep.envName}: private endpoints admitted`);
+}
 // Refactor Wave 1 (2026-05-19): MCP method classifier extracted (was inline at
 // MCP_PUBLIC_METHODS / isProtectedMethod). See
 // cline_docs/reviews/mcp-server-http-clean-refactor-2026-05-19/current-state-inventory.md §C.

@@ -96,6 +96,29 @@ curl -s localhost:8080/.well-known/oauth-authorization-server  # issuer must equ
 curl -s -o /dev/null -w '%{http_code}\n' localhost:8080/mcp    # 401 — correct without a token
 ```
 
+## Registering a service on your own network
+The hub refuses to connect to private addresses (loopback, RFC 1918, link-local, `.local`) — an SSRF guard that is
+right for a public SaaS and wrong for a self-host whose services live next to it. **You, the operator, declare
+where the hub may connect**, by network address, in `.env`:
+
+```bash
+HUB_PRIVATE_ENDPOINT_ALLOWLIST="127.0.0.1:3107,192.168.1.0/24"
+```
+
+- Entries are **IPv4 literals with a port** (`a.b.c.d:port` — that host, that port only) or **IPv4 CIDRs**
+  (`a.b.c.d/n`, n ≥ 8, network address with host bits zero — every port on that network). Nothing else: hostnames
+  (the hub does not resolve names, so a name would be a promise about a resolver it never consults), IPv6,
+  schemes/paths, port-less hosts. A malformed entry is ignored and named in the server log at boot; the rest
+  still apply; if nothing parses, the guard behaves exactly as if the variable were unset. Never allow-all.
+- Never allowlistable, even if listed: `169.254.0.0/16` (cloud metadata), `0.0.0.0/8`, and **the hub's own
+  listeners** (`APP_BASE_URL` / `APP_INTERNAL_BASE_URL` host:port and the MCP port) — a service pointing back at
+  the hub would loop. Loopback is allowed only as an exact `127.x.x.x:port`, never as a CIDR.
+- Restart both processes after changing it (read once at boot). Each admitted registration is logged at WARN.
+- **Reachability is not trust.** The hub will forward *your own* scoped RS256 token to an allowlisted address,
+  over plain `http://` — put a real MCP server there, on a network you control.
+
+Then register as usual: `registry(action: 'register', name: '…', endpoint: 'http://127.0.0.1:3107/mcp', …)`.
+
 ## Production shape (reference)
 `APP_BASE_URL` is the single public origin. A reverse proxy splits it:
 
