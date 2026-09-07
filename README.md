@@ -112,26 +112,32 @@ Or start smaller:
 
 ## Run it yourself
 
-The platform is source-available under the **Elastic License 2.0** (use it, modify it, self-host it — including commercially, inside your own organisation — and redistribute it; the one thing you may not do is offer it to third parties as a hosted or managed service) — this repository carries the full source (web app + MCP
-server) alongside the protocols and verification pack. Self-hosting is seven commands on Node 20 + PostgreSQL 16:
+**Complete install on a fresh Ubuntu 24.04 machine or VM — [docs/SELF-HOST-RUN-SHEET.md](docs/SELF-HOST-RUN-SHEET.md).**
+Every command in order, nothing assumed: PostgreSQL 16 and Node 20 installed, the database created, the app
+cloned, configured, seeded and started, the first login, an admin account, Claude Code installed and connected
+to your hub, and (optionally) services on your own network registered. About 40 minutes, most of it `npm ci`.
+
+Already have Node 20, PostgreSQL 16 and an empty database? The short form:
 
 ```bash
 git clone https://github.com/paichart/paichart && cd paichart && npm ci
-cp .env.example .env            # set DATABASE_URL and ADMIN_EMAIL; then:
-npm run jwt:keys >> .env         # RS256 signing keys
-ADMIN_EMAIL=you@example.com npm run db:seed   # schema, grants, first SUPER_ADMIN (password printed once), protocols
-npm run dev                      # web app  → http://localhost:3000
-npm run mcp:http:dev             # MCP hub  → http://localhost:8080/mcp
+cp .env.example .env               # set DATABASE_URL, APP_BASE_URL and ADMIN_EMAIL; then:
+npm run --silent jwt:keys >> .env  # RS256 signing keys (--silent keeps npm's banner out of .env)
+npm run db:seed                    # schema, grants, first SUPER_ADMIN (password printed once), protocols, hub prompts
+npm run dev                        # web app  → http://localhost:3000
+npm run mcp:http:dev               # MCP hub  → http://localhost:8080/mcp
 ```
 
-- [docs/SELF-HOST-RUN-SHEET.md](docs/SELF-HOST-RUN-SHEET.md) — **start here**: every command from a bare Ubuntu machine to Claude Code talking to your own hub, in order
-- [docs/RUNNING.md](docs/RUNNING.md) — the full first run, the two-process shape, roles, production notes
-- [docs/OAUTH-SETUP.md](docs/OAUTH-SETUP.md) — register your own GitHub / Google / Microsoft apps (optional; password login works without)
+- [docs/RUNNING.md](docs/RUNNING.md) — what each step does: the two-process shape, roles, `APP_BASE_URL`, production notes
 - [docs/VERIFYING-SELF-HOST.md](docs/VERIFYING-SELF-HOST.md) — prove your install owns its identity: every token and OAuth document derives from **your** `APP_BASE_URL`, and tokens for anyone else's issuer are rejected
+- [docs/OAUTH-SETUP.md](docs/OAUTH-SETUP.md) — register your own GitHub / Google / Microsoft apps (optional; password login works without)
 - [CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md)
 
-The hosted service at paichart.app runs this same code. Server-management tooling (monitors, deploy, backups)
-is intentionally not part of the repository.
+The platform is source-available under the **Elastic License 2.0**: use it, modify it, self-host it — including
+commercially, inside your own organisation — and redistribute it; the one thing you may not do is offer it to
+third parties as a hosted or managed service. This repository carries the full source (web app + MCP server)
+alongside the protocols and verification pack. The hosted service at paichart.app runs this same code.
+Server-management tooling (monitors, deploy, backups) is intentionally not part of the repository.
 
 ## Under the Hood
 
