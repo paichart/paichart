@@ -163,38 +163,35 @@ is listening — and
 Programs (step 10) fetch their design artifacts — `requirements.md`, `topology.json` — through a browser-automation
 service the hub calls; the hub has no URL-fetch tool of its own, by design: the fetch runs in a container, not in the hub
 process. This repo ships that service (`services/browser-automation-service` — Playwright, no keys) and a compose file that
-runs only it. Needs Docker (step 3's optional block); the image is ~1.5 GB and the container is capped at 1.5 GB RAM.
+runs only it. Needs Docker (step 3's optional block); the image is a 1.5 GB download (~3 GB on disk) and the container is
+capped at 1.5 GB RAM.
 
 ```bash
 cd ~/paichart
 docker compose -f docker-compose.self-host.yml up -d --build   # first run: several minutes (image pull + build)
 curl -s localhost:3100/health                                  # expect "status":"healthy"
+npm run seed:browser-service                                   # registers it in the hub as a first-party service — ends "Status: ACTIVE"
 ```
 
-It listens on `127.0.0.1:3100` — a private address, which the hub refuses until you, the operator, list it. Add the
-allowlist to `.env`, restart the MCP process (the list is read once at boot), and read the count back from the live process:
-```bash
-echo 'HUB_PRIVATE_ENDPOINT_ALLOWLIST=127.0.0.1:3100' >> .env
-pkill -f "mcp-server-http-clea[n]"; sleep 2
-NODE_ENV=production nohup node mcp-server-http-clean.js > ~/mcp.log 2>&1 &
-sleep 8; curl -s localhost:8080/health | grep -o '"endpointAllowlist":{[^}]*}'   # expect "entries":1,"rejected":0
-```
-(IPv4 `host:port` or CIDR only — hostnames, link-local, `0.0.0.0/8` and the hub's own listeners are never allowlistable.
-Rules and reasoning: RUNNING.md → "Registering a service on your own network".)
+Why a seed and not `registry(action: 'register')`: this service's name is **reserved** — the hub keeps the names of its
+first-party services exclusive, so a user-registered service can never capture one — and first-party services on the hub's
+own host are exempt from the private-address guard. So there is no allowlist step here. A service you write yourself is the
+other case: its private address needs `HUB_PRIVATE_ENDPOINT_ALLOWLIST` — RUNNING.md → "Registering a service on your own
+network" (`services/weather-service` is the pattern; it needs a weather API key of your own).
 
 Then in Claude Code (`claude -c`), the same shape as step 9:
 
-1. *"Register the service described in `descriptors/browser-automation-descriptor.json` with the hub, full tool schemas,
-   and show me the registry's response verbatim."*
-   → `status: ACTIVE`, with a LOW warning `OPERATOR_ALLOWLISTED_ENDPOINT` — that warning is the allowlist doing its job.
-2. *"Through the hub, ask `browser-automation-service` to `scrape_page`
+1. *"Show me the tools of the Browser Automation Service as the hub reports them."*
+   → `registry(action: 'tools', service_name: 'Browser Automation Service')` → 7 tools with full schemas
+   (`scrape_page`, `fill_form`, `click_element`, `take_screenshot`, `generate_pdf`, `run_script`, `trace_session`).
+2. *"Through the hub, ask the browser-automation-service to `scrape_page`
    `https://raw.githubusercontent.com/paichart/paichart/main/program-artifacts/firewall-a3-partner-path-r2/requirements.md`
    with selectors `{doc: 'pre'}`, and show me the call and the result."*
-   → the document's text comes back *through your hub* — exactly what a program's Program Architect does in step 10.
+   → `services(action: 'call', targetService: 'browser-automation-service', tool: 'scrape_page', …)` → `success: true`
+   and the document's text, *through your hub* — exactly the call a program's Program Architect makes in step 10.
 
-One honest note: the hub's SSRF guard also carries a built-in list of service names it exempts, and this name is on it, so
-this particular registration would land even without the allowlist. The allowlist step above is the durable procedure — it
-is what admits any *other* service you host — and retiring that built-in list in its favour is tracked.
+The registry id is `browser-automation-service`, the display name `Browser Automation Service`: `services(action: 'call')`
+accepts either; `registry(action: 'tools')` wants the display name.
 
 ## 10. Operate it from Claude — the GUI is not how pAIchart is run
 Two things come with the clone that make step 8 more than a connector:

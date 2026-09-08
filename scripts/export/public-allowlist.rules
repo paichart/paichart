@@ -70,9 +70,10 @@
 + services/browser-automation-service/**
 - services/**
 + docker-compose.self-host.yml
-# their seed/registration scripts follow the same decision — the self-host registers via
-# registry(action:'register') from descriptors/browser-automation-descriptor.json (public-owned)
+# their seed scripts follow the same decision. The browser service is SEEDED, not registered: its name is
+# reserved (service-registration-handler.js reserved-name guard) and first-party by design — run sheet 9b.
 + scripts/seed-weather-service.ts
++ scripts/seed-browser-automation-service.ts
 - scripts/seed-*-service.ts
 
 # ── .claude/: ship ~2/3 (CLAUDE-DIR-SCAN.md); runbooks + incident diagnostics stay ──

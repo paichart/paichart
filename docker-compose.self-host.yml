@@ -7,7 +7,7 @@
 #   docker compose -f docker-compose.self-host.yml down            # stop
 #
 # The service binds to 127.0.0.1 only: reachable from the hub on the same host, never from the network.
-# Register it with the hub after allowlisting 127.0.0.1:3100 — run sheet step 9b.
+# Then `npm run seed:browser-service` registers it in the hub — run sheet step 9b.
 
 services:
   browser-automation:
@@ -21,9 +21,6 @@ services:
     environment:
       - NODE_ENV=production
       - BROWSER_SERVICE_PORT=3100
-      - BROWSER_POOL_SIZE=${BROWSER_POOL_SIZE:-2}
-      - BROWSER_POOL_TIMEOUT=${BROWSER_POOL_TIMEOUT:-30000}
-      - BROWSER_MAX_PAGES=${BROWSER_MAX_PAGES:-10}
     deploy:
       resources:
         limits:

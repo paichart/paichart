@@ -85,7 +85,7 @@ Then prove the install owns its identity: [VERIFYING-SELF-HOST.md](VERIFYING-SEL
 |---|---|
 | Agent / phase templates | already seeded by `db:seed`; re-run `npm run db:agents`, `npm run db:templates` or a domain `scripts/seed-*-templates.ts` after editing the library (idempotent) |
 | Your own sales theatres / countries / regions | a default set is seeded (4 theatres, 15 countries); `Settings → Geographical` is per-user defaults for new POVs, not an editor. Add countries/regions by editing `data/geographical-default.json` (or your own file via `node scripts/seed-geographical-data.js --file my-geo.json`) and re-running the seed (adds missing rows; never renames or deletes). A new theatre is a schema change (`SalesTheatre` enum → `npx prisma db push`) — `.claude/knowledge/guides/GEOGRAPHICAL_DATA_MANAGEMENT.md` |
-| Services in the hub registry | **empty by design** — prod's services are private infrastructure; register your own (below). Shipped references: `services/browser-automation-service` (Playwright; **programs need it** — run sheet step 9b: `docker compose -f docker-compose.self-host.yml up -d --build`, allowlist `127.0.0.1:3100`, register from `descriptors/browser-automation-descriptor.json`) and `services/weather-service` (the write-your-own pattern; needs a weather API key, `WEATHER_SERVICE_PORT=3102`) |
+| Services in the hub registry | **empty by design** — prod's services are private infrastructure; register your own (below). Shipped references: `services/browser-automation-service` (Playwright; **programs need it** — run sheet step 9b: `docker compose -f docker-compose.self-host.yml up -d --build`, then `npm run seed:browser-service`; a first-party seeded service, no allowlist) and `services/weather-service` (the write-your-own pattern; needs a weather API key, `WEATHER_SERVICE_PORT=3102`) |
 | An API key for Claude Code / Claude Desktop / ChatGPT | log in → pAIchart logo (top-right) → **Profile Settings** → **MCP API Key** → **Generate New API Key** (an RS256 first-party token, shown once); paste as `X-API-Key` |
 | Client configuration (Claude Desktop / ChatGPT / Gemini) | log in, then open **`${APP_BASE_URL}/auth/oauth/success`** — the per-client setup sheet, pre-filled with this install's MCP URL; every login lands there |
 | Self-registration by email | **requires** `BREVO_API_KEY` (+ `BREVO_FROM_EMAIL`): the verification email is how a new user sets their password. Without a mail key, `/register` answers **503 with a clear message and inserts nothing** — create users in `/admin/users` instead — the create dialog's **optional password** makes the account sign-in-ready at once (an admin-set password counts as verification); leave it blank for accounts that will sign in with OAuth. OAuth sign-up needs no mail. Password *reset* is disabled by policy. |
@@ -125,8 +125,7 @@ HUB_PRIVATE_ENDPOINT_ALLOWLIST="127.0.0.1:3107,192.168.1.0/24"
 - **Reachability is not trust.** The hub will forward *your own* scoped RS256 token to an allowlisted address,
   over plain `http://` — put a real MCP server there, on a network you control.
 
-Then register as usual: `registry(action: 'register', name: '…', endpoint: 'http://127.0.0.1:3107/mcp', …)`. The shipped
-worked example of this whole procedure is the browser-automation service — run sheet step 9b.
+Then register as usual: `registry(action: 'register', name: '…', endpoint: 'http://127.0.0.1:3107/mcp', …)`.
 
 ## Production shape (reference)
 `APP_BASE_URL` is the single public origin. A reverse proxy splits it:

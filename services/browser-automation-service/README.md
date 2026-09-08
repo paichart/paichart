@@ -8,17 +8,16 @@ the fetch runs here, in a container, not in the hub process.
 
 - Transport: MCP over SSE — `GET /sse` + `POST /message`; `GET /health`; `GET /tools` (the schemas).
 - Port: `BROWSER_SERVICE_PORT` (default `3100`). The self-host compose binds it to **127.0.0.1 only**.
-- Image: `mcr.microsoft.com/playwright:v1.57.0-jammy` (Playwright is Apache-2.0; the image is ~1.5 GB).
-- Env: `BROWSER_POOL_SIZE` (default 3; 2 in the self-host compose), `BROWSER_POOL_TIMEOUT` ms, `BROWSER_MAX_PAGES`.
-  No keys, no secrets.
+- Image: `mcr.microsoft.com/playwright:v1.57.0-jammy` (Playwright is Apache-2.0; 1.5 GB download, ~3 GB on disk).
+- Env: only `BROWSER_SERVICE_PORT`. No keys, no secrets. (Browser pool size is fixed at 3 in code.)
 
 ## Run it (self-host)
 ```bash
 docker compose -f docker-compose.self-host.yml up -d --build    # from the repo root
 curl -s localhost:3100/health
 ```
-Then allowlist `127.0.0.1:3100` for the hub and register it from
-`descriptors/browser-automation-descriptor.json` — `docs/SELF-HOST-RUN-SHEET.md` step 9b has the exact steps.
+Then `npm run seed:browser-service` (from the repo root, `.env` present) registers it in the hub as a first-party
+service — its name is reserved, so it is seeded rather than registered. `docs/SELF-HOST-RUN-SHEET.md` step 9b.
 
 ## Tools
 `scrape_page`, `fill_form`, `click_element`, `take_screenshot`, `generate_pdf`, `run_script`, `trace_session`

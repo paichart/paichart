@@ -197,6 +197,7 @@
     "db:system-user": "ts-node -r tsconfig-paths/register scripts/ensure-system-user.ts",
     "db:templates": "ts-node -r tsconfig-paths/register scripts/populate-phase-templates-improved.ts",
     "db:agents": "ts-node -r tsconfig-paths/register scripts/seed-agent-templates.ts",
+    "seed:browser-service": "ts-node -r tsconfig-paths/register scripts/seed-browser-automation-service.ts",
     "db:permissions": "ts-node -r tsconfig-paths/register scripts/setup-permissions.ts",
     "setup-demo-mode": "ts-node -r tsconfig-paths/register scripts/setup-demo-mode.ts",
     "reset-demo-povs": "ts-node -r tsconfig-paths/register scripts/setup-demo-mode.ts --reset",

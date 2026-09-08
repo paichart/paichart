@@ -1682,6 +1682,7 @@ scripts/report-template-freshness.ts
 scripts/run-baseline.sh
 scripts/seed-agent-templates.ts
 scripts/seed-artifact-synthesis-templates.ts
+scripts/seed-browser-automation-service.ts
 scripts/seed-data/google-secops-tools.json
 scripts/seed-data/purple-ai-tools.json
 scripts/seed-data/trend-vision-one-tools.json
