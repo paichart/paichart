@@ -1738,6 +1738,7 @@ scripts/test-containment-enrichment-branches.ts
 scripts/test-containment-public-parity.ts
 scripts/test-context-builder-parity.ts
 scripts/test-contract-propagation-enrichment.ts
+scripts/test-cookie-secure-derivation.ts
 scripts/test-cross-pov-isolation.ts
 scripts/test-demo-write-coverage.ts
 scripts/test-derivation-containment.ts

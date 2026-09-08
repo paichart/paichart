@@ -41,7 +41,10 @@ export const config = {
   cookie: {
     accessToken: process.env.COOKIE_ACCESS_TOKEN || 'token',
     refreshToken: process.env.COOKIE_REFRESH_TOKEN || 'refresh_token',
-    secure: process.env.NODE_ENV === 'production',
+    // E33 (2026-09-09): derived from the PUBLIC origin's scheme, not NODE_ENV. A production build
+    // served over plain http (a self-host on a LAN) set Secure cookies the browser then never sent
+    // back, so every page after login bounced to /login. https origin ⇒ Secure (prod unchanged).
+    secure: PUBLIC_BASE_URL.startsWith('https://'),
     sameSite: 'lax' as const,
     domain: process.env.COOKIE_DOMAIN || undefined,
     path: '/',

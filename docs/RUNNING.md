@@ -26,7 +26,9 @@ npm run --silent jwt:keys >> .env # RS256 signing key pair — appends the three
                                   # --silent matters: without it npm's "> jwt:keys" banner lands in .env too (harmless to the
                                   # servers, but `source .env` then runs it as a command and creates a stray file)
 #  → OAUTH_STATE_SECRET: any strong random string (openssl rand -hex 32)
-#  → ANTHROPIC_API_KEY (or set a provider key per-user in Settings after login)
+#  → ANTHROPIC_API_KEY — NOT read by the app at runtime. After the seed, `npm run llm:init` copies it into the
+#    system provider settings (Admin → Settings → LLM), which every user on "use system provider" inherits;
+#    a user can instead paste their own key in Profile Settings → LLM. No key = every agent execution fails at start.
 
 #  → ADMIN_EMAIL=you@example.com (your first login; ADMIN_PASSWORD optional — generated + printed once if unset)
 

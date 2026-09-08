@@ -1,0 +1,5 @@
+---
+# Global defaults (group values override these). Kept minimal — creds live on the group.
+data:
+  lab: network-provisioning-phase4
+  note: "Disposable cEOS validation rig — see ../README.md"
