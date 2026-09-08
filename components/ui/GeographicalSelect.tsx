@@ -3,6 +3,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SalesTheatre } from '@prisma/client';
 import { Label } from '@/components/ui/Label';
 import { Alert, AlertDescription } from '@/components/ui/Alert';
+import { theatreLabel } from '@/lib/constants/theatre-labels';
 
 interface GeographicalSelectProps {
   selectedTheatre?: SalesTheatre;
@@ -103,7 +104,7 @@ export function GeographicalSelect({
           <SelectContent>
             {Object.values(SalesTheatre).map((theatre) => (
               <SelectItem key={theatre} value={theatre}>
-                {theatre.replace('_', ' ')}
+                {theatreLabel(theatre)}
               </SelectItem>
             ))}
           </SelectContent>

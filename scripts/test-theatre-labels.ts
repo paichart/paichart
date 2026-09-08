@@ -19,11 +19,14 @@ check('NORTH_AMERICA reads "America" (Steve, 2026-09-08)', theatreLabel('NORTH_A
 check('unknown value falls back to spaced text, never throws', theatreLabel('NEW_THEATRE') === 'NEW THEATRE');
 
 const sites = ['lib/utils/povColors.ts', 'components/dashboard/GeoDistributionWidget.tsx', 'components/pov/GeographicalFilter.tsx',
-  'components/pov/POVDataVisualization.tsx', 'components/pov/SavedViewsPanel.tsx', 'components/pov/POVSearchAndFilters.tsx'];
+  'components/pov/POVDataVisualization.tsx', 'components/pov/SavedViewsPanel.tsx', 'components/pov/POVSearchAndFilters.tsx',
+  'components/ui/GeographicalSelect.tsx'];
 for (const f of sites) check(`${f} imports the map`, /@\/lib\/constants\/theatre-labels/.test(read(f)));
 const walk = (d: string): string[] => fs.readdirSync(path.join(ROOT, d), { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
 const literal = [...walk('lib'), ...walk('components'), ...walk('app')].filter((f) => /\.(ts|tsx)$/.test(f) && !f.endsWith('theatre-labels.ts') && /'North America'|"North America"/.test(read(f)));
 check(`no display site keeps a 'North America' literal (${literal.join(', ') || 'none'})`, literal.length === 0);
+const rawEnum = [...walk('components'), ...walk('app')].filter((f) => /\.tsx$/.test(f) && /theatre\.replace\(['"]_['"]/.test(read(f)));
+check(`no theatre rendered as the raw enum with underscores spaced (${rawEnum.join(', ') || 'none'})`, rawEnum.length === 0);
 check('bloomberg abbreviations derive from the map', /\.\.\.THEATRE_ABBREV/.test(read('lib/constants/bloomberg-styles.ts')));
 
 console.log(`\n${fails.length ? '❌' : '✅'} test:theatre-labels — ${passed} passed, ${fails.length} failed`);
