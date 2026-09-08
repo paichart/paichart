@@ -21,6 +21,12 @@
 
 import type { Request, Response } from 'express';
 import type { RouteContext } from './route-context';
+// E26 (devext, 2026-09-09): the allowlist's boot-log report can be lost when a restart truncates the log the dying
+// process still holds; /health carries live COUNTS so an operator can verify state without the log. Counts only —
+// the entries are private addresses, and /health is unauthenticated (LAN topology must not leak here).
+const { getEndpointAllowlistReport } = require('../../../utils/endpoint-allowlist') as {
+  getEndpointAllowlistReport: () => { envName: string; entries: string[]; rejected: Array<{ raw: string; why: string }> };
+};
 
 /**
  * Register R1 — GET /health.
@@ -72,6 +78,7 @@ export function registerHealthRoutes(ctx: RouteContext): void {
         evictions: sessionStore.getEvictionStats(),
         backend: 'mcp-server-v5',
       },
+      endpointAllowlist: (() => { const r = getEndpointAllowlistReport(); return { entries: r.entries.length, rejected: r.rejected.length }; })(),
     });
   });
 }

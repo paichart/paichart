@@ -138,22 +138,18 @@ involved. In Claude Code (inside `~/paichart`), ask, in this order:
 the calls and their raw results. A one-line instruction at the start of the session does it: *"I'm learning the hub —
 for every pAIchart tool call, show me the call and the result before you interpret it."*
 
-Also worth trying: `services(action: 'discover')` (finds it by capability), `services(action: 'health', …)`, and
+Also worth trying: `services(action: 'discover')` (finds it by capability), `services(action: 'health', …)` — a
+`statusCode: 405` beside `available: true` is normal: the probe GETs a POST-only MCP endpoint, and the 405 proves something
+is listening — and
 `registry(action: 'update' | 'delete', …)` — the same descriptor shape works for any MCP server you write
 (`descriptors/descriptor.schema.json` and `descriptors/SPEC.md`).
 
-### 9b. A service on your own network (optional)
-The hub refuses private addresses unless you, the operator, list them (RUNNING.md → "Registering a service on
-your own network"):
-```bash
-echo 'HUB_PRIVATE_ENDPOINT_ALLOWLIST="127.0.0.1:3107"' >> ~/paichart/.env     # IPv4 host:port or CIDR; read at boot
-pkill -f "mcp-server-http-clea[n]"; cd ~/paichart && nohup npm run mcp:http:dev > ~/mcp.log 2>&1 &
-for i in $(seq 1 30); do curl -s -o /dev/null --max-time 5 localhost:8080/health && break; sleep 2; done   # late bind (see step 5)
-grep endpoint-allowlist ~/mcp.log                                                 # expect "private endpoints admitted: …"; rejected entries are named here
-```
-Then from Claude: `registry(action: 'register', name: 'my-service', endpoint: 'http://127.0.0.1:3107/mcp', category: …,
-capabilities: { tools: [{ name, description, inputSchema }, …] })` — full tool schemas, not just names, so callers
-never have to guess parameters — then `registry(action: 'tools', service_name: 'my-service')` should grade A.
+### Later: a service on your own network
+When you host an MCP service yourself — the reference is `services/weather-service` in this repo (needs a weather API key
+of your own) — the hub will refuse its private address until you, the operator, list it: `HUB_PRIVATE_ENDPOINT_ALLOWLIST`
+(IPv4 `host:port` or CIDR; hostnames, link-local, `0.0.0.0/8` and the hub's own listeners are never allowlistable; the MCP
+process reads it at boot). Full procedure and the reasoning: RUNNING.md → "Registering a service on your own network".
+Not part of the first-run path — come back to it when you have a service to host.
 
 ## 10. Operate it from Claude — the GUI is not how pAIchart is run
 Two things come with the clone that make step 8 more than a connector:
@@ -188,7 +184,8 @@ Two things come with the clone that make step 8 more than a connector:
 - `pkill -f "some-pattern"` typed inside an `ssh host '…'` command matches the ssh shell itself — use `patter[n]`.
 - Stopping the `npm` wrapper leaves the node child on the port; find it with `ss -ltnp | grep :3000` and kill that.
 - **The MCP process does not hot-reload.** After a `git pull` that touches `lib/`, `scripts/` or `mcp-server-http-clean.js`,
-  restart it (`pkill -f "mcp-server-http-clea[n]"` then `nohup npm run mcp:http:dev …`); the web dev server reloads itself,
+  restart it (`pkill -f "mcp-server-http-clea[n]"; sleep 2;` then `nohup npm run mcp:http:dev …` — the `sleep` matters: without it
+  the dying process still holds the log while the shell truncates it, and the new process's first boot lines vanish); the web dev server reloads itself,
   the MCP server keeps running the old code until you do. Same for re-seeded prompts — it reads the prompt list at boot.
 - The MCP process binds loopback only; nothing else needs to reach :8080 — the web server on :3000 proxies `/mcp` and `/oauth/*` to it.
 - `curl` cannot see CSP; only a browser can. Step 3 is not optional.

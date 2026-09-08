@@ -115,7 +115,13 @@ HUB_PRIVATE_ENDPOINT_ALLOWLIST="127.0.0.1:3107,192.168.1.0/24"
 - Never allowlistable, even if listed: `169.254.0.0/16` (cloud metadata), `0.0.0.0/8`, and **the hub's own
   listeners** (`APP_BASE_URL` / `APP_INTERNAL_BASE_URL` host:port and the MCP port) — a service pointing back at
   the hub would loop. Loopback is allowed only as an exact `127.x.x.x:port`, never as a CIDR.
-- Restart both processes after changing it (read once at boot). Each admitted registration is logged at WARN.
+- Restart the MCP process after changing it (read once at boot). Verify the parse WITHOUT relying on the boot log — a restart
+  can truncate the log the dying process still holds and lose those first lines (E26):
+  ```bash
+  set -a; . ./.env; set +a; node -e "console.log(require('./lib/utils/endpoint-allowlist').getEndpointAllowlistReport())"
+  curl -s localhost:8080/health | grep -o '"endpointAllowlist":{[^}]*}'      # live counts from the running process
+  ```
+  Each admitted registration is logged at WARN.
 - **Reachability is not trust.** The hub will forward *your own* scoped RS256 token to an allowlisted address,
   over plain `http://` — put a real MCP server there, on a network you control.
 
