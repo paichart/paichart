@@ -29,6 +29,19 @@ const steps: Array<[string, string]> = [
   // E13 (devext 2026-09-07): the hub's own server instructions advertise `/prompt HOWTO-get-started` —
   // without this step a self-host answers "Prompt not found" to its first suggested command.
   ['Hub operational prompts (HOWTO-get-started, HOWTO-register-service, HOWTO-use-workflows, audits)', 'npx ts-node --project prisma/tsconfig.seed.json scripts/seed-operational-prompts.ts'],
+  // E15 (devext clean-slate replay, 2026-09-08): a first install landed in a GUI with NO agent templates — db:seed
+  // seeded protocols and prompts only, and the templates were an "optional next step" the run sheet never named.
+  // A complete install needs them; every seed is idempotent (findFirst → update/create) and prod never runs
+  // db:seed (prod re-seeds templates by hand after a deploy — that policy is unchanged).
+  ['Agent templates — generic roles', 'npx ts-node -r tsconfig-paths/register scripts/seed-agent-templates.ts'],
+  ['Pipeline Harness template', 'npx ts-node -r tsconfig-paths/register scripts/seed-harness-template.ts'],
+  ['Artifact-synthesis templates', 'npx ts-node --project prisma/tsconfig.seed.json scripts/seed-artifact-synthesis-templates.ts'],
+  ['Program templates (pipeline-of-pipelines)', 'npx ts-node -r tsconfig-paths/register scripts/seed-program-templates.ts'],
+  ['Domain templates — network provisioning', 'npx ts-node -r tsconfig-paths/register scripts/seed-network-provisioning-templates.ts'],
+  ['Domain templates — Terraform IaC', 'npx ts-node -r tsconfig-paths/register scripts/seed-terraform-iac-templates.ts'],
+  ['Domain templates — Kubernetes GitOps', 'npx ts-node -r tsconfig-paths/register scripts/seed-kubernetes-gitops-templates.ts'],
+  ['KPI templates', 'npx ts-node -r tsconfig-paths/register scripts/seed-kpi-templates.ts'],
+  ['Phase templates', 'npx ts-node -r tsconfig-paths/register scripts/populate-phase-templates-improved.ts'],
 ];
 
 function main(): void {
@@ -40,7 +53,7 @@ function main(): void {
     execSync(cmd, { stdio: 'inherit' });
     console.log('');
   });
-  console.log('✅ db:seed complete. Optional next: npm run db:agents (generic agent templates), npm run db:templates (phase templates).');
+  console.log('✅ db:seed complete — schema, grants, first SUPER_ADMIN, protocols, hub prompts, agent/harness/program/domain/phase templates. The Services registry starts EMPTY by design: register your own (docs/RUNNING.md → "Registering a service on your own network"; services/weather-service is the reference service).');
 }
 
 try {

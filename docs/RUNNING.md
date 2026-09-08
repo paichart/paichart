@@ -31,7 +31,8 @@ npm run --silent jwt:keys >> .env # RS256 signing key pair — appends the three
 #  → ADMIN_EMAIL=you@example.com (your first login; ADMIN_PASSWORD optional — generated + printed once if unset)
 
 npm run db:seed                   # one shot, idempotent, safe to re-run: db push → generate → raw-SQL indexes →
-                                  # role grants → first SUPER_ADMIN → "system" sentinel → theatres/countries → protocols → hub prompts
+                                  # role grants → first SUPER_ADMIN → "system" sentinel → theatres/countries → protocols → hub prompts →
+                                  # agent / harness / program / domain / phase templates
 
 npm run dev                       # terminal 1 → http://localhost:3000
 npm run mcp:http:dev              # terminal 2 → http://localhost:8080/health
@@ -41,7 +42,7 @@ Log in at http://localhost:3000/login with `ADMIN_EMAIL` and the password you se
 works without any OAuth provider configured; OAuth providers are optional and covered in [OAUTH-SETUP.md](OAUTH-SETUP.md).
 
 The individual steps `db:seed` runs (`db:indexes`, `db:permissions`, `db:admin`, `db:system-user`,
-`seed:protocols`, `node scripts/seed-geographical-data.js`, the hub-prompts seed `scripts/seed-operational-prompts.ts`) can each be run alone; all are idempotent.
+`seed:protocols`, `node scripts/seed-geographical-data.js`, the hub-prompts seed, `db:agents` and the other template seeds) can each be run alone; all are idempotent. **Run alone, they are env-blind** — `set -a; . ./.env; set +a` first, or they fail on `DATABASE_URL` (`db:seed` loads `.env` for all of them).
 `db:permissions` never overwrites grants you changed in `/admin/permissions` (`-- --reset` restores the shipped
 defaults); `db:admin` never rotates an existing account's password (`-- --reset-password` does).
 
@@ -82,9 +83,10 @@ Then prove the install owns its identity: [VERIFYING-SELF-HOST.md](VERIFYING-SEL
 ## Optional next steps
 | Want | Do |
 |---|---|
-| Agent templates for POV work | `npm run db:agents` (generic roles) — domain pipelines have their own `scripts/seed-*-templates.ts` |
-| Phase templates | `npm run db:templates` |
-| An API key for Claude Desktop / ChatGPT | log in → Settings → API Keys (mints an RS256 first-party token); paste as `X-API-Key` |
+| Agent / phase templates | already seeded by `db:seed`; re-run `npm run db:agents`, `npm run db:templates` or a domain `scripts/seed-*-templates.ts` after editing the library (idempotent) |
+| Your own sales theatres / countries / regions | a default set is seeded (4 theatres, 17 countries). Add countries/regions by editing `scripts/seed-geographical-data.js` and re-running it (adds missing rows; never renames or deletes). A new theatre is a schema change (`SalesTheatre` enum → `npx prisma db push`) — `.claude/knowledge/guides/GEOGRAPHICAL_DATA_MANAGEMENT.md` |
+| Services in the hub registry | **empty by design** — prod's services are private infrastructure; register your own (below), starting with the reference `services/weather-service` (`WEATHER_SERVICE_PORT=3102`, then allowlist `127.0.0.1:3102` and `registry(action: 'register', …)`) |
+| An API key for Claude Code / Claude Desktop / ChatGPT | log in → pAIchart logo (top-right) → **Profile Settings** → **MCP API Key** → **Generate New API Key** (an RS256 first-party token, shown once); paste as `X-API-Key` |
 | Client configuration (Claude Desktop / ChatGPT / Gemini) | log in, then open **`${APP_BASE_URL}/auth/oauth/success`** — the per-client setup sheet, pre-filled with this install's MCP URL; every login lands there |
 | Self-registration by email | **requires** `BREVO_API_KEY` (+ `BREVO_FROM_EMAIL`): the verification email is how a new user sets their password. Without a mail key, `/register` answers **503 with a clear message and inserts nothing** — create users in `/admin/users` instead — the create dialog's **optional password** makes the account sign-in-ready at once (an admin-set password counts as verification); leave it blank for accounts that will sign in with OAuth. OAuth sign-up needs no mail. Password *reset* is disabled by policy. |
 

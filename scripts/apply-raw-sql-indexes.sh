@@ -30,6 +30,11 @@ if [ -z "${DATABASE_URL:-}" ]; then
     echo "❌ ERROR: DATABASE_URL not set — source .env.production (or the deploy env) first."
     exit 1
 fi
+# psql speaks libpq, not Prisma: strip Prisma-only query parameters (pgbouncer, connection_limit, pool_timeout,
+# schema, …) that make psql fail with "invalid URI query parameter" — a Supabase / pgbouncer self-host hits this on
+# its first db:seed (found 2026-09-08). libpq parameters (sslmode, connect_timeout, application_name) are kept.
+DATABASE_URL=$(printf '%s' "$DATABASE_URL" | sed -E 's/([?&])(pgbouncer|connection_limit|pool_timeout|schema|socket_timeout|statement_cache_size|pgbouncer_mode)=[^&]*//g; s/^([^?]*)&/\1?/; s/[?&]$//')
+export DATABASE_URL
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
