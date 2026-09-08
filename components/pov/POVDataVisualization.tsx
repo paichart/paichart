@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { POVStatus, Priority, SalesTheatre } from '@prisma/client';
 import { ExtendedPoVDetails } from '@/lib/pov/hooks/usePOVList';
 import { cn } from '@/lib/utils';
+import { theatreLabel, theatreShort } from '@/lib/constants/theatre-labels';
 
 interface POVDataVisualizationProps {
   povs: ExtendedPoVDetails[];
@@ -73,18 +74,7 @@ export function POVDataVisualization({ povs }: POVDataVisualizationProps) {
   
   // Format theatre name for display
   function formatTheatreName(theatre: SalesTheatre) {
-    switch (theatre) {
-      case 'NORTH_AMERICA':
-        return 'North America';
-      case 'LAC':
-        return 'Latin America & Caribbean';
-      case 'EMEA':
-        return 'Europe, Middle East & Africa';
-      case 'APJ':
-        return 'Asia Pacific & Japan';
-      default:
-        return String(theatre).replace('_', ' ');
-    }
+    return theatreLabel(theatre);
   }
   
   // Get status color

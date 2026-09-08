@@ -131,6 +131,7 @@
 # ── docs: stranger-facing only ────────────────────────────────────────────────────
 + docs/RUNNING.md
 + docs/SELF-HOST-RUN-SHEET.md
++ data/geographical-default.json
 + docs/OAUTH-SETUP.md
 + docs/VERIFYING-SELF-HOST.md
 - docs/**

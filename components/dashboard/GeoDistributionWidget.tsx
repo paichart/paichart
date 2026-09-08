@@ -2,6 +2,7 @@ import { SalesTheatre } from '@prisma/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { ScrollArea } from '@/components/ui/ScrollArea';
+import { theatreLabel, theatreShort } from '@/lib/constants/theatre-labels';
 
 interface GeoDistributionData {
   byTheatre: Record<SalesTheatre, number>;
@@ -23,18 +24,7 @@ export function GeoDistributionWidget({
   onFilterChange,
 }: GeoDistributionWidgetProps) {
   const formatSalesTheatre = (theatre: SalesTheatre) => {
-    switch (theatre) {
-      case 'NORTH_AMERICA':
-        return 'North America';
-      case 'LAC':
-        return 'Latin America & Caribbean';
-      case 'EMEA':
-        return 'EMEA';
-      case 'APJ':
-        return 'APJ';
-      default:
-        return theatre;
-    }
+    return theatreLabel(theatre);
   };
 
   const totalPOVs = Object.values(data.byTheatre).reduce((sum, count) => sum + count, 0);

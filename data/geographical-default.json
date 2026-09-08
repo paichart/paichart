@@ -1,0 +1,216 @@
+{
+  "NORTH_AMERICA": [
+    {
+      "name": "United States",
+      "code": "US",
+      "regions": [
+        {
+          "name": "East Coast",
+          "type": "EAST"
+        },
+        {
+          "name": "West Coast",
+          "type": "WEST"
+        },
+        {
+          "name": "Central",
+          "type": "CENTRAL"
+        }
+      ]
+    },
+    {
+      "name": "Canada",
+      "code": "CA",
+      "regions": [
+        {
+          "name": "Eastern Canada",
+          "type": "EAST"
+        },
+        {
+          "name": "Western Canada",
+          "type": "WEST"
+        }
+      ]
+    },
+    {
+      "name": "Mexico",
+      "code": "MX",
+      "regions": [
+        {
+          "name": "Mexico City",
+          "type": "CENTRAL"
+        }
+      ]
+    }
+  ],
+  "LAC": [
+    {
+      "name": "Brazil",
+      "code": "BR",
+      "regions": [
+        {
+          "name": "Brasília",
+          "type": "CENTRAL"
+        }
+      ]
+    },
+    {
+      "name": "Argentina",
+      "code": "AR",
+      "regions": [
+        {
+          "name": "Buenos Aires",
+          "type": "CENTRAL"
+        }
+      ]
+    },
+    {
+      "name": "Colombia",
+      "code": "CO",
+      "regions": [
+        {
+          "name": "Bogotá",
+          "type": "CENTRAL"
+        }
+      ]
+    }
+  ],
+  "EMEA": [
+    {
+      "name": "United Kingdom",
+      "code": "GB",
+      "regions": [
+        {
+          "name": "England",
+          "type": "SOUTH"
+        },
+        {
+          "name": "Scotland",
+          "type": "NORTH"
+        }
+      ]
+    },
+    {
+      "name": "Germany",
+      "code": "DE",
+      "regions": [
+        {
+          "name": "Northern Germany",
+          "type": "NORTH"
+        },
+        {
+          "name": "Southern Germany",
+          "type": "SOUTH"
+        }
+      ]
+    },
+    {
+      "name": "France",
+      "code": "FR",
+      "regions": [
+        {
+          "name": "Paris Region",
+          "type": "CENTRAL"
+        },
+        {
+          "name": "Southern France",
+          "type": "SOUTH"
+        }
+      ]
+    }
+  ],
+  "APJ": [
+    {
+      "name": "Australia",
+      "code": "AU",
+      "regions": [
+        {
+          "name": "Eastern Australia",
+          "type": "EAST"
+        },
+        {
+          "name": "Western Australia",
+          "type": "WEST"
+        },
+        {
+          "name": "Southern Australia",
+          "type": "SOUTH"
+        }
+      ]
+    },
+    {
+      "name": "Japan",
+      "code": "JP",
+      "regions": [
+        {
+          "name": "Tokyo Region",
+          "type": "CENTRAL"
+        },
+        {
+          "name": "Kansai Region",
+          "type": "WEST"
+        }
+      ]
+    },
+    {
+      "name": "India",
+      "code": "IN",
+      "regions": [
+        {
+          "name": "Northern India",
+          "type": "NORTH"
+        },
+        {
+          "name": "Southern India",
+          "type": "SOUTH"
+        }
+      ]
+    },
+    {
+      "name": "Singapore",
+      "code": "SG",
+      "regions": [
+        {
+          "name": "Singapore Central",
+          "type": "CENTRAL"
+        }
+      ]
+    },
+    {
+      "name": "China",
+      "code": "CN",
+      "regions": [
+        {
+          "name": "Northern China",
+          "type": "NORTH"
+        },
+        {
+          "name": "Southern China",
+          "type": "SOUTH"
+        },
+        {
+          "name": "Eastern China",
+          "type": "EAST"
+        }
+      ]
+    },
+    {
+      "name": "South East Asia",
+      "code": "SEA",
+      "regions": [
+        {
+          "name": "Thailand",
+          "type": "CENTRAL"
+        },
+        {
+          "name": "Vietnam",
+          "type": "EAST"
+        },
+        {
+          "name": "Indonesia",
+          "type": "SOUTH"
+        }
+      ]
+    }
+  ]
+}

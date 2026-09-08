@@ -1,4 +1,5 @@
 import { POVStatus, Priority, SalesTheatre } from '@prisma/client';
+import { theatreLabel, theatreShort } from '@/lib/constants/theatre-labels';
 
 // Shared color system that matches POVAnalyticsBar
 export const getStatusColor = (status: POVStatus) => {
@@ -145,16 +146,5 @@ export const formatPriority = (priority: Priority) => {
 };
 
 export const formatTheatreName = (theatre: SalesTheatre) => {
-  switch (theatre) {
-    case 'NORTH_AMERICA':
-      return 'North America';
-    case 'LAC':
-      return 'LAC';
-    case 'EMEA':
-      return 'EMEA';
-    case 'APJ':
-      return 'APJ';
-    default:
-      return String(theatre).replace('_', ' ');
-  }
+  return theatreShort(theatre);
 };

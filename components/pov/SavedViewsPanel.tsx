@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Save, X, Check, Edit, Trash } from 'lucide-react';
 import { SalesTheatre } from '@prisma/client';
 import { Badge } from '@/components/ui/Badge';
+import { theatreLabel, theatreShort } from '@/lib/constants/theatre-labels';
 
 interface SavedView {
   id: string;
@@ -71,18 +72,7 @@ export function SavedViewsPanel({
   const formatTheatreName = (theatre?: SalesTheatre) => {
     if (!theatre) return null;
     
-    switch (theatre) {
-      case 'NORTH_AMERICA':
-        return 'North America';
-      case 'LAC':
-        return 'Latin America & Caribbean';
-      case 'EMEA':
-        return 'Europe, Middle East & Africa';
-      case 'APJ':
-        return 'Asia Pacific & Japan';
-      default:
-        return String(theatre).replace('_', ' ');
-    }
+    return theatreLabel(theatre);
   };
 
   // Format sort field for display

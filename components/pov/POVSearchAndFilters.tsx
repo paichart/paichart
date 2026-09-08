@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/Popover';
 import { Search, Filter, X } from 'lucide-react';
 import { SalesTheatre } from '@prisma/client';
+import { theatreShort } from '@/lib/constants/theatre-labels';
 
 interface POVSearchAndFiltersProps {
   searchTerm: string;
@@ -58,10 +59,10 @@ export function POVSearchAndFilters({
   ];
 
   const theatreOptions = [
-    { value: 'NORTH_AMERICA', label: 'North America' },
-    { value: 'LAC', label: 'LAC' },
-    { value: 'EMEA', label: 'EMEA' },
-    { value: 'APJ', label: 'APJ' }
+    { value: 'NORTH_AMERICA', label: theatreShort('NORTH_AMERICA') },
+    { value: 'LAC', label: theatreShort('LAC') },
+    { value: 'EMEA', label: theatreShort('EMEA') },
+    { value: 'APJ', label: theatreShort('APJ') }
   ];
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;

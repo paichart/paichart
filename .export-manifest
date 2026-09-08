@@ -1086,6 +1086,7 @@ components/workflows/WorkflowEditor.tsx
 components/workflows/WorkflowsHowItWorks.tsx
 components/workflows/index.ts
 config/logrotate/paichart-oauth
+data/geographical-default.json
 dev-server.js
 docs/OAUTH-SETUP.md
 docs/RUNNING.md
@@ -1163,6 +1164,7 @@ lib/auth/verify.ts
 lib/config.ts
 lib/config/mcp-cors.js
 lib/constants/bloomberg-styles.ts
+lib/constants/theatre-labels.ts
 lib/contexts/POVFiltersContext.tsx
 lib/cookies.ts
 lib/crypto/hashing.ts
@@ -1762,6 +1764,7 @@ scripts/test-fallback-invariants.ts
 scripts/test-field-leakage-fix.ts
 scripts/test-finalize-response.ts
 scripts/test-form-field-patterns.ts
+scripts/test-geographical-seed-data.ts
 scripts/test-harness-mode-resolver.ts
 scripts/test-hub-discovery-caller-isolation.ts
 scripts/test-hub-endpoint-allowlist.ts
@@ -1853,6 +1856,7 @@ scripts/test-task-security.ts
 scripts/test-team-member-trust-security.ts
 scripts/test-terminal-persist-point-of-no-return.ts
 scripts/test-terminal-persist-shape.ts
+scripts/test-theatre-labels.ts
 scripts/test-token-usage.ts
 scripts/test-truncation-tier-invariant.ts
 scripts/test-typed-error-contract.ts

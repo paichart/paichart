@@ -1,3 +1,4 @@
+import { THEATRE_ABBREV } from './theatre-labels';
 /**
  * Bloomberg Terminal Design System
  * Shared constants for consistent Bloomberg-style UI across dashboard and POV views
@@ -210,14 +211,9 @@ export function getPriorityDisplay(priority: string): PriorityDisplay {
  * Theatre Abbreviations
  * Convert verbose theatre names to Bloomberg-style abbreviations
  */
-export const THEATRE_ABBREVIATIONS: Record<string, string> = {
-  NORTH_AMERICA: 'NA',
-  SOUTH_AMERICA: 'SA',
-  EMEA: 'EMEA',
-  APAC: 'APAC',
-  LATAM: 'LATAM',
-  GLOBAL: 'GLB',
-};
+// One source of truth (2026-09-08): the previous literal map keyed SOUTH_AMERICA / APAC / LATAM / GLOBAL — none are
+// SalesTheatre values — and missed LAC and APJ, so those fell through to the raw enum text.
+export const THEATRE_ABBREVIATIONS: Record<string, string> = { ...THEATRE_ABBREV, GLOBAL: 'GLB' };
 
 /**
  * Metric Label Abbreviations

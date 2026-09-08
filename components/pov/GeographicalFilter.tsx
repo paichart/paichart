@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Globe, MapPin, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CustomDropdown, DropdownOption } from '@/components/ui/CustomDropdown';
+import { theatreLabel, theatreShort } from '@/lib/constants/theatre-labels';
 
 interface Country {
   id: string;
@@ -72,18 +73,7 @@ export function GeographicalFilter({
   
   // Format theatre name for display
   const formatTheatreName = (theatre: SalesTheatre) => {
-    switch (theatre) {
-      case 'NORTH_AMERICA':
-        return 'North America';
-      case 'LAC':
-        return 'Latin America & Caribbean';
-      case 'EMEA':
-        return 'Europe, Middle East & Africa';
-      case 'APJ':
-        return 'Asia Pacific & Japan';
-      default:
-        return String(theatre).replace('_', ' ');
-    }
+    return theatreLabel(theatre);
   };
 
   // Clear all filters
