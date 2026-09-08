@@ -24,6 +24,11 @@ for (const p of ['/mcp', '/mcp/.well-known/jwks.json', '/oauth/authorize', '/oau
 for (const p of ['/', '/login', '/api/auth/me', '/api/mcp/discover', '/.well-known/mcp.json', '/.well-known/agent-card.json',
   '/.well-known/security.txt', '/oauth', '/docs/oauth', undefined]) check(`web:     ${p}`, !shouldProxy(p));
 
+// 2b. the gate in server.ts: dev, or the explicit production opt-in — never unconditional
+const serverTs = fs.readFileSync(path.join(__dirname, '..', 'server.ts'), 'utf8');
+check('server.ts gates the proxy on dev || SINGLE_ORIGIN_PROXY === \'true\'', /\(dev \|\| process\.env\.SINGLE_ORIGIN_PROXY === 'true'\) && shouldProxy\(/.test(serverTs));
+check('server.ts never mounts the proxy unconditionally', !/if \(shouldProxy\(parsedUrl\.pathname\)\)/.test(serverTs));
+
 // 3. unreachable upstream → 502 hint
 (async () => {
   const srv = http.createServer((req, res) => proxyToMcp(req, res, { host: '127.0.0.1', port: 1 }));

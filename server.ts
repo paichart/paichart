@@ -70,7 +70,9 @@ app.prepare().then(() => {
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
       const parsedUrl = parse(req.url!, true);
-      if (dev && shouldProxy(parsedUrl.pathname)) { proxyToMcp(req, res); return; }
+      // E28 (2026-09-09): a self-host DEMO runs the production build without a reverse proxy — SINGLE_ORIGIN_PROXY=true
+      // keeps the built-in /mcp + /oauth/* proxy on in production. Never set it behind nginx (double routing).
+      if ((dev || process.env.SINGLE_ORIGIN_PROXY === 'true') && shouldProxy(parsedUrl.pathname)) { proxyToMcp(req, res); return; }
       await handle(req, res, parsedUrl);
     } catch (err) {
       try { errorCounter.increment('ssr'); } catch {}

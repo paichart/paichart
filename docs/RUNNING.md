@@ -72,8 +72,8 @@ starts a client's login point at `${APP_BASE_URL}/oauth/…`. So the MCP paths m
   to :8080 — the same rule nginx applies in production, drift-tested (`npm run test:dev-mcp-proxy`). Point
   Claude Desktop / ChatGPT at `${APP_BASE_URL}/mcp` and it works with no nginx. If the MCP process is not
   running you get a **502** naming the command to start it.
-- **in production** (`npm run start`) there is no built-in proxy — the reverse proxy in the last section owns
-  that routing, and `APP_BASE_URL` is its public origin.
+- **in production** (`npm run start`) the built-in proxy is off unless `SINGLE_ORIGIN_PROXY=true` — set it for a self-host
+  with **no reverse proxy** (the demo shape); leave it unset behind nginx, which owns that routing (last section).
 
 `localhost:8080` still answers directly in either shape (the Verify block uses it to prove the MCP process
 itself is up).

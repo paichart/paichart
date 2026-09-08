@@ -8,8 +8,9 @@
  * self-host without nginx. This proxy gives dev the same single origin.
  *
  * RULES (from the panel that approved it):
- *  - dev only — `server.ts` mounts it when NODE_ENV !== 'production'; on prod nginx owns routing
- *    and a second proxy would double-route.
+ *  - dev by default — `server.ts` mounts it when NODE_ENV !== 'production', OR when SINGLE_ORIGIN_PROXY=true
+ *    (a self-host running the production build with no reverse proxy — E28, 2026-09-09). On paichart.app
+ *    nginx owns routing and the variable is unset, so a second proxy cannot double-route there.
  *  - the path rule is IDENTICAL to the nginx snippet in docs/RUNNING.md ("Production shape") —
  *    `scripts/test-dev-mcp-proxy.ts` fails if the two ever diverge.
  *  - `/.well-known/mcp.json` (and agent-card.json, glama.json, …) stay on the web server: the rule

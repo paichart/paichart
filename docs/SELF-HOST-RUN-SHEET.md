@@ -45,6 +45,8 @@ sed -i "s#^APP_BASE_URL=.*#APP_BASE_URL=http://$HOST:3000#" .env
 sed -i "s#^OAUTH_STATE_SECRET=.*#OAUTH_STATE_SECRET=\"$(openssl rand -hex 32)\"#" .env
 sed -i "s#^ADMIN_EMAIL=.*#ADMIN_EMAIL=you@example.com#" .env                  # ← your first login
 npm run --silent jwt:keys >> .env        # --silent matters: without it npm's banner lands in .env and `source .env` executes it
+sed -i "s#^\# ARTIFACT_SIGNING_KEY=.*#ARTIFACT_SIGNING_KEY=\"$(openssl rand -hex 32)\"#" .env   # production signs artifact download links with it
+echo 'SINGLE_ORIGIN_PROXY=true' >> .env      # no reverse proxy in this demo: the web server proxies /mcp + /oauth/* to the MCP process
 grep -c "^JWT_" .env                     # expect 3
 ```
 
@@ -56,15 +58,22 @@ npm run db:seed                          # 18 steps, ~1–2 min, ends "✅ db:se
                                          # (schema, grants, admin, protocols, hub prompts, agent/harness/program/domain/phase templates)
                                          # lost it? npm run db:admin -- --reset-password
 ```
-Two processes. Two terminals (or `nohup … &` as below — not supervised; restart by hand after a reboot):
+Build once, then run the **production** build — the demo should feel like the hosted service (fast, no dev tooling):
 ```bash
-nohup npm run dev          > ~/web.log 2>&1 &
-nohup npm run mcp:http:dev > ~/mcp.log 2>&1 &
+npm run build                                                   # 3–10 min; "✓ Compiled successfully" then the route table
+NODE_ENV=production nohup npm run start                > ~/web.log 2>&1 &     # web app on :3000 (serves the built bundle)
+NODE_ENV=production nohup node mcp-server-http-clean.js > ~/mcp.log 2>&1 &     # MCP server on :8080 (loopback)
+```
+Two processes, not supervised — restart them by hand after a reboot (keeping them up with PM2 or systemd is a "Later").
+After a `git pull`, run `npm run build` again and restart both: a production build never reloads. (Developers use
+`npm run dev` + `npm run mcp:http:dev` instead — slower, with hot reload and the TanStack devtools button; the proxy
+is on automatically there.)
+```bash
 # Ports bind LATE: both processes log "ready" before they listen, and for 10–60 s a curl returns 000 (connection
 # refused — --max-time does not help) and `ss -ltnp` shows nothing. Poll, don't probe once:
 for i in $(seq 1 60); do curl -s -o /dev/null --max-time 5 localhost:3000/api/health && break; sleep 3; done
 for i in $(seq 1 30); do curl -s -o /dev/null --max-time 5 localhost:8080/health && break; sleep 2; done
-curl -s -o /dev/null -w '%{http_code}\n' --max-time 180 localhost:3000/api/health            # expect 200 (first hit compiles ~60–90 s)
+curl -s -o /dev/null -w '%{http_code}\n' --max-time 180 localhost:3000/api/health            # expect 200 (production answers at once; in dev the first hit compiles ~60–90 s)
 curl -s -o /dev/null -w '%{http_code}\n' localhost:8080/health                                # expect 200
 curl -s localhost:3000/.well-known/oauth-authorization-server | grep -o '"issuer":"[^"]*"'    # expect "http://HOST:3000" — your origin, nobody else's
 curl -s -o /dev/null -w '%{http_code}\n' localhost:3000/mcp                                  # expect 401 (no token — correct)
