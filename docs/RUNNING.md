@@ -49,7 +49,7 @@ defaults); `db:admin` never rotates an existing account's password (`-- --reset-
 ## Roles — which one to give whom
 pAIchart has four fixed roles. **`SUPER_ADMIN`** — the install owner: bypasses the permission table, is the only
 role that can change what ADMINs may do, and is deliberately excluded from POV teams; `db:admin` creates exactly
-one — use it for administration only. **`ADMIN`** — day-to-day administrator: sees and edits every POV, task and hub
+one — use it for administration only. **`ADMIN`** (shown as *System Admin* in the GUI; the *Admin Dashboard* menu item itself is visible only to the Super Admin) — day-to-day administrator: sees and edits every POV, task and hub
 service, manages users, settings, templates and workflows, but cannot create a SUPER_ADMIN; give it to the people
 who run the platform (including yourself, via `/admin/users`). **`USER`** — standard member: creates POVs, works on
 POVs they own or are a team member of, can register hub services. **`DEMO_USER`** — public read-only viewer for

@@ -82,7 +82,8 @@ Then prove the install owns its identity: `docs/VERIFYING-SELF-HOST.md` with `BA
 
 ## 7. An account for daily work (in the GUI)
 The account you logged in with is the **Super Admin** — administration only. Create the one you will work as:
-**Settings** → the **pAIchart logo** (top-right corner) → **Admin Dashboard** → **User Management** → **Create User**
+**Settings** → the **pAIchart logo** (top-right corner) → **Admin Dashboard** (only the **Super Admin** sees this option —
+which is why this step is done now, before you switch accounts) → **User Management** → **Create User**
 → fill in email and name, set **System Role** to **System Admin**, and **set a password** in the dialog (blank means
 "will sign in with OAuth", and an account without one cannot log in) → Create.
 
