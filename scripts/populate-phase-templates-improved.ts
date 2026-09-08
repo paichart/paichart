@@ -987,7 +987,10 @@ async function populatePhaseTemplates(options: {
     }
 
     // 🔧 IMPROVED: Cleanup with better options
-    if (!skipCleanup || forceRecreate) {
+    // E18 (devext, 2026-09-08 — silent DATA LOSS): the existence check above SKIPS products whose templates exist,
+    // then this cleanup deleted every non-default row — so a second `db:seed` emptied PhaseTemplate (15 → 0) and
+    // exited 0. Default run is now ADD-ONLY like every other seed; only --force-recreate wipes and rebuilds.
+    if (forceRecreate && !skipCleanup) {
       await cleanupPhaseTemplates({ 
         vendorName, 
         cleanAll: !vendorName,

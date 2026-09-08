@@ -290,6 +290,9 @@ export const MCPParameterSchemas = {
     // POV properties
     duration: z.number().min(7).max(730).optional(),  // 7 days to 2 years
     priority: ValidationSchemas.TASK_PRIORITY.optional(),
+    // E19 (devext, 2026-09-08): callers passed `status` and it was SILENTLY stripped (non-strict object) while the
+    // response read as success. Accepted now (default PROJECTED); an invalid value is rejected loudly.
+    status: FormField.optional(PrismaEnum.povStatus),
     createDefaultPhases: z.boolean().optional(),  // Default: true
 
     // Custom phases (optional). When supplied & non-empty, these OVERRIDE the

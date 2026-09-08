@@ -1800,6 +1800,7 @@ scripts/test-orchestration-handler.ts
 scripts/test-parse-verdict.ts
 scripts/test-permission-cache-role-key.ts
 scripts/test-phase-3a-credential-protection.ts
+scripts/test-phase-template-seed-idempotent.ts
 scripts/test-pipeline-context-render.ts
 scripts/test-pipeline-context-ui.ts
 scripts/test-pipeline-engine-skip.ts
@@ -1807,6 +1808,7 @@ scripts/test-pipeline-protocol-validator.ts
 scripts/test-pipeline-stage-jsonb-index.ts
 scripts/test-platform-run-keys.ts
 scripts/test-pov-create-direct-path.ts
+scripts/test-pov-create-status.ts
 scripts/test-pov-cross-tenant-p1.ts
 scripts/test-pov-field-filtering.ts
 scripts/test-pov-security.ts

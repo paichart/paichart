@@ -24,6 +24,7 @@
  * @param {string} [parameters.opportunityName] - Opportunity name (optional)
  * @param {string} [parameters.objective] - POV objective (optional)
  * @param {string} [parameters.priority] - Priority (HIGH/MEDIUM/LOW, default: MEDIUM)
+ * @param {string} [parameters.status] - Initial POV status (PROJECTED/IN_PROGRESS/…; default: PROJECTED)
  * @param {boolean} [parameters.createDefaultPhases=true] - Create 3 default phases
  * @param {Array<{name:string,type:'PLANNING'|'EXECUTION'|'REVIEW',description?:string}>} [parameters.phases] - Custom phases. When supplied & non-empty, overrides the default 3-phase generation (createDefaultPhases ignored).
  * @param {TokenPayload} user - Authenticated user (role gated via RolePermission table)
@@ -356,7 +357,7 @@ export async function handlePOVCreate(
         //   description = customer-facing summary
         //   objective   = success criteria (what done looks like)
         objective: parameters.objective || null,
-        status: POVStatus.PROJECTED,
+        status: (parameters.status as POVStatus | undefined) ?? POVStatus.PROJECTED, // E19: honoured, was silently dropped
         priority,
         startDate,
         endDate: povEndDate,

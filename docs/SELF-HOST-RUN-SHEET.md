@@ -36,7 +36,8 @@ sudo -u postgres createdb -O paichart paichart
 ## 4. Configure
 ```bash
 cd ~/paichart
-npm ci                                   # 10–20 min on a laptop; ~780 packages
+npm ci                                   # 1–20 min depending on the box; npm reports ~1050 packages. It also prints deprecation warnings and a
+                                         # vulnerability count — that is not a failure; rc=0 is
 cp .env.example .env
 HOST=192.168.1.50                        # ← yours
 sed -i "s#^DATABASE_URL=.*#DATABASE_URL=\"postgresql://paichart:$(cat ~/.paichart-dbpw)@localhost:5432/paichart\"#" .env
@@ -49,7 +50,9 @@ grep -c "^JWT_" .env                     # expect 3
 
 ## 5. Seed and start
 ```bash
-npm run db:seed                          # 18 steps, ~1 min, ends "✅ db:seed complete"; the SUPER_ADMIN password is printed ONCE — copy it now
+npm run db:seed                          # 18 steps, ~1–2 min, ends "✅ db:seed complete"; the SUPER_ADMIN password is printed ONCE — copy it now.
+                                         # Expect pino JSON lines and a "[DEV] SLOW QUERY" or two in the middle — noise, not errors. Safe to re-run
+                                         # after a git pull: every step is add-only (a re-run never deletes; --force-recreate on db:templates does)
                                          # (schema, grants, admin, protocols, hub prompts, agent/harness/program/domain/phase templates)
                                          # lost it? npm run db:admin -- --reset-password
 ```
@@ -57,6 +60,10 @@ Two processes. Two terminals (or `nohup … &` as below — not supervised; rest
 ```bash
 nohup npm run dev          > ~/web.log 2>&1 &
 nohup npm run mcp:http:dev > ~/mcp.log 2>&1 &
+# Ports bind LATE: both processes log "ready" before they listen, and for 10–60 s a curl returns 000 (connection
+# refused — --max-time does not help) and `ss -ltnp` shows nothing. Poll, don't probe once:
+for i in $(seq 1 60); do curl -s -o /dev/null --max-time 5 localhost:3000/api/health && break; sleep 3; done
+for i in $(seq 1 30); do curl -s -o /dev/null --max-time 5 localhost:8080/health && break; sleep 2; done
 curl -s -o /dev/null -w '%{http_code}\n' --max-time 180 localhost:3000/api/health            # expect 200 (first hit compiles ~60–90 s)
 curl -s -o /dev/null -w '%{http_code}\n' localhost:8080/health                                # expect 200
 curl -s localhost:3000/.well-known/oauth-authorization-server | grep -o '"issuer":"[^"]*"'    # expect "http://HOST:3000" — your origin, nobody else's
@@ -86,12 +93,15 @@ Then prove the install owns its identity: `docs/VERIFYING-SELF-HOST.md` with `BA
 The account you logged in with is the **Super Admin** — administration only. Create the one you will work as:
 **Settings** → the **pAIchart logo** (top-right corner) → **Admin Dashboard** (only the **Super Admin** sees this option —
 which is why this step is done now, before you switch accounts) → **User Management** → **Create User**
-→ fill in email and name, set **System Role** to **System Admin**, and **set a password** in the dialog (blank means
+→ fill in email and name, set **System Role** to **System Admin** (the dialog defaults to *User* — check it before you
+save; a User cannot administer the hub), and **set a password** in the dialog (blank means
 "will sign in with OAuth", and an account without one cannot log in) → Create.
 
 ## 8. An API key, then connect Claude Code to your hub — required before your first POV
 Log out and log in as the new System Admin. Then: the **pAIchart logo** (top-right) → **Profile Settings** → scroll to
-**MCP API Key** → **Generate New API Key** → copy it now (it is shown once; pick a short expiry for a lab).
+**MCP API Key** → **Generate New API Key** → copy it now (it is shown once; the default expiry is **one year** — pick
+something shorter for a lab). The key's `role` claim is a mint-time snapshot: the hub authorises from the live database,
+so changing a user's role takes effect on existing keys immediately, and the claim can read stale.
 
 Back in Claude Code (running inside `~/paichart`), just ask:
 *"Create an MCP connection to http://HOST:3000/mcp using this API key: &lt;paste the key&gt;"* — Claude runs
@@ -113,7 +123,8 @@ your own network"):
 ```bash
 echo 'HUB_PRIVATE_ENDPOINT_ALLOWLIST="127.0.0.1:3107"' >> ~/paichart/.env     # IPv4 host:port or CIDR; read at boot
 pkill -f "mcp-server-http-clea[n]"; cd ~/paichart && nohup npm run mcp:http:dev > ~/mcp.log 2>&1 &
-sleep 8; grep endpoint-allowlist ~/mcp.log                                        # expect "private endpoints admitted: …"; rejected entries are named here
+for i in $(seq 1 30); do curl -s -o /dev/null --max-time 5 localhost:8080/health && break; sleep 2; done   # late bind (see step 5)
+grep endpoint-allowlist ~/mcp.log                                                 # expect "private endpoints admitted: …"; rejected entries are named here
 ```
 Then from Claude: `registry(action: 'register', name: 'my-service', endpoint: 'http://127.0.0.1:3107/mcp', category: …,
 capabilities: { tools: [{ name, description, inputSchema }, …] })` — full tool schemas, not just names, so callers
@@ -147,6 +158,8 @@ Two things come with the clone that make step 8 more than a connector:
   and `ADD-A-PROGRAM-PROTOCOL.md`.
 
 ## Things that will bite (each cost real time)
+- **Late bind** (the most repeatable false failure in this sheet): both servers log "ready" 10–60 s before they listen.
+  A single `curl` returns `000` and `ss -ltnp` shows nothing; the process is fine. Poll as in step 5.
 - `pkill -f "some-pattern"` typed inside an `ssh host '…'` command matches the ssh shell itself — use `patter[n]`.
 - Stopping the `npm` wrapper leaves the node child on the port; find it with `ss -ltnp | grep :3000` and kill that.
 - Re-seeding prompts (`scripts/seed-operational-prompts.ts`) needs the MCP process restarted — it reads the prompt list at boot.

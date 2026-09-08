@@ -79,7 +79,8 @@ to read the claims):
 KEY='<paste the key>'
 echo "$KEY" | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool | grep -E '"(iss|aud)"'
 ```
-Expected: `"iss": "BASE"`, `"aud": "BASE/mcp"`.
+Expected: `"iss": "BASE"`, `"aud": "BASE/mcp"`. (The `role` claim is a mint-time snapshot, not what authorises you —
+the hub reads the live database on every call; do not reason about privilege from it.)
 
 Prove it verifies — against the **web verifier**, not an MCP list method. `tools/list`, `resources/list`,
 `prompts/list`, `ping` and `initialize` are *public* MCP methods (they answer 200 to anyone; `initialize` 401s
@@ -118,7 +119,8 @@ empty value is the one way to hide your `.env` entry without editing the file. T
 ```bash
 APP_BASE_URL= NODE_ENV=production node mcp-server-http-clean.js 2>&1 | grep -m1 APP_BASE_URL; echo "exit=${PIPESTATUS[0]}"
 APP_BASE_URL= NODE_ENV=production node server.js               2>&1 | grep -m1 APP_BASE_URL; echo "exit=${PIPESTATUS[0]}"
-# expect on each: "APP_BASE_URL is required in production: …" and exit=1
+# expect on each: exit=1 and a line containing "APP_BASE_URL is required in production" (the MCP server's match is the
+# throw's source line from the stack trace, the web server's is the clean message — both are the same refusal)
 ```
 (`env -u APP_BASE_URL …` does NOT work for this — dotenv puts the `.env` value straight back.)
 
