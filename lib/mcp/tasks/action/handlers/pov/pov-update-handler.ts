@@ -113,8 +113,11 @@ export async function handlePOVUpdate(
       params.status as POVStatus,
     );
     if (!transitionResult.valid) {
+      // E25 (devext, 2026-09-08): say WHICH transition — an AI caller cannot recover from "Invalid status transition"
+      // alone; it needs the current state, the requested one, and the rule's own reason.
       throw new Error(
-        `Status transition rejected: ${transitionResult.errors.join('; ')}`
+        `Status transition rejected: ${pov.status} → ${params.status} (${transitionResult.errors.join('; ')}). ` +
+        `Valid POV statuses: PROJECTED, IN_PROGRESS, STALLED, VALIDATION, WON, LOST — transitions are ordered; use pov.details to see the current status.`
       );
     }
   }
