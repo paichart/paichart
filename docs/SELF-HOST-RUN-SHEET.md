@@ -117,7 +117,32 @@ then your first POV (step 10). The key is stored in plaintext in `~/.claude.json
 Claude Desktop cannot send a header: use OAuth (`docs/OAUTH-SETUP.md` §B.1, callback `http://HOST:3000/oauth/callback`)
 or the `mcp-remote --header` stanza the setup sheet shows.
 
-## 9. Register a service that runs on your own network (optional)
+## 9. Your first external service — a remote MCP server, through the hub
+The hub's point is other MCP services: register them once, then every AI client reaches them through `${APP_BASE_URL}/mcp`
+with one identity. This repository ships a descriptor for a public, keyless one — Context7 (library documentation) —
+so you can see the whole path without running anything else. Because the endpoint is public HTTPS, no allowlist is
+involved. In Claude Code (inside `~/paichart`), ask, in this order:
+
+1. *"I'm new to this. Register the MCP service described in `descriptors/context7-descriptor.json` with the hub, using
+   its full tool schemas, and show me the registry's response verbatim."*
+   → `registry(action: 'register', …)` → `status: ACTIVE`, owner = you.
+2. *"Show me its tools and their parameters as the hub reports them."*
+   → `registry(action: 'tools', service_name: 'context7-docs')` → 2 tools, full schemas (grade A).
+3. *"Through the hub, ask context7 to resolve the library id for next.js (query: app router data fetching), then query
+   its docs for how server components fetch data. Show each tool call and its result — don't summarise."*
+   → `services(action: 'call', targetService: 'context7-docs', tool: 'resolve-library-id', …)` returns `/vercel/next.js`,
+   then `services(action: 'call', …, tool: 'query-docs', arguments: { libraryId: '/vercel/next.js', query: … })` returns
+   real documentation — proof that a remote server is being called *through your hub*, not by Claude directly.
+
+**Tell Claude you are new.** By default Claude Code runs tools and reports conclusions; for learning the hub you want
+the calls and their raw results. A one-line instruction at the start of the session does it: *"I'm learning the hub —
+for every pAIchart tool call, show me the call and the result before you interpret it."*
+
+Also worth trying: `services(action: 'discover')` (finds it by capability), `services(action: 'health', …)`, and
+`registry(action: 'update' | 'delete', …)` — the same descriptor shape works for any MCP server you write
+(`descriptors/descriptor.schema.json` and `descriptors/SPEC.md`).
+
+### 9b. A service on your own network (optional)
 The hub refuses private addresses unless you, the operator, list them (RUNNING.md → "Registering a service on
 your own network"):
 ```bash

@@ -1654,6 +1654,7 @@ scripts/discover-validation-schemas.js
 scripts/ensure-system-user.ts
 scripts/export-public.py
 scripts/export/public-allowlist.rules
+scripts/export/publish.sh
 scripts/fixtures/live-service-descriptions.json
 scripts/flip-harness-protocol-mode.ts
 scripts/generate-jwt-keys.sh
