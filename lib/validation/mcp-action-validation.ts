@@ -85,6 +85,17 @@ const SEMANTIC_ENUM_MAPPINGS: Record<string, Record<string, string>> = {
     'FINISHED': 'COMPLETED',
     'CLOSED': 'COMPLETED'
   },
+  // E23 (devext, 2026-09-08): `status` on a pov.* action was normalised with the TASK map above (DONE → COMPLETED,
+  // which POVStatus rejects) and the rejection then named a value the caller never sent. POV aliases live here;
+  // applySemanticMapping picks this map when the action is pov.*. Mirrors the parameter-normalizer's povStatus.
+  povStatus: {
+    'TODO': 'PROJECTED', 'PLANNED': 'PROJECTED', 'PROPOSED': 'PROJECTED',
+    'DOING': 'IN_PROGRESS', 'WORKING': 'IN_PROGRESS', 'STARTED': 'IN_PROGRESS', 'ACTIVE': 'IN_PROGRESS', 'PENDING': 'IN_PROGRESS',
+    'REVIEW': 'VALIDATION', 'TESTING': 'VALIDATION', 'QA': 'VALIDATION',
+    'DONE': 'WON', 'FINISHED': 'WON', 'COMPLETED': 'WON', 'COMPLETE': 'WON', 'RESOLVED': 'WON', 'SUCCESS': 'WON',
+    'CLOSED': 'STALLED', 'PAUSED': 'STALLED', 'BLOCKED': 'STALLED',
+    'FAILED': 'LOST', 'CANCELLED': 'LOST', 'CANCELED': 'LOST', 'REJECTED': 'LOST'
+  },
   workflowType: {
     'UI_TESTING': 'UI_INTERACTION',
     'UI_TEST': 'UI_INTERACTION',
@@ -186,10 +197,12 @@ function normalizeAliases(
  * test 2026-07-25: task.list accepted URGENT, task.update rejected it). One alias table, applied
  * at the chokepoint every path crosses — do NOT add a third copy.
  */
-export function applySemanticMapping(field: string, value: any): any {
+export function applySemanticMapping(field: string, value: any, action?: string): any {
   if (typeof value !== 'string') return value;
 
-  const mapping = SEMANTIC_ENUM_MAPPINGS[field];
+  // E23: the alias table for `status` depends on WHAT is being updated — POV statuses are not task statuses.
+  const key = field === 'status' && typeof action === 'string' && action.startsWith('pov.') ? 'povStatus' : field;
+  const mapping = SEMANTIC_ENUM_MAPPINGS[key];
   if (!mapping) return value;
 
   const normalized = mapping[value.toUpperCase()];
@@ -734,7 +747,7 @@ export function validateMCPActionRequest(body: any): {
     // Apply semantic enum mapping to normalize user input (P0-6: Quick Win)
     const normalizedParameters = { ...baseValidation.parameters };
     Object.keys(normalizedParameters).forEach(key => {
-      normalizedParameters[key] = applySemanticMapping(key, normalizedParameters[key]);
+      normalizedParameters[key] = applySemanticMapping(key, normalizedParameters[key], action);
     });
 
     if (parameterSchema) {

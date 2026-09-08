@@ -1839,6 +1839,7 @@ scripts/test-routes-orchestrator.ts
 scripts/test-sdk-request-options-coverage.ts
 scripts/test-security-invariants.ts
 scripts/test-seed-model-params-guard.ts
+scripts/test-semantic-mapping-scope.ts
 scripts/test-serialization-retry-boundary.ts
 scripts/test-service-call-args-coercion.ts
 scripts/test-session-store.ts

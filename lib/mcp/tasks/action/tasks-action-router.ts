@@ -96,6 +96,7 @@ export class TasksActionRouter {
     }
 
     const schema = MCPParameterSchemas[action as MCPAction];
+    const normalizedFrom: Record<string, unknown> = {};
     if (schema) {
       // BC75 sibling-drift fix (2026-07-25, found by the pov-task-lifecycle smoke test): normalize
       // user-friendly enum aliases (URGENT→HIGH, TODO→OPEN, …) BEFORE schema validation.
@@ -111,14 +112,22 @@ export class TasksActionRouter {
       if (parameters && typeof parameters === 'object' && !Array.isArray(parameters)) {
         const normalized: Record<string, unknown> = { ...(parameters as Record<string, unknown>) };
         for (const key of Object.keys(normalized)) {
-          normalized[key] = applySemanticMapping(key, normalized[key]);
+          // E23: action-aware (pov.* status aliases ≠ task status aliases); the original is kept so a rejection
+          // can name what the caller actually sent, not only what it was normalised to.
+          const after = applySemanticMapping(key, normalized[key], action);
+          if (after !== normalized[key]) normalizedFrom[key] = normalized[key];
+          normalized[key] = after;
         }
         parameters = normalized;
       }
       const parsed = schema.safeParse(parameters);
       if (!parsed.success) {
         const errorDetails = parsed.error.errors
-          .map(e => `${e.path.length > 0 ? e.path.join('.') + ': ' : ''}${e.message}`)
+          .map(e => {
+            const top = e.path.length > 0 ? String(e.path[0]) : '';
+            const from = top && top in normalizedFrom ? ` (normalized from ${JSON.stringify(normalizedFrom[top])})` : '';
+            return `${e.path.length > 0 ? e.path.join('.') + ': ' : ''}${e.message}${from}`;
+          })
           .join('; ');
         log.warn(
           { actionId, action, userId: user.userId, errors: parsed.error.errors },

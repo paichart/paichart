@@ -162,6 +162,8 @@ Two things come with the clone that make step 8 more than a connector:
   A single `curl` returns `000` and `ss -ltnp` shows nothing; the process is fine. Poll as in step 5.
 - `pkill -f "some-pattern"` typed inside an `ssh host '…'` command matches the ssh shell itself — use `patter[n]`.
 - Stopping the `npm` wrapper leaves the node child on the port; find it with `ss -ltnp | grep :3000` and kill that.
-- Re-seeding prompts (`scripts/seed-operational-prompts.ts`) needs the MCP process restarted — it reads the prompt list at boot.
+- **The MCP process does not hot-reload.** After a `git pull` that touches `lib/`, `scripts/` or `mcp-server-http-clean.js`,
+  restart it (`pkill -f "mcp-server-http-clea[n]"` then `nohup npm run mcp:http:dev …`); the web dev server reloads itself,
+  the MCP server keeps running the old code until you do. Same for re-seeded prompts — it reads the prompt list at boot.
 - The MCP process binds loopback only; nothing else needs to reach :8080 — the web server on :3000 proxies `/mcp` and `/oauth/*` to it.
 - `curl` cannot see CSP; only a browser can. Step 3 is not optional.
