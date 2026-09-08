@@ -1,0 +1,233 @@
+{
+  "_comment": "Registration descriptor for the reference self-hosted service shipped in this repo (services/browser-automation-service — Playwright in a container, loopback port 3100). Tool schemas match what the service serves at GET /tools. Register from Claude Code with registry(action: \"register\", ...) AFTER HUB_PRIVATE_ENDPOINT_ALLOWLIST admits 127.0.0.1:3100 (docs/SELF-HOST-RUN-SHEET.md step 9b). pAIchart programs fetch their design artifacts through this service under the name below — keep the name.",
+  "name": "browser-automation-service",
+  "description": "Playwright-based browser automation: scrape pages with CSS selectors (with pagination), fill forms, click elements, take screenshots, generate PDFs, run page scripts, record traces. Self-hosted in a container on the hub host (port 3100, loopback only). pAIchart programs use scrape_page to fetch their design artifacts (requirements.md, topology.json) from a URL.",
+  "endpoint": "http://127.0.0.1:3100/sse",
+  "category": "automation",
+  "version": "1.0.0",
+  "capabilities": {
+    "tools": [
+      {
+        "name": "scrape_page",
+        "description": "Extract data from web pages using CSS selectors with optional pagination",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "selectors": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "waitFor": {
+              "type": "string"
+            },
+            "pagination": {
+              "type": "object",
+              "properties": {
+                "nextSelector": {
+                  "type": "string"
+                },
+                "maxPages": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 100
+                }
+              }
+            }
+          },
+          "required": [
+            "url",
+            "selectors"
+          ]
+        }
+      },
+      {
+        "name": "fill_form",
+        "description": "Fill and optionally submit web forms with field mappings",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "fieldMappings": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "formData": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "submit": {
+              "type": "boolean"
+            },
+            "submitSelector": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url",
+            "fieldMappings",
+            "formData"
+          ]
+        }
+      },
+      {
+        "name": "click_element",
+        "description": "Click an element on the page and optionally capture screenshots",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "selector": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "waitAfter": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 30000
+            },
+            "screenshot": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "selector"
+          ]
+        }
+      },
+      {
+        "name": "take_screenshot",
+        "description": "Capture screenshots of web pages or specific elements",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "fullPage": {
+              "type": "boolean"
+            },
+            "selector": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "generate_pdf",
+        "description": "Generate PDF documents from web pages with configurable settings",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "pageSettings": {
+              "type": "object",
+              "properties": {
+                "format": {
+                  "type": "string",
+                  "enum": [
+                    "A4",
+                    "Letter",
+                    "Legal"
+                  ]
+                },
+                "landscape": {
+                  "type": "boolean"
+                },
+                "margin": {
+                  "type": "object",
+                  "properties": {
+                    "top": {
+                      "type": "string"
+                    },
+                    "right": {
+                      "type": "string"
+                    },
+                    "bottom": {
+                      "type": "string"
+                    },
+                    "left": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "run_script",
+        "description": "Execute JavaScript code in the browser context",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "script": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "timeout": {
+              "type": "number",
+              "minimum": 1000,
+              "maximum": 300000
+            }
+          },
+          "required": [
+            "script"
+          ]
+        }
+      },
+      {
+        "name": "trace_session",
+        "description": "Record and manage browser session traces for debugging",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "start",
+                "stop",
+                "get"
+              ]
+            },
+            "traceId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action"
+          ]
+        }
+      }
+    ],
+    "categories": [
+      "browser-automation",
+      "web-scraping",
+      "testing"
+    ],
+    "transport": "http",
+    "maxConcurrentBrowsers": 5
+  }
+}

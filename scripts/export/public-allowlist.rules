@@ -62,10 +62,16 @@
 - scripts/migrate-task-types.sql
 - scripts/repair-task-completed-at-drift.ts
 
-# ── services: pattern + ONE reference service (decision 1) ───────────────────────
+# ── services: pattern + TWO reference services (decision 1, extended 2026-09-09 — E29) ───────
+# weather-service = the write-your-own pattern; browser-automation-service = the one programs need
+# (the Program Architect fetches design artifacts through it). docker-compose.self-host.yml runs
+# only the latter; prod's docker-compose.yml (excluded below) is private infrastructure.
 + services/weather-service/**
++ services/browser-automation-service/**
 - services/**
-# their seed/registration scripts follow the same decision
++ docker-compose.self-host.yml
+# their seed/registration scripts follow the same decision — the self-host registers via
+# registry(action:'register') from descriptors/browser-automation-descriptor.json (public-owned)
 + scripts/seed-weather-service.ts
 - scripts/seed-*-service.ts
 

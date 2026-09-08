@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 1.2.1.**
+> **Rendered verbatim from the pAIchart platform seed — version 1.2.2.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -56,7 +56,7 @@ Assign templates **by name** from the table above (not by verb-stem inference). 
 
 The cluster's read-only service is provisioned at run time, not pre-registered: the Phase 0 **Cluster State Harvester** self-provisions it from the service descriptor the customer carries in the task. The descriptor names the service (name, endpoint, category, read-only capabilities):
 
-1. **Source the descriptor.** If the task body contains the descriptor JSON inline, use it directly. If the task carries only a URL, fetch it first: `services(action:'call', targetService:'Browser Automation Service', tool:'scrape_page', arguments:{ url:'<url>', selectors:{ descriptor:'pre' } })`, then JSON-parse the returned `data[0].descriptor`. *(pAIchart has no generic URL-fetch tool — `fetch` retrieves pAIchart resources by id, not web URLs — so the browser service IS the descriptor-fetch mechanism. Do NOT substitute a generic fetch/WebFetch/http_get tool; it does not exist.)*
+1. **Source the descriptor.** If the task body contains the descriptor JSON inline, use it directly. If the task carries only a URL, fetch it first: `services(action:'call', targetService:'browser-automation-service', tool:'scrape_page', arguments:{ url:'<url>', selectors:{ descriptor:'pre' } })`, then JSON-parse the returned `data[0].descriptor`. *(pAIchart has no generic URL-fetch tool — `fetch` retrieves pAIchart resources by id, not web URLs — so the browser service IS the descriptor-fetch mechanism. Do NOT substitute a generic fetch/WebFetch/http_get tool; it does not exist.)*
 2. **Register** the service from the descriptor's values — `registry(action:'register', name:<descriptor.name>, endpoint:<descriptor.endpoint>, category:<descriptor.category>, capabilities:{ tools:<descriptor read-only tools> })`. An auto-approving category lands the service `status:'ACTIVE'` immediately and callable; otherwise it awaits admin approval before Phase 0 can read.
 3. **Update** (only if register did not attach the tools) — `registry(action:'update', service_name:<descriptor.name>, updates:{ capabilities:{ tools:<descriptor read-only tools> } })`.
 4. **Call (read-only)** — `services(action:'call', targetService:<descriptor.name>, tool:<a read-only tool from the descriptor>, arguments:{ … })` to harvest current cluster state. Read-only tools only — never a mutating verb.
