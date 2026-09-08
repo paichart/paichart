@@ -91,7 +91,14 @@ export function buildAnthropicRequest(
       } else if (mergedOptions.functionCall === 'none') {
         req.tool_choice = { type: 'none' };
       } else if (typeof mergedOptions.functionCall === 'object') {
-        req.tool_choice = { type: 'tool', name: mergedOptions.functionCall.name };
+        if (cap.forcedToolChoice) {
+          req.tool_choice = { type: 'tool', name: mergedOptions.functionCall.name };
+        } else {
+          // Claude Fable 5.1 / Mythos 5.1 return a 400 on tool_choice 'tool'/'any'. Downgrade to 'auto' and say so —
+          // the tool is still offered; the prompt must name it if the call is required.
+          log.warn({ model: effectiveModel, tool: mergedOptions.functionCall.name }, 'forced tool_choice not supported by this model — downgraded to auto');
+          req.tool_choice = { type: 'auto' };
+        }
       }
     }
   }

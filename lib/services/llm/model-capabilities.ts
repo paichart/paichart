@@ -40,6 +40,9 @@ export interface ModelCapabilities {
    *  via client.beta.messages.create with SERVER_SIDE_FALLBACK_BETA + fallbacks:[{model: FALLBACK_MODEL}].
    *  A rescued refusal re-bills at the fallback model's own rates. (WU-10, 2026-07-02) */
   serverSideFallback: boolean;
+  /** false ⇒ the model rejects forced tool use (`tool_choice` type 'any' / 'tool' → 400): Claude Fable 5.1 and
+   *  Mythos 5.1. The provider downgrades a forced choice to 'auto' and logs it (2026-09-08). */
+  forcedToolChoice: boolean;
 }
 
 /** The model that re-serves a Fable refusal (the only supported fallback target at launch). */
@@ -60,7 +63,8 @@ export function capabilitiesFor(model: string): ModelCapabilities {
   const outputCeiling = maxOutputTokensForModel(model);
   // order matters: most-specific first
   if (/fable|mythos/.test(m))
-    return { acceptsTemperature: false, thinkingMode: 'always-on', allowedEfforts: FULL, outputCeiling, serverSideFallback: true };
+    // Fable 5.1 / Mythos 5.1: same surface as Fable 5 except forced tool use returns a 400.
+    return { acceptsTemperature: false, thinkingMode: 'always-on', allowedEfforts: FULL, outputCeiling, serverSideFallback: true, forcedToolChoice: !/-5-1\b/.test(m) };
   // Opus 5 (2026-08-05): same request surface as Opus 4.8 — temperature/top_p REMOVED, FULL effort
   // set, 128K output — with two Opus-5-only notes:
   //  1. serverSideFallback TRUE. Opus 5 carries the same elevated cyber safeguards as Fable and can
@@ -77,7 +81,7 @@ export function capabilitiesFor(model: string): ModelCapabilities {
   // Placed before opus-4-x: `claude-opus-4-5` does NOT contain the substring `opus-5`, so there is
   // no false match in either direction, but most-recent-first matches the file's convention.
   if (/opus-5/.test(m))
-    return { acceptsTemperature: false, thinkingMode: 'adaptive', allowedEfforts: FULL, outputCeiling, serverSideFallback: true };
+    return { acceptsTemperature: false, thinkingMode: 'adaptive', allowedEfforts: FULL, outputCeiling, serverSideFallback: true , forcedToolChoice: true };
   // ⚠️ TWO MODELS, ONE BRANCH — and they are NOT interchangeable on every axis.
   // Verified identical on every field this interface carries TODAY (probed 2026-08-10:
   // capabilitiesFor('claude-opus-4-7') and ('-4-8') return byte-identical objects), which is why
@@ -96,20 +100,20 @@ export function capabilitiesFor(model: string): ModelCapabilities {
   // Same latent shape in /fable|mythos/ above: Mythos 5 = 512 but *Mythos Preview* = 2048. Also
   // unreachable today; same rule applies.
   if (/opus-4-(7|8)/.test(m))
-    return { acceptsTemperature: false, thinkingMode: 'adaptive', allowedEfforts: FULL, outputCeiling, serverSideFallback: false };
+    return { acceptsTemperature: false, thinkingMode: 'adaptive', allowedEfforts: FULL, outputCeiling, serverSideFallback: false , forcedToolChoice: true };
   if (/opus-4-6/.test(m))
-    return { acceptsTemperature: true, thinkingMode: 'adaptive', allowedEfforts: NO_XHIGH, outputCeiling, serverSideFallback: false };
+    return { acceptsTemperature: true, thinkingMode: 'adaptive', allowedEfforts: NO_XHIGH, outputCeiling, serverSideFallback: false , forcedToolChoice: true };
   if (/opus-4-5/.test(m))
-    return { acceptsTemperature: true, thinkingMode: 'adaptive', allowedEfforts: NO_XHIGH_NO_MAX, outputCeiling, serverSideFallback: false };
+    return { acceptsTemperature: true, thinkingMode: 'adaptive', allowedEfforts: NO_XHIGH_NO_MAX, outputCeiling, serverSideFallback: false , forcedToolChoice: true };
   // Sonnet 5 (2026-07-02): REJECTS temperature/top_p (the first non-Opus/Fable model to); adaptive
   // thinking by default; FULL effort set (first Sonnet with xhigh); 128K output. Checked before
   // sonnet-4-6; the pattern cannot false-match sonnet-4-5/4-6 (their substrings are sonnet-4-x).
   if (/sonnet-5/.test(m))
-    return { acceptsTemperature: false, thinkingMode: 'adaptive', allowedEfforts: FULL, outputCeiling, serverSideFallback: false };
+    return { acceptsTemperature: false, thinkingMode: 'adaptive', allowedEfforts: FULL, outputCeiling, serverSideFallback: false , forcedToolChoice: true };
   if (/sonnet-4-6/.test(m))
-    return { acceptsTemperature: true, thinkingMode: 'adaptive', allowedEfforts: NO_XHIGH, outputCeiling, serverSideFallback: false };
+    return { acceptsTemperature: true, thinkingMode: 'adaptive', allowedEfforts: NO_XHIGH, outputCeiling, serverSideFallback: false , forcedToolChoice: true };
   if (/haiku-4-5/.test(m))
-    return { acceptsTemperature: true, thinkingMode: 'none', allowedEfforts: [], outputCeiling, serverSideFallback: false };
+    return { acceptsTemperature: true, thinkingMode: 'none', allowedEfforts: [], outputCeiling, serverSideFallback: false , forcedToolChoice: true };
   throw new Error(
     `Unknown model "${model}" — add it to capabilitiesFor() (model-capabilities.ts) before use. ` +
     `Sending the legacy request shape to an unknown model risks a silent Anthropic 400.`

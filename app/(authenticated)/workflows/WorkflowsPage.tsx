@@ -27,6 +27,7 @@ import { RecommendationEngine } from '@/components/workflows/RecommendationEngin
 import { useWorkflows } from '@/lib/workflows/useWorkflows';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardContent } from '@/components/ui/Card';
+import { copyToClipboard } from '@/lib/utils/clipboard';
 
 /**
  * Workflow Management Page Client Component
@@ -239,7 +240,7 @@ function StepResultRow({
                   variant="ghost"
                   onClick={(e) => {
                     e.stopPropagation();
-                    navigator.clipboard.writeText(JSON.stringify(result.data, null, 2));
+                    copyToClipboard(JSON.stringify(result.data, null, 2));
                   }}
                   className="h-6 gap-1"
                 >
@@ -502,7 +503,7 @@ function WorkflowExecutionsPanel() {
                                     variant="outline"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      navigator.clipboard.writeText(JSON.stringify(exec.output, null, 2));
+                                      copyToClipboard(JSON.stringify(exec.output, null, 2));
                                     }}
                                     className="h-6 gap-1"
                                   >

@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { ChevronDown, ChevronRight, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
+import { copyToClipboard } from '@/lib/utils/clipboard';
 
 interface JsonViewerProps {
   data: any;
@@ -20,7 +21,7 @@ export const JsonViewer: React.FC<JsonViewerProps> = ({
   const [copied, setCopied] = React.useState(false);
   
   const handleCopy = () => {
-    navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+    copyToClipboard(JSON.stringify(data, null, 2));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

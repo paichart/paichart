@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/lib/hooks/useToast';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { copyToClipboard as copyTextToClipboard } from '@/lib/utils/clipboard';
 
 interface ApiKeyData {
   hasKey: boolean;
@@ -172,7 +173,7 @@ export function SelfServiceApiKeyManagement() {
 
   const copyToClipboard = async (text: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      await copyTextToClipboard(text);
       toast({
         title: "Copied",
         description: "API key copied to clipboard",

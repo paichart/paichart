@@ -73,7 +73,8 @@ What you should see: **Templates** populated (generic roles + the pipeline/progr
 (HOWTO-get-started …), and the **Services** registry **empty — by design**: the hosted service's registry is private
 infrastructure; a self-host registers its own (step 9; `services/weather-service` in this repo is the reference).
 **Sales theatres / countries / regions** come from a default set (4 theatres — `NORTH_AMERICA`, `LAC`, `EMEA`, `APJ` —
-and 17 countries). To add countries or regions, ask Claude to edit `scripts/seed-geographical-data.js` and re-run it
+and 17 countries). `Settings → Geographical` is where each *user* picks their defaults for new POVs from that list — it does
+not edit the list (there is no GUI for that yet). To add countries or regions, ask Claude to edit `scripts/seed-geographical-data.js` and re-run it
 (`set -a; . ./.env; set +a; node scripts/seed-geographical-data.js`): it adds what is missing and leaves existing
 rows alone — it does not rename or delete. A **new theatre is a schema change** (`SalesTheatre` enum in
 `prisma/schema.prisma`, then `npx prisma db push`); the full procedure is `.claude/knowledge/guides/GEOGRAPHICAL_DATA_MANAGEMENT.md`.

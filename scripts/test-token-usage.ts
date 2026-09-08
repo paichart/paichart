@@ -30,6 +30,7 @@ console.log('── resolvePricingKey ──');
 {
   ok(resolvePricingKey('claude-sonnet-5') === 'sonnet-5', 'sonnet-5 → sonnet-5 (not legacy)');
   ok(resolvePricingKey('claude-sonnet-4-6') === 'sonnet-legacy', 'sonnet-4-6 → sonnet-legacy');
+  ok(resolvePricingKey('claude-fable-5-1') === 'fable', 'fable-5-1 prices as fable');
   ok(resolvePricingKey('claude-fable-5') === 'fable' && resolvePricingKey('claude-mythos-5') === 'fable', 'fable/mythos → fable');
   ok(resolvePricingKey('claude-opus-4-8') === 'opus', 'opus-4-8 → opus');
   ok(resolvePricingKey('claude-haiku-4-5-20251001') === 'haiku', 'dated haiku snapshot → haiku');

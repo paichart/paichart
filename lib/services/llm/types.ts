@@ -1026,6 +1026,15 @@ export const anthropicModels: Record<string, ModelInfo> = {
     supportsFunctions: true,
     supportsPromptCache: true,
   },
+  'claude-fable-5-1': {
+    name: 'Claude Fable 5.1',
+    description: 'Successor to Fable 5 in the same tier and price: the most capable widely released model for the hardest reasoning and long-horizon agentic work (premium pricing; requires 30-day data retention; forced tool use is not supported — the provider downgrades it to auto)',
+    maxTokens: 128000,
+    contextWindow: 1_000_000,
+    supportsStreaming: true,
+    supportsFunctions: true,
+    supportsPromptCache: true,
+  },
   'claude-fable-5': {
     name: 'Claude Fable 5',
     description: 'Most capable model for the hardest reasoning and long-horizon agentic work (premium pricing; requires 30-day data retention)',

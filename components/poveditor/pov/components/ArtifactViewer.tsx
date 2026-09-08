@@ -25,6 +25,7 @@ import { AgentService } from '@/lib/pov/api/agent-service';
 import { ArtifactContent } from './ArtifactContent';
 import { useToast } from '@/lib/hooks/useToast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/Dialog';
+import { copyToClipboard } from '@/lib/utils/clipboard';
 
 // Static field guide for the result.json "Info" dialog. A schema explainer, not a
 // per-artifact parse — result.json is built by the shared execution core, so the
@@ -286,7 +287,7 @@ export const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ task }) => {
   const handleCopy = async () => {
     if (selectedArtifact) {
       try {
-        await navigator.clipboard.writeText(selectedArtifact.content);
+        await copyToClipboard(selectedArtifact.content);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
         

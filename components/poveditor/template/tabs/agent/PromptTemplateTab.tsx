@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { AgentTabProps } from './types';
 import { useTemplateData, useTemplateEditorActions } from '../../context/TemplateEditorContext';
+import { copyToClipboard as copyTextToClipboard } from '@/lib/utils/clipboard';
 
 /**
  * Prompt Template Tab Component
@@ -129,7 +130,7 @@ export function PromptTemplateTab({ templateId, isReadOnly = false }: AgentTabPr
   // Copy to clipboard
   const copyToClipboard = async (text: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      await copyTextToClipboard(text);
     } catch {
       // Could not copy to clipboard
     }

@@ -55,7 +55,7 @@ console.log('\n🧪 TEST — fallback invariants (sec-ops C2)\n');
 // (fable/mythos, plus opus-5 from 2026-08-05 — it carries the same cyber safeguards and can
 //  return stop_reason:'refusal'. Everything else must never take the beta path.)
 {
-  for (const m of ['claude-fable-5', 'claude-mythos-5', 'claude-opus-5']) {
+  for (const m of ['claude-fable-5', 'claude-fable-5-1', 'claude-mythos-5', 'claude-opus-5']) {
     ok(capabilitiesFor(m).serverSideFallback, `${m}: serverSideFallback true (the branch is reachable)`);
   }
   for (const m of ['claude-opus-4-8', 'claude-sonnet-5', 'claude-sonnet-4-6', 'claude-haiku-4-5']) {

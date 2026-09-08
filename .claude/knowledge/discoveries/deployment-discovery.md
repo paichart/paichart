@@ -18,6 +18,7 @@ grep -c '"jwt:keys"' package.json                              # expect 1 — th
 ls docs/RUNNING.md docs/OAUTH-SETUP.md | wc -l                 # expect 2 — stranger-facing docs (every npm script they cite must exist)
 grep -c 'test:dev-mcp-proxy' package.json                         # expect 2 — script + its slot in test:all-validation (the nginx-rule drift guard, E7)
 grep -c 'test:hub-endpoint-allowlist' package.json                # expect 2 — E14 gate (operator endpoint allowlist; 100+ cases incl. gate-9 agreement + SSRF≠trust pins)
+grep -rn 'navigator.clipboard.writeText' --include=*.tsx --include=*.ts components app | wc -l   # expect 0 — E17: navigator.clipboard is undefined on a plain-http self-host; every copy goes through lib/utils/clipboard.ts (execCommand fallback)
 grep -rlE 'process\.env\.HUB_PRIVATE_ENDPOINT_ALLOWLIST|env\[ENV_NAME\]' lib --include=*.js --include=*.ts | wc -l   # expect 1 — ONE env READER (mentions in comments/messages are fine) (lib/utils/endpoint-allowlist.js); a second parser cannot appear
 grep -c "require(" lib/utils/url-safety.js                        # expect 0 — the pure gate stays import-free and env-free (the allowlist wraps it, never enters it)
 APP_BASE_URL=http://h:3000 node -e "require('./next.config.js').headers().then(h=>console.log(h[0].headers.find(x=>x.key==='Content-Security-Policy').value.includes('upgrade-insecure-requests')?1:0))"   # expect 0 — E11: plain-http self-host must not get upgrade-insecure-requests (blank UI); unset/https still emits it (prod byte-identical)

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Copy, Check } from 'lucide-react';
 import { useState } from 'react';
 import { BLOOMBERG_COLORS, BLOOMBERG_VARIANTS } from '@/lib/constants/bloomberg-styles';
+import { copyToClipboard } from '@/lib/utils/clipboard';
 
 /**
  * Recommendation Types from Analytics API
@@ -66,7 +67,7 @@ export function RecommendationCard({
   const handleCopy = async (action: string, index: number) => {
     if (!onCopyPrompt) return;
     const prompt = onCopyPrompt(action, type);
-    await navigator.clipboard.writeText(prompt);
+    await copyToClipboard(prompt);
     setCopiedIndex(index);
     setTimeout(() => setCopiedIndex(null), 2000);
   };

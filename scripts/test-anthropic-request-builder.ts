@@ -66,6 +66,14 @@ console.log('\n── per-tier shaping ──');
   ok(!('thinking' in fable), 'fable-5: thinking OMITTED (always-on — the API thinks, not our config)');
   ok(fable.output_config?.effort === 'max', 'fable-5: effort max');
 
+  // Fable 5.1: forced tool_choice is a 400 on the API → downgraded to auto; Fable 5 keeps the forced form
+  const tools = [{ name: 'pick', description: 'd', parameters: { type: 'object', properties: {} } }];
+  const f51 = build('claude-fable-5-1', { functions: tools, functionCall: { name: 'pick' }, effort: 'high' });
+  ok(f51.tool_choice?.type === 'auto', 'fable-5-1: forced tool_choice DOWNGRADED to auto');
+  ok(!('temperature' in f51) && !('thinking' in f51), 'fable-5-1: same shape as fable-5 (no temperature, no thinking config)');
+  const f5 = build('claude-fable-5', { functions: tools, functionCall: { name: 'pick' } });
+  ok(f5.tool_choice?.type === 'tool' && f5.tool_choice?.name === 'pick', 'fable-5: forced tool_choice preserved');
+
   // top_p only when temperature absent (API rejects both) AND model accepts it
   const sonnetTopP = build('claude-sonnet-4-6', { topP: 0.8 });
   ok(sonnetTopP.top_p === 0.8 && !('temperature' in sonnetTopP), 'sonnet: top_p sent when temperature absent');

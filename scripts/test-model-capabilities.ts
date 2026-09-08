@@ -80,6 +80,20 @@ console.log('\n── serverSideFallback ──');
 {
   ok(capabilitiesFor('claude-fable-5').serverSideFallback === true, 'fable-5: serverSideFallback TRUE');
   ok(capabilitiesFor('claude-mythos-5').serverSideFallback === true, 'mythos-5: serverSideFallback TRUE (same surface)');
+  ok(capabilitiesFor('claude-fable-5-1').serverSideFallback === true, 'fable-5-1: serverSideFallback TRUE (same tier)');
+}
+
+// ── Fable 5.1: same surface as Fable 5 except forced tool use (400) ──
+console.log('\n── fable-5-1 ──');
+{
+  const f51 = capabilitiesFor('claude-fable-5-1');
+  ok(f51.acceptsTemperature === false && f51.thinkingMode === 'always-on' && f51.allowedEfforts.includes('max') && f51.outputCeiling === 128000,
+    'fable-5-1: temp NO, thinking ALWAYS-ON, effort full, 128K');
+  ok(f51.forcedToolChoice === false, 'fable-5-1: forced tool_choice NOT supported');
+  ok(capabilitiesFor('claude-mythos-5-1').forcedToolChoice === false, 'mythos-5-1: forced tool_choice NOT supported');
+  for (const mdl of ['claude-fable-5', 'claude-mythos-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-sonnet-4-6', 'claude-haiku-4-5']) {
+    ok(capabilitiesFor(mdl).forcedToolChoice === true, `${mdl}: forced tool_choice still supported`);
+  }
   for (const mdl of ['claude-opus-4-8', 'claude-sonnet-5', 'claude-sonnet-4-6', 'claude-haiku-4-5']) {
     ok(capabilitiesFor(mdl).serverSideFallback === false, `${mdl}: serverSideFallback false`);
   }
