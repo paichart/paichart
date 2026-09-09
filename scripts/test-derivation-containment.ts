@@ -720,6 +720,31 @@ test('D10: hard-gap reasons block, including the two moved there by arch F1', ()
   }
 });
 
+test('H-2 predicate: a `via` (transitive) leg counts exactly like a direct one — clean deriving via-leg ⇒ green; any via-leg violation ⇒ not green', () => {
+  assert(isUpstreamContainmentGreen([
+    { taskId: 'p2', checked: false, violations: 0 },
+    { taskId: 'p1', checked: true, violations: 0, via: 'p2' },
+  ]) === true, 'clean deriving leg reached via a hop must make the list green');
+  assert(isUpstreamContainmentGreen([
+    { taskId: 'p2', checked: false, violations: 0 },
+    { taskId: 'p1', checked: true, violations: 1, via: 'p2' },
+  ]) === false, 'a violation anywhere in the chain must block (every-half)');
+  assert(isUpstreamContainmentGreen([{ taskId: 'p2', checked: false, violations: 0 }]) === false,
+    'a lone consuming hop with nothing flattened stays not green (the pre-fix reading, kept for invariant 2)');
+});
+
+test('D10e: program-tier is benign with its own reason — a program parent has no harvest child BY CONSTRUCTION (H-3)', () => {
+  // 2026-09-09: the enrichment ran on PROGRAM parents (type PIPELINE, mode SYNTHESIZE) and stamped
+  // no-harvest-child → hard-gap on every program's own card (3 of 3 on devext). Structurally
+  // inapplicable ≠ "should have run and could not"; the program gate reads its CHILDREN's facts.
+  const d = computeContainmentDisposition({ checked: false, reason: 'program-tier' });
+  assert(d.disposition === 'benign' && d.reason === 'program-tier-inapplicable', JSON.stringify(d));
+  assert((d.inputs as { reason?: string }).reason === 'program-tier', JSON.stringify(d.inputs));
+  // NEGATIVE CONTROL: the leg reason is untouched — a leg missing its harvester still hard-gaps.
+  const leg = computeContainmentDisposition({ checked: false, reason: 'no-harvest-child' });
+  assert(leg.disposition === 'blocking' && leg.reason === 'hard-gap', JSON.stringify(leg));
+});
+
 test('D10b: no-author-child escalates to needs-node-c with the SUBJECT NAMED', () => {
   // The fix for IGP-T1 R12/R15: an evidence-only leg has no author child BY DESIGN, an authoring leg
   // whose author failed to spawn has none BY FAILURE, and nothing at leg tier separates them.

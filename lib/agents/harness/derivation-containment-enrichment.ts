@@ -68,6 +68,15 @@ export interface ComputeContainmentInput {
   stageId: unknown;
   /** `task.inputContext.chainedFrom` — the leg's chained predecessors. */
   chainedFrom: unknown;
+  /**
+   * H-3 (2026-09-09): true when the task is a PROGRAM harness (`isProgramHarnessTask`, resolved ONCE by
+   * the caller). A program's child stage holds Architect + gates + PIPELINE legs + producer + Node C —
+   * no harvest child BY CONSTRUCTION — so the leg check is structurally inapplicable, not "never ran".
+   * Without this the parent stamped `no-harvest-child → blocking (hard-gap)` on every program
+   * SYNTHESIZE (3 of 3 on devext), a verdict the enrichment never earned. Decided HERE, inside the
+   * replayable module, so `scripts/replay-containment.ts` can print it against a real parent.
+   */
+  programTier?: boolean;
 }
 
 /**
@@ -77,8 +86,14 @@ export interface ComputeContainmentInput {
  */
 export async function computeDerivationContainmentFact(
   prisma: ContainmentPrisma,
-  { stageId, chainedFrom }: ComputeContainmentInput
+  { stageId, chainedFrom, programTier }: ComputeContainmentInput
 ): Promise<Record<string, unknown>> {
+  // H-3: a program parent gets a self-describing, tier-inapplicable fact — never ABSENT (G2 renders
+  // absence as a blocking token) and never the leg's hard-gap. Its containment obligation is discharged
+  // by its CHILDREN's facts, which the program gate already reads.
+  if (programTier === true) {
+    return { checked: false, reason: 'program-tier', tier: 'program', applicable: false };
+  }
   let fact: Record<string, unknown> = { checked: false, reason: 'no-child-stage' };
   // Parsed inside the stage block (that is where the author's text is in hand) and consumed by the
   // checked:false branch below — a CONSUMING leg declares what it took from §6 and applied.
@@ -246,13 +261,55 @@ export async function computeDerivationContainmentFact(
         // the single source. A missing value is counted, never silently dropped — absence of the
         // field must not conflate "no upstream" with "upstream found but unreadable".
         const dc = (entry as { derivationContainment?: unknown }).derivationContainment as
-          { checked?: unknown; violations?: unknown } | null | undefined;
+          { checked?: unknown; violations?: unknown; derivedValues?: unknown;
+            containmentDisposition?: { disposition?: unknown; reason?: unknown } | null;
+            upstreamContainment?: { legs?: unknown } | null } | null | undefined;
         if (dc && typeof dc === 'object') {
+          const derived = Array.isArray(dc.derivedValues)
+            ? (dc.derivedValues as Array<{ kind?: unknown; value?: unknown }>)
+              .filter(v => typeof v?.value === 'string')
+              .map(v => ({ kind: typeof v.kind === 'string' ? v.kind : 'cidr', value: v.value as string }))
+            : undefined;
+          const disp = dc.containmentDisposition && typeof dc.containmentDisposition === 'object'
+            ? dc.containmentDisposition : null;
           legs.push({
             taskId: entry.taskId as string,
             checked: dc.checked === true,
             violations: Array.isArray(dc.violations) ? dc.violations.length : 0,
+            ...(derived && derived.length > 0 ? { derivedValues: derived } : {}),
+            ...(disp && typeof disp.disposition === 'string'
+              ? { disposition: disp.disposition as 'benign' | 'blocking' | 'needs-node-c',
+                  ...(typeof disp.reason === 'string' ? { dispositionReason: disp.reason } : {}) }
+              : {}),
           });
+          // H-2 (2026-09-09): FLATTEN the predecessor's own transcribed legs into this leg's list,
+          // tagged `via`. The predecessor already resolved THEM once (the same single-resolution
+          // rule as the comment above — nothing is re-fetched here; CC3 carried the whole object).
+          // A predecessor WITHOUT `upstreamContainment` contributes itself only and inherits
+          // nothing — a pre-CC3 or unreadable stamp can never become green (invariant 2).
+          // Dedup by taskId (diamond shapes): keep the first record, but violations take the MAX so
+          // a dirty reading is never masked by a clean duplicate (fail-closed).
+          const nested = Array.isArray(dc.upstreamContainment?.legs) ? dc.upstreamContainment!.legs as unknown[] : [];
+          for (const n of nested) {
+            const nl = n as { taskId?: unknown; checked?: unknown; violations?: unknown; derivedValues?: unknown;
+              disposition?: unknown; dispositionReason?: unknown };
+            if (!nl || typeof nl.taskId !== 'string') continue;
+            const rec: UpstreamContainmentLeg = {
+              taskId: nl.taskId,
+              checked: nl.checked === true,
+              violations: typeof nl.violations === 'number' ? nl.violations : 0,
+              via: entry.taskId as string,
+              ...(Array.isArray(nl.derivedValues) && nl.derivedValues.length > 0
+                ? { derivedValues: nl.derivedValues as Array<{ kind: string; value: string }> } : {}),
+              ...(typeof nl.disposition === 'string'
+                ? { disposition: nl.disposition as 'benign' | 'blocking' | 'needs-node-c',
+                    ...(typeof nl.dispositionReason === 'string' ? { dispositionReason: nl.dispositionReason } : {}) }
+                : {}),
+            };
+            const dup = legs.find(l => l.taskId === rec.taskId);
+            if (dup) { dup.violations = Math.max(dup.violations, rec.violations); continue; }
+            legs.push(rec);
+          }
         } else {
           lookupMisses++;
         }
@@ -277,10 +334,24 @@ export async function computeDerivationContainmentFact(
       // LIMIT, deliberate: this compares what the leg SAYS it applied against what upstream derived.
       // It does not prove what went into the authored artifact — a leg could declare X and write Y.
       // That residue stays Node C's, and it is the same trust model `## Derived Values` always had.
-      const upstreamDerived = upstream.flatMap(e => {
-        const dc = (e as { derivationContainment?: { derivedValues?: unknown } }).derivationContainment;
-        return Array.isArray(dc?.derivedValues) ? dc!.derivedValues as Array<{ kind: string; value: string }> : [];
-      });
+      // H-2: the deriving leg may sit any number of hops up. `legs[]` (direct + flattened `via`
+      // entries) carries each deriving leg's transcribed `derivedValues`, so check 1 compares
+      // against the TRUE origin at every hop — not against a relay. Direct entries are read from the
+      // chained object as before; the union is de-duplicated by kind+value.
+      const seen = new Set<string>();
+      const upstreamDerived: Array<{ kind: string; value: string }> = [];
+      const addDerived = (vals: unknown) => {
+        if (!Array.isArray(vals)) return;
+        for (const v of vals as Array<{ kind?: unknown; value?: unknown }>) {
+          if (typeof v?.value !== 'string') continue;
+          const kind = typeof v.kind === 'string' ? v.kind : 'cidr';
+          const key = `${kind}:${v.value}`;
+          if (seen.has(key)) continue;
+          seen.add(key); upstreamDerived.push({ kind, value: v.value });
+        }
+      };
+      for (const e of upstream) addDerived((e as { derivationContainment?: { derivedValues?: unknown } }).derivationContainment?.derivedValues);
+      for (const l of legs) addDerived(l.derivedValues);
       if (Array.isArray(consumed) && consumed.length > 0) {
         // Stamped even when it matches, so a consumer can see WHAT was compared rather than
         // inferring it from the absence of a violation.

@@ -136,6 +136,10 @@ test('INVARIANT 2: no-derived-values-block keeps its ORIGINAL blocking clause (V
     'the no-derived-values-block clause no longer keys on a FACT — if it reverted to judging the leg\'s objective, A7 is reopened');
   assert(/\\`no-harvest-child\\`[\s\S]{0,120}BLOCKING gap, always/.test(taxonomy),
     'no-harvest-child/no-author-child left the always-BLOCKING set — they mean the check never ran and cannot carry harvestedCount, so an ABSENT=>benign reading clears a coverage gap (arch F1, 2026-08-03)');
+  // H-3 (2026-09-09): the program's OWN containment fact must be named benign and non-conjunct, and
+  // the LEG reason must stay blocking in the same text — both halves, or the C3 branch drifts back.
+  assert(/BRANCH C3[\s\S]{0,400}program-tier-inapplicable/.test(taxonomy),
+    'BRANCH C3 (program-tier → benign program-tier-inapplicable) is gone — the parent would again read its own no-harvest-child as a gap');
   assert(/REFUSED or DROPPED[\s\S]{0,80}BLOCKING/.test(taxonomy),
     'the refusal/drop guarantee is gone: a leg that harvested a pool and emitted no derivation must block (VT-11 collision refusal, run-2/3 dropped block)');
   assert(/regardless of anything upstream/.test(taxonomy),
@@ -206,6 +210,11 @@ test('INVARIANT 2d: the taxonomy CONSUMES the computed disposition (mechanisatio
 test('INVARIANT 3: the DAG-position guard (upstreamContainment.green) is REQUIRED', () => {
   assert(/upstreamContainment\.green === true/.test(taxonomy),
     'the upstream guard is missing — a DERIVING leg with a genuinely BROKEN CIDR harvest stamps the SAME reason string and would false-release');
+  // H-2 (2026-09-09): green is TRANSITIVE — the prose must say a deriving leg ANYWHERE in the chain
+  // qualifies, via a discharged consuming hop. Without this line a later edit could quietly restore the
+  // one-hop reading that blocked every consumer-of-a-consumer.
+  assert(/through a discharged consuming hop[\s\S]{0,80}\\`via\\` leg/.test(taxonomy),
+    'the transitive (via) wording is gone from D2 — a consumer of a consumer would again read as upstream-not-green');
   assert(/no predecessor carries any violation/.test(taxonomy),
     'the ALL-predecessors rule is gone — with "at least one" semantics a clean sibling could mask a predecessor carrying a violation');
 });

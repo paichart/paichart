@@ -40,6 +40,7 @@ import { buildExecutionResultJson, deriveChainedContextSignal } from './executio
 import { persistTerminalSuccess } from './execution-terminal-persist';
 import { computeSelfSupersession } from './execution-selection';
 import { computeDerivationContainmentFact } from '@/lib/agents/harness/derivation-containment-enrichment';
+import { isProgramHarnessTask } from '@/lib/agents/harness/program-protocol';
 import { computeDialectLintFact } from '@/lib/agents/harness/dialect-lint-enrichment';
 import { computeContractPropagationFact } from '@/lib/agents/harness/contract-propagation-enrichment';
 import { assessExecutionQuality } from '@/lib/agents/harness/execution-quality';
@@ -340,6 +341,12 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
   // fixture-pinned F17/F20/truncation/HNO ordering untouched and a throw can never roll back the
   // SUCCESS commit. NON-THROW: any miss/parse failure ⇒ checked:false + reason — the reviewer
   // (LLM) tier blocks on missing evidence; this mechanical tier only reports the fact.
+  // H-3 (2026-09-09): the three mechanical nets below are LEG nets. A PROGRAM parent is also
+  // `type === 'PIPELINE'` in SYNTHESIZE, and its child stage has no harvest/author child by
+  // construction — so the tier is resolved ONCE here (stamp-first predicate, the same one the
+  // completion core uses) and each net stamps a named, non-blocking `program-tier` fact instead of
+  // a leg gap. Never a bare skip: an ABSENT fact renders as a blocking token on the card (G2).
+  const programTier = task.type === 'PIPELINE' && isProgramHarnessTask(task);
   if (task.type === 'PIPELINE' && harnessContext?.mode === 'SYNTHESIZE') {
     try {
       // EXTRACTED 2026-07-30 into lib/agents/harness/derivation-containment-enrichment.ts so this
@@ -352,6 +359,7 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
       const fact = await computeDerivationContainmentFact(prisma, {
         stageId: (task.metadata as Record<string, unknown> | null)?.pipelineStageId,
         chainedFrom: (task.inputContext as { chainedFrom?: unknown } | null)?.chainedFrom,
+        programTier,
       });
       (resultJson as Record<string, unknown>).derivationContainment = fact;
       if (Array.isArray((fact as { violations?: unknown[] }).violations) && (fact as { violations: unknown[] }).violations.length > 0) {
@@ -400,10 +408,12 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
   // (R9). Blocking a clean package on that would be the R5 mistake inside our own guard.
   if (task.type === 'PIPELINE' && harnessContext?.mode === 'SYNTHESIZE') {
     try {
-      const lint = await computeDialectLintFact(prisma, {
-        stageId: (task.metadata as Record<string, unknown> | null)?.pipelineStageId,
-        interfaceContract: (task.inputContext as { interfaceContract?: unknown } | null)?.interfaceContract,
-      });
+      const lint = programTier
+        ? { checked: false, reason: 'program-tier', tier: 'program', applicable: false, tokensConsidered: [], violations: [] }
+        : await computeDialectLintFact(prisma, {
+          stageId: (task.metadata as Record<string, unknown> | null)?.pipelineStageId,
+          interfaceContract: (task.inputContext as { interfaceContract?: unknown } | null)?.interfaceContract,
+        });
       (resultJson as Record<string, unknown>).dialectLint = lint;
       const violations = (lint as { violations?: unknown[] }).violations;
       if (Array.isArray(violations) && violations.length > 0) {
@@ -445,10 +455,12 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
   // hasInterfaceContract:false for every child forever, even once the fix works.
   if (task.type === 'PIPELINE' && harnessContext?.mode === 'SYNTHESIZE') {
     try {
-      const propagation = await computeContractPropagationFact(prisma, {
-        stageId: (task.metadata as Record<string, unknown> | null)?.pipelineStageId,
-        interfaceContract: (task.inputContext as { interfaceContract?: unknown } | null)?.interfaceContract,
-      });
+      const propagation = programTier
+        ? { checked: false, reason: 'program-tier', tier: 'program', applicable: false, children: [] as Array<Record<string, unknown>> }
+        : await computeContractPropagationFact(prisma, {
+          stageId: (task.metadata as Record<string, unknown> | null)?.pipelineStageId,
+          interfaceContract: (task.inputContext as { interfaceContract?: unknown } | null)?.interfaceContract,
+        });
       (resultJson as Record<string, unknown>).contractPropagation = propagation;
       const kids = (propagation.children ?? []) as Array<Record<string, unknown>>;
       const starved = kids.filter((k) => k.executed && !k.hasInterfaceContract);

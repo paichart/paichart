@@ -69,6 +69,15 @@ async function valueUnderstood(value: unknown): Promise<boolean> {
       }
     }
     if (carriers.length === 0) console.log('ℹ️ no ACTIVE template carries loadProtocols — nothing to verify');
+    // E35 (2026-09-09): a Pipeline Harness still on legacy load-all while a composed base exists is a
+    // FINDING (every self-host seeded before the seed wrote 'composed' looks like this) — reported, not
+    // fatal: `true` is a valid state the rollback drill deliberately returns to.
+    const baseRows = await prisma.agentPromptLibrary.count({ where: { status: 'ACTIVE', tags: { has: 'protocol-base' } } });
+    for (const t of carriers) {
+      if (t.lp === true && baseRows > 0) {
+        console.log(`⚠️ ${t.name} (${t.id}): loadProtocols=true (legacy load-all) while ${baseRows} protocol-base row(s) exist — prod runs 'composed'; flip with scripts/flip-harness-protocol-mode.ts --flip (E35)`);
+      }
+    }
     await prisma.$disconnect();
     process.exit(bad > 0 ? 1 : 0);
   } catch (e) {

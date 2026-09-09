@@ -201,6 +201,109 @@ async function main() {
       'a cidr harvest with no derivation anywhere is still BLOCKING — VT-11 collision refusal');
   });
 
+  await test('H-3: a PROGRAM parent (programTier:true) gets a self-describing tier-inapplicable fact, never the leg hard-gap', async () => {
+    const PROGRAM_KIDS = [
+      { id: 'arch', title: 'Produce program plan + interface contract', agentRole: 'program_architect' },
+      { id: 'g0', title: 'Plan gate', agentRole: null },
+      { id: 'p1', title: 'Pipeline 1 EDGE', agentRole: 'pipeline_harness_orchestrator' },
+      { id: 'nodec', title: 'Program integration review', agentRole: 'change_reviewer' },
+    ];
+    const fact = await computeDerivationContainmentFact(stubPrisma(PROGRAM_KIDS, {}),
+      { stageId: STAGE, chainedFrom: undefined, programTier: true });
+    assert(fact.checked === false && fact.reason === 'program-tier', `got ${JSON.stringify(fact)}`);
+    assert(fact.tier === 'program' && fact.applicable === false, `tier fields missing: ${JSON.stringify(fact)}`);
+    // FAIL-CLOSED PRESERVED: the same program-shaped stage read as a LEG (programTier absent) is still
+    // the leg's hard gap — the tier flag is the ONLY thing that may change the reading.
+    const asLeg = await computeDerivationContainmentFact(stubPrisma(PROGRAM_KIDS, {}),
+      { stageId: STAGE, chainedFrom: undefined });
+    assert(asLeg.reason === 'no-harvest-child', `leg reading changed: ${JSON.stringify(asLeg)}`);
+  });
+
+  // ── H-2 (2026-09-09): TRANSITIVE consuming leg — edge (derives) → dmz (consumes) → core (consumes) ──
+  // The leaf's direct predecessor is itself a consuming leg. Its stamp carries the deriving leg's clean
+  // stamp nested in ITS upstreamContainment.legs; the enrichment used to read one level too shallow.
+  const X = { kind: 'cidr', value: '10.99.0.6/31' };
+  const CORE_KIDS = [
+    { id: 'h3', title: 'Harvest current network state for Core ceos2', agentRole: 'network_state_harvester' },
+    { id: 'a3', title: 'Author configs + validation + rollback for Core', agentRole: 'config_change_author' },
+  ];
+  const coreArtifacts = (consumed: { kind: string; value: string }) => ({
+    h3: block('## Harvested Allocations', [{ kind: 'cidr', cidr: '10.99.0.3/32', device: 'ceos2' }]),
+    a3: block('## Consumed Values', [consumed]),
+  });
+  const dmzStamp = (opts: { edgeViolations?: number; dmzViolations?: unknown[]; withUpstream?: boolean }) => ({
+    taskId: 'p2', source: 'report.md',
+    derivationContainment: {
+      checked: false, reason: 'no-derived-values-block', harvestedCount: 0,
+      consumedValues: [X],
+      ...(opts.dmzViolations ? { violations: opts.dmzViolations } : {}),
+      containmentDisposition: { disposition: 'benign', reason: 'consuming-leg-consumed-discharged' },
+      ...(opts.withUpstream === false ? {} : {
+        upstreamContainment: {
+          green: (opts.edgeViolations ?? 0) === 0,
+          legs: [{ taskId: 'p1', checked: true, violations: opts.edgeViolations ?? 0, derivedValues: [X],
+                   disposition: (opts.edgeViolations ?? 0) === 0 ? 'benign' : 'blocking' }],
+        },
+      }),
+    },
+  });
+
+  await test('H-2 T1: a consumer-of-a-consumer is GREEN off the deriving leg two hops up, tagged via', async () => {
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)),
+      { stageId: STAGE, chainedFrom: [dmzStamp({})] });
+    const uc = fact.upstreamContainment as { green: boolean; legs: Array<{ taskId: string; via?: string; checked: boolean }> };
+    assert(uc && uc.legs.length === 2, `expected 2 legs (direct + via), got ${JSON.stringify(uc)}`);
+    assert(uc.legs[1].taskId === 'p1' && uc.legs[1].via === 'p2' && uc.legs[1].checked === true, JSON.stringify(uc.legs));
+    assert(uc.green === true, `green must be true off p1: ${JSON.stringify(uc)}`);
+    const d = fact.containmentDisposition as { disposition: string; reason: string };
+    assert(d.disposition === 'benign' && d.reason === 'consuming-leg-consumed-discharged', JSON.stringify(d));
+    assert(fact.violations === undefined, `no violations expected: ${JSON.stringify(fact.violations)}`);
+  });
+
+  await test('H-2 T2: a DIRTY deriving root two hops up still blocks the leaf (fail-closed through the flatten)', async () => {
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)),
+      { stageId: STAGE, chainedFrom: [dmzStamp({ edgeViolations: 1 })] });
+    const uc = fact.upstreamContainment as { green: boolean };
+    assert(uc.green === false, `green must be false with a dirty root: ${JSON.stringify(uc)}`);
+    const d = fact.containmentDisposition as { disposition: string; reason: string };
+    assert(d.disposition === 'blocking' && d.reason === 'consuming-leg-upstream-not-green', JSON.stringify(d));
+  });
+
+  await test('H-2 T3: a violation on the HOP itself (dmz consumed-value-mismatch) makes the leaf not green', async () => {
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)),
+      { stageId: STAGE, chainedFrom: [dmzStamp({ dmzViolations: [{ kind: 'consumed-value-mismatch' }] })] });
+    const uc = fact.upstreamContainment as { green: boolean };
+    assert(uc.green === false, `a dirty hop must not be masked: ${JSON.stringify(uc)}`);
+  });
+
+  await test('H-2 T4: check 1 FIRES for a transitive consumer — a value the deriving leg never derived is a mismatch (inert before this fix)', async () => {
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts({ kind: 'cidr', value: '10.99.0.4/31' })),
+      { stageId: STAGE, chainedFrom: [dmzStamp({})] });
+    const v = fact.violations as Array<{ kind?: string; type?: string }> | undefined;
+    assert(Array.isArray(v) && v.length > 0 && JSON.stringify(v).includes('consumed-value-mismatch'),
+      `expected a consumed-value-mismatch, got ${JSON.stringify(fact.violations)}`);
+    const d = fact.containmentDisposition as { disposition: string; reason: string };
+    assert(d.disposition === 'blocking' && d.reason === 'violations', JSON.stringify(d));
+  });
+
+  await test('H-2 T5: a hop stamped WITHOUT upstreamContainment contributes itself only — no inheritance, not green (invariant 2)', async () => {
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)),
+      { stageId: STAGE, chainedFrom: [dmzStamp({ withUpstream: false })] });
+    const uc = fact.upstreamContainment as { green: boolean; legs: unknown[] };
+    assert(uc.legs.length === 1 && uc.green === false, `expected 1 leg, not green: ${JSON.stringify(uc)}`);
+  });
+
+  await test('H-2 T6: diamond dedup keeps the dirtier reading of a leg reached twice', async () => {
+    const clean = dmzStamp({});
+    const dirtyTwin = { ...dmzStamp({ edgeViolations: 2 }), taskId: 'p2b' };
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)),
+      { stageId: STAGE, chainedFrom: [clean, dirtyTwin] });
+    const uc = fact.upstreamContainment as { green: boolean; legs: Array<{ taskId: string; violations: number }> };
+    const p1 = uc.legs.filter(l => l.taskId === 'p1');
+    assert(p1.length === 1 && p1[0].violations === 2, `dedup must keep max violations: ${JSON.stringify(uc.legs)}`);
+    assert(uc.green === false, 'a dirty duplicate must not be masked by a clean one');
+  });
+
   console.log(`\n📊 Results: ${passed} passed, ${failed} failed\n`);
   process.exit(failed > 0 ? 1 : 0);
 }

@@ -217,11 +217,31 @@ export interface DerivationContainmentFact {
   unsupported?: Array<{ kind: string; value?: string }>;
 }
 
-/** One `report.md` predecessor's stamped containment, transcribed for attribution. */
+/**
+ * One `report.md` predecessor's stamped containment, transcribed for attribution.
+ *
+ * H-2 (2026-09-09, panel `cline_docs/reviews/harness-gate-findings-2026-09-09/`): the list is now
+ * TRANSITIVE. A consuming leg whose direct predecessor is itself a consuming leg (edge → dmz → core)
+ * used to see `[{dmz, checked:false}]` only — the deriving edge leg's clean stamp was already at its
+ * boundary, nested one level down in the predecessor's own `upstreamContainment.legs`, and the
+ * transcription read one level too shallow. So `green` was structurally false for every transitive
+ * consumer that declared its consumed values (prod's FW-A3.5 core leg passed only by declaring none),
+ * and check 1 was silently INERT for them (`upstreamDerived` empty). The enrichment now FLATTENS the
+ * predecessor's transcribed legs into this leg's list, tagged `via`, and carries each deriving leg's
+ * `derivedValues`, so the UNCHANGED predicate below and check 1 both see the true deriving leg.
+ * `green` stays a pure function of `legs[]` (Protocol 10: re-derivable from the stamp).
+ */
 export interface UpstreamContainmentLeg {
   taskId: string;
   checked: boolean;
   violations: number;
+  /** Transitive entry: the DIRECT predecessor through which this leg was reached. Absent on direct legs. */
+  via?: string;
+  /** The deriving leg's own stamped `derivedValues`, transcribed so check 1 can run at every hop. */
+  derivedValues?: Array<{ kind: string; value: string }>;
+  /** A copy of the hop's stamped disposition — attribution for replay, never an input to `green`. */
+  disposition?: 'benign' | 'blocking' | 'needs-node-c';
+  dispositionReason?: string;
 }
 
 /** A value a CONSUMING leg declares it took from chained context and applied. */
@@ -830,6 +850,16 @@ const HARD_GAP_REASONS = new Set([
  */
 const LEG_TIER_UNDECIDABLE_REASONS = new Set(['no-author-child']);
 
+/**
+ * H-3 (2026-09-09): `program-tier` — the enrichment ran on a PROGRAM parent (stamp
+ * `metadata.protocol = pov-program-protocol`), whose child stage has no harvest child BY CONSTRUCTION.
+ * Structurally inapplicable is not "should have run and could not" (branch C), so it is benign with its
+ * own reason: the program's containment obligation is met by its children's facts, which the program
+ * gate reads. Deliberately NOT a bare exemption at the call site — G2 renders an ABSENT fact as a
+ * blocking token, so silence would trade a wrong verdict for the Run-15 shape.
+ */
+const PROGRAM_TIER_REASONS = new Set(['program-tier']);
+
 export function computeContainmentDisposition(fact: Record<string, unknown>): ContainmentDisposition {
   const violations = Array.isArray(fact.violations) ? fact.violations : [];
   const unsupported = Array.isArray(fact.unsupported) ? fact.unsupported : [];
@@ -865,6 +895,7 @@ export function computeContainmentDisposition(fact: Record<string, unknown>): Co
   if (fact.checked === true) return out('benign', 'checked-clean');
 
   if (reason === undefined) return out('blocking', 'no-reason-given');
+  if (PROGRAM_TIER_REASONS.has(reason)) return out('benign', 'program-tier-inapplicable');
   if (HARD_GAP_REASONS.has(reason)) return out('blocking', 'hard-gap');
 
   // CONDITION 3 (contradiction tripwire) — ordered BEFORE the escalation below, deliberately. A leg

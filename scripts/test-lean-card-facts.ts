@@ -66,6 +66,14 @@ test('F3: containment violations + unsupported render both counts', () => {
   );
 });
 
+test('F4b (H-3): a program parent renders its tier-inapplicable fact as benign, not as a hard gap', () => {
+  expectEq(
+    leanFactsLine({ derivationContainment: { checked: false, reason: 'program-tier', tier: 'program', applicable: false,
+      containmentDisposition: { disposition: 'benign', reason: 'program-tier-inapplicable' } } }),
+    '**Facts:** derivationContainment: NOT checked (program-tier) | containmentDisposition: benign (program-tier-inapplicable) [program-gate conjunct]'
+  );
+});
+
 test('F4: checked:false renders NOT checked with reason', () => {
   expectEq(
     leanFactsLine({ derivationContainment: { checked: false, reason: 'no-derived-values-block' } }),

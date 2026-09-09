@@ -48,10 +48,14 @@
  * which the chainer only started carrying on 2026-07-30 (CC3). Legs chained BEFORE that have no such
  * field, so a replay of them reports `upstream: <none carried>` — that is the harness telling the
  * truth about old data, not a regression. Only legs chained after CC3 exercise the populated path.
+ * Legs whose PREDECESSORS were stamped before 2026-09-09 (H-2) carry no `via` legs and no
+ * `derivedValues` on their leg records: `green` may flip on replay (the nested clean stamp is read)
+ * but check 1 stays inert for them — the values were never transcribed. Fresh runs carry both.
  */
 
 import { PrismaClient } from '@prisma/client';
 import { computeDerivationContainmentFact } from '../lib/agents/harness/derivation-containment-enrichment';
+import { isProgramHarnessTask } from '../lib/agents/harness/program-protocol';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { leanFactsLine } = require('../lib/mcp/server/tools/advanced/lean-card-facts');
@@ -87,7 +91,7 @@ async function replay(taskId: string) {
   }
 
   // THE ACTUAL SHIPPING FUNCTION — not a copy.
-  const fact = await computeDerivationContainmentFact(prisma, { stageId, chainedFrom });
+  const fact = await computeDerivationContainmentFact(prisma, { stageId, chainedFrom, programTier: isProgramHarnessTask(task) });
 
   console.log(`\n   ── what the enrichment WOULD STAMP ──`);
   console.log('   ' + JSON.stringify(fact, null, 2).split('\n').join('\n   '));

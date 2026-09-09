@@ -13,8 +13,8 @@
  *
  *   Detailed playbook for each mode lives in the pipeline-orchestrator-protocol
  *   in the agent_prompt_library table — see scripts/seed-protocol-prompts.ts.
- *   The harness reads this protocol at execution time (via loadProtocols: true
- *   metadata flag). Template = role + context; protocol = step-by-step.
+ *   The harness reads this protocol at execution time (via the loadProtocols
+ *   metadata flag — 'composed' since 2026-09-09, E35). Template = role + context; protocol = step-by-step.
  *
  * Design (Option A — metadata-based child-stage linkage):
  *   The harness lives in one stage, creates a separate "Pipeline: X" child
@@ -91,7 +91,13 @@ async function seed() {
       },
       hasModelParameters: true,
       modelParamsVersion: '3.0.0',
-      loadProtocols: true, // Engine injects protocol-tagged prompts; pipeline-orchestrator-protocol is the playbook
+      // E35 (2026-09-09): 'composed' — base (pipeline-orchestrator-protocol) + the task's ONE stamped domain
+      // protocol. Prod has run composed since the 2026-08-17 flip (scripts/flip-harness-protocol-mode.ts,
+      // a one-off DB write this seed never encoded), so every FRESH install — every self-host — was getting
+      // the legacy load-all regime: all six protocols concatenated (~194 K chars), no `Protocol binding:`
+      // line, the base's misroute guard silent by construction. The seed is the source of truth; the flip
+      // script stays for the rollback drill only.
+      loadProtocols: 'composed',
     },
   };
 
