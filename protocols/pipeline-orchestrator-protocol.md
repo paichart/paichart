@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 3.13.0.**
+> **Rendered verbatim from the pAIchart platform seed — version 3.14.0.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -245,7 +245,7 @@ perform(action: "task.update", parameters: {
   metadata: { qualityGate: { reviewerScore: <failing child's confidence>, outcome: "escalated" } }
 })
 ```
-Leave your status IN_PROGRESS. Exit. (Escalation skips the APPROVAL, never the cleanup — if this pipeline self-provisioned a service, its teardown step still runs.) NOTE — program legs only: if you are a child pipeline of a PROGRAM (your stage name starts `Program: `), the platform will COMPLETE your task at this run's persist (your escalated `qualityGate` facts carry the verdict) so the program can escalate instead of hanging on your open leg (F20, 2026-07-16). That completion is expected, not an error; a standalone pipeline stays IN_PROGRESS as before.
+Leave your status IN_PROGRESS. Exit. (Escalation skips the APPROVAL, never the cleanup — if this pipeline self-provisioned a service, its teardown step still runs, and your escalation comment carries the same `**Teardown:**` line as Step 5's final comment.) NOTE — program legs only: if you are a child pipeline of a PROGRAM (your stage name starts `Program: `), the platform will COMPLETE your task at this run's persist (your escalated `qualityGate` facts carry the verdict) so the program can escalate instead of hanging on your open leg (F20, 2026-07-16). That completion is expected, not an error; a standalone pipeline stays IN_PROGRESS as before.
 
 Re-execute each child AT MOST ONCE. If a child's re-execution is also < 70, escalate.
 
@@ -264,6 +264,8 @@ In most pipelines your finalResponse here is the `pipeline-index.json` content �
 **Do NOT post a summary comment in this step.** The final summary comment is posted ONCE in Step 5. Posting here creates a duplicate with Step 5's final comment.
 
 ### Step 5: Complete Yourself
+**Step 5.0 — Domain cleanup, on EVERY outcome.** If the Active Protocol declares a self-provisioning lifecycle, run its teardown delete NOW — `registry(action:'delete', service_name:<descriptor.name>, confirm:true)` — on `approved`, `needs-revision` AND `escalated` alike: approval is not an exit ramp around teardown any more than escalation is (2026-09-09: two APPROVED legs left their registrations ACTIVE and the next leg could not register the same name; the escalated leg, whose branch carried the instruction, did tear down). Record the literal result for the `**Teardown:**` line of your final comment; if nothing was self-provisioned, that line says so.
+
 First stamp the gate FACTS on yourself. Which case you are in is itself a FACT: does your child stage contain a reviewer/QA-gate child (a child whose template is a REVIEWER type / whose role emits a terminal `## VERDICT:` block)? Stamp it as `reviewerPresent` so no consumer ever mistakes a ran-clean approval for a QA-vetted one. `outcome` vocabulary — exactly one of:
 - `"approved"` —
   - **Pipeline WITH a reviewer/QA-gate child** (`reviewerPresent: true`; score = that reviewer's confidence): the reviewer's terminal `## VERDICT:` block is APPROVED with no blocking issues — the terminal block is the verdict; earlier prose never counts.
@@ -299,6 +301,8 @@ Post ONE final comment. The comment MUST start with the child-stage breadcrumb, 
 - Your harness root → `fetch(id: "artifact-<your pipeline-index.json id>")` + `fetch(id: "artifact-{{HARNESS_REPORT_MD_ID}}")` ⭐ deliverable (extracted from <deliverable-producer child>)
 
 **Confidence:** <overall>/100 (the standard rule — avg of children: <math>)
+
+**Teardown:** <service name> deleted | delete failed: <error text> | none self-provisioned
 
 <short aggregated findings — 3-5 bullet points of key numbers only. Do NOT restate the leaf child's report contents; that's what the deliverable fetch is for. The comment is the INDEX, the deliverable is the DOCUMENT.>
 

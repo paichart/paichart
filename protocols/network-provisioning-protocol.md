@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 1.9.3.**
+> **Rendered verbatim from the pAIchart platform seed — version 1.10.0.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -107,8 +107,11 @@ The change package's validation section must be runnable, deterministic checks (
 
 When all children are terminal, produce the final deliverable: the Phase 2 change package, plus a synthesis header carrying a **status**:
 
+**Order at SYNTHESIZE (overrides base Step 5):** (1) teardown delete — `registry(action:'delete', service_name:<descriptor.name>, confirm:true)` — on EVERY outcome (approved, needs-revision, escalated); (2) gate stamp; (3) `task.complete`; (4) final comment carrying the `**Teardown:**` line.
+
+
 - **`approved`** — only if the Phase 3 Reviewer's terminal `## VERDICT:` block says **APPROVED** with `Blocking issues: none` (its `Confidence:` number is a recorded fact, NOT a gate input — 2026-07-18 calibration: the number carries verdict direction, not correctness). Read ONLY the terminal block for the verdict — it supersedes all earlier prose; an issue raised earlier but not carried into the terminal `Blocking issues:` line was retracted and is NOT blocking.
 - **`needs-revision`** — otherwise; name the blocking issues from the Reviewer's terminal block, citing the package's OWN validation-set numbers.
 
-Run the **teardown delete** (self-provision step 5) at this point — **including when you ESCALATE instead of approving** (2026-07-08: an escalated run left the registration orphaned; escalation is not an exit ramp around teardown). Aggregate child confidences into the harness confidence per the standard rule. Restate, in one line, that **apply is a separate human-gated/deterministic step** — this pipeline's output is an approved package, not an applied change.
+The teardown delete is step (1) of the order above — on approval and on escalation alike (2026-07-08: an escalated run left the registration orphaned; 2026-09-09: two approved runs did). Aggregate child confidences into the harness confidence per the standard rule. Restate, in one line, that **apply is a separate human-gated/deterministic step** — this pipeline's output is an approved package, not an applied change.
 

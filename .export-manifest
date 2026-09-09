@@ -1862,6 +1862,7 @@ scripts/test-task-handler-bc76.ts
 scripts/test-task-input-context-merge.ts
 scripts/test-task-security.ts
 scripts/test-team-member-trust-security.ts
+scripts/test-teardown-both-branches.ts
 scripts/test-terminal-persist-point-of-no-return.ts
 scripts/test-terminal-persist-shape.ts
 scripts/test-theatre-labels.ts
