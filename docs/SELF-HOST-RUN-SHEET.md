@@ -271,7 +271,7 @@ in `~/paichart` or issued directly. Each line's response is what a working insta
    producer's deliverable and Node C's verdict, and a final comment with the gate table and `programReleasable`.
    `project(action: 'task.context', taskId: '<task id>')` at any time shows where it is.
 
-**What a finished run looks like** (the first self-host run of this use case, 2026-09-09, one laptop hosting hub + both rigs):
+**What a finished run looks like** (Run 7 of this use case on one laptop hosting hub + both rigs, 2026-09-10 — `programReleasable: true` in ~42 minutes):
 Architect ~2 min → three legs of ~8–12 min each (harvest → design → author → review; each self-provisions its rig service
 at `127.0.0.1` and the reviewer approves or escalates) → Producer + Node C ~4 min → program synthesis. The stamp on the
 program task is the machine fact — `programReleasable`, `qualityGate.outcome`, and each leg's `containmentDisposition` —
@@ -284,7 +284,12 @@ halts on a duplicate `Program: …` stage and accepts only a machine-checkable c
 ```
 perform(action: 'task.update', parameters: { taskId: '<new task id>', metadata: { duplicateAcknowledged: '<prior Program: … stage id>' } })
 ```
-then `agent.assign` + `agent.execute` as in step 4. (The stage id is in the harness's first comment on the prior run.)
+then `agent.assign` + `agent.execute` as in step 4. Stamp the MOST RECENT prior `Program: …` stage id (the harness's
+first comment on that run names it; `project(action: 'pov.details')` lists the stages).
+
+**Releasing a gate**: after `perform(action: 'task.complete', …)` on a gate, read the gate's own status back — a release
+issued within seconds of the upstream leg completing can be rejected while the dependency state settles (it took up to
+five attempts over ~50 s on a laptop). The action's reply text is not the state; `Status: COMPLETED` on the gate is.
 
 A failure at step 4 with `llm_initialized` means the running user has no resolvable LLM key (step 5's `llm:init`,
 or Profile Settings → LLM). A leg that escalates on its harvest usually means a rig service answered `initialize`

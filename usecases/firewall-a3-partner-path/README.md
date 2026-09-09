@@ -69,7 +69,21 @@ In short — from Claude Code inside your clone, or as direct tool calls:
 5. When the harness comments `⏸ PROGRAM PLAN AWAITING APPROVAL`, read the Architect's *Assumptions & open questions*
    and release the gate: `perform(action: 'task.complete', parameters: { taskId: '<G0 gate id>' })`.
 
-## First self-host run (2026-09-09, one laptop: hub + both rigs)
+## Self-host runs (one laptop: hub + both rigs)
+
+**Run 7 (2026-09-10) — `programReleasable: true`.** Architect 88 → edge leg APPROVED 90 (derived pool `10.99.0.6/31`,
+containment checked clean) → dmz leg APPROVED 90 (CREATE package, pool consumed verbatim, consuming-leg discharge) →
+core leg APPROVED 87 (pool consumed via dmz; Node C recomputed containment against the edge harvest) → Node C
+`VERDICT: APPROVED` 88, chaining 3/3, 0 degraded → program `approved` 87, confidence 86. ~42 minutes wall clock.
+Every leg tore its self-provisioned rig service down; the final comment carries the `**Teardown:**` line.
+
+The six runs before it are the honest part of this record: each ended `needs-revision` or `escalated` on something the
+run itself exposed — a wrong descriptor URL (the artifact), a parser that read `### 6. Consumed Values` as absent, a
+reviewer enforcing a rule the platform had outgrown, a settledness race when an agent completed its own task mid-
+execution — and each became a platform fix before the next run. The mechanics were clean from Run 3 onward; what
+changed between Run 3 and Run 7 was the platform's honesty about its own parser and its reviewers' remit.
+
+### First self-host run (2026-09-09), for the record
 
 Architect confidence 88 → edge leg APPROVED 90 (derived pool `10.99.0.6/31`) → dmz leg APPROVED 84 (CREATE package,
 pool consumed verbatim) → core leg APPROVED 88 (pool consumed via dmz) → Node C `VERDICT: APPROVED` 92 with minimality
