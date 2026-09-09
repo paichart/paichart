@@ -28,7 +28,7 @@ grep -c "'derivationContainment'" lib/services/execution-artifacts.ts           
 grep -c "pipeline-index.json" lib/mcp/tasks/action/handlers/agent/agent-results-handler.ts # EXPECT 2 — E1: hoist matches result.json OR pipeline-index.json (was result.json only = 0% hit for PIPELINE execs; also retro-fixed reviewerVerdict/qualityMetrics hoisting there)
 grep -c "leanFactsLine" lib/mcp/server/tools/advanced/task-action-handler.js              # EXPECT 2 — GAP-1: the lean card prints the hoisted facts via the SHARED helper (import + call); the sibling agent-results-handler.js builder consumes it too
 grep -c "derivationContainment" lib/mcp/server/tools/advanced/lean-card-facts.js          # EXPECT 5 — the shared **Facts:** line surfaces confidence | reviewerVerdict | derivationContainment (+containmentDisposition, nested under it, 2026-08-03)
-grep -c "^test(" scripts/test-lean-card-facts.ts                                          # expect 41 — the shared-helper pin (dedup'd + pinned by the born-ready session; do not re-fold). Was 12 at authoring; the suite grew through the asn-kind, containmentDisposition and F7 work. A count that only ever grows is a weak pin — it catches deletion, not drift
+grep -c "^test(" scripts/test-lean-card-facts.ts                                          # expect 42 — (+1 2026-09-09: F4b, the program-tier fact renders benign — H-3) — the shared-helper pin (dedup'd + pinned by the born-ready session; do not re-fold). Was 12 at authoring; the suite grew through the asn-kind, containmentDisposition and F7 work. A count that only ever grows is a weak pin — it catches deletion, not drift
 ```
 
 ## 🆕 2026-07-16 — truncation-stall R1-R4 (Sonnet-5 adaptive-thinking exhausts max_tokens)

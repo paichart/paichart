@@ -176,13 +176,17 @@ for entry in "${ENTRIES[@]}"; do
   # it to `wc -l` yields 1 regardless of the real number — that single mistake
   # produced the bulk of this script's first-run findings. Read the value instead.
   raw=$(bash -c "$cmd" 2>/dev/null)
-  if echo "$cmd" | grep -qE '(^|\s)grep\s+(-[a-zA-Z]*c[a-zA-Z]*)(\s|$)'; then
+  # 2026-09-10: a command ending in `| wc -l` also prints a NUMBER (one line, even when it is "0");
+  # the line-count branch read that "0" as ONE hit and reported two false REGRESSIONS on `expect zero`
+  # greps (E17 clipboard, seed owner-email) that were clean by hand. Read the value for both forms.
+  if echo "$cmd" | grep -qE '(^|\s)grep\s+(-[a-zA-Z]*c[a-zA-Z]*)(\s|$)' || echo "$cmd" | grep -qE '\|\s*wc\s+-l\s*(#.*)?$'; then
     hits=$(echo "$raw" | awk -F: '{ n = (NF>1 ? $NF : $0); if (n ~ /^[0-9]+$/) s += n } END { print s+0 }')
   else
     # `grep -c` already prints 0 on no-match; a `|| echo 0` would append a SECOND 0.
     hits=$(printf '%s' "$raw" | grep -c . 2>/dev/null)
     [ -z "$hits" ] && hits=0
   fi
+  [ "$VERBOSE" -eq 1 ] && echo "     · cmd=[$cmd]  raw=[$(printf %s "$raw" | head -c 60)]  hits=$hits"
   checked=$((checked+1))
 
   # -A/-B/-C emit CONTEXT lines, so a line count is not comparable to a documented

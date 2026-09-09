@@ -64,32 +64,25 @@ Your expertise in deployment architecture and disaster recovery makes you the gu
 
 - **Deploy now applies raw-SQL indexes automatically.** Partial UNIQUE / partial / JSONB-expression indexes can't be expressed in `schema.prisma`, so `prisma db push` never creates them — they lived in ops scripts applied by hand over SSH (a fresh-server / forgot-the-step gap; one of them, `idx_agent_executions_active_per_task`, is CORRECTNESS-bearing, not just perf). `production-deploy.yml` now runs `bash scripts/apply-raw-sql-indexes.sh` right after `npx prisma db push` (`DATABASE_URL` already sourced). Idempotent (`CREATE INDEX CONCURRENTLY IF NOT EXISTS` + invalid-index self-heal) → no-op when present, safe on every deploy, and it covers a fresh provision. **Fresh-server / manual apply**: `source .env.production && npm run db:indexes`. New raw-SQL index = create `scripts/create-<name>-index.sh` + add its basename to the wrapper's `INDEX_SCRIPTS`. Full doc: `PRODUCTION_OPERATIONS_GUIDE.md` §Schema Changes Requiring Raw-SQL. (`scripts/create-production-indices.sh` is DEAD — its 10 plain indexes are now `@@index` in schema; retirement candidate.)
 
-## 🆕 2026-05-26 Recent Ops Work
+## 🆕 2026-09-10 — Self-host program record (E28–E35, H-1…H-7)
 
-- **Cloudflare Bot Fight Mode DISABLED** — it was Managed-Challenging OpenAI's datacenter DCR POSTs (`POST /oauth/register` + `/mcp` from Azure ASN 8075, UA `aiohttp`), breaking the ChatGPT MCP connector while Claude (residential-IP DCR) worked. Free-tier BFM is NOT WAF-skippable, so the fix is BFM **off**; kept a WAF custom Skip rule for `/oauth` + `/mcp` + `/.well-known`. Full detail in the "Cloudflare Bot Fight Mode" block below. (ChatGPT then hit an OpenAI-side `access_list` connector bug — not ours.)
-- **App-level rate limit on `/oauth/register`** (`AuthManager.checkRegisterRateLimit`, 30/min/IP, commit `8f19afae`) — defense-in-depth alongside the existing nginx `limit_req` on `/oauth`.
+- **A stranger's self-host ran a 3-pipeline program to `programReleasable: true`** (devext, Run 7 of 7; public
+  `paichart/paichart` @ `dc177d4`). Sheet steps 9b/10b are the procedure; `usecases/firewall-a3-partner-path/` is the
+  use case with BOTH rig definitions (cEOS image never ships). Records: `cline_docs/reviews/open-source-readiness-2026-09-03/PHASE3-COLDSTART.md`.
+- **Self-host truths this domain owns**: the demo runs the PRODUCTION build (`SINGLE_ORIGIN_PROXY=true`, E28); cookie
+  `Secure` derives from `PUBLIC_BASE_URL`'s scheme, never `NODE_ENV` (E33); the app never reads `ANTHROPIC_API_KEY` —
+  `npm run llm:init` bridges it (E32); the harness seed writes `'composed'` — prod was flipped by a one-off script and every
+  fresh install ran legacy load-all until E35; the browser-automation service is SEEDED (`seed:browser-service`), its name is
+  reserved. All pinned in `deployment-discovery.md` → Cold-Start Health.
+- **Harness fixes the runs forced** (not this domain's code, but this domain reseeds them): H-2 transitive containment,
+  H-3 program-tier fact, H-1 Step 5.0 teardown, H-5/H-6 settledness for every upstream type, H-7. Prod protocol/template
+  reseed procedure unchanged (owning seed scripts; `report:template-freshness` → 0 STALE). Panel records:
+  `cline_docs/reviews/harness-gate-findings-2026-09-09/`; open items in `cline_docs/follow-ups/harness-gate-findings-2026-09-09.md`.
+- **Two pitfalls earned**: `pkill -f "…clea[n]"` still self-matches when the SAME command line carries the plain literal
+  later (kill and start in separate ssh sessions); a program driver must read a gate's STATUS back after `task.complete`
+  and must stop on any non-approved leg.
 
-## 🆕 2026-05-24 Recent Ops Work (read discovery's "Run These Greps FIRST" block)
-
-Session shipped major perimeter + monitoring hardening — your domain:
-- **`infra/` convention NEW**: 4 manual-deploy ops config dirs (`ufw/`, `nginx/`, `cron/`, `fail2ban/`) — repo is source-of-truth, deploy is `scp + apply` per each dir's README.
-- **Cron 3-way fix**: SHELL=/bin/bash + `( ... )` wrapping + env source — fixed 4-month silent failure of enterprise-health-monitor + jwks-monitor + trust-denials monitors. **Lesson**: cron uses `/bin/sh` (dash) which doesn't have `source`; redirect binds to LAST command in chain only.
-- **Workflow regression fix**: stripped `--resolve paichart.app:443:<PROD_HOST>` from 3 GH Actions workflows after CF lockdown broke deploys. Filed `cf-bypass-review-must-enumerate-cicd-2026-05-24.md` as durable lesson — **future CF-bypass reviews MUST enumerate CI/CD + monitoring consumers**.
-- **CF AOP shipped both layers**: UFW (network) + nginx mTLS (TLS). Origin-pull CA cert at `/etc/ssl/cloudflare/origin-pull-ca.pem` (valid through 2029).
-- **Dead-mans-switch** on prod: `scripts/dead-mans-switch.sh` cron at 07:00 UTC emails alert if local-VM daily-summary marker is >36h stale.
-- **In-process scheduled cleanup jobs (prod, 2026-07-06) — TWO, distinct from the OS cron monitors above** (both are
-  in-process timers on the `paichart-web` event loop, `.unref()`; NOT OS cron → they STALL if web is down until restart):
-  (1) **resourceManager** — daily @ **MIDNIGHT UTC** `cleanupArtifactsByTask` (self-rearming `setTimeout`, status-aware
-  keep-4 SUCCESS + 4 FAILED/task) + daily `cleanupArtifactsByAge` orphan sweep; (2) **Compliance Monitor**
-  (`lib/mcp/server/security/compliance-monitor.js`) — daily multi-table sweep incl. AgentArtifact content @ **90d**
-  (aligned from 30d 2026-07-06; since 2026-07-08 `dbbcc7e2` BOTH age-pruners + every compliance window read ONE
-  frozen map — `lib/mcp/server/security/retention-windows.js` `RETENTION_DAYS` — so alignment is structural, and
-  changing any window = edit the map + the literal pins in `scripts/test-compliance-monitor.ts`). Verify firing: `pm2 logs | grep -E "artifact
-  cleanup by task|Scheduled cleanup complete"`. Refs: `.claude/knowledge/RETENTION-POLICY-SUMMARY.md`,
-  `cline_docs/reviews/execution-path-convergence-2026-07-04/flip-2-panel-synthesis.md`. Retention detail owners:
-  resource-manager + mcp-artifacts specialists.
-
----
+*(2026-05-24 and 2026-05-26 blocks evicted to the domain library, Protocol 12 — three dated blocks max.)*
 
 ## My Discovery Prompt
 

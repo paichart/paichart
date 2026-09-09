@@ -24,6 +24,14 @@ grep -c "require(" lib/utils/url-safety.js                        # expect 0 —
 APP_BASE_URL=http://h:3000 node -e "require('./next.config.js').headers().then(h=>console.log(h[0].headers.find(x=>x.key==='Content-Security-Policy').value.includes('upgrade-insecure-requests')?1:0))"   # expect 0 — E11: plain-http self-host must not get upgrade-insecure-requests (blank UI); unset/https still emits it (prod byte-identical)
 grep -c 'migrate dev' scripts/seed-database.ts                 # expect 0 — D7 CLOSED 2026-09-04: db:seed is db push + idempotent seeds; a 'migrate dev' reappearing here re-opens the drift class
 grep -c "https://\${req.get('host')}" mcp-server-http-clean.js lib/mcp/server/routes/oauth-flow-routes.ts | grep -vc ':0$'   # expect 0 — E5 (2026-09-06): the proxy-pattern server callback sent to GitHub/Entra was built from the REQUEST Host with a hardcoded https:// — a self-host's MCP process sees Host=<ip>:8080, so the redirect_uri never matched the documented ${APP_BASE_URL}/oauth/callback; now derived from PUBLIC_BASE_URL (prod byte-identical: nginx forwards Host=paichart.app)
+# 2026-09-09/10 additions — the devext program-run arc (E28–E35; cline_docs/reviews/open-source-readiness-2026-09-03/PHASE3-COLDSTART.md)
+grep -c "loadProtocols: 'composed'" scripts/seed-harness-template.ts   # expect 1 — E35: a fresh seed runs COMPOSED protocol mode (prod was flipped by a one-off script; every self-host got load-all)
+grep -c '"llm:init"' package.json                                        # expect 1 — E32: the app never reads ANTHROPIC_API_KEY; llm:init copies it into the system LLM settings
+grep -c "secure: PUBLIC_BASE_URL.startsWith('https://')" lib/config.ts  # expect 1 — E33: cookie Secure from the origin's scheme, never NODE_ENV (a production build on plain http bounced every page to /login)
+grep -c '"seed:browser-service"' package.json                            # expect 1 — E29: the browser-automation service is SEEDED (reserved first-party name), never registered
+grep -c 'test:cookie-secure-derivation' package.json                     # expect 2 — E33 pin: script + chain slot
+grep -c 'test:marker-contract-claims' package.json                       # expect 2 — the machine-parsed-marker clause is pinned to the parser it describes, both directions
+grep -c 'test:teardown-both-branches' package.json                       # expect 2 — H-1: teardown is an instruction on BOTH SYNTHESIZE branches
 ```
 
 ```bash
