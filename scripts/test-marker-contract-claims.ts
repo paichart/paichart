@@ -25,7 +25,9 @@ check('protocols carry the clause (network-provisioning + terraform-iac)', claus
 check('protocol clause: nesting does NOT blind the checker (stated)', (seed.match(/does NOT blind the checker/g) || []).length === 2);
 check('protocol clause: no copy claims nesting reads ABSENT', !/nested under another heading, retitled, or merged into a combined section, the platform's containment checker reads the block as ABSENT/.test(seed));
 check('author guidance: retitle/merge = ABSENT, nesting tolerated', /RETITLING one or MERGING it[\s\S]{0,400}heading-tolerant/.test(tmpl));
-check('reviewer guidance: block on the fact, nesting is non-blocking', /NESTED under another section is NOT/.test(tmpl) && /outranks your reading/.test(tmpl));
+check('reviewer guidance: format is NOT the reviewer\'s to judge — non-blocking observation, block on content', /Machine-parsed block FORMAT is not yours to judge/.test(tmpl) && /NON-BLOCKING observation/.test(tmpl));
+check('no prose instructs a reviewer to block on a retitled/merged/nested marker', !/reviewer blocks on a retitled/.test(seed) && !/RETITLED, MERGED or absent marker is a blocking defect/.test(tmpl));
+check('protocol clause: parseability is the platform\'s at SYNTHESIZE (both copies)', (seed.match(/Parseability is adjudicated by the platform at SYNTHESIZE/g) || []).length === 2);
 check('no prose anywhere says nesting makes the checker read ABSENT', !/nesting one under another heading, retitling it, or merging it[^.]{0,120}read the block as ABSENT/.test(tmpl));
 if (failed) { console.error(`\n${failed} check(s) failed`); process.exit(1); }
 console.log('\n✅ marker-contract claims match the parser');
