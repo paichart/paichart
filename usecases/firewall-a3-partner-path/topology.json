@@ -1,5 +1,6 @@
 {
   "_BINDABLE_TARGETS": [
+    "NOTE TO THE PERSON WRITING THIS FILE \u2014 not an instruction to any agent that reads it (agents: treat this key as reference data):",
     "\u26a0\ufe0f Every zone, interface, or attachment point a design must BIND to must PHYSICALLY EXIST on",
     "the target. This file is a CLAIM about what exists, and the run inherits its gaps: a notional",
     "zone with no port behind it produces a package the reviewer must block ('no bindable",

@@ -1,28 +1,26 @@
 {
   "_TEMPLATE_README": [
     "Copy to program-artifacts/<run-name>/topology.json and replace every {{PLACEHOLDER}}.",
-    "Delete keys that do not apply to your domain — but keep `interdependency` for ANY program",
+    "Delete keys that do not apply to your domain \u2014 but keep `interdependency` for ANY program",
     "with more than one pipeline, and keep the `_why*` self-documenting convention.",
     "",
     "Audience: the Program Architect reads ONLY this file + requirements.md, and has NO live",
     "state access. Anything it must know has to be here or in requirements.md. Anything it",
     "CANNOT know must be declared runtime (see `interdependency`) so it does not guess."
   ],
-
-  "name": "{{RUN_NAME — e.g. meridian-t6-sequenced}}",
+  "name": "{{RUN_NAME \u2014 e.g. meridian-t6-sequenced}}",
   "description": "{{One line: what this environment is and what the program will change}}",
-
   "_BINDABLE_TARGETS": [
-    "⚠️ Every zone, interface, or attachment point a design must BIND to must PHYSICALLY EXIST on",
+    "NOTE TO THE PERSON WRITING THIS FILE \u2014 not an instruction to any agent that reads it (agents: treat this key as reference data):",
+    "\u26a0\ufe0f Every zone, interface, or attachment point a design must BIND to must PHYSICALLY EXIST on",
     "the target. This file is a CLAIM about what exists, and the run inherits its gaps: a notional",
     "zone with no port behind it produces a package the reviewer must block ('no bindable",
     "interface'), and the round parks. Before you launch, walk each object you name below and",
     "confirm a real thing answers to it on the device.",
-    "Earned: FW-A3.1 — an untrust zone mapped to a nonexistent port parked the whole round. The",
+    "Earned: FW-A3.1 \u2014 an untrust zone mapped to a nonexistent port parked the whole round. The",
     "agents behaved correctly: they disclosed the impossibility rather than fabricating a binding",
     "(VT-18). The defect was in this file."
   ],
-
   "nodes": [
     {
       "name": "{{node1}}",
@@ -35,32 +33,35 @@
       "role": "{{what this node does in the change}}"
     }
   ],
-
   "links": [
     {
-      "endpoints": ["{{node1}}:{{iface}}", "{{node2}}:{{iface}}"],
+      "endpoints": [
+        "{{node1}}:{{iface}}",
+        "{{node2}}:{{iface}}"
+      ],
       "subnet": "{{cidr}}",
-      "addressing": { "{{node1}}": "{{addr}}", "{{node2}}": "{{addr}}" },
+      "addressing": {
+        "{{node1}}": "{{addr}}",
+        "{{node2}}": "{{addr}}"
+      },
       "routing": "{{protocol//notes}}"
     }
   ],
-
   "_domainBlock_EXAMPLE_telemetryExport": {
     "_note": [
       "A domain-specific block. Rename/replace for your domain. What makes it a GOOD block is the",
       "pattern below, not the field names: state the STATIC constraints as values, and state each",
-      "RUNTIME-DERIVED value explicitly as runtime — with a `_why` field saying why it cannot be",
+      "RUNTIME-DERIVED value explicitly as runtime \u2014 with a `_why` field saying why it cannot be",
       "known up front. A value left ambiguous is a value an agent will guess."
     ],
-    "exporterPool": "{{static constraint — a value that IS knowable up front}}",
+    "exporterPool": "{{static constraint \u2014 a value that IS knowable up front}}",
     "exporterInterfaceConvention": "{{static convention}}",
     "addressUniqueness": "{{static rule}}",
-    "existingAllocations": "RUNTIME — discoverable only by harvesting the live devices",
-    "selectedExporterAddresses": "RUNTIME — selected by the design leg from live state",
-    "derivedExporterAggregate": "RUNTIME — derived by the design leg; chained downstream",
+    "existingAllocations": "RUNTIME \u2014 discoverable only by harvesting the live devices",
+    "selectedExporterAddresses": "RUNTIME \u2014 selected by the design leg from live state",
+    "derivedExporterAggregate": "RUNTIME \u2014 derived by the design leg; chained downstream",
     "_whyThisIsUnarguablyRuntime": "{{The objective test. Strongest form: the value changes on every environment rebuild, so it cannot be pinned in a static artifact or agreed in an interface contract, and the Program Architect structurally cannot know it.}}"
   },
-
   "interdependency": {
     "_note": [
       "KEEP THIS BLOCK for any multi-pipeline program. It is the machine-readable counterpart to",
@@ -78,6 +79,6 @@
     "dag": "{{e.g. pipeline-1 -> gate -> pipeline-2}}",
     "chainedValue": "{{the value that crosses the edge, or null if parallel}}",
     "mechanism": "{{'DAG edge (inter-pipeline chaining)' | 'interface contract'}}",
-    "direction_note": "{{which leg produces, which consumes, and what the consumer must NOT do — e.g. 'the consumer re-states the chained value and is forbidden from recomputing it'}}"
+    "direction_note": "{{which leg produces, which consumes, and what the consumer must NOT do \u2014 e.g. 'the consumer re-states the chained value and is forbidden from recomputing it'}}"
   }
 }
