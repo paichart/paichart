@@ -212,14 +212,83 @@ Two things come with the clone that make step 8 more than a connector:
     (step 9 applies for private addresses).
   - *"Run the health check on ceos-lab-readonly and call list_devices"* → `services(action: 'health' / 'call', …)`.
 - **Programs and pipelines.** For a multi-specialist delivery — a reviewed change package from a requirements
-  document and a topology — you don't drive the steps yourself: *"Use the pipeline-harness-specialist sub-agent to
-  run a program for &lt;objective&gt;; requirements are at &lt;url&gt;, topology at &lt;url&gt;, POV &lt;name&gt;"* and the
-  agent runs the whole workflow (plan, the plan-approval gate, the parallel legs, synthesis, the verdict). The
-  in-hub guides are `prompt_command("/prompt HOWTO-use-pipeline-harness")` and `/prompt HOWTO-use-program-harness`;
-  the worked design that the harness was built against is `.claude/knowledge/pipelines/firewall-policy-use-case.md`,
-  and `verification/` holds real program runs with their evidence (VT-01 … VT-15) — read one before your first run
-  so you know what a releasable result looks like. To add a domain of your own: `.claude/knowledge/pipelines/ADD-A-PIPELINE-HARNESS-AGENT.md`
+  document and a topology — you don't drive the steps yourself; the harness does (plan, the plan-approval gate, the
+  legs, synthesis, the verdict). 10b below is the shipped use case, launched call by call. The in-hub guides are
+  `prompt_command("/prompt HOWTO-use-pipeline-harness")` and `/prompt HOWTO-use-program-harness`; `verification/`
+  holds real program runs with their evidence (VT-01 … VT-15) — read one before your first run so you know what a
+  releasable result looks like. To add a domain of your own: `.claude/knowledge/pipelines/ADD-A-PIPELINE-HARNESS-AGENT.md`
   and `ADD-A-PROGRAM-PROTOCOL.md`.
+
+### 10b. Your first program — the shipped use case, exactly as it ran
+
+`usecases/firewall-a3-partner-path/` is a complete program (three sequenced pipelines) with its rigs. With
+step 9b done and the rigs up (that directory's README), this is the whole launch — five hub calls, typed to Claude
+in `~/paichart` or issued directly. Each line's response is what a working install returns.
+
+1. **A POV to hold your use cases, with the phases named up front** (phases are created WITH the POV — there is no
+   `phase.create`; a POV created without `phases` gets the default Planning/Execution/Review three):
+   ```
+   perform(action: 'pov.create', parameters: { title: 'pAIchart Use Cases', countryName: 'Australia',
+     description: 'Runnable use cases for a self-hosted pAIchart …',
+     phases: [ { name: 'Firewall Rules Change', type: 'EXECUTION' },
+               { name: 'Network and Terraform', type: 'EXECUTION' },
+               { name: 'OSPF ISIS Migration',   type: 'EXECUTION' } ] })
+   ```
+   → `✅ POV Created` with the POV id, `Sales Theatre: APJ` (from the country), `Phases Created: 3` in that order,
+   dates spread across the POV's 90 days. Keep the POV id.
+2. **A stage for the run**, in the first phase:
+   ```
+   perform(action: 'stage.create', parameters: { povId: '<pov id>', phaseName: 'Firewall Rules Change', name: 'FW-A3 Program Run' })
+   ```
+   → `Stage ID: <stage id>`. Keep it.
+3. **The program task** — `type: 'PIPELINE'`, the protocol token in the title, the two artifact URLs in the description
+   and nothing else there (the Architect fetches ONLY what the description names):
+   ```
+   perform(action: 'task.create', parameters: { povId: '<pov id>', stageId: '<stage id>', type: 'PIPELINE', priority: 'MEDIUM',
+     title: 'Partner-HTTPS security policy path with edge SNAT (protocol: pov-program)',
+     description: 'Program intent: end-to-end partner-HTTPS policy across ceos1 (edge, SNAT) -> LocalStack dmz-sg -> ceos2 (core), three sequenced pipelines with transitive chaining.\n\nDesign artifacts for the Program Architect (fetch ONLY these two URLs):\n- topology-as-code: https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/topology.json\n- requirements: https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/requirements.md' })
+   ```
+   → `Task ID: <task id>`, `Status: OPEN`.
+4. **Give it the harness.** The Pipeline Harness template was seeded by `db:seed`; `template(action: 'list')` shows its id.
+   ```
+   perform(action: 'agent.assign',  parameters: { taskId: '<task id>', agentTemplateId: '<Pipeline Harness template id>' })
+   perform(action: 'agent.execute', parameters: { taskId: '<task id>', waitForCompletion: false })
+   ```
+   → `Execution Status: RUNNING` with an execution id. The harness's first pass takes ~30 s: it creates a child stage
+   `Program: … (Run <timestamp>)` and spawns the **Program Architect** as the sole child of step PLAN — that is a
+   `task.comment` on your task, and the harness execution ends `SUCCESS` (it exits on purpose; the reactor re-triggers
+   it when the Architect finishes).
+5. **Read the plan, release the gate.** The Architect fetches the two URLs through your browser-automation service
+   (paging the 14 KB requirements with `read_more`), self-provisions nothing yet, and writes the program plan —
+   `## Interface Contract` first (real subnets, VLAN/ASN, tags — as ONE JSON block), the pipeline DAG, and
+   **Assumptions & open questions**. When it lands, the harness comments `⏸ PROGRAM PLAN AWAITING APPROVAL` with the
+   roster and the gate id. Read the assumptions — that list is your disambiguation checklist — then:
+   ```
+   perform(action: 'task.complete', parameters: { taskId: '<G0 gate id from the comment>' })
+   ```
+   Nothing runs before that. After it: the three legs in sequence (each self-provisions its rig service from the
+   descriptor, harvests read-only, designs, is reviewed, tears the registration down), one human gate per domain, the
+   producer's deliverable and Node C's verdict, and a final comment with the gate table and `programReleasable`.
+   `project(action: 'task.context', taskId: '<task id>')` at any time shows where it is.
+
+**What a finished run looks like** (the first self-host run of this use case, 2026-09-09, one laptop hosting hub + both rigs):
+Architect ~2 min → three legs of ~8–12 min each (harvest → design → author → review; each self-provisions its rig service
+at `127.0.0.1` and the reviewer approves or escalates) → Producer + Node C ~4 min → program synthesis. The stamp on the
+program task is the machine fact — `programReleasable`, `qualityGate.outcome`, and each leg's `containmentDisposition` —
+and the release is still your decision: a run can show every leg approved and Node C approved, and still stamp
+`programReleasable: false` on a mechanical containment conjunct. Read the facts, not the adjectives.
+
+**Re-running a program** (an escalated leg, a corrected artifact): a finished program cannot be re-run in place.
+Create a fresh PIPELINE task in the same stage and stamp the prior program stage on it — the harness's pre-flight
+halts on a duplicate `Program: …` stage and accepts only a machine-checkable clearance, never prose in the description:
+```
+perform(action: 'task.update', parameters: { taskId: '<new task id>', metadata: { duplicateAcknowledged: '<prior Program: … stage id>' } })
+```
+then `agent.assign` + `agent.execute` as in step 4. (The stage id is in the harness's first comment on the prior run.)
+
+A failure at step 4 with `llm_initialized` means the running user has no resolvable LLM key (step 5's `llm:init`,
+or Profile Settings → LLM). A leg that escalates on its harvest usually means a rig service answered `initialize`
+but could not READ — check the rig README's readiness probes, not the container list.
 
 ## Things that will bite (each cost real time)
 - **Late bind** (the most repeatable false failure in this sheet): both servers log "ready" 10–60 s before they listen.

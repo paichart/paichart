@@ -46,14 +46,16 @@ its descriptor the same way and registers → reads → tears down the service b
    Rig setup files: `rigs/` — see "The rigs" below.
 3. An Anthropic API key configured for the hub (the pipelines run agents).
 
-## Run it — from Claude Code, inside your clone
+## Run it — five hub calls
 
-Ask Claude, in this order (tell it you are new, so it shows every call and result):
+The exact sequence, with the responses a working install returns, is `docs/SELF-HOST-RUN-SHEET.md` **step 10b**.
+In short — from Claude Code inside your clone, or as direct tool calls:
 
-1. *"Create a POV for this program (name it for a partner-access project, country of your choice), with a
-   phase 'Firewall Rules Change' and a stage 'FW-A3 Program Run'."*
-2. *"In that stage, create a PIPELINE task titled `Partner-HTTPS security policy path with edge SNAT (protocol: pov-program)`
-   with this description:"*
+1. `perform(action: 'pov.create', …)` — a POV `pAIchart Use Cases` (country of your choice) with its phases named
+   up front: `Firewall Rules Change`, `Network and Terraform`, `OSPF ISIS Migration` (all `EXECUTION`).
+2. `perform(action: 'stage.create', …)` — stage `FW-A3 Program Run` in `Firewall Rules Change`.
+3. `perform(action: 'task.create', …)` — `type: 'PIPELINE'`, title
+   `Partner-HTTPS security policy path with edge SNAT (protocol: pov-program)`, description:
    ```
    Program intent: end-to-end partner-HTTPS policy across ceos1 (edge, SNAT) -> LocalStack dmz-sg -> ceos2 (core),
    three sequenced pipelines with transitive chaining.
@@ -62,11 +64,19 @@ Ask Claude, in this order (tell it you are new, so it shows every call and resul
    - topology-as-code: https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/topology.json
    - requirements: https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/requirements.md
    ```
-3. *"Run the pipeline-harness-specialist on it and show me the program plan when it lands."*
+4. `perform(action: 'agent.assign', …)` with the Pipeline Harness template id, then
+   `perform(action: 'agent.execute', parameters: { taskId, waitForCompletion: false })`.
+5. When the harness comments `⏸ PROGRAM PLAN AWAITING APPROVAL`, read the Architect's *Assumptions & open questions*
+   and release the gate: `perform(action: 'task.complete', parameters: { taskId: '<G0 gate id>' })`.
 
-What happens next, and what to expect at each step, is the walk-through in `docs/SELF-HOST-RUN-SHEET.md`
-step 10 — the Architect's plan (interface contract first), the human **G0 gate** you release, the three
-legs with their per-domain gates, the producer's deliverable and Node C's verdict.
+## First self-host run (2026-09-09, one laptop: hub + both rigs)
+
+Architect confidence 88 → edge leg APPROVED 90 (derived pool `10.99.0.6/31`) → dmz leg APPROVED 84 (CREATE package,
+pool consumed verbatim) → core leg APPROVED 88 (pool consumed via dmz) → Node C `VERDICT: APPROVED` 92 with minimality
+recomputed against evidence. Program stamp: `programReleasable: false` — a mechanical containment conjunct on the third
+leg (a consumer whose direct upstream is itself a consumer; tracked in the platform as a gate defect). Every human-readable
+verdict said release; the machine fact said not yet. That contrast is the product: the release stayed a human decision
+with the exact reason on the task.
 
 ## Honest scope
 
