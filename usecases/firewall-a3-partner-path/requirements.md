@@ -260,7 +260,7 @@ Team provisioned for this POV:
 ## Pipeline 1 objective — Network provisioning, EDGE (ceos1) (UPSTREAM)
 
 - Harvest ceos1 AND ceos2 **read-only** (both — pool freedom is fabric-wide). Service descriptor:
-  `https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json`
+  `https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/descriptors/ceos-lab-readonly-descriptor.json`
 - Author the edge policy change package for ceos1:
   - bind the partner ingress rule to the PARTNER-UPLINK interface named in topology.json `policyInterfaces` (Ethernet3, untrust zone);
   - an ingress rule permitting **exactly** tcp/443 from the partner CIDR `203.0.113.0/24` (the
@@ -342,7 +342,7 @@ rule 11) and must not be written as a validation step.
 ## Pipeline 2 objective — Terraform IaC, DMZ security group (MIDSTREAM)
 
 - Harvest the Terraform estate **read-only**. Service descriptor:
-  `https://raw.githubusercontent.com/paichart/paichart/main/descriptors/terraform-readonly-descriptor.json`
+  `https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/descriptors/terraform-readonly-descriptor.json`
 - **Existence assumption, stated (rule 6)**: `aws_security_group.dmz_app` may be ABSENT from the harvested
   state — the `prod` workspace holds the log bucket and a captured secret, not the DMZ security group. If
   it is absent, CREATE is the expected outcome and the plan evidence shows one resource added; if present,
