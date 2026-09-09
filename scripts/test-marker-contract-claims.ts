@@ -14,8 +14,10 @@ const body = '```json\n[{"kind":"cidr","value":"10.99.0.6/31","members":["10.99.
 check('parser: standalone ## Derived Values parses', parseFencedJsonBlock(`## Derived Values\n${body}`, DERIVED_VALUES_MARKER) !== null);
 check('parser: NESTED ### Derived Values under another H2 parses', parseFencedJsonBlock(`## Pre-existing Allocations\ntext\n### Derived Values\n${body}`, DERIVED_VALUES_MARKER) !== null);
 check('parser: emphasis furniture **Derived Values** parses', parseFencedJsonBlock(`**Derived Values**\n${body}`, DERIVED_VALUES_MARKER) !== null);
+check('parser: ORDINAL furniture ### 6. Consumed Values parses (devext Run 4 block)', parseFencedJsonBlock(`### 6. Derived Values\n${body}`, DERIVED_VALUES_MARKER) !== null);
+check('parser: ORDINAL furniture ## 6) / (6) parses', parseFencedJsonBlock(`## 6) Derived Values\n${body}`, DERIVED_VALUES_MARKER) !== null && parseFencedJsonBlock(`(6) Derived Values\n${body}`, DERIVED_VALUES_MARKER) !== null);
 check('parser: RETITLED heading reads ABSENT', parseFencedJsonBlock(`## Pre-existing Allocations\n${body}`, DERIVED_VALUES_MARKER) === null);
-check('parser: prose mention does not count', parseFencedJsonBlock(`the derived values are below\n${body}`, DERIVED_VALUES_MARKER) === null);
+check('parser: prose mention does not count', parseFencedJsonBlock(`the derived values are below\n${body}`, DERIVED_VALUES_MARKER) === null && parseFencedJsonBlock(`the 6 derived values are below\n${body}`, DERIVED_VALUES_MARKER) === null);
 const seed = fs.readFileSync('scripts/seed-protocol-prompts.ts', 'utf8');
 const tmpl = fs.readFileSync('lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts', 'utf8');
 const clauses = seed.split('The heading is a MACHINE-PARSED MARKER').length - 1;

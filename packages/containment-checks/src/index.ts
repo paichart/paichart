@@ -343,7 +343,14 @@ export function parseFencedJsonBlock<T>(text: string | null | undefined, marker:
   // a mid-sentence prose mention ("the derived values are…") still does NOT match.
   const phrase = marker.replace(/^#+\s*/, ''); // marker constants carry the '## ' form
   const esc = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const headingRe = new RegExp(`^[#>\\s*_]*${esc}`, 'gim');
+  // Ordinal furniture (2026-09-09, devext Run 4): the harness's own section convention numbers the
+  // chained-context section "§6", so Authors write `### 6. Consumed Values` / `## 6) Derived Values`
+  // — and a numeric prefix defeated the match, the block read ABSENT, and the consumed-value check
+  // silently did not run (a reviewer caught it by reading; the machine did not). An ordinal is
+  // furniture, not a retitle: tolerate `6.` / `6)` / `(6)` after the heading furniture. A prose
+  // mention ("the 6 consumed values are…") still does not match — the phrase must still begin the
+  // line after furniture only.
+  const headingRe = new RegExp(`^[#>\\s*_]*(?:\\(?\\d{1,3}[.)]\\s*)?[*_]*${esc}`, 'gim');
   let lastIdx = -1;
   for (let m = headingRe.exec(text); m !== null; m = headingRe.exec(text)) {
     lastIdx = m.index;
