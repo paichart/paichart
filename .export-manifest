@@ -1777,6 +1777,7 @@ scripts/test-injection-patterns.ts
 scripts/test-keep-best-selection.ts
 scripts/test-lean-card-facts.ts
 scripts/test-llm-call-options.ts
+scripts/test-marker-contract-claims.ts
 scripts/test-mcp-action-security.ts
 scripts/test-mcp-boundary-error-codes.ts
 scripts/test-mcp-compliance-monitor.ts
