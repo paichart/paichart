@@ -63,16 +63,17 @@ const DEBOUNCE_MS = 30_000;
  * definition of "satisfied" can never drift between them.
  *
  * A dependency is unsatisfied when the upstream is not COMPLETED, OR:
- * F18 settledness (2026-07-16): a PIPELINE upstream is COMPLETED-but-UNSETTLED
+ * F18 settledness (2026-07-16; widened to EVERY upstream type by H-5, 2026-09-09): an upstream is COMPLETED-but-UNSETTLED
  * between its mid-SYNTHESIZE task.complete and its terminal persist committing
  * report.md (~13s window, T4e run #1: producer chained a stale pre-completion
  * snapshot queued by a SIBLING's persist-time fire — finding-9's deferral only
  * guards the completing task's own fire). Treat such an upstream as unsatisfied.
  * Release valves: the straggler's own terminal persist re-fires the dep-completion
- * reactor (engine path), and the 20-min zombie sweep re-fires on a flip — a
- * lingering RUNNING row delays (bounded), never strands. NOTE the shared finding-9
- * assumption: the re-fire exists on the ENGINE path only (stream fireReactors=OFF);
- * program legs run engine-path by construction.
+ * reactor (engine path), and the execution reaper re-fires on a flip — PENDING rows
+ * at 20 min, RUNNING rows at 105 min (EXECUTION_REAPER_RUNNING_MS; M2 forbids lowering) —
+ * a lingering row delays (bounded), never strands. Both the engine and stream paths fire
+ * the reactors since Flip 1/2 (the old "stream fireReactors=OFF" assumption is retired;
+ * panel 2026-09-10).
  * See cline_docs/reviews/nonterminal-family-2026-07-16/synthesis.md (F18).
  *
  * @param taskIdExpr - SQL expression for the dependent task's id: a column
@@ -95,13 +96,15 @@ function unsatisfiedDepExistsSql(taskIdExpr: Prisma.Sql): Prisma.Sql {
 function upstreamUnsatisfiedCondSql(): Prisma.Sql {
   return Prisma.sql`(
         upstream.status != 'COMPLETED'
-        OR (
-          upstream.type = 'PIPELINE'
-          AND EXISTS (
-            SELECT 1 FROM agent_executions ae2
-            WHERE ae2."taskId" = upstream.id
-              AND ae2.status IN ('PENDING', 'RUNNING')
-          )
+        OR EXISTS (
+          -- H-5 (2026-09-09): settledness for EVERY upstream type, not only PIPELINE. A Harvester
+          -- (ACTION) that called task.complete on itself mid-execution fired this reactor before its
+          -- execution persisted; the chainer found no selectable execution and chained EMPTY (devext
+          -- Run 6). Same release valves as F18: the straggler's terminal persist re-fires; the reaper
+          -- re-fires on a flip (PENDING 20 min, RUNNING 105 min) — a lingering row delays, never strands.
+          SELECT 1 FROM agent_executions ae2
+          WHERE ae2."taskId" = upstream.id
+            AND ae2.status IN ('PENDING', 'RUNNING')
         )
       )`;
 }
@@ -128,7 +131,7 @@ export interface UnsatisfiedDep {
   dependsOnId: string;
   title: string;
   status: string;
-  /** true = F18: upstream PIPELINE is COMPLETED but its execution is still PENDING/RUNNING (unsettled). */
+  /** true = F18/H-5: upstream (ANY type since 2026-09-09) is COMPLETED but its execution is still PENDING/RUNNING (unsettled). Field name kept for consumers. */
   unsettledPipeline: boolean;
 }
 
@@ -147,11 +150,11 @@ export async function listUnsatisfiedDeps(
       SELECT upstream.id AS "dependsOnId",
              upstream.title,
              upstream.status,
-             (upstream.type = 'PIPELINE' AND EXISTS (
+             EXISTS (
                SELECT 1 FROM agent_executions ae2
                WHERE ae2."taskId" = upstream.id
                  AND ae2.status IN ('PENDING', 'RUNNING')
-             )) AS "unsettledPipeline"
+             ) AS "unsettledPipeline"
       FROM task_dependencies d2
       INNER JOIN tasks upstream ON upstream.id = d2."dependsOnId"
       WHERE d2."taskId" = ${taskId}

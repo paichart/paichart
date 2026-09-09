@@ -27,17 +27,31 @@ const resolverSrc = read('lib/services/harnessModeResolver.ts');
 
 console.log('🔒 Non-terminal-family source pins\n');
 
-test('NTF-F18.1: reactor dep-satisfaction SQL carries the PIPELINE settledness clause', () => {
-  assert(/upstream\.type = 'PIPELINE'/.test(readySrc), 'settledness type scope missing');
-  const win = readySrc.slice(readySrc.indexOf(`upstream.type = 'PIPELINE'`), readySrc.indexOf(`upstream.type = 'PIPELINE'`) + 400);
-  assert(win.includes(`ae2.status IN ('PENDING', 'RUNNING')`), 'active-execution subquery missing');
+test('NTF-F18.1 (H-5 widened): reactor dep-satisfaction SQL carries the settledness clause for EVERY upstream type', () => {
+  // 2026-09-09: the clause used to be scoped `upstream.type = 'PIPELINE' AND EXISTS(...)`; an ACTION
+  // Harvester that self-completed mid-execution slipped through and its consumer chained EMPTY.
+  assert(!/upstream\.type = 'PIPELINE'\s*AND EXISTS/.test(readySrc), 'settledness re-scoped to PIPELINE only — H-5 reopened');
+  const i = readySrc.indexOf(`upstream.status != 'COMPLETED'`);
+  const win = readySrc.slice(i, i + 1400); // the predicate carries its own SQL comment block (H-5) — window past it
+  assert(win.includes(`ae2.status IN ('PENDING', 'RUNNING')`), 'active-execution subquery missing from the unsatisfied predicate');
 });
 test('NTF-F18.2: manual agent.execute gate blocks on unsettled PIPELINE dependencies', () => {
   assert(execHandlerSrc.includes('completed but not yet settled'), 'manual-gate settledness block missing');
   assert(execHandlerSrc.includes(`status: { in: ['PENDING', 'RUNNING'] }`), 'active-exec check missing');
 });
-test('NTF-F18.3: chainer never chains a stale in-flight PIPELINE predecessor (detector fact)', () => {
+test('NTF-F18.3 (H-5 widened): chainer never chains a stale in-flight predecessor of ANY type (detector fact)', () => {
   assert(chainerSrc.includes(`'pipeline-synthesis-in-flight'`), 'in-flight notChained reason missing');
+  assert(chainerSrc.includes(`'execution-in-flight'`), 'ACTION in-flight reason missing');
+  assert(!/if \(depTask\.type === 'PIPELINE'\) \{\s*\n\s*const activeExec/.test(chainerSrc), 'in-flight guard re-scoped to PIPELINE — H-5 reopened');
+});
+test('NTF-F18.4 (F-B): the chainer in-flight arm is gated on a COMPLETED dependency — a not-yet-completed upstream is the ordinary case, never "in-flight"', () => {
+  assert(/if \(depTask\.status === 'COMPLETED'\) \{\s*\n\s*const activeExec/.test(chainerSrc), 'in-flight arm no longer gated on COMPLETED (F-B reopened)');
+});
+test('NTF-H6: retrigger Guard 4 treats a COMPLETED child with a PENDING/RUNNING execution as NON-terminal', () => {
+  const i = retriggerSrc.indexOf('const nonTerminalChildren');
+  const win = retriggerSrc.slice(i, i + 900);
+  assert(/status: 'COMPLETED',\s*\n\s*executions: \{ some: \{ status: \{ in: \['PENDING', 'RUNNING'\] \} \} \}/.test(win),
+    'Guard 4 no longer counts a self-completed child with an active execution as non-terminal — SYNTHESIZE would read a pre-persist snapshot (H-6 reopened)');
 });
 test('NTF-F19.1: chainer computes chainCapablePredecessors (PIPELINE or templated) + skips non-capable BEFORE notChained', () => {
   assert(chainerSrc.includes('chainCapablePredecessors'), 'fact missing');

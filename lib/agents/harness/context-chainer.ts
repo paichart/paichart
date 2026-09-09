@@ -180,17 +180,25 @@ export async function chainDependencyContext(taskId: string): Promise<ChainedCon
     // COMPLETED-but-UNSETTLED — its deliverable isn't committed yet. NEVER silently chain a
     // stale prior execution (T4e run #1); record the drop as a fact and let the settledness
     // predicates re-queue this task when the predecessor settles.
-    if (depTask.type === 'PIPELINE') {
+    // H-5 (2026-09-09): the SAME guard for every chain-capable predecessor. An ACTION Harvester that
+    // called task.complete on itself mid-execution was chained as EMPTY (no selectable execution yet),
+    // and its consumer designed against nothing (devext Run 6). The reason string keeps the PIPELINE
+    // form for pipelines (pinned) and names the ACTION case distinctly for replay.
+    // F-B (panel 2026-09-10): only a COMPLETED dependency can be "completed but persisting" — a
+    // not-yet-completed upstream with a running execution is the ordinary not-completed case below,
+    // and must not be recorded as in-flight (it logged "completed" falsely).
+    if (depTask.status === 'COMPLETED') {
       const activeExec = await prisma.agentExecution.findFirst({
         where: { taskId: depTask.id, status: { in: ['PENDING', 'RUNNING'] } },
         select: { id: true },
       });
       if (activeExec) {
         log.warn(
-          { taskId, dependencyTaskId: depTask.id, activeExecutionId: activeExec.id },
-          'PIPELINE dependency completed but its execution is still persisting — not chaining a stale snapshot'
+          { taskId, dependencyTaskId: depTask.id, dependencyType: depTask.type, activeExecutionId: activeExec.id },
+          'Dependency completed but its execution is still persisting — not chaining a stale snapshot'
         );
-        notChained.push({ taskId: depTask.id, reason: 'pipeline-synthesis-in-flight' });
+        notChained.push({ taskId: depTask.id,
+          reason: depTask.type === 'PIPELINE' ? 'pipeline-synthesis-in-flight' : 'execution-in-flight' });
         continue;
       }
     }

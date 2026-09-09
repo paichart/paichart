@@ -214,7 +214,9 @@ export async function handleAgentExecute(
   // pre-completion snapshot (T4e run #1). The manual path shares the auto-reactor's settledness
   // predicate: block while any PIPELINE dependency still has an active execution.
   // See cline_docs/reviews/nonterminal-family-2026-07-16/synthesis.md (F18).
-  const pipelineDeps = incompleteDeps.filter(d => d.dependsOn.type === 'PIPELINE');
+  // H-5 (2026-09-09): every dependency type, not only PIPELINE — an ACTION predecessor that
+  // self-completed mid-execution is unsettled in exactly the same way.
+  const pipelineDeps = incompleteDeps;
   if (pipelineDeps.length > 0) {
     const unsettled = await prisma.agentExecution.findMany({
       where: {
@@ -227,10 +229,10 @@ export async function handleAgentExecute(
       const unsettledIds = new Set(unsettled.map(u => u.taskId));
       const list = pipelineDeps
         .filter(d => unsettledIds.has(d.dependsOn.id))
-        .map(d => `  - "${d.dependsOn.title}" (pipeline synthesis still persisting)`)
+        .map(d => `  - "${d.dependsOn.title}" (execution still persisting)`)
         .join('\n');
       throw new Error(
-        `⏳ Cannot execute — ${unsettled.length} pipeline dependency(ies) completed but not yet settled ` +
+        `⏳ Cannot execute — ${unsettled.length} dependency(ies) completed but not yet settled ` +
         `(their deliverables are still being persisted):\n\n${list}\n\n` +
         `Retry in ~30 seconds:\nperform(action: 'agent.execute', parameters: { taskId: '${taskId}' })`
       );

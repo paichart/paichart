@@ -153,7 +153,7 @@ export class DependencyNotSatisfiedError extends AppError {
     const lines = unsatisfied.map((d) =>
       d.unsettledPipeline
         ? `  - "${d.title}" (${d.dependsOnId}): COMPLETED but its execution is still persisting — ` +
-          `re-check after the ≤20-min sweep, or use the audited override`
+          `re-check after the reaper sweep (PENDING ≤20 min, RUNNING ≤105 min), or use the audited override`
         : `  - "${d.title}" (${d.dependsOnId}): ${d.status}`
     );
     super(

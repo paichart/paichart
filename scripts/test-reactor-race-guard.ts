@@ -389,7 +389,9 @@ test('E1.4: F18 settledness clause lives inside the shared predicate', () => {
   if (condStart < 0) throw new Error('upstreamUnsatisfiedCondSql (factored F18 home) missing');
   const condEnd = reactorSource.indexOf('\n}', condStart);
   const condBody = reactorSource.slice(condStart, condEnd);
-  if (!/upstream\.type = 'PIPELINE'/.test(condBody) || !/'PENDING', 'RUNNING'/.test(condBody)) {
+  // H-5 (2026-09-09): the clause is no longer scoped to PIPELINE upstreams — settledness applies to every
+  // upstream type (an ACTION Harvester self-completed mid-execution and its consumer chained EMPTY).
+  if (/upstream\.type = 'PIPELINE'\s*AND/.test(condBody) || !/'PENDING', 'RUNNING'/.test(condBody)) {
     throw new Error('F18 PIPELINE-settledness clause missing from shared predicate condition');
   }
   const predStart = reactorSource.indexOf('function unsatisfiedDepExistsSql');

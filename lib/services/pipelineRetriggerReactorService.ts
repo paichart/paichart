@@ -232,16 +232,30 @@ export async function maybeRetriggerPipelineHarness(completedTaskId: string): Pr
     //     but the harness should still re-enter to escalate)
     //
     // TaskStatus enum: OPEN | IN_PROGRESS | COMPLETED | BLOCKED. No FAILED.
+    // H-6 (2026-09-10, panel on H-5): a child that is COMPLETED but still has a PENDING/RUNNING
+    // execution is NOT terminal — a leaf reviewer that calls task.complete on itself queues
+    // SYNTHESIZE before its result.json exists, and the harness reads a pre-persist snapshot
+    // (prod: SYNTHESIZE queued before the reviewer persisted in 13 of 17 measurable cases;
+    // consistent with the 25-vs-88 stamped-vs-artifact divergence of 2026-08-29). Same
+    // settledness predicate as TaskReadyReactor (H-5); the straggler's terminal persist re-fires.
     const nonTerminalChildren = await prisma.task.count({
       where: {
         stageId: completed.stageId,
-        AND: [
-          { status: { not: 'COMPLETED' } },
+        OR: [
           {
-            OR: [
-              { executionStatus: null },
-              { executionStatus: { notIn: ['FAILED'] } },
+            AND: [
+              { status: { not: 'COMPLETED' } },
+              {
+                OR: [
+                  { executionStatus: null },
+                  { executionStatus: { notIn: ['FAILED'] } },
+                ],
+              },
             ],
+          },
+          {
+            status: 'COMPLETED',
+            executions: { some: { status: { in: ['PENDING', 'RUNNING'] } } },
           },
         ],
       },
