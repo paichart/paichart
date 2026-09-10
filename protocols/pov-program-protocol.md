@@ -1,10 +1,10 @@
-> **Rendered verbatim from the pAIchart platform seed — version 1.4.3.**
+> **Rendered verbatim from the pAIchart platform seed — version 1.4.4.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
 > publication — the fidelity is the point.
 >
-> **Seeded routing description**: Meta-domain protocol for a PROGRAM of pipelines. Bound via the (protocol: pov-program) title token — resolved once and stamped at first execution; composed over the orchestration base when the description asks to compose MULTIPLE domain provisioning pipelines (network / kubernetes / terraform) from one design artifact — topology-as-code + requirements URLs. Runs a Program Architect to produce a plan + interface contract, pauses at a mandatory human plan-approval gate, cascades the child pipelines, and synthesizes child FACTS into a programReleasable stamp. Release stays a human verdict. A single-domain provisioning or synthesis task bound here is a wrong binding — escalate via metadata.cannotRun (see the in-body fence).
+> **Seeded routing description**: Meta-domain protocol for a PROGRAM of pipelines. Bound via the (protocol: pov-program) title token — resolved once and stamped at first execution; composed over the orchestration base when the description asks to compose MULTIPLE domain provisioning pipelines (network / kubernetes / terraform / observability) from one design artifact — topology-as-code + requirements URLs. Runs a Program Architect to produce a plan + interface contract, pauses at a mandatory human plan-approval gate, cascades the child pipelines, and synthesizes child FACTS into a programReleasable stamp. Release stays a human verdict. A single-domain provisioning or synthesis task bound here is a wrong binding — escalate via metadata.cannotRun (see the in-body fence).
 
 ---
 
