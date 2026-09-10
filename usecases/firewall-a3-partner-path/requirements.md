@@ -356,6 +356,14 @@ rule 11) and must not be written as a validation step.
   - **no** `0.0.0.0/0` in any direction, and **no rule matching the partner CIDR `203.0.113.0/24`** —
     that is the pre-NAT source, which does not exist at this hop; a rule matching it would be a
     wrong-stage match that never fires on real traffic.
+- **External input, stated (rules 6 and 11)**: the security group needs a `vpc_id`, and NO VPC exists in the harvested
+  `prod` state (the workspace holds a log bucket and a captured secret). `vpc_id` is therefore an EXTERNAL INPUT the
+  operator supplies at apply time — never harvested, never fabricated. The package MUST (a) declare it as a variable
+  with no default, (b) state the plan precondition that supplies it (`terraform plan -input=false -var vpc_id=<operator
+  value>` or a named tfvars file), and (c) write every `plan`/`conftest` expected output conditioned on that
+  precondition. An expected `Plan: N to add` with no stated `vpc_id` precondition is a rule-11 defect — the step cannot
+  pass as written (devext Run 8, 2026-09-10: a reviewer correctly blocked exactly this; two earlier reviewers had let
+  it through).
 - Deliverable: HCL diff + plan evidence + rollback, and it MUST re-publish the consumed pool
   prominently (it is the value the core leg consumes transitively).
 
