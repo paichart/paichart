@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 1.0.0.**
+> **Rendered verbatim from the pAIchart platform seed — version 1.0.1.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -70,7 +70,7 @@ Each tool result is capped (~8 KB) before the Harvester reasons over it, so an u
 
 | Artifact | Witnessed via | Rollback-quotable from harvest? |
 |---|---|---|
-| Prometheus config (incl. rule files) | the API's RUNNING-config rendering (`get_prometheus_config`) | yes — quote it verbatim, never reconstruct |
+| Prometheus config (incl. rule files) | the API's RUNNING-config rendering (`get_prometheus_config`, incl. the witnessed `configFile` path) | yes — quote it verbatim, never reconstruct. The rendering is the NORMALIZED form (comments stripped, defaults expanded — measured at the R1b apply: not byte-identical to the on-disk file); a rollback quoted from it restores a semantically-equivalent expanded config, and that is the correct, witnessed rollback source |
 | Collector (OTel) config | the as-deployed file mount (`get_otel_config` — the collector has no config API; the FILE is the witnessed artifact) | yes — the file IS the artifact |
 | Grafana dashboard | the API MODEL (`get_grafana_dashboard` — the server injects `id`/`version`/runtime fields the provisioned file never carried) | **no — review evidence only; rollback = the prior provisioned FILE, always: an API model restored as a file is not the file that was applied** |
 | Grafana datasources | the API, **deliberately REDACTED** (`get_grafana_datasources`) | **no — never: a "verbatim" restore built from a redacted rendering writes placeholders into live config** |
