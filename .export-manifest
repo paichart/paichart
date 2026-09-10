@@ -318,6 +318,7 @@
 .claude/knowledge/pipelines/USING-WORKFLOW-EVOLUTION-AND-SIGNAL-DESIGN.md
 .claude/knowledge/pipelines/adding-a-containment-kind-toolkit.md
 .claude/knowledge/pipelines/firewall-policy-use-case.md
+.claude/knowledge/pipelines/observability-demo-use-case.md
 .claude/knowledge/protocols/autonomous-goal-execution-protocol.md
 .claude/knowledge/protocols/boundary-crossing-development-protocol.md
 .claude/knowledge/protocols/bug-class-eradication-protocol.md
@@ -1118,6 +1119,7 @@ lib/agents/harness/diagnostic-retry.ts
 lib/agents/harness/dialect-lint-enrichment.ts
 lib/agents/harness/dialect-lint.ts
 lib/agents/harness/execution-quality.ts
+lib/agents/harness/marker-presence.ts
 lib/agents/harness/parse-confidence.ts
 lib/agents/harness/parse-verdict.ts
 lib/agents/harness/prepare-task-for-execution.ts
@@ -1737,6 +1739,7 @@ scripts/test-confidence-parse-parity.ts
 scripts/test-containment-enrichment-branches.ts
 scripts/test-containment-public-parity.ts
 scripts/test-context-builder-parity.ts
+scripts/test-context-chainer-inflight.ts
 scripts/test-contract-propagation-enrichment.ts
 scripts/test-cookie-secure-derivation.ts
 scripts/test-cross-pov-isolation.ts
@@ -1753,6 +1756,7 @@ scripts/test-dual-representation.ts
 scripts/test-embedded-envelope.ts
 scripts/test-ensure-object.ts
 scripts/test-enum-parity.ts
+scripts/test-execute-routes-dependency-gate.ts
 scripts/test-execution-artifacts-parity.ts
 scripts/test-execution-config-snapshot.ts
 scripts/test-execution-core-boundary.ts
@@ -1778,6 +1782,7 @@ scripts/test-keep-best-selection.ts
 scripts/test-lean-card-facts.ts
 scripts/test-llm-call-options.ts
 scripts/test-marker-contract-claims.ts
+scripts/test-marker-presence.ts
 scripts/test-mcp-action-security.ts
 scripts/test-mcp-boundary-error-codes.ts
 scripts/test-mcp-compliance-monitor.ts

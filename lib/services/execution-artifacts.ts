@@ -283,6 +283,8 @@ export interface ChainedContextSignal {
   degradedPredecessors: number;  // F19: chained PIPELINE predecessors that PROMISED a deliverable
                                  // (deliverableSourceTaskId set) but chained the pipeline-index
                                  // fallback — deliverable missing despite a passing count. Blocking.
+  /** F-A (2026-09-10): the chainer's per-predecessor drop reasons, carried so a shortfall names its cause. */
+  notChained?: Array<{ taskId: string; reason: string }>;
   totalChars: number;            // total chained chars across predecessors (post-A1 cap)
   anyTruncated: boolean;         // did the A1 §6 cap clip any predecessor?
 }
@@ -438,9 +440,21 @@ export function deriveChainedContextSignal(inputContext: unknown): ChainedContex
   const meta = (inputContext as { pipelineMetadata?: Record<string, unknown> } | null | undefined)?.pipelineMetadata;
   if (!meta || typeof meta !== 'object') return null;
   const predecessors = typeof meta.completedDependencies === 'number' ? meta.completedDependencies : 0;
-  if (predecessors <= 0) return null;  // nothing chained → no signal (clean happy path)
+  const chainCapable = typeof meta.chainCapablePredecessors === 'number' ? meta.chainCapablePredecessors : predecessors;
+  // F-A (2026-09-10): the signal used to return null whenever NOTHING was chained — which is exactly
+  // the case where coverage is worst (a leg that chained 0 of 1 had NO chainedContext block at all,
+  // devext Run 6). Absence read as clean on a gate conjunct: Register Pattern 1. Now: null ONLY when
+  // there is nothing chain-capable upstream (a genuinely clean, predecessor-less task); a leg with
+  // chain-capable predecessors always carries the block, predecessors 0 included, and `notChained`
+  // rides along so the gate reads WHY (the protocol's Step 4 already asks it to block on those facts).
+  if (predecessors <= 0 && chainCapable <= 0) return null;
+  const notChainedRaw = Array.isArray(meta.notChained) ? meta.notChained as Array<{ taskId?: unknown; reason?: unknown }> : [];
+  const notChained = notChainedRaw
+    .filter(n => n && typeof n.taskId === 'string' && typeof n.reason === 'string')
+    .map(n => ({ taskId: n.taskId as string, reason: n.reason as string }));
   return {
     predecessors,
+    ...(notChained.length > 0 ? { notChained } : {}),
     expectedPredecessors: typeof meta.totalDependencies === 'number' ? meta.totalDependencies : predecessors,
     chainCapablePredecessors:
       typeof meta.chainCapablePredecessors === 'number' ? meta.chainCapablePredecessors : predecessors,
@@ -485,7 +499,7 @@ export function deriveChainedContextSignal(inputContext: unknown): ChainedContex
  * earns a slot rather than riding inside an unrelated key. If a sub-field is ever added to it
  * (a disposition, a severity), nest it INSIDE `dialectLint` — the same trap, one level down.
  */
-export const RESULT_JSON_SUMMARY_KEYS = ['toolLoop', 'confidenceScore', 'reviewerVerdict', 'derivationContainment', 'dialectLint', 'contractPropagation', 'protocolInjection', 'qualityMetrics'] as const;
+export const RESULT_JSON_SUMMARY_KEYS = ['toolLoop', 'confidenceScore', 'reviewerVerdict', 'derivationContainment', 'dialectLint', 'contractPropagation', 'protocolInjection', 'qualityMetrics', 'markerPresence'] as const; // markerPresence: H-4 (2026-09-10), a deliberate top-level addition — never an unlisted sibling
 
 /** Pick the RESULT_JSON_SUMMARY_KEYS fields present on a parsed result.json (null/undefined skipped). */
 export function pickResultJsonSummary(parsed: Record<string, unknown>): Record<string, unknown> {

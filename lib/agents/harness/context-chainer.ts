@@ -43,6 +43,12 @@ export interface ChainedContext {
     confidenceScore: number | null;
     qualityMetrics: Record<string, unknown> | null;
     /**
+     * H-4 (2026-09-10): the predecessor's stamped MARKER PRESENCE — which machine-parsed blocks the
+     * platform found in its final response. Carried here (like confidenceScore) because the leaf
+     * Reviewer's §6 is the ONLY place it reads a sibling; a card-only fact never reaches it.
+     */
+    markerPresence: Record<string, unknown> | null;
+    /**
      * CC3 (2026-07-30): the predecessor's OWN `derivationContainment` stamp, transcribed at chain
      * time from the facts artifact this loop already parses. Null when the predecessor never
      * stamped one (any non-SYNTHESIZE execution, or a non-PIPELINE predecessor).
@@ -123,9 +129,12 @@ export interface ChainedContext {
  * @param taskId - The task about to be executed
  * @returns ChainedContext to merge into inputContext, or null if no dependencies
  */
-export async function chainDependencyContext(taskId: string): Promise<ChainedContext | null> {
+/** F-D (2026-09-10): the client is injectable so the in-flight / not-completed arms have a real fixture
+ *  (scripts/test-context-chainer-inflight.ts). Production callers pass nothing. */
+export type ChainerClient = typeof prisma;
+export async function chainDependencyContext(taskId: string, db: ChainerClient = prisma): Promise<ChainedContext | null> {
   // Find all tasks this task depends on
-  const dependencies = await prisma.taskDependency.findMany({
+  const dependencies = await db.taskDependency.findMany({
     where: { taskId },
     // CC2b (2026-07-15, boundary B2): deterministic foundational-first order. The total-ceiling
     // trim below walks chainedFrom TAIL-first on the invariant "the earliest / most-foundational
@@ -188,7 +197,7 @@ export async function chainDependencyContext(taskId: string): Promise<ChainedCon
     // not-yet-completed upstream with a running execution is the ordinary not-completed case below,
     // and must not be recorded as in-flight (it logged "completed" falsely).
     if (depTask.status === 'COMPLETED') {
-      const activeExec = await prisma.agentExecution.findFirst({
+      const activeExec = await db.agentExecution.findFirst({
         where: { taskId: depTask.id, status: { in: ['PENDING', 'RUNNING'] } },
         select: { id: true },
       });
@@ -216,7 +225,7 @@ export async function chainDependencyContext(taskId: string): Promise<ChainedCon
     // reviewed 92%): supersession filter (a regressed orchestrator retry never chains) +
     // the uniform R8 empty-deliverable floor (an empty-finalResponse SUCCESS is skipped
     // LOUDLY instead of silently chaining '' — BC-6/F6). Miss behavior unchanged: skip+warn.
-    const { execution: latestExec } = await selectAuthoritativeExecution(prisma, depTask.id, {
+    const { execution: latestExec } = await selectAuthoritativeExecution(db, depTask.id, {
       requireNonEmptyArtifact: true,
     });
 
@@ -240,7 +249,7 @@ export async function chainDependencyContext(taskId: string): Promise<ChainedCon
     const factsArtifactName = isPipelinePredecessor ? 'pipeline-index.json' : 'result.json';
 
     // Read the result-shaped facts artifact (confidence/qualityMetrics + fallback payload)
-    const resultArtifact = await prisma.agentArtifact.findFirst({
+    const resultArtifact = await db.agentArtifact.findFirst({
       where: { executionId: latestExec.id, name: factsArtifactName },
       select: { content: true },
     });
@@ -256,7 +265,7 @@ export async function chainDependencyContext(taskId: string): Promise<ChainedCon
 
     // For a PIPELINE predecessor, prefer the deliverable report.md as the chained payload.
     const reportArtifact = isPipelinePredecessor
-      ? await prisma.agentArtifact.findFirst({
+      ? await db.agentArtifact.findFirst({
           where: { executionId: latestExec.id, name: 'report.md' },
           select: { content: true },
         })
@@ -351,6 +360,7 @@ export async function chainDependencyContext(taskId: string): Promise<ChainedCon
         agentRole: depTask.agentRole,
         confidenceScore: confidence,
         qualityMetrics: parsed.qualityMetrics ?? null,
+        markerPresence: (parsed as { markerPresence?: Record<string, unknown> }).markerPresence ?? null,
         // CC3 (2026-07-30): carry the predecessor's own derivation-containment stamp. FREE — the
         // artifact is already resolved and parsed above for `confidenceScore`.
         //

@@ -6,6 +6,8 @@ import { TaskAgentExecuteSchema } from '@/lib/validation/task-validation';
 import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import { taskLogger } from '@/lib/logger';
 import { createAgentExecution } from '@/lib/services/agent-execution-create';
+import { listUnsatisfiedDeps } from '@/lib/services/taskReadyReactorService';
+import { DependencyNotSatisfiedError } from '@/lib/errors';
 import { DuplicateActiveExecutionError } from '@/lib/errors';
 
 type ApiHandler<T = any> = (
@@ -115,6 +117,15 @@ const executeAgentHandler: ApiHandler = async (
           code: 'NOT_FOUND',
         },
       };
+    }
+
+    // Dependency-settledness gate (2026-09-10) — gate parity with the MCP execute path (F18/H-5).
+    {
+      const unsatisfied = await listUnsatisfiedDeps(task.id, prisma);
+      if (unsatisfied.length > 0) {
+        const err = new DependencyNotSatisfiedError(task.id, unsatisfied);
+        return { error: { message: err.message, code: 'DEPENDENCY_NOT_SATISFIED', details: { unsatisfied } } };
+      }
     }
 
     // 🔒 SECURITY: Validate POV access before allowing agent execution

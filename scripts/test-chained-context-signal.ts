@@ -42,6 +42,13 @@ console.log('── Part A: deriveChainedContextSignal ──\n');
 if (deriveChainedContextSignal(undefined) === null && deriveChainedContextSignal({}) === null) pass('A1 no inputContext / no pipelineMetadata → null');
 else fail('A1 should be null for missing pipelineMetadata');
 
+// A3b (F-A, 2026-09-10) — predecessors 0 but chain-capable predecessors EXIST → the signal is EMITTED with
+// predecessors 0 and the drop reasons carried; absence is reserved for "nothing chain-capable upstream".
+{
+  const r = deriveChainedContextSignal({ pipelineMetadata: { completedDependencies: 0, totalDependencies: 1, chainCapablePredecessors: 1, notChained: [{ taskId: 'h1', reason: 'execution-in-flight' }] } });
+  if (r && r.predecessors === 0 && r.chainCapablePredecessors === 1 && r.notChained?.[0]?.reason === 'execution-in-flight') pass('A3b 0 chained of 1 chain-capable → signal emitted with notChained (F-A: the worst case is no longer invisible)');
+  else fail('A3b should emit the coverage signal when chain-capable predecessors exist', JSON.stringify(r));
+}
 // A3 — predecessors 0 → null (clean happy path, no signal noise)
 if (deriveChainedContextSignal({ pipelineMetadata: { completedDependencies: 0 } }) === null) pass('A3 completedDependencies=0 → null (happy-path-clean)');
 else fail('A3 should be null when no predecessors chained');

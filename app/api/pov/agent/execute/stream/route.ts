@@ -24,6 +24,8 @@ import type { AccumulatedUsage } from '@/lib/agents/harness/agentic-tool-loop';
 import { resolvePromptPlaceholders, buildContextSummary } from '@/lib/services/agentTemplateBuilder/pAIchartUniversalTemplate';
 import { createAgentExecution, stripReservedContextKeys } from '@/lib/services/agent-execution-create';
 import { AuthError, NoTemplateAssignedError, DuplicateActiveExecutionError } from '@/lib/errors';
+import { listUnsatisfiedDeps } from '@/lib/services/taskReadyReactorService';
+import { DependencyNotSatisfiedError } from '@/lib/errors';
 
 /**
  * POST /api/pov/agent/execute/stream
@@ -179,6 +181,21 @@ export const POST = createHandler(
         }),
         { status: 404 }
       );
+    }
+
+    // Dependency-settledness gate (2026-09-10) — GATE PARITY across execution entry paths. The MCP
+    // path (agent-execute-handler) refuses to run a task whose upstream is not completed or is
+    // completed-but-persisting (F18/H-5); this GUI/SSE path had no such check, so a click could
+    // start a leg early and reproduce the chained-EMPTY class by hand. Same predicate as the reactor.
+    {
+      const unsatisfied = await listUnsatisfiedDeps(task.id, prisma);
+      if (unsatisfied.length > 0) {
+        const err = new DependencyNotSatisfiedError(task.id, unsatisfied);
+        return new Response(
+          JSON.stringify({ error: { message: err.message, code: 'DEPENDENCY_NOT_SATISFIED', unsatisfied } }),
+          { status: 409, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // Auto-assign Pipeline Harness template for PIPELINE-type tasks missing

@@ -25,7 +25,8 @@ has this shape is a candidate. The seam test is the gate; this catalog is the wo
 | **Kubernetes / GitOps** | `kubectl get/describe`, API read verbs, `helm get values`, Argo `app get` | manifest / kustomize overlay / Helm-values diff (+ policy facts + rollback) | **Argo CD / Flux reconcile** or `kubectl apply` | ✅ strong (see §K8s) |
 | **Terraform / cloud IaC** | `describe`/`list` APIs, `terraform plan`, state read | HCL diff / **plan output** / PR to the IaC repo | `terraform apply` — native converge + rollback (state) | ✅ **GO** (see §Terraform — cleanest seam, strongest moat) |
 | **DB schema** | introspect schema | a migration file | a deterministic migrator | 🟡 candidate |
-| **Firewall / SG / DNS / observability-as-code** | read current policy/zone/config | desired-state artifact | the domain's apply tool / GitOps | 🟡 candidate |
+| **Observability config** (Prometheus / Grafana / OTel) | Prometheus `/api/v1/targets` `/status/config`, Grafana provisioning API, collector config reads | scrape/pipeline/dashboard change package (config + `promtool`/`otelcol validate` steps + rollback) | human-gated apply / GitOps reconcile | ✅ **GO** (see §Observability) |
+| **Firewall / SG / DNS** | read current policy/zone/config | desired-state artifact | the domain's apply tool / GitOps | 🟡 candidate (firewall itself live-proven as a network-provisioning use case, FW-A3) |
 
 ## What transfers vs what is domain-specific
 
@@ -122,6 +123,11 @@ terminus, which is why k8s/Terraform are high-value next candidates.
 ---
 
 ## §K8s — Kubernetes / GitOps (Phase-1 triage, 2026-06-27)
+
+> **First live use case designed 2026-09-10** (no live round has run yet — the archived corpus has
+> zero k8s pipelines): observability GitOps (kube-prometheus-stack values + otel-collector
+> manifests), part of the customer demo in `observability-demo-use-case.md`. 2–3 internal rounds
+> required before anything customer-facing — every domain's early rounds have found defects.
 
 **Verdict: GO — a strong, arguably cleaner fit than network provisioning.**
 
@@ -276,6 +282,57 @@ leg's harvest confirms convergence before the next gate opens. The harness never
 - **Open customer questions** (block Phase 2, not the verdict): vendor/platform mix, device/area
   count (batching vs 8-leg cap), multi-area→L1/L2 design authority, design-only vs actuation
   expectations.
+
+---
+
+## §Observability — Prometheus / Grafana / OpenTelemetry config (Phase-1 triage, 2026-09-10)
+
+**Verdict: GO — new leg domain (own protocol), roles transfer.** Trigger: live customer ask
+(consultancy; IaC pipeline + GitOps/GitSecOps + Prometheus/Grafana/OTel). Promotes the table's
+long-standing 🟡 observability-as-code candidate. Demo design: `observability-demo-use-case.md`.
+
+**1. Two halves.**
+- **Cognition (→ harness):** read-only harvest of live observability state (Prometheus
+  `/api/v1/targets`, `/api/v1/status/config`, rule groups; Grafana provisioning/dashboard API;
+  otel-collector effective config) → design the change (new scrape job, OTel pipeline/exporter,
+  alert rule, provisioned dashboard) → author a change package: exact config artifacts, expected
+  outputs, rollback (prior config verbatim / git revert).
+- **Actuation (→ OUT of loop):** human-gated apply (config reload / GitOps reconcile). Post-apply
+  the validation is against reality: target shows `up`, rule group loaded, dashboard provisioned.
+
+**2. Seam rule → ✅, and the validator story is the strongest of any domain yet.** Same shape as
+network-provisioning, but the domain ships FIRST-CLASS deterministic validators that run OFFLINE on
+the package itself: `promtool check config` / `promtool check rules`, `amtool check-config`,
+`otelcol validate`. These are to observability configs what config sessions were to EOS — the
+package's validation steps cite them and the operator (or CI) runs them pre-apply. Grafana
+dashboards are JSON-as-code (schema-checkable). Less unwitnessed-rendering exposure than EOS:
+config in ≈ config out.
+
+**3. Reject?** No — high demand (the customer named the stack), low rig cost, and a visual demo
+payoff no prior domain had (a dashboard appearing on screen).
+
+**4. Terminus.** An approved change package with its own runnable validators; a human applies;
+the next harvest confirms the target/pipeline/dashboard live. The harness never writes to
+Prometheus/Grafana/collector.
+
+**Phase-1 surfaces (resolve later, NOT part of the fit verdict):**
+- **Rig (~1 day)**: docker-compose Prometheus + Grafana + otel-collector on devext (~1–2 GB) + a
+  thin read-only FastMCP harvest service (the tf-mcp-readonly pattern; twin suppression from day
+  one — `tool_serializer` stub, r10-serialized-leaf follow-up). Descriptor: read-only verb
+  allowlist, R9 inheritance per the playbook's device-reaching model.
+- **New protocol, not a network-provisioning variant** — the dialect/canonical-stanza machinery is
+  EOS-specific; observability's equivalents are the validator citations and YAML/JSON structural
+  rules. Author per ADD-A-PIPELINE-HARNESS-AGENT: name the `ROLE_GUIDANCE_LIBRARY` step; reuse all
+  four roles (`infra_state_harvester`, `infra_change_architect`, `config_change_author`,
+  `change_reviewer` — the shared-key three-domain warning now becomes four-domain: state properties
+  abstractly, example per-domain or none); reuse `change_reviewer` terminal-verdict wiring.
+- **Derivation kinds**: none expected initially (scrape configs rarely derive values). If a program
+  contract carries endpoints/bucket names across legs, the `## Consumed Values` closed set
+  (`cidr`|`asn`) does NOT cover them — either carry without declaring, or the toolkit-tier `name`
+  kind extension (pure membership; one reviewer, no panel). Do not coin a kind (Tasman Run-1).
+- **Relabel-config correctness** is the likely prose-only judgement class (regex relabeling is
+  token-level) — note it, corpus-measure after Tier-1 runs, leaf it only if measured load-bearing.
+- **Rounds discipline**: 2–3 internal rounds before any customer exposure. Non-negotiable.
 
 ---
 

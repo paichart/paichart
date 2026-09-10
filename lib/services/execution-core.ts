@@ -41,6 +41,7 @@ import { persistTerminalSuccess } from './execution-terminal-persist';
 import { computeSelfSupersession } from './execution-selection';
 import { computeDerivationContainmentFact } from '@/lib/agents/harness/derivation-containment-enrichment';
 import { isProgramHarnessTask } from '@/lib/agents/harness/program-protocol';
+import { computeMarkerPresence, HARNESS_LEAF_ROLE_RE } from '@/lib/agents/harness/marker-presence';
 import { computeDialectLintFact } from '@/lib/agents/harness/dialect-lint-enrichment';
 import { computeContractPropagationFact } from '@/lib/agents/harness/contract-propagation-enrichment';
 import { assessExecutionQuality } from '@/lib/agents/harness/execution-quality';
@@ -341,6 +342,14 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
   // fixture-pinned F17/F20/truncation/HNO ordering untouched and a throw can never roll back the
   // SUCCESS commit. NON-THROW: any miss/parse failure ⇒ checked:false + reason — the reviewer
   // (LLM) tier blocks on missing evidence; this mechanical tier only reports the fact.
+  // H-4 (2026-09-10): MARKER PRESENCE on harness LEAVES (harvester / architect / author) — which
+  // machine-parsed blocks the platform found in this final response, by the containment parser.
+  // Stamped here so the chainer can carry it to the NEXT leaf's §6 (the Reviewer reads it there) —
+  // a card-only fact never reaches a sibling's prompt (R12). A fact, never a verdict.
+  if (task.type !== 'PIPELINE' && HARNESS_LEAF_ROLE_RE.test(agentRole ?? '')) {
+    (resultJson as Record<string, unknown>).markerPresence = computeMarkerPresence(finalResponse);
+  }
+
   // H-3 (2026-09-09): the three mechanical nets below are LEG nets. A PROGRAM parent is also
   // `type === 'PIPELINE'` in SYNTHESIZE, and its child stage has no harvest/author child by
   // construction — so the tier is resolved ONCE here (stamp-first predicate, the same one the

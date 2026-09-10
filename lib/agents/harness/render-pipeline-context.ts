@@ -55,6 +55,13 @@ export function renderPipelineContextSection(inputContext: unknown): string[] {
       if (prev.confidenceScore != null) {
         parts.push(`- **Confidence Score**: ${prev.confidenceScore}/100`);
       }
+      // H-4 (2026-09-10): the platform's OWN reading of the predecessor's machine-parsed blocks, stated
+      // where the Reviewer actually looks. A ✗ for a block the leg needs is the blocking FACT; a ✓ ends
+      // any format question — the reviewer never guesses what the parser accepted.
+      {
+        const mpLine = renderMarkerPresence((prev as { markerPresence?: Record<string, unknown> | null }).markerPresence);
+        if (mpLine) parts.push(`- **Machine-parsed blocks (platform fact)**: ${mpLine}`);
+      }
       // 1c (2026-08-23) — ANNOTATE THE SEAM. R9 neutralization happens at the CHAINING
       // BOUNDARY: the marker is injected into THIS reader's view, while the predecessor's
       // at-rest artifact is unchanged. A reader that cannot know this reasonably concludes
@@ -103,4 +110,5 @@ export function renderPipelineContextSection(inputContext: unknown): string[] {
   }
 
   return parts;
-}
+}import { renderMarkerPresence } from './marker-presence';
+
