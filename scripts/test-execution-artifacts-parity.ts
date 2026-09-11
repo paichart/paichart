@@ -627,6 +627,82 @@ test('E3 (wave-2 2026-07-18): pickResultJsonSummary hoists derivationContainment
   }
 });
 
+test('E3b-3 (2026-09-11): contractApplicability survives NESTED on BOTH contract-dependent facts', () => {
+  // A standalone pipeline has no Program Interface Contract BY DESIGN, so `no-contract` /
+  // `no-contract-on-leg` cannot be told apart from "expected and missing" without re-deriving the
+  // tier — and reviewers graded that absence as a gap on 9 of 37 archived standalone legs (4 of 4
+  // on 2026-09-11). The applicability object is computed ONCE at the call site and nested on BOTH
+  // facts, because putting it inside one would force the other to re-derive the predicate.
+  const applicability = { expected: false, basis: 'no-program-parent' };
+  for (const key of ['dialectLint', 'contractPropagation'] as const) {
+    const fact = { checked: false, reason: 'no-contract', contractApplicability: applicability };
+    const summary = pickResultJsonSummary({
+      taskId: 't1', [key]: fact, finalResponse: 'x'.repeat(20000),
+    } as unknown as Record<string, unknown>);
+    const got = (summary as Record<string, unknown>)[key] as Record<string, unknown> | undefined;
+    if (!got || !got.contractApplicability) {
+      throw new Error(`contractApplicability must survive the pick nested on ${key} — a consumer reading past a long finalResponse would otherwise grade a by-design absence as a gap`);
+    }
+    if ((got.contractApplicability as Record<string, unknown>).basis !== 'no-program-parent') {
+      throw new Error(`the basis must survive verbatim on ${key}, not merely the key`);
+    }
+  }
+
+  // THE FAILURE THIS GUARDS — same trap as E3b/E3b-2, now one net wider. A top-level sibling is
+  // dropped by the strict whitelist with no error.
+  const promoted = pickResultJsonSummary({
+    taskId: 't1',
+    dialectLint: { checked: false, reason: 'no-contract' },
+    contractApplicability: applicability,
+  } as unknown as Record<string, unknown>);
+  if ('contractApplicability' in promoted) {
+    throw new Error('EXPECTATION CHANGED: a top-level contractApplicability is now retained. If deliberate, add it to RESULT_JSON_SUMMARY_KEYS and say so in the header comment; if not, it is riding a path that was never whitelisted');
+  }
+});
+
+test('E3b-2 (2026-09-11): rollbackContainment is whitelisted, and rollbackDisposition survives NESTED', () => {
+  // net #3. `rollbackContainment` is a DELIBERATE new top-level key (the markerPresence precedent),
+  // because a program gate must read it head-slice-safe past a long finalResponse. Its disposition
+  // is NOT a second key: it rides nested, exactly as containmentDisposition does.
+  const fact = {
+    checked: true,
+    restoreLinesFound: 51,
+    restoreLinesTotal: 51,
+    missing: [],
+    excluded: { separator: 6, 'inverse-line': 6 },
+    rollbackDisposition: { disposition: 'benign', reason: 'all-restore-lines-found' },
+  };
+  const summary = pickResultJsonSummary({
+    taskId: 't1', rollbackContainment: fact, finalResponse: 'x'.repeat(20000),
+  } as unknown as Record<string, unknown>);
+  const got = (summary as Record<string, unknown>).rollbackContainment as Record<string, unknown> | undefined;
+  if (!got) {
+    throw new Error('rollbackContainment must be in RESULT_JSON_SUMMARY_KEYS — a consumer reading past a long finalResponse would never see it otherwise');
+  }
+  if (JSON.stringify(got) !== JSON.stringify(fact)) {
+    throw new Error('rollbackContainment must be hoisted verbatim');
+  }
+  if ((got.rollbackDisposition as Record<string, unknown>).disposition !== 'benign') {
+    throw new Error('rollbackDisposition must survive nested, value and all');
+  }
+
+  // THE FAILURE THIS GUARDS — same trap as E3b, one net over. Promote the disposition to a sibling
+  // and the strict whitelist drops it with no error: present in the artifact, ABSENT at the gate.
+  const promoted = pickResultJsonSummary({
+    taskId: 't1',
+    rollbackContainment: { checked: true, restoreLinesFound: 51, restoreLinesTotal: 51, missing: [] },
+    rollbackDisposition: { disposition: 'benign', reason: 'all-restore-lines-found' },
+  } as unknown as Record<string, unknown>);
+  if ('rollbackDisposition' in promoted) {
+    throw new Error('EXPECTATION CHANGED: a top-level rollbackDisposition is now retained. If deliberate, add it to RESULT_JSON_SUMMARY_KEYS and say so in the header comment; if not, it is riding a path that was never whitelisted');
+  }
+
+  // And absence is not fabricated.
+  if ('rollbackContainment' in pickResultJsonSummary({ taskId: 't1' } as unknown as Record<string, unknown>)) {
+    throw new Error('absent fact must not be fabricated by the picker');
+  }
+});
+
 test('E3b (2026-08-04): containmentDisposition survives the pick — it rides NESTED, and a sibling would be stripped', () => {
   // WHY. `containmentDisposition` is what tells the program tier a decision was DELEGATED to it
   // (`needs-node-c`). It is not on RESULT_JSON_SUMMARY_KEYS and does not need to be: it is assigned

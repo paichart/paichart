@@ -348,19 +348,19 @@ grep -nE "'(infra_state_harvester|infra_change_architect|config_change_author|ch
 echo ""
 echo "--- the reuse PROOF: which templates reuse each neutral role ---"
 grep -rhoE "defaultRole: '(infra_state_harvester|infra_change_architect|config_change_author|change_reviewer)'" scripts/seed-*templates*.ts | sort | uniq -c
-# Expect: config_change_author / change_reviewer reused across network + k8s + terraform (×3 each);
-# infra_state_harvester / infra_change_architect across k8s + terraform (×2). Terraform reused all 4 UNEDITED.
+# expect 4 each — all four roles reused across network + k8s + terraform + observability
+# (measured 2026-09-10 at the observability W2 ship; terraform AND observability reused all 4 UNEDITED)
 
 echo ""
 echo "--- terminal-verdict grammar coupling (2026-07-14): grammar canonical in change_reviewer entry ONLY ---"
 grep -c "## VERDICT: APPROVED | NEEDS-REVISION" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # expect 1
 grep -c "## VERDICT: APPROVED | NEEDS-REVISION" scripts/seed-protocol-prompts.ts                                  # expect 0 (protocols reference, never redefine)
 npm run test:parse-verdict   # 15 pass — fixtures are LIFTED from the change_reviewer entry; an entry edit that
-                             # moves the marker fails here. Entry edits ⇒ re-seed the 3 reviewer templates.
+                             # moves the marker fails here. Entry edits ⇒ re-seed the 4 reviewer templates.
 
 echo ""
 echo "--- the domain protocols that layer ON TOP of these roles ---"
-grep -nE "name: '(network-provisioning|kubernetes-gitops|terraform-iac)-protocol'" scripts/seed-protocol-prompts.ts
+grep -nE "name: '(network-provisioning|kubernetes-gitops|terraform-iac|observability-config)-protocol'" scripts/seed-protocol-prompts.ts   # expect 4
 
 echo ""
 echo "--- PAIRING DRIFT CHECK: a 'neutral' role carrying a domain-ism the protocol should own ---"

@@ -60,6 +60,8 @@
  * leg harnesses correctly get neither. Compared CANONICALLY (see canonicalProtocolName), so both
  * short and long forms test true.
  */
+import type { Prisma } from '@prisma/client';
+
 export const PROGRAM_PROTOCOL_NAMES: readonly string[] = [
   'pov-program',
   // Registered 2026-08-08 while its protocol row is still DRAFT (not injected) and DB-only
@@ -190,6 +192,50 @@ export function isProgramHarnessTask(task: {
   metadata?: unknown;
 }): boolean {
   return isProgramProtocol(resolveTaskProtocol(task).protocol);
+}
+
+/**
+ * THE F12 LOOKUP: does a PROGRAM harness own this stage — i.e. is a PIPELINE task in this stage a
+ * program LEG rather than a standalone pipeline?
+ *
+ * Extracted 2026-09-11 from `prepare-task-for-execution.ts`, which had the only copy. A SECOND
+ * consumer now needs the same answer (`contractApplicability` on the dialect-lint and
+ * contract-propagation facts), and two copies of a query this subtle is the two-extractor drift
+ * class this domain keeps paying for.
+ *
+ * ⚠️ THE AND-LIFT IS LOAD-BEARING AND TRAVELS WITH THE QUERY. The stage filter and the protocol
+ * filter are BOTH `metadata` filters, and two `metadata` keys in one object literal is
+ * last-writer-wins — it would silently match EVERY program harness in the POV. Pinned; do not
+ * "simplify" it back into one object.
+ *
+ * The discriminator is the parent TASK ROW's `metadata.protocol` stamp, with a transitional
+ * title-token disjunct for pre-stamp parents. It has NEVER been template metadata: the program
+ * harness reuses the generic "Pipeline Harness" template, so template metadata cannot answer this.
+ *
+ * `Pick<Prisma.TransactionClient, 'task'>` and NOT a hand-written interface — the same idiom and
+ * the same reason as `ContainmentPrisma`: a hand-rolled `findFirst` signature does not satisfy
+ * Prisma's, and it fails at the CALL SITE rather than here. (Tried it; it did exactly that.)
+ * `import type` keeps this module free of any Prisma runtime, so a test can import it with no
+ * DATABASE_URL.
+ *
+ * @returns the owning program parent's id, or null when no PROGRAM harness owns the stage
+ *          (standalone pipeline — or a program ROOT, which has no parent by definition).
+ */
+export async function findProgramParentForStage(
+  db: Pick<Prisma.TransactionClient, 'task'>,
+  stageId: string
+): Promise<string | null> {
+  const parent = await db.task.findFirst({
+    where: {
+      type: 'PIPELINE',
+      AND: [
+        { metadata: { path: ['pipelineStageId'], equals: stageId } },
+        programHarnessProtocolFilter(),
+      ],
+    },
+    select: { id: true },
+  });
+  return parent?.id ?? null;
 }
 
 /**

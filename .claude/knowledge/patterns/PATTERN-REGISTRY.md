@@ -41,7 +41,7 @@
 **When to use**: Every `findMany()` call needs a `take` parameter (safety cap or full pagination)
 **Results**: 50-70% memory reduction, 40-60% faster responses, DoS vector closed
 **Key features**: Two tiers (full pagination + safety caps), cap value guide, validation script
-**Production use**: 253+ bounded calls, 100% effective coverage, `npm run validate:pagination`
+**Production use**: `npm run validate:pagination` is a **CI deploy gate at 90% effective coverage** — and it runs at the MARGIN (measured 2026-09-11: 90.2% after a fix; a deploy was blocked at 89.6% when two new bare `findMany` reads landed). Do not read "100%" anywhere — every new `findMany` either carries `take` or an allowlist entry, or it costs a deploy.
 
 ### **parallel-query-optimization-pattern.md** - 98% Confidence ✅
 **When to use**: Independent database queries (same WHERE clause, all reads)

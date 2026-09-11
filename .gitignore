@@ -83,3 +83,8 @@ gh_*.tar.gz
 
 # export scratch (regenerated every export)
 .export-report.md
+
+# --- merged from platform export ---
+# Python bytecode (rig / export / service helpers) — never commit
+__pycache__/
+*.pyc

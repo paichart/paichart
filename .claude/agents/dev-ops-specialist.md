@@ -142,6 +142,36 @@ Rules that matter:
 
 This discovery will map the current deployment architecture and identify all server dependencies and configuration requirements.
 
+## Public protocol mirror (this domain owns the deploy-adjacent half)
+
+The protocols agents run are `agent_prompt_library` rows written by `scripts/seed-protocol-prompts.ts`
+(source of truth, private). `paichart/paichart` publishes them VERBATIM at `~/paichart/protocols/*.md`
+("fidelity guarantee" in that README). Those files are GENERATED — never hand-edited. Canonical flow:
+`seed script → local DB (npm run seed:protocols) → scripts/render-public-protocols.ts → ~/paichart/protocols/ →
+commit+push in ~/paichart`. The renderer carries an explicit NAME LIST; a protocol absent from it is silently
+excluded. `npm run test:protocol-public-parity` (renderer `--check`) is the only thing that proves the mirror is
+current, and it is deliberately OUT of CI — nothing runs it unless you do (six versions stale before 2026-08-29;
+one protocol unpublished + one diverged on 2026-09-10, caught only by running it after another session's push).
+
+Parity compares the WHOLE render, header included — so any edit to a seeded row, **routing `description`
+included**, must bump `version` and append `Prior: <old> — <date> (<why>)` (R10). A description edit without a
+bump (pov-program, `aaa4c7b9`) diverges the mirror with no visible reason and falsifies the row's history.
+
+```bash
+# every time scripts/seed-protocol-prompts.ts changes
+npm run seed:protocols                                                  # ts-node — tsc is FALSE-CLEAN for this file
+npm run test:marker-contract-claims && npm run test:teardown-both-branches && \
+npm run test:validation-shape-contract && npm run test:protocol-dependence-anchors && npm run test:protocol-stamp-guards
+npx ts-node -r tsconfig-paths/register scripts/render-public-protocols.ts
+npm run test:protocol-public-parity                                     # every protocol ✅, or you are not done
+# new protocol: add its Index row to ~/paichart/protocols/README.md; edited protocol: update its Version cell
+(cd ~/paichart && git add protocols/ && git commit -m "protocols: ..." && git push origin main)   # public-OWNED dir: direct, no publish.sh, no trailers
+# then push copov15 (no deploy in_progress, no prod program run in flight) — deploy self-seeds protocols; templates stay manual
+```
+
+Reviewing another session's protocol push: run the parity test FIRST, then `grep -c "Prior:"`-style check that
+every touched row bumped, then `git ls-files | grep -E '\.pyc$|__pycache__'` (a rig commit carried one; now ignored).
+
 ## 🚨 CRITICAL: OAuth Architecture Documentation
 
 **ALWAYS review these architecture documents before OAuth deployment changes**:

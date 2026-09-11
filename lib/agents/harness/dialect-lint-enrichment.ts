@@ -19,6 +19,17 @@
 import type { PrismaClient } from '@prisma/client';
 import { runDialectLint } from './dialect-lint';
 
+/**
+ * Bound on the stage-children scan — same gap, same fix, same cap as the sibling enrichments.
+ * PRE-EXISTING and NOT named in the follow-up that sent me here: the coordinator named
+ * derivation-containment's read, and a sweep for the same query shape found this one too. Both are
+ * counted by `validate:pagination`, which is a 90% CI DEPLOY GATE running at the margin.
+ *
+ * Safe by ordering: the author child is early in protocol phase order, so `createdAt asc` + the cap
+ * cannot drop the one child this function resolves.
+ */
+const STAGE_CHILD_SCAN_CAP = 50;
+
 export interface ComputeDialectLintInput {
   /** The leg's child stage — where the Author task lives. */
   stageId?: unknown;
@@ -38,6 +49,7 @@ export async function computeDialectLintFact(
     where: { stageId },
     select: { id: true, title: true, agentRole: true },
     orderBy: { createdAt: 'asc' },
+    take: STAGE_CHILD_SCAN_CAP,
   });
   // Same predicate as the containment enrichment, deliberately — one notion of "the author child".
   const authorChild = children.find(c =>

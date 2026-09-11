@@ -11,9 +11,10 @@
  *                          invited "Interface is UP, IP assigned, line protocol UP".
  *   Run 24 (approved, 92): fenced blocks, one per command, with the literal device output per device.
  *
- * So the contract now specifies the shape, in all three domain protocols, identically. This suite pins
- * that they all carry it and that they have not drifted apart — three copies of a rule is three chances
- * for two of them to be right.
+ * So the contract now specifies the shape, in all four domain protocols, identically (extended to the
+ * observability-config-protocol at its 1.0.0 birth, 2026-09-10 — carried from the first seed, not
+ * retrofitted). This suite pins that they all carry it and that they have not drifted apart — four
+ * copies of a rule is four chances for two of them to be right.
  *
  * ⚠️ THIS IS A BET, and it is recorded as one in
  * `cline_docs/follow-ups/validation-text-uncontained-2026-08-02.md` §10: shape beats instruction. The
@@ -38,19 +39,19 @@ const TABLE_BAN = 'Do NOT put validation in a markdown table';
 
 console.log('🧾 Validation-shape contract\n');
 
-test('all THREE domain protocols carry the shape requirement', () => {
+test('all FOUR domain protocols carry the shape requirement', () => {
   const n = SEED.split(SHAPE_ANCHOR).length - 1;
-  assert(n === 3, `expected the shape rule in network + k8s + terraform (3), found ${n}. ` +
+  assert(n === 4, `expected the shape rule in network + k8s + terraform + observability (4), found ${n}. ` +
     'A domain protocol without it will keep emitting prose validation and losing runs.');
 });
 
-test('all three FORBID the table form — the shape that invited the prose', () => {
+test('all four FORBID the table form — the shape that invited the prose', () => {
   const n = SEED.split(TABLE_BAN).length - 1;
-  assert(n === 3, `expected the table prohibition 3 times, found ${n}`);
+  assert(n === 4, `expected the table prohibition 4 times, found ${n}`);
 });
 
-test('the three copies have NOT drifted apart', () => {
-  // Three copies of a rule is three chances for two of them to be right. Compare the clause bodies.
+test('the four copies have NOT drifted apart', () => {
+  // Four copies of a rule is four chances for two of them to be right. Compare the clause bodies.
   const bodies: string[] = [];
   let from = 0;
   for (;;) {
@@ -59,9 +60,9 @@ test('the three copies have NOT drifted apart', () => {
     bodies.push(SEED.slice(i, i + 700));
     from = i + 1;
   }
-  assert(bodies.length === 3, `expected 3 clause bodies, found ${bodies.length}`);
-  assert(bodies[0] === bodies[1] && bodies[1] === bodies[2],
-    'the three shape clauses have diverged — fix them to be identical, or a domain silently gets a weaker rule');
+  assert(bodies.length === 4, `expected 4 clause bodies, found ${bodies.length}`);
+  assert(bodies.every((b) => b === bodies[0]),
+    'the shape clauses have diverged — fix them to be identical, or a domain silently gets a weaker rule');
 });
 
 test('the clause demands LITERAL output and names the failure it replaces', () => {
@@ -92,7 +93,7 @@ test('every domain protocol that carries the rule was VERSION-BUMPED with it', (
   // UNRELATED prompt row by the time it fired. Assert the durable intent instead: each domain
   // protocol entry's version CHANGELOG still carries the shape-rule entry — later bumps must
   // append history ("Prior: …"), never erase it.
-  for (const name of ['network-provisioning-protocol', 'kubernetes-gitops-protocol', 'terraform-iac-protocol']) {
+  for (const name of ['network-provisioning-protocol', 'kubernetes-gitops-protocol', 'terraform-iac-protocol', 'observability-config-protocol']) {
     const entry = SEED.indexOf(`name: '${name}'`);
     assert(entry !== -1, `${name} entry not found in PROTOCOLS[]`);
     const versionLine = SEED.slice(entry).match(/version: '(\d+\.\d+\.\d+)',(.*)/);

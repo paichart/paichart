@@ -203,6 +203,73 @@ console.log(`\n${'─'.repeat(60)}`);
     : fail('1c: anySanitized must never reach the §6 prompt');
 }
 
+console.log(`\n${'─'.repeat(60)}`);
+// ── RC§6 (2026-09-11, H3): rollbackContainment rendered where the Reviewer reads ─────────
+// The §6 block is the ONLY surface on which a leg Reviewer can see this fact — the card is read
+// by the program gate, one leaf later. These pins are about the FRAMING, not the plumbing: an
+// unmatched line rendered without its "could not adjudicate" framing would hand the reviewer a
+// platform fact as evidence for the exact inference the net was built to stop.
+{
+  const withFact = (rollbackContainment: any) => renderPipelineContextSection({
+    chainedFrom: [{ taskTitle: 'Author', agentRole: 'config_change_author', finalResponse: 'pkg', rollbackContainment }],
+    pipelineMetadata: { completedDependencies: 1, totalDependencies: 1 },
+  }).join('\n');
+
+  const clean = withFact({
+    checked: true, restoreLinesFound: 51, restoreLinesTotal: 51, missing: [],
+    rollbackDisposition: { disposition: 'benign', reason: 'all-restore-lines-found' },
+  });
+  clean.includes('51 of 51 restore line(s)') && clean.includes('`benign` (`all-restore-lines-found`)')
+    ? pass('RC§6: clean fact renders counts and the disposition BY NAME')
+    : fail('RC§6: clean fact must render counts + named disposition', clean.slice(0, 300));
+
+  const missing = withFact({
+    checked: true, restoreLinesFound: 24, restoreLinesTotal: 26,
+    missing: [{ line: 'endpoint: 0.0.0.0:9999', blockLine: 412 }, { line: 'batch: {timeout: 5s}', blockLine: 418 }],
+    rollbackDisposition: { disposition: 'needs-node-c', reason: 'unmatched-restore-lines' },
+  });
+  // WHAT, not just how many (F7): an unnamed line sends a verifier to check the nearest thing.
+  missing.includes('endpoint: 0.0.0.0:9999') && missing.includes('package line 412')
+    ? pass('RC§6: unmatched lines are NAMED with their package line')
+    : fail('RC§6: unmatched lines must be named', missing.slice(0, 400));
+  missing.includes('COULD NOT ADJUDICATE') && missing.includes('NOT evidence of fabrication')
+    ? pass('RC§6: unmatched lines carry the mandatory not-evidence-of-fabrication framing')
+    : fail('RC§6: needs-node-c MUST be framed as unadjudicated, never as fabrication');
+
+  // A deliberate no-check and a failed check must not read alike — a reviewer that conflates them
+  // draws a conclusion from silence.
+  const lane = withFact({
+    checked: false, reason: 'lane-not-supported', lane: 'terraform-iac',
+    rollbackDisposition: { disposition: 'benign', reason: 'lane-not-supported' },
+  });
+  lane.includes('does not apply') && lane.includes('not a failed check') && !lane.includes('fails closed')
+    ? pass('RC§6: lane-not-supported reads as a deliberate no-check, not a failed one')
+    : fail('RC§6: lane-not-supported must not render as a could-not-check', lane.slice(0, 300));
+
+  const hardGap = withFact({
+    checked: false, reason: 'no-harvest-text',
+    rollbackDisposition: { disposition: 'blocking', reason: 'hard-gap' },
+  });
+  hardGap.includes('OPEN') && hardGap.includes('neither exonerated nor implicated')
+    ? pass('RC§6: could-not-check arm renders as OPEN — neither exoneration nor implication')
+    : fail('RC§6: could-not-check arm must render as an open question', hardGap.slice(0, 300));
+
+  // Scope note travels with every rendered fact so a reviewer cannot over-claim it, and the
+  // (a) lane — package completeness — is explicitly left as the reviewer's own judgement.
+  clean.includes('TRIMMED EXACT LINE') && clean.includes('says NOTHING about whether the package is COMPLETE')
+    ? pass('RC§6: scope + completeness limits ride with the fact')
+    : fail('RC§6: the scope/completeness limits must ride with every rendered fact');
+
+  // No-op guarantee — the D4 byte-equivalence baseline holds on every leg without the stamp.
+  const absent = renderPipelineContextSection({
+    chainedFrom: [{ taskTitle: 'Author', finalResponse: 'pkg' }],
+    pipelineMetadata: { completedDependencies: 1, totalDependencies: 1 },
+  }).join('\n');
+  !absent.includes('Rollback provenance')
+    ? pass('RC§6: absent fact renders nothing (no ABSENT token while ungated — H2 ruling)')
+    : fail('RC§6: an absent fact must render nothing at all');
+}
+
 console.log(`Results: ✅ ${passed} passed, ${failed ? '❌ ' + failed + ' failed' : '0 failed'}`);
 
 if (failed > 0) { console.log('\nFailures:\n  • ' + failures.join('\n  • ')); process.exit(1); }

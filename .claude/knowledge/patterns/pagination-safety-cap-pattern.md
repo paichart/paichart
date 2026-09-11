@@ -75,8 +75,21 @@ const tasks = await prisma.task.findMany({ where: { povId }, take: 500 });
 | Migration/batch scans | `take: 5000` | One-time operations |
 | Dependency graph | `take: 5000` | Full subgraph needed |
 | Batch lookups (`{ in: ids }`) | `take: 200` | Bounded by input array |
+| Specialist children per pipeline stage (harness enrichments / mechanical nets) | `take: 50` | ~3-8 children per leg stage; harvest/author are earliest-created so `createdAt asc` + cap cannot drop them. Precedent: `CHILD_SCAN_CAP` (contract-propagation), `STAGE_CHILD_SCAN_CAP` (rollback-containment, 2026-09-11 — two bare reads blocked a deploy at 89.6%) |
 
 **Rule of thumb**: Use `2-3x` the expected maximum result set size.
+
+**Before adding ANY `take`, apply the search-vs-aggregate test** (earned 2026-09-11, two harness reads
+given OPPOSITE treatments the same hour): does the caller **search** the rows for one (find the reviewer
+by role among siblings — cap it; ordering makes the cap safe) or **aggregate** over them (count all
+children to decide terminal-ness — `harnessModeResolver.ts`; ALLOWLIST with a reason)? A cap on an
+aggregate does not truncate the result, it silently returns a **different answer** — the same class as
+`graph.ts`'s topological sort. An unbounded read costs a coverage point; a wrongly-capped aggregate
+costs a wrong decision, and only one of those is loud.
+
+⚠️ **The gate runs at the margin, not at 100%** (2026-09-11: 90.2% effective, target 90). Adding a
+mechanical net or enrichment with a stage-children scan is the recurring way to trip it — bound the
+read at write time; `validate:pagination` is NOT in the pinned pre-push suites most harness work runs.
 
 ---
 

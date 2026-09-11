@@ -5,7 +5,10 @@
 > *map*: **which domains fit the Pipeline Harness, what transfers between them, and a worked
 > Phase-1 fit-triage per candidate.** Add an entry here before you start Phase 2 on a new domain.
 >
-> **Who maintains it**: pipeline-harness-specialist, as candidates are triaged.
+> **Who maintains it**: pipeline-harness-specialist, as candidates are triaged. **Item 6's
+> mechanical-net rule (a leaf is earned by a live failure, or by a load-bearing prose-only property
+> of a class already measured as non-binding) is owned by `execution-facts-specialist` since
+> 2026-09-11** — route net proposals there, with the corpus measurement attached.
 
 ## The pattern is domain-agnostic
 
@@ -124,8 +127,10 @@ terminus, which is why k8s/Terraform are high-value next candidates.
 
 ## §K8s — Kubernetes / GitOps (Phase-1 triage, 2026-06-27)
 
-> **First live use case designed 2026-09-10** (no live round has run yet — the archived corpus has
-> zero k8s pipelines): observability GitOps (kube-prometheus-stack values + otel-collector
+> **First live use case designed 2026-09-10.** Round history (corrected 2026-09-10 — the earlier
+> "zero k8s pipelines" claim came from a one-POV query; the unscoped truth:): exactly ONE k8s
+> pipeline has ever run (2026-06-28, the design-era leg behind the public example change report);
+> zero rounds since. The use case: observability GitOps (kube-prometheus-stack values + otel-collector
 > manifests), part of the customer demo in `observability-demo-use-case.md`. 2–3 internal rounds
 > required before anything customer-facing — every domain's early rounds have found defects.
 

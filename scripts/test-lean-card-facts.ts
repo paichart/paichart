@@ -446,6 +446,87 @@ test('W3: helper is the only site rendering the **Facts:** prefix under lib/mcp/
   }
 });
 
+// --- net #3: rollbackContainment (2026-09-11) ---
+// §5.1 convention: a net ships WITH its render. These are COUPLING assertions — the enrichment's
+// write site and this card's read site must stay paired. The 2026-08-03 A1 defect was that neither
+// file was wrong in isolation; the PAIRING was, and nothing tested it. A test that only checked
+// "a render function exists" would have passed straight through that.
+
+test('RC1: a clean fact renders counts AND the disposition', () => {
+  expectEq(
+    leanFactsLine({
+      rollbackContainment: {
+        checked: true, restoreLinesFound: 51, restoreLinesTotal: 51, missing: [],
+        rollbackDisposition: { disposition: 'benign', reason: 'all-restore-lines-found' },
+      },
+    }),
+    '**Facts:** rollbackContainment: 51/51 restore lines found in harvest (0 missing) | rollbackDisposition: benign (all-restore-lines-found)'
+  );
+});
+
+test('RC2: missing lines render WHAT is missing, not just how many (the F7 lesson)', () => {
+  const line = leanFactsLine({
+    rollbackContainment: {
+      checked: true, restoreLinesFound: 24, restoreLinesTotal: 26,
+      missing: [{ line: 'endpoint: 0.0.0.0:9999' }, { line: 'batch: {timeout: 5s}' }],
+      rollbackDisposition: { disposition: 'needs-node-c', reason: 'unmatched-restore-lines' },
+    },
+  }) as string;
+  for (const needle of ['24/26', 'MISSING:', 'endpoint: 0.0.0.0:9999', 'batch: {timeout: 5s}', 'needs-node-c']) {
+    if (!line.includes(needle)) throw new Error(`Facts line must name ${needle}; got: ${line}`);
+  }
+});
+
+test('RC3: a long MISSING list is CAPPED and the truncation is STAMPED, never silent', () => {
+  const many = Array.from({ length: 40 }, (_, i) => ({ line: `config/line/number-${i}-padded-out-a-bit` }));
+  const line = leanFactsLine({
+    rollbackContainment: { checked: true, restoreLinesFound: 1, restoreLinesTotal: 41, missing: many },
+  }) as string;
+  if (!/\+\d+ more/.test(line)) {
+    throw new Error(`truncation must be stamped — an elided finding that looks complete is the failure this module exists to prevent; got: ${line}`);
+  }
+  if (line.length > 400) throw new Error(`Facts segment is size-sensitive; got ${line.length} chars`);
+});
+
+test('RC4: NOT-checked renders the NAMED reason — absence is never a silent pass', () => {
+  const line = leanFactsLine({
+    rollbackContainment: {
+      checked: false, reason: 'no-restore-form-lines',
+      rollbackDisposition: { disposition: 'benign', reason: 'no-restore-form-lines' },
+    },
+  }) as string;
+  if (!line.includes('NOT checked (no-restore-form-lines)')) {
+    throw new Error(`got: ${line}`);
+  }
+});
+
+test('RC5 (H2 RULING): an ABSENT rollbackContainment renders NOTHING while the fact is ungated', () => {
+  // Deliberate asymmetry with containmentDisposition's `ABSENT ⇒ treat as blocking`. This fact is
+  // not a programReleasable conjunct in v1, so ABSENT means "not yet produced" — a leg whose Author
+  // predates the net, or one mid-flight across the deploy — and a blocking-flavoured token would be
+  // FALSE. ⚠️ If it ever becomes a conjunct, this test must flip in the SAME commit that wires it:
+  // adopting the conjunct and adopting fail-closed absence are one decision, not two.
+  expectEq(leanFactsLine({ confidenceScore: 90 }), '**Facts:** confidence: 90');
+});
+
+test('RC6 COUPLING: every reason the enrichment can stamp is renderable by this card', () => {
+  // The write site and the read site must agree on the vocabulary. A reason the enrichment emits
+  // and the card cannot render is a fact that reaches the gate as "no reason given".
+  const enrichmentSrc = fs.readFileSync(
+    path.join(REPO_ROOT, 'lib/agents/harness/rollback-containment-enrichment.ts'), 'utf-8');
+  const reasons = [...enrichmentSrc.matchAll(/reason: '([a-z-]+)'/g)].map((m) => m[1]);
+  const unique = [...new Set(reasons)];
+  if (unique.length < 5) {
+    throw new Error(`expected the enrichment to stamp several named reasons, found: ${unique.join(', ')}`);
+  }
+  for (const r of unique) {
+    const line = leanFactsLine({ rollbackContainment: { checked: false, reason: r } }) as string;
+    if (!line || !line.includes(r)) {
+      throw new Error(`reason '${r}' is stamped by the enrichment but does not reach the card`);
+    }
+  }
+});
+
 // --- Summary ---
 console.log('\n=====================================');
 console.log(`Results: ${passed} passed, ${failed} failed`);

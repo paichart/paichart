@@ -465,20 +465,24 @@ As a Research Analyst:
   // See cline_docs/network-provisioning-promotion/ROADMAP.md.
 
   /**
-   * ⚠️ SHARED KEY — this guidance ships to THREE templates across THREE domains:
-   *   `Config Change-Package Author` (network-provisioning) ·
-   *   `HCL Rollback Author` (terraform-iac) · `Manifest Rollback Author` (kubernetes-gitops).
-   * An edit here is a THREE-DOMAIN edit. That is the leverage (a rule earned by one domain protects
-   * all three — the 2026-08-25 satisfiability rule came from an IS-IS migration and now guards HCL
-   * and manifests too) and it is the hazard: DOMAIN-SPECIFIC EXAMPLES LEAK. This entry has carried
-   * network-isms before, and the satisfiability rule was authored with a routing-only example
-   * ("converged pairwise state") that meant nothing to an HCL author until it was caught in review.
+   * ⚠️ SHARED KEY — this guidance ships to FOUR templates across FOUR domains:
+   *   `Config Change-Package Author` (network-provisioning) · `HCL Rollback Author` (terraform-iac) ·
+   *   `Manifest Rollback Author` (kubernetes-gitops) ·
+   *   `Observability Config Rollback Author` (observability-config).
+   * An edit here is a FOUR-DOMAIN edit. That is the leverage (a rule earned by one domain protects
+   * all four — the 2026-08-25 satisfiability rule came from an IS-IS migration and now guards HCL,
+   * manifests, and monitoring configs too) and it is the hazard: DOMAIN-SPECIFIC EXAMPLES LEAK. This
+   * entry has carried network-isms before, and the satisfiability rule was authored with a
+   * routing-only example ("converged pairwise state") that meant nothing to an HCL author until it
+   * was caught in review. (Known residual: the "maintenance-window note" wording — each non-network
+   * protocol papers over it, observability explicitly so via its apply-governance note; D9
+   * disposition 2026-09-10 = neutralize at the first post-Tier-1 shared-key touch.)
    * RULE: state the property abstractly; if you need an example, give one per domain or none.
-   * Verify with `npm run report:template-freshness` (all three rows go STALE together) and deliver
+   * Verify with `npm run report:template-freshness` (all four rows go STALE together) and deliver
    * by running the OWNING seed script(s). Find them with
    * `grep -rln "defaultRole: '<role>'" scripts/seed-*.ts` — a role can have SEVERAL owners
-   * (config_change_author and change_reviewer each have three: network-provisioning,
-   * terraform-iac, kubernetes-gitops). They are idempotent (findFirst + update/create) and
+   * (config_change_author and change_reviewer each have four: network-provisioning,
+   * terraform-iac, kubernetes-gitops, observability-config). They are idempotent (findFirst + update/create) and
    * rebuild the WHOLE row from source of truth — promptTemplate (base + role guidance) plus
    * category/defaultRole/capabilities/constraints/metadata/tags — so they also restore the
    * columns report:template-freshness cannot see.
@@ -500,10 +504,12 @@ As a Config Change-Package Author:
 
   /**
    * ⚠️ SHARED KEY — ships to `Change Reviewer` (network-provisioning), `GitOps Change Reviewer`
-   * (kubernetes-gitops) and `Plan Policy Reviewer` (terraform-iac); it is also the whole of
-   * `REVIEWER_ROLES` in parse-verdict.ts. An edit here is a three-domain edit AND touches verdict
-   * parsing. Same rule as `config_change_author` above: property abstract, examples per-domain or
-   * none. Deliver by running the OWNING seed scripts (three each for these two roles: network-provisioning, terraform-iac, kubernetes-gitops); find them with grep -rln "defaultRole: '<role>'" scripts/seed-*.ts
+   * (kubernetes-gitops), `Plan Policy Reviewer` (terraform-iac) and `Observability Change Reviewer`
+   * (observability-config); it is also the whole of `REVIEWER_ROLES` in parse-verdict.ts. An edit
+   * here is a FOUR-domain edit AND touches verdict parsing. Same rule as `config_change_author`
+   * above: property abstract, examples per-domain or none. Deliver by running the OWNING seed
+   * scripts (four each for these two roles: network-provisioning, terraform-iac, kubernetes-gitops,
+   * observability-config); find them with grep -rln "defaultRole: '<role>'" scripts/seed-*.ts
    */
   'change_reviewer': `
 As a Change Reviewer:
@@ -513,6 +519,7 @@ As a Change Reviewer:
 - **Dialect lint (blocking)**: verify every candidate config token is valid for the harvested platform/OS — a vendor-foreign token (another platform's syntax) is a blocking issue even when the semantic intent is right. Perform this check against the contract in your OWN \`## Program Interface Contract\` block, never against the package's restatement of it — the package's copy is the thing under review, so grading it against itself is not a check. If that block is absent from your context, say the contract was unavailable and grade the finding ACCEPTED-FROM-CLAIMS; never report a mechanical check you could not perform. Where the contract carries a canonical stanza template or a banned-token list, check transcription and token absence mechanically, token by token (live: IGP-T1 R1/R3 2026-08-23 — dialect defects passed review twice; the operator's config-session apply and the harness caught what review missed).
 - **Machine-parsed block FORMAT is not yours to judge**: the platform parses \`## Harvested Allocations\` / \`## Derived Values\` / \`## Consumed Values\` at SYNTHESIZE and FAILS CLOSED if a block is unparseable (the leg's stamped \`derivationContainment\` is that fact; it lands after your review). Do NOT block on heading level, nesting, numbering, emphasis or fence placement — record a format concern as a NON-BLOCKING observation and move on. Block on CONTENT rules: clause (f) restatement, missing or unsourced evidence, non-deterministic validation, wrong-stage matches. Never state what "the platform's checker reads" — three reviewer format vetoes in three self-host runs (2026-09-09) were contradicted by the platform's own stamp. **The platform's reading is IN your §6**: each predecessor's \`Machine-parsed blocks (platform fact)\` line shows Harvested Allocations / Derived Values / Consumed Values as ✓ or ✗ (H-4, 2026-09-10). A ✗ for a block the leg needs is the blocking FACT to cite; a ✓ ends any format question.
 - **View-layer markers are not document text**: a \`[NEUTRALIZED-…]\` marker in your §6 chained view is a platform sanitization annotation applied at the chaining boundary — it is NOT evidence the marker exists in the document at rest (live: IGP-T1 R5 2026-08-23 — a clean package was blocked for a marker only the reviewer's view carried). Report such a marker as a named OBSERVATION, never a blocking issue; at-rest document hygiene is verified downstream from the stored artifact.
+- **A provenance claim you cannot check against the source is a SUSPICION, not a finding**: where the evidence that would settle whether quoted content truly came from where the package says it did is not visible from your seat, record it as an UNVERIFIABLE SUSPICION — name the lines, name what would settle it, escalation-shaped and NOT blocking on its own — never as a proven fabrication or a proven non-quote (a reviewer that states in its own verdict that it cannot re-verify a comparison and then asserts the conclusion anyway has blocked a correct package on an inference it could not check); and where your §6 carries a \`rollbackContainment\` platform fact for that predecessor, READ IT and cite its numbers instead of inferring provenance from the package's prose — its unmatched lines are lines the check could not adjudicate, NOT evidence of fabrication.
 - **Your reasoning is provisional; your verdict is not.** If you raise a concern and then withdraw it on closer reading, DELETE the withdrawn concern from your final response — never leave raise-then-retract text for a downstream reader to anchor on. Only issues you still hold at the end may appear as blocking issues.
 - **Terminal verdict block (MANDATORY — this format is canonical here; the harness parses it):** your final response MUST END with exactly one block in this format, with NOTHING after it:
 

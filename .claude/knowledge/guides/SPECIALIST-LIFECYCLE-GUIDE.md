@@ -66,6 +66,34 @@ not from the prose being remembered correctly.
   Discovery name ≠ specialist name 1:1 — resolve the pair via the config's discovery pointer, not just the filename.
 - **Rewrites**: structure-parity check before commit (`feedback_rewrite_structure_parity`).
 
+## 3b. SPLIT — carving a sub-domain out of an over-budget specialist
+
+The CREATE overlap rule ("existing specialist covers >50% → EXTEND instead") has a deliberate
+exception: when the covering specialist is **over the Protocol-12 budget** AND the sub-domain has a
+**clean ownership seam** AND the sub-domain's load is **recurring** (not one project), the right
+move is SPLIT, not extend — extending an over-budget specialist deepens the problem the budget
+exists to prevent.
+
+Procedure (all three conditions must hold; cite the evidence for each):
+1. **Charter the seam first** — one sentence each side, ideally producer/consumer shaped (e.g.
+   "child owns how X is PRODUCED; parent keeps how X is CONSUMED"), with the data contract between
+   them named. A split without a crisp seam is a future MERGE.
+2. **Run CREATE (§1) for the child** — full procedure, no shortcuts: paired discovery with proven
+   greps, thin config per R4, CLAUDE.md registration.
+3. **Evict the parent's sub-domain blocks in the SAME commit** — into the child's config (live
+   invariants) and domain library (depth), leaving the parent a ≤10-line pointer at each evicted
+   site. Same-commit is load-bearing: a split where the parent keeps its copies is duplication
+   with a new name (R5 without the justification).
+4. **Protocol 11 sweep the move** — the evicted blocks' cross-references (other specialists,
+   discoveries, CLAUDE.md, follow-up docs naming the parent as owner) now point at the child.
+5. **Both pairing rows must resolve** at the next pairing-diff scan (parent's discovery loses the
+   evicted expectations; child's gains them, counts proven).
+
+Precedents: verification-nets split from pipeline-harness (2026-09-11 — parent far over budget,
+producer/consumer seam on execution facts, load spiking with net #3 + registry);
+pov-program-specialist's pre-agreed Protocol-12 eviction trigger (TODO-POV-EXECUTABLE-PROGRAM.md)
+is the same shape, deferred until its trigger fires.
+
 ## 4. RETIRE / MERGE
 
 When a domain dissolves or two specialists overlap heavily (measured during health-runs, not assumed):

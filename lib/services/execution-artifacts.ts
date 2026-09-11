@@ -499,7 +499,7 @@ export function deriveChainedContextSignal(inputContext: unknown): ChainedContex
  * earns a slot rather than riding inside an unrelated key. If a sub-field is ever added to it
  * (a disposition, a severity), nest it INSIDE `dialectLint` — the same trap, one level down.
  */
-export const RESULT_JSON_SUMMARY_KEYS = ['toolLoop', 'confidenceScore', 'reviewerVerdict', 'derivationContainment', 'dialectLint', 'contractPropagation', 'protocolInjection', 'qualityMetrics', 'markerPresence'] as const; // markerPresence: H-4 (2026-09-10), a deliberate top-level addition — never an unlisted sibling
+export const RESULT_JSON_SUMMARY_KEYS = ['toolLoop', 'confidenceScore', 'reviewerVerdict', 'derivationContainment', 'dialectLint', 'contractPropagation', 'protocolInjection', 'qualityMetrics', 'markerPresence', 'rollbackContainment'] as const; // markerPresence: H-4 (2026-09-10) and rollbackContainment: net #3 (2026-09-11) are DELIBERATE top-level additions — never unlisted siblings. rollbackDisposition rides NESTED inside rollbackContainment (E3b); promoting it here would strip it at the hoist
 
 /** Pick the RESULT_JSON_SUMMARY_KEYS fields present on a parsed result.json (null/undefined skipped). */
 export function pickResultJsonSummary(parsed: Record<string, unknown>): Record<string, unknown> {

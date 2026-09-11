@@ -3,6 +3,8 @@
 > **Created**: 2026-07-18, distilled from the evidence-flow arc (runs 2-6, POV program verification).
 > **Arc record**: `cline_docs/reviews/evidence-flow-arc-2026-07/ARC-RECORD.md` (the incidents + fixes).
 > **Owner**: pipeline-harness-specialist (this domain is inside its remit until the named trigger below).
+> **Co-owner since 2026-09-11**: `execution-facts-specialist` for the MECHANICAL-NET half — how a
+> containment/lint fact is produced, stamped and rendered. Harness keeps the tier semantics and gates.
 > **Register**: INTERNAL. The customer-facing statement of the same invariants is
 > `paichart/verification/ARCHITECTURE.md` safety-stack **items 7 AND 8** — item 7 carries the
 > evidence-flow chain, item 8 the confidence demotion and facts-gated release. Keep them consistent
@@ -148,6 +150,65 @@ on a single pair and should be treated as a hypothesis until another head-to-hea
 VT-14's Run 23 vs Run 24 is a genuine single-variable head-to-head, but of a *different* property — whether
 a rendered subject lets a tier act on an obligation — so it does not test construct-vs-copy and must not be
 counted toward it.
+
+### 🆕 2026-09-11 — the INVERSE failure: a tier judging evidence it structurally cannot see
+
+Everything above is about a tier that **could** have checked and did not (hollow verification). The
+rollbackContainment arc (`cline_docs/reviews/rollback-containment-2026-09-11/IMPLEMENTATION-PLAN.md`)
+is the inverse, and governing question **2** ("what did a tier demonstrably CONSUME?") names it exactly:
+**three content-correct rollbacks were refused on provenance grounds by reviewers who read the PACKAGE
+and never the harvest** — R19 P4 (network, 51/51 lines verbatim ⊆ harvest), R3a-3 (observability,
+byte-equal to the witnessed rendering), R3b-2 (observability, line-identical to the as-deployed file).
+Each reviewer said in its own verdict it could not re-verify the comparison, then asserted the
+conclusion anyway; Node C echoed it (correlation, not corroboration). Base rate of TRUE rollback
+fabrication across the archived corpus: **0 of 56**. The mechanical layer's earned value here is
+**exoneration**, not catching — the check's value inverted.
+
+**What shipped (2026-09-11, `ac33cf5c`..`c867ea70`):**
+
+| Invariant | Earned by | Enforced at |
+|---|---|---|
+| Mechanical `rollbackContainment` fact — restore-form lines of the package's rollback ⊆ the leg's OWN harvest (trimmed-exact-line), five named exclusion classes with load-bearing precedence, `rollbackDisposition` NESTED (E3b) | R19 P4 / R3a-3 / R3b-2 — three refusals of correct packages | `lib/agents/harness/rollback-containment.ts` + `-enrichment.ts` |
+| Stamped at the **AUTHOR leaf's terminal persist**, hoisted (never recomputed) at SYNTHESIZE — because a SYNTHESIZE-only stamp lands AFTER the leg's reviewer runs, the exact blindness the net exists to end (F4) | design finding, not a run | `execution-core.ts` Author-leaf site |
+| **Asymmetric with derivationContainment**: unmatched lines ⇒ `needs-node-c` (escalate, NEVER block); blocking only on could-not-check; not a `programReleasable` conjunct in v1 — soaks, tallied at the 2026-11-29 health-run | corpus base rate 0/56; the 2026-08-29 verdict-consumption reversal (don't add conjuncts without outcome data) | consumer ruling H1 |
+| Delivered to the Reviewer's §6 via `chainedFrom[].rollbackContainment`, **lane-scoped to observability-config** (network/HCL withheld until the context-entry residue is ruled — a fact that escalates on 66% of inputs would be ignored precisely when right) | corpus re-measure P9: 24 of 42 checked packages carry unmatched context-entry lines; HCL lane is desired-state, not harvest → `lane-not-supported` (benign, "no opinion") | `context-chainer.ts` (data), `render-rollback-containment.ts` (words) |
+| Reviewer rule (`change_reviewer`, FOUR-domain shared key): a provenance claim you cannot check against the source is an **UNVERIFIABLE SUSPICION** — escalation-shaped, never a proven fabrication; where §6 carries the fact, READ it instead of inferring from prose | corpus check: 81 of 119 approvals use provenance vocabulary and would have had to rewrite under a symmetric rule — so the rule is scoped to ADVERSE claims (target population: the 3 refusals that blocked while admitting they could not check) | `ROLE_GUIDANCE_LIBRARY`, reseeded prod 2026-09-11 |
+
+**Two distinctions this arc added to the discipline's vocabulary:**
+
+- **(a)/(b) sub-classes of a provenance-shaped refusal.** (a) required evidence genuinely absent from
+  the package — a LEGITIMATE catch; prose fixes it (the June 2026 k8s refusal: harvester HAD the
+  ❌-None captures, the package omitted them). (b) content correct but reviewer-unverifiable from its
+  seat — only a mechanical fact ends it. The fact must end (b) **without suppressing (a)**: it answers
+  only "is this content contained in the witnessed harvest?" and says nothing about completeness — a
+  package that omits its evidence sections yields `no-restore-blocks`, which approves nothing. Pinned by
+  the June k8s fixture as a REQUIRED non-suppression test (greedy predicate ⇒ that assertion fails).
+- **Path 3 (Adjudication) earn-it rule** for a mechanical net: ≥2 occurrences of a judgement repeatedly
+  made by a party **structurally blind to the deciding evidence**, plus corpus FP-bounding; a Path-3
+  leaf may escalate but never block. Condition 1 is FALSE in the (a) lane by construction (the reviewer
+  saw everything and was right) — citing an (a)-lane refusal as Path-3 evidence is how the path gets
+  abused. Toolkit amendment owned by execution-facts-specialist.
+
+**Live acceptance: R3b-3 (root `cmtwcpnwo0003yx2dvd6wxsbd`, 2026-09-11 02:43–02:51Z) — PASSED, APPROVED
+90.** Author `result.json`: `checked:true`, 26/26 restore lines found, `rollbackDisposition: benign`;
+the Reviewer's `chainedFrom[].rollbackContainment` byte-identical; verdict `blocking: []`. The Reviewer
+wrote *"Platform fact cited directly (not inferred from prose) … this proves line-level provenance only,
+not completeness; I independently checked completeness"* — the (a)/(b) boundary holding live. Passing
+direction only; the escalation direction rests on the mutation fixtures by design. Record:
+`cline_docs/reviews/rollback-containment-2026-09-11/R3B-3-LIVE-ACCEPTANCE.md`.
+
+**Open, earned live, not designed:** the **context-entry residue** (`router bgp 65001`, `interface
+LoopbackN` — navigation in a removal rollback, restored CONTENT in R19 where all 9 openers are in the
+harvest; no text-level rule separates them; two candidate rules tested and rejected on the corpus) —
+`cline_docs/follow-ups/rollback-containment-context-entry-2026-09-11.md`. And the **successor
+problem** from R12 (an author can predict what it CONFIGURES, not what the device DISPLAYS) remains
+untouched by this arc.
+
+**Specialist boundary moved (supersedes "Specialist trigger" above):** on 2026-09-11 the fact
+PRODUCTION side — nets, enrichments, stamping/whitelist, dispositions, replay, fixtures, the
+corpus-measure practice — split to **`execution-facts-specialist`** (SPECIALIST-LIFECYCLE-GUIDE §3b);
+this document's epistemic lens and every gate/verdict/consumption ruling stay with
+pipeline-harness-specialist. The fact schema is the contract between them.
 
 **Map 10** (`cline_docs/learning/10-the-signal-chain.md`) is the complementary axis: this document governs
 whether a judgment may be believed; Map 10 governs whether a computed fact survives delivery to the reader

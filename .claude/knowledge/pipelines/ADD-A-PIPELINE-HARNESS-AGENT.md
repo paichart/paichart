@@ -174,7 +174,13 @@ They are independent: a `Solution Architect` (ARCHITECT / DEVELOPMENT) and a `Se
   (the 2026-07-14 verdict-misread mechanism; order pinned by `test-execution-artifacts-parity.ts`).
 
 ## References
-- Worked example (provisional): the **network-provisioning** spike — `.claude/knowledge/pipelines/network-provisioning/`
+- **Cleanest worked example (2026-09-10/11): the observability-config domain** — zero new role keys (all four
+  reused; the two shared keys became FOUR-domain), one protocol row, one seed script, one descriptor;
+  fit-triage → panel → authoring → prod → Tier-1 complete (4/4 change classes approved AND applied) in
+  ~36 h. Plan + round ledger: `cline_docs/reviews/observability-domain-2026-09-10/IMPLEMENTATION-PLAN.md`;
+  design: `observability-demo-use-case.md`. Read this one first — it is the procedure above executed
+  without an engine change.
+- Worked example (provisional, the first): the **network-provisioning** spike — `.claude/knowledge/pipelines/network-provisioning/`
   (`TEMPLATE-AUTHORING-SPEC.md`, `network-provisioning-pipeline.md`, the spike Decision Log).
 - Worked example (meta-domain, 2026-07-15): the **pov-program** domain — a program OF pipelines authored per this
   checklist (`pov-program-protocol` + `program_architect` role + `scripts/seed-program-templates.ts`); its CREATE

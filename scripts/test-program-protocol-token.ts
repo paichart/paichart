@@ -212,18 +212,32 @@ test('GATE: removing the transitional title disjunct requires the RECORDED VERIF
 });
 
 // ─── drift guards (stamp era): call sites use the shared module correctly ──────────────────
-test('DRIFT GUARD: F12 call site composes the shared filter under AND (never inline title/metadata literals)', () => {
+test('DRIFT GUARD: the F12 LOOKUP composes the shared filter under AND (never inline title/metadata literals)', () => {
+  // ⚠️ RETARGETED 2026-09-11. The F12 query was EXTRACTED from prepare-task-for-execution into
+  // `findProgramParentForStage` (a second consumer — contractApplicability — needs the same answer,
+  // and two copies of a query whose AND-lift is load-bearing is the two-extractor class). This
+  // guard FAILED on the extraction, which is it working: it pins a property, and the property
+  // moved house. It now asserts the property at its new home AND that both call sites consume the
+  // shared lookup rather than re-inlining one.
   const fs = require('fs') as typeof import('fs');
   const path = require('path') as typeof import('path');
-  const src = fs.readFileSync(path.resolve(__dirname, '../lib/agents/harness/prepare-task-for-execution.ts'), 'utf-8');
-  assert(src.includes('programHarnessProtocolFilter()'), 'F12 must use the shared filter');
-  const win = src.slice(src.indexOf('const programParent'), src.indexOf('structurallyRequiresContract = !!programParent'));
+  const proto = fs.readFileSync(path.resolve(__dirname, '../lib/agents/harness/program-protocol.ts'), 'utf-8');
+  const start = proto.indexOf('export async function findProgramParentForStage');
+  assert(start > 0, 'the F12 lookup has moved again — find it and retarget this guard');
+  const win = proto.slice(start, proto.indexOf('\n}', start));
+  assert(win.includes('programHarnessProtocolFilter()'), 'F12 must use the shared filter');
   assert(/AND:\s*\[/.test(win),
     'AND-lift missing — two metadata keys in one literal is last-writer-wins and matches the wrong harness');
-  const offenders = src.split('\n').filter(l =>
-    !l.trim().startsWith('//') && !l.trim().startsWith('*') &&
-    /['"`]\(protocol: [a-z]/.test(l));
-  assert(offenders.length === 0, `inline token literal reintroduced:\n     ${offenders.join('\n     ')}`);
+
+  // Every consumer calls the lookup; none re-inlines the query.
+  for (const rel of ['../lib/agents/harness/prepare-task-for-execution.ts', '../lib/services/execution-core.ts']) {
+    const src = fs.readFileSync(path.resolve(__dirname, rel), 'utf-8');
+    assert(src.includes('findProgramParentForStage('), `${rel} must consume the shared F12 lookup`);
+    const offenders = src.split('\n').filter(l =>
+      !l.trim().startsWith('//') && !l.trim().startsWith('*') &&
+      /['"`]\(protocol: [a-z]/.test(l));
+    assert(offenders.length === 0, `inline token literal reintroduced in ${rel}:\n     ${offenders.join('\n     ')}`);
+  }
 });
 test('DRIFT GUARD: F10 call site reads the shared stamp-first predicate, no inline title test', () => {
   const fs = require('fs') as typeof import('fs');

@@ -20,7 +20,8 @@ check('final-comment template carries the **Teardown:** slot', /\*\*Teardown:\*\
 check('escalation comment carries the **Teardown:** line too', /escalation comment carries the same \\`\*\*Teardown:\*\*\\` line/.test(SEED));
 // 2. domain overrides
 const heads = [...SEED.matchAll(/## SYNTHESIZE — aggregate into the final change package/g)].map(m => m.index as number);
-check('three self-provisioning domain SYNTHESIZE sections', heads.length === 3);
+// 2026-09-10: 3 → 4 — observability-config-protocol joins the family at its 1.0.0 birth.
+check('four self-provisioning domain SYNTHESIZE sections', heads.length === 4);
 const bodies: string[] = [];
 for (const h of heads) {
   const sec = SEED.slice(h, SEED.indexOf('\n`;', h)); // the REAL terminator is at line start — the clause itself contains \`task.complete\`;
@@ -30,7 +31,7 @@ for (const h of heads) {
   check(`section @${h}: override names delete on EVERY outcome`, /registry\(action:'delete'[^\n]*on EVERY outcome \(approved, needs-revision, escalated\)/.test(sec));
   bodies.push(sec.slice(o, sec.indexOf('\n\n', o)));
 }
-check('the three override clauses are byte-identical', bodies.length === 3 && bodies.every(b => b === bodies[0]));
+check('the four override clauses are byte-identical', bodies.length === 4 && bodies.every(b => b === bodies[0]));
 // 3. negative pin: every teardown sentence also names the approved case
 const bad = SEED.split('\n').filter(l => /teardown/i.test(l) && /escalat/i.test(l) && !/approv/i.test(l));
 check(`no teardown sentence is anchored only on the escalate case (${bad.length} offenders)`, bad.length === 0);

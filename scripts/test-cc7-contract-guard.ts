@@ -47,27 +47,45 @@ test('B1.1: guard throws INTERFACE_CONTRACT_MISSING on the flag arm OR the struc
   assert(/requiresContract\s*\|\|\s*structurallyRequiresContract/.test(guardSrc), 'guard must fire on either arm');
   assert(guardSrc.includes('INTERFACE_CONTRACT_MISSING'), 'throw missing');
 });
-test('B1.2 (rewritten WS2 Phase A, 2026-08-17): structural arm keys on the parent TASK ROW\'s protocol STAMP via the shared filter, AND-lifted with the stage filter', () => {
+test('B1.2 (retargeted 2026-09-11 after the F12 lookup was EXTRACTED): the query, its shared filter and its AND-lift live in program-protocol.ts', () => {
   // Pre-Phase-A this pin asserted the parent TITLE token and the ABSENCE of path:['protocol'] —
   // guarding against reading TEMPLATE metadata. Phase A moved the discriminator to the parent
   // TASK row's `metadata.protocol` stamp (shared programHarnessProtocolFilter, with a
-  // transitional title disjunct), so the object-discipline property this pin protects is now:
-  // the filter is composed inside a prisma.task query (the TASK row, never the template), and
-  // the stage filter + protocol filter are AND-lifted (two `metadata` keys in one object literal
-  // is last-writer-wins and would match the wrong harness).
+  // transitional title disjunct).
+  //
+  // ⚠️ 2026-09-11: the QUERY then moved too — extracted to `findProgramParentForStage` because a
+  // second consumer (contractApplicability on the dialect-lint / contract-propagation facts) needs
+  // the same answer, and two copies of a query this subtle is the two-extractor class. THIS PIN
+  // FAILED ON THE EXTRACTION, which is the pin working: it points at a property, and the property
+  // moved house. Retargeted rather than deleted — the object-discipline property is unchanged:
+  // the filter is composed inside a prisma TASK query (never the template), and the stage filter
+  // and protocol filter are AND-lifted (two `metadata` keys in one object literal is
+  // last-writer-wins and would match the wrong harness).
+  const protoSrc = fs.readFileSync(path.join(process.cwd(), 'lib/agents/harness/program-protocol.ts'), 'utf8');
+  const start = protoSrc.indexOf('export async function findProgramParentForStage');
+  assert(start > 0, 'findProgramParentForStage not found — the F12 lookup has moved again');
+  const win = protoSrc.slice(start, protoSrc.indexOf('\n}', start));
+  assert(win.includes('programHarnessProtocolFilter()'), 'discriminator must be the SHARED stamp filter (parent task row)');
+  assert(win.includes("path: ['pipelineStageId']"), 'must match the parent whose pipelineStageId == this stage');
+  assert(/AND:\s*\[/.test(win), 'stage filter and protocol filter must be AND-lifted');
+  assert(win.includes('task.findFirst'), 'the read must be against the TASK row, never template metadata (object discipline)');
+});
+test('B1.2b: the guard CONSUMES the shared lookup and does not re-inline a second copy', () => {
   const start = guardSrc.indexOf('structurallyRequiresContract = false');
   const end = guardSrc.indexOf('structurallyRequiresContract = !!programParent');
   assert(start > 0 && end > start, 'structural arm block not found');
   const win = guardSrc.slice(start, end);
-  assert(win.includes('programHarnessProtocolFilter()'), 'discriminator must be the SHARED stamp filter (parent task row)');
-  assert(win.includes("path: ['pipelineStageId']"), 'must match the parent whose pipelineStageId == this stage');
-  assert(/AND:\s*\[/.test(win), 'stage filter and protocol filter must be AND-lifted');
-  assert(win.includes('prisma.task.findFirst') || guardSrc.slice(start - 200, end).includes('prisma.task.findFirst'),
-    'the read must be against the TASK row, never template metadata (object discipline)');
+  assert(win.includes('findProgramParentForStage('), 'the structural arm must call the shared lookup');
+  assert(!/AND:\s*\[/.test(win), 'a re-inlined copy of the F12 query has reappeared here — two copies is the drift class the extraction removed');
 });
 test('B1.3: structural arm only considers PIPELINE-typed children (excludes ACTION producer/NodeC/gate/Architect)', () => {
+  // The CHILD-side predicate stayed in the guard; the PARENT-side `type: 'PIPELINE'` moved into the
+  // shared lookup with the query. Both halves are asserted so the extraction cannot drop either.
   const win = guardSrc.slice(guardSrc.indexOf('structurallyRequiresContract = false'), guardSrc.indexOf('structurallyRequiresContract = !!programParent') + 60);
   assert(win.includes("type === 'PIPELINE'"), 'child must be PIPELINE-typed to be structurally required');
+  const protoSrc = fs.readFileSync(path.join(process.cwd(), 'lib/agents/harness/program-protocol.ts'), 'utf8');
+  const helper = protoSrc.slice(protoSrc.indexOf('export async function findProgramParentForStage'));
+  assert(helper.slice(0, helper.indexOf('\n}')).includes("type: 'PIPELINE'"), 'the PARENT must be PIPELINE-typed in the shared lookup');
 });
 test('B1.4: the throw stays OUTSIDE every try (loud, never swallowed into a catch)', () => {
   // Asserts the PROPERTY, not a position. The prior form compared the throw against the

@@ -25,7 +25,7 @@ import { CanNeverRunError } from '@/lib/errors';
 import { chainDependencyContext, applyChainedContext } from './context-chainer';
 import { inheritInterfaceContractIfAbsent } from '@/lib/tasks/services/inputContext';
 import { deepStripDangerousKeys } from '@/lib/utils/sanitize-keys';
-import { resolveProtocolStamp, programHarnessProtocolFilter } from './program-protocol';
+import { resolveProtocolStamp, findProgramParentForStage } from './program-protocol';
 
 const log = logger.child({ module: 'PrepareTaskForExecution' });
 
@@ -210,16 +210,10 @@ export async function prepareTaskForExecution(
     // ⚠️ AND-lift is load-bearing: the stage filter and the protocol filter are BOTH `metadata`
     // filters — two `metadata` keys in one object literal is last-writer-wins and would match
     // every program harness in the POV (pinned).
-    const programParent = await prisma.task.findFirst({
-      where: {
-        type: 'PIPELINE',
-        AND: [
-          { metadata: { path: ['pipelineStageId'], equals: contractCheck.stageId } },
-          programHarnessProtocolFilter(),
-        ],
-      },
-      select: { id: true },
-    });
+    // EXTRACTED 2026-09-11 — the query (and its load-bearing AND-lift) now lives in
+    // `findProgramParentForStage`, because the contract-applicability facts need the same answer
+    // and a second copy of this would be the two-extractor class. Behaviour is unchanged.
+    const programParent = await findProgramParentForStage(prisma, contractCheck.stageId);
     structurallyRequiresContract = !!programParent;
   }
 

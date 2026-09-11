@@ -250,6 +250,13 @@ network-provisioning 1.3.0 · terraform-iac/kubernetes-gitops 1.1.0 · pipeline-
 3.10.0 · pov-program 1.0.30 — do not reason from pre-batch text; the findings map is
 `cline_docs/reviews/protocol-obligation-audit-2026-08-11/AUDIT.md`.
 
+⚠️ **D7 cross-repo pair — check at every protocol prose edit** (guide R5/§5): any edit to
+derivation-discipline / evidence / rollback prose sweeps
+`~/paichart/program-artifacts/_TEMPLATE/requirements.template.md` in the same sitting — and vice
+versa. The pair crosses repos, so a copov15-only grep silently misses half of it. The quarterly
+obligation audit backstops this; this line exists so the sweep fires at the edit site, not a
+quarter later.
+
 ## 🆕 2026-08-17 — WS1 Phase C: composed-mode prompt surface (headings are PINNED, pc-owned)
 
 Composed harness layout: `UNIVERSAL_AGENT_RULES` → `## Harness Operating Base` (base promptText)

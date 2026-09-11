@@ -24,8 +24,9 @@
  * @created 2026-07-14 (harness verdict-misread fix; 3-specialist review)
  */
 
-/** Roles whose finalResponse carries a terminal verdict block. Shared by network / k8s / terraform
- *  pipelines — all three reviewer templates resolve to `change_reviewer` (verified 2026-07-14). */
+/** Roles whose finalResponse carries a terminal verdict block. Shared by network / k8s / terraform /
+ *  observability pipelines — all four reviewer templates resolve to `change_reviewer`
+ *  (verified 2026-07-14; fourth domain added 2026-09-10). */
 export const REVIEWER_ROLES = new Set(['change_reviewer']);
 
 /** The literal marker the grammar, the protocols, and this parser all pin. Exported so tests can

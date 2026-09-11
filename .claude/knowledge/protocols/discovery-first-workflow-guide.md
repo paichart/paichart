@@ -194,6 +194,7 @@ Only after discovery is complete:
 - `types-system-specialist` - Type system and Prisma schema
 - `prompt-construction-specialist` - Agent prompt engineering
 - `pipeline-harness-specialist` - Pipeline Harness coordinator (three-mode model, reactors, handler invariants)
+- `execution-facts-specialist` - Fact PRODUCTION (mechanical nets, stamping/whitelist, dispositions, replay)
 
 > Full list: 40 specialists in `/.claude/agents/` — see `AGENT-REGISTRY.md` for the authoritative index.
 

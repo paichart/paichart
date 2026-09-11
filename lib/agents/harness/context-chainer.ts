@@ -17,8 +17,44 @@ import { logger } from '@/lib/logger';
 import { mergeTaskInputContext } from '@/lib/tasks/services/inputContext';
 import { sanitizeChainedOutput } from '@/lib/agents/harness/sanitize-chained-output';
 import { selectAuthoritativeExecution } from '@/lib/services/execution-selection';
+import { resolveTaskProtocol, canonicalProtocolName } from '@/lib/agents/harness/program-protocol';
 
 const log = logger.child({ module: 'ContextChainer' });
+
+/** The one lane whose rollback fact is carried to a Reviewer today (net #3, ruled 2026-09-11). */
+const ROLLBACK_FACT_LANE = 'observability-config';
+
+/**
+ * Is this predecessor's leg in the lane whose rollback fact we carry?
+ *
+ * TWO SHAPES, and the second is the one that bites. A PIPELINE predecessor (cross-leg chaining)
+ * carries a real protocol stamp on its own row, so the ladder answers directly. An ACTION sibling
+ * — the common case here, a Reviewer chaining from its own Author — carries `metadata.protocol` as
+ * a PRESENT-BUT-NULL key, and the ladder treats a present key as authoritative (the R1 closure), so
+ * it answers null for every leg in every lane. Asking the sibling therefore silently disables the
+ * carry everywhere. (The enrichment hit this same trap the same day; it is not obvious from either
+ * call site, which is why it is written down at both.)
+ *
+ * So: ask the predecessor first, then fall back to its LEG via `stage.metadata.harnessTaskId`.
+ * Two PK lookups, and only ever reached when a rollback fact actually exists to carry.
+ */
+async function resolveRollbackLane(
+  depTask: { title: string | null; metadata: unknown; stageId: string | null }
+): Promise<boolean> {
+  const direct = resolveTaskProtocol(depTask).protocol;
+  if (direct) return canonicalProtocolName(direct) === canonicalProtocolName(ROLLBACK_FACT_LANE);
+  if (!depTask.stageId) return false;
+  const stage = await prisma.stage.findUnique({
+    where: { id: depTask.stageId }, select: { metadata: true },
+  });
+  const legId = (stage?.metadata as Record<string, unknown> | null)?.harnessTaskId;
+  if (typeof legId !== 'string' || !legId) return false;
+  const leg = await prisma.task.findUnique({
+    where: { id: legId }, select: { title: true, metadata: true },
+  });
+  const protocol = leg ? resolveTaskProtocol(leg).protocol : null;
+  return !!protocol && canonicalProtocolName(protocol) === canonicalProtocolName(ROLLBACK_FACT_LANE);
+}
 
 // A1 §6 chained-context cap (2026-06-06). A THIRD, distinct cap — NOT the 8KB
 // tool-loop cap (MAX_TOOL_RESULT_LENGTH, agentic-tool-loop.ts) and NOT the 50KB
@@ -59,6 +95,23 @@ export interface ChainedContext {
      * branch and that has been got wrong at three separate sites, silently, each time.
      */
     derivationContainment: Record<string, unknown> | null;
+    /**
+     * Net #3 (2026-09-11): the predecessor Author's stamped `rollbackContainment` — is the content
+     * its rollback promises to RESTORE present in the harvest that leg witnessed?
+     *
+     * Carried here for the same reason as `markerPresence`: the leaf Reviewer's §6 is the ONLY
+     * place it reads a sibling's fact, and a card-only fact never reaches its prompt (R12). This
+     * one matters more than most, because the net exists to answer a question the Reviewer
+     * STRUCTURALLY cannot: it reads the package, never the raw harvest, so a verbatim-quotation
+     * claim is uncheckable from where the judgement is made. Three live refusals of correct
+     * rollbacks came from exactly that gap.
+     *
+     * Null when the predecessor never stamped one (any non-Author execution, or an Author predating
+     * the net) AND null OUT OF LANE — see the lane guard at the push site. Null renders nothing:
+     * there is no ABSENT token for this fact while it gates nothing, deliberately, because ABSENT
+     * here means "not yet produced", not "treat as blocking".
+     */
+    rollbackContainment: Record<string, unknown> | null;
     finalResponse: string;
     executionId: string;
     // A1 truncation facts (Protocol-10 fact; pre-wires deferred D1 coverage signal)
@@ -152,6 +205,7 @@ export async function chainDependencyContext(taskId: string, db: ChainerClient =
           agentTemplateId: true, // F19: chain-capable classification
           executionStatus: true,
           metadata: true,
+          stageId: true, // net #3 lane resolution — see resolveRollbackLane()
         },
       },
     },
@@ -354,6 +408,14 @@ export async function chainDependencyContext(taskId: string, db: ChainerClient =
         degradedPredecessors++;
       }
 
+      // Resolved BEFORE the push so the lane lookups are skipped entirely when there is no fact to
+      // carry — which is every predecessor that is not an Author, i.e. most of them.
+      const stampedRollback =
+        (parsed as { rollbackContainment?: Record<string, unknown> }).rollbackContainment ?? null;
+      const rollbackFact = stampedRollback && (await resolveRollbackLane(depTask))
+        ? stampedRollback
+        : null;
+
       chainedFrom.push({
         taskId: depTask.id,
         taskTitle: depTask.title,
@@ -375,6 +437,21 @@ export async function chainDependencyContext(taskId: string, db: ChainerClient =
         // read this field instead of re-deriving it. Do not re-add a predecessor artifact lookup
         // elsewhere; extend this instead.
         derivationContainment: parsed.derivationContainment ?? null,
+        // Net #3 (2026-09-11). Read from the SELECTED execution's own result.json, exactly like
+        // `confidenceScore` above (BC-3) and the two containment fields — never task.metadata,
+        // which is last-writer-wins at the task level and can belong to a different execution.
+        //
+        // LANE GUARD, and it is a FIELD OMISSION rather than a chain skip: the predecessor is still
+        // fully chained, it simply carries no rollback fact. So nothing is recorded in
+        // `notChained` — that array means "this predecessor's CONTEXT did not arrive", which would
+        // be false here and would make a healthy chain read degraded.
+        //
+        // WHY THE LANE EXISTS: a corpus re-measure over 125 archived packages put the unmatched-
+        // line rate at 66% outside observability-config. Handing a Reviewer a fact that cries wolf
+        // gets it ignored precisely when it is right, which would waste the exoneration value the
+        // net was built for. The other lanes are not wrong, they are unruled — see
+        // cline_docs/follow-ups/rollback-containment-context-entry-2026-09-11.md.
+        rollbackContainment: rollbackFact,
         finalResponse,
         executionId: latestExec.id,
         truncated,

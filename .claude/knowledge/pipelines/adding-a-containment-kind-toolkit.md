@@ -4,6 +4,17 @@
 repeating the eight things the first extension got wrong
 **Type**: Execution toolkit (not an analysis protocol)
 **Proven**: 2026-08-02 — `asn`, the first extension. Built, deployed, proven live in Run 20
+**Scope, as of 2026-09-11**: the title says "containment `kind`", but this is **the procedure for
+adding a MECHANICAL NET** and has been used as one — `rollbackContainment` (net #3) was built
+against it end to end, and Step 0 now carries a path earned by that build. Read every "kind" below
+as "kind or net"; the steps are shape-agnostic and only Step 1's examples are cidr/asn-specific.
+⚠️ **Deliberately NOT renamed yet.** Twelve documents reference this file by name, and the rename
+belongs with the generalisation that the shared-net-registry arc (stage 2b) will do anyway — doing
+it now buys a 12-file drift sweep that 2b would immediately redo. When 2b lands, rename and sweep in
+the same commit. Recorded so the decision is not re-litigated as an oversight.
+**Owner**: `execution-facts-specialist` (since 2026-09-11); paired discovery
+`.claude/knowledge/discoveries/execution-facts-discovery.md`. Scheduled to be generalised to
+**adding-a-mechanical-net** in the same arc that extracts the shared net registry.
 **Genesis**: distilled from `cline_docs/reviews/asn-kind-2026-08-02/IMPLEMENTATION-PLAN-v2.md`
 (4 specialists, 32 findings) and the defects that plan itself missed
 
@@ -29,8 +40,12 @@ repeating the eight things the first extension got wrong
 ## STEP 0 — Earn it. Do not skip. *(≈10 min)*
 
 `PIPELINE-DOMAIN-FIT-CATALOG.md`'s mechanical-net rule: **a leaf is earned by a live failure, OR by a
-property that is load-bearing, prose-only, and of a class already measured as non-binding.** All
-three for the second path, or it is speculation.
+property that is load-bearing, prose-only, and of a class already measured as non-binding, OR by a
+judgement repeatedly made blind to the evidence that decides it.** Every box of whichever path you
+claim, or it is speculation.
+
+**Pick ONE path and satisfy it completely.** They are not a menu to graze — each is a different
+argument about why the leaf is not speculation, and half of two paths is neither.
 
 - [ ] **Path 1** — has this failed live? Cite the run.
 - [ ] **Path 2**, all three:
@@ -38,10 +53,50 @@ three for the second path, or it is speculation.
   - [ ] **Prose-only** — quote the *only* existing guard, and say which agent is asked to perform it.
   - [ ] **Measured non-binding** — cite a run where a prose check *of that class* was skipped. Not
         "could be": observed.
+- [ ] **Path 3 — ADJUDICATION** (added 2026-09-11, earned by `rollbackContainment`). Paths 1 and 2
+      both earn a leaf from a defect that ESCAPED. This path earns one from the opposite: a CORRECT
+      artifact repeatedly refused, because the judging party could not see the evidence that decides
+      the question. Both boxes, or it is speculation:
+  - [ ] **≥2 live occurrences of a STRUCTURALLY BLIND judgement.** Not "did not look" — *could not*.
+        The party must have had no access to the deciding evidence from where it sat. Cite each run.
+  - [ ] **A corpus measurement bounding the LEAF's own false-positive rate**, with every benign
+        class named as a non-blocking disposition *before* any panel sees it.
+
+      **Direction is irrelevant, blindness is the point.** An escaped defect and a false refusal
+      earn equally — what is being fixed is that a decision was repeatedly made without the evidence,
+      not which way it happened to fall.
+
+      ⚠️ **Every cited occurrence must be shown to be (b)-lane, and an (a)-lane refusal can NEVER
+      count.** The two look identical in a run-sheet and are opposites:
+
+      | | (a) evidence GENUINELY MISSING from the artifact | (b) evidence PRESENT and correct, but unverifiable from the judge's seat |
+      |---|---|---|
+      | The judge was | **RIGHT** | **WRONG** |
+      | What fixes it | prose (restatement / baseline-evidence obligations) | **this leaf** |
+      | Counts toward Path 3 | **NO** | yes |
+
+      The worked counter-example is the **June 2026 k8s run**: its reviewer blocked for missing
+      LimitRange / ResourceQuota / PDB evidence and was RIGHT — the harvester had captured all three
+      as `❌ None` and the package simply did not restate them. Citing that refusal as Path-3
+      evidence would earn a leaf to suppress a correct catch. It is a pinned NON-SUPPRESSION fixture
+      in `scripts/test-rollback-containment.ts` for exactly that reason.
+
+  - [ ] **A Path-3 leaf may ESCALATE; it may NEVER BLOCK on its own finding.** Its corpus shows a
+        low true-violation base rate *by construction* — that is what makes it an exonerator rather
+        than a detector — so a mechanical block would be an unearned verdict, and it would reproduce
+        the very failure the leaf was built to end. Under Path 1 a low base rate is disqualifying;
+        under Path 3 it is confirming. **If your measurement shows a HIGH true-violation rate, you
+        are on Path 1 and this path does not apply.**
 
 ⚠️ **"It proves the framework is generic" is NOT an earning justification.** It is a benefit. The
 rule would reject it standing alone, and §6 of the portability follow-up is worded in a way that
 invites exactly that mistake.
+
+**Path 3's arc, not restated here**: `EVIDENCE-FLOW-DISCIPLINE.md` §2026-09-11 (the consumption-side
+record of a tier judging evidence it structurally cannot see) · `PIPELINE-RUN-FORENSICS-GUIDE.md`
+(the `Rollback provenance fact` row — where to read the stamp, and the (a)/(b) classification to run
+BEFORE theorising about a provenance-shaped refusal) · the build's own plan and ruling,
+`cline_docs/reviews/rollback-containment-2026-09-11/IMPLEMENTATION-PLAN.md` §1.
 
 ## STEP 0b — Sweep the standing rules this work sits against *(≈10 min)*
 

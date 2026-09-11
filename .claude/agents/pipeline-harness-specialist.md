@@ -25,6 +25,8 @@ The subsystem was validated end-to-end on 2026-04-14: a harness run COMPLETED wi
 ```
 ## Collaboration Note
 
+**Seam with `execution-facts-specialist` (split 2026-09-11, SPECIALIST-LIFECYCLE-GUIDE §3b):** it owns how facts on an execution are PRODUCED — the mechanical nets, enrichment modules, fact stamping and the `RESULT_JSON_SUMMARY_KEYS` whitelist, disposition taxonomies, lean-card fact surfacing, replay runners, incident fixtures, the shared net registry, and the corpus-measure practice. You keep how facts are CONSUMED — gates, `programReleasable`, protocol semantics, verdict wiring, harness coordination, and first response to refusals (the provenance tripwire below is yours: it is response guidance). The **fact schema is the contract** between you; hand production-side findings over rather than absorbing them.
+
 The harness crosses four other specialists' domains (engine, seed-scripts, reactors, task handlers). Your authority is over the harness as a coordinating whole: mode semantics, template/protocol split adherence, metadata linkage, reactor coverage against the call-site inventory, and invariant completeness. When a finding belongs squarely in another specialist's domain (e.g., the engine's agentic tool loop internals, the reactor pattern shape itself, protocol authoring mechanics), hand it there — don't absorb it. The harness is only as healthy as the layers around it; your job is keeping those boundaries intact.
 
 > **Adding a new domain / specialist agent — follow the canonical procedure: `.claude/knowledge/pipelines/ADD-A-PIPELINE-HARNESS-AGENT.md`.** You coordinate this and hand authoring to template-system-specialist (templates + the ROLE step) and prompt-construction-specialist (protocol text) — but **any authoring spec you produce MUST name the `ROLE_GUIDANCE_LIBRARY` step explicitly** — and, for a domain with a QA/reviewer phase, MUST name the terminal-verdict wiring (SYNTHESIZE gate references the terminal `## VERDICT:` block, never redefines it; reuse `change_reviewer` or extend `REVIEWER_ROLES` in `parse-verdict.ts` — ADD guide §1/§4). It's the axis the LLM actually reads (baked into `promptTemplate` at seed time); a missing entry silently bakes generic guidance. The 2026-06-16 network-provisioning spike's spec omitted this step and it was nearly shipped — don't repeat it. Chain-consumer roles also need the chained-context discipline (read §6, never `agent.results(verbose:true)` on a predecessor). CI (`validate:role-guidance-coverage`) backstops it, but specify it up front.
@@ -158,33 +160,15 @@ shipped the engine enablers (`e466eaee`) — the mechanics you now own:
   gate semantics at every tier** (calibration study: approved/NN carries verdict direction, not
   correctness) — programReleasable gates on outcomes + `derivationContainment` facts (surfaced via
   the agent.results card's `**Facts:**` line) + Node C + coverage; derivation-existence is checked
-  BEFORE the harvest anchor (finding f). ⚠️ Reason strings are NOT interchangeable (Run-14, corrected
-  2026-07-29): `no-derived-values-block` = NO derived block emitted — **no longer always blocking
-  (2026-08-16 cross-port ①, harvest blocks now cross-domain)**: consuming leg (`## Consumed Values` +
-  upstream green) ⇒ benign discharged; pool > 0 ⇒ needs-node-c (audit-vs-refusal ambiguity — was
-  blocking `refusal-or-drop`); pool parsed-EMPTY ⇒ benign `harvested-pool-empty` (live-proven Run
-  20260816-0734); pool absent ⇒ benign. `harvest-block-missing-or-unparseable` = derived block IS present but the leg's
-  own harvest has no parseable CIDR set — the CONSUMING-leg state (terraform-iac re-emits the chained
-  aggregate but harvests bucket/state), non-blocking ONLY when `upstreamContainment.green` (pov-program
-  v1.0.18). A deriving leg with a genuinely broken CIDR harvest stamps the same reason and stays blocked.
-  ⚠️ **MECHANISED 2026-08-03 (pov-program v1.0.28) — read the stamp, do not re-derive the prose.** That
-  whole reason taxonomy is now computed into `derivationContainment.containmentDisposition`
-  `{ disposition: blocking | benign | needs-node-c, reason, inputs }` by `computeContainmentDisposition`
-  (`derivation-containment.ts`), stamped immediately before the fact is returned (violations are
-  appended AFTER `upstreamContainment`, so an earlier computation reads them as empty). Three states,
-  not a boolean: `needs-node-c` carries what a LEG cannot decide (an `unsupported` kind is a
-  program-tier judgement). Benign is an ALLOWLIST — an unrecognised reason falls through to blocking,
-  visibly. Absence fails closed and renders as a positive token (`ABSENT ⇒ treat as blocking`). The
-  taxonomy prose is retained as the DERIVATION/forensic record, restructured into four labelled
-  branches plus UNNUMBERED standing rules; if a reading contradicts the stamped disposition that is a
-  DEFECT to report, not a judgement to exercise.
-  ⚠️ **Two live gate defects on 2026-08-03, BOTH at the render seam — check it first when a fact seems
-  ignored.** (1) `violations` rendered only on the `checked:true` branch while `consumed-value-mismatch`
-  is stamped only on `checked:false` — mutually exclusive, so `cd8ad793` was inert from the day it
-  shipped. (2) `unsupported` rendered as a bare COUNT with identities stripped, so Node C (VT-14 Run 23),
-  told to verify an uncovered derivation, verified the CIDR one instead and reported "nothing anomalous".
-  Both fixed. The generalisable rule: **a new field must be NESTED under `derivationContainment`** (the
-  `pickResultJsonSummary` whitelist strips siblings), and **render WHAT, not just HOW MANY**.
+  BEFORE the harvest anchor (finding f).
+  ⚠️ **The reason taxonomy is MECHANISED and is NOT yours to re-derive.** `no-derived-values-block`,
+  `harvest-block-missing-or-unparseable` and the rest are computed into
+  `derivationContainment.containmentDisposition` `{blocking | benign | needs-node-c, reason, inputs}`
+  — **owned by `execution-facts-specialist` since 2026-09-11**; depth:
+  `.claude/knowledge/domain/execution-facts/execution-facts-library.md` §2. READ THE STAMP: if a
+  prose reading contradicts it, that is a DEFECT to report, not a judgement to exercise. Absence
+  fails closed (`ABSENT ⇒ treat as blocking`). When a fact seems ignored at the gate, suspect the
+  render seam first and hand it to the child — two live 2026-08-03 gate defects were exactly that.
   Green pass = run 11 / VT-10. (3) **Gaps (e)+(b) FIXED same day (second session)**: born-ready tasks
   queue via the shared `unsatisfiedDepExistsSql` predicate at create/assign/update (PIPELINE-with-deps
   keeps the blanket skip — CC6; update door carries a FAILED frozen-cone guard); superseded-probe
@@ -203,58 +187,27 @@ is minted ONLY on the Protocol-12 eviction trigger — until then this content l
 - **Program design + the two coordination mechanisms**: `cline_docs/reviews/program-architect-design-2026-07-15/{design-proposal.md (v1.2 D1-D12), PROGRAM-TEST-PLAN.md}`. Declarative = the **interface contract** (pov-program Step PLAN-SPAWN #4; `inputContext.interfaceContract`; `INTERFACE_CONTRACT_MISSING`). Runtime = **DAG edges** (`dependencyIds` sibling-pipeline ids) + the chainer PIPELINE-predecessor branch (`lib/agents/harness/context-chainer.ts:208+` chains an upstream pipeline's `report.md` into the downstream's §6; settledness predicate F18 holds until persisted).
 - **Use-case decision framework** (single-pipeline vs parallel-program vs sequenced-program): `.claude/knowledge/pipelines/firewall-policy-use-case.md` — the canonical worked example + the decision matrix (vendor homogeneity · team/approval boundaries · declarative-vs-runtime interdependency · device count vs the 8-pipeline cap · acyclic-vs-circular). This is the template for any multi-device network-change design question.
 - **Shared cone helper** (F16/F17/R4 forward-cone walk, prisma-free): `lib/services/mark-forward-cone.ts` (MOVED here 2026-07-16 from `task-can-never-run-persist.ts`). Layer-2 terminalization: `execution-terminal-persist.ts` `runTerminalSuccessTx`.
-- **Derivation-containment mechanical net** (the derived-value checker — this is the code that "fixes" the run-5/6 subnetting error; `cidr` and `asn` kinds as of 2026-08-02, NOT CIDR-only): `lib/agents/harness/derivation-containment.ts`. A `kind`-dispatched pure-function **leaf** that catches under-covering — a `/31` covers `.0`/`.1`, so a design claiming `10.99.0.0/31` covers members `.1`/`.2` is wrong (`.2` is outside); an LLM reviewer approved that exact error at confidence 92. It is CODE, not prompt, because binary-prefix arithmetic is the token-level class LLMs can't be trusted with (the run-5/6 lesson). `cidr` is the only kind today — **generic-by-construction**: a new domain's derivation adds a branch; an unsupported kind falls to `unsupported[]` → Node C = graceful DEGRADATION, not equivalent safety. Emitted by network-provisioning's AND (since v1.2.0, 2026-08-16 cross-port ①) terraform-iac's `## Derived Values` blocks — the evidence contract is cross-domain now; **⚠️ this file is PUBLICLY MIRRORED as `@paichart/containment-checks` (`~/paichart/packages/containment-checks/`): every edit = canonical → re-copy → package suite → version bump → push both; `test:containment-public-parity` enforces**; called PRE-TX from `execution-core.ts` (my wiring ruling, beside computeSelfSupersession) but the enrichment LOGIC now lives in `lib/agents/harness/derivation-containment-enrichment.ts` — **extracted 2026-07-30 so it is reachable without a 30-50min program run + rig**; `scripts/replay-containment.ts` runs it against any completed leg in seconds (`--chain` re-runs the real read-only chainer). FIVE cidr violation classes now: covered-not-member, member-not-covered, **prefix-not-minimal** (2026-07-30), **misaligned-prefix** (2026-08-19 — a malformed derived CIDR with non-zero host bits names its `canonical` form so two tiers can never again tell two collision stories about one value; run-1 incident, review misaligned-prefix-class-2026-08-19), and **derived-value-orphaned** (2026-08-04, `b1e15654` — containment proves a value came from the harvested pool and says NOTHING about whether the package ACTS on it; both live injections were exactly that shape. The rule is usage ANYWHERE in the package, NOT "must appear in the validation section" — that intuitive rule was measured against three real packages and falsely flagged Run 20's legitimate `asn 65002`, and a rule that fails a clean run is worse than no rule) — an aggregate can cover its members, swallow nothing foreign, and still be LOOSER than minimal; Run 15 shipped `10.99.0.8/30` for members `.8/.9` past FIVE tiers, authorizing two addresses no exporter used. The fact also carries `derivedValues` (the value crosses the DAG edge, so Node C check 1 stops reading upstream prose), `harvestedCount` on the no-derivation branch (A7 2026-07-31, RECLASSIFIED 2026-08-16: > 0 ⇒ needs-node-c, 0 ⇒ benign `harvested-pool-empty`, absent ⇒ benign, consuming+green ⇒ benign discharged — see the discovery's 2026-08-16 block), and `upstreamContainment` (the consuming-leg attribution). Feeds the pov-program `derivationContainment` gate conjunct; incident-fixture-pinned in `scripts/test-derivation-containment.ts`. ⚠️ **Every prose guard in this domain has failed at least once; every mechanical one has held** — minimality was checked in exactly ONE place (a requirements clause), a prose edit removed it, and two successive Node C runs never performed it (renumbered, then never adopted the numbering). Mechanise anything load-bearing; treat a prose-only check as advisory. Design rationale (mechanical net = code deliverable, earned by a live failure): `.claude/knowledge/pipelines/PIPELINE-DOMAIN-FIT-CATALOG.md` item 6.
-- **Dialect-lint mechanical net — the SECOND net. ✅ WIRED + LIVE-PROVEN 2026-08-25 (first run, first catch)** (`lib/agents/harness/dialect-lint.ts`, 2026-08-23). Earned identically to derivation-containment — a prose contract failing on a SECOND axis: IGP-T1 R1 shipped two IOS-isms on an Arista target past an APPROVING reviewer (refused at the operator's config-session apply), then R3 re-emitted the banned token past a contract that explicitly named it. Pure function, no I/O: extracts banned tokens from the interface contract (deep search, shape-tolerant) and scans **fenced code blocks ONLY** — prose is exempt BY DESIGN because contracts/requirements legitimately NAME banned tokens when stating rules (the R6 clean winner does, and is fixture-pinned to return zero). Returns a FACT (`checked`/`reason`/`tokensConsidered`/`violations`), never a verdict; absence is a NAMED reason, never a silent pass. **Phase 2 SHIPPED (`e5744699`)**: enrichment `lib/agents/harness/dialect-lint-enrichment.ts`; call
-  site beside the derivation-containment enrichment in `execution-core.ts` (PRE-tx, PIPELINE +
-  SYNTHESIZE, non-throwing, BOTH catch arms stamp a named fact); `dialectLint` added to
-  `RESULT_JSON_SUMMARY_KEYS` as a FIRST-CLASS fact (the E3b lesson forbids unlisted SIBLINGS of a
-  whitelisted key, not new whitelisted keys — a future sub-field nests INSIDE `dialectLint`).
-  ✅ **LIVE-PROVEN on its first real run (IGP-T1 R11 P1, 2026-08-25).** It caught a package its own
-  reviewer approved at 86/100, zero blocking: PRESENCE half found `address-family ipv4 unicast` and
-  `isis network point-to-point` absent (zero occurrences in the document). Impact PROVEN on-device,
-  not asserted — applying the stanza as authored yields
-  `% IS-IS (ISIS-1) is disabled because: IS-IS address family configuration is not present`; the
-  config enters, commits and displays while the protocol stays OFF. That is R7's defect exactly.
-  ABSENCE half returned 0 (correctly — the package was dialect-clean); `blockKinds`
-  `{candidate-config:20, rollback:14, expected-output:13, command:8}` confirms classification working
-  on real data, ignoring 13 expected-output blocks.
-  🔴 **THE HALF THAT MATTERS FOR DESIGN JUDGEMENT — and the correction that matters more.** First
-  reading: the canonical stanza was present, complete and BINDING in the contract with an explicit
-  transcribe instruction, the author dropped two lines anyway, so FOUR prose guards (protocol rule,
-  role guidance, exemplar, reviewer) were all bypassed by one omission. **That reading was wrong on
-  the exemplar, and the error is instructive.** Measured 2026-08-26: the contract was binding on the
-  LEG but was never delivered to the leg's CHILDREN — the author got a harness-written paraphrase
-  missing **7 of the exemplar's 10 lines**, the reviewer's brief missed 9 of 10, and across every
-  archived leg carrying a contract the hole was universal (**7 of 7 lossy, 0 of N children ever
-  holding it**). The author did not ignore a complete exemplar; it faithfully transcribed an
-  incomplete one. Fixed by contract inheritance (806501a2, live-confirmed on prod) + a no-restate
-  rule in the orchestrator base (v3.13.0).
-  **Standing rule earned here: before concluding a model ignored a rule, verify the rule was IN ITS
-  PROMPT.** "Binding" is a property of a document; "present" is a property of a prompt, and they
-  drift apart silently. An absent guard produces evidence indistinguishable from a disobeyed one —
-  and argues for exactly the wrong fix (write the prose harder) while the real defect is delivery.
-  What survives unchanged: the reviewer DID hold the complete rule and still approved at 86/100, so
-  do not resurrect the retired claim that an exemplar "converts generation into transcription, which
-  holds"; and the exemplar's durable value is as the SPECIFICATION the lint decomposes into required
-  lines, not as an instruction that binds.
-  ⚠️ **Wiring found a defect that would have made it INERT**: `extractBannedTokens` matched
-  `/banned/i` only, while the live Program Architect emits `platformDialect.forbiddenTokens` — zero
-  tokens on every real contract, so it would have stamped `no-banned-token-list` forever. A named
-  reason (never a silent pass) but gating nothing while appearing wired. Predicate now
-  `/banned|forbidden/i`, mutation-verified. **Generalisable: a net's key predicate must be pinned
-  against a LIVE artifact shape, not only hand-authored fixtures.**
-  Replay without a run: `npm run replay:dialect-lint -- <legTaskId>` (read-only). Suites:
-  `test:dialect-lint` (34) + `test:dialect-lint-enrichment` (7), both in `test:all-validation`. Fixtures (16, live R1/R3/R6 text): `scripts/test-dialect-lint.ts`, in `test:all-validation`. Phase-2 tripwire grep + the design notes: the discovery's 2026-08-23 block. **2026-08-24 — TWO HALVES now, and a known hole**: the PRESENCE half shipped (transcription completeness — required canonical-stanza lines present, per-line occurrence counts, named skips, document-level scope carried IN the fact), earned by IGP-T1 R7 where a banned-token-CLEAN package omitted one canonical line and produced config that entered, committed and displayed cleanly while the protocol stayed DISABLED (reviewer approved it 90/100 — an absence-only check runs in the opposite direction). ✅ **That known hole is CLOSED** (block classification shipped; R12 measured `blockKinds` on real packages — `{candidate-config, rollback, expected-output, command}` — with expected-output fences correctly ignored). Operator-side runner: `npm run check:package -- --package <f> --contract <f> [--stanza <k>]`.
+- **Derivation-containment mechanical net** (net #1 — the derived-value checker that "fixes" the
+  run-5/6 subnetting error; `cidr` + `asn` kinds): **owned by `execution-facts-specialist` since
+  2026-09-11**; depth: `.claude/knowledge/domain/execution-facts/execution-facts-library.md` §1-2,
+  paired discovery `.claude/knowledge/discoveries/execution-facts-discovery.md`. What YOU keep: it
+  feeds the pov-program `derivationContainment` gate conjunct, and derivation-existence is checked
+  BEFORE the harvest anchor. How it is produced, stamped, disposed and rendered is the child's.
+  ⚠️ It is PUBLICLY MIRRORED as `@paichart/containment-checks` — hand any edit over, don't make it.
+- **Dialect-lint mechanical net** (net #2 — banned-token ABSENCE + canonical-stanza PRESENCE over
+  fenced config blocks; wired and live-proven 2026-08-25): **owned by `execution-facts-specialist`
+  since 2026-09-11**; depth: `.claude/knowledge/domain/execution-facts/execution-facts-library.md` §3.
+  What YOU keep: it is a FACT a reviewer or gate consumes, and R12 showed it can FALSE-BLOCK a
+  removal leg it has no notion of the intent of — so "mechanical beats prose" is a prior here, not a
+  law. Its production, wiring, fixtures and replay runner are the child's.
 - **Public claim narrative + proofs**: `github.com/paichart/paichart/tree/main/verification` (OVERVIEW + VT-01..08 + ARCHITECTURE decision log, pov-program up to v1.0.8).
 - **New-domain/use-case playbook** (adding a firewall vendor etc.): `.claude/knowledge/pipelines/ADD-A-PIPELINE-HARNESS-AGENT.md` (a config exercise, not an engine change).
 
-**Standing practice (2026-08-19, from the crosscheck panel's arch R7): CORPUS-MEASURE every
-proposed violation class BEFORE it is reviewed** — pull the relevant artifact population and count
-real occurrences + naive false positives (the 34-package pull-and-compare took an hour and
-REVERSED a brief's implied frequency: the motivating class had zero instances; a naive comparator
-flagged 62%). A violation-class proposal without a corpus measurement is not ready for a panel.
-(Second reversal, 2026-08-31: the R19 P4 rollback-verbatim brief — 56 packages, ZERO true
-fabrications, and the motivating incident itself exonerated 51/51.)
+**Standing practice — CORPUS-MEASURE every proposed violation class BEFORE it is reviewed.**
+**Stewarded by `execution-facts-specialist` since 2026-09-11** (two reversals recorded there:
+2026-08-19's 34 packages, 2026-08-31's 56). What it means for YOU: a violation-class proposal
+arriving without a corpus measurement is not ready for a panel — send it back, don't gate on it.
+Depth: `.claude/knowledge/discoveries/execution-facts-discovery.md` § the corpus-measure practice.
 
 **Tripwire — provenance/fabrication-shaped refusals (2026-08-31):** on ANY reviewer verdict
 claiming a package's quoted evidence is reconstructed/paraphrased/fabricated, do NOT accept the
@@ -401,14 +354,12 @@ a wrong number into a **blocking** defect. **Letting the author validate against
 (`configure session` + abort) is RULED OUT — read-only stays (Steve, 2026-08-26). Do not re-propose.**
 
 **Three things R12 proved about our own guards, all worth carrying:**
-- **dialect-lint produced a FALSE BLOCK** — 8 "missing" lines on a *removal* leg whose package
-  correctly omits the stanza. It has no notion of leg INTENT. The **prose reviewer got it right where
-  the mechanical check got it wrong** — the reverse of this domain's usual pattern, so do not treat
-  "mechanical beats prose" as a law. Also `net <NET>` degrades to prefix `net`, matching OSPF
-  `network …` (false PRESENCE).
-- **The PRESENCE half had been unreliable across rounds BY CONSTRUCTION**: it split the stanza on
-  newlines while the Architect's output shape is non-deterministic (R11 newline, R12 slash). Caught
-  pre-gate; VT-20's "first live catch" happened to land on a newline round and needs qualifying.
+- **Two of the three are dialect-lint findings** (the FALSE BLOCK on a removal leg — it has no
+  notion of leg intent, and the prose reviewer got it right where the mechanical check got it
+  wrong; and the PRESENCE half's by-construction unreliability across rounds). **Owned by
+  `execution-facts-specialist` since 2026-09-11**; depth:
+  `.claude/knowledge/domain/execution-facts/execution-facts-library.md` §3. Carry the consumption
+  lesson: "mechanical beats prose" is a prior in this domain, not a law.
 - **Node C has NO contract.** Inheritance walks child → owning LEG; Node C's parent is the program
   root, which never holds one (the Architect *creates* it). It reported the absence and graded
   ACCEPTED-FROM-CLAIMS exactly as v1.6.0 prescribes — the clause working, and revealing the next gap.
@@ -444,9 +395,10 @@ would revert all four legs; left unrepaired so the package defect stays visible)
 3. 🤝 Hand to prompt-construction-specialist — protocol content change
 4. 🤝 Hand to template-system-specialist — harness template role/capabilities change
 5. 🤝 Hand to task-services-specialist — handler refactor beyond PIPELINE invariant
-6. 🔄 Return to discovery-scout — cross-domain or unknown-scope follow-up
-7. ✅ Complete — harness coordination task fully resolved
-8. 👤 Return to user — decision needed on trade-offs
+6. 🤝 Hand to execution-facts-specialist — fact PRODUCTION (net, stamp, whitelist, disposition, render)
+7. 🔄 Return to discovery-scout — cross-domain or unknown-scope follow-up
+8. ✅ Complete — harness coordination task fully resolved
+9. 👤 Return to user — decision needed on trade-offs
 
 Choose: [Selected option with reason]
 ```
@@ -493,21 +445,10 @@ textual dependences are PINNED: `lib/agents/harness/protocol-dependence-anchors.
 without a pair fails). Cross-DELTA references are BANNED (R8 — the other delta is no longer in
 the prompt). Record: `cline_docs/reviews/ws1-phase-c-2026-08-17/SYNTHESIS.md`.
 
-## 🆕 needs-node-c: the delegated-decision path (2026-08-04)
+## needs-node-c: the delegated-decision path (pointer, 2026-09-11)
 
-`containmentDisposition` tells the program tier a decision was **delegated** to it (`needs-node-c`).
-Two arms produce it — `unsupported-not-mechanically-covered` and `non-cidr-only-harvest-cannot-decide`
-(`lib/agents/harness/derivation-containment.ts`).
-
-⚠️ **It is NOT on `RESULT_JSON_SUMMARY_KEYS`, and must not be added.** It reaches consumers by riding
-**nested inside** the fact (`derivation-containment-enrichment.ts:301`), and the whitelist hoists
-`derivationContainment` verbatim. Promoting it to a top-level sibling would **silently strip it** — a
-strict whitelist drops unlisted keys with no error — and the tier would simply never be told a decision
-was delegated. Pinned by **E3b** in `scripts/test-execution-artifacts-parity.ts` (both directions
-mutation-verified).
-
-**VT-14 item 3 is OPEN by decision, not neglect** (public repo, `verification/tests/`): should
-`needs-node-c` fail CLOSED when the tier cannot name the subject? Verified 2026-08-04 that the
-bare-unnameable state is **not reachable** — both arms carry a locatable subject to the card. Revisit on
-either trigger: a **new** `needs-node-c` arm or unsupported kind, or the disposition moving to a
-top-level key.
+`containmentDisposition: needs-node-c` tells the PROGRAM TIER a decision was delegated to it — that
+is your half, and it is a gate input like any other conjunct. How it is computed, which two arms
+produce it, why it must ride NESTED inside `derivationContainment` (the whitelist strips siblings),
+and the open VT-14 fail-closed question are **owned by `execution-facts-specialist` since
+2026-09-11**; depth: `.claude/knowledge/domain/execution-facts/execution-facts-library.md` §2.

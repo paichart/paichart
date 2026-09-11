@@ -3,7 +3,7 @@
 **Status**: DESIGN SKELETON (Phase-1 depth) — authored 2026-09-10 for a live customer conversation
 (consultancy; asked for IaC pipeline, GitOps/GitSecOps, and modern stacks: Prometheus, Grafana,
 OpenTelemetry). Domain fit: `PIPELINE-DOMAIN-FIT-CATALOG.md` §Observability (GO, 2026-09-10) +
-§Terraform (shipped) + §K8s (seeded, **zero live rounds** — see the rounds gate below).
+§Terraform (shipped) + §K8s (seeded; one design-era run 2026-06-28, zero rounds — see the rounds gate below).
 **Not a promise document** — nothing here is customer-facing until its internal rounds are green.
 
 ## What the customer sees (target demo shape)
@@ -14,7 +14,7 @@ contract, human gates between legs, ending in a Grafana dashboard visibly live:
 | Leg | Domain | Deliverable | Validation | Rig |
 |---|---|---|---|---|
 | 1. Metrics landing zone | terraform-iac (shipped, live-proven) | HCL package: metrics bucket + remote-write IAM | plan output + conftest policy | LocalStack :3113 (exists) |
-| 2. Stack manifests | kubernetes-gitops (seeded, **unrun**) | kube-prometheus-stack values diff + otel-collector manifests + git-revert rollback | `kubeconform` + `kustomize build` + `conftest`/OPA (all offline — no cluster needed) | git repo as harvest source |
+| 2. Stack manifests | kubernetes-gitops (seeded; ONE design-era run 2026-06-28, zero rounds since) | kube-prometheus-stack values diff + otel-collector manifests + git-revert rollback | `kubeconform` + `kustomize build` + `conftest`/OPA (all offline — no cluster needed) | git repo as harvest source |
 | 3. Live config change | **observability (new domain)** | scrape job + OTel pipeline + provisioned dashboard package | `promtool check config` / `otelcol validate` pre-apply; target `up` + dashboard present post-apply | compose rig on devext (~1 day build) |
 
 **The GitSecOps framing is ours already, just unnamed**: policy-as-code gating in the package's own
@@ -52,7 +52,7 @@ refusals. Say the word "GitSecOps" over the machinery we run every day.
 ## The gate that protects the customer relationship
 
 **No leg domain fronts a customer without green internal rounds**: terraform is proven; the
-observability domain needs its Tier-1 rounds; kubernetes-gitops has NEVER run live and needs 2–3
+observability domain needs its Tier-1 rounds; kubernetes-gitops has one design-era leg run (2026-06-28) and zero rounds — 2–3
 rounds minimum (every domain's R1 found defects — FW took 5 rounds to green). The demo asset is the
 run sheet + persisted artifacts (+ optionally the 2-minute video's observability successor), not a
 live first attempt.
@@ -65,6 +65,13 @@ live first attempt.
 3. First kubernetes-gitops live round (offline validators only — cheapest of the three to run).
 4. Compose the program; decide the `name`-kind question when the contract is drafted.
 5. Azure plan-only leg last (needs Steve's sub + credentials).
+
+## Public README (decided, Steve 2026-09-10): evidence-paired only
+
+The public `paichart/paichart` README does NOT mention observability until the domain ships with
+its evidence: the "Four domains" section goes to five + the example change report link + the VT
+doc, all in ONE commit, after R1–R3 are green — claim and machine record arriving together, per
+the README's own credibility model. No roadmap line before then.
 
 ## Open customer questions (block Phase 2, not the fit verdict)
 

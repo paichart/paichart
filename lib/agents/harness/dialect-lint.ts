@@ -131,6 +131,8 @@ const MAX_LINE_TEXT = 120;
 const MAX_TOKENS = 64; // sanity cap — a "banned list" larger than this is not a token list
 const MAX_STANZAS = 8; // sanity cap on canonical stanzas pulled from one contract
 const MIN_PREFIX = 3;  // a placeholder line's literal prefix must be this long to be assertable
+/** A block LABEL is short; a paragraph that merely precedes a block is not. See `labelProse`. */
+const MAX_LABEL_CHARS = 120;
 /** Carried IN the fact so a consumer cannot over-claim what the presence half proves. */
 const SCOPE_NOTE =
   'document-level: catches a required line missing ENTIRELY (the IGP-T1 R7 defect). It does NOT ' +
@@ -218,14 +220,33 @@ const OPERATOR_VERB = /^(show|grep|egrep|fgrep|diff|awk|sed|cat|head|tail|wc|les
 const HARVESTED_STATE_PROSE =
   /harvest|baseline|current\s+(running-?)?config|existing\s+config|quoted\s+verbatim|before[- ]state|as[- ]found|pre[- ]change/i;
 
+/** Rollback/restore intent. Named because TWO axes read it — `kind` below and `restoreIntent`. */
+const ROLLBACK_PROSE = /rollback|restore|revert|back\s?out/i;
+/** Device output the operator COMPARES against, never config the device receives. */
+const EXPECTED_OUTPUT_PROSE = /expected\s+(output|result)/i;
+/** Prose that labels a block as something the operator RUNS to check, not content to apply. */
+const VERIFICATION_PROSE = /verif|validat|\bcheck\b|confirm|\bcommands?\b/i;
+
+/** A separator-only config line (`!`, `!!!`, `---`). Carries no directive. */
+export function isSeparatorLine(text: string): boolean {
+  const t = text.trim();
+  return /^!+$/.test(t) || /^-{3,}$/.test(t);
+}
+
 function classifyBlock(precedingProse: string, body: string[]): BlockKind {
   // Order matters: a "harvested baseline" block inside a Rollback section is still evidence, and a
   // rollback that RESTORES harvested config is still a rollback — both are exempt from the absence
-  // scan, so the precedence between them is not load-bearing. Kept first because it is the more
-  // specific label.
+  // scan, so the precedence between them is not load-bearing HERE.
+  //
+  // ⚠️ It IS load-bearing for `restoreIntent` below, which is why that axis is computed
+  // independently rather than derived from `kind`. Measured 2026-09-11 on the R19-P4 package: the
+  // rollback section's own preamble says "the configuration HARVESTED LIVE by this P4 leg", so one
+  // of its three device blocks lands `harvested-state` while the other two land `rollback` — a
+  // `kind === 'rollback'` filter would silently drop a third of the restore config, position-
+  // dependently. Same shape as the R16-P4 defect recorded in fencedBlockLines below.
   if (HARVESTED_STATE_PROSE.test(precedingProse)) return 'harvested-state';
-  if (/rollback|restore|revert|back\s?out/i.test(precedingProse)) return 'rollback';
-  if (/expected\s+(output|result)/i.test(precedingProse)) return 'expected-output';
+  if (ROLLBACK_PROSE.test(precedingProse)) return 'rollback';
+  if (EXPECTED_OUTPUT_PROSE.test(precedingProse)) return 'expected-output';
   const meaningful = body.map((l) => l.trim()).filter(Boolean);
   // OPERATOR COMMANDS, not just `show` (widened 2026-08-27). A package may legitimately hand the
   // operator a verification command that MENTIONS a banned token as a search pattern — live: an
@@ -234,6 +255,26 @@ function classifyBlock(precedingProse: string, body: string[]): BlockKind {
   // R5 mistake reproduced inside our own guard for the third time: the check must scan what the
   // package ASKS THE DEVICE TO BECOME, never what it asks the operator to RUN.
   if (meaningful.length > 0 && meaningful.every((l) => OPERATOR_VERB.test(l))) return 'command';
+  // ⚠️ SEPARATORS STAY IN THIS DENOMINATOR. DO NOT "FIX" THIS — it was tried on 2026-09-11 and
+  // REVERTED, measured, before shipping.
+  //
+  // The tempting change is to exclude `!` separator lines from the ratio, on the reasoning that a
+  // ratio about DIRECTIVES should not count punctuation, and that an Arista-style inverse rollback
+  // (6 `no `-forms + 3 context lines + 5 `!` = 14, so `12 > 14` is false) therefore falls through to
+  // `candidate-config` and gets scanned. That reasoning is locally correct and globally wrong.
+  //
+  // A REMOVAL leg's candidate configuration is TEXTUALLY IDENTICAL to an inverse rollback: mostly
+  // `no ...` lines with `!` separators. Nothing in the block distinguishes them; only the heading
+  // does, and the heading path (ROLLBACK_PROSE, above) already handles it. Measured on the live
+  // R19-P4 removal package, the "fix" moved 30 lines out of `candidate-config` into `rollback` —
+  // i.e. it would have stopped the ABSENCE half scanning a removal package's real candidate config.
+  // That trades a hypothetical false SCAN for a live false SKIP on the exact class this net exists
+  // to catch, which is the worse direction. (R12 recorded the mirror-image mistake — a false BLOCK
+  // on a removal leg — so this heuristic has now erred in both directions and should be treated as
+  // a last resort, not sharpened.)
+  //
+  // `isSeparatorLine` is exported for consumers whose question really is about directives —
+  // rollback-containment scopes with it — but this classifier is not one of them.
   if (meaningful.length > 0 && meaningful.filter((l) => /^no\s/i.test(l)).length * 2 > meaningful.length) {
     return 'rollback';
   }
@@ -241,12 +282,40 @@ function classifyBlock(precedingProse: string, body: string[]): BlockKind {
 }
 
 /**
- * Extract fenced-block lines with their 1-indexed document line AND the kind of block they came
- * from, so each half can scan the blocks it should.
+ * How a block was LABELLED by the prose immediately above it — an axis orthogonal to `kind`.
+ * `null` means the nearest prose labelled it as nothing in particular.
  */
-function fencedBlockLines(doc: string): Array<{ line: number; text: string; kind: BlockKind }> {
+export type BlockLabel = 'expected-output' | 'verification' | null;
+
+export interface FencedBlockLine {
+  /** 1-indexed line within the scanned document. */
+  line: number;
+  text: string;
+  kind: BlockKind;
+  /**
+   * Does this block sit under a ROLLBACK/RESTORE heading? Computed from the heading ANCESTRY
+   * ALONE — deliberately NOT from the nearest prose and NOT derived from `kind`.
+   *
+   * WHY IT IS A SEPARATE AXIS (measured 2026-09-11, the reason net #3 exists): `kind` answers
+   * "should the banned-token scan read this block?", where `rollback` and `harvested-state` are
+   * both simply exempt, so their precedence is arbitrary. `restoreIntent` answers "is this block
+   * content the package promises to RESTORE?", where that precedence decides the answer. On the
+   * live R19-P4 package the rollback preamble mentions "harvested", so `kind` splits one logical
+   * rollback section across two kinds; the ancestry does not. A heading governs every block
+   * beneath it until the next heading of the same or lower level, which is exactly the scope
+   * "is this the rollback section" needs — and the scope a prose window cannot express.
+   */
+  restoreIntent: boolean;
+  label: BlockLabel;
+}
+
+/**
+ * Extract fenced-block lines with their 1-indexed document line, the kind of block they came
+ * from, and the orthogonal restore-intent/label axes, so each consumer can scope as it should.
+ */
+export function fencedBlockLines(doc: string): FencedBlockLine[] {
   const lines = doc.split('\n');
-  const out: Array<{ line: number; text: string; kind: BlockKind }> = [];
+  const out: FencedBlockLine[] = [];
   let i = 0;
   while (i < lines.length) {
     if (!/^\s*```/.test(lines[i])) {
@@ -259,6 +328,19 @@ function fencedBlockLines(doc: string): Array<{ line: number; text: string; kind
       if (/^\s*```/.test(lines[k])) break;
       if (lines[k].trim()) ctx.push(lines[k]);
     }
+    // The NEAREST prose line alone — not the 3-line window, not the ancestry. `label` answers "what
+    // does the line directly above call this block?", and every other scope gets that wrong:
+    //   • the ancestry would mark every block in a rollback section as expected-output the moment
+    //     one of them was;
+    //   • the 3-line window pulls in ordinary paragraphs. Measured on the live FW-A3.3 R3 package,
+    //     the rollback's introductory sentence contains the word "confirmed", which labelled a real
+    //     inverse-rollback block as a verification command.
+    // A label is also SHORT. The same FW paragraph ends in a colon and would pass any punctuation
+    // test, so the discriminator is length: a genuine block label ("**Expected output (ceos1):**",
+    // "- **Post-rollback verification:**", "**Command:**") is well under this cap; a sentence of
+    // prose that happens to precede a block is not.
+    const nearestProse = ctx.length > 0 ? ctx[0].trim() : '';
+    const labelProse = nearestProse.length <= MAX_LABEL_CHARS ? nearestProse : '';
     // …PLUS the section heading this block sits under, however far back it is (2026-08-27).
     // The 3-line window is easily SHADOWED: IGP-T1 R15 P4 put a per-device sub-label ("**ceos2:**")
     // immediately above a rollback block, which consumed the whole window and hid the "## Rollback"
@@ -283,11 +365,12 @@ function fencedBlockLines(doc: string): Array<{ line: number; text: string; kind
     // its own blocks' h2 ancestor, so a previous "## Rollback Plan" can never reach them. Only
     // genuine ancestors are collected, never siblings.
     let level = 7;
+    const headings: string[] = [];
     for (let k = i - 1; k >= 0 && level > 1; k--) {
       const m = /^\s{0,3}(#{1,6})\s/.exec(lines[k]);
       if (!m) continue;
       const thisLevel = m[1].length;
-      if (thisLevel < level) { ctx.push(lines[k]); level = thisLevel; }
+      if (thisLevel < level) { ctx.push(lines[k]); headings.push(lines[k]); level = thisLevel; }
     }
     const body: string[] = [];
     const startLine = i + 1;
@@ -296,8 +379,19 @@ function fencedBlockLines(doc: string): Array<{ line: number; text: string; kind
       body.push(lines[j]);
       j++;
     }
+    // UNCHANGED INPUT: classifyBlock still receives the combined near-prose + ancestry string, in
+    // the same order it always did. The two axes below are ADDITIVE — no existing consumer's
+    // classification moves because of them (pinned: test:dialect-lint stays at its documented count).
     const kind = classifyBlock(ctx.join(' '), body);
-    for (let b = 0; b < body.length; b++) out.push({ line: startLine + b + 1, text: body[b], kind });
+    const restoreIntent = ROLLBACK_PROSE.test(headings.join(' '));
+    const label: BlockLabel = EXPECTED_OUTPUT_PROSE.test(labelProse)
+      ? 'expected-output'
+      : VERIFICATION_PROSE.test(labelProse)
+        ? 'verification'
+        : null;
+    for (let b = 0; b < body.length; b++) {
+      out.push({ line: startLine + b + 1, text: body[b], kind, restoreIntent, label });
+    }
     i = j + 1;
   }
   return out;

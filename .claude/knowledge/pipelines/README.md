@@ -92,7 +92,7 @@ existing "setup-and-exit, never calls `agent.execute`" rule.
 
 The operator guide — the three modes, quick-start (PIPELINE task), template types, context chaining,
 confidence + the completion loop, dependencies, troubleshooting, and the connected-service **domain
-pipelines** (network / k8s / Terraform) — is **[`PIPELINE-HARNESS-USER-GUIDE.md`](./PIPELINE-HARNESS-USER-GUIDE.md)**.
+pipelines** (network / k8s / Terraform / observability) — is **[`PIPELINE-HARNESS-USER-GUIDE.md`](./PIPELINE-HARNESS-USER-GUIDE.md)**.
 
 ## How to design a new use case
 
@@ -103,7 +103,7 @@ validate → promote. It names the source-of-truth files and the specialist gate
 
 **Which domains fit?** — the companion
 [`PIPELINE-DOMAIN-FIT-CATALOG.md`](./PIPELINE-DOMAIN-FIT-CATALOG.md) maps the pattern across
-domains (network provisioning, Kubernetes/GitOps, and Terraform all shipped; database a candidate),
+domains (network provisioning, Kubernetes/GitOps, Terraform, and observability config all shipped; database a candidate),
 with what transfers vs what's domain-specific, and a worked Phase-1 fit-triage per candidate.
 
 ## How to EVOLVE the platform after a live run finds something
@@ -123,6 +123,7 @@ decides whether a signal earns gate authority.
 | Artifact synthesis (source → reviewed publication) | 🟢 Shipped — the original reference (pure-cognition shape) | `scripts/seed-protocol-prompts.ts` (`artifact-synthesis-protocol`) + `scripts/seed-artifact-synthesis-templates.ts` |
 | Kubernetes / GitOps (cluster state → approved GitOps change) | 🟢 **Built + validated** 2026-06-28 — protocol + templates seeded; end-to-end on a live kind cluster; read-only floor + R9/R10 validated | [`kubernetes-gitops/`](./kubernetes-gitops/kubernetes-gitops-pipeline.md) |
 | Terraform / Cloud IaC (state → approved HCL change PR) | 🟢 **Built + seeded + rig-validated** 2026-06-29 — 4-specialist review (~92); LocalStack rig (R9/R10 demonstrated, K1 moat); all 4 roles reused | [`terraform-iac/`](./terraform-iac/terraform-iac-pipeline.md) |
+| Observability config (Prometheus / Grafana / OpenTelemetry — running config + as-deployed files → approved change package) | 🟢 **Shipped + Tier-1 COMPLETE** 2026-09-11 — protocol 1.0.3, all 4 roles reused (zero new keys; fit-triage→prod in ~36 h); 4 of 4 change classes approved AND applied on the promstack rig (scrape 86 · dashboard 90 · rules 85 · collector 90); first live acceptance of the `rollbackContainment` fact (R3b-3) | [`observability-demo-use-case.md`](./observability-demo-use-case.md) · rig + run guide `observability/phase4-promstack-rig/` (private) |
 
 > **Layout note (2026-08-23)**: `firewall-policy-use-case.md` + `firewall-examples/` are a worked
 > USE-CASE (composed from the network-provisioning + terraform-iac domains — deliberately NOT a

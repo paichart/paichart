@@ -130,7 +130,7 @@ The template lifecycle is:
    (`pAIchartUniversalTemplate.ts`) + `model-tiers.ts`. Edit there.
 2. **Delivery**: deploy, then **re-run the owning seed script(s)** for the changed role(s) —
    `grep -rln "defaultRole: '<role>'" scripts/seed-*.ts` (a role can have SEVERAL owners; the four
-   infra roles each have three). They are idempotent (findFirst → update/create) and rebuild the
+   infra roles each have four). They are idempotent (findFirst → update/create) and rebuild the
    WHOLE row: `promptTemplate`, `category`, `templateType`, `capabilities`, `constraints`, `tags`,
    `defaultRole`, `modelParameters`. Re-running is the mechanism, not a hazard.
 3. **The GUI (Agent Builder) is for experimentation, not authority.** A seed re-run DOES overwrite
@@ -202,11 +202,11 @@ The unexposed fields are set at provisioning time by the seed script and can onl
 
 **TemplateType enum** (9 values): ARCHITECT, BUILDER, ANALYST, REVIEWER, OPERATOR, DOCUMENTER, ORCHESTRATOR, GENERALIST, ACQUIRER (added for the synthesis/harvest source-acquirer role). Category = domain, Type = functional approach.
 
-**Seed scripts**: Main (`seed-agent-templates.ts`, 15 templates) + `seed-artifact-synthesis-templates.ts` (3) + `seed-harness-template.ts` (1) + `seed-mcp-service-integration-template.ts` (1) + `seed-mcp-workflow-orchestration-template.ts` (1) + the **infra-provisioning trio** `seed-network-provisioning-templates.ts` / `seed-kubernetes-gitops-templates.ts` / `seed-terraform-iac-templates.ts` (4 templates each = 12) = **33 total** (Jun 2026; protocols are seeded separately via `seed-protocol-prompts.ts`)
+**Seed scripts**: Main (`seed-agent-templates.ts`, 15 templates) + `seed-artifact-synthesis-templates.ts` (3) + `seed-harness-template.ts` (1) + `seed-mcp-service-integration-template.ts` (1) + `seed-mcp-workflow-orchestration-template.ts` (1) + the **infra-provisioning quartet** `seed-network-provisioning-templates.ts` / `seed-kubernetes-gitops-templates.ts` / `seed-terraform-iac-templates.ts` / `seed-observability-templates.ts` (4 templates each = 16) = **37 total** (Sep 2026; protocols are seeded separately via `seed-protocol-prompts.ts`)
 
 ### Role Guidance Coverage (GS2 — Complete ✅)
 
-`ROLE_GUIDANCE_LIBRARY` in `pAIchartUniversalTemplate.ts` has entries for all active roles. All upgraded to 9-10 bullets with tool-name references + common-mistake callouts in task #83. Swim-lane statements added for overlapping clusters (ARCHITECT pair, ANALYST trio). **Extended Jun 2026 with the five infra-provisioning roles** — including the domain-neutral chain reused unedited across network/k8s/terraform (see "Infrastructure-Provisioning Roles" below).
+`ROLE_GUIDANCE_LIBRARY` in `pAIchartUniversalTemplate.ts` has entries for all active roles. All upgraded to 9-10 bullets with tool-name references + common-mistake callouts in task #83. Swim-lane statements added for overlapping clusters (ARCHITECT pair, ANALYST trio). **Extended Jun 2026 with the five infra-provisioning roles** — including the domain-neutral chain reused unedited across network/k8s/terraform/observability (see "Infrastructure-Provisioning Roles" below).
 
 **Note**: The library is provisioning-only. At runtime, role guidance lives baked in `agent_templates.promptTemplate`. The library is not consulted for named templates — only for the Universal Template fallback path (planned to be guarded against; see "Template Ownership Model" above).
 
@@ -214,11 +214,11 @@ The unexposed fields are set at provisioning time by the seed script and can onl
 
 The connected-service pipelines added five roles to `ROLE_GUIDANCE_LIBRARY` — and they're the architectural high-water mark of the role library:
 
-- **All domain-NEUTRAL now (the reuse surface)**: `infra_state_harvester` (Phase-0, §6-PRODUCING harvester; self-provisions a read-only service; drawn from `artifact_harvester` + `synthesis_source_acquirer`), `infra_change_architect` (was generalized from the original network design role — §6 contract kept, VLAN/SVI dropped), `config_change_author` + `change_reviewer` (neutralized in place). **Shared by network/k8s/terraform** — as of 2026-07-01 network repoints onto these too, so there is no network-specific role left (`network_design_architect`/`network_state_harvester` retired).
+- **All domain-NEUTRAL now (the reuse surface)**: `infra_state_harvester` (Phase-0, §6-PRODUCING harvester; self-provisions a read-only service; drawn from `artifact_harvester` + `synthesis_source_acquirer`), `infra_change_architect` (was generalized from the original network design role — §6 contract kept, VLAN/SVI dropped), `config_change_author` + `change_reviewer` (neutralized in place). **Shared by network/k8s/terraform/observability** (fourth domain 2026-09-10) — as of 2026-07-01 network repoints onto these too, so there is no network-specific role left (`network_design_architect`/`network_state_harvester` retired).
 
 **Proof the neutralization works — Terraform reused ALL FOUR neutral roles UNEDITED** (validated end-to-end 2026-06-29): its build added only a protocol + templates, **zero new roles**. That's the payoff of keeping role guidance domain-neutral — a new infra domain is mostly *configuration* (a protocol + templates), not *construction* (new roles). The domain syntax rides in the injected protocol + the harvested §6 state (the exemplar), never in the role.
 
-**`change_reviewer` carries the CANONICAL terminal-verdict grammar (2026-07-14 verdict-misread fix).** Its entry defines the mandatory terminal `## VERDICT:` block (verdict + `Blocking issues:` + confidence, nothing after it) plus the delete-withdrawn-concerns and summary-states-final-verdict rules — the ONE grammar definition; protocols only reference it (GS8) and `lib/agents/harness/parse-verdict.ts` transcribes it (token-locked; `test-parse-verdict.ts` lifts its fixtures from this entry, so an edit that moves/renames the marker fails CI). **Editing this entry ⇒ re-seed all three reviewer templates AND re-run `test:parse-verdict`.** A NEW reviewer role key additionally needs `REVIEWER_ROLES` extended (ADD-A-PIPELINE-HARNESS-AGENT.md §4) or the structured `reviewerVerdict` fact silently stops being emitted for that domain.
+**`change_reviewer` carries the CANONICAL terminal-verdict grammar (2026-07-14 verdict-misread fix).** Its entry defines the mandatory terminal `## VERDICT:` block (verdict + `Blocking issues:` + confidence, nothing after it) plus the delete-withdrawn-concerns and summary-states-final-verdict rules — the ONE grammar definition; protocols only reference it (GS8) and `lib/agents/harness/parse-verdict.ts` transcribes it (token-locked; `test-parse-verdict.ts` lifts its fixtures from this entry, so an edit that moves/renames the marker fails CI). **Editing this entry ⇒ re-seed all FOUR reviewer templates (network/k8s/terraform/observability owning seeds) AND re-run `test:parse-verdict`.** A NEW reviewer role key additionally needs `REVIEWER_ROLES` extended (ADD-A-PIPELINE-HARNESS-AGENT.md §4) or the structured `reviewerVerdict` fact silently stops being emitted for that domain.
 
 **Backlog — a residual domain-ism to scrub when these roles are next touched**: `config_change_author` still carries a "maintenance-window note" — a network-ism that reads off for IaC (a governed `terraform apply`, not a maintenance window). Flagged by the prompt-construction reviewer during the Terraform review; the protocol papers over it. A ~2-line neutralization, non-urgent.
 
@@ -567,7 +567,7 @@ measuring the gap, which happened twice on 2026-08-04 alone.
 
 **Delivering a fix**: run the **OWNING seed script(s)** —
 `grep -rln "defaultRole: '<role>'" scripts/seed-*.ts`. A role can have SEVERAL owners (the four infra
-roles each have three: network-provisioning, terraform-iac, kubernetes-gitops); run every one the grep
+roles each have four: network-provisioning, terraform-iac, kubernetes-gitops, observability); run every one the grep
 returns, or the rows you missed stay stale while the report goes quiet about the role you just
 "fixed". **Never run the generic `seed-agent-templates.ts` to fix a domain role** — it owns the
 generic family and touches rows you did not intend. The domain scripts are already scoped. Note the precedent's warning — the lesson outlives the script,

@@ -38,6 +38,7 @@ const INTENTIONALLY_UNBOUNDED: Record<string, string> = {
   // --- Graph traversal (needs full subgraph) ---
   'app/api/pov/check-circular-dependency/route.ts': 'Dependency graph — needs full graph for cycle detection',
   'lib/utils/graph.ts': 'Topological sort — capping allTasks would corrupt the adjacency list, not merely truncate it (sibling allDeps query IS take-bounded at 5000)',
+  'lib/services/harnessModeResolver.ts': 'Harness mode resolution — counts ALL stage children to decide terminal-ness (total vs terminal); a cap would silently resolve SYNTHESIZE on a partially-counted stage, not merely truncate. Stage size is bounded upstream by the harness decomposition (single digits), so the read is small by construction (2026-09-11)',
 
   // --- Complete-set-or-wrong-answer (2026-07-28 audit) ---
   // These are NOT "we forgot a take". Each is scoped to a single parent entity AND

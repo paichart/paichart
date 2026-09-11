@@ -58,6 +58,25 @@ import {
  */
 export type ContainmentPrisma = Pick<Prisma.TransactionClient, 'task' | '$queryRaw'>;
 
+/**
+ * Bound on the stage-children scan. PRE-EXISTING gap, found 2026-09-11: `validate:pagination` runs
+ * as a 90% CI DEPLOY GATE at the margin (90.2%), and this bare read plus two new ones in
+ * rollback-containment took deploy 34550802714 to 89.6% — so an unbounded query in this domain does
+ * not merely miss a target, it blocks a deploy that has nothing to do with it.
+ *
+ * SAFE BY ORDERING, not by luck: a leg stage holds a handful of specialists, and the harvest and
+ * author children are the EARLIEST-created (protocol phase order — the `orderBy` below), so the cap
+ * cannot drop the two children this function actually resolves. The `for (const c of children)`
+ * fallback below is bounded by the same cap, which is the intended reading: a derived block sitting
+ * past the 50th child of one stage is not a shape we have, and would be a stage-decomposition
+ * problem before it was a parsing one.
+ *
+ * Mirrors `CHILD_SCAN_CAP` (contract-propagation) and `STAGE_CHILD_SCAN_CAP` (rollback-containment).
+ * FOUR enrichments now carry the same constant for the same query — a candidate for the shared net
+ * registry to own (stage 2b), NOT a reason to add a fourth import edge between enrichments today.
+ */
+const STAGE_CHILD_SCAN_CAP = 50;
+
 export interface ChainedFromEntry {
   taskId?: unknown;
   source?: unknown;
@@ -104,6 +123,7 @@ export async function computeDerivationContainmentFact(
       where: { stageId },
       select: { id: true, title: true, agentRole: true },
       orderBy: { createdAt: 'asc' },   // protocol phase order — Design precedes Review
+      take: STAGE_CHILD_SCAN_CAP,
     });
     const harvestChild = children.find(c =>
       (c.agentRole ?? '').toLowerCase().includes('harvest') || c.title.toLowerCase().startsWith('harvest'));

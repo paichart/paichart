@@ -62,6 +62,32 @@ export function renderPipelineContextSection(inputContext: unknown): string[] {
         const mpLine = renderMarkerPresence((prev as { markerPresence?: Record<string, unknown> | null }).markerPresence);
         if (mpLine) parts.push(`- **Machine-parsed blocks (platform fact)**: ${mpLine}`);
       }
+      // Net #3 (2026-09-11): the predecessor's ROLLBACK CONTAINMENT stamp, rendered where the leg
+      // Reviewer actually reads. Same reasoning as the markerPresence line above and the same
+      // structural blindness: the Reviewer reads the package and never the raw harvest, so a
+      // verbatim-quotation claim is uncheckable from its seat — three live rounds blocked a correct
+      // rollback on exactly that. The fact is stamped one leaf earlier (the Author's persist)
+      // precisely so it can arrive here, before the review, rather than at the leg's SYNTHESIZE
+      // after it.
+      //
+      // The renderer is a PURE FUNCTION OF THE FACT, and re-deriving a lane here would be a third
+      // lane predicate — the two-extractor drift class this domain keeps paying for. THERE ARE TWO
+      // LANE DECISIONS, at different layers, and a debugger who knows only one will misread silence:
+      //   - which legs are ADJUDICATED AT ALL is decided in the enrichment (desired-state lanes get a
+      //     stamped `lane-not-supported` fact meaning "no opinion");
+      //   - which legs' facts REACH §6 is decided in the chainer, which passes null outside
+      //     observability-config while the context-entry residue is unsettled.
+      // So a network-provisioning leg produces a perfectly real adjudicated fact (R19 P4 is 51/51)
+      // and still renders nothing here — because the chainer withheld it, NOT because anything
+      // stamped `lane-not-supported`. Looking for that stamp to explain the silence will find an
+      // ordinary green fact and suggest this render is broken. Both decisions are upstream, which is
+      // exactly why this stays a pure function of whatever arrives.
+      {
+        const rcLines = renderRollbackContainmentForPrompt(
+          (prev as { rollbackContainment?: Record<string, unknown> | null }).rollbackContainment
+        );
+        if (rcLines) parts.push(...rcLines);
+      }
       // 1c (2026-08-23) — ANNOTATE THE SEAM. R9 neutralization happens at the CHAINING
       // BOUNDARY: the marker is injected into THIS reader's view, while the predecessor's
       // at-rest artifact is unchanged. A reader that cannot know this reasonably concludes
@@ -111,4 +137,5 @@ export function renderPipelineContextSection(inputContext: unknown): string[] {
 
   return parts;
 }import { renderMarkerPresence } from './marker-presence';
+import { renderRollbackContainmentForPrompt } from './render-rollback-containment';
 

@@ -40,8 +40,10 @@ import { buildExecutionResultJson, deriveChainedContextSignal } from './executio
 import { persistTerminalSuccess } from './execution-terminal-persist';
 import { computeSelfSupersession } from './execution-selection';
 import { computeDerivationContainmentFact } from '@/lib/agents/harness/derivation-containment-enrichment';
-import { isProgramHarnessTask } from '@/lib/agents/harness/program-protocol';
+import { isProgramHarnessTask, findProgramParentForStage } from '@/lib/agents/harness/program-protocol';
 import { computeMarkerPresence, HARNESS_LEAF_ROLE_RE } from '@/lib/agents/harness/marker-presence';
+import { AUTHOR_LEAF_ROLE_RE } from '@/lib/agents/harness/rollback-containment';
+import { computeRollbackContainmentFact, hoistRollbackContainment } from '@/lib/agents/harness/rollback-containment-enrichment';
 import { computeDialectLintFact } from '@/lib/agents/harness/dialect-lint-enrichment';
 import { computeContractPropagationFact } from '@/lib/agents/harness/contract-propagation-enrichment';
 import { assessExecutionQuality } from '@/lib/agents/harness/execution-quality';
@@ -350,6 +352,35 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
     (resultJson as Record<string, unknown>).markerPresence = computeMarkerPresence(finalResponse);
   }
 
+  // ROLLBACK CONTAINMENT (2026-09-11) — mechanical net #3, and the FIRST stamped on a LEAF rather
+  // than at the leg's SYNTHESIZE. That placement is the design, not convenience: a fact stamped at
+  // SYNTHESIZE lands AFTER this leg's Reviewer has run, which is the very blindness the net exists
+  // to end (three live false refusals: R19 P4, R3a-3, R3b-2 — each a correct rollback blocked
+  // because provenance is structurally uncheckable from the package alone). Stamped here, the
+  // chainer carries it into the Reviewer's §6, exactly as H-4 markerPresence does.
+  //
+  // Author-only: it needs the change package AND the harvest sibling, and only the Author has both
+  // in scope. PRE-tx, non-throwing, catch arm stamps a named fact WITH a disposition (G3).
+  if (task.type !== 'PIPELINE' && AUTHOR_LEAF_ROLE_RE.test(agentRole ?? '')) {
+    try {
+      (resultJson as Record<string, unknown>).rollbackContainment =
+        await computeRollbackContainmentFact(prisma, {
+          taskId: task.id,
+          deliverable: finalResponse,
+        });
+    } catch (rcErr) {
+      (resultJson as Record<string, unknown>).rollbackContainment = {
+        checked: false, reason: 'enrichment-error',
+        rollbackDisposition: {
+          disposition: 'blocking', reason: 'hard-gap',
+          inputs: { reason: 'enrichment-error', missingCount: 0, restoreLinesTotal: 0 },
+        },
+      };
+      logger.warn({ executionId, err: rcErr instanceof Error ? rcErr.message : String(rcErr) },
+        'rollback-containment enrichment failed — fact recorded as checked:false');
+    }
+  }
+
   // H-3 (2026-09-09): the three mechanical nets below are LEG nets. A PROGRAM parent is also
   // `type === 'PIPELINE'` in SYNTHESIZE, and its child stage has no harvest/author child by
   // construction — so the tier is resolved ONCE here (stamp-first predicate, the same one the
@@ -404,6 +435,48 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
     }
   }
 
+  // CONTRACT APPLICABILITY (2026-09-11) — computed ONCE and nested on BOTH contract-dependent facts.
+  //
+  // WHY IT EXISTS. A standalone pipeline has NO Program Interface Contract by design, so both facts
+  // stamp a bare absence (`no-contract` / `no-contract-on-leg`) that cannot be told apart from "a
+  // contract was expected and is missing" without re-deriving the tier. Measured: reviewers graded
+  // that absence as a gap on 9 of 37 archived standalone legs — and on 4 of 4 on 2026-09-11, i.e.
+  // the class is becoming universal. A false gap teaches a reader to skim real ones.
+  //
+  // WHY NEITHER FACT OWNS IT. Both already stamp an absence, so putting the predicate inside one
+  // would force the other to re-derive it — the two-extractor drift class. Computed here, nested
+  // there (E3b: it rides INSIDE each whitelisted fact, so no RESULT_JSON_SUMMARY_KEYS change and
+  // the strict pick carries it verbatim).
+  //
+  // ⚠️ A PROGRAM ROOT NEVER REACHES THIS. The `programTier` ternary below short-circuits a program
+  // parent to `reason: 'program-tier'` before the enrichment runs, so `expected: false` can only
+  // ever mean STANDALONE, never "root". Measured 2026-09-11: program roots say the reviewer
+  // sentence 0 times in 39 — they are not part of this class. (Source-true but UNOBSERVED in prod:
+  // every archived program root predates H-3. Pinned by test, not asserted.)
+  //
+  // F13 GUARD: `expected: true` + an absent contract is structurally UNREACHABLE — F13
+  // (INTERFACE_CONTRACT_MISSING) hard-fails a program pipeline child at prepare time. So that
+  // combination is NOT "the real gap case"; it is evidence the belt has a hole, and it must read
+  // loudly rather than benign. It is stamped, never suppressed.
+  let contractApplicability: Record<string, unknown> | null = null;
+  if (task.type === 'PIPELINE' && harnessContext?.mode === 'SYNTHESIZE' && !programTier) {
+    try {
+      const stageId = (task.metadata as Record<string, unknown> | null)?.pipelineStageId;
+      if (typeof stageId === 'string' && stageId) {
+        // THE F12 LOOKUP, shared — not a second copy of that query (its AND-lift is load-bearing).
+        const programParentId = await findProgramParentForStage(prisma, stageId);
+        contractApplicability = programParentId
+          ? { expected: true, basis: 'program-parent', programParentId }
+          : { expected: false, basis: 'no-program-parent' };
+      }
+    } catch (caErr) {
+      // Non-throwing like every net beside it. ABSENT applicability is honest here: it means the
+      // tier could not be resolved, which must NOT read as "no contract expected".
+      logger.warn({ executionId, err: caErr instanceof Error ? caErr.message : String(caErr) },
+        'contract-applicability lookup failed — facts stamped without it');
+    }
+  }
+
   // DIALECT LINT (Phase 2, 2026-08-25) — the SECOND mechanical net, wired to the same site and the
   // same contract as derivation-containment above: PRE-tx, non-throwing, fact-not-verdict.
   //
@@ -423,6 +496,7 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
           stageId: (task.metadata as Record<string, unknown> | null)?.pipelineStageId,
           interfaceContract: (task.inputContext as { interfaceContract?: unknown } | null)?.interfaceContract,
         });
+      if (contractApplicability) (lint as Record<string, unknown>).contractApplicability = contractApplicability;
       (resultJson as Record<string, unknown>).dialectLint = lint;
       const violations = (lint as { violations?: unknown[] }).violations;
       if (Array.isArray(violations) && violations.length > 0) {
@@ -470,6 +544,7 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
           stageId: (task.metadata as Record<string, unknown> | null)?.pipelineStageId,
           interfaceContract: (task.inputContext as { interfaceContract?: unknown } | null)?.interfaceContract,
         });
+      if (contractApplicability) (propagation as Record<string, unknown>).contractApplicability = contractApplicability;
       (resultJson as Record<string, unknown>).contractPropagation = propagation;
       const kids = (propagation.children ?? []) as Array<Record<string, unknown>>;
       const starved = kids.filter((k) => k.executed && !k.hasInterfaceContract);
@@ -486,6 +561,38 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
       };
       logger.warn({ executionId, err: cpErr instanceof Error ? cpErr.message : String(cpErr) },
         'contract-propagation enrichment failed — fact recorded as checked:false');
+    }
+  }
+
+  // ROLLBACK CONTAINMENT, leg view (2026-09-11) — HOIST the Author child's stamp, never recompute.
+  // Two consumers must agree on one set of numbers: the Reviewer (which read it via §6 one leaf
+  // earlier) and the program gate (which reads it off this leg's lean card). A recomputation could
+  // diverge from what the Reviewer was shown if anything about scoping changed between the two
+  // persists; a hoist is identical by construction. Same contract as the nets above: PRE-tx,
+  // non-throwing, catch arm stamps a named fact WITH a disposition.
+  if (task.type === 'PIPELINE' && harnessContext?.mode === 'SYNTHESIZE') {
+    try {
+      (resultJson as Record<string, unknown>).rollbackContainment = programTier
+        ? {
+            checked: false, reason: 'program-tier', tier: 'program', applicable: false,
+            rollbackDisposition: {
+              disposition: 'benign', reason: 'program-tier',
+              inputs: { reason: 'program-tier', missingCount: 0, restoreLinesTotal: 0 },
+            },
+          }
+        : await hoistRollbackContainment(prisma, {
+            stageId: (task.metadata as Record<string, unknown> | null)?.pipelineStageId,
+          });
+    } catch (rcErr) {
+      (resultJson as Record<string, unknown>).rollbackContainment = {
+        checked: false, reason: 'enrichment-error',
+        rollbackDisposition: {
+          disposition: 'blocking', reason: 'hard-gap',
+          inputs: { reason: 'enrichment-error', missingCount: 0, restoreLinesTotal: 0 },
+        },
+      };
+      logger.warn({ executionId, err: rcErr instanceof Error ? rcErr.message : String(rcErr) },
+        'rollback-containment hoist failed — fact recorded as checked:false');
     }
   }
 

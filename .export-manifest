@@ -14,6 +14,7 @@
 .claude/agents/dev-ops-specialist.md
 .claude/agents/discovery-scout.md
 .claude/agents/event-system-specialist.md
+.claude/agents/execution-facts-specialist.md
 .claude/agents/frontend-provocateur-specialist.md
 .claude/agents/integration-manager-specialist.md
 .claude/agents/mcp-artifacts-specialist.md
@@ -70,6 +71,7 @@
 .claude/knowledge/discoveries/discovery-progress-template.md
 .claude/knowledge/discoveries/endpoint-security-audit.md
 .claude/knowledge/discoveries/event-system-discovery.md
+.claude/knowledge/discoveries/execution-facts-discovery.md
 .claude/knowledge/discoveries/facade-extraction-discovery.md
 .claude/knowledge/discoveries/field-limit-alignment-discovery.md
 .claude/knowledge/discoveries/frontend-design-discovery.md
@@ -125,6 +127,7 @@
 .claude/knowledge/domain/db/multi-tenancy-roadmap-library.md
 .claude/knowledge/domain/db/p0-database-indices-production-migration-guide.md
 .claude/knowledge/domain/db/p0-database-indices-quick-ref.md
+.claude/knowledge/domain/execution-facts/execution-facts-library.md
 .claude/knowledge/domain/harness/ARCHITECTURE.md
 .claude/knowledge/domain/harness/CONTINUATION.md
 .claude/knowledge/domain/harness/HARNESS-MENTAL-MODEL.md
@@ -1127,6 +1130,9 @@ lib/agents/harness/program-protocol.ts
 lib/agents/harness/protocol-dependence-anchors.ts
 lib/agents/harness/redact-artifact-secrets.ts
 lib/agents/harness/render-pipeline-context.ts
+lib/agents/harness/render-rollback-containment.ts
+lib/agents/harness/rollback-containment-enrichment.ts
+lib/agents/harness/rollback-containment.ts
 lib/agents/harness/sanitize-chained-output.ts
 lib/agents/harness/verdict-mismatch-guard.ts
 lib/agents/model-tiers.ts
@@ -1629,7 +1635,6 @@ public/scripts/fix-team-members-ui.js
 public/sounds/notification.mp3
 public/vercel.svg
 scripts/README.md
-scripts/__pycache__/export-public.cpython-312.pyc
 scripts/apply-raw-sql-indexes.sh
 scripts/audit-discovery-greps.sh
 scripts/audit-initialization-patterns.sh
@@ -1659,6 +1664,17 @@ scripts/export-public.py
 scripts/export/public-allowlist.rules
 scripts/export/publish.sh
 scripts/fixtures/live-service-descriptions.json
+scripts/fixtures/rollback-containment/PROVENANCE.md
+scripts/fixtures/rollback-containment/fw-author.md
+scripts/fixtures/rollback-containment/fw-harvest.md
+scripts/fixtures/rollback-containment/k8s-author.md
+scripts/fixtures/rollback-containment/k8s-harvest.md
+scripts/fixtures/rollback-containment/r19p4-author.md
+scripts/fixtures/rollback-containment/r19p4-harvest.md
+scripts/fixtures/rollback-containment/r3a3-author.md
+scripts/fixtures/rollback-containment/r3a3-harvest.md
+scripts/fixtures/rollback-containment/r3b2-author.md
+scripts/fixtures/rollback-containment/r3b2-harvest.md
 scripts/flip-harness-protocol-mode.ts
 scripts/generate-jwt-keys.sh
 scripts/generate-test-tokens.js
@@ -1680,6 +1696,7 @@ scripts/render-public-protocols.ts
 scripts/replay-containment.ts
 scripts/replay-contract-propagation.ts
 scripts/replay-dialect-lint.ts
+scripts/replay-rollback-containment.ts
 scripts/report-template-freshness.ts
 scripts/run-baseline.sh
 scripts/seed-agent-templates.ts
@@ -1698,6 +1715,7 @@ scripts/seed-mcp-service-integration-template.ts
 scripts/seed-mcp-workflow-orchestration-template.ts
 scripts/seed-named-workflows.ts
 scripts/seed-network-provisioning-templates.ts
+scripts/seed-observability-templates.ts
 scripts/seed-operational-prompts.ts
 scripts/seed-program-templates.ts
 scripts/seed-protocol-prompts.ts
@@ -1841,6 +1859,7 @@ scripts/test-registry-schema-regression.ts
 scripts/test-report-md-decision.ts
 scripts/test-resource-authz-coverage.ts
 scripts/test-response-sanitizer.ts
+scripts/test-rollback-containment.ts
 scripts/test-routes-health.ts
 scripts/test-routes-mcp-transport.ts
 scripts/test-routes-oauth-discovery.ts

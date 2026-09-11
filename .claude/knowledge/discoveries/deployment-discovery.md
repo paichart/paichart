@@ -1505,3 +1505,18 @@ unmeasured**, and counting them as clean is the exact mistake the report exists 
 injection code (post-flip). Between them, agents receive no universal rules; a code rollback past
 `05117149` without a re-seed makes that permanent and silent. ⚠️ The CI gate deliberately does **not** roll
 back: rolling back is what CREATES the bad state. Do not "improve" it by adding one.
+
+## Post-deploy public-mirror check (added 2026-09-10)
+
+The deploy self-seeds protocols, but the PUBLIC mirror (`~/paichart/protocols/*.md`, rendered from the seed via
+`scripts/render-public-protocols.ts`) is a manual step and its only proof is out of CI. Run after ANY deploy whose
+commit touched `scripts/seed-protocol-prompts.ts` — yours or another session's:
+
+```bash
+git log --format=%h -3 -- scripts/seed-protocol-prompts.ts          # did the seed change since the last render?
+npm run test:protocol-public-parity                                   # expect every protocol ✅ (needs local DB seeded)
+git ls-files | grep -E '\.pyc$|__pycache__' | wc -l                   # expect 0 — build artefacts never tracked (3 found + purged 2026-09-10)
+```
+Red = re-render + commit in `~/paichart` (procedure: dev-ops-specialist → "Public protocol mirror"). A DIVERGED row
+whose seed body did not change means a description edit landed WITHOUT an R10 version bump — bump + `Prior:` first,
+then render. Two live misses on 2026-09-10: `observability-config-protocol` NOT PUBLISHED, `pov-program` DIVERGED.

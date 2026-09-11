@@ -85,6 +85,9 @@ export async function annotateQualityGateVerdictMismatch(
         stageId: stageId,
       },
       select: { id: true, type: true },
+      // Stage-children scan bound (pagination-safety-cap-pattern, children-per-stage row): a leg
+      // stage holds a handful of specialists; the reviewer is found by role among them.
+      take: 50,
     });
     if (siblings.length === 0) return;
 

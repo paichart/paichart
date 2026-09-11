@@ -1,6 +1,6 @@
 #!/usr/bin/env ts-node
 /**
- * Render the six seeded protocol bodies to the PUBLIC repo (~/paichart/protocols/), verbatim.
+ * Render the seven seeded protocol bodies to the PUBLIC repo (~/paichart/protocols/), verbatim.
  *
  * SOURCE OF TRUTH: the LOCAL DB rows (agent_prompt_library) — the exact text agents receive —
  * not the seed script's template literals (which cannot be safely imported: the seed auto-runs).
@@ -30,6 +30,7 @@ const PROTOCOLS = [
   'network-provisioning-protocol',
   'kubernetes-gitops-protocol',
   'terraform-iac-protocol',
+  'observability-config-protocol', // added 2026-09-10 with the row's 1.0.0 birth — a name absent here is silently excluded from the public parity set
   'pov-program-protocol',
 ];
 
@@ -100,7 +101,7 @@ async function main() {
       }
     }
     if (CHECK && diverged > 0) process.exit(1);
-    if (CHECK) console.log('✅ protocol public parity: all six byte-identical');
+    if (CHECK) console.log('✅ protocol public parity: all seven byte-identical');
   } finally {
     await prisma.$disconnect();
   }
