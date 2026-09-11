@@ -8,6 +8,7 @@ Worked artifacts produced by pAIchart's **Pipeline Harness** — the agentic lay
 | [network-provisioning-ptp-change-report.md](./network-provisioning-ptp-change-report.md) | Network Provisioning | A **second** network example — a **PTP boundary-clock timing** change — designed against the switches' **already-modified** running state (a prior change applied on the devices), with the harvested running-config included as an appendix |
 | [kubernetes-gitops-change-report.md](./kubernetes-gitops-change-report.md) | Kubernetes / GitOps | A **declarative GitOps** change package (HPA + resource limits) from live cluster state — including an honest **NEEDS-REVISION** review that gates on a real traceability gap |
 | [terraform-iac-change-report.md](./terraform-iac-change-report.md) | Terraform / Cloud IaC | An **approved-but-unapplied HCL change package (a PR)** from real Terraform state — S3 hardening (versioning + public-access-block) — with the **layered defense shown**: a secret-shaped tag **redacted** and a prompt-injection tag **refused** |
+| [network-cloud-policy-change-report.md](./network-cloud-policy-change-report.md) | **Program** (pov-program → network-provisioning → terraform-iac) | A **pipeline *of* pipelines**: one objective, three human gates, two domains — the cloud policy authorizes exactly the address the network leg *derived* off live switches, and the platform checks that arithmetic mechanically before releasing |
 | [artifact-synthesis-case-study.md](./artifact-synthesis-case-study.md) | Artifact Synthesis | A **customer delivery case study**, synthesized from *this engagement's own execution history* — the four change packages above narrated into one story, leading with the change that was **correctly blocked at review** |
 
 ---
@@ -82,9 +83,25 @@ See the report's **Guard Verification** addendum for the full result.
 
 ---
 
+## Network → Cloud — program change report (a pipeline *of* pipelines)
+
+**The objective** (one sentence, in natural language): *"Authorize a new telemetry-export path on the live 2-switch fabric, then restrict S3 archive writes to exactly that derived aggregate."*
+
+The four reports above are each **one pipeline**. [network-cloud-policy-change-report.md](./network-cloud-policy-change-report.md) is a **program** — a plan, **three human approval gates**, and **two domain pipelines run in sequence**, where the second leg's cloud policy consumes a value the first leg *derived* from live device state.
+
+**What makes it a different kind of example:** the trust question stops being "is this change package any good?" and becomes **"did the value survive the seam between two domains?"** A model that widened the derived `10.99.0.0/31` to a `/24` — or fell back to `0.0.0.0/0` — would produce a package that reads perfectly and quietly authorizes the internet to write to the bucket. So release is computed from **facts**: the network leg's containment check (`checked, 0 violations`), the cloud leg's consuming-leg discharge against it (`upstreamContainment: green`), both legs' gate outcomes, and complete chained-context coverage — conjoined into `programReleasable: true`. The reviewers are **one conjunct**, not the decision.
+
+**The gate that proves the shape:** the cloud approval gate was answered **thirty minutes after** the plan and network gates — because it could not be answered until the network leg had actually produced the aggregate. A human approved the *concrete derived value*, not an intent.
+
+**Where the evidence is:** the report leads with the deliverable and carries the **harvested pre-change state — raw device getters and the real Terraform state — in Addendum A**, so the address arithmetic in the package can be checked against the ground truth it came from rather than taken on trust.
+
+**Honest scope:** a containerized Arista cEOS lab and LocalStack stand in for production switches and a real cloud account. Nothing was applied — two rollback plans exist precisely because apply is a human decision, out of band.
+
+---
+
 ## Artifact Synthesis — delivery case study
 
-Unlike the four change reports above, this pipeline doesn't touch infrastructure at all — it turns **source material into a written deliverable**. Here the source is *this very engagement's own execution history*: the four completed pipeline runs. The result ([artifact-synthesis-case-study.md](./artifact-synthesis-case-study.md)) is a polished **customer delivery case study** narrating what pAIchart delivered across network, Kubernetes, and cloud IaC — via a harvest → author → review pipeline (Artifact Harvester → Editorial Writer → Publication Reviewer).
+Unlike the change reports above, this pipeline doesn't touch infrastructure at all — it turns **source material into a written deliverable**. Here the source is *this very engagement's own execution history*: the four completed pipeline runs. The result ([artifact-synthesis-case-study.md](./artifact-synthesis-case-study.md)) is a polished **customer delivery case study** narrating what pAIchart delivered across network, Kubernetes, and cloud IaC — via a harvest → author → review pipeline (Artifact Harvester → Editorial Writer → Publication Reviewer).
 
 **How confidence scores work — and why the case study leads with a *failure*.** A pipeline's score is not an opaque verdict; it's the **arithmetic mean of its independently-scored specialist children** (harvest, design, author, review), gated at a fixed **85/100** threshold — so any "approved" is traceable to the specific gates that substantiate it. The proof the gate is real: the Kubernetes HPA change scored **NEEDS-REVISION (72/100)** and the reviewer *refused to approve it*, because its resource values were **assumed** rather than **evidenced**. The case study opens its trust section with that blocked change, not the approvals — a reviewer that only ever says "yes" proves nothing.
 
