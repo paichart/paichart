@@ -8,11 +8,14 @@ device scope, your redaction. The descriptor is the handoff: the pipeline's harv
 **self-provisions** the service from it (register → read-only calls → teardown), so pAIchart never
 stores your device or cloud credentials, and the registration does not outlive the run.
 
-The four `*.json` files in this directory are conforming, production-exercised examples — network
+The five `*.json` files in this directory are conforming, production-exercised examples — network
 devices ([cEOS](./ceos-lab-readonly-descriptor.json)), Kubernetes
 ([kind](./k8s-readonly-descriptor.json)), Terraform
-([LocalStack](./terraform-readonly-descriptor.json)), and a docs service
-([context7](./context7-descriptor.json)).
+([LocalStack](./terraform-readonly-descriptor.json)), an observability stack
+([Prometheus / Grafana / OpenTelemetry](./observability-readonly-descriptor.json) — note its
+`get_otel_config` returns the collector's as-deployed *file* while `get_prometheus_config` returns
+Prometheus's *running* configuration: two different witnessed-artifact kinds behind one descriptor),
+and a docs service ([context7](./context7-descriptor.json)).
 
 Validate yours before a run:
 
@@ -88,7 +91,13 @@ Three rules, in decreasing order of what they guarantee:
 **Credentials.** Device passwords, kubeconfigs, cloud keys, tokens — none of it. Your service holds
 its own credentials; the descriptor only says where the service is and what it offers. This is the
 property that makes the whole lifecycle work: a descriptor is safe to host in a public repo (these
-four are), and pAIchart has nothing to store, rotate, or leak.
+five are), and pAIchart has nothing to store, rotate, or leak.
+
+**A public route.** The endpoint is wherever *your hub* can reach the service — it need not be on the
+internet. Four of the examples here sit behind public hostnames; the observability one is published
+with the loopback endpoint it actually ran with (`http://127.0.0.1:3114/mcp`, an SSH reverse-tunnel
+from the lab host to the hub, allowlisted on the hub side), because that is the honest record of the
+run and a common shape for a customer service that must never be internet-facing.
 
 ## Authoring checklist
 

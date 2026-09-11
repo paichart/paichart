@@ -1,0 +1,30 @@
+{
+  "name": "observability-readonly",
+  "description": "Read-only harvest of a live Prometheus + Grafana + otel-collector stack: running Prometheus config/targets/rules (witnessed renderings), instant PromQL reads, Grafana datasource/dashboard inventory (credentials deep-redacted), and the collector's as-deployed config file. Read-only by construction — no reload/apply/write/admin tool exists on this surface; Prometheus's lifecycle endpoint is never proxied. Phase-4 promstack validation rig.",
+  "endpoint": "http://127.0.0.1:3114/mcp",
+  "category": "monitoring",
+  "capabilities": {
+    "tools": [
+      { "name": "stack_health", "description": "Liveness of Prometheus/Grafana/otel-collector (read-only).",
+        "inputSchema": { "type": "object", "additionalProperties": false, "properties": {} } },
+      { "name": "get_prometheus_config", "description": "The RUNNING Prometheus configuration as the server reports it (/api/v1/status/config) plus its witnessed config-file path (/api/v1/status/flags --config.file).",
+        "inputSchema": { "type": "object", "additionalProperties": false, "properties": {} } },
+      { "name": "get_scrape_targets", "description": "Active scrape targets: job, instance, health, lastError (lean fields).",
+        "inputSchema": { "type": "object", "additionalProperties": false, "properties": {} } },
+      { "name": "get_rules", "description": "Loaded recording/alerting rule groups.",
+        "inputSchema": { "type": "object", "additionalProperties": false, "properties": {} } },
+      { "name": "query_metric", "description": "Instant PromQL query (read-only, <=512 chars, result capped at 50 series).",
+        "inputSchema": { "type": "object", "required": ["query"], "additionalProperties": false,
+          "properties": { "query": { "type": "string", "maxLength": 512 } } } },
+      { "name": "get_grafana_datasources", "description": "Provisioned Grafana datasources, credentials deep-redacted by key.",
+        "inputSchema": { "type": "object", "additionalProperties": false, "properties": {} } },
+      { "name": "list_grafana_dashboards", "description": "Dashboard inventory (uid, title, folder).",
+        "inputSchema": { "type": "object", "additionalProperties": false, "properties": {} } },
+      { "name": "get_grafana_dashboard", "description": "One dashboard's full JSON model by uid (as-provisioned artifact).",
+        "inputSchema": { "type": "object", "required": ["uid"], "additionalProperties": false,
+          "properties": { "uid": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" } } } },
+      { "name": "get_otel_config", "description": "The otel-collector config AS DEPLOYED (read-only file mount; the collector has no config API).",
+        "inputSchema": { "type": "object", "additionalProperties": false, "properties": {} } }
+    ]
+  }
+}

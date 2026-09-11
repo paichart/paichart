@@ -10,8 +10,44 @@ Worked artifacts produced by pAIchart's **Pipeline Harness** — the agentic lay
 | [terraform-iac-change-report.md](./terraform-iac-change-report.md) | Terraform / Cloud IaC | An **approved-but-unapplied HCL change package (a PR)** from real Terraform state — S3 hardening (versioning + public-access-block) — with the **layered defense shown**: a secret-shaped tag **redacted** and a prompt-injection tag **refused** |
 | [network-cloud-policy-change-report.md](./network-cloud-policy-change-report.md) | **Program** (pov-program → network-provisioning → terraform-iac) | A **pipeline *of* pipelines**: one objective, three human gates, two domains — the cloud policy authorizes exactly the address the network leg *derived* off live switches, and the platform checks that arithmetic mechanically before releasing |
 | [artifact-synthesis-case-study.md](./artifact-synthesis-case-study.md) | Artifact Synthesis | A **customer delivery case study**, synthesized from *this engagement's own execution history* — the four change packages above narrated into one story, leading with the change that was **correctly blocked at review** |
+| [observability-config-change-report.md](./observability-config-change-report.md) | **Observability Config** (Prometheus / Grafana / OpenTelemetry) | A `memory_limiter` for a live OTel collector — **the first package in this directory that was also applied**, with what the running system displayed afterwards in an addendum; and the first run where the reviewer read a **platform-stamped rollback-provenance fact** (26/26 lines verbatim in the harvest) instead of guessing |
+| [kubernetes-gitops-pdb-change-report.md](./kubernetes-gitops-pdb-change-report.md) | Kubernetes / GitOps | A **second** Kubernetes example — a PodDisruptionBudget — as a **three-run sequence**: the first package's own gap list became the objective, the reviewer **refused** the first attempt on availability arithmetic (verbatim in an addendum), and the revision was approved because it chose a *different, scale-invariant* field |
 
 ---
+
+## Observability Config — change report
+
+**The objective** (one sentence, in natural language): *"Add the standard memory_limiter processor, first in the collector's metrics pipeline, sized for a 256 MB container — and document the sizing arithmetic."*
+
+**What the pipeline did, autonomously:**
+
+1. **Self-provisioned** a read-only observability service from a descriptor (register → three narrow reads → torn down at synthesis) — pAIchart stores no credentials for the stack.
+2. **Harvested** the collector's **as-deployed config file** (the collector has no config API — the file mount *is* the witnessed artifact), Prometheus's **running** configuration and its witnessed config-file path, and scrape-target health. Read-only; the service never proxies Prometheus's reload endpoint.
+3. **Designed** the processor and its sizing, **carrying the witnessed config forward verbatim** to the Author.
+4. **Authored** the deliverable: the full desired-state file, the sizing arithmetic restated, a deterministic pre-apply validation and a *presence-shaped* post-apply check (no literal exists for a processor that never existed before), the rollback (the harvested file, quoted), and a restart blast-radius note.
+5. **Reviewed** it through an independent QA agent that re-derived the sizing set itself and emitted **APPROVED 90/100**.
+
+**The differentiator — a reviewer that reads a fact instead of guessing.** A reviewer sees the package, never the raw harvest, so "is this rollback a verbatim quote?" is structurally unverifiable from its seat — and three earlier runs across two domains had refused **correct** rollbacks on exactly that suspicion. Here the platform stamped the comparison mechanically when the Author's package was persisted (**26 of 26 restore lines found verbatim in this leg's own harvest**) and delivered it into the reviewer's context; the verdict cites it — *and keeps completeness as its own judgement*, which is the boundary that keeps such a fact from becoming a rubber stamp. Unmatched lines, when they occur, escalate; they never block.
+
+**And then it was applied.** Every other change package in this directory is approved-but-unapplied by design. This one was applied by a human operator using the package as the runbook — and the report's Addendum B records what the running collector actually displayed afterwards, including the one place the package's arithmetic and the system's telemetry pointed at different gauges.
+
+**Honest scope:** a containerized Prometheus + Grafana + OTel stack stands in for a customer's platform; the service authenticates with a lab credential rather than pAIchart's per-user identity contract. Prometheus's config API returns a **normalized** rendering, not file bytes — the package taxonomy says so, and rollbacks for Prometheus changes are the normalized form.
+
+---
+
+## Kubernetes / GitOps — PodDisruptionBudget (a second example, in three runs)
+
+**The objective** (one sentence, in natural language): *"Add a PodDisruptionBudget for the orders-api Deployment in the trading namespace."*
+
+[kubernetes-gitops-pdb-change-report.md](./kubernetes-gitops-pdb-change-report.md) is one approved package at the end of a **sequence**:
+
+1. **R1** (the HPA + limits objective, APPROVED 85) closed with a known-gaps list; one line read *"No PodDisruptionBudget exists for `orders-api`; flagged as a standing availability gap."* That sentence became the next objective.
+2. **R2** was **refused** — NEEDS-REVISION 88 — because the package set `minAvailable: 1` without the required comparison against `maxUnavailable: 1` or a percentage, or any account of the approved-but-unapplied HPA. The reviewer did the arithmetic the package didn't: at 5 replicas an absolute `minAvailable: 1` permits **four** simultaneous voluntary evictions. Its verdict is in the report's Addendum B, unedited.
+3. **R2b** re-ran with the rationale mandatory and the prescribed field **removed**. The Author built the four-form table at 2 and 5 replicas (with Kubernetes' ceiling/floor rounding), chose `maxUnavailable: 1` — the only scale-invariant form — and named the case that breaks it. The reviewer **recomputed every cell** and approved: *"a genuine, independently-verified three-way comparison — not a reworded restatement of the prior round."*
+
+**What it adds to the first Kubernetes example:** that one shows a reviewer refusing what it can't verify. This one shows a refusal that **changed the answer**, and a revision approved because it was *different*, not louder.
+
+**The same trust floor as before:** declarative only (a two-file kustomize overlay; zero `kubectl patch/scale`), offline validation as command + literal expected output, rollback by `git revert` with the reconciler-prune consequence stated, drift honestly graded *not performed* rather than "none found". Read-only by verb-enum **and** RBAC; the ServiceAccount was proven unable to write or read secret values before the run.
 
 ## Network Provisioning — change report
 

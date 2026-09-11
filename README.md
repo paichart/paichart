@@ -2,7 +2,7 @@
 
 [![License: Elastic 2.0](https://img.shields.io/badge/license-Elastic--2.0-blue.svg)](LICENSE) — source-available: self-host, modify, redistribute; not as a hosted service to third parties.
 
-Across network devices, Terraform, and Kubernetes — on an open MCP hub. Give pAIchart a `requirements.md` and a `topology.json` at any fetchable location — and it returns a reviewed low-level design: per-device config, the exact commands that prove it worked, and a rollback. Your team applies it, idempotently and out of band. pAIchart designs and reviews the change; it never applies it.
+Across network devices, Terraform, Kubernetes, and observability stacks (Prometheus / Grafana / OpenTelemetry) — on an open MCP hub. Give pAIchart a `requirements.md` and a `topology.json` at any fetchable location — and it returns a reviewed low-level design: per-device config, the exact commands that prove it worked, and a rollback. Your team applies it, idempotently and out of band. pAIchart designs and reviews the change; it never applies it.
 
 The LLD is the bottleneck it removes. Producing one today means a senior engineer reading live state across every box, writing config in each vendor's language, and hand-reconciling the values that cross domains. pAIchart does that work as a graph of specialist agents, checks it in three tiers, and hands you one reviewed result to approve. You stop authoring across every system and start approving one package.
 
@@ -24,7 +24,7 @@ Every node is a domain pipeline of agents *harvest live state → design → aut
 That's the difference between a graph and a script: the cloud leg authorises exactly the address range the network leg derived, because the cloud leg reads the content the network leg created. There are no pre-defined values in the high level design.
 
 - multiple legs, parallel or sequenced, with context chaining and dependencies
-- Three supported domains today, network device, Terraform, Kubernetes and the shape is extensible
+- Four infrastructure domains today — network devices, Terraform, Kubernetes, observability config (Prometheus / Grafana / OpenTelemetry) — plus artifact synthesis, and the shape is extensible: the observability domain was added as a configuration exercise (a protocol, four role templates, a read-only service descriptor), not an engine change
 - The graph is declared with the work, in a single `PIPELINE` task, not in a separate scheduler you also have to operate
 - Approval gates release from your AI client or the web UI, over one common code path
 - Live state comes from your devices, harvested read-only through per-device MCP servers
@@ -55,10 +55,11 @@ See also the ones that went wrong. **VT-12**: a program self-certified `programR
 
 → **[Verification pack](verification/)** · every claim linked to its machine record · **[Protocols](protocols/)** · the agent-facing contracts those runs are held against, published verbatim and byte-parity-checked against the platform seed
 
-## Four domains, one harness
+## Five domains, one harness
 
 - Network Provisioning : *"add a Loopback0 per switch and advertise it into BGP"* → an approved change package the provisioning team applies idempotently: self-provision a read-only device service from a descriptor, harvest real running state, design, author per-device config + validation + rollback, independent reviewer gates it. → [example change report](examples/network-provisioning-change-report.md)
-- Kubernetes / GitOps: *"add an HPA and resource requests/limits to the orders-api Deployment"* → a declarative kustomize overlay from live cluster state, validated offline (`kubeconform` / `kustomize build` / OPA and we never `kubectl diff`). Read-only, RBAC-scoped; secret *names* surface, values never leave the cluster. → [example](examples/kubernetes-gitops-change-report.md) (includes an earned **NEEDS-REVISION** — the reviewer refusing to approve what it couldn't verify)
+- Kubernetes / GitOps: *"add an HPA and resource requests/limits to the orders-api Deployment"* → a declarative kustomize overlay from live cluster state, validated offline (`kubeconform` / `kustomize build` / OPA and we never `kubectl diff`). Read-only, RBAC-scoped; secret *names* surface, values never leave the cluster. → [example](examples/kubernetes-gitops-change-report.md) (includes an earned **NEEDS-REVISION** — the reviewer refusing to approve what it couldn't verify) · [second example](examples/kubernetes-gitops-pdb-change-report.md) (a PodDisruptionBudget in three runs — the first package's own gap list became the objective, the reviewer refused the first attempt on availability arithmetic, and the revision was approved for choosing a *different* field)
+- Observability Config: *"add a memory_limiter processor, first in the collector's metrics pipeline, sized for a 256 MB container"* → a whole-file desired-state config for a live Prometheus / Grafana / OpenTelemetry stack, harvested read-only from the collector's **as-deployed file** and Prometheus's **running** config, with a deterministic pre-apply validation, a presence-shaped post-apply check, and the harvested file as the rollback. → [example](examples/observability-config-change-report.md) (the first published package that was also **applied**, with what the running system displayed afterwards — and the first where the reviewer read a platform-stamped **rollback-provenance fact** instead of guessing whether a quote was a quote)
 - Terraform / Cloud IaC: "add versioning and a public-access-block to the acme-app-logs bucket" → an HCL change package as a PR, from a scoped `state pull` (no providers launched, no state lock), with `validate` / `plan` / `tflint` / OPA expected-facts and rollback. → [example](examples/terraform-iac-change-report.md) (shows the layered defense: a secret-shaped tag **redacted**, a prompt-injection tag **refused**)
 - Artifact Synthesis: source material (git history, execution logs, a POV's delivery history, external MCP services) → a publishable deliverable via harvest → author → review. → [example](examples/artifact-synthesis-case-study.md)
 
