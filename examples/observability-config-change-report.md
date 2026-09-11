@@ -46,7 +46,7 @@ This objective took three attempts, and the two refusals are more informative th
 
 | Round | Verdict | What happened |
 |---|---|---|
-| R3b | NEEDS-REVISION | A **legitimate** catch: the package chose sound `memory_limiter` values and documented **no sizing rationale**. The objective was re-run with the rationale requirement made explicit. |
+| R3b | NEEDS-REVISION | A **legitimate** catch: the package chose sound `memory_limiter` values and documented **no sizing rationale**. The objective was re-run with the rationale requirement made explicit. *(Since 2026-09-11 that requirement is protocol text — `observability-config` 1.0.3 obliges every chosen value to be compared against its alternatives, sized against a quoted harvested quantity, and recomputed by the reviewer rather than adopted.)* |
 | R3b-2 | NEEDS-REVISION | The package was **content-correct** — its rollback was line-identical to the as-deployed file (an operator string test confirmed it) — but the reviewer blocked on provenance formalism it could not check from the package. The third such refusal across two domains; the platform's rollback-provenance fact was built in response. |
 | **R3b-3** | **APPROVED 90** | This report. Same objective; the reviewer read the stamped fact and approved. |
 
