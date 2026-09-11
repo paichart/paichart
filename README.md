@@ -46,12 +46,13 @@ A Tier-1 violation blocks regardless of who approved above it.
 
 ## The proof is we publish the rounds we failed
 
-Most of this category asks you to trust a demo. We provide **20 verification documents**, each stating its expected observables before the run, then recording what actually happened.
+Most of this category asks you to trust a demo. We provide **21 verification documents**, each stating its expected observables before the run, then recording what actually happened.
 
 See also the ones that went wrong. **VT-12**: a program self-certified `programReleasable: true` while shipping an authorization widening. Five tiers passed it, so minimality is now checked in code rather than in prose.
 
 - Two byte-identical review runs scored 45 and 92 on the same input. So confidence was demoted to a recorded fact at every tier, and the release gate decides on verifiable facts alone — there is no confidence number in it.
 - A check that couldn't run is a block, not a pass. "We couldn't verify it" never rounds up to "it's fine."
+- Three *correct* change packages were refused because a reviewer judged something it structurally could not see — one wrote "I cannot independently re-verify this comparison" and asserted the conclusion anyway. Better prose closed one lane and the class reappeared in the next, so the comparison is now computed where the evidence lives and handed to the reviewer — who still keeps every judgement the fact does not make (VT-21).
 
 → **[Verification pack](verification/)** · every claim linked to its machine record · **[Protocols](protocols/)** · the agent-facing contracts those runs are held against, published verbatim and byte-parity-checked against the platform seed
 
