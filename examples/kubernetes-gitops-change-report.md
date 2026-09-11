@@ -122,6 +122,8 @@ The subtlety is the interesting part. The harvester *did* capture the namespace 
 
 The fix is a one-line change to the authoring step (carry the harvested constraints into the package), after which the same objective yields a clean APPROVED. The point of the example is not the score — it's that **the score is earned**: the review reasons about the artifact in front of it and won't sign off on an unverifiable claim, even a true one.
 
+*Update, 2026-09-11:* that one-line fix is now a **protocol obligation**, not something each objective has to remember — `kubernetes-gitops` 1.4.0 requires the Author to restate the harvested namespace constraints (presence *and* absence, `items: []` included) and to justify every chosen value against its alternatives, and requires the Reviewer to recompute rather than adopt. The [second Kubernetes example](./kubernetes-gitops-pdb-change-report.md) shows the same objective family clearing that bar — and a refusal on the value-rationale half, verbatim.
+
 **The two things that make the deliverable trustworthy regardless of the verdict:**
 - **It never actuates.** The output is a change *to be applied*; applying it stays out-of-band and human-gated. The cognition/actuation seam is permanent by design.
 - **Read-only by construction, secrets never leave the cluster.** The harvest runs against a verb-enum-allowlisted, RBAC-scoped read-only service; an out-of-policy read (a secret value, `exec`, `pods/log`) is refused at the service and the harvest continues without degrading. Secret *names* surface; secret *values* never enter the artifact.
