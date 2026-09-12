@@ -174,12 +174,59 @@ written reason, the re-run completed and APPROVED at 88.
 
 ---
 
+## Independent repeat on the self-host — and a contamination finding in it
+
+The whole round was repeated on a second, independent install: the **devext self-host**, running the
+published open-source build from `github.com/paichart/paichart` rather than paichart.app. Same four
+rigs, same four objectives, same protocol and role-guidance rows (seeded from the same source), a
+different database and a different machine. Runs were serial rather than concurrent, deliberately —
+concurrency is what voided a leg on the production round.
+
+**Three of four reproduce.**
+
+| domain | production said | self-host said |
+|---|---|---|
+| kubernetes-gitops | "declared, not invented" | "**Declared:** no window required" |
+| terraform-iac | "purely additive … no `must be replaced` line" | "additive only — no resource is replaced or updated in place" |
+| observability-config | mechanism / blast radius / not required | "**declared, not invented**", plus mechanism, blast radius, first post-apply check |
+
+Two of the three independently converged on the clause's own phrase, *declared, not invented*, with
+neither run able to see the other. The observability leg is the regression check for retiring that
+domain's two paper-over clauses, and it passed on both installs — on the self-host it also ordered
+its post-apply checks by an argument nothing asked for: structural presence first, because *"a
+healthy-looking value could be a stale cached read from the pre-reload group rather than evidence the
+relocation succeeded."*
+
+🔴 **The fourth — the network control — is VOID on the self-host, and the cause was the test author,
+not the platform.** The run's phase description had been written to record what the control was
+expected to show (*"the apply here genuinely is a window-scheduled cutover, so window guidance must
+still appear"*). The package read it and cited it back as its justification: *"This is a
+window-scheduled cutover, per the phase's own domain declaration."* That is the obligation being
+hand-carried into the run — exactly the practice this clause exists to replace — so the self-host
+control evidences nothing and is excluded.
+
+The production round is **clean**: a corpus check for the expectation text across every package it
+produced returns zero. The difference is mechanical and worth recording for anyone designing a
+similar round: **phase descriptions reach the orchestrator** (it reads them via `pov.details`),
+**stage descriptions do not**. The production round happened to put its expectations in stage
+descriptions and the self-host round in phase descriptions; only the latter leaked. Neither placement
+is safe by intent — the production round was lucky, not careful.
+
+The self-host round also surfaced two environment defects unrelated to the clause, both recorded
+separately: a database restart had killed the MCP server hours earlier with an uncaught `57P01` and
+nothing restarted it, and a stale allowlist in a long-running process blocked one domain's
+self-provisioning entirely. The second produced the same refusal cascade as the production quota
+incident — harvester, architect, author and SYNTHESIZE each declining rather than fabricating a
+baseline.
+
 ## Conclusion
 
-Across the four packages produced, **zero invented maintenance windows** (prior rate: 44 of 49). The
-three non-network domains each declared no-window-needed with a domain-grounded reason; the control
-still produced window guidance; no reviewer demanded a window; and the domain whose paper-over clauses
-were retired produced a fuller note than those clauses had required.
+Across **seven uncontaminated packages on two independent installs** — three on production, three on
+the self-host, with the network control excluded from each for different reasons — **zero invented
+maintenance windows**, against a measured prior rate of 44 in 49. Each non-network domain declared
+no-window-needed with a reason grounded in its own harvest; no reviewer demanded a window; and the
+domain whose paper-over clauses were retired produced a fuller note than those clauses had required,
+on both installs.
 
 The mechanism generalises beyond this slot: **a prompt that demands an observable a domain lacks will
 be answered anyway.** The model does not refuse an unanswerable section — it fills it, plausibly, and
@@ -190,8 +237,13 @@ silent fabrication into a checkable sentence.
 
 - **Not that the clause is validated in general.** One run per domain. The readout is behavioural and
   this is its first exercise as seeded text.
-- **Not a clean control result for network.** The MTU-increase case was poorly chosen, as stated
-  above.
+- **Not a clean control result for network, on either install.** On production the MTU-increase case
+  was poorly chosen and is not unambiguously disruptive. On the self-host the phase description told
+  the package the answer. The control is the weakest part of this round and neither instance should
+  be read as evidence.
+- **Not an independent replication of the clause's authorship.** Both installs seed from the same
+  source, so they share any defect in the text itself. What the repeat establishes is that the same
+  rows produce the same behaviour on a different machine and database — not that the rows are right.
 - **Not that the 44/49 rate is now zero.** Four packages are not a rate. The corpus measurement is
   the baseline; re-measuring it after a quarter of runs is what would establish a new one.
 - **Not that any package was applied.** pAIchart never actuates. All four outputs are
