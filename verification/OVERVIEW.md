@@ -77,6 +77,49 @@ against real state, read-only by construction, with credential-free self-provisi
 secret-redaction guards. New domains are added through a repeatable use-case design playbook: a
 configuration-and-review exercise, not an engineering project.
 
+## What our actual pass rate is, and why we would not want it to be 90%
+
+Measured on production, **2026-09-12**, across every gated pipeline run:
+
+| | approved first pass | needs-revision | escalated |
+|---|---|---|---|
+| All time (181 runs) | **60%** | 29% | 11% |
+| Last 30 days (80 runs) | **64%** | 29% | 7.5% |
+
+Re-measure it yourself against any pAIchart database — this is the query behind the table:
+
+```sql
+SELECT metadata->'qualityGate'->>'outcome' AS outcome, count(*)
+FROM tasks WHERE type = 'PIPELINE' AND metadata->'qualityGate' IS NOT NULL
+GROUP BY 1 ORDER BY 2 DESC;
+```
+
+**Two different things get called "success", and they have very different numbers.** If success means
+*the run reached an honest terminal state with a named, actionable outcome* — approved, or refused with
+a reason a human can act on — that is effectively all of them, by construction: the platform's
+non-terminal-failure work exists so that runs cannot hang, silently compose a partial deliverable, or
+fail mutely. If success means *approved on the first pass*, it is 60–64%.
+
+**We are not trying to make the second number 90%.** The likeliest cause of a jump to 90% is not better
+authoring — it is a softer reviewer, and that failure mode is documented in this pack rather than
+hidden: two byte-identical review runs scored 45 and 92 on the same input, which is why confidence was
+demoted to a recorded fact at every tier; and across three cases where a leg's stamped outcome
+contradicted its reviewer, the reviewer was right in **one**. A reviewer that approves 90% of what it
+sees is cheap to build and proves nothing. Some refusals are the product working — see VT-20, where a
+mechanical check caught two absent configuration lines that five prose guards and an approving reviewer
+had passed.
+
+**The number we do drive toward zero is refusal CORRECTNESS**: of the packages we refused, how many
+were later shown to have been correct? That is a real defect, and we have had them — three this
+quarter, all in one family, where a reviewer judged the provenance of a quotation it structurally could
+not check. Each was verified wrong by a mechanical string test, and the class was then closed in code
+rather than by asking reviewers to try harder (VT-21). Measured base rate of the thing those refusals
+suspected — a fabricated rollback — across the full archive: **zero in 56.**
+
+**And a refusal is not a failure of the engagement.** The second round takes about eight minutes. The
+comparison that matters is not first-pass rate against some ideal, it is total time to a reviewed,
+evidence-backed change package against a senior engineer reading live state across every box by hand.
+
 ## Why you can trust this page
 
 This overview is the marketing-shaped view of an engineering ledger. The ledger's rules: failures are
