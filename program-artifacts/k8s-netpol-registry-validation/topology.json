@@ -1,0 +1,32 @@
+{
+  "name": "k8s-netpol-registry-validation",
+  "description": "A single-cluster Kubernetes environment. The program adds a default-deny NetworkPolicy to one namespace, as a declarative GitOps change package.",
+  "nodes": [
+    {
+      "name": "k8s-rig",
+      "kind": "cluster",
+      "platform": "kubernetes",
+      "_why_one_node": "Single delivery domain, single target. There is no second node and therefore no cross-node ordering.",
+      "namespaces": [
+        {
+          "name": "trading",
+          "workloads": [
+            {
+              "name": "orders-api",
+              "kind": "Deployment",
+              "replicas": 2,
+              "selector": { "app": "orders-api" },
+              "service": { "name": "orders-api", "port": 80, "type": "ClusterIP" },
+              "_note": "Selector labels are a CLAIM in this file. The harvest is authoritative; a package must quote the harvested selector, not this one."
+            }
+          ],
+          "_known_absent": [
+            "NetworkPolicy (any) — the gap this program closes",
+            "LimitRange", "ResourceQuota", "PodDisruptionBudget"
+          ]
+        }
+      ]
+    }
+  ],
+  "_no_interdependency": "Single pipeline. No value crosses a leg boundary, so no runtime-derived constant is declared. The interface contract still binds what the one leg PRODUCES."
+}
