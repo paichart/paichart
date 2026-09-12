@@ -47,9 +47,25 @@ const CLIENT_SIDE_PATTERNS = [
 ];
 
 /** Pino adoption thresholds by domain */
+/**
+ * Layer 2 thresholds, RECALIBRATED 2026-09-12 (75/40 -> 95/95, ruled by Steve).
+ *
+ * They had to move with the denominator. 75% and 40% were set against "every server file", where
+ * most files log nothing and are therefore permanent non-adopters; measured against "files that
+ * LOG" the same corpus reads app/api 150/150 = 100% and lib 153/154 = 99.4%, so the old numbers
+ * could not fire until adoption collapsed by two thirds. A gate that cannot fail is worse than an
+ * absent one: it reads as a guard in review while asserting nothing.
+ *
+ * 95% is a TREND guard with roughly 7 files of headroom in each domain. It is not the per-file
+ * gate — Layer 1 (zero active `console.*` in server TS) fails any single new console call outright,
+ * and a file logging without pino also lands in this denominator, so the two layers compound.
+ *
+ * ⚠️ RECALIBRATE these whenever `fileParticipatesInLogging` changes. A threshold is only meaningful
+ * against the denominator it was measured on, which is exactly how the old pair went dead.
+ */
 const ADOPTION_THRESHOLDS: Record<string, number> = {
-  'app/api': 75,
-  'lib': 40,
+  'app/api': 95,
+  'lib': 95,
 };
 
 // ============================================================
@@ -100,6 +116,7 @@ interface ConsoleViolation {
 interface AdoptionResult {
   domain: string;
   total: number;
+  nonLogging: number;
   withPino: number;
   percentage: number;
   threshold: number;
@@ -175,6 +192,26 @@ const PINO_IMPORT_PATTERN = /(?:from\s+['"](?:@\/lib\/logger|\.\.?\/.*logger)['"
 function fileHasPinoImport(filePath: string): boolean {
   const content = fs.readFileSync(path.join(ROOT, filePath), 'utf-8');
   return PINO_IMPORT_PATTERN.test(content);
+}
+
+/**
+ * Does this file PARTICIPATE in logging at all — either by importing the logger or by calling
+ * `console.*` (comment- and string-aware, via the Layer 1 scanner)?
+ *
+ * ⚠️ CHANGED 2026-09-12, and the reason matters more than the change. Layer 2's denominator used to
+ * be EVERY server file, so a file that logs nothing counted as a non-adopter. It is neither: it has
+ * nothing to adopt. The effect was that a correct addition could fail the build — stage 2b added
+ * three pure modules (a registry, a ctx builder, a net list, all correctly logging nothing) and the
+ * ratio moved 153/380 = 40.3% PASS to 153/383 = 39.9% FAIL with no logging defect anywhere in the
+ * change. That is the SECOND coverage-ratio gate in 24 hours to fail on an addition rather than a
+ * regression (the first: `validate:pagination`, 89.6% vs 90%, 2026-09-11).
+ *
+ * Denominator is now "files that log"; numerator is unchanged ("files that use pino"). A file that
+ * logs via `console.*` and not pino still counts against adoption — it is a genuine non-adopter —
+ * and Layer 1 fails it outright regardless, so NO detection is weakened by this. Ruled by Steve.
+ */
+function fileParticipatesInLogging(filePath: string): boolean {
+  return fileHasPinoImport(filePath) || scanForConsoleViolations(filePath).length > 0;
 }
 
 // ============================================================
@@ -268,11 +305,13 @@ console.log('=====================================\n');
 const adoptionResults: AdoptionResult[] = [];
 
 // app/api domain
-const apiWithPino = apiFiles.filter(f => fileHasPinoImport(f)).length;
-const apiPct = apiFiles.length > 0 ? (apiWithPino / apiFiles.length) * 100 : 0;
+const apiLoggingFiles = apiFiles.filter(f => fileParticipatesInLogging(f));
+const apiWithPino = apiLoggingFiles.filter(f => fileHasPinoImport(f)).length;
+const apiPct = apiLoggingFiles.length > 0 ? (apiWithPino / apiLoggingFiles.length) * 100 : 0;
 adoptionResults.push({
   domain: 'app/api',
-  total: apiFiles.length,
+  total: apiLoggingFiles.length,
+  nonLogging: apiFiles.length - apiLoggingFiles.length,
   withPino: apiWithPino,
   percentage: apiPct,
   threshold: ADOPTION_THRESHOLDS['app/api'],
@@ -280,11 +319,13 @@ adoptionResults.push({
 });
 
 // lib (server-side) domain
-const libWithPino = libServerFiles.filter(f => fileHasPinoImport(f)).length;
-const libPct = libServerFiles.length > 0 ? (libWithPino / libServerFiles.length) * 100 : 0;
+const libLoggingFiles = libServerFiles.filter(f => fileParticipatesInLogging(f));
+const libWithPino = libLoggingFiles.filter(f => fileHasPinoImport(f)).length;
+const libPct = libLoggingFiles.length > 0 ? (libWithPino / libLoggingFiles.length) * 100 : 0;
 adoptionResults.push({
   domain: 'lib (server)',
-  total: libServerFiles.length,
+  total: libLoggingFiles.length,
+  nonLogging: libServerFiles.length - libLoggingFiles.length,
   withPino: libWithPino,
   percentage: libPct,
   threshold: ADOPTION_THRESHOLDS['lib'],
@@ -295,6 +336,7 @@ for (const result of adoptionResults) {
   const icon = result.passed ? '✅' : '❌';
   console.log(`${icon} ${result.domain}`);
   console.log(`   Files with pino: ${result.withPino}/${result.total} (${result.percentage.toFixed(1)}%)`);
+  console.log(`   Excluded (log nothing — nothing to adopt): ${result.nonLogging}`);
   console.log(`   Threshold: ${result.threshold}%`);
   console.log();
 }

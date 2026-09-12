@@ -18,7 +18,21 @@ check('§6 renders the platform-fact line for a predecessor (the Reviewer reads 
 check('§6 omits the line when the predecessor stamped no markerPresence (older executions)', !/Machine-parsed blocks/.test(renderPipelineContextSection({ chainedFrom: [{ taskId: 'a1', taskTitle: 't', agentRole: 'r', confidenceScore: 1, finalResponse: 'x' }], pipelineMetadata: { completedDependencies: 1, totalDependencies: 1 } }).join('\n')));
 check('renderMarkerPresence null-safe', renderMarkerPresence(null) === null);
 const core = fs.readFileSync('lib/services/execution-core.ts', 'utf8'); const chainer = fs.readFileSync('lib/agents/harness/context-chainer.ts', 'utf8'); const tmpl = fs.readFileSync('lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts', 'utf8');
-check('execution-core stamps markerPresence on non-PIPELINE harness leaves', /HARNESS_LEAF_ROLE_RE\.test\(agentRole/.test(core) && /markerPresence = computeMarkerPresence\(finalResponse\)/.test(core));
+/* RETARGETED 2026-09-12 (stage 2b). This asserted the stamp lived INLINE in execution-core, and the
+ * registry migration moved it to a `MECHANICAL_NETS` entry — so the guard failed, which is the guard
+ * WORKING: it pins a PROPERTY, and the property moved house (the same thing that happened to the F12
+ * lookup's two pins when `findProgramParentForStage` was extracted on 2026-09-11). It is retargeted
+ * to the new home AND given the second assertion that lesson demands — that execution-core CONSUMES
+ * the registry rather than re-inlining a stamp beside it, which is how a migration half-lands. */
+const nets = fs.readFileSync('lib/agents/harness/mechanical-nets.ts', 'utf8');
+check('the markerPresence net gates on non-PIPELINE harness leaves and calls the shared predicate',
+  /name: 'markerPresence'/.test(nets)
+  && /HARNESS_LEAF_ROLE_RE\.test\(ctx\.agentRole/.test(nets)
+  && /computeMarkerPresence\(ctx\.finalResponse\)/.test(nets));
+check('execution-core stamps THROUGH the registry and re-inlines no net of its own',
+  /runNetsAtPoint\('leaf-persist'/.test(core)
+  && /runNetsAtPoint\('leg-synthesize'/.test(core)
+  && !/computeMarkerPresence\(/.test(core));
 check('chainer carries markerPresence per predecessor (like confidenceScore)', /markerPresence: \(parsed as/.test(chainer));
 check('reviewer guidance points at the §6 line, not at parser beliefs', /The platform's reading is IN your §6/.test(tmpl));
 

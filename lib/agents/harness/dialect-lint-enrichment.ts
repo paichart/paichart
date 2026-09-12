@@ -35,12 +35,24 @@ export interface ComputeDialectLintInput {
   stageId?: unknown;
   /** The binding interface contract, from the leg task's `inputContext.interfaceContract` (CC7). */
   interfaceContract?: unknown;
+  /**
+   * H-3 tier arm, MOVED INSIDE the enrichment 2026-09-12 (stage 2b). It was a ternary at the
+   * execution-core call site, which put it in the one half a replay runner cannot exercise — so the
+   * only way to see what a program parent stamps was a live program run. `derivationContainment`
+   * already decided its tier here; the registry picks that shape for all of them. The literal below
+   * is transcribed VERBATIM from the call site: the equivalence gate compares serialized bytes, so
+   * a "tidier" object is a behavioural change wearing a refactor's clothes.
+   */
+  programTier?: boolean;
 }
 
 export async function computeDialectLintFact(
   prisma: PrismaClient,
-  { stageId, interfaceContract }: ComputeDialectLintInput
+  { stageId, interfaceContract, programTier }: ComputeDialectLintInput
 ): Promise<Record<string, unknown>> {
+  if (programTier === true) {
+    return { checked: false, reason: 'program-tier', tier: 'program', applicable: false, tokensConsidered: [], violations: [] };
+  }
   if (typeof stageId !== 'string' || !stageId) {
     return { checked: false, reason: 'no-child-stage', tokensConsidered: [], violations: [] };
   }

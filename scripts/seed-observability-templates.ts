@@ -18,7 +18,8 @@
  * change_reviewer become FOUR-domain with this script): infra_state_harvester,
  * infra_change_architect, config_change_author, change_reviewer. Observability-specific behavior
  * (witnessed-artifact taxonomy, per-class rollback provenance, validator citations, the
- * apply-governance note that papers over the shared role's maintenance-window slot — D9) rides in
+ * apply-governance note — whose TERM D9 promoted into the shared roles on 2026-09-12, so it no
+ * longer papers over anything) rides in
  * the PROTOCOL, not the shared roles.
  *
  * SEEDING IS MANUAL (operative rule 2026-08-26): the deploy seeds PROTOCOLS only and never

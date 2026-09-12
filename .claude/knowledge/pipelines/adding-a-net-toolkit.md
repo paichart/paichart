@@ -1,17 +1,26 @@
-# Adding a Containment `kind` — Toolkit
+# Adding a Mechanical Net (or a Containment `kind`) — Toolkit
 
-**Purpose**: Add a new `kind` to the derivation-containment engine (`cidr`, `asn`, …) without
-repeating the eight things the first extension got wrong
+**Purpose**: Add a new mechanical net, or a new `kind` to the derivation-containment engine
+(`cidr`, `asn`, …), without repeating the eight things the first extension got wrong
 **Type**: Execution toolkit (not an analysis protocol)
 **Proven**: 2026-08-02 — `asn`, the first extension. Built, deployed, proven live in Run 20
-**Scope, as of 2026-09-11**: the title says "containment `kind`", but this is **the procedure for
-adding a MECHANICAL NET** and has been used as one — `rollbackContainment` (net #3) was built
-against it end to end, and Step 0 now carries a path earned by that build. Read every "kind" below
-as "kind or net"; the steps are shape-agnostic and only Step 1's examples are cidr/asn-specific.
-⚠️ **Deliberately NOT renamed yet.** Twelve documents reference this file by name, and the rename
-belongs with the generalisation that the shared-net-registry arc (stage 2b) will do anyway — doing
-it now buys a 12-file drift sweep that 2b would immediately redo. When 2b lands, rename and sweep in
-the same commit. Recorded so the decision is not re-litigated as an oversight.
+**Scope**: ✅ **RENAMED 2026-09-12 with the registry (stage 2b), and the deferral was honoured
+exactly as recorded** — the file previously carried a note saying the rename was deliberately
+deferred to this arc so the 12-document sweep would be paid once rather than twice. It was, in one
+commit. Read every "kind" below as "kind or net": the steps are shape-agnostic and only Step 1's
+examples are cidr/asn-specific. `rollbackContainment` (net #3) was built against this procedure end
+to end, and Step 0's Path 3 was earned by that build.
+
+⚠️ **ADDING A NET NOW MEANS ADDING A REGISTRY ENTRY**, not wiring a call site. Since 2026-09-12 the
+six stamp sites are entries in `MECHANICAL_NETS` (`lib/agents/harness/mechanical-nets.ts`) and
+`execution-core.ts` calls the loop twice — once per invocation POINT. So Step 2's wiring layer is
+now: pick the `point` (`leaf-persist` or `leg-synthesize`; a net may register at BOTH under one
+name, as net #3 does), write `appliesTo` as an INVOCATION predicate only (never a lane or domain
+test — those belong inside `enrich`, where the reason is visible in the artifact), decide BOTH
+render slots or record why one is null, and add the name to `RESULT_JSON_SUMMARY_KEYS` — registering
+a net and whitelisting its key are two different acts, and the strict pick drops an unlisted key
+with no error. `test:net-registry` enforces all of that; `test:net-registry-equivalence` is the
+acceptance for any change to an existing net.
 **Owner**: `execution-facts-specialist` (since 2026-09-11); paired discovery
 `.claude/knowledge/discoveries/execution-facts-discovery.md`. Scheduled to be generalised to
 **adding-a-mechanical-net** in the same arc that extracts the shared net registry.

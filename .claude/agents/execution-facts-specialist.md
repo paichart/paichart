@@ -34,10 +34,10 @@ before reasoning about this domain.** They derive current state from the tree; t
 does not. Sections: A fact inventory · B whitelist + E3b nesting law · C the stamp→render→gate seam
 · D replay · E build tripwires (registry, `rollbackContainment`).
 
-**Read on demand:** `.claude/knowledge/pipelines/adding-a-containment-kind-toolkit.md` (the
+**Read on demand:** `.claude/knowledge/pipelines/adding-a-net-toolkit.md` (the
 execution procedure — Step 0 earn-it **incl. Path 3 Adjudication**, Step 3 prove-your-predictions,
 Step 4's two separable live halves. Titled "containment kind", but it IS the adding-a-net procedure
-and says so; the rename waits for the registry arc so it costs one sweep, not two) · `PIPELINE-DOMAIN-FIT-CATALOG.md` item 6 (why a mechanical net is a code deliverable).
+renamed and generalised 2026-09-12 with the registry — adding a net is now adding a REGISTRY ENTRY, not wiring a call site) · `PIPELINE-DOMAIN-FIT-CATALOG.md` item 6 (why a mechanical net is a code deliverable).
 
 ## Live invariants
 
@@ -92,9 +92,9 @@ comparator flagged 62%) and 2026-08-31 (56 packages: zero true fabrications, inc
 
 ```bash
 grep -n "RESULT_JSON_SUMMARY_KEYS = " lib/services/execution-artifacts.ts        # the contract with the consumer side
-grep -c "computeDerivationContainmentFact\|computeDialectLintFact\|computeContractPropagationFact\|computeMarkerPresence" lib/services/execution-core.ts   # the ONE hand-wired call site
-grep -rn "MECHANICAL_NETS\|netRegistry\|registerNet" lib/ scripts/ | wc -l       # 0 ⇒ the shared registry is still unbuilt
-grep -rln "rollbackContainment" lib/agents/harness/ | wc -l                      # 0 ⇒ net #3 earned-and-scheduled, not started
+grep -c "computeDerivationContainmentFact\|computeDialectLintFact\|computeContractPropagationFact\|computeMarkerPresence" lib/services/execution-core.ts   # 0 is HEALTHY since 2026-09-12 — the registry replaced every hand-wired call; non-zero ⇒ a net was re-inlined beside the loop
+grep -c "" lib/agents/harness/mechanical-nets.ts                                 # the registry's contents: one entry per (name, point)
+grep -rn "MECHANICAL_NETS\|netRegistry\|registerNet" lib/ scripts/ | wc -l       # 19 — the registry SHIPPED 2026-09-12 (stage 2b); 0 would mean it was reverted
 ls scripts/replay-*.ts                                                            # observability without a run
 ```
 
@@ -161,19 +161,40 @@ Full expectations (with proven counts) live in the discovery — these are the o
 | `lib/agents/harness/dialect-lint-enrichment.ts` | net #2 impure half |
 | `lib/agents/harness/marker-presence.ts` | H-4 fact, pure + synchronous |
 | `lib/agents/harness/contract-propagation-enrichment.ts` | shares dialect-lint's canonical-stanza needles |
-| `lib/services/execution-core.ts` | the ONE call site — every net wired by hand until the registry exists |
+| `lib/agents/harness/net-registry.ts` | the registry contract — `(name, point)`, `appliesTo`, `errorFact`, the two render slots, and the three things it deliberately does NOT do |
+| `lib/agents/harness/mechanical-nets.ts` | the six entries. ⚠️ key ORDER is part of the contract — the equivalence gate compares serialized bytes |
+| `lib/agents/harness/net-context.ts` | `ctx` — memoized `children()` + `contractApplicability()` |
+| `lib/services/execution-core.ts` | the ONE call site — now two `runNetsAtPoint` calls, not six hand-wired blocks |
 | `lib/services/execution-artifacts.ts` | `RESULT_JSON_SUMMARY_KEYS` + `pickResultJsonSummary` (the contract) |
 | `lib/mcp/server/tools/advanced/lean-card-facts.js` | the `**Facts:**` line — the render half of the seam |
-| `scripts/replay-{containment,dialect-lint,contract-propagation}.ts` | run the SHIPPING enrichment against a completed leg, read-only, seconds |
+| `scripts/replay-{containment,dialect-lint,contract-propagation,rollback-containment}.ts` | run the SHIPPING enrichment against a completed leg, read-only, seconds |
+| `scripts/test-net-registry{,-equivalence}.ts` | the structural pins, and the ACCEPTANCE (byte-identical to what production stamped) |
 | `scripts/test-{derivation-containment,dialect-lint,lean-card-facts,execution-artifacts-parity}.ts` | the incident-fixture corpus and the coupling pins |
 
 ## Open Questions (flagged, not resolved)
 
-- **Two registry-arc (2b) items from the live round** (`R3B-3-LIVE-ACCEPTANCE.md`): `appliesTo`
-  needs a DOMAIN-aware dimension, not just a tier one (markerPresence rendered three ✗ on an obs leg
-  whose protocol never mandates those blocks — honest, but reads as a gap); and the ~790-char
-  `scope` string travels WHOLE into every `chainedFrom` entry, which is a 512KB-ceiling question at
-  four nets, not at one.
+- **`expectedBy` — the domain axis, DETACHED from 2b and still to build.** Corpus-measured
+  2026-09-12: **all 39** archived `markerPresence` stamps (30 observability-config, 9
+  kubernetes-gitops) render three ✗, and zero network legs exist in the window — so the
+  domain-mismatch rate is **100% of the observed corpus**. But measured against the protocol bodies,
+  kubernetes-gitops DOES mandate `## Consumed Values` while observability mandates none of the
+  three, so a net-level `appliesTo` would suppress the one marker that is a real gap. **The axis is
+  per-(protocol × marker) — finer than a net — and belongs NESTED on the fact as `expectedBy`, never
+  as a stamp gate.** Detached from 2b because it changes the render, and 2b's acceptance is
+  byte-equivalence: you cannot assert "identical to production" while shipping an intended
+  difference in the same commit. **Where the mandate LIVES is DECIDED**: a declared field on the
+  protocol's registry entry in `seed-protocol-prompts.ts` (joint with `prompt-construction-specialist`),
+  with the body-derivation kept as the DRIFT TEST rather than the runtime predicate. The derivation
+  matches hand-reading 7/7, but three plausible rewordings of one emit sentence silently flip a
+  mandate to "not required" — fail-open, suppressing a real ✗ — so it reads a phrase, not the
+  authority. Full record + the mutation table:
+  `cline_docs/follow-ups/marker-mandate-source-of-truth-2026-09-12.md`.
+- ~~the `scope` chain-size question~~ **MEASURED AND CLOSED 2026-09-12**: 618 tasks, 658 predecessor
+  entries, max 4 predecessors, worst observed total `chainedFrom` 217 KB of 512 KB, one archived
+  entry carrying a 791-byte `scope`. Four nets add ~12.6 KB worst case. **Carry the string;
+  re-trigger at 8 nets or a 2 KB scope note.** The measurement found a different, real defect
+  instead — the chainer counted only `finalResponse`, so carried facts were outside the ceiling
+  entirely; fixed `3f941d1d`.
 - **The context-entry residue** — after the HCL lane exclusion, 24 of 42 adjudicated packages still
   escalate on config-context openers (`router bgp 65001`, `address-family ipv4`), which are restored
   content in one rollback and navigation scaffolding in another, textually identical. PARKED for a
@@ -184,10 +205,16 @@ Full expectations (with proven counts) live in the discovery — these are the o
 
 ### ✅ Resolved 2026-09-11 (kept briefly so the rulings are not re-litigated)
 
-- **Surfacing** — RULED: `render` is required per net from 2026-09-11; a net that renders nothing
-  carries a recorded reason. `rollbackContainment` shipped with its render in the same commit as its
-  stamp. `dialectLint`/`contractPropagation` stay unrendered until the registry lands (2b), which is
-  why the §C tripwire in the discovery is still `expect 0`.
+- **Surfacing** — RULED, and **DELIVERED 2026-09-12**: `render` is required per net, a net that
+  renders nothing carries a recorded reason, and the registry now enforces it as TWO slots —
+  `renderCard` and `renderPrompt`, because the lean card and the §6 prompt are different audiences
+  with different coverage and one field would let a net satisfy the convention on the card while
+  staying invisible to the Reviewer. `dialectLint` and `contractPropagation` gained the card render
+  they had lacked since 2026-08-25/26; the §C tripwire flipped from `expect 0` to `expect 11` **in
+  the same commit that closed the gap**, because a stale zero there makes the grep audit report a
+  REGRESSION on a deliberate success. `renderCard` names a FILE rather than carrying a function
+  (`lean-card-facts.js` is CommonJS and cannot require TypeScript), and R5b pins the declaration so
+  a net cannot claim a render it does not have.
 - **The two bare stage-children reads outside this domain** — RESOLVED `a7e4a81f`, with OPPOSITE
   treatments worth remembering: `verdict-mismatch-guard.ts` SEARCHES for one child by role and was
   capped; `harnessModeResolver.ts` AGGREGATES over all children to decide terminal-ness and was

@@ -39,13 +39,12 @@ import { finalizeTextForStopReason } from './llm/finalize-response';
 import { buildExecutionResultJson, deriveChainedContextSignal } from './execution-artifacts';
 import { persistTerminalSuccess } from './execution-terminal-persist';
 import { computeSelfSupersession } from './execution-selection';
-import { computeDerivationContainmentFact } from '@/lib/agents/harness/derivation-containment-enrichment';
-import { isProgramHarnessTask, findProgramParentForStage } from '@/lib/agents/harness/program-protocol';
-import { computeMarkerPresence, HARNESS_LEAF_ROLE_RE } from '@/lib/agents/harness/marker-presence';
-import { AUTHOR_LEAF_ROLE_RE } from '@/lib/agents/harness/rollback-containment';
-import { computeRollbackContainmentFact, hoistRollbackContainment } from '@/lib/agents/harness/rollback-containment-enrichment';
-import { computeDialectLintFact } from '@/lib/agents/harness/dialect-lint-enrichment';
-import { computeContractPropagationFact } from '@/lib/agents/harness/contract-propagation-enrichment';
+import { isProgramHarnessTask } from '@/lib/agents/harness/program-protocol';
+// The five facts are no longer imported one by one: they are ENTRIES in the shared registry, and
+// the point of the registry is that this file cannot know one of them and forget another.
+import { runNetsAtPoint } from '@/lib/agents/harness/net-registry';
+import { MECHANICAL_NETS } from '@/lib/agents/harness/mechanical-nets';
+import { buildNetContext } from '@/lib/agents/harness/net-context';
 import { assessExecutionQuality } from '@/lib/agents/harness/execution-quality';
 import { runDiagnosticRetry } from '@/lib/agents/harness/diagnostic-retry';
 import { runAgenticToolLoop } from '@/lib/agents/harness/agentic-tool-loop';
@@ -344,257 +343,98 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
   // fixture-pinned F17/F20/truncation/HNO ordering untouched and a throw can never roll back the
   // SUCCESS commit. NON-THROW: any miss/parse failure ⇒ checked:false + reason — the reviewer
   // (LLM) tier blocks on missing evidence; this mechanical tier only reports the fact.
-  // H-4 (2026-09-10): MARKER PRESENCE on harness LEAVES (harvester / architect / author) — which
-  // machine-parsed blocks the platform found in this final response, by the containment parser.
-  // Stamped here so the chainer can carry it to the NEXT leaf's §6 (the Reviewer reads it there) —
-  // a card-only fact never reaches a sibling's prompt (R12). A fact, never a verdict.
-  if (task.type !== 'PIPELINE' && HARNESS_LEAF_ROLE_RE.test(agentRole ?? '')) {
-    (resultJson as Record<string, unknown>).markerPresence = computeMarkerPresence(finalResponse);
-  }
-
-  // ROLLBACK CONTAINMENT (2026-09-11) — mechanical net #3, and the FIRST stamped on a LEAF rather
-  // than at the leg's SYNTHESIZE. That placement is the design, not convenience: a fact stamped at
-  // SYNTHESIZE lands AFTER this leg's Reviewer has run, which is the very blindness the net exists
-  // to end (three live false refusals: R19 P4, R3a-3, R3b-2 — each a correct rollback blocked
-  // because provenance is structurally uncheckable from the package alone). Stamped here, the
-  // chainer carries it into the Reviewer's §6, exactly as H-4 markerPresence does.
+  // ── MECHANICAL NETS, stamped through the SHARED REGISTRY (stage 2b, 2026-09-12) ─────────────
   //
-  // Author-only: it needs the change package AND the harvest sibling, and only the Author has both
-  // in scope. PRE-tx, non-throwing, catch arm stamps a named fact WITH a disposition (G3).
-  if (task.type !== 'PIPELINE' && AUTHOR_LEAF_ROLE_RE.test(agentRole ?? '')) {
-    try {
-      (resultJson as Record<string, unknown>).rollbackContainment =
-        await computeRollbackContainmentFact(prisma, {
-          taskId: task.id,
-          deliverable: finalResponse,
-        });
-    } catch (rcErr) {
-      (resultJson as Record<string, unknown>).rollbackContainment = {
-        checked: false, reason: 'enrichment-error',
-        rollbackDisposition: {
-          disposition: 'blocking', reason: 'hard-gap',
-          inputs: { reason: 'enrichment-error', missingCount: 0, restoreLinesTotal: 0 },
-        },
-      };
-      logger.warn({ executionId, err: rcErr instanceof Error ? rcErr.message : String(rcErr) },
-        'rollback-containment enrichment failed — fact recorded as checked:false');
-    }
-  }
-
-  // H-3 (2026-09-09): the three mechanical nets below are LEG nets. A PROGRAM parent is also
-  // `type === 'PIPELINE'` in SYNTHESIZE, and its child stage has no harvest/author child by
-  // construction — so the tier is resolved ONCE here (stamp-first predicate, the same one the
-  // completion core uses) and each net stamps a named, non-blocking `program-tier` fact instead of
-  // a leg gap. Never a bare skip: an ABSENT fact renders as a blocking token on the card (G2).
+  // This was six hand-written blocks. They are now six entries in `MECHANICAL_NETS`, and the
+  // difference is the guarantee: a hand-wired site can be FORGOTTEN, and a net that was never
+  // called stamps nothing — indistinguishable, in the artifact, from a net that ran and found
+  // nothing. A REGISTERED net can be inert only by returning an inert fact.
+  //
+  // Everything load-bearing about the old blocks is preserved and now uniform:
+  //   • PRE-tx. The child artifacts committed before the SYNTHESIZE reactor fired, so a READ
+  //     COMMITTED read here sees them, and keeping this out of runTerminalSuccessTx leaves the
+  //     fixture-pinned F17/F20/truncation/HNO ordering untouched — a throw can never roll back the
+  //     SUCCESS commit.
+  //   • NON-THROWING, per net. The loop's catch stamps that net's `errorFact()`, so the one arm
+  //     meaning "things went wrong" still carries a named blocking disposition rather than
+  //     rendering clean (G3). One net throwing can no longer cost another net its stamp.
+  //   • FACTS, NEVER VERDICTS. The reviewer tier blocks on missing evidence; this tier reports.
+  //
+  // TIER: resolved ONCE here (the stamp-first predicate the completion core uses) and handed to
+  // ctx, but every net's tier ARM now lives inside its own enrichment — which is the half a replay
+  // runner can exercise. Three of them decided it in a call-site ternary until today, so the only
+  // way to see what a program parent stamped was a live program run.
   const programTier = task.type === 'PIPELINE' && isProgramHarnessTask(task);
-  if (task.type === 'PIPELINE' && harnessContext?.mode === 'SYNTHESIZE') {
-    try {
-      // EXTRACTED 2026-07-30 into lib/agents/harness/derivation-containment-enrichment.ts so this
-      // logic is reachable WITHOUT a full program run. Inline here, the only way to observe what it
-      // stamps was a rig rebuild + ~30-50 min run + human gates — so it got "verified" by reading
-      // source, and three defects shipped that way (wrong reason string / unrendered field / wrong
-      // artifact name). scripts/replay-containment.ts now runs THAT function against a real
-      // completed leg in seconds. The try/catch stays HERE: non-throwing is the caller's contract
-      // (degrade to enrichment-error; a throw must never roll back the SUCCESS commit).
-      const fact = await computeDerivationContainmentFact(prisma, {
-        stageId: (task.metadata as Record<string, unknown> | null)?.pipelineStageId,
-        chainedFrom: (task.inputContext as { chainedFrom?: unknown } | null)?.chainedFrom,
-        programTier,
-      });
-      (resultJson as Record<string, unknown>).derivationContainment = fact;
-      if (Array.isArray((fact as { violations?: unknown[] }).violations) && (fact as { violations: unknown[] }).violations.length > 0) {
-        logger.warn({ executionId, taskId: task.id, derivationContainment: fact },
-          'Derivation-containment violations: a derived value covers harvested allocation(s) outside its declared members');
-      }
-      // DISCHARGE TELEMETRY (2026-08-27, panel condition 6). `no-author-child` now ESCALATES to Node C
-      // instead of blocking, which trades a mechanical decision for a reviewer judgement. That trade was
-      // made knowingly and is only defensible while we can see how often it is exercised — so emit a
-      // countable line per escalation. This is the outcome data by which a DECLARED `legKind` could later
-      // be EARNED (Protocol 10: ship the fact, earn the verdict); the panel rejected `legKind` as
-      // unearned NOW, not wrong forever. A climb here without new program types is the signal to revisit.
-      const disp = (fact as { containmentDisposition?: { disposition?: string; reason?: string } })
-        .containmentDisposition;
-      if (disp?.reason === 'no-author-child-leg-kind-undecidable') {
-        logger.info({ executionId, taskId: task.id, containmentDisposition: disp },
-          'Containment escalated to Node C: leg kind undecidable (no author child) — discharge required');
-      }
-    } catch (dcErr) {
-      // G3 (2026-08-03): this path NEVER calls computeDerivationContainmentFact, so anything the
-      // enrichment stamps is guaranteed ABSENT on the one arm that means "things went wrong".
-      // Stamp the disposition here too, or an enrichment crash renders as a bare
-      // `NOT checked (enrichment-error)` with no gate token at all — a failure that reads clean.
-      (resultJson as Record<string, unknown>).derivationContainment = {
-        checked: false, reason: 'enrichment-error',
-        containmentDisposition: {
-          disposition: 'blocking', reason: 'hard-gap',
-          inputs: { reason: 'enrichment-error', violationCount: 0, unsupportedCount: 0 },
-        },
-      };
-      logger.warn({ executionId, err: dcErr instanceof Error ? dcErr.message : String(dcErr) },
-        'derivation-containment enrichment failed — fact recorded as checked:false');
+  const netCtx = buildNetContext({
+    prisma,
+    task: { id: task.id, type: task.type, metadata: task.metadata, inputContext: task.inputContext },
+    agentRole: agentRole ?? null,
+    harnessMode: harnessContext?.mode ?? null,
+    finalResponse,
+    programTier,
+    onContractApplicabilityError: (err) =>
+      logger.warn({ executionId, err: err instanceof Error ? err.message : String(err) },
+        'contract-applicability lookup failed — facts stamped without it'),
+  });
+
+  const stampNet = (name: string, fact: Record<string, unknown>) => {
+    (resultJson as Record<string, unknown>)[name] = fact;
+  };
+  const netError = (name: string, err: unknown) =>
+    logger.warn({ executionId, net: name, err: err instanceof Error ? err.message : String(err) },
+      `${name} enrichment failed — fact recorded as checked:false`);
+
+  // TWO INVOCATION POINTS OF ONE LOOP, not two loops. `rollbackContainment` registers at both with
+  // different implementations: computed at the Author leaf's persist so the chainer carries it into
+  // the Reviewer's §6 BEFORE the review, then HOISTED (never recomputed) at the leg's SYNTHESIZE so
+  // the Reviewer and the gate can never see different numbers for one package.
+  await runNetsAtPoint('leaf-persist', netCtx, MECHANICAL_NETS, stampNet, netError);
+  await runNetsAtPoint('leg-synthesize', netCtx, MECHANICAL_NETS, stampNet, netError);
+
+  // ── Per-net operator telemetry. Deliberately OUTSIDE the registry: these lines are specific
+  // claims about specific facts, and a uniform "log the fact" would either say nothing useful or
+  // say it about nets it does not understand. Read from the stamp, so they cannot drift from it.
+  {
+    const dc = (resultJson as Record<string, unknown>).derivationContainment as
+      { violations?: unknown[]; containmentDisposition?: { disposition?: string; reason?: string } } | undefined;
+    if (Array.isArray(dc?.violations) && dc.violations.length > 0) {
+      logger.warn({ executionId, taskId: task.id, derivationContainment: dc },
+        'Derivation-containment violations: a derived value covers harvested allocation(s) outside its declared members');
+    }
+    // DISCHARGE TELEMETRY (2026-08-27, panel condition 6). `no-author-child` ESCALATES to Node C
+    // instead of blocking, trading a mechanical decision for a reviewer judgement. That trade is
+    // only defensible while we can see how often it is exercised — so emit a countable line per
+    // escalation. This is the outcome data by which a DECLARED `legKind` could later be EARNED
+    // (Protocol 10: ship the fact, earn the verdict); the panel rejected it as unearned NOW, not
+    // wrong forever. A climb here without new program types is the signal to revisit.
+    if (dc?.containmentDisposition?.reason === 'no-author-child-leg-kind-undecidable') {
+      logger.info({ executionId, taskId: task.id, containmentDisposition: dc.containmentDisposition },
+        'Containment escalated to Node C: leg kind undecidable (no author child) — discharge required');
+    }
+
+    const lint = (resultJson as Record<string, unknown>).dialectLint as
+      { violations?: unknown[]; transcription?: { missing?: unknown[] } } | undefined;
+    if (Array.isArray(lint?.violations) && lint.violations.length > 0) {
+      logger.warn({ executionId, taskId: task.id, dialectLint: lint },
+        'Dialect-lint violations: banned platform token(s) present in candidate-config blocks');
+    }
+    if (Array.isArray(lint?.transcription?.missing) && lint.transcription.missing.length > 0) {
+      logger.warn({ executionId, taskId: task.id, missing: lint.transcription.missing },
+        'Dialect-lint: required canonical-stanza line(s) ABSENT from the package (the R7 omission shape)');
+    }
+
+    const propagation = (resultJson as Record<string, unknown>).contractPropagation as
+      { children?: Array<Record<string, unknown>> } | undefined;
+    const starved = (propagation?.children ?? []).filter((k) => k.executed && !k.hasInterfaceContract);
+    if (starved.length > 0) {
+      logger.warn({ executionId, taskId: task.id,
+        starved: starved.map((k) => ({ taskId: k.taskId, role: k.role,
+          linesAbsentFromBrief: (k.canonicalLinesAbsentFromBrief as string[])?.length ?? 0 })) },
+        'Contract propagation: executed child ran WITHOUT the structured interface contract — ' +
+        'its conditional transcribe/verify obligations were unsatisfiable');
     }
   }
 
-  // CONTRACT APPLICABILITY (2026-09-11) — computed ONCE and nested on BOTH contract-dependent facts.
-  //
-  // WHY IT EXISTS. A standalone pipeline has NO Program Interface Contract by design, so both facts
-  // stamp a bare absence (`no-contract` / `no-contract-on-leg`) that cannot be told apart from "a
-  // contract was expected and is missing" without re-deriving the tier. Measured: reviewers graded
-  // that absence as a gap on 9 of 37 archived standalone legs — and on 4 of 4 on 2026-09-11, i.e.
-  // the class is becoming universal. A false gap teaches a reader to skim real ones.
-  //
-  // WHY NEITHER FACT OWNS IT. Both already stamp an absence, so putting the predicate inside one
-  // would force the other to re-derive it — the two-extractor drift class. Computed here, nested
-  // there (E3b: it rides INSIDE each whitelisted fact, so no RESULT_JSON_SUMMARY_KEYS change and
-  // the strict pick carries it verbatim).
-  //
-  // ⚠️ A PROGRAM ROOT NEVER REACHES THIS. The `programTier` ternary below short-circuits a program
-  // parent to `reason: 'program-tier'` before the enrichment runs, so `expected: false` can only
-  // ever mean STANDALONE, never "root". Measured 2026-09-11: program roots say the reviewer
-  // sentence 0 times in 39 — they are not part of this class. (Source-true but UNOBSERVED in prod:
-  // every archived program root predates H-3. Pinned by test, not asserted.)
-  //
-  // F13 GUARD: `expected: true` + an absent contract is structurally UNREACHABLE — F13
-  // (INTERFACE_CONTRACT_MISSING) hard-fails a program pipeline child at prepare time. So that
-  // combination is NOT "the real gap case"; it is evidence the belt has a hole, and it must read
-  // loudly rather than benign. It is stamped, never suppressed.
-  let contractApplicability: Record<string, unknown> | null = null;
-  if (task.type === 'PIPELINE' && harnessContext?.mode === 'SYNTHESIZE' && !programTier) {
-    try {
-      const stageId = (task.metadata as Record<string, unknown> | null)?.pipelineStageId;
-      if (typeof stageId === 'string' && stageId) {
-        // THE F12 LOOKUP, shared — not a second copy of that query (its AND-lift is load-bearing).
-        const programParentId = await findProgramParentForStage(prisma, stageId);
-        contractApplicability = programParentId
-          ? { expected: true, basis: 'program-parent', programParentId }
-          : { expected: false, basis: 'no-program-parent' };
-      }
-    } catch (caErr) {
-      // Non-throwing like every net beside it. ABSENT applicability is honest here: it means the
-      // tier could not be resolved, which must NOT read as "no contract expected".
-      logger.warn({ executionId, err: caErr instanceof Error ? caErr.message : String(caErr) },
-        'contract-applicability lookup failed — facts stamped without it');
-    }
-  }
-
-  // DIALECT LINT (Phase 2, 2026-08-25) — the SECOND mechanical net, wired to the same site and the
-  // same contract as derivation-containment above: PRE-tx, non-throwing, fact-not-verdict.
-  //
-  // Earned the same way: a prose contract failing twice on one axis. IGP-T1 R1 shipped two IOS-isms
-  // on an Arista target past an APPROVING reviewer (refused at the operator's config session), then
-  // R3 re-emitted a banned token past a contract that explicitly named it. Prose guards in this
-  // domain have failed at least once each; mechanical ones have held.
-  //
-  // Scans FENCED CODE BLOCKS ONLY, and only those classified candidate-config — prose legitimately
-  // NAMES banned tokens when stating rules, and an expected-output block legitimately quotes them
-  // (R9). Blocking a clean package on that would be the R5 mistake inside our own guard.
-  if (task.type === 'PIPELINE' && harnessContext?.mode === 'SYNTHESIZE') {
-    try {
-      const lint = programTier
-        ? { checked: false, reason: 'program-tier', tier: 'program', applicable: false, tokensConsidered: [], violations: [] }
-        : await computeDialectLintFact(prisma, {
-          stageId: (task.metadata as Record<string, unknown> | null)?.pipelineStageId,
-          interfaceContract: (task.inputContext as { interfaceContract?: unknown } | null)?.interfaceContract,
-        });
-      if (contractApplicability) (lint as Record<string, unknown>).contractApplicability = contractApplicability;
-      (resultJson as Record<string, unknown>).dialectLint = lint;
-      const violations = (lint as { violations?: unknown[] }).violations;
-      if (Array.isArray(violations) && violations.length > 0) {
-        logger.warn({ executionId, taskId: task.id, dialectLint: lint },
-          'Dialect-lint violations: banned platform token(s) present in candidate-config blocks');
-      }
-      const transcription = (lint as { transcription?: { missing?: unknown[] } }).transcription;
-      if (Array.isArray(transcription?.missing) && transcription.missing.length > 0) {
-        logger.warn({ executionId, taskId: task.id, missing: transcription.missing },
-          'Dialect-lint: required canonical-stanza line(s) ABSENT from the package (the R7 omission shape)');
-      }
-    } catch (dlErr) {
-      // Same G3 reasoning as the containment catch above: this path never calls the enrichment, so
-      // anything it stamps is guaranteed ABSENT on the one arm meaning "things went wrong". Stamp a
-      // named fact here too, or an enrichment crash renders as nothing at all — a failure that
-      // reads clean, which is the exact class this net exists to close.
-      (resultJson as Record<string, unknown>).dialectLint = {
-        checked: false, reason: 'enrichment-error', tokensConsidered: [], violations: [],
-      };
-      logger.warn({ executionId, err: dlErr instanceof Error ? dlErr.message : String(dlErr) },
-        'dialect-lint enrichment failed — fact recorded as checked:false');
-    }
-  }
-
-  // CONTRACT PROPAGATION (2026-08-26) — the THIRD mechanical net, and the first that lints the
-  // HARNESS'S OWN DECOMPOSITION rather than an agent's output.
-  //
-  // Measured: across every archived leg carrying an interfaceContract, 7 of 7 lost most of the
-  // canonical stanza when the leg harness PARAPHRASED the contract into its children's
-  // descriptions, and 0 of N ACTION children ever held the structured contract. The obligations
-  // that should have caught it are CONDITIONAL ("where the contract carries a canonical stanza
-  // template, TRANSCRIBE it" / "...verify every non-placeholder line appears"), so with no contract
-  // in context the predicate is false, NO OBLIGATION IS OWED, and nothing is logged as skipped.
-  // Two live rounds shipped configs missing a line that left the routing protocol INACTIVE.
-  //
-  // Same contract as the two nets above: PRE-tx, non-throwing, FACT not verdict, catch arm stamps
-  // a named reason. SYNTHESIZE (not CREATE) is deliberate: inheritance happens at each CHILD's
-  // prepare, i.e. AFTER the leg's CREATE persist — a CREATE-time reading would report
-  // hasInterfaceContract:false for every child forever, even once the fix works.
-  if (task.type === 'PIPELINE' && harnessContext?.mode === 'SYNTHESIZE') {
-    try {
-      const propagation = programTier
-        ? { checked: false, reason: 'program-tier', tier: 'program', applicable: false, children: [] as Array<Record<string, unknown>> }
-        : await computeContractPropagationFact(prisma, {
-          stageId: (task.metadata as Record<string, unknown> | null)?.pipelineStageId,
-          interfaceContract: (task.inputContext as { interfaceContract?: unknown } | null)?.interfaceContract,
-        });
-      if (contractApplicability) (propagation as Record<string, unknown>).contractApplicability = contractApplicability;
-      (resultJson as Record<string, unknown>).contractPropagation = propagation;
-      const kids = (propagation.children ?? []) as Array<Record<string, unknown>>;
-      const starved = kids.filter((k) => k.executed && !k.hasInterfaceContract);
-      if (starved.length > 0) {
-        logger.warn({ executionId, taskId: task.id,
-          starved: starved.map((k) => ({ taskId: k.taskId, role: k.role,
-            linesAbsentFromBrief: (k.canonicalLinesAbsentFromBrief as string[])?.length ?? 0 })) },
-          'Contract propagation: executed child ran WITHOUT the structured interface contract — ' +
-          'its conditional transcribe/verify obligations were unsatisfiable');
-      }
-    } catch (cpErr) {
-      (resultJson as Record<string, unknown>).contractPropagation = {
-        checked: false, reason: 'enrichment-error', canonicalLinesConsidered: 0, children: [],
-      };
-      logger.warn({ executionId, err: cpErr instanceof Error ? cpErr.message : String(cpErr) },
-        'contract-propagation enrichment failed — fact recorded as checked:false');
-    }
-  }
-
-  // ROLLBACK CONTAINMENT, leg view (2026-09-11) — HOIST the Author child's stamp, never recompute.
-  // Two consumers must agree on one set of numbers: the Reviewer (which read it via §6 one leaf
-  // earlier) and the program gate (which reads it off this leg's lean card). A recomputation could
-  // diverge from what the Reviewer was shown if anything about scoping changed between the two
-  // persists; a hoist is identical by construction. Same contract as the nets above: PRE-tx,
-  // non-throwing, catch arm stamps a named fact WITH a disposition.
-  if (task.type === 'PIPELINE' && harnessContext?.mode === 'SYNTHESIZE') {
-    try {
-      (resultJson as Record<string, unknown>).rollbackContainment = programTier
-        ? {
-            checked: false, reason: 'program-tier', tier: 'program', applicable: false,
-            rollbackDisposition: {
-              disposition: 'benign', reason: 'program-tier',
-              inputs: { reason: 'program-tier', missingCount: 0, restoreLinesTotal: 0 },
-            },
-          }
-        : await hoistRollbackContainment(prisma, {
-            stageId: (task.metadata as Record<string, unknown> | null)?.pipelineStageId,
-          });
-    } catch (rcErr) {
-      (resultJson as Record<string, unknown>).rollbackContainment = {
-        checked: false, reason: 'enrichment-error',
-        rollbackDisposition: {
-          disposition: 'blocking', reason: 'hard-gap',
-          inputs: { reason: 'enrichment-error', missingCount: 0, restoreLinesTotal: 0 },
-        },
-      };
-      logger.warn({ executionId, err: rcErr instanceof Error ? rcErr.message : String(rcErr) },
-        'rollback-containment hoist failed — fact recorded as checked:false');
-    }
-  }
 
   // Keep-best self-supersession — computed PRE-tx (READ COMMITTED; target terminal + immutable).
   // Fires ONLY for stamped orchestrator retries. Non-fatal: failure = latest-wins.

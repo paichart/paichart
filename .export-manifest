@@ -304,6 +304,7 @@
 .claude/knowledge/patterns/two-execution-path-drift-pattern.md
 .claude/knowledge/pipelines/ADD-A-PIPELINE-HARNESS-AGENT.md
 .claude/knowledge/pipelines/ADD-A-PROGRAM-PROTOCOL.md
+.claude/knowledge/pipelines/CHECK-DESIGN-DISCIPLINE.md
 .claude/knowledge/pipelines/EVIDENCE-FLOW-DISCIPLINE.md
 .claude/knowledge/pipelines/LEG-NODE-SCALING-LIMITS.md
 .claude/knowledge/pipelines/LLM-ORCHESTRATION-SECURITY-POSTURE.md
@@ -319,7 +320,7 @@
 .claude/knowledge/pipelines/PROTOCOL-AUTHORING-GUIDE.md
 .claude/knowledge/pipelines/README.md
 .claude/knowledge/pipelines/USING-WORKFLOW-EVOLUTION-AND-SIGNAL-DESIGN.md
-.claude/knowledge/pipelines/adding-a-containment-kind-toolkit.md
+.claude/knowledge/pipelines/adding-a-net-toolkit.md
 .claude/knowledge/pipelines/firewall-policy-use-case.md
 .claude/knowledge/pipelines/observability-demo-use-case.md
 .claude/knowledge/protocols/autonomous-goal-execution-protocol.md
@@ -1123,6 +1124,9 @@ lib/agents/harness/dialect-lint-enrichment.ts
 lib/agents/harness/dialect-lint.ts
 lib/agents/harness/execution-quality.ts
 lib/agents/harness/marker-presence.ts
+lib/agents/harness/mechanical-nets.ts
+lib/agents/harness/net-context.ts
+lib/agents/harness/net-registry.ts
 lib/agents/harness/parse-confidence.ts
 lib/agents/harness/parse-verdict.ts
 lib/agents/harness/prepare-task-for-execution.ts
@@ -1664,6 +1668,7 @@ scripts/export-public.py
 scripts/export/public-allowlist.rules
 scripts/export/publish.sh
 scripts/fixtures/live-service-descriptions.json
+scripts/fixtures/net-registry-equivalence/specimens.json
 scripts/fixtures/rollback-containment/PROVENANCE.md
 scripts/fixtures/rollback-containment/fw-author.md
 scripts/fixtures/rollback-containment/fw-harvest.md
@@ -1690,12 +1695,14 @@ scripts/probe-cache-breakpoint.ts
 scripts/profile-analytics-baseline.ts
 scripts/prompt-directives.ts
 scripts/pull-mcp-schemas.py
+scripts/pull-net-equivalence-specimens.sh
 scripts/register-internal-services.ts
 scripts/render-public-claude.py
 scripts/render-public-protocols.ts
 scripts/replay-containment.ts
 scripts/replay-contract-propagation.ts
 scripts/replay-dialect-lint.ts
+scripts/replay-nets.ts
 scripts/replay-rollback-containment.ts
 scripts/report-template-freshness.ts
 scripts/run-baseline.sh
@@ -1746,6 +1753,7 @@ scripts/test-build-agent-prompt-parity.ts
 scripts/test-byok-fail-fast-parity.ts
 scripts/test-cc7-contract-guard-behavioral.ts
 scripts/test-cc7-contract-guard.ts
+scripts/test-chain-cap-accounting.ts
 scripts/test-chained-context-signal.ts
 scripts/test-chatgpt-connector-truncation.ts
 scripts/test-client-context-reserved-keys.ts
@@ -1821,6 +1829,8 @@ scripts/test-mcp-validations.ts
 scripts/test-mode-resolver-injection.ts
 scripts/test-model-capabilities.ts
 scripts/test-model-resolution-parity.ts
+scripts/test-net-registry-equivalence.ts
+scripts/test-net-registry.ts
 scripts/test-nonterminal-family-pins.ts
 scripts/test-null-template-guard.ts
 scripts/test-oauth-security.ts

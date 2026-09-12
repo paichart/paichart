@@ -527,6 +527,68 @@ test('RC6 COUPLING: every reason the enrichment can stamp is renderable by this 
   }
 });
 
+/* ── DL/CP SURFACING (2026-09-12, stage 2b) ───────────────────────────────────────────────────
+ *
+ * `dialectLint` and `contractPropagation` were stamped and whitelisted from 2026-08-25/26 and
+ * rendered on NO card line until today. Every parity suite stayed green throughout, because a fact
+ * that is written correctly and read by nobody is green at each layer in isolation — the A1/F7
+ * class. These assertions are the read half; `test:net-registry` R5b is the write half (a net may
+ * not CLAIM a card render it does not have).
+ */
+test('DL1: dialectLint renders WHAT, not just how many — the token and its line', () => {
+  const line = leanFactsLine({
+    dialectLint: { checked: true, violations: [{ token: 'metric-style wide', line: 412 }] },
+  }) as string;
+  if (!line || !line.includes('metric-style wide') || !line.includes('@L412')) {
+    throw new Error(`the violating token and its line must both reach the card: ${line}`);
+  }
+});
+test('DL2: the transcription half reports BOTH counts, so a REMOVAL leg is not read as a defect', () => {
+  // 1 of 10 is a FALSE positive on a removal leg (IGP-T1 R12 P4) and a real defect on a deploy leg
+  // (R11, 8 of 10). Rendering only the misses makes those indistinguishable.
+  const line = leanFactsLine({
+    dialectLint: { checked: true, violations: [],
+      transcription: { linesPresent: 8, linesRequired: 10, missing: ['address-family ipv4 unicast'] } },
+  }) as string;
+  if (!line.includes('8/10') || !line.includes('address-family ipv4 unicast')) {
+    throw new Error(`both counts and the missing line must render: ${line}`);
+  }
+});
+test('DL3: an UNCHECKED dialectLint renders its named reason, never silence', () => {
+  const line = leanFactsLine({ dialectLint: { checked: false, reason: 'no-author-text' } }) as string;
+  if (!line || !line.includes('no-author-text')) throw new Error(`reason must reach the card: ${line}`);
+});
+test('CP1: contractPropagation names the STARVED child and how much of the contract it lost', () => {
+  const line = leanFactsLine({
+    contractPropagation: { checked: true, children: [
+      { executed: true, hasInterfaceContract: true, role: 'reviewer' },
+      { executed: true, hasInterfaceContract: false, role: 'author',
+        canonicalLinesAbsentFromBrief: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] },
+    ] },
+  }) as string;
+  if (!line.includes('1 of 2 children STARVED') || !line.includes('author') || !line.includes('7 canonical')) {
+    throw new Error(`the starved child must be NAMED, not counted: ${line}`);
+  }
+});
+test('CP2: a fully-propagated contract renders positively (absence of a gap is itself the fact)', () => {
+  const line = leanFactsLine({
+    contractPropagation: { checked: true, children: [{ executed: true, hasInterfaceContract: true, role: 'author' }] },
+  }) as string;
+  if (!line.includes('1 of 1 executed children held the contract')) {
+    throw new Error(`a clean propagation must still render: ${line}`);
+  }
+});
+test('CA1: contractApplicability renders the by-design absence that reviewers kept grading as a gap', () => {
+  // 9 of 37 archived standalone legs had a reviewer grade a by-design missing contract as a gap.
+  const line = leanFactsLine({
+    dialectLint: { checked: false, reason: 'no-contract',
+      contractApplicability: { expected: false, basis: 'no-program-parent' } },
+  }) as string;
+  if (!line.includes('none expected') || !line.includes('no-program-parent')) {
+    throw new Error(`the applicability qualifier must reach the reader: ${line}`);
+  }
+});
+
 // --- Summary ---
 console.log('\n=====================================');
 console.log(`Results: ${passed} passed, ${failed} failed`);

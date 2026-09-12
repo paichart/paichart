@@ -34,6 +34,7 @@ directory has since accumulated the canonical guides, and a reader landing here 
 | doc | for |
 |---|---|
 | `EVIDENCE-FLOW-DISCIPLINE.md` | how evidence crosses stage boundaries |
+| `CHECK-DESIGN-DISCIPLINE.md` | how the checks WE write fail, and what shape a good one has |
 | `USING-WORKFLOW-EVOLUTION-AND-SIGNAL-DESIGN.md` | Protocol 13 + Protocol 10 applied here |
 | `firewall-policy-use-case.md` | the worked example + single-vs-program decision matrix |
 
@@ -105,6 +106,17 @@ validate → promote. It names the source-of-truth files and the specialist gate
 [`PIPELINE-DOMAIN-FIT-CATALOG.md`](./PIPELINE-DOMAIN-FIT-CATALOG.md) maps the pattern across
 domains (network provisioning, Kubernetes/GitOps, Terraform, and observability config all shipped; database a candidate),
 with what transfers vs what's domain-specific, and a worked Phase-1 fit-triage per candidate.
+
+## How our own CHECKS fail — and what shape a good one has
+
+**[`CHECK-DESIGN-DISCIPLINE.md`](./CHECK-DESIGN-DISCIPLINE.md)** is the sibling of
+`EVIDENCE-FLOW-DISCIPLINE.md`: that one is about LLM tiers judging each other, this one about the
+checks WE write — CI gates, protocol clauses, mechanical facts, equivalence gates, audit scripts.
+Read it before adding or re-tuning any gate. Six rules, each earned by a dated failure: a rule is
+usually a PROXY for a property · convert an absence into a declared named state · enumeration vs
+property (let the corpus decide) · coincidental agreement is not coverage · mutation-verify the
+CHECKER · and what actually moves the pass rate, including why two of the three levers cannot be
+pushed proactively.
 
 ## How to EVOLVE the platform after a live run finds something
 

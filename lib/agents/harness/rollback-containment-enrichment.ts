@@ -210,10 +210,27 @@ export async function computeRollbackContainmentFact(
  * scoping changed between the two persists; a hoist is identical by construction. `source` records
  * which child it came from so the attribution is never inferred.
  */
+/**
+ * H-3 tier arm, MOVED INSIDE the enrichment 2026-09-12 (stage 2b). It was a ternary at the
+ * execution-core call site, which put it in the one half a replay runner cannot exercise — so the
+ * only way to see what a program parent stamps was a live program run. `derivationContainment`
+ * already decided its tier here; the registry picks that shape for all of them. The literal below
+ * is transcribed VERBATIM from the call site: the equivalence gate compares serialized bytes, so
+ * a "tidier" object is a behavioural change wearing a refactor's clothes.
+ */
 export async function hoistRollbackContainment(
   prisma: RollbackPrisma,
-  { stageId }: { stageId: unknown }
+  { stageId, programTier }: { stageId: unknown; programTier?: boolean }
 ): Promise<Record<string, unknown>> {
+  if (programTier === true) {
+    return {
+      checked: false, reason: 'program-tier', tier: 'program', applicable: false,
+      rollbackDisposition: {
+        disposition: 'benign', reason: 'program-tier',
+        inputs: { reason: 'program-tier', missingCount: 0, restoreLinesTotal: 0 },
+      },
+    };
+  }
   const miss = (reason: string): Record<string, unknown> => {
     const fact: Record<string, unknown> = { checked: false, reason, scope: ROLLBACK_SCOPE_NOTE };
     fact.rollbackDisposition = computeRollbackDisposition(fact);

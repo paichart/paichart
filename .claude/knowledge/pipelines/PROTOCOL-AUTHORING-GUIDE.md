@@ -59,7 +59,7 @@ say it is a state, never a bar.
 literal (`kind`: `cidr` | `asn`) that the protocol shows only as an example invites helpful
 coining — and a coined token degrades differently at each site (false mismatch / `unsupported[]`
 / silently invisible evidence — O5, Tasman Run 1). When the engine gains a member, the sentences
-gain it in the same change (`adding-a-containment-kind-toolkit.md` Step 2d owns that procedure).
+gain it in the same change (`adding-a-net-toolkit.md` Step 2d owns that procedure).
 
 **R4 — Respect the derive/consume split.** Deriving rules (tightest-value, member-by-member,
 alignment) go ONLY in the deriving protocol. Adding them to a consuming protocol invites the
@@ -174,7 +174,7 @@ observable — the live stamp — before theorising).
 `../patterns/agent-template-gold-standard-pattern.md` (the template tier's equivalent of this
 guide) · `../patterns/agent-output-trustworthiness-defense-stack-pattern.md` (the enforcement
 stack under the prose) · Protocol 10 in CLAUDE.md (fact vs verdict, for any signal a protocol
-tells an agent to emit) · `adding-a-containment-kind-toolkit.md` (R3's procedure).
+tells an agent to emit) · `adding-a-net-toolkit.md` (R3's procedure).
 
 ## Conditional obligations — the three-part shape (earned 2026-08-27, Bug Class 82)
 

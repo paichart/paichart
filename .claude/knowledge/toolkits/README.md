@@ -474,8 +474,8 @@ npm run test:all-validation  # 78 tests
 3. **genesis_prompt.md** - How a toolkit is authored
 4. **README.md** - This file (how to use toolkits)
 
-**Moved** (2026-08-11): **adding-a-containment-kind-toolkit.md** now lives at
-`../pipelines/adding-a-containment-kind-toolkit.md` — it is pipeline-domain material and
+**Moved** (2026-08-11): **adding-a-net-toolkit.md** now lives at
+`../pipelines/adding-a-net-toolkit.md` — it is pipeline-domain material and
 belongs beside PIPELINE-DOMAIN-FIT-CATALOG.md and the run-forensics guide.
 
 **Related**:

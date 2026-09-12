@@ -64,7 +64,7 @@ recomputation against carried evidence.
 | Design declares derivations as `## Derived Values` {kind, value, MANDATORY members} + per-entry containment at design time; widen ⇒ re-select or escalate | runs 2/3 widening; members field: every valid aggregate covers its own members (specialist 2b) | protocol contract + the mechanical check |
 | Evidence sections MANDATORY when derivations exist, FORBIDDEN otherwise; verbatim-quoted, source-named | run 4: an over-applied evidence block invited invention | Author contract |
 | Reviewers recompute vs the evidence; harvest wins on disagreement; unsourced/absent evidence = blocking; findings graded | runs 3/4 | leg Reviewer + Node C contracts (1.2.0/1.0.9) |
-| Mechanical `derivationContainment` fact — anchored to the harvest artifact, pre-tx, non-throw, checked:false-never-block | run 4 fabrication; wiring per harness-specialist ruling (pre-tx beside computeSelfSupersession — NOT the terminal tx) | `lib/agents/harness/derivation-containment.ts` + execution-core enrichment |
+| Mechanical `derivationContainment` fact — anchored to the harvest artifact, pre-tx, non-throw, checked:false-never-block | run 4 fabrication; wiring per harness-specialist ruling (pre-tx beside computeSelfSupersession — NOT the terminal tx) | `lib/agents/harness/derivation-containment.ts` + the shared net registry (`net-registry.ts`, since 2026-09-12 — execution-core no longer names any fact function directly; grepping it for `computeDerivationContainmentFact` now returns ZERO and that is correct, not missing) |
 | `member-not-covered` violation class (arithmetic errors) | run 5: /31 claimed for a straddling pair; leg reviewer caught at 45, run 6's MISSED at 92 | same validator (49b04676) |
 | Heading-tolerant structured-block parsing (furniture-only prefixes; prose mentions excluded) | run 6: `**Derived Values**` (bold) blinded the token-locked parser while the error sat inside the block | parseFencedJsonBlock |
 | Node C retrieves structured facts by tool (perform agent.results per leg) | run 4 access gap | pov-program 1.0.9 |
@@ -125,7 +125,7 @@ stands. This section carries only what moved after it, so the original stays cit
 **The spine held.** The design rule *"a new derivation relation adds a checker to the dispatch — never
 bakes domain logic into the enrichment/persist path"* was written here on 2026-07-18 and used on
 2026-08-02, when `asn` became the second `kind`. It followed the rule exactly, including the persist-path
-half. The procedural descendant is `.claude/knowledge/pipelines/adding-a-containment-kind-toolkit.md`.
+half. The procedural descendant is `.claude/knowledge/pipelines/adding-a-net-toolkit.md`.
 
 **New since:**
 

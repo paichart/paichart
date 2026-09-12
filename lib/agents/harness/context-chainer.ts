@@ -64,6 +64,12 @@ async function resolveRollbackLane(
 // will not bind on normal synthesis pipelines. If a truncation warn fires on a
 // real production pipeline, RAISE the per-predecessor cap (do not lower it).
 // See cline_docs/reviews/2026-06-06-pipeline-stage-handoff-truncation/IMPLEMENTATION-PLAN-v2.md (Change 4).
+// SCOPE, stated because the two caps differ and the difference is deliberate (2026-09-12): this one
+// bounds ONE upstream `finalResponse` and nothing else — its name and its 8x-a-real-harvest sizing
+// are both about that string. TOTAL_CONTEXT_CEILING below bounds the SERIALIZED ENTRY, carried facts
+// included, because that is what actually reaches the §6 prompt. Do not "make them consistent" by
+// widening this one: a per-predecessor cap counting facts would truncate a finalResponse to make
+// room for a fact, which is the opposite of the trim-text-never-facts rule at the ceiling.
 export const PER_PREDECESSOR_SOFT_CAP = 131072; // 128 KB per upstream finalResponse (exported for the tier-invariant test, Finding D)
 export const TOTAL_CONTEXT_CEILING = 524288;    // 512 KB summed across all chainedFrom (~10% of 5MB result.json cap)
 
@@ -484,15 +490,63 @@ export async function chainDependencyContext(taskId: string, db: ChainerClient =
   // most-foundational output (e.g. the Harvester root in a synthesis pipeline)
   // survives whole. Soft guard — marker overhead may leave it marginally over;
   // acceptable for a generous 512KB runaway bound.
-  let totalChars = chainedFrom.reduce((sum, e) => sum + e.finalResponse.length, 0);
+  //
+  // ⚠️ MEASURE THE WHOLE ENTRY, TRIM ONLY `finalResponse` (2026-09-12). This summed
+  // `e.finalResponse.length` alone until today, so every carried FACT — `markerPresence`,
+  // `derivationContainment`, `rollbackContainment`, and each net the registry adds — was
+  // outside the accounting entirely. Those facts are rendered into §6 and therefore ARE
+  // chained context; a chain could sit "at" 512 KB and serialize materially larger, silently.
+  // Measured 2026-09-12 across all 658 archived predecessor entries: ~0.8 KB/entry of fact
+  // today, worst-case ~3.2 KB/entry once four nets carry their honest-limits `scope` prose —
+  // still far under the ceiling (max observed total 217 KB), which is exactly why this had to
+  // be fixed while it was cheap. A ceiling exists to bound a RUNAWAY, and a runaway is
+  // precisely when the uncounted fraction is largest.
+  //
+  // TRIMMING STAYS finalResponse-ONLY, deliberately. A truncated fact is a CORRUPT fact, and a
+  // fact that silently vanished at the ceiling is the A1 class one layer up — a consumer reads
+  // ABSENT and cannot tell "never stamped" from "dropped for space". So the overhead is
+  // COUNTED but never CUT: an entry whose facts alone exceed the ceiling trims its
+  // finalResponse to zero and the loop moves on to the next predecessor rather than spinning.
+  const entryChars = (e: (typeof chainedFrom)[number]): number => {
+    try {
+      return JSON.stringify(e)?.length ?? e.finalResponse.length;
+    } catch {
+      // A non-serializable entry can only over-count by omission; never let accounting throw
+      // inside a soft guard. Degrade to the pre-2026-09-12 behaviour for that entry alone.
+      return e.finalResponse.length;
+    }
+  };
+  const sumChars = () => chainedFrom.reduce((sum, e) => sum + entryChars(e), 0);
+  let totalChars = sumChars();
   for (let i = chainedFrom.length - 1; i >= 0 && totalChars > TOTAL_CONTEXT_CEILING; i--) {
     const entry = chainedFrom[i];
     const overBy = totalChars - TOTAL_CONTEXT_CEILING;
-    const keep = Math.max(0, entry.finalResponse.length - overBy);
+    // SUBTRACT THE MARKER THIS TRIM IS ABOUT TO ADD (2026-09-12). `keep = len - overBy` left the
+    // entry ~50 chars over after the marker was appended, so the loop fell through to the NEXT
+    // predecessor and shaved ~54 chars off it, and the next, and the next — cascading all the way
+    // to the HEAD. That silently contradicted this block's own promise that the earliest /
+    // most-foundational predecessor "survives whole": in a 4-predecessor chain the Harvester root
+    // was being trimmed to pay for the marker on the tail. Pre-existing (the old arithmetic had the
+    // same shape) and only visible once a fixture put a chain deliberately just over the line.
+    // Budgeting the marker up front makes the loop converge on the tail entry, as documented.
+    // The bound is computed from the UNTRIMMED lengths, so it can only over-reserve by a digit
+    // or two — never under-reserve, which is the direction that would re-open the cascade.
+    //
+    // ⚠️ MEASURED IN SERIALIZED BYTES, NOT RAW CHARS, because the accounting above is serialized:
+    // the marker opens with two newlines, and `JSON.stringify` renders each as the two characters
+    // \n. A raw-length budget therefore under-reserves by exactly the escape growth, each pass
+    // removes as many characters as its own marker adds, the total never falls, and the loop walks
+    // the whole chain shaving a marker's worth off every predecessor — the cascade, in a subtler
+    // form. `- 2` drops the quotes `JSON.stringify` puts around the string.
+    const markerBudget = JSON.stringify(truncationMarker(
+      entry.finalResponse.length,
+      entry.originalChars ?? entry.finalResponse.length
+    )).length - 2;
+    const keep = Math.max(0, entry.finalResponse.length - overBy - markerBudget);
     entry.finalResponse = entry.finalResponse.slice(0, keep)
       + truncationMarker(keep, entry.originalChars ?? entry.finalResponse.length);
     entry.truncated = true;
-    totalChars = chainedFrom.reduce((sum, e) => sum + e.finalResponse.length, 0);
+    totalChars = sumChars();
     log.warn(
       {
         taskId,

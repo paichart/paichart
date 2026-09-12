@@ -87,6 +87,26 @@ aggregate does not truncate the result, it silently returns a **different answer
 `graph.ts`'s topological sort. An unbounded read costs a coverage point; a wrongly-capped aggregate
 costs a wrong decision, and only one of those is loud.
 
+### The ratio-gate class — this gate is not the only one
+
+`validate:pagination` and `validate:logging` are both **percentage-of-corpus** gates, and both failed
+within 24 hours (2026-09-11/12) on changes that introduced **no defect of the kind they exist to catch**:
+two correctly-bounded reads took pagination to 89.6% vs 90%, and three modules that correctly log
+nothing took pino adoption to 39.9% vs 40%.
+
+The shared property is the gate's SHAPE, not either change:
+
+- the cost of a **correct addition** lands on whoever ships next, not on whoever wrote the code;
+- a **pure module** — precisely what this codebase keeps asking people to write — is the worst case
+  for both denominators, because it is counted as a non-participant rather than as out of scope;
+- and the tempting fix (bound a read you don't need to bound; import a logger you don't need) makes
+  the gate something you *satisfy* rather than something that *measures* you.
+
+Before adding or re-tuning a ratio gate, ask what its denominator is counting, and whether a file
+that does not participate at all should be in it. `validate:logging`'s denominator was corrected to
+"files that log" on 2026-09-12 for exactly this reason, and its thresholds were recalibrated in the
+same commit — a threshold is only meaningful against the denominator it was measured on.
+
 ⚠️ **The gate runs at the margin, not at 100%** (2026-09-11: 90.2% effective, target 90). Adding a
 mechanical net or enrichment with a stage-children scan is the recurring way to trip it — bound the
 read at write time; `validate:pagination` is NOT in the pinned pre-push suites most harness work runs.

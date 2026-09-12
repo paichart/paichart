@@ -487,6 +487,59 @@ npm run dev
 ❌ Issues → git revert HEAD
 ```
 
+### Strategy 3b: Acceptance for a CONSOLIDATION — equivalence against OBSERVED output
+
+*Added 2026-09-12, from the mechanical-net registry (six hand-wired stamp sites → one registry). This
+protocol covered sequencing and had no acceptance criterion; that half had been reinvented from scratch
+in every prior instance — the completion-path unification (six human write-sites → one core), the
+execution-path convergence, `buildAgentPromptBody` (two callers → one builder), the forward-cone
+extraction. The repo carries ~24 `parity` / `behavioral` / `boundary` suites, which is what
+reinvention looks like from a distance.*
+
+**Recognise the shape first.** A *consolidation* is N working instances of a pattern becoming one shared
+structure so that the N+1th is correct by construction. It is NOT a feature, and it is NOT tidying. Its
+risk is inverted from feature work: the question is never "does the new thing work" but **"does it do
+exactly what the N old things did, including their accidents"** — and accidents are the hard part,
+because nobody wrote them down.
+
+Do it when the convention has already failed at least once in production (a forgotten wiring, an
+un-rendered output, an inconsistent error path). Doing it earlier — "to prove the framework is generic"
+— is a documented failure mode; see `adding-a-net-toolkit.md` Step 0.
+
+**The acceptance criterion, and every clause is load-bearing:**
+
+1. **Compare against what production ACTUALLY PRODUCED** — stored output from real runs — not against a
+   frozen copy of the old code. The second is seductive and nearly worthless: it compares your
+   assumptions with a copy of your assumptions.
+2. **Restrict specimens PER INSTANCE** to runs post-dating that instance's last behavioural change, and
+   **declare the window as data**. Never derive it from the rows under test, or a behavioural change
+   silently redefines its own window. *Dates usually cannot do this job*: in the 2026-09-12 instance the
+   undeployed commits and every candidate specimen shared one date. What decides the window is human
+   knowledge of what deployed when, so write it down as human knowledge.
+3. **"Its answer happens to agree" is not "it was produced by this code."** A match produced by a no-op
+   path is a coincidence, not coverage. Count it NOT COVERED. Applying this honestly took one gate from
+   3 uncovered pairs to 12 — *the increase was the correct number*, and the 3 had been flattering.
+4. **Every mismatch is triaged, never auto-accepted, and there is no expected-diff list.** A gate that
+   has been taught which differences are acceptable has stopped being a gate.
+5. **Uncovered must PRINT and be COUNTED.** Silence and coverage have to stay distinguishable — that is
+   the property the whole thing rests on.
+6. **Mutation-verify the gate itself before trusting it**, because a window mechanism that suppresses
+   phantoms is indistinguishable from one that suppresses findings until you try: falsely declare a
+   withheld instance covered (must FAIL), delete an instance's declaration (must THROW).
+7. **Detach every behaviour change.** You cannot assert byte-identical while shipping an intended
+   difference in the same commit — it destroys the one gate that makes the extraction safe. Anything
+   that changes output ships after, separately, with its own evidence.
+
+**A deferral is a legitimate outcome.** Sub-parts whose risk lives in shapes the archive does not
+contain cannot be covered by this gate and should NOT ride along. In the 2026-09-12 instance two pieces
+detached for exactly that reason, and one of them would have quietly disarmed a check it was unifying —
+a shared reader that dropped a `type` filter and a `CAP + 1` fetch would have reported a clean subset as
+the whole population, which is the precise failure that fact exists to catch.
+
+**Estimates**: state blast radius (sites touched, surfaces pinned) and risk class
+(equivalence-preserving vs behaviour-changing, reversible vs not). Hours are a size proxy, not a
+schedule, and saying so avoids the scheduling confusion they otherwise cause.
+
 ### Strategy 4: Preserve, Don't Optimize
 
 **When extracting complex logic:**

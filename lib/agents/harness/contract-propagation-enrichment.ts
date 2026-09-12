@@ -68,10 +68,22 @@ const SCOPE_NOTE =
  */
 const CHILD_SCAN_CAP = 50;
 
+/**
+ * H-3 tier arm, MOVED INSIDE the enrichment 2026-09-12 (stage 2b). It was a ternary at the
+ * execution-core call site, which put it in the one half a replay runner cannot exercise — so the
+ * only way to see what a program parent stamps was a live program run. `derivationContainment`
+ * already decided its tier here; the registry picks that shape for all of them. The literal below
+ * is transcribed VERBATIM from the call site: the equivalence gate compares serialized bytes, so
+ * a "tidier" object is a behavioural change wearing a refactor's clothes.
+ */
 export async function computeContractPropagationFact(
   prisma: PrismaClient,
-  { stageId, interfaceContract }: { stageId?: unknown; interfaceContract?: unknown }
+  { stageId, interfaceContract, programTier }:
+    { stageId?: unknown; interfaceContract?: unknown; programTier?: boolean }
 ): Promise<Record<string, unknown>> {
+  if (programTier === true) {
+    return { checked: false, reason: 'program-tier', tier: 'program', applicable: false, children: [] as Array<Record<string, unknown>> };
+  }
   const miss = (reason: ContractPropagationFact['reason']): Record<string, unknown> => ({
     checked: false, reason, canonicalLinesConsidered: 0, children: [], scope: SCOPE_NOTE,
   });

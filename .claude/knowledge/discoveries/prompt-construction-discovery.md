@@ -22,8 +22,16 @@ The agent prompt construction system has evolved into a dual-architecture suppor
 #
 # A. P10 Scope Self-Check (escape hatch) — ONE shared append, reaches EVERY system prompt on BOTH paths.
 grep -n "Scope Self-Check\|TEMPLATE_MISMATCH\|SCOPE_SELF_CHECK" lib/services/execution-system-prompt.ts | head
-grep -c "applySystemPromptInjections(" lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts
-# Expect: SCOPE_SELF_CHECK const + P10 append in the tail; 1 engine + 1 stream call the tail.
+grep -c "applySystemPromptInjectionsWithFact(" lib/services/agentExecutionEngine.ts   # expect 1
+grep -c "applySystemPromptInjectionsWithFact(" app/api/pov/agent/execute/stream/route.ts   # expect 1
+# ⚠️ Split one-file-per-grep 2026-09-12: a MULTI-FILE `grep -c` emits `path:count` per line, and
+# audit-discovery-greps.sh counts the LINES — it read this as "got 2" while both files were correct.
+# "# expect 1 per file" is prose arithmetic, which that script does not parse by design. Bare counts only.
+# Also expect: SCOPE_SELF_CHECK const + the P10 append, both in the tail (grep above).
+# ⚠️ 2026-09-12: this grep was pinned to the bare `applySystemPromptInjections(` name and returned
+# ZERO on both files — the adapters call the `WithFact` variant (the bare name survives only as a
+# thin wrapper nothing calls). A drifted grep returns zero and READS AS CLEAN, so the health-run
+# would have reported the shared tail intact without ever testing it (Protocol 11 Part C).
 
 # B. Protocol injection (metadata.loadProtocols → ALL cap-10 / metadata.protocol → ONE named) + the
 # Axis-5 constraints block — both in the shared tail; the adapters only pass templateMetadata/constraints.

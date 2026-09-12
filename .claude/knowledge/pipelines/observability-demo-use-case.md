@@ -41,7 +41,7 @@ refusals. Say the word "GitSecOps" over the machinery we run every day.
 2. **Cross-leg contract values** (remote-write endpoint, bucket names): the `## Consumed Values`
    machine-check is a CLOSED kind set (`cidr`|`asn`) — carry these values in the contract without
    declaring them in the machine-checked block, OR do the toolkit-tier `name` kind first
-   (`adding-a-containment-kind-toolkit.md`; pure membership, one reviewer). Never coin a kind
+   (`adding-a-net-toolkit.md`; pure membership, one reviewer). Never coin a kind
    (Tasman Run-1 false mismatch).
 3. **Rig**: compose Prometheus+Grafana+otel-collector + thin read-only FastMCP harvest service
    (tf-mcp-readonly pattern), twin-suppressed from day one, read-only descriptor per the playbook's

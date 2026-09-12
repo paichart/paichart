@@ -230,7 +230,12 @@ test('DRIFT GUARD: the F12 LOOKUP composes the shared filter under AND (never in
     'AND-lift missing — two metadata keys in one literal is last-writer-wins and matches the wrong harness');
 
   // Every consumer calls the lookup; none re-inlines the query.
-  for (const rel of ['../lib/agents/harness/prepare-task-for-execution.ts', '../lib/services/execution-core.ts']) {
+  // ⚠️ RETARGETED AGAIN 2026-09-12 (stage 2b): the contractApplicability consumer moved OUT of
+  // execution-core into `net-context.ts`, because it is a `ctx` DERIVATION — two nets nest it and
+  // neither owns it. Second move in two days for the same lookup, which is the point of pinning the
+  // property rather than the address: both times the guard failed loudly instead of going quietly
+  // vacuous, and a guard that keeps passing after its subject leaves is the failure mode here.
+  for (const rel of ['../lib/agents/harness/prepare-task-for-execution.ts', '../lib/agents/harness/net-context.ts']) {
     const src = fs.readFileSync(path.resolve(__dirname, rel), 'utf-8');
     assert(src.includes('findProgramParentForStage('), `${rel} must consume the shared F12 lookup`);
     const offenders = src.split('\n').filter(l =>
