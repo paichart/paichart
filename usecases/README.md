@@ -15,19 +15,18 @@ Two kinds of thing live here:
 | [`kubernetes-lab/`](./kubernetes-lab/) | a `kind` cluster with a workload that has real gaps — no HPA, no limits, no PDB, no NetworkPolicy | Yes |
 | [`terraform-lab/`](./terraform-lab/) | LocalStack + a Terraform workspace with real state | Yes |
 | [`observability-lab/`](./observability-lab/) | Prometheus + Grafana + an OpenTelemetry collector | Yes |
+| [`network-lab/`](./network-lab/) | a 2-node Arista fabric via containerlab + Nornir | **Recipe** — you supply the cEOS image (free Arista account) |
 
 Each lab's README covers bring-up, **how to prove the service is read-only rather than trust that it
 is**, how to point a pipeline at it, teardown, and an honest scope note.
 
-## What is NOT here, and why
+## The network recipe
 
-**The network-provisioning rig is not published.** It runs on Arista cEOS, whose container image
-requires an Arista account — so we could publish a recipe but not something you could actually run,
-and a lab you cannot run is worse than an honest absence. The
-[protocol](../protocols/network-provisioning-protocol.md), the
-[descriptor](../descriptors/ceos-lab-readonly-descriptor.json) and two worked
-[examples](../examples/network-provisioning-change-report.md) are all published; if you have a cEOS
-image or real devices, the descriptor tells you the tool surface a device service must expose.
+[`network-lab/`](./network-lab/) is a **recipe rather than a one-command lab**, and the distinction is
+honest rather than coy: the Arista cEOS container image is not redistributable, so you register (free)
+and import it yourself. Everything else — the containerlab topology, the device startup-configs, the
+Nornir inventory, and the read-only MCP service — is complete and runs unmodified. If you have real
+Arista devices, point the inventory at them and skip containerlab entirely.
 
 ## The read-only floor is the part worth copying
 
