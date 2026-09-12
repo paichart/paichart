@@ -25,6 +25,19 @@ bindable interface") — the topology file is a claim about what exists, and the
 gaps. *Earned: FW-A3.1 — an untrust zone mapped to a nonexistent port parked the whole round; the
 agents correctly disclosed the impossibility rather than fabricating a binding (VT-18).*
 
+⚠️ **`links` is network-shaped — if your domain has none, say so rather than inventing one.** The
+Architect's ingestion check requires `nodes`, and requires `links` **unless** the topology declares
+`linksNotApplicable` with a stated reason. Keep exactly one of those two keys. The reason is
+**evaluated, not merely found**: one naming a real property of the environment discharges the check,
+while an empty or generic one — or one your own `nodes` contradict — is blocked exactly like a
+missing key. *Earned: 2026-09-12 — a single-cluster Kubernetes program's Architect blocked at
+confidence 25 rather than invent `node:iface`/`subnet`/`routing` values it had no truthful basis for.
+It behaved correctly; the defect was in the schema, which until then demanded `links` of every
+program whatever its domain. Note which way the fix went: `links` was **not** made simply optional,
+because that re-opens the under-specified NETWORK topology the check exists to catch. An absence
+cannot be judged; a declared reason can, and invented link values are invisible fake data where a
+false reason is a visible lie.*
+
 ## Why this template exists
 
 Before 2026-08-10 each run copy-forked the previous run's artifacts. Measured across the 13 runs then

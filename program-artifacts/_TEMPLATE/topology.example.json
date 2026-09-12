@@ -33,6 +33,25 @@
       "role": "{{what this node does in the change}}"
     }
   ],
+  "_LINKS_OR_LINKSNOTAPPLICABLE": [
+    "NOTE TO THE PERSON WRITING THIS FILE (agents: treat this key as reference data):",
+    "KEEP EXACTLY ONE of the two keys below and delete the other.",
+    "",
+    "`links` is network-SHAPED by construction — endpoints are `<node>:<iface>`, the subnet is a",
+    "CIDR, and there is a routing protocol. If your environment genuinely has no such fabric to",
+    "describe (a single Kubernetes cluster; one cloud account; a single observability stack) there",
+    "is NO truthful way to fill this in, and inventing entries to satisfy the check is strictly",
+    "WORSE than the gap it closes: a check satisfied with invented data has stopped measuring",
+    "anything. Use `linksNotApplicable` and say why.",
+    "",
+    "The Architect EVALUATES that reason — it does not merely look for the key. A reason naming a",
+    "real property of the environment discharges the ingestion check; an empty or generic one, or",
+    "one your own `nodes` contradict, is blocked exactly like a missing key. So this is not an",
+    "escape hatch: it is a claim you are making, and someone checks it.",
+    "Earned: 2026-09-12 — a single-cluster Kubernetes program's Architect blocked at confidence 25",
+    "rather than invent link structure. It behaved correctly; the defect was in this schema, which",
+    "until pov-program-protocol 1.5.0 demanded `links` of every program whatever its domain."
+  ],
   "links": [
     {
       "endpoints": [
@@ -47,6 +66,7 @@
       "routing": "{{protocol//notes}}"
     }
   ],
+  "linksNotApplicable": "{{Keep this INSTEAD of `links` (delete that key) when there is no inter-node fabric to describe. State the reason as a property of the ENVIRONMENT — e.g. 'single Kubernetes cluster: pod-to-pod connectivity is the CNI's, not a described topology' — never as a statement about this file.}}",
   "_domainBlock_EXAMPLE_telemetryExport": {
     "_note": [
       "A domain-specific block. Rename/replace for your domain. What makes it a GOOD block is the",
