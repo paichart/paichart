@@ -1,0 +1,63 @@
+# R2 (defence-in-depth): a least-privilege READ-ONLY ServiceAccount the MCP service authenticates as.
+# Even if server.py had a bug, this SA cannot write/exec/patch, and cannot `get` an individual secret.
+# Apply: kubectl apply -f readonly-rbac.yaml
+#
+# NOTE on secrets: list_secret_names needs `list secrets` (the name/key metadata rides on the list
+# response, which also carries base64 data) — so the metadata-only guarantee is enforced at the
+# SERVICE (server.py strips data; R1), not by RBAC. RBAC still denies `get secrets` (single-value
+# fetch) and all write/exec verbs. k8s RBAC has no field-level (names-not-values) grant.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: readonly-harvester
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: paichart-readonly-harvester
+rules:
+  # Read-only on the allowlisted workload/config kinds (mirrors server.py RESOURCE_MAP).
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps", "endpoints", "resourcequotas", "limitranges", "serviceaccounts"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "watch"]
+  # Secrets: LIST only (for names/keys — server.py strips values). NO `get` (single-value fetch).
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: paichart-readonly-harvester
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: paichart-readonly-harvester
+subjects:
+  - kind: ServiceAccount
+    name: readonly-harvester
+    namespace: kube-system
+---
+# Long-lived token for the SA (kind/k8s 1.24+ no longer auto-creates SA token secrets).
+# The README builds readonly.kubeconfig from this token + the kind cluster CA/server.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: readonly-harvester-token
+  namespace: kube-system
+  annotations:
+    kubernetes.io/service-account.name: readonly-harvester
+type: kubernetes.io/service-account-token

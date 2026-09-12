@@ -1,0 +1,1 @@
+fastmcp>=2.10,<3   # 3.x removed FastMCP(tool_serializer=...) — server.py relies on it; hit 2026-09-09 on a fresh devext build

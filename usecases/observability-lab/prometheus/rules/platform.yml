@@ -1,0 +1,11 @@
+groups:
+  - name: platform-baseline
+    rules:
+      - record: job:up:count
+        expr: count by (job) (up == 1)
+      - alert: InstanceDown
+        expr: up == 0
+        for: 2m
+        labels: { severity: page }
+        annotations:
+          summary: "{{ $labels.job }}/{{ $labels.instance }} target down > 2m"

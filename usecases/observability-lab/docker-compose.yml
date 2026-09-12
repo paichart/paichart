@@ -1,0 +1,70 @@
+# Phase-4 promstack rig — Prometheus + Grafana + otel-collector + read-only harvest MCP.
+# The brownfield baseline the observability domain harvests; the "customer's existing stack".
+# Bring-up/teardown/ports: DEMO-RUN-GUIDE.md (canonical copy lives in copov15 — do not hand-copy).
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: obs-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-lifecycle   # operator-side reload for gated applies; port stays loopback-only
+    volumes:
+      - ./prometheus:/etc/prometheus:ro   # host edits land live; container cannot write
+    ports:
+      - "127.0.0.1:9090:9090"
+    mem_limit: 512m
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: obs-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?set it in .env — see .env.example}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards-json:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3001:3000"   # LAN-visible on purpose so you can open the dashboards from another machine
+    mem_limit: 512m
+    restart: unless-stopped
+
+  otel-collector:
+    build: ./otelcol-image   # repack: published 0.116.0 binary is dynamic-linked in an empty image (see otelcol-image/Dockerfile)
+    container_name: obs-otelcol
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otelcol:/etc/otelcol:ro
+    ports:
+      - "127.0.0.1:4318:4318"   # OTLP/http — lets the operator inject demo telemetry with curl
+    mem_limit: 256m
+    restart: unless-stopped
+
+  node-exporter:
+    # Added 2026-09-10 for R1: the "new exporter to onboard" — present in the WORLD, deliberately
+    # NOT in the Prometheus baseline config; wiring it in IS the R1 change. Baseline = provenance.
+    image: prom/node-exporter:v1.8.2
+    container_name: obs-node-exporter
+    mem_limit: 128m
+    restart: unless-stopped
+
+  obs-mcp:
+    build: ./obs-mcp-readonly
+    container_name: obs-mcp
+    environment:
+      - PROMETHEUS_URL=http://prometheus:9090
+      - GRAFANA_URL=http://grafana:3000
+      - OTELCOL_HEALTH_URL=http://otel-collector:13133
+      # Dedicated service account (Viewer), DECOUPLED from the human admin login — R1b's 401 was
+      # the human admin password changing at first GUI login while the service still held admin/admin.
+      # Lab credential, created via the Grafana admin API (guide §hosting note).
+      - GRAFANA_USER=obs-harvest
+      - GRAFANA_PASSWORD=${OBS_HARVEST_PASSWORD:?set it in .env — see .env.example}
+    volumes:
+      - ./otelcol:/rig/otelcol:ro   # get_otel_config reads the AS-DEPLOYED file (otelcol has no config API)
+    ports:
+      - "127.0.0.1:3114:3107"   # rig family convention: container-internal 3107, distinct loopback host port
+    depends_on: [prometheus, grafana, otel-collector]
+    mem_limit: 256m
+    restart: unless-stopped

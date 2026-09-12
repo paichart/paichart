@@ -13,7 +13,15 @@ compose").
 ## Method
 
 The exact procedure, numbered, including the injected fault and WHERE in the lifecycle it is injected
-(pre-gate / post-gate / mid-run). Anyone with a pAIchart environment should be able to follow it.
+(pre-gate / post-gate / mid-run).
+
+**State what the round needs in order to be reproducible, and be honest when it is not.** Rounds that
+run against the Kubernetes, Terraform or observability labs ARE reproducible — those environments are
+published in [`usecases/`](../usecases/), so link the lab. Rounds against the Arista cEOS fabric are
+**not** externally reproducible: the image requires an Arista account, and saying so is better than a
+procedure a reader cannot execute. *(Corrected 2026-09-12: this section previously asserted "anyone
+with a pAIchart environment should be able to follow it", which was untrue for every rig-dependent
+round at the time, because no rig was published. Three of the four now are.)*
 
 ## Config
 
