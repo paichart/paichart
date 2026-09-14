@@ -244,6 +244,7 @@ function successInput(overrides: Partial<TerminalSuccessInput> = {}): TerminalSu
     commentUserId: 'system',
     truncationStalled: false,
     harnessNoOutput: false,
+    synthesizeDeadEnd: false,
     prune: false,
     fireReactors: false,
     logger: { info: () => {}, warn: () => {}, error: () => {} },

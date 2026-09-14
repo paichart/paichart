@@ -1,7 +1,9 @@
 # Execution Facts Discovery
 
-> **Last Updated**: 2026-09-11 · **Status**: ACTIVE · **Last Validated**: 2026-09-11 (creation —
-> every grep below was RUN and its count written from the measured result, per Protocol 11 Part C)
+> **Last Updated**: 2026-09-14 · **Status**: ACTIVE · **Last Validated**: 2026-09-14 (health-run —
+> all 20 section A–E greps RE-RUN and matching; `audit-discovery-greps.sh` clean at 163/0/0. Two
+> `npm run` expectations were STALE and corrected: `test:derivation-containment` 94→103,
+> `test:rollback-containment` 18→30. Original creation baseline 2026-09-11, per Protocol 11 Part C)
 >
 > **Paired specialist**: `.claude/agents/execution-facts-specialist.md`
 > **Split from**: `pipeline-harness-discovery.md` (SPECIALIST-LIFECYCLE-GUIDE §3b, 2026-09-11). The
@@ -208,8 +210,17 @@ npm run test:derivation-containment && npm run test:dialect-lint && npm run test
   && npm run test:lean-card-facts && npm run test:execution-artifacts-parity
 npm run test:containment-public-parity   # ONLY when the mirrored pure module changed
 npm run validate:pagination              # ⚠️ SEE BELOW — not in the pinned set, and it is a DEPLOY GATE
-bash scripts/audit-discovery-greps.sh    # every documented expectation this file states
+bash scripts/audit-discovery-greps.sh    # every GREP expectation this file states — ⚠️ NOT the `npm run` ones
 ```
+
+⚠️ **`audit-discovery-greps.sh` DOES NOT AUDIT THE `npm run` LINES ABOVE, and that blind spot has now
+drifted three expectations in this file** — `test:dialect-lint` (27 documented vs 64 real, found
+2026-09-11, stale two and a half weeks) and both `test:derivation-containment` (94 vs 103) and
+`test:rollback-containment` (18 vs 30), found 2026-09-14. All three drifted in the HEALTHY direction
+— counts risen from shipped fixtures — which is exactly why nothing noticed: a suite that grows is
+indistinguishable from a suite that is fine, and the stale number reads as a passing check. **Run
+the suite block by hand at every health-run and compare the pass counts to the documented ones**;
+until the audit script can read these lines, a person is the only thing checking them.
 
 ⚠️ **`validate:pagination` is a 90% CI DEPLOY GATE running at the margin, and it is NOT in the
 harness pinned suites** — so a new enrichment can be fully green locally and still block an
@@ -267,8 +278,10 @@ nothing while appearing wired).
   false-positive trap: it names every banned token in prose and must return zero)
 - `scripts/test-execution-artifacts-parity.ts` — E3b, field ORDER, whitelist behaviour
 - `scripts/test-lean-card-facts.ts` — the write-site/read-site coupling assertions
-- `scripts/test-rollback-containment.ts` — net #3 (BUILT 2026-09-11, stage 2a), 18 assertions over
-  FIVE live packages, all pulled from prod and stored under
+- `scripts/test-rollback-containment.ts` — net #3 (BUILT 2026-09-11, stage 2a), 30 assertions over
+  FIVE live packages (⚠️ 30 CORRECTED 2026-09-14 from 18 — same unaudited-`npm run` blind spot as the
+  two lines above; the +12 are ee69d27d's lane ruling, c867ea70's chainer JOIN and 8366c21e's four
+  ARM- precedence pins. The package count is unchanged and still five), all pulled from prod and stored under
   `scripts/fixtures/rollback-containment/` with a PROVENANCE.md naming every source task:
   R19 P4 (51/51, 0 missing — the refused package, exonerated) · R3a-3 (2/2, the excerpt lane) ·
   R3b-2 (26/26, the whole-file lane; also the BLOCKING-direction mutation source) · FW-A3.3 R3
@@ -303,7 +316,7 @@ grep -n "consuming-leg-consumed-discharged\|harvested-pool-no-derivation-cannot-
 #   harvestedCount == 0 ⇒ benign harvested-pool-empty (parsed-empty pool has NO refusal ambiguity — live-proven Run 20260816-0734: tf bucket objective, byte-exact)
 #   absent ⇒ benign nothing-to-derive (unchanged)
 grep -c "out('blocking', 'refusal-or-drop')" lib/agents/harness/derivation-containment.ts   # expect 0 — the EMITTING call is gone (the string survives in the reclassification comment, so a bare-string grep hits 1); a reappearance of the call is the reclassification reverted
-npm run test:derivation-containment   # EXPECT 94 — re-measured 2026-08-21 (+7 misaligned-prefix fixtures F-1..F-7, d546d55d; was 87: D4 rewritten + D4b-f: discharge, fail-closed x2, clause-1 dominance, zero-pool)
+npm run test:derivation-containment   # expect >=103 — FLOOR per the 2026-09-14 ruling (an exact count rots every time a fixture is added; a floor still catches a suite that silently STOPS asserting). History kept because it is the evidence for that ruling: ⚠️ CORRECTED 2026-09-14, and the correction is the SECOND instance of the same blind spot the test:dialect-lint line records: the documented value sat at 94 from 2026-08-21 while four commits grew the suite to 103 (aa12198e fence-inversion fallback, 57818624 missing-author-child, 37a98e6b H-3 tier resolution, 0c85ea70 H-2 transitive containment), and NOTHING CAUGHT IT because audit-discovery-greps.sh audits GREPS, not `npm run` lines. Every delta is a count RISEN from shipped work — the healthy direction — but an expectation nothing runs degrades to decoration. Prior: 94 at 2026-08-21 (+7 misaligned-prefix fixtures F-1..F-7, d546d55d; was 87: D4 rewritten + D4b-f: discharge, fail-closed x2, clause-1 dominance, zero-pool)
 ```
 ⚠️ **TWO-REPO OBLIGATION**: `derivation-containment.ts` is mirrored byte-identically as the public
 `@paichart/containment-checks` package (`~/paichart/packages/containment-checks/`, v0.2.1). EVERY edit:
@@ -376,7 +389,7 @@ Token matching uses word-ish boundaries so a token `is` never fires inside `isis
 (`no-contract` / `no-banned-token-list` / `no-fenced-blocks`), never a silent pass.
 
 ```bash
-npm run test:dialect-lint                                                   # expect 64 — ⚠️ CORRECTED 2026-09-11, and the correction is the finding: the documented value had been 27 since 2026-08-24 while the suite had grown to 64, and NOTHING CAUGHT IT because audit-discovery-greps.sh audits GREPS, not `npm run` lines — so this expectation sat unverified for two and a half weeks across several commits that added fixtures. Verified against HEAD before AND after the net #3 build (64 both times), so the number is the suite's real size, not a side effect of that work. Same class as the silent-exclusion bug the audit script itself had: an expectation nothing runs degrades to decoration. Prior notes: 27 at 2026-08-24 (was 16; +11 PRESENCE-half fixtures on the live R7 package, mutation-verified), 2026-08-23. Fixtures are LIVE campaign text: R1/R3 defect packages + the R6 CLEAN winner (the false-positive trap: it names every banned token in prose)
+npm run test:dialect-lint                                                   # expect >=64 — FLOOR per the 2026-09-14 ruling. ⚠️ CORRECTED 2026-09-11, and the correction is the finding: the documented value had been 27 since 2026-08-24 while the suite had grown to 64, and NOTHING CAUGHT IT because audit-discovery-greps.sh audits GREPS, not `npm run` lines — so this expectation sat unverified for two and a half weeks across several commits that added fixtures. Verified against HEAD before AND after the net #3 build (64 both times), so the number is the suite's real size, not a side effect of that work. Same class as the silent-exclusion bug the audit script itself had: an expectation nothing runs degrades to decoration. Prior notes: 27 at 2026-08-24 (was 16; +11 PRESENCE-half fixtures on the live R7 package, mutation-verified), 2026-08-23. Fixtures are LIVE campaign text: R1/R3 defect packages + the R6 CLEAN winner (the false-positive trap: it names every banned token in prose)
 grep -c "^export function" lib/agents/harness/dialect-lint.ts               # expect 7 — re-measured 2026-09-11 (was 5; +fencedBlockLines +isSeparatorLine, exported so net #3 consumes THE classifier rather than forking a second rollback extractor). Prior: 2026-08-26 (was 3): runDialectLint + extractBannedTokens + extractCanonicalStanzas + canonicalStanzaNeedles (shared with contract-propagation-enrichment, so a change to what counts as a required line reaches BOTH consumers) + splitStanzaLines (separator tolerance, IGP-T1 R12). The two extractors are exported so the wiring layer and tests can reuse the contract-shape-tolerant extraction (contracts have used bannedTokens/banned_token_list and canonicalIsisStanza/canonicalStanza_P1_template/canonicalStanzaExemplar across rounds)
 grep -rn "runDialectLint" lib/ --include="*.ts" | grep -v "lib/agents/harness/dialect-lint.ts"   # expect 4 — re-measured 2026-08-25: PHASE 2 LANDED and this tripwire FIRED exactly as written. All 4 hits are dialect-lint-enrichment.ts (import + call + 2 comment refs); the engine call site is execution-core.ts, which calls computeDialectLintFact, not runDialectLint directly. Its former text was a zero-expectation tripwire promising that a non-zero result meant Phase 2 had landed and every "it gates nothing" claim in this section and the specialist config was stale — it did, they were, and both were corrected the same day. (The old expectation is described here rather than quoted: a literal expect-N string inside prose is read by audit-discovery-greps.sh as a live expectation, which is how this very line reported a false REGRESSION on its first pass.) SECOND time in two days a documented grep predicted its own obsolescence and the audit caught the drift
 grep -c "fencedBlockLines" lib/agents/harness/dialect-lint.ts               # expect 3 — re-measured 2026-09-11 (was 2): definition + its call site + the `export` that lets net #3 consume THE classifier instead of forking a second rollback extractor. The prose-exemption mechanism (a whole-document scan would flag the clean round)

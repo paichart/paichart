@@ -28,7 +28,7 @@
  * Gate: scripts/test-diagnostic-retry.ts. Manifest: Part B (M5).
  */
 
-import { addUsage, buildLlmCallOptions, BUDGET_ERROR_PATTERN } from './agentic-tool-loop';
+import { addUsage, buildLlmCallOptions, BUDGET_ERROR_PATTERN, checkProviderErrorResponse } from './agentic-tool-loop';
 import type { AccumulatedUsage, NormalizedModelConfig } from './agentic-tool-loop';
 import { parseConfidenceScore } from './parse-confidence';
 
@@ -41,6 +41,8 @@ void BUDGET_ERROR_PATTERN; // (imported to document the sibling; not used here)
 interface RetryLogger {
   info: (obj: Record<string, unknown>, msg: string) => void;
   warn: (obj: Record<string, unknown>, msg: string) => void;
+  /** Added 2026-09-14 for the log-only P2 guard (a provider-error return must not be discarded). */
+  error: (obj: Record<string, unknown>, msg: string) => void;
 }
 
 export interface DiagnosticRetryObservers {
@@ -159,6 +161,10 @@ export async function runDiagnosticRetry(
         clearTimeout(diagTimer);
       }
       const retryDurationMs = Date.now() - retryStartTime;
+      // Log-only P2 (2026-09-14): the retry is optional and already degrades to the prior response
+      // on empty text, but a provider-error return ({text:'', error}) would otherwise be discarded
+      // — the one diagnostic that names the cause. Never fatal here.
+      checkProviderErrorResponse(retryResponse, { executionId, phase: 'diagnostic_retry' }, logger, 'log');
 
       if (retryResponse?.text && retryResponse.text.trim().length > 0) {
         // Accumulate retry tokens to totalUsage (same pattern as correction turn)

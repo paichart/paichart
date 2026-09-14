@@ -4399,8 +4399,8 @@ External API client behaviour remained unknown but the priors flipped: the only 
 Smoking gun: `lib/pov/handlers/put.ts:544-555` carries a block of defensive null-preservation assignments (`updateData.agentRole = task.agentRole === null ? null : task.agentRole;`) that have been unreachable since the NestedTask schema transformed nulls. Evidence the author originally intended null-preservation but the schema-level transform short-circuited it. The convergence aligns API and DB semantics with what the comprehensive PUT path has been doing in practice.
 
 **Test coverage post-fix**:
-- `npm run test:enum-parity` (56 tests) — confirms Prisma↔Zod enum alignment, including `taskType` and `executionStatus`
-- `npm run test:pov-update-route` (37 tests) — Layer 2.5 verifies executionStatus survives Zod validation; Layer 2.8 verifies `task.type` enforces TaskType enum (no free-form strings)
+- `npm run test:enum-parity` (>=69 tests; was documented 56 here while native-enum-pattern.md said 69 and the real count is 69 — two docs disagreeing with each other AND one with reality, corrected 2026-09-14) — confirms Prisma↔Zod enum alignment, including `taskType` and `executionStatus`
+- `npm run test:pov-update-route` (>=38 tests) — Layer 2.5 verifies executionStatus survives Zod validation; Layer 2.8 verifies `task.type` enforces TaskType enum (no free-form strings)
 - `npm run test:all-validation` (full suite) — all 50+ tests pass after convergence
 
 **Review artifact**: `cline_docs/reviews/task-shape-convergence-2026-05-15/` — 3 specialist reviews, corrected field-overlap matrix, synthesis. Phase 0 results and convergence commit shipped 2026-05-15.

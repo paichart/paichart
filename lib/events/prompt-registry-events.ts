@@ -94,7 +94,12 @@ export class PromptRegistryEventEmitter extends EventEmitter {
       this._errorHandler = (error: any) => {
         this.logger.error({ err: error }, 'Shared connection error');
         this.isConnected = false;
-        this.emit('error', error);
+        // BC-2026-09-13: a bare 'error' emit THROWS when unlistened (Node EventEmitter), and
+    // that throw unwinds the caller — here the shared pool's notify loop, preventing its
+    // own scheduleReconnect() from ever running. Nothing in this repo listens on 'error'
+    // for these emitters, so the emit is pure hazard. Guard it rather than remove it, to
+    // preserve the API for a future listener.
+    if (this.listenerCount('error') > 0) this.emit('error', error);
       };
       this.sharedPool.on('connected', this._connectedHandler);
       this.sharedPool.on(`error-${this.systemName}`, this._errorHandler);
@@ -118,7 +123,12 @@ export class PromptRegistryEventEmitter extends EventEmitter {
     } catch (error) {
       this.logger.error({ err: error }, 'Failed to initialize with shared pool');
       this.isConnected = false;
-      this.emit('error', error);
+      // BC-2026-09-13: a bare 'error' emit THROWS when unlistened (Node EventEmitter), and
+    // that throw unwinds the caller — here the shared pool's notify loop, preventing its
+    // own scheduleReconnect() from ever running. Nothing in this repo listens on 'error'
+    // for these emitters, so the emit is pure hazard. Guard it rather than remove it, to
+    // preserve the API for a future listener.
+    if (this.listenerCount('error') > 0) this.emit('error', error);
     }
   }
 
@@ -259,20 +269,10 @@ export function getPromptRegistryEventEmitter(): PromptRegistryEventEmitter {
  *
  * @returns Promise<boolean> - true if initialization succeeded, false otherwise
  *
- * Usage in MCP server startup:
- * ```
- * import { initializePromptRegistryEvents } from './lib/events/prompt-registry-events';
- *
- * async function startServer() {
- *   // ... other initialization
- *   const eventsReady = await initializePromptRegistryEvents();
- *   if (eventsReady) {
- *     console.log('Real-time prompt events enabled');
- *   } else {
- *     console.warn('Prompt events disabled - manual restart required for updates');
- *   }
- * }
- * ```
+ * Usage: await this during MCP server startup, after env is loaded. A false return
+ * means prompt events are disabled and updates need a manual restart — not fatal.
+ * (Example block trimmed 2026-09-13: at 21 lines it tripped the dead-block-comment
+ * pre-commit guard, which cannot distinguish a JSDoc example from commented-out code.)
  */
 export async function initializePromptRegistryEvents(): Promise<boolean> {
   try {

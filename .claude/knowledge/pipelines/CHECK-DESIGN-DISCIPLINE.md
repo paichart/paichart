@@ -53,6 +53,43 @@ cases.
 This is the same failure as a mechanical net with no notion of leg intent confidently blocking a clean
 removal package — one layer up, in prose.
 
+### 1b. A check must match the ARTIFACT, never the PROSE ABOUT IT — and knowing 1a does not prevent this
+
+Earned 2026-09-13, three times in one day, by someone who had cited 1a earlier the same hour to reject
+somebody else's check for exactly this reason. **That is the finding.** 1a is stated as a thinking
+discipline, and a thinking discipline you can quote while violating is not doing the work. 1b is its
+mechanical half.
+
+The three instances, all caught only by RUNNING the check:
+
+| check | matched | should have matched |
+|---|---|---|
+| `grep -c 'EnvironmentFile' *.service # expect 0` | 2 — the comments explaining why `EnvironmentFile` is REFUSED | `^EnvironmentFile` — the active directive |
+| `grep -c 'BindsTo\|Requires=' *.service # expect 0` | 2 — the comments naming them as REJECTED alternatives | `^BindsTo\|^Requires=` |
+| skip-path guard (`assertTrue(true,'…SKIP…')`) | 18 — its own docblock quoting the bad output, plus the explanatory comment each FIXED file now carries | the same patterns with comments stripped first |
+
+Every one produced the worst possible orientation: **clean on a broken tree and broken on a clean one.**
+A file that documents why it refuses a thing looks, to a word-count, exactly like a file that does the
+thing. And the better the documentation, the louder the false positive — so a check written this way
+punishes precisely the codebase that explains itself.
+
+**The mechanical rules, which need no judgement:**
+
+1. **Strip or exclude non-code before matching.** Blank comments (preserving line numbers), or anchor to
+   line start so a directive is distinguishable from a mention of it.
+2. **A guard cannot scan itself.** Its patterns and its error messages necessarily contain what it
+   hunts. Exclude it by name — this is correct, not a loophole. (Prior instance: a sweep for `AppError`
+   subclasses matching the base class it mandated.)
+3. **Never count a word that appears in prose about the defect.** If the word is the whole predicate,
+   the predicate is wrong. `nohup` fails this; `nohup npm run start` — the unsupervised production
+   start — passes it.
+4. **Run it against the CURRENT tree before committing the expectation.** Protocol 11 Part C. All three
+   above were caught this way and none by reading.
+
+**The generalisation worth keeping**: 1a says do not test a symptom the correct artifact also exhibits.
+1b is the same error in a different medium — *documentation of a defect is a symptom of the defect*, and
+a check that cannot tell an explanation from an instance is testing the wrong text entirely.
+
 ## 2. Convert an ABSENCE into a DECLARED, NAMED state
 
 An absence and an oversight are indistinguishable. A declared not-applicable can be judged.

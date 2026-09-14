@@ -144,3 +144,48 @@ the flow (steps 2–5) will look healthy, so check the service's own logs.
 | Step 4 API key has the right claims but tools/list is 401 | web and MCP servers read *different* `.env` files (issuer ≠ accept-list) — both must see the same `APP_BASE_URL` |
 | Users re-prompted to log in after you changed `APP_BASE_URL` | expected — the old audience is no longer accepted; refresh tokens carry it |
 | Step 5 boots anyway | `NODE_ENV` is not `production` for that process; the fallback is by design outside production |
+
+## Supervision — prove the processes come back
+
+Everything else in this document verifies the app answers. This verifies it **keeps** answering, which
+is a different property and the one that failed on 2026-09-12: a PostgreSQL restart killed the MCP
+server, nothing restarted it, and the web GUI kept returning 200 for 68 minutes while `/mcp` was dead.
+
+```bash
+# 1. ENABLED, not merely active. A unit that is active-but-not-enabled fails only at the
+#    next reboot — it looks configured and is not.
+systemctl is-enabled paichart-web paichart-mcp     # expect: enabled  enabled
+
+# 2. Survive a database restart. Since 2026-09-13 the app recovers in-process, so BOTH
+#    services should stay up and re-establish their LISTEN channels without restarting.
+sudo systemctl restart postgresql
+sleep 30
+systemctl is-active paichart-web paichart-mcp      # expect: active  active
+curl -s -o /dev/null -w '%{http_code}\n' localhost:8080/health   # expect 200
+
+# 2b. THE DEAFNESS CHECK — and it is the only step here that would have caught the
+#     original 2026-09-12 failure. That process was ALIVE, every HTTP surface returned
+#     200, and it held zero LISTEN channels. Liveness probes cannot see it; `is-active`
+#     cannot see it; the GUI cannot see it. Only the database can say who is listening.
+psql "$DATABASE_URL" -tAc "SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'LISTEN%';"
+# expect >= 2  (paichart-web and paichart-mcp each hold at least one)
+
+# 3. Survive an actual kill. THIS is the step that tests the UNITS.
+#    Step 2 no longer kills anything, so on its own it verifies the code fix and would
+#    pass on a box where Restart= was never going to fire. SIGKILL bypasses the graceful
+#    shutdown path and is the cheapest analogue of an OOM kill — the likeliest residual cause.
+sudo systemctl kill -s SIGKILL paichart-mcp
+sleep 15
+systemctl is-active paichart-mcp                   # expect: active  (Restart= fired)
+```
+
+If step 3 does not return `active`, the unit is installed but not supervising, and you have the
+pre-2026-09-13 behaviour with a file that looks like protection.
+
+### Check the secrets file is not world-readable
+
+```bash
+stat -c '%a %n' ~/paichart/.env                    # expect: 600
+```
+`cp .env.example .env` under Ubuntu's default umask produces `0664` — group- and world-readable. The
+run sheet mandates `chmod 600`; this confirms it took.

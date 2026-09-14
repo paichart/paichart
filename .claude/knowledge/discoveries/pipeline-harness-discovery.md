@@ -44,8 +44,8 @@ differing/novel 400s `PROTOCOL_STAMP_IMMUTABLE` (POV-bulk strips-with-warn, same
 Panel + consult + traceability: `cline_docs/reviews/ws2-phase-a-2026-08-17/`.
 ```bash
 grep -c "enforceProtocolStampImmutable(" lib/tasks/services/task.ts lib/mcp/tasks/action/handlers/task/task-update-handler.ts lib/pov/handlers/put.ts lib/services/taskBulkService.ts   # expect 1+1+3+1 — the surface-enumerating guard set
-npm run test:program-protocol-token     # EXPECT 40 — re-measured 2026-08-21 (was 32 at WS2-A authoring; +8 incl. B3 research-program second-protocol pins) (resolver/tier/filter/gate pins)
-npm run test:protocol-stamp-guards      # EXPECT 20 (the ERASE pin is the load-bearing one)
+npm run test:program-protocol-token     # expect >=40 — re-measured 2026-08-21 (was 32 at WS2-A authoring; +8 incl. B3 research-program second-protocol pins) (resolver/tier/filter/gate pins)
+npm run test:protocol-stamp-guards      # expect >=20 (the ERASE pin is the load-bearing one)
 ```
 Phase C (base+one injection) NOT started — the injection fork is untouched
 (`test:system-prompt-injections` byte-unchanged is the leak detector).
@@ -53,7 +53,7 @@ Phase C (base+one injection) NOT started — the injection fork is untouched
 ## 🆕 2026-07-18 — born-ready family (gap e) + supersession contract (gap b) + A6 no-reviewer rule
 
 Panel record: `cline_docs/reviews/born-ready-gap-e-2026-07-18/SYNTHESIS.md`. Mechanical pins:
-`npm run test:reactor-race-guard` (45, E1.1–E2.5) + `npm run test:lean-card-facts` (41 at 2026-08-21; was 12 at authoring).
+`npm run test:reactor-race-guard` (>=45, E1.1–E2.5) + `npm run test:lean-card-facts` (>=54). ⚠️ FLOORS, not exact counts (ruling 2026-09-14). lean-card-facts was documented 41 against a real 54 and NOTHING could have caught it: both numbers are bare parentheticals with no `expect` keyword on the line, and the FIRST suite's count was correct, so the line read as verified while its second half was 13 behind.
 ```bash
 grep -c "unsatisfiedDepExistsSql" lib/services/taskReadyReactorService.ts   # EXPECT 6 — ONE shared satisfaction predicate (def + jsdoc + both consumption forms + the hasUnsatisfiedDeps wrapper, completion-path 2026-07-24); an inline EXISTS copy reappearing = drift
 grep -c "'pipeline-with-deps'" lib/services/taskReadyReactorService.ts      # EXPECT 1 — CC6: PIPELINE-with-deps keeps the blanket skip (dep-completion reactor is the ONLY auto-start path for PIPELINE children; the pov-program plan-gate design derives from this)
@@ -983,7 +983,7 @@ Audits the pipelines-of-pipelines machinery (design-proposal v1.2 CC1/CC2/CC4/CC
 # 1. CC1 — parent retrigger: blanket PIPELINE type-skip GONE; self-ID guard present, post-Guard-3, loud
 grep -n "harness.id === completedTaskId" lib/services/pipelineRetriggerReactorService.ts
 grep -c "completed.type === 'PIPELINE'" lib/services/pipelineRetriggerReactorService.ts   # comments only — code form pinned gone by test CC1.1
-npm run test:reactor-race-guard   # expect 45 pass (verified 2026-08-08; was 26 at CC1 authoring — CC1.1-1.4 are the nesting pins, E1.1-E2.5 the born-ready ones)
+npm run test:reactor-race-guard   # expect >=45 pass (verified 2026-08-08; was 26 at CC1 authoring — CC1.1-1.4 are the nesting pins, E1.1-E2.5 the born-ready ones)
 
 # 2. CC2 — chainer PIPELINE branch + per-predecessor facts + deterministic order
 grep -n "isPipelinePredecessor\|notChained\|source,\|orderBy: { dependsOn: { createdAt" lib/agents/harness/context-chainer.ts | head
@@ -991,7 +991,7 @@ grep -n "isPipelinePredecessor\|notChained\|source,\|orderBy: { dependsOn: { cre
 # 3. CC7 — contract channel end-to-end: create param → validation → renderer-first → loud-fail
 grep -n "interfaceContract" lib/mcp/tasks/action/handlers/task/task-create-handler.ts lib/validation/mcp-action-validation.ts lib/agents/harness/render-pipeline-context.ts lib/agents/harness/prepare-task-for-execution.ts | head
 grep -n "INTERFACE_CONTRACT_MISSING" lib/agents/harness/prepare-task-for-execution.ts   # the loud-fail, OUTSIDE the chain catch
-npm run test:pipeline-context-render   # EXPECT 13 pass (CC7.1-7.3)
+npm run test:pipeline-context-render   # expect >=26 pass (CC7.1-7.3) — ⚠️ was documented 13 against a real 26 (found 2026-09-14); FLOOR not exact count per the ruling, so growth never drifts it while a SHRINK still reads as a suite that stopped asserting
 
 # 4. CC4 — depth single source (no hardcoded 10 anywhere)
 grep -rn "depth >= 10" lib/ app/ | grep -v node_modules   # EXPECT 0
@@ -1008,12 +1008,12 @@ grep -c "name: 'pov-program-protocol'" scripts/seed-protocol-prompts.ts # expect
 grep -n "PIPELINE_POV_PROGRAM_PROTOCOL" scripts/seed-protocol-prompts.ts | head -2
 grep -n "'program_architect'" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # EXPECT 1 (role entry; NOT in REVIEWER_ROLES)
 ls scripts/seed-program-templates.ts                                   # the MANUAL prod seed (deploy auto-seeds protocols only)
-npm run test:parse-verdict   # EXPECT 15 pass (grammar-redefinition pin — the program protocol REFERENCES, never redefines)
+npm run test:parse-verdict   # expect >=15 pass (grammar-redefinition pin — the program protocol REFERENCES, never redefines)
 
 # 6. T4-hardening (2026-07-15) — the CC7 double-nest hoist + structural loud-fail + child-read path
 grep -n "hoisted double-nested interfaceContract" lib/mcp/tasks/action/tasks-action-router.ts   # A3: router hoist before safeParse (F11)
 grep -n "structurallyRequiresContract\|(protocol: pov-program" lib/agents/harness/prepare-task-for-execution.ts   # B1: structural loud-fail keyed on parent TITLE token (F12)
-npm run test:cc7-contract-guard   # expect 12 pass (verified 2026-08-08; was 6 at authoring) (A3 hoist-before-safeParse + B1 title-token discriminator, NOT template metadata)
+npm run test:cc7-contract-guard   # expect >=13 pass (was documented 12 against a real 13, found 2026-09-14; 6 at authoring) (A3 hoist-before-safeParse + B1 title-token discriminator, NOT template metadata)
 grep -n "verbose: true, limit: 1" scripts/seed-protocol-prompts.ts   # EXPECT >=2 — F14/v1.0.14: PLAN-SPAWN Step 1 + SYNTHESIZE Step 4 read artifact bodies via agent.results verbose:true (fetch is CLIENT-only, never on the engine surface)
 grep -c 'BODY comes ONLY from the \\`fetch' scripts/seed-protocol-prompts.ts   # EXPECT 0 — the false v1.0.5 instruction is removed (panel 2026-07-23; the 1.0.14 changelog QUOTES it unbackticked — that one mention is historical, not an instruction)
 ```
@@ -1134,3 +1134,22 @@ A program leg's duplicate-halt terminalizes + freezes its forward cone with no r
 Run 2); re-runs pre-arm via `metadata.duplicateAcknowledged` on each pipeline child in the
 gate-hold window (validated Run 3, `programReleasable: true`). pov-program 1.0.30 Step 8 warns
 at gate time. Trail: `cline_docs/reviews/protocol-obligation-audit-2026-08-11/AUDIT.md` (S5, O5).
+
+## 🆕 2026-09-14 — Prose-obligation coverage pins
+
+The coverage map at `.claude/knowledge/pipelines/PROSE-OBLIGATION-COVERAGE.md` asserts which
+obligations have a mechanical counterpart. Those claims go stale the moment a net is added, removed or
+renamed, and a coverage map that silently lies is worse than none — a reader consults it to decide
+whether to BUILD something. These pin its load-bearing claims.
+
+```bash
+grep -c "| 'prefix-not-minimal'" lib/agents/harness/derivation-containment.ts   # expect 1 — the counterpart the map credits for requirements.md check 2b (minimality). If this goes to 0 the map's "covered" row is false and check 2b is exposed again
+grep -c "| 'covered-not-member'" lib/agents/harness/derivation-containment.ts   # expect 1 — the counterpart for check 3 (aggregate covers no existing allocation)
+grep -c "^    name: '" lib/agents/harness/mechanical-nets.ts                    # expect 6 — registrations, NOT distinct nets: rollbackContainment registers at both points. The map states 5 nets / 6 registrations and both numbers must move together
+grep -c "point: 'leaf-persist'" lib/agents/harness/mechanical-nets.ts           # expect 2 — a leaf-persist net reaches the leg Reviewer's §6 via the chainer; a leg-synthesize one cannot. Stamp point is a design constraint, so the split is worth pinning
+grep -c "point: 'leg-synthesize'" lib/agents/harness/mechanical-nets.ts         # expect 4
+grep -c "authored-value-not-derived" lib/agents/harness/derivation-containment.ts   # expect 0 — the check-1 leaf is EARNED, SPECCED and deliberately FILED (3 of 13 coverage, zero observed mismatches). A non-zero count means it was built, which is GOOD but makes the map's "EXPOSED" row stale: update the map and retire the health-run re-measure in the same commit
+```
+
+⚠️ The last pin is the useful one: it is the only expectation here that we WANT to flip. When it does,
+the flip is the signal to update the coverage map — not a regression.

@@ -19,6 +19,16 @@ import { MCPCoreManager, type PureSDKNativeServerShape } from '../lib/mcp/server
 let passed = 0;
 let failed = 0;
 const failures: string[] = [];
+let skipped = 0;
+// A SKIP IS NOT A PASS. These sites previously called assertTrue(true, '...SKIPPED...'),
+// which incremented `passed` and printed a green tick for a test that never ran — the
+// unrun-vs-passed distinction this project enforces everywhere else (ARM NOT EXERCISED,
+// lane-not-supported, "the && chain stops at the first failure so later suites are
+// UNVERIFIED"). Counted and reported separately now, never as a pass.
+function skip(msg: string): void {
+  skipped++;
+  console.log(`  \u23ED\uFE0F  SKIPPED (not verified): ${msg}`);
+}
 
 function assertEqual(actual: unknown, expected: unknown, msg: string): void {
   if (actual === expected) {
@@ -157,7 +167,7 @@ console.log('\nTests 5-6: init() live-init path SKIPPED in unit test');
   // None of these are mockable without a comprehensive PureSDKNativeServer
   // fixture. Wave 6 precedent (Phase 6.5 mcp-transport tests) deferred similar
   // live-init paths to Quartet leg 4 (curl smoke against running server).
-  assertTrue(true, 'Tests 5-6: SKIPPED in unit test — full init() flow covered by Quartet leg 4 production smoke');
+  skip('Tests 5-6: init() live-init path — covered by Quartet leg 4 production smoke');
 }
 
 // ─── Test 7: initializeAuthContext no-op without API key ─────────────
@@ -297,7 +307,7 @@ if (failed > 0) {
   failures.forEach((f) => console.log(`  - ${f}\n`));
   process.exit(1);
 }
-console.log('✅ All MCPCoreManager Phase 7.1 tests passed');
+console.log(`✅ All MCPCoreManager Phase 7.1 tests passed${skipped ? ` (${skipped} SKIPPED — not verified)` : ''}`);
 process.exit(0);
 }  // end main()
 

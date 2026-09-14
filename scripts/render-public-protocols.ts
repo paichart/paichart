@@ -34,6 +34,17 @@ const PROTOCOLS = [
   'pov-program-protocol',
 ];
 
+/**
+ * Rows deliberately NOT published, each with a reason. An ACTIVE `protocol`-tagged row must appear
+ * in PROTOCOLS or here — SILENCE IS NOT AN OPTION (the PUBLICATION-COMPLETENESS GUARD below
+ * enforces it). Before that guard existed, a seeded protocol missing from PROTOCOLS was simply
+ * invisible to this script: never queried, never counted, never diffed, and `--check` still printed
+ * ✅ for everything it did know about. That is how the mirror went one protocol short.
+ */
+const NOT_PUBLISHED: Record<string, string> = {
+  // 'some-internal-protocol': 'internal-only — references unpublished infrastructure',
+};
+
 const PUB_DIR = process.env.PAICHART_PUBLIC_REPO
   ? path.join(process.env.PAICHART_PUBLIC_REPO, 'protocols')
   : path.join(os.homedir(), 'paichart/protocols');
@@ -60,8 +71,39 @@ async function main() {
     console.log(`⏭️  SKIP (named, counted): public repo not present at ${path.dirname(PUB_DIR)} — parity unverified on this machine, not clean.`);
     process.exit(0);
   }
+  if (!process.env.DATABASE_URL) {
+    console.error(
+      `❌ DATABASE_URL is not set — this script reads the LOCAL DB (the source of truth for what\n` +
+      `   agents actually receive), so it cannot run without it. This check is out-of-CI and\n` +
+      `   usually run by hand, where the env is not loaded automatically.\n` +
+      `   Run:  set -a; source .env; set +a   then re-run.`
+    );
+    process.exit(1);
+  }
   const prisma = new PrismaClient();
   try {
+    // PUBLICATION-COMPLETENESS GUARD — the mirror image of the seed script's orphan guard
+    // (seed-protocol-prompts.ts), using the same predicate. The seed asks "is every ACTIVE
+    // protocol-tagged row IN THE SEED?"; this asks "is every one of them PUBLISHED, or explicitly
+    // declared unpublished?". Both guards below this point query only `in: PROTOCOLS`, so they can
+    // never see a row outside the list — this is the only check that looks the other way.
+    // Fails hard (unlike the seed's warn): this script is manual and off the deploy path, so there
+    // is no release to avoid breaking, and rendering an incomplete public set is the whole defect.
+    const activeTagged = await prisma.agentPromptLibrary.findMany({
+      where: { tags: { has: 'protocol' }, status: 'ACTIVE' },
+      select: { name: true },
+    });
+    const known = new Set([...PROTOCOLS, ...Object.keys(NOT_PUBLISHED)]);
+    const unlisted = activeTagged.filter((r) => !known.has(r.name)).map((r) => r.name);
+    if (unlisted.length > 0) {
+      console.error(
+        `❌ ${unlisted.length} ACTIVE protocol-tagged row(s) are neither published nor declared unpublished:\n` +
+        unlisted.map((n) => `     • ${n}\n`).join('') +
+        `   Add each to PROTOCOLS (publish it) or to NOT_PUBLISHED with a reason (declare it).\n` +
+        `   Until then the public mirror is INCOMPLETE and parity is green only about the rest.`
+      );
+      process.exit(1);
+    }
     const rows = await prisma.agentPromptLibrary.findMany({
       where: { name: { in: PROTOCOLS } },
       select: { name: true, version: true, description: true, promptText: true, updatedAt: true },

@@ -513,6 +513,21 @@ export class AnthropicSdkProvider extends BaseLLMProvider {
         }
       }
 
+      // 2026-09-14 (prod cmu0yl664006kyx0e3olnguqe): Node's global fetch (undici) applies a
+      // BODY-IDLE timeout — 300 s with no body bytes, its default — which is what actually bounds
+      // a stalled STREAM end-to-end. Neither the SDK client timeout (600 s, armed around the fetch
+      // only) nor the execution watchdog (18 min) fires first. The SDK surfaces it as an
+      // AnthropicError whose message chain ends in "Body Timeout Error", with no HTTP status, so it
+      // otherwise lands in `unknown_error`. Classify it so the class is COUNTABLE — a fact, not a
+      // verdict: it is the evidence a future "retry the stalled turn once" decision needs.
+      if (errorCode === 'unknown_error' &&
+          /body timeout error|headers timeout error|UND_ERR_(BODY|HEADERS)_TIMEOUT/i.test(errorMessage)) {
+        errorCode = 'LLM_STREAM_IDLE_TIMEOUT';
+        errorMessage =
+          `LLM stream stalled with no data for the HTTP body-idle timeout and was terminated ` +
+          `by the transport (${errorMessage}).`;
+      }
+
       return {
         text: '',
         provider: this.provider,

@@ -152,7 +152,7 @@ grep -c "function unsatisfiedDepExistsSql" lib/services/taskReadyReactorService.
 grep -c "unsatisfiedDepExistsSql" lib/services/taskReadyReactorService.ts            # EXPECT 6 — def + jsdoc + column form (dep-completion scan, t.id) + param form (born-ready, ${taskId}) + the hasUnsatisfiedDeps wrapper (completion-path P1-C1, 2026-07-24); a 7th+ hit or an inline EXISTS copy = drift
 grep -rn "unsatisfiedDepExistsSql" lib/ --include='*.ts' | grep -v taskReadyReactorService   # EXPECT empty — the RAW predicate is never exported/copied; external consumers use the exported hasUnsatisfiedDeps/listUnsatisfiedDeps wrappers (the completion dep-guard is the THIRD consumer)
 echo "=== pin suite ==="
-npm run test:reactor-race-guard   # EXPECT 45 pass — E1.1-E1.8 (shared predicate, CC6, fail-closed) + E2.1-E2.5 (task.update door, FAILED frozen-cone guard)
+npm run test:reactor-race-guard   # expect >=45 pass — E1.1-E1.8 (shared predicate, CC6, fail-closed) + E2.1-E2.5 (task.update door, FAILED frozen-cone guard)
 ```
 Review record: `cline_docs/reviews/born-ready-gap-e-2026-07-18/` (event-system verdicts: base 93,
 delta 91 — the delta's F7 cross-stage mid-window residual is documented in

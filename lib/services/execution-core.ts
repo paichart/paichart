@@ -334,6 +334,19 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
     executionDegradation?.errorCategory === 'TRUNCATED_NO_OUTPUT' &&
     (resultJson as { resolvedMode?: unknown }).resolvedMode === 'SYNTHESIZE';
 
+  // SYNTHESIZE dead-end (2026-09-14). The SECOND provable "nothing is in flight" shape, and the
+  // reason HARNESS_NO_OUTPUT Layer 2 did not fire on prod execution cmu0yl664006kyx0e3olnguqe.
+  // That branch proves dead-end-ness from an ABSENT `metadata.pipelineStageId` — correct for a
+  // CREATE (no child stage ⇒ nothing will ever cascade back), but FALSE for a SYNTHESIZE: the link
+  // is present and yet nothing is in flight, because SYNTHESIZE resolves only once every child is
+  // already terminal, so every cascade has already fired and no future event can retrigger it.
+  // Same caller-side derivation as truncationStalled above (keeps the tx free of resultJson shape
+  // assumptions). Mode-gated for the same reason: an empty ORCHESTRATE is harmless (children still
+  // running will retrigger) and an empty CREATE is the case the ABSENT-link conjunct already covers.
+  const synthesizeDeadEnd =
+    (harnessNoOutput || harnessCreateIncomplete) &&
+    (resultJson as { resolvedMode?: unknown }).resolvedMode === 'SYNTHESIZE';
+
   // Derivation-containment fact (2026-07-17, pipeline-harness-specialist GO-WITH-CHANGES@85):
   // MECHANICAL check that a harness's derived values (e.g. a covering CIDR) don't swallow any
   // HARVESTED allocation beyond their declared members. Anchored to the HARVEST child's own
@@ -463,6 +476,7 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
     servingModel,
     supersededById: selfSupersession?.supersededById ?? null,
     truncationStalled,
+    synthesizeDeadEnd,
     // HARNESS_NO_OUTPUT Layer 2 (2026-07-17): quality-layer facts; persist conjoins with
     // FRESH in-tx task-row facts (status !== COMPLETED, !metadata.pipelineStageId) + the
     // F17/F20 gates. Either fact qualifies — the in-tx conjunction is what makes it safe.

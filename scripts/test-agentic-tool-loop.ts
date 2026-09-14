@@ -10,6 +10,8 @@
  *
  * CI-safe: module is pure; fakes only. Run: npm run test:agentic-tool-loop
  */
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { RUNTIME_LIMITS } from '../lib/validation/runtime-limits';
 import { executeToolTurn, runAgenticToolLoop, truncateForLlm, createPagerState, ToolCallRecord } from '../lib/agents/harness/agentic-tool-loop';
 import { LLMProvider } from '../lib/services/llm/types';
@@ -778,6 +780,102 @@ function makeDeps(overrides: Partial<Parameters<typeof executeToolTurn>[1]> = {}
     ok(r.truncationRetryUsed === true && r.truncationRetryRecovered === true, 'R4-5: retry recovered to tool_use');
     ok(r.toolCallResults.length === 1, 'R4-5: the recovered tool_use turn was executed by the normal loop');
     ok(r.currentResponse.text === 'done after tool', 'R4-5: loop continued to the terminal turn');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // P2-CONT — the provider-error guard at EVERY 'full' call site (2026-09-14)
+  // Prod cmu0yl664006kyx0e3olnguqe: the provider returns {text:'', error} instead of throwing;
+  // the CONTINUATION site never checked it, so stopReason was undefined, the while-guard exited
+  // cleanly, and the execution persisted SUCCESS with an EMPTY deliverable — silent and stranding.
+  // ═══════════════════════════════════════════════════════════════════════
+  console.log('\n── P2-CONT: provider-error guard on continuation turns ──');
+
+  const mkProviderErr = (msg: string, code: string) =>
+    ({ text: '', provider: 'anthropic_sdk', error: { message: msg, code, details: { any: 'thing' } } });
+
+  // P2C1: continuation turn returns a provider-error → fail loud, not silent-green.
+  {
+    const { entries, logger } = capturingLogger();
+    const llm = scriptedLLM([
+      mkToolUse([{ id: 'c1', name: 'alpha', arguments: '{}' }]),
+      mkProviderErr('terminated: terminated: Body Timeout Error', 'LLM_STREAM_IDLE_TIMEOUT'),
+    ]);
+    let threw = '';
+    try { await runAgenticToolLoop(baseInput, loopDeps(llm.generateText, logger)); } catch (e: any) { threw = e.message; }
+    ok(/Body Timeout Error \(code: LLM_STREAM_IDLE_TIMEOUT\)/.test(threw),
+      'P2C1: continuation provider-error throws with the real cause + code (was: silent SUCCESS, empty finalResponse)');
+    const e = entries.find(x => x.level === 'error' && /LLM provider returned error/.test(x.msg))!;
+    ok(!!e && e.obj.phase === 'continuation' && e.obj.turn === 1 && e.obj.taskId === 'task-1'
+      && e.obj.apiErrorCode === 'LLM_STREAM_IDLE_TIMEOUT' && e.obj.fatal === true,
+      'P2C1: the cause is logged WITH execution correlation (phase/turn/taskId/code) — it was previously lost');
+    ok(entries.some(x => x.msg === 'Agentic tool loop: turn completed'),
+      'P2C1: the all-undefined turn log (the forensic signature) is still emitted before the guard');
+  }
+
+  // P2C2: the pause_turn continuation has the same guard.
+  {
+    const { entries, logger } = capturingLogger();
+    const llm = scriptedLLM([
+      mkResp({ stopReason: 'pause_turn', rawContentBlocks: [{ type: 'text', text: 'partial' }] }),
+      mkProviderErr('Overloaded', 'unknown_error'),
+    ]);
+    let threw = '';
+    try { await runAgenticToolLoop(baseInput, loopDeps(llm.generateText, logger)); } catch (e: any) { threw = e.message; }
+    ok(/LLM call failed at provider layer: Overloaded/.test(threw), 'P2C2: pause_turn continuation fails loud too');
+    ok(entries.some(x => x.level === 'error' && x.obj.phase === 'pause_turn'), 'P2C2: logged with phase=pause_turn');
+  }
+
+  // P2C3: a truncation RETRY that returns a provider-error is caught by the same guard (the retry
+  // result becomes currentResponse — an unchecked retry would re-open the identical silent exit).
+  {
+    const llm = scriptedLLM([
+      mkToolUse([{ id: 'c3', name: 'alpha', arguments: '{}' }]),
+      mkResp({ stopReason: 'max_tokens', text: '', rawContentBlocks: [] }),
+      mkProviderErr('connection reset', 'unknown_error'),
+    ]);
+    let threw = '';
+    try { await runAgenticToolLoop({ ...baseInput, cfg: { ...cfg, model: 'claude-sonnet-5' as const } }, loopDeps(llm.generateText)); } catch (e: any) { threw = e.message; }
+    ok(/connection reset/.test(threw), 'P2C3: provider-error returned by the truncation retry is guarded');
+  }
+
+  // P2C4: REGRESSION LOCK — the budget fail-fast branch must keep degrading (synthesised blocked
+  // report), never throw. Its degrade-to-(a) contract predates this guard and is deliberate.
+  {
+    const llm = scriptedLLM([mkToolUse(twoCalls), mkProviderErr('Overloaded', 'unknown_error')]);
+    const r = await runAgenticToolLoop(baseInput, budgetDeps(llm.generateText));
+    ok(r.budgetFailFastUsed === true && /System-synthesized/.test(r.currentResponse.text),
+      'P2C4: budget fail-fast still synthesises on a provider-error response (no throw)');
+  }
+
+  // P2C6: STRUCTURAL — every guarded phase is still wired, in both files. The `phase` parameter is a
+  // CLOSED union, so a NEW generateText call site cannot be added without naming its phase here (the
+  // compiler forces the author past this decision); this pin catches a site being silently DELETED.
+  {
+    const loopSrc = readFileSync(join(__dirname, '..', 'lib', 'agents', 'harness', 'agentic-tool-loop.ts'), 'utf8');
+    const diagSrc = readFileSync(join(__dirname, '..', 'lib', 'agents', 'harness', 'diagnostic-retry.ts'), 'utf8');
+    for (const phase of ['initial', 'continuation', 'pause_turn', 'correction']) {
+      ok(new RegExp(`checkProviderErrorResponse\\([\\s\\S]{0,200}phase: '${phase}'`).test(loopSrc),
+        `P2C6: the '${phase}' LLM call site is guarded`);
+    }
+    ok(/checkProviderErrorResponse\([\s\S]{0,200}phase: 'diagnostic_retry'[\s\S]{0,80}'log'/.test(diagSrc),
+      "P2C6: the diagnostic retry is guarded in log-only mode");
+  }
+
+  // P2C5: the #89 correction turn is OPTIONAL — a provider-error there keeps the original response
+  // (non-fatal) but the cause is now logged instead of discarded.
+  {
+    const { entries, logger } = capturingLogger();
+    const failingExec = (gen: any, lg: any) => ({ ...loopDeps(gen, lg), executeToolOnServer: async () => { throw new Error('boom'); } });
+    const llm = scriptedLLM([
+      mkToolUse([{ id: 'c5', name: 'alpha', arguments: '{}' }]),
+      mkResp({ text: 'original narrative' }),
+      mkProviderErr('rate_limit_error', 'unknown_error'),
+    ]);
+    const r = await runAgenticToolLoop(baseInput, failingExec(llm.generateText, logger));
+    ok(r.correctionTurnUsed === false && r.currentResponse.text === 'original narrative',
+      'P2C5: correction provider-error is non-fatal — original kept');
+    const e = entries.find(x => x.level === 'error' && x.obj.phase === 'correction')!;
+    ok(!!e && e.obj.fatal === false, 'P2C5: the correction-turn cause is logged (fatal:false), not discarded');
   }
 
   console.log(`\n${'─'.repeat(50)}\n  Passed: ${passed}  Failed: ${failed}`);

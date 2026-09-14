@@ -937,7 +937,7 @@ judgement is the reason this discovery is run by a specialist and not just by CI
 
 ```bash
 npm run prompt:directives -- <role> --protocol <name>   # every directive sharing that prompt, by source
-npm run prompt:directives -- --roles                    # expect 26
+npm run prompt:directives -- --roles                    # expect >=26 — and the tool SELF-REPORTS (it prints `N roles with guidance:`), so read its output rather than this floor
 ```
 Run before adding or changing any prohibition/mandate. `ROLE_GUIDANCE_LIBRARY` and `UNIVERSAL_AGENT_RULES`
 reference each other **zero** times in either direction (measured 2026-08-04), so a seam between them is

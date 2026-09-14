@@ -103,7 +103,12 @@ export class SecureExecutionEvents extends EventEmitter {
       this._errorHandler = (error: any) => {
         this.logger.error({ err: error }, 'Shared connection error');
         this.isConnected = false;
-        this.emit('error', error);
+        // BC-2026-09-13: a bare 'error' emit THROWS when unlistened (Node EventEmitter), and
+    // that throw unwinds the caller — here the shared pool's notify loop, preventing its
+    // own scheduleReconnect() from ever running. Nothing in this repo listens on 'error'
+    // for these emitters, so the emit is pure hazard. Guard it rather than remove it, to
+    // preserve the API for a future listener.
+    if (this.listenerCount('error') > 0) this.emit('error', error);
       };
       this.sharedPool.on('connected', this._connectedHandler);
       this.sharedPool.on(`error-${this.systemName}`, this._errorHandler);
@@ -127,7 +132,12 @@ export class SecureExecutionEvents extends EventEmitter {
     } catch (error) {
       this.logger.error({ err: error }, 'Failed to initialize execution events with shared pool');
       this.isConnected = false;
-      this.emit('error', error);
+      // BC-2026-09-13: a bare 'error' emit THROWS when unlistened (Node EventEmitter), and
+    // that throw unwinds the caller — here the shared pool's notify loop, preventing its
+    // own scheduleReconnect() from ever running. Nothing in this repo listens on 'error'
+    // for these emitters, so the emit is pure hazard. Guard it rather than remove it, to
+    // preserve the API for a future listener.
+    if (this.listenerCount('error') > 0) this.emit('error', error);
     }
   }
 

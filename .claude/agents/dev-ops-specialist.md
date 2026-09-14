@@ -148,10 +148,18 @@ The protocols agents run are `agent_prompt_library` rows written by `scripts/see
 (source of truth, private). `paichart/paichart` publishes them VERBATIM at `~/paichart/protocols/*.md`
 ("fidelity guarantee" in that README). Those files are GENERATED — never hand-edited. Canonical flow:
 `seed script → local DB (npm run seed:protocols) → scripts/render-public-protocols.ts → ~/paichart/protocols/ →
-commit+push in ~/paichart`. The renderer carries an explicit NAME LIST; a protocol absent from it is silently
-excluded. `npm run test:protocol-public-parity` (renderer `--check`) is the only thing that proves the mirror is
+commit+push in ~/paichart`. The renderer carries an explicit NAME LIST (`PROTOCOLS`).
+**A protocol absent from it USED TO BE silently excluded — that hole is closed as of 2026-09-14.** The renderer now
+carries a PUBLICATION-COMPLETENESS GUARD: the mirror image of the seed's orphan guard, same predicate, asking whether
+every ACTIVE `protocol`-tagged row is published OR declared in `NOT_PUBLISHED` with a reason. It fails hard (the seed
+only warns, because the seed runs on every deploy). So the old manual cross-check — seed's `Orphan guard: N rows` vs
+the count of ✅ parity lines — is no longer yours to remember.
+`npm run test:protocol-public-parity` (renderer `--check`) is still the only thing that proves the mirror is
 current, and it is deliberately OUT of CI — nothing runs it unless you do (six versions stale before 2026-08-29;
 one protocol unpublished + one diverged on 2026-09-10, caught only by running it after another session's push).
+Of those two 2026-09-10 misses only the DIVERGED one was ever detectable by parity; the UNPUBLISHED one was invisible
+to it, because every guard queried `in: PROTOCOLS` and so could not see outside the list. Parity verifies only what it
+was told to look at. It also now refuses to start without `DATABASE_URL` instead of dying in a Prisma stack trace.
 
 Parity compares the WHOLE render, header included — so any edit to a seeded row, **routing `description`
 included**, must bump `version` and append `Prior: <old> — <date> (<why>)` (R10). A description edit without a

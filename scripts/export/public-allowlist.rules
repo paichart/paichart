@@ -145,6 +145,16 @@
 + data/geographical-default.json
 + docs/OAUTH-SETUP.md
 + docs/VERIFYING-SELF-HOST.md
+# Self-host systemd units, referenced by SELF-HOST-RUN-SHEET.md. These MUST be above the
+# `- docs/**` line below: rules are ordered, first match wins, so without an explicit `+`
+# they silently never export and the run sheet points at a file that does not exist in
+# the user's clone. Nothing else catches that.
+#
+# These describe the SELF-HOSTER's box, not ours — no prod hostname, no secret, no path
+# under /var/www. Same class as docs/RUNNING.md, not the same class as infra/ (which is
+# server management and never exports).
++ docs/systemd/paichart-web.service
++ docs/systemd/paichart-mcp.service
 - docs/**
 
 # ── the application ───────────────────────────────────────────────────────────────

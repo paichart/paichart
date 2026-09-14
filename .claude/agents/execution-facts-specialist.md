@@ -94,7 +94,7 @@ comparator flagged 62%) and 2026-08-31 (56 packages: zero true fabrications, inc
 grep -n "RESULT_JSON_SUMMARY_KEYS = " lib/services/execution-artifacts.ts        # the contract with the consumer side
 grep -c "computeDerivationContainmentFact\|computeDialectLintFact\|computeContractPropagationFact\|computeMarkerPresence" lib/services/execution-core.ts   # 0 is HEALTHY since 2026-09-12 — the registry replaced every hand-wired call; non-zero ⇒ a net was re-inlined beside the loop
 grep -c "" lib/agents/harness/mechanical-nets.ts                                 # the registry's contents: one entry per (name, point)
-grep -rn "MECHANICAL_NETS\|netRegistry\|registerNet" lib/ scripts/ | wc -l       # 19 — the registry SHIPPED 2026-09-12 (stage 2b); 0 would mean it was reverted
+grep -rn "MECHANICAL_NETS\|netRegistry\|registerNet" lib/ scripts/ | wc -l       # NON-ZERO = the registry is live (shipped 2026-09-12, stage 2b); 0 would mean it was reverted. Deliberately NOT a number here: this line carried a stale 19 against a real 23 on 2026-09-14, because a duplicated count in the config is audited by nothing while the discovery holds the proven one
 ls scripts/replay-*.ts                                                            # observability without a run
 ```
 

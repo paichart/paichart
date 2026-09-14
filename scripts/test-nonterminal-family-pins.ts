@@ -175,6 +175,28 @@ test('NTF-HNO.3: cone reason UPSTREAM_HARNESS_NO_OUTPUT wired (four-way since 20
   assert(persistSrc.includes(`'UPSTREAM_HARNESS_NO_OUTPUT'`), 'cone reasonCode missing');
 });
 
+test('NTF-SDE.1: the dead-end conjunction covers BOTH shapes — absent link (CREATE) OR synthesizeDeadEnd', () => {
+  const idx = persistSrc.indexOf('HARNESS_NO_OUTPUT Layer 2 (2026-07-17, 3-lens');
+  assert(idx > -1, 'Layer-2 branch missing');
+  const win = persistSrc.slice(idx, idx + 4200);
+  assert(win.includes('input.synthesizeDeadEnd'), 'SYNTHESIZE dead-end disjunct missing — a SYNTHESIZE with all children terminal hangs forever (prod cmu0yl664006kyx0e3olnguqe)');
+  assert(win.includes('pipelineStageId'), 'the ABSENT-LINK (CREATE) disjunct must SURVIVE the widening — it is the shape being loosened');
+});
+
+test('NTF-SDE.2: the fact is derived caller-side and mode-gated (same shape as truncationStalled)', () => {
+  const coreSrc = read('lib/services/execution-core.ts');
+  assert(/const synthesizeDeadEnd\s*=/.test(coreSrc), 'caller-side derivation missing');
+  const i = coreSrc.indexOf('const synthesizeDeadEnd');
+  assert(coreSrc.slice(i, i + 400).includes(`'SYNTHESIZE'`),
+    'mode gate missing — an empty ORCHESTRATE is harmless and an empty CREATE is the other disjunct');
+  assert(coreSrc.includes('synthesizeDeadEnd,'), 'derived fact never passed to the persist input');
+});
+
+test('NTF-SDE.3: the cone reason PHRASE branches — "never linked a child stage" is FALSE of the SYNTHESIZE shape', () => {
+  assert(persistSrc.includes('no cascade left to fire'),
+    'cone phrase does not distinguish the shapes; a program LEG would be told the link was absent when it was present');
+});
+
 test('NTF-PFB.1: pre-flight-bail branch exists (6th family member) — cannotRun/escalated + no child stage ⇒ FAILED, F17/F20-gated', () => {
   const idx = persistSrc.indexOf('PRE_FLIGHT_BAIL terminalization');
   assert(idx > -1, 'PRE_FLIGHT_BAIL branch comment missing');

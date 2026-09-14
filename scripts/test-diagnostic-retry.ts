@@ -28,10 +28,10 @@ function test(d: string, fn: () => Promise<void> | void) {
 }
 function ok(cond: boolean, msg: string) { if (!cond) throw new Error(msg); }
 
-const silentLogger = { info: () => {}, warn: () => {} };
+const silentLogger = { info: () => {}, warn: () => {}, error: () => {} };
 function capturingLogger() {
   const entries: Array<{ level: string; obj: any; msg: string }> = [];
-  return { entries, logger: { info: (o: any, m: string) => entries.push({ level: 'info', obj: o, msg: m }), warn: (o: any, m: string) => entries.push({ level: 'warn', obj: o, msg: m }) } };
+  return { entries, logger: { info: (o: any, m: string) => entries.push({ level: 'info', obj: o, msg: m }), warn: (o: any, m: string) => entries.push({ level: 'warn', obj: o, msg: m }), error: (o: any, m: string) => entries.push({ level: 'error', obj: o, msg: m }) } };
 }
 
 const cfg = {
@@ -126,6 +126,18 @@ async function main() {
     const r = await runDiagnosticRetry(baseInput(), { generateText: llm.generateText, logger: cap.logger });
     ok(r.diagnosticRetryUsed === false && r.confidenceScore === 60, 'prior kept on throw');
     ok(cap.entries.some(e => e.level === 'warn' && e.msg.includes('failed')), 'warn logged');
+  });
+
+  await test('retry returns a PROVIDER-ERROR response → non-fatal, prior kept, cause LOGGED (2026-09-14)', async () => {
+    // The provider returns {text:'', error} rather than throwing. Before the shared P2 guard this
+    // path was indistinguishable from "retry returned empty" and the cause was discarded.
+    const llm = scriptedLLM([{ text: '', provider: 'anthropic_sdk', error: { message: 'terminated: Body Timeout Error', code: 'LLM_STREAM_IDLE_TIMEOUT' } }]);
+    const cap = capturingLogger();
+    const r = await runDiagnosticRetry(baseInput(), { generateText: llm.generateText, logger: cap.logger });
+    ok(r.diagnosticRetryUsed === false && r.confidenceScore === 60, 'prior kept — an optional retry never fails the run');
+    const e = cap.entries.find(x => x.level === 'error' && /LLM provider returned error/.test(x.msg))!;
+    ok(!!e && e.obj.phase === 'diagnostic_retry' && e.obj.fatal === false && e.obj.apiErrorCode === 'LLM_STREAM_IDLE_TIMEOUT',
+      'cause logged with phase + fatal:false + provider code');
   });
 
   // ── Observer order: start BEFORE complete ──

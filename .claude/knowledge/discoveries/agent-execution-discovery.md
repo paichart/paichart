@@ -1,5 +1,37 @@
 # Agent Execution Engine Discovery
 
+## 🆕 2026-09-14 — P2 provider-error guard at EVERY LLM call site (the silent-empty-SUCCESS class)
+
+The provider does NOT throw on an SDK failure — it RETURNS `{text:'', error:{message,code,details}}`
+(`anthropic-sdk-provider.ts` catch). Any consumer keying only on `.text`/`.stopReason` reads that as a
+benign empty completion: `stopReason` is `undefined`, the loop's while-guard exits, terminal-persist
+writes **SUCCESS with an empty finalResponse**. Only the INITIAL call checked it; the CONTINUATION site —
+the one every multi-turn execution uses — did not (prod `cmu0yl664006kyx0e3olnguqe`, a program SYNTHESIZE
+stranded by an undici **Body Timeout Error** 307 s into a continuation turn).
+
+```bash
+grep -c "checkProviderErrorResponse" lib/agents/harness/agentic-tool-loop.ts   # expect 6 — 1 def + 1 doc-ref + 4 call sites (initial · continuation · pause_turn · correction)
+grep -c "checkProviderErrorResponse" lib/agents/harness/diagnostic-retry.ts    # expect 2 — import + the log-only call
+grep -c "LLM_STREAM_IDLE_TIMEOUT" lib/services/llm/anthropic-sdk-provider.ts   # expect 1 — the transport-idle classification (else it folds into unknown_error and the class is uncountable)
+```
+`phase` is a CLOSED union on the guard, so a NEW `deps.generateText(` site cannot compile without naming
+its phase — the type is the tripwire for ADDITIONS; `P2C6` in `test:agentic-tool-loop` is the tripwire for
+DELETIONS (mutation-verified: removing the continuation guard reddens P2C1/P2C3/P2C6).
+Two modes, and the distinction is the contract: **throw** where the response IS the run (initial /
+continuation / pause_turn) so the adapter's catch persists FAILED with a real `errorCategory`; **log-only**
+where the call is an optional polish turn (#89 correction, diagnostic retry) that already degrades to the
+prior response — there the guard exists purely so the CAUSE is not discarded.
+**Do NOT "fix"**: the budget fail-fast branch is deliberately unguarded (it checks `currentResponse?.error`
+itself and synthesises a blocked report — pinned by P2C4). Suites: `test:agentic-tool-loop` ·
+`test:streaming-accumulate` (5.4d/5.4e) · `test:diagnostic-retry`.
+
+**Timeout finding (settled, do not re-derive)**: nothing in OUR code bounded that stalled stream. The SDK
+client timeout (600 s default, never overridden) is armed around the fetch only; the execution watchdog
+(`TIMEOUT_BASE_MS + turns×TIMEOUT_PER_TURN_MS`, 18 min at 30 turns) was far above; the abort signal was
+threaded but never fired. What actually terminated it was **undici's body-idle timeout — Node's global-fetch
+default, 300 s with no body bytes**. That is a sane bound (the API sends pings, so 300 s of silence is a dead
+stream) and needs no change; the defect was purely that its error was swallowed.
+
 ## 🆕 2026-08-17 — WS1 Phase C composed-injection tripwires
 
 ```bash
@@ -55,7 +87,7 @@ grep -n "reviewerVerdict\|REVIEWER_ROLES\|FIELD ORDER" lib/services/execution-ar
 # Parser (pure, null-on-miss, token-locked, last-match-wins) + guard (flag-only qualityGate reconciliation)
 grep -n "export function parseReviewerVerdict\|VERDICT_MARKER" lib/agents/harness/parse-verdict.ts
 grep -n "annotateQualityGateVerdictMismatch" lib/mcp/tasks/action/handlers/task/task-update-handler.ts
-npm run test:parse-verdict   # EXPECT 15 pass; parity suite pins the order: npm run test:execution-artifacts-parity (37)
+npm run test:parse-verdict   # expect >=15 pass; parity suite pins the order: npm run test:execution-artifacts-parity (>=51). FLOORS not exact counts (ruling 2026-09-14): the trailing parity number sat at 37 while the suite was 51 — a second suite's count riding as a parenthetical on another suite's line, which no audit could see
 ```
 EXPECT: exactly ONE grammar DEFINITION (`## VERDICT: APPROVED | NEEDS-REVISION`) repo-wide, in
 `pAIchartUniversalTemplate.ts` change_reviewer guidance — plus string-PIN hits in

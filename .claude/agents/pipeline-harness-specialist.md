@@ -284,10 +284,14 @@ record it in `/.claude/knowledge/pipelines/PIPELINE-DOMAIN-FIT-CATALOG.md` (the 
   Bundle: `cline_docs/reviews/services-envelope-bloat-2026-07-08/`. Prompt caching (G, `dc5645d5`) then took
   family uncached input 2.16M→114 tokens (−78% input cost) — run economics changed materially 2026-07-08.
 - **ROLE_GUIDANCE_LIBRARY reality:** trace every reuse to the role's *actual text*, not a "neutral"
-  claim. **BOTH `change_reviewer` AND `config_change_author` are SHARED KEYS — each ships to THREE
-  templates across network / terraform / k8s** (`Config Change-Package Author` + `HCL Rollback Author`
-  + `Manifest Rollback Author`; `Change Reviewer` + `Plan Policy Reviewer` + `GitOps Change Reviewer`),
-  so **every edit to either is a three-domain edit**. That is real leverage — the 2026-08-25
+  claim. **BOTH `change_reviewer` AND `config_change_author` are SHARED KEYS — each ships to FOUR
+  templates across network / terraform / k8s / observability** (`Config Change-Package Author` +
+  `HCL Rollback Author` + `Manifest Rollback Author` + the observability author; `Change Reviewer` +
+  `Plan Policy Reviewer` + `GitOps Change Reviewer` + `Observability Change Reviewer`),
+  ⚠️ this file said THREE until 2026-09-14 — observability shipped 2026-09-10 and the stale count was
+  repeated twice in one session before a panel lens caught it. Re-verify with
+  `grep -rn "defaultRole: '<role>'" scripts/seed-*.ts` rather than trusting the list,
+  so **every edit to either is a FOUR-domain edit**. That is real leverage — the 2026-08-25
   satisfiability rule was earned by an IS-IS migration and now guards HCL and manifests — and a real
   hazard: both entries have carried network-isms, and the satisfiability rule itself was authored with
   a routing-only example that meant nothing to an HCL author (caught in review, 2026-08-25). State the

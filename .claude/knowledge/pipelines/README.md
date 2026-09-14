@@ -35,6 +35,7 @@ directory has since accumulated the canonical guides, and a reader landing here 
 |---|---|
 | `EVIDENCE-FLOW-DISCIPLINE.md` | how evidence crosses stage boundaries |
 | `CHECK-DESIGN-DISCIPLINE.md` | how the checks WE write fail, and what shape a good one has |
+| `PROSE-OBLIGATION-COVERAGE.md` | whether an instruction we give a tier actually binds — the five failure modes, which are mechanisable, the coverage map, and the instance register |
 | `USING-WORKFLOW-EVOLUTION-AND-SIGNAL-DESIGN.md` | Protocol 13 + Protocol 10 applied here |
 | `firewall-policy-use-case.md` | the worked example + single-vs-program decision matrix |
 

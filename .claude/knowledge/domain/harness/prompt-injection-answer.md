@@ -197,7 +197,7 @@ authorized downstream per-tool rather than at the hub gateway, and that's audite
 
 ✅ **FIXED 2026-07-27** — same session. `serviceEndpointSchema` is now defined once
 (`tool-schemas.js`, next to `SafeNameField`) and referenced by **both** register and update, so the
-constraint cannot drift a third time. Gate: `npm run test:registry-endpoint-parity` (33 assertions —
+constraint cannot drift a third time. Gate: `npm run test:registry-endpoint-parity` (>=33 assertions —
 accept/reject per path **plus** an explicit parity layer asserting the two paths agree on every case,
 so a future constraint added to one path only fails the build). Wired into `test:all-validation`.
 Verified against all 15 live prod services first: only the 3 seed-managed `paichart-*` internal

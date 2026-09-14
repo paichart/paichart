@@ -39,38 +39,88 @@ const TABLE_BAN = 'Do NOT put validation in a markdown table';
 
 console.log('🧾 Validation-shape contract\n');
 
-test('all FOUR domain protocols carry the shape requirement', () => {
-  const n = SEED.split(SHAPE_ANCHOR).length - 1;
-  assert(n === 4, `expected the shape rule in network + k8s + terraform + observability (4), found ${n}. ` +
-    'A domain protocol without it will keep emitting prose validation and losing runs.');
+// 2026-09-15: the clause is now ONE shared const interpolated into the four domain protocols
+// (panel: witnessed-rendering-obligation-2026-09-14). So "4 copies, identical" is the WRONG property
+// to assert — it is true by construction and therefore vacuous. What must be pinned instead is
+// REACHABILITY: exactly one definition, and every domain protocol still receiving it. The old
+// byte-equality test would have caught NONE of the three live defects that motivated the extraction.
+const CLAUSE_REF = '${VALIDATION_SHAPE_CLAUSE}';
+const DOMAIN_PROTOCOL_CONSTS = [
+  'PIPELINE_PROVISIONING_PROTOCOL',
+  'PIPELINE_KUBERNETES_GITOPS_PROTOCOL',
+  'PIPELINE_TERRAFORM_IAC_PROTOCOL',
+  'PIPELINE_OBSERVABILITY_CONFIG_PROTOCOL',
+];
+
+test('the shape clause has exactly ONE definition — no copy has been re-inlined', () => {
+  const defs = SEED.split('const VALIDATION_SHAPE_CLAUSE').length - 1;
+  assert(defs === 1, `expected exactly 1 definition of the clause, found ${defs}`);
+  const anchors = SEED.split(SHAPE_ANCHOR).length - 1;
+  assert(anchors === 1,
+    `the clause anchor appears ${anchors}× in source; it must appear ONCE (inside the const). ` +
+    'A second occurrence means a domain has re-inlined its own copy — which is how the copies ' +
+    'drifted before: only network carried the third sanctioned shape, so the same author behaviour ' +
+    'was approved in one domain and blocked in another.');
 });
 
-test('all four FORBID the table form — the shape that invited the prose', () => {
-  const n = SEED.split(TABLE_BAN).length - 1;
-  assert(n === 4, `expected the table prohibition 4 times, found ${n}`);
-});
-
-test('the four copies have NOT drifted apart', () => {
-  // Four copies of a rule is four chances for two of them to be right. Compare the clause bodies.
-  const bodies: string[] = [];
-  let from = 0;
-  for (;;) {
-    const i = SEED.indexOf(SHAPE_ANCHOR, from);
-    if (i === -1) break;
-    bodies.push(SEED.slice(i, i + 700));
-    from = i + 1;
+test('all FOUR domain protocols still RECEIVE the shape clause', () => {
+  const n = SEED.split(CLAUSE_REF).length - 1;
+  assert(n === 4, `expected 4 interpolations of the shared clause, found ${n}`);
+  // Reachability, not just a count: each named domain protocol body must contain the interpolation.
+  for (const name of DOMAIN_PROTOCOL_CONSTS) {
+    const start = SEED.indexOf(`const ${name} = \``);
+    assert(start > -1, `${name} not found — rename? the reachability check is now blind`);
+    const end = SEED.indexOf('\nconst ', start + 10);
+    const body = SEED.slice(start, end === -1 ? undefined : end);
+    assert(body.includes(CLAUSE_REF),
+      `${name} does NOT receive the shared shape clause — that domain silently gets a weaker rule, ` +
+      'which is exactly the state this extraction was done to end.');
   }
-  assert(bodies.length === 4, `expected 4 clause bodies, found ${bodies.length}`);
-  assert(bodies.every((b) => b === bodies[0]),
-    'the shape clauses have diverged — fix them to be identical, or a domain silently gets a weaker rule');
+});
+
+test('the clause FORBIDS the table form — the shape that invited the prose', () => {
+  const n = SEED.split(TABLE_BAN).length - 1;
+  assert(n === 1, `expected the table prohibition once (in the shared const), found ${n}`);
+});
+
+test('the remedy LADDER is intact — replace before drop, and unwitnessed is not a drop', () => {
+  // The pre-2026-09-15 tail offered only "replace it with one you can, or drop it", which conflated
+  // two different absences: a check that does not exist (drop is right) and one that exists but was
+  // never witnessed (dropping it loses real coverage). It also offered DROP as a peer of REPLACE.
+  assert(SEED.includes('REPLACE** the command with one whose output you CAN quote'),
+    'the REPLACE rung is gone — it is the FIRST remedy and the one authors skip (a terraform leg used ' +
+    '-no-color to make one step quotable and did not apply the same move to the next)');
+  assert(SEED.includes('never a drop, because dropping it loses real coverage'),
+    'the drop/unwitnessed distinction is gone — without it an author drops a runnable check to comply');
+  assert(SEED.includes('nobody has yet observed'),
+    'the unwitnessed-output rung is gone; the honest answer becomes unsayable again');
+});
+
+test('the clause ADDRESSES THE REVIEWER — the half R13 missed', () => {
+  // R13 (2026-08-27) was a REVIEWER blocking a compliant author. Its entire remedy landed on the
+  // author side, so as shipped it did not prevent R13 — which recurred 2026-09-14 in terraform.
+  // The permission must reach the party that blocks, or extraction alone ships the failure intact.
+  assert(SEED.includes('addressed to you as well'),
+    'the reviewer-addressed paragraph is gone — a permission addressed only to the author is read by ' +
+    'the reviewer as nothing at all, and the role-neutral text below it says "literal or drop"');
+  assert(SEED.includes('judge the stated REASON, not the absence of a literal'),
+    'the reviewer disposition is gone — what to ACCEPT, not merely what to reject');
+  assert(SEED.includes('licenses nothing'),
+    'the licensing deferral is gone — without it this clause would sanction the shape in domains ' +
+    'whose protocol sanctions none (terraform/k8s renderings ARE obtainable pre-apply, so a blanket ' +
+    'sanction converts a CORRECT block into a pass)');
 });
 
 test('the clause demands LITERAL output and names the failure it replaces', () => {
   assert(SEED.includes('the LITERAL text the tool or device returns'),
     'the "literal text" requirement is gone — without it "expected output" readmits description');
-  assert(SEED.includes('not deterministic — replace it with one'),
-    'the fallback instruction is gone: a step whose output cannot be quoted must be replaced or dropped, ' +
-    'otherwise the author has no move when the check is genuinely non-deterministic and writes prose instead');
+  // Pins the PROPERTY (a defined move exists when the literal is impossible), not the old phrasing.
+  // The 2026-09-15 rewrite replaced "replace it with one you can, or drop it" with a three-rung
+  // ladder; an assertion on the old words would have failed for a correct change — and this one
+  // did exactly that, which is how it was found. The rungs themselves are pinned by the ladder test.
+  assert(SEED.includes('not deterministic AS WRITTEN') && SEED.includes('do NOT describe it in prose'),
+    'the fallback instruction is gone: without a defined move for a step whose output cannot be ' +
+    'quoted, the author has nothing to do but write prose — the defect this whole clause exists to remove');
 });
 
 test('the clause ships NO worked values — a shape example must not seed a value', () => {

@@ -220,7 +220,28 @@ lines, not as an instruction that binds.
 
 ---
 
-## 5. `rollbackContainment` — net #3, EARNED-AND-SCHEDULED, not built
+## 5. `rollbackContainment` — net #3, ✅ BUILT AND LIVE
+
+> **Status corrected 2026-09-14.** This section's heading read *"EARNED-AND-SCHEDULED, not built"*
+> until today. It shipped: `lib/agents/harness/rollback-containment.ts` +
+> `rollback-containment-enrichment.ts`, registered in the shared net registry
+> (`lib/agents/harness/net-registry.ts`), **live-accepted at R3b-3 on 2026-09-11 — the same day this
+> library was written**, which is how the two diverged: the section was drafted before the build
+> landed and was never revisited.
+>
+> Item 5 below (the shared net registry, built in the same arc) also landed — six hand-wired stamp
+> sites became one registry with two invocation points, guarded by an equivalence gate measured
+> against observed production output.
+>
+> **Why this correction is worth more than a one-line edit.** This library is the authoritative
+> inventory of what is mechanised. A reader consulting it would conclude one of three live nets does
+> not exist — and might propose building it. That is not hypothetical: on 2026-09-13 a coordinator
+> was one step from re-proposing `prefix-not-minimal`, which had shipped six weeks earlier, for
+> exactly this reason. An inventory that says "not built" about a built thing is worse than no
+> inventory.
+>
+> The design record below is preserved verbatim — it is the ruling the build followed, and items 4
+> and 6 in particular are standing constraints rather than history.
 
 Trigger fired 2026-09-10 (second and third provenance-shaped refusals, same day). Full record:
 `cline_docs/follow-ups/r19-p4-reviewer-false-positive-2026-08-31.md` — read the **pre-assembled

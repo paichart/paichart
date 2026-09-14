@@ -166,6 +166,10 @@ export interface TerminalSuccessInput {
    *  quality-layer fact (PIPELINE empty pre-note deliverable OR dead-end CREATE shape).
    *  The tx conjoins it with fresh in-tx facts before terminalizing — see the branch. */
   harnessNoOutput: boolean;
+  /** SYNTHESIZE dead-end (2026-09-14): `harnessNoOutput && resolvedMode === 'SYNTHESIZE'`, derived
+   *  caller-side beside `truncationStalled`. The SECOND provable nothing-in-flight shape — see the
+   *  HARNESS_NO_OUTPUT branch, whose ABSENT-link conjunct proves it only for a CREATE. */
+  synthesizeDeadEnd: boolean;
   /** resolveAgentRole output — the completion-comment Role line. */
   agentRole: string;
   confidenceScore: number | null;
@@ -722,7 +726,14 @@ export async function runTerminalSuccessTx(
     isPipelineTask &&
     input.harnessNoOutput &&
     currentTaskType?.status !== 'COMPLETED' &&
-    !(legMeta as Record<string, unknown> | null | undefined)?.pipelineStageId &&
+    // TWO provable dead-end shapes, not one (2026-09-14). ABSENT LINK proves it for a CREATE:
+    // no child stage exists, so nothing will ever cascade back. That inference is FALSE for a
+    // SYNTHESIZE, where the link is present and nothing is in flight for the opposite reason —
+    // SYNTHESIZE resolves only on all-children-terminal, so every cascade has ALREADY fired and
+    // the retrigger reactor (child-completion driven) has no future event left. Prod specimen
+    // cmu0yl664006kyx0e3olnguqe hung permanently in exactly that gap.
+    (!(legMeta as Record<string, unknown> | null | undefined)?.pipelineStageId ||
+      input.synthesizeDeadEnd) &&
     !programLegCompletion.status &&
     !programLegCompletion.executionStatus
   ) {
@@ -732,13 +743,23 @@ export async function runTerminalSuccessTx(
       harnessNoOutput: { executionId, errorCategory: 'HARNESS_NO_OUTPUT', at: endTime.toISOString() },
     };
     legFailureComment =
-      `⛔ **Harness stall — no output and no handoff** (\`HARNESS_NO_OUTPUT\`).
+      `⛔ **Harness stall — no output** (\`HARNESS_NO_OUTPUT\`).
 
 ` +
-      `This pipeline run produced no deliverable text and never linked a child stage ` +
-      `(\`metadata.pipelineStageId\` absent) — nothing is in flight. Marked \`executionStatus: FAILED\` ` +
-      `so the owning program can escalate (or, for a standalone pipeline, so you can recover) instead ` +
-      `of hanging.
+      (input.synthesizeDeadEnd
+        ? `This run's SYNTHESIZE produced no deliverable text and never closed the task. Every child ` +
+          `was ALREADY terminal when it ran (that is what resolves SYNTHESIZE), so every dependency ` +
+          `cascade has already fired and the retrigger reactor — which only fires on child ` +
+          `completion — has no future event left. Nothing is in flight; without this mark the run ` +
+          `would hang IN_PROGRESS forever. `
+        : `This pipeline run produced no deliverable text and never linked a child stage ` +
+          `(\`metadata.pipelineStageId\` absent) — nothing is in flight. `) +
+      `Marked \`executionStatus: FAILED\` ` +
+      (isProgramLeg
+        ? `so the owning program can escalate instead of hanging.`
+        : `so the false SUCCESS basis is removed and this is visible as a failure rather than a ` +
+          `silent stall — re-execute to retry.`) +
+      `
 
 ` +
       `⚠️ **Before re-executing**: if this run created a stage (look for an unlinked ` +
@@ -841,7 +862,13 @@ export async function runTerminalSuccessTx(
       reasonPhrase: isTruncation
         ? 'produced no deliverable (truncated at the output-token ceiling)'
         : isHarnessNoOutput
-        ? 'produced no output and never linked a child stage (nothing in flight)'
+        // Same reasonCode, two phrasings — the 4-way taxonomy is a CONSUMED contract and a 5th
+        // member has a cost, but "never linked a child stage" is FALSE of the SYNTHESIZE shape
+        // (the link is present; the cascades are spent). A cone explanation that is wrong about
+        // WHY is worse than a coarse one.
+        ? (input.synthesizeDeadEnd
+            ? 'produced no output at SYNTHESIZE, with every child already terminal (no cascade left to fire)'
+            : 'produced no output and never linked a child stage (nothing in flight)')
         : isPreFlightBail
         ? 'bailed in its own pre-flight (stamped cannotRun/escalated with no child stage — it can never run)'
         : 'was halted as a duplicate and produced no deliverable',

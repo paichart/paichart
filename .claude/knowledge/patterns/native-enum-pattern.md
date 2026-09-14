@@ -1,7 +1,7 @@
 # Pattern: z.nativeEnum() for Prisma Enums
 
 **Confidence**: 98% | **Last Audited**: 2026-05-31
-**Test Suite**: `npm run test:enum-parity` (69 tests, dual-layer)
+**Test Suite**: `npm run test:enum-parity` (>=69 tests, dual-layer)
 
 ## Rule
 

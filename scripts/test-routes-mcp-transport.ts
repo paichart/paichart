@@ -44,6 +44,16 @@ import type { RouteContext } from '../lib/mcp/server/routes/route-context';
 let passed = 0;
 let failed = 0;
 const failures: string[] = [];
+let skipped = 0;
+// A SKIP IS NOT A PASS. These sites previously called assertTrue(true, '...SKIPPED...'),
+// which incremented `passed` and printed a green tick for a test that never ran — the
+// unrun-vs-passed distinction this project enforces everywhere else (ARM NOT EXERCISED,
+// lane-not-supported, "the && chain stops at the first failure so later suites are
+// UNVERIFIED"). Counted and reported separately now, never as a pass.
+function skip(msg: string): void {
+  skipped++;
+  console.log(`  \u23ED\uFE0F  SKIPPED (not verified): ${msg}`);
+}
 
 function assertEqual(actual: unknown, expected: unknown, msg: string): void {
   const a = JSON.stringify(actual);
@@ -243,7 +253,7 @@ async function main() {
   // SSE keepAlive interval makes server.close() hang; tested via Phase 6.6
   // Quartet leg 4 curl smoke instead (curl handles streaming response cleanly).
   // The auth-gate part of Test 4 is covered by Test 3 (GET no-auth → 401).
-  assertTrue(true, 'Test 4: SKIPPED in unit test — SSE establishment verified via Phase 6.6 curl smoke (Test 3 covers the auth-gate invariant)');
+  skip('Test 4: SSE establishment — verified via Phase 6.6 curl smoke (Test 3 covers the auth-gate invariant)');
 
   // ─── Tests 5-8 — R11 POST behaviors ─────────────────────────────────
   console.log('\nTests 5-8: R11 POST /mcp behaviors');
@@ -326,7 +336,7 @@ async function main() {
 
   // Test 11: No session + no auth via Mcp-Session-Id → 400 (covered in Test 10 path)
   // SSE establishment skipped for same reason as Test 4 (see above).
-  assertTrue(true, 'Test 11: SKIPPED in unit test — SSE OAuth auto-session-creation branch verified via Phase 6.6 curl smoke');
+  skip('Test 11: SSE OAuth auto-session-creation branch — verified via Phase 6.6 curl smoke');
 
   // ─── Test 12 — R12 inner-closure isolation ──────────────────────────
   console.log('\nTest 12: R12 inner-closure ordering — ChatGPT branch runs BEFORE authMiddleware');
@@ -355,7 +365,7 @@ async function main() {
     failures.forEach(f => console.log(`  - ${f}\n`));
     process.exit(1);
   }
-  console.log('✅ All MCP transport route tests passed');
+  console.log(`✅ All MCP transport route tests passed${skipped ? ` (${skipped} SKIPPED — not verified)` : ''}`);
   // SSE keepAlive intervals on the server side hold the process open even
   // after we destroy client sockets. Force-exit instead of waiting for
   // them to naturally clear (which they won't until the underlying

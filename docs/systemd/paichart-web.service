@@ -1,0 +1,94 @@
+# pAIchart self-host unit — web app (:3000)
+#
+# Install (see docs/SELF-HOST-RUN-SHEET.md):
+#   sudo cp docs/systemd/paichart-web.service /etc/systemd/system/
+#   sudo nano /etc/systemd/system/paichart-web.service      # set User/Group/WorkingDirectory to yours
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now paichart-web
+#
+# `enable --now`, not `start` — `start` alone does not survive a reboot, which is the
+# single most common mistake with units.
+
+[Unit]
+Description=pAIchart web app (:3000)
+# Ordering only. systemd dependencies are a BOOT-ordering mechanism, not runtime
+# supervision: After= prevents a guaranteed crash-loop in the first seconds after a
+# reboot and does nothing when postgres restarts later. The restart policy handles that.
+#
+# Deliberately NOT Requires= (propagates stop, not restart; and on Ubuntu
+# postgresql.service is a RemainAfterExit meta unit, so it buys almost nothing) and
+# NOT BindsTo= (a dependency-caused stop does NOT trigger Restart=, so postgres flapping
+# would stop this unit and leave it stopped — reproducing the very defect these units
+# exist to prevent, behind a file everyone assumes is protecting them).
+Wants=postgresql.service network-online.target
+After=postgresql.service network-online.target
+# The web app must stay up when MCP is down — that is current behaviour and correct.
+# Ordering only, deliberately NO Requires=.
+After=paichart-mcp.service
+
+[Service]
+# `exec`, not `simple`: systemd waits for execve() to succeed, so `systemctl start`
+# fails LOUDLY on a bad ExecStart instead of succeeding and then restart-looping.
+# NOT Type=notify / WatchdogSec — neither process calls sd_notify, and ports bind late
+# (10-60s). `systemctl start` returning is not a readiness signal.
+Type=exec
+
+# EDIT THESE THREE for your install.
+User=steve
+Group=steve
+# A literal absolute path. NOT %h — in a SYSTEM unit %h resolves to root's home,
+# not the home of the User= you set.
+WorkingDirectory=/home/steve/paichart
+
+# NODE_ENV is load-bearing TWICE: server.js gates ts-node registration on it (without
+# it the app dies with a SyntaxError on a TypeScript `import type` line, which looks
+# like a code bug rather than a config one), and Next.js selects production mode from it.
+Environment=NODE_ENV=production
+# The MECHANISM, not a comment, for the line above. If someone edits this unit and drops
+# Environment=, server.ts:37 starts Next in DEVELOPMENT mode against a production build:
+# no crash, no error line, just a silently wrong server. That is the only failure in this
+# review with no other detector.
+# Assert, never Condition — ConditionEnvironment= marks the unit SKIPPED AND SUCCESSFUL
+# when unmet, which is precisely the "looks fine, isn't running" class these units exist
+# to eliminate.
+AssertEnvironment=NODE_ENV=production
+
+# NOT `npm run start`. The npm wrapper forks a child and forwards signals poorly: kill
+# the wrapper and the node child keeps the port, so the next boot dies EADDRINUSE.
+ExecStart=/usr/bin/node server.js
+
+# No EnvironmentFile. Both processes already call dotenv.config() relative to
+# WorkingDirectory, so the environment arrives through the SAME parser the documented
+# nohup command uses. Adding EnvironmentFile= introduces a second, differently-behaving
+# parser whose result SILENTLY WINS (dotenv does not override an already-set variable),
+# and systemd only treats `#` as a comment at the start of a line. Measured on our own
+# .env.example: `CONNECTED_OUTPUT_SANITIZE_ENABLED=true   # enable R9` becomes the literal
+# "true   # enable R9", fails its `=== 'true'` test, and silently disables a security
+# guard while the file says it is enabled. An `export `-prefixed line disappears entirely.
+
+Restart=always
+RestartSec=5
+# Exponential backoff 5 -> 11 -> 18 -> 26 -> 35 -> 48 -> 60 -> 60s.
+# systemd 254+. On 249 (Ubuntu 22.04) unknown directives are logged and IGNORED, so the
+# unit degrades cleanly to a flat RestartSec=5. Do not "fix" this.
+RestartSteps=6
+RestartMaxDelaySec=60
+# Disables rate limiting outright: there is then NO reachable `failed` state from restart
+# churn. Note the argument is "the failure mode we refuse to have", NOT "the database will
+# come back" — since 2026-09-13 the in-process pool recovers from a DB restart in ~1s
+# without systemd, so a persistent loop here now means something we do NOT understand is
+# wrong. We still retry forever: the alternative is a unit that enters `failed` and stays
+# there, which is exactly the 68-minute outage this replaces, for someone with no on-call.
+StartLimitIntervalSec=0
+
+# shutdown() does real cleanup; systemd's 90s default makes `systemctl restart` feel hung.
+TimeoutStopSec=30
+
+# No StandardOutput=/StandardError= — the default is the journal, so logs SURVIVE
+# restarts (`nohup … > ~/app.log` truncates on every restart, destroying the evidence at
+# exactly the moment someone goes looking), are time-indexed, and journald rotates them.
+# No logrotate config to go silently wrong.
+#   journalctl -u paichart-web -e -f
+
+[Install]
+WantedBy=multi-user.target

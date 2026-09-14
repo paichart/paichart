@@ -10,34 +10,45 @@
 
 ```bash
 # Static tripwires — the template drift the 2026-09-04 cold-start found, pinned so it cannot silently return.
-grep -c '^APP_BASE_URL=' .env.example                          # expect 1 — it was defined TWICE (prod first; dotenv keeps the first → self-hosts advertised paichart.app as OAuth issuer)
-grep -c 'paichart\.app' .env.example                           # expect 0 — the template must point at localhost; prod values come from the deploy workflow
+grep -c '^APP_BASE_URL=' .env.example  # expect 1 — it was defined TWICE (prod first; dotenv keeps the first → self-hosts advertised paichart.app as OAuth issuer)
+grep -c 'paichart\.app' .env.example  # expect 0 — the template must point at localhost; prod values come from the deploy workflow
 grep -c 'paichart\.app' app/auth/oauth/success/page.tsx "app/(auth)/login/page.tsx" | grep -vc ':0$'   # expect 0 — E10: the post-login instruction sheet derives the MCP URL from window.location.origin (served from APP_BASE_URL via nginx / the dev proxy); a literal here sends self-host users to the SaaS
-grep -c 'DATABASE_URL=' package.json                           # expect 0 — mcp:http:dev used to hardcode one and silently ignore .env
-grep -c '"jwt:keys"' package.json                              # expect 1 — the RS256 generator a stranger needs (scripts/generate-jwt-keys.sh)
-ls docs/RUNNING.md docs/OAUTH-SETUP.md | wc -l                 # expect 2 — stranger-facing docs (every npm script they cite must exist)
-grep -c 'test:dev-mcp-proxy' package.json                         # expect 2 — script + its slot in test:all-validation (the nginx-rule drift guard, E7)
-grep -c 'test:hub-endpoint-allowlist' package.json                # expect 2 — E14 gate (operator endpoint allowlist; 100+ cases incl. gate-9 agreement + SSRF≠trust pins)
+grep -c 'DATABASE_URL=' package.json  # expect 0 — mcp:http:dev used to hardcode one and silently ignore .env
+grep -c '"jwt:keys"' package.json  # expect 1 — the RS256 generator a stranger needs (scripts/generate-jwt-keys.sh)
+ls docs/RUNNING.md docs/OAUTH-SETUP.md | wc -l  # expect 2 — stranger-facing docs (every npm script they cite must exist)
+grep -c 'test:dev-mcp-proxy' package.json  # expect 2 — script + its slot in test:all-validation (the nginx-rule drift guard, E7)
+grep -c 'test:hub-endpoint-allowlist' package.json  # expect 2 — E14 gate (operator endpoint allowlist; 100+ cases incl. gate-9 agreement + SSRF≠trust pins)
 grep -rn 'navigator.clipboard.writeText' --include=*.tsx --include=*.ts components app | wc -l   # expect 0 — E17: navigator.clipboard is undefined on a plain-http self-host; every copy goes through lib/utils/clipboard.ts (execCommand fallback)
 grep -rlE 'process\.env\.HUB_PRIVATE_ENDPOINT_ALLOWLIST|env\[ENV_NAME\]' lib --include=*.js --include=*.ts | wc -l   # expect 1 — ONE env READER (mentions in comments/messages are fine) (lib/utils/endpoint-allowlist.js); a second parser cannot appear
-grep -c "require(" lib/utils/url-safety.js                        # expect 0 — the pure gate stays import-free and env-free (the allowlist wraps it, never enters it)
+grep -c "require(" lib/utils/url-safety.js  # expect 0 — the pure gate stays import-free and env-free (the allowlist wraps it, never enters it)
 APP_BASE_URL=http://h:3000 node -e "require('./next.config.js').headers().then(h=>console.log(h[0].headers.find(x=>x.key==='Content-Security-Policy').value.includes('upgrade-insecure-requests')?1:0))"   # expect 0 — E11: plain-http self-host must not get upgrade-insecure-requests (blank UI); unset/https still emits it (prod byte-identical)
-grep -c 'migrate dev' scripts/seed-database.ts                 # expect 0 — D7 CLOSED 2026-09-04: db:seed is db push + idempotent seeds; a 'migrate dev' reappearing here re-opens the drift class
+grep -c 'migrate dev' scripts/seed-database.ts  # expect 0 — D7 CLOSED 2026-09-04: db:seed is db push + idempotent seeds; a 'migrate dev' reappearing here re-opens the drift class
 grep -c "https://\${req.get('host')}" mcp-server-http-clean.js lib/mcp/server/routes/oauth-flow-routes.ts | grep -vc ':0$'   # expect 0 — E5 (2026-09-06): the proxy-pattern server callback sent to GitHub/Entra was built from the REQUEST Host with a hardcoded https:// — a self-host's MCP process sees Host=<ip>:8080, so the redirect_uri never matched the documented ${APP_BASE_URL}/oauth/callback; now derived from PUBLIC_BASE_URL (prod byte-identical: nginx forwards Host=paichart.app)
 # 2026-09-09/10 additions — the devext program-run arc (E28–E35; cline_docs/reviews/open-source-readiness-2026-09-03/PHASE3-COLDSTART.md)
 grep -c "loadProtocols: 'composed'" scripts/seed-harness-template.ts   # expect 1 — E35: a fresh seed runs COMPOSED protocol mode (prod was flipped by a one-off script; every self-host got load-all)
-grep -c '"llm:init"' package.json                                        # expect 1 — E32: the app never reads ANTHROPIC_API_KEY; llm:init copies it into the system LLM settings
+grep -c '"llm:init"' package.json  # expect 1 — E32: the app never reads ANTHROPIC_API_KEY; llm:init copies it into the system LLM settings
 grep -c "secure: PUBLIC_BASE_URL.startsWith('https://')" lib/config.ts  # expect 1 — E33: cookie Secure from the origin's scheme, never NODE_ENV (a production build on plain http bounced every page to /login)
-grep -c '"seed:browser-service"' package.json                            # expect 1 — E29: the browser-automation service is SEEDED (reserved first-party name), never registered
-grep -c 'test:cookie-secure-derivation' package.json                     # expect 2 — E33 pin: script + chain slot
-grep -c 'test:marker-contract-claims' package.json                       # expect 2 — the machine-parsed-marker clause is pinned to the parser it describes, both directions
-grep -c 'test:teardown-both-branches' package.json                       # expect 2 — H-1: teardown is an instruction on BOTH SYNTHESIZE branches
+# 2026-09-13 additions — supervision. A PostgreSQL restart killed the self-host MCP server and nothing brought it back for 68 minutes
+# while the GUI kept returning 200; production never saw it because pm2 restarts within seconds. Review: cline_docs/reviews/self-host-supervision-and-listen-replay-2026-09-13/
+grep -c 'nohup npm run start\|nohup node mcp-server-http-clean' docs/SELF-HOST-RUN-SHEET.md   # expect 0 — the unsupervised PRODUCTION start, reintroduced. NOT a bare 'nohup' count: the doc legitimately contains prose about the incident and a dev-server step
+grep -c 'systemctl enable --now' docs/SELF-HOST-RUN-SHEET.md  # expect 1 — enable, not start; `start` alone does not survive a reboot and looks configured
+grep -hc 'AssertEnvironment=NODE_ENV=production' docs/systemd/paichart-web.service  # expect 1 — a dropped Environment= boots Next in DEV mode against a production build, silently, with no other detector
+grep -hc '^EnvironmentFile' docs/systemd/paichart-web.service docs/systemd/paichart-mcp.service | grep -vc '^0$'   # expect 0 — ONE env parser. Anchored to line start: both files DISCUSS EnvironmentFile in comments explaining why it is refused, and counting the word rather than the directive is the drifted-grep class this file exists to prevent. systemd's differs from dotenv's and silently wins: 'X=true   # comment' fails its === 'true' test, which would disable the R9 sanitiser
+grep -hc '^BindsTo\|^Requires=' docs/systemd/paichart-web.service docs/systemd/paichart-mcp.service | grep -vc '^0$'   # expect 0 (anchored — both files name these in comments as REJECTED alternatives) — a dependency-caused stop does NOT trigger Restart=, so BindsTo recreates the 68-minute outage behind a file that looks like protection
+grep -c '^+ docs/systemd/' scripts/export/public-allowlist.rules  # expect 2 — docs/** is excluded with first-match-wins includes above it; without these the units silently never ship. NOTE: necessary but NOT sufficient — the exporter reads `git ls-files`, so an untracked file cannot cross however correct the rule. Run the exporter, do not trust the rule
+grep -c 'SIGKILL paichart-mcp' docs/VERIFYING-SELF-HOST.md  # expect 1 — the step that actually tests the UNITS. Since the 2026-09-13 pool fix a Postgres restart kills nothing, so the DB-restart drill verifies the CODE and would pass where Restart= never fires
+grep -c 'pg_stat_activity' docs/VERIFYING-SELF-HOST.md  # expect 1 — the DEAFNESS check. SIGKILL tests liveness; the 2026-09-12 failure was a LIVE process returning 200 from every surface with zero listeners. Only the DB can see it, so this is the sole probe that would have caught it — or will catch its regression
+grep -c 'chmod 600 .env' docs/SELF-HOST-RUN-SHEET.md  # expect 1 — `cp .env.example .env` under Ubuntu's umask yields 0664 on a file holding DATABASE_URL, the Anthropic key and JWT material
+grep -c '"seed:browser-service"' package.json  # expect 1 — E29: the browser-automation service is SEEDED (reserved first-party name), never registered
+grep -c 'test:cookie-secure-derivation' package.json  # expect 2 — E33 pin: script + chain slot
+grep -c 'test:marker-contract-claims' package.json  # expect 2 — the machine-parsed-marker clause is pinned to the parser it describes, both directions
+grep -c 'test:teardown-both-branches' package.json  # expect 2 — H-1: teardown is an instruction on BOTH SYNTHESIZE branches
 ```
 
 ```bash
 # Public-export tripwires (2026-09-06) — the projection's load-bearing rules, pinned.
-grep -c '^- cline_docs/\*\*' scripts/export/public-allowlist.rules                 # expect 1 — session artifacts NEVER export (Steve)
-grep -c '^+ .claude/knowledge/TODO' scripts/export/public-allowlist.rules          # expect 0 — every TODO* note is private; an exception here re-opens it
+grep -c '^- cline_docs/\*\*' scripts/export/public-allowlist.rules  # expect 1 — session artifacts NEVER export (Steve)
+grep -c '^+ .claude/knowledge/TODO' scripts/export/public-allowlist.rules  # expect 0 — every TODO* note is private; an exception here re-opens it
 python3 scripts/render-public-claude.py | grep -c DANGLING                          # expect 0 — the public CLAUDE.md cites only paths that survive the rules
 grep -l '<maintainer-email>' scripts/seed-protocol-prompts.ts scripts/seed-operational-prompts.ts scripts/seed-*-templates.ts | wc -l   # expect 0 — owner/contact come from SEED_OWNER_EMAIL / SUPPORT_CONTACT / ADMIN_EMAIL (prod pins the first two in the deploy heredoc)
 ```
@@ -59,8 +70,29 @@ print("unread template keys:",[k for k in keys if k not in used] or "none")   # 
 PY
 ```
 
-**Replay procedure** (manual, ~10 min; run after changes to `.env.example`, npm scripts, seeds, or the auth/OAuth
-boot path — record the result in `cline_docs/reviews/open-source-readiness-2026-09-03/PHASE3-COLDSTART.md`):
+**Replay procedure** (manual, ~10 min; run after changes to `.env.example`, npm scripts, seeds, the auth/OAuth
+boot path, **`docs/SELF-HOST-RUN-SHEET.md`, or `docs/systemd/*.service`** — record the result in
+`cline_docs/reviews/open-source-readiness-2026-09-03/PHASE3-COLDSTART.md`):
+
+> **Who runs it** (added 2026-09-13): drive it with `dev-ops-specialist`, whose discovery prompt IS this
+> file. That is not ceremony — on 2026-09-13 the coordinator installed on devext by hand, skipped
+> `npm run build` after a 23-commit pull and started without `NODE_ENV=production`, then debugged the
+> resulting `SyntaxError` as if it were a code regression. Both steps were written in the run sheet. A
+> specialist that reads its discovery first would have read the sheet before touching the box.
+>
+> **Why devext specifically**: it is a real self-host of the PUBLIC repo, and therefore the only place the
+> DOCUMENTED path actually runs. Production runs pm2 via `blue-green-deploy.sh` and exercises none of it.
+> That asymmetry is not incidental — it is how the 2026-09-12 supervision defect survived: pm2 restarted
+> the crashed process within seconds for months, so the crash never became an incident, so nobody looked.
+> Each supervision path needs its own injected failure; making prod run systemd would only move which
+> path is uncovered.
+>
+> ⚠️ **The supervision drill has become the load-bearing half.** Since the 2026-09-13 pool fix a Postgres
+> restart kills nothing, so a restart-postgres check now verifies the CODE and would pass on a box where
+> `Restart=` was never going to fire. Run the `SIGKILL` step in `docs/VERIFYING-SELF-HOST.md`
+> §Supervision — that is what tests the UNITS. A mis-installed unit now produces NO symptom until the one
+> unplanned event it exists for, which may be a year away; an untested supervisor is indistinguishable
+> from a working one right up to the moment it matters.
 
 ```bash
 git clone -q "$PWD" /tmp/cold-start && cd /tmp/cold-start
@@ -1520,3 +1552,26 @@ git ls-files | grep -E '\.pyc$|__pycache__' | wc -l                   # expect 0
 Red = re-render + commit in `~/paichart` (procedure: dev-ops-specialist → "Public protocol mirror"). A DIVERGED row
 whose seed body did not change means a description edit landed WITHOUT an R10 version bump — bump + `Prior:` first,
 then render. Two live misses on 2026-09-10: `observability-config-protocol` NOT PUBLISHED, `pov-program` DIVERGED.
+
+**The NOT-PUBLISHED half is now mechanical (2026-09-14).** Those two misses were different failures and only one was
+detectable: a DIVERGED row is caught by parity, but a NOT-PUBLISHED one was INVISIBLE to it. Every guard in the
+renderer queried `where: { name: { in: PROTOCOLS } }`, so a seeded protocol absent from that list was never queried,
+never counted, never diffed — and `--check` still printed ✅ for all the ones it did know about. Parity can only ever
+verify what it was told to look at.
+
+`render-public-protocols.ts` now carries a PUBLICATION-COMPLETENESS GUARD: the mirror image of the seed script's
+orphan guard, same predicate (`tags has 'protocol'` + `status ACTIVE`), asking the opposite question — is every ACTIVE
+row published, or explicitly declared unpublished in `NOT_PUBLISHED` with a reason? Silence is not an option. It fails
+hard (the seed only warns, because the seed runs on every deploy and must not break a release; this script is manual
+and off the deploy path).
+
+```bash
+grep -c "PUBLICATION-COMPLETENESS GUARD" scripts/render-public-protocols.ts   # expect 2 — 1 the guard itself + 1 the NOT_PUBLISHED docblock pointing at it; removing the guard re-opens the silent-exclusion hole
+```
+
+So the old manual cross-check — compare the seed's `Orphan guard: N ACTIVE protocol-tagged rows` against the number of
+✅ lines from parity — is no longer something a human has to remember. Mutation-verified at authoring time: deleting
+`observability-config-protocol` from `PROTOCOLS` reproduces the 2026-09-10 miss and now fails loudly, naming it.
+
+The renderer also refuses to start without `DATABASE_URL` and names the fix, rather than dying in a Prisma stack
+trace — it reads the LOCAL DB and is normally run by hand, where the env is not loaded.

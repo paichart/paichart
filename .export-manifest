@@ -317,6 +317,7 @@
 .claude/knowledge/pipelines/PROGRAM-OPERATOR-GATE-PLAYBOOK.md
 .claude/knowledge/pipelines/PROGRAM-RUN-FORENSICS-GUIDE.md
 .claude/knowledge/pipelines/PROGRAM-USE-CASE-DESIGN-PLAYBOOK.md
+.claude/knowledge/pipelines/PROSE-OBLIGATION-COVERAGE.md
 .claude/knowledge/pipelines/PROTOCOL-AUTHORING-GUIDE.md
 .claude/knowledge/pipelines/README.md
 .claude/knowledge/pipelines/USING-WORKFLOW-EVOLUTION-AND-SIGNAL-DESIGN.md
@@ -1098,6 +1099,8 @@ docs/OAUTH-SETUP.md
 docs/RUNNING.md
 docs/SELF-HOST-RUN-SHEET.md
 docs/VERIFYING-SELF-HOST.md
+docs/systemd/paichart-mcp.service
+docs/systemd/paichart-web.service
 ecosystem.config.js
 lib/admin/handlers/activity.ts
 lib/admin/handlers/role.ts
@@ -1883,10 +1886,13 @@ scripts/test-serialization-retry-boundary.ts
 scripts/test-service-call-args-coercion.ts
 scripts/test-session-store.ts
 scripts/test-settings-redaction.ts
+scripts/test-shared-pool-listen-replay.ts
+scripts/test-skip-path-honesty.ts
 scripts/test-sse-event-sequence.ts
 scripts/test-stage-metadata-merge.ts
 scripts/test-stage-resolver.ts
 scripts/test-streaming-accumulate.ts
+scripts/test-synthesize-dead-end-behavioral.ts
 scripts/test-system-prompt-constraints.ts
 scripts/test-system-prompt-injections.ts
 scripts/test-task-completed-at.ts

@@ -22,7 +22,8 @@ import {
   CreatePOVSchemaInline,
   UpdatePOVSchemaComprehensive,
   CreateStageSchema,
-  phaseSchema
+  phaseSchema,
+  ReorderStagesSchema
 } from '../lib/validation/pov';
 import { AgentExecuteSchema } from '../lib/validation/agent-template-validation';
 import * as fs from 'fs';
@@ -98,6 +99,48 @@ test('Pattern: CreateStageSchema has XSS prevention', () => {
 
 test('Pattern: CreatePOVSchemaInline has XSS prevention', () => {
   expect(povValidation.includes('CreatePOVSchemaInline') && povValidation.includes('detectPromptInjection')).toBe(true);
+  layer1Passed++;
+});
+
+// ---- DoS prevention: array/field limits -------------------------------------
+// RESTORED 2026-09-14. CLAUDE.md listed "DoS prevention (array/field limits)"
+// among this suite's coverage, but the tests that backed that claim were
+// ImportPOVSchema tests deleted with their dead surface in f6d74b88. The live
+// guards were never regressed — they were simply left untested, so the claim had
+// gone true-by-history rather than true-by-test. These restore it against the
+// guards that actually still ship.
+test('Pattern: ReorderStagesSchema has a DoS array cap', () => {
+  // CAPTURE AND COMPARE, for the same reason as the competitors pin below — plus one
+  // trap specific to this number: /\.max\(50/ also matches the first characters of
+  // `.max(500)`, so a pin written that way stays GREEN while the cap is widened tenfold.
+  // Mutation-proven: widening 50 -> 500 failed only the behaviour test until this form.
+  const block = povValidation.slice(povValidation.indexOf('export const ReorderStagesSchema'));
+  const cap = block.match(/stageIds:[\s\S]*?\.max\((\d+)/);  // no trailing \) — this cap carries a message arg
+  expect(cap !== null && cap[1] === '50').toBe(true);
+  layer1Passed++;
+});
+
+test('Pattern: UpdatePOVSchemaComprehensive caps the competitors array', () => {
+  // SLICE THE SCHEMA'S OWN BLOCK, then assert inside it. Two weaker forms were tried
+  // and both were mutation-DISPROVEN against this exact file:
+  //   /competitors[\s\S]*?\.max\(20/                     — matched the FIRST competitors
+  //       cap in the file, which belongs to CreatePOVSchemaInline, not this schema.
+  //   /UpdatePOVSchemaComprehensive[\s\S]*?competitors[\s\S]*?\.max\(20\)/ — still passed
+  //       when this schema's own cap was mutated to .max(5), because the lazy spans just
+  //       run past it to one of the OTHER .max(20) caps further down the file.
+  // There are three separate competitors caps here, so an unbounded span is never safe.
+  const updateBlock = povValidation.slice(
+    povValidation.indexOf('export const UpdatePOVSchemaComprehensive'),
+    povValidation.indexOf('export const CreatePOVSchemaInline')
+  );
+  // CAPTURE the first cap after `competitors:` and COMPARE it. Asking "does .max(20)
+  // appear somewhere after competitors" is not the same question and passes when the
+  // real cap is wrong: the block still contains a LATER .max(20) (the nested-phase
+  // array), so a lazy span just runs on to that one. Three successive forms of this
+  // pin were mutation-disproven before this one; only the captured comparison fails
+  // when the guard it names is actually changed.
+  const cap = updateBlock.match(/competitors:[\s\S]*?\.max\((\d+)/);
+  expect(cap !== null && cap[1] === '20').toBe(true);
   layer1Passed++;
 });
 
@@ -226,6 +269,47 @@ test('Behavior: CreateStageSchema blocks XSS in name', () => {
   };
   const result = CreateStageSchema.safeParse(malicious);
   expect(result.success).toBe(false);
+  layer2Passed++;
+});
+
+// ---- DoS prevention behaviour (see the Layer 1 note above) -------------------
+// BOTH DIRECTIONS on purpose: "rejects over the cap" and "accepts AT the cap" are
+// different results, and a guard that is too TIGHT breaks legitimate use while
+// still passing a rejection-only test.
+const dosCuid = (n: number) => 'c' + 'kq9z8x7w6v'.slice(0, 10) + String(n).padStart(13, '0');
+const dosStageIds = (n: number) => Array.from({ length: n }, (_, i) => dosCuid(i));
+
+test('Behavior: ReorderStagesSchema rejects 51 stage IDs (over the 50 cap)', () => {
+  const result = ReorderStagesSchema.safeParse({ stageIds: dosStageIds(51) });
+  expect(result.success).toBe(false);
+  layer2Passed++;
+});
+
+test('Behavior: ReorderStagesSchema accepts exactly 50 stage IDs (at the cap)', () => {
+  const result = ReorderStagesSchema.safeParse({ stageIds: dosStageIds(50) });
+  expect(result.success).toBe(true);
+  layer2Passed++;
+});
+
+test('Behavior: ReorderStagesSchema rejects an empty stageIds array', () => {
+  const result = ReorderStagesSchema.safeParse({ stageIds: [] });
+  expect(result.success).toBe(false);
+  layer2Passed++;
+});
+
+test('Behavior: UpdatePOVSchemaComprehensive rejects 21 competitors (over the 20 cap)', () => {
+  const result = UpdatePOVSchemaComprehensive.safeParse({
+    competitors: Array.from({ length: 21 }, () => 'Acme Corp')
+  });
+  expect(result.success).toBe(false);
+  layer2Passed++;
+});
+
+test('Behavior: UpdatePOVSchemaComprehensive accepts exactly 20 competitors (at the cap)', () => {
+  const result = UpdatePOVSchemaComprehensive.safeParse({
+    competitors: Array.from({ length: 20 }, () => 'Acme Corp')
+  });
+  expect(result.success).toBe(true);
   layer2Passed++;
 });
 
@@ -361,3 +445,4 @@ console.log('  - ✅ XSS prevention: schemas protected');
 console.log('  - ✅ Prompt injection: Detection working');
 console.log('  - ✅ CUID enforcement: All ID fields validated');
 console.log('  - ✅ Self-removal prevention: Team deletion secured');
+console.log('  - ✅ DoS prevention: array/field limits enforced (both directions)');

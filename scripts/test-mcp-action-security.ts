@@ -19,9 +19,14 @@
 const DB_AVAILABLE = !!process.env.DATABASE_URL;
 
 if (!DB_AVAILABLE) {
-  console.log('⏭️  SKIPPED: MCP action security tests (DATABASE_URL not available in CI)');
-  console.log('   These tests require database access and run locally/production only');
-  console.log('   ✅ Tests passing locally: 11/11');
+  // A SKIP STATES NO OUTCOME. This block used to print "✅ Tests passing locally: 11/11"
+  // — a hardcoded claim emitted exactly when nothing had been tested, and false besides:
+  // run with DATABASE_URL, this suite currently fails 8 of 11 (a stale assertion, see the
+  // footer). CI printed a green line for a suite that had never run there, about a state
+  // that did not hold, on the line a human scans for reassurance.
+  console.log('⏭️  SKIPPED: MCP action security tests — NOTHING WAS VERIFIED');
+  console.log('   Reason:  DATABASE_URL is not set');
+  console.log('   To run:  DATABASE_URL=... npm run test:mcp-action-security');
   process.exit(0);
 }
 

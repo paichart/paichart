@@ -8,7 +8,6 @@
  * 1. JavaScript tools in `lib/mcp/server/tools/`:
  *    - sdk-native-basic-tools.js (project tool: pov.list, task.list, pov.details, etc.)
  *    - sdk-native-advanced-tools.js (perform tool: task actions, agent results, etc.)
- *    - sdk-native-browser-automation-tools.js (browser automation)
  *
  * 2. These are used by:
  *    - Embedded MCP Server (lib/mcp/embedded-server.ts)

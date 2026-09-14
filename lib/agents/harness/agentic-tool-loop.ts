@@ -986,6 +986,64 @@ async function maybeRetryTruncatedFullTurn(
   }
 }
 
+/**
+ * P2 guard — the ONE provider-error check shared by every LLM call site in the loop.
+ *
+ * The provider does NOT throw on an SDK failure: it catches and returns
+ * `{ text: '', error: { message, code, details } }` (anthropic-sdk-provider.ts catch). A consumer
+ * that keys only on `.text`/`.stopReason` reads that as a benign EMPTY COMPLETION — `stopReason`
+ * is `undefined`, the while-guard exits, and the execution persists SUCCESS with an empty
+ * deliverable. That is the 2026-09-14 prod defect (execution cmu0yl664006kyx0e3olnguqe: an undici
+ * Body Timeout Error killed a stalled stream 307 s into a continuation turn; the run was recorded
+ * SUCCESS with no output and the cause was visible only as an uncorrelated provider-layer log line).
+ * The initial call had this check since the 2026-04-15 incident; the continuation turns — the ones
+ * EVERY multi-turn execution uses — did not. One guard, all sites.
+ *
+ * mode 'throw' — the response IS the run (initial + continuation + paused turns): log the real
+ *   cause WITH execution correlation, then throw an AppError carrying the provider `code`, so the
+ *   adapter's failure catch persists FAILED + a real `errorCategory` instead of a silent green.
+ *   Synthesising terminal text here (the budget fail-fast shape) is deliberately NOT done: budget
+ *   fail-fast is a KNOWN benign terminal state whose forensics already live in the tool records,
+ *   whereas this is an infrastructure failure with no deliverable — minting SUCCESS from it is the
+ *   exact silent-strand being fixed.
+ * mode 'log' — the call is an OPTIONAL polish turn (#89 correction, diagnostic retry) that already
+ *   degrades to the prior response by design: keep the cause, do not fail the run.
+ */
+export function checkProviderErrorResponse(
+  response: any,
+  ctx: { executionId: string; taskId?: string; turn?: number; phase: 'initial' | 'continuation' | 'pause_turn' | 'correction' | 'diagnostic_retry' },
+  logger: { error: (obj: any, msg: string) => void },
+  mode: 'throw' | 'log' = 'throw',
+): void {
+  const apiErrMsg = response?.error?.message;
+  if (!apiErrMsg) return;
+  const apiErrCode = response?.error?.code;
+  logger.error(
+    {
+      executionId: ctx.executionId,
+      taskId: ctx.taskId,
+      turn: ctx.turn,
+      phase: ctx.phase,
+      fatal: mode === 'throw',
+      provider: response?.provider,
+      apiErrorCode: apiErrCode,
+      apiErrorMessage: apiErrMsg,
+      apiErrorDetails: response?.error?.details,
+    },
+    'LLM provider returned error response — surfacing directly (was previously masked as empty-content)'
+  );
+  if (mode === 'log') return;
+  // WU-7 (SDK Phase 2): throw AppError carrying `.code` so the engine's errCode→errorCategory
+  // plumbing surfaces the real category on error.json — e.g. CONTEXT_WINDOW_EXCEEDED or
+  // LLM_STREAM_IDLE_TIMEOUT — instead of an undefined category from a plain Error.
+  throw new AppError(
+    `LLM call failed at provider layer: ${apiErrMsg}` +
+      (apiErrCode ? ` (code: ${apiErrCode})` : '') +
+      `. See pino logs for full error details.`,
+    apiErrCode || 'LLM_PROVIDER_ERROR'
+  );
+}
+
 export async function runAgenticToolLoop(
   input: AgenticLoopInput,
   deps: AgenticLoopDeps,
@@ -1038,32 +1096,9 @@ export async function runAgenticToolLoop(
   // rather than throwing — historically this hid auth failures, model-ID
   // rejections, and rate limits as generic "empty response" symptoms. Fail
   // loud with the real cause (see 2026-04-15 Demo Financial incident).
-  if ((llmResponse as any)?.error?.message) {
-    const apiErrMsg = (llmResponse as any).error.message;
-    const apiErrCode = (llmResponse as any).error.code;
-    deps.logger.error(
-      {
-        executionId,
-        taskId,
-        provider: llmResponse.provider,
-        apiErrorCode: apiErrCode,
-        apiErrorMessage: apiErrMsg,
-        apiErrorDetails: (llmResponse as any).error.details,
-      },
-      'LLM provider returned error response — surfacing directly (was previously masked as empty-content)'
-    );
-    // WU-7 (SDK Phase 2): throw AppError carrying `.code` so the engine's errCode→errorCategory
-    // plumbing (agentExecutionEngine errCode = error.code) surfaces the real category on error.json —
-    // e.g. CONTEXT_WINDOW_EXCEEDED (the provider sets it for a model_context_window_exceeded 400),
-    // plus any other provider code. Previously a plain Error hid the code in the message string only,
-    // so errorCategory was always undefined for provider-layer failures.
-    throw new AppError(
-      `LLM call failed at provider layer: ${apiErrMsg}` +
-        (apiErrCode ? ` (code: ${apiErrCode})` : '') +
-        `. See pino logs for full error details.`,
-      apiErrCode || 'LLM_PROVIDER_ERROR'
-    );
-  }
+  // The check itself lives in `checkProviderErrorResponse` so EVERY 'full' call
+  // site shares it (2026-09-14: the continuation sites had no check at all).
+  checkProviderErrorResponse(llmResponse, { executionId, taskId, turn: 0, phase: 'initial' }, deps.logger);
 
   if (observers.onInitialResponse) {
     await observers.onInitialResponse(llmResponse, initialLlmDurationMs);
@@ -1109,6 +1144,7 @@ export async function runAgenticToolLoop(
         currentResponse, truncationRetry, { signal, mcpFunctions, messages: messageHistory as any },
         { prompt, cfg, userId, executionId }, deps, (u) => addUsage(totalUsage, u),
       );
+      checkProviderErrorResponse(currentResponse, { executionId, taskId, turn: turnCount, phase: 'pause_turn' }, deps.logger);
       addUsage(totalUsage, currentResponse.usage);
       continue;
     }
@@ -1221,6 +1257,13 @@ export async function runAgenticToolLoop(
       stopReason: currentResponse.stopReason,
     }, 'Agentic tool loop: turn completed');
 
+    // P2 at the CONTINUATION site (2026-09-14). Placed after the turn log so the all-undefined
+    // usage/stopReason line — the forensic signature of a provider-error return — is still
+    // emitted, then the real cause is logged with correlation and the run fails loud.
+    // No-op on the budget fail-fast branch: that branch already replaced an error response
+    // with synthesised blocked-report text (its degrade-to-(a) contract is deliberate).
+    checkProviderErrorResponse(currentResponse, { executionId, taskId, turn: turnCount, phase: 'continuation' }, deps.logger);
+
     // Accumulate tokens (input/output + cache — see addUsage)
     addUsage(totalUsage, currentResponse.usage);
 
@@ -1288,6 +1331,9 @@ export async function runAgenticToolLoop(
         messages: messageHistory as any,
       }), userId);
       const correctionDurationMs = Date.now() - correctionStartTime;
+      // Log-only: a failed correction turn is non-fatal by design (the original response is kept),
+      // but the CAUSE must not be discarded — without this the provider error is invisible here.
+      checkProviderErrorResponse(correctedResponse, { executionId, taskId, turn: turnCount, phase: 'correction' }, deps.logger, 'log');
 
       if (correctedResponse?.text && correctedResponse.text.trim().length > 0) {
         // Accumulate correction-turn tokens (NOT counted toward maxToolTurns — H2)

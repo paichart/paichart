@@ -62,6 +62,37 @@ EXP_ZERO = re.compile(r'expect(?:ed)?\s*:?\s*(zero|0\b|no hits|none)', re.I)
 EXP_N    = re.compile(r'expect(?:ed)?\s*:?\s*(?:exactly\s*)?(\d+)', re.I)
 UNSAFE   = re.compile(r'[;&`]|\$\(|\|\s*(rm|mv|tee|xargs)\b')
 
+# ---- LINT PASS: documented EXACT suite counts on `npm run` lines ----------------
+# These are NOT audited (running ~130 heterogeneous suites would be flaky, several
+# need a live DB/server, and 4 of 16 emit no pass count at all). Before 2026-09-14
+# they were dropped SILENTLY by the `^grep\s` filter below — not counted, not named,
+# which is the same class as the 2026-08-08 root cause, one layer out.
+#
+# So: flag them as findings instead of auditing them. A suite's pass count rises
+# every time someone adds a fixture, i.e. it rots as a DIRECT CONSEQUENCE of healthy
+# work — 7 known stale instances vs 0 of 163 audited greps. CLAUDE.md's standing rule
+# already governs: "prefer FLOORS and SELF-VERIFYING claims over exact literals".
+# A floor (`>=13`, `13+`) never drifts on growth and still catches a suite that
+# silently STOPS asserting, which is what the exact count was really protecting.
+#
+# Scope is deliberately `npm run` only. The stale counts appear in THREE different
+# syntaxes (inline `# EXPECT 13`; a second suite's count as a trailing `(37)`
+# parenthetical on another suite's line; two bare `(45, ...)` / `(41 at ...)`
+# parentheticals with NO `expect` keyword at all, first correct and second stale),
+# and broadening to npx/bash/node would add false positives faster than coverage.
+LINT_NPM   = re.compile(r'npm run\s+[\w:.-]+')
+# PER-OCCURRENCE, never per-line. A first attempt suppressed the whole line when ANY
+# floor appeared on it, and security-patterns.md immediately proved that wrong: one
+# floor plus one unresolved exact count on the same line went unflagged. That is the
+# very failure that sinks the "just parse them" option — a line can carry two
+# expectations and be half right — so the lint must not reproduce it.
+LINT_FLOOR = re.compile(r'(?:>=|\u2265)\s*\d+|\b\d+\s*\+|at least\s+\d+', re.I)
+# An exact count either follows an `expect` keyword, or rides as a short parenthetical
+# immediately after a `npm run ...` command. Capped at 3 digits so a YEAR (2026-08-21)
+# or a version (1.0.14) is never read as a pass count.
+LINT_KEYED = re.compile(r'expect(?:ed)?\s*:?\s*(?:exactly\s*)?(>=|\u2265)?\s*(\d{1,3})\b', re.I)
+LINT_PAREN = re.compile(r'npm run\s+[\w:.-]+`?\s*\((>=|\u2265)?\s*(\d{1,3})\b')
+
 def split_cmd_comment(line):
     """Split a shell line into (command, trailing-comment) the way bash does.
 
@@ -97,9 +128,38 @@ for root, _, files in os.walk(scope):
             print(f"{path}\t0\tENCODING\t-")
             continue
         for i, line in enumerate(lines):
+            # LINT PASS runs first and independently: it must see lines the grep
+            # audit skips, which is the entire point (they were invisible before).
+            # The `npm run` must be the LINE'S OWN COMMAND, not text inside another
+            # command's quoted argument and not prose. Verified against the corpus:
+            # without this, deployment-discovery:33 (a `grep -c 'nohup npm run start'
+            # ...` whose SEARCH PATTERN contains the words) and database-management:330
+            # (an `echo "Expect 6 BENIGN hits..."`) both flagged. Same class as the
+            # `grep "#define"` case split_cmd_comment() exists for: a command's
+            # arguments are not commands.
+            ls_ = line.strip()
+            npm_is_command = ls_.startswith('npm run') or '`npm run' in line
+            # ZERO is EXCLUDED, and not as a convenience. `# expect 0 STALE` asserts a
+            # STATE, and a zero does not rot when someone adds a fixture — it is the
+            # self-verifying shape CLAUDE.md asks for, and the highest-value direction
+            # this script audits. Only GROWING exact counts are the rot surface.
+            if npm_is_command:
+                bare = []
+                for rx in (LINT_KEYED, LINT_PAREN):
+                    for m in rx.finditer(line):
+                        floor_marker, num = m.group(1), m.group(2)
+                        if floor_marker:          # >= or U+2265 immediately before it
+                            continue
+                        if num == '0':            # a zero asserts a STATE and does not rot
+                            continue
+                        if line[m.end():m.end()+2].lstrip().startswith('+'):
+                            continue              # trailing `13+` floor
+                        bare.append(num)
+                if bare:
+                    print(f"{path}\t{i+1}\tLINTCOUNT\t{ls_}")
             if not re.match(r'^grep\s', line):
                 continue
-            if not re.search(r'\b(lib|app|scripts|prisma)/', line):
+            if not re.search(r'\b(lib|app|scripts|prisma|docs)/', line):
                 continue
             # SCOPE THE SAFETY TEST TO THE COMMAND, NOT THE LINE (fixed 2026-08-08).
             # It used to test the whole line, comment included — so a markdown
@@ -145,7 +205,7 @@ PYEOF
 
 mapfile -t ENTRIES < <(python3 "$EXTRACTOR" "$SCOPE")
 
-mismatch=0; regression=0; checked=0; skipped=0
+mismatch=0; regression=0; checked=0; skipped=0; lintcount=0
 
 echo "=================================================="
 echo " Discovery-Prompt Grep Audit   (scope: $SCOPE)"
@@ -155,6 +215,17 @@ echo
 
 for entry in "${ENTRIES[@]}"; do
   IFS=$'\t' read -r file line expect cmd <<< "$entry"
+
+  # LINT: a documented EXACT suite count on an `npm run` line. Never executed —
+  # reported so it cannot be invisible. Replace with a floor, a property, or nothing.
+  if [ "$expect" = "LINTCOUNT" ]; then
+    lintcount=$((lintcount+1))
+    echo "  ✏️  EXACT-COUNT   $file:$line"
+    echo "       documented exact suite count on an npm run line — unaudited and rot-prone;"
+    echo "       use a floor (>=N), a property, or drop it (CLAUDE.md: FLOORS over exact literals)"
+    echo "       $cmd"
+    continue
+  fi
 
   if [ "$expect" = "ENCODING" ]; then
     echo "  ⚠️  NOT UTF-8 — silently skipped by every scan: $file"
@@ -222,13 +293,15 @@ echo "=================================================="
 echo "  audited      : $checked  (greps with a stated expectation)"
 echo "  ⚠️  mismatch  : $mismatch"
 echo "  🔴 regression : $regression"
+echo "  ✏️  exact-count: $lintcount  (documented suite counts on npm run lines — NOT audited;"
+echo "                  replace with a floor, a property, or nothing)"
 if [ "$skipped" -gt 0 ]; then
   echo "  ·  skipped    : $skipped  (documented, but command unsafe to run — NOT verified;"
   echo "                  re-run with --verbose to name them)"
 fi
 echo "=================================================="
 
-if [ "$((mismatch + regression))" -gt 0 ]; then
+if [ "$((mismatch + regression + lintcount))" -gt 0 ]; then
   echo
   echo "Fix the grep to match the PROPERTY, not the code's current layout — a"
   echo "single-line regex over a formatted schema breaks on reformatting alone."

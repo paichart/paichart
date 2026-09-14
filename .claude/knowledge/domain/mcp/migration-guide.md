@@ -353,7 +353,7 @@ console.assert(!response.isError, 'pov_name parameter not supported');
 
 **Found a bug?**
 - Check: Latest server version (v5+)
-- Run: `npm run test:mcp-pagination` (48 tests validate pagination)
+- Run: `npm run test:mcp-pagination` (>=46 tests validate pagination. The 48 documented here pre-dated `e8a68fc6` (2026-01-05), which deleted Tests 15-16 along with the in-process `sdk-native-browser-automation-tools.js` they asserted on — browser automation moved to the `browser-automation-service` Docker container. No pagination property lost coverage; ruled benign 2026-09-14.)
 - Report: GitHub issues or support email
 
 ---

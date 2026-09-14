@@ -45,6 +45,11 @@ cd ~/paichart
 npm ci                                   # 1–20 min depending on the box; npm reports ~1050 packages. It also prints deprecation warnings and a
                                          # vulnerability count — that is not a failure; rc=0 is
 cp .env.example .env
+chmod 600 .env                           # DO NOT SKIP. .env holds DATABASE_URL (with the password), your
+                                         # Anthropic key, and JWT signing material. Ubuntu's default umask
+                                         # (0002) makes this copy 0664 — group- AND world-readable. The only
+                                         # thing containing it is your home directory being 0700, which is a
+                                         # default you may not have.
 HOST=192.168.1.50                        # ← yours
 sed -i "s#^DATABASE_URL=.*#DATABASE_URL=\"postgresql://paichart:$(cat ~/.paichart-dbpw)@localhost:5432/paichart\"#" .env
 sed -i "s#^APP_BASE_URL=.*#APP_BASE_URL=http://$HOST:3000#" .env
@@ -68,11 +73,38 @@ npm run db:seed                          # 18 steps, ~1–2 min, ends "✅ db:se
 Build once, then run the **production** build — the demo should feel like the hosted service (fast, no dev tooling):
 ```bash
 npm run build                                                   # 3–10 min; "✓ Compiled successfully" then the route table
-NODE_ENV=production nohup npm run start                > ~/web.log 2>&1 &     # web app on :3000 (serves the built bundle)
-NODE_ENV=production nohup node mcp-server-http-clean.js > ~/mcp.log 2>&1 &     # MCP server on :8080 (loopback)
 ```
-Two processes, not supervised — restart them by hand after a reboot (keeping them up with PM2 or systemd is a "Later").
-After a `git pull`, run `npm run build` again and restart both: a production build never reloads. (Developers use
+Then install the two **systemd units** that keep them running. Edit `User`, `Group` and `WorkingDirectory`
+in each file first — they ship with placeholders:
+```bash
+sudo cp docs/systemd/paichart-web.service docs/systemd/paichart-mcp.service /etc/systemd/system/
+sudo nano /etc/systemd/system/paichart-web.service    # set User= Group= WorkingDirectory=
+sudo nano /etc/systemd/system/paichart-mcp.service    # same
+sudo systemctl daemon-reload
+sudo systemctl enable --now paichart-mcp paichart-web   # `enable --now`, NOT `start`
+```
+**`enable --now`, not `start`.** `start` alone runs them today and does not survive a reboot — the single
+most common mistake with units, and it produces a box that looks configured and isn't.
+
+Logs go to the journal, so they survive restarts and rotate themselves:
+```bash
+journalctl -u paichart-mcp -e -f          # follow
+journalctl -u paichart-web --since -1h    # last hour, after something went wrong
+```
+One-time, so the journal cannot grow without bound:
+```bash
+echo -e '[Journal]\nSystemMaxUse=500M' | sudo tee /etc/systemd/journald.conf.d/paichart.conf
+sudo systemctl restart systemd-journald
+```
+
+> **Why supervised, and why this is not a "Later".** Until 2026-09-13 this sheet started both processes as
+> bare `nohup`s. On 2026-09-12 a routine PostgreSQL restart killed the MCP server on our own test box and
+> **nothing brought it back for 68 minutes**, while the web GUI kept returning 200 and the error message
+> pointed at the wrong cause. We never hit it in production because production runs a supervisor — the
+> perimeter that hid the defect was ours, not the self-hoster's. Details, including the rejected
+> alternatives and why each would recreate the fault, are in the unit files themselves.
+After a `git pull`, run `npm run build` again and `sudo systemctl restart paichart-mcp paichart-web`:
+a production build never reloads. (Developers use
 `npm run dev` + `npm run mcp:http:dev` instead — slower, with hot reload and the TanStack devtools button; the proxy
 is on automatically there.)
 ```bash

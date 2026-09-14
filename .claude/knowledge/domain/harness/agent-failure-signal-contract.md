@@ -38,6 +38,25 @@ surface. These are the ones that do:
 | `TASK_CAN_NEVER_RUN` | async, **task-level** | Informational — stamped by cone marking when an upstream leg cannot produce what a downstream leg must consume. No execution failed, so it appears in logs + task state, **not** on `errorCode` | forward-cone / F16 |
 | `PRE_FLIGHT_BAIL_TERMINALIZED` | async, **non-terminal family** | Informational — the pipeline bailed in pre-flight (cannotRun/escalated stamped, no child stage). The *task's* `executionStatus` goes FAILED so the program can escalate; the execution row stays `SUCCESS` | non-terminal family |
 
+### Provider-layer codes (added 2026-09-14 — the P2 guard's outputs)
+
+These do not come from `lib/errors.ts`: the LLM provider **returns** `{ text: '', error: { message, code } }`
+instead of throwing, and `checkProviderErrorResponse` (`lib/agents/harness/agentic-tool-loop.ts`) turns that
+into an `AppError` carrying the provider's own `code` — so whatever the provider sets becomes the
+`errorCode` / `errorCategory` the caller reads. All are **async** (engine path) or sync-within-the-stream.
+
+| Code | Set where | Agent-actionable? |
+|---|---|---|
+| `CONTEXT_WINDOW_EXCEEDED` | provider, on a `model_context_window_exceeded` 400 | Yes — shrink the prompt/history; a bare retry repeats |
+| `USER_CONFIG_REQUIRED` | provider, on a Fable zero-data-retention 400 | Yes — org config or a different model; never retryable as-is |
+| `LLM_STREAM_IDLE_TIMEOUT` | provider, on a transport body/headers-idle termination of a stalled stream | **Retryable in principle** (transient), but the platform does **not** retry it today — see the deferral in `cline_docs/reviews/`-linked note below |
+| `LLM_PROVIDER_ERROR` | the guard's fallback when the provider set no code | Unknown class — read the pino line (`phase`, `apiErrorMessage`) before acting |
+
+**Before 2026-09-14 none of these were reachable from a CONTINUATION turn**: only the initial LLM call
+checked `.error`, so a provider-error return on a tool-continuation turn left `stopReason` undefined, the
+loop exited cleanly, and the execution persisted **SUCCESS with an empty deliverable** — no code, no
+category, nothing for a caller to branch on (prod `cmu0yl664006kyx0e3olnguqe`).
+
 ### The guard asymmetry that makes `NO_TEMPLATE_ASSIGNED` reachable
 
 Worth knowing, because it looks unreachable at first glance: the **MCP pre-flight** (`agent-execute-handler`)

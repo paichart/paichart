@@ -30,6 +30,16 @@ const repoPath = (rel: string) => require('path').resolve(__dirname, '..', rel);
 let passed = 0;
 let failed = 0;
 const failures: string[] = [];
+let skipped = 0;
+// A SKIP IS NOT A PASS. This site previously called assertTrue(true, '...SKIPPED...'),
+// which incremented `passed` and printed a green tick for a test that never ran — the
+// unrun-vs-passed distinction this project enforces everywhere else (ARM NOT EXERCISED,
+// lane-not-supported, "the && chain stops at the first failure so later suites are
+// UNVERIFIED"). Counted and reported separately now, never as a pass.
+function skip(msg: string): void {
+  skipped++;
+  console.log(`  \u23ED\uFE0F  SKIPPED (not verified): ${msg}`);
+}
 
 function assertEqual(actual: unknown, expected: unknown, msg: string): void {
   const actualStr = JSON.stringify(actual);
@@ -409,10 +419,7 @@ async function main(): Promise<void> {
   // ──────────────────────────────────────────────────────────────────────
   console.log('\nT9: Path 2 coverage — deferred to Quartet leg 4 (requires DB)');
   {
-    assertTrue(
-      true,
-      'T9: SKIPPED in unit test — Path 2 (mcpOrchestrationHandler → tracker) requires Prisma; covered by Quartet leg 4 production smoke'
-    );
+    skip('T9: Path 2 (mcpOrchestrationHandler → tracker) requires Prisma; covered by Quartet leg 4 production smoke');
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -499,7 +506,7 @@ async function main(): Promise<void> {
     failures.forEach((f) => console.log(`  - ${f}\n`));
     process.exit(1);
   }
-  console.log('✅ All BUG-HUB-001 Plan v2 tests passed');
+  console.log(`✅ All BUG-HUB-001 Plan v2 tests passed${skipped ? ` (${skipped} SKIPPED — not verified)` : ''}`);
   process.exit(0);
 }
 

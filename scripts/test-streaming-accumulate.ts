@@ -169,6 +169,30 @@ function baseFixture(overrides: Record<string, any> = {}) {
     ok(r.error?.code === 'unknown_error', '5.4c unrelated 400 stays unknown_error (no over-categorization)');
   }
 
+  // ── 5.4d transport BODY-IDLE timeout → LLM_STREAM_IDLE_TIMEOUT (2026-09-14) ──
+  {
+    // Faithful to prod (execution cmu0yl664006kyx0e3olnguqe): undici's body-idle timeout — Node's
+    // global-fetch default, 300 s with no body bytes — kills a stalled stream mid-response and the
+    // SDK surfaces an AnthropicError with NO http status, so the envelope discriminators above
+    // cannot see it. Unclassified it lands in `unknown_error`, which is what made the class
+    // uncountable. This is the ONLY end-to-end bound on a stream: the SDK client timeout is armed
+    // around the fetch (headers) only, and the execution watchdog sits far above it.
+    const idleErr = new (Anthropic as any).AnthropicError('terminated: terminated: Body Timeout Error');
+    const cap: Capture = {};
+    const r = await makeProvider(baseFixture(), cap, idleErr).generateText('p', { apiKey: 'k', model: 'claude-sonnet-5' });
+    ok(r.error?.code === 'LLM_STREAM_IDLE_TIMEOUT', '5.4d body-idle termination → LLM_STREAM_IDLE_TIMEOUT (countable class, not unknown_error)');
+    ok(typeof r.error?.message === 'string' && /stalled with no data/.test(r.error.message) && /Body Timeout Error/.test(r.error.message),
+      '5.4d message states the cause AND preserves the original transport text');
+    ok(r.text === '' && !r.functionCalls, '5.4d no half-populated success');
+  }
+
+  // ── 5.4e unrelated transport failures are NOT re-labelled as an idle timeout ──
+  {
+    const cap: Capture = {};
+    const r = await makeProvider(baseFixture(), cap, new (Anthropic as any).AnthropicError('socket hang up')).generateText('p', { apiKey: 'k', model: 'claude-sonnet-5' });
+    ok(r.error?.code === 'unknown_error', '5.4e unrelated transport error stays unknown_error (no over-categorization)');
+  }
+
   // ── 5.5 ceiling acceptance (the flip test: FAILS on create(), passes on stream()) ──
   {
     const cap: Capture = {};
