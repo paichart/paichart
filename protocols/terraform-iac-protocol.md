@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 1.4.0.**
+> **Rendered verbatim from the pAIchart platform seed — version 1.5.0.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -112,7 +112,9 @@ The change package's validation section must be runnable, deterministic checks (
 <the exact text it returns, character for character>
 ```
 
-**If you cannot write the literal expected text, the step is not deterministic — replace it with one you can, or drop it.** A step whose expected output you had to describe rather than quote is the defect this rule exists to remove.
+**If you cannot write the literal expected text, the step is not deterministic AS WRITTEN — do NOT describe it in prose.** Three moves, in order of strength, and you owe the strongest your evidence supports: (1) **REPLACE** the command with one whose output you CAN quote — including a machine-readable mode of the same tool, where it has one; (2) where your protocol sanctions a shape for output **nobody has yet observed**, use THAT shape, in full and labelled as such; (3) **DROP** the step only when the check itself does not exist — a check you could run but have not witnessed is (2), never a drop, because dropping it loses real coverage. A step whose expected output you had to describe rather than quote, carrying no label saying which of these three it is, is the defect this rule exists to remove.
+
+**Reviewers — this paragraph is addressed to you as well.** A step written in your protocol's sanctioned shape for unwitnessed output, carrying every part that shape requires, is SANCTIONED: accept it, and judge the stated REASON, not the absence of a literal. One missing a required part, or prose wearing the label, is a blocking defect. Where your protocol sanctions no such shape, this paragraph licenses nothing — the requirement is the literal.
 
 ## Deliverable wiring (see pipeline-orchestrator-protocol Step 5a for tool-call mechanics)
 
