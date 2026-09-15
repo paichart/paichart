@@ -1,0 +1,83 @@
+{
+  "name": "tf-lab-two-independent-telemetry-authz",
+  "description": "Meridian Capital trading fabric — telemetry-archive authorization tier, TWO-INDEPENDENT-AGGREGATE variant. The fabric exports two SEPARATE classes of data from separate loopbacks: a telemetry class and a metrics class. Each class has its own exporter on each switch, and each class summarizes to its OWN aggregate. The cloud archive must authorize both classes — and must authorize them as two distinct ranges. The two aggregates are independent: neither derives from the other, and there is no operational reason for one prefix to contain the other.",
+  "nodes": [
+    {
+      "name": "ceos1",
+      "kind": "arista_ceos",
+      "platform": "eos",
+      "os_version": "4.32.2.1F",
+      "mgmt_ipv4": "172.30.30.11",
+      "bgp_asn": 65001,
+      "router_id": "1.1.1.1",
+      "role": "trading-fabric-switch + telemetry exporter + metrics exporter"
+    },
+    {
+      "name": "ceos2",
+      "kind": "arista_ceos",
+      "platform": "eos",
+      "os_version": "4.32.2.1F",
+      "mgmt_ipv4": "172.30.30.12",
+      "bgp_asn": 65002,
+      "router_id": "2.2.2.2",
+      "role": "trading-fabric-switch + telemetry exporter + metrics exporter"
+    },
+    {
+      "name": "telemetry-archive",
+      "kind": "aws_s3_bucket",
+      "platform": "aws",
+      "terraform_address": "aws_s3_bucket.app_logs",
+      "bucket_name": "acme-app-logs",
+      "workspace": "prod",
+      "role": "fabric-archive for BOTH export classes",
+      "authorization": "s3:PutObject MUST be restricted to the fabric's exporter ranges — BOTH of them, as RUNTIME values produced by the network design (see exportClasses)"
+    }
+  ],
+  "links": [
+    {
+      "endpoints": ["ceos1:Ethernet1", "ceos2:Ethernet1"],
+      "subnet": "10.0.12.0/30",
+      "addressing": { "ceos1": "10.0.12.1/30", "ceos2": "10.0.12.2/30" },
+      "routing": "eBGP 65001 <-> 65002 over the /30 — EXISTING, do not renumber"
+    },
+    {
+      "endpoints": ["ceos1:telemetry-exporter", "telemetry-archive"],
+      "kind": "logical",
+      "purpose": "telemetry-class export from ceos1 — IN SCOPE"
+    },
+    {
+      "endpoints": ["ceos2:telemetry-exporter", "telemetry-archive"],
+      "kind": "logical",
+      "purpose": "telemetry-class export from ceos2 — IN SCOPE"
+    },
+    {
+      "endpoints": ["ceos1:metrics-exporter", "telemetry-archive"],
+      "kind": "logical",
+      "purpose": "metrics-class export from ceos1 — IN SCOPE"
+    },
+    {
+      "endpoints": ["ceos2:metrics-exporter", "telemetry-archive"],
+      "kind": "logical",
+      "purpose": "metrics-class export from ceos2 — IN SCOPE"
+    }
+  ],
+  "exportClasses": {
+    "exporterPool": "10.99.0.0/24",
+    "classes": [
+      { "name": "telemetry", "members": "one exporter /32 on EACH switch", "aggregate": "RUNTIME — the smallest prefix covering this class's members" },
+      { "name": "metrics",   "members": "one exporter /32 on EACH switch", "aggregate": "RUNTIME — the smallest prefix covering this class's members" }
+    ],
+    "addressUniqueness": "fabric-wide across BOTH classes — every exporter /32 is advertised, so a duplicate anywhere is a real BGP conflict",
+    "existingAllocations": "NOT LISTED HERE — the pool already has scattered, asymmetric allocations on both switches, discoverable ONLY by harvesting the live devices.",
+    "independence": "The two classes are operationally independent. They are separate export paths carrying different data to the same archive; no requirement exists that one class's range contain or adjoin the other's, and none should be invented.",
+    "_theTemptation": "Two aggregates invite being summarized into one. A single prefix covering both classes is SHORTER, tidier, and easier to express in a policy — and it is WRONG. Any prefix containing both classes also contains every address between them, which the fabric did not select and the archive must not authorize. Whether such a merge also swallows an existing allocation depends on where the classes land; that it authorizes unselected addresses does not. The archive must be authorized for the two ranges the fabric actually produced, expressed as two values.",
+    "_whyThisIsUnarguablyRuntime": "WOULD THESE VALUES CHANGE IF THE RIG WERE REBUILT? Yes — the scatter of existing allocations is re-randomized per build, so the free set changes, so the viable per-class selections change, so both aggregates change. No Program Architect can know them: the Architect reads only this file and requirements.md and has NO device-state access."
+  },
+  "interdependency": {
+    "kind": "runtime",
+    "dag": "network-pipeline (ceos) -> terraform-pipeline (telemetry-archive)",
+    "chainedValue": "BOTH derived aggregates, plus the four selected /32s and their class membership, for audit",
+    "mechanism": "the terraform leg's dependencyIds include its own approval gate AND the network sibling pipeline; the context-chainer PIPELINE-predecessor branch chains the network leg's report.md into the terraform leg's §6; the F18 settledness predicate holds the terraform leg until the network deliverable is fully persisted.",
+    "_whatTwoValuesTests": "Every prior variant chained ONE value. Two tests something a single value cannot: that the consuming leg carries BOTH forward verbatim and keeps them distinct. A consumer that takes the first value it finds, or that collapses two into one, produces a policy that is wrong in a way no single-value round could reveal."
+  }
+}
