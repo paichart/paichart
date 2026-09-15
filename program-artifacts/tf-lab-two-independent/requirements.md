@@ -62,6 +62,13 @@ address's class membership, and the computation that produced each aggregate.
 ASNs are fixed (`ceos1` 65001, `ceos2` 65002). No renumbering. The `10.0.12.0/30` transit link is out
 of scope.
 
+The harvest role reaches the devices only through a self-provisioned read-only MCP service, and
+`topology.json` is topology data, not a service descriptor — it carries no `endpoint`, `category`, or
+`tools` of its own. The connection surface is `readOnlyDeviceService.descriptorUrl` in that file, and
+**the network pipeline's task description must name that URL alongside the design artifacts**. This is
+not a soft requirement: a harvest role handed only topology data is correct to refuse to invent the
+missing connection fields, and the leg blocks at Phase 0 with nothing harvested.
+
 ## Pipeline 2 objective — cloud IaC (DOWNSTREAM)
 
 Consume **both** derived aggregates verbatim from chained §6 Pipeline Context — never recompute,

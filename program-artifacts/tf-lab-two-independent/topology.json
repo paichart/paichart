@@ -35,37 +35,68 @@
   ],
   "links": [
     {
-      "endpoints": ["ceos1:Ethernet1", "ceos2:Ethernet1"],
+      "endpoints": [
+        "ceos1:Ethernet1",
+        "ceos2:Ethernet1"
+      ],
       "subnet": "10.0.12.0/30",
-      "addressing": { "ceos1": "10.0.12.1/30", "ceos2": "10.0.12.2/30" },
+      "addressing": {
+        "ceos1": "10.0.12.1/30",
+        "ceos2": "10.0.12.2/30"
+      },
       "routing": "eBGP 65001 <-> 65002 over the /30 — EXISTING, do not renumber"
     },
     {
-      "endpoints": ["ceos1:telemetry-exporter", "telemetry-archive"],
+      "endpoints": [
+        "ceos1:telemetry-exporter",
+        "telemetry-archive"
+      ],
       "kind": "logical",
       "purpose": "telemetry-class export from ceos1 — IN SCOPE"
     },
     {
-      "endpoints": ["ceos2:telemetry-exporter", "telemetry-archive"],
+      "endpoints": [
+        "ceos2:telemetry-exporter",
+        "telemetry-archive"
+      ],
       "kind": "logical",
       "purpose": "telemetry-class export from ceos2 — IN SCOPE"
     },
     {
-      "endpoints": ["ceos1:metrics-exporter", "telemetry-archive"],
+      "endpoints": [
+        "ceos1:metrics-exporter",
+        "telemetry-archive"
+      ],
       "kind": "logical",
       "purpose": "metrics-class export from ceos1 — IN SCOPE"
     },
     {
-      "endpoints": ["ceos2:metrics-exporter", "telemetry-archive"],
+      "endpoints": [
+        "ceos2:metrics-exporter",
+        "telemetry-archive"
+      ],
       "kind": "logical",
       "purpose": "metrics-class export from ceos2 — IN SCOPE"
     }
   ],
+  "readOnlyDeviceService": {
+    "_whyThisIsHere": "The harvest role reaches ceos1/ceos2 ONLY through a self-provisioned read-only MCP service. This document is topology/program reference data and deliberately carries no endpoint/category/tools fields of its own — so the descriptor below is the connection surface, and it must be named in the network pipeline's task description. Omitting it is not a soft failure: the harvest role is correct to refuse to invent connection fields, and the whole leg blocks at Phase 0.",
+    "descriptorUrl": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json",
+    "lifecycle": "Self-provision per the active protocol: register from this descriptor, harvest read-only, then tear down the registration — on approval AND on escalation alike."
+  },
   "exportClasses": {
     "exporterPool": "10.99.0.0/24",
     "classes": [
-      { "name": "telemetry", "members": "one exporter /32 on EACH switch", "aggregate": "RUNTIME — the smallest prefix covering this class's members" },
-      { "name": "metrics",   "members": "one exporter /32 on EACH switch", "aggregate": "RUNTIME — the smallest prefix covering this class's members" }
+      {
+        "name": "telemetry",
+        "members": "one exporter /32 on EACH switch",
+        "aggregate": "RUNTIME — the smallest prefix covering this class's members"
+      },
+      {
+        "name": "metrics",
+        "members": "one exporter /32 on EACH switch",
+        "aggregate": "RUNTIME — the smallest prefix covering this class's members"
+      }
     ],
     "addressUniqueness": "fabric-wide across BOTH classes — every exporter /32 is advertised, so a duplicate anywhere is a real BGP conflict",
     "existingAllocations": "NOT LISTED HERE — the pool already has scattered, asymmetric allocations on both switches, discoverable ONLY by harvesting the live devices.",
