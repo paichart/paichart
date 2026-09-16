@@ -20,14 +20,15 @@ harvested.
 
 | gate | approves | approver |
 |---|---|---|
-| program plan | the plan and the interface contract, before any leg runs | the POV owner |
-| cluster change | the METHOD: which namespace, which addresses count, how the range is derived | the POV owner |
-| cloud IaC change | the PRODUCED range — the concrete value, not intent-to-proceed | the POV owner |
+| program plan | the plan and the interface contract, before any leg runs | Steve Terry |
+| cluster change | the METHOD: which namespace, which addresses count, how the range is derived | Josh Allen |
+| cloud IaC change | the PRODUCED range — the concrete value, not intent-to-proceed | Jacob Wilcox |
 
-Three separate gates on one approver is deliberate for this round: the gates exist to be
-crossed at different MOMENTS — the plan before anything runs, the method before the cluster is
-touched, and the produced value only once it exists — not to model an org chart. Assign every
-gate to the POV owner; do not invent approver identities.
+Three gates, three different approvers, crossed at three different MOMENTS — the plan before
+anything runs, the method before the cluster is touched, and the produced value only once it
+exists. The distinct owners are the point: a program exists precisely because the halves are
+approved by different people, and a gate that the producing team can release itself is not a
+gate.
 
 ## Pipeline 1 objective — cluster (UPSTREAM)
 
