@@ -69,21 +69,38 @@ APPROVED"*. Node C's own words:
 
 It refused the prose, followed the fact, and blocked the program.
 
-## ⚠️ Honest disclosure — the fact Node C read was itself stale
+## ⚠️ Correction, 2026-09-16 — the fact was NOT stale, and the claim is stronger for it
 
-This round is published *with* an open defect, because the defect is what makes the claim meaningful.
+**This section originally asserted that the fact Node C blocked on was out of date. That was wrong,
+and the error was the author's.** It is recorded rather than quietly edited, because a verification
+pack that silently revises its own evidence is worth nothing.
 
-The corrected package existed before the leg re-synthesised, yet the containment fact on the leg's
-final execution still reflected the pre-correction state. So Node C blocked on a fact that was
-arguably out of date.
+A fact-production investigation established, from source and corpus:
 
-**That does not weaken claim 3 — it is the sharpest possible form of it.** When prose and mechanical
-record disagreed, the system did not split the difference, and did not prefer the cheerful reading. It
-**failed closed**: a correct-looking program was withheld rather than released on an unverified claim.
-A system that fails open under the same conditions would have shipped.
+- **Nothing was stale.** The enrichment reads the newest child artifact by a direct query; it read the
+  corrected package. The proof is in the stamps themselves — the disposition reason *changed* between
+  the two synthesises, and the second reason is only reachable once the corrected block parsed.
+- **The real cause**: the derived value had no **harvest pool** to be contained against. The leg's
+  *harvester* never emitted the machine-readable pool; the author did, and the check refuses a pool
+  from the author **by design** — a derivation must be checked against what was actually observed,
+  not against a restatement by the party doing the deriving.
+- **Root cause is a protocol coverage gap.** This domain's protocol mandates the consuming block but
+  never mandated the producing ones: **0 of 7** of its harvesters have ever emitted the pool marker,
+  against 74/96 and 13/40 in two sibling domains. This round is the first to use the domain as an
+  upstream producer, and the gap had therefore never been reachable before.
 
-The staleness is a real defect, filed with the fact-production owner with the full timeline, and its
-repair is tracked separately. What it does not do is put a wrong value into an approved artifact.
+**So Node C blocked on a CORRECT fact, for a correct reason: an unverifiable derivation.** The
+original claim survives intact and is strengthened — the gate refused a self-reported correction, and
+the mechanical record it preferred turned out to be right.
+
+One genuine defect remains, and it is a **label**, not a judgement: the disposition's reason string
+names a leg identity the code does not actually know, and has been wrong on 100% of its live
+occurrences (2 of 2, both producing legs). Blocking was correct in both. Filed; no consumer keys on
+the string.
+
+**What the leg would have to do to pass** — proven by running the shipping check against this round's
+real values: the harvester emits the pool block the author already carried, and the result is a clean
+pass with no violations. The entire gap was one block on the wrong child.
 
 ## Why this round is not a green-pass demonstration
 
