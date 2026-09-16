@@ -1,0 +1,28 @@
+{
+  "name": "k8s-tf-podrange-authz",
+  "description": "A cross-domain program. A Kubernetes namespace runs a workload whose pods ship application logs to a cloud archive bucket. The cluster leg harvests the namespace's CURRENT pod addresses and derives the smallest single range covering them; the cloud leg authorises the archive bucket for exactly that range. Two domains, two rigs, one runtime-derived value crossing the boundary.",
+  "_whyThisPairing": "Deliberately avoids the network rig. Both legs run against cheap read-only rigs (a kind cluster and a LocalStack AWS), so the program exercises cross-domain chaining, the program gate and the integration review at a fraction of the cost of a device-reaching run.",
+  "cluster": {
+    "namespace": "trading",
+    "workload": "the namespace's running pods — a Deployment with more than one replica",
+    "_whyThisIsUnarguablyRuntime": "Pod addresses are assigned by the CNI at SCHEDULE time. They are not in any manifest, they differ between clusters, and they CHANGE when a pod is rescheduled. Nothing outside a live harvest can know them — which is the point: the derived range is only valid for the harvest that produced it, and that fact must survive into the change package.",
+    "podAddressesAreNotListedHere": "Discoverable ONLY by harvesting the live cluster. Do not assume, do not carry a value in from any other document."
+  },
+  "cloud": {
+    "terraform_address": "aws_s3_bucket.app_logs",
+    "workspace": "prod",
+    "purpose": "The archive the namespace's pods write to. The bucket policy must restrict s3:PutObject to the derived range and to nothing wider."
+  },
+  "readOnlyServices": {
+    "_whyThisIsHere": "Each leg reaches its rig ONLY through a self-provisioned read-only MCP service. This document is topology data and declares no endpoint/category/tools of its own, so the descriptors below are the connection surfaces and EACH must be named in its own leg's task description. Omitting one is not a soft failure: the harvest role is correct to refuse to invent connection fields, and that leg blocks at Phase 0.",
+    "clusterDescriptorUrl": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json",
+    "cloudDescriptorUrl": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/terraform-readonly-descriptor.json",
+    "lifecycle": "Self-provision per each leg's active protocol: register from the descriptor, harvest read-only, then tear down the registration — on approval AND on escalation alike."
+  },
+  "interdependency": {
+    "direction": "cluster leg (UPSTREAM) → cloud leg (DOWNSTREAM)",
+    "crossingValue": "ONE range: the smallest single CIDR covering every harvested pod address in the namespace.",
+    "consumedVerbatim": "The cloud leg consumes the derived range EXACTLY as published — never recomputed, never widened for convenience, never guessed. If it is absent from chained context, escalate rather than proceed.",
+    "_whatThisTests": "A runtime value crossing a DOMAIN boundary, not merely a leg boundary: the producer speaks Kubernetes and the consumer speaks Terraform, and neither shares the other's vocabulary. The only thing they share is the value."
+  }
+}
