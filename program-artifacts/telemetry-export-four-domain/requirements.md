@@ -57,9 +57,15 @@ addresses nobody observed, in three systems at once, and every tier would check 
 |---|---|---|
 | program plan | the plan and the interface contract, before any leg runs | Steve Terry |
 | fabric change | the METHOD: which addresses count as the pool, and how the covering range is derived | Josh Allen |
-| cluster change | the PRODUCED range as an ingress source — the concrete value, not intent-to-proceed | Sarah Chen |
+| cluster change | the PRODUCED range as an ingress source — the concrete value, not intent-to-proceed | Chris Terry |
 | cloud change | the PRODUCED range as an IAM condition — the concrete value, not intent-to-proceed | Jacob Wilcox |
-| observability change | the alert's scope and every number it carries | Priya Nair |
+| observability change | the alert's scope and every number it carries | Rika Smith |
+
+**Team provisioned for this POV** — every approver named above must be a member of the POV team, or
+the platform cannot route the gate to them and every gate falls to the POV owner instead:
+- Steve Terry `steve.terry@paichart.com` · Josh Allen `josh.allen@paichart.com`
+- Chris Terry `chris.terry@paichart.com` · Jacob Wilcox `jacob.wilcox@paichart.com`
+- Rika Smith `rika@example.com`
 
 Each downstream pipeline waits on **BOTH** its own gate **AND** the fabric pipeline (the DAG edge).
 The three downstream gates approve a **value**, not a direction: an approver who has not seen the
