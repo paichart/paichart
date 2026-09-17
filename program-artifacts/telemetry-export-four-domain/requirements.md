@@ -106,7 +106,16 @@ not a gate — the distinct owners are the point.
 
 Every line below is an incident.
 
-- **Show the computation** in the deliverable: the inputs, the arithmetic, and the result's coverage.
+- **The DESIGN shows the computation**: the inputs, the arithmetic, and the result's coverage.
+  ⚠️ **This binds the design role only.** The change-package author carries forward the structured
+  blocks verbatim and must NOT restate or summarise the design's containment conclusion — its own role
+  contract forbids exactly that, because a carried-forward conclusion hands the reviewer a copyable
+  answer instead of making it derive one. The reasoning lives in the design; the package carries
+  claims plus verbatim evidence.
+  *Named here because "the deliverable" names none of a leg's four roles. On 2026-09-17 the platform
+  happened to route this line to the design and the review roles and not to the author, so it caused
+  nothing — but that routing is a decomposition judgement made per run, not a guarantee, and an author
+  that received it would face its leg objective and its role contract demanding opposite things.*
 - **Minimality.** The covering range must be the smallest that contains every harvested address. A
   result looser than the minimum is a **REJECTABLE defect even when it violates nothing else**,
   because it authorises more than the requirement needs — here, in three systems at once.
