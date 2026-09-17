@@ -194,7 +194,17 @@ the producing team can release for itself is not a gate.
    harvested allocation on either switch;
 2b. the tightest-correct property of the pool — recompute it; do not take the stated size on trust;
 3. no hop widens the flow: no `0.0.0.0/0`, no port beyond 443, no destination beyond the app /32,
-   and no return-path hole beyond established/related;
+   and no return-path hole beyond established/related. ⚠️ **"Hop" here means every match list that
+   selects traffic at that hop, NOT just the device.** On an edge doing source-NAT that is BOTH the
+   security ACL AND the NAT-match ACL: a NAT-match list of `permit ip <partner> any` widens the flow
+   even where the security ACL in front of it is correctly scoped, because the check is on what the
+   configuration permits, not on what happens to reach it. Every selecting list at a hop carries the
+   same destination and port bounds as that hop's tightest one.
+   *Earned across three rounds of this same program, which produced three different widths for that
+   one list: `tcp <partner> any eq 443` (2026-08-21, destination too wide), the correct
+   `tcp <partner> host <app> eq 443` (2026-08-22), and `ip <partner> any` (2026-09-17, wider than
+   either). Node C blocked the third. The requirement was meticulous about the NAT POOL's minimality
+   and silent about the NAT MATCH list, so which reading an author took was left to chance.*
 4. **chaining coverage**: `predecessors === chainCapablePredecessors`, `degradedPredecessors === 0`,
    `notChained []` — i.e. each downstream leg received its upstream leg's **real** deliverable, not
    a fallback and not nothing;
