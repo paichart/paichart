@@ -155,6 +155,23 @@ stops: authoring against a guessed range is the failure this program exists to m
 - Harvest the stack **read-only**. Service descriptor: the `observabilityDescriptorUrl` in `topology.json`.
 - Author the rule alerting when telemetry from the chained range stops arriving or is being refused,
   scoped to that range rather than to all sources.
+- ⚠️ **Existence assumption — the stack cannot distinguish sources today, and the objective does not
+  create that ability.** The collector as deployed has ONE OTLP receiver bound to all addresses and
+  only `memory_limiter` and `batch` in its metrics pipeline: no attribute, label or routing mechanism
+  carries the sender's identity, so by the time the metrics reach the alerting layer, telemetry from
+  the exporter pool is indistinguishable from any other. **Scoping an alert to the range therefore
+  requires the package to ADD the mechanism that makes the distinction** — a collector-side attribute
+  or routing step keyed to the pool, and the pool's membership comes from the chained value.
+  Two acceptable outcomes, and the package must pick one and say which:
+  1. **Add the labelling mechanism** as part of this change, then scope the rule to the label it
+     creates. State the mechanism's own validation step like any other.
+  2. **Declare the scoping impossible within this leg** and author the best available aggregate alert
+     with the limitation stated in the package — what it will and will not catch, and specifically
+     that it will fire on unrelated sources and stay silent if only the pool stops. This is an
+     escalation to the observability approver, not a silent substitution.
+  🔴 **What is NOT acceptable is an aggregate rule presented as a scoped one.** A rule that says it
+  watches the range while evaluating over every source is worse than no rule: it will be believed.
+  *Earned 2026-09-17 — the first round authored exactly that, and its own reviewer caught it.*
 - ⚠️ **Existence assumption**: no rule scoped to these sources exists today. CREATE is expected.
 - **Every number the rule carries — threshold, evaluation window, wait-before-firing — must be chosen
   against a harvested quantity and must carry the comparison that produced it**, including the
