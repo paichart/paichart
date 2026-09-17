@@ -85,14 +85,18 @@ them — conflating design order with apply order is a known error class for seq
 
 ## Approvals — one gate per domain, plus the program plan gate
 
-Team provisioned for this POV:
-- Network security lead is Steve Terry steveterry66@gmail.com
-- Cloud platform lead is Steve Terry steveterry66@gmail.com
-- Core network lead is Steve Terry steveterry66@gmail.com
+Team provisioned for this POV — each approver must be a MEMBER of the POV team, or the platform
+cannot route the gate to them and it silently falls to the POV owner:
+- Network security lead is Josh Allen josh.allen@paichart.com
+- Cloud platform lead is Jacob Wilcox jacob.wilcox@paichart.com
+- Core network lead is Chris Terry chris.terry@paichart.com
 
-- The **edge (ceos1) change** requires its own approval before that pipeline may run.
-- The **dmz (Terraform) change** requires its own approval before that pipeline may run.
-- The **core (ceos2) change** requires its own approval before that pipeline may run.
+- The **edge (ceos1) change** requires its own approval before that pipeline may run. Approver: **Josh Allen**.
+- The **dmz (Terraform) change** requires its own approval before that pipeline may run. Approver: **Jacob Wilcox**.
+- The **core (ceos2) change** requires its own approval before that pipeline may run. Approver: **Chris Terry**.
+
+Three gates, three DIFFERENT approvers, each owning one domain — that separation is the point. A gate
+the producing team can release for itself is not a gate.
 - Sequenced: each downstream pipeline waits on **BOTH** its own gate **AND** the upstream pipeline
   (the DAG edge). The dmz leg waits on the edge pipeline; the core leg waits on the dmz pipeline.
 
