@@ -238,13 +238,51 @@ would go wrong if someone guessed it up front}}
 
 ## Approvals — one gate per domain, plus the program plan gate
 
-Team provisioned for this POV:
+**Team provisioned for this POV** — every approver named below must be a MEMBER of the POV team, or
+the platform cannot route the gate to them and it silently falls to the POV owner, so a board meant
+to show several approvers shows one:
 - {{ROLE}} is {{NAME}} {{EMAIL}}
 
-- The **{{DOMAIN_1}} change** requires its own approval before that pipeline may run. Approver: **{{NAME_1}}**.
-- The **{{DOMAIN_2}} change** requires its own approval before that pipeline may run. Approver: **{{NAME_2}}**.
-- {{If sequenced}}: the downstream pipeline waits on **BOTH** its own gate **AND** the upstream
-  pipeline (the DAG edge).
+### Every gate declares WHAT it approves and WHEN it sits — and the two must agree
+
+🔴 **This is the most expensive thing to get wrong in this section, and stating only one half is how
+it goes wrong.** A gate has a KIND, and the kind fixes the moment:
+
+| kind | approves | sits AFTER | sits BEFORE |
+|---|---|---|---|
+| **intent / method** | how the work will be done, before it is done | the plan gate | the leg it governs |
+| **produced value** | a concrete value that already exists | **the leg that PRODUCES that value** | the leg it authorises |
+
+Fill the table with both columns, never just the first:
+
+| gate | approves | moment — runs AFTER | blocks | approver |
+|---|---|---|---|---|
+| program plan | the plan and the interface contract | the Program Architect | every leg | {{NAME}} |
+| {{DOMAIN_1}} change | {{WHAT — and if it is a produced value, NAME ITS PRODUCER}} | {{WHAT MUST FINISH FIRST}} | {{WHICH LEG IT BLOCKS}} | {{NAME_1}} |
+| {{DOMAIN_2}} change | {{…}} | {{…}} | {{…}} | {{NAME_2}} |
+
+⚠️ **Write "the value produced by X", never a bare "the PRODUCED value".** A bare "PRODUCED" has no
+producer, and the phrase that follows it usually attaches the value to the CONSUMER's artifact
+("the produced range *as an ingress source*"), which reads as the consuming leg's own output and
+forces the gate after that leg. Then the gate approves work already finished.
+*Earned 2026-09-17 (telemetry-export-four-domain): the Approvals table said "the PRODUCED range as an
+ingress source" while the sentence below it said the pipeline waits on its own gate. Both readings
+were defensible, the Program Architect flagged the contradiction as an Open Question and asked for
+confirmation before plan approval, the plan gate was approved without answering it, and all four
+change packages were produced with zero domain approvals.*
+
+⚠️ **A gate wired after the leg it was meant to govern is a RECORD, not a control**, and an
+intent/method gate in that position is close to meaningless — approving a method after the work is
+done changes nothing. If a gate cannot block anything, say so deliberately or move it.
+
+⚠️ **A gate the producing team can release for itself is not a gate.** Distinct owners are the point:
+a program exists precisely because the halves are approved by different people.
+
+**Then state the dependency consequence explicitly** — do not leave a planner to infer the DAG from
+the prose above, because two readings of the same sentence produce two different graphs:
+- {{If sequenced, spell out the chain for each downstream leg, e.g.}}: `{{upstream leg}} → {{its
+  gate}} → {{downstream leg}}`, and say whether the downstream leg ALSO takes a direct edge to the
+  upstream leg or reaches it only through the gate.
 
 ## Pipeline 1 objective — {{DOMAIN_1}} {{(UPSTREAM)}}
 

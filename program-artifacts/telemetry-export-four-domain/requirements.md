@@ -53,13 +53,22 @@ addresses nobody observed, in three systems at once, and every tier would check 
 
 ## Approvals — one gate per domain, plus the program plan gate
 
-| gate | approves | approver |
-|---|---|---|
-| program plan | the plan and the interface contract, before any leg runs | Steve Terry |
-| fabric change | the METHOD: which addresses count as the pool, and how the covering range is derived | Josh Allen |
-| cluster change | the PRODUCED range as an ingress source — the concrete value, not intent-to-proceed | Chris Terry |
-| cloud change | the PRODUCED range as an IAM condition — the concrete value, not intent-to-proceed | Jacob Wilcox |
-| observability change | the alert's scope and every number it carries | Rika Smith |
+Every gate below declares **what it approves** and **the moment it sits at**, and the two must agree.
+A gate that approves an INTENT sits before the work; a gate that approves a PRODUCED VALUE sits after
+the leg that produces that value — and both must sit before the work they authorise. Stating only one
+of the two lets a planner choose the other.
+
+| gate | approves | moment — runs AFTER | blocks | approver |
+|---|---|---|---|---|
+| program plan | the plan and the interface contract | the Program Architect | every leg | Steve Terry |
+| fabric change | the METHOD: which addresses count as the pool, and how the covering range is derived | the program plan gate | the fabric leg | Josh Allen |
+| cluster change | **the range produced by the FABRIC leg**, as this leg will use it for ingress — the concrete value, not intent-to-proceed | the fabric leg | the cluster leg | Chris Terry |
+| cloud change | **the range produced by the FABRIC leg**, as this leg will use it as an IAM condition — the concrete value, not intent-to-proceed | the fabric leg | the cloud leg | Jacob Wilcox |
+| observability change | **the range produced by the FABRIC leg**, as this leg will scope the alert to it, plus every number the rule carries | the fabric leg | the observability leg | Rika Smith |
+
+⚠️ **"PRODUCED" always names its producer.** Every crossing value in this program is produced by the
+FABRIC leg and by nothing else. A gate that reviewed the consuming leg's own output would sit after
+that leg had already done the work, which makes it a record rather than a control.
 
 **Team provisioned for this POV** — every approver named above must be a member of the POV team, or
 the platform cannot route the gate to them and every gate falls to the POV owner instead:
@@ -67,9 +76,15 @@ the platform cannot route the gate to them and every gate falls to the POV owner
 - Chris Terry `chris.terry@paichart.com` · Jacob Wilcox `jacob.wilcox@paichart.com`
 - Rika Smith `rika@example.com`
 
-Each downstream pipeline waits on **BOTH** its own gate **AND** the fabric pipeline (the DAG edge).
+**Dependency consequence, stated so no planner has to infer it**: each downstream pipeline
+(`cluster`, `cloud`, `observability`) depends on **its own gate**, and each of those gates depends on
+**the fabric leg**. The chain is `fabric leg → that leg's gate → that leg`. The downstream pipelines
+do NOT take a direct edge to the fabric leg: the gate is between them, and the range reaches the leg
+through it.
+
 The three downstream gates approve a **value**, not a direction: an approver who has not seen the
-concrete range has not approved this change.
+concrete range has not approved this change. And a gate the producing team can release for itself is
+not a gate — the distinct owners are the point.
 
 ## Pipeline 1 objective — network provisioning (UPSTREAM)
 
