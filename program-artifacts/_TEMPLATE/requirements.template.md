@@ -208,6 +208,28 @@ run.
     richer fabric could not express its original property and kept its number with the narrowing
     stated, so the round stayed comparable.*
 
+15. 🔴 **A crossing VALUE always names its producer. "the PRODUCED range" is not one value — it is two.**
+    Wherever this file names a value that crosses between legs, write *"the range produced by the
+    FABRIC leg"*, never a bare *"the PRODUCED range"*. A bare participle has no subject, and the
+    phrase that follows it usually attaches the value to the CONSUMER's artifact (*"the produced range
+    **as an ingress source**"*), which then reads as the consuming leg's own output. **Two readings of
+    one sentence produce two different DAGs**, and a planner picks one without telling you which —
+    unless it happens to notice.
+    *Earned 2026-09-17 (telemetry-export-four-domain): the Approvals table said "the PRODUCED range as
+    an ingress source" while the sentence four lines below said each downstream pipeline waits on its
+    own gate. Both readings were defensible on the text. The Program Architect DID notice, chose one,
+    flagged it as an Open Question and asked for confirmation before plan approval — the plan gate was
+    released without answering it, and all four change packages were produced with zero domain
+    approvals. The gates held the RELEASE, so nothing shipped; but an intent gate that runs after the
+    work is a record, not a control.*
+    **General form: a noun phrase that omits its subject gets bound to whoever reads it.** Apply it to
+    crossing values first, because those decide the graph.
+    ⚠️ **Do not over-generalise this to every role-agnostic sentence.** On the same run a role-agnostic
+    *"show the computation in the deliverable"* was suspected of misdirecting the change-package author
+    into a clause-(f) violation, and **measured not to** — the platform writes per-role task
+    descriptions, and that instruction reached the architect and the reviewer but never the author.
+    Verify that a sentence actually propagates to the role you think it misled before rewriting it.
+
 ---
 
 ## Program scope
