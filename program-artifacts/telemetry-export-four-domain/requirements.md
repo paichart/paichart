@@ -77,10 +77,17 @@ the platform cannot route the gate to them and every gate falls to the POV owner
 - Rika Smith `rika@example.com`
 
 **Dependency consequence, stated so no planner has to infer it**: each downstream pipeline
-(`cluster`, `cloud`, `observability`) depends on **its own gate**, and each of those gates depends on
-**the fabric leg**. The chain is `fabric leg → that leg's gate → that leg`. The downstream pipelines
-do NOT take a direct edge to the fabric leg: the gate is between them, and the range reaches the leg
-through it.
+(`cluster`, `cloud`, `observability`) depends on **its own gate** AND on **the fabric leg**, and each
+of those gates also depends on the fabric leg. Both edges are required and they do different jobs:
+the gate edge decides **when** the consumer may start (nothing runs before a human has approved the
+concrete range), and the direct edge to the fabric leg is **how the range physically reaches the
+consumer**. Wire `fabric leg → gate` AND `fabric leg → consumer`.
+
+⚠️ **An approval gate carries approval, not data.** Do not assume a value travels to a consumer
+"through" its gate — a gate produces no deliverable, so a consumer whose only dependency is its gate
+receives nothing and cannot see the range it is being asked to authorise. An earlier version of this
+document asserted the opposite and forbade the direct edge; three rounds were planned from it and the
+consumers received empty context (2026-09-18). Requiring both edges is not redundancy.
 
 The three downstream gates approve a **value**, not a direction: an approver who has not seen the
 concrete range has not approved this change. And a gate the producing team can release for itself is
