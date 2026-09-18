@@ -21,6 +21,34 @@ routes. Four changes follow from one fact about them:
 
 The range is not written in this document and must not be. It is derived from what the harvest finds.
 
+## Writing rules — read before authoring, they are the expensive part
+
+These govern how you write **every other section**. All were earned by a failed or false-passing run.
+
+1. ⚠️ **"Deterministic validation" means a reviewer can run it and compare, without judgement.**
+   Every validation step is an **exact command** plus its **exact expected output** — the literal text
+   or count you expect back. Prose like *"verify the policy is applied"*, *"confirm the rule is
+   scoped correctly"*, or *"check the aggregate is advertised"* is a **REJECTABLE defect**, not a
+   validation step: two reviewers could disagree on whether it passed. Where a command offers a
+   machine-readable mode (`-output json`, `-o json`, `terraform state show -json` piped through
+   `jq`), use it — a literal is obtainable far more often than it first appears.
+   *Earned: Run 13's network leg was blocked for exactly this.*
+
+2. ⚠️ **Ship every artefact your validation cites.** If a step invokes a policy/rule file (OPA,
+   Conftest, tflint config, a test fixture), the change package must include that file's **complete,
+   runnable contents**. Citing a check you did not ship is unrunnable, so it is not validation.
+   *Earned: Run 10 was blocked for naming OPA/Conftest checks without shipping the rule files.*
+
+3. 🔴 **State what must be TRUE. Do NOT name the measure that reports it.**
+   Where a requirement can be written as a **property**, write the property — not the stamp shape, not
+   the reason code, not the violation class. Every agent reads this file, so a machine pass-condition
+   written here becomes a target an agent can aim at instead of the requirement.
+   *Earned: Run 15 — a leg met a published pass condition weaker than the requirement beside it.*
+
+4. ⚠️ **Expected values stated in this document are reference data, NEVER evidence.** Restating a
+   value from this file is not a check. Evidence comes from a harvest, a command's output, or a
+   platform fact — never from this document.
+
 ## Program scope
 
 - 4 delivery domains. The fabric runs FIRST; the other three run **IN PARALLEL WITH EACH OTHER**:
