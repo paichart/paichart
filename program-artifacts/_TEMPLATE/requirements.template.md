@@ -339,9 +339,21 @@ a program exists precisely because the halves are approved by different people.
 
 **Then state the dependency consequence explicitly** — do not leave a planner to infer the DAG from
 the prose above, because two readings of the same sentence produce two different graphs:
-- {{If sequenced, spell out the chain for each downstream leg, e.g.}}: `{{upstream leg}} → {{its
-  gate}} → {{downstream leg}}`, and say whether the downstream leg ALSO takes a direct edge to the
-  upstream leg or reaches it only through the gate.
+- {{If sequenced, spell out BOTH edges for each downstream leg}}: the downstream leg depends on
+  **its own gate** AND on **the upstream leg**, and the gate also depends on the upstream leg.
+  Write `{{upstream leg}} → {{its gate}}` AND `{{upstream leg}} → {{downstream leg}}`.
+
+  ⚠️ **This is not a design choice, and the second edge is not redundancy.** An approval gate
+  carries approval, not data: it is template-less and produces no deliverable, so a downstream leg
+  whose only dependency is its gate receives an EMPTY chained context and cannot see the value it
+  exists to consume. Inter-pipeline chaining walks DIRECT dependency edges only. The gate edge
+  decides **when** the leg may start; the direct edge is **how the value reaches it**.
+
+  *Earned twice, in opposite directions. `igp-migration-t1-triangle` stated "each phase waits on
+  BOTH its own gate AND the previous pipeline" and ran correctly. `telemetry-export-four-domain`
+  said the downstream legs do NOT take a direct edge and that the value "reaches the leg through
+  the gate" — an invented mechanism — and three rounds were planned from it before a leg escalated
+  (2026-09-18). An earlier version of this line offered both as valid alternatives; only one is.*
 
 ## Pipeline 1 objective — {{DOMAIN_1}} {{(UPSTREAM)}}
 
