@@ -407,6 +407,14 @@ Keep all of the following — every line is an incident.
 
 - Each change package must include deterministic validation with expected outputs (per *Writing rules*
   #1 and #2) and a rollback plan.
+  > ⚠️ **This line cites *Writing rules* by number, so CARRY THAT SECTION into the document you
+  > produce.** The rules govern how change-package authors write validation, and those authors read
+  > only your produced file — never this template. A citation whose target did not travel is a
+  > dangling reference: the author is held to numbered rules it cannot read, and nothing reports it.
+  > *(Live 2026-09-18: one artifact of six omitted the section. Two consumer legs were then blocked
+  > for violating rule 1 — prose where an exact command plus literal output was required — having
+  > been pointed at a rule that was not in front of them. Either carry the section, or replace this
+  > citation with the requirement stated inline; do not leave the number pointing at nothing.)*
 - **Apply is out-of-band and human-gated in every domain.** This program produces approved change
   packages only — never applied changes.
 
