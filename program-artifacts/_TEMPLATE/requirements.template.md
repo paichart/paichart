@@ -230,6 +230,43 @@ run.
     descriptions, and that instruction reached the architect and the reviewer but never the author.
     Verify that a sentence actually propagates to the role you think it misled before rewriting it.
 
+    ### ✅ VALIDATED END TO END 2026-09-18 — and the same rule covers SCOPE WORDS, not just values
+
+    A second instance of this family was found, fixed and **proven** on a live campaign, so the rule
+    is no longer reasoning from one case.
+
+    **The defect**: acceptance check 3 of a firewall program said *"no **hop** widens the flow."*
+    "Hop" reads naturally as the DEVICE (edge / DMZ / core). It was also true of every match list
+    WITHIN a device — and on an edge doing source-NAT that is two lists, a security ACL and a
+    NAT-match ACL. Three rounds of the same program authored that one list three different widths:
+    `tcp <partner> any eq 443` (destination too wide, **not caught**), the correct
+    `tcp <partner> host <app> eq 443`, and `ip <partner> any`. The program reviewer blocked the third.
+    The requirement was meticulous about the NAT POOL's minimality and silent about the NAT MATCH
+    list, so which reading an author took was left to chance.
+
+    **The fix was one definition** — no new obligation, no new constraint:
+    > *"**Hop" here means every match list that selects traffic at that hop, NOT just the device.** …
+    > the check is on what the configuration PERMITS, not on what happens to reach it. Every selecting
+    > list at a hop carries the same destination and port bounds as that hop's tightest one.*
+
+    **The outcome, measured**: the next round went from `programReleasable: false` to **true**. The
+    definition propagated with no human repeating it — the Architect's plan carried it, the leg's brief
+    stated it as a named clause, the author **self-checked against it by name**, a second author in a
+    different domain cited the same clause, and the program reviewer that had refused the round before
+    approved with no blocking issues. Leg scores rose 85→88 and 84→90.
+
+    🔴 **So the rule generalises past values: any term the acceptance checks TURN ON must be defined
+    where it is used.** A value needs its producer; a scope word needs its extent. The test is the
+    same one — *can this phrase be read two ways that produce different work?* — and the cost of
+    leaving it is not a wrong answer, it is a **coin flip across rounds**, which is worse because it
+    looks like craft variance and gets remediated at the wrong layer.
+
+    ⚠️ **The discriminator that tells you which layer**: RECURRENCE. The same contract producing
+    different results across rounds, from different authors, is an under-specified requirement and
+    belongs here. A single slip — a transposed multiplication, a mis-scoped validation step — is craft
+    and belongs in a re-run or in role guidance. Encoding a craft slip's specific answer into a
+    requirement buys a green that proves nothing; it teaches to the test.
+
 ---
 
 ## Program scope
