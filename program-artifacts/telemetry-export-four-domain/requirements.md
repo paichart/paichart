@@ -203,8 +203,9 @@ stops: authoring against a guessed range is the failure this program exists to m
   evidence, as a ceiling distinct from, and possibly wider than, the tight cover of the harvested
   addresses. `topology.json` does not carry this value: its `fabric.exporterPool` section states
   that pool facts are discoverable ONLY by harvesting both devices, and must not be inferred from a
-  range name or carried in from any other document. A leg that cannot establish the boundary from its own evidence escalates — it does not
-  assume the tight cover is the ceiling, and it does not proceed without one.
+  range name or carried in from any other document. A leg that cannot establish the
+  boundary from its own evidence escalates — it does not assume the tight cover is the ceiling, and
+  it does not proceed without one.
 
 ## Acceptance
 
