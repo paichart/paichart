@@ -190,12 +190,21 @@ stops: authoring against a guessed range is the failure this program exists to m
 ## Design constraints — split across the contract and the DAG
 
 **Static → the interface contract** (knowable up front, agreed before any leg runs):
-- The namespace, the bucket's Terraform address and workspace, and the exporter pool's parent range,
-  as given in `topology.json`.
+- The namespace, and the bucket's Terraform address and workspace, as given in `topology.json`.
+- The parent-range **convention** — the rule that the covering range must not extend beyond the
+  exporter pool's own parent range. The rule is static and belongs in the contract. ⚠️ **The boundary
+  the rule refers to is not**, and the contract must not claim a value for it: carry the rule with a
+  null value rather than inventing one to fill the field.
 
 **Runtime → the DAG edge** (not knowable up front — see the rationale section):
 - The covering range — produced by the fabric leg, chained into each consumer's §6, settled before
   that consumer starts.
+- The pool's parent-range **boundary** — established by the fabric leg from its own live harvest
+  evidence, as a ceiling distinct from, and possibly wider than, the tight cover of the harvested
+  addresses. `topology.json` does not carry this value: its `fabric.exporterPool` section states
+  that pool facts are discoverable ONLY by harvesting both devices, and must not be inferred from a
+  range name or carried in from any other document. A leg that cannot establish the boundary from its own evidence escalates — it does not
+  assume the tight cover is the ceiling, and it does not proceed without one.
 
 ## Acceptance
 
