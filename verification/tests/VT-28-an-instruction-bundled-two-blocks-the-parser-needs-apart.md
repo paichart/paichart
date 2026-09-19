@@ -1,4 +1,4 @@
-# VT-28 — an instruction bundled two blocks the parser needs apart; the program was refused for eight rounds
+# VT-28 — an instruction bundled two blocks the parser needs apart
 
 **Status**: ✅ VERIFIED 2026-09-19 — first `programReleasable: true` for this objective, on round 8.
 Drafted contemporaneously during the round. Re-verify trigger: any change to
@@ -32,6 +32,12 @@ finding.
 Coverage 4 of 4 chain-capable on both the producer and Node C, degraded 0. No `verdictMismatch`.
 Node C graded the crossing VERIFIED-AGAINST-EVIDENCE and confirmed all three consumers took the
 value verbatim.
+
+⚠️ **Attribution, stated precisely.** This defect refused **R7 and R8** — not all eight rounds. What
+held across all eight is that the `derivationContainment` conjunct was never once *satisfied*; the
+causes differed (VT-27 records R3's gate-interposition severance, and validation-shape and
+credential findings on R4 and R6). "Eight rounds" is the age of the unsatisfied conjunct, not this
+defect's blast radius, and an earlier version of this document and its README row conflated the two.
 
 ## What was actually blocking it
 
