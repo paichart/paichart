@@ -10,7 +10,8 @@
       "_whyThisIsUnarguablyRuntime": "The pool's members are individual host addresses configured per switch and advertised individually. They are asymmetric between the two devices, they are not contiguous, and the set is knowable only by reading both running configurations. Nothing outside a live harvest can enumerate them.",
       "addressesAreNotListedHere": "Discoverable ONLY by harvesting both devices. Do not assume, do not infer from a range name, and do not carry a value in from any other document.",
       "existenceAssumption": "The pool is already configured and already advertised as individual host routes. The change is to advertise the covering range in place of the individual routes — not to create the addresses."
-    }
+    },
+    "_allocations": "NONE. No parent range is allocated to the exporter pool in this environment - there is no IPAM entry, no design document, and nothing reserved. Stated explicitly because an ABSENT allocation and an UNDECLARED one look identical from a leg's seat, and three rounds inferred a /24 from the shared high-order bits of the configured addresses, which is the shape of the configuration rather than the allocation. An allocation fact can only be declared here; a device carries configuration, not allocation intent. Consequence: the parent-range convention does not apply to this pool, and MINIMALITY is the control on range width."
   },
   "cluster": {
     "namespace": "trading",

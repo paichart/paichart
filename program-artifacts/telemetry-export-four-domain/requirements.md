@@ -133,9 +133,19 @@ not a gate — the distinct owners are the point.
   legs depend on.
 - ⚠️ **Existence assumption**: the addresses already exist and are already advertised individually.
   This change replaces how they are advertised; it does not create them.
-- ⚠️ **Convention that is not observable**: the covering range must not extend beyond the pool's own
-  parent range, even where a larger range would still be minimal by arithmetic alone. Nothing in the
-  harvest expresses this, so it is stated here or it does not exist for you.
+- ⚠️ **No parent allocation exists for this pool — do NOT try to establish one.** A parent range is
+  an ALLOCATION fact: a statement about what was reserved for a purpose. It lives in an IPAM or a
+  design document, never on a device — a switch knows which addresses are *configured* on it and has
+  no representation of what range was *set aside*. `topology.json` declares this environment has no
+  such allocation (`fabric._allocations`), so the parent-range check does not apply here.
+  **Do not infer one from the harvest.** The shared high-order bits of whatever addresses happen to
+  be configured are the shape of the configuration, not the allocation — if the pool had used only
+  two addresses, the same reasoning would produce a different and equally unfounded "boundary".
+  *(Three rounds derived `/24` that way and looked rigorous doing so; a fourth correctly refused and
+  escalated, which is what retired this obligation — 2026-09-19.)*
+- **What controls range width here is MINIMALITY**, which is checkable: the derived range must be the
+  tightest prefix covering exactly the harvested addresses and nothing else. A range that does not
+  widen cannot breach a ceiling.
 
 ### ⚠️ This leg DERIVES a value three downstream legs consume
 
@@ -226,21 +236,21 @@ stops: authoring against a guessed range is the failure this program exists to m
 
 **Static → the interface contract** (knowable up front, agreed before any leg runs):
 - The namespace, and the bucket's Terraform address and workspace, as given in `topology.json`.
-- The parent-range **convention** — the rule that the covering range must not extend beyond the
-  exporter pool's own parent range. The rule is static and belongs in the contract. ⚠️ **The boundary
-  the rule refers to is not**, and the contract must not claim a value for it: carry the rule with a
-  null value rather than inventing one to fill the field.
+- **Allocation facts — whatever `topology.json` declares under a domain's `_allocations`.** These are
+  statements about what was RESERVED for a purpose, and they are static by nature: no harvest can
+  produce them, because devices carry configuration rather than allocation intent. For THIS
+  environment `fabric._allocations` declares that **no parent allocation exists**, so the
+  parent-range convention does not apply and the contract carries no boundary field at all — not a
+  null one to be filled in later.
 
 **Runtime → the DAG edge** (not knowable up front — see the rationale section):
 - The covering range — produced by the fabric leg, chained into each consumer's §6, settled before
   that consumer starts.
-- The pool's parent-range **boundary** — established by the fabric leg from its own live harvest
-  evidence, as a ceiling distinct from, and possibly wider than, the tight cover of the harvested
-  addresses. `topology.json` does not carry this value: its `fabric.exporterPool` section states
-  that pool facts are discoverable ONLY by harvesting both devices, and must not be inferred from a
-  range name or carried in from any other document. A leg that cannot establish the
-  boundary from its own evidence escalates — it does not assume the tight cover is the ceiling, and
-  it does not proceed without one.
+- ⚠️ **The parent-range boundary is NOT here, and is not runtime either — the obligation was
+  RETIRED on 2026-09-19.** It was asking a leg to derive an allocation fact from devices that cannot
+  hold one. Where a real allocation exists it is a DECLARED fact in `topology.json`
+  (`<domain>._allocations`); where none exists, as here, the check simply does not apply and
+  minimality is the control.
 
 ## Acceptance
 
