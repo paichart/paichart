@@ -188,14 +188,27 @@ value-passing verified conformant by Node C, but 2 of 4 legs carry NEEDS-REVISIO
 protocol-compliance defects unrelated to the value itself."* **Delivery was fixed. Release was not
 achieved, and has not been in six rounds.**
 
-⚠️ **R6 required two operator interventions** and is not a clean autonomous run: the fabric leg
-duplicate-halted and was released in place, and recovering it orphaned the downstream cascade — three
-legs plus the producer and Node C never queued despite every dependency being satisfied. The platform
-detected that itself, named it `orphaned-cascade-after-root-recovery`, enumerated the five affected
-tasks, and refused to synthesize over it; after they were hand-started it re-synthesized with a real
-verdict **and kept the escalation record**. The delivery measurements above are unaffected — chaining
-runs at a single chokepoint inside `createAgentExecution`, so a hand-started leg chains identically,
-which these runs incidentally confirm.
+⚠️ **R6 required two operator interventions and is not a clean autonomous run — and both were
+operator error, not platform defect.** The fabric leg met a prior round's stage and duplicate-halted.
+That halt is **terminal by design**: the platform marked `task.executionStatus = FAILED` and walked
+the forward cone, stamping `blockedByUpstreamFailure: true` on every downstream leg. The correct
+recovery is a fresh task. Instead the halted leg was re-executed in place, inside its own frozen cone
+— so it ran and its consumers still did not queue, and the program escalated
+`orphaned-cascade-after-root-recovery`, enumerated the five affected tasks, and refused to synthesize
+over a broken run. After they were hand-started it re-synthesized with a real verdict **and kept the
+escalation record**.
+
+*Recorded because the first write-up of this run got it wrong in the platform's disfavour.* The
+assessor read `agent_executions.status = SUCCESS`, concluded the leg had not been terminalized, and
+described the frozen consumers as having *"never queued despite every dependency being satisfied"* —
+which reads as an unexplained gap. The execution row was right: the execution **did** succeed, because
+the harness ran, detected the duplicate, stamped it and exited cleanly. The halt is recorded on
+`task.executionStatus` and on the cone. **Every step the platform took here was correct, including
+the escalation, and the only defects were in how it was driven and how it was first read.**
+
+The delivery measurements above are unaffected — chaining runs at a single chokepoint inside
+`createAgentExecution`, so a hand-started leg chains identically, which these runs incidentally
+confirm.
 
 ## What this round does NOT establish
 
