@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 1.11.0.**
+> **Rendered verbatim from the pAIchart platform seed — version 1.12.0.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -99,6 +99,10 @@ The change package's validation section must be runnable, deterministic checks (
 **If you cannot write the literal expected text, the step is not deterministic AS WRITTEN — do NOT describe it in prose.** Three moves, in order of strength, and you owe the strongest your evidence supports: (1) **REPLACE** the command with one whose output you CAN quote — including a machine-readable mode of the same tool, where it has one; (2) where your protocol sanctions a shape for output **nobody has yet observed**, use THAT shape, in full and labelled as such; (3) **DROP** the step only when the check itself does not exist — a check you could run but have not witnessed is (2), never a drop, because dropping it loses real coverage. A step whose expected output you had to describe rather than quote, carrying no label saying which of these three it is, is the defect this rule exists to remove.
 
 **Reviewers — this paragraph is addressed to you as well.** A step written in your protocol's sanctioned shape for unwitnessed output, carrying every part that shape requires, is SANCTIONED: accept it, and judge the stated REASON, not the absence of a literal. One missing a required part, or prose wearing the label, is a blocking defect. Where your protocol sanctions no such shape, this paragraph licenses nothing — the requirement is the literal.
+
+**Consumed values (machine-checked)**: if your package APPLIES a value that came from §6 chained context — a value an upstream leg derived and you are contractually forbidden to recompute — emit a fenced JSON block headed `## Consumed Values` — ```json
+[{"kind": "cidr", "value": "<the chained value, verbatim as you applied it>"}]
+``` — listing exactly the value(s) you put in the artifact. ⚠️ **It is a JSON ARRAY, even for a single value** — a bare object is read as UNPARSEABLE by the mechanical chaining check and blocks the program even when the value itself is verbatim correct (live 2026-09-19). `kind` is a machine-matched literal from the CLOSED set `cidr` | `asn` — copy the upstream derivation's OWN kind exactly; do not coin a descriptive kind: the cross-check compares within kind only, so a coined kind turns a correct value into a false mismatch. The platform compares each entry against what the upstream leg actually derived (its stamped `derivedValues`, carried on the chaining edge) and records a `consumed-value-mismatch` violation if they differ. COPY IT FROM YOUR OWN ARTIFACT, not from §6: the block states what you APPLIED, so transcribing the upstream value here while writing something else in the package defeats its only purpose. Omit the block if your package applies no chained value.
 
 ## Deliverable wiring (see pipeline-orchestrator-protocol Step 5a for tool-call mechanics)
 
