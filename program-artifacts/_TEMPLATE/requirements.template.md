@@ -362,6 +362,11 @@ the prose above, because two readings of the same sentence produce two different
   artifact by id, or a manual read naming the call — and confirmation that the inputs named
   below actually appear in it. `none — first run against this target` is a permitted answer;
   it declares the premise UNTESTED rather than hiding that inside a confident objective.}}
+  ⚠️ *YOU do this while authoring, once, before the run. It changes nothing at run time: every
+  leg still performs its own Phase 0 harvest, and **no agent reads another run's harvest** — a leg
+  reaching into another pipeline's evidence is a blocking defect, not a shortcut. Write the
+  OBSERVATION ("`state_list` returns X and Y only"), never the history ("last round failed
+  because…") — a prior round's narrative in this file reaches the Architect verbatim.*
 - {{THE WORK}}
 - {{THE DERIVATION, if any — see the derivation clauses below}}
 - **If the harvest returns no {{DERIVATION INPUTS}}**: {{THE NULL OUTCOME — normally a gap report
