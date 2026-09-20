@@ -358,6 +358,10 @@ the prose above, because two readings of the same sentence produce two different
 ## Pipeline 1 objective — {{DOMAIN_1}} {{(UPSTREAM)}}
 
 - Harvest {{TARGETS}} **read-only**. Service descriptor: `{{DESCRIPTOR_URL}}`
+- **Preconditions verified — {{WHEN}}**: {{WHICH HARVEST YOU READ — a prior run's harvest
+  artifact by id, or a manual read naming the call — and confirmation that the inputs named
+  below actually appear in it. `none — first run against this target` is a permitted answer;
+  it declares the premise UNTESTED rather than hiding that inside a confident objective.}}
 - {{THE WORK}}
 - {{THE DERIVATION, if any — see the derivation clauses below}}
 - **If the harvest returns no {{DERIVATION INPUTS}}**: {{THE NULL OUTCOME — normally a gap report
