@@ -1,6 +1,7 @@
 # VT-28 — an instruction bundled two blocks the parser needs apart
 
 **Status**: ✅ VERIFIED 2026-09-19 — first `programReleasable: true` for this objective, on round 8.
+**Fix validated 2026-09-20** on an independent run (see *The after-state* below).
 Drafted contemporaneously during the round. Re-verify trigger: any change to
 `parseFencedJsonBlock`'s heading regex, the `config_change_author` role guidance, or the
 network-provisioning Author clause naming `## Derived Values`.
@@ -181,3 +182,58 @@ Evidence: author task `cmu8w9xle0031yxkyt8ddtqqb` (executions `cmu8weck1006iyxkz
 `cmu81fbzc000hyxkzxi0jsbbk` (syntheses 80s → 94s @65 → 115s @85) · P2 `cmu81gnyn0014yxkz347laqi6` ·
 P3 `cmu81go07001ayxkz8upex7lh` · P4 `cmu81go25001gyxkzfg49u09x` · producer
 `cmu81hb62001syxkzvl2gecm1` · Node C `cmu81hb800020yxkz2l2qsnb2`.
+
+---
+
+## The after-state — the fix validated on an independent run (2026-09-20)
+
+R8 proved the **diagnosis**. It could not prove the **fix**, and the distinction is the whole point
+of this section: R8's leg was repaired by hand-editing the Author's task description, while what
+shipped is a protocol change that must make the *harness* compose a correct brief on its own. That
+link had never been exercised.
+
+**The change.** The placement rule was extracted to one shared `MARKER_PLACEMENT_CLAUSE(marker)` and
+interpolated at the **7 sites** where a role is told to emit or carry a machine-parsed block, across
+four domains — and network's and terraform's Phase 2 clauses were restructured so the two evidence
+blocks are two obligations rather than one section with an `Also carry` tail. Pinned by
+*reachability* (one definition, seven interpolations), not byte-equality of copies.
+
+**The run.** A fresh single-pipeline network-provisioning task — deliberately not a program: the
+defect is leg-internal (Phase 1 emits, Phase 2 carries), so a program would have added four legs,
+five human gates and several unrelated failure modes without adding signal. Its brief named **no
+heading, marker or placement rule**, and its PRE-FLIGHT CLEARANCE carried **stage ids only**. Had it
+mentioned the rule, the run would have tested the hint rather than the protocol.
+
+| | R8 (hand-fixed) | 2026-09-20 (unassisted) |
+|---|---|---|
+| Author `markerPresence` | `derived ✗` → `✓` **only after a hand-edited brief** | **`derived ✓ consumed ✓` first attempt** |
+| Reviewer | `approved: false`, 1 blocking → approved 90 | **approved 90, 0 blocking** |
+| Leg | 65 → 85, after a manual re-synthesis | **95** |
+| `derivationContainment` | absent → checked | **checked, 0 violations** |
+| Interventions | 3 | **0** |
+
+The harness's own composed brief is the evidence at the link R8 skipped. Its clause (e) reads
+*"carry forward ONLY **the two structured blocks** from the design (Pre-existing Allocations, Derived
+Values)"* — coordinate, no subordinating `and`, no `Also carry`, and `## Consumed Values` given its
+own lettered clause.
+
+### What this does NOT establish, recorded at the same weight
+
+- **n = 1**, on the domain the defect occurred in, on an objective this corpus has run many times.
+- **The two halves of the fix travel by different channels.** The harness condensed the protocol
+  when writing the brief and did **not** transcribe the placement sentence — the restructure reached
+  the brief, the sentence reached the Author only through the injected protocol. Both worked here;
+  they are not one mechanism and should not be reasoned about as one.
+- **Only network was exercised.** The other three domains carry the identical string by construction
+  (one const, reachability pinned), but no run has observed their behaviour.
+- **The rate is the real claim, and a run cannot answer it.** Corpus-wide placement failures measured
+  **~8** before the fix. A quarterly re-measure is recorded in the project's health-run checklist with
+  that baseline; a fall toward zero is the evidence, and it is the only evidence that scales.
+
+*Incidental but worth recording: this run surfaced a fact the engine states well —
+`contractApplicability(dialectLint): none expected (no-program-parent)`. A standalone pipeline has no
+interface contract, so the dialect check is structurally inapplicable rather than merely unrun, and
+the platform says which. That is the NOT-COMPARABLE-is-not-clean discipline, in the engine.*
+
+Evidence: leg `cmu91mlqf00g6yxkybfdo1cf7` · author `cmu9222mb0010yxygbk2uedqa` · reviewer
+`cmu922ap90017yxygl5cg75mw` · stage `cmu921biy000byxygkk6tgopg`.
