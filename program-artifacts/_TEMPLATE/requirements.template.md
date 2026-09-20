@@ -360,6 +360,8 @@ the prose above, because two readings of the same sentence produce two different
 - Harvest {{TARGETS}} **read-only**. Service descriptor: `{{DESCRIPTOR_URL}}`
 - {{THE WORK}}
 - {{THE DERIVATION, if any — see the derivation clauses below}}
+- **If the harvest returns no {{DERIVATION INPUTS}}**: {{THE NULL OUTCOME — normally a gap report
+  naming exactly what was absent and what would have to exist; NEVER a substitute value}}
 - **The deliverable MUST publish, explicitly and prominently**: {{THE CHAINED VALUES}} plus the
   reasoning for the choice. These are the inputs the downstream leg depends on.
 
@@ -384,6 +386,23 @@ Keep all of the following — every line is an incident.
   *Earned: Runs 5 and 6 lost on this directly; Run 12 compounded it.*
 - **Verify member-by-member** before publishing: every input is inside the derived result, and
   nothing foreign is.
+- ⚠️ **Verify the PREMISE before you write the objective — reachability is not sufficiency.** An
+  objective naming inputs the target does not hold is unsatisfiable, and the leg will either escalate
+  (correct) or find a value somewhere (plausible and wrong). Probing that the service ANSWERS proves
+  it is alive, not that it holds what you are about to ask about. Read a harvest — a fresh one or a
+  prior run's — before writing the derivation clause.
+  *Earned: 2026-09-20 — an objective asked for a cover over harvested private subnet CIDRs in a
+  workspace holding two resources and no subnets. All three endpoints had been probed and answered.*
+- 🔴 **STATE THE NULL CASE, always.** Say what the correct outcome is when the harvest yields no
+  inputs. An objective that only describes the success path forces improvisation at the worst layer:
+  the brief a harness composes at CREATE runs BEFORE the harvest, so it presupposes the derivation
+  and instructs a later agent to carry forward a block that may never exist. A named null outcome
+  ("produce a gap report; author nothing") is satisfiable; silence is not.
+  *Earned: 2026-09-20 — the Design correctly declined to derive from an empty harvest, and the Author,
+  holding a brief that demanded the block, imported a range from an unrelated pipeline and authored a
+  policy permitting writes from switch loopback addresses. Its reviewer graded the import a
+  non-blocking observation and approved at 92; the harness gate escalated and refused to release.
+  Re-run with the null case stated, it produced a correct gap report on the first attempt.*
 - 🔴 **The machine check is a FLOOR, not the bar.** A clean mechanical result is **not** evidence your
   derivation is correct — the checker verifies containment, not that you met the requirement.
   **Satisfy the requirements; do not target the checker.**
