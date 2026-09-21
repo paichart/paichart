@@ -1,7 +1,7 @@
 ## Writing rules — read before authoring, they are the expensive part
 
-These govern how you write **every other section**. Every one was earned by a failed or false-passing
-run.
+*Rules version: 2 — 2026-09-21.* These govern how you write **every other section**. Every one was
+earned by a failed or false-passing run.
 
 1. ⚠️ **"Deterministic validation" means a reviewer can run it and compare, without judgement.**
    Every validation step is an **exact command** plus its **exact expected output** — the literal text
@@ -17,9 +17,14 @@ run.
 
 3. 🔴 **State what must be TRUE. Do NOT name the measure that reports it.**
    Where a requirement can be written as a **property**, write the property — not the stamp shape, not
-   the reason code, not the violation class, not `violations: []`. Every agent reads this file, so a
-   machine pass-condition written here becomes **a target an agent can aim at instead of the
+   the reason code, not the violation class, not `violations: []`. The **Program Architect** reads this
+   file and composes every brief from it, so a machine pass-condition written here propagates into
+   prompts **nobody inspects**, and becomes **a target an agent can aim at instead of the
    requirement**. Let the platform own the string.
+   *Mechanism corrected 2026-09-21; the OBLIGATION is unchanged. This said "every agent reads this
+   file". Measured: 0 of 197 change-package-author legs ever received this document, and the
+   Architect is the only verbatim reader (66 of 92 executions). The hazard is WORSE than originally
+   stated — the string reaches agents as a paraphrase nobody reviews.*
    *Earned: Run 15 (2026-07-29) — a leg met a published pass condition that was weaker than the
    requirement beside it, and shipped a defect. Declaring such a string "reference data" limits the
    damage; omitting it removes the temptation.*

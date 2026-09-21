@@ -73,13 +73,35 @@ def main():
     # legitimately carries a 17-line DO-NOT-AUTHOR blockquote alongside the marker, so a clean
     # copy-and-insert was reported as "the section was AUTHORED" — a confident false finding on
     # the correct path. Test for canonical CONTENT, not for length.
+    # ⚠️ Compare against canonical BODY, never canon[0]: the heading is present in both a
+    # marker-only section and a fully-spliced one, so including it makes marker_only ALWAYS false
+    # and the correct path reports "AUTHORED". (I broke it that way on 2026-09-21 while editing
+    # this function, one commit after it was fixed.)
     canon_body = {l.strip() for l in canon[1:] if len(l.strip()) > 40}
     marker_only = (any('<!-- WRITING-RULES -->' in l for l in doc[s:e])
-                   and not any(l.strip() in canon_body for l in present))
+                   and not any(l.strip() in canon_body for l in doc[s:e]))
+
+    # OUTDATED is not ALTERED. Canonical carries a `Rules version: N` line that travels with the
+    # splice, so a document produced against an older canonical can be told apart from one whose
+    # rules were tampered with. Without this the tool reports both as "DIFFERS", and the whole point
+    # of it is detecting alteration — a check that cannot distinguish the two is a check you learn
+    # to ignore. (Earned 2026-09-21: correcting a measured-false claim in rule 3 would otherwise have
+    # made all 6 existing produced documents read as defective.)
+    def ver(block):
+        for l in block:
+            if 'Rules version:' in l:
+                return l.split('Rules version:')[1].split('—')[0].strip(' *.,')
+        return None
+    v_doc, v_canon = ver(doc[s:e]), ver(canon)
     if mode == '--check':
         print(f"✗ {path}: writing-rules section DIFFERS from canonical.")
         if marker_only:
             print("  (section holds the marker — run --insert to splice the rules in)")
+        elif v_doc and v_canon and v_doc != v_canon:
+            print(f"  OUTDATED, not altered: document carries rules v{v_doc}, canonical is v{v_canon}.")
+            print("  An archived run legitimately carries the rules that were canonical when it was")
+            print("  produced. Re-splice only if you intend to change what that run was held to.")
+            return 1
         else:
             d = [x for x in difflib.unified_diff(expect, present, 'canonical', path, lineterm='', n=0)][:14]
             print("  first differences:")
