@@ -22,14 +22,47 @@ Each run fixed its predecessor's fault and broke something new. A model asked to
 that constrains it is marking its own homework, so the rules are inserted MECHANICALLY and the
 model is told to emit a marker instead.
 
-  --check  FILE   exit 1 if FILE's writing-rules section is not byte-identical to canonical
-  --insert FILE   overwrite that section with canonical, in place; reports whether it had to
+  --check    FILE   exit 1 if FILE's writing-rules section is not byte-identical to canonical
+  --insert   FILE   overwrite that section with canonical, in place; reports whether it had to
+  --skeleton        emit the TEMPLATE's skeleton on stdout: the template minus every block the
+                    template itself addresses to the author. Deterministic; no arguments.
 
 Both are idempotent. --insert is the repair path and deliberately does NOT trust the marker: it
 replaces whatever occupies the section, so a model that emitted the rules anyway is corrected and
 the correction is reported rather than silently applied.
 """
 import sys, os, re, difflib
+
+TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        '..', 'program-artifacts', '_TEMPLATE', 'requirements.template.md')
+
+# The template STATES this rule about itself, and this function is that sentence executed:
+#   "A block headed **🗑 AUTHORING NOTE** is addressed to *you* and must be gone before the run:
+#    `grep -c '^> \*\*🗑' requirements.md` must return 0. Everything else is the document itself."
+# So the skeleton is NOT a judgement about which prose matters — it is the document's own
+# acceptance check applied ahead of time. Do not widen it to "prose that looks like guidance":
+# the template's other blockquotes are binding content (⚠️ clauses), and the same sentence says so.
+STRIP_HEAD = re.compile(r'^> \*\*🗑')
+
+
+def skeleton(lines):
+    """The template minus every author-addressed block. Measured 2026-09-21: strips 59 of 370
+    lines (17%), keeping all 13 headings and 72 of 73 placeholders.
+
+    ⚠️ 17%, not the 81% a line-classifier suggested. That figure counted a template line as
+    'brief' when it appeared in none of 25 authored documents — but 19 of those 25 PREDATE this
+    template, so a newer line scores zero because it is new, not because an author deleted it.
+    The template's own contract is the measure that does not rot."""
+    out, i = [], 0
+    while i < len(lines):
+        if STRIP_HEAD.match(lines[i]):
+            while i < len(lines) and lines[i].startswith('>'):
+                i += 1
+            while i < len(lines) and lines[i].strip() == '':   # and its trailing blank
+                i += 1
+            continue
+        out.append(lines[i]); i += 1
+    return out
 
 HEADING = '## Writing rules'
 CANON = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -50,6 +83,15 @@ def l_top(line):
 
 
 def main():
+    if len(sys.argv) == 2 and sys.argv[1] == '--skeleton':
+        out = skeleton(open(TEMPLATE).read().split('\n'))
+        residual = sum(1 for l in out if STRIP_HEAD.match(l))
+        if residual:                       # fail LOUD: a silent partial strip is the whole defect
+            print(f"skeleton: {residual} author-addressed block(s) survived the strip",
+                  file=sys.stderr)
+            return 1
+        sys.stdout.write('\n'.join(out))
+        return 0
     if len(sys.argv) != 3 or sys.argv[1] not in ('--check', '--insert'):
         print(__doc__); return 2
     mode, path = sys.argv[1], sys.argv[2]

@@ -163,7 +163,7 @@ Fill the table with both columns, never just the first:
 |---|---|---|---|---|
 | program plan | the plan and the interface contract | the Program Architect | every leg | {{NAME}} |
 | {{DOMAIN_1}} change | {{WHAT — and if it is a produced value, NAME ITS PRODUCER}} | {{WHAT MUST FINISH FIRST}} | {{WHICH LEG IT BLOCKS}} | {{NAME_1}} |
-| {{DOMAIN_2}} change | {{…}} | {{…}} | {{…}} | {{NAME_2}} |
+| {{DOMAIN_2}} change | {{WHAT — and if it is a produced value, NAME ITS PRODUCER}} | {{WHAT MUST FINISH FIRST}} | {{WHICH LEG IT BLOCKS}} | {{NAME_2}} |
 
 ⚠️ **Write "the value produced by X", never a bare "the PRODUCED value".** A bare "PRODUCED" has no
 producer, and the phrase that follows it usually attaches the value to the CONSUMER's artifact
@@ -211,7 +211,7 @@ the prose above, because two readings of the same sentence produce two different
   leg still performs its own Phase 0 harvest, and **no agent reads another run's harvest** — a leg
   reaching into another pipeline's evidence is a blocking defect, not a shortcut. Write the
   OBSERVATION ("`state_list` returns X and Y only"), never the history ("last round failed
-  because…") — a prior round's narrative in this file reaches the Architect verbatim.*
+  because...") — a prior round's narrative in this file reaches the Architect verbatim.*
 - {{THE WORK}}
 - {{THE DERIVATION, if any — see the derivation clauses below}}
 - **If the harvest returns no {{DERIVATION INPUTS}}**: {{THE NULL OUTCOME — normally a gap report
@@ -340,7 +340,7 @@ Keep all of the following — every line is an incident.
 
 - 🔴 ⚠️ **THE CHECK NUMBERS ABOVE ARE FIXED. A NEW CLAUSE MAY NOT TAKE ONE.** They are referenced by
   number from elsewhere in this document and from the protocol; renumbering, merging, or substituting
-  one **silently deletes it**. If a new requirement needs a number, it **APPENDS** (5, 6, …).
+  one **silently deletes it**. If a new requirement needs a number, it **APPENDS** (5, 6, ...).
   *Earned: Run 15 (2026-07-29) — a new clause was added to this file and the reviewer renumbered it
   into slot **2b**, the minimality check, which it then never performed. A non-minimal result shipped
   as a result. This is the single most expensive defect this template prevents.*
