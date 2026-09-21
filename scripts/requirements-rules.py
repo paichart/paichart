@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 """Splice the canonical writing rules into a produced requirements.md — and verify they survived.
 
-WHY (2026-09-21): the writing rules must reach the produced document VERBATIM, because
-change-package authors read that document and never the template. Three independent authoring
-passes over the same template each altered them while transcribing, and no two broke the same
-thing:
+WHY (2026-09-21): the writing rules must reach the produced document VERBATIM.
+
+NOT because change-package authors read that document — measured the same day, that is FALSE and
+always was: 0 of 197 author legs ever received requirements.md on the brief or chained-context
+channel. The PROGRAM ARCHITECT reads it verbatim (66 of 92 executions), is the only role that does,
+and composes every brief from what it reads. So an altered rule does not mislead one agent; it
+propagates into prompts nobody inspects.
+
+Three independent authoring passes over the same template each altered the rules while
+transcribing, and no two broke the same thing:
 
   * one loosened rule 1's permitted forms ("or a named property" — a phrase absent from the
     template) and dropped rule 5 entirely, then hardcoded the value rule 5 forbids;
@@ -62,7 +68,14 @@ def main():
         print(f"✓ {path}: writing rules are byte-identical to canonical ({len(expect)} non-blank lines).")
         return 0
 
-    marker_only = any('<!-- WRITING-RULES -->' in l for l in doc[s:e]) and len(present) < 15
+    # "Marker only" means the section holds the marker and NONE of the canonical rule text.
+    # This used to be `len(present) < 15`, which misfired on the template itself: the section
+    # legitimately carries a 17-line DO-NOT-AUTHOR blockquote alongside the marker, so a clean
+    # copy-and-insert was reported as "the section was AUTHORED" — a confident false finding on
+    # the correct path. Test for canonical CONTENT, not for length.
+    canon_body = {l.strip() for l in canon[1:] if len(l.strip()) > 40}
+    marker_only = (any('<!-- WRITING-RULES -->' in l for l in doc[s:e])
+                   and not any(l.strip() in canon_body for l in present))
     if mode == '--check':
         print(f"✗ {path}: writing-rules section DIFFERS from canonical.")
         if marker_only:
