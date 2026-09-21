@@ -5,15 +5,48 @@
 > it. They read as verbose until you know what they cost; the provenance is there so you can check
 > before removing.
 >
+> **Two registers, and the strip rule is mechanical.** A block headed **🗑 AUTHORING NOTE** is
+> addressed to *you* and must be gone before the run: `grep -c '^> \*\*🗑' requirements.md` must
+> return **0**. Everything else is the document itself. Keep the ⚠️ clauses inside it.
+>
+> **Who reads the result — measured 2026-09-21, and it is not who this file used to say.** The
+> **Program Architect** fetches your produced `requirements.md` and is the only role that sees it
+> verbatim (66 of 92 executions). **No agent downstream does** — 0 of 197 change-package-author legs
+> received it on the brief or chained-context channel. So your two readers are the Architect and the
+> **human approving the plan**. The Architect needs the platform vocabulary (`leg`, `gate`,
+> `pipeline`, `DAG`, chained context) because it is wiring a graph; the human needs to see what they
+> must supply. That is what the two registers are for.
+>
+> **The single most transferable rule in this file** is the one at *Writing rules* #3: **state what
+> must be TRUE, never the string that reports it.** A machine pass-condition written here is a target
+> an agent can aim at *instead of* the requirement — and hitting the target while missing the
+> requirement is the entire failure mode. ⚠️ *Rule 3 states its mechanism as "every agent reads this
+> file". That is the pre-2026-09-21 belief and it is false; the **obligation is unchanged**, because
+> the Architect's plan propagates any string you write here into every brief it composes. Indirect,
+> and it is the mechanism that operates. An obligation you need a change-package AUTHOR to obey
+> belongs in its protocol, not here.*
+>
 > **Why this template exists.** Before 2026-08-10 each run copy-forked the previous run's
 > `requirements.md`. Twelve of the thirteen were ~1.9 KB and carried none of the accumulated lessons;
 > one had grown to 22.9 KB and carried all of them *plus* another run's topology to strip out. The
 > durable know-how and the run instance were sharing a document. This is the durable half.
+
+> **🗑 AUTHORING NOTE — what you must supply.** The authoritative list is the placeholders
+> themselves: `grep -o '{{[^}]*}}' requirements.md | sort -u`. That count must reach **0** before the
+> run. *(No absolute number is stated here on purpose — this table gained two rows the same hour a
+> count was written into it, and a literal that rots on healthy edits is worse than no literal.)*
 >
-> **The single most transferable rule in this file** is the one at *Writing rules* #3: **state what
-> must be TRUE, never the string that reports it.** Every agent reads this document, so a machine
-> pass-condition written here is a target an agent can aim at *instead of* the requirement — and
-> hitting the target while missing the requirement is the entire failure mode.
+> | section | you supply |
+> |---|---|
+> | header | POV, phase, run id, date |
+> | Program scope | leg count · sequenced or parallel · each DOMAIN with its target and up/downstream role · what is explicitly out of scope |
+> | Why this is sequenced | the rationale — why the crossing value is not knowable up front |
+> | Approvals | every approver's role, name and email (all must be POV team members) · one table row per gate carrying **both** *approves* and *runs AFTER* · both DAG edges spelled out |
+> | Pipeline 1 | harvest targets · service descriptor URL · preconditions you verified, and when · the work · the derivation · the **null outcome** · the chained values it must publish |
+> | Pipeline 2 | the same fields, plus the consumed value it must **not** re-derive |
+> | Design constraints | static constants for the interface contract · runtime values for the DAG edge, each naming its producing and consuming leg |
+> | Acceptance | Node C checks 1, 2, 2b, 3 — **the numbers are fixed; a new check APPENDS** |
+> | Optional | consuming-leg attribution — keep only if a downstream leg genuinely cannot self-check |
 
 - POV: {{POV_NAME}}
 - Phase: {{PHASE_NAME}}
@@ -45,41 +78,41 @@
 
 ## Program scope
 
-### What counts as a DOMAIN — read this before writing the list below
-
-🔴 **A domain is a PROTOCOL/target class, not a device and not a phase.** Each domain becomes one
-pipeline (one "leg"): one protocol, one specialist chain, one gate. Get this wrong and everything
-downstream is wrong — the DAG, the gate count, the interface contract, and what Node C compares.
-
-**The test, and it is mechanical: WHICH PROTOCOL WOULD AUTHOR THIS?** If two pieces of work would be
-authored by the *same* protocol against the *same* class of target, they are **one domain**, however
-many devices, files or accounts are involved.
-
-A separate leg is warranted by exactly two things:
-
-| warrant | example |
-|---|---|
-| **a different protocol / target class** — a *domain* split | `network-provisioning` + `terraform-iac` + `kubernetes-gitops` + `observability-config` = four domains |
-| **a value or state the next leg needs that ONLY the previous leg can produce** — a *phase* split, necessarily sequenced | an IGP migration where the cutover leg must target the exact NET the coexistence leg assigned |
-
-**These do NOT warrant a separate leg:**
-
-- ⚠️ **Device count.** Two switches either side of one link are **ONE** network domain. A leg
-  harvests every device in its scope and authors per-device configuration as a matter of course.
-  *Earned 2026-09-21: an authoring pass split a 2-node IGP migration into "ceos1 enablement" and
-  "ceos2 enablement" as two parallel domains. Its reasoning was sound — it applied the
-  sequenced/parallel test correctly and even distinguished an apply-time operational precondition
-  from a data dependency — but nothing had told it that a device is not a domain.*
-- ⚠️ **Wanting a separate approval.** A gate is attached to a leg; needing a second approver does not
-  create a second leg. If two approvers must sign one body of work, that is one leg with a gate whose
-  description names both, or a human process outside the program.
-- ⚠️ **Tidiness.** Splitting to make each leg smaller multiplies gates, contracts and chaining edges —
-  every one of which is a place a value can fail to arrive.
-
-**Sanity check before you write the list:** count your domains and ask what protocol each resolves
-to. Two entries resolving to the same protocol against the same targets is the error above, unless
-the second is a *phase* that consumes something the first produces — in which case say so in *Why this
-is sequenced*, and it must take the direct edge described under Approvals.
+> **🗑 AUTHORING NOTE — what counts as a DOMAIN.** Read it, write the list, delete this block.
+>
+> 🔴 **A domain is a PROTOCOL/target class, not a device and not a phase.** Each domain becomes one
+> pipeline (one "leg"): one protocol, one specialist chain, one gate. Get this wrong and everything
+> downstream is wrong — the DAG, the gate count, the interface contract, and what Node C compares.
+>
+> **The test, and it is mechanical: WHICH PROTOCOL WOULD AUTHOR THIS?** If two pieces of work would
+> be authored by the *same* protocol against the *same* class of target, they are **one domain**,
+> however many devices, files or accounts are involved.
+>
+> A separate leg is warranted by exactly two things:
+>
+> | warrant | example |
+> |---|---|
+> | **a different protocol / target class** — a *domain* split | `network-provisioning` + `terraform-iac` + `kubernetes-gitops` + `observability-config` = four domains |
+> | **a value or state the next leg needs that ONLY the previous leg can produce** — a *phase* split, necessarily sequenced | an IGP migration where the cutover leg must target the exact NET the coexistence leg assigned |
+>
+> **These do NOT warrant a separate leg:**
+>
+> - ⚠️ **Device count.** Two switches either side of one link are **ONE** network domain. A leg
+>   harvests every device in its scope and authors per-device configuration as a matter of course.
+>   *Earned 2026-09-21: an authoring pass split a 2-node IGP migration into "ceos1 enablement" and
+>   "ceos2 enablement" as two parallel domains. Its reasoning was sound — it applied the
+>   sequenced/parallel test correctly and even distinguished an apply-time operational precondition
+>   from a data dependency — but nothing had told it that a device is not a domain.*
+> - ⚠️ **Wanting a separate approval.** A gate is attached to a leg; needing a second approver does
+>   not create a second leg. If two approvers must sign one body of work, that is one leg with a gate
+>   whose description names both, or a human process outside the program.
+> - ⚠️ **Tidiness.** Splitting to make each leg smaller multiplies gates, contracts and chaining
+>   edges — every one of which is a place a value can fail to arrive.
+>
+> **Sanity check before you write the list:** count your domains and ask what protocol each resolves
+> to. Two entries resolving to the same protocol against the same targets is the error above, unless
+> the second is a *phase* that consumes something the first produces — in which case say so in *Why
+> this is sequenced*, and it must take the direct edge described under Approvals.
 
 - {{N}} **legs** (pipelines), executed **{{IN SEQUENCE | IN PARALLEL}}**. A leg is either a distinct
   DOMAIN or a PHASE of one — see the definition above; do not call two phases of one protocol two
@@ -244,10 +277,28 @@ Keep all of the following — every line is an incident.
 
 ## Pipeline 2 objective — {{DOMAIN_2}} {{(DOWNSTREAM)}}
 
+> **🗑 AUTHORING NOTE.** A downstream leg still harvests its own domain, still has preconditions, and
+> still has a null case. Give it the SAME fields as Pipeline 1 — consuming a chained value replaces
+> nothing. *Measured 2026-09-21: 3 of 3 downstream sections in produced documents carry a harvest
+> bullet with a descriptor URL and an existence assumption, all three written from scratch because
+> this section offered no slot for them.*
+
+- Harvest {{TARGETS}} **read-only**. Service descriptor: `{{DESCRIPTOR_URL}}`
+- **Preconditions verified — {{WHEN}}**: {{WHICH HARVEST YOU READ, and confirmation that the targets
+  below appear in it. `none — first run against this target` is a permitted answer.}}
 - {{THE WORK}}
+- **Existence assumption** (*Writing rules* #6): {{WHETHER THE TARGET RESOURCE EXISTS IN HARVESTED
+  STATE, and the expected outcome if it does not — e.g. "the bucket exists; a bucket POLICY may not;
+  CREATE of the policy is expected"}}
 - {{If it CONSUMES a chained value}}: it consumes {{VALUE}} **as chained** — it does **not** re-derive
   it, and is forbidden from recomputing it. Containment for that value is discharged **upstream** and
   re-verified at the program tier.
+  - **If §6 does not carry it**: escalate. Do not guess, do not substitute, do not proceed.
+- **If this leg's own harvest returns no {{TARGETS}}**: {{THE NULL OUTCOME}}. The
+  🔴 **STATE THE NULL CASE** clause under Pipeline 1 is not derivation-specific — it was earned by a
+  *downstream* author improvising against a brief that presupposed a block its harvest never produced.
+- {{If a FURTHER leg consumes from this one}}: **the deliverable MUST publish, explicitly and
+  prominently**: {{THE CHAINED VALUES}} — the same obligation Pipeline 1 carries.
 
 ## Design constraints — split across the contract and the DAG
 
@@ -262,13 +313,17 @@ Keep all of the following — every line is an incident.
 - Each change package must include deterministic validation with expected outputs (per *Writing rules*
   #1 and #2) and a rollback plan.
   > ⚠️ **This line cites *Writing rules* by number, so CARRY THAT SECTION into the document you
-  > produce.** The rules govern how change-package authors write validation, and those authors read
-  > only your produced file — never this template. A citation whose target did not travel is a
-  > dangling reference: the author is held to numbered rules it cannot read, and nothing reports it.
-  > *(Live 2026-09-18: one artifact of six omitted the section. Two consumer legs were then blocked
-  > for violating rule 1 — prose where an exact command plus literal output was required — having
-  > been pointed at a rule that was not in front of them. Either carry the section, or replace this
-  > citation with the requirement stated inline; do not leave the number pointing at nothing.)*
+  > produce** — splice it, do not retype it (see the *Writing rules* heading above).
+  > ⚠️ *The reason given here until 2026-09-21 was "change-package authors read your produced file and
+  > never the template". **Measured, that is false and always was**: 0 of 197 author legs received
+  > this file on any channel. The obligation stands on a different mechanism — the **Program
+  > Architect** reads your file verbatim and composes every brief from it, so a number pointing at a
+  > section that did not travel is a rule the Architect cannot resolve and therefore cannot
+  > propagate. Nothing reports the dangling reference.*
+  > *(Live 2026-09-18: one artifact of six omitted the section, and two consumer legs were blocked
+  > for violating rule 1 — prose where an exact command plus literal output was required. Either
+  > carry the section, or replace this citation with the requirement stated inline; do not leave the
+  > number pointing at nothing.)*
 - **Apply is out-of-band and human-gated in every domain.** This program produces approved change
   packages only — never applied changes.
 

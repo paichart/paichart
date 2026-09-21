@@ -6,7 +6,20 @@ Two files define a program run. Copy both, replace the placeholders, delete what
 cp -r program-artifacts/_TEMPLATE program-artifacts/<run-name>
 mv <run-name>/requirements.template.md <run-name>/requirements.md
 mv <run-name>/topology.example.json    <run-name>/topology.json
-rm <run-name>/README.md
+rm <run-name>/README.md <run-name>/writing-rules.md   # both are template-side only
+scripts/requirements-rules.py --insert <run-name>/requirements.md   # splice the canonical rules
+```
+
+`writing-rules.md` is deleted from the run directory on purpose: the splice reads the canonical copy
+in `_TEMPLATE`, and a second copy sitting in a run directory is the copy-fork this template exists to
+end.
+
+**Before you hand the file to a run**, two mechanical checks:
+
+```bash
+grep -c '^> \*\*🗑' <run-name>/requirements.md                    # must be 0 — author-only blocks
+grep -o '{{[^}]*}}' <run-name>/requirements.md | sort -u | wc -l # must be 0 — unfilled placeholders
+scripts/requirements-rules.py --check <run-name>/requirements.md # rules byte-identical to canonical
 ```
 
 | file | what it is |
@@ -83,6 +96,30 @@ rules shape the Architect's plan, and the plan shapes every brief — indirect, 
 actually operates. **An obligation you need a change-package AUTHOR to obey belongs in its protocol,
 not here.**
 
+### The fifteen rules in one line each — so you can find the one you need
+
+This index is **for the human**. It is not spliced anywhere and is not a substitute: each rule in
+`writing-rules.md` carries its rationale and the run that earned it, and those are what let you
+judge whether a rule still applies. Read the index to locate, read the rule to decide.
+
+| # | the obligation |
+|---|---|
+| 1 | Every validation step is an **exact command plus its exact expected output**. Prose is a rejectable defect. |
+| 2 | **Ship every artefact your validation cites** — in full, runnable. Citing a check you did not ship is not validation. |
+| 3 | 🔴 **State what must be TRUE; never name the measure that reports it.** |
+| 4 | Expected values stated here are **reference data, never evidence**. A tier retrieves the actual value. |
+| 5 | Write **properties, not hardcoded values**, wherever the environment can be rebuilt. |
+| 6 | **State every existence assumption** a leg's objective rests on, and the expected outcome if the resource is absent. |
+| 7 | **A constraint that exists only by convention does not exist for the agents.** Write it, or accept the value. |
+| 8 | **State the platform dialect** for any protocol absent from harvest. Prefer a complete positive exemplar — but do not rely on it holding; its durable value is as the lint's specification. Completeness is the half that hides. |
+| 9 | **An unharvestable validation target does not license prose** — derive literals from topology facts, and/or mandate an operator-captured baseline byte-diff. |
+| 10 | A `[NEUTRALIZED-…]` marker in **chained** context is a view-layer annotation. Report it as an observation; never block a document on it. |
+| 11 | **Every validation step must be satisfiable** under the phase's own constraints. |
+| 12 | 🔴 Rule 3 governs **every channel an agent reads** — task descriptions, gate comments, run notes. Never name a prior round's defect token. |
+| 13 | A value the evidence source does not carry must be **labelled DERIVED with its basis named** — and check this document first, the defect is often here. |
+| 14 | **A numbered acceptance check keeps its number** for the life of the program family. Narrow honestly; never renumber. |
+| 15 | 🔴 **A crossing value always names its producer** — and any term the acceptance checks turn on must be defined where it is used. |
+
 ## The rules are tagged with the run that earned them
 
 Every ⚠️ clause in `requirements.template.md` names the run it came from. That is deliberate: these
@@ -98,9 +135,16 @@ check.**
 
 > **State what must be TRUE. Do not name the string that reports it.**
 
-Every agent in the program reads `requirements.md`. A machine pass-condition written there becomes a
-**target an agent can aim at instead of the requirement** — and hitting the target while missing the
-requirement is the failure mode this whole template exists to prevent.
+A machine pass-condition written in `requirements.md` becomes a **target an agent can aim at instead
+of the requirement** — and hitting the target while missing the requirement is the failure mode this
+whole template exists to prevent.
+
+⚠️ **This section used to say "every agent in the program reads `requirements.md`", and the measured
+answer is that only the Program Architect does.** The rule is unchanged; its mechanism is indirect.
+The Architect reads your file verbatim and composes every brief from it, so a string you write here
+propagates into prompts you never see. Writing rule 3 still carries the old wording — it is spliced
+verbatim into produced documents and was left alone deliberately; correcting it changes every future
+document and is a separate decision.
 
 Declaring such a string "reference data" limits the damage. Omitting it removes the temptation.
 
