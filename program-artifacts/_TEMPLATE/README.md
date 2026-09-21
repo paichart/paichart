@@ -53,6 +53,36 @@ sharing a document.
 
 This directory is the durable half. Instances stay small.
 
+## The writing rules live in their own file and are SPLICED IN, not typed
+
+`writing-rules.md` is the single canonical copy. `requirements.template.md` carries only the heading
+and a `<!-- WRITING-RULES -->` marker where they belong.
+
+```bash
+scripts/requirements-rules.py --insert  my-program/requirements.md   # splice canonical rules in
+scripts/requirements-rules.py --check   my-program/requirements.md   # verify byte-identical
+```
+
+**Why it is mechanical.** The rules must land in the produced document unaltered. Three independent
+authoring passes over this template each altered them while transcribing, and no two broke the same
+thing: one loosened rule 1's permitted forms and dropped rule 5, then hardcoded the value rule 5
+forbids; one deleted acceptance check 3, the exact defect the carried rule 14 exists to prevent; one
+dropped the rule numbering and then cited rules by number. Every one still *read* correct. **A model
+asked to transcribe a rule that constrains it is marking its own homework**, so it is told to emit a
+marker and the text is spliced in.
+
+`--insert` does not trust the marker: it replaces whatever occupies the section, so a document whose
+rules were written out by hand or by a model is repaired **and told it was repaired**. `--check`
+prints a diff rather than a verdict, because an altered rule that reads correct is how all three
+defects hid.
+
+⚠️ **Who actually reads these rules — measured 2026-09-21.** The **Program Architect**, which fetches
+`requirements.md` and is the only role that sees it verbatim (66 of 92 executions). **No agent
+downstream does**: 0 of 197 change-package-author legs on the brief or chained-context channel. The
+rules shape the Architect's plan, and the plan shapes every brief — indirect, and the mechanism that
+actually operates. **An obligation you need a change-package AUTHOR to obey belongs in its protocol,
+not here.**
+
 ## The rules are tagged with the run that earned them
 
 Every ⚠️ clause in `requirements.template.md` names the run it came from. That is deliberate: these
