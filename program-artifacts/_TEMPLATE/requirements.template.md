@@ -448,6 +448,20 @@ Keep all of the following — every line is an incident.
   policy permitting writes from switch loopback addresses. Its reviewer graded the import a
   non-blocking observation and approved at 92; the harness gate escalated and refused to release.
   Re-run with the null case stated, it produced a correct gap report on the first attempt.*
+- 🔴 **RUN YOUR OWN RULE. A stated derivation rule and the value it publishes are two artifacts, and
+  nothing else checks they agree.** Apply the rule you wrote, literally and step by step, to one
+  input, and confirm it produces the value you published — including the WIDTH of the result. Every
+  other instruction here verifies the VALUE (is it minimal, is it contained, does it trace to a
+  harvested input); this one verifies the RULE. A rule that does not produce its own output ships a
+  correct-looking value with a wrong method, and every downstream tier that "recomputes using the
+  stated convention" then fails against a value that is actually right.
+  *Earned 2026-09-21: an authoring pass wrote "zero-pad each octet to 4 hex digits and concatenate",
+  which yields 16 hex digits, and published a well-formed 12-digit identifier — one group shorter
+  than its own rule produces. The published value was correct; the stated method could not have
+  produced it. Its own reviewer check said "recompute using the stated convention", which would have
+  mismatched a correct value. Two other passes over the same objective used a self-consistent
+  convention and agreed with each other, so this is a per-run slip, not a general one — which is
+  exactly why a mechanical self-check belongs here rather than a house convention.*
 - 🔴 **The machine check is a FLOOR, not the bar.** A clean mechanical result is **not** evidence your
   derivation is correct — the checker verifies containment, not that you met the requirement.
   **Satisfy the requirements; do not target the checker.**
