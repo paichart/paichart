@@ -271,6 +271,42 @@ run.
 
 ## Program scope
 
+### What counts as a DOMAIN — read this before writing the list below
+
+🔴 **A domain is a PROTOCOL/target class, not a device and not a phase.** Each domain becomes one
+pipeline (one "leg"): one protocol, one specialist chain, one gate. Get this wrong and everything
+downstream is wrong — the DAG, the gate count, the interface contract, and what Node C compares.
+
+**The test, and it is mechanical: WHICH PROTOCOL WOULD AUTHOR THIS?** If two pieces of work would be
+authored by the *same* protocol against the *same* class of target, they are **one domain**, however
+many devices, files or accounts are involved.
+
+A separate leg is warranted by exactly two things:
+
+| warrant | example |
+|---|---|
+| **a different protocol / target class** — a *domain* split | `network-provisioning` + `terraform-iac` + `kubernetes-gitops` + `observability-config` = four domains |
+| **a value or state the next leg needs that ONLY the previous leg can produce** — a *phase* split, necessarily sequenced | an IGP migration where the cutover leg must target the exact NET the coexistence leg assigned |
+
+**These do NOT warrant a separate leg:**
+
+- ⚠️ **Device count.** Two switches either side of one link are **ONE** network domain. A leg
+  harvests every device in its scope and authors per-device configuration as a matter of course.
+  *Earned 2026-09-21: an authoring pass split a 2-node IGP migration into "ceos1 enablement" and
+  "ceos2 enablement" as two parallel domains. Its reasoning was sound — it applied the
+  sequenced/parallel test correctly and even distinguished an apply-time operational precondition
+  from a data dependency — but nothing had told it that a device is not a domain.*
+- ⚠️ **Wanting a separate approval.** A gate is attached to a leg; needing a second approver does not
+  create a second leg. If two approvers must sign one body of work, that is one leg with a gate whose
+  description names both, or a human process outside the program.
+- ⚠️ **Tidiness.** Splitting to make each leg smaller multiplies gates, contracts and chaining edges —
+  every one of which is a place a value can fail to arrive.
+
+**Sanity check before you write the list:** count your domains and ask what protocol each resolves
+to. Two entries resolving to the same protocol against the same targets is the error above, unless
+the second is a *phase* that consumes something the first produces — in which case say so in *Why this
+is sequenced*, and it must take the direct edge described under Approvals.
+
 - {{N}} delivery domains, executed **{{IN SEQUENCE | IN PARALLEL}}**:
   1. **{{DOMAIN_1}}** ({{UPSTREAM|—}}) on {{TARGET_1}}, described in `topology.json`.
   2. **{{DOMAIN_2}}** ({{DOWNSTREAM|—}}) on {{TARGET_2}}.
