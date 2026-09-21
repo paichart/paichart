@@ -23,7 +23,7 @@
 
 ## Writing rules — read before authoring, they are the expensive part
 
-These govern how you write **every other section**. All four were earned by a failed or false-passing
+These govern how you write **every other section**. Every one was earned by a failed or false-passing
 run.
 
 1. ⚠️ **"Deterministic validation" means a reviewer can run it and compare, without judgement.**
@@ -307,7 +307,9 @@ to. Two entries resolving to the same protocol against the same targets is the e
 the second is a *phase* that consumes something the first produces — in which case say so in *Why this
 is sequenced*, and it must take the direct edge described under Approvals.
 
-- {{N}} delivery domains, executed **{{IN SEQUENCE | IN PARALLEL}}**:
+- {{N}} **legs** (pipelines), executed **{{IN SEQUENCE | IN PARALLEL}}**. A leg is either a distinct
+  DOMAIN or a PHASE of one — see the definition above; do not call two phases of one protocol two
+  domains:
   1. **{{DOMAIN_1}}** ({{UPSTREAM|—}}) on {{TARGET_1}}, described in `topology.json`.
   2. **{{DOMAIN_2}}** ({{DOWNSTREAM|—}}) on {{TARGET_2}}.
 - {{EXPLICITLY_OUT_OF_SCOPE}} is explicitly **out of scope**.
