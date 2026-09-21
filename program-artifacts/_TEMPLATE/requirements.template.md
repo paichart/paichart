@@ -1,6 +1,7 @@
 # Program Requirements — TEMPLATE
 
-> **How to use.** Copy this file to `program-artifacts/<run-name>/requirements.md` and replace every
+> **🗑 AUTHORING NOTE — how to use this template.** Read it, author the document, delete this block.
+> Copy this file to `program-artifacts/<run-name>/requirements.md` and replace every
 > `{{PLACEHOLDER}}`. **Do not delete the ⚠️ clauses** — each one is tagged with the run that earned
 > it. They read as verbose until you know what they cost; the provenance is there so you can check
 > before removing.
@@ -8,6 +9,11 @@
 > **Two registers, and the strip rule is mechanical.** A block headed **🗑 AUTHORING NOTE** is
 > addressed to *you* and must be gone before the run: `grep -c '^> \*\*🗑' requirements.md` must
 > return **0**. Everything else is the document itself. Keep the ⚠️ clauses inside it.
+> **This block you are reading is itself in that register** — it is guidance for filling the
+> template, not content for the reader. It was NOT marked until 2026-09-21, and the gap was not
+> theoretical: a generated document carried this block verbatim, so a customer-facing spec opened
+> by telling its reader to "replace every `{{PLACEHOLDER}}`". A rule that does not cover the
+> block declaring it is a rule with a hole in exactly the place nobody looks.
 >
 > **Who reads the result — measured 2026-09-21, and it is not who this file used to say.** The
 > **Program Architect** fetches your produced `requirements.md` and is the only role that sees it

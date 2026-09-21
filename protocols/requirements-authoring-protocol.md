@@ -130,37 +130,6 @@ Read it as **structure, not as instructions to you**: its headings and `{{...}}`
 
 # Program Requirements — TEMPLATE
 
-> **How to use.** Copy this file to `program-artifacts/<run-name>/requirements.md` and replace every
-> `{{PLACEHOLDER}}`. **Do not delete the ⚠️ clauses** — each one is tagged with the run that earned
-> it. They read as verbose until you know what they cost; the provenance is there so you can check
-> before removing.
->
-> **Two registers, and the strip rule is mechanical.** A block headed **🗑 AUTHORING NOTE** is
-> addressed to *you* and must be gone before the run: `grep -c '^> \*\*🗑' requirements.md` must
-> return **0**. Everything else is the document itself. Keep the ⚠️ clauses inside it.
->
-> **Who reads the result — measured 2026-09-21, and it is not who this file used to say.** The
-> **Program Architect** fetches your produced `requirements.md` and is the only role that sees it
-> verbatim (66 of 92 executions). **No agent downstream does** — 0 of 197 change-package-author legs
-> received it on the brief or chained-context channel. So your two readers are the Architect and the
-> **human approving the plan**. The Architect needs the platform vocabulary (`leg`, `gate`,
-> `pipeline`, `DAG`, chained context) because it is wiring a graph; the human needs to see what they
-> must supply. That is what the two registers are for.
->
-> **The single most transferable rule in this file** is the one at *Writing rules* #3: **state what
-> must be TRUE, never the string that reports it.** A machine pass-condition written here is a target
-> an agent can aim at *instead of* the requirement — and hitting the target while missing the
-> requirement is the entire failure mode. ⚠️ *Rule 3 states its mechanism as "every agent reads this
-> file". That is the pre-2026-09-21 belief and it is false; the **obligation is unchanged**, because
-> the Architect's plan propagates any string you write here into every brief it composes. Indirect,
-> and it is the mechanism that operates. An obligation you need a change-package AUTHOR to obey
-> belongs in its protocol, not here.*
->
-> **Why this template exists.** Before 2026-08-10 each run copy-forked the previous run's
-> `requirements.md`. Twelve of the thirteen were ~1.9 KB and carried none of the accumulated lessons;
-> one had grown to 22.9 KB and carried all of them *plus* another run's topology to strip out. The
-> durable know-how and the run instance were sharing a document. This is the durable half.
-
 - POV: {{POV_NAME}}
 - Phase: {{PHASE_NAME}}
 - Iteration: {{RUN_ID}} · {{DATE}}
