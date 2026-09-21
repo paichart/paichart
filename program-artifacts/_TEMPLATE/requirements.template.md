@@ -29,8 +29,14 @@
 > and nothing else here. The rules are spliced in mechanically from `writing-rules.md` by
 > `scripts/requirements-rules.py --insert <your-file>`, and verified by `--check`.
 >
-> *Why: the rules must reach the produced document VERBATIM, because change-package authors read that
-> document and never this template. Three independent authoring passes over this template each
+> *Why: the rules must reach the produced document VERBATIM. ⚠️ **NOT because a change-package author
+> reads it — measured 2026-09-21, that is FALSE and always was.** Across the production corpus,
+> **0 of 197** author legs ever received these rules, on either the brief or the chained-context
+> channel, and a positive control shows **nothing from `requirements.md` reaches any agent verbatim**
+> (0 hits across 2,285 task descriptions, 1,103 agent outputs, 1,286 chained contexts; the concepts
+> arrive only as the Architect's paraphrase). The real reader is the **Program Architect** and the
+> **human reviewing the plan** — the rules shape the plan, and the plan shapes every brief. That is an
+> indirect mechanism, and it is the one that actually operates. Three independent authoring passes each
 > altered them while transcribing — one loosened a rule's permitted forms and dropped another, one
 > deleted an acceptance check, one dropped the rule numbering and then cited rules by number. Three
 > runs, three distinct defects, none repeating. A model asked to transcribe a rule that constrains it
