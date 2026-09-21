@@ -29,7 +29,7 @@ Both are idempotent. --insert is the repair path and deliberately does NOT trust
 replaces whatever occupies the section, so a model that emitted the rules anyway is corrected and
 the correction is reported rather than silently applied.
 """
-import sys, os, difflib
+import sys, os, re, difflib
 
 HEADING = '## Writing rules'
 CANON = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -93,10 +93,48 @@ def main():
                 return l.split('Rules version:')[1].split('—')[0].strip(' *.,')
         return None
     v_doc, v_canon = ver(doc[s:e]), ver(canon)
+
+    # ⚠️ An ABSENT version line is the common case, not an edge case: measured 2026-09-21, ALL SIX
+    # produced documents carrying a rules section predate versioning, so `v_doc is None` covers the
+    # entire population this distinction was built for. Keying only on `v_doc != v_canon` left all
+    # six reporting as ALTERED — the exact outcome the version line was added to prevent.
+    # A DELETED version line looks identical from here. One case IS decidable on evidence: if
+    # restoring the version phrase would make the section match canonical exactly, the line was
+    # deleted and nothing else changed — ALTERED. Otherwise the classification is a BEST GUESS and
+    # the output says so, because "version deleted AND a rule altered" is indistinguishable from
+    # "genuinely older text" without a version to compare. A check that cannot separate two cases
+    # must name the limit rather than pick one silently.
+    # ⚠️ Strip the version PHRASE, do not drop the line: canonical carries it INLINE, prefixed to a
+    # sentence that continues after it. A line-dropping filter therefore compared a real sentence
+    # against nothing and called a deleted version line "pre-versioned" — the one edit that makes an
+    # altered document look merely old, mis-classified. Caught by the mutation case, not by review.
+    strip_ver = lambda ls: [re.sub(r'\*Rules version:[^*]*\*\s*', '', l).strip() for l in ls]
+    pre_versioned = False
+    if v_doc is None and v_canon is not None:
+        pre_versioned = strip_ver(present) != strip_ver(expect)
+
     if mode == '--check':
         print(f"✗ {path}: writing-rules section DIFFERS from canonical.")
         if marker_only:
             print("  (section holds the marker — run --insert to splice the rules in)")
+        elif pre_versioned:
+            print(f"  PRE-VERSIONED: this section predates the `Rules version` line")
+            print(f"  (canonical is v{v_canon}). An archived run legitimately carries the rules that")
+            print("  were canonical when it was produced. Re-splice only if you intend to change what")
+            print("  that run was held to. Diff below is against CURRENT canonical, not against the")
+            print("  text this run was actually held to — read it as a version gap, not as tampering.")
+            print(f"  ⚠️  BEST GUESS, and here is its limit: with no version line, older text and")
+            print("     older-text-that-was-also-altered look identical. If this document SHOULD")
+            print("     carry a version, treat it as ALTERED and diff it properly.")
+            d = [x for x in difflib.unified_diff(expect, present, 'canonical', path, lineterm='', n=0)][:6]
+            for x in d:
+                print("   ", x[:150])
+            return 1
+        elif v_doc is None and v_canon is not None:
+            print(f"  ALTERED: the `Rules version` line was REMOVED and nothing else differs")
+            print(f"  (canonical is v{v_canon}). That is the one edit that makes an altered document")
+            print("  look merely old. Re-splice with --insert.")
+            return 1
         elif v_doc and v_canon and v_doc != v_canon:
             print(f"  OUTDATED, not altered: document carries rules v{v_doc}, canonical is v{v_canon}.")
             print("  An archived run legitimately carries the rules that were canonical when it was")
