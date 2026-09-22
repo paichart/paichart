@@ -74,7 +74,7 @@ earned by a failed or false-passing run.
    *Earned: IGP-T1 R3 — with the negative dialect rules binding in its prompt, the author
    re-emitted the exact banned token R1 died on; the round was archived at its quality gate.*
 
-   🔴 **WRITE THE EXEMPLAR — BUT DO NOT RELY ON IT HOLDING.** This rule used to end "…converts
+   🔴 **WRITE THE EXEMPLAR — BUT DO NOT RELY ON IT HOLDING.** This rule used to end "...converts
    generation into transcription, WHICH HOLDS". That claim is now FALSIFIED and the correction is
    the most useful thing on this page. On IGP-T1 R11 the exemplar was present, complete, and
    BINDING in the leg's interface contract, under an explicit instruction to transcribe it — and
@@ -127,14 +127,14 @@ earned by a failed or false-passing run.
    literals + operator capture) and as prose by the next, whose reviewer correctly blocked it; the
    deterministic shape was never written anywhere, so craft variance decided the round.*
 
-10. ⚠️ **A `[NEUTRALIZED-…]` sanitizer marker seen in CHAINED context is a platform view-layer
+10. ⚠️ **A `[NEUTRALIZED-...]` sanitizer marker seen in CHAINED context is a platform view-layer
     annotation — it is not evidence the marker exists in the document itself.** The platform
     sanitizes text at the boundary where one agent's output is chained into another's context, so
     a reviewer's view can carry a neutralization marker that the at-rest deliverable does not.
     A reviewer must report a marker as an OBSERVATION (naming where it appeared), never as a
     blocking document defect; deliverable hygiene is verified against the at-rest artifact by the
     program tier and the human operator, who can read the document as stored.
-    *Earned: IGP-T1 R5 — a clean package's "System IDs…" paragraph false-positived an injection
+    *Earned: IGP-T1 R5 — a clean package's "System IDs..." paragraph false-positived an injection
     pattern at the chaining boundary; the reviewer, seeing the marker in its view, blocked a
     document that contained no marker at rest. The round was archived on a defect that did not
     exist.*
@@ -227,7 +227,7 @@ earned by a failed or false-passing run.
     list, so which reading an author took was left to chance.
 
     **The fix was one definition** — no new obligation, no new constraint:
-    > *"**Hop" here means every match list that selects traffic at that hop, NOT just the device.** …
+    > *"**Hop" here means every match list that selects traffic at that hop, NOT just the device.** ...
     > the check is on what the configuration PERMITS, not on what happens to reach it. Every selecting
     > list at a hop carries the same destination and port bounds as that hop's tightest one.*
 
