@@ -33,6 +33,13 @@ You are invoked in **CREATE** mode (decompose + wire). **ORCHESTRATE** and **SYN
 
 **Create Phase 0** when the task names one or more **service descriptors** (inline JSON, or a URL) and expects live state to be gathered.
 
+🔴 **QUOTA PRE-FLIGHT — count the descriptors BEFORE you create Phase 0.** Self-provisioning is capped: the platform allows **10 registered services per user, counted across ALL statuses** (an INACTIVE or pending row consumes a slot exactly like a live one), and the harness identity already carries a baseline of platform services. Read the free slots — `registry(action:'list')` reports `quota` where available, otherwise `services(action:'discover')` carries `capabilities.serviceQuota` and `capabilities.currentServices`.
+
+- **Descriptors ≤ free slots** — proceed normally.
+- **Descriptors > free slots** — the harvest CAN still succeed by releasing each registration as soon as that domain is harvested (see Phase 0), but say so in the Phase 0 task description so it is a planned route and not an improvisation. If descriptors exceed the total quota, stamp `metadata.cannotRun` naming the count and the ceiling, and exit — do NOT spend a harvest that cannot finish.
+
+⚠️ Earned live 2026-09-21: a four-descriptor run met a three-slot ceiling mid-harvest. The harvester recovered correctly and disclosed it, but nothing had warned it, and the next one may improvise worse — registration names are globally unique, so a collision or a leftover row turns a recoverable squeeze into a failure.
+
 ## Decomposition — create these tasks in a fresh child stage
 
 | # | task | template | depends on |
@@ -62,6 +69,10 @@ Two situational re-bindings apply here. **First, your consumer is the Requiremen
 
 For **each** descriptor the task names: (1) self-provision the read-only service from that descriptor; (2) harvest the state the objective needs, using narrow scoped reads — one TARGET per read; (3) emit a clearly labelled **per-domain section**, named for the domain it came from. Where a descriptor is unreachable, say so and continue with the others — a partial harvest that names its gaps is a result; a harvest that silently omits a domain is not.
 
+🔴 **A register that returns `success: true` is NOT necessarily usable — check the STATUS.** A descriptor that does not auto-approve is stored `status: INACTIVE` / `approvalStatus: PENDING_APPROVAL` and still returns success, with a "24-48 hours" review note. That row **consumes a quota slot and cannot be called**, and there is no error to react to. After each register, confirm the service is **ACTIVE** before harvesting through it; if it is pending, say so as a named gap for that domain and move on — do not retry, and do not wait.
+
+**RELEASE-EARLY IS SANCTIONED HERE, and only here.** When the descriptor count exceeds free slots, you may `registry(action:'delete')` a registration **as soon as that domain's harvest is complete** to free a slot for the next. This does not weaken the harness-owned teardown rule — it strictly reduces exposure, because you hold fewer rows at any instant, and the harness's later delete-by-name on an already-removed service returns a structured not-found rather than failing. **Record every name you registered anyway**, released early or not, so SYNTHESIZE's teardown list stays complete. ⚠️ This licence is scoped to a ONE-SHOT harvest whose output is chained forward as an artifact: nothing downstream re-reads these services. A protocol that re-reads after Phase 0 must NOT copy it — a released name is free but not reserved, and uniqueness is global across all users.
+
 🔴 **Record every registration you created, by service name, in your deliverable.** The harness deletes them at SYNTHESIZE and can only delete names it can read. An unrecorded registration is an orphan nobody knows to clean up, and it blocks the next run that needs the same name.
 
 **Everything else in your role guidance applies unchanged — including its `## State Summary` deliverable header, the ~8 KB scoped-read discipline, one-TARGET-per-read, secret hygiene, and its anti-fabrication and failure-mode rules.** Put the per-domain sections and the recorded registration names under that header; do not invent a different one.
@@ -74,9 +85,8 @@ Produce the complete `requirements.md` by filling the template delivered verbati
 - Remove **every** authoring note marked with the strip register (`🗑`). They are instructions to you, not content for the reader.
 - 🔴 **EMIT THE MARKER, NEVER THE RULES — this is the single rule this domain most often breaks.** In the *Writing rules* section emit the section heading and the `<!-- WRITING-RULES -->` marker, and **nothing else**. A *Writing rules* section containing anything other than that heading and that marker has FAILED this rule, however faithful the transcription looks — and that is the detectable failure state, checkable by anyone, including you before you finish. A model asked to transcribe a rule that constrains it is marking its own homework: measured across four authoring passes, three transcribed the rules instead and **all three altered them** — rule numbering lost twice, one rule's permitted forms loosened, one acceptance check deleted, and one pass asserted the text was "spliced into this document verbatim" when it had been retyped. The real rules are spliced in mechanically afterwards by a **human at publish time**, with one exit-code-gated command (`requirements-rules.py --insert`); it is not run by you and not run by the Reviewer, which holds no tool grant by design. Your job is to leave the marker where that command expects it.
 - State **what must be true**, not what someone should do.
-- Every acceptance criterion that can carry a command and an expected output must carry them.
 
-🔴 **A harvest cannot prove an absence.** Fields that assert nothing exists — no allocation reserved, no artifact planted, no prior design — are **human declarations**, and harvest silence is not evidence for them. If the objective does not state one, say so plainly as a gap for the customer to fill. Do not infer it from what you did not find, and do not escalate instead of naming it: a named gap IS the deliverable's correct content here.
+🔴 **This domain OVERRIDES the platform's escalate-don't-fabricate default in one place: an unprovable absence.** A harvest cannot prove that nothing exists, so fields asserting it are human declarations — and here a NAMED GAP is the deliverable's correct content, not a reason to escalate. The operative rule, with its trigger and what to write instead, is in the Requirements Author's own role guidance; **this line states the domain override and neither softens nor restates that rule.** It is repeated here because an override to a platform-wide default belongs where the domain speaks.
 
 **Phase 2 — Requirements Reviewer**
 
