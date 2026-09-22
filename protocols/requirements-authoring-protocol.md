@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 1.0.0.**
+> **Rendered verbatim from the pAIchart platform seed — version 1.0.1.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -140,9 +140,16 @@ Read it as **structure, not as instructions to you**: its headings and `{{...}}`
 
 # Program Requirements — TEMPLATE
 
-- POV: {{POV_NAME}}
-- Phase: {{PHASE_NAME}}
+- Authored in: {{POV_NAME}} · {{PHASE_NAME}}
 - Iteration: {{RUN_ID}} · {{DATE}}
+
+> ⚠️ **"Authored in" is where this document was WRITTEN, not where the program it describes RUNS.**
+> Those are normally different phases, and may be different POVs. The running phase is chosen by
+> whoever launches the program, after this document exists — so it is not knowable here, and a
+> header that states it as fact is wrong on every run that is not launched from the authoring phase.
+> Earned 2026-09-22: a published spec asserted the authoring phase as its own, was corrected by
+> hand, and the correction was lost when the document was regenerated — which is why the fix is
+> here and not in a copy.
 
 ---
 

@@ -54,9 +54,16 @@
 > | Acceptance | Node C checks 1, 2, 2b, 3 — **the numbers are fixed; a new check APPENDS** |
 > | Optional | consuming-leg attribution — keep only if a downstream leg genuinely cannot self-check |
 
-- POV: {{POV_NAME}}
-- Phase: {{PHASE_NAME}}
+- Authored in: {{POV_NAME}} · {{PHASE_NAME}}
 - Iteration: {{RUN_ID}} · {{DATE}}
+
+> ⚠️ **"Authored in" is where this document was WRITTEN, not where the program it describes RUNS.**
+> Those are normally different phases, and may be different POVs. The running phase is chosen by
+> whoever launches the program, after this document exists — so it is not knowable here, and a
+> header that states it as fact is wrong on every run that is not launched from the authoring phase.
+> Earned 2026-09-22: a published spec asserted the authoring phase as its own, was corrected by
+> hand, and the correction was lost when the document was regenerated — which is why the fix is
+> here and not in a copy.
 
 ---
 
