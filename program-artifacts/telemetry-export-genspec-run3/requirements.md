@@ -1,13 +1,14 @@
 # Program Requirements — Telemetry Export Authorization
 
-- POV: Requirements Generator — Validation
-- Phase: 1 — Generate Against Ground Truth
 - Iteration: 20260922-0449 · 2026-09-22
-- Origin: authored by the `requirements-authoring-protocol` v1.0.0 pipeline, run 20260922-0449,
-  which cleared its own QA gate (`approved`, reviewer score 91). Publish-time pass 2026-09-22:
-  writing rules spliced at the marker, and the Kubernetes target namespace supplied by the
-  operator. **No other content was edited** — in particular the derived exporter block is absent
-  from this document because the pipeline withheld it, not because anyone removed it.
+- Origin: authored by the `requirements-authoring-protocol` v1.0.0 pipeline, run 20260922-0449, in
+  POV *Requirements Generator — Validation*, phase *1 — Generate Against Ground Truth*. It cleared
+  its own QA gate (`approved`, reviewer score 91). ⚠️ That is where this document was WRITTEN, not
+  where the program it describes runs — the running POV and phase belong to whoever launches it.
+- Publish-time pass 2026-09-22: writing rules spliced at the marker, and the Kubernetes target
+  namespace supplied by the operator. **No other content was edited** — in particular the derived
+  exporter block is absent from this document because the pipeline withheld it, not because anyone
+  removed it.
 - Control: `program-artifacts/telemetry-export-four-domain` — same objective, same gate structure,
   and a `topology.json` byte-identical to this one. The requirements document is the only variable.
 
