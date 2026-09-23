@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 1.0.1.**
+> **Rendered verbatim from the pAIchart platform seed — version 1.2.0.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -153,28 +153,6 @@ Read it as **structure, not as instructions to you**: its headings and `{{...}}`
 
 ---
 
-## Writing rules — read before authoring, they are the expensive part
-
-<!-- WRITING-RULES -->
-
-> 🔴 **DO NOT AUTHOR THIS SECTION.** Emit the heading and the `<!-- WRITING-RULES -->` marker above,
-> and nothing else here. The rules are spliced in mechanically from `writing-rules.md` by
-> `scripts/requirements-rules.py --insert <your-file>`, and verified by `--check`.
->
-> *Why: the rules must reach the produced document VERBATIM. ⚠️ **NOT because a change-package author
-> reads it — measured 2026-09-21, that is FALSE and always was.** Across the production corpus,
-> **0 of 197** author legs ever received these rules on the brief or chained-context channel, and
-> **1 of 205** author executions carries them anywhere at all. The **Program Architect** retrieves
-> this document verbatim by browser fetch (**66 of 92** executions) and is the only role that does;
-> everything downstream gets its paraphrase. The real reader is the **Program Architect** and the
-> **human reviewing the plan** — the rules shape the plan, and the plan shapes every brief. That is an
-> indirect mechanism, and it is the one that actually operates. Three independent authoring passes each
-> altered them while transcribing — one loosened a rule's permitted forms and dropped another, one
-> deleted an acceptance check, one dropped the rule numbering and then cited rules by number. Three
-> runs, three distinct defects, none repeating. A model asked to transcribe a rule that constrains it
-> is marking its own homework; if you emit them anyway, `--insert` will overwrite them and tell you it
-> had to.*
-
 ## Program scope
 
 - {{N}} **legs** (pipelines), executed **{{IN SEQUENCE | IN PARALLEL}}**. A leg is either a distinct
@@ -267,8 +245,8 @@ the prose above, because two readings of the same sentence produce two different
 
 - Harvest {{TARGETS}} **read-only**. Service descriptor: `{{DESCRIPTOR_URL}}`
 - **Preconditions verified — {{WHEN}}**: {{WHICH HARVEST YOU READ — a prior run's harvest
-  artifact by id, or a manual read naming the call — and confirmation that the inputs named
-  below actually appear in it. `none — first run against this target` is a permitted answer;
+  artifact by id, or a manual read naming the call — and confirmation that the inputs the
+  derivation below selects actually appear in it. `none — first run against this target` is a permitted answer;
   it declares the premise UNTESTED rather than hiding that inside a confident objective.}}
   ⚠️ *YOU do this while authoring, once, before the run. It changes nothing at run time: every
   leg still performs its own Phase 0 harvest, and **no agent reads another run's harvest** — a leg
@@ -279,8 +257,14 @@ the prose above, because two readings of the same sentence produce two different
 - {{THE DERIVATION, if any — see the derivation clauses below}}
 - **If the harvest returns no {{DERIVATION INPUTS}}**: {{THE NULL OUTCOME — normally a gap report
   naming exactly what was absent and what would have to exist; NEVER a substitute value}}
-- **The deliverable MUST publish, explicitly and prominently**: {{THE CHAINED VALUES}} plus the
-  reasoning for the choice. These are the inputs the downstream leg depends on.
+- **The deliverable MUST publish, explicitly and prominently**: {{WHAT THE DOWNSTREAM LEG CONSUMES —
+  named by its RULE and its PRODUCER, never by today's value or count}} plus the reasoning for the
+  choice. The downstream leg depends on what this leg PRODUCES at run time, not on what you read
+  while authoring.
+- **Validation (mechanical)**: {{THE READ that re-obtains the inputs}}, then {{THE RULE re-applied}} —
+  expected: the published value equals the recomputation, and every re-obtained input lies inside
+  it. Never the input literals or their count: a check pinned to today's inputs fails a correct run
+  the day the environment changes.
 
 ### ⚠️ If this leg DERIVES a value the downstream leg consumes
 
@@ -355,7 +339,8 @@ Keep all of the following — every line is an incident.
   🔴 **STATE THE NULL CASE** clause under Pipeline 1 is not derivation-specific — it was earned by a
   *downstream* author improvising against a brief that presupposed a block its harvest never produced.
 - {{If a FURTHER leg consumes from this one}}: **the deliverable MUST publish, explicitly and
-  prominently**: {{THE CHAINED VALUES}} — the same obligation Pipeline 1 carries.
+  prominently**: {{WHAT THE FURTHER LEG CONSUMES — named by rule and producer, never by value}} —
+  the same obligation, and the same validation form, Pipeline 1 carries.
 
 ## Design constraints — split across the contract and the DAG
 
@@ -424,4 +409,26 @@ but never actually fired, say **"SHIPPED BUT NEVER YET EXERCISED — do not read
 list what would count as evidence. *Earned: an earlier revision of this clause claimed a machine-gated
 release that had never once occurred; the run cited as proof had cleared via a judgement branch while
 shipping a defect.*
+
+## Writing rules — read before authoring, they are the expensive part
+
+<!-- WRITING-RULES -->
+
+> 🔴 **DO NOT AUTHOR THIS SECTION.** Emit the heading and the `<!-- WRITING-RULES -->` marker above,
+> and nothing else here. The rules are spliced in mechanically from `writing-rules.md` by
+> `scripts/requirements-rules.py --insert <your-file>`, and verified by `--check`.
+>
+> *Why: the rules must reach the produced document VERBATIM. ⚠️ **NOT because a change-package author
+> reads it — measured 2026-09-21, that is FALSE and always was.** Across the production corpus,
+> **0 of 197** author legs ever received these rules on the brief or chained-context channel, and
+> **1 of 205** author executions carries them anywhere at all. The **Program Architect** retrieves
+> this document verbatim by browser fetch (**66 of 92** executions) and is the only role that does;
+> everything downstream gets its paraphrase. The real reader is the **Program Architect** and the
+> **human reviewing the plan** — the rules shape the plan, and the plan shapes every brief. That is an
+> indirect mechanism, and it is the one that actually operates. Three independent authoring passes each
+> altered them while transcribing — one loosened a rule's permitted forms and dropped another, one
+> deleted an acceptance check, one dropped the rule numbering and then cited rules by number. Three
+> runs, three distinct defects, none repeating. A model asked to transcribe a rule that constrains it
+> is marking its own homework; if you emit them anyway, `--insert` will overwrite them and tell you it
+> had to.*
 

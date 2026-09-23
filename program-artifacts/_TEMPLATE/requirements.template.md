@@ -195,8 +195,8 @@ the prose above, because two readings of the same sentence produce two different
 
 - Harvest {{TARGETS}} **read-only**. Service descriptor: `{{DESCRIPTOR_URL}}`
 - **Preconditions verified — {{WHEN}}**: {{WHICH HARVEST YOU READ — a prior run's harvest
-  artifact by id, or a manual read naming the call — and confirmation that the inputs named
-  below actually appear in it. `none — first run against this target` is a permitted answer;
+  artifact by id, or a manual read naming the call — and confirmation that the inputs the
+  derivation below selects actually appear in it. `none — first run against this target` is a permitted answer;
   it declares the premise UNTESTED rather than hiding that inside a confident objective.}}
   ⚠️ *YOU do this while authoring, once, before the run. It changes nothing at run time: every
   leg still performs its own Phase 0 harvest, and **no agent reads another run's harvest** — a leg
@@ -207,8 +207,14 @@ the prose above, because two readings of the same sentence produce two different
 - {{THE DERIVATION, if any — see the derivation clauses below}}
 - **If the harvest returns no {{DERIVATION INPUTS}}**: {{THE NULL OUTCOME — normally a gap report
   naming exactly what was absent and what would have to exist; NEVER a substitute value}}
-- **The deliverable MUST publish, explicitly and prominently**: {{THE CHAINED VALUES}} plus the
-  reasoning for the choice. These are the inputs the downstream leg depends on.
+- **The deliverable MUST publish, explicitly and prominently**: {{WHAT THE DOWNSTREAM LEG CONSUMES —
+  named by its RULE and its PRODUCER, never by today's value or count}} plus the reasoning for the
+  choice. The downstream leg depends on what this leg PRODUCES at run time, not on what you read
+  while authoring.
+- **Validation (mechanical)**: {{THE READ that re-obtains the inputs}}, then {{THE RULE re-applied}} —
+  expected: the published value equals the recomputation, and every re-obtained input lies inside
+  it. Never the input literals or their count: a check pinned to today's inputs fails a correct run
+  the day the environment changes.
 
 ### ⚠️ If this leg DERIVES a value the downstream leg consumes
 
@@ -289,7 +295,8 @@ Keep all of the following — every line is an incident.
   🔴 **STATE THE NULL CASE** clause under Pipeline 1 is not derivation-specific — it was earned by a
   *downstream* author improvising against a brief that presupposed a block its harvest never produced.
 - {{If a FURTHER leg consumes from this one}}: **the deliverable MUST publish, explicitly and
-  prominently**: {{THE CHAINED VALUES}} — the same obligation Pipeline 1 carries.
+  prominently**: {{WHAT THE FURTHER LEG CONSUMES — named by rule and producer, never by value}} —
+  the same obligation, and the same validation form, Pipeline 1 carries.
 
 ## Design constraints — split across the contract and the DAG
 
