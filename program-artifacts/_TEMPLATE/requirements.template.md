@@ -67,28 +67,6 @@
 
 ---
 
-## Writing rules — read before authoring, they are the expensive part
-
-<!-- WRITING-RULES -->
-
-> 🔴 **DO NOT AUTHOR THIS SECTION.** Emit the heading and the `<!-- WRITING-RULES -->` marker above,
-> and nothing else here. The rules are spliced in mechanically from `writing-rules.md` by
-> `scripts/requirements-rules.py --insert <your-file>`, and verified by `--check`.
->
-> *Why: the rules must reach the produced document VERBATIM. ⚠️ **NOT because a change-package author
-> reads it — measured 2026-09-21, that is FALSE and always was.** Across the production corpus,
-> **0 of 197** author legs ever received these rules on the brief or chained-context channel, and
-> **1 of 205** author executions carries them anywhere at all. The **Program Architect** retrieves
-> this document verbatim by browser fetch (**66 of 92** executions) and is the only role that does;
-> everything downstream gets its paraphrase. The real reader is the **Program Architect** and the
-> **human reviewing the plan** — the rules shape the plan, and the plan shapes every brief. That is an
-> indirect mechanism, and it is the one that actually operates. Three independent authoring passes each
-> altered them while transcribing — one loosened a rule's permitted forms and dropped another, one
-> deleted an acceptance check, one dropped the rule numbering and then cited rules by number. Three
-> runs, three distinct defects, none repeating. A model asked to transcribe a rule that constrains it
-> is marking its own homework; if you emit them anyway, `--insert` will overwrite them and tell you it
-> had to.*
-
 ## Program scope
 
 > **🗑 AUTHORING NOTE — what counts as a DOMAIN.** Read it, write the list, delete this block.
@@ -380,3 +358,25 @@ but never actually fired, say **"SHIPPED BUT NEVER YET EXERCISED — do not read
 list what would count as evidence. *Earned: an earlier revision of this clause claimed a machine-gated
 release that had never once occurred; the run cited as proof had cleared via a judgement branch while
 shipping a defect.*
+
+## Writing rules — read before authoring, they are the expensive part
+
+<!-- WRITING-RULES -->
+
+> 🔴 **DO NOT AUTHOR THIS SECTION.** Emit the heading and the `<!-- WRITING-RULES -->` marker above,
+> and nothing else here. The rules are spliced in mechanically from `writing-rules.md` by
+> `scripts/requirements-rules.py --insert <your-file>`, and verified by `--check`.
+>
+> *Why: the rules must reach the produced document VERBATIM. ⚠️ **NOT because a change-package author
+> reads it — measured 2026-09-21, that is FALSE and always was.** Across the production corpus,
+> **0 of 197** author legs ever received these rules on the brief or chained-context channel, and
+> **1 of 205** author executions carries them anywhere at all. The **Program Architect** retrieves
+> this document verbatim by browser fetch (**66 of 92** executions) and is the only role that does;
+> everything downstream gets its paraphrase. The real reader is the **Program Architect** and the
+> **human reviewing the plan** — the rules shape the plan, and the plan shapes every brief. That is an
+> indirect mechanism, and it is the one that actually operates. Three independent authoring passes each
+> altered them while transcribing — one loosened a rule's permitted forms and dropped another, one
+> deleted an acceptance check, one dropped the rule numbering and then cited rules by number. Three
+> runs, three distinct defects, none repeating. A model asked to transcribe a rule that constrains it
+> is marking its own homework; if you emit them anyway, `--insert` will overwrite them and tell you it
+> had to.*
