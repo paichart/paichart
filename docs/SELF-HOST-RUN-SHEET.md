@@ -64,10 +64,10 @@ grep -c "^JWT_" .env                     # expect 3
 ## 5. Seed and start
 ```bash
 set -a; . ./.env; set +a; npm run llm:init   # copies ANTHROPIC_API_KEY from .env into the hub's system LLM settings (the app never reads the env var itself)
-npm run db:seed                          # 18 steps, ~1–2 min, ends "✅ db:seed complete"; the SUPER_ADMIN password is printed ONCE — copy it now.
+npm run db:seed                          # ~1–2 min; prints its own step count as it runs, ends "✅ db:seed complete"; the SUPER_ADMIN password is printed ONCE — copy it now.
                                          # Expect pino JSON lines and a "[DEV] SLOW QUERY" or two in the middle — noise, not errors. Safe to re-run
                                          # after a git pull: every step is add-only (a re-run never deletes; --force-recreate on db:templates does)
-                                         # (schema, grants, admin, protocols, hub prompts, agent/harness/program/domain/phase templates)
+                                         # (schema, grants, admin, protocols, hub prompts, named workflows, agent/harness/program/domain/phase templates)
                                          # lost it? npm run db:admin -- --reset-password
 ```
 Build once, then run the **production** build — the demo should feel like the hosted service (fast, no dev tooling):

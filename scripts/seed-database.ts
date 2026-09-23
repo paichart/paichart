@@ -29,6 +29,12 @@ const steps: Array<[string, string]> = [
   // E13 (devext 2026-09-07): the hub's own server instructions advertise `/prompt HOWTO-get-started` —
   // without this step a self-host answers "Prompt not found" to its first suggested command.
   ['Hub operational prompts (HOWTO-get-started, HOWTO-register-service, HOWTO-use-workflows, audits)', 'npx ts-node --project prisma/tsconfig.seed.json scripts/seed-operational-prompts.ts'],
+  // 2026-09-23, E13 again one layer down: the step ABOVE installs HOWTO-use-workflows, and without this
+  // one a self-host that follows that guide finds ZERO workflows to use. The seed exists precisely
+  // because named workflows lived only in the production database and no fix to them was reproducible.
+  // Safe on an empty DB: it touches mcp_workflows only — no service lookup, no FK (a workflow naming a
+  // service you have not registered is inert data until you run it, which is the intended state).
+  ['Named workflows (the HOWTO above teaches these — without them it teaches an empty list)', 'npx ts-node -r tsconfig-paths/register scripts/seed-named-workflows.ts'],
   // E15 (devext clean-slate replay, 2026-09-08): a first install landed in a GUI with NO agent templates — db:seed
   // seeded protocols and prompts only, and the templates were an "optional next step" the run sheet never named.
   // A complete install needs them; every seed is idempotent (findFirst → update/create) and prod never runs
@@ -40,6 +46,12 @@ const steps: Array<[string, string]> = [
   ['Domain templates — network provisioning', 'npx ts-node -r tsconfig-paths/register scripts/seed-network-provisioning-templates.ts'],
   ['Domain templates — Terraform IaC', 'npx ts-node -r tsconfig-paths/register scripts/seed-terraform-iac-templates.ts'],
   ['Domain templates — Kubernetes GitOps', 'npx ts-node -r tsconfig-paths/register scripts/seed-kubernetes-gitops-templates.ts'],
+  // 2026-09-23: the FOURTH domain, missing since it shipped on 2026-09-10. Its PROTOCOL seeded here
+  // (step 'Pipeline-harness protocols') while its TEMPLATES did not, which is the worst half to have:
+  // a task titled `(protocol: observability-config)` ROUTES — the row is ACTIVE — and then the harness
+  // has no templates for its four children. Same miss as three sibling domains being enumerated in
+  // prose after a fourth arrived. If a fifth domain lands, add it HERE and re-read this comment.
+  ['Domain templates — observability config', 'npx ts-node -r tsconfig-paths/register scripts/seed-observability-templates.ts'],
   ['KPI templates', 'npx ts-node -r tsconfig-paths/register scripts/seed-kpi-templates.ts'],
   ['Phase templates', 'npx ts-node -r tsconfig-paths/register scripts/populate-phase-templates-improved.ts'],
 ];
@@ -53,7 +65,7 @@ function main(): void {
     execSync(cmd, { stdio: 'inherit' });
     console.log('');
   });
-  console.log('✅ db:seed complete — schema, grants, first SUPER_ADMIN, protocols, hub prompts, agent/harness/program/domain/phase templates. The Services registry starts EMPTY by design: register your own (docs/RUNNING.md → "Registering a service on your own network"; services/weather-service is the reference service).');
+  console.log('✅ db:seed complete — schema, grants, first SUPER_ADMIN, protocols, hub prompts, named workflows, agent/harness/program/domain/phase templates. The Services registry starts EMPTY by design: register your own (docs/RUNNING.md → "Registering a service on your own network"; services/weather-service is the reference service).');
 }
 
 try {
