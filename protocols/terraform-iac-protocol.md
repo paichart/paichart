@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 1.6.0.**
+> **Rendered verbatim from the pAIchart platform seed — version 1.6.1.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -61,7 +61,7 @@ The read-only Terraform service is provisioned at run time, not pre-registered: 
 1. **Source the descriptor.** If the task body contains the descriptor JSON inline, use it directly. If the task carries only a URL, fetch it first: `services(action:'call', targetService:'browser-automation-service', tool:'scrape_page', arguments:{ url:'<url>', selectors:{ descriptor:'pre' } })`, then JSON-parse the returned `data[0].descriptor`. *(pAIchart has no generic URL-fetch tool — the browser service IS the descriptor-fetch mechanism. Do NOT substitute a generic fetch/WebFetch/http_get tool; it does not exist.)*
 2. **Register** from the descriptor's values — `registry(action:'register', name:<descriptor.name>, endpoint:<descriptor.endpoint>, category:<descriptor.category>, capabilities:{ tools:<descriptor read-only tools> })`.
 3. **Update** (only if register did not attach the tools) — `registry(action:'update', service_name:<descriptor.name>, updates:{ capabilities:{ tools:<descriptor read-only tools> } })`.
-4. **Call (read-only)** — `services(action:'call', targetService:<descriptor.name>, tool:'state_list'|'state_pull', arguments:{ … })` to harvest current state. Read-only render tools only — never a mutating verb, never `plan`/`validate`.
+4. **Call (read-only)** — `services(action:'call', targetService:<descriptor.name>, tool:<the descriptor's address-LISTING tool>|<its per-address read>, arguments:{ … })` to harvest current state. Read-only render tools only — never a mutating verb, never `plan`/`validate`.
 5. **Teardown delete** — `registry(action:'delete', service_name:<descriptor.name>, confirm:true)`. This runs at **SYNTHESIZE** (after all children terminal), NOT before the package is assembled — and it runs **whether the outcome is approval OR a quality-gate escalation** (the harvest is complete either way). If the delete fails or a child orphaned the row, name the dangling registration in your synthesis/escalation comment.
 
 ## Harvest discipline — narrow reads; render state, never launch providers
