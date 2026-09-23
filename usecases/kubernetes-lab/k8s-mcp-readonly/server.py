@@ -105,6 +105,35 @@ def get_resource(resourceType: str, namespace: str, name: str) -> dict:
 
 
 @mcp.tool()
+def list_resource_names(resourceType: str, namespace: str, labelSelector: str | None = None) -> dict:
+    """List a resource KIND's NAMES + labels + count in a namespace — METADATA ONLY, never specs.
+
+    The CAP-SAFE way to bound a population. `list_resources` returns full unprojected objects:
+    measured 2026-09-23, an unscoped pod listing peaked at 149,030 chars against the ~8 KB Tier-1
+    tool-result cap (18.6x) and truncated 12 of 13 times even WITH a labelSelector, which is the
+    narrowest pod read this service previously offered. The read_more pager tops out near 50,000
+    chars, so a namespace past roughly a dozen pods could not be enumerated at any turn budget.
+    Names + labels run ~70 chars/item, so the same namespace returns ~1-3 KB and always fits.
+
+    Labels are load-bearing, not decoration: without them a caller cannot work out WHICH of the
+    listed names a selector matches, which is the whole point of bounding a set-valued change.
+    Strictly less exposure than list_resources, which already returns labels plus everything else.
+    """
+    _validate(resourceType, namespace)
+    if labelSelector and len(labelSelector) > 256:
+        raise ToolError("labelSelector too long (max 256).")
+    api_version, kind = RESOURCE_MAP[resourceType]
+    try:
+        res = _dyn.resources.get(api_version=api_version, kind=kind)
+        items = res.get(namespace=namespace, label_selector=labelSelector or "").items
+        return {"resourceType": resourceType, "namespace": namespace,
+                "count": len(items),
+                "items": [{"name": i.metadata.name,
+                           "labels": dict(i.metadata.labels or {})} for i in items]}
+    except ApiException as e:
+        raise ToolError(f"k8s API error ({e.status}): {e.reason}")  # isError, not a throw
+
+@mcp.tool()
 def list_secret_names(namespace: str) -> dict:
     """List Secret NAMES + their key names in a namespace — METADATA ONLY, never values."""
     _validate("configmaps", namespace)  # reuse the namespace validation (configmaps is allowlisted)
