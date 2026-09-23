@@ -66,7 +66,7 @@ issues, confidence 82 — and recomputed rather than trusted:
 — and the harness recorded that it retrieved this *"independently, not from Node C's prose"*. It did
 not take the reviewer's word for the coverage fact it was about to gate on.
 
-### Claim 2 — the value is derived, and that is machine-checked
+### Claim 2 — the value is derived: machine-checked for shape, hand-checked for membership
 
 Leg 1's mechanical containment net:
 
@@ -77,8 +77,30 @@ Leg 1's mechanical containment net:
   "containmentDisposition": { "disposition": "benign", "reason": "checked-clean" } }
 ```
 
-`checked: true` with zero violations means the platform attested the derivation; the agent did not
-merely assert it.
+`checked: true` with zero violations attests **four** properties of the derived value, and it is worth
+being exact about which, because two adjacent properties are **not** checked:
+
+| check | what `violations: []` proves |
+|---|---|
+| `misaligned-prefix` | the aggregate sits on a proper prefix boundary |
+| `member-not-covered` | every **declared** member lies inside the aggregate |
+| `prefix-not-minimal` | the aggregate is the smallest prefix for its **declared** members |
+| `covered-not-member` | no harvested allocation **inside** the aggregate was left undeclared |
+
+**Not checked by the net:** that each declared member *came from* the harvest, and that every
+harvested address is *covered* by the aggregate. A member list copied from a stale source, on a fabric
+that had since grown an exporter **outside** the aggregate, would stamp `violations: []` exactly like a
+correct run. (One inside the aggregate would be caught by `covered-not-member`.) The omission is not a
+simple bug: in network domains the harvested-allocations block exists for **collision** avoidance, so a
+blanket "cover every harvested address" rule would be wrong there — the net would need to know which
+harvested entries are members to cover and which are allocations to avoid.
+
+**For this run, membership was verified by inspection instead**, and it holds: the Architect's six
+declared members are exactly the six cidr entries in the harvester's own `## Harvested Allocations`
+block — set-equal, none outside the aggregate. So the derivation is correct; the claim is that it was
+**machine-checked for shape and hand-checked for membership**, not that the platform attested it
+end to end. (Found by the 2026-09-24 panel on harvested state in generated specs, and confirmed against
+`lib/agents/harness/derivation-containment.ts:700-766` before this correction was written.)
 
 **Minimality, recomputed by hand for this record.** The six harvested loopbacks are `.1 .2 .4 .24
 .26 .29`. A `/28` covers `.0–.15` and would exclude three of them; a `/27` covers `.0–.31` and is the
