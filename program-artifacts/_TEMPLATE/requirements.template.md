@@ -195,14 +195,17 @@ the prose above, because two readings of the same sentence produce two different
 
 - Harvest {{TARGETS}} **read-only**. Service descriptor: `{{DESCRIPTOR_URL}}`
 - **Preconditions verified — {{WHEN}}**: {{WHICH HARVEST YOU READ — a prior run's harvest
-  artifact by id, or a manual read naming the call — and confirmation that the inputs the
-  derivation below selects actually appear in it. `none — first run against this target` is a permitted answer;
-  it declares the premise UNTESTED rather than hiding that inside a confident objective.}}
+  artifact by id, or a manual read naming the call — and the PROPERTY it confirmed (e.g. "at least one
+  target carries the label the derivation selects"). A POINTER and a PROPERTY: never the values the
+  harvest returned, and never how many there were. `none — first run against this target` is a
+  permitted answer; it declares the premise UNTESTED rather than hiding that inside a confident objective.}}
   ⚠️ *YOU do this while authoring, once, before the run. It changes nothing at run time: every
   leg still performs its own Phase 0 harvest, and **no agent reads another run's harvest** — a leg
-  reaching into another pipeline's evidence is a blocking defect, not a shortcut. Write the
-  OBSERVATION ("`state_list` returns X and Y only"), never the history ("last round failed
-  because...") — a prior round's narrative in this file reaches the Architect verbatim.*
+  reaching into another pipeline's evidence is a blocking defect, not a shortcut. Write the PROPERTY
+  you confirmed and WHERE its evidence lives, never the values it returned and never the history
+  ("last round failed because..."). Both reach the Architect verbatim, and a dated value is still a
+  value: an Architect has promoted a dated observation from this slot into an undated, binding
+  interface-contract field (live, 2026-09-23).*
 - {{THE WORK}}
 - {{THE DERIVATION, if any — see the derivation clauses below}}
 - **If the harvest returns no {{DERIVATION INPUTS}}**: {{THE NULL OUTCOME — normally a gap report
@@ -231,7 +234,8 @@ Keep all of the following — every line is an incident.
   handful of candidates is a **defect, not an escalation*** — it blocks the downstream leg on a false
   premise.
   *Earned: Run 12 declared the pool too fragmented while a clean pair was free the whole time.*
-- ⚠️ **Verify by arithmetic, never by eyeballing.** {{DOMAIN-SPECIFIC TRAP — e.g. for CIDR: `.1/.2`
+- ⚠️ **Verify by arithmetic, never by eyeballing.** {{DOMAIN-SPECIFIC TRAP, with a SYNTHETIC example — never values
+  this harvest returned, which would hand the program its answer — e.g. for CIDR: `.1/.2`
   are adjacent but do NOT summarize to a `/31`; they straddle a boundary and their minimal cover is a
   `/30` that swallows a neighbour. A `/31` covers an **aligned** pair only.}}
   *Earned: Runs 5 and 6 lost on this directly; Run 12 compounded it.*
@@ -281,8 +285,9 @@ Keep all of the following — every line is an incident.
 > this section offered no slot for them.*
 
 - Harvest {{TARGETS}} **read-only**. Service descriptor: `{{DESCRIPTOR_URL}}`
-- **Preconditions verified — {{WHEN}}**: {{WHICH HARVEST YOU READ, and confirmation that the targets
-  below appear in it. `none — first run against this target` is a permitted answer.}}
+- **Preconditions verified — {{WHEN}}**: {{WHICH HARVEST YOU READ, and the PROPERTY it confirmed about
+  the targets below — a pointer and a property, never the values it returned or how many there were.
+  `none — first run against this target` is a permitted answer.}}
 - {{THE WORK}}
 - **Existence assumption** (*Writing rules* #6): {{WHETHER THE TARGET RESOURCE EXISTS IN HARVESTED
   STATE, and the expected outcome if it does not — e.g. "the bucket exists; a bucket POLICY may not;
