@@ -82,6 +82,45 @@ def l_top(line):
     return line.startswith('## ') and not line.startswith('###')
 
 
+# ── The draft-status footer (2026-09-23) ────────────────────────────────────────────────────────
+# The Author is told to close the document by stating it is "structurally incomplete until a person
+# splices the writing rules in". That is TRUE when the Author writes it and FALSE the moment this
+# tool runs — and nothing was updating it, so every spliced document shipped asserting that its own
+# splice was still outstanding. Live 2026-09-23: a Program Architect read the published spec, hit
+# that footer, could not verify it from where it stood, and correctly escalated it to the human at
+# the plan gate. The document was complete; the claim about the document was not.
+#
+# The fix belongs HERE, not in the authoring instruction: the Author's sentence is correct at
+# authoring time, and deleting it would remove a true warning from a genuinely incomplete draft.
+# The tool that falsifies the claim is the tool that should retire it.
+CLAIM = re.compile(
+    r'It is structurally incomplete until a person splices the writing rules into the section above\s*'
+    r'\(`requirements-rules\.py --insert`\) and runs the corresponding conformance check;\s*'
+    r'the program it describes is launched separately, by a person, after that and after '
+    r'the plan gate above is cleared\.')
+RETIRED = ('The writing rules in the section above were spliced in mechanically '
+           '(`requirements-rules.py --insert`); run `requirements-rules.py --check` to confirm they '
+           'are still canonical. The program it describes is launched separately, by a person, '
+           'after the plan gate above is cleared.')
+
+
+def retire_draft_claim(lines):
+    """Replace the pre-splice claim with its post-splice truth. Returns (lines, status).
+
+    Deliberately NOT a blanket 'structurally incomplete' search-and-replace: that phrase also
+    appears in prose ABOUT the pipeline, and rewriting those would be the tool editing sentences
+    it has no business touching. Match the whole claim or report absent.
+    """
+    if any(RETIRED in l for l in lines):
+        return lines, 'already'
+    out, hit = [], False
+    for l in lines:
+        new = CLAIM.sub(RETIRED, l)
+        hit = hit or new != l
+        out.append(new)
+    return out, ('rewritten' if hit else 'absent')
+
+
 def main():
     if len(sys.argv) == 2 and sys.argv[1] == '--skeleton':
         out = skeleton(open(TEMPLATE).read().split('\n'))
@@ -108,6 +147,20 @@ def main():
     expect = [l for l in canon if l.strip()]
     if present == expect:
         print(f"✓ {path}: writing rules are byte-identical to canonical ({len(expect)} non-blank lines).")
+        # ⚠️ DO NOT return here on --insert without retiring the claim. "Rules already canonical" is
+        # PRECISELY the state in which the draft-status footer is stale: the rules are in, and the
+        # footer still says they are not. An early return made the retirement unreachable on the one
+        # path that needs it most — every already-spliced document. Caught by running the tool, not
+        # by reading the patch (2026-09-23).
+        if mode == '--insert':
+            out, claim_status = retire_draft_claim(doc)
+            if claim_status == 'rewritten':
+                open(path, 'w').write('\n'.join(out))
+                print(f"✓ {path}: draft-status footer retired — it no longer claims its own splice is outstanding.")
+            elif claim_status == 'absent':
+                print(f"⚠️  {path}: no draft-status claim found to retire.")
+                print("   If this document states anywhere that the writing rules are not yet spliced,")
+                print("   that statement is now FALSE and nothing here will fix it. Check by hand.")
         return 0
 
     # "Marker only" means the section holds the marker and NONE of the canonical rule text.
@@ -191,7 +244,16 @@ def main():
         return 1
 
     out = doc[:s] + canon + [''] + doc[e:]
+    out, claim_status = retire_draft_claim(out)
     open(path, 'w').write('\n'.join(out))
+    if claim_status == 'rewritten':
+        print(f"\u2713 {path}: draft-status footer retired \u2014 it no longer claims its own splice is outstanding.")
+    elif claim_status == 'absent':
+        # LOUD, never silent: a document that still asserts the splice is pending will be escalated
+        # by the next agent that reads it, and the escalation will be correct.
+        print(f"\u26a0\ufe0f  {path}: no draft-status claim found to retire.")
+        print("   If this document states anywhere that the writing rules are not yet spliced,")
+        print("   that statement is now FALSE and nothing here will fix it. Check by hand.")
     if marker_only:
         print(f"✓ {path}: rules spliced at the marker ({len(expect)} non-blank lines).")
     else:

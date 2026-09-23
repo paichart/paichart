@@ -432,6 +432,6 @@ earned by a failed or false-passing run.
 
 ---
 
-**Draft status**: this is a **draft specification for human review**, not an approved or launch-ready document. It is structurally incomplete until a person splices the writing rules into the section above (`requirements-rules.py --insert`) and runs the corresponding conformance check; the program it describes is launched separately, by a person, after that and after the plan gate above is cleared.
+**Draft status**: this is a **draft specification for human review**, not an approved or launch-ready document. The writing rules in the section above were spliced in mechanically (`requirements-rules.py --insert`); run `requirements-rules.py --check` to confirm they are still canonical. The program it describes is launched separately, by a person, after the plan gate above is cleared.
 
 Confidence: 84
