@@ -34,7 +34,7 @@ GRAFANA_URL = os.environ.get("GRAFANA_URL", "http://grafana:3000")
 OTELCOL_HEALTH_URL = os.environ.get("OTELCOL_HEALTH_URL", "http://otel-collector:13133")
 GRAFANA_AUTH = (os.environ.get("GRAFANA_USER", "admin"), os.environ.get("GRAFANA_PASSWORD", "admin"))
 OTEL_CONFIG_PATH = "/rig/otelcol/config.yaml"  # fixed at build; never caller-supplied
-INGRESS_CONFIG_PATH = "/rig/ingress/otlp-ingress.conf"  # fixed at build; never caller-supplied
+INGRESS_CONFIG_DIR = "/rig/ingress"  # fixed at build; never caller-supplied
 
 UID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 MAX_QUERY_LEN = 512
@@ -204,13 +204,17 @@ def get_otel_config() -> dict:
 
 @mcp.tool()
 def get_ingress_config() -> dict:
-    """The OTLP ingress allowlist AS DEPLOYED (nginx in front of the collector's OTLP/http receiver;
-    file mounted read-only). This is the enforcement point for which sender addresses may export
-    telemetry — the collector itself has no source-address control."""
+    """The OTLP ingress configuration AS DEPLOYED: EVERY nginx config file in front of the collector
+    (file mount, read-only), so no path through the proxy is unwitnessed. The collector itself has no
+    source-address control; these files are the enforcement point for which senders may export."""
     try:
-        with open(INGRESS_CONFIG_PATH, "r", encoding="utf-8") as f:
-            return {"nginx_conf": f.read(), "source": "as-deployed file (ro mount)",
-                    "fronts": "otel-collector OTLP/http :4318"}
+        names = sorted(n for n in os.listdir(INGRESS_CONFIG_DIR) if n.endswith(".conf"))
+        files = {}
+        for n in names:
+            with open(os.path.join(INGRESS_CONFIG_DIR, n), "r", encoding="utf-8") as f:
+                files[n] = f.read()
+        return {"files": files, "source": "as-deployed files (ro mount)",
+                "fronts": "otel-collector OTLP gRPC :4317 and OTLP/http :4318"}
     except OSError as e:
         raise ToolError(f"ingress config unreadable: {e}") from e
 

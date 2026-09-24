@@ -36,9 +36,16 @@ services:
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
       - ./otelcol:/etc/otelcol:ro
-    # NO host port (2026-09-24): OTLP/http reaches the collector ONLY through obs-ingress, the lab's
+    # NO host port (2026-09-24): OTLP reaches the collector ONLY through obs-ingress, the lab's
     # enforcement point. otelcol-contrib 0.116.0 has no source-address allowlist on its receiver, so
     # without a proxy there is nothing an "authorise these senders" change could be applied to.
+    # The OTLP receivers bind to the collector's address on the PRIVATE `otlp` network (config.yaml),
+    # which only obs-ingress shares — so no container on the default network can bypass the proxy.
+    # Metrics (8888/8889) and health (13133) stay on the default network for prometheus / obs-mcp.
+    networks:
+      default: {}
+      otlp:
+        ipv4_address: 172.31.114.10
     mem_limit: 256m
     restart: unless-stopped
 
@@ -52,7 +59,10 @@ services:
     volumes:
       - ./ingress:/etc/nginx/conf.d:ro   # host edits land on reload; container cannot write
     ports:
-      - "127.0.0.1:4318:4318"   # same operator port as before — the demo curl is unchanged
+      - "127.0.0.1:4317:4317"   # OTLP/gRPC sender port  — governed by otlp-ingress.conf
+      - "127.0.0.1:4318:4318"   # OTLP/http sender port  — governed by otlp-ingress.conf
+      - "127.0.0.1:14318:14318" # OPERATOR injection port — operator-access.conf, outside the sender allowlist
+    networks: [default, otlp]
     depends_on: [otel-collector]
     mem_limit: 64m
     restart: unless-stopped
@@ -96,3 +106,10 @@ networks:
       config:
         - subnet: 172.20.0.0/16
           gateway: 172.20.0.1
+  otlp:
+    # PRIVATE ingress→collector segment (2026-09-24). internal: no route out; only obs-ingress and the
+    # collector attach. Pinned because the collector's OTLP receivers bind to its fixed address here.
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.31.114.0/24

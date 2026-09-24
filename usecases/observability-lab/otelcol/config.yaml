@@ -7,8 +7,9 @@ extensions:
 receivers:
   otlp:
     protocols:
-      grpc: { endpoint: 0.0.0.0:4317 }
-      http: { endpoint: 0.0.0.0:4318 }
+      # Bound to the PRIVATE otlp network only — reachable solely through obs-ingress (docker-compose.yml).
+      grpc: { endpoint: 172.31.114.10:4317 }
+      http: { endpoint: 172.31.114.10:4318 }
 
 processors:
   batch: {}

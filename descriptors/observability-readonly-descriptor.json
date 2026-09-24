@@ -25,7 +25,7 @@
           "properties": { "uid": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" } } } },
       { "name": "get_otel_config", "description": "The otel-collector config AS DEPLOYED (read-only file mount; the collector has no config API).",
         "inputSchema": { "type": "object", "additionalProperties": false, "properties": {} } },
-      { "name": "get_ingress_config", "description": "The OTLP ingress allowlist AS DEPLOYED (nginx in front of the collector's OTLP/http receiver; read-only file mount). The enforcement point for which sender addresses may export telemetry; the collector itself has no source-address control.",
+      { "name": "get_ingress_config", "description": "The OTLP ingress configuration AS DEPLOYED: every nginx config file in front of the collector's OTLP gRPC and HTTP receivers (read-only file mount). The enforcement point for which sender addresses may export telemetry; the collector itself has no source-address control.",
         "inputSchema": { "type": "object", "additionalProperties": false, "properties": {} } }
     ]
   }
