@@ -114,8 +114,12 @@ that choice.
 Before `task.complete` on a plan gate, read the Architect's deliverable and check:
 
 1. **`## Assumptions & Open Questions`** — any item phrased *"Human: confirm …"* or *"confirm before
-   approval"* is a question you are answering by approving. Answer it in the gate's completion
-   comment, or fix the requirements and re-run.
+   approval"* is a question you are answering by approving. **If your answer should change what a leg
+   does, write it into that leg's DESCRIPTION (`task.update`) before you release the gate that holds
+   it** — or fix the requirements and re-run. A gate's completion comment is a record for humans; no
+   agent ever reads it, so an answer written there changes nothing and the leg runs its default
+   (G1, 2026-09-24: a leg's scope was deferred to "customer confirmation at the gate" — a channel the
+   leg cannot read).
 2. **The `## Pipeline DAG` "Depends on" column** — this is the graph that will be built. Check that
    each gate blocks the leg you intended. A gate that depends on the leg it was meant to govern is a
    **record, not a control**.
