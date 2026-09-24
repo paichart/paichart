@@ -36,9 +36,25 @@ services:
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
       - ./otelcol:/etc/otelcol:ro
-    ports:
-      - "127.0.0.1:4318:4318"   # OTLP/http — lets the operator inject demo telemetry with curl
+    # NO host port (2026-09-24): OTLP/http reaches the collector ONLY through obs-ingress, the lab's
+    # enforcement point. otelcol-contrib 0.116.0 has no source-address allowlist on its receiver, so
+    # without a proxy there is nothing an "authorise these senders" change could be applied to.
     mem_limit: 256m
+    restart: unless-stopped
+
+  obs-ingress:
+    # The OTLP ingress ENFORCEMENT POINT: nginx in front of the collector's OTLP/http receiver, with a
+    # source-address allowlist in ./ingress/otlp-ingress.conf. Baseline = allow all (brownfield: the
+    # "customer" has not restricted senders yet). Operator reload after a gated apply:
+    #   docker exec obs-ingress nginx -s reload
+    image: nginx:1.27-alpine
+    container_name: obs-ingress
+    volumes:
+      - ./ingress:/etc/nginx/conf.d:ro   # host edits land on reload; container cannot write
+    ports:
+      - "127.0.0.1:4318:4318"   # same operator port as before — the demo curl is unchanged
+    depends_on: [otel-collector]
+    mem_limit: 64m
     restart: unless-stopped
 
   node-exporter:
@@ -63,8 +79,20 @@ services:
       - GRAFANA_PASSWORD=${OBS_HARVEST_PASSWORD:?set it in .env — see .env.example}
     volumes:
       - ./otelcol:/rig/otelcol:ro   # get_otel_config reads the AS-DEPLOYED file (otelcol has no config API)
+      - ./ingress:/rig/ingress:ro   # get_ingress_config reads the AS-DEPLOYED allowlist (same reason)
     ports:
       - "127.0.0.1:3114:3107"   # rig family convention: container-internal 3107, distinct loopback host port
     depends_on: [prometheus, grafana, otel-collector]
     mem_limit: 256m
     restart: unless-stopped
+
+networks:
+  default:
+    # PINNED (2026-09-24) because the ingress allowlist names an address on it: traffic from the rig
+    # HOST reaches obs-ingress from this network's gateway, not from 127.0.0.1. Unpinned, a `down`/`up`
+    # could re-address the network and silently orphan the operator allow line.
+    # 172.20.0.0/16 is the subnet Docker had already assigned — pinning it moved nothing.
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1

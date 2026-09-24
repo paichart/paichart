@@ -34,6 +34,7 @@ GRAFANA_URL = os.environ.get("GRAFANA_URL", "http://grafana:3000")
 OTELCOL_HEALTH_URL = os.environ.get("OTELCOL_HEALTH_URL", "http://otel-collector:13133")
 GRAFANA_AUTH = (os.environ.get("GRAFANA_USER", "admin"), os.environ.get("GRAFANA_PASSWORD", "admin"))
 OTEL_CONFIG_PATH = "/rig/otelcol/config.yaml"  # fixed at build; never caller-supplied
+INGRESS_CONFIG_PATH = "/rig/ingress/otlp-ingress.conf"  # fixed at build; never caller-supplied
 
 UID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 MAX_QUERY_LEN = 512
@@ -199,6 +200,19 @@ def get_otel_config() -> dict:
             return {"yaml": f.read(), "source": "as-deployed file (ro mount)"}
     except OSError as e:
         raise ToolError(f"otel config unreadable: {e}") from e
+
+
+@mcp.tool()
+def get_ingress_config() -> dict:
+    """The OTLP ingress allowlist AS DEPLOYED (nginx in front of the collector's OTLP/http receiver;
+    file mounted read-only). This is the enforcement point for which sender addresses may export
+    telemetry — the collector itself has no source-address control."""
+    try:
+        with open(INGRESS_CONFIG_PATH, "r", encoding="utf-8") as f:
+            return {"nginx_conf": f.read(), "source": "as-deployed file (ro mount)",
+                    "fronts": "otel-collector OTLP/http :4318"}
+    except OSError as e:
+        raise ToolError(f"ingress config unreadable: {e}") from e
 
 
 if __name__ == "__main__":
