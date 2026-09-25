@@ -24,6 +24,8 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana   # PERSISTS users, the service account and the admin password across recreates (2026-09-25:
+                                       # without it, any container recreate reset Grafana to admin/admin and deleted obs-harvest)
       - ./grafana/dashboards-json:/var/lib/grafana/dashboards:ro
     ports:
       - "3001:3000"   # LAN-visible on purpose so you can open the dashboards from another machine
@@ -95,6 +97,9 @@ services:
     depends_on: [prometheus, grafana, otel-collector]
     mem_limit: 256m
     restart: unless-stopped
+
+volumes:
+  grafana-data: {}
 
 networks:
   default:
