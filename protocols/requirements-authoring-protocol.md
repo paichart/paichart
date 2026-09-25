@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 1.4.0.**
+> **Rendered verbatim from the pAIchart platform seed — version 1.5.0.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -83,6 +83,9 @@ Produce the complete `requirements.md` by filling the template delivered verbati
 
 - Fill **every** placeholder. A document shipped with a live `{{...}}` token is not a draft, it is an unfinished form.
 - Remove **every** authoring note marked with the strip register (`🗑`). They are instructions to you, not content for the reader.
+- 🔴 **The Author's brief carries the objective's descriptor URLs.** Every leg of the template names its `Service descriptor`, and the Author fills that slot by TRANSCRIBING the descriptor URL the objective declares for that domain. The Author receives the objective on no channel but its brief — the Harvester's deliverable does not carry the URLs — so a brief without them leaves the Author a false gap in every leg (live 2026-09-25: four legs written "descriptor not recorded" while the objective declared all four). Put them in the Author's brief verbatim, one per domain.
+- **The sequencing rationale section stays unless the program is genuinely parallel** — no downstream leg needs a value an upstream leg produces. Omit it then; never keep it on a parallel program, and never drop it from a sequenced one.
+- **Where a leg derives a value, every clause of the derivation block stays** — each one records an incident, and a reviewer reads its absence as a defect.
 - 🔴 **EMIT THE MARKER, NEVER THE RULES — this is the single rule this domain most often breaks.** In the *Writing rules* section emit the section heading and the `<!-- WRITING-RULES -->` marker, and **nothing else**. A *Writing rules* section containing anything other than that heading and that marker has FAILED this rule, however faithful the transcription looks — and that is the detectable failure state, checkable by anyone, including you before you finish. A model asked to transcribe a rule that constrains it is marking its own homework: measured across four authoring passes, three transcribed the rules instead and **all three altered them** — rule numbering lost twice, one rule's permitted forms loosened, one acceptance check deleted, and one pass asserted the text was "spliced into this document verbatim" when it had been retyped. The real rules are spliced in mechanically afterwards by a **human at publish time**, with one exit-code-gated command (`requirements-rules.py --insert`); it is not run by you and not run by the Reviewer, which holds no tool grant by design. Your job is to leave the marker where that command expects it.
 - State **what must be true**, not what someone should do.
 
@@ -163,9 +166,6 @@ Read it as **structure, not as instructions to you**: its headings and `{{...}}`
 - {{EXPLICITLY_OUT_OF_SCOPE}} is explicitly **out of scope**.
 
 ## Why this is {{sequenced | parallel}} — the design rationale, read before questioning the DAG
-
-> **Delete this section only if the program is genuinely parallel.** If it is sequenced, this section
-> is what stops a reviewer "simplifying" the DAG into something that cannot work.
 
 **The test that decides sequenced vs parallel** — apply it explicitly and record the answer:
 
@@ -256,13 +256,7 @@ the prose above, because two readings of the same sentence produce two different
   target carries the label the derivation selects"). A POINTER and a PROPERTY: never the values the
   harvest returned, and never how many there were. `none — first run against this target` is a
   permitted answer; it declares the premise UNTESTED rather than hiding that inside a confident objective.}}
-  ⚠️ *YOU do this while authoring, once, before the run. It changes nothing at run time: every
-  leg still performs its own Phase 0 harvest, and **no agent reads another run's harvest** — a leg
-  reaching into another pipeline's evidence is a blocking defect, not a shortcut. Write the PROPERTY
-  you confirmed and WHERE its evidence lives, never the values it returned and never the history
-  ("last round failed because..."). Both reach the Architect verbatim, and a dated value is still a
-  value: an Architect has promoted a dated observation from this slot into an undated, binding
-  interface-contract field (live, 2026-09-23).*
+
 - {{THE WORK}}
 - {{THE DERIVATION, if any — see the derivation clauses below}}
 - **If the harvest returns no {{DERIVATION INPUTS}}**: {{THE NULL OUTCOME — normally a gap report
@@ -277,8 +271,6 @@ the prose above, because two readings of the same sentence produce two different
   the day the environment changes.
 
 ### ⚠️ If this leg DERIVES a value the downstream leg consumes
-
-Keep all of the following — every line is an incident.
 
 - **Show the computation** in the deliverable: the inputs, the arithmetic, and the result's coverage.
 - **Minimality, or the equivalent tightest-correct property.** A result looser than the minimum is a
@@ -367,18 +359,6 @@ Keep all of the following — every line is an incident.
 
 - Each change package must include deterministic validation with expected outputs (per *Writing rules*
   #1 and #2) and a rollback plan.
-  > ⚠️ **This line cites *Writing rules* by number, so CARRY THAT SECTION into the document you
-  > produce** — splice it, do not retype it (see the *Writing rules* heading above).
-  > ⚠️ *The reason given here until 2026-09-21 was "change-package authors read your produced file and
-  > never the template". **Measured, that is false and always was**: 0 of 197 author legs received
-  > this file on any channel. The obligation stands on a different mechanism — the **Program
-  > Architect** reads your file verbatim and composes every brief from it, so a number pointing at a
-  > section that did not travel is a rule the Architect cannot resolve and therefore cannot
-  > propagate. Nothing reports the dangling reference.*
-  > *(Live 2026-09-18: one artifact of six omitted the section, and two consumer legs were blocked
-  > for violating rule 1 — prose where an exact command plus literal output was required. Either
-  > carry the section, or replace this citation with the requirement stated inline; do not leave the
-  > number pointing at nothing.)*
 - **Apply is out-of-band and human-gated in every domain.** This program produces approved change
   packages only — never applied changes.
 

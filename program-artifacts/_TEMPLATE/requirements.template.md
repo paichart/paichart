@@ -114,8 +114,8 @@
 
 ## Why this is {{sequenced | parallel}} — the design rationale, read before questioning the DAG
 
-> **Delete this section only if the program is genuinely parallel.** If it is sequenced, this section
-> is what stops a reviewer "simplifying" the DAG into something that cannot work.
+> **🗑 AUTHORING NOTE — delete this section only if the program is genuinely parallel.** If it is
+> sequenced, this section is what stops a reviewer "simplifying" the DAG into something that cannot work.
 
 **The test that decides sequenced vs parallel** — apply it explicitly and record the answer:
 
@@ -206,13 +206,15 @@ the prose above, because two readings of the same sentence produce two different
   target carries the label the derivation selects"). A POINTER and a PROPERTY: never the values the
   harvest returned, and never how many there were. `none — first run against this target` is a
   permitted answer; it declares the premise UNTESTED rather than hiding that inside a confident objective.}}
-  ⚠️ *YOU do this while authoring, once, before the run. It changes nothing at run time: every
-  leg still performs its own Phase 0 harvest, and **no agent reads another run's harvest** — a leg
-  reaching into another pipeline's evidence is a blocking defect, not a shortcut. Write the PROPERTY
-  you confirmed and WHERE its evidence lives, never the values it returned and never the history
-  ("last round failed because..."). Both reach the Architect verbatim, and a dated value is still a
-  value: an Architect has promoted a dated observation from this slot into an undated, binding
-  interface-contract field (live, 2026-09-23).*
+
+> **🗑 AUTHORING NOTE — the Preconditions slot.** *You do this while authoring, once, before the run. It changes nothing at run time: every
+> leg still performs its own Phase 0 harvest, and **no agent reads another run's harvest** — a leg
+> reaching into another pipeline's evidence is a blocking defect, not a shortcut. Write the PROPERTY
+> you confirmed and WHERE its evidence lives, never the values it returned and never the history
+> ("last round failed because..."). Both reach the Architect verbatim, and a dated value is still a
+> value: an Architect has promoted a dated observation from this slot into an undated, binding
+> interface-contract field (live, 2026-09-23).*
+
 - {{THE WORK}}
 - {{THE DERIVATION, if any — see the derivation clauses below}}
 - **If the harvest returns no {{DERIVATION INPUTS}}**: {{THE NULL OUTCOME — normally a gap report
@@ -228,7 +230,7 @@ the prose above, because two readings of the same sentence produce two different
 
 ### ⚠️ If this leg DERIVES a value the downstream leg consumes
 
-Keep all of the following — every line is an incident.
+> **🗑 AUTHORING NOTE.** Keep all of the following — every line is an incident.
 
 - **Show the computation** in the deliverable: the inputs, the arithmetic, and the result's coverage.
 - **Minimality, or the equivalent tightest-correct property.** A result looser than the minimum is a
@@ -323,20 +325,21 @@ Keep all of the following — every line is an incident.
 
 - Each change package must include deterministic validation with expected outputs (per *Writing rules*
   #1 and #2) and a rollback plan.
-  > ⚠️ **This line cites *Writing rules* by number, so CARRY THAT SECTION into the document you
-  > produce** — splice it, do not retype it (see the *Writing rules* heading above).
-  > ⚠️ *The reason given here until 2026-09-21 was "change-package authors read your produced file and
-  > never the template". **Measured, that is false and always was**: 0 of 197 author legs received
-  > this file on any channel. The obligation stands on a different mechanism — the **Program
-  > Architect** reads your file verbatim and composes every brief from it, so a number pointing at a
-  > section that did not travel is a rule the Architect cannot resolve and therefore cannot
-  > propagate. Nothing reports the dangling reference.*
-  > *(Live 2026-09-18: one artifact of six omitted the section, and two consumer legs were blocked
-  > for violating rule 1 — prose where an exact command plus literal output was required. Either
-  > carry the section, or replace this citation with the requirement stated inline; do not leave the
-  > number pointing at nothing.)*
 - **Apply is out-of-band and human-gated in every domain.** This program produces approved change
   packages only — never applied changes.
+
+> **🗑 AUTHORING NOTE — the *Writing rules* citation above.** ⚠️ **That line cites *Writing rules* by number, so CARRY THAT SECTION into the document you
+> produce** — splice it, do not retype it (see the *Writing rules* heading above).
+> ⚠️ *The reason given here until 2026-09-21 was "change-package authors read your produced file and
+> never the template". **Measured, that is false and always was**: 0 of 197 author legs received
+> this file on any channel. The obligation stands on a different mechanism — the **Program
+> Architect** reads your file verbatim and composes every brief from it, so a number pointing at a
+> section that did not travel is a rule the Architect cannot resolve and therefore cannot
+> propagate. Nothing reports the dangling reference.*
+> *(Live 2026-09-18: one artifact of six omitted the section, and two consumer legs were blocked
+> for violating rule 1 — prose where an exact command plus literal output was required. Either
+> carry the section, or replace this citation with the requirement stated inline; do not leave the
+> number pointing at nothing.)*
 
 ### Program integration reviewer (Node C) verifies, from structured facts:
 
