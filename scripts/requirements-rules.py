@@ -26,7 +26,7 @@ model is told to emit a marker instead.
   --insert   FILE   overwrite that section with canonical, in place; reports whether it had to
   --lint     FILE [--declared OBJECTIVE]
                     PRE-FILTER for harvested state: list every address, abbreviated address, port, ARN,
-                    bucket literal or count-of-harvested-things in FILE (Writing rules section excluded)
+                    bucket literal, Terraform resource address or count-of-harvested-things in FILE (Writing rules section excluded)
                     that appears in neither the template nor the OBJECTIVE file. Exit 1 if any. A hit is a
                     candidate to READ, not a verdict; a zero does not replace the full human read.
   --skeleton        emit the TEMPLATE's skeleton on stdout: the template minus every block the
@@ -139,6 +139,9 @@ _ABBREV = re.compile(r'(?<![\w.\d])\.\d{1,3}(?:\s*(?:,|/|and|or)\s*\.\d{1,3})+')
 _PORT = re.compile(r'(?i)(?:\bport\s+|\b(?:tcp|udp)[\s/:]+|(?<=[a-z0-9\]]):)(\d{2,5})\b')
 _ARN = re.compile(r'\barn:aws[\w-]*:[^\s`\'")|]+')
 _BUCKET = re.compile(r'(?:--bucket\s+|s3://)([a-z0-9][a-z0-9.-]{2,62})')
+# A Terraform-style resource ADDRESS (provider_type.name). Added 2026-09-26: a harvested resource the program never
+# touches was named in the out-of-scope list of 4 of 8 generated drafts — a NAME, which the other shapes cannot see.
+_TF_ADDR = re.compile(r'\b(?:aws|azurerm|azuread|google|random|kubernetes|helm|null|local|tls|time|cloudflare|github)_[a-z0-9_]+\.[a-z0-9_-]+\b')
 _COUNT = re.compile(r'(?i)\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d+)\s+'
                     r'(?:harvested\s+|exporter\s+|existing\s+|live\s+)?'
                     r'(exporters?|addresses|loopbacks|pods|devices|interfaces|members|workloads|servers|blocks|buckets|namespaces)\b')
@@ -160,7 +163,8 @@ def lint(doc_lines, allowed_text):
         if in_example:
             continue
         for kind, rx, grp in (('address', _IPV4, 0), ('abbreviated address', _ABBREV, 0), ('port', _PORT, 1),
-                              ('ARN', _ARN, 0), ('bucket', _BUCKET, 1), ('count', _COUNT, 0)):
+                              ('ARN', _ARN, 0), ('bucket', _BUCKET, 1), ('resource address', _TF_ADDR, 0),
+                              ('count', _COUNT, 0)):
             for m in rx.finditer(line):
                 tok = m.group(grp)
                 # Universal constants are not state (they are what a Forbidden list names), and a token built from a
