@@ -109,7 +109,7 @@ judge whether a rule still applies. Read the index to locate, read the rule to d
 | 3 | 🔴 **State what must be TRUE; never name the measure that reports it.** |
 | 4 | Expected values stated here are **reference data, never evidence**. A tier retrieves the actual value. |
 | 5 | Write **properties, not hardcoded values**, wherever the environment can be rebuilt. |
-| 6 | **State every existence assumption** a leg's objective rests on, and the expected outcome if the resource is absent. |
+| 6 | **State every existence assumption** a leg's objective rests on — as a branch the leg's own harvest decides (absent ⇒ create, present ⇒ modify), never as today's state. |
 | 7 | **A constraint that exists only by convention does not exist for the agents.** Write it, or accept the value. |
 | 8 | **State the platform dialect** for any protocol absent from harvest. Prefer a complete positive exemplar — but do not rely on it holding; its durable value is as the lint's specification. Completeness is the half that hides. |
 | 9 | **An unharvestable validation target does not license prose** — derive literals from topology facts, and/or mandate an operator-captured baseline byte-diff. |

@@ -1,6 +1,6 @@
 ## Writing rules — read before authoring, they are the expensive part
 
-*Rules version: 2 — 2026-09-21.* These govern how you write **every other section**. Every one was
+*Rules version: 3 — 2026-09-25.* These govern how you write **every other section**. Every one was
 earned by a failed or false-passing run.
 
 1. ⚠️ **"Deterministic validation" means a reviewer can run it and compare, without judgement.**
@@ -42,13 +42,19 @@ earned by a failed or false-passing run.
 5. **Write properties, not hardcoded values**, wherever the environment can be rebuilt. If the rig
    re-randomizes, a magic expected string makes the round fail for the wrong reason.
 
-6. ⚠️ **State every existence assumption a leg's objective rests on.** If a target resource may be
-   ABSENT from harvested state (a security group not yet created, an object tracked under another
-   address), say so and name the expected shape ("the resource may not exist; CREATE is the
-   expected outcome"). An unstated existence assumption is resolved by the design at runtime as an
-   ambiguity — it costs retry generations, or worse, a guessed reconciliation.
+6. ⚠️ **State every existence assumption a leg's objective rests on — as a BRANCH, never as today's
+   state.** If a target resource may be ABSENT (a security group not yet created, an object tracked
+   under another address), say what the leg does in each case: *"if the leg's own harvest finds no
+   policy on the bucket, create one — absence is the expected starting point, not an escalation; if
+   it finds one, modify it."* An unstated existence assumption is resolved by the design at runtime as
+   an ambiguity — it costs retry generations, or worse, a guessed reconciliation. **Never write which
+   branch is true today** (*"no policy exists"*, *"CREATE is the expected outcome"*): that is an
+   observation of the environment, it goes false the moment anyone applies the change, and a program
+   carries it forward as fact.
    *Earned: FW-A3.2/A3.3 — the same leg entered the retry band both rounds on exactly this
-   ambiguity; FW-A3.5 stated it and the leg ran clean first-pass (VT-18).*
+   ambiguity; FW-A3.5 stated it and the leg ran clean first-pass (VT-18). Rewritten 2026-09-25: the
+   earlier wording asked for today's state, and a generated spec's "no enforcement point exists"
+   reached a program's BINDING interface contract after the environment had gained one.*
 
 7. ⚠️ **A constraint that exists only by convention does not exist for the agents.** Agents can
    honor any constraint observable in harvested facts or written here — nothing else. If a value is
