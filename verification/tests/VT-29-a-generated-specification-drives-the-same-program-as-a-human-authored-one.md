@@ -198,5 +198,12 @@ the property recorded as Invariant 6, applied here without being asked.
   one can.
 - **`reviewerScore: 85` is a recorded fact, not a bar.** No gate in this platform tests a confidence
   or reviewer score against a threshold, at either tier, by design.
+- **The generated specification had a defect this round did not expose.** Its *Static → the interface
+  contract* section carried two observations from the generator's own harvest — values true when generated,
+  written as if they were declared constants. They are not the derived value this test is about (that was
+  derived at run time and verified), so the derived-value result stands; but "the generated spec drove the
+  program as well as a human one" is qualified by it. A generator rule has since forbidden harvested state
+  anywhere in a spec (2026-09-24), and the Program Architect no longer promotes an observation into the
+  binding contract (2026-09-24, live-validated 2026-09-25). *(Added 2026-09-25.)*
 - **Release remains a human decision.** `programReleasable: true` states that the record supports
   release. It does not release anything.
