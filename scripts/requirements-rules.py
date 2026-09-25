@@ -24,6 +24,11 @@ model is told to emit a marker instead.
 
   --check    FILE   exit 1 if FILE's writing-rules section is not byte-identical to canonical
   --insert   FILE   overwrite that section with canonical, in place; reports whether it had to
+  --lint     FILE [--declared OBJECTIVE]
+                    PRE-FILTER for harvested state: list every address, abbreviated address, port, ARN,
+                    bucket literal or count-of-harvested-things in FILE (Writing rules section excluded)
+                    that appears in neither the template nor the OBJECTIVE file. Exit 1 if any. A hit is a
+                    candidate to READ, not a verdict; a zero does not replace the full human read.
   --skeleton        emit the TEMPLATE's skeleton on stdout: the template minus every block the
                     template itself addresses to the author. Deterministic; no arguments.
 
@@ -121,6 +126,51 @@ def retire_draft_claim(lines):
     return out, ('rewritten' if hit else 'absent')
 
 
+
+# ── --lint (2026-09-26, harvested-state trigger fired: a generated spec carried a harvested bucket name, then a
+# harvested port). A PRE-FILTER, never the check: it lists state-SHAPED tokens (addresses, abbreviated addresses,
+# ports, ARNs, bucket literals, counts of harvested things) that the document did not get from a source allowed to
+# supply them. The allowlist is PRINCIPLED, not a list of exceptions: a token is fine when it appears in the
+# TEMPLATE (its synthetic worked examples) or in the OBJECTIVE (a value the owner DECLARED, e.g. a port). Everything
+# else is a candidate for a human to read. Its known blind spots, by construction: harvested NAMES that carry no
+# state shape (a workload or resource name), and state paraphrased into prose. A zero is not "clean".
+_IPV4 = re.compile(r'(?<![\w.])\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?(?![\w.])')
+_ABBREV = re.compile(r'(?<![\w.\d])\.\d{1,3}(?:\s*(?:,|/|and|or)\s*\.\d{1,3})+')
+_PORT = re.compile(r'(?i)(?:\bport\s+|\b(?:tcp|udp)[\s/:]+|(?<=[a-z0-9\]]):)(\d{2,5})\b')
+_ARN = re.compile(r'\barn:aws[\w-]*:[^\s`\'")|]+')
+_BUCKET = re.compile(r'(?:--bucket\s+|s3://)([a-z0-9][a-z0-9.-]{2,62})')
+_COUNT = re.compile(r'(?i)\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d+)\s+'
+                    r'(?:harvested\s+|exporter\s+|existing\s+|live\s+)?'
+                    r'(exporters?|addresses|loopbacks|pods|devices|interfaces|members|workloads|servers|blocks|buckets|namespaces)\b')
+
+
+def lint(doc_lines, allowed_text):
+    s, e = bounds(doc_lines)
+    scan = doc_lines if s is None else doc_lines[:s] + [''] * (e - s) + doc_lines[e:]
+    hits = []
+    in_example = False
+    for n, line in enumerate(scan, 1):
+        # The template DESIGNATES one slot for a synthetic worked example — the "Verify by arithmetic" bullet — and its
+        # own rule says the example must be synthetic. Authors rewrite it with their own synthetic addresses, so that
+        # bullet (to the next bullet or blank line) is exempt. Anywhere else, the same address is a candidate.
+        if 'Verify by arithmetic' in line:
+            in_example = True
+        elif in_example and (not line.strip() or line.lstrip().startswith('- ')):
+            in_example = False
+        if in_example:
+            continue
+        for kind, rx, grp in (('address', _IPV4, 0), ('abbreviated address', _ABBREV, 0), ('port', _PORT, 1),
+                              ('ARN', _ARN, 0), ('bucket', _BUCKET, 1), ('count', _COUNT, 0)):
+            for m in rx.finditer(line):
+                tok = m.group(grp)
+                # Universal constants are not state (they are what a Forbidden list names), and a token built from a
+                # <PLACEHOLDER> is a shape, not a value.
+                if tok in ('0.0.0.0/0', '0.0.0.0') or '<' in tok:
+                    continue
+                if tok and tok not in allowed_text:
+                    hits.append((n, kind, tok, line.strip()[:140]))
+    return hits
+
 def main():
     if len(sys.argv) == 2 and sys.argv[1] == '--skeleton':
         out = skeleton(open(TEMPLATE).read().split('\n'))
@@ -131,6 +181,25 @@ def main():
             return 1
         sys.stdout.write('\n'.join(out))
         return 0
+    if len(sys.argv) >= 3 and sys.argv[1] == '--lint':
+        path = sys.argv[2]
+        allowed = open(TEMPLATE).read()
+        if len(sys.argv) == 5 and sys.argv[3] == '--declared':
+            allowed += '\n' + open(sys.argv[4]).read()
+        elif len(sys.argv) != 3:
+            print(__doc__); return 2
+        else:
+            print("⚠️  no --declared objective given: values the owner declared will be listed too.")
+        hits = lint(open(path).read().split('\n'), allowed)
+        if not hits:
+            print(f"✓ {path}: 0 state-shaped tokens outside the template and the declared objective.")
+            print("  A pre-filter only — it cannot see harvested names or paraphrased state. Read the whole draft.")
+            return 0
+        print(f"✗ {path}: {len(hits)} state-shaped token(s) the document did not get from the template or the objective:")
+        for n, kind, tok, ctx in hits:
+            print(f"  line {n:>4}  {kind:<20} {tok!r:<22} {ctx}")
+        print("  Each is a CANDIDATE — read it. A harvested value belongs nowhere in the document: regenerate, never hand-edit.")
+        return 1
     if len(sys.argv) != 3 or sys.argv[1] not in ('--check', '--insert'):
         print(__doc__); return 2
     mode, path = sys.argv[1], sys.argv[2]

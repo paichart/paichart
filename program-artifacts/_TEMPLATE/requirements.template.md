@@ -112,6 +112,23 @@
   2. **{{DOMAIN_2}}** ({{DOWNSTREAM|—}}) on {{TARGET_2}}.
 - {{EXPLICITLY_OUT_OF_SCOPE}} is explicitly **out of scope**.
 
+## Design decisions
+
+> **🗑 AUTHORING NOTE — the Design decisions table.** One row per design decision this document relies on — a
+> choice the POV owner could make differently on the same estate. The kinds a program uses vary; common ones are
+> the TARGET (which instance), the POPULATION (which members of a class the program acts on), the REPRESENTATION
+> (how a derived value is expressed), the RECEIVER (which workload on the target side is authorised) and the
+> APPROVERS (they have their own section below). Source is exactly one of: `(declared)` — transcribed from the
+> objective as written; `(derived — basis: <which harvest read> shows <the property that selects it>)` — a pointer
+> and a SELECTING property, never values or counts; `OPEN — <the question for the POV owner>`. A decision that
+> widens who is authorised or what is selected (the whole class, a match-all selector, an all-covering range) is
+> `(declared)` or it is OPEN — never derived. An OPEN row carries no default. Every leg instruction below that
+> selects a target, population, representation or receiver names its row here.
+
+| decision | rule or named target | source |
+|---|---|---|
+| {{DECISION}} | {{THE RULE OR NAMED TARGET — never the values it selects today}} | {{(declared) · (derived — basis: ...) · OPEN — ...}} |
+
 ## Why this is {{sequenced | parallel}} — the design rationale, read before questioning the DAG
 
 > **🗑 AUTHORING NOTE — delete this section only if the program is genuinely parallel.** If it is
@@ -381,6 +398,13 @@ but never actually fired, say **"SHIPPED BUT NEVER YET EXERCISED — do not read
 list what would count as evidence. *Earned: an earlier revision of this clause claimed a machine-gated
 release that had never once occurred; the run cited as proof had cleared via a judgement branch while
 shipping a defect.*
+
+## Open questions
+
+{{EVERY OPEN QUESTION FOR THE POV OWNER — each OPEN design decision, each UNASSIGNED gate, each named gap — one line each, or "none"}}
+
+> **🗑 AUTHORING NOTE — open questions.** This is the one place a question for the owner lives. An open question
+> is NON-OPERATIVE: no leg carries a default for it; the leg's instruction for that decision is its null outcome.
 
 ## Writing rules — read before authoring, they are the expensive part
 

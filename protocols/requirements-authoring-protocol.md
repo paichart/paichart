@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 1.5.0.**
+> **Rendered verbatim from the pAIchart platform seed — version 1.6.0.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -73,6 +73,8 @@ For **each** descriptor the task names: (1) self-provision the read-only service
 
 **RELEASE-EARLY IS SANCTIONED HERE, and only here.** When the descriptor count exceeds free slots, you may `registry(action:'delete')` a registration **as soon as that domain's harvest is complete** to free a slot for the next. This does not weaken the harness-owned teardown rule — it strictly reduces exposure, because you hold fewer rows at any instant, and the harness's later delete-by-name on an already-removed service returns a structured not-found rather than failing. **Record every name you registered anyway**, released early or not, so SYNTHESIZE's teardown list stays complete. ⚠️ This licence is scoped to a ONE-SHOT harvest whose output is chained forward as an artifact: nothing downstream re-reads these services. A protocol that re-reads after Phase 0 must NOT copy it — a released name is free but not reserved, and uniqueness is global across all users.
 
+🔴 **The Harvester's brief quotes the objective's SUBJECT verbatim, and asks for what decides membership.** Where the objective acts on a subset of a class (its exporters, its receivers) or declares how that subset is marked, the brief names the subset in the objective's own words and asks the Harvester to read the attribute on each target that decides membership (a description, a label, a telemetry-source setting). A harvest reads what its brief points at: the membership marker was harvested in every run whose brief carried the subject, and in none of the runs whose brief did not (2026-09-25). Where no read returns such an attribute, the Harvester names that as a gap — which the Author then carries as an OPEN design decision. **This pipeline has no interface contract**: never tell a child to read one, or to receive the objective "on its own channel" — every child here receives the objective only through its brief.
+
 🔴 **Record every registration you created, by service name, in your deliverable.** The harness deletes them at SYNTHESIZE and can only delete names it can read. An unrecorded registration is an orphan nobody knows to clean up, and it blocks the next run that needs the same name.
 
 **Everything else in your role guidance applies unchanged — including its `## State Summary` deliverable header, the ~8 KB scoped-read discipline, one-TARGET-per-read, secret hygiene, and its anti-fabrication and failure-mode rules.** Put the per-domain sections and the recorded registration names under that header; do not invent a different one.
@@ -83,6 +85,7 @@ Produce the complete `requirements.md` by filling the template delivered verbati
 
 - Fill **every** placeholder. A document shipped with a live `{{...}}` token is not a draft, it is an unfinished form.
 - Remove **every** authoring note marked with the strip register (`🗑`). They are instructions to you, not content for the reader.
+- 🔴 **The Author's brief carries the objective's DECLARED BLOCKS verbatim — its design decisions, its approver mapping, and its descriptor URLs — and nothing the objective does not declare.** Retyped, they lose content (a bounding sentence was dropped from one brief on 2026-09-25); added to, they steer. The Author fills the *Design decisions* section from them — each one `(declared)`, anything else `(derived — basis: …)` or OPEN per its role guidance.
 - 🔴 **The Author's brief carries the objective's descriptor URLs.** Every leg of the template names its `Service descriptor`, and the Author fills that slot by TRANSCRIBING the descriptor URL the objective declares for that domain. The Author receives the objective on no channel but its brief — the Harvester's deliverable does not carry the URLs — so a brief without them leaves the Author a false gap in every leg (live 2026-09-25: four legs written "descriptor not recorded" while the objective declared all four). Put them in the Author's brief verbatim, one per domain.
 - **The sequencing rationale section stays unless the program is genuinely parallel** — no downstream leg needs a value an upstream leg produces. Omit it then; never keep it on a parallel program, and never drop it from a sequenced one.
 - **Where a leg derives a value, every clause of the derivation block stays** — each one records an incident, and a reviewer reads its absence as a defect.
@@ -95,6 +98,7 @@ Produce the complete `requirements.md` by filling the template delivered verbati
 
 Independent QA of the document **against the template contract**, not against your own taste:
 
+- 🔴 **The Reviewer's brief carries the objective's DECLARED BLOCKS verbatim** (design decisions, approver mapping, descriptor URLs), or states that the objective declares none. The Reviewer sees only the Author's document in §6 — never the harvest and never the objective — so without this a `(declared)` mark can be checked for presence but never for truth. Its role guidance's design-decision and approver checks read these blocks; this protocol does not restate those checks.
 - Conformance: no live placeholders, no unstripped authoring notes, and the *Writing rules* section carries the heading and the marker and nothing else. Retyped rules there are a blocking issue even when they read correctly — you are checking placement, not prose.
 - Every stated acceptance criterion is checkable by someone who did not write the document.
 - Absence claims are declared as declarations or named as gaps — never inferred from the harvest.
@@ -164,6 +168,12 @@ Read it as **structure, not as instructions to you**: its headings and `{{...}}`
   1. **{{DOMAIN_1}}** ({{UPSTREAM|—}}) on {{TARGET_1}}, described in `topology.json`.
   2. **{{DOMAIN_2}}** ({{DOWNSTREAM|—}}) on {{TARGET_2}}.
 - {{EXPLICITLY_OUT_OF_SCOPE}} is explicitly **out of scope**.
+
+## Design decisions
+
+| decision | rule or named target | source |
+|---|---|---|
+| {{DECISION}} | {{THE RULE OR NAMED TARGET — never the values it selects today}} | {{(declared) · (derived — basis: ...) · OPEN — ...}} |
 
 ## Why this is {{sequenced | parallel}} — the design rationale, read before questioning the DAG
 
@@ -402,6 +412,10 @@ but never actually fired, say **"SHIPPED BUT NEVER YET EXERCISED — do not read
 list what would count as evidence. *Earned: an earlier revision of this clause claimed a machine-gated
 release that had never once occurred; the run cited as proof had cleared via a judgement branch while
 shipping a defect.*
+
+## Open questions
+
+{{EVERY OPEN QUESTION FOR THE POV OWNER — each OPEN design decision, each UNASSIGNED gate, each named gap — one line each, or "none"}}
 
 ## Writing rules — read before authoring, they are the expensive part
 
