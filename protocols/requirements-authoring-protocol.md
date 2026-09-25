@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 1.3.1.**
+> **Rendered verbatim from the pAIchart platform seed — version 1.4.0.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -183,10 +183,15 @@ would go wrong if someone guessed it up front}}
 
 ## Approvals — one gate per domain, plus the program plan gate
 
-**Team provisioned for this POV** — every approver named below must be a MEMBER of the POV team, or
-the platform cannot route the gate to them and it silently falls to the POV owner, so a board meant
-to show several approvers shows one:
-- {{ROLE}} is {{NAME}} {{EMAIL}}
+**Approvers are DECLARED, never chosen.** Every approver below is TRANSCRIBED from the approver mapping
+declared in this program's objective, and marked `(declared)`. A gate the objective names no approver for is
+written `UNASSIGNED — no approver declared` and listed under open questions for the human. Never pick a name
+from the POV roster: a roster says who EXISTS, never who is ACCOUNTABLE — and two generations over one roster
+assigned four of five gates to different people.
+
+**Declared approvers confirmed on the POV team** — the platform routes a gate only to a MEMBER; a declared
+approver who is not one silently falls to the POV owner, so a board meant to show several approvers shows one:
+- {{ROLE}} is {{NAME}} {{EMAIL}} (declared) — {{member, or NOT A MEMBER — raise as an open question}}
 
 ### Every gate declares WHAT it approves and WHEN it sits — and the two must agree
 
@@ -202,9 +207,9 @@ Fill the table with both columns, never just the first:
 
 | gate | approves | moment — runs AFTER | blocks | approver |
 |---|---|---|---|---|
-| program plan | the plan and the interface contract | the Program Architect | every leg | {{NAME}} |
-| {{DOMAIN_1}} change | {{WHAT — and if it is a produced value, NAME ITS PRODUCER}} | {{WHAT MUST FINISH FIRST}} | {{WHICH LEG IT BLOCKS}} | {{NAME_1}} |
-| {{DOMAIN_2}} change | {{WHAT — and if it is a produced value, NAME ITS PRODUCER}} | {{WHAT MUST FINISH FIRST}} | {{WHICH LEG IT BLOCKS}} | {{NAME_2}} |
+| program plan | the plan and the interface contract | the Program Architect | every leg | {{NAME (declared), or UNASSIGNED — no approver declared}} |
+| {{DOMAIN_1}} change | {{WHAT — and if it is a produced value, NAME ITS PRODUCER}} | {{WHAT MUST FINISH FIRST}} | {{WHICH LEG IT BLOCKS}} | {{NAME_1 (declared), or UNASSIGNED — no approver declared}} |
+| {{DOMAIN_2}} change | {{WHAT — and if it is a produced value, NAME ITS PRODUCER}} | {{WHAT MUST FINISH FIRST}} | {{WHICH LEG IT BLOCKS}} | {{NAME_2 (declared), or UNASSIGNED — no approver declared}} |
 
 ⚠️ **Write "the value produced by X", never a bare "the PRODUCED value".** A bare "PRODUCED" has no
 producer, and the phrase that follows it usually attaches the value to the CONSUMER's artifact
@@ -221,7 +226,9 @@ intent/method gate in that position is close to meaningless — approving a meth
 done changes nothing. If a gate cannot block anything, say so deliberately or move it.
 
 ⚠️ **A gate the producing team can release for itself is not a gate.** Distinct owners are the point:
-a program exists precisely because the halves are approved by different people.
+a program exists precisely because the halves are approved by different people. That is a check on the
+DECLARED mapping, never a licence to reassign: if the declaration puts one person on both halves, keep it as
+declared and raise it as an open question.
 
 **Then state the dependency consequence explicitly** — do not leave a planner to infer the DAG from
 the prose above, because two readings of the same sentence produce two different graphs:
