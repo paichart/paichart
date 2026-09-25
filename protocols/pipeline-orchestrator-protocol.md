@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 3.17.0.**
+> **Rendered verbatim from the pAIchart platform seed — version 3.17.1.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -125,7 +125,6 @@ Template types and examples:
 | REVIEWER | Testing, auditing, security validation | QA Test Engineer, Security Analyst, Publication Reviewer |
 | OPERATOR | Deploying, coordinating, timelines | DevOps Engineer, Project Manager |
 | DOCUMENTER | Documentation, guides, prose | Technical Writer, Editorial Writer |
-| ORCHESTRATOR | Calling external MCP services | MCP Service Orchestrator |
 
 If you don't know the exact template names available, call `template(action: "list")` once to see them.
 
