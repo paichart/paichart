@@ -168,8 +168,9 @@ def lint(doc_lines, allowed_text):
             for m in rx.finditer(line):
                 tok = m.group(grp)
                 # Universal constants are not state (they are what a Forbidden list names), and a token built from a
-                # <PLACEHOLDER> is a shape, not a value.
-                if tok in ('0.0.0.0/0', '0.0.0.0') or '<' in tok:
+                # <PLACEHOLDER> or a shell variable ($BUCKET, ${BUCKET}) is a shape, not a value — a validation command
+                # that resolves the value at run time is exactly what the rules ask for (2026-09-26, genspec Rev12).
+                if tok in ('0.0.0.0/0', '0.0.0.0') or '<' in tok or re.search(r'\$\{?[A-Za-z_]', tok):
                     continue
                 if tok and tok not in allowed_text:
                     hits.append((n, kind, tok, line.strip()[:140]))
