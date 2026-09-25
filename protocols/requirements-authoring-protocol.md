@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 1.3.0.**
+> **Rendered verbatim from the pAIchart platform seed — version 1.3.1.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -333,9 +333,10 @@ Keep all of the following — every line is an incident.
   the targets below — a pointer and a property, never the values it returned or how many there were.
   `none — first run against this target` is a permitted answer.}}
 - {{THE WORK}}
-- **Existence assumption** (*Writing rules* #6): {{WHETHER THE TARGET RESOURCE EXISTS IN HARVESTED
-  STATE, and the expected outcome if it does not — e.g. "the bucket exists; a bucket POLICY may not;
-  CREATE of the policy is expected"}}
+- **Existence assumption** (*Writing rules* #6): {{THE BRANCH, NOT TODAY'S STATE — what this leg
+  does if its OWN harvest finds the target absent, and if it finds it present — e.g. "if the bucket
+  carries no policy, create one (absence is the expected starting point, not an escalation); if one
+  exists, modify it". Never state which branch is true today.}}
 - {{If it CONSUMES a chained value}}: it consumes {{VALUE}} **as chained** — it does **not** re-derive
   it, and is forbidden from recomputing it. Containment for that value is discharged **upstream** and
   re-verified at the program tier.
