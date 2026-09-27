@@ -69,6 +69,8 @@ Cascade fires top-to-bottom; first match sets `errorCategory`. Evidence fields p
 
 **Happy-path property — important for consumers:** A clean execution produces a `result.json` with NONE of the signal fields below populated. Only `toolLoop.correctionTurnUsed: false` is added unconditionally — that field is the "code path executed" canary. Consumers (GUI, harness chainer, reactor) MUST treat absence of `errorCategory` / `executionDegradation` / `protocolValidation` / `templateScopeMismatch` as "no issues detected", not as "fields missing — error in detector."
 
+⚠️ **The converse is NOT true for `protocolValidation` (2026-09-15).** Presence no longer implies a problem: a **sanctioned halt** (`haltExempt: true`, `haltReason`, empty `missingSteps`) emits the block as a POSITIVE fact and raises no degradation. Gate on `missingSteps.length > 0`, never on presence. This exists because the null-means-omitted convention above, combined with "absence = no issues", made a harness that correctly REFUSED to act (e.g. declining to spawn a duplicate program) indistinguishable from a flawless run — trading a false accusation for a false all-clear. Protocol 10: ship the fact; silence is a verdict nobody can audit.
+
 This is by design: detection signals are conditional, NOT exhaustive. A `null`/missing field means "this detector ran and found nothing." Validated 2026-04-16 smoke test on Meridian Health pipeline — all 7 executions completed cleanly with `correctionTurnUsed: false` and zero other signal fields.
 
 Always populated when the underlying signal fires, regardless of which cascade winner claimed `errorCategory`:
@@ -265,3 +267,42 @@ grep -rn "errorCategory:" lib/services/ app/api/ --include="*.ts"
 ---
 
 **Pattern Status**: Production ✅ | **Confidence**: 91% | **Failure Modes Detected**: 7 distinct categories where executions previously stored as opaque SUCCESS now surface structured signals. Zero regressions.
+
+---
+
+## 2026-09-16 — a new defense in this stack: do not feed a HARVESTER another pipeline's deliverable
+
+Added when cross-pipeline delivery shipped (Bug Class 84). It is a defense of a kind this stack did
+not previously carry: **a restriction on what the platform may deliver**, rather than a check on what
+an agent produced.
+
+**The threat.** A harvester's entire output is a point-in-time snapshot of **observed** state, and it
+is the *machine-parsed ground truth* downstream containment compares derived values against. An
+upstream pipeline's `report.md` carries allocations, CIDRs and VLANs **in exactly the shape of a
+harvest table**. A harvester that folds one injected entry into its `## Harvested Allocations` block
+produces a clean-looking harvest containing **a value nobody observed on the device**.
+
+**Why that is worse than an ordinary fabrication.** It poisons the net *at its root*: every tier above
+then checks **correctly, against contaminated ground truth**. Nothing further up can detect it,
+because nothing further up sees the device.
+
+**Why the existing defenses do not cover it.**
+- The provenance stamp (`inheritedFromLeg`) answers *who produced this*; it cannot answer *is this
+  still true*. The content is not false — it was observed elsewhere, at another time.
+- `<prior_output role="context_only">` and "not instructions for you" address
+  **instruction-following**, which is the wrong threat model. The harvester would not be *obeying*
+  the entry; it would be *citing* it.
+- Anti-fabrication prose asks the agent not to report what it did not observe — and the agent has no
+  way to tell that an entry in its own §6 was not observed by it.
+
+**The defense**: harvest-shaped roles are excluded from cross-pipeline injection
+(`INJECTION_EXCLUDED_ROLES`, `context-chainer.ts`), with a runtime tripwire warning when a role
+matches `/review|harvest|acquir/i` and is not on the list. `change_reviewer` and
+`publication_reviewer` are excluded on a separate ground (a reviewer must not gain a second
+reviewable document; three self-host format vetoes on 2026-09-09 were reviewers misreading a
+one-document §6).
+
+**Generalisation worth keeping**: when adding a delivery mechanism, ask **per seat** what that role
+would *do* with the payload — not merely whether it is entitled to it. This exclusion came from
+asking that question of a role that had no case either way, and it was invisible to three review
+panels that asked only about delivery.

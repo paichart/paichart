@@ -35,7 +35,11 @@ F20 escalated-as-outcome, and **R4 truncation-stall** (a SYNTHESIZE that persist
 + IN_PROGRESS = the "settled-children, harness-mute" hang; gated `resolvedMode==='SYNTHESIZE'`, F20-COMPLETED
 wins the ordering). The forward-cone walk lives in **`lib/services/mark-forward-cone.ts`** (extracted
 2026-07-16, prisma-free so it doesn't drag `lib/prisma` into mock persist tests; `ORDER BY t.id` for
-deterministic lock order). Predicates (Guard 4 + harnessModeResolver) stay verbatim.
+deterministic lock order). The terminal predicates were kept verbatim until **RWF A1 (2026-09-26)**, which moved
+Guard 4, harnessModeResolver, invariant point 3 and F20 onto ONE shared predicate (`lib/services/child-stage-settled.ts`)
+and widened the in-flight arm to any task status — the property F16 relies on (`executionStatus=FAILED` is terminal)
+is preserved and pinned. Guard 8 exhaustion now TERMINALIZES (RWF A2); the reapers fire the retrigger (A1); only the
+lost-wakeup self-check bypasses Guard 7 (A3). `cline_docs/reviews/rwf-stage1-2026-09-26/`.
 `cline_docs/reviews/{f16-frozen-cone,nonterminal-family,truncation-r4}-2026-07-16/`.
 
 ## Visual Feedback Protocol

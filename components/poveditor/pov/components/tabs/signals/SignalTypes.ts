@@ -36,6 +36,15 @@ export type ErrorCategory =
   | 'TOOL_FAILURES'                   // P3  — >50% tool failure rate
   | 'SILENT_REFUSAL'                  // P7  — "I cannot/unable to..."
   | 'PROTOCOL_STEP_SKIPPED'           // P8  — pipeline harness missed required steps
+  // 2026-09-25 drift catch-up (register E1): the four below were emitted by
+  // lib/agents/harness/execution-quality.ts while this union did not know them, and
+  // PrimaryFaultBanner's exhaustive switches returned undefined for them — `tone.bg` on
+  // undefined, i.e. the Pipeline tab threw on exactly the runs it most needed to show.
+  // Pinned against the emitter by scripts/test-execution-quality.ts (CAT-PARITY).
+  | 'EMPTY_DELIVERABLE'               // M3 companion — empty text + tool activity (non-PIPELINE)
+  | 'TRUNCATED_NO_OUTPUT'             // R2 — stopped at max_tokens with no deliverable text
+  | 'TRUNCATED_PARTIAL_OUTPUT'        // F2 — stopped at max_tokens mid-deliverable
+  | 'HARNESS_NO_OUTPUT'               // PIPELINE harness produced no deliverable text
   | 'TEMPLATE_SCOPE_MISMATCH';        // P9  — RETIRED 2026-07-17; appears only in historical artifacts
 
 /** P3/P4/P5/P7 — tool-execution degradation stats */

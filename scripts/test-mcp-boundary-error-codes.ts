@@ -249,7 +249,11 @@ test('agent.results: no `any[]`, and errorCategory is hoisted from the already-l
   }
   expect(resultsSource).toMatch(/satisfies\s+Prisma\.AgentExecutionSelect/);
   expect(resultsSource).toMatch(/a\.name === 'error\.json'/);
-  expect(resultsSource).toMatch(/errorCategory\s*=\s*typeof\s+parsed\?\.errorCategory\s*===\s*'string'/);
+  // 2026-09-16: the error.json read is now one of TWO sources coalesced into `errorCategory`
+  // (result.json's hoisted degradation token is the other — boundary review F2). Pin the read
+  // by its own name, and the coalesce, so neither half can silently drop the other again.
+  expect(resultsSource).toMatch(/errorCategoryFromErrorJson\s*=\s*typeof\s+parsed\?\.errorCategory\s*===\s*'string'/);
+  expect(resultsSource).toMatch(/resultSummary\.errorCategory[\s\S]{0,120}\?\?\s*errorCategoryFromErrorJson/);
 });
 
 test('agent.results: the four phantom reads stay dead', () => {

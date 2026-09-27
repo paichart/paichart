@@ -66,7 +66,16 @@ export interface NetContext {
   harnessMode: string | null;
   /** The leaf/leg output. NULLABLE by the core's own type — nets handle absence, never the caller. */
   finalResponse: string | null | undefined;
-  /** `task.metadata.pipelineStageId` — the leg's child stage, or null. */
+  /**
+   * `task.metadata.pipelineStageId` — the stage the leg OWNS (where its children live), or null.
+   *
+   * ⚠️ NOT the stage the leg LIVES IN (`tasks.stage_id`). The two are always different, and
+   * confusing them is a shipped defect: `contractApplicability` asked "who owns this stage?" with
+   * the owned stage and got a self-match the protocol filter then rejected, so it answered
+   * `no-program-parent` on every leg for a week (fixed 2026-09-18). A consumer that wants the
+   * leg's OWN stage must read it — it is deliberately not on ctx, because a second stage field
+   * here would be one rename away from the same mix-up.
+   */
   stageId: string | null;
   /** `isProgramHarnessTask` resolved once. Each net's TIER ARM lives inside its own enrichment. */
   programTier: boolean;

@@ -34,9 +34,10 @@ import {
   ROLLBACK_SCOPE_NOTE,
 } from './rollback-containment';
 import { resolveTaskProtocol } from './program-protocol';
+import { readAuthoritativeResultField } from './authoritative-result-read';
 
 /** Same narrow surface, same three reasons, as `ContainmentPrisma` — see that module's note. */
-export type RollbackPrisma = Pick<Prisma.TransactionClient, 'task' | 'stage' | '$queryRaw'>;
+export type RollbackPrisma = Pick<Prisma.TransactionClient, 'task' | 'stage' | 'agentExecution' | 'agentArtifact' | '$queryRaw'>;
 
 /**
  * Bound on the stage-children scan (the `validate:pagination` gate blocked deploy `34550802714`
@@ -175,12 +176,8 @@ export async function computeRollbackContainmentFact(
   // The harvest child is an ACTION task, so `result.json` is the RIGHT name. Do NOT copy this
   // predicate to a PIPELINE lookup — a PIPELINE writes `pipeline-index.json`, which is the same
   // class of defect recorded at three separate sites in the containment enrichment's header.
-  const rows = await prisma.$queryRaw<Array<{ fr: string | null }>>`
-    SELECT (content::jsonb)->>'finalResponse' AS fr FROM agent_artifacts
-    WHERE name = 'result.json' AND content LIKE '{%'
-      AND (content::jsonb)->>'taskId' = ${harvestChild.id}
-    ORDER BY "createdAt" DESC LIMIT 1`;
-  const harvestText = rows[0]?.fr ?? null;
+  // RWF Wave B: the authoritative harvest execution (authoritative-result-read.ts).
+  const harvestText = (await readAuthoritativeResultField(prisma, harvestChild.id, 'finalResponse')).value;
   if (!harvestText) {
     // The check SHOULD have run and could not: the package quotes restore content and the witnessed
     // evidence is unreadable. This is the arm that FAILS CLOSED (blocking, via the disposition).
@@ -248,12 +245,10 @@ export async function hoistRollbackContainment(
     (c.agentRole ?? '').toLowerCase().includes('author') || c.title.toLowerCase().startsWith('author'));
   if (!authorChild) return miss('no-author-child');
 
-  const rows = await prisma.$queryRaw<Array<{ rc: string | null }>>`
-    SELECT (content::jsonb)->>'rollbackContainment' AS rc FROM agent_artifacts
-    WHERE name = 'result.json' AND content LIKE '{%'
-      AND (content::jsonb)->>'taskId' = ${authorChild.id}
-    ORDER BY "createdAt" DESC LIMIT 1`;
-  const raw = rows[0]?.rc ?? null;
+  // RWF Wave B: hoist from the Author execution the Reviewer was chained — a superseded or R8-empty
+  // newer run is skipped, and if none is selectable this fails closed as no-author-stamp. The jsonb
+  // projection (not JSON.parse of the row) is load-bearing: it fixes the hoisted stamp's key order.
+  const raw = (await readAuthoritativeResultField(prisma, authorChild.id, 'rollbackContainment')).value;
   // `no-author-stamp` is a COULD-NOT-CHECK arm and therefore fails closed. Expect it briefly for
   // legs whose Author persisted before this net shipped, and for any leg mid-flight across the
   // deploy: those genuinely were not checked, so a visible token is the honest rendering. It gates

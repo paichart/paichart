@@ -193,6 +193,27 @@ console.log(`\n${'─'.repeat(60)}`);
     ? pass('1c: strip-only rewrite (count 0, sanitized true) → SILENT by design — no marker exists to misread')
     : fail('1c: strip-only rewrite must not annotate (no marker in the text)');
 
+  // F9 (2026-09-25): keyed on the classes that leave a VISIBLE mark, not on the count alone.
+  const tagOnly = renderPipelineContextSection(base({ neutralizedCount: 0, sanitized: false, rewritten: true, rewriteClasses: ['quarantine-tag'] })).join('\n');
+  tagOnly.includes('Platform note (transport, not content)') && tagOnly.includes('‹prior_output›') && !tagOnly.includes('span(s)')
+    ? pass('F9: quarantine-tag with count 0 → the note fires and names the angle-quoted tag (was silent pre-F9)')
+    : fail('F9: a tag-only rewrite must annotate the seam', tagOnly.slice(0, 300));
+  const emptiedOnly = renderPipelineContextSection(base({ neutralizedCount: 0, rewritten: true, rewriteClasses: ['ansi', 'emptied'] })).join('\n');
+  emptiedOnly.includes('replaced the entire output') && emptiedOnly.includes('NOT text the predecessor wrote')
+    ? pass('F9: emptied (clear-screen) with count 0 → the note explains the full-block marker')
+    : fail('F9: an emptied rewrite must annotate the seam', emptiedOnly.slice(0, 300));
+  const withClasses = renderPipelineContextSection(base({ neutralizedCount: 2, sanitized: true, rewritten: true, rewriteClasses: ['injection-pattern'] })).join('\n');
+  withClasses.includes('2 span(s)') && withClasses.includes('beyond those 2 was already in the stored artifact') && !/Any `\[NEUTRALIZED-…\]` marker you see is a platform annotation/.test(withClasses)
+    ? pass('F9: "These"/"beyond those N": a marker quoted AT REST is not claimed as a transit annotation')
+    : fail('F9: the note must not claim every marker was added in transit', withClasses.slice(0, 400));
+  const cosmetic = renderPipelineContextSection(base({ neutralizedCount: 0, sanitized: false, rewritten: true, rewriteClasses: ['nfkc', 'ansi'] })).join('\n');
+  !cosmetic.includes('Platform note')
+    ? pass('F9: cosmetic classes (nfkc/ansi) → SILENT (no mark to misread; avoids the 2026-09-09 false veto)')
+    : fail('F9: cosmetic rewrites must not annotate');
+  cosmetic === renderPipelineContextSection(base({ neutralizedCount: 0, sanitized: false })).join('\n')
+    ? pass('F9: a cosmetic-only entry renders byte-identical to an entry with no F9 fields (D4 baseline)')
+    : fail('F9: cosmetic-only must be byte-identical to the pre-F9 render');
+
   // The 2026-06-24 ruling: the conflated aggregate must never reach the prompt.
   const conflated = renderPipelineContextSection({
     chainedFrom: [{ taskTitle: 'A', finalResponse: 'x' }],
@@ -268,6 +289,252 @@ console.log(`\n${'─'.repeat(60)}`);
   !absent.includes('Rollback provenance')
     ? pass('RC§6: absent fact renders nothing (no ABSENT token while ungated — H2 ruling)')
     : fail('RC§6: an absent fact must render nothing at all');
+}
+
+console.log(`\n${'─'.repeat(60)}`);
+// ── XP§6 (2026-09-16, Bug Class 84): cross-pipeline entries render as what they ARE ───────
+// An entry stamped `inheritedFromLeg` was delivered to this task's LEG by an upstream pipeline.
+// It holds no dependency edge to this task. Rendering it as "### Previous Task:" inside an
+// "N of M predecessor tasks completed" tally is the platform asserting an invented relation —
+// and it would make the delivery SILENT AND SATISFIED where today the consumer escalates.
+{
+  const inheritedEntry = (extra: any = {}) => ({
+    taskTitle: 'Cluster provisioning pipeline',
+    agentRole: 'pipeline_orchestrator',
+    finalResponse: 'derivedRangeCidr: 10.244.0.4/30',
+    inheritedFromLeg: 'cmleg000',
+    inheritedAt: '2026-09-16T00:00:00.000Z',
+    source: 'report.md',
+    ...extra,
+  });
+  const ownEntry = { taskTitle: 'Harvest', agentRole: 'harvester', confidenceScore: 91, finalResponse: 'own out' };
+
+  // A1 — mixed: own entry keeps its heading, injected entry gets the Upstream heading + relation
+  const mixed = renderPipelineContextSection({
+    chainedFrom: [inheritedEntry(), ownEntry],
+    pipelineMetadata: { completedDependencies: 1, totalDependencies: 1, inheritedPredecessors: 1 },
+  }).join('\n');
+  mixed.includes('### Upstream Pipeline Deliverable: Cluster provisioning pipeline') && mixed.includes('### Previous Task: Harvest')
+    ? pass('XP A1: mixed context — injected entry under the Upstream heading, own entry unchanged')
+    : fail('XP A1: mixed render wrong', mixed.slice(0, 300));
+  /NOT produced by a predecessor of this task/.test(mixed) && /delivered to the pipeline THIS task belongs to/.test(mixed)
+    ? pass('XP A1: the relation is NAMED — delivered to this task\'s pipeline, not produced by a predecessor')
+    : fail('XP A1: the relation line must name what the entry is AND is not', mixed.slice(0, 400));
+  // A7 — the tally still counts dependency rows only, and matches the non-injected list
+  mixed.includes('*Pipeline: 1 of 1 predecessor tasks completed.*')
+    ? pass('XP A7: the N-of-M tally is unchanged by an injection (dependency-derived)')
+    : fail('XP A7: tally must exclude injected entries', mixed.slice(0, 300));
+
+  // A7 (section level) — injected-ONLY must not read "0 of 0 predecessor tasks" above a deliverable
+  const injectedOnly = renderPipelineContextSection({
+    chainedFrom: [inheritedEntry()],
+    pipelineMetadata: { completedDependencies: 0, totalDependencies: 0, inheritedPredecessors: 1 },
+  }).join('\n');
+  !injectedOnly.includes('0 of 0 predecessor tasks completed')
+    ? pass('XP A7: injected-only §6 does not print the self-contradicting "0 of 0" tally')
+    : fail('XP A7: "0 of 0 predecessor tasks completed" above a deliverable', injectedOnly.slice(0, 300));
+  injectedOnly.includes('## Pipeline Context (from upstream pipelines)') && injectedOnly.includes('no predecessor tasks of its own')
+    ? pass('XP A7: injected-only §6 qualifies the section heading and states what it holds')
+    : fail('XP A7: section level not qualified', injectedOnly.slice(0, 300));
+  injectedOnly.includes('it was for the previous agent')
+    ? fail('XP A7: closing line still asserts "the previous agent" for an inherited entry')
+    : pass('XP A7: closing line no longer names a predecessor relation that does not hold');
+
+  // A7 — "0 of 2" is TRUE (deps exist, none chained) and must survive alongside an injection
+  const unchainedDeps = renderPipelineContextSection({
+    chainedFrom: [inheritedEntry()],
+    pipelineMetadata: { completedDependencies: 0, totalDependencies: 2, inheritedPredecessors: 1 },
+  }).join('\n');
+  unchainedDeps.includes('*Pipeline: 0 of 2 predecessor tasks completed.*')
+    ? pass('XP A7: a TRUE "0 of 2" tally is kept — only the vacuous 0-of-0 case is replaced')
+    : fail('XP A7: real unchained-dependency tally was dropped', unchainedDeps.slice(0, 300));
+
+  // A13 — an F19 fallback must NOT ride under an unqualified "Deliverable" heading.
+  // Keyed on `source`, never on `degraded`: degraded is ABSENT on every pre-2026-09-16 entry.
+  const f19 = renderPipelineContextSection({
+    chainedFrom: [inheritedEntry({ source: 'pipeline-index.json' })],
+    pipelineMetadata: { completedDependencies: 0, totalDependencies: 0, inheritedPredecessors: 1 },
+  }).join('\n');
+  !f19.includes('### Upstream Pipeline Deliverable') && f19.includes('deliverable not chained') && f19.includes('forensic index')
+    ? pass('XP A13: pipeline-index.json fallback is NOT called a deliverable and says what it is')
+    : fail('XP A13: F19 fallback rendered under an unqualified Deliverable heading', f19.slice(0, 300));
+  const noSource = renderPipelineContextSection({
+    chainedFrom: [inheritedEntry({ source: undefined })],
+    pipelineMetadata: { completedDependencies: 0, totalDependencies: 0, inheritedPredecessors: 1 },
+  }).join('\n');
+  !noSource.includes('### Upstream Pipeline Deliverable') && noSource.includes('source not recorded')
+    ? pass('XP A13: an entry with NO source is not guessed in either direction')
+    : fail('XP A13: absent source must not read as a deliverable', noSource.slice(0, 300));
+  // Absent `degraded` must not flip the heading on a real report.md entry (absent ≠ degraded).
+  renderPipelineContextSection({
+    chainedFrom: [inheritedEntry()],
+    pipelineMetadata: { completedDependencies: 0, totalDependencies: 0 },
+  }).join('\n').includes('### Upstream Pipeline Deliverable')
+    ? pass('XP A13: absent `degraded` on a report.md entry still renders as a Deliverable')
+    : fail('XP A13: heading must key on source, not on the absent degraded flag');
+
+  // D4 no-op guarantee — the qualification is driven by the ENTRIES, not by pipelineMetadata.
+  // A metadata field that disagrees with the array must never qualify a heading with nothing
+  // qualified under it (a replayed/frozen config, or a future writer).
+  const metaLies = renderPipelineContextSection({
+    chainedFrom: [ownEntry],
+    pipelineMetadata: { completedDependencies: 1, totalDependencies: 1, inheritedPredecessors: 3 },
+  }).join('\n');
+  metaLies.includes('## Pipeline Context (from previous tasks)') && !metaLies.includes('Upstream Pipeline')
+    ? pass('XP: render is a pure function of the ENTRIES — a disagreeing metadata count qualifies nothing')
+    : fail('XP: metadata must not drive the heading qualification', metaLies.slice(0, 300));
+  const emptyStamp = renderPipelineContextSection({
+    chainedFrom: [{ ...ownEntry, inheritedFromLeg: '' }],
+    pipelineMetadata: { completedDependencies: 1, totalDependencies: 1 },
+  }).join('\n');
+  emptyStamp.includes('### Previous Task: Harvest')
+    ? pass('XP: an empty-string stamp is not a stamp (no Upstream heading)')
+    : fail('XP: empty inheritedFromLeg must not qualify', emptyStamp.slice(0, 200));
+}
+
+// ── DERIVATION CONTAINMENT (Net #1, 2026-09-17) ────────────────────────────────────────────────
+// Measured before writing: SIBLING entries carry it 0 of 512 times (stamped at leg-SYNTHESIZE,
+// after siblings run); CROSS-PIPELINE entries carry it 215 of 280, with 178 dispositions —
+// 91 benign, 66 needs-node-c, 21 BLOCKING. So presence alone separates the populations and no
+// kind-check is needed. These pin BOTH directions, because a render that always fires or never
+// fires would pass a one-directional test.
+{
+  const base = {
+    taskId: 'u1', taskTitle: 'Harvest current state', agentRole: 'infra_state_harvester',
+    confidenceScore: 90, finalResponse: 'body',
+  };
+  const withDisp = (d: string, reason?: string) => renderPipelineContextSection({
+    chainedFrom: [{ ...base, derivationContainment: { containmentDisposition: { disposition: d, ...(reason ? { reason } : {}) } } }],
+    pipelineMetadata: { completedDependencies: 1, totalDependencies: 1 },
+  }).join('\n');
+
+  const blocking = withDisp('blocking', 'consuming-leg-upstream-absent');
+  blocking.includes('**Derivation containment (platform fact)**: blocking — consuming-leg-upstream-absent')
+    ? pass('DC1: a BLOCKING disposition renders with its reason verbatim')
+    : fail('DC1: blocking disposition must render', blocking.slice(0, 300));
+
+  const needsC = withDisp('needs-node-c', 'harvested-pool-no-derivation-cannot-decide');
+  needsC.includes('delegated to the program-tier reviewer — this is neither a pass nor a block')
+    ? pass('DC2: needs-node-c carries the not-a-pass-not-a-block qualifier (the delicate one)')
+    : fail('DC2: needs-node-c must be qualified', needsC.slice(0, 300));
+
+  const benign = withDisp('benign', 'checked-clean');
+  (benign.includes('**Derivation containment (platform fact)**: benign — checked-clean')
+    && !benign.includes('neither a pass nor a block'))
+    ? pass('DC3: benign renders plainly and does NOT borrow the needs-node-c qualifier')
+    : fail('DC3: benign render', benign.slice(0, 300));
+
+  // The SIBLING case — the reason this line did not exist until 2026-09-17.
+  const noDc = renderPipelineContextSection({
+    chainedFrom: [base],
+    pipelineMetadata: { completedDependencies: 1, totalDependencies: 1 },
+  }).join('\n');
+  !noDc.includes('Derivation containment')
+    ? pass('DC4: an entry WITHOUT the fact renders no line (siblings: 0 of 512 carry it)')
+    : fail('DC4: absent fact must render nothing', noDc.slice(0, 300));
+
+  // Not vacuous in the other direction either: a malformed stamp must not emit a half-line.
+  const malformed = renderPipelineContextSection({
+    chainedFrom: [{ ...base, derivationContainment: { containmentDisposition: { disposition: '' } } }],
+    pipelineMetadata: { completedDependencies: 1, totalDependencies: 1 },
+  }).join('\n');
+  !malformed.includes('Derivation containment')
+    ? pass('DC5: an empty disposition string is not a disposition')
+    : fail('DC5: empty disposition must not render', malformed.slice(0, 300));
+}
+
+// ── UPSTREAM DERIVED VALUES (FU1 §3.3, 2026-09-25) ─────────────────────────────────────────────
+// The value the consuming Architect/Author had only as prose is now stated beside the disposition
+// on the INHERITED entry. Pinned in BOTH directions: it renders WHAT (kind + value, verbatim) where it
+// should, a named "none" where a disposition exists without a value, and NOTHING on a non-inherited
+// entry — which is how a leg's own dependency edges and the program tier stay byte-identical.
+{
+  const LABEL = '**Derived values stamped by this upstream pipeline (platform fact)**';
+  const inh = {
+    taskId: 'up1', taskTitle: 'Fabric leg', agentRole: 'pipeline_harness_orchestrator',
+    confidenceScore: 90, finalResponse: 'upstream deliverable', inheritedFromLeg: 'leg1', source: 'report.md',
+  };
+  const render = (entry: Record<string, unknown>) => renderPipelineContextSection({
+    chainedFrom: [entry], pipelineMetadata: { completedDependencies: 0, totalDependencies: 0 },
+  }).join('\n');
+  const dcOf = (derivedValues?: unknown, disposition: string | null = 'benign') => ({
+    checked: true, violations: [],
+    ...(derivedValues !== undefined ? { derivedValues } : {}),
+    ...(disposition ? { containmentDisposition: { disposition, reason: 'checked-clean' } } : {}),
+  });
+
+  const one = render({ ...inh, derivationContainment: dcOf([{ kind: 'cidr', value: '10.99.0.0/27' }]) });
+  one.includes(`${LABEL}: cidr 10.99.0.0/27`)
+    ? pass('DV1: an inherited entry renders the stamped derived value, kind + value verbatim')
+    : fail('DV1: inherited derived value must render', one.slice(0, 600));
+
+  // Line ORDER: disposition first, value directly beneath it — one fact block, not two floating lines.
+  const lines = one.split('\n');
+  const di = lines.findIndex((l) => l.startsWith('- **Derivation containment (platform fact)**'));
+  lines[di + 1]?.startsWith(`- ${LABEL}`)
+    ? pass('DV2: the value line sits directly beneath the disposition line')
+    : fail('DV2: value line placement', lines.slice(di, di + 3).join(' | '));
+
+  // Multi-value, multi-kind (the real D1 case): every value, in stamped order, kind on each.
+  const multi = render({ ...inh, derivationContainment: dcOf([
+    { kind: 'cidr', value: '10.99.0.16/31' }, { kind: 'asn', value: '65001' }, { kind: 'asn', value: '65002' },
+  ]) });
+  multi.includes(`${LABEL}: cidr 10.99.0.16/31; asn 65001; asn 65002`)
+    ? pass('DV3: a multi-kind set renders every value with its kind, in stamped order')
+    : fail('DV3: multi-value render', multi.slice(0, 600));
+
+  // Named absence: a disposition with no value says "none" — never silence (reads as "not checked").
+  const none = render({ ...inh, derivationContainment: dcOf(undefined) });
+  none.includes(`${LABEL}: none`)
+    ? pass('DV4: disposition + no derivedValues → the absence is NAMED ("none"), not silent')
+    : fail('DV4: named absence', none.slice(0, 600));
+  const emptyArr = render({ ...inh, derivationContainment: dcOf([]) });
+  emptyArr.includes(`${LABEL}: none`)
+    ? pass('DV4b: an EMPTY derivedValues array is the same named absence')
+    : fail('DV4b: empty array', emptyArr.slice(0, 600));
+
+  // No fact at all → no line (nothing stamped, nothing to name; matches DC4's contract).
+  const noFact = render({ ...inh });
+  !noFact.includes('Derived values stamped')
+    ? pass('DV5: an inherited entry with NO derivationContainment renders no value line')
+    : fail('DV5: absent fact must render nothing', noFact.slice(0, 600));
+
+  // Values without a disposition still render (a value is a fact on its own); "none" needs a disposition.
+  const noDisp = render({ ...inh, derivationContainment: dcOf([{ kind: 'vlan', value: '120' }], null) });
+  const noDispNone = render({ ...inh, derivationContainment: dcOf(undefined, null) });
+  (noDisp.includes(`${LABEL}: vlan 120`) && !noDispNone.includes('Derived values stamped'))
+    ? pass('DV6: values render without a disposition; "none" is only stated where a disposition is')
+    : fail('DV6: disposition coupling', `${noDisp.slice(0, 300)} || ${noDispNone.slice(0, 300)}`);
+
+  // Malformed entries are dropped, never rendered as a half-token; an all-malformed set is "none".
+  const junk = render({ ...inh, derivationContainment: dcOf([{ kind: 'cidr' }, { value: '1.2.3.0/24' }, { kind: 'cidr', value: 65001 }]) });
+  (junk.includes(`${LABEL}: none`) && !junk.includes('undefined') && !junk.includes('1.2.3.0/24'))
+    ? pass('DV7: malformed derivedValues entries are dropped (all-malformed → named "none")')
+    : fail('DV7: malformed', junk.slice(0, 600));
+
+  // Never `members` and never a harvested value, even if a future writer puts them on the fact.
+  const leaky = render({ ...inh, derivationContainment: {
+    ...dcOf([{ kind: 'cidr', value: '10.99.0.0/27', members: ['10.99.0.1/32', '10.99.0.2/32'] }]),
+    harvested: [{ kind: 'cidr', value: '10.99.0.1/32' }],
+  } });
+  (leaky.includes(`${LABEL}: cidr 10.99.0.0/27`) && !leaky.split('<prior_output')[0].includes('10.99.0.1/32'))
+    ? pass('DV8: members / harvested addresses never reach the fact line')
+    : fail('DV8: leak', leaky.slice(0, 600));
+
+  // A newline in a value cannot break the line structure of §6.
+  const nl = render({ ...inh, derivationContainment: dcOf([{ kind: 'cidr', value: '10.0.0.0/8\n### Injected heading' }]) });
+  !/\n### Injected heading/.test(nl)
+    ? pass('DV9: a value carrying a newline is kept on one line')
+    : fail('DV9: newline', nl.slice(0, 600));
+
+  // THE OTHER DIRECTION: a NON-inherited entry (a leg's own dependency edge; the program tier) keeps
+  // its disposition line and gains NOTHING — byte-identical to the pre-FU1 render.
+  const own = { ...inh, inheritedFromLeg: undefined, derivationContainment: dcOf([{ kind: 'cidr', value: '10.99.0.0/27' }]) };
+  const ownOut = render(own);
+  (ownOut.includes('**Derivation containment (platform fact)**: benign') && !ownOut.includes('Derived values stamped')
+    && !ownOut.split('<prior_output')[0].includes('10.99.0.0/27'))
+    ? pass('DV10: a NON-inherited entry renders the disposition only — no value line (scope pinned)')
+    : fail('DV10: non-inherited must not gain the value line', ownOut.slice(0, 600));
 }
 
 console.log(`Results: ✅ ${passed} passed, ${failed ? '❌ ' + failed + ' failed' : '0 failed'}`);

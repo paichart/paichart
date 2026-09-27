@@ -66,8 +66,9 @@ exist today. See `cline_docs/reviews/r9-option-b-2026-07-26/TRACE-CORRECTION.md`
 ## 🆕 2026-07-26 — The `securityEvent` pino tag (a convention with a test-pinned NEGATIVE)
 
 ```bash
-# Every emit site. Expect 14 files (2026-07-26): 4 lib/services + harness, the MCP hub/security
-# handlers, 2 app/api routes. The tag marks an INTEGRITY VIOLATION on a security boundary.
+# Every emit site. 19 files at 2026-09-25 (14 at 2026-07-26; F9 added R9 site B, context-chainer.ts):
+# lib/services + harness, the MCP hub/security handlers, app/api routes. The tag marks an INTEGRITY
+# VIOLATION on a security boundary.
 grep -rln "securityEvent" lib/ app/ --include=*.ts --include=*.js
 
 # The pinned NEGATIVE — a benign guard firing must NOT carry the tag.
@@ -89,10 +90,13 @@ unbuilt roadmap (`TODO-observability-and-diagnostics-roadmap.md` §112-144).
 guard firings — `logReactorBudgetSkip` omits it and that omission is test-pinned
 (`scripts/test-reactor-race-guard.ts`). Before tagging a new site, ask whether it can fire routinely
 on benign input; a routinely-firing tag desensitizes the channel operators use to find real attacks.
-**Known exception (accepted 2026-07-26)**: the R9 site-A sanitizer warn (`agentic-tool-loop.ts`)
-carries the tag even though a firing may be a C1 false positive — it is unclassifiable at emit time
-and "a security boundary rewrote data" is true in both branches. Safe only while nothing consumes the
-flag; **re-decide before wiring any `securityEvent`-filtered alert pipeline.**
+**Known exception (accepted 2026-07-26, NARROWED 2026-09-25 by F9)**: the R9 sanitizer warns — site A
+(`agentic-tool-loop.ts`) and, since F9, site B (`context-chainer.ts`) — carry the tag even though a
+firing may be a C1 false positive. Since F9 they fire ONLY on the `quarantine-tag` / `injection-pattern`
+classes (`R9_OPERATOR_EVENT_CLASSES`), never on cosmetic rewrites (NFKC, ANSI, strips) or `emptied`; a
+static pin forbids gating them on `rewritten`. Measured before F9: all 30 site-A firings in history were
+first-party `INSTRUCTION_OVERRIDE` false positives. Still safe only while nothing consumes the flag
+(register F9-s5); **re-decide before wiring any `securityEvent`-filtered alert pipeline.**
 
 ## 🆕 2026-06-23 Session — Run These Greps FIRST (cross-tenant analytics leak class — `264e09c6` + `9c80d7a9`)
 ```bash
@@ -1459,3 +1463,23 @@ cat lib/mcp/server/tools/response-sanitizer.js | head -50
 - L1 input rejection: `lib/mcp/server/config/tool-schemas.js:SafeNameField`
 - Markdown URL allowlist: `lib/mcp/server/tools/advanced/analytics/analytics-formatters.js:sanitizeLinkUri`
 - Pattern memory: [[feedback_bc2_audits_two_axes]] (two-axis grep saved this)
+
+
+## 🆕 2026-09-26 — Generated-spec scope and selector reach (GS-R5; this map had nothing on it)
+
+A generated `requirements.md` is a CONTROL for other automation, and two silent-widening shapes were measured:
+a derived population taken as the WHOLE class (Rev 5: "every configured IPv4 address" ⇒ minimal cover `0.0.0.0/0`,
+approved at 90 with every mechanical check green) and a DISCLOSED namespace-wide default (Run 3: `podSelector: {}`
+reaching an unrelated service, graded "properly disclosed — not a defect" at three tiers and through a human plan gate).
+Severity (sec-ops, 2026-09-26): the class is HIGH latent — the dangerous variant is a plausible widening no gate flags.
+
+```bash
+# The controls, by where they bind (every grep below re-verifiable):
+grep -c "A decision that WIDENS who is authorised or what is selected is never derived" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts  # expect 1
+grep -c "Design-decision provenance" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts  # expect 1
+grep -c "disclosure is not authorisation" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts  # expect 1
+grep -c "Then the AUTHORISATION test" scripts/seed-protocol-prompts.ts  # expect 1
+grep -c "its default is the NARROWEST choice, never the whole class" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts  # expect 1
+```
+Record: `cline_docs/reviews/gs-r5-decision-guidance-2026-09-26/SYNTHESIS.md`. Publish-pass pre-filter for harvested state:
+`requirements-rules.py --lint` (public repo).

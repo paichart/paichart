@@ -927,6 +927,8 @@ The engine's post-execution analysis emits 7 detection signals + 1 anti-fabricat
 
 *(Anchors re-verified 2026-06-10 post-extraction — the loop's removal shifted everything below ~770 in the engine and ~645 in the stream.)*
 
+🔴 **STALE — do not use these line refs (flagged 2026-09-15 by pipeline-harness during a Protocol 11 sweep; NOT yet repaired, owner = agent-execution-specialist).** Every P-signal in the table above has since moved into the shared `lib/agents/harness/execution-quality.ts` (373 lines), and **none** remain in `agentExecutionEngine.ts`. Verified by grep for all six — `TOOL_FAILURES`, `TOOL_LOOP_DEGRADED`, `BUDGET_EXHAUSTED`, `SILENT_REFUSAL`, `PROTOCOL_STEP_SKIPPED`, `TEMPLATE_MISMATCH_SELF_REPORTED` — each returns 2 hits in `execution-quality.ts` and 0 in the engine. So both columns point at a file that no longer contains the signal (e.g. P8 is listed at engine `~1251`; it is `execution-quality.ts:290`). Row #89 already carries the correct "IN THE SHARED MODULE" treatment and is the pattern for the repair. Left unrepaired rather than half-fixed: correcting one row would make the other five read as verified. **Filed with the full grep evidence + the repair pattern: `cline_docs/follow-ups/handoff-agent-execution-2026-09-16.md`.**
+
 **Cascade priority** (top wins for `errorCategory`; co-occurring fields populate independently):
 1. **P10 OVERRIDES** — agent's self-report is highest signal-to-noise
 2. P5 BUDGET_EXHAUSTED (most specific error)

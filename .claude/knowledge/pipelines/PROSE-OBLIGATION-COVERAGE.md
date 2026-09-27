@@ -24,7 +24,7 @@ earned and a defect recurring.
 
 ---
 
-## 1. The five failure modes — and which instrument fixes each
+## 1. The seven failure modes — and which instrument fixes each
 
 Not every mode is fixable by mechanisation. **Getting this wrong costs a build**: the coordinator
 proposed a net-shaped fix for a mode-1 failure on 2026-09-13, which the record had already shown was
@@ -37,10 +37,86 @@ the third iteration of a twice-failed prose instrument.
 | 3 | **Unanswerable → invented** | the obligation demands something the domain cannot answer | ❌ | **rewrite the obligation** |
 | 4 | **Correct by coincidence** | the outcome is right for reasons unrelated to the instruction | ✅ | mechanise |
 | 5 | **Hand-carried** | binds while carried in a task objective, vanishes next round | ❌ | **promote into the protocol** |
+| 6 | **Mis-addressed** | present, processed, answerable — but written to a party that does not act on it | ❌ | **re-address it to the party that acts** |
+| 7 | **Deferred, never discharged** | complete and correctly addressed — but it POINTS AT a referent that was never written | ❌ | **oblige the referent to exist, and pin it** |
 
 Modes 1, 2 and 4 are mechanisable because a mechanical check **does not care whether any tier
-performed the prose check**. Modes 3 and 5 are not: 3 is a defect in what we asked for, and 5 is a
-defect in where we put it.
+performed the prose check**. Modes 3, 5, 6 and 7 are not: 3 is a defect in what we asked for, 5 is a
+defect in where we put it, 6 is a defect in **who we said it to**, and 7 is a defect in **what we
+pointed at**. ⚠️ Mode 7's *pairing* is mechanisable even though the obligation is not — see below.
+
+### Mode 7 was added 2026-09-19, for the same reason, and it is the first that is mechanisable INDIRECTLY
+
+`config_change_author` — a **four-domain** key — grants an escape and defers its licensing:
+
+> *"specify the COMPARISON to perform instead of the output to expect, **per your active protocol's
+> comparison shape**"* — `pAIchartUniversalTemplate.ts:506`
+
+The instruction is processed, answerable, and addressed to the right party. It fails because
+**nothing obliges the referent to exist.** Measured across the four bound protocols on 2026-09-19:
+
+| domain | state | live failure |
+|---|---|---|
+| network-provisioning | defines the shape (3 places) | — |
+| kubernetes-gitops | silent → withdrew explicitly, protocol 1.9.0 | **author guessed, 3 rounds, 3 different invented forms** |
+| terraform-iac | silent | authors improvise; reviewers accept |
+| observability-config | **cites** a shape its body never defines | **reviewer accepts what no text grants** |
+
+The two live failures are mirror images — an author guessing at an undefined shape, a reviewer
+accepting one — and **both are compliant readings of text that does not exist**. Note a dangling
+*citation* is worse than silence: two reviewers can read it oppositely and both be correct.
+
+**Why this is not mode 6.** Mis-addressed means the instruction reached the wrong party. Here the
+author was the right party and received exactly what was written; what it never received was the
+withdrawal, because no one had written one. (Observability *also* has a mode-6 component — the only
+statement that a domain may grant nothing sits in a paragraph addressed to the reviewer — which is
+why it took three rounds to see that the author had never been told.)
+
+**The indirect mechanisation, and the reason mode 7 is worth separating:** the *obligation* cannot be
+mechanised, but the *pairing* can, and cheaply —
+
+> Any role-guidance clause that defers to "your active protocol's X" must be paired with a check that
+> every protocol bound to that role either **defines X** or **states that it grants none.**
+
+Same shape as the reachability test already in `scripts/test-validation-shape-contract.ts`. Today
+only network would pass; 1.9.0 makes kubernetes-gitops the second; the other two become **named,
+visible failures instead of silences** — which is the whole point, because nothing anywhere currently
+reports that a deferral went undischarged. Filed, not built:
+`cline_docs/follow-ups/a-deferral-with-no-discharge-obligation-2026-09-19.md`.
+
+⚠️ **Do not fix mode 7 by moving the licence up into the role guidance.** The deferral is correctly
+placed: network's devices genuinely cannot render a post-change state, kubernetes-gitops's offline
+validators can, and a four-domain key cannot encode that split. Hoisting it grants the shape in the
+domains that must not have it.
+
+### Mode 6 was added 2026-09-15, because a failure fit none of the other five
+
+This file already said: *"If you cannot name the mode, that is itself worth recording — a failure
+that fits none of the five means the taxonomy is incomplete."* One did, so here it is.
+
+A permission for a sanctioned validation shape was seeded, correct, answerable, and NOT
+hand-carried — it lived in the protocol. It simply sat inside a bullet headed **"Phase 2 — Config
+Change-Package Author"**. The REVIEWER — the party that actually blocks — read its own bullet (silent
+on shapes), then a role-neutral clause saying *literal or drop*, then role guidance telling it to
+treat non-fact validation as blocking. So the contradiction resolved AGAINST the permission every
+time, by construction.
+
+The tell that this is its own mode: **the rule was obeyed by everyone who received it.** No tier
+skipped, displaced, invented or coincidentally complied. The author used the shape; the reviewer
+blocked it; both were right about what they held. Nothing in modes 1–5 describes a rule that fails
+while every reader follows it.
+
+**Why it is not mechanisable.** A net could check whether a step carries the sanctioned shape, but
+the defect was never the artifact — it was that the party judging the artifact had not been told the
+shape exists. You cannot check a prompt's addressing from the output it produces.
+
+**The diagnostic question**, worth asking of any obligation: *which role's section is this written
+in, and is that the role that ACTS on it?* A permission belongs with the party that would otherwise
+refuse; a prohibition belongs with the party that would otherwise do it.
+
+⚠️ **The remedy that fixed the incident is the one that fails here.** R13 (2026-08-27) was earned by
+a reviewer blocking a compliant author — and its whole patch landed on the AUTHOR side. As shipped,
+**the fix did not prevent its own incident**, which recurred three weeks later in another domain.
 
 **Worked confirmation of the split** — both shipped, both correct for their mode:
 - **Minimality** was mode 1/2 → fixed by a net (`prefix-not-minimal`). It held through two different
@@ -113,6 +189,8 @@ to make findable.
 | 2026-09-14 | Terraform program UC1 | **2** displaced, **excused** | the SAME rule, network leg | V1–V9 also presence-assertions, not literals. Node C excused them as a *"protocol-sanctioned carve-out for unwitnessed device renderings"*. ⚠️ **CORRECTED 2026-09-14: the carve-out DOES exist** — clause (h) UNWITNESSED RENDERINGS, `seed-protocol-prompts.ts:2627`, network v1.9.0. My original "no such carve-out exists" was a NEGATIVE asserted from `cut -c1-200`-truncated grep output; the evidence was in my own results. The real defect is that (h) is defined in network only and no reviewer in any domain is told the shape exists | ⚠️ **same defect, opposite outcome, lenient side backed by an invented sanction.** Originated at leg tier (Reviewer approved 90/0-blocking), ratified by Node C. The dangerous direction of the 2026-08-29 decision, at program tier |
 | 2026-09-14 | Terraform program UC1 | — **bound** | `requirements.md` check 1 (verbatim equality) | Node C performed check 1 explicitly, graded it VERIFIED-AGAINST-EVIDENCE, and retrieved the leg's `qualityGate` from platform metadata rather than package prose | authored `aws:SourceIp = ["10.99.0.6/31"]` == chained `derivedValues` verbatim. **Second correct performance** of the class that failed in runs 15/16 |
 | 2026-09-14 | Terraform program UC1 | **evidence-flow** | Node C's reading of `upstreamContainment.green` | cited it as confirming "the cross-leg link clean". It transcribes only whether the UPSTREAM leg derived cleanly — it never compares consumed-to-chained | no cost (Node C re-derived the comparison itself and graded it separately), but the fact was credited with a property it does not have |
+| 2026-09-14 | IGP/terraform program, run 2 | **6** mis-addressed | the sanctioned presence-assertion permission (network clause (h), seeded 2026-08-27) | present and correct, but written in the AUTHOR's bullet; the reviewer read its own bullet, a role-neutral literal-or-drop clause, and role guidance saying block. Every reader obeyed what it held | R13 recurred in terraform 3 weeks after its own fix. Re-addressed to the reviewer; **both directions now verified live** (VT-23) |
+| 2026-09-14 | Terraform program UC1 re-run | — **bound** | the same clause, after re-addressing | a well-formed presence assertion planted into a terraform package was BLOCKED as *"unsanctioned"*, while the identical shape in network was APPROVED as *"the sanctioned … shape"* | the good outcome: permission where earned, refusal where not. Control probe, not a natural event — base rate 1 in 38 |
 | 2026-09-11 | k8s 1.4.0 | **5** hand-carried | two Author obligations carried in the task objective | worked across three rounds while carried, then promoted into the protocol | promoted before it could vanish — the good outcome, recorded as the counter-example |
 
 ### How to add a row
@@ -145,6 +223,17 @@ each earned by a refusal:
 ---
 
 ## 5. What lives elsewhere — pointers, not copies
+
+⚠️ **NOT this file: how our own CHECKS fail.** This document is about prose we give an LLM tier
+(protocols, role guidance, task objective, `requirements.md`) and whether it binds. When the thing
+that failed is a **check we wrote** — a validator mis-grading a run, a CI gate blind to its own
+subject, a fixture asserting unreachable state, a mechanical fact emitted or withheld — that is
+`CHECK-DESIGN-DISCIPLINE.md` §1, §2, §5b–5d. The 2026-09-15 harness-validator arc lives there in
+full. The distinction is worth keeping sharp: a prose obligation that does not bind is fixed by
+rewriting or mechanising the instruction; a check that cannot see its subject is fixed by changing
+the check, and no amount of better prose helps.
+
+
 
 | for | go to |
 |---|---|

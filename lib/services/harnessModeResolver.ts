@@ -14,8 +14,10 @@
  * "first-run attempt" on tasks that have live children. Confusing but
  * non-destructive (children already ran via earlier executions).
  */
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { mcpLogger } from '@/lib/logger';
+import { countUnsettledChildren } from './child-stage-settled';
 
 const log = mcpLogger.child({ module: 'HarnessModeResolver' });
 
@@ -125,15 +127,19 @@ export async function resolveHarnessMode(taskId: string): Promise<ResolvedHarnes
       return result;
     }
 
-    const children = await prisma.task.findMany({
-      where: { stageId: pipelineStageId },
-      select: { status: true, executionStatus: true },
-    });
-
-    const total = children.length;
-    const terminal = children.filter(
-      c => c.status === 'COMPLETED' || c.executionStatus === 'FAILED'
-    ).length;
+    // RWF 1.1 (2026-09-26): "terminal" is now the shared SETTLED predicate — a COMPLETED/FAILED child
+    // that still has a PENDING/RUNNING execution (a re-run in flight) is NOT terminal, so a harness
+    // re-executed mid-retry resolves ORCHESTRATE (partial-terminal), never SYNTHESIZE over a child
+    // that is still running. Both counts run in ONE RepeatableRead snapshot so a commit between them
+    // cannot skew the arithmetic; deliberately NOT a raw-SQL copy of the predicate (single source).
+    const [total, unsettled] = await prisma.$transaction(
+      async (tx) => [
+        await tx.task.count({ where: { stageId: pipelineStageId } }),
+        await countUnsettledChildren(tx, pipelineStageId),
+      ] as const,
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead }
+    );
+    const terminal = total - unsettled;
 
     let result: ResolvedHarnessContext;
 

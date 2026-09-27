@@ -27,6 +27,7 @@
             }
         },
         "stageId": "cmtwcqtnv000hyx2df83r5h42",
+        "legOwnStageId": "cmtv37uz20003yx2shp9dymnv",
         "children": [
             {
                 "id": "cmtwcr10o000pyx2d6r63emnn",
@@ -93,8 +94,7 @@
                     ],
                     "pipelineMetadata": {
                         "chainedAt": "2026-09-11T02:44:39.886Z",
-                        "notChained": [
-                        ],
+                        "notChained": [],
                         "totalChars": 4117,
                         "anySanitized": false,
                         "anyTruncated": false,
@@ -157,8 +157,7 @@
                     ],
                     "pipelineMetadata": {
                         "chainedAt": "2026-09-11T02:45:36.918Z",
-                        "notChained": [
-                        ],
+                        "notChained": [],
                         "totalChars": 8946,
                         "anySanitized": false,
                         "anyTruncated": false,
@@ -217,10 +216,8 @@
                             "rollbackContainment": {
                                 "scope": "Answers ONE question: is each scoped restore line present in the harvest THIS leg witnessed? Matching is TRIMMED EXACT LINE — deliberately lossy, because a YAML rollback legitimately re-indents a quoted line (live: R3a-3). It therefore proves PROVENANCE OF THE LINE, not structural equivalence, and it compares against this leg's OWN harvest only, never a predecessor's. It says NOTHING about whether the package is COMPLETE — whether required evidence sections are present or restated remains the reviewer's judgement (the (a) lane). A package that quotes nothing scores zero restore lines, which is not an approval of anything. Unmatched lines are NAMED and escalate; they are never a mechanical block, because the measured base rate of true fabrication across the archived corpus is zero.",
                                 "checked": true,
-                                "missing": [
-                                ],
-                                "excluded": {
-                                },
+                                "missing": [],
+                                "excluded": {},
                                 "matching": "trimmed-exact-line",
                                 "blocksScanned": {
                                     "total": 5,
@@ -245,8 +242,7 @@
                     ],
                     "pipelineMetadata": {
                         "chainedAt": "2026-09-11T02:46:57.874Z",
-                        "notChained": [
-                        ],
+                        "notChained": [],
                         "totalChars": 9648,
                         "anySanitized": false,
                         "anyTruncated": false,
@@ -298,6 +294,7 @@
             }
         },
         "stageId": "cmtwfncok000jyx1rx7xrf77n",
+        "legOwnStageId": "cmtwfmjxa0003yx1r22a6hdry",
         "children": [
             {
                 "id": "cmtwfnj12000ryx1riazkq9m1",
@@ -364,8 +361,7 @@
                     ],
                     "pipelineMetadata": {
                         "chainedAt": "2026-09-11T04:06:01.111Z",
-                        "notChained": [
-                        ],
+                        "notChained": [],
                         "totalChars": 4665,
                         "anySanitized": false,
                         "anyTruncated": false,
@@ -428,8 +424,7 @@
                     ],
                     "pipelineMetadata": {
                         "chainedAt": "2026-09-11T04:06:57.047Z",
-                        "notChained": [
-                        ],
+                        "notChained": [],
                         "totalChars": 6793,
                         "anySanitized": false,
                         "anyTruncated": false,
@@ -492,8 +487,7 @@
                     ],
                     "pipelineMetadata": {
                         "chainedAt": "2026-09-11T04:10:17.061Z",
-                        "notChained": [
-                        ],
+                        "notChained": [],
                         "totalChars": 11365,
                         "anySanitized": false,
                         "anyTruncated": false,
@@ -545,6 +539,7 @@
             }
         },
         "stageId": "cmtwh4p5x003byx1rwr8ro0h6",
+        "legOwnStageId": "cmtwh3rs9002vyx1ra7ni8rz6",
         "children": [
             {
                 "id": "cmtwh4wf4003jyx1rgia83sb5",
@@ -611,8 +606,7 @@
                     ],
                     "pipelineMetadata": {
                         "chainedAt": "2026-09-11T04:47:42.803Z",
-                        "notChained": [
-                        ],
+                        "notChained": [],
                         "totalChars": 4143,
                         "anySanitized": false,
                         "anyTruncated": false,
@@ -675,8 +669,7 @@
                     ],
                     "pipelineMetadata": {
                         "chainedAt": "2026-09-11T04:48:20.395Z",
-                        "notChained": [
-                        ],
+                        "notChained": [],
                         "totalChars": 7745,
                         "anySanitized": false,
                         "anyTruncated": false,
@@ -739,8 +732,7 @@
                     ],
                     "pipelineMetadata": {
                         "chainedAt": "2026-09-11T04:49:38.301Z",
-                        "notChained": [
-                        ],
+                        "notChained": [],
                         "totalChars": 7411,
                         "anySanitized": false,
                         "anyTruncated": false,
@@ -792,6 +784,7 @@
             }
         },
         "stageId": "cmtwhe8cb0076yx1rcussc6m5",
+        "legOwnStageId": "cmtwhd16r006oyx1ramfkm19f",
         "children": [
             {
                 "id": "cmtwhefqw007eyx1rn9gyoh6k",
@@ -858,8 +851,7 @@
                     ],
                     "pipelineMetadata": {
                         "chainedAt": "2026-09-11T04:54:47.577Z",
-                        "notChained": [
-                        ],
+                        "notChained": [],
                         "totalChars": 3525,
                         "anySanitized": false,
                         "anyTruncated": false,
@@ -922,8 +914,7 @@
                     ],
                     "pipelineMetadata": {
                         "chainedAt": "2026-09-11T04:55:56.268Z",
-                        "notChained": [
-                        ],
+                        "notChained": [],
                         "totalChars": 8535,
                         "anySanitized": false,
                         "anyTruncated": false,
@@ -986,8 +977,7 @@
                     ],
                     "pipelineMetadata": {
                         "chainedAt": "2026-09-11T04:57:12.980Z",
-                        "notChained": [
-                        ],
+                        "notChained": [],
                         "totalChars": 10345,
                         "anySanitized": false,
                         "anyTruncated": false,
@@ -1039,6 +1029,7 @@
             }
         },
         "stageId": "cmtxp6h58000jyx61eodcph5s",
+        "legOwnStageId": "cmtxp57ih0003yx61u3lhio1e",
         "children": [
             {
                 "id": "cmtxp6m8m000ryx61l0bqymyz",
@@ -1105,8 +1096,7 @@
                     ],
                     "pipelineMetadata": {
                         "chainedAt": "2026-09-12T01:20:40.292Z",
-                        "notChained": [
-                        ],
+                        "notChained": [],
                         "totalChars": 7015,
                         "anySanitized": false,
                         "anyTruncated": false,
@@ -1169,8 +1159,7 @@
                     ],
                     "pipelineMetadata": {
                         "chainedAt": "2026-09-12T01:21:59.070Z",
-                        "notChained": [
-                        ],
+                        "notChained": [],
                         "totalChars": 9958,
                         "anySanitized": false,
                         "anyTruncated": false,
@@ -1251,8 +1240,7 @@
                                         "blockLine": 107
                                     }
                                 ],
-                                "excluded": {
-                                },
+                                "excluded": {},
                                 "matching": "trimmed-exact-line",
                                 "blocksScanned": {
                                     "total": 7,
@@ -1277,8 +1265,7 @@
                     ],
                     "pipelineMetadata": {
                         "chainedAt": "2026-09-12T01:24:18.668Z",
-                        "notChained": [
-                        ],
+                        "notChained": [],
                         "totalChars": 15627,
                         "anySanitized": false,
                         "anyTruncated": false,

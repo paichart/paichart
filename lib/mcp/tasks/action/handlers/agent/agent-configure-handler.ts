@@ -10,6 +10,7 @@ import { logFieldChange, TaskActivityAction } from '@/lib/tasks/services/taskAct
 import type { ActivityMetadata } from '@/lib/types/activity';
 import { mcpLogger } from '@/lib/logger';
 import { resolvePromptPlaceholders, buildContextSummary } from '@/lib/services/agentTemplateBuilder/pAIchartUniversalTemplate';
+import { refuseAgentLoopConfigure } from '@/lib/services/leg-child-override';
 
 const log = mcpLogger.child({ module: 'AgentConfigureHandler' });
 
@@ -22,7 +23,7 @@ const log = mcpLogger.child({ module: 'AgentConfigureHandler' });
  * @param actionId - Unique action identifier for tracking
  * @returns Configuration result with updated task information
  */
-export async function handleAgentConfigure(parameters: any, user: TokenPayload, actionId: string) {
+export async function handleAgentConfigure(parameters: any, user: TokenPayload, actionId: string, routeOpts?: { callingExecutionId?: string }) {
   const {
     taskId,
     role,           // MCP uses 'role' instead of 'agentRole'
@@ -78,6 +79,7 @@ export async function handleAgentConfigure(parameters: any, user: TokenPayload, 
   const taskForAuth = await prisma.task.findUnique({
     where: { id: taskId },
     select: {
+      stageId: true, // RWF X17: the pipeline-child test
       pov: {
         select: {
           id: true,
@@ -112,6 +114,12 @@ export async function handleAgentConfigure(parameters: any, user: TokenPayload, 
     requireWrite: true,  // 2026-05-26: isDemo read-only (demo-write fix)
     logContext: 'Agent Configure'
   });
+
+  // RWF X17 (2026-09-27): an agent run may not rewrite a pipeline child's configuration. After the access check, before
+  // any write or template lookup. Humans are unaffected. See lib/services/leg-child-override.ts refuseAgentLoopConfigure.
+  await refuseAgentLoopConfigure(prisma, {
+    taskId, stageId: taskForAuth.stageId, callingExecutionId: routeOpts?.callingExecutionId,
+  }, log);
 
   // Handle agent template lookup
   let finalAgentTemplateId = agentTemplateId || agent_template_id || parameters.templateId;

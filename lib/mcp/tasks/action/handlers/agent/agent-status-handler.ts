@@ -17,6 +17,7 @@ import { prisma } from '@/lib/prisma';
 import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import type { TokenPayload } from '@/lib/types/auth';
 import type { Prisma } from '@prisma/client';
+import { readRunDisposition } from '@/lib/tasks/run-disposition';
 
 /**
  * The ONE projection this surface reads (2026-07-25, error-surface panel).
@@ -57,7 +58,10 @@ export async function handleAgentStatus(parameters: any, user: TokenPayload, act
   // Resolve executionId to taskId if needed (prevents executionId bypass)
   let resolvedTaskId = taskId;
   // Pre-flight halt fact (duplicateHalt / cannotRun stamped in task metadata on a non-terminal task)
-  let haltFact: { kind: string; detail: unknown } | null = null;
+  let haltFact: { kind: string; detail: unknown; resolved: boolean } | null = null;
+  // Hoisted to function scope alongside haltFact: both are read inside the taskId branch
+  // and consumed in the response below (item 10, 2026-09-15).
+  let disposition: ReturnType<typeof readRunDisposition> = null;
 
   if (executionId && !taskId) {
     const exec = await prisma.agentExecution.findUnique({
@@ -116,9 +120,29 @@ export async function handleAgentStatus(parameters: any, user: TokenPayload, act
     // saw SUCCESS + get_results and read it as progress. Surface the STAMPED FACTS here
     // (Protocol 10: the stamp content, plus the documented release mechanism — no new judgement).
     const tMeta = (taskForAuth as any).metadata ?? {};
-    if ((taskForAuth as any).status !== 'COMPLETED') {
-      if (tMeta.duplicateHalt) haltFact = { kind: 'duplicateHalt', detail: tMeta.duplicateHalt };
-      else if (tMeta.cannotRun) haltFact = { kind: 'cannotRun', detail: tMeta.cannotRun };
+    // A run a human has stopped pursuing is not awaiting action (item 10, 2026-09-15).
+    // Without this, a disposed run keeps recommending a release nobody intends to perform —
+    // the same defect as the resolved-halt case above, one level up.
+    disposition = readRunDisposition(tMeta);
+    if ((taskForAuth as any).status !== 'COMPLETED' && !disposition) {
+      // 2026-09-15: `duplicateHalt` is a HISTORICAL FACT (the halt happened) and is kept for
+      // forensics; "halted_awaiting_human" is a DERIVED STATE. Deriving the state from the fact
+      // alone told an operator a resolved halt was still blocking, and recommended stamping
+      // `duplicateAcknowledged` — which was ALREADY PRESENT. A recovery instruction telling you
+      // to do the thing you have just done is worse than silence: it reads as "that didn't take".
+      // The stamp is the documented release mechanism, so its presence RESOLVES the halt.
+      // (COMPLETED was already excluded above; this closes the acknowledged-but-still-running
+      // window — 2 live tasks at time of fix.) cannotRun has no acknowledgement channel by
+      // design — its recovery is a fresh task — so it is deliberately not resolved here.
+      if (tMeta.duplicateHalt) {
+        haltFact = {
+          kind: 'duplicateHalt',
+          detail: tMeta.duplicateHalt,
+          resolved: tMeta.duplicateAcknowledged != null,
+        };
+      } else if (tMeta.cannotRun) {
+        haltFact = { kind: 'cannotRun', detail: tMeta.cannotRun, resolved: false };
+      }
     }
   }
 
@@ -233,14 +257,18 @@ export async function handleAgentStatus(parameters: any, user: TokenPayload, act
       message: `Found ${executions.length} agent execution(s)`,
       nextSteps,
       ...(haltFact ? { preFlightHalt: haltFact } : {}),
-      workflow: haltFact && !hasRunning ? {
+      ...(disposition ? { runDisposition: disposition } : {}),
+      workflow: haltFact && !haltFact.resolved && !hasRunning ? {
         current: "halted_awaiting_human",
         recommendation: haltFact.kind === 'duplicateHalt'
-          ? "release_via_task_state: set metadata.duplicateAcknowledged (the detected stage's id/name) or a PRE-FLIGHT CLEARANCE description block, then re-execute — a comment reply cannot clear it"
+          ? "release_via_task_state: set metadata.duplicateAcknowledged (the detected stage's id/name, or a list of every detected stage's id when there are several) or a PRE-FLIGHT CLEARANCE description block, then re-execute — a comment reply cannot clear it"
           : "review metadata.cannotRun; recovery is typically a fresh task (see the halt comment)"
       } : {
-        current: hasRunning ? "executing" : hasCompleted ? "completed" : hasFailed ? "failed" : "not_started",
-        recommendation: hasRunning ? "wait_and_check_again" : hasCompleted ? "get_results" : hasFailed ? "review_and_retry" : "assign_agent_first"
+        current: disposition ? `disposed_${disposition.state}`
+          : hasRunning ? "executing" : hasCompleted ? "completed" : hasFailed ? "failed" : "not_started",
+        recommendation: disposition
+          ? `no action — a human recorded this run as ${disposition.state}: ${disposition.reason}`
+          : hasRunning ? "wait_and_check_again" : hasCompleted ? "get_results" : hasFailed ? "review_and_retry" : "assign_agent_first"
       }
     }
   };

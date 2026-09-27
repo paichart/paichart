@@ -22,7 +22,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { buildExecutionResultJson, ExecutionResultJsonInput, sanitizeLLMForMarkdown, countToolErrorResults, pickResultJsonSummary } from '../lib/services/execution-artifacts';
+import { buildExecutionResultJson, ExecutionResultJsonInput, sanitizeLLMForMarkdown, countToolErrorResults, pickResultJsonSummary, ChainedContextSignal } from '../lib/services/execution-artifacts';
 
 console.log('🧪 Execution Artifacts Parity (Dual-Layer)\n');
 
@@ -374,6 +374,65 @@ test('Behavior: R4 truncationRetryUsed/Recovered reflect input when true', () =>
   layer2Passed++;
 });
 
+// ── R4 time-aware budget facts (2026-09-25, register E1) ─────────────────────────────────
+test('R4-budget: truncationRetrySkippedReason / truncationRetryMaxTokens default null, nested in toolLoop, before finalResponse', () => {
+  const result = buildExecutionResultJson(baseInput()) as { toolLoop: Record<string, unknown> };
+  expect(result.toolLoop.truncationRetrySkippedReason).toBe(null);
+  expect(result.toolLoop.truncationRetryMaxTokens).toBe(null);
+  const keys = Object.keys(result);
+  expect(keys.indexOf('toolLoop') < keys.indexOf('finalResponse')).toBe(true);
+  layer2Passed++;
+});
+
+test('R4-budget: the skip reason + budget reflect input and survive pickResultJsonSummary nested (E3b)', () => {
+  const built = buildExecutionResultJson(baseInput({ truncationRetrySkippedReason: 'INSUFFICIENT_TIME', truncationRetryMaxTokens: 45800 })) as Record<string, unknown>;
+  const summary = pickResultJsonSummary({ ...built, finalResponse: 'x'.repeat(20000) }) as { toolLoop?: Record<string, unknown> };
+  expect(summary.toolLoop?.truncationRetrySkippedReason).toBe('INSUFFICIENT_TIME');
+  expect(summary.toolLoop?.truncationRetryMaxTokens).toBe(45800);
+  layer2Passed++;
+});
+
+test('R4-partial: truncationRetryStopReason / truncationRetryDiscardedChars default null, reflect input, survive the pick nested', () => {
+  const clean = buildExecutionResultJson(baseInput()) as { toolLoop: Record<string, unknown> };
+  expect(clean.toolLoop.truncationRetryStopReason).toBe(null);
+  expect(clean.toolLoop.truncationRetryDiscardedChars).toBe(null);
+  const built = buildExecutionResultJson(baseInput({ truncationRetryUsed: true, truncationRetryStopReason: 'max_tokens', truncationRetryDiscardedChars: 22624 })) as Record<string, unknown>;
+  const summary = pickResultJsonSummary({ ...built, finalResponse: 'x'.repeat(20000) }) as { toolLoop?: Record<string, unknown> };
+  expect(summary.toolLoop?.truncationRetryStopReason).toBe('max_tokens');
+  expect(summary.toolLoop?.truncationRetryDiscardedChars).toBe(22624);
+  layer2Passed++;
+});
+
+// ── F2 (2026-09-25, register E1): the stamped truncation fact ─────────────────────────────
+test('F2-1: toolLoop.finalStopReason defaults null + deliverableTruncated defaults false, both before finalResponse', () => {
+  const result = buildExecutionResultJson(baseInput()) as { toolLoop: Record<string, unknown> };
+  expect(result.toolLoop.finalStopReason).toBe(null);
+  expect(result.toolLoop.deliverableTruncated).toBe(false);
+  const keys = Object.keys(result);
+  expect(keys.indexOf('toolLoop') < keys.indexOf('finalResponse')).toBe(true);
+  layer2Passed++;
+});
+
+test('F2-2: finalStopReason max_tokens → deliverableTruncated true (text-independent); end_turn → false', () => {
+  const t = buildExecutionResultJson(baseInput({ finalStopReason: 'max_tokens' })) as { toolLoop: Record<string, unknown> };
+  expect(t.toolLoop.finalStopReason).toBe('max_tokens');
+  expect(t.toolLoop.deliverableTruncated).toBe(true);
+  const e = buildExecutionResultJson(baseInput({ finalStopReason: 'end_turn' })) as { toolLoop: Record<string, unknown> };
+  expect(e.toolLoop.finalStopReason).toBe('end_turn');
+  expect(e.toolLoop.deliverableTruncated).toBe(false);
+  layer2Passed++;
+});
+
+test('F2-3 (E3b nesting): the fact survives pickResultJsonSummary NESTED in toolLoop — no whitelist entry of its own', () => {
+  const built = buildExecutionResultJson(baseInput({ finalStopReason: 'max_tokens' })) as Record<string, unknown>;
+  const summary = pickResultJsonSummary({ ...built, finalResponse: 'x'.repeat(20000) }) as { toolLoop?: Record<string, unknown> };
+  expect(summary.toolLoop?.finalStopReason).toBe('max_tokens');
+  expect(summary.toolLoop?.deliverableTruncated).toBe(true);
+  // A top-level promotion would be stripped by the whitelist — pin that nobody "helpfully" promotes it.
+  expect((built as Record<string, unknown>).deliverableTruncated).toBeUndefined();
+  layer2Passed++;
+});
+
 test('Behavior: mcpToolsProvided uses mcpFunctions list when provided', () => {
   const result = buildExecutionResultJson(baseInput({
     mcpFunctions: [{ name: 'project' }, { name: 'perform' }, { name: 'fetch' }],
@@ -482,6 +541,89 @@ test('Behavior: reviewerVerdict ABSENT (never fabricated) when reviewer emits no
   layer2Passed++;
 });
 
+// ── E3b-4: evidenceGrading nests on reviewerVerdict (2026-09-20) ──────────────
+
+const gradedReviewerResponse = [
+  '| Derived-value containment | VERIFIED-AGAINST-EVIDENCE — I enumerated the span myself |',
+  '| Harvest fidelity | ACCEPTED-FROM-CLAIMS — not in my chained context |',
+  '',
+  '## VERDICT: APPROVED',
+  'Blocking issues: none',
+].join('\n');
+
+test('E3b-4 (2026-09-20): evidenceGrading survives the pick NESTED on reviewerVerdict', () => {
+  // The fact answers "which epistemic mode did the reviewer declare", which qualifies the verdict —
+  // so it nests rather than taking a RESULT_JSON_SUMMARY_KEYS entry of its own. pickResultJsonSummary
+  // copies `parsed.reviewerVerdict` VERBATIM, so nesting survives by construction; a top-level
+  // sibling `evidenceGrading` would be stripped with no error. Both directions pinned below.
+  const result = buildExecutionResultJson(baseInput({
+    agentRole: 'change_reviewer',
+    finalResponse: gradedReviewerResponse,
+    confidenceScore: 86,
+  }));
+  const summary = pickResultJsonSummary({ ...result, finalResponse: 'x'.repeat(20000) } as Record<string, unknown>);
+  const v = (summary as Record<string, unknown>).reviewerVerdict as Record<string, unknown> | undefined;
+  if (!v || !v.evidenceGrading) {
+    throw new Error('evidenceGrading must survive the pick nested on reviewerVerdict');
+  }
+  const g = v.evidenceGrading as Record<string, unknown>;
+  expect(g.graded).toBe(true);
+  expect(g.verifiedLines).toBe(1);
+  expect(g.acceptedLines).toBe(1);
+
+  // THE SIBLING DIRECTION — the trap this law exists for.
+  const promoted = pickResultJsonSummary({ taskId: 't1', evidenceGrading: g } as unknown as Record<string, unknown>);
+  if ((promoted as Record<string, unknown>).evidenceGrading !== undefined) {
+    throw new Error('evidenceGrading is NOT on RESULT_JSON_SUMMARY_KEYS — if it were added, this pin and the nesting must be reconciled deliberately');
+  }
+  layer2Passed++;
+});
+
+test('E3b-4b: the grading scan covers the WHOLE finalResponse, not just the terminal block', () => {
+  // Load-bearing wiring pin: gradings ride on FINDINGS, which precede `## VERDICT:`. Passing
+  // `parsedVerdict.raw` to the scanner instead of `finalResponse` — the obvious refactor — would
+  // read graded:false on every correctly-formed reviewer, and nothing else in the tree would notice.
+  const result = buildExecutionResultJson(baseInput({
+    agentRole: 'change_reviewer',
+    finalResponse: gradedReviewerResponse,
+  }));
+  const g = (result as { reviewerVerdict?: { evidenceGrading?: Record<string, unknown> } })
+    .reviewerVerdict?.evidenceGrading;
+  if (!g || g.graded !== true) {
+    throw new Error('the scan must see gradings emitted BEFORE the terminal verdict block');
+  }
+  layer2Passed++;
+});
+
+test('E3b-4c: a reviewer that grades NOTHING stamps graded:false, not an absent field', () => {
+  // The three-state requirement at the artifact layer. 26% of the live corpus (68 of 261) is this
+  // bucket: approved with no epistemic claim at all. An absent field would read as "clean".
+  const result = buildExecutionResultJson(baseInput({
+    agentRole: 'change_reviewer',
+    finalResponse: reviewerResponse,
+  }));
+  const g = (result as { reviewerVerdict?: { evidenceGrading?: Record<string, unknown> } })
+    .reviewerVerdict?.evidenceGrading;
+  if (!g) throw new Error('evidenceGrading must be PRESENT even when nothing was graded');
+  expect(g.graded).toBe(false);
+  expect(g.verifiedLines).toBe(0);
+  layer2Passed++;
+});
+
+test('E3b-4d: evidenceGrading is emitted BEFORE raw inside the nested object (head-slice contract)', () => {
+  // `raw` is the bulky member. The outer builder already orders compact fields ahead of
+  // finalResponse for exactly this reason; the nested object is under the same caps.
+  const result = buildExecutionResultJson(baseInput({
+    agentRole: 'change_reviewer',
+    finalResponse: gradedReviewerResponse,
+  }));
+  const keys = Object.keys((result as Record<string, Record<string, unknown>>).reviewerVerdict);
+  if (keys.indexOf('evidenceGrading') > keys.indexOf('raw')) {
+    throw new Error(`evidenceGrading must precede raw — got ${keys.join(', ')}`);
+  }
+  layer2Passed++;
+});
+
 test('Behavior: FIELD ORDER contract — ALL compact fields BEFORE finalResponse; only bulky payloads after', () => {
   // Consumers read result.json through HEAD-SLICE caps (fetch 50KB → tool-loop 8KB); anything after
   // a long finalResponse is invisible on a single fetch (the 2026-07-14 incident mechanism).
@@ -495,7 +637,7 @@ test('Behavior: FIELD ORDER contract — ALL compact fields BEFORE finalResponse
     originalConfidence: 90,
     executionDegradation: { errorCategory: 'timeout' },
     harnessContext: { mode: 'SYNTHESIZE', reasonCode: 'test' } as never,
-    chainedContext: { predecessors: 1, expectedPredecessors: 1, chainCapablePredecessors: 1, degradedPredecessors: 0, totalChars: 10, anyTruncated: false },
+    chainedContext: { predecessors: 1, expectedPredecessors: 1, chainCapablePredecessors: 1, degradedPredecessors: 0, totalChars: 10, anyTruncated: false } as unknown as ChainedContextSignal, // pre-2026-09-16 artifact shape: the A11 inherited counts are REQUIRED on the producer's type (derive emits them, zeros included), so their absence here is deliberately a cast rather than a silent type hole
   }));
   const keys = Object.keys(result);
   const finalResponseIdx = keys.indexOf('finalResponse');
@@ -612,6 +754,25 @@ test('E3c (2026-08-26): pickResultJsonSummary hoists contractPropagation — a g
   }
 });
 
+test('E3d (2026-09-16): errorCategory and chainedContext are DELIBERATE whitelist entries — the card read both, the pick passed neither', () => {
+  // Both are canonical top-level keys of the builder, emitted BEFORE finalResponse (the FIELD ORDER
+  // test below already covers that). The trap here was the other direction of E3b: not an unlisted
+  // SIBLING of a fact, but a top-level fact the renderer already consumed and the whitelist dropped.
+  const built = buildExecutionResultJson(baseInput({
+    executionDegradation: { errorCategory: 'PROTOCOL_STEP_SKIPPED', missingSteps: ['Step 3'] },
+    chainedContext: { predecessors: 0, expectedPredecessors: 1, chainCapablePredecessors: 1, degradedPredecessors: 0, totalChars: 0, anyTruncated: false } as unknown as ChainedContextSignal, // pre-2026-09-16 artifact shape: the A11 inherited counts are REQUIRED on the producer's type (derive emits them, zeros included), so their absence here is deliberately a cast rather than a silent type hole
+  }));
+  const summary = pickResultJsonSummary(built) as Record<string, unknown>;
+  expect(summary.errorCategory).toBe('PROTOCOL_STEP_SKIPPED');
+  expect(JSON.stringify(summary.chainedContext)).toBe(JSON.stringify(built.chainedContext));
+  // The bulky/prose carriers stay OUT: the gate-relevant content is already the one token.
+  expect('executionDegradation' in summary).toBe(false);
+  expect('protocolValidation' in summary).toBe(false);
+  const clean = pickResultJsonSummary(buildExecutionResultJson(baseInput())) as Record<string, unknown>;
+  expect('errorCategory' in clean).toBe(false);
+  expect('chainedContext' in clean).toBe(false);
+});
+
 test('E3 (wave-2 2026-07-18): pickResultJsonSummary hoists derivationContainment from a pipeline-index-shaped object', () => {
   const fact = { checked: true, violations: [{ harvested: '10.99.0.3/32', derived: '10.99.0.0/30', reason: 'covered-not-member' }], unsupported: [], harvestedCount: 6, derivedCount: 1 };
   const summary = pickResultJsonSummary({ taskId: 't1', derivationContainment: fact, finalResponse: 'x'.repeat(20000) } as unknown as Record<string, unknown>);
@@ -645,6 +806,23 @@ test('E3b-3 (2026-09-11): contractApplicability survives NESTED on BOTH contract
     }
     if ((got.contractApplicability as Record<string, unknown>).basis !== 'no-program-parent') {
       throw new Error(`the basis must survive verbatim on ${key}, not merely the key`);
+    }
+  }
+
+  // THE PROGRAM DIRECTION (2026-09-18). `programParentId` only exists on the `expected:true`
+  // branch, which had NEVER been produced in production when this was written (0 of 611 stamps) —
+  // so it is a sub-field that has never made the trip. E3b's whole point is that an unexercised
+  // nesting is an untested one.
+  for (const key of ['dialectLint', 'contractPropagation'] as const) {
+    const summary = pickResultJsonSummary({
+      taskId: 't1', finalResponse: 'x'.repeat(20000),
+      [key]: { checked: false, reason: 'no-banned-token-list',
+        contractApplicability: { expected: true, basis: 'program-parent', programParentId: 'cmpp0000000000000000001' } },
+    } as unknown as Record<string, unknown>);
+    const ca = ((summary as Record<string, unknown>)[key] as Record<string, unknown> | undefined)
+      ?.contractApplicability as Record<string, unknown> | undefined;
+    if (ca?.programParentId !== 'cmpp0000000000000000001') {
+      throw new Error(`programParentId must survive the pick nested on ${key} — it names WHICH program expects the contract, and a reader given only expected:true cannot check it`);
     }
   }
 

@@ -20,6 +20,9 @@ import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import type { TokenPayload } from '@/lib/types/auth';
 import { mcpLogger } from '@/lib/logger';
 import { pickResultJsonSummary } from '@/lib/services/execution-artifacts';
+import { selectAuthoritativeExecution, CHAIN_SELECTION_OPTIONS } from '@/lib/services/execution-selection';
+import { computeVerdictFreshness, freshnessWord } from '@/lib/agents/harness/chained-predecessors';
+import { isReviewerSet } from '@/lib/agents/harness/parse-verdict';
 import type { Prisma } from '@prisma/client';
 
 const log = mcpLogger.child({ module: 'AgentResultsHandler' });
@@ -43,8 +46,11 @@ const RESULTS_EXECUTION_SELECT = {
   startTime: true,
   endTime: true,
   errorCode: true,
-  task: { select: { id: true, title: true, description: true, status: true, priority: true } },
-  agentTemplate: { select: { id: true, name: true, category: true, description: true } },
+  // RWF C.3: the ordering key and the keep-best fact, plus what the reviewer-set test needs.
+  createdAt: true,
+  supersededById: true,
+  task: { select: { id: true, title: true, description: true, status: true, priority: true, agentRole: true } },
+  agentTemplate: { select: { id: true, name: true, category: true, description: true, templateType: true } },
   artifacts: { select: { id: true, name: true, type: true, content: true, createdAt: true } },
 } satisfies Prisma.AgentExecutionSelect;
 
@@ -114,6 +120,9 @@ export async function handleAgentResults(parameters: any, user: TokenPayload, ac
   }
 
   let executions: ResultsExecution[] = [];
+  // RWF C.3: which execution downstream actually reads (the chainer's selection), and the retries that lost.
+  let authoritativeExecutionId: string | null = null;
+  let supersededRetries: Array<{ id: string; supersededById: string | null }> = [];
 
   if (executionId) {
     // Get specific execution with full details including artifacts
@@ -132,15 +141,32 @@ export async function handleAgentResults(parameters: any, user: TokenPayload, ac
     };
 
 
+    // RWF C.3 (2026-09-26). ORDER by createdAt DESC, id DESC: the selector's key. `startTime` is NULL on a
+    // reaped/never-started row and Postgres DESC puts NULLs FIRST, so the old order could lead with a dead
+    // row. HIDE superseded retries from the default list (they lost to their target; downstream never reads
+    // them) but NEVER silently: they are listed below as `supersededRetries`. A FAILED execution is never
+    // superseded, so the latest failure stays visible (the harness's Step 1 reads it).
     executions = await prisma.agentExecution.findMany({
       where: {
         taskId,
-        ...statusFilter
+        ...statusFilter,
+        ...(includeAll ? {} : { supersededById: null }),
       },
       select: RESULTS_EXECUTION_SELECT,
-      orderBy: { startTime: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit
     });
+    const [authoritative, superseded] = await Promise.all([
+      selectAuthoritativeExecution(prisma, taskId, CHAIN_SELECTION_OPTIONS),
+      prisma.agentExecution.findMany({
+        where: { taskId, supersededById: { not: null } },
+        select: { id: true, supersededById: true },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 10,
+      }),
+    ]);
+    authoritativeExecutionId = authoritative.execution?.id ?? null;
+    supersededRetries = superseded.map((r) => ({ id: r.id, supersededById: r.supersededById }));
 
   }
 
@@ -205,16 +231,30 @@ export async function handleAgentResults(parameters: any, user: TokenPayload, ac
     // above: the code is a top-level fact, not part of the verbose artifact payload.
     // Read from the artifact rather than the column so executions that failed BEFORE the
     // column existed still report their code (the column is forward-only).
-    let errorCategory: string | null = null;
+    let errorCategoryFromErrorJson: string | null = null;
     if (exec.artifacts) {
       const errorArtifact = exec.artifacts.find((a) => a.name === 'error.json');
       if (errorArtifact?.content) {
         try {
           const parsed = JSON.parse(errorArtifact.content);
-          errorCategory = typeof parsed?.errorCategory === 'string' ? parsed.errorCategory : null;
+          errorCategoryFromErrorJson = typeof parsed?.errorCategory === 'string' ? parsed.errorCategory : null;
         } catch { /* not valid JSON — skip */ }
       }
     }
+    // 2026-09-16 (boundary review F2): TWO sources carry a key of this name and they are DISJOINT
+    // by construction — result.json's is the compact hoist of `executionDegradation.errorCategory`
+    // on a SUCCESS-but-degraded execution; error.json's is the terminal failure code on a FAILED one
+    // (the terminal-persist `flipped.count === 0` guard stops a row from getting both). Before this
+    // coalesce the error.json literal sat AFTER the `...resultSummary` spread and CLOBBERED the
+    // result.json value, so every degraded SUCCESS (214 of 214 measured) carried an explicit
+    // `errorCategory: null` — "checked, nothing wrong" — while its artifact said
+    // `PROTOCOL_STEP_SKIPPED`, which is a reviewer-less-leg gate input. Whitelisting the key alone
+    // was INERT for exactly that reason; the fix is both halves. The coalesced value is placed
+    // BEFORE the spread so that no whitelist key is ever re-declared after it (RW2 pins that
+    // property structurally in scripts/test-lean-card-facts.ts).
+    const errorCategory: string | null =
+      (typeof resultSummary.errorCategory === 'string' ? resultSummary.errorCategory : null)
+      ?? errorCategoryFromErrorJson;
 
     const result: any = {
       id: exec.id,
@@ -224,14 +264,18 @@ export async function handleAgentResults(parameters: any, user: TokenPayload, ac
       duration: exec.endTime && exec.startTime ?
         Math.round((new Date(exec.endTime).getTime() - new Date(exec.startTime).getTime()) / 1000) :
         null,
+      // The branchable failure/degradation code. `null` means "no code recorded" — never a
+      // placeholder (Protocol 10). Replaces `progress: exec.progress || 0`, which read a column
+      // that never existed and therefore reported 0 for every execution, including completed ones.
+      errorCategory,
+      supersededById: exec.supersededById,
+      // RWF C.3: set below for a reviewer's latest SUCCESS only (read-time verdict freshness); undefined
+      // otherwise, which JSON drops. Declared here so the card's reads stay pinned to emitted keys (RW1).
+      verdictFresh: undefined as string | undefined,
+      verdictFreshPredecessors: undefined as unknown[] | undefined,
       ...resultSummary,
       task: exec.task,
       agentTemplate: exec.agentTemplate,
-      // The branchable failure code, hoisted out of error.json. `null` means "no code
-      // recorded" — never a placeholder (Protocol 10). Replaces `progress: exec.progress || 0`,
-      // which read a column that never existed and therefore reported 0 for every execution,
-      // including completed ones.
-      errorCategory,
       artifacts: exec.artifacts ? exec.artifacts.map((artifact) => {
         // Basic artifact info always included
         const formattedArtifact: any = {
@@ -288,6 +332,22 @@ export async function handleAgentResults(parameters: any, user: TokenPayload, ac
 
     return result;
   });
+
+  // RWF C.3 — verdict freshness at READ time, on a reviewer's latest SUCCESS: were the predecessor executions it
+  // judged still the authoritative ones NOW? This is the harness's re-run decision aid: a reviewer is re-run for
+  // staleness only on the FACT `verdictFresh: no`, and a same-input re-run is refused at the chokepoint. Same
+  // function as the leg-synthesize `verdictFreshness` stamp (computeVerdictFreshness). Non-fatal: on error the
+  // field is simply absent, and absence renders nothing (never "yes").
+  const head = executions[0];
+  if (head && head.status === 'SUCCESS' && isReviewerSet(head.task?.agentRole, head.agentTemplate?.templateType)) {
+    try {
+      const cmp = await computeVerdictFreshness(prisma, head.id);
+      formattedResults[0].verdictFresh = freshnessWord(cmp);
+      formattedResults[0].verdictFreshPredecessors = cmp?.predecessors ?? [];
+    } catch (err) {
+      log.warn({ err, executionId: head.id }, 'verdict freshness computation failed — omitted from the card');
+    }
+  }
 
   // Import the response formatter to use enhanced artifact formatting
   const { responseFormatter } = await import('@/lib/mcp/server/utils/formatters');
@@ -419,6 +479,9 @@ export async function handleAgentResults(parameters: any, user: TokenPayload, ac
     result: {
       message: enhancedResult,
       executions: formattedResults,
+      // RWF C.3: null when this was a single-execution lookup (executionId) rather than a task listing.
+      authoritativeExecutionId,
+      supersededRetries,
       summary: {
         total: executions.length,
         withArtifacts: formattedResults.filter(r => r.artifacts.length > 0).length,

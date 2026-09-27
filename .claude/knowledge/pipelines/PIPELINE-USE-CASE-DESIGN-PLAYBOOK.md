@@ -191,11 +191,31 @@ Mirror the shipped `artifact-synthesis-protocol` shape.
        member of `REVIEWER_ROLES` in `parse-verdict.ts`, which is what emits the structured
        `reviewerVerdict` fact — a NEW reviewer key needs that set extended too, see
        ADD-A-PIPELINE-HARNESS-AGENT.md §4)
-       **but still says "exact *show command*" and "*per-device*"**; **`config_change_author` is
-       only ~70% neutral** (device/show-command ×6). Reuse them, but **neutralize the domain-isms
-       in place** (show command→validation fact, per-device→per-resource) — they're strict supersets
-       (a device *is* a resource; a show command *is* a validation fact). Keep the key name (no
-       rename, no duplication).
+       **and the neutralization this line used to prescribe HAS SHIPPED** — re-measured
+       2026-09-21: `"show command"` = **0** occurrences in `pAIchartUniversalTemplate.ts`,
+       `"per-device"` = **1**, and that one is in `infra_state_harvester`'s general rule
+       ("scope every read to a single device/host/resource"), not in either change-chain role.
+       `change_reviewer` now says *"an exact validation command + its expected output"* and
+       *"rollback adequacy per target"*; `config_change_author` says *"per-target candidate
+       config/manifest blocks"* and carries one `device` mention, inside a live-incident
+       **example**, not an instruction. The old prose ("still says show command / per-device";
+       "`config_change_author` is only ~70% neutral, device/show-command ×6") described the
+       pre-neutralization text and was **stale for months** — it was still steering
+       mint-vs-reuse decisions in the 2026-09-21 requirements-authoring design.
+       **Re-measure before you quote a neutrality figure here; do not copy this paragraph's
+       numbers forward.** Where a residual domain-ism IS found, the rule is unchanged:
+       neutralize **in place** (show command→validation fact, per-device→per-resource) —
+       they're strict supersets (a device *is* a resource; a show command *is* a validation
+       fact). Keep the key name (no rename, no duplication).
+     - ⚠️ **Vocabulary is NOT the only reuse blocker, and by 2026 it is rarely the binding one.**
+       Check the role's **mandated deliverable STRUCTURE** and its **blocking checks** too.
+       `change_reviewer` is vocabulary-neutral yet still does not transfer to a document-QA
+       persona: it mandates a *"standards/blast-radius/rollback assessment table → apply-governance
+       assessment"* deliverable, and a **blocking** dialect lint (*"verify every candidate config
+       token is valid for the harvested platform/OS"*) that a deliverable with no candidate config
+       cannot discharge — an inapplicable blocking check is an observed false-block source.
+       A role transfers when its OBLIGATIONS are dischargeable by the new persona, not when its
+       nouns are generic.
      - **Generic POV roles are NOT drop-in for a harness pipeline.** `solution_architect`/`data_analyst`
        look like the Architect/Harvester but are **POV-interactive** — they lack the **§6 auto-chain
        contract** and instruct the forbidden `task.context`/`agent.results` anti-pattern (metadata, not

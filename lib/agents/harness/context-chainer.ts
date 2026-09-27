@@ -15,8 +15,8 @@
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { mergeTaskInputContext } from '@/lib/tasks/services/inputContext';
-import { sanitizeChainedOutput } from '@/lib/agents/harness/sanitize-chained-output';
-import { selectAuthoritativeExecution } from '@/lib/services/execution-selection';
+import { sanitizeChainedOutput, isR9OperatorEvent } from '@/lib/agents/harness/sanitize-chained-output';
+import { selectAuthoritativeExecution, CHAIN_SELECTION_OPTIONS } from '@/lib/services/execution-selection';
 import { resolveTaskProtocol, canonicalProtocolName } from '@/lib/agents/harness/program-protocol';
 
 const log = logger.child({ module: 'ContextChainer' });
@@ -123,18 +123,42 @@ export interface ChainedContext {
     // A1 truncation facts (Protocol-10 fact; pre-wires deferred D1 coverage signal)
     truncated?: boolean;
     originalChars?: number;
-    // R9 sanitization facts (Protocol-10 fact — what happened, not a verdict). Present
-    // only when the CONNECTED_OUTPUT_SANITIZE_ENABLED flag is on — presence = R9 examined
-    // this predecessor, `sanitized` = it rewrote it (same semantic as site A's ToolCallRecord).
+    // R9 sanitization facts (Protocol-10 fact — what happened, not a verdict). Present ONLY when
+    // R9 examined this predecessor (CONNECTED_OUTPUT_SANITIZE_ENABLED on) — absent otherwise, NEVER
+    // stamped as a clean "false" for text R9 did not see (F9: the flag-off path used to do exactly
+    // that, and the default self-host posture is flag-off). Same semantic as site A's ToolCallRecord.
+    // "Was this rewritten" = `rewritten`; which step = `rewriteClasses` (F9, 2026-09-25). `rewritten`
+    // also explains a gap between `originalChars` (RAW length) and the delivered text's length.
+    // ABSENT `rewritten` on an entry stamped before F9 (incl. an injected legacy copy) means UNKNOWN,
+    // never false — the `degraded` precedent below.
+    // `sanitized` is LEGACY, FROZEN at its 2026-07-26 meaning (zero-width/bidi or C0/C1 strip fired,
+    // or an injection pattern was neutralized). It does NOT mean "rewritten" — NFKC, ANSI, the
+    // quarantine-tag defang and `emptied` are excluded. Do not widen it (sanitize-chained-output.ts).
     sanitized?: boolean;
+    rewritten?: boolean;
+    rewriteClasses?: string[];
     neutralizedCount?: number;
-    // Chars removed by the normalize pass. Counted separately because a strip-only rewrite
-    // yields sanitized=true, neutralizedCount=0 — see the consumer rule on anySanitized below.
+    // Chars removed by the zero-width/bidi + C0-C1 strips (not ANSI). Counted separately because a
+    // strip-only rewrite yields neutralizedCount=0.
     strippedControlChars?: number;
     // CC2 (2026-07-15): which artifact the chained payload came from. 'result.json' for
     // normal predecessors; for a PIPELINE predecessor 'report.md' (the deliverable —
     // preferred) or 'pipeline-index.json' (documented fallback when no report.md exists).
     source?: 'result.json' | 'report.md' | 'pipeline-index.json';
+    // F19 PER ENTRY (2026-09-16): the boolean the `degradedPredecessors` COUNT was summed from and then
+    // discarded. Carried so a consumer that receives this entry second-hand (an injected copy, below)
+    // can qualify it — a "deliverable" heading over a pipeline-index.json fallback is a stronger false
+    // assertion than "Previous Task" was. Absent on entries stamped before this date: treat absent as
+    // UNKNOWN, never as "not degraded" (the renderer keys on `source` for the heading, not on this).
+    degraded?: boolean;
+    // CROSS-PIPELINE DELIVERY (2026-09-16, Bug Class 84 fix). Set ONLY on an entry COPIED VERBATIM from
+    // the owning leg's own `chainedFrom` into a non-PIPELINE child — the leg this child's stage belongs
+    // to. Absent on every entry the child earned through its own task_dependencies edge. The stamp is
+    // PLATFORM-WRITTEN at prepare and lands in the frozen execution config (BC-T6-1), so it is the
+    // per-execution provenance a corpus query can key on. It is NOT the forgeable-hint class of
+    // `interfaceContractInheritedFrom`: no user channel writes `chainedFrom` (every prepare rewrites it).
+    inheritedFromLeg?: string;
+    inheritedAt?: string;
   }>;
   pipelineMetadata: {
     chainedAt: string;
@@ -153,10 +177,12 @@ export interface ChainedContext {
     // (render-pipeline-context.ts), because an injection rewrite puts a visible marker in the
     // reader's copy while the stored artifact stays clean — a reader told nothing blocks a
     // document it cannot inspect (IGP-T1 R5). Strip-only rewrites stay silent there: they leave
-    // no marker to misread. Do not "simplify" that to read anySanitized. A security signal/coverage-gate must branch on neutralizedCount > 0 for
-    // INJECTION specifically; branch on `sanitized` (or strippedControlChars) for "was this
-    // rewritten at all" — a strip-only rewrite has neutralizedCount 0 and still corrupts output
-    // (review 2026-07-26, sec-ops 2(e): keying on the count alone MISSES that class).
+    // no marker to misread. Do not "simplify" that to read anySanitized. F9 (2026-09-25): "was this
+    // rewritten at all" is the per-entry `rewritten`, NOT this aggregate and NOT `sanitized` (the
+    // 2(e) rule that said so was ~3/4 wrong: NFKC, ANSI and the tag defang never set it).
+    // ⚠️ UNREAD AND UNPROJECTED: deriveChainedContextSignal (execution-artifacts.ts) never copies it,
+    // so it has reached 0 result.json artifacts (1,019 tasks carry it). Kept for now; its removal or a
+    // real consumer is register item F9-s6 — do not add a sibling aggregate without projecting it.
     anySanitized: boolean;
     // CC2b (2026-07-15, boundary B4): per-predecessor NOT-chained facts — every skip records
     // WHICH predecessor dropped and WHY (the aggregate completed/total counts can't distinguish
@@ -176,8 +202,114 @@ export interface ChainedContext {
     // even though the count looks complete (T4e run #2). A pipeline that never set
     // deliverableSourceTaskId hands off its index BY DESIGN and is NOT degraded.
     degradedPredecessors: number;
+    // ── CROSS-PIPELINE DELIVERY (2026-09-16) ─────────────────────────────────────────────────────
+    // The four fields below describe the INJECTED population (entries copied from the owning leg's
+    // chainedFrom, see `LegInjection`). They are kept OUT of the dependency-derived counts above ON
+    // PURPOSE: `completedDependencies` / `totalDependencies` / `chainCapablePredecessors` /
+    // `allDependenciesMet` are computed from the task_dependencies ROWS and never count an injected
+    // entry — `predecessors === chainCapablePredecessors` is a string-pinned Protocol-10 fact the
+    // program gate reads, and an injected entry is not a predecessor of THIS task. Only the
+    // payload-describing aggregates (`totalChars`, `anyTruncated`, `anySanitized`) are computed over
+    // the WHOLE array, injected entries included — they describe what the prompt carries.
+    // ⚠️ `anySanitized` is therefore a MIXED-POPULATION aggregate: it can go true from an injected
+    // entry, which was sanitized at the LEG's prepare (copied entries are never re-sanitized here).
+    /** The leg whose chainedFrom was consulted; null when this task is not a leg's child (or no leg resolved). */
+    inheritedFromLeg: string | null;
+    /** How many injected entries are in `chainedFrom`. */
+    inheritedPredecessors: number;
+    /** DENOMINATOR: how many entries the leg OFFERED (pre-policy — candidates + every skip). 0 here
+     *  with a resolved leg means "nothing on offer"; >0 with inheritedPredecessors 0 means every one
+     *  was skipped and `inheritedSkipped` names why. Never a silent zero. */
+    legCrossPipelineEntries: number;
+    /** Every leg entry NOT injected, with its reason. ⚠️ NEVER folded into `notChained` — the program
+     *  gate treats notChained.length > 0 as BLOCKING, and a fail-open here must not fail closed. */
+    inheritedSkipped: Array<{ taskId: string; reason: string }>;
   };
 }
+
+/**
+ * CROSS-PIPELINE DELIVERY (2026-09-16) — what the caller hands the chainer to inject.
+ *
+ * THE DEFECT (Bug Class 84, container-tier terminus): a program's cross-pipeline edge is leg→leg. The
+ * consuming LEG receives the upstream leg's deliverable in its own chainedFrom (51 of 51 edges), and
+ * the leg's harness — an LLM — paraphrases it into its children's task descriptions; no deterministic
+ * path carries it to a CHILD (3 of 51). Run 3's Architect held the correct digits in prose and refused
+ * them, correctly, because prose is not the platform channel. Instance 2 (2026-08-17) had no contract
+ * telling it to refuse, proceeded, and RELEASED on a value it could not verify.
+ *
+ * THE FIX: pass the entry, extract nothing. The owning leg's chainedFrom entries are copied VERBATIM
+ * into the child's chainedFrom, stamped `inheritedFromLeg`. The `derivationContainment` stamp rides
+ * inside each entry, so a stamped crossing value arrives as a FACT; the report.md prose arrives as the
+ * SAME bytes the leg saw (already sanitized and capped at the leg's prepare). Deciding WHICH value
+ * crosses is a verdict this deliberately does not make (Protocol 10).
+ *
+ * Resolution of the leg is the CALLER's (prepare-task-for-execution → resolveOwningLeg): the chainer
+ * takes the entries so a fixture needs no extra stub. `entries` is the leg's stored jsonb — untyped
+ * on purpose; the chainer validates the minimum it relies on and skips the rest with a reason.
+ */
+export interface LegInjection {
+  legTaskId: string;
+  entries: unknown[];
+  /** The CHILD's agentRole (the task being prepared), for the exclusion policy below. null = unnamed. */
+  childAgentRole?: string | null;
+}
+
+/**
+ * INJECTION SCOPE — an EXCLUSION list, never an inclusion list (DECISION-injection-scope.md).
+ *
+ * WHY EXCLUDE HARVESTERS (prompt-construction, from the renderer's chair): a harvester's output is a
+ * point-in-time snapshot of OBSERVED state, and an upstream report.md carries allocations/CIDRs/VLANs
+ * in exactly the shape of a harvest table. A harvester that folds an injected entry into
+ * `## Harvested Allocations` produces a clean-looking harvest containing a value nobody observed on
+ * the device — machine-parsed ground truth the containment net compares derived values against. It
+ * poisons the anti-fabrication net at its ROOT; every tier above then checks correctly against
+ * contaminated data. The provenance stamp cannot defend this (it says WHO produced it, not IS IT STILL
+ * TRUE) and `role="context_only"` addresses instruction-following, the wrong threat model. The
+ * harvester's own seeded guidance says it "run[s] BEFORE any design and ha[s] no predecessor".
+ *
+ * WHY EXCLUSION, NOT INCLUSION: an inclusion list fails CLOSED — a new domain adds a consuming role,
+ * nobody updates the list, delivery silently stops: Bug Class 84 recreated by its own fix. A null /
+ * unnamed role matches no exclusion and RECEIVES the injection — a stated property (255 leg children
+ * carry a null role), pinned by fixture.
+ *
+ * ⚠️ Do NOT reuse `HARNESS_LEAF_ROLE_RE` (marker-presence.ts) — /harvest|architect|design|author/i
+ * would exclude the CONSUMING roles (`infra_change_architect`, `config_change_author`) this fix exists
+ * for. Spell the names literally.
+ *
+ * `change_reviewer` is excluded FOR NOW with a reason: its §6 holds exactly one document today and its
+ * guidance says so; three self-host format vetoes (2026-09-09) were reviewers misreading a
+ * one-document §6. Revisit when a reviewer is told to check `## Consumed Values` against the upstream.
+ * `program_architect` is on NEITHER list — it is a child of the program ROOT, which has no upstream
+ * pipeline, so resolveOwningLeg finds nothing and the question is moot.
+ */
+export const INJECTION_EXCLUDED_ROLES: ReadonlySet<string> = new Set([
+  'infra_state_harvester',      // harvest-shaped
+  'artifact_harvester',         // harvest-shaped
+  'synthesis_source_acquirer',  // harvest-shaped despite the name — the shape is the signal
+  'network_state_harvester',    // harvest-shaped
+  'change_reviewer',            // for now — see above
+  'publication_reviewer',       // artifact-synthesis' reviewer — same seat as change_reviewer
+  'requirements_reviewer',      // requirements-authoring's reviewer — same seat (decided 2026-09-24)
+]);
+
+/**
+ * RECONCILIATION TRIPWIRE (2026-09-17). The list above is LITERAL NAMES, deliberately — see the
+ * HARNESS_LEAF_ROLE_RE warning. That choice has one failure mode: a domain that names its
+ * harvest-shaped or review-shaped role differently falls through and RECEIVES the injection.
+ *
+ * Found exactly that way: `publication_reviewer` (artifact-synthesis, 12 children) sat outside the
+ * list while `change_reviewer` (the same seat in the four infra domains) was excluded. Zero live
+ * impact — artifact-synthesis has never been a leg inside a program — but it was latent, and it is
+ * the direction that matters: an exclusion list fails toward DELIVERY, which is normally the safe
+ * side, EXCEPT for these two shapes, where delivery is the harm (a harvester folding an upstream
+ * value into machine-parsed ground truth; a reviewer gaining a second reviewable document).
+ *
+ * So: warn when a role LOOKS like one of those shapes and is not excluded. A warn, never a block —
+ * the judgement of which roles belong is a human one, and a shape-matching regex is not entitled to
+ * make it (`infra_change_architect` would be untouched here, correctly, but a future
+ * `design_reviewer` would warn and deserve a decision, not a silent exclusion).
+ */
+const INJECTION_SHAPE_TRIPWIRE_RE = /review|harvest|acquir/i;
 
 /**
  * Check if all dependency tasks are completed and chain their outputs.
@@ -191,7 +323,11 @@ export interface ChainedContext {
 /** F-D (2026-09-10): the client is injectable so the in-flight / not-completed arms have a real fixture
  *  (scripts/test-context-chainer-inflight.ts). Production callers pass nothing. */
 export type ChainerClient = typeof prisma;
-export async function chainDependencyContext(taskId: string, db: ChainerClient = prisma): Promise<ChainedContext | null> {
+export async function chainDependencyContext(
+  taskId: string,
+  db: ChainerClient = prisma,
+  opts: { inject?: LegInjection | null } = {}
+): Promise<ChainedContext | null> {
   // Find all tasks this task depends on
   const dependencies = await db.taskDependency.findMany({
     where: { taskId },
@@ -217,8 +353,26 @@ export async function chainDependencyContext(taskId: string, db: ChainerClient =
     },
   });
 
-  if (dependencies.length === 0) {
-    return null; // No dependencies — nothing to chain
+  // CROSS-PIPELINE DELIVERY: the injectable entries, classified BEFORE the dep-free early return so a
+  // leg's Phase-0 harvester (dep-free by construction — 52/198 children) can still receive them.
+  // The early return itself is KEPT: with no dependencies AND nothing to inject the contract is
+  // unchanged (null, no write) — every other dep-free task on the platform, and the read-only replay
+  // in scripts/replay-containment.ts, see exactly what they saw before. Only a task with something to
+  // inject takes the normal path; an EMPTY chainedFrom is never written (Array.isArray([]) is true and
+  // the renderer would emit a hollow "0 of 0" §6 block).
+  const injection = classifyLegInjection(opts.inject);
+
+  if (dependencies.length === 0 && injection.candidates.length === 0) {
+    if (injection.legTaskId && injection.skipped.length > 0) {
+      // A DEP-FREE child whose leg OFFERED entries that were all excluded/filtered: no context, so no
+      // row-level record — this log line is the only trace (see the recording limit in
+      // classifyLegInjection). The excluded harvest population lands here by design.
+      log.info(
+        { taskId, legTaskId: injection.legTaskId, legCrossPipelineEntries: injection.skipped.length, skipped: injection.skipped },
+        'Owning leg consulted — nothing inherited (dep-free child; skips are log-only here)'
+      );
+    }
+    return null; // No dependencies, nothing to inject — nothing to chain
   }
 
   const completedDeps = dependencies.filter(d => d.dependsOn.status === 'COMPLETED');
@@ -285,9 +439,9 @@ export async function chainDependencyContext(taskId: string, db: ChainerClient =
     // reviewed 92%): supersession filter (a regressed orchestrator retry never chains) +
     // the uniform R8 empty-deliverable floor (an empty-finalResponse SUCCESS is skipped
     // LOUDLY instead of silently chaining '' — BC-6/F6). Miss behavior unchanged: skip+warn.
-    const { execution: latestExec } = await selectAuthoritativeExecution(db, depTask.id, {
-      requireNonEmptyArtifact: true,
-    });
+    // CHAIN_SELECTION_OPTIONS, not a literal: the mechanical nets read through the same constant
+    // (authoritative-result-read.ts) so the gate is stamped from exactly the execution chained here.
+    const { execution: latestExec } = await selectAuthoritativeExecution(db, depTask.id, CHAIN_SELECTION_OPTIONS);
 
     if (!latestExec) {
       log.warn(
@@ -381,10 +535,31 @@ export async function chainDependencyContext(taskId: string, db: ChainerClient =
       // NOTE (review 2026-06-24, harness N2): neutralization can GROW text (a short match like
       // `system:` -> a longer marker), so sanitize can INDUCE truncation a raw response just under
       // the cap would not have hit. Latent — the per-predecessor cap clears normal harvests ~8x.
+      // F9: null when R9 did not run, so the push site stamps NO R9 facts (never a fabricated clean).
       const r9 = process.env.CONNECTED_OUTPUT_SANITIZE_ENABLED === 'true'
         ? sanitizeChainedOutput(rawResponse)
-        : { text: rawResponse, strippedControlChars: 0, neutralizedInjections: [] as Array<{ category: string; match: string }> };
-      let finalResponse = r9.text;
+        : null;
+      let finalResponse = r9 ? r9.text : rawResponse;
+      if (r9 && isR9OperatorEvent(r9.rewriteClasses)) {
+        // Site-B operator event (F9 — before this there was NO securityEvent at site B at all).
+        // Same gate as site A (R9_OPERATOR_EVENT_CLASSES). dependency + predecessor execution ids
+        // let an operator dedupe: every re-prepare re-chains the same bytes. No match text for the
+        // tag class (unbounded, attacker-controlled); injection matches truncated as at site A.
+        log.warn(
+          {
+            securityEvent: true,
+            site: 'B',
+            taskId,
+            dependencyTaskId: depTask.id,
+            predecessorExecutionId: latestExec.id,
+            rewriteClasses: r9.rewriteClasses,
+            neutralizedCount: r9.neutralizedInjections.length,
+            neutralizedCategories: Array.from(new Set(r9.neutralizedInjections.map(n => n.category))),
+            matches: r9.neutralizedInjections.slice(0, 5).map(n => n.match.slice(0, 60)),
+          },
+          'R9 sanitizer rewrote chained predecessor output before the downstream reasoner (site B)'
+        );
+      }
       let truncated = false;
       if (finalResponse.length > PER_PREDECESSOR_SOFT_CAP) {
         finalResponse = finalResponse.slice(0, PER_PREDECESSOR_SOFT_CAP)
@@ -406,11 +581,11 @@ export async function chainDependencyContext(taskId: string, db: ChainerClient =
       // F19 (2026-07-16): promised-but-absent deliverable. deliverableSourceTaskId set means
       // this pipeline PROMISED a report.md; chaining anything else means the deliverable is
       // missing — the composition would be built on the forensic index (T4e run #2).
-      if (
+      const degraded =
         isPipelinePredecessor &&
         source !== 'report.md' &&
-        !!(depTask.metadata as Record<string, unknown> | null)?.deliverableSourceTaskId
-      ) {
+        !!(depTask.metadata as Record<string, unknown> | null)?.deliverableSourceTaskId;
+      if (degraded) {
         degradedPredecessors++;
       }
 
@@ -462,10 +637,16 @@ export async function chainDependencyContext(taskId: string, db: ChainerClient =
         executionId: latestExec.id,
         truncated,
         originalChars: rawResponse.length,
-        sanitized: r9.strippedControlChars > 0 || r9.neutralizedInjections.length > 0,
-        neutralizedCount: r9.neutralizedInjections.length,
-        strippedControlChars: r9.strippedControlChars,
+        // R9 facts only when R9 examined the text (F9). `sanitized` = LEGACY, frozen expression.
+        ...(r9 ? {
+          sanitized: r9.strippedControlChars > 0 || r9.neutralizedInjections.length > 0,
+          rewritten: r9.rewritten,
+          rewriteClasses: r9.rewriteClasses,
+          neutralizedCount: r9.neutralizedInjections.length,
+          strippedControlChars: r9.strippedControlChars,
+        } : {}),
         source,
+        degraded,
       });
 
       log.info(
@@ -518,9 +699,30 @@ export async function chainDependencyContext(taskId: string, db: ChainerClient =
   };
   const sumChars = () => chainedFrom.reduce((sum, e) => sum + entryChars(e), 0);
   let totalChars = sumChars();
-  for (let i = chainedFrom.length - 1; i >= 0 && totalChars > TOTAL_CONTEXT_CEILING; i--) {
-    const entry = chainedFrom[i];
+  // ONE loop body, TWO passes (2026-09-16). The body below is the thrice-fixed arithmetic, verbatim;
+  // what changed is WHICH entries it may cut. `candidates` is walked tail-first and only those
+  // entries are trimmed, while `totalChars` is always the sum over the WHOLE array. Pass 1 (here)
+  // runs over the child's OWN entries exactly as before. Pass 2 runs after the leg's entries are
+  // injected, restricted to the INJECTED entries, against whatever headroom pass 1 left — so the
+  // child's own harvest is never cut to make room for an injection, and the single ceiling still
+  // bounds the whole payload. Keying pass 2 on `inheritedFromLeg` rather than array position is
+  // what lets the injected block sit at the HEAD (it is the most foundational input) while still
+  // being the first thing trimmed. A SECOND copy of this loop restricted by hand was rejected: it
+  // is the exact block that was wrong three times, and two copies drift.
+  const trimTailToCeiling = (candidates: Array<(typeof chainedFrom)[number]>): void => {
+  for (let i = candidates.length - 1; i >= 0 && totalChars > TOTAL_CONTEXT_CEILING; i--) {
+    const entry = candidates[i];
     const overBy = totalChars - TOTAL_CONTEXT_CEILING;
+    // RE-TRIM SAFETY (2026-09-16): an entry that was ALREADY truncated (per-predecessor arm above, or
+    // an injected copy the LEG's ceiling cut) carries its marker at the tail of `finalResponse`. Slicing
+    // that string could land INSIDE the old marker and leave a garbled fragment in front of the new
+    // one. Strip the old marker first; `originalChars` is the RAW upstream length either way, so the
+    // fresh marker's "of N" stays true. (Pre-existing latent nit for the per-predecessor→ceiling case;
+    // reachable in earnest now that injected entries can be cut a second time.)
+    const alreadyTruncated = entry.truncated === true;
+    if (alreadyTruncated) {
+      entry.finalResponse = entry.finalResponse.replace(/\n\n\[CHAINED CONTEXT TRUNCATED: \d+ of \d+ chars\]$/, '');
+    }
     // SUBTRACT THE MARKER THIS TRIM IS ABOUT TO ADD (2026-09-12). `keep = len - overBy` left the
     // entry ~50 chars over after the marker was appended, so the loop fell through to the NEXT
     // predecessor and shaved ~54 chars off it, and the next, and the next — cascading all the way
@@ -559,13 +761,58 @@ export async function chainDependencyContext(taskId: string, db: ChainerClient =
       'Chained context truncated — total ceiling exceeded'
     );
   }
+  };
+  trimTailToCeiling(chainedFrom); // pass 1: the child's own entries, unchanged behaviour
+
+  // ── CROSS-PIPELINE DELIVERY: inject the owning leg's entries ──────────────────────────────────
+  // Counts that describe THIS task's dependency rows are pinned BEFORE the append (see the metadata
+  // type comment): `completedDependencies` is the own-entry count, never chainedFrom.length.
+  const completedDependencies = chainedFrom.length;
+  const ownTaskIds = new Set(chainedFrom.map((e) => e.taskId));
+  const notChainedTaskIds = new Set(notChained.map((n) => n.taskId));
+  const inheritedSkipped: ChainedContext['pipelineMetadata']['inheritedSkipped'] = [...injection.skipped];
+  const injected: typeof chainedFrom = [];
+  const inheritedAt = new Date().toISOString();
+  for (const candidate of injection.candidates) {
+    // DE-DUP AGAINST BOTH ARRAYS. A taskId already in the child's own chainedFrom: the child's OWN
+    // entry wins — it came through selectAuthoritativeExecution and is counted. A taskId in
+    // notChained: SKIP — injecting it would make the row assert the predecessor both blocked and
+    // arrived, and for an in-flight upstream would reinstate exactly the stale snapshot the guard
+    // refused. (The in-flight guard exists only where the child holds an edge; a dep-free child has
+    // no such check and receives whatever the LEG chained at ITS prepare — say so, do not hide it.)
+    if (ownTaskIds.has(candidate.taskId)) {
+      inheritedSkipped.push({ taskId: candidate.taskId, reason: 'own-edge-wins' });
+      continue;
+    }
+    if (notChainedTaskIds.has(candidate.taskId)) {
+      inheritedSkipped.push({ taskId: candidate.taskId, reason: 'in-not-chained' });
+      continue;
+    }
+    injected.push({ ...candidate, inheritedFromLeg: injection.legTaskId!, inheritedAt });
+  }
+  if (injected.length > 0) {
+    // HEAD, in received order: the leg predates its own children by construction, so this asserts
+    // nothing that needs a timestamp read. Rendering order is NOT trim order — see pass 2 below.
+    chainedFrom.unshift(...injected);
+    totalChars = sumChars();
+    trimTailToCeiling(injected); // pass 2: ONLY the injected entries, against the remaining headroom
+    log.info(
+      { taskId, legTaskId: injection.legTaskId, inherited: injected.map((e) => e.taskId), skipped: inheritedSkipped },
+      'Cross-pipeline entries inherited from the owning leg'
+    );
+  } else if (injection.legTaskId) {
+    log.info(
+      { taskId, legTaskId: injection.legTaskId, legCrossPipelineEntries: injection.candidates.length + injection.skipped.length, skipped: inheritedSkipped },
+      'Owning leg consulted — nothing inherited'
+    );
+  }
 
   return {
     chainedFrom,
     pipelineMetadata: {
       chainedAt: new Date().toISOString(),
       totalDependencies: dependencies.length,
-      completedDependencies: chainedFrom.length,
+      completedDependencies, // own entries ONLY — pinned before the injection append
       allDependenciesMet: allMet,
       anyTruncated: chainedFrom.some(e => e.truncated),
       totalChars,
@@ -573,8 +820,73 @@ export async function chainDependencyContext(taskId: string, db: ChainerClient =
       notChained,
       chainCapablePredecessors: dependencies.filter(d => isChainCapable(d.dependsOn)).length,
       degradedPredecessors,
+      inheritedFromLeg: injection.legTaskId,
+      inheritedPredecessors: injected.length,
+      // OFFERED count, not post-policy: a leg that offered three result.json entries must read
+      // "inherited 0 of 3", with inheritedSkipped CONFIRMING why — not "0 of 0, nothing on offer".
+      legCrossPipelineEntries: injection.candidates.length + injection.skipped.length,
+      inheritedSkipped,
     },
   };
+}
+
+/**
+ * Classify the leg's stored entries into injectable candidates + recorded skips. Pure; exported for
+ * the fixture. SOURCE POLICY, stated as a policy and not a filter: only a PIPELINE-sourced entry —
+ * `source: 'report.md'` (the deliverable) or `'pipeline-index.json'` (the forensic fallback) — is a
+ * cross-pipeline entry. EXCLUDED: `'result.json'` (an ACTION upstream of the leg — a program-level
+ * producer feeding a leg is not delivered by this mechanism today) and entries with NO `source`
+ * (pre-CC2, before 2026-07-15 — unclassifiable, so not guessed). The plan's literal
+ * `source !== 'result.json'` would have admitted the source-less legacy shape; this is the positive
+ * form of the same policy. Malformed entries (no string taskId / finalResponse) are skipped, named.
+ */
+export function classifyLegInjection(inject: LegInjection | null | undefined): {
+  legTaskId: string | null;
+  candidates: ChainedContext['chainedFrom'];
+  skipped: Array<{ taskId: string; reason: string }>;
+} {
+  if (!inject || !inject.legTaskId || !Array.isArray(inject.entries)) {
+    return { legTaskId: inject?.legTaskId ?? null, candidates: [], skipped: [] };
+  }
+  const candidates: ChainedContext['chainedFrom'] = [];
+  const skipped: Array<{ taskId: string; reason: string }> = [];
+  // ROLE EXCLUSION first: every offered entry is recorded `role-excluded` and none is a candidate.
+  // RECORDING LIMIT, named rather than claimed: `inheritedSkipped` lives in pipelineMetadata, which
+  // exists only when the chainer returns a context. An excluded DEP-FREE child (177 of 186 excluded
+  // children today) therefore gets no row-level record — only the early-return log line below in
+  // chainDependencyContext. Where the child holds its own edges (change_reviewer, 240 of 241) the
+  // skips DO land in the row. A12 is closed on the with-deps population only.
+  const role = inject.childAgentRole ?? null;
+  if (role && !INJECTION_EXCLUDED_ROLES.has(role) && INJECTION_SHAPE_TRIPWIRE_RE.test(role)) {
+    log.warn(
+      { role, legTaskId: inject.legTaskId, errorCode: 'INJECTION_ROLE_SHAPE_UNREVIEWED' },
+      'Role looks harvest- or review-shaped but is not in INJECTION_EXCLUDED_ROLES — it WILL receive ' +
+      'the cross-pipeline injection. Decide deliberately and add it to the list or record why not.',
+    );
+  }
+  if (role && INJECTION_EXCLUDED_ROLES.has(role)) {
+    for (const raw of inject.entries) {
+      const id = (raw as { taskId?: unknown } | null)?.taskId;
+      skipped.push({ taskId: typeof id === 'string' ? id : '<malformed>', reason: 'role-excluded' });
+    }
+    return { legTaskId: inject.legTaskId, candidates, skipped };
+  }
+  for (const raw of inject.entries) {
+    const e = raw as Partial<ChainedContext['chainedFrom'][number]> | null;
+    if (!e || typeof e !== 'object' || typeof e.taskId !== 'string' || typeof e.finalResponse !== 'string') {
+      skipped.push({ taskId: typeof e?.taskId === 'string' ? e.taskId : '<malformed>', reason: 'malformed-entry' });
+      continue;
+    }
+    if (e.source !== 'report.md' && e.source !== 'pipeline-index.json') {
+      skipped.push({ taskId: e.taskId, reason: 'not-cross-pipeline-source' });
+      continue;
+    }
+    // Copy — never alias the leg's object; the trim mutates finalResponse in place. A stamp the leg's
+    // entry might carry is overwritten below with THIS leg (the immediate source).
+    const { inheritedFromLeg: _prior, inheritedAt: _priorAt, ...rest } = e as ChainedContext['chainedFrom'][number];
+    candidates.push({ ...rest });
+  }
+  return { legTaskId: inject.legTaskId, candidates, skipped };
 }
 
 /**
@@ -610,7 +922,8 @@ export async function applyChainedContext(
   log.info(
     {
       taskId,
-      dependenciesChained: chainedContext.chainedFrom.length,
+      dependenciesChained: chainedContext.pipelineMetadata.completedDependencies, // NOT chainedFrom.length — injected entries are not dependencies
+      inheritedPredecessors: chainedContext.pipelineMetadata.inheritedPredecessors,
       allMet: chainedContext.pipelineMetadata.allDependenciesMet,
     },
     'Chained context applied to task'

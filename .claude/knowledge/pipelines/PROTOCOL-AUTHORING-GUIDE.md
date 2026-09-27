@@ -28,9 +28,36 @@ error because it fails silently — the audit's M-class.
 | A platform fact (chaining scope, mode resolution, error codes, stamp shapes) | Stated ONCE, in the protocol whose bound role acts on it — and verified against code at write time | D6: "§6 carries only the IMMEDIATE predecessor" — verified in `context-chainer.ts` |
 | Shared tool-call mechanics | The base orchestrator, with domain protocols carrying only the DECISION RULE + a cross-reference | Step 5a deliverable wiring — the corpus's best pattern |
 | A role's work product | That protocol's `## What each specialist must produce` bullet for that phase | Harvester/Architect/Author/Reviewer contracts |
+| A permission whose SCOPE differs per domain | The **role guidance** grants it and DEFERS licensing to the domain — and every bound protocol must then DEFINE it or state it grants none | `config_change_author`'s comparison shape: network defines, k8s withdrew (1.9.0), terraform + observability undischarged |
 | A grading taxonomy | The CONSUMER tier only (the tier that reads the stamps) — never the tier that produces graded material | pov-program Step 5 owns `containmentDisposition`; domain protocols never restate it |
 | An operator/human procedure | NOT in agent prose as an instruction — surface it via the harness's comment at the moment the human acts | S5: the `duplicateAcknowledged` stamp is warned about in the Step-8 gate comment, not demanded of the agent |
+| **A verbatim ARTIFACT the agent must reproduce** (a template, schema, canonical stanza) | The **protocol body**, read from a vendored file at SEED time — never the task description, §6, an MCP resource or the artifact store | All four alternatives are mechanically dead: an LLM paraphrases a described artifact, R9 rewrites chained text while stamping `sanitized:false`, `resources/read` is not an agent tool, and the artifact store has no input mode. See `patterns/seed-time-artifact-carrier-pattern.md` — incl. the MAINTENANCE chain, because a baked artifact IS protocol content and editing it is editing the protocol |
+| **Text that must reach the PRODUCT byte-identically** (not the agent) | **Nowhere agent-facing.** The agent emits a MARKER; a script splices the text at publish time | A model asked to transcribe a rule that constrains it is marking its own homework — measured: three independent authoring passes each altered the rules while transcribing, and no two broke the same thing |
 | An authoring meta-rule | THIS document | — |
+
+**The SITUATION/JOB rule** — a protocol may re-bind a role's SITUATION; it has **no standing over
+the role's JOB.** Where a protocol changes WHEN a role acts or HOW MANY times, say so at the
+re-binding site, enumerate each re-binding, and close with *"everything else in your role guidance
+applies unchanged"* — an enumerated re-binding that never says what SURVIVES reads as a wholesale
+replacement. Where the difference is WHAT THE ROLE PRODUCES, the role guidance governs: **state the
+deference, do not restate the rule** (a restatement drifts, and it narrows silently — the terminal
+`## VERDICT:` grammar is the standing example, canonical in `change_reviewer` role guidance and
+only ever REFERENCED by the six protocols that consume it, per GS8).
+
+⚠️ **The blanket form — "the protocol takes precedence over role guidance" — is WRONG, not merely
+coarse**, and was declined on 2026-09-22 after being proposed as a preamble clause. It contradicts
+the corpus in the one place precedence is actually stated, and points directly at the six sites
+where the platform deliberately inverted it. Two further reasons it does not survive: production
+carries **zero** instances of an agent resolving a protocol↔role-guidance conflict (1,111 legs;
+1 conflict mention, and it is about two directives inside a task DESCRIPTION), and
+`LAYER-INVENTORY-PASS-2.md` finding I-3 requires any instruction-precedence rule to name a
+**reporting channel for the losing side** or be prose about prose — which is a per-execution output
+cost on a case with no observed instances. The two constraints close the design space between them.
+
+Reference implementation: `seed-protocol-prompts.ts:3316` (requirements-authoring Phase 0) — the
+corpus's ONLY statement of this precedence, pinned since 2026-09-22 by
+`npm run test:protocol-stamp-guards` (both halves; severing either is red). Run
+`npm run prompt:directives -- <role> --protocol <name>` before writing either kind of clause.
 
 **The dischargeability test (M1)**: before binding a role to an obligation, trace the delivery
 mechanism — what does that role's chained context / tool surface ACTUALLY carry at that moment?
@@ -117,7 +144,43 @@ protocol's changelog — a bump that rewrites instead of appending `Prior: …` 
 protocol per semantic change; a shared-preamble change gets ONE canonical changelog (the
 artifact-synthesis 1.4.0 convention).
 
+### 1b. A deferral is only half an obligation — the referent must be OBLIGED to exist
+
+A four-domain role key cannot encode a permission whose correct scope differs per domain, so it
+grants the permission and defers licensing: *"per your active protocol's comparison shape"*. **That
+placement is right** — network's devices genuinely cannot render a post-change state while
+kubernetes-gitops's offline validators can, and hoisting the licence would grant it where it must not
+exist.
+
+⚠️ **What fails is that nothing obliges the referent to exist.** Measured 2026-09-19 across the four
+protocols bound to `config_change_author`: one defines the shape, one **cites** a shape its body never
+defines, two say nothing. Three of four never discharge it, with mirror-image live failures — an
+author guessing at an undefined shape (three rounds), a reviewer accepting one. Both are **compliant
+readings of text that does not exist**.
+
+**Rule when you write a deferral**: pair it with a check that every bound protocol either defines the
+referent or states it grants none. Same shape as the reachability test in
+`test-validation-shape-contract.ts`. Absent that, the silence is indistinguishable from a licence
+and nothing reports it. Full finding:
+`cline_docs/follow-ups/a-deferral-with-no-discharge-obligation-2026-09-19.md`.
+
+⚠️ **And a MUST that is routinely and CORRECTLY disobeyed does not bind — it teaches that MUSTs are
+negotiable.** *2026-09-19: an ingestion check demanded `nodes`/`links` of every topology. Five
+consecutive Architects planned correctly against a domain-structured one; four never mentioned the
+deviation and the fifth flagged it as a judgement call.* If a mandatory instruction is being ignored
+by competent agents for good reasons, the instruction is wrong — reshape it (escalate when the
+artifact is unusable; declare-and-proceed when it is merely different; an UNSTATED deviation becomes
+the defect) rather than restating it louder.
+
 ## 3. What is mechanically enforced vs prose-only
+
+⚠️ **Prose-only is more of the corpus than it looks, and an unenforced MUST reads exactly like an
+enforced one.** *2026-09-19: the Architect's topology ingestion check — a MUST with an escalate
+clause — is prose in two prompt surfaces with NOTHING enforcing it; the platform never fetches or
+parses those artifacts at all. An operator-facing guide separately claimed "the engine enforces
+exactly these checks and escalates on violation", which was false and made the operator's own
+pre-flight (the only mechanical check in that chain) look like a redundant courtesy.* Before you cite
+enforcement in prose, grep for the enforcer.
 
 Enforced (trust these to fail loudly): three-copy validation-shape drift + changelog survival
 (`test-validation-shape-contract`), the pov-program taxonomy's 20 invariants incl. the

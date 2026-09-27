@@ -154,9 +154,19 @@ test('F16.4: cone walk is FORWARD-ONLY + stage-scoped (upstream parked gates str
 test('F16.5: ready-reactor never re-selects a can-never-run (FAILED) task', () => {
   assert(readySrc.includes(`IS DISTINCT FROM 'FAILED'`), 're-selection filter missing (loop belt-and-suspenders)');
 });
-test('F16.6: terminal predicates UNTOUCHED — Guard 4 + mode resolver keep COMPLETED-or-executionStatus-FAILED verbatim', () => {
-  assert(retriggerSrc.includes(`{ executionStatus: { notIn: ['FAILED'] } }`), 'Guard 4 predicate changed — F16 chose the cascade precisely to avoid this');
-  assert(resolverSrc.includes(`c.status === 'COMPLETED' || c.executionStatus === 'FAILED'`), 'resolver predicate changed — must stay verbatim');
+// F16.6 — F16 terminalizes by WRITING executionStatus='FAILED' (plus the cone) rather than changing the terminal
+// predicates, so it depends on every predicate counting FAILED (and COMPLETED) as terminal. It used to pin the
+// Guard 4 and resolver literals verbatim. RWF 1.1 (2026-09-26, Steve-approved) moved both onto ONE shared
+// predicate (lib/services/child-stage-settled.ts) and added an in-flight arm that cannot catch an F16 task:
+// F16 creates no execution row, and the cone walk marks only tasks with no PENDING/RUNNING/SUCCESS execution.
+// The PROPERTY F16 relies on is pinned here; the real-DB proof is test-child-stage-settled D4.
+test('F16.6: terminal = COMPLETED or executionStatus FAILED, in the ONE shared predicate Guard 4 and the resolver read', () => {
+  const settledSrc = fs.readFileSync(path.join(process.cwd(), 'lib/services/child-stage-settled.ts'), 'utf8');
+  assert(/\{ status: \{ not: 'COMPLETED' \} \}/.test(settledSrc) &&
+    /\{ OR: \[\{ executionStatus: null \}, \{ executionStatus: \{ not: 'FAILED' \} \}\] \}/.test(settledSrc),
+    'the not-terminal arm changed — F16\'s executionStatus=FAILED write would no longer read as terminal');
+  assert(retriggerSrc.includes('countUnsettledChildren('), 'Guard 4 does not read the shared predicate');
+  assert(resolverSrc.includes('countUnsettledChildren('), 'mode resolver does not read the shared predicate');
 });
 
 console.log(`\n${'='.repeat(45)}\nResults: ${passed} passed, ${failed} failed\n${'='.repeat(45)}`);

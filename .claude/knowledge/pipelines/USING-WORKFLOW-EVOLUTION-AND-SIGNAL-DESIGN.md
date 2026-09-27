@@ -130,3 +130,67 @@ Records: [`../../../cline_docs/reviews/evidence-flow-arc-2026-07/CALIBRATION-STU
 - **Signal Design in production** — the fact catalog: `.claude/knowledge/patterns/agent-output-trustworthiness-defense-stack-pattern.md` (additive detection facts in `result.json`; the Protocol 10 lens applied to agent output).
 - **Platform-code, event-driven fixes** — the reactor shape: `.claude/knowledge/patterns/orchestration-reactor-pattern.md` (Pattern #46; the shape Protocol 13's platform-code layer requires).
 - **Role-guidance / template fixes** — authoring + bake/re-seed coupling: `.claude/knowledge/patterns/agent-template-gold-standard-pattern.md` (Pattern #44; the standard Protocol 13's role-guidance/template layer authors to).
+
+---
+
+## Worked example — a six-round arc where 13 kept firing and 10 said "not yet" (2026-09-17/19)
+
+The four-domain arc is the better example of the pair's **rhythm**: Protocol 13 fired eleven times,
+and Protocol 10 mostly declined.
+
+**Protocol 13** ran on defects the runs found, each in a different layer — a gate with no stated
+moment; a requirement the rig could not satisfy; an instruction owned by no role; two approvers who
+did not exist; a value classified static that its named source never carried; a requirements clause
+that **forbade the edge carrying the value** and asserted a delivery mechanism that does not exist; a
+harness inventing protocol tokens because the real list was stale; an acceptance criterion citing
+rules the document did not contain; an ingestion check demanding a schema no domain-structured
+topology can satisfy; a guide claiming an enforcement that does not exist; and a role-guidance
+deferral no domain had discharged.
+
+⚠️ **The loop's own failure mode showed up here too**: three of those were diagnosed from the
+*artifact* and would have been fixed in the wrong layer if the agent's **input** had not been read —
+see the anti-patterns in Protocol 13.
+
+**Protocol 10 declined more than it shipped, and the declines are the lesson:**
+
+| candidate | decision |
+|---|---|
+| `programReleasable` / `qualityGate.outcome` | **facts** already — the AND-gate over stamped conjuncts; shipped unchanged |
+| the `escalationReason` the platform wrote itself (`orphaned-cascade-after-root-recovery`) | **fact** — it names what happened and enumerates the affected task ids; it asserts nothing about whether the work is right |
+| "delivery verified" as a summary field | **not written.** The counts and `chainedFrom` are facts; a field asserting the value *arrived correctly* would be a verdict, and two of three legs had already shown that a leg can look delivered while compensating |
+| relaxing the drift rule for a UAT plant | **refused** — that is a control, not a signal; the fix was to declare the artifact so the rule stays armed |
+
+**The rhythm worth copying**: Protocol 13 fires on *what a run revealed*; Protocol 10 fires on *what
+you are tempted to add afterwards*. In a healthy arc 13 is busy and 10 mostly says no — and when 10
+does ship, it ships the fact and leaves the judgement to the gate.
+
+**Records**: `cline_docs/showcase-2026-09-17/RUN-SHEET.md` · VT-27 ·
+`cline_docs/follow-ups/a-deferral-with-no-discharge-obligation-2026-09-19.md`.
+
+## Worked example — both protocols in one arc (2026-09-16/17)
+
+The cross-pipeline delivery arc is the fullest worked example of the pair to date.
+
+**Protocol 13 (workflow evolution)** ran four times from live-run findings: a protocol that never
+asked its harvester for the evidence block → a parser that could not see a backtick-quoted heading →
+a payload that reached the container and never the worker → a role scope that would have poisoned the
+anti-fabrication net. Each found by *running* the thing.
+
+**Protocol 10 (signal design)** decided three questions in that arc, and the interesting one is the
+field **nobody proposed**:
+- `inheritedPredecessors` / `legCrossPipelineEntries` — **facts**. Counts of what the platform placed;
+  wrong only as a findable bug.
+- `inheritedSkipped` — a **fact** with reasons, and explicitly kept OUT of `notChained`, because the
+  gate treats that as blocking and a policy exclusion is not a coverage failure.
+- **`inheritanceComplete` — the verdict nobody wrote.** The Protocol 10 risk was never in the counts;
+  it was in the summary field that would have asserted sufficiency. Naming the verdict you did *not*
+  ship is the cleanest evidence the protocol was applied.
+
+And the rendering constraint that follows from 10: a per-predecessor fact must say **what the
+platform found**, never **whether it is right**. *"The predecessor held the upstream"* must not read
+as *"therefore the value is correct"* — an agent can hold the upstream and still transcribe it
+wrongly. If such a line cannot be worded so a reviewer cannot read approval into it, do not ship it;
+blindness is safer than false assurance.
+
+**Records**: `cline_docs/reviews/cross-pipeline-value-delivery-2026-09-16/` · VT-25 ·
+`cline_docs/follow-ups/upstream-delivery-as-a-per-predecessor-fact-2026-09-17.md`.

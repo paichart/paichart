@@ -148,6 +148,7 @@ export async function handleTaskUpdate(parameters: any, user: TokenPayload, acti
     dueDate, // NEW: Extract dueDate
     due_date, // NEW: Extract due_date (snake_case alias)
     assigneeId, // NEW: Extract assigneeId
+    assignee, // 2026-09-25 (N2-f2): person by name or email — resolved below with the shared resolver
     agentTemplateId,
     agentTemplateName,
     agent_template_name,
@@ -365,36 +366,53 @@ export async function handleTaskUpdate(parameters: any, user: TokenPayload, acti
     updateData.dueDate = parsedDate;
   }
 
-  if (assigneeId !== undefined) {
+  // Person by name or email (N2-f2). Resolved into the ID path below so the SAME team check applies.
+  // Ambiguity or no match throws — nothing is written (the update transaction has not started).
+  let resolvedAssigneeId: string | undefined = assigneeId;
+  if (resolvedAssigneeId === undefined && typeof assignee === 'string' && assignee.trim() !== '') {
+    const { resolveUserByNameOrEmail } = await import('@/lib/mcp/tasks/action/utilities/assignee-resolver');
+    try {
+      resolvedAssigneeId = (await resolveUserByNameOrEmail(assignee, taskForAuth.pov)).id;
+    } catch (e: unknown) {
+      const reason = e instanceof Error ? e.message : String(e);
+      throw new Error(`task.update: assignee "${assignee}" was not applied and the task was not updated. ${reason}`);
+    }
+  }
+
+  if (resolvedAssigneeId !== undefined) {
     // Wave C M3 fix (2026-05-23, Basic Tools sec-ops Phase 3): assignee
     // must be a POV team member or POV owner. Mirror of M2 fix on
     // task.assign. Admins bypass via validatePOVAccess pattern above.
-    if (assigneeId !== null && assigneeId !== '') {
+    if (resolvedAssigneeId !== null && resolvedAssigneeId !== '') {
       const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
       if (!isAdmin) {
-        const isPOVOwner = taskForAuth.pov.ownerId === assigneeId;
+        const isPOVOwner = taskForAuth.pov.ownerId === resolvedAssigneeId;
         const isPOVTeamMember = (taskForAuth.pov.team?.members ?? []).some(
-          (m: { userId: string }) => m.userId === assigneeId
+          (m: { userId: string }) => m.userId === resolvedAssigneeId
         );
         if (!isPOVOwner && !isPOVTeamMember) {
           throw new Error(
-            `User "${assigneeId}" is not a member of this POV team and is not the POV owner. ` +
+            `User "${resolvedAssigneeId}" is not a member of this POV team and is not the POV owner. ` +
             `Add them to the team via pov.update first, or assign to an existing team member.`
           );
         }
       }
     }
-    updateData.assigneeId = assigneeId;
+    updateData.assigneeId = resolvedAssigneeId;
   }
 
-  // Add agent template if provided
-  if (finalAgentTemplateId) {
-    updateData.agentTemplateId = finalAgentTemplateId;
+  // Add agent template if provided — by ID, or by the name resolved above.
+  // 2026-09-25: the name path resolved `templateAgentTemplateId` and then discarded it (this block
+  // read the ID-only variable), so a name-only template was never written: alone it hit NO_EFFECT,
+  // alongside other fields it was silently not applied. Latent since the Phase 2.4 extraction.
+  const effectiveAgentTemplateId = finalAgentTemplateId || templateAgentTemplateId;
+  if (effectiveAgentTemplateId) {
+    updateData.agentTemplateId = effectiveAgentTemplateId;
 
     // Also update the agent role if we have the template
-    if (!agentTemplate && finalAgentTemplateId) {
+    if (!agentTemplate && effectiveAgentTemplateId) {
       agentTemplate = await prisma.agentTemplate.findUnique({
-        where: { id: finalAgentTemplateId }
+        where: { id: effectiveAgentTemplateId }
       });
     }
 
@@ -453,7 +471,7 @@ export async function handleTaskUpdate(parameters: any, user: TokenPayload, acti
     throw new Error(
       'NO_EFFECT: No updatable fields provided. ' +
       'To update a task, specify at least one field: ' +
-      'title, description, priority, status, dueDate, assigneeId, agentTemplateId, or dependencyIds. ' +
+      'title, description, priority, status, dueDate, assigneeId (or assignee by name/email), agentTemplateId, or dependencyIds. ' +
       '\n\nExample: { action: "task.update", taskId: "...", status: "COMPLETED" }'
     );
   }

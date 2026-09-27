@@ -27,7 +27,25 @@
 /** Roles whose finalResponse carries a terminal verdict block. Shared by network / k8s / terraform /
  *  observability pipelines — all four reviewer templates resolve to `change_reviewer`
  *  (verified 2026-07-14; fourth domain added 2026-09-10). */
-export const REVIEWER_ROLES = new Set(['change_reviewer']);
+export const REVIEWER_ROLES = new Set([
+  'change_reviewer',
+  // requirements-authoring (2026-09-21). MUST land in the SAME commit as its ROLE_GUIDANCE_LIBRARY
+  // entry: the coupling test below asserts every REVIEWER_ROLE has guidance containing
+  // VERDICT_MARKER, so adding the key alone fails it. Without membership here the reviewer emits
+  // NO structured reviewerVerdict at all — no evidenceGrading, no lean-card Facts line, and the
+  // verdict-mismatch guard falls silent INDISTINGUISHABLY from a legitimately reviewer-less run.
+  'requirements_reviewer',
+]);
+
+/**
+ * The REVIEWER SET for re-execution policy (RWF C.1/C.2): template type REVIEWER, or a role in REVIEWER_ROLES.
+ * One set for mechanism and prose. It is wider than REVIEWER_ROLES on purpose: publication_reviewer is a
+ * REVIEWER-type template outside it, and it is a judge whose same-input re-run is a re-roll all the same.
+ * REVIEWER_ROLES itself stays the narrower "emits the terminal VERDICT block" set.
+ */
+export function isReviewerSet(agentRole: string | null | undefined, templateType: string | null | undefined): boolean {
+  return templateType === 'REVIEWER' || (!!agentRole && REVIEWER_ROLES.has(agentRole));
+}
 
 /** The literal marker the grammar, the protocols, and this parser all pin. Exported so tests can
  *  assert the role guidance still contains it (three-surface coupling guard). */

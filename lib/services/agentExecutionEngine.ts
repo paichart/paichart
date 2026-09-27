@@ -11,6 +11,7 @@ import { mcpLogger } from '@/lib/logger';
 import { AuthError, NoTemplateAssignedError, ExecutionNotClaimableError } from '@/lib/errors';
 import { resolveHarnessMode, ResolvedHarnessContext } from './harnessModeResolver';
 import { currentOwnerStamp, currentProcessIdentity, classifyOwner, parseOwner } from './executionOwnership';
+import { writeReapedTaskStatuses } from './reaped-task-persist';
 // Phase 6: the happy-path spine (loop → post-loop → SUCCESS persist) moved to execution-core.ts.
 // This adapter keeps prep + the failure catch (persistTerminalFailure + F-1 rethrow).
 import { runExecutionCore } from './execution-core';
@@ -148,20 +149,23 @@ export class AgentExecutionEngine extends EventEmitter {
           // matching the periodic reaper's Phase-4a guard: the read above is a separate
           // statement, so a row that reached a terminal state in between must not be
           // clobbered back to FAILED.
-          await tx.agentExecution.updateMany({
-            where: { id: { in: orphanedExecs.map(e => e.id) }, status: 'RUNNING' },
-            data: {
-              status: 'FAILED',
-              endTime: new Date(),
-            },
-          });
-
-          // Reset executionStatus on affected tasks
-          const taskIds = [...new Set(orphanedExecs.map(e => e.taskId))];
-          await tx.task.updateMany({
-            where: { id: { in: taskIds } },
-            data: { executionStatus: null, updatedAt: new Date() },
-          });
+          // Per row, so we know which tasks were ACTUALLY reaped: a row that reached SUCCESS between the
+          // read and here is left alone, and its task is not written either.
+          const reaped: Array<{ executionId: string; taskId: string }> = [];
+          for (const e of orphanedExecs) {
+            const flipped = await tx.agentExecution.updateMany({
+              where: { id: e.id, status: 'RUNNING' },
+              data: { status: 'FAILED', endTime: new Date() },
+            });
+            if (flipped.count > 0) reaped.push({ executionId: e.id, taskId: e.taskId });
+          }
+          // RWF-X4: the task side (FAILED for a harness-owned task, null otherwise) lives in ONE module
+          // shared with the periodic sweep — see reaped-task-persist.ts for the rule and why.
+          const r = await writeReapedTaskStatuses(tx, reaped, new Date());
+          if (r.failed.length > 0) {
+            logger.warn({ taskIds: r.failed, conedTaskIds: r.conedTaskIds, decisions: r.decisions },
+              'Reaped harness-owned tasks marked executionStatus FAILED (RWF-X4) — owning harness will re-enter');
+          }
         });
 
         logger.warn({ orphanedCount: orphanedExecs.length }, 'Cleaned up orphaned RUNNING executions on startup');
@@ -174,8 +178,13 @@ export class AgentExecutionEngine extends EventEmitter {
         // make this a no-op for normally-orphaned tasks and un-strand ONLY the finding-9 case.
         try {
           const { maybeQueueReadyDependents } = await import('./taskReadyReactorService');
+          const { maybeRetriggerPipelineHarness } = await import('./pipelineRetriggerReactorService');
           for (const tid of [...new Set(orphanedExecs.map(e => e.taskId))]) {
             maybeQueueReadyDependents(tid).catch(() => {});
+            // RWF A1 (2026-09-26): also wake the owning HARNESS. A reaped child never terminal-persists, so without
+            // this no retrigger event is left and a harness waiting on its child stage (a re-executed child, F20
+            // waiting on an escalated leg, a declined dead-end) hangs silently. Guards 1-8 make it idempotent.
+            maybeRetriggerPipelineHarness(tid).catch(() => {});
           }
         } catch { /* reactor import failure is non-fatal on the cleanup path */ }
       }
@@ -266,21 +275,12 @@ export class AgentExecutionEngine extends EventEmitter {
             });
             if (flipped.count === 0) return; // completed between scan and update — leave it
 
-            // Check if this was the only active execution for the task
-            const remainingActive = await tx.agentExecution.findFirst({
-              where: {
-                taskId: exec.taskId,
-                status: { in: ['PENDING', 'RUNNING'] },
-                id: { not: exec.id },
-              },
-              select: { id: true },
-            });
-
-            if (!remainingActive) {
-              await tx.task.update({
-                where: { id: exec.taskId },
-                data: { executionStatus: null, updatedAt: new Date() },
-              });
+            // RWF-X4: the task side — untouched while another execution is in flight, FAILED for a
+            // harness-owned task, null otherwise — lives in ONE module shared with the startup reaper.
+            const r = await writeReapedTaskStatuses(tx, [{ executionId: exec.id, taskId: exec.taskId }], new Date());
+            if (r.failed.length > 0) {
+              logger.warn({ taskIds: r.failed, conedTaskIds: r.conedTaskIds, decisions: r.decisions },
+                'Reaped harness-owned task marked executionStatus FAILED (RWF-X4) — owning harness will re-enter');
             }
           });
 
@@ -302,6 +302,11 @@ export class AgentExecutionEngine extends EventEmitter {
           try {
             const { maybeQueueReadyDependents } = await import('./taskReadyReactorService');
             maybeQueueReadyDependents(exec.taskId).catch(() => {});
+            // RWF A1 (2026-09-26): also wake the owning HARNESS. A reaped child never terminal-persists, so without
+            // this no retrigger event is left and a harness waiting on its child stage (a re-executed child, F20
+            // waiting on an escalated leg, a declined dead-end) hangs silently. Guards 1-8 make it idempotent.
+            const { maybeRetriggerPipelineHarness } = await import('./pipelineRetriggerReactorService');
+            maybeRetriggerPipelineHarness(exec.taskId).catch(() => {});
           } catch { /* non-fatal */ }
         }
       } catch (cleanupError) {
@@ -410,6 +415,11 @@ export class AgentExecutionEngine extends EventEmitter {
               try {
                 const { maybeQueueReadyDependents } = await import('./taskReadyReactorService');
                 maybeQueueReadyDependents(execution.taskId).catch(() => {});
+                // RWF A1 (2026-09-26): also wake the owning HARNESS. A reaped child never terminal-persists, so without
+                // this no retrigger event is left and a harness waiting on its child stage (a re-executed child, F20
+                // waiting on an escalated leg, a declined dead-end) hangs silently. Guards 1-8 make it idempotent.
+                const { maybeRetriggerPipelineHarness } = await import('./pipelineRetriggerReactorService');
+                maybeRetriggerPipelineHarness(execution.taskId).catch(() => {});
               } catch { /* non-fatal */ }
             } catch (updateError) {
               logger.error({ err: updateError, executionId: execution.id }, 'Safety net update also failed');

@@ -176,6 +176,42 @@ test('RUN-6 fixture: bold-heading variance — `**Derived Values** (quoted verba
     `expected member-not-covered after parsing, got ${JSON.stringify(r.violations)}`);
 });
 
+test('BACKTICK fixture (2026-09-16 k8s legs): `` ## 4. `## Derived Values` `` parses', () => {
+  // Live shape from kubernetes-gitops program cmu3nk19o0027yxxq46kkp47l (Author cmu3nuxgm001oyxxwsn6j1jv1,
+  // Architect cmu3nuq430019yxxwesof12sg) and network-provisioning cmu1pj4ht004fyx0optwzmlpe. The agent
+  // QUOTES the mandated heading. It renders identically in markdown and reads correct to a human or an
+  // LLM — only the parser saw the difference, and the block read ABSENT with the fact failing closed.
+  const doc = '## 4. `## Derived Values`\n\n```json\n[{"kind":"cidr","value":"10.99.0.4/30","members":["10.99.0.4/32","10.99.0.5/32"]}]\n```\n';
+  const got = parseFencedJsonBlock<DerivedValue>(doc, DERIVED_VALUES_MARKER);
+  assert(got !== null && got[0].value === '10.99.0.4/30', `backticked-heading parse failed: ${JSON.stringify(got)}`);
+  // The other two markers take the same shape, and the same-parser rule means markerPresence moves with them.
+  assert(parseFencedJsonBlock(`## 3. \`## Harvested Allocations\`\n\`\`\`json\n[]\n\`\`\`\n`, HARVESTED_ALLOCATIONS_MARKER) !== null, 'harvested backticked');
+  // Bare, and with emphasis wrapped outside the quotes:
+  assert(parseFencedJsonBlock(doc.replace('## 4. ', ''), DERIVED_VALUES_MARKER) !== null, 'bare backticked heading');
+  assert(parseFencedJsonBlock(doc.replace('## 4. `', '### 4. **`').replace('`\n', '`**\n'), DERIVED_VALUES_MARKER) !== null, 'bold outside the quotes');
+});
+
+test('BACKTICK tolerance does NOT reach a mid-sentence reference or a sibling marker', () => {
+  const body = '```json\n[{"kind":"cidr","value":"10.99.0.4/30","members":[]}]\n```\n';
+  assert(parseFencedJsonBlock(`See the \`## Derived Values\` block below for details\n${body}`, DERIVED_VALUES_MARKER) === null,
+    'mid-sentence backticked reference must not match');
+  assert(parseFencedJsonBlock(`- the \`## Derived Values\` block is emitted by the Author\n${body}`, DERIVED_VALUES_MARKER) === null,
+    'bulleted backticked reference must not match');
+  assert(parseFencedJsonBlock(`## 3. \`## Harvested Allocations\`\n${body}`, DERIVED_VALUES_MARKER) === null,
+    'a backticked SIBLING marker must not satisfy this marker');
+});
+
+test('BACKTICK tolerance must NOT break the FW-A3.4 fence inversion (the regression the first fix caused)', () => {
+  // The obvious fix — adding a backtick to the FIRST character class — passed every single-heading
+  // fixture and REGRESSED 3 production legs, because that class contains `\s`, which spans newlines:
+  // the match started on the bare ``` opener, `lastIdx` landed on the fence instead of the heading,
+  // the fenceOpensBefore parity flipped odd→even, and the inversion arm below never fired. A
+  // single-heading fixture cannot express last-match-wins, so the index is asserted here directly.
+  const doc = 'Derivation follows.\n```\n## Derived Values\n[{"kind":"cidr","value":"10.99.0.4/30","members":["10.99.0.4/32"]}]\n```\n';
+  const got = parseFencedJsonBlock<DerivedValue>(doc, DERIVED_VALUES_MARKER);
+  assert(got !== null && got[0].value === '10.99.0.4/30', `fence-inverted block must still parse: ${JSON.stringify(got)}`);
+});
+
 test('parser: prose mention mid-sentence still does NOT match (no over-matching)', () => {
   const doc = 'In this section the derived values are computed as follows, with no block.\n';
   assert(parseFencedJsonBlock(doc, DERIVED_VALUES_MARKER) === null, 'prose mention must not match');

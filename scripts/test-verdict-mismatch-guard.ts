@@ -20,6 +20,7 @@
  * A program-wide exemption would blind the dangerous direction. CI-safe: mocks only, no DB.
  */
 import { annotateQualityGateVerdictMismatch } from '../lib/agents/harness/verdict-mismatch-guard';
+import { authoritativeReadStub, type StubExecution } from './fixtures/authoritative-read-stub';
 
 let passed = 0, failed = 0;
 async function test(desc: string, fn: () => Promise<void>) {
@@ -31,30 +32,33 @@ function assert(c: boolean, m: string) { if (!c) throw new Error(m); }
 const STAGE = 'stage-x';
 const silentLogger = { warn: () => {}, error: () => {}, info: () => {} };
 
-/** siblingTypes: 'PIPELINE' present ⇒ program tier. reviewerApproved: the transcribed verdict. */
-function mockPrisma(siblingTypes: string[], reviewerApproved: boolean) {
+/** siblingTypes: 'PIPELINE' present ⇒ program tier. reviewerApproved: the transcribed verdict.
+ *  RWF C.3: the guard reads the reviewer through the authoritative selection, so the stub is the shared
+ *  throwing one — one SUCCESS execution per non-PIPELINE sibling, each a reviewer result.json. */
+function mockPrisma(siblingTypes: string[], reviewerApproved: boolean, extraExecutions: StubExecution[] = []) {
+  const reviewerResult = (approved: boolean) => ({
+    agentRole: 'change_reviewer', finalResponse: 'review body',
+    reviewerVerdict: { approved, blocking: approved ? [] : ['a blocker'] },
+  });
   return {
     task: {
       findMany: async () => siblingTypes.map((type, i) => ({ id: `sib-${i}`, type })),
     },
-    agentArtifact: {
-      findMany: async () => [{
-        content: JSON.stringify({
-          agentRole: 'change_reviewer',
-          reviewerVerdict: { approved: reviewerApproved, blocking: reviewerApproved ? [] : ['a blocker'] },
-        }),
-      }],
-    },
+    ...authoritativeReadStub([
+      ...siblingTypes.map((type, i) => ({ id: `ex-${i}`, taskId: `sib-${i}`, createdAt: new Date(1_700_000_000_000 + i * 1000),
+        result: type === 'PIPELINE' ? null : reviewerResult(reviewerApproved) })),
+      ...extraExecutions,
+    ]),
   };
 }
 
-async function run(opts: { outcome: string; siblingTypes: string[]; reviewerApproved: boolean }) {
+async function run(opts: { outcome: string; siblingTypes: string[]; reviewerApproved: boolean; extra?: StubExecution[] }) {
   const pendingMerge: Record<string, any> = {
     pipelineStageId: STAGE,
     qualityGate: { outcome: opts.outcome, reviewerScore: 42 },
   };
   await annotateQualityGateVerdictMismatch(
-    mockPrisma(opts.siblingTypes, opts.reviewerApproved) as any,
+    mockPrisma(opts.siblingTypes, opts.reviewerApproved, opts.extra) as any,
     'task-under-test', 'PIPELINE', {}, pendingMerge, silentLogger,
   );
   return pendingMerge.qualityGate as Record<string, any>;
@@ -89,20 +93,44 @@ async function run(opts: { outcome: string; siblingTypes: string[]; reviewerAppr
   });
 
   await test('VMG-5 PROGRAM tier · approved + reviewer REJECTED ⇒ MISMATCH (the DANGEROUS direction stays caught)', async () => {
-    const g = await run({ outcome: 'approved', siblingTypes: ['PIPELINE', 'PIPELINE'], reviewerApproved: false });
+    // Program stage: two legs + Node C (the ACTION reviewer). Until RWF C.3 this fixture had no ACTION sibling —
+    // unrealistic (a PIPELINE writes pipeline-index.json, never the reviewer's result.json) and only passed because
+    // the old mock returned a reviewer artifact for any query.
+    const g = await run({ outcome: 'approved', siblingTypes: ['PIPELINE', 'PIPELINE', 'ACTION'], reviewerApproved: false });
     assert(g.verdictMismatch === true, 'REGRESSION: a program-wide exemption would blind this — reviewer approval is a NECESSARY conjunct');
     assert(g.verdictMismatchTier === 'program', 'expected tier program');
   });
 
   // ── invariants that must survive the change ────────────────────────────────────────────────
   await test('VMG-6 agreement ⇒ no annotation at all (facts only)', async () => {
-    const g = await run({ outcome: 'approved', siblingTypes: ['PIPELINE'], reviewerApproved: true });
+    // Includes the ACTION reviewer so the agreement is REAL, not vacuous (no reviewer found ⇒ silent too).
+    const g = await run({ outcome: 'approved', siblingTypes: ['PIPELINE', 'ACTION'], reviewerApproved: true });
     assert(g.verdictMismatch === undefined && g.reviewerVerdict === undefined, 'agreement must annotate nothing');
   });
 
   await test('VMG-7 escalated outcome ⇒ early return (no reviewer counterpart)', async () => {
     const g = await run({ outcome: 'escalated', siblingTypes: ['PIPELINE'], reviewerApproved: true });
     assert(g.verdictMismatch === undefined && g.reviewerVerdict === undefined, 'escalated must not be compared');
+  });
+
+  // RWF C.3: the reviewer's verdict comes from its AUTHORITATIVE execution. Base fixture: an APPROVED reviewer
+  // (ex-0) and a stamped `approved` outcome ⇒ agreement. Each case adds a NEWER reviewer run that REJECTS and
+  // must be ignored — if it were read, the guard would stamp a false mismatch.
+  const reject = { agentRole: 'change_reviewer', finalResponse: 'x', reviewerVerdict: { approved: false, blocking: ['b'] } };
+  await test('VMG-9 a SUPERSEDED newer reviewer retry is ignored (the authoritative verdict is read)', async () => {
+    const g = await run({ outcome: 'approved', siblingTypes: ['ACTION'], reviewerApproved: true,
+      extra: [{ id: 'ex-new', taskId: 'sib-0', createdAt: new Date(1_800_000_000_000), supersededById: 'ex-0', result: reject }] });
+    assert(g.verdictMismatch === undefined, `superseded retry was read: ${JSON.stringify(g)}`);
+  });
+  await test('VMG-10 an R8-EMPTY newer reviewer run is ignored, as the chainer ignores it', async () => {
+    const g = await run({ outcome: 'approved', siblingTypes: ['ACTION'], reviewerApproved: true,
+      extra: [{ id: 'ex-empty', taskId: 'sib-0', createdAt: new Date(1_800_000_000_000), result: { ...reject, finalResponse: '' } }] });
+    assert(g.verdictMismatch === undefined, `empty re-run was read: ${JSON.stringify(g)}`);
+  });
+  await test('VMG-11 control: a newer AUTHORITATIVE rejecting reviewer run IS read (mismatch stamped)', async () => {
+    const g = await run({ outcome: 'approved', siblingTypes: ['ACTION'], reviewerApproved: true,
+      extra: [{ id: 'ex-new', taskId: 'sib-0', createdAt: new Date(1_800_000_000_000), result: reject }] });
+    assert(g.verdictMismatch === true, `expected a mismatch: ${JSON.stringify(g)}`);
   });
 
   await test('VMG-8 tier detection is deterministic: ACTION-only siblings ⇒ pipeline tier', async () => {

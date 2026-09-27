@@ -119,30 +119,40 @@ const executeAgentHandler: ApiHandler = async (
       };
     }
 
+    // 🔒 SECURITY: Validate POV access before allowing agent execution.
+    // S0 (2026-09-26, sec-ops-S0-review.md X3a/X3b): this now runs BEFORE the dependency gate, whose error
+    // returns the upstream tasks' titles, ids and status — a cross-tenant read before the check. And it
+    // FAILS CLOSED on a task with no POV: it used to be wrapped in `if (task.pov)`, so a POV-less task was
+    // executed with no access check at all (0 such tasks on prod 2026-09-26; povId is nullable in the schema).
+    if (!task.pov) {
+      return {
+        error: {
+          message: 'Access denied - task has no POV',
+          code: 'FORBIDDEN',
+        },
+      };
+    }
+    try {
+      validatePOVAccess(user, task.pov, {
+        throwOnDeny: true,
+        requireWrite: true,  // 2026-05-26: isDemo read-only (demo-write fix)
+        logContext: 'Agent Execute'
+      });
+    } catch {
+      return {
+        error: {
+          message: 'Access denied - you do not have access to this POV',
+          code: 'FORBIDDEN',
+        },
+      };
+    }
+
     // Dependency-settledness gate (2026-09-10) — gate parity with the MCP execute path (F18/H-5).
     {
       const unsatisfied = await listUnsatisfiedDeps(task.id, prisma);
       if (unsatisfied.length > 0) {
         const err = new DependencyNotSatisfiedError(task.id, unsatisfied);
         return { error: { message: err.message, code: 'DEPENDENCY_NOT_SATISFIED', details: { unsatisfied } } };
-      }
-    }
-
-    // 🔒 SECURITY: Validate POV access before allowing agent execution
-    if (task.pov) {
-      try {
-        validatePOVAccess(user, task.pov, {
-          throwOnDeny: true,
-          requireWrite: true,  // 2026-05-26: isDemo read-only (demo-write fix)
-          logContext: 'Agent Execute'
-        });
-      } catch {
-        return {
-          error: {
-            message: 'Access denied - you do not have access to this POV',
-            code: 'FORBIDDEN',
-          },
-        };
       }
     }
 
@@ -189,7 +199,8 @@ const executeAgentHandler: ApiHandler = async (
       // Additional metadata
       metadata: {
         ...metadata,
-        triggeredBy: user.userId,
+        // Source string, NOT the user id — see the triggeredBy note below the config.
+        triggeredBy: 'api-task-execute',
         triggeredAt: new Date().toISOString(),
         taskContext: {
           id: task.id,
@@ -207,6 +218,15 @@ const executeAgentHandler: ApiHandler = async (
     // previous code stored `triggeredBy: {id, email}` — the schema now
     // requires `{id, source}` instead (email was unused downstream; if
     // needed for audit it lives in the forensic Activity record).
+    //
+    // config.metadata.triggeredBy (2026-09-26, the last BC-T6-1 sibling): was
+    // `user.userId`, while the other two writers of that key store a SOURCE STRING
+    // (agentExecutionConfigBuilder → options.triggerSource; agentTaskService →
+    // 'engine-direct'). Two meanings under one key with zero readers, so it is now
+    // 'api-task-execute', matching context.triggeredBy.source below. The user id is
+    // not lost; it is canonical in context.triggeredBy.id. Rows written before
+    // 2026-09-26 carry a user CUID in config.metadata.triggeredBy on this route.
+    // They are immutable history, so no backfill.
     //
     // 2026-04-18 L3: throws DuplicateActiveExecutionError if the partial
     // UNIQUE index rejects a concurrent duplicate. Return HTTP 409 via

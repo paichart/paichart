@@ -86,6 +86,14 @@ They are independent: a `Solution Architect` (ARCHITECT / DEVELOPMENT) and a `Se
   in the user-facing guides (`HOWTO-use-pipeline-harness`, the operational catalog) until it's promoted.
 
 ### 4. ⭐ ROLE — add a `ROLE_GUIDANCE_LIBRARY` entry for EACH new `defaultRole`
+
+> 🔴 **4b, same moment, same names: decide whether each new role should RECEIVE an upstream leg's
+> deliverable.** Cross-pipeline delivery scopes itself by an EXCLUSION list of literal role names
+> (`INJECTION_EXCLUDED_ROLES`). It **fails toward delivery**, so a role you never think about
+> receives by default — safe for a consuming role, harmful for a harvest- or review-shaped one.
+> **Full reasoning, the two harmful shapes and the live near-miss: the "reconcile your ROLE NAMES
+> against the injection exclusion list" section near the end of this guide — read it before you
+> finish this step.** A runtime tripwire warns on the obvious shapes; it cannot make the judgement.
 > **This is the step the seed-mirroring approach silently skips**, because the entries live in a DIFFERENT
 > file than the seed (`lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts`). The 2026-06-16
 > network-provisioning spike authored 4 templates and missed this until an explicit re-ask.
@@ -99,6 +107,17 @@ They are independent: a `Solution Architect` (ARCHITECT / DEVELOPMENT) and a `Se
   an unknown role **silently bakes weak guidance — no error**. Two consequences: (1) a missing entry ships a
   quietly-degraded agent; (2) **changing a role entry requires RE-SEEDING** the affected templates — the live
   row holds the old bake until then. ("Provisioning-only / dead at runtime" ≠ unimportant; it means *baked*.)
+- **If the domain needs an agent to receive a VERBATIM artifact** — a template to fill, a schema to
+  conform to, a canonical stanza to emit — do **NOT** design a delivery route for it. Read
+  `patterns/seed-time-artifact-carrier-pattern.md` first. Every obvious channel is mechanically
+  dead: an LLM paraphrases an artifact described in the task description, R9 rewrites chained §6
+  text while stamping `sanitized:false`, `resources/read` is a transport method and not an agent
+  tool, and the artifact store has no input mode. What survives is the same seed-time bake this
+  section is about — a vendored file `readFileSync`'d into the PROTOCOL body — so it inherits the
+  same property: **the live row holds the old bake until you reseed**, and because the artifact is
+  now protocol CONTENT, editing it is editing the protocol and needs a version bump. The pattern's
+  MAINTENANCE section carries the full chain; the first edit after it shipped found none of it
+  written down.
 - **Chain consumers** (any specialist that reads a predecessor's output) MUST carry the **chained-context
   discipline** in their entry: *read your input from §6 Pipeline Context; do NOT re-fetch it via
   `perform(action:'agent.results', verbose:true)`* — that loads the upstream's full result.json into your
@@ -129,6 +148,7 @@ They are independent: a `Solution Architect` (ARCHITECT / DEVELOPMENT) and a `Se
   omission a documented decision instead of a silent gap.
 - **CI enforces both:** `validate:role-guidance` (entry shape) + `validate:role-guidance-coverage` (every
   seeded role has an entry or a documented exemption). Both run in pre-commit and `test:all-validation`.
+- **Program-composable domain? Add your token to the Program Architect's vocabulary.** The Architect picks each program leg's `(protocol: <token>)` from a CLOSED list in the `program_architect` `ROLE_GUIDANCE_LIBRARY` entry; a domain missing from it has no sanctioned token, so the Architect composes one that resolves to nothing and fails only at leg execution, after the plan gate (live 2026-09-18 — `observability-config` sat absent for 8 days). `validate:role-guidance-coverage` now fails on any seeded protocol row missing from that list; a row that is genuinely not program-composable goes in `NON_PROGRAM_LEG_PROTOCOLS` **with a reason**. Then reseed `scripts/seed-program-templates.ts` — the only seed carrying `program_architect`.
 
 ### 5. Deliverable / QA wiring is set at RUNTIME by the harness, not in the template
 - The harness (in CREATE mode) sets `metadata.deliverableSourceTaskId` on itself → the deliverable-producer
@@ -191,3 +211,34 @@ They are independent: a `Solution Architect` (ARCHITECT / DEVELOPMENT) and a `Se
 - Protocol injection: `.claude/knowledge/domain/harness/pipeline-harness-library.md`.
 - Shape precedent: `scripts/seed-artifact-synthesis-templates.ts` + `scripts/seed-protocol-prompts.ts`.
 - CI guards: `scripts/audit-role-guidance-contract.ts` (shape) + `scripts/audit-role-guidance-coverage.ts` (coverage).
+
+---
+
+## 2026-09-17 — new-domain checklist item: reconcile your ROLE NAMES against the injection exclusion list
+
+Since cross-pipeline delivery shipped (Bug Class 84), a program leg's non-PIPELINE children receive
+the upstream leg's deliverable — **scoped by an EXCLUSION list of literal role names**
+(`INJECTION_EXCLUDED_ROLES`, `context-chainer.ts`).
+
+**When you add a domain, check your role names against it.** The list fails toward DELIVERY, which is
+the safe direction for a new *consuming* role — and the harmful one for the two shapes below:
+
+- **harvest-shaped** (`*_harvester`, `synthesis_source_acquirer`): an injected upstream deliverable
+  can be folded into `## Harvested Allocations`, which is machine-parsed ground truth. That poisons
+  the containment net at its root and every tier above then checks correctly against bad data.
+- **review-shaped** (`change_reviewer`, `publication_reviewer`): a reviewer's §6 holds one document
+  and its guidance says so; a second reviewable document caused three self-host format vetoes on
+  2026-09-09.
+
+**This is not hypothetical.** artifact-synthesis names its reviewer `publication_reviewer`, so it sat
+OUTSIDE the list while `change_reviewer` — the same seat in the four infra domains — was excluded.
+Zero live impact (artifact-synthesis has never been a program leg), caught by inspection, fixed
+2026-09-17.
+
+**A runtime tripwire now warns** (`INJECTION_ROLE_SHAPE_UNREVIEWED`) when a role matches
+`/review|harvest|acquir/i` and is not excluded, and `test:chain-injection` fails on any production
+role matching that shape without an explicit decision. **A warn, never a block** — which roles belong
+is a human judgement and a shape regex is not entitled to make it.
+
+⚠️ Do **not** reuse `HARNESS_LEAF_ROLE_RE` (`/harvest|architect|design|author/i`) for this — it would
+exclude the consuming roles the delivery exists for.

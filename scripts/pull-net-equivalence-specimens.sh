@@ -49,13 +49,25 @@ SELECT jsonb_pretty(jsonb_agg(doc)) FROM (
                               'agentRole', l."agentRole", 'metadata', l.metadata,
                               'inputContext', l."inputContext"),
     'stageId', l.metadata->>'pipelineStageId',
+    -- The stage the leg LIVES IN. Distinct from 'stageId' above (the stage it OWNS) and captured
+    -- separately because `contractApplicability` needs this one and nothing else does.
+    'legOwnStageId', l.stage_id,
     'stage', (SELECT jsonb_build_object('id', s.id, 'metadata', s.metadata)
               FROM stages s WHERE s.id = l.metadata->>'pipelineStageId'),
-    -- F12: does a PROGRAM-harness parent point at this stage? Captured as the ANSWER, so the
-    -- fixture does not have to re-encode the AND-lift the shared lookup owns.
+    -- F12: does a PROGRAM-harness parent OWN THE STAGE THIS LEG LIVES IN? Captured as the ANSWER,
+    -- so the fixture does not have to re-encode the AND-lift the shared lookup owns.
+    --
+    -- ⚠️ CORRECTED 2026-09-18. This joined on `l.metadata->>'pipelineStageId'` — the stage the leg
+    -- OWNS — which is the exact defect the fixture exists to detect, re-encoded in the puller. It
+    -- could only self-match the leg, so every specimen captured `programParentId: null` and the
+    -- fixture would have vindicated the production bug forever. The protocol test is tightened to
+    -- the real F12 name set at the same time: `LIKE '%program%'` is a sloppy re-encoding of a
+    -- filter this file is explicitly not supposed to re-encode.
     'programParentId', (SELECT p.id FROM tasks p
-       WHERE p.type = 'PIPELINE' AND p.metadata->>'pipelineStageId' = l.metadata->>'pipelineStageId'
-         AND (p.metadata->>'protocol' LIKE '%program%' OR p.title LIKE '%program%') LIMIT 1),
+       WHERE p.type = 'PIPELINE' AND p.metadata->>'pipelineStageId' = l.stage_id
+         AND (p.metadata->>'protocol' IN ('pov-program-protocol', 'research-program-protocol')
+              OR p.title LIKE '%(protocol: pov-program)%'
+              OR p.title LIKE '%(protocol: research-program)%') LIMIT 1),
     'children', (SELECT coalesce(jsonb_agg(jsonb_build_object(
          'id', c.id, 'title', c.title, 'agentRole', c."agentRole", 'type', c.type,
          'description', c.description, 'inputContext', c."inputContext",

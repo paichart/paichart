@@ -186,5 +186,30 @@ test('WIRING: engine writers stay guard-EXEMPT by construction (no guard import 
   }
 });
 
+// ── SITUATION/JOB precedence split ───────────────────────────────────────────────────────────────
+// `seed-protocol-prompts.ts` Phase 0 of requirements-authoring carries the corpus's ONLY statement
+// of protocol-vs-role-guidance precedence. It is unique, and it was unpinned until 2026-09-22 —
+// a good rule living in one protocol by accident of who wrote it.
+//
+// HALF OF IT IS WORSE THAN NONE. A protocol that claims situational authority WITHOUT disclaiming
+// authority over the role's JOB is the wrong-direction rule: the platform deliberately DEFERS to
+// role guidance for the terminal `## VERDICT:` grammar (GS8 / test-parse-verdict), so a protocol
+// asserting blanket precedence points straight at the one reference the platform inverted.
+//
+// Shape is deliberate: a bounded-gap regex, NOT a verbatim pin. A verbatim string rots the first
+// time someone improves the wording; this survives rewording and fails on a SEVERED clause.
+// Mutation-proven 2026-09-22 — sever the JOB half → red; drop the close → red; delete the clause
+// → red; reword "WHEN or HOW MANY" → stays green.
+// (String-pinned per feedback_string_pinned_tests: a future seed reword updates this test.)
+test('PRECEDENCE: requirements-authoring keeps the SITUATION/JOB split intact (both halves)', () => {
+  const body = read('scripts/seed-protocol-prompts.ts');
+  assert(/re-binds your role guidance.?s SITUATION[\s\S]{0,400}?no standing to change it/.test(body),
+    'the SITUATION/JOB precedence split is severed or gone — a protocol may re-bind a role\'s SITUATION, ' +
+    'never its JOB, and the disclaimer half is the load-bearing one');
+  assert(body.includes('in your role guidance applies unchanged'),
+    'the re-binding must close with the applies-unchanged clause — an enumerated re-binding that ' +
+    'does not say what SURVIVES reads as a wholesale replacement of the role guidance');
+});
+
 console.log(`\n📊 Results: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

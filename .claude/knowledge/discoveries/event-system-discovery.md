@@ -201,6 +201,12 @@ grep -rn '9-cell state-space\|state-space enumeration' cline_docs/reviews/
 # BC67 (one active execution per harness task). Full check: harness-discovery §4.6a.
 grep -n 'logReactorBudgetSkip' lib/services/reactor-skip-counter.ts | head -1
 # Expect: present (the third reactor-skip kind). If absent → D-4 regressed.
+# RWF A2 (2026-09-26): the skip is no longer the END — exhaustion TERMINALIZES the harness
+# (reactor-budget-exhausted-persist.ts: FAILED + fact + cone on a program leg; the tx re-checks that the counted
+# execution is still newest and no run is live), and the budget is TIERED (legs 10, program roots 25, warn at 80%).
+grep -c "await handleReactorBudgetExhausted(" lib/services/pipelineRetriggerReactorService.ts   # expect 1
+# RWF A1: the retrigger's "children settled" test is the ONE shared predicate, not a local copy.
+grep -c "countUnsettledChildren(prisma, completed.stageId)" lib/services/pipelineRetriggerReactorService.ts   # expect 1
 ```
 
 ### 3.5 Event-emitter patterns — `BaseEventEmitter` lazy-init FIXED (Finding C, 2026-06-14)

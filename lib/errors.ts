@@ -78,6 +78,27 @@ export class DuplicateActiveExecutionError extends AppError {
 }
 
 /**
+ * RWF C.1 (2026-09-26): an orchestrator re-execution refused at the create chokepoint, BEFORE anything is
+ * written. Two codes:
+ *   - ORCHESTRATOR_REEXECUTION_CAP: this child was already re-executed once by the same harness in its
+ *     current run (epoch = the harness's newest execution not started by the retrigger reactor, so a human
+ *     re-execute of the harness opens a new run).
+ *   - REVIEWER_SAME_INPUT_REEXECUTION: the child is a reviewer whose authoritative verdict was given over
+ *     exactly the predecessor executions that are authoritative now, so a re-run is a same-input re-roll.
+ * The MCP path drops `_meta.errorCode` before the harness sees the result (mcpService), so the MESSAGE is what
+ * the protocol prose keys on. Keep the leading code token and the "this is the answer" sentence.
+ */
+export class OrchestratorReExecutionRefusedError extends AppError {
+  constructor(
+    code: 'ORCHESTRATOR_REEXECUTION_CAP' | 'REVIEWER_SAME_INPUT_REEXECUTION',
+    message: string,
+    details: Record<string, any>
+  ) {
+    super(message, code, details);
+  }
+}
+
+/**
  * Thrown by `executeById` when the target execution is no longer in a claimable
  * (PENDING) state — the 10s poller won the create→dispatch race and is already
  * running it. This is NOT an execution failure: the run is proceeding under the
@@ -364,6 +385,14 @@ export const ErrorCode = {
 
   // Domain-specific
   PIPELINE_STAGE_MISMATCH: 'PIPELINE_STAGE_MISMATCH',
+  // RWF D1 (2026-09-26): an agent.execute overrideConfig key a pipeline child may not take (see
+  // agent-execute-handler.ts refuseLegChildOverrides). A client error, never a server one.
+  LEG_CHILD_OVERRIDE_REFUSED: 'LEG_CHILD_OVERRIDE_REFUSED',
+  // RWF X17 (2026-09-27): agent.configure called from inside an agent run on a pipeline child. See
+  // leg-child-override.ts refuseAgentLoopConfigure.
+  LEG_CHILD_CONFIGURE_REFUSED: 'LEG_CHILD_CONFIGURE_REFUSED',
+  // RWF A-agent (2026-09-27): task.create/task.update carrying modelParameters from inside an agent run.
+  AGENT_MODEL_PARAMETERS_REFUSED: 'AGENT_MODEL_PARAMETERS_REFUSED',
 } as const;
 
 export type ErrorCodeType = typeof ErrorCode[keyof typeof ErrorCode];
@@ -384,6 +413,9 @@ function getStatusCodeForError(code: ErrorCodeType): number {
     case ErrorCode.MISSING_REQUIRED_FIELD:
     case ErrorCode.INVALID_FIELD_VALUE:
     case ErrorCode.BAD_REQUEST:
+    case ErrorCode.LEG_CHILD_OVERRIDE_REFUSED:
+    case ErrorCode.LEG_CHILD_CONFIGURE_REFUSED:
+    case ErrorCode.AGENT_MODEL_PARAMETERS_REFUSED:
       return 400;
     case ErrorCode.RECORD_NOT_FOUND:
     case ErrorCode.NOT_FOUND:

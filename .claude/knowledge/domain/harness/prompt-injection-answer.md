@@ -127,8 +127,9 @@ template.
 
 **Telemetry (since `94ca63fb` / `abad5d43`)**: both boundaries now record. Site A stamps
 `sanitized` / `neutralizedCount` / `strippedControlChars` / `neutralizedCategories` on every result
-R9 **examines** — presence = examined, `sanitized` = rewritten — plus a `securityEvent` pino warn on
-firings only. Matched text is in the log and deliberately **not** in the artifact (attacker-controlled;
+R9 **examines** — presence = examined; since F9 (2026-09-25) `rewritten` / `rewriteClasses` say whether
+and how the text was rewritten (`sanitized` is a frozen legacy subset) — plus a `securityEvent` pino warn
+that fires only on a `<prior_output>` tag defang or an injection pattern (both sites since F9). Matched text is in the log and deliberately **not** in the artifact (attacker-controlled;
 `result.json` is re-read by agents and rendered in the GUI). How to read it:
 `harness-output-guards.md` § "Reading R9 firings".
 

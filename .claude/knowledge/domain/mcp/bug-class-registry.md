@@ -5198,3 +5198,85 @@ the prose is correct — you have to trace the channel. And the failure is worse
 *confidence-generating*, because a clean run under an inert guard reads as evidence the guard passed.
 Before writing any conditional obligation, answer in the same breath what guarantees its subject
 arrives; if nothing does, the sentence is decoration.
+
+---
+
+## Bug Class 83: Stale-Snapshot Read of a Live Field (the FRESHNESS CLASS)
+
+**Status**: IDENTIFIED (half-cured — 5 instances, 5 fixed, class named 2026-09-16)
+**Severity**: HIGH (silent wrong output; every instance read as ordinary code in review)
+**Source**: boundary-contract-specialist class sweep, 2026-09-16
+**Record**: `cline_docs/reviews/freshness-class-2026-09-16/FINDING.md`
+
+### Description
+
+A field is read from an object captured **before** the code that writes that field has run. The
+expression is unremarkable; the defect lives in the **provenance of the object**, which is why
+review never catches it and why five independent fixes never recognised each other.
+
+### The discriminator
+
+Classify every field read into one of three freshness classes before writing it:
+
+| class | meaning | safe from a snapshot? |
+|---|---|---|
+| **snapshot** | fixed before the operation began (`id`, `type`, `povId`) | yes |
+| **live** | may be written *during* the operation (`metadata.*`) | **no** |
+| **immutable** | write-once, write-protected (`metadata.protocol` once stamped) | yes, *if* stamped before capture |
+
+`task.metadata` is **live**, and has been read as a snapshot five times.
+
+### All sites (5)
+
+| # | date | site | found by | state |
+|---|---|---|---|---|
+| A | 2026-06-06 | stream route `inputContext` | incident | fixed |
+| B | 2026-07-17 | BC-T6-1 | review | fixed |
+| C | 2026-08-18 | `execution-terminal-persist.ts` verdict banner | incident | fixed |
+| D | 2026-09-15 | `pipelineProtocolValidator.ts` | control run | fixed |
+| E | 2026-09-16 | `execution-terminal-persist.ts:264` `getReportMdDecision` | this sweep | fixed (latent — never fired, measured) |
+
+**C and E are the same file, the same transaction, ~150 lines apart.** C's author wrote the
+property down verbatim in a comment and did not look upward — the insight was present in the file
+and did not generalise, because the class had no name.
+
+### Why it hides
+
+E produced correct output the whole time, because an unrelated defence (the Option-A
+source-SUCCESS gate) masked it. **This class leaves systems correct-by-accident**, which is
+indistinguishable from correct until the masking defence moves.
+
+**Measuring the accident is not measuring the bug.** E was first recorded as firing on ~30% of
+SYNTHESIZE executions (90 of 299 write the field mid-run). That population is not the bug
+population: writing mid-run is harmless when the *persist* happens in a later execution, which is
+the normal shape. The bug needs stamp and persist in the SAME execution — 1 task of 242 across
+the whole corpus, and that one's gate was correct for an unrelated reason. **E has never fired.**
+When sizing an instance of this class, count co-occurrence of the write and the read, never the
+write alone.
+
+### The one that gets WORSE with a planned cleanup
+
+`resolveTaskProtocol`'s transitional title-fallback is slated for removal after
+`scripts/backfill-protocol-stamps.ts` is recorded. A backfill stamps **rows**; it cannot put the
+key into an **object** captured before the stamp was written. The stream route
+(`app/api/pov/agent/execute/stream/route.ts:543`) resolves from a pre-`createAgentExecution`
+fetch, so on a first execution the key is absent *regardless of the DB* — that path is correct
+today **only** via the fallback being removed. The gate therefore has TWO conditions (backfill
+recorded **and** every caller passing a post-stamp object), both now enforced in
+`test:program-protocol-token`.
+
+### Sweep procedure
+
+```bash
+# Candidate sites: a metadata read whose object was not fetched in the same scope.
+grep -rn "\.metadata" --include=*.ts lib/ app/ | grep -v "findUnique\|findFirst\|select:" | head -50
+```
+For each hit ask the only question that matters:
+**when was this object captured, relative to the write of the field being read?**
+
+### Lesson
+
+**A rule is usually a proxy for a property.** Verify the property — *what did this object contain
+when it was captured?* — not the proxy — *does this read look reasonable?* The same lesson as the
+2026-09-12 shared-worktree pair (`git add <path>` is a proxy for "commit only what you intend")
+and the truncated-window gate approval ("don't conclude from a window you chose the size of").

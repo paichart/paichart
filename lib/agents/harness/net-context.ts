@@ -83,6 +83,20 @@ export function buildNetContext(input: BuildNetContextInput): NetContext {
      * Moving it here makes that branch reachable from a stubbed fixture, which is a strictly better
      * position than the inline call site it came from — but a fixture proves the branch behaves as
      * written, NOT that a real program root reaches it. That observation still needs a live run.
+     *
+     * ⚠️⚠️ THE STAGE ID HERE IS *NOT* `ctx.stageId`, AND THAT WAS THE BUG (fixed 2026-09-18).
+     * `ctx.stageId` is `metadata.pipelineStageId` — the stage this leg OWNS, where its children
+     * live — which is right for `children()` and wrong for this. `findProgramParentForStage` asks
+     * *who OWNS this stage*, so the argument has to be the stage the leg itself LIVES IN
+     * (`tasks.stage_id`). Passing the owned stage could only ever self-match the leg, and the
+     * program-protocol filter then rejected the self-match on every leg not itself program-named —
+     * so the lookup returned null unconditionally and `basis: 'program-parent'` was stamped
+     * 0 times in 611 archived stamps. 30 of the 38 legs carrying `no-program-parent` had one.
+     *
+     * The leg's own stage is READ HERE rather than threaded through `ExecutionCoreInput.task`,
+     * deliberately: threading reproduces this bug's failure mode, because any adapter that omits
+     * the field passes `undefined`, lands on the null arm, and restores the fail-open answer with
+     * every test green. A read at the point of use cannot be under-plumbed.
      */
     contractApplicability() {
       if (!applicabilityPromise) {
@@ -91,10 +105,18 @@ export function buildNetContext(input: BuildNetContextInput): NetContext {
           if (input.programTier) return null;
           if (!stageId) return null;
           try {
+            const own = await input.prisma.task.findUnique({
+              where: { id: input.task.id },
+              select: { stageId: true },
+            });
+            // NO STAGE OF ITS OWN ⇒ the tier is UNRESOLVED, which is not the same statement as
+            // "no contract expected". Absent applicability is the honest answer; `expected:false`
+            // would be the fail-open one.
+            if (!own?.stageId) return null;
             // THE F12 LOOKUP, shared — not a second copy of that query (its AND-lift is
             // load-bearing: the stage filter and the protocol filter are BOTH `metadata` filters,
             // and two `metadata` keys in one object literal is last-writer-wins).
-            const programParentId = await findProgramParentForStage(input.prisma, stageId);
+            const programParentId = await findProgramParentForStage(input.prisma, own.stageId);
             return programParentId
               ? { expected: true, basis: 'program-parent', programParentId }
               : { expected: false, basis: 'no-program-parent' };

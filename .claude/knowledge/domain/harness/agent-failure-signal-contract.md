@@ -36,7 +36,9 @@ surface. These are the ones that do:
 | `DUPLICATE_ACTIVE_EXECUTION` → surfaced as `DUPLICATE_RECORD` | sync | Yes — wait or cancel the in-flight execution | tool errors |
 | `EXECUTION_NOT_CLAIMABLE` | async, **internal** | **No — deliberately not surfaced.** It is not a failure: the poller won the create→dispatch race and owns a genuinely-RUNNING row. Surfacing it would invite a retry the partial-unique index rejects | *(intentionally undocumented to agents)* |
 | `TASK_CAN_NEVER_RUN` | async, **task-level** | Informational — stamped by cone marking when an upstream leg cannot produce what a downstream leg must consume. No execution failed, so it appears in logs + task state, **not** on `errorCode` | forward-cone / F16 |
-| `PRE_FLIGHT_BAIL_TERMINALIZED` | async, **non-terminal family** | Informational — the pipeline bailed in pre-flight (cannotRun/escalated stamped, no child stage). The *task's* `executionStatus` goes FAILED so the program can escalate; the execution row stays `SUCCESS` | non-terminal family |
+| `REACTOR_BUDGET_EXHAUSTED` | async, **non-terminal family** (RWF A2, 2026-09-26) | Informational — the retrigger reactor re-entered this harness as many times as its tier allows (legs 10, program roots 25). The harness's `executionStatus` goes FAILED with `metadata.reactorBudgetExhausted` and a comment; a program leg's cone is marked. **Recover by re-executing the harness** — a human re-execute starts a new run and resets the count | this file |
+| `DEAD_END_EXEMPT` | log + `metadata.deadEndExempt` (RWF A3) | **Not a failure.** An empty SYNTHESIZE was NOT terminalized because a child was in flight or dispatched that run; the child's completion (or the post-persist self-check) re-enters the harness. Nothing to retry | this file |
+| `PRE_FLIGHT_BAIL_TERMINALIZED` | async, **non-terminal family** | Informational — the pipeline bailed in pre-flight (cannotRun/escalated stamped, no child stage). The *task's* `executionStatus` goes FAILED so the program can escalate; the execution row stays `SUCCESS`. **Since 2026-09-15 that same shape also suppresses step validation** (`isSanctionedHalt` in `pipelineProtocolValidator.ts` → `protocolValidation` null → no `PROTOCOL_STEP_SKIPPED`): a halt makes no structural calls BY DESIGN, so no step profile can fit it, and grading it emitted a false degradation — which is not a DIRECT `programReleasable` conjunct but IS a gate input transitively: leg approval is a conjunct, and the reviewer-less leg rule (`seed-protocol-prompts.ts:362`) names `PROTOCOL_STEP_SKIPPED` among the trust facts that are "gate inputs here, not advisory" (verified by boundary-contract, 2026-09-16) | non-terminal family |
 
 ### Provider-layer codes (added 2026-09-14 — the P2 guard's outputs)
 
@@ -56,6 +58,29 @@ into an `AppError` carrying the provider's own `code` — so whatever the provid
 checked `.error`, so a provider-error return on a tool-continuation turn left `stopReason` undefined, the
 loop exited cleanly, and the execution persisted **SUCCESS with an empty deliverable** — no code, no
 category, nothing for a caller to branch on (prod `cmu0yl664006kyx0e3olnguqe`).
+
+### Degradation categories on a SUCCESS (not failures — but a caller must still branch on them)
+
+These ride `result.json` → `executionDegradation.errorCategory`, hoisted to top-level `errorCategory`
+(→ `agent.results`, the lean card's **Facts:** line, first). The execution row is `SUCCESS` and
+`agent_executions."errorCode"` stays `null`: they classify a *deliverable*, not a failed run.
+
+| Category | Fires when | Agent-actionable? |
+|---|---|---|
+| `TRUNCATED_NO_OUTPUT` | the deliverable's response stopped at `max_tokens` with **no** text (R2, 2026-07-16) | Yes — treat as no source; a harness SYNTHESIZE is also terminalized FAILED by Layer 2 |
+| `TRUNCATED_PARTIAL_OUTPUT` | the deliverable's response stopped at `max_tokens` **after** text began (F2, 2026-09-25) — the deliverable is cut off mid-text (final sections, markers, `Confidence:` line may be missing) | Yes — do **not** treat as a complete deliverable. Not terminalized: a partial has content. Companion facts: `toolLoop.finalStopReason` / `toolLoop.deliverableTruncated` (the boolean, text-independent) |
+
+Since 2026-09-25 a `max_tokens` stop is first **retried once** (R4 Layer 1, empty *or* partial text) with a
+time-budgeted raise; `TRUNCATED_*` therefore means the retry could not run or did not finish. Read why on
+`toolLoop`: `truncationRetrySkippedReason` (`INSUFFICIENT_TIME` — the watchdog had no room for a useful raise;
+`AT_MODEL_CEILING`), `truncationRetryStopReason` (`max_tokens` = retried but still cut), and
+`truncationRetryDiscardedChars`. A retry the watchdog kills does **not** land here: the SDK abort surfaces as a
+provider `unknown_error` → FAILED + `error.json` only (no `result.json`, so no `toolLoop`).
+
+Both classify on the **loop-exit** stop reason (`loopResult.finalStopReason`), never on the response the
+post-loop cascade last saw — #90 replaces that with its reflection, which on 2026-09-24 hid a reviewer's
+`max_tokens` behind an `end_turn`. Before 2026-09-25 a mid-text truncation carried **no** structured signal
+at all, only the 56-char note inside the deliverable.
 
 ### The guard asymmetry that makes `NO_TEMPLATE_ASSIGNED` reachable
 

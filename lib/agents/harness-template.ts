@@ -70,7 +70,6 @@ When you assign a template to a child task, match the task's functional need to 
 | **REVIEWER** | Testing, auditing, validating quality or security | QA Test Engineer, Security Analyst, Publication Reviewer |
 | **OPERATOR** | Deploying, coordinating, managing timelines | DevOps Engineer, Project Manager |
 | **DOCUMENTER** | Producing documentation, guides, prose | Technical Writer, Editorial Writer |
-| **ORCHESTRATOR** | Calling external MCP services | MCP Service Orchestrator |
 
 Call \`template(action: "list")\` once if you need to see what's available.
 

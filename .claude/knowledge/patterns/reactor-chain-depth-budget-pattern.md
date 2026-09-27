@@ -37,6 +37,17 @@ Add a **per-chain generation budget**:
 3. On refusal, log a **FACT** skip through the reactor-skip-counter (not a bare `log.warn`),
    with a distinct `errorCode` and **no** `securityEvent` (a runaway-guard is benign, not an
    integrity violation — Protocol 10-clean).
+4. **Decide what state the refusal LEAVES BEHIND — a skip is not an ending.** ⚠️ Added 2026-09-26
+   (RWF A2). The canonical implementation stopped at step 3 for three months: the budget-exhausted
+   harness was skipped and left `IN_PROGRESS` forever — *a bound that ends in a hang, not a terminal
+   state* — and on a program leg that hung the whole program. If the refused entity is waiting on the
+   reactor that just refused it, the refusal must TERMINALIZE it (FAILED + an explanatory fact +, where
+   something downstream waits, its forward cone) so an owner can act. Re-assert the out-of-tx decision
+   inside the terminalizing transaction (the counted state is still current; nothing live would be
+   killed), because the decision was made outside it. Canonical: `reactor-budget-exhausted-persist.ts`.
+5. **Tier the budget by population, measured.** One budget of 10 was runaway headroom for pipeline legs
+   and a false-terminalization risk for program roots (prod max 7, on a root that completed normally).
+   A budget that becomes terminal must be set per legitimate population, with a `warn` before it bites.
 
 Count **generations (chain depth)**, not rows — a row-count cap can't be set without risking
 self-starvation of a legitimately deep chain; a depth budget only ever trips on a runaway.

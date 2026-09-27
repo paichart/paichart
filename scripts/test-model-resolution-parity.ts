@@ -58,7 +58,7 @@ test('maxOutputTokensForModel: Opus 128K, Sonnet/Haiku/unknown 64K', () => {
 });
 test('normalize: maxTokens defaults to DEFAULT_MAX_TOKENS when template omits it', () => {
   const cfg = normalizeModelConfig({ model: 'claude-haiku-4-5' }, {}, undefined);
-  ok(cfg.maxTokens === DEFAULT_MAX_TOKENS, 'no source maxTokens → DEFAULT_MAX_TOKENS (24000), not the old 4000 formula');
+  ok(cfg.maxTokens === DEFAULT_MAX_TOKENS, `no source maxTokens → DEFAULT_MAX_TOKENS (${DEFAULT_MAX_TOKENS}), not the old 4000 formula`);
 });
 test('normalize: Opus gets its full 128K; Sonnet clamps to 64K', () => {
   const opus = normalizeModelConfig({ model: 'claude-opus-4-8', maxTokens: 100000 }, {}, undefined);

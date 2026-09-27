@@ -253,12 +253,50 @@ lets the agent satisfy the pointer instead of the property. A round that then pa
 *Earned: IGP-T1 R8 was superseded before its plan gate for exactly this, and R9 re-run clean — which
 is the only reason R9's result is usable as evidence.*
 
+⚠️ **The PRE-FLIGHT CLEARANCE block is the channel you will forget.** It is operational text you
+write for the duplicate check, so it does not feel like instruction — and the harness propagates it
+verbatim into CHILD BRIEFS. *Earned 2026-09-18: a clearance block naming a prior round's defect and
+score reached a leg's design role, and on an earlier run reached the **REVIEWER**, handing the judge
+the exact failing string before it had looked. That round was superseded; its result was unusable.*
+**Keep the block to stage identifiers.** Corrective content goes in `requirements.md`, where it
+propagates legitimately and a human sees it at the plan gate.
+
+⚠️ **And check the objective before you use a round as evidence of a protocol change.** If the
+objective hand-carries the behaviour the protocol was changed to produce, the run tests the
+workaround. *Pass condition written IN ADVANCE, then verified mechanically on the package — that is
+what made kubernetes-gitops 1.9.0's validation trustworthy (2026-09-19).*
+
 ## Campaign hygiene
 
 - **Archive, never delete.** A non-green round is the provenance of its fix: disposition comment naming
   defect/fix/continuation, gates left unreleased, next round in a SIBLING stage.
-- **Pre-arm clearances.** Duplicate-halt recurses; name every prior program AND pipeline stage in the
-  new round's description.
+- **Pre-arm clearances — on the ROOT *and* on every leg.** Duplicate-halt recurses; name every prior
+  program AND pipeline stage. ⚠️ **The check fires INCONSISTENTLY**: on 2026-09-18 a round's legs
+  carried no clearance and never halted; on 2026-09-19 the same shape, against the same four prior
+  stages, halted. It costs nothing when unused and a restart when it is not there.
+- **A duplicate-halt is TERMINAL and freezes the cone — a re-run needs a FRESH task.** The platform
+  marks `task.executionStatus = FAILED` and walks the forward cone, stamping
+  `blockedByUpstreamFailure: true` on every downstream sibling (F17,
+  `execution-terminal-persist.ts`). ⚠️ **Do NOT `agent.execute` the halted leg to recover it**: its
+  cone is already frozen, so the leg runs and its consumers still do not queue — the program then
+  escalates `orphaned-cascade-after-root-recovery`, correctly, and every frozen task has to be
+  hand-started. *(2026-09-19: done exactly this; three legs plus the producer and Node C all needed
+  hand-starting, and the round stopped being a clean autonomous run.)*
+- ⚠️ **Read the field the platform writes, not the one next to it.** On a halted leg
+  `agent_executions.status` says **SUCCESS** — truthfully, because the harness ran, detected the
+  duplicate, stamped it and exited cleanly. The halt lives on **`task.executionStatus`** and on the
+  downstream cone. *Reading the execution row produced a confident "it was not terminalized"
+  conclusion that survived into three documents for several hours before the code was read.*
+- **Declare your rig's planted artifacts.** A deliberately planted secret that the environment file
+  does not mention is, from the leg's seat, an unexplained credential on the resource it is about to
+  change — and a domain protocol may require it to HALT on exactly that. *2026-09-19: an AWS
+  access-key pattern in a resource TAG (which the provider's own `sensitive_attributes` redaction does
+  NOT cover — it protects attributes, not tags) blocked a correct package.* You cannot fix this by
+  weakening the drift rule without removing the control that makes the run worth anything: declare the
+  artifact, scope the declaration to it, and leave the rule armed for everything else.
+- **Comments are not a channel.** A comment on a package reaches **no agent** — not the next leg, not
+  Node C; chaining carries `finalResponse` only. Mid-run you can stop a program or let it proceed; you
+  cannot improve it.
 - **Fix at the right layer, then re-run as validation** — rig/input gaps → topology+inputs; craft slips
   → role guidance (+ targeted reseed); contract ambiguity → protocol; a format that recurs → code.
 - **One round, one assessment.** Write it before launching the next; the trend across rounds is the

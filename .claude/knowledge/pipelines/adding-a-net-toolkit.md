@@ -48,6 +48,23 @@ acceptance for any change to an existing net.
 
 ## STEP 0 — Earn it. Do not skip. *(≈10 min)*
 
+> 🔴 **BEFORE any of the three paths: does a control for this property ALREADY SHIP?** (added
+> 2026-09-23.) If it does, you do not owe a frequency measurement — you owe its **compliance rate**,
+> and your leaf must be justified against what that control leaves uncovered, not against the raw
+> defect. Earned by a spec that reached a four-specialist panel proposing a clause which had shipped
+> eleven days earlier in stronger wording; the existing clause FORBADE, the proposal MANDATED, and
+> the defective package would have satisfied the proposal while violating the shipped clause.
+> `grep` the property in 2–3 phrasings across `seed-protocol-prompts.ts` and
+> `pAIchartUniversalTemplate.ts`, then `git log -S` for the ship date. Full record:
+> `execution-facts-discovery.md` § STEP 0; withdrawal record:
+> `cline_docs/follow-ups/set-valued-evidence-rule-2026-09-23.md`.
+>
+> ⚠️ And **validate your proxy on four hand-read artifacts** (two it calls positive, two negative)
+> before reporting any number — `execution-facts-discovery.md` § STEP 0b. One review on 2026-09-23
+> produced eight confident wrong numbers from four people; five of them were zeros, which read as
+> clean results.
+
+
 `PIPELINE-DOMAIN-FIT-CATALOG.md`'s mechanical-net rule: **a leaf is earned by a live failure, OR by a
 property that is load-bearing, prose-only, and of a class already measured as non-binding, OR by a
 judgement repeatedly made blind to the evidence that decides it.** Every box of whichever path you

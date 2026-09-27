@@ -1,9 +1,14 @@
 # Execution Facts Discovery
 
-> **Last Updated**: 2026-09-14 · **Status**: ACTIVE · **Last Validated**: 2026-09-14 (health-run —
+> **Last Updated**: 2026-09-20 · **Status**: ACTIVE · **Last Validated**: 2026-09-14 (health-run —
 > all 20 section A–E greps RE-RUN and matching; `audit-discovery-greps.sh` clean at 163/0/0. Two
 > `npm run` expectations were STALE and corrected: `test:derivation-containment` 94→103,
 > `test:rollback-containment` 18→30. Original creation baseline 2026-09-11, per Protocol 11 Part C)
+>
+> 2026-09-20: the corpus-measure practice gained the three measurement-failure lessons from the
+> eight-round arc (discriminating field / else-branch / absence-vs-rate), a CROSS-REF to measuring
+> rule 6 in the two forensics guides, and the standing containment-is-not-provenance boundary ruling.
+> Two new greps added and RUN before writing (Part C); `audit-discovery-greps.sh` 188 audited.
 >
 > **Paired specialist**: `.claude/agents/execution-facts-specialist.md`
 > **Split from**: `pipeline-harness-discovery.md` (SPECIALIST-LIFECYCLE-GUIDE §3b, 2026-09-11). The
@@ -63,8 +68,8 @@ grep -c "computeRollbackContainmentFact\|hoistRollbackContainment" lib/agents/ha
 
 ```bash
 grep -c "RESULT_JSON_SUMMARY_KEYS" lib/services/execution-artifacts.ts   # expect 3 — the definition plus its uses. This is a STRICT whitelist: an unlisted key is dropped with no error, so a new top-level sibling of a fact is silently stripped and reads ABSENT at the gate
-grep -c "test('E3b" scripts/test-execution-artifacts-parity.ts   # expect 3 — re-measured 2026-09-11 (+E3b-2 rollbackDisposition inside rollbackContainment, +E3b-3 contractApplicability inside BOTH dialectLint and contractPropagation). The nesting pins: a disposition survives the pick because it rides NESTED inside its fact; a top-level SIBLING is stripped. Each is mutation-verified in BOTH directions (nested survives / promoted is dropped), and each new fact carrying a sub-object needs its own — the trap does not generalise for free
-grep -rln "pickResultJsonSummary" lib/ scripts/ | wc -l   # expect 9 — re-measured 2026-09-12 (was 7): +net-registry.ts and +net-context.ts, both E3b notes rather than new consumers. Any new consumer must be added deliberately; the hoist is where a nesting mistake becomes invisible
+grep -c "test('E3b" scripts/test-execution-artifacts-parity.ts   # expect 3+ — re-measured 2026-09-11 (+E3b-2 rollbackDisposition inside rollbackContainment, +E3b-3 contractApplicability inside BOTH dialectLint and contractPropagation). The nesting pins: a disposition survives the pick because it rides NESTED inside its fact; a top-level SIBLING is stripped. Each is mutation-verified in BOTH directions (nested survives / promoted is dropped), and each new fact carrying a sub-object needs its own — the trap does not generalise for free
+grep -rln "pickResultJsonSummary" lib/ scripts/ | wc -l   # expect 12 — re-measured 2026-09-26 (was 11): +test-verdict-freshness.ts (RWF C3: W1 pins that supersession and verdictFreshness survive the pick). 2026-09-25 (was 10): +test-truncation-incident-replay.ts, which hoists the REAL incident artifacts through the real pick before rendering the card (register E1). Prior 2026-09-16 (was 9): +test-lean-card-facts.ts, which now BUILDS its boundary fixtures through the real pick instead of hand-rolling exec objects (CC1/CC2/EC1/EC2) — a hand-made exec is exactly what let the chainedContext render pass green for six days while the whitelist stripped it. Prior 2026-09-12 (was 7): +net-registry.ts and +net-context.ts, both E3b notes rather than new consumers. Any new consumer must be added deliberately; the hoist is where a nesting mistake becomes invisible
 ```
 
 **Reviewer checklist — adding a field to any fact**
@@ -84,7 +89,9 @@ grep -rln "pickResultJsonSummary" lib/ scripts/ | wc -l   # expect 9 — re-meas
 grep -c "derivationContainment\|markerPresence" lib/mcp/server/tools/advanced/lean-card-facts.js   # expect 8 — the two facts the lean card's **Facts:** line renders today
 grep -c "rollbackContainment" lib/mcp/server/tools/advanced/lean-card-facts.js   # expect 4 — net #3 renders from the FIRST commit that stamps it (§5.1 convention, ruled 2026-09-11: a net ships with its render or with a recorded reason for having none, never through a stamped-and-invisible interval). ⚠️ NO `ABSENT` token for this fact, deliberately — while it gates nothing, ABSENT means "not yet produced" (an Author predating the net, or a leg mid-flight across the deploy) and a blocking-flavoured token would be FALSE. If it ever becomes a gate conjunct, ABSENT must flip to fail-closed in the SAME commit
 grep -c "dialectLint\|contractPropagation" lib/mcp/server/tools/advanced/lean-card-facts.js   # expect 11 — ✅ THE GAP IS CLOSED (stage 2b, 2026-09-12) and this expectation FLIPPED IN THE SAME COMMIT that closed it, which is the point of recording the flip in advance: a stale expect-zero here would have made audit-discovery-greps.sh report a REGRESSION on a gap we deliberately closed — a checking tool made to lie about a success. Both facts were stamped and whitelisted from 2026-08-25/26 and rendered on NO card line for two and a half weeks, green at every layer in isolation because a fact written correctly and read by nobody is the A1/F7 class. The symbol-free-prose rule that the old zero-expectation depended on is now RETIRED for these two identifiers — they are rendered, so naming them is honest. Pinned by DL1-DL3/CP1-CP2 in test-lean-card-facts.ts (the READ half) and by R5b in test-net-registry.ts (the WRITE half: a net may not CLAIM a card render it does not have)
+grep -c "chainedContext" lib/mcp/server/tools/advanced/lean-card-facts.js   # expect 4 — measured 2026-09-16 (A11/C8, cross-pipeline delivery). The F-A coverage clause PLUS the `inherited N of M cross-pipeline from leg <id>` clause. ⚠️ The inherited clause is SUPPRESSED when nothing was inherited and nothing was on offer — deliberately, because `inherited 0 of 0` carries no information and this line is read by the pov-program protocol's SYNTHESIZE Step 2, so every execution in the platform would grow a null clause. The case that must NOT be suppressed is entries OFFERED and none taken: it renders the denominator and the skip REASONS (F7 — render WHAT, not how many). Pinned by CC3/CC4/CC5 in test-lean-card-facts.ts, and the four inherited fields ride NESTED inside `chainedContext` (E3b) — a sibling on the result.json root would be stripped by pickResultJsonSummary. ⚠️ `inheritedSkipped` is a SEPARATE list from `notChained` on purpose: the program gate treats `notChained.length > 0` as BLOCKING and these skips are benign by construction, so merging them would turn a fail-open into a fail-closed
 grep -c "contractApplicability" lib/mcp/server/tools/advanced/lean-card-facts.js   # expect 3 — measured 2026-09-12. It rides NESTED inside both facts above (E3b) and renders as their QUALIFIER, never as a fact of its own: a standalone pipeline has no Program Interface Contract BY DESIGN, and a reader told only "no-contract" grades it as a gap (9 of 37 archived legs did exactly that). Pinned by CA1
+grep -c "deliverableTruncated" lib/mcp/server/tools/advanced/lean-card-facts.js   # expect 4 — measured 2026-09-25 (register E1). The `truncation:` segment, keyed on `toolLoop.deliverableTruncated === true` and NOTHING else, so every non-truncated card is byte-identical (TR1). It exists BESIDE `errorCategory: TRUNCATED_PARTIAL_OUTPUT` because errorCategory is FIRST-WINS: five categories outrank TRUNCATED_*, so a cut-off deliverable can be stamped truncated while the card names another category (TR3 — the A1 class; 3 of 7 note-bearing prod rows carried a different category). The retry state names only facts PROVABLY about the final turn: a retry whose own stop reason is not `max_tokens` ran on an EARLIER turn and is rendered as such, never as if it described this one (TR4). No ABSENT token — a pre-F2 artifact has no field and a blocking-flavoured token would be false (TR5). All nested under the whitelisted `toolLoop` (E3b; parity F2-3)
 npm run test:lean-card-facts   # the coupling suite: it asserts the enrichment's WRITE site and the card's READ site stay paired. Neither file was wrong in isolation for the 2026-08-03 A1 defect; the PAIRING was, and nothing tested it
 ```
 
@@ -156,8 +163,8 @@ never purely cosmetic in a fail-closed taxonomy.
 ### E. Build tripwires — these flip when scheduled work lands
 
 ```bash
-grep -rn "MECHANICAL_NETS\|netRegistry\|registerNet" lib/ scripts/ | wc -l   # expect 23 — ✅ THE TRIPWIRE FIRED AND THE REGISTRY LANDED (stage 2b, 2026-09-12). Its former text carried a zero-expectation and promised that a non-zero result meant the registry had shipped and this discovery, the toolkit and the specialist config all needed the same-commit update; it did, and they were. (The old expectation is DESCRIBED rather than quoted: a literal zero-expectation inside prose is read by audit-discovery-greps.sh as a live expectation, which is how three earlier lines in this file reported false REGRESSIONS on their first pass.) lib/agents/harness/{net-registry,mechanical-nets,net-context}.ts plus the pins, the equivalence gate and the shared replay runner
-grep -rln "rollbackContainment" lib/agents/harness/ | wc -l   # expect 6 — re-measured 2026-09-12 (was 4): +mechanical-nets.ts (both registry entries) and +net-registry.ts (the two-invocation-points rationale in the StampPoint doc). The pure module names its types RollbackContainment* and does not carry the camelCase field name, so it still does not count
+grep -rn "MECHANICAL_NETS\|netRegistry\|registerNet" lib/ scripts/ | wc -l   # expect 24 — (was 23; +1 = the EF-M2 applicability pin in test-net-registry.ts, 2026-09-26) ✅ THE TRIPWIRE FIRED AND THE REGISTRY LANDED (stage 2b, 2026-09-12). Its former text carried a zero-expectation and promised that a non-zero result meant the registry had shipped and this discovery, the toolkit and the specialist config all needed the same-commit update; it did, and they were. (The old expectation is DESCRIBED rather than quoted: a literal zero-expectation inside prose is read by audit-discovery-greps.sh as a live expectation, which is how three earlier lines in this file reported false REGRESSIONS on their first pass.) lib/agents/harness/{net-registry,mechanical-nets,net-context}.ts plus the pins, the equivalence gate and the shared replay runner
+grep -rln "rollbackContainment" lib/agents/harness/ | wc -l   # expect 7 — re-measured 2026-09-26 (was 6; +authoritative-result-read.ts, RWF Wave B: the closed `ResultField` union names it); 2026-09-12 (was 4): +mechanical-nets.ts (both registry entries) and +net-registry.ts (the two-invocation-points rationale in the StampPoint doc). The pure module names its types RollbackContainment* and does not carry the camelCase field name, so it still does not count
 ```
 
 ---
@@ -167,6 +174,49 @@ grep -rln "rollbackContainment" lib/agents/harness/ | wc -l   # expect 6 — re-
 **Before any proposed violation class reaches a panel, MEASURE IT AGAINST THE CORPUS**: pull the
 relevant artifact population and count real occurrences plus naive false positives. A
 violation-class proposal without a corpus measurement is not evidence — it is a hypothesis.
+
+### 🔴 STEP 0 — FIRST establish whether a control already exists (added 2026-09-23)
+
+**Before counting frequency, ask: does a control for this property already ship? If it does, the
+measurement you owe is its COMPLIANCE RATE, not the defect's frequency.** They are different
+questions, over different populations, with different remedies — and only the second is answerable
+once a control exists.
+
+This step is new because the practice had a hole exactly where it looks complete. Both reversals
+below are **frequency** failures (the class was rarer than believed), so the practice's text, its
+examples and its whole vocabulary teach frequency. **Duplication is a third failure mode and it had
+no entry.**
+
+Earned 2026-09-23, on a spec that reached a four-specialist panel before anyone noticed: a proposed
+`config_change_author` paragraph turned out to restate a clause that had shipped **eleven days
+earlier**, in the same domain, for the same defect, in stronger wording — `kubernetes-gitops-protocol`
+`:2867`, commit `3a7f0116`, 2026-09-12. The existing clause FORBIDS; the proposal MANDATED, and the
+defective package would have satisfied the proposal while violating the shipped clause. **The
+proposal was weaker than what it duplicated.**
+
+The population that answers this is the same one the practice already tells you to pull — 23
+Kubernetes author legs — and it contained the clause, its originating defect, eight post-clause
+compliant legs and a reviewer verdict citing the clause by date. Compliance measured **7 of 8
+post-clause, one failure**. The practice's own first instruction would have ended the exercise
+before a word of the spec was written. As the steward put it: *the bypass did not merely skip a
+check — it caused the error.*
+
+```bash
+# Step 0, mechanically. Does prose for this property already ship?
+# ⚠️ ALL FOUR SURFACES — a control can live in any of them, and the 2026-09-23 answer was in two.
+grep -rn "<the property, in 2-3 different phrasings>" scripts/seed-protocol-prompts.ts \
+  lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts \
+  scripts/seed-*-templates.ts lib/agents/universal-agent-rules.ts
+# If it does: git log -S "<a distinctive phrase>" --oneline -- <that file>   → ship date
+# Then measure COMPLIANCE over legs AFTER that date, not frequency over all legs.
+```
+
+⚠️ **Compliance measurement is itself proxy-fragile, and more so than frequency.** Measuring
+"did the leg comply" by phrase-matching produced a false positive twice over on 2026-09-23: a leg
+was scored non-compliant because its `podSelector: {}` occurrence was prose about a hypothetical,
+and because it carried the required evidence under different words (*"Harvested workload census
+bounding the selector's reach"*). The robust predicate keyed on **structured tool-call arguments**,
+not on phrasing — see Step 0b.
 
 Two reversals, both of which would have shipped a false-positive machine:
 
@@ -181,6 +231,114 @@ That inversion is itself an open design question: `adding-a-net-toolkit.md` Step
 written for defect-catchers, and a leaf whose proven value is refuting a false suspicion does not
 fit Path 1 as worded. The panel must rule whether exoneration-value counts as Path 1 or the rule
 needs a named third path. Do not resolve it silently in a build.
+
+### How the measurement itself goes wrong (2026-09-20 — three instances in one day)
+
+The two reversals above are about measuring the WRONG THING. These three are about measuring the
+right thing WRONGLY, and all three produced a confident number that supported a wrong conclusion.
+
+### 🔴 STEP 0b — VALIDATE THE PROXY BEFORE REPORTING ANY NUMBER (added 2026-09-23)
+
+**Read TWO artifacts your query calls positive and TWO it calls negative, by hand, before you
+trust the count.** Four artifacts. It subsumes all three lessons below, which become its worked
+examples rather than the guidance itself.
+
+The three lessons below are DIAGNOSES OF SYMPTOMS — each tells you what a wrong number looked like
+*after* someone found it. None of them tells you the procedure that finds it. This is that
+procedure, and it is the standing *"verify the primary observable"* rule applied to a QUERY instead
+of a field.
+
+On 2026-09-23 a single review produced **eight** confident wrong numbers, from four different
+people, every one of which this step would have caught for the cost of reading four artifacts:
+
+| wrong number | cause | one artifact would have shown |
+|---|---|---|
+| "network has 0 set-valued changes" | `\b` is BACKSPACE in Postgres regex, not a word boundary (`\y` is) | any network leg — 76 of 107 carry a multi-host CIDR |
+| "2 of 4 domains, ~9 legs" | counted WILDCARDS as a proxy for set-valued; a `/27` has none | any network leg |
+| "6 of 6 harvests missed the census" | artifacts carry two JSON spacings; the regex required one | one harvester's raw `toolCalls` |
+| "2 post-clause compliance failures" | phrase-matching missed a synonym for the required evidence | one leg the query called non-compliant |
+| "protocol clauses never reach leaf agents" (0 of 931) | queried `agent_executions.config`; the preamble is built at runtime and never persisted there | the stamped `protocolInjection` fact |
+| "48%, the harvester is unreliable" | measured what was ASKED, not what was OWED | any of the 13 legs that owed no census |
+| `toolCalls` query returns 0 rows | `r->'args'->>'tool'`; the real path is `r->'arguments'->>'tool'`, with arguments nested as a JSON **string** | one row |
+| "the rig is down" (obs :3114) | port-scan grep pattern did not include the port | one probe |
+
+🔴 **A zero from a broken proxy is indistinguishable from a clean result**, and it reads as good
+news, which is why it survives review. Five of the eight above were zeros.
+
+⚠️ **Any net built on `toolCalls` must pin its JSON path with a mutation test.** The path is
+`r->'arguments'->>'tool'` and the call arguments are a JSON **string nested inside** it. A wrong
+path returns 0 rows and nothing distinguishes that from a clean corpus.
+
+⚠️ **State what the query measures, not what you wanted it to measure.** "48% of harvests skipped
+the census" was false; "harvest scope is discretionary, objective-dependent and undeclared" was the
+same data stated honestly, and it was the more useful finding. A count of what was ASKED is not a
+count of what was OWED unless something in the system records what was owed — and here nothing did.
+
+**1. Key on the DISCRIMINATING field, not the shared one.** Measuring how often a `## Derived
+Values` block reads ABSENT while the leg's own text carries it: a proxy keyed on `"kind"` gave
+**~31** corpus-wide; re-keyed on `"members"` it gave **~8**. `kind` is carried by harvested,
+derived AND consumed entries; `members` only by a derived one — so the loose proxy counted harvest
+blocks as failed derivations, and terraform's "100% failure" was 15 of 17 flagged legs carrying a
+harvest block. This is a fact-shape property of THIS domain's own schema and is mechanically
+checkable:
+
+```bash
+grep -c "^  kind?: string;" lib/agents/harness/derivation-containment.ts   # expect 4 — `kind` is SHARED across HarvestedAllocation, DerivedValue and ConsumedValue, so it discriminates nothing. Any corpus proxy keyed on it silently merges the three populations
+grep -c "members?: string\[\]" lib/agents/harness/derivation-containment.ts   # expect 1 — on DerivedValue ALONE. This is the discriminating field for raw-text measurement
+```
+
+⚠️ **The discriminating field differs between the TEXT and the STAMP.** `derivationContainment`'s
+nested `derivedValues` is deliberately `kind+value` only — *no members* (it is head-slice-truncation
+sensitive, see its field comment). So a measurement over stamped FACTS discriminates by the KEY
+NAME (`derivedValues` vs the harvested list), and a measurement over raw leg TEXT discriminates by
+`members`. Carrying one method's key into the other's corpus is the mistake above.
+
+**2. An else-branch is a claim that you enumerated every other case.** Every inflated count that
+day came from a classifier catch-all: registry changelog comments attributed to a protocol body; a
+body-range scanner bounded by a closing backtick one const does not use, **swallowing an entire
+protocol** — the one the defect occurred in — and reporting 5 bodies where there are 6, silently;
+and a reach-around classifier whose program-sibling branch matched only `PIPELINE`-type tasks, so
+Node C and producer reads (`ACTION`) fell into "UNRELATED" and turned **4 legs into 9**.
+
+This is related to but DISTINCT from the silent-exclusion lesson the knowledge base already carries
+(`audit-discovery-greps.sh`, 2026-08-08): that one drops rows, this one MIS-BINS them. Mis-binning
+is worse — the row still appears, in the wrong column, supporting a wrong conclusion, and the total
+still looks right. **Print per-bucket counts and assert they sum to the population.**
+
+**3. Zero successes is an ABSENCE, not a rate.** terraform's `parsed_ok: 0` was over **2** attempts:
+a population that rarely derives at all, not a failing one. The first output said so and it was read
+past.
+
+**Cross-domain comparisons** — before comparing domains on a metric, confirm they mandate the same
+thing at the same phase, or you are comparing POPULATIONS, not behaviours. That rule lives, with its
+live example and both confounds, as **measuring rule 6** in `PIPELINE-RUN-FORENSICS-GUIDE.md` and
+`PROGRAM-RUN-FORENSICS-GUIDE.md`. It is CROSS-REFERENCED here, not copied — a duplicated rule with
+no drift test is the D1–D5 family the protocol obligation audit tracks. Record:
+`cline_docs/follow-ups/observations-from-the-eight-round-arc-2026-09-20.md`.
+
+---
+
+## Fact boundaries — what a net is NOT asked (ruled 2026-09-20)
+
+**`derivationContainment` answers containment, never PROVENANCE.** On 2026-09-20 a terraform author
+with nothing to derive imported a derived value from an **unrelated pipeline** (no dependency edge)
+and authored a policy from it. The net returned `checked, 0 violations / benign (checked-clean)` —
+**correctly**: containment asks whether a derived range swallows a harvested allocation, the harvest
+was empty, and the net has no notion of which pipeline a value arrived from. The harness quality
+gate caught it; the leg reviewer read the author's honest prose disclosure and downgraded it.
+
+**RULING: do not extend containment to cover provenance.** A fact answers ONE question. Folding a
+second one in would make `checked-clean` ambiguous and hand every consumer a conjunct that means two
+things — the exact shape Protocol 10 exists to prevent, arrived at from the producer side instead of
+the verdict side. If a provenance fact is ever earned it ships under its own name, with its own
+reason strings and its own disposition. This is a standing boundary, not a deferral: re-proposing it
+as a containment extension needs a panel, not a build.
+
+Corpus: **4 legs ever** reached an unrelated pipeline; 3 predate the 2026-09-16 Bug Class 84
+cross-pipeline delivery fix (`c51311d6`) and reached around because the value genuinely was not
+arriving — the motive was a delivery defect and it is fixed. **Zero instances in the four weeks
+since.** Not a volume problem. Record:
+`cline_docs/follow-ups/cross-pipeline-reach-around-second-instance-2026-09-20.md`.
 
 ---
 
@@ -278,6 +436,15 @@ nothing while appearing wired).
   false-positive trap: it names every banned token in prose and must return zero)
 - `scripts/test-execution-artifacts-parity.ts` — E3b, field ORDER, whitelist behaviour
 - `scripts/test-lean-card-facts.ts` — the write-site/read-site coupling assertions
+- `scripts/test-truncation-incident-replay.ts` — register E1 (2026-09-25). The SHIPPING finalize →
+  quality cascade → builder → pick → card over the two 2026-09-24 truncation incidents plus two
+  same-stage controls, md5-verified against `cline_docs/follow-ups/partial-text-truncation-2026-09-24-fixtures/README.md`
+  (the prod rows were DELETED — these files are the only specimens). R6 is the mutation: the pre-§3.3
+  wiring (post-#90 stop reason) must LOSE the reviewer's truncation on its real text, or the specimen
+  no longer discriminates the fix. ⚠️ **The reviewer specimen carries the note substring as a QUOTE
+  of its predecessor's `<prior_output>`, not as finalize's note** — the note-substring corpus proxy
+  has a false-positive channel as well as #90's false-negative one. Discriminate with the shipping
+  `finalizeTextForStopReason` round-trip, never with a substring (R4, R9)
 - `scripts/test-rollback-containment.ts` — net #3 (BUILT 2026-09-11, stage 2a), 30 assertions over
   FIVE live packages (⚠️ 30 CORRECTED 2026-09-14 from 18 — same unaudited-`npm run` blind spot as the
   two lines above; the +12 are ee69d27d's lane ruling, c867ea70's chainer JOIN and 8366c21e's four
@@ -415,7 +582,7 @@ grep -c "member-not-covered" lib/agents/harness/derivation-containment.ts   # ex
 grep -c "kind !== 'cidr'" lib/agents/harness/derivation-containment.ts      # EXPECT 1 — generic-by-construction: kind dispatch, cidr the ONLY leaf today; a new domain's derivation adds a branch, an unsupported kind -> Node C (degradation, NOT equivalent safety)
 grep -c "derivationContainment" lib/services/execution-core.ts              # expect 2 — re-measured 2026-09-12 (was 3): the registry migration removed the call site and its catch, and what remains is the per-net TELEMETRY block, which reads the STAMP rather than the enrichment so it cannot drift from it. Operator telemetry stayed OUT of the registry deliberately: these lines are specific claims about specific facts, and a uniform "log the fact" would either say nothing useful or say it about nets it does not understand
 grep -c "derivationContainment" lib/agents/harness/derivation-containment-enrichment.ts  # expect 3 — the extracted enrichment (3rd = the 2026-08-02 harvest-precondition note: the checker is unreachable without a parseable harvest block, which is correct for RELATIONAL properties and a real limit for UNARY ones like asn range policy); extracted so scripts/replay-containment.ts can run it against a real completed leg in SECONDS instead of needing a 30-50min program run + rig. Three defects shipped while it was only reachable by a full run, each "verified" by reading source
-grep -c "## Derived Values" scripts/seed-protocol-prompts.ts                # expect 11 — re-measured 2026-09-11 at the §3b split (+1 from a pov-program changelog-comment edit, cd66cb91/1c6ffbd4 era, NOT a new contract site). ⚠️ This is a MENTION count and it drifts whenever a `Prior:` changelog comment is edited — the same class the 2026-08-29 health-run replaced elsewhere with a property grep. Contract sites only = pipe through `grep -vc "Prior:"` (8 today). Scheduled for replacement at the next health-run. Prior: 10 (+1 2026-09-09: the marker clause now names the heading form the parser accepts) — MEASURED 2026-08-16 (was 5): network Phase-1 contract refs + pov-program taxonomy refs + the terraform-iac v1.2.0 port (Derivation-evidence section + bullets)
+grep "## Derived Values" scripts/seed-protocol-prompts.ts | grep -vc "Prior:"   # expect 11 CONTRACT SITES — PROPERTY grep, replacing the mention count 2026-09-17. The old form counted 15 and drifted on every `Prior:` changelog edit; its own comment said so and scheduled this replacement. Contract sites rose 8 -> 11 on 2026-09-17 when kubernetes-gitops v1.8.0 added the producer-side mandate (Phase 0 + Phase 2), the fix for the false block in `cmu3crv0v`.
 grep -c "prefix-not-minimal" lib/agents/harness/derivation-containment.ts   # expect 6 — re-measured 2026-08-21 (+1 comment from the 2026-08-19 misaligned-prefix commit d546d55d). The THIRD violation class (2026-07-30). An aggregate can cover its members, swallow nothing foreign, and still be LOOSER than minimal: Run 15 shipped 10.99.0.8/30 for members .8/.9 (minimal /31), authorizing 2 addresses no exporter used. It passed the Author, the leg reviewer, this checker (minimality was not in its rule set), Node C and the program gate
 grep -c "derivedValues" lib/agents/harness/derivation-containment.ts        # expect 12 (+3 2026-09-09 H-2: the transitive leg record carries derivedValues; was 9 (was 5 before the asn kind, 2026-08-02) — the derived VALUE crosses the DAG edge as a fact (2026-07-31), so acceptance check 1 stops depending on a reviewer reading upstream PROSE (re-measured 2026-08-29 health-run: +1, the derived-value-orphaned class 2026-08-04.)
 grep -c "derived-value-orphaned" lib/agents/harness/derivation-containment.ts   # expect 4 — the FOURTH violation class (2026-08-04, b1e15654). Containment proves a derived value came from the harvested pool and says NOTHING about whether the package ACTS on it; both live injections were exactly that shape (legal values no config applied, no validation checked). The rule is usage ANYWHERE in the package, NOT "must appear in the validation section" — the intuitive rule was measured against three real packages and falsely flagged Run 20's legitimate asn 65002. Protocol 10: it is a FACT (an occurrence count outside the declaring block), not a verdict
@@ -439,7 +606,7 @@ grep -c "needs-node-c" lib/agents/harness/derivation-containment.ts             
 # all carry it. Two live defects on 2026-08-03 were exactly this seam (violations unrendered on the
 # checked:false branch; unsupported rendered as a count with identities stripped).
 # — the VT-11 refusal / run-2/3 silent-drop fail-safe. Conflating the two made a first fix INERT.
-grep -c "## Harvested Allocations" scripts/seed-protocol-prompts.ts         # expect 14 — re-measured 2026-09-11 at the §3b split (+1 changelog-comment edit, not a new contract site). ⚠️ MENTION count, same drift class as the Derived Values line above; contract sites only = 11 (`grep -vc "Prior:"`). Prior: 13 (+1 2026-09-09: marker clause) — MEASURED 2026-08-16 (was 8): +4 from the terraform-iac v1.2.0 Derivation-evidence port (section + phase bullets). The marker is now a CROSS-DOMAIN contract, no longer network-only
+grep "## Harvested Allocations" scripts/seed-protocol-prompts.ts | grep -vc "Prior:"   # expect 13 CONTRACT SITES — PROPERTY grep, replacing the mention count 2026-09-17 (was 17 mentions, drifting on changelog edits). Rose 11 -> 13 with kubernetes-gitops v1.8.0: the domain could not be an UPSTREAM producer before it, because derivation-containment anchors on the HARVESTER and this protocol asked it for no block.
 grep -c "member-not-covered" scripts/test-derivation-containment.ts         # expect 10 — incident fixtures pin the arithmetic class + finding-f reason-ordering, PLUS the 2026-07-30 prefix-not-minimal fixtures which assert it does NOT fire alongside them (re-measured 2026-08-29 health-run: +1.)
 ```
 
@@ -457,3 +624,81 @@ tier is never told a decision was delegated. Pinned by **E3b** in `scripts/test-
 # consumed-value-mismatch violations stamp the non-cidr kind (Tasman actionability fix, moved 2026-09-11)
 grep -c "cKind !== 'cidr'" lib/agents/harness/derivation-containment.ts    # expect 1
 ```
+
+---
+
+## 🆕 2026-09-20 — reviewer evidence grading (`reviewerVerdict.evidenceGrading`)
+
+`VERIFIED-AGAINST-EVIDENCE` / `ACCEPTED-FROM-CLAIMS` is mandated by every domain protocol and, until
+this fact, was read by **nothing**. `approved: true` therefore collapsed *"I recomputed this myself"*
+with *"I am trusting the package's word"*. Producer: `lib/agents/harness/evidence-grading.ts` (pure),
+called inside `buildExecutionResultJson`.
+
+```bash
+grep -c "^export function\|^export const" lib/agents/harness/evidence-grading.ts   # expect 3 — computeEvidenceGrading plus the two token literals. Token-locked and case-sensitive: the protocols write the tokens in caps and a case-fold would start counting prose
+grep -c "computeEvidenceGrading" lib/services/execution-artifacts.ts   # expect 2 — the import and the ONE call site, inside the canonical builder, so dual-path parity is structural rather than maintained by discipline (the Bug Class 75 lesson)
+grep -c "test('E3b-4" scripts/test-execution-artifacts-parity.ts   # expect 4 — nesting survives the pick + the sibling direction (4), the scan covers the WHOLE finalResponse (4b), graded:false is PRESENT not absent (4c), and evidenceGrading precedes `raw` inside the nested object (4d). 4, 4b and 4d are each mutation-proven red
+grep -c "test('EG" scripts/test-parse-verdict.ts   # expect 8 — the parser pins, in the suite beside the verdict parser they mirror. That suite is out-of-CI by the same considered exclusion as its sibling: this fact has no consumer, so it does not meet the CI bar ("underwrites a decision we have already committed to"). Run it with the script named for this file
+```
+
+**NESTED on `reviewerVerdict`, ruled rather than assumed.** `reviewerVerdict` is already a
+whitelisted top-level key and `pickResultJsonSummary` copies it **verbatim**, so nesting survives by
+construction and a top-level `evidenceGrading` sibling would be stripped silently (E3b). The fact
+qualifies a verdict; it does not stand alone. **The nesting cost was MEASURED, not waved past**: of
+**270** `change_reviewer` executions, 261 carry a `reviewerVerdict`; of the 9 that do not, exactly
+**1** carries grading tokens. Nesting loses 1 observation in 270. Re-measure before any promotion to
+a top-level key.
+
+⚠️ **The scan covers the WHOLE `finalResponse`, not `ReviewerVerdict.raw`.** Gradings ride on
+FINDINGS, which precede the terminal `## VERDICT:` block, so scanning from the verdict line onward —
+the obvious refactor — reads `graded: false` on every correctly-formed reviewer. Pinned by E3b-4b and
+mutation-proven; nothing else in the tree would have noticed.
+
+⚠️ **Inside the nested object, `evidenceGrading` precedes `raw`.** Same head-slice contract as the
+outer builder: `raw` is the bulky member, and a compact fact appended after it sits behind the thing
+most likely to be cut. Pinned by E3b-4d.
+
+### THREE states, not two
+
+`graded: false` (no token anywhere) is a different observation from `graded: true, verifiedLines: 0`
+(graded, and verified nothing itself). A two-state fact bins the first into whichever the parser
+defaults to — `CHECK-DESIGN-DISCIPLINE.md` §2a. **Measured baseline, 2026-09-20, 261 live verdicts
+(reproduced independently of the brief and matching it exactly):**
+
+| | count | share |
+|---|---|---|
+| emits `VERIFIED-AGAINST-EVIDENCE` | 170 | 65% |
+| emits `ACCEPTED-FROM-CLAIMS` | 134 | 51% |
+| emits **both** | 111 | 43% |
+| emits **neither** | 68 | **26%** |
+
+### The counts are LINES, and the both-token line is EXPOSED rather than filtered
+
+`verifiedLines`/`acceptedLines` are named for what the parser can observe. A grading token is emitted
+per finding, but findings are not machine-delimited — `verifiedFindings` would assert a unit the
+parser cannot see, which is this discovery's own discriminating-field trap turned into a field name.
+
+The suspected false positive was the **scheme restatement** (*"State findings as X or Y"* — mentions
+both tokens, grades nothing). **CORPUS-MEASURED before building a filter**, and the suspicion did not
+survive: 46 both-token lines across 42 legs, of which the alternation shape is **3**. Excluding it
+moves the corpus 170/134/111 → 170/132/**109** — **2 legs in 261, 0.8pp**. The remaining both-token
+lines are legitimate compound grades (`VERIFIED-AGAINST-EVIDENCE (naming) / ACCEPTED-FROM-CLAIMS
+(content accuracy)`, 9 explicit) and prose gradings (~34), all of which a both-token exclusion would
+have discarded. **So the filter was NOT built**: the parser counts honestly and reports
+`bothTokenLines` as its own field, handing the consumer the ambiguity as a fact. It is a SUBSET of
+both counts — the three fields do not sum (pinned, EG4).
+
+### NO CONSUMER, and deliberately UNRENDERED
+
+No gate conjunct, no `programReleasable` input, no disposition. Protocol 10: ship the fact, let it
+generate the data, earn the verdict. There is a coupling reason too — the reviewer-remit changes
+(removing unverifiable properties; enumerating checkable ones) will move the denominator, and a
+consumer wired now would shift underneath them.
+
+The §5.1 convention requires a render **or a recorded reason**. This is the reason: rendering the
+grading into the §6 prompt tells reviewers what is being measured about them and contaminates the
+baseline this fact exists to establish; rendering it on the lean card puts it in front of SYNTHESIZE,
+which is a consumer. Observe it during the soak by querying the artifact. ⚠️ **RE-DECIDE when the
+remit changes land** — a fact left unrendered past the expiry of its reason is the A1/F7 class, and
+this domain has already had one "nothing to see here" measurement expire silently (§6
+`derivationContainment`, closed 2026-09-17).

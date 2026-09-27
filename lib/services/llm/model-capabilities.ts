@@ -80,6 +80,29 @@ export function capabilitiesFor(model: string): ModelCapabilities {
   // capability flag for it would be untested dead weight. Re-check if a disabled path is ever added.
   // Placed before opus-4-x: `claude-opus-4-5` does NOT contain the substring `opus-5`, so there is
   // no false match in either direction, but most-recent-first matches the file's convention.
+  // Opus 5.5 (2026-09-26) MUST precede the `opus-5` rule: `claude-opus-5-5` contains the substring
+  // `opus-5`, so without this branch it silently resolved as Opus 5 — and Opus 5.5 REJECTS forced tool
+  // use (`tool_choice` any/tool → 400), which Opus 5 accepts. Same surface as Opus 5 otherwise
+  // (claude-api skill, model-migration.md § Migrating to Claude Opus 5.5):
+  //  - temperature/top_p removed; FULL effort set; 128K output; 1M context.
+  //  - Thinking is ALWAYS on: {type:'disabled'} and budget_tokens both 400 at EVERY effort level.
+  //    'adaptive' sends {type:'adaptive'}, the documented equivalent of omitting it. We never send
+  //    disabled thinking (same grep as the Opus 5 note above).
+  //  - forcedToolChoice FALSE → the provider downgrades a forced choice to 'auto' and logs it (the
+  //    Fable 5.1 path, anthropic-sdk-provider.ts).
+  //  - serverSideFallback TRUE, same array form as Opus 5. A rescued refusal runs on FALLBACK_MODEL
+  //    WITHOUT Opus 5.5's thinking blocks (the API drops what the target cannot read; the request
+  //    still succeeds). Classifier set is broader than Opus 5 (bio + reasoning_extraction join cyber).
+  // NOT modelled here, and each must be checked before relying on this model:
+  //  - DEFAULT EFFORT IS `medium` (Opus 5: `high`). The agentic tool loop always sends an effort
+  //    (`clampEffort(source.effort ?? 'high')`, agentic-tool-loop.ts), so agent executions are
+  //    unaffected; any other caller that omits effort silently gets `medium`.
+  //  - PRESERVED THINKING: replayed thinking blocks are bound to a byte-identical prefix. Enforced by
+  //    default only for accounts created on/after 2026-08-31. Any loop path that edits earlier
+  //    history (truncation retry, correction turn, read_more paging) must be audited before a
+  //    production trial — see the Opus 5.5 trial note in the register.
+  if (/opus-5-5/.test(m))
+    return { acceptsTemperature: false, thinkingMode: 'adaptive', allowedEfforts: FULL, outputCeiling, serverSideFallback: true, forcedToolChoice: false };
   if (/opus-5/.test(m))
     return { acceptsTemperature: false, thinkingMode: 'adaptive', allowedEfforts: FULL, outputCeiling, serverSideFallback: true , forcedToolChoice: true };
   // ⚠️ TWO MODELS, ONE BRANCH — and they are NOT interchangeable on every axis.

@@ -33,9 +33,19 @@
  * scripts/test-platform-run-keys.ts P4).
  *
  * EXCLUDED from PLATFORM_RUN_KEYS, deliberately (each would break a legitimate writer):
- *   - duplicateAcknowledged — HUMAN operator clearance (MCP/description today; a future GUI
+ *   - duplicateAcknowledged — HUMAN operator clearance (MCP/description today; since pov-program 1.8.5 the
+ *     program harness also COPIES a root's human clearance onto each leg it creates, citing it in
+ *     duplicateAcknowledgedFrom — a propagated human decision, not an agent judgement. duplicateAcknowledgedFrom
+ *     is excluded with it, for the same reason: it is the provenance of that clearance and must survive
+ *     every write path the clearance survives. A future GUI
  *     clearance affordance must be a TARGETED endpoint like /api/agents/configure, never the
  *     wholesale save). Revisit-trigger: if the protocol's clearance stage-binding rule loosens.
+ *   - runDisposition — HUMAN operator decision that a run is no longer being pursued (item 10,
+ *     2026-09-15). Same posture as duplicateAcknowledged and for the same reason: humans write it
+ *     through MCP, so stripping it there would remove its only write path. Known exposure, accepted
+ *     knowingly: an AGENT with task.update could also stamp it, which would quietly remove a live run
+ *     from the liveness report. No protocol mentions the key, so nothing prompts that today.
+ *     Revisit-trigger: the first agent-written runDisposition, or any protocol that names the key.
  *   - modelParameters, mcpConfiguration — editor-OWNED (the wholesale save exists to carry them).
  *   - workflowResult — written by workflowEngine THROUGH the web funnel (an automation caller on
  *     an editor-classified surface); listing it would erase the workflow engine's own output.
@@ -167,7 +177,16 @@ export const PLATFORM_RUN_KEYS = [
 ] as const;
 
 /** Guard-written audit facts — stripped on ALL client surfaces INCLUDING MCP (class (c)). */
-export const AUDIT_STRIP_KEYS = ['completedWithDependencyOverride'] as const;
+export const AUDIT_STRIP_KEYS = [
+  'completedWithDependencyOverride',
+  // RWF A2 (2026-09-26): written ONLY by the engine (reactor-budget-exhausted-persist.ts, in its own tx).
+  // No client — the harness included — has a legitimate write, so it is stripped on every client surface.
+  'reactorBudgetExhausted',
+  // RWF A3 (2026-09-26): written ONLY by the engine (runTerminalSuccessTx) when a SYNTHESIZE dead-end declines
+  // to terminalize because a child is in flight or was dispatched this run. A forged value would be a
+  // spoofable "I was in flight" exoneration on exactly the runs forensics reads.
+  'deadEndExempt',
+] as const;
 
 export interface RunKeyDropOptions {
   /** Surface label for the warn (e.g. 'web-funnel', 'pov-bulk-save', 'pov-bulk-create', 'bulk-update'). */

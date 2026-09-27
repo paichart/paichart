@@ -350,7 +350,40 @@ export function parseFencedJsonBlock<T>(text: string | null | undefined, marker:
   // furniture, not a retitle: tolerate `6.` / `6)` / `(6)` after the heading furniture. A prose
   // mention ("the 6 consumed values are…") still does not match — the phrase must still begin the
   // line after furniture only.
-  const headingRe = new RegExp(`^[#>\\s*_]*(?:\\(?\\d{1,3}[.)]\\s*)?[*_]*${esc}`, 'gim');
+  // Backtick + inner-heading furniture (2026-09-16, program run cmu3n0lin0005yxxqde1jguai):
+  // agents write the mandated heading QUOTED — `` ## 4. `## Derived Values` `` — which renders
+  // identically in markdown and reads correct to any human or LLM, so only the parser can see the
+  // difference. The block then read ABSENT, the containment fact failed closed, and a leg carrying
+  // a correct, arithmetically minimal derivation was blocked.
+  //
+  // MEASURED: 3 legs of 217 candidates (886 production legs scanned), by running the SHIPPING
+  // parser against the old and new regex and diffing the resulting facts. Count the CHANGED FACT,
+  // not the attempted emit: a first pass counting legs that merely contain a backtick-quoted
+  // marker gave 204, restricting to "no parseable heading anywhere" gave 157, and requiring an
+  // adjacent JSON fence (an attempted emit) gave 11 — all three count the word, because a leg can
+  // quote the marker in prose while carrying a correct heading elsewhere, and only the stamp
+  // actually matters. 3 is the defensible number; anything larger overstates it.
+  //
+  // Two separate widenings are needed and adding the backtick alone is
+  // NOT enough — there is a SECOND `##` inside the quotes, so the inner heading run is tolerated
+  // explicitly, bounded to `#{1,6}` + HORIZONTAL space only.
+  //
+  // ⚠️ THE BACKTICK GOES IN THE SECOND CLASS, NEVER THE FIRST, and that is not cosmetic. The first
+  // class contains `\s`, which spans NEWLINES; adding a backtick there lets the match start on the
+  // ``` line of a FENCE-INVERTED package (the FW-A3.4 shape handled below) and swallow the fence
+  // opener as furniture. `lastIdx` then lands on the fence instead of the heading, the
+  // `fenceOpensBefore` parity flips from odd to even, the inversion arm never fires, and a block
+  // that used to parse reads ABSENT. Measured on the live corpus: that variant REGRESSED 3
+  // production legs while fixing 3 — a net zero that looked like a win at the unit-test layer,
+  // because a single-heading fixture cannot express last-match-wins. The shape below fixes 3 and
+  // regresses 0.
+  //
+  // A mid-sentence reference ("See the `## Derived Values` block below") still does NOT match: the
+  // phrase must begin the line after furniture only.
+  const headingRe = new RegExp(
+    `^[#>\\s*_]*(?:\\(?\\d{1,3}[.)]\\s*)?[*_\`]*(?:#{1,6}[ \\t]*)?[*_\`]*${esc}`,
+    'gim',
+  );
   let lastIdx = -1;
   for (let m = headingRe.exec(text); m !== null; m = headingRe.exec(text)) {
     lastIdx = m.index;

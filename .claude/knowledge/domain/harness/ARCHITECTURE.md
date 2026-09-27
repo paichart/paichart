@@ -166,6 +166,8 @@ The harness has three modes — CREATE, ORCHESTRATE, SYNTHESIZE — derived from
 
 **Since 2026-04-26**: the engine resolves mode from DB state via `lib/services/harnessModeResolver.ts` BEFORE the LLM turn starts. The resolver runs as a pure read (PK-indexed) at engine outer scope (after auth check at line 638, before `buildSystemPrompt` at line 664) and the resolved mode is injected into the system prompt as a `## Harness Context (Platform-Resolved)` block above the protocol injection. The agent reads the resolved mode rather than detecting one. The post-execution `pipelineProtocolValidator.detectHarnessMode()` runs as a SECONDARY signal — its mode (derived from the agent's actual tool log) is recorded alongside the resolver's mode in the artifact for forensic agreement checks. See `cline_docs/reviews/mode-detection-out-of-llm-turn-2026-04-26/`.
 
+⚠️ **"Secondary" means secondary for the PROMPT, not for step judging.** When the validator decides which step-profile to hold a run to, **inference is PRIMARY and `resolvedMode` is an UNKNOWN-only rescue** — never an override of a confident inference (HARNESS_NO_OUTPUT panel ruling, 2026-07-17). This is deliberate: `pov-program` PLAN-SPAWN resolves SYNTHESIZE while doing CREATE-shaped work by design, so an authoritative `resolvedMode` would false-flag it on every run. The consequence for readers of artifacts is that `protocolValidation.mode` and `resolvedMode` **can legitimately disagree in the same document**, and the degradation beside them is computed against the former. Measured 2026-09-15: 12 of 68. Read `.claude/knowledge/pipelines/PIPELINE-RUN-FORENSICS-GUIDE.md` § "`protocolValidation.mode` IS A GUESS" before concluding anything from a degradation.
+
 ## Execution Flow: CREATE Mode
 
 ```
@@ -801,15 +803,47 @@ A normal pipeline run on a harness is 2 executions (CREATE + SYNTHESIZE); 10 giv
 A well-behaved harness (single pipeline OR program) **never hangs**: a task that can no longer make progress
 is *terminalized* and escalated at an **event anchor — the persist transaction — not a timer**. The recurring
 failure shape is "**settled children, but the harness must be told**": a task's dependents are all resolved,
-yet nothing re-enters the reactor to move it, so it sits `IN_PROGRESS` forever. Four members, each a distinct
-trigger with one shared cure (mark the forward cone terminal so the owner can escalate):
+yet nothing re-enters the reactor to move it, so it sits `IN_PROGRESS` forever. **Eight members** (this list
+said "four" until 2026-09-15, "six" and then "seven" on 2026-09-26 — check it against `execution-terminal-persist.ts`,
+`reactor-budget-exhausted-persist.ts` and `reaped-task-persist.ts` before trusting the count), each a distinct trigger with one shared cure
+(mark the forward cone terminal so the owner can escalate):
 
 | Class | Trigger | Terminal outcome |
 |---|---|---|
 | **F16 — can-never-run** | a task whose upstream FAILED can never execute | the task + its forward cone → `executionStatus=FAILED` + `metadata.blockedByUpstreamFailure`; program escalates naming the root leg |
 | **F17 — duplicate-halt** | a redundant halt on a leg that produced nothing / has no children | leg `executionStatus=FAILED`, cone marked **once** (the R4 cone-gap fold) |
-| **F20 — escalated leg** | a reviewer stamps `qualityGate.outcome='escalated'` (`reviewerScore 0`) with all children terminal | escalation is an OUTCOME, not a hang → leg **COMPLETES** so the program can escalate; blocks release |
-| **R4 — truncation-stall** | a SYNTHESIZE turn returns `stop_reason:max_tokens` with empty text | auto-recovered in-loop; any residual → leg `executionStatus=FAILED` + `metadata.truncationStall` + cone |
+| **F20 — escalated leg** | a reviewer stamps `qualityGate.outcome='escalated'` (`reviewerScore 0`) with all children **settled** — terminal AND no child execution in flight (RWF A1 2026-09-26; before, a child re-run in flight still counted as terminal and the re-run was orphaned) | escalation is an OUTCOME, not a hang → leg **COMPLETES** so the program can escalate; blocks release. With a child re-running, the leg waits and completes at the next persist — a delay, never a hang |
+| **R4 — truncation-stall** | a SYNTHESIZE turn returns `stop_reason:max_tokens` with empty text | auto-recovered in-loop; any residual → leg `executionStatus=FAILED` + `metadata.truncationStall` + cone. **Declines** (RWF A3) when a child is in flight or was dispatched this run → `metadata.deadEndExempt` |
+| **HARNESS_NO_OUTPUT** (5th, 2026-07-17) | a harness produces **no deliverable text** and either never linked a child stage (CREATE) or resolved SYNTHESIZE with every cascade already spent (`synthesizeDeadEnd`, 2026-09-14) | leg `executionStatus=FAILED` + `metadata.harnessNoOutput` + cone. The SYNTHESIZE arm **declines** (RWF A3) when a child is in flight or was dispatched this run → `metadata.deadEndExempt` — "every cascade already spent" is now CHECKED, not assumed |
+| **PRE_FLIGHT_BAIL** (6th, 2026-07-18) | the leg bails in its own pre-flight — stamps `cannotRun`/`escalated` with no child stage | leg `executionStatus=FAILED`; F20-escalated-COMPLETED still wins. **Also suppresses step validation** (2026-09-15): a halt makes no structural calls BY DESIGN, so no step profile fits it |
+| **REACTOR_BUDGET_EXHAUSTED** (7th, RWF A2 2026-09-26) | retrigger Guard 8: a harness re-entered as many times as its tier's budget allows (legs 10, program roots 25; roots `warn` at 80%) | harness `executionStatus=FAILED` + `metadata.reactorBudgetExhausted` (keyed by the counted execution) + comment; cone for a program LEG only. The tx re-checks its premises (newest execution unchanged, no live run) — a human rescue run is never FAILED. Before RWF this was a silent skip that left the harness IN_PROGRESS forever. `lib/services/reactor-budget-exhausted-persist.ts` |
+| **REAPED** (8th, RWF-X4 2026-09-26, hit live) | a reaper (startup orphan cleanup / periodic stale sweep) kills a harness-owned task's execution — a pm2 reload mid-run, or a hang past the watchdog | the task → `executionStatus=FAILED` + comment (it used to be `null`, which is NOT terminal: the stage never settled and the harness waited forever); cone `UPSTREAM_REAPED` for a program LEG only. **Left `null`** when the task is COMPLETED (a FAILED stamp would make SYNTHESIZE step 1 abort an approved leg), outside any harness, or itself a harness whose own children are still running (they will wake it); **untouched** while another execution is in flight. ⚠️ Residual, shared with an ordinary failure: a reaped pipeline child with a same-stage DEPENDENT (Author → Reviewer) leaves the dependent OPEN, so the harness still waits for a human re-execute. `lib/services/reaped-task-persist.ts` |
+
+**RWF Stage 1 Wave A (2026-09-26) — the premise "SYNTHESIZE ⇒ nothing is in flight" is checked, not assumed.**
+The shipped 50–69 blind retry re-executes children from SYNTHESIZE, which broke that premise at four predicates.
+One shared predicate now answers "is the child stage settled?" everywhere (`lib/services/child-stage-settled.ts`:
+not terminal, OR any PENDING/RUNNING execution whatever the task status — Guard 4, the mode resolver, invariant
+point 3, F20); the dead-end/R4 declines key on the server-written dispatch fact (`harness-dispatch-fact.ts`); a
+post-persist **lost-wakeup self-check** re-enters the harness when a child settled during its own run; and the
+**reapers fire the retrigger** too — which only helps because (RWF-X4, the REAPED row above) they now write a
+reaped harness-owned task FAILED instead of `null`, so its stage can settle and Guard 4 lets the wake-up through. The
+re-execute-and-exit shape is graded `protocolValidation.reExecutionExit`, not `PROTOCOL_STEP_SKIPPED`.
+Plan + reviews: `cline_docs/reviews/rwf-stage1-2026-09-26/`.
+
+⚠️ **A different candidate member was shipped 2026-09-15 and REVERTED 2026-09-16 — do not re-propose it
+without new evidence** (it was numbered "seventh" at the time; REACTOR_BUDGET_EXHAUSTED is the seventh now).
+Its sanctioned-exit cases are since recognised as FACTS: `escalatedExit` (2026-09-16) and `reExecutionExit`
+(RWF A4, 2026-09-26). `harnessSynthesizeUnclosed` ("articulate but unclosed": SYNTHESIZE writes a full
+deliverable, creates nothing, never calls `task.complete`). Two independent reviews measured its
+predicate over the corpus: **549 PIPELINE executions, 33 matches, ZERO genuine hangs.** Every match
+was a PROTOCOL-SANCTIONED EXIT — the base protocol tells an escalating harness to *"Leave your status
+IN_PROGRESS. Exit."*, and the 50-69 band tells it to re-execute a child and exit awaiting retrigger.
+Six matches would have FAILED legs that went on to complete healthily. The "live specimen" it was
+built from said so in its own deliverable: *"did NOT call `task.complete`, per protocol's explicit
+rule that confidence-floor escalations are not completions for a standalone."* I read a sanctioned
+park as a hang. The standalone case's real remedy is the human-close path (`metadata.runDisposition`,
+item 10). Record: `cline_docs/reviews/synthesize-unclosed-revert-2026-09-16/`.
+
 
 **The forward-cone walk** (`markForwardConeBlocked`, `lib/services/mark-forward-cone.ts`) is a depth-bounded
 recursive CTE over `task_dependencies` (`MAX_CONE_DEPTH = 20`, mirroring `GraphLimits.MAX_DEPTH`). It is
@@ -828,8 +862,8 @@ and the **ordering is load-bearing**: F17/F20 program-leg outcomes are computed 
 with a stamped terminal verdict WINS (F20 → `status='COMPLETED'`) over the truncation branch — the overlap is
 real because the `escalated` gate is metadata written by a mid-run tool call, so one leg can stamp escalated
 *and* truncate its SYNTHESIZE turn. The truncation branch then fires only when `isPipelineTask &&
-input.truncationStalled && status !== 'COMPLETED' && !programLegCompletion.{status,executionStatus}` — i.e.
-never over an already-decided leg. The cone is marked (`coneStageIdToMark`) for program legs only.
+input.truncationStalled && !deadEndExempt && status !== 'COMPLETED' && !programLegCompletion.{status,executionStatus}` —
+i.e. never over an already-decided leg, and never while a child is in flight or was dispatched this run (RWF A3). The cone is marked (`coneStageIdToMark`) for program legs only.
 
 **How the truncation case is detected and recovered** (three layers, the R1–R4 work):
 - **The masking bug it fixes**: `finalizeTextForStopReason` (`lib/services/llm/finalize-response.ts`) glues a
@@ -860,6 +894,51 @@ persisted — is what lets inter-pipeline chaining never chain a half-built desi
 [`PROGRAM-RUN-FORENSICS-GUIDE.md`](../../pipelines/PROGRAM-RUN-FORENSICS-GUIDE.md) §5.
 
 ---
+
+### Invariant 6 — the HARNESS GATE is the load-bearing safety tier, not the reviewer (2026-09-20)
+
+**A reviewer's `approved: true` is one conjunct, never a release.** The tier that has actually caught
+bad deliverables in production is the harness's own SYNTHESIZE quality gate, and any change that
+narrows it — most temptingly "auto-release when the reviewer approves" — removes the layer doing the
+work. Evidence, all live:
+
+- **2026-09-20, terraform leg** (`cmu92zfu30030yxygdr98ctk6`): an Author with nothing to derive
+  imported a covering range from an **unrelated pipeline** and authored a bucket policy permitting S3
+  writes from switch loopback addresses. Its reviewer **saw the import, described it accurately, and
+  graded it a non-blocking observation — `approved: true`, 0 blocking, confidence 92.** The harness
+  gate escalated at confidence 45, refused to publish, and stated the reason: *"A reviewer APPROVED
+  verdict that treats this as non-blocking is not sufficient cover to synthesize this as a customer
+  deliverable."* It then left a **two-option decision for a human** rather than inventing a
+  resolution. The mechanical net was silent and correct — containment asks whether a derived range
+  swallows a harvested allocation; the harvest was empty, and it has no notion of which pipeline a
+  value came from.
+- **2026-08-29 quarterly tally**: 3 verdict mismatches / 159 gated tasks, and the **reviewer was right
+  in 1 of 3**. Deterministic consumption would have flipped two good legs to approved in order to
+  catch one bad one. That is why symmetric Phase 2 was rejected — see CLAUDE.md's standing record.
+- **The direction is structural, not incidental.** The stamped outcome is an AND over several facts
+  *including* a mechanical check; the reviewer's verdict is one conjunct and a lone LLM judgement.
+  Replacing a conjunction with one of its conjuncts can only lose information, and it loses toward
+  approval.
+
+**Corollary — reviewers are reliable at RECOMPUTATION and unreliable at JUDGEMENT about evidence they
+cannot see.** Accurate calls in the record recomputed something from their own context (span+XOR
+arithmetic; citing the platform's ✗ marker stamp). Wrong calls judged a property whose evidence was
+absent from it: provenance (VT-21's three refusals of correct packages; R19-P4; the 2026-09-20 import),
+or parseability (three format vetoes 2026-09-09, each contradicted by the platform's own stamp). When
+adding a reviewer obligation, **ask what it would recompute** — if the answer is "nothing", the check
+belongs on the platform or nowhere.
+
+**Since 2026-09-20 this corollary is MEASURED, not inferred.** `reviewerVerdict.evidenceGrading`
+stamps whether a reviewer graded at all and how many findings it recomputed versus accepted from
+claims (`lib/agents/harness/evidence-grading.ts`). Baseline at ship: **26% of 261 verdicts graded
+NEITHER** — an approval carrying no epistemic claim. The fact is deliberately unrendered and
+unconsumed during its soak; see CLAUDE.md *THE REVIEWER EVIDENCE-GRADING SOAK* and the arc index
+`cline_docs/follow-ups/reviewer-epistemics-arc-2026-09-20.md`.
+
+⚠️ **The gate's strength is an LLM judgement with no mechanism behind it.** It has performed well
+unprompted and repeatedly, but nothing *enforces* the escalation the way the 4-point invariant
+enforces completion. Treat "the gate caught it" as evidence the design is sound, never as a guarantee
+for a run nobody reads.
 
 ## Harness → Child Linkage (Canonical Mapping)
 
@@ -920,7 +999,7 @@ Reference: `cline_docs/reviews/agent-execute-race-condition-2026-04-18/implement
 
 **Resolution**: option (b) from the original triage list — deterministic pre-LLM mode check independent of agent tool calls. `lib/services/harnessModeResolver.ts` (NEW 2026-04-26) reads `tasks.metadata` and the child stage's task list directly via Prisma at engine outer scope, before `buildSystemPrompt`. The resolved mode is injected into the system prompt as a `## Harness Context (Platform-Resolved)` block above the protocol injection, AND persisted to the success-path `pipeline-index.json` artifact as `resolvedMode` + `resolvedReasonCode` fields. Both engine and stream-route paths covered.
 
-**Verification (UAT 2026-04-26)**: 4/4 resolver firings correct across CREATE × 2 + SYNTHESIZE × 2 (executions `cmof11ebw0009yx1t95mx2icx`, `cmof144ki002lyx1trgojvctd`, `cmof6izk20007yxbs0uqxvraf`, `cmof6l6g9001myxbt62m4rhvl`). 0/3 forensic disagreement between resolver and post-execution validator on happy path. Crucial demonstration: a clean run produced an artifact with `protocolValidation = null` (the validator returns null when there are no missing-step issues to flag) but `resolvedMode = 'CREATE'` correctly populated — exactly the failure mode the resolver was designed to fix.
+**Verification (UAT 2026-04-26)**: 4/4 resolver firings correct across CREATE × 2 + SYNTHESIZE × 2 (executions `cmof11ebw0009yx1t95mx2icx`, `cmof144ki002lyx1trgojvctd`, `cmof6izk20007yxbs0uqxvraf`, `cmof6l6g9001myxbt62m4rhvl`). 0/3 forensic disagreement between resolver and post-execution validator on happy path. Crucial demonstration: a clean run produced an artifact with `protocolValidation = null` (the validator returns null when there are no missing-step issues to flag — and, since 2026-09-15, also for a SANCTIONED HALT, whose correct behaviour is to make no structural calls at all) but `resolvedMode = 'CREATE'` correctly populated — exactly the failure mode the resolver was designed to fix.
 
 **Pattern**: third application of the trust-direction-shift (after the engine-owned task lifecycle and the clobber-detection back-pointer at commit `8f225353`). Bug-class registry entry: Bug Class 74. See `cline_docs/reviews/mode-detection-out-of-llm-turn-2026-04-26/` for the full review trail (5 specialists + 3-specialist re-review, 94.7% post-fix average confidence).
 

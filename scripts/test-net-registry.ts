@@ -123,6 +123,20 @@ const DISPOSITION_KEYS = ['containmentDisposition', 'rollbackDisposition'];
       names.some((n) => legNames.includes(n)), `leaf ${names} · leg ${legNames}`);
   }
 
+  // ── R9 (EF-M2, 2026-09-26): a SPECIFICATION author is not a change-package author. Before the fix every
+  // requirements generation was stamped markerPresence ✗✗✗ + rollbackContainment and the ✗✗✗ line reached
+  // the Requirements Reviewer as a "platform fact". Both directions pinned so neither net can drift.
+  {
+    const net = (n: string) => MECHANICAL_NETS.find((x) => x.name === n)!;
+    const applies = (n: string, role: string) =>
+      net(n).appliesTo({ task: { type: 'ACTION' }, agentRole: role } as never);
+    check('R9: markerPresence does NOT apply to requirements_author', !applies('markerPresence', 'requirements_author'));
+    check('R9: rollbackContainment does NOT apply to requirements_author', !applies('rollbackContainment', 'requirements_author'));
+    check('R9: markerPresence still applies to a change-package author', applies('markerPresence', 'config_change_author'));
+    check('R9: rollbackContainment still applies to a change-package author', applies('rollbackContainment', 'config_change_author'));
+    check('R9: markerPresence still applies to the harvester', applies('markerPresence', 'infra_state_harvester'));
+  }
+
   if (failed) { console.error(`\n${failed} failed`); process.exit(1); }
   console.log(`\n✅ net registry: ${MECHANICAL_NETS.length} entries, errorFact contract + uniqueness + render-required pinned`);
   process.exit(0);

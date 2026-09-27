@@ -41,6 +41,9 @@ const ANTI_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /Report results via task\.comment/i,        reason: 'comment-as-delivery (legacy framing)' },
   { pattern: /Post a summary first, then follow-up comments/i, reason: 'split-across-comments (legacy framing)' },
   { pattern: /task\.comment\s+accepts\s+a\s+maximum/i,   reason: '2000-char limit framed as delivery cap' },
+  // RWF D2 (2026-09-26): shared guidance must state the PROPERTY, never another document's clause letter. "clause (f)"
+  // in change_reviewer meant a different rule in observability and nothing at all in k8s or Node C.
+  { pattern: /\bclause \([a-z]\)/i,                     reason: 'cites a protocol clause letter (state the property instead)' },
 ];
 
 interface RoleResult {

@@ -16,13 +16,24 @@ check('parser: NESTED ### Derived Values under another H2 parses', parseFencedJs
 check('parser: emphasis furniture **Derived Values** parses', parseFencedJsonBlock(`**Derived Values**\n${body}`, DERIVED_VALUES_MARKER) !== null);
 check('parser: ORDINAL furniture ### 6. Consumed Values parses (devext Run 4 block)', parseFencedJsonBlock(`### 6. Derived Values\n${body}`, DERIVED_VALUES_MARKER) !== null);
 check('parser: ORDINAL furniture ## 6) / (6) parses', parseFencedJsonBlock(`## 6) Derived Values\n${body}`, DERIVED_VALUES_MARKER) !== null && parseFencedJsonBlock(`(6) Derived Values\n${body}`, DERIVED_VALUES_MARKER) !== null);
+check('parser: BACKTICK-QUOTED heading `` ## 4. `## Derived Values` `` parses (2026-09-16, 3 live legs)', parseFencedJsonBlock(`## 4. \`## Derived Values\`\n${body}`, DERIVED_VALUES_MARKER) !== null && parseFencedJsonBlock(`\`## Derived Values\`\n${body}`, DERIVED_VALUES_MARKER) !== null);
+check('parser: a backticked heading MID-SENTENCE still reads ABSENT', parseFencedJsonBlock(`See the \`## Derived Values\` block below\n${body}`, DERIVED_VALUES_MARKER) === null);
 check('parser: RETITLED heading reads ABSENT', parseFencedJsonBlock(`## Pre-existing Allocations\n${body}`, DERIVED_VALUES_MARKER) === null);
 check('parser: prose mention does not count', parseFencedJsonBlock(`the derived values are below\n${body}`, DERIVED_VALUES_MARKER) === null && parseFencedJsonBlock(`the 6 derived values are below\n${body}`, DERIVED_VALUES_MARKER) === null);
 const seed = fs.readFileSync('scripts/seed-protocol-prompts.ts', 'utf8');
 const tmpl = fs.readFileSync('lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts', 'utf8');
 const clauses = seed.split('The heading is a MACHINE-PARSED MARKER').length - 1;
 check('protocols carry the clause (network-provisioning + terraform-iac)', clauses === 2);
-check('protocol clause: nesting does NOT blind the checker (stated)', (seed.match(/does NOT blind the checker/g) || []).length === 2);
+// 2026-09-20 (VT-28, R8): the PLACEMENT rule is now ONE shared const interpolated per marker
+// (MARKER_PLACEMENT_CLAUSE), following the VALIDATION_SHAPE_CLAUSE precedent — so the property to
+// pin is REACHABILITY, not byte-equality of copies. The two Phase-1 `MACHINE-PARSED MARKER` clauses
+// remain inline (they carry extra Architect-side material), so the file holds two placement families
+// and both must keep saying nesting is tolerated: 2 inline + 1 in the const = 3.
+check('protocol clause: nesting does NOT blind the checker (stated in every placement family)', (seed.match(/does NOT blind the checker/g) || []).length === 3);
+check('placement clause: exactly ONE definition — no copy re-inlined', (seed.match(/const MARKER_PLACEMENT_CLAUSE/g) || []).length === 1);
+check('placement clause: reaches the emitting role in all four domains (7 interpolations)', (seed.match(/\$\{MARKER_PLACEMENT_CLAUSE\(/g) || []).length === 7);
+check('placement clause: mandates it for BOTH machine-parsed markers an Author emits', /MARKER_PLACEMENT_CLAUSE\('Derived Values'\)/.test(seed) && /MARKER_PLACEMENT_CLAUSE\('Consumed Values'\)/.test(seed));
+check('network + terraform Phase 2: the carry is TWO obligations, not one clause with an append', (seed.match(/TWO SEPARATE obligations/g) || []).length === 2 && !/Also carry the design's/.test(seed));
 check('protocol clause: no copy claims nesting reads ABSENT', !/nested under another heading, retitled, or merged into a combined section, the platform's containment checker reads the block as ABSENT/.test(seed));
 check('author guidance: retitle/merge = ABSENT, nesting tolerated', /RETITLING one or MERGING it[\s\S]{0,400}heading-tolerant/.test(tmpl));
 check('reviewer guidance: format is NOT the reviewer\'s to judge — non-blocking observation, block on content', /Machine-parsed block FORMAT is not yours to judge/.test(tmpl) && /NON-BLOCKING observation/.test(tmpl));

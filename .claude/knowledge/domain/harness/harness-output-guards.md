@@ -75,18 +75,31 @@ attacker-spoofable (device output containing that literal passes through unchang
 | Question | Field |
 |---|---|
 | Did an **injection pattern** fire? | `neutralizedCount > 0` |
-| Was the output **rewritten at all**? | `sanitized === true` |
-| Was it a **strip-only** rewrite (zero-width/bidi/C0-C1/ANSI)? | `sanitized === true && neutralizedCount === 0`, size in `strippedControlChars` |
+| Was the output **rewritten at all**? | `rewritten === true` (F9, 2026-09-25 — ONE comparison, `text !== raw`) |
+| **Which** step changed bytes? | `rewriteClasses`: `nfkc` · `zero-width-bidi` · `ansi` · `control` · `quarantine-tag` · `injection-pattern` · `emptied` (+ `unclassified` — must stay 0) |
 
-Keying on `neutralizedCount` alone MISSES strip-only rewrites, which are still silent modification of
-device output (sec-ops finding 2(e), 2026-07-26). Both sites now carry `strippedControlChars`.
+⚠️ **`sanitized` is LEGACY and FROZEN** at its 2026-07-26 meaning: the zero-width/bidi or C0/C1 strip
+fired, or an injection pattern was neutralized. It does **not** mean "rewritten" — NFKC, ANSI, the
+`<prior_output>` tag defang and `emptied` never set it (the F9 defect: the 2026-07-26 rule "key
+'rewritten at all' on `sanitized`" was about three-quarters wrong). Do not widen it; an equivalence pin
+in `test-security-invariants` fails CI if you do. Rows written before F9 carry no `rewritten`: absent
+means unknown.
+
+**Site A cannot see ANSI or C0 control bytes.** It sanitizes the `JSON.stringify` envelope of the tool
+result, which escapes U+0000–001F into literal `\u001b` text before R9 runs. So `ansi`, C0 `control`
+and `emptied` read 0 at site A **by construction**, and an injection split by a C0/ANSI byte is not
+neutralized there (register F9-s1). Site B (plain text) strips them.
+
+**Operator events** (the pino `securityEvent` warn, both sites since F9) fire on `quarantine-tag` or
+`injection-pattern` only — never on `rewritten`, which would warn on every ellipsis.
 
 **Presence means "R9 examined this result", not "R9 rewrote it"** (corrected 2026-07-26 — the first
 shape shipped that day set the fields only when the sanitizer FIRED, and the sentence here wrongly
 claimed absent meant "no-op"). Read it three ways:
 - **absent** → R9 never ran: flag off, tool wasn't `services`, or the call threw
-- **present + `sanitized: false`** → examined, clean ← **this is the C1 denominator**
-- **present + `sanitized: true`** → rewritten; `neutralizedCount` / `strippedControlChars` say how
+- **present + `rewritten: false`** → examined, clean ← **this is the denominator**
+- **present + `rewritten: true`** → rewritten; `rewriteClasses` says which step, `neutralizedCount` /
+  `strippedControlChars` say how much (legacy `sanitized` present too, frozen meaning)
 
 The fields are deliberately NOT stamped on non-`services` records: that would assert R9 inspected
 bytes it never saw. Denominator query — clean reads are the whole point, so match on presence, not
@@ -107,31 +120,30 @@ Pinned: `test:agentic-tool-loop` §5f (18 assertions, incl. the benign route-map
 clean-read denominator as expectations — if the route-map case ever flips to clean, the pattern was
 narrowed: update C1 here, don't delete the test).
 
-> ✅ **R9 coverage — the "artifact-read trust laundering" finding is CLOSED (2026-07-26).** Recorded
-> because it was derived, reviewed by two specialists, CONFIRMED by both, and then disproven — so it
-> will look plausible again to the next reader.
+> 🟠 **R9 coverage — the "artifact-read trust laundering" finding is RE-OPENED (2026-09-25, F9-s7).**
+> It was closed on 2026-07-26 as disproven; the disproof was itself wrong.
 >
-> **Correct**: the RAW pre-R9 tool result IS persisted into `result.json.toolCalls` (`record.result`
-> is assigned before the site-A gate). That is deliberate — forensic evidence, the same line R10
-> draws for secrets.
+> **Correct (unchanged)**: the RAW pre-R9 tool result IS persisted into `result.json.toolCalls`
+> (`record.result` is assigned before the site-A gate) — deliberate forensic evidence.
 >
-> **Wrong**: that it comes back to a reasoner. `perform(action:'agent.results')` returns a **300-char
-> preview** per artifact, not its content (`advanced/agent-results-handler.js` — *"Never dump full
-> content inline"*); `verbose:true` raises the cap on the assembled summary text, which never held the
-> artifact whole; the embedded server exposes no artifact-read tool (`project, perform, analytics,
-> template, services, registry` — no `fetch`); and the preview reads the HEAD of `result.json` while
-> `toolCalls` is written last. Three independent bounds.
+> **Why the 2026-07-26 disproof failed**: it traced `advanced/agent-results-handler.js`, whose formatter
+> emits a 300-char preview. The ENGINE's `perform` does not go there: it reaches
+> `task-action-handler.js`, whose `formatActionResult` carries **full artifact content**, capped only at
+> 100 KB with `verbose:true` — and `read_more` pages it. Harness protocols tell parents to read a child
+> exactly that way. So a child's raw `toolCalls[].result` can reach a harness reasoner unscreened
+> (site A screens `services` only). Live-evidenced on production executions, including a paged window
+> carrying a raw scraped web page.
 >
-> **Full content is served only to EXTERNAL clients** (Claude Desktop / ChatGPT via `fetch`, resource
-> reads via `getAgentExecutionContent`) — human-supervised, own-tenant. Re-graded MEDIUM → LOW.
+> **Fix direction (not yet built)**: serve engine callers a `result.json` with `toolCalls[].result`
+> replaced by a summary + `mcp://` pointer. Do **not** add `perform` to site A — R9 rewrites in place and
+> defangs `<`/`>`, corrupting JSON a consumer parses.
 >
-> **The rule that came out of it**: R9's scope is decided by whether a path feeds an *autonomous*
-> reasoner, not by whether bytes are persisted. A new tool returning stored artifact bodies INTO the
-> tool loop WOULD be in scope — and should be marked with a structural envelope, not sanitized in
-> place (R9 defangs `<`/`>`, which corrupts JSON a consumer may `JSON.parse`).
+> **The rule that came out of it still holds, sharpened**: R9's scope is decided by whether a path feeds
+> an *autonomous* reasoner — and by **which tool delivers the bytes**. A stored artifact fetched back
+> through `services` re-enters site A; one read through `perform` does not.
 >
-> Disproof: `cline_docs/reviews/r9-option-b-2026-07-26/TRACE-CORRECTION.md` ·
-> Original (CLOSED): `cline_docs/follow-ups/r9-artifact-read-trust-laundering-2026-07-26.md`
+> 2026-07-26 trace (its agent.results step is wrong): `cline_docs/reviews/r9-option-b-2026-07-26/TRACE-CORRECTION.md` ·
+> Re-opened: `cline_docs/follow-ups/r9-artifact-read-trust-laundering-2026-07-26.md`
 
 ## Why no flag on the *enforcement* side (contrast)
 R9/R10 are **transforms** (mutate data on hot paths) → flag-gated so they can't surprise the shipped artifact-synthesis pipeline. The dropped **WS3** was an *enforcement gate* — those are fail-closed + data-model-gated, never env-flag-gated (a flag that disables a security gate is a bypass). See `cline_docs/network-provisioning-promotion/ROADMAP.md`.

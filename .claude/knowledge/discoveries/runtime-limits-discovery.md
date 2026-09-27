@@ -46,7 +46,7 @@ The map (verified current state, 2026-06-17). `✅` aligned · `⚠️` validate
 | CAT | Domain | Key ceilings | Status |
 |-----|--------|--------------|--------|
 | 1 | Agentic execution | `MAX_TOOL_TURNS` (default 30, **no max** — R-1), timeout `180k+turns*30k`, truncation 50K/2K | 🔴 R-1 (admin-only → backlog) + 📋 |
-| 2 | LLM / token | `maxTokens` schema 100000 vs model 64K output (R-4), `DEFAULT_MAX_TOKENS`=**24000** (R1 2026-07-16; = `STANDARD_AGENT_LIMIT`), temperature/topP task-path uncapped | ⚠️ R-4 + R-2 |
+| 2 | LLM / token | `maxTokens` schema 100000 vs model 64K output (R-4), `DEFAULT_MAX_TOKENS`=**48000** (2026-09-24; was 24000 from R1 2026-07-16; = `STANDARD_AGENT_LIMIT`), temperature/topP task-path uncapped | ⚠️ R-4 + R-2 |
 | 3 | MCP transport | `SERVICE_CALL_ARGS` 25000, depth 8, leaves 100 | ✅ (shipped `170e3119`) |
 | 4 | Rate limits | tiers 5/10/50/300, `agentExecutionLimiter` 10/min/IP. **`config.ts:56-57` global 100/15min = DEAD CONFIG** | sec-ops-owned |
 | 5 | DB / query | `statement_timeout` 10s, `pool_timeout` 30s (aligned, no runaway gap); **live pagination offset UNBOUNDED** (R-C1); `PAGINATION_LIMIT/OFFSET` in `input-validation-framework.ts` = **dead code** | ⚠️ R-C1 |

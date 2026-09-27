@@ -202,8 +202,11 @@ test('D4.2: counter read ONLY from a reactor prior (C3 client-injection defense)
   );
 });
 
-test('D4.3: budget refusal compares priorGeneration >= MAX_HARNESS_REACTOR_GENERATIONS', () => {
-  expect(retriggerSource).toMatch(/priorGeneration\s*>=\s*MAX_HARNESS_REACTOR_GENERATIONS/);
+// RWF A2 (2026-09-26): the budget is TIERED — legs MAX_HARNESS_REACTOR_GENERATIONS, program roots
+// MAX_PROGRAM_ROOT_REACTOR_GENERATIONS — and the refusal compares against the selected `budget`.
+test('D4.3: budget refusal compares priorGeneration >= the tier-selected budget (both constants feed it)', () => {
+  expect(retriggerSource).toMatch(/priorGeneration\s*>=\s*budget\b/);
+  expect(retriggerSource).toMatch(/const budget = isProgramRoot \? MAX_PROGRAM_ROOT_REACTOR_GENERATIONS : MAX_HARNESS_REACTOR_GENERATIONS/);
 });
 
 test('D4.4: refusal path calls logReactorBudgetSkip', () => {
@@ -215,7 +218,7 @@ test('D4.5: incremented generation is persisted via contextExtras', () => {
 });
 
 test('D4.6: Guard 8 precedes buildRichExecutionConfig (budget-exhausted does no config work)', () => {
-  const guardPos = retriggerSource.indexOf('priorGeneration >= MAX_HARNESS_REACTOR_GENERATIONS');
+  const guardPos = retriggerSource.indexOf('if (priorGeneration >= budget)');
   const buildPos = retriggerSource.indexOf('buildRichExecutionConfig(harnessId');
   if (guardPos < 0 || buildPos < 0) {
     throw new Error('Could not locate Guard 8 and the config-build call');
@@ -391,7 +394,13 @@ test('E1.4: F18 settledness clause lives inside the shared predicate', () => {
   const condBody = reactorSource.slice(condStart, condEnd);
   // H-5 (2026-09-09): the clause is no longer scoped to PIPELINE upstreams — settledness applies to every
   // upstream type (an ACTION Harvester self-completed mid-execution and its consumer chained EMPTY).
-  if (/upstream\.type = 'PIPELINE'\s*AND/.test(condBody) || !/'PENDING', 'RUNNING'/.test(condBody)) {
+  // RWF A1 (2026-09-26): the status set is the shared ACTIVE_EXECUTION_STATUSES constant, rendered as a SQL literal
+  // (ACTIVE_STATUSES_SQL_LITERAL) so the BC67 partial index stays provable. Accept that form; still refuse a
+  // PIPELINE-scoped clause (H-5) and a missing in-flight subquery.
+  const hasActiveSet = /'PENDING', 'RUNNING'/.test(condBody) ||
+    (/ae2\.status IN \(\$\{ACTIVE_STATUSES_SQL_LITERAL\}\)/.test(condBody) &&
+     /const ACTIVE_STATUSES_SQL_LITERAL = Prisma\.raw\(ACTIVE_EXECUTION_STATUSES\.map/.test(reactorSource));
+  if (/upstream\.type = 'PIPELINE'\s*AND/.test(condBody) || !hasActiveSet) {
     throw new Error('F18 PIPELINE-settledness clause missing from shared predicate condition');
   }
   const predStart = reactorSource.indexOf('function unsatisfiedDepExistsSql');

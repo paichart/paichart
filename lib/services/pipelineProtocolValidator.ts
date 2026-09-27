@@ -35,6 +35,8 @@
  * the validator). The full shape includes `result`, `durationMs`, `timestamp`,
  * `server` etc — none of which the validator needs.
  */
+import { extractReExecutedChildIds, type ToolCallLike } from '../agents/harness/re-execution-exit';
+
 export interface ToolCallEntry {
   tool: string; // e.g., 'perform' or 'project'
   success: boolean;
@@ -43,6 +45,8 @@ export interface ToolCallEntry {
     [key: string]: any;
   };
   error?: string;
+  /** The tool result as persisted — read ONLY to exclude `isError` refusals (RWF A4). */
+  result?: unknown;
 }
 
 /**
@@ -98,6 +102,37 @@ export interface ProtocolValidationResult {
   mode: HarnessMode;
   missingSteps: string[];
   toolCallSummary: ToolCallSummary;
+  /**
+   * The run was a SANCTIONED HALT and step validation DOES NOT APPLY (2026-09-15).
+   * Emitted as a positive fact rather than returning null, because the artifact
+   * omits `protocolValidation` entirely when it is null and every consumer is
+   * instructed to read that absence as "no issues detected" — which would make a
+   * harness that correctly refused to act indistinguishable from a flawless run.
+   * Present ⇒ `missingSteps` is empty and NO degradation is raised. (Protocol 10:
+   * ship the fact; silence is a verdict nobody can audit.)
+   */
+  haltExempt?: true;
+  /** Which stamp earned the exemption, for forensics. */
+  haltReason?: string;
+  /**
+   * SYNTHESIZE ended in a SANCTIONED ESCALATED EXIT (2026-09-16): this run stamped
+   * `qualityGate.outcome: 'escalated'` and did not close its own task, which is what the
+   * protocol INSTRUCTS at both tiers. Emitted as a positive fact so "exited correctly on
+   * escalation" is distinguishable from "forgot to close" — silence would make the two
+   * identical, which is the haltExempt lesson one phase later.
+   */
+  escalatedExit?: true;
+  /**
+   * SYNTHESIZE ended in a SANCTIONED RE-EXECUTE EXIT (RWF A4, 2026-09-26): this run dispatched a child
+   * re-execution (the 50–69 band) and exited without closing its task — which is what the protocol
+   * instructs ("a run that re-executes a child ENDS here"). Before RWF this was graded
+   * PROTOCOL_STEP_SKIPPED ("Step 5: task.complete not called"), a sanctioned exit read as a skipped step:
+   * 6 of the 7 prod SYNTHESIZE runs that ever re-executed a child. `childTaskIds` = the children
+   * dispatched; `kind` is 'blind' (the only kind until RWF Stage 3). Emitted even with zero misses.
+   * ⚠️ m3: ANY future "SYNTHESIZE did not close itself" check must exempt this exactly as it exempts
+   * `escalatedExit` (pinned by test-pipeline-protocol-validator).
+   */
+  reExecutionExit?: { kind: 'blind'; childTaskIds: string[] };
   /** Convenience numbers for the most common mismatch (CREATE step 4 vs 5). */
   expectedChildCount?: number;
   actualAssignedCount?: number;
@@ -118,7 +153,14 @@ export interface ProtocolValidationResult {
  * RERUN_NOTE_RE: matches the protocol's near-verbatim re-run guidance,
  *   tolerating formatting variations. Required by SYNTHESIZE final comment.
  */
-const BREADCRUMB_RE = /^\s*\*\*Child stage:\*\*\s+`[a-z0-9]+`/m;
+const BREADCRUMB_RE = /^\s*(?:\*\*)?Child stage:(?:\*\*)?\s+`?[a-z0-9]+`?/m;
+// Accepts `**Child stage:** \`<id>\`` AND the plain `Child stage: <id>` — the
+// breadcrumb is the FACT that the harness named its child stage, not the
+// markdown around it. Relaxed 2026-09-15: a run whose comment literally began
+// "Child stage: cmty0x9jo..." scored hasBreadcrumb:false and was degraded for it.
+// Nothing parses this string — the GUI Pipeline Children panel is metadata-only
+// (PipelineTab.tsx localFallbackContext reads metadata.pipelineStageId), so the
+// "panel will not render" rationale in the step messages below was already stale.
 const DELIVERABLE_POINTER_RE = /\*\*📄?\s*Final deliverable:?\*\*/i;
 const RERUN_NOTE_RE = /pipeline is COMPLETE[^\n]*re-run|create a fresh PIPELINE task/i;
 
@@ -133,7 +175,27 @@ function extractLastTaskCommentText(toolCallResults: ToolCallEntry[]): string | 
     const tc = toolCallResults[i];
     if (!tc.success) continue;
     if (tc.arguments?.action !== 'task.comment') continue;
-    const comment = tc.arguments?.parameters?.comment ?? tc.arguments?.comment;
+    // THREE live shapes, and the third was silently skipped until 2026-09-16:
+    //   1. flat      `arguments.comment`                       (1272 calls)
+    //   2. object    `arguments.parameters.comment`            (  59 calls)
+    //   3. JSON STR  `arguments.parameters` is a STRING        ( 813 calls, 319 executions)
+    // Shape 3 is 38% of all task.comment calls. `("…").comment` is `undefined`, so the caller's
+    // "skip gracefully if comment text isn't extractable" branch ran — meaning the breadcrumb,
+    // deliverable-pointer and re-run-note content checks NEVER RAN on more than a third of runs.
+    // Found by replaying a LIVE-SHAPED transcript rather than a hand-built fixture; the hand-built
+    // ones all used shape 1 or 2. (This also means the oft-cited "~30% breadcrumb compliance"
+    // baseline was measured on a biased sample — re-measure before citing it again.)
+    const params = tc.arguments?.parameters;
+    let fromParams: unknown = (params && typeof params === 'object') ? (params as { comment?: unknown }).comment : undefined;
+    if (fromParams === undefined && typeof params === 'string') {
+      try {
+        const parsed = JSON.parse(params) as { comment?: unknown };
+        fromParams = parsed?.comment;
+      } catch {
+        fromParams = undefined;   // genuinely unparseable — the graceful skip still applies
+      }
+    }
+    const comment = (typeof fromParams === 'string' ? fromParams : undefined) ?? tc.arguments?.comment;
     if (typeof comment === 'string') return comment;
   }
   return null;
@@ -188,7 +250,21 @@ function detectHarnessMode(summary: ToolCallSummary): HarnessMode {
     // specimen shape — stage.create + task.comment only — lands here.
     return 'CREATE';
   }
-  if ((summary['agent.assign'] || 0) > 0 || (summary['task.update'] || 0) > 0) {
+  if ((summary['agent.assign'] || 0) > 0 || (summary['task.create'] || 0) > 0) {
+    // Real orchestration activity: handed work to children (`agent.assign`) or
+    // created them (`task.create` without a stage — the PLAN-SPAWN shape, which
+    // the 2026-07-17 ruling requires stay ORCHESTRATE by inference).
+    //
+    // `task.update` used to qualify here on its own and DOES NOT any more
+    // (2026-09-15). It means only "wrote a field on a task", which every mode
+    // does — CREATE stamps pipelineStageId, SYNTHESIZE stamps results, and a
+    // HALT stamps the reason it stopped. Measured: 11 of 12 corpus executions
+    // whose graded mode disagreed with resolvedMode reached ORCHESTRATE on
+    // task.update alone, and the protocol MANDATES that stamp on every bail —
+    // so obeying the halt mandate was what misclassified the halt. A genuine
+    // ORCHESTRATE run that only calls task.update now falls to UNKNOWN, where
+    // the rescue below reads resolvedMode: ORCHESTRATE and lands on the same
+    // answer honestly.
     return 'ORCHESTRATE';
   }
   return 'UNKNOWN';
@@ -263,6 +339,111 @@ export interface ValidatorTaskContext {
    * legitimately diverge is exactly why inference stays primary.
    */
   resolvedMode?: string | null;
+  /**
+   * RWF A4: child task ids THIS run dispatched, from the server-written execution rows
+   * (harness-dispatch-fact.ts), supplied by the core for SYNTHESIZE runs. Authoritative when present —
+   * it is stage-filtered and refusal-proof. Absent (unit tests, archived replays) ⇒ the validator falls
+   * back to the isError-filtered tool-call helper.
+   */
+  dispatchedChildIds?: string[];
+}
+
+/**
+ * A halt the protocol asked for: the agent stamped WHY it stopped
+ * (`metadata.cannotRun` / `metadata.duplicateHalt` — mandated on every bail),
+ * opened no child stage, and did not complete itself. Such a run made no
+ * structural calls BY DESIGN and cannot satisfy any mode's step profile.
+ */
+/**
+ * Did THIS run stamp `qualityGate.outcome: 'escalated'`?
+ *
+ * WHY THIS IS A SANCTIONED EXIT AT BOTH TIERS — the validator does not need to know which:
+ *  - STANDALONE: the base protocol says verbatim *"Leave your status IN_PROGRESS. Exit."*
+ *    The escalation is RESUMABLE — fix the blocker, re-execute the child, and the harness
+ *    re-enters SYNTHESIZE. A live specimen says so in its own deliverable.
+ *  - PROGRAM LEG: the base protocol's "program legs only" note says the PLATFORM completes
+ *    the task at persist (F20) "so the program can escalate instead of hanging on your open
+ *    leg". The agent correctly does not call `task.complete` itself.
+ * Either way the agent is obeying an instruction, so flagging it accuses a compliant run —
+ * measured at 10 of 70 flagged executions (architectural review, 2026-09-16).
+ *
+ * FAIL-CLOSED: stamping `escalated` is a SELF-DECLARED FAILURE that blocks release, so this
+ * exemption cannot launder an approval. It suppresses ONLY the completion miss; every other
+ * Step 5 content check still applies, because an escalating harness DID do the work.
+ *
+ * Read from TOOL CALLS, never `taskContext.metadata` — that is the PRE-EXECUTION snapshot and
+ * cannot hold a stamp this run writes (the 2026-09-15 inert-fix lesson). Scoped to
+ * `task.update` so narration in a comment cannot exempt a run, and backslash-normalized
+ * because `parameters` arrives as a JSON string on the live path.
+ */
+function stampedEscalatedThisRun(toolCallResults: ToolCallEntry[]): boolean {
+  return toolCallResults.some(tc => {
+    if (tc.success !== true) return false;
+    const a = tc.arguments as { action?: unknown } | null | undefined;
+    if (!a || typeof a !== 'object' || a.action !== 'task.update') return false;
+    try {
+      const blob = JSON.stringify(a).replace(/\\/g, '');
+      // Both halves required: the key AND the value, so a task.update merely MENTIONING
+      // qualityGate (e.g. stamping an approved outcome) cannot exempt itself.
+      return blob.includes('"qualityGate"') && /"outcome"\s*:\s*"escalated"/.test(blob);
+    } catch {
+      return false;
+    }
+  });
+}
+
+function sanctionedHaltReason(
+  taskContext: ValidatorTaskContext | undefined,
+  summary: ToolCallSummary,
+  toolCallResults: ToolCallEntry[]
+): string | null {
+  const md = (taskContext?.metadata && typeof taskContext.metadata === 'object')
+    ? (taskContext.metadata as Record<string, unknown>)
+    : {};
+
+  // TOOL CALLS ARE AUTHORITATIVE. `taskContext.metadata` is the PRE-EXECUTION snapshot —
+  // it is captured before the agent loop runs, so a halt stamped by the agent DURING the
+  // run (its own `task.update`, which the protocol mandates on every bail) is NEVER in it.
+  // Found live 2026-09-15 on cmu2f6w6c0001yxt5s6l6ftrw: a correct duplicate halt still
+  // emitted PROTOCOL_STEP_SKIPPED because the exemption was keyed on the stale snapshot.
+  // This module's own header says it — "tool calls are the authoritative record of what
+  // the agent actually did" — and the first implementation read past it. Unit tests passed
+  // metadata directly and so simulated a state that does not exist at the call site.
+  //
+  // SCOPED TO task.update DELIBERATELY: the halt's own task.comment quotes the stamp name
+  // in prose ("Also stamping `metadata.duplicateHalt` now"), so an unscoped scan would
+  // match narration instead of the act. `arguments` is honestly unknown here (parsed
+  // object on success, raw JSON string in the parameters field on some paths), so the
+  // whole entry is serialized and matched on the quoted key — which covers both shapes.
+  const stampedByThisRun = (key: string): boolean =>
+    toolCallResults.some(tc => {
+      if (tc.success !== true) return false;
+      const a = tc.arguments as { action?: unknown } | null | undefined;
+      if (!a || typeof a !== 'object' || a.action !== 'task.update') return false;
+      try {
+        // Backslashes stripped before matching: when `parameters` arrives as a JSON STRING
+        // (the live shape), serializing the wrapper escapes the inner quotes, so the blob
+        // holds \"duplicateHalt\" and a naive `"duplicateHalt"` match misses it. Normalizing
+        // makes the object form and the string form match identically. The quotes are KEPT
+        // in the needle so this matches the KEY, never a longer name containing it.
+        return JSON.stringify(a).replace(/\\/g, '').includes(`"${key}"`);
+      } catch {
+        return false;
+      }
+    });
+
+  const stamp =
+    (md.cannotRun != null || stampedByThisRun('cannotRun')) ? 'cannotRun'
+    : (md.duplicateHalt != null || stampedByThisRun('duplicateHalt')) ? 'duplicateHalt'
+    : null;
+  if (!stamp) return null;
+
+  // A harness that went on to open a stage or close itself is not a halt,
+  // whatever it stamped along the way.
+  if (md.pipelineStageId != null) return null;
+  if ((summary['stage.create'] || 0) > 0) return null;
+  if ((summary['task.complete'] || 0) > 0) return null;
+  return stamp;
 }
 
 export function validatePipelineProtocolSteps(
@@ -281,6 +462,17 @@ export function validatePipelineProtocolSteps(
     mode = rm;
   }
   if (mode === 'UNKNOWN') return null;
+
+  // A SANCTIONED HALT is unjudgeable by step profile, in ANY mode: its correct
+  // behaviour is to do nothing — no child stage, no children, no completion.
+  // Re-pointing it at the right profile does not help (judged as CREATE it
+  // fails on "stage.create not called", which is true and still wrong, because
+  // not creating the stage was the entire point). Decline to judge instead, so
+  // a correct refusal stops emitting a degradation fact that gates consume.
+  const haltReason = sanctionedHaltReason(taskContext, summary, toolCallResults);
+  if (haltReason) {
+    return { mode, missingSteps: [], toolCallSummary: summary, haltExempt: true, haltReason };
+  }
 
   const missingSteps: string[] = [];
   const result: ProtocolValidationResult = {
@@ -328,7 +520,7 @@ export function validatePipelineProtocolSteps(
         result.commentValidation = cv;
         if (!cv.hasBreadcrumb) {
           missingSteps.push(
-            'Step 6 (content): final task.comment lacks the `**Child stage:** `<id>`` breadcrumb on its first line — GUI Pipeline Children panel will not render correctly. Per Phase 0 baseline (~30% compliance), this is the most common protocol miss; consumers should treat its absence as routine, not as fabrication evidence.'
+            'Step 6 (content): final task.comment does not name the child stage on its first line (`Child stage: <id>`, bold/backticks optional) — the human audit trail loses the link from harness to children. Per Phase 0 baseline (~30% compliance), this is the most common protocol miss; consumers should treat its absence as routine, not as fabrication evidence.'
           );
         }
       }
@@ -339,6 +531,18 @@ export function validatePipelineProtocolSteps(
   } else if (mode === 'SYNTHESIZE') {
     const taskComplete = summary['task.complete'] || 0;
     const taskComments = summary['task.comment'] || 0;
+    // RWF A4: the sanctioned re-execute exit. Server-written dispatch list when the core supplied one;
+    // else the isError-filtered tool-call helper. Only an UNCLOSED run is an exit.
+    const reExecutedChildIds = taskContext?.dispatchedChildIds ??
+      extractReExecutedChildIds(toolCallResults as unknown as ToolCallLike[]);
+    const isReExecutionExit = taskComplete < 1 && reExecutedChildIds.length > 0;
+    if (isReExecutionExit) result.reExecutionExit = { kind: 'blind', childTaskIds: reExecutedChildIds };
+    // A re-execute pass writes NO final comment — that belongs to the later pass that finds every child
+    // settled — so its comments are interim notes and their content is not graded against the final-comment
+    // rules. Decided on the replay of the 6 prod runs (2026-09-26): 5 of 6 posted their Step-3 status note
+    // ("Child stage: … Quality gate results (pass 1): …") on the HARNESS, not the child. Narrowing the
+    // exemption to "last comment on a re-executed child" (a review suggestion) left all 6 still graded
+    // PROTOCOL_STEP_SKIPPED, i.e. the live defect half-fixed.
 
     // A.4 forensic P-signal (2026-04-28): when taskContext is provided AND the
     // task is a post-deploy PIPELINE harness, warn if no deliverableSourceTaskId
@@ -370,9 +574,19 @@ export function validatePipelineProtocolSteps(
     }
 
     if (taskComplete < 1) {
-      missingSteps.push('Step 5: task.complete not called — harness did not close itself; will retrigger again or stay IN_PROGRESS');
+      if (stampedEscalatedThisRun(toolCallResults)) {
+        // Sanctioned escalated exit — the protocol instructs this at both tiers. Recorded as a
+        // FACT rather than passed over in silence, so a reader can tell it from a forgotten close.
+        result.escalatedExit = true;
+      } else if (!isReExecutionExit) {
+        // RWF A4 / m3: the re-execute exit is exempt exactly as the escalated exit is — both are
+        // sanctioned ways for a SYNTHESIZE to end without closing its own task.
+        missingSteps.push('Step 5: task.complete not called — harness did not close itself; will retrigger again or stay IN_PROGRESS');
+      }
     }
-    if (taskComments < 1) {
+    if (isReExecutionExit) {
+      // RWF A4: a re-execute exit writes no final comment yet (the later pass does) — nothing to grade.
+    } else if (taskComments < 1) {
       missingSteps.push('Step 5: no final task.comment with deliverable pointer + quality gates');
     } else {
       // Content check: SYNTHESIZE final comment must have breadcrumb on
@@ -393,7 +607,7 @@ export function validatePipelineProtocolSteps(
         result.commentValidation = cv;
         if (!cv.hasBreadcrumb) {
           missingSteps.push(
-            'Step 5 (content): SYNTHESIZE final task.comment lacks the `**Child stage:** `<id>`` breadcrumb on its first line — same UX impact as CREATE.'
+            'Step 5 (content): SYNTHESIZE final task.comment does not name the child stage on its first line (`Child stage: <id>`, bold/backticks optional) — same audit-trail impact as CREATE.'
           );
         }
         if (!cv.hasDeliverablePointer) {
@@ -430,13 +644,17 @@ export function validatePipelineProtocolSteps(
         result.commentValidation = cv;
         if (!cv.hasBreadcrumb) {
           missingSteps.push(
-            'Step 4 (content): ORCHESTRATE final task.comment lacks the `**Child stage:** `<id>`` breadcrumb on its first line.'
+            'Step 4 (content): ORCHESTRATE final task.comment does not name the child stage on its first line (`Child stage: <id>`, bold/backticks optional).'
           );
         }
       }
     }
   }
 
-  if (missingSteps.length === 0) return null;
+  // A clean run returns null (absence = "no issues detected", the consumer contract). But an
+  // ESCALATED EXIT must still surface its fact even with zero misses — otherwise "exited
+  // correctly on escalation" is indistinguishable from "ran clean", which is the haltExempt
+  // lesson repeating one phase later. Caught here by its own test, not in production.
+  if (missingSteps.length === 0 && !result.escalatedExit && !result.reExecutionExit) return null;
   return result;
 }

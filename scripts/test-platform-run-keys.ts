@@ -105,6 +105,18 @@ await test('P5: modelParameters / mcpConfiguration / duplicateAcknowledged pass 
 });
 
 // ── P6: audit-strip centralization equivalence ───────────────────────────────────────────────
+await test('P6b (RWF A2): reactorBudgetExhausted is an audit fact — stripped from client-surface inbound metadata', () => {
+  assert((AUDIT_STRIP_KEYS as readonly string[]).includes('reactorBudgetExhausted'), 'reactorBudgetExhausted not in AUDIT_STRIP_KEYS');
+  const incoming: Record<string, unknown> = { reactorBudgetExhausted: { forged: true }, other: 1 };
+  stripAuditFacts(incoming);
+  assert(!('reactorBudgetExhausted' in incoming) && 'other' in incoming, 'a forged reactorBudgetExhausted survived the strip');
+});
+await test('P6c (RWF A3): deadEndExempt is an audit fact — stripped from client-surface inbound metadata', () => {
+  assert((AUDIT_STRIP_KEYS as readonly string[]).includes('deadEndExempt'), 'deadEndExempt not in AUDIT_STRIP_KEYS');
+  const incoming: Record<string, unknown> = { deadEndExempt: { reason: 'child-unsettled' }, other: 1 };
+  stripAuditFacts(incoming);
+  assert(!('deadEndExempt' in incoming) && 'other' in incoming, 'a forged deadEndExempt survived the strip');
+});
 await test('P6: stripAuditFacts removes completedWithDependencyOverride; no inline deletes remain outside the module', () => {
   const incoming: Record<string, unknown> = { completedWithDependencyOverride: true, other: 1 };
   const w: unknown[] = [];
@@ -151,6 +163,7 @@ await test('P7: every metadata key the seed prescribes or an engine writer touch
   const CLASSIFIED = new Set<string>([
     ...PLATFORM_RUN_KEYS, ...PLATFORM_STAMP_KEYS, ...AUDIT_STRIP_KEYS,
     'duplicateAcknowledged',                 // OPERATOR clearance (human-written; excluded by design)
+    'duplicateAcknowledgedFrom',             // OPERATOR clearance provenance — travels WITH duplicateAcknowledged (pov-program 1.8.5 propagates a root's human clearance to legs and cites it here); excluded from the drop for the same reason
     'modelParameters', 'mcpConfiguration',   // EDITOR-owned
   ]);
   const EXEMPT = new Set<string>([

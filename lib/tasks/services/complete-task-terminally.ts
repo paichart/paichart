@@ -54,6 +54,11 @@ import { withSerializationRetry } from '@/lib/database/serialization-retry';
 import type { ActivityMetadata } from '@/lib/types/activity';
 import { mcpLogger } from '@/lib/logger';
 import { isProgramHarnessTask } from '@/lib/agents/harness/program-protocol';
+import {
+  countUnsettledChildren,
+  countInFlightChildren,
+  countScheduledChildren,
+} from '@/lib/services/child-stage-settled';
 
 const log = mcpLogger.child({ module: 'CompleteTaskTerminally' });
 
@@ -192,29 +197,23 @@ export async function assertPipelineCompletionInvariant(
     );
   }
 
-  const nonTerminalChildren = await client.task.count({
-    where: {
-      stageId: pipelineStageId,
-      AND: [
-        { status: { not: 'COMPLETED' } },
-        {
-          OR: [
-            { executionStatus: null },
-            { executionStatus: { notIn: ['FAILED'] } },
-          ],
-        },
-      ],
-    },
-  });
+  // RWF 1.1 (2026-09-26): point 3 reads the ONE shared settledness predicate, through the tx `client`.
+  // It now also refuses while a child has a PENDING/RUNNING execution — before RWF a SYNTHESIZE that
+  // re-executed a child and then called task.complete in the same run passed this point (E2).
+  const nonTerminalChildren = await countUnsettledChildren(client, pipelineStageId);
   if (nonTerminalChildren > 0) {
+    const inFlightChildren = await countInFlightChildren(client, pipelineStageId);
+    const scheduledChildren = await countScheduledChildren(client, pipelineStageId);
     throw new PipelineInvariantError(
       task.id,
       'non-terminal-children',
-      `Pipeline cannot complete: ${nonTerminalChildren} child task(s) in stage "${pipelineStageId}" are not yet terminal.\n\n` +
-        `The harness exits after CREATE/ORCHESTRATE and is auto-retriggered by the pipeline reactor ` +
-        `when all children reach a terminal state (COMPLETED or executionStatus=FAILED). Do not call ` +
-        `task.complete on a PIPELINE task before the retrigger fires.`,
-      { pipelineStageId, nonTerminalChildren }
+      `Pipeline cannot complete: ${nonTerminalChildren} child task(s) in stage "${pipelineStageId}" are not yet settled` +
+        (inFlightChildren > 0 ? ` (${inFlightChildren} with an execution still pending or running)` : '') +
+        `.\n\n` +
+        `The harness exits after CREATE/ORCHESTRATE, and after re-executing a child, and is auto-retriggered ` +
+        `by the pipeline reactor when every child is terminal (COMPLETED or executionStatus=FAILED) with no ` +
+        `execution still in flight. Do not call task.complete on a PIPELINE task before the retrigger fires.`,
+      { pipelineStageId, nonTerminalChildren, inFlightChildren, scheduledChildren }
     );
   }
 

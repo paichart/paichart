@@ -46,7 +46,7 @@
  * agent_templates GROUP BY 1;
  *
  *   orchestrator — meta-agents that decompose and synthesize, not do the work:
- *                  Pipeline Harness, Program Architect, MCP Workflow Orchestrator
+ *                  Pipeline Harness, Program Architect
  *   synthesis    — cognition/writing-quality work where output prose IS the
  *                  deliverable: the four artifact-synthesis roles, Research Analyst
  *   infra        — device- and state-reaching domain specialists: kubernetes-gitops,

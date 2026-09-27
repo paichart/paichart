@@ -57,7 +57,17 @@ trap 'rm -f "$EXTRACTOR"' EXIT
 cat > "$EXTRACTOR" <<'PYEOF'
 import os, re, sys
 scope = sys.argv[1]
-EXP_MIN  = re.compile(r'(?:should be|expect(?:ed)?\s*:?)\s*(\d+)\s*\+', re.I)
+# Accepts BOTH floor syntaxes: the trailing-plus `expect 4+` and the `>=`/U+2265 form.
+# ⚠️ The `>=` form is the one CLAUDE.md MANDATES ("Use a floor (`# expect >=13`)"), and until
+# 2026-09-17 this regex could not read it: `\s*` does not span `>=`, so EXP_N did not match
+# either and the grep fell through to "no stated expectation" — silently dropped, NOT even
+# counted as skipped, while the run still printed "every documented expectation still holds".
+# SEVEN greps across three discovery files were excluded that way, five of them in
+# pipeline-harness-discovery. Same root cause as the 2026-08-08 incident this script was
+# already hardened against: a silent exclusion hides itself from the remediation aimed at it.
+# The npm-line LINT (LINT_KEYED, below) understood `>=` the whole time — the two halves of the
+# same script disagreed about the project's own documented syntax.
+EXP_MIN  = re.compile(r'(?:should be|expect(?:ed)?\s*:?)\s*(?:(\d+)\s*\+|(?:>=|\u2265)\s*(\d+))', re.I)
 EXP_ZERO = re.compile(r'expect(?:ed)?\s*:?\s*(zero|0\b|no hits|none)', re.I)
 EXP_N    = re.compile(r'expect(?:ed)?\s*:?\s*(?:exactly\s*)?(\d+)', re.I)
 UNSAFE   = re.compile(r'[;&`]|\$\(|\|\s*(rm|mv|tee|xargs)\b')
@@ -92,6 +102,29 @@ LINT_FLOOR = re.compile(r'(?:>=|\u2265)\s*\d+|\b\d+\s*\+|at least\s+\d+', re.I)
 # or a version (1.0.14) is never read as a pass count.
 LINT_KEYED = re.compile(r'expect(?:ed)?\s*:?\s*(?:exactly\s*)?(>=|\u2265)?\s*(\d{1,3})\b', re.I)
 LINT_PAREN = re.compile(r'npm run\s+[\w:.-]+`?\s*\((>=|\u2265)?\s*(\d{1,3})\b')
+
+def _names_repo_path(line):
+    """True when any non-option argument of the (first) grep command exists under the repo root."""
+    import os, shlex, glob
+    # Tokenize the WHOLE line with quoting respected, then stop at the first bare `|` — splitting on '|'
+    # first cut a quoted pattern like "a || b" in half (caught on its first run, 2026-09-25).
+    try:
+        toks = shlex.split(line, comments=True)
+    except ValueError:
+        toks = line.split()
+    if '|' in toks:
+        toks = toks[:toks.index('|')]
+    root = os.environ.get('AUDIT_REPO_ROOT', os.getcwd())
+    for t in toks[1:]:
+        if t.startswith('-') or not t or t.startswith('/') or t.startswith('~'):
+            continue
+        t = t.split('=',1)[-1] if t.startswith('--include') else t
+        full = os.path.join(root, t.rstrip('/'))
+        if os.path.exists(full):
+            return True
+        if any(ch in t for ch in '*?[') and glob.glob(full, recursive=True):
+            return True
+    return False
 
 def split_cmd_comment(line):
     """Split a shell line into (command, trailing-comment) the way bash does.
@@ -159,8 +192,18 @@ for root, _, files in os.walk(scope):
                     print(f"{path}\t{i+1}\tLINTCOUNT\t{ls_}")
             if not re.match(r'^grep\s', line):
                 continue
-            if not re.search(r'\b(lib|app|scripts|prisma|docs)/', line):
-                continue
+            # Paths outside the repo tree (prod logs, other repos, /var/…) cannot be audited here. That
+            # USED to be decided HERE, before the expectation was read — so a grep that stated an
+            # expectation but named no repo path was dropped without being counted or named, the exact
+            # silent-exclusion class this script exists to stop (N2-f5, 2026-09-25). Now it is only
+            # NOTED here, and reported as a NOPATH skip once we know it states an expectation.
+            # A grep is a REPO grep when one of its path arguments EXISTS in this repo — not when it happens to
+            # name one of five folders. The old folder list (lib|app|scripts|prisma|docs, with a trailing '/')
+            # missed root files (package.json, .env.example, mcp-server-*.js), .github/ workflows, and a bare
+            # `lib` argument: 15 documented greps were never run (found N2-f5, 2026-09-25).
+            # UNION with the old folder rule, so nothing previously audited can drop out (a first version
+            # without it lost 9 greps whose arguments are globs or since-moved files).
+            no_repo_path = not (re.search(r'\b(lib|app|scripts|prisma|docs)/', line) or _names_repo_path(line))
             # SCOPE THE SAFETY TEST TO THE COMMAND, NOT THE LINE (fixed 2026-08-08).
             # It used to test the whole line, comment included — so a markdown
             # backtick or a semicolon in the PROSE of an expectation comment removed
@@ -188,24 +231,51 @@ for root, _, files in os.walk(scope):
             #                         emitted by -B5 -A10 — different units entirely
             # An inline `# expect N` is unambiguous about which command it describes.
             cmd_part, look = split_cmd_comment(line)
-            if   EXP_MIN.search(look):  exp = 'MIN:'   + EXP_MIN.search(look).group(1)
+            _mn = EXP_MIN.search(look)
+            # group(1) = the `4+` form, group(2) = the `>=4` form; exactly one is set.
+            if   _mn:                   exp = 'MIN:'   + (_mn.group(1) or _mn.group(2))
             elif EXP_ZERO.search(look): exp = 'ZERO'
             elif EXP_N.search(look):    exp = 'EXACT:' + EXP_N.search(look).group(1)
             else:                       continue
             # Expectation-first, THEN safety: a grep with no stated expectation is
             # out of scope by design, so counting it as "skipped" would be noise.
-            if UNSAFE.search(cmd_part) or '$' in cmd_part:
-                # REPORTED, never silent. Silent skipping is the root cause of the
-                # 2026-08-08 hole — the regex scope was only its instance. An
-                # exclusion that shows up in the summary cannot hide a third time.
+            # REPORTED, never silent. Silent skipping is the root cause of the
+            # 2026-08-08 hole — the regex scope was only its instance. An
+            # exclusion that shows up in the summary cannot hide a third time.
+            #
+            # ⚠️ TWO DIFFERENT REASONS, reported separately since 2026-09-17. They had
+            # shared one "unsafe command" label, and it was wrong for 7 of the 8 skips
+            # in the corpus: those are blocked by the bare-`$` rule and hold a regex
+            # anchor, not a dangerous command. (The 8th, pipeline-harness:1098, is a
+            # real backtick — command substitution under eval, correctly refused.)
+            # A reader of --verbose went looking for a dangerous command and found `^0$`.
+            # Misnaming the reason for an exclusion is a softer version of hiding it.
+            if no_repo_path:
+                print(f"{path}\t{i+1}\tNOPATH\t{line}")
+                continue
+            if UNSAFE.search(cmd_part):
                 print(f"{path}\t{i+1}\tUNSAFE\t{line}")
+                continue
+            if '$' in cmd_part:
+                # Conservative and DELIBERATE: the runner uses `eval`, so an unescaped
+                # `$` could expand a variable. In practice every instance so far is a
+                # regex end-anchor (`:0$`, `^0$`) or an escaped literal (`\$rc`,
+                # `\${VAR}`) — safe, but the filter cannot tell without parsing quoting
+                # properly, so it fails CLOSED. Cost: an end-anchored grep is currently
+                # unauditable, and `$` is the most ordinary anchor in grep, so this class
+                # grows on its own. All 8 were hand-run 2026-09-17: every one matched its
+                # documented expectation. Re-run them by hand at each health-run, or
+                # narrow this rule (allow `\$` and a `$` before a quote/`)`/end) — that
+                # is a change to a SAFETY guard and wants a review, not a drive-by.
+                # (7 of 8 skips are this rule; the remaining one is a genuine backtick.)
+                print(f"{path}\t{i+1}\tDOLLAR\t{line}")
                 continue
             print(f"{path}\t{i+1}\t{exp}\t{line}")
 PYEOF
 
 mapfile -t ENTRIES < <(python3 "$EXTRACTOR" "$SCOPE")
 
-mismatch=0; regression=0; checked=0; skipped=0; lintcount=0
+mismatch=0; regression=0; checked=0; skipped=0; lintcount=0; dollars=0; nopath=0
 
 echo "=================================================="
 echo " Discovery-Prompt Grep Audit   (scope: $SCOPE)"
@@ -235,7 +305,26 @@ for entry in "${ENTRIES[@]}"; do
   # A documented expectation we decline to run. Counted and named, not dropped.
   if [ "$expect" = "UNSAFE" ]; then
     skipped=$((skipped+1))
-    [ "$VERBOSE" -eq 1 ] && echo "  ·  skipped (unsafe command): $file:$line"
+    [ "$VERBOSE" -eq 1 ] && echo "  ·  skipped (shell metacharacter in command): $file:$line"
+    continue
+  fi
+
+  # Separate reason, separate label. As of 2026-09-17 this accounts for 7 of the 8 skips,
+  # and every one is a regex anchor rather than anything dangerous — so a summary that
+  # called them all "unsafe" was misdirecting the reader.
+  # A documented expectation on a grep whose paths are not in this repo (prod logs, another repo).
+  # Not runnable here — but COUNTED and NAMED, never dropped (N2-f5, 2026-09-25).
+  if [ "$expect" = "NOPATH" ]; then
+    skipped=$((skipped+1))
+    nopath=$((nopath+1))
+    [ "$VERBOSE" -eq 1 ] && echo "  ·  skipped (no repo path — run by hand where its files live): $file:$line"
+    continue
+  fi
+
+  if [ "$expect" = "DOLLAR" ]; then
+    skipped=$((skipped+1))
+    dollars=$((dollars+1))
+    [ "$VERBOSE" -eq 1 ] && echo "  ·  skipped (\$ in command — regex anchor or escaped literal; run by hand): $file:$line"
     continue
   fi
 
@@ -296,7 +385,7 @@ echo "  🔴 regression : $regression"
 echo "  ✏️  exact-count: $lintcount  (documented suite counts on npm run lines — NOT audited;"
 echo "                  replace with a floor, a property, or nothing)"
 if [ "$skipped" -gt 0 ]; then
-  echo "  ·  skipped    : $skipped  (documented, but command unsafe to run — NOT verified;"
+  echo "  ·  skipped    : $skipped  (of which $dollars hold a \$ anchor and $nopath name no repo path — NOT verified here;"
   echo "                  re-run with --verbose to name them)"
 fi
 echo "=================================================="

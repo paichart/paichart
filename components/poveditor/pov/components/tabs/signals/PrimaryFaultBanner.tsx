@@ -93,6 +93,15 @@ function toneForCategory(cat: ErrorCategory): Tone {
       return { fg: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/30', glyph: '◣' };
     case 'TEMPLATE_SCOPE_MISMATCH':
       return { fg: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', glyph: '≠' };
+    case 'EMPTY_DELIVERABLE':
+    case 'TRUNCATED_NO_OUTPUT':
+    case 'TRUNCATED_PARTIAL_OUTPUT':
+    case 'HARNESS_NO_OUTPUT':
+      return { fg: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/30', glyph: '◣' };
+    default:
+      // result.json is parsed unvalidated: an emitter can ship a category this union has not
+      // learned yet (it happened for four of them). Render it neutrally rather than throwing.
+      return { fg: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30', glyph: '?' };
   }
 }
 
@@ -114,6 +123,16 @@ function describeCategory(cat: ErrorCategory, s: ResultJsonSignals): string {
       return 'Pipeline harness skipped required protocol step(s)';
     case 'TEMPLATE_SCOPE_MISMATCH':
       return 'Template type expected verbs do not overlap with task description';
+    case 'EMPTY_DELIVERABLE':
+      return 'Agent used tools but produced no deliverable text';
+    case 'TRUNCATED_NO_OUTPUT':
+      return 'Response hit the output-token limit before producing any deliverable text';
+    case 'TRUNCATED_PARTIAL_OUTPUT':
+      return 'Response hit the output-token limit mid-deliverable — the deliverable is cut off';
+    case 'HARNESS_NO_OUTPUT':
+      return 'Pipeline harness produced no deliverable text';
+    default:
+      return String(cat);
   }
 }
 
@@ -136,6 +155,12 @@ function renderCategoryBody(cat: ErrorCategory, s: ResultJsonSignals) {
       return <ProtocolBody pv={s.protocolValidation} />;
     case 'TEMPLATE_SCOPE_MISMATCH':
       return <ScopeMismatchBody tsm={s.templateScopeMismatch} />;
+    default:
+      // EMPTY_DELIVERABLE / TRUNCATED_* / HARNESS_NO_OUTPUT, and any category not learned yet:
+      // the emitter's own degradationReason is the evidence.
+      return s.executionDegradation?.degradationReason
+        ? <div className="text-xs text-muted-foreground">{s.executionDegradation.degradationReason}</div>
+        : null;
   }
 }
 

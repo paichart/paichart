@@ -78,7 +78,7 @@ const RESULT_JSON_FIELD_GROUPS: { title: string; note?: string; fields: { name: 
     title: 'Tool loop',
     fields: [
       { name: 'toolCalls', desc: 'Per-turn tool-execution transcript, truncated by a shared cap - this is the bulk of the file.' },
-      { name: 'toolLoop', desc: 'totalTurns, hitMaxTurns, totalToolExecutions, correctionTurnUsed, budgetFailFastUsed, diagnosticRetryUsed, truncationRetryUsed, truncationRetryRecovered.' },
+      { name: 'toolLoop', desc: 'totalTurns, hitMaxTurns, totalToolExecutions, correctionTurnUsed, budgetFailFastUsed, diagnosticRetryUsed, truncationRetryUsed, truncationRetryRecovered, truncationRetrySkippedReason, truncationRetryMaxTokens, truncationRetryStopReason, truncationRetryDiscardedChars, finalStopReason (stop reason of the response that produced the deliverable), deliverableTruncated (true when it stopped at the output-token limit), toolErrorResultCount.' },
     ],
   },
   {

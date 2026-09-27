@@ -61,7 +61,7 @@ type State = 'CURRENT' | 'STALE' | 'UNVERIFIABLE' | 'NOT COMPARABLE';
  * A NEW own-base template will surface as UNVERIFIABLE, which is the correct answer until someone adds it
  * here — the list failing open is deliberate.
  */
-const OWN_GENERATOR = new Set(['MCP Service Orchestrator', 'MCP Workflow Orchestrator']);
+const OWN_GENERATOR = new Set<string>([]); // was the two MCP orchestrator templates — removed 2026-09-25 (0 tasks, 0 executions since 2026-04-01)
 
 interface Row {
   name: string;
@@ -270,6 +270,34 @@ async function main() {
   if (by('STALE').length === 0 && by('UNVERIFIABLE').length === 0) {
     console.log('  ✅ Every comparable row matches the code on BOTH axes checked.');
   }
+  // ── TASK-LEVEL OVERRIDES (Steve, 2026-09-27: "the seed script is the source of truth for agents") ──
+  // A task's own prompt and its metadata.modelParameters OUTRANK its template when the execution config is built
+  // (agentTaskService / agentExecutionConfigBuilder: task.prompt || template; task metadata before template). So a
+  // reseed that turns every row above CURRENT still does not reach these tasks. They are legitimate (the GUI writes
+  // them — a person's choice), so this is a FACT to read, never a finding that fails the report.
+  const overrides = await prisma.$queryRaw<Array<{ id: string; status: string; title: string; template: string | null;
+    promptOverride: boolean; model: string | null; mpKeys: string | null }>>`
+    SELECT t.id, t.status::text AS status, left(t.title, 60) AS title, at.name AS template,
+      (t.prompt IS NOT NULL AND t.prompt <> '' AND (at.id IS NULL OR t.prompt IS DISTINCT FROM at."promptTemplate")) AS "promptOverride",
+      t.metadata->'modelParameters'->>'model' AS model,
+      (SELECT string_agg(k, ',' ORDER BY k) FROM jsonb_object_keys(CASE WHEN jsonb_typeof(t.metadata->'modelParameters')='object'
+         THEN t.metadata->'modelParameters' ELSE '{}'::jsonb END) k) AS "mpKeys"
+    FROM tasks t LEFT JOIN agent_templates at ON at.id = t."agentTemplateId"
+    WHERE (t.prompt IS NOT NULL AND t.prompt <> '' AND (at.id IS NULL OR t.prompt IS DISTINCT FROM at."promptTemplate"))
+       OR (jsonb_typeof(t.metadata->'modelParameters') = 'object' AND t.metadata->'modelParameters' <> '{}'::jsonb)
+    ORDER BY (t.status::text = 'COMPLETED'), t.updated_at DESC`;
+  const open = overrides.filter(o => o.status !== 'COMPLETED');
+  console.log(`\n📌 TASKS OVERRIDING THEIR TEMPLATE (a reseed does NOT reach these) — ${overrides.length} total, ${open.length} not completed`);
+  console.log(`   prompt override: ${overrides.filter(o => o.promptOverride).length} · model parameters: ${overrides.filter(o => o.mpKeys).length}` +
+    ` (pinning a model: ${overrides.filter(o => o.model).length})`);
+  for (const o of (VERBOSE ? overrides : open)) {
+    const what = [o.promptOverride ? 'prompt' : null, o.model ? `model=${o.model}` : (o.mpKeys ? `modelParameters{${o.mpKeys}}` : null)].filter(Boolean).join(' · ');
+    console.log(`   ${o.status.padEnd(11)} ${o.id}  ${(o.template ?? '(no template)').padEnd(30).slice(0, 30)}  ${what}  — ${o.title}`);
+  }
+  if (!VERBOSE && overrides.length > open.length) console.log(`   (${overrides.length - open.length} completed tasks not listed — --verbose lists all)`);
+  console.log('   These are usually GUI edits (a person\'s choice). To make one follow its template again, clear the');
+  console.log('   task\'s prompt / model parameters in the GUI. Note: a GUI save with no prompt writes a synthesised one.');
+
   // Say what is NOT covered, so "0 STALE" is never read as "the whole row is verified".
   console.log('  ℹ️  COVERED: promptTemplate (base + role guidance) and modelParameters.');
   console.log('     NOT covered: metadata.protocol / loadProtocols, constraints, capabilities, tags,');

@@ -203,6 +203,12 @@ Defense in depth — both can fire on the same execution; both can fire independ
 
 Evidence: harness clobber-detection Phase 0 (2026-04-25) measured comment breadcrumb prevalence. The breadcrumb is a protocol-mandated extra parameter on `task.comment` calls (CREATE/SYNTHESIZE first-line `**Child stage:** \`<id>\``). Production prevalence: **16/54 (~30%)** despite emphatic protocol wording ("First line MUST be... do not omit it, do not reword it"). See `cline_docs/reviews/harness-clobber-detection-2026-04-25/current-state-validation.md` Finding 4.
 
+⚠️ **RE-MEASURED 2026-09-16 — THE 30% FIGURE IS STALE AND SHOULD NOT BE CITED AS CURRENT.** Full archive, PIPELINE executions, breadcrumb on the FINAL comment (the only one the rule applies to), STRICT pattern `**Child stage:** \`<id>\``: **88.8%** (n=547). Counting EVERY comment including interim ones never required to carry it: **71.7%** (n=1443). By month: 2026-07 **84.4%**, 2026-08 **93.3%**, 2026-09 **83.5%**. The relaxed pattern adds only ~4 points, so this is not a regex artifact, and the population choice does not explain it either. The 2026-04-25 Phase-0 figure (16/54) most likely described the system AT THAT TIME; compliance has since risen — plausibly BECAUSE of the protocol work the low number motivated.
+
+**The principle is not dead, it is RECALIBRATED**: from *"prose lands at 30%, do not route enforcement through it"* to *"prose lands at ~89%, which is good and still not a guarantee — mechanise what MUST hold."* At 89%, roughly one run in nine misses; that is fine for an audit trail and unacceptable for a gate conjunct.
+
+⚠️ Independently: the check that produced compliance numbers was itself blind to **38%** of `task.comment` calls until 2026-09-16 (`parameters` as a JSON string was silently skipped). Both shapes comply at the same rate (91.5% vs 92.0% relaxed), so that blindness did NOT bias the rate — but any OTHER figure from that check before 2026-09-16 is suspect until re-derived. Re-measure queries + method: `cline_docs/follow-ups/sanctioned-escalated-exit-2026-09-16.md`. Owner call on revising the principle: `architectural-review-specialist`.
+
 **Implication for design — when scoping a defense or feature that depends on agent compliance:**
 
 | Compliance scenario | Design rule |

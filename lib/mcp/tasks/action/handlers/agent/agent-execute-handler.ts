@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import { mcpLogger } from '@/lib/logger';
 import { ExecutionNotClaimableError } from '@/lib/errors';
+import { refuseLegChildOverrides } from '@/lib/services/leg-child-override';
 
 const log = mcpLogger.child({ module: 'AgentExecuteHandler' });
 
@@ -99,6 +100,7 @@ export async function handleAgentExecute(
       title: true,
       type: true,
       status: true,
+      stageId: true, // RWF D1: the pipeline-child test
       agentTemplateId: true,
       agentRole: true,
       prompt: true,
@@ -123,63 +125,25 @@ export async function handleAgentExecute(
     throw new Error('Task or POV not found');
   }
 
-  // P3: Check agent configuration prerequisites before execution
-  let hasTemplate = !!taskForAuth.agentTemplateId;
-  const hasCustomConfig = !!taskForAuth.agentRole && !!taskForAuth.prompt;
-
-  // Auto-assign Pipeline Harness template for PIPELINE-type tasks
-  if (!hasTemplate && !hasCustomConfig && taskForAuth.type === 'PIPELINE') {
-    const pipelineTemplate = await prisma.agentTemplate.findFirst({
-      where: { name: 'Pipeline Harness', status: 'ACTIVE' },
-      select: { id: true, name: true, defaultRole: true }
-    });
-
-    if (pipelineTemplate) {
-      await prisma.task.update({
-        where: { id: taskId },
-        data: {
-          agentTemplateId: pipelineTemplate.id,
-          agentRole: pipelineTemplate.defaultRole,
-          updatedAt: new Date()
-        }
-      });
-      hasTemplate = true;
-      log.info({ taskId, templateId: pipelineTemplate.id }, 'Auto-assigned Pipeline Harness template for PIPELINE task');
-    }
-  }
-
-  if (!hasTemplate && !hasCustomConfig) {
-    throw new Error(
-      `❌ Agent not configured for task: "${taskForAuth.title}"\n\n` +
-      `Before executing, you must configure the agent:\n\n` +
-      `**Option 1: Use Template** (Recommended)\n` +
-      `perform(action: 'agent.assign', parameters: {\n` +
-      `  taskId: '${taskId}',\n` +
-      `  agentTemplateName: 'Senior Developer'  // See template(action: 'list')\n` +
-      `})\n\n` +
-      `**Option 2: Custom Configuration**\n` +
-      `perform(action: 'agent.configure', parameters: {\n` +
-      `  taskId: '${taskId}',\n` +
-      `  agentRole: 'QA Engineer',\n` +
-      `  prompt: 'Test the infrastructure setup thoroughly'\n` +
-      `})\n\n` +
-      `Then retry: perform(action: 'agent.execute', parameters: { taskId: '${taskId}' })`
-    );
-  }
-
-  // Transition task to IN_PROGRESS if currently OPEN (required for COMPLETED transition later)
-  if (taskForAuth.status === 'OPEN') {
-    await prisma.task.update({
-      where: { id: taskId },
-      data: { status: 'IN_PROGRESS', updatedAt: new Date() }
-    });
-  }
-
+  // 🔒 S0 (2026-09-26, RWF Stage 1 / sec-ops-S0-review.md): the access check is the FIRST thing after the
+  // not-found check. Before S0 the PIPELINE template auto-assign, the "not configured" error (which echoed
+  // the task TITLE) and an OPEN→IN_PROGRESS flip all ran BEFORE this call, so any authenticated caller
+  // holding another tenant's task id could modify that task, and learn its title, before being refused.
+  // Nothing that writes, or that returns task content, may move above this line (pinned by
+  // test-security-invariants.ts + test-agent-execute-authz-order.ts).
   validatePOVAccess(user, taskForAuth.pov, {
     throwOnDeny: true,
     requireWrite: true,  // 2026-05-26: isDemo read-only (demo-write fix)
     logContext: 'Agent Execute'
   });
+
+  // RWF D1 (2026-09-26; sec-ops-D1-review.md): a PIPELINE CHILD may override only `modelParameters` (known keys).
+  // After the access check (the refusal names only keys the caller sent — nothing about the task) and BEFORE the
+  // dependency checks, whose "retry" wording would otherwise invite an LLM to retry with the same overrides. No
+  // query unless a disallowed key is present. See lib/services/leg-child-override.ts.
+  await refuseLegChildOverrides(prisma, {
+    taskId, stageId: taskForAuth.stageId, overrideConfig, callingExecutionId: routeOpts?.callingExecutionId,
+  }, log);
 
   // Dependency enforcement: block execution if predecessor tasks aren't complete
   const incompleteDeps = await prisma.taskDependency.findMany({
@@ -191,8 +155,13 @@ export async function handleAgentExecute(
     }
   });
 
+  // RWF A1 / m18 (2026-09-26): a PIPELINE upstream is satisfied ONLY when COMPLETED. Its executionStatus
+  // SUCCESS means "the harness's LAST RUN finished" — true after CREATE, and after a SYNTHESIZE that
+  // re-executed a child and exited — so it let a human manually execute a consumer of a leg that was still
+  // mid-run. Automatic paths already require COMPLETED; this closes the manual one. Non-PIPELINE unchanged.
   const blockers = incompleteDeps.filter(
-    d => d.dependsOn.status !== 'COMPLETED' && d.dependsOn.executionStatus !== 'SUCCESS'
+    d => d.dependsOn.status !== 'COMPLETED' &&
+      (d.dependsOn.type === 'PIPELINE' || d.dependsOn.executionStatus !== 'SUCCESS')
   );
 
   if (blockers.length > 0) {
@@ -238,6 +207,57 @@ export async function handleAgentExecute(
       );
     }
   }
+
+  // Configuration is checked AFTER the access and dependency checks (S0): a refused call — denied, or
+  // blocked on dependencies — must leave the task untouched, including the template auto-assign below.
+  // P3: Check agent configuration prerequisites before execution
+  let hasTemplate = !!taskForAuth.agentTemplateId;
+  const hasCustomConfig = !!taskForAuth.agentRole && !!taskForAuth.prompt;
+
+  // Auto-assign Pipeline Harness template for PIPELINE-type tasks
+  if (!hasTemplate && !hasCustomConfig && taskForAuth.type === 'PIPELINE') {
+    const pipelineTemplate = await prisma.agentTemplate.findFirst({
+      where: { name: 'Pipeline Harness', status: 'ACTIVE' },
+      select: { id: true, name: true, defaultRole: true }
+    });
+
+    if (pipelineTemplate) {
+      await prisma.task.update({
+        where: { id: taskId },
+        data: {
+          agentTemplateId: pipelineTemplate.id,
+          agentRole: pipelineTemplate.defaultRole,
+          updatedAt: new Date()
+        }
+      });
+      hasTemplate = true;
+      log.info({ taskId, templateId: pipelineTemplate.id }, 'Auto-assigned Pipeline Harness template for PIPELINE task');
+    }
+  }
+
+  if (!hasTemplate && !hasCustomConfig) {
+    throw new Error(
+      `❌ Agent not configured for task: "${taskForAuth.title}"\n\n` +
+      `Before executing, you must configure the agent:\n\n` +
+      `**Option 1: Use Template** (Recommended)\n` +
+      `perform(action: 'agent.assign', parameters: {\n` +
+      `  taskId: '${taskId}',\n` +
+      `  agentTemplateName: 'Senior Developer'  // See template(action: 'list')\n` +
+      `})\n\n` +
+      `**Option 2: Custom Configuration**\n` +
+      `perform(action: 'agent.configure', parameters: {\n` +
+      `  taskId: '${taskId}',\n` +
+      `  agentRole: 'QA Engineer',\n` +
+      `  prompt: 'Test the infrastructure setup thoroughly'\n` +
+      `})\n\n` +
+      `Then retry: perform(action: 'agent.execute', parameters: { taskId: '${taskId}' })`
+    );
+  }
+
+  // S0: NO status flip here. `createAgentExecution` claims OPEN→IN_PROGRESS when it creates the execution
+  // row (agent-execution-create.ts), so IN_PROGRESS ⇔ an execution was created. The early flip this replaced
+  // also stranded AUTHORIZED callers: a dependency-refused task was left IN_PROGRESS, and the task-ready
+  // reactor only queues OPEN tasks, so it never started when its dependencies completed.
 
   // Import and use the agent task service
   const { AgentTaskService } = await import('@/lib/services/agentTaskService');

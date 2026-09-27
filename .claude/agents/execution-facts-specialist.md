@@ -88,6 +88,31 @@ comparator flagged 62%) and 2026-08-31 (56 packages: zero true fabrications, inc
 51/51). A violation-class proposal without a corpus measurement is a hypothesis, not evidence. And
 "it proves the framework is generic" is a benefit, never an earning justification.
 
+**A measurement of the right thing can still be wrong three ways** (2026-09-20, three instances in
+one day; depth in the discovery's practice section). **Key on the DISCRIMINATING field, not the
+shared one** — `kind` rides on harvested, derived AND consumed entries, `members` only on derived;
+the loose proxy read ~31 where the real number is ~8. **An else-branch is a claim that you
+enumerated every other case** — a catch-all turned 4 legs into 9, and mis-binning is worse than
+dropping because the row still appears, in the wrong column, with the total still summing. Print
+per-bucket counts and assert the total. **Zero successes is an ABSENCE, not a rate.** For
+cross-domain comparisons, measuring rule 6 in the two forensics guides is the authority — cross-ref
+it, never copy it.
+
+**`reviewerVerdict.evidenceGrading` is a FACT WITH NO CONSUMER, on purpose** (shipped 2026-09-20).
+It transcribes the reviewer's declared epistemic mode — `VERIFIED-AGAINST-EVIDENCE` vs
+`ACCEPTED-FROM-CLAIMS` — which every protocol mandates and nothing read. THREE states: `graded:false`
+(26% of 261 live verdicts — approved with NO epistemic claim) is not `verifiedLines:0`. Counts are
+named for LINES because findings are not machine-delimited. Deliberately UNRENDERED, with the reason
+recorded: rendering it tells reviewers what is measured about them and contaminates its own baseline.
+⚠️ That reason EXPIRES when the reviewer-remit changes land — re-decide then. Depth + the baseline
+table: the discovery's 2026-09-20 block.
+
+**A fact answers ONE question — `derivationContainment` is containment, never PROVENANCE** (ruled
+2026-09-20). A leg importing a value from an unrelated pipeline stamps `benign (checked-clean)` and
+that is CORRECT: the harvest was empty and the net has no notion of where a value came from. Folding
+provenance in would make a clean fact ambiguous and hand consumers a conjunct meaning two things. A
+provenance fact, if ever earned, ships under its own name. Standing boundary, not a deferral.
+
 ## Quick derive-state greps
 
 ```bash
@@ -160,6 +185,7 @@ Full expectations (with proven counts) live in the discovery — these are the o
 | `lib/agents/harness/dialect-lint.ts` | net #2, pure; block classifier the rollback net must reuse |
 | `lib/agents/harness/dialect-lint-enrichment.ts` | net #2 impure half |
 | `lib/agents/harness/marker-presence.ts` | H-4 fact, pure + synchronous |
+| `lib/agents/harness/evidence-grading.ts` | reviewer evidence-grading fact, pure. Nests on `reviewerVerdict`; scanned over the WHOLE `finalResponse`, never `raw` |
 | `lib/agents/harness/contract-propagation-enrichment.ts` | shares dialect-lint's canonical-stanza needles |
 | `lib/agents/harness/net-registry.ts` | the registry contract — `(name, point)`, `appliesTo`, `errorFact`, the two render slots, and the three things it deliberately does NOT do |
 | `lib/agents/harness/mechanical-nets.ts` | the six entries. ⚠️ key ORDER is part of the contract — the equivalence gate compares serialized bytes |
@@ -279,3 +305,48 @@ greps outrank it.
 ## Working Directory
 
 /home/steve/copov15
+
+## 🆕 2026-09-16 — cross-pipeline delivery facts, and a render gap that is yours to decide
+
+Shipped with `c51311d6` (Bug Class 84 — a payload delivered to a container is not delivered to the
+thing inside it; 51 of 51 edges reached the leg, 3 reached any child).
+
+**Four fields, all FACTS, nested inside `chainedContext`** (`RESULT_JSON_SUMMARY_KEYS` untouched —
+E3b confirmed rather than assumed: `pickResultJsonSummary` copies `parsed[key]` **verbatim**, so
+nesting survives by construction and a sibling would have been stripped silently):
+`inheritedPredecessors` · `legCrossPipelineEntries` · `inheritedSkipped[{taskId,reason}]` ·
+`inheritedFromLeg`.
+
+- **`deriveChainedContextSignal` no longer nulls out on dep-free children.** Its early-out
+  (`predecessors <= 0 && chainCapable <= 0`) was exactly the population the fix exists for — 52 of
+  198 children would have delivered with **no `chainedContext` block at all**. Absence reads as
+  clean: Register Pattern 1, in the same function whose comment documents the 2026-09-10 F-A fix.
+  **Three reviewers found this independently.**
+- **`inheritedSkipped` must NEVER fold into `notChained`** — the program gate treats
+  `notChained.length > 0` as BLOCKING, and a policy exclusion is not a coverage failure. A fail-open
+  routed there becomes fail-closed.
+- **The verdict nobody shipped: `inheritanceComplete`.** The Protocol 10 risk was never in the
+  counts — it was in the summary field that would have asserted sufficiency. Worth remembering as the
+  cleanest example of the protocol being applied.
+- **The lean card renders `inherited N of M cross-pipeline`** — CC4 pins the no-change claim by
+  comparing two rendered strings, not by eyeball.
+
+✅ **CLOSED 2026-09-17 (`1dceb535`) — `derivationContainment` now renders in §6.** The reason it was
+missing was real and had EXPIRED: for SIBLING entries it is stamped at the leg's SYNTHESIZE, *after* the
+siblings run, so it is empty **512 of 512** times — there was genuinely nothing to render. Cross-pipeline
+delivery ended that: an injected entry comes from a leg that has already synthesised, and **215 of 280
+carry it populated, 178 with a disposition — 91 benign, 66 needs-node-c, 21 BLOCKING.** Twenty-one
+predecessors failed the mechanical check and the consumer could not see it. Keyed on PRESENCE (no
+kind-check — the populations separate themselves), disposition and reason verbatim with no adjective, and
+`needs-node-c` carries an explicit *"neither a pass nor a block"* qualifier, since a reader who takes a
+delegated decision for either verdict is worse off than one who saw nothing. Five fixtures pin BOTH
+directions (a render that always fired, or never fired, would pass a one-directional test).
+⚠️ **The lesson for your half**: "this fact has nothing to see" is a measurement with a shelf life —
+it expired the day a new carrier reached it, and nothing re-checked it. When you decline to surface a
+fact on emptiness grounds, record the population you measured so the next carrier invalidates it loudly.
+
+⚠️ **`legCrossPipelineEntries` is POST-POLICY** and reads 0 when everything was dropped by
+classification. Correctly handed back to agent-execution rather than compensated for render-side.
+
+Suite: `test:chained-context-signal-inherited` (written RED-first and mutation-proven: reverting the
+early-out alone turns A11a-e red while the CONTROL stays green).

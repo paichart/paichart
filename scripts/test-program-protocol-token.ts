@@ -200,15 +200,34 @@ test('F12 filter: stamp-equals disjuncts (OR of equals — Prisma has no `in` fo
 });
 
 // ─── DISJUNCT-REMOVAL GATE: the transition may not end as a quiet cleanup commit ───────────
-test('GATE: removing the transitional title disjunct requires the RECORDED VERIFIED BACKFILL', () => {
+test('GATE: removing the transitional title disjunct requires BOTH the verified backfill AND post-stamp callers', () => {
   const fs = require('fs') as typeof import('fs');
   const path = require('path') as typeof import('path');
   const root = path.resolve(__dirname, '..');
   const src = fs.readFileSync(path.join(root, 'lib/agents/harness/program-protocol.ts'), 'utf-8');
   const hasDisjunct = src.includes('title: { contains: token }');
+  if (hasDisjunct) return; // disjunct still present — gate not yet under test
+
+  // CONDITION 1 — every task ROW carries a stamp.
   const backfillRecord = path.join(root, 'cline_docs/reviews/ws2-phase-a-2026-08-17/BACKFILL-VERIFIED.md');
-  assert(hasDisjunct || fs.existsSync(backfillRecord),
+  assert(fs.existsSync(backfillRecord),
     'the title disjunct is gone but no BACKFILL-VERIFIED.md record exists — pre-stamp tasks just silently lost F12/F10');
+
+  // CONDITION 2 (added 2026-09-16, boundary-contract sweep) — every CALLER passes a POST-stamp
+  // task object. A backfill stamps rows; it cannot put the key into a snapshot captured before
+  // the stamp was written. The stream route resolves from its route-edge fetch (taken pre-
+  // createAgentExecution), so on a first execution the key is absent there regardless of the DB,
+  // and that path resolves correctly TODAY ONLY via the title-fallback this gate is removing.
+  // Condition 1 alone would green-light a silent program-tier regression: F12 belt and F10 stamp
+  // dropped, no error, no log. Same freshness class as the terminal-persist stale-metadata read.
+  const streamSrc = fs.readFileSync(
+    path.join(root, 'app/api/pov/agent/execute/stream/route.ts'), 'utf-8');
+  const stillPreStamp = /resolveTaskProtocol\(\{\s*title:\s*task\.title,\s*metadata:\s*task\.metadata\s*\}\)/.test(streamSrc);
+  assert(!stillPreStamp,
+    'the title disjunct is gone but the stream route still resolves from its PRE-STAMP route-edge ' +
+    'snapshot — program-tier runs launched via the stream will resolve `none` and silently lose ' +
+    'F12/F10. Re-read the task after createAgentExecution (or pass the stamp the writer computed) ' +
+    'before removing the disjunct. See the TRANSITIONAL TITLE DISJUNCT note in program-protocol.ts.');
 });
 
 // ─── drift guards (stamp era): call sites use the shared module correctly ──────────────────

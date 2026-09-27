@@ -7,8 +7,11 @@ This discovery prompt provides comprehensive investigation of pAIchart's Pipelin
 The Pipeline Harness shipped and was validated end-to-end on 2026-04-14:
 - Three-mode execution (CREATE / ORCHESTRATE / SYNTHESIZE) auto-detected from `metadata.pipelineStageId` + child-stage state
 - Two reactors wired at 6 call sites (task.update door added 2026-07-18, gap (e)) (`pipelineRetriggerReactorService` + `taskReadyReactorService`)
-- Handler 3-point invariant gates completion in both `task-complete` and `task-update` paths (bypass-seal)
-- Both execution paths (`agentExecutionEngine` + `stream/route`) skip `status: COMPLETED` for PIPELINE type
+- The PIPELINE completion invariant — 3-point at ship, **4-point since 2026-04-25** — gates completion.
+  Originally mirrored in the `task-complete` and `task-update` handlers; **since 2026-07-24 it is ONE copy**
+  in `lib/tasks/services/complete-task-terminally.ts`, and every human write-site is a thin adapter (Phase 5.2)
+- The `status: COMPLETED` skip for PIPELINE type — originally in both execution paths; **since 2026-07-05
+  enforced ONCE** in the shared spine `execution-terminal-persist.ts`, reached by both callers (Phase 5.4)
 - First successful full-loop run: harness COMPLETED with confidence 84/100 after 4 specialist children executed in dependency order
 
 ## When to Run This Discovery
@@ -20,11 +23,58 @@ The Pipeline Harness shipped and was validated end-to-end on 2026-04-14:
 - Investigating a confidence-score anomaly or a completion-invariant failure
 - Auditing the two-path (engine + stream) drift risk after infrastructure changes
 
+## 🆕 2026-09-15 — the validation-shape clause is ONE definition, and its permission addresses the REVIEWER
+
+The REQUIRED SHAPE clause used to be four verbatim copies, one per domain protocol. They had drifted
+in EFFECT rather than text: only the network protocol carried clause (h)'s third sanctioned shape
+(a *presence assertion* for output nobody has yet observed), so the SAME author behaviour was
+approved in one domain and blocked in another — each reviewer correctly applying what it held.
+
+**The defect was ADDRESSING, not absence.** Clause (h) sat inside the bullet headed *"Phase 2 —
+Config Change-Package Author"*. The reviewer reads its own bullet (silent on shapes), then the
+role-neutral *"Validation = facts, not verdicts"* section saying literal-or-drop, then role guidance
+telling it to treat non-fact validation as blocking. The contradiction resolved AGAINST the
+permission for the reviewer, by construction, every time. R13's remedy landed entirely on the author
+side, so **as shipped it did not prevent R13** — which recurred 2026-09-14 in terraform.
+
+```bash
+grep -c "VALIDATION_SHAPE_CLAUSE" scripts/seed-protocol-prompts.ts      # expect 5 — 1 const + 4 interpolations
+grep -c '\${VALIDATION_SHAPE_CLAUSE}' scripts/seed-protocol-prompts.ts  # expect 4 — one per domain protocol
+grep -c "addressed to you as well" scripts/seed-protocol-prompts.ts     # expect 1 — the reviewer paragraph lives ONCE, in the shared const
+grep -c "THIRD SANCTIONED SHAPE" scripts/seed-protocol-prompts.ts       # expect 2 — network clause (h) + its own v1.9.0 changelog entry
+```
+
+**Extraction is SOURCE-level only.** `render-public-protocols.ts` emits the row body verbatim, so the
+four DB rows and the four PUBLIC files stay byte-identical with the rule inline — there is no pointer
+at any tier. The "customers would read a pointer" objection to extraction is false and was the only
+thing holding that dilemma up.
+
+**Licensing stays with the DOMAIN.** The clause defers — *"Where your protocol sanctions no such
+shape, this paragraph licenses nothing"* — because terraform/k8s renderings ARE obtainable pre-apply
+(`terraform plan`, `tflint --format json`), so a blanket sanction there converts a CORRECT block into
+a pass. Verified live, both directions: a network leg's 6 presence assertions were APPROVED citing
+*"the sanctioned presence-assertion shape"*, and the SAME well-formed shape planted into a terraform
+package was BLOCKED as *"unsanctioned"*. Record: `VT-23`, and
+`cline_docs/reviews/witnessed-rendering-obligation-2026-09-14/LIVE-VALIDATION.md` (carries the
+repeatable control probe — the only on-demand test of the deferral, since terraform authors reach for
+a non-literal step only 1 time in 38).
+
+⚠️ **The old guard caught NONE of the three live defects.** `test-validation-shape-contract.ts`
+compared four copies over a 700-char window of a 908-char clause, cutting off mid-word before the
+remedy sentence, while a separate GLOBAL `includes` passed if any ONE copy retained it. Byte-equality
+is now vacuous by construction, so the test pins REACHABILITY instead: one definition, no re-inlined
+copy, and each of the four named domain protocol bodies still receiving it. Mutation-verified.
+
+⚠️ **`prompt:directives` does NOT surface the reviewer paragraph** — its extractor keys on
+directive-shaped lines. The tool exists to make cross-layer seams visible and cannot see this one, so
+do not use its silence as evidence a rule is absent; check the protocol row, or the execution's
+`protocolInjection` record, which names the version actually injected.
+
 ## 🆕 2026-08-17 — WS1 Phase C composition tripwires
 
 ```bash
-grep -c "protocol-base" scripts/seed-protocol-prompts.ts                     # expect 2 — the tag + its comment
-grep -c "delta:" lib/agents/harness/protocol-dependence-anchors.ts           # expect 8 — 3 mapped groups (interface field + doc uses included)
+grep -c "protocol-base']" scripts/seed-protocol-prompts.ts                   # expect 1 — the EXACTLY-ONE-BASE contract, asserted as the tag literal rather than as a mention-count. The old form counted comments too and drifted whenever a protocol's comment said "NOT protocol-base"
+grep -c "delta:" lib/agents/harness/protocol-dependence-anchors.ts           # expect 8+ — FLOOR, not a count: every new domain protocol adds a pair, so this rises as a direct consequence of healthy work. A FALL means an anchor was deleted, which is the thing worth catching
 grep -c "the standard rule" scripts/seed-protocol-prompts.ts | head -1       # expect >= 4 — base label + x3 infra refs (pairs pinned by test:protocol-dependence-anchors)
 grep "use the default orchestrator" scripts/seed-protocol-prompts.ts | grep -vc "version:"   # expect 0 — the fence fall-back is retired (escalate-on-mismatch); the version-changelog QUOTES of the deleted phrase are excluded by the -v
 ```
@@ -59,7 +109,7 @@ grep -c "unsatisfiedDepExistsSql" lib/services/taskReadyReactorService.ts   # EX
 grep -c "'pipeline-with-deps'" lib/services/taskReadyReactorService.ts      # EXPECT 1 — CC6: PIPELINE-with-deps keeps the blanket skip (dep-completion reactor is the ONLY auto-start path for PIPELINE children; the pov-program plan-gate design derives from this)
 grep -c "maybeQueueIfDepFree" lib/mcp/tasks/action/handlers/task/task-update-handler.ts   # EXPECT 2 — the 6th call site (dep rewrite / template attach fires post-commit)
 grep -c "executionStatus !== 'FAILED'" lib/mcp/tasks/action/handlers/task/task-update-handler.ts   # EXPECT 1 — frozen-cone guard: a dep rewrite must never un-terminalize an OPEN+FAILED cone member (re-enable = explicit agent.execute)
-grep -c "reviewerPresent" scripts/seed-protocol-prompts.ts   # EXPECT 7 — A6 provenance fact: Step 5 dual-branch approved rule (fact-derived when no reviewer) + HOWTO qualityGate branch; green shield w/ reviewerPresent:false = "ran clean, no QA gate", never QA-vetted
+grep -c "reviewerPresent" scripts/seed-protocol-prompts.ts   # expect 7+ — FLOOR; rises with each domain protocol — A6 provenance fact: Step 5 dual-branch approved rule (fact-derived when no reviewer) + HOWTO qualityGate branch; green shield w/ reviewerPresent:false = "ran clean, no QA gate", never QA-vetted
 grep -c "superseded:" scripts/seed-protocol-prompts.ts   # EXPECT 2 — gap (b): PLAN-SPAWN supersession contract (cannotRun state channel; supersede BEFORE wiring dependents; title/comment disposal forbidden)
 grep -c "silent" lib/agents/harness/verdict-mismatch-guard.ts   # EXPECT 1 — reviewer-LESS pipeline: verdict===null silence is CORRECT (never "harden" into a mismatch); Phase-2 verdict consumption must gate on reviewer-present
 ```
@@ -79,11 +129,13 @@ semantics. The fact schema is the contract between the two.
 
 A program leg that ends settled-but-not-COMPLETED HANGS the program (Guard 4 never satisfied). R4
 adds the truncation-stall class (a SYNTHESIZE persisting `TRUNCATED_NO_OUTPUT` + IN_PROGRESS — the
-FOURTH non-terminal-family member, "settled-children, harness-mute").
+FOURTH non-terminal-family member, "settled-children, harness-mute" — ordinal correct AS OF
+2026-07-16; the family is **EIGHT** members today (REAPED, RWF-X4 2026-09-26), canonical table in
+`domain/harness/ARCHITECTURE.md` Invariant 5. Do not carry an ordinal out of a dated block).
 ```bash
-grep -c "input.truncationStalled" lib/services/execution-terminal-persist.ts   # EXPECT 2 — the R4 Layer-2 in-tx FAILED branch. F17/F20 are computed FIRST so an escalated-COMPLETED verdict WINS over truncation-FAILED (impl-panel es/db F1); gated resolvedMode==='SYNTHESIZE' (ORCHESTRATE/CREATE excluded)
+grep -c "input.truncationStalled" lib/services/execution-terminal-persist.ts   # EXPECT 3 — the R4 Layer-2 in-tx FAILED branch (2) + the RWF A3 dead-end exemption gate that precedes it (1, 2026-09-26). F17/F20 are computed FIRST so an escalated-COMPLETED verdict WINS over truncation-FAILED (impl-panel es/db F1); gated resolvedMode==='SYNTHESIZE' (ORCHESTRATE/CREATE excluded)
 grep -c "markForwardConeBlocked" lib/services/execution-terminal-persist.ts   # EXPECT 2 — truncation branch + the F17 duplicate-halt cone-gap fold (both now walk the shared cone in lib/services/mark-forward-cone.ts)
-grep -c "§6 Pipeline Context" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # EXPECT 10 — R5: agent roles read dependency outputs from §6 (auto-chained), NOT fetch(id:...) (a client-only tool). A positive fetch(id:...) instruction in agent role-prose is a defect
+grep -c "§6 Pipeline Context" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # expect 10+ — FLOOR; rises with each chain-consuming role — R5: agent roles read dependency outputs from §6 (auto-chained), NOT fetch(id:...) (a client-only tool). A positive fetch(id:...) instruction in agent role-prose is a defect
 grep -cE "Call .*fetch\(id|and fetch\(id" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # EXPECT 0 — no positive fetch(id) agent instruction remains
 ```
 Layer 1 (in-loop retry) is agent-execution's lane. `cline_docs/reviews/{nonterminal-family,truncation-r4}-2026-07-16/`.
@@ -201,11 +253,22 @@ npm run report:template-freshness | grep -E "config_change_author|change_reviewe
 # All rows sharing a key go STALE together. That co-movement IS the blast radius.
 ```
 
-**Expect**: `config_change_author` → *Config Change-Package Author* (network-provisioning),
-*HCL Rollback Author* (terraform-iac), *Manifest Rollback Author* (kubernetes-gitops).
-`change_reviewer` → *Change Reviewer*, *Plan Policy Reviewer*, *GitOps Change Reviewer* — and it is
-also the whole of `REVIEWER_ROLES` in `lib/agents/harness/parse-verdict.ts`, so editing it touches
-verdict parsing too.
+**Expect** (re-measured 2026-09-26; the list said THREE until then — observability joined 2026-09-10):
+`config_change_author` → *Config Change-Package Author* (network-provisioning), *HCL Rollback Author*
+(terraform-iac), *Manifest Rollback Author* (kubernetes-gitops), *Observability Config Rollback Author*
+(observability-config). `change_reviewer` → *Change Reviewer*, *Plan Policy Reviewer*, *GitOps Change
+Reviewer*, *Observability Change Reviewer*. Re-verify from source rather than trusting this list:
+```bash
+grep -rl "defaultRole: 'config_change_author'" scripts/seed-*.ts | wc -l   # expect 4
+grep -rl "defaultRole: 'change_reviewer'" scripts/seed-*.ts | wc -l        # expect 4
+```
+`change_reviewer` is ALSO a member of `REVIEWER_ROLES` in `lib/agents/harness/parse-verdict.ts`, so
+editing it touches verdict parsing too. It is **not** the whole set: `requirements_reviewer` joined
+2026-09-21 (requirements-authoring), and a REVIEWER_ROLES key must land in the same commit as its
+`ROLE_GUIDANCE_LIBRARY` entry (the coupling test asserts every member's guidance carries the marker).
+```bash
+grep -cE "^  '[a-z_]+'," lib/agents/harness/parse-verdict.ts   # expect 2 — the REVIEWER_ROLES members
+```
 
 **Findings to raise**:
 - A domain-specific example (vendor syntax, a protocol's vocabulary, a tool's resource model) inside
@@ -248,24 +311,56 @@ grep -i "agent\.execute\|do not.*execute\|never.*execute" \
 # Expect: explicit "do not call agent.execute" warnings
 ```
 
-## Phase 4: Reactor Integration Audit (5 Call Sites)
+## Phase 4: Reactor Integration Audit (6 Call Sites + 2 named safety-net classes)
 
 Every one of these must be present and correctly wired. Missing any is a broken pipeline.
 
-### 4.1 Engine success path
+**Complete set of files that FIRE a reactor** (re-measured 2026-09-26 — anything outside this list is new
+and must be classified before it is accepted):
 ```bash
-# Success path of agentExecutionEngine — fires BOTH reactors
-grep -n "maybeRetriggerPipelineHarness\|maybeQueueReadyDependents" \
-  /home/steve/copov15/lib/services/agentExecutionEngine.ts
-# Expect: success path has both imports; failure path has maybeRetrigger only
+grep -rl "maybeRetriggerPipelineHarness(\|maybeQueueReadyDependents(" lib app --include=*.ts | grep -v "test\|ReactorService" | wc -l   # expect 7
+```
+= `execution-terminal-persist.ts` (engine spine, 4.1/4.2) · `complete-task-terminally.ts` (human
+completion core, 4.3) · `task-can-never-run-persist.ts` (F16 escalation: post-commit retrigger only) ·
+`agentExecutionEngine.ts` + `agent-execute-handler.ts` (the **Finding-9 safety nets**, below) ·
+`reactor-budget-exhausted-persist.ts` (RWF A2 2026-09-26: Guard 8 exhaustion terminalizes, then a post-commit
+retrigger of the owning program — the F16 shape) · `harness-dispatch-fact.ts` (RWF A3: the lost-wakeup
+self-check — the ONLY caller passing `bypassDebounce: true`). The
+`maybeQueueIfDepFree` kickstart doors (4.4/4.5 + task.update) are counted separately.
+
+### 4.1 Engine success path — the shared terminal-persist spine (NOT agentExecutionEngine.ts)
+```bash
+# ⚠️ MOVED 2026-07-05 (execution-path convergence). agentExecutionEngine.ts no longer carries the
+# success/failure reactor pair — greping it returns only the Finding-9 safety nets and reads as
+# "success path lost a reactor". The pair lives in the shared spine, used by BOTH callers:
+grep -c "maybeRetriggerPipelineHarness(input\|maybeQueueReadyDependents(input" lib/services/execution-terminal-persist.ts   # expect 4
+# = persistTerminalSuccess: both reactors (~:983-984) · persistTerminalFailure: retrigger (~:1148)
+#   + the Finding-9 TaskReady safety net (~:1161)
+grep -c "maybeRetriggerPipelineHarness(" lib/services/agentExecutionEngine.ts   # expect 3 — the three REAPER-class sites only (RWF A1 2026-09-26:
+#   a reaped child never persists, so the reaper must wake the harness). Each sits beside a maybeQueueReadyDependents
+#   call (pinned 1:1 by test:child-stage-settled L3). A retrigger ANYWHERE ELSE in this file = re-inlined persist.
 ```
 
 ### 4.2 Engine failure path
 ```bash
-# Failure path — pipelineRetrigger only (fail → harness should SYNTHESIZE to escalate)
-grep -B2 -A5 "executionStatus.*FAILED" /home/steve/copov15/lib/services/agentExecutionEngine.ts | \
-  grep -A3 "maybeRetrigger" | head -10
+# Failure fires the RETRIGGER (harness should SYNTHESIZE to escalate). It ALSO fires
+# maybeQueueReadyDependents as a Finding-9 SAFETY NET — this does NOT break the asymmetry policy,
+# because the reactor itself no-ops unless task.status === 'COMPLETED' (a normally-failed task never
+# queues dependents; only a SYNTHESIZE that task.complete'd and THEN failed at persist is un-stranded).
+grep -n -A12 "export async function persistTerminalFailure" lib/services/execution-terminal-persist.ts | head -3
 ```
+
+### 4.2a Finding-9 safety nets (2026-07-15) — legitimate, status-guarded, NOT adapters
+```bash
+grep -c "maybeQueueReadyDependents(" lib/services/agentExecutionEngine.ts   # expect 3 — startup orphan reaper, stale-execution poller, safety-net catch
+grep -c "maybeQueueReadyDependents(" lib/mcp/tasks/action/handlers/agent/agent-execute-handler.ts   # expect 1 — background-dispatch failure, gated on result.persisted
+```
+Since RWF A1 (2026-09-26) each ALSO fires `maybeRetriggerPipelineHarness` (a reaped child never persists, so
+without it a harness waiting on that child hangs). Each exists because a site that bypasses (or lost) `persistTerminalFailure` would otherwise strand the
+dependents of a SYNTHESIZE that had already completed its task. They rely on the reactor's own
+COMPLETED-status guard, so they are idempotent no-ops for ordinary failures. **Do not flag these under
+4.3's "reactor call in an adapter handler" rule** — `agent-execute-handler` is a failure path, not a
+completion adapter.
 
 ### 4.3 Human completion path — ⚠️ the core, not the handler (since 2026-07-24)
 ```bash
@@ -400,8 +495,14 @@ grep -B2 -A8 "PIPELINE harness: wrote stages.metadata.harnessTaskId" \
 
 # Confirm there's no second (forgotten) writer of harnessTaskId
 grep -rn "harnessTaskId" lib/ app/ --include='*.ts' --include='*.js' | grep -v node_modules | grep -v test
-# Expect: writes only at task-update-handler.ts; reads at task-complete-handler.ts,
-# task-update-handler.ts (4th-point check), pipelineRetriggerReactorService.ts (Guard 3.5).
+# Expect (re-measured 2026-09-26): the ONLY write is task-update-handler.ts (the tx.stage.update above).
+# Every other file READS it: complete-task-terminally.ts (4th-point check — moved out of the handlers
+# 2026-07-24), pipelineRetriggerReactorService.ts (Guard 3.5), context-chainer.ts +
+# rollback-containment-enrichment.ts (resolve a stage's owning LEG), pipelineProtocolValidator.ts (doc
+# comment), reactor-skip-counter.ts + errors.ts (log/error payload fields), protected-task-metadata.ts
+# (comment), reactor-budget-exhausted-persist.ts (RWF A2: an input FIELD name — it writes the harness TASK, never
+# the stage back-pointer). A NEW file here must be classified read-vs-write before it is accepted:
+grep -rl "harnessTaskId" lib/ app/ --include='*.ts' --include='*.js' | grep -v test | wc -l   # expect 11 — was 10; +orchestrator-reexecution.ts (RWF C1: the orchestratorReExecution.harnessTaskId stamp the per-child cap counts)
 ```
 
 ### 5.4 Engine skip — the shared SUCCESS-persist core (post-Phase-6 convergence)
@@ -441,9 +542,10 @@ grep -rn "no-back-pointer-or-non-string\|legacy-stage-no-back-pointer\|pipeline-
   lib/ app/ --include='*.ts' --include='*.js' | grep -v node_modules
 # Expect (POST-SUNSET — the 2026-04-25 hard-fail flip closed the sentinel project;
 # the legacy soft-warn strings are GONE, defenses now hard-fail/hard-skip):
-#   - 'no-back-pointer-or-non-string' in task-complete-handler + task-update-handler
-#     (handler hard-fail reason — present at task-complete-handler.ts:257,
-#     task-update-handler.ts:507; throws PipelineStageMismatchError)
+#   - 'no-back-pointer-or-non-string' + 'pipeline-stage-mismatch' as the invariant's hard-fail
+#     reasons — since 2026-07-24 in the ONE shared core, complete-task-terminally.ts (~:254/:266),
+#     each followed by a PipelineStageMismatchError throw. The handler line refs this used to
+#     cite (task-complete-handler.ts:257 / task-update-handler.ts:507) no longer exist.
 #   - Reactor Guard 3.5 no longer soft-warns 'legacy-stage-no-back-pointer'; it
 #     hard-skips via logReactorMismatchSkip (reactor-skip-counter.ts:149 —
 #     errorCode 'PIPELINE_STAGE_MISMATCH', securityEvent: true). Verified 2026-06-15.
@@ -650,6 +752,31 @@ grep -n "deriveChainedContextSignal" \
 # Facts: context-chainer writes pipelineMetadata.{completedDependencies,totalDependencies,
 # totalChars,anyTruncated}; deriveChainedContextSignal maps them.
 ```
+
+### 9.1b ⚠️ `tsc --noEmit -p tsconfig.json` DOES NOT TYPECHECK `scripts/` (2026-09-15)
+
+```bash
+# Prove it — scripts is explicitly excluded:
+python3 -c "import json,re;print(json.loads(re.sub(r'//.*','',open('tsconfig.json').read()))['exclude'])"
+# expect a list containing scripts/**/*.ts
+```
+
+So a clean local typecheck says **nothing** about test fixtures, and "typecheck clean" reads
+far stronger than it is. The failure mode is specific and will recur: **add a REQUIRED field to
+a shared input type** (e.g. `TerminalSuccessInput`, `ExecutionQualityInput`) and every fixture
+in `scripts/` that constructs it breaks — invisibly to `tsc`, and invisibly to any targeted
+suite that does not import it. CI is the first thing that sees it, and CI's `&&` chain means it
+blocks the deploy at that point.
+
+Live instance: `harnessSynthesizeUnclosed` was added as required; local tsc clean, 7 targeted
+suites green, `test-terminal-persist-shape.ts:227` failed in CI and blocked the deploy.
+
+**Before pushing a change to a shared input type:**
+```bash
+grep -rln "TerminalSuccessInput\|ExecutionQualityInput" scripts/   # every constructor site
+npm run test:all-validation                                        # npm's OWN exit code, not a filter's
+```
+Running the suites IS the typecheck for `scripts/` — ts-node compiles each one on load.
 
 ### 9.2 Pure-function validators live in the shared modules
 
@@ -895,13 +1022,14 @@ ORDER BY \\\"createdAt\\\" DESC LIMIT 1;
 ### 11.5 Deliverable Contract in §8 prose + universal template
 
 ```bash
-# Engine §8 should say "finalResponse is the deliverable channel" (commit d0c0f2d8).
-grep -n "deliverable channel\|finalResponse.*deliverable\|comments are coordination\|task.comment.*coordination" \
-  /home/steve/copov15/lib/services/agentExecutionEngine.ts | head -5
+# ⚠️ MOVED + REWORDED (B1 prompt parity). The §8 / Output Requirements prose left agentExecutionEngine.ts
+# for the shared body builder, and no longer says "deliverable channel" — the old engine grep returns 0
+# and READS AS "CONTRACT REMOVED" (it was not; caught 2026-09-26). Assert the contract's two halves:
+grep -c "single canonical deliverable" lib/agents/harness/build-agent-prompt-body.ts         # expect 1 — finalResponse IS the deliverable
+grep -c "NOT for delivering the work product" lib/agents/harness/build-agent-prompt-body.ts  # expect 1 — task.comment is coordination only
 
-# Universal template + role-specific guidance (commit 04fb7630).
-grep -n "Deliverable Contract\|deliverable channel\|comments are coordination" \
-  /home/steve/copov15/lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts | head -10
+# Universal template (commit 04fb7630).
+grep -c "deliverable channel" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts # expect 1
 ```
 
 Output for Phase 11 in the discovery report should list:
@@ -918,10 +1046,16 @@ Audits how prompts are ASSEMBLED at runtime + how the sibling deliverable flows 
 communication mechanism (Phase 11 covers the artifact/deliverable CONTRACT; this covers the PROMPT surface).
 
 ```bash
-# 1. §6 chained context — ONE shared renderer, both paths; per predecessor renders ONLY
-#    taskTitle/agentRole/confidenceScore/finalResponse, wrapped <prior_output role="context_only">.
+# 1. §6 chained context — ONE shared renderer, both paths; per predecessor renders identity +
+#    every PRESENT platform fact + finalResponse wrapped <prior_output role="context_only">.
 grep -n "renderPipelineContextSection" lib/agents/harness/build-agent-prompt-body.ts
 grep -n "prior_output\|context_only\|REFERENCE DATA" lib/agents/harness/render-pipeline-context.ts | head
+
+# 1b. ENUMERATE THE FACTS FROM THE RENDERER, never from prose. This list grew four times since
+#     2026-07 and every prose copy of it went false on the next addition (neutralizedCount 08-24,
+#     markerPresence 09-10, provenance + derivationContainment 09-17). Deliberately a FLOOR, not a
+#     count, so it cannot rot on healthy growth — a DROP is the finding.
+grep -c "platform fact)\*\*\|Platform note (transport" lib/agents/harness/render-pipeline-context.ts  # expect >=4
 
 # 2. Sibling-chaining SINGLE chokepoint (all six entry paths chain identically) — NOT the two-caller prompt-build shape.
 grep -rn "prepareTaskForExecution" lib/services/agent-execution-create.ts | head
@@ -937,7 +1071,9 @@ grep -rn "deliverableSourceTaskId" lib/ scripts/seed-harness-template.ts | head
 grep -n "loadProtocols\|renderConstraintsBlock\|harnessContext\|SCOPE_SELF_CHECK" lib/services/execution-system-prompt.ts | head
 ```
 
-**What to look for**: §6 renders ONLY the 4 fields (never comments/qualityMetrics); chaining is single-site
+**What to look for**: §6 renders identity + whatever platform facts are PRESENT on the entry (enumerate
+them from the renderer per 1b — never from a prose list, including this one) and NEVER comments or
+qualityMetrics; chaining is single-site
 (`prepareTaskForExecution`); keep-best selects the authoritative predecessor (a regressed retry never chains);
 the mode is INJECTED, not a separate template. Cross-lens: HEAD/TAIL construction = prompt-construction; loop
 re-pinning = agent-execution; field→section = template-system.
@@ -1058,18 +1194,19 @@ When completing this discovery, report back:
 - [ ] User-facing `pipeline_harness_guide` seeded from `scripts/seed-protocol-prompts.ts` (not hand-pasted into the GUI)
 - [ ] Human-readable mirror (`PROMPT-PIPELINE-HARNESS-GUIDE.md`) points at seed script as source of truth
 
-### Reactor Integration (6 call sites)
-- [ ] Engine success path — both reactors
-- [ ] Engine failure path — pipelineRetrigger only
-- [ ] MCP task.complete — both reactors
+### Reactor Integration (6 call sites + safety nets)
+- [ ] Engine success — both reactors, in the shared spine `execution-terminal-persist.ts` (NOT agentExecutionEngine.ts)
+- [ ] Engine failure — retrigger + the status-guarded Finding-9 TaskReady safety net, same spine
+- [ ] Human completion — both reactors from the core's post-commit tail (`complete-task-terminally.ts`); zero in adapters
 - [ ] MCP task.create — maybeQueueIfDepFree
 - [ ] MCP agent.assign — maybeQueueIfDepFree
 - [ ] MCP task.update — maybeQueueIfDepFree (gap (e) door 2026-07-18: dep rewrite / template attach; PIPELINE + executionStatus=FAILED call-site guards)
+- [ ] Reactor-firing file set = 5 (Phase 4 intro); the 4 Finding-9 safety nets (4.2a) + F16 retrigger accounted for; nothing new unclassified
 
 ### Anti-Fabrication Defense (3 layers)
 - [ ] Protocol rule present
-- [ ] task-complete-handler invariant present
-- [ ] task-update-handler invariant mirror present
+- [ ] 4-point invariant present ONCE in `complete-task-terminally.ts` (2 PipelineStageMismatchError throws)
+- [ ] Both handlers carry only a pointer comment — zero re-inlined throws
 - [ ] PIPELINE status: COMPLETED omission enforced once in the shared core (`execution-terminal-persist.ts`); both callers delegate via `runExecutionCore`
 
 ### Two-Path Drift (post-2026-07-05 convergence — assert single-source, not mirrored)
@@ -1083,7 +1220,7 @@ When completing this discovery, report back:
 - [ ] Zero snake_case refs for unmapped fields (`agent_template_id`, `task_id`, etc.)
 
 ### Clobber-Detection Alert State (Phase 10)
-- [ ] PipelineStageMismatchError throw + securityEvent log present in both handlers
+- [ ] PipelineStageMismatchError throw + securityEvent log present in the shared completion core (not the handlers — 2026-07-24)
 - [ ] Reactor mirror emits logReactorMismatchSkip with errorCode + securityEvent
 - [ ] MCP boundary preserves errorCode through HTTP 409 (not flattened to 500)
 - [ ] **Recent alert hits (last 24h)**: <count from 10.2 — zero is healthy>
@@ -1097,7 +1234,7 @@ When completing this discovery, report back:
 - [ ] `agentArtifactPolicy.ts` policy table active: PIPELINE → no report.md; leaf → report.md; intermediate → JSON only
 - [ ] Latest leaf `report.md`: tool_marker_pos = 0, stream_marker_pos = 0, length matches `result.json.finalResponse`
 - [ ] Latest PIPELINE `pipeline-index.json` includes `resolvedMode`/`resolvedReasonCode`
-- [ ] Engine §8 prose + universal template carry "finalResponse is the deliverable channel" / "comments are coordination only"
+- [ ] Shared prompt body (`build-agent-prompt-body.ts`) + universal template carry the Deliverable Contract (11.5 property greps: "single canonical deliverable" / "NOT for delivering the work product")
 
 ### Issues Found
 - <list any regressions or gaps detected>
@@ -1135,6 +1272,26 @@ Run 2); re-runs pre-arm via `metadata.duplicateAcknowledged` on each pipeline ch
 gate-hold window (validated Run 3, `programReleasable: true`). pov-program 1.0.30 Step 8 warns
 at gate time. Trail: `cline_docs/reviews/protocol-obligation-audit-2026-08-11/AUDIT.md` (S5, O5).
 
+**Pipeline re-run clearance (2026-09-24)** — technique in the library § "Duplicate-check clearance".
+The matching is the MODEL's, not the platform's; confirm the only code read is still a null check:
+
+```bash
+grep -rn "duplicateAcknowledged" lib --include=*.ts | grep -v "^\S*:\s*\*\|//" | grep -c "!= null"   # expect 1
+```
+
+If that rises, platform code has started matching clearances, and the library's "array is model
+judgement" caveat must be re-verified against it.
+
+## Publishing a generated spec (2026-09-24)
+
+Procedure: `.claude/knowledge/pipelines/requirements-authoring/PUBLISH-GENERATED-SPEC.md`. The publish pass depends on
+the splice tool's two modes and on the operator HOWTO still describing the step — confirm both exist:
+
+```bash
+grep -c "def skeleton\|'--insert'\|'--check'" ~/paichart/scripts/requirements-rules.py   # expect >=3
+grep -c "If the requirements.md was GENERATED" scripts/seed-protocol-prompts.ts            # expect >=1 — the heading, plus changelog mentions (2 at 2026-09-24)
+```
+
 ## 🆕 2026-09-14 — Prose-obligation coverage pins
 
 The coverage map at `.claude/knowledge/pipelines/PROSE-OBLIGATION-COVERAGE.md` asserts which
@@ -1145,11 +1302,106 @@ whether to BUILD something. These pin its load-bearing claims.
 ```bash
 grep -c "| 'prefix-not-minimal'" lib/agents/harness/derivation-containment.ts   # expect 1 — the counterpart the map credits for requirements.md check 2b (minimality). If this goes to 0 the map's "covered" row is false and check 2b is exposed again
 grep -c "| 'covered-not-member'" lib/agents/harness/derivation-containment.ts   # expect 1 — the counterpart for check 3 (aggregate covers no existing allocation)
-grep -c "^    name: '" lib/agents/harness/mechanical-nets.ts                    # expect 6 — registrations, NOT distinct nets: rollbackContainment registers at both points. The map states 5 nets / 6 registrations and both numbers must move together
+grep -c "^    name: '" lib/agents/harness/mechanical-nets.ts                    # expect 7 — registrations, NOT distinct nets: rollbackContainment registers at both points. 6 nets / 7 registrations since RWF C3 (2026-09-26, +verdictFreshness@leg-synthesize); both numbers must move together
 grep -c "point: 'leaf-persist'" lib/agents/harness/mechanical-nets.ts           # expect 2 — a leaf-persist net reaches the leg Reviewer's §6 via the chainer; a leg-synthesize one cannot. Stamp point is a design constraint, so the split is worth pinning
-grep -c "point: 'leg-synthesize'" lib/agents/harness/mechanical-nets.ts         # expect 4
+grep -c "point: 'leg-synthesize'" lib/agents/harness/mechanical-nets.ts         # expect 5 — was 4; +verdictFreshness (RWF C3 2026-09-26)
 grep -c "authored-value-not-derived" lib/agents/harness/derivation-containment.ts   # expect 0 — the check-1 leaf is EARNED, SPECCED and deliberately FILED (3 of 13 coverage, zero observed mismatches). A non-zero count means it was built, which is GOOD but makes the map's "EXPOSED" row stale: update the map and retire the health-run re-measure in the same commit
 ```
 
 ⚠️ The last pin is the useful one: it is the only expectation here that we WANT to flip. When it does,
 the flip is the signal to update the coverage map — not a regression.
+
+## Cross-pipeline delivery (Bug Class 84) — verification greps, added 2026-09-17
+
+Every expectation below was RUN before being written down (Protocol 11 Part C).
+
+```bash
+# The injection exclusion list is spelled LITERALLY, not derived from a role regex.
+grep -c "'.*_harvester'\|'synthesis_source_acquirer'\|'change_reviewer'\|'publication_reviewer'" \
+  lib/agents/harness/context-chainer.ts          # expect >=6 — the list plus its tripwire regex
+
+# ⚠️ It must NOT reuse HARNESS_LEAF_ROLE_RE, which is /harvest|architect|design|author/i and would
+# exclude the CONSUMING roles the delivery exists for. The PROPERTY is "never IMPORTED", not "never
+# mentioned" — the file names it twice in warning comments, and an `expect 0` on the bare string
+# fires on those. (Written wrong first, 2026-09-17, minutes after replacing two mention-counts with
+# property greps for the same reason. The mention-vs-property trap does not announce itself.)
+grep -c "^import.*HARNESS_LEAF_ROLE_RE" lib/agents/harness/context-chainer.ts   # expect 0
+
+# The reconciliation tripwire exists and is a WARN, never a block.
+grep -c "INJECTION_ROLE_SHAPE_UNREVIEWED" lib/agents/harness/context-chainer.ts  # expect 1
+
+# agentRole IS selected at prepare — without it the exclusion predicate reads undefined for every
+# child and excludes NOBODY. This shipped inert once; the pin is in test:chain-injection.
+grep -c "agentRole" lib/agents/harness/prepare-task-for-execution.ts   # expect >=2
+
+# The renderer labels an injected entry as what it is, and keys the degraded arm on `source`
+# (NOT on `degraded`, which is ABSENT on every pre-2026-09-16 entry — absent != not-degraded).
+grep -c "Upstream Pipeline Deliverable" lib/agents/harness/render-pipeline-context.ts  # expect >=1
+
+# The signal no longer nulls out on the dep-free population the fix exists for.
+grep -c "inheritedPredecessors" lib/services/execution-artifacts.ts    # expect >=4
+```
+
+**Property checks that are not greps** — run these against the corpus at a health-run:
+
+- **Tier check.** A leg reading clean on `predecessors` / `chainCapablePredecessors` /
+  `notChained` / `degradedPredecessors` says NOTHING about its children. Query the child's own
+  `inputContext.chainedFrom`; a child whose entries name only its siblings did not receive the
+  upstream. *(Both forensics guides certified this defect as clean, at both tiers, for two months.)*
+- **Role reconciliation.** Any `agentRole` on a leg's children matching `/review|harvest|acquir/i`
+  that is not in `INJECTION_EXCLUDED_ROLES` is an undecided case — `test:chain-injection` fails on it.
+
+**Still open** (do not read a green run as closing these): the dep-free path, the exclusion's
+POSITIVE case, and the 26% are **fixture-proven only** — podrange's consumers each hold a sibling
+edge, so *"first in line AND entitled to the value"* never occurs there.
+
+## RWF Stage 1 Wave A — verification greps (added 2026-09-26; every expectation run before it was written)
+
+"SYNTHESIZE ⇒ nothing is in flight" is CHECKED now, not assumed. Plan + 8 reviews + audits:
+`cline_docs/reviews/rwf-stage1-2026-09-26/`. Suites: `test:child-stage-settled`, `test:reactor-budget-exhausted`,
+`test:harness-dispatch-fact`, `test:agent-execute-authz-order` (CI); `test:synthesize-dead-end-behavioral` (real DB).
+
+```bash
+# A1 — ONE shared settled predicate; every "are the children done?" site reads it (a DROP is the finding)
+grep -c "export async function countUnsettledChildren" lib/services/child-stage-settled.ts   # expect 1
+grep -rl "countUnsettledChildren(" lib --include=*.ts | wc -l   # expect >=6 — module, Guard 4, resolver, invariant, persist (F20 + dead-end), self-check
+# A3 — the dispatch fact is SERVER-WRITTEN rows, mcp-direct only (the retrigger reactor also writes parentExecutionId)
+grep -c "ae.context::jsonb -> 'triggeredBy' ->> 'source' = 'mcp-direct'" lib/services/harness-dispatch-fact.ts   # expect 1
+# A3 — Guard 7 is bypassed at exactly ONE call site (the lost-wakeup self-check), never by reapers
+grep -rc "bypassDebounce: true" lib --include=*.ts | grep -v ":0" | wc -l   # expect 1
+# A4 — the sanctioned re-execute exit is ASSIGNED (a property, not a mention count)
+grep -c "result.reExecutionExit = { kind: 'blind'" lib/services/pipelineProtocolValidator.ts   # expect 1
+# A4 — the quality module gates degradation on missingSteps.length, never on presence
+grep -c "missingSteps.length === 0) {" lib/agents/harness/execution-quality.ts   # expect 1
+# A2/A3 — engine-only audit facts are stripped on every client surface
+grep -c "'deadEndExempt'," lib/tasks/services/protected-task-metadata.ts   # expect 1
+grep -c "'reactorBudgetExhausted'," lib/tasks/services/protected-task-metadata.ts   # expect 1
+```
+
+⚠️ **A refused `agent.execute` records `success: true`** (an MCP `isError` result) and the failure persist has
+no tool calls. Never key a platform fact on tool-call success — read the server-written execution rows.
+
+## RWF Stage 1 X4 + Waves B/C — verification greps (added 2026-09-26; every expectation run before it was written)
+
+Suites: `test:child-stage-settled` (X4 D11-D18), `test:authoritative-result-read` (B), `test:orchestrator-reexecution`
+(C1), `test:keep-best-selection` C2 K1-K8, `test:verdict-freshness` (C3), `test:step3-reexecution-prose` (C4).
+
+```bash
+# X4 — both reapers write the task side through the ONE module; the engine writes no null of its own
+grep -c "writeReapedTaskStatuses(tx," lib/services/agentExecutionEngine.ts   # expect 2
+grep -c "executionStatus: null" lib/services/agentExecutionEngine.ts   # expect 0
+# B1 — the nets read the execution the chainer chained (helper + 3 enrichment files)
+grep -rl "readAuthoritativeResultField(" lib --include=*.ts | wc -l   # expect 4
+# C1 — the cap + Reviewer rule run at the chokepoint, and the chained record is stamped explicitly
+grep -c "enforceOrchestratorReExecutionRules(prisma" lib/services/agent-execution-create.ts   # expect 1
+grep -c "ctx.chainedPredecessors = stamps.chainedPredecessors" lib/services/agent-execution-create.ts   # expect 1
+# C2 — a changed-input retry gets no keep-best comparison
+grep -c "return skip(.changed-input.)" lib/services/execution-selection.ts   # expect 1
+# C3 — persist-time key order; the freshness net; the guard reads the authoritative reviewer
+grep -c "orderResultJsonForPersist(enrichedResultJson)" lib/services/execution-terminal-persist.ts   # expect 1
+grep -c "name: .verdictFreshness." lib/agents/harness/mechanical-nets.ts   # expect 1
+grep -c "selectAuthoritativeExecution(prisma as any, s.id, CHAIN_SELECTION_OPTIONS)" lib/agents/harness/verdict-mismatch-guard.ts   # expect 1
+```
+
+⚠️ **Unknown is never "same"** (audit N8) — a not-chained or absent record compares as unknown, which ALLOWS a
+reviewer re-run and SKIPS keep-best only for the reviewer set. A mechanism that refuses on unknown is a regression.

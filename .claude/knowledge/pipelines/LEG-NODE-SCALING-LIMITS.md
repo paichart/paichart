@@ -31,7 +31,7 @@ psql "$DATABASE_URL" -c "SELECT c.title, length(a.content)/1024 AS kb, a.\"creat
 | `agent.results` verbose ceiling | 100KB (`VERBOSE_MAX_CHARS`, task-action-handler) | ~5–8 |
 | §6 chain cap (harvester finalResponse → author) | 128KB/predecessor (`context-chainer.ts`) | ~8–10, and only if the finalResponse bloats — discipline keeps it a curated summary |
 | Harvest tool turns (3–6 scoped reads/device) | loop turn budget | ~8–10 |
-| Author output budget (package ~2–4KB/device) | maxTokens 24000 ≈ ~70KB | ~15+, not the constraint |
+| Author output budget (package ~2–4KB/device) | maxTokens 48000 — but ~66–79% of a Sonnet-5 call's output is adaptive thinking (measured 2026-09-24), so budget ~10–16K tokens (~40–60KB) of visible text | ~10+, not the constraint |
 | **Lab host RAM** (cEOS ≈ 2GB each) | devext: 19GB usable | **7–8, hard** |
 
 The binding LLM constraint is **downstream read depth**, and it binds only when a consumer needs

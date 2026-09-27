@@ -10,6 +10,7 @@
  */
 import { runDialectLint } from '../lib/agents/harness/dialect-lint';
 import { computeDialectLintFact } from '../lib/agents/harness/dialect-lint-enrichment';
+import { authoritativeReadStubFromTexts } from './fixtures/authoritative-read-stub';
 
 let passed = 0, failed = 0;
 function check(name: string, cond: boolean, detail = '') {
@@ -17,11 +18,12 @@ function check(name: string, cond: boolean, detail = '') {
   else { failed++; console.log(`  ❌ ${name}${detail ? ` — ${detail}` : ''}`); }
 }
 
-/** Minimal prisma double: only the two calls the enrichment makes. */
+/** Minimal prisma double: the stage-children read + the authoritative-read surface (RWF Wave B). Every
+ *  child carries the same `finalResponse` (null ⇒ no artifact), so the Author's is whichever it is. */
 function fakePrisma(children: Array<{ id: string; title: string; agentRole: string | null }>, finalResponse: string | null) {
   return {
     task: { findMany: async () => children },
-    $queryRaw: async () => (finalResponse === null ? [] : [{ fr: finalResponse }]),
+    ...authoritativeReadStubFromTexts(Object.fromEntries(children.map((c) => [c.id, finalResponse]))),
   } as never;
 }
 

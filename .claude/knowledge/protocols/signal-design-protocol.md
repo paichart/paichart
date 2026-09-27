@@ -51,6 +51,7 @@ For each signal the change introduces or modifies:
 | Verdict | Yes | any | **Ship** (carry confidence) |
 | Verdict | No | low (dev-controlled consumer) | Ship with caveat, or instrument |
 | Verdict | No | high (AI consumer acts on it) | **Ship the fact; defer the verdict** |
+| Fact reporting what the check FIRED ON, not what it CONCLUDED about the input | n/a | any | **Carry the denominator with the numerator** — see the axis below |
 | Any signal that can re-create the failure it addresses | — | — | **Reject** |
 
 ---
@@ -165,6 +166,60 @@ Through the lens:
 
 Decision record: `cline_docs/reviews/harness-synthesize-verdict-misread-2026-07-14/finding.md` (three-specialist
 reconciled review; the boundary-contract trace that found the truncation mechanism).
+
+---
+
+## The DENOMINATOR axis — a fact that reports what the check fired on (2026-09-21)
+
+A third way a well-formed fact misleads, after **framing** and **position**. Measured across three
+independent facts in one day, each shipped green in isolation for months:
+
+> **All three report what the check FIRED ON, rather than what it CONCLUDED about the input.**
+
+| fact | reports | cannot say | consequence |
+|---|---|---|---|
+| `sanitized` (R9) | which counters incremented | whether the text was **rewritten** — normalization was thought of as *setup*, so it is outside the counted set | `sanitized: false` stamped on content that WAS rewritten; **≥111 live instances**  — ✅ **resolved 2026-09-25 (F9)** by adding `rewritten = text !== raw` + `rewriteClasses` and FREEZING `sanitized` (split, not widened) |
+| `markerPresence` | which markers parsed | whether a marker was **OWED** by this domain | three ✗ render as "platform fact" into Reviewers in **146/274 stamps across four domains** that mandate no markers |
+| `derivationContainment` | what the check found | whether the check **SHOULD have run** | `blocking / hard-gap` on a pipeline that derives nothing by design |
+
+**The rule**: when a signal reports a count, a category or an outcome, ask what its **denominator** is
+— *over what population is this true?* — and ship that with it. A numerator alone is read as a
+statement about the whole input.
+
+**Three tests that catch it at spec time:**
+1. **Name the negative.** What does the value `0` / `false` / `absent` assert? If the honest answer is
+   *"either nothing happened, or something happened that this check does not count,"* the fact is
+   incomplete.
+2. **Would a future addition be covered?** `sanitized` was derived from a disjunction over the
+   counters that existed. Any transform added later is silently uncounted. Prefer a formulation that
+   **cannot drift** — R9's recommended fix is `text !== raw`, one comparison, covering every future
+   transform automatically. *A fifth counter would have repeated the original mistake.* (Shipped 2026-09-25, with a
+   self-reporting `unclassified` class for a transform added outside the classifier.)
+3. **Is the qualifier on the other side of the reliability line?** `change_reviewer` guidance tells
+   reviewers *"a ✗ for a block the leg needs is the blocking FACT to cite"* — the platform asserts the
+   ✗ **with platform authority** while the qualifier that makes it harmless ("for a block the leg
+   needs") is left to an LLM to infer from prose. Authority and qualifier must sit on the same side
+   (Invariant 6).
+
+⚠️ **This axis is why "it errs toward blocking" is not a defence.** A fact asserting a condition that
+is not true is false regardless of which way it points — `hard-gap` claims *"the check should have run
+and could not"*, and where that sentence is false, pointing conservatively does not repair it. The
+honest alternatives are a **scope claim** (const-verifiable, true regardless of content, e.g.
+`lane-not-supported`) or a **structural claim** (true by construction). ⚠️ A *content prediction*
+("this domain emits nothing") is a **verdict in a fact's clothes** — unverifiable when stamped and
+falsified by the first counter-example.
+
+⚠️ **Corollary — an exemption is not the fix.** Suppressing a wrong fact can be strictly worse than
+stamping it: `lean-card-facts.js` renders an ABSENT fact as *"treat as blocking"*, so silence
+converts a wrong fact into a wrong fact the consumer cannot even see. The declining arm must still
+**stamp a named fact**, and its declaration should be **existence-conditional** — declining only
+while the leg genuinely emits nothing — which makes it a **falsifiable claim about the domain**
+rather than a standing permission.
+
+Evidence: `cline_docs/follow-ups/f9-r9-rewrite-facts-2026-09-21.md` (the measured R9 case) ·
+`cline_docs/reviews/requirements-authoring-review-2026-09-21/SYNTHESIS.md` §13 (all three, and the
+triage rule: **a fact that is FALSE is always worth fixing once measured; a fact that is
+TRUE-but-inapplicable needs a new input earned**).
 
 ---
 

@@ -65,6 +65,9 @@ import { createAgentExecution } from './agent-execution-create';
 import { DuplicateActiveExecutionError } from '@/lib/errors';
 import { logReactorDuplicateSkip, logReactorMismatchSkip, logReactorBudgetSkip } from './reactor-skip-counter';
 import { TriggeredBySchema, type TriggeredBy } from './types/triggered-by';
+import { countUnsettledChildren } from './child-stage-settled';
+import { handleReactorBudgetExhausted } from './reactor-budget-exhausted-persist';
+import { isProgramHarnessTask } from '@/lib/agents/harness/program-protocol';
 
 const log = mcpLogger.child({ module: 'PipelineRetrigger' });
 
@@ -76,9 +79,14 @@ const DEBOUNCE_MS = 30_000;
 // so a runaway/pathological harness whose SYNTHESIZE keeps re-creating stages would
 // retrigger forever (bounded RATE by the engine poller take:5, unbounded TOTAL). This
 // caps the chain. Mirrors the workflow engine's maxTotalRetries=10
-// (lib/services/workflow/core/orchestration-engine.js:313). Legit max generation is 1
-// (CREATE→SYNTHESIZE→complete — harnessModeResolver has no stage-N+1 mode), so 10 is
-// pure runaway headroom. Soft + env-tunable (non-load-bearing).
+// (lib/services/workflow/core/orchestration-engine.js:313). Soft + env-tunable.
+//
+// RWF A2 (2026-09-26) — corrected and TIERED. The old note "legit max generation is 1" was false: a leg
+// re-enters once per settle wave, i.e. ≤ 1 + its orchestrator re-executions (the 50-69 band), and a
+// PROGRAM ROOT re-enters roughly once per leg / gate / Node-C settle. Prod max observed 2026-09-26:
+// 7 on a pov-program root (completed normally), 4 on a leg. A single budget of 10 was runaway headroom for
+// legs but a false-terminalization risk for large programs, so roots get their own (default 25, warned
+// at 80%). Exhaustion now TERMINALIZES (reactor-budget-exhausted-persist.ts) instead of hanging.
 //
 // NOTE: counter monotonicity depends on BC67 (one active execution per harness task) —
 // Guards 6/7 + the partial-unique index guarantee one retrigger row per generation, so
@@ -87,6 +95,11 @@ const DEBOUNCE_MS = 30_000;
 const MAX_HARNESS_REACTOR_GENERATIONS = Number(
   process.env.MAX_HARNESS_REACTOR_GENERATIONS ?? 10
 );
+const MAX_PROGRAM_ROOT_REACTOR_GENERATIONS = Number(
+  process.env.MAX_PROGRAM_ROOT_REACTOR_GENERATIONS ?? 25
+);
+/** Warn when a program root's generation reaches this fraction of its budget (Steve, 2026-09-26). */
+const PROGRAM_ROOT_BUDGET_WARN_FRACTION = 0.8;
 
 /**
  * Called after a task transitions to COMPLETED or FAILED. If the task was
@@ -98,7 +111,16 @@ const MAX_HARNESS_REACTOR_GENERATIONS = Number(
  *
  * @param completedTaskId - Task that just transitioned to a terminal state
  */
-export async function maybeRetriggerPipelineHarness(completedTaskId: string): Promise<void> {
+export async function maybeRetriggerPipelineHarness(
+  completedTaskId: string,
+  /**
+   * RWF A3 (2026-09-26). `bypassDebounce` is read ONLY by Guard 7 and passed ONLY by the lost-wakeup
+   * self-check (harness-dispatch-fact.ts): a single post-persist event, where the debounce's purpose —
+   * absorbing a burst of near-simultaneous child completions — does not apply, and Guard 6 + BC67 still
+   * de-duplicate. Reapers and child completions never pass it (pinned by test-harness-dispatch-fact).
+   */
+  opts?: { bypassDebounce?: boolean },
+): Promise<void> {
   try {
     // Guard 1: Load event entity with the fields guards need.
     const completed = await prisma.task.findUnique({
@@ -132,9 +154,9 @@ export async function maybeRetriggerPipelineHarness(completedTaskId: string): Pr
     // Postgres the column is camelCase with double-quotes. `stage_id` IS
     // mapped so it's snake_case. Always check schema before adding raw SQL.
     const harnesses = await prisma.$queryRaw<
-      Array<{ id: string; title: string; agentTemplateId: string | null; status: string }>
+      Array<{ id: string; title: string; agentTemplateId: string | null; status: string; metadata: unknown }>
     >`
-      SELECT t.id, t.title, t."agentTemplateId", t.status
+      SELECT t.id, t.title, t."agentTemplateId", t.status, t.metadata
       FROM tasks t
       WHERE t.type = 'PIPELINE'
         AND t.metadata->>'pipelineStageId' = ${completed.stageId}
@@ -238,28 +260,10 @@ export async function maybeRetriggerPipelineHarness(completedTaskId: string): Pr
     // (prod: SYNTHESIZE queued before the reviewer persisted in 13 of 17 measurable cases;
     // consistent with the 25-vs-88 stamped-vs-artifact divergence of 2026-08-29). Same
     // settledness predicate as TaskReadyReactor (H-5); the straggler's terminal persist re-fires.
-    const nonTerminalChildren = await prisma.task.count({
-      where: {
-        stageId: completed.stageId,
-        OR: [
-          {
-            AND: [
-              { status: { not: 'COMPLETED' } },
-              {
-                OR: [
-                  { executionStatus: null },
-                  { executionStatus: { notIn: ['FAILED'] } },
-                ],
-              },
-            ],
-          },
-          {
-            status: 'COMPLETED',
-            executions: { some: { status: { in: ['PENDING', 'RUNNING'] } } },
-          },
-        ],
-      },
-    });
+    // RWF 1.1 (2026-09-26): the ONE shared settledness predicate. Its in-flight arm is WIDER than the
+    // H-6 arm it replaces (any task status, not only COMPLETED): a FAILED child being re-run is briefly
+    // IN_PROGRESS+FAILED with a PENDING row, because agentTaskService inserts the row before its claim.
+    const nonTerminalChildren = await countUnsettledChildren(prisma, completed.stageId);
 
     if (nonTerminalChildren > 0) {
       // Not ready — some children still running/open.
@@ -318,7 +322,8 @@ export async function maybeRetriggerPipelineHarness(completedTaskId: string): Pr
 
     // Guard 7: Debounce. Absorb near-simultaneous child completions — multiple
     // children finishing within the window only trigger one harness run.
-    const recentExecution = await prisma.agentExecution.findFirst({
+    // RWF A3: skipped ONLY for the lost-wakeup self-check (opts.bypassDebounce) — see the param doc.
+    const recentExecution = opts?.bypassDebounce ? null : await prisma.agentExecution.findFirst({
       where: {
         taskId: harnessId,
         createdAt: { gte: new Date(Date.now() - DEBOUNCE_MS) },
@@ -398,14 +403,35 @@ export async function maybeRetriggerPipelineHarness(completedTaskId: string): Pr
         ? Number(priorContext?.reactorGeneration ?? 0)
         : 0;
     const nextGeneration = priorGeneration + 1;
-    if (priorGeneration >= MAX_HARNESS_REACTOR_GENERATIONS) {
+    // RWF A2: the budget is tiered. Tier comes from the WS2 protocol stamp (title only as the transitional
+    // fallback) via the shared resolver — never a hand-rolled title test.
+    const isProgramRoot = isProgramHarnessTask({ title: harness.title, metadata: harness.metadata });
+    const tier = isProgramRoot ? 'program-root' as const : 'leg' as const;
+    const budget = isProgramRoot ? MAX_PROGRAM_ROOT_REACTOR_GENERATIONS : MAX_HARNESS_REACTOR_GENERATIONS;
+    if (priorGeneration >= budget) {
       logReactorBudgetSkip('pipeline-retrigger', {
         harnessTaskId: harnessId,
         generation: priorGeneration,
-        budget: MAX_HARNESS_REACTOR_GENERATIONS,
+        budget,
         cascadeCompletedTaskId: completedTaskId,
       });
+      // RWF A2 (2026-09-26): exhaustion TERMINALIZES instead of leaving the harness IN_PROGRESS forever.
+      await handleReactorBudgetExhausted({
+        harnessTaskId: harnessId,
+        evaluatedExecutionId: priorExecRows[0].id,
+        generation: priorGeneration,
+        budget,
+        tier,
+        cascadeCompletedTaskId: completedTaskId,
+        commentUserId: priorTriggeredByParse.data.id,
+      });
       return;
+    }
+    if (isProgramRoot && priorGeneration >= Math.floor(budget * PROGRAM_ROOT_BUDGET_WARN_FRACTION)) {
+      log.warn(
+        { harnessTaskId: harnessId, generation: priorGeneration, budget, errorCode: 'HARNESS_GENERATION_BUDGET_APPROACHING' },
+        'Program root is approaching its reactor re-entry budget — it will be terminalized FAILED at the budget'
+      );
     }
 
     // Build rich config via shared helper.

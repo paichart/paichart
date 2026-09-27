@@ -44,7 +44,8 @@ import { RUNTIME_LIMITS } from '@/lib/validation/runtime-limits';
 import { capabilitiesFor, clampEffort } from '@/lib/services/llm/model-capabilities';
 import { AppError } from '@/lib/errors';
 import type { LLMRequestOptions } from '@/lib/services/llm/types';
-import { sanitizeChainedOutput } from '@/lib/agents/harness/sanitize-chained-output';
+import { sanitizeChainedOutput, isR9OperatorEvent } from '@/lib/agents/harness/sanitize-chained-output';
+import { redactArtifactSecrets } from '@/lib/agents/harness/redact-artifact-secrets';
 
 /**
  * Token-usage accumulation across an agentic loop's turns.
@@ -323,6 +324,14 @@ export function truncateForLlm(
     content.slice(0, MAX_TOOL_RESULT_LENGTH) +
     `\n\n... [truncated] — showed the first ${MAX_TOOL_RESULT_LENGTH} of ${fullLength} characters; ` +
     `the remaining ${dropped} are NOT shown. Do not treat the missing tail as absent or fabricate it. `;
+  // ⚠️ 2026-09-22: "so page only what the task needs" was REMOVED from the read_more clause. A cost
+  // stated without a reach is not a cost fact — it reads as a ration, i.e. a verdict the platform
+  // cannot validate, because it has not computed whether economising forfeits the document. It also
+  // contradicted the role guidance shipping alongside it ("page every `... [truncated]` result to
+  // its end"), and the notice WINS that argument: it arrives inside the tool_result at the moment of
+  // decision while the guidance sits thousands of tokens upstream. A live Architect stopped one
+  // window short of a document it could have finished. Reach now lives in the TRAILER, which is the
+  // only place `pagesLeft` is live — this clause points at it rather than guessing.
   // Recovery clause. Protocol 10: the options are ordered by COST FACTS (a scoped re-read is cheaper),
   // NOT an unearnable "prefer X" verdict (ordering an option the platform can't validate — the run-3
   // no-narrower-form case had none). The read_more line is offered ONLY when this result was captured
@@ -330,7 +339,7 @@ export function truncateForLlm(
   // form only. `... [truncated]` is load-bearing (role prose + string-pinned tests) — keep it verbatim.
   const recover = ref !== undefined
     ? `To recover: a NARROWER/SCOPED re-read (by section, filter, resource, or page) is usually cheaper and needs no extra turn when a narrower form exists. ` +
-      `To keep reading THIS exact result instead: read_more({ ref: "${ref}", offset: ${MAX_TOOL_RESULT_LENGTH} }) — each window costs a turn, so page only what the task needs. ` +
+      `To keep reading THIS exact result instead: read_more({ ref: "${ref}", offset: ${MAX_TOOL_RESULT_LENGTH} }) — each window costs a turn; every window's trailer states how many remain and what window size finishes this result. ` +
       `If you do neither, name the specific missing content as a gap. Never repeat the same broad call unchanged.`
     : `If you need the omitted content, re-issue this read NARROWER/SCOPED (by section, filter, resource, or page). ` +
       `If this read has no narrower form, flag the gap in your output instead of repeating the same call.`;
@@ -341,7 +350,9 @@ export function truncateForLlm(
 // read_more — truncation-recovery pager (Phase 1, memory-backed)
 // Design: cline_docs/reviews/overflow-fetch-design-2026-07-09/. When a tool result exceeds the
 // Tier-1 cap above, its FULL post-R9 string is stashed in a per-execution PagerState and the
-// truncation notice hands the model a `ref`. The model calls read_more({ref, offset}) to page the
+// truncation notice hands the model a `ref`. ("post-R9" holds for `services` results only -- R9 site
+// A screens nothing else, so a stashed `perform agent.results` result is paged UNSCREENED, and it can
+// carry a child's raw toolCalls[].result. OPEN, register F9-s7.) The model calls read_more({ref, offset}) to page the
 // SAME content — NO re-execution, no new query, no device contact. The loop intercepts read_more by
 // NAME in executeToolTurn and serves windows from memory. It is NEVER registered on any server —
 // READ_MORE_FUNCTION_DEF is injected into mcpFunctions at the two build sites (agentExecutionEngine
@@ -420,12 +431,86 @@ RETURNS raw text: a header [read_more ref=.. offset=..], the window, then either
       offset: { type: 'integer', minimum: 0, description: 'Character offset to continue from (the notice gives you the next offset)' },
       limit: {
         type: 'integer', minimum: READ_MORE_WINDOW_BOUNDS.min, maximum: READ_MORE_WINDOW_BOUNDS.max,
-        description: `Window size in chars (default ${READ_MORE_WINDOW_BOUNDS.default}; capped at ${READ_MORE_WINDOW_BOUNDS.max} so the window is itself never truncated)`,
+        description: `Window size in chars (default ${READ_MORE_WINDOW_BOUNDS.default}, max ${READ_MORE_WINDOW_BOUNDS.max}). RAISE IT when the trailer says a larger window is needed to finish — windows per result are capped, so the window size is what decides whether the end is reachable at all, not just how fast you get there. The max is ${READ_MORE_WINDOW_BOUNDS.max} so a served window is never itself truncated.`,
       },
     },
     required: ['ref', 'offset'],
   },
 };
+
+/**
+ * The `[more remains]` trailer — states REACH beside cost, and suggests a window ONLY when the
+ * default cannot finish.
+ *
+ * WHY THIS EXISTS (2026-09-22, four-lane review after a live loss). The trailer used to hand back
+ * `{ ref, offset }` and say "page only what the task needs". That is a price with no total: the
+ * agent could see what a window COSTS and never what remained REACHABLE. Reach is the product of
+ * two numbers and the agent holds only one — `READ_MORE_WINDOW_BOUNDS` is in the tool schema,
+ * `READ_MORE_PAGES_PER_ORIGIN` is module-private and appears nowhere the model can see until it is
+ * already spent. So an agent cannot compute its own ceiling even in principle, and "let the agent
+ * pass `limit`" is not an achievable answer.
+ *
+ * A cost stated without a reach is not a fact — it functions as a VERDICT ("prefer less"), and it
+ * contradicted the role guidance shipping alongside it, which tells the Program Architect to "page
+ * every `... [truncated]` result to its end". The notice arrives inside the tool_result at the
+ * moment of decision; the guidance sits thousands of tokens upstream. The notice won. A live
+ * Architect stopped ONE window short of a document it could have finished and honestly reported an
+ * unreachable tail — costing a downstream reviewer one of its acceptance checks.
+ *
+ * SUGGEST THE MINIMUM, NEVER THE MAX. `limit: 7000` would smuggle "bigger is better", which the
+ * platform cannot validate — a wider window is only dominant if the agent intends to finish.
+ * `ceil(remaining / pagesLeft)` is the smallest window satisfying a stated goal, is cheaper than
+ * the max, and carries no preference. `max` appears only as a CLAMP: a bound on what the platform
+ * may emit, never as advice.
+ *
+ * RECOMPUTED EVERY WINDOW, never pinned once: `pagesLeft` depends on the per-RUN budget, which the
+ * agent may spend on another result between calls. A window computed once is a promise that rots.
+ */
+export function buildMoreRemainsTrailer(
+  ref: number,
+  nextOffset: number,
+  fullLength: number,
+  pagesUsedOnRef: number,
+  pagerTurnsUsed: number,
+  maxPagerTurns: number,
+): string {
+  const remaining = fullLength - nextOffset;
+  // Both caps bind; the smaller is the real one. Per-origin (SO-C5) and per-run are independent,
+  // and on the live incident BOTH were at their limit — the run-budget message simply fired first
+  // because its check sits higher. Reporting only one would name the wrong ceiling.
+  const pagesLeft = Math.min(
+    READ_MORE_PAGES_PER_ORIGIN - pagesUsedOnRef,
+    maxPagerTurns - pagerTurnsUsed,
+  );
+  const scopeHint =
+    'A scoped/narrower re-read of the source is usually cheaper than paging on, where a narrower form exists.';
+
+  if (pagesLeft <= 0) {
+    return `\n[more remains] — ${remaining} characters remain and NO pager windows are left for this result. ` +
+      `Stop paging: re-read the source scoped/narrower, or name that tail as a gap in your output. ${scopeHint}`;
+  }
+
+  const needed = Math.ceil(remaining / pagesLeft);
+  if (needed > READ_MORE_WINDOW_BOUNDS.max) {
+    // THE BRANCH THE OLD TRAILER HAD NO WORDS FOR, and the one the next larger artifact hits.
+    // Without it an agent discovers the ceiling at the last window, having spent the budget that
+    // would have let it do something else.
+    const reach = pagesLeft * READ_MORE_WINDOW_BOUNDS.max;
+    return `\n[more remains] — ${remaining} characters remain; the ${pagesLeft} window(s) left for this result ` +
+      `reach at most ${reach} of them, so the final ${remaining - reach} are BEYOND this pager's reach at any ` +
+      `window size. Do not page on to find out. Re-read the source scoped/narrower, or name that tail as a ` +
+      `gap in your output. ${scopeHint}`;
+  }
+
+  const window = Math.max(needed, READ_MORE_WINDOW_BOUNDS.min);
+  const suggest = window > READ_MORE_WINDOW_BOUNDS.default ? `, limit: ${window}` : '';
+  const windowsToFinish = Math.ceil(
+    remaining / (suggest ? window : READ_MORE_WINDOW_BOUNDS.default),
+  );
+  return `\n[more remains] — continue: read_more({ ref: "${ref}", offset: ${nextOffset}${suggest} }). ` +
+    `${remaining} characters remain; ${windowsToFinish} more window(s) at that size finish this result, ` +
+    `and ${pagesLeft} window(s) are available. Each window costs a turn. ${scopeHint}`;
+}
 
 /** Serve ONE read_more call from memory (Phase 1). Returns a NORMAL record + tool_result block.
  *  Every error path is a fact-shaped is_error block (SO-C5: never throw — the model must be able to
@@ -479,8 +564,12 @@ function pagerServe(
   const end = offset + win.length;
   const nextOffset = end < full.length ? end : null;
   const header = `[read_more ref=${ref} offset=${offset}..${end} of ${full.length}]`;
+  // pagesByRef / pagerTurnsUsed are incremented BELOW, so pass the post-serve values — the trailer
+  // describes what is left AFTER this window, which is what the agent is deciding about.
   const trailer = nextOffset !== null
-    ? `\n[more remains] — continue: read_more({ ref: "${ref}", offset: ${nextOffset} }). A scoped/narrower re-read of the source is usually cheaper than paging on; page only what the task needs.`
+    ? buildMoreRemainsTrailer(
+        ref, nextOffset, full.length, originPages + 1, pager.pagerTurnsUsed + 1, pager.maxPagerTurns,
+      )
     : `\n[end of result]`;
   const text = `${header}\n${win}${trailer}`;
 
@@ -569,7 +658,7 @@ export type ToolCallRecord = {
    *  per-predecessor facts (context-chainer.ts:327-329) so one grep covers both boundaries.
    *
    *  PRESENCE MEANS "R9 EXAMINED THIS RESULT" (review 2026-07-26, aexec+sec-ops concurring), NOT
-   *  "R9 rewrote it" — read `sanitized` for that. Absent means R9 never ran: flag off, tool wasn't
+   *  "R9 rewrote it" — read `rewritten` for that (F9). Absent means R9 never ran: flag off, tool wasn't
    *  `services`, or the call threw (success=false). This distinction IS the C1 dataset: a
    *  false-positive RATE needs a denominator, and the denominator is "records carrying
    *  `sanitized`". The first shape shipped today set the fields only when the sanitizer FIRED,
@@ -582,14 +671,23 @@ export type ToolCallRecord = {
    *  system:informational`, `route-map SYSTEM:PREPEND`) silently corrupted the harvest with no
    *  log, no field and no counter.
    *
-   *  CONSUMER RULE: branch on `sanitized` for "was this result rewritten" — NOT on
-   *  `neutralizedCount` alone (a control-char-only strip is a real rewrite with count 0), and
-   *  NEVER on the in-band marker string (advisory + attacker-spoofable —
-   *  sanitize-chained-output.ts header). */
+   *  CONSUMER RULE (F9, 2026-09-25): "was this result rewritten" is `rewritten`; WHICH step changed
+   *  bytes is `rewriteClasses` (sanitize-chained-output.ts header). NEVER the in-band marker string
+   *  (advisory + attacker-spoofable). At site A the `ansi`, C0 `control` and `emptied` classes can
+   *  never fire: the input is the JSON.stringify envelope, which escapes C0 bytes (F9 panel).
+   *
+   *  `sanitized` is LEGACY, FROZEN at its 2026-07-26 meaning -- the zero-width/bidi or C0/C1 strip
+   *  fired, or an injection pattern was neutralized. It does NOT mean "rewritten" (NFKC, ANSI and the
+   *  quarantine-tag defang are excluded). Do not widen it: archived rows hold this meaning and an
+   *  equivalence pin (test-security-invariants section I) fails CI. */
   sanitized?: boolean;
+  /** `text !== raw` over the LLM-bound copy (F9). Present iff R9 examined this result. */
+  rewritten?: boolean;
+  /** Which R9 steps changed bytes, pipeline order (F9). [] iff !rewritten. */
+  rewriteClasses?: string[];
   neutralizedCount?: number;
-  /** Chars removed by the normalize pass (zero-width/bidi/C0-C1/ANSI). Counted separately from
-   *  `neutralizedCount`: a strip-only rewrite yields sanitized=true, neutralizedCount=0. */
+  /** Chars removed by the zero-width/bidi + C0-C1 strips (NOT ANSI -- uncounted, see `rewriteClasses`).
+   *  Counted separately from `neutralizedCount`: a strip-only rewrite yields neutralizedCount=0. */
   strippedControlChars?: number;
   /** Deduped injection CATEGORIES that fired (e.g. ['SYSTEM_MANIPULATION']). Categories only —
    *  the matched TEXT stays in the pino line and out of the artifact: it is attacker-controlled,
@@ -754,28 +852,35 @@ export async function executeToolTurn(
     // warn) + a pino line carrying the matched text for triage. Behaviour is UNCHANGED — this
     // observes the existing rewrite, it does not alter what the model sees.
     // DENOMINATOR (review 2026-07-26): the facts are stamped for EVERY result R9 examines, clean
-    // ones included — presence = examined, `sanitized` = rewritten. The pino warn stays
-    // firing-only (a clean read is not an operator event).
+    // ones included — presence = examined; `rewritten`/`rewriteClasses` = whether/how (F9; `sanitized`
+    // is the frozen legacy subset). The pino warn fires only on an operator-event class (F9).
     if (success && toolCall.name === 'services' && process.env.CONNECTED_OUTPUT_SANITIZE_ENABLED === 'true') {
       const r9 = sanitizeChainedOutput(toolResultContent);
       toolResultContent = r9.text;
       const categories = Array.from(new Set(r9.neutralizedInjections.map(n => n.category)));
-      const rewrote = r9.neutralizedInjections.length > 0 || r9.strippedControlChars > 0;
-      record.sanitized = rewrote;
+      record.sanitized = r9.neutralizedInjections.length > 0 || r9.strippedControlChars > 0; // LEGACY, frozen
+      record.rewritten = r9.rewritten;
+      record.rewriteClasses = r9.rewriteClasses;
       record.neutralizedCount = r9.neutralizedInjections.length;
       record.strippedControlChars = r9.strippedControlChars;
       if (categories.length > 0) record.neutralizedCategories = categories;
-      if (rewrote) {
+      // OPERATOR EVENT gate (F9): quarantine-tag | injection-pattern ONLY -- never `rewritten`, never
+      // `emptied`/cosmetic classes (R9_OPERATOR_EVENT_CLASSES). Before F9 this fired on the legacy
+      // expression, so a `</prior_output>` breakout was defanged with NO log line at all.
+      if (isR9OperatorEvent(r9.rewriteClasses)) {
         // WARN not INFO: a firing is either a real injection attempt or a false positive that
         // corrupted harvested device state. Both warrant an operator's eye. Matches are truncated
-        // (attacker-controlled, unbounded) and live ONLY here — never in the artifact.
+        // (attacker-controlled, unbounded) and live ONLY here — never in the artifact. The tag
+        // class carries NO match text (its attribute span is unbounded + attacker-controlled).
         deps.logger.warn(
           {
             securityEvent: true,
+            site: 'A',
             toolName: toolCall.name,
             server: record.server,
             executionId: ctx.executionId,
             turn: ctx.turn,
+            rewriteClasses: r9.rewriteClasses,
             neutralizedCount: r9.neutralizedInjections.length,
             neutralizedCategories: categories,
             strippedControlChars: r9.strippedControlChars,
@@ -843,6 +948,9 @@ export interface AgenticLoopDeps extends Omit<ToolTurnDeps, 'logger'> {
   /** llmService.generateText (injected for scripted-fake equivalence tests). */
   generateText: (prompt: string, options: LLMRequestOptions, userId?: string) => Promise<any>;
   logger: LoopLogger;
+  /** Clock (epoch ms). Injected ONLY so tests can pin the R4 time budget; production omits it and
+   *  gets Date.now. Read solely by the R4 Layer-1 budget, never by turn accounting or logs. */
+  now?: () => number;
 }
 
 export interface AgenticLoopInput {
@@ -855,6 +963,14 @@ export interface AgenticLoopInput {
    *  source). Prod harness template uses 100. */
   maxToolTurns: number;
   signal: AbortSignal;
+  /**
+   * Epoch ms at which `signal` will be aborted — the watchdog's OWN deadline, computed by the core
+   * on the line beside its setTimeout (2026-09-25, register E1). An AbortSignal carries no deadline,
+   * so without this the R4 retry could not know whether a raised retry can finish. REQUIRED, not
+   * optional: the core is the only production caller, so parity is structural, and every fixture is
+   * forced to state a deadline instead of silently getting an unbounded one.
+   */
+  deadlineAt: number;
   executionId: string;
   taskId: string;
   userId?: string;
@@ -898,10 +1014,35 @@ export interface AgenticLoopResult {
   /** Budget fail-fast (2026-07-04): an all-budget-rejected tool turn switched the continuation
    *  call to a final no-tools blocked-report turn (or its synthesized degrade). */
   budgetFailFastUsed: boolean;
-  /** R4 Layer 1 (2026-07-16): a 'full' turn truncated at max_tokens with empty text and was
-   *  re-issued once with raised maxTokens. `Recovered` = the retry produced text or a tool_use. */
+  /** R4 Layer 1 (2026-07-16): a 'full' turn truncated at max_tokens and was re-issued once with raised
+   *  maxTokens — empty text only until 2026-09-25, any text since (A2 re-opened, register E1).
+   *  `Recovered` = the retry produced text or a tool_use (NOT "ran to completion": see
+   *  truncationRetryStopReason). */
   truncationRetryUsed: boolean;
   truncationRetryRecovered: boolean;
+  /** The retry's own stop reason (null when no retry returned). 'max_tokens' here = recovered but
+   *  STILL truncated — the retry's partial is then the deliverable, and F2 classifies it. */
+  truncationRetryStopReason: string | null;
+  /** Chars of truncated partial text the returned retry DISCARDED (0 = the truncated turn was empty;
+   *  null = no retry returned, so nothing was discarded). */
+  truncationRetryDiscardedChars: number | null;
+  /** R4 time-aware budget (2026-09-25, E1): why a qualifying truncation was NOT retried —
+   *  'INSUFFICIENT_TIME' (the watchdog's remaining time cannot fit a useful raise) or
+   *  'AT_MODEL_CEILING' (maxTokens is already within the headroom of the model ceiling). null when
+   *  the retry armed or never qualified. A skip is a stamped fact, never a silent return: it is the
+   *  measurable that gates any change to the watchdog formula. */
+  truncationRetrySkippedReason: 'INSUFFICIENT_TIME' | 'AT_MODEL_CEILING' | null;
+  /** The retry budget computed for a qualifying truncation: GRANTED (retry armed) or the sub-headroom
+   *  budget that COULD have been granted (skipped). null when no truncation qualified. */
+  truncationRetryMaxTokens: number | null;
+  /** F2 (2026-09-25, E1): the API stop reason of the response whose text IS `assembledText` — i.e.
+   *  the response this loop RETURNS (post-#89, since a correction turn replaces the deliverable and
+   *  can itself stop at max_tokens). Captured HERE, inside the loop, because the core's post-loop
+   *  cascade REPLACES `currentResponse` when #90 reflects (diagnostic-retry.ts) — a stop reason read
+   *  there after #90 is the reflection's `end_turn`, not the deliverable's `max_tokens` (the reviewer
+   *  half of the 2026-09-24 incident). The core threads THIS value to the quality layer and the
+   *  result.json builder. A transcription (Protocol 10 fact), never a judgement of the text. */
+  finalStopReason: string | null;
   /** Phase 2 (2026-07-05, C-1 resolution): the deliverable text = the FINAL turn's
    *  raw text (post-#89 correction, since `currentResponse` is replaced on correction).
    *  This is the SINGLE deliverable-text source both execution paths consume, so the
@@ -928,11 +1069,11 @@ export interface AgenticLoopResult {
  */
 /**
  * R4 Layer 1 — in-loop truncation retry with headroom. When a `'full'` turn stops at `max_tokens`
- * with NO text (Sonnet-5 runs adaptive extended thinking BY DEFAULT, billed as output against
- * max_tokens; a heavy final turn can exhaust the ceiling mid-thinking → the R2 `TRUNCATED_NO_OUTPUT`
- * root cause), re-issue the IDENTICAL request ONCE with a raised `maxTokens`. The truncated turn is an
- * unsigned partial thinking block that cannot be re-submitted as conversation history, so the only
- * clean recovery is discard + re-ask with more room — done IN-LOOP so the retry's response flows back
+ * (Sonnet-5 runs adaptive extended thinking BY DEFAULT, billed as output against max_tokens; a heavy
+ * final turn can exhaust the ceiling mid-thinking → the R2 `TRUNCATED_NO_OUTPUT` root cause, or
+ * mid-TEXT → the partial deliverable of register E1), re-issue the IDENTICAL request ONCE with a raised
+ * `maxTokens`. The truncated turn is an unsigned partial thinking block that cannot be re-submitted as
+ * conversation history, so the only clean recovery is discard + re-ask with more room — done IN-LOOP so the retry's response flows back
  * through the normal while-guard (`tool_use` → the loop executes `task.complete`; `end_turn` → exit),
  * meaning a harness SYNTHESIZE actually reaches completion instead of stalling. Bounded ONCE per
  * execution (shared `state` across the three `'full'` sites; the retry does NOT push the truncated
@@ -940,25 +1081,82 @@ export interface AgenticLoopResult {
  * throw/abort/empty the truncated original is returned → the loop exits → R2 fires → Layer 2
  * escalates. The truncated attempt's usage is folded via `foldPriorUsage` (BYOK accounting of the
  * sunk thinking tokens). @see cline_docs/reviews/truncation-r4-2026-07-16/synthesis.md
+ *
+ * TIME-AWARE BUDGET (2026-09-25, register E1 — design §1.3). The raise is
+ *   retryMaxTokens = min(maxTokens × 2, model ceiling, timeBudget)
+ * where timeBudget converts the time left before the watchdog (`deadlineAt`, minus a safety margin)
+ * into tokens at the OBSERVED throughput of the attempt just made (floor constant when it carries no
+ * usage), discounted. If that is below maxTokens × (1 + MIN_HEADROOM) the retry does NOT run: it
+ * SKIPS and stamps why ('INSUFFICIENT_TIME' / 'AT_MODEL_CEILING'). There is never a bare re-ask at
+ * the same ceiling — that re-truncates (a coin flip at best), and an un-budgeted raise dies at the
+ * watchdog, converting SUCCESS-with-partial into FAILED-with-nothing.
+ *
+ * PARTIAL TEXT (2026-09-25 — the 2026-08-20 panel decision A2 RE-OPENED, ratified by Steve): the
+ * trigger no longer requires EMPTY text. Every `max_tokens` stop is loop-terminal (the while-guard
+ * continues only on tool_use/pause_turn), so a truncated 'full' turn IS the deliverable turn and no
+ * separate "is this the deliverable" predicate is needed; the time budget above IS the scope. The
+ * partial is discarded exactly as the empty case is (not pushed to history, no turnCount increment,
+ * the response replaced by the retry's) — and it is only discarded when the retry RETURNS: on a skip
+ * or a throw the partial survives as today (SUCCESS + note + TRUNCATED_PARTIAL_OUTPUT). The discard is
+ * forensic, not silent: `truncationRetryDiscardedChars` is stamped and the first 200 chars (secret-
+ * redacted) are logged at warn. On every site the SSE/observer emission runs AFTER this function, so
+ * the GUI never streamed the discarded partial.
  */
 async function maybeRetryTruncatedFullTurn(
   response: any,
-  state: { used: boolean; recovered: boolean },
+  state: TruncationRetryState,
   perCall: PerCallOptions,
-  ctx: { prompt: string; cfg: NormalizedModelConfig; userId?: string; executionId: string },
+  ctx: {
+    prompt: string; cfg: NormalizedModelConfig; userId?: string; executionId: string;
+    /** The watchdog's deadline (epoch ms) — AgenticLoopInput.deadlineAt. */
+    deadlineAt: number;
+    /** When the attempt that just returned was ISSUED (epoch ms) — its duration sizes the tps. */
+    attemptStartedAt: number;
+    now: () => number;
+  },
   deps: AgenticLoopDeps,
   foldPriorUsage: (usage?: PartialUsage) => void,
 ): Promise<any> {
-  const emptyText = !(((response?.text as string) ?? '').trim());
-  if (response?.stopReason !== 'max_tokens' || !emptyText || state.used) return response;
-  state.used = true;
+  // A2 re-opened (2026-09-25): no `emptyText` conjunct — partial text qualifies too, under the same
+  // bounded-once, time-budgeted, headroom-gated guard below.
+  if (response?.stopReason !== 'max_tokens' || state.used || state.skippedReason) return response;
+  const partialText = ((response?.text as string) ?? '');
+  const partialChars = partialText.trim() ? partialText.length : 0;
   // cfg is post-normalize (model resolved-or-thrown upstream); the guard is a type-safe fallback —
-  // if a ceiling can't be resolved, don't raise (retryMax = maxTokens = no headroom, harmless).
+  // an unresolvable ceiling means no raise is possible, which the headroom gate turns into a SKIP.
   const ceiling = ctx.cfg.model ? capabilitiesFor(ctx.cfg.model).outputCeiling : ctx.cfg.maxTokens;
-  const retryMaxTokens = Math.min(ctx.cfg.maxTokens * 2, ceiling);
+  const now = ctx.now();
+  const attemptMs = now - ctx.attemptStartedAt;
+  const attemptOutputTokens = response?.usage?.outputTokens;
+  const observedTps = attemptMs > 0 && typeof attemptOutputTokens === 'number' && attemptOutputTokens > 0
+    ? attemptOutputTokens / (attemptMs / 1000)
+    : RUNTIME_LIMITS.OUTPUT_TOKENS_PER_SEC_FLOOR;
+  const remainingMs = ctx.deadlineAt - now - RUNTIME_LIMITS.TRUNCATION_RETRY_SAFETY_MS;
+  const timeBudget = Math.max(0, Math.floor((remainingMs / 1000) * observedTps * RUNTIME_LIMITS.TRUNCATION_RETRY_TPS_DISCOUNT));
+  const retryMaxTokens = Math.min(ctx.cfg.maxTokens * 2, ceiling, timeBudget);
+  const minUseful = Math.ceil(ctx.cfg.maxTokens * (1 + RUNTIME_LIMITS.TRUNCATION_RETRY_MIN_HEADROOM));
+  state.retryMaxTokens = retryMaxTokens;
+  if (retryMaxTokens < minUseful) {
+    state.skippedReason = timeBudget < minUseful ? 'INSUFFICIENT_TIME' : 'AT_MODEL_CEILING';
+    deps.logger.warn(
+      { executionId: ctx.executionId, skippedReason: state.skippedReason, retryMaxTokens, minUseful,
+        timeBudget, remainingMs, observedTps: Math.round(observedTps), attemptMs,
+        truncatedOutputTokens: attemptOutputTokens },
+      'R4 Layer 1: truncation retry SKIPPED — no useful raise fits (stamped as truncationRetrySkippedReason)'
+    );
+    return response;
+  }
+  state.used = true;
   deps.logger.warn(
-    { executionId: ctx.executionId, truncatedOutputTokens: response?.usage?.outputTokens, retryMaxTokens },
-    'R4 Layer 1: full turn truncated at max_tokens with empty text — retrying once with raised maxTokens'
+    { executionId: ctx.executionId, truncatedOutputTokens: attemptOutputTokens, retryMaxTokens,
+      timeBudget, remainingMs, observedTps: Math.round(observedTps), partialChars,
+      // Forensics for "why does the deliverable differ from what the model began?" — the head of
+      // what a successful retry will DISCARD. Secret-redacted: this copy bypasses the R10 persist
+      // redaction, and the partial itself is never persisted once discarded.
+      ...(partialChars ? { discardedHead: redactArtifactSecrets(partialText.slice(0, 200)).redacted } : {}) },
+    partialChars
+      ? 'R4 Layer 1: full turn truncated at max_tokens MID-TEXT — retrying once with raised maxTokens (the partial will be discarded if the retry returns)'
+      : 'R4 Layer 1: full turn truncated at max_tokens with empty text — retrying once with raised maxTokens'
   );
   try {
     const retry = await deps.generateText(
@@ -970,10 +1168,16 @@ async function maybeRetryTruncatedFullTurn(
     // usage (retry ≠ response) so both count once; on throw we return the ORIGINAL and the caller folds
     // it via its normal accumulation, so folding here too would double-count (ae-r4v Finding 1).
     foldPriorUsage(response?.usage);
+    // `recovered` keeps its 2026-07-16 meaning (the retry produced text or a tool_use); whether the
+    // retry itself ran to completion is the separate `retryStopReason` fact — a retry that ALSO hit
+    // max_tokens is recovered-but-still-truncated, and redefining `recovered` would silently change
+    // every historical row's reading (design §2.6).
     state.recovered = !!(((retry?.text as string) ?? '').trim()) || retry?.stopReason === 'tool_use';
+    state.retryStopReason = retry?.stopReason ?? null;
+    state.discardedChars = partialChars;
     deps.logger.info(
       { executionId: ctx.executionId, recovered: state.recovered, retryStopReason: retry?.stopReason,
-        retryOutputTokens: retry?.usage?.outputTokens },
+        retryOutputTokens: retry?.usage?.outputTokens, discardedChars: partialChars },
       'R4 Layer 1: truncation retry completed'
     );
     return retry;
@@ -984,6 +1188,18 @@ async function maybeRetryTruncatedFullTurn(
     );
     return response;
   }
+}
+
+/** R4 Layer 1 state — one object shared across the three 'full' sites (bounded once per execution). */
+interface TruncationRetryState {
+  used: boolean;
+  recovered: boolean;
+  skippedReason: 'INSUFFICIENT_TIME' | 'AT_MODEL_CEILING' | null;
+  retryMaxTokens: number | null;
+  /** The retry's own stop reason, when it returned. */
+  retryStopReason: string | null;
+  /** Chars of truncated partial text discarded by a returned retry (0 = the truncated turn was empty). */
+  discardedChars: number | null;
 }
 
 /**
@@ -1049,15 +1265,20 @@ export async function runAgenticToolLoop(
   deps: AgenticLoopDeps,
   observers: AgenticLoopObservers = {}
 ): Promise<AgenticLoopResult> {
-  const { prompt, cfg, mcpFunctions, maxToolTurns, signal, executionId, taskId, userId } = input;
+  const { prompt, cfg, mcpFunctions, maxToolTurns, signal, deadlineAt, executionId, taskId, userId } = input;
+  const now = deps.now ?? Date.now;
 
-  // R4 Layer 1 state — shared across the three 'full' call sites; the truncation retry fires at most
-  // ONCE per execution.
-  const truncationRetry = { used: false, recovered: false };
+  // R4 Layer 1 state — shared across the three 'full' call sites; the truncation retry fires (or is
+  // skipped with a stamped reason) at most ONCE per execution.
+  const truncationRetry: TruncationRetryState = {
+    used: false, recovered: false, skippedReason: null, retryMaxTokens: null, retryStopReason: null, discardedChars: null,
+  };
+  const r4Ctx = (attemptStartedAt: number) => ({ prompt, cfg, userId, executionId, deadlineAt, attemptStartedAt, now });
   let initialTruncatedPriorUsage: PartialUsage | undefined = undefined;
 
   // ── Initial LLM call ──
   const initialLlmStart = Date.now();
+  const initialAttemptStartedAt = now();
   let llmResponse = await deps.generateText(prompt, buildLlmCallOptions(cfg, 'full', {
     signal,
     mcpFunctions,
@@ -1065,7 +1286,7 @@ export async function runAgenticToolLoop(
   // R4 Layer 1: retry a truncated INITIAL turn (its prior usage is folded once totalUsage exists, below).
   llmResponse = await maybeRetryTruncatedFullTurn(
     llmResponse, truncationRetry, { signal, mcpFunctions },
-    { prompt, cfg, userId, executionId }, deps, (u) => { initialTruncatedPriorUsage = u; },
+    r4Ctx(initialAttemptStartedAt), deps, (u) => { initialTruncatedPriorUsage = u; },
   );
   const initialLlmDurationMs = Date.now() - initialLlmStart;
 
@@ -1135,6 +1356,7 @@ export async function runAgenticToolLoop(
       }
       deps.logger.info({ executionId, turn: turnCount }, 'Agentic tool loop: continuing paused turn (pause_turn)');
       messageHistory.push({ role: 'assistant', content: currentResponse.rawContentBlocks });
+      const pauseAttemptStartedAt = now();
       currentResponse = await deps.generateText(prompt, buildLlmCallOptions(cfg, 'full', {
         signal,
         mcpFunctions,
@@ -1142,7 +1364,7 @@ export async function runAgenticToolLoop(
       }), userId);
       currentResponse = await maybeRetryTruncatedFullTurn(
         currentResponse, truncationRetry, { signal, mcpFunctions, messages: messageHistory as any },
-        { prompt, cfg, userId, executionId }, deps, (u) => addUsage(totalUsage, u),
+        r4Ctx(pauseAttemptStartedAt), deps, (u) => addUsage(totalUsage, u),
       );
       checkProviderErrorResponse(currentResponse, { executionId, taskId, turn: turnCount, phase: 'pause_turn' }, deps.logger);
       addUsage(totalUsage, currentResponse.usage);
@@ -1230,6 +1452,7 @@ export async function runAgenticToolLoop(
         };
       }
     } else {
+      const continuationAttemptStartedAt = now();
       currentResponse = await deps.generateText(prompt, buildLlmCallOptions(cfg, 'full', {
         signal,
         mcpFunctions,
@@ -1239,7 +1462,7 @@ export async function runAgenticToolLoop(
       // is folded by the shared addUsage below).
       currentResponse = await maybeRetryTruncatedFullTurn(
         currentResponse, truncationRetry, { signal, mcpFunctions, messages: messageHistory as any },
-        { prompt, cfg, userId, executionId }, deps, (u) => addUsage(totalUsage, u),
+        r4Ctx(continuationAttemptStartedAt), deps, (u) => addUsage(totalUsage, u),
       );
     }
     const llmDurationMs = Date.now() - llmStartTime;
@@ -1364,5 +1587,13 @@ export async function runAgenticToolLoop(
     }
   }
 
-  return { currentResponse, assembledText: currentResponse.text, toolCallResults, messageHistory, totalUsage, turnCount, hitMaxTurns, correctionTurnUsed, budgetFailFastUsed, truncationRetryUsed: truncationRetry.used, truncationRetryRecovered: truncationRetry.recovered };
+  return {
+    currentResponse, assembledText: currentResponse.text, toolCallResults, messageHistory, totalUsage, turnCount,
+    hitMaxTurns, correctionTurnUsed, budgetFailFastUsed,
+    truncationRetryUsed: truncationRetry.used, truncationRetryRecovered: truncationRetry.recovered,
+    truncationRetrySkippedReason: truncationRetry.skippedReason, truncationRetryMaxTokens: truncationRetry.retryMaxTokens,
+    truncationRetryStopReason: truncationRetry.retryStopReason, truncationRetryDiscardedChars: truncationRetry.discardedChars,
+    // F2: the stop reason of the deliverable's own response (see AgenticLoopResult.finalStopReason).
+    finalStopReason: currentResponse?.stopReason ?? null,
+  };
 }

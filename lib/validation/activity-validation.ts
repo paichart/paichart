@@ -10,6 +10,7 @@
  */
 
 import { z } from 'zod';
+import { sliceSurrogateSafe } from '@/lib/utils/surrogate-safe';
 import { TaskActivityAction, type ActivityDetails, type ActivityMetadata } from '@/lib/types/activity';
 // Use centralized validators (per validation-engine-specialist)
 import { OptionalCUIDStrict } from '@/lib/validation/id-validation';
@@ -40,7 +41,7 @@ function truncateForActivity(value: unknown, maxWords = 15): string | null {
     // For non-strings, stringify but limit size
     let str: string;
     try { str = JSON.stringify(value); } catch { return '[object too deeply nested]'; } // BC30: stack overflow guard
-    return str.length > 200 ? str.slice(0, 200) + '...' : str;
+    return str.length > 200 ? sliceSurrogateSafe(str, 200) + '...' : str; // X11: jsonb rejects a lone surrogate
   }
   const words = value.trim().split(/\s+/).slice(0, maxWords);
   const truncated = words.join(' ');

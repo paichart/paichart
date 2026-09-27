@@ -59,7 +59,10 @@ import { BoundaryContractViolation, CanNeverRunError, DuplicateActiveExecutionEr
 import { TriggeredBySchema, type TriggeredBy } from './types/triggered-by';
 import { logActivityWithDetails } from '@/lib/tasks/services/taskActivityService';
 import { TaskActivityAction } from '@/lib/types/activity';
-import { prepareTaskForExecution } from '@/lib/agents/harness/prepare-task-for-execution';
+import { prepareTaskForExecutionWithRecord } from '@/lib/agents/harness/prepare-task-for-execution';
+import { classifyOrchestratorReExecution, enforceOrchestratorReExecutionRules } from './orchestrator-reexecution';
+import { buildExecutionContext } from './execution-context-build';
+import type { ChainedRecord } from '@/lib/agents/harness/chained-predecessors';
 
 const log = mcpLogger.child({ module: 'agentExecutionCreate' });
 
@@ -87,6 +90,11 @@ export const SERVER_RESERVED_CONTEXT_KEYS = [
   // retry-band keep-best (2026-07-04): retry-provenance stamp, written ONLY by the
   // gated chokepoint logic below — never client-suppliable.
   'reExecutionOfExecutionId',
+  // RWF C.1 (2026-09-26): the orchestrator re-execution stamp (the per-child cap counts it) and the
+  // per-execution chained record (keep-best, the Reviewer rule and verdict freshness compare it). Both are
+  // written explicitly below, value or delete, so a forwarded context can never supply either.
+  'orchestratorReExecution',
+  'chainedPredecessors',
 ] as const;
 
 /**
@@ -102,6 +110,10 @@ export function stripReservedContextKeys(
   for (const key of SERVER_RESERVED_CONTEXT_KEYS) delete out[key];
   return out;
 }
+
+// buildExecutionContext lives in ./execution-context-build (dependency-light, so pure tests can import it without
+// reaching lib/prisma — which throws in CI where DATABASE_URL is unset). Re-exported here for existing importers.
+export { buildExecutionContext } from './execution-context-build';
 
 /**
  * Sources permitted to set server-reserved context keys (`reactorGeneration`/
@@ -233,12 +245,35 @@ export async function createAgentExecution(
   // executionStatus=FAILED + cone + fire the program retrigger (frozen-cone fix).
   // Best-effort then RETHROW THE ORIGINAL error (loud-fail contract preserved —
   // interactive callers still see the refusal; reactor catches log-and-continue).
+  // RWF C.1 — pre-prepare active-execution short-circuit (database-manager C4). The prompt is built from the
+  // task ROW, and prepare rewrites that row. A create that is going to collide with an active execution (BC67
+  // index) would otherwise re-chain the row UNDER the running execution before its insert fails with P2002.
+  // SCHEDULED rows are outside the index and are not short-circuited.
+  if (args.status !== 'SCHEDULED') {
+    const active = await prisma.agentExecution.findFirst({
+      where: { taskId: args.taskId, status: { in: ['PENDING', 'RUNNING'] } }, select: { id: true },
+    });
+    if (active) {
+      log.warn({ taskId: args.taskId, errorCode: 'DUPLICATE_ACTIVE_EXECUTION', existingExecutionId: active.id,
+        triggeredBy: validatedTriggeredBy.source }, 'Active execution already exists — refused before chaining');
+      throw new DuplicateActiveExecutionError(args.taskId, active.id);
+    }
+  }
+
+  // RWF C.1 — orchestrator re-execution: classify, then the per-child cap and the Reviewer rule. BEFORE
+  // prepare, so a refusal writes nothing. See orchestrator-reexecution.ts for the definition and residuals.
+  const orchestratorReExecution = await classifyOrchestratorReExecution(prisma, args.taskId, validatedTriggeredBy);
+  if (orchestratorReExecution) {
+    await enforceOrchestratorReExecutionRules(prisma, args.taskId, orchestratorReExecution, args.agentTemplateId);
+  }
+
   let chainedInputContext: Record<string, unknown> | null;
+  let chainedPredecessors: ChainedRecord;
   try {
-    chainedInputContext = await prepareTaskForExecution(args.taskId, {
+    ({ context: chainedInputContext, record: chainedPredecessors } = await prepareTaskForExecutionWithRecord(args.taskId, {
       status: args.status,
       skipChaining: args.skipChaining,
-    });
+    }));
   } catch (prepErr) {
     if (prepErr instanceof CanNeverRunError) {
       try {
@@ -363,11 +398,9 @@ export async function createAgentExecution(
         agentTemplateId: args.agentTemplateId ?? undefined,
         status: args.status,
         config: frozenConfig as any,
-        context: {
-          ...(args.contextExtras || {}),
-          triggeredBy: validatedTriggeredBy as any,
-          ...(reExecutionOfExecutionId ? { reExecutionOfExecutionId } : {}),
-        } as any,
+        context: buildExecutionContext(args.contextExtras, validatedTriggeredBy, {
+          reExecutionOfExecutionId, orchestratorReExecution, chainedPredecessors,
+        }) as any,
         logs: args.logs ?? [],
         // A RUNNING execution has, by definition, already started → stamp startTime now. SCHEDULED uses its
         // scheduled time; PENDING stays null until a runner promotes it. 2026-06-09: the stream path creates
@@ -462,15 +495,16 @@ export async function createAgentExecution(
     }
   );
 
-  // OPEN → IN_PROGRESS at the row-creation chokepoint (2026-07-14). The agent.execute MCP
-  // handler does this transition itself, but the OTHER entry paths (TaskReadyReactor
-  // auto-queue, poller, reactor SYNTHESIZE requeue) reach here directly — and a task left
+  // OPEN → IN_PROGRESS at the row-creation chokepoint (2026-07-14). Since S0 (2026-09-26) this is the
+  // SOLE claim site for every entry path — the agent.execute MCP handler no longer flips status itself
+  // (its early flip ran before the access check and stranded dependency-refused tasks; see
+  // cline_docs/reviews/rwf-stage1-2026-09-26/sec-ops-S0-review.md §4). The other entry paths (TaskReadyReactor
+  // auto-queue, poller, reactor SYNTHESIZE requeue) reach here directly too — and a task left
   // OPEN while executing breaks TWO downstream invariants: the pipeline-retrigger reactor's
   // Guard 3 (`status = 'IN_PROGRESS'`) silently never fires (auto-queued harness ran CREATE,
   // children all completed, SYNTHESIZE never retriggered — cascading-pipelines Phase-0 probe,
   // run cmrkmy4z6…), and task.complete rejects OPEN→COMPLETED as an invalid transition.
-  // Conditioned on OPEN so it is a no-op for re-runs of COMPLETED tasks and for tasks the
-  // handler already transitioned (idempotent parity with agent-execute-handler.ts:171).
+  // Conditioned on OPEN so it is a no-op for re-runs of COMPLETED and IN_PROGRESS tasks.
   await prisma.task.updateMany({
     where: { id: args.taskId, status: 'OPEN' },
     data: { status: 'IN_PROGRESS', updatedAt: new Date() },

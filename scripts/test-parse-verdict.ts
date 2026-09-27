@@ -19,6 +19,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { parseReviewerVerdict, REVIEWER_ROLES, VERDICT_MARKER } from '../lib/agents/harness/parse-verdict';
+import { computeEvidenceGrading, VERIFIED_TOKEN, ACCEPTED_TOKEN } from '../lib/agents/harness/evidence-grading';
 import { parseConfidenceScore } from '../lib/agents/harness/parse-confidence';
 import { ROLE_GUIDANCE_LIBRARY } from '../lib/services/agentTemplateBuilder/pAIchartUniversalTemplate';
 
@@ -66,10 +67,26 @@ test('Coupling: change_reviewer role guidance exists and defines the terminal bl
   expect(reviewerGuidance.includes('Blocking issues:')).toBe(true);
 });
 
-test('Coupling: every REVIEWER_ROLE has a guidance entry containing the marker', () => {
+// Assert EVERY token the parser reads, for EVERY reviewer role — not just the marker.
+//
+// Widened 2026-09-22. This loop checked the marker alone, i.e. 1 of the 4 tokens
+// `parse-verdict.ts` keys on, while the fuller check (`Blocking issues:`) was asserted for
+// `change_reviewer` only. That was invisible while `change_reviewer` was the sole reviewer; adding
+// `requirements_reviewer` to REVIEWER_ROLES made a second copy of the grammar, and the parser
+// returns null on a miss — so a role whose guidance carried the marker but dropped a later token
+// would have produced a silent null verdict on every review, with the harness seeing no reviewer
+// judgement at all rather than an error. Found by the documented-grep audit flagging that the
+// grammar now appears twice in the library, which is correct, and unpinned, which was not.
+test('Coupling: every REVIEWER_ROLE guidance carries ALL FOUR tokens the parser reads', () => {
   for (const role of REVIEWER_ROLES) {
-    expect(typeof ROLE_GUIDANCE_LIBRARY[role]).toBe('string');
-    expect(ROLE_GUIDANCE_LIBRARY[role].includes(VERDICT_MARKER)).toBe(true);
+    const g = ROLE_GUIDANCE_LIBRARY[role];
+    expect(typeof g).toBe('string');
+    for (const token of [VERDICT_MARKER, 'APPROVED', 'NEEDS-REVISION', 'Blocking issues:', 'Confidence:']) {
+      if (!g.includes(token)) {
+        throw new Error(`REVIEWER_ROLE '${role}' guidance is missing the parsed token '${token}' — ` +
+          `parse-verdict returns null on a miss, so this role's verdicts would vanish silently`);
+      }
+    }
   }
 });
 
@@ -169,6 +186,90 @@ test('Missing Blocking issues line → blocking [] with verdict still transcribe
   const v = parseReviewerVerdict('## VERDICT: APPROVED\nConfidence: 91');
   expect(v?.approved).toBe(true);
   expect(v?.blocking).toEqual([]);
+});
+
+// ── Evidence grading (2026-09-20) ───────────────────────────────────────────────────────────────
+//
+// The reviewer's declared epistemic mode per finding. THREE states, not two — see the module header.
+// Each pin below is written so a mutation flips it: a two-state fact, a verdict-block-only scan, a
+// both-token exclusion, or a sum-the-three-fields reading each fail HERE.
+
+test('EG1 — graded:false is DISTINGUISHABLE from verified:0 (three states, not two)', () => {
+  const none = computeEvidenceGrading('The package looks fine to me.\n## VERDICT: APPROVED');
+  expect(none.graded).toBe(false);
+  expect(none.verifiedLines).toBe(0);
+  expect(none.acceptedLines).toBe(0);
+
+  // Graded, but the reviewer verified NOTHING itself — same zero, different meaning.
+  const trusted = computeEvidenceGrading('| Blast radius | PASS | ACCEPTED-FROM-CLAIMS |\n## VERDICT: APPROVED');
+  expect(trusted.graded).toBe(true);
+  expect(trusted.verifiedLines).toBe(0);
+  if (none.graded === trusted.graded) throw new Error('the two states collapsed — a two-state fact would bin 26% of the live corpus into one of them');
+});
+
+test('EG2 — gradings BEFORE the terminal verdict block are counted (scan is finalResponse, not raw)', () => {
+  // The live shape: findings carry the grade, the verdict block carries none. Scanning from the
+  // `## VERDICT:` line onward — the obvious mistake — would read zero on a correct reviewer.
+  const text = [
+    '| Derived-value containment | VERIFIED-AGAINST-EVIDENCE — constructed myself |',
+    '| Harvest fidelity | ACCEPTED-FROM-CLAIMS |',
+    '',
+    '## VERDICT: APPROVED',
+    'Blocking issues: none',
+  ].join('\n');
+  const g = computeEvidenceGrading(text);
+  expect(g.verifiedLines).toBe(1);
+  expect(g.acceptedLines).toBe(1);
+  const afterVerdictOnly = computeEvidenceGrading(text.slice(text.indexOf('## VERDICT:')));
+  expect(afterVerdictOnly.graded).toBe(false); // proves the scan scope is load-bearing
+});
+
+test('EG3 — a compound grade is counted in BOTH, and reported in bothTokenLines', () => {
+  // The dominant live both-token shape (9 of 46 lines are this explicit form; ~34 more are prose).
+  // A rule excluding both-token lines would discard it — measured cost > the false positive it fixes.
+  const g = computeEvidenceGrading('| Evidence-block integrity | PASS | VERIFIED-AGAINST-EVIDENCE (naming) / ACCEPTED-FROM-CLAIMS (harvest fidelity) |');
+  expect(g.graded).toBe(true);
+  expect(g.verifiedLines).toBe(1);
+  expect(g.acceptedLines).toBe(1);
+  expect(g.bothTokenLines).toBe(1);
+});
+
+test('EG4 — bothTokenLines is a SUBSET, not a third bucket (the fields do not sum)', () => {
+  const g = computeEvidenceGrading([
+    'Finding 1 — VERIFIED-AGAINST-EVIDENCE',
+    'Finding 2 — VERIFIED-AGAINST-EVIDENCE (shape) / ACCEPTED-FROM-CLAIMS (facts)',
+  ].join('\n'));
+  expect(g.verifiedLines).toBe(2);
+  expect(g.acceptedLines).toBe(1);
+  expect(g.bothTokenLines).toBe(1);
+  // A consumer adding the three would get 4 for 2 graded lines. Pinned so the shape is not "fixed".
+  if (g.verifiedLines + g.acceptedLines + g.bothTokenLines === 2) throw new Error('fields became disjoint — re-read the header before changing the contract');
+});
+
+test('EG5 — the scheme restatement IS counted, deliberately and documented', () => {
+  // MEASURED 2026-09-20: excluding this shape moves the live corpus 111 -> 109 both-token legs
+  // (0.8pp). The honest caveat beat the clever regex; this pin stops a later "cleanup" from
+  // reintroducing a filter whose cost was measured to exceed its benefit.
+  const g = computeEvidenceGrading('4. State findings as VERIFIED-AGAINST-EVIDENCE or ACCEPTED-FROM-CLAIMS');
+  expect(g.graded).toBe(true);
+  expect(g.bothTokenLines).toBe(1);
+});
+
+test('EG6 — token-locked: no synonyms, no case-folding, no inference', () => {
+  expect(computeEvidenceGrading('verified-against-evidence').graded).toBe(false);
+  expect(computeEvidenceGrading('VERIFIED AGAINST EVIDENCE').graded).toBe(false);
+  expect(computeEvidenceGrading('I verified this against the evidence myself').graded).toBe(false);
+});
+
+test('EG7 — null/empty input is graded:false, never a throw', () => {
+  expect(computeEvidenceGrading(null).graded).toBe(false);
+  expect(computeEvidenceGrading(undefined).verifiedLines).toBe(0);
+  expect(computeEvidenceGrading('').parser).toBe('line-token-scan');
+});
+
+test('EG8 — the two literals this parser pins are the ones the protocols mandate', () => {
+  expect(VERIFIED_TOKEN).toBe('VERIFIED-AGAINST-EVIDENCE');
+  expect(ACCEPTED_TOKEN).toBe('ACCEPTED-FROM-CLAIMS');
 });
 
 // ── Summary ─────────────────────────────────────────────────────────────────────────────────────

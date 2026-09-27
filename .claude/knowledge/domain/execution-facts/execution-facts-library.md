@@ -293,3 +293,41 @@ On any reviewer verdict claiming a package's quoted evidence is reconstructed / 
 fabricated, the response guidance (run the string test FIRST, read the r19 follow-up) is **response
 guidance and stays with `pipeline-harness-specialist`** as first responder for refusals. What lives
 here is the *build* it triggers (§5) and the corpus practice that overturned it.
+
+---
+
+## RWF Wave B (2026-09-26): a net reads the execution the Reviewer was chained
+
+Every result.json read a net makes goes through `readAuthoritativeResultField(client, taskId, field)`
+(`lib/agents/harness/authoritative-result-read.ts`). That helper selects with `CHAIN_SELECTION_OPTIONS`, the same
+constant the context chainer passes. Before Wave B, the four reads each took "the newest result.json whose CONTENT
+carries this taskId": derivation harvest/Author/fallback, dialect-lint Author, rollback leaf-persist harvest, and
+the rollback leg-synthesize hoist. The chainer skips superseded and R8-empty runs, so once leg retry makes re-runs
+routine, the Reviewer and the gate would silently read different packages.
+
+- **field is a closed union** (`finalResponse` | `rollbackContainment`), with one literal query per member.
+- **The jsonb projection is load-bearing.** The hoisted stamp's key order IS the jsonb rendering, and the
+  equivalence gate compares bytes. Never `JSON.parse(content)[field]`.
+- **A plain module, not `ctx`**, so the replay runners can still call enrichments directly.
+- **`executionId` is returned but stamped nowhere.** Stamping it is a byte change with its own commit (C.2).
+- **Proof is fixture-only.** 1,203 of 1,203 archived children agree, so the equivalence gate declares the skip
+  arms unexercised. The proof is `scripts/test-authoritative-result-read.ts` F1–F6. Stubs:
+  `scripts/fixtures/authoritative-read-stub.ts` throws on the old content-taskId query.
+- **Coverage lock** (`test-execution-selection-coverage.ts`): per-call artifact fingerprints with no file-level
+  escape, `.js` scanned, and a positive control.
+- **Side effect:** the old reads cast `content::jsonb` in WHERE across the whole artifact table, so ONE malformed
+  row would have broken every net read. A lone-surrogate `pipeline-index.json` exists in prod since 2026-09-25.
+  It did not break the nets, which read `result.json` only, but it broke `replay-nets.ts`'s own copy of the read.
+  That copy is now routed through the selector too.
+
+## RWF Wave C (2026-09-26): supersession + verdictFreshness, and persist-time key order
+
+- **`supersession`** is now on `RESULT_JSON_SUMMARY_KEYS` (the pick stripped it). It is NOT a net: `computeSelfSupersession`
+  writes it. Three shapes: `supersededById` present = the retry LOST; `skipped: changed-input | input-unknown` = no
+  comparison ran (the retry stays authoritative); `{checked:false, reason:'keep-best-error'}` = the comparison threw.
+- **`verdictFreshness`** is a leg-synthesize net (`verdict-freshness-enrichment.ts`): were the reviewer's judged predecessor
+  executions still authoritative when the leg was stamped. Three-state `match`; unknown is `checked:false,
+  no-chained-record`, never clean. `renderPrompt: null`; NO consumer in Stage 1. Equivalence gate: `legs: 'none'`, and
+  E1a now compares only keys whose window covers the leg plus everything production stamped.
+- **Key order**: `orderResultJsonForPersist` at persist moves the bulky payloads to the tail, so net stamps no longer
+  land after `finalResponse`. Artifacts persisted before 2026-09-26 still have them at the tail.

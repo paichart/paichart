@@ -407,9 +407,350 @@ test('UNKNOWN rescue: comments-only run + resolvedMode CREATE → judged as CREA
   assert(result!.missingSteps.some(st => st.includes('Step 2')), 'must flag Step 2 (no stage.create at all)');
 });
 
+// ========================================
+// 2026-09-15 — mode inference vs the mandated halt stamp
+// Live defect: 12 of 68 corpus executions were graded against a mode they did
+// not resolve to, ORCHESTRATE in 12 of 12. Root cause: `task.update` alone
+// counted as a CONFIDENT ORCHESTRATE, and the protocol MANDATES that stamp on
+// every bail — so obeying the halt mandate is what misclassified the halt.
+// ========================================
+
+test('task.update ALONE is no longer a confident ORCHESTRATE (it is what every mode does)', () => {
+  const result = validatePipelineProtocolSteps([_call('task.update'), _commentCall('stamped')]);
+  assert(result === null, `task.update alone must fall to UNKNOWN (null without resolvedMode), got mode ${result?.mode}`);
+});
+
+test('task.update alone + resolvedMode ORCHESTRATE → rescued to the SAME answer, honestly', () => {
+  const result = validatePipelineProtocolSteps(
+    [_call('task.update'), _commentCall('setup done')],
+    { type: 'PIPELINE', resolvedMode: 'ORCHESTRATE' }
+  );
+  assert(result !== null && result.mode === 'ORCHESTRATE',
+    `genuine ORCHESTRATE must survive via the UNKNOWN rescue, got ${result?.mode}`);
+});
+
+test('REGRESSION (2026-07-17 ruling): PLAN-SPAWN reaches ORCHESTRATE via task.create, NOT task.update', () => {
+  // PLAN-SPAWN calls task.create + task.update and NO agent.assign. A fix that
+  // required agent.assign would have sent it to UNKNOWN → rescued as SYNTHESIZE
+  // → false-flagged on EVERY program run. That is the regression this pins.
+  const calls = [_call('task.create'), _call('task.create'), _call('task.update'), _commentCall('spawned')];
+  const result = validatePipelineProtocolSteps(calls, { type: 'PIPELINE', resolvedMode: 'SYNTHESIZE' });
+  assert(result === null || result.mode === 'ORCHESTRATE',
+    `PLAN-SPAWN must stay ORCHESTRATE by inference, got ${result?.mode}`);
+});
+
+test('SANCTIONED HALT (duplicateHalt): emits haltExempt FACT, flags no steps', () => {
+  // The live shape: pre-flight duplicate detected, metadata stamped, no stage,
+  // no completion. Graded as ORCHESTRATE pre-fix and degraded PROTOCOL_STEP_SKIPPED.
+  const calls = [_call('task.update'), _commentCall('HALTED at pre-flight duplicate check.')];
+  const result = validatePipelineProtocolSteps(calls, {
+    type: 'PIPELINE',
+    resolvedMode: 'CREATE',
+    metadata: { duplicateHalt: { existingStage: 'cmu20gio700exyxvrp9n24ksj' } },
+  });
+  // NOT null: null is omitted from the artifact, and every consumer reads absence as
+  // "no issues detected" — which would make a correct refusal look like a flawless run.
+  assert(result !== null, 'halt must emit a positive fact, not silence');
+  assert(result!.haltExempt === true, `expected haltExempt, got ${JSON.stringify(result)}`);
+  assert(result!.haltReason === 'duplicateHalt', `expected haltReason duplicateHalt, got ${result!.haltReason}`);
+  assert(result!.missingSteps.length === 0, `a halt must flag no steps, got ${JSON.stringify(result!.missingSteps)}`);
+});
+
+test('SANCTIONED HALT (cannotRun): same exemption, reason recorded', () => {
+  const result = validatePipelineProtocolSteps(
+    [_call('task.update'), _commentCall('cannot run: upstream contract absent')],
+    { type: 'PIPELINE', resolvedMode: 'CREATE', metadata: { cannotRun: { reason: 'no contract' } } }
+  );
+  assert(result !== null && result.haltExempt === true, `expected haltExempt, got ${JSON.stringify(result)}`);
+  assert(result!.haltReason === 'cannotRun', `expected haltReason cannotRun, got ${result!.haltReason}`);
+  assert(result!.missingSteps.length === 0, 'a halt must flag no steps');
+});
+
+test('HALT exemption does NOT swallow a harness that stamped then carried on', () => {
+  // Stamped cannotRun but went on to open a stage — not a halt, still judged.
+  const result = validatePipelineProtocolSteps(
+    [_call('stage.create'), _call('task.update'), _commentCall('proceeding anyway')],
+    { type: 'PIPELINE', resolvedMode: 'CREATE', metadata: { cannotRun: { reason: 'x' } } }
+  );
+  assert(result !== null && result.mode === 'CREATE',
+    `a stamped-but-continuing harness must still be judged, got ${JSON.stringify(result)}`);
+});
+
+test('HALT REPLAY (live cmu2f6w6c): stamp is in the TOOL CALL, metadata snapshot has none', () => {
+  // THE TEST THAT WAS MISSING. The first exemption keyed on taskContext.metadata, which is
+  // the PRE-EXECUTION snapshot — the agent stamps duplicateHalt mid-run, so it is never
+  // there. Unit tests that pass metadata directly simulate a state the call site never has,
+  // and this shipped to prod and fired a false PROTOCOL_STEP_SKIPPED on a correct halt.
+  const stampCall: ToolCallEntry = {
+    tool: 'perform', success: true,
+    arguments: {
+      action: 'task.update',
+      parameters: JSON.stringify({ metadata: { duplicateHalt: { existingStage: 'cmu1yj66y000zyxvrs6aa93t3' } } }),
+    },
+  };
+  const result = validatePipelineProtocolSteps(
+    [_call('pov.details'), _call('task.context'),
+     _commentCall('Mode: CREATE. Also stamping `metadata.duplicateHalt` now for visibility.'),
+     stampCall],
+    // metadata as it ACTUALLY is at this call site: protocol stamp only, no halt
+    { type: 'PIPELINE', resolvedMode: 'CREATE',
+      metadata: { protocol: 'pov-program-protocol', protocolResolvedAt: '2026-09-15T08:38:48.403Z' } }
+  );
+  assert(result?.haltExempt === true,
+    `live halt shape must be exempt, got ${JSON.stringify(result?.missingSteps ?? result)}`);
+  assert(result!.missingSteps.length === 0, 'and must flag no steps');
+});
+
+test('HALT narration alone does NOT exempt — the comment quotes the stamp name', () => {
+  // The halt's own comment says "stamping `metadata.duplicateHalt`". Scanning every tool
+  // call would match the narration instead of the act, letting any run talk its way out
+  // of validation.
+  const result = validatePipelineProtocolSteps(
+    [_call('stage.create'), _commentCall('I considered metadata.duplicateHalt but did not stamp it')],
+    { type: 'PIPELINE', resolvedMode: 'CREATE', metadata: {} }
+  );
+  assert(result === null || result.haltExempt !== true,
+    `narration must not exempt, got ${JSON.stringify(result)}`);
+});
+
+// ========================================
+// 2026-09-16 — the SANCTIONED ESCALATED EXIT (the halt lesson, one phase later)
+// Measured by architectural-review: 10 of 70 flagged executions were runs OBEYING the
+// protocol. Base protocol, verbatim: "Leave your status IN_PROGRESS. Exit." — and for a
+// program leg, the PLATFORM completes the task (F20), so the agent correctly does not.
+// ========================================
+
+const _escalateCall = (): ToolCallEntry => ({
+  tool: 'perform', success: true,
+  arguments: {
+    action: 'task.update',
+    parameters: JSON.stringify({ metadata: { qualityGate: { outcome: 'escalated', reviewerScore: 15, reviewerPresent: true } } }),
+  },
+});
+
+test('ESCALATED EXIT: a SYNTHESIZE that stamped escalated and did not close itself is NOT accused', () => {
+  const result = validatePipelineProtocolSteps(
+    [_call('task.list'), _call('agent.results'), _escalateCall(),
+     _commentCall('**Child stage:** `cmtabc123` — ESCALATED. Quality gate failed on 3 of 4 children.\n**📄 Final deliverable:** report.md\nRe-run note: create a fresh PIPELINE task.')],
+    { type: 'PIPELINE', resolvedMode: 'SYNTHESIZE', metadata: { pipelineStageId: 'cmtstage1' } }
+  );
+  const missedComplete = (result?.missingSteps ?? []).some(st => st.includes('task.complete not called'));
+  assert(!missedComplete, `a sanctioned escalated exit must not be accused, got ${JSON.stringify(result?.missingSteps)}`);
+  assert(result?.escalatedExit === true, 'and must record the FACT, not pass over it in silence');
+});
+
+test('ESCALATED EXIT is NARROW: other Step 5 content checks still apply', () => {
+  // An escalating harness DID do the work, so the deliverable pointer and re-run note
+  // remain meaningful. Only the completion miss is suppressed.
+  const result = validatePipelineProtocolSteps(
+    [_call('agent.results'), _escalateCall(), _commentCall('ESCALATED, nothing else')],
+    { type: 'PIPELINE', resolvedMode: 'SYNTHESIZE', metadata: { pipelineStageId: 'cmtstage1' } }
+  );
+  assert(result !== null, 'other misses must still be reported');
+  assert(!(result!.missingSteps.some(st => st.includes('task.complete not called'))), 'completion miss suppressed');
+  // Pin the STRUCTURED fact, not the message prose (the 2026-09-15 string-pin lesson).
+  assert(result!.commentValidation?.hasDeliverablePointer === false,
+    `deliverable-pointer miss still detected, got ${JSON.stringify(result!.commentValidation)}`);
+  assert(result!.missingSteps.length > 0, 'and still produces at least one miss');
+});
+
+test('NOT escalated: an ordinary SYNTHESIZE that forgot to close IS still accused', () => {
+  const result = validatePipelineProtocolSteps(
+    [_call('agent.results'), _call('task.update'), _commentCall('all done')],
+    { type: 'PIPELINE', resolvedMode: 'SYNTHESIZE', metadata: { pipelineStageId: 'cmtstage1' } }
+  );
+  assert(result!.missingSteps.some(st => st.includes('task.complete not called')),
+    'a genuine forgotten close must still be flagged');
+  assert(result!.escalatedExit === undefined, 'and must not claim an escalated exit');
+});
+
+test('FAIL-CLOSED: an APPROVED qualityGate stamp cannot exempt itself', () => {
+  // The exemption requires the VALUE "escalated", not merely the qualityGate key — otherwise
+  // a harness could stamp approved, skip its close, and escape the check.
+  const approvedStamp: ToolCallEntry = {
+    tool: 'perform', success: true,
+    arguments: { action: 'task.update', parameters: JSON.stringify({ metadata: { qualityGate: { outcome: 'approved', reviewerScore: 90 } } }) },
+  };
+  const result = validatePipelineProtocolSteps(
+    [_call('agent.results'), approvedStamp, _commentCall('done')],
+    { type: 'PIPELINE', resolvedMode: 'SYNTHESIZE', metadata: { pipelineStageId: 'cmtstage1' } }
+  );
+  assert(result!.missingSteps.some(st => st.includes('task.complete not called')),
+    'an approved stamp must NOT exempt the completion miss');
+});
+
+test('ESCALATED narration in a comment does NOT exempt — only the task.update act does', () => {
+  const result = validatePipelineProtocolSteps(
+    [_call('agent.results'), _commentCall('I am stamping qualityGate outcome escalated now')],
+    { type: 'PIPELINE', resolvedMode: 'SYNTHESIZE', metadata: { pipelineStageId: 'cmtstage1' } }
+  );
+  assert(result!.missingSteps.some(st => st.includes('task.complete not called')),
+    'narration must not exempt');
+});
+
+test('COMMENT EXTRACTOR: the JSON-STRING parameters shape — 38% of live calls — is now read', () => {
+  // Until 2026-09-16 this shape returned undefined, so the caller skipped content validation
+  // "gracefully" and the breadcrumb / pointer / re-run checks never ran. 813 of 2146 live
+  // task.comment calls across 319 executions. Hand-built fixtures all used the other two shapes.
+  const stringParamComment: ToolCallEntry = {
+    tool: 'perform', success: true,
+    arguments: { action: 'task.comment', parameters: JSON.stringify({ taskId: 't', comment: 'no breadcrumb here at all' }) },
+  };
+  const result = validatePipelineProtocolSteps(
+    [_call('stage.create'), _call('task.create'), _call('agent.assign'), stringParamComment]
+  );
+  assert(result?.commentValidation?.inspected === true,
+    'the comment must now be INSPECTED, not skipped');
+  assert(result?.commentValidation?.hasBreadcrumb === false,
+    `and judged: a missing breadcrumb must be detected, got ${JSON.stringify(result?.commentValidation)}`);
+});
+
+test('COMMENT EXTRACTOR: an unparseable string still skips gracefully, never throws', () => {
+  const junk: ToolCallEntry = {
+    tool: 'perform', success: true,
+    arguments: { action: 'task.comment', parameters: '{not valid json' },
+  };
+  const result = validatePipelineProtocolSteps([_call('stage.create'), _call('task.create'), _call('agent.assign'), junk]);
+  assert(result === null || result.commentValidation === undefined,
+    'unparseable parameters must fall back to the graceful skip');
+});
+
+test('CLEAN run stays null — "validated clean" and "not applicable" must not collapse', () => {
+  const clean = validatePipelineProtocolSteps([
+    _call('stage.create'), _call('task.update'), _call('task.create'), _call('agent.assign'),
+    _commentCall('**Child stage:** `cmtabc123` — queued'),
+  ]);
+  assert(clean === null, `a clean run must still emit nothing, got ${JSON.stringify(clean)}`);
+  const halt = validatePipelineProtocolSteps(
+    [_call('task.update'), _commentCall('halted')],
+    { type: 'PIPELINE', resolvedMode: 'CREATE', metadata: { duplicateHalt: { existingStage: 'x' } } }
+  );
+  assert(halt?.haltExempt === true, 'and a halt must be positively distinguishable from it');
+});
+
+test('BREADCRUMB: plain `Child stage: <id>` counts — the fact, not the decoration', () => {
+  // Live false positive: a comment beginning "Child stage: cmty0x9jo..." scored
+  // hasBreadcrumb:false because the regex demanded bold + backticks. Nothing
+  // parses this string (the GUI panel is metadata-only), so the strictness
+  // protected nothing.
+  const calls = [
+    _call('stage.create'), _call('task.create'), _call('agent.assign'),
+    _commentCall('Child stage: cmty0x9jo006dyxt89y7cjood — D9 dry-run readout'),
+  ];
+  const result = validatePipelineProtocolSteps(calls);
+  // Pin the STRUCTURED fact, never the message prose — the wording is free to change
+  // (and did, 2026-09-15, which broke this assertion's first draft).
+  assert(result?.commentValidation?.hasBreadcrumb !== false,
+    `plain-text breadcrumb must count, got hasBreadcrumb=${result?.commentValidation?.hasBreadcrumb}`);
+});
+
+test('BREADCRUMB: the strict `**Child stage:** `id`` form still counts', () => {
+  const calls = [
+    _call('stage.create'), _call('task.create'), _call('agent.assign'),
+    _commentCall('**Child stage:** `cmtabc123` — queued'),
+  ];
+  const result = validatePipelineProtocolSteps(calls);
+  assert(result?.commentValidation?.hasBreadcrumb !== false,
+    `strict breadcrumb must still count, got hasBreadcrumb=${result?.commentValidation?.hasBreadcrumb}`);
+});
+
+test('BREADCRUMB: a comment with no child-stage reference at all is still flagged', () => {
+  const calls = [
+    _call('stage.create'), _call('task.create'), _call('agent.assign'),
+    _commentCall('all done, looks good'),
+  ];
+  const result = validatePipelineProtocolSteps(calls);
+  assert(result !== null && result.commentValidation?.hasBreadcrumb === false,
+    `a genuinely absent breadcrumb must still be detected, got hasBreadcrumb=${result?.commentValidation?.hasBreadcrumb}`);
+  assert(result!.missingSteps.length > 0, 'and must still produce a missing step');
+});
+
 test('UNKNOWN without resolvedMode: still returns null (non-harness runs unjudged)', () => {
   const result = validatePipelineProtocolSteps([_commentCall('just a note')], { type: 'PIPELINE' });
   assert(result === null, 'no resolvedMode → UNKNOWN stays null');
+});
+
+// ========================================
+// RWF A4 (2026-09-26) — the sanctioned RE-EXECUTE exit (reExecutionExit)
+// ========================================
+// Before RWF a SYNTHESIZE that re-executed a child (the 50–69 band) and exited was graded
+// PROTOCOL_STEP_SKIPPED: "Step 5 not called" + three final-comment content misses graded against the
+// diagnostic it posted on the CHILD. 6 of the 7 prod runs that ever re-executed a child carry it.
+const _exec = (taskId: string, shape: 'params' | 'params_snake' | 'params_string' | 'top' | 'top_snake' = 'params',
+  result: unknown = { content: [{ text: 'RUNNING' }] }): ToolCallEntry => {
+  const args: any =
+    shape === 'params' ? { action: 'agent.execute', parameters: { taskId } } :
+    shape === 'params_snake' ? { action: 'agent.execute', parameters: { task_id: taskId } } :
+    shape === 'params_string' ? { action: 'agent.execute', parameters: JSON.stringify({ taskId }) } :
+    shape === 'top' ? { action: 'agent.execute', taskId } : { action: 'agent.execute', task_id: taskId };
+  return { tool: 'perform', success: true, arguments: args, result };
+};
+const _childComment = (taskId: string, text: string): ToolCallEntry =>
+  ({ tool: 'perform', success: true, arguments: { action: 'task.comment', parameters: { taskId, comment: text } } });
+const SYN = { type: 'PIPELINE', metadata: { pipelineStageId: 'cmstage' }, resolvedMode: 'SYNTHESIZE' as const };
+
+test('A4.1 blind re-execute exit (agent.execute + diagnostic on the CHILD) → reExecutionExit, 0 misses, NOT null', () => {
+  const r = validatePipelineProtocolSteps([_exec('cmchild1'), _childComment('cmchild1', 'Re-running: confidence 62, weak evidence')], SYN);
+  assert(r !== null, 'a re-execute exit must surface its fact, never read as "ran clean"');
+  assert(r!.reExecutionExit?.kind === 'blind' && r!.reExecutionExit.childTaskIds[0] === 'cmchild1', `got ${JSON.stringify(r!.reExecutionExit)}`);
+  assert(r!.missingSteps.length === 0, `expected no misses, got ${JSON.stringify(r!.missingSteps)}`);
+});
+test('A4.2 a REFUSED agent.execute (isError, recorded success:true) is NOT a re-execution → Step 5 miss kept', () => {
+  const refused = _exec('cmchild1', 'params', { isError: true, content: [{ text: '❌ Error in perform: Cannot execute' }] });
+  const r = validatePipelineProtocolSteps([refused, _childComment('cmchild1', 'tried to re-run')], SYN);
+  assert(!r?.reExecutionExit, 'a refusal must not earn the exemption');
+  assert(r!.missingSteps.some((m) => m.startsWith('Step 5: task.complete not called')), 'the genuine miss must stay');
+});
+test('A4.3 a refusal whose result was TRUNCATED at persistence is still recognised as a refusal', () => {
+  const refused = _exec('cmchild1', 'params', { truncated: true, preview: '{"content":[{"text":"❌ Error"}],"isError":true,' });
+  const r = validatePipelineProtocolSteps([refused], SYN);
+  assert(!r?.reExecutionExit, 'a truncated refusal must not earn the exemption');
+});
+test('A4.4 taskId is read from all five accepted argument shapes', () => {
+  for (const shape of ['params', 'params_snake', 'params_string', 'top', 'top_snake'] as const) {
+    const r = validatePipelineProtocolSteps([_exec(`cm_${shape}`, shape)], SYN);
+    assert(r?.reExecutionExit?.childTaskIds[0] === `cm_${shape}`, `shape ${shape}: got ${JSON.stringify(r?.reExecutionExit)}`);
+  }
+});
+test('A4.5 the core-supplied server-written list is AUTHORITATIVE (stage-filtered: an out-of-stage call does not count)', () => {
+  const r = validatePipelineProtocolSteps([_exec('cmOUTOFSTAGE')], { ...SYN, dispatchedChildIds: [] });
+  assert(!r?.reExecutionExit, 'the DB fact says nothing in-stage was dispatched — no exemption');
+  assert(r!.missingSteps.some((m) => m.startsWith('Step 5: task.complete not called')), 'miss kept');
+  const r2 = validatePipelineProtocolSteps([_call('task.comment')], { ...SYN, dispatchedChildIds: ['cmFromDb'] });
+  assert(r2?.reExecutionExit?.childTaskIds[0] === 'cmFromDb', 'the DB list is used even when the tool log shows no call');
+});
+test('A4.6 a harness that merely FORGOT task.complete (no dispatch) is still flagged', () => {
+  const r = validatePipelineProtocolSteps([_call('task.comment')], SYN);
+  assert(!r?.reExecutionExit && r!.missingSteps.some((m) => m.startsWith('Step 5: task.complete not called')), 'forgot-close must stay flagged');
+});
+test('A4.7 escalated exit and re-execute exit in one run → BOTH facts, no completion miss', () => {
+  const esc: ToolCallEntry = { tool: 'perform', success: true, arguments: { action: 'task.update', parameters: { taskId: 'cmharness', metadata: { qualityGate: { outcome: 'escalated' } } } } };
+  const r = validatePipelineProtocolSteps([esc, _exec('cmchild1')], SYN);
+  assert(r?.escalatedExit === true && !!r?.reExecutionExit, `got ${JSON.stringify({ e: r?.escalatedExit, x: r?.reExecutionExit })}`);
+  assert(!r!.missingSteps.some((m) => m.startsWith('Step 5: task.complete not called')), 'completion miss suppressed');
+});
+// A4.8 pins the REAL observed shape (replay of the 6 prod runs, 2026-09-26): the re-execute pass posts its
+// Step-3 status note on the HARNESS. It is an interim note, not a final comment, and must not be graded as one.
+test('A4.8 a status note on the HARNESS in a re-execute pass is interim — not graded as the final comment', () => {
+  const note = '**Child stage:** `cmstage` — Pipeline: X\n\n**Quality gate results (pass 1):**\n- Harvest (88): accept\n- Author (62): re-running';
+  const r = validatePipelineProtocolSteps([_exec('cmchild1'), _childComment('cmharness', note)], SYN);
+  assert(!!r?.reExecutionExit, 'still a re-execute exit');
+  assert(r!.missingSteps.length === 0, `an interim note must not be graded as a final comment: ${JSON.stringify(r!.missingSteps)}`);
+});
+test('A4.9 a run that re-executed AND closed its task is not an exit', () => {
+  const r = validatePipelineProtocolSteps([_exec('cmchild1'), _call('task.complete')], SYN);
+  assert(!r?.reExecutionExit, 'a closed run is not a re-execute exit');
+});
+test('A4.10 (m3) every "Step 5: task.complete not called" push is exempted by BOTH sanctioned exits', () => {
+  const fs = require('fs') as typeof import('fs');
+  const path = require('path') as typeof import('path');
+  const src: string = fs.readFileSync(path.join(__dirname, '../lib/services/pipelineProtocolValidator.ts'), 'utf8');
+  const pushes = src.split("missingSteps.push('Step 5: task.complete not called").length - 1;
+  assert(pushes === 1, `expected ONE completion-miss push site, found ${pushes} — a new site must honour reExecutionExit AND escalatedExit`);
+  const i = src.indexOf("missingSteps.push('Step 5: task.complete not called");
+  const guard = src.slice(Math.max(0, i - 700), i);
+  assert(/stampedEscalatedThisRun\(toolCallResults\)/.test(guard) && /!isReExecutionExit/.test(guard),
+    'the completion-miss push is no longer guarded by both sanctioned exits');
 });
 
 // ========================================

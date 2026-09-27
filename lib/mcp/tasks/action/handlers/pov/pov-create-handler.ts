@@ -499,7 +499,7 @@ ${phases.map((p: any) => `• ${p.name} (${p.type}) - ${new Date(p.startDate).to
 **💡 Next Steps:**
 • Add tasks: perform(action: 'task.create', parameters: { povId: '${pov.id}', phaseName: '${phases[0]?.name ?? 'Planning and Design'}', title: '...' })
 • View details: project(action: 'pov.details', povId: '${pov.id}')
-• Add team members: Use web UI to add team members (not yet available via MCP)
+• Add team members (ADMIN role): perform(action: 'pov.update', parameters: { povId: '${pov.id}', projectManager: '<userId>', salesEngineers: ['<userId>'] }) — or use the web UI
 • Create stages: perform(action: 'stage.create', parameters: { phaseName: '${phases[0]?.name ?? 'Planning and Design'}', name: 'Requirements Analysis' })`;
 
   return {

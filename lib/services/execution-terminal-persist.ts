@@ -58,15 +58,18 @@ import type { AccumulatedUsage } from '@/lib/agents/harness/agentic-tool-loop';
 import { redactArtifactsForPersist } from '@/lib/agents/harness/redact-artifact-secrets';
 import { getReportMdDecision } from './agentArtifactPolicy';
 import { selectAuthoritativeExecution } from './execution-selection';
-import { buildTokenUsageColumns, rollUpAndDeleteExecutions, sanitizeLLMForMarkdown } from './execution-artifacts';
+import { buildTokenUsageColumns, rollUpAndDeleteExecutions, sanitizeLLMForMarkdown, orderResultJsonForPersist } from './execution-artifacts';
 import { selectExecutionsToDelete, PRUNE_ON_COMPLETE_RETENTION } from './execution-retention';
 import { markForwardConeBlocked } from './mark-forward-cone';
+import { sliceSurrogateSafe, stringifyWellFormed } from '@/lib/utils/surrogate-safe';
+import { countUnsettledChildren } from './child-stage-settled';
+import { childTasksDispatchedBy, maybeSelfCheckLostWakeup } from './harness-dispatch-fact';
 
 // BC38: truncate artifact content to prevent database bloat (5MB per artifact).
 // Formerly duplicated as an inline const in BOTH paths.
 export const MAX_ARTIFACT_SIZE = 5 * 1024 * 1024; // exported for the tier-invariant test (Finding D)
 const truncate = (s: string) =>
-  s.length > MAX_ARTIFACT_SIZE ? s.substring(0, MAX_ARTIFACT_SIZE) + '\n\n[TRUNCATED: exceeded 5MB limit]' : s;
+  s.length > MAX_ARTIFACT_SIZE ? sliceSurrogateSafe(s, MAX_ARTIFACT_SIZE) + '\n\n[TRUNCATED: exceeded 5MB limit]' : s;
 
 export interface TerminalPersistLogger {
   info(data: Record<string, unknown>, msg: string): void;
@@ -103,7 +106,7 @@ export function buildErrorJson(input: {
   executionTimeMs?: number;
   timestamp: Date;
 }): string {
-  return JSON.stringify({
+  return stringifyWellFormed({
     error: input.errorMessage,
     errorCategory: input.errorCode || undefined,
     source: input.source,
@@ -111,7 +114,7 @@ export function buildErrorJson(input: {
     taskTitle: input.taskTitle,
     executionTimeMs: input.executionTimeMs,
     timestamp: input.timestamp.toISOString(),
-  }, null, 2);
+  }, 2).json;
 }
 
 /** I-6 fact pair — ONE derivation from row timestamps (Protocol-10 facts). */
@@ -198,6 +201,36 @@ export interface TerminalSuccessResult extends TerminalSuccessTxResult {
  * atomicity boundary unchanged (pattern #37: artifacts + execution status + task
  * status commit together; getReportMdDecision's SUCCESS-filter read depends on it).
  */
+/**
+ * Strip a model's own working-out from the FRONT of a deliverable.
+ *
+ * The deliverable contract mandates that a producer's response BEGIN at its first heading — the
+ * producer itself quotes that instruction. So text before the first heading is contract-violating by
+ * definition, and it lands in the customer-facing `report.md` verbatim.
+ *
+ * Observed twice, both on the program-synthesis producer, both reaching `report.md`:
+ *   "Now I'll compose the final program-level deliverable. Based on the task description and the two
+ *    chained pipeline outputs, I need to synthesize: 1. Pipeline 1 (network-provisioning)…"
+ * and once with the instruction quoted inside its own violation ("I must begin at the first heading
+ * with no preamble"). A customer opening the deliverable read an agent's planning notes first.
+ *
+ * SAFE BY CONSTRUCTION — nothing is lost. `report.md` is a DERIVED view; the complete finalResponse
+ * remains in the source execution's `result.json`. That is what allows a deterministic strip here
+ * rather than a heuristic one, and why the stripped text is recorded as a fact rather than discarded.
+ *
+ * CONSERVATIVE: never strips when there is no heading (a heading-less deliverable is all we have, and
+ * removing it would destroy the artifact to enforce a formatting rule). Never strips when the heading
+ * is already first — the common case costs one regex and no allocation.
+ */
+export function stripPreHeadingPreamble(text: string): { text: string; stripped: string | null } {
+  if (!text) return { text, stripped: null };
+  const m = /^#{1,6}[ \t]+\S/m.exec(text);
+  if (!m || m.index === 0) return { text, stripped: null };          // no heading, or already clean
+  const head = text.slice(0, m.index);
+  if (!head.trim()) return { text: text.slice(m.index), stripped: null }; // leading whitespace only
+  return { text: text.slice(m.index), stripped: head.trim() };
+}
+
 export async function runTerminalSuccessTx(
   tx: Prisma.TransactionClient,
   input: TerminalSuccessInput,
@@ -231,21 +264,49 @@ export async function runTerminalSuccessTx(
   //        finalResponse (Option A defense — gates on source SUCCESS so
   //        harness CREATE doesn't write a misleading report.md before
   //        the upstream Editor task has completed).
+  // FRESHNESS CLASS: `task.metadata` is LIVE, not a snapshot.
+  //
+  // The `task` object in scope was fetched PRE-CLAIM — before this execution ran. Anything the
+  // agent stamped DURING its run (`deliverableSourceTaskId`, `qualityGate`, `programReleasable`)
+  // is absent from it. Read those from `freshMeta`, never from `task.metadata`.
+  //
+  // This is the fifth instance of one bug class — a live field read through a snapshot captured
+  // before the writer ran (2026-06-06 stream `inputContext`; 2026-07-17 BC-T6-1; 2026-08-18 the
+  // verdict banner ~150 lines below, which fetched this same row separately; 2026-09-15 the
+  // protocol validator). Each was fixed in isolation because the class had no name. It has one
+  // now: classify every metadata read as snapshot / live / immutable before you write it.
+  //
+  // One read serves both consumers below. `deliverableSourceTaskId` is written mid-run by ~30%
+  // of SYNTHESIZE executions, so the decision itself needs the fresh value; it was previously
+  // correct only because the Option-A source-SUCCESS gate happened to mask the stale read.
+  const freshTask = await tx.task.findUnique({
+    where: { id: task.id },
+    select: { metadata: true },
+  });
+  const freshMeta = (freshTask?.metadata ?? null) as Record<string, unknown> | null;
+
   const decision = await getReportMdDecision(tx, {
     id: task.id,
     type: task.type,
-    metadata: task.metadata,
+    metadata: (freshTask?.metadata ?? task.metadata) as typeof task.metadata,
   });
   const jsonArtifactName = task.type === 'PIPELINE' ? 'pipeline-index.json' : 'result.json';
 
   let reportMdContent: string | null = null;
-  let reportMdSource: { mode: 'self' | 'upstream'; sourceTaskId?: string; extractFailureReason?: string } | null = null;
+  let reportMdSource: { mode: 'self' | 'upstream'; sourceTaskId?: string; extractFailureReason?: string; preambleStripped?: number } | null = null;
   if (decision.produce) {
     if (decision.source === 'self') {
       // BC46/0.5d: sanitize freshly generated text — report.md renders in the same
       // GUI viewer regardless of creating path (stored-XSS surface).
-      reportMdContent = finalText ? sanitizeLLMForMarkdown(finalText) : '*No response generated.*';
-      reportMdSource = { mode: 'self' };
+      const selfRaw = finalText ? sanitizeLLMForMarkdown(finalText) : '*No response generated.*';
+      const selfStrip = stripPreHeadingPreamble(selfRaw);
+      reportMdContent = selfStrip.text;
+      reportMdSource = { mode: 'self', ...(selfStrip.stripped ? { preambleStripped: selfStrip.stripped.length } : {}) };
+      if (selfStrip.stripped) {
+        logger.warn({ executionId, taskId: task.id, source: 'self',
+          strippedChars: selfStrip.stripped.length, preview: selfStrip.stripped.slice(0, 160) },
+          'Stripped pre-heading preamble from report.md — the deliverable contract requires starting at the first heading');
+      }
     } else {
       // source === 'upstream' — fetch source task's finalResponse.
       //
@@ -284,6 +345,7 @@ export async function runTerminalSuccessTx(
       }
 
       let extracted: string | null = null;
+      let extractedPreambleChars = 0;
       let extractFailureReason: string | null = null;
 
       if (sourceArtifact) {
@@ -302,7 +364,17 @@ export async function runTerminalSuccessTx(
             if (typeof candidate === 'string' && candidate.length > 0) {
               // No double-sanitise: upstream content was already sanitized when its
               // own execution wrote it; re-running would double-process.
-              extracted = candidate;
+              const upStrip = stripPreHeadingPreamble(candidate);
+              extractedPreambleChars = upStrip.stripped ? upStrip.stripped.length : 0;
+              extracted = upStrip.text;
+              if (upStrip.stripped) {
+                logger.warn({
+                  executionId, sourceTaskId: decision.sourceTaskId,
+                  sourceExecutionId: sourceArtifact.executionId,
+                  strippedChars: upStrip.stripped.length,
+                  preview: upStrip.stripped.slice(0, 160),
+                }, 'Stripped pre-heading preamble from upstream deliverable — observed twice on the program-synthesis producer, reaching the customer-facing report.md');
+              }
               if (candidate.length < 100) {
                 logger.warn({
                   executionId,
@@ -364,13 +436,11 @@ export async function runTerminalSuccessTx(
         // explicit and audited; facts on every surface the artifact travels). A future audited
         // release-waiver feature would be transcribed here the same way.
         //
-        // FRESH READ, deliberately: the `task` object in scope was fetched pre-claim, BEFORE the
-        // harness stamped qualityGate during its run — reading it would miss this run's verdict.
-        const freshTask = await tx.task.findUnique({
-          where: { id: task.id },
-          select: { metadata: true },
-        });
-        const freshMeta = (freshTask?.metadata ?? null) as Record<string, unknown> | null;
+        // Reads `freshMeta` — the hoisted live-class read taken above. `qualityGate` is stamped
+        // by the harness DURING this run, so the pre-claim `task.metadata` would miss this run's
+        // verdict. (Until 2026-09-16 this site did its own `findUnique` for exactly that reason,
+        // ~150 lines below a sibling read of the same row that was stale for want of the same
+        // insight. One read now serves both; see the freshness-class note at the hoist.)
         const gate = (freshMeta?.qualityGate ?? null) as { outcome?: string } | null;
         const releasable = freshMeta?.programReleasable;
         if (gate?.outcome && gate.outcome !== 'approved') {
@@ -385,7 +455,8 @@ export async function runTerminalSuccessTx(
             'report.md verdict banner prepended (non-approved quality gate)');
         }
         reportMdContent = extracted;
-        reportMdSource = { mode: 'upstream', sourceTaskId: decision.sourceTaskId };
+        reportMdSource = { mode: 'upstream', sourceTaskId: decision.sourceTaskId,
+          ...(extractedPreambleChars ? { preambleStripped: extractedPreambleChars } : {}) };
       } else {
         const errorHeader = `# ⚠️ Report Extraction Failed\n\nThe pipeline harness was configured to extract its customer deliverable from task \`${decision.sourceTaskId}\`, but extraction failed: \`${extractFailureReason}\`.\n\n**Recovery**: Fetch the source task's result.json directly via \`fetch(id: "artifact-<source result.json id>")\`.\n\n---\n\n`;
         // 0.5d: fallback body is freshly generated text — sanitize.
@@ -416,14 +487,26 @@ export async function runTerminalSuccessTx(
   // live SSE stream and the in-flight finalResponse are narrower-audience and deliberately out
   // of scope, so this is not "no secret anywhere". The original enrichedResultJson is not
   // mutated. See redact-artifact-secrets.ts.
-  const persistRedaction = redactArtifactsForPersist(enrichedResultJson, reportMdContent);
+  // RWF C.3: every compact fact before the bulky payloads, including the ones appended after the builder
+  // (net stamps, supersession, reportMdSource). See orderResultJsonForPersist.
+  const persistRedaction = redactArtifactsForPersist(orderResultJsonForPersist(enrichedResultJson), reportMdContent);
 
+  // X11 (2026-09-27): the JSON artifact is serialised with every string made well-formed. A lone UTF-16 surrogate
+  // (a cut through an emoji — ours, or an external service's in a tool result) otherwise persists as a `\udXXX` escape
+  // that Postgres rejects as jsonb, breaking every query that casts this row. Repair is U+FFFD; the count is logged.
+  const wellFormed = stringifyWellFormed(persistRedaction.resultJson, 2);
+  if (wellFormed.repaired > 0) {
+    logger.warn(
+      { executionId, taskId: task.id, artifact: jsonArtifactName, repairedStrings: wellFormed.repaired },
+      'Persist: replaced lone UTF-16 surrogate(s) with U+FFFD before writing the JSON artifact'
+    );
+  }
   const artifactData: Array<{ executionId: string; name: string; type: string; content: string }> = [
     {
       executionId,
       name: jsonArtifactName,
       type: 'application/json',
-      content: truncate(JSON.stringify(persistRedaction.resultJson, null, 2)),
+      content: truncate(wellFormed.json),
     },
   ];
   if (reportMdContent !== null) {
@@ -645,16 +728,12 @@ export async function runTerminalSuccessTx(
       );
     } else if (legGate?.outcome === 'escalated') {
       const legStageId = typeof legMeta.pipelineStageId === 'string' ? legMeta.pipelineStageId : null;
+      // RWF 1.1 (2026-09-26): the shared settledness predicate, in-tx. Before RWF this count had no
+      // in-flight arm, so a leg stamped `escalated` while a re-executed child was still RUNNING was
+      // COMPLETED here and the re-run was orphaned (E1). Now the leg stays IN_PROGRESS; the child's own
+      // terminal persist (or, if it is reaped, the reaper's retrigger) re-enters it and this completes then.
       const nonTerminalChildren = legStageId
-        ? await tx.task.count({
-            where: {
-              stageId: legStageId,
-              AND: [
-                { status: { not: 'COMPLETED' } },
-                { OR: [{ executionStatus: null }, { executionStatus: { notIn: ['FAILED'] } }] },
-              ],
-            },
-          })
+        ? await countUnsettledChildren(tx, legStageId)
         : 1; // no child stage → cannot assert the invariant → do not complete
       if (nonTerminalChildren === 0) {
         programLegCompletion = { status: 'COMPLETED' };
@@ -663,6 +742,44 @@ export async function runTerminalSuccessTx(
           'Program leg escalated with all children terminal — platform-completed so the program can escalate (F20)'
         );
       }
+    }
+  }
+
+  // RWF A3 (2026-09-26) — the "nothing is in flight" premise, CHECKED instead of assumed. The two branches
+  // below (R4 truncation stall, and HARNESS_NO_OUTPUT's SYNTHESIZE arm) terminalize a SYNTHESIZE that ended
+  // with no deliverable on the premise that "SYNTHESIZE resolves only once every child is terminal, so no
+  // future event can retrigger it". That is false the moment a SYNTHESIZE re-executes a child (the shipped
+  // 50–69 blind retry): the leg and its program cone were FAILED while the re-run was still going. Decline
+  // when EITHER
+  //   (a) the harness's child stage is unsettled right now — fresh in-tx read, the shared predicate; or
+  //   (b) THIS execution dispatched a child in its own child stage — the server-written row, read in-tx.
+  //       (b) covers the child that settled DURING this run: its wakeup died at retrigger Guard 6 and (a)
+  //       would read settled; the post-commit self-check (harness-dispatch-fact.ts) delivers that wakeup.
+  // Never silent (§5d): a decline stamps `deadEndExempt` after the task write, below.
+  // Plan + reviews: cline_docs/reviews/rwf-stage1-2026-09-26/ (PLAN §2 A.1b).
+  let deadEndExempt: {
+    reason: 'child-dispatched-this-run' | 'child-unsettled';
+    executionId: string; unsettledChildren: number; dispatchedChildIds: string[]; at: string;
+  } | null = null;
+  const deadEndChildStageId =
+    typeof (legMeta as Record<string, unknown>)?.pipelineStageId === 'string'
+      ? ((legMeta as Record<string, unknown>).pipelineStageId as string)
+      : null;
+  if (
+    isPipelineTask &&
+    deadEndChildStageId &&
+    (input.truncationStalled || input.synthesizeDeadEnd) &&
+    currentTaskType?.status !== 'COMPLETED' &&
+    !programLegCompletion.status &&
+    !programLegCompletion.executionStatus
+  ) {
+    const unsettledChildren = await countUnsettledChildren(tx, deadEndChildStageId);
+    const dispatchedChildIds = await childTasksDispatchedBy(tx, { executionId, childStageId: deadEndChildStageId });
+    if (unsettledChildren > 0 || dispatchedChildIds.length > 0) {
+      deadEndExempt = {
+        reason: dispatchedChildIds.length > 0 ? 'child-dispatched-this-run' : 'child-unsettled',
+        executionId, unsettledChildren, dispatchedChildIds, at: endTime.toISOString(),
+      };
     }
   }
 
@@ -675,6 +792,7 @@ export async function runTerminalSuccessTx(
   if (
     isPipelineTask &&
     input.truncationStalled &&
+    !deadEndExempt &&
     currentTaskType?.status !== 'COMPLETED' &&
     !programLegCompletion.status &&
     !programLegCompletion.executionStatus
@@ -733,7 +851,7 @@ export async function runTerminalSuccessTx(
     // the retrigger reactor (child-completion driven) has no future event left. Prod specimen
     // cmu0yl664006kyx0e3olnguqe hung permanently in exactly that gap.
     (!(legMeta as Record<string, unknown> | null | undefined)?.pipelineStageId ||
-      input.synthesizeDeadEnd) &&
+      (input.synthesizeDeadEnd && !deadEndExempt)) &&
     !programLegCompletion.status &&
     !programLegCompletion.executionStatus
   ) {
@@ -838,6 +956,20 @@ export async function runTerminalSuccessTx(
     },
   });
 
+  // RWF A3: record the decline. Atomic jsonb merge on the row AFTER the update above — never a spread of
+  // `legMeta`, which was read without a row lock (a spread would be a lost-update). On this path the update
+  // above did not write `metadata` (legFailureMetaMerge is null when a dead-end declined).
+  if (deadEndExempt) {
+    await tx.$executeRaw`
+      UPDATE tasks
+      SET metadata = COALESCE(metadata::jsonb, '{}'::jsonb) || jsonb_build_object('deadEndExempt', ${JSON.stringify(deadEndExempt)}::jsonb)
+      WHERE id = ${task.id}`;
+    logger.warn(
+      { taskId: task.id, errorCode: 'DEAD_END_EXEMPT', ...deadEndExempt },
+      'SYNTHESIZE ended with no deliverable but a child is in flight or was dispatched this run — NOT terminalized (RWF A3)'
+    );
+  }
+
   // R4 Layer 2 + F17 cone-gap: post the leg's honesty comment (truncation only) and mark the
   // forward cone (program legs only), in the SAME transaction, via the shared walk.
   if (legFailureComment) {
@@ -914,6 +1046,14 @@ export async function persistTerminalSuccess(
     const { maybeQueueReadyDependents } = await import('./taskReadyReactorService');
     maybeRetriggerPipelineHarness(input.task.id).catch(() => {});
     maybeQueueReadyDependents(input.task.id).catch(() => {});
+    // RWF A3: lost-wakeup self-check — if THIS harness run dispatched a child (server-written fact), or it
+    // resolved CREATE/ORCHESTRATE and its child stage settled during the run, re-evaluate its own child
+    // stage now that this execution is no longer active (Guard 6 swallowed any wakeup that fired meanwhile).
+    const resolvedMode = (input.resultJson as { resolvedMode?: unknown } | null)?.resolvedMode;
+    void maybeSelfCheckLostWakeup(db, {
+      taskId: input.task.id, executionId: input.executionId,
+      resolvedMode: typeof resolvedMode === 'string' ? resolvedMode : null, tail: 'success',
+    }, input.logger);
   }
 
   // Auto-post completion comment with artifact fetch commands (visible in GUI +
@@ -937,7 +1077,7 @@ export async function persistTerminalSuccess(
       data: {
         taskId: input.task.id,
         userId: input.commentUserId,
-        text: completionComment.substring(0, 2000),
+        text: sliceSurrogateSafe(completionComment, 2000),
         createdAt: new Date(),
       }
     });
@@ -1094,6 +1234,12 @@ export async function persistTerminalFailure(
     } catch {
       // Ignore import/reactor errors on the failure path.
     }
+    // RWF A3: lost-wakeup self-check on the failure tail — DISPATCH FACT ONLY (no resolved mode here, and a
+    // mode-based arm could re-enter a SYNTHESIZE that keeps failing). A harness that dispatched a child and
+    // then failed still owes that child's wakeup.
+    void maybeSelfCheckLostWakeup(db, {
+      taskId: input.taskId, executionId: input.executionId, resolvedMode: null, tail: 'failure',
+    }, input.logger);
   }
 
   return result;

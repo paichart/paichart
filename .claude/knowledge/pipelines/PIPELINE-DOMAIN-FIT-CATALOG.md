@@ -341,6 +341,65 @@ Prometheus/Grafana/collector.
 
 ---
 
+## §Requirements-Authoring — the program spec itself (Phase-1 triage, 2026-09-21)
+
+**Verdict: GO — new leg domain (own protocol), roles mostly transfer, NO NEW RIG.** Trigger: the
+authoring burden is the measured bottleneck. Evidence: four generation runs across two models
+(`cline_docs/reviews/requirements-generation-test-2026-09-21/`).
+
+**1. Two halves.**
+- **Cognition (→ harness):** read-only harvest of the target environment(s) using the EXISTING
+  descriptors → decompose the objective into legs per the template's domain definition → author
+  `requirements.md` conforming to `_TEMPLATE/requirements.template.md`.
+- **Actuation (→ OUT of loop):** the human **plan gate**, and then the program running from the
+  document. The harness never launches a program from its own output.
+
+**2. Seam rule → ✅, but the seam does not capture this domain's real hazard, and that is the
+finding.** There is almost no actuation here at all — nothing is mutated, and regenerating the
+document twice is harmless. By the cognition/actuation test this is the *safest* domain triaged.
+
+🔴 **But its deliverable is a CONTROL for other automation, which is a third category the seam does
+not name.** A wrong change package fails at apply, loudly and visibly. **A wrong `requirements.md`
+produces a program that satisfies wrong requirements — self-consistently, with every gate green.**
+Node C grades legs *against* `requirements.md`; nothing grades `requirements.md`. So the usual
+"escalation catches it" argument does not apply: the escalation tiers are calibrated by the very
+document under question.
+
+**Consequence for the design, not a reason to reject:** the human plan gate stops being a
+convenience and becomes the only tier that can catch a wrong spec. It must be a real review of the
+generated document against the requester's intent — and the acceptance criteria must be mechanical
+wherever possible, because a mechanical check is the one form of grading that does *not* inherit the
+document's own framing.
+
+**3. Reject?** No. Measured over four runs: decomposition converges once "domain" is defined; the
+null case fires rather than inventing a value; preconditions get filled from real harvests; and v4
+caught a design flaw in the human-written objective (an `aws:SourceIp` control that a NAT egress
+path would defeat) that the human author — me — had missed.
+
+**4. Terminus.** An approved-but-unlaunched `requirements.md` (+ `topology.json`) pair, reviewed by
+a human at the plan gate before any program is created from it.
+
+**Phase-1 surfaces (resolve later, NOT part of the fit verdict):**
+- **NO NEW RIG — a first.** Every prior domain needed one. The harvest targets are the existing
+  read-only descriptors (`ceos-lab`, `k8s-lab`, `tf-lab`, observability), reached exactly as a
+  normal leg reaches them.
+- **Closest shape is `artifact-synthesis`, not a device-reaching variant.** Its Phase 0 Source
+  Acquisition already reaches external MCP services; harvest → editorial writer → reviewer already
+  exists. What changes is that "the publishable bar" becomes **template conformance**.
+- **The acceptance criteria are unusually mechanical**, which is this domain's equivalent of
+  observability's offline validators: `requirements-rules.py --check` clean, every consumer wired to
+  both edges, required sections present, no unfilled placeholder, no leftover `🗑` block — and the
+  elegant one, **the generator can verify its own preconditions claim because it performed the
+  harvest**.
+- **Known residual, three runs in four:** the writing-rules section is re-transcribed and altered
+  (numbering lost twice; one run additionally asserted it was "spliced verbatim" when it was not).
+  The mechanical splice is the mitigation and this domain is the workflow it was built for.
+- **Open question for Phase 2:** the reviewer role grades a *document against a template*, which is
+  a different act from grading a change package against harvested state. Whether
+  `publication_reviewer` transfers or needs a sibling is undecided.
+
+---
+
 ## Mitigation typology — what ages how across model generations (2026-08-22, from the FW-A3 campaign)
 
 The mechanical-net rules above generalize: every guard in this stack is one of four types, sorted by

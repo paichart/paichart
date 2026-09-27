@@ -158,6 +158,22 @@ The unexposed fields are set at provisioning time by the seed script and can onl
 **`ROLE_GUIDANCE_LIBRARY` is provisioning-only infrastructure.** It is never consulted at runtime in production — verified 2026-04-16: 0 of 128 executions used the Universal Template (the only path that reads the library at runtime). Every execution uses a named template with baked role guidance.
 
 > **⚠️ "Dead at runtime" does NOT mean unimportant — it means BAKED.** At seed time the script does `BASE_TEMPLATE.replace('${roleSpecificGuidance}', getRoleSpecificGuidance(role))`, so the role guidance is **frozen into the template's `promptTemplate` — which IS the agent's actual prompt.** Consequences when creating a new agent: (1) a `defaultRole` with **no** library entry silently bakes the thin GENERIC fallback (no error) → a quietly-degraded agent; (2) **changing a role entry requires RE-SEEDING** the affected templates to take effect (the live row holds the old bake). So adding the `ROLE_GUIDANCE_LIBRARY` entry is a **required** step of template creation, not optional polish. **CI now enforces it**: `validate:role-guidance-coverage` (pre-commit + `test:all-validation`) fails if a seeded `defaultRole` has neither an entry nor a documented `INTENTIONALLY_GENERIC_ROLES` exemption. Full procedure: `.claude/knowledge/pipelines/ADD-A-PIPELINE-HARNESS-AGENT.md`.
+>
+> 🔴 **A new `defaultRole` carries a SECOND decision nobody else will make for you: does this role
+> RECEIVE an upstream pipeline's deliverable?** Since cross-pipeline delivery shipped, a program
+> leg's non-PIPELINE children are handed the upstream leg's output, scoped by an EXCLUSION list of
+> literal role names (`INJECTION_EXCLUDED_ROLES`, `lib/agents/harness/context-chainer.ts`). The list
+> **fails toward delivery**, which is the safe direction for a *consuming* role and the harmful one
+> for two shapes: **harvest-shaped** (an upstream deliverable folded into `## Harvested Allocations`
+> poisons machine-parsed ground truth at its root, and every tier above then checks correctly against
+> bad data) and **review-shaped** (a second reviewable document — three self-host format vetoes on
+> 2026-09-09). ⚠️ **Decide it by SHAPE, not by NAME**: `synthesis_source_acquirer` is harvest-shaped
+> and carries no "harvest" in its name, and `publication_reviewer` sat outside the list while
+> `change_reviewer` — the same seat in four infra domains — was excluded (caught by inspection
+> 2026-09-17, zero live impact only because that domain had never run as a program leg). A runtime
+> tripwire warns on `/review|harvest|acquir/i` and `test:chain-injection` fails on an undecided
+> production role of that shape, but a shape regex is not entitled to make the judgement — you are.
+> Reasoning + the live near-miss: step 4b and the injection-exclusion section of the ADD guide.
 
 **Guard (SHIPPED 2026-06-10, commit `4077c049`)**: the engine throws `NoTemplateAssignedError` when no template resolves (`agentExecutionEngine.ts:570`, stream `:420`), and the Priority-3 Universal-Template fallback was DELETED. `ROLE_GUIDANCE_LIBRARY` is formally dead at runtime — consulted only offline/seed-time.
 

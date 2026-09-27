@@ -25,6 +25,7 @@
  */
 
 import type { Prisma } from '@prisma/client';
+import { readAuthoritativeResultField } from './authoritative-result-read';
 import {
   parseFencedJsonBlock,
   checkDerivationContainment,
@@ -56,7 +57,7 @@ import {
  *    never reaches lib/prisma.ts — a test (or the replay harness) can import it without
  *    DATABASE_URL being set.
  */
-export type ContainmentPrisma = Pick<Prisma.TransactionClient, 'task' | '$queryRaw'>;
+export type ContainmentPrisma = Pick<Prisma.TransactionClient, 'task' | 'agentExecution' | 'agentArtifact' | '$queryRaw'>;
 
 /**
  * Bound on the stage-children scan. PRE-EXISTING gap, found 2026-09-11: `validate:pagination` runs
@@ -137,14 +138,10 @@ export async function computeDerivationContainmentFact(
       // `pipeline-index.json` instead, and copying this shape to a PIPELINE site is exactly
       // defect 3 in the header (also CC2 in context-chainer, wave-2 E1 in agent-results-handler:
       // three sites, same class). Predecessor facts are now carried by the chainer instead.
-      const finalOf = async (taskId: string): Promise<string | null> => {
-        const rows = await prisma.$queryRaw<Array<{ fr: string | null }>>`
-          SELECT (content::jsonb)->>'finalResponse' AS fr FROM agent_artifacts
-          WHERE name = 'result.json' AND content LIKE '{%'
-            AND (content::jsonb)->>'taskId' = ${taskId}
-          ORDER BY "createdAt" DESC LIMIT 1`;
-        return rows[0]?.fr ?? null;
-      };
+      // RWF Wave B: the authoritative execution — the one the chainer handed the Reviewer — never "the
+      // newest result.json whose content names this task" (see authoritative-result-read.ts).
+      const finalOf = async (taskId: string): Promise<string | null> =>
+        (await readAuthoritativeResultField(prisma, taskId, 'finalResponse')).value;
       const harvested = parseFencedJsonBlock<HarvestedAllocation>(await finalOf(harvestChild.id), HARVESTED_ALLOCATIONS_MARKER);
       const authorText = await finalOf(authorChild.id);
       // THE DERIVED BLOCK IS FOUND WHEREVER IT WAS WRITTEN, not only on the Author (Run 19,

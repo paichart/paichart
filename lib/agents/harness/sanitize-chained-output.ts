@@ -31,36 +31,62 @@
  *   LLM-bound copy is rewritten. That raw payload reaches result.json.toolCalls deliberately --
  *   it is forensic EVIDENCE, and R10 draws the same line for secrets. Persisting it is not a gap.
  *
- *   IT DOES NOT COME BACK TO A HARNESS REASONER. perform(action:'agent.results') does not return
- *   artifact content: the results formatter emits a 300-char preview per artifact
- *   (advanced/agent-results-handler.js, "Never dump full content inline"), the embedded server
- *   exposes no artifact-read tool (project/perform/analytics/template/services/registry -- no
- *   `fetch`), and the preview reads the HEAD of result.json while toolCalls is written last.
- *   `verbose:true` raises the cap on the assembled SUMMARY TEXT, not on the artifact.
+ *   CORRECTED 2026-09-25 (F9-s7) -- IT *DOES* COME BACK TO A HARNESS REASONER. The 2026-07-26
+ *   disproof traced advanced/agent-results-handler.js (300-char preview), a handler the ENGINE does
+ *   not reach. The engine's perform (embedded-server.ts `perform` -> task-action-handler.js) formats
+ *   with formatActionResult, which carries FULL artifact content; with `verbose:true` it is capped
+ *   only at 100 KB, and read_more pages it. So a harness reading a child's result.json via
+ *   agent.results can receive that child's RAW toolCalls[].result -- and `perform` is not screened by
+ *   site A (services only). Live-evidenced; OPEN as register item F9-s7, fix direction there
+ *   (serve engine callers a toolCalls-result-stripped result.json -- do NOT add perform to site A;
+ *   in-place rewriting corrupts JSON a consumer parses). Evidence:
+ *   cline_docs/reviews/f9-r9-rewrite-fact-2026-09-25/sec-ops-f9-s7.md
  *
- *   THE ONE PLACE FULL CONTENT IS SERVED is an EXTERNAL client -- Claude Desktop / ChatGPT via
- *   fetch(mcp://artifacts/{id}), and resource reads via embedded-server's
- *   getAgentExecutionContent. Human-supervised, own-tenant, and largely the point of storing it.
+ *   A DOWNSTREAM FETCH RE-ENTERS SITE A. A stored artifact fetched back into a tool loop THROUGH
+ *   `services` (e.g. browser-automation-service reading a published report) is screened at site A
+ *   on the way in. Two prior "R9 gap" derivations (2026-07-26, 2026-09-21) missed this step; check
+ *   which TOOL delivers the bytes before concluding a path is unscreened.
+ *
+ *   EXTERNAL clients also receive full content -- Claude Desktop / ChatGPT via
+ *   fetch(mcp://artifacts/{id}), and resource reads via embedded-server's getAgentExecutionContent.
+ *   Human-supervised, own-tenant, and largely the point of storing it.
  *
  * SO THE RULE IS: R9's scope is decided by whether a path feeds an AUTONOMOUS reasoner, not by
  * whether the bytes are stored or who stored them. If you are adding a tool that returns stored
  * artifact bodies INTO the tool loop, that is a new reasoner-bound path and it belongs in scope --
  * mark it (structural envelope) rather than mutating it: R9 rewrites in place and defangs < > into
  * angle-quotes, which would corrupt first-party JSON a consumer may JSON.parse.
- * Full trace + disproof: cline_docs/reviews/r9-option-b-2026-07-26/TRACE-CORRECTION.md
- * Original finding (CLOSED): cline_docs/follow-ups/r9-artifact-read-trust-laundering-2026-07-26.md
+ * 2026-07-26 trace (its agent.results disproof is WRONG, see above):
+ *   cline_docs/reviews/r9-option-b-2026-07-26/TRACE-CORRECTION.md
+ * Original finding (RE-OPENED 2026-09-25 as F9-s7): cline_docs/follow-ups/r9-artifact-read-trust-laundering-2026-07-26.md
  *
  * MARKER IS ADVISORY (review 2026-06-24, validation I-1): the in-band `[NEUTRALIZED-INJECTION:cat]`
  * string is operator-facing and attacker-spoofable (device output may contain that literal verbatim
  * -- it passes through unchanged). Any consumer / coverage-gate MUST key on the structured
  * `neutralizedInjections[]` / `neutralizedCount`, NEVER on the in-band string.
  *
- * ...BUT `neutralizedCount` alone answers only "did an INJECTION pattern fire". A normalize-pass
- * strip (zero-width/bidi/C0-C1/ANSI) rewrites the text with neutralizedCount 0, and that is still
- * silent modification of device output. A consumer asking "was this rewritten at all" must key on
- * `strippedControlChars > 0 || neutralizedInjections.length > 0` -- persisted at both call sites as
- * the `sanitized` fact (agentic-tool-loop ToolCallRecord, context-chainer chainedFrom).
- * (Review 2026-07-26, sec-ops finding 2(e): the shorter rule above had a control-char blind spot.)
+ * "WAS THIS REWRITTEN?" -- read `rewritten` (F9, 2026-09-25). It is ONE comparison, `text !== raw`,
+ * taken at the end of this function before any caller truncates, so it covers every transform,
+ * present and future, by construction. `rewriteClasses` says WHICH step changed bytes -- a fact
+ * about the transform, never about intent or severity (Protocol 10); attack-vs-cosmetic is decided
+ * by the CONSUMERS (the securityEvent gate, the section-6 transport note), not stamped here:
+ *   nfkc, zero-width-bidi, ansi, control, quarantine-tag, injection-pattern, emptied
+ *   + `unclassified` -- rewritten but no step claimed it: a transform was added OUTSIDE step().
+ *     Pinned to 0 (test-security-invariants section I); a non-zero in production is the finding.
+ * `nfkc` is NOT guaranteed cosmetic: on the site-A JSON envelope a fullwidth quote/backslash becomes
+ * structural (register F9-s1).
+ *
+ * `sanitized` (both call sites) is LEGACY and FROZEN at its 2026-07-26 meaning --
+ * `strippedControlChars > 0 || neutralizedInjections.length > 0`, i.e. classes include any of {zero-width-bidi,
+ * control, injection-pattern}. It does NOT mean "rewritten" (NFKC, ANSI, the tag defang and
+ * `emptied` are excluded). The 2(e) rule that told consumers to key "rewritten at all" on it was
+ * ~3/4 wrong (F9 record: cline_docs/follow-ups/f9-r9-rewrite-facts-2026-09-21.md). Do not widen it:
+ * archived rows and injected chainedFrom copies hold this meaning; an equivalence pin fails CI.
+ *
+ * SITE A CANNOT REACH `ansi`, C0 `control` OR `emptied`: it sanitizes JSON.stringify(toolResult),
+ * which escapes U+0000-001F into literal `\u001b` text, and the envelope is never empty. Only
+ * DEL/C1, zero-width/bidi, nfkc, quarantine-tag and injection-pattern fire there. A zero for those
+ * three classes at site A is a zero BY CONSTRUCTION (register F9-s1 records the evasion consequence).
  *
  * NOTE: control/zero-width chars are expressed as \uXXXX inside RegExp() strings so this
  * source file stays pure-ASCII (no invisible bytes).
@@ -82,27 +108,46 @@ const PRIOR_OUTPUT_TAG = /<\s*\/?\s*prior_output\b[^>]*>/gi;
 const SINGLE_LT = String.fromCharCode(0x2039); // angle-quote stand-in for '<'
 const SINGLE_GT = String.fromCharCode(0x203A); // angle-quote stand-in for '>'
 
+export type RewriteClass =
+  | 'nfkc' | 'zero-width-bidi' | 'ansi' | 'control' | 'quarantine-tag'
+  | 'injection-pattern' | 'emptied' | 'unclassified';
+
 export interface SanitizeChainedResult {
   text: string;
   strippedControlChars: number;
   neutralizedInjections: Array<{ category: string; match: string }>;
+  /** `text !== raw` -- see header. false for non-string / empty input. */
+  rewritten: boolean;
+  /** Which steps changed bytes, in pipeline order. [] iff !rewritten. */
+  rewriteClasses: RewriteClass[];
 }
 
 export function sanitizeChainedOutput(raw: string): SanitizeChainedResult {
   if (!raw || typeof raw !== 'string') {
-    return { text: typeof raw === 'string' ? raw : '', strippedControlChars: 0, neutralizedInjections: [] };
+    // Explicit: a naive end comparison would call null/undefined/number "rewritten" ('' !== raw).
+    return { text: typeof raw === 'string' ? raw : '', strippedControlChars: 0, neutralizedInjections: [], rewritten: false, rewriteClasses: [] };
   }
 
   let strippedControlChars = 0;
   const countStrip = (s: string, re: RegExp): string =>
     s.replace(re, (m) => { strippedControlChars += m.length; return ''; });
 
-  // 1) NORMALIZE (must precede detect)
-  let text = raw.normalize('NFKC');
-  text = countStrip(text, ZERO_WIDTH_BIDI);
-  text = text.replace(ANSI_CSI, '').replace(ANSI_OSC, '');
-  text = countStrip(text, CONTROL_CHARS); // also removes any leftover ESC
-  text = text.replace(PRIOR_OUTPUT_TAG, (m) => m.replace(/</g, SINGLE_LT).replace(/>/g, SINGLE_GT));
+  // Classification = compare before/after EACH step (never re-run a regex: two are costly on
+  // hostile input, register F9-s2). A new transform goes through step(); one added outside it
+  // surfaces as `unclassified` below rather than disappearing.
+  const classes = new Set<RewriteClass>();
+  const step = (cls: RewriteClass, s: string, fn: (x: string) => string): string => {
+    const out = fn(s);
+    if (out !== s) classes.add(cls);
+    return out;
+  };
+
+  // 1) NORMALIZE (must precede detect). ORDER AND NFKC ARE LOAD-BEARING -- do not change (F9 record).
+  let text = step('nfkc', raw, (x) => x.normalize('NFKC'));
+  text = step('zero-width-bidi', text, (x) => countStrip(x, ZERO_WIDTH_BIDI));
+  text = step('ansi', text, (x) => x.replace(ANSI_CSI, '').replace(ANSI_OSC, ''));
+  text = step('control', text, (x) => countStrip(x, CONTROL_CHARS)); // also removes any leftover ESC
+  text = step('quarantine-tag', text, (x) => x.replace(PRIOR_OUTPUT_TAG, (m) => m.replace(/</g, SINGLE_LT).replace(/>/g, SINGLE_GT)));
 
   // 2) DETECT on the normalized text (positions are valid indices into `text`)
   const { detectedPatterns } = detectPromptInjection(text);
@@ -121,10 +166,40 @@ export function sanitizeChainedOutput(raw: string): SanitizeChainedResult {
     lastStart = s.start;
   }
 
-  // sec-ops I-3: an entirely-injection banner must not collapse to empty (banner-DoS).
+  if (neutralizedInjections.length > 0) classes.add('injection-pattern');
+
+  // EMPTIED: the normalize/strip steps removed every visible character of a non-empty input
+  // (a terminal clear-screen, a zero-width-only string). It is NEVER an injection: neutralizing a
+  // pattern always leaves a marker, so the text cannot be empty on that path (F9 panel, executed).
+  // The in-band label below still says INJECTION -- known-false, kept for now (register F9-s4).
   if (text.trim().length === 0 && raw.trim().length > 0) {
     text = '[NEUTRALIZED-INJECTION:full-block]';
+    classes.add('emptied');
   }
 
-  return { text, strippedControlChars, neutralizedInjections };
+  const rewritten = text !== raw;
+  if (rewritten && classes.size === 0) classes.add('unclassified');
+  const rewriteClasses = PIPELINE_ORDER.filter((c) => classes.has(c));
+
+  return { text, strippedControlChars, neutralizedInjections, rewritten, rewriteClasses };
 }
+
+/**
+ * The classes that are OPERATOR EVENTS (the pino `securityEvent` warn, both sites). A consumer's
+ * judgement, deliberately kept OUT of the stamped fact (Protocol 10). NOT `emptied` (a device
+ * clear-screen), NOT the cosmetic strips, and NEVER "any rewrite" (`rewritten` would warn on ~5% of
+ * results -- every ellipsis -- and bury the one quarantine-tag firing that matters). F9 panel D.
+ */
+export const R9_OPERATOR_EVENT_CLASSES: readonly RewriteClass[] = ['quarantine-tag', 'injection-pattern'];
+
+/** Classes that leave a VISIBLE platform mark in the reader's copy (a [NEUTRALIZED-...] marker or an
+ *  angle-quoted tag) -- the section-6 transport note keys on these. The rest leave nothing to misread. */
+export const R9_VISIBLE_MARK_CLASSES: readonly RewriteClass[] = ['injection-pattern', 'quarantine-tag', 'emptied'];
+
+export function isR9OperatorEvent(classes: readonly string[] | undefined): boolean {
+  return !!classes && classes.some((c) => (R9_OPERATOR_EVENT_CLASSES as readonly string[]).includes(c));
+}
+
+const PIPELINE_ORDER: RewriteClass[] = [
+  'nfkc', 'zero-width-bidi', 'ansi', 'control', 'quarantine-tag', 'injection-pattern', 'emptied', 'unclassified',
+];

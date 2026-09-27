@@ -37,6 +37,12 @@ export const RUNTIME_LIMITS = {
    * runtime justification).
    */
   MAX_RETRIES: 10,
+  /**
+   * Ceiling for a task/execution `timeout` value (RWF X16, 2026-09-27) — the same bound the task column's
+   * create/update schemas use (1 hour, ms). ⚠️ A `timeout` inside modelParameters is in SECONDS on the template path
+   * (template.timeout @default(300) — 48 tasks store 300–900), so nested checks bound TYPE and SIZE only.
+   */
+  MAX_TASK_TIMEOUT_MS: 3_600_000,
   DEFAULT_RETRIES: 3,
 
   /**
@@ -135,6 +141,46 @@ export const RUNTIME_LIMITS = {
    * the runtime chokepoint (a tuning-knob clamp, not a hard reject).
    */
   MAX_OUTPUT_TOKENS_OPUS: 128000,
+
+  // ── R4 Layer 1 time-aware retry budget (2026-09-25, register E1) ─────────────────────────────
+  // The in-loop truncation retry (`maybeRetryTruncatedFullTurn`) used to raise maxTokens to
+  // min(2×, model ceiling) with NO notion of time. After DEFAULT_MAX_TOKENS went 24000 → 48000
+  // (2026-09-24) that is a 96K retry after a full 48K attempt: ~1500 s at the measured slow end,
+  // against a 1080 s default (30-turn) watchdog — a deterministic kill, which surfaces as a
+  // provider `unknown_error` (the SDK abort is caught and RETURNED, not thrown) with the killed
+  // retry's tokens unaccounted. The retry is now also bounded by the time left on the watchdog.
+  // Design: cline_docs/follow-ups/partial-text-truncation-2026-09-24-DESIGN.md §1.3. These four
+  // numbers are JUDGEMENTS with stated bases, kept here so each is arguable in exactly one place.
+  // The watchdog formula itself (EXECUTION_TIMEOUT_BASE_MS above) is deliberately UNCHANGED —
+  // it is gated on the `truncationRetrySkippedReason: 'INSUFFICIENT_TIME'` fact this produces.
+
+  /**
+   * Fallback output throughput (tokens/s) when the truncated attempt carries no usable usage to
+   * measure from. Measured 2026-09-24 over the heaviest 30-day executions: 94–134 tok/s computed
+   * over the WHOLE execution wall clock (prompt build + TTFT + tool time included), so per-call
+   * generation is at least that; p10 ≈ 92. 90 sits just under the observed floor. Normally the
+   * budget uses the OBSERVED rate of the attempt just made (same model, account, minute) instead.
+   */
+  OUTPUT_TOKENS_PER_SEC_FLOOR: 90,
+  /**
+   * Wall-clock reserved before the watchdog deadline when sizing the retry: TTFT, prompt
+   * re-transmission and network. Subtracted from the remaining time before converting to tokens.
+   */
+  TRUNCATION_RETRY_SAFETY_MS: 30_000,
+  /**
+   * Multiplier on the observed throughput when converting remaining time to a token budget — the
+   * retry is a heavier-context call than the average of the attempt, and a retry the watchdog
+   * kills is strictly worse than one that never ran (FAILED + no deliverable vs SUCCESS + partial).
+   */
+  TRUNCATION_RETRY_TPS_DISCOUNT: 0.85,
+  /**
+   * Minimum useful raise: the retry arms only if its budget is at least maxTokens × (1 + this).
+   * Below that it SKIPS with a stamped reason rather than re-asking — a re-ask at (near) the same
+   * ceiling is a coin flip (the same prompt produced part-written / empty / complete within a
+   * 24–28K band) that costs up to a full attempt. Basis: the one recovered incident needed +17%
+   * (28185 on a 24000 attempt); the July stalls recovered at ×2. Anything in 20–50% is defensible.
+   */
+  TRUNCATION_RETRY_MIN_HEADROOM: 0.25,
 } as const;
 
 /**
@@ -153,8 +199,11 @@ export const RUNTIME_LIMITS = {
  * Streaming-accumulate (2026-07-04): with the provider on stream().finalMessage(), the SDK's
  * former non-streaming transport ceiling (maxTokens ≤ 21,333, the 10-min duration guard) is
  * GONE — this model ceiling is once again the real REQUEST bound. The COMPLETION bound is now
- * the execution watchdog (180s + 30s/turn ≈ 35-45K output tokens on a default-30-turn
- * template); a 64K/128K generation needs a turns≥100 template or a reviewed formula change.
+ * the execution watchdog (180s + 30s/turn). ⚠️ The earlier estimate here ("≈ 35-45K output tokens on
+ * a default-30-turn template") was 2-3× low: measured 2026-09-24 over the 14 heaviest executions,
+ * throughput is 94-134 output tok/s, i.e. ≈ 100K tokens per 1080s. A 64K/128K generation on a 30-turn
+ * template still needs a turns≥100 template or a reviewed formula change, and so does a retry that
+ * doubles an already-large attempt.
  * See cline_docs/reviews/engine-streaming-accumulate-2026-07-04/ (R4).
  */
 export function maxOutputTokensForModel(model: string | undefined): number {

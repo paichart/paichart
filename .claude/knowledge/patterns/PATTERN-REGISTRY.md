@@ -4,7 +4,7 @@
 
 **Last Updated**: July 27, 2026
 
-**Total Patterns**: 64 documented patterns
+**Total Patterns**: 65 documented patterns
 
 ---
 
@@ -410,7 +410,18 @@
 
 ---
 
-## Automation Patterns (5 patterns)
+## Automation Patterns (6 patterns)
+
+### **seed-time-artifact-carrier-pattern.md** - 85% Confidence ✅ (NEW - Sep 2026)
+**When to use**: An agent must receive a VERBATIM artifact it fills, transcribes or checks against — a template, schema, canonical stanza or reference document — whose exact bytes matter and which is authored elsewhere (often another repo)
+**Results**: Delivers byte-exact content to a model with no sanitizer, renderer, truncator or LLM in the path; a rule that had failed 3 of 4 hand tests passed on its first live outing
+**Key features**: Split the artifact by PROPERTY — structure → protocol body (auto-reseeds, parity-pinned) · obligations → role guidance (measured by freshness) · text that must reach the PRODUCT byte-identically → no agent surface at all, spliced deterministically at publish time. Vendor a GENERATED file (never hand-maintained), `.tmpl` not `.md` where CI ignores markdown, read at seed time
+**The transferable half — the ELIMINATION CHAIN**: task description dies to LLM transcription (3 of 4 passes altered what they retyped) · §6 chained context dies to R9 (NFKC-rewrites while stamping `sanitized: false`) · MCP resource dies because `resources/read` is a transport method, never a tool · artifact store dies because it has no input mode. Do not re-derive these
+**Production use**: `requirements-authoring-protocol` v1.0.0 (Sep 2026) — 370-line template → 19,730-char vendored skeleton → 33,933-char protocol body
+**Routing principle**: the thing that can go stale-against-a-source goes where it is auto-reseeded; the thing that cannot goes where it is measured
+**✅ Gap VALIDATED 2026-09-22 (one run)**: the targeted defect went 33 occurrences → 0 and the SUBSTITUTE appeared in its place — absence alone would only mean the document got vaguer. Reads as *the defect did not recur under the new guidance*, never as *the guidance prevents it*. 🔴 **The same run showed the fix was PARTIAL**: a second obligation moved in the same batch was violated on 2 of 4 sections — the one written as a PREFERENCE rather than an obligation. **Measured lesson — and it REFUTES the obvious fix: the violated rule already carried a clean MUST with a discriminator in an injected protocol, while the obeyed rule had no MUST anywhere. FORCE is not the binding mechanism; TRIGGER + SUBSTITUTE is. 'Write MUST everywhere' is the remedy the evidence does not support. Audit for trigger and substitute, never bulk-pass the non-proof-case rules** — the obligations split is the only half that cannot be checked mechanically
+**Anti-patterns**: Not for per-run data (this bakes at seed time) · not for semantically-deliverable content (role guidance is simpler) · not when you would be the N+1st verbatim copy
+**Common pitfalls**: A source's FRONT MATTER is author-addressed but sits outside any block its own strip rule can see · generic placeholder tokens (`{{...}}`) are instructions about slots, not slots · `tsc -p tsconfig.json` fails OPEN where `scripts/**` is excluded while the ts-node seed path fails CLOSED · role guidance does NOT auto-reseed
 
 ### **orchestration-reactor-pattern.md** - 90% Confidence ✅ (NEW - Apr 2026)
 **When to use**: A domain event (task completes, artifact created, milestone reached) should trigger orchestration action in another component — without coupling or polling
@@ -444,10 +455,10 @@
 **Results**: Closes the "guards-bound-a-cycle-not-the-chain" gap; D-4 capped the harness retrigger chain (was depth-unbounded — `pipelineRetriggerReactorService.ts:281`) without self-starving legit pipelines; shipped `148e321a` + 10 pinned tests
 **Key features**: Per-chain **generation budget** (count chain depth, not rows); mirrors workflow engine's `maxTotalRetries=10`; soft/best-effort (no advisory lock — the one-row invariant gives exact-once); routed through reactor-skip-counter as a FACT signal (no `securityEvent`); env-tunable
 **Distinction to grade separately**: fan-out (breadth, idempotency-bounded) vs concurrency (rate, poller `take:5`-bounded) vs **depth (cumulative total, unbounded until a budget)** — "bounded rate ≠ bounded cost; a runaway bleeds, it doesn't spike"
-**Production use**: `pipelineRetriggerReactorService` Guard 8 (2026-06-14) — pipeline-harness 88% + event-system 91%
+**Production use**: `pipelineRetriggerReactorService` Guard 8 (2026-06-14) — pipeline-harness 88% + event-system 91%. **RWF A2 (2026-09-26): exhaustion now TERMINALIZES** (`reactor-budget-exhausted-persist.ts`) and the budget is tiered (legs 10, program roots 25) — the original skip left the harness IN_PROGRESS forever
 **Strategic doc**: `.claude/knowledge/domain/harness/automation-loop-closure-architecture.md` § "Reactor Chain Depth"
 **Companion patterns**: inherited-context-chain-state-pattern (the mechanism the counter rides); orchestration-reactor-pattern (the reactor this guards)
-**Anti-patterns**: Per-cycle guards as a chain bound; per-user row-count cap (can't be set without self-starvation risk); bare `log.warn` for the stop; trusting a chain-state field read from a client-writable link
+**Anti-patterns**: Per-cycle guards as a chain bound; per-user row-count cap (can't be set without self-starvation risk); bare `log.warn` for the stop; trusting a chain-state field read from a client-writable link; **a refusal that leaves the refused entity non-terminal** (a bound that ends in a hang — step 4 of the pattern)
 
 ### **inherited-context-chain-state-pattern.md** - 88% Confidence ✅ (NEW - 2026-06-14)
 **When to use**: You must carry state (counter, accumulator, flag) across a chain of SEPARATE executions where there is no shared memory — each link is a fresh process spawned by a poller/reactor

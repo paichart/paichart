@@ -34,7 +34,14 @@ The harness crosses four other specialists' domains (engine, seed-scripts, react
 ## Verbatim-class synthesis + retry-band caveat (2026-07-04)
 
 - **Verbatim-reproduction deliverables work** (config-quoting runbooks): the orchestrator self-decomposes into per-source harvest leaves when the objective names an output-budget failure; harvest leaves verbose-read their *named source* runs (NOT the §6 anti-pattern — that's re-fetching your own upstream). Evidence + limits: `.claude/knowledge/domain/harness/agent-tool-surface-and-read-depth.md` (2026-07-04 update) + FR §0b.
-- **Retry-band keep-best (Phase 1 SHIPPED `d2544f5a`)**: the orchestrator's 50-69 retry re-executes on BYTE-IDENTICAL inputs (F1 — the diagnostic comment never reaches the child prompt; retries are blind re-rolls), so a retry can REGRESS. FIX: a stamped retry that catastrophically degrades vs its target self-supersedes at terminal persist; every authoritative consumer (chainer/report-md/policy) now filters via the shared selectAuthoritativeExecution. The BAND SURVIVES ON PROBATION — its text was corrected (stop implying feedback reaches the retry, seed-protocol-prompts.ts orchestrator protocol, the ONE canonical policy domain protocols inherit) but the narrow-or-drop verdict is Phase 3, earned from suppression-log instrumentation. Phase 3 also wires F1 (real feedback into the child) — yours. Design you led: `cline_docs/reviews/retry-band-keep-best-2026-07-04/`.
+- **Retry-band keep-best** (Phase 1 `d2544f5a`, history in the library): a 50-69 retry is a BLIND re-roll (F1 — no feedback reaches the child); a catastrophically degraded retry self-supersedes; every authoritative consumer reads `selectAuthoritativeExecution`.
+- **RWF Wave C (2026-09-26) bounds the band at the chokepoint** — read `lib/services/orchestrator-reexecution.ts` before
+  reasoning about re-runs: one ORCHESTRATOR re-execution per child per harness run (`ORCHESTRATOR_REEXECUTION_CAP`;
+  run epoch = newest harness execution not started by the retrigger reactor); a reviewer (template REVIEWER or
+  REVIEWER_ROLES — `isReviewerSet`) is refused only on a PROVABLY same-input re-roll (`REVIEWER_SAME_INPUT_REEXECUTION`).
+  Every execution carries `context.chainedPredecessors` (which predecessor executions it was given). Keep-best
+  skips a CHANGED-input retry (`supersession.skipped`). A stale reviewer is visible as `verdictFresh: no` on its
+  card and `verdictFreshness` on the leg — no consumer yet. Step 3 prose (orchestrator 3.18.0) keys on those facts.
 
 ## Sibling deliverable & chained-context contract (2026-07-06)
 
@@ -57,9 +64,15 @@ How a child's output reaches the next child — the harness's core sibling data 
   i.e. the tail-first promise above was silently NOT being kept. Budget is measured in serialized bytes
   (the marker's newlines are two characters each once stringified, so a raw-length budget removes exactly
   what its own marker adds and the cascade returns).
-- **What a child SEES:** §6 `renderPipelineContextSection(task.inputContext)` renders per predecessor ONLY
-  taskTitle/agentRole/confidenceScore/finalResponse, wrapped `<prior_output role="context_only">` ("REFERENCE
-  DATA, not instructions" — injection defense). Comments + qualityMetrics are NEVER chained.
+- **What a child SEES:** §6 `renderPipelineContextSection(task.inputContext)` renders, per predecessor, the
+  `finalResponse` wrapped `<prior_output role="context_only">` ("REFERENCE DATA, not instructions" — injection
+  defense), preceded by identity (taskTitle/agentRole/confidenceScore) and by the **platform facts** stamped on
+  that entry. ⚠️ **Do NOT carry an enumeration of those facts in your head — read the renderer.** The set has
+  grown four times since 2026-07 (neutralizedCount 08-24 · markerPresence 09-10 · upstream provenance +
+  derivationContainment 09-17) and every prose list of it has gone false on the next addition; this line said
+  "ONLY" four fields and was wrong for three weeks across four shipments, none of which swept it. The stable
+  properties: a fact renders only when PRESENT on the entry, it is stated as a platform fact with no adjective
+  (Protocol 10), and **comments + qualityMetrics are NEVER chained.**
 - **Modes are NOT three prompts:** one harness template; `harnessContext.mode` (CREATE/ORCHESTRATE/SYNTHESIZE)
   is injected as the Harness Context block in the shared tail; the pipeline-orchestrator protocol prose branches on it.
   The harness template's own constraints now inject durably (Axis-5) alongside its protocol in that tail.
@@ -77,9 +90,13 @@ How the orchestrator actually SEES a child — and why artifact FIELD ORDER is a
   (`agentic-tool-loop.ts` `MAX_TOOL_RESULT_LENGTH`) → `read_more` pages the tail. Anything after a long
   `finalResponse` (~12KB for a reviewer) is INVISIBLE on a single window. The 2026-07-14 verdict-misread (`cmrk5nzw5…`, false
   NEEDS-REVISION on an APPROVED run) was this mechanism, not (only) LLM misjudgment — check signal
-  POSITION vs the 8KB boundary before theorizing (PIPELINE-RUN-FORENSICS-GUIDE §3).
+  POSITION vs the 8KB boundary before theorizing (PIPELINE-RUN-FORENSICS-GUIDE §3). Since RWF C3 (2026-09-26) the
+  whole persisted object is key-ordered (net stamps no longer trail `finalResponse`), and `agent.results` lists
+  newest first (createdAt), hides superseded retries but names them (`supersededRetries`), and names the
+  execution downstream reads (`authoritativeExecutionId`).
 - **The verdict is a transcribed FACT (Protocol 10):** reviewers (`REVIEWER_ROLES` = `change_reviewer`,
-  shared by network/k8s/terraform) must END `finalResponse` with the terminal `## VERDICT:` block —
+  shared by network/k8s/terraform/observability, + `requirements_reviewer` since 2026-09-21 — re-verify
+  in `parse-verdict.ts`, never from this line) must END `finalResponse` with the terminal `## VERDICT:` block —
   grammar canonical in ROLE_GUIDANCE_LIBRARY, protocols only reference it (GS8), parser
   `lib/agents/harness/parse-verdict.ts` (null-on-miss, token-locked, last-match-wins, approved/blocking
   transcribed independently). Emitted as `reviewerVerdict` BEFORE `finalResponse` in
@@ -122,67 +139,34 @@ shipped the engine enablers (`e466eaee`) — the mechanics you now own:
   `chainedContext.predecessors === expectedPredecessors` (the notChained/coverage BLOCKING consumer).
 - **Roles/templates**: `program_architect` (the one minted key; NOT in REVIEWER_ROLES) baked via
   `scripts/seed-program-templates.ts` — MANUAL prod seed step (deploy auto-seeds protocols only).
-- **Reading a CHILD's deliverable body (F14 gotcha, T4b live 2026-07-15; retrieval verb corrected
-  2026-07-23, v1.0.14)**: a parent harness reading its child's plan/report (e.g. PLAN-SPAWN reading the
-  Architect's plan) must **actively retrieve the artifact BODY** — the child is a CHILD, not a §6
-  dependency, so its output is NOT auto-chained. The route is `perform(action:"agent.results",
-  taskId:"<child id>", verbose:true, limit:1)` — `verbose:true` is load-bearing (without it the 3KB
-  dispatch cap returns a lean card whose only body pointers are CLIENT-only `fetch(id:)` hints, a dead
-  end for the engine; the live cmrvlnn2… PLAN-SPAWN failure). `task.context` returns only the POINTER
-  (metadata + comments — the completion comment's `report.md → fetch(id:)` line is for HUMANS in Desktop).
-  A harness that stops at task.context expecting the body inline finds the contract absent and stalls
-  (T4b; v1.0.5 fixed the diagnosis but prescribed the client-only `fetch` verb — every PLAN-SPAWN
-  1.0.5→1.0.13 paid a failed-fetch turn recovered by LLM improvisation; 4-panel review
-  `plan-spawn-fetch-and-start-semantics-2026-07-23/`). The same rule applies to ANY
-  parent-reads-child-artifact path.
-  ⚠ **Load-bearing precondition (softened by the v1.0.14 route)**: the Architect HAS a `report.md` only
-  because it runs during PLAN with ZERO dependents (the plan-gate is created later, in PLAN-SPAWN) —
-  `report.md` is gated to leaf (zero-dependent) non-PIPELINE tasks. The `agent.results` envelope carries
-  ALL artifacts (result.json first, report.md second — insertion order, `execution-terminal-persist.ts`),
-  so if the choreography ever collapses CREATE into one execution (no report.md), the same call still
-  serves the plan via `result.json.finalResponse` — the fallback is now in-envelope, not a different read.
-- **T4-hardening findings shipped (2026-07-15)**: F11 double-nest (router hoist), F12 structural
-  loud-fail (prepare-task-for-execution, keyed on the parent title token `(protocol: pov-program`, NOT
-  template metadata — program reuses the generic Pipeline Harness template), F14 above. Protocol at
-  v1.0.5. F13 open (contract-missing loud-fail is log-only, not surfaced as task status/comment).
-- **Non-terminal-family + truncation (2026-07-16, F16-F21 + R1-R5)**: a program leg that ends
-  settled-but-not-COMPLETED HANGS the program (Guard-4 never satisfied). All classes are terminalized
-  at the leg's persist tx (event-anchored, no timer): F16 can-never-run, F17 duplicate-halt, F20
-  escalated-as-outcome, **R4 truncation-stall** (a SYNTHESIZE that persists `TRUNCATED_NO_OUTPUT` +
-  IN_PROGRESS — the FOURTH member, "settled-children, harness-mute"). R4 also adds an in-loop
-  retry-with-headroom (Layer 1) so a truncated SYNTHESIZE usually reaches `task.complete` and the stall
-  never forms; F20-escalated-COMPLETED WINS over truncation-FAILED in the persist ordering. Forward cone
-  = shared `mark-forward-cone.ts`; F17 duplicate-halt cone-gap folded in. Root cause: Sonnet-5 adaptive
-  thinking exhausting `max_tokens` (STANDARD_AGENT_LIMIT 8000→24000). R5: `fetch(id:...)` is NOT an agent
-  tool — dependency outputs arrive via §6 Pipeline Context.
-  `cline_docs/reviews/{nonterminal-family,truncation-stall,truncation-r4}-2026-07-16/`.
-- **2026-07-18 batch (runs 8-11; ratified invariant: non-terminal = waiting-for-a-human, always)**:
-  (1) **PRE_FLIGHT_BAIL — SIXTH family member**: a leg that bails in its own pre-flight (stamps
-  `metadata.cannotRun` — MANDATED on every bail, orchestrator 3.9.1 — and/or `escalated` with no
-  child stage) is terminalized FAILED in `runTerminalSuccessTx` (race-free vs the SUCCESS write;
-  F20-escalated-COMPLETED still wins); cone reason is now FOUR-way (+`UPSTREAM_PRE_FLIGHT_BAIL`);
-  a `task.update` belt hook (`handleAgentStampedCannotRun`, allowFlipFromSuccess) covers at-rest
-  stamps. Live-proven on run 9 (machine-driven escalation, transitive root attribution — pov-program
-  1.0.12 step-1 follows `failedDependencyTaskId` to the first non-casualty). (2) **Confidence OUT of
-  gate semantics at every tier** (calibration study: approved/NN carries verdict direction, not
-  correctness) — programReleasable gates on outcomes + `derivationContainment` facts (surfaced via
-  the agent.results card's `**Facts:**` line) + Node C + coverage; derivation-existence is checked
-  BEFORE the harvest anchor (finding f).
-  ⚠️ **The reason taxonomy is MECHANISED and is NOT yours to re-derive.** `no-derived-values-block`,
-  `harvest-block-missing-or-unparseable` and the rest are computed into
-  `derivationContainment.containmentDisposition` `{blocking | benign | needs-node-c, reason, inputs}`
-  — **owned by `execution-facts-specialist` since 2026-09-11**; depth:
-  `.claude/knowledge/domain/execution-facts/execution-facts-library.md` §2. READ THE STAMP: if a
-  prose reading contradicts it, that is a DEFECT to report, not a judgement to exercise. Absence
-  fails closed (`ABSENT ⇒ treat as blocking`). When a fact seems ignored at the gate, suspect the
-  render seam first and hand it to the child — two live 2026-08-03 gate defects were exactly that.
-  Green pass = run 11 / VT-10. (3) **Gaps (e)+(b) FIXED same day (second session)**: born-ready tasks
-  queue via the shared `unsatisfiedDepExistsSql` predicate at create/assign/update (PIPELINE-with-deps
-  keeps the blanket skip — CC6; update door carries a FAILED frozen-cone guard); superseded-probe
-  disposal = pov-program 1.0.13 supersession contract (cannotRun state channel → FIX-A terminalization,
-  supersede-before-wiring). (4) **A6 no-reviewer approved rule** (orchestrator 3.9.2 + HOWTO 2.4.5):
-  fact-derived approval + `reviewerPresent` provenance + roster-defect/misroute guards; T6 narrowed to
-  "when a reviewer exists". `cline_docs/reviews/{confidence-gate-demotion,reactor-cascade-audit,born-ready-gap-e}-2026-07-18/`.
+- **Reading a CHILD's deliverable body (F14)**: a child is NOT a §6 dependency, so its output is never
+  auto-chained. Retrieve it with `perform(action:"agent.results", taskId:"<child>", verbose:true, limit:1)` —
+  `verbose:true` is load-bearing (the lean card's only body pointers are client-only `fetch(id:)`); `task.context`
+  returns the pointer, not the body. The envelope carries result.json AND report.md, so it serves the plan even if
+  CREATE ever collapses to one execution. History (T4b, v1.0.5→1.0.14): library.
+- **Diagnostic trigger — a program leg that ends settled-but-NOT-COMPLETED HANGS the program**
+  (Guard-4 never satisfied). **Eight** terminalization classes cover it (2026-09-26: RWF A2 added
+  REACTOR_BUDGET_EXHAUSTED, RWF-X4 added REAPED — a reaped harness-owned task is FAILED, not null), all event-anchored: the canonical table is ARCHITECTURE.md
+  Invariant 5 — **read it, don't carry a list** (this line listed five and omitted HARNESS_NO_OUTPUT
+  for weeks). **Before proposing another, read the library** — a candidate shipped 2026-09-15 was
+  reverted a day later (33 corpus matches, 0 genuine hangs; all protocol-SANCTIONED exits).
+- **"SYNTHESIZE ⇒ nothing is in flight" is CHECKED, not assumed (RWF Wave A, 2026-09-26).** One shared
+  settled predicate (`child-stage-settled.ts`) at every "are the children done?" site; the dead-end/R4
+  declines and the lost-wakeup self-check key on the server-written dispatch fact
+  (`harness-dispatch-fact.ts`). ⚠️ **A REFUSED `agent.execute` records `success:true`** (an `isError`
+  result) and the failure persist has no tool calls — never key a platform fact on tool-call success.
+  Plan + 8 reviews: `cline_docs/reviews/rwf-stage1-2026-09-26/`.
+- ⚠️ **Before shipping ANY harness-layer rule, state what it does to PLAN-SPAWN and to every
+  sanctioned exit.** That is the shape that defeats tool-call predicates — an exit that ARMS a future
+  event rather than creating one. `pipelines/CHECK-DESIGN-DISCIPLINE.md` §5b-5d.
+- ⚠️ **Confidence is OUT of gate semantics at every tier.** Do NOT add a `≥ N` conjunct to any gate;
+  `programReleasable` gates on outcomes + `derivationContainment` + Node C + coverage. The score is a
+  recorded fact, not a bar (2026-07-18 calibration study).
+- ⚠️ **`fetch(id:)` is NOT an agent tool.** Dependency outputs arrive via §6 Pipeline Context.
+- **OPEN (mine)**: base protocol says an escalated harness leaves IN_PROGRESS and exits; four domain
+  protocols say `task.complete` on EVERY outcome. F13 also open (contract-missing loud-fail is
+  log-only, not surfaced as task status/comment).
+
 
 ### Program canonical docs & use-cases (READ these on a fresh/compacted invocation — you own program design guidance)
 
@@ -216,7 +200,7 @@ is minted ONLY on the Protocol-12 eviction trigger — until then this content l
 arriving without a corpus measurement is not ready for a panel — send it back, don't gate on it.
 Depth: `.claude/knowledge/discoveries/execution-facts-discovery.md` § the corpus-measure practice.
 
-**Tripwire — provenance/fabrication-shaped refusals (2026-08-31):** on ANY reviewer verdict
+**Tripwire — provenance/fabrication- or ABSENCE-shaped refusals (2026-08-31; absence instance 2026-09-27, GS-R5-M14 pt 3 — a complete config read DOES establish a config absence):** on ANY reviewer verdict
 claiming a package's quoted evidence is reconstructed/paraphrased/fabricated, do NOT accept the
 verdict on its internal reasoning — run the string test FIRST (each disputed line ⊆ the leg's own
 harvest artifact; two minutes, read-only) and read
@@ -247,7 +231,13 @@ Run this BEFORE modifying the harness template, either reactor, or any handler t
 2. **Architecture** — `/.claude/knowledge/domain/harness/automation-loop-closure-architecture.md` — reactor event catalogue + §Hindsight Lessons + **§Reactor Chain Depth** (the pitfall class "per-cycle guards bound one firing, not the chain"; concurrency-vs-depth-vs-fanout grading — "bounded rate ≠ bounded cost"; the chain-state technique + race-safe-by-construction proof + client-trust rule). **Consult before designing/reviewing ANY reactor.** Patterns #47 `reactor-chain-depth-budget-pattern`, #48 `inherited-context-chain-state-pattern`.
 3. **End-to-end smoke test** — `/.claude/knowledge/smoke-tests/pipeline-harness-e2e-test.md` — Failure Triage table for "what can go wrong at which layer"
 4. **Agent tool surface & read-depth** — `/.claude/knowledge/domain/harness/agent-tool-surface-and-read-depth.md` — agents get 6 consolidated tools (**NO `fetch`/`search`**); read-depth is a *tool-grant* fact, not the truncation cap; synthesis harvests **comments (summaries), not artifact bodies**. Read before reasoning/asserting about what an agent can read (corrects the "Harvester fetches via `fetch(id)`" error).
-5. **Run forensics / assessment tables** — `/.claude/knowledge/pipelines/PIPELINE-RUN-FORENSICS-GUIDE.md` — the reproducible method for assessing runs from persisted records (the 4 evidence layers, jsonb toolCalls dissection, payload-vs-envelope splits, event-vs-prose phrase classification, the 7 comparison-framing rules). **Use it for ANY before/after run comparison or truncation/token investigation** — incl. the post-2026-07-08 meter rule: `inputTokens` is the UNCACHED component only; real prompt volume = input + cacheRead + cacheCreation.
+5. **Defect-layer routing** — `/.claude/knowledge/domain/harness/defect-layer-routing.md` — WHERE a fix belongs:
+   service/descriptor · domain protocol · orchestrator base · role guidance · mechanical net · requirements.
+   Six routing questions, Step 0 first (*does a control already ship? then measure COMPLIANCE, not frequency*),
+   and the five disciplines — incl. **detection binds, production binds only when the action is cheap and
+   available**, and *name the property, never our rig* (enforced: `npm run test:no-rig-identifiers`). Use it on
+   EVERY forensic investigation; it is the method, the forensics guide is the evidence-reading half.
+6. **Run forensics / assessment tables** — `/.claude/knowledge/pipelines/PIPELINE-RUN-FORENSICS-GUIDE.md` — the reproducible method for assessing runs from persisted records (the 4 evidence layers, jsonb toolCalls dissection, payload-vs-envelope splits, event-vs-prose phrase classification, the comparison-framing + measuring rules). **Use it for ANY before/after OR CROSS-DOMAIN comparison, or truncation/token investigation** — a cross-domain metric needs the domains' clauses open side by side first (rule 6): differing mandates or emission phase make it a POPULATION difference, not a behaviour one — incl. the post-2026-07-08 meter rule: `inputTokens` is the UNCACHED component only; real prompt volume = input + cacheRead + cacheCreation.
 
 ### Creating a NEW pipeline use-case / protocol → the playbook
 
@@ -265,122 +255,59 @@ new-protocol process — follow the playbook.** To judge whether a *new domain* 
 record it in `/.claude/knowledge/pipelines/PIPELINE-DOMAIN-FIT-CATALOG.md` (the cross-domain map
 + per-candidate Phase-1 triages).
 
-**Mechanics surfaced by the k8s design review (2026-06-27; depth in `cline_docs/reviews/kubernetes-gitops-design-2026-06-27/`):**
-- **Three caps, distinct:** 8 KB Tier-1 per-tool-result (`agentic-tool-loop.ts:298` `MAX_TOOL_RESULT_LENGTH`, `truncateForLlm` `:307`) **binds harvest
-  strategy** (broad reads clip before the LLM sees them → mandate many narrow reads — and since 2026-07-08 the
-  runtime AUTO-NUDGES: the truncation marker directs a narrower re-read, **offers a `read_more(ref, offset)` continuation** to page the SAME result's tail when no narrower form exists (Phase 1 SHIPPED 2026-07-10 `3264e28f` — memory-backed loop pager `:399 READ_MORE_FUNCTION_DEF`, injected into `mcpFunctions`, NOT a registered/6-consolidated tool; verified live exec `cmrdz81ll`, forensics §7c), or flag-the-gap; the record
-  carries `resultTruncatedForLlm`/`resultChars` for the operator grep; SoT: `/.claude/knowledge/domain/harness/harvest-truncation-safety.md` §1/§3/§6 — §3 incl. the one-TARGET-per-read rule, 2026-07-08); 128 KB/512 KB §6
-  chain (`context-chainer.ts:30-31`); 50 KB persist (only the `agent.results(verbose)` anti-pattern).
-  - **Authoring a new protocol:** the `read_more` pointer lives in `UNIVERSAL_AGENT_RULES` (prepended to every protocol at seed time), so a new protocol INHERITS it — don't duplicate it in the body. For a protocol with a device-harvest / scoped-read section, DO add the domain-specific "no-narrower-form → `read_more`" pointer (as `network-provisioning-protocol` v1.1.2 does for the no-getter case, e.g. run-3's `spanning-tree`). Keep the fact-not-imperative framing (Protocol 10): "cheaper *when* a narrower form exists," never a blanket "prefer scoping" (right for config reads, wrong for holistic list reads — see forensics §7c).
-- **Teardown-on-escalation (F, 2026-07-08):** a quality-gate escalation (child < 50 → harness escalates instead
-  of approving) previously exited WITHOUT the self-provision teardown — a live multicast-VLAN run orphaned its
-  `ceos-lab-readonly` registration. Fixed in the seeded prose (network v1.1.1 / k8s v1.0.1 / terraform v1.0.1
-  step-5 + SYNTHESIZE sections + the harness guide): teardown runs on approval AND escalation — "escalation skips
-  the APPROVAL, never the cleanup". When auditing an escalated run, CHECK the registry for the dangling row.
-- **Embedded-envelope bloat (E) — SHIPPED + LIVE-VERIFIED 2026-07-08 (`803ec916`):** `embedded-server.ts` used to
-  decorate every agent tool result with a schema-echo ≈ a second copy of the data (45–49% of every services
-  response; why Test B's scoped reads all crossed Tier-1). Now leaned producer-side (all three branches, −746
-  lines); verified live: truncations 10/14→2/13, specialists −40% input. Guard: `test:embedded-envelope`.
-  Bundle: `cline_docs/reviews/services-envelope-bloat-2026-07-08/`. Prompt caching (G, `dc5645d5`) then took
-  family uncached input 2.16M→114 tokens (−78% input cost) — run economics changed materially 2026-07-08.
-- **ROLE_GUIDANCE_LIBRARY reality:** trace every reuse to the role's *actual text*, not a "neutral"
-  claim. **BOTH `change_reviewer` AND `config_change_author` are SHARED KEYS — each ships to FOUR
-  templates across network / terraform / k8s / observability** (`Config Change-Package Author` +
-  `HCL Rollback Author` + `Manifest Rollback Author` + the observability author; `Change Reviewer` +
-  `Plan Policy Reviewer` + `GitOps Change Reviewer` + `Observability Change Reviewer`),
-  ⚠️ this file said THREE until 2026-09-14 — observability shipped 2026-09-10 and the stale count was
-  repeated twice in one session before a panel lens caught it. Re-verify with
-  `grep -rn "defaultRole: '<role>'" scripts/seed-*.ts` rather than trusting the list,
-  so **every edit to either is a FOUR-domain edit**. That is real leverage — the 2026-08-25
-  satisfiability rule was earned by an IS-IS migration and now guards HCL and manifests — and a real
-  hazard: both entries have carried network-isms, and the satisfiability rule itself was authored with
-  a routing-only example that meant nothing to an HCL author (caught in review, 2026-08-25). State the
-  property abstractly; example per-domain or none. The keys now carry that warning in-file at the edit
-  site. Confirm blast radius with `npm run report:template-freshness` (all three rows of a key go STALE
-  together); deliver with the TARGETED reseed, never the full seed. The original network harvester had
-  **no key** (generic fallback) — network now repoints onto `infra_state_harvester` (2026-07-01). A §6-PRODUCING **tool-using** harvester role draws on **BOTH** bases:
-  `artifact_harvester` (§6-producing + escalate-don't-fabricate) **AND** `synthesis_source_acquirer`
-  (the iterative scoped `services.call` loop + succeed-with-partial + `## Acquisition Summary` — the
-  **tool-loop discipline lives in the acquirer**, NOT artifact_harvester). In-place neutralization of a
-  shipped role is gated by a **dry-run of its live pipeline**, not string tests.
-- **services-gateway R9 invariant** (convention, not runtime-enforced): a connected service reached as a
-  bespoke tool bypasses R9 (site A gates on `toolCall.name==='services'`) — a design-review gate.
-- **Expected-denial channel — `isError` vs throw (NOT "denials degrade").** A verb-enum/RBAC denial
-  returned as an MCP `isError:true` tool-result is recorded `success:true` **by construction** (mcpService
-  RETURNS isError; the loop sets success on the normal path), so a confined harvest **does not self-degrade**
-  (#89/executionDegradation key off `!success`). Only a genuine **throw** → `success:false` → degrades. So the
-  fix is a **contract** (the service returns isError, not a throw), not engine calibration. Pinned:
-  `test-security-invariants.ts` §L. And **"build CI for the customer's half" is a WS3-category smell** —
-  test our half, spec + self-cert theirs.
+⚠️ **If a domain needs an agent to receive a VERBATIM artifact** (template/schema/canonical stanza),
+do NOT design a delivery route — read `patterns/seed-time-artifact-carrier-pattern.md` first. Task
+description, §6 chained context, MCP resource and the artifact store are all **mechanically** dead
+(LLM transcription · R9 rewriting the text — NFKC turns `{{…}}` into `{{...}}`; since F9 it records
+`rewritten:true`, but the bytes still change · `resources/read` is not a tool ·
+no input mode). Protocol injection at seed time is what survives. Carries a known open gap (F-V3-1).
 
-### Canonical Artifact Builder for Trust Signals (May 2026)
-
-`result.json` / `pipeline-index.json` artifact construction was extracted
-to `lib/services/execution-artifacts.ts:buildExecutionResultJson` in
-commit `e480a5c0`. Both execution paths call it.
-
-Trust-signal fields the harness LLM relies on (`resolvedMode`,
-`resolvedReasonCode`, `protocolValidation`, `executionDegradation`,
-`templateScopeMismatch`, `confidenceCapped`+`originalConfidence`) flow
-through the helper's conditional-emission logic. When investigating
-"why didn't the harness see signal X on a stream-launched child?" —
-check whether stream is passing the input. The 2026-05-14 audit found
-stream wasn't passing `confidenceCapped`/`originalConfidence` because
-it doesn't implement the cap logic yet (followup B in
-`cline_docs/types-cleanup-followups-2026-05-13.md`).
+**Live mechanics (full text + shipped history — read_more rollout, teardown-on-escalation, envelope bloat — in the library):**
+- **Three caps, distinct:** 8 KB per-tool-result (`agentic-tool-loop.ts` `MAX_TOOL_RESULT_LENGTH`; `read_more` pages
+  the tail — inherited from `UNIVERSAL_AGENT_RULES`, never duplicate it in a protocol body) · 128 KB/512 KB §6 chain
+  (`context-chainer.ts`) · 50 KB persist. SoT: `domain/harness/harvest-truncation-safety.md`.
+- **Shared role keys:** `change_reviewer` AND `config_change_author` each ship to FOUR domains (network / terraform /
+  k8s / observability) — every edit is a four-domain edit. Re-verify with `grep -rn "defaultRole: '<role>'"
+  scripts/seed-*.ts`; state the property abstractly (examples per-domain or none); confirm with
+  `npm run report:template-freshness`; deliver via the OWNING seeds. A tool-using §6-producing harvester draws on
+  BOTH `artifact_harvester` and `synthesis_source_acquirer` (the tool-loop discipline lives in the acquirer).
+- **services-gateway R9 invariant** (convention): a connected service reached as a bespoke tool bypasses R9 site A.
+- **Denials by `isError`, not throw:** an `isError:true` result is recorded `success:true` by construction, so a
+  confined harvest does not self-degrade; only a throw degrades. Pinned `test-security-invariants.ts` §L.
 
 ## Domain Library (Protocol 12)
 
 Depth evicted per **Protocol 12** lives at `.claude/knowledge/domain/harness/pipeline-harness-library.md` — read/grep ON DEMAND: Core Knowledge,
-Key Information, Learning Notes, pino, archives, evicted 🆕 blocks. Canonical patterns +
+Key Information, Learning Notes, pino, archives, evicted 🆕 blocks, and (2026-09-27, X14) the retry-band, F14, k8s-review mechanics and May artifact-builder history. Canonical patterns +
 the paired discovery's PROVEN greps outrank it.
 
-**Harness output guards (R9/R10) & their flags** — `CONNECTED_OUTPUT_SANITIZE_ENABLED` (R9 sanitize, both boundaries: tool-loop + context-chainer) and `ARTIFACT_SECRET_REDACT_ENABLED` (R10 redact, both persist sites: engine + stream), both **env-var, default-OFF in code but ENABLED IN PROD since 2026-06-29** (`f7398004` — do NOT read the `=false` in .env templates as the prod posture; that error cost three wrong answers on 2026-07-26). No live toggle — `pm2 restart` to apply; same var = kill-switch). What they enable, the modules/call-sites, the enable-gates (incl. WS1 C1): `.claude/knowledge/domain/harness/harness-output-guards.md`.
+**Harness output guards (R9/R10) & their flags** — `CONNECTED_OUTPUT_SANITIZE_ENABLED` (R9 sanitize, both boundaries: tool-loop + context-chainer) and `ARTIFACT_SECRET_REDACT_ENABLED` (R10 redact, at the ONE shared terminal persist — engine and stream converge there; re-verified 2026-09-27), both **env-var, default-OFF in code but ENABLED IN PROD since 2026-06-29** (`f7398004` — do NOT read the `=false` in .env templates as the prod posture; that error cost three wrong answers on 2026-07-26). No live toggle — `pm2 restart` to apply; same var = kill-switch). What they enable, the modules/call-sites, the enable-gates (incl. WS1 C1): `.claude/knowledge/domain/harness/harness-output-guards.md`.
 
-## 🆕 2026-08-26 — contract inheritance SHIPPED and LIVE-PROVEN (IGP-T1 R12); the successor problem named
+## Interface-contract inheritance + the successor problem (2026-08-26, IGP-T1 R12)
 
-**The defect:** the interface contract was delivered to a LEG and never to the leg's children.
-Measured across every archived leg that carried one: **7 of 7 lossy, 0 of N children ever holding
-it.** So a reviewer instructed to "check transcription mechanically, token by token" held only a
-paraphrase missing 9 of 10 canonical lines — an **UNSATISFIABLE PREDICATE**, and it could only accept
-the package's word. Fixed: `inheritInterfaceContractIfAbsent` (write-if-absent from the qualified
-owning leg, sanitized, 64 KB cap, atomic conditional write) at `prepare-task-for-execution.ts`;
-orchestrator base **v3.13.0** (no-restate); network-provisioning **v1.6.0** (both clauses now name
-the `## Program Interface Contract` block as the source and define absent-block behaviour).
+Contract inheritance SHIPPED (`inheritInterfaceContractIfAbsent`, `prepare-task-for-execution.ts`;
+orchestrator v3.13.0, network v1.6.0) after a measured **7 of 7 legs lossy, 0 of N children ever
+holding it**. R12 then applied four legs verbatim to live cEOS with 0 config-syntax defects.
 
-**R12 result — four legs applied VERBATIM to live cEOS: 0 config-syntax defects, 0 device
-rejections, 4/4 children holding the contract on every leg** (R11: 0/4, 2 canonical lines omitted).
+🔴 **DELIVERY ALONE FIXED TRANSCRIPTION. Do NOT re-propose** a deterministic config renderer or a
+`canonicalStanza`-as-array schema — both were proposed mid-arc and dropped as premature, and R12
+vindicated dropping them. Re-propose only on a NEW live failure where the author held the complete
+stanza.
 
-🔴 **DELIVERY ALONE FIXED TRANSCRIPTION. Do not re-propose a deterministic config renderer or a
-`canonicalStanza`-as-array schema** — both were proposed mid-arc and dropped as premature, on the
-grounds that no author had ever failed while HOLDING the complete exemplar. R12 vindicates dropping
-them. Re-propose only on a NEW live failure where the author held the complete stanza.
+🔴 **Letting the author validate against the device (`configure session` + abort) is RULED OUT**
+(Steve, 2026-08-26). Read-only stays. Do not re-propose.
 
-**THE SUCCESSOR PROBLEM (open, no design yet):** the author can predict what it **CONFIGURES** but
-not what the device **DISPLAYS** — its harvest shows pre-change rendering only and it never sees the
-device's reply to its own config. Four R12 instances: System Id renders as hostname; `distance 90`
-renders as two per-level lines; a template omitted EOS's real `Instance`/`VRF` columns; a parity
-table equated OSPF *path cost* with IS-IS *interface metric*. ⚠️ Not cosmetic — the fourth propagated
-a wrong number into a **blocking** defect. **Letting the author validate against the device
-(`configure session` + abort) is RULED OUT — read-only stays (Steve, 2026-08-26). Do not re-propose.**
+⚠️ **THE SUCCESSOR PROBLEM is OPEN, no design.** An author can predict what it CONFIGURES but not
+what the device DISPLAYS — its harvest shows pre-change rendering only. Four R12 instances; one
+propagated a wrong number into a *blocking* defect, so treat it as correctness, not cosmetics.
 
-**Three things R12 proved about our own guards, all worth carrying:**
-- **Two of the three are dialect-lint findings** (the FALSE BLOCK on a removal leg — it has no
-  notion of leg intent, and the prose reviewer got it right where the mechanical check got it
-  wrong; and the PRESENCE half's by-construction unreliability across rounds). **Owned by
-  `execution-facts-specialist` since 2026-09-11**; depth:
-  `.claude/knowledge/domain/execution-facts/execution-facts-library.md` §3. Carry the consumption
-  lesson: "mechanical beats prose" is a prior in this domain, not a law.
-- **Node C has NO contract.** Inheritance walks child → owning LEG; Node C's parent is the program
-  root, which never holds one (the Architect *creates* it). It reported the absence and graded
-  ACCEPTED-FROM-CLAIMS exactly as v1.6.0 prescribes — the clause working, and revealing the next gap.
+⚠️ **Node C has NO contract.** Inheritance walks child → owning LEG; Node C's parent is the program
+root, which never holds one (the Architect *creates* it). Expect ACCEPTED-FROM-CLAIMS there.
 
-**And our own prose did not bind:** v3.13.0's no-restate rule was ignored (the brief carried all 10
-lines anyway). Mechanical delivery is what worked.
-
-Open items, all earned live: `cline_docs/follow-ups/igp-t1-r12-followups-2026-08-26.md`
-(incl. packages not mandating PERSISTENCE — R12's migration was running-config only and a reboot
-would revert all four legs; left unrepaired so the package defect stays visible).
+⚠️ **"Mechanical beats prose" is a PRIOR here, not a law** — R12's dialect-lint FALSE-BLOCKED a
+removal leg it had no notion of the intent of, and the prose reviewer was right where the check was
+wrong. Depth + open items: library, and
+`cline_docs/follow-ups/igp-t1-r12-followups-2026-08-26.md`.
 
 ## Shared-worktree hygiene (earned twice on 2026-09-12, both times by me)
 
@@ -410,8 +337,8 @@ Verify the property (what did this commit contain? what will that execution read
 
 ## Work Summary:
 🧬 **Scope**: [what aspect of the harness was addressed]
-🔗 **Call sites audited**: X/5
-🔒 **Invariant sites audited**: X/2
+🔗 **Call sites audited**: X/6 (+ Finding-9 safety nets / F16 retrigger — discovery Phase 4 intro)
+🔒 **Invariant sites audited**: X/1 (one shared core since 2026-07-24; handlers are pointer-only)
 🛣️ **Two-path audit**: [yes — both engine + stream | n/a]
 🧪 **Smoke-test coverage**: [which tests were run / updated / added]
 
@@ -453,10 +380,47 @@ Two operational facts from Tasman Runs 2/3 (2026-08-11): (1) a PROGRAM leg's dup
 TERMINAL — F17 + one-way forward-cone freeze (`mark-forward-cone.ts`), no in-place release;
 recovery for a re-run is stamping `metadata.duplicateAcknowledged` (prior LEG stage id) on each
 pipeline child in the PLAN-SPAWN→gate-approval hold window (pov-program 1.0.30 Step 8 now warns
-at gate time). (2) `## Consumed Values` `kind` is a machine-matched CLOSED set (`cidr`|`asn`) —
-a coined kind stamps a false `consumed-value-mismatch` and parks a correct program (Run 1);
-the violation record now carries the kind. Full trail:
-`cline_docs/reviews/protocol-obligation-audit-2026-08-11/AUDIT.md` (S5, O5).
+at gate time).
+
+✅ **2026-09-19 — (1) re-confirmed live (R6 fabric leg), plus two things (1) does not say:**
+- **A halted leg's cone is FROZEN, so a re-run needs a FRESH task** — never `agent.execute` on the
+  halted one. Doing that runs the leg inside its own frozen cone: consumers still do not queue and
+  the program escalates `orphaned-cascade-after-root-recovery`, correctly.
+- **The halt is recorded on `task.executionStatus` + downstream `blockedByUpstreamFailure`.**
+  `agent_executions.status` says SUCCESS — truthfully; the execution succeeded. Reading it instead
+  cost seven documents a false "not terminalized" claim (`CHECK-DESIGN-DISCIPLINE.md` §5f).
+
+**Setting a clearance for a PIPELINE re-run (2026-09-24, live twice)** — metadata, never the description
+on a customer-facing POV; name the prior run's **`Pipeline: …` child stage** (`metadata.pipelineStageId`),
+not its parent; **several prior runs ⇒ an ARRAY** of every such id (a single id is guaranteed to halt);
+unchanged title ⇒ **new stage** (`task.create` silently returns the existing task); verify
+`jsonb_typeof` in the row, then read the harness's pre-flight comment. ⚠️ The list is documented since
+orchestrator 3.15.1 / pov-program 1.8.2, but no platform code matches it — the model does. Depth:
+library § "Duplicate-check clearance — the operator technique".
+
+## Generated requirements → published program input (proven end to end 2026-09-24, `genspec-run4`)
+
+The requirements-authoring pipeline drafts a `requirements.md`; turning that draft into what a `pov-program` reads is
+a HUMAN publish step you coordinate. Full procedure + commands:
+`.claude/knowledge/pipelines/requirements-authoring/PUBLISH-GENERATED-SPEC.md`. What you must know without opening it:
+
+- **Most of it is decided at generation.** DECLARE in the generation description, as "transcribe, do not infer":
+  the non-enumerable **scope** (namespace/workspace/account), the **derivation rule** ("exactly … nothing wider" has
+  two readings), and the **gate → approver mapping** (the generator invents one from the roster otherwise).
+- **Publish the SYNTHESIZE `report.md`**, from a run that passed **without harness recovery**.
+- **Harvested state belongs nowhere** — not even *Preconditions verified* (pointer + property only). Read the whole
+  draft by hand: abbreviated addresses (`.1, .2`), **counts**, and the worked example (synthetic only). A defect means
+  **regenerate**, never hand-edit — a hand-edited spec tests nothing and the next generation repeats it.
+- **Publish pass, in order:** a NEW `program-artifacts/<name>/` dir (never edit a published one — it is a run's input
+  of record); copy `topology.json` byte-identical; remove the Author's trailing `Confidence:` line; rewrite any
+  "not yet spliced" footer; `requirements-rules.py --insert` then `--check` (byte-identical); expect 0 × `🗑`, 0 ×
+  `{{` (exemplar placeholders are `<ANGLE>`), 0 × `Confidence:`, 0 × marker; `## Writing rules` LAST. `--insert` fills
+  in place and cannot move a section.
+- **Verify the raw URLs serve the commit** (200 + identical) before launching — raw GitHub caches ~5 min, and a 404
+  fetched before the push can be cached.
+- **Program task:** replicate a known-good root, change the URLs, drop clearance/history on a fresh POV. The
+  "keep the derived range out of the contract" warning is an FU2 stopgap, redundant when the spec carries the
+  Static/Runtime split and no value is reachable.
 
 ## 🆕 2026-08-17 — WS1 Phase C: the harness prompt is COMPOSED (base + one), not load-all
 
@@ -482,3 +446,46 @@ is your half, and it is a gate input like any other conjunct. How it is computed
 produce it, why it must ride NESTED inside `derivationContainment` (the whitelist strips siblings),
 and the open VT-14 fail-closed question are **owned by `execution-facts-specialist` since
 2026-09-11**; depth: `.claude/knowledge/domain/execution-facts/execution-facts-library.md` §2.
+
+## 🆕 2026-09-16 — Bug Class 84: a payload delivered to a CONTAINER is not delivered to the thing inside it
+
+**Measured: 51 of 51 upstream edges reached a program LEG; 3 reached any child.** Seven programs,
+four releases. The consuming Architect held the correct derived CIDR **in its own task description**
+— the harness had paraphrased it in — and refused it, correctly: *"a value stated in prose in the
+task description is not the same as a value delivered through the platform's chained-dependency
+mechanism."* **It lacked provenance, not information** — which kills every richer-brief fix.
+
+Second instance of the same boundary; the first (the interface contract, 7 of 7 lossy, fixed
+2026-08-26) is *why* this one was loud — the child now inherits a `consumptionRule` commanding it to
+read a channel structurally always empty at its tier.
+
+**FIXED** (`c51311d6`, live-validated run 4 → `programReleasable: true`): the chainer appends the
+owning leg's cross-pipeline `chainedFrom` entries to its non-PIPELINE children, stamped
+`inheritedFromLeg`, rendered `### Upstream Pipeline Deliverable` **outside** the N-of-M predecessor
+tally — rendering it as a Previous Task would have the platform assert a dependency relation it
+invented.
+
+**What you own here:**
+- **Tier discipline.** Every coverage fact (`predecessors`, `chainCapablePredecessors`, `notChained`,
+  `degradedPredecessors`) is scoped to the tier you stand on. **Both forensics guides certified this
+  defect as CLEAN, at both tiers, five times over two months** — they now carry the child-tier query.
+  Never assert "the evidence reached the judgement" without naming the TIER of both.
+- **The injection scope is a POLICY you decide** (`INJECTION_EXCLUDED_ROLES`, `context-chainer.ts`).
+  EXCLUSION, never inclusion: an inclusion list fails CLOSED, so a new domain's consuming role
+  silently stops receiving — this class recreated by its own fix. Harvest-shaped roles are excluded
+  because an upstream `report.md` carries allocations in the shape of a harvest table, and one folded
+  into `## Harvested Allocations` poisons machine-parsed ground truth **at its root**; the provenance
+  stamp cannot defend against it (it answers *who produced this*, not *is this still true*).
+  Reviewers excluded for now — a second reviewable document caused three self-host vetoes 2026-09-09.
+- **Protocol-agnostic.** Verified across network-provisioning, terraform-iac, kubernetes-gitops and
+  observability-config — they share one four-role skeleton. `publication_reviewer`
+  (artifact-synthesis) was added 2026-09-17 after it was found outside the list; a runtime tripwire
+  now warns on any `/review|harvest|acquir/i` role that is not an explicit decision.
+
+⚠️ **STILL OPEN and mine**: *who is INCLUDED and why.* The exclusion list decides exclusions; every
+other role receives **by default with no case made** (`data_analyst`, `technical_writer`,
+`network_design_architect`…). And the dep-free path, the exclusion's positive case, and the 26% are
+**fixture-proven only** — podrange cannot exercise them.
+
+Depth: `cline_docs/reviews/cross-pipeline-value-delivery-2026-09-16/` (4 panels, 3 plan drafts,
+TRACEABILITY + MASTER-TRACKER) · VT-25 · `cline_docs/follow-ups/upstream-delivery-as-a-per-predecessor-fact-2026-09-17.md`.

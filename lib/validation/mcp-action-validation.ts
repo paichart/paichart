@@ -15,6 +15,7 @@ import { detectPromptInjection } from '@/lib/security/prompt-injection-preventio
 import { mcpLogger } from '@/lib/logger';
 import { safePassthrough, safeRecord, InjectionSafeOptional } from './zod-helpers';
 import { ModelParametersPassthroughSchema } from './model-parameters';
+import { AGENT_EXECUTE_OVERRIDE_FIELDS } from './task-validation';
 import { RUNTIME_LIMITS } from './runtime-limits';
 import { stripDangerousKeys, deepStripDangerousKeys } from '@/lib/utils/sanitize-keys';
 import { FIELD_LIMITS } from './field-limits';
@@ -289,6 +290,55 @@ export const MCPActionRequestSchema = z.object({
   ).optional()
 });
 
+/**
+ * Template keys task.create refuses (2026-09-25). Every spelling any layer accepts for a template:
+ * the perform tool schema advertises all five and copies agent_template_id / templateId into
+ * agentTemplateId (source kept), and moves agent_template_name into agentTemplateName.
+ */
+export const TASK_CREATE_TEMPLATE_KEYS = [
+  'agentTemplateId', 'agent_template_id', 'templateId', 'agentTemplateName', 'agent_template_name',
+] as const;
+
+/**
+ * Raw-input check for task.create: reject any template key, naming the key(s) the caller sent.
+ * Protocol 10 — facts only: which key, that it was not applied, that no task was created, and the
+ * two actions that do attach. No guess at what the caller "meant".
+ */
+function rejectTemplateKeysOnTaskCreate(raw: unknown, ctx: z.RefinementCtx): void {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return; // the object stage reports shape errors
+  const params = raw as Record<string, unknown>;
+  const present = TASK_CREATE_TEMPLATE_KEYS.filter(k => params[k] !== undefined);
+  if (present.length === 0) return;
+  // agentTemplateId may be the tool layer's COPY of agent_template_id / templateId — name the key the
+  // caller actually sent, not the copy.
+  const named = present.filter(k => !(
+    k === 'agentTemplateId' &&
+    ((params.agent_template_id !== undefined && params.agent_template_id === params.agentTemplateId) ||
+     (params.templateId !== undefined && params.templateId === params.agentTemplateId))
+  ));
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: [named[0]],
+    message:
+      `task.create does not attach agent templates; ${named.join(', ')} ${named.length > 1 ? 'were' : 'was'} ` +
+      `not applied and no task was created. Create the task, then attach a template with agent.assign ` +
+      `(may start it — see agent.assign) or agent.configure (attaches without starting).`,
+  });
+}
+
+/**
+ * Declared top-level keys of an action's L3 schema, or null when the schema has no object shape.
+ * Unwraps ZodEffects (.refine/.superRefine/.transform) and ZodPipeline (.pipe) to the ZodObject.
+ * Used by the router's ignoredParameters fact and by the task.create description-parity test.
+ */
+export function getActionSchemaShapeKeys(action: string): string[] | null {
+  let s: any = (MCPParameterSchemas as Record<string, unknown>)[action];
+  for (let depth = 0; s && !(s instanceof z.ZodObject) && depth < 10; depth++) {
+    s = s._def?.schema ?? s._def?.out ?? s._def?.innerType;
+  }
+  return s instanceof z.ZodObject ? Object.keys(s.shape) : null;
+}
+
 // Action-specific parameter validation schemas
 export const MCPParameterSchemas = {
   'pov.create': z.object({
@@ -419,7 +469,13 @@ export const MCPParameterSchemas = {
   )
   .transform(data => normalizeAliases(data)),  // MCP convention (snake_case → camelCase)
 
-  'task.create': z.object({
+  // 2026-09-25 (Steve ruling, perform-template-param review): task.create does NOT attach agent
+  // templates — agent.assign / agent.configure do. A template key used to be silently stripped here
+  // (non-strict object) while the call reported success. It is now rejected LOUDLY and no task is
+  // created. The check runs on the RAW input as the FIRST stage of a pipe, before the object stage
+  // strips unknown keys and before any transform (standing rule: refine before transform). A dirty
+  // first stage short-circuits the pipe, so no half-validated create proceeds.
+  'task.create': z.any().superRefine(rejectTemplateKeysOnTaskCreate).pipe(z.object({
     title: SimpleTextField(500),  // User content: unicode allowed
     description: RichTextField(50000).optional(),  // Rich text: markdown, emojis, unicode allowed
     povId: ValidationSchemas.POV_ID, // CRITICAL: Required to prevent orphaned tasks
@@ -438,6 +494,13 @@ export const MCPParameterSchemas = {
 
     // Assignment
     assigneeId: ValidationSchemas.USER_ID.optional(),
+    // Person assignee by name or email (2026-09-25). Resolved by the resolver task.assign uses
+    // (utilities/assignee-resolver.ts); an unresolvable name fails and no task is created. Before this,
+    // the key was undeclared here and SILENTLY stripped — 23 harness APPROVAL gates named for a person
+    // landed on the POV owner (2026-07-26 → 09-22). Same field types as task.assign.
+    assignee: SimpleTextField(255).optional(),
+    assignee_name: SimpleTextField(255).optional(),
+    assigneeName: ValidationSchemas.SAFE_NAME.optional(),
     teamId: z.string().regex(/^[a-zA-Z0-9_-]{1,50}$/, 'Invalid team ID').optional(),
 
     // Ordering
@@ -466,7 +529,7 @@ export const MCPParameterSchemas = {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'interfaceContract too large (max 64KB stringified)' });
       }
     }).transform((obj) => deepStripDangerousKeys(obj)).optional()
-  }),
+  })),
 
   'task.update': z.object({
     // Task identification (taskId OR task_name/taskName with POV context)
@@ -484,6 +547,10 @@ export const MCPParameterSchemas = {
     dueDate: z.string().datetime().optional(),
     due_date: z.string().datetime().optional(),  // Snake_case alias
     assigneeId: ValidationSchemas.USER_ID.optional(),
+    // Person assignee by name or email (2026-09-25, N2-f2) — same shared resolver as task.create / task.assign
+    // (ambiguity is an error; the POV's people are tried first). Previously undeclared here, so a name was
+    // silently stripped and the update reported success without assigning anyone.
+    assignee: SimpleTextField(255).optional(),
 
     // Agent template assignment
     agentTemplateId: z.string().regex(/^[a-zA-Z0-9_-]{1,50}$/, 'Invalid agent template ID').optional(),
@@ -686,7 +753,14 @@ export const MCPParameterSchemas = {
     // caps. Type the nested modelParameters with the shared schema; passthrough the rest
     // of overrideConfig (agentRole/prompt/maxRetries/timeout/…) + strip dangerous keys.
     overrideConfig: z.object({
-      modelParameters: ModelParametersPassthroughSchema.optional()
+      // RWF X16 parity (2026-09-27): the same typed override fields the REST route validates (prompt/agentRole with the
+      // injection check, CUID tool ids, record contexts) — they were untyped and LIVE on this door.
+      ...AGENT_EXECUTE_OVERRIDE_FIELDS,
+      modelParameters: ModelParametersPassthroughSchema.optional(),
+      // X16 (sec-ops D1 review F2): typed and bounded. Inert today (nothing reads them), but they were persisted into
+      // agent_executions.config at any type and size. Bounds = the task column's (ms); null passes (readers use `??`).
+      maxRetries: z.number().int().min(0).max(RUNTIME_LIMITS.MAX_RETRIES).nullable().optional(),
+      timeout: z.number().int().min(1000).max(RUNTIME_LIMITS.MAX_TASK_TIMEOUT_MS).nullable().optional(),
     }).passthrough().transform(stripDangerousKeys).optional()  // Override default config
   }),
 

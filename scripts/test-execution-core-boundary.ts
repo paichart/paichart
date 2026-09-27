@@ -129,6 +129,34 @@ test('ORDER: cap → runDiagnosticRetry → assessExecutionQuality → persistTe
   assert(iQuality < iPersist, 'assessExecutionQuality must precede persistTerminalSuccess');
 });
 
+// ---------- F2 §3.3 (2026-09-25, register E1): the truncation fact reads the LOOP-EXIT stop reason ----------
+// #90 REPLACES currentResponse with its reflection, so `currentResponse.stopReason` after #90 is the
+// reflection's end_turn. On the 2026-09-24 reviewer incident that hid a max_tokens deliverable. Both
+// consumers of the truncation fact must be handed the loop's own value.
+test('F2-3.3: assessExecutionQuality AND buildExecutionResultJson receive loopResult.finalStopReason (not the post-#90 currentResponse)', () => {
+  const qStart = coreSrc.indexOf('assessExecutionQuality({');
+  const qWin = coreSrc.slice(qStart, coreSrc.indexOf('});', qStart));
+  assert(/loopExitStopReason:\s*loopResult\.finalStopReason/.test(qWin),
+    'the quality layer must classify truncation on loopResult.finalStopReason');
+  const bStart = coreSrc.indexOf('buildExecutionResultJson({');
+  const bWin = coreSrc.slice(bStart, coreSrc.indexOf('});', bStart));
+  assert(/finalStopReason:\s*loopResult\.finalStopReason/.test(bWin),
+    'the result.json builder must stamp loopResult.finalStopReason');
+  assert(!/finalStopReason:\s*currentResponse/.test(bWin), 'the builder must never be handed the post-#90 stop reason');
+});
+
+// ---------- NTF-R4L1.3 (2026-09-25, register E1): the retry's deadline IS the watchdog's ----------
+test('NTF-R4L1.3: deadlineAt is computed beside the watchdog setTimeout and passed into runAgenticToolLoop', () => {
+  const iTimer = coreSrc.indexOf('setTimeout(() => executionAbort.abort()');
+  assert(iTimer > 0, 'watchdog timer missing from the core');
+  const before = coreSrc.slice(Math.max(0, iTimer - 200), iTimer);
+  assert(/const deadlineAt = Date\.now\(\) \+ executionTimeoutMs;\s*const executionTimeout = $/.test(before),
+    'deadlineAt must be computed on the line adjacent to the watchdog timer, from the SAME executionTimeoutMs');
+  const lStart = coreSrc.indexOf('runAgenticToolLoop({');
+  const lWin = coreSrc.slice(lStart, coreSrc.indexOf('}, {', lStart));
+  assert(/\bdeadlineAt,/.test(lWin), 'deadlineAt must be passed in the runAgenticToolLoop input');
+});
+
 // ---------- SEAM: happy-path core does NOT own the failure catch or the engine activity log ----------
 test('SEAM: core owns SUCCESS persist only — no persistTerminalFailure / buildErrorJson', () => {
   assert(!/persistTerminalFailure|buildErrorJson/.test(coreSrc),

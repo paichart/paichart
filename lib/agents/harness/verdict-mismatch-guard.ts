@@ -20,13 +20,17 @@
  */
 
 import { parseReviewerVerdict, REVIEWER_ROLES, type ReviewerVerdict } from './parse-verdict';
+import { selectAuthoritativeExecution, CHAIN_SELECTION_OPTIONS } from '../../services/execution-selection';
 
 // Method-shorthand signatures (bivariant) so the real PrismaClient is directly assignable.
 type PrismaLike = {
   // `type` is OPTIONAL so existing mocks/callers stay structurally valid; it is the deterministic
   // program-tier signal (a PIPELINE sibling ⇒ this stage is a program's — F-T6-2, 2026-07-17).
   task: { findMany(args: any): Promise<Array<{ id: string; type?: string | null }>> };
-  agentArtifact: { findMany(args: any): Promise<Array<{ content: string }>> };
+  // RWF C.3: the authoritative selection (agentExecution.findMany + the R8 floor's findFirst) and the per-execution
+  // result.json read.
+  agentExecution: { findMany(args: any): Promise<Array<{ id: string; status: string; createdAt: Date; supersededById: string | null }>> };
+  agentArtifact: { findFirst(args: any): Promise<{ content: string } | null> };
 };
 
 type LoggerLike = {
@@ -119,23 +123,26 @@ export async function annotateQualityGateVerdictMismatch(
     // CLAUDE.md quarterly Phase-2 decision is tallied from.
     const isProgramTier = siblings.some((s) => s.type === 'PIPELINE');
 
-    // Newest-first authoritative result.json artifacts across the children; the reviewer child is
-    // identified by result.json.agentRole (there is no role column on agent_executions).
-    const artifacts = await prisma.agentArtifact.findMany({
-      where: {
-        name: 'result.json',
-        execution: {
-          taskId: { in: siblings.map((s) => s.id) },
-          supersededById: null,
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      select: { content: true },
-      take: 20,
-    });
+    // RWF C.3 (2026-09-26; execution-facts handover): read the reviewer's verdict from its AUTHORITATIVE
+    // execution, selected exactly as the chainer selects (CHAIN_SELECTION_OPTIONS): non-superseded SUCCESS with
+    // a non-empty deliverable. The old read took the newest non-superseded result.json with no SUCCESS or R8
+    // floor, harmless while re-runs were rare, but with routine reviewer re-runs it could compare the stamp
+    // against a verdict nobody downstream reads. Newest authoritative first; the reviewer is identified by
+    // result.json.agentRole (there is no role column on agent_executions).
+    const candidates: Array<{ id: string; createdAt: Date }> = [];
+    for (const s of siblings) {
+      if (s.type === 'PIPELINE') continue; // a program leg is not a reviewer; its verdict is its own stamp
+      const { execution } = await selectAuthoritativeExecution(prisma as any, s.id, CHAIN_SELECTION_OPTIONS);
+      if (execution) candidates.push({ id: execution.id, createdAt: execution.createdAt });
+    }
+    candidates.sort((x, y) => y.createdAt.getTime() - x.createdAt.getTime() || (x.id < y.id ? 1 : -1));
 
     let verdict: ReviewerVerdict | null = null;
-    for (const artifact of artifacts) {
+    for (const cand of candidates) {
+      const artifact = await prisma.agentArtifact.findFirst({
+        where: { executionId: cand.id, name: 'result.json' }, select: { content: true },
+      });
+      if (!artifact?.content) continue;
       try {
         const parsed = JSON.parse(artifact.content) as Record<string, unknown>;
         if (typeof parsed.agentRole !== 'string' || !REVIEWER_ROLES.has(parsed.agentRole)) continue;
@@ -145,7 +152,7 @@ export async function annotateQualityGateVerdictMismatch(
           emitted && typeof emitted.approved === 'boolean'
             ? emitted
             : parseReviewerVerdict(typeof parsed.finalResponse === 'string' ? parsed.finalResponse : null);
-        break; // newest reviewer result.json is authoritative — stop at the first
+        break; // newest authoritative reviewer result.json wins — stop at the first
       } catch {
         continue; // not valid JSON — skip
       }

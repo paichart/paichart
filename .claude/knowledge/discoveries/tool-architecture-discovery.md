@@ -227,7 +227,7 @@ grep -n "CONSOLIDATED_SCHEMAS lookup miss\|nonexistent_tool_typo" scripts/test-m
 # SHAPE NOTE (2026-06-11): task.create + stage.create moved from `if (action === ...)` into the
 # grouped `actionsRequiringPOV.includes(action)` check — a bare `action === ` grep sees only 2 of 4.
 echo "=== Actions with special pre-processing ==="
-grep -nE "action === 'pov.create'|action === 'agent.execute'|actionsRequiringPOV = " lib/mcp/server/tools/advanced/task-action-handler.js   # expect 3 lines (:167, :298, :357)
+grep -nE "action === 'pov.create'|action === 'agent.execute'|actionsRequiringPOV = " lib/mcp/server/tools/advanced/task-action-handler.js | wc -l   # expect 3
 
 # Schema-declared actions (14 since 2026-05-15 — pov.update added in 8bb6915a)
 echo ""
@@ -273,7 +273,9 @@ The OUTER dispatcher owns agent.execute's completion-poll; two prompt-return bra
 ```bash
 # Gate present: in-agent-loop (callingExecutionId) + waitForCompletion:false both skip the poll
 grep -n "promptReturn\|inAgentLoop\|waitForCompletion" lib/mcp/server/tools/advanced/task-action-handler.js | head
-# Schema declares the nested param (flat top-level form is stripped by design)
+# Schema declares the nested param. A flat top-level waitForCompletion survives the outer .passthrough()
+# but is NOT in flatParams → never hoisted, never read → reported in ignoredParameters (corrected 2026-09-25;
+# this line used to say "stripped").
 grep -n "waitForCompletion" lib/mcp/server/config/tool-schemas.js
 # Prod behavior anchor (should appear on every in-loop or opted-out execute)
 # ssh prod: grep 'agent.execute prompt-return' /var/log/paichart/mcp-combined-0.log | tail -5
@@ -282,6 +284,31 @@ grep -n "waitForCompletion" lib/mcp/server/config/tool-schemas.js
 **What to look for**: in-loop calls NEVER poll (pipeline protocols exit-and-retrigger); human-client default
 stays poll-to-completion; the five doc surfaces stay in sync when semantics change (tool-schemas docstring,
 HOWTO-run-an-agent §6, orchestrator Step 3 retry text, ADD guide §8, cEOS DEMO-RUN-GUIDE Path B).
+
+### 6.7 perform template surface + ignoredParameters (2026-09-25)
+
+Templates attach via `agent.assign` / `agent.configure` / `task.update` — NEVER `task.create` (Steve ruling).
+Every perform Tier-1 success carries the `ignoredParameters` FACT; only that site may opt in (a pre-validated
+caller — the REST route — would stamp a false `[]`).
+
+```bash
+# task.create rejects template keys on the RAW input (declaration + use in the pipe's first stage)
+grep -c "rejectTemplateKeysOnTaskCreate" lib/validation/mcp-action-validation.ts   # expect 2
+# templateId → agentTemplateId alias lives in the perform tool schema (L1), kept-source copy
+grep -c "data.parameters.agentTemplateId = data.parameters.templateId" lib/mcp/server/config/tool-schemas.js   # expect 1
+# ONE opt-in site for ignoredParameters, repo-wide
+grep -rn "reportIgnoredParameters: true" lib/ app/ | wc -l   # expect 1
+# task.assign + task.create share ONE name resolver (no inline copy re-grown in task.assign)
+grep -c "resolveUserByNameOrEmail" lib/mcp/tasks/action/handlers/task/task-assign-handler.ts   # expect 2
+grep -c "prisma.user.findFirst" lib/mcp/tasks/action/handlers/task/task-assign-handler.ts   # expect 0
+npm run test:perform-template-surface   # expect >=22
+npm run test:ignored-parameters         # expect >=25
+```
+**Check**: a NEW action/param that a layer outside the L3 schema consumes post-routing must be added to
+`POST_ROUTING_CONSUMERS` (`utilities/ignored-parameters.ts`) or it will be reported as ignored; a new
+kept-source alias copy in the perform transform must be added to `LAYER_COPY_ALIASES`
+(`test:ignored-parameters` P2/P3 pin both tables to the source). Before any per-action `.strict()` (advisory
+step 6), read the prod `perform: parameters not applied` log for that action over a soak window.
 
 ## Phase 7: Service Registry
 

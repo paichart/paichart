@@ -1566,7 +1566,7 @@ hard (the seed only warns, because the seed runs on every deploy and must not br
 and off the deploy path).
 
 ```bash
-grep -c "PUBLICATION-COMPLETENESS GUARD" scripts/render-public-protocols.ts   # expect 2 — 1 the guard itself + 1 the NOT_PUBLISHED docblock pointing at it; removing the guard re-opens the silent-exclusion hole
+grep -c "unlisted.length > 0" scripts/render-public-protocols.ts   # expect 1 — the PUBLICATION-COMPLETENESS GUARD's own predicate. Asserts the MECHANISM, not a mention-count: the old grep counted prose about the guard and drifted the moment a comment was edited. Removing this line re-opens the silent-exclusion hole (an ACTIVE protocol in neither PROTOCOLS nor NOT_PUBLISHED renders nothing and still prints green)
 ```
 
 So the old manual cross-check — compare the seed's `Orphan guard: N ACTIVE protocol-tagged rows` against the number of

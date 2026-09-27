@@ -17,7 +17,7 @@ const globalModelParameters = {
   provider: 'anthropic_sdk',
   model: AGENT_MODELS.generic,
   temperature: 0.3,
-  maxTokens: DEFAULT_MAX_TOKENS,  // 6000→8000→24000 (2026-07-16 truncation-stall R1 — a ceiling not a target). Never a literal — see test-seed-model-params-guard.
+  maxTokens: DEFAULT_MAX_TOKENS,  // 6000→8000→24000 (2026-07-16 truncation-stall R1)→48000 (2026-09-24) — a ceiling not a target. Never a literal — see test-seed-model-params-guard.
   stopSequences: [],
   useSystemPrompt: true,
   maxRetries: 3,
@@ -35,7 +35,7 @@ const globalModelParameters = {
  * Templates removed during rationalization (2026-04-03):
  * - General Purpose Assistant: consolidated into Universal (overlapping scope)
  * - Customer Success Specialist: niche, covered by Business Analyst
- * - MCP Service Discovery: covered by MCP Service Orchestrator's registry(action: "tools")
+ * - MCP Service Discovery: removed (the MCP Service Orchestrator that was to cover it was itself removed 2026-09-25, unused)
  *
  * Templates recategorized:
  * - Project Manager: GENERAL → AUTOMATION (coordination/process role)
@@ -260,7 +260,24 @@ const defaultTemplates = [
     priority: AgentPriority.MEDIUM,
     tags: ['documentation', 'writing', 'technical', 'customer-confidence', 'paichart-universal'],
     metadata: {
-      modelParameters: globalModelParameters,
+      modelParameters: {
+        // PROMOTED generic → synthesis (2026-09-15). This template is named by
+        // `pov-program-protocol` as the program-synthesis producer, whose finalResponse is
+        // extracted VERBATIM into the program's customer-facing report.md — while EVERY role
+        // feeding it (harness, architect, harvesters, authors, reviewers) runs on a sonnet tier.
+        // It sat on `generic` only because that is this FILE's default, not because anyone chose
+        // it for that job. Same rationale as the Research Analyst promotion above: capable models
+        // refuse, less-capable hallucinate — and the observed failure was instruction-following,
+        // a run-2 program deliverable that opened "I must begin at the first heading with no
+        // preamble" as its preamble, in the artifact a customer reads.
+        // NOT a persona change: this template is also the BASE protocol's generic DOCUMENTER
+        // (93 tasks since 2026-04-10) and appears in HOWTO-run-an-agent's assign-by-name
+        // examples, so its ROLE_GUIDANCE_LIBRARY entry stays generic. Giving it program-specific
+        // guidance would silently repurpose a shared template — see the follow-up for the
+        // separate `program_deliverable_composer` proposal.
+        ...globalModelParameters,
+        model: AGENT_MODELS.synthesis,
+      },
       hasModelParameters: true,
       modelParamsVersion: '1.0.0'
     }
@@ -482,8 +499,8 @@ async function seedAgentTemplates() {
 
   try {
     // Upsert templates — create if missing, update if existing.
-    // NEVER deleteMany: other seed scripts (MCP Service Orchestrator, MCP Workflow
-    // Orchestrator) create templates that must not be wiped.
+    // NEVER deleteMany: other seed scripts (the domain, harness, program and requirements
+    // seeders) create templates that must not be wiped.
     const createdTemplates = [];
 
     for (const template of defaultTemplates) {

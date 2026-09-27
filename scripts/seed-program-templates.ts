@@ -10,8 +10,8 @@
  * Everything else in a program REUSES shipped templates (design-proposal D1/D2):
  *   - child pipelines → `Pipeline Harness` (assigned by the program harness in PLAN-SPAWN)
  *   - program-synthesis producer → `Technical Writer` (DOCUMENTER)
- *   - Node C integration reviewer → `Change Reviewer` (change_reviewer — sole
- *     REVIEWER_ROLES member; never fork it)
+ *   - Node C integration reviewer → `Change Reviewer` (change_reviewer — a
+ *     REVIEWER_ROLES member; never fork it. Its row is seeded by the NETWORK seed, not this file)
  *
  * ⚠ DEPLOY NOTE (ADD guide §7): deploy auto-seeds PROTOCOLS only. This template
  * seed (which bakes the program_architect ROLE_GUIDANCE_LIBRARY entry into the
@@ -63,7 +63,7 @@ const TEMPLATES: TemplateSeed[] = [
         provider: 'anthropic_sdk',
         model: AGENT_MODELS.orchestrator,
         temperature: 0.3,
-        maxTokens: DEFAULT_MAX_TOKENS,  // 8000→24000 (R1): ceiling, not target. Never a literal — see test-seed-model-params-guard.
+        maxTokens: DEFAULT_MAX_TOKENS,  // 8000→24000 (R1)→48000 (2026-09-24): ceiling, not target. Never a literal — see test-seed-model-params-guard.
         useSystemPrompt: true,
         maxRetries: 2,
         timeout: 600,

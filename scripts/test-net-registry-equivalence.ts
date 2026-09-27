@@ -35,6 +35,7 @@ process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://stub:stub@1
 process.env.PAICHART_SKIP_DB_CONNECT = 'true';
 import * as fs from 'fs';
 import * as path from 'path';
+import { authoritativeReadStub } from './fixtures/authoritative-read-stub';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { MECHANICAL_NETS } = require('../lib/agents/harness/mechanical-nets') as typeof import('../lib/agents/harness/mechanical-nets');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -59,6 +60,8 @@ interface Specimen {
   legTaskId: string;
   leg: { id: string; type: string; title: string; agentRole: string | null; metadata: unknown; inputContext: unknown };
   stageId: string | null;
+  /** The stage the leg LIVES IN (`tasks.stage_id`) — NOT `stageId`, the stage it OWNS. */
+  legOwnStageId: string | null;
   stage: { id: string; metadata: unknown } | null;
   programParentId: string | null;
   children: Child[];
@@ -129,28 +132,54 @@ const POST_H2_LEGS = [
  */
 const POST_DEPLOY_LEG = 'cmtxp5r6k0005yx61hg4owvlv';
 
+/**
+ * RWF Wave B (2026-09-26): the four result.json reads now select the authoritative execution (the one the
+ * chainer chained). Every archived leg child agrees with the old latest-artifact read (1,203 of 1,203,
+ * execution-facts corpus measure), so this gate is byte-identical BY CONSTRUCTION and proves nothing about
+ * the new selection. Declared on each affected key so a green run is never read as that proof.
+ */
+const WAVE_B_ARM = 'authoritative-selection skip arms (superseded, R8-empty): 0 of 1,203 archived leg children '
+  + 'diverge (2026-09-26) — fixture-proven only (test-authoritative-result-read.ts F1-F6)';
+
 const NET_SPECIMENS: Record<string,
   { legs: string[] | 'none'; why: string; unexercisedArms?: string[] }> = {
   'markerPresence@leaf-persist': { legs: [...POST_H2_LEGS, POST_DEPLOY_LEG],
     why: 'H-4 shipped 2026-09-10; every leg here ran after it' },
   'derivationContainment@leg-synthesize': { legs: [...POST_H2_LEGS, POST_DEPLOY_LEG],
-    why: 'last behavioural change H-2 (2026-09-09); every leg here ran after it' },
+    why: 'last behavioural change H-2 (2026-09-09); every leg here ran after it',
+    unexercisedArms: [WAVE_B_ARM] },
   'rollbackContainment@leg-synthesize': { legs: [...POST_H2_LEGS, POST_DEPLOY_LEG],
-    why: 'the HOIST shipped with net #3 on 2026-09-11 and these legs carry its stamp' },
+    why: 'the HOIST shipped with net #3 on 2026-09-11 and these legs carry its stamp',
+    unexercisedArms: [WAVE_B_ARM] },
 
   // ✅ CLOSED 2026-09-12 by the first post-deploy leg. The pre-deploy legs stay OUT: their stamps
   // predate the contractApplicability nesting, and adding them would be declaring something false.
   'dialectLint@leg-synthesize': { legs: [POST_DEPLOY_LEG],
     why: 'contractApplicability nesting (2dc4663a) reached production with the registry deploy; this '
-       + 'leg carries the first stamp that has it nested ({basis: no-program-parent, expected: false})' },
+       + 'leg carries the first stamp that has it nested ({basis: no-program-parent, expected: false})',
+    // The 2026-09-18 stage-id correction is BYTE-NEUTRAL on every specimen here, and that is a
+    // property of the corpus, not of the fix: all five specimen legs are STANDALONE (verified
+    // against production — no program harness owns the stage any of them lives in), so both the
+    // buggy and the corrected lookup return null and stamp the identical fact. The window is
+    // therefore NOT reopened. What the corpus cannot give is the other arm:
+    unexercisedArms: [WAVE_B_ARM, 'basis: program-parent — NEVER OBSERVED IN PRODUCTION (0 of 611 archived '
+       + 'stamps). Every specimen is standalone, so the corrected lookup is exercised here only on '
+       + 'its null branch. The success branch is fixture-validated ONLY until a program leg is '
+       + 'archived post-fix; add that leg here and delete this arm in the same commit'] },
   'contractPropagation@leg-synthesize': { legs: [POST_DEPLOY_LEG],
-    why: 'same deploy, same nesting — contractApplicability is stamped on BOTH facts from one ctx derivation' },
+    why: 'same deploy, same nesting — contractApplicability is stamped on BOTH facts from one ctx derivation',
+    unexercisedArms: ['basis: program-parent — same one derivation, same gap; see the dialectLint entry'] },
+
+  // RWF C.3 (2026-09-26): newer than every specimen — no archived leg can have stamped it. Proven by
+  // fixtures (test-verdict-freshness); add the first post-deploy leg that carries it and delete this note.
+  'verdictFreshness@leg-synthesize': { legs: 'none',
+    why: 'shipped 2026-09-26, after every specimen leg; fixture-proven only until a post-deploy leg is archived' },
 
   'rollbackContainment@leaf-persist': { legs: [POST_DEPLOY_LEG],
     why: 'lane-first arm precedence (8366c21e) reached production with the registry deploy; this leg\'s '
        + 'Author stamp was produced by that code',
     // ⚠️ SEE THE ARM NOTE BELOW: covered as a LEG, not as an ARM.
-    unexercisedArms: ['lane-not-supported — needs a DESIRED-STATE leg (terraform-iac / kubernetes-gitops); '
+    unexercisedArms: [WAVE_B_ARM, 'lane-not-supported — needs a DESIRED-STATE leg (terraform-iac / kubernetes-gitops); '
        + 'this specimen is observability-config, which is ADJUDICATED (checked:true), so the lane arm never ran'] },
 };
 
@@ -211,7 +240,12 @@ function stubPrisma(s: Specimen) {
         }));
       },
       findUnique: async (args: { where: { id: string } }) => {
-        if (args.where.id === s.leg.id) return { ...s.leg, stageId: null };
+        // ⚠️ `stageId: null` here until 2026-09-18 — the stub asserted the leg had no stage of its
+        // own, which is false for every archived leg. Nothing read it, so it cost nothing until
+        // `contractApplicability` started reading it; then it would have sent the corrected lookup
+        // straight down its unresolvable-tier arm and reproduced the exact answer the fix removes.
+        // A fixture that misstates an input silently vindicates the bug that input would expose.
+        if (args.where.id === s.leg.id) return { ...s.leg, stageId: s.legOwnStageId };
         const c = byId.get(args.where.id);
         return c ? { id: c.id, title: c.title, agentRole: c.agentRole, stageId: c.stageId, metadata: null } : null;
       },
@@ -224,17 +258,17 @@ function stubPrisma(s: Specimen) {
       findUnique: async (args: { where: { id: string } }) =>
         (s.stage && args.where.id === s.stage.id ? { id: s.stage.id, metadata: s.stage.metadata } : null),
     },
-    $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
-      const sql = strings.join('?');
-      const taskId = String(values[0]);
-      const c = byId.get(taskId);
-      if (sql.includes("->>'finalResponse'")) return [{ fr: c?.finalResponse ?? null }];
-      if (sql.includes("->>'rollbackContainment'")) {
-        // The JSONB rendering, matching production's own read path exactly.
-        return [{ rc: c?.stamped?.rollbackContainmentJsonbText ?? null }];
-      }
-      throw new Error(`stub $queryRaw: unmodelled query — ${sql.slice(0, 90)}`);
-    },
+    // RWF Wave B: result.json reads go through the authoritative selector. One synthetic SUCCESS
+    // execution per captured child (`exec-<childId>`), carrying its captured finalResponse and the
+    // JSONB rendering of its stamp — production's own read path, so key order is preserved. The shared
+    // stub THROWS on a content-taskId query (the pre-Wave-B read) and on any unmodelled where.
+    // ⚠️ One execution per child means this gate CANNOT exercise the selection's skip arms — see
+    // WAVE_B_ARM below; the fixtures in test-authoritative-result-read.ts carry that proof.
+    ...authoritativeReadStub(s.children.map((c, i) => ({
+      id: `exec-${c.id}`, taskId: c.id, createdAt: new Date(1_700_000_000_000 + i * 1000),
+      result: { taskId: c.id, finalResponse: c.finalResponse ?? null },
+      rollbackContainmentJsonbText: c.stamped?.rollbackContainmentJsonbText ?? null,
+    }))),
   } as never;
 }
 
@@ -261,7 +295,12 @@ function stubPrisma(s: Specimen) {
     // widening derivationContainment's predicate produced ZERO failures until this assertion existed.
     {
       const prodKeys = Object.entries(s.stampedLeg ?? {}).filter(([, v]) => v != null).map(([k]) => k).sort();
-      const ourKeys = Object.keys(stamped).sort();
+      // RWF C.3 (execution-facts review §4.5): a net NEWER than every specimen stamps a key production never had
+      // the chance to stamp. Compare only keys whose net's window covers this leg, PLUS every key production
+      // did stamp, so the over-application guard still bites for every in-window net (mutation-proven).
+      const ourKeys = Object.keys(stamped)
+        .filter((k) => covers(`${k}@leg-synthesize`, s.legTaskId) || prodKeys.includes(k))
+        .sort();
       check(`E1a ${s.legTaskId.slice(-6)}: stamps exactly the keys production stamped (no net over-applied)`,
         JSON.stringify(ourKeys) === JSON.stringify(prodKeys),
         `registry : ${ourKeys}\n     prod     : ${prodKeys}`);

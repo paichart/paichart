@@ -2,8 +2,8 @@ import { prisma } from '@/lib/prisma';
 import { taskLogger } from '@/lib/logger';
 import { ExecutionStatus } from '@prisma/client';
 import { createAgentExecution } from './agent-execution-create';
-import { buildTemplateModelParameters } from './llm/template-model-params';
 import { ApiError, ErrorCode, DuplicateActiveExecutionError } from '@/lib/errors';
+import { buildTemplateModelParameters, withoutExecutionIdentityKeys } from './llm/template-model-params';
 // (logFieldChange / TaskActivityAction / ActivityMetadata imports removed 2026-06-08, TS4 —
 //  their sole consumer, configureAgentForTask, was deleted as dead code.)
 
@@ -189,6 +189,17 @@ export class AgentTaskService {
         where: { id: taskId },
         select: { inputContext: true },
       });
+
+      // X15 (RWF, 2026-09-27): modelParameters is spread AFTER the identity keys below, so it must never carry them — a
+      // modelParameters.prompt/agentRole silently replaced the task's directive and role. THIS strip is the control: stored
+      // task/template metadata is validated only as a record on most write paths, so the schema rejection is an early,
+      // clearer error on some fields, not a guarantee. Shared helper — the reactor builder calls the same one. Loud.
+      const idStrip = withoutExecutionIdentityKeys(modelParameters as Record<string, any>);
+      if (idStrip.stripped.length > 0) {
+        taskLogger.warn({ taskId, strippedIdentityKeys: idStrip.stripped, errorCode: 'MODEL_PARAMETERS_IDENTITY_KEY_STRIPPED' },
+          'modelParameters carried execution-identity keys; stripped so they cannot replace the task\'s own');
+        modelParameters = idStrip.params;
+      }
 
       // Prepare execution configuration
       const executionConfig = {

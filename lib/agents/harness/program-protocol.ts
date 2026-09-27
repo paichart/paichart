@@ -47,6 +47,26 @@
  * fails-OPEN direction while it exists (retitling a non-program pipeline INTO a program token)
  * is the same pre-stamp exposure, no worse.
  *
+ * ⚠️ BACKFILL PRECONDITION THE RECORD ALONE DOES NOT SATISFY (boundary-contract sweep, 2026-09-16).
+ * A completed backfill proves every TASK ROW carries a stamp. It does NOT make the key present in
+ * every task OBJECT this resolver is handed — and one live caller is handed a pre-stamp one every
+ * time. `app/api/pov/agent/execute/stream/route.ts:543` resolves from the ROUTE-EDGE snapshot taken
+ * at :143, BEFORE `createAgentExecution` writes the stamp; on a first execution the key is absent
+ * there no matter what the DB holds. That path survives TODAY *only* because the title-fallback
+ * re-runs the stamp writer's pure function and converges. Delete the disjunct on the strength of a
+ * backfill and the stream path resolves `none` — silently, on program tier, where `none` means the
+ * F12 contract belt and F10 programConfidence stamp simply do not apply.
+ *
+ * So the gate has TWO conditions, not one:
+ *   1. a recorded, verified backfill (every row stamped), AND
+ *   2. every caller demonstrably passing a POST-stamp task object — i.e. the stream route reading
+ *      the task AFTER createAgentExecution, or being handed the stamp the writer just computed.
+ * Condition 2 is unmet today and nothing else in the tree connects it to condition 1.
+ *
+ * This is the freshness-class bug (see execution-terminal-persist.ts's hoist note): `metadata` is
+ * LIVE, and a snapshot taken before the writer ran cannot contain what the writer wrote. The
+ * backfill is the one planned cleanup that makes this WORSE rather than better.
+ *
  * Adding a program protocol: add its SHORT name here AND (eventually) seed the protocol. Seeding
  * is NOT a precondition for registration — `research-program` was registered 2026-08-08 while its
  * row was DRAFT and deliberately absent from the seed (register EARLY: cheap to register, silent
@@ -60,7 +80,7 @@
  * leg harnesses correctly get neither. Compared CANONICALLY (see canonicalProtocolName), so both
  * short and long forms test true.
  */
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 export const PROGRAM_PROTOCOL_NAMES: readonly string[] = [
   'pov-program',
@@ -236,6 +256,52 @@ export async function findProgramParentForStage(
     select: { id: true },
   });
   return parent?.id ?? null;
+}
+
+/**
+ * CROSS-PIPELINE DELIVERY (2026-09-16): resolve the LEG that owns a child's stage, and hand back the
+ * leg's own `chainedFrom` so the chainer can inject it (context-chainer `LegInjection`).
+ *
+ * NEITHER existing lookup fits, and the reasons are the design:
+ *   - `findProgramParentForStage` conjoins `programHarnessProtocolFilter()` — the pov-program NAME
+ *     set. The parent here is a LEG, stamped `kubernetes-gitops` / `terraform-iac` / … → ZERO matches,
+ *     forever, while tests read green.
+ *   - `inheritInterfaceContractIfAbsent`'s parent predicate REQUIRES the parent to hold an
+ *     `interfaceContract` — payload-coupled. Instance 2's children (2026-08-17, RELEASED) had none.
+ *     It is lossless at 51/51 today coincidentally, not by construction.
+ *
+ * QUALIFIER: `metadata->>'protocol' IS NOT NULL` in SQL. This platform deliberately stamps
+ * `protocol: null` on a no-token task (WS2 Phase A — key present, value null); `->>` renders a JSON
+ * null as SQL NULL, so `IS NOT NULL` excludes it. A Prisma `not: null` over a JSON path does NOT
+ * (JsonNull vs DbNull), which is why this is raw SQL and not a `task.findFirst`.
+ *
+ * ⚠️ NO `ORDER BY … LIMIT 1`. `inheritInterfaceContractIfAbsent` picks the newest qualified parent,
+ * which for a contract (frozen-cone, identical across candidates) is harmless. For a DELIVERABLE it
+ * would silently choose WHICH pipeline's output a child receives. >1 candidate ⇒ `ambiguous`, the
+ * caller logs, nothing is injected. Do NOT rewire the contract inheritance onto this in the same
+ * change — it gates the CC7 loud-fail.
+ *
+ * Returns the leg's stored jsonb array UNTYPED — the chainer validates the shape it relies on.
+ */
+export type OwningLegResolution =
+  | { kind: 'none' }
+  | { kind: 'ambiguous'; candidates: string[] }
+  | { kind: 'one'; legTaskId: string; chainedFrom: unknown[] };
+
+export async function resolveOwningLeg(
+  db: { $queryRaw: <T = unknown>(query: Prisma.Sql) => Promise<T> },
+  stageId: string
+): Promise<OwningLegResolution> {
+  const rows = await db.$queryRaw<Array<{ id: string; chained: unknown }>>(Prisma.sql`
+    SELECT id, "inputContext"->'chainedFrom' AS chained
+      FROM "tasks"
+     WHERE type = 'PIPELINE'
+       AND metadata->>'pipelineStageId' = ${stageId}
+       AND metadata->>'protocol' IS NOT NULL`);
+  if (rows.length === 0) return { kind: 'none' };
+  if (rows.length > 1) return { kind: 'ambiguous', candidates: rows.map((r) => r.id) };
+  const chained = rows[0].chained;
+  return { kind: 'one', legTaskId: rows[0].id, chainedFrom: Array.isArray(chained) ? chained : [] };
 }
 
 /**

@@ -213,3 +213,113 @@ pipeline-harness-specialist. The fact schema is the contract between them.
 **Map 10** (`cline_docs/learning/10-the-signal-chain.md`) is the complementary axis: this document governs
 whether a judgment may be believed; Map 10 governs whether a computed fact survives delivery to the reader
 who needs it. Neither substitutes for the other.
+
+---
+
+## 2026-09-19 — a THIRD unnamed tier: the GOVERNANCE NODE between producer and consumer
+
+The section below found the failure between a container and the thing inside it. This one sits
+between two **siblings**, in a node deliberately placed there: an approval gate.
+
+**The incident.** Each consumer leg was wired `P1 → G2 → P2` — correct governance, so a human
+approves the concrete value before any consumer uses it. But a gate is template-less: no execution,
+no deliverable. Sibling chaining walks DIRECT dependency edges, so it carries nothing. Measured:
+`chainedFrom: 0` on all three consumers. The value existed, was correct, and had no path.
+
+**A dependency edge is BOTH how work is ordered and how evidence travels — so interposing a node for
+one purpose silently spends the other.** The previous round had chained correctly *for the wrong
+reason*: its gates hung off their legs as dead ends, so consumers happened to take direct edges.
+**Fixing the governance defect is what severed the evidence path.**
+
+### The part this document exists for: two of three legs MASKED it
+
+Given the same empty context, the three consumers did three different things:
+
+| leg | behaviour | outcome |
+|---|---|---|
+| K8s | its **harness** made three `agent.results` calls, retrieved the value itself, and wrote it into its own child briefs | approved 92 |
+| Observability | took a branch that needed no value | approved 84 |
+| Cloud | refused and escalated | 20 |
+
+**Only the refusal made the defect visible.** Had the third compensated too, the program would have
+gone green with an evidence path that does not work.
+
+Three consequences, each an instance of a governing question above:
+
+1. **Compensation is indistinguishable from delivery, downstream.** The K8s package carried
+   *"consumed verbatim from the fabric leg (task …) — not recomputed, not widened"* — impeccable
+   provenance prose describing an **unsanctioned retrieval**. A reviewer reading the package cannot
+   tell the two apart. (Cf. *A self-reported verification grade is a claim*.)
+2. **A pass can be CONFOUNDED by the same break that produced it.** Observability's branch (b)
+   required a labelling mechanism *keyed to the value*; with no value, (a) was unreachable. The break
+   forced the branch. The outcome may be right; the run cannot say so.
+3. **The corpus says compensation is rare, which is why it is dangerous.** Of 681 `agent.results`
+   calls across 236 callers, **2 callers** ever read outside their own child stage — so a reviewer has
+   no prior that this happens, and no reason to look.
+
+### What to check, and when
+
+⚠️ **`chainedFrom` is written at EXECUTION time.** Before a leg runs it reads 0 whether the wiring is
+right or wrong — a pre-run read manufactures a false finding about a healthy run. (Written into two
+forensics guides as a pre-run check on 2026-09-19 and corrected the same day, after it returned 0
+across a run whose edges were provably correct.)
+
+- **PRE-run**: read the **edges**. Every consumer must appear twice — once `[APPROVAL]` (governance,
+  *when* it may start) and once `[PIPELINE]` (evidence, *whether it can see anything*).
+- **POST-run**: `chainedFrom` ≥ 1 on every consumer that has executed.
+- **Never conclude delivery works because a leg succeeded.** Conclude it from `chainedFrom`.
+
+⚠️ **Do not fix this by teaching the chainer to walk THROUGH gates.** That makes gate placement stop
+meaning what it says, and the next interposed node type re-opens the hole. The consumer depends on
+both: the gate for governance, the producer for evidence. Published as **VT-27**.
+
+## 2026-09-16 — the same discipline at a tier this document had not named: CONTAINER → WORKER
+
+Everything above is about evidence reaching the **seat where the judgement happens**, between LLM
+tiers that are siblings. This arc found the same failure between a **container and the thing inside
+it**, and it is worth adding because the fix shape differs.
+
+**The incident.** A two-leg program. Pipeline 1 derives a CIDR; Pipeline 2 must consume it verbatim.
+Pipeline 2's Architect **escalated**, saying the value was absent from its §6. It was right:
+
+> *"a value stated in prose in the task description is not the same as a value delivered through the
+> platform's chained-dependency mechanism — and I have no way to verify it is Pipeline 1's actual,
+> current, unmodified published fact (not stale, not miscopied, not injected)."*
+
+The value HAD arrived — at the **leg**. `chainedFrom`: 1 entry, 6,780 chars, containing the value.
+The leg's children held only their own siblings. The harness (itself an LLM) had read it from its
+own context and **paraphrased it into the child task descriptions**. Digits right, channel empty.
+
+Measured: **54 of 54** pipeline→pipeline edges chained at the LEG tier; **3 of 51** reached any
+child. Registered as **Bug Class 84 — Container-Tier Terminus**.
+
+### What this adds to the discipline
+
+1. **"Delivered" has a tier.** Every coverage fact in this document — `predecessors`,
+   `chainCapablePredecessors`, `notChained`, `degradedPredecessors` — is scoped to the tier you are
+   standing on. The leg read **clean on every one** while the consuming child had nothing. When
+   asserting that evidence reached a judgement, name the TIER of both.
+2. **It was the SECOND instance of the same boundary**, and the first one's fix is what made this one
+   loud: the interface contract began inheriting to children on 2026-08-26, so the child now held a
+   `consumptionRule` commanding it to read a channel structurally always empty at its tier. **A
+   correct obligation delivered without its subject is an unsatisfiable predicate** — the class this
+   document already names, arriving by a new route.
+3. **The refusal was the system working.** Two earlier runs consumed the same value *from prose* and
+   were approved at 90. The defect worth attention was never the escalation; it was the two runs that
+   shipped without one.
+4. **Fact vs payload is a per-SEAT question, not a per-value one.** The Architect needs the upstream's
+   reasoning (payload). The Author needs to verify a restatement (a fact would mostly do). The
+   Reviewer must NOT receive a second reviewable document — for it, a fact is the only safe carrier.
+   Measured: 22 of 55 cross-pipeline entries carry a machine-readable derived value (40%), so a
+   fact-only channel cannot be the floor. Follow-up:
+   `cline_docs/follow-ups/upstream-delivery-as-a-per-predecessor-fact-2026-09-17.md`.
+5. ✅ **`derivationContainment` renders in §6 since 2026-09-17 (`1dceb535`)** — it had been the one
+   mechanical fact the renderer omitted, i.e. the fact the program gate leans on hardest was invisible
+   to the next tier. The omission had a real reason that had expired: SIBLING entries are stamped at
+   the leg's SYNTHESIZE, after the siblings run, so it is empty 512 of 512 times. Injected
+   cross-pipeline entries come from an already-synthesised leg — **215 of 280 populated, 21 BLOCKING.**
+   `needs-node-c` renders with an explicit "neither a pass nor a block" qualifier: it means the decision
+   was DELEGATED to the program tier, and a reader who takes it for either verdict is worse off than one
+   who saw nothing.
+
+**Record**: `cline_docs/reviews/cross-pipeline-value-delivery-2026-09-16/` · VT-25.

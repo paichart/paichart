@@ -44,7 +44,7 @@ import {
   TerminalSuccessInput,
   TerminalFailureInput,
 } from '../lib/services/execution-terminal-persist';
-import { sanitizeLLMForMarkdown } from '../lib/services/execution-artifacts';
+import { sanitizeLLMForMarkdown, orderResultJsonForPersist } from '../lib/services/execution-artifacts';
 
 console.log('🧪 Terminal-Persist Shape Tests (Phase 4b equivalence gate)\n');
 
@@ -295,6 +295,10 @@ await test('stream-config success (prune off): canonical statement order — sta
   await runTerminalSuccessTx(makeMockTx({}, calls), input);
   assertEq(calls.map(c => c.op), [
     'agentExecution.update',     // I-7: status-first (stream's order)
+    'task.findUnique',           // LIVE-class metadata read, hoisted 2026-09-16 — feeds BOTH
+                                 // getReportMdDecision and the verdict banner. `task.metadata`
+                                 // in scope is a PRE-CLAIM snapshot and misses anything the
+                                 // agent stamped during its own run.
     'taskDependency.count',      // getReportMdDecision leaf path
     'agentArtifact.createMany',
     'agentArtifact.findMany',    // createdArtifacts — after pointer-substitution region
@@ -325,13 +329,14 @@ await test('keep-best: supersededById lands in the SAME terminal update when set
   assertEq(calls[0].args.data.supersededById, 'cmexecPRIOR0000000000001', 'supersededById in terminal update');
 });
 
-await test('BYTE PIN: result.json artifact = truncate(JSON.stringify({...resultJson, reportMdSource}, null, 2)); report.md = sanitizeLLMForMarkdown(finalText)', async () => {
+await test('BYTE PIN: result.json artifact = truncate(JSON.stringify(orderResultJsonForPersist({...resultJson, reportMdSource}), null, 2)); report.md = sanitizeLLMForMarkdown(finalText)', async () => {
   const calls: RecordedCall[] = [];
   const input = successInput();
   await runTerminalSuccessTx(makeMockTx({}, calls), input);
   const createMany = calls.find(c => c.op === 'agentArtifact.createMany')!.args.data;
   assertEq(createMany[0].name, 'result.json', 'json artifact name for non-PIPELINE');
-  assertEq(createMany[0].content, JSON.stringify({ ...RESULT_JSON, reportMdSource: { mode: 'self' } }, null, 2), 'result.json bytes');
+  // RWF C.3: the persisted bytes are the ORDERED object — reportMdSource (appended at persist) now precedes the bulky tail.
+  assertEq(createMany[0].content, JSON.stringify(orderResultJsonForPersist({ ...RESULT_JSON, reportMdSource: { mode: 'self' } }), null, 2), 'result.json bytes');
   assertEq(createMany[1].name, 'report.md', 'report.md produced for leaf');
   assertEq(createMany[1].content, sanitizeLLMForMarkdown(input.finalText), 'report.md bytes');
 });
@@ -591,6 +596,24 @@ await test('source: HARNESS_NO_OUTPUT branch sits AFTER the truncation branch (m
   const hnoIdx = persistSrc.indexOf('input.harnessNoOutput &&');
   assert(truncIdx > -1 && hnoIdx > -1, 'both Layer-2 branches present');
   assert(truncIdx < hnoIdx, 'truncation (more specific) must be evaluated first — HNO is gated on !programLegCompletion so truncation wins when both facts are true');
+});
+
+// RWF C.3 (2026-09-26): PERSIST-TIME key order, pinned on the PERSISTED artifact. Keys appended after the
+// builder (net stamps, supersession) must land BEFORE the bulky payloads, or a head-slice reader never sees them.
+await test('C3 KEY ORDER: every compact key in the persisted result.json precedes finalResponse/toolCalls — incl. keys appended after the builder', async () => {
+  const calls: RecordedCall[] = [];
+  const appended = { ...RESULT_JSON, finalResponse: 'x'.repeat(200), toolCalls: [{ tool: 't' }],
+    derivationContainment: { checked: true }, supersession: { skipped: 'changed-input' }, verdictFreshness: { checked: false } };
+  await persistTerminalSuccess(makeMockDb({}, calls), successInput({ resultJson: appended as any }));
+  const writes = calls.filter((c) => c.op === 'agentArtifact.createMany').flatMap((c) => c.args.data);
+  const art = writes.find((d: any) => d.name === 'result.json');
+  assert(!!art, 'result.json was written');
+  const keys = Object.keys(JSON.parse(art.content));
+  const firstBulky = Math.min(...['finalResponse', 'toolCalls'].map((k) => keys.indexOf(k)).filter((i) => i >= 0));
+  const late = keys.filter((k, i) => i > firstBulky && !['finalResponse', 'toolCalls', 'functionCall', 'webSearchResults', 'citations', 'searchQueries'].includes(k));
+  assert(late.length === 0, `compact keys persisted AFTER the bulky payloads: ${late.join(', ')}`);
+  assert(keys.indexOf('finalResponse') < keys.indexOf('toolCalls'), 'bulky payloads keep their builder order');
+  for (const k of ['derivationContainment', 'supersession', 'verdictFreshness']) assert(keys.includes(k), `${k} was dropped`);
 });
 
 console.log(`\n📊 Results: ${passed} passed, ${failed} failed`);

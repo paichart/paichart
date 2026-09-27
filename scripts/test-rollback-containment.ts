@@ -22,6 +22,7 @@ import {
   computeRollbackDisposition,
   type ExclusionClass,
 } from '../lib/agents/harness/rollback-containment';
+import { authoritativeReadStub } from './fixtures/authoritative-read-stub';
 
 console.log('↩️  rollback-containment fixtures\n');
 
@@ -320,7 +321,9 @@ function stubPrisma(opts: { stageId: string | null; legTitle: string | null; chi
       findMany: async () => opts.children ?? [],
     },
     stage: { findUnique: async () => ({ metadata: { harnessTaskId: 'leg1' } }) },
-    $queryRaw: async () => [],
+    // RWF Wave B: no executions — and the stub THROWS on any read it does not model, so an ARM pin
+    // that starts reaching the harvest read fails loudly instead of silently taking no-harvest-text.
+    ...authoritativeReadStub([]),
   } as unknown as Parameters<typeof computeRollbackContainmentFact>[0];
 }
 

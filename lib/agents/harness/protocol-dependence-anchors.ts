@@ -34,28 +34,48 @@ export interface ProtocolDependencePair {
 }
 
 export const PROTOCOL_DEPENDENCE_ANCHORS: readonly ProtocolDependencePair[] = [
-  // ── The shared infra override clause — identical across all four infra domains (the single
-  //    highest-value pin: it is the sentence that MAKES composition semantically coherent). ────
-  ...(['network-provisioning-protocol', 'kubernetes-gitops-protocol', 'terraform-iac-protocol', 'observability-config-protocol'] as const).map((delta) => ({
+  // ── The shared override clause — identical across the four infra domains AND requirements-
+  //    authoring (2026-09-21), which is NOT an infra domain but leans on the base identically (the
+  //    single highest-value pin: the sentence that MAKES composition semantically coherent). ────
+  ...(['network-provisioning-protocol', 'kubernetes-gitops-protocol', 'terraform-iac-protocol', 'observability-config-protocol', 'requirements-authoring-protocol'] as const).map((delta) => ({
     delta,
     ref: 'Everything the default pipeline-orchestrator protocol states remains in force except where this protocol overrides it.',
     anchor: '# Pipeline Orchestrator Protocol (System Default)',
     note: 'the override clause presumes the base is present in the same prompt — composition guarantees it',
   })),
-  // ── "per the standard rule" ×4 → the base's NAMED Step-5 confidence rule (B8: the name was
-  //    added 2026-08-17; before that these three references dangled in prod). ─────────────────
-  ...(['network-provisioning-protocol', 'kubernetes-gitops-protocol', 'terraform-iac-protocol', 'observability-config-protocol'] as const).map((delta) => ({
+  // ── "per the standard rule" ×5 → the base's NAMED Step-5 confidence rule (B8: the name was
+  //    added 2026-08-17; before that these references dangled in prod). ──────────────────────
+  ...(['network-provisioning-protocol', 'kubernetes-gitops-protocol', 'terraform-iac-protocol', 'observability-config-protocol', 'requirements-authoring-protocol'] as const).map((delta) => ({
     delta,
     ref: 'Aggregate child confidences into the harness confidence per the standard rule.',
     anchor: 'the standard rule — avg of children',
   })),
-  // ── infra ×4 → orchestrator Step 5a (deliverable-wiring mechanics live base-side; surfaced by
-  //    this file's own bidirectional count pin on its first run — the pin works) ────────────────
-  ...(['network-provisioning-protocol', 'kubernetes-gitops-protocol', 'terraform-iac-protocol', 'observability-config-protocol'] as const).map((delta) => ({
+  // ── ×5 → orchestrator Step 5a (deliverable-wiring mechanics live base-side; surfaced by this
+  //    file's own bidirectional count pin on its first run — the pin works) ────────────────────
+  ...(['network-provisioning-protocol', 'kubernetes-gitops-protocol', 'terraform-iac-protocol', 'observability-config-protocol', 'requirements-authoring-protocol'] as const).map((delta) => ({
     delta,
     ref: 'pipeline-orchestrator-protocol Step 5a for tool-call mechanics',
     anchor: '### Step 5a: Wire the deliverable metadata',
   })),
+  // ── requirements-authoring → the base's Step 5 STAMP. No sibling has this pair: the other
+  //    deltas restate the gate, this one deliberately REFERENCES it so the six anti-fabrication
+  //    signals and the roster-defect rule are inherited rather than paraphrased into a narrower
+  //    set (F6, 2026-09-21). That makes the reference load-bearing, hence pinned. ──────────────
+  {
+    delta: 'requirements-authoring-protocol',
+    ref: "Stamp the gate FACTS on yourself per the default orchestrator's Step 5.",
+    anchor: '### Step 5: Complete Yourself',
+    note: 'the delta owns only its three domain facts; everything else in the gate is the base\'s',
+  },
+  // ── requirements-authoring → the base's Step 3 re-execution bands (RWF C4, 2026-09-26; audit m9). The delta
+  //    says its confidence rule does NOT cancel them, which only means something while the base still has a
+  //    Step 3 with bands. C4 rewrote that step, so the reference is pinned rather than trusted. Not a counted
+  //    marker phrase, so EXPECTED_MARKER_COUNTS is unchanged. ────────────────────────────────────────────────
+  {
+    delta: 'requirements-authoring-protocol',
+    ref: "It does **NOT** cancel the base's Step 3 re-execution bands",
+    anchor: '### Step 3: Quality Gate',
+  },
   // ── artifact-synthesis → orchestrator Step 5a (deliverable-wiring mechanics live base-side) ──
   {
     delta: 'artifact-synthesis-protocol',
@@ -129,5 +149,9 @@ export const EXPECTED_MARKER_COUNTS: Readonly<Record<string, number>> = {
   // siblings — fence header, Mode override clause, Step 5a deliverable-wiring ref, SYNTHESIZE
   // standard-rule sentence. MEASURED via --print-counts against the locally seeded row.
   'observability-config-protocol': 4,
+  // requirements-authoring (2026-09-21): 4 paired + 1 UNPAIRED-BY-DESIGN (the fence header names
+  // the base descriptively, same as all six siblings). MEASURED with --print-counts against the
+  // locally seeded row, never counted from the source string.
+  'requirements-authoring-protocol': 5,
   'pov-program-protocol': 7,
 };

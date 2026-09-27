@@ -243,7 +243,9 @@ Back-edges are rejected at write time. But **the harness creates tasks at runtim
 iterate-until-converged is expressible as **unrolled generations**: each retrigger spawns a fresh
 generation rather than revisiting a node.
 
-⚠️ Bounded by **Guard 8** (`MAX_HARNESS_REACTOR_GENERATIONS`, default 10, env-tunable) — **but
+⚠️ Bounded by **Guard 8** — tiered since RWF A2 (2026-09-26): a program ROOT gets
+`MAX_PROGRAM_ROOT_REACTOR_GENERATIONS` (default 25, `warn` at 80%), a leg `MAX_HARNESS_REACTOR_GENERATIONS` (default 10);
+both env-tunable, and exhaustion now ends the harness `executionStatus=FAILED` (+ cone on a leg), not a silent hang — **but
 Guard 8 may not be the bound that actually fires.** Generation *N+1* must depend on generation *N*
 to receive its state (§6 chaining rides dependency edges), so the connected dependency component
 grows monotonically, and `GraphLimits.MAX_NODES` (100) is enforced on exactly the `task.create` /
@@ -412,6 +414,13 @@ describes still apply to every OTHER protocol; the exception is scoped to active
    spec you write. It is baked into `promptTemplate` at seed time and is the axis the LLM actually
    reads; a missing entry silently bakes generic guidance. CI (`validate:role-guidance-coverage`)
    backstops it, but specify it up front. A 2026-06-16 spike omitted this step and nearly shipped.
+   🔴 **Same step, second decision: does each new role RECEIVE an upstream leg's deliverable?**
+   Cross-pipeline delivery scopes itself by an EXCLUSION list of literal role names
+   (`INJECTION_EXCLUDED_ROLES`, `context-chainer.ts`) that **fails toward delivery** — a role nobody
+   considers receives by default. Harmless for a consuming role; harmful for a harvest-shaped one
+   (an upstream deliverable folded into machine-parsed ground truth) or a review-shaped one (a second
+   reviewable document). Reasoning + the live near-miss: `ADD-A-PIPELINE-HARNESS-AGENT.md`, the
+   injection-exclusion section. A tripwire warns on the obvious shapes; the judgement is yours.
 
 5. **Seed as `DRAFT`** — `status: 'DRAFT'` in the entry, then `npm run seed:protocols`
    (per-row idempotent upsert). **See §6b for the full lifecycle**: why `DRAFT` and not
@@ -467,6 +476,15 @@ describes still apply to every OTHER protocol; the exception is scoped to active
   by a transitional stamp-OR-title disjunct until the recorded backfill
   (`scripts/backfill-protocol-stamps.ts`) — its removal is test-gated. Still don't build anything
   NEW on the title: it is an input, and only until it is consumed.
+  ⚠️ **The backfill is NOT sufficient to remove the disjunct** (boundary-contract sweep,
+  2026-09-16). It proves every task ROW is stamped; it cannot put the key into a task OBJECT
+  captured before the stamp was written — and the stream route
+  (`app/api/pov/agent/execute/stream/route.ts:543`) resolves from exactly such a pre-stamp
+  snapshot on every first execution. That path works today *only* via the title-fallback. Remove
+  the disjunct on the backfill alone and program-tier runs launched through the stream resolve
+  `none`, silently dropping the F12 belt and F10 stamp. Gate on **both** conditions: backfill
+  recorded, **and** every caller passing a post-stamp object. See the expanded note at
+  `lib/agents/harness/program-protocol.ts` (TRANSITIONAL TITLE DISJUNCT).
 - **A child created WITHOUT its token silently routes to the default orchestrator** — generic
   decomposition, no domain chain, nothing throws.
 - **Confidence is not a gate input**, at any tier. A 45-vs-92 pair on byte-identical inputs
@@ -475,9 +493,10 @@ describes still apply to every OTHER protocol; the exception is scoped to active
 - **Prose guards in this domain have failed at least once each; mechanical ones have held.**
   Minimality was checked in exactly one prose clause, an edit displaced it, and two successive
   reviews never performed it. If a check is load-bearing, mechanise it and treat prose as advisory.
-- **A non-terminal leg hangs the whole program** — the completion guard never satisfies. Six
-  terminalization classes exist for this (F16/F17/F20/R4/PRE_FLIGHT_BAIL/duplicate-halt). If you
-  invent a new way for a node to settle without completing, you have invented a seventh; raise it.
+- **A non-terminal leg hangs the whole program** — the completion guard never satisfies. Seven
+  terminalization classes exist for this; the canonical table is ARCHITECTURE.md Invariant 5 (read it —
+  this list named six, one of them twice, until 2026-09-26). If you invent a new way for a node to settle
+  without completing, you have invented another; raise it.
 - **Don't reach for the 1-hour prompt-cache TTL** as a cost win — see
   `cline_docs/follow-ups/resolvedat-cache-prefix-2026-08-08.md`. It would cost 2× to write and buy
   nothing today.

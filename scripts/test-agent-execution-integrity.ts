@@ -174,9 +174,15 @@ test('F1: Engine has 3 $transaction blocks (startup cleanup + poll cycle cleanup
   layer1Passed++;
 });
 
-test('F2: Engine has 3 tx.task.update/updateMany calls (lifecycle txs only)', () => {
-  const taskUpdateCount = countMatches(engineSource, /tx\.task\.update/g);
-  expect(taskUpdateCount).toBe(3);
+test('F2: Engine has 3 task-write sites in lifecycle txs (1 inline safety net + 2 reapers via the shared module)', () => {
+  // RWF-X4 (2026-09-26): both reapers' task writes moved into writeReapedTaskStatuses
+  // (lib/services/reaped-task-persist.ts), so the property is "3 lifecycle task-write sites", of which
+  // the reapers delegate. A NEW inline tx.task.update in the engine, or a reaper bypassing the module,
+  // changes one of these counts.
+  const inline = countMatches(engineSource, /tx\.task\.update/g);
+  const reaperDelegations = countMatches(engineSource, /writeReapedTaskStatuses\(tx,/g);
+  expect(inline).toBe(1);
+  expect(reaperDelegations).toBe(2);
   layer1Passed++;
 });
 

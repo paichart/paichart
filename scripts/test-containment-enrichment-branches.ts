@@ -21,6 +21,7 @@
  */
 
 import { computeDerivationContainmentFact, type ContainmentPrisma } from '../lib/agents/harness/derivation-containment-enrichment';
+import { authoritativeReadStubFromTexts } from './fixtures/authoritative-read-stub';
 
 let passed = 0, failed = 0;
 function test(desc: string, fn: () => Promise<void>): Promise<void> {
@@ -39,13 +40,12 @@ const STAGE = 'stage-1';
  */
 function stubPrisma(children: Array<{ id: string; title: string; agentRole: string | null }>,
                     artifacts: Record<string, string>): ContainmentPrisma {
+  // RWF Wave B: the reads go through the authoritative selector; the shared stub throws on the old
+  // content-taskId query and on anything else unmodelled.
   return {
     task: { findMany: async () => children } as unknown as ContainmentPrisma['task'],
-    $queryRaw: (async (_strings: TemplateStringsArray, taskId: string) => {
-      const fr = artifacts[taskId];
-      return fr === undefined ? [] : [{ fr }];
-    }) as unknown as ContainmentPrisma['$queryRaw'],
-  };
+    ...authoritativeReadStubFromTexts(artifacts),
+  } as unknown as ContainmentPrisma;
 }
 
 const KIDS = [

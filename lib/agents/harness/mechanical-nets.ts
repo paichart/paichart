@@ -25,11 +25,22 @@ import { computeMarkerPresence, renderMarkerPresence, HARNESS_LEAF_ROLE_RE } fro
 import { computeDerivationContainmentFact } from './derivation-containment-enrichment';
 import { computeDialectLintFact } from './dialect-lint-enrichment';
 import { computeContractPropagationFact } from './contract-propagation-enrichment';
+import { computeVerdictFreshnessFact } from './verdict-freshness-enrichment';
 import {
   computeRollbackContainmentFact,
   hoistRollbackContainment,
 } from './rollback-containment-enrichment';
 import { AUTHOR_LEAF_ROLE_RE } from './rollback-containment';
+
+/**
+ * EF-M2 (2026-09-26, GS-R5 panel / execution-facts): roles that author a SPECIFICATION, not a change package.
+ * `requirements_author` matches both leaf regexes (/author/), so every requirements generation was stamped
+ * `markerPresence ✗✗✗` + `rollbackContainment` — facts about change-package blocks that role never emits — and the
+ * ✗✗✗ line was rendered to the Requirements Reviewer as a "platform fact" (9/9 generations; 3/10 reviewers spent a
+ * paragraph dismissing it, i.e. the population was being taught to discount platform facts). Excluded from both
+ * change-package nets. Anchored on the role-name PREFIX so a future specification role inherits the exclusion.
+ */
+export const SPECIFICATION_ROLE_RE = /^requirements_/i;
 import { renderRollbackContainmentForPrompt } from './render-rollback-containment';
 import type { Fact, MechanicalNet, NetContext } from './net-registry';
 import type { PrismaClient } from '@prisma/client';
@@ -44,7 +55,8 @@ export const MECHANICAL_NETS: readonly MechanicalNet[] = [
   {
     name: 'markerPresence',
     point: 'leaf-persist',
-    appliesTo: (ctx) => ctx.task.type !== 'PIPELINE' && HARNESS_LEAF_ROLE_RE.test(ctx.agentRole ?? ''),
+    appliesTo: (ctx) => ctx.task.type !== 'PIPELINE' && HARNESS_LEAF_ROLE_RE.test(ctx.agentRole ?? '')
+      && !SPECIFICATION_ROLE_RE.test(ctx.agentRole ?? ''),
     enrich: async (ctx) => computeMarkerPresence(ctx.finalResponse) as unknown as Fact,
     // Pure and synchronous over a string, so this arm is unreachable in practice — which is exactly
     // why it must still exist and be pinned. An unreachable arm that is WRONG is discovered by the
@@ -63,7 +75,8 @@ export const MECHANICAL_NETS: readonly MechanicalNet[] = [
   {
     name: 'rollbackContainment',
     point: 'leaf-persist',
-    appliesTo: (ctx) => ctx.task.type !== 'PIPELINE' && AUTHOR_LEAF_ROLE_RE.test(ctx.agentRole ?? ''),
+    appliesTo: (ctx) => ctx.task.type !== 'PIPELINE' && AUTHOR_LEAF_ROLE_RE.test(ctx.agentRole ?? '')
+      && !SPECIFICATION_ROLE_RE.test(ctx.agentRole ?? ''),
     enrich: (ctx) => computeRollbackContainmentFact(ctx.prisma, {
       taskId: ctx.task.id,
       deliverable: ctx.finalResponse,
@@ -188,5 +201,23 @@ export const MECHANICAL_NETS: readonly MechanicalNet[] = [
     renderNullReason:
       'prompt: the Author-persist entry carries this fact into §6; a leg-SYNTHESIZE render would ' +
       'arrive after the review it exists to inform',
+  },
+  // ── RWF C.3 (2026-09-26): did the leg's reviewer judge the predecessor executions that were then authoritative?
+  // A FACT OF RECORD with no consumer in Stage 1 (execution-facts review §4). The harness's own re-run decision
+  // is served by the read-time `verdictFresh` on the reviewer's agent.results card, computed by the SAME function
+  // (computeVerdictFreshness), because a leg-synthesize stamp lands after the loop that would act on it.
+  {
+    name: 'verdictFreshness',
+    point: 'leg-synthesize',
+    appliesTo: isLegSynthesize,
+    enrich: (ctx) => computeVerdictFreshnessFact(ctx.prisma, {
+      stageId: (ctx.task.metadata as Record<string, unknown> | null)?.pipelineStageId,
+      programTier: ctx.programTier,
+    }),
+    errorFact: () => ({ checked: false, reason: 'enrichment-error', match: null }),
+    renderCard: 'lean-card-facts',
+    renderPrompt: null,
+    renderNullReason:
+      'prompt: stamped at leg SYNTHESIZE, after the Reviewer has run — no §6 exists to render into',
   },
 ];

@@ -153,7 +153,7 @@ echo "--- Three-arm P2002 matcher for named raw-SQL partial-unique indexes ---"
 grep -rn "prismaErr?.code === 'P2002'\|meta.target.includes" lib/services/agent-execution-create.ts
 
 echo "--- Typed error classes with .code discriminator ---"
-grep -n '^export class .* extends AppError' lib/errors.ts   # expect 14 (was 13; +ProtocolStampImmutableError, WS2 Phase A 2026-08-17)
+grep -n '^export class .* extends AppError' lib/errors.ts   # expect 15 (was 14; +OrchestratorReExecutionRefusedError, RWF C1 2026-09-26; was 13 before +ProtocolStampImmutableError, WS2 Phase A 2026-08-17)
 echo "AppError-derived classes (AuthError, NoTemplateAssignedError, DuplicateActiveExecutionError, PipelineStageMismatchError, ValidationError, DatabaseError, ApiError — re-proven 2026-06-11)"
 
 echo "--- Phantom-P2002 sanity check (protects against Prisma error-shape drift) ---"

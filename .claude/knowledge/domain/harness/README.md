@@ -16,6 +16,11 @@ The Pipeline Harness is pAIchart's goal-directed autonomous orchestration system
 | [PIPELINE-HARNESS-USER-GUIDE.md](../../pipelines/PIPELINE-HARNESS-USER-GUIDE.md) | How to use it — Options A-D, troubleshooting, perf data | Using the harness, onboarding users |
 | [CONTINUATION.md](CONTINUATION.md) | Session state — what's built, tested, and next | Starting a development session |
 
+### Method
+| Document | Purpose | When to Read |
+|----------|---------|-------------|
+| [defect-layer-routing.md](defect-layer-routing.md) | WHERE a fix belongs — six routing questions (service/descriptor · domain protocol · orchestrator base · role guidance · mechanical net · requirements) | Every forensic investigation, before proposing a fix (moved here from `frameworks/` 2026-09-25) |
+
 ### Strategy
 | Document | Purpose | When to Read |
 |----------|---------|-------------|

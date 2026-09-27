@@ -20,9 +20,11 @@ This discovery will map the current state and identify all integration points in
 **`maxOutputTokensForModel(model)`** at the `normalizeModelConfig` chokepoint — Opus 4.x 128K,
 Sonnet 4.6 / Haiku 4.5 64K (confirmed via the claude-api skill). The schema (`ModelParametersSchema`)
 admits up to the GLOBAL max `RUNTIME_LIMITS.MAX_OUTPUT_TOKENS_OPUS` (128000) — it can't see the resolved
-model, so the runtime enforces the per-model limit (an Opus request gets 128K; a Sonnet request >64K
-clamps to 64K). This closed the old static-64000 Opus under-cap. `DEFAULT_MAX_TOKENS` is **24000**
-(`MCPTokenDefaults.STANDARD_AGENT_LIMIT`, `types.ts`), raised from 8000 on 2026-07-16 (truncation-stall
+model, so the runtime enforces the per-model limit (an Opus request gets 128K; Sonnet 5 also allows 128K —
+`runtime-limits.ts` routes `sonnet-5` to the Opus ceiling; older Sonnets clamp to 64K. The "Sonnet 64K" in
+this file until 2026-09-24 was stale for Sonnet 5). This closed the old static-64000 Opus under-cap. `DEFAULT_MAX_TOKENS` is **48000** since 2026-09-24
+(`MCPTokenDefaults.STANDARD_AGENT_LIMIT`, `types.ts`) — 24000 was falsified by single-call Author/Reviewer
+needs of 24–28K (your own analysis: `cline_docs/reviews/harvested-state-in-generated-spec-2026-09-24/token-ceiling.md`); raised from 8000 to 24000 on 2026-07-16 (truncation-stall
 R1 — a CEILING not a target, so free for fitting runs; Sonnet-5 adaptive thinking could exhaust 8000 on
 a heavy final synthesis turn → stop_reason:max_tokens with zero text; 24000 < every model's 64K/128K
 ceiling so it never clips). Prod agent_templates rows updated in parallel (the template modelParameters
@@ -137,7 +139,7 @@ Your role includes being a steward of resources while ensuring the system remain
 
 ## Learning Notes
 
-- **Pattern**: DEFAULT_MAX_TOKENS = 24000 (`MCPTokenDefaults.STANDARD_AGENT_LIMIT`) is the standardized output ceiling across the platform — 6000 → 8000 (Phase-0) → 24000 (2026-07-16 truncation-stall R1)
+- **Pattern**: DEFAULT_MAX_TOKENS = 48000 (`MCPTokenDefaults.STANDARD_AGENT_LIMIT`) is the standardized output ceiling across the platform — 6000 → 8000 (Phase-0) → 24000 (2026-07-16 truncation-stall R1) → 48000 (2026-09-24)
 - **Gotcha (the two 8000s DIVERGED on 2026-07-16)**: `DEFAULT_MAX_TOKENS` (the **output-generation ceiling**) was raised to **24000**; `MAX_TOOL_RESULT_LENGTH = 8000` (`agentic-tool-loop.ts:298`) — the **Tier-1 tool-result char cap** that bounds what a tool return feeds back to the LLM in-loop (Tier-2 = 50 KB persistence). Same value, unrelated meaning. Since 2026-07-08 (`ed702abb`) a TRUNCATED tool result carries an enriched auto-nudge directive (~60 tokens, or ~90 when it advertises a `read_more` continuation ref — 2026-07-10 `3264e28f`; vs ~5 for the old bare marker) — negligible per call, but a pathological broad-read loop pays it every turn (and each `read_more` page is itself a tool turn — the per-origin/per-run caps bound that cost). Caps re-assessment **CLOSED 2026-07-04** (env-var rejected; verbatim class served by decomposition + output budget, no cap change): `cline_docs/follow-ups/tool-result-truncation-caps-reassess-2026-06-26.md` §0b
 - **Gotcha (maxTokens bounds, updated 2026-07-04)**: the former 21,333 SDK transport ceiling is GONE — `generateText` streams internally (stream().finalMessage(), reviewed 93%). The REQUEST bound is the model clamp (64K/128K); the COMPLETION bound is the execution watchdog (~35-45K output tokens on a default-30-turn template — R4, `cline_docs/reviews/engine-streaming-accumulate-2026-07-04/`). Mid-stream Fable refusal-rescues may carry partial usage the old transport wouldn't — small usage deltas on rescued calls are expected, not regressions.
 - **Budget facts (updated 2026-07-04, fail-fast SHIPPED `63d6ee25`)**: the hourly budget is **PER-USER** (context.triggeredBy.id → tool userId → checkBudget), 4M/hr/user; ONLY tool calls are budget-checked — `llm-service.ts:195`'s gate is dead code platform-wide (LLM-only spend is budget-INVISIBLE; recordUsage only increments buckets checkBudget created — tracked item 5). A budget-dead run now spends ≤2 LLM calls (~91K, agent-written blocked report) vs the old 4-turn ~183K. The 4M raise decision stays deferred (fail-fast weakened the case); trigger: recurring BUDGET_EXHAUSTED on legitimate non-experimental single-user workloads (and re-check the daily 20M ratio — 4M×24 binds first at >5h burn). Index: `cline_docs/follow-ups/engine-runtime-limits-follow-ups-2026-07-04.md`

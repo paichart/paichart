@@ -27,6 +27,7 @@ const ErrorCategorySchema = z.enum([
   // schema silently (the exact drift its own header warns about).
   'EMPTY_DELIVERABLE',
   'TRUNCATED_NO_OUTPUT',
+  'TRUNCATED_PARTIAL_OUTPUT', // 2026-09-25 (F2, register E1): max_tokens stop AFTER text began — cut off mid-text
   'HARNESS_NO_OUTPUT', // 2026-07-17: PIPELINE + empty pre-note deliverable (residual net)
   'TEMPLATE_SCOPE_MISMATCH', // RETIRED 2026-07-17 (P9: ~60 firings, 0 true positives) — kept for READS of historical artifacts; no writer emits it
 ]);

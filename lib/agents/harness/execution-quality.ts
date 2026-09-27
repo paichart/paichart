@@ -12,6 +12,8 @@
  *   P7  SILENT_REFUSAL                 — "I cannot…" with end_turn (500-char prefix, 0.5f shape)
  *   P9  TEMPLATE_SCOPE_MISMATCH        — RETIRED 2026-07-17 (~60 firings, 0 true positives; see templateScopeMatcher retirement)
  *   P10 TEMPLATE_MISMATCH_SELF_REPORTED — agent's own [TEMPLATE_MISMATCH] escape hatch (OVERRIDES)
+ *   —   TRUNCATED_NO_OUTPUT           — deliverable response stopped at max_tokens, raw text EMPTY (R2, 2026-07-16)
+ *   —   TRUNCATED_PARTIAL_OUTPUT      — deliverable response stopped at max_tokens, raw text NON-empty (F2, 2026-09-25)
  *   —   EMPTY_DELIVERABLE             — empty text + tool activity, nothing else claimed, NON-PIPELINE (M3 companion)
  *   —   HARNESS_NO_OUTPUT             — PIPELINE + empty pre-note deliverable, residual after P8 (2026-07-17 panel)
  *   P8  PROTOCOL_STEP_SKIPPED          — pipeline protocol validator (PIPELINE tasks only)
@@ -48,6 +50,8 @@ export type { ExecutionDegradation };
 /** Minimal pino-compatible logger surface (both paths pass their own). */
 interface QualityLogger {
   warn: (obj: Record<string, unknown>, msg: string) => void;
+  /** Optional: a sanctioned halt is notable but is NOT a warning (2026-09-15). */
+  info?: (obj: Record<string, unknown>, msg: string) => void;
 }
 
 export interface ExecutionQualityInput {
@@ -63,12 +67,27 @@ export interface ExecutionQualityInput {
    * back to `text` (older callers / fixtures).
    */
   rawDeliverableText?: string | null;
-  /** `currentResponse?.stopReason` at loop exit. */
+  /** `currentResponse?.stopReason` as the post-loop cascade last saw it — i.e. AFTER #90, which
+   *  REPLACES the response with its reflection. P7 (silent refusal) judges the post-#90 text, so it
+   *  pairs with this. Do NOT use it for truncation: see `loopExitStopReason`. */
   stopReason: string | null | undefined;
+  /**
+   * F2 (2026-09-25, E1 §3.3): the stop reason of the response whose text IS `rawDeliverableText`
+   * (`loopResult.finalStopReason`). The two TRUNCATED_* categories classify on THIS, because they
+   * classify the raw deliverable and must pair with the response that produced it. Reading
+   * `stopReason` there instead is the reviewer-shape blind spot: #90 reflected over a truncated
+   * partial, its reflection stopped `end_turn`, and the truncation became invisible.
+   * Optional for older callers/fixtures: absent ⇒ falls back to `stopReason`.
+   */
+  loopExitStopReason?: string | null;
   task: { id: string; type?: string | null; metadata?: unknown; createdAt?: Date };
   /** Platform-resolved harness mode (harnessContext.resolvedMode). Used for the P8
    *  UNKNOWN-only rescue and the harnessCreateIncomplete fact (2026-07-17). */
   resolvedMode?: string | null;
+  /** RWF A4: child task ids THIS run dispatched (server-written rows; core-supplied for SYNTHESIZE).
+   *  Handed to the protocol validator so it grades the re-execute exit on the same fact the persist
+   *  decision uses. Optional: absent ⇒ the validator's tool-call fallback. */
+  dispatchedChildIds?: string[];
   executionId: string;
   turnCount: number;
   /** P10 log enrichment (engine supplies; optional). */
@@ -96,6 +115,8 @@ export function assessExecutionQuality(input: ExecutionQualityInput): ExecutionQ
   // Raw deliverable emptiness is judged on the PRE-note text (see rawDeliverableText doc).
   const rawDeliverable = input.rawDeliverableText !== undefined ? input.rawDeliverableText : text;
   const rawDeliverableEmpty = !rawDeliverable || rawDeliverable.trim().length === 0;
+  // The truncation categories pair the raw deliverable with ITS OWN stop reason (F2 §3.3).
+  const loopExitStopReason = input.loopExitStopReason !== undefined ? input.loopExitStopReason : stopReason;
 
   // P3+P4+P5 (task #84): detect execution-quality degradation signals.
   let executionDegradation: ExecutionDegradation | null = null;
@@ -238,7 +259,7 @@ export function assessExecutionQuality(input: ExecutionQualityInput): ExecutionQ
   // max_tokens. Additive (never flips SUCCESS/FAILED; Protocol-10 ship-the-fact); consumed by
   // keep-best (R3) so a truncated-empty retry can't supersede a real prior deliverable, and by the
   // harness SYNTHESIZE consumer so a stalled leg is not read as a satisfied source.
-  if (!executionDegradation && stopReason === 'max_tokens' && rawDeliverableEmpty) {
+  if (!executionDegradation && loopExitStopReason === 'max_tokens' && rawDeliverableEmpty) {
     executionDegradation = {
       errorCategory: 'TRUNCATED_NO_OUTPUT',
       degradationReason: `Final turn stopped at max_tokens and produced no deliverable text (output-token ceiling exhausted, likely mid-thinking) — stored as SUCCESS but the deliverable is empty; downstream consumers must NOT treat this as a satisfied source, and it must not supersede a prior real deliverable`,
@@ -252,6 +273,34 @@ export function assessExecutionQuality(input: ExecutionQualityInput): ExecutionQ
       toolCallCount: toolCallResults.length,
       turnCount,
     }, 'Execution truncated at max_tokens with no deliverable text — TRUNCATED_NO_OUTPUT signal (stored SUCCESS)');
+  }
+
+  // TRUNCATED_PARTIAL_OUTPUT (F2, 2026-09-25 — register E1; filed 2026-08-20, second incident
+  // 2026-09-24): the deliverable's response stopped at `max_tokens` AFTER text had begun, so the
+  // deliverable exists but is cut off mid-text. The TRUNCATED_NO_OUTPUT sibling's non-empty case,
+  // placed immediately after it so the empty case keeps its more specific claim. Until now this
+  // shipped as an unqualified SUCCESS whose only signal was the 56-char note INSIDE the deliverable
+  // — a verifiable fact (the stop reason) delivered only as prose, which no automated consumer
+  // (Reviewer, SYNTHESIZE, gate) reads. Same class as TRUNCATED_NO_OUTPUT (Protocol 10): a
+  // classification of a verifiable stop reason, never a judgement of whether the partial is usable.
+  // Classifies on the LOOP-EXIT stop reason, not the post-#90 one (§3.3). Additive: never flips
+  // SUCCESS/FAILED, and terminal-persist Layer 2 deliberately does NOT key on it — a partial
+  // SYNTHESIZE has a deliverable, and marking it FAILED would kill a healthy pipeline.
+  if (!executionDegradation && loopExitStopReason === 'max_tokens' && !rawDeliverableEmpty) {
+    executionDegradation = {
+      errorCategory: 'TRUNCATED_PARTIAL_OUTPUT',
+      degradationReason: `Final turn stopped at max_tokens after producing ${rawDeliverable?.length ?? 0} chars of deliverable text — the deliverable is cut off mid-text (output-token ceiling exhausted); stored as SUCCESS, but downstream consumers must NOT treat it as a complete deliverable (its final sections, markers and confidence line may be missing)`,
+      consecutiveTailFailures: 0,
+      toolFailureRate: 0,
+    };
+    logger?.warn({
+      executionId,
+      taskId: task.id,
+      taskType: task.type ?? undefined,
+      rawDeliverableChars: rawDeliverable?.length ?? 0,
+      toolCallCount: toolCallResults.length,
+      turnCount,
+    }, 'Execution truncated at max_tokens mid-deliverable — TRUNCATED_PARTIAL_OUTPUT signal (stored SUCCESS)');
   }
 
   // EMPTY_DELIVERABLE (M3 companion, 2026-07-05, Phase-6 core-spine harness ruling):
@@ -297,8 +346,31 @@ export function assessExecutionQuality(input: ExecutionQualityInput): ExecutionQ
       metadata: task.metadata,
       createdAt: task.createdAt,
       resolvedMode: input.resolvedMode ?? null,
+      ...(input.dispatchedChildIds ? { dispatchedChildIds: input.dispatchedChildIds } : {}),
     });
-    if (protocolValidation) {
+    if (protocolValidation?.haltExempt) {
+      // Sanctioned halt: the fact is recorded on the artifact, but there is no
+      // protocol gap to report — the run correctly declined to act.
+      logger?.info?.({
+        executionId,
+        taskId: task.id,
+        mode: protocolValidation.mode,
+        haltReason: protocolValidation.haltReason,
+      }, `Pipeline harness sanctioned halt (${protocolValidation.haltReason}) — step validation not applicable`);
+    } else if (protocolValidation && protocolValidation.missingSteps.length === 0) {
+      // RWF A4 (2026-09-26): a SANCTIONED EXIT with nothing missing — the escalated exit or the re-execute
+      // exit, emitted as a fact so it is distinguishable from a clean run. Gate on missingSteps.length,
+      // never on presence (the documented consumer contract, CHECK-DESIGN-DISCIPLINE §5d): before this
+      // branch, presence alone raised PROTOCOL_STEP_SKIPPED "skipped 0 required step(s)". Latent for the
+      // escalated exit (0 prod instances, 2026-09-26), live for every clean re-execute exit once A4 shipped.
+      logger?.info?.({
+        executionId,
+        taskId: task.id,
+        mode: protocolValidation.mode,
+        escalatedExit: protocolValidation.escalatedExit ?? false,
+        reExecutionExit: protocolValidation.reExecutionExit ?? null,
+      }, 'Pipeline harness sanctioned exit — recorded as a fact, no protocol gap');
+    } else if (protocolValidation) {
       logger?.warn({
         executionId,
         taskId: task.id,

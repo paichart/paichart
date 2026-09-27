@@ -37,7 +37,12 @@ Record: `cline_docs/reviews/ws1-phase-c-2026-08-17/SYNTHESIS.md`.
   `reviewerVerdict`, the full trust-signal stack, metrics — BEFORE the bulky payloads
   (`finalResponse`, `toolCalls`, stream extensions); the parity test asserts no non-bulky key sits
   at/after `finalResponse`. When ADDING a result.json field, it goes before `finalResponse` unless
-  it is genuinely bulky.
+  it is genuinely bulky. ⚠️ That builder contract covered only what the BUILDER emits. Keys added
+  AFTER it — every net stamp, `supersession`, `reportMdSource` — were spread onto the tail, after
+  `finalResponse` (prod: `markerPresence` at 10.6–18.1K behind a ~2K `finalResponse`). Since RWF C3
+  (2026-09-26) `orderResultJsonForPersist` re-orders the whole object at persist, just before
+  redaction; pinned on the PERSISTED artifact (`test-terminal-persist-shape` C3). Artifacts persisted
+  before 2026-09-26 still carry those keys at the tail — check position when reading one.
 - **`reviewerVerdict`** (9th signal): transcription of the reviewer's terminal `## VERDICT:` block —
   parsed INSIDE the builder (structural dual-path parity, same lesson as the stream confidence-cap
   drift), role-gated on `REVIEWER_ROLES` (`lib/agents/harness/parse-verdict.ts`; null-on-miss, never
@@ -60,10 +65,21 @@ Record: `cline_docs/reviews/ws1-phase-c-2026-08-17/SYNTHESIS.md`.
   `rawDeliverableText`, gated `stopReason==='max_tokens' && rawDeliverableEmpty`, before EMPTY_DELIVERABLE,
   type-independent); **R3** keep-best Arm 3 (`execution-selection.ts` — a truncated-empty retry can't
   supersede a non-truncated target); **R4 Layer 1** `maybeRetryTruncatedFullTurn` in `agentic-tool-loop.ts`
-  (in-loop, once/execution, re-issue identical request at `min(2×cfg.maxTokens, ceiling)`, flows through
+  (in-loop, once/execution, re-issue identical request at `min(2×cfg.maxTokens, ceiling, timeBudget)` —
+  TIME-AWARE since 2026-09-25 (register E1): the raise is also bounded by the watchdog's remaining time
+  (`AgenticLoopInput.deadlineAt`, REQUIRED, computed by the core beside its setTimeout) at the attempt's
+  observed tok/s; below maxTokens×1.25 it SKIPS with stamped `toolLoop.truncationRetrySkippedReason`
+  (`INSUFFICIENT_TIME` | `AT_MODEL_CEILING`) — never a bare re-ask. Flows through
   the normal while-guard so a SYNTHESIZE reaches `task.complete`; fold prior usage ONLY on success —
   throw-path double-count was the panel's Finding 1). `truncationRetryUsed/Recovered` → toolLoop (before
-  finalResponse). STANDARD_AGENT_LIMIT 8000→24000 (R1). Pins: test-agentic-tool-loop R4-1..5,
+  finalResponse). **A2 RE-OPENED + BUILT 2026-09-25 (register E1)**: the trigger no longer needs EMPTY text —
+  a partial is discarded exactly as the empty case (only when the retry RETURNS; skip/throw keeps it),
+  stamped `toolLoop.truncationRetryDiscardedChars` + `truncationRetryStopReason` (`recovered` keeps its
+  meaning). F2 ships beside it: `toolLoop.finalStopReason`/`deliverableTruncated` + errorCategory
+  `TRUNCATED_PARTIAL_OUTPUT`, classified on `loopResult.finalStopReason` — NEVER the post-#90
+  currentResponse (#90 swaps in its reflection's end_turn). Layer 2 + keep-best Arm 3 deliberately
+  unchanged (a partial has a deliverable). Design: `cline_docs/follow-ups/partial-text-truncation-2026-09-24-DESIGN.md`.
+  STANDARD_AGENT_LIMIT 8000→24000 (R1) → 48000 (2026-09-24). Pins: test-agentic-tool-loop R4-1..9 + R4-3b/c/d,
   test-execution-quality recovered-negative.
 
 ## 🆕 2026-07-05 — Convergence state: terminal persist / prompt tail / hydration are SINGLE-SOURCE
@@ -77,7 +93,7 @@ or `stream/route.ts` in isolation for these concerns:
   EventEmitter progress / stream SSE observers) + documented per-adapter facts (extensions N-6, prompt
   heads, `prune` transitional — Flip 2 gated; `fireReactors` CONVERGED both-true via Flip 1, 2026-07-06 → GUI
   runs fire reactors like the engine). Seam = happy-path core (owns SUCCESS + throws; adapter owns failure). Gate:
-  `test:execution-core-boundary` (16 — C-4 / reactor-thread both adapters / reactor-firing semantics asymmetry /
+  `test:execution-core-boundary` (>=18 — C-4 / reactor-thread both adapters / reactor-firing semantics asymmetry /
   stream F1/F1b input-assembly / seam).
 - **Multi-turn prompt treatment (2026-07-06)**: the SYSTEM prompt is re-pinned as the `system` param every
   generateText call (both full + reflection modes — it lives in `buildLlmCallOptions`' shared `base`), so
@@ -93,7 +109,7 @@ or `stream/route.ts` in isolation for these concerns:
 - **System-prompt injection tail (5a)**: `lib/services/execution-system-prompt.ts`. Resolution
   HEADS remain per-adapter POLICY (six axes, deliberate — phase-5-prompt-construction-signoff.md).
 - **Hydration shapes (5b-i)**: `lib/services/execution-hydration.ts` (11-field template union;
-  §4/§5 superset). P9 templateScopeMismatch is LIVE on the engine since 5b-i. AE-I1 position
+  §4/§5 superset). P9 templateScopeMismatch was live on the engine from 5b-i until RETIRED 2026-07-17 (6cff83d3). AE-I1 position
   invariant: hydration stays poller-pre-claim / route-edge-pre-row-create.
 Authoritative inventory + parked/pending items (STREAM swap · 5b-ii/5b-iii · flips · post-6b prompt-head axes):
 `cline_docs/reviews/execution-path-convergence-2026-07-04/{divergence-manifest.md, phase-6-stream-swap-continuation-prompt.md}`.
@@ -420,3 +436,46 @@ The transition machine lives in `lib/tasks/services/status-transitions.ts` (task
 Decision record/plan/test-procedure: `cline_docs/reviews/completion-path-unification-2026-07-24/`.
 Pins: `test:completion-core-boundary` · `test:completion-tx-shape` · `test:completion-behavioral`.
 Engine note: terminal-persist remains the SEPARATE exempt spine (parameterized-core rejected); shares only leaf predicates.
+
+## 🆕 2026-09-16 — cross-pipeline delivery in `chainDependencyContext` (Bug Class 84)
+
+`c51311d6`. A program leg's cross-pipeline `chainedFrom` entries are now appended to its
+**non-PIPELINE children**. Live-validated (run 4, `programReleasable: true`). Four traps found in
+this lane, each of which passed its own tests first:
+
+- **The append site is ONE site and it is load-bearing.** Inside `chainDependencyContext`, **after**
+  its own trim, **before** the return, with `pipelineMetadata` computed **pre-append** for
+  `completedDependencies` / `totalDependencies` / `chainCapablePredecessors`. `predecessors` is a
+  **string-pinned Protocol-10 fact** — redefining it to count a predecessor with no edge both
+  false-blocks the gate conjunct AND lets a child with a silently-dropped own-dep read CLEAN
+  (Register Pattern 1 / the F-A failure shipped 2026-09-10 to close). Appending *before* the trim
+  cuts the child's own harvest to preserve an injection, because `createdAt asc` sorts an upstream
+  leg to the head and the trim walks tail-first.
+- **`mergeTaskInputContext` is a top-level patch-wins `||`.** An inherit-site write at `:99` is
+  **destroyed** by `applyChainedContext` at `:254`. The interface contract escapes only because the
+  chainer never writes *its* key. So this is an APPEND at the chain site, never a write-if-absent —
+  a faithful copy of the R12 template would have shipped a fix that silently does nothing for every
+  Architect and Author.
+- **Dep-free children (52/198, every harvester) sit behind `if (!chained) return inheritedContext`**,
+  whose own comment — written for the 2026-08-26 contract fix — warns about this exact line.
+- **`agentRole` was selected NOWHERE in `prepare-task-for-execution`.** A role predicate there reads
+  `undefined` for every child, so the exclusion list shipped **inert** — and no role-name test could
+  catch it, because every role was `undefined`. Fixture pair: a named harvester asserting EXCLUSION
+  plus a null-role child asserting DELIVERY. Neither alone distinguishes a working predicate from a
+  blind one.
+
+**Do NOT**: add `withSerializationRetry` (a single autocommitted statement at READ COMMITTED cannot
+raise 40001); use write-if-absent for `chainedFrom` (it must be rewritten every prepare — guarding
+freezes a child at its first execution); or use `jsonb_set` (no sub-path; splits one statement into
+two and reopens the clobber window).
+
+⚠️ **`legCrossPipelineEntries` is POST-POLICY** (`candidates.length`) — a leg offering three
+`result.json` entries reports 0 "on offer" while `inheritedSkipped` names all three. The honest count
+is `candidates.length + skipped.length`; execution-facts declined to compensate for it render-side
+and handed it back. Open, this lane.
+
+Suites: `test:chain-injection` · `test:resolve-owning-leg` · `test:chain-cap-accounting`.
+⚠️ `tsc --noEmit` is FALSE-CLEAN for `scripts/**` — ts-node is the only compiler that sees the suites.
+
+Depth: `cline_docs/reviews/cross-pipeline-value-delivery-2026-09-16/` (CHECKLIST.md carries the
+anchors + 10 build divergences) · VT-25.

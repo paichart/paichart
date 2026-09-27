@@ -20,7 +20,7 @@ const ok = (c: boolean, m: string) => { if (c) { passed++; console.log(`  ✅ ${
 const near = (a: number | null, b: number) => a != null && Math.abs(a - b) < 1e-9;
 
 const M = 1_000_000; // 1 MTok — makes $/MTok rates the expected dollar figure directly
-const introDate = new Date('2026-07-15');   // within Sonnet-5 intro window (≤ 2026-08-31)
+const introDate = new Date('2026-07-15');   // before the (cancelled) 2026-09-01 Sonnet-5 rise
 const stdDate = new Date('2026-09-15');      // after intro expiry
 
 console.log('\n🧪 TEST — token-usage persistence\n');
@@ -30,9 +30,11 @@ console.log('── resolvePricingKey ──');
 {
   ok(resolvePricingKey('claude-sonnet-5') === 'sonnet-5', 'sonnet-5 → sonnet-5 (not legacy)');
   ok(resolvePricingKey('claude-sonnet-4-6') === 'sonnet-legacy', 'sonnet-4-6 → sonnet-legacy');
-  ok(resolvePricingKey('claude-fable-5-1') === 'fable', 'fable-5-1 prices as fable');
+  ok(resolvePricingKey('claude-fable-5-1') === 'fable-5-1' && resolvePricingKey('claude-mythos-5-1') === 'fable-5-1', 'fable/mythos-5-1 → own key (cache read 0.025×)');
   ok(resolvePricingKey('claude-fable-5') === 'fable' && resolvePricingKey('claude-mythos-5') === 'fable', 'fable/mythos → fable');
   ok(resolvePricingKey('claude-opus-4-8') === 'opus', 'opus-4-8 → opus');
+  ok(resolvePricingKey('claude-opus-5-5') === 'opus-5-5' && resolvePricingKey('claude-opus-5') === 'opus',
+    'opus-5-5 → opus-5-5 (own price), opus-5 → opus (substring guard)');
   ok(resolvePricingKey('claude-haiku-4-5-20251001') === 'haiku', 'dated haiku snapshot → haiku');
   ok(resolvePricingKey('gpt-4o') === null && resolvePricingKey(null) === null && resolvePricingKey('') === null, 'unknown/null/empty → null');
 }
@@ -42,10 +44,11 @@ console.log('\n── cost: base rates ──');
 {
   const io = { inputTokens: M, outputTokens: M };
   ok(near(costForExecution(io, 'claude-sonnet-5', introDate).costUsd, 2 + 10), 'sonnet-5 INTRO: $2 in + $10 out = $12');
-  ok(near(costForExecution(io, 'claude-sonnet-5', stdDate).costUsd, 3 + 15), 'sonnet-5 STANDARD (after 2026-08-31): $3 + $15 = $18');
+  ok(near(costForExecution(io, 'claude-sonnet-5', stdDate).costUsd, 2 + 10), 'sonnet-5 AFTER 2026-08-31 stays $2 + $10 = $12 (the $3/$15 rise was cancelled)');
   ok(near(costForExecution(io, 'claude-sonnet-4-6', introDate).costUsd, 3 + 15), 'sonnet-4-6: $3 + $15 = $18');
   ok(near(costForExecution(io, 'claude-opus-4-8', introDate).costUsd, 5 + 25), 'opus: $5 + $25 = $30');
   ok(near(costForExecution(io, 'claude-fable-5', introDate).costUsd, 10 + 50), 'fable: $10 + $50 = $60');
+  ok(near(costForExecution(io, 'claude-opus-5-5', stdDate).costUsd, 4 + 20), 'opus-5-5: $4 + $20 = $24');
   ok(near(costForExecution(io, 'claude-haiku-4-5', introDate).costUsd, 1 + 5), 'haiku: $1 + $5 = $6');
 }
 
@@ -55,6 +58,12 @@ console.log('\n── cost: cache multipliers ──');
   // opus input rate = $5/MTok. cacheRead = 0.1× = $0.5/M; cacheCreation(5m) = 1.25× = $6.25/M.
   ok(near(costForExecution({ cacheReadTokens: M }, 'claude-opus-4-8', introDate).costUsd, 0.5), 'cacheRead = input × 0.1 ($0.50/M on opus)');
   ok(near(costForExecution({ cacheCreationTokens: M }, 'claude-opus-4-8', introDate).costUsd, 6.25), 'cacheCreation = input × 1.25 ($6.25/M on opus)');
+  // Opus 5.5 lists cache reads at $0.20/M (0.05×), NOT the 0.1× rule ($0.40/M) — an explicit override.
+  ok(near(costForExecution({ cacheReadTokens: M }, 'claude-fable-5-1', stdDate).costUsd, 0.25), 'fable-5-1 cacheRead = explicit $0.25/M (0.025×)');
+  ok(near(costForExecution({ cacheReadTokens: M }, 'claude-fable-5', stdDate).costUsd, 1.0), 'fable-5 cacheRead = 0.1× ($1.00/M) — unchanged');
+  ok(near(costForExecution({ cacheReadTokens: M }, 'claude-sonnet-5', stdDate).costUsd, 0.2), 'sonnet-5 cacheRead = 0.1× ($0.20/M)');
+  ok(near(costForExecution({ cacheReadTokens: M }, 'claude-opus-5-5', stdDate).costUsd, 0.2), 'opus-5-5 cacheRead = explicit $0.20/M (not 0.1× = $0.40)');
+  ok(near(costForExecution({ cacheCreationTokens: M }, 'claude-opus-5-5', stdDate).costUsd, 5), 'opus-5-5 cacheCreation = input × 1.25 ($5.00/M)');
 }
 
 // ── serving-model keying: a Fable→Opus rescue prices at OPUS (modelUsed = serving model) ──

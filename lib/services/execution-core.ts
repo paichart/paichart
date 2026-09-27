@@ -34,6 +34,7 @@
 
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { childTasksDispatchedBy } from './harness-dispatch-fact';
 import { llmService } from './llm/llm-service';
 import { finalizeTextForStopReason } from './llm/finalize-response';
 import { buildExecutionResultJson, deriveChainedContextSignal } from './execution-artifacts';
@@ -133,6 +134,9 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
   // The abort TIMER is core-owned and spans the #89 correction turn too (converged to the stream
   // route's safer placement; the engine formerly cleared it in a finally before #89).
   const executionAbort = new AbortController();
+  // The watchdog's OWN deadline, computed on the line beside the timer it describes (register E1,
+  // 2026-09-25) so a refactor cannot split them. The loop's R4 retry sizes its raise against it.
+  const deadlineAt = Date.now() + executionTimeoutMs;
   const executionTimeout = setTimeout(() => executionAbort.abort(), executionTimeoutMs);
 
   // Phase 3 extraction: the full agentic loop (initial LLM call, P2 provider-error check, tool
@@ -147,6 +151,7 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
       mcpFunctions,
       maxToolTurns,
       signal: executionAbort.signal,
+      deadlineAt,
       executionId,
       taskId: task.id,
       userId,
@@ -161,7 +166,7 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
     clearTimeout(executionTimeout);
   }
 
-  const { toolCallResults, messageHistory, totalUsage, turnCount, correctionTurnUsed, budgetFailFastUsed, truncationRetryUsed, truncationRetryRecovered } = loopResult;
+  const { toolCallResults, messageHistory, totalUsage, turnCount, correctionTurnUsed, budgetFailFastUsed, truncationRetryUsed, truncationRetryRecovered, truncationRetrySkippedReason, truncationRetryMaxTokens, truncationRetryStopReason, truncationRetryDiscardedChars } = loopResult;
   let currentResponse = loopResult.currentResponse;
   // Phase 2 (C-1): the loop owns the deliverable-text source. `assembledText` === last-turn
   // `currentResponse.text` (post-#89) — both paths consume the SAME source.
@@ -266,6 +271,22 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
 
   const executionLogs = buildSuccessLogs({ tokensUsed, executionTime, turnCount, toolCallCount: toolCallResults.length });
 
+  // RWF A4 (2026-09-26): for a SYNTHESIZE harness run, the children THIS run dispatched — read from the
+  // server-written execution rows (refusal-proof, stage-filtered), so the protocol validator grades the
+  // re-execute exit on the same fact the persist decision uses. The child-stage link is written by an
+  // EARLIER CREATE, so it is genuinely present in this pre-run task snapshot. Failure ⇒ undefined ⇒ the
+  // validator's tool-call fallback; never fatal.
+  let dispatchedChildIds: string[] | undefined;
+  const childStageForDispatch = (task.metadata as Record<string, unknown> | null)?.pipelineStageId;
+  if (task.type === 'PIPELINE' && harnessContext?.mode === 'SYNTHESIZE' && typeof childStageForDispatch === 'string') {
+    try {
+      dispatchedChildIds = await childTasksDispatchedBy(prisma, { executionId, childStageId: childStageForDispatch });
+    } catch (dispatchErr) {
+      logger.warn({ executionId, err: dispatchErr instanceof Error ? dispatchErr.message : String(dispatchErr) },
+        'dispatch-fact read failed — protocol validator falls back to the tool-call log');
+    }
+  }
+
   // Post-loop quality cascade (P5/P4/P3/P7/P10/EMPTY_DELIVERABLE/P8/HARNESS_NO_OUTPUT) — shared
   // assessExecutionQuality. Signals are ADDITIVE — they never change SUCCESS/FAILED status.
   const { executionDegradation, protocolValidation, harnessNoOutput, harnessCreateIncomplete } = assessExecutionQuality({
@@ -273,15 +294,21 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
     failedToolCalls,
     text: finalResponse,
     // Raw pre-note text so TRUNCATED_NO_OUTPUT (R2) isn't masked by the finalize note.
-    // `loopResult.assembledText` is the deliverable BEFORE finalizeTextForStopReason; on the
-    // truncation-stall path no diagnostic retry fires (null confidence), so this still
-    // corresponds to the final currentResponse.
+    // `loopResult.assembledText` is the deliverable BEFORE finalizeTextForStopReason.
     rawDeliverableText: loopResult.assembledText,
+    // P7 judges the post-#90 text, so it keeps the post-#90 stop reason.
     stopReason: currentResponse?.stopReason,
+    // F2 §3.3 (2026-09-25): the truncation categories pair the raw deliverable with ITS OWN stop
+    // reason. `currentResponse` above has been REPLACED by #90's reflection when #90 produced text,
+    // so its stop reason is the reflection's (`end_turn`) — the former comment here ("no diagnostic
+    // retry fires on the truncation path") held only for the EMPTY case; a PARTIAL deliverable can
+    // carry a parseable 50–69 score and trip #90 (reviewer incident cmuerrjuz…, 2026-09-24).
+    loopExitStopReason: loopResult.finalStopReason,
     task: { id: task.id, type: task.type, metadata: task.metadata, createdAt: task.createdAt },
     // HARNESS_NO_OUTPUT (2026-07-17): resolver-stamped mode — P8's UNKNOWN-only rescue
     // + the harnessCreateIncomplete (dead-end CREATE) fact.
     resolvedMode: harnessContext?.mode ?? null,
+    ...(dispatchedChildIds ? { dispatchedChildIds } : {}),
     executionId,
     turnCount,
     templateName: resolvedTemplate?.name,
@@ -316,6 +343,12 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
     diagnosticRetryUsed,
     truncationRetryUsed,
     truncationRetryRecovered,
+    truncationRetrySkippedReason,
+    truncationRetryMaxTokens,
+    truncationRetryStopReason,
+    truncationRetryDiscardedChars,
+    // F2: the LOOP-EXIT stop reason (never the post-#90 currentResponse's — §3.3).
+    finalStopReason: loopResult.finalStopReason,
     ...(extensions ? { extensions } : {}),
     chainedContext: deriveChainedContextSignal(task.inputContext),
     logger,
@@ -453,11 +486,17 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
   // Fires ONLY for stamped orchestrator retries. Non-fatal: failure = latest-wins.
   let selfSupersession: Awaited<ReturnType<typeof computeSelfSupersession>> = null;
   try {
-    selfSupersession = await computeSelfSupersession(prisma, (execution as any).context, resultJson);
+    selfSupersession = await computeSelfSupersession(prisma, (execution as any).context, resultJson,
+      { executionId, config: input.config });
     if (selfSupersession) (resultJson as any).supersession = selfSupersession.audit;
   } catch (ksErr) {
     logger.warn({ executionId, err: ksErr instanceof Error ? ksErr.message : String(ksErr) },
       'keep-best comparison failed — proceeding latest-wins');
+    // RWF C.3: a stamped retry whose comparison THREW is named, so absence of `supersession` never reads as
+    // "compared and kept". `supersededById` presence (not key presence) is what means "lost".
+    if ((execution as any).context?.reExecutionOfExecutionId) {
+      (resultJson as any).supersession = { checked: false, reason: 'keep-best-error' };
+    }
   }
 
   // Terminal SUCCESS persist — the ONE shared implementation (Phase 4b): atomic tx (artifacts +

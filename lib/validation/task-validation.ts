@@ -361,8 +361,13 @@ export const ReorderTasksSchema = z.object({
  * Task Agent Execute Schema with Prompt Injection Protection
  * For: POST /api/tasks/[taskId]/agent/execute
  */
-export const TaskAgentExecuteSchema = z.object({
-  overrideConfig: z.object({
+/**
+ * The agent.execute override fields both doors validate identically (RWF X16 parity, 2026-09-27; validation-engine F2):
+ * the REST route typed these all along, while MCP `perform(agent.execute)` let them through `.passthrough()` untyped —
+ * `prompt: {a:1}` or `mcpToolId: 'anything'` were accepted and LIVE. One object, spread into both schemas. Each door
+ * keeps its own maxRetries/timeout bounds (REST's pre-date this change; MCP's are the task-column bounds).
+ */
+export const AGENT_EXECUTE_OVERRIDE_FIELDS = {
     agentRole: z.string()
       .max(255, 'Agent role must be 255 characters or less')
       .refine((val) => detectPromptInjection(val).isSafe, {
@@ -378,14 +383,19 @@ export const TaskAgentExecuteSchema = z.object({
       .optional(),
 
     inputContext: safeRecord().nullable().optional(),
-    maxRetries: z.number().min(1).max(RUNTIME_LIMITS.MAX_RETRIES).nullable().optional(),
-    timeout: z.number().min(1000).max(600000).nullable().optional(), // 1s to 10min
 
     // MCP overrides
     mcpToolId: OptionalCUIDStrict('mcpToolId'),
     mcpWorkflowId: OptionalCUIDStrict('mcpWorkflowId'),
     mcpContext: safeRecord().nullable().optional(),
     mcpMetadata: safeRecord().nullable().optional(),
+};
+
+export const TaskAgentExecuteSchema = z.object({
+  overrideConfig: z.object({
+    ...AGENT_EXECUTE_OVERRIDE_FIELDS,
+    maxRetries: z.number().min(1).max(RUNTIME_LIMITS.MAX_RETRIES).nullable().optional(),
+    timeout: z.number().min(1000).max(600000).nullable().optional(), // 1s to 10min
   }).nullable().optional(),
 
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).nullable().optional(),

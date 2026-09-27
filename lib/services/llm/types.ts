@@ -1081,7 +1081,20 @@ export const MCPTokenDefaults = {
   
   /**
    * Standardized default for all agent operations.
-   * History: 6000 → 8000 (Phase 0 truncation) → 24000 (2026-07-16, truncation-stall R1).
+   * History: 6000 → 8000 (Phase 0 truncation) → 24000 (2026-07-16, truncation-stall R1) → 48000
+   * (2026-09-24). The 24000 premise below ("clears the observed worst case, 14089") was falsified:
+   * requirements-authoring Author and Reviewer calls need 24–28K per SINGLE call (~75% adaptive
+   * thinking), and in 30 days 5 of 628 executions (0.8%; 29% of requirements_author runs; three roles)
+   * hit 24000 — 3 of them visible only as `truncationRetryUsed`, never as a note. Measured throughput
+   * 94–134 output tok/s, so one 48K call (~511s at the slowest) fits the 30-turn watchdog (1080s).
+   * R4 Layer 1 retries at min(maxTokens × 2, model ceiling, time budget) since 2026-09-25 (register E1):
+   * a ×2 raise to 96000 does NOT fit a 30-turn watchdog after a full 48K attempt, so the raise is also
+   * bounded by the watchdog's remaining time at the attempt's observed throughput, and SKIPS with a
+   * stamped `toolLoop.truncationRetrySkippedReason` when no useful raise fits. On a default 30-turn
+   * template a retry after a FULL 48K attempt will therefore usually skip ('INSUFFICIENT_TIME') — the
+   * retry cannot manufacture time; the watchdog formula is the evidence-gated lever. Design:
+   * cline_docs/follow-ups/partial-text-truncation-2026-09-24-DESIGN.md. Analysis:
+   * cline_docs/reviews/harvested-state-in-generated-spec-2026-09-24/token-ceiling.md.
    * It is a CEILING, not a target (normalizeModelConfig does Math.min(source.maxTokens, outputCeiling);
    * a turn that needs 4K still bills 4K), so raising it is free for runs that fit and prevents the
    * final SYNTHESIZE/PLAN turn from exhausting the budget mid-thinking. Root cause: claude-sonnet-5
@@ -1091,7 +1104,7 @@ export const MCPTokenDefaults = {
    * sits well under every model's outputCeiling (Sonnet/Haiku 64K, Opus/Fable 128K) so it never clips.
    * Panel: cline_docs/reviews/truncation-stall-2026-07-16/synthesis.md (R1).
    */
-  STANDARD_AGENT_LIMIT: 24000,
+  STANDARD_AGENT_LIMIT: 48000,
   
   /**
    * Minimum tokens to reserve for response

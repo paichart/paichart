@@ -1,6 +1,7 @@
 import { TokenPayload } from '@/lib/types/auth';
 import { mcpLogger } from '@/lib/logger';
-import { MCPParameterSchemas, applySemanticMapping, type MCPAction } from '@/lib/validation/mcp-action-validation';
+import { MCPParameterSchemas, applySemanticMapping, getActionSchemaShapeKeys, type MCPAction } from '@/lib/validation/mcp-action-validation';
+import { computeIgnoredParameters } from './utilities/ignored-parameters';
 import { handleTaskComplete } from './handlers/task/task-complete-handler';
 
 const log = mcpLogger.child({ module: 'TasksActionRouter' });
@@ -17,6 +18,7 @@ import { handleTaskCreate } from './handlers/task/task-create-handler';
 import { handleAgentConfigure } from './handlers/agent/agent-configure-handler';
 import { handlePOVCreate } from './handlers/pov/pov-create-handler';
 import { handlePOVUpdate } from './handlers/pov/pov-update-handler';
+import { refuseAgentLoopModelParameters } from '@/lib/services/leg-child-override';
 
 /**
  * TasksActionRouter - Facade pattern for routing MCP task actions to specialized handlers
@@ -50,8 +52,13 @@ export class TasksActionRouter {
     user: TokenPayload,
     actionId: string,
     /** Server-side routing extras (NOT client parameters — never validated as such).
-     *  callingExecutionId: retry provenance for agent.execute (keep-best 2026-07-04). */
-    routeOpts?: { callingExecutionId?: string }
+     *  callingExecutionId: retry provenance for agent.execute (keep-best 2026-07-04).
+     *  reportIgnoredParameters: compute + return + log the ignoredParameters fact (2026-09-25). Opt-in:
+     *    only a caller that hands the router RAW client keys may set it (the perform Tier-1 site) —
+     *    a pre-validated caller (REST route) would stamp a false [] (see utilities/ignored-parameters.ts).
+     *  unappliedTopLevelKeys: top-level perform args the outer dispatcher did not merge into parameters
+     *    (it alone can see them); folded into the same fact and log line. */
+    routeOpts?: { callingExecutionId?: string; reportIgnoredParameters?: boolean; unappliedTopLevelKeys?: string[] }
   ): Promise<any> {
     // ── SECURITY: enforce MCPParameterSchemas at the router boundary ──
     //
@@ -97,6 +104,11 @@ export class TasksActionRouter {
 
     const schema = MCPParameterSchemas[action as MCPAction];
     const normalizedFrom: Record<string, unknown> = {};
+    // Raw keys as the client sent them (after the CC7 hoist above) — captured BEFORE safeParse strips.
+    const rawForIgnored: Record<string, unknown> | null =
+      routeOpts?.reportIgnoredParameters && parameters && typeof parameters === 'object' && !Array.isArray(parameters)
+        ? { ...(parameters as Record<string, unknown>) }
+        : null;
     if (schema) {
       // BC75 sibling-drift fix (2026-07-25, found by the pov-task-lifecycle smoke test): normalize
       // user-friendly enum aliases (URGENT→HIGH, TODO→OPEN, …) BEFORE schema validation.
@@ -143,6 +155,10 @@ export class TasksActionRouter {
       log.warn({ actionId, action }, 'no MCPParameterSchemas entry — schema enforcement skipped');
     }
 
+    // RWF "A, agent-only" (2026-09-27): an agent run may not persistently set a task's model parameters. After
+    // validation (parameters are the parsed payload), before any handler. Humans are unaffected.
+    refuseAgentLoopModelParameters(action, parameters, routeOpts?.callingExecutionId, log);
+
     // Delegate to specialized handlers based on action
     let result;
     switch (action) {
@@ -180,7 +196,8 @@ export class TasksActionRouter {
         break;
 
       case 'agent.configure':
-        result = await handleAgentConfigure(parameters, user, actionId);
+        // RWF X17: routeOpts carries callingExecutionId — present only for calls from an agent's tool loop.
+        result = await handleAgentConfigure(parameters, user, actionId, routeOpts);
         break;
 
       case 'agent.assign':
@@ -210,6 +227,23 @@ export class TasksActionRouter {
     // Ensure timestamp is always present (centralized, not per-handler)
     if (!result.timestamp) {
       result.timestamp = new Date().toISOString();
+    }
+
+    // ignoredParameters (2026-09-25): a FACT on the success result — the keys the caller sent that no
+    // layer applied. Computed only on success (a failed call reports its own error) and only when opted in.
+    if (routeOpts?.reportIgnoredParameters) {
+      const shapeKeys = getActionSchemaShapeKeys(action);
+      if (rawForIgnored && shapeKeys) {
+        const ignored = computeIgnoredParameters(action, rawForIgnored, shapeKeys);
+        const topLevel = [...new Set(routeOpts.unappliedTopLevelKeys ?? [])].sort();
+        result.ignoredParameters = [...new Set([...ignored, ...topLevel])].sort();
+        if (result.ignoredParameters.length > 0) {
+          log.info(
+            { actionId, action, userId: user.userId, keys: ignored, topLevelKeys: topLevel },
+            'perform: parameters not applied'
+          );
+        }
+      }
     }
 
     return result;

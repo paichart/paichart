@@ -32,6 +32,10 @@ const PROTOCOLS = [
   'terraform-iac-protocol',
   'observability-config-protocol', // added 2026-09-10 with the row's 1.0.0 birth — a name absent here is silently excluded from the public parity set
   'pov-program-protocol',
+  // added 2026-09-21 with the row's 1.0.0 birth. MANDATORY the moment the row went ACTIVE: the
+  // PUBLICATION-COMPLETENESS GUARD below inspects ACTIVE protocol-tagged rows, and an ACTIVE row
+  // in neither list makes this script refuse to render ANY protocol.
+  'requirements-authoring-protocol',
 ];
 
 /**
@@ -143,7 +147,9 @@ async function main() {
       }
     }
     if (CHECK && diverged > 0) process.exit(1);
-    if (CHECK) console.log('✅ protocol public parity: all seven byte-identical');
+    // Count DERIVED, never spelled out: it read "all seven" while rendering eight the day
+    // requirements-authoring landed. A literal here rots as a direct consequence of healthy work.
+    if (CHECK) console.log(`✅ protocol public parity: all ${PROTOCOLS.length} byte-identical`);
   } finally {
     await prisma.$disconnect();
   }

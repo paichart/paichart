@@ -950,7 +950,7 @@ Before analyzing protocol text, confirm the corpus version you are reading:
 
 ```bash
 # The obligation-audit batch markers — each must hold on the seed (drift = pre-batch text)
-grep -c "machine-matched literal from the CLOSED set" scripts/seed-protocol-prompts.ts   # expect 5 — corrected 2026-08-17 (the 2026-08-16 cross-port batch added the 5th and did not move this expectation; found by the WS1 Phase C panel's own reviewer)
+grep -c "machine-matched literal from the CLOSED set" scripts/seed-protocol-prompts.ts   # expect >=6 — a FLOOR, not a count: this rises whenever a domain gains a block mandate, which is healthy work, so an exact number rots by design (it read 6 while the tree held 8 — the 2026-09-19 Consumed-Values port added two contract sites and did not move it). The floor still catches what the count guarded: the phrase vanishing = pre-batch text restored. History: 5 (2026-08-16 cross-port), 6 (2026-09-17 kubernetes-gitops v1.8.0 Phase 0 mandate), 8 (2026-09-19 Consumed-Values port to network + observability). Prior corrections: 2026-08-17 (the 2026-08-16 cross-port batch added the 5th and did not move this expectation; found by the WS1 Phase C panel's own reviewer)
 grep -c "for a PROGRAM leg a duplicate-stop is TERMINAL" scripts/seed-protocol-prompts.ts  # expect 1 — the bare phrase returns 2 (version changelog matches too)
 grep -c "Do NOT compose new acceptance criteria" scripts/seed-protocol-prompts.ts         # expect 1
 ```

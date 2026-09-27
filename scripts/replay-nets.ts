@@ -32,19 +32,30 @@ import { MECHANICAL_NETS } from '../lib/agents/harness/mechanical-nets';
 import { runNetsAtPoint, type StampPoint } from '../lib/agents/harness/net-registry';
 import { buildNetContext } from '../lib/agents/harness/net-context';
 import { isProgramHarnessTask } from '../lib/agents/harness/program-protocol';
+import { selectAuthoritativeExecution, CHAIN_SELECTION_OPTIONS } from '../lib/services/execution-selection';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { leanFactsLine } = require('../lib/mcp/server/tools/advanced/lean-card-facts');
 
 const prisma = new PrismaClient();
 
+/**
+ * The task's own deliverable, from its AUTHORITATIVE execution (RWF Wave B, 2026-09-26) — the same selection
+ * the chainer and the nets use, so a replay sees what production would. Read by executionId and parsed in JS:
+ * the old form cast every result/pipeline-index row in the table to jsonb, so ONE malformed artifact anywhere
+ * (a lone UTF-16 surrogate, found on a 2026-09-25 pipeline-index.json) made every replay throw.
+ */
 async function finalResponseOf(taskId: string): Promise<string | null> {
-  const rows = await prisma.$queryRaw<Array<{ fr: string | null }>>`
-    SELECT (content::jsonb)->>'finalResponse' AS fr FROM agent_artifacts
-    WHERE name IN ('result.json','pipeline-index.json') AND content LIKE '{%'
-      AND (content::jsonb)->>'taskId' = ${taskId}
-    ORDER BY "createdAt" DESC LIMIT 1`;
-  return rows[0]?.fr ?? null;
+  const { execution } = await selectAuthoritativeExecution(prisma, taskId, CHAIN_SELECTION_OPTIONS);
+  if (!execution) return null;
+  const art = await prisma.agentArtifact.findFirst({
+    where: { executionId: execution.id, name: { in: ['result.json', 'pipeline-index.json'] } },
+    orderBy: { createdAt: 'desc' }, select: { content: true },
+  });
+  try {
+    const fr = art?.content ? JSON.parse(art.content)?.finalResponse : null;
+    return typeof fr === 'string' ? fr : null;
+  } catch { return null; }
 }
 
 async function replay(taskId: string, onlyNet: string | null) {
@@ -98,7 +109,9 @@ async function replay(taskId: string, onlyNet: string | null) {
   const argv = process.argv.slice(2);
   const netIdx = argv.indexOf('--net');
   const onlyNet = netIdx >= 0 ? argv[netIdx + 1] : null;
-  const ids = argv.filter((a, i) => !a.startsWith('--') && i !== netIdx + 1);
+  // `netIdx < 0 ||` — without it, `i !== netIdx + 1` is `i !== 0` when no --net is given, silently dropping
+  // the FIRST task id (a single-id call printed usage and exited 1). Found running the Wave B replay, 2026-09-26.
+  const ids = argv.filter((a, i) => !a.startsWith('--') && (netIdx < 0 || i !== netIdx + 1));
   if (!ids.length) {
     console.error('usage: replay-nets.ts [--net <name>] <taskId> [<taskId> ...]');
     console.error(`nets: ${[...new Set(MECHANICAL_NETS.map((n) => `${n.name}@${n.point}`))].join(', ')}`);

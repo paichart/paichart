@@ -336,7 +336,7 @@ Plus `errorCategory: 'PROTOCOL_STEP_SKIPPED'` is set only if no higher-priority 
 
 **Test coverage:** `scripts/test-pipeline-protocol-validator.ts` — **17 tests** (12 original tool-count tests + 5 added 2026-04-25 for comment-content). Includes the artifact-synthesis incident shape as a regression test. Wired into `npm run test:all-validation`.
 
-**When extending:** if you add a new harness mode or required step, update `validatePipelineProtocolSteps` AND add a regression test. Mode detection lives in `detectHarnessMode()`; per-mode signatures in the body of `validatePipelineProtocolSteps()`. Content patterns live as module-level regex constants (`BREADCRUMB_RE`, `DELIVERABLE_POINTER_RE`, `RERUN_NOTE_RE`) — keep them strict; loose patterns dilute the signal.
+**When extending:** if you add a new harness mode or required step, update `validatePipelineProtocolSteps` AND add a regression test. Mode detection lives in `detectHarnessMode()`; per-mode signatures in the body of `validatePipelineProtocolSteps()`. Content patterns live as module-level regex constants (`BREADCRUMB_RE`, `DELIVERABLE_POINTER_RE`, `RERUN_NOTE_RE`). **Be strict about the FACT, never about the DECORATION** (corrected 2026-09-15): `BREADCRUMB_RE` demanded `**Child stage:** \`<id>\`` and rejected a comment that literally began `Child stage: cmty0x9jo...`, emitting a false degradation into a gate input. Nothing parses these strings — the GUI Pipeline Children panel is metadata-only. A pattern that asserts markdown while appearing to assert semantics does not sharpen the signal, it manufactures noise. Loose patterns dilute; format-bound patterns misfire. Match what the step must ACHIEVE.
 
 **Pattern:** part of the agent-output-trustworthiness defense stack (`agent-output-trustworthiness-defense-stack-pattern.md`). One signal among 7; co-occurs with cascade.
 
@@ -574,3 +574,258 @@ The harness spans four other specialists' domains. Division of concerns:
 **Handover shape:** when a finding touches one of these specialists' authoritative areas, hand the piece there; keep the coordinating view here. The harness only works when all five layers stay in lock-step.
 
 
+
+
+---
+
+## Evicted 2026-09-19 (Protocol 12, trigger-bound rule) — program-tier shipping history
+
+*Moved from `.claude/agents/pipeline-harness-specialist.md`. The config keeps the TRIGGERS (what to do,
+at what moment); this is the reasoning and the incident record behind them.*
+
+- **T4-hardening findings shipped (2026-07-15)**: F11 double-nest (router hoist), F12 structural
+  loud-fail (prepare-task-for-execution, keyed on the parent title token `(protocol: pov-program`, NOT
+  template metadata — program reuses the generic Pipeline Harness template), F14 above. Protocol at
+  v1.0.5. F13 open (contract-missing loud-fail is log-only, not surfaced as task status/comment).
+- **Non-terminal-family + truncation (2026-07-16, F16-F21 + R1-R5)**: a program leg that ends
+  settled-but-not-COMPLETED HANGS the program (Guard-4 never satisfied). All classes are terminalized
+  at the leg's persist tx (event-anchored, no timer): F16 can-never-run, F17 duplicate-halt, F20
+  escalated-as-outcome, **R4 truncation-stall** (a SYNTHESIZE that persists `TRUNCATED_NO_OUTPUT` +
+  IN_PROGRESS — the FOURTH member, "settled-children, harness-mute"). R4 also adds an in-loop
+  retry-with-headroom (Layer 1) so a truncated SYNTHESIZE usually reaches `task.complete` and the stall
+  never forms; F20-escalated-COMPLETED WINS over truncation-FAILED in the persist ordering. Forward cone
+  = shared `mark-forward-cone.ts`; F17 duplicate-halt cone-gap folded in. Root cause: Sonnet-5 adaptive
+  thinking exhausting `max_tokens` (STANDARD_AGENT_LIMIT 8000→24000). R5: `fetch(id:...)` is NOT an agent
+  tool — dependency outputs arrive via §6 Pipeline Context.
+  `cline_docs/reviews/{nonterminal-family,truncation-stall,truncation-r4}-2026-07-16/`.
+- **2026-07-18 batch (runs 8-11; ratified invariant: non-terminal = waiting-for-a-human, always)**:
+  (0) ⚠️ **SIX members — a 7th (`harnessSynthesizeUnclosed`) shipped 2026-09-15 and was REVERTED
+  2026-09-16.** Corpus: 33 matches, **0 genuine hangs** — all protocol-SANCTIONED exits (base protocol
+  says an escalating harness leaves IN_PROGRESS and exits; the 50-69 band re-executes a child and
+  exits awaiting retrigger). **Do not re-propose without a NEW live hang.** Standing lesson: before any
+  harness-layer rule, state what it does to PLAN-SPAWN **and to every sanctioned exit** — "it armed a
+  future event rather than creating one" is the shape that defeats tool-call predicates (`task.create`
+  for spawn, `agent.execute` for re-run-and-wait). Check-design lessons:
+  `pipelines/CHECK-DESIGN-DISCIPLINE.md` §5b-5d. OPEN POLICY CONFLICT (mine): base protocol says
+  escalated ⇒ leave IN_PROGRESS; four domain protocols say `task.complete` on EVERY outcome.
+  (1) **PRE_FLIGHT_BAIL — SIXTH family member**: a leg that bails in its own pre-flight (stamps
+  `metadata.cannotRun` — MANDATED on every bail, orchestrator 3.9.1 — and/or `escalated` with no
+  child stage) is terminalized FAILED in `runTerminalSuccessTx` (race-free vs the SUCCESS write;
+  F20-escalated-COMPLETED still wins); cone reason is now FOUR-way (+`UPSTREAM_PRE_FLIGHT_BAIL`);
+  a `task.update` belt hook (`handleAgentStampedCannotRun`, allowFlipFromSuccess) covers at-rest
+  stamps. Live-proven on run 9 (machine-driven escalation, transitive root attribution — pov-program
+  1.0.12 step-1 follows `failedDependencyTaskId` to the first non-casualty). (2) **Confidence OUT of
+  gate semantics at every tier** (calibration study: approved/NN carries verdict direction, not
+  correctness) — programReleasable gates on outcomes + `derivationContainment` facts (surfaced via
+  the agent.results card's `**Facts:**` line) + Node C + coverage; derivation-existence is checked
+  BEFORE the harvest anchor (finding f).
+  ⚠️ **The reason taxonomy is MECHANISED and is NOT yours to re-derive.** `no-derived-values-block`,
+  `harvest-block-missing-or-unparseable` and the rest are computed into
+  `derivationContainment.containmentDisposition` `{blocking | benign | needs-node-c, reason, inputs}`
+  — **owned by `execution-facts-specialist` since 2026-09-11**; depth:
+  `.claude/knowledge/domain/execution-facts/execution-facts-library.md` §2. READ THE STAMP: if a
+  prose reading contradicts it, that is a DEFECT to report, not a judgement to exercise. Absence
+  fails closed (`ABSENT ⇒ treat as blocking`). When a fact seems ignored at the gate, suspect the
+  render seam first and hand it to the child — two live 2026-08-03 gate defects were exactly that.
+  Green pass = run 11 / VT-10. (3) **Gaps (e)+(b) FIXED same day (second session)**: born-ready tasks
+  queue via the shared `unsatisfiedDepExistsSql` predicate at create/assign/update (PIPELINE-with-deps
+  keeps the blanket skip — CC6; update door carries a FAILED frozen-cone guard); superseded-probe
+  disposal = pov-program 1.0.13 supersession contract (cannotRun state channel → FIX-A terminalization,
+  supersede-before-wiring). (4) **A6 no-reviewer approved rule** (orchestrator 3.9.2 + HOWTO 2.4.5):
+  fact-derived approval + `reviewerPresent` provenance + roster-defect/misroute guards; T6 narrowed to
+  "when a reviewer exists". `cline_docs/reviews/{confidence-gate-demotion,reactor-cascade-audit,born-ready-gap-e}-2026-07-18/`.
+
+
+---
+
+## Evicted 2026-09-19 — contract inheritance / IGP-T1 R12 narrative
+
+*Config keeps the do-not-re-propose triggers and the open successor problem; this is the record.*
+
+## 🆕 2026-08-26 — contract inheritance SHIPPED and LIVE-PROVEN (IGP-T1 R12); the successor problem named
+
+**The defect:** the interface contract was delivered to a LEG and never to the leg's children.
+Measured across every archived leg that carried one: **7 of 7 lossy, 0 of N children ever holding
+it.** So a reviewer instructed to "check transcription mechanically, token by token" held only a
+paraphrase missing 9 of 10 canonical lines — an **UNSATISFIABLE PREDICATE**, and it could only accept
+the package's word. Fixed: `inheritInterfaceContractIfAbsent` (write-if-absent from the qualified
+owning leg, sanitized, 64 KB cap, atomic conditional write) at `prepare-task-for-execution.ts`;
+orchestrator base **v3.13.0** (no-restate); network-provisioning **v1.6.0** (both clauses now name
+the `## Program Interface Contract` block as the source and define absent-block behaviour).
+
+**R12 result — four legs applied VERBATIM to live cEOS: 0 config-syntax defects, 0 device
+rejections, 4/4 children holding the contract on every leg** (R11: 0/4, 2 canonical lines omitted).
+
+🔴 **DELIVERY ALONE FIXED TRANSCRIPTION. Do not re-propose a deterministic config renderer or a
+`canonicalStanza`-as-array schema** — both were proposed mid-arc and dropped as premature, on the
+grounds that no author had ever failed while HOLDING the complete exemplar. R12 vindicates dropping
+them. Re-propose only on a NEW live failure where the author held the complete stanza.
+
+**THE SUCCESSOR PROBLEM (open, no design yet):** the author can predict what it **CONFIGURES** but
+not what the device **DISPLAYS** — its harvest shows pre-change rendering only and it never sees the
+device's reply to its own config. Four R12 instances: System Id renders as hostname; `distance 90`
+renders as two per-level lines; a template omitted EOS's real `Instance`/`VRF` columns; a parity
+table equated OSPF *path cost* with IS-IS *interface metric*. ⚠️ Not cosmetic — the fourth propagated
+a wrong number into a **blocking** defect. **Letting the author validate against the device
+(`configure session` + abort) is RULED OUT — read-only stays (Steve, 2026-08-26). Do not re-propose.**
+
+**Three things R12 proved about our own guards, all worth carrying:**
+- **Two of the three are dialect-lint findings** (the FALSE BLOCK on a removal leg — it has no
+  notion of leg intent, and the prose reviewer got it right where the mechanical check got it
+  wrong; and the PRESENCE half's by-construction unreliability across rounds). **Owned by
+  `execution-facts-specialist` since 2026-09-11**; depth:
+  `.claude/knowledge/domain/execution-facts/execution-facts-library.md` §3. Carry the consumption
+  lesson: "mechanical beats prose" is a prior in this domain, not a law.
+- **Node C has NO contract.** Inheritance walks child → owning LEG; Node C's parent is the program
+  root, which never holds one (the Architect *creates* it). It reported the absence and graded
+  ACCEPTED-FROM-CLAIMS exactly as v1.6.0 prescribes — the clause working, and revealing the next gap.
+
+**And our own prose did not bind:** v3.13.0's no-restate rule was ignored (the brief carried all 10
+lines anyway). Mechanical delivery is what worked.
+
+Open items, all earned live: `cline_docs/follow-ups/igp-t1-r12-followups-2026-08-26.md`
+(incl. packages not mandating PERSISTENCE — R12's migration was running-config only and a reboot
+would revert all four legs; left unrepaired so the package defect stays visible).
+
+---
+
+## Duplicate-check clearance — the operator technique (2026-09-24, live-validated twice)
+
+The pipeline and program harnesses both halt on a **duplicate stage for the same objective in the same
+phase**, and a human releases them through TASK STATE (a comment reply never clears it). Two forms are
+accepted by the protocol: `metadata.duplicateAcknowledged` (**canonical**) or a trailing
+`PRE-FLIGHT CLEARANCE:` block in the task description (the human-readable backup). The check resolves
+**only if the clearance names the duplicate the harness actually detected** — an unbound clearance is
+stale and does not clear.
+
+**The technique, in order:**
+
+1. **Prefer the metadata form, and on a customer-facing POV use nothing else.** The description is the
+   only channel that reaches every child brief verbatim, and it is what a customer reads — a clearance
+   block puts run history into both. The metadata form reaches the harness and nothing else.
+2. **Name the stage the harness DETECTS, which is the `Pipeline: …` child stage** created by the prior
+   run's CREATE — not the parent stage the prior task sits in. Evidence: Revision 2's pre-flight comment,
+   *"duplicate stage `cmuepqcp9000vyx2bf11u8k7i` ("Pipeline: Telemetry Export Requirements Authoring …")
+   found … metadata.duplicateAcknowledged matches this exact stage id — clearance resolved"*. Find it from
+   the prior task: `tasks.metadata->>'pipelineStageId'`.
+3. **With MORE THAN ONE prior run, use an ARRAY of every prior pipeline stage id.** The harness reports
+   every duplicate it finds and binds the clearance to each; a single id is then guaranteed to leave one
+   unmatched and halt. Live 2026-09-24 (Revision 3): *"duplicate pipelines found in this phase (Revision 1
+   stage …, Revision 2 stage …). My task metadata carries `duplicateAcknowledged: [...]`, matching both
+   detected duplicates exactly — clearance is bound and resolved."*
+   ⚠️ **The list is now DOCUMENTED (orchestrator 3.15.1, pov-program 1.8.2, HOWTO 2.6.3 — 2026-09-24),
+   but the match is still made by the model reading its own metadata, not by platform code.** The
+   harness accepted the list live before the text allowed it (n=1); the text was then aligned to it. **No platform code matches it**: the only code read is `agent-status-handler.ts:141`
+   (`resolved: tMeta.duplicateAcknowledged != null`, a status-report flag); `protected-task-metadata.ts`
+   marks the key human-written; everything else is the model. If a harness ever rejects the array, it halts BEFORE creating anything and
+   names the stage it wanted — one `task.update` recovers.
+4. **A re-run needs a NEW stage when the title is unchanged.** `task.create` deduplicates by title within
+   a stage: it silently returns the existing task (it did — the prior COMPLETED task came back, unmodified).
+   Create a fresh stage, then the task in it.
+5. **Verify persistence, then read the resolution.** `task.update` reporting success does not prove the
+   field survived the MCP parameter layers — read `metadata->'duplicateAcknowledged'` and its
+   `jsonb_typeof` from the row (an array must come back `array`). After CREATE, the harness's mode comment
+   states whether and how it resolved the clearance — read it before assuming the run is past pre-flight.
+
+**Program legs are a separate case** (agent file § "Program re-run duplicate-halt"): a program leg's
+duplicate-halt is TERMINAL with a frozen forward cone, so the clearance must be PRE-ARMED on each pipeline
+child in the PLAN-SPAWN → gate-approval window, and a halted leg needs a fresh task.
+
+
+## Evicted 2026-09-27 (Protocol 12, X14 — specialist was 556 lines)
+
+Moved verbatim from `.claude/agents/pipeline-harness-specialist.md`; the agent keeps a compressed live-invariant line and a pointer here.
+
+### Retry-band keep-best Phase 1 (2026-07-04)
+
+- **Retry-band keep-best (Phase 1 SHIPPED `d2544f5a`)**: the orchestrator's 50-69 retry re-executes on BYTE-IDENTICAL inputs (F1 — the diagnostic comment never reaches the child prompt; retries are blind re-rolls), so a retry can REGRESS. FIX: a stamped retry that catastrophically degrades vs its target self-supersedes at terminal persist; every authoritative consumer (chainer/report-md/policy) now filters via the shared selectAuthoritativeExecution. The BAND SURVIVES ON PROBATION — its text was corrected (stop implying feedback reaches the retry, seed-protocol-prompts.ts orchestrator protocol, the ONE canonical policy domain protocols inherit) but the narrow-or-drop verdict is Phase 3, earned from suppression-log instrumentation. Phase 3 also wires F1 (real feedback into the child) — yours. Design you led: `cline_docs/reviews/retry-band-keep-best-2026-07-04/`.
+
+### Reading a CHILD's deliverable body — F14 history (2026-07-15 → 07-23)
+
+- **Reading a CHILD's deliverable body (F14 gotcha, T4b live 2026-07-15; retrieval verb corrected
+  2026-07-23, v1.0.14)**: a parent harness reading its child's plan/report (e.g. PLAN-SPAWN reading the
+  Architect's plan) must **actively retrieve the artifact BODY** — the child is a CHILD, not a §6
+  dependency, so its output is NOT auto-chained. The route is `perform(action:"agent.results",
+  taskId:"<child id>", verbose:true, limit:1)` — `verbose:true` is load-bearing (without it the 3KB
+  dispatch cap returns a lean card whose only body pointers are CLIENT-only `fetch(id:)` hints, a dead
+  end for the engine; the live cmrvlnn2… PLAN-SPAWN failure). `task.context` returns only the POINTER
+  (metadata + comments — the completion comment's `report.md → fetch(id:)` line is for HUMANS in Desktop).
+  A harness that stops at task.context expecting the body inline finds the contract absent and stalls
+  (T4b; v1.0.5 fixed the diagnosis but prescribed the client-only `fetch` verb — every PLAN-SPAWN
+  1.0.5→1.0.13 paid a failed-fetch turn recovered by LLM improvisation; 4-panel review
+  `plan-spawn-fetch-and-start-semantics-2026-07-23/`). The same rule applies to ANY
+  parent-reads-child-artifact path.
+  ⚠ **Load-bearing precondition (softened by the v1.0.14 route)**: the Architect HAS a `report.md` only
+  because it runs during PLAN with ZERO dependents (the plan-gate is created later, in PLAN-SPAWN) —
+  `report.md` is gated to leaf (zero-dependent) non-PIPELINE tasks. The `agent.results` envelope carries
+  ALL artifacts (result.json first, report.md second — insertion order, `execution-terminal-persist.ts`),
+  so if the choreography ever collapses CREATE into one execution (no report.md), the same call still
+  serves the plan via `result.json.finalResponse` — the fallback is now in-envelope, not a different read.
+
+### Mechanics surfaced by the k8s design review (2026-06-27) — full text
+
+**Mechanics surfaced by the k8s design review (2026-06-27; depth in `cline_docs/reviews/kubernetes-gitops-design-2026-06-27/`):**
+- **Three caps, distinct:** 8 KB Tier-1 per-tool-result (`agentic-tool-loop.ts:298` `MAX_TOOL_RESULT_LENGTH`, `truncateForLlm` `:307`) **binds harvest
+  strategy** (broad reads clip before the LLM sees them → mandate many narrow reads — and since 2026-07-08 the
+  runtime AUTO-NUDGES: the truncation marker directs a narrower re-read, **offers a `read_more(ref, offset)` continuation** to page the SAME result's tail when no narrower form exists (Phase 1 SHIPPED 2026-07-10 `3264e28f` — memory-backed loop pager `:399 READ_MORE_FUNCTION_DEF`, injected into `mcpFunctions`, NOT a registered/6-consolidated tool; verified live exec `cmrdz81ll`, forensics §7c), or flag-the-gap; the record
+  carries `resultTruncatedForLlm`/`resultChars` for the operator grep; SoT: `/.claude/knowledge/domain/harness/harvest-truncation-safety.md` §1/§3/§6 — §3 incl. the one-TARGET-per-read rule, 2026-07-08); 128 KB/512 KB §6
+  chain (`context-chainer.ts:30-31`); 50 KB persist (only the `agent.results(verbose)` anti-pattern).
+  - **Authoring a new protocol:** the `read_more` pointer lives in `UNIVERSAL_AGENT_RULES` (prepended to every protocol at seed time), so a new protocol INHERITS it — don't duplicate it in the body. For a protocol with a device-harvest / scoped-read section, DO add the domain-specific "no-narrower-form → `read_more`" pointer (as `network-provisioning-protocol` v1.1.2 does for the no-getter case, e.g. run-3's `spanning-tree`). Keep the fact-not-imperative framing (Protocol 10): "cheaper *when* a narrower form exists," never a blanket "prefer scoping" (right for config reads, wrong for holistic list reads — see forensics §7c).
+- **Teardown-on-escalation (F, 2026-07-08):** a quality-gate escalation (child < 50 → harness escalates instead
+  of approving) previously exited WITHOUT the self-provision teardown — a live multicast-VLAN run orphaned its
+  `ceos-lab-readonly` registration. Fixed in the seeded prose (network v1.1.1 / k8s v1.0.1 / terraform v1.0.1
+  step-5 + SYNTHESIZE sections + the harness guide): teardown runs on approval AND escalation — "escalation skips
+  the APPROVAL, never the cleanup". When auditing an escalated run, CHECK the registry for the dangling row.
+- **Embedded-envelope bloat (E) — SHIPPED + LIVE-VERIFIED 2026-07-08 (`803ec916`):** `embedded-server.ts` used to
+  decorate every agent tool result with a schema-echo ≈ a second copy of the data (45–49% of every services
+  response; why Test B's scoped reads all crossed Tier-1). Now leaned producer-side (all three branches, −746
+  lines); verified live: truncations 10/14→2/13, specialists −40% input. Guard: `test:embedded-envelope`.
+  Bundle: `cline_docs/reviews/services-envelope-bloat-2026-07-08/`. Prompt caching (G, `dc5645d5`) then took
+  family uncached input 2.16M→114 tokens (−78% input cost) — run economics changed materially 2026-07-08.
+- **ROLE_GUIDANCE_LIBRARY reality:** trace every reuse to the role's *actual text*, not a "neutral"
+  claim. **BOTH `change_reviewer` AND `config_change_author` are SHARED KEYS — each ships to FOUR
+  templates across network / terraform / k8s / observability** (`Config Change-Package Author` +
+  `HCL Rollback Author` + `Manifest Rollback Author` + the observability author; `Change Reviewer` +
+  `Plan Policy Reviewer` + `GitOps Change Reviewer` + `Observability Change Reviewer`),
+  ⚠️ this file said THREE until 2026-09-14 — observability shipped 2026-09-10 and the stale count was
+  repeated twice in one session before a panel lens caught it. Re-verify with
+  `grep -rn "defaultRole: '<role>'" scripts/seed-*.ts` rather than trusting the list,
+  so **every edit to either is a FOUR-domain edit**. That is real leverage — the 2026-08-25
+  satisfiability rule was earned by an IS-IS migration and now guards HCL and manifests — and a real
+  hazard: both entries have carried network-isms, and the satisfiability rule itself was authored with
+  a routing-only example that meant nothing to an HCL author (caught in review, 2026-08-25). State the
+  property abstractly; example per-domain or none. The keys now carry that warning in-file at the edit
+  site. Confirm blast radius with `npm run report:template-freshness` (all three rows of a key go STALE
+  together); deliver with the TARGETED reseed, never the full seed. The original network harvester had
+  **no key** (generic fallback) — network now repoints onto `infra_state_harvester` (2026-07-01). A §6-PRODUCING **tool-using** harvester role draws on **BOTH** bases:
+  `artifact_harvester` (§6-producing + escalate-don't-fabricate) **AND** `synthesis_source_acquirer`
+  (the iterative scoped `services.call` loop + succeed-with-partial + `## Acquisition Summary` — the
+  **tool-loop discipline lives in the acquirer**, NOT artifact_harvester). In-place neutralization of a
+  shipped role is gated by a **dry-run of its live pipeline**, not string tests.
+- **services-gateway R9 invariant** (convention, not runtime-enforced): a connected service reached as a
+  bespoke tool bypasses R9 (site A gates on `toolCall.name==='services'`) — a design-review gate.
+- **Expected-denial channel — `isError` vs throw (NOT "denials degrade").** A verb-enum/RBAC denial
+  returned as an MCP `isError:true` tool-result is recorded `success:true` **by construction** (mcpService
+  RETURNS isError; the loop sets success on the normal path), so a confined harvest **does not self-degrade**
+  (#89/executionDegradation key off `!success`). Only a genuine **throw** → `success:false` → degrades. So the
+  fix is a **contract** (the service returns isError, not a throw), not engine calibration. Pinned:
+  `test-security-invariants.ts` §L. And **"build CI for the customer's half" is a WS3-category smell** —
+  test our half, spec + self-cert theirs.
+
+### Canonical Artifact Builder for Trust Signals (May 2026) — SUPERSEDED: since execution-path convergence `buildExecutionResultJson` has ONE caller (`execution-core.ts`), so the two-path/stream-not-passing claim below no longer holds (verified 2026-09-27)
+
+### Canonical Artifact Builder for Trust Signals (May 2026)
+
+`result.json` / `pipeline-index.json` artifact construction was extracted
+to `lib/services/execution-artifacts.ts:buildExecutionResultJson` in
+commit `e480a5c0`. Both execution paths call it.
+
+Trust-signal fields the harness LLM relies on (`resolvedMode`,
+`resolvedReasonCode`, `protocolValidation`, `executionDegradation`,
+`templateScopeMismatch`, `confidenceCapped`+`originalConfidence`) flow
+through the helper's conditional-emission logic. When investigating
+"why didn't the harness see signal X on a stream-launched child?" —
+check whether stream is passing the input. The 2026-05-14 audit found
+stream wasn't passing `confidenceCapped`/`originalConfidence` because
+it doesn't implement the cap logic yet (followup B in
+`cline_docs/types-cleanup-followups-2026-05-13.md`).

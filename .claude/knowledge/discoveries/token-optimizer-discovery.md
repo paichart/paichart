@@ -9,7 +9,7 @@
 Perform a comprehensive discovery of the token management system to understand how token limits are enforced, usage is tracked, costs are optimized, and prompts are constructed within token constraints.
 
 ## Context
-Token management is critical for cost control and execution reliability. The system standardized on DEFAULT_MAX_TOKENS = 24000 (`MCPTokenDefaults.STANDARD_AGENT_LIMIT`; 6000→8000 in a Phase-0 truncation fix, 8000→24000 in truncation-stall R1 2026-07-16; delivered to ALL template rows 2026-08-20 — the seeds' explicit pins had silently overridden it for a month, see cline_docs/reviews/maxtokens-sonnet-flip-2026-08-20/). We need to understand all token-related implementations, optimization strategies, and critical limits including the Claude Desktop MCP response limit of 25,000 tokens, rate limiting constraints, and pagination strategies for managing large responses.
+Token management is critical for cost control and execution reliability. The system standardized on DEFAULT_MAX_TOKENS = 48000 (`MCPTokenDefaults.STANDARD_AGENT_LIMIT`; 6000→8000 in a Phase-0 truncation fix, 8000→24000 in truncation-stall R1 2026-07-16, 24000→48000 on 2026-09-24 after single-call needs of 24–28K were measured; delivered to ALL template rows 2026-08-20 — the seeds' explicit pins had silently overridden it for a month, see cline_docs/reviews/maxtokens-sonnet-flip-2026-08-20/). We need to understand all token-related implementations, optimization strategies, and critical limits including the Claude Desktop MCP response limit of 25,000 tokens, rate limiting constraints, and pagination strategies for managing large responses.
 
 **Plan 6 Event System Impact**: Event-driven architecture eliminates polling token overhead:
 - 90% reduction in database-related token usage for status checks
@@ -65,7 +65,7 @@ Locate:
 - Usage response parsing
 
 **Cost facts (WU-10, 2026-07-02)**: Fable 5 = $10/$50 per MTok (Opus 4.8 = $5/$25; Sonnet 5 = $3/$15,
-intro $2/$10 through 2026-08-31; Haiku = $1/$5). **Fable refusal-fallback = silent repricing**: the
+$2/$10 — the launch "intro through 2026-08-31" rise to $3/$15 was CANCELLED, verified on the live pricing page 2026-09-26; Haiku = $1/$5). **Fable refusal-fallback = silent repricing**: the
 provider opts Fable into the server-side fallback beta (`capabilitiesFor().serverSideFallback` →
 `fallbacks:[claude-opus-4-8]`), so a rescued refusal re-bills at OPUS rates inside the same call —
 `metadata.model` reports the SERVING model (Opus on a rescue), which is the audit signal. Sonnet 5
@@ -261,7 +261,7 @@ grep -r "4000.*DEFAULT_MAX_TOKENS\|2000.*DEFAULT_MAX_TOKENS" --include="*.ts" -B
 ```bash
 echo "=== Token System Health Check ==="
 echo "1. DEFAULT_MAX_TOKENS defined: $(grep -c "export const DEFAULT_MAX_TOKENS" lib/services/llm/types.ts || echo '❌ MISSING')"
-echo "2. STANDARD_AGENT_LIMIT is 24000: $(grep "STANDARD_AGENT_LIMIT: 24000" lib/services/llm/types.ts && echo '✅ YES' || echo '❌ NO')"  # expect 1 — DEFAULT_MAX_TOKENS = STANDARD_AGENT_LIMIT; raised 8000→24000 (R1 2026-07-16). This grep sat stale-failing for a month (found 2026-08-20) — update it WITH the constant.
+echo "2. STANDARD_AGENT_LIMIT is 48000: $(grep "STANDARD_AGENT_LIMIT: 48000" lib/services/llm/types.ts && echo '✅ YES' || echo '❌ NO')"  # expect 1 — DEFAULT_MAX_TOKENS = STANDARD_AGENT_LIMIT; raised 8000→24000 (R1 2026-07-16), 24000→48000 (2026-09-24). This grep sat stale-failing for a month (found 2026-08-20) — update it WITH the constant.
 echo "3. TokenManager exists: $([ -f lib/services/llm/tokenManager.ts ] && echo '✅ EXISTS' || echo '❌ MISSING')"
 echo "4. Rate limiter configured: $([ -f lib/utils/rate-limiter.ts ] && echo '✅ EXISTS' || echo '❌ MISSING')"
 
@@ -481,7 +481,7 @@ Discovery Completeness: [██████████] 100%
 | Context overflow | High | Medium | Information loss | MCPContextManager strategies |
 | MCP 25K limit hit | High | Medium | Tool response fails | Pagination, includeOutput: false |
 | Rate limit breach | Medium | High | Service disruption | LRU cache, per-token tracking |
-| Legacy limits persist | Medium | High | Inconsistent behavior | Standardization to DEFAULT_MAX_TOKENS (24000) + seed-literal guard (test-seed-model-params-guard) |
+| Legacy limits persist | Medium | High | Inconsistent behavior | Standardization to DEFAULT_MAX_TOKENS (48000) + seed-literal guard (test-seed-model-params-guard) |
 | Resource bloat | Low | Medium | Performance degradation | 5-minute cleanup intervals |
 | Cache overflow | Low | Low | Memory issues | 10K item limit, TTL expiry |
 

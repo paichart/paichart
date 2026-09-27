@@ -41,7 +41,9 @@ import type { ResolvedHarnessContext } from './harnessModeResolver';
 import type { AccumulatedUsage } from '@/lib/agents/harness/agentic-tool-loop';
 import { assessScoreIntegrity } from '@/lib/agents/harness/parse-confidence';
 import { parseReviewerVerdict, REVIEWER_ROLES } from '@/lib/agents/harness/parse-verdict';
+import { computeEvidenceGrading } from '@/lib/agents/harness/evidence-grading';
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { sliceSurrogateSafe } from '@/lib/utils/surrogate-safe';
 
 /**
  * BC46 / convergence 0.5d: strip HTML script/event-handler/iframe vectors from
@@ -287,6 +289,31 @@ export interface ChainedContextSignal {
   notChained?: Array<{ taskId: string; reason: string }>;
   totalChars: number;            // total chained chars across predecessors (post-A1 cap)
   anyTruncated: boolean;         // did the A1 §6 cap clip any predecessor?
+  /** A11/C8 (cross-pipeline delivery, 2026-09-16) — the injected upstream-leg entries a dep-free or
+   *  partially-dep'd child received from its stage's OWNING LEG. These are NOT predecessors: they
+   *  cross no dependency edge of this task, so they are counted on their own axis and never fold
+   *  into `predecessors` / `chainCapablePredecessors` (the gate's numerator and denominator stay
+   *  dependency-derived — C3/A4). Nested INSIDE `chainedContext` (E3b): a sibling of it on the
+   *  result.json root would be silently stripped by `pickResultJsonSummary`.
+   *
+   *  ⚠️ Both counts are emitted UNCONDITIONALLY, zeros included, and that is deliberate. A
+   *  conditional emit would make absence mean either "nothing to inherit" or "pre-2026-09-16
+   *  artifact"; emitting always leaves absence meaning exactly one thing (an artifact predating the
+   *  injection), which is the Register-Pattern-1 discipline this whole signal exists to hold. */
+  inheritedPredecessors: number;    // entries actually injected from the owning leg
+  /** THE DENOMINATOR (C9). How many cross-pipeline entries the owning leg HAD to offer. 0 with
+   *  `inheritedPredecessors` 0 means there was nothing to inherit; >0 with `inheritedPredecessors` 0
+   *  means every candidate was skipped and `inheritedSkipped` names why. Never a silent zero. */
+  legCrossPipelineEntries: number;
+  /** Per-candidate skip reasons (`own-edge-wins`, `in-not-chained`, …), present only when non-empty.
+   *  ⚠️ DELIBERATELY NOT merged into `notChained`: the program gate treats `notChained.length > 0`
+   *  as BLOCKING, and these skips are benign by construction (the child already holds the entry on
+   *  its own edge, or the chainer already recorded the drop). Routing them there would turn a
+   *  fail-open into a fail-closed. */
+  inheritedSkipped?: Array<{ taskId: string; reason: string }>;
+  /** The owning leg the entries came from — the subject, so a reader is not told a count without
+   *  being told of what (the F7 render-WHAT rule). Present only when a leg was resolved. */
+  inheritedFromLeg?: string;
 }
 
 export interface ExecutionResultJsonInput {
@@ -327,10 +354,28 @@ export interface ExecutionResultJsonInput {
   /** Budget fail-fast fired (all-budget-rejected turn → final no-tools blocked-report turn). */
   budgetFailFastUsed?: boolean;
   diagnosticRetryUsed?: boolean;
-  /** R4 Layer 1: a 'full' turn truncated at max_tokens with empty text and was re-issued once with
-   *  raised maxTokens; `Recovered` = the retry produced text/tool_use. Trust-signal family. */
+  /** R4 Layer 1: a 'full' turn truncated at max_tokens and was re-issued once with raised maxTokens
+   *  (empty text only until 2026-09-25; any text since — A2 re-opened, register E1); `Recovered` = the
+   *  retry produced text/tool_use. Trust-signal family. */
   truncationRetryUsed?: boolean;
   truncationRetryRecovered?: boolean;
+  /** R4 time-aware budget (2026-09-25, register E1): why a qualifying truncation was NOT retried
+   *  ('INSUFFICIENT_TIME' | 'AT_MODEL_CEILING'), and the budget computed for it (granted when armed,
+   *  the sub-headroom value when skipped). Both null when no truncation qualified. The E1 measurables:
+   *  an INSUFFICIENT_TIME skip on a SUCCESS row is what would earn a watchdog-formula change. */
+  truncationRetrySkippedReason?: string | null;
+  truncationRetryMaxTokens?: number | null;
+  /** Partial-text retry (2026-09-25, register E1 §2.5/§2.6): the retry's own stop reason
+   *  ('max_tokens' = recovered but still truncated) and the chars of partial text it discarded
+   *  (0 = the truncated turn was empty). Both null when no retry returned. */
+  truncationRetryStopReason?: string | null;
+  truncationRetryDiscardedChars?: number | null;
+  /** F2 (2026-09-25, register E1): the stop reason of the deliverable's own response, captured at
+   *  loop exit (`AgenticLoopResult.finalStopReason`) — NEVER the post-#90 `currentResponse`, which
+   *  #90 replaces with its reflection. Emitted as `toolLoop.finalStopReason` (null when unknown) and
+   *  derived into `toolLoop.deliverableTruncated`. NESTED under toolLoop by design (E3b): toolLoop is
+   *  whitelisted and copied verbatim, so it survives the hoist with no whitelist edit. */
+  finalStopReason?: string | null;
 
   // Path-specific extensions (Vercel-AI-SDK fields emitted by stream path only —
   // engine uses Anthropic SDK directly and doesn't surface these as artifact fields)
@@ -401,7 +446,7 @@ function truncateToolCallResults(
       result: {
         truncated: true,
         originalSize: resultJson.length,
-        preview: resultJson.slice(0, TOOL_RESULT_PREVIEW_BYTES) + '...',
+        preview: sliceSurrogateSafe(resultJson, TOOL_RESULT_PREVIEW_BYTES) + '...', // X11: never split a pair
         note: `Full result was ${resultJson.length} bytes (exceeded 50KB persistence threshold). Truncated to prevent chained-context cascade bloat. The preview covers what the LLM saw in-loop (8KB Tier-1 cap). If this result was a fetch of another task's artifact, the full content lives on that originating task (agent.results); an external service response beyond the preview was not persisted anywhere.`,
       },
     };
@@ -425,7 +470,10 @@ function truncateToolCallResults(
  *             scoreIntegrity}, executionTime, tokensUsed, mcpToolsProvided
  *   Tools:    toolCalls (truncated), toolLoop{totalTurns, hitMaxTurns,
  *             totalToolExecutions, correctionTurnUsed, diagnosticRetryUsed, budgetFailFastUsed,
- *             truncationRetryUsed, truncationRetryRecovered, toolErrorResultCount}
+ *             truncationRetryUsed, truncationRetryRecovered, truncationRetrySkippedReason,
+ *             truncationRetryMaxTokens, truncationRetryStopReason,
+ *             truncationRetryDiscardedChars, finalStopReason,
+ *             deliverableTruncated, toolErrorResultCount}
  *   Stream extensions (Vercel-AI-SDK only): functionCall, webSearchResults,
  *             citations, searchQueries
  */
@@ -447,9 +495,25 @@ export function deriveChainedContextSignal(inputContext: unknown): ChainedContex
   // there is nothing chain-capable upstream (a genuinely clean, predecessor-less task); a leg with
   // chain-capable predecessors always carries the block, predecessors 0 included, and `notChained`
   // rides along so the gate reads WHY (the protocol's Step 4 already asks it to block on those facts).
-  if (predecessors <= 0 && chainCapable <= 0) return null;
+  // A11/C8 (2026-09-16): the injection the cross-pipeline delivery fix serves lands on DEP-FREE
+  // children — 52 of 198, every Phase-0 harvester — whose dependency-derived counts are honestly
+  // zero. Under the F-A predicate alone those executions would deliver an upstream deliverable with
+  // NO chainedContext block at all: no card line, no gate-readable fact, nothing. Absence reads as
+  // clean — the identical shape to the F-A defect recorded three lines up, one population over. So
+  // the early-out now also spares a context that inherited anything, or that had anything to
+  // inherit and skipped it all (the all-skipped case is exactly where a reader needs the reasons).
+  // UNCHANGED: a genuinely predecessor-less task with nothing injected still returns null.
+  const inheritedPredecessors = typeof meta.inheritedPredecessors === 'number' ? meta.inheritedPredecessors : 0;
+  const legCrossPipelineEntries = typeof meta.legCrossPipelineEntries === 'number' ? meta.legCrossPipelineEntries : 0;
+  if (predecessors <= 0 && chainCapable <= 0 && inheritedPredecessors <= 0 && legCrossPipelineEntries <= 0) return null;
   const notChainedRaw = Array.isArray(meta.notChained) ? meta.notChained as Array<{ taskId?: unknown; reason?: unknown }> : [];
   const notChained = notChainedRaw
+    .filter(n => n && typeof n.taskId === 'string' && typeof n.reason === 'string')
+    .map(n => ({ taskId: n.taskId as string, reason: n.reason as string }));
+  // Same shape-guard as notChained, and kept on its OWN list for the fail-open reason documented on
+  // the interface field.
+  const inheritedSkippedRaw = Array.isArray(meta.inheritedSkipped) ? meta.inheritedSkipped as Array<{ taskId?: unknown; reason?: unknown }> : [];
+  const inheritedSkipped = inheritedSkippedRaw
     .filter(n => n && typeof n.taskId === 'string' && typeof n.reason === 'string')
     .map(n => ({ taskId: n.taskId as string, reason: n.reason as string }));
   return {
@@ -462,6 +526,10 @@ export function deriveChainedContextSignal(inputContext: unknown): ChainedContex
       typeof meta.degradedPredecessors === 'number' ? meta.degradedPredecessors : 0,
     totalChars: typeof meta.totalChars === 'number' ? meta.totalChars : 0,
     anyTruncated: meta.anyTruncated === true,
+    inheritedPredecessors,
+    legCrossPipelineEntries,
+    ...(inheritedSkipped.length > 0 ? { inheritedSkipped } : {}),
+    ...(typeof meta.inheritedFromLeg === 'string' ? { inheritedFromLeg: meta.inheritedFromLeg } : {}),
   };
 }
 
@@ -498,8 +566,49 @@ export function deriveChainedContextSignal(inputContext: unknown): ChainedContex
  * gate has to be able to read this head-slice-safe, exactly like `derivationContainment`, so it
  * earns a slot rather than riding inside an unrelated key. If a sub-field is ever added to it
  * (a disposition, a severity), nest it INSIDE `dialectLint` — the same trap, one level down.
+ *
+ * `errorCategory` and `chainedContext` (added 2026-09-16, boundary review
+ * `cline_docs/reviews/boundary-summary-keys-2026-09-16/`) are the OTHER direction of the same
+ * law. Both are genuine top-level keys this builder emits BEFORE `finalResponse` (the compact
+ * hoist of `executionDegradation.errorCategory`, and the 8th trust signal), the card's Facts line
+ * READ both, and this list passed neither — so the `chainedContext` render branch shipped
+ * 2026-09-10 and never once fired (present on 47.5% of artifacts), and `errorCategory` was
+ * stripped here and then re-declared as an explicit `null` from error.json by the results handler,
+ * which reads as "checked, nothing wrong" on every SUCCESS-but-degraded execution (214 of 214
+ * measured). `PROTOCOL_STEP_SKIPPED` on this key is a reviewer-less-leg gate input
+ * (`seed-protocol-prompts.ts`, the "no child's result.json carries a trust signal" conjunct), so
+ * the null was load-bearing. `executionDegradation` and `protocolValidation` are deliberately NOT
+ * listed: the gate-relevant content of both is already reduced to this one token, and
+ * `protocolValidation.missingSteps` is prose that would wreck the head slice this list exists to
+ * survive. Pinned by E3d in the parity suite and by RW1/RW2 in `test-lean-card-facts.ts` — the
+ * read-side tripwire that would have caught the first defect the day it shipped.
  */
-export const RESULT_JSON_SUMMARY_KEYS = ['toolLoop', 'confidenceScore', 'reviewerVerdict', 'derivationContainment', 'dialectLint', 'contractPropagation', 'protocolInjection', 'qualityMetrics', 'markerPresence', 'rollbackContainment'] as const; // markerPresence: H-4 (2026-09-10) and rollbackContainment: net #3 (2026-09-11) are DELIBERATE top-level additions — never unlisted siblings. rollbackDisposition rides NESTED inside rollbackContainment (E3b); promoting it here would strip it at the hoist
+export const RESULT_JSON_SUMMARY_KEYS = ['toolLoop', 'confidenceScore', 'reviewerVerdict', 'derivationContainment', 'dialectLint', 'contractPropagation', 'protocolInjection', 'qualityMetrics', 'markerPresence', 'rollbackContainment', 'errorCategory', 'chainedContext', 'supersession', 'verdictFreshness'] as const; // markerPresence: H-4 (2026-09-10) and rollbackContainment: net #3 (2026-09-11) are DELIBERATE top-level additions — never unlisted siblings. rollbackDisposition rides NESTED inside rollbackContainment (E3b); promoting it here would strip it at the hoist. errorCategory + chainedContext (2026-09-16): see the header — both were canonical top-level keys of this builder that the card READ and this list DROPPED
+// RWF C.3 (2026-09-26): `supersession` (keep-best's audit, written by computeSelfSupersession — NOT a net) and
+// `verdictFreshness` (a leg-synthesize net) are deliberate top-level additions: the pick stripped `supersession`
+// until now, so a retry that lost, or was skipped, was invisible on the card.
+
+/**
+ * The bulky payloads of a result.json, in their builder order. Everything else (every compact fact) goes
+ * BEFORE them. See orderResultJsonForPersist.
+ */
+export const RESULT_JSON_BULKY_TAIL_KEYS = ['finalResponse', 'toolCalls', 'functionCall', 'webSearchResults', 'citations', 'searchQueries'] as const;
+
+/**
+ * PERSIST-TIME key order (RWF C.3, 2026-09-26). The builder above puts compact facts before the bulky
+ * payloads, because a reader of a long result.json sees only its head (the 8KB tool-loop slice; see the
+ * builder's contract comment). But most facts are added AFTER the builder: every net stamp, `supersession`,
+ * `reportMdSource`. A JS spread appends them, so in prod `finalResponse` sat at ~2K while `markerPresence`
+ * sat at 10.6–18.1K, past the head a reader sees. One re-order immediately before JSON.stringify fixes every
+ * such key at once, including ones not yet written. Relative order is preserved on both sides.
+ */
+export function orderResultJsonForPersist<T extends Record<string, unknown>>(json: T): T {
+  const bulky = new Set<string>(RESULT_JSON_BULKY_TAIL_KEYS);
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(json)) if (!bulky.has(k)) out[k] = v;
+  for (const k of RESULT_JSON_BULKY_TAIL_KEYS) if (k in json) out[k] = (json as Record<string, unknown>)[k];
+  return out as T;
+}
 
 /** Pick the RESULT_JSON_SUMMARY_KEYS fields present on a parsed result.json (null/undefined skipped). */
 export function pickResultJsonSummary(parsed: Record<string, unknown>): Record<string, unknown> {
@@ -520,6 +629,9 @@ export function buildExecutionResultJson(input: ExecutionResultJsonInput): Recor
     executionTime, tokensUsed, mcpFunctions,
     correctionTurnUsed, diagnosticRetryUsed = false, budgetFailFastUsed = false,
     truncationRetryUsed = false, truncationRetryRecovered = false,
+    truncationRetrySkippedReason = null, truncationRetryMaxTokens = null,
+    truncationRetryStopReason = null, truncationRetryDiscardedChars = null,
+    finalStopReason = null,
     extensions = {},
     logger, executionId,
   } = input;
@@ -528,7 +640,28 @@ export function buildExecutionResultJson(input: ExecutionResultJsonInput): Recor
   // parser (Protocol 10 — a transcription of what the terminal `## VERDICT:` block said, never a
   // platform judgment). Role-gated; parsed INSIDE the canonical builder so dual-path parity is
   // structural (Bug Class 75 lesson — an external wiring site is how the stream path drifted before).
-  const reviewerVerdict = REVIEWER_ROLES.has(agentRole) ? parseReviewerVerdict(finalResponse) : null;
+  const parsedVerdict = REVIEWER_ROLES.has(agentRole) ? parseReviewerVerdict(finalResponse) : null;
+
+  // Evidence grading (2026-09-20): the reviewer's declared epistemic mode per finding —
+  // VERIFIED-AGAINST-EVIDENCE vs ACCEPTED-FROM-CLAIMS — mandated by every domain protocol and read
+  // by nothing until now. NESTED inside reviewerVerdict deliberately (E3b): it qualifies that
+  // verdict, and pickResultJsonSummary copies `parsed.reviewerVerdict` VERBATIM, so nesting
+  // survives the whitelist by construction while a top-level sibling would be stripped silently.
+  // Scanned over the WHOLE finalResponse, not `raw` — gradings ride on findings, which precede the
+  // terminal block. Protocol 10: a FACT with NO CONSUMER by design; see the module header.
+  //
+  // ⚠️ FIELD ORDER INSIDE THE NESTED OBJECT IS PART OF THE SAME HEAD-SLICE CONTRACT as the outer
+  // builder (see the note below): `raw` carries the reviewer's terminal block verbatim and is the
+  // bulky member, so the compact grading fact is emitted BEFORE it. Appending after `raw` would put
+  // a field that exists to be read behind the thing most likely to be cut.
+  const reviewerVerdict = parsedVerdict
+    ? {
+        approved: parsedVerdict.approved,
+        blocking: parsedVerdict.blocking,
+        evidenceGrading: computeEvidenceGrading(finalResponse),
+        raw: parsedVerdict.raw,
+      }
+    : null;
 
   // FIELD ORDER IS A CONTRACT, not cosmetics: SYNTHESIZE reads this artifact through HEAD-SLICE caps
   // (fetch 50KB → tool-loop 8KB), so anything emitted after a long `finalResponse` (~12KB for a
@@ -592,6 +725,16 @@ export function buildExecutionResultJson(input: ExecutionResultJsonInput): Recor
       diagnosticRetryUsed,
       truncationRetryUsed,
       truncationRetryRecovered,
+      // R4 time-aware budget facts (2026-09-25, register E1) — compact, so before finalResponse.
+      truncationRetrySkippedReason: truncationRetrySkippedReason ?? null,
+      truncationRetryMaxTokens: truncationRetryMaxTokens ?? null,
+      truncationRetryStopReason: truncationRetryStopReason ?? null,
+      truncationRetryDiscardedChars: truncationRetryDiscardedChars ?? null,
+      // F2 (2026-09-25, register E1): the deliverable's stop reason at loop exit — a transcription —
+      // and the boolean a gate can branch on without knowing stop-reason vocabulary. Text-
+      // independent: TRUNCATED_NO_OUTPUT is its empty sub-case, TRUNCATED_PARTIAL_OUTPUT the rest.
+      finalStopReason: finalStopReason ?? null,
+      deliverableTruncated: finalStopReason === 'max_tokens',
       // F-NEW-3 (T6, 2026-07-17): tool calls that RETURNED an MCP error envelope while keeping
       // success=true (the §L expected-denial contract). Without this a dead connected service is
       // INVISIBLE in structured facts — see countToolErrorResults() for the full rationale.

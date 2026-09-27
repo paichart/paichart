@@ -32,6 +32,8 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { logger } from '../logger';
 import { assessScoreIntegrity } from '../agents/harness/parse-confidence';
+import { readChainedRecord, compareRecords } from '../agents/harness/chained-record';
+import { isReviewerSet } from '../agents/harness/parse-verdict';
 
 const log = logger.child({ module: 'ExecutionSelection' });
 
@@ -58,6 +60,14 @@ export interface SelectionOptions {
    *  caller would read the artifact anyway (chainer, report-md extraction). */
   requireNonEmptyArtifact?: boolean;
 }
+
+/**
+ * The options the context chainer selects with — and therefore the options every reader that must see
+ * what the Reviewer saw MUST use (RWF Wave B: the mechanical nets, via authoritative-result-read.ts).
+ * One constant, never two literals that happen to agree: a later edit to either site would silently
+ * re-open Reviewer/gate divergence. Source-pinned by scripts/test-authoritative-result-read.ts (F6).
+ */
+export const CHAIN_SELECTION_OPTIONS = { requireNonEmptyArtifact: true } as const satisfies SelectionOptions;
 
 /**
  * Select the authoritative SUCCESS execution for a task.
@@ -231,9 +241,13 @@ export function judgeCatastrophicDegradation(
   return { superseded: structuralCollapse || scoreAsymmetry || truncationRegression, reasons };
 }
 
-/** Audit block persisted into the LOSER's own result.json.supersession (AR-5: auditable). */
+/**
+ * Audit block persisted into the retry's own result.json.supersession (AR-5: auditable). `supersededById`
+ * is null when the comparison was deliberately SKIPPED (RWF C.2): the audit then says why
+ * (`skipped: 'changed-input' | 'input-unknown'`) and the retry stays authoritative, latest-wins.
+ */
 export interface SelfSupersessionResult {
-  supersededById: string;
+  supersededById: string | null;
   audit: Record<string, unknown>;
 }
 
@@ -250,10 +264,43 @@ export async function computeSelfSupersession(
   client: SelectionClient,
   executionContext: unknown,
   ownResultJson: Record<string, unknown>,
+  own?: { executionId: string; config?: unknown },
 ): Promise<SelfSupersessionResult | null> {
   const targetId = (executionContext as { reExecutionOfExecutionId?: unknown } | null | undefined)
     ?.reExecutionOfExecutionId;
   if (typeof targetId !== 'string' || targetId.length === 0) return null;
+
+  // ── RWF C.2 (2026-09-26): keep-best compares like with like, or not at all. ──
+  // Arms 1-3 ask "is this retry catastrophically WORSE than its target at the same job?". When the retry
+  // was given DIFFERENT predecessor executions it is not the same job: a Reviewer re-run over a new Author
+  // package that truncates would lose to the OLD approval, leaving the authoritative verdict APPROVED-for-v1
+  // while the authoritative Author is v2, i.e. fail-open. So a changed-input retry gets NO comparison
+  // (latest-wins; a truncated re-review then parses to no verdict and fails closed). Unknown input skips for
+  // the REVIEWER set only; other roles keep today's arms, so same-input Author retries do not lose their
+  // catastrophic-degradation protection during the transition (independent audit X7).
+  // Named residual (agent-execution): harness edits to a child's description or contract between runs are
+  // invisible to an execution-id key.
+  const targetRow = await client.agentExecution.findUnique({
+    where: { id: targetId }, select: { context: true, config: true },
+  });
+  const inputRelation = compareRecords(
+    readChainedRecord({ context: executionContext, config: own?.config }).record,
+    targetRow ? readChainedRecord(targetRow).record : null,
+  );
+  const skip = (why: 'changed-input' | 'input-unknown'): SelfSupersessionResult => {
+    log.info({ targetId, skipped: why }, 'keep-best: comparison skipped — the retry stays authoritative (latest-wins)');
+    return { supersededById: null, audit: { skipped: why, target: targetId, judgedAt: new Date().toISOString() } };
+  };
+  if (inputRelation === 'changed') return skip('changed-input');
+  if (inputRelation === null && own?.executionId) {
+    const row = await client.agentExecution.findUnique({
+      where: { id: own.executionId },
+      select: { agentTemplate: { select: { templateType: true } },
+        task: { select: { agentRole: true, agentTemplate: { select: { templateType: true } } } } },
+    });
+    const templateType = row?.agentTemplate?.templateType ?? row?.task?.agentTemplate?.templateType ?? null;
+    if (isReviewerSet(row?.task?.agentRole, templateType)) return skip('input-unknown');
+  }
 
   const targetArtifact = await client.agentArtifact.findFirst({
     where: { executionId: targetId, name: { in: ['result.json', 'pipeline-index.json'] } },

@@ -321,6 +321,22 @@ echo ""
 echo "--- ⚠️ Template roles WITHOUT guidance (get generic fallback) ---"
 comm -23 /tmp/template_roles.txt /tmp/guidance_roles.txt
 
+# A new defaultRole carries a SECOND decision: does it RECEIVE an upstream pipeline's deliverable?
+# Cross-pipeline delivery is scoped by an EXCLUSION list that FAILS TOWARD DELIVERY, so a role nobody
+# considered receives by default — harmless for a consuming role, harmful for a harvest-shaped one
+# (an upstream deliverable folded into machine-parsed ground truth) or a review-shaped one (a second
+# reviewable document). Shape, not name: synthesis_source_acquirer is harvest-shaped and says so
+# nowhere in its name. Decide it at the same moment you name the role.
+echo ""
+echo "--- ⚠️ Shape-matching roles NOT in INJECTION_EXCLUDED_ROLES (an UNDECIDED role) ---"
+awk '/INJECTION_EXCLUDED_ROLES/{f=1} f{print} f&&/\]\)/{exit}' lib/agents/harness/context-chainer.ts \
+  | grep -oE "'[a-z_]+'" | tr -d "'" | sort -u > /tmp/injection_excluded.txt
+wc -l < /tmp/injection_excluded.txt   # expect >=6 — CONTROL: a zero here means the parse broke, not that nothing is excluded
+comm -23 /tmp/guidance_roles.txt /tmp/injection_excluded.txt | grep -iE "review|harvest|acquir" \
+  || echo "(none — every shape-matching role has been decided)"
+# ⚠️ Read the CONTROL line first. An earlier draft of this block used sed with an unbalanced paren,
+# parsed 0 exclusions, and confidently reported all five excluded roles as undecided findings.
+
 echo ""
 echo "--- Guidance roles WITHOUT templates (orphaned entries) ---"
 comm -13 /tmp/template_roles.txt /tmp/guidance_roles.txt
@@ -348,12 +364,12 @@ grep -nE "'(infra_state_harvester|infra_change_architect|config_change_author|ch
 echo ""
 echo "--- the reuse PROOF: which templates reuse each neutral role ---"
 grep -rhoE "defaultRole: '(infra_state_harvester|infra_change_architect|config_change_author|change_reviewer)'" scripts/seed-*templates*.ts | sort | uniq -c
-# expect 4 each — all four roles reused across network + k8s + terraform + observability
+# infra_state_harvester 5 (network + k8s + terraform + observability + requirements-authoring); the other three 4 each (corrected 2026-09-26, GS-R5 panel)
 # (measured 2026-09-10 at the observability W2 ship; terraform AND observability reused all 4 UNEDITED)
 
 echo ""
 echo "--- terminal-verdict grammar coupling (2026-07-14): grammar canonical in change_reviewer entry ONLY ---"
-grep -c "## VERDICT: APPROVED | NEEDS-REVISION" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # expect 1
+grep -c "## VERDICT: APPROVED | NEEDS-REVISION" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # expect 2 — ONE PER REVIEWER ROLE (change_reviewer, requirements_reviewer), not one globally. GS8 keeps the grammar out of PROTOCOLS; it does not make it single-copy inside the library, because each reviewer role must instruct its own terminal block. The copies are pinned by npm run test:parse-verdict, which asserts all four parsed tokens for every REVIEWER_ROLE — widened 2026-09-22 when this grep caught the second copy arriving unpinned
 grep -c "## VERDICT: APPROVED | NEEDS-REVISION" scripts/seed-protocol-prompts.ts                                  # expect 0 (protocols reference, never redefine)
 npm run test:parse-verdict   # 15 pass — fixtures are LIFTED from the change_reviewer entry; an entry edit that
                              # moves the marker fails here. Entry edits ⇒ re-seed the 4 reviewer templates.
@@ -1023,5 +1039,5 @@ template edits. So a library fix can sit undelivered indefinitely with nothing m
 ```bash
 grep -c "loadProtocols" lib/pov/api/agent-templates-adapter.ts               # expect 15 — raw round-trip everywhere
 grep -c "loadProtocols: template.metadata?.loadProtocols === true" lib/pov/api/agent-templates-adapter.ts  # expect 0 — the coercion form is retired (a reappearance is the 'composed'-wipe bug)
-grep -c "flip-harness-protocol-mode" .github/workflows/production-deploy.yml # expect 1 — the gate's error text names the sanctioned flip path
+grep -c "flip-harness-protocol-mode" scripts/deploy/blue-green-deploy.sh # expect 1 — the gate's error text names the sanctioned flip path (the deploy logic moved from the workflow into this script; this grep never ran until the audit's path check was fixed, 2026-09-25)
 ```

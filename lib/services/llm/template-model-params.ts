@@ -1,3 +1,5 @@
+import { EXECUTION_IDENTITY_KEYS } from '../../validation/model-parameters';
+
 /**
  * Build the synthetic `modelParameters` for an execution from an agent template's
  * own fields — WITHOUT injecting hardcoded provider/model/temperature defaults.
@@ -63,6 +65,22 @@ export function buildTemplateModelParameters(template: {
  * execution paths read the frozen row. Pure + leaf-module (no prisma import) —
  * fixture-tested in scripts/test-execution-config-snapshot.ts.
  */
+/**
+ * X15 (RWF, 2026-09-27): remove the execution-identity keys (agentRole, prompt, inputContext, priority) from a
+ * modelParameters object before it is spread into an execution config. THE runtime control: `task.metadata.modelParameters`
+ * and template metadata are validated only as records on most write paths, so the schema rejection is an early, clearer
+ * error on some fields — not a guarantee (boundary-contract B2). PRESENCE-based, so `prompt: null` is stripped too (B1).
+ * Called by BOTH execution-config builders (agentTaskService, agentExecutionConfigBuilder) and by
+ * resolveExecutionModelParams (the frozen snapshot). Callers log `stripped` — a loud fact, never a silent strip.
+ */
+export function withoutExecutionIdentityKeys(mp: Record<string, any>): { params: Record<string, any>; stripped: string[] } {
+  const stripped = EXECUTION_IDENTITY_KEYS.filter((k) => Object.prototype.hasOwnProperty.call(mp, k));
+  if (stripped.length === 0) return { params: mp, stripped };
+  const params = { ...mp };
+  for (const k of stripped) delete params[k];
+  return { params, stripped };
+}
+
 export function resolveExecutionModelParams(input: {
   taskMetadata: unknown;
   explicitParams: unknown;
@@ -76,9 +94,10 @@ export function resolveExecutionModelParams(input: {
     input.taskMetadata && typeof input.taskMetadata === 'object' && !Array.isArray(input.taskMetadata)
       ? (input.taskMetadata as any).modelParameters
       : null;
-  return (
+  const chosen =
     nonEmpty(taskMeta) ||
     nonEmpty(input.explicitParams) ||
-    (input.template ? buildTemplateModelParameters(input.template) : {})
-  );
+    (input.template ? buildTemplateModelParameters(input.template) : {});
+  // X15: the frozen snapshot must not carry a stored identity key either (boundary-contract L1).
+  return withoutExecutionIdentityKeys(chosen).params;
 }

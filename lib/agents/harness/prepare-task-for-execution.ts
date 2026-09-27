@@ -25,7 +25,9 @@ import { CanNeverRunError } from '@/lib/errors';
 import { chainDependencyContext, applyChainedContext } from './context-chainer';
 import { inheritInterfaceContractIfAbsent } from '@/lib/tasks/services/inputContext';
 import { deepStripDangerousKeys } from '@/lib/utils/sanitize-keys';
-import { resolveProtocolStamp, findProgramParentForStage } from './program-protocol';
+import { resolveProtocolStamp, findProgramParentForStage, resolveOwningLeg } from './program-protocol';
+import type { LegInjection } from './context-chainer';
+import { recordFromChained, type ChainedRecord } from './chained-predecessors';
 
 const log = logger.child({ module: 'PrepareTaskForExecution' });
 
@@ -61,9 +63,22 @@ export async function prepareTaskForExecution(
   taskId: string,
   opts: PrepareTaskOptions = {}
 ): Promise<Record<string, unknown> | null> {
+  return (await prepareTaskForExecutionWithRecord(taskId, opts)).context;
+}
+
+/**
+ * RWF C.1 (2026-09-26): the same preparation, plus WHICH case produced the outcome, as the per-execution
+ * chained record (chained-predecessors.ts). The null return above is ambiguous across four cases
+ * (scheduled, skip-chaining, chain-failed, no-deps) and chain-failed must never be recorded as "no
+ * predecessors". createAgentExecution stamps `record` into the execution's context.
+ */
+export async function prepareTaskForExecutionWithRecord(
+  taskId: string,
+  opts: PrepareTaskOptions = {}
+): Promise<{ context: Record<string, unknown> | null; record: ChainedRecord }> {
   // SCHEDULED rows are created long before they run; chaining now would capture a
   // stale upstream snapshot. The future SCHEDULED processor must chain at run time.
-  if (opts.status === 'SCHEDULED') return null;
+  if (opts.status === 'SCHEDULED') return { context: null, record: { status: 'not-chained', reason: 'scheduled' } };
 
   // ── CONTRACT INHERITANCE (2026-08-26) — write-if-absent, BEFORE everything below ──────────────
   // PLACEMENT IS LOAD-BEARING, and it is why there is no "recompute hasContract" dance here. This
@@ -124,7 +139,7 @@ export async function prepareTaskForExecution(
         'contract inherited on an explicit-override execution — the ROW now carries it but the ' +
         'EXECUTED prompt used the caller override; returning null preserves BC-T6-1');
     }
-    return null;
+    return { context: null, record: { status: 'not-chained', reason: 'skip-chaining' } };
   }
 
   // CC7 loud-fail consumer (2026-07-15, program-harness design / boundary B1): a program
@@ -151,7 +166,10 @@ export async function prepareTaskForExecution(
   //       Architect are all correctly excluded.
   const contractCheck = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { title: true, metadata: true, inputContext: true, type: true, stageId: true },
+    // `agentRole` is read by the injection EXCLUSION policy below (INJECTION_EXCLUDED_ROLES). Without it
+    // every child reads undefined, no role is ever excluded, and the harvest-poisoning case ships
+    // silently — a predicate on an unselected column is fail-OPEN (caught 2026-09-16 before ship).
+    select: { title: true, metadata: true, inputContext: true, type: true, stageId: true, agentRole: true },
   });
 
   // ── PROTOCOL STAMP (WS2 Phase A, 2026-08-17) — write-if-absent at the execution chokepoint ──
@@ -244,19 +262,54 @@ export async function prepareTaskForExecution(
     );
   }
 
+  // ── CROSS-PIPELINE DELIVERY (2026-09-16, Bug Class 84) — resolve the owning leg's entries ──────
+  // NON-PIPELINE children only, and AFTER the CC7 throw above (which must stay outside every try —
+  // pinned). The leg's own `chainedFrom` is handed to the chainer as `inject`; the chainer copies the
+  // cross-pipeline entries VERBATIM into this child's chainedFrom, stamped `inheritedFromLeg`, and
+  // keeps them out of every dependency-derived count. Same one-hop shape as the contract inheritance
+  // at the top of this function, one payload later: the leg harness is an LLM and paraphrases what it
+  // received into child descriptions (3 of 51 edges ever reached a child); this is the deterministic
+  // touchpoint downstream of it.
+  //
+  // SCOPE: an EXCLUSION list (context-chainer `INJECTION_EXCLUDED_ROLES` — harvest-shaped roles + the
+  // reviewer for now); the chainer applies it from `childAgentRole`. A null role RECEIVES the injection.
+  //
+  // FAIL-OPEN, LOUD, and NEVER into notChained: a resolution failure logs and the chain proceeds with
+  // nothing to inject — the child runs exactly as it did before this change. An `ambiguous` leg (>1
+  // PIPELINE row owning this stage) also injects nothing: choosing one would silently decide WHICH
+  // pipeline's deliverable the child receives.
+  let inject: LegInjection | null = null;
+  if (contractCheck && contractCheck.type !== 'PIPELINE' && contractCheck.stageId) {
+    try {
+      const leg = await resolveOwningLeg(prisma, contractCheck.stageId);
+      if (leg.kind === 'one') {
+        inject = { legTaskId: leg.legTaskId, entries: leg.chainedFrom, childAgentRole: contractCheck.agentRole };
+      } else if (leg.kind === 'ambiguous') {
+        log.warn({ taskId, stageId: contractCheck.stageId, candidates: leg.candidates, errorCode: 'OWNING_LEG_AMBIGUOUS' },
+          'more than one PIPELINE row owns this stage — injecting nothing rather than choosing');
+      }
+    } catch (err) {
+      log.warn({ err, taskId, stageId: contractCheck.stageId, errorCode: 'OWNING_LEG_RESOLUTION_FAILED' },
+        'owning-leg resolution failed — proceeding without cross-pipeline injection');
+    }
+  }
+
   try {
-    const chained = await chainDependencyContext(taskId);
-    // No dependencies is a benign no-op for CHAINING — but if inheritance wrote, the caller still
-    // needs the authoritative merged row. The leg's FIRST child (the harvester) is dep-free and is
-    // exactly the child that most needs the contract, so returning null here would have made the
-    // whole fix invisible to the SSE route's §6 render and to the frozen-config snapshot.
-    if (!chained) return inheritedContext;
-    return await applyChainedContext(taskId, chained);
+    const chained = await chainDependencyContext(taskId, prisma, { inject });
+    // No dependencies AND nothing to inject is a benign no-op for CHAINING — but if inheritance
+    // wrote, the caller still needs the authoritative merged row. The leg's FIRST child (the
+    // harvester) is dep-free and is exactly the child that most needs the contract, so returning
+    // null here would have made the whole fix invisible to the SSE route's §6 render and to the
+    // frozen-config snapshot. (With something to inject the chainer no longer returns null for a
+    // dep-free child — that is the C4 arm, and the injected-only context takes the normal path.)
+    if (!chained) return { context: inheritedContext, record: { status: 'not-chained', reason: 'no-deps' } };
+    const context = await applyChainedContext(taskId, chained);
+    return { context, record: recordFromChained(chained) };
   } catch (err) {
     log.warn(
       { err, taskId, errorCode: 'CONTEXT_CHAINING_FAILED' },
       'context chaining failed — stage will run on partial upstream input'
     );
-    return inheritedContext;
+    return { context: inheritedContext, record: { status: 'not-chained', reason: 'chain-failed' } };
   }
 }

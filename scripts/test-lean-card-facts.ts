@@ -15,6 +15,7 @@
 const { leanFactsLine, appendFactsLine } = require('../lib/mcp/server/tools/advanced/lean-card-facts');
 import * as fs from 'fs';
 import * as path from 'path';
+import { buildExecutionResultJson, pickResultJsonSummary, RESULT_JSON_SUMMARY_KEYS, ExecutionResultJsonInput, ChainedContextSignal } from '../lib/services/execution-artifacts';
 
 console.log('🃏 Lean-card Facts line tests\n');
 
@@ -586,6 +587,284 @@ test('CA1: contractApplicability renders the by-design absence that reviewers ke
   }) as string;
   if (!line.includes('none expected') || !line.includes('no-program-parent')) {
     throw new Error(`the applicability qualifier must reach the reader: ${line}`);
+  }
+});
+test('CA2: contractApplicability is SUPPRESSED on a program leg — the other direction (2026-09-18)', () => {
+  // ⚠️ CA1 ALONE IS WHY THE STAGE-ID DEFECT SHIPPED. It pins that the qualifier RENDERS, and the
+  // render is `expected === false`-only, so a predicate that answered `no-program-parent` for
+  // EVERY leg kept CA1 green while telling the reader "no Program Interface Contract is expected
+  // here" on 30 program legs — 25 of which carried `reason: no-banned-token-list`, i.e. the fact
+  // and its own qualifier contradicted each other on the same card line. A one-directional render
+  // test cannot see a predicate that is stuck on the direction it pins.
+  const line = leanFactsLine({
+    dialectLint: { checked: false, reason: 'no-banned-token-list',
+      contractApplicability: { expected: true, basis: 'program-parent', programParentId: 'cmprogramparent0000000001' } },
+  }) as string | null;
+  if (line && line.includes('contractApplicability')) {
+    throw new Error(`a program leg's contract is EXPECTED — there is nothing to excuse, so the `
+      + `qualifier must not render: ${line}`);
+  }
+});
+
+// --- 2026-09-16: the artifact → summary → card boundary (boundary review F1/F2) ---
+//
+// ⚠️ THESE FIXTURES ARE BUILT, NOT HAND-ROLLED. Every fixture above hands `leanFactsLine` a literal
+// object, which proves the RENDER and nothing about whether the value ever REACHES it. That is
+// exactly how the chainedContext branch passed green for six days while `pickResultJsonSummary`
+// stripped the key on every real execution (instance 5 of this module's stamp → render → gate
+// class). A fixture that survives the real whitelist is the only fixture that can fail for the
+// real reason.
+
+const quietLogger = { info: () => {} } as unknown as ExecutionResultJsonInput['logger'];
+function execViaBuilder(overrides: Partial<ExecutionResultJsonInput>): Record<string, unknown> {
+  const built = buildExecutionResultJson({
+    taskId: 'cmtaskid00000000000000001', taskTitle: 'T', agentRole: 'config_change_author', modelUsed: 'm',
+    finalResponse: 'x'.repeat(20000), confidenceScore: 80,
+    turnCount: 1, maxToolTurns: 30, toolCallResults: [], successfulToolCalls: 0, failedToolCalls: 0,
+    executionTime: 1000, tokensUsed: 100, correctionTurnUsed: false,
+    executionId: 'cmexecid000000000000000001', logger: quietLogger,
+    ...overrides,
+  });
+  return pickResultJsonSummary(built);
+}
+
+test('CC1 (F1): chainedContext SURVIVES the whitelist and renders — the branch fires on a built artifact', () => {
+  const exec = execViaBuilder({ chainedContext: {
+    predecessors: 1, expectedPredecessors: 2, chainCapablePredecessors: 2, degradedPredecessors: 0,
+    notChained: [{ taskId: 'cmdep0000000000000000002', reason: 'no-result-json' }],
+    totalChars: 10, anyTruncated: false,
+  } as unknown as ChainedContextSignal });
+  if (!('chainedContext' in exec)) {
+    throw new Error('chainedContext was stripped by pickResultJsonSummary — the card branch that reads it can never fire');
+  }
+  const line = leanFactsLine(exec) as string;
+  const expected = 'chainedContext: 1 of 2 chain-capable (degraded 0; notChained: cmdep0000000000000000002:no-result-json)';
+  if (!line.includes(expected)) throw new Error(`expected "${expected}" in: ${line}`);
+});
+
+test('CC2 (F1): the 0-of-1 shape — the case F-A was shipped to make visible — renders through the real pick', () => {
+  const exec = execViaBuilder({ chainedContext: {
+    predecessors: 0, expectedPredecessors: 1, chainCapablePredecessors: 1, degradedPredecessors: 0,
+    totalChars: 0, anyTruncated: false,
+  } as unknown as ChainedContextSignal });
+  const line = leanFactsLine(exec) as string;
+  if (!line.includes('chainedContext: 0 of 1 chain-capable (degraded 0)')) throw new Error(`0-of-1 must render: ${line}`);
+});
+
+test('CC3 (A11/C8, 2026-09-16): the INHERITED cross-pipeline facts survive the whitelist NESTED inside chainedContext and render with their denominator + subject', () => {
+  // E3b in miniature, proved rather than assumed: the four new fields are nested inside an
+  // already-whitelisted key, so `pickResultJsonSummary` — a strict whitelist that drops unlisted
+  // keys with NO error — passes them verbatim. Had they been added as SIBLINGS of `chainedContext`
+  // on the result.json root they would be present in the artifact and absent at the gate.
+  const exec = execViaBuilder({ chainedContext: {
+    predecessors: 0, expectedPredecessors: 0, chainCapablePredecessors: 0, degradedPredecessors: 0,
+    totalChars: 7000, anyTruncated: false,
+    inheritedPredecessors: 1, legCrossPipelineEntries: 2, inheritedFromLeg: 'cmleg00000000000000000001',
+    inheritedSkipped: [{ taskId: 'cmups0000000000000000001', reason: 'own-edge-wins' }],
+  } });
+  const cc = (exec.chainedContext ?? {}) as Record<string, unknown>;
+  for (const k of ['inheritedPredecessors', 'legCrossPipelineEntries', 'inheritedFromLeg', 'inheritedSkipped']) {
+    if (!(k in cc)) throw new Error(`${k} was stripped — a nested field of a whitelisted fact must survive the pick`);
+  }
+  const line = leanFactsLine(exec) as string;
+  const expected = 'chainedContext: 0 of 0 chain-capable (degraded 0; inherited 1 of 2 cross-pipeline from leg cmleg00000000000000000001; inheritedSkipped: cmups0000000000000000001:own-edge-wins)';
+  if (!line.includes(expected)) throw new Error(`expected "${expected}" in: ${line}`);
+});
+
+test('CC4 (A11/C8): nothing inherited AND nothing on offer renders the pre-2026-09-16 line byte-identically', () => {
+  // The suppression is deliberate and scoped: `0 of 0` says nothing, and this line is read by the
+  // pov-program protocol's SYNTHESIZE Step 2, so every execution in the platform must not grow a
+  // clause that carries no information. The case that MUST NOT be suppressed — entries offered and
+  // none taken — is CC5.
+  const zeroed = execViaBuilder({ chainedContext: {
+    predecessors: 1, expectedPredecessors: 1, chainCapablePredecessors: 1, degradedPredecessors: 0,
+    totalChars: 10, anyTruncated: false, inheritedPredecessors: 0, legCrossPipelineEntries: 0,
+  } });
+  // The cast is the POINT, not a convenience: the inherited counts are REQUIRED on the producer's
+  // type (derive always emits them, zeros included), so a fixture without them can only be an
+  // artifact written before 2026-09-16 — and saying so in a cast keeps that assumption visible.
+  const legacy = execViaBuilder({ chainedContext: {
+    predecessors: 1, expectedPredecessors: 1, chainCapablePredecessors: 1, degradedPredecessors: 0,
+    totalChars: 10, anyTruncated: false,
+  } as unknown as ChainedContextSignal });
+  const a = leanFactsLine(zeroed) as string;
+  if (a !== leanFactsLine(legacy)) throw new Error(`explicit zeros must render identically to a pre-fix artifact:\n${a}\n${leanFactsLine(legacy)}`);
+  if (a.includes('inherited')) throw new Error(`no inherited clause expected: ${a}`);
+});
+
+test('CC5 (A12/C9): entries were OFFERED and none taken — the clause renders with the reason, not a silent zero', () => {
+  const exec = execViaBuilder({ chainedContext: {
+    predecessors: 1, expectedPredecessors: 1, chainCapablePredecessors: 1, degradedPredecessors: 0,
+    totalChars: 10, anyTruncated: false, inheritedPredecessors: 0, legCrossPipelineEntries: 1,
+    inheritedSkipped: [{ taskId: 'cmups0000000000000000001', reason: 'in-not-chained' }],
+  } });
+  const line = leanFactsLine(exec) as string;
+  if (!line.includes('inherited 0 of 1 cross-pipeline')) throw new Error(`the denominator must render: ${line}`);
+  if (!line.includes('inheritedSkipped: cmups0000000000000000001:in-not-chained')) throw new Error(`the reason must render: ${line}`);
+  // ⚠️ and it must NOT have been laundered into notChained, which the program gate treats as blocking.
+  if (line.includes('notChained')) throw new Error(`a benign inherit skip must not appear as notChained: ${line}`);
+});
+
+test('CC6 (A11/C9): every leg entry POLICY-FILTERED — `legCrossPipelineEntries` is 0 and the skip rows must still render', () => {
+  // The denominator counts POST-POLICY candidates (context-chainer `injection.candidates.length`),
+  // so a leg that offered three `result.json` entries reports 0 here while `inheritedSkipped` names
+  // all three. Keying the clause on the counts alone would suppress precisely the rows that explain
+  // the zero — the Register-Pattern-1 shape C9 exists to close, one level down.
+  const exec = execViaBuilder({ chainedContext: {
+    predecessors: 1, expectedPredecessors: 1, chainCapablePredecessors: 1, degradedPredecessors: 0,
+    totalChars: 10, anyTruncated: false, inheritedPredecessors: 0, legCrossPipelineEntries: 0,
+    inheritedSkipped: [{ taskId: 'cmups0000000000000000009', reason: 'not-cross-pipeline-source' }],
+  } });
+  const line = leanFactsLine(exec) as string;
+  if (!line.includes('inheritedSkipped: cmups0000000000000000009:not-cross-pipeline-source')) {
+    throw new Error(`a 0-of-0 with recorded skips must still name them: ${line}`);
+  }
+});
+
+test('EC1 (F2): errorCategory survives the whitelist and renders its VALUE, first among the facts', () => {
+  const exec = execViaBuilder({ executionDegradation: { errorCategory: 'PROTOCOL_STEP_SKIPPED', missingSteps: ['x'] } });
+  if (exec.errorCategory !== 'PROTOCOL_STEP_SKIPPED') {
+    throw new Error(`errorCategory must be hoisted as the bare token, got ${JSON.stringify(exec.errorCategory)}`);
+  }
+  if ('executionDegradation' in exec) {
+    throw new Error('executionDegradation must NOT be hoisted wholesale — its prose would wreck the head slice; the token is the gate-relevant content');
+  }
+  const line = leanFactsLine(exec) as string;
+  expectEq(line.startsWith('**Facts:** confidence: 80 | errorCategory: PROTOCOL_STEP_SKIPPED'), true);
+});
+
+test('EC3 (register E1, 2026-09-25): TRUNCATED_PARTIAL_OUTPUT rides the same hoist and renders first — no card code change', () => {
+  // The new category needed no renderer work: the errorCategory path already carries any string value.
+  // This fixture proves the path for the new token so a future card refactor cannot quietly drop it.
+  const exec = execViaBuilder({ executionDegradation: { errorCategory: 'TRUNCATED_PARTIAL_OUTPUT' } });
+  if (exec.errorCategory !== 'TRUNCATED_PARTIAL_OUTPUT') {
+    throw new Error(`errorCategory must be hoisted as the bare token, got ${JSON.stringify(exec.errorCategory)}`);
+  }
+  const line = leanFactsLine(exec) as string;
+  expectEq(line.startsWith('**Facts:** confidence: 80 | errorCategory: TRUNCATED_PARTIAL_OUTPUT'), true);
+});
+
+test('EC2 (F2): a clean execution renders NO errorCategory segment — absence here is the true clean state', () => {
+  // Contrast with containmentDisposition, whose absence is "not yet decided" and gets a positive
+  // token. A degradation is stamped only when detected, so a missing token is not a silent pass.
+  const exec = execViaBuilder({});
+  if ('errorCategory' in exec) throw new Error('the picker must not fabricate an absent category');
+  const line = leanFactsLine(exec) as string;
+  if (line.includes('errorCategory')) throw new Error(`no segment expected on a clean execution: ${line}`);
+});
+
+// --- TR: the truncation segment (register E1, 2026-09-25) ------------------------------------
+// Keyed on `toolLoop.deliverableTruncated === true` ONLY. Every fixture is BUILT through the real
+// builder + pick (the facts ride NESTED inside the whitelisted `toolLoop` — E3b), so a whitelist or
+// nesting regression fails here for the real reason. Both directions are pinned: a segment that
+// always fired, or never fired, would each pass a one-directional test.
+
+test('TR1: a non-truncated execution is BYTE-IDENTICAL to a card with no toolLoop at all — no segment', () => {
+  const exec = execViaBuilder({ finalStopReason: 'end_turn', truncationRetryUsed: true, truncationRetryRecovered: true, truncationRetryStopReason: 'end_turn' });
+  const without = { ...exec };
+  delete (without as Record<string, unknown>).toolLoop;
+  expectEq(leanFactsLine(exec), leanFactsLine(without));
+  if (String(leanFactsLine(exec)).includes('truncation:')) throw new Error('a RECOVERED retry must not render — the deliverable is complete');
+});
+
+test('TR2: TRUNCATED_PARTIAL_OUTPUT + INSUFFICIENT_TIME renders the category FIRST, then the skip reason', () => {
+  const exec = execViaBuilder({
+    executionDegradation: { errorCategory: 'TRUNCATED_PARTIAL_OUTPUT' } as unknown as ExecutionResultJsonInput['executionDegradation'],
+    finalStopReason: 'max_tokens', truncationRetrySkippedReason: 'INSUFFICIENT_TIME', truncationRetryMaxTokens: 45800,
+  });
+  const line = leanFactsLine(exec) as string;
+  expectEq(line.startsWith('**Facts:** confidence: 80 | errorCategory: TRUNCATED_PARTIAL_OUTPUT | truncation: final stop max_tokens (retry skipped: INSUFFICIENT_TIME)'), true);
+});
+
+test('TR3 (MASKING — the reason the segment exists): an earlier category wins, and the truncation is STILL visible', () => {
+  // errorCategory is first-wins: TOOL_LOOP_DEGRADED outranks TRUNCATED_* (test:execution-quality
+  // TPO-3). Without this segment the card would name only the tool-loop category and the cut-off
+  // deliverable would be stamped and invisible — the A1 class.
+  const exec = execViaBuilder({
+    executionDegradation: { errorCategory: 'TOOL_LOOP_DEGRADED' } as unknown as ExecutionResultJsonInput['executionDegradation'],
+    finalStopReason: 'max_tokens',
+  });
+  const line = leanFactsLine(exec) as string;
+  if (!line.includes('errorCategory: TOOL_LOOP_DEGRADED | truncation: final stop max_tokens (no retry)')) {
+    throw new Error(`a masked truncation must render beside the winning category: ${line}`);
+  }
+});
+
+test('TR4: the retry state names only what the facts say about the FINAL turn', () => {
+  const cases: Array<[Partial<ExecutionResultJsonInput>, string]> = [
+    [{ truncationRetryUsed: true, truncationRetryStopReason: 'max_tokens' }, 'retry also stopped at max_tokens'],
+    // A retry that returned end_turn cannot be the final response of a truncated deliverable — it ran on an earlier turn.
+    [{ truncationRetryUsed: true, truncationRetryRecovered: true, truncationRetryStopReason: 'end_turn' }, 'retry spent on an earlier turn'],
+    // null stop reason: threw, or returned without one — the facts cannot tell which, so the card does not guess.
+    [{ truncationRetryUsed: true }, 'retry used, no retry stop reason stamped'],
+    [{ truncationRetrySkippedReason: 'AT_MODEL_CEILING' }, 'retry skipped: AT_MODEL_CEILING'],
+    [{}, 'no retry'],
+  ];
+  for (const [over, want] of cases) {
+    const line = leanFactsLine(execViaBuilder({ finalStopReason: 'max_tokens', ...over })) as string;
+    if (!line.includes(`truncation: final stop max_tokens (${want})`)) throw new Error(`expected "(${want})" for ${JSON.stringify(over)} in: ${line}`);
+  }
+});
+
+test('TR5: an artifact PREDATING F2 (no deliverableTruncated field) renders nothing — no false ABSENT token', () => {
+  const exec = execViaBuilder({ finalStopReason: 'max_tokens' });
+  const tl = { ...(exec.toolLoop as Record<string, unknown>) };
+  delete tl.deliverableTruncated; delete tl.finalStopReason;
+  const line = leanFactsLine({ ...exec, toolLoop: tl }) as string;
+  if (line.includes('truncation')) throw new Error(`a pre-F2 artifact must not render a truncation segment: ${line}`);
+});
+
+// --- RW: the READ half of the render-required convention ------------------------------------
+// The recurring defect on this boundary is not "a field was omitted" but "a renderer reads a field
+// the whitelist does not pass" — five instances, every one found by a human or a live run. RW1
+// derives the READ set from the card source and checks each key against what the results handler
+// actually EMITS: the whitelist plus the handler's own literal keys. RW2 pins the collision that
+// made F2's whitelist fix inert on its own.
+
+
+const resultsHandlerTs = fs.readFileSync(path.join(REPO_ROOT, 'lib/mcp/tasks/action/handlers/agent/agent-results-handler.ts'), 'utf-8');
+
+/** The literal keys of the `const result: any = {` object in the TS results handler, in order,
+ *  with the index of the `...resultSummary` spread among them. */
+function resultsHandlerLiteralKeys(): { keys: string[]; spreadAt: number } {
+  const start = resultsHandlerTs.indexOf('const result: any = {');
+  if (start < 0) throw new Error('results handler no longer builds `const result: any = {` — retarget RW1/RW2');
+  const body = resultsHandlerTs.slice(start, resultsHandlerTs.indexOf('\n    };', start));
+  const keys: string[] = [];
+  let spreadAt = -1;
+  for (const m of body.matchAll(/^      (?:([A-Za-z_]\w*)\s*[:,]|(\.\.\.resultSummary))/gm)) {
+    if (m[2]) spreadAt = keys.length;
+    else keys.push(m[1]);
+  }
+  if (spreadAt < 0) throw new Error('results handler no longer spreads resultSummary into the card — the whitelist reaches nothing');
+  return { keys, spreadAt };
+}
+
+test('RW1: every exec.<key> the card renderers read is a key the results handler EMITS', () => {
+  const emitted = new Set<string>([...RESULT_JSON_SUMMARY_KEYS, ...resultsHandlerLiteralKeys().keys]);
+  const sources: Array<[string, string]> = [
+    ['lean-card-facts.js', fs.readFileSync(path.join(REPO_ROOT, 'lib/mcp/server/tools/advanced/lean-card-facts.js'), 'utf-8')],
+    ['agent-results-handler.js', agentResultsSource],
+  ];
+  const unmatched: string[] = [];
+  for (const [name, src] of sources) {
+    const reads = new Set([...src.matchAll(/\bexec\.([A-Za-z_]\w*)/g)].map((m) => m[1]));
+    for (const key of reads) if (!emitted.has(key)) unmatched.push(`${name}: exec.${key}`);
+  }
+  if (unmatched.length) {
+    throw new Error(`card reads a key the handler never emits (whitelist it or fix the read): ${unmatched.join(', ')}`);
+  }
+});
+
+test('RW2 (F2 collision): no whitelist key is re-declared as a literal AFTER the ...resultSummary spread', () => {
+  const { keys, spreadAt } = resultsHandlerLiteralKeys();
+  const after = keys.slice(spreadAt).filter((k) => (RESULT_JSON_SUMMARY_KEYS as readonly string[]).includes(k));
+  if (after.length) {
+    throw new Error(`literal(s) after the spread CLOBBER the hoisted value — whitelisting is inert for: ${after.join(', ')}`);
+  }
+  // And the coalesce itself: result.json's hoisted category must reach the card key.
+  if (!/resultSummary\.errorCategory/.test(resultsHandlerTs)) {
+    throw new Error('results handler no longer coalesces resultSummary.errorCategory — the degraded-SUCCESS case reads null again');
   }
 });
 

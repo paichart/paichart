@@ -56,6 +56,16 @@ console.log('── capability matrix ──');
   ok(opus45.allowedEfforts.length !== opus5.allowedEfforts.length && opus45.serverSideFallback === false,
     'opus-4-5 vs opus-5: distinct branches, no substring cross-match');
 
+  // Opus 5.5 (2026-09-26). `claude-opus-5-5` CONTAINS `opus-5`: before its own branch existed it silently
+  // resolved as Opus 5 and would have sent forced tool_choice, which Opus 5.5 rejects with a 400.
+  const opus55 = capabilitiesFor('claude-opus-5-5');
+  ok(opus55.acceptsTemperature === false && opus55.thinkingMode === 'adaptive'
+     && opus55.allowedEfforts.includes('xhigh') && opus55.allowedEfforts.includes('max')
+     && opus55.outputCeiling === 128000 && opus55.serverSideFallback === true,
+    'opus-5-5: temp NO, adaptive (never disabled), effort full, 128K, fallback YES');
+  ok(opus55.forcedToolChoice === false && opus5.forcedToolChoice === true,
+    'opus-5-5 vs opus-5: forcedToolChoice false vs true (distinct branches — substring guard)');
+
   const fable = capabilitiesFor('claude-fable-5');
   ok(fable.acceptsTemperature === false && fable.thinkingMode === 'always-on'
      && fable.allowedEfforts.includes('xhigh') && fable.outputCeiling === 128000,

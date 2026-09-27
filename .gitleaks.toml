@@ -40,6 +40,7 @@ regexes = [
   '''^eyJ\.[A-Za-z0-9]{1,12}\.[A-Za-z0-9]{1,4}$''',
   '''^eyJhbGciOiJIUzI1NiJ9\.eyJleHAiOjE2MDAwMDAwMDB9\.''', # security-testing-guide fixture: {"alg":"HS256"}.{"exp":1600000000} (expired 2020, unsigned stub)
   '''^c[a-z0-9]{24}$''',                     # CUID row ids (user/task ids in log excerpts) — identifiers, not credentials
+  '''^orders-api-[a-z0-9]{8,10}-[a-z0-9]{5}$''', # k8s lab pod names (Deployment-generated ReplicaSet+pod hashes) in exported run artifacts — identifiers, not credentials (inspected 2026-09-24)
   '''^BGP/OSPF/''',                           # prose fragment in a review doc
 ]
 paths = [

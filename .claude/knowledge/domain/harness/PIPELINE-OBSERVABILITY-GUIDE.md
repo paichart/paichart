@@ -95,7 +95,7 @@ The harness composes its child stage + child tasks + assignments + Step 5a metad
 **What to read in Comments tab** (top-to-bottom, two new entries):
 1. **Mode-resolver entry** ("Mode: CREATE. No pipelineStageId in metadata — creating child stage and decomposing objective. Platform-resolved mode: CREATE...") — confirms harness was given the right mode pre-LLM.
 2. **PIPELINE QUEUED comment** with:
-   - **First line**: `**Child stage:** \`<id>\` — <name>` breadcrumb (GUI's Pipeline Children panel parses this)
+   - **First line**: `Child stage: <id> — <name>` breadcrumb, bold/backticks optional (human audit trail; ⚠️ corrected 2026-09-15 — the GUI Pipeline Children panel does NOT parse this, it reads `metadata.pipelineStageId`. Nothing parses the string.)
    - **Child task list** with template assignments + dependency annotations
    - **Execution sequence** prose
 
@@ -119,7 +119,7 @@ The harness composes its child stage + child tasks + assignments + Step 5a metad
 **Failure signals**:
 - No `⭐ deliverable source` annotation → Step 5a was likely skipped (harness LLM didn't set `metadata.deliverableSourceTaskId`). The forensic P-signal in `pipelineProtocolValidator.ts` will fire at SYNTHESIZE.
 - Children created with no template assignments → Step 5 (`agent.assign`) failed; check engine auto-comment for tool-call failure breakdown.
-- Missing breadcrumb on PIPELINE QUEUED comment first line → GUI Pipeline Children panel won't render; check protocol prose for breadcrumb format.
+- Missing breadcrumb on PIPELINE QUEUED comment first line → the human audit trail loses the harness→children link; check protocol prose for breadcrumb format. ⚠️ This previously read "GUI Pipeline Children panel won't render" — **false**, corrected 2026-09-15: that panel is metadata-only (`PipelineTab.tsx` `localFallbackContext` reads `metadata.pipelineStageId`).
 
 ### Phase 3 — Cascade observation
 

@@ -61,7 +61,9 @@ const REACTOR_SVC = 'lib/services/taskReadyReactorService.ts';
 const EXEMPT_STATUS_WRITERS = new Set([
   'lib/services/execution-terminal-persist.ts',   // engine spine — the ONLY exempt terminal writer
   'lib/services/agent-execution-create.ts',       // claim: OPEN→IN_PROGRESS literal
-  'lib/mcp/tasks/action/handlers/agent/agent-execute-handler.ts', // claim literal
+  // 'lib/mcp/tasks/action/handlers/agent/agent-execute-handler.ts' REMOVED 2026-09-26 (S0): the handler no
+  // longer writes task.status (its early OPEN→IN_PROGRESS flip ran before the access check). A stale
+  // exemption here would silently re-admit that flip; with it gone, re-adding one fails this suite.
   'app/api/pov/agent/execute/stream/route.ts',    // claim literal
   'app/api/tasks/[taskId]/agent/execute/route.ts',// claim literal
   // 'lib/services/workflowEngine.ts' REMOVED 2026-07-25 (F1 panel finding). The path was wrong —
@@ -76,6 +78,7 @@ const EXEMPT_STATUS_WRITERS = new Set([
   'lib/services/agentExecutionEngine.ts',         // engine family: executionStatus/sweep writes (spread-flagged), never task.status terminal
   'lib/services/mark-forward-cone.ts',            // engine family: executionStatus=FAILED + metadata (F16 cone walk) — terminal-FAMILY, not status
   'lib/services/task-can-never-run-persist.ts',   // engine family: executionStatus=FAILED chokepoint (F16) — terminal-FAMILY, not status
+  'lib/services/reactor-budget-exhausted-persist.ts', // engine family (RWF A2): Guard 8 exhaustion → executionStatus=FAILED + metadata stamp + cone — terminal-FAMILY, never task.status
   'app/api/pov/[povId]/phase/[phaseId]/task/reorder/route.ts', // order-only write (verified 2026-07-24); spread-heuristic false positive
   'scripts/migrate-mcp-tool-names.ts',            // mcpContext/mcpToolId migration; nested spread only (verified 2026-07-24)
 ]);

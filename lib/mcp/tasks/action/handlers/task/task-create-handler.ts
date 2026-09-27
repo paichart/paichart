@@ -131,6 +131,7 @@ import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import { getNextTaskOrder } from '@/lib/mcp/tasks/action/utilities/order-utils';
 import { resolveStageForTask } from '@/lib/mcp/tasks/action/utilities/stage-resolver';
 import { assertPersisted } from '@/lib/mcp/tasks/action/utilities/durability';
+import { resolveUserByNameOrEmail, assertAssigneeInPovTeam } from '@/lib/mcp/tasks/action/utilities/assignee-resolver';
 import { TaskPriority, TaskStatus } from '@prisma/client';
 import { logTaskCreated } from '@/lib/tasks/services/taskActivityService';
 import type { ActivityMetadata } from '@/lib/types/activity';
@@ -144,8 +145,11 @@ export async function handleTaskCreate(
 ) {
   const {
     title, description, assigneeId, teamId, povId, phaseId, phaseName, priority, status, type, dueDate, stageId, stageName, parentTask,
-    order, afterTask, beforeTask, position, dependencyIds, interfaceContract
+    order, afterTask, beforeTask, position, dependencyIds, interfaceContract,
+    assignee, assignee_name, assigneeName
   } = parameters;
+  // Person assignee by name/email (2026-09-25). assigneeId wins when both are given (task.assign parity).
+  const assigneeNameParam: string | undefined = assignee ?? assignee_name ?? assigneeName;
 
   // 🔒 BUG-005 defence-in-depth, alias map REMOVED 2026-07-25.
   //
@@ -276,8 +280,9 @@ export async function handleTaskCreate(
         mcpLogger.debug({ teamId: finalTeamId }, 'Auto-inherited team from POV');
       }
 
-      // Smart assignee assignment if not provided
-      if (!finalAssigneeId) {
+      // Smart assignee assignment if not provided. NOT when a name was given — that is resolved
+      // below, after the access check (defaulting here would overwrite the named person with the owner).
+      if (!finalAssigneeId && !assigneeNameParam) {
         // Option 1: Assign to POV owner
         if (povWithTeam.ownerId) {
           finalAssigneeId = povWithTeam.ownerId;
@@ -298,6 +303,24 @@ export async function handleTaskCreate(
       requireWrite: true,  // 2026-05-26: isDemo read-only (demo-write fix)
       logContext: 'Task Create'
     });
+  }
+
+  // Person assignee by name/email — resolved AFTER the access check (the resolver's not-found error
+  // lists user names, which a caller without POV access must not see) and BEFORE stage resolution
+  // (which can auto-create a stage) and the create transaction, so a failure leaves nothing behind.
+  if (!finalAssigneeId && assigneeNameParam) {
+    if (!povWithTeam) {
+      // No POV → no access check ran above; never run a user lookup (its error lists names) unchecked.
+      throw new Error(`task.create: assignee "${assigneeNameParam}" was not applied and no task was created. POV "${povId}" was not found.`);
+    }
+    try {
+      const resolved = await resolveUserByNameOrEmail(assigneeNameParam, povWithTeam);
+      assertAssigneeInPovTeam(user, povWithTeam, resolved.id);
+      finalAssigneeId = resolved.id;
+    } catch (e: unknown) {
+      const reason = e instanceof Error ? e.message : String(e);
+      throw new Error(`task.create: assignee "${assigneeNameParam}" was not applied and no task was created. ${reason}`);
+    }
   }
 
   // 🔧 FIX: Smart Phase and Stage Association
@@ -737,21 +760,23 @@ export async function handleTaskCreate(
 
   mcpLogger.debug({ taskId: task.id }, 'Activity logged for task creation');
 
-  // Fire-and-forget: if the task was created dep-free (or born-ready — all
-  // deps already satisfied at create, gap (e) 2026-07-18) AND has an agent
-  // template assigned, queue a PENDING execution so the engine picks it up.
-  // This kicks off the initial wave for pipelines created by the harness —
-  // without it, a correctly-created child with no deps would sit OPEN forever.
-  // Idempotency guarded inside the reactor; safe if the task was created
-  // with unsatisfied deps (those get handled by maybeQueueReadyDependents
-  // when upstream completes) or without a template (skipped). PIPELINE tasks
-  // with deps are never auto-queued here (CC6 — dep-completion reactor only).
-  // Deliberate asymmetry (DA1, 2026-07-18 delta review): NO call-site PIPELINE
-  // skip here, unlike assign/update — a dep-free PIPELINE created WITH a
-  // template in one call has no explicit agent.execute in flight to race
-  // (the L1 race is assign/update-time), so the create-with-template flow
-  // auto-queues it; assign/update call sites skip PIPELINE entirely.
-  // @see lib/services/taskReadyReactorService.ts
+  // DEFENSIVE — currently always a no-op. task.create never sets agentTemplateId: template keys are
+  // REJECTED at the L3 schema (task.create creates no task when one is sent — Steve ruling 2026-09-25,
+  // cline_docs/reviews/perform-template-param-2026-09-25/), and before that ruling they were silently
+  // stripped there. So the reactor returns at its `!task.agentTemplateId` check on every create. The
+  // start of a created task is owned by agent.assign / agent.configure+agent.execute, and by the
+  // dep-completion reactor for tasks with dependencies.
+  //
+  // Kept because it is idempotent and cheap, and a template-bearing create path could reappear (a new
+  // caller writing agentTemplateId in the create transaction) — the same reactor rules would then apply.
+  //
+  // STRUCTURAL ARGUMENT for the ruling, recorded here because this is where it bites: this call site has
+  // NO PIPELINE skip (DA1, 2026-07-18 delta review), unlike agent.assign / task.update, which skip PIPELINE
+  // entirely. The reactor's own PIPELINE skip covers only PIPELINEs WITH dependencies (CC6). So if a
+  // template were ever accepted at create, a dep-free PIPELINE would AUTO-RUN AT CREATE — the one start
+  // path assign deliberately refuses ("a PIPELINE task never starts on assign"). Do not add template
+  // support to task.create without first adding a PIPELINE skip here.
+  // @see lib/services/taskReadyReactorService.ts (maybeQueueIfDepFree)
   const { maybeQueueIfDepFree } = await import('@/lib/services/taskReadyReactorService');
   maybeQueueIfDepFree(task.id).catch(() => {});
 

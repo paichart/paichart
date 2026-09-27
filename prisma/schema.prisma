@@ -279,6 +279,14 @@ model Task {
   prompt          String?        @db.Text
   inputContext    Json?
   outputArtifacts Json?
+  /// ⚠️ NOT the same question as `AgentExecution.status` — they sit one join apart, read as synonyms,
+  /// and legitimately DISAGREE. This answers "what happened to the TASK": on a duplicate-halted or
+  /// can-never-run leg the platform writes FAILED here and walks the forward cone, while the execution
+  /// row says SUCCESS — truthfully, because the harness ran, detected, stamped and exited cleanly.
+  /// Terminalization (F16/F17/F20/R4) is recorded HERE and on `blockedByUpstreamFailure`, never there.
+  /// Measured cost of reading the wrong one (2026-09-19): a false "the leg was never terminalized"
+  /// claim reached seven document surfaces, including a published verification doc, before the code
+  /// was read.
   executionStatus ExecutionStatus?
   agentLog        String?        @db.Text
   /// ⚠️ CARRIED BUT NOT CONSUMED by agent execution (verified 2026-08-05). This value is read into the
@@ -354,6 +362,10 @@ model AgentExecution {
   id              String          @id @default(cuid())
   taskId          String
   agentTemplateId String?
+  /// ⚠️ NOT the same question as `Task.executionStatus` — see that field. This answers "did this
+  /// EXECUTION run to completion", and is SUCCESS whenever the agent ran and exited cleanly —
+  /// including when it detected a duplicate and halted, which is a FAILED task carrying a SUCCESS
+  /// execution. Do not infer a leg's or a task's outcome from this column.
   status          String
   config          Json
   context         Json

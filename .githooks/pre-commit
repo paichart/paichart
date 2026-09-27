@@ -69,6 +69,24 @@ echo "pre-commit: ✓ all role-guidance entries carry Deliverable Contract"
 # Check 2b — Role-guidance COVERAGE (every seeded defaultRole has an entry or a
 # documented generic exemption). Catches the silent generic-fallback gap found
 # 2026-06-16 (network-provisioning spike). See audit-role-guidance-coverage.ts.
+# Rig identifiers must not reach agent-facing shipped text (2026-09-23). Protocol bodies and
+# ROLE_GUIDANCE_LIBRARY run on SOMEONE ELSE'S infrastructure; naming our lab's devices, services or
+# tool names there teaches an agent to call something their deployment does not have. Operator
+# HOWTO/GUIDE prompts are exempt by design. Found by a question, not a check — hence this check.
+echo "pre-commit: checking for rig identifiers in agent-facing text..."
+if ! npm run --silent test:no-rig-identifiers > /tmp/precommit-rig-identifiers.log 2>&1; then
+  echo ""
+  echo "✗ pre-commit FAILED: rig identifier in agent-facing protocol/role text"
+  echo ""
+  tail -30 /tmp/precommit-rig-identifiers.log
+  echo ""
+  echo "Name the OBSERVABLE or the read SHAPE, not our rig."
+  echo "Full output: /tmp/precommit-rig-identifiers.log"
+  echo "To bypass (not recommended): git commit --no-verify"
+  exit 1
+fi
+echo "pre-commit: ✓ no rig identifiers in agent-facing text"
+
 echo "pre-commit: validating agent role-guidance coverage..."
 if ! npm run --silent validate:role-guidance-coverage > /tmp/precommit-role-guidance-coverage.log 2>&1; then
   echo ""

@@ -15,6 +15,7 @@ import type { TokenPayload } from '@/lib/types/auth';
 import { logTaskAssignment, logCommentAdded } from '@/lib/tasks/services/taskActivityService';
 import type { ActivityMetadata } from '@/lib/types/activity';
 import { mcpLogger } from '@/lib/logger';
+import { resolveUserByNameOrEmail, assertAssigneeInPovTeam } from '@/lib/mcp/tasks/action/utilities/assignee-resolver';
 
 /**
  * Assigns a task to a user with intelligent lookup and validation
@@ -122,66 +123,10 @@ export async function handleTaskAssign(parameters: any, user: TokenPayload, acti
 
   let finalAssigneeId = assigneeId;
 
-    // If assignee is provided as a name/email instead of ID, look up the user
+    // If assignee is provided as a name/email instead of ID, look up the user.
+    // Resolver shared with task.create (2026-09-25) — utilities/assignee-resolver.ts.
     if (!finalAssigneeId && assignee) {
-      mcpLogger.debug('Looking up user for assignment');
-
-      // ============================================================================
-      // PARALLEL QUERY OPTIMIZATION (Dec 2025 - 3 user lookups → ~45% faster)
-      // Run all user search strategies in parallel, use best match
-      // ============================================================================
-
-      const nameParts = assignee.split(' ').filter((part: string) => part.length > 0);
-
-      const [exactMatch, partialMatch, namePartsMatch] = await Promise.all([
-        // Strategy 1: Exact match (name OR email equals)
-        prisma.user.findFirst({
-          where: {
-            OR: [
-              { name: { equals: assignee, mode: 'insensitive' } },
-              { email: { equals: assignee, mode: 'insensitive' } }
-            ]
-          },
-          select: { id: true, name: true, email: true }
-        }),
-        // Strategy 2: Partial match (name OR email contains)
-        prisma.user.findFirst({
-          where: {
-            OR: [
-              { name: { contains: assignee, mode: 'insensitive' } },
-              { email: { contains: assignee, mode: 'insensitive' } }
-            ]
-          },
-          select: { id: true, name: true, email: true }
-        }),
-        // Strategy 3: Name parts match (first/last name split)
-        nameParts.length > 0
-          ? prisma.user.findFirst({
-              where: {
-                OR: nameParts.map((part: string) => ({
-                  name: { contains: part, mode: 'insensitive' }
-                }))
-              },
-              select: { id: true, name: true, email: true }
-            })
-          : Promise.resolve(null)
-      ]);
-
-      // Use best match (exact > partial > nameParts)
-      const foundUser = exactMatch || partialMatch || namePartsMatch;
-
-      if (foundUser) {
-        finalAssigneeId = foundUser.id;
-        mcpLogger.debug({ userId: foundUser.id, matchType: exactMatch ? 'exact' : partialMatch ? 'partial' : 'nameParts' }, 'User resolved for assignment');
-      } else {
-        // List available users for debugging
-        const allUsers = await prisma.user.findMany({
-          select: { id: true, name: true, email: true },
-          take: 50
-        });
-        mcpLogger.warn({ availableCount: allUsers.length }, 'User lookup failed for assignment');
-        throw new Error(`User not found: "${assignee}". Available users: ${allUsers.map(u => u.name).join(', ')}`);
-      }
+      finalAssigneeId = (await resolveUserByNameOrEmail(assignee, taskForAuth.pov)).id;
     }
 
     // Validate that the user ID exists before trying to assign
@@ -195,24 +140,8 @@ export async function handleTaskAssign(parameters: any, user: TokenPayload, acti
         throw new Error(`User ID "${finalAssigneeId}" does not exist in the database`);
       }
 
-      // Wave C M2 fix (2026-05-23, Basic Tools sec-ops Phase 3): assignee
-      // must be a POV team member or POV owner. Previously: any user in
-      // the system could be assigned to any task. Blocks notification-spam,
-      // workflow-disruption, and audit-trail-pollution surface.
-      // Admins bypass via validatePOVAccess pattern above.
-      const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
-      if (!isAdmin) {
-        const isPOVOwner = taskForAuth.pov.ownerId === finalAssigneeId;
-        const isPOVTeamMember = (taskForAuth.pov.team?.members ?? []).some(
-          (m: { userId: string }) => m.userId === finalAssigneeId
-        );
-        if (!isPOVOwner && !isPOVTeamMember) {
-          throw new Error(
-            `User "${finalAssigneeId}" is not a member of this POV team and is not the POV owner. ` +
-            `Add them to the team via pov.update first, or assign to an existing team member.`
-          );
-        }
-      }
+      // Wave C M2: assignee must be a POV team member or POV owner (admins bypass).
+      assertAssigneeInPovTeam(user, taskForAuth.pov, finalAssigneeId);
     }
 
   let finalTeamId = teamId;

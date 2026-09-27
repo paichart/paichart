@@ -149,13 +149,14 @@ console.log('\n── Part D: placement invariants in prepareTaskForExecution �
 
   // D3 — TS3: that path must still RETURN NULL, or BC-T6-1 replaces the caller's explicit override
   // with the row value — the inverse of its purpose.
-  /if \(opts\.skipChaining\) \{[\s\S]{0,600}?return null;/.test(prep)
+  // RWF C.1 (2026-09-26): prepare now returns { context, record }; the property is unchanged — context null.
+  /if \(opts\.skipChaining\) \{[\s\S]{0,600}?return \{ context: null, record: \{ status: 'not-chained', reason: 'skip-chaining' \} \};/.test(prep)
     ? pass('D3 skipChaining still returns null (BC-T6-1 override not clobbered)')
     : fail('D3 skipChaining no longer returns null — explicit overrides would be clobbered');
 
   // D4 — the dep-free child (the harvester — the fix's PRIMARY target) must still get its merged
   // context back, or the SSE route's §6 render and the frozen config never see the contract.
-  /if \(!chained\) return inheritedContext;/.test(prep)
+  /if \(!chained\) return \{ context: inheritedContext, record: \{ status: 'not-chained', reason: 'no-deps' \} \};/.test(prep)
     ? pass('D4 dep-free children return the inherited context (the harvester is dep-free)')
     : fail('D4 dep-free path returns null — the fix would be invisible to §6 and the snapshot');
 

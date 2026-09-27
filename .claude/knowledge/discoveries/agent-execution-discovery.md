@@ -45,10 +45,12 @@ A drop in the resolveTaskProtocol counts means a call site reverted to a raw met
 the F1 drift class. `protocolInjection` leaving the whitelist silently strips the 10th signal from
 lean surfaces. Suites: test:system-prompt-injections (37) · test:program-protocol-token (40, P3/P4).
 
-## 🆕 2026-07-18 — derivationContainment surfacing path (YOUR lane; arithmetic is pipeline-harness's)
+## 🆕 2026-07-18 — derivationContainment surfacing path (YOUR lane; arithmetic is execution-facts-specialist's since the 2026-09-11 split)
 
-The CIDR under-covering check (the subnetting leaf) is pipeline-harness's
-`lib/agents/harness/derivation-containment.ts` — NOT this domain. But the FACT rides your artifact-gen
+The CIDR under-covering check (the subnetting leaf) is execution-facts-specialist's (was pipeline-harness's until the
+2026-09-11 split) `lib/agents/harness/derivation-containment.ts` — NOT this domain. Since 2026-09-12 `execution-core.ts`
+names NO fact function: the nets run via `runNetsAtPoint` at two points (`leaf-persist`, `leg-synthesize`) —
+`grep -c "runNetsAtPoint(" lib/services/execution-core.ts   # expect 2` — so adding a fact is a registry entry, never a core call site. But the FACT rides your artifact-gen
 + result-surfacing path, and the evidence-flow arc shipped two fixes here. E1: the results-handler
 hoist missed PIPELINE execs entirely (they persist `pipeline-index.json`, not `result.json`); GAP-1:
 the size-capped lean card is a separate surface that needs the shared `leanFactsLine` helper to print
@@ -60,7 +62,7 @@ grep -c "'derivationContainment'" lib/services/execution-artifacts.ts           
 grep -c "pipeline-index.json" lib/mcp/tasks/action/handlers/agent/agent-results-handler.ts # EXPECT 2 — E1: hoist matches result.json OR pipeline-index.json (was result.json only = 0% hit for PIPELINE execs; also retro-fixed reviewerVerdict/qualityMetrics hoisting there)
 grep -c "leanFactsLine" lib/mcp/server/tools/advanced/task-action-handler.js              # EXPECT 2 — GAP-1: the lean card prints the hoisted facts via the SHARED helper (import + call); the sibling agent-results-handler.js builder consumes it too
 grep -c "derivationContainment" lib/mcp/server/tools/advanced/lean-card-facts.js          # EXPECT 5 — the shared **Facts:** line surfaces confidence | reviewerVerdict | derivationContainment (+containmentDisposition, nested under it, 2026-08-03)
-grep -c "^test(" scripts/test-lean-card-facts.ts                                          # expect 54 — (+6 2026-09-12: DL1-DL3/CP1-CP2/CA1, the stage-2b card renders for dialectLint and contractPropagation, which were stamped and whitelisted from 2026-08-25/26 and rendered on NO card line until then) — (+6 2026-09-11: RC1-RC6, net #3 rollbackContainment's render + the write-site/read-site COUPLING pin; a test that only checked "a render function exists" would pass through the 2026-08-03 A1 defect, where neither file was wrong in isolation and the PAIRING was) — (+1 2026-09-09: F4b, the program-tier fact renders benign — H-3) — (+1 2026-09-09: F4b, the program-tier fact renders benign — H-3) — the shared-helper pin (dedup'd + pinned by the born-ready session; do not re-fold). Was 12 at authoring; the suite grew through the asn-kind, containmentDisposition and F7 work. A count that only ever grows is a weak pin — it catches deletion, not drift
+grep -c "^test(" scripts/test-lean-card-facts.ts                                          # expect >=64 — (+4 2026-09-16: CC3/CC4/CC5/CC6, the A11/C8 cross-pipeline INHERITED facts — that they survive the whitelist NESTED inside chainedContext, that a leg offering nothing renders the pre-fix line byte-identically, and that entries OFFERED-and-none-taken render the denominator and the skip reason instead of a silent zero, and that a leg whose entries were all POLICY-FILTERED — denominator 0, skip rows present — still renders the rows that explain the zero) (+6 2026-09-16: CC1-2/EC1-2 built through the real whitelist for chainedContext + errorCategory, and RW1/RW2 — the READ-side tripwire that every exec.<key> the card reads is a key the results handler emits, plus the no-literal-after-the-spread collision pin; boundary review cline_docs/reviews/boundary-summary-keys-2026-09-16) (+6 2026-09-12: DL1-DL3/CP1-CP2/CA1, the stage-2b card renders for dialectLint and contractPropagation, which were stamped and whitelisted from 2026-08-25/26 and rendered on NO card line until then) — (+6 2026-09-11: RC1-RC6, net #3 rollbackContainment's render + the write-site/read-site COUPLING pin; a test that only checked "a render function exists" would pass through the 2026-08-03 A1 defect, where neither file was wrong in isolation and the PAIRING was) — (+1 2026-09-09: F4b, the program-tier fact renders benign — H-3) — (+1 2026-09-09: F4b, the program-tier fact renders benign — H-3) — the shared-helper pin (dedup'd + pinned by the born-ready session; do not re-fold). Was 12 at authoring; the suite grew through the asn-kind, containmentDisposition and F7 work. A count that only ever grows is a weak pin — it catches deletion, not drift
 ```
 
 ## 🆕 2026-07-16 — truncation-stall R1-R4 (Sonnet-5 adaptive-thinking exhausts max_tokens)
@@ -69,11 +71,19 @@ Root cause: Sonnet-5 runs adaptive extended thinking BY DEFAULT (billed as outpu
 heavy final SYNTHESIZE/PLAN turn exhausts the ceiling mid-thinking → `stop_reason:max_tokens`, ZERO
 text. The `finalize-response.ts` note (56 chars) masked the emptiness → silent-green SUCCESS.
 ```bash
-grep -c "TRUNCATED_NO_OUTPUT" lib/agents/harness/execution-quality.ts   # EXPECT 4 — R2 fact: classify the RAW pre-note text (rawDeliverableText), gated stopReason==='max_tokens' && rawDeliverableEmpty, BEFORE EMPTY_DELIVERABLE, type-independent
-grep -c "maybeRetryTruncatedFullTurn" lib/agents/harness/agentic-tool-loop.ts   # EXPECT 4 (1 def + 3 'full'-site calls) — R4 Layer-1 in-loop retry, once/execution, re-issue identical request at min(2×cfg.maxTokens, ceiling); flows through the normal while-guard so a SYNTHESIZE reaches task.complete
+grep -c "errorCategory: 'TRUNCATED_NO_OUTPUT'" lib/agents/harness/execution-quality.ts   # expect 1 — the category LITERAL (property grep since 2026-09-25: the bare-token count went 4→7 on comment edits alone). R2 fact: classify the RAW pre-note text (rawDeliverableText), gated loopExitStopReason==='max_tokens' && rawDeliverableEmpty (loop-exit since F2 §3.3), BEFORE EMPTY_DELIVERABLE, type-independent
+grep -c "maybeRetryTruncatedFullTurn" lib/agents/harness/agentic-tool-loop.ts   # EXPECT 4 (1 def + 3 'full'-site calls) — R4 Layer-1 in-loop retry, once/execution, re-issue identical request at min(2×cfg.maxTokens, model ceiling, time budget) — TIME-AWARE since 2026-09-25 (deadlineAt from the core's watchdog; below maxTokens×(1+TRUNCATION_RETRY_MIN_HEADROOM) it SKIPS, stamped toolLoop.truncationRetrySkippedReason INSUFFICIENT_TIME|AT_MODEL_CEILING, never a bare re-ask); flows through the normal while-guard so a SYNTHESIZE reaches task.complete
 grep -c "truncatedNoOutput" lib/services/execution-selection.ts   # EXPECT 5 — keep-best Arm 3: a truncated-empty retry can't supersede a non-truncated target
+grep -c "state.discardedChars =" lib/agents/harness/agentic-tool-loop.ts   # expect 1 — A2 RE-OPENED 2026-09-25: partial text is retried too (no emptyText conjunct in the trigger; NTF-R4L1.4 pins its absence); the discard is stamped only when the retry RETURNS
+grep -c "TRUNCATED_PARTIAL_OUTPUT" lib/agents/harness/execution-quality.ts   # expect >=2 — F2 (2026-09-25, register E1): the non-empty sibling, placed right after TRUNCATED_NO_OUTPUT; header row + category literal
+grep -c "loopResult.finalStopReason" lib/services/execution-core.ts   # expect 2 — F2 §3.3: quality (loopExitStopReason) AND builder (finalStopReason) read the LOOP-EXIT stop reason; #90 replaces currentResponse, so a post-#90 read hides a max_tokens deliverable
 ```
-EXPECT: `STANDARD_AGENT_LIMIT: 24000` (R1, was 8000, `lib/services/llm/types.ts:1085` — it is an OBJECT PROPERTY inside `MCPTokenDefaults`, colon not equals; a grep on `STANDARD_AGENT_LIMIT = ` returns empty and false-reads as removed. `DEFAULT_MAX_TOKENS` at :1126 derives from it). Fold the truncated attempt's usage
+F2 (2026-09-25): `toolLoop.finalStopReason` + `toolLoop.deliverableTruncated` are NESTED under the whitelisted
+`toolLoop` (E3b — no RESULT_JSON_SUMMARY_KEYS edit). `finalStopReason` is captured from the response the loop
+RETURNS (post-#89), because a #89 correction can itself stop at `max_tokens` and it is what `finalizeTextForStopReason`
+reads. Every errorCategory the cascade emits is pinned against BOTH closed lists (`ErrorCategorySchema`,
+the GUI `ErrorCategory` union) by `test:execution-quality` CAT-PARITY — both had drifted before.
+EXPECT: `STANDARD_AGENT_LIMIT: 48000` (2026-09-24; was 24000 from R1, 8000 before that; `lib/services/llm/types.ts:1104` — it is an OBJECT PROPERTY inside `MCPTokenDefaults`, colon not equals; a grep on `STANDARD_AGENT_LIMIT = ` returns empty and false-reads as removed. `DEFAULT_MAX_TOKENS` at :1150 derives from it). Fold the truncated attempt's usage
 ONLY on retry-SUCCESS — folding on the throw path double-counts (impl-panel Finding 1).
 `truncationRetryUsed/Recovered` emit in `toolLoop` (before finalResponse). Layer 2 (persist-tx
 escalation) is pipeline-harness/event-system's lane. `cline_docs/reviews/truncation-r4-2026-07-16/`.
@@ -115,7 +125,7 @@ grep -c "runAgenticToolLoop({"       lib/services/execution-core.ts lib/services
 grep -c "persistTerminalSuccess(prisma" lib/services/execution-core.ts lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts  # Expect: 1 core + 0 engine + 0 stream
 grep -c "persistTerminalFailure(prisma" lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts  # expect 2 — 1 engine + 1 stream (failure stays ADAPTER-side — seam)
 grep -c "runExecutionCore("           lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts  # expect 2 — 1 engine + 1 stream (both adapters call the core)
-# Gate: test:execution-core-boundary (13) — C-4 (core does zero create/claim/hydration), reactor-thread pins
+# Gate: test:execution-core-boundary (>=18, measured 2026-09-26) — C-4 (core does zero create/claim/hydration), reactor-thread pins
 # (engine true/true + stream false/false, no hardcoded literal), stream F1/F1b input-assembly pins
 # (extensions shared-ref, buildSuccessLogs mutate), ordered-call (cap→retry→quality→persist), seam pins.
 ```
@@ -157,9 +167,10 @@ grep -c "persistTerminalSuccess(prisma\|persistTerminalFailure(prisma" lib/servi
 grep -c "applySystemPromptInjectionsWithFact(" lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts  # expect 2 — one call site per execution path (engine + stream). Symbol RENAMED from applySystemPromptInjections( when the protocol-injection FACT was added; the old grep matched 0 and read as 'clean' (drift-sweep 2026-08-23). Prose-arithmetic '1 + 1' also replaced — the audit cannot parse it
 # Hydration shapes (5b-i): 11-field template UNION select + §4/§5 task-relation superset, consumed at all 3 sites:
 grep -c "EXECUTION_TEMPLATE_SELECT" lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts  # Expect: 3 + 2 (engine: import + poller + executeById; stream: import + route fetch)
-# P9 templateScopeMismatch is LIVE on the engine since 5b-i (was dead-by-select for its whole life before).
+# P9 templateScopeMismatch was LIVE on the engine from 5b-i until RETIRED 2026-07-17 (6cff83d3 — ~60 firings, 0 true
+# positives; templateScopeMatcher.ts deleted). The enum value survives READ-ONLY for historical artifacts; no writer emits it.
 ```
-Gates: test:terminal-persist-shape (21) / test:system-prompt-injections (13) / test:execution-hydration (10) +
+Gates (floors, measured 2026-09-26): test:terminal-persist-shape (>=24) / test:system-prompt-injections (>=37) / test:execution-hydration (>=7 — fell 10→7 when P9 retired) +
 the retargeted fleet (failed-persist-cas, pipeline-engine-skip, mode-resolver-injection, integrity F-series).
 PARKED/PENDING (do not "find" these as bugs): 5b-ii context-builder merge (parked — premise invalidated, see
 phase-5-confidence-assessment.md tail), 5b-iii I-10 snapshot-at-create (inventoried, 6 callers), reactor/PRUNE
@@ -168,9 +179,9 @@ THIS doc done 2026-07-06; authoritative inventory = cline_docs/reviews/execution
 
 
 **Last Updated**: 2026-06-20 — propagated the SDK-0.105 capability-map architecture into §5 (broadened the loop grep + added a capability-map/finalizer grep block + What-to-look-for: `model-capabilities`/`capabilitiesFor`, `buildAnthropicRequest`, `normalizeStopReason`, `finalize-response`, `pause_turn` resume). (Prior: 2026-06-19 — paired §11 to the agent-execution-specialist config: TWO-AXIS model resolution (MODEL fail-loud `MODEL_UNRESOLVED` via `normalizeModelConfig` + PROVIDER/KEY from profile), model-aware maxTokens, D-1 maxToolTurns template-lock; corrected stale `effectiveModel`/maxToolTurns claims; 2026-06-10.)
-**Status**: v6.4 - SSE event list refreshed (11 types incl. `execution_started`); content-block grep false-positives documented
+**Status**: v6.5 - SSE event list is 13 (12 named + `[DONE]`, re-verified 2026-09-26); content-block grep false-positives documented
 **Confidence**: Very High - Based on production-validated patterns including Claude Desktop fixes
-**Last Validated**: 2026-06-10 (full 17-phase run, all checks PASS)
+**Last Validated**: 2026-09-26 (health-run: 36/36 audited greps match; 14/14 domain suites green; drift fixed — P9-retired claim, net-registry ownership, watchdog-in-core, line-refs). Prior full run 2026-06-10.
 
 ## 🆕 2026-06-25 — Harness output guards (R9/R10) + their feature flags
 
@@ -180,21 +191,25 @@ grep -rln "sanitizeChainedOutput\|redactArtifactsForPersist\|redactSecretsDeep" 
 grep -nE "sanitizeChainedOutput|CONNECTED_OUTPUT_SANITIZE_ENABLED" lib/agents/harness/agentic-tool-loop.ts lib/agents/harness/context-chainer.ts
 grep -nE "redactArtifactsForPersist|ARTIFACT_SECRET_REDACT_ENABLED" lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts
 
-# R9 TELEMETRY CONTRACT (added 2026-07-26) — the facts each site records about its own rewrite.
-# Expect 4 hits in the tool-loop (sanitized/neutralizedCount/strippedControlChars/neutralizedCategories
-# assigned inside the ONE `services`+flag gate) and 3 in the chainer (per-predecessor chainedFrom entry).
-grep -nE "record\.(sanitized|neutralizedCount|strippedControlChars|neutralizedCategories)" lib/agents/harness/agentic-tool-loop.ts
-grep -nE "^\s+(sanitized|neutralizedCount|strippedControlChars):" lib/agents/harness/context-chainer.ts
+# R9 TELEMETRY CONTRACT (added 2026-07-26; F9 2026-09-25) — the facts each site records about its own rewrite.
+grep -cE "record\.(sanitized|rewritten|rewriteClasses|neutralizedCount|strippedControlChars|neutralizedCategories) =" lib/agents/harness/agentic-tool-loop.ts  # expect 6
+grep -cE "^\s+(sanitized|rewritten|rewriteClasses):" lib/agents/harness/context-chainer.ts  # expect 4 — 3 on the chainedFrom stamp + rewriteClasses in the site-B warn payload
+# The securityEvent warn is gated on the operator-event classes at BOTH sites (never on `rewritten`):
+grep -c "isR9OperatorEvent(r9.rewriteClasses)" lib/agents/harness/agentic-tool-loop.ts  # expect 1
+grep -c "isR9OperatorEvent(r9.rewriteClasses)" lib/agents/harness/context-chainer.ts  # expect 1
 ```
 R9 (`CONNECTED_OUTPUT_SANITIZE_ENABLED`, ON in prod since 2026-06-29) sanitizes connected-service output before the reasoner; R10 (`ARTIFACT_SECRET_REDACT_ENABLED`) redacts secrets from persisted report.md/result.json. Both **env-var, default OFF** (no live toggle; `pm2 restart` to apply). What they enable + toggle + enable-gates: `.claude/knowledge/domain/harness/harness-output-guards.md`.
 
-**Telemetry semantic (2026-07-26 — the C1 dataset).** Both sites record the rewrite as emit-only
-Protocol-10 facts, and at site A **presence means "R9 examined this result", not "R9 rewrote it"**
-(`sanitized` says that). Absent = flag off / non-`services` tool / call threw; present-and-`false` is
-the **denominator** the false-positive rate needs. `neutralizedCount` alone answers only "did an
-injection pattern fire" — a strip-only rewrite has count 0, which is why `strippedControlChars` is
-recorded. Emit-only record fields are therefore FIVE, not two: `resultTruncatedForLlm`, `resultChars`,
-`sanitized`, `neutralizedCount`, `strippedControlChars` (+ conditional `neutralizedCategories`).
+**Telemetry semantic (2026-07-26 — the C1 dataset; F9 2026-09-25).** Both sites record the rewrite as
+emit-only Protocol-10 facts, and **presence means "R9 examined this result"**. Absent = flag off /
+non-`services` tool / call threw (and, since F9, site B's flag-off path stamps NOTHING — it used to stamp
+a fabricated `sanitized:false`); present-and-`rewritten:false` is the **denominator**. **Whether** the text
+was rewritten is `rewritten` (`text !== raw`); **which step** is `rewriteClasses` (nfkc · zero-width-bidi ·
+ansi · control · quarantine-tag · injection-pattern · emptied, + `unclassified` tripwire). `sanitized` is
+LEGACY and FROZEN (strip or injection only — NFKC/ANSI/tag defang never set it; do not widen, pinned).
+At site A `ansi`, C0 `control` and `emptied` can never fire: the input is the JSON.stringify envelope.
+Emit-only record fields: `resultTruncatedForLlm`, `resultChars`, `sanitized`, `rewritten`,
+`rewriteClasses`, `neutralizedCount`, `strippedControlChars` (+ conditional `neutralizedCategories`).
 Matched TEXT is deliberately pino-only, never on the record. Pinned: `test:agentic-tool-loop` §5f.
 
 ## 🆕 2026-06-21 — Cross-process invariant (poller is paichart-web ONLY)
@@ -251,8 +266,9 @@ grep -c "deriveMcpToolNames(" lib/services/agentExecutionEngine.ts app/api/pov/a
 # Excluding a tool removes it from the model's OFFER surface, but a model that emits it anyway still executes.
 # The pending track-1 fix is an allowlist gate HERE (assert toolCall.name ∈ grantedSet before dispatch):
 grep -nE "for \(const toolCall of functionCalls|getToolDefinition\(toolCall\.name\)" lib/agents/harness/agentic-tool-loop.ts
-# Expect: loop at ~:294 + getToolDefinition(toolCall.name) at ~:295 with NO membership guard between them.
-# If a `grantedSet`/`not granted` check appears around :295 → track-1 executor gate SHIPPED; update this note.
+# Expect: loop at ~:777 + getToolDefinition(toolCall.name) at ~:788 (refs 2026-09-26) with NO membership guard between
+# them — the only thing between is the read_more pager interception (a local tool, not a grant check).
+# If a `grantedSet`/`not granted` check appears there → track-1 executor gate SHIPPED; update this note.
 
 # Service-call auth is USER-scoped, not template/agent-scoped (the real confinement gap — hub domain, not engine):
 grep -nE "checkServiceAccess" lib/mcp/server/tools/hub/hub-utilities.js lib/mcp/server/tools/hub/service-call-handler.js
@@ -292,7 +308,7 @@ The most critical aspect. Every execution path must atomically update execution 
 Map all state transitions from PENDING through RUNNING to SUCCESS/FAILED.
 
 ### Phase 3: SSE Streaming Architecture
-Audit all 11 SSE event types, verify SSE-after-commit ordering.
+Audit all 13 SSE event types (12 named + `[DONE]`), verify SSE-after-commit ordering.
 
 ### Phase 4: Error Path Completeness
 Verify every error path updates BOTH execution AND task status atomically.
@@ -320,7 +336,7 @@ echo "--- Engine guard sites that throw typed errors ---"
 grep -rn 'throw new NoTemplateAssignedError\|throw new DuplicateActiveExecutionError' lib/services/ app/api/
 
 echo "--- Outer-catch .code → errorCategory wiring ---"
-# The outer catches at agentExecutionEngine.ts:1631 + :308 read error.code
+# The outer catch at agentExecutionEngine.ts:389 (errCode) + :956 (errorCode log) read error.code
 # into execution.errorCategory for error.json. Typed errors surface through
 # this path automatically; plain new Error() would yield undefined.
 grep -n '(error as any)?.code\|errorCategory:\s*execErrCode\|errorCategory:\s*errCode' lib/services/agentExecutionEngine.ts
@@ -328,7 +344,7 @@ grep -n '(error as any)?.code\|errorCategory:\s*execErrCode\|errorCategory:\s*er
 echo "--- Priority-3 Universal Template fallback: REMOVED (commit 4077c049, 2026-06-10) ---"
 # The deprecated Priority-3 fallback in buildSystemPrompt + the stream-route
 # ad-hoc fallback were deleted after the 30-day observation window showed zero
-# prod hits. Replaced by fail-loud NoTemplateAssignedError (engine:569, stream:420).
+# prod hits. Replaced by fail-loud NoTemplateAssignedError (engine:650, stream:482 — refs 2026-09-26).
 # These greps should now return ZERO (markers gone, fallback dead). If they hit,
 # the dead fallback was re-introduced.
 grep -rn 'DEPRECATED.*Concern B\|DEPRECATED.*Priority 3\|resolvePAIchartUniversalTemplate' lib/services/ app/api/ && echo "WARNING: dead fallback re-introduced" || echo "✓ Priority-3 fallback stays removed"
@@ -620,11 +636,11 @@ grep -n "agentTemplateService\|getTemplate\|loadTemplate\|template" \
 # The four convergence fixes (commits 349c8f84, b5a8d59c, 9f55a9f4, 64b7c864) made the
 # two tool loops behaviorally identical pending extraction. Verify none regressed:
 
-echo "=== D-A: per-turn timeout identical (expect 30_000 in BOTH) ==="
+echo "=== D-A: per-turn timeout identical (both read RUNTIME_LIMITS.EXECUTION_TIMEOUT_PER_TURN_MS — the value lives there) ==="
 grep -n "TIMEOUT_PER_TURN_MS = " lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts
 
-echo "=== D-B: P2 provider-error check in BOTH paths (expect 1 hit each) ==="
-grep -c "LLM call failed at provider layer" lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts
+echo "=== D-B: P2 provider-error check (shared loop) ==="
+grep -c "LLM call failed at provider layer" lib/agents/harness/agentic-tool-loop.ts   # 1 — lives in the SHARED loop since extraction (engine/stream read 0 + 0; superseded by the checkProviderErrorResponse block at the top of this doc)
 
 echo "=== D-C: per-tool durationMs from toolStartTime in BOTH (expect 0 turnStartTime) ==="
 grep -c "durationMs: Date.now() - toolStartTime" lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts
@@ -669,9 +685,9 @@ once Phase 2-3 extraction lands (the shared module IS the parity guarantee then)
 
 echo "=== Shared terminal-persist: isPipelineTask declaration + conditional spread ==="
 grep -n "isPipelineTask" /home/steve/copov15/lib/services/execution-terminal-persist.ts
-# Expect: declaration (:527) + `...(isPipelineTask ? {} : { status: 'COMPLETED' })` spread (:740).
-# Refs verified 2026-07-26 (were ~:483/~:493 — ~50 and ~250 lines stale). Four other uses at
-# :556 (isProgramLeg), :608, :658, :703 — the SHAPE claim is "one declaration, one status spread".
+# Expect: declaration (:663) + `...(isPipelineTask ? {} : { status: 'COMPLETED' })` spread (:893).
+# Refs verified 2026-09-26 (were :527/:740 on 2026-07-26). Four other uses at
+# :692 (isProgramLeg), :744, :794, :856 — the SHAPE claim is "one declaration, one status spread".
 
 echo ""
 echo "=== Adapters MUST be empty now (Phase-6 centralization — NOT a broken path) ==="
@@ -1252,9 +1268,8 @@ echo "Run: ssh <PROD_USER>@<PROD_HOST> \"grep 'TARGET_ID' /var/log/paichart/web-
 ```bash
 # Verify AbortController at all 3 LLM call sites
 echo "=== Execution Timeouts ==="
-grep -n "AbortController\|AbortSignal\|executionAbort\|streamAbort\|executionTimeout\|streamTimeout" \
-  /home/steve/copov15/lib/services/agentExecutionEngine.ts \
-  /home/steve/copov15/app/api/pov/agent/execute/stream/route.ts
+grep -n "AbortController\|AbortSignal\|executionAbort\|executionTimeout\|deadlineAt\|clearTimeout" \
+  /home/steve/copov15/lib/services/execution-core.ts   # the ONE watchdog since Phase 6 (adapters: 0)
 
 # Verify signal threading through LLM stack
 echo ""
@@ -1285,7 +1300,7 @@ grep -n "maxWaitMs\|pollIntervalMs" \
 ```
 
 **What to look for**:
-- 2 AbortController instances: `executionAbort` (engine), `streamAbort` (streaming route)
+- ONE AbortController (`executionAbort`) + watchdog `setTimeout` + `clearTimeout`, in the SHARED core `lib/services/execution-core.ts` (~:135-165) since Phase 6 — the adapters no longer own it; `deadlineAt` is computed beside the setTimeout and threaded to the loop (R4 time-aware retry). Grepping the two adapters for `AbortController` correctly returns ZERO
 - Both pass `signal` in LLMRequestOptions
 - `clearTimeout` called on success and outer catch paths
 - `streamTimeout` hoisted before try block in streaming route (scope visibility for catch)
@@ -1455,7 +1470,7 @@ grep -c "async updateExecution(" \
 20. **Agentic Tool Loop (Mar 2026; cap raised to 30 Apr 2026)**: Up to 30 tool turns per execution (`MAX_TOOL_TURNS`, default `|| 30`). While-loop checks `stopReason === 'tool_use'`. All tool_use blocks executed per turn. Tool errors returned as is_error tool_result. Tool results truncated at 8K chars via `truncateForLlm()` with an auto-nudge directive (narrower re-read / `read_more` page / flag-gap; the `read_more` memory-backed pager added 2026-07-10 `3264e28f` — `READ_MORE_FUNCTION_DEF` injected into `mcpFunctions`, loop-intercepted, NOT a registered tool) + emit-only `resultTruncatedForLlm`/`resultChars` record fields (C1+C2 2026-07-08 `ed702abb`). Message history uses rawContentBlocks + tool_result arrays. Signal passed to ALL generateText calls.
 21. **tool_use_id Preservation (Mar 2026)**: Provider now preserves id on all tool_use blocks. functionCalls[] has required id. functionCall (singular) has optional id (Gemini compat). Streaming path also preserves id.
 22. **JSON Schema Generation (Mar 2026)**: Stub replaced with real zod-to-json-schema (jsonSchema7 target) in embedded-server.ts. LLM tools now get proper JSON Schema definitions.
-23. **Execution Setup Layer (`agentTaskService.ts`)**: Controls model parameter resolution chain, execution config assembly, and CAS guard — for the **explicit** `agent.execute` path only (NOT the universal gateway; reactor cascade / retrigger / REST / SSE bypass it). Model defaults in template fallback MUST match current registry (`claude-haiku-4-5` / `anthropic_sdk`). Template metadata `modelParameters` are spread at top level. `updateExecution()` has a known non-atomic task update (uses separate `prisma.task.update`, not `$transaction`) — acceptable for intermediate status only. **Dependency context chaining is NO LONGER here (removed 2026-06-07, commit 6c640337) — it moved to the `createAgentExecution()` chokepoint (`lib/services/agent-execution-create.ts` → `lib/agents/harness/prepare-task-for-execution.ts`) so all paths chain.**
+23. **Execution Setup Layer (`agentTaskService.ts`)**: Controls model parameter resolution chain, execution config assembly, and CAS guard — for the **explicit** `agent.execute` path only (NOT the universal gateway; reactor cascade / retrigger / REST / SSE bypass it). Model defaults in template fallback MUST match current registry (`claude-haiku-4-5` / `anthropic_sdk`). Template metadata `modelParameters` are spread at top level. ~~`updateExecution()` non-atomic task update~~ DELETED 2026-07-25 (63e24f19 — see §17 guard grep). **Dependency context chaining is NO LONGER here (removed 2026-06-07, commit 6c640337) — it moved to the `createAgentExecution()` chokepoint (`lib/services/agent-execution-create.ts` → `lib/agents/harness/prepare-task-for-execution.ts`) so all paths chain.**
 
 ## Risk Assessment Matrix
 
@@ -1477,13 +1492,13 @@ grep -c "async updateExecution(" \
 ## Success Criteria
 
 - All transaction blocks verified to update BOTH execution AND task atomically
-- All 11 SSE event types documented with line numbers (incl. `execution_started`; exclude content-block false positives like `type: 'tool_result'`)
+- All 13 SSE event types (12 named + `[DONE]`) documented with line numbers (incl. `execution_started`, `prompt_snapshot`, `tool_result_card`; exclude false positives like `type: 'object'`)
 - All 2 error paths verified (streaming outer catch, engine safety-net)
 - SSE-after-commit ordering confirmed for all event emissions
 - updateExecutionStatus NOT called inside any $transaction
 - Rate limiting confirmed on streaming execution endpoint
 - Task executionStatus synchronized at every state transition
-- Execution timeout verified at all 2 LLM call sites (1080s engine + streaming route) with clearTimeout on all exit paths
+- Execution timeout verified at the ONE shared watchdog in execution-core.ts (1080s at 30 turns, both adapters) with clearTimeout in its finally
 - Embedded server tools verified: 6 consolidated tools (~33 actions) registered via `allTools` object with `for...of` loop
 - AbortController signal threading verified: LLMRequestOptions → Anthropic SDK RequestOptions
 - Agentic loop: MAX_TOOL_TURNS enforced, stopReason checked, tool_use_id preserved

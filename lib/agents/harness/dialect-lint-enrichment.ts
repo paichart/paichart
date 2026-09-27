@@ -18,6 +18,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { runDialectLint } from './dialect-lint';
+import { readAuthoritativeResultField } from './authoritative-result-read';
 
 /**
  * Bound on the stage-children scan — same gap, same fix, same cap as the sibling enrichments.
@@ -73,12 +74,8 @@ export async function computeDialectLintFact(
   // The Author is an ACTION task, so `result.json` is the right artifact name here. Do NOT copy
   // this predicate to a PIPELINE lookup — a PIPELINE writes `pipeline-index.json` instead, which is
   // the same class of defect the containment header records at three separate sites.
-  const rows = await prisma.$queryRaw<Array<{ fr: string | null }>>`
-    SELECT (content::jsonb)->>'finalResponse' AS fr FROM agent_artifacts
-    WHERE name = 'result.json' AND content LIKE '{%'
-      AND (content::jsonb)->>'taskId' = ${authorChild.id}
-    ORDER BY "createdAt" DESC LIMIT 1`;
-  const authorText = rows[0]?.fr ?? null;
+  // RWF Wave B: lint the package the Reviewer was chained (authoritative-result-read.ts).
+  const authorText = (await readAuthoritativeResultField(prisma, authorChild.id, 'finalResponse')).value;
   if (!authorText) {
     return { checked: false, reason: 'no-author-text', tokensConsidered: [], violations: [] };
   }

@@ -14,6 +14,308 @@
 
 ---
 
+## 🆕 2026-09-15 — WHICH SURFACE HOLDS WHICH FACT (read this before concluding a fact is absent)
+
+Three times in one session a fact was reported ABSENT when it was present on a different surface.
+Each time the query was reasonable and the conclusion was wrong. **When a fact looks missing, the
+prior should be "I queried the wrong surface", not "the fact is missing"** — measured 3 for 3.
+
+| the fact you want | where it ACTUALLY lives | where people look first (and find nothing) |
+|---|---|---|
+| `derivationContainment`, `dialectLint`, the mechanical nets | the execution's **`result.json` / `pipeline-index.json` artifact** | `tasks.metadata` — nets stamp the artifact, not the row |
+| `qualityGate`, `programReleasable`, `pipelineStageId`, `duplicateHalt` | **`tasks.metadata`** | the artifact |
+| which protocol VERSION an agent actually received | the artifact's **`protocolInjection`** block (name, version, `preambleChars`) | `agent_executions.config.systemPrompt` — that holds the TEMPLATE's prompt; protocols are injected at run time and are NOT in it |
+| what a role is TOLD (assembled view) | `npm run prompt:directives -- <role> --protocol <p>` | — but see the caveat below |
+| **what a child was told on a PAST run** | **nowhere durable** — `tasks.description` is CURRENT state and is overwritten in place | `tasks.description`, which now shows whatever it was last edited to |
+| the deliverable text | `result.json.finalResponse`; `report.md` only for leaf/designated tasks | — |
+| **whether the engine DECIDED to emit a `report.md`** | the artifact's **`reportMdSource`** block (`{mode:'self'\|'upstream', sourceTaskId?, extractFailureReason?}`) | the presence of the `report.md` artifact itself — which conflates *decided not to* with *decided to and failed* |
+
+⚠️ **A brief is MUTABLE, and your own remediation is a writer to it.** `tasks.description` holds
+current state, not history: there is no prior-version record, so once a defective brief is corrected
+the evidence that it was ever defective is gone. Measured the hard way on 2026-09-20 — an Author
+brief closed with *"unless you find you are reusing a chained value verbatim from elsewhere"*, which
+licensed the import that caused the incident; I fixed the brief, then an hour later queried the
+corpus for that phrasing and got a clean **0 of 197**, and very nearly reported it. The instance had
+been destroyed by the fix.
+
+**When the BRIEF is the thing under investigation, capture it verbatim BEFORE editing it** — into
+the follow-up, the review bundle, anywhere immutable. The execution artifacts preserve what an agent
+*did*; nothing preserves what it was *told*. The general form is worth more than the instance:
+**before measuring a mutable surface for a defect, ask whether you have already repaired one — you
+are a writer to the corpus you are querying.**
+
+⚠️ **`prompt:directives` is a FILTERED view, not the prompt.** It lists prohibitions and mandates by
+pattern. A reviewer-addressed paragraph added 2026-09-15 does **not** appear in its output even though
+it is in the injected protocol — verified against the execution's own `protocolInjection` record.
+**Its silence is not evidence of absence.**
+
+⚠️ **Never assert an absence from truncated output.** A `grep` piped through `cut -c1-200` reported
+"no such clause exists" for a clause sitting at character ~4,000 of a single ~15,000-char line. The
+evidence was in the grep's own result and the formatting discarded it. That false negative was
+committed, pushed, and used to brief four review agents. If you are about to write "X does not
+exist", re-run the search with no truncation and no `head`.
+
+⚠️ **`reportMdSource` separates the two reasons a deliverable is missing** (added 2026-09-16). It is
+written **only** when `getReportMdDecision` returned `produce: true`, so on a harness task with no
+`report.md`:
+- `reportMdSource` **absent** ⇒ the engine decided *not* to produce. Check the Option-A gate: did the
+  `deliverableSourceTaskId` source have a SUCCESS execution **at the moment this execution
+  persisted**? Compare `agent_executions."endTime"` on both sides — a source that succeeded *later*
+  makes `produce:false` correct, and three of three archive candidates were exactly that.
+- `reportMdSource` **present** ⇒ the engine decided to produce and the artifact still is not there.
+  That is a real anomaly. Exactly **1** such execution exists in the corpus (`cmrmkegkv…`,
+  2026-07-15); retention is ruled out (July retains 147 `report.md` rows).
+
+Without this split, "harness produced no deliverable" reads as one symptom with one cause. It is two,
+and only the second is a defect.
+
+⚠️ **`allDependenciesMet` is a CONSTANT — never use it as a coverage fact** (added 2026-09-16).
+`true` in **729 of 729** rows; it has never been false, including where `completedDependencies: 0`.
+It measures SCHEDULING (are the predecessor *tasks* terminal) while every field beside it in
+`pipelineMetadata` measures DELIVERY, so it answers a question nobody asked in a place where it reads
+as the answer to the one they did. Filed:
+`cline_docs/follow-ups/all-dependencies-met-is-constant-2026-09-16.md`.
+
+⚠️ **A chained fact on a LEG is not a fact about its CHILDREN** (added 2026-09-16). See
+PROGRAM-RUN-FORENSICS-GUIDE §3 — measured 51 of 51 upstream edges reaching a leg and 3 reaching any
+child (Bug Class 84). Query the child's own `inputContext.chainedFrom` separately; a child whose
+entries name only its siblings has not received the upstream deliverable, whatever the leg reports.
+
+⚠️ **A stale stamp keeps reporting.** `metadata.duplicateHalt` is NOT cleared when
+`duplicateAcknowledged` resolves it, so `agent.status` keeps returning `halted_awaiting_human` and
+recommending a stamp that already exists. Read the metadata, not the workflow recommendation.
+
+## 🆕 2026-09-15 — `protocolValidation.mode` IS A GUESS. `resolvedMode` IS THE RECORD.
+
+An artifact can carry `"resolvedMode": "CREATE"` and `"protocolValidation": {"mode": "ORCHESTRATE"}`
+**in the same document**, and the degradation beside them is computed against the SECOND one.
+Measured across the corpus: **12 of 68 executions carrying `protocolValidation` are graded against a
+mode they did not resolve to, and the graded mode is ORCHESTRATE in 12 of 12.**
+
+Do not treat this as a bug to report on sight — the divergence is *deliberate* and the ruling behind
+it is sound. But do not read `protocolValidation.mode` as "the mode this run was in", because it is
+not. It is an inference from the tool-call transcript.
+
+**Why inference at all?** `validatePipelineProtocolSteps` runs against an immutable post-execution
+snapshot and must decide WHICH step-profile to judge against. It cannot simply trust the stamped
+`resolvedMode`, because `pov-program` PLAN-SPAWN legitimately resolves **SYNTHESIZE** (all-terminal
+reason code) while doing **CREATE-shaped** work by design and deliberately never calling
+`task.complete`. Trusting the stamp would false-flag PLAN-SPAWN on *every run*. So inference is
+primary and `resolvedMode` is an **UNKNOWN-only rescue** — never an override of a confident
+inference (HARNESS_NO_OUTPUT panel + pipeline-harness ruling, 2026-07-17).
+
+**The inference ladder** (`detectHarnessMode`, first match wins):
+
+| # | test | verdict |
+|---|---|---|
+| 1 | `task.create` **and** `stage.create` | CREATE |
+| 2 | `task.complete` | SYNTHESIZE |
+| 3 | `stage.create` alone | CREATE (half-CREATE: stage opened, no children yet) |
+| 4 | `agent.assign` **or** `task.update` | ORCHESTRATE |
+| 5 | none of the above | UNKNOWN → rescued by `resolvedMode` |
+
+**Rung 4 is the trap.** By the time it is reached we already know no stage was created and the task
+was not closed. In that position `agent.assign` is a genuinely distinctive tell — handing work to
+children that already exist is what orchestrating *is*. But `task.update` means only "wrote a field
+on a task", which **every mode does**: CREATE stamps its `pipelineStageId`, SYNTHESIZE stamps its
+results, and a halt stamps the reason it stopped. Identifying an orchestrator by `task.update` is
+identifying a horse by counting four legs.
+
+Measured: of the 12 disagreements, **11 have zero `agent.assign`** — they reached ORCHESTRATE on
+`task.update` alone. The single exception is the PLAN-SPAWN shape the 2026-07-17 ruling protects.
+
+⚠️ **The sting: obeying the protocol is what triggers it.** A halting agent is *mandated* to record
+why it stopped (`metadata.cannotRun` / `metadata.duplicateHalt`) — and the only way to record it is
+`task.update`. So compliance with the halt mandate is the exact act that classifies the halt as an
+orchestrator, which then emits `PROTOCOL_STEP_SKIPPED` accusing it of skipping a step. **The most
+disciplined behaviour in the corpus carries a red flag.**
+
+⚠️ **The same shape for the re-execute exit — fixed 2026-09-26 (RWF A4).** A SYNTHESIZE that re-executes a child
+(the 50–69 band) and exits used to be graded `PROTOCOL_STEP_SKIPPED` ("Step 5 not called" + content misses
+graded against its interim status note). Since A4 it records `protocolValidation.reExecutionExit {kind,
+childTaskIds}` and does not degrade. **Reading rule:** a `PROTOCOL_STEP_SKIPPED` on a SYNTHESIZE that
+dispatched a child and is dated BEFORE 2026-09-26 is that artifact, not a skipped step (6 of the 7 prod
+instances). Related facts on the same runs: `metadata.deadEndExempt` (an empty SYNTHESIZE NOT terminalized
+because a child was in flight or dispatched that run) and `metadata.reactorBudgetExhausted` (Guard 8).
+
+⚠️ **And a halt can never satisfy a step-profile at all.** Its correct behaviour is to do nothing —
+no stage, no children, no completion. Re-pointing it at the right profile does not help: judged as
+CREATE it simply fails on "stage.create not called", which is *true* and still wrong, because not
+creating the stage was the entire point. A sanctioned halt must be **exempt from step validation**,
+not merely graded under a different ruleset.
+
+**Forensic rules that follow:**
+
+1. When reading any degradation, **read `resolvedMode` first** and check whether
+   `protocolValidation.mode` agrees. If they disagree, the degradation was computed against a
+   ruleset the run was never following — treat the finding as unproven until you have checked it by
+   hand.
+2. `executionDegradation` is a **gate input** (`programReleasable`, leg-tier stamped outcome). A
+   wrong mode here is not cosmetic — it propagates.
+3. A degradation on an execution that *escalated correctly* deserves suspicion, not confirmation.
+   Two hand-verified false positives (2026-09-15): a CREATE duplicate-halt and an observability
+   SYNTHESIZE that escalated, wrote `report.md`, and was failed for lacking an ORCHESTRATE
+   breadcrumb.
+4. `hasBreadcrumb: false` does **not** mean the breadcrumb is absent. The check matches
+   ``**Child stage:** `<id>` `` and rejects the same fact in plain text — one execution whose
+   comment literally begins `Child stage: cmty0x9jo...` scored `false`. It asserts *formatting*
+   while appearing to assert *semantics*.
+
+```bash
+# Is a degradation graded against the mode the run actually resolved to?
+# Run per-artifact; a disagreement means the finding needs hand-verification.
+psql "$DATABASE_URL" -c "
+SELECT (a.content::jsonb)->>'resolvedMode' AS resolved,
+       (a.content::jsonb)->'protocolValidation'->>'mode' AS graded_against,
+       (a.content::jsonb)->'executionDegradation'->>'errorCategory' AS degradation
+FROM agent_artifacts a
+WHERE a.\"executionId\" = '<execution id>' AND (a.content::jsonb) ? 'protocolValidation';"
+```
+
+
+## ⚠️ 2026-09-16 · 2026-09-17 · 2026-09-19 · 2026-09-20 — SIX RULES FOR MEASURING, earned by getting each one wrong on a live run
+
+A forensics guide is only as good as the queries it leads you to write. On 2026-09-16 a single
+investigation produced **five** wrong numbers before the right one, every time by measuring something
+adjacent to the property. These rules are what separated them.
+
+### 1. Run a CONTROL before believing a total
+
+A query returning null/zero for **everything** is far more likely to be a broken query than a broken
+platform. The control is cheap: find a population that is *known* to have the field and check that it
+does.
+
+Live example: `inputContext.chainedContext.predecessors` returned null on all 95 cross-pipeline edges,
+which read as *"chaining has been silently broken since 2026-07-16"*. The control — **zero tasks of
+ANY type had that path, including ACTION tasks known to chain** — showed the path does not exist. The
+real key is `inputContext.chainedFrom`, and chaining is **54 of 54** where the downstream executed.
+
+> **A field that is null for everything is a broken query, not a broken platform.**
+
+### 2. A field NAME is not a field VALUE
+
+`truncated`, `sanitized`, `degraded`, `notChained` are **keys present on every entry**. Matching the
+word matches every row.
+
+Live example: `chainedFrom::text LIKE '%truncat%'` returned **642 of 643** — reading as near-universal
+truncation. The value test, `(e->>'truncated')::boolean`, returns **0 of 779**. The trim has never
+fired. Always test the value, and prefer a jsonb accessor to a text match.
+
+### 3. Count OPPORTUNITIES, not lookalikes
+
+Before reporting a rate, ask: *what is the population in which the thing could have happened?*
+
+Two live examples the same day:
+- Backtick-quoted canonical headings: legs *containing* one = **204**; containing one and no parseable
+  heading = **157**; containing one adjacent to a JSON fence, i.e. an attempted emit = **11**; legs
+  whose **stamped fact actually changes** = **3**. Only the last is the defect. The first three count
+  the word.
+- Non-terminal PIPELINE tasks reported **71 UNEXPLAINED**; **59** were simply blocked by an incomplete
+  dependency — correctly queued, not hung. The bucket was the tool's residual, not a finding.
+
+A corollary for this whole guide: **a residual bucket is not a finding.** "Unexplained" means the
+question has not been asked yet. Add the predicate; do not let the pile acquire a reputation.
+
+### 4. A fact is only readable once the thing that stamps it has run
+
+**A harness leg has at least TWO executions** — the CREATE/ORCHESTRATE pass that decomposes it, and
+the terminal SYNTHESIZE pass that stamps the leg-level facts. `derivationContainment`,
+`upstreamContainment` and the quality gate are written by the SECOND one. Read
+`pipeline-index.json` between them and the key is simply not there yet.
+
+That is dangerous rather than merely wrong, because **absence is specified to fail closed**
+(`ABSENT ⇒ treat as blocking`). A premature read does not produce "no data" — it manufactures a
+false BLOCKING finding about a run that was fine.
+
+Live example (2026-09-17, phase-1 showcase program): the cloud leg was reported as carrying no
+containment fact at all, and written up as a gap in cross-leg attestation — *"the consumption is
+attested by prose, not by the mechanical net."* The leg has two executions, `01:51:53` (no fact)
+and `02:00:43` (the fact). The read happened at ~01:52. The real stamp was
+`disposition: benign`, `reason: consuming-leg-consumed-discharged`, carrying
+`upstreamContainment.legs[].derivedValues` — the producer's `taskId` **and** its value — with
+`green: true`. The mechanical attestation the finding said was missing was the exact thing that
+existed.
+
+**Two mechanical habits prevent it:**
+
+```sql
+-- (a) Test KEY PRESENCE, never a pretty-print. jsonb_pretty(NULL) prints BLANK,
+--     which is indistinguishable from "the key is there and empty".
+SELECT (a.content::jsonb) ? 'derivationContainment' AS key_present,
+       jsonb_typeof((a.content::jsonb)->'derivationContainment') AS typ
+
+-- (b) Never `ORDER BY "startTime" DESC LIMIT 1` on a leg while anything is still RUNNING.
+--     Gate the read on the leg being settled, and say which execution you read.
+SELECT e.id, e.status, e."startTime", ((a.content::jsonb) ? 'derivationContainment') dc
+FROM agent_executions e JOIN agent_artifacts a
+  ON a."executionId" = e.id AND a.name = 'pipeline-index.json'
+WHERE e."taskId" = '<leg id>' ORDER BY e."startTime" DESC;   -- read them ALL, then choose
+```
+
+⚠️ **`task.status = COMPLETED` does NOT mean the leg is settled.** In the live case the poll printed
+`task=COMPLETED exec=RUNNING` in the same row that the read was taken from. The task flips before its
+terminal execution finishes persisting. Gate on the EXECUTION, not the task.
+
+> **Absent, benign and not-yet-stamped are three different states, and only one of them is a finding.**
+
+### 5. A leg told to consume a chained value, with nothing chained, is a WIRING finding — not a leg finding
+
+When a leg's brief says *"consume X verbatim from chained context"* and the leg escalates saying it
+cannot find X, the defect is usually **upstream of the leg**, in the DAG. Check before reading a
+single line of the leg's reasoning:
+
+```sql
+SELECT jsonb_array_length(coalesce("inputContext"->'chainedFrom','[]'::jsonb)) AS chained
+FROM tasks WHERE id = '<leg id>';   -- 0 on a leg that HAS RUN is the finding
+```
+
+⚠️ **Only meaningful once the leg has executed.** `chainedFrom` is written by
+`prepareTaskForExecution` at execution time, so before a leg runs it is `0` whether the wiring is
+right or wrong. To check wiring BEFORE a run, read the dependency edges instead —
+`PROGRAM-RUN-FORENSICS-GUIDE.md` §5.
+
+A `0` here means the leg was **right to escalate** and its own work is not in question. The common
+cause at program tier is an APPROVAL gate interposed between producer and consumer: the chainer
+walks DIRECT edges and a gate carries no deliverable, so `P1 → G2 → P2` delivers nothing. Full
+treatment, including why the previous round chained correctly for the wrong reason:
+`PROGRAM-RUN-FORENSICS-GUIDE.md` §5.
+
+⚠️ **A sibling leg succeeding does not clear the wiring.** Given the same empty context on
+2026-09-18, one leg harness fetched the value itself via `agent.results` and wrote it into its child
+briefs (approved 92), one took a branch that needed no value (approved 84), and only the third
+refused (20). Two of three masked it. If one leg escalates on a missing chained value, check
+`chainedFrom` on **every** consumer in the stage, not just the one that complained — and see
+§5b there for detecting a harness that routed around the chain.
+
+
+### 6. A cross-domain comparison needs the domains' clauses open side by side
+
+**Before comparing domains on a metric, confirm they mandate the same thing at the same phase.**
+Otherwise you are comparing POPULATIONS, not behaviours.
+
+Live example (2026-09-19/20): measuring how often a machine-parsed marker block reads ABSENT gave
+network 16% / kubernetes 53% / terraform 100% — which reads as *"the domain that carries the
+placement rule fails most"*. Both numbers were population artifacts:
+
+- **Different mandates.** terraform and kubernetes require a `## Harvested Allocations` block
+  UNCONDITIONALLY; network does not. A proxy keyed on `"kind"` — present in harvested AND derived
+  entries — therefore loaded exactly the two domains that scored worst. Re-keying on `"members"`
+  (only a DERIVED entry carries it) took terraform from 17 attempts to **2**; 15 had been harvest
+  blocks. Corpus-wide the count fell from ~31 to **~8**.
+- **Different phase.** kubernetes emits `## Derived Values` at **Phase 2**; network and terraform
+  emit at **Phase 1** and only CARRY at Phase 2. Filtering to two roles therefore samples a
+  different point in the chain in each domain.
+
+⚠️ **Neither asymmetry was visible from the query side, however the query was written.** Both were
+found by someone holding all four domains' clauses open together, because a porting job required
+deciding which were in scope. The lesson is NOT "read prose instead of querying" — it is that a
+cross-domain claim made from outside a side-by-side reading of the domains' own texts cannot see
+what makes the populations differ.
+
+⚠️ **0 successes is an ABSENCE, not a rate.** terraform's "100% failing" was 0 parsed against 2
+attempts — a population that rarely derives at all. The first output said so and it was read past.
+
+
 ## 0. The mental model — four layers of persisted evidence
 
 Every pipeline run leaves a layered forensic record. Know which layer answers which question:
@@ -157,7 +459,11 @@ orchestrator's judgment, prove whether the load-bearing signal even survived the
 retracted prose; the position check showed the retraction + `VERDICT: APPROVED` sat past char 8000 and was
 never in the orchestrator's view. Post-fix, ALL compact fields (confidence, `reviewerVerdict`, the full
 trust-signal stack, metrics) are emitted BEFORE the bulky payloads — `finalResponse`/`toolCalls` — (field
-order is a contract — see `execution-artifacts.ts`), and a stamped
+order is a contract — see `execution-artifacts.ts`). ⚠️ Until 2026-09-26 that held only for what the builder
+emits: keys added at persist — net stamps (`derivationContainment`, `markerPresence`, `rollbackContainment`…),
+`supersession`, `reportMdSource` — sat AFTER `finalResponse`. RWF C3 re-orders the whole object at persist
+(`orderResultJsonForPersist`), so on an artifact persisted before that date, run the position check on those
+keys too. And a stamped
 `qualityGate.verdictMismatch: true` marks a stamped outcome that contradicts the reviewer's transcribed
 terminal verdict. See `cline_docs/reviews/harness-synthesize-verdict-misread-2026-07-14/finding.md`.
 

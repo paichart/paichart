@@ -14,7 +14,7 @@
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://t:t@localhost:5432/t';
 
 import { assessScoreIntegrity } from '@/lib/agents/harness/parse-confidence';
-import { extractKeepBestFacts, judgeCatastrophicDegradation, selectAuthoritativeExecution } from '@/lib/services/execution-selection';
+import { extractKeepBestFacts, judgeCatastrophicDegradation, selectAuthoritativeExecution, computeSelfSupersession } from '@/lib/services/execution-selection';
 
 let passed = 0, failed = 0;
 const ok = (c: boolean, m: string) => { if (c) { passed++; console.log(`  ✅ ${m}`); } else { failed++; console.log(`  ❌ ${m}`); } };
@@ -175,6 +175,46 @@ const D = (s: string) => new Date(s);
   const r = await selectAuthoritativeExecution(client, 't1', { requireNonEmptyArtifact: true });
   ok(r.execution?.id === 'good' && r.skipped.length === 1 && r.skipped[0].reason === 'empty-artifact',
     'SELECTOR S4: R8 empty-SUCCESS skipped (recorded), older non-empty selected (BC-6/F6)');
+}
+
+// ── RWF C.2 (2026-09-26): keep-best on CHANGED input — no comparison; unknown skips for reviewers only ──
+{
+  const TARGET = { keepBestFacts: { deliverableChars: 14000, fencedBlockCount: 17, scoreIntegrity: { recordedIsFinalMention: true } } };
+  const COLLAPSED = { keepBestFacts: { deliverableChars: 800, fencedBlockCount: 0, scoreIntegrity: { recordedIsFinalMention: true } } }; // Arm 1
+  const TRUNCATED = { errorCategory: 'TRUNCATED_NO_OUTPUT', keepBestFacts: { deliverableChars: 56, fencedBlockCount: 0, scoreIntegrity: { recordedIsFinalMention: true } } }; // Arm 3
+  const rec = (ids: Record<string, string>) => ({ chainedPredecessors: { status: 'chained', ids } });
+  /** Stub: the target row + artifact, and the retry's own row (reviewer facts). */
+  const client = (targetContext: unknown, own: { agentRole?: string | null; templateType?: string | null } = {}) => ({
+    agentExecution: {
+      findUnique: async ({ where }: any) => where.id === 'target'
+        ? { context: targetContext, config: {} }
+        : { agentTemplate: null, task: { agentRole: own.agentRole ?? null, agentTemplate: own.templateType ? { templateType: own.templateType } : null } },
+    },
+    agentArtifact: { findFirst: async () => ({ content: JSON.stringify(TARGET) }) },
+  }) as any;
+  const run = (targetCtx: unknown, ownCtx: Record<string, unknown>, result: unknown, own?: any) =>
+    computeSelfSupersession(client(targetCtx, own), { reExecutionOfExecutionId: 'target', ...ownCtx }, result as any, { executionId: 'retry', config: {} });
+
+  const k1 = await run(rec({ author: 'v1' }), rec({ author: 'v2' }), COLLAPSED);
+  ok(k1?.supersededById === null && k1?.audit.skipped === 'changed-input',
+    'C2 K1: changed input + an Arm-1 collapse profile ⇒ NOT superseded, stamped skipped:changed-input');
+  const k2 = await run(rec({ author: 'v1' }), rec({ author: 'v2' }), TRUNCATED, { agentRole: 'change_reviewer' });
+  ok(k2?.supersededById === null && k2?.audit.skipped === 'changed-input',
+    'C2 K2: changed input + a TRUNCATED re-review ⇒ NOT superseded (it stays authoritative, parses to no verdict, fails closed)');
+  const k3 = await run(rec({ author: 'v1' }), rec({ author: 'v1' }), COLLAPSED);
+  ok(k3?.supersededById === 'target', 'C2 K3: SAME input ⇒ Arms 1-3 unchanged (collapse supersedes)');
+  const k3b = await run(rec({ author: 'v1' }), rec({ author: 'v1' }), TRUNCATED);
+  ok(k3b?.supersededById === 'target', 'C2 K3b: SAME input truncation ⇒ Arm 3 still fires');
+  const k4 = await run({}, rec({ author: 'v1' }), COLLAPSED, { agentRole: 'config_change_author' });
+  ok(k4?.supersededById === 'target', 'C2 K4: UNKNOWN input (pre-record target) for a NON-reviewer ⇒ arms unchanged (audit X7)');
+  const k5 = await run({}, rec({ author: 'v1' }), COLLAPSED, { agentRole: 'change_reviewer' });
+  ok(k5?.supersededById === null && k5?.audit.skipped === 'input-unknown', 'C2 K5: UNKNOWN input for a reviewer role ⇒ skipped:input-unknown');
+  const k6 = await run({}, rec({ author: 'v1' }), COLLAPSED, { agentRole: 'publication_reviewer', templateType: 'REVIEWER' });
+  ok(k6?.audit.skipped === 'input-unknown', 'C2 K6: a REVIEWER-type template outside REVIEWER_ROLES is in the reviewer set');
+  const k7 = await run({ chainedPredecessors: { status: 'not-chained', reason: 'chain-failed' } }, rec({ author: 'v1' }), COLLAPSED, { agentRole: 'change_reviewer' });
+  ok(k7?.audit.skipped === 'input-unknown', 'C2 K7: a not-chained record on either side is UNKNOWN, never "same" (N8)');
+  const k8 = await run(rec({ author: 'v1' }), rec({ author: 'v1', harvest: 'h1' }), COLLAPSED);
+  ok(k8?.audit.skipped === 'changed-input', 'C2 K8: a different predecessor SET is changed input');
 }
 
 console.log(`\n──────────────────────────────────────────────────`);

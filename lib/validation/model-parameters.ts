@@ -89,6 +89,8 @@ const modelParametersShape = {
 };
 
 const KNOWN_KEYS = Object.keys(modelParametersShape);
+/** The known model-parameter keys (RWF D1): the ONLY modelParameters keys a pipeline child's agent.execute may carry. */
+export const MODEL_PARAMETER_KEYS: readonly string[] = KNOWN_KEYS;
 
 /**
  * D-1 template-lock (2026-06-18): reject orchestration/budget params the template
@@ -108,6 +110,32 @@ function rejectTemplateControlledKeys(data: unknown, ctx: z.RefinementCtx): void
   }
 }
 
+/**
+ * X15 (RWF, 2026-09-27; sec-ops D1 review F1): keys the EXECUTION CONFIG owns, which a modelParameters object must never
+ * carry. agentTaskService builds the config as `{ agentRole, prompt, inputContext, …, priority, ...modelParameters }`, so
+ * a modelParameters `prompt`/`agentRole` silently REPLACED the task's directive and role (the engine reads
+ * config.agentRole; the prompt body reads config.prompt). Rejected loudly at every write/override boundary that uses these
+ * schemas (Protocol 10: a clear signal, never a silent strip), and stripped again in agentTaskService for anything
+ * already stored. Measured 2026-09-27: 0 tasks, 0 templates, 0 executions (60d) carry any of them.
+ * NOT here: `systemPrompt`/`useSystemPrompt`/`maxRetries`/`timeout` — the template path puts those in modelParameters on
+ * purpose (template-model-params.ts), and 50 tasks store systemPrompt legitimately.
+ */
+export const EXECUTION_IDENTITY_KEYS = ['agentRole', 'prompt', 'inputContext', 'priority'] as const;
+
+function rejectExecutionIdentityKeys(data: unknown, ctx: z.RefinementCtx): void {
+  if (!data || typeof data !== 'object') return;
+  for (const k of EXECUTION_IDENTITY_KEYS) {
+    // PRESENCE, not non-null (boundary-contract B1): `prompt: null` spread over the config blanks the task's directive.
+    if (Object.prototype.hasOwnProperty.call(data, k) && (data as Record<string, unknown>)[k] !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [k],
+        message: `modelParameters.${k} is not a model parameter — it would replace the execution's ${k}. Set ${k} on the task (or, for agent.execute, as overrideConfig.${k}).`,
+      });
+    }
+  }
+}
+
 /** Restore strict strip-unknowns after passthrough+refine (drops any key not in the cap list). */
 const pickKnownKeys = (obj: Record<string, unknown>): Record<string, unknown> => {
   const out: Record<string, unknown> = {};
@@ -120,10 +148,30 @@ const pickKnownKeys = (obj: Record<string, unknown>): Record<string, unknown> =>
  * 400) and strips all other unknowns — same closed-shape result as the prior
  * `z.object`, plus the maxToolTurns signal.
  */
+/**
+ * X16 nested (validation-engine F1): `maxRetries`/`timeout` are NOT model parameters (not in the shape — adding them would
+ * put them on the pipeline-child allowlist), but they ride inside modelParameters on the template path and are spread OVER
+ * the bounded top-level values. Bound their TYPE and SIZE here, unit-agnostically: a nested timeout is in seconds on the
+ * template path (stored 300–900) and may be ms elsewhere. null passes (readers use `??`).
+ */
+function boundNestedRunControls(data: unknown, ctx: z.RefinementCtx): void {
+  if (!data || typeof data !== 'object') return;
+  const d = data as Record<string, unknown>;
+  const bad = (k: string, msg: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path: [k], message: msg });
+  if (d.maxRetries != null && !(Number.isInteger(d.maxRetries) && (d.maxRetries as number) >= 0 && (d.maxRetries as number) <= RUNTIME_LIMITS.MAX_RETRIES)) {
+    bad('maxRetries', `modelParameters.maxRetries must be an integer 0..${RUNTIME_LIMITS.MAX_RETRIES}`);
+  }
+  if (d.timeout != null && !(Number.isInteger(d.timeout) && (d.timeout as number) >= 1 && (d.timeout as number) <= RUNTIME_LIMITS.MAX_TASK_TIMEOUT_MS)) {
+    bad('timeout', `modelParameters.timeout must be an integer 1..${RUNTIME_LIMITS.MAX_TASK_TIMEOUT_MS}`);
+  }
+}
+
 export const ModelParametersSchema = z
   .object(modelParametersShape)
   .passthrough()
   .superRefine(rejectTemplateControlledKeys)
+  .superRefine(rejectExecutionIdentityKeys)
+  .superRefine(boundNestedRunControls)
   .transform(pickKnownKeys);
 
 /**
@@ -135,4 +183,6 @@ export const ModelParametersPassthroughSchema = z
   .object(modelParametersShape)
   .passthrough()
   .superRefine(rejectTemplateControlledKeys)
+  .superRefine(rejectExecutionIdentityKeys)
+  .superRefine(boundNestedRunControls)
   .transform(stripDangerousKeys);

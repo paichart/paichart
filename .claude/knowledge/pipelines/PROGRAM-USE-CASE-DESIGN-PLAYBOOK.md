@@ -186,3 +186,35 @@ use-case doc + illustrative artifacts → validate against the VT guarantees →
 - Leg-level design: [`PIPELINE-USE-CASE-DESIGN-PLAYBOOK.md`](./PIPELINE-USE-CASE-DESIGN-PLAYBOOK.md)
 - Rationale + acceptance: `cline_docs/reviews/program-architect-design-2026-07-15/{design-proposal.md, PROGRAM-TEST-PLAN.md}`
 - Public proofs: `github.com/paichart/paichart/tree/main/verification`
+
+---
+
+## 2026-09-16 — the crossing value now reaches the consuming AGENT, not just the leg
+
+Until this date a program's crossing value reached the downstream **leg** and stopped: its children
+held only their own siblings, and the value reached them as *prose* the harness had paraphrased into
+their task descriptions. **51 of 51 edges reached the leg; 3 of 51 reached any child.** A consuming
+Architect that took the `consumptionRule` literally escalated rather than trust it — correctly.
+
+**Design consequences, now that delivery works:**
+
+1. **You may write a `consumptionRule` that demands verbatim consumption from chained context, and it
+   is satisfiable.** Before this it was not, at the child tier, for any program.
+2. **The value reaches CONSUMING roles only.** `infra_change_architect`, `config_change_author`, and
+   anything new by default. **Harvest-shaped roles and reviewers are excluded** — see the
+   defense-stack pattern for why (ground-truth poisoning; a second reviewable document). If your
+   decomposition puts the consumer in a harvest-shaped seat, it will not receive the value.
+3. **Do not design around the old gap.** Restating the value into a child's task description is what
+   the platform now does properly; a hand-carried restatement is prose, and a strict consumer will
+   refuse it.
+4. **A leg whose ENTIRE input is the upstream publication** — no local harvest — is the dep-free
+   case. It is served in code but **unproven in production**: the podrange topology cannot exercise
+   it because its consumers each hold a sibling edge. Fixture-proven only; design one deliberately
+   if you want it validated.
+
+**Coverage**: protocol-agnostic. Verified across network-provisioning, terraform-iac,
+kubernetes-gitops and observability-config — they share an identical four-role skeleton, so one
+exclusion list covers all four. artifact-synthesis has never been a program leg; its
+`publication_reviewer` was added to the exclusion list 2026-09-17 before it can be.
+
+**Record**: `cline_docs/reviews/cross-pipeline-value-delivery-2026-09-16/` · VT-25.

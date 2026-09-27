@@ -51,6 +51,13 @@ import { buildRichExecutionConfig, resolveTriggeredByFromParent } from './agentE
 import { createAgentExecution } from './agent-execution-create';
 import { CanNeverRunError, DuplicateActiveExecutionError } from '@/lib/errors';
 import { logReactorDuplicateSkip } from './reactor-skip-counter';
+import { ACTIVE_EXECUTION_STATUSES } from './child-stage-settled';
+
+// The in-flight status set, rendered as a SQL LITERAL list (never bind parameters): the BC67 partial index
+// `idx_agent_executions_active_per_task` has `WHERE status IN ('PENDING','RUNNING')`, and Postgres can use a
+// partial index only when it can PROVE the query implies that predicate — which a generic plan over bound
+// parameters cannot. Safe to inline: a compile-time constant, not input. (RWF A1 single-source, 2026-09-26.)
+const ACTIVE_STATUSES_SQL_LITERAL = Prisma.raw(ACTIVE_EXECUTION_STATUSES.map((s) => `'${s}'`).join(', '));
 
 const log = mcpLogger.child({ module: 'TaskReadyReactor' });
 
@@ -104,7 +111,7 @@ function upstreamUnsatisfiedCondSql(): Prisma.Sql {
           -- re-fires on a flip (PENDING 20 min, RUNNING 105 min) — a lingering row delays, never strands.
           SELECT 1 FROM agent_executions ae2
           WHERE ae2."taskId" = upstream.id
-            AND ae2.status IN ('PENDING', 'RUNNING')
+            AND ae2.status IN (${ACTIVE_STATUSES_SQL_LITERAL})
         )
       )`;
 }
@@ -442,16 +449,16 @@ export async function maybeQueueIfDepFree(taskId: string): Promise<void> {
 
     // 2026-04-18 (L2, Concern A): if another path already claimed the task, no-op.
     //
-    // The specific window this closes: task.executionStatus=PENDING (agent.execute
-    // has run its CAS at agentTaskService.ts:328-340) but the agent_executions
-    // INSERT hasn't committed yet. The existing check below queries agent_executions
-    // and would miss Thread B's row by a few ms; task.executionStatus is already
-    // PENDING and visible.
+    // Corrected 2026-09-26 (RWF A1, event-system review): agentTaskService INSERTS the
+    // agent_executions row FIRST (createAgentExecution) and only THEN runs its CAS that sets
+    // task.executionStatus=PENDING — the reverse of what this comment used to say. So this
+    // executionStatus check is a second, cheaper signal; the agent_executions check below is
+    // the one that sees a freshly created row. Both are kept.
     //
-    // READY is exclusively set on scheduledFor executions (agentTaskService.ts:327,
-    // app/api/tasks/[taskId]/agent/execute/route.ts:216,257) — no reactor sets it,
-    // so including it in the block list is correct (a scheduled execution is
-    // about to flip to PENDING; racing it is pointless).
+    // READY is exclusively set on scheduledFor executions — no reactor sets it. Including it in
+    // the block list is correct, but NOT because the execution is "about to flip to PENDING":
+    // nothing promotes SCHEDULED → PENDING (the poller selects PENDING only). A scheduled
+    // execution is a dead row until a human acts, so a READY task is simply not ours to queue.
     //
     // See plan §L2 at cline_docs/reviews/agent-execute-race-condition-2026-04-18/implementation-plan.md
     // and event-system-specialist-review.md §F5 (9-cell state-space table showing zero misbehavior).

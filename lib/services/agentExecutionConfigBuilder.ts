@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { mcpLogger } from '@/lib/logger';
-import { buildTemplateModelParameters } from './llm/template-model-params';
+import { buildTemplateModelParameters, withoutExecutionIdentityKeys } from './llm/template-model-params';
 import type { TriggeredBy, TriggeredBySource } from './types/triggered-by';
 
 const log = mcpLogger.child({ module: 'agentExecutionConfigBuilder' });
@@ -25,7 +25,9 @@ const log = mcpLogger.child({ module: 'agentExecutionConfigBuilder' });
  * EXCEPT config.metadata.triggeredBy — this helper writes a SOURCE STRING, the
  * engine wrote the triggering USER's CUID under the same key (semantic collision,
  * zero readers, fixed same day: engine now writes 'engine-direct'; the user id is
- * canonical in context.triggeredBy.id). The pre/post-chain inputContext timing
+ * canonical in context.triggeredBy.id). A third inline builder, the REST route
+ * app/api/tasks/[taskId]/agent/execute, carried the same collision and was missed by
+ * that sweep; it was aligned 2026-09-26 to 'api-task-execute'. The pre/post-chain inputContext timing
  * difference between callers is neutralized at the chokepoint: createAgentExecution
  * overrides frozen config.inputContext with prepareTaskForExecution's RETURNING
  * value (BC-T6-1 fix, pinned by test-execution-config-snapshot.ts) — and
@@ -109,6 +111,15 @@ export async function buildRichExecutionConfig(
     // Shared with agentTaskService via buildTemplateModelParameters (one helper,
     // no re-drift).
     modelParameters = buildTemplateModelParameters(task.agentTemplate);
+  }
+
+  // X15 (RWF, 2026-09-27): this is how pipeline children run (task-ready and retrigger reactors), and it spreads
+  // modelParameters AFTER agentRole/prompt exactly like agentTaskService — so the same strip, via the same helper.
+  const idStrip = withoutExecutionIdentityKeys(modelParameters);
+  if (idStrip.stripped.length > 0) {
+    log.warn({ taskId, strippedIdentityKeys: idStrip.stripped, errorCode: 'MODEL_PARAMETERS_IDENTITY_KEY_STRIPPED' },
+      'modelParameters carried execution-identity keys; stripped so they cannot replace the task\'s own');
+    modelParameters = idStrip.params;
   }
 
   const config: Record<string, any> = {

@@ -116,7 +116,9 @@ test('P7: inability phrase buried past 500 chars → NOT flagged (0.5f prefix ru
 
 test('P7: does not fire on non-end_turn stopReason', () => {
   const r = assessExecutionQuality(baseInput({ text: 'I am unable to complete this.', stopReason: 'max_tokens' }));
-  expectEq(r.executionDegradation, null, 'degradation');
+  // Pre-F2 this was null. Since 2026-09-25 a max_tokens stop with text is TRUNCATED_PARTIAL_OUTPUT —
+  // the point of THIS test is only that P7 does not claim it.
+  expectEq(r.executionDegradation?.errorCategory, 'TRUNCATED_PARTIAL_OUTPUT', 'P7 does not claim; the truncation does');
 });
 
 test('P7: suppressed when a tool-failure category already matched', () => {
@@ -129,6 +131,34 @@ test('P7: suppressed when a tool-failure category already matched', () => {
 });
 
 // ---------- HARNESS_NO_OUTPUT (2026-07-17, 3-lens panel + harness-specialist) ----------
+
+// RWF A4 (2026-09-26): a SANCTIONED exit with zero misses is a fact, never a degradation. Before, the quality
+// module degraded on the PRESENCE of protocolValidation, so every clean re-execute exit would have been
+// PROTOCOL_STEP_SKIPPED "skipped 0 required step(s)" — the very defect RWF 1.8 removes.
+const performRec = (args: Record<string, unknown>, result: unknown = { content: [{ text: 'RUNNING' }] }): ToolCallRecord => ({
+  turn: 1, tool: 'perform', arguments: args, success: true, result, durationMs: 10, timestamp: '2026-09-26T00:00:00.000Z',
+} as ToolCallRecord);
+test('A4-Q1: re-execute exit with zero misses → reExecutionExit recorded, NO PROTOCOL_STEP_SKIPPED', () => {
+  const r = assessExecutionQuality(baseInput({
+    task: { id: 'cmh5taskid12345', type: 'PIPELINE', metadata: { pipelineStageId: 'cmstage' } },
+    resolvedMode: 'SYNTHESIZE',
+    text: 'Re-executing the Author (confidence 62). Exiting; will synthesize when it settles.',
+    toolCallResults: [
+      performRec({ action: 'agent.execute', parameters: { taskId: 'cmchild1' } }),
+      performRec({ action: 'task.comment', parameters: { taskId: 'cmh5taskid12345', comment: '**Child stage:** `cmstage` — Quality gate results (pass 1): Author (62) re-running' } }),
+    ],
+  }));
+  expectEq(JSON.stringify(r.protocolValidation?.reExecutionExit?.childTaskIds), JSON.stringify(['cmchild1']), 'reExecutionExit fact recorded');
+  expectEq(r.executionDegradation?.errorCategory ?? null, null, 'no degradation for a sanctioned exit');
+});
+test('A4-Q2: the core-supplied dispatch list wins — an empty server list means no exemption, the miss degrades', () => {
+  const r = assessExecutionQuality(baseInput({
+    task: { id: 'cmh5taskid12345', type: 'PIPELINE', metadata: { pipelineStageId: 'cmstage' } },
+    resolvedMode: 'SYNTHESIZE', dispatchedChildIds: [],
+    toolCallResults: [performRec({ action: 'agent.execute', parameters: { taskId: 'cmOUTOFSTAGE' } })],
+  }));
+  expectEq(r.executionDegradation?.errorCategory ?? null, 'PROTOCOL_STEP_SKIPPED', 'out-of-stage dispatch does not exempt');
+});
 
 test('HNO: SPECIMEN REPLAY — PIPELINE, empty, end_turn, stage.create-only → P8 leads (PROTOCOL_STEP_SKIPPED), both facts true', () => {
   const r = assessExecutionQuality(baseInput({
@@ -282,9 +312,78 @@ test('TRUNCATED_NO_OUTPUT (R2): classifies on RAW text — the finalize note doe
   expectEq(r.executionDegradation?.errorCategory, 'TRUNCATED_NO_OUTPUT', 'note-masked emptiness still detected');
 });
 
-test('TRUNCATED_NO_OUTPUT (R2): does NOT fire when raw deliverable is non-empty (real content, just capped)', () => {
+test('TRUNCATED_NO_OUTPUT (R2): does NOT fire when raw deliverable is non-empty — that is TRUNCATED_PARTIAL_OUTPUT (F2, 2026-09-25)', () => {
+  // Pre-F2 this asserted executionDegradation === null: a mid-text truncation shipped as an
+  // UNQUALIFIED SUCCESS (register E1, the 2026-08-20 F2 that was filed and never built).
   const r = assessExecutionQuality(baseInput({ text: 'Real deliverable content.' + TRUNC_NOTE, rawDeliverableText: 'Real deliverable content.', stopReason: 'max_tokens' }));
-  expectEq(r.executionDegradation, null, 'a truncation WITH content is not TRUNCATED_NO_OUTPUT');
+  expectEq(r.executionDegradation?.errorCategory, 'TRUNCATED_PARTIAL_OUTPUT', 'a truncation WITH content is PARTIAL, not NO_OUTPUT');
+});
+
+// ---------- F2 (2026-09-25, register E1): TRUNCATED_PARTIAL_OUTPUT ----------
+
+test('TPO-1: max_tokens + NON-empty raw → TRUNCATED_PARTIAL_OUTPUT (reason carries the partial length)', () => {
+  const raw = 'x'.repeat(22624);
+  const r = assessExecutionQuality(baseInput({ text: raw + TRUNC_NOTE, rawDeliverableText: raw, stopReason: 'max_tokens', loopExitStopReason: 'max_tokens' }));
+  expectEq(r.executionDegradation?.errorCategory, 'TRUNCATED_PARTIAL_OUTPUT', 'category');
+  if (!String(r.executionDegradation?.degradationReason).includes('22624 chars')) throw new Error('reason must state the partial deliverable length');
+});
+
+test('TPO-2: ordering — max_tokens + EMPTY raw still claims TRUNCATED_NO_OUTPUT (the specific sub-case wins)', () => {
+  const r = assessExecutionQuality(baseInput({ text: TRUNC_NOTE, rawDeliverableText: '', stopReason: 'max_tokens', loopExitStopReason: 'max_tokens' }));
+  expectEq(r.executionDegradation?.errorCategory, 'TRUNCATED_NO_OUTPUT', 'empty case keeps NO_OUTPUT');
+});
+
+test('TPO-3: suppressed when an earlier category already claimed (P4 TOOL_LOOP_DEGRADED)', () => {
+  const calls = [call(false, 'x'), call(false, 'x')];
+  const r = assessExecutionQuality(baseInput({ text: 'partial' + TRUNC_NOTE, rawDeliverableText: 'partial', stopReason: 'max_tokens', loopExitStopReason: 'max_tokens', toolCallResults: calls, failedToolCalls: 2 }));
+  expectEq(r.executionDegradation?.errorCategory, 'TOOL_LOOP_DEGRADED', 'earlier category wins');
+});
+
+test('TPO-4 (§3.3 pin): fires from the LOOP-EXIT stop reason even when the post-#90 response reads end_turn', () => {
+  // The reviewer half of the 2026-09-24 incident (cmuerrjuz…): a partial deliverable carried a 50–69
+  // score, #90 reflected, its reflection stopped end_turn, and the quality layer saw only end_turn.
+  const r = assessExecutionQuality(baseInput({ text: 'reflected text', rawDeliverableText: 'partial findings…', stopReason: 'end_turn', loopExitStopReason: 'max_tokens' }));
+  expectEq(r.executionDegradation?.errorCategory, 'TRUNCATED_PARTIAL_OUTPUT', 'loop-exit max_tokens must classify despite post-#90 end_turn');
+});
+
+test('TPO-5 (§3.3 converse): loop-exit end_turn is authoritative — a post-#90 max_tokens does NOT classify the deliverable as truncated', () => {
+  const r = assessExecutionQuality(baseInput({ text: 'Complete deliverable.', rawDeliverableText: 'Complete deliverable.', stopReason: 'max_tokens', loopExitStopReason: 'end_turn' }));
+  expectEq(r.executionDegradation, null, 'the raw deliverable was complete');
+});
+
+test('TPO-6: a recovered R4 retry (end_turn + text) is clean — no truncation category', () => {
+  const r = assessExecutionQuality(baseInput({ text: 'recovered body', rawDeliverableText: 'recovered body', stopReason: 'end_turn', loopExitStopReason: 'end_turn' }));
+  expectEq(r.executionDegradation, null, 'recovered run is clean');
+});
+
+test('TPO-7: fires for PIPELINE too (type-independent, like NO_OUTPUT) and outranks the P8 errorCategory fill', () => {
+  const r = assessExecutionQuality(baseInput({
+    text: 'partial synthesis' + TRUNC_NOTE, rawDeliverableText: 'partial synthesis', stopReason: 'max_tokens', loopExitStopReason: 'max_tokens',
+    task: { id: 'cmh5taskid12345', type: 'PIPELINE' },
+  }));
+  expectEq(r.executionDegradation?.errorCategory, 'TRUNCATED_PARTIAL_OUTPUT', 'PIPELINE partial');
+  expectEq(r.harnessNoOutput, false, 'a partial PIPELINE deliverable is NOT harness-no-output (Layer 2 must not fire)');
+});
+
+// CAT-PARITY (2026-09-25, coordinator addition): every category this cascade can EMIT must be known to
+// the two CLOSED lists that read it back. Both lists drifted before: ErrorCategorySchema learned
+// EMPTY_DELIVERABLE/TRUNCATED_NO_OUTPUT only in a later catch-up (a sibling row carrying either failed
+// the schema silently), and the GUI union never learned four of them, so PrimaryFaultBanner's
+// exhaustive switch returned undefined and the Pipeline tab threw on exactly those runs.
+test('CAT-PARITY: every errorCategory execution-quality.ts emits is in ErrorCategorySchema AND the GUI ErrorCategory union', () => {
+  const qualitySource = fs.readFileSync(path.join(__dirname, '../lib/agents/harness/execution-quality.ts'), 'utf8');
+  const emitted = [...qualitySource.matchAll(/errorCategory:\s*'([A-Z_]+)'/g)].map(m => m[1]);
+  if (emitted.length < 9) throw new Error(`expected >=9 emitted categories, found ${emitted.length} — the extraction regex broke, not the parity`);
+  const schemaSrc = fs.readFileSync(path.join(__dirname, '../lib/validation/pipeline-context-schemas.ts'), 'utf8');
+  const enumBody = schemaSrc.slice(schemaSrc.indexOf('const ErrorCategorySchema = z.enum(['), schemaSrc.indexOf(']);', schemaSrc.indexOf('const ErrorCategorySchema')));
+  const guiSrc = fs.readFileSync(path.join(__dirname, '../components/poveditor/pov/components/tabs/signals/SignalTypes.ts'), 'utf8');
+  const unionBody = guiSrc.slice(guiSrc.indexOf('export type ErrorCategory ='), guiSrc.indexOf(';', guiSrc.indexOf('export type ErrorCategory =')));
+  const missing: string[] = [];
+  for (const cat of new Set(emitted)) {
+    if (!enumBody.includes(`'${cat}'`)) missing.push(`ErrorCategorySchema:${cat}`);
+    if (!unionBody.includes(`'${cat}'`)) missing.push(`SignalTypes.ErrorCategory:${cat}`);
+  }
+  if (missing.length) throw new Error(`closed category lists missing emitted values: ${missing.join(', ')}`);
 });
 
 test('TRUNCATED_NO_OUTPUT (R2): does NOT fire for a non-max_tokens empty (that is EMPTY_DELIVERABLE / guard territory)', () => {
@@ -315,7 +414,10 @@ test('TRUNCATED_NO_OUTPUT (R2/R4): a RECOVERED run (Layer-1 retry produced text,
 test('Pattern: TRUNCATED_NO_OUTPUT signal present + max_tokens/raw-empty gated in the shared cascade', () => {
   const qualitySource = fs.readFileSync(path.join(__dirname, '../lib/agents/harness/execution-quality.ts'), 'utf8');
   if (!qualitySource.includes("errorCategory: 'TRUNCATED_NO_OUTPUT'")) throw new Error('TRUNCATED_NO_OUTPUT signal missing from execution-quality cascade');
-  if (!qualitySource.includes("stopReason === 'max_tokens' && rawDeliverableEmpty")) throw new Error('TRUNCATED_NO_OUTPUT must gate on max_tokens AND raw-empty');
+  // F2 §3.3 (2026-09-25): gated on the LOOP-EXIT stop reason (was `stopReason`, which is post-#90).
+  if (!qualitySource.includes("loopExitStopReason === 'max_tokens' && rawDeliverableEmpty")) throw new Error('TRUNCATED_NO_OUTPUT must gate on loop-exit max_tokens AND raw-empty');
+  if (!qualitySource.includes("loopExitStopReason === 'max_tokens' && !rawDeliverableEmpty")) throw new Error('TRUNCATED_PARTIAL_OUTPUT must gate on loop-exit max_tokens AND raw NON-empty');
+  if (qualitySource.indexOf("errorCategory: 'TRUNCATED_NO_OUTPUT'") > qualitySource.indexOf("errorCategory: 'TRUNCATED_PARTIAL_OUTPUT'")) throw new Error('NO_OUTPUT must precede PARTIAL_OUTPUT (the empty sub-case claims first)');
 });
 
 test('P8: PIPELINE task with incomplete CREATE transcript → protocolValidation + PROTOCOL_STEP_SKIPPED', () => {
