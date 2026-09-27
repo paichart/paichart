@@ -162,7 +162,13 @@ const BREADCRUMB_RE = /^\s*(?:\*\*)?Child stage:(?:\*\*)?\s+`?[a-z0-9]+`?/m;
 // (PipelineTab.tsx localFallbackContext reads metadata.pipelineStageId), so the
 // "panel will not render" rationale in the step messages below was already stale.
 const DELIVERABLE_POINTER_RE = /\*\*📄?\s*Final deliverable:?\*\*/i;
-const RERUN_NOTE_RE = /pipeline is COMPLETE[^\n]*re-run|create a fresh PIPELINE task/i;
+// MI-1 (2026-09-27, mechanism inventory): the protocol asks for the note "verbatim (or near-verbatim)", and its purpose
+// is to stop a reader flipping the task back to OPEN. The two exact phrasings alone rejected 28 of 46 flagged runs that
+// DID carry it in paraphrase ("**Complete, cannot re-run in place.**", "cannot be re run in place"). The third arm is
+// the property those share — an explicit "cannot be re-run" — replayed over 437 prod SYNTHESIZE comments with 0
+// regressions. Deliberately NOT a bare "fresh PIPELINE task" arm: that also matches ADVICE ("spin a fresh PIPELINE task
+// for a clean report.md"), which is not the note.
+const RERUN_NOTE_RE = /pipeline is COMPLETE[^\n]*re-run|create a fresh PIPELINE task|\b(?:cannot|can['’]t|can not)\s+(?:be\s+)?re[- ]?run\b/i;
 
 /**
  * Extract the LAST successful task.comment's text. The final/closing comment
@@ -610,12 +616,18 @@ export function validatePipelineProtocolSteps(
             'Step 5 (content): SYNTHESIZE final task.comment does not name the child stage on its first line (`Child stage: <id>`, bold/backticks optional) — same audit-trail impact as CREATE.'
           );
         }
-        if (!cv.hasDeliverablePointer) {
+        // MI-1: an ESCALATED exit is told "Escalate. Do NOT synthesize. Post a comment explaining which child failed
+        // quality and what the human should decide" (base protocol Step 3; pov-program likewise). It has no deliverable,
+        // and "COMPLETE, cannot be re-run in place" would be FALSE on a task that stays IN_PROGRESS. So neither is
+        // demanded of it; the breadcrumb still is. (Reverses the 2026-09-16 "escalated exit is NARROW" assumption that
+        // both "remain meaningful" — 9 escalated exits since were flagged for exactly this.) The FACTS are still recorded.
+        const escalated = result.escalatedExit === true;
+        if (!cv.hasDeliverablePointer && !escalated) {
           missingSteps.push(
             'Step 5 (content): SYNTHESIZE final task.comment is missing the `**📄 Final deliverable:**` pointer — users have no unambiguous way to find THE customer-facing deliverable artifact.'
           );
         }
-        if (!cv.hasRerunNote) {
+        if (!cv.hasRerunNote && !escalated) {
           missingSteps.push(
             'Step 5 (content): SYNTHESIZE final task.comment is missing the re-run note — users may try to flip the task back to OPEN instead of creating a fresh PIPELINE task.'
           );

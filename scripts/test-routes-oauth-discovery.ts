@@ -35,6 +35,12 @@
  *        jwks_uri, etc.)
  */
 
+// Hermetic (2026-09-27): every URL assertion in this suite is the UNSET-default contract of
+// lib/auth/public-base-url.ts (an unset APP_BASE_URL derives today's prod strings). That module reads the variable
+// ONCE, at import, so it must be cleared BEFORE the imports below — a per-test override cannot reach it. A caller
+// that had sourced a dev .env (APP_BASE_URL=http://localhost:3000) turned 9 assertions red, and the suite was
+// misfiled as "needs a live server" by the 2026-09-27 mechanism inventory.
+delete process.env.APP_BASE_URL;
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import http from 'http';

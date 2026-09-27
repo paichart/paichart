@@ -30,6 +30,12 @@ test('reads abandoned without supersededBy', () => {
   assert(d?.supersededBy === undefined, 'no supersededBy');
 });
 
+test('reads preserved (MI-3): a deliberately kept specimen is a disposition, distinct from abandoned', () => {
+  const d = readRunDisposition({ runDisposition: { state: 'preserved', reason: 'acceptance fixture for the containment fix', at: '2026-09-27T09:00:00Z' } });
+  assert(d?.state === 'preserved', 'state');
+  assert(isDisposed({ runDisposition: { state: 'preserved', reason: 'x', at: 'y' } }), 'isDisposed true');
+});
+
 test('FAILS CLOSED: a coined state is not a disposition', () => {
   // The closed set matters — 2026-08-12 a coined `kind` stamped a false violation and
   // parked a correct program. Same class, so the same closed-set discipline.

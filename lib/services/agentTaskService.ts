@@ -3,7 +3,7 @@ import { taskLogger } from '@/lib/logger';
 import { ExecutionStatus } from '@prisma/client';
 import { createAgentExecution } from './agent-execution-create';
 import { ApiError, ErrorCode, DuplicateActiveExecutionError } from '@/lib/errors';
-import { buildTemplateModelParameters, withoutExecutionIdentityKeys } from './llm/template-model-params';
+import { buildTemplateModelParameters, withoutExecutionIdentityKeys, msToExecutionTimeoutSeconds, DEFAULT_EXECUTION_TIMEOUT_SECONDS } from './llm/template-model-params';
 // (logFieldChange / TaskActivityAction / ActivityMetadata imports removed 2026-06-08, TS4 —
 //  their sole consumer, configureAgentForTask, was deleted as dead code.)
 
@@ -207,11 +207,15 @@ export class AgentTaskService {
         prompt: options.overrideConfig?.prompt || task.prompt || task.agentTemplate?.promptTemplate,
         inputContext: options.overrideConfig?.inputContext || freshTask?.inputContext || task.inputContext,
         maxRetries: options.overrideConfig?.maxRetries ?? task.maxRetries ?? 3,
-        timeout: options.overrideConfig?.timeout ?? task.timeout ?? 300000,
+        // X19: SECONDS (see msToExecutionTimeoutSeconds). The template's value, spread below, wins over the task column;
+        // an explicit per-run override wins over both (applied after the spread).
+        timeout: msToExecutionTimeoutSeconds(task.timeout) ?? DEFAULT_EXECUTION_TIMEOUT_SECONDS,
         priority: options.priority || 'MEDIUM',
         
         // Model parameters
         ...modelParameters,
+        ...(msToExecutionTimeoutSeconds(options.overrideConfig?.timeout) !== undefined
+          ? { timeout: msToExecutionTimeoutSeconds(options.overrideConfig?.timeout) } : {}),
         
         // MCP configuration
         mcpToolId: options.overrideConfig?.mcpToolId || task.mcpToolId,

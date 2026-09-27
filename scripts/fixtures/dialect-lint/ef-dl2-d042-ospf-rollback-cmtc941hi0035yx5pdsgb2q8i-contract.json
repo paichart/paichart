@@ -1,0 +1,150 @@
+{
+  "bgp": "NONE \u2014 this network runs no BGP; IGP is the only routing protocol in scope.",
+  "nets": {
+    "area": "49.0001",
+    "devices": [
+      {
+        "net": "49.0001.0010.0100.1001.00",
+        "device": "ceos1",
+        "routerId": "1.1.1.1",
+        "systemId": "0010.0100.1001",
+        "bcdPacking": {
+          "regrouped_4x3": [
+            "0010",
+            "0100",
+            "1001"
+          ],
+          "octets_zero_padded": [
+            "001",
+            "001",
+            "001",
+            "001"
+          ],
+          "concatenated_12_digit": "001001001001"
+        }
+      },
+      {
+        "net": "49.0001.0020.0200.2002.00",
+        "device": "ceos2",
+        "routerId": "2.2.2.2",
+        "systemId": "0020.0200.2002",
+        "bcdPacking": {
+          "regrouped_4x3": [
+            "0020",
+            "0200",
+            "2002"
+          ],
+          "octets_zero_padded": [
+            "002",
+            "002",
+            "002",
+            "002"
+          ],
+          "concatenated_12_digit": "002002002002"
+        }
+      }
+    ],
+    "derivationRule": "NET = 49.0001 (AFI 49, area 0001) + system-ID (6 bytes, BCD-packed from the device's router-id, each octet zero-padded to 3 digits before 4-digit regrouping) + 00 (NSEL)",
+    "verificationRule": "Every device has exactly one NET; every system-ID is unique; recompute digit-by-digit, never eyeball."
+  },
+  "program": "igp-migration-t1-2node",
+  "approvers": {
+    "networkLeadMigrationApprover": {
+      "name": "<name redacted>",
+      "email": "<email redacted>"
+    }
+  },
+  "iteration": "IGP-T1 R18 (2-node)",
+  "metricStyle": {
+    "style": "wide",
+    "scopeNote": "Two devices, one link: there is no alternate path. A clean metric-translation pass proves faithful per-interface metric translation only, NOT path-selection preference preservation (the 3-node property is not exercised on this topology).",
+    "interfaces": [
+      {
+        "link": "ceos1:Ethernet1 <-> ceos2:Ethernet1",
+        "subnet": "10.0.12.0/30",
+        "isisMetric": {
+          "ceos1_Ethernet1": 10,
+          "ceos2_Ethernet1": 10
+        },
+        "networkType": "point-to-point",
+        "harvestedOspfCost": {
+          "ceos1_Ethernet1": 10,
+          "ceos2_Ethernet1": 10
+        }
+      },
+      {
+        "devices": [
+          "ceos1",
+          "ceos2"
+        ],
+        "passive": true,
+        "interface": "Loopback0",
+        "isisMetric": "none configured (canonical stanza carries no metric line under Loopback0; passive interface only)"
+      }
+    ],
+    "platformNote": "EOS IS-IS uses wide metrics unconditionally \u2014 there is NO 'metric-style' command. State this as a platform default in every package; do not configure it.",
+    "translationRule": "Per-interface IS-IS metric = the harvested OSPF interface cost, carried forward 1:1 (unscaled). Show the input (harvested cost) and result per interface in every consuming package."
+  },
+  "topologyScope": "2 nodes, 1 point-to-point link (3-node triangle authored then shelved \u2014 see topology.json _topologyNote)",
+  "parityCriteria": {
+    "gate": "G2",
+    "property": "Every prefix OSPF advertises is present in each device's IS-IS link-state database, with a next-hop identical to the one OSPF resolves for it.",
+    "tolerance": "zero (no missing or extra prefixes)",
+    "nextHopNote": "The IS-IS next-hop is DERIVED (SPF/topology product), not directly retrieved from the LSDB \u2014 P2 must label it derived and state its basis, never present it as a retrieved quote.",
+    "comparisonRule": "harvest vs harvest only \u2014 never harvest vs this document.",
+    "evidenceSource": "link-state database (LSDB) comparison, NOT the RIB/installed-route view \u2014 IS-IS routes are computed but not installed while OSPF stays preferred, so a RIB-based criterion is unsatisfiable by design during coexistence."
+  },
+  "targetProtocol": {
+    "protocol": "IS-IS",
+    "instances": "one IS-IS instance, identical instance identifier on both devices",
+    "levelDesign": "flat Level-2-only (single OSPF area 0.0.0.0 maps to one L2 domain)",
+    "instanceIdentifier": "1",
+    "instanceIdentifierNote": "Requirements state 'any consistent value' is acceptable by convention. Chosen '1' for consistency with the existing OSPF process id 1. Flagged under Assumptions for human confirmation at the plan gate."
+  },
+  "platformDialect": {
+    "platform": "arista_eos",
+    "osVersion": "4.32.2.1F",
+    "canonicalStanza": "router isis <instance>\n   net <NET>\n   is-type level-2\n   !\n   address-family ipv4 unicast\n!\ninterface <Ethernet-interface>\n   isis enable <instance>\n   isis network point-to-point\n   isis metric <value>\n!\ninterface Loopback0\n   isis enable <instance>\n   isis passive",
+    "forbiddenTokens": [
+      "metric-style",
+      "passive-interface",
+      "level-2-only"
+    ],
+    "additionalDialectFacts": [
+      "EOS expresses level-2-only as 'is-type level-2' \u2014 there is no 'level-2-only' token.",
+      "EOS IS-IS uses wide metrics unconditionally \u2014 no 'metric-style' command exists.",
+      "IS-IS passive is INTERFACE-level ('isis passive' under the interface) \u2014 there is no router-level 'passive-interface' command under 'router isis'.",
+      "Administrative distance for IS-IS is configured under the address-family context ('distance <value>' under 'address-family ipv4 unicast'), never directly under 'router isis <instance>'."
+    ]
+  },
+  "preferencePolicy": {
+    "p3Mechanism": "single, seconds-reversible administrative-distance knob under the address-family context (NOT at router-isis top level)",
+    "invalidPlacement": "distance <value> directly under 'router isis <instance>' (top level, outside address-family) is INVALID on this platform \u2014 must never appear in any package.",
+    "duringCoexistence": "OSPF-learned routes must remain preferred on every device (default OSPF AD 110 < default IS-IS AD 115 \u2014 no config change needed for this state).",
+    "canonicalKnobStanza": "router isis <instance>\n   address-family ipv4 unicast\n      distance <value>",
+    "chosenDistanceValue": 90,
+    "chosenDistanceValueNote": "Requirements specify the syntax/placement but not the numeric target. 90 is chosen (< OSPF's 110) to make IS-IS preferred; flagged under Assumptions for human confirmation at the plan gate. Rollback is 'no distance <value>' (reverts to 115 default) or explicit re-application of 110/115 as applicable."
+  },
+  "serviceDescriptor": {
+    "usage": "Every leg harvests BOTH switches read-only via this descriptor. Every leg's report must state which phase it is, what the previous phase was expected to have applied, and what its harvest actually showed about that.",
+    "readOnlyHarvest": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json"
+  },
+  "existenceAssumptions": [
+    "P1 harvest: no IS-IS process exists on any device \u2014 CREATE is the expected outcome.",
+    "P2+ harvest: the previous phase's applied state is expected to be present. If absent, the gate's apply did not happen or did not take \u2014 the leg must surface that finding and stop; designing around a missing apply is a defect.",
+    "P4 harvest: OSPF is still present (removal is P4's own subject); the P3 preference flip is expected to be live."
+  ],
+  "reviewerNodeCFixedChecks": [
+    "1: every leg's applied contract values (NETs, per-interface metrics, preference mechanism) exactly equal the plan's interface contract (retrieved and compared, not assumed).",
+    "2: each NET is well-formed for area 49.0001 and its system-ID is exactly the BCD packing of that device's router-id (recomputed digit-by-digit).",
+    "2b: recompute the metric translation from packages against harvested OSPF costs (WEAKER than 3-node form \u2014 no path ordering to verify on a single-link topology; check number retained per fixed-numbering rule).",
+    "3: no-collision/no-widening \u2014 all system-IDs unique; each phase touches only its phase's scope (P1 leaves OSPF/preference untouched, P3 touches preference only, P4 rollback embeds live-harvested OSPF config verbatim).",
+    "4: chaining coverage \u2014 predecessors === chainCapablePredecessors, degradedPredecessors === 0, notChained []."
+  ],
+  "designConstraintsCarriedOver": [
+    "NET area 49.0001 on all devices (private AFI 49, single area \u2014 operating convention).",
+    "IS-IS instance identifier identical on both devices (convention; any consistent value \u2014 see chosen value above).",
+    "Loopback0 remains passive under IS-IS, as it is under OSPF.",
+    "No phase may change interface addressing, descriptions, or the management plane."
+  ]
+}

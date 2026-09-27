@@ -1,6 +1,6 @@
 # Architectural Review Discovery Task
 
-**Last Updated**: 2026-06-11 (health-run: KB-migration paths, Wave-3a/6/7 retargets, phantom engine path purged)
+**Last Updated**: 2026-09-27 (Step 12 added: fact/verdict, measure-before-build, seat-of-the-judge checks from RWF/EG-1/MI-13/X19-X20); prior 2026-06-11 (health-run: KB-migration paths, Wave-3a/6/7 retargets, phantom engine path purged)
 **Status**: v1.1 - Systematic Conflict Prevention
 **Confidence**: Very High - Designed based on Plan 11 semantic conflict learnings
 **Last Validated**: 2026-06-11 - Gate scripts, §5.5 symbols, Step-9 helpers, Step-10/11 paths re-proven against tree
@@ -1146,3 +1146,66 @@ grep -n "featureFlags" lib/mcp/server/config/feature-flags.js | head -5
 ---
 
 Remember: The goal is preventing Plan 11-type semantic conflicts through systematic, proactive architectural review that's fast enough to be practical but thorough enough to catch real issues.
+## Step 12: Fact-vs-Verdict, Measure-Before-Build and Seat-of-the-Judge Checks (2026-09-27)
+
+**Purpose**: Apply the Protocol 10 lens (incl. the 2026-09-21 DENOMINATOR axis) to any plan that adds a stamped fact, a
+gate conjunct, a retry/recovery verb, or changes what a reviewer role is asked to judge. Grounded in the 2026-09-26/27
+decisions (RWF Stage 1 shipped + Stage 3 STOPPED on measurement; EG-1 remit change; MI-13 inventory; X19/X20;
+`runDisposition: preserved`). Depth + evidence: `.claude/knowledge/domain/operations/architectural-review-library.md`
+§ "Harness decisions 2026-09-26 → 09-27".
+
+```bash
+echo "=== FACT / VERDICT / CONSUMER STATE ==="
+
+# Freshness: ONE function behind both the read-time card fact (verdictFresh) and the leg stamp (verdictFreshness)
+grep -rn "export async function computeVerdictFreshness(" lib | wc -l   # expect 1
+
+# No GATE reads verdictFreshness yet (it is rendered, not consumed). A hit means a consumer landed: review it.
+grep -l "verdictFreshness" lib/agents/harness/verdict-mismatch-guard.ts lib/services/execution-terminal-persist.ts lib/services/pipelineProtocolValidator.ts | wc -l   # expect 0
+
+# evidenceGrading: producer (parse-verdict) + summary whitelist only. A THIRD file is a new reader: review it.
+grep -rln "evidenceGrading" lib | wc -l   # expect 2
+
+# runDisposition is a closed, human-written set that includes 'preserved' (MI-3)
+grep -c "export type RunDispositionState = 'abandoned' | 'superseded' | 'preserved'" lib/tasks/run-disposition.ts   # expect 1
+
+# X20: the deferred ownership check's trigger lives AT the field, not only in the register
+grep -c "TRIGGER: any code that starts RESOLVING" lib/validation/task-validation.ts   # expect 1
+
+# RWF C1 chokepoint refusal codes (per-child cap + reviewer same-input re-roll)
+grep -c "'ORCHESTRATOR_REEXECUTION_CAP' | 'REVIEWER_SAME_INPUT_REEXECUTION'" lib/errors.ts   # expect 1
+
+# EG-1: reviewer remit — PRESENCE always, FIDELITY only with the source in context
+grep -c "evidence FIDELITY only when you hold the source" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # expect 1
+```
+
+**Reviewer checklist** *(prose — NOT a command)*:
+
+**FACT vs VERDICT (Protocol 10):**
+- [ ] Every new stamped field classified fact or verdict; a verdict-shaped name (`fresh`, `disposition`, `confidence`, `recommendation`) is a tripwire, not a pass
+- [ ] The negative is named: what do `0` / `false` / absent assert, over what denominator? (unknown must never read as clean — cf. `verdictFreshness` `match: null`)
+- [ ] Stamp vs read-time distinguished: an immutable "true when stamped" and a mutable "true now" are two facts, ideally one function
+- [ ] A consumer exists, or the fact is parked with a trigger (a fact with no reader is storage — `defect-layer-routing.md` discipline 4)
+- [ ] Human decisions recorded as human-written facts in a closed set (`runDisposition`), never platform-inferred
+
+**MEASURE BEFORE BUILD:**
+- [ ] Any build justified by a PREDICTED rate carries a read-only measurement first, with the stop line named BEFORE measuring (RWF Stage 2: predicted ≈34%, measured 0 of 16)
+- [ ] Rate estimates that multiply per-item rates are checked for an independence assumption
+- [ ] Rates are never compared across a remit/guidance change (EG-1 SERIES BREAK 2026-09-27)
+- [ ] Inferences about what an agent DID come from server-written rows, not the tool-call envelope (a refused `agent.execute` still logs `success:true`)
+
+**SEAT OF THE JUDGE (ARCHITECTURE.md Invariant 6):**
+- [ ] A property is only in a reviewer's remit if the evidence to verify it is in that reviewer's context
+- [ ] A reviewer `approved: true` is treated as one conjunct, never a release; no plan narrows the harness gate on the reviewer's word
+- [ ] Before adding a clause, STEP 0 of `defect-layer-routing.md`: does a control already exist? then measure its compliance, not the defect's frequency
+
+**DEFERRED CHECKS:**
+- [ ] A "safe because nothing reads it" deferral writes its trigger at the field (X20 pattern), not only in a register
+- [ ] A field with two units/meanings is resolved from the observed population and converted at one boundary helper (X19)
+
+**Red Flags**:
+- ⚠️ A new gate conjunct reading `reviewerVerdict`, `evidenceGrading` or `verdictFreshness` without a soak record (CLAUDE.md: "Only then consider a consumer")
+- ⚠️ A classifier whose context window crosses a structural boundary (the EF-DL2 heading-blind prose window in `dialect-lint.ts` `fencedBlockLines`)
+- ⚠️ A mechanism inventory or health claim that COUNTS matches without classifying them (MI-1: 28 of 46 flags false)
+
+---

@@ -955,7 +955,23 @@ grep -c "for a PROGRAM leg a duplicate-stop is TERMINAL" scripts/seed-protocol-p
 grep -c "Do NOT compose new acceptance criteria" scripts/seed-protocol-prompts.ts         # expect 1
 ```
 
-Versions after the 2026-08-16 cross-port batch: network-provisioning 1.3.1 (secret-hygiene clause),
+**Current versions (2026-09-27; re-read `grep -n "version: '" scripts/seed-protocol-prompts.ts`)**:
+pipeline-orchestrator 3.18.0 · network-provisioning 1.15.0 · kubernetes-gitops 1.13.0 · terraform-iac 1.7.0 ·
+observability-config 1.4.0 · pov-program 1.8.6 · requirements-authoring 1.6.0 · HOWTO-use-pipeline-harness 2.8.0 ·
+HOWTO-use-program-harness 2.6.7. What changed 09-26→09-27 (RWF C4/D2, EG-1, MI-1, identity keys, Stage 3 STOP):
+`.claude/knowledge/domain/harness/prompt-construction-library.md` last section.
+
+```bash
+# RWF C4 (3.18.0): Step 3 states enforcement — fact-keyed stale-reviewer re-run + the per-child cap codes
+grep -c "verdictFresh: no" scripts/seed-protocol-prompts.ts                    # expect 4 — Step 3 bullet, harness-guide line, 2 version changelogs
+grep -c "REVIEWER_SAME_INPUT_REEXECUTION" scripts/seed-protocol-prompts.ts     # expect 1
+# RWF D2: the clause-letter lock exists (state properties, never clause letters)
+grep -c "cites a protocol clause letter" scripts/audit-role-guidance-contract.ts   # expect 1
+# EG-1: presence always the reviewer's, fidelity only with the source in context
+grep -c "Evidence PRESENCE is always yours" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # expect 1
+```
+
+*Historical (superseded above)* — versions after the 2026-08-16 cross-port batch: network-provisioning 1.3.1 (secret-hygiene clause),
 terraform-iac 1.2.0 (Derivation-evidence port — the ONE port of five that binds via the platform;
 bound on first live exposure, Run 20260816-0734), kubernetes-gitops 1.2.0 (baseline-scoped drift,
 prose-only, seeded-unvalidated), pipeline-orchestrator 3.10.0, pov-program 1.0.30. Panel + wording

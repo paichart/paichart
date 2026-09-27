@@ -1,7 +1,7 @@
 # System Review Discovery Task
 
-**Last Updated**: 2026-02-16
-**Status**: Enhanced v4.0 - Bug Class Regression Health Edition
+**Last Updated**: 2026-09-27 (health-run machinery §10 added; dead `.claude/agents` / `.claude/knowledge/discoveries` / `ci.yml` / `deploy.yml` paths corrected — they returned a silent 0 / ❌)
+**Status**: Enhanced v4.1 - Health-Run Machinery Edition
 **Confidence**: Very High - Enhanced with MCP breakthrough validation, universal compatibility checks, and lean OAuth implementation
 **Last Validated**: 2025-09-21 - Lean MCP OAuth implementation added with 92% confidence rating
 
@@ -108,6 +108,16 @@ echo "Protocol: /.claude/knowledge/protocols/bug-class-eradication-protocol.md"
 - [ ] Check log files and rotation effectiveness
 - [ ] Monitor disk usage and memory consumption
 - [ ] Validate production vs development parity
+
+### 8. Quarterly Health-Run Machinery (NEW - 2026-09-27)
+CLAUDE.md "Quarterly Specialist Health-Run" is the SOURCE OF TRUTH for the list, cadence and baselines; §10 below
+is the reviewer's map of the machinery and its traps, with proven greps. Checklist:
+- [ ] `bash scripts/audit-discovery-greps.sh` — 0 mismatch, 0 regression, and the AUDITED COUNT compared to the last run
+- [ ] Out-of-CI suites loop (CLAUDE.md) — live-server reds are expected; every OTHER red is a finding
+- [ ] `npm run report:template-freshness` — STALE is the signal; read the 📌 TASKS OVERRIDING THEIR TEMPLATE section too
+- [ ] `scripts/report-mechanism-inventory.sh` (MI-13) — every 🔴 TRIGGER 0; every ⚪ control non-zero
+- [ ] `npm run report:run-liveness` — the `preserved` bucket is a deliberate specimen, never a stuck run
+- [ ] The rate/soak re-measures in CLAUDE.md (evidence-grading, marker placement, FU1, F9, …) — read each against its OWN baseline
 
 ## Search Strategies
 
@@ -220,7 +230,7 @@ done
 # Count documentation by type
 echo -e "\n=== Documentation Distribution ==="
 echo "Discovery prompts: $(find .claude/knowledge/discoveries -name "*.md" | wc -l)"  # path corrected 2026-06-11 (KB migration)
-echo "Sub-agents: $(find .claude/sub-agents -name "*.md" | wc -l)"
+echo "Sub-agents: $(find .claude/agents -name "*.md" | wc -l)"
 echo "Architecture docs: $(find cline_docs -name "*.md" | grep -E "architecture|design" | wc -l)"
 echo "Workflow guides: $(find cline_docs -name "*.md" | grep -E "workflow|guide" | wc -l)"
 
@@ -454,7 +464,7 @@ echo "Manual check needed: npx prisma migrate status --schema=./prisma/schema.pr
 # GitHub Actions deployment check
 echo -e "\n=== Deployment Pipeline Status ==="
 [ -d ".github/workflows" ] && echo "✅ GitHub Actions configured" || echo "❌ GitHub Actions missing"
-[ -f ".github/workflows/deploy.yml" ] && echo "✅ Deploy workflow found" || echo "❌ Deploy workflow missing"
+[ -f ".github/workflows/production-deploy.yml" ] && echo "✅ Deploy workflow found" || echo "❌ Deploy workflow missing"
 grep -q "<PROD_HOST>" .github/workflows/*.yml 2>/dev/null && echo "✅ Production server configured in workflow" || echo "❌ Production server not in workflow"
 
 # Check for required deployment files
@@ -470,14 +480,14 @@ echo -e "\n=== Deployment File Requirements ==="
 # Check discovery prompt usage
 echo "=== Discovery-First Workflow ==="
 echo "Discovery prompts: $(find .claude/knowledge/discoveries -name "*.md" | wc -l)"  # path corrected 2026-06-11 (KB migration)
-echo "v2.0 prompts: $(grep -l "Enhanced v2.0" cline_docs/discovery-prompts/*.md | wc -l)"
-echo "Recently validated: $(grep "Last Validated.*2025" cline_docs/discovery-prompts/*.md | wc -l)"
+echo "v2.0 prompts: $(grep -l "Enhanced v2.0" .claude/knowledge/discoveries/*.md | wc -l)"
+echo "Recently validated: $(grep "Last Validated.*2025" .claude/knowledge/discoveries/*.md | wc -l)"
 
 # Sub-agent collaboration check
 echo -e "\n=== Sub-Agent Ecosystem ==="
-echo "Total sub-agents: $(find .claude/sub-agents -name "*.md" | wc -l)"
-echo "With learning notes: $(grep -l "Learning Notes" .claude/sub-agents/*.md | wc -l)"
-echo "Handover patterns: $(grep -c "delegate_to\|handover" .claude/sub-agents/*.md | paste -sd+ | bc)"
+echo "Total sub-agents: $(find .claude/agents -name "*.md" | wc -l)"
+echo "With learning notes: $(grep -l "Learning Notes" .claude/agents/*.md | wc -l)"
+echo "Handover patterns: $(grep -c "delegate_to\|handover" .claude/agents/*.md | paste -sd+ | bc)"
 
 # Check CLAUDE.md usage
 echo -e "\n=== CLAUDE.md Integration ==="
@@ -508,18 +518,86 @@ echo "tsconfig.json exists: $([ -f tsconfig.json ] && echo '✅ YES' || echo '�
 echo -e "\n=== Development Process ==="
 echo "Git hooks installed: $([ -d .git/hooks ] && ls .git/hooks | grep -v sample | wc -l || echo '0')"
 echo "Pre-commit config: $([ -f .pre-commit-config.yaml ] && echo '✅ YES' || echo '❌ NO')"
-echo "CI/CD config: $([ -f .github/workflows/ci.yml ] && echo '✅ YES' || [ -d .gitlab-ci.yml ] && echo '✅ YES' || echo '❌ NO')"
+echo "CI/CD config: $([ -f .github/workflows/validation-reusable.yml ] && echo '✅ YES' || [ -d .gitlab-ci.yml ] && echo '✅ YES' || echo '❌ NO')"
 
 # Documentation completeness
 echo -e "\n=== Documentation Health ==="
-total_prompts=$(find cline_docs/discovery-prompts -name "*.md" | wc -l)
-dated_prompts=$(grep -l "Last Updated" cline_docs/discovery-prompts/*.md | wc -l)
+total_prompts=$(find .claude/knowledge/discoveries -name "*.md" | wc -l)
+dated_prompts=$(grep -l "Last Updated" .claude/knowledge/discoveries/*.md | wc -l)
 echo "Discovery prompts with dates: $dated_prompts/$total_prompts"
 
-total_agents=$(find .claude/sub-agents -name "*.md" | wc -l)
-agents_with_learning=$(grep -l "Learning Notes" .claude/sub-agents/*.md | wc -l)
+total_agents=$(find .claude/agents -name "*.md" | wc -l)
+agents_with_learning=$(grep -l "Learning Notes" .claude/agents/*.md | wc -l)
 echo "Sub-agents with learning notes: $agents_with_learning/$total_agents"
 ```
+
+### 10. Quarterly Health-Run Machinery (NEW - 2026-09-27)
+
+The health-run's checking tools are themselves the thing most likely to be wrong SILENTLY. Every tool below has at
+least one recorded instance of reporting "clean" while a class of input was dropped uncounted. Review them with the
+question *what does this tool fail to see, and does it SAY so?* before trusting a green run.
+
+```bash
+# (a) Documented-grep audit (Protocol 11 Part C, mechanised). Record THREE numbers, not one:
+#     audited / mismatch / regression, plus skipped. 2026-09-27: 258 audited, 0/0, 9 skipped (7 hold a $ anchor),
+#     rising to 291 / 0/0 / 12 skipped the same day as the parallel specialist self-updates added greps (7 of them here).
+#     A FALL in audited with no deletion is the finding — three silent-exclusion instances so far
+#     (regex scope 08-08, floor vocabulary 09-17, path filter 09-25).
+bash scripts/audit-discovery-greps.sh
+grep -c "NOPATH" scripts/audit-discovery-greps.sh  # expect >=1
+
+# (b) Mechanism inventory (MI-13, 2026-09-27). Read-only against prod, ~30s. Sections 0-4 are census;
+#     the TRIGGER block is the verdict. Baseline 38 alive / 14 dormant / 1 partially blind (fixed as MI-1) / 5 unmeasurable.
+scripts/report-mechanism-inventory.sh
+grep -c "'🔴" scripts/report-mechanism-inventory.sh  # expect >=4
+grep -c "'⚪" scripts/report-mechanism-inventory.sh  # expect >=3
+grep -c "artifacts_skipped_lone_surrogate" scripts/report-mechanism-inventory.sh  # expect 1
+
+# (c) Preserved specimens (MI-3). metadata.runDisposition.state = preserved is a HUMAN-WRITTEN fact.
+grep -c "'preserved'" lib/tasks/run-disposition.ts  # expect >=2
+grep -c "preserved (deliberate specimen" scripts/report-run-liveness.ts  # expect 2
+
+# (d) Template freshness gained a FACT section (X21, 2026-09-27): tasks whose own prompt or modelParameters
+#     outrank their template — a reseed does NOT reach them. Prod 2026-09-27: 59 prompt overrides, 50 model pins.
+grep -c "TASKS OVERRIDING THEIR TEMPLATE" scripts/report-template-freshness.ts  # expect 1
+```
+
+**Reading rules (each one already walked into):**
+- **🔴 is 0 by construction; ⚪ is its control.** A 🔴 zero beside a ⚪ zero is UNMEASURED, not clean. Report both.
+- **Never re-run a preserved fixture.** The SYNTHESIZE dead-end program root `cmu0x9d1m000kyx0dloebjb3u` is the only
+  specimen of its class. Retention is count-based: two more executions evict the failing one and destroy it. MI-13
+  first mislabelled it a "stuck leg" — when a hung task looks like a finding, check `runDisposition` and its comments
+  before filing.
+- **Lone-surrogate artifacts** (X11 class) crash any query that casts `agent_artifacts.content::jsonb`. Filter BEFORE
+  the cast and COUNT what you filtered (script section 0). Any ad-hoc prod query in a review must do the same.
+- **Classify matches, never count them.** MI-13's only 🔴 was a validator whose 46 "missing re-run note" flags were 28
+  false (a regex blind to paraphrase). The raw count had been quoted as "61 PROTOCOL_STEP_SKIPPED in 30d".
+- **Dormant-by-age is not dormant-by-trigger.** Five mechanisms shipped 09-25/26 (`verdictFreshness`, `reExecutionExit`,
+  REACTOR_BUDGET_EXHAUSTED, REAPED, `TRUNCATED_PARTIAL_OUTPUT`) were 🟡 only because they were one day old. Re-measure.
+- **Out-of-CI live-server suites** (`validate:schemas`, `test:refresh-race`, `test:routes-oauth-flow`,
+  `test:oauth-security`) are legitimately red without a server. `test:routes-oauth-discovery` was reported red with them
+  on 2026-09-27, but it has no server or DB dependency and passed 43/43 locally with no server running (checked the same
+  day). If it is red, treat it as a FINDING, not as expected.
+- **Series breaks.** The evidence-grading soak's accepted-line rate falls BY CONSTRUCTION after the 2026-09-27 EG-1
+  reseed (copy fidelity was removed from the reviewer remit where the source is absent). Never compare `emits_accepted`
+  across that cut.
+- **`find .claude/agents -name "*.md"` counts tombstones and shared protocol files** (46 files at 2026-09-27 against 39
+  active specialists). Use CLAUDE.md's grouped list or `scripts/pairing-diff-scan.sh` for the live set.
+
+**Auditing a panel synthesis (Phase C of a specialist panel — e.g. EF-DL2, 2026-09-27).** The method that found the RWF
+misses (`cline_docs/reviews/rwf-stage1-2026-09-26/INDEPENDENT-AUDIT.md`, `-v2.md`):
+1. Read every panel file IN FULL, plus the brief/PANEL.md handoff questions, BEFORE opening the synthesis.
+2. Extract every obligation (finding, constraint, proof obligation, trap, flagged note) to scratch with its source, and
+   commit the list to disk before opening the synthesis. Grading against a list written afterwards anchors on the
+   synthesis's framing.
+3. Grade each item COVERED / PARTIAL / MISSING, and each gap DEFECT (a literal builder ships a bug or a wrong
+   measurement) or MINOR.
+4. Reverse direction: synthesis claims that misstate a panelist, resolve a disagreement without evidence, or exceed
+   scope; spot-check the code claims against the tree (file:line).
+5. Sibling sweep (Protocol 11 Axis 4): for every site the synthesis fixes, grep for the same pattern where it was NOT
+   expected. v2's N2 was a third site of the exact pattern the plan fixed at two (the poller safety net, beside the two
+   reapers).
+6. Check the handoff questions: every one must be answered, or explicitly deferred with a trigger.
 
 ### 12. Prompt Command Accessibility Check
 ```bash
@@ -1063,7 +1141,7 @@ echo "Docs older than 30 days: $old_docs/$total_docs"
 echo -e "\n=== Process Health ==="
 [ -f CLAUDE.md ] && echo "✅ CLAUDE.md exists" || echo "❌ CLAUDE.md missing"
 [ -d .git/hooks ] && echo "✅ Git hooks directory exists" || echo "❌ No git hooks"
-[ -f .github/workflows/ci.yml ] && echo "✅ CI/CD configured" || echo "❌ No CI/CD"
+[ -f .github/workflows/validation-reusable.yml ] && echo "✅ CI/CD configured" || echo "❌ No CI/CD"
 ```
 
 ## Deployment & Infrastructure Review (2025-09-24 NEW)

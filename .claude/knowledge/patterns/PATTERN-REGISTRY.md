@@ -2,9 +2,9 @@
 
 **Purpose**: Quick reference for all proven implementation patterns in pAIchart knowledge library
 
-**Last Updated**: July 27, 2026
+**Last Updated**: September 28, 2026
 
-**Total Patterns**: 65 documented patterns
+**Total Patterns**: 66 documented patterns
 
 ---
 
@@ -472,7 +472,7 @@
 
 ---
 
-## Process & Workflow Patterns (8 patterns)
+## Process & Workflow Patterns (9 patterns)
 
 ### **specialist-knowledge-propagation-pattern.md** - 95% Confidence ✅
 **When to use**: After implementing patterns that should update specialists
@@ -529,6 +529,15 @@
 **Anti-patterns**: Skip the observation window (lose evidence); compare unstable fields (timestamps, random IDs); let shadow throw (production unaffected requires .catch); forget to remove shadow on flip (migration scaffolding becomes maintenance liability)
 **Companion**: [[safe-modular-extraction-pattern]] (the 6-phase methodology; shadow window plugs into Phase 4-5)
 **Validates**: feedback_audit_ownership_at_extraction + feedback_ts_port_behavioral_equivalence
+
+### **zero-by-construction-check-with-control-pattern.md** - 85% Confidence ⚠️ (NEW - 2026-09-28)
+**When to use**: Writing a health-run / quarterly query that guards a shipped fix or stamped fact, or classifying a mechanism as alive / dormant / dead.
+**Results**: MI-13 inventory — 58 mechanisms classified (38 alive · 14 dormant · 1 partly blind · 5 unmeasurable); the recompute-the-trigger rule separated genuinely dormant mechanisms from a blind validator (fixed as MI-1). F9 queries — controls proved every column computed (942 / 520 examined) before any post-fix data existed, so an empty window read as unmeasured, not clean.
+**Key features**: 🔴 trigger lines that are 0 by construction on correct code (cannot rot as data grows) · ⚪ a control beside each (while it reads 0, the zero is unmeasured) · exclusions counted and named · "dormant" only when the trigger was recomputed from the mechanism's own inputs · window scoped to the fix's live date · classify matches, never count them.
+**Production use**: `scripts/report-mechanism-inventory.sh`; CLAUDE.md health-run F9 and FU1 queries.
+**Promotion condition**: 90%+ once a trigger line catches a genuine regression and its control proves the catch real.
+**Candidate follow-ons (not yet patterns)**: a re-open trigger written at the field it guards (EF-DL2's `HARVESTED_STATE_PROSE`); a version integer on a stamped fact so series breaks are visible (`dialectLint.classifier`).
+**Companion**: Protocol 14 (`evidence-graded-panel-review-protocol.md`); Protocol 10 denominator axis
 
 ---
 

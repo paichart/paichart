@@ -66,6 +66,24 @@ export function buildTemplateModelParameters(template: {
  * fixture-tested in scripts/test-execution-config-snapshot.ts.
  */
 /**
+ * X19 (2026-09-27): an execution config's `timeout` is in SECONDS. That is what 994 of 994 prod executions in the
+ * prior 30 days recorded (the template's value — `agent_templates.timeout`, `@default(300) // seconds` — always won the
+ * merge), what every template and stored modelParameters carries (240–900), and what the template editor shows.
+ * Two sources are MILLISECONDS by contract and are converted here, never reinterpreted downstream:
+ *   - `tasks.timeout` (the `agent.configure` boundary multiplies by 1000; default 300000)
+ *   - `overrideConfig.timeout` on agent.execute (validated 1000..MAX_TASK_TIMEOUT_MS)
+ * A millisecond value below 1000 cannot be a real timeout (it is under the agent.execute floor) — two June-era task
+ * rows hold 60 and 450, written as seconds through a schema that accepted 0..3600000 — so it is treated as ABSENT,
+ * a validity rule rather than a unit guess. Nothing reads config.timeout today (the watchdog has its own constant);
+ * this fixes the unit before anything does.
+ */
+export const DEFAULT_EXECUTION_TIMEOUT_SECONDS = 300;
+export function msToExecutionTimeoutSeconds(ms: unknown): number | undefined {
+  if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 1000) return undefined;
+  return Math.round(ms / 1000);
+}
+
+/**
  * X15 (RWF, 2026-09-27): remove the execution-identity keys (agentRole, prompt, inputContext, priority) from a
  * modelParameters object before it is spread into an execution config. THE runtime control: `task.metadata.modelParameters`
  * and template metadata are validated only as records on most write paths, so the schema rejection is an early, clearer

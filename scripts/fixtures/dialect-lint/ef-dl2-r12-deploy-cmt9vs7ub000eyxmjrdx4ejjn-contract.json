@@ -1,0 +1,125 @@
+{
+  "bgp": "NONE \u2014 this network runs no BGP; out of scope entirely",
+  "nets": {
+    "areaId": "49.0001",
+    "perDevice": [
+      {
+        "net": "49.0001.0010.0100.1001.00",
+        "device": "ceos1",
+        "routerId": "1.1.1.1",
+        "systemId": "0010.0100.1001",
+        "concatenated": "001001001001",
+        "paddedOctets": [
+          "001",
+          "001",
+          "001",
+          "001"
+        ]
+      },
+      {
+        "net": "49.0001.0020.0200.2002.00",
+        "device": "ceos2",
+        "routerId": "2.2.2.2",
+        "systemId": "0020.0200.2002",
+        "concatenated": "002002002002",
+        "paddedOctets": [
+          "002",
+          "002",
+          "002",
+          "002"
+        ]
+      }
+    ],
+    "derivationRule": "system-ID = BCD packing of router-id: zero-pad each octet to 3 decimal digits, concatenate to 12 digits, regroup into three 4-digit chunks"
+  },
+  "links": [
+    {
+      "subnet": "10.0.12.0/30",
+      "endpoints": [
+        "ceos1:Ethernet1",
+        "ceos2:Ethernet1"
+      ],
+      "addressing": {
+        "ceos1": "10.0.12.1",
+        "ceos2": "10.0.12.2"
+      },
+      "harvestedOspfCost": {
+        "ceos1": 10,
+        "ceos2": 10
+      }
+    }
+  ],
+  "devices": [
+    {
+      "name": "ceos1",
+      "mgmtIpv4": "172.30.32.11",
+      "routerId": "1.1.1.1",
+      "loopback0": "1.1.1.1/32"
+    },
+    {
+      "name": "ceos2",
+      "mgmtIpv4": "172.30.32.12",
+      "routerId": "2.2.2.2",
+      "loopback0": "2.2.2.2/32"
+    }
+  ],
+  "outOfScope": [
+    "interface renumbering",
+    "new links",
+    "management plane (eAPI, credentials, Management0)",
+    "BGP"
+  ],
+  "programRound": "R12",
+  "topologyScope": "2 nodes, 1 point-to-point link. A 3-node triangle was authored but SHELVED (does not fit prod host / cEOS unbootable off-host) \u2014 no transit-path preference story this round.",
+  "parityCriteria": {
+    "scope": "At G2 (post-P1 harvest): every prefix OSPF advertises must be present in each device's IS-IS link-state database, with a next-hop identical to the one OSPF resolves",
+    "tolerance": "zero \u2014 no missing or extra prefixes",
+    "compareAgainst": "the link-state database (LSDB) \u2014 NEVER the routing table/RIB, because IS-IS routes are computed but not installed during coexistence by design; a RIB-based comparison reads empty on a perfectly healthy fabric"
+  },
+  "targetProtocol": {
+    "level": "level-2-only \u2014 EOS token is `is-type level-2`; there is NO `level-2-only` token",
+    "protocol": "IS-IS",
+    "metricStyle": "wide \u2014 EOS platform default, NO `metric-style` command exists on this platform; state it in packages, never configure it",
+    "addressFamily": "ipv4 unicast",
+    "instanceIdentifier": "CORE",
+    "instanceIdentifierNote": "Identical on both devices per requirements ('any consistent value' is explicitly permitted, not derivable \u2014 see Assumptions)."
+  },
+  "platformDialect": {
+    "platform": "arista_eos 4.32.2.1F",
+    "canonicalStanza": "router isis <instance> / net <NET> / is-type level-2 / ! / address-family ipv4 unicast / ! / interface <Ethernet-if> / isis enable <instance> / isis network point-to-point / isis metric <value> / ! / interface Loopback0 / isis enable <instance> / isis passive",
+    "forbiddenTokens": [
+      "metric-style",
+      "passive-interface (under router isis)",
+      "level-2-only"
+    ]
+  },
+  "preferencePolicy": {
+    "rollback": "`no distance <value>` under the same address-family stanza (reverts to EOS default 115) \u2014 single knob, seconds-reversible",
+    "shiftMechanism": {
+      "note": "Any value < 110 (OSPF's AD) achieves the flip; 90 is this plan's proposed value, not a derived constant \u2014 see Assumptions & Open Questions.",
+      "location": "under `router isis <instance>` -> `address-family ipv4 unicast` -> `distance <value>` (NOT at the router-isis top level \u2014 EOS rejects that placement)",
+      "proposedValue": 90
+    },
+    "coexistencePhase": "OSPF-learned routes remain preferred on every device while both protocols run. EOS default administrative distances already satisfy this (OSPF 110 < IS-IS 115) \u2014 no explicit distance command required in P1."
+  },
+  "harvestDescriptor": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json",
+  "metricTranslation": {
+    "rule": "each IS-IS interface metric equals the harvested OSPF interface cost on that same interface \u2014 the cost relationship is carried forward exactly",
+    "loopback0": "isis enable <instance> + isis passive only \u2014 canonical stanza carries no isis metric line on Loopback0",
+    "scopeNote": "Two devices, one link \u2192 no alternate path exists. A clean pass proves faithful per-interface metric translation only, NOT path-selection preference preservation (the 3-node form of this check is not exercisable this round).",
+    "perInterface": [
+      {
+        "device": "ceos1",
+        "interface": "Ethernet1",
+        "isisMetric": 10,
+        "harvestedOspfCost": 10
+      },
+      {
+        "device": "ceos2",
+        "interface": "Ethernet1",
+        "isisMetric": 10,
+        "harvestedOspfCost": 10
+      }
+    ]
+  }
+}

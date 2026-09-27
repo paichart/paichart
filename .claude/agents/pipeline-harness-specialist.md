@@ -210,6 +210,8 @@ from where it was made — R19's reviewer said so in its own verdict and asserte
 C echoed the same inference (correlation, not corroboration), and the refused package was verbatim
 ⊆ harvest. A confirmed SECOND occurrence is the build trigger for the gated `rollbackContainment`
 FACT (fixtures named in the follow-up).
+**Since 2026-09-27 leg reviewers no longer judge fidelity where the source is absent** (soak decision) — a
+fidelity-shaped claim from a leg reviewer is now itself a guidance violation; run the string test anyway.
 
 ## My Discovery Prompt
 

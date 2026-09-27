@@ -184,6 +184,124 @@ Replay: `npm run replay:dialect-lint -- <legTaskId>` (read-only). Operator-side 
   newlines while the Architect's output shape is non-deterministic (R11 newline, R12 slash). Caught
   pre-gate; VT-20's "first live catch" happened to land on a newline round and needs qualifying.
 
+### EF-DL1 — the lifetime false-positive audit (2026-09-27)
+
+Measured: every dialect-lint violation ever stamped was a false positive — **3 of 3, across 30
+archived packages whose contract carries a banned-token list** (231 stamped; the other 201 unchecked by a NAMED reason — 70 `no-banned-token-list`, 64 `program-tier`, 47 `no-contract`, 20 `no-author-child`).
+The R1/R3 true positives predate the Phase 2 wiring and exist only as fixtures. Replaying HEAD over
+the 30 separates the three:
+
+- **2 × 2026-08-27 (`passive-interface`, R15 P4 + R16 P4 OSPF-removal legs) were ALREADY FIXED** the
+  same day by the `harvested-state` kind and the heading-ancestry walk; the stamps simply predate
+  those commits. HEAD returns 0 on both. They are **not** the R12 removal-intent class — they are
+  classification misses on harvested/rollback blocks, fixture-pinned since 08-27.
+- **1 × 2026-09-26 (`allow all;`, observability ingress leg) was a NEW class**: a one-line block
+  `docker exec obs-ingress nginx -T 2>/dev/null | grep -c 'allow all;'` whose expected output is `0`.
+  The ABSENCE half was ALREADY scoped to `candidate-config` (so "scope it like PRESENCE" was not
+  available — it had been done since `5fd447da`); the block landed there because it opens with an
+  exec WRAPPER, not an `OPERATOR_VERB`. **Fixed at OCCURRENCE level, not by widening the classifier:**
+  a token inside a QUOTED argument of a grep-family command (bounded by the first unquoted `|`/`;`/`&`)
+  is a search pattern, recorded in `searchPatternExempt` (present only when non-empty); any other
+  occurrence on the line still flags. Rejected: re-kinding exec-wrapped blocks as `command` — it moves
+  PRESENCE's denominator and every stamped `blockKinds`, on a classifier this file already records as
+  having erred in both directions. Polarity (`-c … → 0` vs presence checks) is deliberately not read.
+  **Replay: 1 → 0 violations; 1 changed verdict of 30; block kinds and PRESENCE byte-identical on all 30.**
+
+Known residual, not widened here: a block led by `sed` is kind `command` and never scanned — including
+`sed -i`, which WRITES. No corpus instance; recorded so it is not rediscovered as new.
+
+⚠️ **Found while fixing it, MEASURED and NOT shipped — the false-NEGATIVE direction.** The 3-line prose
+window in `fencedBlockLines` does not stop at a heading, so it reaches ABOVE a block's own section
+heading into the previous section. On the EF-DL1 package, `## 2. Full Desired-State Config File`
+inherits "Phase 0 **Harvest**er" from section 1's table, so the package's REAL config is
+`harvested-state` — scanned by neither half (production stamped PRESENCE 0 of 2 on a package that
+carries both lines). Bounding the window at the first heading, replayed over the 100 archived packages
+with a contract: **block kinds move in 66**, often wholesale (`candidate-config 3 → 42`), **0 violations
+change**, PRESENCE flips on 2 (the EF-DL1 package reads a correct 2 of 2). A classifier change of that
+reach needs its own panel and its own fixtures — the ABSENCE half has been blind to a large share of
+harvested-labelled config, which is the direction this net exists to prevent.
+**Filed as EF-DL2** (register, owner execution-facts; BOTH commits shipped 2026-09-28 — commit 1 / F1 as classifier 2, commit 2 / option (ac) as classifier 3, both below). Assessment and panel brief:
+`cline_docs/reviews/ef-dl2-dialect-lint-classification-2026-09-27/ASSESSMENT.md` and `PANEL.md`. Anchors
+as of 2026-09-27: `classifyBlock` at `dialect-lint.ts:242`, `fencedBlockLines` at `:322`. "0 violations change"
+means no banned token has been hiding in mis-kinded config in the archive. It does NOT mean re-kinding is safe:
+the 66-package move changes PRESENCE denominators and every stamped `blockKinds`.
+
+### EF-DL2 commit 1 — F1, the fence-aware ancestry, and the `classifier` field (2026-09-28)
+
+The panel found a SECOND defect in the same function, independent of the window: the heading-ancestry walk
+tested every earlier line against the heading pattern **including lines inside earlier fences**, so a `#`
+comment in HCL/YAML/bash/nginx read as a level-1 heading. It did two things at once — its words reached
+`classifyBlock` (terraform `# NEW: … per security baseline` inside candidate HCL kinded every Part B
+validation block `harvested-state`), and, being level 1, it STOPPED the walk and hid the real section
+heading (`# Find the commit hash` inside a bash fence left the next block under `### 3. Rollback Plan`
+reading `restoreIntent: false`). F1 toggles on each fence line walking up — the same pairing the forward
+loop uses, so the two scans cannot disagree — and skips everything inside. No vocabulary, threshold or
+precedence moved. Shipped on STRUCTURE (Phase D decision 2), not on the census: its gold-labelled effect is
+1 right / 5 wrong-kind (both exempt) / 2 wrong scan decisions, nearly all from one title leak.
+
+**`dialectLint.classifier`** (Phase D decision 4) — nested integer, `DIALECT_LINT_CLASSIFIER` in the module:
+bumped by EVERY commit that changes which kind a line receives (F1 → 2; option (ac) → 3). Present exactly
+when the classifier ran; absent on `no-contract` (nothing classified — which also keeps those stamps, and the
+equivalence gate's only dialectLint specimen, byte-identical across the cut) and on every pre-cut stamp
+(implicitly 1). Pinned: E3b-5 (survives the whitelist nested). **Split a `blockKinds` series on this field.**
+`rollbackContainment` got NO version: its `blocksScanned`/`excluded` bytes move, but nothing reads them
+programmatically (grep of lib/ and app/), and its dispositions do not move.
+
+**Archive replay (the lane-1 harness, prod read-only):** dialectLint — `blockKinds` moves on **3 of 97**
+contract packages, **0 violations, 0 PRESENCE**; net #3 — **87 `restoreIntent` blocks in 22 of 220** Author
+packages, **22 stamped `blocksScanned`/`excluded` moves** (21 terraform via `lane-not-supported`, 1
+observability `all-restore-lines-found` 19/19 either way), **0 dispositions**. Latent correctness for net #3:
+live only if the terraform lane ruling changes or an EOS/obs Author puts `#` lines in fences.
+
+**Named residuals (fixtures, re-measured at the health-run):**
+- **The TITLE LEAK.** Two terraform Authors title their package "… HCL Rollback Author". The old walk
+  stopped at an in-fence comment before reaching the title; the fence-aware walk reaches it, so every block
+  in the package reads rollback (19 blocks in 2 packages, `restoreIntent` decided by the title ALONE).
+  F028, a shipped rego policy, becomes a new false SKIP. No fact-level effect today (no tokens, no stanza,
+  terraform lane). **Not sharpened for 2 packages** — a document-title exclusion is new judgement.
+- **F035** — a `## Consumed Values` marker JSON loses a leaked `# Revert:` ancestor and becomes
+  candidate-config: the pre-existing EF-DL3 false-SCAN floor, not a new class.
+
+**The equivalence gate cannot pin F1 yet** — every specimen is `no-contract`, which never runs the
+classifier (F-7). Its `classifier` arm is declared unexercised and self-checking (E3: the note must agree
+with the stamps in both directions) until a post-deploy contract-bearing leg is archived. Until then F1 is
+pinned by the F1-* fixtures in `test-dialect-lint.ts` and F1-RC1..3 in `test-rollback-containment.ts`.
+
+### EF-DL2 commit 2 — option (ac), `classifier: 3` (2026-09-28)
+
+Two changes in `fencedBlockLines`, nothing else: **(a)** the 3-line prose window stops AT the first heading, the
+heading line INCLUDED; **(c)** `harvested-state` is decided only from `labelProse` (the nearest line, when ≤
+`MAX_LABEL_CHARS`) or the heading ancestry — `classifyBlock` gained an `ownProse` argument that only the harvest
+test reads. Rollback/expected-output keep the (now bounded) window; no vocabulary, threshold or precedence moved.
+
+- **Why (a) alone was not enough** (panel F-2, pinned by D076): 6 of the 32 false SKIPs were a long sentence
+  INSIDE the block's own section naming the harvest — protocol-mandated dialect notes, gap-naming, the (e1)
+  source line. Bounding the window cannot reach them; the existing 120-char label rule can.
+- **The heading is INCLUDED on purpose** (panel F-9): when the nearest line is the heading, `ctx[0]` must not
+  move, or `label` moves (59 archived blocks under the `acx` control) and net #3 scopes on `label`. Replay: 0
+  `label` and 0 `restoreIntent` moves archive-wide.
+- **This reverses the file's old "UNCHANGED INPUT" note** (audit A5): AC5 passes in letter only. The note was
+  REPLACED in the code, not left stale, and Steve approved (ac) knowing it (Phase D decision 1).
+- **Archive replay, commit 1 → commit 2:** `blockKinds` 88 of 97 contract packages (harvested-state −973 lines,
+  candidate-config +761); **0 violations**; PRESENCE **exactly 2 corrections** (R12 deploy 0/10 → 10/10, EF-DL1
+  0/2 → 2/2) plus 4 packages whose per-line `occurrences` rise with `linesPresent` unchanged; **net #3: 0
+  scope / 0 disposition moves** on 220 Author packages. The shipped module is byte-identical to the panel's
+  `f1ac` variant on 362/362 texts, so the panel's gold scores ARE this commit's.
+- **The cost, approved knowingly:** false SCAN 5 → 109 census blocks (operator commands, marker/allocation
+  JSON; 0 expected-output, 0 violations on the archive). A contract banning a token those blocks can carry
+  turns this into LOUD false violations — EF-DL3 owns the floor.
+- **Post-fix baselines for the health-run replay:** false SKIP **2 / 21 lines** (F028 title leak — F1's; D098 —
+  ROLLBACK_PROSE in a long own-section sentence, a NAMED pre-fix residual), false SCAN **109 / 269**. How to
+  re-run: the discovery's "Classifier cut … classifier: 3" block.
+- **The (d) trigger lives AT THE FIELD** (`HARVESTED_STATE_PROSE`'s doc comment, Lane 2's form): re-open
+  Author-side fence-role declaration only on a gold false SKIP in a NEW (classifier ≥ 3) package or a second
+  position-dependence incident — label-line form in `VALIDATION_SHAPE_CLAUSE`, never the info-string form.
+- **Pins that held the defective reading were REWRITTEN, not deleted:** the EF-DL1 block's "classification
+  unchanged from the production stamp" (the stamp WAS the defect) and F1's cmrlm3hp expected-output list (L73,
+  `terraform validate`, was expected-output only because the window crossed `#### B.1`). Mutation-proven with
+  compiling mutations: revert (a), revert (c), exclude the heading, classifier 2, drop the rollback rule
+  (D042), label-cap expected (D052), label-cap rollback (D098) — each turns a named assertion red.
+
 ### The delivery-vs-disobedience correction (2026-08-26) — a standing audit rule
 
 The first reading of R11 was that the exemplar was present, complete and BINDING with an explicit
@@ -319,6 +437,17 @@ routine, the Reviewer and the gate would silently read different packages.
   row would have broken every net read. A lone-surrogate `pipeline-index.json` exists in prod since 2026-09-25.
   It did not break the nets, which read `result.json` only, but it broke `replay-nets.ts`'s own copy of the read.
   That copy is now routed through the selector too.
+- **X11 closed that row's class at the source (`7d81b2b9`, 2026-09-27).** The writer was not a net. It was
+  `sanitizeForResponse` cutting a task DESCRIPTION at 197 UTF-16 units through an emoji, echoed by `task.list` into
+  an agent's tool result. The terminal persist now serialises the JSON artifact (`result.json` AND
+  `pipeline-index.json`, one code path keyed on `jsonArtifactName`) and `error.json` through `stringifyWellFormed`
+  (`lib/utils/surrogate-safe.js`, CommonJS). A lone surrogate becomes U+FFFD and the repair count is logged as a
+  warn. On well-formed input the output is byte-identical to `JSON.stringify`, and key order is kept, so
+  `orderResultJsonForPersist` survives it. **For this domain:** a stamped fact can no longer carry a lone surrogate
+  into an artifact. The one historical row (`cmugva9aw006gyxa722697ijv`) stays as immutable history, so any query
+  that casts the WHOLE table `::jsonb` must still pre-filter it (`scripts/report-mechanism-inventory.sh` section 0
+  filters and COUNTS such rows). Nets are unaffected because they cast only the selected row. Suite:
+  `test:surrogate-safe`, in the battery.
 
 ## RWF Wave C (2026-09-26): supersession + verdictFreshness, and persist-time key order
 
@@ -331,3 +460,75 @@ routine, the Reviewer and the gate would silently read different packages.
   E1a now compares only keys whose window covers the leg plus everything production stamped.
 - **Key order**: `orderResultJsonForPersist` at persist moves the bulky payloads to the tail, so net stamps no longer
   land after `finalResponse`. Artifacts persisted before 2026-09-26 still have them at the tail.
+
+**Depth added 2026-09-27 (verified at source):**
+
+- **`supersession` skip rules (C2, `b45340e9`, `execution-selection.ts` ~:247-302).** A retry whose chained
+  predecessors DIFFER from its target's gets no keep-best comparison, for EVERY role: `skipped: 'changed-input'`,
+  latest wins. An UNKNOWN relation (a not-chained or absent record on either side) skips only for the REVIEWER set
+  (`skipped: 'input-unknown'`). Other roles keep Arms 1-3, so a same-input Author retry keeps its
+  catastrophic-degradation protection. Why: an old APPROVED-for-v1 Reviewer beating a truncated re-review of v2
+  leaves an approval standing over a different package, which fails open. On a skip, `supersededById` is null.
+  Named residual: a harness edit to a child's description or contract between runs is invisible to an
+  execution-id key.
+- **Card render** (`lean-card-facts.js`, `grep -c "supersession"` gives 5): `superseded by <id> (<reasons>)` ·
+  `comparison skipped (<why>) — this run is authoritative` · `NOT compared (<reason>)`.
+- **Two freshness facts from ONE function.** `computeVerdictFreshness` (`chained-predecessors.ts:91`, which wraps
+  `compareChainedInputs`) serves both. They answer different questions:
+  - `verdictFresh: yes|no|unknown` is computed at READ time on a reviewer's `agent.results` card
+    (`agent-results-handler.ts`). It asks "is the verdict fresh NOW". A later Author re-run flips it retroactively,
+    so it is a decision aid for the harness and never a record.
+  - `verdictFreshness` is the leg-synthesize STAMP. It asks "was the verdict fresh when the leg was stamped", and it
+    is immutable.
+  - The C1 Reviewer rule (`orchestrator-reexecution.ts`, REVIEWER_SAME_INPUT_REEXECUTION) refuses a Reviewer re-run
+    only on `compareChainedInputs → 'same'`. That is CONSUMPTION, and it belongs to the harness. Unknown is never
+    "same".
+- **`verdictFreshness` reason set** (grep the enrichment): `compared` · `no-reviewer` · `no-reviewer-verdict` ·
+  `no-chained-record` · `program-tier` · `no-child-stage`, plus the registry's `enrichment-error`. The module header
+  lists five of these; `no-child-stage` is the sixth. The reviewer scan is a SEARCH, bounded by its own
+  `REVIEWER_SCAN_CAP = 20`, `orderBy createdAt asc`.
+- **The card renders the stamp only when it says something**: `different (<taskIds>)`, or `NOT checked (<reason>)`
+  for any unchecked reason EXCEPT `no-reviewer` and `program-tier`. A same-match renders nothing. That is safe only
+  while nothing consumes the fact. If it ever gates, silence on `same` must become a positive token in the same
+  commit.
+- **Registry: 7 entries under 6 names** (`rollbackContainment` is registered at two points). The entry order is
+  byte-contract, because the equivalence gate compares serialized bytes.
+- **Live: 1 stamp** (inventory 2026-09-27, 🟡 by age). The first control run after Wave C (Rev 14, 2026-09-27) read
+  `verdictFreshness` = same. Re-measure at the next health-run (MI-4). See the §7 gap: the quarterly script counts
+  its presence but not its `match`.
+
+## RWF Stage 2 (2026-09-27): the reviewer tag-grammar fact was NOT built
+
+Stage 2 would have soaked a parsed-but-unconsumed reviewer class-tag grammar, a new fact on this side of the seam.
+**It was not built.** Steve decided to STOP on the numbers (`cline_docs/reviews/rwf-stage2-2026-09-27/RESULTS.md`):
+strict clause-(f)-only retry reach was **5%** of infra NR verdicts (2/38), and **0 of 16** non-releasable programs
+were sunk by write-up legs alone (the synthesis had predicted ≈34%). A retry lever with no program-level benefit
+leaves the tag grammar with nothing to feed. **Re-open only on NEW evidence** (register RWF): strict reach ≥ 10% of
+infra NR verdicts, OR ≥ 1 program non-releasable solely through write-up legs, on a fresh window. Do not rebuild it
+as a "cheap fact": with no lever to feed, a fact with no reader is storage (the A1/F7 class).
+
+## 7. The mechanism inventory (MI-13, executed 2026-09-27): what it said about this domain
+
+Source: `cline_docs/reviews/mechanism-inventory-2026-09-16/INVENTORY.md` §1. Quarterly re-run:
+`scripts/report-mechanism-inventory.sh` (read-only against prod, CLAUDE.md health-run item). Platform-wide totals
+were 38 alive, 14 dormant (trigger recomputed and absent), 1 partially blind, 5 unmeasurable. **None of the
+partially blind or unmeasurable entries is a net of ours.**
+
+| Fact | Class | What it showed |
+|---|---|---|
+| `derivationContainment` | 🟢 | disposition benign 148 · blocking 68 · needs-node-c 41 · none 122. **Value violations: 5 lifetime, last 08-19.** `blocking` still fires through hard-gap (68, last 09-16). This means the derivations have been right, not that the net is blind |
+| `dialectLint` | 🟢 | 231 stamped / 201 in 30d. Violations 3 lifetime, all false positives (EF-DL1). The false-NEGATIVE direction is EF-DL2 |
+| `contractPropagation` | 🟢 | checked=true 25 |
+| `rollbackContainment` | 🟢 | benign 259 · needs-node-c 36 · blocking 6 |
+| `markerPresence` | 🟢 | derivedValues true 55 · false 345 |
+| `reviewerVerdict` ↳ `evidenceGrading` | 🟢 | 53 stamped; graded true 52 · false 1 |
+| `supersession` | 🟡 | **1 stamp lifetime (07-04).** The trigger was recomputed: 7 stamped retries lifetime, 0 in 30d. Stamping is complete: 6 of 6 agent-loop child re-executions in 60 days were stamped |
+| `verdictFreshness` | 🟡 | shipped 09-26, 1 stamp. Dormant by age. That is exactly where a mechanism turns out to be inert |
+
+⚠️ **Gap in the quarterly script (recorded, not fixed here, because it is code):** section 1 counts the top-level
+PRESENCE of every key, so it counts `verdictFreshness` and `supersession`. Section 1b ("do the nets ever say
+anything but their default?") covers derivation, rollback, dialect, contractPropagation, reviewerVerdict and
+markerPresence. It does NOT cover `verdictFreshness.match`, the `supersession` shape, or `evidenceGrading.graded`.
+The re-measure MI-4 schedules for `verdictFreshness` therefore needs an ad-hoc query until 1b gains a row. A fact
+whose presence is counted but whose VALUE is never read is the exact dormant-by-age blindness the inventory exists
+to catch.

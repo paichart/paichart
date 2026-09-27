@@ -40,8 +40,8 @@
  *     every write path the clearance survives. A future GUI
  *     clearance affordance must be a TARGETED endpoint like /api/agents/configure, never the
  *     wholesale save). Revisit-trigger: if the protocol's clearance stage-binding rule loosens.
- *   - runDisposition — HUMAN operator decision that a run is no longer being pursued (item 10,
- *     2026-09-15). Same posture as duplicateAcknowledged and for the same reason: humans write it
+ *   - runDisposition — HUMAN operator decision that a run is no longer being pursued, or (state `preserved`,
+ *     2026-09-27) is deliberately KEPT as a specimen (item 10, 2026-09-15). Same posture as duplicateAcknowledged and for the same reason: humans write it
  *     through MCP, so stripping it there would remove its only write path. Known exposure, accepted
  *     knowingly: an AGENT with task.update could also stamp it, which would quietly remove a live run
  *     from the liveness report. No protocol mentions the key, so nothing prompts that today.

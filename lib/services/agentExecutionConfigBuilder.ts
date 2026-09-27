@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { mcpLogger } from '@/lib/logger';
-import { buildTemplateModelParameters, withoutExecutionIdentityKeys } from './llm/template-model-params';
+import { buildTemplateModelParameters, withoutExecutionIdentityKeys, msToExecutionTimeoutSeconds, DEFAULT_EXECUTION_TIMEOUT_SECONDS } from './llm/template-model-params';
 import type { TriggeredBy, TriggeredBySource } from './types/triggered-by';
 
 const log = mcpLogger.child({ module: 'agentExecutionConfigBuilder' });
@@ -127,7 +127,7 @@ export async function buildRichExecutionConfig(
     prompt: task.prompt || task.agentTemplate?.promptTemplate,
     inputContext: task.inputContext,
     maxRetries: task.maxRetries ?? 3,
-    timeout: task.timeout ?? 300000,
+    timeout: msToExecutionTimeoutSeconds(task.timeout) ?? DEFAULT_EXECUTION_TIMEOUT_SECONDS, // X19: seconds; the template's value (spread) wins
     priority: 'MEDIUM',
     // Model parameters spread flat (provider, model, temperature, maxTokens, etc.)
     ...modelParameters,

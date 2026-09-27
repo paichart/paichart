@@ -48,7 +48,11 @@ async function replay(legTaskId: string) {
   console.log(`     tokens considered : ${tokens.length ? tokens.join(' · ') : '(none)'}`);
   console.log(`     violations        : ${violations.length}`);
   for (const v of violations as Array<Record<string, unknown>>) {
-    console.log(`        🛑 ${String(v.token)}  ${v.line ? `(line ${String(v.line)})` : ''} ${v.text ? String(v.text).trim().slice(0, 70) : ''}`);
+    console.log(`        🛑 ${String(v.token)}  ${v.line ? `(line ${String(v.line)})` : ''} ${v.lineText ? String(v.lineText).trim().slice(0, 70) : ''}`);
+  }
+  // EF-DL1: exempt occurrences (quoted grep search patterns) are named, never silently dropped.
+  for (const v of ((fact as { searchPatternExempt?: Array<Record<string, unknown>> }).searchPatternExempt ?? [])) {
+    console.log(`        ⓘ exempt (grep search pattern)  ${String(v.token)}  (line ${String(v.line)}) ${String(v.lineText ?? '').slice(0, 60)}`);
   }
   console.log(`     block kinds       : ${Object.keys(blockKinds).length ? JSON.stringify(blockKinds) : '(none)'}`);
   if (!Object.keys(blockKinds).length) {

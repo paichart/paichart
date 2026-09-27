@@ -26,8 +26,16 @@
  * first and let the data say whether Phase 2 is needed.
  */
 
-/** Why a human stopped pursuing a run. Closed set — a coined state is silently unmatched. */
-export type RunDispositionState = 'abandoned' | 'superseded';
+/**
+ * Why a human stopped pursuing a run. Closed set — a coined state is silently unmatched.
+ *  - `abandoned`  — nobody intends to continue it.
+ *  - `superseded` — another run replaced it (`supersededBy`).
+ *  - `preserved`  — (2026-09-27, MI-3) deliberately KEPT in its current state as a test specimen or evidence. Neither
+ *    of the others is true of such a run, and `abandoned` is actively dangerous: it invites the next tidy-up to clear or
+ *    re-run it, and a re-run can destroy the specimen (execution retention is count-based, so new executions evict the
+ *    old ones). Consumers must treat it as "do not touch", not as "done".
+ */
+export type RunDispositionState = 'abandoned' | 'superseded' | 'preserved';
 
 export interface RunDisposition {
   state: RunDispositionState;
@@ -39,7 +47,7 @@ export interface RunDisposition {
   supersededBy?: string;
 }
 
-const STATES: readonly string[] = ['abandoned', 'superseded'];
+const STATES: readonly string[] = ['abandoned', 'superseded', 'preserved'];
 
 /**
  * Read a disposition off task metadata, or null.

@@ -1,0 +1,90 @@
+{
+  "povId": "<id redacted>",
+  "program": "telemetry-export-four-domain",
+  "outOfScope": "Applying any change in any domain. Every deliverable is an approved-but-unapplied change package; the platform never actuates.",
+  "approvalGates": {
+    "cloudChange": {
+      "approver": "<name redacted>",
+      "approves": "the PRODUCED range as an IAM condition \u2014 the concrete value, not intent-to-proceed",
+      "onPovTeam": true,
+      "approverEmail": "<email redacted>"
+    },
+    "programPlan": {
+      "approver": "<name redacted>",
+      "approves": "the plan and the interface contract, before any leg runs",
+      "onPovTeam": true,
+      "approverEmail": "<email redacted>"
+    },
+    "fabricChange": {
+      "approver": "<name redacted>",
+      "approves": "the METHOD: which addresses count as the pool, and how the covering range is derived",
+      "onPovTeam": true,
+      "approverEmail": "<email redacted>"
+    },
+    "clusterChange": {
+      "approver": "<name redacted>",
+      "approves": "the PRODUCED range as an ingress source \u2014 the concrete value, not intent-to-proceed",
+      "onPovTeam": true,
+      "approverEmail": "<email redacted>"
+    },
+    "observabilityChange": {
+      "_warning": "<name redacted> is NOT a member of the POV team (team = <name redacted>/PM, <name redacted>/SE, <name redacted>/Technical, <name redacted>/Owner). Per requirements' own rule, this gate routes to the POV owner (<name redacted>) instead unless she is added to the team first. See Assumptions & Open Questions #2.",
+      "approver": "<name redacted>",
+      "approves": "the alert's scope and every number it carries",
+      "onPovTeam": false,
+      "approverEmail": "<email redacted>"
+    }
+  },
+  "crossingValue": {
+    "name": "telemetryExporterCoveringRange",
+    "_note": "Deliberately null. The Architect has no live state access and must not fabricate this value.",
+    "value": null,
+    "producedBy": "Pipeline 1 (network-provisioning / fabric leg)",
+    "description": "The smallest single range covering every harvested telemetry-exporter loopback address across both fabric switches.",
+    "consumptionRule": "Pipelines 2, 3 and 4 MUST consume this value EXACTLY as published by Pipeline 1 \u2014 never recomputed, never widened, never guessed. If absent from a consumer's chained context at its own start, that consumer escalates and stops rather than authoring against a guess.",
+    "deliveryMechanism": "DAG edge (chained context) \u2014 NOT a static contract field. The value is a function of live device state; it is unknowable before Pipeline 1 harvests, so it cannot be pinned here."
+  },
+  "platformDialect": {
+    "_status": "NOT APPLICABLE \u2014 neither topology.json nor requirements.md carries a canonical/exemplar configuration stanza or a forbidden-token list for any of the four target languages. No platformDialect.canonicalStanza / platformDialect.forbiddenTokens populated. See Assumptions & Open Questions #4."
+  },
+  "acceptanceChecks": {
+    "1": "the range each consumer used exactly equals what the fabric leg produced \u2014 the chained value, not a guess, not a recomputation, in all three consumers",
+    "2": "every harvested exporter address is covered by that range, and nothing foreign is",
+    "3": "no consumer's authorisation extends wider than that range, in any of the three languages",
+    "4": "chaining coverage: the downstream legs received the fabric leg's real deliverable, not a fallback and not nothing",
+    "2b": "the range is the tightest correct cover \u2014 recompute it independently, do not take the stated value on trust",
+    "_numbering": "FIXED per requirements \u2014 never renumber, merge or substitute. New checks append (5, 6, ...)."
+  },
+  "connectionSurfaces": {
+    "lifecycle": "self-provision per each leg's active protocol: register from descriptor, harvest read-only, tear down registration on approval AND on escalation alike",
+    "cloudDescriptorUrl": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/terraform-readonly-descriptor.json",
+    "fabricDescriptorUrl": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json",
+    "clusterDescriptorUrl": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json",
+    "observabilityDescriptorUrl": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/observability-readonly-descriptor.json"
+  },
+  "staticDesignConstants": {
+    "cloud": {
+      "workspace": "prod",
+      "forbiddenReads": [
+        "the in-state captured secret on the neighbouring resource \u2014 never required for this change, must not be read, must not appear anywhere in the package"
+      ],
+      "terraformAddress": "aws_s3_bucket.app_logs",
+      "existingBucketPolicy": "NONE CONFIRMED \u2014 bucket exists, a bucket policy may not; CREATE of the policy is expected"
+    },
+    "fabric": {
+      "devices": "the two switches reachable through the network read-only service",
+      "existenceAssumption": "the exporter pool addresses already exist and are already advertised as individual host routes; the change replaces the advertisement method only \u2014 it does not create addresses",
+      "exporterPoolParentRangeConstraint": "UNRESOLVED \u2014 see Assumptions & Open Questions #1. Requirements state this is 'given in topology.json'; topology.json does not carry a parent-range value. Pipeline 1 must not fabricate one."
+    },
+    "cluster": {
+      "workload": "the trading namespace's running Deployment (name resolved by Pipeline 2's own read-only harvest; no specific Deployment name is given in the design artifacts)",
+      "namespace": "trading",
+      "existingNetworkPolicy": "NONE \u2014 CREATE is the expected outcome, not modification"
+    },
+    "observability": {
+      "alertRequirement": "alert when telemetry from the crossing-value range stops arriving OR is being refused; scope to that range, not to all sources",
+      "existingScopedRule": "NONE \u2014 CREATE is the expected outcome",
+      "numberJustificationRule": "every number the rule carries (threshold, evaluation window, wait-before-firing) must be chosen against a harvested quantity from the collector/metrics stack's own pipeline metrics, and must carry the comparison that produced it, including rejected alternatives"
+    }
+  }
+}

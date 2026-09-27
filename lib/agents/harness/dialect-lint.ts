@@ -117,15 +117,54 @@ export interface DialectLintResult {
   /** The tokens the lint scanned for (deduped, as found in the contract). */
   tokensConsidered: string[];
   /** Violations found inside CANDIDATE-CONFIG blocks only (expected-output and rollback blocks may
-   *  legitimately contain banned tokens — see the classification note in this file). */
+   *  legitimately contain banned tokens — see the classification note in this file). An occurrence
+   *  inside a quoted grep-family search pattern is not a violation — see `searchPatternExempt`. */
   violations: DialectLintViolation[];
-  /** How many fenced blocks of each kind were seen — so "0 violations" can be told apart from
-   *  "nothing was classified as candidate config". */
+  /** How many fenced-block LINES of each kind were seen — LINES, not blocks (every line of a block
+   *  carries its block's kind and is counted once; a 12-line rollback adds 12 to `rollback`). It is
+   *  the CLASSIFIER'S READING of the document, not ground truth: it tells "0 violations" apart from
+   *  "nothing was classified as candidate config" only in the TOTAL case (no `candidate-config` key
+   *  at all). A mis-kinded config block moves lines between keys without making the stamp look
+   *  empty — EF-DL2 measured 32 real-config blocks / 503 lines exempted that way. Series break:
+   *  compare values only between stamps with the same `classifier`. */
   blockKinds: Record<string, number>;
+  /** Version of the block classifier (`fencedBlockLines` + `classifyBlock`) that produced
+   *  `blockKinds` and decided which lines BOTH halves scanned. Present exactly when the classifier
+   *  RAN — absent on the `no-contract` path (nothing classified) and on stamps written before
+   *  2026-09-28 (implicitly 1). See `DIALECT_LINT_CLASSIFIER`. Optional in the type for that reason. */
+  classifier?: number;
+  /** Banned-token occurrences NOT counted as violations because every occurrence on the line sits
+   *  inside a quoted grep-family search pattern (EF-DL1 — a check FOR the token's absence is not
+   *  its presence). Present ONLY when non-empty. Named rather than silently dropped, so a reader
+   *  can see the exemption fired and audit it. */
+  searchPatternExempt?: DialectLintViolation[];
   /** PRESENCE half — independent of the banned-token (absence) half above: a package can be
    *  banned-token clean and still fatally incomplete (IGP-T1 R7). Always emitted. */
   transcription: TranscriptionCheck;
 }
+
+/**
+ * THE CLASSIFIER VERSION stamped as `dialectLint.classifier` (EF-DL2 Phase D decision 4, 2026-09-28).
+ *
+ * BUMP THIS IN EVERY COMMIT THAT CHANGES WHICH KIND A LINE RECEIVES — the ancestry walk, the
+ * window, `classifyBlock`'s vocabulary/precedence/body rules. Not for a change to the halves that
+ * CONSUME the kinds. Why a field and not a documented date: `blockKinds` and the scan scope move
+ * on most contract packages at every such change, and a query that splits the series on a typed
+ * date silently mixes the two sides the day someone re-runs a leg. A field makes each cut derive
+ * itself.
+ *   1 — implicit: every stamp before 2026-09-28 (no field).
+ *   2 — F1: the heading-ancestry walk is fence-aware (a `#` line inside a fence is not a heading).
+ *   3 — EF-DL2 commit 2, option (ac), 2026-09-28: the 3-line prose window stops AT the first
+ *       heading (heading line included, so `label` is unmoved); `harvested-state` is decided only
+ *       from the block's own label (`labelProse`, ≤ MAX_LABEL_CHARS) + heading ancestry. Moves
+ *       `blockKinds` on most contract packages and 2 PRESENCE results (both corrections); 0
+ *       violations and 0 net #3 dispositions on the archive.
+ *
+ * NESTED on the fact (E3b), never a `RESULT_JSON_SUMMARY_KEYS` entry: the result-json whitelist
+ * copies `dialectLint` verbatim, so a nested field survives by construction (pinned: E3b-5 in
+ * test-execution-artifacts-parity).
+ */
+export const DIALECT_LINT_CLASSIFIER = 3;
 
 const MAX_LINE_TEXT = 120;
 const MAX_TOKENS = 64; // sanity cap — a "banned list" larger than this is not a token list
@@ -216,6 +255,23 @@ const OPERATOR_VERB = /^(show|grep|egrep|fgrep|diff|awk|sed|cat|head|tail|wc|les
  * Deliberately matched on the block's LABEL, not its content: what makes a block harvested state is
  * that the package SAYS it is quoting the device, and content-sniffing here would be the same
  * circularity we refused elsewhere in this file.
+ *
+ * Since `classifier: 3` (EF-DL2 option ac) the "label" is literal: this is tested only against the
+ * block's own short label line and its heading ancestry, never against a sentence elsewhere in the
+ * prose window (see the call site in `fencedBlockLines`).
+ *
+ * ⚠️ RE-OPEN TRIGGER for Author-side fence-role declaration — EF-DL2 option (d), deferred with this
+ * trigger by all four panel lanes (Phase D decision 3, Lane 2's form, 2026-09-28):
+ *   re-open ONLY IF, after `classifier: 3`, a GOLD-LABELLED false SKIP (real config kinded as anything
+ *   but candidate-config) appears on a NEW package — one stamped by classifier ≥ 3 — OR a second
+ *   POSITION-DEPENDENCE incident occurs (identical blocks classified differently by where they sit).
+ *   D098 (`cmu4wyjzv006syx8ybnafzc9n`, pinned in test-dialect-lint) is a KNOWN PRE-FIX RESIDUAL,
+ *   not a trigger.
+ * If it is ever built: the LABEL-LINE form, in the shared VALIDATION_SHAPE_CLAUSE (protocol tail,
+ * auto-seeded), widening-only, the declaration never replacing the prose source label. NEVER the
+ * info-string form (```` ```harvested ````): `parseFencedJsonBlock` (derivation-containment.ts) reads
+ * a tagged marker block as ABSENT, which fails a CORRECT program leg closed.
+ * Measure it with the lane-1 replay (discovery §E, "EF-DL2 re-measure").
  */
 const HARVESTED_STATE_PROSE =
   /harvest|baseline|current\s+(running-?)?config|existing\s+config|quoted\s+verbatim|before[- ]state|as[- ]found|pre[- ]change/i;
@@ -233,7 +289,14 @@ export function isSeparatorLine(text: string): boolean {
   return /^!+$/.test(t) || /^-{3,}$/.test(t);
 }
 
-function classifyBlock(precedingProse: string, body: string[]): BlockKind {
+/**
+ * @param precedingProse the bounded prose window (up to 3 lines, stopping AT the block's first heading,
+ *   heading included) plus the heading ancestry. Decides rollback / expected-output.
+ * @param ownProse the block's OWN label (`labelProse`, the nearest line when ≤ MAX_LABEL_CHARS) plus the
+ *   heading ancestry. Since `classifier: 3` (EF-DL2 option ac) it is the ONLY input to the
+ *   `harvested-state` decision — see the note at `fencedBlockLines`' call site.
+ */
+function classifyBlock(precedingProse: string, body: string[], ownProse: string): BlockKind {
   // Order matters: a "harvested baseline" block inside a Rollback section is still evidence, and a
   // rollback that RESTORES harvested config is still a rollback — both are exempt from the absence
   // scan, so the precedence between them is not load-bearing HERE.
@@ -244,7 +307,7 @@ function classifyBlock(precedingProse: string, body: string[]): BlockKind {
   // of its three device blocks lands `harvested-state` while the other two land `rollback` — a
   // `kind === 'rollback'` filter would silently drop a third of the restore config, position-
   // dependently. Same shape as the R16-P4 defect recorded in fencedBlockLines below.
-  if (HARVESTED_STATE_PROSE.test(precedingProse)) return 'harvested-state';
+  if (HARVESTED_STATE_PROSE.test(ownProse)) return 'harvested-state';
   if (ROLLBACK_PROSE.test(precedingProse)) return 'rollback';
   if (EXPECTED_OUTPUT_PROSE.test(precedingProse)) return 'expected-output';
   const meaningful = body.map((l) => l.trim()).filter(Boolean);
@@ -294,7 +357,9 @@ export interface FencedBlockLine {
   kind: BlockKind;
   /**
    * Does this block sit under a ROLLBACK/RESTORE heading? Computed from the heading ANCESTRY
-   * ALONE — deliberately NOT from the nearest prose and NOT derived from `kind`.
+   * ALONE — deliberately NOT from the nearest prose and NOT derived from `kind`. The ancestry is
+   * FENCE-AWARE since `classifier: 2` (a `#` line inside an earlier fence is content, not a
+   * heading — see the walk in `fencedBlockLines`).
    *
    * WHY IT IS A SEPARATE AXIS (measured 2026-09-11, the reason net #3 exists): `kind` answers
    * "should the banned-token scan read this block?", where `rollback` and `harvested-state` are
@@ -322,11 +387,26 @@ export function fencedBlockLines(doc: string): FencedBlockLine[] {
       i++;
       continue;
     }
-    // Nearest preceding non-empty prose (skip blank lines) — up to 3 lines of context.
+    // Nearest preceding non-empty prose (skip blank lines) — up to 3 lines of context, stopping at
+    // the first fence OR AT the first heading, the heading line INCLUDED.
+    //
+    // BOUNDED AT THE HEADING (EF-DL2 commit 2 / option (ac), 2026-09-28 — `classifier: 3`). The window
+    // used to climb PAST a block's own section heading into the previous section's prose. Live
+    // (EF-DL1 package): `## 2. Full Desired-State Config File` sat directly above its config, and the
+    // window reached section 1's table naming the "Phase 0 Harvester" — so the package's REAL config
+    // was `harvested-state`, scanned by neither half (production stamped PRESENCE 0 of 2 on a package
+    // carrying both lines). Gold-labelled census (panel lane 1, 310 blocks): 23 of the shipped rule's
+    // 32 false SKIPs were this crossing.
+    //
+    // ⚠️ The heading is INCLUDED, not excluded, and that is load-bearing: when the nearest non-empty
+    // line IS the heading, `ctx[0]` — and so `labelProse` and `label` below — must not move. Excluding
+    // it moved `label` on 59 archived blocks (the `acx` control), and net #3 (rollback-containment)
+    // scopes on `label`. Pinned by the EF-DL2 synthetic `label` fixture.
     const ctx: string[] = [];
     for (let k = i - 1; k >= 0 && ctx.length < 3; k--) {
       if (/^\s*```/.test(lines[k])) break;
       if (lines[k].trim()) ctx.push(lines[k]);
+      if (/^\s{0,3}#{1,6}\s/.test(lines[k])) break;
     }
     // The NEAREST prose line alone — not the 3-line window, not the ancestry. `label` answers "what
     // does the line directly above call this block?", and every other scope gets that wrong:
@@ -364,9 +444,31 @@ export function fencedBlockLines(doc: string): FencedBlockLine[] {
     // Still bounded, and in the way that matters: a later "## Candidate configuration" section is
     // its own blocks' h2 ancestor, so a previous "## Rollback Plan" can never reach them. Only
     // genuine ancestors are collected, never siblings.
+    //
+    // FENCE-AWARE (EF-DL2 commit 1 / "F1", 2026-09-28 — `classifier: 2`). The walk used to test
+    // EVERY earlier line against the heading pattern, including lines INSIDE earlier fenced blocks,
+    // so a `#` comment in HCL/YAML/bash/nginx read as a heading. Under CommonMark a line inside a
+    // fence is never a heading. A `# comment` is level 1, so it did two things at once: its words
+    // were fed to classifyBlock as an "ancestor", AND it stopped the walk (level 1), hiding the
+    // block's real `##`/`###` section heading. Live (panel-architectural-review.md §0, terraform):
+    // `# NEW: Enforce public-access restrictions per security baseline` inside candidate HCL made
+    // every later Part B command/expected block `harvested-state` ("baseline"), and a `# Find the
+    // commit hash …` inside a bash block hid `### 3. Rollback Plan`, so the rollback block read
+    // `restoreIntent: false`.
+    //
+    // Walking UP from an opening fence (the forward loop guarantees `i` is one), every fence line
+    // toggles in/out, exactly mirroring the forward pairing — so the two scans can never disagree
+    // about where a block starts and ends. Structure only: no vocabulary, threshold or precedence
+    // moved. F1 left the 3-line WINDOW unchanged (it already stopped at the first fence); commit 2 (`classifier: 3`) bounded it at the first heading too.
     let level = 7;
     const headings: string[] = [];
+    let insideFence = false;
     for (let k = i - 1; k >= 0 && level > 1; k--) {
+      if (/^\s*```/.test(lines[k])) {
+        insideFence = !insideFence;
+        continue;
+      }
+      if (insideFence) continue;
       const m = /^\s{0,3}(#{1,6})\s/.exec(lines[k]);
       if (!m) continue;
       const thisLevel = m[1].length;
@@ -379,10 +481,32 @@ export function fencedBlockLines(doc: string): FencedBlockLine[] {
       body.push(lines[j]);
       j++;
     }
-    // UNCHANGED INPUT: classifyBlock still receives the combined near-prose + ancestry string, in
-    // the same order it always did. The two axes below are ADDITIVE — no existing consumer's
-    // classification moves because of them (pinned: test:dialect-lint stays at its documented count).
-    const kind = classifyBlock(ctx.join(' '), body);
+    // ⚠️ THE HARVEST DECISION'S INPUT CHANGED (EF-DL2 option (ac), `classifier: 3`). This note used to
+    // read "UNCHANGED INPUT SHAPE", and that stopped being true here — deliberately, approved as such
+    // (Phase D decision 1, 2026-09-28; SYNTHESIS v2 §2 D1 "AC5 passes in letter only").
+    //   • `harvested-state` is decided ONLY from the block's OWN label (`labelProse` — the nearest
+    //     line, when ≤ MAX_LABEL_CHARS) or the heading ANCESTRY. Harvest words anywhere else in the
+    //     window no longer count. Why: a sentence ABOUT provenance is not a label OF the block, and the
+    //     protocols MANDATE such sentences beside real config (dialect notes, gap-naming, the (e1)
+    //     source line) — live D076: "Dialect note: transcribed from … ceos1's own harvested `show
+    //     running-config`" exempted a real deploy stanza. Bounding the window (above) cannot fix that
+    //     one: the sentence is inside the block's own section. The 120-char label rule already
+    //     separates a label from a sentence, so this reuses it.
+    //   • rollback / expected-output keep their inputs (the bounded window + ancestry), and the
+    //     vocabulary, the thresholds and the precedence (harvest → rollback → expected → body rules)
+    //     are all unchanged. So a block whose harvest word lived only in the window now falls through
+    //     to the rollback/expected/body rules on the SAME window — live D042 (an OSPF rollback quoted
+    //     from harvest) stays exempt, now as `rollback`.
+    // Measured on the gold census (310 blocks): false SKIP 32 blocks / 503 lines → 2 / 21 (with F1);
+    // false SCAN 5 → 109 blocks, all operator commands / marker+allocation JSON, 0 expected-output,
+    // 0 violations on the archive. The remaining false SKIPs are NAMED: F028 (title leak, F1) and D098
+    // (ROLLBACK_PROSE in a long own-section sentence + a majority-`no` body — fixing it needs the
+    // rollback/expected decision label-capped too, which re-scans long `**Expected output** (…)`
+    // labels, the R9 class).
+    // The two axes below (`restoreIntent`, `label`) read `headings` / `labelProse` directly and are
+    // unaffected by the harvest change.
+    const ownProse = [labelProse, ...headings].join(' ');
+    const kind = classifyBlock(ctx.join(' '), body, ownProse);
     const restoreIntent = ROLLBACK_PROSE.test(headings.join(' '));
     const label: BlockLabel = EXPECTED_OUTPUT_PROSE.test(labelProse)
       ? 'expected-output'
@@ -400,10 +524,64 @@ export function fencedBlockLines(doc: string): FencedBlockLine[] {
 /**
  * Token match: case-insensitive substring with word-ish boundaries on both ends, so
  * `metric-style` matches `metric-style wide` but a token `is` never matches `isis`.
+ * Global, because the ABSENCE half must judge EACH occurrence on a line (see searchPatternRanges).
  */
 function tokenRegex(token: string): RegExp {
   const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(?<![\\w-])${escaped}(?![\\w-])`, 'i');
+  return new RegExp(`(?<![\\w-])${escaped}(?![\\w-])`, 'gi');
+}
+
+/** The grep family — the same read-only search verbs OPERATOR_VERB already treats as operator commands. */
+const SEARCH_VERB = /(?<![\w-])(?:grep|egrep|fgrep|zgrep)(?![\w-])/g;
+
+/**
+ * Character ranges of a line that are QUOTED ARGUMENTS OF A grep-FAMILY COMMAND — i.e. a search
+ * pattern, which the device never receives (EF-DL1, 2026-09-27).
+ *
+ * WHY OCCURRENCE-LEVEL, NOT A BLOCK KIND: the live defect was a one-line block
+ * `docker exec obs-ingress nginx -T 2>/dev/null | grep -c 'allow all;'` — a check that the banned
+ * token is ABSENT, flagged as its presence. The whole-block `command` rule above cannot see it
+ * because the line starts with an exec WRAPPER (`docker exec`, `kubectl exec`, `ssh`), not an
+ * operator verb, so the block defaults to candidate-config. Widening the classifier to wrappers
+ * would re-kind every exec block in the corpus and move the PRESENCE half's denominator and the
+ * stamped per-kind block counts with it — and this classifier is recorded above as a last resort that has
+ * erred in both directions. The exemption here touches ONLY the absence half and ONLY an
+ * occurrence that sits inside a grep pattern, so the block keeps its kind and everything else on
+ * the line is still scanned.
+ *
+ * Polarity is deliberately NOT read (`grep -c … → 0` vs `grep -A1 …`): a search pattern is not a
+ * directive whichever way the operator is checking, which is the same reason a block of bare `grep`
+ * lines is already `command`. Reading the expected-output block to decide polarity would buy nothing
+ * and add a cross-block dependency.
+ *
+ * Bounded so it cannot swallow config on the same line: the scan starts AT a grep verb and stops at
+ * the first unquoted `|`, `;` or `&`, so `grep -q x f || echo 'allow all;' >> f` still flags the
+ * echo. QUOTED arguments only — an unquoted pattern, or an unterminated quote, is NOT exempt; both
+ * fail toward a visible false positive rather than a silent miss.
+ */
+function searchPatternRanges(text: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  SEARCH_VERB.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = SEARCH_VERB.exec(text)) !== null) {
+    let quote: string | null = null;
+    let start = -1;
+    for (let i = m.index + m[0].length; i < text.length; i++) {
+      const ch = text[i];
+      if (quote) {
+        if (ch === quote && !(quote === '"' && text[i - 1] === '\\')) {
+          ranges.push([start, i]);
+          quote = null;
+        }
+      } else if (ch === "'" || ch === '"') {
+        quote = ch;
+        start = i + 1;
+      } else if (ch === '|' || ch === ';' || ch === '&') {
+        break;
+      }
+    }
+  }
+  return ranges;
 }
 
 /**
@@ -687,6 +865,7 @@ export function runDialectLint(
       tokensConsidered: [],
       violations: [],
       blockKinds,
+      classifier: DIALECT_LINT_CLASSIFIER,
       transcription,
     };
   }
@@ -697,6 +876,7 @@ export function runDialectLint(
       tokensConsidered: tokens,
       violations: [],
       blockKinds,
+      classifier: DIALECT_LINT_CLASSIFIER,
       transcription,
     };
   }
@@ -705,12 +885,34 @@ export function runDialectLint(
   // ABSENCE scans CANDIDATE CONFIG ONLY — see the classification note above. So does the PRESENCE
   // half, since 2026-08-28: "looking for a required line cannot false-positive" holds for a raw
   // COUNT but NOT once that count drives per-stanza attribution (R18-P4 — see the note above it).
+  //
+  // Each occurrence is judged separately (EF-DL1): one inside a grep search pattern is exempt and
+  // RECORDED in `searchPatternExempt`; any other occurrence on the same line is still a violation.
+  const searchPatternExempt: DialectLintViolation[] = [];
   for (const { line, text } of blockLines.filter((b) => b.kind === 'candidate-config')) {
+    let ranges: Array<[number, number]> | null = null;
     for (const { token, re } of regexes) {
-      if (re.test(text)) {
-        violations.push({ token, line, lineText: text.trim().slice(0, MAX_LINE_TEXT) });
+      re.lastIndex = 0;
+      let directive = false;
+      let exempt = false;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text)) !== null) {
+        const s = m.index;
+        const e = s + m[0].length;
+        ranges ??= searchPatternRanges(text);
+        if (ranges.some(([a, b]) => s >= a && e <= b)) exempt = true;
+        else directive = true;
+        if (m[0].length === 0) re.lastIndex++;
       }
+      const entry = { token, line, lineText: text.trim().slice(0, MAX_LINE_TEXT) };
+      if (directive) violations.push(entry);
+      else if (exempt) searchPatternExempt.push(entry);
     }
   }
-  return { checked: true, tokensConsidered: tokens, violations, blockKinds, transcription };
+  return {
+    checked: true, tokensConsidered: tokens, violations, blockKinds, classifier: DIALECT_LINT_CLASSIFIER, transcription,
+    // Emitted ONLY when the exemption fired: every stamp without one stays byte-identical to what
+    // production has already written (the net-registry equivalence gate compares serialized bytes).
+    ...(searchPatternExempt.length ? { searchPatternExempt } : {}),
+  };
 }

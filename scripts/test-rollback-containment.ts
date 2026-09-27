@@ -376,6 +376,43 @@ test('ARM-4: an UNRESOLVABLE lane is ADJUDICATED, never silently skipped', async
   }
 });
 
+// ── F1 × NET #3 (EF-DL2 commit 1, 2026-09-28): the fence-aware ancestry moves restoreIntent, NOT dispositions ──
+// net #3 scopes on `restoreIntent`, which F1 corrects. Replayed over 220 archived Author packages: 87 blocks in
+// 22 packages move, ZERO dispositions — 21 of the 22 are terraform, stamped `lane-not-supported` BEFORE
+// restoreIntent is read, and the observability package finds 19 of 19 either way. The STAMPED BYTES still move
+// (`blocksScanned`/`excluded`), which is why both halves are pinned. Fixtures live beside the dialect-lint ones.
+const DL_DIR = path.join(__dirname, 'fixtures', 'dialect-lint');
+const readDl = (n: string) => fs.readFileSync(path.join(DL_DIR, n), 'utf8');
+
+test('F1-RC1 (obs Author cmuhn7bmx009ryxcrzmoauxib): 3 restore blocks (was 1), still 19 of 19 found — disposition unchanged', () => {
+  const scope = scopeRestoreLines(readDl('ef-dl1-obs-ingress-author-2026-09-26.md'));
+  expectEq(scope.blocksScanned.restore, 3, 'restore blocks: ');
+  expectEq(scope.excluded['procedural-rollback-block'], 1, 'procedural-rollback-block: ');
+  expectEq(scope.excluded['expected-output-in-restore-section'], 1, 'expected-output-in-restore-section: ');
+  const check = checkRollbackContainment(scope.lines, readDl('ef-dl1-obs-ingress-harvest-2026-09-26.md'));
+  expectEq(check.restoreLinesTotal, 19, 'restore lines: ');
+  expectEq(check.restoreLinesFound, 19, 'found: ');
+  const d = computeRollbackDisposition({ checked: true, ...check });
+  expectEq(`${d.disposition}/${d.reason}`, 'benign/all-restore-lines-found', 'disposition: ');
+});
+
+test('F1-RC2 (terraform Author cms123vmf00ewyxv8wd5o7vbu): stamped blocksScanned moves 8 -> 21, disposition stays benign/lane-not-supported', async () => {
+  const fact = await computeRollbackContainmentFact(
+    stubPrisma({ stageId: 's1', legTitle: 'S3 bucket policy (protocol: terraform-iac)' }),
+    { taskId: 'a1', deliverable: readDl('f1-tf-restore-cms123vmf00ewyxv8wd5o7vbu.md') }
+  );
+  expectEq(fact.reason, 'lane-not-supported', 'reason: ');
+  expectEq(JSON.stringify(fact.blocksScanned), JSON.stringify({ restore: 21, total: 21 }), 'blocksScanned: ');
+  const d = fact.rollbackDisposition as Record<string, unknown>;
+  expectEq(`${d.disposition}/${d.reason}`, 'benign/lane-not-supported', 'disposition: ');
+});
+
+test('F1-RC3 (terraform exec cmrmjqmko00fmyxlunmemx4vm): the rollback block hidden by `# Find the commit hash` is now scoped', () => {
+  // Lane-independent pure scope — what net #3 WOULD read if the terraform lane ruling ever changed.
+  const scope = scopeRestoreLines(readDl('f1-tf-lane3-cmrmjqmko00fmyxlunmemx4vm.md'));
+  expectEq(scope.blocksScanned.restore, 6, 'restore blocks: ');
+});
+
 // ── CHAINER CARRY (2a-plumbing) ───────────────────────────────────────────────────────────────
 // Source-text pins, the same shape test-marker-presence.ts uses for the sibling fact. They assert
 // the WIRING PROPERTIES, not the formatting: each one is written so that deleting the behaviour

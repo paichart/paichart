@@ -103,6 +103,9 @@ review layer changed the fix **six consecutive times**, each catch a shipped bug
 terminalization would have killed legitimate runs; the members field, the pre-tx wiring, the
 F17/F20 gating, the orphan-re-minting recovery text). Fold findings with a traceability table —
 every finding → folded / deferred-with-reason / rejected-with-reason.
+**For a panel at Tier 2 (classifier/gate, shared key, public surface, expected disagreement), run it by
+Protocol 14** (`evidence-graded-panel-review-protocol.md`): knowledge refresh, lanes with mid-panel relay,
+independent audit, blind ground truth, implementation gates.
 
 ⚠️ **A reviewer's summary of PROSE is a reading, not the prose. Open the file before acting on it.**
 2026-09-16: a review reported that four domain protocols mandate `task.complete` "on EVERY outcome",

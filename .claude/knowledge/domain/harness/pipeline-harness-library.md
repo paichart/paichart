@@ -189,6 +189,15 @@ If you see the harness hitting a 10-turn wall again, treat it as a drift regress
 | **50-69** | Re-execute the child once with diagnostic feedback | Harness LLM posts `**HARNESS DIAGNOSTIC**` comment on the child task naming the root cause + specific corrective feedback, then calls `perform(action: "agent.execute", taskId: <child id>)`; harness exits; pipeline-retrigger reactor brings harness back when the child re-completes; SYNTHESIZE retries the gate against the new score |
 | **< 50** | Escalate; do NOT synthesise; leave harness IN_PROGRESS for human triage | Per documented protocol |
 
+> ⚠️ **Corrected 2026-09-27 — the 50-69 row above is historical in two respects.** (1) "with diagnostic feedback" was
+> never true of the CHILD: the `**HARNESS DIAGNOSTIC**` comment does not reach the re-run's prompt (F1, known since
+> 2026-07-04), so the retry is a BLIND re-roll — and RWF Stage 3, the findings-carrying retry that would have changed
+> that, was STOPPED on measurement 2026-09-27 (see § "2026-09-27" at the end). (2) The re-execution is now bounded at
+> the chokepoint (RWF Wave C, `orchestrator-reexecution.ts`): one ORCHESTRATOR re-execution per child per harness run,
+> a reviewer refused on a provably same-input re-roll, and since RWF D1/X18 the harness may not change the child's
+> prompt, role, inputContext, model or provider on that re-run. The `< 50` improvised-retry pattern below is subject
+> to the same cap.
+
 **Empirically observed extension to `< 50` cases** (Run 2, 2026-04-28, task `cmohyjjzr0011yxagg4hecbtz`): the harness LLM diagnosed a `< 50` failure as a recoverable I/O-pattern issue and re-executed rather than escalating. Specifically the Publication Reviewer scored 25/100 because it tried to call `project(action: "task.context")` to read the Editorial Writer's article (returns metadata, not artifact content) and "fabricated critique without reading article" when that returned nothing useful. The harness identified the root cause from the Reviewer's own `result.json.finalResponse` self-disclosure ("could not access artifact-..., reviewer could not read article"), posted a structured diagnostic comment naming both the cause AND the corrective behaviour ("**The Editorial Writer's article IS in your §6 Pipeline Context as auto-chained finalResponse**. Read it there — do NOT try to fetch the artifact by ID"), then re-executed. Recovery: 25/100 → 92/100. Total wall-clock impact: ~1m20s for the retry execution.
 
 This `< 50` retry is **NOT in the documented protocol** — the protocol says < 50 escalates. The harness LLM made a judgment call that the failure was recoverable and acted on it. The judgment was correct in this case (verified empirical recovery). Whether to make this canonical (update the protocol prose to allow "< 50 with identifiable cause → retry") or treat it as emergent flexibility worth preserving without prescribing is an architectural call worth a future review pass. For now, the behaviour is observed-and-beneficial; the harness specialist file documents it as a recognised pattern.
@@ -335,6 +344,19 @@ protocolValidation: {
 Plus `errorCategory: 'PROTOCOL_STEP_SKIPPED'` is set only if no higher-priority category matched (BUDGET_EXHAUSTED etc. are more specific). Both `errorCategory` and `protocolValidation` can co-occur — they answer different questions.
 
 **Test coverage:** `scripts/test-pipeline-protocol-validator.ts` — **17 tests** (12 original tool-count tests + 5 added 2026-04-25 for comment-content). Includes the artifact-synthesis incident shape as a regression test. Wired into `npm run test:all-validation`.
+
+> ⚠️ **Updated 2026-09-27 (MI-1, `34f3bc8d`) — the "17 tests" count and the two SYNTHESIZE-only rows above are stale.**
+> The suite is 55 at 2026-09-27 (quote a floor, never an exact count). The content checks changed twice:
+> - **`RERUN_NOTE_RE` gained a property arm** — an explicit "cannot be re-run" (hyphen optional, `can't`/`can not`
+>   too). The mechanism inventory found **28 of 46** re-run-note flags false: the protocol permits a
+>   "near-verbatim" note and the regex accepted two exact phrasings. Replayed over 437 prod SYNTHESIZE comments, 0
+>   regressions. A bare "fresh PIPELINE task" arm was deliberately NOT added — it also matches advice.
+> - **An escalated exit (`result.escalatedExit`) is no longer asked for the deliverable pointer or the re-run note** —
+>   both are FALSE on a task the protocol leaves IN_PROGRESS ("Escalate. Do NOT synthesize."). 9 escalated exits since
+>   2026-09-16 had been flagged for it. The breadcrumb is still demanded, and `hasDeliverablePointer` /
+>   `hasRerunNote` are still RECORDED. This **reverses the 2026-09-16 "escalated exit is NARROW" test's premise**
+>   (that both checks "remain meaningful" on an escalation) — against the protocol's own text. Every
+>   PROTOCOL_STEP_SKIPPED count before 2026-09-27 (e.g. "61 in 30d") is inflated by both defects.
 
 **When extending:** if you add a new harness mode or required step, update `validatePipelineProtocolSteps` AND add a regression test. Mode detection lives in `detectHarnessMode()`; per-mode signatures in the body of `validatePipelineProtocolSteps()`. Content patterns live as module-level regex constants (`BREADCRUMB_RE`, `DELIVERABLE_POINTER_RE`, `RERUN_NOTE_RE`). **Be strict about the FACT, never about the DECORATION** (corrected 2026-09-15): `BREADCRUMB_RE` demanded `**Child stage:** \`<id>\`` and rejected a comment that literally began `Child stage: cmty0x9jo...`, emitting a false degradation into a gate input. Nothing parses these strings — the GUI Pipeline Children panel is metadata-only. A pattern that asserts markdown while appearing to assert semantics does not sharpen the signal, it manufactures noise. Loose patterns dilute; format-bound patterns misfire. Match what the step must ACHIEVE.
 
@@ -740,6 +762,10 @@ Moved verbatim from `.claude/agents/pipeline-harness-specialist.md`; the agent k
 
 - **Retry-band keep-best (Phase 1 SHIPPED `d2544f5a`)**: the orchestrator's 50-69 retry re-executes on BYTE-IDENTICAL inputs (F1 — the diagnostic comment never reaches the child prompt; retries are blind re-rolls), so a retry can REGRESS. FIX: a stamped retry that catastrophically degrades vs its target self-supersedes at terminal persist; every authoritative consumer (chainer/report-md/policy) now filters via the shared selectAuthoritativeExecution. The BAND SURVIVES ON PROBATION — its text was corrected (stop implying feedback reaches the retry, seed-protocol-prompts.ts orchestrator protocol, the ONE canonical policy domain protocols inherit) but the narrow-or-drop verdict is Phase 3, earned from suppression-log instrumentation. Phase 3 also wires F1 (real feedback into the child) — yours. Design you led: `cline_docs/reviews/retry-band-keep-best-2026-07-04/`.
 
+  *(Annotation 2026-09-27, not part of the evicted text: "Phase 3 also wires F1" did not happen. The findings-carrying
+  retry became RWF; Stage 1 shipped the prerequisites, Stage 3 — the retry itself — was STOPPED on the Stage 2
+  numbers. The band remains a blind re-roll, now capped by Wave C. See § "2026-09-27" below.)*
+
 ### Reading a CHILD's deliverable body — F14 history (2026-07-15 → 07-23)
 
 - **Reading a CHILD's deliverable body (F14 gotcha, T4b live 2026-07-15; retrieval verb corrected
@@ -829,3 +855,146 @@ check whether stream is passing the input. The 2026-05-14 audit found
 stream wasn't passing `confidenceCapped`/`originalConfidence` because
 it doesn't implement the cap logic yet (followup B in
 `cline_docs/types-cleanup-followups-2026-05-13.md`).
+
+
+## 2026-09-27 — what a harness can and cannot do to its children (the agent-run config-guard family), and the day's other shipped mechanics
+
+Protocol 11 self-update; every claim grep-confirmed against the tree on 2026-09-27. Greps with expectations: paired
+discovery § "2026-09-27". Register rows: RWF, RWF-X (X11, X15–X21), MI-13, EG-1/EG-2, EF-DL1/EF-DL2
+(`cline_docs/follow-ups/OPEN-REGISTER-2026-09-23.md`).
+
+### The config-guard family — one module, `lib/services/leg-child-override.ts`
+
+A **pipeline child** (`isLegChild`) = its stage's `metadata.harnessTaskId` is a string, OR a PIPELINE task claims the
+stage via `metadata.pipelineStageId` (reuses `harnessOwnedTaskIds` — literal `type='PIPELINE'`, index-backed). That
+covers a harness's children, a program's legs and Node C. No query runs unless a disallowed key is present.
+
+| Guard | Commit | Door | Refuses | Caller scope | Code |
+|---|---|---|---|---|---|
+| **D1** | `3090ed42` | `agent.execute` `overrideConfig` (`agent-execute-handler.ts`) | any key but `modelParameters`, and any `modelParameters` key outside `MODEL_PARAMETER_KEYS`; `prompt` (replaces the directive), `inputContext` incl. `{}` (suppresses re-chaining AND skips the interface-contract guard), `agentRole` (changes the key the verdict parser reads), `maxRetries`/`timeout` | **everyone** — the hazard belongs to the task | `LEG_CHILD_OVERRIDE_REFUSED` |
+| **X18** | `465d63a7` | same | `modelParameters.model` and `.provider` (either selects the model) | everyone | same |
+| **X15** | `ba188432` | every execution-config build | `EXECUTION_IDENTITY_KEYS` = `agentRole`, `prompt`, `inputContext`, `priority` — STRIPPED from `modelParameters` (presence-based, so `null` too) at all three merge sites: `agentTaskService`, `agentExecutionConfigBuilder` (how pipeline children run), `resolveExecutionModelParams` (the frozen snapshot); both model-parameter schemas also reject them early | **every task**, not only children | warn `MODEL_PARAMETERS_IDENTITY_KEY_STRIPPED` |
+| **X16** | `ba188432` | MCP `agent.execute` `overrideConfig` | untyped values: `maxRetries` int 0..10, `timeout` int 1000..`MAX_TASK_TIMEOUT_MS` (3,600,000 ms), and `prompt`/`agentRole`/`inputContext`/`mcp*` typed by the SAME object the REST route uses (`AGENT_EXECUTE_OVERRIDE_FIELDS`); the nested `modelParameters.timeout/maxRetries` bypass closed | everyone | validation error |
+| **X17** | `3a5d2b6a` | `agent.configure` (`agent-configure-handler.ts`) | any call on a pipeline child from inside an agent run — after the access check, before any template lookup or write | **agent runs only** (`routeOpts.callingExecutionId`) | `LEG_CHILD_CONFIGURE_REFUSED` |
+| **X21** | `26a7ad05` | `task.create` / `task.update` (`tasks-action-router.ts`, after validation, before any handler) | `modelParameters` anywhere — top level, `metadata`, a JSON-string `metadata`, nested updates | **agent runs only**; on ANY task | `AGENT_MODEL_PARAMETERS_REFUSED` |
+
+All three codes map to **400** (`lib/errors.ts` — an unmapped code defaults to 500, the D1 review's F5).
+
+**So, today — a harness CAN:** create children, `agent.assign` their templates (the sanctioned verb), execute a child
+with known model-tuning keys, re-execute a child within the Wave C cap, comment, and complete its own task.
+**It CANNOT:** change a child's prompt, role, inputContext, model or provider — per run (D1/X18), persistently via
+`agent.configure` (X17), or by pinning `modelParameters` on any task (X21); nor can any `modelParameters` object
+anywhere carry an identity key (X15).
+
+**Why each was built, measured first:**
+- **X18 (Steve, option B):** the judged party choosing its judge's model was the one self-interested lever D1 left
+  open — a harness re-running its own reviewer on a weaker model. Option C (harness-only) was rejected to keep the
+  rule caller-independent. The model is set on the task or template instead — a visible, persistent, human act.
+- **X17:** 816 harness runs in 90 days set `prompt`/`agentRole` on a child **zero** times; they called `agent.configure`
+  twice (2026-08-27), both template-only — and `agent.configure` with no prompt **synthesises one**, so both calls
+  silently replaced the child's prompt. A human configuring a child is not refused.
+- **X21 (seed-is-truth, Steve 2026-09-27):** 59 tasks carry their own prompt (51 synthesised by configure saves) and
+  50 pin a model (0 matching their template); both outrank the template at run time, so **a reseed never reached
+  them**. `report:template-freshness` now prints a "tasks overriding their template" FACT section (exit code
+  unchanged). 0 of 1,445 agent `task.update` calls in 90 days set `modelParameters`. `agent.configure` stays on MCP by
+  decision.
+- **X15:** sec-ops' suggested fixes (spread known keys only / move the spread) would have broken the template path,
+  which puts `systemPrompt`, `useSystemPrompt`, `maxRetries` and `timeout` into `modelParameters` on purpose — hence
+  a strip of four named keys, not an allowlist. Prod: 0 tasks / templates / 60-day executions carried any of them.
+
+⚠️ **The agent-only guards key on `routeOpts.callingExecutionId`, which ONLY the tool loop threads.** A new
+agent-reachable entry path that does not pass `routeOpts` exempts itself silently (the router threading is pinned by
+`test:agent-configure-leg-child`). REST and stream routes are human-only, which is why they are out of scope.
+
+### Adjacent RWF-X fixes the harness depends on
+
+- **X19 `d0fb4e4f` — an execution config's `timeout` is SECONDS.** 994 of 994 prod executions (30 days) recorded
+  300–900: the template's seconds always won the merge over the task column's milliseconds. `tasks.timeout` and
+  `overrideConfig.timeout` (ms by contract) now convert through ONE helper, `msToExecutionTimeoutSeconds`
+  (`template-model-params.ts`), at both builders and the engine default; a sub-1000 ms value is treated as absent. An
+  explicit per-run override now wins over the template. Nothing reads `config.timeout` yet — the unit is fixed before
+  anything does.
+- **X20 `9c037761` — `overrideConfig.mcpToolId`/`mcpWorkflowId`: NO ownership check, deliberately.** Nothing
+  dereferences them (tool selection is `config.mcpTools`, by name); 0 of 2,132 executions and 0 tasks carry either.
+  The trigger is written AT the field (`task-validation.ts`): any code that starts resolving them ships the
+  caller-may-use check.
+- **X11 `7d81b2b9` — surrogate-safe cuts, well-formed JSON persist.** A 197-unit description cut through an emoji's
+  surrogate pair put a lone `\ud83d` into a `task.list` tool result, which persisted into a `pipeline-index.json` as
+  invalid jsonb — **any query casting the table threw**. `lib/utils/surrogate-safe.js` (`sliceSurrogateSafe`,
+  `stringifyWellFormed`) now backs the cut sites, and the terminal persist serialises the JSON artifact and
+  `error.json` well-formed (U+FFFD, count logged; byte-identical on well-formed input, key order preserved). Rows
+  persisted BEFORE the fix can still carry the escape — the mechanism inventory filters them before its `::jsonb`
+  cast and counts them.
+
+### RWF Stage 2 measured → Stage 3 STOPPED (Steve, 2026-09-27)
+
+`cline_docs/reviews/rwf-stage2-2026-09-27/RESULTS.md` (`c0cb13d3`, read-only, window 2026-09-10 → 09-27):
+- **M1** strict reach of the proposed findings-carrying retry (clause-(f)-class only): **2 of 38 infra NEEDS-REVISION
+  verdicts (5%)**; 24% on the broad reading. The largest non-eligible group is **U** — legs with nothing to review
+  because the harvest service was unreachable.
+- **M2** Alternative B (strip the design's containment conclusion before the Author sees it): the conclusion is SPREAD
+  across 2–7 headed sections in 11 of 12 Architect outputs ⇒ not delimitable ⇒ **dropped**.
+- **M3** of 16 non-releasable programs, **0** were sunk by write-up legs alone (the synthesis predicted ≈34% from an
+  independence assumption).
+- **M4** one failed pipeline-child execution in 18 days (a deploy reload) ⇒ **no X12 "re-run a FAILED child" verb**.
+
+**Decision:** Stage 3 not built, the tag-grammar soak not built, Alternative B dropped, no X12 verb. **Re-open only on
+NEW evidence on a fresh window:** strict (clause-(f)-only) reach ≥ 10% of infra NR verdicts, OR ≥ 1 program
+non-releasable solely through write-up legs. Recurring classes route to source fixes instead (U harvest availability ·
+N quotable validation commands · E/P evidence + provenance · GS-R5-M14 pt 3). **Consequence for this specialist:** the
+50–69 retry stays a blind re-roll; Stage 1 (the chokepoint cap, keep-best like-with-like, verdict freshness, the D
+guards) is the shipped state and is what to reason from.
+
+### MI-13 — the mechanism inventory, now a quarterly script
+
+`scripts/report-mechanism-inventory.sh` (read-only against prod, ~30s; CLAUDE.md health-run item). Baseline 2026-09-27
+(`cline_docs/reviews/mechanism-inventory-2026-09-16/INVENTORY.md`): 38 alive · 14 dormant (trigger recomputed, absent) ·
+1 partially blind · 5 unmeasurable. Every 🔴 line is 0 by construction; each ⚪ is its control. Findings, all mine:
+- **MI-1 `34f3bc8d`** — the partially-blind one: the re-run-note validator (see § 9's 2026-09-27 note).
+- **MI-2 `66a0f8d2`** — two drifted documented greps in the paired discovery (Wave C moved the `chainedPredecessors`
+  assignment; the `harnessTaskId` reader count rose). Audit 257/0/0 at the time.
+- **MI-3 `ab760ea2`** — the "stuck leg" was **Steve's preserved test fixture**: program root
+  `cmu0x9d1m000kyx0dloebjb3u`, the only specimen of the SYNTHESIZE dead-end class
+  (`cline_docs/reviews/synthesize-empty-turn-hang-2026-09-14/`). `runDisposition` gained **`preserved`** (closed set
+  `abandoned | superseded | preserved`, still fails closed on any coined state) — `abandoned` was the dangerous lie, it
+  invites the next tidy-up to re-run it. `report:run-liveness` has its own `preserved (deliberate specimen — do not
+  re-run)` bucket; the inventory names fixtures in section 0. **Never re-run it**: execution retention is count-based,
+  so two more runs evict the failing execution and destroy the specimen. Recorded on prod 2026-09-27; verified live
+  (preserved 1, SETTLED 0, UNEXPLAINED 0).
+- **MI-4** — the five 09-25/26 mechanisms (`verdictFreshness`, `reExecutionExit`, REACTOR_BUDGET_EXHAUSTED, REAPED,
+  `TRUNCATED_PARTIAL_OUTPUT`) are re-measured at the next health-run: dormant-by-age is where a mechanism turns out
+  to be inert.
+
+### Reviewer remit and the dialect lint (pointers — production is execution-facts', consumption is mine)
+
+- **EG-1 `4d1d21d7` (the evidence-grading soak decision, prod live + reseeded 2026-09-27):** over 41 `change_reviewer`
+  verdicts since 2026-09-20, NEITHER fell 26–27% → **0%**, and copy FIDELITY was never once genuinely verified (0
+  blocking items). So evidence **PRESENCE** stays the reviewer's (section present, source named, source permitted —
+  may block); **FIDELITY** is judged only WHERE the source is in context (the source wins); otherwise it is not
+  graded, raised or blocked on, and never asserted as fabrication. Protocols: network 1.15.0, kubernetes 1.13.0,
+  terraform 1.7.0, observability 1.4.0; Node C unchanged (its harvest-authority duty IS the source-in-context case).
+  ⚠️ **Series break:** the ACCEPTED-line rate falls by construction after this reseed — never compare across the cut.
+  A leg reviewer that still raises fidelity is now a guidance violation; the provenance tripwire's string test still
+  applies.
+- **EG-2 CLOSED, no build:** contracts omit `platformDialect` exactly where there is no dialect defect class
+  (kubernetes + terraform: 0 dialect defects ever, by any catcher). Re-open trigger: a dialect defect that ESCAPES
+  review on a leg whose contract lacked `platformDialect`.
+- **EF-DL1 `44855220`:** the ABSENCE half no longer flags a banned token inside a grep-family quoted pattern (a check
+  FOR the token). Nested `searchPatternExempt`, emitted only when non-empty.
+- **EF-DL2 (open, execution-facts, panel in progress at
+  `cline_docs/reviews/ef-dl2-dialect-lint-classification-2026-09-27/`):** the FALSE-NEGATIVE direction — the prose
+  window does not stop at a heading, so real config in a harvested-labelled section is scanned by neither half
+  (block kinds move in 66 of 100 contracted packages when bounded). Until it lands, a **clean** dialect-lint fact is
+  weaker evidence than it reads — the R12 "mechanical beats prose is a prior" caveat now cuts in both directions.
+
+### Deploy mechanics learned 2026-09-27
+
+- **A docs-only push does NOT deploy.** `production-deploy.yml` `paths-ignore`: `.github/**`, `*.md`, `docs/**`,
+  `cline_docs/**`, `.claude/**`, `.gitignore`. A fix whose only changed paths are there needs a code-bearing push (or a
+  manual trigger — ask first) before "live" can be claimed. (The MI-3 deploy was first missed this way.)
+- **The memory pre-flight refuses below 5120 MB available** (`blue-green-deploy.sh`), fail-closed. On 2026-09-27 it
+  refused at **5027 MB** on a transient process. `9faec7dd` corrected the refusal text — it used to advise tearing down
+  rigs that no longer live on prod (rigs run on devext since 2026-09-27; never stop cloudflared). The gate itself is
+  unchanged.
+- Protocols go live at deploy; **templates wait for the manual reseed of the owning seeds** — do not leave them
+  disagreeing (EG-1 and D2 both reseeded the four `change_reviewer` rows immediately: 0 STALE / 40 CURRENT).

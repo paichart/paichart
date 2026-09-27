@@ -91,8 +91,14 @@ you cannot trust, which is worse than no evidence.
    contributes no platform knowledge of its own, so a line absent from the exemplar is a line it can
    never require. The tool NAMES what it skipped (`checked:false` always carries a reason; a
    placeholder line whose literal prefix is too short is skipped and listed) — read those lines, do
-   not skim past them. `blockKinds` tells you "0 violations because clean" apart from "0 violations
-   because nothing was classified as config".
+   not skim past them. `blockKinds` is the CLASSIFIER'S READING of the package (a count of fenced-block
+   LINES per kind), not ground truth. It separates "0 violations because clean" from "0 violations
+   because nothing was scanned" only in the TOTAL case — no `candidate-config` key at all. A mis-kinded
+   config block moves lines between keys without making the stamp look empty (EF-DL2 measured 32 real
+   config blocks exempted that way), so a non-zero `candidate-config` count does not prove the config
+   you care about was scanned: open the package and check that its applied config sits in blocks the
+   lint would call candidate config. Compare `blockKinds` across legs only when their
+   `dialectLint.classifier` matches.
 3. **The mechanical fact can be WRONG — read it against the leg's INTENT.** The check assumes a leg
    DEPLOYS the stanza. A *removal* leg legitimately contains none of it, and a package that correctly
    says "the IS-IS stanza is untouched by this change, not restated below" is doing the right thing —

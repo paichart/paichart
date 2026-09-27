@@ -41,6 +41,7 @@
   "exclude": [
     "node_modules",
     "scripts/**/*.ts",
-    "services/**/*.ts"
+    "services/**/*.ts",
+    "cline_docs"
   ]
 }

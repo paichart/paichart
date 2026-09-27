@@ -63,6 +63,7 @@ const BUCKETS = [
   'waiting (open human gate)',
   'halted (awaiting human)',
   'escalated (terminal verdict)',
+  'preserved (deliberate specimen — do not re-run)',
   'disposed',
   'SETTLED (harness not re-entered)',
   'UNEXPLAINED',
@@ -145,6 +146,9 @@ async function main() {
     let bucket: Bucket;
     if (liveIds.has(t.id)) {
       bucket = 'RUNNING';
+    } else if (readRunDisposition(md)?.state === 'preserved') {
+      // A human recorded that this run is KEPT as it is (a test fixture or evidence) — MI-3, 2026-09-27.
+      bucket = 'preserved (deliberate specimen — do not re-run)';
     } else if (readRunDisposition(md)) {
       // A human recorded that this run is no longer being pursued.
       bucket = 'disposed';

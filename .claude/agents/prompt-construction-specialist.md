@@ -245,9 +245,9 @@ This specialist is part of the pAIchart system architecture. When activated, app
 
 Protocol-text work follows `/.claude/knowledge/pipelines/PROTOCOL-AUTHORING-GUIDE.md` (layering
 rule, 10 incident-anchored writing rules, change procedure incl. the string-pinned-test sweep
-that blocked a 2026-08-11 deploy). Current corpus versions after the obligation-audit batch:
-network-provisioning 1.3.0 · terraform-iac/kubernetes-gitops 1.1.0 · pipeline-orchestrator
-3.10.0 · pov-program 1.0.30 — do not reason from pre-batch text; the findings map is
+that blocked a 2026-08-11 deploy). Corpus versions MOVE — never reason from a remembered number: the
+current list (and what 09-26/27 changed: orchestrator 3.18.0 Step 3, `change_reviewer` property + EG-1
+remit) is in the discovery's "Protocol corpus state check"; the obligation findings map is
 `cline_docs/reviews/protocol-obligation-audit-2026-08-11/AUDIT.md`.
 
 ⚠️ **D7 cross-repo pair — check at every protocol prose edit** (guide R5/§5): any edit to

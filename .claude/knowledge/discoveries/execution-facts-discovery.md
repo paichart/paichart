@@ -58,9 +58,11 @@ grep -c "computeDerivationContainmentFact\|computeDialectLintFact\|computeContra
 grep -c "^export function" lib/agents/harness/derivation-containment.ts   # expect 12 — the pure surface (parsers, per-kind checks, disposition, usage check). It is a pure module by contract: no prisma, no logger, text in / fact out
 grep -c "^export function" lib/agents/harness/dialect-lint.ts   # expect 7 — re-measured 2026-09-11 (was 5): +fencedBlockLines and +isSeparatorLine, both exported for net #3 so it consumes THE classifier instead of forking a second rollback extractor. runDialectLint plus the extractors shared with contract-propagation-enrichment (a change to what counts as a required line reaches BOTH consumers)
 grep -c "^export function" lib/agents/harness/marker-presence.ts   # expect 2 — H-4 (2026-09-10), the newest fact: which machine-parsed blocks the platform found
-grep -c "blockKinds" lib/agents/harness/dialect-lint.ts   # expect 7 — the block classifier ({candidate-config, rollback, expected-output, command, harvested-state}).
-grep -c "restoreIntent" lib/agents/harness/dialect-lint.ts   # expect 6 — added 2026-09-11 with net #3. ⚠️ READ WHY IT IS A SEPARATE AXIS AND NOT A `kind`: for dialect-lint, `rollback` and `harvested-state` are both simply exempt from the scan, so the precedence between them is arbitrary and the file says so. For rollback-containment that precedence DECIDES the answer, and measured on the live R19-P4 package it goes the wrong way — the rollback preamble says "harvested", so one of three device blocks lands `harvested-state` and a `kind === 'rollback'` filter sees 34 restore lines instead of 51, position-dependently. restoreIntent reads the heading ANCESTRY, which does not split
+grep -c "blockKinds" lib/agents/harness/dialect-lint.ts   # expect 10 — re-measured 2026-09-28 after EF-DL2 commit 2 (was 9; +1 the classifier-3 history line). Prior same day (was 7; +2 from the EF-DL2 F1 commit: the `classifier` field doc and DIALECT_LINT_CLASSIFIER doc name it). ⚠️ blockKinds counts LINES, not blocks, and is the CLASSIFIER'S READING, not ground truth — values are comparable only between stamps with the same `classifier`. The block classifier ({candidate-config, rollback, expected-output, command, harvested-state}).
+grep -c "restoreIntent" lib/agents/harness/dialect-lint.ts   # expect 8 — re-measured 2026-09-28 after EF-DL2 commit 2 (was 7; +1 the call-site note that the axes are unaffected by the harvest change). Prior same day (was 6; +1 the F1 walk comment citing the live `restoreIntent: false` defect). Added 2026-09-11 with net #3. ⚠️ READ WHY IT IS A SEPARATE AXIS AND NOT A `kind`: for dialect-lint, `rollback` and `harvested-state` are both simply exempt from the scan, so the precedence between them is arbitrary and the file says so. For rollback-containment that precedence DECIDES the answer, and measured on the live R19-P4 package it goes the wrong way — the rollback preamble says "harvested", so one of three device blocks lands `harvested-state` and a `kind === 'rollback'` filter sees 34 restore lines instead of 51, position-dependently. restoreIntent reads the heading ANCESTRY, which does not split
 grep -c "^export function" lib/agents/harness/rollback-containment.ts   # expect 5 — net #3's pure surface: scopeRestoreLines (the classification), checkRollbackContainment (trimmed-exact-line membership), computeRollbackDisposition, isCommentLine, isDesiredStateLane (the lane predicate, 2026-09-11). AUTHOR_LEAF_ROLE_RE, DESIRED_STATE_LANES and ROLLBACK_SCOPE_NOTE are consts and do not count here. The §6 RENDER is deliberately NOT here — it lives in render-rollback-containment.ts (H3, 2026-09-11), split along the ownership seam (prompt prose vs predicate) rather than co-located like renderMarkerPresence; the module header states why
+grep -c "^    name: '" lib/agents/harness/mechanical-nets.ts   # expect 7 — measured 2026-09-27. Registry ENTRIES, not net names: 6 names, rollbackContainment registered at two points. Was 6 until RWF C3 (2026-09-26) added verdictFreshness at leg-synthesize, whose producer is verdict-freshness-enrichment.ts and is NOT in the ls-count above (that list is the containment/dialect family). Entry order is byte-contract (the equivalence gate)
+grep -c "stringifyWellFormed" lib/services/execution-terminal-persist.ts   # expect 3 — X11 (2026-09-27): import + error.json + the JSON artifact (result.json and pipeline-index.json share one path). Every fact this domain stamps is serialised through it, so no stamp can persist a lone surrogate. If this hits 0 the one-bad-row-breaks-every-table-cast class is back
 grep -c "computeRollbackContainmentFact\|hoistRollbackContainment" lib/agents/harness/mechanical-nets.ts   # expect 4 — re-homed and re-measured 2026-09-12 (the import pair plus one call each). Net #3 is wired at TWO POINTS, and the registry expresses that as two entries keyed (name, point) under ONE name with different enrich halves — compute at the Author leaf persist, hoist at the leg SYNTHESIZE. That shape is what appliesTo had to support and is pinned by R8 in test-net-registry.ts
 ```
 
@@ -92,6 +94,8 @@ grep -c "dialectLint\|contractPropagation" lib/mcp/server/tools/advanced/lean-ca
 grep -c "chainedContext" lib/mcp/server/tools/advanced/lean-card-facts.js   # expect 4 — measured 2026-09-16 (A11/C8, cross-pipeline delivery). The F-A coverage clause PLUS the `inherited N of M cross-pipeline from leg <id>` clause. ⚠️ The inherited clause is SUPPRESSED when nothing was inherited and nothing was on offer — deliberately, because `inherited 0 of 0` carries no information and this line is read by the pov-program protocol's SYNTHESIZE Step 2, so every execution in the platform would grow a null clause. The case that must NOT be suppressed is entries OFFERED and none taken: it renders the denominator and the skip REASONS (F7 — render WHAT, not how many). Pinned by CC3/CC4/CC5 in test-lean-card-facts.ts, and the four inherited fields ride NESTED inside `chainedContext` (E3b) — a sibling on the result.json root would be stripped by pickResultJsonSummary. ⚠️ `inheritedSkipped` is a SEPARATE list from `notChained` on purpose: the program gate treats `notChained.length > 0` as BLOCKING and these skips are benign by construction, so merging them would turn a fail-open into a fail-closed
 grep -c "contractApplicability" lib/mcp/server/tools/advanced/lean-card-facts.js   # expect 3 — measured 2026-09-12. It rides NESTED inside both facts above (E3b) and renders as their QUALIFIER, never as a fact of its own: a standalone pipeline has no Program Interface Contract BY DESIGN, and a reader told only "no-contract" grades it as a gap (9 of 37 archived legs did exactly that). Pinned by CA1
 grep -c "deliverableTruncated" lib/mcp/server/tools/advanced/lean-card-facts.js   # expect 4 — measured 2026-09-25 (register E1). The `truncation:` segment, keyed on `toolLoop.deliverableTruncated === true` and NOTHING else, so every non-truncated card is byte-identical (TR1). It exists BESIDE `errorCategory: TRUNCATED_PARTIAL_OUTPUT` because errorCategory is FIRST-WINS: five categories outrank TRUNCATED_*, so a cut-off deliverable can be stamped truncated while the card names another category (TR3 — the A1 class; 3 of 7 note-bearing prod rows carried a different category). The retry state names only facts PROVABLY about the final turn: a retry whose own stop reason is not `max_tokens` ran on an EARLIER turn and is rendered as such, never as if it described this one (TR4). No ABSENT token — a pre-F2 artifact has no field and a blocking-flavoured token would be false (TR5). All nested under the whitelisted `toolLoop` (E3b; parity F2-3)
+grep -c "verdictFresh" lib/mcp/server/tools/advanced/lean-card-facts.js   # expect 9 — measured 2026-09-27 (RWF C3). TWO facts from ONE function (computeVerdictFreshness): the read-time `verdictFresh` (reviewer's agent.results card, "fresh NOW", flips retroactively) and the leg-synthesize STAMP `verdictFreshness` ("fresh when stamped", immutable). The stamp renders only on `different` or an unchecked reason other than no-reviewer/program-tier, so `same` prints NOTHING — safe only while it has no consumer; a gate on it needs a positive token in the same commit
+grep -c "supersession" lib/mcp/server/tools/advanced/lean-card-facts.js   # expect 5 — measured 2026-09-27: superseded-by / comparison-skipped (changed-input | input-unknown, "this run is authoritative") / NOT-compared (keep-best-error). supersession is whitelisted but NOT a net — computeSelfSupersession writes it (library, RWF Wave C)
 npm run test:lean-card-facts   # the coupling suite: it asserts the enrichment's WRITE site and the card's READ site stay paired. Neither file was wrong in isolation for the 2026-08-03 A1 defect; the PAIRING was, and nothing tested it
 ```
 
@@ -366,6 +370,7 @@ not an earning justification.**
 npm run test:derivation-containment && npm run test:dialect-lint && npm run test:dialect-lint-enrichment \
   && npm run test:rollback-containment && npm run test:marker-presence \
   && npm run test:lean-card-facts && npm run test:execution-artifacts-parity
+npm run test:authoritative-result-read && npm run test:execution-selection-coverage   # ANY net that reads an artifact (RWF Wave B, 2026-09-26): the read must go through readAuthoritativeResultField (a closed field union — a new field is a new union member + literal query), and the coverage lock fingerprints every artifact read with no file-level escape
 npm run test:containment-public-parity   # ONLY when the mirrored pure module changed
 npm run validate:pagination              # ⚠️ SEE BELOW — not in the pinned set, and it is a DEPLOY GATE
 bash scripts/audit-discovery-greps.sh    # every GREP expectation this file states — ⚠️ NOT the `npm run` ones
@@ -542,11 +547,10 @@ an Arista EOS target) past an APPROVING reviewer and was refused at the operator
 apply; R3 then RE-EMITTED `metric-style wide` past an interface contract that explicitly banned it.
 Prose guards lost twice; the check moved to code (`lib/agents/harness/dialect-lint.ts`).
 
-🔴 **STATUS — read before citing it as a guard: PHASE 1 = pure module + fixtures ONLY. It is NOT
-called from the engine, emits no fact, appears on no card, and has NEVER run against a live
-execution.** Phase 2 (wiring beside derivation-containment enrichment in execution-core, a nested
-fact, artifact-parity pins) is open: `cline_docs/follow-ups/igp-t1-campaign-followups-2026-08-23.md`
-item 2. Do not describe it as protecting a run until grep C below returns non-zero.
+~~PHASE 1 = pure module + fixtures only~~ — **SUPERSEDED 2026-08-25**: Phase 2 is wired (enrichment
+`dialect-lint-enrichment.ts`, stamped `dialectLint` on the leg at SYNTHESIZE through the net registry,
+whitelisted, rendered on the lean card). Grep C below is the proof and is non-zero. *(Corrected 2026-09-27,
+EF-DL1 — this paragraph had kept telling readers the net ran nowhere for a month after it went live.)*
 
 Design notes that matter when wiring it: it scans **fenced code blocks ONLY** — prose is exempt BY
 DESIGN, because requirements/contracts legitimately NAME banned tokens when stating the rules (R6's
@@ -555,15 +559,57 @@ Token matching uses word-ish boundaries so a token `is` never fires inside `isis
 (checked/reason/tokensConsidered/violations), never a verdict — absence is a NAMED reason
 (`no-contract` / `no-banned-token-list` / `no-fenced-blocks`), never a silent pass.
 
+**Classifier cut 2026-09-28 — `dialectLint.classifier: 2` (EF-DL2 commit 1, F1).** The heading-ancestry walk
+is fence-aware. Replayed over the archive before shipping (lane-1 corpus, prod read-only): **dialectLint —
+3 of 97 contract packages move `blockKinds`, 0 violations, 0 PRESENCE**, all terraform; **net #3 — 87
+`restoreIntent` blocks in 22 of 220 Author packages, 22 STAMPED `blocksScanned`/`excluded` moves (21 terraform
+via `lane-not-supported`, 1 observability), 0 dispositions.** Nothing reads `blockKinds` or net #3's
+`blocksScanned`/`excluded` programmatically (grep of lib/ and app/, 2026-09-28), so net #3 carries no version
+field of its own. **Named residuals, pinned as fixtures and re-measured at the health-run:** the TITLE LEAK —
+a terraform Author titled "… HCL Rollback Author" now reads every validation block as rollback (2 packages, 19
+blocks; F028, a shipped rego policy, becomes a new false SKIP) — and F035 (a `## Consumed Values` marker JSON
+becomes candidate-config, the EF-DL3 false-SCAN floor). **The equivalence gate cannot pin F1 yet**: every
+specimen is `no-contract`, which never runs the classifier; its `classifier` ARM is declared unexercised and
+self-checked (E3) until a post-deploy contract-bearing leg is archived.
+
+**Classifier cut 2026-09-28 — `dialectLint.classifier: 3` (EF-DL2 commit 2, option (ac)).** The 3-line prose
+window stops AT the first heading (heading line INCLUDED — `label` is byte-identical, 0 line moves archive-wide;
+excluding it moved `label` on 59 blocks, and net #3 scopes on `label`), and `harvested-state` is decided only from
+the block's own label (`labelProse`, ≤ 120 chars) or the heading ancestry. **This changes the harvest decision's
+INPUT** — approved as such (Phase D decision 1). Replayed commit 1 → commit 2 over the archive (lane-1 corpus, prod
+read-only; shipped module byte-identical to the panel's `f1ac` variant on **362/362** texts): **dialectLint —
+`blockKinds` moves on 88 of 97 contract packages (26 of the 30 banned-token packages), lines harvested-state −973,
+candidate-config +761, rollback +141, command +63, expected-output +8; 0 violations; PRESENCE: exactly 2 count
+moves, both corrections — `cmt9vs7ub000eyxmjrdx4ejjn` 0/10 → 10/10 and `cmuhmm2u5006byxcq64ndua1v` 0/2 → 2/2 —
+plus 4 network packages whose per-line `occurrences` rise (a second device's copy now counted) with
+`linesPresent` unchanged. net #3 — 0 scope, 0 fact, 0 disposition moves on 220 Author packages; 0 `label`, 0
+`restoreIntent` moves.** Fixtures: the EF-DL2 block in `test-dialect-lint.ts` (both directions; D042 and D052
+must stay exempt; D098 a NAMED pre-fix residual, not a trigger).
+
+**Post-fix gold-census baselines (the health-run re-measure compares against these):** false SKIP **2 blocks /
+21 lines** (F028 title leak, D098), false SCAN **109 / 269** (operator commands 59, marker/derivation JSON 36,
+allocation JSON 14; **0 expected-output**) on the 310-block census; control 0/0 and 15/24 (the EF-DL3 floor,
+unmoved). Re-run: `/tmp/ef-dl2-lane1/` holds the prod pull (NOT committed — re-pull with
+`lane1-data/pull.sql`, lone-surrogate filter included); build the per-block kinds from the SHIPPED
+`fencedBlockLines` keyed `leg:firstBodyLine` and score with `lane1-data/score2.py`'s definitions (false SKIP =
+label C and kind ≠ candidate-config; false SCAN = label ∉ {C, AMB} and kind = candidate-config). Labels:
+`lane1-data/labels.txt` + `labels_ctl.txt` (second blind labeller agreed C-vs-non-C 104/104). **A new gold-labelled
+false SKIP on a package stamped `classifier ≥ 3` is the (d) re-open trigger** — the comment at
+`HARVESTED_STATE_PROSE` holds it.
+
 ```bash
 npm run test:dialect-lint                                                   # expect >=64 — FLOOR per the 2026-09-14 ruling. ⚠️ CORRECTED 2026-09-11, and the correction is the finding: the documented value had been 27 since 2026-08-24 while the suite had grown to 64, and NOTHING CAUGHT IT because audit-discovery-greps.sh audits GREPS, not `npm run` lines — so this expectation sat unverified for two and a half weeks across several commits that added fixtures. Verified against HEAD before AND after the net #3 build (64 both times), so the number is the suite's real size, not a side effect of that work. Same class as the silent-exclusion bug the audit script itself had: an expectation nothing runs degrades to decoration. Prior notes: 27 at 2026-08-24 (was 16; +11 PRESENCE-half fixtures on the live R7 package, mutation-verified), 2026-08-23. Fixtures are LIVE campaign text: R1/R3 defect packages + the R6 CLEAN winner (the false-positive trap: it names every banned token in prose)
 grep -c "^export function" lib/agents/harness/dialect-lint.ts               # expect 7 — re-measured 2026-09-11 (was 5; +fencedBlockLines +isSeparatorLine, exported so net #3 consumes THE classifier rather than forking a second rollback extractor). Prior: 2026-08-26 (was 3): runDialectLint + extractBannedTokens + extractCanonicalStanzas + canonicalStanzaNeedles (shared with contract-propagation-enrichment, so a change to what counts as a required line reaches BOTH consumers) + splitStanzaLines (separator tolerance, IGP-T1 R12). The two extractors are exported so the wiring layer and tests can reuse the contract-shape-tolerant extraction (contracts have used bannedTokens/banned_token_list and canonicalIsisStanza/canonicalStanza_P1_template/canonicalStanzaExemplar across rounds)
 grep -rn "runDialectLint" lib/ --include="*.ts" | grep -v "lib/agents/harness/dialect-lint.ts"   # expect 4 — re-measured 2026-08-25: PHASE 2 LANDED and this tripwire FIRED exactly as written. All 4 hits are dialect-lint-enrichment.ts (import + call + 2 comment refs); the engine call site is execution-core.ts, which calls computeDialectLintFact, not runDialectLint directly. Its former text was a zero-expectation tripwire promising that a non-zero result meant Phase 2 had landed and every "it gates nothing" claim in this section and the specialist config was stale — it did, they were, and both were corrected the same day. (The old expectation is described here rather than quoted: a literal expect-N string inside prose is read by audit-discovery-greps.sh as a live expectation, which is how this very line reported a false REGRESSION on its first pass.) SECOND time in two days a documented grep predicted its own obsolescence and the audit caught the drift
-grep -c "fencedBlockLines" lib/agents/harness/dialect-lint.ts               # expect 3 — re-measured 2026-09-11 (was 2): definition + its call site + the `export` that lets net #3 consume THE classifier instead of forking a second rollback extractor. The prose-exemption mechanism (a whole-document scan would flag the clean round)
+grep -c "fencedBlockLines" lib/agents/harness/dialect-lint.ts               # expect 7 — re-measured 2026-09-28 after EF-DL2 commit 2 (was 5; +2 doc pointers to the call site: the classifyBlock `ownProse` param doc and the HARVESTED_STATE_PROSE note). Prior same day (was 3; +2 doc references added by F1: the `classifier` field doc and the restoreIntent doc pointing at the fence-aware walk). Prior 2026-09-11 (was 2): definition + its call site + the `export` that lets net #3 consume THE classifier instead of forking a second rollback extractor. The prose-exemption mechanism (a whole-document scan would flag the clean round)
 grep -c "export interface TranscriptionCheck" lib/agents/harness/dialect-lint.ts   # expect 1 — the PRESENCE half (2026-08-24, earned by IGP-T1 R7: a banned-token-CLEAN package omitted one canonical stanza line; config entered, committed and displayed cleanly while the protocol stayed DISABLED; reviewer approved 90/100 because an absence check runs the opposite direction)
 grep -c "check:package" package.json                                        # expect 1 — the OPERATOR-side runner (scripts/check-package-against-contract.ts). Puts BOTH halves at the gate today without engine wiring; verified to exit 1 and name the omitted line on R7's real artifacts
 grep -c "kind === 'candidate-config'" lib/agents/harness/dialect-lint.ts   # expect 2 — BOTH halves scope to candidate-config. Replaced a `rollback|expected output` word-count on 2026-08-29: that counted PROSE about the classification, not the classification, so it drifted every time the comments were edited. This asserts the exemption mechanism itself. Absence scoped 2026-08-25 (`5fd447da`); PRESENCE followed 2026-08-28 (per-stanza attribution) — the raw-count argument for scanning everything stops holding once the count drives attribution (R18-P4).
-grep -c "BlockKind\|classifyBlock" lib/agents/harness/dialect-lint.ts        # expect 5 — the classification mechanism (type + classifier + its uses). If this hits 0 the ABSENCE half is scanning whole documents again and follow-up 2b has regressed
+grep -c "BlockKind\|classifyBlock" lib/agents/harness/dialect-lint.ts        # expect 7 — re-measured 2026-09-28 after EF-DL2 commit 2 (was 8; −1: the stale "UNCHANGED INPUT SHAPE: classifyBlock still receives…" note was REPLACED, because commit 2 changed the harvest decision's input). Prior same day (was 5; +3 comment refs from F1: the classifier-field doc, the DIALECT_LINT_CLASSIFIER bump rule, the fence-aware walk note). The classification mechanism (type + classifier + its uses). If this hits 0 the ABSENCE half is scanning whole documents again and follow-up 2b has regressed
+grep -c "insideFence" lib/agents/harness/dialect-lint.ts                   # expect 3 — EF-DL2 commit 1 / F1 (2026-09-28): declaration + toggle + skip. The heading-ancestry walk is FENCE-AWARE — a `#` line inside a fenced block is content, never a heading (CommonMark). Before it, an in-fence `# comment` read as a level-1 heading: its words reached classifyBlock ("baseline" -> harvested-state on terraform Part B blocks) AND it stopped the walk, hiding the real section heading (a rollback block read restoreIntent false). If this hits 0 the walk is fence-blind again
+grep -c "classifier: DIALECT_LINT_CLASSIFIER" lib/agents/harness/dialect-lint.ts   # expect 3 — the THREE return paths that ran the classifier (no-banned-token-list, no-fenced-blocks, checked). The no-contract path deliberately carries NO `classifier` (nothing classified), which is also why its stamp stayed byte-identical across the cut. `dialectLint.classifier` is the SERIES-BREAK MARKER (Phase D decision 4): 2 = F1, 3 = option (ac) (EF-DL2 commit 2); absent = pre-2026-09-28 (implicitly 1) or no-contract. Split every blockKinds series on this field, never on a typed date
+grep -c "searchPatternRanges" lib/agents/harness/dialect-lint.ts           # expect 3 — EF-DL1 (2026-09-27): definition + its one call + its doc-comment reference. The OCCURRENCE-level exemption in the ABSENCE half: a banned token inside a QUOTED grep-family pattern is a search, not a directive, and is recorded in `searchPatternExempt` (emitted only when non-empty, so every other stamp stays byte-identical). If this hits 0 the absence-verification false positive is back. ⚠️ The OPPOSITE direction is EF-DL2 — two defects, two commits, BOTH shipped 2026-09-28: F1 (fence-blind ancestry) as classifier 2, and option (ac) (the window crossing a heading, 32 real-config blocks exempt) as classifier 3, after a blind second labeller agreed 104/104: cline_docs/reviews/ef-dl2-dialect-lint-classification-2026-09-27/SYNTHESIS.md
+grep -c "HARVESTED_STATE_PROSE.test(ownProse)" lib/agents/harness/dialect-lint.ts   # expect 1 — EF-DL2 commit 2 / option (ac), classifier 3 (2026-09-28): the harvest decision reads ONLY the block's own label (`labelProse`, ≤ MAX_LABEL_CHARS) + heading ancestry, never the prose window. A PROPERTY grep: if it hits 0 the harvest test is reading the window again and a long own-section sentence naming "harvested" (live D076) exempts real config from both halves. The window's heading bound is pinned by the EF-DL2 synthetic (a) fixture, not a grep (its regex does not survive the audit runner)
 grep -c "dialectLint" lib/services/execution-artifacts.ts                   # expect 4 — re-measured 2026-08-26 (was 3; the fourth is the `contractPropagation` header comment citing dialectLint as the precedent for whitelisting it): `dialectLint` is now on RESULT_JSON_SUMMARY_KEYS as a FIRST-CLASS whitelisted fact plus its two header-comment refs. The E3b lesson forbids an unlisted SIBLING of a whitelisted key, not a new whitelisted key — a gate must read this head-slice-safe exactly as it reads derivationContainment. If a SUB-field is ever added (a disposition, a severity) it nests INSIDE dialectLint — same trap, one level down
 ```
 
@@ -702,3 +748,30 @@ which is a consumer. Observe it during the soak by querying the artifact. ⚠️
 remit changes land** — a fact left unrendered past the expiry of its reason is the A1/F7 class, and
 this domain has already had one "nothing to see here" measurement expire silently (§6
 `derivationContainment`, closed 2026-09-17).
+
+### 2026-09-27: the soak decided, the remit moved, and the series broke
+
+**The soak answered both of its questions (CLAUDE.md "REVIEWER EVIDENCE-GRADING SOAK", DECIDED 2026-09-27; register
+EG-1).** Over the 41 `change_reviewer` verdicts since this fact shipped (240 graded lines), NEITHER fell to **0%**
+(it was 26-27% before 09-20; RWF Stage 2 `RESULTS.md` reads 68 of 256 = 27% on its window). Compliance is no longer
+the constraint. Provenance/copy FIDELITY was never genuinely verified: 18 lines were accepted on trust, and the 6
+"verified" lines under provenance vocabulary verified something else. So fidelity was **removed from the reviewer
+remit WHERE THE SOURCE IS NOT IN CONTEXT** (`4d1d21d7`, network 1.15.0 / k8s 1.13.0 / terraform 1.7.0 /
+observability 1.4.0; live and reseeded on prod 2026-09-27). Evidence PRESENCE stays the reviewer's, and it may block.
+Dialect lint was NOT moved from the remit (EG-2, closed with no build).
+
+⚠️ **SERIES BREAK 2026-09-27.** `acceptedLines` falls BY CONSTRUCTION after the reseed, because provenance lines
+stop being graded at all. **Never compare accepted counts or rates across the cut.** The parser did not change,
+the population did. That is the case the three-state shape exists for: a fall in `acceptedLines` after the cut is
+not a rise in verification.
+
+**The render/consumer re-decision this block scheduled has now come due.** The remit change landed. What the
+record says: CLAUDE.md "Still no consumer", and a NEXT soak read is defined (does the verified rate on the other
+properties hold; does any leg reviewer still raise fidelity, which is now a guidance violation). A continuing soak
+keeps the contamination reason alive, so **the fact stays unrendered for the length of that read, and this line is
+the new expiry**: re-decide at the next soak read, and record either a render or a fresh reason. This is the reading
+the record supports. It was not decided in a session; confirm it with Steve if the next read is deferred again.
+
+**The tag-grammar soak is NOT built** (RWF Stage 2, Steve 2026-09-27). It was a proposed sibling fact (reviewer
+class tags, parsed and unconsumed). Strict retry reach was 5% and 0 of 16 programs were sunk by write-up alone, so
+the lever it would have fed was stopped. The re-open triggers are in the library ("RWF Stage 2").

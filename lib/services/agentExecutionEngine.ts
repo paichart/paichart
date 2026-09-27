@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { llmService } from './llm/llm-service';
 import { DEFAULT_MAX_TOKENS } from './llm/types';
 import { finalizeTextForStopReason } from './llm/finalize-response';
+import { msToExecutionTimeoutSeconds, DEFAULT_EXECUTION_TIMEOUT_SECONDS } from './llm/template-model-params';
 import { RUNTIME_LIMITS } from '@/lib/validation/runtime-limits';
 import { resolvePromptPlaceholders, buildContextSummary } from './agentTemplateBuilder/pAIchartUniversalTemplate';
 import { EventEmitter } from 'events';
@@ -609,7 +610,7 @@ export class AgentExecutionEngine extends EventEmitter {
         maxTokens: config.maxTokens || task.maxTokens || DEFAULT_MAX_TOKENS,  // Standardized default
         temperature: config.temperature ?? 0.3,
         maxRetries: config.maxRetries ?? task.maxRetries ?? 3,
-        timeout: config.timeout ?? task.timeout ?? 300000
+        timeout: config.timeout ?? msToExecutionTimeoutSeconds(task.timeout) ?? DEFAULT_EXECUTION_TIMEOUT_SECONDS // X19: seconds
       };
 
       // Structured config summary (minimal fields)

@@ -385,6 +385,10 @@ export const AGENT_EXECUTE_OVERRIDE_FIELDS = {
     inputContext: safeRecord().nullable().optional(),
 
     // MCP overrides
+    // X20 (2026-09-27): NO ownership check, deliberately — nothing dereferences these. They are copied into the
+    // execution's config JSON and never read (tool selection is config.mcpTools, consolidated NAMES); prod has 0 of 2,132
+    // executions and 0 tasks carrying either. ⚠️ TRIGGER: any code that starts RESOLVING config/task mcpToolId or
+    // mcpWorkflowId to a tool or workflow must ship the caller-may-use-it check in the same change.
     mcpToolId: OptionalCUIDStrict('mcpToolId'),
     mcpWorkflowId: OptionalCUIDStrict('mcpWorkflowId'),
     mcpContext: safeRecord().nullable().optional(),

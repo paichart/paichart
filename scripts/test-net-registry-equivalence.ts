@@ -141,6 +141,17 @@ const POST_DEPLOY_LEG = 'cmtxp5r6k0005yx61hg4owvlv';
 const WAVE_B_ARM = 'authoritative-selection skip arms (superseded, R8-empty): 0 of 1,203 archived leg children '
   + 'diverge (2026-09-26) — fixture-proven only (test-authoritative-result-read.ts F1-F6)';
 
+/**
+ * EF-DL2 F-7: the dialect-lint CLASSIFIER arm. Closing it needs a POST-DEPLOY leg whose prod stamp
+ * carries `classifier` (i.e. a contract-bearing leg stamped by `classifier >= 2` code). A pre-cut
+ * contract-bearing leg cannot close it: its stamp has no `classifier` field and different
+ * `blockKinds`, and admitting it would be an expected-diff list by another name.
+ */
+const CLASSIFIER_ARM = 'classifier — no declared specimen is contract-bearing, so fencedBlockLines/classifyBlock '
+  + 'never run in this gate; F1 (classifier 2) and option ac (classifier 3) are fixture-proven only '
+  + '(test-dialect-lint F1-* / EF-DL2 *) plus the archive replays recorded with each commit. Close it with the first post-deploy leg whose dialectLint '
+  + 'stamp carries `classifier`, and delete this arm in the same commit';
+
 const NET_SPECIMENS: Record<string,
   { legs: string[] | 'none'; why: string; unexercisedArms?: string[] }> = {
   'markerPresence@leaf-persist': { legs: [...POST_H2_LEGS, POST_DEPLOY_LEG],
@@ -165,7 +176,14 @@ const NET_SPECIMENS: Record<string,
     unexercisedArms: [WAVE_B_ARM, 'basis: program-parent — NEVER OBSERVED IN PRODUCTION (0 of 611 archived '
        + 'stamps). Every specimen is standalone, so the corrected lookup is exercised here only on '
        + 'its null branch. The success branch is fixture-validated ONLY until a program leg is '
-       + 'archived post-fix; add that leg here and delete this arm in the same commit'] },
+       + 'archived post-fix; add that leg here and delete this arm in the same commit',
+      // EF-DL2 F-7 (2026-09-28). Every specimen here is `reason: no-contract` (`blockKinds: {}`), and that
+      // path returns BEFORE `fencedBlockLines` runs — so this gate has never seen the block classifier and
+      // could not see F1 (`classifier: 2`), option ac (`classifier: 3`) or any later classifier change. The no-contract arm is still
+      // pinned byte-identical ACROSS the cut (it deliberately carries no `classifier` field). The
+      // CLASSIFIER_ARM_EXERCISED check below derives this arm's truth from the stamps, so this note fails
+      // the gate the day a contract-bearing leg is declared and nobody deletes it.
+      CLASSIFIER_ARM] },
   'contractPropagation@leg-synthesize': { legs: [POST_DEPLOY_LEG],
     why: 'same deploy, same nesting — contractApplicability is stamped on BOTH facts from one ctx derivation',
     unexercisedArms: ['basis: program-parent — same one derivation, same gap; see the dialectLint entry'] },
@@ -360,6 +378,21 @@ function stubPrisma(s: Specimen) {
   }
 
   reportUnexercisedArms();
+
+  // CLASSIFIER_ARM_EXERCISED — the declared note must agree with the stamps, in BOTH directions. A note
+  // that outlives the gap reads as a permanent caveat; a gap without its note reads as coverage.
+  {
+    const w = NET_SPECIMENS['dialectLint@leg-synthesize'];
+    const declaredUnexercised = (w.unexercisedArms ?? []).includes(CLASSIFIER_ARM);
+    const exercised = specimens.some((s) => {
+      const prod = s.stampedLeg?.dialectLint;
+      if (prod == null || !covers('dialectLint@leg-synthesize', s.legTaskId)) return false;
+      return Object.prototype.hasOwnProperty.call(JSON.parse(prod), 'classifier');
+    });
+    check('E3 dialectLint classifier arm: declared-unexercised iff no covered specimen stamped `classifier`',
+      declaredUnexercised === !exercised,
+      `declared unexercised: ${declaredUnexercised}; a covered specimen carries classifier: ${exercised}`);
+  }
 
   if (notCovered > 0) {
     console.log(`\n⚠️  ${notCovered} gap(s) this gate does NOT cover:`);

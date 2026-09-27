@@ -1,0 +1,71 @@
+{
+  "drift": {
+    "graded": false,
+    "reason": "No repo baseline is supplied for this run. 'No drift detected' from a one-sided read would be a fabrication and must not be claimed."
+  },
+  "program": "k8s-netpol-registry-validation",
+  "rollback": {
+    "mechanism": "git revert",
+    "mustState": "the reconciler-prune consequence of the revert"
+  },
+  "changeObjects": {
+    "defaultDenyIngress": {
+      "name": "default-deny-ingress",
+      "namespace": "trading",
+      "podSelector": {},
+      "policyTypes": [
+        "Ingress"
+      ]
+    },
+    "allowOrdersApiIngress": {
+      "name": "allow-orders-api-ingress",
+      "namespace": "trading",
+      "servicePort": {
+        "port": 80,
+        "protocol": "TCP"
+      },
+      "targetWorkload": "orders-api",
+      "claimedPodSelector": {
+        "app": "orders-api"
+      },
+      "policyTypesDecision": "OPEN BY DESIGN \u2014 the leg must justify Ingress-only vs Ingress+Egress, and whether the allow-policy is scoped by port, namespaceSelector, or both, against the harvested namespace state (per requirements.md Evidence Obligations). This contract does not pre-decide it.",
+      "claimedPodSelectorSource": "topology.json \u2014 NON-AUTHORITATIVE. topology.json itself states the harvested selector governs; the leg MUST quote the harvested selector verbatim and MUST NOT use this claimed value if they differ."
+    }
+  },
+  "targetCluster": {
+    "node": "k8s-rig",
+    "platform": "kubernetes",
+    "clusterServiceAccess": "read-only (verb allowlist + RBAC); secret values must never enter any artifact",
+    "clusterServiceDescriptorUrl": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json"
+  },
+  "deliveryFormat": {
+    "mechanism": "declarative GitOps change package (raw manifests or a kustomize overlay)",
+    "forbiddenMechanisms": [
+      "kubectl patch",
+      "kubectl apply"
+    ]
+  },
+  "platformDialect": {
+    "note": "requirements.md and topology.json carry NO canonical/exemplar configuration stanza and NO forbidden-token list for this leg's manifest/YAML output. Fields left null/empty deliberately \u2014 see Assumptions & Open Questions. Do not invent one.",
+    "canonicalStanza": null,
+    "forbiddenTokens": []
+  },
+  "targetNamespace": "trading",
+  "offlineValidation": {
+    "requiredTools": [
+      "kubeconform",
+      "kustomize build",
+      "conftest/OPA"
+    ]
+  },
+  "evidenceObligations": [
+    "Restate harvested namespace constraint evidence: existing NetworkPolicies, LimitRange, ResourceQuota, PodDisruptionBudget \u2014 presence AND absence. An empty result is a finding to quote, not a section to omit.",
+    "Quote target pod selector labels verbatim from the harvest, never from topology.json.",
+    "Justify the policyTypes choice and allow-policy scope against the harvested state; state what an operator must revisit if a second workload is added to the namespace."
+  ],
+  "approvedButUnapplied": true,
+  "programTierValidationFacts": {
+    "contractApplicabilityTier": "program-root",
+    "rollbackContainmentExpectedArm": "lane-not-supported \u2014 benign-by-construction for this desired-state / procedural-rollback (git revert) lane, per requirements.md Acceptance \u00a74. Not evidence about the package quality."
+  }
+}

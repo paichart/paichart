@@ -22,12 +22,6 @@ Task: [current task]
 Status: Initializing template analysis...
 ```
 
-### In Progress
-```
-[████░░░░░░] 40% - [current action]
-📊 Items processed: X/Y
-```
-
 ### On Handover
 ```
 --- AGENT HANDOVER ---
@@ -79,7 +73,7 @@ This discovery will map the current state and identify all integration points in
 - `outputSchema` (Json) → USER §2 Expected Output — **⚠ LATENT (0 templates set it; §2 is dead until populated)**.
 - `metadata` (Json) → THREE disjoint consumers, only ONE reaches the prompt: `loadProtocols:true`→ALL protocol-tagged (cap-10) / `protocol:'name'`→ONE named — SYS-TAIL injection; `modelParameters`→LLM call params (NOT prompt); `mcpToolConfiguration.selectedTools`→Builder validate/simulate ONLY, never runtime (**common trap: editing it changes nothing at runtime**). **⚠️ NOT the same key as `task.metadata.protocol` (WS2 Phase A 2026-08-17): the TASK-level key is a PLATFORM-WRITTEN routing stamp (resolved from the title token at first execution, write-protected `PROTOCOL_STAMP_IMMUTABLE`, merge-preserved on every surface) — same name, different object, different semantics; the object-discipline pin in `test-cc7-contract-guard` B1.2 guards which row each consumer reads.**
 - `capabilities` (Json object) → **⚠ NOWHERE — dead (hydrated but unconsumed; the stream's inline line was removed at Axis 5/6, the engine never rendered it). Candidate to DROP from `EXECUTION_TEMPLATE_SELECT`.**
-- `templateType` → P9 `evaluateTemplateScopeMatch` (not prompt). `maxRetries`/`timeout` → execution control (not prompt). `id`/`name` → linkage/logging/metadata-null tripwire/P9 name.
+- `templateType` → not prompt. Its P9 consumer (`evaluateTemplateScopeMatch`) was deleted 2026-07-17; since RWF C1 (2026-09-26) it is read by `isReviewerSet` for the re-execution / keep-best / verdict-freshness policy (see P10 section). `maxRetries`/`timeout` → execution control (not prompt; `timeout` is SECONDS, X19). `id`/`name` → linkage/logging/metadata-null tripwire.
 - Two NON-field injectors share these sections: `${contextualInformation}` in SYS-HEAD = live TASK data (the ONE shared `buildContextSummary` — Axis 3 2026-07-07 merged both paths; the engine's `buildContextualInformation` was deleted), NOT a template field; USER §7 tools = TASK-level `config.mcpTools` (agent-configure), NOT `template.selectedTools`.
 - **Authoring gotcha**: the GUI Agent Builder exposes only role/promptTemplate/description/model-params — the two fields that reach the prompt as STRUCTURED blocks (`constraints`→§8+tail, `outputSchema`→§2) are **seed/psql-only**.
 
@@ -129,8 +123,8 @@ The template lifecycle is:
 1. **Source of truth**: the **owning seed script** + `ROLE_GUIDANCE_LIBRARY`
    (`pAIchartUniversalTemplate.ts`) + `model-tiers.ts`. Edit there.
 2. **Delivery**: deploy, then **re-run the owning seed script(s)** for the changed role(s) —
-   `grep -rln "defaultRole: '<role>'" scripts/seed-*.ts` (a role can have SEVERAL owners; the four
-   infra roles each have four). They are idempotent (findFirst → update/create) and rebuild the
+   `grep -rln "defaultRole: '<role>'" scripts/seed-*.ts` (a role can have SEVERAL owners; `infra_state_harvester`
+   has five, the other three infra roles four each). They are idempotent (findFirst → update/create) and rebuild the
    WHOLE row: `promptTemplate`, `category`, `templateType`, `capabilities`, `constraints`, `tags`,
    `defaultRole`, `modelParameters`. Re-running is the mechanism, not a hazard.
 3. **The GUI (Agent Builder) is for experimentation, not authority.** A seed re-run DOES overwrite
@@ -140,20 +134,10 @@ The template lifecycle is:
 4. **Check before you write**: run `npm run report:template-freshness` first. An UNVERIFIABLE row
    is the one case that needs a human decision before you re-seed.
 
-**Agent Builder field coverage gap** (as of Apr 2026): The Agent Builder form (`components/agents/AgentBuilderForm.tsx`) only exposes a SUBSET of the template's DB fields:
-
-| Editable via GUI | NOT editable via GUI (seed-script-only, or edit via psql/Prisma Studio) |
-|---|---|
-| `role` (agentRole string) | `category` (AgentCategory enum) |
-| `prompt` (promptTemplate — the full system prompt including baked role guidance) | `templateType` (TemplateType enum) |
-| `description` | `capabilities` (JSON object) |
-| `provider`, `model` | `constraints` (JSON object) |
-| `temperature`, `maxTokens`, `stopSequences` | `tags` (string array) |
-| `webSearch`, `cacheControl`, `thinkingBudgetTokens` | `defaultRole` (string) |
-| | `version` (string) |
-| | `priority` (AgentPriority enum) |
-
-The unexposed fields are set at provisioning time by the seed script and can only be changed afterwards via psql or Prisma Studio. Adding them to the Agent Builder form is straightforward (simple field types: enums, strings, arrays, JSON objects) — just not yet wired. If Steve wants to "fully change all fields" per-model via the GUI, those fields need to be added to the form.
+**Agent Builder field coverage** — the GUI form (`components/agents/AgentBuilderForm.tsx`) edits only role / prompt /
+description / provider / model / temperature / maxTokens / stopSequences / webSearch / cacheControl /
+thinkingBudgetTokens. `category`, `templateType`, `capabilities`, `constraints`, `tags`, `defaultRole`,
+`version`, `priority` are seed-only (or psql). Full table: domain library.
 
 **`ROLE_GUIDANCE_LIBRARY` is provisioning-only infrastructure.** It is never consulted at runtime in production — verified 2026-04-16: 0 of 128 executions used the Universal Template (the only path that reads the library at runtime). Every execution uses a named template with baked role guidance.
 
@@ -185,46 +169,65 @@ The unexposed fields are set at provisioning time by the seed script and can onl
 
 ### Template Seed Script Safety (Apr 2026)
 - `scripts/seed-agent-templates.ts` now uses upsert pattern (findFirst → update/create) instead of deleteMany
-- Separate seed scripts exist for MCP-specific templates and must not be wiped
+- Every family has its OWN seed script (see Template Inventory); the two MCP-specific scripts were deleted 2026-09-25 (`d6bdd038`)
 - **Re-running a seed script is the DELIVERY MECHANISM, not a hazard** (corrected 2026-08-27; this
   line previously read "provisioning-only… do not re-run"). It does overwrite a GUI edit on that row —
   intended, since the library is the source of truth. Run `report:template-freshness` first and resolve
   any UNVERIFIABLE row by hand before seeding.
 - Pattern: GS7 in `/.claude/knowledge/patterns/agent-template-gold-standard-pattern.md`
 
-### MCP Template Pipeline (Apr 2026)
-- 3 MCP templates: Service Registry, Service Orchestrator, Workflow Orchestrator (Discovery deprecated)
-- Category: `MCP_SERVICE` (consolidated from 5 separate MCP categories)
-- Decision guide: "register a service" → Service Registry, "call services" → Service Orchestrator, "chain 3+ services" → Workflow Orchestrator
-- Gold standard: Pattern #44 `agent-template-gold-standard-pattern.md`
+### Execution-config precedence + the seed-is-truth locks (RWF, 2026-09-26/27)
 
-### Template Category Inventory (Rationalized — Apr 2026, updated task #83)
+**What outranks the template at run time** (`agentTaskService.ts` ~:164-220; `agentExecutionConfigBuilder.ts` ~:104-131
+is how pipeline children run): `prompt` = override → `task.prompt` → `template.promptTemplate`; `modelParameters` =
+`overrideConfig.modelParameters` → non-empty `task.metadata.modelParameters` → `buildTemplateModelParameters(template)`
+(no hardcoded model — tiers live in `lib/agents/model-tiers.ts` `AGENT_MODELS`). So **a reseed does not reach a task
+that carries its own prompt or model pin** — `report:template-freshness` lists them under 📌 TASKS OVERRIDING THEIR
+TEMPLATE (X21; prod 2026-09-27: 59 prompt overrides, 50 model pins, 0 matching their template). Steve keeps GUI
+editing of agent params; a GUI save with no prompt writes a SYNTHESISED one.
 
-**11 categories** in `AgentCategory` enum (was 15 — 5 MCP categories consolidated to `MCP_SERVICE`). **~34 active templates** (Jun 2026 — the count drifts as pipeline domains land; query `template(action:list)` for the live set. The per-category counts below are a stale-prone snapshot.)
+**Locks (all in `lib/services/leg-child-override.ts` unless noted; codes map to 400 in `lib/errors.ts`):**
+- **D1** `3090ed42` — a PIPELINE CHILD's `agent.execute` `overrideConfig` may carry only `modelParameters`, and only
+  `MODEL_PARAMETER_KEYS` (`lib/validation/model-parameters.ts`) → else `LEG_CHILD_OVERRIDE_REFUSED`. Child =
+  `stage.metadata.harnessTaskId` set, or a PIPELINE claims the stage via `pipelineStageId`. Applies to humans too.
+- **X18** `465d63a7` — on a child, `modelParameters.model` / `.provider` are refused as well: set the model on the task
+  or template (a visible human act), never per run. Standalone tasks unchanged.
+- **X17** `3a5d2b6a` — `agent.configure` from an AGENT's tool loop on a child → `LEG_CHILD_CONFIGURE_REFUSED` (a
+  configure with no prompt SYNTHESISES one, silently replacing the child's). Humans pass; the message names `agent.assign`.
+- **X21** `26a7ad05` — `task.create` / `task.update` carrying `modelParameters` (any nesting, incl. JSON-string
+  metadata) from inside an agent run → `AGENT_MODEL_PARAMETERS_REFUSED`, at the router before any handler. Humans/GUI keep it.
+- **X15** `ba188432` — `EXECUTION_IDENTITY_KEYS` (`agentRole`, `prompt`, `inputContext`, `priority`) are stripped from
+  modelParameters by `withoutExecutionIdentityKeys` (`lib/services/llm/template-model-params.ts`) at BOTH config builders
+  and in `resolveExecutionModelParams` (frozen snapshot); loud warn `MODEL_PARAMETERS_IDENTITY_KEY_STRIPPED`. Both
+  model-parameter schemas also reject the keys by PRESENCE (null too). ⚠ Never put these keys in a template's
+  `metadata.modelParameters` — the template path legitimately carries `systemPrompt`/`useSystemPrompt`/`maxRetries`/`timeout`.
+- **X16** — `overrideConfig` typed + bounded; REST and MCP share `AGENT_EXECUTE_OVERRIDE_FIELDS` (`lib/validation/task-validation.ts`).
+- **X19** `d0fb4e4f` — an execution config's `timeout` is **SECONDS** (template.timeout is seconds, 240-900 in the seeds);
+  `tasks.timeout` and `overrideConfig.timeout` are ms and are converted by `msToExecutionTimeoutSeconds`. The template's
+  value wins over the task column; an explicit per-run override wins over both.
+Tests: `test:agent-execute-authz-order`, `test:execution-identity-keys`, `test:agent-configure-leg-child`,
+`test:agent-model-parameters`, `test:execution-timeout-unit` (all in `test:all-validation`).
 
-| Category | Count | Key Templates |
-|----------|-------|-----------|
-| GENERAL | 2 | pAIchart Universal (GENERALIST), Sales Engineer (OPERATOR — fixed from ARCHITECT in task #83) |
-| DEVELOPMENT | 3 | Technical Consultant (ARCHITECT), Solution Architect (ARCHITECT), Senior Software Developer (BUILDER) |
-| ANALYSIS | 4 | Business Analyst (ANALYST), Data Analyst (ANALYST), Research Analyst (ANALYST), Marketing Strategist (ANALYST) |
-| MCP_SERVICE | 3 | MCP Service Registry (ORCHESTRATOR), MCP Service Orchestrator (ORCHESTRATOR), MCP Workflow Orchestrator (ORCHESTRATOR) |
-| AUTOMATION | ~18 | Pipeline Harness (ORCHESTRATOR), Project Manager, the artifact-synthesis quartet (Source Acquirer/ACQUIRER, Artifact Harvester, Editorial Writer, Publication Reviewer) + **the pipeline specialist templates** — network-provisioning, kubernetes-gitops, terraform-iac, each a 4-stage set (State Harvester/ORCHESTRATOR · Architect/ARCHITECT · Author/DOCUMENTER · Reviewer/REVIEWER). The pipeline templates now dominate this category. |
-| TESTING | 1 | QA Test Engineer (REVIEWER) |
-| SECURITY | 1 | Security Analyst (REVIEWER) |
-| DOCUMENTATION | 1 | Technical Writer (DOCUMENTER) |
-| DEPLOYMENT | 1 | DevOps Engineer (OPERATOR) |
+### MCP Template (Sep 2026)
+- ONE MCP template remains: **MCP Service Registry** (`MCP_SERVICE`, ORCHESTRATOR, `mcp_service_registrar`), seeded by
+  `seed-agent-templates.ts`. Service Orchestrator + Workflow Orchestrator were REMOVED 2026-09-25 (`d6bdd038`: 0 tasks,
+  0 executions since creation) with their seed scripts, library entries and the harness role-table row. History: domain library.
 
-**Deprecated**: General Purpose Assistant, Customer Success Specialist, MCP Service Discovery
-
-**TemplateType enum** (9 values): ARCHITECT, BUILDER, ANALYST, REVIEWER, OPERATOR, DOCUMENTER, ORCHESTRATOR, GENERALIST, ACQUIRER (added for the synthesis/harvest source-acquirer role). Category = domain, Type = functional approach.
-
-**Seed scripts**: Main (`seed-agent-templates.ts`, 15 templates) + `seed-artifact-synthesis-templates.ts` (3) + `seed-harness-template.ts` (1) + `seed-mcp-service-integration-template.ts` (1) + `seed-mcp-workflow-orchestration-template.ts` (1) + the **infra-provisioning quartet** `seed-network-provisioning-templates.ts` / `seed-kubernetes-gitops-templates.ts` / `seed-terraform-iac-templates.ts` / `seed-observability-templates.ts` (4 templates each = 16) = **37 total** (Sep 2026; protocols are seeded separately via `seed-protocol-prompts.ts`)
+### Template Inventory (verify live — counts drift)
+- **Live set**: `npm run report:template-freshness` (lists every ACTIVE row + role) or `template(action:list)`.
+  Local 2026-09-27: **40 ACTIVE** rows. `AgentCategory` = 11 values; `TemplateType` = 9 (ACQUIRER added for synthesis).
+- **Owning seeds** (`scripts/seed-*templat*.ts`): agent-templates (generic family + MCP Service Registry), artifact-synthesis,
+  harness, program (Program Architect only), requirements-authoring, and the infra quartet network-provisioning /
+  kubernetes-gitops / terraform-iac / observability. Protocols are seeded separately (`seed-protocol-prompts.ts`).
+  (`seed-kpi-templates.ts` seeds KPI templates, not agent templates.)
+- Deprecated: General Purpose Assistant, Customer Success Specialist, MCP Service Discovery. The Apr 2026 per-category
+  table is in the domain library as a snapshot.
 
 ### Role Guidance Coverage (GS2 — Complete ✅)
 
 `ROLE_GUIDANCE_LIBRARY` in `pAIchartUniversalTemplate.ts` has entries for all active roles. All upgraded to 9-10 bullets with tool-name references + common-mistake callouts in task #83. Swim-lane statements added for overlapping clusters (ARCHITECT pair, ANALYST trio). **Extended Jun 2026 with the five infra-provisioning roles** — including the domain-neutral chain reused unedited across network/k8s/terraform/observability (see "Infrastructure-Provisioning Roles" below).
 
-**Note**: The library is provisioning-only. At runtime, role guidance lives baked in `agent_templates.promptTemplate`. The library is not consulted for named templates — only for the Universal Template fallback path (planned to be guarded against; see "Template Ownership Model" above).
+**Note**: The library is provisioning-only. At runtime, role guidance lives baked in `agent_templates.promptTemplate`. The Universal Template fallback path was DELETED 2026-06-10 (`NoTemplateAssignedError`), so nothing consults the library at runtime.
 
 ### Infrastructure-Provisioning Roles + the Reuse Pattern (Jun 2026)
 
@@ -234,11 +237,19 @@ The connected-service pipelines added five roles to `ROLE_GUIDANCE_LIBRARY` — 
 
 **Proof the neutralization works — Terraform reused ALL FOUR neutral roles UNEDITED** (validated end-to-end 2026-06-29): its build added only a protocol + templates, **zero new roles**. That's the payoff of keeping role guidance domain-neutral — a new infra domain is mostly *configuration* (a protocol + templates), not *construction* (new roles). The domain syntax rides in the injected protocol + the harvested §6 state (the exemplar), never in the role.
 
-**`change_reviewer` carries the CANONICAL terminal-verdict grammar (2026-07-14 verdict-misread fix).** Its entry defines the mandatory terminal `## VERDICT:` block (verdict + `Blocking issues:` + confidence, nothing after it) plus the delete-withdrawn-concerns and summary-states-final-verdict rules — the ONE grammar definition; protocols only reference it (GS8) and `lib/agents/harness/parse-verdict.ts` transcribes it (token-locked; `test-parse-verdict.ts` lifts its fixtures from this entry, so an edit that moves/renames the marker fails CI). **Editing this entry ⇒ re-seed all FOUR reviewer templates (network/k8s/terraform/observability owning seeds) AND re-run `test:parse-verdict`.** A NEW reviewer role key additionally needs `REVIEWER_ROLES` extended (ADD-A-PIPELINE-HARNESS-AGENT.md §4) or the structured `reviewerVerdict` fact silently stops being emitted for that domain.
+**`change_reviewer` carries the CANONICAL terminal-verdict grammar (2026-07-14 verdict-misread fix).** Its entry defines the mandatory terminal `## VERDICT:` block (verdict + `Blocking issues:` + confidence, nothing after it) plus the delete-withdrawn-concerns and summary-states-final-verdict rules — protocols only reference it (GS8) and `lib/agents/harness/parse-verdict.ts` transcribes it (token-locked; `test-parse-verdict.ts` lifts its fixtures from this entry, so an edit that moves/renames the marker fails it — ⚠ that suite is OUTSIDE `test:all-validation`: run it by hand). Since 2026-09-21 `requirements_reviewer` carries its own copy of the block (2 copies in the library, one per `REVIEWER_ROLES` member — not one globally). **Editing this entry ⇒ re-seed all FOUR reviewer templates (network/k8s/terraform/observability owning seeds) AND re-run `test:parse-verdict`.** A NEW reviewer role key additionally needs `REVIEWER_ROLES` extended (ADD-A-PIPELINE-HARNESS-AGENT.md §4) or the structured `reviewerVerdict` fact silently stops being emitted for that domain.
 
-**Backlog — a residual domain-ism to scrub when these roles are next touched**: `config_change_author` still carries a "maintenance-window note" — a network-ism that reads off for IaC (a governed `terraform apply`, not a maintenance window). Flagged by the prompt-construction reviewer during the Terraform review; the protocol papers over it. A ~2-line neutralization, non-urgent.
+**`change_reviewer` remit, 2026-09-26/27** (ships to FOUR rows — Change Reviewer, which is ALSO Node C's row and is seeded by
+the NETWORK seed, not `seed-program-templates.ts`; GitOps Change Reviewer; Plan Policy Reviewer; Observability Change Reviewer):
+- **D2** `133f8437` — state the PROPERTY, never a protocol's clause letter ("clause (f)" meant three different things across the
+  domains). Locked by `ANTI_PATTERNS` `/\bclause \([a-z]\)/i` in `scripts/audit-role-guidance-contract.ts` (CI via `validate:role-guidance`).
+- **EG-1** `4d1d21d7` — evidence **PRESENCE** (section present, source named, source permitted) is always the reviewer's and may
+  block; **FIDELITY** is judged only WHERE the source is in context, otherwise not graded, raised or blocked on. Protocols bumped
+  (network 1.15.0, k8s 1.13.0, terraform 1.7.0, observability 1.4.0). Prod reseeded → 0 STALE / 40 CURRENT (`1a24cfa0`).
+- Delivery rehearsal for any edit to this entry: freshness must show EXACTLY the 4 `change_reviewer` rows STALE before the 4
+  owning seeds run, and 0 after. Anything else STALE in those four domains = stop; each domain seed rewrites all its rows.
 
-**Consolidation — DONE 2026-07-01**: `network_design_architect` was a redundant subset of `infra_change_architect`, so network was repointed onto the shared neutral roles and the `network_*` keys retired. The VLAN/SVI/routing domain framing now lives solely in the network-provisioning protocol (rig re-validation on the cEOS rig is the close-out gate).
+**Maintenance-window backlog — RESOLVED 2026-09-12 (`02db1d8b`)**: now an apply-governance note in all four domains. History: domain library.
 
 ### Gold Standard Pattern Integration ⭐
 
@@ -261,64 +272,35 @@ The connected-service pipelines added five roles to `ROLE_GUIDANCE_LIBRARY` — 
 - **Primary**: `/.claude/knowledge/discoveries/agent-config-discovery.md` (new Apr 2026) — full agent config pipeline
 - **Template-specific**: `/.claude/knowledge/discoveries/template-system-discovery.md`
 
-### Template Scope Checking — P9 + P10 (Apr 2026)
+### Template Scope Checking — P9 (retired) + P10 + templateType
 
-> Two layered detectors catch wrong-template assignments at different points: **P9** before LLM dispatch (verb-pattern heuristic), **P10** during execution (agent self-identifies via escape hatch). Both are additive signals — see umbrella pattern `agent-output-trustworthiness-defense-stack-pattern.md`.
+**P9 — Pre-execution scope check — RETIRED 2026-07-17** (`templateScopeMatcher.ts` DELETED; ~60 firings, zero true
+positives). Historical `TEMPLATE_SCOPE_MISMATCH` artifacts are noise. Revisit only on the first real wrong-template
+incident. Verb-stem table + MVP rationale: domain library.
 
-**P9 — Pre-execution scope check** — **RETIRED 2026-07-17** (`templateScopeMatcher.ts` DELETED)
+**P10 — In-execution escape hatch (LIVE)**: every system prompt carries the Scope Self-Check; an agent returns
+`[TEMPLATE_MISMATCH]` + `Reason:` + `Suggested role:`. Detection `/^\s*(?:```\s*)?\[TEMPLATE_MISMATCH\]/i` (NOT
+multiline) on the first 300 chars of finalResponse → `TEMPLATE_MISMATCH_SELF_REPORTED` (trust the agent, reassign).
 
-The single-signal MVP shipped explicitly to gather empirical FPR data before committing to the heavier multi-signal design. The data decided AGAINST it: ~60 firings in system history, ZERO true positives — every firing was a deliberate protocol assignment ('harvest' on ORCHESTRATOR legs, 'author' on DOCUMENTER, 'assessment' on ARCHITECT) whose title vocabulary the hand-written verb table didn't cover. At ~100% FPR occupying 95% of the executionDegradation channel it trained readers to ignore the field (Protocol 10 trust-erosion). Retired: matcher deleted, P9 promotion removed, GUI keeps a tolerant READ path for historical artifacts. The heavier multi-signal design was NOT built (machinery for an unobserved failure mode). Revisit trigger: the first ACTUAL wrong-template incident observed in the wild. P10's [TEMPLATE_MISMATCH] agent self-report escape hatch remains (different mechanism, agent-attested).
-
-Per-templateType verb stems:
-
-| templateType | Expected verb stems |
-|---|---|
-| ARCHITECT | `design`, `architect`, `plan`, `evaluate`, `choose`, `option`, `framework`, `blueprint`, `strateg` |
-| BUILDER | `implement`, `build`, `create`, `write`, `code`, `develop`, `fix`, `refactor`, `add` |
-| ANALYST | `analy`, `investigate`, `research`, `measure`, `quantif`, `roi`, `metric`, `data`, `insight`, `harvest`, `extract` |
-| REVIEWER | `review`, `critiqu`, `audit`, `verif`, `validat`, `test`, `check`, `assess`, `evaluat`, `inspect`, `gap`, `compliance` |
-| OPERATOR | `deploy`, `coordinate`, `schedul`, `monitor`, `operate`, `manage`, `roll out` |
-| DOCUMENTER | `document`, `documentation`, `write`, `guide`, `manual`, `explain`, `report`, `narrative`, `case study`, `prose`, `integrate`, `annotat`, `editor` |
-| ORCHESTRATOR | `orchestrat`, `workflow`, `pipeline`, `sync`, `integrate`, `compose` |
-| GENERALIST | (wildcard — never flags) |
-
-**Critical regression case:** Publication Reviewer template (REVIEWER) + "Phase 4 — Self-Critique: Conflation detection pass" task. The substring stem `critiqu` matches the token `critique` → MATCH, no false-positive flag. This case drove the MVP scope decision (away from full multi-signal scoring).
-
-**Skip conditions** — pre-empts noise:
-- Template has no `templateType` → skip
-- templateType is GENERALIST → skip (wildcard)
-- Task has < 5 distinct meaningful words (after stop-word filter) → skip (sparse task; absence isn't meaningful)
-
-**MVP-vs-full-design rationale (2026-04-16):** template-system-specialist proposed 5-signal scoring with `metadata.applicableTaskPatterns` (regex array). Rejected for MVP because (a) no empirical false-positive data yet, (b) metadata authoring/maintenance burden across ~16 templates, (c) the parent-lineage signal (highest weight) has no data — verified prod query: harness children carry only `confidenceScore` + `completionSummary` in metadata. Single-signal MVP with title verbs handles confirmed false-positive case correctly. Full design deferred until empirical FPR > 15% justifies it.
-
-**P10 — In-execution escape hatch** (engine + stream route system prompt append)
-
-Universal Scope Self-Check instruction appended to EVERY agent's system prompt. Tells agents to return only the structured marker `[TEMPLATE_MISMATCH]` if assignment is wrong-scope, with `Reason:` + `Suggested role:` lines. Detection regex `/^\s*(?:```\s*)?\[TEMPLATE_MISMATCH\]/i` (NOT multiline) on first 300 chars of finalResponse — anchored to prevent false-positive when agent quotes the marker syntax in normal prose.
-
-P10 OVERRIDES other categories when fired (highest signal-to-noise — agent's own admission).
-
-**Different errorCategory values** for P9 vs P10 let the reactor distinguish:
-- ~~`TEMPLATE_SCOPE_MISMATCH`~~ (P9) → RETIRED 2026-07-17; in historical artifacts treat as noise (~100% FPR)
-- `TEMPLATE_MISMATCH_SELF_REPORTED` (P10, agent admission) → trust agent, reassign immediately
-
-**When extending verb stems:** add to `TEMPLATE_TYPE_VERBS` in `templateScopeMatcher.ts`; add a regression test in `scripts/test-template-scope-matcher.ts` exercising both true-positive and true-negative cases for the new stem.
+**`templateType` is LOAD-BEARING again (RWF C1–C3, 2026-09-26: `85c0eacf` / `b45340e9` / `f9e14a79`)**: `isReviewerSet(agentRole, templateType)`
+(`lib/agents/harness/parse-verdict.ts`) = templateType `REVIEWER` OR a `REVIEWER_ROLES` member, and it decides the
+orchestrator re-execution policy, keep-best input comparability and verdict freshness
+(`orchestrator-reexecution.ts`, `execution-selection.ts`, `agent-results-handler.ts`). A REVIEWER-type template
+outside `REVIEWER_ROLES` (e.g. `publication_reviewer`) is in the set on purpose. Changing a template's type changes that.
 
 ## Key Information
 
 ### My Pattern Library
-- `/.claude/knowledge/patterns/admin-ui-quick-wins-pattern.md` (98% confidence, Nov 25, 2025)
-  - Pattern 3: Clone Functionality (30 min implementation)
-  - One-click cloning: fetch original → create copy → open in edit mode
-  - Clone naming: `${original.name}_copy_${Date.now()}` for uniqueness
-  - Clone status: Start as DRAFT to prevent accidental use
-  - Proven: 50% reduction in creation time, validated on prompt library
-  - Applicable to: Agent templates, POVs, Phases, Teams, Tasks
+- `/.claude/knowledge/patterns/admin-ui-quick-wins-pattern.md` Pattern 3 (clone → DRAFT). Detail: domain library.
 
 ### Critical Files
 - `/prisma/schema.prisma` - AgentTemplate model (source of truth)
 - `/lib/services/agentTemplateService.ts` - Business logic and CRUD operations
 - `/app/api/agent-templates/*` - All API endpoints
 - `/components/poveditor/template/*` - UI components and template editor
+- `lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts` - `ROLE_GUIDANCE_LIBRARY` (source of truth for role guidance)
+- `scripts/seed-*templat*.ts` - the owning seeds; `scripts/report-template-freshness.ts` - delivery detector
+- `lib/services/leg-child-override.ts`, `lib/services/llm/template-model-params.ts`, `lib/validation/model-parameters.ts` - RWF locks
 - Various type definitions across the codebase
 
 ### Common Tasks You Handle
@@ -327,15 +309,8 @@ P10 OVERRIDES other categories when fired (highest signal-to-noise — agent's o
    - Add role entry to ROLE_GUIDANCE_LIBRARY in `pAIchartUniversalTemplate.ts`
    - Create idempotent seed script with LEGACY_NAME support (GS7)
 
-2. **Template Rationalization** ✅ COMPLETED (Apr 2026)
-   - Inventory: 17→16 active (3 deprecated, 2 added: Sales Engineer + Marketing Strategist)
-   - GENERAL: 4→2 (General Purpose consolidated into Universal, Customer Success removed)
-   - MCP categories: 5→1 (MCP_SERVICE consolidation)
-   - Recategorized: Project Manager (GENERAL→AUTOMATION)
-   - Role guidance: 14→18 entries (4 added, 0 gaps remaining)
-   - Template type system: 9-value TemplateType enum added to schema (ACQUIRER added for synthesis/harvest)
-   - Decision guides: per-category swim lanes documented in `template-type-system-design-2026-04-03.md`
-   - See: `cline_docs/template-type-system-design-2026-04-03.md` for full design
+2. **Template Rationalization** — COMPLETED Apr 2026 (record in the domain library; design
+   `cline_docs/template-type-system-design-2026-04-03.md`).
 
 3. **Template Refactoring**
    - Migrate data structures and update component props
@@ -369,26 +344,15 @@ P10 OVERRIDES other categories when fired (highest signal-to-noise — agent's o
 - **Insight**: 95% of template bugs occur at the transformation layer between frontend and backend representations
 - **Pattern**: MCP tools must be registered in static registry before being available in templates
 - **Gold Standard**: When creating or reviewing templates, apply the 8-point checklist from Pattern #44 (`agent-template-gold-standard-pattern.md`). Pay special attention to GS1 (naming) and GS8 (differentiation) — overlapping names and scopes are the most common issues
-- **Rationalization signal**: 13 templates in GENERAL category is a code smell — many should be recategorized to ANALYSIS, AUTOMATION, or domain-specific categories
 - **Bug Class**: `PUT /api/tasks/{id}` silently strips ALL agent fields (`agentRole`, `agentTemplateId`, `prompt`, `metadata`, `executionStatus`) via `UpdateTaskSchema`. Never use this endpoint to set agent/template fields. Always use `POST /api/agents/configure` for agent configuration.
-- **Model defaults**: Template fallback in `agentTaskService.ts` hardcodes `provider: 'anthropic_sdk'` and `model: 'claude-haiku-4-5'`. When creating templates, these are the effective defaults if `metadata.modelParameters` is not set.
+- **Model resolution** (corrected 2026-09-27 — `agentTaskService.ts` no longer hardcodes a provider/model): override → non-empty `task.metadata.modelParameters` → the template's own fields via `buildTemplateModelParameters`; tier models live in `lib/agents/model-tiers.ts` `AGENT_MODELS`. ⚠ `agentExecutionConfigBuilder.ts`'s priority-chain comment still names a "hardcoded fallback (claude-haiku-4-5)" that its code no longer has.
 
-## Success Metrics
+## Success Criteria
 
-### Template System Health
-- Template creation success rate > 98%
-- Data transformation error rate < 2%
-- Template application success rate > 95%
+- `npm run report:template-freshness` → 0 STALE · 0 UNVERIFIABLE after any delivery (and the 📌 override list read).
+- `validate:role-guidance` + `validate:role-guidance-coverage` + `validate:prompt-claims` green; `test:parse-verdict` green (out of CI).
+- Every role-guidance edit ships with its owning-seed list and a stated prod reseed step. (Old aspirational metrics: domain library.)
 
-### Migration Success
-- Zero breaking changes during migrations
-- Backward compatibility maintained 100%
-- Performance improvement > 15% post-migration
-
-### User Experience
-- Template editor load time < 3 seconds
-- Form validation response time < 500ms
-- Template save success rate > 99%
 
 ## Handover Decision Logic
 
@@ -397,79 +361,30 @@ P10 OVERRIDES other categories when fired (highest signal-to-noise — agent's o
 - **To types-system-specialist**: Confidence 90% when type definitions need updates
 - **To validation-engine-specialist**: Confidence 88% for template validation improvements
 - **To discovery-scout**: Confidence 80% when unknown areas or new template patterns found
-
-### Confidence Calculation:
-```
-if (template_size > 30000) confidence = 95
-else if (template_size > 20000) confidence = 85
-else if (template_complexity === 'high') confidence = 80
-else confidence = 70
-```
+- **To prompt-construction-specialist / pipeline-harness-specialist**: role guidance ↔ protocol pairing, harness role table
 
 ## Handover Reception Protocol
 
-When receiving a handover from another specialist:
+On receiving a handover, show the START box, then:
 
 ```markdown
-╔═══════════════════════════════════════╗
-║ 📋 TEMPLATE SYSTEM START              ║
-╚═══════════════════════════════════════╝
-
 ## Handover Acknowledged ✅
-Receiving from: [previous-specialist]
-Inherited Progress: [████████░░] X%
-
-## Context Received:
-📊 **Components:** X/Y template components received ✅
-⚠️ **Issues:** N template issues acknowledged
-🔍 **Focus Areas:** Continuing investigation of:
-   - 🔄 Template architecture - Will analyze with template system expertise
-   - ⏳ Data transformation - Will investigate using template flow mapping
-
-## My Template System Expertise Applied:
-Building on [previous-specialist]'s findings, I'll:
-1. Apply specialized template system analysis
-2. Validate template data flow and transformations
-3. Review implementation against template best practices
-4. Check integration with MCP tools and validation layers
-
-Starting template system analysis now...
+Receiving from: [previous-specialist] · Context: [what was handed over] · Focus: [what I will verify]
 ```
 
 ## Completion & Handback Protocol
 
-When completing specialist work:
+Show the COMPLETE box with: work summary, templates/rows touched (and whether a reseed is owed), remaining
+items, and one handback choice — discovery-scout · types-system-specialist · token-optimizer-specialist ·
+complete · return to user (with the reason).
 
-```markdown
-╔═══════════════════════════════════════╗
-║ 📋 TEMPLATE SYSTEM COMPLETE           ║
-╚═══════════════════════════════════════╝
+## Domain Library (Protocol 12)
 
-## Work Summary:
-📊 **Tasks Completed:** X/Y template tasks ✅
-🔧 **Templates Updated:** N templates modified
-📝 **Documentation:** Updated M template files
-⚠️ **Remaining Issues:** K template items for follow-up
-
-## Deliverables:
-1. ✅ Template architecture analysis complete
-2. ✅ Data transformation flows verified
-3. ⚠️ Migration planning - needs stakeholder review
-
-## Next Steps Recommended:
-- [ ] Implement template architecture improvements
-- [ ] Complete metadata.agentConfig migration
-- [ ] Update template validation rules
-
-## Handback Options:
-1. 🔄 **Return to discovery-scout** - More investigation needed in template patterns
-2. 🤝 **Hand to types-system-specialist** - For type definition updates
-3. 🤝 **Hand to token-optimizer-specialist** - For template size optimization
-4. ✅ **Complete** - Template task fully resolved
-5. 👤 **Return to user** - Awaiting user decision on template changes
-
-Choose: [Selected option with reason]
-```
+Depth evicted per **Protocol 12** lives at `.claude/knowledge/domain/templates/template-system-library.md` —
+read/grep ON DEMAND: the Agent Builder field table, the Apr 2026 category/seed inventory snapshot, the MCP-template
+history, the P9 verb-stem table + MVP rationale, the rationalization record, the admin-ui clone pattern, and the
+Nov 2025 variable-security integration (whose prompt-registry claim is now stale). The paired discovery's PROVEN
+greps and Pattern #44 outrank it.
 
 ## Working Directory
 
@@ -481,54 +396,11 @@ This specialist is part of the pAIchart system architecture. When activated, app
 
 ---
 
-## ⭐ Variable Security Integration Discovery (Nov 2025)
+## Variable Security (applyTemplateSafe)
 
-**Critical Finding**: Prompt library was vulnerable, agent templates were protected
-
-**Existing Security**: `/lib/security/prompt-injection-prevention.ts` (808 lines)
-- applyTemplateSafe() with 5-layer protection
-- 25+ injection patterns (IGNORE INSTRUCTIONS, system:, etc.)
-- Production-tested since Oct 30, 2025
-
-**Integration Pattern** (Prompt Registry):
-```javascript
-// lib/mcp/server/prompts/prompt-registry.js
-const { applyTemplateSafe } = require('../../security/prompt-injection-prevention');
-
-const application = applyTemplateSafe(prompt.promptText, args, {
-  strictMode: true,         // Block CRITICAL + HIGH
-  validateInjection: true,  // 25+ patterns
-  maxValueLength: 2000      // DoS prevention
-});
-
-if (!application.success) {
-  throw new Error(`Injection blocked: ${application.errors.join(', ')}`);
-}
-return application.result;  // Sanitized
-```
-
-**Impact**: Saved 5.5 hours by discovering existing solution vs rebuilding
-
-**Discovery Commands**:
-```bash
-# Find applyTemplateSafe usage
-grep -r "applyTemplateSafe" lib app --include="*.ts" --include="*.js"
-
-# Find variable substitution patterns
-grep -r "{{.*}}\|prompt.*variable" lib app --include="*.js" --include="*.ts"
-
-# Find injection prevention
-grep -r "detectPromptInjection\|sanitizeTemplateVariable" lib --include="*.ts"
-
-# Check security layer exists
-ls -la lib/security/prompt-injection-prevention.ts
-```
-
-**Pattern for All Template Systems**:
-1. **Check if security exists** before building new
-2. **Reuse applyTemplateSafe()** for any variable substitution
-3. **Same security** for agent templates AND prompt templates
-4. **Consistent protection** across all template types
+`lib/security/prompt-injection-prevention.ts` `applyTemplateSafe()` is the one safe substitution helper — reuse it,
+never build another. Importers today: `agentTemplateService.ts`, `agent-template-validation.ts`. ⚠ The Nov 2025
+prompt-registry integration was REMOVED 2025-11-25 (`847b7153`) — history + the open question in the domain library.
 
 ## 🆕 2026-08-17 — WS1 Phase C: loadProtocols is a LOAD-BEARING template key (round-trip + flip rails)
 
@@ -546,9 +418,9 @@ the template flipped de-protocols every harness — backstopped by the
 
 ## 🆕 Prompt-claim validation (2026-07-25)
 
-> _Protocol-12 size budget: this file is 508 lines (>500). Steve explicitly authorized the
-> overage for this block on 2026-07-25 — do NOT evict it at the quarterly health-run without
-> re-reading that decision._
+> _Protocol-12: Steve authorized keeping this block on 2026-07-25 when the file was over 500 lines.
+> The 2026-09-27 eviction brought the file under budget WITHOUT evicting it — do not evict it at the
+> quarterly health-run without re-reading that decision._
 
 **Run `npm run validate:prompt-claims` in your discovery.** Templates make CLAIMS about the code
 (errors, codes, action names) and nothing pinned them — three fabricated claims were found by hand
@@ -582,8 +454,9 @@ measuring the gap, which happened twice on 2026-08-04 alone.
 | ✅ CURRENT | matches the code. |
 
 **Delivering a fix**: run the **OWNING seed script(s)** —
-`grep -rln "defaultRole: '<role>'" scripts/seed-*.ts`. A role can have SEVERAL owners (the four infra
-roles each have four: network-provisioning, terraform-iac, kubernetes-gitops, observability); run every one the grep
+`grep -rln "defaultRole: '<role>'" scripts/seed-*.ts`. A role can have SEVERAL owners (three infra
+roles have four: network-provisioning, terraform-iac, kubernetes-gitops, observability; `infra_state_harvester`
+has a fifth, requirements-authoring); run every one the grep
 returns, or the rows you missed stay stale while the report goes quiet about the role you just
 "fixed". **Never run the generic `seed-agent-templates.ts` to fix a domain role** — it owns the
 generic family and touches rows you did not intend. The domain scripts are already scoped. Note the precedent's warning — the lesson outlives the script,
@@ -595,4 +468,10 @@ as a live tool is how the next person reaches for the unsafe shape.
 **Before editing role guidance at all**, run `npm run prompt:directives -- <role> --protocol <name>`: an
 entry here never reaches an agent alone, and this file references `UNIVERSAL_AGENT_RULES` zero times.
 
-Baseline 2026-08-04 (prod and local identical): 0 STALE · 0 UNVERIFIABLE · 3 NOT COMPARABLE · 32 CURRENT.
+Baseline 2026-09-27 (local, re-run): **0 STALE · 0 UNVERIFIABLE · 0 NOT COMPARABLE · 40 CURRENT**; all 40 on a
+sanctioned tier at maxTokens 48000. Prod after the EG-1 reseed: 0 STALE / 40 CURRENT (`1a24cfa0`). *(Prior 2026-08-04: 0/0/3/32.)*
+
+**📌 TASKS OVERRIDING THEIR TEMPLATE** (X21 `26a7ad05`) — a FACT section, not a state and not an exit code: tasks whose own
+`prompt` or `metadata.modelParameters` OUTRANK their template, so a reseed does not reach them. Read it after every reseed.
+Usually a person's GUI choice (legitimate — Steve keeps GUI editing); to make one follow its template again, clear the task's
+prompt / model parameters in the GUI. Prod 2026-09-27: 59 prompt overrides, 50 model pins. Local 2026-09-27: 0 / 1.

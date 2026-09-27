@@ -424,3 +424,69 @@ Evidence: harness clobber-detection Phase 0 (2026-04-25) measured comment breadc
 - **Reference**: `/.claude/knowledge/patterns/mcp-metadata-exposure-pattern.md` (Pattern 4)
 
 
+
+## 2026-09-26 → 2026-09-27 — RWF Stage 1/2, EG-1, MI-1, execution-identity keys (Protocol 11 self-update)
+
+Verified at source 2026-09-27. Register: `cline_docs/follow-ups/OPEN-REGISTER-2026-09-23.md` (RWF, RWF-X, EG-1, MI-13/MI-1).
+
+**Corpus versions (seed, 2026-09-27)** — pipeline-orchestrator **3.18.0** (`seed-protocol-prompts.ts:3856`) ·
+network-provisioning **1.15.0** · kubernetes-gitops **1.13.0** · terraform-iac **1.7.0** · observability-config **1.4.0** ·
+pov-program **1.8.6** · requirements-authoring **1.6.0** · HOWTO-use-pipeline-harness **2.8.0** · HOWTO-use-program-harness **2.6.7**.
+Re-read `grep -n "version: '" scripts/seed-protocol-prompts.ts` rather than trusting this line.
+
+**Orchestrator Step 3 now describes enforcement, not advice (RWF C4 `d49975e3`, 3.18.0; harness guide 2.8.0).**
+- Reviewer/QA-gate children are NOT re-run for a 50–69 score — their verdict decides (Accept).
+- A stale reviewer is re-run only on the platform FACT `verdictFresh: no` on the child's `agent.results` Facts line
+  (`seed:355`; operator mirror `seed:1225`). Freshness is stamped by `f9e14a79` (C3).
+- One orchestrator re-execution per child per run (`seed:365`), enforced in `lib/services/orchestrator-reexecution.ts`;
+  refusal codes `ORCHESTRATOR_REEXECUTION_CAP` and `REVIEWER_SAME_INPUT_REEXECUTION` (`lib/errors.ts:93`). The prose
+  names the codes so an agent that hits one recognises it — the prompt-claim validator pins that they are real codes.
+- Pinned by `test:step3-reexecution-prose` (prose) and `test:orchestrator-reexecution` (mechanism).
+- Authoring lesson: once the platform enforces a rule, the protocol sentence changes from an instruction to a
+  statement of what the platform will do — leaving it as an instruction invites the agent to "decide" something it
+  cannot decide.
+
+**`change_reviewer` guidance (shared; ships to 4 templates incl. Node C's row, owned by the network/k8s/terraform/
+observability seeds — `grep -rln "defaultRole: 'change_reviewer'" scripts/seed-*.ts`).**
+- RWF D2 `133f8437`: "clause (f) restatement" replaced by the PROPERTY (a package that carries the design's containment
+  conclusion or its own verification narrative/table/confidence; the single terminal `Confidence:` line is exempt).
+  The letter meant different rules per domain and nothing in k8s/Node C. Lock: `ANTI_PATTERNS /\bclause \([a-z]\)/i`
+  in `scripts/audit-role-guidance-contract.ts:46` (CI via `validate:role-guidance`). General rule: **state properties,
+  never another document's clause letters** — letters are domain-local and rot silently.
+- EG-1 `4d1d21d7` (evidence-grading soak decision): evidence **PRESENCE** is always the reviewer's (section present,
+  source named, source permitted — may block); copy **FIDELITY** is judged only where the source is in the reviewer's
+  context, otherwise not graded, raised, blocked on, or asserted as fabrication (`pAIchartUniversalTemplate.ts:515`).
+  Cites `rollbackContainment` where §6 carries it; `derivationContainment` dropped from the guidance because reviewers
+  are injection-excluded and never receive it. Node C's harvest-authority duty is unchanged (it is the source-in-context
+  case). Precedent: format left the remit 2026-09-09. Delivery = manual reseed of the 4 owning seeds (freshness: 4 STALE → 0).
+
+**Retry-with-findings Stage 3 is NOT built (RWF Stage 2 `c0cb13d3`; STOP decided `c0f3a721`).** Strict retry reach 5%,
+0 of 16 non-releasable programs sunk by write-up legs alone, Alternative B dropped. No reviewer tag grammar exists or is
+planned — do not author prompt text that assumes one. Re-open only on new evidence (register RWF): strict reach ≥ 10% of
+infra NR verdicts, or ≥ 1 program non-releasable solely through write-up legs, on a fresh window. Side-effect worth
+knowing: evidence-grading NEITHER fell 27% → 0% over the window.
+
+**Validator re-run note (MI-1 `34f3bc8d`).** `RERUN_NOTE_RE` (`lib/services/pipelineProtocolValidator.ts:171`) now
+accepts near-verbatim — a third arm for an explicit "cannot be re-run" (hyphen optional) — because the protocol says
+"verbatim (or near-verbatim)" and 28 of 46 flags were paraphrases. No bare "fresh PIPELINE task" arm (matches advice).
+An ESCALATED exit is no longer asked for the deliverable pointer or the re-run note (protocol: "Escalate. Do NOT
+synthesize."); the breadcrumb is still required. Lesson: when the protocol licenses paraphrase, the checker must accept
+the PROPERTY, or its false flags train authors to distrust it.
+
+**Execution identity cannot come from modelParameters (X15 `ba188432`; X17 `3a5d2b6a`; X18 `465d63a7`; X21 `26a7ad05`).**
+- `withoutExecutionIdentityKeys` (`lib/services/llm/template-model-params.ts:94`) strips `agentRole`, `prompt`,
+  `inputContext`, `priority` from modelParameters at all three merge sites (`agentTaskService.ts:197`,
+  `agentExecutionConfigBuilder.ts:118`, the frozen-snapshot resolver). Before this, a spread order let
+  modelParameters.prompt / .agentRole (even `null`) replace the task's own — i.e. it could silently rewrite the §1
+  directive and the Axis-4 role slot. Axis 4's chain (`config > defaultRole > task > 'AI Assistant'`) is unchanged;
+  what changed is that "config" can no longer be smuggled in through modelParameters.
+- An agent run may not `agent.configure` a pipeline child (X17 — configure with no prompt SYNTHESISES one, so it
+  silently replaced the child's prompt), may not override a pipeline child's model/provider per run (X18), and may not
+  set modelParameters via task.create/update (X21, `AGENT_MODEL_PARAMETERS_REFUSED`). Humans/GUI keep the capability.
+- `report:template-freshness` now lists tasks that OVERRIDE their template (own prompt / model pin) — a reseed does
+  not reach those. When a prompt fix "didn't land" on a task, check that section before suspecting the template.
+
+**requirements-authoring 1.5.0 → 1.6.0 (09-26, changelog on `seed:3642`)**: 1.5.0 (GS-T1 + GS-D1) turned the
+template's author-addressed lines outside a trash-can block into AUTHORING NOTEs so `--skeleton` strips them
+mechanically; 1.6.0 (GS-R5) — the objective's DECLARED BLOCKS (design decisions, approvers, descriptor URLs) go
+verbatim into the generated spec. Panel: `cline_docs/reviews/gs-r5-decision-guidance-2026-09-26/`.

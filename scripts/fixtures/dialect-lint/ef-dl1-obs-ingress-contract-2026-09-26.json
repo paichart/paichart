@@ -1,0 +1,65 @@
+{
+  "cloud": {
+    "workspace": "prod",
+    "conditionKey": "aws:SourceIp",
+    "excludedActions": [
+      "s3:GetObject",
+      "s3:ListBucket",
+      "s3:DeleteObject"
+    ],
+    "authorisedAction": "s3:PutObject",
+    "terraformAddress": "aws_s3_bucket.app_logs"
+  },
+  "fabric": {
+    "widthControl": "minimality — this environment declares no parent-range/IPAM allocation convention for the exporter pool, so the minimal aligned cover is the sole control on range width",
+    "cidrDerivationRule": "smallest CIDR block, aligned to a valid prefix boundary, containing every selected interface's IPv4 address (Design decision: CIDR representation)",
+    "exporterSelectionRule": "IPv4 address of every fabric interface whose description marks it as a telemetry exporter (Design decision: Exporter population)"
+  },
+  "cluster": {
+    "namespace": "trading",
+    "portProtocols": {
+      "4317": "OTLP-gRPC",
+      "4318": "OTLP-HTTP"
+    },
+    "receiverPorts": [
+      4317,
+      4318
+    ],
+    "receiverLabelSelector": {
+      "app.kubernetes.io/component": "telemetry-receiver"
+    }
+  },
+  "program": "telemetry-export-four-domain",
+  "crossingValue": {
+    "name": "fabricExporterCidr",
+    "delivery": "DAG edge (chained §6 context) from the fabric leg — NOT a static value in this contract. Each consuming leg must treat it as chained input; if §6 does not carry it, escalate — never guess, substitute, or recompute.",
+    "consumedBy": [
+      "kubernetes leg",
+      "cloud storage leg",
+      "observability leg"
+    ],
+    "producedBy": "fabric leg",
+    "consumptionRule": "consumed verbatim by every consumer — never recomputed, never widened, never guessed"
+  },
+  "observability": {
+    "listeners": [
+      {
+        "name": "OTLP-gRPC",
+        "port": 4317
+      },
+      {
+        "name": "OTLP-HTTP",
+        "port": 4318
+      }
+    ]
+  },
+  "platformDialect": {
+    "appliesTo": "observability leg only — insert into each of the two OTLP-facing server blocks (4317 and 4318), above any existing catch-all allow, terminated by the deny-all; no deny directive may reference a scope narrower or wider than <FABRIC_CIDR>",
+    "placeholder": "<FABRIC_CIDR> resolves at runtime to crossingValue.fabricExporterCidr — never a value fixed in this contract",
+    "canonicalStanza": "allow <FABRIC_CIDR>;\ndeny all;",
+    "forbiddenTokens": [
+      "allow all;"
+    ]
+  },
+  "readOnlyServiceLifecycle": "Each leg self-provisions its own read-only MCP registration from its own descriptor URL, harvests read-only, then tears the registration down — on approval AND on escalation alike."
+}

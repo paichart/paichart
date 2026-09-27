@@ -788,6 +788,22 @@ test('E3 (wave-2 2026-07-18): pickResultJsonSummary hoists derivationContainment
   }
 });
 
+test('E3b-5 (2026-09-28): dialectLint.classifier survives the pick NESTED — the series-break marker reaches the consumer', () => {
+  // EF-DL2 Phase D decision 4: every classifier-changing commit bumps `dialectLint.classifier` so a
+  // blockKinds series splits on a FIELD, not a typed date. That only works if the field survives the
+  // strict whitelist — built here from the SHIPPING producer, not a hand-written object, so a rename
+  // at the producer turns this red rather than leaving it pinning a shape nobody stamps.
+  const { runDialectLint, DIALECT_LINT_CLASSIFIER } = require('../lib/agents/harness/dialect-lint');
+  const fact = runDialectLint('## Candidate\n```\nrouter isis A\n```', { platformDialect: { bannedTokens: ['metric-style'] } });
+  if (fact.classifier !== DIALECT_LINT_CLASSIFIER) throw new Error(`the producer must stamp classifier ${DIALECT_LINT_CLASSIFIER}, got ${fact.classifier}`);
+  const summary = pickResultJsonSummary({ taskId: 't1', dialectLint: fact, finalResponse: 'x'.repeat(20000) } as unknown as Record<string, unknown>);
+  const got = (summary as Record<string, unknown>).dialectLint as Record<string, unknown> | undefined;
+  if (got?.classifier !== DIALECT_LINT_CLASSIFIER) throw new Error('classifier must survive the pick nested on dialectLint');
+  // …and the trap: promoted to a top-level sibling it is stripped silently.
+  const promoted = pickResultJsonSummary({ taskId: 't1', dialectLint: { checked: true }, dialectLintClassifier: 2 } as unknown as Record<string, unknown>);
+  if ('dialectLintClassifier' in (promoted as Record<string, unknown>)) throw new Error('a top-level sibling must be stripped — if this fires, the whitelist stopped being strict');
+});
+
 test('E3b-3 (2026-09-11): contractApplicability survives NESTED on BOTH contract-dependent facts', () => {
   // A standalone pipeline has no Program Interface Contract BY DESIGN, so `no-contract` /
   // `no-contract-on-leg` cannot be told apart from "expected and missing" without re-deriving the

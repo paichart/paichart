@@ -143,11 +143,11 @@ Layer 1 (in-loop retry) is agent-execution's lane. `cline_docs/reviews/{nontermi
 ## 🆕 2026-06-25 — Harness output guards (R9/R10) + their feature flags
 
 ```bash
-# R9 sanitizer (both boundaries) + R10 redactor (both persist sites) + the flags
+# R9 sanitizer (both boundaries) + R10 redactor (the ONE shared terminal persist) + the flags
 grep -rln "sanitizeChainedOutput\|redactArtifactsForPersist" lib/agents/harness/ lib/services/ app/api/pov/agent/
 grep -rn "CONNECTED_OUTPUT_SANITIZE_ENABLED\|ARTIFACT_SECRET_REDACT_ENABLED" lib/ app/ .env*
 ```
-R9 neutralizes untrusted connected-service output before the reasoner (tool-loop site A + context-chainer site B); R10 redacts secrets from persisted report.md/result.json (engine + stream persist, shared helper). Both **env-var, default-OFF in code but ON in prod since 2026-06-29** (`f7398004`; the `=false` in .env templates is the code default, NOT the prod posture — verify via the deploy workflow or `pm2 jlist`, never the template). No live toggle — `pm2 restart`. Modules, call-sites, enable-gates (R9 C1), CI pins: `.claude/knowledge/domain/harness/harness-output-guards.md`.
+R9 neutralizes untrusted connected-service output before the reasoner (tool-loop site A + context-chainer site B); R10 redacts secrets from persisted report.md/result.json at the ONE shared terminal persist (`execution-terminal-persist.ts` `redactArtifactsForPersist` — engine and stream converge there since the 2026-07-05 convergence; the old "engine + stream persist" wording was stale, corrected 2026-09-27). Both **env-var, default-OFF in code but ON in prod since 2026-06-29** (`f7398004`; the `=false` in .env templates is the code default, NOT the prod posture — verify via the deploy workflow or `pm2 jlist`, never the template). No live toggle — `pm2 restart`. Modules, call-sites, enable-gates (R9 C1), CI pins: `.claude/knowledge/domain/harness/harness-output-guards.md`.
 
 ## Phase 1: Stack Map Orientation
 
@@ -502,7 +502,7 @@ grep -rn "harnessTaskId" lib/ app/ --include='*.ts' --include='*.js' | grep -v n
 # comment), reactor-skip-counter.ts + errors.ts (log/error payload fields), protected-task-metadata.ts
 # (comment), reactor-budget-exhausted-persist.ts (RWF A2: an input FIELD name — it writes the harness TASK, never
 # the stage back-pointer). A NEW file here must be classified read-vs-write before it is accepted:
-grep -rl "harnessTaskId" lib/ app/ --include='*.ts' --include='*.js' | grep -v test | wc -l   # expect 11 — was 10; +orchestrator-reexecution.ts (RWF C1: the orchestratorReExecution.harnessTaskId stamp the per-child cap counts)
+grep -rl "harnessTaskId" lib/ app/ --include='*.ts' --include='*.js' | grep -v test | wc -l   # expect 12 — was 11; +leg-child-override.ts (RWF D1 3090ed42, 2026-09-27 — not X17 as first recorded; X17 reuses its isLegChild: READS stage.metadata.harnessTaskId to decide 'is this a pipeline child?' — a read, classified per the rule above); was 10 before orchestrator-reexecution.ts (RWF C1)
 ```
 
 ### 5.4 Engine skip — the shared SUCCESS-persist core (post-Phase-6 convergence)
@@ -848,7 +848,8 @@ grep -c "executionDegradation = {" \
 
 ```bash
 grep -n "test:pipeline-protocol-validator\|test:template-scope-matcher" /home/steve/copov15/package.json
-# Expect: both scripts present AND both included in test:all-validation chain
+# Expect: test:pipeline-protocol-validator present AND in the test:all-validation chain; test:template-scope-matcher
+# ABSENT (retired 2026-07-17 with its detector — see 9.4; this line said "both present" until 2026-09-27).
 # Violation: validator pure functions exist but aren't run by CI → silent regression risk
 ```
 
@@ -1394,7 +1395,7 @@ grep -c "executionStatus: null" lib/services/agentExecutionEngine.ts   # expect 
 grep -rl "readAuthoritativeResultField(" lib --include=*.ts | wc -l   # expect 4
 # C1 — the cap + Reviewer rule run at the chokepoint, and the chained record is stamped explicitly
 grep -c "enforceOrchestratorReExecutionRules(prisma" lib/services/agent-execution-create.ts   # expect 1
-grep -c "ctx.chainedPredecessors = stamps.chainedPredecessors" lib/services/agent-execution-create.ts   # expect 1
+grep -c "ctx.chainedPredecessors = stamps.chainedPredecessors" lib/services/execution-context-build.ts   # expect 1 — moved out of agent-execution-create.ts by 0901c160 (a prisma-free module, so its test runs in CI); found drifted by MI-13
 # C2 — a changed-input retry gets no keep-best comparison
 grep -c "return skip(.changed-input.)" lib/services/execution-selection.ts   # expect 1
 # C3 — persist-time key order; the freshness net; the guard reads the authoritative reviewer
@@ -1405,3 +1406,53 @@ grep -c "selectAuthoritativeExecution(prisma as any, s.id, CHAIN_SELECTION_OPTIO
 
 ⚠️ **Unknown is never "same"** (audit N8) — a not-chained or absent record compares as unknown, which ALLOWS a
 reviewer re-run and SKIPS keep-best only for the reviewer set. A mechanism that refuses on unknown is a regression.
+
+## 2026-09-27 — what a harness can do to its children, and the day's other shipped mechanics (every expectation run before it was written)
+
+Depth + rationale: library § "2026-09-27 — what a harness can and cannot do to its children". Suites (all in CI):
+`test:agent-execute-authz-order` (D1 + X18, D1a-D1l), `test:execution-identity-keys` (X15/X16),
+`test:agent-configure-leg-child` (X17), `test:agent-model-parameters` (X21), `test:execution-timeout-unit` (X19),
+`test:surrogate-safe` (X11), `test:run-disposition` (MI-3), `test:pipeline-protocol-validator` (MI-1).
+
+```bash
+# D1 + X18 — agent.execute on a pipeline child: overrides allowlisted to known modelParameters keys, never model/provider
+grep -c "export const LEG_CHILD_OVERRIDE_ALLOWED_KEYS: readonly string\[\] = \['modelParameters'\]" lib/services/leg-child-override.ts   # expect 1
+grep -c "export const LEG_CHILD_REFUSED_MODEL_KEYS: readonly string\[\] = \['model', 'provider'\]" lib/services/leg-child-override.ts   # expect 1
+grep -c "refuseLegChildOverrides(prisma" lib/mcp/tasks/action/handlers/agent/agent-execute-handler.ts   # expect 1
+# X15 — the identity keys are stripped from modelParameters at every merge site (definition file + both builders)
+grep -c "export const EXECUTION_IDENTITY_KEYS = \['agentRole', 'prompt', 'inputContext', 'priority'\] as const" lib/validation/model-parameters.ts   # expect 1
+grep -rl "withoutExecutionIdentityKeys(" lib --include=*.ts | wc -l   # expect 3 — template-model-params (defines + resolveExecutionModelParams) + agentTaskService + agentExecutionConfigBuilder
+# X17 — agent.configure from an agent's tool loop on a pipeline child is refused (humans are not)
+grep -c "await refuseAgentLoopConfigure(prisma" lib/mcp/tasks/action/handlers/agent/agent-configure-handler.ts   # expect 1
+# X21 — task.create/task.update carrying modelParameters from an agent run: refused at the router, before any handler
+grep -c "refuseAgentLoopModelParameters(action, parameters, routeOpts?.callingExecutionId" lib/mcp/tasks/action/tasks-action-router.ts   # expect 1
+# all three refusals are 400, never the unmapped-code 500
+grep -c "ErrorCode.LEG_CHILD_OVERRIDE_REFUSED:\|ErrorCode.LEG_CHILD_CONFIGURE_REFUSED:\|ErrorCode.AGENT_MODEL_PARAMETERS_REFUSED:" lib/errors.ts   # expect 3
+# X19 — config.timeout is SECONDS; the two ms sources convert through ONE helper (defining file + 3 callers)
+grep -rl "msToExecutionTimeoutSeconds(" lib --include=*.ts | wc -l   # expect 4
+# X20 — the mcpToolId ownership trigger sits AT the field
+grep -c "X20" lib/validation/task-validation.ts   # expect 1
+# X11 — the terminal persist serialises JSON artifacts well-formed (no lone surrogate reaches jsonb)
+grep -c "stringifyWellFormed(" lib/services/execution-terminal-persist.ts   # expect 2
+# MI-1 — escalated exits are not asked for the deliverable pointer or the re-run note; the paraphrase arm exists
+grep -c "const escalated = result.escalatedExit === true" lib/services/pipelineProtocolValidator.ts   # expect 1
+grep -c "cv.hasRerunNote .. .escalated" lib/services/pipelineProtocolValidator.ts   # expect 1 — the re-run-note miss is gated on not-escalated
+grep -c "cv.hasDeliverablePointer .. .escalated" lib/services/pipelineProtocolValidator.ts   # expect 1 — so is the deliverable-pointer miss
+grep -c "(?:cannot" lib/services/pipelineProtocolValidator.ts   # expect 1
+# MI-3 — runDisposition's closed set includes 'preserved' (still fails closed on any coined state)
+grep -c "const STATES: readonly string\[\] = \['abandoned', 'superseded', 'preserved'\]" lib/tasks/run-disposition.ts   # expect 1
+# Deploy mechanics — a docs-only push does NOT deploy
+grep -c "      - 'cline_docs/\*\*'" .github/workflows/production-deploy.yml   # expect 1
+grep -c "      - '.claude/\*\*'" .github/workflows/production-deploy.yml   # expect 1
+grep -c "lt 5120" scripts/deploy/blue-green-deploy.sh   # expect 1
+```
+
+**Property checks that are not greps:**
+- **Caller scope.** D1 and X18 refuse on the TASK (humans too — the hazard belongs to the child); X17 and X21 refuse
+  only when `routeOpts.callingExecutionId` is present, which ONLY the agent tool loop threads. A new agent-reachable
+  entry path that does not thread `routeOpts` silently exempts itself — check it before accepting any new route.
+- **Preserved fixtures.** `scripts/report-mechanism-inventory.sh` section 0 and `report:run-liveness` must name
+  `cmu0x9d1m000kyx0dloebjb3u` (the only SYNTHESIZE dead-end specimen) as `preserved`, never as a hang. **Never re-run
+  it** — execution retention is count-based and two more runs evict the failing execution.
+- **RWF Stage 3 is STOPPED** (no verb, no tag grammar, no Alternative B). A green retry-band audit does not mean the
+  findings-carrying retry exists; the 50-69 retry is still a blind re-roll. Re-open triggers: library.

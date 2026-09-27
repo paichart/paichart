@@ -88,6 +88,10 @@ if (!r.checked) {
   console.log(`  🛑 ${r.violations.length} violation(s):`);
   for (const v of r.violations) console.log(`     line ${v.line}: "${v.token}" → ${v.lineText}`);
 }
+// EF-DL1: an occurrence inside a quoted grep pattern is exempt — name it, never drop it silently.
+for (const v of r.searchPatternExempt ?? []) {
+  console.log(`     ⓘ exempt (grep search pattern, not a directive) line ${v.line}: "${v.token}" → ${v.lineText}`);
+}
 
 // ── PRESENCE ──
 const t = r.transcription;

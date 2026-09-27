@@ -4,6 +4,7 @@
 **Status**: Enhanced v3.0 — Gold Standard integrated, rationalization added  
 **Confidence**: Very High - Validated Apr 2026
 **Last Validated**: 2026-04-03 — All file paths, greps, categories verified
+**Partial re-validation 2026-09-27**: §18b, GS5/GS6 greps, Template freshness, and the new RWF section below were re-proven against the tree (Protocol 11). Evicted specialist depth: `.claude/knowledge/domain/templates/template-system-library.md`.
 
 ## Objective
 Map and understand the complete agent template system in pAIchart, including data flow, storage patterns, UI components, and the ongoing metadata.agentConfig refactoring.
@@ -371,8 +372,9 @@ echo ""
 echo "--- terminal-verdict grammar coupling (2026-07-14): grammar canonical in change_reviewer entry ONLY ---"
 grep -c "## VERDICT: APPROVED | NEEDS-REVISION" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # expect 2 — ONE PER REVIEWER ROLE (change_reviewer, requirements_reviewer), not one globally. GS8 keeps the grammar out of PROTOCOLS; it does not make it single-copy inside the library, because each reviewer role must instruct its own terminal block. The copies are pinned by npm run test:parse-verdict, which asserts all four parsed tokens for every REVIEWER_ROLE — widened 2026-09-22 when this grep caught the second copy arriving unpinned
 grep -c "## VERDICT: APPROVED | NEEDS-REVISION" scripts/seed-protocol-prompts.ts                                  # expect 0 (protocols reference, never redefine)
-npm run test:parse-verdict   # 15 pass — fixtures are LIFTED from the change_reviewer entry; an entry edit that
-                             # moves the marker fails here. Entry edits ⇒ re-seed the 4 reviewer templates.
+npm run test:parse-verdict   # expect >=23 — fixtures are LIFTED from the change_reviewer entry; an entry edit that
+                             # moves the marker fails here. OUTSIDE test:all-validation: run it by hand.
+                             # Entry edits ⇒ re-seed the 4 reviewer templates.
 
 echo ""
 echo "--- the domain protocols that layer ON TOP of these roles ---"
@@ -381,8 +383,9 @@ grep -nE "name: '(network-provisioning|kubernetes-gitops|terraform-iac|observabi
 echo ""
 echo "--- PAIRING DRIFT CHECK: a 'neutral' role carrying a domain-ism the protocol should own ---"
 grep -n "maintenance-window\|maintenance window" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts
-# Known residual: config_change_author still says 'maintenance-window' (a network-ism, off for IaC — the
-# protocol owns the apply mechanism). A hit here = a drift candidate to neutralize.
+# RESOLVED 2026-09-12 (02db1d8b): the slot is now an APPLY-GOVERNANCE note in all four domains. Today's hits are
+# that neutralization (config_change_author item (d), change_reviewer 'never require a window') and its
+# measurement comment. A NEW hit that REQUIRES a window in shared guidance = the drift to neutralize.
 ```
 
 **What to verify:**
@@ -449,20 +452,25 @@ grep -B1 "promptTemplate:" scripts/seed-agent-templates.ts 2>/dev/null | grep "n
 echo ""
 echo "--- GS5: Pre-flight checks in MCP templates ---"
 echo "MCP templates MUST include schema inspection + health check before calls"
+# The two seed-mcp-*.ts scripts were DELETED 2026-09-25 (d6bdd038) — the old glob returned nothing and read clean.
+# The one MCP template left (MCP Service Registry) bakes its guidance from the library entry mcp_service_registrar.
+grep -n "'mcp_service_registrar'" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts
 grep -l "registry.*tools\|health.*check\|pre.flight\|inspect.*schema" \
-  scripts/seed-mcp-*.ts 2>/dev/null
+  lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts
 
 echo ""
 echo "--- GS6: Deliverable Contract in templates (2026-04-26) ---"
 echo "Templates MUST carry the Deliverable Contract: finalResponse is the delivery channel; comments are coordination only."
 echo "Hits — templates correctly stating finalResponse-as-deliverable-channel:"
 grep -l "deliverable channel\|final assistant response\|comments are coordination\|task.comment.*coordination" \
-  scripts/seed-agent-templates.ts scripts/seed-mcp-*.ts \
+  scripts/seed-agent-templates.ts \
   lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts 2>/dev/null
 
 echo "Anti-pattern — templates still framing 2000-char comment-limit AS the deliverable cap (should be ZERO; superseded 2026-04-26):"
+# ⚠ 2026-09-27: this lists pAIchartUniversalTemplate.ts — NOT a regression: :14 is a JSDoc changelog line and :493 a
+# common-mistake callout that FORBIDS splitting across task.comment. READ hits; the mechanical guard is validate:role-guidance.
 grep -lE "2000.*task\.comment|task\.comment.*2000|comment.*limit.*2000|split.*comment.*if.*long" \
-  scripts/seed-agent-templates.ts scripts/seed-mcp-*.ts \
+  scripts/seed-agent-templates.ts \
   lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts 2>/dev/null
 
 echo "Engine §8 prose — should mention finalResponse as deliverable channel (commit d0c0f2d8):"
@@ -1022,17 +1030,77 @@ non-blocking.
 field is always set") are not mechanically decidable. Spot-check several against the tree — that
 judgement is the reason this discovery is run by a specialist and not just by CI.
 
-## Template freshness (added 2026-08-04)
+## Template freshness (added 2026-08-04; re-proven 2026-09-27)
 
 ```bash
 npm run report:template-freshness            # expect 0 STALE, 0 UNVERIFIABLE
 npm run report:template-freshness -- --verbose
+grep -c "TASKS OVERRIDING THEIR TEMPLATE" scripts/report-template-freshness.ts   # expect 1
 ```
-`agent_templates` rows are seeded MANUALLY — the deploy does not re-seed them, deliberately, to protect GUI
-template edits. So a library fix can sit undelivered indefinitely with nothing measuring the gap.
-**NOT COMPARABLE means unmeasured, NOT clean.** Baseline 2026-08-04 (prod and local identical): 0 STALE ·
-0 UNVERIFIABLE · 3 NOT COMPARABLE · 32 CURRENT. Deliver a fix with a targeted, refusing reseed
-(run the OWNING seed script(s); `grep -rln "defaultRole: '<role>'" scripts/seed-*.ts` names them) — never the generic seed-agent-templates.ts for a domain role.
+`agent_templates` rows are seeded MANUALLY after the deploy lands (the deploy seeds PROTOCOLS only). The OPERATIVE rule
+(Steve, 2026-08-26/27): **the owning seed script + `ROLE_GUIDANCE_LIBRARY` is the source of truth**; a GUI-edited row is a
+conflict to resolve toward the library, not a state to preserve. The cost of the manual step: a library fix can sit
+undelivered indefinitely — this report is what measures the gap.
+**NOT COMPARABLE means unmeasured, NOT clean.** Baseline **2026-09-27 (local, re-run): 0 STALE · 0 UNVERIFIABLE · 0 NOT
+COMPARABLE · 40 CURRENT**, all 40 on a sanctioned tier at maxTokens 48000; prod 0 STALE / 40 CURRENT after the EG-1 reseed.
+*(Prior 2026-08-04: 0/0/3/32.)*
+
+**Delivering a fix**: run EVERY owning seed — `grep -rln "defaultRole: '<role>'" scripts/seed-*.ts` — never the generic
+`seed-agent-templates.ts` for a domain role. ⚠ The owning seeds **never refuse**: they findFirst → update/create and
+overwrite (the one refusing reseed script was deleted 2026-08-26). The only guard is running this report FIRST: it must show
+exactly the rows you expect STALE. Anything else STALE in the same domain = stop and decide — each domain seed rewrites ALL its
+rows, so it would ship that other undelivered edit as a side effect. Run it again after: 0 STALE.
+
+**📌 TASKS OVERRIDING THEIR TEMPLATE** (X21 `26a7ad05`, 2026-09-27) — a FACT section, not a state, and not in the exit code:
+tasks whose own `prompt` or non-empty `metadata.modelParameters` OUTRANK their template at run time (precedence below), so a
+reseed does not reach them. Usually a person's GUI choice. Prod 2026-09-27: 59 prompt overrides (51 synthesised by configure
+saves), 50 model pins (0 matching their template). Local 2026-09-27: 0 prompt / 1 model pin. Read it after every reseed.
+
+⚠ Still NOT covered by the report: `metadata.protocol` / `loadProtocols`, `constraints`, `capabilities`, `tags`,
+`defaultRole` — re-running the owning seed restores them, nothing detects their drift.
+
+## RWF seed-is-truth locks — execution-config precedence (added 2026-09-27)
+
+**Precedence at run time** (`lib/services/agentTaskService.ts` ~:160-220; `lib/services/agentExecutionConfigBuilder.ts`
+~:100-131 is the builder pipeline children run through): `prompt` = override → `task.prompt` → `template.promptTemplate`;
+`modelParameters` = `overrideConfig.modelParameters` → non-empty `task.metadata.modelParameters` →
+`buildTemplateModelParameters(template)`. No hardcoded model (tiers: `lib/agents/model-tiers.ts` `AGENT_MODELS`). ⚠ The
+builder's own priority-chain comment still lists a "hardcoded fallback (claude-haiku-4-5, temp 0.7)" the code no longer has.
+
+| Item | Commit | What it enforces | Code |
+|---|---|---|---|
+| D1 | `3090ed42` | pipeline child's `agent.execute` overrideConfig = `modelParameters` with `MODEL_PARAMETER_KEYS` only → `LEG_CHILD_OVERRIDE_REFUSED` (humans too) | `leg-child-override.ts` `refuseLegChildOverrides`, `isLegChild` |
+| X18 | `465d63a7` | on a child, `modelParameters.model` / `.provider` refused — model is set on task/template, never per run | same, `LEG_CHILD_REFUSED_MODEL_KEYS` |
+| X17 | `3a5d2b6a` | `agent.configure` from an agent's tool loop on a child → `LEG_CHILD_CONFIGURE_REFUSED` (humans pass) | `refuseAgentLoopConfigure`; router threads `routeOpts` |
+| X21 | `26a7ad05` | `task.create`/`task.update` with `modelParameters` (any nesting) from an agent run → `AGENT_MODEL_PARAMETERS_REFUSED` | `refuseAgentLoopModelParameters` in `tasks-action-router.ts` |
+| X15 | `ba188432` | `EXECUTION_IDENTITY_KEYS` (agentRole, prompt, inputContext, priority) stripped from modelParameters — warn `MODEL_PARAMETERS_IDENTITY_KEY_STRIPPED` | `withoutExecutionIdentityKeys` (`llm/template-model-params.ts`) at both builders + `resolveExecutionModelParams` |
+| X16 | `ba188432` | overrideConfig typed + bounded; REST/MCP share one field object | `AGENT_EXECUTE_OVERRIDE_FIELDS` (`validation/task-validation.ts`) |
+| X19 | `d0fb4e4f` | execution `timeout` is SECONDS; ms sources converted | `msToExecutionTimeoutSeconds` |
+
+```bash
+grep -c "withoutExecutionIdentityKeys(" lib/services/agentTaskService.ts            # expect 1
+grep -c "withoutExecutionIdentityKeys(" lib/services/agentExecutionConfigBuilder.ts # expect 1
+grep -c "withoutExecutionIdentityKeys(" lib/services/llm/template-model-params.ts   # expect 2 — definition + the frozen resolver
+grep -c "msToExecutionTimeoutSeconds(" lib/services/agentExecutionConfigBuilder.ts  # expect 1
+grep -c "LEG_CHILD_OVERRIDE_REFUSED\|LEG_CHILD_CONFIGURE_REFUSED\|AGENT_MODEL_PARAMETERS_REFUSED" lib/errors.ts   # expect 6 — 3 codes + 3 cases mapping to 400
+grep -c "templateType === 'REVIEWER'" lib/agents/harness/parse-verdict.ts          # expect 1 — isReviewerSet: templateType is load-bearing (RWF C1-C3)
+npm run test:execution-identity-keys && npm run test:agent-execute-authz-order && npm run test:agent-configure-leg-child && npm run test:agent-model-parameters && npm run test:execution-timeout-unit
+```
+⚠ Template authoring consequence: never put `agentRole`/`prompt`/`inputContext`/`priority` in a template's
+`metadata.modelParameters` (stripped, loudly). `systemPrompt`, `useSystemPrompt`, `maxRetries`, `timeout` belong there
+on purpose; `timeout` in SECONDS.
+
+### change_reviewer: property not letter (D2) + evidence PRESENCE vs FIDELITY (EG-1)
+
+```bash
+grep -c "bclause" scripts/audit-role-guidance-contract.ts                                   # expect 1 — ANTI_PATTERNS lock (D2 133f8437)
+grep -c "Evidence PRESENCE is always yours" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # expect 1 — EG-1 4d1d21d7
+grep -rln "defaultRole: 'change_reviewer'" scripts/seed-*.ts | wc -l                        # expect 4 — the owning seeds (Node C uses the NETWORK row)
+npm run validate:role-guidance
+```
+Four rows, not "four plus Node C": Node C `agent.assign`s the network `Change Reviewer`, owned by
+`seed-network-provisioning-templates.ts`; `seed-program-templates.ts` seeds only Program Architect. A `clause (x)` hit in
+the library outside a JSDoc comment fails `validate:role-guidance` (the one comment hit at the entry's JSDoc is expected).
 
 ## 🆕 2026-08-17 — WS1 Phase C loadProtocols round-trip tripwires
 

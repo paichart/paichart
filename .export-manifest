@@ -229,6 +229,7 @@
 .claude/knowledge/domain/parameter-normalization/tool-schema-discovery.md
 .claude/knowledge/domain/security/permission-matrix.md
 .claude/knowledge/domain/security/sec-ops-library.md
+.claude/knowledge/domain/templates/template-system-library.md
 .claude/knowledge/domain/testing/agent-integration-testing.md
 .claude/knowledge/domain/testing/validation-testing-architecture.md
 .claude/knowledge/domain/tutorials/tutorial-production-playbook.md
@@ -304,6 +305,7 @@
 .claude/knowledge/patterns/transaction-atomicity-pattern.md
 .claude/knowledge/patterns/transport-boundary-argument-coercion-pattern.md
 .claude/knowledge/patterns/two-execution-path-drift-pattern.md
+.claude/knowledge/patterns/zero-by-construction-check-with-control-pattern.md
 .claude/knowledge/pipelines/ADD-A-PIPELINE-HARNESS-AGENT.md
 .claude/knowledge/pipelines/ADD-A-PROGRAM-PROTOCOL.md
 .claude/knowledge/pipelines/CHECK-DESIGN-DISCIPLINE.md
@@ -333,6 +335,7 @@
 .claude/knowledge/protocols/drift-sweep-protocol.md
 .claude/knowledge/protocols/endpoint-consolidation-protocol.md
 .claude/knowledge/protocols/endpoint-security-audit-protocol.md
+.claude/knowledge/protocols/evidence-graded-panel-review-protocol.md
 .claude/knowledge/protocols/gold-standard-regression-triage-protocol.md
 .claude/knowledge/protocols/iterative-test-hardening-protocol.md
 .claude/knowledge/protocols/large-scale-refactoring-protocol.md
@@ -1691,6 +1694,27 @@ scripts/export-public.py
 scripts/export/public-allowlist.rules
 scripts/export/publish.sh
 scripts/fixtures/authoritative-read-stub.ts
+scripts/fixtures/dialect-lint/PROVENANCE.md
+scripts/fixtures/dialect-lint/ef-dl1-obs-ingress-author-2026-09-26.md
+scripts/fixtures/dialect-lint/ef-dl1-obs-ingress-contract-2026-09-26.json
+scripts/fixtures/dialect-lint/ef-dl1-obs-ingress-harvest-2026-09-26.md
+scripts/fixtures/dialect-lint/ef-dl2-d042-ospf-rollback-cmtc941hi0035yx5pdsgb2q8i-contract.json
+scripts/fixtures/dialect-lint/ef-dl2-d042-ospf-rollback-cmtc941hi0035yx5pdsgb2q8i.md
+scripts/fixtures/dialect-lint/ef-dl2-d052-k8s-expected-cmtxqjequ000ayxw6xfkvycvp-contract.json
+scripts/fixtures/dialect-lint/ef-dl2-d052-k8s-expected-cmtxqjequ000ayxw6xfkvycvp.md
+scripts/fixtures/dialect-lint/ef-dl2-d076-dialect-note-cmu236uev00nyyxvrntaxjv9s.md
+scripts/fixtures/dialect-lint/ef-dl2-d098-residual-cmu4wyjzv006syx8ybnafzc9n-contract.json
+scripts/fixtures/dialect-lint/ef-dl2-d098-residual-cmu4wyjzv006syx8ybnafzc9n.md
+scripts/fixtures/dialect-lint/ef-dl2-d137-obs-rule-file-cmu6lojrs00j9yxqffg3qc2in.md
+scripts/fixtures/dialect-lint/ef-dl2-d241-tf-hcl-diff-cmuhmm2sm0064yxcqx8hezp92-contract.json
+scripts/fixtures/dialect-lint/ef-dl2-d241-tf-hcl-diff-cmuhmm2sm0064yxcqx8hezp92.md
+scripts/fixtures/dialect-lint/ef-dl2-r12-deploy-cmt9vs7ub000eyxmjrdx4ejjn-contract.json
+scripts/fixtures/dialect-lint/ef-dl2-r12-deploy-cmt9vs7ub000eyxmjrdx4ejjn.md
+scripts/fixtures/dialect-lint/f1-tf-lane3-cmrlm3hp5004cyxjwe6rhi55a.md
+scripts/fixtures/dialect-lint/f1-tf-lane3-cmrmjqmko00fmyxlunmemx4vm.md
+scripts/fixtures/dialect-lint/f1-tf-marker-json-cmu7h6erg002oyx3c7v7ydlao.md
+scripts/fixtures/dialect-lint/f1-tf-restore-cms123vmf00ewyxv8wd5o7vbu.md
+scripts/fixtures/dialect-lint/f1-tf-title-leak-cmu3d42ls001pyxe35rmj6bap.md
 scripts/fixtures/live-service-descriptions.json
 scripts/fixtures/net-registry-equivalence/specimens.json
 scripts/fixtures/rollback-containment/PROVENANCE.md
@@ -1728,6 +1752,7 @@ scripts/replay-contract-propagation.ts
 scripts/replay-dialect-lint.ts
 scripts/replay-nets.ts
 scripts/replay-rollback-containment.ts
+scripts/report-mechanism-inventory.sh
 scripts/report-run-liveness.ts
 scripts/report-template-freshness.ts
 scripts/run-baseline.sh
@@ -1822,6 +1847,7 @@ scripts/test-execution-ownership.ts
 scripts/test-execution-quality.ts
 scripts/test-execution-retention.ts
 scripts/test-execution-selection-coverage.ts
+scripts/test-execution-timeout-unit.ts
 scripts/test-express-setup.ts
 scripts/test-f16-frozen-cone-behavioral.ts
 scripts/test-failed-persist-cas.ts

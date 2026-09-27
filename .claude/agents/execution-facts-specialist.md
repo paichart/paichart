@@ -101,11 +101,11 @@ it, never copy it.
 **`reviewerVerdict.evidenceGrading` is a FACT WITH NO CONSUMER, on purpose** (shipped 2026-09-20).
 It transcribes the reviewer's declared epistemic mode — `VERIFIED-AGAINST-EVIDENCE` vs
 `ACCEPTED-FROM-CLAIMS` — which every protocol mandates and nothing read. THREE states: `graded:false`
-(26% of 261 live verdicts — approved with NO epistemic claim) is not `verifiedLines:0`. Counts are
+(26% of 261 pre-fact verdicts, 0% of 41 since — approved with NO epistemic claim) is not `verifiedLines:0`. Counts are
 named for LINES because findings are not machine-delimited. Deliberately UNRENDERED, with the reason
 recorded: rendering it tells reviewers what is measured about them and contaminates its own baseline.
-⚠️ That reason EXPIRES when the reviewer-remit changes land — re-decide then. Depth + the baseline
-table: the discovery's 2026-09-20 block.
+⚠️ The remit change LANDED 2026-09-27 (EG-1) and the accepted-line series BREAKS there; the reason now
+expires at the next soak read. Depth + baseline: the discovery's 2026-09-20 and 2026-09-27 blocks.
 
 **A fact answers ONE question — `derivationContainment` is containment, never PROVENANCE** (ruled
 2026-09-20). A leg importing a value from an unrelated pipeline stamps `benign (checked-clean)` and
@@ -188,7 +188,7 @@ Full expectations (with proven counts) live in the discovery — these are the o
 | `lib/agents/harness/evidence-grading.ts` | reviewer evidence-grading fact, pure. Nests on `reviewerVerdict`; scanned over the WHOLE `finalResponse`, never `raw` |
 | `lib/agents/harness/contract-propagation-enrichment.ts` | shares dialect-lint's canonical-stanza needles |
 | `lib/agents/harness/net-registry.ts` | the registry contract — `(name, point)`, `appliesTo`, `errorFact`, the two render slots, and the three things it deliberately does NOT do |
-| `lib/agents/harness/mechanical-nets.ts` | the six entries. ⚠️ key ORDER is part of the contract — the equivalence gate compares serialized bytes |
+| `lib/agents/harness/mechanical-nets.ts` | the seven entries (six names; `rollbackContainment` at two points). ⚠️ key ORDER is part of the contract — the equivalence gate compares serialized bytes |
 | `lib/agents/harness/net-context.ts` | `ctx` — memoized `children()` + `contractApplicability()` |
 | `lib/services/execution-core.ts` | the ONE call site — now two `runNetsAtPoint` calls, not six hand-wired blocks |
 | `lib/services/execution-artifacts.ts` | `RESULT_JSON_SUMMARY_KEYS` + `pickResultJsonSummary` (the contract) |

@@ -539,19 +539,55 @@ test('ESCALATED EXIT: a SYNTHESIZE that stamped escalated and did not close itse
   assert(result?.escalatedExit === true, 'and must record the FACT, not pass over it in silence');
 });
 
-test('ESCALATED EXIT is NARROW: other Step 5 content checks still apply', () => {
-  // An escalating harness DID do the work, so the deliverable pointer and re-run note
-  // remain meaningful. Only the completion miss is suppressed.
+test('ESCALATED EXIT (MI-1): no deliverable pointer or re-run note is demanded — the protocol says "Do NOT synthesize"', () => {
+  // Reverses the 2026-09-16 assumption that both "remain meaningful" on an escalation. The protocol tells an escalating
+  // harness to explain which child failed and what the human should decide; it has no deliverable, and "COMPLETE,
+  // cannot be re-run in place" would be false on a task that stays IN_PROGRESS. 9 escalated exits were flagged for it.
+  const result = validatePipelineProtocolSteps(
+    [_call('agent.results'), _escalateCall(), _commentCall('**Child stage:** `cmtstage1`\n\nESCALATED: Reviewer scored 15. Human decision needed.')],
+    { type: 'PIPELINE', resolvedMode: 'SYNTHESIZE', metadata: { pipelineStageId: 'cmtstage1' } }
+  );
+  assert(result?.escalatedExit === true, 'the escalation FACT is still recorded');
+  assert(!(result!.missingSteps.some(st => st.includes('Final deliverable') || st.includes('re-run note'))),
+    `an escalation must not be accused of a missing deliverable/re-run note, got ${JSON.stringify(result!.missingSteps)}`);
+  // The facts themselves are still recorded (not hidden): the comment really has neither.
+  assert(result!.commentValidation?.hasDeliverablePointer === false && result!.commentValidation?.hasRerunNote === false, 'facts recorded');
+});
+
+test('ESCALATED EXIT (MI-1): the breadcrumb is STILL required', () => {
   const result = validatePipelineProtocolSteps(
     [_call('agent.results'), _escalateCall(), _commentCall('ESCALATED, nothing else')],
     { type: 'PIPELINE', resolvedMode: 'SYNTHESIZE', metadata: { pipelineStageId: 'cmtstage1' } }
   );
-  assert(result !== null, 'other misses must still be reported');
-  assert(!(result!.missingSteps.some(st => st.includes('task.complete not called'))), 'completion miss suppressed');
-  // Pin the STRUCTURED fact, not the message prose (the 2026-09-15 string-pin lesson).
-  assert(result!.commentValidation?.hasDeliverablePointer === false,
-    `deliverable-pointer miss still detected, got ${JSON.stringify(result!.commentValidation)}`);
-  assert(result!.missingSteps.length > 0, 'and still produces at least one miss');
+  assert(result !== null && result.missingSteps.some(st => st.includes('does not name the child stage')),
+    `breadcrumb miss must still be flagged, got ${JSON.stringify(result?.missingSteps)}`);
+});
+
+test('RE-RUN NOTE (MI-1): near-verbatim paraphrases observed in prod are accepted', () => {
+  for (const note of [
+    '**Complete, cannot re-run in place.** DRAFT for human review. Fresh objective = new PIPELINE task.',
+    '**Program COMPLETE, cannot re-run in place.** Fresh PIPELINE task to re-run.',
+    '**COMPLETE — cannot be re-run in place.** Create a fresh PROGRAM task to re-run.',
+    'This program is complete and cannot be re run in place.',
+    '**Complete; cannot be re-run in place.** Create a fresh task to re-run.',
+    '**This pipeline is COMPLETE and cannot be re-run in place.** To re-run this objective, create a fresh PIPELINE task.',
+  ]) {
+    const r = validatePipelineProtocolSteps([_call('task.complete'), _commentCall(`**Child stage:** \`cmstage1\`\n\n**📄 Final deliverable:** x\n\n---\n${note}`)]);
+    assert(!r || r.commentValidation?.hasRerunNote === true, `rejected a real note: ${note}`);
+  }
+});
+
+test('RE-RUN NOTE (MI-1): comments WITHOUT the note are still flagged — including advice that merely mentions a fresh task', () => {
+  for (const tail of [
+    'Complete (needs-revision). Re-execute Review, or create a follow-up pipeline, to reach approved.',
+    'Use that artifact for downstream chaining, or spin a fresh PIPELINE task for a clean report.md.',
+    'No re-execution attempted: protocol escalates immediately on sub-fifty confidence.',
+    'Apply remains separate and operator-gated.',
+  ]) {
+    const r = validatePipelineProtocolSteps([_call('task.complete'), _commentCall(`**Child stage:** \`cmstage1\`\n\n**📄 Final deliverable:** x\n\n${tail}`)]);
+    assert(r !== null && r.commentValidation?.hasRerunNote === false && r.missingSteps.some(st => st.includes('re-run note')),
+      `must still flag: ${tail}`);
+  }
 });
 
 test('NOT escalated: an ordinary SYNTHESIZE that forgot to close IS still accused', () => {
