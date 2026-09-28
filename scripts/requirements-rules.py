@@ -26,7 +26,8 @@ model is told to emit a marker instead.
   --insert   FILE   overwrite that section with canonical, in place; reports whether it had to
   --lint     FILE [--declared OBJECTIVE]
                     PRE-FILTER for harvested state: list every address, abbreviated address, port, ARN,
-                    bucket literal, Terraform resource address or count-of-harvested-things in FILE (Writing rules section excluded)
+                    bucket literal, Terraform resource address, count-of-harvested-things, or number inside a
+                    `(derived — basis: ...)` answer in FILE (Writing rules section excluded)
                     that appears in neither the template nor the OBJECTIVE file. Exit 1 if any. A hit is a
                     candidate to READ, not a verdict; a zero does not replace the full human read.
   --skeleton        emit the TEMPLATE's skeleton on stdout: the template minus every block the
@@ -145,6 +146,13 @@ _TF_ADDR = re.compile(r'\b(?:aws|azurerm|azuread|google|random|kubernetes|helm|n
 _COUNT = re.compile(r'(?i)\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d+)\s+'
                     r'(?:harvested\s+|exporter\s+|existing\s+|live\s+)?'
                     r'(exporters?|addresses|loopbacks|pods|devices|interfaces|members|workloads|servers|blocks|buckets|namespaces)\b')
+# A NUMBER inside a `(derived — basis: ...)` answer (2026-09-28, decision surfacing Phase 1). The template's answer grammar
+# says a derived basis is "a pointer and a property, never a harvested name or value" — and a basis is the one place a
+# generator is TOLD to cite a harvest, so it is where a count leaks first. `_COUNT` cannot see it: it needs the number
+# next to a known noun, and a basis reads "shows two OTLP blocks" or "shows one bucket" (both from the design's own
+# worked example). Any number word or bare integer inside the basis is a candidate; `Phase 0` is the pointer, not state.
+_DERIVED = re.compile(r'\(derived\s+—\s+basis:([^)]*)\)')
+_BASIS_NUM = re.compile(r'(?i)(?<!phase )\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|single|\d+)\s+([\w./:-]+)')
 
 
 def lint(doc_lines, allowed_text):
@@ -174,6 +182,11 @@ def lint(doc_lines, allowed_text):
                     continue
                 if tok and tok not in allowed_text:
                     hits.append((n, kind, tok, line.strip()[:140]))
+        for d in _DERIVED.finditer(line):
+            for m in _BASIS_NUM.finditer(d.group(1)):
+                tok = m.group(0)
+                if tok not in allowed_text:
+                    hits.append((n, 'count in derived basis', tok, line.strip()[:140]))
     return hits
 
 def main():

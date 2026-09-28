@@ -46,6 +46,7 @@
 > |---|---|
 > | header | POV, phase, run id, date |
 > | Program scope | leg count · sequenced or parallel · each DOMAIN with its target and up/downstream role · what is explicitly out of scope |
+> | Design decisions | one block per leg, keyed by its protocol token: EVERY question row answered with exactly one source — `(declared — item N: "<selecting words>")` · `(derived — basis: ...)` · `(forced — ...) → gap` · `OPEN — ...; options: ...` |
 > | Why this is sequenced | the rationale — why the crossing value is not knowable up front |
 > | Approvals | every approver's role, name and email (all must be POV team members) · one table row per gate carrying **both** *approves* and *runs AFTER* · both DAG edges spelled out |
 > | Pipeline 1 | harvest targets · service descriptor URL · preconditions you verified, and when · the work · the derivation · the **null outcome** · the chained values it must publish |
@@ -53,6 +54,8 @@
 > | Design constraints | static constants for the interface contract · runtime values for the DAG edge, each naming its producing and consuming leg |
 > | Acceptance | Node C checks 1, 2, 2b, 3 — **the numbers are fixed; a new check APPENDS** |
 > | Optional | consuming-leg attribution — keep only if a downstream leg genuinely cannot self-check |
+> | Decisions needed from the owner | generated from the Design decisions rows — every row that is not `(declared — item N: "...")`, with its tier |
+> | Open questions | named gaps only — a decision is a row, never only a line here |
 
 - Authored in: {{POV_NAME}} · {{PHASE_NAME}}
 - Iteration: {{RUN_ID}} · {{DATE}}
@@ -114,20 +117,64 @@
 
 ## Design decisions
 
-> **🗑 AUTHORING NOTE — the Design decisions table.** One row per design decision this document relies on — a
-> choice the POV owner could make differently on the same estate. The kinds a program uses vary; common ones are
-> the TARGET (which instance), the POPULATION (which members of a class the program acts on), the REPRESENTATION
-> (how a derived value is expressed), the RECEIVER (which workload on the target side is authorised) and the
-> APPROVERS (they have their own section below). Source is exactly one of: `(declared)` — transcribed from the
-> objective as written; `(derived — basis: <which harvest read> shows <the property that selects it>)` — a pointer
-> and a SELECTING property, never values or counts; `OPEN — <the question for the POV owner>`. A decision that
-> widens who is authorised or what is selected (the whole class, a match-all selector, an all-covering range) is
-> `(declared)` or it is OPEN — never derived. An OPEN row carries no default. Every leg instruction below that
-> selects a target, population, representation or receiver names its row here.
+> **🗑 AUTHORING NOTE — the Design decisions inventory.** Every row below is a QUESTION this kind of leg must be answered, not a
+> decision someone made. Keep one block per leg, keyed by the leg's protocol token — exactly one of `network-provisioning`,
+> `kubernetes-gitops`, `terraform-iac`, `observability-config`, never an abbreviation (`k8s`, `tf`, `obs`). Answer EVERY row with
+> exactly one source:
+> - `(declared — item N: "<the words of item N that select this answer>")` — cite the NUMBER and QUOTE the selecting words
+>   verbatim. On a row with options the quoted words must select exactly one option; if no words in any item do, the row is
+>   OPEN. Cite an item only on a row of a leg whose target or domain it names, or that it states for all legs.
+> - `(derived — basis: <which harvest read> shows <the selecting property>)` — TARGET and SCOPE rows only, a pointer and a
+>   property, never a harvested name or value. A derived row's *rule or named target* cell names only the selected surface or
+>   members — no action, port, verb (allow, deny, replace, preserve, create) or treatment of existing allowances.
+> - `(forced — <the declared item that rules out the alternative>) → gap` — ONLY on `target-absent` and `inputs-empty`, e.g.
+>   `(forced — creating a namespace is outside item 1) → gap` or `(forced — a substitute population is outside item 4) → gap`.
+>   A forced row's *rule or named target* cell reads `gap` — a gap report naming what is absent — and nothing else.
+> - `OPEN — <the question>; options: <the row's options>` — with NO default.
+>
+> `admitted-principal`, `granted-action`, `existing-grant`, `target-empty` and `collateral` are NEVER derived and NEVER forced.
+> An `admitted-principal` answer rests on a premise — that the enforcer SEES that attribute on the path the sender's traffic
+> takes (a source address that is translated or never reaches the enforcer cannot be matched): state it as an
+> existence-assumption branch the leg's harvest decides, citing the row. **A leg clause that cites a
+> row applies THAT row's answer and nothing more; a clause that cites an OPEN row only reports the gap, naming the row id.** An
+> objective line that applies to every leg (e.g. "absent enforcers are created") must be a NUMBERED item, so rows can cite it.
+> A row that does not apply is deleted only if the leg neither grants nor removes anything on its target, and is then listed in
+> the owner block as `not-applicable — <reason>`. Never delete a row to avoid answering it. Add a row for any further decision
+> the document relies on.
+>
+> **Kept from the table this inventory replaced (each still earned):** the *rule or named target* cell states a RULE or a NAMED
+> target, never the values it selects today, and never a count. A decision that WIDENS who is authorised or what is selected — the
+> whole class, a match-all selector, an all-covering range — is `(declared — item N: "...")` or it is OPEN, never derived (Rev 5,
+> 2026-09-25: "every address" derived, `0.0.0.0/0`, approved at 90). Every leg instruction below that selects a target, a
+> population, a representation, a receiver or a grant, and every existence and null branch, cites its row id.
 
-| decision | rule or named target | source |
-|---|---|---|
-| {{DECISION}} | {{THE RULE OR NAMED TARGET — never the values it selects today}} | {{(declared) · (derived — basis: ...) · OPEN — ...}} |
+### Every leg
+
+| id | question | options | rule or named target | source |
+|---|---|---|---|---|
+| {{LEG_TOKEN}}.target | which surface of the leg's service does it act on | — | {{THE NAMED TARGET}} | {{SOURCE}} |
+| {{PRODUCER_TOKEN}}.population | which members of the class the derivation reads | — | {{THE RULE}} | {{SOURCE}} |
+| {{PRODUCER_TOKEN}}.representation | how the derived value is expressed | one aligned prefix · a set of prefixes · a host list | {{THE RULE}} | {{SOURCE}} |
+| {{PRODUCER_TOKEN}}.inputs-empty | the derivation's inputs are empty | gap | {{THE NULL OUTCOME}} | {{SOURCE}} |
+| approver.{{GATE}} | who approves this gate | — | {{NAME, EMAIL}} | {{SOURCE}} |
+| gate.{{GATE}}.position | when this gate sits (every gate except the program plan gate) | before-leg · after-leg-before-completion · after-producer-before-consumers | {{THE POSITION}} | {{SOURCE}} |
+
+### A leg that grants or removes access (authorisation)
+
+| id | question | options | rule or named target | source |
+|---|---|---|---|---|
+| {{LEG_TOKEN}}.receiver | which workload/resource on the target is authorised | — | {{SELECTOR OR NAMED RESOURCE}} | {{SOURCE}} |
+| {{LEG_TOKEN}}.admitted-principal | who is admitted, and by which attribute the enforcer recognises them | source-address-range · named-identity · network-path · combination (state each part) | {{THE PRINCIPAL}} | {{SOURCE}} |
+| {{LEG_TOKEN}}.granted-action | what the admitted principal may do (actions, ports) | — | {{THE GRANT}} | {{SOURCE}} |
+| {{LEG_TOKEN}}.existing-grant | other allowances already on the same surface | replace · preserve · preserve-bounded (state the bound) | {{THE RULE}} | {{SOURCE}} |
+| {{LEG_TOKEN}}.target-empty | the receiver selector/surface matches nothing now | act · gap | {{THE RULE}} | {{SOURCE}} |
+| {{LEG_TOKEN}}.enforcer-absent | no policy object governs the receiver yet | create · gap | {{THE RULE}} | {{SOURCE}} |
+| {{LEG_TOKEN}}.target-absent | the declared target itself does not exist | gap · create-target | {{THE RULE}} | {{SOURCE}} |
+| {{LEG_TOKEN}}.collateral | what else on the target changes because enforcement now applies | per enforcer (Kubernetes: allow-named-ports · deny · leave-to-workload-manifests) | {{THE RULE}} | {{SOURCE}} |
+
+> **🗑 Enforcer fact — Kubernetes NetworkPolicy:** a pod selected by any Ingress policy is isolated for all ingress that no policy
+> allows. A declared answer that says other ports on selected pods are "not touched" cannot be implemented and must be raised as
+> INFEASIBLE, not transcribed. (Earned: Program Run 4, 2026-09-28.)
 
 ## Why this is {{sequenced | parallel}} — the design rationale, read before questioning the DAG
 
@@ -152,7 +199,8 @@ would go wrong if someone guessed it up front}}
 
 **Approvers are DECLARED, never chosen.** Every approver below is TRANSCRIBED from the approver mapping
 declared in this program's objective, and marked `(declared)`. A gate the objective names no approver for is
-written `UNASSIGNED — no approver declared` and listed under open questions for the human. Never pick a name
+written `UNASSIGNED — no approver declared`, and its `approver.<gate>` row in *Design decisions* is OPEN — the human sees it
+in *Decisions needed from the owner*. Never pick a name
 from the POV roster: a roster says who EXISTS, never who is ACCOUNTABLE — and two generations over one roster
 assigned four of five gates to different people.
 
@@ -234,12 +282,11 @@ the prose above, because two readings of the same sentence produce two different
 
 - {{THE WORK}}
 - {{THE DERIVATION, if any — see the derivation clauses below}}
-- **If the harvest returns no {{DERIVATION INPUTS}}**: {{THE NULL OUTCOME — normally a gap report
-  naming exactly what was absent and what would have to exist; NEVER a substitute value}}
+- **If the harvest returns no {{DERIVATION INPUTS}}**: {{THE NULL OUTCOME — apply the `<producer token>.inputs-empty`
+  row and cite its id; name exactly what was absent and what would have to exist; NEVER a substitute value}}
 - **The deliverable MUST publish, explicitly and prominently**: {{WHAT THE DOWNSTREAM LEG CONSUMES —
-  named by its RULE and its PRODUCER, never by today's value or count}} plus the reasoning for the
-  choice. The downstream leg depends on what this leg PRODUCES at run time, not on what you read
-  while authoring.
+  named by its RULE and its PRODUCER, never by today's value or count}}. The downstream leg depends
+  on what this leg PRODUCES at run time, not on what you read while authoring.
 - **Validation (mechanical)**: {{THE READ that re-obtains the inputs}}, then {{THE RULE re-applied}} —
   expected: the published value equals the recomputation, and every re-obtained input lies inside
   it. Never the input literals or their count: a check pinned to today's inputs fails a correct run
@@ -249,7 +296,8 @@ the prose above, because two readings of the same sentence produce two different
 
 > **🗑 AUTHORING NOTE.** Keep all of the following — every line is an incident.
 
-- **Show the computation** in the deliverable: the inputs, the arithmetic, and the result's coverage.
+- **The computation is shown in the DESIGN.** The deliverable carries the input block and the result block, plus
+  re-runnable checks each followed by the literal text it prints — never a sentence stating the conclusion.
 - **Minimality, or the equivalent tightest-correct property.** A result looser than the minimum is a
   **REJECTABLE defect even when it violates nothing else**, because it authorizes/permits more than
   the requirement needs.
@@ -317,13 +365,17 @@ the prose above, because two readings of the same sentence produce two different
 - {{THE WORK}}
 - **Existence assumption** (*Writing rules* #6): {{THE BRANCH, NOT TODAY'S STATE — what this leg
   does if its OWN harvest finds the target absent, and if it finds it present — e.g. "if the bucket
-  carries no policy, create one (absence is the expected starting point, not an escalation); if one
-  exists, modify it". Never state which branch is true today.}}
+  carries no policy, apply the `<leg token>.enforcer-absent` row; if it carries one, apply the
+  `<leg token>.existing-grant` row; if the bucket itself is absent, apply the `<leg token>.target-absent`
+  row" — cite each row's id. Never state which branch is true today, and never choose a branch's
+  outcome here: that is the row's answer.}}
 - {{If it CONSUMES a chained value}}: it consumes {{VALUE}} **as chained** — it does **not** re-derive
   it, and is forbidden from recomputing it. Containment for that value is discharged **upstream** and
   re-verified at the program tier.
   - **If §6 does not carry it**: escalate. Do not guess, do not substitute, do not proceed.
-- **If this leg's own harvest returns no {{TARGETS}}**: {{THE NULL OUTCOME}}. The
+- **If this leg's own harvest returns no {{TARGETS}}**: {{THE NULL OUTCOME — apply the row that governs it and
+  cite its id: `<leg token>.target-empty` when the receiver selector or surface matches nothing,
+  `<leg token>.target-absent` when the declared target does not exist}}. The
   🔴 **STATE THE NULL CASE** clause under Pipeline 1 is not derivation-specific — it was earned by a
   *downstream* author improvising against a brief that presupposed a block its harvest never produced.
 - {{If a FURTHER leg consumes from this one}}: **the deliverable MUST publish, explicitly and
@@ -399,12 +451,27 @@ list what would count as evidence. *Earned: an earlier revision of this clause c
 release that had never once occurred; the run cited as proof had cleared via a judgement branch while
 shipping a defect.*
 
+## Decisions needed from the owner
+
+<!-- one line per row that is not simply declared:
+<row id> — <question> — options: <enum> — governs: <which leg clause> — tier: blocking | confirm | default | not-applicable -->
+{{OWNER BLOCK — generated from the table above; write "none" if every row is declared}}
+
+> **🗑 AUTHORING NOTE — the owner block.** Generate it FROM the *Design decisions* rows, never write it freehand: the set of row
+> ids here must equal the OPEN rows (`tier: blocking`) ∪ the `(derived)` rows (`tier: confirm`) ∪ the `(forced)` rows
+> (`tier: default`) ∪ the deleted rows (`tier: not-applicable — <reason>`). A `(declared — item N: "...")` row does not appear. An
+> OPEN row carries its options and NO default. It sits here, at the end, because its readers are the owner and the harness
+> (which copies it into its final comment); the Program Architect reads the table above.
+
 ## Open questions
 
-{{EVERY OPEN QUESTION FOR THE POV OWNER — each OPEN design decision, each UNASSIGNED gate, each named gap — one line each, or "none"}}
+{{EVERY OPEN QUESTION FOR THE POV OWNER THAT IS NOT A DESIGN-DECISIONS ROW — each named gap — one line each, or "none"}}
 
-> **🗑 AUTHORING NOTE — open questions.** This is the one place a question for the owner lives. An open question
-> is NON-OPERATIVE: no leg carries a default for it; the leg's instruction for that decision is its null outcome.
+> **🗑 AUTHORING NOTE — open questions.** An open question is NON-OPERATIVE: no leg carries a default for it; the leg's
+> instruction for that decision is its null outcome. **A decision is never only here**: every decision the document relies
+> on is a *Design decisions* row, an unanswered one is OPEN there, and its question reaches the owner through the owner block
+> above. An OPEN that appears here with no row is a missing row (Rev 13 was approved with one). An unassigned
+> approver is the OPEN `approver.<gate>` row, not a line here.
 
 ## Writing rules — read before authoring, they are the expensive part
 
