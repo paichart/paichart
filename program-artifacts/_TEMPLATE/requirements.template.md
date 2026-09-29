@@ -54,7 +54,7 @@
 > | Design constraints | static constants for the interface contract · runtime values for the DAG edge, each naming its producing and consuming leg |
 > | Acceptance | Node C checks 1, 2, 2b, 3 — **the numbers are fixed; a new check APPENDS** |
 > | Optional | consuming-leg attribution — keep only if a downstream leg genuinely cannot self-check |
-> | Decisions needed from the owner | generated from the Design decisions rows — every row that is not `(declared — item N: "...")`, with its tier |
+> | Decisions needed from the owner | generated from the Design decisions rows — every row that is not `(declared — item N: "<one exact span of item N>")`, with its tier |
 > | Open questions | named gaps only — a decision is a row, never only a line here |
 
 - Authored in: {{POV_NAME}} · {{PHASE_NAME}}
@@ -132,10 +132,11 @@
 >   A forced row's *rule or named target* cell reads `gap` — a gap report naming what is absent — and nothing else.
 > - `OPEN — <the question>; options: <the row's options>` — with NO default.
 >
-> `admitted-principal`, `granted-action`, `existing-grant`, `target-empty` and `collateral` are NEVER derived and NEVER forced.
+> `admitted-principal`, `principal-unseen`, `granted-action`, `existing-grant`, `target-empty` and `collateral` are NEVER derived and NEVER forced.
 > An `admitted-principal` answer rests on a premise — that the enforcer SEES that attribute on the path the sender's traffic
 > takes (a source address that is translated or never reaches the enforcer cannot be matched): state it as an
-> existence-assumption branch the leg's harvest decides, citing the row. **A leg clause that cites a
+> existence-assumption branch the leg's harvest decides — the *Admitted-principal premise* slot of each authorisation leg —
+> citing `admitted-principal` for the premise and applying the `principal-unseen` row for its outcome. **A leg clause that cites a
 > row applies THAT row's answer and nothing more; a clause that cites an OPEN row only reports the gap, naming the row id.** An
 > objective line that applies to every leg (e.g. "absent enforcers are created") must be a NUMBERED item, so rows can cite it.
 > A row that does not apply is deleted only if the leg neither grants nor removes anything on its target, and is then listed in
@@ -144,7 +145,7 @@
 >
 > **Kept from the table this inventory replaced (each still earned):** the *rule or named target* cell states a RULE or a NAMED
 > target, never the values it selects today, and never a count. A decision that WIDENS who is authorised or what is selected — the
-> whole class, a match-all selector, an all-covering range — is `(declared — item N: "...")` or it is OPEN, never derived (Rev 5,
+> whole class, a match-all selector, an all-covering range — is `(declared — item N: "<one exact span of item N>")` or it is OPEN, never derived (Rev 5,
 > 2026-09-25: "every address" derived, `0.0.0.0/0`, approved at 90). Every leg instruction below that selects a target, a
 > population, a representation, a receiver or a grant, and every existence and null branch, cites its row id.
 
@@ -152,25 +153,26 @@
 
 | id | question | options | rule or named target | source |
 |---|---|---|---|---|
-| {{LEG_TOKEN}}.target | which surface of the leg's service does it act on | — | {{THE NAMED TARGET}} | {{SOURCE}} |
-| {{PRODUCER_TOKEN}}.population | which members of the class the derivation reads | — | {{THE RULE}} | {{SOURCE}} |
-| {{PRODUCER_TOKEN}}.representation | how the derived value is expressed | one aligned prefix · a set of prefixes · a host list | {{THE RULE}} | {{SOURCE}} |
-| {{PRODUCER_TOKEN}}.inputs-empty | the derivation's inputs are empty | gap | {{THE NULL OUTCOME}} | {{SOURCE}} |
-| approver.{{GATE}} | who approves this gate | — | {{NAME, EMAIL}} | {{SOURCE}} |
-| gate.{{GATE}}.position | when this gate sits (every gate except the program plan gate) | before-leg · after-leg-before-completion · after-producer-before-consumers | {{THE POSITION}} | {{SOURCE}} |
+| {{LEG_TOKEN}}.target | which surface of the leg's service does it act on | — | {{THE NAMED TARGET}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{PRODUCER_TOKEN}}.population | which members of the class the derivation reads | — | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{PRODUCER_TOKEN}}.representation | how the derived value is expressed | one aligned prefix · a set of prefixes · a host list | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{PRODUCER_TOKEN}}.inputs-empty | the derivation's inputs are empty | gap | {{THE NULL OUTCOME}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| approver.{{GATE}} | who approves this gate | — | {{NAME, EMAIL}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| gate.{{GATE}}.position | when this gate sits (every gate except the program plan gate) | before-leg · after-leg-before-completion · after-producer-before-consumers | {{THE POSITION}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 
 ### A leg that grants or removes access (authorisation)
 
 | id | question | options | rule or named target | source |
 |---|---|---|---|---|
-| {{LEG_TOKEN}}.receiver | which workload/resource on the target is authorised | — | {{SELECTOR OR NAMED RESOURCE}} | {{SOURCE}} |
-| {{LEG_TOKEN}}.admitted-principal | who is admitted, and by which attribute the enforcer recognises them | source-address-range · named-identity · network-path · combination (state each part) | {{THE PRINCIPAL}} | {{SOURCE}} |
-| {{LEG_TOKEN}}.granted-action | what the admitted principal may do (actions, ports) | — | {{THE GRANT}} | {{SOURCE}} |
-| {{LEG_TOKEN}}.existing-grant | other allowances already on the same surface | replace · preserve · preserve-bounded (state the bound) | {{THE RULE}} | {{SOURCE}} |
-| {{LEG_TOKEN}}.target-empty | the receiver selector/surface matches nothing now | act · gap | {{THE RULE}} | {{SOURCE}} |
-| {{LEG_TOKEN}}.enforcer-absent | no policy object governs the receiver yet | create · gap | {{THE RULE}} | {{SOURCE}} |
-| {{LEG_TOKEN}}.target-absent | the declared target itself does not exist | gap · create-target | {{THE RULE}} | {{SOURCE}} |
-| {{LEG_TOKEN}}.collateral | what else on the target changes because enforcement now applies | per enforcer (Kubernetes: allow-named-ports · deny · leave-to-workload-manifests) | {{THE RULE}} | {{SOURCE}} |
+| {{LEG_TOKEN}}.receiver | which workload/resource on the target is authorised | — | {{SELECTOR OR NAMED RESOURCE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.admitted-principal | who is admitted, and by which attribute the enforcer recognises them | source-address-range · named-identity · network-path · combination (state each part) | {{THE PRINCIPAL}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.principal-unseen | the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path | gap · act-regardless | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.granted-action | what the admitted principal may do (actions, ports) | — | {{THE GRANT}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.existing-grant | other allowances already on the same surface | replace · preserve · preserve-bounded (state the bound) | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.target-empty | the receiver selector/surface matches nothing now | act · gap | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.enforcer-absent | no policy object governs the receiver yet | create · gap | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.target-absent | the declared target itself does not exist | gap · create-target | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.collateral | what else on the target changes because enforcement now applies | per enforcer (Kubernetes: allow-named-ports · deny · leave-to-workload-manifests) | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 
 > **🗑 Enforcer fact — Kubernetes NetworkPolicy:** a pod selected by any Ingress policy is isolated for all ingress that no policy
 > allows. A declared answer that says other ports on selected pods are "not touched" cannot be implemented and must be raised as
@@ -184,7 +186,7 @@
 
 > **🗑 AUTHORING NOTE — the owner block.** Generate it FROM the *Design decisions* rows, never write it freehand: the set of row
 > ids here must equal the OPEN rows (`tier: blocking`) ∪ the `(derived)` rows (`tier: confirm`) ∪ the `(forced)` rows
-> (`tier: default`) ∪ the deleted rows (`tier: not-applicable — <reason>`). A `(declared — item N: "...")` row does not appear. An
+> (`tier: default`) ∪ the deleted rows (`tier: not-applicable — <reason>`). A `(declared — item N: "<one exact span of item N>")` row does not appear. An
 > OPEN row carries its options and NO default. It sits directly after the table it is generated from, never at the end: a long
 > draft that hits its output limit loses its LAST sections, and this block is what the owner acts on (T1-zero, 2026-09-29: the
 > Author stopped at its token ceiling in *Acceptance* and the whole block was lost). Its readers are the owner and the harness
@@ -377,6 +379,10 @@ the prose above, because two readings of the same sentence produce two different
   the targets below — a pointer and a property, never the values it returned or how many there were.
   `none — first run against this target` is a permitted answer.}}
 - {{THE WORK}}
+- **Admitted-principal premise** (`<leg token>.admitted-principal`): {{THE ATTRIBUTE the enforcer must see, and on
+  which path}} — if this leg's own harvest cannot confirm it, apply the `<leg token>.principal-unseen` row and cite its id.
+  Where the objective declares the program does not create or verify that attribute's carrier, the branch still exists:
+  it records the premise as UNTESTED and names it in the leg's gap report — never drop the branch.
 - **Existence assumption** (*Writing rules* #6): {{THE BRANCH, NOT TODAY'S STATE — what this leg
   does if its OWN harvest finds the target absent, and if it finds it present — e.g. "if the bucket
   carries no policy, apply the `<leg token>.enforcer-absent` row; if it carries one, apply the
