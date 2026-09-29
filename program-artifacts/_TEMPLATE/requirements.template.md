@@ -176,6 +176,20 @@
 > allows. A declared answer that says other ports on selected pods are "not touched" cannot be implemented and must be raised as
 > INFEASIBLE, not transcribed. (Earned: Program Run 4, 2026-09-28.)
 
+## Decisions needed from the owner
+
+<!-- one line per row that is not simply declared:
+<row id> — <question> — options: <enum> — governs: <which leg clause> — tier: blocking | confirm | default | not-applicable -->
+{{OWNER BLOCK — generated from the table above; write "none" if every row is declared}}
+
+> **🗑 AUTHORING NOTE — the owner block.** Generate it FROM the *Design decisions* rows, never write it freehand: the set of row
+> ids here must equal the OPEN rows (`tier: blocking`) ∪ the `(derived)` rows (`tier: confirm`) ∪ the `(forced)` rows
+> (`tier: default`) ∪ the deleted rows (`tier: not-applicable — <reason>`). A `(declared — item N: "...")` row does not appear. An
+> OPEN row carries its options and NO default. It sits directly after the table it is generated from, never at the end: a long
+> draft that hits its output limit loses its LAST sections, and this block is what the owner acts on (T1-zero, 2026-09-29: the
+> Author stopped at its token ceiling in *Acceptance* and the whole block was lost). Its readers are the owner and the harness
+> (which copies it into its final comment); the Program Architect reads the table above.
+
 ## Why this is {{sequenced | parallel}} — the design rationale, read before questioning the DAG
 
 > **🗑 AUTHORING NOTE — delete this section only if the program is genuinely parallel.** If it is
@@ -450,18 +464,6 @@ but never actually fired, say **"SHIPPED BUT NEVER YET EXERCISED — do not read
 list what would count as evidence. *Earned: an earlier revision of this clause claimed a machine-gated
 release that had never once occurred; the run cited as proof had cleared via a judgement branch while
 shipping a defect.*
-
-## Decisions needed from the owner
-
-<!-- one line per row that is not simply declared:
-<row id> — <question> — options: <enum> — governs: <which leg clause> — tier: blocking | confirm | default | not-applicable -->
-{{OWNER BLOCK — generated from the table above; write "none" if every row is declared}}
-
-> **🗑 AUTHORING NOTE — the owner block.** Generate it FROM the *Design decisions* rows, never write it freehand: the set of row
-> ids here must equal the OPEN rows (`tier: blocking`) ∪ the `(derived)` rows (`tier: confirm`) ∪ the `(forced)` rows
-> (`tier: default`) ∪ the deleted rows (`tier: not-applicable — <reason>`). A `(declared — item N: "...")` row does not appear. An
-> OPEN row carries its options and NO default. It sits here, at the end, because its readers are the owner and the harness
-> (which copies it into its final comment); the Program Architect reads the table above.
 
 ## Open questions
 
