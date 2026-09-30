@@ -437,9 +437,13 @@ the prose above, because two readings of the same sentence produce two different
 2. {{a containment/coverage property of that value}};
 2b. {{the tightest-correct property — recompute it; do not take the stated value on trust}};
 3. {{a no-widening / no-collision property}};
-4. **chaining coverage**: `predecessors === chainCapablePredecessors`, `degradedPredecessors === 0`,
-   `notChained []` — i.e. the downstream leg received the upstream leg's **real** deliverable, not a
-   fallback and not nothing.
+4. **chaining coverage** — the downstream leg received the upstream leg's **real** deliverable, not a
+   fallback and not nothing. The counters (`predecessors === chainCapablePredecessors`,
+   `degradedPredecessors === 0`, `notChained []`) are **platform facts the program gate computes
+   mechanically**; no reviewer tool exposes them, so Node C does not re-derive them and does not block
+   for being unable to read them. Node C checks what its own chained context shows: every leg appears
+   as a predecessor, each carrying its `report.md` deliverable — not an upstream output marked as a
+   fallback, and not missing.
 
 - 🔴 ⚠️ **THE CHECK NUMBERS ABOVE ARE FIXED. A NEW CLAUSE MAY NOT TAKE ONE.** They are referenced by
   number from elsewhere in this document and from the protocol; renumbering, merging, or substituting
