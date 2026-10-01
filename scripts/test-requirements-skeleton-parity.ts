@@ -36,12 +36,36 @@ const text = readFileSync(VENDORED, 'utf8');
 
 // 1. INVARIANTS — the properties the protocol body depends on
 check('skeleton is non-empty and substantial', text.length > 15000, `${text.length} chars`);
-// 15 since 2026-09-26 (GS-R5: + Design decisions, + Open questions). A deliberate SHAPE pin — it guards against a
-// truncated skeleton; CI has no ~/paichart to derive it from, so a template heading change updates it here.
-check('carries all 15 template headings',
-  (text.match(/^#{1,4} /gm) || []).length === 15, `${(text.match(/^#{1,4} /gm) || []).length}`);
-check('carries the placeholder set', (text.match(/\{\{/g) || []).length >= 70,
+// 18 since 2026-09-28 (decision surfacing Phase 1: + ### Every leg, + ### A leg that grants or removes access,
+// + ## Decisions needed from the owner). Was 15 since 2026-09-26 (GS-R5: + Design decisions, + Open questions).
+// A deliberate SHAPE pin — it guards against a truncated skeleton; CI has no ~/paichart to derive it from, so a
+// template heading change updates it here.
+check('carries all 18 template headings',
+  (text.match(/^#{1,4} /gm) || []).length === 18, `${(text.match(/^#{1,4} /gm) || []).length}`);
+// A FLOOR, not a count (115 on 2026-09-28; was 78 under a floor of 70) — the same ~90% slack, so healthy edits
+// that add slots never rot it, and a truncation that loses the decision inventory's rows (37 of them) still fails.
+check('carries the placeholder set', (text.match(/\{\{/g) || []).length >= 105,
   `${(text.match(/\{\{/g) || []).length}`);
+// The decision inventory's QUESTION KEYS are literals other surfaces key on: the requirements_reviewer guidance names
+// the closed forced-eligible list (target-absent, inputs-empty) literally, and counts every key per leg. A key renamed
+// or dropped here makes that count look for a row the Author was never offered — silently. Pin the Author-visible side.
+const DECISION_KEYS = ['target', 'population', 'representation', 'inputs-empty', 'receiver', 'admitted-principal', 'principal-unseen', 'granted-action',
+  'existing-grant', 'target-empty', 'enforcer-absent', 'target-absent', 'collateral'];
+const missingKeys = DECISION_KEYS.filter(k => !new RegExp('^\\| \\{\\{(?:LEG|PRODUCER)_TOKEN\\}\\}\\.' + k + ' \\|', 'm').test(text));
+check('carries every decision-inventory question key as a table row', missingKeys.length === 0,
+  `missing: ${missingKeys.join(', ')}`);
+check('carries the approver and gate-position rows',
+  /^\| approver\.\{\{GATE\}\} \|/m.test(text) && /^\| gate\.\{\{GATE\}\}\.position \|/m.test(text));
+// Section ORDER the protocol depends on: the owner block sits IMMEDIATELY after Design decisions (2026-09-29, T1-zero: a draft
+// that hit its output ceiling lost its last sections, and the owner block used to be one of them), and the
+// writing rules stay LAST (1.1.0, R3: a truncated Architect read must lose the rules, never the requirements).
+const tops = (text.match(/^## .*$/gm) || []).map(h => h.replace(/^## /, ''));
+const at = (p: string) => tops.findIndex(h => h.startsWith(p));
+check('section order: Design decisions, then IMMEDIATELY Decisions needed from the owner, … < Open questions < Writing rules (LAST)',
+  at('Design decisions') >= 0 && at('Decisions needed from the owner') === at('Design decisions') + 1
+    && at('Decisions needed from the owner') < at('Open questions')
+    && at('Open questions') < at('Writing rules') && at('Writing rules') === tops.length - 1,
+  tops.join(' | '));
 check('carries the WRITING-RULES marker the Author must leave in place',
   text.includes('<!-- WRITING-RULES -->'));
 // The template's OWN acceptance check, applied to what we ship:

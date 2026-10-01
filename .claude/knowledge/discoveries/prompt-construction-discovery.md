@@ -955,9 +955,9 @@ grep -c "for a PROGRAM leg a duplicate-stop is TERMINAL" scripts/seed-protocol-p
 grep -c "Do NOT compose new acceptance criteria" scripts/seed-protocol-prompts.ts         # expect 1
 ```
 
-**Current versions (2026-09-27; re-read `grep -n "version: '" scripts/seed-protocol-prompts.ts`)**:
-pipeline-orchestrator 3.18.0 · network-provisioning 1.15.0 · kubernetes-gitops 1.13.0 · terraform-iac 1.7.0 ·
-observability-config 1.4.0 · pov-program 1.8.6 · requirements-authoring 1.6.0 · HOWTO-use-pipeline-harness 2.8.0 ·
+**Current versions (2026-09-30; re-read `grep -n "version: '" scripts/seed-protocol-prompts.ts`)**:
+pipeline-orchestrator 3.18.0 · network-provisioning 1.16.0 (X29 (f2), 2026-09-28, `369070a3`) · kubernetes-gitops 1.13.0 · terraform-iac 1.7.0 ·
+observability-config 1.4.0 · pov-program 1.8.7 · requirements-authoring 1.7.4 · HOWTO-use-pipeline-harness 2.8.0 ·
 HOWTO-use-program-harness 2.6.7. What changed 09-26→09-27 (RWF C4/D2, EG-1, MI-1, identity keys, Stage 3 STOP):
 `.claude/knowledge/domain/harness/prompt-construction-library.md` last section.
 

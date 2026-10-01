@@ -741,11 +741,40 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
     !/if\s*\(\s*task\.pov\s*\)\s*\{\s*\n?\s*try\s*\{\s*\n?\s*validatePOVAccess/.test(rest) && /if\s*\(\s*!task\.pov\s*\)/.test(rest));
 }
 
+
+// ── P. X26/X27 (2026-09-28) — event-handler stripping is tag-scoped; comments refuse only UNSAFE content ──
+// Pinned HERE because this gate runs in CI and test:execution-artifacts-parity does not (sec-ops second pass,
+// cline_docs/reviews/x25-forwarded-args-injection-2026-09-28/SECOPS-REVIEW-2.md). The two prod strings were corrupted
+// in 5 delivered report.md bodies by the former unscoped `on\w+=` arm; the last four strip shapes are the second-pass
+// bypasses (a handler straight after a quoted one; a quote inside an unquoted value).
+{
+  const { stripHtmlEventHandlers, validateComment } = require('@/lib/utils/sanitization') as {
+    stripHtmlEventHandlers: (t: string) => string;
+    validateComment: (t: string) => { valid: boolean; error?: string };
+  };
+  const KEEP = [
+    "kubectl get networkpolicy -n trading <NAME> -o jsonpath='{.spec.ingress[*].from[*].ipBlock.cidr}'",
+    'Environment = "prod"',
+  ];
+  for (const k of KEEP) check(`P1 non-HTML text byte-identical: ${k.slice(0, 40)}`, stripHtmlEventHandlers(k) === k);
+  const STRIP = [
+    '<img src=x onerror=alert(1)>',
+    '<svg/onload=alert(1)>',
+    '<img oncut=""onerror=alert(1)>',
+    "<img oncut=''onerror=alert(1)>",
+    '<img src=x"y onerror=alert(1)>',
+    "<img src=x' onerror=alert(1)>",
+  ];
+  for (const x of STRIP) check(`P2 every handler stripped: ${x}`, !/on(error|load)\s*=/i.test(stripHtmlEventHandlers(x)));
+  check('P3 validateComment accepts a padded safe comment', validateComment('  component=receiver ok\n').valid === true);
+  check('P3 validateComment refuses a padded unsafe comment', validateComment('\n<img src=x onerror=alert(1)>  ').valid === false);
+}
+
 if (fails.length) {
   console.error(`\n❌ security-invariants gate FAILED (${fails.length}/${passed + fails.length}) — a pentest-hardened invariant regressed:`);
   fails.forEach((f) => console.error('  - ' + f));
   console.error('\nSee memory project_prelaunch_pentest_2026_05_26 for the original finding before "fixing" the test.\n');
   process.exit(1);
 }
-console.log(`✅ security-invariants gate PASSED (${passed} invariants: SSRF, MA-1, M-2, JWT-alg, M-1, api-key-RS256, resource-authz, oauth-wave2, R9-sanitizer, R10-redactor(k8s+tf), K4-denial, identity-fact-fieldset, contract-inheritance-copy-site).`);
+console.log(`✅ security-invariants gate PASSED (${passed} invariants: SSRF, MA-1, M-2, JWT-alg, M-1, api-key-RS256, resource-authz, oauth-wave2, R9-sanitizer, R10-redactor(k8s+tf), K4-denial, identity-fact-fieldset, contract-inheritance-copy-site, X26-tag-scoped-handlers, X27-comment-trim).`);
 process.exit(0);

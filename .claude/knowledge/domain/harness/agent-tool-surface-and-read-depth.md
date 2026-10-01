@@ -86,7 +86,7 @@ possible — earns its keep on five independent grounds:
 its mitigations*. It is only as good as (a) the condensed surfaces actually carrying the
 load-bearing facts (the field-order contract and facts-line are not optional decorations — E1/GAP-1
 showed facts silently unreachable when they lapse), and (b) chaining reaching the reads that matter
-(the immediate predecessor's FULL `finalResponse` — which IS `report.md` verbatim — arrives via §6;
+(each DIRECT dependency's FULL `finalResponse` (in a linear chain, the immediate predecessor's) — which IS `report.md` verbatim — arrives via §6;
 without that, "curated" would just mean "starved"). A deliverable class that genuinely needs
 arbitrary cross-DAG body reads remains a deliberate surface-design decision, per the Corrections
 section below.

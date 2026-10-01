@@ -37,6 +37,8 @@
 import { z } from 'zod';
 import { deepStripDangerousKeys } from '../lib/utils/sanitize-keys';
 const { makeArgsShapeRefine } = require('../lib/validation/args-shape');
+// X25: the SHIPPED injection regex (tool-schemas.js requires the same module).
+const { FORWARDED_ARGS_INJECTION_PATTERN } = require('../lib/validation/forwarded-args-injection');
 const fs = require('fs');
 const path = require('path');
 
@@ -86,6 +88,10 @@ const argumentsSchema = z.union([
     if (args === undefined) return true;
     try { return JSON.stringify(args).length <= 25_000; } catch { return false; }
   }, 'Arguments object too large (>25KB stringified) or too deeply nested')
+  .refine((args: any) => {
+    if (args === undefined) return true;
+    try { return !FORWARDED_ARGS_INJECTION_PATTERN.test(JSON.stringify(args)); } catch { return false; }
+  }, 'Arguments contain dangerous injection patterns')
   .optional();
 
 console.log('\n🛡️ TEST-SVC-ARGS-1 — services.call.arguments coercion regression\n');
@@ -182,6 +188,47 @@ console.log('── Part A: behavioral ──\n');
   }
 }
 
+// ── Part A (X25): injection screen — ordinary label selectors pass, HTML handlers refused ──
+// 2026-09-28: the event-handler arm had no left boundary, so it matched INSIDE words
+// (`comp|onent=`), refusing every Kubernetes recommended-label selector at the hub.
+// Each case is run through BOTH branches (object + JSON string), since an LLM caller
+// sends either and both reach the same stringified-args refine.
+{
+  const isInjectionRejection = (r: any) =>
+    !r.success && r.error.issues.some((i: any) => i.message === 'Arguments contain dangerous injection patterns');
+  const mustPass: Array<[string, Record<string, unknown>]> = [
+    ['A8 k8s recommended-label selector (the X25 live call)', { namespace: 'telemetry', labelSelector: 'app.kubernetes.io/component=telemetry-receiver' }],
+    ['A9 header-style connection=keep-alive', { headers: 'connection=keep-alive' }],
+    ['A10 zone= / condition= / persona= (all contained `on`+word+`=`)', { q: 'zone=a,condition=Ready,persona=ops' }],
+    ['A11 control: tier=backend, region=us-east-1', { labelSelector: 'tier=backend,region=us-east-1' }],
+  ];
+  const mustRefuse: Array<[string, Record<string, unknown>]> = [
+    ['A12 bare onclick=alert(1)', { a: 'onclick=alert(1)' }],
+    ['A13 <img src=x onerror=alert(1)>', { a: '<img src=x onerror=alert(1)>' }],
+    ['A14 uppercase + space before = (ONLOAD =x)', { a: 'ONLOAD =x' }],
+    ['A15 slash separator <img/onerror=…>', { a: '<img/onerror=alert(1)>' }],
+    ['A16 quote-adjacent <img src="x"onerror=…>', { a: '<img src="x"onerror=alert(1)>' }],
+    ['A17 newline separator (stringified `\\n` has no word boundary)', { a: '<img src=x\nonerror=alert(1)>' }],
+    ['A18 tab / CR / FF separators', { a: '<svg\tonload=1>', b: '<svg\ronload=1>', c: '<svg\fonload=1>' }],
+    ['A19 handler in a KEY ("onclick=…": 1)', { 'onclick=alert(1)': 1 }],
+  ];
+  for (const [name, obj] of mustPass) {
+    const ro = argumentsSchema.safeParse(obj);
+    const rs = argumentsSchema.safeParse(JSON.stringify(obj));
+    if (ro.success && rs.success) pass(`${name} — accepted (object + string branch)`);
+    else fail(`${name} — REFUSED (X25 false positive)`, JSON.stringify({ object: ro.success ? 'ok' : ro.error.issues, string: rs.success ? 'ok' : rs.error.issues }));
+  }
+  for (const [name, obj] of mustRefuse) {
+    // A18 carries three handlers in one payload; also check each one alone so a
+    // single regressed separator cannot hide behind its siblings.
+    const parts = name.startsWith('A18') ? Object.entries(obj).map(([k, v]) => ({ [k]: v })) : [obj];
+    const allRefused = parts.every((p) =>
+      isInjectionRejection(argumentsSchema.safeParse(p)) && isInjectionRejection(argumentsSchema.safeParse(JSON.stringify(p))));
+    if (allRefused) pass(`${name} — refused as injection (object + string branch)`);
+    else fail(`${name} — ACCEPTED (event-handler screen regressed)`, JSON.stringify(obj));
+  }
+}
+
 console.log('\n── Part B: static guard on shipped schema ──\n');
 
 // B1 — the REAL tool-schemas.js string branch must be hardened, not bare z.string().
@@ -202,6 +249,19 @@ console.log('\n── Part B: static guard on shipped schema ──\n');
     fail('B1 shipped string branch regressed toward bare z.string()',
       `transform=${hasStringTransform} jsonParse=${hasJsonParse} deepStrip=${hasDeepStrip} bareString=${hasBareString}`);
   }
+}
+
+// B3 (X25) — the shipped refine must test the SHARED pattern this suite exercises,
+// not an inline copy that could drift back to the unbounded `on\w+\s*=` arm.
+{
+  const src = fs.readFileSync(path.join(__dirname, '../lib/mcp/server/config/tool-schemas.js'), 'utf8');
+  const usesShared = /return !FORWARDED_ARGS_INJECTION_PATTERN\.test\(argsString\)/.test(src)
+    && /require\('\.\.\/\.\.\/\.\.\/validation\/forwarded-args-injection'\)/.test(src);
+  const idx = src.indexOf("'Arguments contain dangerous injection patterns'");
+  const refineRegion = idx >= 0 ? src.slice(Math.max(0, idx - 900), idx) : '';
+  const inlineCopy = /on\\w\+\\s\*=/.test(refineRegion);
+  if (usesShared && !inlineCopy) pass('B3 services.call.arguments refine uses FORWARDED_ARGS_INJECTION_PATTERN (no inline copy)');
+  else fail('B3 services.call.arguments refine no longer uses the shared pattern', `usesShared=${usesShared} inlineCopy=${inlineCopy}`);
 }
 
 // B2 — the single-point handler guard must remain (defense-in-depth).

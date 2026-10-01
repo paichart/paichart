@@ -147,17 +147,42 @@ const WAVE_B_ARM = 'authoritative-selection skip arms (superseded, R8-empty): 0 
  * contract-bearing leg cannot close it: its stamp has no `classifier` field and different
  * `blockKinds`, and admitting it would be an expected-diff list by another name.
  */
+// ✅ CLOSED 2026-09-28 by RUN4_CLASSIFIER3_LEGS (below): no longer declared on any net. Kept because the E3
+// check reads it in BOTH directions — re-declaring it while a covered specimen carries `classifier` fails.
 const CLASSIFIER_ARM = 'classifier — no declared specimen is contract-bearing, so fencedBlockLines/classifyBlock '
   + 'never run in this gate; F1 (classifier 2) and option ac (classifier 3) are fixture-proven only '
   + '(test-dialect-lint F1-* / EF-DL2 *) plus the archive replays recorded with each commit. Close it with the first post-deploy leg whose dialectLint '
   + 'stamp carries `classifier`, and delete this arm in the same commit';
 
+/**
+ * EF-DL2 F-7 CLOSED 2026-09-28: Program Run 4 (program `cmukqei5n0083yxilnydjewgp`), the first CONTRACT-BEARING
+ * legs stamped by `classifier: 3` code — FABRIC, CLUSTER, CLOUD, OBSERVABILITY. All four are
+ * `reason: no-banned-token-list` (the contract names canonical stanzas but no banned tokens), which is a
+ * path that RUNS `fencedBlockLines`/`classifyBlock` and stamps `blockKinds` + `classifier` — the arm every
+ * earlier specimen (all `no-contract`) returned before. They are also the first PROGRAM legs in the fixture
+ * (`contractApplicability.basis: program-parent`, never observed before), so they close that arm on BOTH
+ * facts that nest it. All four replay byte-identical for dialectLint and contractPropagation.
+ *
+ * ⚠️ FABRIC (`cmukqplsa00beyxiljaajwx4s`) is declared for those two ONLY. Its Author stamped
+ * `markerPresence.derivedValues: false` through the X28 parser defect (register X28), fixed in the same
+ * change — so the shipping registry now stamps `true` there, and the leg's `derivationContainment.derivedSource`
+ * moves from the Architect (the fallback) to the Author (value and disposition unchanged). Those are the
+ * INTENDED differences, observed here exactly as predicted and nowhere else, which makes FABRIC out of window
+ * for markerPresence and derivationContainment by definition. The other three are byte-identical for both
+ * and are declared.
+ */
+const RUN4_FABRIC_LEG = 'cmukqplsa00beyxiljaajwx4s';
+const RUN4_UNAFFECTED_LEGS = [
+  'cmukqr4l100bwyxilltficxsl', 'cmukqr4mb00c3yxil7njlatne', 'cmukqr4ng00cayxil6dl9zqc0',
+];
+const RUN4_CLASSIFIER3_LEGS = [RUN4_FABRIC_LEG, ...RUN4_UNAFFECTED_LEGS];
+
 const NET_SPECIMENS: Record<string,
   { legs: string[] | 'none'; why: string; unexercisedArms?: string[] }> = {
-  'markerPresence@leaf-persist': { legs: [...POST_H2_LEGS, POST_DEPLOY_LEG],
-    why: 'H-4 shipped 2026-09-10; every leg here ran after it' },
-  'derivationContainment@leg-synthesize': { legs: [...POST_H2_LEGS, POST_DEPLOY_LEG],
-    why: 'last behavioural change H-2 (2026-09-09); every leg here ran after it',
+  'markerPresence@leaf-persist': { legs: [...POST_H2_LEGS, POST_DEPLOY_LEG, ...RUN4_UNAFFECTED_LEGS],
+    why: 'H-4 shipped 2026-09-10; every leg here ran after it (Run 4 FABRIC excluded: X28, see RUN4_CLASSIFIER3_LEGS)' },
+  'derivationContainment@leg-synthesize': { legs: [...POST_H2_LEGS, POST_DEPLOY_LEG, ...RUN4_UNAFFECTED_LEGS],
+    why: 'last behavioural change H-2 (2026-09-09); every leg here ran after it (Run 4 FABRIC excluded: X28)',
     unexercisedArms: [WAVE_B_ARM] },
   'rollbackContainment@leg-synthesize': { legs: [...POST_H2_LEGS, POST_DEPLOY_LEG],
     why: 'the HOIST shipped with net #3 on 2026-09-11 and these legs carry its stamp',
@@ -165,7 +190,7 @@ const NET_SPECIMENS: Record<string,
 
   // ✅ CLOSED 2026-09-12 by the first post-deploy leg. The pre-deploy legs stay OUT: their stamps
   // predate the contractApplicability nesting, and adding them would be declaring something false.
-  'dialectLint@leg-synthesize': { legs: [POST_DEPLOY_LEG],
+  'dialectLint@leg-synthesize': { legs: [POST_DEPLOY_LEG, ...RUN4_CLASSIFIER3_LEGS],
     why: 'contractApplicability nesting (2dc4663a) reached production with the registry deploy; this '
        + 'leg carries the first stamp that has it nested ({basis: no-program-parent, expected: false})',
     // The 2026-09-18 stage-id correction is BYTE-NEUTRAL on every specimen here, and that is a
@@ -173,20 +198,14 @@ const NET_SPECIMENS: Record<string,
     // against production — no program harness owns the stage any of them lives in), so both the
     // buggy and the corrected lookup return null and stamp the identical fact. The window is
     // therefore NOT reopened. What the corpus cannot give is the other arm:
-    unexercisedArms: [WAVE_B_ARM, 'basis: program-parent — NEVER OBSERVED IN PRODUCTION (0 of 611 archived '
-       + 'stamps). Every specimen is standalone, so the corrected lookup is exercised here only on '
-       + 'its null branch. The success branch is fixture-validated ONLY until a program leg is '
-       + 'archived post-fix; add that leg here and delete this arm in the same commit',
-      // EF-DL2 F-7 (2026-09-28). Every specimen here is `reason: no-contract` (`blockKinds: {}`), and that
-      // path returns BEFORE `fencedBlockLines` runs — so this gate has never seen the block classifier and
-      // could not see F1 (`classifier: 2`), option ac (`classifier: 3`) or any later classifier change. The no-contract arm is still
-      // pinned byte-identical ACROSS the cut (it deliberately carries no `classifier` field). The
-      // CLASSIFIER_ARM_EXERCISED check below derives this arm's truth from the stamps, so this note fails
-      // the gate the day a contract-bearing leg is declared and nobody deletes it.
-      CLASSIFIER_ARM] },
-  'contractPropagation@leg-synthesize': { legs: [POST_DEPLOY_LEG],
-    why: 'same deploy, same nesting — contractApplicability is stamped on BOTH facts from one ctx derivation',
-    unexercisedArms: ['basis: program-parent — same one derivation, same gap; see the dialectLint entry'] },
+    // ✅ Two arms CLOSED 2026-09-28 by the Run 4 program legs: `basis: program-parent` (the corrected F12
+    // lookup's success branch, never observed before) and the block CLASSIFIER (EF-DL2 F-7 — every earlier
+    // specimen was `no-contract`, which returns before `fencedBlockLines` runs; the Run 4 legs are
+    // `no-banned-token-list` stamped `classifier: 3`). The no-contract arm stays pinned by POST_DEPLOY_LEG.
+    unexercisedArms: [WAVE_B_ARM] },
+  'contractPropagation@leg-synthesize': { legs: [POST_DEPLOY_LEG, ...RUN4_CLASSIFIER3_LEGS],
+    why: 'same deploy, same nesting — contractApplicability is stamped on BOTH facts from one ctx derivation; '
+       + 'the Run 4 legs close the program-parent arm here too (reason no-canonical-stanza)' },
 
   // RWF C.3 (2026-09-26): newer than every specimen — no archived leg can have stamped it. Proven by
   // fixtures (test-verdict-freshness); add the first post-deploy leg that carries it and delete this note.

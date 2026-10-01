@@ -9,6 +9,10 @@ const body = '```json\n[{"kind":"cidr","value":"10.99.0.6/31"}]\n```\n';
 const mp = computeMarkerPresence(`## Pre-existing Allocations\ntext\n### 6. Derived Values\n${body}\n## Consumed Values\n${body}`);
 check('nested + ordinal Derived Values and standalone Consumed Values → both ✓, harvested ✗', mp.derivedValues && mp.consumedValues && !mp.harvestedAllocations);
 check('retitled block → ✗ (same parser as the containment enrichment)', !computeMarkerPresence(`## Pre-existing Allocations\n${body}`).derivedValues);
+// X28 (2026-09-28, Run 4 FABRIC Author cmukr4blz00f7yxils8659wsw): the STAMP the Reviewer blocked on. A validation
+// line BEGINNING with the marker words inside an expected-output fence must not flip a correctly placed block to ✗.
+check('X28: a trailing `Derived Values members set = {…}` validation line does not flip Derived Values to ✗',
+  computeMarkerPresence(`## Derived Values\n${body}\n## Validation\n\`\`\`\nDerived Values members set = {10.99.0.6/32, 10.99.0.7/32}\n\`\`\`\n`).derivedValues);
 check('empty / null response → all ✗, never throws', !computeMarkerPresence(null).derivedValues && !computeMarkerPresence('').consumedValues);
 check('parser field names the shared parser', mp.parser === 'parseFencedJsonBlock');
 check('leaf roles: harvester/architect/author match, reviewer does not', HARNESS_LEAF_ROLE_RE.test('infra_state_harvester') && HARNESS_LEAF_ROLE_RE.test('config_change_author') && HARNESS_LEAF_ROLE_RE.test('infra_change_architect') && !HARNESS_LEAF_ROLE_RE.test('change_reviewer'));

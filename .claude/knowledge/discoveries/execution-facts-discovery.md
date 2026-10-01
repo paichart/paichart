@@ -568,9 +568,12 @@ via `lane-not-supported`, 1 observability), 0 dispositions.** Nothing reads `blo
 field of its own. **Named residuals, pinned as fixtures and re-measured at the health-run:** the TITLE LEAK —
 a terraform Author titled "… HCL Rollback Author" now reads every validation block as rollback (2 packages, 19
 blocks; F028, a shipped rego policy, becomes a new false SKIP) — and F035 (a `## Consumed Values` marker JSON
-becomes candidate-config, the EF-DL3 false-SCAN floor). **The equivalence gate cannot pin F1 yet**: every
-specimen is `no-contract`, which never runs the classifier; its `classifier` ARM is declared unexercised and
-self-checked (E3) until a post-deploy contract-bearing leg is archived.
+becomes candidate-config, the EF-DL3 false-SCAN floor). ~~The equivalence gate cannot pin F1 yet~~ **CLOSED 2026-09-28**: the four Program Run 4 legs
+(`cmukqplsa…`, `cmukqr4l1…`, `cmukqr4mb…`, `cmukqr4ng…`, all `no-banned-token-list` stamped `classifier: 3`, and
+the first `contractApplicability.basis: program-parent` specimens) are in the fixture and replay byte-identical
+for dialectLint and contractPropagation; the `classifier` and `program-parent` arm notes are gone and E3 still
+guards the classifier note in both directions. The puller needed two fixes to pull them at all: a lone-surrogate
+filter before its `::jsonb` cast, and a QUOTED heredoc (its SQL comments' backticks were being executed).
 
 **Classifier cut 2026-09-28 — `dialectLint.classifier: 3` (EF-DL2 commit 2, option (ac)).** The 3-line prose
 window stops AT the first heading (heading line INCLUDED — `label` is byte-identical, 0 line moves archive-wide;
@@ -653,6 +656,7 @@ grep -c "needs-node-c" lib/agents/harness/derivation-containment.ts             
 # checked:false branch; unsupported rendered as a count with identities stripped).
 # — the VT-11 refusal / run-2/3 silent-drop fail-safe. Conflating the two made a first fix INERT.
 grep "## Harvested Allocations" scripts/seed-protocol-prompts.ts | grep -vc "Prior:"   # expect 13 CONTRACT SITES — PROPERTY grep, replacing the mention count 2026-09-17 (was 17 mentions, drifting on changelog edits). Rose 11 -> 13 with kubernetes-gitops v1.8.0: the domain could not be an UPSTREAM producer before it, because derivation-containment anchors on the HARVESTER and this protocol asked it for no block.
+grep -c "isHeadingShapedAt(text, starts" lib/agents/harness/derivation-containment.ts   # expect 1 — X28 (2026-09-28, PROPERTY grep): parseFencedJsonBlock walks back from the last marker match to the last one whose block PARSES, but stops at a HEADING-shaped match that does not (fail-closed: a broken corrected re-statement stays null, never the stale earlier block). If this hits 0 either the walk-back is gone (Run 4 FABRIC false-ABSENT is back: `Derived Values members set = {…}` in a validation fence displaced the real block) or the stop is gone (an unbounded walk-back — rejected: it substitutes an earlier block). Corpus-measured on 826 result.json texts x 3 markers: 4 changed stamps, all null to array, 3 fixed / 1 neutral / 0 regressed; the "heading-shaped only" alternative regressed 19. Public mirror: needs @paichart/containment-checks 0.6.1
 grep -c "member-not-covered" scripts/test-derivation-containment.ts         # expect 10 — incident fixtures pin the arithmetic class + finding-f reason-ordering, PLUS the 2026-07-30 prefix-not-minimal fixtures which assert it does NOT fire alongside them (re-measured 2026-08-29 health-run: +1.)
 ```
 

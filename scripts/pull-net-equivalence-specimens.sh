@@ -15,26 +15,40 @@
 # dialectLint and contractPropagation — so all four leg nets are in-window for all four legs.
 #
 #   usage: scripts/pull-net-equivalence-specimens.sh [legTaskId ...]
-#   default: the four 2026-09-11 legs (obs R3b-3 + R2b/k8s and siblings)
+#   default: every leg the committed fixture holds — the four 2026-09-11 legs (obs R3b-3 + R2b/k8s and
+#   siblings), the first post-deploy leg (2026-09-12), and the four Program Run 4 legs (2026-09-28, the
+#   first classifier-3 / program-parent specimens). ⚠️ The script OVERWRITES the fixture with exactly the
+#   legs it is given, so a partial argument list silently drops the rest.
 set -euo pipefail
 
 HOST="${PAICHART_PROD_HOST:-<PROD_USER>@<PROD_HOST>}"
 OUT="$(dirname "$0")/fixtures/net-registry-equivalence/specimens.json"
 LEGS=("$@")
 if [ ${#LEGS[@]} -eq 0 ]; then
-  LEGS=(cmtwhdi4d006qyx1rnnxkblay cmtwh44dv002xyx1rdi2cygju cmtwfmqrz0005yx1rqhsvmpps cmtwcpnwo0003yx2dvd6wxsbd)
+  LEGS=(cmtwcpnwo0003yx2dvd6wxsbd cmtwfmqrz0005yx1rqhsvmpps cmtwh44dv002xyx1rdi2cygju cmtwhdi4d006qyx1rnnxkblay
+        cmtxp5r6k0005yx61hg4owvlv
+        cmukqplsa00beyxiljaajwx4s cmukqr4l100bwyxilltficxsl cmukqr4mb00c3yxil7njlatne cmukqr4ng00cayxil6dl9zqc0)
 fi
 IDS=$(printf "'%s'," "${LEGS[@]}"); IDS="${IDS%,}"
 
 mkdir -p "$(dirname "$OUT")"
 
 # One document per leg. `latest per task` mirrors the enrichments' own ORDER BY createdAt DESC LIMIT 1.
-read -r -d '' SQL <<SQLEOF || true
-WITH legs AS (SELECT * FROM tasks WHERE id IN ($IDS)),
+# QUOTED heredoc (2026-09-28). It was unquoted, so bash ran every backticked phrase in the SQL comments
+# below as a COMMAND SUBSTITUTION and blanked it — one of them contains a `>>` redirect, which created an
+# empty file named pipelineStageId in the caller's cwd. The leg-id list is spliced in afterwards through a
+# placeholder, so nothing else in the SQL is shell-expanded (and the regex backslashes below are literal).
+read -r -d '' SQL <<'SQLEOF' || true
+WITH legs AS (SELECT * FROM tasks WHERE id IN (__LEG_IDS__)),
 art AS (
   SELECT e."taskId", a.content, row_number() OVER (PARTITION BY e."taskId" ORDER BY a."createdAt" DESC) rn
   FROM agent_artifacts a JOIN agent_executions e ON e.id = a."executionId"
   WHERE a.name IN ('result.json','pipeline-index.json') AND a.content LIKE '{%'
+    -- Lone-surrogate filter (2026-09-28): ONE archived pipeline-index.json (task cmugur75k0094yxa5tx6s20xh,
+    -- pre-X11) carries an unpaired \\ud83d escape, and the ::jsonb cast below aborts the WHOLE pull on it —
+    -- the known trap (CLAUDE.md MI-13 trap 1). Filtered BEFORE the cast. A specimen whose own latest artifact
+    -- is dropped here would read finalResponse null and fail the gate loudly, never pass it quietly.
+    AND a.content !~* '\\ud[89ab][0-9a-f]{2}(?!\\ud[c-f][0-9a-f]{2})'
 ),
 -- TWO casts on purpose. jsonb NORMALIZES key order (length, then bytewise), so a baseline
 -- pulled through it is not what production wrote — the first run of this gate reported 14
@@ -96,6 +110,7 @@ SELECT jsonb_pretty(jsonb_agg(doc)) FROM (
   FROM legs l
 ) t;
 SQLEOF
+SQL="${SQL//__LEG_IDS__/$IDS}"
 
 echo "Pulling ${#LEGS[@]} specimen leg(s) from $HOST (read-only)…" >&2
 # Ship the SQL as a FILE rather than through two layers of shell quoting. The inline -c form went

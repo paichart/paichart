@@ -327,11 +327,12 @@ export function isUpstreamContainmentGreen(legs: UpstreamContainmentLeg[]): bool
 }
 
 /**
- * Extract the LAST fenced ```json block that appears after the given `## Header` marker
- * (case-insensitive header match; last-match-wins mirrors parse-verdict/parse-confidence — a
+ * Extract the fenced ```json block that follows the LAST line introducing the given `## Header`
+ * marker (case-insensitive header match; last-match-wins mirrors parse-verdict/parse-confidence — a
  * corrected re-statement supersedes an earlier one). Returns null when the header or a parseable
  * fenced JSON array is absent — callers translate null into `checked:false`, never a fabricated
- * empty list.
+ * empty list. A line that merely BEGINS with the marker words and does not introduce a block is
+ * stepped over (X28, below); a HEADING-shaped line whose block does not parse is never stepped over.
  */
 export function parseFencedJsonBlock<T>(text: string | null | undefined, marker: string): T[] | null {
   if (!text) return null;
@@ -384,11 +385,61 @@ export function parseFencedJsonBlock<T>(text: string | null | undefined, marker:
     `^[#>\\s*_]*(?:\\(?\\d{1,3}[.)]\\s*)?[*_\`]*(?:#{1,6}[ \\t]*)?[*_\`]*${esc}`,
     'gim',
   );
-  let lastIdx = -1;
-  for (let m = headingRe.exec(text); m !== null; m = headingRe.exec(text)) {
-    lastIdx = m.index;
+  const starts: number[] = [];
+  for (let m = headingRe.exec(text); m !== null; m = headingRe.exec(text)) starts.push(m.index);
+  // X28 (2026-09-28, Program Run 4 FABRIC Author `cmukr4blz00f7yxils8659wsw`): last-match-wins took a
+  // VALIDATION line that merely BEGINS with the marker words — `Derived Values members set = {…}`,
+  // inside a fenced recomputation step 57 lines below a correctly placed `## Derived Values` block —
+  // as the heading. The first fence after it was not the block, the fact read ABSENT, and the leg's
+  // Reviewer blocked on it (correct behaviour on a WRONG fact). Same shape on two archived Authors'
+  // closing summaries: `5. **Consumed Values:** Chained value … documented` (the ordinal widening
+  // made a numbered summary line match).
+  //
+  // The rule: walk back from the last match to the last one that yields a parseable array, but
+  // NEVER past a HEADING-SHAPED match that does not — the marker ending its line apart from
+  // furniture, an optional parenthetical and a trailing colon. That keeps "a corrected re-statement
+  // supersedes an earlier one" fail-CLOSED: a real heading over a broken or non-array block still
+  // reads null, and the stale earlier block is never substituted for it. Only prose-shaped lines
+  // (the marker followed by more words on the same line) are stepped over.
+  //
+  // REJECTED: "accept only heading-shaped matches". Measured on 826 archived result.json texts it
+  // changed 20 facts and REGRESSED 19 (4 on Harvester/Architect/Author roles) — real headings carry
+  // trailing words (`## Derived Values Block`, `**Harvested Allocations in 10.99.0.0/24** (from
+  // Phase 0):`, `### 2. Consumed Values Block Verification`). Also rejected: an
+  // unbounded walk-back (the last PARSEABLE match), which is this rule without the heading stop —
+  // it substitutes an earlier block when the last real heading carries a non-array restatement
+  // (1 archived specimen, a technical_writer, same value by luck).
+  // MEASURED (old → this rule, all three markers, 826 texts): 4 changed facts, all null → array —
+  // 3 fixed (the Run 4 Author's Derived Values block; two Authors' Consumed Values blocks), 1 neutral (a
+  // change_reviewer, a role no net reads) — and 0 regressed. The rule is monotone by construction:
+  // it only runs where the old parser returned null.
+  for (let i = starts.length - 1; i >= 0; i--) {
+    const found = parseBlockAt<T>(text, starts[i]);
+    if (found) return found;
+    if (isHeadingShapedAt(text, starts[i], esc)) return null;
   }
-  if (lastIdx === -1) return null;
+  return null;
+}
+
+/**
+ * True when the marker match at `idx` is HEADING-shaped: after the phrase, the rest of its line is
+ * only emphasis/backtick furniture, an optional parenthetical, and an optional trailing colon.
+ * `**Derived Values** (quoted verbatim…)` and `## 6. Consumed Values:` are headings;
+ * `Derived Values members set = {…}` and `5. **Consumed Values:** Chained value …` are not.
+ */
+function isHeadingShapedAt(text: string, idx: number, esc: string): boolean {
+  const re = new RegExp(
+    `^[#>\\s*_]*(?:\\(?\\d{1,3}[.)]\\s*)?[*_\`]*(?:#{1,6}[ \\t]*)?[*_\`]*${esc}` +
+      `[*_\`]*[ \\t]*(?:\\([^\\n]*\\))?[ \\t]*[*_\`:]*[ \\t]*$`,
+    'gim',
+  );
+  re.lastIndex = idx;
+  const m = re.exec(text);
+  return m !== null && m.index === idx;
+}
+
+/** Parse the block introduced by the marker match at `lastIdx` (primary fence, then fence-inversion). */
+function parseBlockAt<T>(text: string, lastIdx: number): T[] | null {
   const after = text.slice(lastIdx);
   // First fenced block after the header: ```json ... ``` (json tag optional; tolerate ```JSON)
   const fence = after.match(/```(?:json)?\s*\n([\s\S]*?)```/i);

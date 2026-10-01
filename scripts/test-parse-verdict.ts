@@ -143,6 +143,50 @@ test('NEEDS-REVISION with itemized blocking issues transcribes both', () => {
   expect(v?.blocking).toEqual(['Set 3: rollback missing for Ethernet1', 'Set 5: no expected output']);
 });
 
+// ── Numbered blocking lists (2026-10-01, Phase 0 item 2c) ───────────────────────────────────────
+// Before this fix only `-`/`*` bullets were captured, so these three PROD shapes (trimmed from real
+// stamped verdicts) were transcribed `approved:false, blocking: []` — 15 rejected verdicts all-time.
+
+test('Numbered list, consecutive lines (prod requirements_reviewer cmuke82rb…) transcribes every item', () => {
+  const v = parseReviewerVerdict(
+    '## VERDICT: NEEDS-REVISION\nBlocking issues:\n1. Live placeholder `{{declared bucket}}` outside a fenced code example (check 1).\n2. Unhedged absence claim in Open Questions (Absence-claims rule).\nConfidence: 88',
+  );
+  expect(v?.approved).toBe(false);
+  expect(v?.blocking).toEqual([
+    'Live placeholder `{{declared bucket}}` outside a fenced code example (check 1).',
+    'Unhedged absence claim in Open Questions (Absence-claims rule).',
+  ]);
+});
+
+test('Numbered list with blank lines between items under a bold heading (prod change_reviewer cmrplnzvc…)', () => {
+  const v = parseReviewerVerdict(
+    '## VERDICT: NEEDS-REVISION\n\n**Blocking issues:** \n\n1. **No change package to review** — Phase 2 escalated as BLOCKED.\n\n2. **Phase 0 infrastructure failure** — both devices unreachable.\n\nConfidence: 30',
+  );
+  expect(v?.approved).toBe(false);
+  expect(v?.blocking).toEqual([
+    '**No change package to review** — Phase 2 escalated as BLOCKED.',
+    '**Phase 0 infrastructure failure** — both devices unreachable.',
+  ]);
+});
+
+test('Numbered list ends at the first prose line (prod change_reviewer cmrmnmix2…)', () => {
+  const v = parseReviewerVerdict(
+    '## VERDICT: NEEDS-REVISION\n\n**Blocking issues**: \n1. Terraform-iac validation step 4 — policy baseline incomplete.\n\n**Network-provisioning pipeline is APPROVED** (92/100).\n\nConfidence: 72',
+  );
+  expect(v?.blocking).toEqual(['Terraform-iac validation step 4 — policy baseline incomplete.']);
+});
+
+test('`1)` numbering is captured; a number with no following text is not an item', () => {
+  const v = parseReviewerVerdict('## VERDICT: NEEDS-REVISION\nBlocking issues:\n1) first\n2) second\n3.\nConfidence: 50');
+  expect(v?.blocking).toEqual(['first', 'second']);
+});
+
+test('Prose that starts with a year or version number is NOT read as a list item', () => {
+  // "2026" is four digits — the item pattern caps at three, so a dated sentence never becomes a finding.
+  const v = parseReviewerVerdict('## VERDICT: NEEDS-REVISION\nBlocking issues:\n- one item\n2026. a dated note\nConfidence: 50');
+  expect(v?.blocking).toEqual(['one item']);
+});
+
 test('Inconsistent block (NEEDS-REVISION + none) is transcribed AS-IS, not normalized', () => {
   const v = parseReviewerVerdict('## VERDICT: NEEDS-REVISION\nBlocking issues: none\nConfidence: 70');
   expect(v?.approved).toBe(false);

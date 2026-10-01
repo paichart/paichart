@@ -91,7 +91,6 @@ export function sanitizeRecommendationText(text: string): string {
     .replace(/<embed[^>]*>.*?<\/embed>/gi, '') // Remove embed tags
     .replace(/<[^>]+>/g, '') // Strip all remaining HTML tags
     .replace(/javascript:/gi, '') // Remove javascript: protocol
-    .replace(/on\w+\s*=/gi, '') // Remove inline event handlers (onclick, onerror, etc.)
     .slice(0, 1000); // Limit length to prevent display issues
 }
 

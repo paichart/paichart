@@ -52,7 +52,7 @@ import {
   getRoleSpecificGuidance
 } from '../lib/services/agentTemplateBuilder/pAIchartUniversalTemplate';
 import { AGENT_MODELS } from '../lib/agents/model-tiers';
-import { DEFAULT_MAX_TOKENS } from '../lib/services/llm/types';
+import { expectedMaxTokens } from '../lib/agents/role-model-params';
 
 const prisma = new PrismaClient();
 
@@ -70,13 +70,14 @@ interface TemplateSeed {
 // No personal address in code: SEED_OWNER_EMAIL (hosted deploy pins it) → ADMIN_EMAIL → 'system'.
 const SEED_OWNER_EMAIL = (process.env.SEED_OWNER_EMAIL || process.env.ADMIN_EMAIL || '').trim().toLowerCase();
 
-// NEVER a maxTokens literal here — single source is DEFAULT_MAX_TOKENS
-// (guarded by scripts/test-seed-model-params-guard.ts).
-const MODEL_PARAMS = (tier: 'infra' | 'synthesis', timeout: number) => ({
+// NEVER a maxTokens literal here — the value comes from the per-role table (lib/agents/role-model-params.ts),
+// which falls back to DEFAULT_MAX_TOKENS; report:template-freshness reads the same table
+// (guarded by scripts/test-seed-model-params-guard.ts + test:role-model-params).
+const MODEL_PARAMS = (tier: 'infra' | 'synthesis', timeout: number, role: string) => ({
   provider: 'anthropic_sdk',
   model: AGENT_MODELS[tier],
   temperature: 0.3,
-  maxTokens: DEFAULT_MAX_TOKENS,
+  maxTokens: expectedMaxTokens(role),
   useSystemPrompt: true,
   maxRetries: 2,
   timeout,
@@ -96,7 +97,7 @@ const TEMPLATES: TemplateSeed[] = [
       // maxToolTurns decided CONSCIOUSLY: no override. The per-descriptor loop is the same shape as
       // the observability harvest (lifecycle + a few scoped reads), repeated — the engine default
       // suffices. V3's multi-descriptor dry-run is what would justify a bump, as a written finding.
-      modelParameters: MODEL_PARAMS('infra', 600), // 'infra' tier: this is the one state-reaching role here
+      modelParameters: MODEL_PARAMS('infra', 600, 'infra_state_harvester'), // 'infra' tier: this is the one state-reaching role here
       hasModelParameters: true,
       modelParamsVersion: '1.0.0',
       protocol: 'requirements-authoring-protocol', // byte-matches the agent_prompt_library row name
@@ -115,7 +116,7 @@ const TEMPLATES: TemplateSeed[] = [
       // deliverable, which is that tier's stated definition (lib/agents/model-tiers.ts). Both tiers
       // resolve to the same model today, so this is an intent declaration, not a behaviour change —
       // it is what a future tier split would act on.
-      modelParameters: MODEL_PARAMS('synthesis', 600),
+      modelParameters: MODEL_PARAMS('synthesis', 600, 'requirements_author'),
       hasModelParameters: true,
       modelParamsVersion: '1.0.0',
       protocol: 'requirements-authoring-protocol',
@@ -131,7 +132,7 @@ const TEMPLATES: TemplateSeed[] = [
     tags: ['requirements-authoring', 'reviewer', 'quality', 'qa-gate'],
     timeout: 300, // 5 min — review is bounded, no generation
     metadata: {
-      modelParameters: MODEL_PARAMS('synthesis', 300), // reaches nothing; grades a document
+      modelParameters: MODEL_PARAMS('synthesis', 300, 'requirements_reviewer'), // reaches nothing; grades a document
       hasModelParameters: true,
       modelParamsVersion: '1.0.0',
       protocol: 'requirements-authoring-protocol',

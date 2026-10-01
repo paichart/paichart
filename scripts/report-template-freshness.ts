@@ -42,6 +42,7 @@ import { prisma } from '@/lib/prisma';
 import { AGENT_MODELS } from '@/lib/agents/model-tiers';
 import { buildHarnessPromptTemplate } from '@/lib/agents/harness-template';
 import { DEFAULT_MAX_TOKENS } from '@/lib/services/llm/types';
+import { expectedMaxTokens } from '@/lib/agents/role-model-params';
 import {
   PAICHART_UNIVERSAL_BASE_TEMPLATE,
   ROLE_GUIDANCE_LIBRARY,
@@ -120,19 +121,26 @@ const BARE_BASE_BY_DESIGN = new Set(['pAIchart Universal Agent Template']);
  * post-verify, and deleting the spent script would have taken the check with it.
  *
  * Both sides are importable, so this is a genuine comparison, not a heuristic: the model must be one
- * of the sanctioned `AGENT_MODELS` tiers and maxTokens must equal `DEFAULT_MAX_TOKENS`. It
+ * of the sanctioned `AGENT_MODELS` tiers and maxTokens must equal the per-ROLE expectation (`expectedMaxTokens`, lib/agents/role-model-params.ts — DEFAULT_MAX_TOKENS unless the role has a measured entry). It
  * deliberately does NOT assert WHICH tier a given row belongs on — that mapping lives in the seed
  * scripts' data blocks, which cannot be imported without executing them. Off-tier is reported as a
  * FACT to look at, never as a verdict (Protocol 10).
  */
-function checkModelParams(metadata: unknown): string | null {
+function checkModelParams(metadata: unknown, role: string | null | undefined): string | null {
   const mp = (metadata as any)?.modelParameters;
   if (!mp) return 'no modelParameters on the row';
   const problems: string[] = [];
   const tiers = new Set<string>(Object.values(AGENT_MODELS) as string[]);
   if (!mp.model) problems.push('no model set');
   else if (!tiers.has(mp.model)) problems.push(`model "${mp.model}" is not a sanctioned tier`);
-  if (mp.maxTokens !== DEFAULT_MAX_TOKENS) problems.push(`maxTokens ${mp.maxTokens} !== DEFAULT_MAX_TOKENS ${DEFAULT_MAX_TOKENS}`);
+  // Expected per ROLE (lib/agents/role-model-params.ts — the same table the owning seed writes from), so a
+  // deliberate per-role ceiling is not reported as permanent drift, and a GUI save back to the default is.
+  const expected = expectedMaxTokens(role);
+  if (mp.maxTokens !== expected) {
+    problems.push(expected === DEFAULT_MAX_TOKENS
+      ? `maxTokens ${mp.maxTokens} !== DEFAULT_MAX_TOKENS ${DEFAULT_MAX_TOKENS}`
+      : `maxTokens ${mp.maxTokens} !== per-role ${expected} (role-model-params.ts)`);
+  }
   return problems.length ? problems.join('; ') : null;
 }
 
@@ -147,7 +155,7 @@ async function main() {
   const modelDrift: Array<{ name: string; role: string; problem: string }> = [];
   for (const t of templates) {
     // Independent of the prompt verdict: a prompt-CURRENT row can still be model-drifted.
-    const mpProblem = checkModelParams(t.metadata);
+    const mpProblem = checkModelParams(t.metadata, t.defaultRole);
     if (mpProblem) modelDrift.push({ name: t.name, role: t.defaultRole, problem: mpProblem });
     const live = t.promptTemplate ?? '';
     const role = t.defaultRole;

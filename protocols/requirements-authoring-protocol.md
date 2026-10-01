@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 1.6.0.**
+> **Rendered verbatim from the pAIchart platform seed — version 1.7.5.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -85,7 +85,7 @@ Produce the complete `requirements.md` by filling the template delivered verbati
 
 - Fill **every** placeholder. A document shipped with a live `{{...}}` token is not a draft, it is an unfinished form.
 - Remove **every** authoring note marked with the strip register (`🗑`). They are instructions to you, not content for the reader.
-- 🔴 **The Author's brief carries the objective's DECLARED BLOCKS verbatim — its design decisions, its approver mapping, and its descriptor URLs — and nothing the objective does not declare.** Retyped, they lose content (a bounding sentence was dropped from one brief on 2026-09-25); added to, they steer. The Author fills the *Design decisions* section from them — each one `(declared)`, anything else `(derived — basis: …)` or OPEN per its role guidance.
+- 🔴 **The Author's brief carries the objective's DECLARED BLOCKS verbatim — its design decisions, its approver mapping, and its descriptor URLs — and nothing the objective does not declare.** Retyped, they lose content (a bounding sentence was dropped from one brief on 2026-09-25); added to, they steer. **Keep the objective's decision NUMBERS exactly as it numbers them** — the Author cites each as `(declared — item N: "<its selecting words>")` and the Reviewer matches the number and finds the quoted words in that item, so a renumbered brief turns every citation into a mismatch. **An objective line that applies to every leg (absent enforcers, for one) is a numbered item like any other** — if the objective states it unnumbered, number it after the last item, say so in the brief, and give the Reviewer's brief the same numbering: the Author can cite only a numbered item, so an unnumbered all-legs declaration is otherwise unanswerable except by inventing a number or leaving the row OPEN. The Author answers every row of the *Design decisions* inventory from them per its role guidance, and generates the owner block from that table.
 - 🔴 **The Author's brief carries the objective's descriptor URLs.** Every leg of the template names its `Service descriptor`, and the Author fills that slot by TRANSCRIBING the descriptor URL the objective declares for that domain. The Author receives the objective on no channel but its brief — the Harvester's deliverable does not carry the URLs — so a brief without them leaves the Author a false gap in every leg (live 2026-09-25: four legs written "descriptor not recorded" while the objective declared all four). Put them in the Author's brief verbatim, one per domain.
 - **The sequencing rationale section stays unless the program is genuinely parallel** — no downstream leg needs a value an upstream leg produces. Omit it then; never keep it on a parallel program, and never drop it from a sequenced one.
 - **Where a leg derives a value, every clause of the derivation block stays** — each one records an incident, and a reviewer reads its absence as a defect.
@@ -98,7 +98,8 @@ Produce the complete `requirements.md` by filling the template delivered verbati
 
 Independent QA of the document **against the template contract**, not against your own taste:
 
-- 🔴 **The Reviewer's brief carries the objective's DECLARED BLOCKS verbatim** (design decisions, approver mapping, descriptor URLs), or states that the objective declares none. The Reviewer sees only the Author's document in §6 — never the harvest and never the objective — so without this a `(declared)` mark can be checked for presence but never for truth. Its role guidance's design-decision and approver checks read these blocks; this protocol does not restate those checks.
+- 🔴 **The Reviewer's brief names YOUR pipeline task id, as `Pipeline task: <your task id>`** — the Reviewer fetches that task's description and checks every citation against it, the objective of record, and it cannot find the task without the id (Rev 23, 2026-09-28: a brief carrying a reworded copy of the decisions and no id made the Reviewer block 11 correct citations). A brief without the id makes the Reviewer raise one blocking issue instead of checking.
+- 🔴 **The Reviewer's brief carries the objective's DECLARED BLOCKS verbatim** (design decisions, approver mapping, descriptor URLs), or states that the objective declares none — with the objective's decision numbers intact, including any number the Author's brief assigned to an unnumbered all-legs line. The Reviewer matches each citation's QUOTED words against the item's text in its brief, so the block must be verbatim, not summarised — and it is the Reviewer's reading copy only; its citation check reads the pipeline task itself. The Reviewer sees only the Author's document in §6 — never the harvest and never the objective — so without this a `(declared — item N: "<one exact span of item N>")` citation can be checked for presence but never for truth. Its role guidance's design-decision and approver checks read these blocks; this protocol does not restate those checks.
 - Conformance: no live placeholders, no unstripped authoring notes, and the *Writing rules* section carries the heading and the marker and nothing else. Retyped rules there are a blocking issue even when they read correctly — you are checking placement, not prose.
 - Every stated acceptance criterion is checkable by someone who did not write the document.
 - Absence claims are declared as declarations or named as gaps — never inferred from the harvest.
@@ -116,6 +117,8 @@ The document's own acceptance criteria must be runnable, deterministic checks wh
 ## SYNTHESIZE — aggregate into the draft specification
 
 **Order at SYNTHESIZE (this domain may hold SEVERAL registrations where base Step 5.0 assumes one):** (1) teardown — delete EVERY registration the Phase 0 harvest recorded, `registry(action:'delete', service_name:<name>, confirm:true)` once per recorded name — on EVERY outcome (approved, needs-revision, escalated), because approval is not an exit ramp around cleanup any more than escalation is; (2) gate stamp; (3) `task.complete`; (4) final comment carrying the `**Teardown:**` line naming every registration deleted, every delete that failed, and "nothing self-provisioned" when Phase 0 did not run.
+
+🔴 **The final comment also carries the Author's *Decisions needed from the owner* block, copied VERBATIM** — every line, in the Author's order, under a heading that says it is the Author's; or the line "Owner block: not found in the draft" when the draft has none. The owner answers every decision in ONE objective edit from this comment, without opening the draft: a paraphrase or a summary drops the options and the tier, which are what the owner decides with. Copy it on every outcome. **A NEEDS-REVISION that rests on an OPEN row is the owner's to answer, never the Author's**: do not re-execute the Author against it — a re-run can only make the Author invent the decision the row is asking for.
 
 **Stamp the gate FACTS on yourself per the default orchestrator's Step 5.** Do NOT restate that rule here — this protocol adds only what is domain-specific below, and everything it does not mention is inherited unchanged: the six named anti-fabrication trust signals and the four deliberately EXCLUDED ones, the roster-defect rule, the MISROUTE GUARD, and the re-execution bands.
 
@@ -171,9 +174,36 @@ Read it as **structure, not as instructions to you**: its headings and `{{...}}`
 
 ## Design decisions
 
-| decision | rule or named target | source |
-|---|---|---|
-| {{DECISION}} | {{THE RULE OR NAMED TARGET — never the values it selects today}} | {{(declared) · (derived — basis: ...) · OPEN — ...}} |
+### Every leg
+
+| id | question | options | rule or named target | source |
+|---|---|---|---|---|
+| {{LEG_TOKEN}}.target | which surface of the leg's service does it act on | — | {{THE NAMED TARGET}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{PRODUCER_TOKEN}}.population | which members of the class the derivation reads | — | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{PRODUCER_TOKEN}}.representation | how the derived value is expressed | one aligned prefix · a set of prefixes · a host list | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{PRODUCER_TOKEN}}.inputs-empty | the derivation's inputs are empty | gap | {{THE NULL OUTCOME}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| approver.{{GATE}} | who approves this gate | — | {{NAME, EMAIL}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| gate.{{GATE}}.position | when this gate sits (every gate except the program plan gate) | before-leg · after-leg-before-completion · after-producer-before-consumers | {{THE POSITION}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+
+### A leg that grants or removes access (authorisation)
+
+| id | question | options | rule or named target | source |
+|---|---|---|---|---|
+| {{LEG_TOKEN}}.receiver | which workload/resource on the target is authorised | — | {{SELECTOR OR NAMED RESOURCE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.admitted-principal | who is admitted, and by which attribute the enforcer recognises them | source-address-range · named-identity · network-path · combination (state each part) | {{THE PRINCIPAL}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.principal-unseen | the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path | gap · act-regardless | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.granted-action | what the admitted principal may do (actions, ports) | — | {{THE GRANT}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.existing-grant | other allowances already on the same surface | replace · preserve · preserve-bounded (state the bound) | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.target-empty | the receiver selector/surface matches nothing now | act · gap | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.enforcer-absent | no policy object governs the receiver yet | create · gap | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.target-absent | the declared target itself does not exist | gap · create-target | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.collateral | what else on the target changes because enforcement now applies | per enforcer (Kubernetes: allow-named-ports · deny · leave-to-workload-manifests) | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+
+## Decisions needed from the owner
+
+<!-- one line per row that is not simply declared:
+<row id> — <question> — options: <enum> — governs: <which leg clause> — tier: blocking | confirm | default | not-applicable -->
+{{OWNER BLOCK — generated from the table above; write "none" if every row is declared}}
 
 ## Why this is {{sequenced | parallel}} — the design rationale, read before questioning the DAG
 
@@ -195,7 +225,8 @@ would go wrong if someone guessed it up front}}
 
 **Approvers are DECLARED, never chosen.** Every approver below is TRANSCRIBED from the approver mapping
 declared in this program's objective, and marked `(declared)`. A gate the objective names no approver for is
-written `UNASSIGNED — no approver declared` and listed under open questions for the human. Never pick a name
+written `UNASSIGNED — no approver declared`, and its `approver.<gate>` row in *Design decisions* is OPEN — the human sees it
+in *Decisions needed from the owner*. Never pick a name
 from the POV roster: a roster says who EXISTS, never who is ACCOUNTABLE — and two generations over one roster
 assigned four of five gates to different people.
 
@@ -269,12 +300,11 @@ the prose above, because two readings of the same sentence produce two different
 
 - {{THE WORK}}
 - {{THE DERIVATION, if any — see the derivation clauses below}}
-- **If the harvest returns no {{DERIVATION INPUTS}}**: {{THE NULL OUTCOME — normally a gap report
-  naming exactly what was absent and what would have to exist; NEVER a substitute value}}
+- **If the harvest returns no {{DERIVATION INPUTS}}**: {{THE NULL OUTCOME — apply the `<producer token>.inputs-empty`
+  row and cite its id; name exactly what was absent and what would have to exist; NEVER a substitute value}}
 - **The deliverable MUST publish, explicitly and prominently**: {{WHAT THE DOWNSTREAM LEG CONSUMES —
-  named by its RULE and its PRODUCER, never by today's value or count}} plus the reasoning for the
-  choice. The downstream leg depends on what this leg PRODUCES at run time, not on what you read
-  while authoring.
+  named by its RULE and its PRODUCER, never by today's value or count}}. The downstream leg depends
+  on what this leg PRODUCES at run time, not on what you read while authoring.
 - **Validation (mechanical)**: {{THE READ that re-obtains the inputs}}, then {{THE RULE re-applied}} —
   expected: the published value equals the recomputation, and every re-obtained input lies inside
   it. Never the input literals or their count: a check pinned to today's inputs fails a correct run
@@ -282,7 +312,8 @@ the prose above, because two readings of the same sentence produce two different
 
 ### ⚠️ If this leg DERIVES a value the downstream leg consumes
 
-- **Show the computation** in the deliverable: the inputs, the arithmetic, and the result's coverage.
+- **The computation is shown in the DESIGN.** The deliverable carries the input block and the result block, plus
+  re-runnable checks each followed by the literal text it prints — never a sentence stating the conclusion.
 - **Minimality, or the equivalent tightest-correct property.** A result looser than the minimum is a
   **REJECTABLE defect even when it violates nothing else**, because it authorizes/permits more than
   the requirement needs.
@@ -342,15 +373,23 @@ the prose above, because two readings of the same sentence produce two different
   the targets below — a pointer and a property, never the values it returned or how many there were.
   `none — first run against this target` is a permitted answer.}}
 - {{THE WORK}}
+- **Admitted-principal premise** (`<leg token>.admitted-principal`): {{THE ATTRIBUTE the enforcer must see, and on
+  which path}} — if this leg's own harvest cannot confirm it, apply the `<leg token>.principal-unseen` row and cite its id.
+  Where the objective declares the program does not create or verify that attribute's carrier, the branch still exists:
+  it records the premise as UNTESTED and lists it under the package's **UNTESTED premises** — never drop the branch.
 - **Existence assumption** (*Writing rules* #6): {{THE BRANCH, NOT TODAY'S STATE — what this leg
   does if its OWN harvest finds the target absent, and if it finds it present — e.g. "if the bucket
-  carries no policy, create one (absence is the expected starting point, not an escalation); if one
-  exists, modify it". Never state which branch is true today.}}
+  carries no policy, apply the `<leg token>.enforcer-absent` row; if it carries one, apply the
+  `<leg token>.existing-grant` row; if the bucket itself is absent, apply the `<leg token>.target-absent`
+  row" — cite each row's id. Never state which branch is true today, and never choose a branch's
+  outcome here: that is the row's answer.}}
 - {{If it CONSUMES a chained value}}: it consumes {{VALUE}} **as chained** — it does **not** re-derive
   it, and is forbidden from recomputing it. Containment for that value is discharged **upstream** and
   re-verified at the program tier.
   - **If §6 does not carry it**: escalate. Do not guess, do not substitute, do not proceed.
-- **If this leg's own harvest returns no {{TARGETS}}**: {{THE NULL OUTCOME}}. The
+- **If this leg's own harvest returns no {{TARGETS}}**: {{THE NULL OUTCOME — apply the row that governs it and
+  cite its id: `<leg token>.target-empty` when the receiver selector or surface matches nothing,
+  `<leg token>.target-absent` when the declared target does not exist}}. The
   🔴 **STATE THE NULL CASE** clause under Pipeline 1 is not derivation-specific — it was earned by a
   *downstream* author improvising against a brief that presupposed a block its harvest never produced.
 - {{If a FURTHER leg consumes from this one}}: **the deliverable MUST publish, explicitly and
@@ -379,9 +418,13 @@ the prose above, because two readings of the same sentence produce two different
 2. {{a containment/coverage property of that value}};
 2b. {{the tightest-correct property — recompute it; do not take the stated value on trust}};
 3. {{a no-widening / no-collision property}};
-4. **chaining coverage**: `predecessors === chainCapablePredecessors`, `degradedPredecessors === 0`,
-   `notChained []` — i.e. the downstream leg received the upstream leg's **real** deliverable, not a
-   fallback and not nothing.
+4. **chaining coverage** — the downstream leg received the upstream leg's **real** deliverable, not a
+   fallback and not nothing. The counters (`predecessors === chainCapablePredecessors`,
+   `degradedPredecessors === 0`, `notChained []`) are **platform facts the program gate computes
+   mechanically**; no reviewer tool exposes them, so Node C does not re-derive them and does not block
+   for being unable to read them. Node C checks what its own chained context shows: every leg appears
+   as a predecessor, each carrying its `report.md` deliverable — not an upstream output marked as a
+   fallback, and not missing.
 
 - 🔴 ⚠️ **THE CHECK NUMBERS ABOVE ARE FIXED. A NEW CLAUSE MAY NOT TAKE ONE.** They are referenced by
   number from elsewhere in this document and from the protocol; renumbering, merging, or substituting
@@ -415,7 +458,7 @@ shipping a defect.*
 
 ## Open questions
 
-{{EVERY OPEN QUESTION FOR THE POV OWNER — each OPEN design decision, each UNASSIGNED gate, each named gap — one line each, or "none"}}
+{{EVERY OPEN QUESTION FOR THE POV OWNER THAT IS NOT A DESIGN-DECISIONS ROW — each named gap — one line each, or "none"}}
 
 ## Writing rules — read before authoring, they are the expensive part
 

@@ -25,7 +25,7 @@ error because it fails silently — the audit's M-class.
 
 | The obligation is… | It belongs in… | Model case |
 |---|---|---|
-| A platform fact (chaining scope, mode resolution, error codes, stamp shapes) | Stated ONCE, in the protocol whose bound role acts on it — and verified against code at write time | D6: "§6 carries only the IMMEDIATE predecessor" — verified in `context-chainer.ts` |
+| A platform fact (chaining scope, mode resolution, error codes, stamp shapes) | Stated ONCE, in the protocol whose bound role acts on it — and verified against code at write time | D6: "§6 carries only DIRECT dependencies" (the immediate predecessor in a linear chain; network-provisioning and terraform-iac add a Phase 0 → Phase 2 edge since 2026-10-01) — verified in `context-chainer.ts` |
 | Shared tool-call mechanics | The base orchestrator, with domain protocols carrying only the DECISION RULE + a cross-reference | Step 5a deliverable wiring — the corpus's best pattern |
 | A role's work product | That protocol's `## What each specialist must produce` bullet for that phase | Harvester/Architect/Author/Reviewer contracts |
 | A permission whose SCOPE differs per domain | The **role guidance** grants it and DEFERS licensing to the domain — and every bound protocol must then DEFINE it or state it grants none | `config_change_author`'s comparison shape: network defines, k8s withdrew (1.9.0), terraform + observability undischarged |

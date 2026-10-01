@@ -99,10 +99,13 @@ export function parseReviewerVerdict(text: string | null | undefined): ReviewerV
   if (blockingLine) {
     const inline = blockingLine[1].trim().replace(/[*_`]+$/g, '').trim();
     if (inline && !/^none\b/i.test(inline)) blocking.push(inline);
-    // Itemized form: bullet lines immediately following the `Blocking issues:` line.
+    // Itemized form: bullet OR numbered lines immediately following the `Blocking issues:` line.
+    // Numbered items (`1.` / `1)`) added 2026-10-01: reviewers are told to itemize and often number,
+    // and a `-`/`*`-only match stamped 15 rejected verdicts `blocking: []` (requirements-pipeline
+    // review, Phase 0 item 2c). Blank lines between items are skipped; the first other line ends the list.
     const rest = after.slice((blockingLine.index ?? 0) + blockingLine[0].length);
     for (const line of rest.split('\n')) {
-      const bullet = line.match(/^\s*[-*]\s+(.+)$/);
+      const bullet = line.match(/^\s*(?:[-*]|\d{1,3}[.)])\s+(.+)$/);
       if (bullet) blocking.push(bullet[1].trim());
       else if (line.trim() !== '') break; // first non-bullet, non-blank line ends the list
     }

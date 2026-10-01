@@ -1154,6 +1154,7 @@ lib/agents/harness/sanitize-chained-output.ts
 lib/agents/harness/verdict-freshness-enrichment.ts
 lib/agents/harness/verdict-mismatch-guard.ts
 lib/agents/model-tiers.ts
+lib/agents/role-model-params.ts
 lib/agents/services/agent-configuration-service.ts
 lib/agents/universal-agent-rules.ts
 lib/api-handler.ts
@@ -1590,6 +1591,7 @@ lib/validation/enum-validation.ts
 lib/validation/field-limits.ts
 lib/validation/file-validation.ts
 lib/validation/form-field-patterns.ts
+lib/validation/forwarded-args-injection.js
 lib/validation/geographical-validation.ts
 lib/validation/id-validation.ts
 lib/validation/input-validation-framework.ts
@@ -1673,9 +1675,11 @@ scripts/audit-pov-access-completeness.sh
 scripts/audit-role-guidance-contract.ts
 scripts/audit-role-guidance-coverage.ts
 scripts/backfill-protocol-stamps.ts
+scripts/build-answered-objective.py
 scripts/check-field-limits-adoption.ts
 scripts/check-naming.mjs
 scripts/check-package-against-contract.ts
+scripts/check-requirements-citations.py
 scripts/check-validation-parity.ts
 scripts/cleanup-workflow-executions.ts
 scripts/connect-browser-use-server.js
@@ -1937,6 +1941,7 @@ scripts/test-requirements-skeleton-parity.ts
 scripts/test-resolve-owning-leg.ts
 scripts/test-resource-authz-coverage.ts
 scripts/test-response-sanitizer.ts
+scripts/test-role-model-params.ts
 scripts/test-rollback-containment.ts
 scripts/test-routes-health.ts
 scripts/test-routes-mcp-transport.ts

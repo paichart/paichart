@@ -1293,6 +1293,24 @@ grep -c "def skeleton\|'--insert'\|'--check'" ~/paichart/scripts/requirements-ru
 grep -c "If the requirements.md was GENERATED" scripts/seed-protocol-prompts.ts            # expect >=1 — the heading, plus changelog mentions (2 at 2026-09-24)
 ```
 
+The design-decision questions (2026-09-29) are maintained in
+`.claude/knowledge/pipelines/requirements-authoring/DESIGN-DECISION-QUESTIONS.md`, and the key-parity check compares it
+with the skeleton, the Author guidance and Reviewer 8.1 per class. Confirm the registry is still one of the compared
+copies (a registry dropped from the check would drift silently):
+
+```bash
+grep -c "keysFromRegistry(REGISTRY)" scripts/test-requirements-guidance-anchors.ts   # expect 1
+```
+
+The owner-answer session (2026-09-30) turns a zero-decision generation's owner block into an answered objective. Its
+merge must stay mechanical — confirm the procedure still points at the script, and the script still refuses an
+unanswered question:
+
+```bash
+grep -c "build-answered-objective.py" .claude/knowledge/pipelines/requirements-authoring/OWNER-ANSWER-SESSION.md   # expect >=1
+grep -c "owner question(s) with no answer" scripts/build-answered-objective.py   # expect 1
+```
+
 ## 🆕 2026-09-14 — Prose-obligation coverage pins
 
 The coverage map at `.claude/knowledge/pipelines/PROSE-OBLIGATION-COVERAGE.md` asserts which

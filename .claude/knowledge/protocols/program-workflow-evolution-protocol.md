@@ -197,6 +197,51 @@ Findings that are real but out of scope get FILED with owner + trigger, never si
 (the arc filed: atomic-stage-link with its predicate-coupling warning, the cascade-miss audit,
 BLOCKED-non-terminal — each later ruled on with its evidence intact).
 
+## When the loop stops converging — the step-back review (added 2026-10-01)
+
+The loop above fixes ONE finding at a time. It has a failure mode of its own: each run fails on a
+different defect, each defect gets a correct local fix, and the success rate does not move. When that
+happens, stop running the loop and step back — the next finding is not the problem; the shape of the
+system is.
+
+**Triggers — any one is enough (each was hit before the 2026-10-01 review):**
+- three or more consecutive runs fail, each on a DIFFERENT defect (Program Runs 4–7: four runs, four
+  different blockers);
+- the generator's or a leg's guidance is being edited many times a day (51 edits in 10 days) — the
+  change rate now exceeds what outcomes can attribute;
+- verdicts keep failing on slips rather than defects (0 of 11 generations approved, every blocking
+  item a copy, format or linking slip);
+- a fix that worked locally does not move the success rate (1 release in 10 runs, unchanged).
+
+**The method (run 2026-10-01 — `cline_docs/reviews/requirements-pipeline-review-2026-10-01/`):**
+1. **Evidence ledger** — every run in the window from persisted records, every blocking item
+   classified by the layer that caused it (owner answer, generator, template/protocol, leg Author,
+   leg reviewer, Node C, gate/script, platform). Replace impressions with counts. Classify from the
+   REVIEWER'S STATED REASON, not the outcome (see anti-patterns).
+2. **Actor map** — for each node, the KIND of job it does (decide, observe, derive, copy, link, write,
+   check, judge, route) against the actor doing it. The principle: people decide, harvests observe,
+   code copies/links/counts/routes, LLMs write and judge — and any judgement with a closed answer moves
+   to code. Check that the ledger's failures cluster where the actor is wrong.
+3. **Targeted research** — outside evidence on the failure CLASSES the ledger shows, primary sources
+   read, secondary summaries marked as such. Ask "what does this say about our class", not for a survey.
+4. **T0 measurements before any review** — the cheap read-only measurements the proposal's claims rest
+   on. They change the proposal (T0 removed one item's premise and closed another).
+5. **Proposal, then an evidence-graded panel** (Protocol 14) of the owning specialists PLUS an
+   OUTSIDE-VIEW reviewer that writes its own diagnosis from the evidence BEFORE reading the proposal.
+   Synthesise from the full reports; trace every finding; expect the panel to correct the evidence
+   documents, not only the plan (it did: four ledger errors, a misdiagnosed parser, a refuted lint).
+6. **Owner decisions in groups** — one group per turn, a recommendation and its evidence per row,
+   each group recorded immediately.
+7. **A phased plan** — small evidence-backed fixes first, then larger tracks in parallel where their
+   code is disjoint, later items each behind their own evidence.
+
+**Working rules for the plan that follows (decided 2026-10-01, SYNTHESIS §7 Group 1):**
+- guidance changes ship in NAMED BATCHES with a version cut, each followed by a measurement window
+  (normally the next live run) before the next batch; plain bug fixes are exempt;
+- every new code check ships with a DENOMINATOR (what it examined) and a POSITIVE CONTROL (a planted
+  case it must catch);
+- every measurement claim states its n; no causal claim from fewer than ~10 runs.
+
 ## Anti-patterns (observed, named, banned)
 
 - **Re-wording a warning after its second failure** (run 6) — escalate the layer instead.
@@ -243,7 +288,36 @@ BLOCKED-non-terminal — each later ruled on with its evidence intact).
   instead** — unexplained becomes known, scoped to the named artifact, and the rule stays armed. A
   demo that switches off its own control to get a green proves nothing.
 
+- **Labelling a corpus by OUTCOME instead of the reviewer's stated REASON** (2026-10-01, T0(b)). A
+  candidate check "fired on 12 approved legs" read as false positives — but two of those approvals were
+  reviewer misses, and two of the rule's "true positives" were not why their legs failed. Start from
+  the reviewer-cited cause of each failure, then hand-read positives and negatives before trusting a
+  precision. Approval is not ground truth.
+- **Treating blind regeneration as a retry** (regenerations 1–5). Re-rolling a whole 45 KB document with
+  no feedback is intrinsic self-correction — it introduces errors as fast as it removes them (each
+  regeneration produced a different slip set). A retry needs external feedback (findings, a check's
+  output) and an instruction to change only what they name.
+- **Trusting an unattested automation** (2026-10-01). A run watcher whose queries silently returned
+  empty never fired; a plan gate waited 80 minutes. Every watcher, gate script or check is tested
+  against a known state — and an empty or null result is an error, never "not ready yet".
+- **Reading a platform fact out of its context** (Run 8). `markerPresence.harvestedAllocations: false`
+  on a leg Author's output was read as a defect by a reviewer and by the coordinator; it is false on
+  EVERY Author by construction (the Author's section is `## Pre-existing Allocations`). Before treating
+  a fact as a finding, check its value across runs that passed.
+- **Blaming the agent for a choice the structure made available** (FABRIC-PROVENANCE, 2026-10-01). Two
+  protocols required the Author to quote a block its chain never delivered — so each Author either
+  fetched it (passed) or quoted a restatement (failed): a coin flip on behaviour over a structural gap.
+  The fix was one dependency edge, not a stronger instruction.
+
 ## Proven impact
+
+**2026-10-01 — the step-back review (first run of the section above).** Ledger (39 generations, 14 program runs) → actor
+map → research → T0 → six-reviewer panel (60 findings traced) → five grouped decisions → Phase 0 shipped as small named
+batches with short reviews. Live: Run 8 — all three consuming legs approved for the first time, every Phase 0 check held,
+blocked only by one structural class (the fabric Author never received the block it had to quote); Run 9 — that class
+fixed by one dependency edge and validated (fabric approved), with the program then blocked by a REGRESSION the batch
+itself introduced (a citation rule that made legs self-assess acceptance checks — ACCEPT-SELFCHECK). n = 2 runs. The honest
+lesson: a measurement window after every batch is what caught the batch's own regression on the next run.
 
 **2026-09-19 — the loop's best R7 instance yet, because the test was written BEFORE the run.**
 `kubernetes-gitops` 1.9.0 shipped a behavioural clause and recorded its own pass condition in the

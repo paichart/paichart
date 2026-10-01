@@ -27,6 +27,7 @@ import {
   asnToCanonical,
   HARVESTED_ALLOCATIONS_MARKER,
   DERIVED_VALUES_MARKER,
+  CONSUMED_VALUES_MARKER,
   type HarvestedAllocation,
   type DerivedValue,
   computeContainmentDisposition,
@@ -210,6 +211,74 @@ test('BACKTICK tolerance must NOT break the FW-A3.4 fence inversion (the regress
   const doc = 'Derivation follows.\n```\n## Derived Values\n[{"kind":"cidr","value":"10.99.0.4/30","members":["10.99.0.4/32"]}]\n```\n';
   const got = parseFencedJsonBlock<DerivedValue>(doc, DERIVED_VALUES_MARKER);
   assert(got !== null && got[0].value === '10.99.0.4/30', `fence-inverted block must still parse: ${JSON.stringify(got)}`);
+});
+
+// X28 (2026-09-28) — Program Run 4 FABRIC Author (`cmukr4blz00f7yxils8659wsw`, leg `cmukqplsa00beyxiljaajwx4s`).
+// Shape reproduced from the live text (lab addresses): a correctly placed `## Derived Values` block, then
+// a validation step whose EXPECTED OUTPUT fence contains a line BEGINNING with the marker words. The
+// shipped parser took that line as the heading (last match wins), the first fence after it was not the
+// block, and markerPresence.derivedValues stamped false — the leg's Reviewer then blocked on the fact.
+const X28_RUN4 = [
+  '## Derived Values', '',
+  '*Carried forward verbatim from Phase 1 design (task ID `cmukr46n100f2yxil1aokkba5`), unaltered:*', '',
+  '```json',
+  '[{"kind": "cidr", "value": "10.99.0.0/27", "members": ["10.99.0.1/32", "10.99.0.2/32", "10.99.0.4/32", "10.99.0.24/32", "10.99.0.26/32", "10.99.0.29/32"]}]',
+  '```', '',
+  '## Validation steps (recomputation)', '',
+  '```',
+  'Step 3 — Population match: cross-check § Pre-existing Allocations cidr entries against § Derived Values members',
+  '```',
+  '**Expected output (set equality, exact):**',
+  '```',
+  'Pre-existing Allocations cidr set  = {10.99.0.1/32, 10.99.0.26/32, 10.99.0.29/32, 10.99.0.2/32, 10.99.0.4/32, 10.99.0.24/32}',
+  'Derived Values members set          = {10.99.0.1/32, 10.99.0.2/32, 10.99.0.4/32, 10.99.0.24/32, 10.99.0.26/32, 10.99.0.29/32}',
+  'SET EQUAL → no member fabricated, none omitted',
+  '```', '',
+  '```',
+  'Step 4 — Chaining coverage, to be run by each consuming leg',
+  '```', '',
+].join('\n');
+
+test('X28 fixture: Run 4 FABRIC — a validation line BEGINNING with the marker words does not displace the real block', () => {
+  const got = parseFencedJsonBlock<DerivedValue>(X28_RUN4, DERIVED_VALUES_MARKER);
+  assert(got !== null && got.length === 1 && got[0].value === '10.99.0.0/27' && (got[0].members ?? []).length === 6,
+    `Run 4 block must parse through the trailing validation line: ${JSON.stringify(got)}`);
+});
+
+test('X28 fixture: numbered SUMMARY line (`5. **Consumed Values:** Chained value …`) does not displace the real block', () => {
+  // Archived shape, two Authors (cmsd0coei002tyx51t8bpjx62, cmsa6cg7c007eyxeu7rio9o1r): the ordinal widening
+  // (2026-09-09) made a closing numbered summary line match, so the consumed block read ABSENT.
+  const doc = '## Consumed Values\n\n```json\n[{"kind":"cidr","value":"10.99.0.8/31"}]\n```\n\n### Summary for Reviewer\n\n' +
+    '4. **Rollback:** documented\n5. **Consumed Values:** Chained value `10.99.0.8/31` documented for platform verification.\n\nConfidence: 92\n';
+  const got = parseFencedJsonBlock<{ value: string }>(doc, CONSUMED_VALUES_MARKER);
+  assert(got !== null && got[0].value === '10.99.0.8/31', `summary line must not win: ${JSON.stringify(got)}`);
+});
+
+test('X28 negative: a HEADING-shaped last match over a broken/non-array block stays null — the earlier block is NEVER substituted', () => {
+  // The fail-closed half. "A corrected re-statement supersedes an earlier one": if the correction is
+  // malformed the fact must read ABSENT, not silently fall back to the stale block. Archived specimen:
+  // a technical_writer whose second `### Derived Values` carried a JSON OBJECT.
+  const first = '### Derived Values\n\n```json\n[{"kind":"cidr","value":"10.99.0.16/31","members":["10.99.0.16/32","10.99.0.17/32"]}]\n```\n\n';
+  const objectRestatement = '### Derived Values\n\n```json\n{"exporter_aggregate": "10.99.0.16/31"}\n```\n';
+  assert(parseFencedJsonBlock(first + objectRestatement, DERIVED_VALUES_MARKER) === null, 'non-array heading restatement must stay null');
+  const broken = '**Derived Values** (corrected)\n\n```json\n[{"kind":"cidr", oops\n```\n';
+  assert(parseFencedJsonBlock(first + broken, DERIVED_VALUES_MARKER) === null, 'broken bold+parenthetical restatement must stay null');
+  assert(parseFencedJsonBlock(first + '## 6. Derived Values:\n```json\n{oops\n```\n', DERIVED_VALUES_MARKER) === null,
+    'broken numbered-colon heading must stay null');
+});
+
+test('X28 negative: a prose line beginning with the marker never wins over a real heading, and alone parses nothing', () => {
+  // The prose line is stepped over, the REAL heading wins — and with no real heading, prose over a
+  // non-array fence is still null (no fabrication; absence keeps its meaning).
+  const real = '## Harvested Allocations\n```json\n[{"kind":"cidr","cidr":"10.99.0.4/32"}]\n```\n';
+  const prose = 'Harvested Allocations were cross-checked against the device:\n```\nshow ip int brief | include Loopback\n```\n';
+  const got = parseFencedJsonBlock<HarvestedAllocation>(real + prose, HARVESTED_ALLOCATIONS_MARKER);
+  assert(got !== null && got[0].cidr === '10.99.0.4/32', `real heading must win over trailing prose: ${JSON.stringify(got)}`);
+  assert(parseFencedJsonBlock(prose, HARVESTED_ALLOCATIONS_MARKER) === null, 'prose alone must stay null');
+  // Last-match-wins between two REAL blocks is unchanged:
+  const two = real + '## Harvested Allocations\n```json\n[{"kind":"cidr","cidr":"10.99.0.5/32"}]\n```\n' + prose;
+  const g2 = parseFencedJsonBlock<HarvestedAllocation>(two, HARVESTED_ALLOCATIONS_MARKER);
+  assert(g2 !== null && g2[0].cidr === '10.99.0.5/32', `corrected re-statement must still supersede: ${JSON.stringify(g2)}`);
 });
 
 test('parser: prose mention mid-sentence still does NOT match (no over-matching)', () => {

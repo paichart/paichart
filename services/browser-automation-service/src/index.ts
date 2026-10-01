@@ -120,113 +120,120 @@ function zodToJsonSchema(schema: z.ZodType<any>): object {
   return { type: 'any' };
 }
 
-// Create MCP Server
-const mcpServer = new Server(
-  {
-    name: 'browser-automation-service',
-    version: '1.0.0',
-  },
-  {
-    capabilities: {
-      tools: {},
+// One Server per SSE session. The MCP SDK (1.25.3, shared/protocol.js) sends every reply on the transport
+// connected MOST RECENTLY (`capturedTransport = this._transport`), so a single module-level server shared
+// across sessions answers session A's request on session B, and once B closes it answers into nothing
+// (X30, 2026-09-29: a pipeline harvest lost two replies this way). Never hoist this back to module scope.
+function createMcpServer(): Server {
+  // Create MCP Server
+  const mcpServer = new Server(
+    {
+      name: 'browser-automation-service',
+      version: '1.0.0',
     },
-  }
-);
-
-// Handle tools/list request
-mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
-  console.log('[MCP] Handling tools/list request');
-  return {
-    tools: Object.values(tools).map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      inputSchema: zodToJsonSchema(tool.inputSchema)
-    }))
-  };
-});
-
-// Handle tools/call request
-mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name: toolName, arguments: args } = request.params;
-  console.log(`[MCP] Handling tools/call request for: ${toolName}`);
-
-  const tool = tools[toolName as keyof typeof tools];
-  if (!tool) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify({ error: `Tool not found: ${toolName}`, availableTools: Object.keys(tools) })
-        }
-      ],
-      isError: true
-    };
-  }
-
-  try {
-    // Strip _context before Zod validation, preserve for future use
-    const safeArgs = ensureObject(args);
-    const { _context, ...toolArgs } = safeArgs;
-    const validatedInput = tool.inputSchema.parse(toolArgs);
-
-    // Acquire browser from pool
-    const poolManager = BrowserPoolManager.getInstance();
-    const { id, page, context } = await poolManager.acquire();
-
-    console.log(`[MCP] Executing ${toolName} with browser ${id}`);
-
-    try {
-      let result;
-
-      // Special handling for trace_session (needs context, not page)
-      if (toolName === 'trace_session') {
-        result = await (tool.handler as typeof traceSession)(context, validatedInput as any);
-      } else {
-        result = await (tool.handler as any)(page, validatedInput);
-      }
-
-      // Release browser back to pool
-      await poolManager.release(id);
-
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify(result, null, 2)
-          }
-        ]
-      };
-    } catch (executionError: any) {
-      // Release browser even on error
-      await poolManager.release(id);
-      throw executionError;
+    {
+      capabilities: {
+        tools: {},
+      },
     }
-  } catch (error: any) {
-    console.error(`[MCP] Error executing ${toolName}:`, error);
+  );
 
-    if (error instanceof z.ZodError) {
+  // Handle tools/list request
+  mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
+    console.log('[MCP] Handling tools/list request');
+    return {
+      tools: Object.values(tools).map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: zodToJsonSchema(tool.inputSchema)
+      }))
+    };
+  });
+
+  // Handle tools/call request
+  mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name: toolName, arguments: args } = request.params;
+    console.log(`[MCP] Handling tools/call request for: ${toolName}`);
+
+    const tool = tools[toolName as keyof typeof tools];
+    if (!tool) {
       return {
         content: [
           {
             type: 'text' as const,
-            text: JSON.stringify({ error: 'Validation error', details: error.errors })
+            text: JSON.stringify({ error: `Tool not found: ${toolName}`, availableTools: Object.keys(tools) })
           }
         ],
         isError: true
       };
     }
 
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify({ error: error.message })
+    try {
+      // Strip _context before Zod validation, preserve for future use
+      const safeArgs = ensureObject(args);
+      const { _context, ...toolArgs } = safeArgs;
+      const validatedInput = tool.inputSchema.parse(toolArgs);
+
+      // Acquire browser from pool
+      const poolManager = BrowserPoolManager.getInstance();
+      const { id, page, context } = await poolManager.acquire();
+
+      console.log(`[MCP] Executing ${toolName} with browser ${id}`);
+
+      try {
+        let result;
+
+        // Special handling for trace_session (needs context, not page)
+        if (toolName === 'trace_session') {
+          result = await (tool.handler as typeof traceSession)(context, validatedInput as any);
+        } else {
+          result = await (tool.handler as any)(page, validatedInput);
         }
-      ],
-      isError: true
-    };
-  }
-});
+
+        // Release browser back to pool
+        await poolManager.release(id);
+
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(result, null, 2)
+            }
+          ]
+        };
+      } catch (executionError: any) {
+        // Release browser even on error
+        await poolManager.release(id);
+        throw executionError;
+      }
+    } catch (error: any) {
+      console.error(`[MCP] Error executing ${toolName}:`, error);
+
+      if (error instanceof z.ZodError) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({ error: 'Validation error', details: error.errors })
+            }
+          ],
+          isError: true
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify({ error: error.message })
+          }
+        ],
+        isError: true
+      };
+    }
+  });
+  return mcpServer;
+}
 
 // Express app for SSE transport and health checks
 const app = express();
@@ -241,6 +248,8 @@ app.get('/sse', async (req: Request, res: Response) => {
 
   // Create SSE transport for this connection
   const transport = new SSEServerTransport('/message', res);
+  // A fresh server for this session only (see createMcpServer).
+  const mcpServer = createMcpServer();
 
   // Get sessionId (available immediately after construction)
   const sessionId = transport.sessionId;
@@ -255,6 +264,7 @@ app.get('/sse', async (req: Request, res: Response) => {
       connectionClosed = true;
       console.log(`[MCP] SSE connection closed: ${sessionId}`);
       activeTransports.delete(sessionId);
+      void mcpServer.close().catch(() => {});
       resolve();
     });
   });
@@ -392,4 +402,4 @@ app.listen(PORT, () => {
   console.log(`[BrowserAutomationService] MCP SDK version: 1.25.3`);
 });
 
-export { app, mcpServer, tools };
+export { app, createMcpServer, tools };

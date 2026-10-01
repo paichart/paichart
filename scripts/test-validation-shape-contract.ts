@@ -134,6 +134,50 @@ test('the clause ships NO worked values — a shape example must not seed a valu
     'the placeholder illustration is gone; without it "one fenced block per command" is under-specified');
 });
 
+test('network (f2): a VALUE-PRODUCING package validates by printed literal, never by restated conclusion', () => {
+  // X29 (2026-09-28, Program Run 4 FABRIC). A package that changes no device has nothing to validate
+  // except its derived value, so it restated the design's derivation — which clause (f) forbids.
+  // Measured: 5 of 8 value-producing network packages did so, 4 were refused; 0 config-change packages
+  // ever were. The two that wrote re-runnable commands + the literal text they print were both
+  // approved. (f2) names that shape. Pinned per PROPERTY, and scoped to the network body: this is the
+  // only domain whose legs publish a derived value without changing anything (R4 derive/consume split).
+  const start = SEED.indexOf('const PIPELINE_PROVISIONING_PROTOCOL = `');
+  const end = SEED.indexOf('\nconst ', start + 10);
+  const body = SEED.slice(start, end);
+  assert(body.includes('(f2) **A VALUE-PRODUCING package — one that changes no device'),
+    'the (f2) scope condition is gone — without a condition the agent can evaluate from its own design, ' +
+    'the rule either reaches config-change packages or reaches nothing');
+  assert(body.includes('The expected output is what the command PRINTS, never a sentence saying what it proves'),
+    'the printed-literal rule is gone — Run 4 put "/27 is the tightest valid cover" inside an expected-output block');
+  assert(body.includes('a step that is a description of arithmetic rather than a command is not a validation step'),
+    'the pseudo-command exclusion is gone — "Step 1 — Containment: enumerate the span" is not re-runnable');
+  assert(body.includes('plus these commands and the text they print ARE the computation shown'),
+    'the show-the-computation reconciliation is gone — the requirements template demands the deliverable "show the computation", ' +
+    'and Run 4\'s Author brief demanded both full arithmetic and no narrative; without this sentence the two layers contradict');
+  assert(body.includes('Any package that changes a device: (b) applies unchanged'),
+    'the config-change exit is gone — (f2) must leave ordinary config-change packages exactly as they were');
+  assert(body.includes('is a claim, not a conclusion, and belongs in the package'),
+    'the observed/applied carve-out is gone — without it a contract "must report" obligation collides with (f) ' +
+    '(2026-09-26: a marker interpretation was blocked together with the restated derivation it sat beside)');
+  assert(body.includes('is the shape (f2) REQUIRES — accept it'),
+    'the reviewer half is gone — a permission addressed only to the Author is read by the Reviewer as nothing');
+  assert(body.includes('never block it as one'),
+    'the reviewer is no longer told an observed/applied report is not a conclusion');
+  // (f) itself must survive — (f2) sharpens it, never replaces it.
+  assert(body.includes('Do NOT restate, summarize, or carry forward the design\'s containment CONCLUSION'),
+    'clause (f) is gone — (f2) is a clarification of (f) and is meaningless without it');
+  for (const other of ['PIPELINE_KUBERNETES_GITOPS_PROTOCOL', 'PIPELINE_TERRAFORM_IAC_PROTOCOL', 'PIPELINE_OBSERVABILITY_CONFIG_PROTOCOL']) {
+    const s = SEED.indexOf(`const ${other} = \``);
+    const e = SEED.indexOf('\nconst ', s + 10);
+    assert(s > -1 && !SEED.slice(s, e).includes('(f2)'),
+      `${other} carries (f2) — its legs do not publish derived values without a change, and "(f2)" names a clause that domain does not have`);
+  }
+  const entry = SEED.indexOf(`name: 'network-provisioning-protocol'`);
+  const versionLine = SEED.slice(entry).match(/version: '(\d+\.\d+\.\d+)',(.*)/);
+  assert(!!versionLine && versionLine[2].includes('X29'),
+    'the network changelog no longer records X29 — a later bump erased history instead of appending "Prior: …"');
+});
+
 test('every domain protocol that carries the rule was VERSION-BUMPED with it', () => {
   // A protocol edited without a bump ships silently and cannot be correlated with a run.
   //

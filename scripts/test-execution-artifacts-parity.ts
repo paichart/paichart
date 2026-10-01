@@ -23,6 +23,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { buildExecutionResultJson, ExecutionResultJsonInput, sanitizeLLMForMarkdown, countToolErrorResults, pickResultJsonSummary, ChainedContextSignal } from '../lib/services/execution-artifacts';
+import { sanitizeComment, validateComment, stripHtmlEventHandlers } from '../lib/utils/sanitization';
+import { sanitizeRecommendationText } from '../lib/utils/analytics-errors';
 
 console.log('🧪 Execution Artifacts Parity (Dual-Layer)\n');
 
@@ -195,6 +197,129 @@ test('Behavior: sanitizeLLMForMarkdown strips script/event-handler/iframe vector
   expect(clean.includes('onclick')).toBe(false);
   expect(clean.includes('<iframe')).toBe(false);
   expect(clean.includes('ok')).toBe(true);
+  layer2Passed++;
+});
+
+// ── X26 (2026-09-28): event-handler stripping is TAG-SCOPED ────────────────────────────
+// The former unscoped arm `on\w+\s*=\s*["'][^"']*["']` rewrote non-HTML text in delivered
+// reports. 5 prod report.md artifacts carry `[event handler removed]` from exactly the first two
+// strings below (a Program Architect's kubectl jsonpath validation step; an HCL tag in a customer
+// deliverable). These must pass through BYTE-IDENTICAL.
+const X26_MUST_NOT_CHANGE = [
+  "kubectl get networkpolicy -n trading <NAME> -o jsonpath='{.spec.ingress[*].from[*].ipBlock.cidr}'",
+  'Environment = "prod"',
+  'condition = "StringEquals"',
+  'zone = "us-east-1a"',
+  "response_type='code'",
+  'app.kubernetes.io/component=receiver',
+];
+// Must strip: the sec-ops set (incl. unquoted and `/`-separated handlers the old arm MISSED),
+// plus two shapes the sec-ops regex as written let through (a second handler in the same tag;
+// a `>`/`<` inside an earlier quoted value) — hence the quote-aware, per-tag form.
+const X26_MUST_STRIP = [
+  '<img src=x onerror=alert(1)>',
+  '<svg/onload=alert(1)>',
+  '<a href="#" onclick="x()">',
+  "<div\nonmouseover='y'>",
+  '<img src="x"onerror="alert(1)">',
+  '<IMG SRC=x ONERROR=alert(1)>',
+  '<img src=x onmouseover=a onerror=alert(1)>',
+  '<img onload="a" onerror="alert(1)">',
+  '<img alt=">" onerror=alert(1)>',
+  '<img alt="<" onerror="alert(1)">',
+  // sec-ops second pass (2026-09-28): a handler straight after a quoted one; a quote inside an unquoted value.
+  '<img oncut=""onerror=alert(1)>',
+  "<img oncut=''onerror=alert(1)>",
+  '<img src=x"y onerror=alert(1)>',
+  "<img src=x' onerror=alert(1)>",
+];
+const X26_HANDLER = /on(error|load|click|mouseover)\s*=/i;
+
+test('Behavior (X26): sanitizeLLMForMarkdown leaves non-HTML key=value text byte-identical', () => {
+  for (const s of X26_MUST_NOT_CHANGE) expect(sanitizeLLMForMarkdown(s)).toBe(s);
+  // In a realistic multi-line body too (the prod shape: a validation step inside a plan).
+  const body = `## Validation\n\n\`\`\`\n${X26_MUST_NOT_CHANGE[0]}\n\`\`\`\n\n\`\`\`hcl\ntags = {\n  ${X26_MUST_NOT_CHANGE[1]}\n}\n\`\`\`\n`;
+  expect(sanitizeLLMForMarkdown(body)).toBe(body);
+  layer2Passed++;
+});
+
+test('Behavior (X26): sanitizeLLMForMarkdown strips EVERY event handler inside an HTML tag (quoted, unquoted, /-separated, multiple)', () => {
+  for (const s of X26_MUST_STRIP) {
+    const out = sanitizeLLMForMarkdown(s);
+    if (X26_HANDLER.test(out)) throw new Error(`handler survived: ${JSON.stringify(s)} -> ${JSON.stringify(out)}`);
+    expect(out.includes('[event handler removed]')).toBe(true);
+  }
+  // The attribute boundary is kept (the tag stays a tag; only the handler is replaced).
+  expect(sanitizeLLMForMarkdown('<a href="#" onclick="x()">go</a>')).toBe('<a href="#" [event handler removed]>go</a>');
+  layer2Passed++;
+});
+
+test('Behavior (X26): event-handler stripping is linear on adversarial input (<=50 ms on 120 KB)', () => {
+  const K = 120 * 1024;
+  const inputs: Array<[string, string]> = [
+    ['onon…', 'on'.repeat(K / 2)],
+    ['<a + attribute noise', '<a ' + 'x '.repeat(K / 2)],
+    ['<a <a <a …', '<a '.repeat(Math.floor(K / 3))],
+    ['<a + onx= …', '<a ' + ' onx='.repeat(Math.floor(K / 5))],
+    ['<a "<a "…', '<a "'.repeat(K / 4)],
+  ];
+  for (const [label, input] of inputs) {
+    let best = Infinity; // best-of-3 so a GC pause on a CI box cannot flake the bound
+    for (let i = 0; i < 3; i++) {
+      const t0 = process.hrtime.bigint();
+      sanitizeLLMForMarkdown(input);
+      best = Math.min(best, Number(process.hrtime.bigint() - t0) / 1e6);
+    }
+    if (best > 50) throw new Error(`${label}: ${best.toFixed(1)} ms on ${input.length} chars (bound 50 ms)`);
+  }
+  layer2Passed++;
+});
+
+test('Behavior (X26): sanitizeComment / validateComment — same tag-scoped rule (task comments + task.complete notes)', () => {
+  // Before X26 `component=receiver` became `compreceiver` in a task.complete note (silent), and
+  // task.comment REFUSED it (validateComment rejects any text sanitizeComment changes).
+  for (const s of X26_MUST_NOT_CHANGE) {
+    expect(sanitizeComment(s)).toBe(s);
+    expect(validateComment(s).valid).toBe(true);
+  }
+  for (const s of X26_MUST_STRIP) {
+    const out = sanitizeComment(s);
+    if (X26_HANDLER.test(out)) throw new Error(`handler survived sanitizeComment: ${JSON.stringify(s)} -> ${JSON.stringify(out)}`);
+    expect(validateComment(s).valid).toBe(false);
+  }
+  // Single source: both sanitizers use the one helper.
+  expect(stripHtmlEventHandlers(X26_MUST_STRIP[0])).toBe('<img src=x [event handler removed]>');
+  layer2Passed++;
+});
+
+test('Behavior (X27): validateComment refuses only UNSAFE content — leading/trailing whitespace is not unsafe', () => {
+  // Before X27 validateComment compared sanitizeComment(text) (which trims) against the UNTRIMMED
+  // text, so 'ok\n' was refused as "potentially unsafe content".
+  const pads: Array<[string, string]> = [['', ''], ['  ', ''], ['', '\n'], ['\t', '  \n'], ['\n\n', '\r\n']];
+  const safe = ['ok', ...X26_MUST_NOT_CHANGE, 'a'.repeat(2000)]; // 2000 = MAX_COMMENT_LENGTH after trim
+  for (const [pre, post] of pads) {
+    for (const s of safe) {
+      const r = validateComment(pre + s + post);
+      if (!r.valid) throw new Error(`safe comment refused: ${JSON.stringify((pre + s + post).slice(0, 60))} -> ${r.error}`);
+    }
+    // The unsafe-content refusal is unchanged, padded or not.
+    for (const s of ['<script>alert(1)</script>', 'ok <script>x</script>', '<iframe src=x></iframe>', 'javascript:alert(1)',
+                     'data:text/html,<b>', ...X26_MUST_STRIP]) {
+      const r = validateComment(pre + s + post);
+      if (r.valid || r.error !== 'Comment contains potentially unsafe content') {
+        throw new Error(`unsafe comment not refused as unsafe: ${JSON.stringify(pre + s + post)} -> ${JSON.stringify(r)}`);
+      }
+    }
+  }
+  // Length and emptiness still judged on the trimmed text.
+  expect(validateComment('a'.repeat(2001)).valid).toBe(false);
+  expect(validateComment('  \n\t ').valid).toBe(false);
+  layer2Passed++;
+});
+
+test('Behavior (X26): sanitizeRecommendationText no longer deletes on*= from plain text (it strips every tag first)', () => {
+  expect(sanitizeRecommendationText('Set Environment = "prod" and condition = "StringEquals"')).toBe('Set Environment = "prod" and condition = "StringEquals"');
+  expect(sanitizeRecommendationText('<img src=x onerror=alert(1)>ok')).toBe('ok');
   layer2Passed++;
 });
 

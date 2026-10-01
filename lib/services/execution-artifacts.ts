@@ -44,6 +44,7 @@ import { parseReviewerVerdict, REVIEWER_ROLES } from '@/lib/agents/harness/parse
 import { computeEvidenceGrading } from '@/lib/agents/harness/evidence-grading';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { sliceSurrogateSafe } from '@/lib/utils/surrogate-safe';
+import { stripHtmlEventHandlers } from '@/lib/utils/sanitization';
 
 /**
  * BC46 / convergence 0.5d: strip HTML script/event-handler/iframe vectors from
@@ -57,9 +58,11 @@ import { sliceSurrogateSafe } from '@/lib/utils/surrogate-safe';
  * the parity hole found by the convergence review, agent-execution I-1.)
  */
 export function sanitizeLLMForMarkdown(text: string): string {
-  return text.replace(/<script[\s>][\s\S]*?<\/script>/gi, '[script removed]')
-             .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '[event handler removed]')
-             .replace(/<iframe[\s>][\s\S]*?(<\/iframe>|>)/gi, '[iframe removed]');
+  // X26: event handlers are stripped inside HTML tags only — the former unscoped arm rewrote
+  // `jsonpath='…'` / `Environment = "…"` in delivered reports (5 prod artifacts carry the marker).
+  const noScript = text.replace(/<script[\s>][\s\S]*?<\/script>/gi, '[script removed]');
+  return stripHtmlEventHandlers(noScript)
+    .replace(/<iframe[\s>][\s\S]*?(<\/iframe>|>)/gi, '[iframe removed]');
 }
 
 /**

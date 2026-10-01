@@ -63,8 +63,9 @@ perform(action: "task.create", parameters: {
   type: "PIPELINE"
 })
 
-// 2. Execute — auto-assign detects PIPELINE type and assigns the harness
-perform(action: "agent.execute", taskId: "PIPELINE_TASK_ID")
+// 2. Execute — auto-assign detects PIPELINE type and assigns the harness.
+//    waitForCompletion:false returns at once; a bare call can report a spurious timeout on a long run.
+perform(action: "agent.execute", parameters: { taskId: "PIPELINE_TASK_ID", waitForCompletion: false })
 
 // 3. Watch progress
 perform(action: "agent.status", taskId: "PIPELINE_TASK_ID")
@@ -402,6 +403,7 @@ Enabling in-place re-run on the SAME PIPELINE task is a separately tracked enhan
 | Harness didn't execute all tasks | Token budget or tool turn limit exceeded | See "Known Limitations" — execute remaining tasks manually |
 | Orchestrate mode not triggered | Mode is `harnessModeResolver`-driven (post-2026-04-26): ORCHESTRATE only fires when `metadata.pipelineStageId` is set AND the child stage has tasks but some lack templates or dependencies (interrupted-CREATE recovery). It is NOT a user-invocable mode. | If you want a fresh decomposition, ensure `metadata.pipelineStageId` is absent on the PIPELINE task (e.g., create a new PIPELINE task) — that resolves to CREATE. Manual ORCHESTRATE-mode invocation isn't supported. |
 | PIPELINE auto-assign didn't work | Task type not set to PIPELINE | Create with `type: "PIPELINE"` or manually assign via `agent.assign` |
+| `agent.execute` reports "The operation timed out" | A bare call waits for a long run; the client gives up first — the run has usually STARTED | Pass `parameters: { taskId, waitForCompletion: false }`; on a timeout, check the task's executions before retrying (a retry while the first is active is refused; after it finished, it is a real second run) |
 | `agent.execute` on COMPLETED task returns "Invalid task status transition" | COMPLETED is terminal in the state machine — no in-place re-run | Create a fresh PIPELINE task in a NEW stage (not the old one). See "Re-running a Completed Pipeline" and `TODO-PIPELINE-INPLACE-RERUN.md` |
 | New PIPELINE task escalates instead of decomposing | Pre-2026-04-26 "stage trap" caused this under the old sibling-detection logic. Post-resolver: shouldn't happen — fresh PIPELINE tasks resolve to CREATE regardless of parent-stage neighbors. | If you observe this post-2026-04-26, check `harnessModeResolver` logs for the resolved mode. Fresh PIPELINE tasks should always resolve to CREATE. |
 | Pipeline SUCCESS but zero child tasks created (hallucinated pipeline) | `mcpToolRegistry` empty in the process hosting agent execution — LLM invoked with no tool definitions, emits Cline-style XML text instead of native `tool_use`, engine loop never fires | Verify `initializeMCPServices()` runs at startup in the process hosting agent execution. Since Apr 10 2026 Fix 2 (`e4a9c9ef`), `mcp-server-http-clean.js` calls this. If this regresses, `agentExecutionEngine.ts` will throw: "Agent execution requires MCP tools but none resolved from the tool registry" (Fix 1 `1f1c6477`). |

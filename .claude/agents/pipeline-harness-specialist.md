@@ -406,6 +406,11 @@ The requirements-authoring pipeline drafts a `requirements.md`; turning that dra
 a HUMAN publish step you coordinate. Full procedure + commands:
 `.claude/knowledge/pipelines/requirements-authoring/PUBLISH-GENERATED-SPEC.md`. What you must know without opening it:
 
+- **The design-decision QUESTIONS are a registry, not prose:** `…/requirements-authoring/DESIGN-DECISION-QUESTIONS.md`
+  (keys, allowed answer forms, provenance, the add/change checklist). Never add, move or rename a key outside it.
+- **You drive the owner-answer session** (zero-decision generation → grouped owner answers → merged objective →
+  regenerate): `…/requirements-authoring/OWNER-ANSWER-SESSION.md`; merge ONLY via `scripts/build-answered-objective.py`.
+
 - **Most of it is decided at generation.** DECLARE in the generation description, as "transcribe, do not infer":
   the non-enumerable **scope** (namespace/workspace/account), the **derivation rule** ("exactly … nothing wider" has
   two readings), and the **gate → approver mapping** (the generator invents one from the roster otherwise).

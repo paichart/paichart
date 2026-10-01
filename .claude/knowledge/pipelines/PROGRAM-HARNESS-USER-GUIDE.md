@@ -40,8 +40,15 @@ perform(action: "task.create", parameters: {
   description: "Program intent: <one line>.\n\nDesign artifacts for the Program Architect (fetch ONLY these two URLs):\n- topology-as-code: https://raw.githubusercontent.com/<owner>/<repo>/main/program-artifacts/<name>/topology.json\n- requirements: https://raw.githubusercontent.com/<owner>/<repo>/main/program-artifacts/<name>/requirements.md"
 })
 perform(action: "agent.assign", taskId: "<program task id>", agentTemplateName: "Pipeline Harness")
-perform(action: "agent.execute", taskId: "<program task id>")
+perform(action: "agent.execute", parameters: { taskId: "<program task id>", waitForCompletion: false })
 ```
+
+> **Launching from an interactive session (Claude Code, Claude Desktop, ChatGPT):** pass
+> `parameters: { taskId, waitForCompletion: false }`. A bare `agent.execute` waits for the run and, on a long
+> one, the client reports *"The operation timed out"* — **the run has usually started anyway.** Watch it with
+> `agent.status`. If a timeout does happen, check the task's executions before retrying: a retry while the
+> first run is still active is refused (`DUPLICATE_ACTIVE_EXECUTION`), but a retry after it finished is a
+> genuine second run.
 
 The title token is **load-bearing** — without it the harness runs the generic orchestrator, not the
 program protocol. The design artifacts must be reachable by URL (the Architect fetches them via the
@@ -171,12 +178,36 @@ nothing hung — the program simply ran the reading nobody chose on purpose.*
 requirements document, picking a defensible reading, and refusing to resolve it silently is the
 behaviour you want. The control only works if someone reads the question.
 
+### Delegating gate release to an AI coordinator (operator practice, 2026-10-01)
+
+An owner may let the session that launched a program review and release its gates while they are away.
+It works only if the rules are fixed BEFORE the run and the record says who decided:
+
+1. **State the release rules in advance, per gate.** Plan gate: the contract matches the requirements'
+   decisions and the open questions are ones the owner has already accepted. Value gate: the producing leg
+   is APPROVED and its value recomputes. Method gates: release only for an APPROVED leg.
+2. **Hold, don't stretch.** Anything outside the rules — a needs-revision leg, a new open question, a
+   contract deviation — is left OPEN for the owner with notes. Never release a non-approved leg's gate
+   "to let the program settle" under delegation; that release is the owner's call.
+3. **Record the delegation on every release:** "released by <coordinator> on <owner>'s delegation
+   (approver of record: <owner>)", plus the evidence checked. The release note is the audit trail.
+4. **Make the waiting reliable.** The coordinator must be woken when a gate becomes ready; test any
+   watcher against a known state first, and treat an empty or failed probe as an error — an untested
+   watcher once left a plan gate waiting 80 minutes.
+5. **Nothing else under delegation:** no code changes, pushes or reseeds during the run; the only
+   recovery is re-executing a child killed by a platform restart.
+
 ## 6. Reading the result
 
-- **`programReleasable`** (on the program task's `metadata`): a deterministic AND over child outcomes,
-  reviewer verdict, and coverage facts — `true` only when every child gate is `approved`/≥85, Node C is
-  APPROVED, and coverage is clean (`predecessors === chainCapablePredecessors`, `degradedPredecessors 0`,
-  `notChained []`). It is an **input to a human release decision, never the decision** (VT-06).
+- **`programReleasable`** (on the program task's `metadata`): a deterministic AND over facts — `true` only
+  when every child pipeline's `qualityGate.outcome` is `approved`, no child carries `verdictMismatch: true`,
+  no child's `derivationContainment` lists a violation (or an unaccounted-for `unsupported[]` entry, and any
+  `checked: false` has a benign reason), Node C's terminal verdict is APPROVED with no blocking issues, and
+  coverage is clean for the producer and Node C (`predecessors === chainCapablePredecessors`,
+  `degradedPredecessors 0`, `notChained []`). **No confidence number appears in it** — scores are recorded,
+  never gated on (pov-program 1.0.10, 2026-07-18; runs before that also gated `reviewerScore ≥ 85`). The
+  canonical formula is the pov-program protocol's SYNTHESIZE gate step. It is an **input to a human release
+  decision, never the decision** (VT-06).
 - **`programConfidence`** = engine-computed MIN of the legs' confidences (the weakest leg sets it).
 - **The composed deliverable** = the producer's `report.md`, extracted to the program's `report.md`.
 - **The final comment** carries the per-pipeline gate table + the deliverable pointer + the apply-order

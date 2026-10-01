@@ -375,6 +375,17 @@ test('the pov-program protocol version is >= 1.0.18 (structurally located, not d
 
 // ── Summary ─────────────────────────────────────────────────────────────────────────────────────
 
+test('D-7: SYNTHESIZE final comment carries an ADVISORY "Decisions named by legs" section that never feeds the gate', () => {
+  const i = seedSource.indexOf('**Decisions named by legs (D-7, 2026-09-28):**');
+  if (i === -1) throw new Error('Decisions named by legs section missing from the pov-program protocol');
+  const para = seedSource.slice(i, i + 1400);
+  for (const must of ['headed exactly **Decisions named by legs**', 'the choice the owner must make', 'write the heading and the word none',
+                      'never feeds programReleasable or any gate conjunct', 'never re-opens a child']) {
+    if (!para.includes(must)) throw new Error(`D-7 section lost: "${must}"`);
+  }
+  if (!/version: '1\.8\.(7|[89])|version: '1\.(9|1\d)\./.test(seedSource)) throw new Error('pov-program version not bumped past 1.8.6');
+});
+
 console.log(`\n${'─'.repeat(50)}`);
 console.log(`✅ Passed: ${passed}`);
 if (failed > 0) {
