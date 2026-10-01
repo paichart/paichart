@@ -144,6 +144,25 @@ nothing hung — the program simply ran the reading nobody chose on purpose.*
 requirements document, picking a defensible reading, and refusing to resolve it silently is the
 behaviour you want. The control only works if someone reads the question.
 
+### Delegating gate release to an AI coordinator (operator practice, 2026-10-01)
+
+An owner may let the session that launched a program review and release its gates while they are away.
+It works only if the rules are fixed BEFORE the run and the record says who decided:
+
+1. **State the release rules in advance, per gate.** Plan gate: the contract matches the requirements'
+   decisions and the open questions are ones the owner has already accepted. Value gate: the producing leg
+   is APPROVED and its value recomputes. Method gates: release only for an APPROVED leg.
+2. **Hold, don't stretch.** Anything outside the rules — a needs-revision leg, a new open question, a
+   contract deviation — is left OPEN for the owner with notes. Never release a non-approved leg's gate
+   "to let the program settle" under delegation; that release is the owner's call.
+3. **Record the delegation on every release:** "released by <coordinator> on <owner>'s delegation
+   (approver of record: <owner>)", plus the evidence checked. The release note is the audit trail.
+4. **Make the waiting reliable.** The coordinator must be woken when a gate becomes ready; test any
+   watcher against a known state first, and treat an empty or failed probe as an error — an untested
+   watcher once left a plan gate waiting 80 minutes.
+5. **Nothing else under delegation:** no code changes, pushes or reseeds during the run; the only
+   recovery is re-executing a child killed by a platform restart.
+
 ## 6. Reading the result
 
 - **`programReleasable`** (on the program task's `metadata`): a deterministic AND over facts — `true` only
