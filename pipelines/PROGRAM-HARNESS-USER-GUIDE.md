@@ -44,8 +44,15 @@ perform(action: "task.create", parameters: {
   description: "Program intent: <one line>.\n\nDesign artifacts for the Program Architect (fetch ONLY these two URLs):\n- topology-as-code: https://raw.githubusercontent.com/<owner>/<repo>/main/program-artifacts/<name>/topology.json\n- requirements: https://raw.githubusercontent.com/<owner>/<repo>/main/program-artifacts/<name>/requirements.md"
 })
 perform(action: "agent.assign", taskId: "<program task id>", agentTemplateName: "Pipeline Harness")
-perform(action: "agent.execute", taskId: "<program task id>")
+perform(action: "agent.execute", parameters: { taskId: "<program task id>", waitForCompletion: false })
 ```
+
+> **Launching from an interactive session (Claude Code, Claude Desktop, ChatGPT):** pass
+> `parameters: { taskId, waitForCompletion: false }`. A bare `agent.execute` waits for the run and, on a long
+> one, the client reports *"The operation timed out"* — **the run has usually started anyway.** Watch it with
+> `agent.status`. If a timeout does happen, check the task's executions before retrying: a retry while the
+> first run is still active is refused (`DUPLICATE_ACTIVE_EXECUTION`), but a retry after it finished is a
+> genuine second run.
 
 The title token is **load-bearing** — without it the harness runs the generic orchestrator, not the
 program protocol. The design artifacts must be reachable by URL (the Architect fetches them via the
