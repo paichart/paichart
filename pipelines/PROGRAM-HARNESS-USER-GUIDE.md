@@ -139,10 +139,15 @@ behaviour you want. The control only works if someone reads the question.
 
 ## 6. Reading the result
 
-- **`programReleasable`** (on the program task's `metadata`): a deterministic AND over child outcomes,
-  reviewer verdict, and coverage facts — `true` only when every child gate is `approved`/≥85, Node C is
-  APPROVED, and coverage is clean (`predecessors === chainCapablePredecessors`, `degradedPredecessors 0`,
-  `notChained []`). It is an **input to a human release decision, never the decision** (VT-06).
+- **`programReleasable`** (on the program task's `metadata`): a deterministic AND over facts — `true` only
+  when every child pipeline's `qualityGate.outcome` is `approved`, no child carries `verdictMismatch: true`,
+  no child's `derivationContainment` lists a violation (or an unaccounted-for `unsupported[]` entry, and any
+  `checked: false` has a benign reason), Node C's terminal verdict is APPROVED with no blocking issues, and
+  coverage is clean for the producer and Node C (`predecessors === chainCapablePredecessors`,
+  `degradedPredecessors 0`, `notChained []`). **No confidence number appears in it** — scores are recorded,
+  never gated on (pov-program 1.0.10, 2026-07-18; runs before that also gated `reviewerScore ≥ 85`). The
+  canonical formula is the pov-program protocol's SYNTHESIZE gate step. It is an **input to a human release
+  decision, never the decision** (VT-06).
 - **`programConfidence`** = engine-computed MIN of the legs' confidences (the weakest leg sets it).
 - **The composed deliverable** = the producer's `report.md`, extracted to the program's `report.md`.
 - **The final comment** carries the per-pipeline gate table + the deliverable pointer + the apply-order
