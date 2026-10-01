@@ -382,7 +382,7 @@ the prose above, because two readings of the same sentence produce two different
 - **Admitted-principal premise** (`<leg token>.admitted-principal`): {{THE ATTRIBUTE the enforcer must see, and on
   which path}} — if this leg's own harvest cannot confirm it, apply the `<leg token>.principal-unseen` row and cite its id.
   Where the objective declares the program does not create or verify that attribute's carrier, the branch still exists:
-  it records the premise as UNTESTED and names it in the leg's gap report — never drop the branch.
+  it records the premise as UNTESTED and lists it under the package's **UNTESTED premises** — never drop the branch.
 - **Existence assumption** (*Writing rules* #6): {{THE BRANCH, NOT TODAY'S STATE — what this leg
   does if its OWN harvest finds the target absent, and if it finds it present — e.g. "if the bucket
   carries no policy, apply the `<leg token>.enforcer-absent` row; if it carries one, apply the
