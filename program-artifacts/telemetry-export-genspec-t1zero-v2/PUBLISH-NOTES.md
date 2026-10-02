@@ -34,3 +34,16 @@ Published despite two write-up findings, neither of which changes what the progr
   the four Preconditions slots: pointer + property only, no harvested values or counts. The only address literals are
   the template's synthetic CIDR worked example.
 - Publish checks: 0 `🗑` blocks, 0 `{{`, 0 `Confidence:` lines, 0 markers; *Writing rules* is the last section.
+
+## 2026-10-02 — program view added (value-chain frozen window)
+
+`requirements.program.md` added beside `requirements.md` (no published file edited). It is byte-identical to
+`requirements.md` through `## Open questions`; the `## Writing rules` section (20,771 chars) is replaced by the
+READING_NOTES block from `scripts/requirements-rules.py --program-view` — the omission is deliberate, the rule numbers
+the body cites (#1, #2, #6) are glossed, and the two reading properties are carried. The full `requirements.md` stays the
+human/editor copy and is NOT an input to a value-chain run.
+
+Size check (`--size-check requirements.program.md topology.json`): ⚠️ fits — 48,539 delivered chars, 6/6 pages,
+1,461 headroom; run 7/8 pages. The full `requirements.md` does not fit (9/6 pages — Program Run 14 stopped at 50,000).
+The ⚠️ is ACCEPTED rather than trimmed: the frozen window must run the same spec body as Program Runs 11-14; a trim would
+be a new spec version and a series break. An Architect reporting an incomplete read is a stop-line finding.
