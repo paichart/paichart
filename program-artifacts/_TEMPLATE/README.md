@@ -20,7 +20,10 @@ end.
 grep -c '^> \*\*🗑' <run-name>/requirements.md                    # must be 0 — author-only blocks
 grep -o '{{[^}]*}}' <run-name>/requirements.md | sort -u | wc -l # must be 0 — unfilled placeholders
 scripts/requirements-rules.py --check <run-name>/requirements.md # rules byte-identical to canonical
+scripts/requirements-rules.py --size-check <run-name>/requirements.md <run-name>/topology.json   # fits the reader?
 ```
+
+If `--size-check` says ✗, see **[If it does not fit: the program view](#if-it-does-not-fit-the-program-view)** below.
 
 | file | what it is |
 |---|---|
@@ -50,6 +53,29 @@ program whatever its domain. Note which way the fix went: `links` was **not** ma
 because that re-opens the under-specified NETWORK topology the check exists to catch. An absence
 cannot be judged; a declared reason can, and invented link values are invisible fake data where a
 false reason is a visible lie.*
+
+## If it does not fit: the program view
+
+The Program Architect reads each document through a fixed budget — one ~8,000-character window plus at most six
+`read_more` pages of ~7,000, so about **50,000 delivered characters per document**, and 8 pages across the run. A complete
+`requirements.md` carries the full Writing rules (~20,000 characters, addressed to the spec's author and reviewer, not
+to the program), and can exceed that: the Architect then stops partway and plans from part of the document. *Earned:
+2026-10-01 — an Architect read 50,000 of 67,093 characters, reported the gap honestly, and the run was ended.*
+
+```bash
+scripts/requirements-rules.py --size-check   <run-name>/requirements.md <run-name>/topology.json   # ✓/⚠️ fits, ✗ does not
+scripts/requirements-rules.py --program-view <run-name>/requirements.md     # writes <run-name>/requirements.program.md
+scripts/requirements-rules.py --size-check   <run-name>/requirements.program.md <run-name>/topology.json
+```
+
+`requirements.program.md` is identical to `requirements.md` except that the Writing rules section becomes a short note:
+the omission is deliberate, the rule numbers the body cites are explained, and two reading properties are carried
+(expected values are reference data, never evidence; a crossing value is what its producing leg derives at run time).
+The tool refuses if the body cites a rule the note does not explain, and refuses to overwrite `requirements.md`.
+**Keep both files**: the program fetches `requirements.program.md`; `requirements.md` stays the copy people and
+generators work from. A ⚠️ means it fits with under 5,000 characters spare — prefer trimming author-facing prose from
+the body; never raise a reader's page cap to fit one document. Worked example:
+[`telemetry-export-genspec-t1zero-v2/`](../telemetry-export-genspec-t1zero-v2/) (its `PUBLISH-NOTES.md` records the check).
 
 ## Why this template exists
 
