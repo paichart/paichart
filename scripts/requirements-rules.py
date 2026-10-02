@@ -32,6 +32,14 @@ model is told to emit a marker instead.
                     candidate to READ, not a verdict; a zero does not replace the full human read.
   --skeleton        emit the TEMPLATE's skeleton on stdout: the template minus every block the
                     template itself addresses to the author. Deterministic; no arguments.
+  --program-view FILE [OUT]
+                    write the PROGRAM VIEW of a published spec (default OUT: FILE with .md -> .program.md):
+                    the same document with the Writing rules section replaced by a short READING NOTES block.
+                    Opt-in per run (point the program's task at the program-view URL). See SPEC-SIZE below.
+  --size-check FILE [TOPOLOGY]
+                    exit 1 unless each file, as DELIVERED (JSON-escaped + envelope), fits one document's read
+                    limit (8,000 + 6 pages x 7,000 = 50,000) and all files together need <= 8 read_more pages;
+                    WARN under 5,000 headroom. Run on the file(s) the program will FETCH.
 
 Both are idempotent. --insert is the repair path and deliberately does NOT trust the marker: it
 replaces whatever occupies the section, so a model that emitted the rules anyway is corrected and
@@ -189,7 +197,114 @@ def lint(doc_lines, allowed_text):
                     hits.append((n, 'count in derived basis', tok, line.strip()[:140]))
     return hits
 
+# ── SPEC-SIZE (2026-10-02) ──────────────────────────────────────────────────────────────────────
+# Program Run 14 (2026-10-01): the Program Architect read 50,000 of a 67,093-char requirements.md and
+# stopped. Its read budget is one 8,000-char window per fetch plus a per-run read_more budget of
+# min(8, 25% of tool turns) pages of <= 8,000 chars (agentic-tool-loop.ts) — about 72K across BOTH
+# design artifacts; topology (13K) + requirements (67K) needed 80K, impossible even read perfectly.
+# The unread tail was the Writing rules section (20.8K, the largest in the document; LAST by design).
+#
+# The PROGRAM VIEW keeps every section a program plans from and replaces the Writing rules with a
+# short block. It is OPT-IN per run (a run uses it only if its task points at the program-view URL),
+# so every existing run and published spec is unchanged. The full requirements.md stays the human /
+# editor copy and keeps passing --check.
+# ⚠️ Not free: the Program Architect DOES read the rules today and composes briefs from what it reads
+# (see the module docstring). Whether a program view loses anything a brief needs is a review
+# question, recorded in the SPEC-SIZE batch — not an assumption made here.
+# Budget is in DELIVERED characters, not raw: the fetch result reaches the agent JSON-escaped (measured on Run 14:
+# requirements raw 63,435 -> seen 67,093; topology raw 10,222 -> seen 12,932). delivered_estimate() = doubly
+# JSON-escaped length + an envelope allowance per file; on Run 14 it estimated 69.5K / 13.3K (conservative both).
+# The read MECHANISM (agentic-tool-loop.ts; keep these in step with it): each fetch returns an 8,000-char first window
+# (MAX_TOOL_RESULT_LENGTH); read_more serves windows of at most 7,000 (READ_MORE_WINDOW_BOUNDS.max), at most 6 pages
+# per fetched document (READ_MORE_PAGES_PER_ORIGIN) and min(8, 25% of tool turns) pages per run. So ONE document is
+# readable to 8,000 + 6 x 7,000 = 50,000 — exactly where Run 14 stopped — and the run can spend 8 pages in all.
+# (Corrected 2026-10-02 by the prompt-construction review: a single combined budget passed files that cannot be read.)
+FIRST_WINDOW, PAGE_MAX, PAGES_PER_DOC, PAGES_PER_RUN = 8000, 7000, 6, 8
+PER_FILE_MAX = FIRST_WINDOW + PAGES_PER_DOC * PAGE_MAX      # 50,000
+WARN_HEADROOM = 5000
+ENVELOPE = 2500
+
+
+def delivered_estimate(text):
+    import json
+    return len(json.dumps(json.dumps(text))) - 2 + ENVELOPE
+READING_NOTES = """## Writing rules — omitted from this program view
+
+*Program view.* This section is omitted deliberately — it is not a truncated read. The Writing
+rules bind this document's author and reviewer; they are published in full in the companion
+`requirements.md`, which is not an input to this run. Every other section is byte-identical to it.
+Where a section cites a rule by number: #1 and #2 (deterministic validation; shipping every cited
+artefact) are obligations of each leg's own protocol; #6 means an existence assumption is a BRANCH
+decided by the leg's own harvest, never a statement of today's state.
+
+Two properties of this document carry over:
+
+1. **Expected values stated here are reference data, never evidence.** They describe intent; what
+   is true is what a run's own harvest observes.
+2. **A value that crosses between legs is the value its named producing leg derives at run time**,
+   never a literal written here. A crossing value or scope word that can be read two ways producing
+   different work is an ambiguity in this document, not a decision."""
+GLOSSED_RULES = {1, 2, 6}   # the rule numbers READING_NOTES explains; C3 refuses a view citing any other
+
+
+def program_view(doc_lines):
+    """(out_lines, removed_chars) — FILE with the Writing rules section replaced by READING_NOTES."""
+    s, e = bounds(doc_lines)
+    if s is None:
+        return None, 0
+    removed = sum(len(l) + 1 for l in doc_lines[s:e])
+    return doc_lines[:s] + READING_NOTES.split('\n') + [''] + doc_lines[e:], removed
+
+
 def main():
+    if len(sys.argv) in (3, 4) and sys.argv[1] == '--program-view':
+        src = sys.argv[2]
+        dst = sys.argv[3] if len(sys.argv) == 4 else re.sub(r'\.md$', '', src) + '.program.md'
+        if os.path.abspath(dst) == os.path.abspath(src):
+            print("✗ refusing: OUT is FILE — the full requirements.md is the human copy and must not be overwritten.")
+            return 2
+        body = open(src).read()
+        cited = {int(n) for n in re.findall(r'Writing rules\*?\s*#\s*(\d+)', body)}
+        cited |= {int(n) for m in re.findall(r'Writing rules\*?\s*#\s*\d+(?:\s*(?:,|and)\s*#?\s*\d+)+', body)
+                  for n in re.findall(r'\d+', m)}
+        stray = sorted(cited - GLOSSED_RULES)
+        if stray:
+            print(f"✗ {src}: the body cites Writing rules #{stray} — READING_NOTES glosses only #{sorted(GLOSSED_RULES)}.")
+            print("  Extend READING_NOTES (and GLOSSED_RULES) before writing a program view, or the citation dangles.")
+            return 1
+        out, removed = program_view(body.split('\n'))
+        if out is None:
+            print(f"✗ {src}: no '{HEADING}' section found — nothing to replace.")
+            return 1
+        open(dst, 'w').write('\n'.join(out))
+        n = len('\n'.join(out))
+        print(f"✓ {dst}: program view written — {n:,} chars (removed {removed:,} chars of writing rules).")
+        return 0
+    if len(sys.argv) >= 3 and sys.argv[1] == '--size-check':
+        args = sys.argv[2:]
+        if not 1 <= len(args) <= 2:
+            print(__doc__); return 2
+        import math
+        fail, warn, pages = False, False, 0
+        for p in args:
+            t = open(p).read(); d = delivered_estimate(t)
+            need = max(0, math.ceil((d - FIRST_WINDOW) / PAGE_MAX))
+            pages += need
+            head = PER_FILE_MAX - d
+            flag = '✗' if d > PER_FILE_MAX else ('⚠️' if head < WARN_HEADROOM else '✓')
+            fail |= d > PER_FILE_MAX; warn |= 0 <= head < WARN_HEADROOM
+            print(f"  {flag} raw {len(t):>7,}  delivered~{d:>7,}  pages {need}/{PAGES_PER_DOC}  headroom {head:>7,}  {p}")
+        print(f"  run pages {pages}/{PAGES_PER_RUN}")
+        if fail or pages > PAGES_PER_RUN:
+            print(f"✗ a Program Architect cannot read all of this: each file must be <= ~{PER_FILE_MAX:,} delivered chars")
+            print(f"  ({FIRST_WINDOW:,} + {PAGES_PER_DOC} pages x {PAGE_MAX:,}) and all files together <= {PAGES_PER_RUN} read_more pages.")
+            print("  Use the program view, or shorten the document — never raise a cap to fit one document.")
+            return 1
+        if warn:
+            print(f"⚠️  fits, but a file has under {WARN_HEADROOM:,} chars of headroom: trim author-facing prose from the body first;")
+            print("   raising the per-document page cap is the reserve lever (token-optimizer review).")
+        print("✓ readable within the Program Architect's read budget.")
+        return 0
     if len(sys.argv) == 2 and sys.argv[1] == '--skeleton':
         out = skeleton(open(TEMPLATE).read().split('\n'))
         residual = sum(1 for l in out if STRIP_HEAD.match(l))
