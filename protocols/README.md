@@ -2,58 +2,67 @@
 
 These are the **exact texts injected into pipeline agents' system prompts** — the contracts the
 [verification pack](../verification/) holds runs against, rendered byte-for-byte from the platform
-seed. Since 2026-08-17 injection is **composed**: a running agent's prompt carries the
-orchestration base (`pipeline-orchestrator-protocol`) plus the **one** protocol its task is bound
-to — the binding is resolved by the platform from the task title's `(protocol: <name>)` token,
-once, at first execution, and stamped; it is never a model-side choice. So each file here is not
-just "available" to an agent — when bound, it is the governing half of that agent's prompt,
-verbatim. Nothing is edited for publication: internal cross-references, tool-call mechanics, and the
-scar tissue of dated incident clauses are all part of the record. The
-[ARCHITECTURE decision log](../verification/ARCHITECTURE.md) is the version history; every version
-stamp there now has a readable text here.
+seed. Injection is **composed**: a running agent's prompt carries the orchestration base
+(`pipeline-orchestrator`) plus the **one** protocol its task is bound to. The platform resolves
+that binding from the task title's `(protocol: <name>)` token, once, at first execution, and
+stamps it on the task; it is never a model-side choice. So when a protocol here is bound, it is
+the governing half of that agent's prompt, verbatim. Nothing is edited for publication: internal
+cross-references, tool-call mechanics, and dated incident clauses are all part of the record.
 
 Why publish them: the pack's central claim is that behavior is governed by *contracts plus
-mechanical checks*, not by hope. A verification document that says "the protocol's Phase-0 clause
-requires X" is a paraphrase; this directory is the primary source. When VT-15 says a clause "bound
-on first live exposure", the clause it means is [readable below](terraform-iac-protocol.md).
+mechanical checks*, not by hope. A verification document that says "the protocol requires X" is a
+paraphrase; this directory is the primary source.
 
 ## Index
 
-| Protocol | Version | What it governs | Live validation status |
-|---|---|---|---|
-| [`pipeline-orchestrator`](pipeline-orchestrator-protocol.md) | 3.14.0 | The default pipeline decomposition + the three-mode lifecycle every domain protocol inherits | Exercised by every pipeline run in the pack |
-| [`pov-program`](pov-program-protocol.md) | 1.5.1 | Programs of pipelines: the DAG, the interface contract, the plan gate, the release gate's deterministic AND | The most-verified text here — VT-01…VT-14 exercise it, including the failure rounds |
-| [`artifact-synthesis`](artifact-synthesis-protocol.md) | 1.4.1 | Source material (git history, execution logs, delivery history, external services) → a publishable deliverable via harvest → author → review | Exercised by the published [artifact-synthesis case study](../examples/artifact-synthesis-case-study.md) |
-| [`network-provisioning`](network-provisioning-protocol.md) | 1.11.0 | Device config change packages; the origin of the derivation-evidence contract | Battle-hardened: runs 2–26 shaped it clause by clause (see the decision log). The v1.3.1 secret-hygiene clause is newly seeded and not yet exercised by a published round **v1.11.0 (2026-09-15)** extracts the REQUIRED SHAPE clause to ONE shared definition across all four domains and ADDRESSES ITS REVIEWER PARAGRAPH — the half the 2026-08-27 fix missed. That fix was earned by a reviewer blocking a *compliant* author, yet its whole remedy landed on the author side, so it did not prevent the same block recurring on 2026-09-14 in another domain. The clause now names REPLACE before DROP, separates "the check does not exist" from "exists but unwitnessed", and licenses nothing in a domain whose protocol sanctions no such shape. **Seeded-unvalidated**: no live round has yet run with it. |
-| [`terraform-iac`](terraform-iac-protocol.md) | 1.5.0 | HCL change packages as PRs; zero-provider harvest; the cross-ported derivation-evidence contract | v1.2.0's evidence contract: **benign path verified live** ([VT-15](../verification/tests/VT-15-cross-domain-evidence-contract.md) — bound on first exposure). The *deriving* path (containment arithmetic firing on a Terraform derivation) is not yet exercised live **v1.5.0 (2026-09-15)** extracts the REQUIRED SHAPE clause to ONE shared definition across all four domains and ADDRESSES ITS REVIEWER PARAGRAPH — the half the 2026-08-27 fix missed. That fix was earned by a reviewer blocking a *compliant* author, yet its whole remedy landed on the author side, so it did not prevent the same block recurring on 2026-09-14 in another domain. The clause now names REPLACE before DROP, separates "the check does not exist" from "exists but unwitnessed", and licenses nothing in a domain whose protocol sanctions no such shape. **Seeded-unvalidated**: no live round has yet run with it. |
-| [`kubernetes-gitops`](kubernetes-gitops-protocol.md) | 1.7.0 | Declarative GitOps change packages; offline validation only; constraint-evidence restatement + chosen-value rationale; **blast radius = the harvested extension of a set-valued selector, not its labels** | v1.4.0's two Author obligations were **earned live before they were seeded** — carried in the task objective across three 2026-09-11 rounds (approved 85 · needs-revision 88, a legitimate catch on a missing value comparison · approved 90), then promoted into the protocol. v1.5.0's set-extension clause pair is **seeded-unvalidated**: it was measured against the corpus before it was written (a broader enumeration-restatement form was drafted, and the measurement REFUSED it — n=45, one fail, and that one package had satisfied the enumeration completely), but no round has yet run with the surviving clause as seeded text. Its readout is behavioural — does a package state the namespace bounding population *unprompted*. v1.2.0's baseline-scoped drift clause also still ships seeded-unvalidated — no published round has presented out-of-band drift yet. We say so here for the same reason the pack publishes failed rounds **v1.7.0 (2026-09-15)** extracts the REQUIRED SHAPE clause to ONE shared definition across all four domains and ADDRESSES ITS REVIEWER PARAGRAPH — the half the 2026-08-27 fix missed. That fix was earned by a reviewer blocking a *compliant* author, yet its whole remedy landed on the author side, so it did not prevent the same block recurring on 2026-09-14 in another domain. The clause now names REPLACE before DROP, separates "the check does not exist" from "exists but unwitnessed", and licenses nothing in a domain whose protocol sanctions no such shape. **Seeded-unvalidated**: no live round has yet run with it. |
-| [`observability-config`](observability-config-protocol.md) | 1.1.0 | Observability change packages (Prometheus rules / OTel collector / Grafana provisioning) — witnessed-artifact taxonomy, unconditional live-stack Phase 0, per-class rollback provenance, chosen-value rationale | Seeded 2026-09-10; first rounds green 2026-09-10: R1 escalated honestly (infra fault), R1b approved 86 + applied, R2 approved 90 + applied — stated here for the same reason the pack publishes failed rounds. v1.0.3's chosen-value rationale clause was earned by a round gated for exactly it (a collector `memory_limiter` whose values were sound but whose sizing was unexplained) and carried in the task objective thereafter; as *seeded* text it has not yet steered a round **v1.1.0 (2026-09-15)** extracts the REQUIRED SHAPE clause to ONE shared definition across all four domains and ADDRESSES ITS REVIEWER PARAGRAPH — the half the 2026-08-27 fix missed. That fix was earned by a reviewer blocking a *compliant* author, yet its whole remedy landed on the author side, so it did not prevent the same block recurring on 2026-09-14 in another domain. The clause now names REPLACE before DROP, separates "the check does not exist" from "exists but unwitnessed", and licenses nothing in a domain whose protocol sanctions no such shape. **Seeded-unvalidated**: no live round has yet run with it. |
+Every status below says what has actually run. "Validated live" means the **current version** has
+run end to end on real infrastructure, with the evidence named. Anything less says so — for the
+same reason the pack publishes its failed rounds.
 
-Not in this directory, honestly rather than silently: a `research-program` protocol exists as a
-**database-side draft** under active authoring and is deliberately unpublished until it stabilizes;
-the user-facing `HOWTO-*` guides are prompt UX, reachable in any connected AI client via
-`list_prompts()`, and are not verification-bearing contracts.
+| Protocol | Version | What it does | Verification status |
+|---|---|---|---|
+| [`pipeline-orchestrator`](pipeline-orchestrator-protocol.md) | 3.18.0 | The base every pipeline composes over: the three-mode lifecycle (create, orchestrate, synthesize) and the default decomposition into specialist tasks | **Validated live** — every pipeline in [VT-31](../verification/tests/VT-31-a-specification-generated-with-no-decisions-declared-drives-a-releasable-program.md) (2026-10-01) and every program run on 2026-10-05/06 composed over this version. |
+| [`pov-program`](pov-program-protocol.md) | 2.0.0 | A program of pipelines: plan, interface contract, human plan gate, change and value legs, integration review, and a release fact computed from the legs' facts | **Validated live** 2026-10-05/06 — the plan-gate check passed; three programs were releasable; two correctly withheld release because a leg's own reviewer refused it (a Kubernetes drift-paperwork gap; an elided Terraform rollback diff). |
+| [`artifact-synthesis`](artifact-synthesis-protocol.md) | 1.4.1 | Source material (history, logs, external services) to a publishable document via harvest, author, review | **Validated live** at this version in [VT-16](../verification/tests/VT-16-composed-protocol-injection.md) (2026-08-17, approved); see also the [case study](../examples/artifact-synthesis-case-study.md). |
+| [`network-provisioning`](network-provisioning-protocol.md) | 1.19.0 | An approved network device change package (never an applied change), with derivation evidence for any computed value | **Validated live, one run** (2026-10-06) — the leg was approved, and this version's new reachability step ran: the Author's package checked a discard-route risk itself. |
+| [`network-derivation`](network-derivation-protocol.md) | 1.0.1 | A network value leg: harvest state read-only, derive a value other legs consume (an address aggregate or AS number), review the derivation; changes nothing | **Validated live, one run** (2026-10-06) — in a four-domain program, the value leg published a value every consuming leg used, and the program was releasable. |
+| [`terraform-iac`](terraform-iac-protocol.md) | 1.12.1 | An approved HCL change package as a pull request; state is harvested read-only, and nothing is applied | **Validated live** — Terraform legs were approved in four programs on 2026-10-05/06; on 2026-10-06 a leg was correctly refused for an elided rollback diff (an Author defect we are measuring). |
+| [`kubernetes-gitops`](kubernetes-gitops-protocol.md) | 1.15.0 | An approved declarative GitOps change package, validated offline; blast radius is what a selector actually matches | **Validated live, one run** (2026-10-06) — this version's drift-restatement step ran, and the leg was approved. |
+| [`observability-config`](observability-config-protocol.md) | 1.6.0 | An approved observability change package (Prometheus rules, OpenTelemetry collector, Grafana provisioning) from an unconditional read-only harvest of the live stack | **Validated live** — observability legs were approved in three four-domain programs on 2026-10-05/06. |
+| [`requirements-authoring`](requirements-authoring-protocol.md) | 1.8.0 | A draft `requirements.md` for a program, for human review; never a launched program | **Seeded, not yet exercised live** at 1.8.0 (it adds routing design decisions). Version 1.7.5 generated the specification behind [VT-31](../verification/tests/VT-31-a-specification-generated-with-no-decisions-declared-drives-a-releasable-program.md). |
+
+Version history: the [decision log](../verification/ARCHITECTURE.md) and the
+[VT index](../verification/README.md). The decision log currently records changes through
+2026-08-17; entries for later versions are not yet written there, so for later behavior the VT
+documents and the protocol texts themselves are the record.
+
+Not in this directory, honestly rather than silently:
+- `value-chain-program` was folded into `pov-program` 2.0.0 on 2026-10-05. Its row survives only
+  as a retired marker: a task bound to it fails loudly before running. It is not published.
+- `research-program` is an unpublished draft.
+- The user-facing `HOWTO-*` guides are prompt UX, reachable in any connected AI client via
+  `list_prompts()`. They are not verification-bearing contracts.
 
 ## How to read one
 
-- The **description** at the top of each file documents which title token binds it — binding is a
-  platform stamp, not model-side matching (2026-08-17; before that the harness matched intent
-  prose). A protocol still self-fences, but a fence no longer says "ignore this and fall back":
-  a wrong binding is an **escalation** — the agent stamps `metadata.cannotRun` and stops, and the
-  platform terminalizes the run for human re-route.
-- Dated clauses (*"2026-08-04, measured"*, *"run-4 incident"*) are earned, not decorative: nearly
-  every load-bearing sentence exists because a published round failed without it. The
-  [decision log](../verification/ARCHITECTURE.md) and the [VT index](../verification/README.md)
-  are the cross-reference.
-- Prose contracts are **advisory until a mechanical check backs them** — the platform's own
-  measured position (two rounds skipped a numbered prose check by two different mechanisms). Where
-  a clause matters, look for its structured block (`## Harvested Allocations`, `## Derived Values`,
-  `## Consumed Values`) — those are parsed and re-checked in code
+- The **description** at the top of each file names the title token that binds it. Binding is a
+  platform stamp, not model-side matching. A wrong binding is an **escalation**: the agent stamps
+  `metadata.cannotRun` and stops, and the platform ends the run for a human to re-route.
+- Dated clauses (*"2026-08-04, measured"*, *"run-4 incident"*) are earned, not decorative. Most
+  load-bearing sentences exist because a round failed without them.
+- Prose contracts are **advisory until a mechanical check backs them**. Where a clause matters,
+  look for its structured block (`## Harvested Allocations`, `## Derived Values`,
+  `## Consumed Values`). Those are parsed and re-checked in code
   ([`@paichart/containment-checks`](../packages/containment-checks/), the open-sourced arithmetic).
+- Strictness is set by the platform, not by the customer. New checks default to a recorded
+  warning rather than a block, and there is no customer-settable policy profile today.
+- Release stays a human decision. A program's release fact says whether the legs' facts allow
+  release; a person still releases.
 
 ## Fidelity guarantee
 
-Each file is rendered from the platform's seeded row and byte-parity-checked against it
-(`--check` mode of the render script, run at every protocol change and quarterly). The public copy
-is never edited directly — a divergence fails the check naming the file. If a version stamp here
-lags the decision log, that is a defect; please open an issue.
+Each file is rendered from the platform's seeded row and checked byte-for-byte against it. The
+public copy is never edited by hand; a divergence fails the check and names the file. This set
+was re-rendered on 2026-10-06. The check is run by hand, not in CI, and this mirror has fallen
+behind before. If a version here lags what the platform runs, that is a defect — please open an
+issue.
