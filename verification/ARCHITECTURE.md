@@ -213,3 +213,42 @@ rather than passing.
   harness by name** (the base carries no program-composition mechanics, so a silent base-only run
   would fabricate a one-child "program") and degrades a leg harness to base-only with a recorded
   degradation fact.
+
+**Catch-up, 2026-08-17 → 2026-10-06.** The entries below cover five of the versions now published in
+[`protocols/`](../protocols/). `pipeline-orchestrator` 3.18.0 and `observability-config` 1.6.0 are published but not
+itemised here, and nor are intermediate versions; for those, the VT documents of the period and the protocol texts are
+the record.
+
+- `pov-program` v2.0.0 (2026-10-05) — the value-chain variant is **folded in** and retired. Each leg in the plan is
+  typed `leg type: change` (changes a system, produces a change package) or `leg type: value` (publishes a value other
+  legs consume, changes nothing), and the human approves the types at the plan gate. A network value leg runs on the
+  new `network-derivation` protocol (v1.0.1): Harvester → Derivation Architect → Derivation Reviewer, with no Author and
+  no change package; its card carries `legShape: value`. The integration reviewer (Node C) moves to a neutral
+  `Program Integration Reviewer` template bound to no domain protocol, and it checks every leg's protocol token and
+  leg type against the plan. The retired variant's name stays in the platform's program-protocol set **permanently**,
+  so a task bound to it fails loudly instead of running without its program mechanics. Verified in VT-32: the released
+  shapes still plan and gate as before, and the first value leg typed from a specification alone released.
+- `network-provisioning` v1.19.0 (2026-10-06) — **reachability after route suppression.** A package that suppresses,
+  filters, withdraws or replaces routes must carry a post-change step proving that each destination its own change
+  could make unreachable, as far as the leg's harvest shows, is still reachable. A destination the harvest cannot name
+  is listed as not checked, never guessed. A missing step is a labelled **non-blocking warning**, placed above the
+  verdict block and never under `Blocking issues:`, which the parser reads as blocking. A written but imperfect step
+  blocks only for a stated harm. The suppression black-hole the step guards against is still inferred, not observed on
+  the lab, so even the clearest suppression case is a warning, not a block, unless the package's own evidence shows a
+  destination losing reachability. Live-validated once (VT-32): the Author checked the discard-route risk itself. The
+  reviewer's warning has not yet fired live.
+- `kubernetes-gitops` v1.15.0 (2026-10-06) — the **Author restates the Architect's drift decision** (reconciled /
+  halted / no drift found, and what was compared; or "not performed: no config-repo baseline supplied"). The reviewer
+  reads only the package and already blocked on a missing disposition. Before this version, nothing told the Author
+  to carry one. The reviewer's duty is unchanged. Live-validated once (VT-32).
+- `terraform-iac` v1.12.0–v1.12.1 (2026-10-05) — the Harvester can read a task-named `.tf` source file verbatim
+  (1.12.0). That makes the earlier rule reachable in practice: an existing line is quoted only from a read of the
+  source, never rebuilt from state. The Author writes
+  every diff as a **standard unified diff**: `---`/`+++` file headers, then numbered `@@ -<start>,<count>
+  +<start>,<count> @@` hunk headers, with counts taken from the hunk's own lines. It never claims a tool will repair
+  the patch, and the reviewer blocks a header-less or unnumbered diff. The Author also restates the drift decision
+  (1.12.1). One elided hunk body was still refused at this version (VT-32); a mechanical header-vs-body count check is
+  filed with its trigger, not built.
+- `requirements-authoring` v1.8.0 (2026-10-06) — a **routing** class of design decisions for a leg that changes
+  routes: whether covered routes stop being advertised (`covered-routes`: replace · accompany), and which destinations
+  must stay reachable, and from where (`must-stay-reachable`). Seeded; not yet exercised live at this version.

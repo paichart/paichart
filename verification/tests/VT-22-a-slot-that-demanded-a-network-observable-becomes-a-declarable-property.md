@@ -176,7 +176,7 @@ written reason, the re-run completed and APPROVED at 88.
 
 ## Independent repeat on the self-host — and a contamination finding in it
 
-The whole round was repeated on a second, independent install: the **devext self-host**, running the
+The whole round was repeated on a second, independent install: a **self-hosted instance**, running the
 published open-source build from `github.com/paichart/paichart` rather than paichart.app. Same four
 rigs, same four objectives, same protocol and role-guidance rows (seeded from the same source), a
 different database and a different machine. Runs were serial rather than concurrent, deliberately —
