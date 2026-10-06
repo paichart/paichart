@@ -132,15 +132,16 @@
 >   A forced row's *rule or named target* cell reads `gap` — a gap report naming what is absent — and nothing else.
 > - `OPEN — <the question>; options: <the row's options>` — with NO default.
 >
-> `admitted-principal`, `principal-unseen`, `granted-action`, `existing-grant`, `target-empty` and `collateral` are NEVER derived and NEVER forced.
+> `admitted-principal`, `principal-unseen`, `granted-action`, `existing-grant`, `target-empty`, `collateral`, `covered-routes` and `must-stay-reachable` are NEVER derived and NEVER forced.
 > An `admitted-principal` answer rests on a premise — that the enforcer SEES that attribute on the path the sender's traffic
 > takes (a source address that is translated or never reaches the enforcer cannot be matched): state it as an
 > existence-assumption branch the leg's harvest decides — the *Admitted-principal premise* slot of each authorisation leg —
 > citing `admitted-principal` for the premise and applying the `principal-unseen` row for its outcome. **A leg clause that cites a
 > row applies THAT row's answer and nothing more; a clause that cites an OPEN row only reports the gap, naming the row id.** An
 > objective line that applies to every leg (e.g. "absent enforcers are created") must be a NUMBERED item, so rows can cite it.
-> A row that does not apply is deleted only if the leg neither grants nor removes anything on its target, and is then listed in
-> the owner block as `not-applicable — <reason>`. Never delete a row to avoid answering it. Add a row for any further decision
+> An authorisation row is deleted only if the leg neither grants nor removes access on its target; on a routing leg,
+> `covered-routes` is deleted only when the leg adds no advertised covering route, and `must-stay-reachable` is never deleted.
+> A deleted row is listed in the owner block as `not-applicable — <why the row does not apply>`. Never delete a row to avoid answering it. Add a row for any further decision
 > the document relies on.
 >
 > **Kept from the table this inventory replaced (each still earned):** the *rule or named target* cell states a RULE or a NAMED
@@ -177,6 +178,31 @@
 > **🗑 Enforcer fact — Kubernetes NetworkPolicy:** a pod selected by any Ingress policy is isolated for all ingress that no policy
 > allows. A declared answer that says other ports on selected pods are "not touched" cannot be implemented and must be raised as
 > INFEASIBLE, not transcribed. (Earned: Program Run 4, 2026-09-28.)
+
+### A leg that changes routes (routing)
+
+| id | question | options | rule or named target | source |
+|---|---|---|---|---|
+| {{LEG_TOKEN}}.covered-routes | when the leg adds a covering route, whether the routes it covers stop being advertised | replace · accompany | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.must-stay-reachable | which destinations must stay reachable after the change, and from where | — | {{DESTINATIONS, AND FROM WHERE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+
+> **🗑 Routing block.** A ROUTING leg is one whose work or deliverable adds a covering route, or suppresses, filters, withdraws
+> or replaces routes or their advertisement — whatever its protocol token (e.g. a summary or aggregate, a route filter, a
+> withdrawn advertisement). Filtering TRAFFIC — a network policy, security group, firewall or bucket policy — is
+> authorisation, not routing. A covering route is an ADVERTISED route that can stand in for the more specific routes it covers
+> (a summary or aggregate); a static or default route, which advertises nothing in their place, is not one. It carries both
+> rows. `covered-routes`: `replace` — the covering route is advertised IN PLACE OF the routes it covers, which stop being
+> advertised; `accompany` — it is advertised ALONGSIDE them; not-applicable when the leg adds no advertised covering route.
+> Wording anywhere else (an existence assumption, a topology note, a leg description) that says "in place of" is not an
+> answer: suppression can cut off destinations the covered routes reached, so cite a numbered item or leave the row OPEN.
+> `must-stay-reachable` states WHAT must stay reachable and from where, as a rule (e.g. "every host behind a route this
+> change covers, from every device that reached it before"), never today's addresses and never HOW the leg validates it. It
+> is declared or OPEN, never derived: a destination no harvest can name (e.g. a collector reached through another network)
+> is known only to the owner, and one numbered item can answer it for every routing leg. The leg clause that adds the
+> covering route cites `covered-routes`; the leg's objective cites `must-stay-reachable`. (Earned: program control 2,
+> 2026-10-05 — a cover advertised in place of the routes it covered on both devices of a pair, so cross-device reachability
+> to the covered hosts may be lost, inferred and not applied, and nobody had asked which destinations must stay reachable.
+> The "in place of" choice came from a hand-written topology note; no generated spec made it.)
 
 ## Decisions needed from the owner
 
