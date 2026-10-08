@@ -143,7 +143,11 @@ def retire_draft_claim(lines):
 # TEMPLATE (its synthetic worked examples) or in the OBJECTIVE (a value the owner DECLARED, e.g. a port). Everything
 # else is a candidate for a human to read. Its known blind spots, by construction: harvested NAMES that carry no
 # state shape (a workload or resource name), and state paraphrased into prose. A zero is not "clean".
-_IPV4 = re.compile(r'(?<![\w.])\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?(?![\w.])')
+# Trailing context (2026-10-08): `(?![\w.])` refused an address followed by ANY '.', so a sentence-final address
+# ("The exporter is 10.250.7.9.") was invisible to the lint. Now only a following word character or a '.'+word
+# (a longer dotted token) refuses it. Measured on every published spec: 0 new hits; a sentence-final CIDR now matches
+# with its prefix instead of the bare address the old pattern reached by backtracking.
+_IPV4 = re.compile(r'(?<![\w.])\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?(?!\w|\.\w)')
 _ABBREV = re.compile(r'(?<![\w.\d])\.\d{1,3}(?:\s*(?:,|/|and|or)\s*\.\d{1,3})+')
 _PORT = re.compile(r'(?i)(?:\bport\s+|\b(?:tcp|udp)[\s/:]+|(?<=[a-z0-9\]]):)(\d{2,5})\b')
 _ARN = re.compile(r'\barn:aws[\w-]*:[^\s`\'")|]+')
