@@ -27,9 +27,14 @@ import {
   asnToCanonical,
   HARVESTED_ALLOCATIONS_MARKER,
   DERIVED_VALUES_MARKER,
+  CONSUMED_VALUES_MARKER,
   type HarvestedAllocation,
   type DerivedValue,
   computeContainmentDisposition,
+  markerHeadingRegex,
+  markerSectionEnd,
+  FENCE_LINE_RE,
+  FENCED_JSON_BLOCK_RE,
 } from '../src/index';
 
 let passed = 0, failed = 0;
@@ -113,6 +118,25 @@ test('parser: LAST block wins (corrected re-statement supersedes)', () => {
   assert(got !== null && got[0].value === '10.99.0.4/30', `last-match-wins failed: ${JSON.stringify(got)}`);
 });
 
+test('parser: fence-inversion fallback (FW-A3.4 live shape 2026-08-22) — marker INSIDE the fence parses', () => {
+  // The agent opened the ```json fence one line before the heading, swallowing the marker.
+  const doc = `# Report\n\n### Gaps\nNone.\n\n\`\`\`json\n${HARVESTED_ALLOCATIONS_MARKER}\n[\n  {"kind":"cidr","cidr":"10.99.0.2/32","device":"ceos1"},\n  {"kind":"cidr","cidr":"10.99.0.8/32","device":"ceos1"}\n]\n\`\`\`\nTrailing prose.\n`;
+  const got = parseFencedJsonBlock<HarvestedAllocation>(doc, HARVESTED_ALLOCATIONS_MARKER);
+  assert(got !== null && got.length === 2 && got[0].cidr === '10.99.0.2/32', `fence-inversion parse failed: ${JSON.stringify(got)}`);
+});
+
+test('parser: fence-inversion with garbage json → still null (fallback never fabricates)', () => {
+  const doc = `\`\`\`json\n${HARVESTED_ALLOCATIONS_MARKER}\n{not json\n\`\`\`\n`;
+  assert(parseFencedJsonBlock(doc, HARVESTED_ALLOCATIONS_MARKER) === null, 'garbage inside inverted fence must be null');
+});
+
+test('parser: normal form still preferred when both shapes present (primary path precedence)', () => {
+  // A wrapping fence earlier in the doc must not shadow a well-formed marker+fence later.
+  const doc = `\`\`\`json\n["unrelated"]\n\`\`\`\n${HARVESTED_ALLOCATIONS_MARKER}\n\`\`\`json\n[{"kind":"cidr","cidr":"10.99.0.4/32"}]\n\`\`\`\n`;
+  const got = parseFencedJsonBlock<HarvestedAllocation>(doc, HARVESTED_ALLOCATIONS_MARKER);
+  assert(got !== null && got.length === 1 && got[0].cidr === '10.99.0.4/32', `precedence failed: ${JSON.stringify(got)}`);
+});
+
 test('parser: missing header / broken json / non-array → null (never a fabricated empty list)', () => {
   assert(parseFencedJsonBlock('no header here', HARVESTED_ALLOCATIONS_MARKER) === null, 'missing header');
   assert(parseFencedJsonBlock(`${HARVESTED_ALLOCATIONS_MARKER}\n\`\`\`json\n{oops\n\`\`\``, HARVESTED_ALLOCATIONS_MARKER) === null, 'broken json');
@@ -157,14 +181,275 @@ test('RUN-6 fixture: bold-heading variance — `**Derived Values** (quoted verba
     `expected member-not-covered after parsing, got ${JSON.stringify(r.violations)}`);
 });
 
+test('BACKTICK fixture (2026-09-16 k8s legs): `` ## 4. `## Derived Values` `` parses', () => {
+  // Live shape from kubernetes-gitops program cmu3nk19o0027yxxq46kkp47l (Author cmu3nuxgm001oyxxwsn6j1jv1,
+  // Architect cmu3nuq430019yxxwesof12sg) and network-provisioning cmu1pj4ht004fyx0optwzmlpe. The agent
+  // QUOTES the mandated heading. It renders identically in markdown and reads correct to a human or an
+  // LLM — only the parser saw the difference, and the block read ABSENT with the fact failing closed.
+  const doc = '## 4. `## Derived Values`\n\n```json\n[{"kind":"cidr","value":"10.99.0.4/30","members":["10.99.0.4/32","10.99.0.5/32"]}]\n```\n';
+  const got = parseFencedJsonBlock<DerivedValue>(doc, DERIVED_VALUES_MARKER);
+  assert(got !== null && got[0].value === '10.99.0.4/30', `backticked-heading parse failed: ${JSON.stringify(got)}`);
+  // The other two markers take the same shape, and the same-parser rule means markerPresence moves with them.
+  assert(parseFencedJsonBlock(`## 3. \`## Harvested Allocations\`\n\`\`\`json\n[]\n\`\`\`\n`, HARVESTED_ALLOCATIONS_MARKER) !== null, 'harvested backticked');
+  // Bare, and with emphasis wrapped outside the quotes:
+  assert(parseFencedJsonBlock(doc.replace('## 4. ', ''), DERIVED_VALUES_MARKER) !== null, 'bare backticked heading');
+  assert(parseFencedJsonBlock(doc.replace('## 4. `', '### 4. **`').replace('`\n', '`**\n'), DERIVED_VALUES_MARKER) !== null, 'bold outside the quotes');
+});
+
+test('BACKTICK tolerance does NOT reach a mid-sentence reference or a sibling marker', () => {
+  const body = '```json\n[{"kind":"cidr","value":"10.99.0.4/30","members":[]}]\n```\n';
+  assert(parseFencedJsonBlock(`See the \`## Derived Values\` block below for details\n${body}`, DERIVED_VALUES_MARKER) === null,
+    'mid-sentence backticked reference must not match');
+  assert(parseFencedJsonBlock(`- the \`## Derived Values\` block is emitted by the Author\n${body}`, DERIVED_VALUES_MARKER) === null,
+    'bulleted backticked reference must not match');
+  assert(parseFencedJsonBlock(`## 3. \`## Harvested Allocations\`\n${body}`, DERIVED_VALUES_MARKER) === null,
+    'a backticked SIBLING marker must not satisfy this marker');
+});
+
+test('BACKTICK tolerance must NOT break the FW-A3.4 fence inversion (the regression the first fix caused)', () => {
+  // The obvious fix — adding a backtick to the FIRST character class — passed every single-heading
+  // fixture and REGRESSED 3 production legs, because that class contains `\s`, which spans newlines:
+  // the match started on the bare ``` opener, `lastIdx` landed on the fence instead of the heading,
+  // the fenceOpensBefore parity flipped odd→even, and the inversion arm below never fired. A
+  // single-heading fixture cannot express last-match-wins, so the index is asserted here directly.
+  const doc = 'Derivation follows.\n```\n## Derived Values\n[{"kind":"cidr","value":"10.99.0.4/30","members":["10.99.0.4/32"]}]\n```\n';
+  const got = parseFencedJsonBlock<DerivedValue>(doc, DERIVED_VALUES_MARKER);
+  assert(got !== null && got[0].value === '10.99.0.4/30', `fence-inverted block must still parse: ${JSON.stringify(got)}`);
+});
+
+// MARKER-LETTERED-HEADING (2026-10-08). Opus 5.5 lab Author (L7 N-R opusAuthor sample-02) wrote
+// `## (e2) Derived Values`; the block read ABSENT and the Reviewer refused. Prod carries `### (f)` /
+// `### (g) Consumed Values` (config_change_author cmuoxvlzn00e5yxlrywsa05zf, cmurg6cpy0101yxx9f34qflb0).
+// Accepted ONLY parenthesised: `(letter[0-2 digits])`. The rejected shapes are the live non-markers a
+// wider rule would capture: reviewers quoting a leg (`### P1 Harvested Allocations (Ground Truth)`), a
+// technical_writer's report section (`### 7.2 Derived Values (…)`), a bare `e2 `, and prose titles.
+test('LETTERED ordinal: `(e2)` / `(f)` / `(G)` parse; bare `P1 ` / `e2 ` / `7.2 ` / prose do not', () => {
+  const body = '```json\n[{"kind":"cidr","value":"10.99.0.6/31","members":["10.99.0.6/32","10.99.0.7/32"]}]\n```\n';
+  for (const h of ['## (e2) Derived Values', '### (f) Derived Values', '## (G) Derived Values', '**(e2) Derived Values**']) {
+    const got = parseFencedJsonBlock<DerivedValue>(`${h}\n${body}`, DERIVED_VALUES_MARKER);
+    assert(got !== null && got[0].value === '10.99.0.6/31', `lettered heading must parse: ${h} → ${JSON.stringify(got)}`);
+  }
+  assert(parseFencedJsonBlock(`### (g) Consumed Values\n\`\`\`json\n[{"kind":"cidr","value":"10.99.0.0/27"}]\n\`\`\`\n`, CONSUMED_VALUES_MARKER) !== null,
+    'lettered Consumed Values heading must parse');
+  for (const h of ['### P1 Derived Values (Ground Truth)', '### 7.2 Derived Values (Phase 1 Design)', '## e2 Derived Values',
+    '## (ee) Derived Values', '## (e123) Derived Values', '## Evidence — Derived Values', '#### P1/P2 Derived Values']) {
+    assert(parseFencedJsonBlock(`${h}\n${body}`, DERIVED_VALUES_MARKER) === null, `must NOT parse as a marker heading: ${h}`);
+  }
+});
+
+test('LETTERED ordinal: a lettered wrapper above the canonical heading still reads the SAME block (prod shape)', () => {
+  // cmuoxvlzn00e5yxlrywsa05zf: `### (f) Consumed Values` then a blank line then `## Consumed Values` + fence.
+  // Last-match-wins must keep selecting the inner canonical heading's block.
+  const doc = '### (f) Consumed Values\n\n## Consumed Values\n```json\n[{"kind":"cidr","value":"10.99.0.0/27"}]\n```\nCopied verbatim.\n\n### (g) Isolation collateral effect\n';
+  const got = parseFencedJsonBlock<{ kind: string; value: string }>(doc, CONSUMED_VALUES_MARKER);
+  assert(got !== null && got.length === 1 && got[0].value === '10.99.0.0/27', `wrapper shape: ${JSON.stringify(got)}`);
+});
+
+// X28 (2026-09-28) — Program Run 4 FABRIC Author (`cmukr4blz00f7yxils8659wsw`, leg `cmukqplsa00beyxiljaajwx4s`).
+// Shape reproduced from the live text (lab addresses): a correctly placed `## Derived Values` block, then
+// a validation step whose EXPECTED OUTPUT fence contains a line BEGINNING with the marker words. The
+// shipped parser took that line as the heading (last match wins), the first fence after it was not the
+// block, and markerPresence.derivedValues stamped false — the leg's Reviewer then blocked on the fact.
+const X28_RUN4 = [
+  '## Derived Values', '',
+  '*Carried forward verbatim from Phase 1 design (task ID `cmukr46n100f2yxil1aokkba5`), unaltered:*', '',
+  '```json',
+  '[{"kind": "cidr", "value": "10.99.0.0/27", "members": ["10.99.0.1/32", "10.99.0.2/32", "10.99.0.4/32", "10.99.0.24/32", "10.99.0.26/32", "10.99.0.29/32"]}]',
+  '```', '',
+  '## Validation steps (recomputation)', '',
+  '```',
+  'Step 3 — Population match: cross-check § Pre-existing Allocations cidr entries against § Derived Values members',
+  '```',
+  '**Expected output (set equality, exact):**',
+  '```',
+  'Pre-existing Allocations cidr set  = {10.99.0.1/32, 10.99.0.26/32, 10.99.0.29/32, 10.99.0.2/32, 10.99.0.4/32, 10.99.0.24/32}',
+  'Derived Values members set          = {10.99.0.1/32, 10.99.0.2/32, 10.99.0.4/32, 10.99.0.24/32, 10.99.0.26/32, 10.99.0.29/32}',
+  'SET EQUAL → no member fabricated, none omitted',
+  '```', '',
+  '```',
+  'Step 4 — Chaining coverage, to be run by each consuming leg',
+  '```', '',
+].join('\n');
+
+test('X28 fixture: Run 4 FABRIC — a validation line BEGINNING with the marker words does not displace the real block', () => {
+  const got = parseFencedJsonBlock<DerivedValue>(X28_RUN4, DERIVED_VALUES_MARKER);
+  assert(got !== null && got.length === 1 && got[0].value === '10.99.0.0/27' && (got[0].members ?? []).length === 6,
+    `Run 4 block must parse through the trailing validation line: ${JSON.stringify(got)}`);
+});
+
+test('X28 fixture: numbered SUMMARY line (`5. **Consumed Values:** Chained value …`) does not displace the real block', () => {
+  // Archived shape, two Authors (cmsd0coei002tyx51t8bpjx62, cmsa6cg7c007eyxeu7rio9o1r): the ordinal widening
+  // (2026-09-09) made a closing numbered summary line match, so the consumed block read ABSENT.
+  const doc = '## Consumed Values\n\n```json\n[{"kind":"cidr","value":"10.99.0.8/31"}]\n```\n\n### Summary for Reviewer\n\n' +
+    '4. **Rollback:** documented\n5. **Consumed Values:** Chained value `10.99.0.8/31` documented for platform verification.\n\nConfidence: 92\n';
+  const got = parseFencedJsonBlock<{ value: string }>(doc, CONSUMED_VALUES_MARKER);
+  assert(got !== null && got[0].value === '10.99.0.8/31', `summary line must not win: ${JSON.stringify(got)}`);
+});
+
+test('X28 negative: a HEADING-shaped last match over a broken/non-array block stays null — the earlier block is NEVER substituted', () => {
+  // The fail-closed half. "A corrected re-statement supersedes an earlier one": if the correction is
+  // malformed the fact must read ABSENT, not silently fall back to the stale block. Archived specimen:
+  // a technical_writer whose second `### Derived Values` carried a JSON OBJECT.
+  const first = '### Derived Values\n\n```json\n[{"kind":"cidr","value":"10.99.0.16/31","members":["10.99.0.16/32","10.99.0.17/32"]}]\n```\n\n';
+  const objectRestatement = '### Derived Values\n\n```json\n{"exporter_aggregate": "10.99.0.16/31"}\n```\n';
+  assert(parseFencedJsonBlock(first + objectRestatement, DERIVED_VALUES_MARKER) === null, 'non-array heading restatement must stay null');
+  const broken = '**Derived Values** (corrected)\n\n```json\n[{"kind":"cidr", oops\n```\n';
+  assert(parseFencedJsonBlock(first + broken, DERIVED_VALUES_MARKER) === null, 'broken bold+parenthetical restatement must stay null');
+  assert(parseFencedJsonBlock(first + '## 6. Derived Values:\n```json\n{oops\n```\n', DERIVED_VALUES_MARKER) === null,
+    'broken numbered-colon heading must stay null');
+});
+
+test('X28 negative: a prose line beginning with the marker never wins over a real heading, and alone parses nothing', () => {
+  // The prose line is stepped over, the REAL heading wins — and with no real heading, prose over a
+  // non-array fence is still null (no fabrication; absence keeps its meaning).
+  const real = '## Harvested Allocations\n```json\n[{"kind":"cidr","cidr":"10.99.0.4/32"}]\n```\n';
+  const prose = 'Harvested Allocations were cross-checked against the device:\n```\nshow ip int brief | include Loopback\n```\n';
+  const got = parseFencedJsonBlock<HarvestedAllocation>(real + prose, HARVESTED_ALLOCATIONS_MARKER);
+  assert(got !== null && got[0].cidr === '10.99.0.4/32', `real heading must win over trailing prose: ${JSON.stringify(got)}`);
+  assert(parseFencedJsonBlock(prose, HARVESTED_ALLOCATIONS_MARKER) === null, 'prose alone must stay null');
+  // Last-match-wins between two REAL blocks is unchanged:
+  const two = real + '## Harvested Allocations\n```json\n[{"kind":"cidr","cidr":"10.99.0.5/32"}]\n```\n' + prose;
+  const g2 = parseFencedJsonBlock<HarvestedAllocation>(two, HARVESTED_ALLOCATIONS_MARKER);
+  assert(g2 !== null && g2[0].cidr === '10.99.0.5/32', `corrected re-statement must still supersede: ${JSON.stringify(g2)}`);
+});
+
+// PARSE-STEAL (2026-10-04) — value-chain B7 run 1 S3 Author (`cmuqs10r500i2yxx9v9j8ovfd`, leg
+// `cmuqqjrgq002kyxx9duvc9yhr`). Excerpt of the live text: an EMPTY `## Derived Values` heading (prose
+// only) followed by a correct `## Consumed Values` block. The shipped parser took the first fence
+// ANYWHERE after the marker, so the CONSUMED block was read as the DERIVED values; the enrichment took
+// the checked path against an empty pool (benign/checked-clean by construction) and check 1
+// (consumed-value-mismatch) never ran. Fails OPEN.
+const PS_B7R1_S3 = [
+  '## Pre-existing Allocations', '',
+  'Quoted verbatim from the Phase 0 harvest\'s `## Harvested Allocations` block (`infra_state_harvester`, workspace `prod`):', '',
+  '```json', '[]', '```', '',
+  'No CIDR/ASN allocation exists in this resource\'s harvested state. This pool is empty by construction, not by omission.', '',
+  '## Derived Values', '',
+  'Not carried forward — the Architect\'s design performed no derivation arithmetic for this leg (it explicitly states: ' +
+    '*"No `## Derived Values` block is emitted by this Architect leg… this design consumes the exporter-range CIDR from the ' +
+    'upstream network-derivation leg rather than deriving it itself"*). No block exists to carry.', '',
+  '## Consumed Values', '',
+  '```json', '[{"kind": "cidr", "value": "10.99.0.0/27"}]', '```', '',
+  'Value taken verbatim from the network-derivation leg\'s published deliverable (task `cmuqqhnty0021yxx9le2mzg1a`).', '',
+  '## Policy / Constraint Baseline (restated from harvest, for the Reviewer)', '',
+  '| Dimension | Baseline |', '|---|---|', '| Workspace | `prod` |', '',
+].join('\n');
+
+test('PARSE-STEAL incident (B7 run 1 S3 Author): an EMPTY `## Derived Values` heading does NOT claim the Consumed block', () => {
+  assert(parseFencedJsonBlock(PS_B7R1_S3, DERIVED_VALUES_MARKER) === null,
+    `derived must read ABSENT — its section holds no block: ${JSON.stringify(parseFencedJsonBlock(PS_B7R1_S3, DERIVED_VALUES_MARKER))}`);
+  const consumed = parseFencedJsonBlock<{ value: string }>(PS_B7R1_S3, CONSUMED_VALUES_MARKER);
+  assert(consumed !== null && consumed.length === 1 && consumed[0].value === '10.99.0.0/27',
+    `the consumed block is still its own: ${JSON.stringify(consumed)}`);
+});
+
+test('PARSE-STEAL, the OTHER order: an EMPTY `## Consumed Values` heading before a populated Derived block reads ABSENT', () => {
+  // The direction that would hide the CONSUMER-FAIL-OPEN arm: a consuming leg with no consumed block must
+  // read null (⇒ needs-node-c consuming-leg-no-consumed-block), never borrow the next section's block.
+  const doc = '## Consumed Values\n\nNone — this leg consumes nothing.\n\n## Derived Values\n\n```json\n' +
+    '[{"kind":"cidr","value":"10.99.0.8/31","members":["10.99.0.8/32","10.99.0.9/32"]}]\n```\n';
+  assert(parseFencedJsonBlock(doc, CONSUMED_VALUES_MARKER) === null, 'empty consumed heading must not steal the derived block');
+  const d = parseFencedJsonBlock<DerivedValue>(doc, DERIVED_VALUES_MARKER);
+  assert(d !== null && d[0].value === '10.99.0.8/31', `derived unaffected: ${JSON.stringify(d)}`);
+});
+
+test('PARSE-STEAL: an equal- or higher-level ATX heading ends the section; a DEEPER sub-heading is layout inside it', () => {
+  const block = '```json\n[{"kind":"cidr","value":"10.99.0.4/31"}]\n```\n';
+  // deeper sub-heading: still inside the section (measurement bug 1, 2026-10-03 — must keep parsing)
+  const sub = parseFencedJsonBlock<DerivedValue>(`## Derived Values\n\n### Rationale\n\nMinimal pair.\n\n${block}`, DERIVED_VALUES_MARKER);
+  assert(sub !== null && sub[0].value === '10.99.0.4/31', `sub-heading must not end the section: ${JSON.stringify(sub)}`);
+  // equal level ends it
+  assert(parseFencedJsonBlock(`## Derived Values\n\nnone\n\n## Rollback\n\n${block}`, DERIVED_VALUES_MARKER) === null, 'equal-level heading ends the section');
+  // higher level ends it
+  assert(parseFencedJsonBlock(`### Derived Values\n\nnone\n\n## Rollback\n\n${block}`, DERIVED_VALUES_MARKER) === null, 'higher-level heading ends the section');
+  // a non-`#` marker (bold) has no level: ANY ATX heading ends it (archived shapes #5/#6, 2026-07-18 / 08-03)
+  assert(parseFencedJsonBlock(`**Harvested Allocations in the containing scope:**\n\nsee table\n\n### Derived Values\n\n${block}`,
+    HARVESTED_ALLOCATIONS_MARKER) === null, 'a bold marker is ended by any ATX heading');
+});
+
+test('PARSE-STEAL rule (b): a HEADING-SHAPED line of ANOTHER marker ends the section at ANY level (deeper or bold)', () => {
+  const block = '```json\n[{"kind":"cidr","value":"10.99.0.0/27"}]\n```\n';
+  // `### Consumed Values` is deeper than `## Derived Values`, so rule (a) alone would let derived steal it.
+  assert(parseFencedJsonBlock(`## Derived Values\n\nNot carried forward.\n\n### Consumed Values\n\n${block}`, DERIVED_VALUES_MARKER) === null,
+    'a deeper sibling marker must still end the section');
+  // two bold markers, no ATX heading anywhere
+  const bold = `**Harvested Allocations:** none in scope.\n\n**Derived Values:**\n\n${block}`;
+  assert(parseFencedJsonBlock(bold, HARVESTED_ALLOCATIONS_MARKER) === null, 'bold sibling marker ends a bold marker');
+  const d = parseFencedJsonBlock<DerivedValue>(bold, DERIVED_VALUES_MARKER);
+  assert(d !== null && d[0].value === '10.99.0.0/27', `the bold derived marker keeps its own block: ${JSON.stringify(d)}`);
+  // a PROSE line that merely begins with a sibling marker's words is NOT a boundary
+  const prose = parseFencedJsonBlock<DerivedValue>(
+    `## Derived Values\n\nConsumed Values are declared by the downstream leg, not here.\n\n${block}`, DERIVED_VALUES_MARKER);
+  assert(prose !== null, 'a prose sibling-marker line is content, not a boundary');
+});
+
+test('PARSE-STEAL: an IN-FENCE marker (FW-A3.4 inversion) stays unbounded; fenced `#` lines are content, not markers or boundaries', () => {
+  // The inverted layout's block is its own enclosing fence, bounded by the inversion arm — a section scan
+  // started inside a fence would read the fence's content as structure, so it is not applied there.
+  const doc = '```json\n## Derived Values\n[{"kind":"cidr","value":"10.99.0.2/31"}]\n```\n\n## Next\n```bash\n# show run\n```\n';
+  const d = parseFencedJsonBlock<DerivedValue>(doc, DERIVED_VALUES_MARKER);
+  assert(d !== null && d[0].value === '10.99.0.2/31', `FW-A3.4 in-fence marker stays unbounded and parses: ${JSON.stringify(d)}`);
+  const doc2 = '## Harvested Allocations\n\n```json\n[{"kind":"cidr","cidr":"10.99.0.4/32"}]\n```\n';
+  const withComment = '## Notes\n```bash\n# Harvested Allocations\n## Derived Values\n```\n' + doc2;
+  const h = parseFencedJsonBlock<HarvestedAllocation>(withComment, HARVESTED_ALLOCATIONS_MARKER);
+  assert(h !== null && h[0].cidr === '10.99.0.4/32', `the real heading after a fenced comment still parses: ${JSON.stringify(h)}`);
+});
+
+test('PARSE-STEAL live shape (re-measure run 2 k8s Author `cmuszqer600kmyxfk8i7jpfn9`): heading, then a fence whose FIRST line repeats the heading — still parses as consumed', () => {
+  // Verbatim excerpt. Two matches: the outer heading (outside a fence) and the repeated line INSIDE the
+  // ```json fence. Last-match-wins takes the in-fence one, which is unbounded (FW-A3.4) and parses via the
+  // inversion arm. The in-fence `## Consumed Values` line is content to the section scan, never a boundary.
+  // Stamped consumedValues:true / consuming-leg-consumed-discharged in production; must not change.
+  const doc = 'against live traffic once a receiver pod exists.\n\n## Consumed Values\n\n```json\n## Consumed Values\n' +
+    '[{"kind": "cidr", "value": "10.99.0.0/27"}]\n```\n\nConfidence: 90 — Manifest and kustomize overlay are fully traceable.\n';
+  const c = parseFencedJsonBlock<{ value: string }>(doc, CONSUMED_VALUES_MARKER);
+  assert(c !== null && c.length === 1 && c[0].value === '10.99.0.0/27', `live k8s shape must keep parsing: ${JSON.stringify(c)}`);
+  assert(parseFencedJsonBlock(doc, DERIVED_VALUES_MARKER) === null && parseFencedJsonBlock(doc, HARVESTED_ALLOCATIONS_MARKER) === null,
+    'no other marker reads it');
+});
+
+test('PARSE-STEAL × X28: a HEADING-shaped empty section STOPS the walk-back — an earlier block is never revived', () => {
+  // A later, heading-shaped `## Derived Values` that says "not carried forward" is a corrected statement
+  // (X28's fail-closed half): the fact reads ABSENT. Shipped code read the CONSUMED block here.
+  const doc = '## Derived Values\n\n```json\n[{"kind":"cidr","value":"10.99.0.0/26"}]\n```\n\n' +
+    '## Derived Values\n\nNot carried forward — superseded.\n\n## Consumed Values\n\n```json\n[{"kind":"cidr","value":"10.99.0.0/27"}]\n```\n';
+  assert(parseFencedJsonBlock(doc, DERIVED_VALUES_MARKER) === null, 'heading-shaped empty restatement must read null');
+});
+
+test('PARSE-STEAL × X28: a PROSE-shaped match with an empty section walks back to the real heading instead of stealing', () => {
+  // Shipped: the summary line `5. **Derived Values:** carried as above` was the last match, the first fence
+  // after it was the CONSUMED block, and that was returned as derived. Bounded: the summary line's section
+  // ends at the next ATX heading, holds nothing, is prose-shaped ⇒ X28 steps back to the real block.
+  const doc = '## Derived Values\n\n```json\n[{"kind":"cidr","value":"10.99.0.8/31"}]\n```\n\n## Summary\n\n' +
+    '5. **Derived Values:** carried as above, unaltered.\n\n## Consumed Values\n\n```json\n[{"kind":"cidr","value":"10.99.0.0/27"}]\n```\n';
+  const d = parseFencedJsonBlock<DerivedValue>(doc, DERIVED_VALUES_MARKER);
+  assert(d !== null && d[0].value === '10.99.0.8/31', `must walk back to the real block, not steal consumed: ${JSON.stringify(d)}`);
+});
+
+test('PARSE-STEAL archived shape: `### Harvested Allocations` (prose gap note) does not claim the `### Derived Values` block', () => {
+  // network Author 2026-09-15 (`cmu1zam3h0097yxvrhm7fmxt5`): the harvested section carried a table, the
+  // derived section the block — markerPresence stamped Harvested ✓ off the DERIVED block.
+  const doc = '## Pre-existing Allocations\n\n### Harvested Allocations\n*(Gap — the Harvester\'s fenced block was not chained.)*\n\n' +
+    '| # | CIDR |\n|---|---|\n| 1 | 10.99.0.1/32 |\n\n### Derived Values\n*(quoted verbatim from Phase 1)*\n\n```json\n' +
+    '[{"kind": "cidr", "value": "10.99.0.8/30", "members": ["10.99.0.8/32", "10.99.0.9/32", "10.99.0.10/32", "10.99.0.11/32"]}]\n```\n';
+  assert(parseFencedJsonBlock(doc, HARVESTED_ALLOCATIONS_MARKER) === null, 'harvested reads ABSENT (it is a table)');
+  assert(parseFencedJsonBlock(doc, DERIVED_VALUES_MARKER) !== null, 'derived unaffected');
+});
+
 test('parser: prose mention mid-sentence still does NOT match (no over-matching)', () => {
   const doc = 'In this section the derived values are computed as follows, with no block.\n';
   assert(parseFencedJsonBlock(doc, DERIVED_VALUES_MARKER) === null, 'prose mention must not match');
 });
 
-// (One platform-layer test was removed at extraction: the FINDING-F ordering pin reads the
-// PRIVATE enrichment module that wires this library into the pAIchart pipeline. It lives with
-// that module. Everything below tests the library itself.)
+// NOTE (corrected 2026-07-29, Run-14): the ORDERING assertion below is unchanged and still correct,
+// but its original rationale cited a "terraform/k8s leg" as the beneficiary, which is wrong and is
+// the misconception that later made a whole fix INERT. A terraform-iac leg DOES emit a `## Derived
+// Values` block (it re-states the chained aggregate), so it takes the `!harvested` branch and stamps
+// `harvest-block-missing-or-unparseable` — NOT `no-derived-values-block`. The leg this ordering
+// actually protects is one that emits NEITHER block: existence-first keeps it on the benign reason
+// instead of the blocking harvest one.
+// FINDING-F pin omitted in the package: it reads the platform's enrichment wiring
+// (derivation-containment-enrichment.ts), which is not part of this package.
 
 // ── consumed-value-mismatch: check 1 made mechanical (2026-07-31) ───────────────────────────────
 // "The policy value exactly equals the aggregate the network leg derived (the chained value, not a
@@ -659,6 +944,76 @@ test('D6: A4 RESIDUAL — a non-CIDR-only harvest cannot be decided, so escalate
     `an ASN-only refusal must never read benign: ${JSON.stringify(d)}`);
 });
 
+// ── CONSUMER-FAIL-OPEN (2026-10-03, pattern (h) batch 2) ─────────────────────────────────────────
+// A CONSUMING leg (upstream resolved) whose `## Consumed Values` block did not parse used to read
+// `benign nothing-to-derive`, so check 1 never ran and the gate conjunct read benign. The two
+// fixtures are the LIVE stamps of both instances, verbatim minus the disposition they were stamped
+// with (that is what is being recomputed). Measured before building: the arm moves exactly the 4
+// upstream-carrying `nothing-to-derive` legs since 09-15 and 0 of the 41 without an upstream.
+const CFO_LIVE_RUN5_OBS = { // 2026-10-03 obs, Run 5 — `cmurpr9sj00poyxxaeywagi0a`, pipeline-index.json
+  reason: 'no-derived-values-block', checked: false,
+  derivedSource: 'cmurq5m3v02k5yxx9sj8lxwng', harvestSource: 'cmurq582i02ieyxx9s9xfi999',
+  upstreamContainment: { green: true, legs: [{ taskId: 'cmurpovk000osyxxab3ll84a2', checked: true, violations: 0,
+    disposition: 'benign', dispositionReason: 'checked-clean', derivedValues: [{ kind: 'cidr', value: '10.99.0.0/27' }] }] },
+};
+const CFO_LIVE_0919_OBS = { // 2026-09-19 obs — `cmu7xmfhb005fyxgzxro3u4b7`, pipeline-index.json
+  reason: 'no-derived-values-block', checked: false,
+  derivedSource: 'cmu7z9ju400g8yxgzm4sfa5xe', harvestSource: 'cmu7z8shn00emyxgzqt9gbejf',
+  upstreamContainment: { green: true, legs: [{ taskId: 'cmu7xketu004ayxgzibyal6q3', checked: true, violations: 0,
+    disposition: 'benign', dispositionReason: 'checked-clean', derivedValues: [
+      { kind: 'cidr', value: '10.99.0.0/27' }, { kind: 'asn', value: '65001' }, { kind: 'asn', value: '65002' }] }] },
+};
+
+test('CFO-1: LIVE Run 5 obs (10-03) — consuming leg, no consumed block ⇒ needs-node-c consuming-leg-no-consumed-block, never benign', () => {
+  const d = computeContainmentDisposition(CFO_LIVE_RUN5_OBS);
+  assert(d.disposition === 'needs-node-c' && d.reason === 'consuming-leg-no-consumed-block', JSON.stringify(d));
+  assert(d.inputs.upstreamContainmentGreen === true && d.inputs.consumedCount === undefined,
+    `the deciding inputs must be recorded so the escalation is replay-auditable: ${JSON.stringify(d.inputs)}`);
+});
+
+test('CFO-2: LIVE 09-19 obs (second instance) — same shape, same answer', () => {
+  const d = computeContainmentDisposition(CFO_LIVE_0919_OBS);
+  assert(d.disposition === 'needs-node-c' && d.reason === 'consuming-leg-no-consumed-block', JSON.stringify(d));
+});
+
+test('CFO-3: upstream resolved but NOT green, nothing consumed ⇒ same escalation (an upstream exists either way)', () => {
+  const d = computeContainmentDisposition({ ...CFO_LIVE_RUN5_OBS,
+    upstreamContainment: { green: false, legs: [{ taskId: 'u', checked: false, violations: 0 }] } });
+  assert(d.disposition === 'needs-node-c' && d.reason === 'consuming-leg-no-consumed-block', JSON.stringify(d));
+});
+
+test('CFO-4: a consumed block that PARSED EMPTY declared nothing — escalates like an absent one', () => {
+  const d = computeContainmentDisposition({ ...CFO_LIVE_RUN5_OBS, consumedValues: [] });
+  assert(d.disposition === 'needs-node-c' && d.reason === 'consuming-leg-no-consumed-block', JSON.stringify(d));
+});
+
+test('CFO-5 CONTROL: a NON-consumer (no upstream resolved) with nothing to derive stays benign nothing-to-derive', () => {
+  // The 41-of-41 population. Same live fact with the upstream removed — one field apart from CFO-1,
+  // opposite answers (436d6d6d: a single specimen is never sufficient evidence here).
+  const { upstreamContainment: _u, ...nonConsumer } = CFO_LIVE_RUN5_OBS;
+  const d = computeContainmentDisposition(nonConsumer);
+  assert(d.disposition === 'benign' && d.reason === 'nothing-to-derive', JSON.stringify(d));
+});
+
+test('CFO-6 CONTROL: a consumer WITH a parsed consumed block stays benign consuming-leg-consumed-discharged', () => {
+  const d = computeContainmentDisposition({ ...CFO_LIVE_RUN5_OBS, consumedValues: [{ kind: 'cidr', value: '10.99.0.0/27' }] });
+  assert(d.disposition === 'benign' && d.reason === 'consuming-leg-consumed-discharged', JSON.stringify(d));
+});
+
+test('CFO-7 SCOPE: the arm is LAST — a consumer on the empty-pool / cannot-decide arms keeps its answer', () => {
+  // Records the decided scope (only legs that read `nothing-to-derive` move), not a claim that these
+  // arms are right for a consumer. Widening the arm is a separate, measured decision.
+  const empty = computeContainmentDisposition({ ...CFO_LIVE_RUN5_OBS, harvestedCount: 0, harvestedByKind: {} });
+  assert(empty.disposition === 'benign' && empty.reason === 'harvested-pool-empty', JSON.stringify(empty));
+  const pool = computeContainmentDisposition({ ...CFO_LIVE_RUN5_OBS, harvestedCount: 6 });
+  assert(pool.reason === 'harvested-pool-no-derivation-cannot-decide', JSON.stringify(pool));
+});
+
+test('CFO-8: CLAUSE-1 DOMINANCE still holds on the new arm — a violation blocks first', () => {
+  const d = computeContainmentDisposition({ ...CFO_LIVE_RUN5_OBS, violations: [{ reason: 'consumed-value-mismatch' }] });
+  assert(d.disposition === 'blocking' && d.reason === 'violations', JSON.stringify(d));
+});
+
 test('D7: consuming-leg exception — benign ONLY on an explicit green:true', () => {
   const d = computeContainmentDisposition({
     checked: false, reason: 'harvest-block-missing-or-unparseable', upstreamContainment: { green: true },
@@ -674,8 +1029,44 @@ test('D8: FAIL CLOSED — green:false blocks', () => {
 });
 
 test('D9: FAIL CLOSED — upstreamContainment ABSENT blocks, and says so distinguishably', () => {
+  // R5 (2026-10-05): with nothing upstream at all the reason no longer claims a consuming leg.
   const d = computeContainmentDisposition({ checked: false, reason: 'harvest-block-missing-or-unparseable' });
+  assert(d.disposition === 'blocking' && d.reason === 'harvest-missing-or-unparseable-no-upstream', JSON.stringify(d));
+  assert(!('upstreamDeliverableMissing' in d.inputs), 'inputs must stay byte-identical when the count is absent');
+});
+
+// R5 LIVE SHAPES — the two production stamps that read `consuming-leg-upstream-absent` (2026-08-22 network
+// cmt3s3mqn001syxmfwz5tj050, 2026-09-16 k8s podrange cmu3d3jcr001dyxe33yrqhrh4), verbatim minus the
+// disposition. Neither leg had a PIPELINE dependency edge or any chained entry: both PRODUCED.
+const R5_LIVE_0822_NET = { reason: 'harvest-block-missing-or-unparseable', checked: false,
+  derivedSource: 'cmt3s9b3y005byxmg9bhadpms', harvestSource: 'cmt3s8qh2004jyxmg9cvyi034' };
+const R5_LIVE_0916_K8S = { reason: 'harvest-block-missing-or-unparseable', checked: false,
+  derivedSource: 'cmu3ddtyu004nyxe35ni8ti60', harvestSource: 'cmu3dcxh7003byxe3wtv6jqic' };
+
+test('D9-R5a: both live producing-leg stamps now name what is true — blocking, no upstream implied', () => {
+  for (const f of [R5_LIVE_0822_NET, R5_LIVE_0916_K8S]) {
+    const d = computeContainmentDisposition(f);
+    assert(d.disposition === 'blocking' && d.reason === 'harvest-missing-or-unparseable-no-upstream', JSON.stringify(d));
+    assert(JSON.stringify(d.inputs) === JSON.stringify({ reason: 'harvest-block-missing-or-unparseable', violationCount: 0, unsupportedCount: 0 }),
+      `inputs must be byte-identical to the live stamp: ${JSON.stringify(d.inputs)}`);
+  }
+});
+
+test('D9-R5b: the old name stays where it is TRUE — a chained PIPELINE predecessor whose deliverable never arrived', () => {
+  const d = computeContainmentDisposition({ ...R5_LIVE_0916_K8S, upstreamDeliverableMissing: 1 });
   assert(d.disposition === 'blocking' && d.reason === 'consuming-leg-upstream-absent', JSON.stringify(d));
+  assert(d.inputs.upstreamDeliverableMissing === 1, 'the separating input is transcribed');
+});
+
+test('D9-R5c: the count never weakens a block — zero, or with green set, the green arms still decide', () => {
+  const zero = computeContainmentDisposition({ ...R5_LIVE_0916_K8S, upstreamDeliverableMissing: 0 });
+  assert(zero.disposition === 'blocking' && zero.reason === 'harvest-missing-or-unparseable-no-upstream', JSON.stringify(zero));
+  const green = computeContainmentDisposition({ ...R5_LIVE_0916_K8S, upstreamDeliverableMissing: 2, upstreamContainment: { green: true } });
+  assert(green.disposition === 'benign' && green.reason === 'consuming-leg-upstream-discharged', JSON.stringify(green));
+  const red = computeContainmentDisposition({ ...R5_LIVE_0916_K8S, upstreamDeliverableMissing: 2, upstreamContainment: { green: false } });
+  assert(red.disposition === 'blocking' && red.reason === 'consuming-leg-upstream-not-green', JSON.stringify(red));
+  const viol = computeContainmentDisposition({ ...R5_LIVE_0916_K8S, upstreamDeliverableMissing: 1, violations: [{ reason: 'covered-not-member' }] });
+  assert(viol.disposition === 'blocking' && viol.reason === 'violations', JSON.stringify(viol));
 });
 
 test('D10: hard-gap reasons block, including the two moved there by arch F1', () => {
@@ -685,6 +1076,31 @@ test('D10: hard-gap reasons block, including the two moved there by arch F1', ()
     const d = computeContainmentDisposition({ checked: false, reason });
     assert(d.disposition === 'blocking' && d.reason === 'hard-gap', `${reason}: ${JSON.stringify(d)}`);
   }
+});
+
+test('H-2 predicate: a `via` (transitive) leg counts exactly like a direct one — clean deriving via-leg ⇒ green; any via-leg violation ⇒ not green', () => {
+  assert(isUpstreamContainmentGreen([
+    { taskId: 'p2', checked: false, violations: 0 },
+    { taskId: 'p1', checked: true, violations: 0, via: 'p2' },
+  ]) === true, 'clean deriving leg reached via a hop must make the list green');
+  assert(isUpstreamContainmentGreen([
+    { taskId: 'p2', checked: false, violations: 0 },
+    { taskId: 'p1', checked: true, violations: 1, via: 'p2' },
+  ]) === false, 'a violation anywhere in the chain must block (every-half)');
+  assert(isUpstreamContainmentGreen([{ taskId: 'p2', checked: false, violations: 0 }]) === false,
+    'a lone consuming hop with nothing flattened stays not green (the pre-fix reading, kept for invariant 2)');
+});
+
+test('D10e: program-tier is benign with its own reason — a program parent has no harvest child BY CONSTRUCTION (H-3)', () => {
+  // 2026-09-09: the enrichment ran on PROGRAM parents (type PIPELINE, mode SYNTHESIZE) and stamped
+  // no-harvest-child → hard-gap on every program's own card (3 of 3 on devext). Structurally
+  // inapplicable ≠ "should have run and could not"; the program gate reads its CHILDREN's facts.
+  const d = computeContainmentDisposition({ checked: false, reason: 'program-tier' });
+  assert(d.disposition === 'benign' && d.reason === 'program-tier-inapplicable', JSON.stringify(d));
+  assert((d.inputs as { reason?: string }).reason === 'program-tier', JSON.stringify(d.inputs));
+  // NEGATIVE CONTROL: the leg reason is untouched — a leg missing its harvester still hard-gaps.
+  const leg = computeContainmentDisposition({ checked: false, reason: 'no-harvest-child' });
+  assert(leg.disposition === 'blocking' && leg.reason === 'hard-gap', JSON.stringify(leg));
 });
 
 test('D10b: no-author-child escalates to needs-node-c with the SUBJECT NAMED', () => {
@@ -848,35 +1264,126 @@ test('O7: usage count is measured, and the separation is what the design rests o
   assert(usageOutsideDerivedBlock(PKG, '100') === 0, 'an unused value appears zero times outside its block');
 });
 
-test('misaligned-prefix: run-1 replay — malformed /29 stamps the canonical form FIRST; canonical-span collisions .2/.3 only (never the literal span\'s .9/.10)', () => {
-  const r = checkDerivationContainment(
-    [
-      { kind: 'cidr', cidr: '10.99.0.2/32' }, { kind: 'cidr', cidr: '10.99.0.3/32' },
-      { kind: 'cidr', cidr: '10.99.0.9/32' }, { kind: 'cidr', cidr: '10.99.0.10/32' },
-    ],
-    [{ kind: 'cidr', value: '10.99.0.4/29', members: ['10.99.0.5/32', '10.99.0.6/32'] }],
-  );
-  const reasons = r.violations!.map(v => v.reason);
-  assert(reasons[0] === 'misaligned-prefix', 'stamped first');
-  assert(r.violations![0].canonical === '10.99.0.0/29', 'canonical named');
-  const covered = r.violations!.filter(v => v.reason === 'covered-not-member').map(v => v.harvested).sort();
-  assert(JSON.stringify(covered) === JSON.stringify(['10.99.0.2/32', '10.99.0.3/32']),
-    'canonical-span semantics: .2/.3 collide, .9/.10 do NOT');
-});
-
-test('misaligned-prefix: fires alone on an otherwise-clean misaligned value; aligned values never carry a canonical field', () => {
-  const alone = checkDerivationContainment([], [
-    { kind: 'cidr', value: '10.99.0.1/30', members: ['10.99.0.1/32', '10.99.0.2/32'] },
-  ]);
-  assert(alone.violations!.length === 1 && alone.violations![0].reason === 'misaligned-prefix', 'blocks alone');
-  const clean = checkDerivationContainment([], [
-    { kind: 'cidr', value: '10.99.0.4/30', members: ['10.99.0.5/32', '10.99.0.6/32'] },
-  ]);
-  assert(clean.violations!.length === 0 && !JSON.stringify(clean).includes('canonical'), 'aligned artifacts byte-identical');
-});
-
 // SELF-CHECK: every declared test executed (bottom-exit trap guard).
 const declared = (require('fs').readFileSync(__filename, 'utf-8').match(/^test\(/gm) || []).length;
+
+// ── misaligned-prefix (run-1 2026-08-17; review misaligned-prefix-class-2026-08-19) ──────────
+// Fixtures F-1..F-7 per the decision record. Reason strings and shapes taken from the LIVE
+// run-1 stamp (artifact cmswon78u009pyxroi38kbf1g), honoring the false-park history's rule.
+
+test('F-1 run-1 replay: misaligned /29 → misaligned-prefix FIRST + prefix-not-minimal + covered-not-member .2/.3 — and .9/.10 NOT stamped (the load-bearing negative)', () => {
+  // The real run-1 blocks: derived 10.99.0.4/29 members .5/.6; harvest incl. .2/.3 (inside the
+  // CANONICAL span .0-.7) and .9/.10 (inside the LITERAL span .4-.11 Node C mistakenly used).
+  const harvest = [
+    { kind: 'cidr', cidr: '10.99.0.2/32', device: 'ceos1' },
+    { kind: 'cidr', cidr: '10.99.0.10/32', device: 'ceos1' },
+    { kind: 'cidr', cidr: '10.99.0.27/32', device: 'ceos1' },
+    { kind: 'cidr', cidr: '10.99.0.3/32', device: 'ceos2' },
+    { kind: 'cidr', cidr: '10.99.0.9/32', device: 'ceos2' },
+    { kind: 'cidr', cidr: '10.99.0.15/32', device: 'ceos2' },
+  ] as HarvestedAllocation[];
+  const r = checkDerivationContainment(harvest, [
+    { kind: 'cidr', value: '10.99.0.4/29', members: ['10.99.0.5/32', '10.99.0.6/32'] },
+  ]);
+  const reasons = r.violations!.map(v => v.reason);
+  assert(reasons[0] === 'misaligned-prefix', `misaligned-prefix must be stamped FIRST, got ${reasons[0]}`);
+  const mis = r.violations![0];
+  assert(mis.derived === '10.99.0.4/29' && mis.canonical === '10.99.0.0/29',
+    `canonical naming wrong: ${JSON.stringify(mis)}`);
+  assert(reasons.includes('prefix-not-minimal'), 'prefix-not-minimal still fires (independent axis)');
+  const covered = r.violations!.filter(v => v.reason === 'covered-not-member').map(v => v.harvested).sort();
+  assert(JSON.stringify(covered) === JSON.stringify(['10.99.0.2/32', '10.99.0.3/32']),
+    `canonical-span collisions must be .2/.3, got ${JSON.stringify(covered)}`);
+  // THE LOAD-BEARING NEGATIVE: the literal-span reading (Node C's .9/.10) must NOT be stamped —
+  // this pin fixes the canonical-span semantics on the exact axis the two tiers diverged.
+  assert(!covered.includes('10.99.0.9/32') && !covered.includes('10.99.0.10/32'),
+    '.9/.10 are OUTSIDE the canonical span and must never be stamped');
+});
+
+test('F-2 aligned-clean: .4/30 members .5/.6, non-colliding harvest → no violations, NO canonical field anywhere', () => {
+  const r = checkDerivationContainment(
+    [{ kind: 'cidr', cidr: '10.99.0.30/32', device: 'ceos1' }] as HarvestedAllocation[],
+    [{ kind: 'cidr', value: '10.99.0.4/30', members: ['10.99.0.5/32', '10.99.0.6/32'] }],
+  );
+  assert(r.checked === true && r.violations!.length === 0, `expected clean, got ${JSON.stringify(r.violations)}`);
+  assert(!JSON.stringify(r).includes('canonical'), 'aligned artifacts must stay byte-identical (no canonical field)');
+});
+
+test('F-3 misaligned-but-canonical-clean: .1/30 members .1/.2, empty harvest → ONLY misaligned-prefix, disposition-blocking alone', () => {
+  const r = checkDerivationContainment([], [
+    { kind: 'cidr', value: '10.99.0.1/30', members: ['10.99.0.1/32', '10.99.0.2/32'] },
+  ]);
+  const reasons = r.violations!.map(v => v.reason);
+  assert(reasons.length === 1 && reasons[0] === 'misaligned-prefix',
+    `expected only misaligned-prefix, got ${JSON.stringify(reasons)}`);
+  assert(r.violations![0].canonical === '10.99.0.0/30', `canonical: ${r.violations![0].canonical}`);
+});
+
+test('F-3b misaligned-minimal-length: .5/30 members .5/.6 → misaligned-prefix WITHOUT prefix-not-minimal (independent axes)', () => {
+  const r = checkDerivationContainment([], [
+    { kind: 'cidr', value: '10.99.0.5/30', members: ['10.99.0.5/32', '10.99.0.6/32'] },
+  ]);
+  const reasons = r.violations!.map(v => v.reason);
+  assert(reasons.includes('misaligned-prefix'), 'misaligned fires');
+  assert(!reasons.includes('prefix-not-minimal'), 'declared 30 == minimal 30 — non-minimality must NOT fire');
+});
+
+test('F-4 VT-12 unchanged: aligned non-minimal .8/30 members .8/.9 → prefix-not-minimal only, NO misaligned stamp', () => {
+  const r = checkDerivationContainment([], [
+    { kind: 'cidr', value: '10.99.0.8/30', members: ['10.99.0.8/32', '10.99.0.9/32'] },
+  ]);
+  const reasons = r.violations!.map(v => v.reason);
+  assert(reasons.includes('prefix-not-minimal'), 'VT-12 class intact');
+  assert(!reasons.includes('misaligned-prefix'), '.8 sits on its /30 boundary — no cross-fire');
+});
+
+test('F-6 back-compat: bare address (implicit /32) never misaligns', () => {
+  const r = checkDerivationContainment([], [
+    { kind: 'cidr', value: '10.99.0.7', members: ['10.99.0.7/32'] },
+  ]);
+  assert(!r.violations!.some(v => v.reason === 'misaligned-prefix'),
+    'a bare address is /32 by definition and cannot carry host bits');
+});
+
+test('F-7 consumed-vs-derived spelling (document, not change): sameRange matches canonical vs literal forms of one deployed range', () => {
+  // consumed 10.99.0.0/29 vs upstream-derived 10.99.0.4/29 canonicalize to the same range —
+  // no spurious consumed-value-mismatch when a downstream leg writes the canonical form. This is
+  // intended behavior, pinned so a future 'string-exact' tightening is a visible decision.
+  const r = checkConsumedValues(
+    [{ kind: 'cidr', value: '10.99.0.0/29' }],
+    [{ kind: 'cidr', value: '10.99.0.4/29' }],
+  );
+  assert(r.length === 0, `same deployed range must match: ${JSON.stringify(r)}`);
+});
+
+// ── Shared section-bounded primitives, EXPORTED 2026-10-04 (C2/C3 plan v2 §1.3, EF-F1/F2/F3) ─────────
+// Behaviour pins for the exports — the set to port into @paichart/containment-checks at 0.7.0.
+const TICKS = '`'.repeat(3);
+test('primitives: markerHeadingRegex returns a FRESH gim RegExp on every call (never cache — lastIndex)', () => {
+  const a = markerHeadingRegex(DERIVED_VALUES_MARKER), b = markerHeadingRegex(DERIVED_VALUES_MARKER);
+  assert(a !== b && a.flags === 'gim' && a.source === b.source, 'shared instance or wrong flags');
+});
+test('primitives: markerHeadingRegex strips a leading # run — marker and phrase are the same regex', () => {
+  assert(markerHeadingRegex('## Derived Values').source === markerHeadingRegex('Derived Values').source, 'marker form differs from phrase form');
+  const t = '**Derived Values** (verbatim)\n';
+  assert(markerHeadingRegex(DERIVED_VALUES_MARKER).exec(t)?.index === 0, 'bold variant not matched via the marker constant');
+});
+test('primitives: markerSectionEnd — same-level heading ends; deeper heading and in-fence heading do not', () => {
+  const t = `## Derived Values\n### Rationale\n${TICKS}json\n## not a heading\n${TICKS}\n## Intent\nx`;
+  const end = markerSectionEnd(t, 0);
+  assert(t.slice(end).startsWith('## Intent'), `section ended at ${JSON.stringify(t.slice(end, end + 20))}`);
+});
+test('primitives: markerSectionEnd rule (b) is hard-wired to the three markers — a deeper marker heading ends any section', () => {
+  const t = `## Interface Contract\nbody\n### Consumed Values\n[]`;
+  assert(t.slice(markerSectionEnd(t, 0)).startsWith('### Consumed Values'), 'rule (b) did not end the section');
+});
+test('primitives: FENCE_LINE_RE / FENCED_JSON_BLOCK_RE are stateless (no g flag) and line/first-match shaped', () => {
+  assert(!FENCE_LINE_RE.global && !FENCED_JSON_BLOCK_RE.global, 'a g flag makes a shared const stateful');
+  assert(FENCE_LINE_RE.test('  ' + TICKS + 'json') && !FENCE_LINE_RE.test('x ' + TICKS), 'fence line test');
+  const m = `a\n${TICKS}json\n[1]\n${TICKS}\n${TICKS}\n[2]\n${TICKS}`.match(FENCED_JSON_BLOCK_RE);
+  assert(m?.[1] === '[1]\n', `first block body: ${JSON.stringify(m?.[1])}`);
+});
+
 console.log(`\n📊 Results: ${passed} passed, ${failed} failed`);
 if (passed + failed !== declared) {
   console.error(`❌ SELF-CHECK: ${declared} declared, ${passed + failed} executed`);

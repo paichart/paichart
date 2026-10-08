@@ -215,6 +215,14 @@ export interface DerivationContainmentFact {
   violations?: ContainmentViolation[];
   /** Entries skipped because their kind has no checker yet. */
   unsupported?: Array<{ kind: string; value?: string }>;
+  /**
+   * R5 (2026-10-05): stamped ONLY on a `checked:false` fact with no `report.md` predecessor, when the
+   * leg's chained context nonetheless holds PIPELINE predecessors that arrived through the
+   * `pipeline-index.json` fallback (the predecessor's deliverable never arrived). The count of such
+   * entries. It separates "a consuming leg whose upstream evidence is absent" from "a leg with no
+   * upstream at all" for the disposition; absent on every other fact (byte-identical by design).
+   */
+  upstreamDeliverableMissing?: number;
 }
 
 /**
@@ -326,12 +334,61 @@ export function isUpstreamContainmentGreen(legs: UpstreamContainmentLeg[]): bool
   return legs.some(l => l.checked && l.violations === 0) && legs.every(l => l.violations === 0);
 }
 
+// ── Shared section-bounded block primitives (exported 2026-10-04, C2/C3) ─────────────────────────
+// The program PLAN reader (`plan-spawn-carry.ts`, the platform's copy of a Program Architect's
+// `## Interface Contract`) reuses the SAME heading grammar, section rule and fence grammar this
+// parser uses — one parser, never a second re-typed grammar (the two-extractor class). Exporting
+// them changes no behaviour for the existing callers (proved by `scripts/replay-parse-identity.ts`:
+// every existing parse byte-identical). Note for any NEW caller: `markerSectionEnd` rule (b) is
+// HARD-WIRED to the three marker phrases above (Harvested / Derived / Consumed) — a heading-shaped
+// line of one of THOSE ends any section, whatever marker the section belongs to.
+
+/** The heading furniture accepted before a marker phrase (`#`, `>`, whitespace, emphasis, an ordinal,
+ *  a backtick-quoted inner heading). Typed once; used by the heading regex, the heading-shape test and
+ *  the any-marker boundary set. */
+// Lettered ordinal (MARKER-LETTERED-HEADING, 2026-10-08): an Author numbering its package items by
+// letter writes `### (f) Consumed Values` / `## (e2) Derived Values`, and the block read ABSENT (Opus
+// lab L6/L7: the reviewer refused on it). Accepted ONLY parenthesised — `(f)`, `(e2)`, `(G)`: a letter
+// plus at most two digits inside BOTH parentheses. Deliberately NOT accepted: a bare `P1 ` / `e2 `
+// (reviewers QUOTING another leg — `### P1 Harvested Allocations (Ground Truth)`), a dotted decimal
+// `7.2 ` (a technical_writer's report section), or free text. MEASURED (prod, 1,187 marker-bearing
+// result.json, 2026-10-08): 2 lines newly match, both config_change_author `(f)`/`(g)` Consumed Values
+// headings, and replay-parse-identity moves 0 existing parses (the 2 rows already parsed via another
+// heading and return the same block).
+const HEADING_PREFIX_SRC = `^[#>\\s*_]*(?:\\(?\\d{1,3}[.)]\\s*|\\([a-z]\\d{0,2}\\)\\s*)?[*_\`]*(?:#{1,6}[ \\t]*)?[*_\`]*`;
+
 /**
- * Extract the LAST fenced ```json block that appears after the given `## Header` marker
- * (case-insensitive header match; last-match-wins mirrors parse-verdict/parse-confidence — a
+ * The heading-tolerant marker regex (see the furniture history in `parseFencedJsonBlock`).
+ *
+ * ⚠️ Returns a FRESH RegExp on EVERY call, and that is load-bearing: the flags are `gim`, so an
+ * instance carries `lastIndex` state between `exec` calls. A cached instance shared by two callers
+ * (e.g. a first-match-only reader running after a full scan, or two plans resolved in sequence)
+ * would start mid-text and silently miss the match. Never cache the result across callers.
+ *
+ * Accepts either the phrase (`'Interface Contract'`) or the marker constant (`'## Interface
+ * Contract'`): a leading `#` run and the whitespace after it are stripped here, so passing the marker
+ * keeps the bold / quoted / ordinal tolerance (the `#` run is matched by the furniture class).
+ */
+export function markerHeadingRegex(phraseOrMarker: string): RegExp {
+  const esc = phraseOrMarker.replace(/^#+\s*/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`${HEADING_PREFIX_SRC}${esc}`, 'gim');
+}
+
+/** A line that opens or closes a code fence (```), line-anchored. No `g` flag ⇒ stateless; safe to
+ *  share. Used by `markerSectionEnd` (fence state) and by any caller counting a section's fences. */
+export const FENCE_LINE_RE = /^\s*```/;
+
+/** The first fenced block in a span — ```json … ``` (the `json` tag optional, case-insensitive).
+ *  Group 1 is the body. No `g` flag ⇒ stateless; `String.match` with it is a first-match read. */
+export const FENCED_JSON_BLOCK_RE = /```(?:json)?\s*\n([\s\S]*?)```/i;
+
+/**
+ * Extract the fenced ```json block that follows the LAST line introducing the given `## Header`
+ * marker (case-insensitive header match; last-match-wins mirrors parse-verdict/parse-confidence — a
  * corrected re-statement supersedes an earlier one). Returns null when the header or a parseable
  * fenced JSON array is absent — callers translate null into `checked:false`, never a fabricated
- * empty list.
+ * empty list. A line that merely BEGINS with the marker words and does not introduce a block is
+ * stepped over (X28, below); a HEADING-shaped line whose block does not parse is never stepped over.
  */
 export function parseFencedJsonBlock<T>(text: string | null | undefined, marker: string): T[] | null {
   if (!text) return null;
@@ -380,18 +437,146 @@ export function parseFencedJsonBlock<T>(text: string | null | undefined, marker:
   //
   // A mid-sentence reference ("See the `## Derived Values` block below") still does NOT match: the
   // phrase must begin the line after furniture only.
-  const headingRe = new RegExp(
-    `^[#>\\s*_]*(?:\\(?\\d{1,3}[.)]\\s*)?[*_\`]*(?:#{1,6}[ \\t]*)?[*_\`]*${esc}`,
+  const headingRe = markerHeadingRegex(marker);
+  const starts: number[] = [];
+  for (let m = headingRe.exec(text); m !== null; m = headingRe.exec(text)) starts.push(m.index);
+  // X28 (2026-09-28, Program Run 4 FABRIC Author `cmukr4blz00f7yxils8659wsw`): last-match-wins took a
+  // VALIDATION line that merely BEGINS with the marker words — `Derived Values members set = {…}`,
+  // inside a fenced recomputation step 57 lines below a correctly placed `## Derived Values` block —
+  // as the heading. The first fence after it was not the block, the fact read ABSENT, and the leg's
+  // Reviewer blocked on it (correct behaviour on a WRONG fact). Same shape on two archived Authors'
+  // closing summaries: `5. **Consumed Values:** Chained value … documented` (the ordinal widening
+  // made a numbered summary line match).
+  //
+  // The rule: walk back from the last match to the last one that yields a parseable array, but
+  // NEVER past a HEADING-SHAPED match that does not — the marker ending its line apart from
+  // furniture, an optional parenthetical and a trailing colon. That keeps "a corrected re-statement
+  // supersedes an earlier one" fail-CLOSED: a real heading over a broken or non-array block still
+  // reads null, and the stale earlier block is never substituted for it. Only prose-shaped lines
+  // (the marker followed by more words on the same line) are stepped over.
+  //
+  // REJECTED: "accept only heading-shaped matches". Measured on 826 archived result.json texts it
+  // changed 20 facts and REGRESSED 19 (4 on Harvester/Architect/Author roles) — real headings carry
+  // trailing words (`## Derived Values Block`, `**Harvested Allocations in 10.99.0.0/24** (from
+  // Phase 0):`, `### 2. Consumed Values Block Verification`). Also rejected: an
+  // unbounded walk-back (the last PARSEABLE match), which is this rule without the heading stop —
+  // it substitutes an earlier block when the last real heading carries a non-array restatement
+  // (1 archived specimen, a technical_writer, same value by luck).
+  // MEASURED (old → this rule, all three markers, 826 texts): 4 changed facts, all null → array —
+  // 3 fixed (the Run 4 Author's Derived Values block; two Authors' Consumed Values blocks), 1 neutral (a
+  // change_reviewer, a role no net reads) — and 0 regressed. The rule is monotone by construction:
+  // it only runs where the old parser returned null.
+  for (let i = starts.length - 1; i >= 0; i--) {
+    const found = parseBlockAt<T>(text, starts[i]);
+    if (found) return found;
+    if (isHeadingShapedAt(text, starts[i], esc)) return null;
+  }
+  return null;
+}
+
+/**
+ * True when the marker match at `idx` is HEADING-shaped: after the phrase, the rest of its line is
+ * only emphasis/backtick furniture, an optional parenthetical, and an optional trailing colon.
+ * `**Derived Values** (quoted verbatim…)` and `## 6. Consumed Values:` are headings;
+ * `Derived Values members set = {…}` and `5. **Consumed Values:** Chained value …` are not.
+ */
+function isHeadingShapedAt(text: string, idx: number, esc: string): boolean {
+  const re = new RegExp(
+    `${HEADING_PREFIX_SRC}${esc}` +
+      `[*_\`]*[ \\t]*(?:\\([^\\n]*\\))?[ \\t]*[*_\`:]*[ \\t]*$`,
     'gim',
   );
-  let lastIdx = -1;
-  for (let m = headingRe.exec(text); m !== null; m = headingRe.exec(text)) {
-    lastIdx = m.index;
+  re.lastIndex = idx;
+  const m = re.exec(text);
+  return m !== null && m.index === idx;
+}
+
+/**
+ * A line that is a HEADING-SHAPED match of ANY of the three marker phrases (the same shape
+ * `isHeadingShapedAt` accepts). Used only as a section boundary — see `markerSectionEnd`.
+ */
+const ANY_MARKER_HEADING_LINE_RES: RegExp[] = [
+  HARVESTED_ALLOCATIONS_MARKER,
+  DERIVED_VALUES_MARKER,
+  CONSUMED_VALUES_MARKER,
+].map(m => {
+  const esc = m.replace(/^#+\s*/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(
+    `${HEADING_PREFIX_SRC}${esc}` +
+      `[*_\`]*[ \\t]*(?:\\([^\\n]*\\))?[ \\t]*[*_\`:]*[ \\t]*$`,
+    'i',
+  );
+});
+
+/**
+ * PARSE-STEAL (2026-10-04, value-chain B7 run 1 S3 Author `cmuqs10r500i2yxx9v9j8ovfd`): a marker owns
+ * only the block inside ITS OWN SECTION. The section runs from the marker's line to the first later
+ * line, OUTSIDE a code fence, that is either
+ *   (a) an ATX heading (`#`…`######`) of EQUAL OR HIGHER level than the marker's own — a marker written
+ *       without `#` (bold, plain, quoted) has no level, so ANY ATX heading ends it; a deeper sub-heading
+ *       (`### Rationale` under `## Derived Values`) is layout inside the section, not a boundary; or
+ *   (b) a HEADING-SHAPED line of ANY of the three markers — the three blocks are siblings by contract,
+ *       so one marker's section never contains another's, whatever their relative levels
+ *       (`## Derived Values` followed by `### Consumed Values` would otherwise pass rule (a)).
+ * Lines inside a fence are content (a `# comment` in a bash block is not a heading).
+ *
+ * Why: the parser used to take the first fence ANYWHERE after the marker. Run 1's Author wrote
+ * `## Derived Values` + prose ("Not carried forward — the Architect performed no derivation") and then
+ * a correct `## Consumed Values` block; the CONSUMED block was read as the DERIVED values, the enrichment
+ * took the checked path against an empty pool (benign/checked-clean by construction) and check 1
+ * (consumed-value-mismatch) never ran. Fails OPEN.
+ *
+ * MEASURED (2026-10-04, 1,056 prod result.json texts × 3 markers, shipping vs this rule, real parser):
+ * 10 changed parses, ALL array → null (a block taken from outside the section), 0 gained, 0 different;
+ * 1 gate input (the run-1 Author above), 5 `markerPresence` display stamps, 4 on roles no net reads.
+ * Rule (b) adds no change on that corpus — it is a boundary by contract, pinned by fixture.
+ *
+ * EXPORTED (2026-10-04, C2/C3) for the program plan reader. `idx` is a match index from
+ * `markerHeadingRegex` (the scan steps over any leading whitespace itself). Rule (b) is HARD-WIRED to
+ * the three marker phrases of this module, whatever marker `idx` belongs to. Returns the index where
+ * the section ENDS (exclusive), or `text.length`.
+ */
+export function markerSectionEnd(text: string, idx: number): number {
+  // The heading regex's leading furniture class spans `\s`, so a match can START on the blank line(s)
+  // before the heading — step to the marker's real line first, or that blank line is read as the
+  // marker and the heading itself ends the section (measurement bug 2, 2026-10-03).
+  let start = idx;
+  while (start < text.length && /\s/.test(text[start])) start++;
+  const nl = text.indexOf('\n', start);
+  if (nl === -1) return text.length;
+  const lv = /^[> \t]*(#{1,6})[ \t]/.exec(text.slice(start, nl));
+  const level = lv ? lv[1].length : 7;
+  let pos = nl + 1;
+  let inFence = false;
+  while (pos < text.length) {
+    const e = text.indexOf('\n', pos);
+    const line = text.slice(pos, e === -1 ? text.length : e);
+    if (FENCE_LINE_RE.test(line)) {
+      inFence = !inFence;
+    } else if (!inFence) {
+      const h = /^[ \t]{0,3}(#{1,6})[ \t]/.exec(line);
+      if (h && h[1].length <= level) return pos;
+      if (ANY_MARKER_HEADING_LINE_RES.some(re => re.test(line))) return pos;
+    }
+    if (e === -1) break;
+    pos = e + 1;
   }
-  if (lastIdx === -1) return null;
-  const after = text.slice(lastIdx);
+  return text.length;
+}
+
+/** Parse the block introduced by the marker match at `lastIdx` (primary fence, then fence-inversion). */
+function parseBlockAt<T>(text: string, lastIdx: number): T[] | null {
+  // PARSE-STEAL: an ordinary marker owns only the block in its own section (see markerSectionEnd).
+  // A marker that sits INSIDE an open fence (the FW-A3.4 fence-inversion layout, below) is left
+  // unbounded on purpose: its block is the enclosing fence, which the inversion arm already bounds to
+  // that fence's own close — and a section scan started inside a fence would read the fence's content
+  // as structure (its closing ``` reads as an opener). Measured on the 2026-10-04 corpus (35 in-fence
+  // matches): bounding them too changes 0 parses, so this exemption buys byte-identity BY CONSTRUCTION
+  // for that layout, not a corpus-earned difference — no fixture distinguishes the two, by design.
+  const fenceOpensBefore = (text.slice(0, lastIdx).match(/^\s*```/gm) || []).length;
+  const after = text.slice(lastIdx, fenceOpensBefore % 2 === 1 ? text.length : markerSectionEnd(text, lastIdx));
   // First fenced block after the header: ```json ... ``` (json tag optional; tolerate ```JSON)
-  const fence = after.match(/```(?:json)?\s*\n([\s\S]*?)```/i);
+  const fence = after.match(FENCED_JSON_BLOCK_RE);
   if (fence) {
     try {
       const parsed = JSON.parse(fence[1]);
@@ -408,7 +593,6 @@ export function parseFencedJsonBlock<T>(text: string | null | undefined, marker:
   // it structurally: an ODD count of fence delimiters before the marker means the marker sits
   // inside an open fence; the JSON is then the span from the end of the marker's line to that
   // fence's closing ```.
-  const fenceOpensBefore = (text.slice(0, lastIdx).match(/^\s*```/gm) || []).length;
   if (fenceOpensBefore % 2 === 1) {
     const markerLineEnd = after.indexOf('\n');
     if (markerLineEnd !== -1) {
@@ -838,6 +1022,8 @@ export interface ContainmentDisposition {
     harvestedCount?: number;
     harvestedByKind?: Record<string, number>;
     upstreamContainmentGreen?: boolean;
+    /** R5 (2026-10-05): transcribed when stamped — the input that separates the two no-upstream reasons. */
+    upstreamDeliverableMissing?: number;
     /** 2026-08-16 (cross-port ①): how many `## Consumed Values` entries the fact carries — the
      *  consuming-leg discharge below keys on this; recorded so the discharge is auditable. */
     consumedCount?: number;
@@ -910,12 +1096,15 @@ export function computeContainmentDisposition(fact: Record<string, unknown>): Co
   const uc = fact.upstreamContainment as { green?: boolean } | undefined;
   const upstreamContainmentGreen = uc && typeof uc.green === 'boolean' ? uc.green : undefined;
   const consumedCount = Array.isArray(fact.consumedValues) ? fact.consumedValues.length : undefined;
+  const upstreamDeliverableMissing = typeof fact.upstreamDeliverableMissing === 'number'
+    ? fact.upstreamDeliverableMissing : undefined;
 
   const inputs = {
     ...(reason !== undefined ? { reason } : {}),
     ...(harvestedCount !== undefined ? { harvestedCount } : {}),
     ...(harvestedByKind !== undefined ? { harvestedByKind } : {}),
     ...(upstreamContainmentGreen !== undefined ? { upstreamContainmentGreen } : {}),
+    ...(upstreamDeliverableMissing !== undefined ? { upstreamDeliverableMissing } : {}),
     ...(consumedCount !== undefined ? { consumedCount } : {}),
     violationCount: violations.length,
     unsupportedCount: unsupported.length,
@@ -996,14 +1185,49 @@ export function computeContainmentDisposition(fact: Record<string, unknown>): Co
     if (harvestedByKind && !('cidr' in harvestedByKind)) {
       return out('needs-node-c', 'non-cidr-only-harvest-cannot-decide');
     }
+    // CONSUMER-FAIL-OPEN (2026-10-03, pattern (h) batch 2): an upstream was RESOLVED for this leg
+    // (`upstreamContainment` stamped, green or not), so it is a CONSUMING leg — and it carries no
+    // parsed `## Consumed Values` entry. Before this arm it fell through to `nothing-to-derive`, so
+    // check 1 (consumed-value-mismatch) never ran and the program-gate conjunct read benign. Only the
+    // leg's LLM reviewer stood between that and a release, twice: 2026-09-19 obs
+    // `cmu7xmfhb005fyxgzxro3u4b7` and 2026-10-03 obs `cmurpr9sj00poyxxaeywagi0a` (Run 5).
+    //
+    // ESCALATE, do not block: a contract-listed consumer that applies nothing is either a dropped or
+    // unparseable block (a defect) or a legitimate documentation-only use (`cmu7osno5`, 09-19 — the
+    // range appears only in an alert description, nothing applied for check 1 to compare). Telling
+    // them apart is a judgement, and this taxonomy delegates judgements. Fail-closed is preserved:
+    // needs-node-c is never releasable without Node C discharging it. Its own reason, so the
+    // discharge names its subject (F7) and never reads as `nothing-to-derive`.
+    //
+    // MEASURED before building (09-15 → 10-03, 177 stamped legs): of the 45 that ended on
+    // `nothing-to-derive`, this moves exactly the 4 with an upstream (all observability) and 0 of
+    // the 41 without one — the stamped field separates the populations, so no prose proxy is needed.
+    // Placed LAST in the arm on purpose: `harvested-pool-empty` and the two `cannot-decide` arms
+    // above keep their answers, so the change is confined to legs that read `nothing-to-derive`.
+    // Record: cline_docs/reviews/pattern-h-corpus-measure-2026-10-03/ (SYNTHESIS §5.1, §11).
+    if (upstreamContainmentGreen !== undefined) {
+      return out('needs-node-c', 'consuming-leg-no-consumed-block');
+    }
     return out('benign', 'nothing-to-derive');
   }
 
   // harvest-block-missing-or-unparseable — the consuming-leg exception, mechanised.
   // Fails CLOSED: benign ONLY on an explicit true. Absent or false stays blocking (clause 19).
   if (upstreamContainmentGreen === true) return out('benign', 'consuming-leg-upstream-discharged');
-  return out('blocking', upstreamContainmentGreen === false
-    ? 'consuming-leg-upstream-not-green' : 'consuming-leg-upstream-absent');
+  if (upstreamContainmentGreen === false) return out('blocking', 'consuming-leg-upstream-not-green');
+  // NO upstream containment was resolved. Two different truths share that input, and the reason
+  // must state the one that holds (R5, 2026-10-05 — retrospective from the B6 review):
+  //  - a PIPELINE predecessor WAS chained, but only through the pipeline-index.json fallback (its
+  //    deliverable never arrived), counted by the enrichment as `upstreamDeliverableMissing`. That
+  //    IS a consuming leg whose upstream evidence is absent — the old name is true and stays.
+  //  - nothing upstream at all: a PRODUCING (or standalone) leg whose own harvest block did not
+  //    parse while it derived values. `consuming-leg-upstream-absent` told the gate this leg had an
+  //    upstream it did not have — 2 of 2 production stamps (2026-08-22 network, 2026-09-16 k8s
+  //    podrange) were this case, and Node C read the second as an upstream problem.
+  // Both stay BLOCKING; only the name changes. Absence of the count fails toward the new name,
+  // which is still blocking — never toward a pass.
+  return out('blocking', upstreamDeliverableMissing !== undefined && upstreamDeliverableMissing > 0
+    ? 'consuming-leg-upstream-absent' : 'harvest-missing-or-unparseable-no-upstream');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
