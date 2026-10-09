@@ -91,16 +91,22 @@ Claim 2:
 - In both runs the draft as first written exceeded the size the program can read, and the correction turn brought it
   inside the limit **within the same run**. Before the check existed, that failure was only found after the run, by a
   human, and fixed by regenerating, which re-rolled everything else too.
-- **Waived, by name, by the owner:** W1 — coverage rows caused by the decision registry itself (rows the Author was
-  never asked about); W2/W3 — two dropped-clause findings verified by hand to be present in other words (the checker
-  matches words, and missed a pronoun and a paraphrase). None of the three changes anything the program is told.
+- In both runs the message also carried one finding later verified as a checker false positive (run 1: the citation
+  parse; run 2: the two clause findings waived as W2/W3).
+- **Waived, by name, by the owner:** W1 — three rows the Author added for clauses of owner answers that have no
+  registry key (the R1 class the pre-registration names as waivable); W2/W3 — two dropped-clause findings verified by
+  hand to be present in other words (the checker matches words, and missed a pronoun and a paraphrase). None of the
+  three changes anything the program is told. W1 is in the class the pre-registration named. W2/W3 are not: they were
+  waived under the skill's general rule (a finding is waivable only if it changes nothing the program is told), after
+  a hand check that each obligation is present. The pass clause as written did not name checker false positives.
+- **One procedural deviation within the attempt (Z46):** the merge script was fed a reformatted copy of the draft,
+  verified identical except for the 29 bullet prefixes.
 - **Known limitation, recorded, not waived:** the policy matches on `aws:SourceIp`. On real AWS, a request from a
   private pod address reaching S3 over a VPC endpoint carries `aws:VpcSourceIp`, not `aws:SourceIp`, so the policy as
   written would refuse the pods too. The lab cannot show this. The specification records it as an UNTESTED premise for
   the cloud leg; **this round does not verify the policy against real AWS.**
 - Found during the run and filed, not fixed (fixing would have broken the rules): the Author invented registry rows for
-  sub-clauses of an owner answer; the answer-merge script could not read the canonical owner-block format (worked
-  around with a reformatted copy, diff-verified); the dropped-clause checker's pronoun/paraphrase false positives.
+  sub-clauses of an owner answer; the answer-merge script could not read the canonical owner-block format; the dropped-clause checker's pronoun/paraphrase false positives.
 
 **Claim 2 — VERIFIED: `programReleasable: true`, gate recomputed by hand.**
 
@@ -151,6 +157,12 @@ Claim 2:
 closed restrict-shaped objective. One objective, one attempt, one Author model: it shows the budget can be met, not that
 it is met reliably.
 
+**What this attributes.** The correction turn is the only reason both drafts fit the read limit: each original was
+over, and each adopted correction was under. It did not change coverage, citations or lint in the run that passed,
+since they were clean before it. The nine-generation trial differed in objective, checkers, pass rules and procedure
+as well, so the change from nine to two is not a measured effect of the turn. The size failure appeared when the
+specification Author moved to Opus 5.5.
+
 **Claim 2: verified live** — the generated specification drove a two-domain program to `programReleasable: true`, every
 conjunct recomputed by hand, with no refusal caused by the specification's wording. Qualified by: a superseded first run
 (orchestration, not the spec), one provider re-run, four specification checks no stage ran, and two properties of real
@@ -159,8 +171,8 @@ AWS this lab cannot show — `aws:SourceIp` from a private address over a VPC en
 
 ## Enforcement
 
-- The in-run requirements form check and its correction turn: shipped behind a flag, ON in production since this test
-  passed; the correction turn is pinned in CI (`test:requirements-form-correction`); the check itself has its own suites
+- The in-run requirements form check and its correction turn: shipped behind a flag, ON in production since 2026-10-09
+  04:00:17Z (switched on for this test, before run 1) and kept on after it passed; the correction turn is pinned in CI (`test:requirements-form-correction`); the check itself has its own suites
   (`test:requirements-form-check`, `-parity`, `-data`) that are NOT in the CI chain — run by hand.
 - Protocols: as in Config.
 - Residual limitations, each with its trigger: the `aws:SourceIp` limitation (a real-AWS run, or a registry row asking
