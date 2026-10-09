@@ -87,6 +87,25 @@ def main() -> int:
             else:
                 ok += 1
 
+    # Every item NUMBER the document uses must exist (2026-10-09, S-cit / Z18): gen 4 cited a non-existent "item 22" as a
+    # SECOND citation in one cell (no "declared —" prefix, so CITE never saw it) and wrote "items 1–22" in the owner
+    # block. Scan every `item N` / `items N–M` before the Writing rules, and string-test any extra `item N: "…"` quote.
+    w = draft.find('## Writing rules')
+    body = draft[:w] if w >= 0 else draft
+    top = max(items) if items else 0
+    seen_bad = set()
+    for m in re.finditer(r'\bitems?\s+(\d{1,2})(?:\s*[–-]\s*(\d{1,2}))?\b', body):
+        for g in (m.group(1), m.group(2)):
+            if g and int(g) not in items and (int(g), m.start()) not in seen_bad:
+                seen_bad.add((int(g), m.start()))
+                findings.append(f'line {body.count(chr(10), 0, m.start()) + 1}: item {g} is referenced but the objective has items 1–{top}')
+    for m in re.finditer(r'(?<!declared — )\bitem (\d+):\s*"([^"]*)"', body):
+        n = int(m.group(1))
+        if n in items:
+            why = quote_ok(m.group(2), items[n])
+            if why:
+                findings.append(f'line {body.count(chr(10), 0, m.start()) + 1}: item {n} (extra citation) — {why}: "{m.group(2)[:90]}"')
+
     # premise branches, outside the Design decisions table
     s = draft.find('## Design decisions')
     e = draft.find('\n## ', s + 5) if s >= 0 else -1
