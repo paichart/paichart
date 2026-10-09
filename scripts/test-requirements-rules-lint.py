@@ -63,6 +63,28 @@ CASES = [
     ('a non-S3 ARN is still a candidate',
      'Principal: arn:aws:iam::123456789012:role/acme-app-logs\n',
      ['arn:aws:iam::123456789012:role/acme-app-logs']),
+    # 2026-10-09 (stage A) — a block the document DECLARES synthetic is exempt like the slot (old code: gen 7's synthetic
+    # table outside the "Verify by arithmetic" slot read as 10 candidates).
+    ('a block declared synthetic is exempt',
+     "  The rule worked on synthetic inputs (reference data only):\n\n  | pod | podIP |\n  |---|---|\n  | `a` | `192.0.2.10` |\n\n  Result: `192.0.2.10/32`.\n",
+     []),
+    # known positive — the next sibling bullet after a synthetic block is scanned again.
+    ('a sibling bullet after a synthetic block is a candidate',
+     "- Worked on synthetic inputs: `192.0.2.10`.\n- The harvested pod is 10.244.0.5.\n",
+     ['10.244.0.5']),
+    # known positive — a documentation-range address NOT declared synthetic is a candidate (rigs use these ranges as
+    # real values: the firewall specs' partner CIDR is 203.0.113.0/24).
+    ('a documentation-range value not declared synthetic is a candidate',
+     "- The partner CIDR is `203.0.113.0/24`.\n",
+     ['203.0.113.0/24']),
+    # 2026-10-09 (stage A) — "item 21 blocks …" is an owner item number, not a count (old code: a count candidate).
+    ('an item number followed by a verb is not a count',
+     "The Deny of item 21 blocks every other writer.\n",
+     []),
+    # known positive — a real count of harvested things is still a candidate.
+    ('a count of harvested pods is a candidate',
+     "The harvest found 21 harvested pods in the namespace.\n",
+     ['21 harvested pods']),
 ]
 
 

@@ -164,7 +164,9 @@ def _declared_name(name, allowed_text):
 # A Terraform-style resource ADDRESS (provider_type.name). Added 2026-09-26: a harvested resource the program never
 # touches was named in the out-of-scope list of 4 of 8 generated drafts — a NAME, which the other shapes cannot see.
 _TF_ADDR = re.compile(r'\b(?:aws|azurerm|azuread|google|random|kubernetes|helm|null|local|tls|time|cloudflare|github)_[a-z0-9_]+\.[a-z0-9_-]+\b')
-_COUNT = re.compile(r'(?i)\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d+)\s+'
+# `(?<!item )` (2026-10-09, stage A): "item 21 blocks the Deny…" is an owner ITEM number followed by a verb, not a count
+# of harvested blocks; a count is still a count anywhere else ("21 harvested pods", "six pods").
+_COUNT = re.compile(r'(?i)(?<!item )(?<!items )\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d+)\s+'
                     r'(?:harvested\s+|exporter\s+|existing\s+|live\s+)?'
                     r'(exporters?|addresses|loopbacks|pods|devices|interfaces|members|workloads|servers|blocks|buckets|namespaces)\b')
 # A NUMBER inside a `(derived — basis: ...)` answer (2026-09-28, decision surfacing Phase 1). The template's answer grammar
@@ -180,7 +182,7 @@ def lint(doc_lines, allowed_text):
     s, e = bounds(doc_lines)
     scan = doc_lines if s is None else doc_lines[:s] + [''] * (e - s) + doc_lines[e:]
     hits = []
-    in_example, example_indent = False, 0
+    in_example, example_indent, declared = False, 0, False
     for n, line in enumerate(scan, 1):
         # The template DESIGNATES one slot for a synthetic worked example — the "Verify by arithmetic" bullet — and its
         # own rule says the example must be synthetic. Authors rewrite it with their own synthetic addresses, so that
@@ -188,10 +190,22 @@ def lint(doc_lines, allowed_text):
         # address is a candidate. Indent (2026-10-09, Z39): an Author who put the example in INDENTED sub-bullets ended
         # the exemption at the first one, so the slot's own synthetic addresses read as harvested; a sibling bullet
         # after the slot still ends it.
+        # A block the document itself DECLARES synthetic (2026-10-09, stage A): gen 7 wrote its worked example as a table
+        # introduced by "The rule worked on synthetic inputs (reference data only):" — outside the designated slot, so its
+        # 10 synthetic addresses read as harvested. A line saying "synthetic" opens the same exemption as the slot and it
+        # ends the same way. NOT exempted by address range: rigs use the RFC 5737 ranges as REAL values (the firewall
+        # specs' partner CIDR is 203.0.113.0/24), so a range rule would hide genuine state — measured, rejected.
+        # The declared-synthetic block may hold blank lines (a lead-in, then a table, then a result line); it ends at a
+        # heading, a bullet at its own indent or shallower, or a non-blank line shallower than its lead-in.
         indent = len(line) - len(line.lstrip())
         if 'Verify by arithmetic' in line:
-            in_example, example_indent = True, indent
-        elif in_example and (not line.strip() or (line.lstrip().startswith('- ') and indent <= example_indent)):
+            in_example, example_indent, declared = True, indent, False
+        elif re.search(r'(?i)\bsynthetic\b', line) and not in_example:
+            in_example, example_indent, declared = True, indent, True
+        elif in_example and not declared and (not line.strip() or (line.lstrip().startswith('- ') and indent <= example_indent)):
+            in_example = False
+        elif in_example and declared and line.strip() and (line.lstrip().startswith('#') or indent < example_indent
+                                                           or (line.lstrip().startswith('- ') and indent <= example_indent)):
             in_example = False
         if in_example:
             continue
