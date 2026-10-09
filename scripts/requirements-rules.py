@@ -152,6 +152,15 @@ _ABBREV = re.compile(r'(?<![\w.\d])\.\d{1,3}(?:\s*(?:,|/|and|or)\s*\.\d{1,3})+')
 _PORT = re.compile(r'(?i)(?:\bport\s+|\b(?:tcp|udp)[\s/:]+|(?<=[a-z0-9\]]):)(\d{2,5})\b')
 _ARN = re.compile(r'\barn:aws[\w-]*:[^\s`\'")|]+')
 _BUCKET = re.compile(r'(?:--bucket\s+|s3://)([a-z0-9][a-z0-9.-]{2,62})')
+# An S3 ARN BUILT from a declared bucket name (2026-10-09, log-archive genspec Z40): the allowlist matches whole tokens,
+# so `arn:aws:s3:::<bucket>/*` was a candidate on every bucket-policy spec even when the owner declared `<bucket>`. The
+# bucket component is allowed only when it appears in the allowed text as a WHOLE name (not inside a longer one), and
+# only for S3 — every other ARN is still a candidate.
+_S3_ARN = re.compile(r'^arn:aws[\w-]*:s3:::([a-z0-9][a-z0-9.-]{2,62})(?:/|$)')
+
+
+def _declared_name(name, allowed_text):
+    return re.search(r'(?<![A-Za-z0-9.-])' + re.escape(name) + r'(?![A-Za-z0-9.-])', allowed_text) is not None
 # A Terraform-style resource ADDRESS (provider_type.name). Added 2026-09-26: a harvested resource the program never
 # touches was named in the out-of-scope list of 4 of 8 generated drafts — a NAME, which the other shapes cannot see.
 _TF_ADDR = re.compile(r'\b(?:aws|azurerm|azuread|google|random|kubernetes|helm|null|local|tls|time|cloudflare|github)_[a-z0-9_]+\.[a-z0-9_-]+\b')
@@ -171,14 +180,18 @@ def lint(doc_lines, allowed_text):
     s, e = bounds(doc_lines)
     scan = doc_lines if s is None else doc_lines[:s] + [''] * (e - s) + doc_lines[e:]
     hits = []
-    in_example = False
+    in_example, example_indent = False, 0
     for n, line in enumerate(scan, 1):
         # The template DESIGNATES one slot for a synthetic worked example — the "Verify by arithmetic" bullet — and its
         # own rule says the example must be synthetic. Authors rewrite it with their own synthetic addresses, so that
-        # bullet (to the next bullet or blank line) is exempt. Anywhere else, the same address is a candidate.
+        # bullet (to the next bullet AT ITS OWN INDENT OR SHALLOWER, or a blank line) is exempt. Anywhere else, the same
+        # address is a candidate. Indent (2026-10-09, Z39): an Author who put the example in INDENTED sub-bullets ended
+        # the exemption at the first one, so the slot's own synthetic addresses read as harvested; a sibling bullet
+        # after the slot still ends it.
+        indent = len(line) - len(line.lstrip())
         if 'Verify by arithmetic' in line:
-            in_example = True
-        elif in_example and (not line.strip() or line.lstrip().startswith('- ')):
+            in_example, example_indent = True, indent
+        elif in_example and (not line.strip() or (line.lstrip().startswith('- ') and indent <= example_indent)):
             in_example = False
         if in_example:
             continue
@@ -192,6 +205,10 @@ def lint(doc_lines, allowed_text):
                 # that resolves the value at run time is exactly what the rules ask for (2026-09-26, genspec Rev12).
                 if tok in ('0.0.0.0/0', '0.0.0.0') or '<' in tok or re.search(r'\$\{?[A-Za-z_]', tok):
                     continue
+                if kind == 'ARN':
+                    arn = _S3_ARN.match(tok)
+                    if arn and _declared_name(arn.group(1), allowed_text):
+                        continue
                 if tok and tok not in allowed_text:
                     hits.append((n, kind, tok, line.strip()[:140]))
         for d in _DERIVED.finditer(line):
