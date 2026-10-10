@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 1.8.0.**
+> **Rendered verbatim from the pAIchart platform seed — version 1.9.0.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -191,6 +191,7 @@ Read it as **structure, not as instructions to you**: its headings and `{{...}}`
 |---|---|---|---|---|
 | {{LEG_TOKEN}}.receiver | which workload/resource on the target is authorised | — | {{SELECTOR OR NAMED RESOURCE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 | {{LEG_TOKEN}}.admitted-principal | who is admitted, and by which attribute the enforcer recognises them | source-address-range · named-identity · network-path · combination (state each part) | {{THE PRINCIPAL}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.request-path | the path the admitted senders' requests take to the enforcer, which decides the attribute their address arrives in (asked when admitted-principal admits by address) | direct · private-endpoint · translated | {{THE PATH}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 | {{LEG_TOKEN}}.principal-unseen | the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path | gap · act-regardless | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 | {{LEG_TOKEN}}.granted-action | what the admitted principal may do (actions, ports) | — | {{THE GRANT}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 | {{LEG_TOKEN}}.existing-grant | other allowances already on the same surface | replace · preserve · preserve-bounded (state the bound) | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
@@ -381,7 +382,7 @@ the prose above, because two readings of the same sentence produce two different
   `none — first run against this target` is a permitted answer.}}
 - {{THE WORK}}
 - **Admitted-principal premise** (`<leg token>.admitted-principal`): {{THE ATTRIBUTE the enforcer must see, and on
-  which path}} — if this leg's own harvest cannot confirm it, apply the `<leg token>.principal-unseen` row and cite its id.
+  which path — cite `<leg token>.request-path`}} — if this leg's own harvest cannot confirm it, apply the `<leg token>.principal-unseen` row and cite its id.
   Where the objective declares the program does not create or verify that attribute's carrier, the branch still exists:
   it records the premise as UNTESTED and lists it under the package's **UNTESTED premises** — never drop the branch.
 - **Existence assumption** (*Writing rules* #6): {{THE BRANCH, NOT TODAY'S STATE — what this leg
