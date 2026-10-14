@@ -73,7 +73,7 @@ const SEED_OWNER_EMAIL = (process.env.SEED_OWNER_EMAIL || process.env.ADMIN_EMAI
 // NEVER a maxTokens literal here — the value comes from the per-role table (lib/agents/role-model-params.ts),
 // which falls back to DEFAULT_MAX_TOKENS; report:template-freshness reads the same table
 // (guarded by scripts/test-seed-model-params-guard.ts + test:role-model-params).
-const MODEL_PARAMS = (tier: 'infra' | 'synthesis', timeout: number, role: string) => ({
+const MODEL_PARAMS = (tier: 'infra' | 'synthesis' | 'requirementsAuthor', timeout: number, role: string) => ({
   provider: 'anthropic_sdk',
   model: AGENT_MODELS[tier],
   temperature: 0.3,
@@ -112,11 +112,10 @@ const TEMPLATES: TemplateSeed[] = [
     tags: ['requirements-authoring', 'author', 'documenter', 'deliverable-producer'],
     timeout: 600, // 10 min — authoring a full template-shaped document is the longest phase
     metadata: {
-      // 'synthesis' tier, not 'infra': this role reaches nothing and its output PROSE is the
-      // deliverable, which is that tier's stated definition (lib/agents/model-tiers.ts). Both tiers
-      // resolve to the same model today, so this is an intent declaration, not a behaviour change —
-      // it is what a future tier split would act on.
-      modelParameters: MODEL_PARAMS('synthesis', 600, 'requirements_author'),
+      // Its own tier (G8, 2026-10-10): Opus 5.5, matching the live row the owner set by GUI edit on 2026-10-08, so a
+      // reseed keeps it instead of silently reverting it to Sonnet. Was 'synthesis' (this role reaches nothing and its
+      // output PROSE is the deliverable). See lib/agents/model-tiers.ts `requirementsAuthor`.
+      modelParameters: MODEL_PARAMS('requirementsAuthor', 600, 'requirements_author'),
       hasModelParameters: true,
       modelParamsVersion: '1.0.0',
       protocol: 'requirements-authoring-protocol',

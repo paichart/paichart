@@ -379,6 +379,34 @@ Synthesis exhibits all 5; vanilla pipelines exhibit NONE. If your new workflow e
 - `.claude/knowledge/patterns/prompt-library-gold-standard-pattern.md` §4a/4b/4c (Pattern #45) — the two-kinds taxonomy + decision rule + key insight
 - `.claude/agents/pipeline-harness-specialist.md` §2a/2b — specialist's view
 
+### Retiring a protocol — DEPRECATED semantics (promotion E, 2026-10-05/06)
+
+The first retirement was `value-chain-program-protocol` (folded into pov-program 2.0.0 at promotion E deploy 2). What
+"retired" means mechanically, so nobody re-derives it:
+- **The row stays, `status: 'DEPRECATED'`, with a tombstone body** (facts + a `git show` recovery pointer + the last live
+  text's sha256). Status comes from the SEED (`ProtocolSeed.status`; ACTIVE by default) — a code revert reseeds it ACTIVE.
+- **It fails loud before any child or spend, on both paths** (`lib/services/execution-system-prompt.ts`): composed →
+  `PROTOCOL_ROW_NOT_ACTIVE` for a PROGRAM-tier stamp (a non-ACTIVE LEG protocol instead degrades base-only, fact
+  `PROTOCOL_ROW_NOT_ACTIVE_LEG_BASE_ONLY`); named → `NAMED_PROTOCOL_NOT_FOUND` (the named read is ACTIVE-only). A DEPRECATED
+  row's message carries its row `description` (≤ 500 chars), else — program tier only — the HOWTO-use-program-harness
+  pointer; engine code never names a successor. Both are plain `Error`s: `errorCode` is NULL, read `errorMessage`
+  (AppError codes are a filed follow-up, AE-F10). The stamp is fixed at first execution: a stamped task cannot be
+  re-routed — relaunch as a new task.
+- **Membership is PERMANENT.** The name stays in `PROGRAM_PROTOCOL_NAMES` (`lib/agents/harness/program-protocol.ts`) —
+  tier is a property of the NAME, lifecycle of the ROW. Removed, a task stamped with it would take the leg branch and
+  compose base-only (the Kind-B one-child "program"), and read-time tier facts (F12, the clearance carry,
+  `contractApplicability`) would drop for the 9 stamped roots. Pinned in `test-system-prompt-injections.ts`; every
+  drift sweep over the retired name EXCLUDES this entry by name.
+- **Templates bound to the retired row are DEPRECATED through per-entry seed status.** Template status is NOT enforced at
+  assignment (`findBestMatch` is status-blind) — the status is a label that must match behaviour (the row cannot run).
+- **The substring hazard (both directions).** PLAN-SPAWN assigns Node C by name, and a name that misses its exact row
+  binds the nearest one SILENTLY, above the 50 floor (`fuzzy-search-helper.js`), in both directions by different tiers:
+  `Program Integration Reviewer` missing ⇒ the contains tier (`100 + ⌊ratio·100⌋` = 170) lands on `Value-Chain Program
+  Integration Reviewer`, of which it is a substring; `Value-Chain Program Integration Reviewer` missing ⇒ the word tier
+  (3 of 4 words, `3 × (10 + 15)` = 75) lands on `Program Integration Reviewer`. Harmless while both rows' prompts are identical (true at E1); re-check if one
+  row's constraints or prompt diverge (e.g. W4 moving the value-leg Node C paragraph into its constraints). Deploys gate
+  on an exact-name SQL read; run checks compare Node C's `agentTemplateId` by id, never by name pattern.
+
 ### Tool Resolution Chain (`agentExecutionEngine.ts:493-509`)
 
 Every agent execution gets a list of MCP tools made available to its LLM as `function`s. The engine resolves the per-execution tool list via a 3-tier fallback chain:
@@ -479,6 +507,12 @@ Task B's prompt includes full predecessor output
     ▼
 Task B executes with full upstream context
 ```
+
+**F19 — promised-but-absent deliverable** (2026-07-16): a PIPELINE predecessor whose `deliverableSourceTaskId` is set
+but which chains anything other than `report.md` (the CREATE-time `pipeline-index.json` fallback) is chained with
+`degraded: true` and counted in `pipelineMetadata.degradedPredecessors` — the gate that caught the 2026-10-04
+COMPLETE-THEN-FAIL leg. The phase-1 rescue keeps it at 0 for that shape; it still fires for the unrescued residuals
+(see *Adjacent: terminal-without-deliverable* under Invariant 5).
 
 **Design note**: Full predecessor output is injected deliberately. Research (Omni-SimpleMem, 2026) found full text outperforms summaries by 53%. Selective access is deferred until pipelines exceed 10 tasks with fan-in dependencies.
 
@@ -811,13 +845,33 @@ said "four" until 2026-09-15, "six" and then "seven" on 2026-09-26 — check it 
 | Class | Trigger | Terminal outcome |
 |---|---|---|
 | **F16 — can-never-run** | a task whose upstream FAILED can never execute | the task + its forward cone → `executionStatus=FAILED` + `metadata.blockedByUpstreamFailure`; program escalates naming the root leg |
-| **F17 — duplicate-halt** | a redundant halt on a leg that produced nothing / has no children | leg `executionStatus=FAILED`, cone marked **once** (the R4 cone-gap fold) |
+| **F17 — duplicate-halt** | a redundant halt on a leg that produced nothing / has no children | leg `executionStatus=FAILED`, cone marked **once** (the R4 cone-gap fold). **Gated on the fresh status** since 2026-10-05 (COMPLETE-THEN-FAIL Q1(a)) like its siblings: a COMPLETED leg carrying a STALE `duplicateHalt` is no longer written FAILED by its own SUCCESS persist (prod `cmu7or3ix0022yx4z9xukqs58`, 2026-09-19) |
 | **F20 — escalated leg** | a reviewer stamps `qualityGate.outcome='escalated'` (`reviewerScore 0`) with all children **settled** — terminal AND no child execution in flight (RWF A1 2026-09-26; before, a child re-run in flight still counted as terminal and the re-run was orphaned) | escalation is an OUTCOME, not a hang → leg **COMPLETES** so the program can escalate; blocks release. With a child re-running, the leg waits and completes at the next persist — a delay, never a hang |
 | **R4 — truncation-stall** | a SYNTHESIZE turn returns `stop_reason:max_tokens` with empty text | auto-recovered in-loop; any residual → leg `executionStatus=FAILED` + `metadata.truncationStall` + cone. **Declines** (RWF A3) when a child is in flight or was dispatched this run → `metadata.deadEndExempt` |
 | **HARNESS_NO_OUTPUT** (5th, 2026-07-17) | a harness produces **no deliverable text** and either never linked a child stage (CREATE) or resolved SYNTHESIZE with every cascade already spent (`synthesizeDeadEnd`, 2026-09-14) | leg `executionStatus=FAILED` + `metadata.harnessNoOutput` + cone. The SYNTHESIZE arm **declines** (RWF A3) when a child is in flight or was dispatched this run → `metadata.deadEndExempt` — "every cascade already spent" is now CHECKED, not assumed |
-| **PRE_FLIGHT_BAIL** (6th, 2026-07-18) | the leg bails in its own pre-flight — stamps `cannotRun`/`escalated` with no child stage | leg `executionStatus=FAILED`; F20-escalated-COMPLETED still wins. **Also suppresses step validation** (2026-09-15): a halt makes no structural calls BY DESIGN, so no step profile fits it |
+| **PRE_FLIGHT_BAIL** (6th, 2026-07-18) | the leg bails in its own pre-flight — stamps `cannotRun`/`escalated` with no child stage | leg `executionStatus=FAILED`; F20-escalated-COMPLETED still wins. **Also suppresses step validation** (2026-09-15): a halt makes no structural calls BY DESIGN, so no step profile fits it. **At-rest belt** (`task.update` → `handleAgentStampedCannotRun`): PIPELINE tasks, and since DN1 (2026-10-05) any NON-PIPELINE harness-owned child with no execution in flight — a superseded ACTION child (duplicate Node C, 2026-10-04) had hung its program |
 | **REACTOR_BUDGET_EXHAUSTED** (7th, RWF A2 2026-09-26) | retrigger Guard 8: a harness re-entered as many times as its tier's budget allows (legs 10, program roots 25; roots `warn` at 80%) | harness `executionStatus=FAILED` + `metadata.reactorBudgetExhausted` (keyed by the counted execution) + comment; cone for a program LEG only. The tx re-checks its premises (newest execution unchanged, no live run) — a human rescue run is never FAILED. Before RWF this was a silent skip that left the harness IN_PROGRESS forever. `lib/services/reactor-budget-exhausted-persist.ts` |
-| **REAPED** (8th, RWF-X4 2026-09-26, hit live) | a reaper (startup orphan cleanup / periodic stale sweep) kills a harness-owned task's execution — a pm2 reload mid-run, or a hang past the watchdog | the task → `executionStatus=FAILED` + comment (it used to be `null`, which is NOT terminal: the stage never settled and the harness waited forever); cone `UPSTREAM_REAPED` for a program LEG only. **Left `null`** when the task is COMPLETED (a FAILED stamp would make SYNTHESIZE step 1 abort an approved leg), outside any harness, or itself a harness whose own children are still running (they will wake it); **untouched** while another execution is in flight. ⚠️ Residual, shared with an ordinary failure: a reaped pipeline child with a same-stage DEPENDENT (Author → Reviewer) leaves the dependent OPEN, so the harness still waits for a human re-execute. `lib/services/reaped-task-persist.ts` |
+| **REAPED** (8th, RWF-X4 2026-09-26, hit live) | a reaper (startup orphan cleanup / periodic stale sweep) kills a harness-owned task's execution — a pm2 reload mid-run, or a hang past the watchdog | the task → `executionStatus=FAILED` + comment (it used to be `null`, which is NOT terminal: the stage never settled and the harness waited forever); cone `UPSTREAM_REAPED` for a program LEG only. **Left `null`** when the task is COMPLETED (a FAILED stamp would make SYNTHESIZE step 1 abort an approved leg), outside any harness, or itself a harness whose own children are still running (they will wake it); **untouched** while another execution is in flight. The COMPLETED-task `null` is the shape a reaped-AFTER-`task.complete` SYNTHESIZE leaves — see *Adjacent: terminal-without-deliverable* below (phase 2 of that fix will rescue it). ⚠️ Residual, shared with an ordinary failure: a reaped pipeline child with a same-stage DEPENDENT (Author → Reviewer) leaves the dependent OPEN, so the harness still waits for a human re-execute. `lib/services/reaped-task-persist.ts` |
+
+**Adjacent: terminal-without-deliverable (COMPLETE-THEN-FAIL, 2026-10-05) — a SIBLING of this family, not a 9th
+member.** Nothing hangs and nothing is cone-marked: a SYNTHESIZE harness calls `task.complete` (task COMPLETED, gate
+stamped) and then its NEXT LLM call throws, so the success persist never ran — a COMPLETED leg with no `report.md` and
+no SYNTHESIZE `pipeline-index.json`, whose dependents chain the CREATE-time index. Phase 1 (shipped 2026-10-05) rescues
+the in-loop THROW: when the execution completed its OWN task (`metadata.completedByExecutionId`, written by the
+completion core's Layer 1 from the agent loop's `callingExecutionId`, an `AUDIT_STRIP_KEYS` member) and the deliverable
+source has an authoritative SUCCESS, the core persists SUCCESS from DB state with a labelled platform finalResponse +
+the `postCompletionFailure` fact (`lib/services/execution-completion-anchored.ts`; anchored CAS in
+`runTerminalSuccessTx`). Every other terminated execution on a COMPLETED task writes the task column `null`, never
+FAILED (O4 — the REAPED row's rule, now shared via `writeTerminatedExecutionTaskStatus`). The **reaped** shape is phase 2
+(O6; MI-13's COUNT line is its trigger). Residuals (declined/failed rescue, human completion mid-run) are still caught
+**at program tier only, and only for a leg with `deliverableSourceTaskId` set**, by F19 `degradedPredecessors` (Context
+Chaining, below) and program Step 2's absent-`derivationContainment` gap. A standalone pipeline has neither catch, and a
+`no-deliverable-source` decline is never F19-degraded. A separate shape O4 changed at LEG tier: an **ACTION child** that
+completes itself and then fails used to read COMPLETED+FAILED and trip base SYNTHESIZE Step 1; it now reads `null`, so
+the leg-tier catch left is the reviewer-less conjunct's "authoritative SUCCESS" (or a reviewer reading `notChained
+no-selectable-execution`). MI-13 counts it (residual (e)).
+Design + record: `cline_docs/reviews/complete-then-fail-2026-10-05/` (DESIGN-v2, BUILD-REPORT); forensics:
+`PROGRAM-RUN-FORENSICS-GUIDE.md` §5a.
 
 **RWF Stage 1 Wave A (2026-09-26) — the premise "SYNTHESIZE ⇒ nothing is in flight" is checked, not assumed.**
 The shipped 50–69 blind retry re-executes children from SYNTHESIZE, which broke that premise at four predicates.

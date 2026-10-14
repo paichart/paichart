@@ -175,7 +175,8 @@ export class TasksActionRouter {
         break;
 
       case 'task.update':
-        result = await handleTaskUpdate(parameters, user, actionId);
+        // COMPLETE-THEN-FAIL (v2 §2.2): routeOpts carries callingExecutionId (agent loop only) — the completion anchor.
+        result = await handleTaskUpdate(parameters, user, actionId, routeOpts);
         break;
 
       case 'task.assign':
@@ -183,7 +184,8 @@ export class TasksActionRouter {
         break;
 
       case 'task.complete':
-        result = await handleTaskComplete(parameters, user, actionId);
+        // COMPLETE-THEN-FAIL (v2 §2.2): routeOpts carries callingExecutionId (agent loop only) — the completion anchor.
+        result = await handleTaskComplete(parameters, user, actionId, routeOpts);
         break;
 
       case 'task.comment':

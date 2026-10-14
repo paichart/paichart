@@ -88,6 +88,14 @@ export interface ExecutionQualityInput {
    *  Handed to the protocol validator so it grades the re-execute exit on the same fact the persist
    *  decision uses. Optional: absent ⇒ the validator's tool-call fallback. */
   dispatchedChildIds?: string[];
+  /**
+   * COMPLETE-THEN-FAIL (2026-10-05, DESIGN-v2 §3.2 step 4 / §3.3): true ONLY on the completion-anchored rescue, whose
+   * `text` is a PLATFORM-authored record, not model output. Every TEXT-dependent arm (P7 SILENT_REFUSAL, P10
+   * TEMPLATE_MISMATCH, TRUNCATED_*, EMPTY_DELIVERABLE, HARNESS_NO_OUTPUT and the dead-end facts) is bypassed — named
+   * reason `post-completion-anchored` — so none of them is fed text the model never wrote. The tool-log arms
+   * (P5/P4/P3) and the protocol validator (with its post-completion sanctioned exit) still run on the partial log.
+   */
+  postCompletionFailure?: boolean;
   executionId: string;
   turnCount: number;
   /** P10 log enrichment (engine supplies; optional). */
@@ -117,6 +125,12 @@ export function assessExecutionQuality(input: ExecutionQualityInput): ExecutionQ
   const rawDeliverableEmpty = !rawDeliverable || rawDeliverable.trim().length === 0;
   // The truncation categories pair the raw deliverable with ITS OWN stop reason (F2 §3.3).
   const loopExitStopReason = input.loopExitStopReason !== undefined ? input.loopExitStopReason : stopReason;
+  // COMPLETE-THEN-FAIL: false ⇒ every text-dependent arm below is bypassed (reason 'post-completion-anchored').
+  const textArms = !input.postCompletionFailure;
+  if (!textArms) {
+    logger?.info?.({ executionId, taskId: task.id, bypassReason: 'post-completion-anchored' },
+      'Execution quality: text-dependent arms bypassed — the deliverable text is platform-authored (post-completion rescue)');
+  }
 
   // P3+P4+P5 (task #84): detect execution-quality degradation signals.
   let executionDegradation: ExecutionDegradation | null = null;
@@ -186,7 +200,7 @@ export function assessExecutionQuality(input: ExecutionQualityInput): ExecutionQ
   // P7 (task #88): Silent refusal detection — LLM says "I can't do this" with
   // end_turn instead of the refusal stopReason path. Only fires if no other
   // degradation category matched (those are more specific diagnoses).
-  if (!executionDegradation && text && stopReason === 'end_turn') {
+  if (textArms && !executionDegradation && text && stopReason === 'end_turn') {
     const inabilityPatterns = [
       /\bi\s+(?:am\s+)?(?:unable|cannot|can['']?t)\s+(?:to\s+)?(?:complete|fulfill|do|perform|handle|process|execute|accomplish|finish)/i,
       /\b(?:unable|not\s+able)\s+to\s+(?:complete|fulfill|proceed|continue|generate|produce)/i,
@@ -229,7 +243,7 @@ export function assessExecutionQuality(input: ExecutionQualityInput): ExecutionQ
   // flag; first 300 chars) to prevent false-positives when the agent quotes
   // the marker syntax mid-prose.
   const _templateMismatchPattern = /^\s*(?:```\s*)?\[TEMPLATE_MISMATCH\]/i;
-  if (text && _templateMismatchPattern.test(text.slice(0, 300))) {
+  if (textArms && text && _templateMismatchPattern.test(text.slice(0, 300))) {
     executionDegradation = {
       errorCategory: 'TEMPLATE_MISMATCH_SELF_REPORTED',
       degradationReason: 'Agent invoked the Scope Self-Check escape hatch — task assignment is outside template scope per the agent itself',
@@ -259,7 +273,7 @@ export function assessExecutionQuality(input: ExecutionQualityInput): ExecutionQ
   // max_tokens. Additive (never flips SUCCESS/FAILED; Protocol-10 ship-the-fact); consumed by
   // keep-best (R3) so a truncated-empty retry can't supersede a real prior deliverable, and by the
   // harness SYNTHESIZE consumer so a stalled leg is not read as a satisfied source.
-  if (!executionDegradation && loopExitStopReason === 'max_tokens' && rawDeliverableEmpty) {
+  if (textArms && !executionDegradation && loopExitStopReason === 'max_tokens' && rawDeliverableEmpty) {
     executionDegradation = {
       errorCategory: 'TRUNCATED_NO_OUTPUT',
       degradationReason: `Final turn stopped at max_tokens and produced no deliverable text (output-token ceiling exhausted, likely mid-thinking) — stored as SUCCESS but the deliverable is empty; downstream consumers must NOT treat this as a satisfied source, and it must not supersede a prior real deliverable`,
@@ -286,7 +300,7 @@ export function assessExecutionQuality(input: ExecutionQualityInput): ExecutionQ
   // Classifies on the LOOP-EXIT stop reason, not the post-#90 one (§3.3). Additive: never flips
   // SUCCESS/FAILED, and terminal-persist Layer 2 deliberately does NOT key on it — a partial
   // SYNTHESIZE has a deliverable, and marking it FAILED would kill a healthy pipeline.
-  if (!executionDegradation && loopExitStopReason === 'max_tokens' && !rawDeliverableEmpty) {
+  if (textArms && !executionDegradation && loopExitStopReason === 'max_tokens' && !rawDeliverableEmpty) {
     executionDegradation = {
       errorCategory: 'TRUNCATED_PARTIAL_OUTPUT',
       degradationReason: `Final turn stopped at max_tokens after producing ${rawDeliverable?.length ?? 0} chars of deliverable text — the deliverable is cut off mid-text (output-token ceiling exhausted); stored as SUCCESS, but downstream consumers must NOT treat it as a complete deliverable (its final sections, markers and confidence line may be missing)`,
@@ -314,6 +328,7 @@ export function assessExecutionQuality(input: ExecutionQualityInput): ExecutionQ
   // NON-PIPELINE ONLY: PIPELINE setup-and-exit runs legitimately emit thin/empty prose
   // (deliverable = created children + pipeline-index.json); P8 below owns their coverage.
   if (
+    textArms &&
     !executionDegradation &&
     (!text || text.trim().length === 0) &&
     toolCallResults.length > 0 &&
@@ -347,6 +362,7 @@ export function assessExecutionQuality(input: ExecutionQualityInput): ExecutionQ
       createdAt: task.createdAt,
       resolvedMode: input.resolvedMode ?? null,
       ...(input.dispatchedChildIds ? { dispatchedChildIds: input.dispatchedChildIds } : {}),
+      ...(input.postCompletionFailure ? { postCompletionFailure: true } : {}),
     });
     if (protocolValidation?.haltExempt) {
       // Sanctioned halt: the fact is recorded on the artifact, but there is no
@@ -369,6 +385,9 @@ export function assessExecutionQuality(input: ExecutionQualityInput): ExecutionQ
         mode: protocolValidation.mode,
         escalatedExit: protocolValidation.escalatedExit ?? false,
         reExecutionExit: protocolValidation.reExecutionExit ?? null,
+        // COMPLETE-THEN-FAIL (v2 §3.3, pure case): the post-completion exit with nothing missing before task.complete.
+        postCompletionExempt: protocolValidation.postCompletionExempt ?? false,
+        postCompletionSteps: protocolValidation.postCompletionSteps?.length ?? 0,
       }, 'Pipeline harness sanctioned exit — recorded as a fact, no protocol gap');
     } else if (protocolValidation) {
       logger?.warn({
@@ -408,7 +427,7 @@ export function assessExecutionQuality(input: ExecutionQualityInput): ExecutionQ
   // defect; the documented legitimate setup-and-exit case is THIN, never empty.
   // Additive: never flips SUCCESS/FAILED by itself (Layer 2 in terminal-persist owns
   // that, on a stricter in-tx conjunction).
-  if (!executionDegradation && task.type === 'PIPELINE' && rawDeliverableEmpty) {
+  if (textArms && !executionDegradation && task.type === 'PIPELINE' && rawDeliverableEmpty) {
     executionDegradation = {
       errorCategory: 'HARNESS_NO_OUTPUT',
       degradationReason: 'PIPELINE harness produced no deliverable text (pre-note) — a healthy harness always says what it did; downstream consumers should not treat this run as a satisfied source',
@@ -434,12 +453,13 @@ export function assessExecutionQuality(input: ExecutionQualityInput): ExecutionQ
     typeof entry.arguments === 'object' && entry.arguments !== null &&
     (entry.arguments as { action?: unknown }).action === action;
   const harnessCreateIncomplete =
+    textArms &&
     task.type === 'PIPELINE' &&
     input.resolvedMode === 'CREATE' &&
     toolCallResults.some(tc => callsAction(tc as { arguments?: unknown; success?: boolean }, 'stage.create')) &&
     !toolCallResults.some(tc => callsAction(tc as { arguments?: unknown; success?: boolean }, 'task.update'));
 
-  const harnessNoOutput = task.type === 'PIPELINE' && rawDeliverableEmpty;
+  const harnessNoOutput = textArms && task.type === 'PIPELINE' && rawDeliverableEmpty;
 
   return { executionDegradation, protocolValidation, harnessNoOutput, harnessCreateIncomplete };
 }

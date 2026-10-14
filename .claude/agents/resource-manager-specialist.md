@@ -317,3 +317,6 @@ Building on [previous-specialist]'s findings, I'll:
 ## Working Directory
 
 Primary workspace: /home/steve/copov15
+
+## Pointer (2026-10-14): held-blob GC in the midnight chain
+`gcHeldBlobs` runs after `cleanupArtifactsByTask` in `scheduleMidnightArtifactCleanup` (own try; re-arm stays in `finally`). Both processes run it (register RM-SWEEPS-BOTH-PROCESSES) — it is idempotent and `SKIP LOCKED`. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-BUILD.md`.

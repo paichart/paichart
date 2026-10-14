@@ -174,6 +174,89 @@ console.log('\n── Part D: placement invariants in prepareTaskForExecution �
     : fail('D6 healing is silent — adherence regressions would be unmeasurable');
 }
 
+console.log('\n── Part E: C2-a plan arm + the shared writer + C3 placement (2026-10-04) ──\n');
+{
+  const prep = read('lib/agents/harness/prepare-task-for-execution.ts');
+  const wStart = helper.indexOf('export async function writeInterfaceContractIfAbsent');
+  const writer = wStart >= 0 ? helper.slice(wStart, helper.indexOf('\n}', wStart)) : '';
+
+  // E1 — BODY-scoped (a whole-file regex would pass on the leg arm's parent SELECT): BOTH the absence
+  // guard AND the PIPELINE exclusion sit in the shared writer's UPDATE WHERE (AE-F1). F16 disjointness is
+  // then enforced at the one write that could violate it.
+  const where = writer.slice(writer.indexOf('WHERE id ='));
+  (writer && /AND type <> 'PIPELINE'/.test(where) && /AND NOT \(COALESCE\("inputContext", '\{\}'::jsonb\) \? 'interfaceContract'/.test(where))
+    ? pass("E1 the shared writer's UPDATE WHERE carries the absence guard AND type <> 'PIPELINE'")
+    : fail('E1 shared writer WHERE lost the absence guard or the PIPELINE exclusion');
+
+  // E2 — provenance by the write that WON (T3): the metadata patch is in the SAME statement, under the
+  // same WHERE; a lost race (0 rows) stamps nothing. A second statement would stamp a loser.
+  (/metadata = COALESCE\(metadata, '\{\}'::jsonb\) \|\| \$\{JSON\.stringify\(metadataPatch\)\}::jsonb/.test(writer)
+    && /\$\{setMetadata\}/.test(writer.slice(writer.indexOf('UPDATE "tasks"')))
+    && (writer.match(/\$queryRaw|\$executeRaw/g) || []).length === 1)
+    ? pass('E2 the metadata patch is set by the SAME single statement (lost race stamps nothing)')
+    : fail('E2 provenance is not stamped in-statement by the winning write');
+
+  // E3 — the leg arm passes NO patch (its statement is unchanged apart from the in-statement type guard).
+  /writeInterfaceContractIfAbsent\(taskId, safe, parent\.id\)/.test(helper)
+    ? pass('E3 leg arm calls the shared writer with no metadata patch')
+    : fail('E3 leg arm no longer calls the shared writer plainly');
+
+  // E4 — the inputContext patch keeps EXACTLY the existing three keys.
+  {
+    const m = writer.match(/const patch = \{([\s\S]*?)\};/);
+    const keys = m ? [...m[1].matchAll(/^\s*(\w+):/gm)].map((x) => x[1]) : [];
+    JSON.stringify(keys) === JSON.stringify(['interfaceContract', 'interfaceContractInheritedFrom', 'interfaceContractInheritedAt'])
+      ? pass('E4 inputContext patch = exactly the three existing keys')
+      : fail('E4 inputContext patch keys changed', JSON.stringify(keys));
+  }
+
+  // D1′/D2′ — the plan arm writes BEFORE the contractCheck snapshot and BEFORE the skipChaining return.
+  const iPlan = prep.indexOf('writeInterfaceContractIfAbsent(taskId, decision.contract');
+  const iSnapshot = prep.indexOf('const contractCheck = await prisma.task.findUnique');
+  const iSkip = prep.indexOf('if (opts.skipChaining)');
+  (iPlan > 0 && iPlan < iSnapshot) ? pass('D1′ plan arm writes BEFORE the contractCheck snapshot')
+    : fail('D1′ plan arm is not before the snapshot — F16 flag arm could fire on an installed contract');
+  (iPlan > 0 && iPlan < iSkip) ? pass('D2′ plan arm runs before the skipChaining early return')
+    : fail('D2′ skipChaining path never inherits the plan');
+
+  // D4′ — the plan arm's RETURNING row feeds inheritedContext, which the no-deps / chain-failed returns carry.
+  const armBody = iPlan > 0 ? prep.slice(iPlan, iPlan + 400) : '';
+  (/inheritedContext = merged;/.test(armBody)
+    && /if \(!chained\) return \{ context: inheritedContext/.test(prep)
+    && /return \{ context: inheritedContext, record: \{ status: 'not-chained', reason: 'chain-failed' \} \};/.test(prep))
+    ? pass("D4′ the plan arm's merged row reaches the no-deps and chain-failed returns")
+    : fail("D4′ plan arm result is not fed to inheritedContext");
+
+  // D5′ — the reviewer arm's predicate order: not PIPELINE → no object contract → reviewer-set → program stage.
+  {
+    const a = prep.indexOf("early.type !== 'PIPELINE'");
+    const b = prep.indexOf('!earlyHasObjectContract', a);
+    const c = prep.indexOf('isReviewerSet(early.agentRole', a);
+    const d = prep.indexOf('findProgramParentForStage(prisma, early.stageId)', a);
+    (a > 0 && b > a && c > b && d > c) ? pass('D5′ reviewer arm predicate order: !PIPELINE → no contract → reviewer-set → program stage')
+      : fail('D5′ reviewer arm predicate order changed', `${a} ${b} ${c} ${d}`);
+  }
+
+  // D6′ — a refusal is a log + a stamp, NEVER a CanNeverRunError (the createAgentExecution catch would FAIL the task).
+  {
+    const s = prep.indexOf('// ── C2-a REVIEWER ARM');
+    const e = prep.indexOf('// ── C3-a CLEARANCE CARRY');
+    const block = s > 0 && e > s ? prep.slice(s, e).replace(/\/\/.*$/gm, '') : 'MISSING';
+    (block !== 'MISSING' && !/CanNeverRunError/.test(block) && /stampInterfaceContractSource\(prisma, taskId, decision\.fact\)/.test(block))
+      ? pass('D6′ plan-arm refusal stamps a fact and never throws CanNeverRunError')
+      : fail('D6′ plan-arm refusal path changed (throws, or stamps nothing)');
+  }
+
+  // C3′ — the clearance carry runs before the skipChaining return, inside its own try (fail-open).
+  {
+    const iCarry = prep.indexOf('carryProgramClearance(prisma');
+    const tryBefore = prep.lastIndexOf('try {', iCarry);
+    (iCarry > 0 && iCarry < iSkip && tryBefore > prep.indexOf('// ── C3-a CLEARANCE CARRY'))
+      ? pass('C3′ the clearance carry runs before skipChaining, inside its own try')
+      : fail('C3′ clearance carry placement changed');
+  }
+}
+
 console.log(`\n${'─'.repeat(60)}`);
 console.log(`Results: ✅ ${passed} passed, ${failed ? '❌ ' + failed + ' failed' : '0 failed'}`);
 if (failed > 0) { console.log('\nFailures:\n  • ' + failures.join('\n  • ')); process.exit(1); }

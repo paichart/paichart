@@ -1,0 +1,23 @@
+== coverage (answered-3)
+coverage — work/log-archive-namespace-write-2026-10-09/draft-answered-3/report.md
+  legs ['kubernetes-gitops', 'terraform-iac'] · gates ['kubernetes-gitops-change', 'program-plan', 'terraform-iac-change'] · rows 20 {'declared': 20, 'derived': 0, 'forced': 0, 'open': 0, 'other': 0} · owner block none · not-applicable 0
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: receiver
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: admitted-principal
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: principal-unseen
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: granted-action
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: existing-grant
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: target-empty
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: enforcer-absent
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: collateral
+  👁  what: no producer rows — confirm for each leg: the leg derives no value another leg consumes · legs: ['terraform-iac']
+  👁  what: no routing rows — confirm for each leg: the leg adds no advertised covering route and suppresses, filters, withdraws or replaces no routes · legs: ['kubernetes-gitops', 'terraform-iac']
+  8 error(s), 2 to read
+exit=1
+== citations (answered-3)
+citations: 20 total, 20 verbatim, 0 failing
+premise branches: terraform-iac ✓
+✅ citation + premise gate clean (the Reviewer still owns: does each quote select the same option as the item?)
+exit=0
+== lint
+✓ work/log-archive-namespace-write-2026-10-09/draft-answered-3/report.md: 0 state-shaped tokens outside the template and the declared objective.
+  A pre-filter only — it cannot see harvested names or paraphrased state. Read the whole draft.

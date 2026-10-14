@@ -17,12 +17,12 @@ import { writeReapedTaskStatuses } from './reaped-task-persist';
 // This adapter keeps prep + the failure catch (persistTerminalFailure + F-1 rethrow).
 import { runExecutionCore } from './execution-core';
 import { deriveMcpToolNames, buildHubToolGuidance } from './execution-hub-guidance';
-import { persistTerminalFailure, buildErrorJson, resolveAgentRole } from './execution-terminal-persist';
+import { persistTerminalFailure, buildErrorJson, resolveAgentRole, writeTerminatedExecutionTaskStatus, readPostCompletionRescue } from './execution-terminal-persist';
 import { applySystemPromptInjectionsWithFact, type ProtocolInjectionFact } from './execution-system-prompt';
 import { resolveTaskProtocol } from '../agents/harness/program-protocol';
 import { EXECUTION_TASK_CONTEXT_INCLUDE, EXECUTION_TEMPLATE_SELECT } from './execution-hydration';
 import { buildAgentPromptBody } from '@/lib/agents/harness/build-agent-prompt-body';
-import { normalizeModelConfig, READ_MORE_FUNCTION_DEF } from '@/lib/agents/harness/agentic-tool-loop';
+import { normalizeModelConfig, READ_MORE_FUNCTION_DEF, readAgenticLoopPartial } from '@/lib/agents/harness/agentic-tool-loop';
 import type { AccumulatedUsage } from '@/lib/agents/harness/agentic-tool-loop';
 
 const logger = mcpLogger.child({ module: 'AgentExecutionEngine' });
@@ -379,13 +379,9 @@ export class AgentExecutionEngine extends EventEmitter {
                   return;
                 }
 
-                await tx.task.update({
-                  where: { id: execution.taskId },
-                  data: {
-                    executionStatus: 'FAILED',
-                    updatedAt: safetyNetEndTime
-                  }
-                });
+                // COMPLETE-THEN-FAIL O4 (v2 §5.2, TS-F2): the failure path's own fallback writes the task side
+                // through the SAME helper as runTerminalFailureTx — NULL on a COMPLETED task, FAILED otherwise.
+                await writeTerminatedExecutionTaskStatus(tx, execution.taskId, safetyNetEndTime);
 
                 // B4 (task #85): include errorCategory when the thrown error
                 // carries one — lets GUI render targeted remediation banners
@@ -405,6 +401,7 @@ export class AgentExecutionEngine extends EventEmitter {
                       taskId: execution.taskId,
                       taskTitle: execution.task?.title,
                       timestamp: safetyNetEndTime,
+                      postCompletionRescue: readPostCompletionRescue(error),
                     }),
                   },
                 });
@@ -974,10 +971,13 @@ export class AgentExecutionEngine extends EventEmitter {
           endTime,
           executionCreatedAt: execution.createdAt ?? null,
           executionStartTime: startTime,
-          usage: capturedUsage,
-          servingModel: capturedModel,
+          // F-c (COMPLETE-THEN-FAIL batch, Q6): a loop throw carries its partial usage + serving model on the
+          // ORIGINAL error. Precedence captured ?? partial — never summed, so a post-loop throw cannot double-count.
+          usage: capturedUsage ?? readAgenticLoopPartial(error)?.totalUsage,
+          servingModel: capturedModel ?? readAgenticLoopPartial(error)?.servingModel ?? null,
           fireReactors: true,
           logger,
+          originalError: error,
         });
       } catch (persistError) {
         // F-1: the FAILURE persist itself failed — the row may still be

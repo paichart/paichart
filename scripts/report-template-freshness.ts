@@ -42,7 +42,7 @@ import { prisma } from '@/lib/prisma';
 import { AGENT_MODELS } from '@/lib/agents/model-tiers';
 import { buildHarnessPromptTemplate } from '@/lib/agents/harness-template';
 import { DEFAULT_MAX_TOKENS } from '@/lib/services/llm/types';
-import { expectedMaxTokens } from '@/lib/agents/role-model-params';
+import { expectedMaxTokens, expectedMaxToolTurns } from '@/lib/agents/role-model-params';
 import {
   PAICHART_UNIVERSAL_BASE_TEMPLATE,
   ROLE_GUIDANCE_LIBRARY,
@@ -121,7 +121,7 @@ const BARE_BASE_BY_DESIGN = new Set(['pAIchart Universal Agent Template']);
  * post-verify, and deleting the spent script would have taken the check with it.
  *
  * Both sides are importable, so this is a genuine comparison, not a heuristic: the model must be one
- * of the sanctioned `AGENT_MODELS` tiers and maxTokens must equal the per-ROLE expectation (`expectedMaxTokens`, lib/agents/role-model-params.ts — DEFAULT_MAX_TOKENS unless the role has a measured entry). It
+ * of the sanctioned `AGENT_MODELS` tiers and maxTokens must equal the per-ROLE expectation (`expectedMaxTokens`, lib/agents/role-model-params.ts — DEFAULT_MAX_TOKENS unless the role has a measured entry), and maxToolTurns must equal `expectedMaxToolTurns` for a role that has an entry. It
  * deliberately does NOT assert WHICH tier a given row belongs on — that mapping lives in the seed
  * scripts' data blocks, which cannot be imported without executing them. Off-tier is reported as a
  * FACT to look at, never as a verdict (Protocol 10).
@@ -140,6 +140,13 @@ function checkModelParams(metadata: unknown, role: string | null | undefined): s
     problems.push(expected === DEFAULT_MAX_TOKENS
       ? `maxTokens ${mp.maxTokens} !== DEFAULT_MAX_TOKENS ${DEFAULT_MAX_TOKENS}`
       : `maxTokens ${mp.maxTokens} !== per-role ${expected} (role-model-params.ts)`);
+  }
+  // maxToolTurns (2026-10-12): checked ONLY for a role with a table entry (today the Program Architect, 48). A GUI save
+  // that drops the key would silently put the role back on the engine default (30 turns → read cap 7, not 12). Rows
+  // without an entry are not asserted — the Pipeline Harness legitimately carries its own seed's 100.
+  const expectedTurns = expectedMaxToolTurns(role);
+  if (expectedTurns !== undefined && mp.maxToolTurns !== expectedTurns) {
+    problems.push(`maxToolTurns ${mp.maxToolTurns ?? '(absent → engine default 30)'} !== per-role ${expectedTurns} (role-model-params.ts)`);
   }
   return problems.length ? problems.join('; ') : null;
 }
@@ -257,7 +264,7 @@ async function main() {
     console.log(`  🟡 modelParameters DRIFT (${modelDrift.length}) — prompt state above says nothing about these:`);
     for (const d of modelDrift) console.log(`     ${d.name.padEnd(34)} ${d.role.padEnd(28)} ${d.problem}`);
     console.log(`     Deliver by re-running the OWNING seed script(s); they write modelParameters from`);
-    console.log(`     lib/agents/model-tiers.ts + DEFAULT_MAX_TOKENS.`);
+    console.log(`     lib/agents/model-tiers.ts + lib/agents/role-model-params.ts.`);
   }
 
   console.log(`\n${'-'.repeat(104)}`);

@@ -1,0 +1,14 @@
+{
+  "id": "la-es-item22",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "LA: enforcer-scope declared from item 22, one verbatim span, selecting all-reaching-the-protected-thing (G-SCOPE LA pass).",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "| terraform-iac.collateral |",
+      "new": "| terraform-iac.enforcer-scope | which parts of the enforcer the restriction covers | all-reaching-the-protected-thing · exemption-by-property · gap | all-reaching-the-protected-thing | (declared — item 22: \"the restriction covers all of it\") |\n| terraform-iac.collateral |"
+    }
+  ]
+}

@@ -27,6 +27,12 @@ export interface BuildNetContextInput {
   harnessMode: string | null;
   finalResponse: string | null | undefined;
   programTier: boolean;
+  /** The execution being persisted (value-chain B4: recorded on the value-leg fact, never selected on). Optional so
+   *  replay runners that predate it build the same context. */
+  executionId?: string | null;
+  /** The execution's own `toolCalls` (result.json shape). Optional so replay runners that predate it build the same
+   *  context; `quoteFidelity` then reads `[]` and says so (`no-raw-tool-results`). */
+  toolCalls?: unknown;
   /** Surfaced so a lookup failure is a recorded fact rather than silence (the call site logged it). */
   onContractApplicabilityError?: (err: unknown) => void;
 }
@@ -46,6 +52,8 @@ export function buildNetContext(input: BuildNetContextInput): NetContext {
     finalResponse: input.finalResponse,
     stageId,
     programTier: input.programTier,
+    executionId: input.executionId ?? null,
+    toolCalls: input.toolCalls ?? [],
 
     children() {
       if (!childrenPromise) {

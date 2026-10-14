@@ -103,8 +103,11 @@ sudo systemctl restart systemd-journald
 > pointed at the wrong cause. We never hit it in production because production runs a supervisor — the
 > perimeter that hid the defect was ours, not the self-hoster's. Details, including the rejected
 > alternatives and why each would recreate the fault, are in the unit files themselves.
-After a `git pull`, run `npm run build` again and `sudo systemctl restart paichart-mcp paichart-web`:
-a production build never reloads. (Developers use
+After a `git pull`, run `npm run db:seed` first if the pull touched `prisma/schema.prisma` or `scripts/create-*index*.sh`
+(it applies the schema and the raw-SQL indexes in the order they need, and is add-only), then `npm run build` again and
+`sudo systemctl restart paichart-mcp paichart-web`: a production build never reloads. Do not run a bare `npx prisma db push`
+on an existing install: since 2026-10-14 a unique service-name index must exist before the push, or the push refuses the change
+(it is listed as a possible data loss) — `db:seed` creates it first. (Developers use
 `npm run dev` + `npm run mcp:http:dev` instead — slower, with hot reload and the TanStack devtools button; the proxy
 is on automatically there.)
 ```bash
@@ -133,7 +136,7 @@ not edit the list (there is no GUI for that yet). The set is data, not code: `da
 write your own with the same shape and pass `--file my-geo.json`) and re-run
 `set -a; . ./.env; set +a; node scripts/seed-geographical-data.js`: it adds what is missing and leaves existing rows
 alone — it does not rename or delete; an invalid file is refused with the reasons listed. A **new theatre is a schema change** (`SalesTheatre` enum in
-`prisma/schema.prisma`, then `npx prisma db push`); the full procedure is `.claude/knowledge/guides/GEOGRAPHICAL_DATA_MANAGEMENT.md`.
+`prisma/schema.prisma`, then `npm run db:seed`, which pushes the schema after the indexes it depends on); the full procedure is `.claude/knowledge/guides/GEOGRAPHICAL_DATA_MANAGEMENT.md`.
 
 Then prove the install owns its identity: `docs/VERIFYING-SELF-HOST.md` with `BASE=http://HOST:3000; MCP=$BASE`.
 

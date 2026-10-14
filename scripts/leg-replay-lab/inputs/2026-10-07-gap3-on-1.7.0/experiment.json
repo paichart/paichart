@@ -1,0 +1,138 @@
+{
+  "label": "2026-10-07-gap3-on-1.7.0",
+  "purpose": "Does observability 1.8.0 (gap 3, as seeded) lower refusals on the access-control validation-step refusals (O4, O1, O7) without flipping the approved controls (C-1002, C-1004)? Baseline = obs 1.7.0 as LIVE in prod + the gap-2 config_change_author guidance (live since 2026-10-07 00:59:27Z), so both arms run today's production texts except the gap-3 delta. Both arms replay POST-fix-A (dropTemplateDirective): the run validates the world that ships \u2014 fix A + 1.8.0 deploy together.",
+  "n": 5,
+  "flags": {
+    "CONNECTED_OUTPUT_SANITIZE_ENABLED": "true",
+    "FORM_CORRECTION_ENABLED": "true"
+  },
+  "baseline": {
+    "comment": "obs 1.7.0 pinned from the production row by build-candidates --refresh-baseline.",
+    "protocols": {
+      "observability-config-protocol": {
+        "file": "protocols/observability-config-protocol@1.7.0.baseline.md",
+        "version": "1.7.0",
+        "sha256": "3941058638d26a0ace62d8fb3cbdad42ebec7844a0874527c9cfe37a3371f4a5"
+      }
+    }
+  },
+  "variants": {
+    "baseline": {
+      "edits": [],
+      "templateEdits": [
+        "edits/gap2-role-guidance.json"
+      ],
+      "dropTemplateDirective": true
+    },
+    "gap3": {
+      "edits": [
+        "edits/gap3-1.8.0.json"
+      ],
+      "templateEdits": [
+        "edits/gap2-role-guidance.json"
+      ],
+      "dropTemplateDirective": true
+    }
+  },
+  "nodes": [
+    {
+      "id": "O7",
+      "authorExecutionId": "cmuwby46000jmyx9eltfdr4z1",
+      "kind": "refused",
+      "originalVersion": "1.6.0",
+      "variants": [
+        "baseline",
+        "gap3"
+      ],
+      "why": "10-06 obs: V2 'Must contain / Must NOT contain' prose \u2014 gap 1 (and gap 3's access-control step). NOTE: gap 2 (the quote-your-own-file contradiction) is being fixed in a separate text batch and is NOT in these texts, so O7's result still carries that contradiction"
+    },
+    {
+      "id": "O4",
+      "authorExecutionId": "cmurilb0n01mwyxx9os3mqaqf",
+      "kind": "refused",
+      "originalVersion": "1.5.0",
+      "variants": [
+        "baseline",
+        "gap3"
+      ],
+      "why": "10-02 obs: no 4317 admitted-sender check; reviewer remedy `nc -z` cannot see an in-location deny \u2014 gap 3"
+    },
+    {
+      "id": "O1",
+      "authorExecutionId": "cmunduty100dbyx7p74tnwd7r",
+      "kind": "refused",
+      "originalVersion": "1.4.0",
+      "variants": [
+        "baseline",
+        "gap3"
+      ],
+      "why": "09-30 obs: a containment step that compares a value with a copy of itself \u2014 gap 3"
+    },
+    {
+      "id": "C-1002",
+      "authorExecutionId": "cmuqs1qfz0026yxxab7u91i5o",
+      "kind": "approved-control",
+      "originalVersion": "1.5.0",
+      "variants": [
+        "baseline",
+        "gap3"
+      ],
+      "why": "10-02 obs APPROVED: `grep -A 2 \"listen 4317\"` read-back (READ.md \u00a77: its literal is unsatisfiable \u2014 an approved package with a latent form defect)"
+    },
+    {
+      "id": "C-1004",
+      "authorExecutionId": "cmutj5f1x004ayx0g9bzbsssv",
+      "kind": "approved-control",
+      "originalVersion": "1.6.0",
+      "variants": [
+        "baseline",
+        "gap3"
+      ],
+      "why": "10-04 obs APPROVED: Steps 2 & 3 quote exact, byte-identical expected file content"
+    }
+  ],
+  "measures": [
+    {
+      "name": "conditionAsExpectedOutput",
+      "kind": "expected-output-blocks",
+      "contentRegex": "\\bmust\\s+(not\\s+)?contain\\b|\\bNOT\\s+\\d{3}\\b|^\\s*NOT\\b|\\bnot equal\\b|!=",
+      "lineRegex": "expected (output|result)[^\\n]*\\b(NOT\\s+\\d{3}|must\\s+(not\\s+)?contain)",
+      "why": "gap 1 \u2014 an expected output that states a condition. Should FALL on the refused nodes"
+    },
+    {
+      "name": "presenceShapeLabels",
+      "kind": "count",
+      "regex": "PRESENCE:",
+      "flags": "g",
+      "why": "the labelled sanctioned shape \u2014 must NOT regress on the controls"
+    },
+    {
+      "name": "printsDecision",
+      "kind": "count",
+      "regex": "echo\\s+['\"]?(PASS|FAIL)|grep\\s+-c\\b|\\|\\s*wc\\s+-l",
+      "flags": "gi",
+      "why": "gap 1's named remedy (PASS/FAIL, a count). Should RISE where gap 1 applies"
+    },
+    {
+      "name": "admittedDeniedWords",
+      "kind": "count",
+      "regex": "\\b(admitted|denied)\\b",
+      "flags": "gi",
+      "why": "gap 3 \u2014 a lexical proxy for an admitted/denied probe pair; READ the samples before believing it"
+    },
+    {
+      "name": "selfComparison",
+      "kind": "count",
+      "regex": "applied\\s*==\\s*published|print\\(\\s*applied",
+      "flags": "gi",
+      "why": "gap 3 \u2014 O1's self-comparison shape. Should be 0"
+    },
+    {
+      "name": "protocolAwareClient",
+      "kind": "count",
+      "regex": "\\bgrpcurl\\b|grpc_health_probe|curl\\s+[^\\n]*--http2",
+      "flags": "gi",
+      "why": "gap 3 \u2014 a client that can see an HTTP/gRPC-layer deny"
+    }
+  ]
+}

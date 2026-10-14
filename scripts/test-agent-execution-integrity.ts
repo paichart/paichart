@@ -174,14 +174,19 @@ test('F1: Engine has 3 $transaction blocks (startup cleanup + poll cycle cleanup
   layer1Passed++;
 });
 
-test('F2: Engine has 3 task-write sites in lifecycle txs (1 inline safety net + 2 reapers via the shared module)', () => {
+test('F2: Engine has 3 task-write sites in lifecycle txs (safety net via the O4 helper + 2 reapers via the shared module)', () => {
   // RWF-X4 (2026-09-26): both reapers' task writes moved into writeReapedTaskStatuses
   // (lib/services/reaped-task-persist.ts), so the property is "3 lifecycle task-write sites", of which
   // the reapers delegate. A NEW inline tx.task.update in the engine, or a reaper bypassing the module,
   // changes one of these counts.
+  // COMPLETE-THEN-FAIL O4 (2026-10-05): the inline safety net now writes through the shared O4 helper
+  // (writeTerminatedExecutionTaskStatus — NULL on a COMPLETED task, FAILED otherwise), so the property is
+  // "ZERO inline tx.task.update + 1 helper delegation + 2 reaper delegations".
   const inline = countMatches(engineSource, /tx\.task\.update/g);
+  const safetyNetDelegations = countMatches(engineSource, /writeTerminatedExecutionTaskStatus\(tx,/g);
   const reaperDelegations = countMatches(engineSource, /writeReapedTaskStatuses\(tx,/g);
-  expect(inline).toBe(1);
+  expect(inline).toBe(0);
+  expect(safetyNetDelegations).toBe(1);
   expect(reaperDelegations).toBe(2);
   layer1Passed++;
 });

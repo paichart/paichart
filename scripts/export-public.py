@@ -29,7 +29,9 @@ from collections import Counter
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RULES = os.path.join(ROOT, 'scripts', 'export', 'public-allowlist.rules')
 PROD_IP = '<PROD_HOST>'
-PERSONAL = ['<maintainer-email>', '<maintainer-email>', '<maintainer-email>']  # the last is the operator's work address — docs mention it as the prod admin identity
+PERSONAL = ['<maintainer-email>', '<maintainer-email>', '<maintainer-email>']
+WORK_ADDRESS = '<maintainer-email>'
+WORK_ADDRESS_KEPT_UNDER = ('.claude/skills/',)  # the last is the operator's work address — docs mention it as the prod admin identity
 TEXT_EXT = {'.md', '.ts', '.tsx', '.js', '.mjs', '.cjs', '.json', '.yml', '.yaml', '.sh', '.txt', '.toml', '.py', '.sql', '.tf', '.conf', '.env', '.example', '.rules', '.css'}
 
 def glob_to_re(p):
@@ -158,6 +160,11 @@ def main():
             c = t.count(f'root@{PROD_IP}'); t = t.replace(f'root@{PROD_IP}', '<PROD_USER>@<PROD_HOST>'); sweeps['root@ip'] += c
             c = t.count(PROD_IP); t = t.replace(PROD_IP, '<PROD_HOST>'); sweeps['prod-ip'] += c
             for e in PERSONAL:
+                # The work address stays in the requirements-spec skill files (Steve, 2026-10-14): it is the declared gate
+                # approver in the trial drafts, already public in the published specs, and two battery suites byte-pin
+                # those drafts — rewriting it there broke public CI. Personal addresses are swept everywhere.
+                if e == WORK_ADDRESS and p.startswith(WORK_ADDRESS_KEPT_UNDER):
+                    continue
                 c = t.count(e); t = t.replace(e, a.maintainer_email); sweeps['personal-email'] += c
             if t != n0: swept_files[p.split('/')[0]] += 1
             with open(dst, 'w', encoding='utf-8') as f: f.write(t)

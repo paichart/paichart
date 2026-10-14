@@ -132,17 +132,31 @@
 >   A forced row's *rule or named target* cell reads `gap` — a gap report naming what is absent — and nothing else.
 > - `OPEN — <the question>; options: <the row's options>` — with NO default.
 >
-> `admitted-principal`, `principal-unseen`, `granted-action`, `existing-grant`, `target-empty`, `collateral`, `covered-routes` and `must-stay-reachable` are NEVER derived and NEVER forced.
+> `admitted-principal`, `request-path`, `principal-unseen`, `granted-action`, `existing-grant`, `target-empty`, `collateral`, `enforcer-scope`, `covered-routes` and `must-stay-reachable` are NEVER derived and NEVER forced.
 > An `admitted-principal` answer rests on a premise — that the enforcer SEES that attribute on the path the sender's traffic
 > takes (a source address that is translated or never reaches the enforcer cannot be matched): state it as an
 > existence-assumption branch the leg's harvest decides — the *Admitted-principal premise* slot of each authorisation leg —
-> citing `admitted-principal` for the premise and applying the `principal-unseen` row for its outcome. **A leg clause that cites a
+> citing `admitted-principal` for the premise and applying the `principal-unseen` row for its outcome. When `admitted-principal` admits by ADDRESS, `request-path` states
+> the path the senders' requests take to the enforcer, which decides the attribute their address arrives in: `direct` (the
+> enforcer sees each sender's own address), `private-endpoint` (the requests arrive through a private endpoint of the
+> enforcer's service, and the address is carried in that path's own attribute), `translated` (NAT, a proxy or a load
+> balancer sits on the path, so the enforcer sees the intermediary and a sender-address list cannot be enforced there: a
+> gap). An exemplar stanza conditions on the attribute the declared path carries, written as the key itself, and never forbids it; a placeholder stands only for a value the leg derives at run time (the member list). `network-path` in
+> `admitted-principal` means admitted BY a path, which is a different question. **A leg clause that cites a
 > row applies THAT row's answer and nothing more; a clause that cites an OPEN row only reports the gap, naming the row id.** An
 > objective line that applies to every leg (e.g. "absent enforcers are created") must be a NUMBERED item, so rows can cite it.
-> An authorisation row is deleted only if the leg neither grants nor removes access on its target; on a routing leg,
+> An authorisation row is deleted only if the leg neither grants nor removes access on its target, and `request-path` also
+> when `admitted-principal` admits no address; on a routing leg,
 > `covered-routes` is deleted only when the leg adds no advertised covering route, and `must-stay-reachable` is never deleted.
-> A deleted row is listed in the owner block as `not-applicable — <why the row does not apply>`. Never delete a row to avoid answering it. Add a row for any further decision
-> the document relies on.
+> A deleted row is listed in the owner block as `not-applicable — <why the row does not apply>`. Never delete a row to avoid answering it.
+> An owner item that states a choice for a leg which no row of that leg cites gets ONE row on that leg keyed by the item's
+> NUMBER, `<token>.item-<N>`: options `—`, source `(declared — item N: "<one exact span of item N>")` with the same N; never
+> derived, forced or OPEN, never in the owner block, never under a chosen name. A decision the document relies on that NO item
+> states gets an OPEN row under a key you name; the owner answers it as a new item.
+>
+> `act-regardless` means NOT CONFIRMED AND NOT CONTRADICTED: harvest evidence that the attribute arrives by another path stops
+> the leg (no change, a report). Where the harvest has no read that can observe the premise (an arrival address is not in
+> configuration), `gap` fires on every run: a permanent stop.
 >
 > **Kept from the table this inventory replaced (each still earned):** the *rule or named target* cell states a RULE or a NAMED
 > target, never the values it selects today, and never a count. A decision that WIDENS who is authorised or what is selected — the
@@ -167,17 +181,27 @@
 |---|---|---|---|---|
 | {{LEG_TOKEN}}.receiver | which workload/resource on the target is authorised | — | {{SELECTOR OR NAMED RESOURCE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 | {{LEG_TOKEN}}.admitted-principal | who is admitted, and by which attribute the enforcer recognises them | source-address-range · named-identity · network-path · combination (state each part) | {{THE PRINCIPAL}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.request-path | the path the admitted senders' requests take to the enforcer, which decides the attribute their address arrives in (asked when admitted-principal admits by address) | direct · private-endpoint · translated | {{THE PATH}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 | {{LEG_TOKEN}}.principal-unseen | the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path | gap · act-regardless | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 | {{LEG_TOKEN}}.granted-action | what the admitted principal may do (actions, ports) | — | {{THE GRANT}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 | {{LEG_TOKEN}}.existing-grant | other allowances already on the same surface | replace · preserve · preserve-bounded (state the bound) | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 | {{LEG_TOKEN}}.target-empty | the receiver selector/surface matches nothing now | act · gap | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 | {{LEG_TOKEN}}.enforcer-absent | no policy object governs the receiver yet | create · gap | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 | {{LEG_TOKEN}}.target-absent | the declared target itself does not exist | gap · create-target | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
-| {{LEG_TOKEN}}.collateral | what else on the target changes because enforcement now applies | per enforcer (Kubernetes: allow-named-ports · deny · leave-to-workload-manifests) | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.collateral | what else on the target changes because enforcement now applies | per enforcer (Kubernetes: allow-named-ports · deny · leave-to-workload-manifests; a proxy or listener allowlist: confined-to-block · whole-listener · gap) | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.enforcer-scope | which parts of the enforcer the restriction covers | all-reaching-the-protected-thing · exemption-by-property · gap | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 
 > **🗑 Enforcer fact — Kubernetes NetworkPolicy:** a pod selected by any Ingress policy is isolated for all ingress that no policy
 > allows. A declared answer that says other ports on selected pods are "not touched" cannot be implemented and must be raised as
 > INFEASIBLE, not transcribed. (Earned: Program Run 4, 2026-09-28.)
+
+> **🗑 Enforcer scope.** `enforcer-scope` asks which parts of the enforcer the restriction covers when more than one part
+> reaches the receiver: `all-reaching-the-protected-thing` (every part that reaches it); `exemption-by-property` (parts that
+> carry a property the owner states, which the leg's harvest can check, stay out of scope; they are the owner's exemption
+> from "nothing wider", and the leg reports the literal property value it matched); `gap` (the leg makes no change and
+> reports). Never name the parts — a list of blocks or interfaces is harvested state. Declared or OPEN, never derived or
+> forced. A proxy or listener allowlist's `collateral`: `confined-to-block` (other blocks, paths and ports the listener
+> serves keep their behaviour) · `whole-listener` (they are restricted too) · `gap` (no change; report what else would change).
 
 ### A leg that changes routes (routing)
 
@@ -406,7 +430,7 @@ the prose above, because two readings of the same sentence produce two different
   `none — first run against this target` is a permitted answer.}}
 - {{THE WORK}}
 - **Admitted-principal premise** (`<leg token>.admitted-principal`): {{THE ATTRIBUTE the enforcer must see, and on
-  which path}} — if this leg's own harvest cannot confirm it, apply the `<leg token>.principal-unseen` row and cite its id.
+  which path — cite `<leg token>.request-path`}} — if this leg's own harvest cannot confirm it, apply the `<leg token>.principal-unseen` row and cite its id; if the harvest CONTRADICTS it (shows another path), make no change and report — whatever that row says.
   Where the objective declares the program does not create or verify that attribute's carrier, the branch still exists:
   it records the premise as UNTESTED and lists it under the package's **UNTESTED premises** — never drop the branch.
 - **Existence assumption** (*Writing rules* #6): {{THE BRANCH, NOT TODAY'S STATE — what this leg
@@ -419,6 +443,7 @@ the prose above, because two readings of the same sentence produce two different
   it, and is forbidden from recomputing it. Containment for that value is discharged **upstream** and
   re-verified at the program tier.
   - **If §6 does not carry it**: escalate. Do not guess, do not substitute, do not proceed.
+  - **If it arrives EMPTY** (a `<producer token>.inputs-empty` gap, or no members): make no change to the target and report the upstream gap, citing `<producer token>.inputs-empty`. Never apply an empty set.
 - **If this leg's own harvest returns no {{TARGETS}}**: {{THE NULL OUTCOME — apply the row that governs it and
   cite its id: `<leg token>.target-empty` when the receiver selector or surface matches nothing,
   `<leg token>.target-absent` when the declared target does not exist}}. The

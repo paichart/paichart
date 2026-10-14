@@ -1,0 +1,115 @@
+{
+  "label": "2026-10-07-opus-author-xdomain",
+  "purpose": "Does the Opus 5.5 AUTHOR result (observability: refused cases 4/10 -> 1/10, controls unchanged) hold in the other three domains that share config_change_author (network, terraform, kubernetes)? Owner decision 2026-10-07: pay for Opus-high on the Author rather than build a revision pass; this run gates the production switch. Reviewer unchanged on Sonnet 5 (instrument fixed). Texts = LIVE since 2026-10-07 05:10:44Z: current protocol rows + gap-2 config_change_author guidance, post-fix-A.",
+  "n": 5,
+  "flags": {
+    "CONNECTED_OUTPUT_SANITIZE_ENABLED": "true",
+    "FORM_CORRECTION_ENABLED": "true"
+  },
+  "baseline": {
+    "comment": "pinned from the production rows by build-candidates --refresh-baseline",
+    "protocols": {
+      "network-provisioning-protocol": {
+        "file": "protocols/network-provisioning-protocol@1.19.0.baseline.md",
+        "version": "1.19.0",
+        "sha256": "db30851bb44bfbec5a46d86dfbadd1a68c2a7f4e52b868519aa28cc7e320733d"
+      },
+      "terraform-iac-protocol": {
+        "file": "protocols/terraform-iac-protocol@1.12.1.baseline.md",
+        "version": "1.12.1",
+        "sha256": "0329e1d3ebf1d23b417825e3a1006263f97f9c8a866c8e0d04bba31b802a5801"
+      },
+      "kubernetes-gitops-protocol": {
+        "file": "protocols/kubernetes-gitops-protocol@1.15.0.baseline.md",
+        "version": "1.15.0",
+        "sha256": "9de5c99f0bf56ee6b99e5b3075ca6d250a70a0783be6774286719c29b9de5385"
+      }
+    }
+  },
+  "variants": {
+    "baseline": {
+      "edits": [],
+      "templateEdits": [
+        "edits/gap2-role-guidance.json"
+      ],
+      "dropTemplateDirective": true
+    },
+    "opusAuthor": {
+      "edits": [],
+      "templateEdits": [
+        "edits/gap2-role-guidance.json"
+      ],
+      "dropTemplateDirective": true,
+      "authorModel": "claude-opus-5-5"
+    }
+  },
+  "nodes": [
+    {
+      "id": "N-R",
+      "authorExecutionId": "cmuq29wom00d4yx4vj9mpcmog",
+      "kind": "refused",
+      "originalVersion": "1.18.0",
+      "variants": [
+        "baseline",
+        "opusAuthor"
+      ],
+      "why": "network: guessed literal for a never-rendered interface (is_up/is_enabled) — Author error class"
+    },
+    {
+      "id": "N-A",
+      "authorExecutionId": "cmuw8uwbl006yyx9ey6bw4cs6",
+      "kind": "approved-control",
+      "originalVersion": "1.19.0",
+      "variants": [
+        "baseline",
+        "opusAuthor"
+      ],
+      "why": "network 1.19.0 approved"
+    },
+    {
+      "id": "T-R",
+      "authorExecutionId": "cmuw9a9u500euyx9extv2aj4p",
+      "kind": "refused",
+      "originalVersion": "1.12.1",
+      "variants": [
+        "baseline",
+        "opusAuthor"
+      ],
+      "why": "terraform: elided rollback diff ('... (full block as added above)') — Author error class (TF-DIFF-ELISION)"
+    },
+    {
+      "id": "T-A",
+      "authorExecutionId": "cmuwbwxvw00jdyx9eoy7ra77r",
+      "kind": "approved-control",
+      "originalVersion": "1.12.1",
+      "variants": [
+        "baseline",
+        "opusAuthor"
+      ],
+      "why": "terraform 1.12.1 approved (the TF control)"
+    },
+    {
+      "id": "K-R",
+      "authorExecutionId": "cmuvsg84b00piyxgx9ybrhw2k",
+      "kind": "refused",
+      "originalVersion": "1.14.0",
+      "variants": [
+        "baseline",
+        "opusAuthor"
+      ],
+      "why": "k8s: missing drift disposition — class FIXED in k8s 1.15.0 (K8S-DRIFT-CARRY), so on today's text it may act as a control"
+    },
+    {
+      "id": "K-A",
+      "authorExecutionId": "cmuwbx63h00reyx9dmzjkg82z",
+      "kind": "approved-control",
+      "originalVersion": "1.15.0",
+      "variants": [
+        "baseline",
+        "opusAuthor"
+      ],
+      "why": "k8s 1.15.0 approved"
+    }
+  ],
+  "measures": []
+}

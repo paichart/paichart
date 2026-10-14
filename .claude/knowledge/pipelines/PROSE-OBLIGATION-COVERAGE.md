@@ -50,7 +50,8 @@ pointed at**. ⚠️ Mode 7's *pairing* is mechanisable even though the obligati
 `config_change_author` — a **four-domain** key — grants an escape and defers its licensing:
 
 > *"specify the COMPARISON to perform instead of the output to expect, **per your active protocol's
-> comparison shape**"* — `pAIchartUniversalTemplate.ts:506`
+> comparison shape**"* — `pAIchartUniversalTemplate.ts:506` *(as of 2026-09-19; replaced 2026-10-04 by the conditional
+> grant "Where your active protocol defines a shape for that step … Where it defines none …", now `:483`)*
 
 The instruction is processed, answerable, and addressed to the right party. It fails because
 **nothing obliges the referent to exist.** Measured across the four bound protocols on 2026-09-19:
@@ -59,8 +60,12 @@ The instruction is processed, answerable, and addressed to the right party. It f
 |---|---|---|
 | network-provisioning | defines the shape (3 places) | — |
 | kubernetes-gitops | silent → withdrew explicitly, protocol 1.9.0 | **author guessed, 3 rounds, 3 different invented forms** |
-| terraform-iac | silent | authors improvise; reviewers accept |
-| observability-config | **cites** a shape its body never defines | **reviewer accepts what no text grants** |
+| terraform-iac | silent → withdrew explicitly, protocol 1.10.0 (2026-10-04) | authors improvise; reviewers approved and refused the same `tflint` step |
+| observability-config | **cites** a shape its body never defines → owns it, protocol 1.6.0 (2026-10-04) | **reviewer accepts what no text grants** |
+
+**Status 2026-10-04 (pattern (h) batch 3): all four discharged and the pairing is BUILT** — `test-validation-shape-contract.ts`
+"mode 7" (derived population; proven RED for terraform + observability before the text). The text below records the
+state at filing (2026-09-19), including "Filed, not built".
 
 The two live failures are mirror images — an author guessing at an undefined shape, a reviewer
 accepting one — and **both are compliant readings of text that does not exist**. Note a dangling

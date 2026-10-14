@@ -1,0 +1,14 @@
+{
+  "id": "plant-P-GLOSS",
+  "title": "P-GLOSS: N4's gloss (R-1001, cmupd2asp006uyx4wz60o2rt5, verbatim) planted as prose after N-A's Derived Values block — TRUE for N-A's members (.1 in the first /28, .29 not)",
+  "appliesTo": [
+    "author:cmuw8uwbl006yyx9ey6bw4cs6"
+  ],
+  "ops": [
+    {
+      "type": "replace",
+      "old": "  {\"kind\": \"asn\", \"value\": \"65002\", \"device\": \"ceos2\"}\n]\n```\n",
+      "new": "  {\"kind\": \"asn\", \"value\": \"65002\", \"device\": \"ceos2\"}\n]\n```\n\n*(member .1 falls in the first /28 block, member .29 does not — proving /27 is the minimal aligned block, not just a sufficient one.)*\n"
+    }
+  ]
+}

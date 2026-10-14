@@ -336,3 +336,13 @@ Resource Lifecycle:
 - No apiClient usage in embedded server (P6 complete)
 - Admin auth fallback hardened to throw
 - Tests pass: manager (29) + security (42) + smoke (12)
+
+## Held-blob GC in the midnight chain (PLATFORM-HELD-BYTES Stage A, 2026-10-14)
+
+```bash
+grep -c "gcHeldBlobs(" lib/services/mcp/resourceManager.ts   # expect 1 — after cleanupArtifactsByTask, own try, re-arm in finally
+```
+`scheduleMidnightArtifactCleanup` now also runs `gcHeldBlobs` (lib/services/held-bytes-store.ts): one autocommit DELETE per
+batch, grace predicate on the DELETE target + `FOR UPDATE SKIP LOCKED`, errors named by SQLSTATE (`err.meta.code`). The RM
+singleton arms its sweeps in BOTH pm2 processes (register RM-SWEEPS-BOTH-PROCESSES), so the GC runs twice a night — it is
+idempotent by design. Its journal line ("Held-bytes GC sweep") lands in /var/log/paichart/*combined*.log*.

@@ -93,6 +93,11 @@ Precedents: verification-nets split from pipeline-harness (2026-09-11 — parent
 producer/consumer seam on execution facts, load spiking with net #3 + registry);
 pov-program-specialist's pre-agreed Protocol-12 eviction trigger (TODO-POV-EXECUTABLE-PROGRAM.md)
 is the same shape, deferred until its trigger fires.
+**requirements-authoring split from pipeline-harness (2026-10-11)** — the pre-agreed trigger (register
+REQ-AUTHORING-SPECIALIST: parent past 500 lines, or a second new registry class) had FIRED unnoticed at 505 lines;
+producer/consumer seam on the published spec (child produces the program's input, parent consumes it). Lesson: a
+size trigger is only real if it is checked at the edit that crosses it — check `wc -l` before adding to a parent
+that carries a mint trigger.
 
 ## 4. RETIRE / MERGE
 

@@ -334,6 +334,7 @@ export async function handleAgentExecute(
         // double-fires the retrigger.
         try {
           const { persistTerminalFailure } = await import('@/lib/services/execution-terminal-persist');
+          const { readAgenticLoopPartial } = await import('@/lib/agents/harness/agentic-tool-loop');
           const failTime = new Date();
           // Same extraction as the poller safety net: a typed AppError carries a branchable
           // `.code`; anything else records null ("no code recorded"), never a placeholder.
@@ -352,12 +353,14 @@ export async function handleAgentExecute(
             // later), so executionMs is measured from createdAt and includes queue time.
             executionCreatedAt: execution.createdAt ?? null,
             executionStartTime: execution.startTime ?? null,
-            // No LLM accounting is available at this site — the dispatch threw, and the
-            // adapter owns the usage it accumulated. All-null columns, not zeros.
-            usage: undefined,
-            servingModel: null,
+            // No captured accounting at this site — the dispatch threw. F-c (build review BC-L5): a LOOP throw still carries
+            // its partial usage + serving model on the original error; otherwise all-null columns, not zeros.
+            usage: readAgenticLoopPartial(err)?.totalUsage,
+            servingModel: readAgenticLoopPartial(err)?.servingModel ?? null,
             fireReactors: false,
             logger: log,
+            // COMPLETE-THEN-FAIL (v2 §3.6): transcribe a postCompletionRescue outcome if the error carries one.
+            originalError: err,
           });
 
           // Finding-9 mirror (see the poller safety net): a PIPELINE SYNTHESIZE that called

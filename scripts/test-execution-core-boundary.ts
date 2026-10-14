@@ -129,6 +129,18 @@ test('ORDER: cap → runDiagnosticRetry → assessExecutionQuality → persistTe
   assert(iQuality < iPersist, 'assessExecutionQuality must precede persistTerminalSuccess');
 });
 
+// ---------- Step B (2026-10-07): ONE reflection pass — #89 (in the loop) > form correction > #90 ----------
+test('ORDER (Step B): runFormCorrection precedes onStoringResults and runDiagnosticRetry, and #90 is told an attempt happened', () => {
+  const iLoop = coreSrc.indexOf('runAgenticToolLoop(');
+  const iForm = coreSrc.indexOf('runFormCorrection(');
+  const iStore = coreSrc.indexOf('observers.onStoringResults');
+  const iRetry = coreSrc.indexOf('runDiagnosticRetry(');
+  assert(iLoop > 0 && iForm > iLoop && iForm < iStore && iStore < iRetry, `order loop ${iLoop} < form ${iForm} < storing ${iStore} < #90 ${iRetry}`);
+  assert((coreSrc.match(/runFormCorrection\(/g) || []).length === 1, 'exactly one form-correction call site');
+  assert(/formCorrectionAttempted/.test(coreSrc.slice(iRetry, iRetry + 200)), '#90 call does not carry formCorrectionAttempted (the 5th disqualifier)');
+  assert(!/runFormCorrection\(/.test(engineSrc) && !/runFormCorrection\(/.test(streamSrc), 'an adapter calls the form correction itself (one insertion must serve both paths)');
+});
+
 // ---------- F2 §3.3 (2026-09-25, register E1): the truncation fact reads the LOOP-EXIT stop reason ----------
 // #90 REPLACES currentResponse with its reflection, so `currentResponse.stopReason` after #90 is the
 // reflection's end_turn. On the 2026-09-24 reviewer incident that hid a max_tokens deliverable. Both
@@ -173,6 +185,107 @@ test('SEAM: engine adapter no longer runs the loop inline (moved to the core)', 
 });
 test('SEAM: core does not own the engine activity log (adapter-only)', () => {
   assert(!/logAgentExecution/.test(coreSrc), 'logAgentExecution is engine-adapter-only (fires via onExecutionCompleted)');
+});
+
+// ---------- COMPLETE-THEN-FAIL (2026-10-05, DESIGN-v2 §3): the catch around the LOOP, and only the loop ----------
+const anchoredSrc = stripComments(fs.readFileSync(path.join(__dirname, '../lib/services/execution-completion-anchored.ts'), 'utf8'));
+test('CTF-SEAM-1: the core catches the LOOP throw only and hands it to rescueOrRethrow; the post-loop cascade has no catch', () => {
+  const loopIdx = coreSrc.indexOf('runAgenticToolLoop({');
+  const catchIdx = coreSrc.indexOf('} catch (loopErr) {');
+  const finIdx = coreSrc.indexOf('} finally {', catchIdx);
+  assert(loopIdx > 0 && catchIdx > loopIdx && finIdx > catchIdx, 'try { loop } catch (loopErr) { … } finally { clearTimeout } shape');
+  const catchBody = coreSrc.slice(catchIdx, finIdx);
+  assert(/await rescueOrRethrow\(loopErr,/.test(catchBody), 'the catch delegates to rescueOrRethrow with the ORIGINAL error object');
+  assert(/onExecutionCompleted\?\.\(/.test(catchBody) && /return;/.test(catchBody), 'a rescue resolves through the adapter success tail and returns');
+  assert(!/\bthrow\b/.test(catchBody), "the catch has NO throw of its own — every rethrow is rescueOrRethrow's (the original object)");
+  const afterFinally = coreSrc.slice(finIdx);
+  assert(!/catch \(loopErr\)/.test(afterFinally), 'no second loop catch');
+});
+test('CTF-SEAM-2: the rescue never calls the text cascade (#90 / confidence parse / finalize / generateText)', () => {
+  for (const sym of ['runDiagnosticRetry', 'parseConfidenceScore', 'applyConfidenceCap', 'finalizeTextForStopReason', 'generateText', 'computeSelfSupersession']) {
+    assert(!new RegExp(`\\b${sym}\\(`).test(anchoredSrc), `execution-completion-anchored.ts must not call ${sym}`);
+  }
+  assert(/confidenceScore: null/.test(anchoredSrc) && /diagnosticRetryUsed: false/.test(anchoredSrc), 'structural nulls in the builder call');
+  assert(/persistTerminalSuccess\(db, \{[\s\S]*?anchored: true/.test(anchoredSrc), 'the persist is the anchored mode');
+});
+test('CTF-SEAM-3: every non-rescued exit of rescueOrRethrow throws the ORIGINAL error object (`throw err;`)', () => {
+  const body = anchoredSrc.slice(anchoredSrc.indexOf('export async function rescueOrRethrow'));
+  const throws = body.match(/\bthrow [^;]+;/g) || [];
+  assert(throws.length > 0 && throws.every((t) => t === 'throw err;'), `only "throw err;" allowed, found ${JSON.stringify(throws)}`);
+});
+
+test('CTF-SEAM-4 (build review BC-M1/EF-F1): the post-loop region is wrapped ONCE and its catch only annotates (the original is rethrown by the helper)', () => {
+  const i = coreSrc.indexOf('} catch (postLoopErr) {');
+  assert(i > 0 && coreSrc.indexOf('} catch (postLoopErr) {', i + 1) < 0, 'exactly one post-loop catch');
+  const body = coreSrc.slice(i, coreSrc.indexOf('}', coreSrc.indexOf('annotatePostLoopThrowOrRethrow(', i)) + 1);
+  assert(/await annotatePostLoopThrowOrRethrow\(postLoopErr,/.test(body), 'the post-loop catch hands the ORIGINAL error to annotatePostLoopThrowOrRethrow');
+  assert(!/\bthrow\b/.test(body), 'no throw of its own');
+  assert(coreSrc.indexOf('} catch (postLoopErr) {') > coreSrc.indexOf('persistTerminalSuccess(prisma'), 'the normal success persist sits inside the wrapped region');
+});
+test('CTF-SEAM-5 (build review EF-F2): the core AND the rescue stamp nets through the ONE shared helper; neither builds its own net ctx', () => {
+  const nets = stripComments(fs.readFileSync(path.join(__dirname, '../lib/services/execution-nets.ts'), 'utf8'));
+  assert(/runNetsAtPoint\('leaf-persist'/.test(nets) && /runNetsAtPoint\('leg-synthesize'/.test(nets), 'the helper runs BOTH points');
+  for (const [name, src] of [['execution-core', coreSrc], ['execution-completion-anchored', anchoredSrc]] as const) {
+    assert(/await stampExecutionNets\(/.test(src), `${name} calls stampExecutionNets`);
+    assert(!/runNetsAtPoint\(|buildNetContext\(/.test(src), `${name} must not call runNetsAtPoint/buildNetContext itself (a forked net ctx)`);
+  }
+});
+
+test('CTF-SEAM-6 (PLATFORM-HELD-BYTES Stage A): the capture halves sit where the plan puts them, on BOTH success paths', () => {
+  const pos = (src: string, needle: string) => src.indexOf(needle);
+  const count = (src: string, re: RegExp) => (src.match(re) || []).length;
+  // core: ONE pure call after `const executionTime` and before every reader of toolCallResults
+  assert(count(coreSrc, /prepareHeldCapture\(/g) === 1, 'core: exactly one prepareHeldCapture(');
+  const prep = pos(coreSrc, 'prepareHeldCapture(');
+  assert(prep > pos(coreSrc, 'const executionTime') && prep < pos(coreSrc, 'buildSuccessLogs(')
+    && prep < pos(coreSrc, 'assessExecutionQuality(') && prep < pos(coreSrc, 'buildExecutionResultJson('),
+    'core: the pure half is after the duration and before buildSuccessLogs / assessExecutionQuality / buildExecutionResultJson');
+  // core: ONE I/O call after keep-best and before the persist, inside the post-loop region
+  assert(count(coreSrc, /await captureHeldFiles\(/g) === 1, 'core: exactly one await captureHeldFiles(');
+  const io = pos(coreSrc, 'await captureHeldFiles(');
+  assert(io > pos(coreSrc, '} catch (ksErr) {') && io < pos(coreSrc, 'persistTerminalSuccess(prisma'), 'core: the I/O half is after keep-best and before the persist');
+  // The POST-LOOP try is the last `try {` before `} catch (postLoopErr) {` (code review AE N-2: not the first in the file).
+  const postCatch = pos(coreSrc, '} catch (postLoopErr) {');
+  const postTry = coreSrc.lastIndexOf('try {', coreSrc.lastIndexOf('const { toolCallResults', postCatch));
+  assert(postTry > 0 && prep > postTry && io < postCatch, 'core: both inside the post-loop region');
+  // anchored: the pure half BEFORE buildCompletionAnchoredResult (which runs the nets), the I/O half after `built`
+  const fnA = anchoredSrc.slice(pos(anchoredSrc, 'export async function persistCompletionAnchored'));
+  assert(pos(fnA, 'prepareHeldCapture(') > 0 && pos(fnA, 'prepareHeldCapture(') < pos(fnA, 'buildCompletionAnchoredResult('), 'anchored: pure half before buildCompletionAnchoredResult (AE D1)');
+  assert(pos(fnA, 'await captureHeldFiles(') > pos(fnA, 'const built') && pos(fnA, 'await captureHeldFiles(') < pos(fnA, 'persistTerminalSuccess(db'), 'anchored: I/O half after built, before the persist');
+  // the two-caller pin: exactly two success persists in lib/ + app/, each preceded in its function by captureHeldFiles(
+  const walk = (dir: string, out: string[] = []): string[] => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p2 = path.join(dir, e.name);
+      if (e.isDirectory()) { if (e.name !== 'node_modules' && !e.name.startsWith('.')) walk(p2, out); }
+      else if (/\.(ts|tsx|js)$/.test(e.name)) out.push(p2);
+    }
+    return out;
+  };
+  const callers: string[] = [];
+  for (const f of [...walk(path.join(__dirname, '../lib')), ...walk(path.join(__dirname, '../app'))]) {
+    const src = stripComments(fs.readFileSync(f, 'utf8'));
+    const n = count(src, /\bpersistTerminalSuccess\(/g) - count(src, /export async function persistTerminalSuccess\(/g);
+    for (let i = 0; i < n; i++) callers.push(path.relative(path.join(__dirname, '..'), f));
+  }
+  assert(JSON.stringify(callers.sort()) === JSON.stringify(['lib/services/execution-completion-anchored.ts', 'lib/services/execution-core.ts']),
+    `persistTerminalSuccess callers: ${JSON.stringify(callers)} — a third success path must capture too`);
+  // neither file reaches inside the helper
+  for (const [name, src] of [['execution-core', coreSrc], ['execution-completion-anchored', anchoredSrc]] as const) {
+    assert(!/extractDeclaredFiles\(|canonicalBase\(|upsertHeldBlobs\(/.test(src), `${name} must call only the two helper halves`);
+  }
+  // Every catch body, brace-balanced, incl. a bare `catch {` (code review AE N-1: the [^}]* form stopped inside the
+  // body's first object literal and never matched `catch {`).
+  const helper = stripComments(fs.readFileSync(path.join(__dirname, '../lib/services/held-bytes-capture.ts'), 'utf8'));
+  const catchBodies: string[] = [];
+  const re = /catch\s*(?:\([^)]*\))?\s*\{/g;
+  let mm: RegExpExecArray | null;
+  while ((mm = re.exec(helper)) !== null) {
+    let depth = 1, i = mm.index + mm[0].length;
+    for (; i < helper.length && depth > 0; i++) { if (helper[i] === '{') depth++; else if (helper[i] === '}') depth--; }
+    catchBodies.push(helper.slice(mm.index, i));
+  }
+  assert(catchBodies.length >= 3, `found ${catchBodies.length} catch bodies`);
+  assert(catchBodies.every((c) => !/\bthrow\b/.test(c)), 'no catch in the helper rethrows');
 });
 
 console.log(`\n📊 Results: ${passed} passed, ${failed} failed`);

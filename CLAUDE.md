@@ -3,7 +3,7 @@
      cross. Regenerate after editing CLAUDE.md; do not hand-edit this file. -->
 # CLAUDE.md
 
-> **Version**: 2.6 | **Updated**: 2026-08-12 | **Agents**: 38
+> **Version**: 2.6 | **Updated**: 2026-09-11 | **Agents**: 41
 >
 > | Need | Action |
 > |------|--------|
@@ -83,7 +83,7 @@ Example requests:
 
   - Each review directory contains: specialist reviews, confidence assessments, implementation plans
 
-**Formal Agents**: `/.claude/agents/` - 38 active specialist agents with YAML frontmatter (multi-tenancy + frontend-provocateur RETIRED 2026-06-11 — tombstones + domain libraries)
+**Formal Agents**: `/.claude/agents/` - 41 active specialist agents with YAML frontmatter (multi-tenancy + frontend-provocateur RETIRED 2026-06-11 — tombstones + domain libraries)
 
 **Quick Decision**: "Is this permanent agent knowledge or temporary session artifact?"
 - Permanent (reusable, validated, agent-referenced) → `.claude/knowledge/`
@@ -115,7 +115,7 @@ Example requests:
 
 **Pattern-First Protocol**: Check registry BEFORE implementing → Use proven patterns → Avoid reinventing solutions
 
-### Available Agents (38 active)
+### Available Agents (41 active)
 
 Located in `/.claude/agents/`. Grouped by domain for easier selection:
 
@@ -158,7 +158,7 @@ Located in `/.claude/agents/`. Grouped by domain for easier selection:
 | `event-system-specialist` | PostgreSQL NOTIFY/LISTEN, connection pooling |
 | `metadata-tenant-preservation-specialist` | Metadata preservation, tenant isolation |
 
-#### Domain-Specific (10 agents)
+#### Domain-Specific (13 agents)
 | Agent | Purpose |
 |-------|---------|
 | `agent-execution-specialist` | Execution engine, transaction atomicity, SSE streaming |
@@ -171,6 +171,9 @@ Located in `/.claude/agents/`. Grouped by domain for easier selection:
 | `types-system-specialist` | TypeScript, Prisma schema |
 | `prompt-construction-specialist` | Agent prompt engineering |
 | `mcp-artifacts-specialist` | Artifact lifecycle |
+| `execution-facts-specialist` | Fact PRODUCTION — mechanical nets, stamping/whitelist, disposition taxonomies, replay + fixtures |
+| `model-evaluation-specialist` | Measure text + model/effort changes before ship — leg replay lab, Protocol 16, model-onboarding playbook, reviewer ground-truth bench |
+| `requirements-authoring-specialist` | Objective → published, answered requirements.md — design-decision question registry, owner-answer session, publish checks (Python + in-run TS port), publish pass, requirements-spec skill (split from pipeline-harness 2026-10-11) |
 
 #### Operations (5 agents)
 | Agent | Purpose |
@@ -524,7 +527,10 @@ I need to work on [YOUR TASK]. Please use the discovery-scout sub-agent to run r
 | 10. Signal Design (Fact vs. Verdict) | Adding/altering a client-facing signal an AI consumer acts on | Prevents misleading-signal regressions |
 | 11. Drift Sweep | After any rename/move/delete/retirement or pattern centralization | Prevents stale-doc-driven wrong analyses + re-add-the-dead-thing traps |
 | 12. Specialist Eviction & Size Budget | Adding a 4th dated session block; specialist >500 lines; quarterly size scan | Keeps agents loadable + reviews sharp (agent=router, knowledge=docs) |
-| 13. Program Workflow Evolution | A live program/pipeline run produced a defect, near-miss, or suspicious pass you intend to fix | Fix lands at the right layer, live-validated, can't silently regress |
+| 13. Program Workflow Evolution | A live program/pipeline run produced a defect, near-miss, or suspicious pass you intend to fix — **or the per-finding loop has stopped converging (step-back review: ledger → actor map → research → T0 → panel → grouped decisions)** | Fix lands at the right layer, live-validated, can't silently regress |
+| 14. Evidence-Graded Panel Review | A high-stakes change (classifier/gate, shared key, security, public surface, expected disagreement) needs a panel whose conclusion must be trusted — `.claude/knowledge/protocols/evidence-graded-panel-review-protocol.md` | Knowledge refresh, independent audit and blind ground truth catch the synthesis's own errors before the decision |
+| 15. Isolated Variant Build & Promotion | A step-back says a RELEASED protocol/program/leg shape must change, and its successful runs must not move — build an opt-in variant, prove existing runs byte-unchanged, gate it before ACTIVE, measure in a frozen window, then promote — `.claude/knowledge/protocols/isolated-variant-build-protocol.md` (phases 0-9 proven on value-chain 2026-10-03; phase 10 promotion proven 2026-10-05 — value-chain folded into pov-program 2.0.0, 4 controls, 0 stop-line hits; value-leg positive control owed) | Value-chain (2026-10-02): 41/41 texts byte-identical through 5 batches, 0 changed facts over 2,196 replayed prod tasks, a guaranteed first-run false refusal caught before go-live |
+| 16. Pre-registered Lab Gate | A change to what a pipeline agent reads (protocol, role guidance, template constraint) or to a role's model/effort, before push — pre-register the rule, score both directions (ground-truth bench when the REVIEWER changes), prove the bytes, hand-read, owner pays — `.claude/knowledge/protocols/pre-registered-lab-gate-protocol.md` | Batch 2 (2026-10-08): run 1 stopped a text that would have shipped four defects; two production parser faults found by reading samples |
 
 **Typical Workflow**: Discovery → Boundary mapping → Specialist review → Implementation → Pattern extraction
 
@@ -678,9 +684,11 @@ npm run test:security        # POV domain security validation
 - **POV domain security**:
   * XSS prevention (6 schemas validated)
   * Prompt injection detection (AgentExecuteSchema)
-  * DoS prevention (array/field limits)
+  * DoS prevention (array/field limits — `ReorderStagesSchema` 50-cap, competitors 20-cap;
+    both directions, mutation-proven. RESTORED 2026-09-14: the tests backing this claim were
+    `ImportPOVSchema` tests deleted with their dead surface in `f6d74b88`, so the claim went
+    true-by-history rather than true-by-test while the live guards stayed un-regressed)
   * CUID enforcement (all ID fields)
-  * Rate limiting (export endpoint)
   * Self-removal prevention (team deletion)
   * withPOVAccess middleware validation
 

@@ -1,0 +1,129 @@
+{
+  "network-provisioning-protocol:baseline": {
+    "file": "protocols/network-provisioning-protocol@1.20.0.baseline.md",
+    "sha256": "c5b862056ae1cc57473bfca6cc47e35245b5f07e05b046b952d3057ca6d773e0",
+    "chars": 47429
+  },
+  "network-provisioning-protocol:batch2": {
+    "file": "protocols/network-provisioning-protocol@1.20.0.batch2.md",
+    "sha256": "7c2f1ceb3d35fed9e8dfe7856aa43095be5b7b204e7c1ffcd1613b23ee44def7",
+    "chars": 47634,
+    "edits": [
+      "batch2-network-N1-v3"
+    ],
+    "deltaChars": 205
+  },
+  "terraform-iac-protocol:baseline": {
+    "file": "protocols/terraform-iac-protocol@1.12.1.baseline.md",
+    "sha256": "0329e1d3ebf1d23b417825e3a1006263f97f9c8a866c8e0d04bba31b802a5801",
+    "chars": 38602
+  },
+  "kubernetes-gitops-protocol:baseline": {
+    "file": "protocols/kubernetes-gitops-protocol@1.15.0.baseline.md",
+    "sha256": "9de5c99f0bf56ee6b99e5b3075ca6d250a70a0783be6774286719c29b9de5385",
+    "chars": 41646
+  },
+  "observability-config-protocol:baseline": {
+    "file": "protocols/observability-config-protocol@1.7.0.baseline.md",
+    "sha256": "3941058638d26a0ace62d8fb3cbdad42ebec7844a0874527c9cfe37a3371f4a5",
+    "chars": 31148
+  },
+  "template:cmqgakedh0003yxhnrfg5isly:baseline": {
+    "file": "templates/change-reviewer.cmqgakedh0003yxhnrfg5isly.baseline.md",
+    "name": "Change Reviewer",
+    "sha256": "9d10835135bbe200a9308033580d8608f8eaf2c277eb1b8771b16d4ecd96c155",
+    "chars": 20420
+  },
+  "template:cmqgakedh0003yxhnrfg5isly:batch2": {
+    "sha256": "a2e4d60cce9296375b1f18ba6217896bc3348c1c79331ac0c25b75f2b5b1db2a",
+    "chars": 23426,
+    "edits": [
+      "batch2-role-v3"
+    ],
+    "deltaChars": 3006
+  },
+  "template:cmqyjicve0003yxa8l5iu00t1:baseline": {
+    "file": "templates/plan-policy-reviewer.cmqyjicve0003yxa8l5iu00t1.baseline.md",
+    "name": "Plan Policy Reviewer",
+    "sha256": "9d10835135bbe200a9308033580d8608f8eaf2c277eb1b8771b16d4ecd96c155",
+    "chars": 20420
+  },
+  "template:cmqyjicve0003yxa8l5iu00t1:batch2": {
+    "sha256": "a2e4d60cce9296375b1f18ba6217896bc3348c1c79331ac0c25b75f2b5b1db2a",
+    "chars": 23426,
+    "edits": [
+      "batch2-role-v3"
+    ],
+    "deltaChars": 3006
+  },
+  "template:cmqx7308t0003yx4g9rsdbvgc:baseline": {
+    "file": "templates/gitops-change-reviewer.cmqx7308t0003yx4g9rsdbvgc.baseline.md",
+    "name": "GitOps Change Reviewer",
+    "sha256": "9d10835135bbe200a9308033580d8608f8eaf2c277eb1b8771b16d4ecd96c155",
+    "chars": 20420
+  },
+  "template:cmqx7308t0003yx4g9rsdbvgc:batch2": {
+    "sha256": "a2e4d60cce9296375b1f18ba6217896bc3348c1c79331ac0c25b75f2b5b1db2a",
+    "chars": 23426,
+    "edits": [
+      "batch2-role-v3"
+    ],
+    "deltaChars": 3006
+  },
+  "template:cmtv2lufq0003yxtalviqqza3:baseline": {
+    "file": "templates/observability-change-reviewer.cmtv2lufq0003yxtalviqqza3.baseline.md",
+    "name": "Observability Change Reviewer",
+    "sha256": "9d10835135bbe200a9308033580d8608f8eaf2c277eb1b8771b16d4ecd96c155",
+    "chars": 20420
+  },
+  "template:cmtv2lufq0003yxtalviqqza3:batch2": {
+    "sha256": "a2e4d60cce9296375b1f18ba6217896bc3348c1c79331ac0c25b75f2b5b1db2a",
+    "chars": 23426,
+    "edits": [
+      "batch2-role-v3"
+    ],
+    "deltaChars": 3006
+  },
+  "plant:P-GLOSS": {
+    "file": "edits/plant-P-GLOSS.json",
+    "edit": "plant-P-GLOSS",
+    "sha256": "7acb64a476d52d8fe0ed82c4e76f118712ab911faabb12ff4281ccce15893896",
+    "deltaChars": 136
+  },
+  "plant:P-GLOSS-TF": {
+    "file": "edits/plant-P-GLOSS-TF.json",
+    "edit": "plant-P-GLOSS-TF",
+    "sha256": "d4dcb3288eed6687838ba1c83a3a9cfc6113092a8282fb031346c41cb4a3cb35",
+    "deltaChars": 119
+  },
+  "plant:P-FALSE": {
+    "file": "edits/plant-P-FALSE.json",
+    "edit": "plant-P-FALSE",
+    "sha256": "a8f3091616b8679d60369165f2d1987e63fa1424997e5745ebb5cc22be50e364",
+    "deltaChars": 170
+  },
+  "plant:P-CERT": {
+    "file": "edits/plant-P-CERT.json",
+    "edit": "plant-P-CERT",
+    "sha256": "417acb9809ae605ad98405bb3e6b842833208742cbb8a4cd53123aef37c9201b",
+    "deltaChars": 133
+  },
+  "plant:P-GRADE": {
+    "file": "edits/plant-P-GRADE.json",
+    "edit": "plant-P-GRADE",
+    "sha256": "593f3e65c6ed1f828b31611c0c559cd947316d0a4d2adf605421447f846629de",
+    "deltaChars": 262
+  },
+  "plant:P-POINT": {
+    "file": "edits/plant-P-POINT.json",
+    "edit": "plant-P-POINT",
+    "sha256": "166901d139cde1f625d96dcda71c074894854a0af4b2a39a659ccd01fcebcffc",
+    "deltaChars": 96
+  },
+  "plant:P-REACH": {
+    "file": "edits/plant-P-REACH.json",
+    "edit": "plant-P-REACH",
+    "sha256": "9678999cae762d3e151d0fdd589d0f6d94cae11fb9586fc560f7005a2932b5ef",
+    "deltaChars": -3460
+  }
+}

@@ -177,16 +177,27 @@ const RUN4_UNAFFECTED_LEGS = [
 ];
 const RUN4_CLASSIFIER3_LEGS = [RUN4_FABRIC_LEG, ...RUN4_UNAFFECTED_LEGS];
 
+/** value-chain B4 (2026-10-02): arms only a VALUE leg can take — none archived yet (fixture-proven). */
+const VALUE_LEG_HOIST_ARM = 'value-leg hoist (isValueLegTask true) — no value leg has run; fixture-proven by test:value-leg-containment';
+const VALUE_LEG_ROLLBACK_ARM = 'value-leg-no-package (benign) — no value leg has run; fixture-proven by test:value-leg-containment';
+
 const NET_SPECIMENS: Record<string,
   { legs: string[] | 'none'; why: string; unexercisedArms?: string[] }> = {
   'markerPresence@leaf-persist': { legs: [...POST_H2_LEGS, POST_DEPLOY_LEG, ...RUN4_UNAFFECTED_LEGS],
     why: 'H-4 shipped 2026-09-10; every leg here ran after it (Run 4 FABRIC excluded: X28, see RUN4_CLASSIFIER3_LEGS)' },
   'derivationContainment@leg-synthesize': { legs: [...POST_H2_LEGS, POST_DEPLOY_LEG, ...RUN4_UNAFFECTED_LEGS],
     why: 'last behavioural change H-2 (2026-09-09); every leg here ran after it (Run 4 FABRIC excluded: X28)',
-    unexercisedArms: [WAVE_B_ARM] },
+    unexercisedArms: [WAVE_B_ARM, VALUE_LEG_HOIST_ARM] },
   'rollbackContainment@leg-synthesize': { legs: [...POST_H2_LEGS, POST_DEPLOY_LEG],
     why: 'the HOIST shipped with net #3 on 2026-09-11 and these legs carry its stamp',
-    unexercisedArms: [WAVE_B_ARM] },
+    unexercisedArms: [WAVE_B_ARM, VALUE_LEG_ROLLBACK_ARM] },
+  // value-chain B4 (2026-10-02): the value leg's Derivation Architect leaf. No archived leg is a value leg — the
+  // protocol is DRAFT and no derivation_architect has ever run — so no specimen can exist. The isValueLeg-FALSE
+  // direction IS covered: every leg-synthesize specimen above replays through the new dispatch and must stay
+  // byte-identical (E2a's infra_change_architect children never reach this net: appliesTo is an exact role match).
+  // Fixture-proven by test:value-leg-containment until the first value leg is archived.
+  'derivationContainment@leaf-persist': { legs: 'none',
+    why: 'value-chain B4 — no value leg has run (protocol DRAFT); fixture-proven by test:value-leg-containment' },
 
   // ✅ CLOSED 2026-09-12 by the first post-deploy leg. The pre-deploy legs stay OUT: their stamps
   // predate the contractApplicability nesting, and adding them would be declaring something false.
@@ -212,9 +223,29 @@ const NET_SPECIMENS: Record<string,
   'verdictFreshness@leg-synthesize': { legs: 'none',
     why: 'shipped 2026-09-26, after every specimen leg; fixture-proven only until a post-deploy leg is archived' },
 
-  'rollbackContainment@leaf-persist': { legs: [POST_DEPLOY_LEG],
-    why: 'lane-first arm precedence (8366c21e) reached production with the registry deploy; this leg\'s '
-       + 'Author stamp was produced by that code',
+  // WARNINGS-INVISIBLE (2026-10-08): newer than every specimen — no archived leg can have stamped it. Fixture-proven
+  // (test-reviewer-warnings-net); add the first post-deploy leg that carries it and delete this note.
+  // VERBATIM-QUOTE-OMISSION (2026-10-13): a NEW net, newer than every specimen. Its applicability is pinned in
+  // test-quote-fidelity (REGISTRY: harvest/author leaves only) because E2a below cannot see it over-apply.
+  'quoteFidelity@leaf-persist': { legs: 'none',
+    why: 'shipped 2026-10-13, after every specimen leg; fixture-proven (test-quote-fidelity) and replayed over production' },
+  // PLACEHOLDER-APPLIES-AS-LITERAL (2026-10-13): a NEW net, newer than every specimen. Applicability (exact role
+  // `config_change_author`) is pinned in test-apply-block-placeholder (G2) because E2a cannot see it over-apply; the
+  // stored-corpus replay is replay-apply-block-placeholder.ts (PLACEHOLDER-GUARD-BUILD.md).
+  'applyBlockPlaceholder@leaf-persist': { legs: 'none',
+    why: 'shipped 2026-10-13, after every specimen leg; fixture-proven (test-apply-block-placeholder) and replayed over every stored Author package' },
+  'reviewerWarnings@leg-synthesize': { legs: 'none',
+    why: 'shipped 2026-10-08, after every specimen leg; fixture-proven only until a post-deploy leg is archived' },
+
+  // E1 (VERBATIM-QUOTE-OMISSION, 2026-10-13): the leaf's WITNESS moved from the harvest's finalResponse to its raw
+  // toolCalls and the fact gained `witness`, so every archived stamp predates the code under test BY CONSTRUCTION. It was
+  // [POST_DEPLOY_LEG] until then. Byte-equality to those stamps is impossible, and the specimen captures carry no
+  // toolCalls — so this is declared, not exempted: proven over the WHOLE production population by
+  // replay-nets-byte-identity.sh, which names every leg that moved (verbatim-quote-omission-2026-10-13/BUILD-A-E.md).
+  // Re-add a post-E1 leg here once one is archived.
+  'rollbackContainment@leaf-persist': { legs: 'none',
+    why: 'E1 (2026-10-13) moved the witness to the harvest\'s RAW toolCalls; every specimen stamp predates it — '
+       + 'the production replay (BUILD-A-E.md) is the proof until a post-E1 leg is archived here',
     // ⚠️ SEE THE ARM NOTE BELOW: covered as a LEG, not as an ARM.
     unexercisedArms: [WAVE_B_ARM, 'lane-not-supported — needs a DESIRED-STATE leg (terraform-iac / kubernetes-gitops); '
        + 'this specimen is observability-config, which is ADJUDICATED (checked:true), so the lane arm never ran'] },
@@ -375,7 +406,12 @@ function stubPrisma(s: Specimen) {
       {
         const prodKeys = Object.entries(c.stamped as Record<string, string | null>)
           .filter(([k, v]) => v != null && k !== 'rollbackContainmentJsonbText').map(([k]) => k).sort();
-        const ourKeys = Object.keys(leafStamped).sort();
+        // A net DECLARED newer than every specimen (`legs: 'none'`) that production never stamped here cannot be compared
+        // — it is reported NOT COVERED, never silently dropped (quoteFidelity, 2026-10-13).
+        const newer = Object.keys(leafStamped).filter((k) =>
+          NET_SPECIMENS[`${k}@leaf-persist`]?.legs === 'none' && !prodKeys.includes(k));
+        for (const k of newer) reportNotCovered(`${c.id.slice(-6)} · ${k}@leaf-persist`, NET_SPECIMENS[`${k}@leaf-persist`].why);
+        const ourKeys = Object.keys(leafStamped).filter((k) => !newer.includes(k)).sort();
         check(`E2a ${c.id.slice(-6)}: stamps exactly the keys production stamped (no net over-applied)`,
           JSON.stringify(ourKeys) === JSON.stringify(prodKeys),
           `registry : ${ourKeys}\n     prod     : ${prodKeys}`);

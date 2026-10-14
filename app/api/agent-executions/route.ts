@@ -209,7 +209,9 @@ const getAgentExecutionsHandler: ApiHandler = async (
         endTime: exec.endTime,
         duration,
         progress,
-        prompt: 'prompt' in config ? String(config.prompt) : 'Agent execution',
+        // Since TEMPLATE-SENT-TWICE fix A (2026-10-07) config.prompt is absent for a task with no directive of its own;
+        // a present-but-null/empty value must not render as the string "null"/"undefined".
+        prompt: typeof config.prompt === 'string' && config.prompt ? config.prompt : 'Agent execution',
         result: typeof exec.context === 'object' && exec.context && 'result' in exec.context
           ? (exec.context as any).result
           : null,

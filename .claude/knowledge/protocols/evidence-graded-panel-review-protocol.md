@@ -11,6 +11,8 @@
 > any signal the change ships), Protocol 11 (the drift sweep that closes it), Protocol 12 (keep specialist files lean
 > while updating them), `SPECIALIST-LIFECYCLE-GUIDE.md`.
 
+> **Used at three gates by Protocol 15** (`isolated-variant-build-protocol.md`): design, plan and pre-ACTIVE prose review — each followed by its independent audit (value-chain, 2026-10-02).
+
 ## When to use — and when NOT to (proportionality)
 
 The full procedure costs roughly **8–12 agent runs** (EF-DL2: 6 knowledge refreshes, 4 lanes, 1 audit, 1 blind
@@ -116,6 +118,7 @@ changes — even when the answer is "all recommendations". A decision nobody wro
 - Giving a "blind" labeller a path to the first labeller's file.
 - Carrying an inherited claim into the assessment without a mechanism behind it (EF-DL2: "EG-1 made a false scan lower-stakes" — the net's facts never reach a reviewer).
 - Committing review scratch code that imports by absolute path into a type-checked folder.
+- Trusting a builder's mutation checks. In the 2026-10-12 containment build the first round read green on code that did not compile, because an output filter hid the crash. A reviewer breaks each guard itself, one at a time, and reads the suite's COUNTS (and the failing pin's message), never only its exit code.
 
 ## Proven impact (EF-DL2, 2026-09-27/28)
 

@@ -1017,6 +1017,19 @@ export const anthropicModels: Record<string, ModelInfo> = {
   // Recorded because a confident, specific, wrong justification is worse than none: it is precisely
   // what stops the next reader from re-checking. (Same failure as the stale "engine + stream +
   // reactor" comment corrected in agentic-tool-loop.ts on the same day — see 620b9062.)
+  // Opus 5.5 added to the registry (= made SELECTABLE) 2026-10-07 — the register OPUS55 note said "add only when the
+  // trial is approved"; Steve approved it as the config_change_author model the same day (register MODEL-CHOICE). Its
+  // request shaping (capability branch ahead of /opus-5/, forced tool_choice downgraded, thinking always on) and its
+  // pricing key ('opus-5-5', $4/$20) shipped 2026-09-26 (`97f8612b`). Placed first among the Opus entries (newest first).
+  'claude-opus-5-5': {
+    name: 'Claude Opus 5.5',
+    description: 'Strongest Opus for complex agentic and reasoning work; thinking always on',
+    maxTokens: 128000,
+    contextWindow: 1_000_000,
+    supportsStreaming: true,
+    supportsFunctions: true,
+    supportsPromptCache: true,
+  },
   'claude-opus-5': {
     name: 'Claude Opus 5',
     description: 'Complex agentic coding and deep reasoning, at half the cost of Fable 5',

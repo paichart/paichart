@@ -1,0 +1,23 @@
+{
+  "id": "z49-protocol-1.9.0",
+  "appliesTo": [
+    "requirements-authoring-protocol"
+  ],
+  "ops": [
+    {
+      "type": "replace",
+      "old": "| {{LEG_TOKEN}}.admitted-principal | who is admitted, and by which attribute the enforcer recognises them | source-address-range · named-identity · network-path · combination (state each part) | {{THE PRINCIPAL}} | {{SOURCE — (declared — item N: \"<one exact span of item N>\") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |\n| {{LEG_TOKEN}}.principal-unseen | the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path | gap · act-regardless | {{THE RULE}} | {{SOURCE — (declared — item N: \"<one exact span of item N>\") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |\n",
+      "new": "| {{LEG_TOKEN}}.admitted-principal | who is admitted, and by which attribute the enforcer recognises them | source-address-range · named-identity · network-path · combination (state each part) | {{THE PRINCIPAL}} | {{SOURCE — (declared — item N: \"<one exact span of item N>\") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |\n| {{LEG_TOKEN}}.request-path | the path the admitted senders' requests take to the enforcer, which decides the attribute their address arrives in (asked when admitted-principal admits by address) | direct · private-endpoint · translated | {{THE PATH}} | {{SOURCE — (declared — item N: \"<one exact span of item N>\") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |\n| {{LEG_TOKEN}}.principal-unseen | the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path | gap · act-regardless | {{THE RULE}} | {{SOURCE — (declared — item N: \"<one exact span of item N>\") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |\n"
+    },
+    {
+      "type": "replace",
+      "old": "  which path}} — if this leg's own harvest cannot confirm it, apply the `<leg token>.principal-unseen` row and cite its id.\n",
+      "new": "  which path — cite `<leg token>.request-path`}} — if this leg's own harvest cannot confirm it, apply the `<leg token>.principal-unseen` row and cite its id.\n"
+    }
+  ],
+  "derivedFrom": {
+    "base": "scripts/leg-replay-lab/inputs/2026-10-10-z49-request-path/protocols/requirements-authoring-protocol@1.8.0.baseline.md",
+    "target": "/tmp/claude-1000/-home-steve-copov15/811262b2-8231-4c0c-9e24-1031270d1c94/scratchpad/render-0bcbfd7f/requirements-authoring-protocol.md",
+    "proof": "apply(base, ops) == target, byte for byte"
+  }
+}

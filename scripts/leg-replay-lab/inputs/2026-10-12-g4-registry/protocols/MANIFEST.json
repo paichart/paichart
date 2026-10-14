@@ -1,0 +1,74 @@
+{
+  "requirements-authoring-protocol:baseline": {
+    "file": "protocols/requirements-authoring-protocol@1.9.0.baseline.md",
+    "sha256": "1b1a7c4e938f66f6fec81f8a6902966a9a76965740639c2b1322b06d95391cbf",
+    "chars": 50485
+  },
+  "requirements-authoring-protocol:g4": {
+    "file": "protocols/requirements-authoring-protocol@1.9.0.g4.md",
+    "sha256": "fd4b55a8e292b01b250a074eebd10b072ce4bead924e79ccde38770c4d2cbdef",
+    "chars": 51209,
+    "edits": [
+      "g4-protocol-1.10.1"
+    ],
+    "deltaChars": 724
+  },
+  "template:cmub1ql6f0001yx6695cga4zx:baseline": {
+    "file": "templates/requirements-author.baseline.md",
+    "name": "Requirements Author",
+    "sha256": "53bd58f09795063d9b88fc9ad4a64c210fcd2fb549ffeb8ae950dcffbab1f71d",
+    "chars": 43589
+  },
+  "template:cmub1ql6f0001yx6695cga4zx:g4": {
+    "sha256": "e0d39e4b866f85f66fc171c3d51de8c079f896c6d1dc3f5b3133ef900f2c557a",
+    "chars": 46231,
+    "edits": [
+      "g4-author-guidance"
+    ],
+    "deltaChars": 2642
+  },
+  "template:cmub1ql6m0002yx66hrxgxcc3:baseline": {
+    "file": "templates/requirements-reviewer.baseline.md",
+    "name": "Requirements Reviewer",
+    "sha256": "d126d7ce1709f3f56bdc3ab3928a386e670fcbe5aa3a3c7e8c29269f7599e74a",
+    "chars": 28822
+  },
+  "template:cmub1ql6m0002yx66hrxgxcc3:g4": {
+    "sha256": "b0f86fe92925962e44a679c6b0cf31e3822558251a051cb49683bec8bdc5d943",
+    "chars": 29204,
+    "edits": [
+      "g4-reviewer-guidance"
+    ],
+    "deltaChars": 382
+  },
+  "inputEdits:LA": {
+    "file": "node-inputs/item-22-enforcer-scope.json",
+    "edit": "item-22-enforcer-scope",
+    "targets": {
+      "leg:description": {
+        "beforeChars": 5111,
+        "afterChars": 5210
+      },
+      "author-task:description": {
+        "beforeChars": 5478,
+        "afterChars": 5577
+      },
+      "reviewer-task:description": {
+        "beforeChars": 4299,
+        "afterChars": 4398
+      }
+    }
+  },
+  "requirementsCheckAt:base": {
+    "commit": "3f8603a4b6f4fb2ff63e82ec928e2a2ee7c61970",
+    "registrySha256": "cd4cd7082a9e97fcb62bdb14e4605b46827e15c96d9009df31f3f6f3906088a9",
+    "templateSha256": "2821bd48c9e10688c703a5f641304e6abf80002c95065f6307a6cd4b33aa6d95",
+    "source": "commit:3f8603a4b6f4"
+  },
+  "requirementsCheckAt:g4": {
+    "commit": "2c55baae1c6420fbc1c90c5f97e5389ae0f16782",
+    "registrySha256": "c0ca080dd99298446cd49a96fc5a727213934c5d41421dcd30d1015f0f74b292",
+    "templateSha256": "2634c6ba044847cd866abaa5dc03d6fe2b16ae9c0681e5066a551b3ee39eaf0c",
+    "source": "commit:2c55baae1c64"
+  }
+}

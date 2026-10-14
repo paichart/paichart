@@ -1,0 +1,16 @@
+{
+  "observability-config-protocol:baseline": {
+    "file": "protocols/observability-config-protocol@1.7.0.baseline.md",
+    "sha256": "3941058638d26a0ace62d8fb3cbdad42ebec7844a0874527c9cfe37a3371f4a5",
+    "chars": 31148
+  },
+  "observability-config-protocol:gap3": {
+    "file": "protocols/observability-config-protocol@1.7.0.gap3.md",
+    "sha256": "b8e4965e4a8b60dbaf8152cd98de476c32d9537b5fc14035585fa90768b78820",
+    "chars": 32542,
+    "edits": [
+      "gap3-1.8.0"
+    ],
+    "deltaChars": 1394
+  }
+}

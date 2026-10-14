@@ -40,6 +40,99 @@ The plan gate is where platform reality is cheapest to check: nothing is built y
 
 5. **Check the contract the LEGS hold, not the one the Architect wrote.** These are the same
    document only if nothing was re-run. Read `inputContext.interfaceContract` off an actual leg.
+5b. **You approve LEG TYPES here (pov-program 2.0.0, promotion E).** Every DAG entry states `leg type: value`
+   (publishes a value, changes no system) or `leg type: change`; the gate description lists them, and each value leg
+   quotes the requirements phrase it relied on. Check each type against what that leg's objective actually does — a
+   leg that derives a value AND changes a device is a `change` leg. A type you do not accept means the plan is not
+   approved: do not release, re-plan. An entry with no type is reported
+   in the gate description, never supplied by the harness. Node C later checks every leg's token and type against
+   this approved plan, and a mismatch there is BLOCKING.
+
+### The hold window: what PLAN-SPAWN built, checked BEFORE you release (2026-10-04)
+
+PLAN-SPAWN is the harness step that reads the approved plan and CREATES the legs, gates, producer and Node C. Several of
+its steps are performed by the model and varied across the value-chain frozen window (B7, five runs). Each is fixable
+only while the plan gate is held — once released, the legs start with whatever they were given. Check all four:
+
+6. **Every leg and Node C holds the PLAN'S contract — compare each to the plan, never to each other.** The plan is the
+   fenced JSON under `## Interface Contract` in the Architect's report; compare it to each child's
+   `inputContext.interfaceContract` as **jsonb** (key-order-insensitive) — the query is in PROGRAM-RUN-FORENSICS-GUIDE §4c.
+   Expect `SAME AS PLAN` on every row. ⚠️ *Corrected 2026-10-04:* this check used to compare md5 ACROSS legs, which is
+   blind to a paraphrase every leg shares — measured, it missed 17 of 23 deviations, and passed B7 runs 1-2 and
+   re-measure run 1 while their contracts had been re-typed (value-chain: 5 of 7 runs differ from the plan). *B7 runs 3-4:
+   trimmed per leg; run 4's and re-measure run 1's Node C had no branch conditions.* A contract shape defect cannot be
+   repaired in place — archive and relaunch, or release with the deviation recorded (owner's call).
+   **Since C2/C3 (deploy of `d7762f17`, pushed 2026-10-04 06:24 UTC) the platform stores the PLAN's contract itself**, so
+   also expect `metadata.interfaceContractSource.source = 'plan'` on every contract-bearing row and the live contract's sha
+   equal to `storedAtWriteSha256`. Primary instrument: `npm run replay:plan-contract -- --root <root id>` (the shipped
+   resolver; the SQL in the forensics guide is a cross-check). `source:'supplied'` or `'none'` on any row is a finding —
+   read its `planResolution`. Keep the plan-comparison above until the first live run has verified this.
+7. **The clearance reached every leg** (from the second run in a POV onward). Each PIPELINE leg's
+   `metadata.duplicateAcknowledged` must CONTAIN every id in the root's list (⊇, not equal — the harness computes each
+   leg's list and may legitimately add the leg-stage ids; a NARROWER list is the defect: one pov-program run carried 25
+   of the root's 32). A leg's duplicate-halt is TERMINAL. *B7 run 4: the root held 15 ids and no leg got them — stamped
+   by hand in the hold window, and the legs then passed their own check.* (Planned: the platform will make each leg's
+   list a superset of the root's at execution, after which this check reads the ROOT — design C3,
+   `cline_docs/reviews/value-chain-post-window-2026-10-04/C-PLAN-SPAWN-DESIGN.md`.)
+   **Since C2/C3 (`d7762f17`):** read the ROOT's `metadata.duplicateAcknowledged` — it must carry every prior program AND
+   pipeline stage. The platform makes each leg a superset of it at the leg's FIRST EXECUTION, so a short leg list in the
+   hold window is now expected. It carries only a root clearance that names at least one real stage in the POV
+   (`root-clearance-unbound` otherwise). A `PRE-FLIGHT CLEARANCE:` block in the DESCRIPTION is NOT carried — with one,
+   check the legs as before. After first execution: every carry's `added` ⊆ the leg's current list (a stale POV-editor
+   autosave can revert it; the carry runs again, idempotently, at every later execution prep). `HOWTO-use-program-harness`
+   2.8.0 (promotion E deploy 2) states this carry rule; before deploy 2 it still said to confirm on leg metadata. Until
+   the first live run verifies the carry, ALSO check ⊇ root on every leg as before.
+8. **The dependency shape — Node C must REVIEW before you decide the change gates.** The intended shape:
+   ```
+   Plan gate ──► value leg ──► value gate ──► change leg A ──► change-method gate A
+                                          ├─► change leg B ──► change-method gate B
+                                          └─► change leg C ──► change-method gate C
+   Producer + Node C wait for:   the legs only
+   Program SYNTHESIZE waits for: everything, gates included
+   ```
+   Node C's cross-leg verdict (same value everywhere, nothing widened, each leg's own verdict) then lands while the
+   change gates are still open — evidence FOR your gate decisions. The variant to catch:
+   ```
+   Producer + Node C wait for:   the legs AND the change-method gates
+   ```
+   *B7 run 4* — the harness acted on an Architect remark that gates "block program completion". The order of evidence
+   flips: you decide the gates without Node C, and Node C then reads your gate notes as evidence (run 4's Node C cited
+   our "settled, NOT approved" notes back as its blocking reasons — an echo, not an independent check), and it is a
+   series break for any measurement. Neither shape is unsafe (release still needs every leg approved), but the protocol
+   intends the first — and since pov-program 2.0.0 (promotion E6) it ENFORCES it in text: producer and Node C get "ALL
+   pipeline child ids — never a gate", whatever the plan, contract or gate table says, and the Architect is told never to
+   prescribe their edges. So on a run whose PLAN-SPAWN ran under 2.0.0 (launched after deploy 2) **Node C reviews BEFORE you release a gate that "blocks program completion"**
+   (`after-leg-before-completion`): its verdict is evidence for that gate, and SYNTHESIZE still waits for the gate. The
+   variant on such a run is a finding. Fix before release by removing the extra dependency edges. **How:** `perform task.update` with `dependencyIds: [<the PIPELINE leg ids>]` on the producer and on Node C — it
+   REPLACES the dependency set (done live 2026-10-04, re-measure run 1). **Why it matters for approvers:** under the
+   variant, Node C fetches each settled gate with `task.context` and reads your completion note as evidence — a gate
+   note becomes a Node C input (an anchoring channel; persuasive prose passes the R9 sanitiser, only injection-shaped
+   text is neutralised). If you ever do run the variant, keep gate notes strictly factual. *The cause so far has always
+   been the same: the Architect reads the requirements' "blocks program completion" gate column as a wiring
+   instruction — watch its assumptions for it.*
+9. **Every leg title carries its protocol token and leg type** (`(protocol: network-derivation)` etc.) — Node C checks
+   them against the approved plan.
+10. **Node C runs on the `Program Integration Reviewer` row** on a run whose PLAN-SPAWN ran under 2.0.0 (launched after deploy 2) — confirm Node C's `agentTemplateId`
+   is the id recorded at deploy 2, by id, not by name: `Value-Chain Program Integration Reviewer` also contains that name,
+   and a missing exact name binds the nearest row SILENTLY. A root PLANNED before deploy 2 and released after it keeps
+   its `Change Reviewer` Node C — the third population (CLAUDE.md soak entry), expected, not a finding.
+
+⚠️ **Re-running a leg after Node C has reviewed it leaves Node C's verdict STALE.** With Node C wired to the legs only, it
+can finish while a leg's own gate is still open. If you then re-run that leg (to fix its package) before releasing its
+gate, the program synthesises on Node C's verdict about the OLD package — the operator-induced re-run class, made
+reachable by the new order. Re-run Node C after the leg (its input changed, so it is not a same-input re-roll), or record
+the deviation before release.
+
+The SQL for 6-8 (one query, read-only) is in `PROGRAM-RUN-FORENSICS-GUIDE.md` §4c.
+
+### Run titles in a MEASUREMENT window — no run number, so the clearance must be perfect
+
+`PROGRAM-HARNESS-USER-GUIDE.md` §2 says put a run number in the title: it lets a leg read a prior run's stage as
+history instead of a duplicate of itself. In a measurement window that number tells agents where they sit in the series
+(B7 run 4's Architect quoted "Run 4 of a declared ≥5-run window" and the stop line), so the re-measure window drops it —
+plain identical title, a timestamped fresh stage per run, and NO measurement criteria in phase/stage text. The cost is
+that the run number's protection is gone, so check 7 is no longer optional: the root carries every prior stage id, and
+every leg must carry it before release.
 
 ## A contract SHAPE defect cannot be repaired in place — archive the round
 
@@ -142,6 +235,25 @@ you cannot trust, which is worse than no evidence.
 2. **Apply the package VERBATIM.** Never patch it while applying. If a line is wrong, that is a gate
    finding and the package gets re-authored — the applied change must stay byte-provenant to the
    reviewed document, or the run's whole claim collapses.
+
+   🔴 **Never apply a block that contains `<<REDACTED-SECRET>>` or `<REDACTED-SECRET>`** — or any other
+   `<<REDACTED…>>` or `<REDACTED…>` form (Authors invent variants such as `<REDACTED-SNMP-RO-COMMUNITY>`) — in
+   desired state, a rollback or a CLI step. Those are the platform's secret
+   placeholders, not values, and devices accept them as literals (device-verified 2026-10-13, P4): EOS
+   takes them as an SNMP community, a `secret 0` / `enable password 0` or a TACACS key; nginx takes them
+   in a `proxy_set_header` value; otelcol takes them in a header or auth setting. **A green `nginx -t`
+   or `otelcol validate` does not prove such a file safe** — both pass with the placeholder in place.
+   **On EOS, a full `configure replace` (or rollback clean-config + load) of a file with a redacted
+   password-hash line can delete that object, the only admin user included, while still printing
+   "Copy completed successfully".** Such a block cannot be applied verbatim, so it is a gate finding
+   like any other wrong line: hold, and have the package re-authored to leave the secret-bearing line
+   out of the edit set; for a rollback, restore from the device's own saved configuration, not from the
+   package text. Never type the real value in by hand: the applied change would then differ from the
+   reviewed document. Since 2026-10-13 the leg's `report.md` names such lines under **Platform warnings
+   (non-blocking)** (`placeholder-in-apply-block`). That is a warning, not a gate, and **its absence is
+   not clearance**: it reads the persisted package, and a package from before 2026-10-13 carries no
+   such check at all. Search the text yourself: `grep -nE '<{1,2}REDACTED' <package file>` (every hit inside a block you
+   will apply is a stop).
 3. **Use a config session and review the diff BEFORE commit.** The diff must contain only package
    lines. `abort` costs nothing.
 4. **Run the package's own validation — and read each step's SHAPE before judging it.** Since
@@ -271,6 +383,24 @@ propagates legitimately and a human sees it at the plan gate.
 objective hand-carries the behaviour the protocol was changed to produce, the run tests the
 workaround. *Pass condition written IN ADVANCE, then verified mechanically on the package — that is
 what made kubernetes-gitops 1.9.0's validation trustworthy (2026-09-19).*
+
+## Settling a gate WITHOUT approving the package — option (b) (owner's decision, used in value-chain runs 2-5)
+
+A program only reaches its final SYNTHESIZE when every gate is terminal. If a change leg came back NEEDS-REVISION and you
+do not intend to re-run it, holding its gate leaves the program open forever (run 12: `runDisposition: abandoned`).
+**Option (b):** complete the gate with a note that says, in so many words, **"Gate SETTLED, package NOT APPROVED"**, the
+leg's blocking reason, and that the completion releases nothing. The program then synthesises and stamps
+`programReleasable: false` with the reason — you get the finished record (Node C, cost, facts) and nothing is released,
+because `programReleasable` keys on each leg's outcome, not on the gate.
+
+- **This is the owner's call, every time** — never a delegated default (PROGRAM-HARNESS-USER-GUIDE §5 rule 2). The owner
+  chose it per gate in each run.
+- ⚠️ **Gate completion is not an approval fact.** The platform cannot tell an option-(b) settlement from an approval; only
+  the note says so. Harmless while release keys on leg outcomes — but nothing downstream may read "gate completed" as
+  "package approved". A gate-outcome FACT is the candidate fix (filed: GATE-COMPLETION-IS-NOT-APPROVAL).
+- If Node C depends on the gates (it did in value-chain run 4; a pov-program 2.0.0 run should never wire it so), it
+  **reads your gate notes and uses them as evidence** — write them as facts.
+- Keep the note under 500 characters (`task.complete` summary limit — an over-long one writes nothing).
 
 ## Campaign hygiene
 

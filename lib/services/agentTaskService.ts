@@ -204,7 +204,9 @@ export class AgentTaskService {
       // Prepare execution configuration
       const executionConfig = {
         agentRole: options.overrideConfig?.agentRole || task.agentRole || task.agentTemplate?.defaultRole,
-        prompt: options.overrideConfig?.prompt || task.prompt || task.agentTemplate?.promptTemplate,
+        // TEMPLATE-SENT-TWICE (fix A, 2026-10-07): never fall back to the template — it is the SYSTEM prompt. Absent ⇒
+        // buildAgentPromptBody synthesizes the directive. Same rule as agentExecutionConfigBuilder.ts.
+        prompt: options.overrideConfig?.prompt || task.prompt || undefined,
         inputContext: options.overrideConfig?.inputContext || freshTask?.inputContext || task.inputContext,
         maxRetries: options.overrideConfig?.maxRetries ?? task.maxRetries ?? 3,
         // X19: SECONDS (see msToExecutionTimeoutSeconds). The template's value, spread below, wins over the task column;

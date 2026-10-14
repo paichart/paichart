@@ -119,7 +119,10 @@ def main() -> int:
             if not has:
                 findings.append(f'{t}: authorisation leg with no premise branch citing `{t}.principal-unseen` outside the table')
 
-    declared_rows = len(re.findall(r'(?m)^\|[^|\n]+\|.*\bdeclared\b', table))
+    # A row is DECLARED when its SOURCE cell (the last) says so — never when the word appears anywhere in the row: the
+    # registry's own question text for `target-absent` reads "the declared target itself does not exist", so every
+    # zero-decision draft drew a false "citation form drifted" finding (2026-10-11, run 1 of the three-run test).
+    declared_rows = len(re.findall(r'(?m)^\|[^|\n]+\|.*\|\s*\(?declared\b[^|\n]*\|[ \t]*$', table))
     if total == 0 and declared_rows:
         findings.append(f'{declared_rows} declared row(s) in the Design decisions table but 0 citations parsed — the citation form drifted; a zero here is NOT clean')
     print(f'citations: {total} total, {ok} verbatim, {total - ok} failing')

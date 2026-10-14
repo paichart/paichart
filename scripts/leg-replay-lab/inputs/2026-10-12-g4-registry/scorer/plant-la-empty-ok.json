@@ -1,0 +1,14 @@
+{
+  "id": "la-empty-ok",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "LA: an empty-upstream branch citing the producer's inputs-empty, no change (G-EMPTY pass).",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "## Pipeline 2 objective — terraform-iac (DOWNSTREAM)\n",
+      "new": "## Pipeline 2 objective — terraform-iac (DOWNSTREAM)\n\n- **Empty upstream** (`kubernetes-gitops.inputs-empty`): when the host list arrives empty, the leg makes no change to the bucket policy and reports the upstream gap.\n"
+    }
+  ]
+}

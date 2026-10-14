@@ -1,0 +1,17 @@
+{
+  "network-provisioning-protocol:baseline": {
+    "file": "protocols/network-provisioning-protocol@1.19.0.baseline.md",
+    "sha256": "db30851bb44bfbec5a46d86dfbadd1a68c2a7f4e52b868519aa28cc7e320733d",
+    "chars": 47422
+  },
+  "terraform-iac-protocol:baseline": {
+    "file": "protocols/terraform-iac-protocol@1.12.1.baseline.md",
+    "sha256": "0329e1d3ebf1d23b417825e3a1006263f97f9c8a866c8e0d04bba31b802a5801",
+    "chars": 38602
+  },
+  "kubernetes-gitops-protocol:baseline": {
+    "file": "protocols/kubernetes-gitops-protocol@1.15.0.baseline.md",
+    "sha256": "9de5c99f0bf56ee6b99e5b3075ca6d250a70a0783be6774286719c29b9de5385",
+    "chars": 41646
+  }
+}

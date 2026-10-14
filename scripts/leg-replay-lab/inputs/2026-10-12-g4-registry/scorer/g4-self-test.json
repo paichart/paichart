@@ -1,0 +1,336 @@
+{
+  "purpose": "P9 (LAB-PREREG section 4): the g4 scorer must read the persisted TZ/TA/LA drafts under each arm's check data, and every planted case, as written here BEFORE spend; a mismatch is a scorer fault. Plants whose text would carry an attempt-1 answer or estate value live in the gitignored sealed directory (rule 6); their expectations here name no option, item or value.",
+  "cases": [
+    {
+      "name": "TZ persisted · base data",
+      "node": "TZ",
+      "arm": "base",
+      "expect": {
+        "itemRows": 0,
+        "restates": 0,
+        "esPresent": false,
+        "esNonAuth": true,
+        "emptyCites": false,
+        "premiseArm": false,
+        "premiseCheck": true,
+        "collK8sOnly": true,
+        "collProxyExact": false,
+        "nwCoverage": 0,
+        "nwCitations": 0,
+        "nwClauses": 0,
+        "nwLint": 0
+      }
+    },
+    {
+      "name": "TZ persisted · g4 data (G-NOWORSE control: identical draft, +0)",
+      "node": "TZ",
+      "arm": "g4",
+      "expect": {
+        "itemRows": 0,
+        "restates": 0,
+        "esPresent": false,
+        "esNonAuth": true,
+        "nwCoverage": 0,
+        "nwCitations": 0,
+        "nwClauses": 0,
+        "nwLint": 0
+      }
+    },
+    {
+      "name": "TA persisted · base data (restatements present, no enforcer-scope)",
+      "node": "TA",
+      "arm": "base",
+      "expect": {
+        "itemRows": 0,
+        "itemRowViolations": [],
+        "restates": 5,
+        "asks": 0,
+        "esPresent": false,
+        "sealedMatch": false,
+        "emptyCites": false,
+        "premiseCheck": true,
+        "collK8sOnly": true,
+        "nwCoverage": 0,
+        "nwCitations": 0,
+        "nwClauses": 0,
+        "nwLint": 0
+      }
+    },
+    {
+      "name": "TA persisted · g4 data (G-ITEM-WORKS reads a fail: 5 restatements)",
+      "node": "TA",
+      "arm": "g4",
+      "expect": {
+        "itemRows": 0,
+        "restates": 5,
+        "asks": 0,
+        "esPresent": false,
+        "sealedMatch": false,
+        "nwCoverage": 0,
+        "nwCitations": 0,
+        "nwClauses": 0,
+        "nwLint": 0
+      }
+    },
+    {
+      "name": "LA persisted · base data (Z49 stanza passes, no enforcer-scope)",
+      "node": "LA",
+      "arm": "base",
+      "expect": {
+        "itemRows": 0,
+        "restates": 4,
+        "esPresent": false,
+        "laItem22": false,
+        "z49Stanza": true,
+        "emptyCites": false,
+        "premiseArm": false,
+        "premiseCheck": true,
+        "collBucketAsserts": false,
+        "nwCoverage": 0,
+        "nwCitations": 0,
+        "nwClauses": 0,
+        "nwLint": 0
+      }
+    },
+    {
+      "name": "LA persisted · g4 data",
+      "node": "LA",
+      "arm": "g4",
+      "expect": {
+        "restates": 4,
+        "esPresent": false,
+        "laItem22": false,
+        "z49Stanza": true,
+        "nwCoverage": 0,
+        "nwCitations": 0,
+        "nwClauses": 0,
+        "nwLint": 0
+      }
+    },
+    {
+      "name": "TA + well-formed item row (sealed plant)",
+      "node": "TA",
+      "arm": "g4",
+      "plant": "../../cache/g4-sealed/plant-ta-item-row-ok.json",
+      "expect": {
+        "itemRows": 1,
+        "itemRowViolations": [],
+        "restates": 4,
+        "asks": 0
+      }
+    },
+    {
+      "name": "TA + item row OPEN",
+      "node": "TA",
+      "arm": "g4",
+      "plant": "scorer/plant-ta-item-row-open.json",
+      "expect": {
+        "itemRows": 1,
+        "itemRowViolations": [
+          "form open"
+        ]
+      }
+    },
+    {
+      "name": "TA + item row citing another N",
+      "node": "TA",
+      "arm": "g4",
+      "plant": "scorer/plant-ta-item-row-other-n.json",
+      "expect": {
+        "itemRows": 1,
+        "itemRowViolations": [
+          "cites item 13"
+        ]
+      }
+    },
+    {
+      "name": "TA + item row options not the em dash",
+      "node": "TA",
+      "arm": "g4",
+      "plant": "scorer/plant-ta-item-row-options.json",
+      "expect": {
+        "itemRows": 1,
+        "itemRowViolations": [
+          "options not —"
+        ]
+      }
+    },
+    {
+      "name": "TA + item row in the owner block",
+      "node": "TA",
+      "arm": "g4",
+      "plant": "scorer/plant-ta-item-row-owner.json",
+      "expect": {
+        "itemRows": 0,
+        "itemRowViolations": [
+          "in the owner block"
+        ]
+      }
+    },
+    {
+      "name": "TA + new-decision row",
+      "node": "TA",
+      "arm": "g4",
+      "plant": "scorer/plant-ta-new-decision.json",
+      "expect": {
+        "restates": 5,
+        "asks": 1,
+        "asksScope": 0
+      }
+    },
+    {
+      "name": "TA + enforcer-scope matching the sealed expectation (sealed plant)",
+      "node": "TA",
+      "arm": "g4",
+      "plant": "../../cache/g4-sealed/plant-ta-es-sealed.json",
+      "expect": {
+        "esPresent": true,
+        "esForm": "declared",
+        "esOptionsExact": true,
+        "esOption": "all-reaching-the-protected-thing",
+        "sealedMatch": true,
+        "partHits": 0
+      }
+    },
+    {
+      "name": "TZ + enforcer-scope OPEN, three options",
+      "node": "TZ",
+      "arm": "g4",
+      "plant": "scorer/plant-tz-es-open.json",
+      "expect": {
+        "esPresent": true,
+        "esForm": "open",
+        "esOptionsExact": true,
+        "esOption": null,
+        "esNonAuth": true,
+        "partHits": 0
+      }
+    },
+    {
+      "name": "TZ + enforcer-scope derived",
+      "node": "TZ",
+      "arm": "g4",
+      "plant": "scorer/plant-tz-es-derived.json",
+      "expect": {
+        "esPresent": true,
+        "esForm": "derived"
+      }
+    },
+    {
+      "name": "TZ + enforcer-scope forced",
+      "node": "TZ",
+      "arm": "g4",
+      "plant": "scorer/plant-tz-es-forced.json",
+      "expect": {
+        "esPresent": true,
+        "esForm": "forced"
+      }
+    },
+    {
+      "name": "TZ + enforcer-scope naming harvested parts (sealed plant; DO-NOT-SHIP)",
+      "node": "TZ",
+      "arm": "g4",
+      "plant": "../../cache/g4-sealed/plant-tz-es-part.json",
+      "expect": {
+        "esPresent": true,
+        "esForm": "open",
+        "partHits": 4,
+        "partHitsInOwnerQuote": 0
+      }
+    },
+    {
+      "name": "TZ + obs collateral with the proxy set",
+      "node": "TZ",
+      "arm": "g4",
+      "plant": "scorer/plant-tz-collateral-proxy.json",
+      "expect": {
+        "collProxyExact": true,
+        "collK8sOnly": false
+      }
+    },
+    {
+      "name": "LA + enforcer-scope declared from item 22 (pass)",
+      "node": "LA",
+      "arm": "g4",
+      "plant": "scorer/plant-la-es-item22.json",
+      "expect": {
+        "esPresent": true,
+        "esForm": "declared",
+        "esOptionsExact": true,
+        "esOption": "all-reaching-the-protected-thing",
+        "laItem22": true,
+        "partHits": 0,
+        "z49Stanza": true
+      }
+    },
+    {
+      "name": "LA + part name inside a verbatim owner quote (subcount only)",
+      "node": "LA",
+      "arm": "g4",
+      "plant": "scorer/plant-la-es-quote-name.json",
+      "parts": [
+        "own policy"
+      ],
+      "expect": {
+        "laItem22": true,
+        "partHits": 0,
+        "partHitsInOwnerQuote": 1
+      }
+    },
+    {
+      "name": "LA + the same part name outside any owner quote (stop)",
+      "node": "LA",
+      "arm": "g4",
+      "plant": "scorer/plant-la-es-rule-name.json",
+      "parts": [
+        "own policy"
+      ],
+      "expect": {
+        "partHits": 1,
+        "partHitsInOwnerQuote": 0
+      }
+    },
+    {
+      "name": "LA + empty-upstream branch, no change (pass)",
+      "node": "LA",
+      "arm": "g4",
+      "plant": "scorer/plant-la-empty-ok.json",
+      "expect": {
+        "emptyCites": true,
+        "emptyNoChange": true,
+        "denyAllOnEmpty": 0
+      }
+    },
+    {
+      "name": "LA + empty-upstream branch writing deny-all (DO-NOT-SHIP)",
+      "node": "LA",
+      "arm": "g4",
+      "plant": "scorer/plant-la-empty-denyall.json",
+      "expect": {
+        "emptyCites": true,
+        "emptyNoChange": false,
+        "denyAllOnEmpty": 1
+      }
+    },
+    {
+      "name": "LA + premise contradiction arm (pass)",
+      "node": "LA",
+      "arm": "g4",
+      "plant": "scorer/plant-la-premise-arm.json",
+      "expect": {
+        "premiseArm": true,
+        "actsOnContradiction": 0,
+        "premiseCheck": true
+      }
+    },
+    {
+      "name": "LA + premise acting on contradiction (DO-NOT-SHIP)",
+      "node": "LA",
+      "arm": "g4",
+      "plant": "scorer/plant-la-premise-acts.json",
+      "expect": {
+        "actsOnContradiction": 1
+      }
+    }
+  ]
+}

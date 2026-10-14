@@ -108,7 +108,7 @@ const TEMPLATES: TemplateSeed[] = [
     tags: ['kubernetes-gitops', 'provisioning', 'manifest', 'change-package', 'author', 'documenter'],
     timeout: 600, // 10 min — manifest generation is the longest phase
     metadata: {
-      modelParameters: COMMON_MODEL_PARAMS(600),
+      modelParameters: { ...COMMON_MODEL_PARAMS(600), model: AGENT_MODELS.infraAuthor }, // Author-only tier (model-tiers.ts infraAuthor)
       hasModelParameters: true,
       modelParamsVersion: '1.0.0',
       protocol: 'kubernetes-gitops-protocol',

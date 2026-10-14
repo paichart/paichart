@@ -117,6 +117,8 @@ export interface ActivityMetadata {
   ipAddress?: string;
   userAgent?: string;
   requestId?: string;
+  /** COMPLETE-THEN-FAIL (2026-10-05): the agent execution that performed this action (agent completions only). */
+  executionId?: string;
 }
 
 /**

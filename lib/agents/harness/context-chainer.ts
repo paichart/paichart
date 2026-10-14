@@ -187,8 +187,9 @@ export interface ChainedContext {
     // CC2b (2026-07-15, boundary B4): per-predecessor NOT-chained facts — every skip records
     // WHICH predecessor dropped and WHY (the aggregate completed/total counts can't distinguish
     // a by-design absence from a failure). Empty array on the happy path. The program-level
-    // gate consumes notChained.length > 0 / predecessors < expectedPredecessors as BLOCKING
-    // for program children (protocol wiring, Session B).
+    // gate consumes notChained.length > 0 / predecessors < chainCapablePredecessors as BLOCKING
+    // for program children (protocol wiring, Session B). Never expectedPredecessors: it is the raw
+    // edge count and includes never-executing gates (the protocol forbids it; corrected 2026-10-04).
     notChained: Array<{ taskId: string; reason: string }>;
     // F19 (2026-07-16): count of deps that CAN produce a chainable artifact
     // (type PIPELINE or templated). Template-less human gates/holds complete without ever
@@ -290,6 +291,14 @@ export const INJECTION_EXCLUDED_ROLES: ReadonlySet<string> = new Set([
   'change_reviewer',            // for now — see above
   'publication_reviewer',       // artifact-synthesis' reviewer — same seat as change_reviewer
   'requirements_reviewer',      // requirements-authoring's reviewer — same seat (decided 2026-09-24)
+  // value-chain build B3 (2026-10-02, plan TS P3): the value leg's two non-harvest roles. derivation_reviewer — same
+  // seat as change_reviewer. derivation_architect — FAIL CLOSED: a value leg derives from its OWN harvest, and an
+  // upstream report.md folded into its context is a second population it could select from. Revisit only when a value
+  // leg is designed to consume an upstream value. (The program Architect — program_architect /
+  // value_chain_architect — needs no entry: it is a child of the program ROOT, which owns no leg, so resolveOwningLeg
+  // finds nothing and the question is moot.)
+  'derivation_reviewer',
+  'derivation_architect',
 ]);
 
 /**

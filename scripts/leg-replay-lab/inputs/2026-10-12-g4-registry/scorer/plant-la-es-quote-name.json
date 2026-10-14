@@ -1,0 +1,14 @@
+{
+  "id": "la-es-quote-name",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "LA: a part name (case-level list 'own policy') inside a verbatim owner quote — a subcount, not a stop.",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "| terraform-iac.collateral |",
+      "new": "| terraform-iac.enforcer-scope | which parts of the enforcer the restriction covers | all-reaching-the-protected-thing · exemption-by-property · gap | all-reaching-the-protected-thing | (declared — item 22: \"The bucket's own policy is the only part that governs reads\") |\n| terraform-iac.collateral |"
+    }
+  ]
+}

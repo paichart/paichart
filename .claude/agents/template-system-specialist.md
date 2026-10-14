@@ -121,10 +121,12 @@ canonical delivery path went undocumented for months.
 
 The template lifecycle is:
 1. **Source of truth**: the **owning seed script** + `ROLE_GUIDANCE_LIBRARY`
-   (`pAIchartUniversalTemplate.ts`) + `model-tiers.ts`. Edit there.
+   (`pAIchartUniversalTemplate.ts`) + `model-tiers.ts` + `role-model-params.ts` (maxTokens, maxToolTurns). Edit there.
 2. **Delivery**: deploy, then **re-run the owning seed script(s)** for the changed role(s) —
    `grep -rln "defaultRole: '<role>'" scripts/seed-*.ts` (a role can have SEVERAL owners; `infra_state_harvester`
-   has five, the other three infra roles four each). They are idempotent (findFirst → update/create) and rebuild the
+   has five, `change_reviewer` six since 2026-10-05 (+ the unbound value-chain Node C row, + the unbound `Program Integration Reviewer` from `seed-program-templates.ts`), the other two infra roles
+   four each; and a role rendered through a SHARED builder stales its SIBLING too — `program_architect` ↔
+   `value_chain_architect`, `infra_change_architect` ↔ `derivation_architect`: reseed the owners of BOTH keys). They are idempotent (findFirst → update/create) and rebuild the
    WHOLE row: `promptTemplate`, `category`, `templateType`, `capabilities`, `constraints`, `tags`,
    `defaultRole`, `modelParameters`. Re-running is the mechanism, not a hazard.
 3. **The GUI (Agent Builder) is for experimentation, not authority.** A seed re-run DOES overwrite
@@ -215,12 +217,16 @@ Tests: `test:agent-execute-authz-order`, `test:execution-identity-keys`, `test:a
 
 ### Template Inventory (verify live — counts drift)
 - **Live set**: `npm run report:template-freshness` (lists every ACTIVE row + role) or `template(action:list)`.
-  Local 2026-09-27: **40 ACTIVE** rows. `AgentCategory` = 11 values; `TemplateType` = 9 (ACQUIRER added for synthesis).
+  **Prod 2026-10-02: 44 ACTIVE** rows (value-chain B6 seeded 4: Value-Chain Program Architect, Network Derivation Architect, Network Derived Value Reviewer, Value-Chain Program Integration Reviewer — the last bound to NO protocol). **Promotion E:** E1 (2026-10-05) added `Program Integration Reviewer` ⇒ **45 ACTIVE**; the deploy-2 reseed (ND6) sets Value-Chain Program Architect DEPRECATED ⇒ **44 ACTIVE + 2 DEPRECATED** on prod (freshness then reads 44 CURRENT — it reports ACTIVE rows only). Local 2026-10-06: 44 ACTIVE + 4 DEPRECATED (the three generic rows below are DEPRECATED locally too). `AgentCategory` = 11 values; `TemplateType` = 9 (ACQUIRER added for synthesis).
 - **Owning seeds** (`scripts/seed-*templat*.ts`): agent-templates (generic family + MCP Service Registry), artifact-synthesis,
-  harness, program (Program Architect only), requirements-authoring, and the infra quartet network-provisioning /
+  harness, program (Program Architect + Program Integration Reviewer since E1, per-entry fields + a REFUSE guard),
+  value-chain (its two derivation rows, its unbound Node C row, and the DEPRECATED Value-Chain Program Architect —
+  per-entry status since E3, so a retired row is never re-asserted ACTIVE), requirements-authoring, and the infra quartet network-provisioning /
   kubernetes-gitops / terraform-iac / observability. Protocols are seeded separately (`seed-protocol-prompts.ts`).
   (`seed-kpi-templates.ts` seeds KPI templates, not agent templates.)
-- Deprecated: General Purpose Assistant, Customer Success Specialist, MCP Service Discovery. The Apr 2026 per-category
+- Deprecated: General Purpose Assistant, Customer Success Specialist, MCP Service Discovery; Value-Chain Program
+  Architect from promotion E deploy 2 (bound to the DEPRECATED protocol, so it cannot run on any path; template status
+  is NOT enforced at assignment — `findBestMatch` is status-blind). The Apr 2026 per-category
   table is in the domain library as a snapshot.
 
 ### Role Guidance Coverage (GS2 — Complete ✅)
@@ -237,17 +243,20 @@ The connected-service pipelines added five roles to `ROLE_GUIDANCE_LIBRARY` — 
 
 **Proof the neutralization works — Terraform reused ALL FOUR neutral roles UNEDITED** (validated end-to-end 2026-06-29): its build added only a protocol + templates, **zero new roles**. That's the payoff of keeping role guidance domain-neutral — a new infra domain is mostly *configuration* (a protocol + templates), not *construction* (new roles). The domain syntax rides in the injected protocol + the harvested §6 state (the exemplar), never in the role.
 
-**`change_reviewer` carries the CANONICAL terminal-verdict grammar (2026-07-14 verdict-misread fix).** Its entry defines the mandatory terminal `## VERDICT:` block (verdict + `Blocking issues:` + confidence, nothing after it) plus the delete-withdrawn-concerns and summary-states-final-verdict rules — protocols only reference it (GS8) and `lib/agents/harness/parse-verdict.ts` transcribes it (token-locked; `test-parse-verdict.ts` lifts its fixtures from this entry, so an edit that moves/renames the marker fails it — ⚠ that suite is OUTSIDE `test:all-validation`: run it by hand). Since 2026-09-21 `requirements_reviewer` carries its own copy of the block (2 copies in the library, one per `REVIEWER_ROLES` member — not one globally). **Editing this entry ⇒ re-seed all FOUR reviewer templates (network/k8s/terraform/observability owning seeds) AND re-run `test:parse-verdict`.** A NEW reviewer role key additionally needs `REVIEWER_ROLES` extended (ADD-A-PIPELINE-HARNESS-AGENT.md §4) or the structured `reviewerVerdict` fact silently stops being emitted for that domain.
+**`change_reviewer` carries the CANONICAL terminal-verdict grammar (2026-07-14 verdict-misread fix).** Its entry defines the mandatory terminal `## VERDICT:` block (verdict + `Blocking issues:` + confidence, nothing after it) plus the delete-withdrawn-concerns and summary-states-final-verdict rules — protocols only reference it (GS8) and `lib/agents/harness/parse-verdict.ts` transcribes it (token-locked; `test-parse-verdict.ts` lifts its fixtures from this entry, so an edit that moves/renames the marker fails it — that suite is IN `test:all-validation`). Since 2026-09-21 `requirements_reviewer` carries its own copy of the block (2 copies in the library, one per `REVIEWER_ROLES` member — not one globally). **Editing this entry ⇒ re-seed all SIX reviewer templates (network/k8s/terraform/observability/value-chain/program owning seeds) AND re-run `test:parse-verdict`.** A NEW reviewer role key additionally needs `REVIEWER_ROLES` extended (ADD-A-PIPELINE-HARNESS-AGENT.md §4) or the structured `reviewerVerdict` fact silently stops being emitted for that domain.
 
-**`change_reviewer` remit, 2026-09-26/27** (ships to FOUR rows — Change Reviewer, which is ALSO Node C's row and is seeded by
-the NETWORK seed, not `seed-program-templates.ts`; GitOps Change Reviewer; Plan Policy Reviewer; Observability Change Reviewer):
+**`change_reviewer` remit, 2026-09-26/27** (ships to SIX rows since 2026-10-05 — Change Reviewer, seeded by the NETWORK seed,
+which is ALSO pov-program's Node C row until promotion E deploy 2 (the protocol's `nodeCTemplate` decides); GitOps Change
+Reviewer; Plan Policy Reviewer; Observability Change Reviewer; Value-Chain Program Integration Reviewer, value-chain's unbound
+Node C, seeded by `seed-value-chain-templates.ts`; Program Integration Reviewer, unbound, seeded by `seed-program-templates.ts`
+— pov-program's Node C from deploy 2):
 - **D2** `133f8437` — state the PROPERTY, never a protocol's clause letter ("clause (f)" meant three different things across the
   domains). Locked by `ANTI_PATTERNS` `/\bclause \([a-z]\)/i` in `scripts/audit-role-guidance-contract.ts` (CI via `validate:role-guidance`).
 - **EG-1** `4d1d21d7` — evidence **PRESENCE** (section present, source named, source permitted) is always the reviewer's and may
   block; **FIDELITY** is judged only WHERE the source is in context, otherwise not graded, raised or blocked on. Protocols bumped
   (network 1.15.0, k8s 1.13.0, terraform 1.7.0, observability 1.4.0). Prod reseeded → 0 STALE / 40 CURRENT (`1a24cfa0`).
-- Delivery rehearsal for any edit to this entry: freshness must show EXACTLY the 4 `change_reviewer` rows STALE before the 4
-  owning seeds run, and 0 after. Anything else STALE in those four domains = stop; each domain seed rewrites all its rows.
+- Delivery rehearsal for any edit to this entry: freshness must show EXACTLY the 6 `change_reviewer` rows STALE before the 6
+  owning seeds run, and 0 after. Anything else STALE in those six seeds' rows = stop; each domain seed rewrites all its rows.
 
 **Maintenance-window backlog — RESOLVED 2026-09-12 (`02db1d8b`)**: now an apply-governance note in all four domains. History: domain library.
 
@@ -402,6 +411,15 @@ This specialist is part of the pAIchart system architecture. When activated, app
 never build another. Importers today: `agentTemplateService.ts`, `agent-template-validation.ts`. ⚠ The Nov 2025
 prompt-registry integration was REMOVED 2025-11-25 (`847b7153`) — history + the open question in the domain library.
 
+## Pattern (h) role changes (2026-10-03/04, pointer)
+
+`change_reviewer` (5 rows at the time, hash `916088d3`; SIX rows since promotion E1, and E5 moves the hash to `04f9a76c`
+locally — confirm on prod at the deploy-2 reseed): Node C bullet for `consuming-leg-no-consumed-block` + the ✗ line naming the
+two blocking ✗ shapes. `config_change_author` (4 rows): comparison grant only where the protocol defines a shape;
+unconditional no-self-assessment (map a check, never certify it); Deliverable line carries branch answers — **now at the
+GS2 10-bullet ceiling**. `program_architect` + `value_chain_architect`: one branch-row id per condition, outcome copied
+verbatim from its Design decisions row. Batch-3 reseed = 6 rows / 6 seeds. Depth: `cline_docs/reviews/pattern-h-corpus-measure-2026-10-03/` (REVIEW-B2/B3-template-system).
+
 ## 🆕 2026-08-17 — WS1 Phase C: loadProtocols is a LOAD-BEARING template key (round-trip + flip rails)
 
 `metadata.loadProtocols` now selects the injection mode (`true` load-all · `'composed'` base +
@@ -433,6 +451,9 @@ Full rationale, open items, and the semantic-claim checklist:
 `.claude/knowledge/discoveries/template-system-discovery.md` (Prompt-claim validation section) and
 `.claude/agents/prompt-construction-specialist.md`.
 
+
+## Model tiers, 2026-10-07 (pointer)
+`AGENT_MODELS.infraAuthor = claude-opus-5-5` is used ONLY by the four `config_change_author` seeds (reseeded 09:14:14Z). ⚠️ Freshness checks a SANCTIONED tier, not the seed's tier — a model change reads 0 STALE until reseeded (register FRESHNESS-MODEL-BLIND-SPOT); verify `modelParameters.model` in the row. Also yours: AGENT-BUILDER-TEMPLATE-PREFILL.
 
 ## 🆕 Template freshness and the manual-seed trade (2026-08-04)
 
@@ -468,7 +489,9 @@ as a live tool is how the next person reaches for the unsafe shape.
 **Before editing role guidance at all**, run `npm run prompt:directives -- <role> --protocol <name>`: an
 entry here never reaches an agent alone, and this file references `UNIVERSAL_AGENT_RULES` zero times.
 
-Baseline 2026-09-27 (local, re-run): **0 STALE · 0 UNVERIFIABLE · 0 NOT COMPARABLE · 40 CURRENT**; all 40 on a
+**Promotion E:** prod after the E1 seed (2026-10-05): 0 STALE / 45 CURRENT. The deploy-2 rehearsal expects **8 STALE before**
+(both Architect rows + the six `change_reviewer` rows — Value-Chain Program Architect is still ACTIVE, so still
+reported, until that reseed) and **0 STALE / 44 CURRENT after** — record the reseed timestamp: it is a series break. **Baseline 2026-10-02 (PROD, after the value-chain seed): 0 STALE · 0 UNVERIFIABLE · 0 NOT COMPARABLE · 44 CURRENT**, all 44 on a sanctioned tier at maxTokens 48000; the 40 pre-existing rows unchanged (before/after diff). Prior baseline 2026-09-27 (local, re-run): **0 STALE · 0 UNVERIFIABLE · 0 NOT COMPARABLE · 40 CURRENT**; all 40 on a
 sanctioned tier at maxTokens 48000. Prod after the EG-1 reseed: 0 STALE / 40 CURRENT (`1a24cfa0`). *(Prior 2026-08-04: 0/0/3/32.)*
 
 **📌 TASKS OVERRIDING THEIR TEMPLATE** (X21 `26a7ad05`) — a FACT section, not a state and not an exit code: tasks whose own

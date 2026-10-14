@@ -1,0 +1,14 @@
+{
+  "id": "ta-item-row-options",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "TA: an item row whose options cell is not the em dash (G-ITEM-SAFE stop).",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "| observability-config.target | which surface of the leg's service does it act on | — |",
+      "new": "| observability-config.item-12 | a planted item row | gap · act | r | (declared — item 12: \"The\") |\n| observability-config.target | which surface of the leg's service does it act on | — |"
+    }
+  ]
+}

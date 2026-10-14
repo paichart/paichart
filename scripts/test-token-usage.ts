@@ -223,6 +223,48 @@ console.log('\n── BC-#2 structural: exactly-once construction ──');
        'provider does NOT use || on cache counters — || maps 0 to undefined and drops the row from every average');
   }
 
+  // ── F-c (COMPLETE-THEN-FAIL batch, Q6 2026-10-05): a FAILED row from a LOOP throw carries its partial spend ──
+  console.log('\n── F-c: partial usage on FAILED rows from a loop throw ──');
+  {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { runAgenticToolLoop, readAgenticLoopPartial } = require('@/lib/agents/harness/agentic-tool-loop');
+    const responses: any[] = [
+      { text: '', stopReason: 'tool_use', functionCalls: [{ id: 'f1', name: 'a', arguments: '{}' }],
+        rawContentBlocks: [{ type: 'tool_use', id: 'f1' }], usage: { inputTokens: 700, outputTokens: 70, cacheReadTokens: 7 }, metadata: { model: 'claude-sonnet-5' } },
+      { text: '', provider: 'anthropic_sdk', error: { message: 'Overloaded', code: 'LLM_PROVIDER_OVERLOADED', details: null } },
+    ];
+    let i = 0;
+    let err: unknown = null;
+    try {
+      await runAgenticToolLoop({
+        prompt: 'p', cfg: { maxTokens: 1000, systemPrompt: 's', provider: 'anthropic_sdk', model: 'claude-sonnet-5', apiKey: 'k' } as any,
+        maxToolTurns: 5, signal: new AbortController().signal, deadlineAt: Date.now() + 3_600_000, agentRole: null, executionId: 'e', taskId: 't',
+      }, {
+        getToolDefinition: async () => ({ serverName: 's' }), executeToolOnServer: async () => ({ ok: 1 }),
+        generateText: async () => responses[i++], logger: { info() {}, warn() {}, error() {} },
+      });
+    } catch (e) { err = e; }
+    const capturedUsage = undefined; // the core never reached onUsageCaptured — the loop threw
+    const capturedModel = null;
+    const partial = readAgenticLoopPartial(err);
+    const cols = buildTokenUsageColumns(capturedUsage ?? partial?.totalUsage, capturedModel ?? partial?.servingModel ?? null);
+    ok(cols.inputTokens === 700 && cols.outputTokens === 70 && cols.cacheReadTokens === 7 && cols.modelUsed === 'claude-sonnet-5',
+      `F-c: a loop-throw FAILED row gets NON-NULL tokens + the real serving model (got ${JSON.stringify(cols)})`);
+    const captured = { inputTokens: 5, outputTokens: 5, cacheReadTokens: 0, cacheCreationTokens: 0 };
+    const pre = buildTokenUsageColumns(captured ?? partial?.totalUsage, 'm');
+    ok(pre.inputTokens === 5, 'F-c: precedence captured ?? partial — a captured usage wins, never summed');
+    for (const rel of ['lib/services/agentExecutionEngine.ts', 'app/api/pov/agent/execute/stream/route.ts']) {
+      const src = readFileSync(join(__dirname, '..', rel), 'utf8');
+      ok(/usage: capturedUsage \?\? readAgenticLoopPartial\(error\)\?\.totalUsage,/.test(src)
+        && /servingModel: capturedModel \?\? readAgenticLoopPartial\(error\)\?\.servingModel \?\? null,/.test(src),
+        `F-c: ${rel} failure persist uses captured ?? partial for usage AND serving model`);
+    }
+    // Build review BC-L5: the third failure-persist caller (mcp-dispatch) reads the partial too.
+    const md = readFileSync(join(__dirname, '..', 'lib/mcp/tasks/action/handlers/agent/agent-execute-handler.ts'), 'utf8');
+    ok(/usage: readAgenticLoopPartial\(err\)\?\.totalUsage,/.test(md) && /servingModel: readAgenticLoopPartial\(err\)\?\.servingModel \?\? null,/.test(md),
+      'F-c: mcp-dispatch failure persist reads the partial (BC-L5)');
+  }
+
   console.log(`\n${'─'.repeat(50)}\n  Passed: ${passed}  Failed: ${failed}`);
   if (failed > 0) process.exit(1);
   console.log('  ✅ token-usage: GREEN\n');

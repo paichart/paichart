@@ -48,20 +48,51 @@ const EXEMPT = /HOWTO|GUIDE|_PROMPT\b/;
 
 type Hit = { file: string; owner: string; id: string; line: number; excerpt: string };
 
+/** Names of consts interpolated (\${NAME} / \${NAME(…)}) into agent-facing consts, transitively. */
+function interpolatedIntoAgentFacing(lines: string[]): Set<string> {
+  const body = new Map<string, string[]>();
+  let owner = '';
+  for (const text of lines) {
+    const m = text.match(/^(?:export\s+)?const\s+([A-Z0-9_]+)\s*(?::[^=]*)?=/);
+    if (m) { owner = m[1]; body.set(owner, []); }
+    else if (/^`;/.test(text)) owner = '';
+    if (owner) body.get(owner)!.push(text);
+  }
+  const facing = new Set([...body.keys()].filter(n => AGENT_FACING.test(`const ${n} =`) && !EXEMPT.test(n)));
+  const found = new Set<string>();
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const n of [...facing, ...found]) {
+      for (const t of body.get(n) ?? []) {
+        if (/^\s*(\/\/|\*|\/\*)/.test(t)) continue;
+        for (const mm of t.matchAll(/\$\{([A-Z0-9_]{4,})\b/g)) {
+          if (!facing.has(mm[1]) && !found.has(mm[1]) && body.has(mm[1])) { found.add(mm[1]); grew = true; }
+        }
+      }
+    }
+  }
+  return found;
+}
+
 function scanSeed(): Hit[] {
   const file = 'scripts/seed-protocol-prompts.ts';
   const lines = readFileSync(join(ROOT, file), 'utf8').split('\n');
   const hits: Hit[] = [];
+  // A const INTERPOLATED into an agent-facing body is agent-facing too (2026-10-02, value-chain B1.4): shared
+  // passages moved out of protocol bodies into section consts (NETWORK_*), whose names AGENT_FACING does not match.
+  // Without this their text — still delivered to agents — would silently leave the scan. Computed to a fixed point.
+  const interpolated = interpolatedIntoAgentFacing(lines);
   let owner = '';
   lines.forEach((text, i) => {
-    const m = text.match(/^const\s+([A-Z0-9_]+)\s*=/);
+    const m = text.match(/^(?:export\s+)?const\s+([A-Z0-9_]+)\s*(?::[^=]*)?=/); // `export const` + typed consts are boundaries too (2026-10-02)
     if (m) owner = m[1];
     // ⚠️ CLOSE the template literal, or everything after the last protocol body — the PROTOCOLS
     // metadata array, with its version changelogs — is attributed to that body and reported as a
     // leak. Caught on this guard's FIRST run: 5 of 12 hits were changelog prose naming the rig a
     // run happened on, which is legitimate and not agent-facing.
     else if (/^`;/.test(text)) owner = '';
-    if (!AGENT_FACING.test(`const ${owner} =`) || EXEMPT.test(owner)) return;
+    if (!(AGENT_FACING.test(`const ${owner} =`) || interpolated.has(owner)) || EXEMPT.test(owner)) return;
     // Skip comment lines — changelog prose legitimately names the rig a run happened on.
     if (/^\s*(\/\/|\*|\/\*)/.test(text)) return;
     for (const id of RIG_IDENTIFIERS) {
@@ -90,7 +121,28 @@ function scanRoleGuidance(): Hit[] {
   return hits;
 }
 
-const hits = [...scanSeed(), ...scanRoleGuidance()];
+/**
+ * The package FORM-CORRECTION prompt (prompt-construction review L3, 2026-10-07): agent-facing text that reaches every
+ * domain's config_change_author, built in code rather than seeded. Every non-comment line of the module is scanned, so
+ * a future item template or bullet cannot name a rig. (The interpolated parts — headings, hunk headers, markers — are
+ * the Author's own package text and are not platform text.)
+ */
+function scanFormCorrection(): Hit[] {
+  const file = 'lib/agents/harness/form-correction.ts';
+  const src = readFileSync(join(ROOT, file), 'utf8');
+  if (!src.includes('export function buildFormCorrectionPrompt')) throw new Error('buildFormCorrectionPrompt not found — this guard is scanning nothing');
+  const hits: Hit[] = [];
+  src.split('\n').forEach((text, i) => {
+    if (/^\s*(\/\/|\*|\/\*)/.test(text)) return;
+    for (const id of RIG_IDENTIFIERS) {
+      const at = text.indexOf(id);
+      if (at >= 0) hits.push({ file, owner: 'form-correction prompt', id, line: i + 1, excerpt: text.slice(Math.max(0, at - 70), at + 70) });
+    }
+  });
+  return hits;
+}
+
+const hits = [...scanSeed(), ...scanRoleGuidance(), ...scanFormCorrection()];
 if (hits.length === 0) {
   console.log(`✅ no rig identifiers in agent-facing text (${RIG_IDENTIFIERS.length} identifiers checked)`);
   process.exit(0);

@@ -42,8 +42,8 @@ Run this discovery to understand:
 ```bash
 echo "=== DATABASE SCHEMA ANALYSIS ==="
 echo "--- Model Count and Distribution ---"
-grep -c "^model " prisma/schema.prisma
-echo "Total models in main schema (44 as of 2026-06-11)"
+grep -c "^model " prisma/schema.prisma   # expect >=48
+echo "Total models in main schema (48 at 2026-10-14: + the three PLATFORM-HELD-BYTES tables)"
 
 ls prisma/*.prisma   # expect exactly ONE file: prisma/schema.prisma
 echo "Single unified schema — prisma/domains/ was DELETED 2025-11-18 (1b1f2be7, abandoned modular design); do not re-add"
@@ -644,3 +644,30 @@ pm2 logs --nostream --lines 5000 | grep -c "serialization retry exhausted"      
 **Decision rule:** EXHAUSTIONS (not retries) are the trigger. A non-trivial exhaustion rate = retries aren't
 draining contention → build the breaker (mirror `lib/mcp/server/services/service-connection-pool.js`). Zero/near-
 zero exhaustions = working as intended, do NOT build it. See cline_docs/BACKLOG-2026-06-session.md §watch-grep.
+
+## O4 — `tasks.executionStatus` on a COMPLETED task (2026-10-05, COMPLETE-THEN-FAIL)
+
+A terminated execution on a COMPLETED task writes `executionStatus = NULL` (reaper parity), never FAILED — one shared helper used by
+both failure sinks. When classifying failures after 2026-10-05 02:04 UTC, read the EXECUTION row's status, not the task column.
+
+```bash
+grep -c "writeTerminatedExecutionTaskStatus(" lib/services/execution-terminal-persist.ts   # expect 2 — definition + the failure tx
+grep -c "writeTerminatedExecutionTaskStatus(" lib/services/agentExecutionEngine.ts         # expect 1 — the engine safety net
+grep -c "executionStatus: null" lib/services/execution-terminal-persist.ts                 # expect 1 — the COMPLETED arm
+```
+
+## PLATFORM-HELD-BYTES Stage A tables (2026-10-14)
+
+```bash
+grep -c "held_blobs" lib/services/held-bytes-store.ts   # expect >=2 — the ONLY module that writes or deletes held_blobs
+psql "$DATABASE_URL" -X -q -f scripts/check-held-bytes-schema.sql   # read every row, then the derived summary
+```
+`held_blobs` (key `(scope, sha256)`, the schema's first `Bytes` column), `held_file_refs`, `held_capture_refusals`. Rules worth
+knowing before touching them: the blob upsert is PRE-transaction (autocommit, de-duplicated, sorted, DB clock); refs and
+refusals are written INSIDE the terminal SUCCESS transaction within `SAVEPOINT held_capture`; no select pulls `content`
+(`HELD_BLOB_META_SELECT`). **The GC lesson (EvalPlanQual):** in READ COMMITTED a DELETE re-checks only quals on its TARGET
+relation, so the grace predicate must sit on the DELETE target, not only in its `IN (subquery)` — the v1 SQL deleted a
+just-touched blob (reproduced on PG 16). Shipping form: target predicate + `FOR UPDATE SKIP LOCKED`; rehearsal
+`scripts/rehearse-held-gc-race.ts` (throwaway DB, v1 positive control). Prisma reports raw-SQL errors as `P2010` with the
+SQLSTATE in `err.meta.code`; `meta.message` carries the Postgres DETAIL (key values) — never log it. Record:
+`cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-BUILD.md`.

@@ -56,7 +56,7 @@ const ANCHORS: Array<[role: string, phrase: string, why: string]> = [
     'M1: 99 of 100 rows read "declared" — the table copied the objective and every undeclared decision went silent'],
   ['requirements_author', 'HOW THE CHANGE BEHAVES',
     'M2: the decision kinds gain the grant and change semantics — the questions every baseline run missed (T0, Z1)'],
-  ['requirements_author', '`.receiver`, `.admitted-principal`, `.principal-unseen`, `.granted-action`, `.existing-grant`, `.target-empty`, `.enforcer-absent`, `.target-absent`, `.collateral`',
+  ['requirements_author', '`.receiver`, `.admitted-principal`, `.request-path`, `.principal-unseen`, `.granted-action`, `.existing-grant`, `.target-empty`, `.enforcer-absent`, `.target-absent`, `.collateral`, `.enforcer-scope`',
     'M2/M3: the authorisation block\'s keys, named exactly as the template\'s row ids (Appendix A)'],
   ['requirements_author', 'cite the NUMBER and QUOTE the selecting words verbatim',
     'M4: (declared — item N) turns the reviewer\'s match into a numeric comparison instead of a paraphrase'],
@@ -174,8 +174,73 @@ const ANCHORS: Array<[role: string, phrase: string, why: string]> = [
     'S-11: 8.7 keys on the enforcer, not the literal key string'],
   ['requirements_reviewer', 'turns on an OPEN row existing in the table',
     'A-10: retry/owner routing keys on the OPEN row, never on the presentation tag'],
+  // Group 4 registry batch (2026-10-12, cline_docs/reviews/group4-registry-batch-2026-10-12/DESIGN.md; owner Q1-Q4).
+  ['requirements_author', 'asks WHICH PARTS of the enforcer the restriction covers',
+    'Z60 / 4a: no row asked which blocks a restriction covers; the Author invented one and the Reviewer blocked on it'],
+  ['requirements_author', 'never deleted on an authorisation leg: how many parts exist is harvested state',
+    'Q1: enforcer-scope is asked on every authorisation leg; a state trigger fails exactly when the zero harvest misses a part'],
+  ['requirements_author', 'keyed by the item\'s NUMBER: `<token>.item-<N>`',
+    'B-2 / Z62: an Author-chosen name drifted every generation, so owner pointers and waivers never matched the next draft'],
+  ['requirements_author', 'An item that a row of that leg already cites needs no item row',
+    'Q4: 19 of 30 stored restatements cite an item a registry row of the same leg already cites'],
+  ['requirements_reviewer', 'A row `<token>.item-<N>` records an owner item no key asks',
+    'B-2: the Reviewer must not refuse a well-formed item row as "not in the key list"'],
+  ['requirements_author', 'EMPTY-upstream branch, citing `<producer>.inputs-empty`',
+    'D3: no row asked it; the owner had to declare it in an item and the Author invented an upstream-empty row twice'],
+  ['requirements_reviewer', 'empty-upstream branch that cites `<producer>.inputs-empty`',
+    'Q3: Reviewer 8.4 counts the empty-upstream branch (a presence count, not a judgement)'],
+  ['requirements_author', '`act-regardless` means NOT CONFIRMED AND NOT CONTRADICTED',
+    'D2: the option did not say what a contradicting harvest does'],
+  ['requirements_author', 'a proxy or listener allowlist `confined-to-block`',
+    'Z57: a proxy enforcer had no collateral option set; the owner answered free-form'],
 ];
 
+// ── Registry routing rows (2026-10-06, cline_docs/reviews/registry-routing-rows-2026-10-06/BUILD-REPORT.md) ──────────
+// covered-routes (replace · accompany; declared or OPEN) + must-stay-reachable (a rule; declared, derived or OPEN). The
+// specs that produced program control 2's suppression chose "in place of" in prose nobody asked the owner about.
+ANCHORS.push(
+  // Fold of three reviews (Steve 2026-10-06, register REGISTRY-ROUTING-ROWS): trigger narrowed BY PROPERTY.
+  ['requirements_author', 'a ROUTING leg — one whose work or deliverable adds a covering route, or suppresses, filters, withdraws or replaces routes or their advertisement, whatever its token',
+    'routing class test (decision 1): an advertised cover or route suppression/filtering — not bare adds/removes; keyed on the WORK, never the token'],
+  ['requirements_reviewer', 'Every ROUTING leg — one whose work or deliverable adds a covering route, or suppresses, filters, withdraws or replaces routes or their advertisement, whatever its token',
+    'routing class test, Reviewer 8.1 key list: the same test as the Author'],
+  ['requirements_author', 'filtering TRAFFIC — a network policy, security group, firewall or bucket policy — is authorisation, not routing',
+    'decision 1: "filters" sits beside the authorisation verbs — a traffic filter is never a routing leg'],
+  ['requirements_reviewer', 'filtering TRAFFIC (a network policy, security group, firewall or bucket policy) is authorisation, not routing',
+    'decision 1, Reviewer side'],
+  ['requirements_author', 'a static or default route, which advertises nothing in their place, is not one',
+    'decision 1 / template-system M2: a static route has no advertisement to replace, so `replace` would be unimplementable'],
+  ['requirements_reviewer', 'a static or default route is not one',
+    'decision 1, Reviewer side (replaces "a less specific prefix")'],
+  ['requirements_author', 'wording outside a numbered item — an existence assumption, a topology note, a leg description that says "in place of" — is not an answer',
+    'control 2 (2026-10-05): the suppression choice came from hand-written topology wording ("in place of the individual routes"), never asked'],
+  ['requirements_author', '`collateral`, `enforcer-scope`, `covered-routes` and `must-stay-reachable` are NEVER derived and NEVER forced',
+    'decision 3 + L3: both routing rows are owner-only; a derived must-stay-reachable is the platform deciding which destinations matter (Protocol 10)'],
+  ['requirements_author', 'ONLY on a target or scope row (`target`, `population`, `representation`, `receiver`);',
+    'decision 3: the derived list is exactly these four — must-stay-reachable must not return to it'],
+  ['requirements_reviewer', 'on any key other than `target`, `population`, `representation` or `receiver` is BLOCKING',
+    'decision 3 + L3: Reviewer 8.2 derived list — exactly four keys, so a derived routing row is BLOCKING'],
+  ['requirements_author', 'It is declared or OPEN, never derived',
+    'decision 3: must-stay-reachable is never derived'],
+  ['requirements_author', 'It is never deleted on a routing leg',
+    'row deletion is the second escape (A-4 hole 3) — the reachability obligation cannot be dropped by deleting its row'],
+  ['requirements_author', 'An authorisation row is deleted only when the leg neither grants nor removes access on its target',
+    'template-system M1: "removes anything" read literally made a route-withdrawing leg undeletable for its authorisation rows'],
+  ['requirements_reviewer', 'An authorisation row is deleted only when the leg neither grants nor removes access on its target',
+    'template-system M1, Reviewer 8.1 side'],
+  ['requirements_author', '`covered-routes`: the leg adds no advertised covering route',
+    'template-system M1: a deleted covered-routes has its own not-applicable reason shape'],
+  ['requirements_author', 'never HOW the leg validates it',
+    'decision 5: the row states WHAT must stay reachable — the Program Architect is barred from prescribing validation'],
+  ['requirements_reviewer', 'never HOW the leg validates it',
+    'decision 5, Reviewer 8.4 side'],
+  ['requirements_reviewer', 'any text that says whether the covered routes stop being advertised',
+    'template-system M3a: uncited "in place of" prose while covered-routes is OPEN is the earned failure'],
+  ['requirements_reviewer', 'is a routing leg; quote the phrase',
+    'routing class detection: the Reviewer quotes the classifying phrase, as for authorisation'],
+  ['requirements_reviewer', 'a deleted `must-stay-reachable` is BLOCKING',
+    'routing deletion rule, reviewer side'],
+);
 // The protocol half: read the seed as TEXT (no import — the seed module connects to a database).
 // ── RPR Phase 0 batch 2a+2b (2026-10-01, requirements-pipeline-review SYNTHESIS §3 items 1-2) ──────────────────────
 // Branch conditions travel VERBATIM on the contract; each leg role answers them about their own subject; "gap report"
@@ -183,6 +248,8 @@ const ANCHORS: Array<[role: string, phrase: string, why: string]> = [
 ANCHORS.push(
   ['program_architect', 'BRANCH CONDITIONS ARE CONTRACT FIELDS, carried VERBATIM',
     'RPR 2a: the premise reached a leg Architect verbatim once (answered correctly) and was dropped/reworded three times (all misread)'],
+  ['program_architect', 'Each leg\'s service descriptor goes in the contract',
+    'PLAN-SPAWN-DESCRIPTOR B (2026-10-10): program run 1 spawned both legs without the descriptors the plan named; the contract is copied to every leg verbatim (C2-a)'],
   ['program_architect', 'Acceptance checks are not a leg\'s job — keep them out of leg objectives entirely',
     'ACCEPT-SELFCHECK (Run 9): "Validate against Acceptance checks 1, 3" in a leg objective made a leg self-assess and blocked the program'],
   ['program_architect', 'State what the leg must ACHIEVE, as its objective',
@@ -197,6 +264,43 @@ ANCHORS.push(
     'RPR 2a: evidence PRESENCE — the reviewers that approved the misreadings never saw the condition'],
   ['requirements_author', 'lists it under the package\'s **UNTESTED premises**',
     'RPR 2b: the act-regardless artifact is named apart from the gap outcome'],
+);
+// ── pattern (h) batch 3 (2026-10-04, text at source) ────────────────────────────────────────────────────────────────
+// The builder renders the atomic-row rule into BOTH architect roles; each is anchored on its own key so a future fork
+// of buildProgramArchitectGuidance cannot drop it from one role silently.
+ANCHORS.push(
+  ['program_architect', 'One entry per row id, never a combined id',
+    'pattern (h) batch 3: 10 of 12 contracts (09-29→10-03) merged two of one leg\'s rows into one id, spelled five ways — no leg or reviewer can count it row by row'],
+  ['value_chain_architect', 'One entry per row id, never a combined id',
+    'pattern (h) batch 3: same rule through the shared builder; value-chain B7 runs carried the combined id'],
+  ['config_change_author', 'Never assess your own package — whether or not it derives anything',
+    'pattern (h) batch 3: the ban read as derivation-scoped; a non-deriving terraform consumer was refused for a self-assessed acceptance-check section (2026-10-01)'],
+);
+// ── promotion E, E3 — 1d (2026-10-05; SYNTHESIS P11, REVIEW-template-system M4, -architectural-review M3, -prompt-construction F8)
+// The two-network-legs case has ONE rule, and it carries the default: keep EVERY network leg on the change token until
+// the human answers by re-planning (E3 review PC-L1/L2: the leg-description channel cannot answer a leg type; ND2's shape has 4). It AMENDS the folded value-leg sentence — never a second sentence beside it. Anchored on both Architect keys
+// (one constant today; a fork of either drops it loudly), with a negative pin below that the old permissive tail is gone.
+const ONE_D_ANCHOR = 'raise it under Assumptions & open questions, and keep EVERY network leg on the change token (`network-provisioning`, `leg type: change`) until the human answers by re-planning';
+ANCHORS.push(
+  ['program_architect', ONE_D_ANCHOR,
+    'promotion E 1d: two network legs share the network-provisioning row key; without a default the Architect could type one a value leg before the human answered'],
+  ['value_chain_architect', ONE_D_ANCHOR,
+    'promotion E 1d: same rule through the one constant (alias key)'],
+);
+// ── promotion E, E6 — C1-a wiring (2026-10-06; PLAN-v2 §E6, P22, B9; value-chain-post-window C-PLAN-SPAWN-DESIGN §C1)
+// In 3 of 7 value-chain runs the producer and Node C were wired to the change-method gates because the Architect read
+// the requirements' "blocks program completion" column as a dependency instruction (and the harness obeyed 4 of 4 times
+// it was told). The Architect half of the rule is anchored here on BOTH keys (one constant; a fork drops it loudly); the
+// protocol half (PLAN-SPAWN steps 5/6, "never a gate") is pinned beside the E2 pins in test-value-leg-containment.ts.
+const E6_NO_EDGES = 'Never prescribe dependency edges for the program-synthesis producer or the program integration reviewer, and never put dependency or wait-for instructions in the contract';
+// E6 review PH-M1: state the fact without naming a step — "the program synthesis waits" read as the PRODUCER waiting
+// for the gates, i.e. the C1 cause restated as a platform fact.
+const E6_GATE_HOLDS = 'holds program completion by existing: the program cannot complete until every child, gates included, has finished';
+ANCHORS.push(
+  ['program_architect', E6_NO_EDGES, 'E6 C1-a: an Architect-prescribed gate edge on the producer/Node C was obeyed 4 of 4 times (C1, 3 of 7 value-chain runs)'],
+  ['value_chain_architect', E6_NO_EDGES, 'E6 C1-a: same rule through the one constant (alias key)'],
+  ['program_architect', E6_GATE_HOLDS, 'E6 C1-a: the cause was reading "blocks program completion" as an edge; the gate needs none to hold completion'],
+  ['value_chain_architect', E6_GATE_HOLDS, 'E6 C1-a: same rule through the one constant (alias key)'],
 );
 const SEED = readFileSync(join(__dirname, 'seed-protocol-prompts.ts'), 'utf8');
 const reqStart = SEED.indexOf('const PIPELINE_REQUIREMENTS_AUTHORING_PROTOCOL');
@@ -229,6 +333,21 @@ let passed = 0, failed = 0;
     if (ok) passed++; else failed++;
   }
 }
+// Negative pin (promotion E 1d): the old permissive wording — "raise it" with NO change-token default — must be gone, and
+// the two-legs case must be stated exactly ONCE (one rule per case: a second sentence would leave two instructions).
+{
+  const OLD_1D = 'raise it under Assumptions & open questions; do not split the rows yourself';
+  const CASE = 'If the program needs both a network value leg and a network change leg';
+  for (const role of ['program_architect', 'value_chain_architect']) {
+    const text = ROLE_GUIDANCE_LIBRARY[role] || '';
+    const gone = text.length > 0 && !text.includes(OLD_1D);
+    console.log(`${gone ? '✅' : '❌'} ${role} no longer carries the permissive 1d wording (raise it, no change-token default)`);
+    if (gone) passed++; else failed++;
+    const once = text.split(CASE).length - 1 === 1;
+    console.log(`${once ? '✅' : '❌'} ${role} states the two-network-legs case exactly once (${text.split(CASE).length - 1})`);
+    if (once) passed++; else failed++;
+  }
+}
 for (const [role, phrase, why] of ANCHORS) {
   const text = ROLE_GUIDANCE_LIBRARY[role];
   const ok = typeof text === 'string' && text.includes(phrase);
@@ -247,15 +366,19 @@ for (const [phrase, why] of PROTOCOL_ANCHORS) {
 // not the others is either a row nobody is told to answer or a count nobody can satisfy. Compared per CLASS (every
 // leg / producing leg / gate / authorisation), so a key moved between classes also fails. Derived from the text,
 // never from a hardcoded list here — a fourth copy would drift the same way.
-type KeyClasses = Record<'leg' | 'producer' | 'gate' | 'auth', string[]>;
+// 'routing' joined 2026-10-06 (registry-routing-rows): a leg whose work changes routes carries covered-routes +
+// must-stay-reachable, whatever its token — the routing analogue of the authorisation class.
+const CLASSES = ['leg', 'producer', 'gate', 'auth', 'routing'] as const;
+type KeyClasses = Record<typeof CLASSES[number], string[]>;
 const norm = (k: string): string => k
   .replace(/^(<token>|<producer token>|<producer>|\{\{LEG_TOKEN\}\}|\{\{PRODUCER_TOKEN\}\})?\./, '.')
   .replace(/\{\{GATE\}\}/g, '<gate>');
 const finish = (c: Record<string, Set<string>>): KeyClasses =>
-  Object.fromEntries(['leg', 'producer', 'gate', 'auth'].map(k => [k, [...(c[k] || [])].sort()])) as KeyClasses;
+  Object.fromEntries(CLASSES.map(k => [k, [...(c[k] || [])].sort()])) as KeyClasses;
 const KEY_RE = /`((?:<token>|<producer>)?\.[a-z-]+|approver\.<gate>|gate\.<gate>\.position)`/g;
 function classify(seg: string): string | null {
   if (/permitted principal/.test(seg)) return 'auth';
+  if (/ROUTING leg/.test(seg)) return 'routing';
   if (/producing leg/.test(seg)) return 'producer';
   if (/gate/.test(seg) && /approver\.<gate>/.test(seg)) return 'gate';
   if (/Every leg/i.test(seg)) return 'leg';
@@ -276,10 +399,10 @@ function keysFromSkeleton(tmpl: string): KeyClasses | string {
   if (s < 0 || e < 0) return 'could not locate ## Design decisions in the skeleton';
   const c: Record<string, Set<string>> = {}; let block = '';
   for (const line of tmpl.slice(s, e).split('\n')) {
-    if (line.startsWith('### ')) { block = line.includes('grants or removes access') ? 'auth' : line.includes('Every leg') ? 'every' : '?'; continue; }
+    if (line.startsWith('### ')) { block = line.includes('grants or removes access') ? 'auth' : line.includes('changes routes') ? 'routing' : line.includes('Every leg') ? 'every' : '?'; continue; }
     const m = line.match(/^\|\s*([^|\s]+)\s*\|/); if (!m || m[1] === 'id' || /^-+$/.test(m[1])) continue;
     const id = m[1];
-    const cls = block === 'auth' ? 'auth' : id.startsWith('{{PRODUCER_TOKEN}}') ? 'producer'
+    const cls = block === 'auth' ? 'auth' : block === 'routing' ? 'routing' : id.startsWith('{{PRODUCER_TOKEN}}') ? 'producer'
       : /^(approver|gate)\./.test(id) ? 'gate' : id.startsWith('{{LEG_TOKEN}}') ? 'leg' : `UNCLASSIFIED(${block})`;
     (c[cls] ||= new Set()).add(norm(id));
   }
@@ -293,7 +416,7 @@ function keysFromRegistry(doc: string): KeyClasses | string {
   const c: Record<string, Set<string>> = {}; let inTable = false;
   for (const line of doc.slice(s).split('\n').slice(1)) {
     if (line.startsWith('|')) inTable = true; else if (inTable) break; else continue;
-    const m = line.match(/^\|\s*`([^`]+)`\s*\|\s*(leg|producer|gate|auth)\s*\|/); if (!m) continue;
+    const m = line.match(/^\|\s*`([^`]+)`\s*\|\s*(leg|producer|gate|auth|routing)\s*\|/); if (!m) continue;
     (c[m[2]] ||= new Set()).add(norm(m[1]));
   }
   return finish(c);
@@ -323,7 +446,7 @@ for (const [name, got] of copies) {
   if (empty.length) { console.log(`❌ key parity: ${name} has NO keys for class(es) ${empty.join(', ')} — the extractor lost them`); failed++; continue; }
   if (name === refName) continue;
   if (typeof ref === 'string') continue;
-  if (JSON.stringify(got) === JSON.stringify(ref)) { console.log(`✅ key parity: ${name} = ${refName} (${Object.values(got).flat().length} keys in 4 classes)`); passed++; }
+  if (JSON.stringify(got) === JSON.stringify(ref)) { console.log(`✅ key parity: ${name} = ${refName} (${Object.values(got).flat().length} keys in ${CLASSES.length} classes)`); passed++; }
   else { console.log(`❌ key parity: ${name} ≠ ${refName}\n   ${name}: ${JSON.stringify(got)}\n   ${refName}: ${JSON.stringify(ref)}`); failed++; }
 }
 // The owner-line format: the Author's guidance must carry the skeleton's comment line character for character.

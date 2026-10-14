@@ -4,6 +4,7 @@ import { UserRole } from '@/lib/types/auth';
 import { logger } from '@/lib/logger';
 import { trackActivity } from '@/lib/auth/audit';
 import { getCurrentKid } from '@/lib/auth/jwt-key-store';
+import { calculateKeyAge, calculateNextRotationDate } from '@/lib/auth/jwt-key-age';
 
 /**
  * Admin JWT Status Endpoint
@@ -28,6 +29,9 @@ import { getCurrentKid } from '@/lib/auth/jwt-key-store';
  * - Recommendation: validation-engine-specialist
  * - Handles: future dates, invalid years/months, malformed key IDs
  *
+ * 2026-10-13: age now comes from JWT_KEY_ROTATED_AT (exact day) when it is a valid YYYY-MM-DD,
+ * falling back to the kid's month — see lib/auth/jwt-key-age.ts (same rule as the daily summary).
+ *
  * @see cline_docs/reviews/phase-3-jwt-enhancements-2026-01-24/implementation-plan.md - Component 2.2
  * @see cline_docs/reviews/phase-3-jwt-enhancements-2026-01-24/boundary-contract-review.md - Critical Fix
  * @see cline_docs/reviews/phase-3-jwt-enhancements-2026-01-24/validation-engine-review.md - Critical Fix
@@ -42,7 +46,8 @@ export const GET = createHandler(
       // mints/serves with DEFAULT_JWT_KEY_ID (getCurrentKid warns once), so
       // 'unknown' would misreport live state. Centralized 2026-06-11.
       const keyId = getCurrentKid();
-      const keyAgeDays = calculateKeyAge(keyId);
+      const rotatedAt = process.env.JWT_KEY_ROTATED_AT;
+      const keyAgeDays = calculateKeyAge(keyId, rotatedAt);
 
       // CRITICAL FIX #2: Handle invalid key ID (validation-engine-specialist)
       if (keyAgeDays === -1) {
@@ -74,7 +79,7 @@ export const GET = createHandler(
           keyAgeDays,
           rotationDueDays: Math.max(0, rotationDueDays), // Never negative
           status,
-          nextRotationDate: calculateNextRotationDate(keyId),
+          nextRotationDate: calculateNextRotationDate(keyId, rotatedAt),
           hasMultipleKeys: !!process.env.JWT_KEY_ID_PREV,
         }
       };
@@ -95,76 +100,3 @@ export const GET = createHandler(
     rateLimit: 'admin', // Apply admin operation rate limiting (100 req/min per IP)
   }
 );
-
-/**
- * Calculate JWT key age in days
- *
- * CRITICAL FIX #2: Comprehensive edge case handling
- * - Validates year range (2000-2100)
- * - Validates month range (1-12)
- * - Handles future dates (returns 0 for brand new keys)
- * - Returns -1 for invalid key IDs
- *
- * @param keyId - Key identifier (format: paichart-YYYY-MM)
- * @returns Age in days, or -1 if invalid
- */
-function calculateKeyAge(keyId: string): number {
-  // Extract YYYY-MM from paichart-YYYY-MM
-  const match = keyId.match(/paichart-(\d{4})-(\d{2})/);
-  if (!match) {
-    logger.error({ keyId }, 'JWT Status invalid key ID format');
-    return -1; // Signal error
-  }
-
-  const [_, yearStr, monthStr] = match;
-  const year = parseInt(yearStr);
-  const month = parseInt(monthStr);
-
-  // Validate year range (2000-2100)
-  if (year < 2000 || year > 2100) {
-    logger.error({ year }, 'JWT Status invalid year in key ID');
-    return -1;
-  }
-
-  // Validate month range (1-12)
-  if (month < 1 || month > 12) {
-    logger.error({ month }, 'JWT Status invalid month in key ID');
-    return -1;
-  }
-
-  const keyDate = new Date(year, month - 1, 1);
-  const now = new Date();
-
-  const diffMs = now.getTime() - keyDate.getTime();
-  const ageDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  // Handle future dates (negative age)
-  if (ageDays < 0) {
-    logger.warn({ keyId, daysInFuture: -ageDays }, 'JWT Status future key date detected');
-    return 0; // Treat as brand new key
-  }
-
-  return ageDays;
-}
-
-/**
- * Calculate next rotation date based on 90-day cadence
- *
- * @param keyId - Key identifier (format: paichart-YYYY-MM)
- * @returns Next rotation date (YYYY-MM-DD) or error message
- */
-function calculateNextRotationDate(keyId: string): string {
-  const keyAge = calculateKeyAge(keyId);
-
-  // Handle invalid key ID
-  if (keyAge === -1) {
-    return 'Invalid key ID';
-  }
-
-  const daysUntilRotation = 90 - keyAge;
-
-  const nextRotation = new Date();
-  nextRotation.setDate(nextRotation.getDate() + Math.max(0, daysUntilRotation));
-
-  return nextRotation.toISOString().split('T')[0]; // YYYY-MM-DD
-}

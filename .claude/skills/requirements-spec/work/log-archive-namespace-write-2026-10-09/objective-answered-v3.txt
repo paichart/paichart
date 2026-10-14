@@ -1,0 +1,34 @@
+Objective. The pods of one Kubernetes namespace must be able to write to a cloud log-archive bucket. Produce the requirements document for a program that lets that namespace's pods write to that bucket, and that authorises exactly what the design decisions declare - nothing wider than them.
+
+This is a DRAFT SPECIFICATION for human review. Do not launch a program.
+
+DESIGN DECISIONS - DECLARED, NOT INFERRED. Each item below is a choice made by the POV owner. Transcribe each one; do not substitute a different choice, and do not treat any of them as a description of current state - the program's legs observe current state for themselves.
+
+1. The cluster leg grants and removes no access and changes nothing; it only derives, from the namespace's pods, the value the cloud leg consumes. The bucket is the only enforcer.
+2. The target namespace is `trading`.
+3. The target bucket is the Terraform resource `aws_s3_bucket.app_logs` in workspace `prod` (bucket `acme-app-logs`); it is the log archive.
+4. On the bucket, the authorised resource is its objects, with no key-prefix limit.
+5. The derivation's population is every pod in the namespace of item 2 whose phase is Running; readiness is not a criterion; the leg reports, in its own published deliverable (report.md), the literal criterion it applied.
+6. The program plan gate is approved by steve.terry@paichart.com.
+7. The kubernetes-gitops change gate is approved by josh.allen@paichart.com.
+8. The terraform-iac change gate is approved by jacob.wilcox@paichart.com.
+9. The kubernetes-gitops change gate sits before the cluster leg (before-leg): it approves the method - which namespace, which pods count, how the value is derived - before the cluster leg runs.
+10. The terraform-iac change gate sits after the producer and before the consumers (after-producer-before-consumers): it approves the produced value, once it exists, before the bucket leg uses it.
+11. The bucket admits by source address (source-address-range): the admitted principal is the source-address value the cluster leg produces (items 1 and 5). No VPC endpoint is declared.
+12. When the bucket leg's own harvest cannot confirm that the bucket sees the admitted attribute on the pods' path, the leg acts regardless (act-regardless) and records as UNTESTED the premise that the pods' source addresses reach the bucket unchanged, with no address translation on the path.
+13. The admitted pods may perform s3:PutObject only.
+14. The derived value is expressed as a host list - each running pod's address exactly.
+15. If no running pod is found in the namespace of item 2, the cluster leg reports a gap and produces no value (gap).
+16. If the namespace of item 2 does not exist, the cluster leg reports a gap (gap); it never creates the namespace.
+17. If the bucket of item 3 does not exist, the bucket leg reports a gap (gap); it never creates the bucket.
+18. Existing statements on the bucket policy are preserved (preserve): the leg adds only its own statement and changes no other.
+19. If the bucket has no policy yet, the leg creates one (create) holding only this grant.
+20. If the bucket holds no objects, the bucket leg still authors against the receiver of item 4 (act).
+21. The bucket leg adds Allow statements only and no Deny statement, and the bucket leg's change package states what else, if anything, the change affects. The bucket's existing tags are known drift, triaged by the owner: synthetic test fixtures, out of scope for this change, accepted; neither leg acts on or changes them.
+
+Phase 0 is REQUIRED - harvest live state; nothing is supplied inline. Self-provision each descriptor below, harvest it, emit a per-domain section, and record every registration you create so the harness can tear down every one of them at SYNTHESIZE:
+
+- cluster https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json
+- cloud   https://raw.githubusercontent.com/paichart/paichart/main/descriptors/terraform-readonly-descriptor.json
+
+Harvest scope: read-only, through the two descriptors above only - in the cluster, the namespace of item 2 (its pods, their labels and addresses, and its network policies); in the cloud, the bucket of item 3 with its policy and any endpoints or roles that policy references. Nothing else.

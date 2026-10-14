@@ -267,8 +267,9 @@ console.log(`\n${'─'.repeat(60)}`);
     ? pass('RC§6: lane-not-supported reads as a deliberate no-check, not a failed one')
     : fail('RC§6: lane-not-supported must not render as a could-not-check', lane.slice(0, 300));
 
+  // E1 (2026-10-13): the live could-not-check reason; archived stamps carry the pre-E1 `no-harvest-text`, rendered the same way.
   const hardGap = withFact({
-    checked: false, reason: 'no-harvest-text',
+    checked: false, reason: 'no-harvest-tool-results',
     rollbackDisposition: { disposition: 'blocking', reason: 'hard-gap' },
   });
   hardGap.includes('OPEN') && hardGap.includes('neither exonerated nor implicated')
@@ -441,6 +442,29 @@ console.log(`\n${'─'.repeat(60)}`);
   !malformed.includes('Derivation containment')
     ? pass('DC5: an empty disposition string is not a disposition')
     : fail('DC5: empty disposition must not render', malformed.slice(0, 300));
+}
+
+// ── CONSUMER-FAIL-OPEN (2026-10-03) ───────────────────────────────────────────────────────────
+// The new reason reaches a downstream reader through this line. The disposition is COMPUTED by the
+// shipping function from the live Run 5 obs stamp (`cmurpr9sj00poyxxaeywagi0a`), so reverting the arm
+// turns this red: it would render `benign — nothing-to-derive` with no qualifier.
+{
+  const { computeContainmentDisposition } = require('../lib/agents/harness/derivation-containment');
+  const fact: Record<string, unknown> = {
+    reason: 'no-derived-values-block', checked: false,
+    upstreamContainment: { green: true, legs: [{ taskId: 'cmurpovk000osyxxab3ll84a2', checked: true, violations: 0,
+      disposition: 'benign', dispositionReason: 'checked-clean', derivedValues: [{ kind: 'cidr', value: '10.99.0.0/27' }] }] },
+  };
+  fact.containmentDisposition = computeContainmentDisposition(fact);
+  const out = renderPipelineContextSection({
+    chainedFrom: [{ taskId: 'cmurpr9sj00poyxxaeywagi0a', taskTitle: 'Observability leg', agentRole: 'pipeline_harness',
+      confidenceScore: 80, finalResponse: 'body', derivationContainment: fact }],
+    pipelineMetadata: { completedDependencies: 1, totalDependencies: 1 },
+  }).join('\n');
+  (out.includes('**Derivation containment (platform fact)**: needs-node-c — consuming-leg-no-consumed-block')
+    && out.includes('delegated to the program-tier reviewer — this is neither a pass nor a block'))
+    ? pass('DC6: consuming-leg-no-consumed-block renders verbatim WITH the neither-pass-nor-block qualifier')
+    : fail('DC6: the new reason must render as a qualified needs-node-c', out.slice(0, 600));
 }
 
 // ── UPSTREAM DERIVED VALUES (FU1 §3.3, 2026-09-25) ─────────────────────────────────────────────

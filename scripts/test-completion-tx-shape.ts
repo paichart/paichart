@@ -13,6 +13,7 @@ process.env.LOG_LEVEL = 'silent';
 
 import {
   runTaskCompletionTx,
+  completeTaskTerminally,
   type TaskCompletionTxInput,
 } from '../lib/tasks/services/complete-task-terminally';
 import { DependencyNotSatisfiedError, CompletionConflictError } from '../lib/errors';
@@ -29,13 +30,13 @@ function assert(cond: boolean, msg: string) { if (!cond) throw new Error(msg); }
 interface Call { op: string; args: any }
 
 function makeMockTx(opts: {
-  status?: string; type?: string; unsatisfied?: boolean; casCount?: number;
+  status?: string; type?: string; unsatisfied?: boolean; casCount?: number; metadata?: Record<string, unknown> | null;
 }) {
   const calls: Call[] = [];
   let findCount = 0;
   const row = {
     id: 't1', status: opts.status ?? 'IN_PROGRESS', type: opts.type ?? 'ACTION',
-    metadata: null, title: 'fixture task',
+    metadata: opts.metadata ?? null, title: 'fixture task',
   };
   const tx: any = {
     task: {
@@ -131,6 +132,69 @@ async function main() {
     } catch (e) { threw = e; }
     assert(threw instanceof Error && /must not set status/.test((threw as Error).message),
       'buildUpdateData returning status must hard-fail');
+  });
+
+  // ── COMPLETE-THEN-FAIL anchor (2026-10-05, DESIGN-v2 §2.1, §7) ───────────────────────────────
+  const EXEC = 'cmexecANCHOR000000000001';
+  const casMeta = (calls: Call[]) => calls.find((c) => c.op === 'task.updateMany')!.args.data.metadata as Record<string, unknown> | undefined;
+
+  await test('S7 anchor present iff actor.executionId (direct Layer 1): stamped with the id; absent ⇒ S1 statement shape unchanged (no metadata write)', async () => {
+    const a = makeMockTx({});
+    await runTaskCompletionTx(a.tx, baseInput({ actor: { userId: 'user1', source: 'MCP', executionId: EXEC } }));
+    assert(casMeta(a.calls)?.completedByExecutionId === EXEC, 'stamp must be written with the executing run id');
+    const b = makeMockTx({});
+    await runTaskCompletionTx(b.tx, baseInput());
+    assert(!('metadata' in b.calls.find((c) => c.op === 'task.updateMany')!.args.data), 'no executionId ⇒ no metadata write at all (S1 shape)');
+  });
+
+  await test('S8 anchor written LAST: a builder (or the F10 stamp) returning completedByExecutionId is overwritten by the actor id', async () => {
+    const a = makeMockTx({});
+    await runTaskCompletionTx(a.tx, baseInput({
+      actor: { userId: 'user1', source: 'MCP', executionId: EXEC },
+      buildUpdateData: () => ({ metadata: { completedByExecutionId: 'cmFORGEDbuilder0000000001', keep: 1 } }),
+      metadataStamp: { completedByExecutionId: 'cmFORGEDstamp000000000001' },
+    }));
+    const m = casMeta(a.calls)!;
+    assert(m.completedByExecutionId === EXEC, `the actor id must win the merge (got ${m.completedByExecutionId})`);
+    assert(m.keep === 1, 'builder metadata otherwise preserved');
+  });
+
+  await test('S4b already-COMPLETED with an executionId: still NO write — the stamp is never written on the no-op path', async () => {
+    const { tx, calls } = makeMockTx({ status: 'COMPLETED' });
+    const res = await runTaskCompletionTx(tx, baseInput({ actor: { userId: 'user1', source: 'MCP', executionId: EXEC } }));
+    assert(res.transitioned === false && calls.length === 1 && calls[0].op === 'task.findUnique', 'only the fresh read may run');
+  });
+
+  await test('S9 a human completion REMOVES an inherited stamp (the key always describes the most recent completion)', async () => {
+    const { tx, calls } = makeMockTx({ metadata: { completedByExecutionId: 'cmOLD0000000000000000001', other: 'x' } });
+    await runTaskCompletionTx(tx, baseInput());
+    const m = casMeta(calls);
+    assert(!!m && !('completedByExecutionId' in m) && m.other === 'x', `inherited stamp must be deleted, siblings kept (got ${JSON.stringify(m)})`);
+  });
+
+  await test('S11 (build review TS-F3) a human completion deletes the key whatever its source — a BUILDER-supplied anchor is removed too', async () => {
+    const { tx, calls } = makeMockTx({});
+    await runTaskCompletionTx(tx, baseInput({ buildUpdateData: () => ({ metadata: { completedByExecutionId: 'cmFORGEDbuilder0000000001', keep: 2 } }) }));
+    const m = casMeta(calls)!;
+    assert(!('completedByExecutionId' in m) && m.keep === 2, `builder-supplied anchor must not survive a human completion (got ${JSON.stringify(m)})`);
+  });
+
+  await test('S10 Layer 2 (completeTaskTerminally) stamps through the SAME core: anchor present with executionId, absent without', async () => {
+    for (const withExec of [true, false]) {
+      const { tx, calls } = makeMockTx({});
+      const db: any = {
+        task: { findUnique: async () => ({ type: 'ACTION', title: 't', metadata: null }) },
+        $transaction: async (fn: (t: any) => Promise<any>) => fn(tx),
+      };
+      await completeTaskTerminally(db, {
+        taskId: 't1',
+        actor: { userId: 'user1', source: 'MCP', ...(withExec ? { executionId: EXEC } : {}) },
+        fireReactors: false,
+      });
+      const m = casMeta(calls);
+      if (withExec) assert(m?.completedByExecutionId === EXEC, 'Layer 2 must carry the anchor');
+      else assert(!m || !('completedByExecutionId' in m), 'Layer 2 without an executionId writes no anchor');
+    }
   });
 
   console.log(`\n📊 Results: ${passed} passed, ${failed} failed`);

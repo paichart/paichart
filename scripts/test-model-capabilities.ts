@@ -10,7 +10,7 @@
  * CI-safe: model-capabilities imports only runtime-limits (dependency-free). No prisma.
  * Run: npm run test:model-capabilities
  */
-import { capabilitiesFor, acceptsEffort, clampEffort, supportsThinkingBudget, EffortLevel } from '@/lib/services/llm/model-capabilities';
+import { capabilitiesFor, acceptsEffort, clampEffort, supportsThinkingBudget, bindsThinkingToPrefix, EffortLevel } from '@/lib/services/llm/model-capabilities';
 
 let passed = 0, failed = 0;
 const ok = (c: boolean, m: string) => { if (c) { passed++; console.log(`  ✅ ${m}`); } else { failed++; console.log(`  ❌ ${m}`); } };
@@ -107,6 +107,22 @@ console.log('\n── fable-5-1 ──');
   for (const mdl of ['claude-opus-4-8', 'claude-sonnet-5', 'claude-sonnet-4-6', 'claude-haiku-4-5']) {
     ok(capabilitiesFor(mdl).serverSideFallback === false, `${mdl}: serverSideFallback false`);
   }
+}
+
+// ── bindsThinkingToPrefix: preserved thinking's history-editing check (Opus 5.5 loop audit C1, 2026-10-07) ──
+// Drives the reflection-call shape in buildLlmCallOptions. TRUE only where the docs say the check runs; every other
+// model must stay FALSE so its reflection request stays byte-identical (test-llm-call-options §3c golden).
+console.log('\n── bindsThinkingToPrefix ──');
+{
+  ok(capabilitiesFor('claude-opus-5-5').bindsThinkingToPrefix === true, 'opus-5-5: bindsThinkingToPrefix TRUE');
+  ok(capabilitiesFor('claude-fable-5-1').bindsThinkingToPrefix === true, 'fable-5-1: bindsThinkingToPrefix TRUE');
+  ok(capabilitiesFor('claude-mythos-5-1').bindsThinkingToPrefix === false, 'mythos-5-1: FALSE (Mythos 5.1 does not run the check)');
+  for (const mdl of ['claude-opus-5', 'claude-fable-5', 'claude-mythos-5', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6',
+    'claude-opus-4-5', 'claude-sonnet-5', 'claude-sonnet-4-6', 'claude-haiku-4-5']) {
+    ok(capabilitiesFor(mdl).bindsThinkingToPrefix === false, `${mdl}: bindsThinkingToPrefix false`);
+  }
+  ok(bindsThinkingToPrefix('claude-opus-5-5') === true && bindsThinkingToPrefix('test-model') === false && bindsThinkingToPrefix(undefined) === false,
+    'bindsThinkingToPrefix(): true for opus-5-5; FALSE (legacy shape), never a throw, for an unknown/absent model');
 }
 
 // ── supportsThinkingBudget: UI/gating predicate derived from the map (WU-10 drift-sweep) ──

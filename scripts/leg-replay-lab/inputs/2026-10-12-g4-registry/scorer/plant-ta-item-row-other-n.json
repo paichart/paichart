@@ -1,0 +1,14 @@
+{
+  "id": "ta-item-row-other-n",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "TA: an item row keyed 12 citing item 13 (G-ITEM-SAFE stop).",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "| observability-config.target | which surface of the leg's service does it act on | — |",
+      "new": "| observability-config.item-12 | a planted item row | — | r | (declared — item 13: \"The\") |\n| observability-config.target | which surface of the leg's service does it act on | — |"
+    }
+  ]
+}

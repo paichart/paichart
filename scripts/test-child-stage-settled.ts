@@ -77,6 +77,45 @@ const MODULE = 'lib/services/child-stage-settled.ts';
     assert(!/status: 'COMPLETED',\s*executions/.test(src), 'in-flight arm narrowed to COMPLETED-only');
   });
 
+  // Promotion E, E6 review PH-L1 (2026-10-06): pov-program PLAN-SPAWN now tells the harness "SYNTHESIZE already waits for
+  // every gate" and wires the producer/Node C to legs ONLY — so after E6 this predicate is the ONE thing holding release
+  // behind an after-leg-before-completion gate. It must not filter on task type or template: an unreleased template-less
+  // APPROVAL gate keeps the stage unsettled. (chainCapablePredecessors excludes such gates for COVERAGE; the same
+  // exclusion here would silently stop gates holding release.) Pure: the where-object is evaluated, no database.
+  await test('L2c an unreleased template-less APPROVAL gate keeps the stage unsettled (no type/template filter)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { unsettledChildWhere } = require('../lib/services/child-stage-settled') as { unsettledChildWhere: (id: string) => unknown };
+    const where = unsettledChildWhere('stage-x');
+    const keys: string[] = [];
+    const walk = (v: unknown) => { if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) { keys.push(k); walk(x); } };
+    walk(where);
+    const banned = keys.filter((k) => /^(type|agentTemplateId|templateId|agentTemplate|template|agentRole)$/.test(k));
+    assert(banned.length === 0, `unsettledChildWhere filters on ${banned.join(', ')} — a gate could stop holding release`);
+    // Evaluate the where against task rows (the operators the predicate uses: equality, not, null, in, some, AND, OR).
+    type Row = Record<string, unknown> & { executions: Array<{ status: string }> };
+    const leaf = (val: unknown, cond: unknown): boolean => {
+      if (cond === null) return val === null || val === undefined;
+      if (cond && typeof cond === 'object') {
+        const c = cond as Record<string, unknown>;
+        if ('not' in c) return val !== null && val !== undefined && val !== c.not; // SQL: NULL never matches `not`
+        if ('in' in c) return (c.in as unknown[]).includes(val);
+        throw new Error(`unhandled operator ${Object.keys(c).join(',')}`);
+      }
+      return val === cond;
+    };
+    const match = (row: Row, w: Record<string, unknown>): boolean => Object.entries(w).every(([k, v]) => {
+      if (k === 'AND') return (v as Record<string, unknown>[]).every((x) => match(row, x));
+      if (k === 'OR') return (v as Record<string, unknown>[]).some((x) => match(row, x));
+      if (k === 'executions') return row.executions.some((e) => match(e as unknown as Row, (v as { some: Record<string, unknown> }).some));
+      return leaf(row[k], v);
+    });
+    const w = where as Record<string, unknown>;
+    const gate: Row = { stageId: 'stage-x', type: 'APPROVAL', agentTemplateId: null, status: 'IN_PROGRESS', executionStatus: null, executions: [] };
+    assert(match(gate, w), 'an IN_PROGRESS template-less APPROVAL gate (no execution) must be UNSETTLED');
+    assert(!match({ ...gate, status: 'COMPLETED' }, w), 'control: a released (COMPLETED) gate is settled');
+    assert(match({ ...gate, type: 'ACTION', agentTemplateId: 't1', status: 'OPEN' }, w), 'control: an OPEN templated ACTION is unsettled');
+  });
+
   await test('L3 every reaper-class ready-dependents fire in the engine also fires the harness retrigger', () => {
     const src = stripComments(read('lib/services/agentExecutionEngine.ts'));
     const ready = src.split('maybeQueueReadyDependents(').length - 1;

@@ -1,0 +1,27 @@
+== coverage (gen 8)
+coverage — work/log-archive-namespace-write-2026-10-09/draft-answered-7/report.md
+  legs ['kubernetes-gitops', 'terraform-iac'] · gates ['kubernetes-gitops-change', 'program-plan', 'terraform-iac-change'] · rows 23 {'declared': 22, 'derived': 0, 'forced': 0, 'open': 1, 'other': 0} · owner block 0 · not-applicable 0
+  ❌ what: unknown key for a known token · id: kubernetes-gitops.population-all-excluded
+  ❌ what: unknown key for a known token · id: terraform-iac.policy-managers-multiple
+  ❌ what: unknown key for a known token · id: terraform-iac.existing-tags
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: receiver
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: admitted-principal
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: principal-unseen
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: granted-action
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: existing-grant
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: target-empty
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: enforcer-absent
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: collateral
+  ❌ what: non-declared row missing from the owner block · id: kubernetes-gitops.population-all-excluded · expected_tier: blocking
+  👁  what: no producer rows — confirm for each leg: the leg derives no value another leg consumes · legs: ['terraform-iac']
+  👁  what: no routing rows — confirm for each leg: the leg adds no advertised covering route and suppresses, filters, withdraws or replaces no routes · legs: ['kubernetes-gitops', 'terraform-iac']
+  12 error(s), 2 to read
+exit=1
+== citations (gen 8)
+citations: 23 total, 23 verbatim, 0 failing
+premise branches: terraform-iac ✓
+✅ citation + premise gate clean (the Reviewer still owns: does each quote select the same option as the item?)
+exit=0
+== lint
+✗ work/log-archive-namespace-write-2026-10-09/draft-answered-7/report.md: 17 state-shaped token(s) the document did not get from the template or the objective:
+  Each is a CANDIDATE — read it. A harvested value belongs nowhere in the document: regenerate, never hand-edit.

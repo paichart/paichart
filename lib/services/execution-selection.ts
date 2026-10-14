@@ -244,11 +244,36 @@ export function judgeCatastrophicDegradation(
 /**
  * Audit block persisted into the retry's own result.json.supersession (AR-5: auditable). `supersededById`
  * is null when the comparison was deliberately SKIPPED (RWF C.2): the audit then says why
- * (`skipped: 'changed-input' | 'input-unknown'`) and the retry stays authoritative, latest-wins.
+ * (`skipped: KeepBestSkipReason`) and the retry stays authoritative, latest-wins.
  */
 export interface SelfSupersessionResult {
   supersededById: string | null;
   audit: Record<string, unknown>;
+}
+
+/**
+ * Why a stamped retry's keep-best comparison was SKIPPED (the retry stays authoritative, latest-wins).
+ * 'post-completion-anchored' (COMPLETE-THEN-FAIL, 2026-10-05, DESIGN-v2 §3.2 step 4): the run completed its task and
+ * was rescued from DB state; its finalResponse is a platform record, so its keep-best facts describe no deliverable,
+ * and a self-supersession would hand authority back to the CREATE-time index — re-creating the defect.
+ */
+export type KeepBestSkipReason = 'changed-input' | 'input-unknown' | 'post-completion-anchored';
+
+/** The ONE skip-audit shape (RWF C.2). */
+function skippedSupersession(why: KeepBestSkipReason, targetId: string): SelfSupersessionResult {
+  log.info({ targetId, skipped: why }, 'keep-best: comparison skipped — the retry stays authoritative (latest-wins)');
+  return { supersededById: null, audit: { skipped: why, target: targetId, judgedAt: new Date().toISOString() } };
+}
+
+/**
+ * COMPLETE-THEN-FAIL: keep-best for a completion-anchored rescue. No comparison, no read: a stamped retry gets the
+ * named skip audit; anything else gets null (exactly as computeSelfSupersession returns for a non-retry).
+ */
+export function anchoredSelfSupersession(executionContext: unknown): SelfSupersessionResult | null {
+  const targetId = (executionContext as { reExecutionOfExecutionId?: unknown } | null | undefined)
+    ?.reExecutionOfExecutionId;
+  if (typeof targetId !== 'string' || targetId.length === 0) return null;
+  return skippedSupersession('post-completion-anchored', targetId);
 }
 
 /**
@@ -287,10 +312,7 @@ export async function computeSelfSupersession(
     readChainedRecord({ context: executionContext, config: own?.config }).record,
     targetRow ? readChainedRecord(targetRow).record : null,
   );
-  const skip = (why: 'changed-input' | 'input-unknown'): SelfSupersessionResult => {
-    log.info({ targetId, skipped: why }, 'keep-best: comparison skipped — the retry stays authoritative (latest-wins)');
-    return { supersededById: null, audit: { skipped: why, target: targetId, judgedAt: new Date().toISOString() } };
-  };
+  const skip = (why: KeepBestSkipReason): SelfSupersessionResult => skippedSupersession(why, targetId);
   if (inputRelation === 'changed') return skip('changed-input');
   if (inputRelation === null && own?.executionId) {
     const row = await client.agentExecution.findUnique({
@@ -315,6 +337,12 @@ export async function computeSelfSupersession(
   try { targetJson = JSON.parse(targetArtifact.content); } catch {
     log.warn({ targetId }, 'keep-best: retry target artifact unparseable — degrading to latest-wins');
     return null;
+  }
+  // COMPLETE-THEN-FAIL build review BC-L3: a rescued (completion-anchored) TARGET carries no keepBestFacts and a
+  // platform-authored finalResponse; deriving facts from that text is the computation the rescue set out to avoid. Skip
+  // from the target side too, with the same named reason.
+  if (targetJson && typeof targetJson === 'object' && targetJson.postCompletionFailure) {
+    return skippedSupersession('post-completion-anchored', targetId);
   }
   const targetFacts = extractKeepBestFacts(targetJson);
   const ownFacts = extractKeepBestFacts(ownResultJson);

@@ -18,6 +18,9 @@ require('dotenv').config();
 import { execSync } from 'child_process';
 
 const steps: Array<[string, string]> = [
+  // BEFORE the push (2026-10-14): on an EXISTING install the plain push refuses `MCPTool.name @unique` (a data-loss
+  // warning); creating the unique indexes first makes it read "in sync". Skips a fresh DB (no mcp_tools yet).
+  ['Unique service name/endpoint indexes (existing installs; pre-push)', 'bash scripts/create-mcp-tools-unique-indexes.sh'],
   ['Schema → database (db push; no migration files by design)', 'npx prisma db push --skip-generate'],
   ['Prisma client', 'npx prisma generate'],
   ['Raw-SQL indexes Prisma cannot express (one is correctness-bearing)', 'bash scripts/apply-raw-sql-indexes.sh'],

@@ -5280,3 +5280,36 @@ For each hit ask the only question that matters:
 when it was captured?* — not the proxy — *does this read look reasonable?* The same lesson as the
 2026-09-12 shared-worktree pair (`git add <path>` is a proxy for "commit only what you intend")
 and the truncated-window gate approval ("don't conclude from a window you chose the size of").
+
+## Bug Class 85: One Clean Sibling Vouches for the Rest (`some` where `every` is needed)
+
+**Status**: IDENTIFIED — 4 known sites, 0 observed instances, 0 fixed (class named 2026-10-12)
+**Severity**: HIGH when reachable (FAIL-OPEN: a gate passes with an input nobody checked); dormant today
+**Source**: independent containment review, 2026-10-12 (`cline_docs/reviews/containment-propagation-2026-10-12/REVIEW-A-B3.md` L1, M2, F11, F12)
+**Record / plan**: `cline_docs/follow-ups/containment-green-path-gaps-2026-10-12.md` (open register CONTAINMENT-FALLBACK-PREDECESSOR)
+
+### Description
+
+An aggregate "is the input safe?" verdict is computed as *at least one member is verified* plus *no member reports a
+failure*, instead of *every member is verified*. A member that is unchecked, undecided, unreadable or invisible reports no
+failure, so it is carried along by the one member that was checked. The expression reads as reasonable in review ("there
+is a clean source and nothing is wrong"), and the defect only exists once there are two or more members.
+
+### Site (canonical)
+
+`lib/agents/harness/derivation-containment.ts:332-335` `isUpstreamContainmentGreen`:
+`legs.some(l => l.checked && l.violations === 0) && legs.every(l => l.violations === 0)`. A consuming leg whose upstream reads
+green is discharged benign, so the program tier is never asked. Known shapes: G1 a fallback-chained predecessor is not a
+leg at all beside a report.md one; G2 an unreadable predecessor (`lookupMisses`) beside a clean one; G3 the diamond dedupe
+keeps `checked` from the better copy; G4 `checked: true` with a `needs-node-c` disposition reads green.
+
+### How to find more sites
+
+Any verdict over a SET that uses `some(...)` for the "verified" half, or that counts failures without counting coverage:
+`grep -rn "\.some(.*checked\|\.some(.*verified\|\.some(.*ok)" lib/` and read each; also any "green / clean / ok" flag over a
+list that never compares the number of judged members to the number of members.
+
+### Guard
+
+Require EVERY member to be judged (verified, or explicitly delegated with a named reason), and count members that could not
+be read or seen as unjudged. Never let absence of failure stand in for presence of a check.

@@ -1,6 +1,6 @@
 # Program Harness User Guide
 
-**Version**: 1.0 | **Created**: 2026-07-16 | **Status**: Production — pov-program v1.0.8 live (T2–T5 passed, customer demo POV published)
+**Version**: 1.0 | **Created**: 2026-07-16 | **Updated**: 2026-10-06 (promotion E: value legs + unbound Node C, pov-program 2.0.0 at deploy 2) | **Status**: Production (T2–T5 passed at v1.0.8, customer demo POV published)
 
 > **This guide = how to RUN/USE a program** (a pipeline-of-pipelines). For a single pipeline, see the
 > sibling [`PIPELINE-HARNESS-USER-GUIDE.md`](./PIPELINE-HARNESS-USER-GUIDE.md) — a program's legs ARE
@@ -54,6 +54,44 @@ The title token is **load-bearing** — without it the harness runs the generic 
 program protocol. The design artifacts must be reachable by URL (the Architect fetches them via the
 Browser Automation Service; pAIchart has no generic URL-fetch tool).
 
+### Where the two artifacts come from
+
+`topology.json` and `requirements.md` live in a NEW directory under `program-artifacts/` — never edit a published one; it
+is a run's input of record. One published spec serves every run of its objective, so you make one **per objective**, not
+per run. Two routes:
+
+- **Hand-written** — from `program-artifacts/_TEMPLATE/` (`requirements.template.md`, `topology.example.json`,
+  `writing-rules.md`). Fits a small objective whose few design decisions you can state yourself. Nothing checks that you
+  covered every decision a generated spec would have asked, so prefer the generated route for anything with two or more
+  legs or any leg that grants access or changes routes.
+- **Generated** — the `requirements-authoring` pipeline drafts the spec from a plain objective and **asks** every design
+  decision instead of making it (a fixed list per kind of leg: target, population, who is admitted, what they may do,
+  existing allowances, side effects, routing, approvers, gate positions …). You answer them once, the answers are merged
+  into the objective, the spec is regenerated, and a publish pass splices the canonical writing rules
+  (`scripts/requirements-rules.py --insert/--check`), lints for harvested state, checks the read size, and verifies the
+  raw URLs. Unanswered design decisions were the main cause of refusals on multi-leg objectives; on a fully answered
+  spec they essentially stop (2026-10, telemetry objective: 1 of 14 refusals related to a decision, and that one was an
+  answer the leg did not act on).
+
+**In the source repo, `/requirements-spec` walks the generated route end to end** (Claude Code project skill,
+`.claude/skills/requirements-spec/`; not part of the public export). Start it with the objective you want specified,
+e.g. *"/requirements-spec — specify a program that restricts writes to an archive bucket to one namespace's running
+pods, and nothing wider"*. It drafts the zero-decision objective with you, then STOPS for your OK before every launch, push and
+program task, and for your decision on every answer group and any waiver; between those stops it runs the scripts
+(coverage check, answer merge, citation gate, publish pass, URL verify) and refuses to continue on a failed gate. It
+never answers a design question or edits a spec for you. Its working files land in its `work/` folder, one sub-folder
+per objective. **The owner's plain-English walk-through** (each step, what to reply, and why a draft can ask questions the
+registry does not have) is `.claude/skills/requirements-spec/STEP-BY-STEP.md`.
+
+**Where the generated route fits — and where it does not (2026-10-09).** It works only when the program's end state is
+fully determined by, and checkable from, the targets its legs harvest: a **closed** objective ("only these pods may write
+to this bucket" — the bucket's own policy shows who can), **named** targets, a **rule-shaped** population, and changes to
+**existing** enforcers. It does not fit a grant-only or additive objective ("also let these pods write") where effective
+access also comes from surfaces no leg reads — "nothing wider" is then uncheckable, and a blind trial showed the generated
+spec answering every question and still stating a false expected result; nor "every bucket / whatever needs access"
+targets, hand-picked membership, or objectives that first need new infrastructure designed. For those, an architect
+writes the requirements.md by hand. The skill runs this fit check before drafting anything and stops if it fails.
+
 ### 🔴 Put a RUN NUMBER in the title. It looks cosmetic and it is not.
 
 `title: "<objective> (Run N) (protocol: pov-program)"`
@@ -77,6 +115,10 @@ history?"* — which is the judgement the duplicate check actually makes.
 ⚠️ **The halt is TERMINAL** (F17, one-way forward-cone freeze). Recovery is a fresh task tree, not a
 retry — so this costs a whole run's setup when you get it wrong.
 
+**Exception — measurement windows (2026-10-04):** a run number tells agents where they sit in a measured series, so a
+measurement window drops it and relies on the clearance instead — see `PROGRAM-OPERATOR-GATE-PLAYBOOK.md` § "Run titles in
+a MEASUREMENT window" (the clearance check before every plan-gate release then becomes mandatory).
+
 ### The clearance burden grows by one leg per run
 
 Each completed run leaves **its own leg child stages** behind in the phase, and the next run must be
@@ -97,21 +139,24 @@ only at `task.create`, and pipeline children start only via dependency-completio
 2. **The Architect** fetches the two URLs and produces its plan as its `report.md`, with a fixed section
    order: **`## Interface Contract` FIRST** (one JSON block, deliberately in the head so truncation
    can't eat it) → `## Intent` → `## Pipeline DAG` → `## Assumptions & Open Questions` → `## Cost & Time
-   Estimate`.
+   Estimate`. Since pov-program 2.0.0 every DAG entry states its **leg type** (`leg type: change` or
+   `leg type: value` — §10b), and the plan gate's description lists them: you approve leg types there.
 3. **PLAN-SPAWN (execution 2, auto-retriggered)** — the harness reads the plan (fetches the Architect's
    report.md), enforces the **≤ 8-pipeline cap**, then creates the full roster in ONE program stage:
    - the mandatory **plan-approval gate** (template-less `APPROVAL`, born `IN_PROGRESS`);
    - any **per-team approval gates** the plan's DAG names (multi-team case);
    - the **child PIPELINE tasks** from the DAG — each carrying the **interface contract**, each depending
      on its gate (+ any upstream sibling-pipeline edges the DAG orders);
-   - a **producer** (Technical Writer) + **Node C** (Change Reviewer, report.md suppressed — it's the QA
-     gate), each depending on all the pipelines;
+   - a **producer** (Technical Writer) + **Node C** (the `Program Integration Reviewer` — unbound, no domain
+     protocol, since pov-program 2.0.0; earlier runs used the network-bound `Change Reviewer`; report.md
+     suppressed — it's the QA gate), each depending on all the pipelines and **never on a gate** — so Node C
+     reviews before you decide any gate that waits on a leg;
    - wires `metadata.deliverableSourceTaskId` → the producer.
    It posts the plan for approval and **exits**. **No child pipeline runs until a human releases the gate.**
 4. **You release the gate(s)** (§5). The dep-satisfied pipelines queue within seconds and run their own
    domain protocols in their own child stages — **in parallel** (no edges) or **sequenced** (DAG edges),
    each with the contract rendered first in its §6 as a BINDING block.
-5. **PROGRAM SYNTHESIZE (auto-retriggered when producer + Node C complete)** — the harness fact-gates
+5. **PROGRAM SYNTHESIZE (auto-retriggered when every child, gates included, is terminal)** — the harness fact-gates
    the children, reads Node C's structured verdict, checks the chained-coverage facts, computes
    `programReleasable` (a deterministic AND), stamps the facts on itself, completes, and posts ONE final
    comment: the per-pipeline gate table, the deliverable pointer, and the release-is-a-human-decision
@@ -166,6 +211,17 @@ Before `task.complete` on a plan gate, read the Architect's deliverable and chec
    gates *beyond* the plan gate (fixed in pov-program 1.8.3 — step 3 now assigns it). A gate on the
    wrong person is released by the wrong person, and an owner-assigned gate looks exactly like one
    that was meant to be. `task.assign` corrects it before release.
+5. **Read every spawned LEG's task description, not just the plan.** PLAN-SPAWN composes each leg's
+   description from the plan by model, and it can drop lines. Check each leg carries what the plan gave
+   it — its service descriptor, its leg type, its scope. If one is missing, add it to that leg task
+   (`task.update`) in the hold window, before any gate is released. *(2026-10-09: both legs were spawned
+   without the descriptors the plan named; the harvester correctly blocked — register
+   PLAN-SPAWN-DESCRIPTOR-DROP.)*
+   **Standing control (Steve, 2026-10-10, option C):** do this for EVERY leg of EVERY program, before the plan
+   gate is released. A leg passes when its service descriptor (URL or inline JSON) is in its description OR in
+   its `inputContext.interfaceContract`. The contract also counts, because legs harvest from a contract-carried
+   descriptor; that is how most legs before October received it. It stays manual until the structured
+   `serviceDescriptors` contract key ships (option B, `cline_docs/follow-ups/plan-spawn-descriptor-carry-measure-2026-10-10.md`).
 
 *Earned 2026-09-17 (telemetry-export-four-domain). The Architect flagged exactly two items — a
 gate-wiring ambiguity in the requirements (*"confirm G1–G4 should gate only their own domain's
@@ -208,6 +264,11 @@ It works only if the rules are fixed BEFORE the run and the record says who deci
   never gated on (pov-program 1.0.10, 2026-07-18; runs before that also gated `reviewerScore ≥ 85`). The
   canonical formula is the pov-program protocol's SYNTHESIZE gate step. It is an **input to a human release
   decision, never the decision** (VT-06).
+- **Reviewer warnings** (2026-10-08, WARNINGS-INVISIBLE): lines a leg reviewer (or Node C) labelled
+  `NON-BLOCKING WARNING (<id>):`. The platform transcribes them (`reviewerVerdict.warnings`), stamps them on each
+  leg and on the program (`reviewerWarnings`; card: `reviewerWarnings: N (ids)`, `0` = checked and none, no segment =
+  not measured) and lists their text in the program `report.md` under **Reviewer warnings (non-blocking)**, by leg.
+  They are recorded facts and **never an input to `programReleasable`**. Read them before releasing.
 - **`programConfidence`** = engine-computed MIN of the legs' confidences (the weakest leg sets it).
 - **The composed deliverable** = the producer's `report.md`, extracted to the program's `report.md`.
 - **The final comment** carries the per-pipeline gate table + the deliverable pointer + the apply-order
@@ -230,6 +291,14 @@ It works only if the rules are fixed BEFORE the run and the record says who deci
 
 - **Approved-but-unapplied** — the program never actuates; apply is a separate human/GitOps/`terraform
   apply` step it can only recommend (incl. the safe apply order).
+- **⚠️ Never apply a block containing `<<REDACTED-SECRET>>`, `<REDACTED-SECRET>` or any other `<REDACTED…>` /
+  `<<REDACTED…>>` form** (check with `grep -nE '<{1,2}REDACTED' <package file>`) — they are secret placeholders, and devices accept them as literal values (EOS community / `secret 0` / enable / TACACS
+  key lines, nginx `proxy_set_header`, otelcol headers; device-verified 2026-10-13). A green `nginx -t`
+  or `otelcol validate` does not prove such a block safe, and on EOS a full config replace with a
+  redacted password-hash line can delete the object (the only admin user included) while printing
+  success. Hold and re-author instead. A leg's `report.md` flags such lines under **Platform warnings
+  (non-blocking)** since 2026-10-13; the absence of that section is not clearance. Full rule:
+  [`PROGRAM-OPERATOR-GATE-PLAYBOOK.md`](./PROGRAM-OPERATOR-GATE-PLAYBOOK.md) (Apply gate, step 2).
 - **≤ 8 child pipelines per program** — a deliberate blast-radius/cost cap; group devices if the path is
   wider (`firewall-policy-use-case.md` §5).
 - **Contract loud-fail** — a pipeline child without its contract aborts loudly, never silently composes.
@@ -381,11 +450,43 @@ When a round ends non-green and you re-run after a fix, the choreography that ma
 
 Worked record: VT-18 (public verification pack) + `cline_docs/firewall-a3-validation-2026-08-21/`.
 
+## 10b. Value legs in a pov-program (since pov-program 2.0.0; `value-chain-program` is RETIRED)
+
+Use a **value leg** when one leg's job is to **derive a value** from live state (e.g. the CIDR covering a set of exporter
+addresses) and the other legs **consume** it. It runs under the ordinary `(protocol: pov-program)` token — the
+`value-chain-program` variant that proved the shape (Protocol 15 frozen window, 2026-10-02/03) is folded into pov-program
+2.0.0 and its token is retired: a task titled `(protocol: value-chain-program)` **fails loudly at its first execution,
+before any child or spend** — relaunch it as a new task with the pov-program token (a stamped task cannot be re-routed).
+
+- The plan types each leg `leg type: value | change`, quotes the requirements phrase a value leg relies on, and you
+  approve the types at the plan gate (a type you do not accept ⇒ do not release; re-plan). The **value leg**
+  (`network-derivation`) runs Harvester → Network Derivation Architect → Network Derived Value Reviewer — **no Author, no
+  change package, changes nothing**. A leg that derives a value AND changes a device stays a `change` leg.
+- ⚠️ **Limit (until the F lane lands):** the generated requirements template has no slot for the "this leg changes
+  nothing" phrase, so a value leg comes **only from a hand-shaped requirements document** (e.g. a published program view,
+  `requirements.program.md`). A generated spec yields change legs only. Two network legs (one value, one change) are kept
+  on the change token until you answer by re-planning.
+- Gates: plan → a gate after the value leg (approve the published value; it starts the consumers) → one change-method
+  gate per consuming leg, as the plan's gate table says.
+- Node C is the unbound `Program Integration Reviewer` on every pov-program run whose PLAN-SPAWN ran under 2.0.0 (launched
+  after deploy 2), value leg or not. A root planned before deploy 2 and released later keeps its `Change Reviewer` Node C
+  (the "third population" — not a fault). On a 2.0.0 plan Node C checks every leg's
+  title token and leg type against the approved plan (a mismatch is BLOCKING) and is the only reviewer of whether a
+  consumer that declared nothing applied the published value.
+- Before releasing the plan gate, run the hold-window checks in PROGRAM-RUN-FORENSICS-GUIDE §4c and the operator
+  playbook (clearance on the ROOT, every child holds the PLAN's contract, producer/Node C depend on the legs only).
+
+Measured in the variant's window (5 runs, 2026-10-03): the value leg approved 5/5, $1.46 per run on average (−28% vs the
+network-provisioning fabric leg it replaces); the program released 1/5 — every refusal was a change leg's write-up, never
+the configuration. Promotion state: deploy 2 of promotion E (`cline_docs/reviews/promotion-e-2026-10-05/`); the regression
+controls (E10) run after it.
+
 ## 11. See also
 
 - Design a use-case: [`PROGRAM-USE-CASE-DESIGN-PLAYBOOK.md`](./PROGRAM-USE-CASE-DESIGN-PLAYBOOK.md) ·
   [`firewall-policy-use-case.md`](./firewall-policy-use-case.md) · [`PROGRAM-COMPOSITION-CATALOG.md`](./PROGRAM-COMPOSITION-CATALOG.md).
 - Leg-level detail: [`PIPELINE-HARNESS-USER-GUIDE.md`](./PIPELINE-HARNESS-USER-GUIDE.md).
+- **Make the requirements.md** (§2 "Where the two artifacts come from"): the public template `program-artifacts/_TEMPLATE/`; in the source repo the `/requirements-spec` skill, over the requirements-authoring procedures.
 - **Run the human side of the gates**: [`PROGRAM-OPERATOR-GATE-PLAYBOOK.md`](./PROGRAM-OPERATOR-GATE-PLAYBOOK.md) — plan-gate probing, mechanical package checks, apply discipline, and the read-raw-output rule. Every device-facing defect across two campaigns was caught by an operator step, not an agent tier.
 - Forensically assess a run: [`PROGRAM-RUN-FORENSICS-GUIDE.md`](./PROGRAM-RUN-FORENSICS-GUIDE.md).
 - Design rationale (D1–D12): `cline_docs/reviews/program-architect-design-2026-07-15/design-proposal.md`.

@@ -23,6 +23,7 @@ import {
   type ExclusionClass,
 } from '../lib/agents/harness/rollback-containment';
 import { authoritativeReadStub } from './fixtures/authoritative-read-stub';
+import { buildRawWitness } from '../lib/agents/harness/raw-tool-witness';
 
 console.log('↩️  rollback-containment fixtures\n');
 
@@ -238,8 +239,9 @@ test('DISPOSITION: an unrecognised reason falls through to blocking, VISIBLY', (
   expectEq(d.reason, 'hard-gap');
 });
 
-test('DISPOSITION: no-harvest-text fails CLOSED — the package quoted content and the evidence was unreadable', () => {
-  const d = computeRollbackDisposition({ checked: false, reason: 'no-harvest-text' });
+test('DISPOSITION: no-harvest-tool-results (and the archived pre-E1 no-harvest-text) fail CLOSED — the package quoted content and the evidence was unreadable', () => {
+  expectEq(computeRollbackDisposition({ checked: false, reason: 'no-harvest-text' }).disposition, 'blocking', 'archived pre-E1 reason: ');
+  const d = computeRollbackDisposition({ checked: false, reason: 'no-harvest-tool-results' });
   expectEq(d.disposition, 'blocking');
 });
 
@@ -284,11 +286,11 @@ test('LANE: terraform-iac and kubernetes-gitops are DELIBERATE no-checks — ben
 });
 
 test('LANE: a DELIBERATE no-check and a COULD-NOT-check must not share a disposition reason', () => {
-  // lane-not-supported = we chose not to look. no-harvest-text = we tried and the evidence was
+  // lane-not-supported = we chose not to look. no-harvest-tool-results = we tried and the evidence was
   // unreadable. Conflating them either blocks every terraform leg or silently excuses a broken
   // harvest; the whole value of the taxonomy is telling a reader which one happened.
   const deliberate = computeRollbackDisposition({ checked: false, reason: 'lane-not-supported' });
-  const couldNot = computeRollbackDisposition({ checked: false, reason: 'no-harvest-text' });
+  const couldNot = computeRollbackDisposition({ checked: false, reason: 'no-harvest-tool-results' });
   expectEq(deliberate.disposition, 'benign');
   expectEq(couldNot.disposition, 'blocking');
 });
@@ -322,7 +324,7 @@ function stubPrisma(opts: { stageId: string | null; legTitle: string | null; chi
     },
     stage: { findUnique: async () => ({ metadata: { harnessTaskId: 'leg1' } }) },
     // RWF Wave B: no executions — and the stub THROWS on any read it does not model, so an ARM pin
-    // that starts reaching the harvest read fails loudly instead of silently taking no-harvest-text.
+    // that starts reaching the harvest read fails loudly instead of silently taking no-harvest-tool-results.
     ...authoritativeReadStub([]),
   } as unknown as Parameters<typeof computeRollbackContainmentFact>[0];
 }
@@ -411,6 +413,84 @@ test('F1-RC3 (terraform exec cmrmjqmko00fmyxlunmemx4vm): the rollback block hidd
   // Lane-independent pure scope — what net #3 WOULD read if the terraform lane ruling ever changed.
   const scope = scopeRestoreLines(readDl('f1-tf-lane3-cmrmjqmko00fmyxlunmemx4vm.md'));
   expectEq(scope.blocksScanned.restore, 6, 'restore blocks: ');
+});
+
+// ── E1 (VERBATIM-QUOTE-OMISSION, owner decision 2026-10-13): THE WITNESS IS THE HARVESTER'S RAW TOOL RESULTS ─────────
+// Live specimens in scripts/fixtures/quote-fidelity/. Each pair is shown under BOTH witnesses, so the movement is the
+// assertion: the transcription (finalResponse) certified a corruption and escalated a correction; the raw does neither.
+const QF_DIR = path.join(__dirname, 'fixtures', 'quote-fidelity');
+const loadQf = (n: string) => JSON.parse(fs.readFileSync(path.join(QF_DIR, `${n}.json`), 'utf8')) as
+  { finalResponse: string; toolCalls: unknown[] };
+
+function e1Prisma(harvest: { finalResponse: string; toolCalls?: unknown } | null) {
+  return {
+    task: {
+      findUnique: async ({ select }: { select?: Record<string, unknown> }) =>
+        select && 'stageId' in select ? { stageId: 's1' } : { title: 'OTLP sender restriction (protocol: observability-config)', metadata: {} },
+      findMany: async () => [
+        { id: 'h1', title: 'Harvest as-deployed config', agentRole: 'infra_state_harvester' },
+        { id: 'a1', title: 'Author change package', agentRole: 'config_change_author' },
+      ],
+    },
+    stage: { findUnique: async () => ({ metadata: { harnessTaskId: 'leg1' } }) },
+    ...authoritativeReadStub(harvest ? [{ id: 'exec-h1', taskId: 'h1', createdAt: new Date(1_700_000_000_000), result: { taskId: 'h1', ...harvest } }] : []),
+  } as unknown as Parameters<typeof computeRollbackContainmentFact>[0];
+}
+const ACTR = 'proxy_set_header X-Forwarded-For $remote_actr;';
+const ADDR = 'proxy_set_header X-Forwarded-For $remote_addr;';
+
+test('E1-1 (2026-10-01, cmuoukung): the old witness CERTIFIED `$remote_actr`; the raw witness names it unmatched → needs-node-c', async () => {
+  const a = loadQf('oct01a-author'), h = loadQf('oct01a-harvest');
+  const old = checkRollbackContainment(scopeRestoreLines(a.finalResponse).lines, h.finalResponse);
+  expectEq(old.missing.length, 0, 'old witness (transcription) missing: ');
+  const fact = await computeRollbackContainmentFact(e1Prisma(h), { taskId: 'a1', deliverable: a.finalResponse });
+  expectEq(fact.checked, true);
+  expectEq(JSON.stringify((fact.missing as Array<{ line: string }>).map((m) => m.line)), JSON.stringify([ACTR]), 'raw witness missing: ');
+  // The proposal's prediction (MEASURE-AND-PROPOSAL §4 (e)): 19/19 benign → 18/19 needs-node-c.
+  expectEq(`${old.restoreLinesFound}/${old.restoreLinesTotal}`, '19/19', 'old witness: ');
+  expectEq(`${fact.restoreLinesFound}/${fact.restoreLinesTotal}`, '18/19', 'raw witness: ');
+  const d = fact.rollbackDisposition as Record<string, unknown>;
+  expectEq(`${d.disposition}/${d.reason}`, 'needs-node-c/unmatched-restore-lines');
+});
+
+test('E1-2 (Phase 4 run 1): the old witness ESCALATED the Author\'s correct `$remote_addr`; the raw witness finds it', async () => {
+  const a = loadQf('run1-author'), h = loadQf('run1-harvest');
+  const old = checkRollbackContainment(scopeRestoreLines(a.finalResponse).lines, h.finalResponse);
+  if (!old.missing.some((m) => m.line === ADDR)) throw new Error('fixture drift: the old witness no longer misses the corrected line');
+  const fact = await computeRollbackContainmentFact(e1Prisma(h), { taskId: 'a1', deliverable: a.finalResponse });
+  const missing = (fact.missing as Array<{ line: string }>).map((m) => m.line);
+  expectEq(missing.includes(ADDR), false, 'corrected line unmatched under the raw witness: ');
+  expectEq(missing.length < old.missing.length, true, 'fewer unmatched lines than the old witness: ');
+});
+
+test('E1-3: the fact names its witness — the series key for the cut (never time)', async () => {
+  const fact = await computeRollbackContainmentFact(e1Prisma(loadQf('oct01a-harvest')), { taskId: 'a1', deliverable: loadQf('oct01a-author').finalResponse });
+  const w = fact.witness as Record<string, unknown>;
+  expectEq(w.source, 'harvest-raw-tool-results', 'witness.source: ');
+  expectEq(typeof w.calls === 'number' && (w.calls as number) > 0, true, 'witness.calls > 0: ');
+  expectEq(fact.matching, 'trimmed-exact-line', 'matching rule unchanged: ');
+});
+
+test('E1-4: a harvest with NO raw tool results fails CLOSED — the transcription is never a fallback witness', async () => {
+  const h = loadQf('oct01a-harvest');
+  const fact = await computeRollbackContainmentFact(e1Prisma({ finalResponse: h.finalResponse, toolCalls: [] }), { taskId: 'a1', deliverable: loadQf('oct01a-author').finalResponse });
+  expectEq(fact.reason, 'no-harvest-tool-results', 'reason: ');
+  const d = fact.rollbackDisposition as Record<string, unknown>;
+  expectEq(`${d.disposition}/${d.reason}`, 'blocking/hard-gap');
+});
+
+test('E1-5: a line the model was shown in R9-SANITISED form is witnessed (the alternate form), and only for a rewritten call', () => {
+  const zw = 'allow 10.99.0.0/27;​';
+  const tc = (rewritten: boolean) => [{ tool: 'services', result: { content: [{ type: 'text', text: `server {\n    ${zw}\n}` }] }, rewritten }];
+  expectEq(buildRawWitness(tc(true)).lines.has('allow 10.99.0.0/27;'), true, 'rewritten call: ');
+  expectEq(buildRawWitness(tc(false)).lines.has('allow 10.99.0.0/27;'), false, 'unrewritten call: ');
+});
+
+test('E1-6: a persist-truncated harvest result contributes its preview lines and is COUNTED, never silently whole', () => {
+  const big = { truncated: true, originalSize: 99_999, preview: JSON.stringify({ text: 'server {\n    listen 4317;\n}' }).slice(0, -2) + '...', note: 'a platform sentence that is not a witness' };
+  const w = buildRawWitness([{ tool: 'services', result: big }]);
+  expectEq(w.persistTruncatedCalls, 1, 'truncated calls: ');
+  expectEq(w.lines.has('a platform sentence that is not a witness'), false, 'the platform note is not walked: ');
 });
 
 // ── CHAINER CARRY (2a-plumbing) ───────────────────────────────────────────────────────────────

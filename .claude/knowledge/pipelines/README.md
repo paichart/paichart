@@ -20,6 +20,7 @@ directory has since accumulated the canonical guides, and a reader landing here 
 | `ADD-A-PIPELINE-HARNESS-AGENT.md` | adding a domain/agent to the leg tier |
 | `PIPELINE-RUN-FORENSICS-GUIDE.md` | assessing a run from persisted records |
 | `PIPELINE-DOMAIN-FIT-CATALOG.md` | does a candidate domain fit at all? (seam test) |
+| `MODEL-ONBOARDING-PLAYBOOK.md` | evaluating a new model (or effort) for a pipeline role, then switching it (wire audit → lab → decision → reseed → watch) |
 
 ### Program tier (a program of pipelines)
 | doc | for |

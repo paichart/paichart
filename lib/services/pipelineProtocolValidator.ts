@@ -133,6 +133,19 @@ export interface ProtocolValidationResult {
    * `escalatedExit` (pinned by test-pipeline-protocol-validator).
    */
   reExecutionExit?: { kind: 'blind'; childTaskIds: string[] };
+  /**
+   * SYNTHESIZE ended in the THIRD sanctioned exit — POST-COMPLETION (COMPLETE-THEN-FAIL, 2026-10-05, DESIGN-v2 §3.3):
+   * the run called `task.complete` and then an LLM call failed, so the steps AFTER `task.complete` (the Step-5 final
+   * comment and its content checks) never ran. The platform rescued the run from DB state. Modelled on the escalated
+   * and re-execute exits (the m3 note above is the PRECEDENT, not a requirement). A cut-off run is neither "forgot the
+   * format" nor "fabricated completion" — the two things PROTOCOL_STEP_SKIPPED exists to separate — so the
+   * post-completion items are recorded in their OWN field, never in `missingSteps`: that keeps the execution-quality
+   * branch keys correct and keeps rescued rows out of the fleet-wide `missingSteps` diagnosis aggregation.
+   * Everything BEFORE `task.complete` is still graded (incl. Step 5a); a pre-completion gap still raises PSS.
+   */
+  postCompletionExempt?: true;
+  /** The post-completion steps that did not run — a recorded FACT, never a PSS input. */
+  postCompletionSteps?: string[];
   /** Convenience numbers for the most common mismatch (CREATE step 4 vs 5). */
   expectedChildCount?: number;
   actualAssignedCount?: number;
@@ -352,6 +365,12 @@ export interface ValidatorTaskContext {
    * back to the isError-filtered tool-call helper.
    */
   dispatchedChildIds?: string[];
+  /**
+   * COMPLETE-THEN-FAIL (v2 §3.3): true ONLY on the completion-anchored rescue path — the execution's own
+   * `postCompletionFailure` fact is being stamped. Together with a `task.complete` in the tool log it selects the
+   * post-completion sanctioned exit. Absent everywhere else (every normal run is graded exactly as before).
+   */
+  postCompletionFailure?: boolean;
 }
 
 /**
@@ -590,8 +609,25 @@ export function validatePipelineProtocolSteps(
         missingSteps.push('Step 5: task.complete not called — harness did not close itself; will retrigger again or stay IN_PROGRESS');
       }
     }
+    // COMPLETE-THEN-FAIL (v2 §3.3): the post-completion sanctioned exit. Only comments AFTER the run's last successful
+    // task.complete can be its closing comment (the protocol order is gate stamp → task.complete → ONE final comment).
+    const isPostCompletionExit = taskContext?.postCompletionFailure === true && taskComplete >= 1;
+    let lastCompleteIdx = -1;
+    if (isPostCompletionExit) {
+      for (let i = toolCallResults.length - 1; i >= 0; i--) {
+        const tc = toolCallResults[i];
+        if (tc.success && tc.arguments?.action === 'task.complete') { lastCompleteIdx = i; break; }
+      }
+      result.postCompletionExempt = true;
+      result.postCompletionSteps = [];
+    }
+    const closingCommentRan = !isPostCompletionExit || toolCallResults.slice(lastCompleteIdx + 1)
+      .some((tc) => tc.success && tc.arguments?.action === 'task.comment');
     if (isReExecutionExit) {
       // RWF A4: a re-execute exit writes no final comment yet (the later pass does) — nothing to grade.
+    } else if (!closingCommentRan) {
+      // The closing turn did not run: the final comment and its content checks are recorded as a FACT, not graded.
+      result.postCompletionSteps!.push('Step 5: no final task.comment with deliverable pointer + quality gates');
     } else if (taskComments < 1) {
       missingSteps.push('Step 5: no final task.comment with deliverable pointer + quality gates');
     } else {
@@ -667,6 +703,6 @@ export function validatePipelineProtocolSteps(
   // ESCALATED EXIT must still surface its fact even with zero misses — otherwise "exited
   // correctly on escalation" is indistinguishable from "ran clean", which is the haltExempt
   // lesson repeating one phase later. Caught here by its own test, not in production.
-  if (missingSteps.length === 0 && !result.escalatedExit && !result.reExecutionExit) return null;
+  if (missingSteps.length === 0 && !result.escalatedExit && !result.reExecutionExit && !result.postCompletionExempt) return null;
   return result;
 }

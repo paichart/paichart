@@ -14,7 +14,8 @@
  *
  * Three callers share it: `handleCanNeverRunTask` (F16 can-never-run), `runTerminalSuccessTx`
  * truncation-stall branch (R4 Layer 2), and `runTerminalSuccessTx` F17 duplicate-halt branch. Without
- * the cone, a failed leg with a same-stage dependent (Node C is two hops from the leg) re-hangs the
+ * the cone, a failed leg with a same-stage dependent (Node C is one hop from the leg since pov-program 2.0.0 wires it
+ * to the pipeline legs only — two hops when it was wired through a gate) re-hangs the
  * program ONE node downstream — the F16 lesson.
  *
  * D4 gate semantics (verbatim from F16): FORWARD-ONLY from the failed task, so a parked upstream

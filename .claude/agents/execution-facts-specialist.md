@@ -185,12 +185,13 @@ Full expectations (with proven counts) live in the discovery — these are the o
 | `lib/agents/harness/dialect-lint.ts` | net #2, pure; block classifier the rollback net must reuse |
 | `lib/agents/harness/dialect-lint-enrichment.ts` | net #2 impure half |
 | `lib/agents/harness/marker-presence.ts` | H-4 fact, pure + synchronous |
+| `lib/agents/harness/quote-fidelity.ts` (+ `-enrichment`, `raw-tool-witness.ts`) | `quoteFidelity`, pure; the Author point's one read is in the enrichment. `raw-tool-witness.ts` is the ONE "what the tool returned" extractor, shared with `rollbackContainment` (E1) |
 | `lib/agents/harness/evidence-grading.ts` | reviewer evidence-grading fact, pure. Nests on `reviewerVerdict`; scanned over the WHOLE `finalResponse`, never `raw` |
 | `lib/agents/harness/contract-propagation-enrichment.ts` | shares dialect-lint's canonical-stanza needles |
 | `lib/agents/harness/net-registry.ts` | the registry contract — `(name, point)`, `appliesTo`, `errorFact`, the two render slots, and the three things it deliberately does NOT do |
 | `lib/agents/harness/mechanical-nets.ts` | the seven entries (six names; `rollbackContainment` at two points). ⚠️ key ORDER is part of the contract — the equivalence gate compares serialized bytes |
 | `lib/agents/harness/net-context.ts` | `ctx` — memoized `children()` + `contractApplicability()` |
-| `lib/services/execution-core.ts` | the ONE call site — now two `runNetsAtPoint` calls, not six hand-wired blocks |
+| `lib/services/execution-nets.ts` | the ONE call site (`stampExecutionNets`, 2026-10-05) — two `runNetsAtPoint` calls, not six hand-wired blocks; called by `execution-core.ts` AND the COMPLETE-THEN-FAIL rescue (`execution-completion-anchored.ts`), so their net inputs cannot fork |
 | `lib/services/execution-artifacts.ts` | `RESULT_JSON_SUMMARY_KEYS` + `pickResultJsonSummary` (the contract) |
 | `lib/mcp/server/tools/advanced/lean-card-facts.js` | the `**Facts:**` line — the render half of the seam |
 | `scripts/replay-{containment,dialect-lint,contract-propagation,rollback-containment}.ts` | run the SHIPPING enrichment against a completed leg, read-only, seconds |
@@ -221,6 +222,12 @@ Full expectations (with proven counts) live in the discovery — these are the o
   re-trigger at 8 nets or a 2 KB scope note.** The measurement found a different, real defect
   instead — the chainer counted only `finalResponse`, so carried facts were outside the ceiling
   entirely; fixed `3f941d1d`.
+  **RE-MEASURED 2026-10-13 (P5)**: the "8 nets" trigger counted the wrong population, because the chainer copies 3 named
+  facts, not registry nets. Since 09-12 the worst chain is 70.8 KB (13.5%), with 0 truncations ever. The two
+  PLATFORM-HELD-BYTES facts fit the chain even at 2× budget. The **head slice** is what binds: the Author's `finalResponse`
+  offset is 3.9 K at p95 before QF. Re-trigger is now: ≥ 8 chained named facts · fact bytes per entry p95 > 4 KB · worst
+  30-day total > 256 KB · Harvester/Author `"finalResponse"` offset p95 > 6,000.
+  `cline_docs/reviews/platform-held-bytes-2026-10-13/P5-CHAIN-SIZE.md` (scripts alongside).
 - **The context-entry residue** — after the HCL lane exclusion, 24 of 42 adjudicated packages still
   escalate on config-context openers (`router bgp 65001`, `address-family ipv4`), which are restored
   content in one rollback and navigation scaffolding in another, textually identical. PARKED for a
@@ -263,6 +270,7 @@ Full expectations (with proven counts) live in the discovery — these are the o
   tool loop around the stamp.
 - **To `architectural-review-specialist`**: any proposed field whose name implies a judgement
   (Protocol 10 fact-vs-verdict gate).
+- **To `model-evaluation-specialist`** (2026-10-08): leg replay lab experiment design, runs, reading, Protocol 16 gates, model/effort evaluation. Lab handoff: it owns the CLI/levers + experiments; you keep the shipping nets/measure code the lab imports and any parser/measure fault a run exposes.
 - **To `discovery-scout`**: cross-domain or unknown-scope follow-up; specialist lifecycle questions.
 
 ## Completion & Handback Protocol
@@ -287,6 +295,7 @@ Full expectations (with proven counts) live in the discovery — these are the o
 3. 🤝 boundary-contract-specialist — whitelist/leakage trace
 4. 🤝 agent-execution-specialist — persist/tool-loop
 5. 🔄 discovery-scout — cross-domain follow-up
+5b. 🤝 model-evaluation-specialist — lab experiment / model evaluation
 6. ✅ Complete
 7. 👤 Return to user — decision needed (earn-it ruling, verdict-vs-fact call)
 
@@ -301,6 +310,66 @@ reason strings and the needs-node-c delegated path · §3 dialect-lint, its two 
 corrections · §4 markerPresence + contractPropagation · §5 the scheduled `rollbackContainment` build
 and its pre-assembled panel brief · §6 what stayed with the harness. The paired discovery's PROVEN
 greps outrank it.
+
+## New facts + open items, 2026-10-07 (pointer)
+- `toolLoop.reflectionErrors: [{site, status, errorType, errorCode}]` — an errored reflection call (#89 · budget_failfast · form_correction · diagnostic_retry), nested in `toolLoop`, present only when non-empty (OPUS55). Yours to surface if it ever fires.
+- FORM-CORRECTION-PROSE-ECHO (register): a correct undercount fix is refused (`prose-changed`) when the Author echoes the count in prose — the guard's call.
+
+## quoteFidelity + E1 raw witness (pointer, 2026-10-13 — built locally, not yet deployed)
+- `quoteFidelity@leaf-persist` (Harvester pure; Author = reproduction blocks only, desired state excluded incl. by heading
+  ancestry). Escalate-only, consumed by nothing, rendered NOWHERE until the Group C lab (owner A1/B1–B3). Series key:
+  `quoteFidelity.version`; render selector: `findings[].source.lane = 'file-artifact'`.
+- E1: `rollbackContainment`'s witness is the harvest's RAW `toolCalls` (`raw-tool-witness.ts`, shared — never fork it); key
+  `witness.source`. Record + replay + series-cut draft: `cline_docs/reviews/verbatim-quote-omission-2026-10-13/BUILD-A-E.md`.
+
+## applyBlockPlaceholder (pointer, 2026-10-13 — built locally, not yet deployed)
+- Warning-only fact on every `config_change_author` leaf (owner (a), PLACEHOLDER-APPLIES-AS-LITERAL): a placeholder in a desired/rollback
+  fence of the PERSISTED package. NOT whitelisted (`summaryExcludedReason`, R4 = whitelisted XOR reason); its one render is the leg
+  report.md "Platform warnings (non-blocking)" section. Record + residuals: `cline_docs/reviews/platform-held-bytes-2026-10-13/PLACEHOLDER-GUARD-BUILD.md`.
+
+## In-run facts-only correction — you own the mechanism (pointer, 2026-10-11)
+Two production instances, both yours to maintain:
+- terraform `config_change_author` (`package-form-check` + `form-correction`; provenance guard, live 9/9 adopted);
+- `requirements_author` (`requirements-form-check` + `requirements-form-correction`; regression guard, adoption rule v2,
+  3/3 live adoptions on 2026-10-10).
+
+Canonical home: `patterns/in-run-facts-only-correction-pattern.md`. Read its four preconditions and anti-patterns
+before proposing a THIRD instance. It applies to FORM slips only, never judgement; it gets one turn, never a loop.
+
+Rules of thumb:
+- **Adopted ≠ passed.** Report both.
+- **A falling adoption rate means: check the checker first.** Lab L10 refused 0/6 good corrections on a clause-checker
+  false positive.
+- **Split of ownership on the requirements instance:** what each check MEANS is `requirements-authoring-specialist`'s
+  (Python canonical, TS parity). The turn, the adoption rule and the fact are yours. The loop wiring is
+  agent-execution's.
+
+## Value-leg facts + the consumer-side fail-OPEN findings (value-chain, 2026-10-02/03)
+
+`value-leg-containment-enrichment.ts` (yours): a value leg's Derivation Architect stamps `derivationContainment` with
+`legShape: value` at **leaf-persist** (8th registry entry), hoisted to the leg; card segments `legShape: value`,
+`value: <kind> <v>`, `orphanCheck: not applicable (value leg)`; rollback `value-leg-no-package` benign. Dispatch is an
+EXACT role match (`derivation_architect`) — never a regex. Changes to the module re-run
+`scripts/replay-nets-byte-identity.sh` (pattern `byte-identity-refactor-pattern.md`; at ~2,300 tasks a pass takes ~60-65
+min — two passes exceed a 2 h background limit, run them separately). **CONSUMER-FAIL-OPEN is FIXED (live 2026-10-03,
+`71ffd705`):** a consuming leg with no parsed consumed block now stamps `needs-node-c (consuming-leg-no-consumed-block)`.
+**PARSE-STEAL is FIXED** (`8fe8ad56`, 2026-10-04 — a marker owns only the fenced block inside its own section; was
+`parseBlockAt` taking the first fence after a heading; `cline_docs/reviews/parse-steal-2026-10-03/`). **Promotion E
+(deploy 2):** value legs now run under **pov-program 2.0.0** (value-chain-program is RETIRED, its name kept in
+`PROGRAM_PROTOCOL_NAMES` permanently), so these facts appear on pov-program roots. Node C runs on the unbound
+`Program Integration Reviewer` and reads a leg's `containmentDisposition` from §6 or its `agent.results` card; an ABSENT
+disposition is unverified and blocking (E5; the degraded-card gap is yours, filed). **Series cut** for any value-leg or
+Node C `evidenceGrading` measure at the deploy-2 flip/reseed: Node C's remit also grew (the PC-F1 scoping — an undeclared
+consumer is Node C's to compare). Depth: library §9.
+
+## Containment delegation — live 2026-10-12 21:22:09Z (pointer)
+
+`consuming-leg-upstream-delegated` (`needs-node-c`): a consumer whose upstream DELEGATED (checked-clean or `needs-node-c`, named
+reason, numeric 0 violations, no `lookupMisses`) hands the decision to Node C instead of blocking; subject at
+`containmentDisposition.inputs.upstreamDelegated`, card segments `upstreamDelegated:` / `consumedValueCheck:` on that reason
+only; discharged by pov-program 2.2.0 BRANCH D4. Replay: exactly C5/C6/C7. Record + fold: `cline_docs/reviews/
+containment-propagation-2026-10-12/` (BUILD-A §9). **Owed:** C3 public mirror bump; Bug Class 85 / green-path gaps G1–G4
+(`cline_docs/follow-ups/containment-green-path-gaps-2026-10-12.md`, yours, measure first); D-B2 member-not-harvested (filed).
 
 ## Working Directory
 
@@ -350,3 +419,9 @@ classification. Correctly handed back to agent-execution rather than compensated
 
 Suite: `test:chained-context-signal-inherited` (written RED-first and mutation-proven: reverting the
 early-out alone turns A11a-e red while the CONTROL stays green).
+
+## Pointer (2026-10-13): quoteFidelity blind spot
+The shipped `quoteFidelity` reports omissions/added lines only on blocks labelled verbatim — a silent cut relabelled "excerpt" reads `all-quotes-complete` (register QUOTE-FIDELITY-EXCERPT-BLIND, yours; fix measure-first with a version bump). Until then read obs quoting with the strict scorer (`scripts/leg-replay-lab/score-quote.ts`); after observability 1.9.0 (cut 2026-10-13 06:03:41Z) the stamped escalation rate FALLS by construction. Also filed for you: SCRAPE-PAGE-STORED-72-SHORT (verify first).
+
+## Pointer (2026-10-14): PLATFORM-HELD-BYTES facts side
+`FILE_ARTIFACT_TOOLS` is now derived from `held-bytes/descriptors.ts` (value + order pinned; `laneOf` unchanged — OA-22). `heldBytes` digest/manifest builders exist (`held-bytes/held-bytes-fact.ts`) but are NOT stamped or whitelisted until Stage B. MI-13 has a HELD BYTES section. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-BUILD.md`.

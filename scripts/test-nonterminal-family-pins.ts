@@ -83,7 +83,9 @@ test('NTF-F19.3: expectedPredecessors/totalDependencies keeps its raw all-edges 
 test('NTF-F20.1: terminal persist completes an ESCALATED program leg only with Program:-prefix + all-children-terminal guards', () => {
   const idx = persistSrc.indexOf('programLegCompletion');
   assert(idx > 0, 'program-leg block missing');
-  const win = persistSrc.slice(idx - 200, idx + 2600);
+  // Window widened 2600 → 3200 (COMPLETE-THEN-FAIL Q1(a), 2026-10-05: the duplicate-halt arm gained a 3-line gate
+  // comment that pushed the escalated guard past the old window — a layout move, not a behaviour change).
+  const win = persistSrc.slice(idx - 200, idx + 3200);
   assert(win.includes(`startsWith('Program: ')`), 'stage-prefix discriminator missing (standalone pipelines must stay IN_PROGRESS)');
   assert(win.includes(`outcome === 'escalated'`), 'escalated-outcome guard missing');
   // Anchored on the escalated branch itself, not a fixed window from the block start (a comment edit
@@ -160,7 +162,9 @@ test('NTF-R4L2.3: both FAILED branches (truncation + F17 duplicate-halt) walk th
   const truncIdx = persistSrc.indexOf('    input.truncationStalled &&\n    !deadEndExempt');
   const truncWin = persistSrc.slice(truncIdx, truncIdx + 1200);
   assert(truncWin.includes('coneStageIdToMark = isProgramLeg ?'), 'truncation cone must be program-legs-only (standalone = leg-mark-only)');
-  const dupIdx = persistSrc.indexOf('if (legMeta.duplicateHalt)');
+  // COMPLETE-THEN-FAIL Q1(a) (2026-10-05): the arm is now gated on the fresh status (no FAILED onto a COMPLETED leg).
+  const dupIdx = persistSrc.indexOf("if (legMeta.duplicateHalt && currentTaskType?.status !== 'COMPLETED')");
+  assert(dupIdx > 0, 'F17 duplicate-halt arm (status-gated since Q1(a)) not found');
   assert(persistSrc.slice(dupIdx, dupIdx + 700).includes('coneStageIdToMark'), 'F17 duplicate-halt must now walk the cone (the folded cone-gap fix)');
 });
 test('NTF-R4L2.4: the shared cone walk is deterministic-ordered (ORDER BY t.id) to avoid concurrent-walk deadlock (db-r4v P-DB-1)', () => {

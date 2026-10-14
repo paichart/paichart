@@ -229,6 +229,8 @@ function stub(deps: Array<{ id: string; fr: string; inFlight?: boolean }>) {
       'infra_change_architect', 'config_change_author', 'network_design_architect',
       'technical_writer', 'editorial_writer', 'program_architect',
       'security_analyst', 'business_analyst', 'data_analyst',
+      // value-chain build B3 (2026-10-02): seeded after the measurement, decided at birth.
+      'value_chain_architect', 'derivation_architect', 'derivation_reviewer',
     ];
     const unreviewed = PROD_ROLES.filter((r) => SHAPE.test(r) && !INJECTION_EXCLUDED_ROLES.has(r));
     check(`ROLE TRIPWIRE: every shape-matching production role is an explicit decision (unreviewed: ${unreviewed.join(', ') || 'none'})`,
@@ -257,7 +259,7 @@ function stub(deps: Array<{ id: string; fr: string; inFlight?: boolean }>) {
         { inject: { legTaskId: 'leg1', entries: [up], childAgentRole: role } });
       return renderPipelineContextSection(c).join('\n');
     };
-    for (const r of ['change_reviewer', 'publication_reviewer', 'requirements_reviewer']) {
+    for (const r of ['change_reviewer', 'publication_reviewer', 'requirements_reviewer', 'derivation_reviewer', 'derivation_architect']) {
       const out = await as(r);
       check(`FU1 SEAM: ${r} renders its own predecessor and NO upstream value line`,
         out.includes('author package') && !out.includes(LABEL) && !out.includes('10.99.0.0/27'), out.slice(0, 400));

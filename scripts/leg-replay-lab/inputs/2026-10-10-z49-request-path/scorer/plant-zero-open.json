@@ -1,0 +1,24 @@
+{
+  "id": "zero-open",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "Run-1 zero draft with the row as Z49 wants it: terraform OPEN with the three options (table + owner block, tier blocking), kubernetes-gitops listed not-applicable. Must PASS G-ROW (zero).",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "| terraform-iac.admitted-principal | who is admitted, and by which attribute the enforcer recognises them | source-address-range · named-identity · network-path · combination (state each part) | unanswered — gap report naming this row | OPEN — by which attribute the bucket's enforcer recognises the namespace's running pods; options: source-address-range · named-identity · network-path · combination (state each part) |\n",
+      "new": "| terraform-iac.admitted-principal | who is admitted, and by which attribute the enforcer recognises them | source-address-range · named-identity · network-path · combination (state each part) | unanswered — gap report naming this row | OPEN — by which attribute the bucket's enforcer recognises the namespace's running pods; options: source-address-range · named-identity · network-path · combination (state each part) |\n| terraform-iac.request-path | the path the admitted senders' requests take to the enforcer, which decides the attribute their address arrives in (asked when admitted-principal admits by address) | direct · private-endpoint · translated | unanswered — gap report naming this row | OPEN — which path the pods' requests take to reach the bucket, which decides the attribute their address arrives in; options: direct · private-endpoint · translated |\n"
+    },
+    {
+      "type": "replace",
+      "old": "terraform-iac.principal-unseen — the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path — options: gap · act-regardless — governs: Pipeline 2 admitted-principal premise — tier: blocking\n",
+      "new": "terraform-iac.request-path — the path the admitted senders' requests take to the enforcer, which decides the attribute their address arrives in (asked when admitted-principal admits by address) — options: direct · private-endpoint · translated — governs: Pipeline 2 admitted-principal premise — tier: blocking\nterraform-iac.principal-unseen — the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path — options: gap · act-regardless — governs: Pipeline 2 admitted-principal premise — tier: blocking\n"
+    },
+    {
+      "type": "replace",
+      "old": "kubernetes-gitops.principal-unseen — the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path — options: gap · act-regardless — governs: none — tier: not-applicable — the leg grants or removes no access on the cluster\n",
+      "new": "kubernetes-gitops.request-path — the path the admitted senders' requests take to the enforcer, which decides the attribute their address arrives in (asked when admitted-principal admits by address) — options: direct · private-endpoint · translated — governs: none — tier: not-applicable — the leg grants or removes no access on the cluster\nkubernetes-gitops.principal-unseen — the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path — options: gap · act-regardless — governs: none — tier: not-applicable — the leg grants or removes no access on the cluster\n"
+    }
+  ]
+}

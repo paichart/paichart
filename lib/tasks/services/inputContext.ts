@@ -62,9 +62,11 @@ export async function mergeTaskInputContext(
  * warn covers the residue. NO R9 here — sanitising a binding constant would corrupt the exact value
  * every child must transcribe verbatim.
  *
- * SCOPE: NON-PIPELINE children only. It must NEVER backstop the F16 loud-fail for PIPELINE legs —
- * that guard is deliberate program semantics (a missing leg contract means broken wiring, and the
- * platform holds no deterministic source for it).
+ * SCOPE: NON-PIPELINE children only. It must NEVER backstop the F16 loud-fail for PIPELINE legs.
+ * Since C2-a (2026-10-04) the platform DOES hold a deterministic source for a leg's contract (the
+ * program plan, `plan-spawn-carry.ts`), so the reason is no longer capability: it is POLICY (Q2,
+ * re-decided at E) — a leg created without its contract signals broken wiring, and that must stay
+ * loud. The write itself now enforces the scope in-statement (`writeInterfaceContractIfAbsent`).
  */
 export async function inheritInterfaceContractIfAbsent(
   taskId: string,
@@ -140,25 +142,53 @@ export async function inheritInterfaceContractIfAbsent(
     return null;
   }
 
-  // ── 3. atomic write-if-absent ──────────────────────────────────────────────────────────────
-  // Provenance rides SIBLING top-level keys — never inside `interfaceContract` (the F12 flag arm
-  // keys on that key's presence) and never inside `pipelineMetadata` (the chainer replaces that
-  // key wholesale every execution). Treat the stamp as a HINT: these are ordinary inputContext
-  // keys and therefore forgeable through the same user channels.
+  // ── 3. atomic write-if-absent — the shared writer below (provenance placement documented there) ──
+  const merged = await writeInterfaceContractIfAbsent(taskId, safe, parent.id);
+  if (merged) deps.onInherited({ taskId, parentTaskId: parent.id, bytes });
+  return merged;
+}
+
+/**
+ * THE shared contract write (extracted 2026-10-04, C2-a, from `inheritInterfaceContractIfAbsent`):
+ * atomic write-if-absent of a SANITIZED contract plus the existing three provenance keys, on a
+ * NON-PIPELINE task. Two callers: the leg arm (above) and the plan arm (a reviewer-set child of a
+ * program stage inheriting the program plan, prepare-task-for-execution.ts).
+ *
+ *  - The absence guard AND `type <> 'PIPELINE'` sit IN the UPDATE's WHERE (re-evaluated after a lock
+ *    wait), so F16 disjointness is enforced at the one write that could violate it — not only in a
+ *    caller's SELECT. A concurrent prepare that loses is a 0-row no-op.
+ *  - `metadataPatch` (optional, plan arm only) is merged into `metadata` by the SAME statement under
+ *    the SAME WHERE: provenance is stamped only by the write that won, and a lost race stamps nothing.
+ *    The leg arm passes none, so its statement is unchanged apart from the in-statement type guard.
+ *  - The inputContext patch carries exactly three keys. Provenance rides SIBLING top-level keys —
+ *    never inside `interfaceContract` (the F12 flag arm keys on that key's presence) and never inside
+ *    `pipelineMetadata` (the chainer replaces that key wholesale every execution). Treat the stamp as a
+ *    HINT: these are ordinary inputContext keys and therefore forgeable through the same user channels.
+ *  - The caller sanitizes and caps BEFORE calling; nothing is truncated here, and no R9 runs here.
+ */
+export async function writeInterfaceContractIfAbsent(
+  taskId: string,
+  safe: Record<string, unknown>,
+  inheritedFrom: string,
+  metadataPatch?: Record<string, unknown>
+): Promise<Record<string, unknown> | null> {
   const patch = {
     interfaceContract: safe,
-    interfaceContractInheritedFrom: parent.id,
+    interfaceContractInheritedFrom: inheritedFrom,
     interfaceContractInheritedAt: new Date().toISOString(),
   };
+  const setMetadata = metadataPatch
+    ? Prisma.sql`metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(metadataPatch)}::jsonb,`
+    : Prisma.empty;
   const rows = await prisma.$queryRaw<Array<{ inputContext: Record<string, unknown> }>>(Prisma.sql`
     UPDATE "tasks"
        SET "inputContext" = COALESCE("inputContext", '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb,
+           ${setMetadata}
            "updated_at" = now()
      WHERE id = ${taskId}
+       AND type <> 'PIPELINE'
        AND NOT (COALESCE("inputContext", '{}'::jsonb) ? 'interfaceContract'
                 AND jsonb_typeof("inputContext"->'interfaceContract') = 'object')
      RETURNING "inputContext"`);
-  const merged = rows[0]?.inputContext ?? null;
-  if (merged) deps.onInherited({ taskId, parentTaskId: parent.id, bytes });
-  return merged;
+  return rows[0]?.inputContext ?? null;
 }

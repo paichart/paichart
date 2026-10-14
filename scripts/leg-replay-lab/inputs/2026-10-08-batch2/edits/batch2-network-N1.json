@@ -1,0 +1,14 @@
+{
+  "id": "batch2-network-N1-v3",
+  "title": "WARNINGS-INVISIBLE batch 2 FINAL (BATCH2-DRAFT.md v3 §6) — network-provisioning Phase 3 N1, verbatim",
+  "appliesTo": [
+    "network-provisioning-protocol"
+  ],
+  "ops": [
+    {
+      "type": "replace",
+      "old": "an expected-output block stating a containment or tightness conclusion instead of printed text is the violation, and so is a derivation restated anywhere else in the package (2026-09-22: one such restatement was approved). A report of what the leg observed or applied (a selection-rule interpretation and the members it selected, with source) is not a conclusion — never block it as one.",
+      "new": "an expected-output block stating a containment or tightness conclusion instead of printed text is the violation, and it blocks as a validation-step defect. A derivation restated anywhere else in the package is the `restated-conclusion` warning the Change Reviewer role guidance defines: record it, never block on it alone, never adopt it — your own containment check above runs first and blocks on any defect it finds. A report of what the leg observed or applied (a selection-rule interpretation and the members it selected, with source) is not a conclusion — never label or block it as one."
+    }
+  ]
+}

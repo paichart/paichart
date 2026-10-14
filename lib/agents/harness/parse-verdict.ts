@@ -35,6 +35,8 @@ export const REVIEWER_ROLES = new Set([
   // NO structured reviewerVerdict at all — no evidenceGrading, no lean-card Facts line, and the
   // verdict-mismatch guard falls silent INDISTINGUISHABLY from a legitimately reviewer-less run.
   'requirements_reviewer',
+  // value-chain build B3 (2026-10-02): the value leg's reviewer. Same commit as its guidance (coupling test).
+  'derivation_reviewer',
 ]);
 
 /**
@@ -61,6 +63,43 @@ export interface ReviewerVerdict {
 }
 
 /**
+ * Locate the TERMINAL verdict marker line: the LAST line in `text` with the `## VERDICT:` shape the
+ * parser accepts. Returns its start offset, its full matched line and the raw token text after the
+ * colon — or `null` when there is none.
+ *
+ * Exported (WARNINGS-INVISIBLE, 2026-10-08) so every reader that needs the block's POSITION uses ONE
+ * marker rule: `computeReviewerWarnings` transcribes only lines ABOVE this offset, which is what keeps
+ * its warnings disjoint from `blocking[]` by construction. A second copy of the regex would drift the
+ * next time the VERDICT-HEADING tolerance moves (EF F3).
+ */
+export function locateTerminalVerdict(
+  text: string | null | undefined,
+): { index: number; line: string; tokenText: string } | null {
+  if (!text) return null;
+  // LAST-match-wins on the marker line (case-insensitive on the whole line).
+  // VERDICT-HEADING (2026-10-05): up to three `#`-runs, each followed by a space, MAY precede the marker's own
+  // `#`-run — a reviewer that wraps the literal marker in a heading writes `## ## VERDICT:` (Node C,
+  // 2026-10-04) or `### ## VERDICT:` (2026-08-21), and both lost the whole fact (`reviewerVerdict: null`).
+  // Measured over every stored reviewer finalResponse (431): those two are the ONLY post-grammar misses. The
+  // other near-misses are NOT tolerated, on evidence: a BOLD `**Verdict: X**` line is how reviewers write
+  // per-section sub-verdicts (~70 such lines in the corpus), so accepting it would let a sub-verdict win
+  // last-match; a token on the line AFTER a bare `## VERDICT` heading occurs once, before the grammar shipped.
+  // `[ \t]*` around the token, NOT `\s*` (2026-10-08): `\s` spans `\n`, so an EMPTY marker line followed by the real
+  // one (`## VERDICT:\n## VERDICT: NEEDS-REVISION`, batch-2 lab P-CERT s04) captured the second line as the
+  // FIRST match's token, swallowed it, and returned null. Same class as the `Blocking issues` note below.
+  // Corpus: 0 of 461 stored reviewer responses change.
+  const verdictLine = /^\s*(?:#{1,6}[ \t]+){0,3}#{0,6}\s*VERDICT:[ \t]*(.+?)[ \t]*$/gim;
+  const matches = [...text.matchAll(verdictLine)]
+    // Require the literal `## VERDICT:` shape (any heading level ≥ 2 discouraged but the marker is
+    // `##` — accept `##`–`######` to tolerate renderer nesting, reject bare "VERDICT:" prose). The run
+    // IMMEDIATELY before VERDICT is the marker's and must be ≥ 2, so `# VERDICT:` and `# # VERDICT:` stay out.
+    .filter(m => /^\s*(?:#{1,6}[ \t]+){0,3}#{2,6}\s*VERDICT:/i.test(m[0]));
+  if (matches.length === 0) return null;
+  const last = matches[matches.length - 1];
+  return { index: last.index ?? 0, line: last[0], tokenText: last[1] };
+}
+
+/**
  * Parse the reviewer's terminal verdict block from response text.
  *
  * @param text the reviewer's `finalResponse` (may be null/undefined/empty)
@@ -68,19 +107,12 @@ export interface ReviewerVerdict {
  */
 export function parseReviewerVerdict(text: string | null | undefined): ReviewerVerdict | null {
   if (!text) return null;
+  const last = locateTerminalVerdict(text);
+  if (!last) return null;
 
-  // LAST-match-wins on the marker line (case-insensitive on the whole line).
-  const verdictLine = /^\s*#{0,6}\s*VERDICT:\s*(.+?)\s*$/gim;
-  const matches = [...text.matchAll(verdictLine)]
-    // Require the literal `## VERDICT:` shape (any heading level ≥ 2 discouraged but the marker is
-    // `##` — accept `##`–`######` to tolerate renderer nesting, reject bare "VERDICT:" prose).
-    .filter(m => /^\s*#{2,6}\s*VERDICT:/i.test(m[0]));
-  if (matches.length === 0) return null;
-
-  const last = matches[matches.length - 1];
   // Strip WRAPPING markdown only (leading/trailing ** / _ / `) — an inner underscore is part of the
   // token (`needs_revision`).
-  const token = last[1].trim().replace(/^[*_`]+|[*_`]+$/g, '').replace(/[.!]+$/, '').trim();
+  const token = last.tokenText.trim().replace(/^[*_`]+|[*_`]+$/g, '').replace(/[.!]+$/, '').trim();
 
   // Token set locked: exactly APPROVED or NEEDS-REVISION (case-insensitive; tolerate space/underscore
   // for the hyphen). Anything else — including the grammar's own "APPROVED | NEEDS-REVISION"
@@ -91,7 +123,7 @@ export function parseReviewerVerdict(text: string | null | undefined): ReviewerV
   else return null;
 
   // Transcribe `Blocking issues:` INDEPENDENTLY from the lines after the verdict line.
-  const after = text.slice((last.index ?? 0) + last[0].length);
+  const after = text.slice(last.index + last.line.length);
   const blocking: string[] = [];
   // NB: `[ \t]*` after the colon, NOT `\s*` — `\s` matches `\n` and would swallow the newline,
   // mis-capturing the first bullet line as the inline value.
@@ -111,5 +143,5 @@ export function parseReviewerVerdict(text: string | null | undefined): ReviewerV
     }
   }
 
-  return { approved, blocking, raw: text.slice(last.index ?? 0).trim() };
+  return { approved, blocking, raw: text.slice(last.index).trim() };
 }

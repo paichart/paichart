@@ -38,8 +38,9 @@ model is told to emit a marker instead.
                     Opt-in per run (point the program's task at the program-view URL). See SPEC-SIZE below.
   --size-check FILE [TOPOLOGY]
                     exit 1 unless each file, as DELIVERED (JSON-escaped + envelope), fits one document's read
-                    limit (8,000 + 6 pages x 7,000 = 50,000) and all files together need <= 8 read_more pages;
-                    WARN under 5,000 headroom. Run on the file(s) the program will FETCH.
+                    limit (64,000: the Program Architect reads 8,000 + 9 pages x 7,000 = 71,000, less one
+                    page of margin) and all files together need <= 12 read_more pages; WARN under 5,000
+                    headroom. Run on the file(s) the program will FETCH.
 
 Both are idempotent. --insert is the repair path and deliberately does NOT trust the marker: it
 replaces whatever occupies the section, so a model that emitted the rules anyway is corrected and
@@ -174,6 +175,24 @@ _COUNT = re.compile(r'(?i)(?<!item )(?<!items )\b(two|three|four|five|six|seven|
 # generator is TOLD to cite a harvest, so it is where a count leaks first. `_COUNT` cannot see it: it needs the number
 # next to a known noun, and a basis reads "shows two OTLP blocks" or "shows one bucket" (both from the design's own
 # worked example). Any number word or bare integer inside the basis is a candidate; `Phase 0` is the pointer, not state.
+# The DELIVERABLE'S OWN two blocks (2026-10-12, lab L11 rerun 2): the template's derivation leg says "the deliverable
+# carries the input block and the result block", and an Author summarises that as "MUST publish … two blocks", then names
+# them in the bullets under it. That count is the template's structure, not a harvest. Exempt ONLY "two blocks" whose
+# deeper lines UNDER it (to a blank line or a line at its indent or shallower; never its own line) name BOTH "input
+# block" and "result block". Any other count of blocks — "six blocks", or "two blocks" that does not name those two — is still a
+# candidate.
+def _names_own_blocks(scan, i):
+    indent = len(scan[i]) - len(scan[i].lstrip())
+    text = []   # the lines UNDER the count only, never its own line (review: "harvest shows two blocks; the
+    #             deliverable carries the input block and the result block" is a harvested count)
+    for nxt in scan[i + 1:]:
+        if not nxt.strip() or len(nxt) - len(nxt.lstrip()) <= indent:
+            break
+        text.append(nxt)
+    low = ' '.join(text).lower()
+    return 'input block' in low and 'result block' in low
+
+
 _DERIVED = re.compile(r'\(derived\s+—\s+basis:([^)]*)\)')
 _BASIS_NUM = re.compile(r'(?i)(?<!phase )\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|single|\d+)\s+([\w./:-]+)')
 
@@ -182,7 +201,7 @@ def lint(doc_lines, allowed_text):
     s, e = bounds(doc_lines)
     scan = doc_lines if s is None else doc_lines[:s] + [''] * (e - s) + doc_lines[e:]
     hits = []
-    in_example, example_indent, declared = False, 0, False
+    in_example, example_indent, declared, list_lead = False, 0, False, False
     for n, line in enumerate(scan, 1):
         # The template DESIGNATES one slot for a synthetic worked example — the "Verify by arithmetic" bullet — and its
         # own rule says the example must be synthetic. Authors rewrite it with their own synthetic addresses, so that
@@ -197,15 +216,21 @@ def lint(doc_lines, allowed_text):
         # specs' partner CIDR is 203.0.113.0/24), so a range rule would hide genuine state — measured, rejected.
         # The declared-synthetic block may hold blank lines (a lead-in, then a table, then a result line); it ends at a
         # heading, a bullet at its own indent or shallower, or a non-blank line shallower than its lead-in.
+        # A lead-in that ENDS WITH A COLON introduces a list (2026-10-10, Z53): "Synthetic self-check, with three pods:"
+        # followed by bullets at the lead-in's own indent lost the exemption on its first item. Its bullets stay exempt
+        # until a blank line; after that a sibling bullet ends the block as before. A shallower line or a heading still
+        # ends it at once.
         indent = len(line) - len(line.lstrip())
         if 'Verify by arithmetic' in line:
             in_example, example_indent, declared = True, indent, False
         elif re.search(r'(?i)\bsynthetic\b', line) and not in_example:
-            in_example, example_indent, declared = True, indent, True
+            in_example, example_indent, declared, list_lead = True, indent, True, line.rstrip().endswith(':')
         elif in_example and not declared and (not line.strip() or (line.lstrip().startswith('- ') and indent <= example_indent)):
             in_example = False
-        elif in_example and declared and line.strip() and (line.lstrip().startswith('#') or indent < example_indent
-                                                           or (line.lstrip().startswith('- ') and indent <= example_indent)):
+        elif in_example and declared and not line.strip():
+            list_lead = False
+        elif in_example and declared and (line.lstrip().startswith('#') or indent < example_indent
+                                          or (line.lstrip().startswith('- ') and indent <= example_indent and not list_lead)):
             in_example = False
         if in_example:
             continue
@@ -218,6 +243,8 @@ def lint(doc_lines, allowed_text):
                 # <PLACEHOLDER> or a shell variable ($BUCKET, ${BUCKET}) is a shape, not a value — a validation command
                 # that resolves the value at run time is exactly what the rules ask for (2026-09-26, genspec Rev12).
                 if tok in ('0.0.0.0/0', '0.0.0.0') or '<' in tok or re.search(r'\$\{?[A-Za-z_]', tok):
+                    continue
+                if kind == 'count' and tok.lower() == 'two blocks' and _names_own_blocks(scan, n - 1):
                     continue
                 if kind == 'ARN':
                     arn = _S3_ARN.match(tok)
@@ -252,10 +279,20 @@ def lint(doc_lines, allowed_text):
 # The read MECHANISM (agentic-tool-loop.ts; keep these in step with it): each fetch returns an 8,000-char first window
 # (MAX_TOOL_RESULT_LENGTH); read_more serves windows of at most 7,000 (READ_MORE_WINDOW_BOUNDS.max), at most 6 pages
 # per fetched document (READ_MORE_PAGES_PER_ORIGIN) and min(8, 25% of tool turns) pages per run. So ONE document is
-# readable to 8,000 + 6 x 7,000 = 50,000 — exactly where Run 14 stopped — and the run can spend 8 pages in all.
+# readable to 8,000 + 6 x 7,000 = 50,000 — exactly where Run 14 stopped — and the run can spend 8 pages in all
+# (every role, until 2026-10-12 — see below).
 # (Corrected 2026-10-02 by the prompt-construction review: a single combined budget passed files that cannot be read.)
-FIRST_WINDOW, PAGE_MAX, PAGES_PER_DOC, PAGES_PER_RUN = 8000, 7000, 6, 8
-PER_FILE_MAX = FIRST_WINDOW + PAGES_PER_DOC * PAGE_MAX      # 50,000
+# 2026-10-12 (size plan, owner decision R1): the page caps are now PER ROLE (lib/agents/role-read-budget.ts). Every
+# role keeps 6 per document / 8 per run; the PROGRAM ARCHITECT — the one reader of the whole spec — gets 9 / 12
+# (PROGRAM_ARCHITECT_READ_BUDGET; per run it is also bounded by 25% of its tool turns, so its template runs 48 turns).
+# These checks measure against the ARCHITECT's budget. One document is physically readable to 8,000 + 9 x 7,000 =
+# 71,000; the CHECKED limit is one page lower, 64,000, so an estimate that undercounts the delivered size by up to a
+# full page (on Run 14 the estimate's body was 84 chars under the measured size, before its 2,500 envelope) still
+# reads to the end — a document is never published at the exact edge Run 14 stopped on. A 64,000 document needs 8 pages; topology 1-2 more <= 12.
+FIRST_WINDOW, PAGE_MAX, PAGES_PER_DOC, PAGES_PER_RUN = 8000, 7000, 9, 12
+PHYSICAL_MAX = FIRST_WINDOW + PAGES_PER_DOC * PAGE_MAX      # 71,000 — what the Architect can read of one document
+READ_MARGIN = PAGE_MAX                                      # one page of reserve under the physical read
+PER_FILE_MAX = PHYSICAL_MAX - READ_MARGIN                   # 64,000 — the checked limit
 WARN_HEADROOM = 5000
 ENVELOPE = 2500
 
@@ -267,7 +304,8 @@ READING_NOTES = """## Writing rules — omitted from this program view
 
 *Program view.* This section is omitted deliberately — it is not a truncated read. The Writing
 rules bind this document's author and reviewer; they are published in full in the companion
-`requirements.md`, which is not an input to this run. Every other section is byte-identical to it.
+`requirements.md`, which is not an input to this run. Every other section is byte-identical to it, except that the
+rows of *Decisions needed from the owner* ruled not applicable are listed only there.
 Where a section cites a rule by number: #1 and #2 (deterministic validation; shipping every cited
 artefact) are obligations of each leg's own protocol; #6 means an existence assumption is a BRANCH
 decided by the leg's own harvest, never a statement of today's state.
@@ -282,13 +320,49 @@ Two properties of this document carry over:
 GLOSSED_RULES = {1, 2, 6}   # the rule numbers READING_NOTES explains; C3 refuses a view citing any other
 
 
+# Phase 4 group 3a (2026-10-12): a generated spec's *Decisions needed from the owner* section lists every registry row the
+# generator ruled NOT APPLICABLE, each with its reason — 14 rows, 5,004 delivered chars on attempt 1's run 3. They are
+# for the OWNER to confirm (no leg acts on a not-applicable row, and no program protocol reads the list), so the program
+# view keeps the section and its applicable rows and replaces those rows with one line. The full requirements.md keeps
+# them all.
+OWNER_HEADING = re.compile(r'^## Decisions needed from the owner\b')
+NA_ROW = re.compile(r'^\s*(?:[-*]\s+)?`?[a-z0-9-]+\.[a-z0-9.<>-]+`?\s*—.*\btier:\s*`?not-applicable')
+NA_NOTE = ('*Program view.* {n} rows ruled not applicable to this program are listed, each with its reason, only in the '
+           'full `requirements.md` (they are for the owner\'s review; no leg acts on them).')
+
+
+def drop_not_applicable(lines):
+    """(lines, removed_chars, n_rows) — the owner section's not-applicable rows replaced by one NA_NOTE line."""
+    s = next((i for i, l in enumerate(lines) if OWNER_HEADING.match(l)), None)
+    if s is None:
+        return lines, 0, 0
+    e = next((i for i in range(s + 1, len(lines)) if lines[i].startswith('## ')), len(lines))
+    keep, removed, n, first = [], 0, 0, None
+    for i in range(s + 1, e):
+        if NA_ROW.match(lines[i]):
+            removed += len(lines[i]) + 1
+            n += 1
+            if first is None:
+                first = len(keep)
+        else:
+            keep.append(lines[i])
+    if not n:
+        return lines, 0, 0
+    keep.insert(first, NA_NOTE.format(n=n))
+    removed -= len(NA_NOTE.format(n=n)) + 1
+    return lines[:s + 1] + keep + lines[e:], removed, n
+
+
 def program_view(doc_lines):
-    """(out_lines, removed_chars) — FILE with the Writing rules section replaced by READING_NOTES."""
+    """(out_lines, removed_chars) — FILE with the Writing rules section replaced by READING_NOTES, and the owner
+    section's not-applicable rows replaced by one line (group 3a)."""
     s, e = bounds(doc_lines)
     if s is None:
         return None, 0
     removed = sum(len(l) + 1 for l in doc_lines[s:e])
-    return doc_lines[:s] + READING_NOTES.split('\n') + [''] + doc_lines[e:], removed
+    out = doc_lines[:s] + READING_NOTES.split('\n') + [''] + doc_lines[e:]
+    out, na_removed, _n = drop_not_applicable(out)
+    return out, removed + na_removed
 
 
 def main():
@@ -313,7 +387,7 @@ def main():
             return 1
         open(dst, 'w').write('\n'.join(out))
         n = len('\n'.join(out))
-        print(f"✓ {dst}: program view written — {n:,} chars (removed {removed:,} chars of writing rules).")
+        print(f"✓ {dst}: program view written — {n:,} chars (removed {removed:,} chars: writing rules + not-applicable owner rows).")
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] == '--size-check':
         args = sys.argv[2:]
@@ -332,12 +406,12 @@ def main():
         print(f"  run pages {pages}/{PAGES_PER_RUN}")
         if fail or pages > PAGES_PER_RUN:
             print(f"✗ a Program Architect cannot read all of this: each file must be <= ~{PER_FILE_MAX:,} delivered chars")
-            print(f"  ({FIRST_WINDOW:,} + {PAGES_PER_DOC} pages x {PAGE_MAX:,}) and all files together <= {PAGES_PER_RUN} read_more pages.")
+            print(f"  ({FIRST_WINDOW:,} + {PAGES_PER_DOC} pages x {PAGE_MAX:,} = {PHYSICAL_MAX:,}, less a {READ_MARGIN:,} margin) and all files together <= {PAGES_PER_RUN} read_more pages.")
             print("  Use the program view, or shorten the document — never raise a cap to fit one document.")
             return 1
         if warn:
             print(f"⚠️  fits, but a file has under {WARN_HEADROOM:,} chars of headroom: trim author-facing prose from the body first;")
-            print("   raising the per-document page cap is the reserve lever (token-optimizer review).")
+            print("   the page caps are an owner decision (R1, 2026-10-12) — never raise one to fit a document.")
         print("✓ readable within the Program Architect's read budget.")
         return 0
     if len(sys.argv) == 2 and sys.argv[1] == '--skeleton':

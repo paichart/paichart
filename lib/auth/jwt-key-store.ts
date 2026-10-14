@@ -44,12 +44,12 @@ let keyCache: Map<string, KeyEntry> | null = null;
  * Default kid used ONLY when JWT_KEY_ID is unset (dev convenience — prod always
  * sets it explicitly via production-deploy.yml secrets).
  *
- * ROTATION: bump this literal on each 90-day key rotation (next ~2026-10-20) —
+ * ROTATION: bump this literal on each 90-day key rotation (next ~2027-01-11) —
  * see JWT_KEY_ROTATION_GUIDE.md. This is the SINGLE source of the default;
  * before 2026-06-11 the literal was duplicated at 6 call sites and had gone
  * one rotation stale ('paichart-2026-01' while prod served 'paichart-2026-04').
  */
-export const DEFAULT_JWT_KEY_ID = 'paichart-2026-07';
+export const DEFAULT_JWT_KEY_ID = 'paichart-2026-10';
 
 let warnedDefaultKid = false;
 

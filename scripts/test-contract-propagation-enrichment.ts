@@ -50,6 +50,11 @@ async function main() {
 
   const c = await computeContractPropagationFact(fakePrisma([kid()]), { stageId: 's1', interfaceContract: { note: 'no stanza here' } });
   check('contract without a canonical stanza → named reason', c.checked === false && c.reason === 'no-canonical-stanza');
+  check('contract without a canonical stanza → no stanzaShapes key (bytes unchanged)', !('stanzaShapes' in c));
+
+  const cArr = await computeContractPropagationFact(fakePrisma([kid()]), { stageId: 's1', interfaceContract: { platformDialect: { canonicalStanza: [{ Effect: 'Allow' }] } } });
+  check('G7: an ARRAY canonical stanza → canonical-stanza-unsupported-shape + stanzaShapes [array], never a false absence',
+    cArr.checked === false && cArr.reason === 'canonical-stanza-unsupported-shape' && JSON.stringify((cArr as any).stanzaShapes) === '["array"]', JSON.stringify(cArr).slice(0, 200));
 
   const d = await computeContractPropagationFact(fakePrisma([]), { stageId: 's1', interfaceContract: CONTRACT });
   check('no children → named reason', d.checked === false && d.reason === 'no-children');

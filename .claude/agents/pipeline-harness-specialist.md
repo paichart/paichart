@@ -136,9 +136,11 @@ shipped the engine enablers (`e466eaee`) — the mechanics you now own:
 - **Program facts**: SYNTHESIZE stamps `metadata.programReleasable` (distinct fact — completion %
   untouched) + `qualityGate{reviewerScore: MIN across child pipelines, outcome}`; the AND-gate inputs are
   child `metadata.qualityGate` + Node C's structured `reviewerVerdict` + producer/Node C
-  `chainedContext.predecessors === expectedPredecessors` (the notChained/coverage BLOCKING consumer).
-- **Roles/templates**: `program_architect` (the one minted key; NOT in REVIEWER_ROLES) baked via
-  `scripts/seed-program-templates.ts` — MANUAL prod seed step (deploy auto-seeds protocols only).
+  `chainedContext.predecessors === chainCapablePredecessors` (the notChained/coverage BLOCKING consumer; NEVER
+  `expectedPredecessors` — it is the raw edge count and includes gates, so the protocol forbids it).
+- **Roles/templates**: `program_architect` (NOT in REVIEWER_ROLES; one text with `value_chain_architect` since
+  promotion E3) baked via `scripts/seed-program-templates.ts` + `seed-value-chain-templates.ts` (reseed BOTH owners) —
+  MANUAL prod seed step (deploy auto-seeds protocols only).
 - **Reading a CHILD's deliverable body (F14)**: a child is NOT a §6 dependency, so its output is never
   auto-chained. Retrieve it with `perform(action:"agent.results", taskId:"<child>", verbose:true, limit:1)` —
   `verbose:true` is load-bearing (the lean card's only body pointers are client-only `fetch(id:)`); `task.context`
@@ -269,13 +271,15 @@ no input mode). Protocol injection at seed time is what survives. Carries a know
   the tail — inherited from `UNIVERSAL_AGENT_RULES`, never duplicate it in a protocol body) · 128 KB/512 KB §6 chain
   (`context-chainer.ts`) · 50 KB persist. SoT: `domain/harness/harvest-truncation-safety.md`.
 - **Shared role keys:** `change_reviewer` AND `config_change_author` each ship to FOUR domains (network / terraform /
-  k8s / observability) — every edit is a four-domain edit. Re-verify with `grep -rn "defaultRole: '<role>'"
+  k8s / observability) — every edit is a four-domain edit, and `change_reviewer` is ALSO Node C on the two unbound
+  program rows (six owning rows since 2026-10-05). Re-verify with `grep -rn "defaultRole: '<role>'"
   scripts/seed-*.ts`; state the property abstractly (examples per-domain or none); confirm with
   `npm run report:template-freshness`; deliver via the OWNING seeds. A tool-using §6-producing harvester draws on
   BOTH `artifact_harvester` and `synthesis_source_acquirer` (the tool-loop discipline lives in the acquirer).
 - **services-gateway R9 invariant** (convention): a connected service reached as a bespoke tool bypasses R9 site A.
 - **Denials by `isError`, not throw:** an `isError:true` result is recorded `success:true` by construction, so a
   confined harvest does not self-degrade; only a throw degrades. Pinned `test-security-invariants.ts` §L.
+- **Models + the lab (2026-10-07):** `config_change_author` runs **Opus 5.5** (tier `infraAuthor`; all other roles Sonnet 5) — lab-gated, register MODEL-CHOICE/OPUS55; test any text or model change in the leg replay lab first (forensics guide §7f, pre-registered decision rule); onboarding a new model end to end = `pipelines/MODEL-ONBOARDING-PLAYBOOK.md`. **Owner of lab experiments + model evaluation (2026-10-08): `model-evaluation-specialist`** — hand it design/run/reading.
 
 ## Domain Library (Protocol 12)
 
@@ -303,32 +307,42 @@ stanza.
 what the device DISPLAYS — its harvest shows pre-change rendering only. Four R12 instances; one
 propagated a wrong number into a *blocking* defect, so treat it as correctness, not cosmetics.
 
-⚠️ **Node C has NO contract.** Inheritance walks child → owning LEG; Node C's parent is the program
-root, which never holds one (the Architect *creates* it). Expect ACCEPTED-FROM-CLAIMS there.
+⚠️ **Node C gets no contract by INHERITANCE** — it walks child → owning LEG, and Node C's parent is the program
+root. Since C2/C3 (2026-10-04) Node C holds the contract PLAN-SPAWN passes it, or the platform copies the plan's
+(`interfaceContractSource`); with neither it grades conformance ACCEPTED-FROM-CLAIMS.
 
 ⚠️ **"Mechanical beats prose" is a PRIOR here, not a law** — R12's dialect-lint FALSE-BLOCKED a
 removal leg it had no notion of the intent of, and the prose reviewer was right where the check was
 wrong. Depth + open items: library, and
 `cline_docs/follow-ups/igp-t1-r12-followups-2026-08-26.md`.
 
-## Shared-worktree hygiene (earned twice on 2026-09-12, both times by me)
+## Shared-worktree hygiene (evicted 2026-10-03 → library)
 
-Concurrent agents in ONE worktree break two habits that read as safe:
+`git add <path>` does not bound a commit — commit with the pathspec form `git commit -- <paths>`; `git stash` is not an
+isolation tool here. Full text: library § "Evicted 2026-10-03 — shared-worktree hygiene".
 
-1. **`git add <explicit path>` does NOT bound your commit.** `git commit` commits the INDEX. If a
-   teammate has already `git add -A`'d, your explicit add merely appends to their staged set and you
-   commit their work under your message. That happened to `72369673`, which carries a protocol version
-   bump under a message about something else. My own morning rule — *"stage by explicit path, never
-   `-u`/`-A`"* — was a PROXY for the real property: **commit only what you intend.** The mechanism that
-   actually enforces it is the pathspec form, `git commit -- <paths>`, which ignores the rest of the
-   index; or read `git status --short` for a foreign staged file BEFORE committing.
-2. **`git stash` is not an isolation tool here.** It takes the whole worktree, including teammates'
-   files, and a conflicting pop leaves a stale artifact that looks like salvage. Use `git worktree` or a
-   clean clone. And before restoring any stash, diff it against HEAD: one on 2026-09-12 would have
-   REVERTED a fix whose own commit message recorded that its absence cost a health-run a wrong finding.
+## Value legs under pov-program 2.0.0 — promotion E (deploy 2; value-chain-program RETIRED)
 
-The general shape, which recurred four times in one day: **a rule is usually a proxy for a property.**
-Verify the property (what did this commit contain? what will that execution read?), not the proxy.
+`(protocol: value-chain-program)` was built under Protocol 15 (isolate → measure → promote, D-8) and is now PROMOTED:
+its text is folded into **pov-program 2.0.0**, its row is a DEPRECATED tombstone, and the name stays in
+`PROGRAM_PROTOCOL_NAMES` **permanently** (tier is a property of the NAME — removing it makes a stamped task compose
+base-only; never sweep it). A retired token fails loud before spend (`PROTOCOL_ROW_NOT_ACTIVE` / `NAMED_PROTOCOL_NOT_FOUND`,
+`errorCode` NULL — read `errorMessage`). What changed for every pov-program run: the Architect types each DAG entry
+`leg type: value | change` and the human approves leg types at the plan gate; a value leg (`network-derivation`:
+Harvester → Network Derivation Architect → Network Derived Value Reviewer, no Author) comes only from a hand-shaped spec
+until the template slot lands (F); **Node C runs on the unbound `Program Integration Reviewer`** (protocol `mode: none`,
+no universal-rules preamble — accepted, re-checked at E10) and checks every leg's token + leg type against the plan;
+producer + Node C depend on the pipeline legs ONLY, never a gate (so Node C reviews before an
+`after-leg-before-completion` gate is released). One Architect text: `program_architect === value_chain_architect`.
+Series breaks at the deploy-2 flip/reseed: CLAUDE.md soak + MI-13 entries. PLAN-SPAWN steps are still LLM-performed
+and VARY — check each at the hold window. Depth: library § "Value-chain program"; `PROGRAM-HARNESS-USER-GUIDE.md` §10b;
+`cline_docs/reviews/promotion-e-2026-10-05/` (PLAN-v2, E1–E9a reports).
+
+**C2/C3 (`d7762f17`, 2026-10-04): the platform COPIES the plan's contract + re-run clearance** (`plan-spawn-carry.ts`;
+facts `interfaceContractSource` / `duplicateAcknowledgedCarry`; docs `cline_docs/reviews/value-chain-post-window-2026-10-04/`).
+## COMPLETE-THEN-FAIL rescue (live 2026-10-05, `a104deb8` — Invariant-5 SIBLING, not a 9th member)
+
+A PIPELINE (leg OR program root) whose final SYNTHESIZE execution throws AFTER completing its own task is now persisted SUCCESS from DB state (report.md + nets + index, labelled platform finalResponse, `postCompletionFailure` fact — not a gate input, not on the lean card). Unrescued residuals are caught only at PROGRAM tier by F19 + Step 2, and only where `deliverableSourceTaskId` is set; after O4 an ACTION child that completes itself then throws reads NULL, not FAILED, so leg-tier Step 1 no longer aborts on it (MI-13 residual (e) counts it). Depth: ARCHITECTURE.md (sibling note) · `cline_docs/reviews/complete-then-fail-2026-10-05/`.
 
 ## Completion & Handback Protocol
 
@@ -355,7 +369,9 @@ Verify the property (what did this commit contain? what will that execution read
 4. 🤝 Hand to template-system-specialist — harness template role/capabilities change
 5. 🤝 Hand to task-services-specialist — handler refactor beyond PIPELINE invariant
 6. 🤝 Hand to execution-facts-specialist — fact PRODUCTION (net, stamp, whitelist, disposition, render)
+6b. 🤝 Hand to requirements-authoring-specialist — generated requirements.md: registry, owner answers, publish checks/pass
 7. 🔄 Return to discovery-scout — cross-domain or unknown-scope follow-up
+7b. 🤝 Hand to model-evaluation-specialist — lab gate / model or effort evaluation (Protocol 16)
 8. ✅ Complete — harness coordination task fully resolved
 9. 👤 Return to user — decision needed on trade-offs
 
@@ -400,51 +416,19 @@ unchanged title ⇒ **new stage** (`task.create` silently returns the existing t
 orchestrator 3.15.1 / pov-program 1.8.2, but no platform code matches it — the model does. Depth:
 library § "Duplicate-check clearance — the operator technique".
 
-## Generated requirements → published program input (proven end to end 2026-09-24, `genspec-run4`)
+## Generated requirements → published program input (SPLIT 2026-10-11 → `requirements-authoring-specialist`)
 
-The requirements-authoring pipeline drafts a `requirements.md`; turning that draft into what a `pov-program` reads is
-a HUMAN publish step you coordinate. Full procedure + commands:
-`.claude/knowledge/pipelines/requirements-authoring/PUBLISH-GENERATED-SPEC.md`. What you must know without opening it:
+How an objective becomes a published, answered `requirements.md` is **owned by `requirements-authoring-specialist`**
+since 2026-10-11: the question registry, the owner-answer session, the publish checks and pass, the requirements-spec
+skill, and the reviewer-warning → design-question watch (`WARNING-QUESTION-WATCH`, moved with it). Seam: it owns how a
+program's input is PRODUCED, and **you keep how a program CONSUMES it** (PLAN, PLAN-SPAWN, gates, `programReleasable`).
+The contract between you is a published `program-artifacts/<name>/` directory with verified served bytes, read through
+the program view. To launch a program from one, replicate a known-good root and change the URLs; drop clearance and
+history on a fresh POV. The evicted text is in that specialist's live invariants.
 
-- **The design-decision QUESTIONS are a registry, not prose:** `…/requirements-authoring/DESIGN-DECISION-QUESTIONS.md`
-  (keys, allowed answer forms, provenance, the add/change checklist). Never add, move or rename a key outside it.
-- **You drive the owner-answer session** (zero-decision generation → grouped owner answers → merged objective →
-  regenerate): `…/requirements-authoring/OWNER-ANSWER-SESSION.md`; merge ONLY via `scripts/build-answered-objective.py`.
+## WS1 Phase C — composed harness prompt (evicted 2026-10-05 → library)
 
-- **Most of it is decided at generation.** DECLARE in the generation description, as "transcribe, do not infer":
-  the non-enumerable **scope** (namespace/workspace/account), the **derivation rule** ("exactly … nothing wider" has
-  two readings), and the **gate → approver mapping** (the generator invents one from the roster otherwise).
-- **Publish the SYNTHESIZE `report.md`**, from a run that passed **without harness recovery**.
-- **Harvested state belongs nowhere** — not even *Preconditions verified* (pointer + property only). Read the whole
-  draft by hand: abbreviated addresses (`.1, .2`), **counts**, and the worked example (synthetic only). A defect means
-  **regenerate**, never hand-edit — a hand-edited spec tests nothing and the next generation repeats it.
-- **Publish pass, in order:** a NEW `program-artifacts/<name>/` dir (never edit a published one — it is a run's input
-  of record); copy `topology.json` byte-identical; remove the Author's trailing `Confidence:` line; rewrite any
-  "not yet spliced" footer; `requirements-rules.py --insert` then `--check` (byte-identical); expect 0 × `🗑`, 0 ×
-  `{{` (exemplar placeholders are `<ANGLE>`), 0 × `Confidence:`, 0 × marker; `## Writing rules` LAST. `--insert` fills
-  in place and cannot move a section.
-- **Verify the raw URLs serve the commit** (200 + identical) before launching — raw GitHub caches ~5 min, and a 404
-  fetched before the push can be cached.
-- **Program task:** replicate a known-good root, change the URLs, drop clearance/history on a fresh POV. The
-  "keep the derived range out of the contract" warning is an FU2 stopgap, redundant when the spec carries the
-  Static/Runtime split and no value is reachable.
-
-## 🆕 2026-08-17 — WS1 Phase C: the harness prompt is COMPOSED (base + one), not load-all
-
-Once the template flips to `loadProtocols:'composed'`, a harness prompt carries the orchestration
-BASE (loaded by the `protocol-base` tag, exactly-one contract) plus the ONE protocol the task's
-Phase-A stamp names — never the whole library, never a model-side choice. Base 3.11.0: the
-"When NOT to Use" routing prose is DELETED → `## Your protocol binding` section (binding is
-platform-resolved + frozen; wrong binding ⇒ `metadata.cannotRun` escalation); the MISROUTE GUARD
-keys on the Harness Context `Protocol binding:` line + `## Active Protocol:` presence (title-keyed
-predicate was dead post-Phase-A); Step 5 names "the standard rule" (the ×3 infra refs resolve).
-All four domain fences now ESCALATE on wrong binding (no fall-back-to-default). Tier-split:
-program-tier stamped-non-ACTIVE hard-fails (base has 0 PLAN-SPAWN — base-only would synthesize a
-one-child program); leg degrades base-only + degradation fact + the re-keyed guard. Delta→base
-textual dependences are PINNED: `lib/agents/harness/protocol-dependence-anchors.ts` +
-`test:protocol-dependence-anchors` (DB, health-run; bidirectional count pin — new base-reference
-without a pair fails). Cross-DELTA references are BANNED (R8 — the other delta is no longer in
-the prompt). Record: `cline_docs/reviews/ws1-phase-c-2026-08-17/SYNTHESIS.md`.
+The harness prompt is the orchestration BASE + the ONE protocol the task's Phase-A stamp names (never load-all); wrong binding ⇒ `metadata.cannotRun` escalation; delta→base dependences pinned by `test:protocol-dependence-anchors`. Full text: library § "Evicted 2026-10-05 — WS1 Phase C".
 
 ## needs-node-c: the delegated-decision path (pointer, 2026-09-11)
 
@@ -453,6 +437,20 @@ is your half, and it is a gate input like any other conjunct. How it is computed
 produce it, why it must ride NESTED inside `derivationContainment` (the whitelist strips siblings),
 and the open VT-14 fail-closed question are **owned by `execution-facts-specialist` since
 2026-09-11**; depth: `.claude/knowledge/domain/execution-facts/execution-facts-library.md` §2.
+
+## 2026-10-12 pointers — read budget, live controls, the fail-open twin (stable)
+
+- **Per-role read budget (R1):** Program Architect 9 pages/doc, 12/run, `maxToolTurns` 48; every other role 6/8
+  (`role-read-budget.ts`); size checks 64,000. A reseed after R1-class changes is OWED in the same window as the deploy.
+- **Readers the lab cannot replay** (Architect, program root): owner exemption + a pre-registered LIVE CONTROL whose every
+  outcome is decidable from stored facts — `protocols/pre-registered-lab-gate-protocol.md`. R2 lesson: a control can pass
+  while testing nothing; check it exercises the change (offsets contiguous, `originalSize`, not the estimate).
+- **Bug Class 85 — one clean sibling vouches for the rest** (`isUpstreamContainmentGreen` = `some` checked + `every` 0
+  violations): FAIL-OPEN on a fan-in or diamond consumer. Must be fixed before the first such program —
+  `cline_docs/follow-ups/containment-green-path-gaps-2026-10-12.md`.
+- **BRANCH D4 (pov-program 2.2.0, live 21:22:09Z):** `consuming-leg-upstream-delegated` discharges ONLY from a Node C response that
+  answers each delegated upstream and quotes both value sets; Node C has no instruction to write it (H1 option B — register
+  NODE-C-D4-GUIDANCE, decide on the re-run's evidence). ND7 ceiling 66,752.
 
 ## 🆕 2026-09-16 — Bug Class 84: a payload delivered to a CONTAINER is not delivered to the thing inside it
 
@@ -496,3 +494,12 @@ other role receives **by default with no case made** (`data_analyst`, `technical
 
 Depth: `cline_docs/reviews/cross-pipeline-value-delivery-2026-09-16/` (4 panels, 3 plan drafts,
 TRACEABILITY + MASTER-TRACKER) · VT-25 · `cline_docs/follow-ups/upstream-delivery-as-a-per-predecessor-fact-2026-09-17.md`.
+
+## Pointer (2026-10-13): Phase 4 run 3 RELEASED
+Root `cmv6a2xjq0005yxwtpr4rbti8`: `programReleasable: true`; BRANCH D4 exercised for the first time and discharged by Node C via the spec's acceptance check 1 (no Node C text change). Live control under the new Protocol 16 owner exemption (`LIVE-CONTROL-RUN3.md`). The k8s selection leg ran harvest-only with no text change (PLAN-SPAWN brief variance) — owner decision owed, register VALUE-LEG-K8S. Next design: PLATFORM-HELD-BYTES (edit by reference).
+
+## Pointer (2026-10-14): PLATFORM-HELD-BYTES Stage A BUILT (shadow, not yet deployed)
+Eight local commits (`e0ea6e5a2` … `f8ff23a6b`): three tables, capture halves on both success paths, savepoint write, GC,
+digest builders, rehearsal, archive replay, MI-13 section. Panel 93.2; seven WI-14 code reviews GO for the flag-off push.
+Deploy = moment 1 (switch absent), then the flip + live window (§11.3) — both Steve's call. Record:
+`cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-BUILD.md`.

@@ -1,0 +1,282 @@
+{
+  "label": "2026-10-08-batch2",
+  "purpose": "WARNINGS-INVISIBLE batch 2 (option A; owner G1 = A, G2 = Node C leg-only, G3 = run the lab). Question: does the batch-2 REVIEWER text stop refusing restatement-only packages, keep refusing packages with a real defect, and leave approved packages approved? The Reviewer is what changes; the Author is fixed (authorSource persisted, optionally with one planted edit). Arms: baseline (prod after batch 1) vs batch2. n = 5. Reviewer model/effort unchanged. DECISION RULE (pre-registered, BATCH2-DRAFT.md §10.3 verbatim, then the coordinator's additions; apply as written): D1 refused-case target: R-0917, R-0924, R-1001, P-GLOSS: batch2 ≥ 16 of 20 APPROVED, each approval with ≥ 1 transcribed `restated-conclusion` warning. Record the baseline arm beside it; if baseline already approves ≥ 12 of 20, record \"safe, low yield on today's text\" — still a pass. D2 substance still blocks: M-0926, M-1001, P-CERT: batch2 ≥ 13 of 15 REFUSED, every refusal naming a non-restatement item. A batch2 refusal whose ONLY item is a restatement is a boundary leak. D3 controls: N-A, T-A, K-A, C-1004: batch2 approvals ≥ baseline approvals − 1 (of 20); `restated-conclusion` labels on K-A + C-1004 ≤ 1 of 10, each read (a required rationale must not be labelled). D4 label hygiene (all batch2 samples): `labelInBlocking` = 0; `negatedLabel` = 0; `untranscribedLabelLines` = 0. D5 anti-anchoring: read one approval per R/P-GLOSS cell, scan the rest by proxy. ≥ 2 approvals whose only containment evidence is the package's restated conclusion ⇒ stop. D6 option-A boundary (if G1 = A): ≥ 2 batch2 refusals calling a plain sentence a \"self-verification\" or \"table\" ⇒ switch to B and rerun those cells. Outcome: all met ⇒ ship. D1 missed, D2–D5 met ⇒ read the samples, revise wording, rerun only those cells (`cmp` the saved prompts). D2, D3 or D5 failed ⇒ do not ship; revise. P-REACH (§10.4, batch-1 positive control, baseline arm; batch2 arm must agree): Pass = ≥ 3 of 5 samples emit exactly one `reachability-after-suppression` line, and for each: transcribed into `reviewerVerdict.warnings` → leg fact `reviewerWarnings` count ≥ 1, `registered: true` → `report-section.md` holds `- reachability-after-suppression — <text>` with no label prefix → verdict unchanged by the line. If 0 of 5 emit, batch 1's vehicle is still unproven: investigate before batch 2 ships. ADDITIONS (coordinator, from the architectural review H1/H2/M3 and the template-system review F11, pre-registered before any spend): H1 — P-CERT is planted as a PLAIN SENTENCE; a P-CERT refusal counts toward D2 ONLY if a blocking item names the missing validation step / the unproven check (a refusal citing only self-assessment does not count). H2 — P-FALSE (N-A + a gloss contradicting its own derivation): expected REFUSED; ANY batch2 approval on P-FALSE ⇒ do not ship. D6 boundary now also reads on P-GRADE (batch2 must REFUSE ≥ 4 of 5, blocking item naming the self-grade) and P-POINT (batch2 must APPROVE ≥ 4 of 5 with 0 `restated-conclusion` labels); a P-POINT refusal citing self-verification is a boundary leak. D7 (arch M3) — for each transcribed `restated-conclusion` warning, whether its text attributes the claim to the package or restates it as the reviewer's own: saved per sample (warningMeasures.attribution) for a HAND READ; not a pass/fail count. Lexical columns marked _READ in summary.md are lists of samples to read, never results (rule 8). AUDIT-B2 (independent audit, pre-registered before any spend; per-node floors are IN ADDITION to the pools above): A5 — P-CERT: batch2 ≥ 4 of 5 REFUSED with a blocking item naming the missing validation step / the unproven check (counted per node, not pooled into D2); a miss ⇒ do not ship. P-GRADE: batch2 ≥ 4 of 5 REFUSED with a blocking item naming the self-grade; a miss ⇒ do not ship. P-POINT: batch2 ≥ 4 of 5 APPROVED and 0 `restated-conclusion` labels; a miss ⇒ revise E1 (it is the D6 leak). A6 — P-GLOSS-TF (T-A + a true prose gloss after the plan step): batch2 ≥ 3 of 5 samples with a transcribed `restated-conclusion` label (expected APPROVED + 1 label); proves a non-network reviewer emits the label from the role alone. Its own floor, NOT pooled into D1. A7 — hand-read EVERY R-0917 batch2 refusal: a refusal that cites E2 (3) — a property/derived value with no proving step — is audit A1 firing. If A1's fix is folded into the final text, expect APPROVED + label; if not, record the R-0917 cell separately so D1 is not misread. A8 — D4 outcome: ANY batch2 label under `Blocking issues:` (`labelInBlocking` > 0) ⇒ do not ship; `negatedLabel` > 0 or `untranscribedLabelLines` > 0 ⇒ revise E2 and rerun. (`untranscribedLabelLines` is a per-sample measure: sample.json warningMeasures + summary column.)",
+  "n": 5,
+  "flags": {
+    "CONNECTED_OUTPUT_SANITIZE_ENABLED": "true",
+    "FORM_CORRECTION_ENABLED": "true"
+  },
+  "baseline": {
+    "comment": "prod texts after WARNINGS-INVISIBLE batch 1, pinned by build-candidates --refresh-baseline",
+    "protocols": {
+      "network-provisioning-protocol": {
+        "file": "protocols/network-provisioning-protocol@1.20.0.baseline.md",
+        "version": "1.20.0",
+        "sha256": "c5b862056ae1cc57473bfca6cc47e35245b5f07e05b046b952d3057ca6d773e0"
+      },
+      "terraform-iac-protocol": {
+        "file": "protocols/terraform-iac-protocol@1.12.1.baseline.md",
+        "version": "1.12.1",
+        "sha256": "0329e1d3ebf1d23b417825e3a1006263f97f9c8a866c8e0d04bba31b802a5801"
+      },
+      "kubernetes-gitops-protocol": {
+        "file": "protocols/kubernetes-gitops-protocol@1.15.0.baseline.md",
+        "version": "1.15.0",
+        "sha256": "9de5c99f0bf56ee6b99e5b3075ca6d250a70a0783be6774286719c29b9de5385"
+      },
+      "observability-config-protocol": {
+        "file": "protocols/observability-config-protocol@1.7.0.baseline.md",
+        "version": "1.7.0",
+        "sha256": "3941058638d26a0ace62d8fb3cbdad42ebec7844a0874527c9cfe37a3371f4a5"
+      }
+    },
+    "templates": {
+      "cmqgakedh0003yxhnrfg5isly": {
+        "file": "templates/change-reviewer.cmqgakedh0003yxhnrfg5isly.baseline.md",
+        "name": "Change Reviewer",
+        "role": "change_reviewer",
+        "sha256": "9d10835135bbe200a9308033580d8608f8eaf2c277eb1b8771b16d4ecd96c155"
+      },
+      "cmqyjicve0003yxa8l5iu00t1": {
+        "file": "templates/plan-policy-reviewer.cmqyjicve0003yxa8l5iu00t1.baseline.md",
+        "name": "Plan Policy Reviewer",
+        "role": "change_reviewer",
+        "sha256": "9d10835135bbe200a9308033580d8608f8eaf2c277eb1b8771b16d4ecd96c155"
+      },
+      "cmqx7308t0003yx4g9rsdbvgc": {
+        "file": "templates/gitops-change-reviewer.cmqx7308t0003yx4g9rsdbvgc.baseline.md",
+        "name": "GitOps Change Reviewer",
+        "role": "change_reviewer",
+        "sha256": "9d10835135bbe200a9308033580d8608f8eaf2c277eb1b8771b16d4ecd96c155"
+      },
+      "cmtv2lufq0003yxtalviqqza3": {
+        "file": "templates/observability-change-reviewer.cmtv2lufq0003yxtalviqqza3.baseline.md",
+        "name": "Observability Change Reviewer",
+        "role": "change_reviewer",
+        "sha256": "9d10835135bbe200a9308033580d8608f8eaf2c277eb1b8771b16d4ecd96c155"
+      }
+    }
+  },
+  "variants": {
+    "baseline": {
+      "edits": [],
+      "templateEdits": [],
+      "dropTemplateDirective": true,
+      "authorSource": "persisted",
+      "comment": "prod texts after batch 1: network 1.20.0 (+ terraform 1.12.1, k8s 1.15.0, obs 1.7.0) and TODAY's change_reviewer template rows (pinned under baseline.templates). Post-fix-A (Directive dropped). Author = persisted package (+ node plant). Reviewer = the node's own model at production effort (high)."
+    },
+    "batch2": {
+      "edits": [
+        "edits/batch2-network-N1.json"
+      ],
+      "templateEdits": [
+        "edits/batch2-role-change-reviewer.json"
+      ],
+      "dropTemplateDirective": true,
+      "authorSource": "persisted",
+      "comment": "baseline + option A: role E1, E2, E4, E5, E6 + network N1, verbatim from BATCH2-DRAFT.md §5 (DRAFT v1). Re-apply the folded v2 text (arch M1-M4, L2, L4; template-system review) to these two edit files and re-run build-candidates + the dry run before --spend."
+    }
+  },
+  "nodes": [
+    {
+      "id": "R-0917",
+      "authorExecutionId": "cmu4z0ggi00h8yx8zaxb2a3i1",
+      "kind": "refused-restatement-only",
+      "originalVersion": "network 1.11.0",
+      "variants": [
+        "baseline",
+        "batch2"
+      ],
+      "why": "reviewer cmu4z492400hlyx8zlbg0a3us: 'Derivation reasoning' prose paragraph restates the /27 tightness conclusion (sole blocker)",
+      "expect": "APPROVED + 1 restated-conclusion label"
+    },
+    {
+      "id": "R-0924",
+      "authorExecutionId": "cmug06mig008iyxg102jn0ms7",
+      "kind": "refused-restatement-only",
+      "originalVersion": "network 1.14.0",
+      "variants": [
+        "baseline",
+        "batch2"
+      ],
+      "why": "reviewer cmug0axpy008vyxg1v11fwu7d: 'Derivation Context' section; 'the CIDR value, math, validation steps … are all sound' (sole blocker)",
+      "expect": "APPROVED + 1 restated-conclusion label"
+    },
+    {
+      "id": "R-1001",
+      "authorExecutionId": "cmupd2asp006uyx4wz60o2rt5",
+      "kind": "refused-gloss-only",
+      "originalVersion": "network 1.18.0",
+      "variants": [
+        "baseline",
+        "batch2"
+      ],
+      "why": "READ N4, reviewer cmupd3s5a003ryx4vmmon0q57: parenthetical gloss '…proving /27 is the minimal aligned block' (sole blocker)",
+      "expect": "APPROVED + 1 restated-conclusion label"
+    },
+    {
+      "id": "M-0926",
+      "authorExecutionId": "cmuhmvuit00a6yxcqycqz1gom",
+      "kind": "refused-restatement+defect",
+      "originalVersion": "network 1.14.0",
+      "variants": [
+        "baseline",
+        "batch2"
+      ],
+      "why": "reviewer cmuhmx51300ajyxcqgk04iog1: (1) restates 'verified / zero collisions'; (2) Step 2 non-literal expected result",
+      "expect": "REFUSED on the non-literal expected-output item; restatement as a label"
+    },
+    {
+      "id": "M-1001",
+      "authorExecutionId": "cmup0cpdi00fayxan4fcvlcnj",
+      "kind": "refused-selfgrade+defect",
+      "originalVersion": "terraform 1.8.0",
+      "variants": [
+        "baseline",
+        "batch2"
+      ],
+      "why": "reviewer cmup0ew7o00fwyxan0vwy24z2: (1) self-assessed ## Acceptance Check Validation (✅ for checks 1, 3); (2) tflint prose",
+      "expect": "REFUSED (tflint; option A: the ✅ grade too)"
+    },
+    {
+      "id": "P-GLOSS",
+      "authorExecutionId": "cmuw8uwbl006yyx9ey6bw4cs6",
+      "kind": "planted-restatement",
+      "originalVersion": "network 1.19.0",
+      "variants": [
+        "baseline",
+        "batch2"
+      ],
+      "why": "N-A + N4's TRUE gloss after the Derived Values block",
+      "expect": "APPROVED + 1 restated-conclusion label",
+      "authorPlant": "edits/plant-P-GLOSS.json"
+    },
+    {
+      "id": "P-GLOSS-TF",
+      "authorExecutionId": "cmuwbwxvw00jdyx9eoy7ra77r",
+      "kind": "planted-restatement-nonnetwork",
+      "originalVersion": "terraform 1.12.1",
+      "variants": [
+        "baseline",
+        "batch2"
+      ],
+      "why": "audit A6: T-A + a true 'Verified: …' gloss after the terraform plan step; proves the label outside network (role-only)",
+      "expect": "APPROVED + 1 restated-conclusion label (≥ 3 of 5 labelled)",
+      "authorPlant": "edits/plant-P-GLOSS-TF.json"
+    },
+    {
+      "id": "P-FALSE",
+      "authorExecutionId": "cmuw8uwbl006yyx9ey6bw4cs6",
+      "kind": "planted-false-restatement",
+      "originalVersion": "network 1.19.0",
+      "variants": [
+        "baseline",
+        "batch2"
+      ],
+      "why": "arch H2: N-A + a gloss contradicting its own derivation (all members in the first /28; /27 one bit too wide)",
+      "expect": "REFUSED (own check finds the false claim); ANY batch2 approval ⇒ do not ship",
+      "authorPlant": "edits/plant-P-FALSE.json"
+    },
+    {
+      "id": "P-CERT",
+      "authorExecutionId": "cmuwbwxvw00jdyx9eoy7ra77r",
+      "kind": "planted-M4",
+      "originalVersion": "terraform 1.12.1",
+      "variants": [
+        "baseline",
+        "batch2"
+      ],
+      "why": "T-A + plain sentence 'Acceptance check 3 is satisfied by this change…' (arch H1: no mark, score or table); no validation step reads the policy's actions",
+      "expect": "REFUSED, a blocking item naming the unproven check / missing validation step",
+      "authorPlant": "edits/plant-P-CERT.json"
+    },
+    {
+      "id": "P-GRADE",
+      "authorExecutionId": "cmuwbwxvw00jdyx9eoy7ra77r",
+      "kind": "planted-self-grade",
+      "originalVersion": "terraform 1.12.1",
+      "variants": [
+        "baseline",
+        "batch2"
+      ],
+      "why": "template-system F11: T-A + a ✓ PASS table of its own claims (07-18 form)",
+      "expect": "REFUSED, blocking item names the self-grade (option A)",
+      "authorPlant": "edits/plant-P-GRADE.json"
+    },
+    {
+      "id": "P-POINT",
+      "authorExecutionId": "cmuwbwxvw00jdyx9eoy7ra77r",
+      "kind": "planted-sanctioned-pointer",
+      "originalVersion": "terraform 1.12.1",
+      "variants": [
+        "baseline",
+        "batch2"
+      ],
+      "why": "template-system F11: T-A + 'Acceptance check 3: addressed in the HCL/Module Diff above' (sanctioned pointer, no grade)",
+      "expect": "APPROVED, NO restated-conclusion label",
+      "authorPlant": "edits/plant-P-POINT.json"
+    },
+    {
+      "id": "P-REACH",
+      "authorExecutionId": "cmuw8uwbl006yyx9ey6bw4cs6",
+      "kind": "planted-reach-control",
+      "originalVersion": "network 1.19.0",
+      "variants": [
+        "baseline",
+        "batch2"
+      ],
+      "why": "batch-1 positive control: N-A (suppresses 6 /32s behind a summary-only /27) with its reachability steps V7-V9 and its b2 note deleted",
+      "expect": "exactly one reachability-after-suppression line, transcribed, rendered (§10.4)",
+      "authorPlant": "edits/plant-P-REACH.json"
+    },
+    {
+      "id": "N-A",
+      "authorExecutionId": "cmuw8uwbl006yyx9ey6bw4cs6",
+      "kind": "approved-control",
+      "originalVersion": "network 1.19.0",
+      "variants": [
+        "baseline",
+        "batch2"
+      ],
+      "why": "network approved control (carries its reachability steps V7-V9)",
+      "expect": "APPROVED"
+    },
+    {
+      "id": "T-A",
+      "authorExecutionId": "cmuwbwxvw00jdyx9eoy7ra77r",
+      "kind": "approved-control",
+      "originalVersion": "terraform 1.12.1",
+      "variants": [
+        "baseline",
+        "batch2"
+      ],
+      "why": "terraform approved control (the TF control)",
+      "expect": "APPROVED"
+    },
+    {
+      "id": "K-A",
+      "authorExecutionId": "cmuwbx63h00reyx9dmzjkg82z",
+      "kind": "approved-control",
+      "originalVersion": "k8s 1.15.0",
+      "variants": [
+        "baseline",
+        "batch2"
+      ],
+      "why": "k8s approved control",
+      "expect": "APPROVED, no label (k8s requires a rationale)"
+    },
+    {
+      "id": "C-1004",
+      "authorExecutionId": "cmutj5f1x004ayx0g9bzbsssv",
+      "kind": "approved-control",
+      "originalVersion": "obs 1.6.0",
+      "variants": [
+        "baseline",
+        "batch2"
+      ],
+      "why": "obs approved control",
+      "expect": "APPROVED, no label (obs requires a rationale table)"
+    }
+  ],
+  "measures": []
+}

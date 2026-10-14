@@ -1,0 +1,14 @@
+{
+  "id": "answered-row-only",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "The row is declared but the stanza is unchanged (the Z49 failure with the question answered). Must FAIL G-STANZA, PASS G-ROW.",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "| terraform-iac.principal-unseen | the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path | gap · act-regardless | act-regardless; premise recorded UNTESTED | (declared — item 14: \"the cloud leg acts regardless (act-regardless)\") |\n",
+      "new": "| terraform-iac.request-path | the path the admitted senders' requests take to the enforcer, which decides the attribute their address arrives in (asked when admitted-principal admits by address) | direct · private-endpoint · translated | private-endpoint | (declared — item 21: \"The pods' requests reach the bucket through a private endpoint of the storage service (private-endpoint)\") |\n| terraform-iac.principal-unseen | the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path | gap · act-regardless | act-regardless; premise recorded UNTESTED | (declared — item 14: \"the cloud leg acts regardless (act-regardless)\") |\n"
+    }
+  ]
+}

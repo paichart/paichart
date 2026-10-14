@@ -5,6 +5,7 @@ import { MCPResource } from '../llm/mcp-integration';
 import { prisma } from '../../prisma';
 import { ExecutionStatus, AgentCategory } from '@prisma/client';
 import { rollUpAndDeleteExecutions } from '../execution-artifacts';
+import { gcHeldBlobs } from '../held-bytes-store';
 import { selectExecutionsToDelete, RM_DAILY_RETENTION, msUntilNextMidnightUTC } from '../execution-retention';
 // Shared retention map (Finding B, 2026-07-08) — keeps this pruner structurally aligned with
 // compliance-monitor.cleanupOldArtifacts (both age-prune AgentArtifact; previously two hand-synced 90s).
@@ -1067,6 +1068,19 @@ export class MCPResourceManager extends EventEmitter implements IResourceManager
           await this.cleanupArtifactsByTask();
         } catch (error) {
           mcpLogger.error({ err: error }, 'Periodic artifact cleanup failed');
+        }
+        // PLATFORM-HELD-BYTES Stage A (2026-10-14, WI-7): collect held blobs no ref points at, after a 1-day grace.
+        // Its own try so a GC failure never skips the re-arm and never masks the artifact sweep's error. Runs in BOTH
+        // processes (register RM-SWEEPS-BOTH-PROCESSES): the GC is idempotent and locks candidates SKIP LOCKED.
+        // gcHeldBlobs never throws; it logs content-free facts only (no Postgres DETAIL — it carries key values).
+        try {
+          const gc = await gcHeldBlobs(prisma, {});
+          mcpLogger.info(
+            { heldBlobsDeleted: gc.deleted, batches: gc.batches, stoppedOn: gc.stoppedOn, ...(gc.fault ?? {}) },
+            'Held-bytes GC sweep',
+          );
+        } catch {
+          mcpLogger.warn({}, 'Held-bytes GC sweep threw unexpectedly');
         } finally {
           scheduleMidnightArtifactCleanup(); // re-arm for the next midnight
         }

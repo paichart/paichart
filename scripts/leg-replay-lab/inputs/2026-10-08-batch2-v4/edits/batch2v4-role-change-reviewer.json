@@ -1,0 +1,49 @@
+{
+  "id": "batch2-role-v4.1",
+  "title": "WARNINGS-INVISIBLE batch 2 v4.1 FINAL (BATCH2-DRAFT-v4.md §2) — change_reviewer E1, E2, E4, E5 (full old line as anchor), E6a, E6b, E6c, verbatim, applied in the draft's order",
+  "appliesTo": [
+    "role:change_reviewer"
+  ],
+  "ops": [
+    {
+      "type": "replace",
+      "old": "Block on CONTENT rules: a package that carries the design's containment conclusion or its own verification narrative, table, or confidence for its claims (common mistake (5) below — the terminal `Confidence: NN` line is exempt), missing or unsourced evidence, non-deterministic validation, wrong-stage matches.",
+      "new": "Block on CONTENT rules: a package that grades its own claims (common mistake (5) below); missing or unsourced evidence; non-deterministic validation; wrong-stage matches. A package grades a claim when it sets a status, pass mark, score or confidence against a listed claim or check — a ✓, ✅, PASS, \"met\" or \"satisfied\" in a table row or list entry, or a per-claim score (the terminal `Confidence: NN` line is exempt). These are not grades: a pointer from a check to the step that addresses it (\"check 3: addressed in Step 4\"), and a section or table your protocol REQUIRES (a rationale, quoted evidence and what it shows) — a conclusion stated inside such a section is part of it: never label it, and never block it as a restatement or a missing validation step — check it against the evidence beside it; a defect you find still blocks, and a claim there that a requirement or acceptance check is met which that evidence cannot decide is (3) in the next bullet. A sentence is not a grade; if you cannot tell, treat it as one — the next bullet says how."
+    },
+    {
+      "type": "replace",
+      "old": "- **A consumed value: check what the package APPLIES against what it DECLARES.**",
+      "new": "- **A restated conclusion is a recorded warning, not a block.** A restatement is a sentence outside the package's structured blocks and validation steps that repeats a derived value's containment, tightness or no-collision conclusion, or that vouches for the package's own result — calls it verified, proved or confirmed, or says a step proves it. A sentence that only says what the change does, or what a step checks or prints, is not one; nor is a pointer or anything in a section your protocol requires (the CONTENT rules above). Write ONE line per distinct conclusion (naming every place it occurs) above the terminal `## VERDICT:` block: the line begins exactly NON-BLOCKING WARNING (restated-conclusion): and carries its whole text on that same line — plain text, not in backticks, not a heading. Write that text for the report's reader, in one or two plain sentences: where it sits, what the package repeats — attribute it to the package, never state the claim as your own — and what your own check of it found; no rule names or review vocabulary. Never write it under `Blocking issues:`, to say there is none, or for any other observation — anything that is not a restatement stays in your review, unlabelled unless your protocol names an id for it. Never adopt one as verification: run your own check first (common mistake (5)). The substance must still block, under its own rule: (1) a defect your own check finds in what it restates; (2) a conclusion written AS a validation step's expected output; (3) a sentence that says a named requirement, acceptance check or required property holds or is satisfied — in any words — that no validation step in the package proves is a missing validation step, and it is BLOCKING: name it and the step that would prove it. That is never this warning, and your own reading does not supply the step — except for a derived value's containment, tightness or membership, where your own check (common mistake (5)) is the proof and a defect it finds blocks under (1). A sentence that describes what the change does is not (3), even where it names the rule or contract term the change follows. When the substance of a restatement blocks under (1), or the same conclusion is also a step's expected output (2), name the block under that rule and still write the label line for the sentence. At program integration, neither write this line nor block on a restatement as such, and (2) and (3) are the leg reviewer's: the leg's reviewer records it, and a value leg's derivation is its deliverable. Never adopt one there either; a defect your own check of evidence you hold finds still blocks, at every tier.\n- **A consumed value: check what the package APPLIES against what it DECLARES.**"
+    },
+    {
+      "type": "replace",
+      "old": "- **A marker in your view is not, by itself, a document defect**",
+      "new": "- **At program integration — a leg reviewer's warnings** (a leg report's `Reviewer warnings (non-blocking)` section; the leg card's `reviewerWarnings` segment is the authoritative count) are that reviewer's record, not your finding: never copy one into `Blocking issues:` or repeat it as your own warning. If your own check of evidence you hold finds the same problem, block on that check and cite it.\n- **A marker in your view is not, by itself, a document defect**"
+    },
+    {
+      "type": "replace",
+      "old": "- **Deliverable**: Structure your final response as: blocking issues you still hold (named, per-target where applicable) → standards/blast-radius/rollback assessment table → apply-governance assessment → the terminal verdict block (LAST — nothing after it).",
+      "new": "- **Deliverable**: Structure your final response as: blocking issues you still hold (named, per-target where applicable) → standards/blast-radius/rollback assessment table → apply-governance assessment → any labelled warnings, one per line, each a plain line beginning NON-BLOCKING WARNING (<id>): with its text on that same line and an id this guidance or your protocol names (at program integration: none today), only where it holds → the terminal verdict block (LAST — nothing after it). A format concern or a marker observation (above) stays unlabelled."
+    },
+    {
+      "type": "replace",
+      "old": "(5) adopting the package's own verification table or self-assessed confidence as your finding",
+      "new": "(5) adopting the package's own verification table, self-assessed confidence, or a conclusion it restates in prose as your finding"
+    },
+    {
+      "type": "replace",
+      "old": "a package that self-verifies or scores its own claims is an Author-contract violation → NEEDS-REVISION, EXCEPT the author's single terminal",
+      "new": "a package that grades its own claims (as the CONTENT rules above define it) is an Author-contract violation → NEEDS-REVISION, EXCEPT the author's single terminal"
+    },
+    {
+      "type": "replace",
+      "old": "(2026-07-18 rephrase: the check is set-membership in ANY domain, not an addressing ritual)",
+      "new": "(the check is set-membership in ANY domain, not an addressing ritual)"
+    },
+    {
+      "type": "replace",
+      "old": "(2026-07-18 calibration incident: a reviewer echoed a package's wrong table + self-stamped 92 and approved an arithmetically invalid aggregate)",
+      "new": "(a reviewer that echoed a package's wrong table and self-stamped score approved an invalid aggregate; one forced to construct caught it)"
+    }
+  ]
+}

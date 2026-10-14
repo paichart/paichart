@@ -790,6 +790,62 @@ test('A4.10 (m3) every "Step 5: task.complete not called" push is exempted by BO
 });
 
 // ========================================
+// COMPLETE-THEN-FAIL (2026-10-05, DESIGN-v2 §3.3, W3/W6) — the post-completion sanctioned exit
+// ========================================
+// VALIDATOR-ONLY on purpose (HOOK-1, build review 2026-10-05): the repo pre-commit hook runs this file with
+// `npx ts-node --transpile-only` and NO tsconfig-paths, so it must not import anything that reaches an `@/` alias
+// (execution-quality.ts does). The quality-side halves of these cases live in test-execution-quality.ts (CTF-Q1..Q4).
+{
+  const POST = new Date('2026-10-04T00:00:00Z');
+  const legMeta = { pipelineStageId: 'cmstage10x', deliverableSourceTaskId: 'cmsrc10x' };
+  // The 10-04 shape: context reads, the gate stamp, task.complete — then the next call failed.
+  const tenFourShape = (): ToolCallEntry[] => [_call('task.context'), _call('task.context'), _call('task.update'), _call('task.complete')];
+
+  test('CTF-V1 pure case (10-04 shape): missingSteps = [], postCompletionExempt, the Step-5 comment recorded in postCompletionSteps', () => {
+    const r = validatePipelineProtocolSteps(tenFourShape(), { type: 'PIPELINE', metadata: legMeta, createdAt: POST, postCompletionFailure: true });
+    assert(r !== null, 'the exit is a FACT — never the null "clean" result');
+    assert(r!.missingSteps.length === 0, `missingSteps must be empty, got ${r!.missingSteps.join(' | ')}`);
+    assert(r!.postCompletionExempt === true, 'postCompletionExempt stamped');
+    assert((r!.postCompletionSteps ?? []).some((s) => s.startsWith('Step 5: no final task.comment')), 'the final comment is recorded as a post-completion step');
+    assert(!JSON.stringify(r).includes('task.complete not called'), '"task.complete not called" is impossible on the fixture');
+  });
+
+  test('CTF-V2 mixed case: a PRE-completion gap (Step 5a) stays in missingSteps, alone; the post-completion item beside it', () => {
+    const meta = { pipelineStageId: 'cmstage10x' }; // no deliverableSourceTaskId
+    const r = validatePipelineProtocolSteps(tenFourShape(), { type: 'PIPELINE', metadata: meta, createdAt: POST, postCompletionFailure: true });
+    assert(r!.missingSteps.length === 1 && r!.missingSteps[0].startsWith('Step 5a'), `only the pre-completion gap is missing: ${r!.missingSteps.join(' | ')}`);
+    assert((r!.postCompletionSteps ?? []).length === 1, 'post-completion items recorded beside it');
+  });
+
+  test('CTF-V3 control: the SAME log on a normal SYNTHESIZE (no rescue) still reports the missing final comment in missingSteps', () => {
+    const r = validatePipelineProtocolSteps(tenFourShape(), { type: 'PIPELINE', metadata: legMeta, createdAt: POST });
+    assert(r!.missingSteps.some((s) => s.startsWith('Step 5: no final task.comment')), 'normal grading unchanged');
+    assert(r!.postCompletionExempt === undefined && r!.postCompletionSteps === undefined, 'no post-completion fields on a normal run');
+  });
+
+  test('CTF-V4 the flag alone is not the exit: no task.complete in the log ⇒ graded normally', () => {
+    const calls = [_call('task.context'), _call('task.update')];
+    const r = validatePipelineProtocolSteps(calls, { type: 'PIPELINE', metadata: legMeta, createdAt: POST, resolvedMode: 'SYNTHESIZE', postCompletionFailure: true });
+    assert(!r || r.postCompletionExempt === undefined, 'no exemption without task.complete');
+  });
+
+  test('CTF-V5 the closing comment DID run (after task.complete) ⇒ its content is graded as usual; nothing post-completion recorded', () => {
+    const calls = [...tenFourShape(), _commentCall('no breadcrumb here')];
+    const r = validatePipelineProtocolSteps(calls, { type: 'PIPELINE', metadata: legMeta, createdAt: POST, postCompletionFailure: true });
+    assert(r!.missingSteps.some((s) => s.startsWith('Step 5 (content)')), 'content graded when the comment ran');
+    assert((r!.postCompletionSteps ?? []).length === 0, 'nothing recorded as post-completion');
+  });
+
+  test('CTF-V7 (build review EF-F8, a DECISION not an accident): a harness that completed via task.update(status COMPLETED) — no task.complete in its log — is graded normally, so "task.complete not called" is reported', () => {
+    // It is still anchored (task.update writes the anchor too) and rescued; only the validator exit keys on task.complete.
+    const calls = [_call('task.context'), _call('task.update'), _call('task.update')];
+    const r = validatePipelineProtocolSteps(calls, { type: 'PIPELINE', metadata: legMeta, createdAt: POST, resolvedMode: 'SYNTHESIZE', postCompletionFailure: true });
+    assert(!!r && r.postCompletionExempt === undefined, 'the post-completion exit is NOT taken without a task.complete in the log');
+    assert(r!.missingSteps.some((s) => s.includes('task.complete not called')), `literally-true grading kept: ${r!.missingSteps.join(' | ')}`);
+  });
+}
+
+// ========================================
 // Summary
 // ========================================
 

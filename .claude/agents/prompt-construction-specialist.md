@@ -93,6 +93,38 @@ Depth evicted per **Protocol 12** lives at `.claude/knowledge/domain/harness/pro
 Key Information, Learning Notes, pino, archives, evicted 🆕 blocks. Canonical patterns +
 the paired discovery's PROVEN greps outrank it.
 
+## Program-protocol builder + network-derivation (2026-10-02; value-chain PROMOTED by E, 2026-10-05/06)
+
+`network-derivation-protocol` (the value leg) is ACTIVE since 2026-10-02; listed in the public renderer since E7, it lands
+in `~/paichart` at the F sitting (after control 3) — NOT published yet.
+`value-chain-program-protocol` is RETIRED: its value-leg text is folded into **pov-program 2.0.0** as the `VALUE_LEG_*`
+section constants, interpolated directly into `buildProgramProtocol` (so the source scanners read them); its row is a
+DEPRECATED tombstone pinned by content in `test:protocol-golden` and never moves again. ONE builder call remains
+(`POV_PROGRAM_PROTOCOL_PARAMS`: binding, Architect template, `nodeCTemplate: 'Program Integration Reviewer'`); 9 ACTIVE
+protocol-tagged rows. The name `value-chain-program` stays in `PROGRAM_PROTOCOL_NAMES` permanently — never sweep it.
+network-provisioning and network-derivation share `NETWORK_*` section constants.
+**Any edit to a shared builder line or constant moves BOTH** — pinned by `test:protocol-golden` (sha256 of every rendered
+text; existing keys must stay equal, `--update` only with a version bump). Layering rules, pinned: domain protocols
+rig-independent, program protocols domain-independent. Method: `patterns/byte-identity-refactor-pattern.md`, Protocol 15.
+
+## Pattern (h) text changes you now own (2026-10-03/04) — read before editing these protocols
+
+- **Program protocols (batch 2, pov-program 1.9.0 / value-chain 1.1.0 — both carried into pov-program 2.0.0):** SYNTHESIZE **BRANCH D** rewritten to the code's
+  arm order (it had been stale since 2026-08-03/16) + **BRANCH D3** — `needs-node-c (consuming-leg-no-consumed-block)`
+  is discharged ONLY from a Node C statement naming the leg. Taxonomy is "evaluate in order, stop at first match": a new
+  reason needs its branch AND a forward reference in the branch a reader hits first.
+- **Domain protocols (batch 3, terraform 1.10.0 / observability 1.6.0):** terraform **sanctions no comparison shape**
+  (pre-apply = literal or narrowed projection; change-proving steps must move; lint/policy count `0` is no-regression; a
+  check reading the DEPLOYED cloud is post-apply, judged as the named post-apply check — owner decision A2).
+  Observability: "the comparison/presence shape THIS protocol sanctions" + a Phase 2 pointer to the consumed block.
+- **Pins (`test:validation-shape-contract`):** mode-7 PAIRING — every protocol interpolating the shared validation
+  clause defines its shape or says it sanctions none; QUOTE-SURVIVES — no protocol may quote a role sentence that left the
+  role (kubernetes-gitops 1.14.0's quote of the old comparison grant is the one named exception,
+  `KNOWN_STALE_ROLE_QUOTES`). Prefer stating a property to quoting a role.
+- **Text growth is a cost:** preambles grew 15-28% in September; terraform +8.8% in batch 3. Prefer replacing to adding;
+  the network Phase 2 bullet (~13 KB in one bullet) needs a consolidation pass — never bundled into a fix.
+Depth: `cline_docs/reviews/pattern-h-corpus-measure-2026-10-03/` (SYNTHESIS, REVIEW-B2/B3-prompt-construction, BATCH3-TEXT-DRAFT).
+
 ## Success Metrics
 
 Define measurable outcomes for prompt construction to track specialist effectiveness:
@@ -196,6 +228,8 @@ Primary workspace: /home/steve/copov15
 
 The SYSTEM prompt is TWO parts; the USER prompt is one shared builder.
 
+> **2026-10-07:** on the engine path a prompt-less task's USER §1 is now the synthesized directive, not a raw copy of the role template (TEMPLATE-SENT-TWICE fix A, ~6K tokens/call). The role template reaches the agent ONCE, in the SYSTEM prompt — never assume it is restated in the user turn.
+
 **SYSTEM = per-adapter HEAD + shared injection TAIL.**
 - **HEAD** — per-adapter POLICY, a permanent **4-axis fork** (the six axes are named at
   `lib/services/execution-system-prompt.ts:6-14` — "converging any axis is a 5b+ flagged change"):
@@ -236,6 +270,13 @@ Role-specific → HEAD.
 **Bug this prevents**: instructions in the Universal Template's system-prompt HEAD are silently absent for agents
 with custom templates (custom templates REPLACE the HEAD). Cross-cutting/guardrail content must live in the shared
 user §8 and/or the shared TAIL — which no template can override.
+
+## Deferred text batch — "a selection is a derivation" (pointer, 2026-10-12)
+
+The kubernetes-gitops protocol emits `## Derived Values` "when, and only when, a packaged value was derived", with range-only
+examples, so an Author may read a SELECTED host list as not derived (Phase 4 attempt 2 run 1). Draft + Protocol 16 lab prereg
+ready, DEFERRED by the owner until after the Phase 4 MVP: `cline_docs/reviews/containment-propagation-2026-10-12/DRAFT-B.md`
+(register CONTAINMENT-FIX-B-SELECTION). Owner decisions D-B1 yes, D-B2 filed.
 
 ## Important Context
 
@@ -324,3 +365,6 @@ working feature is broken. Several agent-reachable error codes are documented no
 produce). Extending the validator to agent-facing strings inside HANDLERS is also open — the
 `stage.list` lie lived in `stage-create-handler.ts` remediation text as well as the prompt, and
 only the prompt copy is currently scanned.
+
+## Pointer (2026-10-13): observability 1.9.0 — interim quoting + consumer rules
+C1 (every config file an as-deployed read returns is quoted byte for byte; the modified/restored file always whole; other files may be labelled excerpts with `# [elided: …]`; the Author never copies a marker), C2 (Prometheus = values, not layout, never "verbatim"), and `CONSUMED_ADDRESS_CLAUSE` (obs only: an address an upstream LEG produced is declared as cidr, /32 or bare; never own-harvest/brief/contract addresses). Shipped under a Protocol 16 owner exemption; live control passed (Phase 4 run 3). C1/C2 are INTERIM until PLATFORM-HELD-BYTES. Next-edit note in register CONTAINMENT-FIX-B-SELECTION. Record: `cline_docs/reviews/verbatim-quote-omission-2026-10-13/` (DRAFT-C, REVIEW-OBS-1.9.0).

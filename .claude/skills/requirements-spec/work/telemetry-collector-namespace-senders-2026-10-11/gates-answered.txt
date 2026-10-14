@@ -1,0 +1,30 @@
+coverage — work/telemetry-collector-namespace-senders-2026-10-11/draft-answered/report.md
+  legs ['kubernetes-gitops', 'observability-config'] · gates ['kubernetes-gitops-change', 'observability-config-change', 'program-plan'] · rows 25 {'declared': 24, 'derived': 0, 'forced': 0, 'open': 1, 'other': 0} · owner block 15 · not-applicable 14
+  ❌ what: unknown key for a known token · id: kubernetes-gitops.maintenance
+  ❌ what: unknown key for a known token · id: observability-config.sender-blocks
+  ❌ what: unknown key for a known token · id: observability-config.non-sender-paths
+  ❌ what: unknown key for a known token · id: observability-config.shared-access
+  ❌ what: unknown key for a known token · id: observability-config.upstream-empty
+  👁  what: no producer rows — confirm for each leg: the leg derives no value another leg consumes · legs: ['observability-config']
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.receiver · line: kubernetes-gitops.receiver — which workload/resource on the target is authorised — options: — — governs: no Pipeline 1 clause — tier: not-applicable — the kubernetes-gitops leg neither grants nor remo
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.admitted-principal · line: kubernetes-gitops.admitted-principal — who is admitted, and by which attribute the enforcer recognises them — options: source-address-range · named-identity · network-path · combination (state each pa
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.request-path · line: kubernetes-gitops.request-path — the path the admitted senders' requests take to the enforcer, which decides the attribute their address arrives in — options: direct · private-endpoint · translated — 
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.principal-unseen · line: kubernetes-gitops.principal-unseen — the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path — options: gap · act-regardless — governs: no Pipeline 1 clause 
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.granted-action · line: kubernetes-gitops.granted-action — what the admitted principal may do (actions, ports) — options: — — governs: no Pipeline 1 clause — tier: not-applicable — the kubernetes-gitops leg neither grants no
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.existing-grant · line: kubernetes-gitops.existing-grant — other allowances already on the same surface — options: replace · preserve · preserve-bounded (state the bound) — governs: no Pipeline 1 clause — tier: not-applicabl
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.target-empty · line: kubernetes-gitops.target-empty — the receiver selector/surface matches nothing now — options: act · gap — governs: no Pipeline 1 clause — tier: not-applicable — the kubernetes-gitops leg neither grant
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.enforcer-absent · line: kubernetes-gitops.enforcer-absent — no policy object governs the receiver yet — options: create · gap — governs: no Pipeline 1 clause — tier: not-applicable — the kubernetes-gitops leg neither grants 
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.target-absent · line: kubernetes-gitops.target-absent — the declared target itself does not exist — options: gap · create-target — governs: no Pipeline 1 clause — tier: not-applicable — the kubernetes-gitops leg neither gr
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.collateral · line: kubernetes-gitops.collateral — what else on the target changes because enforcement now applies — options: per enforcer (Kubernetes: allow-named-ports · deny · leave-to-workload-manifests) — governs: n
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.covered-routes · line: kubernetes-gitops.covered-routes — when the leg adds a covering route, whether the routes it covers stop being advertised — options: replace · accompany — governs: no Pipeline 1 clause — tier: not-app
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.must-stay-reachable · line: kubernetes-gitops.must-stay-reachable — which destinations must stay reachable after the change, and from where — options: — — governs: no Pipeline 1 clause — tier: not-applicable — the leg changes no
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: observability-config.covered-routes · line: observability-config.covered-routes — when the leg adds a covering route, whether the routes it covers stop being advertised — options: replace · accompany — governs: no Pipeline 2 clause — tier: not-
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: observability-config.must-stay-reachable · line: observability-config.must-stay-reachable — which destinations must stay reachable after the change, and from where — options: — — governs: no Pipeline 2 clause — tier: not-applicable — the leg changes
+  5 error(s), 15 to read
+citations: 25 total, 25 verbatim, 0 failing
+premise branches: observability-config ✓
+✅ citation + premise gate clean (the Reviewer still owns: does each quote select the same option as the item?)
+clauses: 7 checked, 3 dropped
+  ❌ item 20 → kubernetes-gitops: "reports a gap naming what was absent " — missing ['naming what']
+  ❌ item 20 → kubernetes-gitops: "reports the upstream gap" — missing ['upstream']
+  ❌ item 21 → observability-config: "reports a gap instead of widening the change" — missing ['instead widening']

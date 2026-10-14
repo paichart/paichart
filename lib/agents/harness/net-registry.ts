@@ -79,6 +79,14 @@ export interface NetContext {
   stageId: string | null;
   /** `isProgramHarnessTask` resolved once. Each net's TIER ARM lives inside its own enrichment. */
   programTier: boolean;
+  /** The execution being persisted, when the caller has it (value-chain B4). Recorded on a fact, never selected on. */
+  executionId?: string | null;
+  /**
+   * The execution's OWN `toolCalls`, exactly as `result.json` carries them (persist-truncated, pre-R10) — what the tool
+   * calls RETURNED. `quoteFidelity` compares a quote against it (VERBATIM-QUOTE-OMISSION, 2026-10-13). Read off the
+   * built resultJson inside `stampExecutionNets`, so both execution paths hand the same value. Absent ⇒ [].
+   */
+  toolCalls?: unknown;
   /**
    * The leg's child tasks, memoized. ⚠️ SEARCH-shaped: bounded `take: STAGE_CHILD_SCAN_CAP` with
    * `orderBy createdAt asc`, which is safe ONLY because every consumer today FINDS one child by
@@ -93,8 +101,16 @@ export interface NetContext {
 }
 
 export interface MechanicalNet {
-  /** The `resultJson` key this net stamps. MUST be on `RESULT_JSON_SUMMARY_KEYS`. */
+  /** The `resultJson` key this net stamps. MUST be on `RESULT_JSON_SUMMARY_KEYS`, unless `summaryExcludedReason` is set. */
   name: string;
+  /**
+   * Set ONLY for a fact deliberately kept off the lean card and the `agent.results` SUMMARY (never picked). It is still in
+   * the raw result.json, which a verbose `agent.results` returns — this is not invisibility to agents. Its
+   * presence is the decision, recorded as a value rather than an omission — the renderNullReason rule applied to the
+   * whitelist. `test:net-registry` R4 pins whitelisted XOR this reason. First user: `applyBlockPlaceholder` (owner
+   * decision 2026-10-13: an operator warning with no agent-facing instruction text).
+   */
+  summaryExcludedReason?: string;
   /** Which persist this entry runs at. `(name, point)` is the registry's unique key. */
   point: StampPoint;
   /** Does this net run on THIS task at THIS point? Invocation only — never a lane or domain test. */

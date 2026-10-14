@@ -1,6 +1,6 @@
 #!/usr/bin/env ts-node
 /**
- * Render the seven seeded protocol bodies to the PUBLIC repo (~/paichart/protocols/), verbatim.
+ * Render the published protocol bodies (PROTOCOLS below) to the PUBLIC repo (~/paichart/protocols/), verbatim.
  *
  * SOURCE OF TRUTH: the LOCAL DB rows (agent_prompt_library) — the exact text agents receive —
  * not the seed script's template literals (which cannot be safely imported: the seed auto-runs).
@@ -36,6 +36,9 @@ const PROTOCOLS = [
   // PUBLICATION-COMPLETENESS GUARD below inspects ACTIVE protocol-tagged rows, and an ACTIVE row
   // in neither list makes this script refuse to render ANY protocol.
   'requirements-authoring-protocol',
+  // added at promotion E (E7, 2026-10-06): the value-leg protocol, published with pov-program 2.0.0, which offers value legs.
+  // E-3 held it back until promotion; the public render + code export happen together after control 3 (ND4).
+  'network-derivation-protocol',
 ];
 
 /**
@@ -47,6 +50,8 @@ const PROTOCOLS = [
  */
 const NOT_PUBLISHED: Record<string, string> = {
   // 'some-internal-protocol': 'internal-only — references unpublished infrastructure',
+  // E-3 entries removed at promotion E (E7, 2026-10-06): network-derivation is now in PROTOCOLS; value-chain-program is a
+  // DEPRECATED tombstone, which the completeness guard (ACTIVE rows only) no longer sees, so it needs no entry here.
 };
 
 const PUB_DIR = process.env.PAICHART_PUBLIC_REPO

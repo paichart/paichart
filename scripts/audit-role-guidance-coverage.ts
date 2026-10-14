@@ -73,6 +73,12 @@ const NON_PROGRAM_LEG_PROTOCOLS: Record<string, string> = {
     'HUMAN at the plan gate, never by a downstream leg. If that ever changes, ADD the token to the ' +
     'Architect vocabulary and DELETE this entry — never leave both. ' +
     '(template-system, 2026-09-21 review F5 — cline_docs/reviews/requirements-authoring-review-2026-09-21/.)',
+  'value-chain-program-protocol':
+    'Retired program tier (DEPRECATED tombstone since promotion E, 2026-10; its name stays in PROGRAM_PROTOCOL_NAMES ' +
+    'permanently). A program leg is a leg, never another program — and a retired protocol is offered to nobody.',
+  // network-derivation-protocol is NOT here: promotion E (E3, 2026-10-05; D-8 option A) ADDED `network-derivation` to the
+  // program_architect vocabulary and DELETED its entry, as the entry itself instructed. Never re-add it — the list-scoped
+  // "both" assertion below fails if an allowlisted row's token is also offered.
   'artifact-synthesis-protocol':
     'Leg tier and it WOULD resolve, but the program machinery is provisioning-shaped: the interface ' +
     'contract carries subnets/VLANs/ASNs/tags, ingestion requires a topology with `nodes`, and the ' +
@@ -86,13 +92,40 @@ const NON_PROGRAM_LEG_PROTOCOLS: Record<string, string> = {
 // string cannot match. A false positive here is LOUD (a build failure), never silent.
 const PROTOCOL_ROW_RX = /\n\s*name:\s*'([a-z0-9-]+-protocol)'/g;
 
-/** Returns [failures, warnings]. Failures exit 1; warnings keep the allowlist honest. */
+/**
+ * The Architect's offered vocabulary vs the seeded leg protocols (promotion E, E3, 2026-10-05; REVIEW-template-system M5).
+ * Reads ONLY the sanctioned-token sentence of program_architect (value_chain_architect is the same string — pinned `===`
+ * by test:protocol-golden, so it needs no parallel check). Three properties, each mutation-proven (E3-BUILD-REPORT):
+ *  1. SCOPE — the list is SANCTIONED_LIST_RX's capture on program_architect (the bold sentence only), and every token is
+ *     matched BACKTICK-ANCHORED (`list.includes('`token`')`), so `terraform` can never satisfy `terraform-iac` and the
+ *     value-leg rule's other mentions of `network-derivation` / `network-provisioning` cannot satisfy a dropped entry.
+ *     (The whole-text check this replaces passed with either token deleted from the list: vacuous, K5.)
+ *  2. FAIL CLOSED — if the sentence cannot be found that is a FAILURE. There is no whole-text fallback.
+ *  3. "BOTH" IS LIST-SCOPED — an allowlisted (non-leg) row whose backticked token appears IN THE LIST fails: a row is
+ *     either offered or exempt, never both. Scoped to the list so prose that mentions, say, `pov-program` elsewhere in the
+ *     guidance never false-reds.
+ * Returns [failures, warnings]. Failures exit 1; warnings keep the allowlist honest.
+ */
+// Bold on BOTH sides is required: a half-unbolded sentence (opening ** dropped) is a reworded sentence, so it fails closed
+// too (mutation m4b, E3 — the unanchored-start form of this regex passed it).
+const SANCTIONED_LIST_RX = /\*\*The sanctioned tokens are exactly:([^\n]*?)\.\*\*/;
+
 function auditArchitectVocabulary(scriptsDir: string): [string[], string[]] {
   const failures: string[] = [];
   const warnings: string[] = [];
   const guidance = ROLE_GUIDANCE_LIBRARY['program_architect'];
   if (!guidance) {
     return [['program_architect has no ROLE_GUIDANCE_LIBRARY entry — the domain-token vocabulary check cannot run.'], warnings];
+  }
+  const sentenceCount = (guidance.match(new RegExp(SANCTIONED_LIST_RX.source, 'g')) ?? []).length;
+  if (sentenceCount > 1) {
+    return [[`program_architect: the bold "The sanctioned tokens are exactly: … ." sentence appears ${sentenceCount} times — ` +
+      'the check would read only the first (a stale copy above the real one would pass). Keep exactly one (E3 review AR-F4).'], warnings];
+  }
+  const list = SANCTIONED_LIST_RX.exec(guidance)?.[1];
+  if (list === undefined) {
+    return [['program_architect: the bold "The sanctioned tokens are exactly: … ." sentence is missing or reworded — ' +
+      'the vocabulary check cannot run, and it fails closed (no whole-text fallback). Restore the sentence\'s wording and bold.'], warnings];
   }
 
   const seed = readFileSync(join(scriptsDir, 'seed-protocol-prompts.ts'), 'utf8');
@@ -102,15 +135,24 @@ function auditArchitectVocabulary(scriptsDir: string): [string[], string[]] {
   while ((m = PROTOCOL_ROW_RX.exec(seed)) !== null) rows.add(m[1]);
 
   for (const row of [...rows].sort()) {
-    if (row in NON_PROGRAM_LEG_PROTOCOLS) continue;
     const token = row.replace(/-protocol$/, '');
-    if (!guidance.includes(token)) {
+    const offered = list.includes(`\`${token}\``);
+    if (row in NON_PROGRAM_LEG_PROTOCOLS) {
+      if (offered) {
+        failures.push(
+          `'${token}' is OFFERED in the program_architect sanctioned-token list AND allowlisted in NON_PROGRAM_LEG_PROTOCOLS ` +
+          `(${row}). A row is a program leg or it is not — never both. Delete the allowlist entry, or drop the token from the list.`
+        );
+      }
+      continue;
+    }
+    if (!offered) {
       failures.push(
         `'${token}' is a seeded protocol row (${row}) but is absent from the program_architect ` +
-        `domain-token vocabulary.\n     FIX ONE OF:\n` +
-        `       • add it to the "Map each per-pipeline objective" bullet in\n` +
-        `         lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts, then reseed\n` +
-        `         scripts/seed-program-templates.ts (report:template-freshness will show it STALE), OR\n` +
+        `sanctioned-token list.\n     FIX ONE OF:\n` +
+        `       • add it to "The sanctioned tokens are exactly: …" in buildProgramArchitectGuidance\n` +
+        `         (lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts), then reseed the owners of BOTH\n` +
+        `         program_architect and value_chain_architect (report:template-freshness will show them STALE), OR\n` +
         `       • add '${row}' to NON_PROGRAM_LEG_PROTOCOLS in this script WITH A REASON.`
       );
     }

@@ -31,7 +31,7 @@
 import type { Prisma } from '@prisma/client';
 import { selectAuthoritativeExecution, CHAIN_SELECTION_OPTIONS } from '../../services/execution-selection';
 
-export type ResultField = 'finalResponse' | 'rollbackContainment';
+export type ResultField = 'finalResponse' | 'rollbackContainment' | 'derivationContainment' | 'reviewerVerdict' | 'reviewerWarnings' | 'toolCalls';
 
 export type AuthoritativeReadClient = Pick<Prisma.TransactionClient, 'agentExecution' | 'agentArtifact' | '$queryRaw'>;
 
@@ -64,6 +64,43 @@ export async function readAuthoritativeResultField(
     case 'rollbackContainment':
       rows = await client.$queryRaw<Array<{ v: string | null }>>`
         SELECT (content::jsonb)->>'rollbackContainment' AS v FROM agent_artifacts
+        WHERE name = 'result.json' AND content LIKE '{%'
+          AND "executionId" = ${executionId}
+        ORDER BY "createdAt" DESC LIMIT 1`;
+      break;
+    // value-chain build B4 (2026-10-02): the value-leg hoist reads the Derivation Architect's leaf stamp from the
+    // execution the Reviewer was chained — same rule, same jsonb projection, one more literal query.
+    case 'derivationContainment':
+      rows = await client.$queryRaw<Array<{ v: string | null }>>`
+        SELECT (content::jsonb)->>'derivationContainment' AS v FROM agent_artifacts
+        WHERE name = 'result.json' AND content LIKE '{%'
+          AND "executionId" = ${executionId}
+        ORDER BY "createdAt" DESC LIMIT 1`;
+      break;
+    // WARNINGS-INVISIBLE (2026-10-08): the leg-synthesize `reviewerWarnings` net reads each leg reviewer's STAMPED
+    // verdict (never re-parses its prose) from the execution the chainer would hand on — same rule, one more literal.
+    case 'reviewerVerdict':
+      rows = await client.$queryRaw<Array<{ v: string | null }>>`
+        SELECT (content::jsonb)->>'reviewerVerdict' AS v FROM agent_artifacts
+        WHERE name = 'result.json' AND content LIKE '{%'
+          AND "executionId" = ${executionId}
+        ORDER BY "createdAt" DESC LIMIT 1`;
+      break;
+    // …and its PROGRAM arm reads each child LEG's stamped leg fact. A PIPELINE leg writes pipeline-index.json, never
+    // result.json (CC2); the selection is still the chainer's, so the program report lists exactly what Node C chains.
+    case 'reviewerWarnings':
+      rows = await client.$queryRaw<Array<{ v: string | null }>>`
+        SELECT (content::jsonb)->>'reviewerWarnings' AS v FROM agent_artifacts
+        WHERE name = 'pipeline-index.json' AND content LIKE '{%'
+          AND "executionId" = ${executionId}
+        ORDER BY "createdAt" DESC LIMIT 1`;
+      break;
+    // VERBATIM-QUOTE-OMISSION (2026-10-13): the Harvester's RAW tool results — the witness `rollbackContainment` (E1)
+    // and `quoteFidelity`'s Author point compare against. Its jsonb rendering re-orders object keys; both readers walk
+    // string VALUES only, so the order is immaterial to them (and never stamped).
+    case 'toolCalls':
+      rows = await client.$queryRaw<Array<{ v: string | null }>>`
+        SELECT (content::jsonb)->>'toolCalls' AS v FROM agent_artifacts
         WHERE name = 'result.json' AND content LIKE '{%'
           AND "executionId" = ${executionId}
         ORDER BY "createdAt" DESC LIMIT 1`;

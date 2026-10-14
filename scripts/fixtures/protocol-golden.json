@@ -1,0 +1,192 @@
+{
+  "protocols": {
+    "pipeline-orchestrator-protocol": {
+      "sha256": "e1ee0f72b757fb2e01b87eda6984d7392a17ba36f81d51d560d8c83ef61f12dd",
+      "chars": 41946
+    },
+    "artifact-synthesis-protocol": {
+      "sha256": "254665394309623ad155c862e94827fed28e99cb6e1859fd5b1855c3c7293969",
+      "chars": 30736
+    },
+    "network-provisioning-protocol": {
+      "sha256": "0a764869882176453d4e596507be6a7fbe2724a1e26adb2336a16c07a826cd8e",
+      "chars": 48105
+    },
+    "kubernetes-gitops-protocol": {
+      "sha256": "4aadeed48421c7faaa9fff22abb011f38fac96a5972225f39c73d1c10da98518",
+      "chars": 42054
+    },
+    "terraform-iac-protocol": {
+      "sha256": "d66c6d5d770e30b4a6cc6a6ee654bd28869d05849d8208bd9693c352bf58cdde",
+      "chars": 39006
+    },
+    "observability-config-protocol": {
+      "sha256": "655a75db46746fbe6ad9b54f1e817eea9701707687d918d9195c2e3adde46a9b",
+      "chars": 34345
+    },
+    "pov-program-protocol": {
+      "sha256": "d741a805df3e03a040a509a686dc93688405cacff31d8843744b11a261ed0895",
+      "chars": 66718
+    },
+    "value-chain-program-protocol": {
+      "sha256": "d566d008b93283cd77479cdecd3301119bf2a0c54cc5dc4ea7d2f4150532817e",
+      "chars": 546
+    },
+    "network-derivation-protocol": {
+      "sha256": "b928aacb777183c07c570fe539b3939b5f5a4cdcdcaeee9b7f6e5982511eacc6",
+      "chars": 22022
+    },
+    "requirements-authoring-protocol": {
+      "sha256": "fd4b55a8e292b01b250a074eebd10b072ce4bead924e79ccde38770c4d2cbdef",
+      "chars": 51209
+    },
+    "HOWTO-use-pipeline-harness": {
+      "sha256": "6b0a14a936970c4839f63801c0f2fb57f0ee0deb9ff18bb30cddfb95fdea2a1e",
+      "chars": 62083
+    },
+    "HOWTO-use-program-harness": {
+      "sha256": "7240fb31d1a082d2ce70f0735e62befd899e84b732733a222e9cdfe3211f1443",
+      "chars": 38045
+    },
+    "HOWTO-program-workflow": {
+      "sha256": "06c5ad3f771b9685d4af140c0bdc333b87fff8fba9ff7cda72cad7abc44283ea",
+      "chars": 15776
+    },
+    "HOWTO-run-an-agent": {
+      "sha256": "f9a18820cc1f66eb5a955d0c0812d7da1cfa6b98b7c3dee6b965b609a38c43e7",
+      "chars": 16438
+    },
+    "HOWTO-mcp-tools": {
+      "sha256": "179fc799b6f9a23033d9c5ecb2bebd7f00043003fc593a981d922445d5d9a0ac",
+      "chars": 16222
+    }
+  },
+  "roles": {
+    "qa_test_engineer": {
+      "sha256": "606c31dda8a161bc2403091ab95e99e3efc30df46148cfd22c1bad276f75d7d5",
+      "chars": 1581
+    },
+    "business_analyst": {
+      "sha256": "83c76d64a1e97880c1956616deaf6c0ba12726cc7271e9e4a2bf933659d7424b",
+      "chars": 2081
+    },
+    "technical_consultant": {
+      "sha256": "520bfe42192fb252d4c77a20c6f5a6f2cd0eaa2336b220b87d8b69b7c049f841",
+      "chars": 2032
+    },
+    "devops_engineer": {
+      "sha256": "b850eff64beea1bffb71311ca476a6e4caae641d45e74ab4adeb50a0eeaa4af6",
+      "chars": 1772
+    },
+    "security_analyst": {
+      "sha256": "e257c007c5763fa165c1fd45b1aa95785b227ae26e4193dfacf246a1fd978dd3",
+      "chars": 1966
+    },
+    "project_manager": {
+      "sha256": "07716c1a36c932a2772655b7b36f2dc178df846cbc10af6b84e71559c5eb2080",
+      "chars": 1751
+    },
+    "solution_architect": {
+      "sha256": "6f7e6fc1a5c9aadb258b7c1aa0e3c58b9fd66f672a213ce1895e2a5ecb7e7d13",
+      "chars": 2106
+    },
+    "data_analyst": {
+      "sha256": "ba9372c93987922f2d98a7ee817dd6e0a5435a386102373b7d98d146b1c85891",
+      "chars": 1985
+    },
+    "senior_software_developer": {
+      "sha256": "c1b76ccebbfa6773e40f486adc1a02eb001195877ac7e379fcdba5efc347ef81",
+      "chars": 1805
+    },
+    "technical_writer": {
+      "sha256": "7c5f389b64ce2554fff059eacb8fcf3be4115fc30c5e7f18f5c053923055303e",
+      "chars": 3596
+    },
+    "strategic_technical_advisor": {
+      "sha256": "7a1aba8c7d8716fa5c69fc42f684cdabd1b326a8e88f4da2f1b7cf8629d024e0",
+      "chars": 1417
+    },
+    "mcp_service_registrar": {
+      "sha256": "d1be378380abbca3858fda720a151812c305a0f9814cbf02bdf44dcae9d8eb5d",
+      "chars": 1147
+    },
+    "sales_engineer": {
+      "sha256": "4c5bf769716008dfdfce258dee8b88d56b02b91792a28cf576eefd3290314b95",
+      "chars": 1428
+    },
+    "marketing_strategist": {
+      "sha256": "b5fb574e4aef8bf4e376df935439e586894042648c7224844dd73bf727ded291",
+      "chars": 1217
+    },
+    "synthesis_source_acquirer": {
+      "sha256": "bf5e60d62655fbcf2ac3806d90ff1bf54e73e4656ce1319d8846c5ee0bdb776c",
+      "chars": 7030
+    },
+    "artifact_harvester": {
+      "sha256": "d6c3469c96be035f94d7d1cbeb43fbc60cefdf0e50758c3617e32dfee9e836b3",
+      "chars": 4058
+    },
+    "editorial_writer": {
+      "sha256": "4e73dde1045b12aa7817c3fcae0a35e089bdd3524716884f206b431b9fa20a8a",
+      "chars": 4760
+    },
+    "publication_reviewer": {
+      "sha256": "b036914834db4cd6de93946678b6831cba2299e702eb482f0bcd7ca02ba64bc4",
+      "chars": 3218
+    },
+    "research_analyst": {
+      "sha256": "39eba2c897bbdeaeee9b68f74e5e972407d7ee9adeb78284a2e5c4a65371371a",
+      "chars": 3352
+    },
+    "config_change_author": {
+      "sha256": "351a6c16c5b2fd29ac78c784803399ced3db8f6bb27f16848956380ee806fbef",
+      "chars": 11518
+    },
+    "change_reviewer": {
+      "sha256": "c641a6ee0f0be516de5bc6226c6ffd6abcc0ade6fdc8e4a2938e9b4be966ca7f",
+      "chars": 17315
+    },
+    "infra_change_architect": {
+      "sha256": "3efd092b2b8f3b662a65f6bc0f35cd65edcfcd66f9be76f81c04278ea3eb846e",
+      "chars": 3226
+    },
+    "infra_state_harvester": {
+      "sha256": "382927e0aab709536215c47eb73242fe528f7b66d43a818b780288d1c70a71ef",
+      "chars": 4295
+    },
+    "program_architect": {
+      "sha256": "132b65fce81dd937ed5ee9c7a609b0bc0fbffd8f67c05c75929870d99d85e675",
+      "chars": 21256
+    },
+    "value_chain_architect": {
+      "sha256": "132b65fce81dd937ed5ee9c7a609b0bc0fbffd8f67c05c75929870d99d85e675",
+      "chars": 21256
+    },
+    "derivation_architect": {
+      "sha256": "42ce2145fdc4f2d3a843e96e7eece48322f1b428f20f9240ff2f5ab5f4a23a18",
+      "chars": 4080
+    },
+    "derivation_reviewer": {
+      "sha256": "4cf10c8cff33dc6bcfcd6bcf1ba17f04f86c63b7544a961cab8a362f5b7e1463",
+      "chars": 5801
+    },
+    "requirements_author": {
+      "sha256": "3e8cc02b3be0bba7d62209b40049dabafcc61fde57b9300e949742e5a5448df0",
+      "chars": 39009
+    },
+    "requirements_reviewer": {
+      "sha256": "3b6a403bef2980121dd4b910ed24d386ae2365fdfaec08b70cbec85fc58aea7d",
+      "chars": 21982
+    }
+  },
+  "shared": {
+    "PAICHART_UNIVERSAL_BASE_TEMPLATE": {
+      "sha256": "dcd4bfc99598b420ee79b6ce4fcbc9fada681f72d7cb925e649760f8de947d65",
+      "chars": 7245
+    },
+    "UNIVERSAL_AGENT_RULES": {
+      "sha256": "6e23233a1cabb47f09b67a8a470351af783ceeac0f3433fa547a5db8a1d9ee52",
+      "chars": 4996
+    }
+  }
+}

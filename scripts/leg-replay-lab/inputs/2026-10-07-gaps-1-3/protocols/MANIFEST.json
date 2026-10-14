@@ -1,0 +1,39 @@
+{
+  "observability-config-protocol:baseline": {
+    "file": "protocols/observability-config-protocol@1.6.0.baseline.md",
+    "sha256": "09833e69505f8c407a1397643b9093823dd8735303776512afd13bcebd3bf114",
+    "chars": 28869
+  },
+  "observability-config-protocol:gap1": {
+    "file": "protocols/observability-config-protocol@1.6.0.gap1.md",
+    "sha256": "8b50e20cffe7d53ce33854525157a2f1de7637cf9d5cc8d7a0255b45cd55ae91",
+    "chars": 29146,
+    "edits": [
+      "gap1"
+    ],
+    "deltaChars": 277
+  },
+  "observability-config-protocol:gap3": {
+    "file": "protocols/observability-config-protocol@1.6.0.gap3.md",
+    "sha256": "09ebeb8cab5647a51bb25824009309051daf12214e7197ae88f01323dfd92a69",
+    "chars": 29608,
+    "edits": [
+      "gap3"
+    ],
+    "deltaChars": 739
+  },
+  "terraform-iac-protocol:baseline": {
+    "file": "protocols/terraform-iac-protocol@1.12.1.baseline.md",
+    "sha256": "0329e1d3ebf1d23b417825e3a1006263f97f9c8a866c8e0d04bba31b802a5801",
+    "chars": 38602
+  },
+  "terraform-iac-protocol:gap1": {
+    "file": "protocols/terraform-iac-protocol@1.12.1.gap1.md",
+    "sha256": "4804b3bcc0815aac789ba4ab74e4b8cadf0c74e803fd9a59a4d51557d27f01a7",
+    "chars": 38879,
+    "edits": [
+      "gap1"
+    ],
+    "deltaChars": 277
+  }
+}

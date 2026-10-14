@@ -431,5 +431,37 @@ test('WIRING: web status route maps DependencyNotSatisfiedError to a structured 
     'status route must map the typed dep-guard error to DEPENDENCY_NOT_SATISFIED');
 });
 
+// ---------------------------------------------------------------------------------------------
+// COMPLETE-THEN-FAIL anchor producers (2026-10-05, DESIGN-v2 §2.2 / §7, TS-F7): "a human completion never triggers
+// the rescue" is STRUCTURAL — only the two MCP adapters set actor.executionId, only from routeOpts.
+// ---------------------------------------------------------------------------------------------
+test('CTF-1: ONLY the two MCP adapters set actor.executionId, and ONLY from routeOpts.callingExecutionId', () => {
+  for (const key of ['mcpComplete', 'mcpUpdate'] as const) {
+    const src = read(ADAPTERS[key]);
+    assert(/executionId:\s*routeOpts\.callingExecutionId/.test(src), `${key} must set actor.executionId from routeOpts.callingExecutionId`);
+    assert(!/executionId:\s*(?:parameters|params|completedBy|args)\b/.test(src), `${key} must never take executionId from request parameters`);
+  }
+  // Build review TS-F1: task.update carries the actor TWICE — the Layer-1 actor that WRITES the anchor and the effects
+  // actor that only feeds the activity. A once-per-file match passed with the WRITING one deleted.
+  const upd = read(ADAPTERS.mcpUpdate);
+  assert((upd.match(/executionId:\s*routeOpts\.callingExecutionId/g) || []).length === 2, 'task.update: both actors carry the routeOpts executionId');
+  const callIdx = upd.indexOf('runTaskCompletionTx(tx, {');
+  const callBody = upd.slice(callIdx, upd.indexOf('include:', callIdx));
+  assert(callIdx > 0 && /executionId:\s*routeOpts\.callingExecutionId/.test(callBody), 'the anchor-WRITING runTaskCompletionTx actor carries it');
+  const cmp = read(ADAPTERS.mcpComplete);
+  const cIdx = cmp.indexOf('completeTaskTerminally(prisma, {');
+  assert(cIdx > 0 && /executionId:\s*routeOpts\.callingExecutionId/.test(cmp.slice(cIdx, cmp.indexOf('completionNote:', cIdx))), 'task.complete: the completeTaskTerminally actor carries it');
+  for (const key of ['updateTask', 'bulk', 'move', 'povPut'] as const) {
+    const src = read(ADAPTERS[key]);
+    assert(!/callingExecutionId/.test(src), `${key} is a HUMAN surface and must never read callingExecutionId`);
+    assert(!/actor:\s*\{[^}]*executionId/.test(src), `${key} sets actor.executionId — a human completion could arm the rescue`);
+  }
+});
+test('CTF-2: the router threads routeOpts into BOTH completion handlers', () => {
+  const router = read('lib/mcp/tasks/action/tasks-action-router.ts');
+  assert(/handleTaskComplete\(parameters, user, actionId, routeOpts\)/.test(router), 'task.complete must receive routeOpts');
+  assert(/handleTaskUpdate\(parameters, user, actionId, routeOpts\)/.test(router), 'task.update must receive routeOpts');
+});
+
 console.log(`\n📊 Results: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

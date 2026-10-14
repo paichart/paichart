@@ -7,7 +7,8 @@ The v2.0 body below (triple-layer architecture, all 6 file targets) re-proved LI
 
 ```bash
 # 1. updateTask is RR + retry-wrapped (BC19/serialization-retry, 2026-06-09)
-grep -n "withSerializationRetry\|task.ts:updateTask" lib/tasks/services/task.ts | head -3   # expect import (:2), wrap open (~:765), label (~:818) — lines shifted 2026-07-24 (completion-path: assembleUpdateData helper + terminal routing to complete-task-terminally.ts added above updateTask)
+grep -n "withSerializationRetry\|task.ts:updateTask" lib/tasks/services/task.ts   # import (:2); updateTaskDependencies wrap (~:138, label ~:165); updateTask wrap (~:831, label ~:896). Re-measured 2026-10-05 (D6 drift fix — the old note said ~:765/~:818). Lines move; the PROPERTY is two RR+retry wraps, each labelled
+grep -c "'task.ts:updateTask'\|'task.ts:updateTaskDependencies'" lib/tasks/services/task.ts   # expect 2 — both labels present
 
 # 2. MCP task-update handler carries the BC19 atomic read-modify-write fix
 grep -c "BC19" lib/mcp/tasks/action/handlers/task/task-update-handler.ts   # expect 5
@@ -19,6 +20,25 @@ ls lib/services/taskReadyReactorService.ts lib/services/taskBulkService.ts lib/s
 
 # 4. Concurrency canon for any task read-modify-write: transaction-atomicity-pattern.md §Retry
 #    + the database-management-discovery 2026-06-09 concurrency block (BC19/BC47 sweep tables)
+```
+
+### 2026-10-05 addendum (D6) — the two task-side modules the v2.0 inventory never named
+
+```bash
+# 5. complete-task-terminally.ts — the ONE completion core (2026-07-24). Layer 1 runTaskCompletionTx (in-tx: fresh
+#    read → transition validate → APPROVAL dep-guard → 4-point PIPELINE invariant → CAS write), Layer 2
+#    completeTaskTerminally (RR + withSerializationRetry), post-commit fireCompletionEffects/fireCompletionReactors.
+grep -n "^export async function\|^export interface CompletionActor\|^export const COMPLETED_BY_EXECUTION_KEY" lib/tasks/services/complete-task-terminally.ts
+grep -c "assembled\[COMPLETED_BY_EXECUTION_KEY\] = anchorId" lib/tasks/services/complete-task-terminally.ts   # expect 1 — COMPLETE-THEN-FAIL anchor, merged LAST (after builder metadata, F10 stamp, override fact)
+#    The anchor `metadata.completedByExecutionId` is set ONLY from actor.executionId, which ONLY the two MCP completion
+#    adapters set, ONLY from routeOpts.callingExecutionId (the agent loop). A completion without it REMOVES an
+#    inherited stamp. Pins: test:completion-tx-shape S7–S10, test:completion-core-boundary CTF-1/CTF-2.
+
+# 6. protected-task-metadata.ts — the three key classes: (a) PROTOCOL stamp immutability, (b) PLATFORM_RUN_KEYS
+#    (dropped on EDITOR surfaces, MCP-writable), (c) AUDIT_STRIP_KEYS (guard-written facts, stripped on ALL client
+#    surfaces INCLUDING MCP). A new platform-written key MUST be classified (test:platform-run-keys P7 fails until it is).
+grep -n "^export const PLATFORM_RUN_KEYS\|^export const AUDIT_STRIP_KEYS\|^export function stripAuditFacts\|^export function dropPlatformRunKeys" lib/tasks/services/protected-task-metadata.ts
+grep -c "'completedByExecutionId'" lib/tasks/services/protected-task-metadata.ts   # expect 1 — an AUDIT_STRIP key (P6e), never a run key
 ```
 
 ## Discovery Objective

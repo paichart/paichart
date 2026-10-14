@@ -141,9 +141,9 @@ test('INVARIANT 2: no-derived-values-block keeps its ORIGINAL blocking clause (V
   assert(/BRANCH C3[\s\S]{0,400}program-tier-inapplicable/.test(taxonomy),
     'BRANCH C3 (program-tier → benign program-tier-inapplicable) is gone — the parent would again read its own no-harvest-child as a gap');
   assert(/REFUSED or DROPPED[\s\S]{0,80}BLOCKING/.test(taxonomy),
-    'the refusal/drop guarantee is gone: a leg that harvested a pool and emitted no derivation must block (VT-11 collision refusal, run-2/3 dropped block)');
+    'the refusal/drop guarantee is gone: a leg that harvested a pool and emitted no derivation must never read benign — since 2026-08-16 it is needs-node-c (harvested-pool-no-derivation-cannot-decide), BLOCKING until Node C discharges it (VT-11 collision refusal, run-2/3 dropped block)');
   assert(/regardless of anything upstream/.test(taxonomy),
-    'the upstream-irrelevance marker is gone — a downstream deriving leg that refuses HAS a clean in-edge, so an edge-aware rule would clear it wrongly');
+    'the upstream-irrelevance marker is gone — a downstream deriving leg that refuses HAS a clean in-edge, so an edge-aware rule would clear it wrongly. Its ONE exception (2026-08-16) is the consumed discharge, which needs a parsed consumed block AND green === true (pinned separately below)');
   assert(/REFUSAL\/DROP fail-safe and is NEVER relaxed/.test(taxonomy),
     'the never-relax marker is gone — without it a later editor may extend the consuming exception onto this clause, releasing VT-11 collision refusals and run-2/3 silent drops');
   // Guard against the specific regression: the exception phrase must NOT appear inside the
@@ -158,7 +158,7 @@ test('INVARIANT 2: no-derived-values-block keeps its ORIGINAL blocking clause (V
     'cannot delimit the no-derived-values-block clause (its start or the following harvest-block clause moved) — the leak check below would be vacuous');
   const ndvbClause = taxonomy.slice(ndvbIdx, nextClauseIdx);
   assert(!/CONSUMING LEG/.test(ndvbClause),
-    'the CONSUMING LEG exception leaked into the no-derived-values-block clause — a refused collision would then read benign');
+    'the D2 CONSUMING LEG exception (keyed on harvest-block-missing-or-unparseable) leaked into the no-derived-values-block clause. This reason has its OWN consumed discharge since 2026-08-16, but only on two facts — a parsed consumed block AND green === true (pinned below); the D2 exception must not widen it, or a refused collision reads benign');
 });
 
 test('INVARIANT 2b: clause 1 DOMINANCE is stated where the conditional clauses begin', () => {
@@ -220,7 +220,7 @@ test('INVARIANT 3: the DAG-position guard (upstreamContainment.green) is REQUIRE
 });
 
 test('INVARIANT 4: fails CLOSED, and does not send the gate to parse the plan or infer from counts', () => {
-  assert(/ABSENT or \\`green\\` is false, the reason stays BLOCKING \(fail closed\)/.test(taxonomy),
+  assert(/ABSENT or \\`green\\` is false, the reason stays BLOCKING \(fail closed\) unless D4 applies/.test(taxonomy),
     'no fail-closed rule — an absent upstream fact must BLOCK, never be assumed benign');
   assert(/do NOT parse the Architect plan/i.test(taxonomy),
     'the plan-parse prohibition is gone — that route truncates (~100K cap) and reintroduces intermittent false parks');
@@ -312,11 +312,11 @@ test('A7 CLOSED: the deriving test is the harvestedCount FACT, not a judgement',
   assert(/harvestedCount/.test(taxonomy),
     'the taxonomy no longer reads harvestedCount — the benign/blocking call reverts to judging the leg\'s objective, which is A7 reopened');
   assert(/\*\*PRESENT\*\*[\s\S]{0,400}BLOCKING/.test(taxonomy),
-    'PRESENT-means-blocking is gone: a leg that harvested a pool and emitted no derivation REFUSED or DROPPED (VT-11 / run-2/3) and must block');
+    'the PRESENT arm is gone: a leg that harvested a pool and emitted no derivation may have REFUSED or DROPPED (VT-11 / run-2/3) — it is needs-node-c since 2026-08-16, never benign, and BLOCKING until Node C discharges it');
   assert(/\*\*ABSENT\*\*[\s\S]{0,200}benign/.test(taxonomy),
     'ABSENT-means-benign is gone: a leg that harvested no pool had nothing to derive');
   assert(/absent ≠ 0/.test(taxonomy),
-    'the absent-vs-zero distinction is gone — harvestedCount:0 means the block PARSED and the pool was empty, so the leg still harvested and is still deriving');
+    'the absent-vs-zero distinction is gone — harvestedCount:0 means the block PARSED and the pool was empty: benign harvested-pool-empty (2026-08-16), a different reason from ABSENT, which resolves through the remaining arms');
   assert(/harvestedCount/.test(cardSource),
     'the lean card does not render harvestedCount — SYNTHESIZE Step 2 reads the fact off that card, so the gate could not see it (the Run-15 inertness, third occurrence of this trap)');
 });
@@ -373,6 +373,107 @@ test('the pov-program protocol version is >= 1.0.18 (structurally located, not d
     `expected >= 1.0.18, got ${maj}.${min}.${pat}`);
 });
 
+// ── CONSUMER-FAIL-OPEN (2026-10-03, pattern (h) batch 2) ─────────────────────────────────────────
+// BRANCH D was stale against the code's arm order from 2026-08-03/16 until this batch, and the taxonomy says "stop at the
+// first match" — so a D3 placed after D2 was unreachable while D said "ABSENT ⇒ benign". These pin the corrected text to the
+// code, in both directions: the reason exists in the code, in both program protocols, and in the D slice that routes to it.
+const containmentSource = fs.readFileSync(path.join(__dirname, '..', 'lib', 'agents', 'harness', 'derivation-containment.ts'), 'utf-8');
+const branchDStart = taxonomy.indexOf('**BRANCH D — ');
+const branchD2Start = taxonomy.indexOf('**BRANCH D2 — ', branchDStart);
+const branchD = branchDStart === -1 || branchD2Start === -1 ? '' : taxonomy.slice(branchDStart, branchD2Start);
+
+test('CFO: a harvested pool with no derivation is NEVER benign (stated in BRANCH D)', () => {
+  assert(branchD.length > 0, 'cannot delimit BRANCH D (its heading or BRANCH D2 moved) — every CFO assertion below would be vacuous');
+  assert(/\*\*PRESENT\*\*[\s\S]{0,500}never benign/.test(branchD),
+    'BRANCH D no longer says a harvested pool with no derivation is never benign — that is the VT-11 refusal fail-safe');
+  assert(/harvestedCount > 0|harvestedCount !== undefined/.test(containmentSource)
+      && /'harvested-pool-no-derivation-cannot-decide'/.test(containmentSource),
+    'the code arm the prose describes is gone — re-read computeContainmentDisposition before editing the text');
+});
+
+test('CFO: the consumed discharge requires BOTH a parsed consumed block AND green === true', () => {
+  assert(/\\`## Consumed Values\\` block parsed AND \\`upstreamContainment\.green === true\\` ⇒ \*\*benign\*\*/.test(branchD),
+    'BRANCH D no longer states BOTH facts for the consumed discharge — a one-fact reading releases a dirty upstream or an undeclared consumer');
+  assert(/consumedPresent && upstreamContainmentGreen === true/.test(containmentSource),
+    'the code no longer requires both facts for consuming-leg-consumed-discharged — the prose pin above is then describing a different rule');
+});
+
+test('CFO: consuming-leg-no-consumed-block is named in the code, the program protocol, and the BRANCH D slice', () => {
+  assert(/'consuming-leg-no-consumed-block'/.test(containmentSource),
+    'the code no longer stamps consuming-leg-no-consumed-block — the D3 text names a reason that does not exist');
+  assert(/\\`consuming-leg-no-consumed-block\\`[\s\S]{0,40}BRANCH D3 below/.test(branchD),
+    'BRANCH D no longer forward-references D3 — a reader stops at "ABSENT ⇒ benign" (stop at the first match) and never reaches the discharge rule');
+  process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://stub:stub@localhost:5432/stub';
+  const protos = require('./seed-protocol-prompts').PROTOCOLS as Array<{ name: string; promptText: string }>;
+  // Promotion E (E2, 2026-10-05): value-chain-program-protocol is a DEPRECATED tombstone (no taxonomy) — pov-program
+  // is the one program protocol that renders BRANCH D3.
+  for (const name of ['pov-program-protocol']) {
+    const t = protos.find((p) => p.name === name)?.promptText ?? '';
+    assert(t.includes('**BRANCH D3 — \`consuming-leg-no-consumed-block\`'), `${name} does not render BRANCH D3`);
+    assert(t.indexOf('BRANCH D3 below') !== -1 && t.indexOf('BRANCH D3 below') < t.indexOf('**BRANCH D3 — '),
+      `${name}: the BRANCH D forward reference does not precede D3`);
+  }
+});
+
+// ── DN1 / A1 (promotion E, E4, 2026-10-05): ONE "disposed child" definition, four shapes ──────────────────────────
+// SYNTHESIS §9 A1 + §3 C1 (PH-H1, PC-F2): an agent-written `superseded:` stamp waives a FAILED child only with a
+// corroborating roster fact — the stamp names its replacement's task id, that id is a child of the stage, and no
+// casualty chain ends at the child. The four fixtures below are the four shapes; each names the clause that decides
+// it, so deleting the clause turns that fixture red. Plus the NEW PLAN-SPAWN exit (B8): a supersession that cannot
+// name a replacement escalates instead of stamping. The stamp's prefix stays `superseded:` so the platform's
+// exclusion (plan-spawn-carry.ts `startsWith('superseded:')`) still reads it — pinned in test-plan-spawn-carry.ts.
+{
+  process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://stub:stub@localhost:5432/stub';
+  const protos = require('./seed-protocol-prompts').PROTOCOLS as Array<{ name: string; promptText: string }>;
+  const pov = protos.find((p) => p.name === 'pov-program-protocol')?.promptText ?? '';
+  const slice = (from: string, to: string) => { const i = pov.indexOf(from); const j = pov.indexOf(to, i + 1); return i === -1 || j === -1 ? '' : pov.slice(i, j); };
+  const step1 = slice('1. **Abort on failed legs.**', '\n2. **Fact-gate every child PIPELINE**');
+  const supersede = slice('**Superseding a PIPELINE child you already persisted (rare)**', '\n5. Create the **program-synthesis producer**');
+  const step2 = slice('2. **Fact-gate every child PIPELINE**', '\n3. **Read Node C');
+  const step3 = slice("3. **Read Node C's verdict**", '\n4. **Check chained coverage');
+  const formula = slice('programReleasable = ', '\n```');
+  const DEFINITION = 'its `metadata.cannotRun` reads `superseded: <task id> — …`, that id names ANOTHER child of this stage, and no casualty chain (below) ends at it';
+  const step6 = slice('6. **Stamp the facts on yourself**', '\n7. ');
+
+  test('DN1 slices found (Step 1, the supersession bullet, Steps 2/3, the gate formula)', () => {
+    for (const [k, v] of Object.entries({ step1, supersede, step2, step3, formula, step6 })) assert(v.length > 0, `${k} slice not found`);
+  });
+  test('DN1 fixture 1 — REPLACED (stamp names ANOTHER task in this stage, no casualties) ⇒ disposed ⇒ excluded from Steps 1, 2, 3, 5, 6', () => {
+    assert(step1.includes(DEFINITION), 'the three-conjunct disposed definition is gone or reworded');
+    assert(step1.includes('If ANY child that is not DISPOSED has'), 'Step 1 no longer excludes a disposed child from the abort');
+    assert(step2.includes('that is not disposed (Step 1)'), 'Step 2 iterates every child PIPELINE again — a disposed child has no qualityGate');
+    assert(step3.includes("(a disposed Node C's replacement's, Step 1)"), 'Step 3 no longer reads the replacement Node C');
+    assert(formula.startsWith('programReleasable = every non-disposed child pipeline'), 'the Step-5 conjunct iterates disposed children again');
+    assert(step6.includes('<MIN reviewerScore across non-disposed child pipelines>'), 'Step 6 MIN ranges over disposed children again (PH-F3 / EF-L3)');
+    assert(step1.includes('(the one definition Steps 2, 3, 5 and 6 use)'), 'Step 1 no longer names every step that iterates the children');
+    assert((pov.match(/\*\*Disposed\*\*/g) ?? []).length === 1, 'the disposed definition must be stated ONCE (Steps 2, 3, 5 and 6 reference it)');
+  });
+  test('DN1 fixture 2 — UNREPLACED (no replacement exists) ⇒ not stamped; PLAN-SPAWN escalates and exits IN_PROGRESS (new exit B8)', () => {
+    assert(supersede.includes('cannotRun: "superseded: <replacement task id> — <reason>"'), 'the stamp format no longer names the replacement id');
+    assert(supersede.includes('create its replacement first (under a new title: a same-title `task.create` returns the existing task), then dispose of it'),
+      'replacement-first ordering, or the new-title reason (PH-F1: a same-title create hands back the obsolete child\'s own id), lost');
+    for (const must of ['**No replacement, no supersession:**', 'if it has no replacement in this stage, do not stamp it',
+      'escalate via comment naming the child', 'exit IN_PROGRESS, leaving the program parked at the gate; the human re-plans and the armed plan gate is never released']) {
+      assert(supersede.includes(must), `the PLAN-SPAWN no-replacement exit lost "${must}"`);
+    }
+    assert(!supersede.includes('your program is never blocked by it'), 'the unconditional "never blocked" promise is back — false for an unreplaced child');
+  });
+  test('DN1 fixture 3 — LEGACY stamp with no id ⇒ not disposed ⇒ blocking ROOT failure', () => {
+    assert(/Any other superseded child — no id,[^.]*is the ROOT failure/.test(step1), 'a legacy no-id superseded stamp no longer stays blocking');
+  });
+  // PH-F1 (E4 review): a same-title create returns the existing task, so a re-created DAG entry can hand back the
+  // obsolete child's OWN id; a stamp naming itself must not dispose it (the row cannot corroborate itself).
+  test('DN1 fixture 5 — SELF-REFERENCE (stamp names the child\'s own id) ⇒ NOT disposed ⇒ blocking ROOT failure', () => {
+    assert(step1.includes('that id names ANOTHER child of this stage'), 'a stamp naming the child itself would satisfy "a child of this stage" — the self-supersession release route is open');
+    assert(/Any other superseded child — no id, its own id,[^.]*is the ROOT failure/.test(step1), 'a self-referential stamp is no longer named as a ROOT failure');
+  });
+  test('DN1 fixture 4 — CASUALTY CHAIN ends at the superseded child ⇒ ROOT failure, named with its reason and its dependents', () => {
+    assert(/or casualties chained onto it — is the ROOT failure: name it, its `cannotRun` reason and the dependents wired onto it/.test(step1),
+      'a superseded child with casualties is no longer the named ROOT failure (PH-H1: cms5r… shape)');
+    assert(step1.includes('following `failedDependencyTaskId` TRANSITIVELY'), 'the casualty-chain rule the definition leans on ("below") is gone');
+  });
+}
+
 // ── Summary ─────────────────────────────────────────────────────────────────────────────────────
 
 test('D-7: SYNTHESIZE final comment carries an ADVISORY "Decisions named by legs" section that never feeds the gate', () => {
@@ -384,6 +485,26 @@ test('D-7: SYNTHESIZE final comment carries an ADVISORY "Decisions named by legs
     if (!para.includes(must)) throw new Error(`D-7 section lost: "${must}"`);
   }
   if (!/version: '1\.8\.(7|[89])|version: '1\.(9|1\d)\./.test(seedSource)) throw new Error('pov-program version not bumped past 1.8.6');
+});
+
+// L6 (containment review 2026-10-12): two-way pin between the code that STAMPS and RENDERS the delegated reason and the
+// BRANCH D4 text that READS it. A renamed reason or card segment on either side would leave D4 reading a string the card
+// never prints — fail-closed, but a permanent false park. Same shape as the D3/CFO pins above.
+test('D4 ⇄ code: the delegated reason and its card segments are the SAME strings on both sides', () => {
+  const dcSource = fs.readFileSync(path.join(__dirname, '..', 'lib', 'agents', 'harness', 'derivation-containment.ts'), 'utf-8');
+  const reason = (dcSource.match(/export const UPSTREAM_DELEGATED_REASON = '([^']+)'/) || [])[1];
+  assert(reason === 'consuming-leg-upstream-delegated', `UPSTREAM_DELEGATED_REASON not found or renamed in derivation-containment.ts (${reason})`);
+  const d4 = seedSource.indexOf('**BRANCH D4 — \\`' + reason + '\\`');
+  assert(d4 > 0, 'BRANCH D4 is missing from pov-program, or no longer names the reason the code stamps');
+  const d4Text = seedSource.slice(d4, d4 + 1600);
+  for (const seg of ['upstreamDelegated:', 'consumedValueCheck: check 1 NOT run', 'NONE STAMPED']) {
+    assert(d4Text.includes(seg), `D4 no longer reads the card segment "${seg}"`);
+    assert(cardSource.includes(seg.split(':')[0] + ':') || cardSource.includes(seg), `the card no longer renders "${seg}"`);
+  }
+  assert(cardSource.includes('check 1 NOT run ('), 'the card no longer renders "check 1 NOT run (<state>)"');
+  assert(/NONE STAMPED ⇒ treat as blocking/.test(cardSource), 'the card no longer renders the fail-closed NONE STAMPED token');
+  assert(/never\s+discharge from a leg reviewer's approval/.test(d4Text), 'D4 lost the leg-reviewer prohibition');
+  assert(/both QUOTED/.test(d4Text), 'D4 lost the both-values-quoted requirement');
 });
 
 console.log(`\n${'─'.repeat(50)}`);

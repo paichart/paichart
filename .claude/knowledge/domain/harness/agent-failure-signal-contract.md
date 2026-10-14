@@ -53,6 +53,17 @@ into an `AppError` carrying the provider's own `code` — so whatever the provid
 | `USER_CONFIG_REQUIRED` | provider, on a Fable zero-data-retention 400 | Yes — org config or a different model; never retryable as-is |
 | `LLM_STREAM_IDLE_TIMEOUT` | provider, on a transport body/headers-idle termination of a stalled stream | **Retryable in principle** (transient), but the platform does **not** retry it today — see the deferral in `cline_docs/reviews/`-linked note below |
 | `LLM_PROVIDER_ERROR` | the guard's fallback when the provider set no code | Unknown class — read the pino line (`phase`, `apiErrorMessage`) before acting |
+| `LLM_PROVIDER_OVERLOADED` | provider, on its own `overloaded_error` (HTTP 529, or the same body as a mid-stream SSE error event) — F-b, COMPLETE-THEN-FAIL batch 2026-10-05. Before, this folded into `unknown_error` | **Retryable in principle** (transient), but the platform does **not** retry it today. Changes the code existing overload failures get from that date — never compare `unknown_error` counts across it |
+
+**COMPLETE-THEN-FAIL (2026-10-05) — when a provider failure is NOT a failure at all.** If the failed call came AFTER the
+execution completed its OWN PIPELINE SYNTHESIZE task, the run is rescued: the execution persists **SUCCESS**,
+`errorCode` stays `null` (O3), and the provider error lives inside `pipeline-index.json` → `postCompletionFailure.cause`
+(`errorCode`, structural `providerErrorType` + `requestId`, verbatim `message` ≤1,000 chars). A caller reading
+`agent.results` sees a SUCCESS leg with that fact in its summary; it is **not a gate input** and NOT rendered on the lean
+card in phase 1. When the rescue declines or fails, the run stays FAILED with the provider's code AND error.json carries
+`postCompletionRescue {attempted, declinedReason, failedWith}`. `POST_COMPLETION_RESCUE_FAILED`,
+`POST_COMPLETION_CAS_MISS` and `POST_COMPLETION_PREDICATE_MISMATCH` are **internal** (log / `failedWith.errorCode`
+only — never an execution's `errorCode`, which is always the original loop error's).
 
 **Before 2026-09-14 none of these were reachable from a CONTINUATION turn**: only the initial LLM call
 checked `.error`, so a provider-error return on a tool-continuation turn left `stopReason` undefined, the

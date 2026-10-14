@@ -1,0 +1,193 @@
+{
+  "label": "2026-10-13-obs-quote-consumer",
+  "purpose": "VERBATIM-QUOTE-OMISSION group C + CONTAINMENT-FIX-B consumer side: observability-config 1.8.0 -> 1.9.0 (C1 byte-for-byte file quoting, C2 Prometheus values rule, CONSUMED_ADDRESS_CLAUSE), DRAFT-C.md section 5 as REVISED by the model-evaluation gate review (cline_docs/reviews/verbatim-quote-omission-2026-10-13/LAB-PREREG-OBS.md section 2). ONE lever per arm: protocol text (hbase/hobs19 on Harvester nodes, base/obs19 on consumer nodes); models = production tiers (Harvester claude-sonnet-5, Author claude-opus-5-5 high, Reviewer claude-sonnet-5 high); templates = today's rows pinned. Harvester nodes: harvesterOnly, tools RECORDED (the production raw results, R9 by the shipping loop). A Harvester sample COUNTS only if >= 90% of its file-tool calls were served (recorded-tools.ts); invalid samples are reported and re-drawn into a second run folder for the shortfall (stop if > 15 invalid). SCORE: Harvester = scoreHarvesterQuotes (score-quote.ts: the shipping computeQuoteFidelity per block, plus a STRICT reading with a verbatim label prepended, because the stamped fact cannot see an unlabelled silent cut); consumer = markerPresence + parsed Consumed Values + offline check 1 + the lab's shipping leg net (derivationContainment). DO-NOT-SHIP (one hit stops all three edits): G-H-CORRUPT (a) pooled over the nodes with both arms (H-R2, H-R1, H-PROM; 20 variant vs 15 baseline samples): variant edited-line sample rate >= baseline rate + 15 points AND >= 3 variant samples; (b) H-CLEAN or H-PROMC: >= 2/5 variant samples with an edited line. G-H-SPUR: any marker heading (Harvested Allocations / Derived Values / Consumed Values) in any variant Harvester sample. G-H-OVER: any variant Harvester sample stopping at max_tokens, or >= 2 variant samples on one node longer than 2x that node's production finalResponse. G-H-PROMVAL (hand read, every H-PROM/H-PROMC variant sample): any quoted key or value the served rendering did not return. G-C-FAB: any consumed entry the sample's own artifact does not apply, or outside the upstream's published set (10.244.0.5, 10.244.0.6 on O-SEL/O-SEL1). G-C-SPUR: any Consumed Values block on O-DOC. G-C-SPLIT: any O-RANGE sample declaring the upstream range as anything but that one range (offline check 1 vs the stored upstream must be []). G-C-AGG: any O-SEL/O-SEL1 entry that joins or aggregates addresses (offline check 1 vs S1 = 10.244.0.5/32,10.244.0.6/32 must be []). SHIP GATES (all must hold; a miss => revise the named text and rerun only the named cells): G-H-FAITH: H-R2 + H-R1 hobs19 >= 13/15 FAITHFUL (score: >= 1 file block and every file block strict-clean), H-R2 alone >= 9/10; hbase rate recorded and stated beside it with both n (a variant rate not above the hbase rate is a miss). G-H-ADD (moved from do-not-ship: it is C1's target, not a harm): file-lane variant samples (H-R2, H-R1, H-CLEAN; 20) with an added line in a file block under the strict reading <= 1, hand-read. G-H-KEEP: H-CLEAN hobs19 >= 4/5 faithful. G-H-PROM: H-PROM hobs19 <= 1/5 with the Prometheus block labelled verbatim (the one hand-read), 0 edited lines. G-H-PROMC: H-PROMC hobs19 5/5 with no edited line and no invented key (hand read). G-C-EMIT: O-SEL obs19 >= 9/10 emit a parsed block, every entry kind cidr, one per applied address, declared set == applied set (both addresses; hand read), offline check 1 vs S1 = [], and the lab leg net stamps consuming-leg-upstream-delegated with consumedValueCheck not-run-no-upstream-derived. G-C-KEEP: O-SEL1 obs19 >= 4/5 still declare, check 1 []. G-C-REP: O-SEL obs19 >= 9/10 keep the deliverable's own form (no /32 in the applied config or the published sender copy unless the sample's design says why). G-NOWORSE: on O-SEL, O-SEL1, O-RANGE, O-DOC every refusal citing /32, the consumed block or 'covering prefix' is read; >= 2 such refusals => revise. Approval-count half on O-SEL only (variant approval rate >= base approval rate - 20 points): O-RANGE and O-DOC were refused in production on older text and have no today's-text baseline. CONDITIONAL BASELINE (Protocol 16 rule 7): H-CLEAN, H-PROMC, O-RANGE and O-DOC have no today's-text baseline arm. A gate hit or miss on one of them triggers a 5-sample baseline arm on that cell (within the cap) BEFORE the decision; the hit/miss counts only if the baseline does not show the same behaviour at >= the same rate. MEASURED, NOT GATED: invalid samples and serve tiers; unmarked whole-unit / adjacent-to-excerpt cuts; verbatim-labelled excerpts; excerpt vs whole-file choice; Harvester and Author tokens/cost; O-SEL reviewer consumed-values-coverage-gap warning presence (should vanish). DECISION: no do-not-ship hit and every ship gate met => 1.9.0 confirmed (it shipped under the owner exemption 133a8b39 before this lab; a do-not-ship hit => revert or revise 1.9.0, owner decides). WHAT THIS LAB CANNOT SHOW: the Author-side effect of a more faithful harvest (consumer Authors read their stored section 6); a Node C D4 discharge (program tier); Prometheus on a current objective (H-PROM/H-PROMC are 09-10/09-20 inputs).",
+  "n": 5,
+  "flags": {
+    "CONNECTED_OUTPUT_SANITIZE_ENABLED": "true",
+    "FORM_CORRECTION_ENABLED": "true"
+  },
+  "baseline": {
+    "protocols": {
+      "observability-config-protocol": {
+        "file": "protocols/observability-config-protocol@1.8.0.baseline.md",
+        "version": "1.8.0",
+        "sha256": "a60102e658bf35cfd7571d25664ee878acb034d067304d968fc65d30283232ef"
+      }
+    },
+    "templates": {
+      "cmtv2luf40000yxta18r707rp": {
+        "file": "templates/observability-state-harvester.cmtv2luf40000yxta18r707rp.baseline.md",
+        "name": "Observability State Harvester",
+        "role": "infra_state_harvester",
+        "sha256": "e3968477b189551d147cd0bcd3d42862fc2281e0c17f1fc72d6a6ddc12188ed4"
+      },
+      "cmtv2lufj0002yxta1f2ii508": {
+        "file": "templates/observability-config-rollback-author.cmtv2lufj0002yxta1f2ii508.baseline.md",
+        "name": "Observability Config Rollback Author",
+        "role": "config_change_author",
+        "sha256": "3b3bdce905a8c3a0fc8a575990d3eaa2ca46cdf91c91e8969c43f860b579bcc4"
+      },
+      "cmtv2lufq0003yxtalviqqza3": {
+        "file": "templates/observability-change-reviewer.cmtv2lufq0003yxtalviqqza3.baseline.md",
+        "name": "Observability Change Reviewer",
+        "role": "change_reviewer",
+        "sha256": "6799a196fc010421efbbfa1405071ca04794293b027bfea7d74ed44d14c51880"
+      }
+    }
+  },
+  "variants": {
+    "hbase": {
+      "edits": [],
+      "dropTemplateDirective": true,
+      "comment": "Harvester nodes, prod text: observability-config 1.8.0 + TODAY's templates (pinned). Harvester on its node's model (claude-sonnet-5 = production tier), production effort (high). Tools RECORDED."
+    },
+    "hobs19": {
+      "edits": [
+        "edits/obs-1.9.0.json"
+      ],
+      "dropTemplateDirective": true,
+      "comment": "Harvester nodes, the full 1.9.0 candidate (C1 + C2a + C2b + consumer clause). Otherwise = hbase."
+    },
+    "base": {
+      "edits": [],
+      "dropTemplateDirective": true,
+      "authorModel": "claude-opus-5-5",
+      "comment": "Consumer nodes, prod text 1.8.0 + TODAY's templates. Author pinned to the production tier (claude-opus-5-5, high: O-RANGE/O-DOC ran on Sonnet 5 before 2026-10-07); Reviewer on its node's model (claude-sonnet-5 = production). Tools stubbed (Authors work from §6)."
+    },
+    "obs19": {
+      "edits": [
+        "edits/obs-1.9.0.json"
+      ],
+      "dropTemplateDirective": true,
+      "authorModel": "claude-opus-5-5",
+      "comment": "Consumer nodes, the full 1.9.0 candidate. Otherwise = base."
+    }
+  },
+  "nodes": [
+    {
+      "id": "H-R2",
+      "authorExecutionId": "cmv5t9ivv008oyxghtb0epzmr",
+      "kind": "harvester-file-target",
+      "harvesterOnly": true,
+      "tools": "recorded",
+      "variants": [
+        "hbase",
+        "hobs19"
+      ],
+      "nByVariant": {
+        "hbase": 5,
+        "hobs19": 10
+      },
+      "expect": "hbase: strict-unfaithful (production: 3 verbatim blocks, 16 omitted + 1 inline stripped + 1 added); hobs19: FAITHFUL, no added line, no edited line"
+    },
+    {
+      "id": "H-R1",
+      "authorExecutionId": "cmv4x8h1q00a4yx9lf6mj9yh2",
+      "kind": "harvester-file-target",
+      "harvesterOnly": true,
+      "tools": "recorded",
+      "variants": [
+        "hbase",
+        "hobs19"
+      ],
+      "nByVariant": {
+        "hbase": 5,
+        "hobs19": 5
+      },
+      "expect": "hbase: unfaithful, edited-line rate on the ingress file recorded (production: $remote_actor); hobs19: FAITHFUL, edited samples not above hbase"
+    },
+    {
+      "id": "H-CLEAN",
+      "authorExecutionId": "cmundq5om00eayx7o6hm6ywob",
+      "kind": "harvester-file-control",
+      "harvesterOnly": true,
+      "tools": "recorded",
+      "variants": [
+        "hobs19"
+      ],
+      "n": 5,
+      "expect": "hobs19: FAITHFUL (production: 3 complete quotes) — excerpt with named elisions is not a regression"
+    },
+    {
+      "id": "H-PROM",
+      "authorExecutionId": "cmu933q80009yyxygyphrkoy6",
+      "kind": "harvester-prometheus-target",
+      "harvesterOnly": true,
+      "tools": "recorded",
+      "variants": [
+        "hbase",
+        "hobs19"
+      ],
+      "nByVariant": {
+        "hbase": 5,
+        "hobs19": 5
+      },
+      "expect": "hbase: Prometheus block labelled verbatim (production: verbatim reflow); hobs19: not labelled verbatim, 0 edited, no invented key"
+    },
+    {
+      "id": "H-PROMC",
+      "authorExecutionId": "cmtvdrb0m002tyxu85fhmqgb1",
+      "kind": "harvester-prometheus-control",
+      "harvesterOnly": true,
+      "tools": "recorded",
+      "variants": [
+        "hobs19"
+      ],
+      "n": 5,
+      "expect": "hobs19: Prometheus quote with no edited line and no invented key"
+    },
+    {
+      "id": "O-SEL",
+      "authorExecutionId": "cmv5te81m00akyxgh5k4qq4y3",
+      "kind": "consumer-single-address-target",
+      "variants": [
+        "base",
+        "obs19"
+      ],
+      "nByVariant": {
+        "base": 5,
+        "obs19": 10
+      },
+      "expect": "base: omission rate on 1.8.0 recorded (production: no block, D3); obs19: block with two /32 cidr entries == applied set, leg stamps consuming-leg-upstream-delegated"
+    },
+    {
+      "id": "O-SEL1",
+      "authorExecutionId": "cmv4xcxto008ryx9k3sba1r7l",
+      "kind": "consumer-single-address-control",
+      "variants": [
+        "obs19"
+      ],
+      "n": 5,
+      "expect": "obs19: still declares (production: bare cidr entries), check 1 []"
+    },
+    {
+      "id": "O-RANGE",
+      "authorExecutionId": "cmuwby46000jmyx9eltfdr4z1",
+      "kind": "consumer-range-control",
+      "variants": [
+        "obs19"
+      ],
+      "n": 5,
+      "expect": "obs19: the upstream /27 declared as that one range, check 1 [] against the stored upstream"
+    },
+    {
+      "id": "O-DOC",
+      "authorExecutionId": "cmunlhuli0099yxh373p8rdvt",
+      "kind": "consumer-documentation-only-control",
+      "variants": [
+        "obs19"
+      ],
+      "n": 5,
+      "expect": "obs19: NO Consumed Values block (documentation-only use)"
+    }
+  ],
+  "measures": [
+    {
+      "name": "consumedValuesHeading",
+      "kind": "count",
+      "regex": "^#{1,6}\\s*Consumed Values\\b",
+      "flags": "im",
+      "why": "a ## Consumed Values heading in the Author package (G-C-EMIT/G-C-SPUR pre-filter; the gate reads the parsed block)"
+    }
+  ]
+}

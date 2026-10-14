@@ -13,7 +13,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { RUNTIME_LIMITS } from '../lib/validation/runtime-limits';
-import { executeToolTurn, runAgenticToolLoop, truncateForLlm, createPagerState, buildMoreRemainsTrailer, ToolCallRecord } from '../lib/agents/harness/agentic-tool-loop';
+import { executeToolTurn, runAgenticToolLoop, truncateForLlm, createPagerState, buildMoreRemainsTrailer, ToolCallRecord, readAgenticLoopPartial, AGENTIC_LOOP_PARTIAL_KEY } from '../lib/agents/harness/agentic-tool-loop';
 import { LLMProvider } from '../lib/services/llm/types';
 
 let passed = 0, failed = 0;
@@ -181,7 +181,7 @@ function makeDeps(overrides: Partial<Parameters<typeof executeToolTurn>[1]> = {}
     // read_more serves 8,000→14,000 at the default, so the first trailer sits at offset 14,000 with
     // one window used on the ref and two pager turns spent (one went to a second artifact).
     {
-      const t = buildMoreRemainsTrailer(2, 14000, 45956, 1, 2, 7);
+      const t = buildMoreRemainsTrailer(2, 14000, 45956, 1, 2, 7, 6);
       ok(t.includes('limit: 6392'), 'trailer: suggests the COMPUTED MINIMUM window that finishes');
       ok(!t.includes('limit: 7000'), 'trailer: never suggests the MAX — that smuggles "bigger is better"');
       ok(t.includes('31956 characters remain'), 'trailer: states what remains');
@@ -191,18 +191,18 @@ function makeDeps(overrides: Partial<Parameters<typeof executeToolTurn>[1]> = {}
       ok(14000 + 5 * 6392 >= 45956, 'trailer: the suggested window actually reaches the end');
     }
     // No suggestion when the default already finishes — otherwise the agent learns "always max",
-    // which is the behaviour READ_MORE_PAGES_PER_ORIGIN exists to prevent.
-    ok(!buildMoreRemainsTrailer(2, 40000, 45956, 1, 1, 7).includes('limit:'),
+    // which is the behaviour the per-origin page cap (ReadBudget.pagesPerDocument) exists to prevent.
+    ok(!buildMoreRemainsTrailer(2, 40000, 45956, 1, 1, 7, 6).includes('limit:'),
        'trailer: omits limit when the default window suffices');
     // THE BRANCH THE OLD TRAILER HAD NO WORDS FOR. Without it an agent discovers the ceiling at its
     // last window, having spent the budget that would have let it do something else.
     {
-      const t = buildMoreRemainsTrailer(2, 8000, 100000, 1, 1, 7);
+      const t = buildMoreRemainsTrailer(2, 8000, 100000, 1, 1, 7, 6);
       ok(/BEYOND this pager's reach at any window size/.test(t), 'trailer: names an unreachable tail as a FACT');
       ok(!t.includes('limit:'), 'trailer: never offers a window that cannot finish');
       ok(/gap in your output/.test(t), 'trailer: routes an unreachable tail to scope-or-flag');
     }
-    ok(/NO pager windows are left/.test(buildMoreRemainsTrailer(2, 44000, 45956, 6, 7, 7)),
+    ok(/NO pager windows are left/.test(buildMoreRemainsTrailer(2, 44000, 45956, 6, 7, 7, 6)),
        'trailer: budget exhausted is stated before the next call, not discovered by it');
 
     // unknown ref → fact-shaped is_error (NOT a throw)
@@ -491,6 +491,8 @@ function makeDeps(overrides: Partial<Parameters<typeof executeToolTurn>[1]> = {}
     // REQUIRED since 2026-09-25 (register E1): the watchdog deadline the R4 retry budgets against.
     // FAR, so every pre-existing fixture keeps its expectation (R4-1 still retries at 8192).
     deadlineAt: Date.now() + 3_600_000,
+    // REQUIRED since 2026-10-12 (R1): selects the pager's per-role read budget; null = the default 6 / 8.
+    agentRole: null,
   };
   const loopDeps = (gen: any, logger: any = silentFullLogger) => ({
     getToolDefinition: async (name: string) => name === 'ghost' ? null : { serverName: `srv-${name}` },
@@ -1097,6 +1099,102 @@ function makeDeps(overrides: Partial<Parameters<typeof executeToolTurn>[1]> = {}
       'P2C5: correction provider-error is non-fatal — original kept');
     const e = entries.find(x => x.level === 'error' && x.obj.phase === 'correction')!;
     ok(!!e && e.obj.fatal === false, 'P2C5: the correction-turn cause is logged (fatal:false), not discarded');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // CTF — COMPLETE-THEN-FAIL (2026-10-05, DESIGN-v2 §3.1, audit W1): partial loop state ATTACHED to the ORIGINAL
+  // error, never wrapped. The rescue's predicate P1 requires it; F-c's FAILED-row usage reads it.
+  // ═══════════════════════════════════════════════════════════════════════
+  console.log('\n── CTF: partial loop state attached to the original error ──');
+  {
+    // The 10-04 shape: tool turn(s) incl. task.complete, then the NEXT call returns a provider overloaded error whose
+    // SDK details carry the envelope + request id.
+    const details = { error: { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' }, request_id: 'req_CTF1' } };
+    const providerErr = { text: '', provider: 'anthropic_sdk', error: { message: '{"type":"error"…}', code: 'LLM_PROVIDER_OVERLOADED', details } };
+    const llm = scriptedLLM([
+      mkToolUse([{ id: 'k1', name: 'alpha', arguments: '{}' }], { usage: { inputTokens: 1000, outputTokens: 10 }, metadata: { model: 'served-model' } }),
+      mkToolUse([{ id: 'k2', name: 'beta', arguments: '{}' }], { usage: { inputTokens: 2000, outputTokens: 20 }, metadata: { model: 'served-model' } }),
+      providerErr,
+    ]);
+    let caught: any = null;
+    try { await runAgenticToolLoop(baseInput, loopDeps(llm.generateText)); } catch (e) { caught = e; }
+    const p = readAgenticLoopPartial(caught);
+    ok(!!p, 'CTF-L1: a loop throw carries the branded partial state');
+    ok(caught instanceof Error && /LLM call failed at provider layer/.test(caught.message) && (caught as any).code === 'LLM_PROVIDER_OVERLOADED',
+      'CTF-L1: the thrown object is the ORIGINAL provider AppError — message/code unchanged (attach, never wrap)');
+    ok(!!p && p.toolCallResults.length === 2 && p.failedToolCalls === 0 && p.turnCount === 2,
+      `CTF-L1: toolCallResults/failedToolCalls/turnCount carried (got ${p?.toolCallResults.length}/${p?.failedToolCalls}/${p?.turnCount})`);
+    ok(!!p && p.totalUsage.inputTokens === 3000 && p.totalUsage.outputTokens === 30,
+      `CTF-L1: totalUsage = everything accumulated before the throw (got ${JSON.stringify(p?.totalUsage)})`);
+    ok(!!p && p.servingModel === 'served-model' && p.finalStopReason === 'tool_use',
+      'CTF-L1: servingModel from the last GOOD response; finalStopReason of the last completed response');
+    ok(!!p && p.phase === 'continuation' && p.turn === 2, `CTF-L1: phase + turn of the failed call (got ${p?.phase}/${p?.turn})`);
+    ok(!!p && p.causeClass === 'provider' && p.providerErrorType === 'overloaded_error' && p.requestId === 'req_CTF1',
+      'CTF-L1: cause class set by the THROW SITE; provider type + request id read STRUCTURALLY');
+  }
+  {
+    // Same object identity, explicitly: a throw from a tool executor's surroundings (an internal error) is rethrown as
+    // the very object raised, with the attachment.
+    const sentinel: any = new Error('rawContentBlocks missing');
+    const llm = scriptedLLM([mkToolUse([{ id: 'k3', name: 'alpha', arguments: '{}' }]), sentinel]);
+    let caught: any = null;
+    try { await runAgenticToolLoop(baseInput, loopDeps(llm.generateText)); } catch (e) { caught = e; }
+    ok(caught === sentinel, 'CTF-L2: the rethrown error is toBe(original) — identity preserved');
+    const p = readAgenticLoopPartial(caught);
+    ok(!!p && p.causeClass === 'internal' && p.providerErrorType === null && p.requestId === null,
+      'CTF-L2: a non-provider, non-abort throw is class internal with null provider fields');
+    ok(!!p && p.totalUsage.inputTokens === 100, 'CTF-L2: usage of the responses that DID return is kept');
+  }
+  {
+    // Abort: the watchdog fired.
+    const ac = new AbortController();
+    const llm = { generateText: async () => { ac.abort(); const e: any = new Error('aborted'); e.name = 'AbortError'; throw e; } };
+    let caught: any = null;
+    try { await runAgenticToolLoop({ ...baseInput, signal: ac.signal }, loopDeps(llm.generateText)); } catch (e) { caught = e; }
+    const p = readAgenticLoopPartial(caught);
+    ok(!!p && p.causeClass === 'abort' && p.phase === 'initial' && p.turn === 0 && p.toolCallResults.length === 0,
+      'CTF-L3: an aborted initial call ⇒ class abort, phase initial, turn 0, no tool calls');
+  }
+  {
+    // BC-H1 (build review): the attachment is NON-ENUMERABLE — pino's err serializer and JSON.stringify copy every
+    // enumerable own property, and toolCallResults holds RAW (pre-R9, untruncated, unredacted) tool results.
+    const details = { error: { type: 'error', error: { type: 'overloaded_error' }, request_id: 'req_H1' } };
+    const llm = scriptedLLM([
+      mkToolUse([{ id: 'h1', name: 'alpha', arguments: '{}' }]),
+      { text: '', provider: 'anthropic_sdk', error: { message: 'Overloaded', code: 'LLM_PROVIDER_OVERLOADED', details } },
+    ]);
+    let caught: any = null;
+    try { await runAgenticToolLoop(baseInput, loopDeps(llm.generateText)); } catch (e) { caught = e; }
+    const json = JSON.stringify(caught);
+    ok(!json.includes('toolCallResults') && !json.includes('agenticLoopPartial') && !json.includes('agenticLoopProviderError'),
+      `CTF-L5 (BC-H1): JSON.stringify(err) carries no partial state / provider mark (got ${json.slice(0, 120)})`);
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const pino = require('pino');
+    const chunks: string[] = [];
+    const lg = pino({ level: 'info' }, { write: (c: string) => { chunks.push(c); } });
+    lg.error({ err: caught }, 'Agent execution failed');
+    const line = chunks.join('');
+    ok(line.includes('LLM call failed at provider layer') && !line.includes('toolCallResults') && !line.includes('agenticLoopPartial'),
+      'CTF-L5 (BC-H1): a REAL pino serialization of { err } carries the message but NOT the raw tool log');
+    const p = readAgenticLoopPartial(caught);
+    ok(!!p && p.toolCallResults.length === 1 && p.providerErrorType === 'overloaded_error', 'CTF-L5: still readable BY NAME');
+    ok(!!p && typeof p.failedAt === 'string' && !Number.isNaN(Date.parse(p.failedAt)), 'CTF-L6 (EF-F6): the partial carries the throw-time failedAt');
+  }
+  {
+    // BC-L2: an aborted stream comes back as a provider-error RESPONSE (so the P2 guard marks it) — the abort wins.
+    const ac = new AbortController();
+    const llm = { generateText: async () => { ac.abort(); return { text: '', provider: 'anthropic_sdk', error: { message: 'Request was aborted.', code: 'unknown_error', details: null } }; } };
+    let caught: any = null;
+    try { await runAgenticToolLoop({ ...baseInput, signal: ac.signal }, loopDeps(llm.generateText)); } catch (e) { caught = e; }
+    const p = readAgenticLoopPartial(caught);
+    ok(!!p && p.causeClass === 'abort', `CTF-L7 (BC-L2): a watchdog abort that also carries the provider mark is class abort (got ${p?.causeClass})`);
+  }
+  {
+    // A forged / unbranded attachment is not trusted.
+    const fake: any = new Error('x');
+    fake[AGENTIC_LOOP_PARTIAL_KEY] = { toolCallResults: [], totalUsage: {}, turnCount: 0 };
+    ok(readAgenticLoopPartial(fake) === null, 'CTF-L4: an unbranded partial is rejected (P1 then declines)');
+    ok(readAgenticLoopPartial('a string') === null && readAgenticLoopPartial(null) === null, 'CTF-L4: primitives carry nothing');
   }
 
   console.log(`\n${'─'.repeat(50)}\n  Passed: ${passed}  Failed: ${failed}`);

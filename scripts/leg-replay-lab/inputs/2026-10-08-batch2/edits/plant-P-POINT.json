@@ -1,0 +1,14 @@
+{
+  "id": "plant-P-POINT",
+  "title": "P-POINT (template-system F11): the SANCTIONED Author pointer form (pAIchartUniversalTemplate.ts:497 'check 3: addressed in Step 4'; terraform Phase 2) with NO grade — neither a grade nor a restatement.",
+  "appliesTo": [
+    "author:cmuwbwxvw00jdyx9eoy7ra77r"
+  ],
+  "ops": [
+    {
+      "type": "replace",
+      "old": "paired with `aws:SourceVpce`.",
+      "new": "paired with `aws:SourceVpce`.\n\nAcceptance check 3: addressed in the HCL/Module Diff above (the single new `Statement` block)."
+    }
+  ]
+}

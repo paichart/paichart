@@ -1384,6 +1384,180 @@ test('primitives: FENCE_LINE_RE / FENCED_JSON_BLOCK_RE are stateless (no g flag)
   assert(m?.[1] === '[1]\n', `first block body: ${JSON.stringify(m?.[1])}`);
 });
 
+// ── PHASE4-CONTAINMENT-PROPAGATION (2026-10-12) — the narrow delegation rule, BOTH directions ─────
+// cline_docs/reviews/containment-propagation-2026-10-12/ (MEASURE-AND-PROPOSAL §3.1, BUILD-A).
+// C1..C7 are the seven production consumer legs that ever reached the arm, VERBATIM from their latest
+// pipeline-index.json (containmentDisposition removed — it is what the test recomputes).
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const CP = require('./fixtures/containment-propagation-cases-2026-10-12.json').cases as
+  Record<string, { taskId: string; fact: Record<string, unknown> }>;
+const cpFact = (id: string) => JSON.parse(JSON.stringify(CP[id].fact)) as Record<string, unknown>;
+const DELEGATED = 'consuming-leg-upstream-delegated';
+const NOT_GREEN = 'consuming-leg-upstream-not-green';
+const consumer = (legs: unknown[], extra: Record<string, unknown> = {}) => ({
+  checked: false, reason: 'no-derived-values-block', consumedValues: [{ kind: 'cidr', value: '10.244.0.4/30' }],
+  upstreamContainment: { green: false, legs }, ...extra,
+});
+const NNC = (taskId: string, reason = 'harvested-pool-no-derivation-cannot-decide', extra: Record<string, unknown> = {}) =>
+  ({ taskId, checked: false, violations: 0, disposition: 'needs-node-c', dispositionReason: reason, ...extra });
+
+test('CP P-1: C7 incident (10-12 obs) VERBATIM ⇒ needs-node-c consuming-leg-upstream-delegated, subject + check-1 state named', () => {
+  const d = computeContainmentDisposition(cpFact('C7'));
+  assert(d.disposition === 'needs-node-c' && d.reason === DELEGATED, JSON.stringify(d));
+  assert(JSON.stringify(d.inputs.upstreamDelegated) === JSON.stringify([
+    { taskId: 'cmv4woyp50051yx9lii90wviz', dispositionReason: 'harvested-pool-no-derivation-cannot-decide' }]),
+  `subject: ${JSON.stringify(d.inputs.upstreamDelegated)}`);
+  assert(d.inputs.consumedValueCheck === 'not-run-no-upstream-derived', `check 1: ${String(d.inputs.consumedValueCheck)}`);
+  // Every OTHER input is exactly what the stored blocking stamp carried (the replay's byte claim).
+  const { upstreamDelegated: _u, consumedValueCheck: _c, ...rest } = d.inputs;
+  assert(JSON.stringify(rest) === JSON.stringify({ reason: 'no-derived-values-block', upstreamContainmentGreen: false,
+    consumedCount: 2, violationCount: 0, unsupportedCount: 0 }), `other inputs moved: ${JSON.stringify(rest)}`);
+});
+
+test('CP P-2: C5 (09-16 log archive) VERBATIM ⇒ delegated', () => {
+  const d = computeContainmentDisposition(cpFact('C5'));
+  assert(d.disposition === 'needs-node-c' && d.reason === DELEGATED, JSON.stringify(d));
+  assert(d.inputs.upstreamDelegated?.[0].taskId === 'cmu3nk19o0027yxxq46kkp47l', JSON.stringify(d.inputs));
+});
+
+test('CP P-3: C6 (10-07, no-author-child upstream) VERBATIM ⇒ delegated, reason transcribed', () => {
+  const d = computeContainmentDisposition(cpFact('C6'));
+  assert(d.disposition === 'needs-node-c' && d.reason === DELEGATED, JSON.stringify(d));
+  assert(d.inputs.upstreamDelegated?.[0].dispositionReason === 'no-author-child-leg-kind-undecidable', JSON.stringify(d.inputs));
+});
+
+test('CP N-1: C1 (prefix-not-minimal upstream) VERBATIM ⇒ blocking, unchanged, no subject fields', () => {
+  const d = computeContainmentDisposition(cpFact('C1'));
+  assert(d.disposition === 'blocking' && d.reason === NOT_GREEN, JSON.stringify(d));
+  assert(!('upstreamDelegated' in d.inputs) && !('consumedValueCheck' in d.inputs), 'blocking inputs must stay byte-identical');
+});
+
+test('CP N-2: C3 (asn-not-member upstream; Node C APPROVED 94 over it) VERBATIM ⇒ blocking — a violation is never delegated', () => {
+  const d = computeContainmentDisposition(cpFact('C3'));
+  assert(d.disposition === 'blocking' && d.reason === NOT_GREEN, JSON.stringify(d));
+  // and with a delegated-shaped copy of the same dirty leg: still blocking (rule 1 before rule 3)
+  const f = cpFact('C3');
+  const leg = (f.upstreamContainment as { legs: Array<Record<string, unknown>> }).legs[0];
+  Object.assign(leg, { checked: false, disposition: 'needs-node-c', dispositionReason: 'harvested-pool-no-derivation-cannot-decide' });
+  const d2 = computeContainmentDisposition(f);
+  assert(d2.disposition === 'blocking' && d2.reason === NOT_GREEN, `violations must dominate: ${JSON.stringify(d2)}`);
+});
+
+test('CP N-3: C4 — the public case study — stays blocking, verbatim AND with the upstream\'s own benign nothing-to-derive copy (A2)', () => {
+  const a = computeContainmentDisposition(cpFact('C4'));   // stored copy carries no disposition (pre-copy era)
+  assert(a.disposition === 'blocking' && a.reason === NOT_GREEN, JSON.stringify(a));
+  const f = cpFact('C4');   // what today's enrichment would transcribe from cmt2rpxc8's own stamp
+  Object.assign((f.upstreamContainment as { legs: Array<Record<string, unknown>> }).legs[0],
+    { disposition: 'benign', dispositionReason: 'nothing-to-derive' });
+  const b = computeContainmentDisposition(f);
+  assert(b.disposition === 'blocking' && b.reason === NOT_GREEN, `benign-unchecked is a contradiction, not a delegation: ${JSON.stringify(b)}`);
+});
+
+test('CP N-4: C2 VERBATIM (upstream copy with NO disposition) ⇒ blocking', () => {
+  const d = computeContainmentDisposition(cpFact('C2'));
+  assert(d.disposition === 'blocking' && d.reason === NOT_GREEN, JSON.stringify(d));
+});
+
+test('CP N-5: an upstream stamped blocking with 0 violations (hard gap) ⇒ blocking', () => {
+  const d = computeContainmentDisposition(consumer([{ taskId: 'u1', checked: false, violations: 0, disposition: 'blocking', dispositionReason: 'hard-gap' }]));
+  assert(d.disposition === 'blocking' && d.reason === NOT_GREEN, JSON.stringify(d));
+});
+
+test('CP N-6: one delegated leg + one leg with a violation ⇒ blocking (cross-leg dominance)', () => {
+  const d = computeContainmentDisposition(consumer([NNC('u1'),
+    { taskId: 'u2', checked: true, violations: 1, disposition: 'blocking', dispositionReason: 'violations' }]));
+  assert(d.disposition === 'blocking' && d.reason === NOT_GREEN, JSON.stringify(d));
+});
+
+test('CP N-7: needs-node-c leg with NO dispositionReason (or an empty one) ⇒ blocking (B1 / VT-14 item 3: unnameable fails closed)', () => {
+  for (const leg of [{ taskId: 'u1', checked: false, violations: 0, disposition: 'needs-node-c' }, NNC('u1', '')]) {
+    const d = computeContainmentDisposition(consumer([leg]));
+    assert(d.disposition === 'blocking' && d.reason === NOT_GREEN, `${JSON.stringify(leg)} → ${JSON.stringify(d)}`);
+  }
+});
+
+test('CP N-8: diamond — the same taskId as a delegated copy AND a blocking via copy ⇒ blocking (worst copy wins, either order)', () => {
+  const blockingVia = { taskId: 'u1', checked: false, violations: 0, via: 'hop', disposition: 'blocking', dispositionReason: 'hard-gap' };
+  for (const legs of [[NNC('u1'), blockingVia], [blockingVia, NNC('u1')]]) {
+    const d = computeContainmentDisposition(consumer(legs));
+    assert(d.disposition === 'blocking' && d.reason === NOT_GREEN, JSON.stringify(d));
+  }
+});
+
+test('CP N-9: bare {green:false} with no legs (the D4c/D8 shape) and an empty legs list ⇒ blocking, both arms', () => {
+  for (const uc of [{ green: false }, { green: false, legs: [] }]) {
+    const a = computeContainmentDisposition({ checked: false, reason: 'no-derived-values-block', consumedValues: [{ value: 'x' }], upstreamContainment: uc });
+    const b = computeContainmentDisposition({ checked: false, reason: 'harvest-block-missing-or-unparseable', upstreamContainment: uc });
+    assert(a.reason === NOT_GREEN && b.reason === NOT_GREEN && a.disposition === 'blocking' && b.disposition === 'blocking',
+      `${JSON.stringify(uc)}: ${JSON.stringify([a, b])}`);
+  }
+});
+
+test('CP N-10: a leg with a non-numeric violations field ⇒ blocking (the rule never assumes 0)', () => {
+  const d = computeContainmentDisposition(consumer([{ ...NNC('u1'), violations: undefined }]));
+  assert(d.disposition === 'blocking' && d.reason === NOT_GREEN, JSON.stringify(d));
+});
+
+test('CP N-11: a benign-UNCHECKED leg beside a delegated one ⇒ blocking (A2 is not diluted by a delegated sibling)', () => {
+  const d = computeContainmentDisposition(consumer([NNC('u1'),
+    { taskId: 'u2', checked: false, violations: 0, disposition: 'benign', dispositionReason: 'nothing-to-derive' }]));
+  assert(d.disposition === 'blocking' && d.reason === NOT_GREEN, JSON.stringify(d));
+});
+
+test('CP N-12 (review M2): one delegated leg + a predecessor that could not be read (lookupMisses 1) ⇒ blocking — an unread upstream is not a judged one', () => {
+  const f = consumer([NNC('u1')]);
+  (f.upstreamContainment as Record<string, unknown>).lookupMisses = 1;
+  const d = computeContainmentDisposition(f);
+  assert(d.disposition === 'blocking' && d.reason === NOT_GREEN, JSON.stringify(d));
+  const zero = consumer([NNC('u1')]);
+  (zero.upstreamContainment as Record<string, unknown>).lookupMisses = 0;
+  assert(computeContainmentDisposition(zero).reason === DELEGATED, 'lookupMisses 0 is not a miss');
+});
+
+test('CP N-13 (review L4/G5): every copy machine-checked clean on a green:false stamp (no subject) ⇒ blocking, never an empty delegation', () => {
+  const d = computeContainmentDisposition(consumer([{ taskId: 'u1', checked: true, violations: 0, disposition: 'benign', dispositionReason: 'checked-clean' }]));
+  assert(d.disposition === 'blocking' && d.reason === NOT_GREEN, JSON.stringify(d));
+});
+
+test('CP N-14 (review L5): a whitespace-only dispositionReason is unnamed ⇒ blocking', () => {
+  for (const r of [' ', '\t', '  \n ']) {
+    const d = computeContainmentDisposition(consumer([NNC('u1', r)]));
+    assert(d.disposition === 'blocking' && d.reason === NOT_GREEN, `${JSON.stringify(r)}: ${JSON.stringify(d)}`);
+  }
+});
+
+test('CP P-4: two-hop — a delegated consumer hop + its delegated via root ⇒ delegated, BOTH subjects named in order', () => {
+  const d = computeContainmentDisposition(consumer([NNC('hop', DELEGATED), NNC('root', 'harvested-pool-no-derivation-cannot-decide', { via: 'hop' })]));
+  assert(d.disposition === 'needs-node-c' && d.reason === DELEGATED, JSON.stringify(d));
+  assert(JSON.stringify(d.inputs.upstreamDelegated) === JSON.stringify([
+    { taskId: 'hop', dispositionReason: DELEGATED }, { taskId: 'root', dispositionReason: 'harvested-pool-no-derivation-cannot-decide' }]),
+  JSON.stringify(d.inputs.upstreamDelegated));
+});
+
+test('CP P-5: the :1217 sibling arm (harvest-block-missing-or-unparseable) with a delegated upstream ⇒ delegated (A3 symmetry)', () => {
+  const d = computeContainmentDisposition({ checked: false, reason: 'harvest-block-missing-or-unparseable',
+    upstreamContainment: { green: false, legs: [NNC('u1')] } });
+  assert(d.disposition === 'needs-node-c' && d.reason === DELEGATED, JSON.stringify(d));
+  assert(d.inputs.consumedValueCheck === 'not-run-no-consumed-values', `no consumed block on this arm: ${String(d.inputs.consumedValueCheck)}`);
+  const withConsumed = computeContainmentDisposition({ checked: false, reason: 'harvest-block-missing-or-unparseable',
+    consumedValues: [{ value: '10.0.0.0/31' }], upstreamContainment: { green: false, legs: [NNC('u1')] } });
+  assert(withConsumed.inputs.consumedValueCheck === 'not-run-no-upstream-derived', JSON.stringify(withConsumed.inputs));
+});
+
+test('CP P-6: a clean machine-checked copy alongside a delegated one is allowed (and green stays the benign route when it is TRUE)', () => {
+  // green:false is stamped by the enrichment; a clean copy + delegated copy normally reads green:true (§1.4),
+  // so this only arises on a stamp whose green disagrees with its legs. The rule reads the legs, never green.
+  const d = computeContainmentDisposition(consumer([NNC('u1'), { taskId: 'u2', checked: true, violations: 0, disposition: 'benign', dispositionReason: 'checked-clean', derivedValues: [{ kind: 'cidr', value: '10.0.0.0/31' }] }]));
+  assert(d.disposition === 'needs-node-c' && d.reason === DELEGATED, JSON.stringify(d));
+  assert(d.inputs.consumedValueCheck === 'ran-no-mismatch', `a transcribed derived value means check 1 compared: ${String(d.inputs.consumedValueCheck)}`);
+  assert(d.inputs.upstreamDelegated?.length === 1 && d.inputs.upstreamDelegated[0].taskId === 'u1', 'only the delegated leg is the subject');
+});
+
+test('CP P-7: green:true still discharges BENIGN, unchanged — the new arm never touches the green route', () => {
+  const d = computeContainmentDisposition({ ...consumer([NNC('u1')]), upstreamContainment: { green: true, legs: [NNC('u1')] } });
+  assert(d.disposition === 'benign' && d.reason === 'consuming-leg-consumed-discharged', JSON.stringify(d));
+});
+
 console.log(`\n📊 Results: ${passed} passed, ${failed} failed`);
 if (passed + failed !== declared) {
   console.error(`❌ SELF-CHECK: ${declared} declared, ${passed + failed} executed`);

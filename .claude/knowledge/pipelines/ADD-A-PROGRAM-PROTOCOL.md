@@ -17,6 +17,7 @@ Three different jobs get confused. Pick the right door:
 | design a **new use case** on the existing composition model (a DAG of legs, gates, Node C) | `PROGRAM-USE-CASE-DESIGN-PLAYBOOK.md` | no |
 | add a **new domain** for a leg (a firewall vendor, a new IaC target) | `ADD-A-PIPELINE-HARNESS-AGENT.md` | no |
 | author a **new composition model** — a different graph structure, different gate semantics, a different notion of "done" | **this doc** | no, but it is the deepest of the four |
+| **change a LIVE program protocol** (or a leg shape inside it) without moving its successful runs | **`protocols/isolated-variant-build-protocol.md` (Protocol 15)** + **§9b below** | sometimes — a variant may need a new mechanical net |
 
 **The test**: if `pov-program`'s shape (a DAG of sibling pipelines, human APPROVAL gates, a
 facts-only integration review, `programReleasable` as an AND over child outcomes) can express your
@@ -500,6 +501,118 @@ describes still apply to every OTHER protocol; the exception is scoped to active
 - **Don't reach for the 1-hour prompt-cache TTL** as a cost win — see
   `cline_docs/follow-ups/resolvedat-cache-prefix-2026-08-08.md`. It would cost 2× to write and buy
   nothing today.
+
+---
+
+## 9b. Building a VARIANT of a live program protocol (value-chain, 2026-10-02)
+
+When the change is to a program that already releases runs, do not edit it — build an opt-in variant beside it and
+promote it later. The procedure (phases, gates, exits) is **Protocol 15**; this section is the program-tier
+mechanics. Reference build: `value-chain-program` (variant of `pov-program`), `cline_docs/reviews/producer-leg-2026-10-02/`.
+**Outcome: PROMOTED** (promotion E, deploy 2 — `cline_docs/reviews/promotion-e-2026-10-05/`): its text is folded into
+pov-program 2.0.0, its row is a DEPRECATED tombstone, its Architect row DEPRECATED, and its name stays in
+`PROGRAM_PROTOCOL_NAMES` permanently. The sections below describe the variant AS BUILT; the "today" notes say what
+promotion changed. A promotion is the reverse of the registration list below — see *Retiring a variant* at the end.
+
+### Why `value-chain-program` exists — the worked example (read this before deciding you need a variant)
+
+**The use case it serves: a leg that is purely a PRODUCER.** In the four-domain telemetry-export program, the fabric
+leg's whole job is to harvest the network, derive one value (the exporter address range) and publish it for the other
+legs to consume. It changes nothing. But it ran the `network-provisioning` pipeline, which was built for DEVICE CHANGES:
+harvest → design → **author a change package** (candidate config, validation, rollback, evidence) → review the package.
+A producer leg has no change, so its Author had nothing to package except the derivation itself — and restated it,
+which the protocol forbids.
+
+**The evidence that made it a shape problem, not a slip to patch** (design brief + synthesis,
+`cline_docs/reviews/producer-leg-2026-10-02/`):
+- The four-domain shape released **3 of 18** runs, against 16 of 41 for two-leg programs. Release is an AND over every
+  leg and Node C, so it is roughly the PRODUCT of leg rates (four legs at 85% ≈ 52%): fixing slips one at a time cannot
+  beat that arithmetic; removing failure surface can.
+- The fabric leg derived the **correct value 8 of 8** times (T1-zero runs 6–13) and was approved only **5 of 8** — **all
+  three failures were change-package write-up on a leg that changes nothing**, none about the value: a quoted
+  restatement instead of the harvest (run 8), an optional check citing addresses the package never quoted (run 10), a
+  prose restatement of the minimality conclusion (run 13).
+- The protocol had already been patched for exactly this (clause (f2), 2026-09-28): 5 of 8 value-producing packages
+  restated the derivation and 4 were refused, against 0 refusals on config-change packages — and run 13 made it 6 of 9
+  AFTER the patch. **Prose was not holding it.**
+- It contradicted the platform's actor map (*people decide, harvests observe, code copies/counts/routes, LLMs write
+  and judge*): one LLM computed the value, a second wrote a package arguing it was right, a third judged that package
+  — and code (`derivationContainment`) checked the arithmetic anyway.
+
+**What the variant changes**: the producer becomes a **value leg** — Harvester → Derivation Architect → Derived Value
+Reviewer, no Author — whose deliverable IS the derived value; the platform computes containment and minimality on the
+Architect's own output (leaf-persist) so the Reviewer sees it, the Reviewer recomputes MEMBERSHIP against the harvest,
+and the program reads the leg's card facts (`legShape: value`, `value:`, `orphanCheck`). The human approves each leg's
+TYPE at the plan gate. Honest size of the win (design review): the fabric leg goes from 5/8 toward ~8/8 — at most a
+~1.6× gain in program release; worth doing, not a cure for four-leg compounding on its own.
+
+**What it is NOT for**: a leg that derives a value AND changes a device stays a change leg (Exhibit 5's network leg
+derived an aggregate and created loopbacks + a BGP advertisement — real config, real validation, real rollback — and
+released). Only value-ONLY legs need the new type.
+
+**Why a variant rather than editing `pov-program`**: `pov-program` releases runs today; editing its leg handling
+would have made every live run the experiment (decision D-8: build isolated, measure in a frozen window, promote later).
+
+**How to recognise YOUR case**: a class of legs keeps failing on obligations its pipeline shape imposes but its job does
+not need, while the substantive result is right — measure where the blocking items land (write-up vs substance) before
+proposing a variant, and confirm a prose patch already failed to hold.
+
+**Text: one builder, never a copy.** `pov-program`'s body is rendered by `buildProgramProtocol(p)`
+(`scripts/seed-protocol-prompts.ts`); a variant is a second params object. While value-chain lived its parameters were
+`bindingName`, `architectTemplate`, `gateDescriptionExtra`, `nodeCDescriptionSentence`, `synthesizeValueLegBlock`,
+`nodeCTemplate`, `producerDescriptionExtra` — each inserted text carrying its own leading separator, `''` rendering
+nothing. A new seam is a new parameter whose original value keeps the original byte-identical (`test:protocol-golden`).
+**Today (after promotion E2/E3)** only one variant exists, so the slot fields are gone: `ProgramProtocolParams` is
+`bindingName`, `architectTemplate`, `nodeCTemplate`, and the value-leg text is the `VALUE_LEG_*` section constants
+interpolated DIRECTLY into the builder (so `test:no-rig-identifiers` and `test:protocol-marker-declarations` read them — a
+params object hides text from both scanners). The architect role is `buildProgramArchitectGuidance()` with NO
+parameters, rendered once into `PROGRAM_ARCHITECT_GUIDANCE` and held by both `program_architect` and
+`value_chain_architect` (`===` pinned by golden). A future variant re-introduces exactly the parameters it needs.
+⚠️ **Never edit a SHARED line for the variant's sake** — the `## Pipeline DAG` deliverable line is shared with the live
+`program_architect`; a variant-only requirement goes in the variant's own parameter (B6 audit A8).
+
+**Layering: a program protocol names no domain.** Domain tokens, which tokens are which leg type, and which
+requirement rows map to which leg live in the variant's ARCHITECT ROLE and in code sets — never in the program
+protocol. Pinned: no leg-protocol token may appear in the variant more often than in `pov-program`
+(`test:protocol-golden`). Speak of "a leg the approved plan types `leg type: value`", not of a domain.
+
+**Template bindings are design, not plumbing.** A child reads its TEMPLATE's bound protocol (named mode), never its
+leg's or the program's. Check every template the variant assigns by name: `pov-program`'s Node C (`Change Reviewer`)
+is bound to `network-provisioning-protocol`, so it reads a domain protocol at program tier — value-chain gave its
+Node C a dedicated row bound to NO protocol (decision D1). **Since pov-program 2.0.0 its Node C is likewise unbound**
+(`Program Integration Reviewer`, protocol `mode: none`, no universal-rules preamble). Assign templates by EXACT name and
+gate a deploy on an exact-name SQL read: a missing name binds the nearest row SILENTLY (fuzzy contains-tier), and the two
+Integration Reviewer rows share a substring. See `cline_docs/follow-ups/role-protocol-binding-audit-2026-10-02.md`.
+
+**Registration additions for a variant** (beyond §7):
+- the short name in `PROGRAM_PROTOCOL_NAMES` (register while DRAFT — retroactive by design);
+- `PROGRAM_PROTOCOL_ROWS` in `protocol-dependence-anchors.ts` (the shared pairs pin both rows from one list) + a
+  MEASURED `EXPECTED_MARKER_COUNTS` entry (`--print-counts`);
+- `NON_PROGRAM_LEG_PROTOCOLS` in `audit-role-guidance-coverage.ts` for anything the ORIGINAL's architect must not
+  offer, plus a vocabulary check for the variant's architect scoped to its sanctioned-token sentence. (As built for
+  value-chain, `network-derivation` was allowlisted per-original and a separate value-chain vocabulary audit ran; at
+  promotion E3 the entry was DELETED and the token ADDED to the one Architect vocabulary, and the separate audit was
+  removed — the coverage audit now reads only the sanctioned sentence, fails closed, and fails on a duplicated sentence.
+  The retired variant's own row is allowlisted as "retired program tier".)
+- size budgets in `test:protocol-golden` (the variant's ceiling relative to the original; raise only as a recorded
+  owner decision — value-chain is pov-program + 5,000, accepted 2026-10-02);
+- a new owning seed for the variant's templates that REFUSES a name collision with another role/protocol.
+
+**Go-live order**: seed the variant's templates BEFORE the ACTIVE flip (the reverse leaves an ACTIVE protocol
+assigning a template that does not exist), in one sitting; flip via the seed source.
+
+**Retrospective pass**: every variant review also yields findings about the original — file them
+(`cline_docs/follow-ups/pov-program-retrospective-from-b6-review-2026-10-02.md` is the first).
+
+**Retiring a variant at promotion (promotion E, the first worked case):** fold its text into the original as shared
+constants (golden: the original moves once, with a major version bump; the variant moves ONCE, to a tombstone, and is
+pinned by content thereafter); set its protocol row `status: 'DEPRECATED'` via the seed (status comes from the seed, so
+a revert reseeds it ACTIVE); **keep its short name in `PROGRAM_PROTOCOL_NAMES` permanently** — without it a stamped task
+composes base-only instead of failing loud — and fence that entry from every drift sweep by name; give both failure
+paths (composed and named) a message carrying the row's description (facts + a HOWTO pointer; the successor is named
+only after the regression controls pass); DEPRECATE templates bound to the retired row via per-entry seed status
+(assignment is status-blind, so the label must match behaviour); and record series breaks for every measure the fold
+moves. Record: `cline_docs/reviews/promotion-e-2026-10-05/` (PLAN-v2 §1, §E2–§E9).
 
 ---
 

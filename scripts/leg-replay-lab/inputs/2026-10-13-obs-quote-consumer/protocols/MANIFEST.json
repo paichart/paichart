@@ -1,0 +1,43 @@
+{
+  "observability-config-protocol:baseline": {
+    "file": "protocols/observability-config-protocol@1.8.0.baseline.md",
+    "sha256": "a60102e658bf35cfd7571d25664ee878acb034d067304d968fc65d30283232ef",
+    "chars": 31559
+  },
+  "observability-config-protocol:hobs19": {
+    "file": "protocols/observability-config-protocol@1.8.0.hobs19.md",
+    "sha256": "61ed2a3dc95ef380636df7978d738867a9faf150e259f3d76b49dbbef73ce8ef",
+    "chars": 33466,
+    "edits": [
+      "obs-1.9.0"
+    ],
+    "deltaChars": 1907
+  },
+  "observability-config-protocol:obs19": {
+    "file": "protocols/observability-config-protocol@1.8.0.obs19.md",
+    "sha256": "61ed2a3dc95ef380636df7978d738867a9faf150e259f3d76b49dbbef73ce8ef",
+    "chars": 33466,
+    "edits": [
+      "obs-1.9.0"
+    ],
+    "deltaChars": 1907
+  },
+  "template:cmtv2luf40000yxta18r707rp:baseline": {
+    "file": "templates/observability-state-harvester.cmtv2luf40000yxta18r707rp.baseline.md",
+    "name": "Observability State Harvester",
+    "sha256": "e3968477b189551d147cd0bcd3d42862fc2281e0c17f1fc72d6a6ddc12188ed4",
+    "chars": 11517
+  },
+  "template:cmtv2lufj0002yxta1f2ii508:baseline": {
+    "file": "templates/observability-config-rollback-author.cmtv2lufj0002yxta1f2ii508.baseline.md",
+    "name": "Observability Config Rollback Author",
+    "sha256": "3b3bdce905a8c3a0fc8a575990d3eaa2ca46cdf91c91e8969c43f860b579bcc4",
+    "chars": 18740
+  },
+  "template:cmtv2lufq0003yxtalviqqza3:baseline": {
+    "file": "templates/observability-change-reviewer.cmtv2lufq0003yxtalviqqza3.baseline.md",
+    "name": "Observability Change Reviewer",
+    "sha256": "6799a196fc010421efbbfa1405071ca04794293b027bfea7d74ed44d14c51880",
+    "chars": 24537
+  }
+}

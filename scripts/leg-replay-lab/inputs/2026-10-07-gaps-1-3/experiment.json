@@ -1,0 +1,173 @@
+{
+  "label": "2026-10-07-gaps-1-3",
+  "purpose": "Does naming the narrowing remedy (gap 1, shared VALIDATION_SHAPE_CLAUSE move 1) and an observability allow/deny validation shape (gap 3) lower Reviewer refusals on the open validation-step cluster, without regressing the approved controls? Nodes, controls and text pairs per cline_docs/reviews/refusal-root-cause-2026-10-07/READ.md \u00a73/\u00a76.",
+  "n": 5,
+  "flags": {
+    "CONNECTED_OUTPUT_SANITIZE_ENABLED": "true",
+    "FORM_CORRECTION_ENABLED": "true"
+  },
+  "baseline": {
+    "comment": "OLD text = the protocol rows LIVE in production when this config was built (obs 1.6.0, terraform 1.12.1), pinned by sha256 so a later reseed cannot silently change the baseline. It is NOT the text every node originally ran under (O1 1.4.0, O4/O5/C-1002 1.5.0); use --variant historical for that.",
+    "protocols": {
+      "observability-config-protocol": {
+        "file": "protocols/observability-config-protocol@1.6.0.baseline.md",
+        "version": "1.6.0",
+        "sha256": "09833e69505f8c407a1397643b9093823dd8735303776512afd13bcebd3bf114"
+      },
+      "terraform-iac-protocol": {
+        "file": "protocols/terraform-iac-protocol@1.12.1.baseline.md",
+        "version": "1.12.1",
+        "sha256": "0329e1d3ebf1d23b417825e3a1006263f97f9c8a866c8e0d04bba31b802a5801"
+      }
+    }
+  },
+  "variants": {
+    "baseline": {
+      "edits": []
+    },
+    "gap1": {
+      "edits": [
+        "edits/gap1-validation-shape-move1.json"
+      ]
+    },
+    "gap3": {
+      "edits": [
+        "edits/gap3-obs-access-control.json"
+      ]
+    },
+    "nodirective": {
+      "edits": [],
+      "dropTemplateDirective": true,
+      "comment": "TEMPLATE-SENT-TWICE fix A: baseline protocol, raw template Directive dropped from the user message (Author + Reviewer). Run on approved controls."
+    }
+  },
+  "nodes": [
+    {
+      "id": "O5",
+      "authorExecutionId": "cmurnitt9029zyxx9r8fb7n0i",
+      "kind": "refused",
+      "originalVersion": "1.5.0",
+      "variants": [
+        "baseline",
+        "gap1"
+      ],
+      "why": "10-03 obs: `Expected output: NOT 403` (a negation, unlabelled) \u2014 gap 1's target"
+    },
+    {
+      "id": "O7",
+      "authorExecutionId": "cmuwby46000jmyx9eltfdr4z1",
+      "kind": "refused",
+      "originalVersion": "1.6.0",
+      "variants": [
+        "baseline",
+        "gap1",
+        "gap3"
+      ],
+      "why": "10-06 obs: V2 'Must contain / Must NOT contain' prose \u2014 gap 1 (and gap 3's access-control step). NOTE: gap 2 (the quote-your-own-file contradiction) is being fixed in a separate text batch and is NOT in these texts, so O7's result still carries that contradiction"
+    },
+    {
+      "id": "O4",
+      "authorExecutionId": "cmurilb0n01mwyxx9os3mqaqf",
+      "kind": "refused",
+      "originalVersion": "1.5.0",
+      "variants": [
+        "baseline",
+        "gap3"
+      ],
+      "why": "10-02 obs: no 4317 admitted-sender check; reviewer remedy `nc -z` cannot see an in-location deny \u2014 gap 3"
+    },
+    {
+      "id": "O1",
+      "authorExecutionId": "cmunduty100dbyx7p74tnwd7r",
+      "kind": "refused",
+      "originalVersion": "1.4.0",
+      "variants": [
+        "baseline",
+        "gap3"
+      ],
+      "why": "09-30 obs: a containment step that compares a value with a copy of itself \u2014 gap 3"
+    },
+    {
+      "id": "C-1002",
+      "authorExecutionId": "cmuqs1qfz0026yxxab7u91i5o",
+      "kind": "approved-control",
+      "originalVersion": "1.5.0",
+      "variants": [
+        "baseline",
+        "gap1",
+        "gap3",
+        "nodirective"
+      ],
+      "why": "10-02 obs APPROVED: `grep -A 2 \"listen 4317\"` read-back (READ.md \u00a77: its literal is unsatisfiable \u2014 an approved package with a latent form defect)"
+    },
+    {
+      "id": "C-1004",
+      "authorExecutionId": "cmutj5f1x004ayx0g9bzbsssv",
+      "kind": "approved-control",
+      "originalVersion": "1.6.0",
+      "variants": [
+        "baseline",
+        "gap1",
+        "gap3",
+        "nodirective"
+      ],
+      "why": "10-04 obs APPROVED: Steps 2 & 3 quote exact, byte-identical expected file content"
+    },
+    {
+      "id": "TF",
+      "authorExecutionId": "cmuwbwxvw00jdyx9eoy7ra77r",
+      "kind": "approved-control",
+      "originalVersion": "1.12.1",
+      "variants": [
+        "baseline",
+        "gap1",
+        "nodirective"
+      ],
+      "why": "10-06 terraform APPROVED: cross-domain control for the shared clause; terraform 1.10.0's 'no comparison shape' rule must still hold"
+    }
+  ],
+  "measures": [
+    {
+      "name": "conditionAsExpectedOutput",
+      "kind": "expected-output-blocks",
+      "contentRegex": "\\bmust\\s+(not\\s+)?contain\\b|\\bNOT\\s+\\d{3}\\b|^\\s*NOT\\b|\\bnot equal\\b|!=",
+      "lineRegex": "expected (output|result)[^\\n]*\\b(NOT\\s+\\d{3}|must\\s+(not\\s+)?contain)",
+      "why": "gap 1 \u2014 an expected output that states a condition. Should FALL on the refused nodes"
+    },
+    {
+      "name": "presenceShapeLabels",
+      "kind": "count",
+      "regex": "PRESENCE:",
+      "flags": "g",
+      "why": "the labelled sanctioned shape \u2014 must NOT regress on the controls"
+    },
+    {
+      "name": "printsDecision",
+      "kind": "count",
+      "regex": "echo\\s+['\"]?(PASS|FAIL)|grep\\s+-c\\b|\\|\\s*wc\\s+-l",
+      "flags": "gi",
+      "why": "gap 1's named remedy (PASS/FAIL, a count). Should RISE where gap 1 applies"
+    },
+    {
+      "name": "admittedDeniedWords",
+      "kind": "count",
+      "regex": "\\b(admitted|denied)\\b",
+      "flags": "gi",
+      "why": "gap 3 \u2014 a lexical proxy for an admitted/denied probe pair; READ the samples before believing it"
+    },
+    {
+      "name": "selfComparison",
+      "kind": "count",
+      "regex": "applied\\s*==\\s*published|print\\(\\s*applied",
+      "flags": "gi",
+      "why": "gap 3 \u2014 O1's self-comparison shape. Should be 0"
+    },
+    {
+      "name": "protocolAwareClient",
+      "kind": "count",
+      "regex": "\\bgrpcurl\\b|grpc_health_probe|curl\\s+[^\\n]*--http2",
+      "flags": "gi",
+      "why": "gap 3 \u2014 a client that can see an HTTP/gRPC-layer deny"
+    }
+  ]
+}

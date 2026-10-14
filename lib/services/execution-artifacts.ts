@@ -42,6 +42,7 @@ import type { AccumulatedUsage } from '@/lib/agents/harness/agentic-tool-loop';
 import { assessScoreIntegrity } from '@/lib/agents/harness/parse-confidence';
 import { parseReviewerVerdict, REVIEWER_ROLES } from '@/lib/agents/harness/parse-verdict';
 import { computeEvidenceGrading } from '@/lib/agents/harness/evidence-grading';
+import { computeReviewerWarnings } from '@/lib/agents/harness/reviewer-warnings';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { sliceSurrogateSafe } from '@/lib/utils/surrogate-safe';
 import { stripHtmlEventHandlers } from '@/lib/utils/sanitization';
@@ -51,9 +52,11 @@ import { stripHtmlEventHandlers } from '@/lib/utils/sanitization';
  * LLM prose before it lands in report.md (rendered by the GUI artifact viewer
  * regardless of which path created it — stored-XSS surface).
  *
- * Apply ONLY to freshly generated text (report.md `source === 'self'` body and
- * the extraction-failure fallback body). Upstream-extracted content was already
- * sanitized when its own execution wrote it — re-running would double-process.
+ * Applied to freshly generated text (report.md `source === 'self'` body, the
+ * extraction-failure fallback body, and the reviewer-warnings section). ⚠️ The
+ * upstream-extracted body is NOT sanitised anywhere today — a leg's source child has a
+ * dependent, so its own report.md is never produced and its text never passed here
+ * (corrected 2026-10-08, WARNINGS-INVISIBLE panel AE F7 / MA F2; filed for sec-ops).
  * (Formerly inline in stream/route.ts only; the engine wrote raw finalResponse —
  * the parity hole found by the convergence review, agent-execution I-1.)
  */
@@ -341,6 +344,12 @@ export interface ExecutionResultJsonInput {
    *  prompt actually carried — mode, base/delta rows+versions, stampSource, preambleChars. A FACT
    *  (Protocol 10): transcribed from the injection, never judged here. */
   protocolInjection?: object | null;
+  /**
+   * COMPLETE-THEN-FAIL (2026-10-05, DESIGN-v2 §3.5): the post-completion failure FACT — present ONLY on the
+   * completion-anchored rescue, whose `finalResponse` is a PLATFORM-authored record. When present the builder emits it
+   * (compact ⇒ before finalResponse) and does NOT compute `keepBestFacts` over the platform text (v2 §3.2 step 4).
+   */
+  postCompletionFailure?: object | null;
 
   // Metrics
   turnCount: number;
@@ -379,6 +388,24 @@ export interface ExecutionResultJsonInput {
    *  derived into `toolLoop.deliverableTruncated`. NESTED under toolLoop by design (E3b): toolLoop is
    *  whitelisted and copied verbatim, so it survives the hoist with no whitelist edit. */
   finalStopReason?: string | null;
+  /** Package form check (2026-10-07, mechanical-reflection-trigger Step A): the `config_change_author`
+   *  form fact (hunk arithmetic + elision markers). NESTED under toolLoop by design (E3b) — beside the
+   *  sibling pass flags `correctionTurnUsed` / `diagnosticRetryUsed`, and copied verbatim by the pick, so
+   *  it survives the hoist with NO whitelist edit; a top-level `formCheck` would be stripped silently.
+   *  Emitted ONLY when supplied: every non-eligible role and the completion-anchored rescue stay
+   *  byte-identical (plan §7a). Built by `computeFormCheckFact` (lib/agents/harness/package-form-check.ts). */
+  formCheck?: object | null;
+  /** Requirements form check (2b, 2026-10-09): the `requirements_author` publish-check fact + its correction record
+   *  (`runRequirementsFormStep`, lib/agents/harness/requirements-form-correction.ts). NESTED under toolLoop (E3b) for the
+   *  same reason as `formCheck`; emitted ONLY when supplied, so every other role stays byte-identical. */
+  requirementsFormCheck?: object | null;
+  /** Reflection calls (#89 correction, budget fail-fast, form correction, #90) that ERRORED — `{site, status,
+   *  errorType, errorCode}` per call (`reflectionErrorFact`, agentic-tool-loop.ts). Opus 5.5 loop audit, 2026-10-07:
+   *  those passes fall back silently by design, and preserved thinking 400s an edited history only on customer orgs
+   *  created on/after 2026-08-31 — never visible from the platform's own org. NESTED under toolLoop (E3b: whitelisted,
+   *  copied verbatim, survives the hoist with no whitelist edit). Emitted ONLY when non-empty: every clean execution's
+   *  bytes and key order are unchanged. */
+  reflectionErrors?: Array<{ site: string; status: number | null; errorType: string | null; errorCode: string | null }> | null;
 
   // Path-specific extensions (Vercel-AI-SDK fields emitted by stream path only —
   // engine uses Anthropic SDK directly and doesn't surface these as artifact fields)
@@ -476,7 +503,9 @@ function truncateToolCallResults(
  *             truncationRetryUsed, truncationRetryRecovered, truncationRetrySkippedReason,
  *             truncationRetryMaxTokens, truncationRetryStopReason,
  *             truncationRetryDiscardedChars, finalStopReason,
- *             deliverableTruncated, toolErrorResultCount}
+ *             deliverableTruncated, toolErrorResultCount, (config_change_author only) formCheck,
+ *             (requirements_author only) requirementsFormCheck,
+ *             (only when a reflection call errored) reflectionErrors}
  *   Stream extensions (Vercel-AI-SDK only): functionCall, webSearchResults,
  *             citations, searchQueries
  */
@@ -586,16 +615,48 @@ export function deriveChainedContextSignal(inputContext: unknown): ChainedContex
  * survive. Pinned by E3d in the parity suite and by RW1/RW2 in `test-lean-card-facts.ts` — the
  * read-side tripwire that would have caught the first defect the day it shipped.
  */
-export const RESULT_JSON_SUMMARY_KEYS = ['toolLoop', 'confidenceScore', 'reviewerVerdict', 'derivationContainment', 'dialectLint', 'contractPropagation', 'protocolInjection', 'qualityMetrics', 'markerPresence', 'rollbackContainment', 'errorCategory', 'chainedContext', 'supersession', 'verdictFreshness'] as const; // markerPresence: H-4 (2026-09-10) and rollbackContainment: net #3 (2026-09-11) are DELIBERATE top-level additions — never unlisted siblings. rollbackDisposition rides NESTED inside rollbackContainment (E3b); promoting it here would strip it at the hoist. errorCategory + chainedContext (2026-09-16): see the header — both were canonical top-level keys of this builder that the card READ and this list DROPPED
+export type ReflectionPassSpender = '#89' | 'form-correction' | 'requirements-form-correction' | '#90';
+/** G6: the one reflection pass's spender, by the shipped precedence. An ATTEMPTED form or requirements correction
+ *  spends it even when the call failed (llm-error) — the pattern doc names that trade. */
+export function reflectionPassSpentBy(i: {
+  correctionTurnUsed?: boolean; diagnosticRetryUsed?: boolean; formCheck?: object | null; requirementsFormCheck?: object | null;
+}): ReflectionPassSpender | null {
+  const attempted = (f: object | null | undefined) => (f as { correction?: { attempted?: boolean } } | null | undefined)?.correction?.attempted === true;
+  if (i.correctionTurnUsed) return '#89';
+  if (attempted(i.formCheck)) return 'form-correction';
+  if (attempted(i.requirementsFormCheck)) return 'requirements-form-correction';
+  if (i.diagnosticRetryUsed) return '#90';
+  return null;
+}
+
+export const RESULT_JSON_SUMMARY_KEYS = ['toolLoop', 'confidenceScore', 'reviewerVerdict', 'derivationContainment', 'dialectLint', 'contractPropagation', 'protocolInjection', 'qualityMetrics', 'markerPresence', 'rollbackContainment', 'errorCategory', 'chainedContext', 'supersession', 'verdictFreshness', 'postCompletionFailure', 'reviewerWarnings', 'quoteFidelity'] as const; // markerPresence: H-4 (2026-09-10) and rollbackContainment: net #3 (2026-09-11) are DELIBERATE top-level additions — never unlisted siblings. rollbackDisposition rides NESTED inside rollbackContainment (E3b); promoting it here would strip it at the hoist. errorCategory + chainedContext (2026-09-16): see the header — both were canonical top-level keys of this builder that the card READ and this list DROPPED
 // RWF C.3 (2026-09-26): `supersession` (keep-best's audit, written by computeSelfSupersession — NOT a net) and
 // `verdictFreshness` (a leg-synthesize net) are deliberate top-level additions: the pick stripped `supersession`
 // until now, so a retry that lost, or was skipped, was invisible on the card.
+// COMPLETE-THEN-FAIL (2026-10-05, DESIGN-v2 §3.5): `postCompletionFailure` — this whitelist entry IS its hoist (no
+// agent-results-handler code). Its O2 label `finalResponseSource: 'platform-post-completion'` rides NESTED inside it
+// (E3b): a top-level `finalResponseSource` would be stripped here. ⚠️ ABSENCE of
+// `postCompletionFailure.finalResponseSource` means "UNCLASSIFIED", NOT "model-authored": REFUSAL_MESSAGE
+// (finalize-response.ts) and the budget fail-fast text are platform-authored and unlabelled today (stamping a source
+// on every row is filed as D1). Deliberately NOT rendered on the lean card in phase 1 (Q5).
+// VERBATIM-QUOTE-OMISSION (2026-10-13): `quoteFidelity` — a deliberate top-level addition (a new net), stamped on
+// Harvester and Author leaves. Its findings and `quoteFidelityDisposition` ride NESTED inside it (E3b). Whitelisted so
+// agent.results returns it; deliberately RENDERED NOWHERE (no card segment, no §6) until the Group C lab (owner B1/B2).
 
 /**
  * The bulky payloads of a result.json, in their builder order. Everything else (every compact fact) goes
  * BEFORE them. See orderResultJsonForPersist.
  */
 export const RESULT_JSON_BULKY_TAIL_KEYS = ['finalResponse', 'toolCalls', 'functionCall', 'webSearchResults', 'citations', 'searchQueries'] as const;
+
+/**
+ * Compact facts persisted AFTER the bulky payloads, deliberately (PLACEHOLDER-APPLIES-AS-LITERAL, 2026-10-13; review B1
+ * mitigation). A fact for the OPERATOR, not for any agent reasoner: placed past `toolCalls` it costs nothing in the 8 KB
+ * tool-result head a verbose `agent.results` reader sees first (P5: that head is the binding constraint), and it does
+ * not move `finalResponse`. It is still in the artifact, and a reader that pages (`read_more`) or fetches the raw
+ * artifact can reach it — this reduces exposure, it does not remove it.
+ */
+export const RESULT_JSON_OPERATOR_TAIL_KEYS = ['applyBlockPlaceholder'] as const;
 
 /**
  * PERSIST-TIME key order (RWF C.3, 2026-09-26). The builder above puts compact facts before the bulky
@@ -606,10 +667,11 @@ export const RESULT_JSON_BULKY_TAIL_KEYS = ['finalResponse', 'toolCalls', 'funct
  * such key at once, including ones not yet written. Relative order is preserved on both sides.
  */
 export function orderResultJsonForPersist<T extends Record<string, unknown>>(json: T): T {
-  const bulky = new Set<string>(RESULT_JSON_BULKY_TAIL_KEYS);
+  const tail = new Set<string>([...RESULT_JSON_BULKY_TAIL_KEYS, ...RESULT_JSON_OPERATOR_TAIL_KEYS]);
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(json)) if (!bulky.has(k)) out[k] = v;
+  for (const [k, v] of Object.entries(json)) if (!tail.has(k)) out[k] = v;
   for (const k of RESULT_JSON_BULKY_TAIL_KEYS) if (k in json) out[k] = (json as Record<string, unknown>)[k];
+  for (const k of RESULT_JSON_OPERATOR_TAIL_KEYS) if (k in json) out[k] = (json as Record<string, unknown>)[k];
   return out as T;
 }
 
@@ -627,7 +689,7 @@ export function buildExecutionResultJson(input: ExecutionResultJsonInput): Recor
     taskId, taskTitle, agentRole, modelUsed, finalResponse, confidenceScore,
     confidenceCapped, originalConfidence,
     executionDegradation, protocolValidation, harnessContext,
-    chainedContext, protocolInjection,
+    chainedContext, protocolInjection, postCompletionFailure,
     turnCount, maxToolTurns, toolCallResults, successfulToolCalls, failedToolCalls,
     executionTime, tokensUsed, mcpFunctions,
     correctionTurnUsed, diagnosticRetryUsed = false, budgetFailFastUsed = false,
@@ -635,6 +697,9 @@ export function buildExecutionResultJson(input: ExecutionResultJsonInput): Recor
     truncationRetrySkippedReason = null, truncationRetryMaxTokens = null,
     truncationRetryStopReason = null, truncationRetryDiscardedChars = null,
     finalStopReason = null,
+    formCheck = null,
+    requirementsFormCheck = null,
+    reflectionErrors = null,
     extensions = {},
     logger, executionId,
   } = input;
@@ -657,10 +722,19 @@ export function buildExecutionResultJson(input: ExecutionResultJsonInput): Recor
   // builder (see the note below): `raw` carries the reviewer's terminal block verbatim and is the
   // bulky member, so the compact grading fact is emitted BEFORE it. Appending after `raw` would put
   // a field that exists to be read behind the thing most likely to be cut.
+  // Reviewer warnings (WARNINGS-INVISIBLE, 2026-10-08): every line-start `NON-BLOCKING WARNING (<id>):` label
+  // above the terminal marker, transcribed (Protocol 10 — never a gate input). NESTED here for the same E3b
+  // reason as evidenceGrading, and placed BEFORE it and `raw` (head-slice contract). Present whenever the
+  // verdict parses, so `warnings: []` means "checked, none" — three states: absent / [] / [...].
+  // `untranscribedLabelLines` is an unrendered diagnostic; `overflowCount` appears only past MAX_WARNINGS.
+  const rw = parsedVerdict ? computeReviewerWarnings(finalResponse) : null;
   const reviewerVerdict = parsedVerdict
     ? {
         approved: parsedVerdict.approved,
         blocking: parsedVerdict.blocking,
+        warnings: rw!.warnings,
+        untranscribedLabelLines: rw!.untranscribedLabelLines,
+        ...(rw!.overflowCount ? { warningsOverflowCount: rw!.overflowCount } : {}),
         evidenceGrading: computeEvidenceGrading(finalResponse),
         raw: parsedVerdict.raw,
       }
@@ -700,6 +774,8 @@ export function buildExecutionResultJson(input: ExecutionResultJsonInput): Recor
     // did this agent actually run under" answerable from the artifact (stampSource makes the F1
     // stream-snapshot class visible in prod). COMPACT → before finalResponse, per the contract.
     ...(protocolInjection ? { protocolInjection } : {}),
+    // COMPLETE-THEN-FAIL fact — compact, so before finalResponse; head-slice-safe on every fetch.
+    ...(postCompletionFailure ? { postCompletionFailure } : {}),
     qualityMetrics: {
       toolCallSuccess: {
         total: toolCallResults.length,
@@ -714,11 +790,14 @@ export function buildExecutionResultJson(input: ExecutionResultJsonInput): Recor
     // synchronous self-supersession judgment + forensics. Facts only (Protocol 10) — the
     // conjunctive catastrophic rule lives at the terminal-persist comparison, not here.
     // Emitted by the canonical builder so BOTH paths carry them (dual-path parity).
-    keepBestFacts: {
-      deliverableChars: finalResponse?.length || 0,
-      fencedBlockCount: Math.floor(((finalResponse || '').match(/```/g) || []).length / 2),
-      scoreIntegrity: assessScoreIntegrity(finalResponse, confidenceScore ?? null),
-    },
+    // Not computed on a platform-authored record (COMPLETE-THEN-FAIL): it would describe no deliverable.
+    ...(postCompletionFailure ? {} : {
+      keepBestFacts: {
+        deliverableChars: finalResponse?.length || 0,
+        fencedBlockCount: Math.floor(((finalResponse || '').match(/```/g) || []).length / 2),
+        scoreIntegrity: assessScoreIntegrity(finalResponse, confidenceScore ?? null),
+      },
+    }),
     toolLoop: {
       totalTurns: turnCount,
       hitMaxTurns: turnCount >= maxToolTurns,
@@ -743,6 +822,20 @@ export function buildExecutionResultJson(input: ExecutionResultJsonInput): Recor
       // INVISIBLE in structured facts — see countToolErrorResults() for the full rationale.
       // Emit-only fact (Protocol 10): no consumer, no control-flow, `success` semantics untouched.
       toolErrorResultCount: countToolErrorResults(toolCallResults),
+      // Package form check (2026-10-07): LAST in toolLoop and only when supplied, so an absent input leaves
+      // every existing byte (and key order) of this object unchanged.
+      ...(formCheck ? { formCheck } : {}),
+      // Requirements form check (2b, 2026-10-09): requirements_author only; absent ⇒ no byte changes.
+      ...(requirementsFormCheck ? { requirementsFormCheck } : {}),
+      // Errored reflection calls (2026-10-07): only when non-empty, after formCheck, so absence changes no byte.
+      ...(reflectionErrors && reflectionErrors.length ? { reflectionErrors } : {}),
+      // G6 (2026-10-10, AR M3): WHO spent the run's ONE reflection pass, derived from the facts above in the
+      // documented precedence (#89 > form correction > requirements correction > #90). A transcription, not a new
+      // decision; emitted only when a pass was spent, so a clean execution's bytes and key order are unchanged.
+      ...(() => {
+        const by = reflectionPassSpentBy({ correctionTurnUsed, diagnosticRetryUsed, formCheck, requirementsFormCheck });
+        return by ? { reflectionPassSpentBy: by } : {};
+      })(),
     },
     executionTime: executionTime ?? 0,
     tokensUsed: tokensUsed ?? 0,

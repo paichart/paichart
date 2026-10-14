@@ -93,12 +93,25 @@ judgement to exercise.
   - consuming leg (`## Consumed Values` + upstream green) ⇒ benign, discharged
   - pool `> 0` ⇒ needs-node-c (audit-vs-refusal ambiguity — was blocking `refusal-or-drop`)
   - pool parsed-EMPTY ⇒ benign `harvested-pool-empty` (live-proven Run 20260816-0734)
-  - pool absent ⇒ benign
+  - pool absent + a harvest that parsed only non-cidr entries ⇒ needs-node-c `non-cidr-only-harvest-cannot-decide`
+  - pool absent + an upstream resolved (`upstreamContainment` stamped, green or not) + NO parsed consumed block ⇒
+    **needs-node-c `consuming-leg-no-consumed-block`** (2026-10-03, CONSUMER-FAIL-OPEN fix — §9)
+  - pool absent otherwise ⇒ benign `nothing-to-derive`
 - **`harvest-block-missing-or-unparseable`** = the derived block IS present but the leg's own harvest
   has no parseable CIDR set — the CONSUMING-leg state (terraform-iac re-emits the chained aggregate
   but harvests bucket/state). Non-blocking ONLY when `upstreamContainment.green` (pov-program
   v1.0.18). A *deriving* leg with a genuinely broken CIDR harvest stamps the same reason and stays
-  blocked.
+  blocked. **Its disposition reason states which (R5, 2026-10-05):** green ⇒ benign
+  `consuming-leg-upstream-discharged`; not green ⇒ blocking `consuming-leg-upstream-not-green`; NO upstream
+  resolved ⇒ blocking **`harvest-missing-or-unparseable-no-upstream`** (a producing/standalone leg — was
+  mis-named `consuming-leg-upstream-absent` on 2 of 2 live stamps, 2026-08-22 network and 2026-09-16 k8s
+  podrange); `consuming-leg-upstream-absent` now fires ONLY when the fact carries
+  `upstreamDeliverableMissing > 0` (a PIPELINE predecessor chained via the `pipeline-index.json` fallback —
+  0 corpus occurrences, true by construction). ⚠️ **Series cut 2026-10-05**: a count of the old string
+  across the cut mixes two meanings; read pre-cut stamps of it as "no upstream resolved", never as
+  "consumer". Pre-2026-07-29 facts carry no `upstreamContainment` at all, so a pure recompute of one reads
+  `no-upstream` even for a consumer — re-derive through the enrichment, never the bare function.
+  Record: `cline_docs/reviews/r4-r5-2026-10-05/REPORT.md`.
 
 ### `## Consumed Values` `kind` is a CLOSED set
 
@@ -331,6 +344,10 @@ lines, not as an instruction that binds.
   machine-parsed blocks the platform found (harvested / derived / consumed). A **deliberate
   top-level addition** to `RESULT_JSON_SUMMARY_KEYS`, never an unlisted sibling. Rendered on the
   lean card. Suites: `test:marker-presence`, `test:marker-contract-claims`.
+  - **Heading furniture, 2026-10-08 (MARKER-LETTERED-HEADING):** a parenthesised lettered ordinal
+    (`(f)`, `(e2)`) is furniture like `6.`; bare `P1 ` / `7.2 ` / free text stay unparsed (live
+    non-markers). Fact-coverage change only. Pins: `test:derivation-containment` LETTERED tests,
+    `test:marker-presence`. Method: corpus census + `replay:parse-identity` + the lab samples.
 - `contractPropagation` — `lib/agents/harness/contract-propagation-enrichment.ts`, consuming
   dialect-lint's `canonicalStanzaNeedles` so "what counts as a required line" has ONE definition.
   Replay: `npm run replay:contract-propagation -- <legTaskId>`. Whitelisted; **not** rendered on the
@@ -423,7 +440,7 @@ carries this taskId": derivation harvest/Author/fallback, dialect-lint Author, r
 the rollback leg-synthesize hoist. The chainer skips superseded and R8-empty runs, so once leg retry makes re-runs
 routine, the Reviewer and the gate would silently read different packages.
 
-- **field is a closed union** (`finalResponse` | `rollbackContainment`), with one literal query per member.
+- **field is a closed union** (`finalResponse` | `rollbackContainment` | `derivationContainment` | `reviewerVerdict` | `reviewerWarnings` | `toolCalls` — the last added 2026-10-13 for E1 and quoteFidelity's Author point), with one literal query per member.
 - **The jsonb projection is load-bearing.** The hoisted stamp's key order IS the jsonb rendering, and the
   equivalence gate compares bytes. Never `JSON.parse(content)[field]`.
 - **A plain module, not `ctx`**, so the replay runners can still call enrichments directly.
@@ -532,3 +549,45 @@ markerPresence. It does NOT cover `verdictFreshness.match`, the `supersession` s
 The re-measure MI-4 schedules for `verdictFreshness` therefore needs an ad-hoc query until 1b gains a row. A fact
 whose presence is counted but whose VALUE is never read is the exact dormant-by-age blindness the inventory exists
 to catch.
+
+## 9. Value-chain (2026-10-02 → 2026-10-03): the value-leg net and two fail-OPEN consumer paths (CONSUMER-FAIL-OPEN FIXED 2026-10-03; PARSE-STEAL open)
+
+**The value-leg net.** `lib/agents/harness/value-leg-containment-enrichment.ts` — `VALUE_LEG_PROTOCOLS`,
+`computeValueLegContainmentFact` (leaf-persist on the `derivation_architect` child; empty `## Derived Values` = absent,
+S2b) and `hoistValueLegContainment` (leg SYNTHESIZE; four tripwires — value leg WITH an author child, no Architect stamp,
+a PIPELINE upstream, harvest-execution mismatch — each a `value-leg-…` reason that falls to `unrecognised-reason:`
+blocking). Registered as `derivationContainment@leaf-persist` (registry 7 → 8). Proven additive by a back-to-back
+read-only production replay over 2,196 tasks: 0 changed lines, 1,731 added = one informational "does not apply" line per
+leaf (`scripts/replay-nets-byte-identity.sh`). Live 5/5 in the frozen window: every value leg `checked, 0 violations`,
+`benign (checked-clean)`, `legShape: value`, `cidr 10.99.0.0/27`.
+
+**PARSE-STEAL (found run 1).** A marker heading with no block of its own claims the NEXT section's fenced block
+(`parseBlockAt`, `derivation-containment.ts` ~442). Run 1's terraform Author wrote an empty `## Derived Values` heading
+then a correct `## Consumed Values`; the parser read the consumed block as derived, took the checked path against an
+empty pool (`benign / checked-clean` by construction) and **check 1 never ran**. Measured over 2,529 parses: 6 real
+differences, gate-affecting once (run 1, hand-verified correct), 3 false `markerPresence` stamps. Fix: bound a heading's
+block to its own section; fixtures = the 6 + the 29 in-fence headings. `cline_docs/reviews/parse-steal-2026-10-03/`.
+
+**CONSUMER-FAIL-OPEN (found run 5).** The observability Author emitted its consumed block with NO heading;
+`markerPresence.consumedValues: false`. The `no-derived-values-block` arm of the disposition (~1006-1050): `consumedPresent`
+false → past both discharge arms → `harvestedCount` undefined and no cidr `harvestedByKind` → `out('benign',
+'nothing-to-derive')`. The arm never consults `upstreamContainmentGreen`, so "a consumer that declared nothing" reads
+exactly like "a leg with nothing to derive"; the program-gate conjunct read benign and only the LLM reviewer stopped the
+release. Fix direction: `upstreamContainmentGreen !== undefined && !consumedPresent` ⇒ a distinct reason
+(`consuming-leg-consumed-absent`) at `needs-node-c` or `blocking` — the "none declared" line FU1 D2 already specced.
+Corpus-measure first (legs with `upstreamContainment` present + `nothing-to-derive`, read each). Check the public
+`@paichart/containment-checks` mirror.
+
+**✅ CONSUMER-FAIL-OPEN FIXED — live 2026-10-03 (`71ffd705`, pattern (h) batch 2).** New last arm of the
+`no-derived-values-block` branch: `upstreamContainmentGreen !== undefined` and no consumed block ⇒ `needs-node-c`
+`consuming-leg-no-consumed-block` (escalate, not block: an ordering-only edge or a documentation-only use applies nothing).
+Byte-identity replay over 2,336 tasks: exactly 8 consuming legs changed (4 observability 09-19→10-03 + 4 July terraform
+consumers that predate the consumed-values rule), 0 other lines; every one was hand-checked to apply its upstream's
+published value. Pins: CFO-1..8, CFO-C1, DC6 (mutation-proven). Program SYNTHESIZE BRANCH D3 + a `change_reviewer` Node C
+bullet discharge it. Residuals (not fixed): an edge-less consumer, and a leg whose Derived and harvest blocks both fail to
+parse, still read `nothing-to-derive`. The public `@paichart/containment-checks` package lags (X28 + this fix) until
+republished.
+
+Both are the SAME shape by different routes (wrong block parsed / no block parsed) and both fail OPEN on the consumer
+side. Neither touched configuration content in the window — the values were correct — but each let a gate input read
+benign without the mechanical check having run.

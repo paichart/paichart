@@ -1,5 +1,112 @@
 # Agent Execution Engine Discovery
 
+## 🆕 2026-10-07 — Opus 5.5 loop audit: reflection calls keep the replayed-thinking prefix (C1/C2) + reflectionErrors fact
+
+Preserved thinking (Opus 5.5, Fable 5.1) binds a replayed `thinking` block to system + TOOL SET + earlier messages; the
+'reflection' calls (#89, budget fail-fast, form correction, #90) sent NO tools ⇒ every replayed block invalid (400 on orgs
+created ≥ 2026-08-31 — under BYOK, CUSTOMER orgs only). Fix: capability `bindsThinkingToPrefix` (opus-5-5, fable-5-1) ⇒
+reflection = the full-mode options with ONLY `functionCall: 'none'`; every other model's reflection request stays
+BYTE-IDENTICAL (wire golden: test-llm-call-options §3c). C2: an un-adopted #89 removes its two messages. An errored
+reflection call is stamped `toolLoop.reflectionErrors: [{site,status,errorType,errorCode}]` (nested, only when non-empty)
++ one warn line. Record: `cline_docs/reviews/opus55-loop-audit-2026-10-07/` (AUDIT.md, V1-V2-VERIFICATION.md).
+
+```bash
+grep -c "bindsThinkingToPrefix(cfg.model)" lib/agents/harness/agentic-tool-loop.ts                       # expect 1 — the ONE gate in buildLlmCallOptions
+grep -c "forcedToolChoice: false, bindsThinkingToPrefix: true" lib/services/llm/model-capabilities.ts    # expect 1 — opus-5-5 (fable-5-1 is regex-derived)
+grep -c "mcpFunctions: input.mcpFunctions" lib/agents/harness/form-correction.ts      # expect 1 — form correction re-sends the tool set
+grep -c "mcpFunctions: input.mcpFunctions" lib/agents/harness/diagnostic-retry.ts     # expect 1 — #90 re-sends the tool set
+grep -c "messageHistory.length = correctionHistoryLength" lib/agents/harness/agentic-tool-loop.ts       # expect 1 — C2
+npm run test:reflection-history-binding   # expect >=61 (in test:all-validation; the binding rule, mechanised)
+```
+**Do NOT "find" as bugs**: the #89/#90 prompts still say "none are available on this turn" while an Opus reflection call
+declares the tools — `tool_choice: none` makes that true, and rewording would change Sonnet's bytes. A Sonnet run whose
+#89 is not adopted now sends a SHORTER history to form correction/#90 (C2 is universal — the old shape replayed the
+final turn twice).
+
+## 🆕 2026-10-07 — TEMPLATE-SENT-TWICE fix A: `config.prompt` is the task's OWN directive only
+
+```bash
+# Tripwire: the raw-template fallback must never return to the engine config builders (it re-sent the ~18 KB role
+# template as the user ## Directive on ~98% of executions; missed sibling of the 2026-06-09 universal-fallback removal)
+grep -c "agentTemplate?.promptTemplate" lib/services/agentExecutionConfigBuilder.ts lib/services/agentTaskService.ts   # expect 0
+npm run test:config-prompt-no-template-fallback   # expect >=9 passed (in test:all-validation)
+```
+Absent `config.prompt` ⇒ `buildAgentPromptBody` synthesizes "As a <role>, complete the following task: …". The template is the
+SYSTEM prompt only (`buildSystemPrompt`). Series cut 2026-10-07 05:10:44Z (CLAUDE.md caching section). Record: register TEMPLATE-SENT-TWICE.
+
+## 🆕 2026-10-07 — Package FORM CORRECTION (mechanical-reflection-trigger Step B): a second reflection pass, flag-gated
+
+`config_change_author` only (exact role, non-PIPELINE). Step A (`698d6070`, live) stamps `toolLoop.formCheck` on every
+Author execution. Step B adds ONE tool-less correction turn (`lib/agents/harness/form-correction.ts`) in `runExecutionCore`,
+after the fact and BEFORE `onStoringResults`/#90, gated on the fact's own decision: `FORM_CORRECTION_ENABLED=true` (env,
+default OFF; restart BOTH `paichart-mcp` and `paichart-web` to apply/kill — the core runs in both, MCP `agent.execute`
+runs `executeById` in-process: review B-H1), no #89 pass, no budget flag, and EVERY hit — fact-only kinds included —
+an UNDERCOUNT (B-M1; a header that declares fewer lines than its well-formed body). Markers, short hunks and mixed packages stay fact-only
+(`notAttemptedReason: 'hits-include-non-undercount'`). The corrected text is adopted only if the provenance guard
+passes; otherwise the original stands by reference. An ATTEMPT spends the run's one reflection pass: #89 > form > #90.
+Record: `cline_docs/reviews/mechanical-reflection-trigger-2026-10-07/BUILD-REPORT-B.md`.
+
+```bash
+grep -c "runFormCorrection(" lib/services/execution-core.ts                                # expect 1 — ONE insertion serves both adapters
+grep -c "runFormCorrection(" lib/services/agentExecutionEngine.ts                          # expect 0 — the engine delegates
+grep -c "runFormCorrection(" app/api/pov/agent/execute/stream/route.ts                     # expect 0 — the stream delegates (it wires 2 observers only)
+grep -c "correctionEnabled: formCorrectionEnabled" lib/services/execution-core.ts          # expect 1 — flag read ONCE via isFormCorrectionEnabled(); never a literal true
+grep -c "undercountOnly: true" lib/services/execution-core.ts                              # expect 1 — the turn re-asserts the Step B scope itself
+grep -c "correctionTurnUsed, formCorrectionAttempted," lib/services/execution-core.ts      # expect 1 — #90's 5th disqualifier is threaded
+grep -c "!formCorrectionAttempted" lib/agents/harness/diagnostic-retry.ts                  # expect 1 — the 5th trigger condition
+grep -c "'hits-include-non-undercount'" lib/agents/harness/package-form-check.ts       # expect 3 — header doc + the reason in the union + the decision arm (flag-off is decided FIRST)
+grep -c "allUndercount: allHitsAreUndercounts(a)" lib/agents/harness/package-form-check.ts # expect 1 — B-M1: the scope is every HIT, not every trigger hit
+grep -c "'header-start-changed'" lib/agents/harness/form-correction.ts                    # expect 2 — B-M3: start numbers pinned (the guard arm + the neutral phrase)
+grep -c "if (sb.confidence !== sa.confidence)" lib/agents/harness/form-correction.ts      # expect 1 — B-M4: the confidence line is byte-identical
+```
+**Do NOT "find" as bugs**: with the flag ON a mixed/elision package records `hits-include-non-undercount` and makes no
+call (Steve's scope, A.5 evidence); the turn's tokens fold into usage even when NOT adopted (they were spent); when
+adopted the top-level counts are the RE-CHECK of the corrected text (`textSource: 'form-correction'`, trigger hits 0) and
+`correction.decisionHits` carries what was repaired; `rawDeliverableText` stays the pre-correction loop text (truncation
+paths only, which the correction never takes). With the flag OFF the persisted fact is byte-identical to Step A.
+Suites (floors): `npm run test:form-correction-core   # expect >=15` (the REAL core, I/O stubbed) ·
+`npm run test:form-correction   # expect >=54` (incl. the M2 sha256 pins on the shipping prompt — a hash change is a
+WORDING change and needs a paid re-run of the in-scope specimens) · `npm run test:package-form-check   # expect >=57` ·
+`npm run test:sse-event-sequence   # expect >=6` (golden 34 sites; the pre-Step-B 30 must stay a subsequence).
+Kill criteria (read-only, prod): `scripts/report-form-correction-kill-criteria.sh`; MI-13 sections `PACKAGE FORM CHECK` + `PACKAGE FORM CORRECTION`.
+
+## 🆕 2026-10-05 — COMPLETE-THEN-FAIL phase 1: the completion-anchored rescue (one catch, around the loop only)
+
+A PIPELINE SYNTHESIZE that calls `task.complete` and THEN has an LLM call throw used to end FAILED with no deliverable.
+The core now catches the LOOP throw (only) and hands it to `rescueOrRethrow`: when the execution completed its OWN task
+(`metadata.completedByExecutionId` — written by the completion core's Layer 1 from `routeOpts.callingExecutionId`, an
+`AUDIT_STRIP_KEYS` member) and `deliverableSourceTaskId` has an authoritative SUCCESS, ONE DB-only builder persists
+SUCCESS (anchored CAS) with a labelled platform finalResponse + `postCompletionFailure`; every other throw is rethrown as
+the ORIGINAL object (with `postCompletionRescue` attached when the run was eligible). Design/build record:
+`cline_docs/reviews/complete-then-fail-2026-10-05/{DESIGN-v2,BUILD-REPORT}.md`.
+
+```bash
+grep -c "rescueOrRethrow(" lib/services/execution-core.ts                                 # expect 1 — the catch around runAgenticToolLoop; nothing post-loop is caught
+grep -c "attachAgenticLoopPartial(err, track, input)" lib/agents/harness/agentic-tool-loop.ts   # expect 1 — ATTACH partial state to the original error, never wrap (W1)
+grep -c "anchored: true" lib/services/execution-completion-anchored.ts                     # expect 1 — the rescue persists through the anchored (CAS) success tx
+grep -c "readAgenticLoopPartial(error)" lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts   # expect 4 — 2 per adapter (usage + serving model, captured ?? partial: F-c)
+grep -c "'completedByExecutionId'" lib/tasks/services/protected-task-metadata.ts           # expect 1 — the anchor is an audit-strip key, never a run key
+grep -c "LLM_PROVIDER_OVERLOADED" lib/services/llm/anthropic-sdk-provider.ts               # expect 1 — F-b: overloaded_error is a countable code
+```
+**Do NOT "find" as bugs**: the rescued row has `confidenceScore: null`, no `keepBestFacts`, `errorCode` null (O3) and
+a platform-authored `finalResponse` whose first line is the in-band label — all by design. The rescue never calls
+`parseConfidenceScore`, `runDiagnosticRetry` (#90) or `finalizeTextForStopReason`. **Absence of
+`postCompletionFailure.finalResponseSource` means "unclassified", NOT "model-authored"** — `REFUSAL_MESSAGE` and the
+budget fail-fast text are platform-authored and unlabelled (stamping a source on every row is filed, D1).
+O4: a terminated execution on a COMPLETED task writes the task column NULL, never FAILED
+(`writeTerminatedExecutionTaskStatus`, the failure tx + engine safety net). F-c: a FAILED row from a loop throw now
+carries its partial tokens + serving model (it used to be NULL — spend never reached `token_usage_daily`); a loop throw
+before any response persists ZEROS + the configured model, not NULL. Suites: `test:post-completion-rescue` (Part 2 needs
+the local DB) · `test:terminal-persist-shape` · `test:execution-core-boundary` (CTF-SEAM-1..3) · `test:completion-tx-shape`
+(S7–S10) · `test:agentic-tool-loop` (CTF-L1..L7). Acceptance replay: `scripts/replay-completion-anchored.ts`.
+**GUI (build review BC-L4):** the platform text does NOT reach the live GUI — there is no SSE `complete` event (v2 §3.4
+was wrong on this). A rescued stream run emits `execution_update SUCCESS`, `artifact_created` × N and a final
+`log_update` whose last line is the `Post-completion rescue:` log line; the label travels with the text only on the
+artifact surfaces (`agent.results` verbose, `fetch`, a residual chain).
+**Partial state is NON-ENUMERABLE** (build review BC-H1): `agenticLoopPartial` and the provider mark are attached with
+`Object.defineProperty(..., enumerable:false)` so pino / `JSON.stringify` never copy the raw tool log into logs. Read
+them by name (`readAgenticLoopPartial`). `postCompletionRescue` stays enumerable on purpose (small, useful in the line).
+
 ## 🆕 2026-09-14 — P2 provider-error guard at EVERY LLM call site (the silent-empty-SUCCESS class)
 
 The provider does NOT throw on an SDK failure — it RETURNS `{text:'', error:{message,code,details}}`
@@ -43,14 +150,18 @@ grep -c "PROTOCOL_ROW_NOT_ACTIVE" lib/services/execution-system-prompt.ts    # e
 ```
 A drop in the resolveTaskProtocol counts means a call site reverted to a raw metadata/title read —
 the F1 drift class. `protocolInjection` leaving the whitelist silently strips the 10th signal from
-lean surfaces. Suites: test:system-prompt-injections (37) · test:program-protocol-token (40, P3/P4).
+lean surfaces. Suites (floors — a suite's count rises with healthy work):
+```bash
+npm run test:system-prompt-injections   # expect >=43 — was documented 37; promotion E2 (2026-10-05) added the DEPRECATED composed + named retired-row cases (2a)
+npm run test:program-protocol-token     # expect >=40 — P3/P4
+```
 
 ## 🆕 2026-07-18 — derivationContainment surfacing path (YOUR lane; arithmetic is execution-facts-specialist's since the 2026-09-11 split)
 
 The CIDR under-covering check (the subnetting leaf) is execution-facts-specialist's (was pipeline-harness's until the
 2026-09-11 split) `lib/agents/harness/derivation-containment.ts` — NOT this domain. Since 2026-09-12 `execution-core.ts`
 names NO fact function: the nets run via `runNetsAtPoint` at two points (`leaf-persist`, `leg-synthesize`) —
-`grep -c "runNetsAtPoint(" lib/services/execution-core.ts   # expect 2` — so adding a fact is a registry entry, never a core call site. But the FACT rides your artifact-gen
+`grep -c "runNetsAtPoint(" lib/services/execution-nets.ts   # expect 2` (moved 2026-10-05 into the shared `stampExecutionNets` helper, which the core and the COMPLETE-THEN-FAIL rescue both call — `grep -c "stampExecutionNets(" lib/services/execution-core.ts lib/services/execution-completion-anchored.ts   # expect 2`) — so adding a fact is a registry entry, never a core call site. But the FACT rides your artifact-gen
 + result-surfacing path, and the evidence-flow arc shipped two fixes here. E1: the results-handler
 hoist missed PIPELINE execs entirely (they persist `pipeline-index.json`, not `result.json`); GAP-1:
 the size-capped lean card is a separate surface that needs the shared `leanFactsLine` helper to print
@@ -76,7 +187,7 @@ grep -c "maybeRetryTruncatedFullTurn" lib/agents/harness/agentic-tool-loop.ts   
 grep -c "truncatedNoOutput" lib/services/execution-selection.ts   # EXPECT 5 — keep-best Arm 3: a truncated-empty retry can't supersede a non-truncated target
 grep -c "state.discardedChars =" lib/agents/harness/agentic-tool-loop.ts   # expect 1 — A2 RE-OPENED 2026-09-25: partial text is retried too (no emptyText conjunct in the trigger; NTF-R4L1.4 pins its absence); the discard is stamped only when the retry RETURNS
 grep -c "TRUNCATED_PARTIAL_OUTPUT" lib/agents/harness/execution-quality.ts   # expect >=2 — F2 (2026-09-25, register E1): the non-empty sibling, placed right after TRUNCATED_NO_OUTPUT; header row + category literal
-grep -c "loopResult.finalStopReason" lib/services/execution-core.ts   # expect 2 — F2 §3.3: quality (loopExitStopReason) AND builder (finalStopReason) read the LOOP-EXIT stop reason; #90 replaces currentResponse, so a post-#90 read hides a max_tokens deliverable
+grep -c "loopResult.finalStopReason" lib/services/execution-core.ts   # expect 4 — F2 §3.3: quality (loopExitStopReason) AND builder (finalStopReason) read the LOOP-EXIT stop reason, plus the package form check (Step A, 2026-10-07 — re-measured in the Opus 5.5 loop audit), plus the requirements form step (2b, 2026-10-09 — also loop-exit, correctly); #90 replaces currentResponse, so a post-#90 read hides a max_tokens deliverable
 ```
 F2 (2026-09-25): `toolLoop.finalStopReason` + `toolLoop.deliverableTruncated` are NESTED under the whitelisted
 `toolLoop` (E3b — no RESULT_JSON_SUMMARY_KEYS edit). `finalStopReason` is captured from the response the loop
@@ -170,7 +281,7 @@ grep -c "EXECUTION_TEMPLATE_SELECT" lib/services/agentExecutionEngine.ts app/api
 # P9 templateScopeMismatch was LIVE on the engine from 5b-i until RETIRED 2026-07-17 (6cff83d3 — ~60 firings, 0 true
 # positives; templateScopeMatcher.ts deleted). The enum value survives READ-ONLY for historical artifacts; no writer emits it.
 ```
-Gates (floors, measured 2026-09-26): test:terminal-persist-shape (>=24) / test:system-prompt-injections (>=37) / test:execution-hydration (>=7 — fell 10→7 when P9 retired) +
+Gates (floors, measured 2026-09-26): test:terminal-persist-shape (>=24) / test:system-prompt-injections (>=43 since promotion E2) / test:execution-hydration (>=7 — fell 10→7 when P9 retired) +
 the retargeted fleet (failed-persist-cas, pipeline-engine-skip, mode-resolver-injection, integrity F-series).
 PARKED/PENDING (do not "find" these as bugs): 5b-ii context-builder merge (parked — premise invalidated, see
 phase-5-confidence-assessment.md tail), 5b-iii I-10 snapshot-at-create (inventoried, 6 callers), reactor/PRUNE
@@ -1385,6 +1496,12 @@ grep -n "loopProgress\|executing_tools\|LOOP_START\|LOOP_END" \
 - `functionCalls[]` iterated (all tool_use blocks per turn, not just first)
 - `tool_use_id` preserved in provider's `functionCalls[].id` (required) and `functionCall.id` (optional for Gemini compat)
 - `rawContentBlocks` passed through from provider response for message history construction
+- **Per-role read budget (2026-10-12, size plan R1)**: the read_more page caps are PER ROLE — `lib/agents/role-read-budget.ts` (`readBudgetFor(role)`, exact key; default 6 pages/document + 8/run; `program_architect` + `value_chain_architect` 9 / 12). Carried on `PagerState.pagesPerDocument` + `maxPagerTurns = min(pagesPerRun, floor(0.25 × maxToolTurns))`; the role arrives as the REQUIRED `AgenticLoopInput.agentRole` from execution-core (one call site, both adapters). ⚠️ The Program Architect runs at the default 30 tool turns, so its per-run cap is 7, not 12, until its template sets maxToolTurns ≥ 48 (owner decision). Greps:
+  ```bash
+  grep -c "createPagerState(maxToolTurns, readBudgetFor(agentRole))" lib/agents/harness/agentic-tool-loop.ts  # expect 1
+  grep -c "READ_MORE_PAGES_PER_ORIGIN" lib/agents/harness/agentic-tool-loop.ts  # expect 0
+  npm run test:role-read-budget  # expect >=37
+  ```
 - Tool result truncation at 8K chars via `truncateForLlm()` (`:307`, C1 2026-07-08): the marker is an ENRICHED fact-forward directive (counts + recovery options: re-read-narrower / **`read_more(ref, offset)` page the tail** when no narrower form exists (2026-07-10 `3264e28f`, memory-backed loop pager) / flag-the-gap), NOT the old bare `\n... [truncated]`; the record gains emit-only `resultTruncatedForLlm` + `resultChars` (C2), set by mutating the already-pushed record AFTER the observer ran (the SSE card never sees them — deliberate)
 - `is_error: true` on failed tool_result blocks
 - `loopProgress(turn, phase)` events in 75-90% band
@@ -1505,3 +1622,15 @@ grep -c "async updateExecution(" \
 - Tool result truncation at 8K chars verified (post-2026-07-08: expect `truncateForLlm` + the enriched directive + C2 record fields, and test-agentic-tool-loop tests 5/5b/5c/6)
 - Token accumulation across all turns verified
 - Scaled timeout (1080s for engine, 1140s MCP poll — poll must outlive engine) verified
+
+## PLATFORM-HELD-BYTES capture halves on both success paths (2026-10-14)
+
+```bash
+grep -c "prepareHeldCapture(" lib/services/execution-core.ts   # expect 1 — right after executionTime, before every reader
+grep -c "prepareHeldCapture(" lib/services/execution-completion-anchored.ts   # expect 1 — BEFORE buildCompletionAnchoredResult
+```
+`lib/services/held-bytes-capture.ts`: a PURE half (after the duration is taken, before anything reads `toolCallResults`;
+primitives-only plan) and an I/O half (just before `persistTerminalSuccess`). Both never throw; both are no-ops unless
+`HELD_BYTES_CAPTURE_ENABLED === 'true'`. The terminal SUCCESS tx gains `SAVEPOINT held_capture` + up to two `createMany`
+only when the batch has rows; the failure path never captures (rows ⇔ SUCCESS). Pinned by CTF-SEAM-6
+(`test-execution-core-boundary.ts`, incl. "exactly two `persistTerminalSuccess` callers"). Duration series do not move.

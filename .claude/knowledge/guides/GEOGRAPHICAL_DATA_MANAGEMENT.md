@@ -553,6 +553,8 @@ npx prisma generate
 
 #### Step 4: Create Database Migration (2 minutes)
 
+> ⚠️ **2026-10-14:** on a database that predates the unique service-name index, a bare `npx prisma db push` refuses (it lists adding `MCPTool.name @unique` as possible data loss). Run `bash scripts/create-mcp-tools-unique-indexes.sh` once first, or use `npm run db:seed`, which does it in order. Production deploys do it automatically.
+
 ```bash
 npx prisma db push
 ```

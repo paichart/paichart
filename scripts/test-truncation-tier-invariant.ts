@@ -26,6 +26,7 @@ import { MAX_TOOL_RESULT_LENGTH } from '../lib/agents/harness/agentic-tool-loop'
 import { MAX_STORED_TOOL_RESULT_BYTES, TOOL_RESULT_PREVIEW_BYTES } from '../lib/services/execution-artifacts';
 import { PER_PREDECESSOR_SOFT_CAP, TOTAL_CONTEXT_CEILING } from '../lib/agents/harness/context-chainer';
 import { MAX_ARTIFACT_SIZE } from '../lib/services/execution-terminal-persist';
+import { HELD_FILE_CAP, HELD_EXECUTION_CAP, HELD_EXECUTION_FILE_CAP, HELD_ROW_BINDS } from '../lib/agents/harness/held-bytes/caps';
 
 let passed = 0;
 let failed = 0;
@@ -51,6 +52,18 @@ ok(PER_PREDECESSOR_SOFT_CAP <= TOTAL_CONTEXT_CEILING,
   `Tier-3 per-predecessor (${PER_PREDECESSOR_SOFT_CAP}) <= Tier-3 ceiling (${TOTAL_CONTEXT_CEILING})`);
 ok(TOTAL_CONTEXT_CEILING <= MAX_ARTIFACT_SIZE,
   `Tier-3 ceiling (${TOTAL_CONTEXT_CEILING}) <= Tier-4 artifact (${MAX_ARTIFACT_SIZE})`);
+
+// PLATFORM-HELD-BYTES Stage A (2026-10-14, WI-8): the held-file caps sit ABOVE the stored tool result (a held file is
+// captured BEFORE Tier-2 truncation, so it must be able to hold what Tier-2 cuts), equal the Tier-4 artifact cap
+// (owner decision: "= the existing Tier-4"), and keep the blob upsert under Postgres's 65,535 bind limit (panel AE S2).
+ok(HELD_FILE_CAP >= MAX_STORED_TOOL_RESULT_BYTES,
+  `held file cap (${HELD_FILE_CAP}) >= Tier-2 store (${MAX_STORED_TOOL_RESULT_BYTES})`);
+ok(HELD_FILE_CAP === MAX_ARTIFACT_SIZE,
+  `held file cap (${HELD_FILE_CAP}) === Tier-4 artifact (${MAX_ARTIFACT_SIZE})`);
+ok(HELD_EXECUTION_CAP >= HELD_FILE_CAP,
+  `held execution cap (${HELD_EXECUTION_CAP}) >= held file cap (${HELD_FILE_CAP})`);
+ok(HELD_EXECUTION_FILE_CAP * HELD_ROW_BINDS < 65535,
+  `held file count cap × binds per row (${HELD_EXECUTION_FILE_CAP} × ${HELD_ROW_BINDS}) < 65,535`);
 
 console.log(`\n  Passed: ${passed}  Failed: ${failed}`);
 if (failed > 0) {

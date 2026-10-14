@@ -1,0 +1,14 @@
+{
+  "id": "answered-derived",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "A derived request-path row. Must FAIL G-ROW (never derived).",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "| terraform-iac.principal-unseen | the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path | gap · act-regardless | act-regardless; premise recorded UNTESTED | (declared — item 14: \"the cloud leg acts regardless (act-regardless)\") |\n",
+      "new": "| terraform-iac.request-path | the path the admitted senders' requests take to the enforcer, which decides the attribute their address arrives in (asked when admitted-principal admits by address) | direct · private-endpoint · translated | private-endpoint | (derived — basis: the cloud harvest shows a gateway endpoint on the bucket's VPC) |\n| terraform-iac.principal-unseen | the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path | gap · act-regardless | act-regardless; premise recorded UNTESTED | (declared — item 14: \"the cloud leg acts regardless (act-regardless)\") |\n"
+    }
+  ]
+}

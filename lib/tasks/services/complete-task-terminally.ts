@@ -292,7 +292,17 @@ export async function assertPipelineCompletionInvariant(
 export interface CompletionActor {
   userId: string;
   source: 'MCP' | 'API' | 'BULK' | 'MOVE';
+  /**
+   * COMPLETE-THEN-FAIL anchor (2026-10-05, DESIGN-v2 §2): the agent execution whose tool loop is completing this
+   * task. Set ONLY by the two MCP completion adapters (task.complete, task.update), ONLY from
+   * `routeOpts.callingExecutionId` — which only the agent loop supplies (mcpService.ts, from the loop's sessionId).
+   * Never from request parameters, never on a human surface. Written as `metadata.completedByExecutionId`.
+   */
+  executionId?: string;
 }
+
+/** The anchor's metadata key. An AUDIT_STRIP_KEYS member — no client surface can write it. */
+export const COMPLETED_BY_EXECUTION_KEY = 'completedByExecutionId' as const;
 
 export interface TaskCompletionTxInput {
   taskId: string;
@@ -372,20 +382,31 @@ export async function runTaskCompletionTx(
   await assertPipelineCompletionInvariant(tx, existing, { effectiveMetadata });
 
   // Metadata assembly: builder's merge (or stored) + core facts + the override audit fact.
+  // COMPLETE-THEN-FAIL anchor (v2 §2.1): `completedByExecutionId` is merged LAST, after the builder's metadata, the
+  // F10 stamp and the override fact, so no adapter builder and no metadataStamp can set or override it. A completion
+  // WITHOUT an executing agent removes an inherited stamp (TS-F9) — the key always describes the most recent
+  // completion. On the normal human path the key is absent, so neither arm fires and the statement is unchanged.
   const stamp = input.metadataStamp ?? {};
+  const anchorId = typeof actor.executionId === 'string' && actor.executionId.length > 0 ? actor.executionId : null;
+  const baseMeta = ((builderData.metadata as Record<string, unknown> | undefined) ??
+    ((existing.metadata as Record<string, unknown> | null) || {}));
+  const removeInheritedAnchor = anchorId === null && Object.prototype.hasOwnProperty.call(baseMeta, COMPLETED_BY_EXECUTION_KEY);
   const needMetadataWrite =
-    builderData.metadata !== undefined || Object.keys(stamp).length > 0 || overrideFact !== null;
-  const metadataWrite = needMetadataWrite
+    builderData.metadata !== undefined || Object.keys(stamp).length > 0 || overrideFact !== null ||
+    anchorId !== null || removeInheritedAnchor;
+  const assembled: Record<string, unknown> = needMetadataWrite
     ? {
-        metadata: JSON.parse(
-          JSON.stringify({
-            ...((builderData.metadata as Record<string, unknown> | undefined) ??
-              ((existing.metadata as Record<string, unknown> | null) || {})),
-            ...stamp,
-            ...(overrideFact ? { completedWithDependencyOverride: overrideFact } : {}),
-          })
-        ) as Prisma.InputJsonValue,
+        ...baseMeta,
+        ...stamp,
+        ...(overrideFact ? { completedWithDependencyOverride: overrideFact } : {}),
       }
+    : {};
+  if (anchorId !== null) assembled[COMPLETED_BY_EXECUTION_KEY] = anchorId;
+  // Build review TS-F3: delete whatever the source (stored metadata, builder, F10 stamp, a future fact) — the key must
+  // describe the most recent completion for EVERY input. Harmless on `{}` (no metadata write when nothing else needs one).
+  else delete assembled[COMPLETED_BY_EXECUTION_KEY];
+  const metadataWrite = needMetadataWrite
+    ? { metadata: JSON.parse(JSON.stringify(assembled)) as Prisma.InputJsonValue }
     : {};
 
   // CAS write (Phase-4a analog): gated on the status we validated — a concurrent transition
@@ -565,7 +586,12 @@ export async function fireCompletionEffects(
   // The ONE canonical completion-activity fact (boundary-contract matrix #11). Dynamic import:
   // taskActivityService transitively pulls the prisma singleton, which would break Layer 1's
   // prisma-instantiation-free mock-testability (DM1) if imported at module load.
-  const activityMeta: ActivityMetadata = { source: actor.source === 'MCP' ? 'MCP' : 'API' };
+  // COMPLETE-THEN-FAIL (v2 §2.2, BC-F-9): an agent completion's activity carries the executing run's id (additive;
+  // `source` stays 'MCP' — changing it to 'AGENT' is filed as D5).
+  const activityMeta: ActivityMetadata = {
+    source: actor.source === 'MCP' ? 'MCP' : 'API',
+    ...(actor.executionId ? { executionId: actor.executionId } : {}),
+  };
   import('./taskActivityService')
     .then(({ logTaskCompleted }) => logTaskCompleted(taskId, actor.userId, activityMeta))
     .catch(() => {});

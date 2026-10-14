@@ -62,8 +62,12 @@ const DISPOSITION_KEYS = ['containmentDisposition', 'rollbackDisposition'];
     check(`R3 ${net.name}@${net.point}: errorFact() is pure (stable across calls)`,
       JSON.stringify(net.errorFact()) === JSON.stringify(f));
 
-    check(`R4 ${net.name}@${net.point}: name is on RESULT_JSON_SUMMARY_KEYS (E3b — an unlisted key is dropped silently)`,
-      (RESULT_JSON_SUMMARY_KEYS as readonly string[]).includes(net.name));
+    // R4 — whitelisted XOR a recorded exclusion reason (2026-10-13, applyBlockPlaceholder). An unlisted key is dropped
+    // silently (E3b), so being unlisted is legal ONLY as a recorded decision; a listed key that also claims exclusion
+    // is a contradiction one of the two halves will lose.
+    const listed = (RESULT_JSON_SUMMARY_KEYS as readonly string[]).includes(net.name);
+    check(`R4 ${net.name}@${net.point}: on RESULT_JSON_SUMMARY_KEYS XOR a recorded summaryExcludedReason (E3b — an unlisted key is dropped silently)`,
+      listed !== !!net.summaryExcludedReason, `listed=${listed} reason=${!!net.summaryExcludedReason}`);
 
     check(`R5 ${net.name}@${net.point}: render decision is EXPLICIT (both slots set, or a recorded reason)`,
       (net.renderCard !== null && net.renderPrompt !== null) || !!net.renderNullReason);

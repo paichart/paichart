@@ -1,0 +1,13 @@
+== coverage (answered-2)
+coverage — work/log-archive-namespace-write-2026-10-09/draft-answered-2/report.md
+  legs ['kubernetes-gitops', 'terraform-iac'] · gates ['kubernetes-gitops', 'plan', 'terraform-iac'] · rows 19 {'declared': 19, 'derived': 0, 'forced': 0, 'open': 0, 'other': 0} · owner block 0 · not-applicable 0
+  👁  what: no producer rows — confirm for each leg: the leg derives no value another leg consumes · legs: ['terraform-iac']
+  👁  what: no auth rows — confirm for each leg: the leg neither grants nor removes access on its target (no sender/principal is allowed, denied, admitted or restricted, and no chained value lands in a source/allow/admit/policy/selector field) · legs: ['kubernetes-gitops']
+  👁  what: no routing rows — confirm for each leg: the leg adds no advertised covering route and suppresses, filters, withdraws or replaces no routes · legs: ['kubernetes-gitops', 'terraform-iac']
+  0 error(s), 3 to read
+exit=0
+== citations (answered-2)
+citations: 20 total, 20 verbatim, 0 failing
+premise branches: terraform-iac ✓
+✅ citation + premise gate clean (the Reviewer still owns: does each quote select the same option as the item?)
+exit=0

@@ -1,0 +1,177 @@
+{
+  "label": "req-author-loop",
+  "purpose": "PRE-REGISTERED 2026-10-09 (model-evaluation-specialist; NOT RUN). Stage B of the Requirements Author retrospective (SYNTHESIS v3 §C rank 2 + D0). QUESTION: does the 2b in-run correction turn make a requirements_author run RELEASE-TRUE AND PUBLISHABLE IN ONE RUN, on persisted Author nodes, without dropping owner clauses or adding slips? Same run measures M1 (Sonnet 5 vs Opus 5.5 Author). LEVERS, one per pairwise comparison: opusLoop vs opusBase = the 2b flag ONLY (variant lever requirementsFormCorrection; same model, effort, text, nodes); sonnetBase vs opusBase = the Author model ONLY (both flag OFF). FIXED SIDE: the Reviewer on its production model (claude-sonnet-5, effort high) in every arm, rebuilt from today's pinned Requirements Reviewer row; it is a conjunct of the primary but is measured, never gated on its own (playbook Phase 0 step 2). TEXT: requirements-authoring-protocol@1.8.0 + today's Requirements Author row, identical in every arm; every arm replays in today's post-fix prompt shape (dropTemplateDirective — a byte no-op on the 2026-10-08/09 trial nodes, which are post-fix; it removes the frozen template copy from pre-fix T1's directive, as production now builds it). INSTRUMENT NOTES: tool calls are stubbed (L-R3; 8/8 answered Authors called project pov.details) — G-FID brackets the effect; the 2b step is the SHIPPING runRequirementsFormStep with production's watchdog (180 s + maxToolTurns x 30 s); the owner map (nodes N7/N8/N9/F6) is answers.md via scripts/build-row-item-map.py, placed only in a COPY of the harness row's metadata (never in a prompt). SCORER: npm run lab:leg-replay -- score --run <runDir> --experiment <this dir> (the shipping TS port; self-test reproduces stage A on all 9 gens). PRIMARY per sample = Reviewer approved AND every in-run trigger check passes (size, stray rule citations, author-actionable coverage, citations incl. item-N, owner-map clauses, lint, `{{`, 🗑) AND programViewDelivered + 500 <= 50,000 (L-R5: report.md adds +0 on approved runs, +296 'NOT RELEASED' banner on refused ones, measured on the 9 committed reports). Registry-caused coverage findings (stage A (b)) are excluded from the primary and reported as a subcount, with the strict PORT-NOTE §5 conjunct beside it. GATES and what each miss triggers: (G-PRIMARY) pooled over N7+N8+N9 (15 samples per arm): PASS iff opusLoop >= 9/15 AND opusLoop - opusBase >= 5/15 AND each of N7, N8, N9 has opusLoop >= 2/5. Basis: a per-run rate >= 0.6 gives >= 0.94 probability of success within 3 runs (the SYNTHESIS target); 9 vs 4 of 15 is Fisher one-sided p = 0.07 — this is the precision n=5/cell buys, a decision threshold, not a significance claim. MISS => the flag stays OFF; read every correction record (outcome histogram: rejected:no-improvement / regressed / sections-changed / insufficient-time) to name the next lever (message text -> prompt-construction; adoption rule -> agent-execution; size ballast -> stage-2 trim arms). INCONCLUSIVE (opusLoop 7-8/15, or difference 3-4/15) => extend N7-N9 x {opusBase, opusLoop} to n=10 before deciding (pre-registered extension, cap below). (G-CLAUSE, do not ship) per owner-map node: opusLoop dropped-clause count per sample <= the opusBase median, AND no item dropped in >= 3/5 opusLoop samples that is dropped in <= 1/5 opusBase samples. (G-FORM, do not ship) per node: opusLoop samples with any form failure (a citation finding, a live `{{`, a 🗑) <= opusBase; and 0 adopted corrections introduce one (by construction; a violation is a code fault -> agent-execution / execution-facts). (G-B/C, blind hand read, A6) opusBase vs opusLoop finals on N7/N8/N9, reader blind to arm (lab blind command; key kept in the run dir): class B (leg text adds/narrows a condition, invented row or option, item not reaching its leg) and class C (harvested state or today's branch stated), summed over the 5 samples per node: a rise of >= 2 in either class on any node => revise (flag stays OFF); >= 4 => do not ship. PLUS an UNBLINDED DIFF READ of every ADOPTED correction (author.pre-correction.md vs author.md): classify each changed sentence (ballast removed / owner-decision or binding clause removed / condition added / reworded); ANY owner-decision clause removed or condition added => revise (the adoption rule cannot see wording — WIRING-NOTE-2B §5). (G-TIME, do not ship) no opusLoop sample whose Author loop + correction exceeds 1080 s; report insufficient-time count, correction duration max and correction cost mean (estimate $0.70-1.00 per Opus correction: one full re-emission, 30-45K output + ~90K cached input). (G-FALLBACK, measured) Author calls whose served model differs from the requested one, per arm (feeds M1; a fallback appearing only in opusLoop => read its correction input). (G-TRUNC, measured) max_tokens stops and the largest single-call output vs 64,000; for M1, any max_tokens stop in an arm => that arm's model is not switched to. (G-FID, instrument, measured) opusBase median view within +-15% of the persisted Opus view (N9 51,725; N8 52,985; N7 57,520) and sonnetBase within +-15% of the Sonnet range on this objective (25.9-38.3K); outside => read 2 samples for stub effects before believing any gate. (G-REV, measured) Reviewer approve rate per arm; read every opusLoop Reviewer refusal that cites text the correction changed. (M1, measured for Steve) sonnetBase vs opusBase: primary, size, blind B/C slips, fallback, max_tokens, cost and duration. T1 (telemetry, 4 legs, no owner map: clauses use draft citations, recorded) and F6/Z1 are MEASURED, never gating. A rule found wrong is corrected for the NEXT run, never reinterpreted for this one (Protocol 16).",
+  "n": 5,
+  "flags": {
+    "CONNECTED_OUTPUT_SANITIZE_ENABLED": "true",
+    "FORM_CORRECTION_ENABLED": "true"
+  },
+  "baseline": {
+    "protocols": {
+      "requirements-authoring-protocol": {
+        "file": "protocols/requirements-authoring-protocol@1.8.0.baseline.md",
+        "version": "1.8.0",
+        "sha256": "9f4623569e6f154e0636cff827b77429e41fd483e4f4931e8a7b3ae850a5ea25"
+      }
+    },
+    "templates": {
+      "cmub1ql6f0001yx6695cga4zx": {
+        "file": "templates/requirements-author.baseline.md",
+        "name": "Requirements Author",
+        "role": "requirements_author",
+        "sha256": "8bc9d7c7bf22035f99b5aff463241ced279b3043b99387381c74970a14487265"
+      },
+      "cmub1ql6m0002yx66hrxgxcc3": {
+        "file": "templates/requirements-reviewer.baseline.md",
+        "name": "Requirements Reviewer",
+        "role": "requirements_reviewer",
+        "sha256": "670bb7c5ee97dd6c39c6b1cfa77d28101365090b885a6c006b67d07bf3846ed2"
+      }
+    }
+  },
+  "variants": {
+    "sonnetBase": {
+      "edits": [],
+      "authorModel": "claude-sonnet-5",
+      "authorEffort": "high",
+      "reviewerModel": "claude-sonnet-5",
+      "reviewerEffort": "high",
+      "requirementsFormCorrection": false,
+      "dropTemplateDirective": true
+    },
+    "opusBase": {
+      "edits": [],
+      "authorModel": "claude-opus-5-5",
+      "authorEffort": "high",
+      "reviewerModel": "claude-sonnet-5",
+      "reviewerEffort": "high",
+      "requirementsFormCorrection": false,
+      "dropTemplateDirective": true
+    },
+    "opusLoop": {
+      "edits": [],
+      "authorModel": "claude-opus-5-5",
+      "authorEffort": "high",
+      "reviewerModel": "claude-sonnet-5",
+      "reviewerEffort": "high",
+      "requirementsFormCorrection": true,
+      "dropTemplateDirective": true
+    }
+  },
+  "stage2Slots": {
+    "why": "NOT RUNNABLE YET — the text trim T does not exist. When prompt-construction delivers T as edits/T.json (protocol skeleton) and/or templateEdits (role guidance), add these two variants, re-run build-candidates, prove T verbatim in every rendered prompt, and re-use opusBase/opusLoop only if cmp-identical. A guidance trim is delivered by reseeding the owning seed, which also resolves the MODEL — so M1 must be decided first (review B2).",
+    "opusTrim": {
+      "edits": [
+        "edits/T.json"
+      ],
+      "authorModel": "claude-opus-5-5",
+      "authorEffort": "high",
+      "reviewerModel": "claude-sonnet-5",
+      "reviewerEffort": "high",
+      "requirementsFormCorrection": false,
+      "dropTemplateDirective": true
+    },
+    "opusTrimLoop": {
+      "edits": [
+        "edits/T.json"
+      ],
+      "authorModel": "claude-opus-5-5",
+      "authorEffort": "high",
+      "reviewerModel": "claude-sonnet-5",
+      "reviewerEffort": "high",
+      "requirementsFormCorrection": true,
+      "dropTemplateDirective": true
+    },
+    "gates": "G-PRE (whole-package counterfactual on the persisted views, SYNTHESIS v2 §3/§5) must pass at $0 before spend; then v2 A4 G-SIZE/G-FORM/G-COV/G-CLAUSE/G-B/C on opusTrim vs opusBase, and G-PRIMARY re-applied to opusTrimLoop vs opusLoop."
+  },
+  "nodes": [
+    {
+      "id": "N9",
+      "authorExecutionId": "cmv07fmft00byyxls5jn3xgm4",
+      "reviewerExecutionId": "cmv07nowe00cbyxlsbgmusez7",
+      "kind": "gate",
+      "originalVersion": "1.8.0",
+      "ownerRowItemMap": "owner-maps/log-archive-namespace-write-2026-10-09.answers.json",
+      "variants": [
+        "sonnetBase",
+        "opusBase",
+        "opusLoop"
+      ],
+      "why": "trial gen 9 (current objective, restrict design); persisted Opus view 51,725 (-1,725 over); Reviewer APPROVED 94; stage A: the loop would see size only",
+      "expect": "opusBase: size fails in most samples => primary <= 2/5. opusLoop: correction attempted on size in most samples; adopted when it cuts >= 1,725 with no regression => primary >= 3/5. sonnetBase: size passes (Sonnet 26-39K on this objective); coverage/clause/citation slips decide its primary (measured)."
+    },
+    {
+      "id": "N8",
+      "authorExecutionId": "cmv069bme00a9yxlsibsipg03",
+      "reviewerExecutionId": "cmv06gebv00xbyxlrfntzfcpp",
+      "kind": "gate",
+      "originalVersion": "1.8.0",
+      "ownerRowItemMap": "owner-maps/log-archive-namespace-write-2026-10-09.answers.json",
+      "variants": [
+        "sonnetBase",
+        "opusBase",
+        "opusLoop"
+      ],
+      "why": "trial gen 8 (objective v5); persisted Opus view 52,985 (-2,985); Reviewer REFUSED (Q7, an owner question the loop cannot see)",
+      "expect": "opusBase primary <= 1/5 (size + a Reviewer refusal class the loop does not address). opusLoop: size repaired in most samples; primary limited by Reviewer approvals => >= 2/5."
+    },
+    {
+      "id": "N7",
+      "authorExecutionId": "cmv0564wz008kyxlscta8h2uw",
+      "reviewerExecutionId": "cmv05exlr00u6yxlrwy7zdy74",
+      "kind": "gate",
+      "originalVersion": "1.8.0",
+      "ownerRowItemMap": "owner-maps/log-archive-namespace-write-2026-10-09.answers.json",
+      "variants": [
+        "sonnetBase",
+        "opusBase",
+        "opusLoop"
+      ],
+      "why": "trial gen 7 (objective v5); largest persisted Opus view 57,520 (-7,520); size stress for one re-emission",
+      "expect": "opusBase primary 0-1/5. opusLoop: the hardest cut; adoption needs an improvement with no regression, not a pass => some adopted drafts still over size; primary >= 2/5 is the per-node floor."
+    },
+    {
+      "id": "T1",
+      "authorExecutionId": "cmunr0cq20003yx1ik7pdm0hf",
+      "reviewerExecutionId": "cmunrbdbq000gyx1ienta86ft",
+      "kind": "measured",
+      "originalVersion": "1.7.4",
+      "variants": [
+        "sonnetBase",
+        "opusBase",
+        "opusLoop"
+      ],
+      "why": "telemetry genspec, 4 legs, second objective; persisted Sonnet view 52,036 at 1.7.4, replayed on pinned 1.8.0 (tokenFidelity not comparable — today's text on an old input); no owner map exists (clauses = draft citations, recorded)",
+      "expect": "measured: Opus views likely > 50,000 on a 4-leg objective; whether one re-emission can cut enough is the scope question (a miss => a second lever before the next 4-leg spec)."
+    },
+    {
+      "id": "F6",
+      "authorExecutionId": "cmv04cjje00qxyxlrna6v86o4",
+      "reviewerExecutionId": "cmv04m8m200r6yxlrjmk8sa1b",
+      "kind": "measured",
+      "originalVersion": "1.8.0",
+      "ownerRowItemMap": "owner-maps/log-archive-namespace-write-2026-10-09.answers.json",
+      "variants": [
+        "opusBase",
+        "opusLoop"
+      ],
+      "why": "trial gen 6 — the input Opus 5.5 declined (served by the Opus 4.8 fallback); measures the fallback rate and whether a fallback draft is corrected",
+      "expect": "measured: fallback calls per arm; if >= 2/5 decline, an ablation of the chained harvest becomes worth building (review B3)."
+    },
+    {
+      "id": "Z1",
+      "authorExecutionId": "cmuzykq08006iyxlr1m1zplw8",
+      "reviewerExecutionId": "cmuzyvyzn002uyxlsa6i1pfjp",
+      "kind": "measured",
+      "originalVersion": "1.8.0",
+      "n": 3,
+      "variants": [
+        "opusBase",
+        "opusLoop"
+      ],
+      "why": "trial gen 1, zero-decision mode (the flow's first step); no owner map (there are no answers yet)",
+      "expect": "measured: zero-mode drafts are inputs to the owner session, not publishable specs; records what the loop does to a zero draft (coverage/citation/lint triggers)."
+    }
+  ],
+  "measures": []
+}

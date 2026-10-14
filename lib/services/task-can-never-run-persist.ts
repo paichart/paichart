@@ -17,8 +17,9 @@
  *      executionStatus NOT already FAILED/SUCCESS — 0 rows ⇒ another attempt already
  *      handled it ⇒ return early (no duplicate comments, no duplicate retrigger).
  *   2. Mark its FORWARD CONE terminal: transitive dependents via a stage-scoped,
- *      depth-bounded recursive CTE over task_dependencies (Node C is TWO hops from the
- *      leg — transitive, not direct-only). Each gets `executionStatus='FAILED'` +
+ *      depth-bounded recursive CTE over task_dependencies (Node C is one hop from the leg
+ *      since pov-program 2.0.0 wires it to the pipeline legs only; two hops when it was wired
+ *      through a gate — so the walk is transitive, not direct-only). Each gets `executionStatus='FAILED'` +
  *      `metadata.blockedByUpstreamFailure` + a comment. Filters: status IN
  *      (OPEN, IN_PROGRESS), no PENDING/RUNNING/SUCCESS execution, not already terminal.
  *
@@ -47,6 +48,7 @@ import { prisma } from '@/lib/prisma';
 import { mcpLogger } from '@/lib/logger';
 import type { CanNeverRunError } from '@/lib/errors';
 import { markForwardConeBlocked } from './mark-forward-cone';
+import { ACTIVE_EXECUTION_STATUSES, harnessOwnedTaskIds } from './child-stage-settled';
 
 const log = mcpLogger.child({ module: 'TaskCanNeverRunPersist' });
 
@@ -76,8 +78,24 @@ export async function handleCanNeverRunTask(
 export async function handleAgentStampedCannotRun(
   taskId: string,
   stampText: string,
-  commentUserId: string
+  commentUserId: string,
+  taskType?: string | null
 ): Promise<void> {
+  // DN1 (2026-10-05): the consumer was scoped to PIPELINE tasks only, so a NON-PIPELINE program child stamped
+  // cannotRun (the 2026-10-04 superseded duplicate Node C, a template-less ACTION) stayed non-terminal, its
+  // child stage never settled, and program SYNTHESIZE could never resolve — the operator settled it by hand.
+  // Scope is now decided by agentStampedCannotRunScope (below): a PIPELINE keeps its unchanged behaviour; a
+  // NON-PIPELINE task is consumed only when it lives INSIDE a harness (its stage is some PIPELINE's
+  // pipelineStageId — the hang only exists there; an ordinary POV task's stamp stays inert data, as before)
+  // and only when it has NO execution in flight (an in-flight child's own terminal persist settles it —
+  // COMPLETED on success, FAILED on failure — so flipping it here would race that write and could mark a
+  // forward cone FAILED under a task that then completes).
+  const harnessOwned = taskType === 'PIPELINE' ? false : (await harnessOwnedTaskIds(prisma, [taskId])).has(taskId);
+  const scope = agentStampedCannotRunScope(taskType, harnessOwned);
+  if (scope === 'out-of-scope') {
+    log.debug({ taskId, taskType }, 'agent-stamped cannotRun on a non-PIPELINE task outside any harness — not consumed (DN1 scope)');
+    return;
+  }
   return persistCanNeverRun(
     taskId,
     {
@@ -86,15 +104,35 @@ export async function handleAgentStampedCannotRun(
       message: stampText || 'Agent stamped metadata.cannotRun with no further detail.',
     },
     commentUserId,
-    { allowFlipFromSuccess: true }
+    { allowFlipFromSuccess: true, requireNotInFlight: scope === 'harness-child' }
   );
+}
+
+/**
+ * DN1 (2026-10-05): which agent-stamped `cannotRun` writes the at-rest consumer terminalizes. PURE.
+ *   'pipeline'      — a PIPELINE task (the original FIX-A scope, behaviour unchanged).
+ *   'harness-child' — a NON-PIPELINE task inside a harness's child stage (a program's Node C / producer /
+ *                     gate, or a pipeline's agent child). Terminalized like a pipeline, but never in flight.
+ *   'out-of-scope'  — a NON-PIPELINE task outside every harness: no stage waits on it, so nothing hangs.
+ * The outcome for both consumed scopes is the SAME platform fact — executionStatus FAILED, status untouched,
+ * forward cone marked, owning harness retriggered — because that is what every "are the children done?" site
+ * already counts as settled (child-stage-settled.ts arm 1) and what the protocols already promise a cannotRun
+ * disposal does ("the machine terminalizes it … executionStatus: FAILED").
+ */
+export type AgentStampedCannotRunScope = 'pipeline' | 'harness-child' | 'out-of-scope';
+export function agentStampedCannotRunScope(
+  taskType: string | null | undefined,
+  harnessOwned: boolean
+): AgentStampedCannotRunScope {
+  if (taskType === 'PIPELINE') return 'pipeline';
+  return harnessOwned ? 'harness-child' : 'out-of-scope';
 }
 
 async function persistCanNeverRun(
   taskId: string,
   err: { code: string; reasonCode: string; message: string },
   commentUserId: string,
-  opts?: { allowFlipFromSuccess?: boolean }
+  opts?: { allowFlipFromSuccess?: boolean; requireNotInFlight?: boolean }
 ): Promise<void> {
   const now = new Date();
   let markedCone: string[] = [];
@@ -114,7 +152,16 @@ async function persistCanNeverRun(
           { executionStatus: null },
           { executionStatus: { notIn: opts?.allowFlipFromSuccess ? ['FAILED'] : ['FAILED', 'SUCCESS'] } },
         ],
-        ...(opts?.allowFlipFromSuccess ? { status: { not: 'COMPLETED' as const } } : {}),
+        // COMPLETE-THEN-FAIL Q1(b) (SYN-1, Steve 2026-10-05): the COMPLETED guard is now UNCONDITIONAL. Before, only
+        // the agent-stamped arm had it; the non-agent arm admitted `executionStatus: null`, which O4 now writes onto a
+        // COMPLETED task whose execution terminated — so that arm could write FAILED onto a finished task. Same rule
+        // as O4: no FAILED onto a COMPLETED task.
+        status: { not: 'COMPLETED' as const },
+        // DN1: a harness-owned NON-PIPELINE child is never flipped while it has a PENDING/RUNNING execution —
+        // in the CAS itself, so the check and the write are one statement.
+        ...(opts?.requireNotInFlight
+          ? { executions: { none: { status: { in: [...ACTIVE_EXECUTION_STATUSES] } } } }
+          : {}),
       },
       data: { executionStatus: 'FAILED', updatedAt: now },
     });
@@ -165,7 +212,7 @@ async function persistCanNeverRun(
   });
 
   if (!marked) {
-    log.debug({ taskId, reasonCode: err.reasonCode }, 'can-never-run already persisted — no-op');
+    log.debug({ taskId, reasonCode: err.reasonCode }, 'can-never-run already persisted (or task COMPLETED / in flight) — no-op');
     return;
   }
 

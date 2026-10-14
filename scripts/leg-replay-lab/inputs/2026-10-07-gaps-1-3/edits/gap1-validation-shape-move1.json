@@ -1,0 +1,14 @@
+{
+  "id": "gap1",
+  "title": "VALIDATION_SHAPE_CLAUSE move (1): name the narrowing remedy",
+  "source": "cline_docs/reviews/refusal-root-cause-2026-10-07/READ.md §3 Gap 1 (OLD/NEW verbatim)",
+  "status": "DRAFT — candidate text for the lab, not reviewed for seeding. The shared const is byte-identical in all four domains; the lab applies it to the two domains it replays.",
+  "appliesTo": ["observability-config-protocol", "terraform-iac-protocol", "network-provisioning-protocol", "kubernetes-gitops-protocol"],
+  "ops": [
+    {
+      "type": "replace",
+      "old": "(1) **REPLACE** the command with one whose output you CAN quote — including a machine-readable mode of the same tool, where it has one;",
+      "new": "(1) **REPLACE** the command with one whose output you CAN quote — a machine-readable mode of the same tool, or the same check narrowed so it PRINTS its decision: the matching lines themselves, a count, or `PASS`/`FAIL` from a test of the property. An expected output that states a condition — a negation (`NOT 403`), a 'must contain / must not contain' list, a range — describes the output; it is not the output;"
+    }
+  ]
+}

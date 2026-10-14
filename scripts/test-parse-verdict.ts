@@ -18,7 +18,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { parseReviewerVerdict, REVIEWER_ROLES, VERDICT_MARKER } from '../lib/agents/harness/parse-verdict';
+import { parseReviewerVerdict, locateTerminalVerdict, REVIEWER_ROLES, VERDICT_MARKER } from '../lib/agents/harness/parse-verdict';
 import { computeEvidenceGrading, VERIFIED_TOKEN, ACCEPTED_TOKEN } from '../lib/agents/harness/evidence-grading';
 import { parseConfidenceScore } from '../lib/agents/harness/parse-confidence';
 import { ROLE_GUIDANCE_LIBRARY } from '../lib/services/agentTemplateBuilder/pAIchartUniversalTemplate';
@@ -100,6 +100,12 @@ test('Coupling: seed-protocol-prompts references the marker but does NOT redefin
 
 test('Coupling: a well-formed block built from the guidance grammar parses', () => {
   // Lift the grammar line from the actual guidance to prove parser ↔ grammar agreement.
+  // B6 fold S20 (2026-10-02): from EVERY REVIEWER_ROLES member, not change_reviewer alone — three role-level copies of
+  // the grammar exist (change_reviewer, requirements_reviewer, derivation_reviewer) and a drift in any one would make
+  // that role's verdicts parse null silently.
+  for (const role of REVIEWER_ROLES) {
+    expect(ROLE_GUIDANCE_LIBRARY[role].includes('## VERDICT: APPROVED | NEEDS-REVISION')).toBe(true);
+  }
   expect(reviewerGuidance.includes('## VERDICT: APPROVED | NEEDS-REVISION')).toBe(true);
   const block = '## VERDICT: APPROVED\nBlocking issues: none\nConfidence: 86';
   expect(parseReviewerVerdict(`analysis text\n\n${block}`)).toEqual({
@@ -232,6 +238,46 @@ test('Missing Blocking issues line → blocking [] with verdict still transcribe
   expect(v?.blocking).toEqual([]);
 });
 
+// ── VERDICT-HEADING (2026-10-05): a heading wrapped around the literal marker ─────────────────
+//
+// Measured over all 431 stored reviewer finalResponses: the parser missed 4; two were a `#`-run in front of
+// the literal marker (the only post-grammar misses), two predate the grammar. Only the first shape is
+// tolerated. The other near-miss shapes stay null ON EVIDENCE — bold `**Verdict: X**` is the corpus's
+// per-section sub-verdict form (~70 lines), so tolerating it would let a sub-verdict win last-match.
+
+test('VH1 — doubled marker `## ## VERDICT:` parses (prod Node C cmutophv4…, 2026-10-04)', () => {
+  const v = parseReviewerVerdict('Findings…\n\n## ## VERDICT: NEEDS-REVISION\nBlocking issues: P4 branch-condition table incomplete\nConfidence: 84');
+  expect(v?.approved).toBe(false);
+  expect(v?.blocking).toEqual(['P4 branch-condition table incomplete']);
+  expect(v?.raw.startsWith('## ## VERDICT: NEEDS-REVISION')).toBe(true);
+});
+
+test('VH2 — `### ## VERDICT:` parses (prod change_reviewer cmt2mdb3x…, 2026-08-21)', () => {
+  expect(parseReviewerVerdict('### ## VERDICT: APPROVED\nBlocking issues: none')?.approved).toBe(true);
+});
+
+test('VH3 — the run IMMEDIATELY before VERDICT is the marker and must be ≥ 2 (`#`/`# #`/`## #` stay null)', () => {
+  expect(parseReviewerVerdict('# VERDICT: APPROVED\nBlocking issues: none')).toBeNull();
+  expect(parseReviewerVerdict('# # VERDICT: APPROVED\nBlocking issues: none')).toBeNull();
+  expect(parseReviewerVerdict('## # VERDICT: APPROVED\nBlocking issues: none')).toBeNull();
+});
+
+test('VH4 — bold `**Verdict: X**` is NOT a terminal block, and never wins last-match', () => {
+  expect(parseReviewerVerdict('**Verdict: APPROVED**\nBlocking issues: none')).toBeNull();
+  const v = parseReviewerVerdict('## VERDICT: NEEDS-REVISION\nBlocking issues: x\n\n**Verdict: APPROVED**');
+  expect(v?.approved).toBe(false);
+});
+
+test('VH5 — token-lock and last-match-wins hold on the prefixed shape', () => {
+  expect(parseReviewerVerdict('## ## VERDICT: LGTM\nBlocking issues: none')).toBeNull();
+  expect(parseReviewerVerdict('## ## VERDICT: NEEDS-REVISION\nBlocking issues: x\n\n## VERDICT: APPROVED\nBlocking issues: none')?.approved).toBe(true);
+  expect(parseReviewerVerdict('## VERDICT: APPROVED\nBlocking issues: none\n\n## ## VERDICT: NEEDS-REVISION\nBlocking issues: y')?.approved).toBe(false);
+});
+
+test('VH6 — a token on the line AFTER a bare `## VERDICT` heading stays null (pre-grammar shape, 1 in corpus)', () => {
+  expect(parseReviewerVerdict('## VERDICT\n\n**NEEDS-REVISION**\n\nBlocking issues: x')).toBeNull();
+});
+
 // ── Evidence grading (2026-09-20) ───────────────────────────────────────────────────────────────
 //
 // The reviewer's declared epistemic mode per finding. THREE states, not two — see the module header.
@@ -314,6 +360,32 @@ test('EG7 — null/empty input is graded:false, never a throw', () => {
 test('EG8 — the two literals this parser pins are the ones the protocols mandate', () => {
   expect(VERIFIED_TOKEN).toBe('VERIFIED-AGAINST-EVIDENCE');
   expect(ACCEPTED_TOKEN).toBe('ACCEPTED-FROM-CLAIMS');
+});
+
+test('W1 — a labelled NON-BLOCKING WARNING line ABOVE the block is never blocking (generic placement rule, 2026-10-07)', () => {
+  // The placement the reviewer warnings use (network reachability today): a labelled line in the review BODY, above the
+  // terminal block. The parser reads only what follows the LAST verdict line, so the line cannot reach `blocking`.
+  const v = parseReviewerVerdict(
+    'Review body.\n\nNON-BLOCKING WARNING (reachability-after-suppression): no post-change reachability step.\n\n## VERDICT: APPROVED\nBlocking issues: none\nConfidence: 88',
+  );
+  expect(v?.approved).toBe(true);
+  expect(v?.blocking).toEqual([]);
+});
+
+test('W2 — the SAME line as a bullet under `Blocking issues:` IS read as blocking (why warnings must sit above the block)', () => {
+  const v = parseReviewerVerdict(
+    '## VERDICT: NEEDS-REVISION\nBlocking issues:\n- NON-BLOCKING WARNING (reachability-after-suppression): gloss.\nConfidence: 70',
+  );
+  expect(v?.approved).toBe(false);
+  expect(v?.blocking).toEqual(['NON-BLOCKING WARNING (reachability-after-suppression): gloss.']);
+});
+
+test('NL1 — an EMPTY marker line directly before the real one does not swallow it (batch-2 lab P-CERT s04, 2026-10-08)', () => {
+  const v = parseReviewerVerdict('Body.\n\n## VERDICT:\n## VERDICT: NEEDS-REVISION\nBlocking issues: (1) unproven claim\nConfidence: 90');
+  expect(v?.approved).toBe(false);
+  expect(v?.blocking).toEqual(['(1) unproven claim']);
+  const loc = locateTerminalVerdict('Body.\n\n## VERDICT:\n## VERDICT: APPROVED\nBlocking issues: none');
+  expect(loc?.tokenText).toBe('APPROVED');
 });
 
 // ── Summary ─────────────────────────────────────────────────────────────────────────────────────

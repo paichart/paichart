@@ -72,7 +72,9 @@ const log = mcpLogger.child({ module: 'TaskCompleteHandler' });
 export async function handleTaskComplete(
   parameters: any,
   user: TokenPayload,
-  actionId: string
+  actionId: string,
+  /** COMPLETE-THEN-FAIL (v2 §2.2): present ONLY when the agent tool loop is the caller. Never read from parameters. */
+  routeOpts?: { callingExecutionId?: string }
 ) {
   const { taskId, completionNote, completionNotes, confidence, summary, dependencyOverrideReason } = parameters;
 
@@ -146,7 +148,12 @@ export async function handleTaskComplete(
   // response envelope, and the confidence/summary metadata merge as a pure buildUpdateData.
   const result = await completeTaskTerminally(prisma, {
     taskId,
-    actor: { userId: user.userId, source: 'MCP' },
+    actor: {
+      userId: user.userId,
+      source: 'MCP',
+      // COMPLETE-THEN-FAIL anchor — only from routeOpts (the loop), never `parameters` (its `completedBy` is a user id).
+      ...(routeOpts?.callingExecutionId ? { executionId: routeOpts.callingExecutionId } : {}),
+    },
     completionNote: finalCompletionNote,
     llmConfidenceScore: confidenceScore,
     dependencyOverride: dependencyOverrideReason ? { reason: dependencyOverrideReason } : null,

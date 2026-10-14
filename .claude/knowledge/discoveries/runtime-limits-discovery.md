@@ -150,3 +150,11 @@ When a real gap is confirmed, the fix is a **shared constant imported on BOTH si
 **Use Case**: Prevent runtime failures (timeout/loop/truncation/API-reject) from validation↔runtime ceiling mismatches
 **Frequency**: Quarterly (health rotation) or when adding any input that flows into an execution/LLM/DB ceiling
 **Priority**: HIGH (failures surface at runtime, not as clean 400s — harder to trace)
+
+## Held-bytes tier (2026-10-14)
+
+```bash
+grep -n "HELD_FILE_CAP\|HELD_EXECUTION_CAP\|HELD_EXECUTION_FILE_CAP" lib/agents/harness/held-bytes/caps.ts
+```
+5 MB per held file (= the Tier-4 artifact cap), 16 MB per execution, 256 files per execution — REFUSE, never truncate
+(`over-cap` with `capScope`). Captured BEFORE Tier-1/Tier-2 truncation. Pinned in `test-truncation-tier-invariant.ts`.

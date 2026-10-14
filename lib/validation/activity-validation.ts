@@ -119,6 +119,9 @@ export const ActivityMetadataSchema = z.object({
   ipAddress: z.string().ip().optional(),
   userAgent: z.string().max(FIELD_LIMITS.SHORT_TEXT).optional(),
   requestId: z.string().optional(),
+  // COMPLETE-THEN-FAIL (2026-10-05): the executing agent run behind an agent completion. Must be listed here —
+  // the schema is .strict(), so an unlisted key drops the WHOLE metadata object (warn only).
+  executionId: z.string().cuid().optional(), // build review TS-F5: house CUID rule on ID fields
 }).strict();
 
 /**

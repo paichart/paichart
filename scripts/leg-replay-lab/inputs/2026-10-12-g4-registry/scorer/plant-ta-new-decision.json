@@ -1,0 +1,14 @@
+{
+  "id": "ta-new-decision",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "TA: an OPEN row asking a decision no key and no item asks (the 'asks' kind; measured, read).",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "| observability-config.target | which surface of the leg's service does it act on | — |",
+      "new": "| observability-config.retry-window | a planted decision no item states | short · long | gap report (OPEN) | OPEN — options: short · long |\n| observability-config.target | which surface of the leg's service does it act on | — |"
+    }
+  ]
+}

@@ -56,11 +56,13 @@ false reason is a visible lie.*
 
 ## If it does not fit: the program view
 
-The Program Architect reads each document through a fixed budget — one ~8,000-character window plus at most six
-`read_more` pages of ~7,000, so about **50,000 delivered characters per document**, and 8 pages across the run. A complete
-`requirements.md` carries the full Writing rules (~20,000 characters, addressed to the spec's author and reviewer, not
-to the program), and can exceed that: the Architect then stops partway and plans from part of the document. *Earned:
-2026-10-01 — an Architect read 50,000 of 67,093 characters, reported the gap honestly, and the run was ended.*
+The Program Architect reads each document through a fixed budget — one ~8,000-character window plus at most nine
+`read_more` pages of ~7,000, so about 71,000 delivered characters per document, and 12 pages across the run. The size
+check allows **64,000 delivered characters per document** — one page under that, so a document that passes is read to
+its end. A complete `requirements.md` carries the full Writing rules (~20,000 characters, addressed to the spec's author
+and reviewer, not to the program), and can exceed that: the Architect then stops partway and plans from part of the
+document. *Earned: 2026-10-01 — under the earlier six-page budget, an Architect read 50,000 of 67,093 characters,
+reported the gap honestly, and the run was ended.*
 
 ```bash
 scripts/requirements-rules.py --size-check   <run-name>/requirements.md <run-name>/topology.json   # ✓/⚠️ fits, ✗ does not
@@ -115,12 +117,17 @@ rules were written out by hand or by a model is repaired **and told it was repai
 prints a diff rather than a verdict, because an altered rule that reads correct is how all three
 defects hid.
 
-⚠️ **Who actually reads these rules — measured 2026-09-21.** The **Program Architect**, which fetches
-`requirements.md` and is the only role that sees it verbatim (66 of 92 executions). **No agent
-downstream does**: 0 of 197 change-package-author legs on the brief or chained-context channel. The
-rules shape the Architect's plan, and the plan shapes every brief — indirect, and the mechanism that
-actually operates. **An obligation you need a change-package AUTHOR to obey belongs in its protocol,
-not here.**
+⚠️ **Who actually reads these rules — re-measured 2026-10-12: no agent reads the spliced text.** The
+generator's Author emits only the marker, and its Reviewer checks that the section holds no rule prose;
+both receive the rules' obligations through their own role guidance. The **Program Architect** reads
+the document's BODY verbatim, but it fetches the program view, where this section is replaced by short
+reading notes, and its guidance says the rules bind the author and reviewer, not it (on a full
+document it skips the section). **No agent downstream sees `requirements.md` at all**: 0 of 197
+change-package-author legs on the brief or chained-context channel. So the rules' readers are people
+(the owner, the operator, anyone writing a spec by hand), and the published copy records which rules
+version a spec was written under. *(2026-09-21 this said the Architect was the rules' reader — true
+until the program view, 2026-10.)* **An obligation you need a change-package AUTHOR to obey belongs
+in its protocol, not here.**
 
 ### The fifteen rules in one line each — so you can find the one you need
 

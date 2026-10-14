@@ -1,29 +1,33 @@
 #!/usr/bin/env ts-node
 /**
- * MCP Action Security Tests (Handler-Level Authorization)
+ * MCP Action Security Tests (Handler-Level Authorization) — pov.create
  *
- * Purpose: Validate handler-level authorization for perform tool actions
- * Specialist: sec-ops-specialist recommendation (Jan 31, 2026)
- * Pattern: #30 (handler-level-authorization-pattern.md)
+ * Purpose: validate that `handlePOVCreate` enforces the POV-create capability gate.
+ * Pattern: #30 (handler-level-authorization-pattern.md); sec-ops recommendation (2026-01-31).
  *
- * Focus: Authorization layer ONLY (not full POV creation)
- * Tests: 11 total (authorization + attack vectors + edge cases)
+ * REWRITTEN 2026-10-04. The previous suite encoded a RETIRED policy (ADMIN-only, message
+ * "Admin Access Required") and built callers with `.id` where the handler reads the MCP
+ * TokenPayload's `.userId`; since the 2026-07-28 cache-key guard (lib/auth/cache.ts) refuses a
+ * key with no user id, 8 of 11 cases failed on the fixture shape, not on behaviour.
  *
- * Note: Tests verify authorization blocks unauthorized users.
- * Requires DATABASE_URL (skipped in CI, run locally or in production).
+ * The policy is now READ FROM THE RolePermission TABLE at run time (PoV / CREATE), so a policy
+ * change cannot silently make this suite assert the wrong thing again:
+ *   - a role whose row is enabled  ⇒ must pass the gate (proved by reaching the country lookup,
+ *     which rejects a deliberately unknown country — NO POV is ever created);
+ *   - a role with no row or a disabled row ⇒ must be refused with the FORBIDDEN message naming
+ *     the role, BEFORE any business logic.
+ * Attack cases (missing role, lowercase 'admin', an unknown role) must be refused whatever the
+ * table says. A table with no enabled row or no refused role makes the suite FAIL (it would
+ * prove nothing).
  *
- * Created: 2026-01-31
+ * Requires DATABASE_URL (skipped in CI, run locally). WRITES permission-audit Activity rows — NEVER point it at prod.
+ * Fixed invariants (sec-ops review 2026-10-04): DEMO_USER never creates; SUPER_ADMIN always passes.
  */
 
-// Check if database is available (skip tests in CI/CD)
 const DB_AVAILABLE = !!process.env.DATABASE_URL;
 
 if (!DB_AVAILABLE) {
-  // A SKIP STATES NO OUTCOME. This block used to print "✅ Tests passing locally: 11/11"
-  // — a hardcoded claim emitted exactly when nothing had been tested, and false besides:
-  // run with DATABASE_URL, this suite currently fails 8 of 11 (a stale assertion, see the
-  // footer). CI printed a green line for a suite that had never run there, about a state
-  // that did not hold, on the line a human scans for reassurance.
+  // A SKIP STATES NO OUTCOME — never print a pass line when nothing was tested.
   console.log('⏭️  SKIPPED: MCP action security tests — NOTHING WAS VERIFIED');
   console.log('   Reason:  DATABASE_URL is not set');
   console.log('   To run:  DATABASE_URL=... npm run test:mcp-action-security');
@@ -31,389 +35,158 @@ if (!DB_AVAILABLE) {
 }
 
 import { handlePOVCreate } from '../lib/mcp/tasks/action/handlers/pov/pov-create-handler';
-import { UserRole } from '../lib/types/auth';
+import { UserRole, ResourceType, ResourceAction } from '../lib/types/auth';
+import { prisma } from '../lib/prisma';
 
-console.log('🔐 MCP Action Security Tests\n');
+console.log('🔐 MCP Action Security Tests (pov.create)\n');
 
 let passed = 0;
 let failed = 0;
-let authTests = 0;
-let attackTests = 0;
-let edgeCaseTests = 0;
 
-function test(description: string, fn: () => void | Promise<void>) {
-  return async () => {
-    try {
-      await fn();
-      console.log(`✅ ${description}`);
-      passed++;
-    } catch (error) {
-      console.error(`❌ ${description}`);
-      if (error instanceof Error) {
-        console.error(`   Error: ${error.message}`);
-      }
-      failed++;
-    }
-  };
-}
-
-function expect(value: any) {
-  return {
-    toBe(expected: any) {
-      if (value !== expected) {
-        throw new Error(`Expected ${expected}, got ${value}`);
-      }
-    },
-    toBeTruthy() {
-      if (!value) {
-        throw new Error(`Expected truthy, got ${value}`);
-      }
-    },
-    toThrow(expectedMessage?: string) {
-      // For testing if a function throws
-      return async (fn: () => Promise<any>) => {
-        try {
-          await fn();
-          throw new Error('Expected function to throw, but it did not');
-        } catch (error) {
-          if (error instanceof Error) {
-            if (expectedMessage && !error.message.includes(expectedMessage)) {
-              throw new Error(`Expected error to include "${expectedMessage}", got: ${error.message}`);
-            }
-          }
-        }
-      };
-    }
-  };
-}
-
-async function runTests() {
-  // ========================================
-  // POV.CREATE AUTHORIZATION TESTS
-  // ========================================
-
-  console.log('=====================================');
-  console.log('POV.CREATE Authorization Tests');
-  console.log('=====================================\n');
-
-  await test('Should block DEMO_USER from creating POVs', async () => {
-    const demoUser: any = {
-      id: 'demo123',
-      role: UserRole.DEMO_USER,
-      email: 'demo@test.com'
-    };
-
-    try {
-      await handlePOVCreate({
-        title: 'Test POV',
-        description: 'Should be blocked',
-        countryName: 'Australia'
-      }, demoUser, 'action123');
-      throw new Error('Should have thrown authorization error');
-    } catch (error) {
-      if (error instanceof Error) {
-        if (!error.message.includes('Admin Access Required')) {
-          throw new Error(`Wrong error message: ${error.message}`);
-        }
-      }
-    }
-    authTests++;
-  })();
-
-  await test('Should block USER from creating POVs', async () => {
-    const regularUser: any = {
-      id: 'user123',
-      role: UserRole.USER,
-      email: 'user@test.com'
-    };
-
-    try {
-      await handlePOVCreate({
-        title: 'Test POV',
-        description: 'Should be blocked',
-        countryName: 'Australia'
-      }, regularUser, 'action456');
-      throw new Error('Should have thrown authorization error');
-    } catch (error) {
-      if (error instanceof Error) {
-        if (!error.message.includes('Admin Access Required')) {
-          throw new Error(`Wrong error message: ${error.message}`);
-        }
-      }
-    }
-    authTests++;
-  })();
-
-  await test('Should block PROJECT_MANAGER from creating POVs', async () => {
-    const pmUser: any = {
-      id: 'pm123',
-      role: 'PROJECT_MANAGER' as any,
-      email: 'pm@test.com'
-    };
-
-    try {
-      await handlePOVCreate({
-        title: 'Test POV',
-        description: 'Should be blocked',
-        countryName: 'Australia'
-      }, pmUser, 'action789');
-      throw new Error('Should have thrown authorization error');
-    } catch (error) {
-      if (error instanceof Error) {
-        if (!error.message.includes('Admin Access Required')) {
-          throw new Error(`Wrong error message: ${error.message}`);
-        }
-      }
-    }
-    authTests++;
-  })();
-
-  // Note: Tests for "ADMIN should succeed" and "SUPER_ADMIN should succeed"
-  // require full database setup (countries, teams, etc.)
-  // These are validated in integration tests, not unit tests
-  // The CRITICAL tests are the blocking tests above (all passing ✅)
-
-  await test('Should provide descriptive error message for unauthorized users', async () => {
-    const demoUser: any = {
-      id: 'demo456',
-      role: UserRole.DEMO_USER,
-      email: 'demo@example.com'
-    };
-
-    try {
-      await handlePOVCreate({
-        title: 'Test',
-        description: 'Test',
-        countryName: 'Australia'
-      }, demoUser, 'action-error-test');
-      throw new Error('Should have blocked');
-    } catch (error) {
-      if (error instanceof Error) {
-        // Verify error message is descriptive
-        expect(error.message.includes('Admin Access Required')).toBeTruthy();
-        expect(error.message.includes('DEMO_USER')).toBeTruthy();
-        expect(error.message.includes('Contact an administrator')).toBeTruthy();
-      }
-    }
-    authTests++;
-  })();
-
-  await test('Should log user role in error message', async () => {
-    const user: any = {
-      id: 'test123',
-      role: 'CUSTOM_ROLE' as any,
-      email: 'test@test.com'
-    };
-
-    try {
-      await handlePOVCreate({
-        title: 'Test',
-        description: 'Test',
-        countryName: 'Australia'
-      }, user, 'action-log-test');
-      throw new Error('Should have blocked');
-    } catch (error) {
-      if (error instanceof Error) {
-        // Verify error includes the actual role (for debugging)
-        expect(error.message.includes('CUSTOM_ROLE')).toBeTruthy();
-      }
-    }
-    authTests++;
-  })();
-
-  await test('Should check authorization BEFORE business logic', async () => {
-    const demoUser: any = {
-      id: 'demo789',
-      role: UserRole.DEMO_USER,
-      email: 'demo@test.com'
-    };
-
-    // If authorization is checked first, should fail quickly
-    // If business logic runs first, would fail on country lookup
-    const startTime = Date.now();
-
-    try {
-      await handlePOVCreate({
-        title: 'Test',
-        description: 'Test',
-        countryName: 'NonExistentCountry12345'  // Invalid country
-      }, demoUser, 'action-timing-test');
-      throw new Error('Should have blocked');
-    } catch (error) {
-      const duration = Date.now() - startTime;
-
-      if (error instanceof Error) {
-        // Should fail on authorization (< 10ms), not country lookup (> 50ms)
-        if (!error.message.includes('Admin Access Required')) {
-          throw new Error(`Authorization not checked first: ${error.message}`);
-        }
-        if (duration > 50) {
-          throw new Error(`Too slow (${duration}ms) - business logic may have run before auth check`);
-        }
-      }
-    }
-    authTests++;
-  })();
-
-  // ========================================
-  // ATTACK VECTOR TESTS
-  // ========================================
-
-  console.log('\n=====================================');
-  console.log('Attack Vector Tests');
-  console.log('=====================================\n');
-
-  await test('Attack 1: Handler trusts JWT-validated role (defense-in-depth)', async () => {
-    // This test verifies the architectural decision:
-    // - JWT layer validates role (token signature)
-    // - Handler layer trusts validated role
-    // - This is CORRECT (don't re-validate what JWT already validated)
-
-    // In real attack: Attacker can't fake role because JWT signature validation would fail
-    // This test assumes JWT validation passed (upstream layer)
-
-    // Verification: Handler checks the role value (doesn't re-validate JWT)
-    // This is correct separation of concerns ✅
-    attackTests++;
-  })();
-
-  await test('Attack 2: Missing role field should be handled safely', async () => {
-    const userWithoutRole: any = {
-      id: 'noRole123',
-      // role: undefined,  // Missing role
-      email: 'norole@test.com'
-    };
-
-    try {
-      await handlePOVCreate({
-        title: 'Test',
-        description: 'Test',
-        countryName: 'Australia'
-      }, userWithoutRole, 'action-attack-2');
-      throw new Error('Should have blocked user without role');
-    } catch (error) {
-      if (error instanceof Error) {
-        // Should fail gracefully (not crash)
-        expect(error.message.includes('Admin Access Required')).toBeTruthy();
-      }
-    }
-    attackTests++;
-  })();
-
-  await test('Attack 3: Null user object should be handled safely', async () => {
-    try {
-      await handlePOVCreate({
-        title: 'Test',
-        description: 'Test',
-        countryName: 'Australia'
-      }, null as any, 'action-attack-3');
-      throw new Error('Should have blocked null user');
-    } catch (error) {
-      // Should fail gracefully (not crash with null pointer)
-      if (error instanceof Error) {
-        // Any error is acceptable (as long as it doesn't crash)
-      }
-    }
-    attackTests++;
-  })();
-
-  await test('Attack 4: Case manipulation (admin vs ADMIN) should not bypass', async () => {
-    const userWithLowercaseRole: any = {
-      id: 'case123',
-      role: 'admin' as any,  // Lowercase (not ADMIN)
-      email: 'case@test.com'
-    };
-
-    try {
-      await handlePOVCreate({
-        title: 'Test',
-        description: 'Test',
-        countryName: 'Australia'
-      }, userWithLowercaseRole, 'action-attack-4');
-      throw new Error('Should have blocked lowercase admin role');
-    } catch (error) {
-      if (error instanceof Error) {
-        // Should block (role must be exact match)
-        expect(error.message.includes('Admin Access Required')).toBeTruthy();
-      }
-    }
-    attackTests++;
-  })();
-
-  // ========================================
-  // EDGE CASE TESTS
-  // ========================================
-
-  console.log('\n=====================================');
-  console.log('Edge Case Tests');
-  console.log('=====================================\n');
-
-  // Note: Edge case tests for successful ADMIN/SUPER_ADMIN POV creation
-  // require full database fixtures (countries, teams, etc.)
-  // These are better suited for integration tests
-  // Authorization blocking is the CRITICAL security concern (tested above ✅)
-
-  await test('Edge 4: Authorization check happens before country validation', async () => {
-    const demoUser: any = {
-      id: 'demo-country',
-      role: UserRole.DEMO_USER,
-      email: 'demo@test.com'
-    };
-
-    try {
-      await handlePOVCreate({
-        title: 'Test',
-        description: 'Test',
-        countryName: 'InvalidCountryXYZ123'  // Invalid country
-      }, demoUser, 'action-edge-4');
-      throw new Error('Should have blocked');
-    } catch (error) {
-      if (error instanceof Error) {
-        // Should fail on AUTHORIZATION (not country lookup)
-        expect(error.message.includes('Admin Access Required')).toBeTruthy();
-        // Should NOT mention country (authorization failed first)
-        if (error.message.includes('Country not found')) {
-          throw new Error('Country validation ran before authorization check!');
-        }
-      }
-    }
-    edgeCaseTests++;
-  })();
-
-  // ========================================
-  // Summary
-  // ========================================
-
-  console.log('\n=====================================');
-  console.log('MCP Action Security Summary:');
-  console.log('=====================================');
-  console.log(`\n📊 Authorization Blocking Tests: ${authTests}/6`);
-  console.log(`📊 Attack Vector Tests: ${attackTests}/4`);
-  console.log(`📊 Edge Case Tests: ${edgeCaseTests}/1`);
-  console.log(`\n✅ Total Passed: ${passed}`);
-  console.log(`❌ Total Failed: ${failed}`);
-  console.log(`📊 Total Tests:  ${passed + failed}/11`);
-  console.log('\nNote: ADMIN success tests require database fixtures (integration testing)');
-  console.log('Critical security: Unauthorized user blocking is tested and passing ✅');
-  console.log('=====================================\n');
-
-  if (failed > 0) {
-    console.error('❌ Some tests failed!\n');
-    process.exit(1);
-  } else {
-    console.log('✅ All MCP action security tests passed!\n');
-    console.log('Security Validation:');
-    console.log('- Handler-level authorization working ✅');
-    console.log('- DEMO_USER blocked from pov.create ✅');
-    console.log('- ADMIN allowed for pov.create ✅');
-    console.log('- Attack vectors mitigated ✅');
-    console.log('- Edge cases handled ✅');
-    console.log('\nPattern #30 (handler-level-authorization): VALIDATED ✅\n');
-    process.exit(0);
+async function test(description: string, fn: () => Promise<void>) {
+  try {
+    await fn();
+    console.log(`✅ ${description}`);
+    passed++;
+  } catch (error) {
+    console.error(`❌ ${description}`);
+    console.error(`   Error: ${error instanceof Error ? error.message : String(error)}`);
+    failed++;
   }
 }
 
-runTests().catch((error) => {
+const FORBIDDEN_PREFIX = 'You do not have permission to create POVs.';
+const UNKNOWN_COUNTRY = 'Zzz-No-Such-Country-For-Security-Test';
+
+/** Call the handler and return the thrown message ('' if it did not throw — which is a failure here). */
+async function attempt(user: any, countryName = UNKNOWN_COUNTRY): Promise<string> {
+  try {
+    await handlePOVCreate(
+      { title: 'Security test POV (never created)', description: 'authorization probe', countryName },
+      user,
+      `sec-test-${Math.random().toString(36).slice(2, 8)}`
+    );
+    return '';
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+}
+
+/** A WELL-FORMED caller that the policy refuses must get FORBIDDEN naming its role — nothing else. */
+function assertForbidden(msg: string, role: string) {
+  if (!msg) throw new Error('handler did NOT throw — a POV may have been created');
+  if (!(msg.includes(FORBIDDEN_PREFIX) && msg.includes(`Your role: ${role}`))) {
+    throw new Error(`expected FORBIDDEN for ${role}, got: ${msg.slice(0, 200)}`);
+  }
+}
+
+/** A MALFORMED caller (no user id / no role / no object) must be refused before any business logic. */
+function assertMalformedRefused(msg: string) {
+  if (!msg) throw new Error('handler did NOT throw — a POV may have been created');
+  if (msg.includes('Country not found')) throw new Error(`malformed caller reached business logic: ${msg.slice(0, 200)}`);
+}
+
+function assertPassedGate(msg: string) {
+  if (!msg) throw new Error('handler did NOT throw — the unknown country should have stopped it');
+  if (msg.includes(FORBIDDEN_PREFIX)) throw new Error(`refused although the policy allows it: ${msg}`);
+  if (!msg.includes('Country not found')) throw new Error(`did not reach the country lookup: ${msg.slice(0, 200)}`);
+}
+
+async function runTests() {
+  // A real user id keeps the permission audit write (Activity FK) quiet; the ROLE under test is
+  // carried in the token payload, which is what the gate reads.
+  const anyUser = await prisma.user.findFirst({ select: { id: true } });
+  if (!anyUser) throw new Error('no user in the database — seed it before running this suite');
+  const uid = anyUser.id;
+
+  const rows = await prisma.rolePermission.findMany({
+    where: { resourceType: ResourceType.PoV as any, action: ResourceAction.CREATE as any },
+    select: { role: true, enabled: true },
+  });
+  const allowed = new Set(rows.filter(r => r.enabled).map(r => String(r.role)));
+  const roles = [UserRole.USER, UserRole.DEMO_USER, UserRole.ADMIN, UserRole.SUPER_ADMIN];
+  console.log(`Policy (role_permissions PoV/CREATE enabled): ${[...allowed].sort().join(', ') || '(none)'}\n`);
+
+  // ---- policy sanity: the suite must be able to prove both directions -------------------------
+  await test('Policy table allows at least one tested role and refuses at least one', async () => {
+    if (!roles.some(r => allowed.has(r))) throw new Error('no tested role is allowed — the allow path is unproven');
+    if (!roles.some(r => !allowed.has(r))) throw new Error('no tested role is refused — the deny path is unproven');
+  });
+
+  // ---- FIXED INVARIANTS, independent of the table (sec-ops R1, 2026-10-04) ----------------------
+  // The table-derived cases prove the gate FOLLOWS the table; these prove the policy is SAFE. Any ADMIN
+  // can upsert a DEMO_USER row (app/api/admin/permissions), and DEMO_USER is the self-signup default role
+  // (registration-policy.ts) — a flipped row must turn this suite RED, never become a new expectation.
+  await test('INVARIANT: DEMO_USER (self-signup default) can never create POVs, whatever the table says', async () => {
+    if (allowed.has(UserRole.DEMO_USER)) throw new Error('role_permissions enables PoV/CREATE for DEMO_USER — policy drift');
+    assertForbidden(await attempt({ userId: uid, role: UserRole.DEMO_USER }), UserRole.DEMO_USER);
+  });
+  await test('INVARIANT: SUPER_ADMIN always passes the gate (bypass)', async () => {
+    assertPassedGate(await attempt({ userId: uid, role: UserRole.SUPER_ADMIN }));
+  });
+
+  // ---- each role behaves exactly as the table says --------------------------------------------
+  // NOTE: every role reuses ONE uid inside the permission-cache TTL and USER runs before DEMO_USER, so
+  // the DEMO_USER refusal here also exercises the 2026-07-28 role-in-key fix. That is order-dependent;
+  // the dedicated pin is `test:permission-cache-role-key`.
+  for (const role of roles) {
+    if (allowed.has(role)) {
+      await test(`${role}: allowed by the table ⇒ passes the gate (stops at the unknown country)`, async () => {
+        assertPassedGate(await attempt({ userId: uid, role, email: 'sec@test.local' }));
+      });
+    } else {
+      await test(`${role}: refused by the table ⇒ FORBIDDEN naming the role`, async () => {
+        assertForbidden(await attempt({ userId: uid, role, email: 'sec@test.local' }), role);
+      });
+    }
+  }
+
+  // ---- ordering: authorization happens BEFORE business logic ----------------------------------
+  const refusedRole = roles.find(r => !allowed.has(r));
+  if (refusedRole) {
+    await test(`Authorization runs before the country lookup (${refusedRole} + unknown country ⇒ FORBIDDEN, not "Country not found")`, async () => {
+      const msg = await attempt({ userId: uid, role: refusedRole });
+      assertForbidden(msg, refusedRole);
+      if (msg.includes('Country not found')) throw new Error('business logic ran before authorization');
+    });
+  }
+
+  // ---- attacks: refused whatever the table says -------------------------------------------------
+  await test('Attack: a null user object is refused', async () => {
+    assertMalformedRefused(await attempt(null));
+  });
+  await test('Attack: missing role is refused (fails closed)', async () => {
+    assertMalformedRefused(await attempt({ userId: uid }));
+  });
+  await test("Attack: lowercase 'admin' does not match ADMIN", async () => {
+    assertForbidden(await attempt({ userId: uid, role: 'admin' }), 'admin');
+  });
+  await test('Attack: an unknown role is refused', async () => {
+    assertForbidden(await attempt({ userId: uid, role: 'CUSTOM_ROLE' }), 'CUSTOM_ROLE');
+  });
+  await test('Attack: a raw payload with .id but no .userId is refused (cache-key guard)', async () => {
+    // ADMIN explicitly: SUPER_ADMIN bypasses the cache before any key is built, so it cannot
+    // exercise the guard (an allowed, non-bypass role is what proves a raw payload is refused).
+    const m = await attempt({ id: uid, role: UserRole.ADMIN });
+    assertMalformedRefused(m);
+    if (!m.includes('Permission cache key missing a discriminator')) throw new Error(`expected the cache-key guard, got: ${m.slice(0, 200)}`);
+  });
+
+  console.log('\n=====================================');
+  console.log(`✅ Passed: ${passed}`);
+  console.log(`❌ Failed: ${failed}`);
+  console.log('=====================================\n');
+  await prisma.$disconnect();
+  if (failed > 0) {
+    console.error('❌ Some tests failed!\n');
+    process.exit(1);
+  }
+  console.log('✅ All MCP action security tests passed (pov.create gate follows role_permissions).\n');
+  process.exit(0);
+}
+
+runTests().catch(async (error) => {
   console.error('Fatal error:', error);
+  try { await prisma.$disconnect(); } catch { /* ignore */ }
   process.exit(1);
 });

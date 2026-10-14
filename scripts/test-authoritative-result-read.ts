@@ -107,7 +107,7 @@ async function winsOver<T>(label: string, run: (e: StubExecution[]) => Promise<T
   });
 
   // ── F3: nothing selectable. The consumed reason vocabulary is unchanged, and the hoist fails CLOSED.
-  await test('F3 all candidates empty or absent: named reasons unchanged (no-author-text, no-author-stamp, no-harvest-text, derivation null path)', async () => {
+  await test('F3 all candidates empty or absent: named reasons (no-author-text, no-author-stamp, no-harvest-tool-results, derivation null path)', async () => {
     const emptyAuthor = ex('ea', A.id, { finalResponse: '', rollbackContainment: { checked: true, tag: 'stamped-over-nothing' } });
     const d = await dialect([emptyAuthor]);
     assert(d.reason === 'no-author-text', `dialect: ${j(d)}`);
@@ -119,14 +119,19 @@ async function winsOver<T>(label: string, run: (e: StubExecution[]) => Promise<T
     assert(j(withEmpty) === j(withNone), `derivation: an empty Author must take the same null path as no Author:\n       ${j(withEmpty)}\n       ${j(withNone)}`);
     const rb = await computeRollbackContainmentFact(client([ex('eh0', H.id, { finalResponse: '' })]),
       { taskId: A.id, deliverable: fs.readFileSync(path.join(ROOT, 'scripts/fixtures/rollback-containment/r3a3-author.md'), 'utf8') });
-    assert(rb.reason === 'no-harvest-text', `rollback leaf-persist: ${j(rb)}`);
+    // E1 (2026-10-13): the rollback leaf reads the harvest's RAW toolCalls, so its could-not-check arm is named for them
+    // (`no-harvest-text` until E1; still blocking — any reason outside the benign allowlist is).
+    assert(rb.reason === 'no-harvest-tool-results', `rollback leaf-persist: ${j(rb)}`);
   });
 
   // ── F4: a superseded harvest, at BOTH points that read one.
   await test('F4 superseded harvest: rollback LEAF-PERSIST and the derivation harvest parse both read the authoritative harvest', async () => {
     const pkg = fs.readFileSync(path.join(ROOT, 'scripts/fixtures/rollback-containment/r3a3-author.md'), 'utf8');
-    const goodH = ex('eh1', H.id, { finalResponse: fs.readFileSync(path.join(ROOT, 'scripts/fixtures/rollback-containment/r3a3-harvest.md'), 'utf8') });
-    const badH = ex('eh2', H.id, { finalResponse: 'a harvest that quotes none of it' }, { supersededById: 'eh1' });
+    // E1 (2026-10-13): the leaf's witness is the harvest's RAW toolCalls, so each execution carries its own.
+    const r3a3 = fs.readFileSync(path.join(ROOT, 'scripts/fixtures/rollback-containment/r3a3-harvest.md'), 'utf8');
+    const rawCall = (text: string) => [{ tool: 'services', result: { content: [{ type: 'text', text }] } }];
+    const goodH = ex('eh1', H.id, { finalResponse: r3a3, toolCalls: rawCall(r3a3) });
+    const badH = ex('eh2', H.id, { finalResponse: 'a harvest that quotes none of it', toolCalls: rawCall('a harvest that quotes none of it') }, { supersededById: 'eh1' });
     const leaf = (execs: StubExecution[]) => computeRollbackContainmentFact(client(execs), { taskId: A.id, deliverable: pkg });
     await winsOver('rollback leaf-persist', leaf, [goodH, badH], [goodH], [{ ...badH, supersededById: null }]);
     const author = ex('ea', A.id, { finalResponse: DERIVED + CLEAN_CFG });

@@ -656,9 +656,10 @@ import { AGENT_MODELS } from '../lib/agents/model-tiers';
 modelParameters: { provider: 'anthropic_sdk', model: AGENT_MODELS.infra, temperature: 0.3, ... }
 ```
 
-| Template purpose | Tier | Resolves to (2026-08-09) |
+| Template purpose | Tier | Resolves to (2026-10-07; the value lives in `model-tiers.ts` — read it, this column dates) |
 |---|---|---|
-| Device/state-reaching domain specialists (k8s, network, terraform) | `AGENT_MODELS.infra` | `claude-haiku-4-5` |
+| Device/state-reaching domain specialists (k8s, network, terraform, observability) — harvester, architect, reviewer | `AGENT_MODELS.infra` | `claude-sonnet-5` (haiku → sonnet 2026-08-20) |
+| The `config_change_author` role in those four domains ONLY | `AGENT_MODELS.infraAuthor` | `claude-opus-5-5` (2026-10-07, lab-gated; register MODEL-CHOICE) |
 | Legacy / general / MCP service-integration | `AGENT_MODELS.generic` | `claude-haiku-4-5` |
 | Cognition + writing-quality work, where the prose IS the deliverable | `AGENT_MODELS.synthesis` | `claude-sonnet-5` |
 | Meta-agents that decompose and synthesize (harness, program architect) | `AGENT_MODELS.orchestrator` | `claude-sonnet-5` |

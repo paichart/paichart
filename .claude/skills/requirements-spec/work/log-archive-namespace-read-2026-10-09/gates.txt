@@ -1,0 +1,32 @@
+== coverage
+coverage — work/log-archive-namespace-read-2026-10-09/draft-answered/report.md
+  legs ['kubernetes-gitops', 'terraform-iac'] · gates ['kubernetes-gitops', 'program-plan', 'terraform-iac'] · rows 22 {'declared': 22, 'derived': 0, 'forced': 0, 'open': 0, 'other': 0} · owner block 13 · not-applicable 13
+  ❌ what: unknown key for a known token · id: kubernetes-gitops.writes
+  ❌ what: unknown key for a known token · id: terraform-iac.policy-managers-multiple
+  ❌ what: unknown key for a known token · id: terraform-iac.tags
+  👁  what: no producer rows — confirm for each leg: the leg derives no value another leg consumes · legs: ['terraform-iac']
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.receiver · line: kubernetes-gitops.receiver — which workload/resource on the target is authorised — options: — — governs: Pipeline 1 objective — tier: not-applicable — the leg neither grants nor removes access on its 
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.admitted-principal · line: kubernetes-gitops.admitted-principal — who is admitted, and by which attribute the enforcer recognises them — options: source-address-range · named-identity · network-path · combination (state each pa
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.principal-unseen · line: kubernetes-gitops.principal-unseen — the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path — options: gap · act-regardless — governs: Pipeline 1 objective 
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.granted-action · line: kubernetes-gitops.granted-action — what the admitted principal may do (actions, ports) — options: — — governs: Pipeline 1 objective — tier: not-applicable — the leg neither grants nor removes access o
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.existing-grant · line: kubernetes-gitops.existing-grant — other allowances already on the same surface — options: replace · preserve · preserve-bounded (state the bound) — governs: Pipeline 1 objective — tier: not-applicabl
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.target-empty · line: kubernetes-gitops.target-empty — the receiver selector/surface matches nothing now — options: act · gap — governs: Pipeline 1 objective — tier: not-applicable — the leg neither grants nor removes acce
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.enforcer-absent · line: kubernetes-gitops.enforcer-absent — no policy object governs the receiver yet — options: create · gap — governs: Pipeline 1 objective — tier: not-applicable — the leg neither grants nor removes access
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.target-absent · line: kubernetes-gitops.target-absent — the declared target itself does not exist — options: gap · create-target — governs: Pipeline 1 objective — tier: not-applicable — the leg neither grants nor removes a
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.collateral · line: kubernetes-gitops.collateral — what else on the target changes because enforcement now applies — options: per enforcer (Kubernetes: allow-named-ports · deny · leave-to-workload-manifests) — governs: P
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.covered-routes · line: kubernetes-gitops.covered-routes — when the leg adds a covering route, whether the routes it covers stop being advertised — options: replace · accompany — governs: Pipeline 1 objective — tier: not-app
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.must-stay-reachable · line: kubernetes-gitops.must-stay-reachable — which destinations must stay reachable after the change, and from where — options: — — governs: Pipeline 1 objective — tier: not-applicable — the leg is not a r
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: terraform-iac.covered-routes · line: terraform-iac.covered-routes — when the leg adds a covering route, whether the routes it covers stop being advertised — options: replace · accompany — governs: Pipeline 2 objective — tier: not-applica
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: terraform-iac.must-stay-reachable · line: terraform-iac.must-stay-reachable — which destinations must stay reachable after the change, and from where — options: — — governs: Pipeline 2 objective — tier: not-applicable — the leg is not a routi
+  3 error(s), 14 to read
+exit=1
+== citations
+citations: 28 total, 28 verbatim, 0 failing
+premise branches: terraform-iac ✓
+✅ citation + premise gate clean (the Reviewer still owns: does each quote select the same option as the item?)
+exit=0
+== clauses
+clauses: 6 checked, 2 dropped
+  ❌ item 13 → kubernetes-gitops: "publishes them" — missing ['them']
+  ❌ item 20 → terraform-iac: "lists the existing statements whose s3:GetObject the Deny now overrides" — missing ['existing statements']
+exit=1

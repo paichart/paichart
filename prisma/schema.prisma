@@ -407,6 +407,10 @@ model AgentExecution {
   task            Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
   agentTemplate   AgentTemplate?  @relation("ExecutionAgentTemplate", fields: [agentTemplateId], references: [id])
   artifacts       AgentArtifact[]
+  // PLATFORM-HELD-BYTES Stage A (2026-10-14): shadow capture of declared file text. Both cascade with the
+  // execution: a ref's lifetime is the execution that wrote it. Plan: cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-PLAN.md §6
+  heldFileRefs        HeldFileRef[]
+  heldCaptureRefusals HeldCaptureRefusal[]
 
   @@index([taskId])
   @@index([agentTemplateId])
@@ -468,6 +472,92 @@ model AgentArtifact {
 
   @@index([executionId])
   @@map("agent_artifacts")
+}
+
+/// PLATFORM-HELD-BYTES (Stage A, 2026-10-14): content-addressed held file text. Key (scope, sha256), never sha256
+/// alone. `content` is B = R10_v(C) (or C when R10 is off; see the ref's redactorVersion); sha256 = baseHash =
+/// sha256(content). Holds NO per-capture facts: the upsert touches lastReferencedAt only, so a fact here would keep
+/// the first writer's value (facts live on HeldFileRef). lastReferencedAt is written and compared only in SQL via
+/// now(). Written ONLY by lib/services/held-bytes-store.ts. Plan: cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-PLAN.md §6
+model HeldBlob {
+  scope            String // task.povId
+  sha256           String // lowercase hex of sha256(content)
+  content          Bytes
+  storedByteLength Int // octet_length(content)
+  createdAt        DateTime      @default(now())
+  lastReferencedAt DateTime      @default(now()) // touched by EVERY upsert; the GC grace clock
+  refs             HeldFileRef[]
+
+  @@id([scope, sha256])
+  @@map("held_blobs")
+}
+
+/// One row per held file per capturing execution (Stage A writes kind = CAPTURE only).
+model HeldFileRef {
+  id                          String         @id @default(cuid())
+  scope                       String
+  blobSha256                  String // = baseHash
+  executionId                 String
+  kind                        String // CAPTURE | BASE | CANDIDATE (String, errorCode precedent)
+  legTaskId                   String? // the shared owning-leg predicate; null on miss
+  rootTaskId                  String? // null for a standalone (non-program) pipeline
+  serviceId                   String // success envelope data.metadata.targetServiceId (gateway-resolved)
+  serviceName                 String // success envelope data.targetService
+  sourceTool                  String
+  toolCallIndex               Int // index into toolCallResults = into result.json.toolCalls
+  selector                    String // RFC 6901 JSON Pointer with {key} resolved
+  target                      String
+  path                        String
+  declaredBy                  String // platform-default (A) | registration-descriptor | embedded-resource
+  descriptorVersion           Int? // the descriptor table version that captured it; null for embedded-resource
+  hashBasis                   String // legacy-decoded-text (A) | canonical-v1
+  /// Under legacy-decoded-text this is NOT what the service ran (Python universal newlines): it is the decode the
+  /// operator must apply to reproduce baseHash.
+  decodeVersion               String
+  redactorVersion             String // R10_VERSION | 'none'
+  redactedCount               Int
+  lineCount                   Int // counted on B
+  newline                     String? // null under legacy-decoded-text
+  bom                         Boolean?
+  finalNewline                Boolean?
+  serviceReportsComplete      Boolean? // a transcription of the SERVICE's claim, never a platform judgement
+  derivedRawByteLength        Int? // contract-v1 only
+  placeholderPreexistingCount Int // counted on C before R10, one non-overlapping pattern
+  createdAt                   DateTime       @default(now())
+  blob                        HeldBlob       @relation(fields: [scope, blobSha256], references: [scope, sha256], onDelete: Restrict, onUpdate: NoAction)
+  execution                   AgentExecution @relation(fields: [executionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([scope, blobSha256]) // GC anti-join + the Restrict check
+  @@index([executionId]) // cascade from the execution prune
+  @@index([legTaskId])
+  @@index([rootTaskId])
+  @@map("held_file_refs")
+}
+
+/// A declared file the platform did not hold, by name. Lifetime = the execution (cascade). Identity columns are
+/// nullable: a refused call may carry no resolvable id (owner decision OA-20); identitySource says where it came from.
+model HeldCaptureRefusal {
+  id                String         @id @default(cuid())
+  executionId       String
+  scope             String?
+  serviceId         String? // null unless the success envelope carried it
+  serviceName       String?
+  identitySource    String // envelope | gateway-meta | arguments
+  sourceTool        String
+  toolCallIndex     Int
+  selector          String? // RFC 6901 JSON Pointer
+  target            String?
+  path              String? // null for path-invalid and for every call-level refusal
+  refusal           String
+  detail            Json? // never content; OMITTED when empty, never null
+  declaredBy        String
+  descriptorVersion Int?
+  createdAt         DateTime       @default(now())
+  execution         AgentExecution @relation(fields: [executionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([executionId])
+  @@index([refusal, createdAt]) // MI-13 reads by name over a window
+  @@map("held_capture_refusals")
 }
 
 model Team {
@@ -1065,7 +1155,7 @@ enum ExecutionStatus {
 
 model MCPTool {
   id              String            @id @default(cuid())
-  name            String
+  name            String            @unique // REGISTRATION-UNIQUENESS-TOCTOU (2026-10-14): index mcp_tools_name_key, pre-created by scripts/create-mcp-tools-unique-indexes.sh
   description     String?
   version         String
   capabilities    Json              // Tool capabilities and supported operations

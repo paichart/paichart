@@ -27,7 +27,7 @@ psql "$DATABASE_URL" -c "SELECT c.title, length(a.content)/1024 AS kb, a.\"creat
 
 | Limit | Value (source of truth) | Nodes before it binds |
 |---|---|---|
-| Downstream read depth: 8K Tier-1 window + `read_more` (6 pages/origin, ~8/run) | `agentic-tool-loop.ts` `MAX_TOOL_RESULT_LENGTH` + pager caps | **~4–5** if a consumer must page the RAW harvest (R19 P4 hit this at 3 nodes pre-twin-fix) |
+| Downstream read depth: 8K Tier-1 window + `read_more` (6 pages/origin, ~8/run; Program Architect 9/12 since 2026-10-12 — `role-read-budget.ts`) | `agentic-tool-loop.ts` `MAX_TOOL_RESULT_LENGTH` + pager caps | **~4–5** if a consumer must page the RAW harvest (R19 P4 hit this at 3 nodes pre-twin-fix) |
 | `agent.results` verbose ceiling | 100KB (`VERBOSE_MAX_CHARS`, task-action-handler) | ~5–8 |
 | §6 chain cap (harvester finalResponse → author) | 128KB/predecessor (`context-chainer.ts`) | ~8–10, and only if the finalResponse bloats — discipline keeps it a curated summary |
 | Harvest tool turns (3–6 scoped reads/device) | loop turn budget | ~8–10 |
@@ -51,8 +51,9 @@ interface contract, each harvesting only its own devices. Every cap above **rese
 ## If a use-case genuinely forces more depth per leg
 
 Levers in preference order (none currently needed):
-1. Raise the `read_more` per-run page budget — one constant, Layer 1 (`agentic-tool-loop.ts`,
-   agent-execution-specialist's domain).
+1. Raise the `read_more` per-run page budget — since R1 (2026-10-12) a PER-ROLE table, Layer 1
+   (`lib/agents/role-read-budget.ts`, read by `agentic-tool-loop.ts`; agent-execution-specialist's domain). Raise it for
+   the role that needs it, never globally (the Program Architect precedent: 9 / 12).
 2. Only then consider the 8K Tier-1 window — it is calibrated to context economics
    (`harvest-truncation-safety.md`), not arbitrary; raising it taxes every run.
 

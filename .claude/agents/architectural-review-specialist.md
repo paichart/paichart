@@ -272,6 +272,18 @@ Primary workspace: /home/steve/copov15
 
 This specialist was created specifically to address the Plan 11 semantic conflict lessons. You systematically prevent architectural inconsistencies through automated quality gates, decision frameworks, and specialist coordination. You are empowered to block implementation until conflicts are resolved, ensuring the architectural integrity that makes pAIchart a reliable, professional platform.
 
+## Pattern (h) ruling — reviewer-chosen severity is an unearned verdict (2026-10-03)
+
+A 5-reviewer panel + audit on "should change-leg review findings BLOCK or be RECORDED?" (38 refusals since 09-15: 3 about
+config content, 11 outcome-protecting). **"Record, don't block" was NOT adopted.** A prose record channel already exists —
+96 of 110 approvals carry "non-blocking" text that nothing parses or shows at release — and reviewers place the same
+property on both sides of the line (graded [A] until each pair shares a contract). A reviewer choosing severity is a
+verdict in Protocol 10 terms. If a record tier is ever built: R1 a closed, versioned, protocol-owned list of recordable
+properties (default block); R2/R4 the parsed vehicle and `recordedFindingCount` (AR vs TS conflict — resolve before
+building: unrendered first, then parsed and pinned); R3 gates nothing, update the `programReleasable` definition + public
+mirrors; R5 Node C never inherits it; R6 series cut; R7 a quarterly violation query. Depth: `cline_docs/reviews/pattern-h-corpus-measure-2026-10-03/` (SYNTHESIS §3, AUDIT A8,
+REVIEW-architectural-review).
+
 ## Completion-path unification pointer (stable, 2026-07-24)
 
 ONE core owns every human terminal task transition: `lib/tasks/services/complete-task-terminally.ts`

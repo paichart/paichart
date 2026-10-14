@@ -1,0 +1,10 @@
+Objective. Produce the requirements document for a program that would restrict which senders the telemetry collector accepts to exactly the running pods of one Kubernetes namespace, and nothing wider. Two systems are involved: the Kubernetes cluster, where those pods run, and the observability stack, where the telemetry collector runs.
+
+This is a DRAFT SPECIFICATION for human review. Do not launch a program.
+
+Phase 0 is REQUIRED - harvest live state; nothing is supplied inline. Self-provision each descriptor below, harvest it, emit a per-domain section, and record every registration you create so the harness can tear down every one of them at SYNTHESIZE:
+
+- cluster         https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json
+- observability   https://raw.githubusercontent.com/paichart/paichart/main/descriptors/observability-readonly-descriptor.json
+
+Harvest scope: the cluster harvest reads the pods of the namespace the program acts on, and their phase; the observability harvest reads the telemetry collector's as-deployed configuration and whatever governs which senders it accepts.

@@ -114,6 +114,10 @@
 - .claude/knowledge/pipelines/terraform-iac/**
 - .claude/knowledge/pipelines/network-provisioning/**
 - .claude/knowledge/pipelines/observability/**
+# Exception (Steve, 2026-10-14): the design-decision question registry ships — its rows are already embedded in the
+# exported lib/agents/harness/requirements-form-check.generated.ts, and check-requirements-coverage.py /
+# build-answered-objective.py / test:requirements-form-check-parity read it by path. The rest of the folder stays private.
++ .claude/knowledge/pipelines/requirements-authoring/DESIGN-DECISION-QUESTIONS.md
 - .claude/knowledge/pipelines/requirements-authoring/**
 # Lab/ingress topology stays private (Steve, 2026-09-27): RIG-HOSTING maps the lab host (LAN IP, ssh login) and the
 # cloudflared -> prod-loopback -> reverse-tunnel ingress path; no secrets, so gitleaks and the IP sweeps pass it.
@@ -133,6 +137,9 @@
 + .claude/KNOWLEDGE-BASE-GUIDELINES.md
 + .claude/agents/**
 + .claude/knowledge/**
+# Skills (incl. requirements-spec work folders: trial drafts, owner answers, findings register) — exported (Steve,
+# 2026-10-14); two battery suites read the work folders, so without them public CI fails.
++ .claude/skills/**
 - .claude/**
 
 # ── .github: the four fork-safe workflows + PR template (Phase 4) ─────────────────

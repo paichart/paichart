@@ -1,0 +1,34 @@
+Objective. Produce the requirements document for a program that would restrict reads of a cloud log-archive bucket to exactly the running pods of one Kubernetes namespace, and nothing wider. Two systems are involved: the Kubernetes cluster, where those pods run, and the cloud, where the log-archive bucket lives.
+
+This is a DRAFT SPECIFICATION for human review. Do not launch a program.
+
+DESIGN DECISIONS - DECLARED, NOT INFERRED. Each item below is a choice made by the POV owner. Transcribe each one; do not substitute a different choice, and do not treat any of them as a description of current state - the program's legs observe current state for themselves.
+
+1. The cluster leg acts on the Kubernetes namespace `trading`.
+2. The cloud leg acts on the Terraform resource `aws_s3_bucket.app_logs` in workspace `prod` (bucket `acme-app-logs`); the restriction is written on the bucket's own policy.
+3. The restriction governs the whole bucket.
+4. The pods that count are the pods in the declared namespace whose phase is Running at the time of the leg's read; readiness is not a criterion; pods on the host's network are excluded; the leg reports, in its report.md, the literal criterion it applied and the time of the read.
+5. The published set is a host list.
+6. The program plan gate is approved by steve.terry@paichart.com.
+7. The cluster (`kubernetes-gitops`) change gate is approved by josh.allen@paichart.com.
+8. The cloud (`terraform-iac`) change gate is approved by jacob.wilcox@paichart.com.
+9. The cluster gate's position is before-leg: it approves the method (which namespace, which pods count, how the list is derived) before the cluster leg runs.
+10. The cloud gate's position is after-producer-before-consumers: it approves the host list produced by the cluster leg, once it exists, before the cloud leg uses it.
+11. The cloud leg's admitted principal is source-address-range: the pods' addresses, as the host list of item 5; no identity and no network path is admitted.
+12. The admitted pods may perform `s3:GetObject` only.
+13. The cluster leg is read-and-publish: it reads the pods' addresses and publishes them, and writes nothing to the cluster.
+14. Where the cloud leg's own harvest cannot confirm that the bucket sees the pods' addresses on their request path, the cloud leg acts regardless (act-regardless): the policy is written, and the premise that the pods' source addresses reach the bucket unchanged, with no address translation on the path, is recorded as UNTESTED in the cloud leg's package.
+15. Existing allowances on the bucket's policy are preserve-bounded: every existing statement is preserved unchanged; the bound is an explicit Deny of `s3:GetObject` (and only that action) for any request whose source address is not in the host list of item 5 — the same list the Allow uses. If more than one Terraform resource manages the bucket's policy, the cloud leg reports a gap and does not consolidate them.
+16. If no policy governs the bucket, the cloud leg will create one: it creates a policy holding only the Allow and the Deny of item 15.
+17. If the declared bucket does not exist, the outcome is gap: the cloud leg reports the gap and creates nothing.
+18. If the bucket holds no objects, the cloud leg will act: an empty bucket still gets the restriction, because logs arrive later.
+19. If no running pod remains after the exclusions of item 4 (none is found, or every one is excluded), the outcome is gap: the cluster leg publishes a gap report and no host list, and the cloud leg, having no host list, writes no policy.
+20. No exception is made for any other reader; the effect is stated, not worked around. The Deny of item 15 stops every other reader of the bucket's objects from using `s3:GetObject` — other roles and users, administrators and the account root, and services that read objects on someone's behalf; it does not affect writes, listing, or changing the policy, so access can always be restored by editing the policy. The cloud leg names this effect in its package and lists the existing statements whose `s3:GetObject` the Deny now overrides. The bucket's existing tags are known drift, triaged by the owner: synthetic test fixtures, out of scope for this change, accepted; neither leg acts on or changes them.
+21. The pods' requests reach the bucket through a private endpoint of the storage service (private-endpoint): the bucket sees each pod's own address in the attribute that path carries.
+
+Phase 0 is REQUIRED - harvest live state; nothing is supplied inline. Self-provision each descriptor below, harvest it, emit a per-domain section, and record every registration you create so the harness can tear down every one of them at SYNTHESIZE:
+
+- cluster       https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json
+- cloud         https://raw.githubusercontent.com/paichart/paichart/main/descriptors/terraform-readonly-descriptor.json
+
+Harvest scope: the cluster harvest reads the pods of the declared namespace, and their phase; the cloud harvest reads the declared bucket and the policy that governs it.

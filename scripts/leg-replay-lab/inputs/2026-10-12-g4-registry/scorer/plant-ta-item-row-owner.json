@@ -1,0 +1,14 @@
+{
+  "id": "ta-item-row-owner",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "TA: an item row listed in the owner block (G-ITEM-SAFE stop).",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "## Decisions needed from the owner\n",
+      "new": "## Decisions needed from the owner\n\nobservability-config.item-12 — a planted item row — options: — — governs: Pipeline 2 objective — tier: blocking — planted\n"
+    }
+  ]
+}

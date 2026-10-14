@@ -66,6 +66,8 @@ Inspired by CrewAI's proven architecture where role, goal, backstory, descriptio
 
 ### Directive Synthesis (when `task.prompt` not explicitly set)
 
+> **2026-10-07:** until TEMPLATE-SENT-TWICE fix A (`24d70fa8`) the ENGINE path never reached this branch for a prompt-less task — both config builders fell back to the raw role template, which was rendered here as a second (unresolved) copy of the system prompt. The fallback is gone; this synthesis now runs on ~98% of executions. Pinned: `test:config-prompt-no-template-fallback`.
+
 ```typescript
 // ✅ CORRECT: Synthesize a role-aware directive
 const directive = `As a ${agentRole}, complete the following task: "${task.title}"`;

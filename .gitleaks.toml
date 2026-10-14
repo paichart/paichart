@@ -42,6 +42,11 @@ regexes = [
   '''^c[a-z0-9]{24}$''',                     # CUID row ids (user/task ids in log excerpts) — identifiers, not credentials
   '''^orders-api-[a-z0-9]{8,10}-[a-z0-9]{5}$''', # k8s lab pod names (Deployment-generated ReplicaSet+pod hashes) in exported run artifacts — identifiers, not credentials (inspected 2026-09-24)
   '''^BGP/OSPF/''',                           # prose fragment in a review doc
+  # A PEM BEGIN marker written AS PROSE in markdown (review docs discussing the R10 PEM rule, 2026-10-13):
+  # the BEGIN line continues into text containing a backtick. A real key's BEGIN line ends at the
+  # closing dashes and the next line is base64, which never contains a backtick (inspected: 5 matches in
+  # REVIEW-P1-P2.md / REVIEW-P1-P2-PATTERNS.md, none with a key body).
+  '''-----BEGIN[ A-Z0-9_-]*PRIVATE KEY(?: BLOCK)?-----[^\n]*`''',
 ]
 paths = [
   '''node_modules''',

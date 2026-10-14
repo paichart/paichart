@@ -15,7 +15,7 @@ The artifact system is critical for audit trails, debugging, and context enrichm
 
 | Task type | dependents | JSON artifact | report.md? |
 |-----------|-----------|---------------|------------|
-| `PIPELINE` (harness) | any | `pipeline-index.json` | ❌ |
+| `PIPELINE` (harness) | any | `pipeline-index.json` | ✅ only when `metadata.deliverableSourceTaskId` is set and the source has a SUCCESS (extracted source `finalResponse`; banner when the gate is not approved; reviewer-warnings section on infra change legs / program roots, 2026-10-08) — else ❌ (corrected 2026-10-08: this row said ❌ since the 2026-04-28 rework) |
 | Non-PIPELINE | 0 (leaf) | `result.json` | ✅ — `report.md = finalResponse` verbatim |
 | Non-PIPELINE | 1+ (intermediate) | `result.json` | ❌ |
 
@@ -661,3 +661,10 @@ echo -e "\n=== Resource Health ==="
 echo "Lazy loading: $(grep -c "lazy.*load\|on-demand" lib/mcp/simple-resource-manager.js || echo '0') references"
 echo "Resource validation: $(grep -c "validateResource\|resource.*exists" --include="*.js" -r lib/mcp || echo '0') checks"
 ```
+
+## Held bytes are NOT artifacts (2026-10-14)
+
+PLATFORM-HELD-BYTES stores captured file text in `held_blobs` / `held_file_refs`, never in `agent_artifacts`, and Stage A has
+NO reader surface: no MCP resource, no `fetch`, no agent tool, no artifact. A Stage B reader must go through
+`HELD_BLOB_META_SELECT` and read refs only by the `executionId` `selectAuthoritativeExecution` selects (selection-coverage
+fingerprint C).

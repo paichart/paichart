@@ -101,12 +101,79 @@ const CONTROL_CHARS = new RegExp('[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\
 // (e.g. `ESC c` full-reset) has its ESC stripped by CONTROL_CHARS below; the trailing printable
 // byte is intentionally left (cosmetic stray char, not a quarantine-breakout vector — sec-ops NTH-1).
 const ANSI_CSI = new RegExp('\\u001B\\[[0-9;?]*[ -/]*[@-~]', 'g');
-const ANSI_OSC = new RegExp('\\u001B\\][\\s\\S]*?(?:\\u0007|\\u001B\\\\)', 'g');
+// OSC (`ESC ]` ... BEL | `ESC \\`) is removed by removeAnsiOsc() below, not by a regex: the former
+// `/\u001B\][\s\S]*?(?:\u0007|\u001B\\)/g` rescanned to the end of the text from EVERY unterminated `ESC ]`
+// (27.5 s at 400 KB, register F9-s2). Same output, linear time.
+const ESC = String.fromCharCode(0x1B);
+const BEL = String.fromCharCode(0x07);
 // Defang the quarantine tag (open AND close), case-insensitive + whitespace-tolerant,
-// so device output cannot break out of its <prior_output> block.
-const PRIOR_OUTPUT_TAG = /<\s*\/?\s*prior_output\b[^>]*>/gi;
+// so device output cannot break out of its <prior_output> block. The HEAD is matched by regex and the
+// rest of the tag (up to the next `>`) by indexOf -- see defangPriorOutputTags() (F9-s2).
+// `\s*(?:\/\s*)?` is the same language as the former `\s*\/?\s*` without its ambiguity: two adjacent
+// `\s*` split a whitespace run k ways, so `<` + a long run of spaces was quadratic on its own.
+const PRIOR_OUTPUT_HEAD = /<\s*(?:\/\s*)?prior_output\b/gi;
 const SINGLE_LT = String.fromCharCode(0x2039); // angle-quote stand-in for '<'
 const SINGLE_GT = String.fromCharCode(0x203A); // angle-quote stand-in for '>'
+
+/**
+ * Remove every OSC sequence -- byte-identical to `x.replace(/\u001B\][\s\S]*?(?:\u0007|\u001B\\)/g, '')`.
+ * A match starting at `ESC ]` exists iff a terminator (BEL, or `ESC \\`) begins at or after the `]`'s
+ * successor, and it ends at the FIRST such terminator. The next-terminator positions are cached, so a run
+ * of unterminated `ESC ]` costs one scan, not one scan each (F9-s2).
+ * NOTE: OSC still deletes everything up to the next BEL, across lines (the "47 characters of real config"
+ * observation in F9-s2). That is semantics, not cost; changing it changes output and is its own decision.
+ */
+function removeAnsiOsc(x: string): string {
+  if (!x.includes(ESC + ']')) return x;
+  let out = '';
+  let pos = 0;
+  let nextBel = -2;
+  let nextSt = -2; // `ESC \\` (string terminator)
+  for (;;) {
+    const i = x.indexOf(ESC + ']', pos);
+    if (i === -1) break;
+    const from = i + 2;
+    if (nextBel !== -1 && nextBel < from) nextBel = x.indexOf(BEL, from);
+    if (nextSt !== -1 && nextSt < from) nextSt = x.indexOf(ESC + '\\', from);
+    if (nextBel === -1 && nextSt === -1) break; // no terminator anywhere after: no later start can match either
+    const useBel = nextSt === -1 || (nextBel !== -1 && nextBel < nextSt);
+    const end = useBel ? nextBel + 1 : nextSt + 2;
+    out += x.slice(pos, i);
+    pos = end;
+  }
+  return pos === 0 ? x : out + x.slice(pos);
+}
+
+/**
+ * Defang every quarantine tag. WITH a `>` after the head: byte-identical to the former
+ * `x.replace(/<\s*\/?\s*prior_output\b[^>]*>/gi, m => m.replace(/</g, LT).replace(/>/g, GT))` -- the span runs
+ * from the head to the FIRST `>` after it, and every `<`/`>` in it is angle-quoted. WITHOUT one (the F9-s2
+ * shape -- the former regex rescanned to the end of the text from every such head, 22 s/MB, and then defanged
+ * NOTHING): the head's own `<` is defanged. Never bound the attribute length: a long tag must not escape the
+ * defang (register F9-s2). The next-`>` position is cached, so a run of `>`-less heads stays linear.
+ */
+function defangPriorOutputTags(x: string): string {
+  PRIOR_OUTPUT_HEAD.lastIndex = 0;
+  if (!PRIOR_OUTPUT_HEAD.test(x)) return x;
+  let out = '';
+  let pos = 0;
+  let nextGt = -2;
+  PRIOR_OUTPUT_HEAD.lastIndex = 0;
+  let h: RegExpExecArray | null;
+  while ((h = PRIOR_OUTPUT_HEAD.exec(x)) !== null) {
+    const headEnd = h.index + h[0].length;
+    if (nextGt !== -1 && nextGt < headEnd) nextGt = x.indexOf('>', headEnd);
+    if (nextGt === -1) {
+      out += x.slice(pos, h.index) + SINGLE_LT + x.slice(h.index + 1, headEnd);
+      pos = headEnd;
+    } else {
+      out += x.slice(pos, h.index) + x.slice(h.index, nextGt + 1).replace(/</g, SINGLE_LT).replace(/>/g, SINGLE_GT);
+      pos = nextGt + 1;
+    }
+    PRIOR_OUTPUT_HEAD.lastIndex = pos;
+  }
+  return out + x.slice(pos);
+}
 
 export type RewriteClass =
   | 'nfkc' | 'zero-width-bidi' | 'ansi' | 'control' | 'quarantine-tag'
@@ -132,8 +199,8 @@ export function sanitizeChainedOutput(raw: string): SanitizeChainedResult {
   const countStrip = (s: string, re: RegExp): string =>
     s.replace(re, (m) => { strippedControlChars += m.length; return ''; });
 
-  // Classification = compare before/after EACH step (never re-run a regex: two are costly on
-  // hostile input, register F9-s2). A new transform goes through step(); one added outside it
+  // Classification = compare before/after EACH step (never re-run a step: the OSC and tag steps were
+  // quadratic on hostile input until 2026-10-13, register F9-s2 -- keep it cheap to add one). A new transform goes through step(); one added outside it
   // surfaces as `unclassified` below rather than disappearing.
   const classes = new Set<RewriteClass>();
   const step = (cls: RewriteClass, s: string, fn: (x: string) => string): string => {
@@ -145,9 +212,9 @@ export function sanitizeChainedOutput(raw: string): SanitizeChainedResult {
   // 1) NORMALIZE (must precede detect). ORDER AND NFKC ARE LOAD-BEARING -- do not change (F9 record).
   let text = step('nfkc', raw, (x) => x.normalize('NFKC'));
   text = step('zero-width-bidi', text, (x) => countStrip(x, ZERO_WIDTH_BIDI));
-  text = step('ansi', text, (x) => x.replace(ANSI_CSI, '').replace(ANSI_OSC, ''));
+  text = step('ansi', text, (x) => removeAnsiOsc(x.replace(ANSI_CSI, '')));
   text = step('control', text, (x) => countStrip(x, CONTROL_CHARS)); // also removes any leftover ESC
-  text = step('quarantine-tag', text, (x) => x.replace(PRIOR_OUTPUT_TAG, (m) => m.replace(/</g, SINGLE_LT).replace(/>/g, SINGLE_GT)));
+  text = step('quarantine-tag', text, (x) => defangPriorOutputTags(x));
 
   // 2) DETECT on the normalized text (positions are valid indices into `text`)
   const { detectedPatterns } = detectPromptInjection(text);

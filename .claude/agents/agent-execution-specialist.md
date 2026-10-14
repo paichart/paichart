@@ -25,7 +25,9 @@ preambleChars) threads adapter→ExecutionCoreInput→canonical builder, emitted
 finalResponse + whitelisted in `RESULT_JSON_SUMMARY_KEYS`. Ops: deploy gate
 `verify-template-mode-compat.ts` (UNKNOWN-mode red, no rollback); the ONLY flip =
 `scripts/flip-harness-protocol-mode.ts` (refusing, one-key jsonb merge, --render-hash rollback
-drill). Gate: test:system-prompt-injections 37 (frozen control arm — pre-C goldens never edited).
+drill). Gate: test:system-prompt-injections `# expect >=43` (floor — was 37 at Phase C; frozen control arm, pre-C goldens never
+edited). Promotion E 2a (2026-10-05): a DEPRECATED (retired) row's message carries its row `description` (≤500 chars) or, for a
+program-tier name, the HOWTO-use-program-harness pointer — on BOTH the composed and the named path; `errorCode` stays NULL.
 Record: `cline_docs/reviews/ws1-phase-c-2026-08-17/SYNTHESIS.md`.
 
 ## 🆕 2026-07-14 — result.json FIELD ORDER is a contract + reviewerVerdict (9th trust signal)
@@ -178,6 +180,8 @@ Before making changes in the execution engine domain, run:
 `/.claude/knowledge/discoveries/agent-execution-discovery.md`
 
 This discovery will map the current state of the execution engine, audit transaction boundaries, trace SSE event flows, and identify all integration points in the agent execution system.
+
+**Per-role read budget (2026-10-12, R1)**: read_more page caps are per role — `lib/agents/role-read-budget.ts` (default 6/8; `program_architect` + `value_chain_architect` 9/12), threaded as REQUIRED `AgenticLoopInput.agentRole` from execution-core; per-run cap still `min(pagesPerRun, 25% of maxToolTurns)` (Architect at 30 turns = 7). Pin `test:role-read-budget`. Record: `cline_docs/reviews/size-plan-2026-10-12/R1-ENGINE.md`.
 
 **Runtime ceilings I OWN (2026-06-17, model-aware + D-1 closed 2026-06-18)**: `maxToolTurns` is
 `Math.min`-clamped to `RUNTIME_LIMITS.MAX_TOOL_TURNS` (200) at the read sites — `agentExecutionEngine.ts:765`
@@ -479,3 +483,23 @@ Suites: `test:chain-injection` · `test:resolve-owning-leg` · `test:chain-cap-a
 
 Depth: `cline_docs/reviews/cross-pipeline-value-delivery-2026-09-16/` (CHECKLIST.md carries the
 anchors + 10 build divergences) · VT-25.
+
+## Prompt/model fixes, 2026-10-07 (pointers — register TEMPLATE-SENT-TWICE + OPUS55)
+- **`config.prompt` = the task's OWN directive only** (`24d70fa8`): both engine config builders lost the `|| promptTemplate` fallback; absent ⇒ §1 synthesizes "As a <role>…". Pin `test:config-prompt-no-template-fallback`; series cut 05:10:44Z.
+- **Preserved thinking (`dbef8984`):** for `bindsThinkingToPrefix` models (Opus 5.5, Fable 5.1; Sonnet 5.5 must get it when added) the four reflection calls (#89, budget fail-fast, form correction, #90) keep the full tool set with `tool_choice: none` — the bound prefix is system + tools + messages (Anthropic docs). An errored reflection call is now a FACT, `toolLoop.reflectionErrors`. Pin `test:reflection-history-binding`; API-verified (V1).
+- **In-run correction turns (2 roles, pattern `in-run-facts-only-correction-pattern.md`):** you own the loop WIRING (one tool-less turn, after the fact, before `onStoringResults`/#90; time budget; `reflectionPassSpentBy`); the mechanism + adoption rule are execution-facts'. Discovery §2026-10-07 holds the wiring greps.
+
+## COMPLETE-THEN-FAIL rescue + PLAN-SPAWN carries (pointer, 2026-10-05 — you own the rescue)
+
+**Rescue (`a104deb8`):** `lib/services/execution-completion-anchored.ts` (`rescueOrRethrow`, `persistCompletionAnchored`). When a
+PIPELINE's final harness execution throws AFTER completing its own task (anchor `metadata.completedByExecutionId` = this execution),
+the core persists the deliverable + facts from DB state through an anchored CAS success tx (rolls back if the row is no longer
+RUNNING), writes a LABELLED platform finalResponse + `postCompletionFailure` fact, never runs #90 or the confidence parse, and ALWAYS
+rethrows the ORIGINAL error otherwise. Partial loop state rides the error NON-ENUMERABLY (`agenticLoopPartial` — never logged). O4: a
+failed execution on a COMPLETED task writes `executionStatus = NULL` (`writeTerminatedExecutionTaskStatus`, both sinks). Phase 2
+(reapers) deferred — trigger on the register's O6 line. Pins: `test:post-completion-rescue` (CI + local DB I1–I8, I4b late rollback).
+**C3 clearance carry** runs in `prepare-task-for-execution.ts` (~:235; module `lib/agents/harness/plan-spawn-carry.ts`).
+Depth: `cline_docs/reviews/complete-then-fail-2026-10-05/` (DESIGN-v2, BUILD-REPORT §8) · discovery top section.
+
+## Pointer (2026-10-14): PLATFORM-HELD-BYTES capture halves
+`lib/services/held-bytes-capture.ts` — pure half right after `executionTime` (before every reader of `toolCallResults`), I/O half just before `persistTerminalSuccess`, on BOTH success paths (rescue: before `buildCompletionAnchoredResult`). Never throws; off unless `HELD_BYTES_CAPTURE_ENABLED === 'true'`. Pinned by CTF-SEAM-6. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-BUILD.md`.

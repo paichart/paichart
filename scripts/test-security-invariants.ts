@@ -18,7 +18,8 @@ import * as path from 'path';
 import { sanitizePovMetadata } from '@/lib/pov/sanitize-metadata';
 import { parseEnumParam } from '@/lib/utils/parse-enum-param';
 import { sanitizeChainedOutput, isR9OperatorEvent, R9_OPERATOR_EVENT_CLASSES } from '@/lib/agents/harness/sanitize-chained-output';
-import { redactSerializedLeaf, redactArtifactSecrets, redactSecretsDeep } from '@/lib/agents/harness/redact-artifact-secrets';
+import { redactSerializedLeaf, redactArtifactSecrets, redactSecretsDeep, R10_VERSION, R10_RULE_SOURCES } from '@/lib/agents/harness/redact-artifact-secrets';
+import { createHash } from 'crypto';
 const { validateUrlSafety } = require('@/lib/utils/url-safety') as {
   validateUrlSafety: (u: string) => { safe: boolean; reason?: string };
 };
@@ -288,6 +289,68 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
       isR9OperatorEvent(['quarantine-tag']) && !isR9OperatorEvent(['nfkc']) && !isR9OperatorEvent(['ansi', 'emptied']));
   }
 
+  // ── F9-s2 (2026-10-13, PLATFORM-HELD-BYTES P2): the OSC and quarantine-tag steps are LINEAR, and byte-identical
+  // to the former regexes on every input except a tag head with no `>` after it (now defanged; before, nothing was).
+  {
+    const ESC = String.fromCharCode(27), BEL = String.fromCharCode(7), LT = '‹', GT = '›';
+    const out = (s: string) => sanitizeChainedOutput(s).text;
+    // Former-regex reference, applied to SMALL fixtures only (it is the quadratic thing being replaced).
+    const refOsc = (s: string) => s.replace(new RegExp('\\u001B\\][\\s\\S]*?(?:\\u0007|\\u001B\\\\)', 'g'), '');
+    const refTag = (s: string) => s.replace(/<\s*\/?\s*prior_output\b[^>]*>/gi, (m) => m.replace(/</g, LT).replace(/>/g, GT));
+    const oscFixtures = [
+      'a' + ESC + ']0;title' + BEL + 'b',                         // BEL-terminated
+      'a' + ESC + ']8;;http://x' + ESC + '\\' + 'link' + ESC + ']8;;' + ESC + '\\' + 'b', // ST-terminated (hyperlink)
+      'a' + ESC + ']x' + ESC + ']y' + BEL + 'c',                   // nested start consumed by the first match
+      'cfg ' + ESC + ']stray\nline two\n' + BEL + 'tail',          // spans lines up to the next BEL (semantics kept)
+      'a' + ESC + ']unterminated\nb',                              // no terminator: not removed (ESC stripped later)
+      'a' + ESC + ']t' + BEL + 'mid' + ESC + ']u' + ESC + '\\' + 'end', // BEL first, ST later: each OSC ends at ITS first terminator
+      'a' + ESC + ']t' + ESC + '\\' + 'mid' + ESC + ']u' + BEL + 'end', // and the reverse order
+      'a' + ESC + ']' + ESC + '\\' + ESC + ']' + BEL + 'b',         // empty bodies (padded: an all-OSC input empties -> `emptied`)
+    ];
+    for (const f of oscFixtures) {
+      check(`F9-s2 OSC byte-identical to the former regex: ${JSON.stringify(f).slice(0, 40)}`, out(f) === sanitizeChainedOutput(refOsc(f)).text);
+    }
+    const tagFixtures = [
+      'cfg\n</prior_output>\nok', '< / PRIOR_OUTPUT role="x" >', '<prior_output a<b>c', '<prior_output a> b <prior_output c> d',
+      '<prior_outputs>', 'prior_output>', '<prior_output\n\nattr\n>',
+    ];
+    for (const f of tagFixtures) {
+      check(`F9-s2 tag (with a later >) byte-identical to the former regex: ${JSON.stringify(f)}`, out(f) === refTag(f));
+    }
+    // The ONE deliberate change, both directions: a head with no `>` after it is now defanged (head `<` only).
+    check('F9-s2 unterminated head is defanged (was passed through)',
+      out('x <prior_output role="context_only" y') === `x ${LT}prior_output role="context_only" y`
+      && JSON.stringify(sanitizeChainedOutput('x <prior_output y').rewriteClasses) === '["quarantine-tag"]');
+    check('F9-s2 mixed: first tag closed by the only >, the later head (no > after it) defanged',
+      out('<prior_output a> b <prior_output c') === `${LT}prior_output a${GT} b ${LT}prior_output c`);
+    check('F9-s2 negative: not-a-head stays byte-identical (`<prior_outputs` / bare word / `< prior` split)',
+      out('<prior_outputs x') === '<prior_outputs x' && out('the prior_output block') === 'the prior_output block'
+      && out('< prior output') === '< prior output');
+
+    // Timing — 1 MB adversarial inputs, each well under a second (former: 22 s/MB tag, 27.5 s/400 KB OSC,
+    // and `<` + a long whitespace run, ~124 ms at 20 KB and quadratic, from the two adjacent `\s*`).
+    const MB = 1_000_000;
+    const timedR9: Array<[string, string]> = [
+      ['<prior_output xN, no >', '<prior_output'.repeat(MB / 13 | 0)],
+      ['unterminated ESC] xN', (ESC + ']').repeat(MB / 2)],
+      ['< + 1 MB whitespace', '<' + ' '.repeat(MB)],
+      ['heads then a single > at the very end', '<prior_output a'.repeat(MB / 15 | 0) + '>'],
+      ['ESC] xN then a single BEL at the end', (ESC + ']x').repeat(MB / 3 | 0) + BEL],
+      // Many SHORT terminated OSCs with only ONE terminator kind present: the absent kind's "none left" must be cached,
+      // or every start rescans the whole text for it (mutation-found 2026-10-13; ~3.3 s at 1 MB uncached).
+      ['BEL-terminated OSC xN, no ST anywhere', (ESC + ']x' + BEL).repeat(MB / 4)],
+      ['ST-terminated OSC xN, no BEL anywhere', (ESC + ']x' + ESC + '\\').repeat(MB / 5)],
+      // 4 MB on purpose: an uncached `>` lookup here is quadratic but V8's single-char indexOf hides it at 1 MB (~0.5 s).
+      ['<prior_output xN, no >, 4 MB', '<prior_output'.repeat(4 * MB / 13 | 0)],
+    ];
+    for (const [name, s] of timedR9) {
+      const t0 = Date.now(); sanitizeChainedOutput(s); const ms = Date.now() - t0;
+      // 4 MB fixture: 3 s bar (linear ~0.2-1 s on a loaded box; the uncached-`>` mutant takes ~38 s).
+      const bar = s.length > 2 * MB ? 3000 : 1000;
+      check(`F9-s2 linear: ${name} (${s.length} chars) under ${bar} ms (got ${ms} ms)`, ms < bar);
+    }
+  }
+
   // Overlap-skip negative control (validation N-3): the subtlest branch (right-to-left + overlap
   // skip) must still strip the payload literal while preserving surrounding device text.
   {
@@ -502,6 +565,232 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
     redactMod.includes("process.env.ARTIFACT_SECRET_REDACT_ENABLED === 'false'"));
   check('R10 DEFAULT-ON: the opt-IN form is gone (a default-off security control is a control you must remember to have)',
     !redactMod.includes("ARTIFACT_SECRET_REDACT_ENABLED !== 'true'"));
+}
+
+// ── J (P1, 2026-10-13). R10 — observability/cloud credential shapes + LINE PRESERVATION ──
+// PLATFORM-HELD-BYTES prerequisite P1 (cline_docs/reviews/platform-held-bytes-2026-10-13/P1-P2-BUILD.md). Each shape
+// is pinned BOTH directions: the positive is redacted token-in-place, the near-miss negative is byte-identical.
+// The held-bytes design depends on R10 never changing a text's line count — pinned as a property over every fixture.
+{
+  const eq = (input: string, want: string) => redactArtifactSecrets(input).redacted === want;
+  const same = (input: string) => { const r = redactArtifactSecrets(input); return r.redacted === input && r.redactedCount === 0; };
+  const PH = '<<REDACTED-SECRET>>';
+
+  // bearer_token (Prometheus scrape / remote_write)
+  check('R10 P1: bearer_token value redacted', eq('    bearer_token: synthetic.test.token9', `    bearer_token: ${PH}`));
+  check('R10 P1 FP: bearer_token_file path untouched (exact key)', same('    bearer_token_file: /etc/prom/token'));
+
+  // credentials under authorization:
+  const authBlk = (key: string) => `remote_write:\n  - url: https://m/api/v1/write\n    authorization:\n      type: Bearer\n      ${key}: abcdefTOKENonlyletters\n`;
+  check('R10 P1: credentials under authorization: redacted (no shape gate: the parent is the anchor)',
+    eq(authBlk('credentials'), authBlk('credentials').replace('abcdefTOKENonlyletters', PH)));
+  check('R10 P1 FP: credentials NOT under authorization: untouched',
+    same('remote_write:\n  - url: https://m\n    queue_config:\n      credentials: abc123def\n'));
+  check('R10 P1 FP: credentials at the SAME indent as authorization: (block ended) untouched',
+    same('    authorization:\n      type: Bearer\n    credentials: abc123def\n'));
+  check('R10 P1 FP: credentials_file under authorization: untouched (exact key)', same(authBlk('credentials_file').replace('abcdefTOKENonlyletters', '/etc/cred')));
+
+  // nginx proxy_set_header Authorization
+  check('R10 P1: nginx Bearer value redacted, scheme + quote + semicolon survive',
+    eq('    proxy_set_header Authorization "Bearer abc123def";', `    proxy_set_header Authorization "Bearer ${PH}";`));
+  check('R10 P1: nginx Basic value redacted (letters-only credential, no shape gate)',
+    eq('proxy_set_header Authorization "Basic dXNlcjpwYXNz";', `proxy_set_header Authorization "Basic ${PH}";`));
+  check('R10 P1 FP: nginx $variable references untouched',
+    same('proxy_set_header Authorization $http_authorization;\nproxy_set_header Authorization "Bearer $jwt";'));
+  check('R10 P1 FP: nginx non-Authorization header untouched', same('proxy_set_header X-Real-IP "Bearer abc123def";'));
+
+  // YAML headers: map
+  const hdr = (v: string) => `exporters:\n  otlphttp:\n    headers:\n      Authorization: "${v}"\n      x-scope-orgid: tenant1\n`;
+  check('R10 P1: headers: Authorization Basic redacted', eq(hdr('Basic dXNlcjpwYXNz'), hdr(`Basic ${PH}`)));
+  check('R10 P1: headers: lowercase authorization Bearer redacted', eq(hdr('Bearer abc.def.ghi').replace('Authorization', 'authorization'), hdr(`Bearer ${PH}`).replace('Authorization', 'authorization')));
+  check('R10 P1 FP: headers: ${env:TOKEN} reference untouched', same(hdr('Bearer ${env:TOKEN}')));
+  check('R10 P1 FP: Authorization: Bearer prose/HTTP line with NO headers: parent untouched',
+    same('Authorization: Bearer tokens are issued by the IdP\n'));
+
+  // prefixed aws_secret_access_key
+  check('R10 P1: aws_secret_access_key (credentials-file form) redacted',
+    eq('aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY', `aws_secret_access_key = ${PH}`));
+  check('R10 P1: AWS_SECRET_ACCESS_KEY env form redacted', eq('AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY', `AWS_SECRET_ACCESS_KEY=${PH}`));
+  check('R10 P1 FP: aws_secret_access_key with a non-secret-shaped value untouched (gate kept)',
+    same('aws_secret_access_key = required'));
+  check('R10 P1 FP: aws_secret_access_key_id-style longer key untouched (exact key)', same('aws_secret_access_key_ref: my-secret'));
+
+  // PEM private key blocks — a new block kind: BEGIN/END kept, one placeholder per body line, one count per block
+  // Markers and bodies are BUILT AT RUNTIME and the bodies are obviously synthetic: a literal marker followed by a
+  // base64-looking body in source trips the pre-commit gitleaks `private-key` rule (and should).
+  const PKL = 'PRIVATE ' + 'KEY';
+  const BEG = (label: string) => '-----' + 'BEGIN ' + label + '-----';
+  const ENDM = (label: string) => '-----' + 'END ' + label + '-----';
+  const body = ['SynthTestKeyLineA'.repeat(3) + 'A+/=', 'SynthTestKeyLineB'.repeat(3) + 'B+/=', 'SynthTail=='];
+  const pem = (label: string) => `tls:\n  key: |\n    ${BEG(label)}\n${body.map((l) => '    ' + l).join('\n')}\n    ${ENDM(label)}\n`;
+  const pemR = redactArtifactSecrets(pem('RSA PRIVATE KEY'));
+  check('R10 P1: PEM RSA PRIVATE KEY body redacted per line, BEGIN/END + indent kept, counted once',
+    pemR.redacted === pem('RSA PRIVATE KEY').replace(body[0], PH).replace(body[1], PH).replace(body[2], PH) && pemR.redactedCount === 1);
+  check('R10 P1: PEM (unlabelled / OPENSSH / EC / ENCRYPTED) PRIVATE KEY labels all caught',
+    ['PRIVATE KEY', 'OPENSSH PRIVATE KEY', 'EC PRIVATE KEY', 'ENCRYPTED PRIVATE KEY'].every((l) => !redactArtifactSecrets(pem(l)).redacted.includes(body[1])));
+  check('R10 P1 FP: PEM CERTIFICATE and PUBLIC KEY blocks untouched', same(pem('CERTIFICATE')) && same(pem('PUBLIC KEY')));
+  // Same negative BESIDE a private key, so the scan actually runs (alone, the PRIVATE KEY pre-check short-circuits it
+  // and a widened label survives — mutation-found 2026-10-13).
+  check('R10 P1 FP: CERTIFICATE / PUBLIC KEY bodies survive next to a redacted PRIVATE KEY', (() => {
+    const mixed = pem('CERTIFICATE').replace(body[2], 'CERTTAILxxxxxxxxxxxx') + pem('PUBLIC KEY').replace(body[2], 'PUBTAILxxxxxxxxxxxxx') + pem('PRIVATE KEY');
+    const r = redactArtifactSecrets(mixed).redacted;
+    return r.includes('CERTTAILxxxxxxxxxxxx') && r.includes('PUBTAILxxxxxxxxxxxxx') && !r.includes(body[2]);
+  })());
+  const cut = `before\n${BEG(PKL)}\n${body[0]}\n${body[1]}\nDone, next section\n`;
+  check('R10 P1: UNTERMINATED PEM (capped leaf) body redacted, scan stops at the first non-body line',
+    redactArtifactSecrets(cut).redacted === `before\n${BEG(PKL)}\n${PH}\n${PH}\nDone, next section\n`);
+  check('R10 P1: single-line PEM (env-var form) body redacted between the markers',
+    eq(`KEY="${BEG(PKL)} ${body[0]} ${ENDM(PKL)}"`, `KEY="${BEG(PKL)} ${PH} ${ENDM(PKL)}"`));
+  check('R10 P1: PEM redaction is idempotent (a second pass changes nothing, counts 0)',
+    (() => { const r2 = redactArtifactSecrets(pemR.redacted); return r2.redacted === pemR.redacted && r2.redactedCount === 0; })());
+
+  // B1 / S-1 (reviews 2026-10-13): a marker is MENTIONED in reports, scripts and runbooks. A span is a key only when it
+  // looks like one (every segment between the markers base64-run / header / blank); otherwise nothing is redacted for
+  // that BEGIN unless its own line remainder is blank or key-shaped. Every repro below must come back byte-identical.
+  const RSA = 'RSA ' + PKL;
+  const proseNegatives: Array<[string, string]> = [
+    ['validation steps expecting BEGIN, then (two steps later) END', `Step 3: \`head -1 /etc/ssl/key.pem\`\nExpected output:\n    ${BEG(PKL)}\nStep 4: \`openssl pkey -in /etc/ssl/key.pem -noout -check\`\nExpected output: \`Key is valid\`\nStep 5: \`tail -1 /etc/ssl/key.pem\`\nExpected output:\n    ${ENDM(PKL)}\n`],
+    ['BEGIN quoted mid-sentence', `The key file starts with \`${BEG(RSA)}\` and must be mode 0600.`],
+    ['BEGIN … END in one sentence', `A key looks like ${BEG(PKL)} … ${ENDM(PKL)} on disk.`],
+    ['sed range script', `sed -n '/${BEG(PKL)}/,/${ENDM(PKL)}/p' /etc/ssl/key.pem`],
+    ['grep line (quotes must stay balanced)', `grep -q -- "${BEG(RSA)}" "$f" && echo "rsa key"`],
+    ['paste instruction', `Paste the key that starts with ${BEG(PKL)} into the Vault field, then click Save.`],
+    ['markdown: BEGIN in para 1, a table, END later', `The file opens with \`${BEG(PKL)}\`.\n\n| file | mode |\n|---|---|\n| key.pem | 0600 |\n| cert.pem | 0644 |\n\nIt closes with \`${ENDM(PKL)}\`.\n`],
+    ['BEGIN and END in two separate fenced examples', '```text\n' + BEG(PKL) + '\n```\n\nand the last line is\n\n```text\n' + ENDM(PKL) + '\n```\n'],
+    ['the two markers alone with words between', `${BEG(PKL)}\nkey goes here\n${ENDM(PKL)}`],
+    // The two halves of the key rule, each alone (mutation-found: neither was distinguished by a fixture):
+    ['a doc placeholder between the markers (one short run: no 16+ run)', `${BEG(PKL)}\nREDACTED\n${ENDM(PKL)}`],
+    ['a pointer with short words around a long run (short NON-last runs)', `${BEG(PKL)} see Vault secret/data/tls/serverkey ${ENDM(PKL)}`],
+  ];
+  for (const [name, text] of proseNegatives) check(`R10 P1 FP (B1/S-1): ${name} -- byte-identical`, same(text));
+  // A cut key, then unrelated text, then a stray END: only the cut key's lines go (the span is not a key).
+  const strayEnd = `${BEG(PKL)}\n${body[0]}\n${body[1]}\n[output truncated]\nrouter bgp 65001\n neighbor 10.0.0.2 remote-as 65002\n-----BEGIN CERTIFICATE-----\nCERTBODYsynthetic0000000000\n-----END CERTIFICATE-----\nsee ${ENDM(PKL)} above\n`;
+  check('R10 P1 (B1/S-1): cut key + BGP config + CERTIFICATE + stray END -- only the cut key body redacted',
+    redactArtifactSecrets(strayEnd).redacted === strayEnd.replace(body[0], PH).replace(body[1], PH));
+  // A real ENCRYPTED key (headers + blank line) still counts as a key -- terminated and cut.
+  const encBody = `Proc-Type: 4,ENCRYPTED\nDEK-Info: AES-128-CBC,SYNTH0000000000000000000000000000\n\n${body[0]}\n${body[2]}`;
+  const enc = `${BEG(RSA)}\n${encBody}\n${ENDM(RSA)}\n`;
+  check('R10 P1: encrypted PEM (Proc-Type/DEK-Info + blank) still redacted as a key',
+    redactArtifactSecrets(enc).redacted === `${BEG(RSA)}\n${PH}\n${PH}\n\n${PH}\n${PH}\n${ENDM(RSA)}\n`);
+  check('R10 P1: cut encrypted PEM (headers, blank, body; no END) redacted up to the first non-body line',
+    redactArtifactSecrets(`${BEG(RSA)}\n${encBody.split('\n').slice(0, 4).join('\n')}\nnext: done\n`).redacted
+      === `${BEG(RSA)}\n${PH}\n${PH}\n\n${PH}\nnext: done\n`);
+  check('R10 P1: a cut key immediately followed by a second whole key -- both bodies redacted, count 2', (() => {
+    const two = `${BEG(PKL)}\n${body[0]}\n${BEG(PKL)}\n${body[1]}\n${ENDM(PKL)}\n`;
+    const r = redactArtifactSecrets(two);
+    return r.redacted === `${BEG(PKL)}\n${PH}\n${BEG(PKL)}\n${PH}\n${ENDM(PKL)}\n` && r.redactedCount === 2;
+  })());
+
+  // JSON-in-JSON with CRLF: the escaped CR before each separator is `\\r` behind TWO backslashes -- the segment trim must
+  // step over the whole backslash run, or a backslash is left glued to the placeholder and the inner JSON breaks.
+  check('R10 P1 (N-13): tab-indented CRLF PEM in JSON-in-JSON -- both layers parse, tabs + CRs kept, body redacted', (() => {
+    const inner = `${BEG(PKL)}\r\n\t${body[0]}\r\n\t${body[1]}\r\n${ENDM(PKL)}\r\n`; // tab indent: the LEADING trim too
+    const r = redactArtifactSecrets(JSON.stringify({ v: JSON.stringify({ k: inner }) }));
+    try { return JSON.parse(JSON.parse(r.redacted).v).k === `${BEG(PKL)}\r\n\t${PH}\r\n\t${PH}\r\n${ENDM(PKL)}\r\n`; } catch { return false; }
+  })());
+
+  // S-2: CRLF on the block-context parents (Windows hosts, some APIs). Line preservation must hold with CRLF too.
+  const crlfAuth = 'authorization:\r\n  type: Bearer\r\n  credentials: s3cr3tT0ken\r\n';
+  const crlfHdr = 'headers:\r\n  Authorization: "Bearer abc.def1"\r\n';
+  check('R10 P1 (S-2): CRLF authorization: block -- credentials redacted, CR kept',
+    eq(crlfAuth, crlfAuth.replace('s3cr3tT0ken', PH)));
+  check('R10 P1 (S-2): CRLF headers: map -- Authorization redacted', eq(crlfHdr, crlfHdr.replace('abc.def1', PH)));
+  check('R10 P1 (S-2): CRLF fixtures keep their line count', [crlfAuth, crlfHdr, pem(RSA).replace(/\n/g, '\r\n')]
+    .every((t) => redactArtifactSecrets(t).redacted.split('\n').length === t.split('\n').length));
+  // S-3: nginx single-quoted value.
+  check("R10 P1 (S-3): nginx single-quoted 'Bearer …' redacted, quotes + semicolon kept",
+    eq("proxy_set_header Authorization 'Bearer abc.def1';", `proxy_set_header Authorization 'Bearer ${PH}';`));
+  // N-13: a key inside JSON inside JSON (separators `\\n`): no backslash lost, both layers still parse.
+  check('R10 P1 (N-13): PEM in JSON-in-JSON -- body redacted, both JSON layers still parse, markers kept', (() => {
+    const outer = JSON.stringify({ v: JSON.stringify({ k: `${BEG(PKL)}\n${body[0]}\n${body[1]}\n${ENDM(PKL)}\n` }) });
+    const r = redactArtifactSecrets(outer);
+    try {
+      const k: string = JSON.parse(JSON.parse(r.redacted).v).k;
+      return r.redactedCount === 1 && k === `${BEG(PKL)}\n${PH}\n${PH}\n${ENDM(PKL)}\n`;
+    } catch { return false; }
+  })());
+
+  // Serialized leaves (arm 1 parses; arm 2 in place) — byte structure and encoded newlines survive
+  const serPem = JSON.stringify({ k: `${BEG(PKL)}\n${body[0]}\n${body[1]}\n${ENDM(PKL)}\n` });
+  const serCut = serPem.slice(0, serPem.length - 40); // truncated: never parses
+  const deepCut = JSON.stringify(redactSecretsDeep({ t: serCut }).value);
+  check('R10 P1 serialized: TRUNCATED leaf PEM body redacted, encoded newlines preserved',
+    !deepCut.includes(body[0]) && (redactSecretsDeep({ t: serCut }).value as any).t.split('\\n').length === serCut.split('\\n').length);
+  check('R10 P1 serialized: VALID leaf PEM redacted via arm 1', !JSON.stringify(redactSecretsDeep({ t: serPem }).value).includes(body[1]));
+  const serNginx = JSON.stringify({ conf: 'server {\n  proxy_set_header Authorization "Bearer abc123def";\n}\n' }).slice(0, 75);
+  const serNginxR = redactSerializedLeaf(serNginx).redacted;
+  check('R10 P1 serialized: nginx Bearer in a truncated leaf redacted, the \\" escape survives',
+    !serNginxR.includes('abc123def') && serNginxR.includes(`\\"Bearer ${PH}\\"`));
+
+  // LINE PRESERVATION — the property, over every fixture above plus the multi-shape config.
+  const multi = authBlk('credentials') + hdr('Basic dXNlcjpwYXNz') + pem('RSA PRIVATE KEY') + cut
+    + 'aws_secret_access_key = wJal/rX9\n"password": "a1\nb2"\nproxy_set_header Authorization "Bearer x9";\n';
+  const lines = (s: string) => s.split('\n').length;
+  check('R10 P1 LINE-PRESERVING: redaction never changes a text\'s line count (every P1 fixture)',
+    [multi, authBlk('credentials'), hdr('Basic dXNlcjpwYXNz'), pem('RSA PRIVATE KEY'), cut].every((s) => lines(redactArtifactSecrets(s).redacted) === lines(s)));
+  check('R10 P1 LINE-PRESERVING: the JSON-quoted token no longer crosses a newline',
+    redactArtifactSecrets('"password": "a1\nb2"').redacted === `"password": "${PH}\nb2"`);
+
+  // P3-B3 — the held-file base uses the PLAIN-TEXT arm only. A JSON config ('{' first) or an nginx log_format can carry a
+  // LITERAL backslash-n inside a string; the plain arm must neither re-serialise it nor treat it as a line break when
+  // counting -- real newlines in == real newlines out, on every shape (incl. a PEM whose body is \n-joined in JSON).
+  const jsonCfg = '{\n  "log_format": "main \\n $remote_addr",\n  "password": "s3cr3t.9",\n  "tls_key": "' + BEG(PKL) + '\\n'
+    + body[0] + '\\n' + body[1] + '\\n' + ENDM(PKL) + '\\n",\n  "bearer_token": "eyJ.a.b9"\n}\n';
+  const nginxCfg = "log_format main '$remote_addr \\n $request';\nproxy_set_header Authorization \"Basic dXNlcjpwYXNz\";\n";
+  for (const [name, cfg] of [['JSON config with literal \\n + PEM', jsonCfg], ['nginx log_format with literal \\n', nginxCfg]] as Array<[string, string]>) {
+    const r = redactArtifactSecrets(cfg);
+    check(`R10 P3-B3 plain arm: ${name} keeps its real-newline count and redacts`, lines(r.redacted) === lines(cfg) && r.redactedCount >= 1);
+    check(`R10 P3-B3 plain arm: ${name} keeps every literal \\n (no re-serialisation)`,
+      (r.redacted.match(/\\n/g) || []).length === (cfg.match(/\\n/g) || []).length);
+  }
+  check('R10 P3-B3 plain arm: JSON-config PEM body redacted, markers kept', (() => {
+    const r = redactArtifactSecrets(jsonCfg).redacted;
+    return !r.includes(body[0]) && !r.includes(body[1]) && r.includes(BEG(PKL) + '\\n<<REDACTED-SECRET>>\\n<<REDACTED-SECRET>>\\n' + ENDM(PKL));
+  })());
+
+  // P3-B4 — R10_VERSION is part of a held base's identity. The fingerprint = rule sources + the plain arm's outputs over a
+  // golden corpus (catches PEM/segment LOGIC changes that move no regex). If this fails: bump R10_VERSION in
+  // redact-artifact-secrets.ts and ADD a row below -- never edit an existing row (a version names one behaviour forever).
+  {
+    const R10_FINGERPRINTS: Record<string, string> = {
+      // /2 was re-pinned twice BEFORE it shipped (B3/B4 fold-in, then the B1/S-1..S-3 fixes); no base was ever hashed under
+      // an earlier /2 fingerprint. From the first deploy on, a row is never edited.
+      'paichart.r10/2': '459b984dbde119d31283ce1edb09fac039c594448895dabbdcc20adb95adf5f7',
+    };
+    const golden = [multi, jsonCfg, nginxCfg, pem('OPENSSH PRIVATE KEY'), cut, `KEY="${BEG(PKL)} ${body[0]} ${ENDM(PKL)}"`,
+      'enable secret 5 $1$x$y\nusername a privilege 15 role r secret sha512 $6$a$b\nsnmp-server community S3c RO\n key-string 7 060506324F41',
+      ' neighbor 10.0.0.1 password 7 070C\n encrypted-password "$9$AbC";\nAPI_KEY=sk-1\n"secret": "x.1"\nthe key AKIAIOSFODNN7EXAMPLE x\npassword 7 110A',
+      '    bearer_token: eyJ.a.b9\nPassword: required\nkey findings: x',
+      pem('RSA PRIVATE KEY').replace(/\n/g, '\r\n'), 'enable secret 5 $1$x$y\r\nsnmp-server community S3c RO\r\n', // CRLF: device output
+      ...proseNegatives.map(([, t]) => t), strayEnd, enc, `${BEG(RSA)}\n${encBody}\nnext: done\n`, crlfAuth, crlfHdr,
+      `${BEG(PKL)}\n${body[0]}\n${BEG(PKL)}\n${body[1]}\n${ENDM(PKL)}\n`,
+      JSON.stringify({ v: JSON.stringify({ k: `${BEG(PKL)}\n${body[0]}\n${ENDM(PKL)}` }) })];
+    const fp = createHash('sha256').update(JSON.stringify([R10_RULE_SOURCES, golden.map((g) => redactArtifactSecrets(g))])).digest('hex');
+    check(`R10 P3-B4: R10_VERSION (${R10_VERSION}) matches its pinned fingerprint (got ${fp}) -- bump the version + add a row`,
+      R10_FINGERPRINTS[R10_VERSION] === fp);
+    check('R10 P3-B4: R10_VERSION is a non-empty paichart.r10/<n> string, never "none" (that value is the R10-off stamp)',
+      /^paichart\.r10\/\d+$/.test(R10_VERSION));
+    check('R10 P3-B4: no two versions share a fingerprint', new Set(Object.values(R10_FINGERPRINTS)).size === Object.keys(R10_FINGERPRINTS).length);
+  }
+
+  // Linear time on adversarial 1 MB inputs (the F9-s2 class must not be re-created in R10).
+  // One pass per fixture: these pins catch QUADRATIC/EXPONENTIAL regressions (seconds to minutes), not micro-perf;
+  // the linear floor is dominated by the 20 pre-existing line patterns (~0.2-0.4 s/MB on a loaded box).
+  const timed = (s: string) => { const t0 = Date.now(); redactArtifactSecrets(s); return Date.now() - t0; };
+  const adversarial: Array<[string, string]> = [
+    ['many END-less PEM BEGINs', (BEG(PKL) + '\n').repeat(Math.ceil(1_000_000 / 28))],
+    ['PEM BEGIN + 1 MB whitespace segment', BEG(PKL) + ' a' + ' '.repeat(1_000_000) + 'b\n' + ENDM(PKL)],
+    // Key-shaped, so it reaches redactSegment: a 1 MB whitespace run INSIDE a body segment (a lazy-middle trim regex is
+    // quadratic here, and the shape regex must stay linear on it).
+    ['key-shaped segment with a 1 MB inner whitespace run', BEG(PKL) + '\n' + 'A'.repeat(20) + ' '.repeat(1_000_000) + 'B'.repeat(20) + '\n' + ENDM(PKL)],
+    ['many BEGIN/END pairs around prose (span rejected, unterminated tried)', (BEG(PKL) + ' see the runbook, ' + ENDM(PKL) + '\n').repeat(1_000_000 / 70 | 0)],
+    ['nested headers: blocks', Array.from({ length: 1000 }, (_, i) => ' '.repeat(i) + 'headers:').join('\n') + '\n'],
+    ['authorization: + 1 MB deeper lines', 'authorization:\n' + ' x\n'.repeat(330_000)],
+  ];
+  for (const [name, s] of adversarial) {
+    const ms = timed(s);
+    check(`R10 P1 linear: ${name} (${s.length} chars) under 1500 ms (got ${ms} ms)`, ms < 1500);
+  }
 }
 
 // ── K. R10 — k8s/cloud secret families + colon-FP fix (2026-06-27, WP-C1) ──
@@ -768,6 +1057,47 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
   for (const x of STRIP) check(`P2 every handler stripped: ${x}`, !/on(error|load)\s*=/i.test(stripHtmlEventHandlers(x)));
   check('P3 validateComment accepts a padded safe comment', validateComment('  component=receiver ok\n').valid === true);
   check('P3 validateComment refuses a padded unsafe comment', validateComment('\n<img src=x onerror=alert(1)>  ').valid === false);
+}
+
+// ── Q. PLATFORM-HELD-BYTES Stage A (2026-10-14) — SO B1/B3/B4, O14a, SF-1..SF-4 ─────────────────────────────────────
+// The held store must never hold a secret result.json removes, never hash text R10 has not run over, and never read R9's
+// rewritten copy. Module-level pins land here with their modules (commit 3); the capture-helper pins land with the helper.
+// Plan: cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-PLAN.md WI-8.
+{
+  const fsQ = require('fs') as typeof import('fs');
+  const pathQ = require('path') as typeof import('path');
+  const { canonicalBase } = require('@/lib/agents/harness/held-bytes/canonical-text') as {
+    canonicalBase: (c: string, o: { redact: boolean }) => { ok: boolean; refusal?: string; baseHash?: string; B?: string };
+  };
+  const { digestFamily } = require('@/lib/agents/harness/held-bytes/extract') as { digestFamily: (k: string) => string | null };
+  const BSQ = '\\n';
+  // Q1 (SF-1): a secret behind a literal \n that result.json's deep walk redacts is REFUSED, never held less redacted.
+  const v20 = 'body: "header line' + BSQ + 'password: ' + 'hunter2' + 'secret' + BSQ + 'more"\nnext: 1\n';
+  check('Q1 V20 escaped-newline secret ⇒ escaped-secret-residual (SF-1)', canonicalBase(v20, { redact: true }).refusal === 'escaped-secret-residual');
+  const v21 = '{\n  "banner": "line one' + BSQ + '\\tpassword ' + 'hunter2' + 'zz' + BSQ + '",\n  "x": 1\n}\n';
+  check('Q1 V21 escaped-newline+tab secret in a JSON string ⇒ escaped-secret-residual (NF-1)', canonicalBase(v21, { redact: true }).refusal === 'escaped-secret-residual');
+  const v22 = '{\n  "password": "' + 'hunter2' + 'plainzz",\n  "banner": "line one' + BSQ + '\\tpassword ' + 'second2' + 'zz' + BSQ + '"\n}\n';
+  check('Q1 V22 key-name-blind arm 1 cannot cancel an escaped-tab secret ⇒ escaped-secret-residual (code review SF-1)', canonicalBase(v22, { redact: true }).refusal === 'escaped-secret-residual');
+  // Q2 (SO B3): the base hash is over R10 output — a planted secret never reaches the hash input.
+  const crypto = require('crypto') as typeof import('crypto');
+  const v19 = 'auth:\n  bearer_token: ' + 'abcd' + 'efgh1234567890XYZ' + '\nnext: 1\n';
+  const r19 = canonicalBase(v19, { redact: true });
+  check('Q2 V19 baseHash ≠ sha256(C) and the token is gone from B',
+    r19.ok === true && r19.baseHash !== crypto.createHash('sha256').update(v19, 'utf8').digest('hex') && !String(r19.B).includes('abcdefgh1234567890XYZ'));
+  // Q3 (SF-4): the digest-family matcher sees the normalised family, not an exact key set.
+  check('Q3 contentSha256 ⇒ sha256 family (SF-4)', digestFamily('contentSha256') === 'sha256');
+  check('Q3 sha-256 / fileHash / content_md5 ⇒ a family', digestFamily('sha-256') === 'sha256' && digestFamily('fileHash') === 'hash' && digestFamily('content_md5') === 'md5');
+  // Q4 (SF-2 / SO B1): the modules that read tool records never import R9 and never read its rewritten siblings.
+  const heldDir = pathQ.join(process.cwd(), 'lib', 'agents', 'harness', 'held-bytes');
+  for (const f of ['extract.ts', 'canonical-text.ts', '../../../services/held-bytes-capture.ts']) {
+    const src = fsQ.readFileSync(pathQ.join(heldDir, f), 'utf8');
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    check(`Q4 ${f} imports nothing from R9 (sanitize-chained-output)`, !src.includes('sanitize-chained-output'));
+    check(`Q4 ${f} reads no R9 sibling field`, !/\.(rewritten|sanitized|rewriteClasses)\b/.test(code));
+  }
+  // Q5 (SO B3): exactly one hash in the canonical module, over B.
+  const canonSrc = fsQ.readFileSync(pathQ.join(heldDir, 'canonical-text.ts'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  check('Q5 canonical module: one createHash, over B', countOf(canonSrc, 'createHash(') === 1 && canonSrc.includes("update(Buffer.from(B, 'utf8'))"));
 }
 
 if (fails.length) {

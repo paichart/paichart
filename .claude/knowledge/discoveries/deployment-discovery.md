@@ -1,9 +1,22 @@
 # Deployment Discovery Prompt
 
-**Last Updated**: 2026-03-10 (Docker services: production-first guidance, 6 services)
+**Last Updated**: 2026-10-03 (Docker count 6 → 8; pino baseline re-taken; two run-the-check traps recorded)
 **Status**: Blue-Green Deployment v5.0 - Zero-downtime with Docker MCP Services
 **Confidence**: Very High - Production-tested blue-green + Docker orchestration
-**Last Validated**: 2026-03-10 - All 6 Docker MCP services healthy on production
+**Last Validated**: 2026-10-03 — full discovery run. Auditor: 318 greps across all discoveries, 0 mismatch / 0
+regression; this file's 5 `$`-skips + 4 unparsed lines run BY HAND, all matched. Prod: pm2 both online 0 restarts,
+health 200, log-rotation probes 1–5 all matched, template freshness 0 STALE / 44 CURRENT. 7 of 8 containers healthy —
+`mcp-snowflake` UNHEALTHY since ~2026-09-29 (external: the Snowflake free trial ended, warehouses suspended; not a
+platform fault — decision pending: add billing or decommission).
+
+> ⚠️ **Two traps when running this file (2026-10-03)**:
+> - `python3 scripts/render-public-claude.py` (Public-export tripwires) is NOT read-only — it REWRITES the tracked
+>   `CLAUDE.public.md`. Run it in a throwaway copy: `git archive HEAD | tar -x -C <scratch> && cd <scratch> && python3 scripts/render-public-claude.py | grep -c DANGLING`.
+>   And note `export-public.py` copies the COMMITTED `CLAUDE.public.md` verbatim (renames it to CLAUDE.md) — it never
+>   re-renders, so the public CLAUDE.md stays frozen at the last manual `npm run render:claude-public` + commit.
+>   Compare `cmp` the scratch render against the committed one; a difference is a pending public refresh.
+> - `npm run test:protocol-public-parity` refuses to run when `scripts/seed-protocol-prompts.ts` is newer than the
+>   LOCAL DB rows — `npm run seed:protocols` (a local-DB write) must come first. Load env: `set -a; source .env; set +a`.
 **Production Server**: <PROD_HOST> (paichart.app)
 
 ## 🆕 2026-09-04 — Cold-Start Health (self-host readiness; replayable)
@@ -49,6 +62,8 @@ grep -c 'test:teardown-both-branches' package.json  # expect 2 — H-1: teardown
 # Public-export tripwires (2026-09-06) — the projection's load-bearing rules, pinned.
 grep -c '^- cline_docs/\*\*' scripts/export/public-allowlist.rules  # expect 1 — session artifacts NEVER export (Steve)
 grep -c '^+ .claude/knowledge/TODO' scripts/export/public-allowlist.rules  # expect 0 — every TODO* note is private; an exception here re-opens it
+grep -c '^+ .claude/skills/\*\*' scripts/export/public-allowlist.rules  # expect 1 — skills export (Steve, 2026-10-14); test:requirements-form-correction and test:requirements-form-check-parity read the requirements-spec work folders, so public CI fails without them
+grep -c '^+ .claude/knowledge/pipelines/requirements-authoring/' scripts/export/public-allowlist.rules  # expect 1 — ONLY the question registry crosses (Steve, 2026-10-14); a second include here widens the private-domain rule
 python3 scripts/render-public-claude.py | grep -c DANGLING                          # expect 0 — the public CLAUDE.md cites only paths that survive the rules
 grep -l '<maintainer-email>' scripts/seed-protocol-prompts.ts scripts/seed-operational-prompts.ts scripts/seed-*-templates.ts | wc -l   # expect 0 — owner/contact come from SEED_OWNER_EMAIL / SUPPORT_CONTACT / ADMIN_EMAIL (prod pins the first two in the deploy heredoc)
 ```
@@ -127,6 +142,39 @@ script has no ceiling — rationale comments live inline there again). The ~2100
 expression/scalar ceiling STILL applies to every other workflow scalar; `workflow-lint.yml`
 (actionlint + 20K run-scalar tripwire, triggered ON `.github/**` — the exact trigger the deploy
 workflow ignores) guards it at push time.
+
+## Env-var switch OFF needs the value in the restart command (verified 2026-10-14)
+
+```bash
+# What each process ACTUALLY holds (pm2's own env copy), vs the file. Read-only.
+ssh <PROD_USER>@<PROD_HOST> 'pm2 jlist | python3 -c "import json,sys;[print(p[\"name\"],{k:p[\"pm2_env\"].get(k) for k in (\"FORM_CORRECTION_ENABLED\",\"REQUIREMENTS_FORM_CORRECTION_ENABLED\",\"HELD_BYTES_CAPTURE_ENABLED\")}) for p in json.load(sys.stdin)]"'
+```
+⚠️ **Correction to the two blocks below:** "set `=false` + `pm2 restart … --update-env`" turns a switch ON from absent but
+does NOT turn it OFF. pm2 keeps the value it started the app with, and the apps' dotenv load never overrides a set variable,
+so the stale `'true'` survives (prod 2026-10-14: both processes `true` for both form-correction switches). **OFF =**
+`FLAG=false pm2 restart paichart-mcp paichart-web --update-env`, then re-read the command above for both processes, then
+make it durable in `.env.production` + the `production-deploy.yml` heredoc. Never restart during an in-flight run.
+Register: ENV-KILL-SWITCH-STALE. Specialist: `dev-ops-specialist.md` § Env-var feature switches.
+
+## 🆕 2026-10-07 — A push that touches ONLY ignored paths does NOT deploy (incl. `.env.production` flag changes)
+
+```bash
+# The ignore list: a push whose files ALL match it starts no Production Deploy run
+grep -n -A8 "paths-ignore" .github/workflows/production-deploy.yml   # expect .github/** · *.md · docs/** · cline_docs/** · .claude/** · .gitignore
+# After any push you expect to deploy, confirm a run actually started:
+gh run list --workflow "Production Deploy (Blue-Green)" --limit 3
+```
+`.env.production` is REBUILT every deploy from the heredoc in `production-deploy.yml`, so a feature
+flag is made durable by editing that workflow. But **a commit that changes only the workflow (or only
+docs) does not trigger a deploy** — `.github/**` is in `paths-ignore`. The edit sits unapplied until
+the next code push, and nothing reports it. Live instance 2026-10-06: `FORM_CORRECTION_ENABLED=true`
+was added to the heredoc (`2d0a1bd5`), no run started, and a background deploy-wait timed out before
+`gh run list` showed why. **To apply a flag NOW:** set it in the live `.env.production` (current release)
+AND keep the workflow edit for durability, then `pm2 restart paichart-mcp paichart-web --update-env` —
+**restart BOTH**: executions run in both processes, and restarting only `paichart-web` (the first draft
+of that procedure) leaves MCP-launched runs on the old value. To force a deploy without a code change,
+use `workflow_dispatch` (ask first — it is a production deploy). Never restart during an in-flight
+pipeline run (check `agent_executions` RUNNING/PENDING read-only first).
 
 ## 🆕 2026-06-25 — Harness output-guard feature flags (env-var + restart to toggle)
 
@@ -495,7 +543,8 @@ done
 
 echo "--- Prod-verified mechanism ---"
 # idx_agent_executions_id_status created Aug 2025 via raw SQL has survived
-# 200+ db push --accept-data-loss=false deploys since Dec 2025. Direct proof
+# 200+ db push deploys since Dec 2025 (with --accept-data-loss=false until 2026-10-14 — that form ACCEPTS
+# data loss; the deploy runs a plain push since, test:db-push-data-loss-guard). Direct proof
 # the exception is safe — db push does NOT drop out-of-band raw-SQL indexes.
 grep -rn 'idx_agent_executions_id_status\|idx_task_pov_status_assignee' prisma/migrations/ scripts/
 ```
@@ -630,6 +679,20 @@ ssh <PROD_USER>@<PROD_HOST> "pm2 logs paichart-mcp --lines 500 --nostream 2>/dev
 #   2 auth "Team members loaded without userId field — falling back to member.user.id"
 # Both are known-benign fallbacks, not faults. A NEW warning string, or any level-50, is the
 # finding — compare against this list rather than against zero.
+#
+# RE-BASELINED 2026-10-03 (paichart-web, 500-line window, ~20h after a deploy): 702 lines; paichart-mcp 0 errors.
+#   Level-50, two strings:
+#     mcp "Failed to generate category comparative prompts"  — REAL BUG, FIXED 2026-10-03: the select asked for
+#         AgentTemplate.complexity (no such field — phantom-column class), so every single-category agent.results
+#         threw. It logged with NO cause because the error went console-style `logger.error('msg:', err)` to a RAW
+#         pino child, which drops the second argument. Use `logger.error({ err }, 'msg')`. Should read 0 now.
+#     mcp "perform failed: Comment too long (N chars, max 2000)" — rejected CLIENT input logged at level 50, not a
+#         server fault. Known; compare against it.
+#   Warnings: monitor "High error rate detected" (66, tool sdk_native_perform — co-occurs with the comment-too-long
+#     rejections), monitor "Slow response detected" (14), auth "Team members loaded without userId field" (8),
+#     api "response sanitizer truncated long input" (7), monitor "Error recorded" (5).
+# Group warnings by MESSAGE, not just domain — a by-domain count hid which strings were new:
+#   ... | grep '"level":40' | sed 's/^[^{]*//' | jq -r '"\(.domain) | \(.msg)"' | sort | uniq -c | sort -rn
 
 # OAuth audit log status (separate system)
 ssh <PROD_USER>@<PROD_HOST> "ls -la /var/log/paichart/oauth-audit.log && wc -l /var/log/paichart/oauth-audit.log" 2>/dev/null
@@ -954,12 +1017,15 @@ test -f /home/steve/disaster-recovery/.activated && \
 echo "✅ DR system activated and monitoring" || echo "⚠️ DR system ready but not activated"
 ```
 
-## Phase 10: Docker MCP Services Architecture (NEW - 2026-01-06, Updated 2026-06-15: 7th service)
+## Phase 10: Docker MCP Services Architecture (NEW - 2026-01-06, Updated 2026-10-03: 8 services)
 
-> **⚠️ COUNT: 7 services as of 2026-06-15** (was 6). Snowflake added at **:3106**
-> (`mcp-snowflake`, `services/snowflake-service/`, External OAuth, internal `mcp-internal` network).
-> Phase 10 prose below still narrates the original 6 (3100-3105); treat snowflake (:3106)
-> as the 7th. Verify live: `grep -c 'container_name: mcp-' docker-compose.yml` → 7.
+> **⚠️ COUNT: 8 services as of 2026-10-03** (6 originals at 3100-3105, then snowflake **:3106** on 2026-06-15
+> and cloudflare **:3109** on 2026-07-12). Verify live: `grep -c 'container_name: mcp-' docker-compose.yml` → 8.
+> - `mcp-snowflake` — `services/snowflake-service/`, External OAuth, `mcp-internal` network. ⚠️ UNHEALTHY since
+>   ~2026-09-29: its `testConnection` fails with "Your free trial has ended" — an account state, not a code fault.
+> - `mcp-cloudflare` — a Caddy reverse proxy (NOT a Node MCP server) to Cloudflare's hosted Code Mode MCP; host
+>   `127.0.0.1:3109` → container `8000`; healthcheck is `wget /healthz` (NOT `/health`, so the 3100-range loop
+>   below does not apply). Doc: `.claude/knowledge/mcp-servers/cloudflare/README.md`.
 
 
 ### CRITICAL: Docker Services Run on PRODUCTION, Not Local
@@ -988,7 +1054,8 @@ echo "Weather Service: Port 3102 (mcp-weather)"
 echo "EIA Service: Port 3103 (mcp-eia)"
 echo "EODHD Service: Port 3104 (mcp-eodhd)"
 echo "Test Auth Service: Port 3105 (mcp-test-auth)"
-echo "Snowflake Service: Port 3106 (mcp-snowflake) — added 2026, External OAuth"
+echo "Snowflake Service: Port 3106 (mcp-snowflake) — added 2026-06-15, External OAuth"
+echo "Cloudflare Service: Port 3109 -> 8000 (mcp-cloudflare) — added 2026-07-12, Caddy proxy to hosted Code Mode MCP"
 echo "Transport: MCP SDK 1.17.5 SSEServerTransport"
 
 # Check Docker services directory structure
@@ -1062,21 +1129,26 @@ grep -A 10 "/health" services/browser-automation-service/src/index.ts
 # Do NOT check local Docker status for deployment health — local is dev only
 
 # Check Docker containers on PRODUCTION
-echo -e "\n=== Production Docker Container Status (6 services) ==="
+echo -e "\n=== Production Docker Container Status (8 services) ==="
 ssh <PROD_USER>@<PROD_HOST> "docker ps --filter 'name=mcp-' --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'" 2>/dev/null || \
 echo "SSH to production required for container status"
 
-# Expected: 6 containers, all healthy
+# Expected: 8 containers (baseline 2026-10-03: 7 healthy + snowflake unhealthy — see Phase 10 note)
 # mcp-browser-automation :3100
 # mcp-notification       :3101
 # mcp-weather            :3102
 # mcp-eia                :3103
 # mcp-eodhd              :3104
 # mcp-test-auth          :3105
+# mcp-snowflake          :3106
+# mcp-cloudflare         :3109 -> 8000 (health: /healthz, not /health)
+# Docker's own healthcheck verdict is the fastest read; for an unhealthy one:
+#   ssh <PROD_USER>@<PROD_HOST> "docker inspect <name> --format '{{json .State.Health}}' | jq '.FailingStreak'; docker logs --tail 15 <name>"
+# FailingStreak x 30s interval = how long it has been down.
 
 # Health check endpoints (via SSH to production)
 echo -e "\nService health checks:"
-for port in 3100 3101 3102 3103 3104 3105; do
+for port in 3100 3101 3102 3103 3104 3105 3106; do
   ssh <PROD_USER>@<PROD_HOST> "curl -sf http://localhost:${port}/health | jq -c '{port: ${port}, status: .status}'" 2>/dev/null || \
   echo "{\"port\": ${port}, \"status\": \"unreachable\"}"
 done
@@ -1132,7 +1204,7 @@ npx ts-node scripts/register-internal-services.ts  # batch internal services
 
 `SSRF_EXEMPT_SERVICES` (`lib/mcp/server/config/service-call-policy.js:161`) is a **seeded list**, not a user-facing self-service path. If a legitimate first-party self-registration use case emerges (e.g., runtime container provisioning), revisit `cline_docs/follow-ups/sec-ops-finding-b-ssrf-asymmetry.md` Decision 1 option (c).
 
-### Expected Docker Services Outputs (PRODUCTION — 6 services)
+### Expected Docker Services Outputs (PRODUCTION — 8 services; the 6 originals detailed below, snowflake + cloudflare in the Phase 10 note)
 ```
 # Docker Compose Services (all run on production <PROD_HOST>, NOT local):
 - mcp-browser-automation:
@@ -1575,3 +1647,17 @@ So the old manual cross-check — compare the seed's `Orphan guard: N ACTIVE pro
 
 The renderer also refuses to start without `DATABASE_URL` and names the fix, rather than dying in a Prisma stack
 trace — it reads the LOCAL DB and is normally run by hand, where the env is not loaded.
+
+## npm registry — `@paichart` scope (added 2026-10-08)
+
+The npm organisation `paichart` exists (owner Steve, 2FA) — the `@paichart` scope is reserved; nothing is published.
+Two public copies of the containment checks exist: the repo mirror (`~/paichart/packages/containment-checks/`, proved
+by `npm run test:containment-public-parity`) and, once a first publish happens, the npm package — which needs its own
+version check, since a synced repo with an unpublished bump is the same stale-mirror class as the protocol mirror.
+Steve publishes by hand; no npm token in CI or on the server. Register: `NPM-SCOPE @paichart`.
+
+```bash
+npm view @paichart/containment-checks version 2>/dev/null || echo "not published"   # today: not published (by design)
+grep -c '"name": "@paichart/containment-checks"' ~/paichart/packages/containment-checks/package.json   # expect 1
+grep -rln "NPM_TOKEN" .github/ 2>/dev/null | wc -l   # expect 0 — no CI publish path without Steve's decision
+```

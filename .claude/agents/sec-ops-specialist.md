@@ -279,6 +279,16 @@ When completing specialist work:
 ║ 🔐 SECURITY SPECIALIST COMPLETE       ║
 ╚═══════════════════════════════════════╝
 
+## Pattern (h): which "paperwork" review rules are anti-fabrication controls (2026-10-03)
+
+Classified on the 38 change-leg refusals since 09-15: **controls** — the restatement rule (no carrying the Architect's
+conclusion), no self-verification (an Author never certifies its own package), and evidence PRESENCE (since 2026-09-27 the
+reviewer's only check that a value in a validation step came from somewhere); **documentation** — rationale arithmetic
+on a rejected alternative. **Never eligible for a bounded revision round (RWF Stage 3, deferred):** governance (credential
+drift HALT — an Author "fix" absorbs the drift) and presence/sourcing findings (a retry can add a plausible source label a
+presence-only re-reviewer accepts) unless the platform verifies the source against the harvest. The restatement class is
+deletion-only, so retry-safe once a detector exists. Depth: `cline_docs/reviews/pattern-h-corpus-measure-2026-10-03/` (REVIEW-sec-ops, SYNTHESIS §2, §6).
+
 ## Work Summary:
 📊 **Security Tasks Completed:** X/Y tasks ✅
 🔧 **Security Fixes Applied:** N critical fixes
@@ -316,3 +326,15 @@ metrics, anomaly detection, auto-remediation recommendations, daily report — r
 `~/disaster-recovery/scripts/daily-summary.sh` (Part 9, PRODUCTION-HEALTH-AGENT-GUIDE.md).
 Full implementation detail (metrics list, detection rules, log patterns, report sections):
 `.claude/knowledge/domain/security/sec-ops-library.md` §Trim follow-up additions.
+
+## `test:mcp-action-security` rewritten (2026-10-04, `1aa428f0`)
+
+The suite had encoded a RETIRED policy (pov.create ADMIN-only) and the wrong caller shape (`.id` vs the MCP TokenPayload `.userId`) —
+red since the 2026-07-28 cache-key guard. Now: expectations read from `role_permissions` (PoV/CREATE) PLUS fixed invariants
+independent of the table — **DEMO_USER never creates; SUPER_ADMIN always passes** — FORBIDDEN-only vs malformed-caller asserts,
+null-user + raw-payload attacks. Needs DATABASE_URL (CI skips it); writes Activity audit rows — never run on prod. Filed (register):
+a CI-safe static pin of the desired DEMO_USER row, a DB-vs-desired-row drift check, and the SUPER_ADMIN-bypass-before-id-check hygiene
+item. Also: REST `createTask` now strips AUDIT_STRIP keys (a POV writer could forge them before). Review: `cline_docs/reviews/value-chain-post-window-2026-10-04/REVIEW-mcp-action-security-rewrite-sec-ops.md`.
+
+## Pointer (2026-10-14): PLATFORM-HELD-BYTES block Q
+No pre-R10 hash; scope-keyed store; `escaped-secret-residual` on deep(B) > B (V20–V22 — a deep(C) form cancels); closed digest-family tokens; capture logs name/code/metaCode only. R10 exports `isR10Disabled()` (the one R10-off predicate) and `looksSerialized`. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-BUILD.md`.

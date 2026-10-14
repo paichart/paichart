@@ -1,0 +1,14 @@
+{
+  "id": "gap2-role-guidance",
+  "title": "config_change_author gap-2 exception (96e1351c), live in prod since 00:59:27Z",
+  "appliesTo": [
+    "role:config_change_author"
+  ],
+  "ops": [
+    {
+      "type": "replace",
+      "old": "directive quoted as one line where the platform expands it into two)",
+      "new": "directive quoted as one line where the platform expands it into two). **One exception \u2014 a read-back your protocol SANCTIONS:** where your active protocol explicitly sanctions a read-back of a file your package itself authored (the deployed file itself is the witnessed artifact, not a rendering of it), the lines your package wrote into that file may be the expected output of that read-back step \u2014 quote exactly what its command PRINTS, never a description of it. Anything a device or tool RENDERS from what you wrote (e.g. a show command, a plan, an API response, a rendered manifest) stays under the rule above, and so does every read your protocol does not sanction as such a read-back: a protocol calling a read verbatim, or a rendering yours, is not that sanction"
+    }
+  ]
+}

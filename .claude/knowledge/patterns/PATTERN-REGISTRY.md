@@ -2,9 +2,9 @@
 
 **Purpose**: Quick reference for all proven implementation patterns in pAIchart knowledge library
 
-**Last Updated**: September 28, 2026
+**Last Updated**: October 10, 2026
 
-**Total Patterns**: 66 documented patterns
+**Total Patterns**: 69 documented patterns
 
 ---
 
@@ -75,7 +75,7 @@
 
 ### **sanctioned-db-push-exception-ops-script-pattern.md** - 97% Confidence ✅
 **When to use**: Schema changes that `db push` CANNOT express — partial unique indexes, JSONB expression indexes, or `CREATE INDEX CONCURRENTLY` on production-scale tables
-**Results**: 4 canonical instances in production, zero incidents. Aug 2025 raw-SQL partial index on agent_executions has survived 200+ `db push --accept-data-loss=false` deploys since drift-elimination
+**Results**: 4 canonical instances in production, zero incidents. Aug 2025 raw-SQL partial index on agent_executions has survived 200+ `db push` deploys (run with `--accept-data-loss=false` until 2026-10-14 — a form that ACCEPTS data loss; plain push since) since drift-elimination
 **Key features**: Hardened bash script (ON_ERROR_STOP, INVALID-index cleanup, post-create indisvalid + WHERE-clause verification, ANALYZE refresh); doc-only annotation on the Prisma model; sanctioned escape hatch from the db-push-everywhere default
 **Pairs with**: database-drift-elimination-pattern (this is the escape hatch; that is the default)
 **Production use**: L3 partial UNIQUE on agent_executions (Apr 2026), A6 partial JSONB on tasks (Apr 2026), 10× CONCURRENTLY P0 batch (Oct 2025)
@@ -398,7 +398,7 @@
 **Production use**: MCP Service Orchestrator + Workflow Orchestrator (Apr 2026), 4 templates built to gold standard
 **Discovery**: Sections 17-21 in `template-system-discovery.md` (inventory, GS2/4/8 audits, prompt quality)
 **Specialist**: template-system-specialist has full gold standard integration + rationalization workflow
-**Model selection**: by **tier**, from `lib/agents/model-tiers.ts` (`AGENT_MODELS.infra|generic|synthesis|orchestrator`) @ temp 0.3 — **never a literal in a seed script** (hoisted 2026-08-09; the literal was previously duplicated 15× across 9 seeds, so a migration could silently half-apply)
+**Model selection**: by **tier**, from `lib/agents/model-tiers.ts` (`AGENT_MODELS.infra|infraAuthor|generic|synthesis|orchestrator`; `infraAuthor` = the `config_change_author` role only, Opus 5.5 since 2026-10-07) @ temp 0.3 — **never a literal in a seed script** (hoisted 2026-08-09; the literal was previously duplicated 15× across 9 seeds, so a migration could silently half-apply)
 
 ### **prompt-library-gold-standard-pattern.md** - 92% Confidence ✅ (NEW - Apr 2026)
 **When to use**: Creating, reviewing, or maintaining database prompts (agent_prompt_library table)
@@ -410,7 +410,14 @@
 
 ---
 
-## Automation Patterns (6 patterns)
+## Automation Patterns (8 patterns)
+
+### **byte-identity-refactor-pattern.md** - 85% Confidence ✅ (NEW - Oct 2026)
+**When to use**: Restructuring text LIVE agents read (protocol bodies, role guidance) or code that stamps facts LIVE gates read, so a new consumer can share it — while every existing run must stay byte-unchanged
+**Results**: value-chain build (2026-10-02) — 5 batches, 41/41 agent-facing texts byte-identical after every step; a 2,196-task production replay with 0 changed facts and every added line accounted for
+**Key features**: four proofs in order — (1) golden-pin the RECEIVED bytes first (present-and-equal, new keys allowed, mutation-proven) · (2) draft the new text, then cut builder seams + shared constants · (3) scanner output DIFFED identical, scanners taught to follow interpolation (mutation-proven) · (4) read-only back-to-back replay of the shipping code over the production population
+**Anti-patterns**: "suites green" as proof after moving text · editing a builder line shared with a live role · whole-text vocabulary checks
+**Used by**: Protocol 15 (isolated variant build) phases 4–6
 
 ### **seed-time-artifact-carrier-pattern.md** - 85% Confidence ✅ (NEW - Sep 2026)
 **When to use**: An agent must receive a VERBATIM artifact it fills, transcribes or checks against — a template, schema, canonical stanza or reference document — whose exact bytes matter and which is authored elsewhere (often another repo)
@@ -450,6 +457,14 @@
 **Companion patterns**: boundary-contract-wrapper-enforcement (sibling — additive signals at data boundaries vs execution outputs); orchestration-reactor-pattern (the reactor system this stack defends); dual-execution-path-parity (the parity discipline this stack obeys)
 **Anti-patterns**: Don't make signals blocking; don't overload `executionDegradation` (use co-occurring fields); don't skip stream-route mirror; don't ship a detector without a regression test using the canonical incident shape
 
+### **in-run-facts-only-correction-pattern.md** - 75% (regression guard) / 80% (provenance guard) ⚠️ (NEW - 2026-10-10; corrected after post-work review)
+**When to use**: An agent's deliverable fails a MECHANICALLY checkable rule (size, form, a missing line, a citation) that is otherwise only found after the run, forcing a full regeneration (an open loop)
+**Results**: requirements_author — pre-registered test passed at run 2 of 3 (VT-33, n=1); the turn was necessary there on SIZE only. The earlier 9-generation trial is not a control, because six things changed at once. terraform config_change_author live since 2026-10-06: 9/9 adopted, 0 collateral changes, fixes latent truncation (not refusals)
+**Key features**: pure check → fact stamped always (shadow first) → ONE tool-less facts-only correction turn behind a default-OFF flag → re-check → adoption rule (no measure worsens + one improves, or per-line provenance) → time budget, kill criteria, series cut
+**Production use**: `lib/agents/harness/{package-form-check,form-correction}.ts` (terraform) · `lib/agents/harness/{requirements-form-check,requirements-form-correction}.ts` (requirements) · wired in `lib/services/execution-core.ts`
+**Companion patterns**: agent-output-trustworthiness-defense-stack (ancestor: anti-fabrication correction turn); Protocol 16 lab gate; Protocol 10 (the message carries facts, never verdicts)
+**Anti-patterns**: judging/instructing in the message; looping until clean; triggering on what the agent does not own; adopting on the agent's claim; gating release on the turn; shipping without shadow data; a pre-filter as a trigger; correcting toward a defective checker/spec. Applies to FORM slips only, never judgement. Deletion-repairable triggers need provenance or a content-preservation measure (condition 4)
+
 ### **reactor-chain-depth-budget-pattern.md** - 88% Confidence ✅ (NEW - 2026-06-14)
 **When to use**: A reactor's queued action can (directly or transitively) cause its own hook to fire again — so per-cycle guards bound a SINGLE firing but nothing bounds the chain (the Nth consecutive firing)
 **Results**: Closes the "guards-bound-a-cycle-not-the-chain" gap; D-4 capped the harness retrigger chain (was depth-unbounded — `pipelineRetriggerReactorService.ts:281`) without self-starving legit pipelines; shipped `148e321a` + 10 pinned tests
@@ -472,7 +487,14 @@
 
 ---
 
-## Process & Workflow Patterns (9 patterns)
+## Process & Workflow Patterns (10 patterns)
+
+### **owner-decision-elicitation-pattern.md** - 80% Confidence ⚠️ (NEW - 2026-10-10; promoted from the requirements owner-answer session)
+**When to use**: An agent produces a design artifact whose choices belong to an owner, and those choices recur across objectives (so a fixed, earned question list can exist)
+**Results**: telemetry-export — ~40 owner rows → ~12 grouped decisions, one human pass instead of 20+ hand revisions; log-archive read — 20 questions → APPROVED 92 → published → program `programReleasable: true`
+**Key features**: question registry with earned-by provenance + CI parity → zero-decision run → coverage BEFORE answers → grouped owner answers with evidence → numbered items + row→item map → mechanical merge → regenerate + citation/coverage/clause gates; owner-only, per-finding waivers
+**Production use**: `.claude/knowledge/pipelines/requirements-authoring/OWNER-ANSWER-SESSION.md` (canonical procedure), `/requirements-spec` skill, `scripts/{check-requirements-coverage,build-answered-objective,build-row-item-map}.py`
+**Anti-patterns**: generator defaults an owner decision; flat 40-row lists; answering around a missing question; merging by hand; adding questions on speculation; observed state inside an answer
 
 ### **specialist-knowledge-propagation-pattern.md** - 95% Confidence ✅
 **When to use**: After implementing patterns that should update specialists

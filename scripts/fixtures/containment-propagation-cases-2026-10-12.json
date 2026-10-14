@@ -1,0 +1,193 @@
+{
+  "_source": "prod pipeline-index.json derivationContainment, latest per task, read-only 2026-10-12; containmentDisposition removed (recomputed by the test). MEASURE-AND-PROPOSAL \u00a71.2.",
+  "cases": {
+    "C1": {
+      "taskId": "cmsa61kuq001iyxeu5ox5teyf",
+      "fact": {
+        "reason": "no-derived-values-block",
+        "checked": false,
+        "derivedSource": "cmsa6cg7c007eyxeu7rio9o1r",
+        "harvestSource": "cmsa6by4i006xyxeu5s304nil",
+        "consumedValues": [
+          {
+            "kind": "cidr",
+            "value": "10.99.0.16/29"
+          }
+        ],
+        "upstreamContainment": {
+          "legs": [
+            {
+              "taskId": "cmsa615of0015yxeu9hd3r3uh",
+              "checked": true,
+              "violations": 1
+            }
+          ],
+          "green": false
+        }
+      }
+    },
+    "C2": {
+      "taskId": "cmsb10emy001uyxzttdnizmf1",
+      "fact": {
+        "reason": "no-derived-values-block",
+        "checked": false,
+        "derivedSource": "cmsb1btcs0055yxzuh5waew3t",
+        "harvestSource": "cmsb1bcx8004nyxzut7prqwxl",
+        "consumedValues": [
+          {
+            "kind": "cidr",
+            "value": "10.99.0.6/31"
+          }
+        ],
+        "upstreamContainment": {
+          "legs": [
+            {
+              "taskId": "cmsb101wf001nyxzt5yk4a2v4",
+              "checked": false,
+              "violations": 0
+            }
+          ],
+          "green": false
+        }
+      }
+    },
+    "C3": {
+      "taskId": "cmsbh37yb00dxyxac9a26qpye",
+      "fact": {
+        "reason": "no-derived-values-block",
+        "checked": false,
+        "derivedSource": "cmsbheaa200idyxacmmkaa88y",
+        "harvestSource": "cmsbhdswn00hlyxaca98wmdem",
+        "consumedValues": [
+          {
+            "kind": "cidr",
+            "value": "10.99.0.20/31"
+          }
+        ],
+        "upstreamContainment": {
+          "legs": [
+            {
+              "taskId": "cmsbh2qq700djyxacogb739xk",
+              "checked": true,
+              "violations": 1
+            }
+          ],
+          "green": false
+        }
+      }
+    },
+    "C4": {
+      "taskId": "cmt2rr5i8000uyx78h913zga4",
+      "fact": {
+        "reason": "no-derived-values-block",
+        "checked": false,
+        "derivedSource": "cmt2sfwoi005cyx77qhj84f7y",
+        "harvestSource": "cmt2sfgdu004vyx7748u4hz08",
+        "consumedValues": [
+          {
+            "kind": "cidr",
+            "value": "10.99.0.0/31"
+          }
+        ],
+        "harvestedCount": 0,
+        "upstreamContainment": {
+          "legs": [
+            {
+              "taskId": "cmt2rpxc8000hyx78aejnqujj",
+              "checked": false,
+              "violations": 0
+            }
+          ],
+          "green": false
+        }
+      }
+    },
+    "C5": {
+      "taskId": "cmu3nkkaw002jyxxqabzcgs7g",
+      "fact": {
+        "reason": "no-derived-values-block",
+        "checked": false,
+        "derivedSource": "cmu3og4yj0065yxxwyx1cu7tx",
+        "harvestSource": "cmu3ofk8p005wyxxw2wz41ouw",
+        "consumedValues": [
+          {
+            "kind": "cidr",
+            "value": "10.244.0.4/30"
+          }
+        ],
+        "harvestedCount": 0,
+        "upstreamContainment": {
+          "legs": [
+            {
+              "taskId": "cmu3nk19o0027yxxq46kkp47l",
+              "checked": false,
+              "violations": 0,
+              "disposition": "needs-node-c",
+              "dispositionReason": "harvested-pool-no-derivation-cannot-decide"
+            }
+          ],
+          "green": false
+        }
+      }
+    },
+    "C6": {
+      "taskId": "cmuyn4jwy002xyxfh1k7bkyci",
+      "fact": {
+        "reason": "no-derived-values-block",
+        "checked": false,
+        "derivedSource": "cmuynj9aj009syxfhi5kalsba",
+        "harvestSource": "cmuynixi4009byxfhjmxr9f9i",
+        "consumedValues": [
+          {
+            "kind": "cidr",
+            "value": "10.244.0.4/30"
+          }
+        ],
+        "harvestedCount": 0,
+        "upstreamContainment": {
+          "legs": [
+            {
+              "taskId": "cmuyn3zj6002eyxfh8f47sbrj",
+              "checked": false,
+              "violations": 0,
+              "disposition": "needs-node-c",
+              "dispositionReason": "no-author-child-leg-kind-undecidable"
+            }
+          ],
+          "green": false
+        }
+      }
+    },
+    "C7": {
+      "taskId": "cmv4wpoq7005dyx9l0e3tgh1g",
+      "fact": {
+        "reason": "no-derived-values-block",
+        "checked": false,
+        "derivedSource": "cmv4x8xnt00aoyx9l4fksou5h",
+        "harvestSource": "cmv4x8fma009yyx9ls8mmdac8",
+        "consumedValues": [
+          {
+            "kind": "cidr",
+            "value": "10.244.0.5"
+          },
+          {
+            "kind": "cidr",
+            "value": "10.244.0.6"
+          }
+        ],
+        "upstreamContainment": {
+          "legs": [
+            {
+              "taskId": "cmv4woyp50051yx9lii90wviz",
+              "checked": false,
+              "violations": 0,
+              "disposition": "needs-node-c",
+              "dispositionReason": "harvested-pool-no-derivation-cannot-decide"
+            }
+          ],
+          "green": false
+        }
+      }
+    }
+  }
+}

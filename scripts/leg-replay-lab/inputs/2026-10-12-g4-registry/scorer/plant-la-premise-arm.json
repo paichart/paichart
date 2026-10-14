@@ -1,0 +1,14 @@
+{
+  "id": "la-premise-arm",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "LA: the premise branch carries the contradiction arm (G-PREMISE pass).",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "- **Admitted-principal premise** (`terraform-iac.admitted-principal`).",
+      "new": "- **Admitted-principal premise** (`terraform-iac.admitted-principal`). Where this leg's own harvest shows the address arriving by another path than the declared one, the leg makes no change and reports."
+    }
+  ]
+}

@@ -33,13 +33,22 @@
  * scripts/test-platform-run-keys.ts P4).
  *
  * EXCLUDED from PLATFORM_RUN_KEYS, deliberately (each would break a legitimate writer):
- *   - duplicateAcknowledged — HUMAN operator clearance (MCP/description today; since pov-program 1.8.5 the
- *     program harness also COPIES a root's human clearance onto each leg it creates, citing it in
- *     duplicateAcknowledgedFrom — a propagated human decision, not an agent judgement. duplicateAcknowledgedFrom
- *     is excluded with it, for the same reason: it is the provenance of that clearance and must survive
- *     every write path the clearance survives. A future GUI
- *     clearance affordance must be a TARGETED endpoint like /api/agents/configure, never the
- *     wholesale save). Revisit-trigger: if the protocol's clearance stage-binding rule loosens.
+ *   - duplicateAcknowledged — HUMAN operator clearance at the root, EXTENDED by a named rule at execution
+ *     prep (C3-a, 2026-10-04: `duplicateAcknowledgedCarry.basis`). The platform APPENDS the root's
+ *     clearance and the prior-phase `Pipeline:` stages to each program leg's list — it appends, never
+ *     narrows, and never MATCHES (the same-stage duplicate decision stays the model's). The program
+ *     harness may also copy the root's clearance itself (pov-program 1.8.5). `duplicateAcknowledgedFrom`
+ *     (= the root) is written by the platform only if ABSENT, and is excluded with the clearance for the
+ *     same reason: it is the provenance of that clearance and must survive every write path the
+ *     clearance survives. On a leg a human stamped directly, the carry fact's `added` disambiguates which
+ *     entries the platform contributed. A future GUI clearance affordance must be a TARGETED endpoint like
+ *     /api/agents/configure, never the wholesale save. Revisit-trigger: if the protocol's clearance
+ *     stage-binding rule loosens.
+ *     ⚠️ STALE-CLOBBER AXIS, accepted on record (QS4, 2026-10-04): the key stays client-writable (the P5
+ *     editor channel), so a POV-editor snapshot autosaved after a leg's prep can REVERT the carried union
+ *     (and a POV PUT update replaces inputContext wholesale, erasing an inherited Node C contract). Both
+ *     heal at the next prep; the audit-stripped facts survive and read stale. Playbook check 7
+ *     (`carry.added ⊆ current`) and check 6 (live contract sha vs `storedAtWriteSha256`) make it visible.
  *   - runDisposition — HUMAN operator decision that a run is no longer being pursued, or (state `preserved`,
  *     2026-09-27) is deliberately KEPT as a specimen (item 10, 2026-09-15). Same posture as duplicateAcknowledged and for the same reason: humans write it
  *     through MCP, so stripping it there would remove its only write path. Known exposure, accepted
@@ -186,6 +195,19 @@ export const AUDIT_STRIP_KEYS = [
   // to terminalize because a child is in flight or was dispatched this run. A forged value would be a
   // spoofable "I was in flight" exoneration on exactly the runs forensics reads.
   'deadEndExempt',
+  // C2-a (2026-10-04): written ONLY by the platform — at MCP task.create (inside the one tx.task.create)
+  // and at execution prep (plan-spawn-carry.ts). Provenance of a program child's interface contract; a
+  // forged value would launder a paraphrased contract as "the plan's".
+  'interfaceContractSource',
+  // C3-a (2026-10-04): written ONLY by the platform at a program leg's execution prep. Records which
+  // clearance entries the PLATFORM appended (cumulative `added`); `agent.status` reads its `carries`.
+  'duplicateAcknowledgedCarry',
+  // COMPLETE-THEN-FAIL (2026-10-05, DESIGN-v2 §2.3): written ONLY by the completion core's Layer 1, from the agent
+  // loop's callingExecutionId. It is the anchor the post-completion rescue keys on, so a forged value would let a
+  // task.update claim "this execution completed me" and arm (or disarm) a rescue. Same writer class as
+  // completedWithDependencyOverride. NOT a PLATFORM_RUN_KEY: those stay MCP-writable, which would leave the agent's
+  // own task.update as a forgery channel.
+  'completedByExecutionId',
 ] as const;
 
 export interface RunKeyDropOptions {

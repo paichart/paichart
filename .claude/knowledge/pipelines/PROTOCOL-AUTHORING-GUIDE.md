@@ -28,7 +28,7 @@ error because it fails silently — the audit's M-class.
 | A platform fact (chaining scope, mode resolution, error codes, stamp shapes) | Stated ONCE, in the protocol whose bound role acts on it — and verified against code at write time | D6: "§6 carries only DIRECT dependencies" (the immediate predecessor in a linear chain; network-provisioning and terraform-iac add a Phase 0 → Phase 2 edge since 2026-10-01) — verified in `context-chainer.ts` |
 | Shared tool-call mechanics | The base orchestrator, with domain protocols carrying only the DECISION RULE + a cross-reference | Step 5a deliverable wiring — the corpus's best pattern |
 | A role's work product | That protocol's `## What each specialist must produce` bullet for that phase | Harvester/Architect/Author/Reviewer contracts |
-| A permission whose SCOPE differs per domain | The **role guidance** grants it and DEFERS licensing to the domain — and every bound protocol must then DEFINE it or state it grants none | `config_change_author`'s comparison shape: network defines, k8s withdrew (1.9.0), terraform + observability undischarged |
+| A permission whose SCOPE differs per domain | The **role guidance** grants it and DEFERS licensing to the domain — and every bound protocol must then DEFINE it or state it grants none | `config_change_author`'s comparison shape: network defines, k8s withdrew (1.9.0), terraform withdrew (1.10.0), observability owns its shape (1.6.0); since 2026-10-04 the role grant is itself conditional ("Where your active protocol defines a shape … Where it defines none …") and the pairing is pinned (`test-validation-shape-contract.ts` mode 7) |
 | A grading taxonomy | The CONSUMER tier only (the tier that reads the stamps) — never the tier that produces graded material | pov-program Step 5 owns `containmentDisposition`; domain protocols never restate it |
 | An operator/human procedure | NOT in agent prose as an instruction — surface it via the harness's comment at the moment the human acts | S5: the `duplicateAcknowledged` stamp is warned about in the Step-8 gate comment, not demanded of the agent |
 | **A verbatim ARTIFACT the agent must reproduce** (a template, schema, canonical stanza) | The **protocol body**, read from a vendored file at SEED time — never the task description, §6, an MCP resource or the artifact store | All four alternatives are mechanically dead: an LLM paraphrases a described artifact, R9 rewrites chained text while stamping `sanitized:false`, `resources/read` is not an agent tool, and the artifact store has no input mode. See `patterns/seed-time-artifact-carrier-pattern.md` — incl. the MAINTENANCE chain, because a baked artifact IS protocol content and editing it is editing the protocol |
@@ -147,8 +147,9 @@ artifact-synthesis 1.4.0 convention).
 ### 1b. A deferral is only half an obligation — the referent must be OBLIGED to exist
 
 A four-domain role key cannot encode a permission whose correct scope differs per domain, so it
-grants the permission and defers licensing: *"per your active protocol's comparison shape"*. **That
-placement is right** — network's devices genuinely cannot render a post-change state while
+grants the permission and defers licensing — since 2026-10-04 (pattern (h) batch 3) conditionally: *"Where your active
+protocol defines a shape for that step, use it in full … Where it defines none, there is no comparison to fall back
+on"* (was: *"per your active protocol's comparison shape"*). **That placement is right** — network's devices genuinely cannot render a post-change state while
 kubernetes-gitops's offline validators can, and hoisting the licence would grant it where it must not
 exist.
 
@@ -159,8 +160,11 @@ author guessing at an undefined shape (three rounds), a reviewer accepting one. 
 readings of text that does not exist**.
 
 **Rule when you write a deferral**: pair it with a check that every bound protocol either defines the
-referent or states it grants none. Same shape as the reachability test in
-`test-validation-shape-contract.ts`. Absent that, the silence is indistinguishable from a licence
+referent or states it grants none. **Built 2026-10-04** for the shape deferral: the mode-7 test in
+`test-validation-shape-contract.ts` (population DERIVED from the protocols that interpolate the shared clause;
+each body searched without that clause and without the version comments, or it passes vacuously — proven RED for
+terraform + observability before batch 3). Its sibling asserts that a role sentence a protocol QUOTES still exists in
+the role — k8s 1.14.0's quote of the pre-batch-3 grant is the one named, counted exception (A1). Absent such a pair, the silence is indistinguishable from a licence
 and nothing reports it. Full finding:
 `cline_docs/follow-ups/a-deferral-with-no-discharge-obligation-2026-09-19.md`.
 

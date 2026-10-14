@@ -74,7 +74,7 @@ do not use its silence as evidence a rule is absent; check the protocol row, or 
 
 ```bash
 grep -c "protocol-base']" scripts/seed-protocol-prompts.ts                   # expect 1 — the EXACTLY-ONE-BASE contract, asserted as the tag literal rather than as a mention-count. The old form counted comments too and drifted whenever a protocol's comment said "NOT protocol-base"
-grep -c "delta:" lib/agents/harness/protocol-dependence-anchors.ts           # expect 8+ — FLOOR, not a count: every new domain protocol adds a pair, so this rises as a direct consequence of healthy work. A FALL means an anchor was deleted, which is the thing worth catching
+grep -cE "^\s+delta[:,]" lib/agents/harness/protocol-dependence-anchors.ts           # expect 13+ — re-formed 2026-10-02 (value-chain B2): a pair line is `delta: '…'` OR the shorthand `delta,` inside a `.map((delta) => …)` list — pov-program's six pairs became one list shared by both program-tier rows, so the literal `delta:` count FELL from 10 to 4 with no anchor deleted (the old grep would have read that as a deletion). FLOOR, not a count: every new domain protocol adds a pair, so this rises as a direct consequence of healthy work. A FALL means an anchor was deleted, which is the thing worth catching
 grep -c "the standard rule" scripts/seed-protocol-prompts.ts | head -1       # expect >= 4 — base label + x3 infra refs (pairs pinned by test:protocol-dependence-anchors)
 grep "use the default orchestrator" scripts/seed-protocol-prompts.ts | grep -vc "version:"   # expect 0 — the fence fall-back is retired (escalate-on-mismatch); the version-changelog QUOTES of the deleted phrase are excluded by the -v
 ```
@@ -110,7 +110,7 @@ grep -c "'pipeline-with-deps'" lib/services/taskReadyReactorService.ts      # EX
 grep -c "maybeQueueIfDepFree" lib/mcp/tasks/action/handlers/task/task-update-handler.ts   # EXPECT 2 — the 6th call site (dep rewrite / template attach fires post-commit)
 grep -c "executionStatus !== 'FAILED'" lib/mcp/tasks/action/handlers/task/task-update-handler.ts   # EXPECT 1 — frozen-cone guard: a dep rewrite must never un-terminalize an OPEN+FAILED cone member (re-enable = explicit agent.execute)
 grep -c "reviewerPresent" scripts/seed-protocol-prompts.ts   # expect 7+ — FLOOR; rises with each domain protocol — A6 provenance fact: Step 5 dual-branch approved rule (fact-derived when no reviewer) + HOWTO qualityGate branch; green shield w/ reviewerPresent:false = "ran clean, no QA gate", never QA-vetted
-grep -c "superseded:" scripts/seed-protocol-prompts.ts   # EXPECT 2 — gap (b): PLAN-SPAWN supersession contract (cannotRun state channel; supersede BEFORE wiring dependents; title/comment disposal forbidden)
+grep -c 'cannotRun: "superseded: <replacement task id> — <reason>"' scripts/seed-protocol-prompts.ts   # expect 1 — gap (b): PLAN-SPAWN supersession contract (cannotRun state channel; supersede BEFORE wiring dependents; title/comment disposal forbidden). PROPERTY grep since promotion E4 (2026-10-05, DN1/A1): the stamp names its REPLACEMENT task id, which SYNTHESIZE Step 1's ONE "disposed child" definition requires (legacy no-id stamp = ROOT failure; no replacement = escalate at PLAN-SPAWN). Replaced the bare `superseded:` count (EXPECT 2), which a correct Step-1 mention moved to 3. Four-shape fixtures: test:program-containment-taxonomy (DN1); prefix exclusion: test:plan-spawn-carry (E4)
 grep -c "silent" lib/agents/harness/verdict-mismatch-guard.ts   # EXPECT 1 — reviewer-LESS pipeline: verdict===null silence is CORRECT (never "harden" into a mismatch); Phase-2 verdict consumption must gate on reviewer-present
 ```
 Ruling registered same day: **BLOCKED stays NON-terminal permanently** (terminal set closed:
@@ -164,12 +164,18 @@ cat /home/steve/copov15/.claude/agents/pipeline-harness-specialist.md
 
 # The end-to-end smoke test — Failure Triage table maps "observation → likely cause"
 cat /home/steve/copov15/.claude/knowledge/smoke-tests/pipeline-harness-e2e-test.md
+# 2026-10-12 — per-role read budget (R1) and the containment green rule (Bug Class 85, fail-open on fan-in consumers)
+grep -c "export const PROGRAM_ARCHITECT_READ_BUDGET" lib/agents/role-read-budget.ts   # expect 1 — the Architect's 9/12 budget
+grep -c "export function isUpstreamContainmentGreen" lib/agents/harness/derivation-containment.ts   # expect 1 — some-checked + every-0-violations; see follow-ups/containment-green-path-gaps-2026-10-12.md
+grep -c "BRANCH D4 — " scripts/seed-protocol-prompts.ts   # expect 1 — pov-program 2.2.0 delegated-upstream discharge (live 2026-10-12 21:22:09Z)
 ```
 
 ### 1.2 Confirm current shipped versions
 ```bash
-# Protocol version
-grep "version:" /home/steve/copov15/scripts/seed-protocol-prompts.ts | head -5
+# Protocol version — the ORCHESTRATOR's version is NOT on its PROTOCOLS[] entry; it is assigned in
+# the seeding loop's defaultVersion ternary. A `grep "version:" | head` shows artifact-synthesis
+# first and reads as the orchestrator's (caught 2026-10-03). Domain protocols carry `version:` inline.
+grep -A1 "const defaultVersion = protocol.name === 'pipeline-orchestrator-protocol'" /home/steve/copov15/scripts/seed-protocol-prompts.ts | cut -c1-40
 
 # Template version
 grep "version:" /home/steve/copov15/scripts/seed-harness-template.ts | head -3
@@ -257,17 +263,18 @@ npm run report:template-freshness | grep -E "config_change_author|change_reviewe
 `config_change_author` → *Config Change-Package Author* (network-provisioning), *HCL Rollback Author*
 (terraform-iac), *Manifest Rollback Author* (kubernetes-gitops), *Observability Config Rollback Author*
 (observability-config). `change_reviewer` → *Change Reviewer*, *Plan Policy Reviewer*, *GitOps Change
-Reviewer*, *Observability Change Reviewer*. Re-verify from source rather than trusting this list:
+Reviewer*, *Observability Change Reviewer* (the four domain rows), plus two unbound program-tier Node C rows:
+*Value-Chain Program Integration Reviewer* and *Program Integration Reviewer* (promotion E1, 2026-10-05). Re-verify from source rather than trusting this list:
 ```bash
 grep -rl "defaultRole: 'config_change_author'" scripts/seed-*.ts | wc -l   # expect 4
-grep -rl "defaultRole: 'change_reviewer'" scripts/seed-*.ts | wc -l        # expect 4
+grep -rl "defaultRole: 'change_reviewer'" scripts/seed-*.ts | wc -l        # expect 6 — the four domain seeds + seed-value-chain-templates.ts (the unbound value-chain Node C row, B6 decision D1, 2026-10-02) + seed-program-templates.ts (the unbound `Program Integration Reviewer`, promotion E1, 2026-10-05)
 ```
 `change_reviewer` is ALSO a member of `REVIEWER_ROLES` in `lib/agents/harness/parse-verdict.ts`, so
 editing it touches verdict parsing too. It is **not** the whole set: `requirements_reviewer` joined
 2026-09-21 (requirements-authoring), and a REVIEWER_ROLES key must land in the same commit as its
 `ROLE_GUIDANCE_LIBRARY` entry (the coupling test asserts every member's guidance carries the marker).
 ```bash
-grep -cE "^  '[a-z_]+'," lib/agents/harness/parse-verdict.ts   # expect 2 — the REVIEWER_ROLES members
+grep -cE "^  '[a-z_]+'," lib/agents/harness/parse-verdict.ts   # expect 3 — the REVIEWER_ROLES members (change_reviewer, requirements_reviewer, + derivation_reviewer since value-chain B3, 2026-10-02)
 ```
 
 **Findings to raise**:
@@ -346,8 +353,19 @@ grep -c "maybeRetriggerPipelineHarness(" lib/services/agentExecutionEngine.ts   
 # Failure fires the RETRIGGER (harness should SYNTHESIZE to escalate). It ALSO fires
 # maybeQueueReadyDependents as a Finding-9 SAFETY NET — this does NOT break the asymmetry policy,
 # because the reactor itself no-ops unless task.status === 'COMPLETED' (a normally-failed task never
-# queues dependents; only a SYNTHESIZE that task.complete'd and THEN failed at persist is un-stranded).
+# queues dependents; only a SYNTHESIZE that task.complete'd and THEN failed is un-stranded).
+# COMPLETE-THEN-FAIL (2026-10-05): that last case is now mostly RESCUED, not merely un-stranded. A loop throw after
+# the execution completed its OWN task (metadata.completedByExecutionId) persists SUCCESS from DB state
+# (execution-completion-anchored.ts) — report.md + the SYNTHESIZE pipeline-index.json + net stamps + postCompletionFailure.
+# The safety net fires only for the RESIDUALS: a throw inside the success persist / an anchored CAS miss, a declined rescue
+# (no partial state, no deliverableSourceTaskId, no authoritative source), a human completing mid-run, a reap (phase 2, O6).
+# On a COMPLETED task the failure tx now writes executionStatus NULL, never FAILED (O4) — so SYNTHESIZE Step 1
+# ("any child FAILED ⇒ abort") no longer fires on an approved leg. F19 degradedPredecessors catches the residual only at
+# PROGRAM tier and only for a leg with deliverableSourceTaskId set; an ACTION CHILD that completes itself then fails also
+# reads NULL now (leg-tier catch = the reviewer-less "authoritative SUCCESS" conjunct; MI-13 residual (e) counts it).
 grep -n -A12 "export async function persistTerminalFailure" lib/services/execution-terminal-persist.ts | head -3
+grep -c "await writeTerminatedExecutionTaskStatus(" lib/services/execution-terminal-persist.ts lib/services/agentExecutionEngine.ts   # expect 2 — 1 failure tx + 1 engine safety net (O4 sinks; the reapers keep their locked read-branch until phase 2)
+grep -c "rescueOrRethrow(" lib/services/execution-core.ts   # expect 1 — the ONE catch, around the loop only
 ```
 
 ### 4.2a Finding-9 safety nets (2026-07-15) — legitimate, status-guarded, NOT adapters
@@ -502,7 +520,7 @@ grep -rn "harnessTaskId" lib/ app/ --include='*.ts' --include='*.js' | grep -v n
 # comment), reactor-skip-counter.ts + errors.ts (log/error payload fields), protected-task-metadata.ts
 # (comment), reactor-budget-exhausted-persist.ts (RWF A2: an input FIELD name — it writes the harness TASK, never
 # the stage back-pointer). A NEW file here must be classified read-vs-write before it is accepted:
-grep -rl "harnessTaskId" lib/ app/ --include='*.ts' --include='*.js' | grep -v test | wc -l   # expect 12 — was 11; +leg-child-override.ts (RWF D1 3090ed42, 2026-09-27 — not X17 as first recorded; X17 reuses its isLegChild: READS stage.metadata.harnessTaskId to decide 'is this a pipeline child?' — a read, classified per the rule above); was 10 before orchestrator-reexecution.ts (RWF C1)
+grep -rl "harnessTaskId" lib/ app/ --include='*.ts' --include='*.js' | grep -v test | wc -l   # expect 13 — +requirements-form-correction.ts (2b, 2026-10-09: a FIELD name on the fact — the resolved harness id; a read, never the stage back-pointer); was 12, was 11; +leg-child-override.ts (RWF D1 3090ed42, 2026-09-27 — not X17 as first recorded; X17 reuses its isLegChild: READS stage.metadata.harnessTaskId to decide 'is this a pipeline child?' — a read, classified per the rule above); was 10 before orchestrator-reexecution.ts (RWF C1)
 ```
 
 ### 5.4 Engine skip — the shared SUCCESS-persist core (post-Phase-6 convergence)
@@ -896,9 +914,15 @@ grep -n "PipelineStageMismatchError\|getStatusCodeForError\|409" \
 ### 10.2 Production log query for recent alerts
 
 ```bash
-ssh <PROD_USER>@<PROD_HOST> "pm2 logs paichart --lines 5000 --raw 2>&1 | \
-  grep 'PIPELINE_STAGE_MISMATCH' | tail -20"
-# Expect: empty (post-sunset 2026-04-25 — no legacy stages should produce false positives)
+# ⚠️ There is NO pm2 app named `paichart` (apps: paichart-web, paichart-mcp) — the old
+# `pm2 logs paichart` form returned 0 for a nonexistent app and read as CLEAN (caught 2026-10-03).
+# Logs are files, rotated daily (~14 days of .gz). The `lines` column is the CONTROL: a 0 alert
+# count is only a measurement while lines > 0.
+ssh <PROD_USER>@<PROD_HOST> 'cd /var/log/paichart && for f in $(ls | grep -E "^(web|mcp)-(out|error)-"); do
+  case $f in *.gz) c=zcat;; *) c=cat;; esac
+  $c $f | awk -v f=$f "{n++} /PIPELINE_STAGE_MISMATCH/{m++; print} END{printf \"%s lines=%d mismatch=%d\n\", f, n, m}"
+done'
+# Expect: mismatch=0 on every file, lines > 0 (post-sunset 2026-04-25 — no legacy stages should produce false positives)
 # Each hit: capture taskId, pipelineStageId, recordedHarnessId from the JSON payload, then
 # follow the playbook in pipeline-harness-specialist.md § Clobber-Detection Forensic Playbook
 ```
@@ -1015,6 +1039,11 @@ WHERE name = 'pipeline-index.json'
   AND \\\"createdAt\\\" > NOW() - INTERVAL '1 hour'
 ORDER BY \\\"createdAt\\\" DESC LIMIT 1;
 \"" | jq 'keys'
+# ⚠️ Keep this LIMIT-1-then-cast shape. Any query that casts MANY artifact rows `::jsonb` (a
+# WHERE/ORDER BY over content::jsonb, or a `?` across several rows) crashes on a pre-X11 artifact
+# carrying a lone UTF-16 surrogate escape (one known: cmugva9aw006gyxa722697ijv, 2026-09-25;
+# X11 2026-09-27 stops new ones). Filter such rows BEFORE the cast, as
+# scripts/report-mechanism-inventory.sh section 0 does.
 # Expected keys include: resolvedMode, resolvedReasonCode (added 2026-04-26),
 # protocolValidation (when LLM ran the validator), finalResponse, toolCalls,
 # qualityMetrics, mcpToolsProvided, toolLoop.
@@ -1126,7 +1155,7 @@ npm run test:reactor-race-guard   # expect >=45 pass (verified 2026-08-08; was 2
 grep -n "isPipelinePredecessor\|notChained\|source,\|orderBy: { dependsOn: { createdAt" lib/agents/harness/context-chainer.ts | head
 
 # 3. CC7 — contract channel end-to-end: create param → validation → renderer-first → loud-fail
-grep -n "interfaceContract" lib/mcp/tasks/action/handlers/task/task-create-handler.ts lib/validation/mcp-action-validation.ts lib/agents/harness/render-pipeline-context.ts lib/agents/harness/prepare-task-for-execution.ts | head
+grep -n "interfaceContract" lib/mcp/tasks/action/handlers/task/task-create-handler.ts lib/validation/mcp-action-validation.ts lib/agents/harness/render-pipeline-context.ts lib/agents/harness/prepare-task-for-execution.ts lib/agents/harness/plan-spawn-carry.ts | head   # since C2/C3 (2026-10-04) the create site stores the PLAN's contract; plan-spawn-carry.ts is the resolver
 grep -n "INTERFACE_CONTRACT_MISSING" lib/agents/harness/prepare-task-for-execution.ts   # the loud-fail, OUTSIDE the chain catch
 npm run test:pipeline-context-render   # expect >=26 pass (CC7.1-7.3) — ⚠️ was documented 13 against a real 26 (found 2026-09-14); FLOOR not exact count per the ruling, so growth never drifts it while a SHRINK still reads as a suite that stopped asserting
 
@@ -1171,7 +1200,8 @@ report.md) degrades gracefully — the same call serves the plan via `result.jso
 
 **Session-B facts to verify hold**: program SYNTHESIZE stamps `metadata.programReleasable` (distinct
 fact; completion % untouched) + `qualityGate.reviewerScore = MIN` across child pipelines; the gate's
-BLOCKING inputs include producer/Node C `chainedContext.predecessors === expectedPredecessors` (the
+BLOCKING inputs include producer/Node C `chainedContext.predecessors === chainCapablePredecessors` (never
+`expectedPredecessors`, which counts gates — corrected 2026-10-04) (the
 CC2b notChained consumer). Program CREATE spans TWO harness executions — PLAN (Architect only) →
 PLAN-SPAWN on the Architect-completion retrigger (CC7 is create-time-only; PIPELINE children start
 only via dep-completion) — rationale in the protocol const's header comment.
@@ -1274,42 +1304,25 @@ gate-hold window (validated Run 3, `programReleasable: true`). pov-program 1.0.3
 at gate time. Trail: `cline_docs/reviews/protocol-obligation-audit-2026-08-11/AUDIT.md` (S5, O5).
 
 **Pipeline re-run clearance (2026-09-24)** — technique in the library § "Duplicate-check clearance".
-The matching is the MODEL's, not the platform's; confirm the only code read is still a null check:
+The MATCHING is the MODEL's, not the platform's. Since the C2/C3 batch (2026-10-04) the platform WRITES
+clearances (C3-a carry) but still never MATCHES one against a detected duplicate. PROPERTY greps (the old
+`!= null` count went to 0 when `agent.status` moved onto the shared rule — a count of a phrasing, not the property):
 
 ```bash
-grep -rn "duplicateAcknowledged" lib --include=*.ts | grep -v "^\S*:\s*\*\|//" | grep -c "!= null"   # expect 1
+grep -c "export async function carryProgramClearance" lib/agents/harness/plan-spawn-carry.ts   # expect 1 — the platform's ONE clearance writer (append-only, in-statement)
+grep -c "resolved: isDuplicateHaltResolved(tMeta)" lib/mcp/tasks/action/handlers/agent/agent-status-handler.ts   # expect 1 — != null unless the platform carried (carries >= 1), then set membership (QS1)
+grep -rln "duplicateAcknowledged" lib --include=*.ts | wc -l   # expect 5 — plan-spawn-carry, prepare-task-for-execution, agent-status-handler, run-disposition, protected-task-metadata
 ```
 
-If that rises, platform code has started matching clearances, and the library's "array is model
-judgement" caveat must be re-verified against it.
+A NEW file in that list is a new platform reader or writer of a human clearance: read it, and if it makes a
+same-stage duplicate decision, the library's "the matching is the model's" caveat
+(`pipeline-harness-library.md` § "Duplicate-check clearance") must be re-verified against it.
 
-## Publishing a generated spec (2026-09-24)
+## Publishing a generated spec — MOVED 2026-10-11
 
-Procedure: `.claude/knowledge/pipelines/requirements-authoring/PUBLISH-GENERATED-SPEC.md`. The publish pass depends on
-the splice tool's two modes and on the operator HOWTO still describing the step — confirm both exist:
-
-```bash
-grep -c "def skeleton\|'--insert'\|'--check'" ~/paichart/scripts/requirements-rules.py   # expect >=3
-grep -c "If the requirements.md was GENERATED" scripts/seed-protocol-prompts.ts            # expect >=1 — the heading, plus changelog mentions (2 at 2026-09-24)
-```
-
-The design-decision questions (2026-09-29) are maintained in
-`.claude/knowledge/pipelines/requirements-authoring/DESIGN-DECISION-QUESTIONS.md`, and the key-parity check compares it
-with the skeleton, the Author guidance and Reviewer 8.1 per class. Confirm the registry is still one of the compared
-copies (a registry dropped from the check would drift silently):
-
-```bash
-grep -c "keysFromRegistry(REGISTRY)" scripts/test-requirements-guidance-anchors.ts   # expect 1
-```
-
-The owner-answer session (2026-09-30) turns a zero-decision generation's owner block into an answered objective. Its
-merge must stay mechanical — confirm the procedure still points at the script, and the script still refuses an
-unanswered question:
-
-```bash
-grep -c "build-answered-objective.py" .claude/knowledge/pipelines/requirements-authoring/OWNER-ANSWER-SESSION.md   # expect >=1
-grep -c "owner question(s) with no answer" scripts/build-answered-objective.py   # expect 1
-```
+The publish-pass, registry-parity and owner-answer merge greps moved to
+`.claude/knowledge/discoveries/requirements-authoring-discovery.md` with the requirements-authoring split
+(SPECIALIST-LIFECYCLE-GUIDE §3b). Run them there.
 
 ## 🆕 2026-09-14 — Prose-obligation coverage pins
 
@@ -1321,9 +1334,9 @@ whether to BUILD something. These pin its load-bearing claims.
 ```bash
 grep -c "| 'prefix-not-minimal'" lib/agents/harness/derivation-containment.ts   # expect 1 — the counterpart the map credits for requirements.md check 2b (minimality). If this goes to 0 the map's "covered" row is false and check 2b is exposed again
 grep -c "| 'covered-not-member'" lib/agents/harness/derivation-containment.ts   # expect 1 — the counterpart for check 3 (aggregate covers no existing allocation)
-grep -c "^    name: '" lib/agents/harness/mechanical-nets.ts                    # expect 7 — registrations, NOT distinct nets: rollbackContainment registers at both points. 6 nets / 7 registrations since RWF C3 (2026-09-26, +verdictFreshness@leg-synthesize); both numbers must move together
-grep -c "point: 'leaf-persist'" lib/agents/harness/mechanical-nets.ts           # expect 2 — a leaf-persist net reaches the leg Reviewer's §6 via the chainer; a leg-synthesize one cannot. Stamp point is a design constraint, so the split is worth pinning
-grep -c "point: 'leg-synthesize'" lib/agents/harness/mechanical-nets.ts         # expect 5 — was 4; +verdictFreshness (RWF C3 2026-09-26)
+grep -c "^    name: '" lib/agents/harness/mechanical-nets.ts                    # expect 11 — 2026-10-13 (2): +applyBlockPlaceholder@leaf-persist (PLACEHOLDER-APPLIES-AS-LITERAL interim guard). Before that 10 — 2026-10-13: +quoteFidelity@leaf-persist (VERBATIM-QUOTE-OMISSION). Before that 9; — (+reviewerWarnings@leg-synthesize, 2026-10-08) registrations, NOT distinct nets: rollbackContainment AND (since value-chain B4, 2026-10-02) derivationContainment each register at both points. 8 nets / 10 registrations (re-proven 2026-10-13: `grep -oE "^    name: '[A-Za-z]+'" … | sort -u | wc -l` = 8); both numbers must move together
+grep -c "point: 'leaf-persist'" lib/agents/harness/mechanical-nets.ts           # expect 5 — 2026-10-13 (2): +applyBlockPlaceholder (config_change_author leaves). Before that 4 — 2026-10-13: +quoteFidelity (Harvester + Author leaves). Before that 3; — (was 2; +derivationContainment on the value-leg Derivation Architect, value-chain B4 2026-10-02 — leaf-persist precisely so its disposition reaches the value leg's Reviewer) — a leaf-persist net reaches the leg Reviewer's §6 via the chainer; a leg-synthesize one cannot. Stamp point is a design constraint, so the split is worth pinning
+grep -c "point: 'leg-synthesize'" lib/agents/harness/mechanical-nets.ts         # expect 6 — +reviewerWarnings (WARNINGS-INVISIBLE 2026-10-08); was 5; was 4; +verdictFreshness (RWF C3 2026-09-26)
 grep -c "authored-value-not-derived" lib/agents/harness/derivation-containment.ts   # expect 0 — the check-1 leaf is EARNED, SPECCED and deliberately FILED (3 of 13 coverage, zero observed mismatches). A non-zero count means it was built, which is GOOD but makes the map's "EXPOSED" row stale: update the map and retire the health-run re-measure in the same commit
 ```
 
@@ -1410,7 +1423,7 @@ Suites: `test:child-stage-settled` (X4 D11-D18), `test:authoritative-result-read
 grep -c "writeReapedTaskStatuses(tx," lib/services/agentExecutionEngine.ts   # expect 2
 grep -c "executionStatus: null" lib/services/agentExecutionEngine.ts   # expect 0
 # B1 — the nets read the execution the chainer chained (helper + 3 enrichment files)
-grep -rl "readAuthoritativeResultField(" lib --include=*.ts | wc -l   # expect 4
+grep -rl "readAuthoritativeResultField(" lib --include=*.ts | wc -l   # expect 8 — 2026-10-13: +quote-fidelity-enrichment.ts (the Author point reads the harvest's raw toolCalls through it). Before that 7; — (+reviewer-warnings-enrichment.ts, 2026-10-08: the reviewerWarnings net reads each reviewer's stamped verdict and each leg's stamped fact through the chainer's selection; was 6) (+plan-spawn-carry.ts, C2/C3 2026-10-04: the program PLAN read takes the Architect's AUTHORITATIVE execution, the same selection the chainer uses; was 5; was 4; +value-leg-containment-enrichment.ts, value-chain B4 2026-10-02: the harvest read at leaf-persist and the Architect-stamp hoist)
 # C1 — the cap + Reviewer rule run at the chokepoint, and the chained record is stamped explicitly
 grep -c "enforceOrchestratorReExecutionRules(prisma" lib/services/agent-execution-create.ts   # expect 1
 grep -c "ctx.chainedPredecessors = stamps.chainedPredecessors" lib/services/execution-context-build.ts   # expect 1 — moved out of agent-execution-create.ts by 0901c160 (a prisma-free module, so its test runs in CI); found drifted by MI-13
@@ -1474,3 +1487,90 @@ grep -c "lt 5120" scripts/deploy/blue-green-deploy.sh   # expect 1
   it** — execution retention is count-based and two more runs evict the failing execution.
 - **RWF Stage 3 is STOPPED** (no verb, no tag grammar, no Alternative B). A green retry-band audit does not mean the
   findings-carrying retry exists; the 50-69 retry is still a blind re-roll. Re-open triggers: library.
+
+## C2/C3 PLAN-SPAWN carries — verification greps (added 2026-10-04; every expectation run before it was written)
+
+C2-a (the platform stores the program PLAN's interface contract; a contract-less reviewer-set child of a program
+stage inherits it when every leg holds that plan) and C3-a (a program leg's `duplicateAcknowledged` ⊇ root ∪
+prior `Pipeline:` stages). ONE module: `lib/agents/harness/plan-spawn-carry.ts`. Plan + build report:
+`cline_docs/reviews/value-chain-post-window-2026-10-04/C2-C3-IMPLEMENTATION-PLAN-v2.md`, `C23-BUILD-REPORT.md`.
+
+```bash
+grep -c "resolveCreateContract(prisma" lib/mcp/tasks/action/handlers/task/task-create-handler.ts   # expect 1 — the create site: one call, inside a try, before the tx
+grep -c "writeInterfaceContractIfAbsent(taskId, decision.contract" lib/agents/harness/prepare-task-for-execution.ts   # expect 1 — the plan arm, through the SHARED writer
+grep -c "AND type <> 'PIPELINE'" lib/tasks/services/inputContext.ts   # expect 1 — F16 disjointness enforced IN the shared writer's statement
+grep -c "carryProgramClearance(prisma" lib/agents/harness/prepare-task-for-execution.ts   # expect 1
+grep -c "'interfaceContractSource',\|'duplicateAcknowledgedCarry'," lib/tasks/services/protected-task-metadata.ts   # expect 2 — audit-stripped on every client surface
+grep -c "stripAuditFacts(incoming)" lib/tasks/services/task.ts   # expect 2 — update funnel + createTask (the REST-create audit-strip gap, closed)
+grep -c "CanNeverRunError" lib/agents/harness/plan-spawn-carry.ts   # expect 1 — the header comment saying it is NOT imported; a refusal is a stamp, never a can-never-run
+npm run test:plan-spawn-carry   # expect >=85 pass — pure (in CI)
+```
+
+**Watch on reading these facts:** `interfaceContractSource` and `duplicateAcknowledgedCarry` are UNRENDERED and
+consumed by nothing but `agent.status` (`carries`). Hash comparisons go through `canonicalContractSha` only —
+SQL `contract::text` orders keys by length then bytes and cannot reproduce `planSha256`. The live instrument is
+`npm run replay:plan-contract -- --root <id>`; the forensics §4c SQL is a cross-check.
+
+
+## DN1 + VERDICT-HEADING — verification greps (added 2026-10-05; every expectation run before it was written)
+
+DN1: the agent-stamped `cannotRun` consumer covers NON-PIPELINE harness children (harness-owned, never in flight).
+VERDICT-HEADING: the parser tolerates `#`-runs in front of the literal marker (`## ## VERDICT:`), nothing else.
+Record: `cline_docs/reviews/dn1-verdict-heading-2026-10-05/REPORT.md`. Suites: `test:agent-stamped-cannot-run-scope`
+(CI), `test:agent-stamped-cannot-run-behavioral` (dev DB), `test:parse-verdict` (CI).
+
+```bash
+grep -c "requireNotInFlight: scope === 'harness-child'" lib/services/task-can-never-run-persist.ts   # expect 1 — the in-flight clause is ON for the harness-child scope
+grep -c "harnessOwnedTaskIds(prisma, \[taskId\])" lib/services/task-can-never-run-persist.ts   # expect 1 — ownership through the shared helper
+grep -c "type === 'PIPELINE'" lib/mcp/tasks/action/handlers/task/task-update-handler.ts   # expect 1 — the stage back-pointer check only; the cannotRun hook's PIPELINE gate is gone (it was 2 before DN1)
+grep -c '(?:#{1,6}\[ \\t\]+){0,3}#{2,6}' lib/agents/harness/parse-verdict.ts   # expect 1 — the filter: prefix runs, then the marker run >= 2
+```
+
+⚠️ Bold `**Verdict: X**` is NOT tolerated, on evidence: it is the corpus's per-section sub-verdict form (~70 lines in
+431 reviewer outputs), so tolerating it would let a sub-verdict win last-match (VH4 pins it).
+
+## Promotion E — value legs under pov-program 2.0.0, value-chain-program RETIRED (added 2026-10-06, E9a; every expectation run before it was written)
+
+Deploy 2 ships pov-program **2.0.0** (value-chain's value-leg text folded in), the value-chain-program row as a
+DEPRECATED tombstone, Node C on the unbound `Program Integration Reviewer` (mode `none`), one Architect text for both
+Architect keys, and producer + Node C wired to the pipeline legs only. Record: `cline_docs/reviews/promotion-e-2026-10-05/`
+(PLAN-v2, E1–E9a build reports). 🔒 **FENCE — never "clean up" `'value-chain-program'` in `PROGRAM_PROTOCOL_NAMES`
+(`lib/agents/harness/program-protocol.ts`) or its pin** (`test-system-prompt-injections.ts`, the DEPRECATED composed +
+named cases — it goes red if the entry is removed; `test-program-protocol-token.ts` only ITERATES the list and stays
+green without it, so it is not a pin): tier is a property of the NAME, and without it a stamped task composes
+base-only instead of failing loud. A drift sweep over "value-chain-program" EXCLUDES this entry by name.
+
+```bash
+grep -c "'value-chain-program'," lib/agents/harness/program-protocol.ts            # expect 1 — the PERMANENT membership (owner decision D2); 0 = the fence was swept
+grep -c "nodeCTemplate: 'Program Integration Reviewer'" scripts/seed-protocol-prompts.ts   # expect 1 — pov-program's Node C row (exact name: a missing exact name binds the nearest row SILENTLY, fuzzy contains-tier)
+grep -c "status: 'DEPRECATED'" scripts/seed-protocol-prompts.ts                    # expect 1 — the value-chain-program tombstone (status comes from the seed: a revert reseeds it ACTIVE)
+grep -c "status: 'DEPRECATED'" scripts/seed-value-chain-templates.ts              # expect 1 — Value-Chain Program Architect (ND6, per-entry status)
+grep -c "'value_chain_architect': PROGRAM_ARCHITECT_GUIDANCE" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # expect 1 — one Architect text for both keys (=== pinned in test:protocol-golden)
+grep -c "<ALL pipeline child ids — never a gate>" scripts/seed-protocol-prompts.ts   # expect 2 — PLAN-SPAWN steps 5 (producer) and 6 (Node C), E6 C1-a
+```
+Series breaks this deploy causes (CLAUDE.md soak + MI-13 entries): the whole `change_reviewer` evidence-grading series,
+Node C `protocolInjection.mode` named → none, program-tier rows keyed on the root's `protocolInjection.delta.version`
+(1.9.0 vs 2.0.0 — in the root's `pipeline-index.json`; harness executions write no `result.json`), and a THIRD population — pre-E roots released later. Shadow tasks `cmuv6cbj90007yxsetwx41mlr` and
+`cmuv6coz0000dyxse7t7h5zoi` are excluded from every Node C series.
+
+## WARNING-QUESTION-WATCH — MOVED 2026-10-11
+
+Owned by `requirements-authoring-specialist` since 2026-10-11; its grep is in that pair's discovery.
+
+## 2026-10-09 — requirements pipeline 2b — MOVED 2026-10-11
+
+The consumer-side greps for the in-run requirements form check moved to the requirements-authoring discovery.
+
+## PLATFORM-HELD-BYTES Stage A — shadow capture under the Harvester (2026-10-14)
+
+```bash
+grep -c "captureHeldFiles(" lib/services/execution-core.ts   # expect 1
+grep -c "captureHeldFiles(" lib/services/execution-completion-anchored.ts   # expect 1
+```
+Observability Harvesters' declared file reads (`get_otel_config`, `get_ingress_config`) are captured, R10-redacted and held
+in `held_blobs` / `held_file_refs`, or refused by name in `held_capture_refusals` — SHADOW: nothing an agent, card, §6 or
+`result.json` sees changes, and the switch `HELD_BYTES_CAPTURE_ENABLED` is opt-in. `FILE_ARTIFACT_TOOLS` derives from the
+descriptor table (`held-bytes/descriptors.ts`). Stage B (edit by reference: the variant, line map, applier, reviewer diff,
+`heldBytes` fact wiring) builds on these tables. Record + G0 + review folds:
+`cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-BUILD.md`; plan `STAGE-A-PLAN.md` §15 carries Stage B's
+preconditions.

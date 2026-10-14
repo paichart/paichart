@@ -64,6 +64,36 @@
  *    state K1 default-deny at the read-only service (harvest by `state pull` + redact by the state's own
  *    `sensitive_attributes`, never raw state) is the SOLE state defense; this family only backstops
  *    secret-shaped values that survive into the LLM-authored prose of report.md.
+ *  - observability/cloud (2026-10-13, P1 of PLATFORM-HELD-BYTES): `bearer_token:`, `credentials:` under an
+ *    `authorization:` block, `Authorization: Bearer|Basic` under a YAML `headers:` map, nginx
+ *    `proxy_set_header Authorization "Bearer|Basic …"`, prefixed `aws_secret_access_key`, and PEM
+ *    `-----BEGIN … PRIVATE KEY-----` blocks are now caught. Still residual, priced: a scheme-less header value
+ *    (`x-api-key: …`, `Authorization: <token>` with no scheme), a flow-style map (`headers: {Authorization: …}`),
+ *    a credential after a blank line or more than 32 lines inside its block, the block-context forms on a
+ *    TRUNCATED serialized leaf (arm 2 has no `\n` to anchor them), `aws_session_token`, and the last body line
+ *    of a cut (END-less) PEM key when it is shorter than 16 characters. From the pattern-attack review
+ *    (REVIEW-P1-P2-PATTERNS.md, 2026-10-13), probed and NOT caught, priced: `export AWS_SECRET_ACCESS_KEY=…` and inline
+ *    `-e KEY=…` flags (the line anchor; pre-existing for every key); k8s `- name: X` / `value: …` pairs incl. probe
+ *    `httpHeaders`; a list-item `- bearer_token: …`; schemes other than Bearer/Basic (`ApiKey`, `Token`);
+ *    `grpc_set_header`, a commented-out `# proxy_set_header …`, or one not at line start; an `authorization:` parent
+ *    with a trailing comment, capitalised, holding a list, or a folded scalar; PGP private key blocks and k8s
+ *    `tls.key:` base64-of-PEM; a quoted credential with a space (only its first word goes); letters-only bearer
+ *    tokens (the shape gate, deliberate).
+ *  - PEM IS SHAPE-ANCHORED, not directive-anchored (review B1/S-1): a span between markers is redacted only when it
+ *    looks like a key body, so a report/script that MENTIONS the markers is untouched. Cost, priced: a key whose BEGIN
+ *    line carries trailing non-base64 text, or whose body is broken by a non-base64 line, is not redacted.
+ *  - THE ONE NARROWING AGAINST THE PRE-P1 MODULE (review N-8): `"password": "hunter\n2"` (a raw newline inside the
+ *    quotes) was redacted by the old `[^"]+` and is not by `[^"\n]+`. Valid JSON cannot hold a raw newline in a
+ *    string, so only broken JSON or prose loses that accidental coverage. Accepted.
+ *  - LINE PRESERVATION IS ABOUT REAL NEWLINES (review N-12). An ENCODED `\n` inside a JSON-quoted token is consumed
+ *    up to the next `"` (over-redacts, never leaks; pre-existing for `password`). A consumer that counts lines of a
+ *    serialized leaf must not rely on R10 preserving encoded ones.
+ *  - KEY NAMES IN PARSED JSON ARE NOT SEEN (review N-11, pre-existing, filed separately): the deep walk redacts string
+ *    VALUES without their keys, so `{"aws_secret_access_key": "…"}` as a parsed object (or a valid-JSON leaf, via
+ *    arm 1) is not redacted; the JSON-quoted family fires only on prose and on leaves that do not parse.
+ *  - LINE-PRESERVING (P1): no pattern's TOKEN spans a newline (the JSON-quoted token was `[^"]+` and could;
+ *    now `[^"\n]+`), and PEM bodies keep one placeholder per line. A redacted text has exactly the line count of
+ *    its input — the held-bytes design depends on it; pinned in test-security-invariants.ts §J.
  *  - An inline mid-sentence secret mention in prose (not at a line start) is not redacted.
  *  - Non-plain objects (e.g. Date) flatten to `{}` via the object branch in redactSecretsDeep
  *    (harmless: result.json is JSON-serialized anyway).
@@ -74,7 +104,7 @@ export interface RedactArtifactResult {
   redactedCount: number;
 }
 
-const PLACEHOLDER = '<<REDACTED-SECRET>>';
+export const PLACEHOLDER = '<<REDACTED-SECRET>>';
 const MAX_REDACT_DEPTH = 200; // fail-open ceiling: a backstop must never throw on the write path
 
 // Each regex: group 1 = preserved prefix (line indent + directive), group 2 = secret token.
@@ -121,13 +151,21 @@ const PATTERNS: RegExp[] = [
   // secret-VALUE keys, case-insensitive. The value MUST be SECRET-SHAPED (a digit or one of $ . / = +)
   // so a prose line like `Password: required` is NOT redacted. Exact-key match (bare `secret`, not
   // `secretName`; `secret_key`, not `secretKeyRef`) leaves k8s *references* (names) intact — only values.
-  /^([ \t]*(?:password|passwd|passphrase|token|api[_-]?token|api[_-]?key|apikey|client[_-]?secret|secret[_-]?access[_-]?key|secret[_-]?key|access[_-]?key|private[_-]?key|privatekey|bearer|auth[_-]?token|connection[_-]?string|connectionstring|dsn|secret)[ \t]*[:=][ \t]*)((?=\S*[\d$.\/=+])"?\S+)/gim,
+  /^([ \t]*(?:password|passwd|passphrase|token|api[_-]?token|api[_-]?key|apikey|client[_-]?secret|(?:aws[_-]?)?secret[_-]?access[_-]?key|secret[_-]?key|access[_-]?key|private[_-]?key|privatekey|bearer(?:[_-]?token)?|auth[_-]?token|connection[_-]?string|connectionstring|dsn|secret)[ \t]*[:=][ \t]*)((?=\S*[\d$.\/=+])"?\S+)/gim,
   // terraform/IaC (2026-06-29, WP-C): JSON-quoted-key form `"key": "value"`. terraform `show -json` /
   // state is JSON, so the bare-key family above (line-anchored on an UNQUOTED key) slips past it — the
   // leading `"` breaks the `^[ \t]*key` anchor. Same secret-key set + secret-shaped gate. The token is
   // `[^"]+` (stops BEFORE the closing `"`) so the JSON object survives: a greedy `\S+` would eat the
   // closing quote and break structure (sec-ops IMP-2). PROSE backstop only — K1 is the state defense.
-  /^([ \t]*"(?:password|passwd|passphrase|token|api[_-]?token|api[_-]?key|apikey|client[_-]?secret|secret[_-]?access[_-]?key|secret[_-]?key|access[_-]?key|private[_-]?key|privatekey|bearer|auth[_-]?token|connection[_-]?string|connectionstring|dsn|secret)"[ \t]*:[ \t]*")((?=[^"]*[\d$.\/=+])[^"]+)/gim,
+  /^([ \t]*"(?:password|passwd|passphrase|token|api[_-]?token|api[_-]?key|apikey|client[_-]?secret|(?:aws[_-]?)?secret[_-]?access[_-]?key|secret[_-]?key|access[_-]?key|private[_-]?key|privatekey|bearer(?:[_-]?token)?|auth[_-]?token|connection[_-]?string|connectionstring|dsn|secret)"[ \t]*:[ \t]*")((?=[^"\n]*[\d$.\/=+])[^"\n]+)/gim,
+  // nginx `proxy_set_header Authorization "Bearer abc123";` / `'Basic dXNlcjpwYXNz';` (P1, 2026-10-13; single quotes
+  // since review S-3 -- nginx accepts both, and a JSON escape never applies to `'`). The
+  // directive + header name + scheme are the anchor, so no secret-shape gate (a Basic credential is often
+  // letters only). The scheme and the closing `";` survive. A `$variable` value is a reference, not a secret:
+  // `(?!\$)` leaves `$http_authorization` / `"Bearer $token"` intact. `\\?"?` and the `\\`-free token let the
+  // derived serialized variant match `\"Bearer x\";` without eating the escape. Case-insensitive: header
+  // names and schemes are case-insensitive in HTTP; the directive keeps the line anchored.
+  /^([ \t]*proxy_set_header[ \t]+authorization[ \t]+(?:\\?["'])?(?:bearer|basic)[ \t]+)((?!\$)[^\s"'\\;]+)/gim,
   // AWS access key id — distinctive (AKIA + 16 upper/digit), redact inline wherever it appears.
   /()(AKIA[0-9A-Z]{16})/g,
   // FAIL-SAFE generic: lowercase directive at line start + a SECRET-SHAPED token. Bare `:` REMOVED
@@ -136,20 +174,222 @@ const PATTERNS: RegExp[] = [
   /^([ \t]*(?:password|secret|key)(?:\s+\d+)?\s+)((?=\S*[\d$.\/=])\S+)/gm,
 ];
 
-export function redactArtifactSecrets(text: string): RedactArtifactResult {
-  if (!text || typeof text !== 'string') {
-    return { redacted: typeof text === 'string' ? text : '', redactedCount: 0 };
+// ── BLOCK-CONTEXT patterns (P1, 2026-10-13): a YAML key that is a secret only INSIDE a named parent block.
+// The parent line is the anchor (`credentials:` alone is too generic; `Authorization:` alone collides with
+// prose and HTTP-header explanations). Group 1 = preserved prefix (parent line + the intervening lines +
+// the key); group 2 = the parent's indent, back-referenced so the child must be indented deeper and every
+// intervening line too (the block ends where indentation returns). The token is always the END of the match,
+// so the replacer reads it as `whole.slice(prefix.length)` rather than by group number.
+// LINEAR BY CONSTRUCTION: each intervening line is `\2[ \t][^\n]*\n` (one way to match a line, no
+// whitespace ambiguity — `[ \t]+[^\n]*` would be exponential on failure), and the window is capped at 32
+// lines so a deeply nested hostile block costs at most 32 lines per start. A credential more than 32 lines
+// below its parent, or after a blank line inside the block, is a priced false negative.
+// NOT applied on the serialized-leaf arm (arm 2): its `\\n` line separators are not `\n`, and arm 1 parses
+// every leaf that is valid JSON. A TRUNCATED serialized leaf carrying one of these blocks is a residual.
+const BLOCK_CONTEXT_PATTERNS: RegExp[] = [
+  // Prometheus `authorization:` block — `type: Bearer` + `credentials: <token>` (scrape configs, remote_write).
+  // `\r?\n` on the parent (review S-2): CRLF text from Windows hosts and some APIs; intervening lines already admit `\r`.
+  // The parent pins the meaning, so no secret-shape gate. Lowercase: Prometheus keys are lowercase.
+  /^(([ \t]*)(?:-[ \t]+)?authorization:[ \t]*\r?\n(?:\2[ \t][^\n]*\n){0,32}?\2[ \t]+credentials:[ \t]*(?:\\?["'])?)((?!\$)[^\s"'\\]+)/gm,
+  // YAML `headers:` map (OTel exporters, Prometheus remote_write) — `Authorization: "Bearer x"` / `Basic x`.
+  // Scheme required (the brief's shape; a scheme-less header value is a residual). `$` / `${env:X}` values
+  // are references and survive. Case-insensitive for the header name and scheme.
+  /^(([ \t]*)(?:-[ \t]+)?headers:[ \t]*\r?\n(?:\2[ \t][^\n]*\n){0,32}?\2[ \t]+["']?authorization["']?[ \t]*:[ \t]*["']?(?:bearer|basic)[ \t]+)((?!\$)[^\s"'\\]+)/gim,
+];
+
+// ── PEM PRIVATE KEY BLOCKS (P1, 2026-10-13) — a block-pattern kind, implemented as a linear scan, not a regex
+// with a lazy `[\s\S]*?` body (that is quadratic on many BEGIN markers with no END — the F9-s2 class).
+// The BEGIN and END lines survive; every body segment's non-whitespace CORE becomes one placeholder, so the
+// segment (= line) count, indentation and separators are unchanged — R10 IS LINE-PRESERVING and the
+// held-bytes design depends on it (pinned in test-security-invariants.ts §J). One block counts once.
+// `-----BEGIN CERTIFICATE-----` / `PUBLIC KEY` are not matched: only `… PRIVATE KEY-----` labels.
+// ANCHOR (review B1 / S-1, 2026-10-13): a marker is not a directive -- reports, scripts and runbooks MENTION it
+// (`head -1 key.pem` expecting a BEGIN line, a `sed` range, "paste the key that starts with …"). So a span is
+// a key only when it LOOKS like one: every segment between the markers is blank, a `Proc-Type:`/`DEK-Info:` header,
+// or whitespace-separated base64 runs, with at least one run of 16+ chars and every run but the last 16+ (a key's
+// lines are 64 chars, its final line short). Otherwise that BEGIN is tried as UNTERMINATED instead.
+// UNTERMINATED (a capped leaf cut mid-key): only when the BEGIN line's remainder is blank or key-shaped by the same
+// rule; then that remainder plus following body-shaped lines (base64 runs of 16+ chars, headers, one blank line
+// after a header) are redacted, stopping at the first other line. A short final line (<16 chars) of a cut key is a
+// priced residual; so is a key whose BEGIN line carries trailing non-base64 text (not valid PEM).
+// Whitespace includes the ESCAPED forms (`\t`, `\r` behind ANY run of backslashes: a key inside JSON, or JSON inside
+// JSON -- review N-13); a base64 body never contains `\`, so a backslash run is always an escape.
+// Sticky: tried only AT an `indexOf` candidate (a global-regex search per block measured ~10x slower on 35k blocks).
+const PEM_BEGIN = /-----BEGIN (?:[A-Z0-9]+ ){0,3}PRIVATE KEY-----/y;
+const PEM_END = /-----END (?:[A-Z0-9]+ ){0,3}PRIVATE KEY-----/y;
+const PEM_WS = String.raw`(?:[ \t\r]|\\+[tr])`;
+const PEM_BODY_LINE = new RegExp(String.raw`^${PEM_WS}*(?:[A-Za-z0-9+/=]{16,}|(?:Proc-Type|DEK-Info):[^\n]*)${PEM_WS}*$`);
+const PEM_HEADER_LINE = new RegExp(String.raw`^${PEM_WS}*(?:Proc-Type|DEK-Info):`);
+const PEM_BLANK = new RegExp(String.raw`^${PEM_WS}*$`);
+const PEM_RUNS_SEGMENT = new RegExp(String.raw`^${PEM_WS}*(?:[A-Za-z0-9+/=]+(?:${PEM_WS}+[A-Za-z0-9+/=]+)*)?${PEM_WS}*$`);
+
+/** Base64 run lengths of a body segment; 'header' for a Proc-Type/DEK-Info line; null if the segment is not key-shaped. */
+function pemSegmentRuns(seg: string): number[] | 'header' | null {
+  if (PEM_HEADER_LINE.test(seg)) return 'header';
+  if (!PEM_RUNS_SEGMENT.test(seg)) return null;
+  // Escaped whitespace first: its `t`/`r` are base64 letters and would otherwise glue onto the next run.
+  return (seg.replace(/\\+[tr]/g, ' ').match(/[A-Za-z0-9+/=]+/g) || []).map((r) => r.length);
+}
+
+/** The key-shape rule over a span's runs: at least one 16+ run, and every run but the last 16+. */
+function pemRunsLookLikeKey(runs: number[]): boolean {
+  return runs.some((n) => n >= 16) && runs.slice(0, -1).every((n) => n >= 16);
+}
+
+/** True when every segment (even indexes of a PEM_SEP split) is key-shaped and the runs pass the key rule. */
+function pemSpanIsKey(parts: string[]): boolean {
+  const runs: number[] = [];
+  for (let i = 0; i < parts.length; i += 2) {
+    const r = pemSegmentRuns(parts[i]);
+    if (r === null) return false;
+    if (r !== 'header') runs.push(...r);
   }
+  return pemRunsLookLikeKey(runs);
+}
+
+/** Replace a segment's non-whitespace core with the placeholder; whitespace (incl. escaped `\t`/`\r`) kept. */
+// A loop, not a `^(ws*)(.*?)(ws*)$` regex: that lazy middle is quadratic on one long whitespace run.
+function redactSegment(seg: string): { out: string; changed: boolean } {
+  let i = 0;
+  let j = seg.length;
+  for (;;) {
+    if (seg[i] === ' ' || seg[i] === '\t' || seg[i] === '\r') { i += 1; continue; }
+    if (seg[i] === '\\') {
+      let k = i;
+      while (seg[k] === '\\') k += 1;
+      if (seg[k] === 't' || seg[k] === 'r') { i = k + 1; continue; }
+    }
+    break;
+  }
+  for (;;) {
+    if (j > i && (seg[j - 1] === ' ' || seg[j - 1] === '\t' || seg[j - 1] === '\r')) { j -= 1; continue; }
+    if (j - 1 > i && (seg[j - 1] === 'r' || seg[j - 1] === 't') && seg[j - 2] === '\\') {
+      let k = j - 2;
+      while (k - 1 >= i && seg[k - 1] === '\\') k -= 1;
+      j = k;
+      continue;
+    }
+    break;
+  }
+  const core = seg.slice(i, j);
+  if (core.length === 0 || core === PLACEHOLDER) return { out: seg, changed: false };
+  return { out: seg.slice(0, i) + PLACEHOLDER + seg.slice(j), changed: true };
+}
+
+// Body segments split on BOTH separators: a real newline, and an ESCAPED one (`\n` behind any run of backslashes:
+// a serialized leaf, or JSON inside JSON -- review N-13). R10's plain pass runs before arm 2 on a serialized leaf,
+// so a `\n`-only split there would fold an encoded body into ONE placeholder and eat its encoded newlines.
+const PEM_SEP = /(\n|\\+n)/;
+
+/** The next `literal…PRIVATE KEY-----` marker at or after `from`: [index, length], or null. */
+function findPemMarker(text: string, from: number, literal: string, re: RegExp): [number, number] | null {
+  for (let i = text.indexOf(literal, from); i !== -1; i = text.indexOf(literal, i + 1)) {
+    re.lastIndex = i;
+    const m = re.exec(text);
+    if (m) return [i, m[0].length];
+  }
+  return null;
+}
+
+function redactPemBlocks(text: string): RedactArtifactResult {
+  if (!text.includes('PRIVATE KEY-----')) return { redacted: text, redactedCount: 0 };
+  let redactedCount = 0;
+  let out = '';
+  let cursor = 0;
+  // The next END, cached: a run of END-less BEGINs looks it up once (null = none left), not once per BEGIN.
+  let nextEnd: [number, number] | null | undefined;
+  let b = findPemMarker(text, 0, '-----BEGIN ', PEM_BEGIN);
+  while (b) {
+    const bodyStart = b[0] + b[1];
+    if (nextEnd === undefined || (nextEnd !== null && nextEnd[0] < bodyStart)) nextEnd = findPemMarker(text, bodyStart, '-----END ', PEM_END);
+    const following = findPemMarker(text, bodyStart, '-----BEGIN ', PEM_BEGIN);
+    let changed = false;
+    const redactParts = (parts: string[]): string => parts.map((seg, i) => {
+      if (i % 2 === 1) return seg; // a separator
+      const r = redactSegment(seg);
+      if (r.changed) changed = true;
+      return r.out;
+    }).join('');
+    let body = '';
+    let bodyEnd = bodyStart;
+    const terminatedParts = nextEnd && (!following || nextEnd[0] < following[0])
+      ? text.slice(bodyStart, nextEnd[0]).split(PEM_SEP) : null;
+    if (nextEnd && terminatedParts && pemSpanIsKey(terminatedParts)) {
+      // TERMINATED, and the span looks like a key: every segment between the markers.
+      bodyEnd = nextEnd[0];
+      body = redactParts(terminatedParts);
+    } else {
+      // UNTERMINATED (or a span that is not key-shaped): only if the BEGIN line's remainder is blank or key-shaped.
+      const parts = text.slice(bodyStart, following ? following[0] : text.length).split(PEM_SEP); // [seg, sep, seg, ...]
+      const head = pemSegmentRuns(parts[0]);
+      if (Array.isArray(head) && (head.length === 0 || pemRunsLookLikeKey(head))) {
+        let keep = 1; // parts kept: the BEGIN line's remainder
+        let prevHeader = false;
+        for (let i = 2; i < parts.length; i += 2) {
+          if (PEM_BODY_LINE.test(parts[i]) || (PEM_BLANK.test(parts[i]) && prevHeader)) { keep = i + 1; prevHeader = PEM_HEADER_LINE.test(parts[i]); continue; }
+          break;
+        }
+        const kept = parts.slice(0, keep);
+        body = redactParts(kept);
+        bodyEnd = bodyStart + kept.join('').length;
+      }
+    }
+    if (changed) redactedCount += 1;
+    out += text.slice(cursor, bodyStart) + body;
+    cursor = bodyEnd;
+    b = following; // always at or after bodyEnd: a body never extends past the next BEGIN
+  }
+  out += text.slice(cursor);
+  return { redacted: out, redactedCount };
+}
+
+/** Apply a prefix/token pattern list. The token is the tail of the match after group 1 (true of every
+ *  pattern here), so a pattern may carry extra groups (BLOCK_CONTEXT_PATTERNS back-reference an indent). */
+function applyPatterns(text: string, patterns: RegExp[]): RedactArtifactResult {
   let redactedCount = 0;
   let out = text;
-  for (const re of PATTERNS) {
-    out = out.replace(re, (whole: string, prefix: string, token: string) => {
+  for (const re of patterns) {
+    out = out.replace(re, (whole: string, prefix: string) => {
+      const token = whole.slice(prefix.length);
       if (token === PLACEHOLDER) return whole; // already redacted by an earlier pattern (idempotent)
       redactedCount += 1;
       return prefix + PLACEHOLDER;
     });
   }
   return { redacted: out, redactedCount };
+}
+
+/**
+ * R10's VERSION (P1 / PLATFORM-HELD-BYTES P3-B4, 2026-10-13). Part of a held file's base identity
+ * (`redactorVersion` beside `baseHash`): a held base is `sha256(redactArtifactSecrets(text))`, so ANY change to what
+ * the plain-text arm emits changes every affected hash. A version change between harvest and check reads "base
+ * changed" -- the safe direction. BUMP IT whenever `redactArtifactSecrets`' output can change: a PATTERNS /
+ * BLOCK_CONTEXT_PATTERNS / PEM rule, the placeholder, or the PEM/segment logic. test-security-invariants.ts §J pins
+ * a fingerprint (rule sources + outputs over a golden corpus) per version and fails when they move without a bump.
+ * History: paichart.r10/1 = everything before 2026-10-13 (never stamped); paichart.r10/2 = P1.
+ * Self-host with R10 switched off stamps `redactorVersion: "none"` (the P3 contract), never this constant.
+ */
+export const R10_VERSION = 'paichart.r10/2';
+
+/** The plain-text arm's rule sources, in application order -- input to the §J version fingerprint (read-only copy:
+ *  the RegExp objects stay private, since global regexes carry `lastIndex` state). */
+export const R10_RULE_SOURCES: readonly string[] = Object.freeze([
+  `placeholder:${PLACEHOLDER}`,
+  ...[PEM_BEGIN, PEM_END, PEM_BODY_LINE, PEM_HEADER_LINE, PEM_BLANK, PEM_RUNS_SEGMENT, PEM_SEP].map((re) => `pem:/${re.source}/${re.flags}`),
+  ...PATTERNS.map((re) => `line:/${re.source}/${re.flags}`),
+  ...BLOCK_CONTEXT_PATTERNS.map((re) => `block:/${re.source}/${re.flags}`),
+]);
+
+/** R10's PLAIN-TEXT arm -- the only arm a held-file base may use (P3-B3): no JSON re-serialisation, no escaped-newline
+ *  variants. Line-preserving (pinned §J). */
+export function redactArtifactSecrets(text: string): RedactArtifactResult {
+  if (!text || typeof text !== 'string') {
+    return { redacted: typeof text === 'string' ? text : '', redactedCount: 0 };
+  }
+  const pem = redactPemBlocks(text);
+  const line = applyPatterns(pem.redacted, PATTERNS);
+  const block = applyPatterns(line.redacted, BLOCK_CONTEXT_PATTERNS);
+  return { redacted: block.redacted, redactedCount: pem.redactedCount + line.redactedCount + block.redactedCount };
 }
 
 /**
@@ -230,20 +470,14 @@ const SERIALIZED_PATTERNS: RegExp[] = PATTERNS.map(toSerializedVariant);
 
 /** ARM 2 — redact a pre-serialized string leaf in place. Never used on the markdown path. */
 export function redactSerializedLeaf(text: string): RedactArtifactResult {
-  let redactedCount = 0;
-  let out = text;
-  for (const re of SERIALIZED_PATTERNS) {
-    out = out.replace(re, (whole: string, prefix: string, token: string) => {
-      if (token === PLACEHOLDER) return whole;
-      redactedCount += 1;
-      return prefix + PLACEHOLDER;
-    });
-  }
-  return { redacted: out, redactedCount };
+  // PEM (P1): idempotent here when the plain pass already ran (redactSecretsDeep); kept for direct callers.
+  const pem = redactPemBlocks(text);
+  const line = applyPatterns(pem.redacted, SERIALIZED_PATTERNS);
+  return { redacted: line.redacted, redactedCount: pem.redactedCount + line.redactedCount };
 }
 
 /** A string leaf that ARRIVED serialized: long enough to matter and carrying encoded newlines. */
-function looksSerialized(s: string): boolean {
+export function looksSerialized(s: string): boolean {
   return s.length > 40 && s.includes('\\n');
 }
 
@@ -286,6 +520,15 @@ export function redactSecretsDeep(value: unknown): { value: unknown; redactedCou
 }
 
 /**
+ * The ONE R10-off predicate (PLATFORM-HELD-BYTES Stage A, 2026-10-14, panel D6 / sec-ops N-3). Every site that honours
+ * the R10 switch calls this, so the switch cannot drift between the persist path and the held-bytes capture. Only an
+ * explicit 'false' disables R10 (default-ON since 2026-08-28 — see redactArtifactsForPersist).
+ */
+export function isR10Disabled(): boolean {
+  return process.env.ARTIFACT_SECRET_REDACT_ENABLED === 'false';
+}
+
+/**
  * SHARED persist-site helper — used by BOTH the engine and the stream route so the two artifact
  * persist paths cannot drift (WS2 parity). Reads the flag itself (single source of the gate), deep-
  * redacts result.json + redacts report.md text, returns the redacted copies + the total token count.
@@ -310,7 +553,7 @@ export function redactArtifactsForPersist(
   //
   // Explicit `'false'` still disables it (byte-exact persist pins need that). Prod sets `'true'`
   // explicitly, so this changes nothing there; it changes dev, test and fresh deployments.
-  if (process.env.ARTIFACT_SECRET_REDACT_ENABLED === 'false') {
+  if (isR10Disabled()) {
     return { resultJson: resultJsonObject, reportMd: reportMdContent, redactedCount: 0 };
   }
   const deep = redactSecretsDeep(resultJsonObject);
@@ -322,4 +565,12 @@ export function redactArtifactsForPersist(
     redactedCount += r.redactedCount;
   }
   return { resultJson: deep.value, reportMd, redactedCount };
+}
+
+/** The same R10 control for a further text artifact persisted beside result.json/report.md (G1 B: the requirements
+ *  pre-correction draft). Same switch: only an explicit 'false' disables it. */
+export function redactExtraArtifactForPersist(text: string): { text: string; redactedCount: number } {
+  if (isR10Disabled()) return { text, redactedCount: 0 };
+  const r = redactArtifactSecrets(text);
+  return { text: r.redacted, redactedCount: r.redactedCount };
 }

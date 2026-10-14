@@ -1209,3 +1209,9 @@ grep -c "evidence FIDELITY only when you hold the source" lib/services/agentTemp
 - ⚠️ A mechanism inventory or health claim that COUNTS matches without classifying them (MI-1: 28 of 46 flags false)
 
 ---
+
+## Pattern (h) — the block/record ruling (added 2026-10-04)
+
+Before reviewing any proposal to let reviewers RECORD rather than BLOCK a finding class, read
+`cline_docs/reviews/pattern-h-corpus-measure-2026-10-03/SYNTHESIS.md` §3 (R1–R7) and the specialist § "Pattern (h)
+ruling": reviewer-chosen severity is an unearned verdict; the existing prose record channel is untranscribed.

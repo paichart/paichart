@@ -30,7 +30,7 @@
  * stanza; the structured channel carries it). The live signal is then `hasInterfaceContract: false`.
  */
 import type { PrismaClient } from '@prisma/client';
-import { canonicalStanzaNeedles } from './dialect-lint';
+import { canonicalStanzaNeedles, unsupportedCanonicalStanzaShapes } from './dialect-lint';
 
 export interface ContractPropagationChildFact {
   taskId: string;
@@ -49,7 +49,10 @@ export interface ContractPropagationChildFact {
 
 export interface ContractPropagationFact {
   checked: boolean;
-  reason?: 'no-child-stage' | 'no-contract-on-leg' | 'no-children' | 'no-canonical-stanza' | 'enrichment-error';
+  reason?: 'no-child-stage' | 'no-contract-on-leg' | 'no-children' | 'no-canonical-stanza' | 'canonical-stanza-unsupported-shape' | 'enrichment-error';
+  /** G7 (2026-10-10): shapes of canonical-stanza values this check cannot read (see dialect-lint `stanzaShapes`).
+   *  Present only with `canonical-stanza-unsupported-shape` — never a false `no-canonical-stanza`. */
+  stanzaShapes?: string[];
   /** How many canonical lines were derivable from the leg's contract. */
   canonicalLinesConsidered: number;
   children: ContractPropagationChildFact[];
@@ -92,7 +95,10 @@ export async function computeContractPropagationFact(
   if (!interfaceContract || typeof interfaceContract !== 'object') return miss('no-contract-on-leg');
 
   const derived = canonicalStanzaNeedles(interfaceContract);
-  if (derived.needles.length === 0) return miss('no-canonical-stanza');
+  if (derived.needles.length === 0) {
+    const stanzaShapes = derived.stanzasConsidered === 0 ? unsupportedCanonicalStanzaShapes(interfaceContract) : [];
+    return stanzaShapes.length ? { ...miss('canonical-stanza-unsupported-shape'), stanzaShapes } : miss('no-canonical-stanza');
+  }
 
   // Bounded read. A leg stage holds a handful of ACTION children, but an unbounded
   // findMany is unbounded in principle. Fetch CAP+1 so the cap biting is DETECTABLE:

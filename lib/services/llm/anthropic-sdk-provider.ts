@@ -486,6 +486,15 @@ export class AnthropicSdkProvider extends BaseLLMProvider {
             }
           }
 
+          // F-b (COMPLETE-THEN-FAIL batch, Q3 2026-10-05): the provider's own `overloaded_error` (HTTP 529, or the
+          // same body as a mid-stream SSE error event) gets a countable code instead of folding into
+          // `unknown_error`. Same "countable fact" argument as the stream-idle classification below: it is the denominator
+          // any future "retry an overloaded turn" decision needs. Keyed on the STRUCTURAL inner type, never the
+          // message; the message is left verbatim. Changes the errorCode existing overload failures get from here on.
+          if ('type' in apiError && apiError.type === 'overloaded_error' && errorCode === 'unknown_error') {
+            errorCode = 'LLM_PROVIDER_OVERLOADED';
+          }
+
           // WU-7 (SDK Phase 2): context-window-exceeded → a categorized errorCode so the engine surfaces
           // errorCategory='CONTEXT_WINDOW_EXCEEDED' (GUI degradation banner) instead of a generic failure.
           // model_context_window_exceeded is NOT a stop_reason in the SDK union (Phase-0-deep) — it arrives

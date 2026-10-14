@@ -161,8 +161,10 @@ test('network (f2): a VALUE-PRODUCING package validates by printed literal, neve
     '(2026-09-26: a marker interpretation was blocked together with the restated derivation it sat beside)');
   assert(body.includes('is the shape (f2) REQUIRES — accept it'),
     'the reviewer half is gone — a permission addressed only to the Author is read by the Reviewer as nothing');
-  assert(body.includes('never block it as one'),
-    'the reviewer is no longer told an observed/applied report is not a conclusion');
+  // WARNINGS-INVISIBLE batch 2 (network 1.21.0): the sentence now also forbids LABELLING an observed/applied report as a
+  // restated conclusion ("never label or block it as one") — same property, widened to the new warning.
+  assert(body.includes('never label or block it as one'),
+    'the reviewer is no longer told an observed/applied report is not a conclusion (neither a block nor a restated-conclusion label)');
   // (f) itself must survive — (f2) sharpens it, never replaces it.
   assert(body.includes('Do NOT restate, summarize, or carry forward the design\'s containment CONCLUSION'),
     'clause (f) is gone — (f2) is a clarification of (f) and is meaningless without it');
@@ -195,6 +197,92 @@ test('every domain protocol that carries the rule was VERSION-BUMPED with it', (
     assert(versionLine![2].includes('VALIDATION SHAPE'),
       `${name} version changelog no longer records the shape rule — a bump erased history instead of appending "Prior: …"`);
   }
+});
+
+// ── Mode 7 (pattern (h) batch 3, 2026-10-04): a deferral needs its referent ─────────────────────────
+// `config_change_author` defers the non-literal shape to "your active protocol" (since batch 3: "Where your
+// active protocol defines a shape for that step … Where it defines none …"). A deferral is half an
+// obligation: every protocol the role reads must DEFINE the shape or SAY it sanctions none, or the author
+// guesses (k8s, three rounds 2026-09-17/18/19) and reviewers split on identical steps (terraform, 09-22 vs
+// 10-01). PROSE-OBLIGATION-COVERAGE mode 7 names this pairing check; this is it.
+// ⚠️ NOT vacuous by construction (REVIEW-B3-execution-facts §3c): the population is DERIVED (every
+// protocol const that interpolates the shared clause), and each body is searched WITHOUT the shared clause
+// (its "Where your protocol sanctions no such shape" would satisfy every domain) and WITHOUT the PROTOCOLS[]
+// version comments (two changelogs already say "sanctions no shape"). Proven RED at 0d981e15 for
+// terraform-iac and observability-config, GREEN after batch 3.
+
+/** Every `const NAME = \`…\`` template-literal body in the seed (backtick-escaped source text). */
+function protocolBodies(): Map<string, string> {
+  const out = new Map<string, string>();
+  const re = /^const ([A-Z_0-9]+) = `/gm;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(SEED))) {
+    const start = m.index + m[0].length;
+    const end = SEED.indexOf('\n`;', start);
+    if (end > start) out.set(m[1], SEED.slice(start, end));
+  }
+  return out;
+}
+const BODIES = protocolBodies();
+const SHAPE_DOMAINS = [...BODIES].filter(([, b]) => b.includes(CLAUSE_REF)).map(([n]) => n);
+const DEFINES_A_SHAPE = ['SANCTIONED SHAPE — PRESENCE ASSERTION', 'comparison/presence shape THIS protocol sanctions'];
+const SANCTIONS_NONE = 'sanctions no presence-assertion or comparison shape';
+
+test('mode 7: every protocol the shape clause defers to DEFINES its shape or SAYS it sanctions none', () => {
+  assert(SHAPE_DOMAINS.length >= 4,
+    `only ${SHAPE_DOMAINS.length} protocol(s) interpolate the shared clause — the population derivation is broken, so this check is blind`);
+  const silent: string[] = [];
+  for (const name of SHAPE_DOMAINS) {
+    const own = BODIES.get(name)!.split(CLAUSE_REF).join('');
+    const ok = DEFINES_A_SHAPE.some((p) => own.includes(p)) || own.includes(SANCTIONS_NONE);
+    if (!ok) silent.push(name);
+  }
+  assert(silent.length === 0,
+    `${silent.join(', ')} neither define a non-literal shape nor state they sanction none — the role's deferral ` +
+    '"Where your active protocol defines a shape" then has no referent there, and author and reviewer each guess');
+});
+
+// A protocol may QUOTE its bound role ("That guidance permits you … to \"…\""). When the role sentence is later
+// changed, the quote silently describes a role that no longer exists (batch 3 item 2 did exactly that to k8s).
+// Every quoted role sentence must still occur in some ROLE_GUIDANCE_LIBRARY entry, or be a NAMED, COUNTED
+// exception pointing at the register — never a silent skip (the 2026-08-08 grep-audit root cause).
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { ROLE_GUIDANCE_LIBRARY } = require('../lib/services/agentTemplateBuilder/pAIchartUniversalTemplate') as { ROLE_GUIDANCE_LIBRARY: Record<string, string> };
+const norm = (s: string) => s.replace(/\\`/g, '`').replace(/\*\*/g, '').replace(/\s+/g, ' ').trim();
+const ROLE_TEXT = Object.values(ROLE_GUIDANCE_LIBRARY).map(norm).join('\n');
+const KNOWN_STALE_ROLE_QUOTES: Record<string, Record<string, string>> = {
+  PIPELINE_KUBERNETES_GITOPS_PROTOCOL: {
+    "specify the COMPARISON to perform instead of the output to expect, per your active protocol's comparison shape":
+      'A1 (Steve, 2026-10-04): k8s 1.14.0 left byte-identical through pattern (h) batch 3, which made this config_change_author ' +
+      'grant conditional; the conclusion k8s draws (no shape here, the literal stands) still holds. FILED in OPEN-REGISTER ' +
+      '"DECIDED Group A"; fix at the next k8s edit or the consolidation pass, then DELETE this entry.',
+  },
+};
+
+test('a role sentence a protocol QUOTES still exists in the role (or is a named, counted exception)', () => {
+  let quotes = 0, suppressed = 0;
+  const stale: string[] = [], unused: string[] = [];
+  for (const [name, body] of BODIES) {
+    if (!/PROTOCOL$/.test(name)) continue;
+    const allowed = KNOWN_STALE_ROLE_QUOTES[name] ?? {};
+    const seen = new Set<string>();
+    for (const m of body.matchAll(/guidance[^"\n]{0,200}"([^"\n]{30,})"/g)) {
+      const q = norm(m[1]);
+      quotes++;
+      seen.add(q);
+      if (ROLE_TEXT.includes(q)) continue;
+      if (allowed[q]) { suppressed++; continue; }
+      stale.push(`${name}: "${q.slice(0, 90)}…"`);
+    }
+    for (const q of Object.keys(allowed)) {
+      if (!seen.has(q)) unused.push(`${name}: no longer quotes "${q.slice(0, 60)}…" — delete the exception`);
+      else if (ROLE_TEXT.includes(q)) unused.push(`${name}: "${q.slice(0, 60)}…" exists in the role again — delete the exception`);
+    }
+  }
+  console.log(`   (${quotes} quoted role sentence(s); ${suppressed} named stale-quote exception(s) — see KNOWN_STALE_ROLE_QUOTES)`);
+  assert(quotes > 0, 'no quoted role sentence found at all — the extraction regex is blind (k8s quotes its role at HEAD)');
+  assert(stale.length === 0, `protocol quotes a role sentence the role no longer contains:\n   ${stale.join('\n   ')}`);
+  assert(unused.length === 0, `stale exception(s):\n   ${unused.join('\n   ')}`);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

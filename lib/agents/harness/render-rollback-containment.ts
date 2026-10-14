@@ -23,7 +23,7 @@
  *    archived corpus is zero. A Reviewer reading "2 unmatched" as "2 fabricated" would reproduce the
  *    exact incident this net was built to end, with a platform fact as its evidence: strictly worse
  *    than rendering nothing at all;
- *  - a DELIBERATE no-check (`lane-not-supported`) and a FAILED check (`no-harvest-text` and the
+ *  - a DELIBERATE no-check (`lane-not-supported`) and a FAILED check (`no-harvest-tool-results` — pre-E1 `no-harvest-text` — and the
  *    other could-not-check arms) get deliberately different sentences. They are the same silence to
  *    a careless reader, and a conclusion drawn from silence is how this class keeps recurring;
  *  - every rendered fact carries its own limits: matching is trimmed-exact-line against THIS leg's

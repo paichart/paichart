@@ -1,0 +1,16 @@
+{
+  "id": "item-21-request-path",
+  "appliesTo": [
+    "leg:description",
+    "author-task:description",
+    "reviewer-task:description"
+  ],
+  "why": "Z49 lab, ANSWERED node: the owner declares the request path for the cloud leg as item 21 (owner wording, PLAN.md B1). Appended after item 20 in the objective of record AND in each child brief's copy of the items — the harness transcribes the items there in production; the lab does not replay the harness.",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "The bucket's existing tags are known drift, triaged by the owner: synthetic test fixtures, out of scope for this change, accepted; neither leg acts on or changes them.\n",
+      "new": "The bucket's existing tags are known drift, triaged by the owner: synthetic test fixtures, out of scope for this change, accepted; neither leg acts on or changes them.\n21. The pods' requests reach the bucket through a private endpoint of the storage service (private-endpoint): the bucket sees each pod's own address in the attribute that path carries.\n"
+    }
+  ]
+}

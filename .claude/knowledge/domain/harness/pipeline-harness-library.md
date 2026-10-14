@@ -737,9 +737,14 @@ stale and does not clear.
    detected duplicates exactly — clearance is bound and resolved."*
    ⚠️ **The list is now DOCUMENTED (orchestrator 3.15.1, pov-program 1.8.2, HOWTO 2.6.3 — 2026-09-24),
    but the match is still made by the model reading its own metadata, not by platform code.** The
-   harness accepted the list live before the text allowed it (n=1); the text was then aligned to it. **No platform code matches it**: the only code read is `agent-status-handler.ts:141`
-   (`resolved: tMeta.duplicateAcknowledged != null`, a status-report flag); `protected-task-metadata.ts`
-   marks the key human-written; everything else is the model. If a harness ever rejects the array, it halts BEFORE creating anything and
+   harness accepted the list live before the text allowed it (n=1); the text was then aligned to it. **No platform code matches it** — re-verified for the C2/C3 batch (2026-10-04). Since that batch
+   the platform WRITES clearances but still never MATCHES one: `carryProgramClearance`
+   (`plan-spawn-carry.ts`) APPENDS a program root's metadata clearance and the prior-phase `Pipeline:` stages
+   to each program leg's list at its first execution prep (`duplicateAcknowledgedCarry.basis`), and
+   `agent.status` reads `isDuplicateHaltResolved` — `!= null` exactly as before unless the platform actually
+   carried (`carries >= 1`), in which case it is set membership of the halted stage in the list (a status
+   flag, not a duplicate decision). The same-stage duplicate decision is still the model's.
+   `protected-task-metadata.ts` marks the key human-written. If a harness ever rejects the array, it halts BEFORE creating anything and
    names the stage it wanted — one `task.update` recovers.
 4. **A re-run needs a NEW stage when the title is unchanged.** `task.create` deduplicates by title within
    a stage: it silently returns the existing task (it did — the prior COMPLETED task came back, unmodified).
@@ -752,6 +757,12 @@ stale and does not clear.
 **Program legs are a separate case** (agent file § "Program re-run duplicate-halt"): a program leg's
 duplicate-halt is TERMINAL with a frozen forward cone, so the clearance must be PRE-ARMED on each pipeline
 child in the PLAN-SPAWN → gate-approval window, and a halted leg needs a fresh task.
+**Once the C2/C3 batch is DEPLOYED and verified** (C3-a), stamping the ROOT's `metadata.duplicateAcknowledged`
+is sufficient: the platform carries it, plus the prior `Pipeline:` stages created before the program stage,
+onto each leg at the leg's first execution — so in the hold window a leg's own list may legitimately be
+short. Only the METADATA channel is carried (a `PRE-FLIGHT CLEARANCE:` description block is not), and only
+when at least one entry names a real stage in the POV (S7). Until that deploy is verified, keep pre-arming
+each leg (playbook check 7 changes at deploy, not before).
 
 
 ## Evicted 2026-09-27 (Protocol 12, X14 — specialist was 556 lines)
@@ -998,3 +1009,107 @@ guards) is the shipped state and is what to reason from.
   unchanged.
 - Protocols go live at deploy; **templates wait for the manual reseed of the owning seeds** — do not leave them
   disagreeing (EG-1 and D2 both reseeded the four `change_reviewer` rows immediately: 0 STALE / 40 CURRENT).
+
+## Evicted 2026-10-03 — shared-worktree hygiene (Protocol 12; specialist was 498 lines)
+
+Concurrent agents in ONE worktree break two habits that read as safe:
+
+1. **`git add <explicit path>` does NOT bound your commit.** `git commit` commits the INDEX. If a
+   teammate has already `git add -A`'d, your explicit add merely appends to their staged set and you
+   commit their work under your message. That happened to `72369673`, which carries a protocol version
+   bump under a message about something else. My own morning rule — *"stage by explicit path, never
+   `-u`/`-A`"* — was a PROXY for the real property: **commit only what you intend.** The mechanism that
+   actually enforces it is the pathspec form, `git commit -- <paths>`, which ignores the rest of the
+   index; or read `git status --short` for a foreign staged file BEFORE committing.
+2. **`git stash` is not an isolation tool here.** It takes the whole worktree, including teammates'
+   files, and a conflicting pop leaves a stale artifact that looks like salvage. Use `git worktree` or a
+   clean clone. And before restoring any stash, diff it against HEAD: one on 2026-09-12 would have
+   REVERTED a fix whose own commit message recorded that its absence cost a health-run a wrong finding.
+
+The general shape, which recurred four times in one day: **a rule is usually a proxy for a property.**
+Verify the property (what did this commit contain? what will that execution read?), not the proxy.
+
+## Value-chain program — the isolated variant and its frozen window (2026-10-02 → 2026-10-03; PROMOTED by E, see the end of this section)
+
+**What it is.** `value-chain-program-protocol` (token `(protocol: value-chain-program)`) is pov-program built through
+`buildProgramProtocol(params)` with value-chain's own parameters, plus a leg protocol `network-derivation-protocol` for a
+**value leg**: Harvester → Network Derivation Architect (`derivation_architect`) → Network Derived Value Reviewer
+(`derivation_reviewer`, in `REVIEWER_ROLES`). No Author, no change package, no rollback — it derives a value (here the
+exporter-range CIDR) from live state and publishes it for the change legs to consume. Node C is a dedicated row,
+`Value-Chain Program Integration Reviewer` (`change_reviewer`, **protocol none**), so it never reads a domain protocol
+(cf. pov-program retrospective R1, measured LATENT 2026-10-03). The Program Architect is `value_chain_architect` — a
+separate role key from pov-program's `program_architect`, with separate text while the variant was isolated; since
+promotion E3 both keys hold ONE text.
+Why it exists, the seams and the build: `pipelines/ADD-A-PROGRAM-PROTOCOL.md` §9b,
+`cline_docs/reviews/producer-leg-2026-10-02/` (BUILD-PLAN, b6-review), Protocol 15.
+
+**Value-leg facts** (stamped by `value-leg-containment-enrichment.ts`; owned by execution-facts): the Architect leaf
+stamps `derivationContainment` with `legShape: value`; the leg card reads `legShape: value | value: cidr <v> |
+orphanCheck: not applicable (value leg)`, `rollbackContainment: NOT checked (value-leg-no-package)` (benign),
+`dialectLint: NOT checked (no-author-child)`. Tripwire reasons `value-leg-…` fall through to `unrecognised-reason:`
+(blocking).
+
+**Frozen window (B7, 5 runs, POV `Telemetry Export Authorisation — Value Chain`):**
+- **Stop line PASSED** — value leg approved 5/5 (95·95·94·96·95), 0 write-up failures, `10.99.0.0/27` every run.
+- **Program released 1/5.** Runs 2-5 were each refused on CHANGE-leg write-up items only (validation as prose ×2,
+  branch rows unanswered ×2, a missing port check, an unheaded consumed block, a rollback that does not match its
+  harvest). **No refusal touched configuration content** — the open question (pattern h) is which review requirements
+  should BLOCK release vs be RECORDED; it also re-opens RWF Stage 3.
+- **Cost:** mean $10.54 / 29 execs (−5.8% vs pov-program $11.19 / 30); value leg mean $1.46 (−28% vs $2.04).
+- **Node C (unbound)** never blocked a value leg for a package-shaped reason ⇒ the C2 mint trigger never fired.
+
+**Operational lessons (each happened in the window):**
+- **PLAN-SPAWN is LLM-performed and varies run to run.** Run 3 trimmed the interface contract per leg (runs 1, 2, 5
+  passed the identical full contract; run 4 gave Node C 2.2 KB); run 4 made the producer and Node C wait on the change
+  gates; run 4 **skipped the clearance carry** — the root held 15 ids and no leg got them. Check all three in the hold
+  window (`md5` of `inputContext.interfaceContract` per leg, `jsonb_array_length(metadata.duplicateAcknowledged)`,
+  `task_dependencies` of producer/Node C). The carry is recoverable only before the plan gate is released: stamp
+  `duplicateAcknowledged` + `duplicateAcknowledgedFrom` on each pipeline child (task.update merges metadata).
+- **Gate completion is not an approval fact.** A change gate settled under option (b) (owner's decision: complete it
+  with a "NOT APPROVED" note so the program reaches SYNTHESIZE) is indistinguishable to the platform from an approval;
+  harmless because `programReleasable` keys on leg outcomes, but a candidate gate-outcome fact (Protocol 10).
+- **When Node C waits on the gates it READS the gate notes** and used them as evidence (run 4); when it runs before them
+  it may approve past a leg's own NEEDS-REVISION (run 3) — Node C is inconsistent about leg verdicts.
+- **Two fail-OPEN paths on the consumer side of derivation-containment**: PARSE-STEAL (wrong block parsed, run 1 —
+  **FIXED `8fe8ad56`, 2026-10-04**: a marker owns only the fenced block inside its own section) and CONSUMER-FAIL-OPEN (no consumed block parsed ⇒ `benign (nothing-to-derive)`,
+  check 1 never ran, run 5 — **FIXED 2026-10-03**: now `needs-node-c (consuming-leg-no-consumed-block)`, discharged by
+  SYNTHESIZE BRANCH D3 only from a Node C statement naming the leg).
+- **After the window — pattern (h)** (`cline_docs/reviews/pattern-h-corpus-measure-2026-10-03/`): of 38 change-leg
+  refusals since 09-15 only 3 were config content; reviewers place the same property on both sides of the line, so
+  'record, don't block' was NOT adopted; the fix was text at source (batch 3) plus the batch-2 platform fix, measured in
+  a fresh re-measure POV. RWF Stage 3 stays deferred against a pre-registered criterion.
+- **The stop line was visible to agents** (run 4 Architect quoted it) — keep measurement criteria out of agent-visible
+  text in future windows.
+
+**Promotion E (2026-10-05/06, Protocol 15 phase 10; record `cline_docs/reviews/promotion-e-2026-10-05/`).** Deploy 1 (E1)
+seeded the unbound `Program Integration Reviewer` row (constraints copied verbatim from the value-chain Node C row); the
+E1.5 two-arm shadow found no loss attributable to unbinding Node C. Deploy 2 ships: pov-program **2.0.0** = value-chain
+1.1.1's text with the binding, Architect and Node C names swapped (value-leg slots → `VALUE_LEG_*` constants
+interpolated into the builder); value-chain-program **2.0.0 DEPRECATED** tombstone, name kept in
+`PROGRAM_PROTOCOL_NAMES` permanently; one Architect text (`program_architect === value_chain_architect`) offering five
+tokens incl. `network-derivation`, leg typing, and the amended two-network-legs sentence; Value-Chain Program Architect
+DEPRECATED (ND6); E4 stale-text corrections + DN1 (one disposed-child definition) + the new PLAN-SPAWN no-replacement
+exit; E5 `change_reviewer` scoping; E6 producer/Node C wired to the legs only. **Cost (R9, as corrected — net):** about
++4.5K chars per root execution AND per Architect (named read of pov-program) + ~2.7K role text on the Architect (≈ +7.2K),
+against Node C's ~−45K once it stops reading network-provisioning: ≈ +$0.04 gross / **+$0.01 net** per run —
+informational, never a gate. The 10 → 9 ACTIVE-protocol headroom matters only to the unused load-all path. Regression
+controls (E10) follow deploy 2; the successor sentence in the tombstone's description lands only after they pass (ND8).
+
+
+## Evicted 2026-10-05 — WS1 Phase C (composed harness prompt, 2026-08-17)
+
+
+Once the template flips to `loadProtocols:'composed'`, a harness prompt carries the orchestration
+BASE (loaded by the `protocol-base` tag, exactly-one contract) plus the ONE protocol the task's
+Phase-A stamp names — never the whole library, never a model-side choice. Base 3.11.0: the
+"When NOT to Use" routing prose is DELETED → `## Your protocol binding` section (binding is
+platform-resolved + frozen; wrong binding ⇒ `metadata.cannotRun` escalation); the MISROUTE GUARD
+keys on the Harness Context `Protocol binding:` line + `## Active Protocol:` presence (title-keyed
+predicate was dead post-Phase-A); Step 5 names "the standard rule" (the ×3 infra refs resolve).
+All four domain fences now ESCALATE on wrong binding (no fall-back-to-default). Tier-split:
+program-tier stamped-non-ACTIVE hard-fails (base has 0 PLAN-SPAWN — base-only would synthesize a
+one-child program); leg degrades base-only + degradation fact + the re-keyed guard. Delta→base
+textual dependences are PINNED: `lib/agents/harness/protocol-dependence-anchors.ts` +
+`test:protocol-dependence-anchors` (DB, health-run; bidirectional count pin — new base-reference
+without a pair fails). Cross-DELTA references are BANNED (R8 — the other delta is no longer in
+the prompt). Record: `cline_docs/reviews/ws1-phase-c-2026-08-17/SYNTHESIS.md`.

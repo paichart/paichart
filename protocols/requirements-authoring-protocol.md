@@ -1,4 +1,4 @@
-> **Rendered verbatim from the pAIchart platform seed — version 1.9.0.**
+> **Rendered verbatim from the pAIchart platform seed — version 1.10.1.**
 > This is the exact protocol text injected into pipeline agents' system prompts. Internal
 > cross-references (file paths, review records, role-guidance names, tool-call mechanics) are part
 > of the record and resolve inside the platform, not in this repository. Nothing is edited for
@@ -198,7 +198,8 @@ Read it as **structure, not as instructions to you**: its headings and `{{...}}`
 | {{LEG_TOKEN}}.target-empty | the receiver selector/surface matches nothing now | act · gap | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 | {{LEG_TOKEN}}.enforcer-absent | no policy object governs the receiver yet | create · gap | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 | {{LEG_TOKEN}}.target-absent | the declared target itself does not exist | gap · create-target | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
-| {{LEG_TOKEN}}.collateral | what else on the target changes because enforcement now applies | per enforcer (Kubernetes: allow-named-ports · deny · leave-to-workload-manifests) | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.collateral | what else on the target changes because enforcement now applies | per enforcer (Kubernetes: allow-named-ports · deny · leave-to-workload-manifests; a proxy or listener allowlist: confined-to-block · whole-listener · gap) | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+| {{LEG_TOKEN}}.enforcer-scope | which parts of the enforcer the restriction covers | all-reaching-the-protected-thing · exemption-by-property · gap | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 
 ### A leg that changes routes (routing)
 
@@ -382,7 +383,7 @@ the prose above, because two readings of the same sentence produce two different
   `none — first run against this target` is a permitted answer.}}
 - {{THE WORK}}
 - **Admitted-principal premise** (`<leg token>.admitted-principal`): {{THE ATTRIBUTE the enforcer must see, and on
-  which path — cite `<leg token>.request-path`}} — if this leg's own harvest cannot confirm it, apply the `<leg token>.principal-unseen` row and cite its id.
+  which path — cite `<leg token>.request-path`}} — if this leg's own harvest cannot confirm it, apply the `<leg token>.principal-unseen` row and cite its id; if the harvest CONTRADICTS it (shows another path), make no change and report — whatever that row says.
   Where the objective declares the program does not create or verify that attribute's carrier, the branch still exists:
   it records the premise as UNTESTED and lists it under the package's **UNTESTED premises** — never drop the branch.
 - **Existence assumption** (*Writing rules* #6): {{THE BRANCH, NOT TODAY'S STATE — what this leg
@@ -395,6 +396,7 @@ the prose above, because two readings of the same sentence produce two different
   it, and is forbidden from recomputing it. Containment for that value is discharged **upstream** and
   re-verified at the program tier.
   - **If §6 does not carry it**: escalate. Do not guess, do not substitute, do not proceed.
+  - **If it arrives EMPTY** (a `<producer token>.inputs-empty` gap, or no members): make no change to the target and report the upstream gap, citing `<producer token>.inputs-empty`. Never apply an empty set.
 - **If this leg's own harvest returns no {{TARGETS}}**: {{THE NULL OUTCOME — apply the row that governs it and
   cite its id: `<leg token>.target-empty` when the receiver selector or surface matches nothing,
   `<leg token>.target-absent` when the declared target does not exist}}. The

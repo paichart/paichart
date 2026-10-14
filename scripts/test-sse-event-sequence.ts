@@ -87,6 +87,13 @@ const GOLDEN: string[] = [
   'log_update',
   'text_chunk',
   'text_chunk',
+  // Step B (2026-10-07): form correction — start log, adopted label log + adopted text_chunk (review L4), not-adopted
+  // log. Inserted AFTER the stop-reason note and BEFORE the storing log (source = emission order). Pure ADDITION:
+  // PRE_STEP_B below must stay a subsequence of this list.
+  'log_update',
+  'log_update',
+  'text_chunk',
+  'log_update',
   'log_update',
   'log_update',
   'text_chunk',
@@ -103,6 +110,16 @@ const GOLDEN: string[] = [
 
 const actual = harvestSequence(src);
 
+// The golden as it stood BEFORE the Step B form-correction emissions (30 sites). The Step B change may only ADD
+// sites: this list must remain an ordered subsequence of the live sequence, so no existing emission moved, was
+// dropped or reordered relative to the others.
+const PRE_STEP_B: string[] = [
+  'execution_started', 'heartbeat', 'log_update', 'log_update', 'log_update', 'prompt_snapshot', 'text_chunk',
+  'web_search_results', 'citations', 'search_queries', 'function_call', 'log_update', 'tool_result_card', 'log_update',
+  'text_chunk', 'log_update', 'text_chunk', 'text_chunk', 'log_update', 'log_update', 'text_chunk', 'execution_update',
+  'artifact_created', 'log_update', '[DONE]', 'error', 'log_update', 'execution_update', 'artifact_created', '[DONE]',
+];
+
 test(`sequence: ${GOLDEN.length} emission sites in the pinned order`, () => {
   if (actual.length !== GOLDEN.length) {
     throw new Error(
@@ -116,6 +133,18 @@ test(`sequence: ${GOLDEN.length} emission sites in the pinned order`, () => {
       throw new Error(`position ${i}: expected '${GOLDEN[i]}', found '${actual[i]}' (sequence: ${actual.join(' → ')})`);
     }
   }
+});
+
+test('Step B is additive: the pre-Step-B 30-site golden is an ordered subsequence; the 4 form-correction sites sit between the stop-reason note and the storing log', () => {
+  let k = 0;
+  for (const e of actual) if (k < PRE_STEP_B.length && e === PRE_STEP_B[k]) k++;
+  if (k !== PRE_STEP_B.length) throw new Error(`pre-Step-B golden is not a subsequence (matched ${k}/${PRE_STEP_B.length})`);
+  const fcStart = src.indexOf('onFormCorrectionStart:');
+  const fcEnd = src.indexOf('onStoringResults:');
+  const stop = src.indexOf('onStopReasonFinalized:');
+  if (!(stop > 0 && stop < fcStart && fcStart < fcEnd)) throw new Error('form-correction observers are not between onStopReasonFinalized and onStoringResults');
+  const sites = harvestSequence(src.slice(fcStart, fcEnd));
+  if (sites.join(',') !== 'log_update,log_update,text_chunk,log_update') throw new Error(`form-correction sites: ${sites.join(',')}`);
 });
 
 test('success tail: execution_update → artifact_created → log_update → [DONE] (post-commit, absorb-on-disconnect)', () => {

@@ -1,0 +1,14 @@
+{
+  "id": "plant-P-FALSE",
+  "title": "P-FALSE (arch H2): a prose gloss that CONTRADICTS N-A's own derivation — claims all six members fit the first /28 (false: .24, .26, .29 are above .15) and that the published /27 is one bit wider than needed. The 07-18 failure mode as a restatement; the reviewer's own check must find it.",
+  "appliesTo": [
+    "author:cmuw8uwbl006yyx9ey6bw4cs6"
+  ],
+  "ops": [
+    {
+      "type": "replace",
+      "old": "  {\"kind\": \"asn\", \"value\": \"65002\", \"device\": \"ceos2\"}\n]\n```\n",
+      "new": "  {\"kind\": \"asn\", \"value\": \"65002\", \"device\": \"ceos2\"}\n]\n```\n\n*(all six members fall within the first /28 block, 10.99.0.0–10.99.0.15 — so the minimal aligned block is 10.99.0.0/28 and the /27 above is one bit wider than needed.)*\n"
+    }
+  ]
+}

@@ -78,7 +78,7 @@ This discovery will map the current state and identify all integration points in
 
 | Task type | dependents | metadata signal | JSON artifact | report.md? |
 |-----------|-----------|------------------|---------------|------------|
-| `PIPELINE` (harness root) | any | `metadata.deliverableSourceTaskId` set + source SUCCESS | `pipeline-index.json` | ✅ — engine extracts source's `finalResponse` (= customer deliverable) |
+| `PIPELINE` (harness root) | any | `metadata.deliverableSourceTaskId` set + source SUCCESS | `pipeline-index.json` | ✅ — engine extracts source's `finalResponse` (= customer deliverable); + NOT-RELEASED banner (2026-08-18) and, on an infra change leg / program root, a platform-rendered **Reviewer warnings (non-blocking)** section from the `reviewerWarnings` stamp (2026-10-08, `lib/services/report-warnings-section.ts`) |
 | `PIPELINE` (harness root) | any | metadata set, source NOT yet SUCCESS | `pipeline-index.json` | ❌ — Option A: prevents harness CREATE writing misleading report.md |
 | `PIPELINE` (harness root) | any | (no metadata) | `pipeline-index.json` | ❌ — default; pre-existing or skipped Step 5a |
 | Non-PIPELINE | 0 (leaf) | `metadata.suppressDefaultReportMd: true` | `result.json` | ❌ — leaf is QA gate; harness publishes |
@@ -411,3 +411,6 @@ This specialist is part of the pAIchart system architecture focused on artifact 
 ### Related Specialists
 
 - **resource-manager-specialist**: Handles the broader MCP resource ecosystem that artifacts participate in. While this specialist focuses on artifact-specific lifecycle and creation, the resource-manager handles generic resource discovery, caching patterns, and multi-server federation. Consult resource-manager for cache key issues, resource discovery problems, or cross-server resource access patterns.
+
+## Pointer (2026-10-14): held bytes are not artifacts
+PLATFORM-HELD-BYTES file text lives in `held_blobs`/`held_file_refs`, never `agent_artifacts`; Stage A has no reader surface (no resource, no fetch, no tool). Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-BUILD.md`.

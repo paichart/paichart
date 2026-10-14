@@ -1,0 +1,77 @@
+{
+    "version": 1,
+    "source": "answers.md",
+    "items": {
+        "1": [
+            "kubernetes-gitops.admitted-principal",
+            "kubernetes-gitops.collateral",
+            "kubernetes-gitops.enforcer-absent",
+            "kubernetes-gitops.existing-grant",
+            "kubernetes-gitops.granted-action",
+            "kubernetes-gitops.principal-unseen",
+            "kubernetes-gitops.receiver",
+            "kubernetes-gitops.target-empty"
+        ],
+        "2": [
+            "kubernetes-gitops.target"
+        ],
+        "3": [
+            "terraform-iac.target"
+        ],
+        "4": [
+            "terraform-iac.receiver"
+        ],
+        "5": [
+            "kubernetes-gitops.population"
+        ],
+        "6": [
+            "approver.plan"
+        ],
+        "7": [
+            "approver.kubernetes-gitops-change"
+        ],
+        "8": [
+            "approver.terraform-iac-change"
+        ],
+        "9": [
+            "gate.kubernetes-gitops-change.position"
+        ],
+        "10": [
+            "gate.terraform-iac-change.position"
+        ],
+        "11": [
+            "terraform-iac.admitted-principal"
+        ],
+        "12": [
+            "terraform-iac.principal-unseen"
+        ],
+        "13": [
+            "terraform-iac.granted-action"
+        ],
+        "14": [
+            "kubernetes-gitops.representation"
+        ],
+        "15": [
+            "kubernetes-gitops.inputs-empty",
+            "kubernetes-gitops.population-all-excluded"
+        ],
+        "16": [
+            "kubernetes-gitops.target-absent"
+        ],
+        "17": [
+            "terraform-iac.target-absent"
+        ],
+        "18": [
+            "terraform-iac.existing-grant"
+        ],
+        "19": [
+            "terraform-iac.enforcer-absent"
+        ],
+        "20": [
+            "terraform-iac.target-empty"
+        ],
+        "21": [
+            "terraform-iac.collateral"
+        ]
+    }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "gap3",
+  "title": "observability-config: a validation shape for an allow/deny (access-control) change — Author (Phase 2 (b)) and Reviewer (Phase 3) halves",
+  "source": "cline_docs/reviews/refusal-root-cause-2026-10-07/READ.md §3 Gap 3. The Author sentence is READ.md's ADD text verbatim. The Reviewer half is a LAB DRAFT: READ.md says 'mirror the reviewer half in the obs Phase 3 bullet' but gives no text.",
+  "status": "DRAFT — the Reviewer half needs prompt-construction review before any seed. It adds no new blocking class: validation-step defects are already blocking under the Phase 3 bullet; the half names what an access-control step must cover and constrains the REMEDY a reviewer names (the O4 nc -z case, Invariant 6).",
+  "appliesTo": ["observability-config-protocol"],
+  "ops": [
+    {
+      "type": "replace",
+      "where": "Phase 2 (b), after the post-apply examples",
+      "old": "the recorded series returned by a metric query). Expected outputs follow the witnessed rule:",
+      "new": "the recorded series returned by a metric query). An access-control change (who may send to a listener) is proven per granted port or listener by one ADMITTED and one DENIED probe, each printing a literal or written in the sanctioned shape, using a client that speaks the listener's protocol where the control sits above the transport (a raw connect cannot see an HTTP-layer deny). A step that compares a value with a copy of itself proves nothing and is not a validation step. Expected outputs follow the witnessed rule:"
+    },
+    {
+      "type": "replace",
+      "where": "Phase 3 Reviewer bullet, after the validation-step clause",
+      "old": "every validation step a real fact (validator citation + literal expected output, or the sanctioned presence/comparison shape — not prose), ",
+      "new": "every validation step a real fact (validator citation + literal expected output, or the sanctioned presence/comparison shape — not prose), for an access-control change one ADMITTED and one DENIED probe per granted port or listener — any remedy you name must use a client that can see the control (a raw TCP connect cannot see a deny that sits inside an HTTP location), and a step that compares a value with a copy of itself is not a validation step, "
+    }
+  ]
+}

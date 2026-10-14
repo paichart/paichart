@@ -180,6 +180,37 @@ npm run test:protocol-public-parity                                     # every 
 Reviewing another session's protocol push: run the parity test FIRST, then `grep -c "Prior:"`-style check that
 every touched row bumped, then `git ls-files | grep -E '\.pyc$|__pycache__'` (a rig commit carried one; now ignored).
 
+## Deploy `db push` data-loss guard (2026-10-14)
+
+The deploy runs a **plain** `npx prisma db push` (`blue-green-deploy.sh`, DATA-LOSS GUARD). The old `--accept-data-loss=false` ACCEPTED data loss (Prisma discards `=false` on that flag; scratch-DB proof). A plain push in the non-interactive deploy refuses any data-losing change (and Prisma's other warnings) and exits 1 BEFORE the flip — the live release is untouched. Override: hand-run `Production Deploy` with input `accept_data_loss=true` (→ `ACCEPT_DATA_LOSS=yes`), only after reading the removal. Never append `=false` to that flag anywhere. Pin: `npm run test:db-push-data-loss-guard` (in the battery). Register: DB-PUSH-ACCEPT-DATA-LOSS-INVERTED.
+
+## Env-var feature switches — turning one OFF (verified 2026-10-14)
+
+pm2 keeps its OWN copy of every env var it started an app with, and both apps' `require('dotenv').config()` never
+overrides a variable already set. So **editing `.env.production` to `false` and running `pm2 restart … --update-env` from
+an ssh shell does NOT turn a switch off** — the stale `'true'` survives. Verified read-only on prod 2026-10-14: both
+processes hold `FORM_CORRECTION_ENABLED` and `REQUIREMENTS_FORM_CORRECTION_ENABLED` = `true` in `pm2_env`. The working
+procedure (applies to every switch, incl. the planned `HELD_BYTES_CAPTURE_ENABLED`):
+1. Read-only first: no RUNNING/PENDING `agent_executions` (never restart during an in-flight run).
+2. `FLAG=false pm2 restart paichart-mcp paichart-web --update-env` — the value IN THE COMMAND, both apps.
+3. Verify both: `pm2 jlist | python3 -c '…'` (or `pm2 env 0` / `pm2 env 1`) shows `false` in each.
+4. Make it durable: set `false` in the live `.env.production` AND in the `production-deploy.yml` heredoc (the file is
+   rebuilt every deploy; a workflow-only commit does not deploy — see the discovery's 2026-10-07 block).
+Turning a switch ON from absent works with the plain form; OFF does not. Register: ENV-KILL-SWITCH-STALE.
+
+## npm registry — the `@paichart` scope (2026-10-08)
+
+- **The npm organisation `paichart` exists** (owner Steve, free public plan, 2FA), so the `@paichart` scope is
+  reserved. **Nothing is published yet**: `npm view @paichart/containment-checks` returns 404 by design. Record:
+  open register `NPM-SCOPE @paichart`.
+- **Only Steve publishes.** He runs `npm login` + `npm publish --access public` himself; never handle, store or
+  request an npm token, and never add an `NPM_TOKEN` secret or a publish step to CI without his explicit decision.
+- **First publish has preconditions** (register entry): a clean package build without internal comments
+  (execution ids, `cline_docs/` paths — a version is permanent after 72 h), tied to the external engineer test.
+- **The package is a mirror.** `~/paichart/packages/containment-checks/` is a byte copy of
+  `lib/agents/harness/derivation-containment.ts` (`npm run test:containment-public-parity`). Procedure owner:
+  execution-facts (library §"PUBLICLY MIRRORED": canonical → re-copy → package suite → bump → push; + publish once live).
+
 ## 🚨 CRITICAL: OAuth Architecture Documentation
 
 **ALWAYS review these architecture documents before OAuth deployment changes**:

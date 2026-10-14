@@ -1,0 +1,36 @@
+Objective. Produce the requirements document for a program that would restrict which senders the telemetry collector accepts to exactly the running pods of one Kubernetes namespace, and nothing wider. Two systems are involved: the Kubernetes cluster, where those pods run, and the observability stack, where the telemetry collector runs.
+
+This is a DRAFT SPECIFICATION for human review. Do not launch a program.
+
+DESIGN DECISIONS - DECLARED, NOT INFERRED. Each item below is a choice made by the POV owner. Transcribe each one; do not substitute a different choice, and do not treat any of them as a description of current state - the program's legs observe current state for themselves.
+
+1. The kubernetes-gitops leg acts on the pods of the Kubernetes namespace `trading`. The permitted senders are drawn from that namespace only.
+2. The observability-config leg acts on the ingress proxy in front of the telemetry collector's receiver.
+3. The receiver authorised on the observability-config target is the collector's OTLP sender endpoints, gRPC and HTTP, exposed through the proxy. Every proxy block that forwards to one of the collector's OTLP receivers is a sender endpoint, whatever its description says, including any block described as outside the sender allowlist; no forwarding path into an OTLP receiver is exempt. Any other path the proxy forwards into the collector, one that does not reach an OTLP receiver, is not a sender endpoint.
+4. A member of the sender population is a pod in the declared namespace whose phase is Running, excluding pods on the host's network and pods whose deletion has been requested. The leg reports, in its own published deliverable (report.md), the literal criterion it applied.
+5. The sender set is expressed as a host list: one entry per member pod's address, with no covering prefix.
+6. The sender set is point-in-time as of the leg's harvest; the deliverable states the harvest time. Nothing maintains the set after the program.
+7. The program plan gate is approved by jacob.wilcox@paichart.com.
+8. The kubernetes-gitops change gate is approved by josh.allen@paichart.com.
+9. The observability-config change gate is approved by steve.terry@paichart.com.
+10. The kubernetes-gitops change gate approves the sender set produced by the kubernetes-gitops leg, and sits after that leg and before the observability-config leg (after-producer-before-consumers).
+11. The observability-config change gate approves the change package produced by the observability-config leg, and sits after that leg and before its completion (after-leg-before-completion).
+12. The observability-config leg admits senders by source address: the member pods' addresses, as the host list in item 5.
+13. The admitted senders' requests reach the proxy directly, carrying each pod's own address (direct).
+14. If the leg's own harvest cannot confirm that the proxy sees the pods' own addresses, the leg acts anyway (act-regardless). It relies on the owner-declared path in item 13 and states that premise in its deliverable as owner-declared, not observed.
+15. Admitted senders may submit telemetry on the collector's OTLP sender endpoints, gRPC and HTTP (item 3), and nothing else on those endpoints.
+16. On every proxy block that forwards to one of the collector's OTLP receivers (item 3), the allowances are replaced by exactly the sender set, followed by a deny for everything else (replace). Blocks that forward other paths into the collector, ones that do not reach an OTLP receiver, are not sender endpoints (item 3); the leg leaves them unchanged and lists each one in its deliverable as unchanged by owner decision (item 3).
+17. If no proxy block forwards to the OTLP sender endpoints, the observability-config leg reports a gap and authors nothing (gap).
+18. If a block forwarding to the sender endpoints carries no access directives, the observability-config leg adds them to that block (create).
+19. If the proxy does not exist, the observability-config leg reports a gap and creates nothing (gap).
+20. If no pod in the declared namespace meets item 4, the kubernetes-gitops leg publishes no sender set and reports a gap naming what was absent (gap). If no sender set is published, the observability-config leg makes no change to the proxy and reports the upstream gap; it never writes a deny-everything rule from an empty set.
+21. The observability-config change is confined to the forwarding blocks in item 16: senders outside the set are refused there, and no other server block, location, port or forwarded path on the proxy changes. If the leg finds that a sender endpoint shares an access setting with a non-sender path, so the restriction cannot be confined to the sender endpoints, it reports a gap instead of widening the change.
+22. A proxy block is a sender endpoint if it forwards to one of the collector's OTLP receivers, whatever its own description says (every-block-forwarding-to-an-OTLP-receiver). A block whose description places it outside the sender allowlist is restricted like every other sender endpoint, and senders that reach the collector through it today and are not members of the sender set are refused there (item 21).
+23. The observability-config restriction covers every part of the proxy that reaches the collector's OTLP receivers (all-reaching-the-protected-thing).
+
+Phase 0 is REQUIRED - harvest live state; nothing is supplied inline. Self-provision each descriptor below, harvest it, emit a per-domain section, and record every registration you create so the harness can tear down every one of them at SYNTHESIZE:
+
+- cluster         https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json
+- observability   https://raw.githubusercontent.com/paichart/paichart/main/descriptors/observability-readonly-descriptor.json
+
+Harvest scope: the cluster harvest reads the pods of the declared namespace (item 1), reading each pod individually for its phase, host-network setting, deletion marker and address; the observability harvest reads the telemetry collector's as-deployed receiver configuration, and every proxy block that forwards into the collector with that block's access directives.

@@ -31,6 +31,10 @@ A forensics guide is only as good as the queries it leads you to write. On 2026-
 investigation produced **five** wrong numbers before the right one, every time by measuring something
 adjacent to the property. These rules are what separated them.
 
+> **Two more rules (2026-10-07) live in the pipeline guide and apply here unchanged** — `PIPELINE-RUN-FORENSICS-GUIDE.md`
+> rule 7 (*know which code produced a number before you read it*) and rule 8 (*before believing a failure rate, diff ONE
+> failing case*). Not copied here, so the two guides cannot drift apart on them.
+
 ### 1. Run a CONTROL before believing a total
 
 A query returning null/zero for **everything** is far more likely to be a broken query than a broken
@@ -287,8 +291,8 @@ retracted 2026-08-11 finding did exactly that. Absence fails closed (`ABSENT ⇒
 | disposition | means | program-tier action |
 |---|---|---|
 | `benign` | allowlisted clean reason (e.g. `checked-clean`, `nothing-to-derive`) | conjunct satisfied |
-| `blocking` | a violation, a refusal/silent drop, or an **unrecognised** reason falling through | release blocked |
-| `needs-node-c` | a judgement a LEG cannot make was **delegated to the program tier** | Node C must resolve it — check it actually did, and on the *named subject* |
+| `blocking` | a violation, a refusal/silent drop, or an **unrecognised** reason falling through (incl. `harvest-missing-or-unparseable-no-upstream` — the leg derived values, its own harvest did not parse, and it has NO upstream; before 2026-10-05 this read `consuming-leg-upstream-absent`, which did NOT mean an upstream existed) | release blocked |
+| `needs-node-c` | a judgement a LEG cannot make was **delegated to the program tier** (incl. `consuming-leg-no-consumed-block`, 2026-10-03, and `consuming-leg-upstream-delegated`, pov-program 2.2.0 — see §4c) | Node C must resolve it — check it actually did, and on the *named subject* |
 
 `needs-node-c` is the state unique to this tier: it is not a failure, it is a handoff, and a program
 that released without Node C addressing it is a finding. It rides **nested inside**
@@ -394,13 +398,21 @@ deliverable is an F18 regression.
 
 ## 4b. Protocol-composition facts (2026-08-17, composed injection)
 
-Since `loadProtocols:'composed'`, every execution's `result.json` carries a `protocolInjection`
-FACT (before `finalResponse`): `{mode, base{name,version}, delta{name,version}, stampSource,
+Since `loadProtocols:'composed'`, every execution carries a `protocolInjection` FACT — in its `result.json`
+(before `finalResponse`), or, for a harness (PIPELINE) execution, which writes NO `result.json`, in its
+`pipeline-index.json` (a program root's and a leg harness's facts are read there; verified on prod 2026-10-06): `{mode, base{name,version}, delta{name,version}, stampSource,
 preambleChars}` — also emitted as one structured `Protocol injection resolved` log line with
 execution identity. Program forensics adds one composition check per family: **did each tier
 compose the RIGHT protocol?** Program root → `mode:"composed"`, delta `pov-program-protocol`;
 each leg harness → `mode:"composed"`, delta = ITS domain protocol only; leaf specialists →
-`mode:"named"` with their template binding. `stampSource` should read `"stamp"` on every harness
+`mode:"named"` with their template binding. **Node C → `mode:"none"`, `preambleChars` 0 from
+pov-program 2.0.0** (the unbound `Program Integration Reviewer`); a pre-2.0.0 Node C reads
+`mode:"named"` network-provisioning (`Change Reviewer`) — a series break, not a finding. Key a
+program-tier series on the ROOT's `delta.version` (1.9.0 vs 2.0.0, from the root's `pipeline-index.json`)
+of its PLAN-SPAWN execution, not on time alone: a pre-E root released after deploy 2 (PLAN-SPAWN ≤ 1.9.0,
+later executions 2.0.0, Node C on `Change Reviewer`) is a third population. A root stamped
+`value-chain-program-protocol` that executes after deploy 2 fails `PROTOCOL_ROW_NOT_ACTIVE`
+(read `agent_executions."errorMessage"` — `errorCode` is NULL for that throw). `stampSource` should read `"stamp"` on every harness
 execution (a `"title-fallback"` on a non-first execution is a stamp-write ordering finding); any
 `degraded` value is a finding to chase before reading anything else in the family. PLAN and
 PLAN-SPAWN should show byte-identical `preambleChars` (the stamp is frozen — a differing pair
@@ -422,6 +434,45 @@ timer*):
 If a program is genuinely stuck IN_PROGRESS with no escalation comment and no terminalized cone, THAT is the
 bug — check the reactor retrigger path (CC1: a completing child must retrigger its program parent;
 `pipelineRetriggerReactorService.ts` self-ID check) before blaming the leg.
+
+### 5a. Adjacent, not a member: COMPLETE-THEN-FAIL — how to read `postCompletionFailure` (2026-10-05)
+
+Not a hang, so not in the table above: the leg's SYNTHESIZE called `task.complete` (task COMPLETED, gate stamped)
+and then its **next** LLM call failed. Since the phase-1 rescue (`lib/services/execution-completion-anchored.ts`),
+the core persists that run **SUCCESS** from DB state when the execution completed its OWN task
+(`metadata.completedByExecutionId` = that execution's id) and `deliverableSourceTaskId` has an authoritative
+SUCCESS. How the record reads:
+
+| Where | Rescued run | Unrescued residual |
+|---|---|---|
+| execution row | `SUCCESS`, `errorCode` null, tokens = the loop's partial spend; last `logs` line starts `Post-completion rescue:` | `FAILED` with the provider's code; tokens non-null since F-c |
+| task row | `COMPLETED`, `executionStatus SUCCESS` | `COMPLETED`, `executionStatus NULL` (O4 — never FAILED onto a COMPLETED task) |
+| `pipeline-index.json` | `postCompletionFailure {taskCompletedAt, failedAt, phase, turn, cause{class, errorCode, providerErrorType, requestId, message}, closingTurnRun:false, finalResponseSource:'platform-post-completion'}`; `confidenceScore: null`; no `keepBestFacts`; `protocolValidation.postCompletionExempt: true` with the skipped Step-5 items in `postCompletionSteps` (NOT `missingSteps`) | only the CREATE-time index exists |
+| `finalResponse` | first line `[Platform-authored record — not model output. …]` — a record, not the harness's synthesis | — |
+| `report.md` | the normal upstream extraction (or, on extraction failure, the fixed line naming `postCompletionFailure`) | absent |
+| `error.json` | none | carries `postCompletionRescue {attempted, declinedReason, failedWith}` whenever the run had completed its own task |
+| comments | the auto-comment names `postCompletionFailure`; a facts-only Step-5 replacement comment (real report.md id, gate as stamped, teardown fact) | the harness's comments up to the failure |
+
+Reading rules:
+- **The fact is NOT a gate conjunct at any tier.** The leg's outcome is its stamped `qualityGate`; the program
+  releases on the same conjuncts as any other leg. Do not read "failure" in the key name as a refusal.
+- **Absence of `postCompletionFailure.finalResponseSource` means "unclassified", NOT "model-authored"** —
+  `REFUSAL_MESSAGE` and the budget fail-fast text are platform-authored and unlabelled.
+- **Key on the EXECUTION's status, never task `executionStatus`.** After O4 the task column carries NULL for an
+  unrescued residual, so "COMPLETED + FAILED" queries no longer find them. The six COMPLETED+FAILED rows that
+  predate O4 (incl. the preserved 10-04 S3 fixture `cmutguolg0013yx0gjnhituqp` — never re-run it) stay as history.
+- Rescued provider failures are absent from `errorCode` counts (O3); count them from
+  `postCompletionFailure.cause.providerErrorType`.
+- The unrescued residuals (a declined rescue, a rescue that failed, a human completing mid-run, a reap) are still
+  caught downstream by F19 `degradedPredecessors` and program Step 2's absent-`derivationContainment` gap — **at program
+  tier only, and only for a leg with `deliverableSourceTaskId` set** (a `no-deliverable-source` decline is never
+  F19-degraded; a standalone pipeline has neither catch).
+- **ACTION child at leg tier** (separate shape, changed by O4): a harness child that completed itself and then failed now
+  reads `COMPLETED` + `executionStatus NULL`, so base SYNTHESIZE Step 1 no longer aborts on it. Find it by the child's
+  LATEST EXECUTION status (MI-13 residual (e)); the leg-tier catch is the reviewer-less "authoritative SUCCESS" conjunct.
+- A row with `postCompletionRescue.declinedReason: 'post-loop-throw'` is a run whose loop ENDED normally and whose
+  later persist/cascade threw — not rescuable, named so it is not mistaken for an unevaluated rescue.
+  Census lines: `scripts/report-mechanism-inventory.sh` (MI-13, COMPLETE-THEN-FAIL section).
 
 ## 6. Quick-reference one-liners
 
@@ -459,6 +510,131 @@ capture-exit-before-pipe) are identical to the pipeline guide §0 — read them 
   IN_PROGRESS awaiting the human. The escalation comment names the root leg — that attribution is the deliverable.
 - **A needs-revision leg** (T4d): a leg `needs-revision/72` drove program `qualityGate: needs-revision/72`
   (MIN) + `programReleasable:false` with **no override** — the outcome-keyed block from §2, on real data.
+
+## 4c. Value legs — the value leg's facts and the hold-window checks (2026-10-03; under pov-program since 2.0.0)
+
+A **value leg** (`network-derivation`: Harvester → Network Derivation Architect → Network Derived Value Reviewer, **no
+Author**) appears in a `(protocol: pov-program)` run whose plan types a DAG entry `leg type: value` (pov-program 2.0.0,
+promotion E deploy 2). Before deploy 2 the same leg ran only under the RETIRED `(protocol: value-chain-program)` variant
+— 9 roots, all terminal; read them with this section unchanged. Every pov-program run whose PLAN-SPAWN ran under 2.0.0
+has an **unbound** Node C (`Program Integration Reviewer`), value leg or not; a root planned earlier and released after
+deploy 2 keeps `Change Reviewer` (third population, §4b). What the value leg's facts mean:
+
+| Fact on the value leg's card | Meaning |
+|---|---|
+| `legShape: value` · `value: cidr <v>` | stamped by the Architect leaf, hoisted to the leg — the published value |
+| `orphanCheck: not applicable (value leg)` | no change package, so nothing to orphan — by design |
+| `rollbackContainment: NOT checked (value-leg-no-package)`, benign | no rollback exists — by design |
+| `dialectLint: NOT checked (no-author-child)` | no Author child — by design |
+| any `value-leg-…` reason ⇒ `unrecognised-reason:` **blocking** | a tripwire fired (author child present, no Architect stamp, PIPELINE upstream, harvest mismatch) — investigate |
+
+**Three PLAN-SPAWN steps are model-performed and varied in the frozen window — check them before releasing the plan gate:**
+
+```sql
+-- per child of the program stage: clearance carried? contract identical? who waits on what?
+SELECT left(t.title,40), t.type,
+  jsonb_array_length(CASE WHEN jsonb_typeof(t.metadata->'duplicateAcknowledged')='array' THEN t.metadata->'duplicateAcknowledged' ELSE '[]' END) AS clearance_n,
+  md5(t."inputContext"::jsonb->>'interfaceContract') AS contract_md5,
+  (SELECT count(*) FROM task_dependencies d WHERE d."taskId"=t.id) AS deps
+FROM tasks t WHERE t.stage_id = '<program child stage id>' ORDER BY t.created_at;
+```
+
+**Contract vs the PLAN (check 6 — corrected 2026-10-04; the md5 column above compares legs to each other and misses a
+shared paraphrase).** Run with `psql -v root=<program root id> -f c6.sql`; verified on all 7 value-chain runs (5 differ):
+
+```sql
+WITH root AS (SELECT metadata->>'pipelineStageId' ps FROM tasks WHERE id = :'root'),
+arch AS (
+  SELECT (a.content::jsonb)->>'finalResponse' fr
+  FROM tasks t JOIN agent_executions e ON e."taskId"=t.id
+  JOIN agent_artifacts a ON a."executionId"=e.id AND a.name='result.json' AND a.content LIKE '{%'
+  WHERE t.stage_id=(SELECT ps FROM root) AND t."agentRole" IN ('program_architect','value_chain_architect')
+  ORDER BY e."startTime" DESC LIMIT 1),
+sect AS (SELECT substr(fr, strpos(fr, '## Interface Contract')) s FROM arch WHERE strpos(fr, '## Interface Contract') > 0),
+plan AS (SELECT (regexp_match(substr(s, strpos(s, E'```')), E'^```(?:json)?[ \\t]*\\n(.*?)\\n```'))[1]::jsonb pc FROM sect)
+SELECT left(t.title,45) child, t.type,
+  CASE WHEN (SELECT pc FROM plan) IS NULL THEN 'NO PLAN CONTRACT FOUND — read the plan by hand'
+       WHEN t."inputContext"::jsonb ? 'interfaceContract' THEN
+    CASE WHEN (t."inputContext"::jsonb->'interfaceContract') = (SELECT pc FROM plan) THEN 'SAME AS PLAN' ELSE 'DIFFERS' END
+  ELSE 'NONE HELD' END AS contract_vs_plan,
+  (SELECT string_agg(k, ',') FROM jsonb_object_keys((SELECT pc FROM plan)) k
+     WHERE NOT (t."inputContext"::jsonb->'interfaceContract') ? k) AS keys_missing
+FROM tasks t WHERE t.stage_id=(SELECT ps FROM root)
+  AND (t.type='PIPELINE' OR t."agentRole"='change_reviewer') ORDER BY t.created_at;
+```
+
+⚠️ Traps already walked into: the Architect's role key differs by protocol (`value_chain_architect` on the retired
+variant's roots, `program_architect` on pov-program's — ONE identical guidance text since promotion E3, two keys) — a
+query keyed on one returns a NULL plan, and NULL = x reads as `DIFFERS` on every row (hence the explicit NO-PLAN line);
+and in a Postgres regex the FIRST quantifier sets the greediness of the whole pattern — keep the block regex anchored
+on the first fence of the section as above. `DIFFERS` with no `keys_missing` = values re-typed (the common case).
+
+Expect every PIPELINE leg to carry the root's clearance count (run 4 skipped it — a leg duplicate-halt is TERMINAL, so
+stamp it in the hold window), legs + Node C to hold the PLAN's contract (query below; runs 3-4 trimmed it per leg), and the producer +
+Node C to depend on the legs only (run 4 also made them wait on the change gates — then Node C reads the gate notes).
+Since pov-program 2.0.0 (E6) the protocol itself says "ALL pipeline child ids — never a gate", so a gate-wired producer or
+Node C on a run whose PLAN-SPAWN ran under 2.0.0 (launched after deploy 2) is a finding (it is also the C1-b create-time-refusal trigger). Also check at its hold window: every
+DAG entry carries `leg type:`, the gate description lists the types, and Node C's `agentTemplateId` is the
+`Program Integration Reviewer` id recorded at E8 — compare by **id**, never by name (both Integration Reviewer rows match
+`%Program Integration Reviewer%`).
+
+**C2/C3 facts (live from `d7762f17`, 2026-10-04): what the platform copied.** Primary instruments are the shipped
+module — `npm run replay:plan-contract -- --root <id>` (recomputes `planSha256` and every child's live sha) and
+`npm run replay:plan-contract -- --carry --since <ISO>` (what the clearance carry should have written: use it as the
+**should-have-carried, carried-nothing** check, since an absent carry leaves only a journal line). The facts per child:
+
+```sql
+-- run with -v root=<program root id>; verified syntax 2026-10-04 (pre-deploy rows read empty)
+SELECT left(t.title,45) child, t.type, t."agentRole",
+  t.metadata->'interfaceContractSource'->>'source'          AS contract_source,
+  t.metadata->'interfaceContractSource'->>'suppliedMatched' AS supplied_matched,
+  t.metadata->'interfaceContractSource'->>'planResolution'  AS plan_resolution,
+  t.metadata->'duplicateAcknowledgedCarry'->>'carries'      AS carries,
+  jsonb_typeof(t.metadata->'duplicateAcknowledged')         AS clearance_shape
+FROM tasks t
+WHERE t.stage_id = (SELECT metadata->>'pipelineStageId' FROM tasks WHERE id = :'root')
+ORDER BY t.created_at;
+```
+
+⚠️ Traps: the plan-vs-child SQL above is a SECOND extractor (`strpos` heading, first fence, newest by `startTime`, `::jsonb`
+with no strip) — a `DIFFERS` there is investigated, not believed; the module decides. The shas
+(`planSha256`, `storedAtWriteSha256`) CANNOT be reproduced from `contract::text` — jsonb reorders keys and adds spacing;
+compare jsonb values in SQL and hashes only through `canonicalContractSha`. `interfaceContractSource` is true WHEN
+STAMPED: `agent.configure` and the POV editor can replace `inputContext` later, so recompute against the live row.
+Series break at this deploy for the contract-vs-plan deviation measure (it falls to 0 by construction).
+
+**Consumer-side checks — one fixed, one still open:**
+- **CONSUMER-FAIL-OPEN — FIXED, live 2026-10-03** (pattern (h) batch 2, `71ffd705`). A leg with an upstream resolved
+  (`upstreamContainment` on the stamp, green or not) and no parsed `## Consumed Values` block now stamps
+  **`needs-node-c (consuming-leg-no-consumed-block)`**, not `benign (nothing-to-derive)` — check 1 could not run, so the
+  decision is delegated. Program SYNTHESIZE **BRANCH D3** discharges it ONLY from a Node C statement naming the leg:
+  either the applied value compared with the upstream's published value (both quoted; a difference blocks), or "no
+  upstream value applied" with where the value appears. Never from the leg reviewer's approval; a Node C response that
+  does not address the leg blocks. **Forensics:** for any consuming leg check that, when it reads needs-node-c with this
+  reason, Node C's FULL response (the statement may sit outside its VERDICT block) names the leg. A leg stamped
+  `benign (nothing-to-derive)` WITH `upstreamContainment` before 2026-10-03 07:06 UTC is the pre-fix fail-open — verify
+  its applied value by hand (the historical population was read 2026-10-03: no release ever carried a mismatched value).
+- **PARSE-STEAL — FIXED** (`8fe8ad56`, 2026-10-04): a marker now owns only the fenced block inside its own section. Before
+  that, a package with an empty `## Derived Values` heading followed by `## Consumed Values` could have its consumed block
+  parsed as derived (value-chain run 1) — on a pre-fix leg, verify the applied value against the published one yourself.
+- **DELEGATED-UPSTREAM DEAD END — FIXED (fix (a) + BRANCH D4, pov-program 2.2.0, 2026-10-12/13;
+  `cline_docs/reviews/containment-propagation-2026-10-12/`).** A consumer whose upstream was UNDECIDED (`needs-node-c`, 0
+  violations — e.g. a producer that harvested a pool and published a SELECTION with no `## Derived Values` block) used to stamp
+  `blocking (consuming-leg-upstream-not-green)`: the code treated "not green" as "dirty", so no Node C verdict could clear it
+  (Phase 4 attempt 2 run 1: legs 94/90, Node C APPROVED 88, `programReleasable: false`). It now stamps
+  **`needs-node-c (consuming-leg-upstream-delegated)`**, with the subject nested at `containmentDisposition.inputs.upstreamDelegated`
+  and the card segments `upstreamDelegated: <id> (<reason>)` / `consumedValueCheck: check 1 NOT run (<state>)`. BRANCH D4
+  discharges it ONLY from a Node C response that answers each delegated upstream against its published evidence AND names the
+  consumer with both value sets QUOTED. A dirty, blocking, absent, never-checked or unreadable upstream still blocks.
+  **Forensics traps this case taught:**
+  - **"0 violations" on a consumer can mean "not compared".** Check 1 returns no violations when the upstream derived nothing
+    (`derivation-containment.ts` `checkConsumedValues`). Read `inputs.consumedValueCheck` before reading 0 as equal.
+  - **Compare with a RELEASED run of the same shape.** The log-archive program (same producer shape) released only because its
+    Author happened to emit `## Derived Values`; diffing the two legs' `derivationContainment` named the cause in minutes.
+  - **Upstream "green" is `some` checked-clean + `every` 0 violations** (`isUpstreamContainmentGreen`). With two or more
+    upstream legs, one clean sibling vouches for the rest — a FAIL-OPEN read on the green path, filed
+    (`cline_docs/follow-ups/containment-green-path-gaps-2026-10-12.md`). On a fan-in consumer, read every leg in
+    `upstreamContainment.legs[]`, never `green` alone.
 
 ## See also
 

@@ -1,0 +1,53 @@
+== coverage (gen 7)
+coverage — work/log-archive-namespace-write-2026-10-09/draft-answered-6/report.md
+  legs ['kubernetes-gitops', 'terraform-iac'] · gates ['kubernetes-gitops-change', 'program-plan', 'terraform-iac-change'] · rows 24 {'declared': 24, 'derived': 0, 'forced': 0, 'open': 0, 'other': 0} · owner block 0 · not-applicable 0
+  ❌ what: unknown key for a known token · id: kubernetes-gitops.work
+  ❌ what: unknown key for a known token · id: terraform-iac.added-statements
+  ❌ what: unknown key for a known token · id: terraform-iac.policy-managers-multiple
+  ❌ what: unknown key for a known token · id: terraform-iac.existing-tags
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: receiver
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: admitted-principal
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: principal-unseen
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: granted-action
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: existing-grant
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: target-empty
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: enforcer-absent
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: collateral
+  👁  what: no producer rows — confirm for each leg: the leg derives no value another leg consumes · legs: ['terraform-iac']
+  👁  what: no routing rows — confirm for each leg: the leg adds no advertised covering route and suppresses, filters, withdraws or replaces no routes · legs: ['kubernetes-gitops', 'terraform-iac']
+  12 error(s), 2 to read
+exit=1
+== citations (gen 7)
+citations: 24 total, 24 verbatim, 0 failing
+premise branches: terraform-iac ✓
+✅ citation + premise gate clean (the Reviewer still owns: does each quote select the same option as the item?)
+exit=0
+== lint
+✗ work/log-archive-namespace-write-2026-10-09/draft-answered-6/report.md: 26 state-shaped token(s) the document did not get from the template or the objective:
+  line   57  ARN                  'arn:aws:s3:::acme-app-logs/*' | terraform-iac.receiver | which workload/resource on the target is authorised | — | the objects of bucket `acme-app-logs`, with no key-pref
+  line  241  address              '192.0.2.10'           - `192.0.2.10` and `192.0.2.11` form an aligned pair. `192.0.2.10/31` covers exactly those two, and is still wrong here because it is not a 
+  line  241  address              '192.0.2.11'           - `192.0.2.10` and `192.0.2.11` form an aligned pair. `192.0.2.10/31` covers exactly those two, and is still wrong here because it is not a 
+  line  241  address              '192.0.2.10/31'        - `192.0.2.10` and `192.0.2.11` form an aligned pair. `192.0.2.10/31` covers exactly those two, and is still wrong here because it is not a 
+  line  242  address              '192.0.2.11'           - `192.0.2.11` and `192.0.2.12` are adjacent but sit across a boundary. Their minimal cover is `192.0.2.8/29`, which takes in six addresses 
+  line  242  address              '192.0.2.12'           - `192.0.2.11` and `192.0.2.12` are adjacent but sit across a boundary. Their minimal cover is `192.0.2.8/29`, which takes in six addresses 
+  line  242  address              '192.0.2.8/29'         - `192.0.2.11` and `192.0.2.12` are adjacent but sit across a boundary. Their minimal cover is `192.0.2.8/29`, which takes in six addresses 
+  line  242  count                'six addresses'        - `192.0.2.11` and `192.0.2.12` are adjacent but sit across a boundary. Their minimal cover is `192.0.2.8/29`, which takes in six addresses 
+  line  282  address              '192.0.2.10'           | `a` | Running | true | absent | `192.0.2.10` | in host list as `192.0.2.10` |
+  line  282  address              '192.0.2.10'           | `a` | Running | true | absent | `192.0.2.10` | in host list as `192.0.2.10` |
+  line  283  address              '192.0.2.11'           | `b` | Running | false | absent | `192.0.2.11` | in host list as `192.0.2.11` (readiness is not a criterion) |
+  line  283  address              '192.0.2.11'           | `b` | Running | false | absent | `192.0.2.11` | in host list as `192.0.2.11` (readiness is not a criterion) |
+  line  284  address              '198.51.100.7'         | `c` | Running | true | true | `198.51.100.7` (the node's) | excluded; listed in `excluded.txt` |
+  line  286  address              '192.0.2.12'           | `e` | Succeeded | false | absent | `192.0.2.12` | not in the population |
+  line  288  address              '192.0.2.10'           Result: `hosts.txt` = `192.0.2.10`, `192.0.2.11`, and the terraform-iac leg writes these as `192.0.2.10/32`, `192.0.2.11/32`. `excluded.txt`
+  line  288  address              '192.0.2.11'           Result: `hosts.txt` = `192.0.2.10`, `192.0.2.11`, and the terraform-iac leg writes these as `192.0.2.10/32`, `192.0.2.11/32`. `excluded.txt`
+  line  288  address              '192.0.2.10/32'        Result: `hosts.txt` = `192.0.2.10`, `192.0.2.11`, and the terraform-iac leg writes these as `192.0.2.10/32`, `192.0.2.11/32`. `excluded.txt`
+  line  288  address              '192.0.2.11/32'        Result: `hosts.txt` = `192.0.2.10`, `192.0.2.11`, and the terraform-iac leg writes these as `192.0.2.10/32`, `192.0.2.11/32`. `excluded.txt`
+  line  311  ARN                  'arn:aws:s3:::acme-app-logs/*' "Resource": "arn:aws:s3:::acme-app-logs/*",
+  line  323  ARN                  'arn:aws:s3:::acme-app-logs/*' "Resource": "arn:aws:s3:::acme-app-logs/*",
+  line  335  ARN                  'arn:aws:s3:::acme-app-logs/*' - any Resource other than `arn:aws:s3:::acme-app-logs/*`: the bucket ARN alone, a key prefix, or `*` (`terraform-iac.receiver`);
+  line  379  ARN                  'arn:aws:s3:::acme-app-logs/*' Expected: `{"e":"Allow","a":["s3:PutObject"],"r":["arn:aws:s3:::acme-app-logs/*"],"p":"*","c":["IpAddress"],"k":["aws:SourceIp"]}`.
+  line  382  ARN                  'arn:aws:s3:::acme-app-logs/*' Expected: `{"e":"Deny","a":["s3:PutObject"],"r":["arn:aws:s3:::acme-app-logs/*"],"p":"*","c":["NotIpAddress"],"k":["aws:SourceIp"]}`.
+  line  407  ARN                  'arn:aws:s3:::acme-app-logs/*' - Receiver: `arn:aws:s3:::acme-app-logs/*`, objects with no key-prefix limit (item 4).
+  line  430  ARN                  'arn:aws:s3:::acme-app-logs/*' - The Allow grants `s3:PutObject` only, on `arn:aws:s3:::acme-app-logs/*` only, to `"*"`, conditioned only on `IpAddress`/`aws:SourceIp`.
+  line  478  count                '21 blocks'            - **The host list goes stale when pods are rescheduled. No option in this program changes that.** The host list (item 14) is a point-in-time
+  Each is a CANDIDATE — read it. A harvested value belongs nowhere in the document: regenerate, never hand-edit.

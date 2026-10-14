@@ -117,6 +117,43 @@ await test('P6c (RWF A3): deadEndExempt is an audit fact — stripped from clien
   stripAuditFacts(incoming);
   assert(!('deadEndExempt' in incoming) && 'other' in incoming, 'a forged deadEndExempt survived the strip');
 });
+await test('P6d (C2/C3 2026-10-04): interfaceContractSource + duplicateAcknowledgedCarry are audit facts, NOT run keys', () => {
+  for (const k of ['interfaceContractSource', 'duplicateAcknowledgedCarry']) {
+    assert((AUDIT_STRIP_KEYS as readonly string[]).includes(k), `${k} not in AUDIT_STRIP_KEYS`);
+    assert(!(PLATFORM_RUN_KEYS as readonly string[]).includes(k), `${k} must not be a run key (the editor drop is a different axis)`);
+    const incoming: Record<string, unknown> = { [k]: { forged: true }, other: 1 };
+    stripAuditFacts(incoming);
+    assert(!(k in incoming) && 'other' in incoming, `a forged ${k} survived the strip`);
+  }
+});
+await test('P6e (COMPLETE-THEN-FAIL 2026-10-05): completedByExecutionId is an audit fact, NOT a run key; a forged value is stripped', () => {
+  const k = 'completedByExecutionId';
+  assert((AUDIT_STRIP_KEYS as readonly string[]).includes(k), `${k} not in AUDIT_STRIP_KEYS — the agent's own task.update could forge the rescue anchor`);
+  assert(!(PLATFORM_RUN_KEYS as readonly string[]).includes(k), `${k} must not be a run key — run keys stay MCP-writable`);
+  const incoming: Record<string, unknown> = { [k]: 'cmforgedexecutionid000000', other: 1 };
+  stripAuditFacts(incoming);
+  assert(!(k in incoming) && 'other' in incoming, `a forged ${k} survived the strip`);
+  // The writer is the completion core's Layer 1, reading the key name from ONE exported constant.
+  const core = read('lib/tasks/services/complete-task-terminally.ts');
+  assert(/COMPLETED_BY_EXECUTION_KEY = 'completedByExecutionId'/.test(core), 'the Layer-1 writer no longer names the key the strip protects');
+  // Build review TS-F4: the key is spelled at two READERS too; a rename of the writer constant must not leave them
+  // looking for the old key (the rescue would go inert — fail-closed, but silent until MI-13's CONTROL after deploy).
+  const rescue = read('lib/services/execution-completion-anchored.ts');
+  const persist = read('lib/services/execution-terminal-persist.ts');
+  assert(/ANCHOR_KEY = 'completedByExecutionId'/.test(rescue), 'the rescue predicate no longer reads the protected key');
+  assert(/anchorMeta\.completedByExecutionId !== executionId/.test(persist), 'the in-tx re-assert no longer reads the protected key');
+});
+await test('P9 (C2/C3, register AUDIT-STRIP GAP): TaskService.createTask strips audit facts from inbound metadata', () => {
+  const src = read('lib/tasks/services/task.ts');
+  const start = src.indexOf('static async createTask(');
+  const end = src.indexOf('static async ', start + 10);
+  const body = src.slice(start, end);
+  assert(start > 0 && end > start, 'createTask not found');
+  const metaIdx = body.indexOf('metadata: taskData.metadata ?');
+  assert(metaIdx > 0, 'createTask metadata write not found');
+  assert(/stripAuditFacts\(incoming\)/.test(body.slice(metaIdx, metaIdx + 400)),
+    'createTask writes taskData.metadata without stripAuditFacts — a POV writer can create a task with forged audit facts');
+});
 await test('P6: stripAuditFacts removes completedWithDependencyOverride; no inline deletes remain outside the module', () => {
   const incoming: Record<string, unknown> = { completedWithDependencyOverride: true, other: 1 };
   const w: unknown[] = [];

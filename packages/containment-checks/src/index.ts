@@ -1032,7 +1032,84 @@ export interface ContainmentDisposition {
     /** F7 (VT-14 Run 23): WHICH kinds are uncovered. A `needs-node-c` that names no subject gets
      *  discharged against whatever evidence is nearest — observed live, not hypothesised. */
     unsupportedKinds?: string[];
+    /** PHASE4-CONTAINMENT-PROPAGATION (2026-10-12): stamped ONLY on `consuming-leg-upstream-delegated` —
+     *  the SUBJECT of the delegation (F7 / VT-14 item 3): each upstream leg that delegated, by id, with
+     *  the reason it stamped. Absent on every other disposition (byte-identical by construction). */
+    upstreamDelegated?: Array<{ taskId: string; dispositionReason: string }>;
+    /** Same arm only: whether program check 1 (consumed-value-mismatch) ran. On this arm it cannot have
+     *  run against anything — no delegated upstream derived a value — and `violations: 0` alone would
+     *  read as "compared and equal". */
+    consumedValueCheck?: ConsumedValueCheckState;
   };
+}
+
+/** Whether check 1 compared anything, as a closed set of named states (never a bare boolean). */
+export type ConsumedValueCheckState =
+  | 'not-run-no-upstream-derived'
+  | 'not-run-no-consumed-values'
+  | 'ran-no-mismatch';
+
+/**
+ * PHASE4-CONTAINMENT-PROPAGATION (2026-10-12; owner decisions A1-A3, B1). The NEW reason a consuming
+ * leg stamps when its upstream DELEGATED (`needs-node-c`) rather than failed. Its own string, never a
+ * reuse (F7): the program tier discharges it under BRANCH D4, which names this string verbatim.
+ */
+export const UPSTREAM_DELEGATED_REASON = 'consuming-leg-upstream-delegated';
+
+/**
+ * The NARROW propagation rule (MEASURE-AND-PROPOSAL §3.1), applied only on the two consumer arms that
+ * would otherwise stamp `blocking consuming-leg-upstream-not-green`. Returns the delegated subjects
+ * when — and only when — EVERY transcribed upstream copy (direct and `via`) is either
+ *   - machine-checked clean: `checked === true`, `disposition === 'benign'`, 0 violations; or
+ *   - delegated WITH ITS SUBJECT NAMED: `disposition === 'needs-node-c'` with a non-empty
+ *     `dispositionReason`, 0 violations (B1 / VT-14 item 3: unnameable ⇒ fail closed);
+ * and at least one copy is delegated. Anything else returns null ⇒ the caller keeps `blocking`:
+ *   - rule 1, any violation on any copy (C3: Node C approved 94 over `asn-not-member` — a violation is
+ *     never delegated);
+ *   - rule 2, a copy that is `blocking`, carries NO disposition (pre-2026-08 transcriptions), or is
+ *     `benign` without `checked` (A2 / C4: a consumer declaring a value taken from a leg whose own stamp
+ *     says nothing was derivable is a CONTRADICTION between two facts, not a delegation);
+ *   - rule 4, no legs at all (a bare `{green:false}`, or every predecessor unreadable), or ANY predecessor
+ *     unreadable (`lookupMisses > 0`, review M2).
+ * Every copy is judged, so a taskId reached twice (a diamond) is only as good as its WORST copy.
+ *
+ * Deliberately NOT a change to `isUpstreamContainmentGreen`: `green` feeds the BENIGN discharge arms,
+ * and widening it would turn a delegation into a pass with no Node C read at all (§3.3, rejected).
+ * PURE.
+ */
+function upstreamDelegatedSubjects(uc: unknown): Array<{ taskId: string; dispositionReason: string }> | null {
+  const legs = uc && typeof uc === 'object' && Array.isArray((uc as { legs?: unknown }).legs)
+    ? (uc as { legs: unknown[] }).legs : [];
+  if (legs.length === 0) return null;
+  // Review M2 (2026-10-13): a predecessor whose chained entry carried no readable containment never becomes a leg; it
+  // is only COUNTED, as `lookupMisses`. An unread upstream is not a judged one, so it cannot be delegated past.
+  const misses = (uc as { lookupMisses?: unknown }).lookupMisses;
+  if (typeof misses === 'number' && misses > 0) return null;
+  const delegated: Array<{ taskId: string; dispositionReason: string }> = [];
+  for (const raw of legs) {
+    const l = raw as Partial<UpstreamContainmentLeg> | null;
+    if (!l || typeof l !== 'object' || typeof l.taskId !== 'string') return null;
+    if (typeof l.violations !== 'number' || l.violations !== 0) return null;
+    if (l.disposition === 'benign' && l.checked === true) continue;
+    if (l.disposition === 'needs-node-c'
+        && typeof l.dispositionReason === 'string' && l.dispositionReason.trim().length > 0) { // L5: whitespace is unnamed
+      if (!delegated.some(d => d.taskId === l.taskId && d.dispositionReason === l.dispositionReason)) {
+        delegated.push({ taskId: l.taskId, dispositionReason: l.dispositionReason });
+      }
+      continue;
+    }
+    return null;
+  }
+  return delegated.length > 0 ? delegated : null;
+}
+
+/** Check 1's state on the delegated arm, computed from the stamp (Protocol 10: re-derivable). */
+function consumedValueCheckState(uc: unknown, consumedCount: number | undefined): ConsumedValueCheckState {
+  if (consumedCount === undefined || consumedCount === 0) return 'not-run-no-consumed-values';
+  const legs = uc && typeof uc === 'object' && Array.isArray((uc as { legs?: unknown }).legs)
+    ? (uc as { legs: Array<{ derivedValues?: unknown }> }).legs : [];
+  const anyDerived = legs.some(l => l && Array.isArray(l.derivedValues) && l.derivedValues.length > 0);
+  return anyDerived ? 'ran-no-mismatch' : 'not-run-no-upstream-derived';
 }
 
 /**
@@ -1114,6 +1191,22 @@ export function computeContainmentDisposition(fact: Record<string, unknown>): Co
   };
   const out = (disposition: ContainmentDispositionState, why: string): ContainmentDisposition =>
     ({ disposition, reason: why, inputs });
+  // The two consumer arms below that read `green === false` share ONE answer (A3): blocking, unless
+  // every upstream copy is clean-or-delegated-with-a-named-subject (§3.1). The subject fields are
+  // nested in `inputs` ONLY here, so every other disposition stays byte-identical.
+  const upstreamNotGreen = (): ContainmentDisposition => {
+    const delegated = upstreamDelegatedSubjects(fact.upstreamContainment);
+    if (!delegated) return out('blocking', 'consuming-leg-upstream-not-green');
+    return {
+      disposition: 'needs-node-c',
+      reason: UPSTREAM_DELEGATED_REASON,
+      inputs: {
+        ...inputs,
+        upstreamDelegated: delegated,
+        consumedValueCheck: consumedValueCheckState(fact.upstreamContainment, consumedCount),
+      },
+    };
+  };
 
   // CLAUSE 1 DOMINANCE, first and unconditional. Never reorder below any exception arm.
   if (violations.length > 0) return out('blocking', 'violations');
@@ -1151,12 +1244,16 @@ export function computeContainmentDisposition(fact: Record<string, unknown>): Co
     // sibling: benign ONLY on an explicit green:true; green:false is a dirty upstream and blocks
     // (a discharge must never be weaker than the harvest-missing arm's same case). Clause-1
     // dominance above means a consumed-value-mismatch violation blocks before this arm is reached.
+    // 2026-10-12 (PHASE4-CONTAINMENT-PROPAGATION): green:false is NOT always a dirty upstream — an
+    // upstream that DELEGATED (`needs-node-c`, 0 violations) also reads false, and blocking it here made
+    // the consumer's conjunct undischargeable for a question its producer already hands to Node C (3 of
+    // 3 such stored cases carried correct values). `upstreamNotGreen` delegates in that narrow case only.
     const consumedPresent = consumedCount !== undefined && consumedCount > 0;
     if (consumedPresent && upstreamContainmentGreen === true) {
       return out('benign', 'consuming-leg-consumed-discharged');
     }
     if (consumedPresent && upstreamContainmentGreen === false) {
-      return out('blocking', 'consuming-leg-upstream-not-green');
+      return upstreamNotGreen();
     }
     // A7 deriving test, RECLASSIFIED (2026-08-16, cross-port ① Shape A — was `blocking
     // 'refusal-or-drop'`): a pool harvested with nothing derived is a genuine AMBIGUITY between an
@@ -1214,7 +1311,7 @@ export function computeContainmentDisposition(fact: Record<string, unknown>): Co
   // harvest-block-missing-or-unparseable — the consuming-leg exception, mechanised.
   // Fails CLOSED: benign ONLY on an explicit true. Absent or false stays blocking (clause 19).
   if (upstreamContainmentGreen === true) return out('benign', 'consuming-leg-upstream-discharged');
-  if (upstreamContainmentGreen === false) return out('blocking', 'consuming-leg-upstream-not-green');
+  if (upstreamContainmentGreen === false) return upstreamNotGreen(); // A3: same rule as the arm above
   // NO upstream containment was resolved. Two different truths share that input, and the reason
   // must state the one that holds (R5, 2026-10-05 — retrospective from the B6 review):
   //  - a PIPELINE predecessor WAS chained, but only through the pipeline-index.json fallback (its

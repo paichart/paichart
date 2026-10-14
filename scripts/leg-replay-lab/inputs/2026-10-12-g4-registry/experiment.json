@@ -1,0 +1,194 @@
+{
+  "label": "g4-registry",
+  "purpose": "PRE-REGISTERED 2026-10-12 (model-evaluation-specialist; owner decisions L1-L3: approved as written, HARD CAP $50 for all runs of this lab, paid only after P0-P12 pass). Full rule: cline_docs/reviews/group4-registry-batch-2026-10-12/LAB-PREREG.md (this field wins where they differ; a rule found wrong is corrected for the NEXT run, never reinterpreted for this one). QUESTION: does the group 4 registry batch (commit G 5230c131: requirements-authoring-protocol 1.10.0, Author/Reviewer text, enforcer-scope row, B-2 item rows + the R2 invented-row split in the coverage CODE and the correction trigger predicate, D3 empty-upstream consumer branch, Z57 proxy collateral options, D2/D1 premise contradiction arm) make a requirements_author run key owner items as item rows instead of restating them, ask/carry enforcer-scope, write the empty-upstream and premise branches, and copy the proxy collateral set, without harming the rest of the draft? LEVER: base = production (protocol 1.9.0 + today's Requirements Author/Reviewer rows, pinned from production and byte-identical to the seed render at 3f8603a4; in-run check DATA at 3f8603a4; check CODE = the release tree, run from a detached worktree whose lib == 3f8603a4). g4 = baseline + edits derived from the seed render at G (derive-edits proves base+edits == render) + check data at G + G's code (main tree). The code is a lever the lab cannot swap per arm (LAB-PREREG D1), hence two trees, P6 and P8. FIXED in both arms: Author claude-opus-5-5 effort high; 2b correction ON, adoption rule 3 (variant lever, not the env); Reviewer claude-sonnet-5 effort high rebuilt from the arm's text, measured and never gated alone except where a gate names a Reviewer block read by hand; every node replays its persisted Phase 0 harvest. NODES: TZ (attempt-1 zero, objective unchanged, no owner map), TA (attempt-1 answered, objective and row->item map as run), LA (log-archive answered 3 + owner-adopted item 22, node-inputs/item-22-enforcer-scope.json, map + 22 -> terraform-iac.enforcer-scope; the SAME edited node in both arms). n: g4 3 per node; base TZ 1, TA 3, LA 3 (+ the persisted originals, $0, Author-text observables only, never pooled). BLINDNESS (rule 6): attempt-1 owner items are named by NUMBER only; the TA enforcer-scope expectation and the harvested part identifiers are in the sealed file (g4.sealedFile, sha256 g4.sealedSha256); results say matched / did not match. GATES (proxies from g4-score narrow the read; hand reads are the score): (G-ITEM-SAFE, DO NOT SHIP) TA+LA x g4, 6 final drafts: every <token>.item-<N>[a-z] row declared, leading citation item N, one contiguous verbatim span, options em dash, not in the owner block, 0 violations 6/6; 0 Reviewer blocks FOR a well-formed item row; no owner item cited in every base sample and in no g4 sample of the node (confirmed by reading). STOP on any item row OPEN/derived/forced, any such Reviewer block, any such deleted declaration. (G-ITEM-WORKS, REVISE) TA+LA x g4: 'invented key restates' = 0 in >= 5/6 final drafts; overlap READs <= 1 per draft 6/6; TA 'invented key asks' = 0 in >= 2/3 (each read). Measured: the same on the pre-correction draft and on base under G's classifier. MISS => read; text not followed => prompt-construction revises the Author item-row sentence, rerun TA x g4 n=3; correction dropped a citation => correction fault (agent-execution / requirements-authoring). (G-SCOPE, REVISE; one stop DO NOT SHIP) TZ,TA,LA x g4 (9): enforcer-scope row on every authorisation leg with options exactly 'all-reaching-the-protected-thing · exemption-by-property · gap' 9/9; never derived/forced 9/9; TZ OPEN 3/3; TA declared or OPEN and matching the sealed expectation >= 2/3, 0/3 with an invented which-parts row; LA declared citing item 22 with one verbatim span selecting all-reaching-the-protected-thing 3/3; non-authorisation legs list it not-applicable or carry it nowhere with every auth row not-applicable 9/9. STOP: a harvested part identifier (sealed list or found by reading) in the enforcer-scope row or any clause citing it outside a verbatim owner quote (inside one: subcount, reported to the owner). REVISE: exemption-by-property applied without the literal property value. Mandatory read: the row and every citing clause, 9 drafts. (G-EMPTY, REVISE; one stop DO NOT SHIP) g4: every consuming leg (obs on TZ/TA, terraform on LA) carries an empty-upstream branch citing kubernetes-gitops.inputs-empty that makes no change to its target >= 8/9; the 'If §6 does not carry it' escalation kept wherever base carries it. Measured, not gated: base TZ absent, TA present, LA present (predictions). STOP: any g4 clause applying an empty set or writing deny-all on empty. Read all 9 g4 branches and every g4 Reviewer block citing a missing empty-upstream branch (a false block is a revise finding against the Reviewer line). (G-COLL, REVISE) TZ x g4: obs collateral OPEN with 'confined-to-block · whole-listener · gap' 3/3; TA x g4: declared with a quote selecting a proxy option or OPEN stating no words select (counted), 0/3 with the Kubernetes set as the only options; LA x g4: neither set asserted as a bucket policy's behaviour 3/3. MISS => revise the Author collateral sentence, rerun the named cell. (G-PREMISE, REVISE; one stop DO NOT SHIP) all x g4 (9 auth-leg premise branches): contradiction arm >= 8/9; citations premise check ✓ 9/9. STOP: any clause acting on contradicting evidence. REVISE: principal-unseen citation dropped where base keeps it. Read all 9. (G-NOWORSE, REVISE; LA stanza DO NOT SHIP) per node TA and LA (TZ measured), g4 - base means over 3, ONE instrument (G's code, each arm's own data, changed classes removed: enforcer-scope, unknown key, invented key restates/asks, every item row finding): author-actionable coverage <= +1.0; citation findings <= +1.0; REAL dropped clauses <= +0.67 (hand read decides each flag); harvested-state lint <= +0.34; program-view median <= +1,500; size-with-allowance passes g4 >= base - 1; Reviewer approvals (a stub-only 'no objective of record' refusal counts approved, subcounted) g4 >= base - 1 of 3. DO NOT SHIP: LA x g4 Z49 stanza (score-z49, read) < 3/3. MISS => read; one sample's unrelated swing => extend that node's two cells to n=5 INSTEAD of a text rerun; a delta read to the new text => revise, rerun that node's g4 cell. Measured: TA program-view delivered size vs 50,000; correction attempted/adopted/adoptionArm/failing checks; Reviewer blocks by kind; fallback calls, max_tokens stops, cost, Author duration. A cell is VOID when any sample's registrySha256/templateSha256 is not its arm's (g4.registrySha256/templateSha256) or its code is not its arm's tree; a void cell is rerun, not scored. RUN ORDER: g4 first (--max-usd 21, concurrency 2); read every DO-NOT-SHIP gate by hand; base only if none stops (--max-usd 15, concurrency 2, from the base worktree). Any follow-up's cap = 50 - actual spend - 3.5, concurrency 1. DECISION TABLE: LAB-PREREG section 5.",
+  "n": 3,
+  "measures": [],
+  "flags": {
+    "CONNECTED_OUTPUT_SANITIZE_ENABLED": "true",
+    "FORM_CORRECTION_ENABLED": "true"
+  },
+  "variants": {
+    "base": {
+      "edits": [],
+      "authorModel": "claude-opus-5-5",
+      "authorEffort": "high",
+      "reviewerModel": "claude-sonnet-5",
+      "reviewerEffort": "high",
+      "requirementsFormCorrection": true,
+      "dropTemplateDirective": true,
+      "requirementsCheckAt": "3f8603a4b6f4fb2ff63e82ec928e2a2ee7c61970"
+    },
+    "g4": {
+      "edits": [
+        "edits/g4-protocol.json"
+      ],
+      "authorModel": "claude-opus-5-5",
+      "authorEffort": "high",
+      "reviewerModel": "claude-sonnet-5",
+      "reviewerEffort": "high",
+      "requirementsFormCorrection": true,
+      "dropTemplateDirective": true,
+      "requirementsCheckAt": "2c55baae1c6420fbc1c90c5f97e5389ae0f16782",
+      "templateEdits": [
+        "edits/g4-author-guidance.json",
+        "edits/g4-reviewer-guidance.json"
+      ]
+    }
+  },
+  "nodes": [
+    {
+      "id": "TZ",
+      "authorExecutionId": "cmv3i6u4b003eyx18e0drlr2t",
+      "reviewerExecutionId": "cmv3ih1qu003qyx1806gq56nc",
+      "kind": "gate",
+      "originalVersion": "1.9.0",
+      "variants": [
+        "base",
+        "g4"
+      ],
+      "g4Mode": "zero",
+      "why": "Attempt-1 (telemetry collector) zero-decision Author, run 1 (harness cmv3i0fnt000oyx17rt47bpad; Opus 5.5; Reviewer REFUSED, expected for a zero draft). Objective unchanged. No owner map (draft-citations).",
+      "expect": "g4: observability-config.enforcer-scope OPEN with the three options 3/3; obs collateral OPEN with the proxy option set 3/3; empty-upstream branch citing kubernetes-gitops.inputs-empty 3/3 (>= 8/9 pooled); premise contradiction arm present. Reviewer REFUSED in both arms (OPEN rows block). base (n=1 + persisted original): no enforcer-scope row; empty-upstream branch predicted absent (measured).",
+      "nByVariant": {
+        "base": 1
+      }
+    },
+    {
+      "id": "TA",
+      "authorExecutionId": "cmv3nfg3q009wyx1889zgp5ad",
+      "reviewerExecutionId": "cmv3npik300acyx1879v6elrw",
+      "kind": "gate",
+      "originalVersion": "1.9.0",
+      "variants": [
+        "base",
+        "g4"
+      ],
+      "g4Mode": "answered",
+      "ownerRowItemMap": "owner-maps/telemetry-answered.row-item-map.json",
+      "why": "Attempt-1 (telemetry collector) answered Author (harness cmv3nbrgz004wyx17042uvqzm; Opus 5.5; Reviewer APPROVED 90; 5 restatement rows, 2 overlapping a registry row, per BUILD-REPORT section 2). Objective as run (items named by number only) and the run's row -> item map, unchanged.",
+      "expect": "g4: restatements re-keyed as item rows (invented-restates 0 in the final draft), every item row well-formed and declared, no deleted declaration; observability-config.enforcer-scope declared or OPEN, matching the SEALED expectation in >= 2/3, no invented which-parts row; obs collateral declared with a proxy-option quote or OPEN with no words selecting, never the Kubernetes set alone; empty-upstream branch present; Reviewer approvals g4 >= base - 1 (measured; persisted APPROVED 90). base: restatements present (as stored), no enforcer-scope row; empty-upstream predicted present (an owner item states it)."
+    },
+    {
+      "id": "LA",
+      "authorExecutionId": "cmv261gws00byyx0r0np06hg3",
+      "reviewerExecutionId": "cmv26bmo50026yx0s6kj2mg0d",
+      "kind": "gate",
+      "originalVersion": "1.9.0",
+      "variants": [
+        "base",
+        "g4"
+      ],
+      "g4Mode": "answered",
+      "inputEdits": "node-inputs/item-22-enforcer-scope.json",
+      "ownerRowItemMap": "owner-maps/log-archive-answered3-g4.row-item-map.json",
+      "why": "Log-archive answered 3 Author (harness cmv25xka0008kyx0rj0mjv32v; Opus 5.5; Reviewer NEEDS-REVISION 90, two Author-fixable mechanical-check gaps). Input edit: owner-adopted item 22 appended after item 21 (objective of record + both brief copies) and the owner map gains 22 -> terraform-iac.enforcer-scope. The SAME edited node runs under both arms.",
+      "expect": "g4: terraform-iac.enforcer-scope declared citing item 22 with one contiguous verbatim span, selecting all-reaching-the-protected-thing, 3/3; Z49 stanza (score-z49 G-STANZA) 3/3; empty-upstream branch present; collateral sets never asserted as a bucket policy's behaviour. base: no enforcer-scope row (the 1.9.0 skeleton has none; item 22 then reads as an owner item no key asks); Z49 stanza measured."
+    }
+  ],
+  "baseline": {
+    "protocols": {
+      "requirements-authoring-protocol": {
+        "file": "protocols/requirements-authoring-protocol@1.9.0.baseline.md",
+        "version": "1.9.0",
+        "sha256": "1b1a7c4e938f66f6fec81f8a6902966a9a76965740639c2b1322b06d95391cbf"
+      }
+    },
+    "templates": {
+      "cmub1ql6f0001yx6695cga4zx": {
+        "file": "templates/requirements-author.baseline.md",
+        "name": "Requirements Author",
+        "role": "requirements_author",
+        "sha256": "53bd58f09795063d9b88fc9ad4a64c210fcd2fb549ffeb8ae950dcffbab1f71d"
+      },
+      "cmub1ql6m0002yx66hrxgxcc3": {
+        "file": "templates/requirements-reviewer.baseline.md",
+        "name": "Requirements Reviewer",
+        "role": "requirements_reviewer",
+        "sha256": "d126d7ce1709f3f56bdc3ab3928a386e670fcbe5aa3a3c7e8c29269f7599e74a"
+      }
+    }
+  },
+  "g4": {
+    "nodes": {
+      "TZ": {
+        "mode": "zero",
+        "authLeg": "observability-config",
+        "producerLeg": "kubernetes-gitops",
+        "nonAuthLegs": [
+          "kubernetes-gitops"
+        ],
+        "enforcer": "proxy"
+      },
+      "TA": {
+        "mode": "answered",
+        "authLeg": "observability-config",
+        "producerLeg": "kubernetes-gitops",
+        "nonAuthLegs": [
+          "kubernetes-gitops"
+        ],
+        "enforcer": "proxy"
+      },
+      "LA": {
+        "mode": "answered",
+        "authLeg": "terraform-iac",
+        "producerLeg": "kubernetes-gitops",
+        "nonAuthLegs": [
+          "kubernetes-gitops"
+        ],
+        "enforcer": "bucket",
+        "enforcerScopeItem": 22,
+        "z49": true
+      }
+    },
+    "noWorseTolerance": {
+      "coverageAuthorActionable": 1,
+      "citationFindings": 1,
+      "clausesDropped": 0.67,
+      "lintHits": 0.34,
+      "viewMedianChars": 1500,
+      "sizePassDrop": 1,
+      "approvalDrop": 1
+    },
+    "sealedFile": "../../cache/g4-sealed/expect.json",
+    "sealedSha256": "fba3e89737de75cb9dfa0520e8272fbf49cb2e57bbb5ed9d2b2b8a84d9c9b098",
+    "registrySha256": {
+      "base": "cd4cd7082a9e97fcb62bdb14e4605b46827e15c96d9009df31f3f6f3906088a9",
+      "g4": "c0ca080dd99298446cd49a96fc5a727213934c5d41421dcd30d1015f0f74b292"
+    },
+    "templateSha256": {
+      "base": "2821bd48c9e10688c703a5f641304e6abf80002c95065f6307a6cd4b33aa6d95",
+      "g4": "2634c6ba044847cd866abaa5dc03d6fe2b16ae9c0681e5066a551b3ee39eaf0c"
+    },
+    "item22": "22. The bucket's own policy is the only part that governs reads; the restriction covers all of it.",
+    "codeTrees": {
+      "base": "detached worktree at L-base (0461ac2d + this lab commit's scripts/leg-replay-lab and lab suite; lib == 3f8603a4)",
+      "g4": "main at G (5230c131) + L"
+    },
+    "protocolVersion": {
+      "base": "1.9.0",
+      "g4": "1.10.1"
+    },
+    "rerun": {
+      "decided": "2026-10-12, owner option A (LAB-RESULT.md: Decision after the re-score; Owner decisions)",
+      "what": "the ONE allowed rerun: LA x g4, n=3, after the prompt-construction trim (cb723f3b, requirements-authoring 1.10.1; TRIM.md). The base cell is REUSED from the L11 base run (2026-10-12-g4-registry-base), unchanged (base texts, base check data 3f8603a4; base prompts must be cmp-identical).",
+      "g4TextsAt": "cb723f3b4666cffb34987bb3f35c8dd40505feb1",
+      "g4CodeAt": "main at the commit carrying this field (G + L + checker fix 2 + its review fix 4eb153c6 + trim)",
+      "baseAdoptionForGNoWorse": "the stored base cell's corrections are re-decided under the SAME checker code as the rerun (release code + checker fix 2 + 4eb153c6, base check data), the L11 re-score rule",
+      "regate": "every gate on LA x g4 (G-ITEM-SAFE, G-ITEM-WORKS, G-SCOPE, G-EMPTY, G-COLL, G-PREMISE, Z49 stanza) + G-NOWORSE LA vs the stored base cell; TZ/TA g4 cells stay as scored in L11 (texts before the trim).",
+      "cap": "--max-usd 9 --concurrency 1 (owner, on an ESTIMATED VOID spend)",
+      "supersededBy": "rerun2"
+    },
+    "templateSha256L11": {
+      "base": "2821bd48c9e10688c703a5f641304e6abf80002c95065f6307a6cd4b33aa6d95",
+      "g4": "e07397ce5c2b50741d1d8be31332563953ab4a4eb3123339591ae62001ff591a"
+    },
+    "rerun2": {
+      "decided": "2026-10-12, owner option 1 after the LA rerun's Z49 stanza stop (LAB-RESULT.md)",
+      "what": "LA x g4, n=3, after the stanza literal-key fix (2c55baae: one requirements_author sentence, +113 chars; protocol 1.10.1 unchanged). Base cell REUSED from the L11 base run, unchanged.",
+      "g4TextsAt": "2c55baae1c6420fbc1c90c5f97e5389ae0f16782",
+      "cap": "--max-usd 12 --concurrency 1 (owner raised the total to about $55, accepted above $50)",
+      "regate": "every gate on LA x g4 incl. the Z49 stanza (G-STANZA as in L10: the exemplar conditions on aws:VpcSourceIp itself), G-NOWORSE LA vs the stored base cell under the same checker."
+    },
+    "templateSha256Rerun1": "dabff2312c1678362c61ebde4d9aa67ca182e041ea90de450d079a93a3f0e0bd"
+  }
+}

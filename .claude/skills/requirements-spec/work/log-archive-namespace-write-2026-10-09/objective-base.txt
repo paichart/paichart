@@ -1,0 +1,10 @@
+Objective. The pods of one Kubernetes namespace must be able to write to a cloud log-archive bucket, and nothing else may. Produce the requirements document for a program that restricts writes to that bucket to that namespace's pods, and that authorises exactly what the design decisions declare - nothing wider than them.
+
+This is a DRAFT SPECIFICATION for human review. Do not launch a program.
+
+Phase 0 is REQUIRED - harvest live state; nothing is supplied inline. Self-provision each descriptor below, harvest it, emit a per-domain section, and record every registration you create so the harness can tear down every one of them at SYNTHESIZE:
+
+- cluster https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json
+- cloud   https://raw.githubusercontent.com/paichart/paichart/main/descriptors/terraform-readonly-descriptor.json
+
+Harvest scope: read-only, through the two descriptors above only - in the cluster, the namespace of item 2 (its pods, their labels and addresses, and its network policies); in the cloud, the bucket of item 3 with its policy and any endpoints or roles that policy references. Nothing else.

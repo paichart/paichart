@@ -40,5 +40,13 @@ check('reviewer guidance: format is NOT the reviewer\'s to judge — non-blockin
 check('no prose instructs a reviewer to block on a retitled/merged/nested marker', !/reviewer blocks on a retitled/.test(seed) && !/RETITLED, MERGED or absent marker is a blocking defect/.test(tmpl));
 check('protocol clause: parseability is the platform\'s at SYNTHESIZE (both copies)', (seed.match(/Parseability is adjudicated by the platform at SYNTHESIZE/g) || []).length === 2);
 check('no prose anywhere says nesting makes the checker read ABSENT', !/nesting one under another heading, retitling it, or merging it[^.]{0,120}read the block as ABSENT/.test(tmpl));
+// value-chain build B2 (2026-10-02): network-derivation REUSES the Architect-side placement family through the shared
+// NETWORK_DERIVED_VALUES_PASSAGE and the harvester's block mandate through NETWORK_HARVESTER_PHASE_BULLET. A SOURCE count
+// cannot see interpolation, so pin REACHABILITY on the rendered text (the seed module only instantiates Prisma; stub the URL).
+process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://stub:stub@localhost:5432/stub';
+const nd: string | undefined = (require('./seed-protocol-prompts').PROTOCOLS as Array<{ name: string; promptText: string }>)
+  .find((p) => p.name === 'network-derivation-protocol')?.promptText;
+check('network-derivation renders the Architect placement family (MACHINE-PARSED MARKER, nesting tolerated)', !!nd && nd.includes('The heading is a MACHINE-PARSED MARKER') && nd.includes('does NOT blind the checker'));
+check('network-derivation renders the harvester\'s Harvested Allocations block mandate', !!nd && nd.includes('headed \`## Harvested Allocations\`'));
 if (failed) { console.error(`\n${failed} check(s) failed`); process.exit(1); }
 console.log('\n✅ marker-contract claims match the parser');

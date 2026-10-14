@@ -221,3 +221,14 @@ release is first-class, dependency-enforced); the engine terminal-persist spine 
 The transition machine lives in `lib/tasks/services/status-transitions.ts` (task.ts re-exports).
 Decision record/plan/test-procedure: `cline_docs/reviews/completion-path-unification-2026-07-24/`.
 Pins: `test:completion-core-boundary` · `test:completion-tx-shape` · `test:completion-behavioral`.
+
+## O4 — executionStatus semantics changed (2026-10-05, `a104deb8`)
+
+A terminated execution on a **COMPLETED** task now writes `tasks.executionStatus = NULL`, never `FAILED` (reaper parity) — one shared
+helper `writeTerminatedExecutionTaskStatus` (`lib/services/execution-terminal-persist.ts` ~:138), used by the failure tx and the engine
+safety net; the F17 duplicate-halt arm and the non-agent can-never-run arm carry the same COMPLETED guard. Read the EXECUTION's status,
+not the task's `executionStatus`, when classifying failures after this date. The rescue's anchored success tx is a status CAS
+(`updateMany … status RUNNING`, rolls back on 0). Series cut 2026-10-05 02:04 UTC. Depth: `cline_docs/reviews/complete-then-fail-2026-10-05/`.
+
+## Pointer (2026-10-14): PLATFORM-HELD-BYTES Stage A tables
+Three new models (`held_blobs` with the first `Bytes` column, `held_file_refs`, `held_capture_refusals`); blob upsert pre-tx (autocommit, de-duplicated, sorted), refs/refusals in the SUCCESS tx inside `SAVEPOINT held_capture`; GC grace predicate ON THE DELETE TARGET + `FOR UPDATE SKIP LOCKED` (EvalPlanQual lesson). Rehearsal: `scripts/rehearse-held-gc-race.ts`. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-BUILD.md`.

@@ -54,16 +54,20 @@
  */
 
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { AppError } from '@/lib/errors';
 import type { AccumulatedUsage } from '@/lib/agents/harness/agentic-tool-loop';
-import { redactArtifactsForPersist } from '@/lib/agents/harness/redact-artifact-secrets';
+import { redactArtifactsForPersist, redactExtraArtifactForPersist } from '@/lib/agents/harness/redact-artifact-secrets';
+import { REQUIREMENTS_PRE_CORRECTION_ARTIFACT, REQUIREMENTS_CORRECTION_NOT_ADOPTED_ARTIFACT } from '@/lib/agents/harness/requirements-artifact-names';
 import { getReportMdDecision } from './agentArtifactPolicy';
 import { selectAuthoritativeExecution } from './execution-selection';
 import { buildTokenUsageColumns, rollUpAndDeleteExecutions, sanitizeLLMForMarkdown, orderResultJsonForPersist } from './execution-artifacts';
+import { appendReviewerWarningsSection, appendApplyBlockPlaceholderSection } from './report-warnings-section';
 import { selectExecutionsToDelete, PRUNE_ON_COMPLETE_RETENTION } from './execution-retention';
 import { markForwardConeBlocked } from './mark-forward-cone';
 import { sliceSurrogateSafe, stringifyWellFormed } from '@/lib/utils/surrogate-safe';
 import { countUnsettledChildren } from './child-stage-settled';
 import { childTasksDispatchedBy, maybeSelfCheckLostWakeup } from './harness-dispatch-fact';
+import { errorFacts, type HeldCaptureBatch } from './held-bytes-store';
 
 // BC38: truncate artifact content to prevent database bloat (5MB per artifact).
 // Formerly duplicated as an inline const in BOTH paths.
@@ -105,6 +109,9 @@ export function buildErrorJson(input: {
   taskTitle?: string;
   executionTimeMs?: number;
   timestamp: Date;
+  /** COMPLETE-THEN-FAIL (v2 §3.6, W2): the rescue outcome the core attached to the original error, transcribed
+   *  verbatim. Present ONLY when the execution had completed its own PIPELINE SYNTHESIZE task (P2–P4 held). */
+  postCompletionRescue?: unknown;
 }): string {
   return stringifyWellFormed({
     error: input.errorMessage,
@@ -114,8 +121,54 @@ export function buildErrorJson(input: {
     taskTitle: input.taskTitle,
     executionTimeMs: input.executionTimeMs,
     timestamp: input.timestamp.toISOString(),
+    postCompletionRescue: input.postCompletionRescue ?? undefined,
   }, 2).json;
 }
+
+/**
+ * COMPLETE-THEN-FAIL O4 (2026-10-05, DESIGN-v2 §5): the ONE task-side write of a terminated (FAILED) execution.
+ *
+ * On a COMPLETED task a terminated execution writes `executionStatus = NULL` (reaper parity — reaped-task-persist.ts
+ * writes null on a COMPLETED task); on any other task it writes FAILED, exactly as before. "Stop writing FAILED"
+ * implemented as SKIP-the-write would be wrong: the claim left the column at RUNNING/PENDING/READY, which on a terminal
+ * task would read as running forever and refuse every later claim (DUPLICATE_ACTIVE_EXECUTION).
+ *
+ * The status predicate lives in the WHERE of two statements — never a read-then-branch — so the row lock decides: a
+ * completion committing between a read and the write cannot recreate the mixed COMPLETED + FAILED state.
+ * Callers: runTerminalFailureTx and the engine poller's safety net. The reapers keep their locked read-branch
+ * (race-safe under FOR UPDATE) until phase 2 (O6); a parity pin holds the two to the same outcomes.
+ */
+export async function writeTerminatedExecutionTaskStatus(
+  tx: Prisma.TransactionClient,
+  taskId: string,
+  now: Date,
+): Promise<void> {
+  await tx.task.updateMany({
+    where: { id: taskId, status: { not: 'COMPLETED' } },
+    data: { executionStatus: 'FAILED', updatedAt: now },
+  });
+  await tx.task.updateMany({
+    where: { id: taskId, status: 'COMPLETED' },
+    data: { executionStatus: null, updatedAt: now },
+  });
+}
+
+/**
+ * COMPLETE-THEN-FAIL (v2 §4): thrown INSIDE the anchored success tx so that every statement in it rolls back —
+ * pipeline-index.json, report.md, PRUNE and the task write. Never returned early; artifacts are never written onto a
+ * row someone else terminalized (they would be invisible to the selector). The core rethrows the ORIGINAL loop error.
+ */
+export class PostCompletionAnchorError extends AppError {
+  declare code: 'POST_COMPLETION_CAS_MISS' | 'POST_COMPLETION_PREDICATE_MISMATCH';
+  constructor(code: 'POST_COMPLETION_CAS_MISS' | 'POST_COMPLETION_PREDICATE_MISMATCH', message: string) {
+    super(message, code);
+  }
+}
+
+/** The fixed report.md body for an anchored run whose upstream extraction FAILED (v2 §3.2 step 5, BC-F-3): never the
+ *  platform-authored finalResponse, which would otherwise become the customer-facing deliverable's body. */
+export const ANCHORED_EXTRACTION_FALLBACK_BODY =
+  '*No harness deliverable — the SYNTHESIZE run ended after task.complete; see postCompletionFailure in pipeline-index.json*';
 
 /** I-6 fact pair — ONE derivation from row timestamps (Protocol-10 facts). */
 function deriveTimingFacts(
@@ -140,10 +193,18 @@ export interface TerminalTaskSnapshot {
 export interface TerminalSuccessInput {
   executionId: string;
   task: TerminalTaskSnapshot;
-  /** The loop deliverable (loopResult.assembledText) — report.md 'self' body + extraction fallback. */
+  /** The FINAL deliverable — the loop's text, or the adopted form correction / #90 reflection that replaced it
+   *  (execution-core's `finalResponse`) — report.md 'self' body + extraction fallback. */
   finalText: string;
   /** Caller-built via buildExecutionResultJson (supersession audit already mirrored in). */
   resultJson: Record<string, unknown>;
+  /** G1 B (2026-10-10): the requirements Author's ORIGINAL draft when an in-run correction was ATTEMPTED — persisted as
+   *  its own artifact (REQUIREMENTS_PRE_CORRECTION_ARTIFACT), R10-redacted, never inside the JSON artifact, never the
+   *  report. Absent for every other execution, whose artifact set is unchanged. */
+  preCorrectionDraft?: string | null;
+  /** Phase 4 group 1 (1b): a NOT-adopted correction's text — persisted as REQUIREMENTS_CORRECTION_NOT_ADOPTED_ARTIFACT,
+   *  same handling as the pre-correction draft. */
+  correctionNotAdoptedText?: string | null;
   /** Adapter-shaped execution.logs to persist (engine: canned 5-line; stream: rich narrative). */
   logs: string[];
   /** The single terminal timestamp (M11) — endTime, exec updatedAt, task updatedAt. */
@@ -185,6 +246,22 @@ export interface TerminalSuccessInput {
   /** TRANSITIONAL (Flip 1): post-commit reactors. Engine true / stream false — preserves today. */
   fireReactors: boolean;
   logger: TerminalPersistLogger;
+  /**
+   * COMPLETE-THEN-FAIL (DESIGN-v2 §4): the completion-anchored rescue. Absent/false on every normal persist, which
+   * stays byte-identical. When true: the execution flip is a CAS (`status: RUNNING`), the rescue predicate is
+   * re-asserted in-tx from the existing task read, an extraction failure gets the fixed fallback body, and any miss
+   * throws PostCompletionAnchorError inside the tx so the whole tx rolls back.
+   */
+  anchored?: boolean;
+  /** COMPLETE-THEN-FAIL (v2 §3.2 step 6): one extra line appended to the auto-comment naming postCompletionFailure. */
+  autoCommentNote?: string | null;
+  /**
+   * PLATFORM-HELD-BYTES Stage A (2026-10-14): the shadow-capture rows, built and validated PRE-tx by
+   * lib/services/held-bytes-capture.ts (the `supersededById` "computed pre-tx, caller-owned" precedent above). Absent,
+   * or present with zero rows ⇒ the persist is byte-identical and issues ZERO new statements. Inserted inside
+   * SAVEPOINT held_capture so a bad row costs the shadow measurement, never this SUCCESS (owner decision OA-19).
+   */
+  heldCaptures?: HeldCaptureBatch | null;
 }
 
 export interface TerminalSuccessTxResult {
@@ -231,26 +308,75 @@ export function stripPreHeadingPreamble(text: string): { text: string; stripped:
   return { text: text.slice(m.index), stripped: head.trim() };
 }
 
+/**
+ * PLATFORM-HELD-BYTES Stage A (2026-10-14, WI-6). Inside the SUCCESS transaction, so a ref or refusal exists only for an
+ * execution whose SUCCESS committed (rows ⇔ SUCCESS — moving these pre-tx "for safety" would lose that). Bracketed by
+ * SAVEPOINT held_capture: ANY error between SAVEPOINT and RELEASE rolls back to it and the transaction continues, so
+ * capture can never fail a Harvester (owner decision OA-19; panel DB-3(c), proven on Prisma 6.19.3). That makes a lost
+ * batch silent here — MI-13 🔴 9 is its witness. The warn carries name / code / metaCode only, never the message or
+ * meta.message (a Postgres DETAIL prints the key values — panel SF-3, DB NEW-1). Stage A ONLY: Stage B's
+ * "package ⇒ refs exist" invariant needs the strict form and re-decides.
+ */
+async function insertHeldCaptureRows(
+  tx: Prisma.TransactionClient,
+  batch: HeldCaptureBatch,
+  logger: TerminalPersistLogger,
+  executionId: string,
+): Promise<void> {
+  await tx.$executeRaw`SAVEPOINT held_capture`;
+  try {
+    if (batch.refs.length > 0) await tx.heldFileRef.createMany({ data: batch.refs });
+    if (batch.refusals.length > 0) {
+      await tx.heldCaptureRefusal.createMany({
+        data: batch.refusals as unknown as Prisma.HeldCaptureRefusalCreateManyInput[],
+      });
+    }
+    await tx.$executeRaw`RELEASE SAVEPOINT held_capture`;
+  } catch (err) {
+    await tx.$executeRaw`ROLLBACK TO SAVEPOINT held_capture`;
+    logger.warn(
+      { executionId, ...errorFacts(err), refs: batch.refs.length, refusals: batch.refusals.length },
+      'held-bytes: shadow capture rows rolled back to savepoint (the SUCCESS persist continues)',
+    );
+  }
+}
+
 export async function runTerminalSuccessTx(
   tx: Prisma.TransactionClient,
   input: TerminalSuccessInput,
 ): Promise<TerminalSuccessTxResult> {
   const { executionId, task, finalText, logs, endTime, usage, servingModel, supersededById, logger } = input;
 
-  await tx.agentExecution.update({
-    where: { id: executionId },
-    data: {
-      status: 'SUCCESS',
-      endTime,
-      logs,
-      updatedAt: endTime,
-      // token-usage-persistence: structured token facts + serving model, via the shared
-      // dual-path builder. Zero new statements — same tx update.
-      ...buildTokenUsageColumns(usage, servingModel),
-      // keep-best: self-mark (Adj #1) — the row is never observable as SUCCESS-and-unjudged.
-      ...(supersededById ? { supersededById } : {}),
-    },
-  });
+  const successExecData = {
+    status: 'SUCCESS' as const,
+    endTime,
+    logs,
+    updatedAt: endTime,
+    // token-usage-persistence: structured token facts + serving model, via the shared
+    // dual-path builder. Zero new statements — same tx update.
+    ...buildTokenUsageColumns(usage, servingModel),
+    // keep-best: self-mark (Adj #1) — the row is never observable as SUCCESS-and-unjudged.
+    ...(supersededById ? { supersededById } : {}),
+  };
+  if (input.anchored) {
+    // COMPLETE-THEN-FAIL (v2 §4): CAS. A user cancel, the periodic stale sweep or the startup reaper may have
+    // terminalized this row while the rescue was being built; then nothing here may commit.
+    const anchoredFlip = await tx.agentExecution.updateMany({
+      where: { id: executionId, status: 'RUNNING' },
+      data: successExecData,
+    });
+    if (anchoredFlip.count === 0) {
+      throw new PostCompletionAnchorError('POST_COMPLETION_CAS_MISS',
+        `anchored success persist: execution ${executionId} is no longer RUNNING — rolled back, nothing committed`);
+    }
+  } else {
+    // Normal path: the unconditional update is a documented reliance (runtime-limits.ts — a falsely-reaped live run
+    // is overwritten by its SUCCESS). Changing it is filed separately (COMPLETE-THEN-FAIL D2).
+    await tx.agentExecution.update({
+      where: { id: executionId },
+      data: successExecData,
+    });
+  }
 
   // Artifact policy (lib/services/agentArtifactPolicy.ts, 2026-04-28):
   //  - JSON artifact: always produced. Name differs by task type:
@@ -293,7 +419,10 @@ export async function runTerminalSuccessTx(
   const jsonArtifactName = task.type === 'PIPELINE' ? 'pipeline-index.json' : 'result.json';
 
   let reportMdContent: string | null = null;
-  let reportMdSource: { mode: 'self' | 'upstream'; sourceTaskId?: string; extractFailureReason?: string; preambleStripped?: number } | null = null;
+  let reportMdSource: { mode: 'self' | 'upstream'; sourceTaskId?: string; extractFailureReason?: string; preambleStripped?: number; reviewerWarnings?: 'not-stamped'; reviewerWarningsAppended?: number; applyBlockPlaceholderAppended?: number } | null = null;
+  // The upstream source's own `applyBlockPlaceholder` stamp, read off the SAME parsed artifact the extraction reads
+  // (no extra query inside the transaction). Undefined for a self-sourced report or a source that carries no stamp.
+  let sourceApplyBlockPlaceholder: unknown = undefined;
   if (decision.produce) {
     if (decision.source === 'self') {
       // BC46/0.5d: sanitize freshly generated text — report.md renders in the same
@@ -360,10 +489,14 @@ export async function runTerminalSuccessTx(
         } else {
           try {
             const sourceJson = JSON.parse(sourceArtifact.content);
+            sourceApplyBlockPlaceholder = sourceJson.applyBlockPlaceholder;
             const candidate = sourceJson.finalResponse;
             if (typeof candidate === 'string' && candidate.length > 0) {
-              // No double-sanitise: upstream content was already sanitized when its
-              // own execution wrote it; re-running would double-process.
+              // ⚠️ NOT sanitised here — and, contrary to what this comment said until 2026-10-08, NOT sanitised
+              // upstream either: a leg's source child (Author / producer / requirements author) has a dependent, so
+              // its own report.md decision is produce:false and its finalResponse never passed sanitizeLLMForMarkdown
+              // (WARNINGS-INVISIBLE panel AE F7 / MA F2; filed for sec-ops — LOW: no viewer renders raw HTML). Do not
+              // rely on this body being clean: the reviewer-warnings section below sanitises its own text.
               const upStrip = stripPreHeadingPreamble(candidate);
               extractedPreambleChars = upStrip.stripped ? upStrip.stripped.length : 0;
               extracted = upStrip.text;
@@ -459,8 +592,11 @@ export async function runTerminalSuccessTx(
           ...(extractedPreambleChars ? { preambleStripped: extractedPreambleChars } : {}) };
       } else {
         const errorHeader = `# ⚠️ Report Extraction Failed\n\nThe pipeline harness was configured to extract its customer deliverable from task \`${decision.sourceTaskId}\`, but extraction failed: \`${extractFailureReason}\`.\n\n**Recovery**: Fetch the source task's result.json directly via \`fetch(id: "artifact-<source result.json id>")\`.\n\n---\n\n`;
-        // 0.5d: fallback body is freshly generated text — sanitize.
-        const fallbackBody = finalText ? sanitizeLLMForMarkdown(finalText) : '*No response generated.*';
+        // 0.5d: fallback body is freshly generated text — sanitize. COMPLETE-THEN-FAIL (v2 §3.2 step 5): an anchored
+        // run's finalText is PLATFORM-authored and must never become the deliverable body — a fixed line instead.
+        const fallbackBody = input.anchored
+          ? ANCHORED_EXTRACTION_FALLBACK_BODY
+          : (finalText ? sanitizeLLMForMarkdown(finalText) : '*No response generated.*');
         reportMdContent = errorHeader + fallbackBody;
         reportMdSource = {
           mode: 'upstream',
@@ -472,6 +608,38 @@ export async function runTerminalSuccessTx(
           sourceTaskId: decision.sourceTaskId,
           extractFailureReason,
         }, 'Customer-facing report.md extraction failed; produced error-header report.md instead. Customer pointer will land but content is degraded.');
+      }
+
+      // ── REVIEWER WARNINGS SECTION (WARNINGS-INVISIBLE, 2026-10-08; SYNTHESIS v0.3 P3, O1/O2) ──────────────────
+      // Rendered from the `reviewerWarnings` leg-synthesize STAMP already on resultJson (stamped pre-tx by
+      // stampExecutionNets, which the core and the rescue share) — never by reading a reviewer here. Both arms (an
+      // extraction-failure report is the one a human reads closely — R3). No lines / out of scope ⇒ the report is
+      // byte-identical. Appended BEFORE R10 below, so redaction covers it. Facts only, commands nothing (the banner
+      // ruling above). A report.md produced without the stamp (a non-SYNTHESIZE execution) records `not-stamped`.
+      if (reportMdContent !== null && reportMdSource) {
+        const rwFact = (input.resultJson as Record<string, unknown>).reviewerWarnings;
+        if (rwFact === undefined) {
+          reportMdSource = { ...reportMdSource, reviewerWarnings: 'not-stamped' };
+        } else {
+          const { content, appended } = appendReviewerWarningsSection(reportMdContent, rwFact);
+          if (appended > 0) {
+            reportMdContent = content;
+            reportMdSource = { ...reportMdSource, reviewerWarningsAppended: appended };
+          }
+        }
+      }
+
+      // ── PLATFORM WARNINGS SECTION (PLACEHOLDER-APPLIES-AS-LITERAL interim guard, 2026-10-13; owner decision (a)) ───
+      // Rendered from the deliverable SOURCE's own `applyBlockPlaceholder` stamp (the Author leaf), captured from the
+      // artifact the extraction above already parsed — and only on an extracted body (an error-header report carries
+      // no package). No hit ⇒ the report is byte-identical. Appended BEFORE R10 below. Facts only, gates nothing.
+      if (extracted && reportMdContent !== null && reportMdSource && decision.sourceTaskId) {
+        const { content, appended } = appendApplyBlockPlaceholderSection(
+          reportMdContent, sourceApplyBlockPlaceholder, decision.sourceTaskId);
+        if (appended > 0) {
+          reportMdContent = content;
+          reportMdSource = { ...reportMdSource, applyBlockPlaceholderAppended: appended };
+        }
       }
     }
   }
@@ -517,14 +685,43 @@ export async function runTerminalSuccessTx(
       content: truncate(persistRedaction.reportMd ?? reportMdContent),
     });
   }
-  if (persistRedaction.redactedCount > 0) {
+  // G1 B: the pre-correction draft, on attempts only (non-PIPELINE — the requirements Author). Redacted by the same
+  // R10 control as report.md; its count joins the one securityEvent line below.
+  let preCorrectionRedacted = 0;
+  if (typeof input.preCorrectionDraft === 'string' && input.preCorrectionDraft.length > 0 && task.type !== 'PIPELINE') {
+    const r = redactExtraArtifactForPersist(input.preCorrectionDraft);
+    preCorrectionRedacted = r.redactedCount;
+    artifactData.push({
+      executionId,
+      name: REQUIREMENTS_PRE_CORRECTION_ARTIFACT,
+      type: 'text/markdown',
+      content: truncate(r.text),
+    });
+  }
+  // 1b (2026-10-12): the not-adopted correction's text, same route and guard.
+  if (typeof input.correctionNotAdoptedText === 'string' && input.correctionNotAdoptedText.length > 0 && task.type !== 'PIPELINE') {
+    const r = redactExtraArtifactForPersist(input.correctionNotAdoptedText);
+    preCorrectionRedacted += r.redactedCount;
+    artifactData.push({
+      executionId,
+      name: REQUIREMENTS_CORRECTION_NOT_ADOPTED_ARTIFACT,
+      type: 'text/markdown',
+      content: truncate(r.text),
+    });
+  }
+  if (persistRedaction.redactedCount + preCorrectionRedacted > 0) {
     // Protocol-10 FACT (not a verdict): N matched token(s) redacted before persist.
     logger.warn(
-      { executionId, taskId: task.id, redactedCount: persistRedaction.redactedCount, securityEvent: true },
+      { executionId, taskId: task.id, redactedCount: persistRedaction.redactedCount + preCorrectionRedacted, securityEvent: true },
       'R10 backstop: redacted matched token(s) from persisted artifact(s) before write'
     );
   }
   await tx.agentArtifact.createMany({ data: artifactData });
+
+  // PLATFORM-HELD-BYTES Stage A (2026-10-14): shadow capture rows, only when the pre-tx batch has ≥ 1 row.
+  if (input.heldCaptures && (input.heldCaptures.refs.length > 0 || input.heldCaptures.refusals.length > 0)) {
+    await insertHeldCaptureRows(tx, input.heldCaptures, logger, executionId);
+  }
 
   // Pointer substitution (2026-04-29): the harness can't know its own
   // report.md ID at SYNTHESIZE compose time (the artifact only exists
@@ -677,6 +874,16 @@ export async function runTerminalSuccessTx(
   });
   const isPipelineTask = currentTaskType?.type === 'PIPELINE';
 
+  // COMPLETE-THEN-FAIL (v2 §3.0 / §4, DB-DB-7): re-assert the rescue predicate from THIS read — zero new statements.
+  // A mismatch throws inside the tx, so every statement above rolls back and the core rethrows the original error.
+  if (input.anchored) {
+    const anchorMeta = (currentTaskType?.metadata as Record<string, unknown> | null) ?? {};
+    if (currentTaskType?.status !== 'COMPLETED' || anchorMeta.completedByExecutionId !== executionId) {
+      throw new PostCompletionAnchorError('POST_COMPLETION_PREDICATE_MISMATCH',
+        `anchored success persist: task ${task.id} is no longer COMPLETED by execution ${executionId} — rolled back`);
+    }
+  }
+
   // F17/F20 program-leg terminalization (2026-07-16, non-terminal-family panel — see
   // cline_docs/reviews/nonterminal-family-2026-07-16/synthesis.md). The "never auto-complete
   // PIPELINE" rule below exists because a harness exits after CREATE before children run —
@@ -716,7 +923,10 @@ export async function runTerminalSuccessTx(
   // safe regardless.
   if (isProgramLeg) {
     const legGate = legMeta.qualityGate as Record<string, unknown> | undefined;
-    if (legMeta.duplicateHalt) {
+    // COMPLETE-THEN-FAIL Q1(a) (DB-DB-1, Steve 2026-10-05): gated on the fresh status like its F20/R4/HNO/bail
+    // siblings. A COMPLETED leg carrying a STALE duplicateHalt was written FAILED by its own SUCCESS persist and its
+    // dependents cone-marked (prod cmu7or3ix0022yx4z9xukqs58, 2026-09-19) — the O4 rule: no FAILED onto COMPLETED.
+    if (legMeta.duplicateHalt && currentTaskType?.status !== 'COMPLETED') {
       programLegCompletion = { executionStatus: 'FAILED' };
       // F17 cone-gap fold (2026-07-16): the shipped F17 branch marked the leg FAILED with NO cone
       // walk — a duplicate-halted leg with same-stage dependents had the identical one-node-downstream
@@ -1071,7 +1281,8 @@ export async function persistTerminalSuccess(
       `\n- **Duration**: ${durationSec}s` +
       `\n- **Tool Calls**: ${input.toolCallsTotal} (${input.toolCallsSucceeded} succeeded, ${input.toolCallsFailed} failed)` +
       confidenceLine +
-      `\n- **Artifacts**:\n${artifactLines}`;
+      `\n- **Artifacts**:\n${artifactLines}` +
+      (input.autoCommentNote ? `\n- ${input.autoCommentNote}` : '');
 
     await db.comment.create({
       data: {
@@ -1114,6 +1325,12 @@ export interface TerminalFailureInput {
   /** TRANSITIONAL (Flip 1): failure fires the pipeline retrigger ONLY (never ready-dependents). */
   fireReactors: boolean;
   logger: TerminalPersistLogger;
+  /**
+   * COMPLETE-THEN-FAIL (v2 §3.6, W2/W5): the ORIGINAL thrown error, passed through so this shared persist can
+   * transcribe a `postCompletionRescue` outcome the core attached to it into error.json. Read for that one property
+   * only — the cause of record is still `errorMessage`/`errorCode`, derived by the adapter from this same object.
+   */
+  originalError?: unknown;
 }
 
 export interface TerminalFailureResult {
@@ -1131,6 +1348,7 @@ export interface TerminalFailureResult {
  * The same guard makes every other FAILED-persist site a no-op once one has
  * flipped, so a real failure persists exactly ONCE.
  */
+// PLATFORM-HELD-BYTES: NO held-capture rows on the failure path — deliberate (rows ⇔ SUCCESS; panel DB §4). Do not "fix".
 export async function runTerminalFailureTx(
   tx: Prisma.TransactionClient,
   input: TerminalFailureInput,
@@ -1161,13 +1379,8 @@ export async function runTerminalFailureTx(
     return { persisted: false, errorArtifactId: null, executionMs };
   }
 
-  await tx.task.update({
-    where: { id: input.taskId },
-    data: {
-      executionStatus: 'FAILED',
-      updatedAt: input.endTime,
-    },
-  });
+  // COMPLETE-THEN-FAIL O4 (v2 §5): FAILED on a non-COMPLETED task, NULL on a COMPLETED one — the shared helper.
+  await writeTerminatedExecutionTaskStatus(tx, input.taskId, input.endTime);
 
   // B4: errorCategory feeds GUI targeted remediation banners.
   const errorArtifact = await tx.agentArtifact.create({
@@ -1183,11 +1396,19 @@ export async function runTerminalFailureTx(
         taskTitle: input.taskTitle,
         executionTimeMs: executionMs ?? undefined,
         timestamp: input.endTime,
+        postCompletionRescue: readPostCompletionRescue(input.originalError),
       }),
     },
   });
 
   return { persisted: true, errorArtifactId: errorArtifact.id, executionMs };
+}
+
+/** The rescue outcome the core attached to an original loop error (v2 §3.6), or undefined. */
+export function readPostCompletionRescue(err: unknown): unknown {
+  if (!err || typeof err !== 'object') return undefined;
+  const v = (err as Record<string, unknown>).postCompletionRescue;
+  return v && typeof v === 'object' ? v : undefined;
 }
 
 /**
@@ -1197,6 +1418,13 @@ export async function runTerminalFailureTx(
  * nets (poller catch, MCP .catch) still see an un-persisted failure and fire.
  * A swallow here is the one mis-implementation that LOSES a failure (row stuck
  * RUNNING, no error.json).
+ *
+ * COMPLETE-THEN-FAIL (2026-10-05, DESIGN-v2 §3.6/§9, W5) — the same contract, extended: the error this receives may
+ * be a loop error that CARRIES an attached post-completion rescue outcome (`postCompletionRescue`) and partial loop
+ * state (`agenticLoopPartial`). The cause of record is ALWAYS that original error — never the rescue's own failure,
+ * which lives only inside `postCompletionRescue.failedWith`. This function transcribes `postCompletionRescue` into
+ * error.json (via `originalError`) and nothing else changes; on a COMPLETED task the task column gets NULL, not FAILED
+ * (O4, writeTerminatedExecutionTaskStatus).
  */
 export async function persistTerminalFailure(
   db: PrismaClient,
@@ -1224,7 +1452,11 @@ export async function persistTerminalFailure(
     // Finding 9 amendment (2026-07-15): TaskReady on the failure path too — as a SAFETY NET
     // for the deferral in task-complete-handler. A PIPELINE SYNTHESIZE that calls
     // task.complete (task now COMPLETED, TaskReady deferred to "my terminal persist") and
-    // THEN fails before/at persist would otherwise strand its dependents forever. The
+    // THEN fails before/at persist would otherwise strand its dependents forever.
+    // COMPLETE-THEN-FAIL (2026-10-05): the IN-LOOP throw after task.complete is now RESCUED by the core
+    // (persistCompletionAnchored → a SUCCESS persist with the real deliverable). This net now covers the
+    // RESIDUALS only: a throw inside the success persist itself / a rescue CAS miss, a declined rescue
+    // (P1/P5/P6), a completion by a human or another execution, and a reap (phase 2, O6). The
     // asymmetry policy is preserved by the reactor itself: maybeQueueReadyDependents
     // no-ops unless the task's STATUS is COMPLETED — a normally-failed task (status not
     // COMPLETED) still never queues dependents off a failure.

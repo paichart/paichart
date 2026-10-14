@@ -17,9 +17,10 @@ import { resolveTaskProtocol } from '@/lib/agents/harness/program-protocol';
 import { EXECUTION_TASK_CONTEXT_INCLUDE, EXECUTION_TEMPLATE_SELECT } from '@/lib/services/execution-hydration';
 import { persistTerminalFailure, resolveAgentRole } from '@/lib/services/execution-terminal-persist';
 import { runExecutionCore } from '@/lib/services/execution-core';
+import { describeNotAdopted } from '@/lib/agents/harness/form-correction';
 import { deriveMcpToolNames, buildHubToolGuidance } from '@/lib/services/execution-hub-guidance';
 import { buildAgentPromptBody } from '@/lib/agents/harness/build-agent-prompt-body';
-import { normalizeModelConfig, READ_MORE_FUNCTION_DEF } from '@/lib/agents/harness/agentic-tool-loop';
+import { normalizeModelConfig, READ_MORE_FUNCTION_DEF, readAgenticLoopPartial } from '@/lib/agents/harness/agentic-tool-loop';
 import type { AccumulatedUsage } from '@/lib/agents/harness/agentic-tool-loop';
 import { resolvePromptPlaceholders, buildContextSummary } from '@/lib/services/agentTemplateBuilder/pAIchartUniversalTemplate';
 import { createAgentExecution, stripReservedContextKeys } from '@/lib/services/agent-execution-create';
@@ -729,8 +730,8 @@ export const POST = createHandler(
           fireReactors: true,
           logger: mcpLogger,
         }, {
-          // ⚠ Observer property order = EMISSION order (loop → stopReason → storing →
-          // diagnosticRetry → completed), NOT interface-declaration order.
+          // ⚠ Observer property order = EMISSION order (loop → stopReason → formCorrection →
+          // storing → diagnosticRetry → completed), NOT interface-declaration order.
           // test:sse-event-sequence harvests by SOURCE position; a naive interface-order
           // layout breaks the 30-site golden at idx17.
           loop: {
@@ -873,6 +874,39 @@ export const POST = createHandler(
               isComplete: true,
             })}\n\n`);
           },
+          formCorrection: {
+            // Step B (2026-10-07, mechanical-reflection-trigger): the package form correction runs in the core
+            // BEFORE onStoringResults, so these sit here in source = emission order. Mirrors the #90 pattern below.
+            onFormCorrectionStart: async (triggerHits) => {
+              // GUI signal: tell the user a mechanical correction pass is running.
+              // ⚠️ PRECONDITION (review L4): this wording is true ONLY because the core passes `undercountOnly: true` —
+              // every hit is a hunk-header undercount. If the Step B scope ever widens (e.g. to elisions), reword this.
+              await safeWrite(`data: ${JSON.stringify({
+                type: 'log_update',
+                logs: [`Form check: ${triggerHits} hunk header count${triggerHits === 1 ? '' : 's'} below the body's line count — running one correction pass...`],
+              })}\n\n`);
+            },
+            onFormCorrectionComplete: async ({ adopted, notAdoptedReason, text }) => {
+              if (adopted) {
+                // Label it (review L4), then stream the corrected package as a fresh chunk (mirror of the #90 retry text)
+                await safeWrite(`data: ${JSON.stringify({
+                  type: 'log_update',
+                  logs: ['Form check: correction adopted — corrected package follows'],
+                })}\n\n`);
+                await safeWrite(`data: ${JSON.stringify({
+                  type: 'text_chunk',
+                  text: '\n\n' + text,
+                  isComplete: true,
+                })}\n\n`);
+              } else {
+                await safeWrite(`data: ${JSON.stringify({
+                  type: 'log_update',
+                  // Neutral wording (review B-L2): the reason describes the discarded correction, not the package.
+                  logs: [`Form check: correction not adopted (${describeNotAdopted(notAdoptedReason)}) — the Author's original package is kept`],
+                })}\n\n`);
+              }
+            },
+          },
           onStoringResults: async () => {
             // Pre-artifact storing signal (fires before the terminal tx). The two log lines
             // feed the accumulated `logs` array persisted via buildSuccessLogs (subtlety #2).
@@ -990,8 +1024,12 @@ export const POST = createHandler(
           endTime: errorEndTime,
           executionCreatedAt: execution.createdAt ?? null,
           executionStartTime: execution.startTime ?? null,
-          usage: capturedUsage,
-          servingModel: capturedModel,
+          // F-c (COMPLETE-THEN-FAIL batch, Q6): a loop throw carries its partial usage + serving model on the
+          // ORIGINAL error. Precedence captured ?? partial — never summed, so a post-loop throw cannot double-count.
+          usage: capturedUsage ?? readAgenticLoopPartial(error)?.totalUsage,
+          servingModel: capturedModel ?? readAgenticLoopPartial(error)?.servingModel ?? null,
+          // COMPLETE-THEN-FAIL (v2 §3.6): the original error, so the shared persist can transcribe postCompletionRescue.
+          originalError: error,
           // Flip 1 (2026-07-06): GUI-triggered FAILURE now fires the pipeline retrigger (retrigger ONLY —
           // never ready-dependents; core-policy asymmetry at execution-terminal-persist.ts:713-727), so a
           // failed GUI pipeline child lets the harness re-enter SYNTHESIZE-to-escalate instead of leaving it

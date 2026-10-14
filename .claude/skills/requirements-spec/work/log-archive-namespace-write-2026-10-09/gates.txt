@@ -1,0 +1,40 @@
+== coverage
+coverage — work/log-archive-namespace-write-2026-10-09/draft-answered/report.md
+  legs ['kubernetes-gitops', 'terraform-iac'] · gates ['kubernetes-gitops', 'plan', 'terraform-iac'] · rows 19 {'declared': 0, 'derived': 0, 'forced': 0, 'open': 0, 'other': 19} · owner block none · not-applicable 0
+  ❌ what: source is not one of the four forms · id: kubernetes-gitops.target · source: declared — item 2: "The target namespace is `trading`."
+  ❌ what: source is not one of the four forms · id: kubernetes-gitops.population · source: declared — item 5: "every running pod in the namespace of item 2"
+  ❌ what: source is not one of the four forms · id: kubernetes-gitops.representation · source: declared — item 14: "expressed as a host list — each running pod's address exactly"
+  ❌ what: source is not one of the four forms · id: kubernetes-gitops.inputs-empty · source: declared — item 15: "the cluster leg reports a gap and produces no value (gap)"
+  ❌ what: source is not one of the four forms · id: approver.plan · source: declared — item 6: "The program plan gate is approved by steve.terry@paichart.com."
+  ❌ what: source is not one of the four forms · id: approver.kubernetes-gitops · source: declared — item 7: "The kubernetes-gitops change gate is approved by josh.allen@paichart.com."
+  ❌ what: source is not one of the four forms · id: approver.terraform-iac · source: declared — item 8: "The terraform-iac change gate is approved by jacob.wilcox@paichart.com."
+  ❌ what: source is not one of the four forms · id: gate.kubernetes-gitops.position · source: declared — item 9: "sits before the cluster leg (before-leg)"
+  ❌ what: source is not one of the four forms · id: gate.terraform-iac.position · source: declared — item 10: "sits after the producer and before the consumers (after-producer-before-consumers)"
+  ❌ what: source is not one of the four forms · id: terraform-iac.target · source: declared — item 3: "The target bucket is the Terraform resource `aws_s3_bucket.app_logs` in workspace `prod` (bucket `ac
+  ❌ what: source is not one of the four forms · id: terraform-iac.receiver · source: declared — item 4: "the authorised resource is its objects, with no key-prefix limit."
+  ❌ what: source is not one of the four forms · id: terraform-iac.admitted-principal · source: declared — item 11: "admits by source address (source-address-range): the admitted principal is the source-address value
+  ❌ what: source is not one of the four forms · id: terraform-iac.principal-unseen · source: declared — item 12: "the leg acts regardless (act-regardless) and records as UNTESTED the premise that the pods' source 
+  ❌ what: source is not one of the four forms · id: terraform-iac.granted-action · source: declared — item 13: "The admitted pods may perform s3:PutObject only."
+  ❌ what: source is not one of the four forms · id: terraform-iac.existing-grant · source: declared — item 18: "Existing statements on the bucket policy are preserved (preserve): the leg adds only its own statem
+  ❌ what: source is not one of the four forms · id: terraform-iac.target-empty · source: declared — item 20: "the bucket leg still authors against the receiver of item 4 (act)."
+  ❌ what: source is not one of the four forms · id: terraform-iac.enforcer-absent · source: declared — item 19: "the leg creates one (create) holding only this grant."
+  ❌ what: source is not one of the four forms · id: terraform-iac.target-absent · source: declared — item 17: "the bucket leg reports a gap (gap); it never creates the bucket."
+  ❌ what: source is not one of the four forms · id: terraform-iac.collateral · source: declared — item 21: "the leg adds Allow statements only and no Deny statement; its package states what else, if anything
+  👁  what: no producer rows — confirm for each leg: the leg derives no value another leg consumes · legs: ['terraform-iac']
+  👁  what: no auth rows — confirm for each leg: the leg neither grants nor removes access on its target (no sender/principal is allowed, denied, admitted or restricted, and no chained value lands in a source/allow/admit/policy/selector field) · legs: ['kubernetes-gitops']
+  👁  what: no routing rows — confirm for each leg: the leg adds no advertised covering route and suppresses, filters, withdraws or replaces no routes · legs: ['kubernetes-gitops', 'terraform-iac']
+  19 error(s), 3 to read
+exit=1
+== citations
+citations: 20 total, 20 verbatim, 0 failing
+premise branches: terraform-iac ✓
+✅ citation + premise gate clean (the Reviewer still owns: does each quote select the same option as the item?)
+exit=0
+
+== reading (2026-10-09)
+- All 19 coverage ERRORS are one slip: every source written `declared — item N: "…"` WITHOUT the registry's parentheses
+  `(declared — item N: "…")`. Re-run with a SCRATCH copy whose only change makes the '(' optional (canonical script untouched):
+  0 errors · 19 declared · owner block none · 3 READ = classes the owner already confirmed (item 1 + step-4 answers).
+  Citation gate: 20/20 verbatim, terraform-iac premise branch ✓.
+- Reviewer: NEEDS-REVISION 88 — item 21's second clause ("its package states what else, if anything, the change affects")
+  is in the collateral ROW but in no Pipeline 2 clause / Acceptance / Design constraint. Reviewer did NOT flag the parentheses.

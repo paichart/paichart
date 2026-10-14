@@ -363,6 +363,81 @@ test('G2-3: needs-node-c is rendered distinctly — a boolean could not carry it
   );
 });
 
+// CONSUMER-FAIL-OPEN (2026-10-03): the disposition is COMPUTED by the shipping function from the live
+// Run 5 obs stamp (`cmurpr9sj00poyxxaeywagi0a`), not hand-written, so reverting the arm turns this red
+// too. Before the fix this exact fact rendered `benign (nothing-to-derive)` beside `green (1 leg)` —
+// a card that read clean while check 1 had never run.
+test('CFO-C1: a consuming leg with no consumed block renders needs-node-c with its reason verbatim', () => {
+  const { computeContainmentDisposition } = require('../lib/agents/harness/derivation-containment');
+  const fact: Record<string, unknown> = {
+    reason: 'no-derived-values-block', checked: false,
+    upstreamContainment: { green: true, legs: [{ taskId: 'cmurpovk000osyxxab3ll84a2', checked: true, violations: 0,
+      disposition: 'benign', dispositionReason: 'checked-clean', derivedValues: [{ kind: 'cidr', value: '10.99.0.0/27' }] }] },
+  };
+  fact.containmentDisposition = computeContainmentDisposition(fact);
+  expectEq(
+    leanFactsLine({ derivationContainment: fact }),
+    '**Facts:** derivationContainment: NOT checked (no-derived-values-block) | containmentDisposition: needs-node-c (consuming-leg-no-consumed-block) [program-gate conjunct] | upstreamContainment: green (1 leg)'
+  );
+});
+
+// PHASE4-CONTAINMENT-PROPAGATION (2026-10-12, owner decision B2). The C7 incident fact VERBATIM, its
+// disposition COMPUTED by the shipping function, and carried through the REAL whitelist before render —
+// so reverting the arm, dropping the nesting, or dropping the render each turns this red.
+test('CP-R1: the delegated reason renders the upstream leg id + its reason + "check 1 NOT run", through the real pick', () => {
+  const { computeContainmentDisposition } = require('../lib/agents/harness/derivation-containment');
+  const fact = JSON.parse(JSON.stringify(require('./fixtures/containment-propagation-cases-2026-10-12.json').cases.C7.fact));
+  fact.containmentDisposition = computeContainmentDisposition(fact);
+  const exec = pickResultJsonSummary({ derivationContainment: fact, upstreamDelegated: 'a top-level sibling is stripped' });
+  const inputs = ((exec.derivationContainment as Record<string, unknown>).containmentDisposition as { inputs: Record<string, unknown> }).inputs;
+  if (!Array.isArray(inputs.upstreamDelegated) || inputs.consumedValueCheck !== 'not-run-no-upstream-derived') {
+    throw new Error(`the subject must survive the pick NESTED (E3b): ${JSON.stringify(inputs)}`);
+  }
+  if ('upstreamDelegated' in exec) throw new Error('a top-level sibling must be stripped — the whitelist is the contract');
+  expectEq(
+    leanFactsLine(exec),
+    '**Facts:** derivationContainment: NOT checked (no-derived-values-block) | containmentDisposition: needs-node-c (consuming-leg-upstream-delegated) [program-gate conjunct] | upstreamContainment: NOT green (1 leg) | upstreamDelegated: cmv4woyp50051yx9lii90wviz (harvested-pool-no-derivation-cannot-decide) | consumedValueCheck: check 1 NOT run (not-run-no-upstream-derived)'
+  );
+});
+
+test('CP-R2: the delegated reason with NO stamped subject renders a positive blocking token, never nothing (G2)', () => {
+  const line = leanFactsLine({ derivationContainment: { checked: false, reason: 'no-derived-values-block',
+    containmentDisposition: { disposition: 'needs-node-c', reason: 'consuming-leg-upstream-delegated', inputs: {} } } }) as string;
+  expectEq(line.includes('upstreamDelegated: NONE STAMPED ⇒ treat as blocking'), true);
+  expectEq(line.includes('consumedValueCheck: check 1 NOT run (state not stamped)'), true);
+});
+
+test('CP-R3: every OTHER disposition reason renders WITHOUT the two new segments (byte-identical to the pre-change card)', () => {
+  // The render is additive and keyed on the reason alone, so "neither segment present" is exactly
+  // "byte-identical". Swept over every reason the shipping function can stamp, including the six
+  // stored C1-C4 / blocking shapes, and a leftover subject on a non-delegated stamp.
+  const reasons = ['checked-clean', 'consuming-leg-consumed-discharged', 'consuming-leg-upstream-discharged', 'harvested-pool-empty',
+    'nothing-to-derive', 'program-tier-inapplicable', 'consuming-leg-upstream-not-green', 'hard-gap',
+    'no-author-child-but-leg-derived-values', 'no-reason-given', 'unrecognised-reason:x', 'consuming-leg-upstream-absent',
+    'harvest-missing-or-unparseable-no-upstream', 'violations', 'consuming-leg-no-consumed-block',
+    'harvested-pool-no-derivation-cannot-decide', 'no-author-child-leg-kind-undecidable', 'non-cidr-only-harvest-cannot-decide',
+    'unsupported-not-mechanically-covered'];
+  // Review L4 (2026-10-13): planted under ALL THREE dispositions — a render keyed on `disposition === 'needs-node-c'`
+  // instead of the reason survived the blocking-only sweep.
+  for (const r of reasons) for (const disposition of ['blocking', 'benign', 'needs-node-c']) {
+    const line = leanFactsLine({ derivationContainment: { checked: false, reason: 'no-derived-values-block',
+      upstreamContainment: { green: false, legs: [{ taskId: 'u1' }] },
+      containmentDisposition: { disposition, reason: r,
+        inputs: { upstreamDelegated: [{ taskId: 'u1', dispositionReason: 'x' }], consumedValueCheck: 'not-run-no-upstream-derived' } } } }) as string;
+    if (line.includes('upstreamDelegated:') || line.includes('consumedValueCheck:')) throw new Error(`${disposition} ${r} grew a segment: ${line}`);
+  }
+  const { computeContainmentDisposition } = require('../lib/agents/harness/derivation-containment');
+  const cases = require('./fixtures/containment-propagation-cases-2026-10-12.json').cases;
+  for (const id of ['C1', 'C2', 'C3', 'C4']) {
+    const fact = JSON.parse(JSON.stringify(cases[id].fact));
+    fact.containmentDisposition = computeContainmentDisposition(fact);
+    const line = leanFactsLine({ derivationContainment: fact }) as string;
+    if (!line.endsWith('containmentDisposition: blocking (consuming-leg-upstream-not-green) [program-gate conjunct] | upstreamContainment: NOT green (1 leg)')) {
+      throw new Error(`${id} card moved: ${line}`);
+    }
+  }
+});
+
 test('G2-4: ABSENCE is a positive token, never silence', () => {
   const line = leanFactsLine({ derivationContainment: { checked: false, reason: 'no-derived-values-block' } });
   expectEq(line.includes('containmentDisposition: ABSENT ⇒ treat as blocking'), true);
@@ -867,6 +942,67 @@ test('RW2 (F2 collision): no whitelist key is re-declared as a literal AFTER the
     throw new Error('results handler no longer coalesces resultSummary.errorCategory — the degraded-SUCCESS case reads null again');
   }
 });
+
+// --- COMPLETE-THEN-FAIL Q5 (build review EF-F5): postCompletionFailure is NOT rendered in phase 1 ---
+// RETIRE at the Q5 re-decide (the first live stamp). Rendering it needs the paired pov-program Step-2 review (v2 §6).
+test('CTF-Q5: a summary carrying postCompletionFailure renders the SAME Facts line as without it', () => {
+  const base = { confidenceScore: 90, reviewerVerdict: { approved: true, blocking: [] } };
+  const withFact = { ...base, postCompletionFailure: { closingTurnRun: false, finalResponseSource: 'platform-post-completion',
+    cause: { class: 'provider', errorCode: 'LLM_PROVIDER_OVERLOADED' } } };
+  expectEq(leanFactsLine(withFact), leanFactsLine(base));
+});
+
+// --- mechanical-reflection-trigger Step B (2026-10-07): the formCheck segment renders ONLY on an attempt (D3) ---
+{
+  const decisionHits = [{ kind: 'hunk-count-mismatch', block: 2, heading: 'HCL', line: 12, header: '@@ -0,0 +1,33 @@',
+    declared: { old: 0, new: 33 }, observed: { old: 0, new: 33 }, extraBodyLines: 3 }];
+  const base = { confidenceScore: 88, reviewerVerdict: { approved: true, blocking: [] } };
+  const stepA = { version: 1, checked: true, reason: 'checked', textSource: 'loop', fencedBlocks: 4, numberedHunks: 1,
+    unnumberedHunkHeaders: 0, hitsTotal: 1, triggerHitsTotal: 1, hits: decisionHits };
+  const card = (formCheck: unknown) => leanFactsLine({ ...base, toolLoop: { turnsUsed: 3, formCheck } });
+  const plain = leanFactsLine(base);
+
+  test('FC1: no correction attempted (flag-off / no-trigger-hit / out-of-scope) — card BYTE-IDENTICAL to a card without formCheck', () => {
+    for (const reason of ['flag-off', 'no-trigger-hit', 'hits-include-non-undercount', 'prior-pass-used:anti-fabrication', 'budget-flagged', 'not-checked']) {
+      expectEq(card({ ...stepA, correction: { attempted: false, notAttemptedReason: reason } }), plain);
+    }
+    expectEq(leanFactsLine({ ...base, toolLoop: { turnsUsed: 3 } }), plain);
+  });
+  test('FC2: adopted → transcribes attempted, the decision-point kinds, adopted and the re-check count', () => {
+    const fc = { ...stepA, textSource: 'form-correction', hitsTotal: 0, triggerHitsTotal: 0, hits: [],
+      correction: { attempted: true, adopted: true, postHitsTotal: 0, postTriggerHitsTotal: 0, decisionTriggerHitsTotal: 1,
+        decisionHits, inputTokens: 900, outputTokens: 3000, durationMs: 41000 } };
+    expectEq(card(fc), `${plain} | formCheck: correction attempted on 1 trigger hit (hunk-count-mismatch ×1) → adopted, re-check 0 trigger hits`);
+  });
+  test('FC3 (B-L2): not adopted → a NEUTRAL guard phrase about the correction, and the persisted package is the Author\'s original', () => {
+    const fc = { ...stepA, correction: { attempted: true, adopted: false, notAdoptedReason: 'content-not-from-named-source',
+      postHitsTotal: 0, postTriggerHitsTotal: 0, decisionTriggerHitsTotal: 2, decisionHits: [...decisionHits, { ...decisionHits[0], line: 40 }] } };
+    expectEq(card(fc), `${plain} | formCheck: correction attempted on 2 trigger hits (hunk-count-mismatch ×2) → correction not adopted (guard: content outside named lines); the persisted package is the Author's original`);
+  });
+  test('FC4: an LLM throw (no tokens, llm-error) renders the reason, never a fabricated outcome', () => {
+    const fc = { ...stepA, correction: { attempted: true, adopted: false, notAdoptedReason: 'llm-error', durationMs: 5, decisionTriggerHitsTotal: 1, decisionHits } };
+    expectEq(card(fc), `${plain} | formCheck: correction attempted on 1 trigger hit (hunk-count-mismatch ×1) → correction not adopted (guard: correction call failed); the persisted package is the Author's original`);
+  });
+  test('FC6 (B-L1): the kind list under "N trigger hits" names TRIGGER kinds only; remaining fact-only hits are named on the adopted arm', () => {
+    const mixed = [...decisionHits, { kind: 'marker-line-unlocated', block: 3, heading: 'x', line: 50, marker: '...' }];
+    const fc = { ...stepA, textSource: 'form-correction', triggerHitsTotal: 0, hitsTotal: 1,
+      correction: { attempted: true, adopted: true, postHitsTotal: 1, postTriggerHitsTotal: 0, decisionTriggerHitsTotal: 1,
+        decisionHitsTotal: 2, decisionHits: mixed } };
+    expectEq(card(fc), `${plain} | formCheck: correction attempted on 1 trigger hit (hunk-count-mismatch ×1) → adopted, re-check 0 trigger hits, 1 other hit`);
+  });
+  test('FC7 (B-L2): the card\'s neutral phrases MIRROR form-correction.ts NOT_ADOPTED_PHRASES key for key, and the trigger kinds mirror FORM_CHECK_TRIGGER_KINDS', () => {
+    const js = require('../lib/mcp/server/tools/advanced/lean-card-facts.js');
+    const ts = require('../lib/agents/harness/form-correction');
+    const pfc = require('../lib/agents/harness/package-form-check');
+    expectEq(JSON.stringify(js.NOT_ADOPTED_PHRASES), JSON.stringify(ts.NOT_ADOPTED_PHRASES));
+    expectEq(JSON.stringify(js.FORM_TRIGGER_KINDS), JSON.stringify(pfc.FORM_CHECK_TRIGGER_KINDS));
+  });
+  test('FC5: the segment is APPEND-ONLY — every segment before it is byte-identical', () => {
+    const fc = { ...stepA, correction: { attempted: true, adopted: false, notAdoptedReason: 'empty', decisionTriggerHitsTotal: 1, decisionHits } };
+    const out = card(fc) as string;
+    if (!out.startsWith(`${plain} | formCheck: `)) throw new Error(out);
+  });
+}
 
 // --- Summary ---
 console.log('\n=====================================');

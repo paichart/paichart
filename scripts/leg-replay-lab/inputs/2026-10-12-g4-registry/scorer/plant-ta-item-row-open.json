@@ -1,0 +1,14 @@
+{
+  "id": "ta-item-row-open",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "TA: an item row written OPEN (G-ITEM-SAFE stop).",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "| observability-config.target | which surface of the leg's service does it act on | — |",
+      "new": "| observability-config.item-12 | a planted item row | — | gap report (OPEN) | OPEN — options: — |\n| observability-config.target | which surface of the leg's service does it act on | — |"
+    }
+  ]
+}

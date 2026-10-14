@@ -1,0 +1,74 @@
+{
+  "requirements-authoring-protocol:baseline": {
+    "file": "protocols/requirements-authoring-protocol@1.8.0.baseline.md",
+    "sha256": "9f4623569e6f154e0636cff827b77429e41fd483e4f4931e8a7b3ae850a5ea25",
+    "chars": 50024
+  },
+  "requirements-authoring-protocol:z49": {
+    "file": "protocols/requirements-authoring-protocol@1.8.0.z49.md",
+    "sha256": "1b1a7c4e938f66f6fec81f8a6902966a9a76965740639c2b1322b06d95391cbf",
+    "chars": 50485,
+    "edits": [
+      "z49-protocol-1.9.0"
+    ],
+    "deltaChars": 461
+  },
+  "template:cmub1ql6f0001yx6695cga4zx:baseline": {
+    "file": "templates/requirements-author.baseline.md",
+    "name": "Requirements Author",
+    "sha256": "8bc9d7c7bf22035f99b5aff463241ced279b3043b99387381c74970a14487265",
+    "chars": 42899
+  },
+  "template:cmub1ql6f0001yx6695cga4zx:z49": {
+    "sha256": "53bd58f09795063d9b88fc9ad4a64c210fcd2fb549ffeb8ae950dcffbab1f71d",
+    "chars": 43589,
+    "edits": [
+      "z49-author-guidance"
+    ],
+    "deltaChars": 690
+  },
+  "template:cmub1ql6m0002yx66hrxgxcc3:baseline": {
+    "file": "templates/requirements-reviewer.baseline.md",
+    "name": "Requirements Reviewer",
+    "sha256": "670bb7c5ee97dd6c39c6b1cfa77d28101365090b885a6c006b67d07bf3846ed2",
+    "chars": 28449
+  },
+  "template:cmub1ql6m0002yx66hrxgxcc3:z49": {
+    "sha256": "d126d7ce1709f3f56bdc3ab3928a386e670fcbe5aa3a3c7e8c29269f7599e74a",
+    "chars": 28822,
+    "edits": [
+      "z49-reviewer-guidance"
+    ],
+    "deltaChars": 373
+  },
+  "inputEdits:A21": {
+    "file": "node-inputs/item-21-request-path.json",
+    "edit": "item-21-request-path",
+    "targets": {
+      "leg:description": {
+        "beforeChars": 4925,
+        "afterChars": 5110
+      },
+      "author-task:description": {
+        "beforeChars": 4911,
+        "afterChars": 5096
+      },
+      "reviewer-task:description": {
+        "beforeChars": 4805,
+        "afterChars": 4990
+      }
+    }
+  },
+  "requirementsCheckAt:base": {
+    "commit": "452dfe15a547a2f88bbcc0a0529cd9f7e20f3b26",
+    "registrySha256": "7a896d1ddc4ce325d50519a7ce0739908ba000bca580ffeb69996947278ef70c",
+    "templateSha256": "5b1464fecfeb730f9251bd8719171b6a10e3e6da40fbab925a6fc9c71893d75d",
+    "source": "commit:452dfe15a547"
+  },
+  "requirementsCheckAt:z49": {
+    "commit": "0bcbfd7f5ce46d1b9c05692ab629064aaf1175b4",
+    "registrySha256": "cd4cd7082a9e97fcb62bdb14e4605b46827e15c96d9009df31f3f6f3906088a9",
+    "templateSha256": "2821bd48c9e10688c703a5f641304e6abf80002c95065f6307a6cd4b33aa6d95",
+    "source": "commit:0bcbfd7f5ce4"
+  }
+}

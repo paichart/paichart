@@ -14,6 +14,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { isDuplicateHaltResolved } from '@/lib/agents/harness/plan-spawn-carry';
 import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import type { TokenPayload } from '@/lib/types/auth';
 import type { Prisma } from '@prisma/client';
@@ -135,10 +136,15 @@ export async function handleAgentStatus(parameters: any, user: TokenPayload, act
       // window — 2 live tasks at time of fix.) cannotRun has no acknowledgement channel by
       // design — its recovery is a fresh task — so it is deliberately not resolved here.
       if (tMeta.duplicateHalt) {
+        // C3-a (2026-10-04, QS1 decided NARROWED): the platform now CARRIES a root clearance onto program
+        // legs, so the key's presence no longer proves a human answered THIS halt. Where the platform
+        // actually carried (`duplicateAcknowledgedCarry.carries >= 1`) the halt is resolved only if the
+        // halted stage is a member of the clearance; otherwise this is byte-identical to the old
+        // `duplicateAcknowledged != null` (skipped/failed carries included). See isDuplicateHaltResolved.
         haltFact = {
           kind: 'duplicateHalt',
           detail: tMeta.duplicateHalt,
-          resolved: tMeta.duplicateAcknowledged != null,
+          resolved: isDuplicateHaltResolved(tMeta),
         };
       } else if (tMeta.cannotRun) {
         haltFact = { kind: 'cannotRun', detail: tMeta.cannotRun, resolved: false };

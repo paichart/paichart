@@ -132,11 +132,12 @@ import { getNextTaskOrder } from '@/lib/mcp/tasks/action/utilities/order-utils';
 import { resolveStageForTask } from '@/lib/mcp/tasks/action/utilities/stage-resolver';
 import { assertPersisted } from '@/lib/mcp/tasks/action/utilities/durability';
 import { resolveUserByNameOrEmail, assertAssigneeInPovTeam } from '@/lib/mcp/tasks/action/utilities/assignee-resolver';
-import { TaskPriority, TaskStatus } from '@prisma/client';
+import { TaskPriority, TaskStatus, Prisma } from '@prisma/client';
 import { logTaskCreated } from '@/lib/tasks/services/taskActivityService';
 import type { ActivityMetadata } from '@/lib/types/activity';
 import { mcpLogger } from '@/lib/logger';
 import { checkDependencyCycle, GraphLimits } from '@/lib/utils/graph';
+import { resolveCreateContract, operatorEventOnce, type InterfaceContractSourceFact } from '@/lib/agents/harness/plan-spawn-carry';
 
 export async function handleTaskCreate(
   parameters: any,
@@ -648,6 +649,66 @@ export async function handleTaskCreate(
     }
   }
 
+  // ── C2-a (2026-10-04): the platform copies the PROGRAM PLAN's contract ────────────────────────
+  // A program child's `interfaceContract` is TRANSCRIBED by the PLAN-SPAWN harness (an LLM) from the
+  // Program Architect's plan, and 23 of 55 rosters since 08-28 were not byte-equal to it. The platform
+  // holds the deterministic source, so for a child of a PROGRAM stage the stored contract is the PLAN's
+  // and the model's copy is recorded only as a fact (`interfaceContractSource.suppliedMatched`).
+  // The decision lives in plan-spawn-carry.ts (decideCreateContract); this is one call + the spread.
+  //  - FAIL-OPEN, TOTAL (Q1/T1): any failure stores the supplied value exactly as before, stamped
+  //    `resolver-error`. The resolver never throws by construction; the try/catch here is the belt.
+  //  - Runs AFTER the duplicate-title early return (a duplicate writes nothing) and BEFORE the tx, so
+  //    the fact is born with its row inside the ONE tx.task.create (no post-create update).
+  //  - The task.create RESULT is unchanged: neither return projection may reference the fact or the
+  //    substituted contract (the PLAN-SPAWN model is the population `suppliedMatched` measures).
+  //  - Not a program stage → byte-unchanged, no key written.
+  let contractToStore: unknown = interfaceContract;
+  let interfaceContractSource: InterfaceContractSourceFact | null = null;
+  if (interfaceContract && typeof interfaceContract === 'object' && !Array.isArray(interfaceContract)) {
+    try {
+      const decision = await resolveCreateContract(prisma, finalStageId, interfaceContract as Record<string, unknown>);
+      contractToStore = decision.stored;
+      interfaceContractSource = decision.sourceFact;
+      const f = decision.sourceFact;
+      if (f) {
+        const base = { stageId: finalStageId, title, source: f.source, planResolution: f.planResolution,
+          architectTaskId: f.architectTaskId, architectExecutionId: f.architectExecutionId, planSha256: f.planSha256 };
+        if (decision.signals.resolveError) {
+          const e = decision.signals.resolveError as { name?: string; code?: string };
+          mcpLogger.error({ ...base, errorClass: e?.name ?? typeof e, errorCodeRaw: e?.code ?? null, errorCode: 'CONTRACT_PLAN_RESOLVE_FAILED' },
+            'program plan contract could not be resolved at create — the supplied contract is stored, as before');
+        } else if (f.source === 'supplied') {
+          mcpLogger.warn({ ...base, errorCode: 'CONTRACT_PLAN_UNRESOLVED' },
+            'program plan contract unresolved at create — the supplied contract is stored, as before (fail-open)');
+        } else if (decision.signals.suppliedMismatch) {
+          mcpLogger.info({ ...base, suppliedDiffPathCount: f.suppliedDiffPathCount, errorCode: 'CONTRACT_SUPPLIED_MISMATCH' },
+            "the harness's contract differs from the program plan — the PLAN's contract is stored");
+        } else {
+          mcpLogger.info({ ...base, errorCode: 'CONTRACT_STORED_FROM_PLAN' }, 'program plan contract stored (supplied copy matched)');
+        }
+        if (decision.signals.divergesFromLegs) {
+          mcpLogger.warn({ ...base, legBaseline: f.legBaseline, errorCode: 'CONTRACT_PLAN_DIVERGES_FROM_LEGS' },
+            'the existing legs hold a contract other than the current plan — the plan is stored and the divergence stamped');
+        }
+        if (decision.signals.operatorEvent && operatorEventOnce(f.architectExecutionId, f.storedAtWriteSha256)) {
+          mcpLogger.warn({ securityEvent: true, site: 'C2-create', stageId: finalStageId,
+            rewriteClasses: decision.signals.operatorEvent.classes, matches: decision.signals.operatorEvent.matches,
+            planSha256: f.planSha256 }, 'R9 would rewrite the rendered program contract (classified, not applied)');
+        }
+      }
+    } catch (err) {
+      contractToStore = interfaceContract;
+      interfaceContractSource = null;
+      mcpLogger.error({ stageId: finalStageId, errorClass: (err as Error)?.name, errorCode: 'CONTRACT_PLAN_RESOLVE_FAILED' },
+        'program plan contract resolution threw at create — the supplied contract is stored, as before');
+    }
+  }
+  // Built by the PLATFORM before the tx, never spread from input (TS-F8).
+  const createContractMetadata: Record<string, unknown> = {
+    requiresInterfaceContract: true,
+    ...(interfaceContractSource ? { interfaceContractSource } : {}),
+  };
+
   // BC47/BC19 FIX (2026-06-08): a plain $transaction does NOT prevent the duplicate-order race —
   // at READ COMMITTED the max-order findFirst takes no lock, so two concurrent default-appends both
   // read the same max and write the same order (silent — `order` has no unique constraint). Lock the
@@ -688,8 +749,8 @@ export async function handleTaskCreate(
         // lost before execution). Nested-parameters form only (flat top-level is
         // schema-stripped, same as waitForCompletion).
         ...(interfaceContract && typeof interfaceContract === 'object' ? {
-          inputContext: { interfaceContract },
-          metadata: { requiresInterfaceContract: true },
+          inputContext: { interfaceContract: contractToStore } as Prisma.InputJsonValue,
+          metadata: createContractMetadata as Prisma.InputJsonValue,
         } : {}),
         createdAt: new Date(),
         updatedAt: new Date()

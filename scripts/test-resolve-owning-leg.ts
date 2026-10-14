@@ -19,7 +19,20 @@ const db = (rows: unknown[]) => ({ $queryRaw: async () => rows }) as unknown as 
   check('ambiguous: >1 candidate names both and injects nothing (A9)', amb.kind === 'ambiguous' && amb.candidates.join(',') === 'a,b');
   const src = fs.readFileSync(path.join(__dirname, '../lib/agents/harness/program-protocol.ts'), 'utf8');
   const fn = src.slice(src.indexOf('export async function resolveOwningLeg'), src.indexOf('\n}', src.indexOf('export async function resolveOwningLeg')));
-  check("PIN: qualifier is SQL `metadata->>'protocol' IS NOT NULL` (a stamped protocol:null is excluded; Prisma not:null would over-match)", fn.includes("metadata->>'protocol' IS NOT NULL"));
+  // 2026-10-14 (PLATFORM-HELD-BYTES Stage A, panel arch S4): the WHERE moved into the SHARED owningLegPredicate. The pins
+  // now read the RENDERED SQL (behavioural, not source text) — byte-identical to the pre-extraction inline WHERE.
+  let rendered: { sql: string; values: unknown[] } | null = null;
+  await resolveOwningLeg({ $queryRaw: async (q: any) => { rendered = { sql: q.sql, values: q.values }; return [] as any; } } as any, 'STAGE');
+  const FROZEN = "\n    SELECT id, \"inputContext\"->'chainedFrom' AS chained\n      FROM \"tasks\"\n     WHERE type = 'PIPELINE'\n       AND metadata->>'pipelineStageId' = ?\n       AND metadata->>'protocol' IS NOT NULL";
+  check('PIN: resolveOwningLeg renders BYTE-IDENTICAL SQL to the pre-extraction inline WHERE (one bound value)',
+    !!rendered && (rendered as any).sql === FROZEN && JSON.stringify((rendered as any).values) === '["STAGE"]');
+  check("PIN: qualifier is SQL `metadata->>'protocol' IS NOT NULL` (a stamped protocol:null is excluded; Prisma not:null would over-match)",
+    !!rendered && (rendered as any).sql.includes("metadata->>'protocol' IS NOT NULL"));
+  const { owningLegPredicate } = require('../lib/agents/harness/program-protocol');
+  const { Prisma } = require('@prisma/client');
+  const aliased = owningLegPredicate(Prisma.sql`h.stage_id`, 'leg');
+  check('PIN: the aliased predicate qualifies every column and keeps the protocol conjunct (shared by the held-bytes join)',
+    aliased.sql === "leg.type = 'PIPELINE'\n       AND leg.metadata->>'pipelineStageId' = h.stage_id\n       AND leg.metadata->>'protocol' IS NOT NULL" && aliased.values.length === 0);
   check('PIN: no ORDER BY / LIMIT — the resolver never silently picks which deliverable a child receives', !/LIMIT|ORDER BY/.test(fn));
   check('PIN: no interfaceContract conjunct — a contract-LESS leg resolves', !/interfaceContract/.test(fn));
   if (failed) { console.error(`\n${failed} failed`); process.exit(1); }

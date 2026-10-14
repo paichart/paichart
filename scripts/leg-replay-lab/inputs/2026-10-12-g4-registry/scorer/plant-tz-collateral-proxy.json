@@ -1,0 +1,14 @@
+{
+  "id": "tz-collateral-proxy",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "TZ: the obs collateral options cell carries the proxy set (G-COLL pass).",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "| observability-config.collateral | what else on the target changes because enforcement now applies | per enforcer (Kubernetes: allow-named-ports · deny · leave-to-workload-manifests) |",
+      "new": "| observability-config.collateral | what else on the target changes because enforcement now applies | confined-to-block · whole-listener · gap |"
+    }
+  ]
+}

@@ -234,6 +234,9 @@ system is.
    each group recorded immediately.
 7. **A phased plan** — small evidence-backed fixes first, then larger tracks in parallel where their
    code is disjoint, later items each behind their own evidence.
+8. **If the step-back concludes the SHAPE of a released protocol/program must change** and its successful
+   runs must not move, run **Protocol 15** (`isolated-variant-build-protocol.md`): build the change as an
+   opt-in variant, prove existing runs byte-unchanged, gate it, measure it, then promote (value-chain, 2026-10-02).
 
 **Working rules for the plan that follows (decided 2026-10-01, SYNTHESIS §7 Group 1):**
 - guidance changes ship in NAMED BATCHES with a version cut, each followed by a measurement window
@@ -310,6 +313,26 @@ system is.
   The fix was one dependency edge, not a stronger instruction.
 
 ## Proven impact
+
+**2026-10-12/13 — "every agent approved, the platform refused" (Phase 4 attempt 2 run 1).** Legs 94 / 90, Node C APPROVED 88,
+`programReleasable: false`. The loop, step by step: (1) read the STAMPED facts per leg, not the agents' summaries — producer
+`needs-node-c`, consumer `blocking (consuming-leg-upstream-not-green)`; (2) diff against a RELEASED run of the same shape —
+the only difference was one Author emitting `## Derived Values`; (3) the owner's question "is it the requirements?" forced the
+layer question — cause = domain protocol prose (a "selection" read as not derived), fatal because the net treated an
+undecided upstream as a dirty one, NOT the requirements; (4) corpus-measure before design (execution-facts: 7 archive cases,
+2 dirty, 3 undecided, 1 never-checked, 1 historical — and Node C once approved a dirty upstream at 94, which fixed the shape
+of the safe rule); (5) a NARROW fix (delegation propagates only with a named reason and 0 violations; replay over 2,800 tasks:
+exactly the 3 predicted legs move) plus a program-protocol discharge branch (D4) whose live control was pre-registered with
+every outcome decidable from stored facts; (6) an independent review that broke each guard itself — it found a missing Node C
+half, a protocol self-contradiction, an unreadable-upstream gap and, looking at the same rule from the other side, a FAIL-OPEN
+class ("one clean upstream vouches for the rest") that became its own follow-up. The cause fix (protocol text) was deferred
+with its lab; the fatal-path fix goes first (deployed 2026-10-12 21:22:09Z). **Live re-run outcome (run 2, `cmv5s15we0005yxgg45vmt698`): D4 NOT
+exercised** — the consumer emitted no `## Consumed Values` (the same single-address ambiguity, consumer side) and took BRANCH D3, which Node C
+discharged; the run was then held NOT RELEASABLE for a new class the run exposed one step earlier: the Harvester's "verbatim" quote had
+silently dropped lines (VERBATIM-QUOTE-OMISSION — measured 28 of 42 observability file harvests). The loop's lesson held twice: each
+fix's live control surfaced the next, deeper defect, and the gates refused correctly both times. Records: `cline_docs/reviews/containment-propagation-2026-10-12/`; case study
+https://claude.ai/artifact/YYHKcGUUhRrgkYLVhg22gq. **The lesson to copy:** separate the CAUSE layer from the "what made it
+fatal" layer, fix the fatal one narrowly, and expect the review of a fail-closed fix to find the fail-open twin.
 
 **2026-10-01 — the step-back review (first run of the section above).** Ledger (39 generations, 14 program runs) → actor
 map → research → T0 → six-reviewer panel (60 findings traced) → five grouped decisions → Phase 0 shipped as small named

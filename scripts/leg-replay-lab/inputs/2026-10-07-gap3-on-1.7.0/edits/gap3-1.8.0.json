@@ -1,0 +1,24 @@
+{
+  "id": "gap3-1.8.0",
+  "title": "observability-config 1.7.0 -> 1.8.0 (gap 3, as seeded)",
+  "appliesTo": [
+    "observability-config-protocol"
+  ],
+  "ops": [
+    {
+      "type": "replace",
+      "old": "the recorded series returned by a metric query). Expected outputs follow the witnessed rule:",
+      "new": "the recorded series returned by a metric query). An access-control change (which senders may reach a listener) is proven, for EACH listener or port the change restricts, by one ADMITTED and one DENIED probe. Each probe names the sender it runs from (inside the admitted set; outside it). Each uses a client that speaks the listener's protocol wherever the rule is evaluated after the connection is accepted, because a raw transport connect succeeds whatever such a rule decides. A probe result nobody has yet observed is a first-ever state: write it in the shape below, never a predicted literal. If no sender outside the admitted set is available to the operator, say so for that listener and do not invent one. A step that cannot fail on a wrong change, for example one comparing a value with a copy of itself, proves nothing and is not a validation step. Expected outputs follow the witnessed rule:"
+    },
+    {
+      "type": "replace",
+      "old": "(for an access-control change, that the right senders are admitted and the rest denied)",
+      "new": "(for an access-control change, the ADMITTED and DENIED probes above)"
+    },
+    {
+      "type": "replace",
+      "old": "so it never stands in for a behavioural post-apply check), ",
+      "new": "so it never stands in for a behavioural post-apply check), for an access-control change the ADMITTED and DENIED probe per restricted listener that the Author bullet requires, each naming its sender \u2014 a probe missing with no stated reason is a blocking validation gap; a DENIED probe the package declares unavailable (no sender outside the admitted set) is not a gap: name it in your review; any remedy you name must use a client that can see the rule (a raw transport connect cannot see a rule evaluated after the connection is accepted), and a wrong remedy is never by itself a blocking issue; a step that cannot fail on a wrong change is not a validation step, "
+    }
+  ]
+}

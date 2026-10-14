@@ -504,5 +504,53 @@ test('Pattern: EMPTY_DELIVERABLE companion signal present + NON-PIPELINE scoped 
   if (!qualitySource.includes("task.type !== 'PIPELINE'")) throw new Error('EMPTY_DELIVERABLE must be NON-PIPELINE scoped');
 });
 
+// ── COMPLETE-THEN-FAIL (2026-10-05, DESIGN-v2 §3.3) — the quality half of the post-completion exit ─────────────
+// Moved here from test-pipeline-protocol-validator.ts (HOOK-1: that file runs in the pre-commit hook without
+// tsconfig-paths, and this module reaches `@/` aliases).
+{
+  const POST = new Date('2026-10-04T00:00:00Z');
+  const legMeta = { pipelineStageId: 'cmstage10x', deliverableSourceTaskId: 'cmsrc10x' };
+  const call = (action: string) => ({ tool: 'perform', success: true, arguments: { action } }) as unknown as ToolCallRecord;
+  const tenFourShape = (): ToolCallRecord[] => [call('task.context'), call('task.context'), call('task.update'), call('task.complete')];
+  const q = (calls: ToolCallRecord[], meta: Record<string, unknown>, postCompletionFailure: boolean, over: Partial<ExecutionQualityInput> = {}) =>
+    assessExecutionQuality({
+      toolCallResults: calls, failedToolCalls: 0, text: '[Platform-authored record — not model output.]',
+      stopReason: 'tool_use', task: { id: 't', type: 'PIPELINE', metadata: meta, createdAt: POST },
+      resolvedMode: 'SYNTHESIZE', postCompletionFailure, executionId: 'e', turnCount: 3, ...over,
+    });
+
+  test('CTF-Q1 pure case (10-04 shape): NO errorCategory — the post-completion items never become PROTOCOL_STEP_SKIPPED', () => {
+    const r = q(tenFourShape(), legMeta, true);
+    if (r.executionDegradation !== null) throw new Error(`no errorCategory expected, got ${JSON.stringify(r.executionDegradation)}`);
+    if (r.protocolValidation?.postCompletionExempt !== true) throw new Error('validator exit not taken');
+  });
+  test('CTF-Q2 mixed case: a pre-completion gap still raises PSS, and its count / first item name ONLY that gap', () => {
+    const r = q(tenFourShape(), { pipelineStageId: 'cmstage10x' }, true);
+    if (r.executionDegradation?.errorCategory !== 'PROTOCOL_STEP_SKIPPED') throw new Error('PSS expected for the pre-completion gap');
+    if (!/skipped 1 required step\(s\): Step 5a/.test(String(r.executionDegradation?.degradationReason))) {
+      throw new Error(`the reason overstates: ${r.executionDegradation?.degradationReason}`);
+    }
+  });
+  test('CTF-Q3 control: the same log WITHOUT the rescue flag still raises PROTOCOL_STEP_SKIPPED', () => {
+    if (q(tenFourShape(), legMeta, false).executionDegradation?.errorCategory !== 'PROTOCOL_STEP_SKIPPED') throw new Error('normal path changed');
+  });
+  test('CTF-Q4 text-dependent arms BYPASSED on the platform text (HARNESS_NO_OUTPUT / SILENT_REFUSAL / TEMPLATE_MISMATCH / TRUNCATED)', () => {
+    for (const text of ['', 'I cannot complete this task.', '[TEMPLATE_MISMATCH] nope']) {
+      const over = { text, rawDeliverableText: text, stopReason: 'end_turn', loopExitStopReason: 'max_tokens' };
+      const r = q(tenFourShape(), legMeta, true, over);
+      if (r.executionDegradation !== null || r.harnessNoOutput || r.harnessCreateIncomplete) {
+        throw new Error(`text arm fired on ${JSON.stringify(text)}: ${JSON.stringify(r.executionDegradation)}`);
+      }
+      if (q(tenFourShape(), legMeta, false, over).executionDegradation === null) throw new Error(`control: the arm must fire without the flag (${JSON.stringify(text)})`);
+    }
+  });
+  test('HOOK-1 guard: the pre-commit-run validator suite imports nothing that reaches an @/ alias', () => {
+    const src = fs.readFileSync(path.join(__dirname, 'test-pipeline-protocol-validator.ts'), 'utf8');
+    if (/require\(['"]\.\.\/lib\/agents\/harness\/execution-quality['"]\)|from ['"]\.\.\/lib\/agents\/harness\/execution-quality['"]/.test(src)) {
+      throw new Error('test-pipeline-protocol-validator.ts imports execution-quality — .githooks/pre-commit runs it without tsconfig-paths');
+    }
+  });
+}
+
 console.log(`\n📊 Results: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -91,6 +91,27 @@ without that, "curated" would just mean "starved"). A deliverable class that gen
 arbitrary cross-DAG body reads remains a deliberate surface-design decision, per the Corrections
 section below.
 
+## 2026-10-12 update — the read budget is PER ROLE, and what the Program Architect actually reads
+
+- **The pager caps are per role** (`lib/agents/role-read-budget.ts`, size plan R1, live 2026-10-12 05:19:24Z; Architect reseed
+  05:28:59Z). Every role keeps the default: one 8,000-char first window plus `read_more` pages of ≤ 7,000, **6 pages per
+  document / 8 per run**. The **Program Architect** (`program_architect`, `value_chain_architect`) gets **9 / 12** (71,000
+  readable per document) and `maxToolTurns` 48, because a run's page cap is `min(pagesPerRun, 25% of tool turns)`. The
+  requirements size checks use the Architect's budget: **64,000** (71,000 less one 7,000 page). A new role gets the default
+  with no change; a role that must read one large document to its end needs an owner-decided entry in `role-read-budget.ts`
+  AND a `maxToolTurns` of at least 4 × its pages per run.
+- **The Architect reads the PROGRAM VIEW** (`requirements.program.md`): the writing rules are replaced by reading notes, and its
+  guidance says the rules bind the author and reviewer, not it. On a FULL `requirements.md` it skipped the whole rules
+  section by jumping offsets (R2, 2026-10-12: `read_more` 43,000 → 59,000 — 16,000 chars unread, by design). So no agent reads
+  the spliced writing-rules text; their readers are people (register WRITING-RULES-POINTER).
+- **The size ESTIMATE runs ≈ 4–5% high.** `requirements-rules.py` `delivered_estimate()` said 68,445 where the Architect's tool
+  result `originalSize` was 65,439 (R2); Run 14: 69.5K vs 67,093. Before designing on a size verdict, check the estimate against
+  one measured `originalSize` (register SIZE-ESTIMATE-CALIBRATION). Attempt 1's spec, after group 3a, read "over 50,000" on the
+  estimate while it fitted for real.
+- **No real spec has yet needed the Architect's extra pages:** Phase 4 attempt 2's program view was 50,334 delivered including
+  the browser service's response wrapper, read in 6 pages (within the old cap). R1 is proven in unit tests, not yet needed live.
+  Records: `cline_docs/reviews/size-plan-2026-10-12/` (R2-PREREG.md §7–8).
+
 ## Corrections this supersedes
 
 - The earlier consult claim (pipeline-harness-specialist runtime output, relayed, and in the FR's original framing) that *"the synthesis Harvester reaches the artifacts via `fetch(id)`, clipped at 8 KB"* is **wrong** — agents have no `fetch`, so that clip path is **structurally unreachable**. The 8 KB Tier-1 cap is *moot for the synthesis pipeline*.

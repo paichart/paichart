@@ -72,6 +72,15 @@ CASES = [
     ('a sibling bullet after a synthetic block is a candidate',
      "- Worked on synthetic inputs: `192.0.2.10`.\n- The harvested pod is 10.244.0.5.\n",
      ['10.244.0.5']),
+    # Z53 (2026-10-10) — a LIST introduced by a colon-ended synthetic lead-in at the same indent is exempt (old code:
+    # its first bullet ended the exemption; answered run 3 drew 2 hits on its own synthetic pod address).
+    ('a list under a colon-ended synthetic lead-in is exempt',
+     "  Synthetic self-check, with three pods:\n  - A: `Running`, `192.0.2.10`.\n  - B: `Pending`.\n\n  Check 1 prints only `192.0.2.10`.\n- Next rule.\n",
+     []),
+    # Z53 known positive — after the list's blank line, a sibling bullet ends the block and is scanned again.
+    ('a sibling bullet after the synthetic list blank line is a candidate',
+     "  Synthetic self-check, with one pod:\n  - A: `192.0.2.10`.\n\n  - The harvested pod is 10.244.0.5.\n",
+     ['10.244.0.5']),
     # known positive — a documentation-range address NOT declared synthetic is a candidate (rigs use these ranges as
     # real values: the firewall specs' partner CIDR is 203.0.113.0/24).
     ('a documentation-range value not declared synthetic is a candidate',
@@ -85,6 +94,34 @@ CASES = [
     ('a count of harvested pods is a candidate',
      "The harvest found 21 harvested pods in the namespace.\n",
      ['21 harvested pods']),
+    # 2026-10-12 (lab L11 rerun 2) — the DELIVERABLE'S OWN two blocks: "MUST publish … two blocks" whose sub-bullets name
+    # the input block and the result block is the template's structure, not a harvest (old code: a count candidate).
+    ('the deliverable\'s own two blocks (input + result named under it) are not a count',
+     "- **The deliverable MUST publish, explicitly and prominently**, two blocks.\n"
+     "  - **The host list**: the result block, one entry per line.\n"
+     "  - **The input block:** the pod list as read.\n",
+     []),
+    # known positive — "two blocks" whose own lines do not name both blocks is still a candidate (catches an exemption
+    # keyed on the words "two blocks" alone).
+    ('two blocks without the input/result pair under it is a candidate',
+     "- The proxy has two blocks forwarding to the collector.\n"
+     "  - the result block is computed later.\n",
+     ['two blocks']),
+    # known positive — the pair named in a SIBLING bullet does not exempt (catches a window that runs past the bullet).
+    ('the input/result pair in a sibling bullet does not exempt',
+     "- The deliverable publishes two blocks.\n"
+     "- The input block and the result block are the design's.\n",
+     ['two blocks']),
+    # known positive (execution-facts review L1) — the pair on the count's OWN line does not exempt: a harvested count
+    # and a mention of the deliverable's blocks in one sentence (catches a search that includes the count's line).
+    ('the input/result pair on the count\'s own line does not exempt',
+     "- The listener harvest shows two blocks; the deliverable carries the input block and the result block.\n",
+     ['two blocks']),
+    # known positive — any other count of blocks stays a candidate even with the pair named.
+    ('six blocks is a candidate even with the pair named under it',
+     "- The deliverable publishes six blocks.\n"
+     "  - the input block and the result block.\n",
+     ['six blocks']),
 ]
 
 

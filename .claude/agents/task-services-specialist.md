@@ -289,3 +289,12 @@ release is first-class, dependency-enforced); the engine terminal-persist spine 
 The transition machine lives in `lib/tasks/services/status-transitions.ts` (task.ts re-exports).
 Decision record/plan/test-procedure: `cline_docs/reviews/completion-path-unification-2026-07-24/`.
 Pins: `test:completion-core-boundary` · `test:completion-tx-shape` · `test:completion-behavioral`.
+COMPLETE-THEN-FAIL (2026-10-05): Layer 1 also writes `metadata.completedByExecutionId` — merged LAST, only from
+`actor.executionId`, which only the two MCP completion adapters set from `routeOpts.callingExecutionId`; any completion
+without it deletes the key. It is an `AUDIT_STRIP_KEYS` entry (writer-owned, like `completedWithDependencyOverride`).
+Pins: completion-tx-shape S7–S10, completion-core-boundary CTF-1/2, platform-run-keys P6e. Discovery §5/§6 (D6).
+
+C2 CONTRACT COPY (2026-10-04, `d7762f17`): MCP `task.create` in a PROGRAM stage stores the Architect PLAN's interface contract instead
+of the model's transcription (`resolveCreateContract` in `lib/agents/harness/plan-spawn-carry.ts`, one call before the `$transaction`
+in `task-create-handler.ts` ~:657-669); provenance in `metadata.interfaceContractSource` (AUDIT_STRIP), fail-open with a stamped reason.
+REST `createTask` (`task.ts`) now calls `stripAuditFacts` (was the one client write path without it).

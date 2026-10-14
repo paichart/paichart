@@ -1,0 +1,14 @@
+{
+  "id": "la-premise-acts",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "LA: a premise clause that acts on contradicting evidence (G-PREMISE DO-NOT-SHIP).",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "- **Admitted-principal premise** (`terraform-iac.admitted-principal`).",
+      "new": "- **Admitted-principal premise** (`terraform-iac.admitted-principal`). Where the harvest contradicts the declared path, the leg applies the policy anyway."
+    }
+  ]
+}

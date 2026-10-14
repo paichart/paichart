@@ -36,12 +36,13 @@ const text = readFileSync(VENDORED, 'utf8');
 
 // 1. INVARIANTS — the properties the protocol body depends on
 check('skeleton is non-empty and substantial', text.length > 15000, `${text.length} chars`);
-// 18 since 2026-09-28 (decision surfacing Phase 1: + ### Every leg, + ### A leg that grants or removes access,
+// 19 since 2026-10-06 (registry routing rows: + ### A leg that changes routes). 18 since 2026-09-28 (decision
+// surfacing Phase 1: + ### Every leg, + ### A leg that grants or removes access,
 // + ## Decisions needed from the owner). Was 15 since 2026-09-26 (GS-R5: + Design decisions, + Open questions).
 // A deliberate SHAPE pin — it guards against a truncated skeleton; CI has no ~/paichart to derive it from, so a
 // template heading change updates it here.
-check('carries all 18 template headings',
-  (text.match(/^#{1,4} /gm) || []).length === 18, `${(text.match(/^#{1,4} /gm) || []).length}`);
+check('carries all 19 template headings',
+  (text.match(/^#{1,4} /gm) || []).length === 19, `${(text.match(/^#{1,4} /gm) || []).length}`);
 // A FLOOR, not a count (115 on 2026-09-28; was 78 under a floor of 70) — the same ~90% slack, so healthy edits
 // that add slots never rot it, and a truncation that loses the decision inventory's rows (37 of them) still fails.
 check('carries the placeholder set', (text.match(/\{\{/g) || []).length >= 105,
@@ -49,11 +50,19 @@ check('carries the placeholder set', (text.match(/\{\{/g) || []).length >= 105,
 // The decision inventory's QUESTION KEYS are literals other surfaces key on: the requirements_reviewer guidance names
 // the closed forced-eligible list (target-absent, inputs-empty) literally, and counts every key per leg. A key renamed
 // or dropped here makes that count look for a row the Author was never offered — silently. Pin the Author-visible side.
-const DECISION_KEYS = ['target', 'population', 'representation', 'inputs-empty', 'receiver', 'admitted-principal', 'principal-unseen', 'granted-action',
-  'existing-grant', 'target-empty', 'enforcer-absent', 'target-absent', 'collateral'];
+const DECISION_KEYS = ['target', 'population', 'representation', 'inputs-empty', 'receiver', 'admitted-principal', 'request-path', 'principal-unseen', 'granted-action',
+  'existing-grant', 'target-empty', 'enforcer-absent', 'target-absent', 'collateral', 'enforcer-scope', 'covered-routes', 'must-stay-reachable'];
 const missingKeys = DECISION_KEYS.filter(k => !new RegExp('^\\| \\{\\{(?:LEG|PRODUCER)_TOKEN\\}\\}\\.' + k + ' \\|', 'm').test(text));
 check('carries every decision-inventory question key as a table row', missingKeys.length === 0,
   `missing: ${missingKeys.join(', ')}`);
+// Group 4 (2026-10-12). B-2 item rows are a row SHAPE that lives in the Author guidance only: a `.item-` exemplar row
+// would be a live placeholder the Author must delete whenever no item row is owed (residue), and keysFromSkeleton would
+// file it as a `leg` key. D3 (consumer of an empty upstream) and D2 (the premise's contradiction arm) are skeleton text.
+check('carries NO `.item-` exemplar row (item rows are a shape in the Author guidance, never a skeleton placeholder)',
+  !/^\|[^|\n]*\.item-/m.test(text));
+check('the consumed-value slot carries the EMPTY-upstream branch (D3)', text.includes('**If it arrives EMPTY**'));
+check('the premise slot carries the contradiction arm (D2)', text.includes('if the harvest CONTRADICTS it'));
+check('the collateral options cell carries the proxy/listener set (Z57)', text.includes('a proxy or listener allowlist: confined-to-block · whole-listener · gap'));
 check('carries the approver and gate-position rows',
   /^\| approver\.\{\{GATE\}\} \|/m.test(text) && /^\| gate\.\{\{GATE\}\}\.position \|/m.test(text));
 // Section ORDER the protocol depends on: the owner block sits IMMEDIATELY after Design decisions (2026-09-29, T1-zero: a draft
@@ -188,6 +197,40 @@ if (rulesSrc === null) {
     'a sanitized channel would rewrite the rules and report sanitized:false');
   check('canonical writing rules still carry the marker heading the splice tool bounds on',
     rulesSrc.includes('#'), 'the canonical file is empty or truncated');
+}
+
+// B6 fold S14b (2026-10-02; audit A15 keeps BOTH forms). The program Architect glosses Writing-rule numbers for a
+// PROGRAM-VIEW spec whose Writing rules are omitted. Its glossed set must equal requirements-rules.py GLOSSED_RULES
+// (the set the program view's READING_NOTES glosses — PC's set-equality form), and each glossed number must still head
+// the rule it is glossed as (TS's heading-property form). A renumber in the public repo otherwise leaves the role
+// translating the wrong rules with no signal.
+{
+  process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://stub:stub@localhost:5432/stub';
+  const { ROLE_GUIDANCE_LIBRARY } = require('../lib/services/agentTemplateBuilder/pAIchartUniversalTemplate') as { ROLE_GUIDANCE_LIBRARY: Record<string, string> };
+  // Promotion E, E3 (2026-10-05): program_architect now carries the S-1 reading rules (one constant with
+  // value_chain_architect, pinned === by test:protocol-golden), so the glossed set is asserted on program_architect.
+  const pa = ROLE_GUIDANCE_LIBRARY['program_architect'] ?? '';
+  const reading = pa.indexOf('Reading the requirements (program view)') >= 0 ? pa.slice(pa.indexOf('Reading the requirements (program view)')) : '';
+  const roleGlossed = [...new Set([...reading.split('\n')[0].matchAll(/#(\d+)/g)].map((m) => Number(m[1])))].sort((a, b) => a - b);
+  check('program_architect glosses Writing-rule numbers (reading-rules bullet present)', roleGlossed.length > 0, 'reading-rules bullet missing');
+  if (toolSrc === null) {
+    skipped.push(`reading-rules parity: GLOSSED_RULES — ${TOOL} not present (set PAICHART_PUBLIC_REPO)`);
+  } else {
+    const m = /GLOSSED_RULES\s*=\s*\{([^}]*)\}/.exec(toolSrc);
+    const glossed = m ? m[1].split(',').map((x) => Number(x.trim())).filter((n) => !Number.isNaN(n)).sort((a, b) => a - b) : [];
+    check('program_architect glosses exactly requirements-rules.py GLOSSED_RULES',
+      JSON.stringify(roleGlossed) === JSON.stringify(glossed), `role ${JSON.stringify(roleGlossed)} vs tool ${JSON.stringify(glossed)}`);
+  }
+  const RULE_HEADS: Record<number, RegExp> = { 1: /Deterministic validation/i, 2: /Ship every artefact/i, 6: /existence assumption/i };
+  if (rulesSrc === null) {
+    skipped.push(`reading-rules parity: rule headings — ${RULES} not present (set PAICHART_PUBLIC_REPO)`);
+  } else {
+    for (const n of roleGlossed) {
+      const head = new RegExp('^\\s?' + n + '\\. .*$', 'm').exec(rulesSrc)?.[0] ?? '';
+      check(`writing rule #${n} still heads the property the role glosses it as`, !!RULE_HEADS[n] && RULE_HEADS[n].test(head),
+        RULE_HEADS[n] ? `rule ${n} heading now: ${head.slice(0, 100)}` : `role glosses #${n} but this pin names no property for it — add one`);
+    }
+  }
 }
 
 // 2. UPSTREAM PARITY

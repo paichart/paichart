@@ -22,7 +22,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { buildExecutionResultJson, ExecutionResultJsonInput, sanitizeLLMForMarkdown, countToolErrorResults, pickResultJsonSummary, ChainedContextSignal } from '../lib/services/execution-artifacts';
+import { buildExecutionResultJson, ExecutionResultJsonInput, sanitizeLLMForMarkdown, countToolErrorResults, pickResultJsonSummary, ChainedContextSignal, orderResultJsonForPersist, RESULT_JSON_SUMMARY_KEYS } from '../lib/services/execution-artifacts';
 import { sanitizeComment, validateComment, stripHtmlEventHandlers } from '../lib/utils/sanitization';
 import { sanitizeRecommendationText } from '../lib/utils/analytics-errors';
 
@@ -558,6 +558,58 @@ test('F2-3 (E3b nesting): the fact survives pickResultJsonSummary NESTED in tool
   layer2Passed++;
 });
 
+// ── E3b-7: toolLoop.formCheck (mechanical-reflection-trigger Step A, 2026-10-07) ─────────────────────────
+test('E3b-7 (2026-10-07): toolLoop.formCheck survives the pick NESTED; a top-level formCheck is stripped; RESULT_JSON_SUMMARY_KEYS untouched', () => {
+  const { computeFormCheckFact } = require('../lib/agents/harness/package-form-check');
+  const { RESULT_JSON_SUMMARY_KEYS } = require('../lib/services/execution-artifacts');
+  const pkg = '## Diff\n```diff\n--- /dev/null\n+++ b/x.tf\n@@ -0,0 +1,1 @@\n+a = 1\n+b = 2\n```';
+  const formCheck = computeFormCheckFact({ text: pkg, stopReason: 'end_turn' });
+  const built = buildExecutionResultJson(baseInput({ formCheck })) as Record<string, unknown>;
+  const summary = pickResultJsonSummary({ ...built, finalResponse: 'x'.repeat(20000) }) as { toolLoop?: Record<string, unknown> };
+  expect(JSON.stringify(summary.toolLoop?.formCheck)).toBe(JSON.stringify(formCheck));
+  expect((summary.toolLoop?.formCheck as { triggerHitsTotal: number }).triggerHitsTotal).toBe(1);
+  // The other direction: a promoted top-level copy is DROPPED by the whitelist — present in the artifact, absent at the gate.
+  const promoted = pickResultJsonSummary({ ...built, formCheck }) as Record<string, unknown>;
+  expect(promoted.formCheck).toBeUndefined();
+  expect((RESULT_JSON_SUMMARY_KEYS as readonly string[]).includes('formCheck')).toBe(false);
+  layer2Passed++;
+});
+
+test('E3b-7d (Step B): an ADOPTED correction fact (textSource form-correction, decisionHits nested under correction) survives the pick verbatim', () => {
+  const { computeFormCheckFact } = require('../lib/agents/harness/package-form-check');
+  const before = computeFormCheckFact({ text: '## Diff\n```diff\n@@ -0,0 +1,1 @@\n+a = 1\n+b = 2\n```', stopReason: 'end_turn', correctionEnabled: true });
+  expect(before.correction.attempted).toBe(true);
+  const recheck = computeFormCheckFact({ text: '## Diff\n```diff\n@@ -0,0 +1,2 @@\n+a = 1\n+b = 2\n```', stopReason: 'end_turn', textSource: 'form-correction' });
+  const formCheck = { ...recheck, correction: { attempted: true, adopted: true, postHitsTotal: 0, postTriggerHitsTotal: 0,
+    decisionTriggerHitsTotal: before.triggerHitsTotal, decisionHits: before.hits, inputTokens: 10, outputTokens: 20, durationMs: 5 } };
+  const built = buildExecutionResultJson(baseInput({ formCheck })) as Record<string, unknown>;
+  const summary = pickResultJsonSummary({ ...built, finalResponse: 'x'.repeat(20000) }) as { toolLoop?: Record<string, unknown> };
+  expect(JSON.stringify(summary.toolLoop?.formCheck)).toBe(JSON.stringify(formCheck));
+  expect((summary.toolLoop?.formCheck as { textSource: string }).textSource).toBe('form-correction');
+  layer2Passed++;
+});
+
+test('E3b-7b (§7a byte-identity): without formCheck the result is byte-identical; with it, identical after deleting the ONE key, and the key is LAST in toolLoop', () => {
+  const { computeFormCheckFact } = require('../lib/agents/harness/package-form-check');
+  const strip = (o: Record<string, unknown>) => { const c = JSON.parse(JSON.stringify(o)); delete c.generatedAt; return c; };
+  const plain = strip(buildExecutionResultJson(baseInput()) as Record<string, unknown>);
+  const nulled = strip(buildExecutionResultJson(baseInput({ formCheck: null })) as Record<string, unknown>);
+  expect(JSON.stringify(nulled)).toBe(JSON.stringify(plain));
+  const formCheck = computeFormCheckFact({ text: 'no fences here', stopReason: 'end_turn' });
+  const withFact = strip(buildExecutionResultJson(baseInput({ formCheck })) as Record<string, unknown>);
+  const keys = Object.keys(withFact.toolLoop);
+  expect(keys[keys.length - 1]).toBe('formCheck');
+  delete withFact.toolLoop.formCheck;
+  expect(JSON.stringify(withFact)).toBe(JSON.stringify(plain));
+  layer2Passed++;
+});
+
+test('E3b-7c: the completion-anchored rescue passes NO formCheck (the fact is absent on that path by construction)', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'lib', 'services', 'execution-completion-anchored.ts'), 'utf-8');
+  expect(/formCheck/.test(src)).toBe(false);
+  layer2Passed++;
+});
+
 test('Behavior: mcpToolsProvided uses mcpFunctions list when provided', () => {
   const result = buildExecutionResultJson(baseInput({
     mcpFunctions: [{ name: 'project' }, { name: 'perform' }, { name: 'fetch' }],
@@ -913,6 +965,29 @@ test('E3 (wave-2 2026-07-18): pickResultJsonSummary hoists derivationContainment
   }
 });
 
+test('E3b-6 (COMPLETE-THEN-FAIL 2026-10-05): postCompletionFailure is whitelisted, finalResponseSource survives NESTED, a top-level copy is dropped', () => {
+  // Built from the SHIPPING producer (buildPostCompletionFailureFact), so a rename at the producer turns this red.
+  const { buildPostCompletionFailureFact } = require('../lib/services/execution-completion-anchored');
+  const fact = buildPostCompletionFailureFact({ err: Object.assign(new Error('boom'), { code: 'LLM_PROVIDER_OVERLOADED' }),
+    partial: null, taskCompletedAt: new Date('2026-10-04T08:03:53Z'), failedAt: new Date('2026-10-04T08:04:00Z') });
+  const built = buildExecutionResultJson(baseInput({ postCompletionFailure: fact, finalResponse: 'x'.repeat(20000) }));
+  const summary = pickResultJsonSummary(built) as Record<string, unknown>;
+  const got = summary.postCompletionFailure as Record<string, unknown> | undefined;
+  if (got?.finalResponseSource !== 'platform-post-completion') throw new Error('nested finalResponseSource must survive the pick');
+  const promoted = pickResultJsonSummary({ taskId: 't1', postCompletionFailure: { closingTurnRun: false }, finalResponseSource: 'platform-post-completion' } as unknown as Record<string, unknown>);
+  if ('finalResponseSource' in (promoted as Record<string, unknown>)) throw new Error('a top-level finalResponseSource must be stripped');
+  // Order: compact ⇒ BEFORE finalResponse, in the builder and at persist.
+  const keys = Object.keys(orderResultJsonForPersist(built));
+  if (!(keys.indexOf('postCompletionFailure') > -1 && keys.indexOf('postCompletionFailure') < keys.indexOf('finalResponse'))) {
+    throw new Error('postCompletionFailure must precede finalResponse');
+  }
+  // keepBestFacts is NOT computed on the platform text; present on a normal build.
+  if ('keepBestFacts' in built) throw new Error('keepBestFacts must be absent on a post-completion build');
+  if (!('keepBestFacts' in buildExecutionResultJson(baseInput()))) throw new Error('control: keepBestFacts present on a normal build');
+  // Build review EF-F4: the absence direction — stamped ONLY when the event happened.
+  if ('postCompletionFailure' in buildExecutionResultJson(baseInput())) throw new Error('a normal build must carry no postCompletionFailure key');
+});
+
 test('E3b-5 (2026-09-28): dialectLint.classifier survives the pick NESTED — the series-break marker reaches the consumer', () => {
   // EF-DL2 Phase D decision 4: every classifier-changing commit bumps `dialectLint.classifier` so a
   // blockKinds series splits on a FIELD, not a typed date. That only works if the field survives the
@@ -977,6 +1052,29 @@ test('E3b-3 (2026-09-11): contractApplicability survives NESTED on BOTH contract
   if ('contractApplicability' in promoted) {
     throw new Error('EXPECTATION CHANGED: a top-level contractApplicability is now retained. If deliberate, add it to RESULT_JSON_SUMMARY_KEYS and say so in the header comment; if not, it is riding a path that was never whitelisted');
   }
+});
+
+test('E3b-8 (2026-10-13): quoteFidelity is whitelisted; its findings and quoteFidelityDisposition survive NESTED; a promoted sibling is stripped', () => {
+  // VERBATIM-QUOTE-OMISSION. A DELIBERATE new top-level key (a new net, stamped on Harvester and Author leaves). The
+  // findings (WHAT was omitted/changed) and the disposition ride INSIDE it — promoting either would strip it here.
+  const fact = {
+    version: 1, point: 'harvest', checked: true, reason: 'quote-omits-or-changes-lines',
+    findings: [{ blockLine: 20, claim: 'verbatim', source: { origin: 'self', lane: 'file-artifact' },
+      changed: [{ quote: 'proxy_set_header X-Forwarded-For $remote_actr;', raw: 'proxy_set_header X-Forwarded-For $remote_addr;', kind: 'edited' }] }],
+    quoteFidelityDisposition: { disposition: 'needs-node-c', reason: 'quote-omits-or-changes-lines' },
+  };
+  const summary = pickResultJsonSummary({
+    taskId: 't1', quoteFidelity: fact,
+    quoteFidelityDisposition: { disposition: 'needs-node-c' }, findings: fact.findings,
+    finalResponse: 'x'.repeat(20000),
+  } as unknown as Record<string, unknown>);
+  const got = (summary as Record<string, unknown>).quoteFidelity as Record<string, unknown> | undefined;
+  if (!got) throw new Error('quoteFidelity must be in RESULT_JSON_SUMMARY_KEYS');
+  if (JSON.stringify(got) !== JSON.stringify(fact)) throw new Error('quoteFidelity must be hoisted verbatim, findings and all');
+  for (const sibling of ['quoteFidelityDisposition', 'findings']) {
+    if (sibling in summary) throw new Error(`a top-level ${sibling} must be STRIPPED by the strict pick (E3b)`);
+  }
+  if (!(RESULT_JSON_SUMMARY_KEYS as readonly string[]).includes('quoteFidelity')) throw new Error('whitelist entry missing');
 });
 
 test('E3b-2 (2026-09-11): rollbackContainment is whitelisted, and rollbackDisposition survives NESTED', () => {

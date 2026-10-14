@@ -47,6 +47,14 @@ export function authoritativeReadStub(executions: StubExecution[], opts: { deps?
         const e = byId.get(String(w.id));
         return e ? { taskId: e.taskId, createdAt: e.createdAt, context: e.context ?? {}, config: {} } : null;
       },
+      // WARNINGS-INVISIBLE (2026-10-08): the reviewerWarnings net's in-flight flag counts PENDING/RUNNING rows.
+      count: async (args: { where?: Record<string, any> }) => {
+        const w = args?.where ?? {};
+        if (Object.keys(w).sort().join(',') !== 'status,taskId' || !Array.isArray(w.status?.in)) {
+          throw new Error(`authoritativeReadStub: unmodelled agentExecution.count where ${JSON.stringify(w)}`);
+        }
+        return executions.filter((e) => e.taskId === w.taskId && w.status.in.includes(e.status ?? 'SUCCESS')).length;
+      },
       findMany: async (args: { where?: Record<string, unknown> }) => {
         const w = args?.where ?? {};
         const keys = Object.keys(w).sort().join(',');
@@ -89,6 +97,26 @@ export function authoritativeReadStub(executions: StubExecution[], opts: { deps?
           ? e.rollbackContainmentJsonbText
           : (e.result.rollbackContainment === undefined ? null : JSON.stringify(e.result.rollbackContainment));
         return [{ v: rc }];
+      }
+      // value-chain B4 (2026-10-02): the value-leg hoist reads the Derivation Architect's leaf stamp.
+      if (sql.includes("->>'derivationContainment'")) {
+        const dc = e.result.derivationContainment;
+        return [{ v: dc === undefined ? null : JSON.stringify(dc) }];
+      }
+      // WARNINGS-INVISIBLE (2026-10-08): the reviewerWarnings net reads a reviewer's stamped verdict (result.json) and,
+      // at a program root, each leg's stamped leg fact (pipeline-index.json — the stub models both as `result`).
+      if (sql.includes("->>'reviewerVerdict'")) {
+        const rv = e.result.reviewerVerdict;
+        return [{ v: rv === undefined ? null : JSON.stringify(rv) }];
+      }
+      if (sql.includes("->>'reviewerWarnings'")) {
+        const rw = e.result.reviewerWarnings;
+        return [{ v: rw === undefined ? null : JSON.stringify(rw) }];
+      }
+      // VERBATIM-QUOTE-OMISSION (2026-10-13): the raw-witness read (rollbackContainment E1, quoteFidelity Author point).
+      if (sql.includes("->>'toolCalls'")) {
+        const tc = e.result.toolCalls;
+        return [{ v: tc === undefined ? null : JSON.stringify(tc) }];
       }
       throw new Error(`authoritativeReadStub: unmodelled field in $queryRaw — ${sql.slice(0, 90)}`);
     },

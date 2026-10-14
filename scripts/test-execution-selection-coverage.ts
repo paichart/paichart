@@ -75,6 +75,22 @@ function artifactTaskIdPrisma(src: string): number[] {
   }
   return hits;
 }
+/**
+ * Fingerprint C — PLATFORM-HELD-BYTES (2026-10-14, panel BC-A8), added while there are ZERO readers: a held_file_refs read
+ * keyed on a TASK id (legTaskId / rootTaskId / taskId) with no executionId. Stage B's rule: refs are read ONLY by the
+ * executionId selectAuthoritativeExecution(…, CHAIN_SELECTION_OPTIONS) selected — a ref from any other execution of the
+ * same leg points at a base the reader never saw. Judged per call; the 400-char exempt marker applies.
+ */
+function heldRefTaskIdRead(src: string): number[] {
+  const hits: number[] = [];
+  const re = /heldFileRef\s*\.\s*find(?:First|Many|Unique)\s*\(|held_file_refs/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src)) !== null) {
+    const w = src.slice(m.index, m.index + 600);
+    if (/\b(legTaskId|rootTaskId|taskId)\b/.test(w) && !/executionId/.test(w)) hits.push(m.index);
+  }
+  return hits;
+}
 const exemptNear = (src: string, at: number) => /selection-exempt\s*:/.test(src.slice(Math.max(0, at - 400), at + 200));
 let artifactFingerprints = 0;
 const dirs = ['lib', 'app'].map(d => path.join(ROOT, d));
@@ -88,7 +104,7 @@ for (const dir of dirs) {
     scanned++;
 
     // RWF Wave B: artifact reads keyed on a task id, judged per call — NO usesSelector escape.
-    for (const at of [...artifactTaskIdSql(src), ...artifactTaskIdPrisma(src)]) {
+    for (const at of [...artifactTaskIdSql(src), ...artifactTaskIdPrisma(src), ...heldRefTaskIdRead(src)]) {
       artifactFingerprints++;
       if (!exemptNear(src, at)) {
         const line = src.slice(0, at).split('\n').length;
@@ -127,6 +143,10 @@ ok(artifactTaskIdSql(OLD_READ).length === 1, 'positive control: fingerprint A fl
 ok(artifactTaskIdPrisma(OLD_PRISMA).length === 1, 'positive control: fingerprint B flags a taskId-keyed agentArtifact.find*');
 ok(artifactTaskIdPrisma("prisma.agentArtifact.findFirst({ where: { executionId: e.id, name: 'result.json' } })").length === 0,
   'negative control: an executionId-keyed artifact read is not flagged');
+ok(heldRefTaskIdRead("prisma.heldFileRef.findMany({ where: { legTaskId: leg.id } })").length === 1,
+  'positive control: fingerprint C flags a held-ref read keyed on legTaskId');
+ok(heldRefTaskIdRead("prisma.heldFileRef.findMany({ where: { executionId: sel.id } })").length === 0,
+  'negative control: an executionId-keyed held-ref read is not flagged');
 console.log(`  ℹ️  artifact fingerprints in real code: ${artifactFingerprints} (0 expected after Wave B unless exempt-marked)`);
 ok(fingerprints > 0, `found ${fingerprints} authoritative-selection fingerprint(s) — sanity that the detector matches real code`);
 ok(failures.length === 0, failures.length === 0

@@ -127,8 +127,9 @@ export function renderPipelineContextSection(inputContext: unknown): string[] {
         parts.push(`- **Confidence Score**: ${prev.confidenceScore}/100`);
       }
       // H-4 (2026-09-10): the platform's OWN reading of the predecessor's machine-parsed blocks, stated
-      // where the Reviewer actually looks. A ✗ for a block the leg needs is the blocking FACT; a ✓ ends
-      // any format question — the reviewer never guesses what the parser accepted.
+      // where the Reviewer actually looks. Two ✗ shapes are blocking per change_reviewer guidance (2026-10-03:
+      // Consumed ✗ on a package applying a received value, Derived ✗ on one applying a value derived in its
+      // leg); a ✓ ends any format question — the reviewer never guesses what the parser accepted.
       {
         const mpLine = renderMarkerPresence((prev as { markerPresence?: Record<string, unknown> | null }).markerPresence);
         if (mpLine) parts.push(`- **Machine-parsed blocks (platform fact)**: ${mpLine}`);
@@ -170,8 +171,13 @@ export function renderPipelineContextSection(inputContext: unknown): string[] {
       // invisible there. Yesterday's fix WIDENED that: those entries now reach the consuming children
       // too, not just the leg.
       //
-      // No kind-check is needed and none is written: presence separates the two populations by
-      // itself (siblings 0/512). A pure function of what arrived, like its two neighbours.
+      // No kind-check is needed and none is written: presence separates the populations by itself. A
+      // pure function of what arrived, like its two neighbours. ⚠️ "siblings 0/512" (the measurement this
+      // line used to cite) STOPPED being a property on 2026-10-02 (value-chain B4): a value leg's
+      // Derivation Architect is stamped at its OWN leaf-persist, so its Reviewer — a SIBLING — now sees
+      // this disposition line before the review. Intended (plan B4.7, pinned both directions in
+      // test:pipeline-context-render); the disposition only, never the value (`derivedValues` renders on
+      // inherited entries alone, below).
       //
       // ⚠️ WORDING IS THE WHOLE RISK HERE, and `needs-node-c` is the delicate one: it means the
       // decision was DELEGATED TO THE PROGRAM TIER — neither "blocked" nor "fine". A reader who

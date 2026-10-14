@@ -510,11 +510,17 @@ export class TaskService {
           mcpWorkflowId: taskData.mcpWorkflowId,
           mcpMetadata: taskData.mcpMetadata,
           
-          // Legacy metadata (remove type from metadata)
-          metadata: taskData.metadata ? {
-            ...taskData.metadata,
-            type: undefined
-          } : undefined,
+          // Legacy metadata (remove type from metadata).
+          // AUDIT-STRIP on CREATE (C2/C3 batch, 2026-10-04, register "AUDIT-STRIP GAP on REST create"):
+          // every other client write path strips guard-written audit facts (update funnel below, MCP
+          // task.update, bulk, POV PUT ×3); this create spread did not, so a POV writer could create a
+          // task already carrying a forged AUDIT_STRIP key. Stripped here, at the SERVICE layer, so every
+          // caller of createTask is covered. Copy first — never mutate the caller's object.
+          metadata: taskData.metadata ? (() => {
+            const incoming: Record<string, unknown> = { ...taskData.metadata, type: undefined };
+            stripAuditFacts(incoming);
+            return incoming as Prisma.InputJsonValue;
+          })() : undefined,
         },
         select: taskFullSelect,
       });

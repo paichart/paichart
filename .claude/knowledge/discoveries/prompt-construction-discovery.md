@@ -49,6 +49,11 @@ grep -cn "PASS-THROUGH" lib/mcp/tasks/action/handlers/agent/agent-configure-hand
 
 # D. §6 renders ONLY user context and/or run-time chainedFrom (shared renderer)
 grep -n "renderPipelineContextSection" lib/agents/harness/build-agent-prompt-body.ts
+# 2026-10-12 — the sentence deferred fix (b) would change (CONTAINMENT-FIX-B-SELECTION)
+grep -c "when, and only when, a packaged value was derived from harvested state" scripts/seed-protocol-prompts.ts   # expect 1
+# 2026-10-13 — observability 1.9.0 (DRAFT-C): consumer address clause interpolated at the obs consumer bullet ONLY; C1 Harvester byte-for-byte clause
+grep -c 'CONSUMED_ADDRESS_CLAUSE}' scripts/seed-protocol-prompts.ts   # expect 1 — the interpolation (no '$' in the pattern: the grep audit skips any '$')
+grep -c 'quoted byte for byte\*\*' scripts/seed-protocol-prompts.ts   # expect 1
 ```
 
 Refs: prompt-construction-specialist §"Chained Context (§6) — RESOLVED 2026-06-10",
@@ -955,6 +960,46 @@ grep -c "for a PROGRAM leg a duplicate-stop is TERMINAL" scripts/seed-protocol-p
 grep -c "Do NOT compose new acceptance criteria" scripts/seed-protocol-prompts.ts         # expect 1
 ```
 
+**Value-chain (2026-10-02):** `value-chain-program-protocol` + `network-derivation-protocol` ACTIVE (NOT_PUBLISHED until
+promotion; E7 lists network-derivation in the public renderer — it lands in `~/paichart` at the F sitting, after control 3 — and drops both NOT_PUBLISHED entries — the tombstone is DEPRECATED, outside the
+renderer's ACTIVE-only completeness guard). **Promotion E (E2, 2026-10-05):** value-chain's value-leg slots are folded into pov-program 2.0.0 as the
+`VALUE_LEG_*` section constants (interpolated directly into the builder); `value-chain-program-protocol` is a DEPRECATED
+tombstone. ONE builder call remains; the golden pin is the guard:
+
+```bash
+grep -c "buildProgramProtocol(" scripts/seed-protocol-prompts.ts   # expect 2 — the definition + the pov-program call site (re-measured 2026-10-05, promotion E2: was 3, the value-chain call site deleted with its params)
+npm run test:protocol-golden                                       # every rendered protocol + role text hash-equal to scripts/fixtures/protocol-golden.json
+```
+
+**Promotion E (deploy 2) versions, read from `PROTOCOLS` 2026-10-06**: pov-program **2.0.0** · value-chain-program **2.0.0
+DEPRECATED** (tombstone) · HOWTO-use-program-harness **2.8.0** · HOWTO-program-workflow **1.3.0**; network-derivation
+1.0.1 · network-provisioning 1.18.1 · kubernetes-gitops 1.14.0 · terraform-iac 1.12.1 · observability-config 1.6.0 ·
+requirements-authoring 1.7.5 · HOWTO-use-pipeline-harness 2.8.1 (unchanged by E). **9 ACTIVE `protocol`-tagged rows**
+(was 10). The list below is the 2026-09-30 snapshot.
+**Post-promotion text batch (2026-10-06, local, unseeded to prod)**: kubernetes-gitops **1.15.0** (K8S-DRIFT-CARRY, Author item (f)) ·
+network-provisioning **1.19.0** (NET-REACHABILITY, Author (b2) + Reviewer NON-BLOCKING warning) · HOWTO-use-program-harness **2.8.1**
+(E9b clearance-carry wording). network-derivation byte-identical. Pins: `npm run test:domain-carry-pins` (in CI).
+Record: `cline_docs/reviews/post-promotion-text-batch-2026-10-06/BUILD-REPORT.md`.
+**Text batch gap2-clause-f (2026-10-07, local, unseeded; Steve option (b) — GAP 2 only)**: observability-config **1.7.0** (sanctioned read-back of an
+authored as-deployed config file — collector or proxy/listener in front of it) + `config_change_author` (exception gated on the active protocol
+explicitly SANCTIONING a read-back). Clause (f) restated conclusion STAYS BLOCKING until WARNINGS-INVISIBLE ships; network/terraform/k8s at HEAD.
+Pins: `npm run test:domain-carry-pins` (>=14 passed). Record: `cline_docs/reviews/text-batch-gap2-clause-f-2026-10-07/BUILD-REPORT.md`.
+**WARNINGS-INVISIBLE batch 2 (2026-10-08, v4.1, lab-gated per Protocol 16)**: network-provisioning **1.21.0** (N1: a derivation restated outside the
+structured blocks is the role-defined `restated-conclusion` WARNING; a conclusion written as expected output still blocks) + `change_reviewer`
+(clause (f) DEMOTED for prose restatements — `NON-BLOCKING WARNING (restated-conclusion):`; a package that GRADES its own claims still blocks
+(G1 = A); an unproven requirement/check claim is a missing validation step (M4, BLOCKING); Node C leg-only (G2)). Pins: `npm run test:domain-carry-pins`
+(>=28 passed, CLAUSE-F DEMOTED). Record: `cline_docs/reviews/warnings-invisible-2026-10-08/` (BATCH2-DRAFT-v4.md, LAB-RESULTS-B2.md).
+**Registry routing rows (2026-10-06, local, unseeded)**: requirements-authoring **1.8.0** — the embedded skeleton gains a fifth
+decision class, `routing` (`<token>.covered-routes`, `<token>.must-stay-reachable`, both declared or OPEN only); `requirements_author` / `requirements_reviewer`
+move with it. Class parity (5 classes, 17 keys) is pinned by `npm run test:requirements-guidance-anchors`; how to add a class:
+`.claude/knowledge/pipelines/requirements-authoring/DESIGN-DECISION-QUESTIONS.md` § Adding a class. Record:
+`cline_docs/reviews/registry-routing-rows-2026-10-06/BUILD-REPORT.md`.
+**Group 4 registry batch (2026-10-12, LOCAL commit G, unpushed, lab-gated)**: requirements-authoring **1.10.0** — the embedded
+skeleton gains the auth row `<token>.enforcer-scope`, the proxy/listener `collateral` options, the premise slot's contradiction arm
+(D2) and the consumed-value EMPTY-upstream branch (D3); item rows `<token>.item-<N>` (B-2) live in the role guidance only. Key
+parity 19 keys in 5 classes. Golden moved for the protocol + both roles in the same commit. Record:
+`cline_docs/reviews/group4-registry-batch-2026-10-12/BUILD-REPORT.md`.
+
 **Current versions (2026-09-30; re-read `grep -n "version: '" scripts/seed-protocol-prompts.ts`)**:
 pipeline-orchestrator 3.18.0 · network-provisioning 1.16.0 (X29 (f2), 2026-09-28, `369070a3`) · kubernetes-gitops 1.13.0 · terraform-iac 1.7.0 ·
 observability-config 1.4.0 · pov-program 1.8.7 · requirements-authoring 1.7.4 · HOWTO-use-pipeline-harness 2.8.0 ·
@@ -980,3 +1025,12 @@ rationale: cline_docs/reviews/protocol-cross-port-2026-08-16/. Authoring rules:
 `cline_docs/reviews/protocol-obligation-audit-2026-08-11/AUDIT.md`. Note
 `research-program-protocol` is deliberately NOT in the seed (DB-side authorship; see the seed
 file's tombstone) — its absence is not drift.
+
+## Pattern (h) protocol state (added 2026-10-04)
+
+```bash
+grep -c "consuming-leg-no-consumed-block" scripts/seed-protocol-prompts.ts          # expect 5 — BRANCH D forward ref + D3 + 2 version changelogs (pov-program 1.9.0, value-chain 1.1.0) + the Node C value-leg paragraph (promotion E4, 2026-10-05: an undeclared consumer is Node C's to compare — PC-F1)
+grep -c "KNOWN_STALE_ROLE_QUOTES" scripts/test-validation-shape-contract.ts         # expect 3 — the quote-survives pin's named-exception list (kubernetes-gitops 1.14.0)
+npm run test:validation-shape-contract                                              # mode-7 pairing + quote-survives pins; expect exit 0
+```
+Context: `cline_docs/reviews/pattern-h-corpus-measure-2026-10-03/`; specialist § "Pattern (h) text changes you now own".

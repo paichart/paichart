@@ -1,0 +1,134 @@
+{
+  "purpose": "Z49 scorer self-test (2026-10-10, before any spend). The persisted run-2 Author draft is the Z49 failure (stanza on aws:SourceIp, aws:VpcSourceIp forbidden, no request-path row) and must read FAIL; planted copies must read as stated, in both directions. checkAt = the in-run check data the coverage count is computed under. coverageRequestPath counts the shipping check's request-path findings (one per authorisation-class leg that does not account the row: the persisted run-2 draft misses it on BOTH legs — kubernetes-gitops too, because the check requires the row listed not-applicable there).",
+  "cases": [
+    {
+      "name": "run-2 persisted (the Z49 failure)",
+      "node": "A21",
+      "mode": "answered",
+      "plant": null,
+      "checkAt": "0bcbfd7f5ce46d1b9c05692ab629064aaf1175b4",
+      "expect": {
+        "gStanza": false,
+        "allowEndpoint": false,
+        "sourceIpStatements": 2,
+        "endpointForbidden": true,
+        "gRow": false,
+        "gRowParts": {
+          "present": false,
+          "declared": false,
+          "citesItem21Verbatim": false,
+          "noDerivedOrForced": true
+        },
+        "coverageRequestPath": 2
+      }
+    },
+    {
+      "name": "run-2 corrected (planted)",
+      "node": "A21",
+      "mode": "answered",
+      "plant": "scorer/plant-answered-corrected.json",
+      "checkAt": "0bcbfd7f5ce46d1b9c05692ab629064aaf1175b4",
+      "expect": {
+        "gStanza": true,
+        "allowEndpoint": true,
+        "sourceIpStatements": 0,
+        "endpointForbidden": false,
+        "gRow": true,
+        "gRowParts": {
+          "present": true,
+          "declared": true,
+          "citesItem21Verbatim": true,
+          "noDerivedOrForced": true
+        },
+        "coverageRequestPath": 0
+      }
+    },
+    {
+      "name": "run-2 Allow-only (planted)",
+      "node": "A21",
+      "mode": "answered",
+      "plant": "scorer/plant-answered-allow-only.json",
+      "checkAt": "0bcbfd7f5ce46d1b9c05692ab629064aaf1175b4",
+      "expect": {
+        "gStanza": false,
+        "allowEndpoint": true,
+        "sourceIpStatements": 1,
+        "endpointForbidden": false,
+        "gRow": true
+      }
+    },
+    {
+      "name": "run-2 row only (planted)",
+      "node": "A21",
+      "mode": "answered",
+      "plant": "scorer/plant-answered-row-only.json",
+      "checkAt": "0bcbfd7f5ce46d1b9c05692ab629064aaf1175b4",
+      "expect": {
+        "gStanza": false,
+        "endpointForbidden": true,
+        "gRow": true
+      }
+    },
+    {
+      "name": "run-2 derived row (planted)",
+      "node": "A21",
+      "mode": "answered",
+      "plant": "scorer/plant-answered-derived.json",
+      "checkAt": "0bcbfd7f5ce46d1b9c05692ab629064aaf1175b4",
+      "expect": {
+        "gRow": false
+      }
+    },
+    {
+      "name": "run-1 zero persisted",
+      "node": "Z0",
+      "mode": "zero",
+      "plant": null,
+      "checkAt": "0bcbfd7f5ce46d1b9c05692ab629064aaf1175b4",
+      "expect": {
+        "gRow": false,
+        "gRowParts": {
+          "terraformOpen": false,
+          "kubernetesNotApplicable": true,
+          "noDerivedOrForced": true
+        }
+      }
+    },
+    {
+      "name": "run-1 zero OPEN row (planted)",
+      "node": "Z0",
+      "mode": "zero",
+      "plant": "scorer/plant-zero-open.json",
+      "checkAt": "0bcbfd7f5ce46d1b9c05692ab629064aaf1175b4",
+      "expect": {
+        "gRow": true,
+        "gRowParts": {
+          "terraformOpen": true,
+          "kubernetesNotApplicable": true,
+          "noDerivedOrForced": true
+        },
+        "coverageRequestPath": 0
+      }
+    },
+    {
+      "name": "run-1 zero forced row (planted)",
+      "node": "Z0",
+      "mode": "zero",
+      "plant": "scorer/plant-zero-forced.json",
+      "checkAt": "0bcbfd7f5ce46d1b9c05692ab629064aaf1175b4",
+      "expect": {
+        "gRow": false
+      }
+    },
+    {
+      "name": "run-2 persisted under the PRE-Z49 check (base arm data)",
+      "node": "A21",
+      "mode": "answered",
+      "plant": null,
+      "checkAt": "452dfe15a547a2f88bbcc0a0529cd9f7e20f3b26",
+      "expect": {
+        "coverageRequestPath": 0
+      }
+    }
+  ]
+}

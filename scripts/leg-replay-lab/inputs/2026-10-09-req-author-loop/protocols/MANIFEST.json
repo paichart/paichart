@@ -1,0 +1,19 @@
+{
+  "requirements-authoring-protocol:baseline": {
+    "file": "protocols/requirements-authoring-protocol@1.8.0.baseline.md",
+    "sha256": "9f4623569e6f154e0636cff827b77429e41fd483e4f4931e8a7b3ae850a5ea25",
+    "chars": 50024
+  },
+  "template:cmub1ql6f0001yx6695cga4zx:baseline": {
+    "file": "templates/requirements-author.baseline.md",
+    "name": "Requirements Author",
+    "sha256": "8bc9d7c7bf22035f99b5aff463241ced279b3043b99387381c74970a14487265",
+    "chars": 42899
+  },
+  "template:cmub1ql6m0002yx66hrxgxcc3:baseline": {
+    "file": "templates/requirements-reviewer.baseline.md",
+    "name": "Requirements Reviewer",
+    "sha256": "670bb7c5ee97dd6c39c6b1cfa77d28101365090b885a6c006b67d07bf3846ed2",
+    "chars": 28449
+  }
+}

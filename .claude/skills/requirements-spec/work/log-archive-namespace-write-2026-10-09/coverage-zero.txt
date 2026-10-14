@@ -1,0 +1,15 @@
+coverage — work/log-archive-namespace-write-2026-10-09/draft-zero/report.md
+  legs ['kubernetes-gitops', 'terraform-iac'] · gates ['kubernetes-gitops-change', 'plan', 'terraform-iac-change'] · rows 28 {'declared': 0, 'derived': 0, 'forced': 0, 'open': 21, 'other': 7} · owner block 28 · not-applicable 0
+  ❌ what: source is not one of the four forms · id: terraform-iac.target · source: derived — basis: the Phase 0 cloud harvest's full-state listing shows exactly one storage-bucket-class resource in the w
+  ❌ what: source is not one of the four forms · id: kubernetes-gitops.inputs-empty · source: forced (structural — no declared item exists to cite; the objective's own subject, "the pods of one Kubernetes namespace
+  ❌ what: source is not one of the four forms · id: gate.kubernetes-gitops-change.position · source: mechanical — not an owner decision: fixed by this document's own gate-kind rule (Approvals section) given what the Appro
+  ❌ what: source is not one of the four forms · id: gate.terraform-iac-change.position · source: mechanical — not an owner decision: fixed by this document's own gate-kind rule given what the Approvals table above alr
+  ❌ what: source is not one of the four forms · id: kubernetes-gitops.target-absent · source: forced (structural — no declared item exists to cite; the objective's framing presupposes an existing namespace with exi
+  ❌ what: source is not one of the four forms · id: terraform-iac.target-empty · source: not-applicable — `terraform-iac.target` is a single named bucket resource, not a selector that can match zero members
+  ❌ what: source is not one of the four forms · id: terraform-iac.target-absent · source: forced (structural — no declared item exists to cite; the objective scopes this program to writing to an existing log-ar
+  👁  what: no producer rows — confirm for each leg: the leg derives no value another leg consumes · legs: ['terraform-iac']
+  👁  what: no routing rows — confirm for each leg: the leg adds no advertised covering route and suppresses, filters, withdraws or replaces no routes · legs: ['kubernetes-gitops', 'terraform-iac']
+  7 error(s), 2 to read
+
+FILED 2026-10-09: all 7 ERRORS (Z1–Z4) + read deviations (Z5–Z9) → OPEN-REGISTER REQ-SPEC-STREAMLINE, "BLIND TRIAL zero-decision run".
+READ items → owner (step 4), answers recorded in notes.md.

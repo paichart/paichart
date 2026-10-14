@@ -20,6 +20,7 @@ import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import type { TokenPayload } from '@/lib/types/auth';
 import { mcpLogger } from '@/lib/logger';
 import { pickResultJsonSummary } from '@/lib/services/execution-artifacts';
+import { REQUIREMENTS_OPERATOR_ARTIFACTS } from '@/lib/agents/harness/requirements-artifact-names';
 import { selectAuthoritativeExecution, CHAIN_SELECTION_OPTIONS } from '@/lib/services/execution-selection';
 import { computeVerdictFreshness, freshnessWord } from '@/lib/agents/harness/chained-predecessors';
 import { isReviewerSet } from '@/lib/agents/harness/parse-verdict';
@@ -51,7 +52,13 @@ const RESULTS_EXECUTION_SELECT = {
   supersededById: true,
   task: { select: { id: true, title: true, description: true, status: true, priority: true, agentRole: true } },
   agentTemplate: { select: { id: true, name: true, category: true, description: true, templateType: true } },
-  artifacts: { select: { id: true, name: true, type: true, content: true, createdAt: true } },
+  // G1 B (2026-10-10) + 1b (2026-10-12): the requirements correction artifacts (pre-correction draft, not-adopted
+  // correction) are OPERATOR artifacts (diff reads), never a result a
+  // reasoner reads — excluded here so neither the lean card's ".md = report" picker nor the verbose envelope sees it.
+  artifacts: {
+    where: { name: { notIn: [...REQUIREMENTS_OPERATOR_ARTIFACTS] } },
+    select: { id: true, name: true, type: true, content: true, createdAt: true },
+  },
 } satisfies Prisma.AgentExecutionSelect;
 
 type ResultsExecution = Prisma.AgentExecutionGetPayload<{ select: typeof RESULTS_EXECUTION_SELECT }>;

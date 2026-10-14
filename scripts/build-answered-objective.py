@@ -29,6 +29,15 @@ ANCHOR = 'This is a DRAFT SPECIFICATION for human review. Do not launch a progra
 FORCED_ELIGIBLE = ('target-absent', 'inputs-empty')  # the Reviewer's closed list (check 8.3)
 
 
+# Z58 (2026-10-11, Phase 4 attempt 1; fixed 2026-10-12): an item used to end only at the next item or a `##`/`###`
+# heading, so owner rationale written under `####` inside a group, and a ROW-ITEM-MAP table placed after the last group,
+# were merged INTO the items while the script reported ✅ — the generator would have read rationale and register ids as
+# owner decisions. A heading of ANY level, a table row or an HTML comment after a group's first item is now REFUSED with
+# the line named: rationale belongs under `## Owner rationale`, the map under `## Row → item map`.
+NON_ITEM_LINE = re.compile(r'^(?:#{1,6}\s|\||\s*<!--)')
+ITEM_PROBLEMS: list = []
+
+
 def items_from(answers: str) -> list:
     """Numbered items `N. ...` that appear under a `### Group` heading, in file order (continuation lines kept)."""
     out = []
@@ -36,7 +45,15 @@ def items_from(answers: str) -> list:
         if not block.startswith('### Group'):
             continue
         block = block.split('\n## ', 1)[0]  # a group ends at the next `##` section (the file also quotes the objective)
-        for m in re.finditer(r'(?ms)^(\d{1,2})\. (.*?)(?=^\d{1,2}\. |^#{2,3} |\Z)', block):
+        lines = block.split('\n')
+        started = False
+        for line in lines[1:]:
+            if re.match(r'^\d{1,2}\. ', line):
+                started = True
+            elif started and NON_ITEM_LINE.match(line):
+                ITEM_PROBLEMS.append(f'{lines[0].strip()}: "{line.strip()[:80]}" sits after an item and would be merged into '
+                                     'it - put rationale under `## Owner rationale` and the map under `## Row → item map`')
+        for m in re.finditer(r'(?ms)^(\d{1,2})\. (.*?)(?=^\d{1,2}\. |^#{1,6} |^\||^\s*<!--|\Z)', block):
             out.append((int(m.group(1)), f'{m.group(1)}. {m.group(2).rstrip()}\n'))
     return out
 
@@ -65,16 +82,29 @@ ADDED: set = set()
 NOT_APPLICABLE: list = []  # deleted rows (tier not-applicable): listed, never answered
 
 
+def _coverage_module():
+    """The coverage check's owner-block parser, loaded from its file (hyphenated name, so not importable by name).
+
+    Z46 (2026-10-09): this script once had its own parser that required a `- ` bullet, while the canonical owner-block
+    line carries none (`<row id> — … — tier: …`, role guidance + registry + skeleton) and the coverage check read the
+    same block fine. Two parsers disagreed on one format; there is now one parser, owned by the coverage check.
+    """
+    import importlib.util
+    import os
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'check-requirements-coverage.py')
+    spec = importlib.util.spec_from_file_location('check_requirements_coverage', path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def owner_row_ids(draft: str) -> list:
-    s = draft.find('## Decisions needed from the owner')
-    if s < 0:
-        return []
-    e = draft.find('\n## ', s + 5)
-    section = draft[s:e if e > 0 else len(draft)]
-    rows = re.findall(r'(?ms)^- ([a-z][a-z-]*(?:\.[a-z<>-]+)+) —(.*?)(?=^- |\Z)', section)
+    cov = _coverage_module()
+    lines, _none = cov.parse_owner_block(cov.section(draft, r'^## Decisions needed from the owner\b.*$'))
+    lines = lines or []
     # A `not-applicable` row is a DELETED row listed for the owner to check its reason; it needs no answer.
-    NOT_APPLICABLE.extend(rid for rid, rest in rows if 'tier: not-applicable' in rest)
-    return [rid for rid, rest in rows if 'tier: not-applicable' not in rest]
+    NOT_APPLICABLE.extend(o['id'] for o in lines if o['tier'] == 'not-applicable')
+    return [o['id'] for o in lines if o['tier'] != 'not-applicable']
 
 
 def main() -> int:
@@ -88,6 +118,7 @@ def main() -> int:
 
     problems = []
     items = items_from(answers)
+    problems += ITEM_PROBLEMS
     nums = [n for n, _ in items]
     if nums != list(range(1, len(nums) + 1)):
         problems.append(f'items must run 1..N with no gap or repeat; found {nums}')

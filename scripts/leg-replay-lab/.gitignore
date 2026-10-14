@@ -1,0 +1,3 @@
+# Production snapshots (prod data incl. an assignee email), rendered historical seeds, and run outputs.
+cache/
+runs/

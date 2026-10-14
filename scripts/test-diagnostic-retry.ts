@@ -58,7 +58,7 @@ function baseInput(over: Partial<DiagnosticRetryInput> = {}): DiagnosticRetryInp
     currentResponse: { text: 'prior response', rawContentBlocks: [{ type: 'text', text: 'prior response' }], stopReason: 'end_turn' },
     messageHistory: [{ role: 'user', content: 'do the task' }],
     totalUsage: { inputTokens: 100, outputTokens: 50 } as any,
-    prompt: 'do the task', normalizedLlmConfig: cfg,
+    prompt: 'do the task', normalizedLlmConfig: cfg, mcpFunctions: undefined,
     executionId: 'exec-diag-1', userId: 'user-a', ...over,
   };
 }
@@ -89,6 +89,24 @@ async function main() {
     const llm = scriptedLLM([mkResp()]);
     const r = await runDiagnosticRetry(baseInput({ correctionTurnUsed: true }), { generateText: llm.generateText, logger: silentLogger });
     ok(r.diagnosticRetryUsed === false && llm.calls.length === 0, 'no retry');
+  });
+  // 5th disqualifier (mechanical-reflection-trigger Step B, 2026-10-07): ONE reflection pass per execution.
+  await test('formCorrectionAttempted → no retry (5th disqualifier), outputs unchanged, skip logged with its reason', async () => {
+    const llm = scriptedLLM([mkResp()]);
+    const cap = capturingLogger();
+    const inp = baseInput({ formCorrectionAttempted: true });
+    const r = await runDiagnosticRetry(inp, { generateText: llm.generateText, logger: cap.logger });
+    ok(r.diagnosticRetryUsed === false && llm.calls.length === 0, 'no retry, no LLM call');
+    ok(r.confidenceScore === 60 && r.text === inp.text && r.currentResponse === inp.currentResponse, 'outputs unchanged (by reference)');
+    ok(inp.messageHistory.length === 1 && inp.totalUsage.inputTokens === 100, 'history and usage untouched');
+    ok(cap.entries.some(e => e.obj.reason === 'form_correction_attempted'), 'skip logged with reason form_correction_attempted');
+  });
+  await test('formCorrectionAttempted: false / absent → the retry still fires (the 5th rule is the ONLY change)', async () => {
+    for (const over of [{ formCorrectionAttempted: false }, {}] as Array<Partial<DiagnosticRetryInput>>) {
+      const llm = scriptedLLM([mkResp()]);
+      const r = await runDiagnosticRetry(baseInput(over), { generateText: llm.generateText, logger: silentLogger });
+      ok(r.diagnosticRetryUsed === true && llm.calls.length === 1, `fires with ${JSON.stringify(over)}`);
+    }
   });
   await test('confidence out of band (49 / 70 / null) → no retry', async () => {
     for (const c of [49, 70, null]) {
@@ -173,6 +191,11 @@ async function main() {
     ok(!engineSrc.includes('const diagnosticPrompt ='), 'engine inline diagnosticPrompt gone');
     ok(!streamSrc.includes('const diagnosticPrompt ='), 'stream inline diagnosticPrompt gone');
     ok(!coreSrc.includes('const diagnosticPrompt ='), 'core inline diagnosticPrompt gone');
+  });
+
+  await test('the core threads formCorrectionAttempted into runDiagnosticRetry (Step B pin)', async () => {
+    const call = coreSrc.slice(coreSrc.indexOf('runDiagnosticRetry({'), coreSrc.indexOf('runDiagnosticRetry({') + 200);
+    ok(/formCorrectionAttempted/.test(call), 'formCorrectionAttempted not passed to #90');
   });
 
   console.log(`\n📊 Results: ${passed} passed, ${failed} failed`);

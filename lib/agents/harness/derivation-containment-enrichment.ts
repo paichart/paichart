@@ -78,6 +78,17 @@ export type ContainmentPrisma = Pick<Prisma.TransactionClient, 'task' | 'agentEx
  */
 const STAGE_CHILD_SCAN_CAP = 50;
 
+/**
+ * Worse-is-higher order of a transcribed upstream copy, for the diamond dedupe (2026-10-12).
+ * Mirrors the consumer arm's delegation rule in the pure module: machine-checked clean < delegated with
+ * a named reason < everything else (blocking, absent, benign-unchecked, unnamed needs-node-c).
+ */
+function dispositionRank(l: UpstreamContainmentLeg): number {
+  if (l.disposition === 'benign' && l.checked) return 0;
+  if (l.disposition === 'needs-node-c' && typeof l.dispositionReason === 'string' && l.dispositionReason.trim().length > 0) return 1;
+  return 2;
+}
+
 export interface ChainedFromEntry {
   taskId?: unknown;
   source?: unknown;
@@ -268,6 +279,14 @@ export async function computeDerivationContainmentFact(
     // `source: 'report.md'` marks a PIPELINE predecessor's REAL deliverable (context-chainer CC2);
     // a pipeline-index.json fallback means the deliverable never arrived, so it does not qualify.
     const upstream = entries.filter(c => c?.source === 'report.md' && typeof c?.taskId === 'string');
+    // R5 (2026-10-05): no report.md predecessor, yet a PIPELINE predecessor WAS chained through the
+    // pipeline-index.json fallback (its deliverable never arrived). Counted so the disposition can
+    // name a CONSUMING leg with absent upstream evidence apart from a leg with no upstream at all.
+    // Stamped only when non-zero, so every other fact stays byte-identical.
+    if (upstream.length === 0) {
+      const fallback = entries.filter(c => c?.source === 'pipeline-index.json' && typeof c?.taskId === 'string').length;
+      if (fallback > 0) fact.upstreamDeliverableMissing = fallback;
+    }
     if (upstream.length > 0) {
       const legs: UpstreamContainmentLeg[] = [];
       let lookupMisses = 0;
@@ -311,10 +330,14 @@ export async function computeDerivationContainmentFact(
             const nl = n as { taskId?: unknown; checked?: unknown; violations?: unknown; derivedValues?: unknown;
               disposition?: unknown; dispositionReason?: unknown };
             if (!nl || typeof nl.taskId !== 'string') continue;
+            // Review L5 (2026-10-13): a nested copy with no numeric `violations` was read as 0, i.e. as clean.
+            // Fail closed instead: it is unreadable, so it is COUNTED as a lookup miss and never transcribed —
+            // the delegation arm then refuses (M2). 0 stored facts carry such a copy (prod, 2026-10-13).
+            if (typeof nl.violations !== 'number') { lookupMisses++; continue; }
             const rec: UpstreamContainmentLeg = {
               taskId: nl.taskId,
               checked: nl.checked === true,
-              violations: typeof nl.violations === 'number' ? nl.violations : 0,
+              violations: nl.violations,
               via: entry.taskId as string,
               ...(Array.isArray(nl.derivedValues) && nl.derivedValues.length > 0
                 ? { derivedValues: nl.derivedValues as Array<{ kind: string; value: string }> } : {}),
@@ -324,7 +347,19 @@ export async function computeDerivationContainmentFact(
                 : {}),
             };
             const dup = legs.find(l => l.taskId === rec.taskId);
-            if (dup) { dup.violations = Math.max(dup.violations, rec.violations); continue; }
+            if (dup) {
+              dup.violations = Math.max(dup.violations, rec.violations);
+              // 2026-10-12 (PHASE4-CONTAINMENT-PROPAGATION, N-8): the disposition copy is now READ —
+              // by the consumer arm's delegation rule — so a diamond keeps the WORSE copy of it too,
+              // for the same reason violations take the max: a clean or delegated duplicate must
+              // never mask a blocking one. `checked` is deliberately untouched (it feeds `green`).
+              if (dispositionRank(rec) > dispositionRank(dup)) {
+                if (rec.disposition !== undefined) dup.disposition = rec.disposition; else delete dup.disposition;
+                if (rec.dispositionReason !== undefined) dup.dispositionReason = rec.dispositionReason;
+                else delete dup.dispositionReason;
+              }
+              continue;
+            }
             legs.push(rec);
           }
         } else {

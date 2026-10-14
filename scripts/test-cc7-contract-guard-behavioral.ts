@@ -51,6 +51,8 @@ async function main() {
     try { await prepareTaskForExecution(childNoIC.id); } catch (e: any) { threw = e?.message ?? String(e); }
     check('B1.1 program pipeline child w/ NO contract + NO flag → THROWS (structural arm)', threw.includes('INTERFACE_CONTRACT_MISSING'), threw.slice(0, 70));
     check('B1.2 error names the structural reason', threw.includes('structurally required'));
+    // Promotion E (E4): no contract, no flag, no source fact = the dominant case; the cause says so FIRST.
+    check('B1.2b cause is the absence branch (no contract supplied at create)', threw.includes('no contract was supplied when this child was created'));
 
     // control: a NON-program pipeline child (parent template has no pov-program protocol) → must NOT throw
     const plainStage = await prisma.stage.create({ data: { phaseId: phase!.id, name: `F12 plain stage ${Date.now()%100000}`, order: 9997, status: 'PENDING' }, select: { id: true } });

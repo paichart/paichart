@@ -6,6 +6,24 @@
 **Last Validated**: 2026-04-03 — All file paths, greps, categories verified
 **Partial re-validation 2026-09-27**: §18b, GS5/GS6 greps, Template freshness, and the new RWF section below were re-proven against the tree (Protocol 11). Evicted specialist depth: `.claude/knowledge/domain/templates/template-system-library.md`.
 
+## 2026-10-07 — Author model tier (`infraAuthor`) tripwire
+
+```bash
+grep -l "AGENT_MODELS.infraAuthor" scripts/seed-*.ts | wc -l   # expect 4 — only the four config_change_author seeds
+grep -c "infraAuthor: 'claude-opus-5-5'" lib/agents/model-tiers.ts   # expect 1
+```
+`report:template-freshness` does NOT compare a row's model to its seed's tier (register FRESHNESS-MODEL-BLIND-SPOT): after a
+tier change, verify `metadata->'modelParameters'->>'model'` per row directly. Reseeded 2026-10-07 09:14:14Z.
+
+**Per-role `maxToolTurns` (2026-10-12, size plan R1 option A):** `lib/agents/role-model-params.ts` `ROLE_MODEL_PARAMS` now carries
+`maxToolTurns: 48` for `program_architect` + `value_chain_architect` (read cap min(12, floor(0.25 × 48)) = 12; watchdog
+1,080 s → 1,620 s). Both Architect seeds spread `roleToolTurnParams(role)`; the freshness report flags the row until reseeded
+(it DOES check this key, for table roles only). Per-ROW literals stay in their seeds: harness 100, terraform harvester 60.
+```bash
+grep -c "maxToolTurns: PROGRAM_ARCHITECT_MAX_TOOL_TURNS" lib/agents/role-model-params.ts   # expect 2
+grep -l "roleToolTurnParams(role)" scripts/seed-*.ts | wc -l   # expect 2
+```
+
 ## Objective
 Map and understand the complete agent template system in pAIchart, including data flow, storage patterns, UI components, and the ongoing metadata.agentConfig refactoring.
 
@@ -370,7 +388,7 @@ grep -rhoE "defaultRole: '(infra_state_harvester|infra_change_architect|config_c
 
 echo ""
 echo "--- terminal-verdict grammar coupling (2026-07-14): grammar canonical in change_reviewer entry ONLY ---"
-grep -c "## VERDICT: APPROVED | NEEDS-REVISION" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # expect 2 — ONE PER REVIEWER ROLE (change_reviewer, requirements_reviewer), not one globally. GS8 keeps the grammar out of PROTOCOLS; it does not make it single-copy inside the library, because each reviewer role must instruct its own terminal block. The copies are pinned by npm run test:parse-verdict, which asserts all four parsed tokens for every REVIEWER_ROLE — widened 2026-09-22 when this grep caught the second copy arriving unpinned
+grep -c "## VERDICT: APPROVED | NEEDS-REVISION" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # expect 3 — ONE PER REVIEWER ROLE (change_reviewer, requirements_reviewer, derivation_reviewer since value-chain B3 2026-10-02), not one globally. GS8 keeps the grammar out of PROTOCOLS; it does not make it single-copy inside the library, because each reviewer role must instruct its own terminal block. The copies are pinned by npm run test:parse-verdict, which asserts all four parsed tokens for every REVIEWER_ROLE — widened 2026-09-22 when this grep caught the second copy arriving unpinned
 grep -c "## VERDICT: APPROVED | NEEDS-REVISION" scripts/seed-protocol-prompts.ts                                  # expect 0 (protocols reference, never redefine)
 npm run test:parse-verdict   # expect >=23 — fixtures are LIFTED from the change_reviewer entry; an entry edit that
                              # moves the marker fails here. OUTSIDE test:all-validation: run it by hand.
@@ -1041,13 +1059,18 @@ grep -c "TASKS OVERRIDING THEIR TEMPLATE" scripts/report-template-freshness.ts  
 (Steve, 2026-08-26/27): **the owning seed script + `ROLE_GUIDANCE_LIBRARY` is the source of truth**; a GUI-edited row is a
 conflict to resolve toward the library, not a state to preserve. The cost of the manual step: a library fix can sit
 undelivered indefinitely — this report is what measures the gap.
-**NOT COMPARABLE means unmeasured, NOT clean.** Baseline **2026-09-27 (local, re-run): 0 STALE · 0 UNVERIFIABLE · 0 NOT
+**NOT COMPARABLE means unmeasured, NOT clean.** Promotion E: prod 0 STALE / 45 CURRENT after the E1 seed (2026-10-05);
+the deploy-2 reseed expects 8 STALE before and **0 STALE / 44 CURRENT after** (Value-Chain Program Architect goes
+DEPRECATED, so it leaves the ACTIVE-only report — and a later edit to the shared Architect builder stales it UNSEEN;
+reseed both owners anyway). Baseline **2026-10-02 (PROD, after the value-chain seed): 0 STALE · 0 UNVERIFIABLE · 0 NOT COMPARABLE · 44 CURRENT**, all 44 on a sanctioned tier at maxTokens 48000, the 40 pre-existing rows unchanged. Prior baseline **2026-09-27 (local, re-run): 0 STALE · 0 UNVERIFIABLE · 0 NOT
 COMPARABLE · 40 CURRENT**, all 40 on a sanctioned tier at maxTokens 48000; prod 0 STALE / 40 CURRENT after the EG-1 reseed.
 *(Prior 2026-08-04: 0/0/3/32.)*
 
-**Delivering a fix**: run EVERY owning seed — `grep -rln "defaultRole: '<role>'" scripts/seed-*.ts` — never the generic
-`seed-agent-templates.ts` for a domain role. ⚠ The owning seeds **never refuse**: they findFirst → update/create and
-overwrite (the one refusing reseed script was deleted 2026-08-26). The only guard is running this report FIRST: it must show
+**Delivering a fix**: run EVERY owning seed — `grep -rln "defaultRole: '<role>'" scripts/seed-*.ts` (⚠️ 2026-10-02: a role rendered through a SHARED builder couples to its sibling — an edit to shared `buildProgramArchitectGuidance` text stales `program_architect` AND `value_chain_architect`, an edit to shared `buildInfraArchitectGuidance` text stales `infra_change_architect` AND `derivation_architect`: run the owning seeds of BOTH role keys; `change_reviewer` now has SIX owners incl. `seed-value-chain-templates.ts` and, since promotion E1 (2026-10-05), `seed-program-templates.ts`) — never the generic
+`seed-agent-templates.ts` for a domain role. ⚠ Most owning seeds **never refuse**: they findFirst → update/create and
+overwrite (the one refusing reseed script was deleted 2026-08-26). Two exceptions REFUSE (exit 1, nothing written) on a
+name match bound differently: `seed-value-chain-templates.ts` and `seed-program-templates.ts` (both role + protocol +
+templateType — the program seed since promotion E1, the value-chain seed since E3 AR-F1) — a guard against rebinding a live row by name, not against GUI edits. The only guard is running this report FIRST: it must show
 exactly the rows you expect STALE. Anything else STALE in the same domain = stop and decide — each domain seed rewrites ALL its
 rows, so it would ship that other undelivered edit as a side effect. Run it again after: 0 STALE.
 
@@ -1095,11 +1118,13 @@ on purpose; `timeout` in SECONDS.
 ```bash
 grep -c "bclause" scripts/audit-role-guidance-contract.ts                                   # expect 1 — ANTI_PATTERNS lock (D2 133f8437)
 grep -c "Evidence PRESENCE is always yours" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # expect 1 — EG-1 4d1d21d7
-grep -rln "defaultRole: 'change_reviewer'" scripts/seed-*.ts | wc -l                        # expect 4 — the owning seeds (Node C uses the NETWORK row)
+grep -rln "defaultRole: 'change_reviewer'" scripts/seed-*.ts | wc -l                        # expect 6 — the owning seeds: four domain seeds + seed-value-chain-templates.ts (value-chain's Node C, `Value-Chain Program Integration Reviewer`, bound to NO protocol — B6 decision D1, 2026-10-02) + seed-program-templates.ts (`Program Integration Reviewer`, unbound, promotion E1, 2026-10-05). Which row pov-program's Node C assigns is the protocol's `nodeCTemplate`: the NETWORK `Change Reviewer` until promotion E deploy 2, then `Program Integration Reviewer`. A change_reviewer guidance edit now stales SIX rows (the delivery rehearsal's count moves with it)
 npm run validate:role-guidance
 ```
-Four rows, not "four plus Node C": Node C `agent.assign`s the network `Change Reviewer`, owned by
-`seed-network-provisioning-templates.ts`; `seed-program-templates.ts` seeds only Program Architect. A `clause (x)` hit in
+Six rows: four domain reviewers, the value-chain Node C row, and `Program Integration Reviewer` (seeded by
+`seed-program-templates.ts` alongside Program Architect since promotion E1). pov-program's Node C `agent.assign`s whatever
+row its protocol's `nodeCTemplate` names — the network `Change Reviewer` (owned by
+`seed-network-provisioning-templates.ts`) until promotion E deploy 2, `Program Integration Reviewer` after. A `clause (x)` hit in
 the library outside a JSDoc comment fails `validate:role-guidance` (the one comment hit at the entry's JSDoc is expected).
 
 ## 🆕 2026-08-17 — WS1 Phase C loadProtocols round-trip tripwires
@@ -1109,3 +1134,12 @@ grep -c "loadProtocols" lib/pov/api/agent-templates-adapter.ts               # e
 grep -c "loadProtocols: template.metadata?.loadProtocols === true" lib/pov/api/agent-templates-adapter.ts  # expect 0 — the coercion form is retired (a reappearance is the 'composed'-wipe bug)
 grep -c "flip-harness-protocol-mode" scripts/deploy/blue-green-deploy.sh # expect 1 — the gate's error text names the sanctioned flip path (the deploy logic moved from the workflow into this script; this grep never ran until the audit's path check was fixed, 2026-09-25)
 ```
+
+## Pattern (h) role state (added 2026-10-04)
+
+```bash
+grep -c "branch-condition answers" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts        # expect 1 — config_change_author Deliverable line (batch 3)
+grep -c "consuming-leg-no-consumed-block" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts # expect 1 — change_reviewer Node C bullet (batch 2)
+```
+`config_change_author` is at the GS2 10-bullet ceiling after batch 3 — the next addition must replace, not append.
+Context: specialist § "Pattern (h) role changes".

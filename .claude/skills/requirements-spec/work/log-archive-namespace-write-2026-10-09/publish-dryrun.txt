@@ -1,0 +1,39 @@
+✅ removed the Author's trailing Confidence line
+✅ topology.json copied byte-identical from k8s-tf-podrange-authz
+✅ harvested-state pre-filter: 0 hits (a pre-filter only — the §2 full read is still owed)
+✅ writing rules spliced; --check byte-identical to canonical (✓ /tmp/publish-k8s-tf-podrange-genspec-3uk6je6y/requirements.md: rules spliced at the marker (232 non-blank lines).)
+✅ §3 checks: 0 🗑 · 0 {{ · 0 Confidence · 0 marker · 0 stale claim · Writing rules last
+coverage — /tmp/publish-k8s-tf-podrange-genspec-3uk6je6y/requirements.md
+  legs ['kubernetes-gitops', 'terraform-iac'] · gates ['kubernetes-gitops', 'program-plan', 'terraform-iac'] · rows 23 {'declared': 23, 'derived': 0, 'forced': 0, 'open': 0, 'other': 0} · owner block 0 · not-applicable 0
+  ❌ what: unknown key for a known token · id: terraform-iac.policy-managers-multiple
+  ❌ what: unknown key for a known token · id: terraform-iac.deny-others
+  ❌ what: unknown key for a known token · id: terraform-iac.tag-drift
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: receiver
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: admitted-principal
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: principal-unseen
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: granted-action
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: existing-grant
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: target-empty
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: enforcer-absent
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: collateral
+  👁  what: no producer rows — confirm for each leg: the leg derives no value another leg consumes · legs: ['terraform-iac']
+  👁  what: no routing rows — confirm for each leg: the leg adds no advertised covering route and suppresses, filters, withdraws or replaces no routes · legs: ['kubernetes-gitops', 'terraform-iac']
+  11 error(s), 2 to read
+✅ coverage ERRORS present and accepted ONLY because --waiver was given — the waiver must name each one
+citations: 23 total, 23 verbatim, 0 failing
+premise branches: terraform-iac ✓
+✅ citation + premise gate clean (the Reviewer still owns: does each quote select the same option as the item?)
+✅ citation gate: 0 findings
+  ✗ raw  65,799  delivered~ 72,695  pages 10/6  headroom -22,695  /tmp/publish-k8s-tf-podrange-genspec-3uk6je6y/requirements.md
+  ✓ raw   3,227  delivered~  6,057  pages 0/6  headroom  43,943  /tmp/publish-k8s-tf-podrange-genspec-3uk6je6y/topology.json
+  run pages 10/8
+✗ a Program Architect cannot read all of this: each file must be <= ~50,000 delivered chars
+  (8,000 + 6 pages x 7,000) and all files together <= 8 read_more pages.
+  Use the program view, or shorten the document — never raise a cap to fit one document.
+  ✗ raw  46,093  delivered~ 51,725  pages 7/6  headroom  -1,725  /tmp/publish-k8s-tf-podrange-genspec-3uk6je6y/requirements.program.md
+  ✓ raw   3,227  delivered~  6,057  pages 0/6  headroom  43,943  /tmp/publish-k8s-tf-podrange-genspec-3uk6je6y/topology.json
+  run pages 7/8
+✗ a Program Architect cannot read all of this: each file must be <= ~50,000 delivered chars
+  (8,000 + 6 pages x 7,000) and all files together <= 8 read_more pages.
+  Use the program view, or shorten the document — never raise a cap to fit one document.
+⛔ even the program view is over the read limit — trim author-facing prose and regenerate; never raise a cap to fit

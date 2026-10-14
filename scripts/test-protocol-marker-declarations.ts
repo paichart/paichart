@@ -40,7 +40,10 @@ lines.forEach((l, i) => {
   // and its declaration was checked against a body containing all three marker strings. That is
   // why this test passed while pov-program's declaration disagreed with the 2026-09-12 hand-read.
   // A boundary bug here does not fail loudly; it makes a check pass against the wrong text.
-  const m = /^const ([A-Z_0-9]+)\s*(?::[^=]*)?=/.exec(l);
+  // FOURTH instance (2026-10-02, value-chain B1.1): `export const PROTOCOLS` (exported so the golden test can import
+  // the rendered bodies) stopped matching `^const`, and the last protocol const absorbed the array again — the
+  // requirements-authoring body was then checked against every entry's text. `export` is now part of the boundary.
+  const m = /^(?:export\s+)?const ([A-Z_0-9]+)\s*(?::[^=]*)?=/.exec(l);
   if (m) starts.push({ name: m[1], at: i });
 });
 const bodyOf = new Map<string, string>();
@@ -70,11 +73,28 @@ const entries = src.slice(arrayStart).split(/\n  \{\n/).slice(1);
 const KNOWN_MENTION_NOT_MANDATE: Record<string, Partial<Record<string, string>>> = {
   'pov-program-protocol': {
     'Harvested Allocations':
-      "program tier READS the leg's parsed block as a platform fact and FORBIDS fabricating one; it never asks a program leg to emit it (verified by reading all 3 occurrences, 2026-09-21; matches the 2026-09-12 hand-read)",
+      "program tier READS the leg's parsed block as a platform fact and FORBIDS fabricating one; it never asks a program leg to emit it (verified by reading all 3 occurrences, 2026-09-21; matches the 2026-09-12 hand-read). +1 at promotion E (2026-10-05, read by hand): the folded Node C value-leg paragraph names it only to EXEMPT a value leg from its absence — 4 occurrences",
     'Derived Values':
-      "named only inside the definition of the platform's `harvest-block-missing-or-unparseable` reason — a description of what the platform computes, not a mandate (1 occurrence, same verification)",
+      "named only where the program tier READS a platform reason: the `harvest-block-missing-or-unparseable` definition and BRANCH D's 'no block parsed anywhere in the leg' — descriptions of what the platform computes, not mandates (2 occurrences; the BRANCH D one added 2026-10-03, read by hand). +1 at promotion E (2026-10-05, read by hand): the folded Node C value-leg paragraph DESCRIBES a value leg's deliverable to the reviewer (\"…arithmetic, `## Derived Values` block\") — the mandate to emit it lives in network-derivation-protocol — 3 occurrences",
+    'Consumed Values':
+      "named only in BRANCH D (the consumed-discharge arm) and BRANCH D3 (no consumed entry parsed) — the program tier READS whether the leg's block parsed; the mandate to emit it lives in the domain protocols (2 occurrences, both added 2026-10-03 by pattern (h) batch 2, read by hand). +1 at promotion E4 (2026-10-05, read by hand): the Node C value-leg paragraph scopes Node C's 'check only' to a consuming leg that DECLARES its value in the block — a read, not a mandate — 3 occurrences",
   },
 };
+
+/** Bodies of `names` plus every const they interpolate, transitively (each body once). */
+function expandRefs(names: string[]): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const visit = (n: string) => {
+    if (seen.has(n) || !bodyOf.has(n)) return;
+    seen.add(n);
+    const b = bodyOf.get(n)!;
+    out.push(b);
+    for (const m of b.matchAll(/\$\{([A-Z_0-9]{4,})\b/g)) visit(m[1]);
+  };
+  names.forEach(visit);
+  return out.join('\n');
+}
 
 let checked = 0, findings = 0, suppressed = 0;
 for (const e of entries) {
@@ -87,9 +107,12 @@ for (const e of entries) {
   const declared = new Set<string>(
     declRaw === "'none'" ? [] : [...declRaw.matchAll(/'([^']+)'/g)].map(m => m[1]));
 
-  // union the bodies of every constant this entry's promptText references
+  // union the bodies of every constant this entry's promptText references, FOLLOWING \${CONST} / \${CONST(…)}
+  // interpolation transitively (2026-10-02, value-chain B1.4): network-provisioning's shared passages moved into
+  // NETWORK_* section consts, and a scan of the composite const alone would no longer read them. Without this the
+  // test keeps passing on the text that did NOT move — coverage lost silently, the failure mode named above.
   const refs = [...promptText.matchAll(/([A-Z_0-9]{4,})/g)].map(m => m[1]);
-  const body = refs.map(r => bodyOf.get(r) ?? '').join('\n');
+  const body = expandRefs(refs);
 
   for (const marker of MARKERS) {
     const inBody = body.includes(`## ${marker}`);

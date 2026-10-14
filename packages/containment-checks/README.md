@@ -95,6 +95,12 @@ not a verdict. Design choices worth knowing before you consume it:
   ignored" stay distinguishable even when both end green. The live round that proved this path,
   including the counterfactual false-block it retired:
   [VT-15](../../verification/tests/VT-15-cross-domain-evidence-contract.md).
+- **Delegation propagates, it does not harden** (v0.8.0): a consuming leg whose upstream DELEGATED its decision —
+  every transcribed upstream copy is checked-clean or `needs-node-c` with a non-blank reason and zero violations, at
+  least one delegated, and no copy unreadable — classifies `needs-node-c` (`consuming-leg-upstream-delegated`) instead
+  of `blocking`. Earlier versions read an undecided upstream as a dirty one, which no judgement tier could clear. A
+  genuinely dirty upstream (violations, or itself blocking) still blocks, and when two copies of one upstream disagree
+  (a diamond) the worse copy's disposition wins. The subject is recorded under `inputs.upstreamDelegated`.
 
 ## Test suite
 

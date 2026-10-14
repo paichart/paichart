@@ -23,11 +23,21 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { CanNeverRunError } from '@/lib/errors';
 import { chainDependencyContext, applyChainedContext } from './context-chainer';
-import { inheritInterfaceContractIfAbsent } from '@/lib/tasks/services/inputContext';
+import { inheritInterfaceContractIfAbsent, writeInterfaceContractIfAbsent } from '@/lib/tasks/services/inputContext';
+import {
+  resolveInheritDecision,
+  stampInterfaceContractSource,
+  buildSourceFact,
+  carryProgramClearance,
+  stampCarryAttempt,
+  operatorEventOnce,
+} from './plan-spawn-carry';
+import { isReviewerSet } from './parse-verdict';
 import { deepStripDangerousKeys } from '@/lib/utils/sanitize-keys';
 import { resolveProtocolStamp, findProgramParentForStage, resolveOwningLeg } from './program-protocol';
 import type { LegInjection } from './context-chainer';
 import { recordFromChained, type ChainedRecord } from './chained-predecessors';
+import { interfaceContractMissingCause } from './interface-contract-missing';
 
 const log = logger.child({ module: 'PrepareTaskForExecution' });
 
@@ -97,14 +107,18 @@ export async function prepareTaskForExecutionWithRecord(
   // at the door the LLM itself walks through; execute-prep is the first deterministic touchpoint
   // downstream of it.
   //
-  // ⚠️ ASYMMETRY WITH F16, DELIBERATE AND CAPABILITY-DERIVED (not preference): a PIPELINE leg
-  // missing its contract FAILS LOUD because the platform holds no deterministic source for it — the
-  // value exists only in the Architect's artifact. A NON-PIPELINE child's contract sits one
+  // ⚠️ ASYMMETRY WITH F16 — now a POLICY, no longer a capability fact (re-decided 2026-10-04, C2-a):
+  // a PIPELINE leg missing its contract FAILS LOUD. Until C2-a the reason was capability (the value
+  // existed only in the Architect's artifact). The REVISIT TRIGGER recorded here — "the platform CAN
+  // supply leg contracts deterministically" — has FIRED: `plan-spawn-carry.ts` now reads the plan's
+  // contract deterministically, stores it at create, and heals reviewer-set children below. It was
+  // RE-DECIDED (Q2, C2/C3 plan v2 §1.4.6, cline_docs/reviews/value-chain-post-window-2026-10-04/):
+  // leg omission still fails loud, because a leg created without its contract signals BROKEN WIRING,
+  // and healing it would hide that. Re-decided again at E, on the Q2 trigger (any
+  // INTERFACE_CONTRACT_MISSING on a program leg after ship). A NON-PIPELINE child's contract sits one
   // deterministic hop up, so heal-WITH-EVIDENCE beats fail. The evidence is the log line below;
   // without it this would merely institutionalise the harness's paraphrase failure and make
-  // adherence regressions invisible. REVISIT TRIGGER: if the Architect's output ever becomes
-  // structured enough that the platform CAN supply leg contracts deterministically, this asymmetry
-  // loses its justification and must be re-decided rather than treated as settled.
+  // adherence regressions invisible.
   //
   // The two populations are DISJOINT by construction — inheritance is non-PIPELINE only, the F16
   // structural arm is PIPELINE only — so the guard can never demand a contract this declines to
@@ -131,11 +145,124 @@ export async function prepareTaskForExecutionWithRecord(
       'contract inheritance failed — continuing without it');
   }
 
+  // ── ONE early read for both PLAN-SPAWN carries (C2-a reviewer arm, C3-a clearance carry) ─────
+  // Read once, after the leg arm. Fail-open: a failed read leaves both carries off, as before.
+  let inheritedArm: 'leg' | 'plan' | null = inheritedContext ? 'leg' : null;
+  let early: {
+    type: string; stageId: string | null; agentRole: string | null; metadata: unknown;
+    inputContext: unknown; agentTemplate: { templateType: string | null } | null;
+  } | null = null;
+  try {
+    early = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: { type: true, stageId: true, agentRole: true, metadata: true, inputContext: true,
+        agentTemplate: { select: { templateType: true } } },
+    });
+  } catch (err) {
+    log.warn({ err, taskId, errorCode: 'PLAN_SPAWN_CARRY_READ_FAILED' }, 'early read for the PLAN-SPAWN carries failed — continuing without them');
+  }
+  const earlyMeta = ((early?.metadata as Record<string, unknown> | null) ?? {});
+  const earlyContract = (early?.inputContext as Record<string, unknown> | null)?.interfaceContract;
+  const earlyHasObjectContract = earlyContract !== null && typeof earlyContract === 'object' && !Array.isArray(earlyContract);
+
+  // ── C2-a REVIEWER ARM (2026-10-04) — inherit the PROGRAM PLAN's contract, write-if-absent ──────
+  // PLACEMENT mirrors the leg arm and is load-bearing for the same reasons: BEFORE the skipChaining
+  // return (D2) and BEFORE the contractCheck snapshot (D1), so the F16 flag arm sees the installed
+  // contract. Runs only when the leg arm wrote nothing.
+  // Acts when: NOT PIPELINE (D5 — the shared writer also enforces it in-statement) → no object
+  // contract → reviewer-set (`isReviewerSet`, keyed on the TASK's template ON PURPOSE: the contract
+  // persists on the task row across executions, so it must not depend on one execution's
+  // agentTemplateId override) → the stage is a PROGRAM stage. Breadth, stated: EVERY reviewer-set child
+  // of a program stage (today: the two Node C templates), a GUI-added reviewer included.
+  // Inherits only when the plan resolves AND every leg holds that plan (Q5, compared on CONTENT —
+  // plan-spawn-carry `legBaseline`). A refusal is a log line plus a stamped fact, NEVER a
+  // CanNeverRunError (the createAgentExecution catch would FAIL the task): Node C runs as before.
+  if (!inheritedContext && early && early.type !== 'PIPELINE' && early.stageId && !earlyHasObjectContract
+      && isReviewerSet(early.agentRole, early.agentTemplate?.templateType ?? null)) {
+    let programRoot: string | null = null;
+    try {
+      programRoot = await findProgramParentForStage(prisma, early.stageId);
+      if (programRoot) {
+        const decision = await resolveInheritDecision(prisma, early.stageId);
+        const base = { taskId, stageId: early.stageId, arm: 'plan' as const, programRootId: programRoot,
+          architectTaskId: decision.fact.architectTaskId, architectExecutionId: decision.fact.architectExecutionId,
+          planSha256: decision.fact.planSha256 };
+        if (decision.action === 'inherit') {
+          const merged = await writeInterfaceContractIfAbsent(taskId, decision.contract,
+            decision.fact.architectTaskId as string, { interfaceContractSource: decision.fact });
+          if (merged) {
+            inheritedContext = merged;
+            inheritedArm = 'plan';
+            // A child FLAGGED requiresInterfaceContract was created WITH a contract and lost it after
+            // create — the F16 flag arm used to fail it loudly. Healing must keep that loss measurable.
+            const healed = earlyMeta.requiresInterfaceContract === true;
+            log.info({ ...base, reason: healed ? 'healed-post-create-loss' : 'omitted-at-create', errorCode: 'CONTRACT_INHERITED_FROM_PLAN' },
+              'interface contract inherited from the program plan — the child held none');
+          }
+          if (decision.operatorEvent && operatorEventOnce(decision.fact.architectExecutionId, decision.fact.planSha256)) {
+            log.warn({ securityEvent: true, site: 'C2-inherit', taskId, rewriteClasses: decision.operatorEvent.classes,
+              matches: decision.operatorEvent.matches, planSha256: decision.fact.planSha256 },
+              'R9 would rewrite the rendered program contract (classified, not applied)');
+          }
+        } else {
+          await stampInterfaceContractSource(prisma, taskId, decision.fact);
+          // A legitimately contract-less program (no sibling flagged) must not emit WARN on every Node C
+          // execution: no-heading / no-architect drop to INFO there.
+          let level: 'warn' | 'info' = 'warn';
+          if (decision.reason === 'no-heading' || decision.reason === 'no-architect') {
+            const flagged = await prisma.task.count({
+              where: { stageId: early.stageId, metadata: { path: ['requiresInterfaceContract'], equals: true } },
+            });
+            if (flagged === 0) level = 'info';
+          }
+          log[level]({ ...base, reason: decision.reason, legBaseline: decision.fact.legBaseline, errorCode: 'CONTRACT_INHERIT_FROM_PLAN_REFUSED' },
+            'program-plan contract NOT inherited — the child runs without it, as before');
+        }
+      }
+    } catch (err) {
+      log.error({ err, taskId, arm: 'plan', errorCode: 'CONTRACT_INHERIT_FAILED' },
+        'program-plan contract inheritance failed — continuing without it');
+      if (programRoot) {
+        try {
+          await stampInterfaceContractSource(prisma, taskId,
+            buildSourceFact({ source: 'none', arm: 'inherit', planResolution: 'resolver-error' }, new Date().toISOString()));
+        } catch (stampErr) {
+          log.error({ err: stampErr, taskId, errorCode: 'CONTRACT_INHERIT_FAILED' }, 'resolver-error stamp also failed');
+        }
+      }
+    }
+  }
+
+  // ── C3-a CLEARANCE CARRY (2026-10-04) — a program leg's duplicateAcknowledged ⊇ root ∪ prior ─────
+  // Before the skipChaining return, independent of contractCheck. Fail-open: a throw logs, stamps
+  // `lastAttempt {failed}` best effort, and the leg runs as before. E5 (root has no clearance), a
+  // non-program leg and the superset no-op write nothing and stamp nothing.
+  if (early && early.type === 'PIPELINE' && early.stageId) {
+    try {
+      const carry = await carryProgramClearance(prisma, { taskId, stageId: early.stageId, legMetadata: earlyMeta });
+      if (carry.outcome === 'wrote') {
+        log.info({ taskId, rootTaskId: carry.rootTaskId, added: carry.added, errorCode: 'DUPLICATE_CLEARANCE_CARRIED' },
+          'program root clearance + prior pipeline stages appended to this leg\'s duplicateAcknowledged');
+      } else if (carry.outcome === 'skipped') {
+        log.warn({ taskId, rootTaskId: carry.rootTaskId, reason: carry.reason, errorCode: 'DUPLICATE_CLEARANCE_CARRY_SKIPPED' },
+          'program root clearance NOT carried onto this leg');
+      }
+    } catch (err) {
+      log.error({ err, taskId, errorCode: 'DUPLICATE_CLEARANCE_CARRY_FAILED' },
+        'clearance carry failed — the leg runs with its own clearance, as before');
+      try {
+        await stampCarryAttempt(prisma, taskId, { outcome: 'failed', reason: 'carry-error', at: new Date().toISOString() });
+      } catch (stampErr) {
+        log.error({ err: stampErr, taskId, errorCode: 'DUPLICATE_CLEARANCE_CARRY_FAILED' }, 'carry-error stamp also failed');
+      }
+    }
+  }
+
   // Preserve v1's explicit-path skip (agentTaskService.ts old :253): an explicit
   // inputContext override must not be clobbered by dependency chaining (TS3).
   if (opts.skipChaining) {
     if (inheritedContext) {
-      log.info({ taskId, errorCode: 'CONTRACT_INHERITED_ON_OVERRIDE_PATH' },
+      log.info({ taskId, arm: inheritedArm, errorCode: 'CONTRACT_INHERITED_ON_OVERRIDE_PATH' },
         'contract inherited on an explicit-override execution — the ROW now carries it but the ' +
         'EXECUTED prompt used the caller override; returning null preserves BC-T6-1');
     }
@@ -247,18 +374,12 @@ export async function prepareTaskForExecutionWithRecord(
       `(${requiresContract ? 'flagged requiresInterfaceContract' : 'structurally required by its program-protocol parent'}) ` +
       `but inputContext.interfaceContract is absent — refusing to execute a program child without its ` +
       `binding design constants (silent-composition guard). ` +
-      // 2026-08-26: inheritance (inheritInterfaceContractIfAbsent, run earlier in this same
-      // function) now backfills a NON-PIPELINE child from its owning leg, so the old advice
-      // ("re-create the child with the contract nested at parameters.interfaceContract") is no
-      // longer the first thing to check — for those children it is usually WRONG, and sends the
-      // reader to rebuild a task when the real answer is one refusal log line away.
-      `Diagnose in this order: (1) for a NON-PIPELINE child, inheritance already ran and DECLINED — ` +
-      `grep the CONTRACT_INHERIT_REFUSED / CONTRACT_INHERIT_FAILED log for this taskId, whose reason ` +
-      `names the cause (no qualified parent in the child's stage, parent holds no object-typed ` +
-      `contract, sanitize threw, or contract-too-large); (2) for a PIPELINE child, inheritance does ` +
-      `NOT apply by design — the contract must be supplied at task.create, so check it was landed ` +
-      `nested at parameters.interfaceContract and not double-nested; (3) only if neither explains it, ` +
-      `treat the contract as lost post-create and restore it before re-running.`
+      // Promotion E (E4, 2026-10-05): the cause is a PURE function of fields already loaded above (task type, the
+      // flag, the interfaceContractSource fact) — no await between the condition and this throw, so it stays
+      // outside every try by construction. ABSENCE FIRST: the source fact exists only when a contract was supplied at
+      // create, so the dominant case (a PIPELINE child created without one) has none. One branch; enum fields only.
+      interfaceContractMissingCause({ taskType: contractCheck?.type, flagged: requiresContract,
+        sourceFact: taskMeta.interfaceContractSource })
     );
   }
 

@@ -1,0 +1,39 @@
+{
+  "id": "plant-P-REACH",
+  "title": "P-REACH (batch-1 positive control): N-A suppresses six /32 host routes behind a summary-only /27; this plant DELETES its reachability steps V7, V8, V9, the ordering items that run them, and its Reachability-After-Suppression note, so the package carries no post-change step proving the affected destinations stay reachable (network 1.20.0 Phase 3: the reachability-after-suppression WARNING condition).",
+  "appliesTo": [
+    "author:cmuw8uwbl006yyx9ey6bw4cs6"
+  ],
+  "ops": [
+    {
+      "type": "replace",
+      "old": "### V7 — ceos1: reachability regression check for the flagged best-path risk ⚠️ CRITICAL\n\n*Context carried forward from Phase 1: because both devices independently originate the identical `10.99.0.0/27` prefix (local aggregate, empty AS-PATH) while also learning the peer's copy via eBGP (AS-PATH length 1), standard best-path selection is expected to prefer each device's own local aggregate — whose installed route is a discard — over the peer-learned path. If that occurs, traffic from ceos1 toward ceos2's 3 exporter addresses (and vice versa) black-holes into a local discard instead of crossing the link. This step is the deterministic test of that risk, satisfying protocol clause (b2).*\n\n```\nshow ip route 10.99.0.0/27\n```\n\n**Presence assertion (ceos1)** — this is the first-ever rendering of this route on this device (the aggregate does not exist pre-change); no literal is predicted.\n- Field whose presence decides PASS/FAIL: the **next-hop interface** of the installed/best route for `10.99.0.0/27`.\n  - **PASS**: next-hop interface is `Ethernet1` (the eBGP-learned path from `ceos2` wins best-path — traffic reaches the peer's 3 exporter addresses across the link).\n  - **FAIL / regression materialized**: next-hop interface is `Null0` (discard) — the local aggregate won best-path, ceos2's 3 exporter addresses (`10.99.0.2`, `10.99.0.4`, `10.99.0.24`) become unreachable from ceos1.\n- Volatile fields excluded by name: route age/uptime, any metric/weight tiebreak counters.\n\n### V8 — ceos2: reachability regression check (mirror of V7) ⚠️ CRITICAL\n\n```\nshow ip route 10.99.0.0/27\n```\n\n**Presence assertion (ceos2)**:\n- **PASS**: next-hop interface is `Ethernet1` (eBGP-learned path from `ceos1` wins — ceos1's 3 exporter addresses reachable).\n- **FAIL**: next-hop interface is `Null0` — `10.99.0.1`, `10.99.0.26`, `10.99.0.29` become unreachable from ceos2.\n- Volatile fields excluded by name: route age/uptime.\n\n### V9 — End-to-end reachability confirmation (operator-run, both directions)\n\n```\nping 10.99.0.2 source Loopback11\nping 10.99.0.4 source Loopback11\nping 10.99.0.24 source Loopback11\n```\n(run from ceos1; mirror with `ping 10.99.0.1/26/29 source Loopback11` from ceos2)\n\n**Presence assertion (both devices)** — no prior ping output exists for this post-change topology.\n- Field whose presence proves the property: the response line contains `0% packet loss` for each of the 3 target addresses.\n- Volatile fields excluded by name: round-trip-time (min/avg/max) values, individual `icmp_seq` sequence numbers.\n- If V7/V8 shows FAIL, V9 is expected to fail identically — V9 is confirmation, not a substitute for V7/V8.\n\n",
+      "new": ""
+    },
+    {
+      "type": "replace",
+      "old": "4. Run **V7/V8 before closing the window** — these are the gating checks for the flagged best-path risk. If either reads FAIL (`Null0`), execute the rollback on both devices immediately within the same window; do not leave the FAIL state in place past the window.\n5. Run **V9** as end-to-end confirmation once V7/V8 PASS.\n",
+      "new": ""
+    },
+    {
+      "type": "replace",
+      "old": "- **First post-apply check:** V1/V2 (config present), immediately followed by V7/V8 (the critical reachability gate) before V3–V6/V9.",
+      "new": "- **First post-apply check:** V1/V2 (config present), then V3–V6."
+    },
+    {
+      "type": "replace",
+      "old": "persistence is gated on V1–V9 passing first.",
+      "new": "persistence is gated on V1–V6 passing first."
+    },
+    {
+      "type": "replace",
+      "old": "## Reachability-After-Suppression Note (protocol clause b2)\n\nThis change suppresses 6 individual host-route advertisements. V7/V8 (RIB next-hop/best-path check) plus V9 (ping) together prove that every destination this change could make unreachable — all 6 exporter addresses, as observed by the harvest — remains reachable across the link post-change. No destination outside the harvested scope is addressed by this package.\n\n",
+      "new": ""
+    },
+    {
+      "type": "replace",
+      "old": "One named gap: V1–V9 all use",
+      "new": "One named gap: V1–V6 all use"
+    }
+  ]
+}

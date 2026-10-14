@@ -15,12 +15,15 @@ to end, and Step 0's Path 3 was earned by that build.
 six stamp sites are entries in `MECHANICAL_NETS` (`lib/agents/harness/mechanical-nets.ts`) and
 `execution-core.ts` calls the loop twice — once per invocation POINT. So Step 2's wiring layer is
 now: pick the `point` (`leaf-persist` or `leg-synthesize`; a net may register at BOTH under one
-name, as net #3 does), write `appliesTo` as an INVOCATION predicate only (never a lane or domain
-test — those belong inside `enrich`, where the reason is visible in the artifact), decide BOTH
+name, as net #3 does — and net #1 since value-chain B4, 2026-10-02: `derivationContainment` gained a `leaf-persist` entry on the value-leg Derivation Architect, while its existing `leg-synthesize` entry DISPATCHES inside `enrich` (value leg → hoist, every other leg → the unchanged computation), because a dispatch in `appliesTo` would be the domain test the registry forbids), write `appliesTo` as an INVOCATION predicate only (never a lane or domain
+test — those belong inside `enrich`, where the reason is visible in the artifact; and when it keys on a role, an EXACT match, never a regex: `HARNESS_LEAF_ROLE_RE` would have put a value-leg net on every existing Architect), decide BOTH
 render slots or record why one is null, and add the name to `RESULT_JSON_SUMMARY_KEYS` — registering
 a net and whitelisting its key are two different acts, and the strict pick drops an unlisted key
 with no error. `test:net-registry` enforces all of that; `test:net-registry-equivalence` is the
-acceptance for any change to an existing net.
+acceptance for any change to an existing net — **and, before push, `scripts/replay-nets-byte-identity.sh`**: the
+equivalence gate replays ~9 archived specimen legs; the production replay runs the shipping registry over EVERY leg in
+the window and their children (2,196 tasks on 2026-10-02) at the base and new commits, read-only, and must show zero
+changed lines with every added line accounted for (Protocol 15 phase 6; `byte-identity-refactor-pattern.md`).
 **Owner**: `execution-facts-specialist` (since 2026-09-11); paired discovery
 `.claude/knowledge/discoveries/execution-facts-discovery.md`. Scheduled to be generalised to
 **adding-a-mechanical-net** in the same arc that extracts the shared net registry.

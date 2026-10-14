@@ -35,6 +35,7 @@ import {
 } from './rollback-containment';
 import { resolveTaskProtocol } from './program-protocol';
 import { readAuthoritativeResultField } from './authoritative-result-read';
+import { buildRawWitness } from './raw-tool-witness';
 
 /** Same narrow surface, same three reasons, as `ContainmentPrisma` — see that module's note. */
 export type RollbackPrisma = Pick<Prisma.TransactionClient, 'task' | 'stage' | 'agentExecution' | 'agentArtifact' | '$queryRaw'>;
@@ -132,7 +133,7 @@ export async function computeRollbackContainmentFact(
   // a coverage gap must surface as visible escalation, never as silence.
 
   // ── CONTENT ARMS. Existence-first (derivation-containment's finding (f)): a package that quotes
-  // nothing needs no harvest, and reporting `no-harvest-text` for it would blame the wrong layer.
+  // nothing needs no harvest, and reporting `no-harvest-tool-results` for it would blame the wrong layer.
   if (scope.blocksScanned.restore === 0) {
     return withDisposition({
       checked: false, reason: 'no-restore-blocks',
@@ -177,23 +178,43 @@ export async function computeRollbackContainmentFact(
   // predicate to a PIPELINE lookup — a PIPELINE writes `pipeline-index.json`, which is the same
   // class of defect recorded at three separate sites in the containment enrichment's header.
   // RWF Wave B: the authoritative harvest execution (authoritative-result-read.ts).
-  const harvestText = (await readAuthoritativeResultField(prisma, harvestChild.id, 'finalResponse')).value;
-  if (!harvestText) {
+  //
+  // ── E1 (VERBATIM-QUOTE-OMISSION, owner decision 2026-10-13): THE WITNESS IS THE RAW TOOL RESULTS ──────────────────
+  // Until E1 this read the Harvester's `finalResponse` — its TRANSCRIPTION of what the tools returned, not the witness.
+  // Live, both directions: on 2026-10-01 (leg cmuoukung…) the transcription said `$remote_actr`, the rollback carried
+  // it, and the net stamped 19/19 BENIGN, certifying the corruption; on Phase 4 run 1 the Author CORRECTED it to
+  // `$remote_addr` and the net escalated the correction. The question is unchanged ("is each restore line in what this
+  // leg witnessed"); only the witness moved: the union of the Harvester's raw tool-result lines, each `rewritten` call
+  // also contributing its R9-sanitised form (what the model was shown). The `witness` object below is the series key.
+  const rawToolCalls = (await readAuthoritativeResultField(prisma, harvestChild.id, 'toolCalls')).value;
+  let toolCalls: unknown = [];
+  if (rawToolCalls) {
+    try { toolCalls = JSON.parse(rawToolCalls); } catch { toolCalls = []; }
+  }
+  const raw = buildRawWitness(toolCalls);
+  const witness = {
+    source: 'harvest-raw-tool-results',
+    calls: raw.calls,
+    persistTruncatedCalls: raw.persistTruncatedCalls,
+    rewrittenCalls: raw.rewrittenCalls,
+  };
+  if (raw.lines.size === 0) {
     // The check SHOULD have run and could not: the package quotes restore content and the witnessed
     // evidence is unreadable. This is the arm that FAILS CLOSED (blocking, via the disposition).
     return withDisposition({
-      checked: false, reason: 'no-harvest-text', harvestSource: harvestChild.id,
+      checked: false, reason: 'no-harvest-tool-results', harvestSource: harvestChild.id, witness,
       blocksScanned: scope.blocksScanned, excluded: scope.excluded, scope: ROLLBACK_SCOPE_NOTE,
     });
   }
 
-  const check = checkRollbackContainment(scope.lines, harvestText);
+  const check = checkRollbackContainment(scope.lines, [...raw.lines].join('\n'));
   return withDisposition({
     checked: true,
     ...check,
     excluded: scope.excluded,
     blocksScanned: scope.blocksScanned,
     harvestSource: harvestChild.id,
+    witness,
     matching: 'trimmed-exact-line',
     scope: ROLLBACK_SCOPE_NOTE,
   });
@@ -217,7 +238,7 @@ export async function computeRollbackContainmentFact(
  */
 export async function hoistRollbackContainment(
   prisma: RollbackPrisma,
-  { stageId, programTier }: { stageId: unknown; programTier?: boolean }
+  { stageId, programTier, valueLeg }: { stageId: unknown; programTier?: boolean; valueLeg?: boolean }
 ): Promise<Record<string, unknown>> {
   if (programTier === true) {
     return {
@@ -243,6 +264,10 @@ export async function hoistRollbackContainment(
   });
   const authorChild = children.find(c =>
     (c.agentRole ?? '').toLowerCase().includes('author') || c.title.toLowerCase().startsWith('author'));
+  // value-chain B4 (audit A4): a VALUE leg has no author child BY DESIGN and nothing to roll back. Without this arm
+  // the hoist stamps no-author-child → blocking / hard-gap on every value leg. Only when the leg is a value leg —
+  // every other leg's no-author-child is byte-unchanged.
+  if (!authorChild && valueLeg === true) return miss('value-leg-no-package');
   if (!authorChild) return miss('no-author-child');
 
   // RWF Wave B: hoist from the Author execution the Reviewer was chained — a superseded or R8-empty

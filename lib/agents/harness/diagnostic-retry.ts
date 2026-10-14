@@ -21,6 +21,9 @@
  *   3. NOT correctionTurnUsed (the #89 anti-fabrication correction already ran)
  *   4. Agent did NOT self-flag budget exhaustion in the deliverable text
  *      (a same-window retry would hit the same rate-limit wall)
+ *   5. NOT formCorrectionAttempted (2026-10-07, mechanical-reflection-trigger Step B): the package form
+ *      correction already ran. ONE reflection pass per execution, precedence #89 > form > #90; an
+ *      ATTEMPT spends the pass whether or not the correction was adopted.
  *
  * Bounded to ONE retry (no tools → no loop re-entry). Non-fatal on empty/throw:
  * the prior response is kept.
@@ -28,13 +31,15 @@
  * Gate: scripts/test-diagnostic-retry.ts. Manifest: Part B (M5).
  */
 
-import { addUsage, buildLlmCallOptions, BUDGET_ERROR_PATTERN, checkProviderErrorResponse } from './agentic-tool-loop';
-import type { AccumulatedUsage, NormalizedModelConfig } from './agentic-tool-loop';
+import { addUsage, buildLlmCallOptions, BUDGET_ERROR_PATTERN, checkProviderErrorResponse, reflectionErrorFact, warnReflectionError } from './agentic-tool-loop';
+import type { AccumulatedUsage, NormalizedModelConfig, ReflectionErrorFact } from './agentic-tool-loop';
+import type { LLMRequestOptions } from '@/lib/services/llm/types';
 import { parseConfidenceScore } from './parse-confidence';
 
 // The deliverable-text budget self-flag pattern (distinct from the tool-error
 // BUDGET_ERROR_PATTERN — this scans the agent's own prose). Kept verbatim.
-const BUDGET_SELF_FLAG_PATTERN =
+// Exported 2026-10-07 so the package form check applies the SAME budget disqualifier (one definition).
+export const BUDGET_SELF_FLAG_PATTERN =
   /token budget|rate limit|MCP tool calls.*blocked|hourly.*budget.*exhaust|all MCP tools are rate-limited/i;
 void BUDGET_ERROR_PATTERN; // (imported to document the sibling; not used here)
 
@@ -61,6 +66,9 @@ export interface DiagnosticRetryInput {
   confidenceScore: number | null;
   confidenceCapped: boolean;
   correctionTurnUsed: boolean;
+  /** 5th disqualifier (Step B): the package form correction was ATTEMPTED this execution. Optional so every
+   *  pre-Step-B caller and fixture is unchanged (absent ⇒ false). */
+  formCorrectionAttempted?: boolean;
   /** The deliverable text (last-turn, post-Phase-2). Scanned for the budget
    *  self-flag and embedded in the diagnostic prompt. */
   text: string;
@@ -74,6 +82,9 @@ export interface DiagnosticRetryInput {
   /** The agent's base user prompt, passed to the retry generateText call. */
   prompt: string;
   normalizedLlmConfig: NormalizedModelConfig;
+  /** The SAME tool definitions the loop's full calls sent (REQUIRED key — state `undefined` for a tool-less run).
+   *  Re-sent with tool_choice 'none' for preserved-thinking models; ignored by the legacy shape. AUDIT C1. */
+  mcpFunctions: LLMRequestOptions['functions'] | undefined;
   executionId: string;
   userId: string | undefined;
 }
@@ -91,6 +102,9 @@ export interface DiagnosticRetryResult {
   currentResponse: any;
   /** Re-parsed confidence (retry) or unchanged. */
   confidenceScore: number | null;
+  /** Set only when the retry CALL errored (provider error response or throw); the core stamps it into
+   *  `toolLoop.reflectionErrors` (AUDIT 2026-10-07). Absent on every other path. */
+  reflectionError?: ReflectionErrorFact;
 }
 
 export async function runDiagnosticRetry(
@@ -108,11 +122,14 @@ export async function runDiagnosticRetry(
   let currentResponse = input.currentResponse;
   let confidenceScore = input.confidenceScore;
   let diagnosticRetryUsed = false;
+  let reflectionError: ReflectionErrorFact | undefined;
 
   const isInDiagnosticBand = confidenceScore !== null && confidenceScore >= 50 && confidenceScore <= 69;
   const agentSelfFlaggedBudget = !!text && BUDGET_SELF_FLAG_PATTERN.test(text.slice(0, 1500));
 
-  if (isInDiagnosticBand && !confidenceCapped && !correctionTurnUsed && !agentSelfFlaggedBudget) {
+  const formCorrectionAttempted = input.formCorrectionAttempted === true;
+
+  if (isInDiagnosticBand && !confidenceCapped && !correctionTurnUsed && !agentSelfFlaggedBudget && !formCorrectionAttempted) {
     try {
       const priorConfidence = confidenceScore as number;
       const diagnosticPrompt =
@@ -155,6 +172,7 @@ export async function runDiagnosticRetry(
       try {
         retryResponse = await generateText(prompt, buildLlmCallOptions(normalizedLlmConfig, 'reflection', {
           signal: diagAbort.signal,
+          mcpFunctions: input.mcpFunctions,
           messages: messageHistory as any,
         }), userId);
       } finally {
@@ -165,6 +183,8 @@ export async function runDiagnosticRetry(
       // on empty text, but a provider-error return ({text:'', error}) would otherwise be discarded
       // — the one diagnostic that names the cause. Never fatal here.
       checkProviderErrorResponse(retryResponse, { executionId, phase: 'diagnostic_retry' }, logger, 'log');
+      reflectionError = reflectionErrorFact('diagnostic_retry', retryResponse) ?? undefined;
+      if (reflectionError) warnReflectionError(logger, executionId, reflectionError, retryResponse?.error?.message);
 
       if (retryResponse?.text && retryResponse.text.trim().length > 0) {
         // Accumulate retry tokens to totalUsage (same pattern as correction turn)
@@ -203,7 +223,7 @@ export async function runDiagnosticRetry(
           ? 'Diagnostic retry: completed — LARGE NEGATIVE DELTA (first response was severely overconfident; agent reflected and dropped >20 points). Investigate prior response for inflated claims, missing data, or fabrication patterns.'
           : 'Diagnostic retry: completed');
 
-        return { diagnosticRetryUsed, text: retryText, currentResponse, confidenceScore };
+        return { diagnosticRetryUsed, text: retryText, currentResponse, confidenceScore, ...(reflectionError ? { reflectionError } : {}) };
       } else {
         logger.warn({ executionId, retryDurationMs },
           'Diagnostic retry returned empty — keeping prior response');
@@ -212,7 +232,13 @@ export async function runDiagnosticRetry(
       // Non-fatal: keep prior response, log for forensics
       logger.warn({ err: retryErr, executionId },
         'Diagnostic retry failed — keeping prior response');
+      reflectionError = reflectionErrorFact('diagnostic_retry', null, retryErr) ?? undefined;
+      if (reflectionError) warnReflectionError(logger, executionId, reflectionError, retryErr instanceof Error ? retryErr.message : String(retryErr));
     }
+  } else if (isInDiagnosticBand && formCorrectionAttempted) {
+    // Forensic visibility: the band matched but the run's one reflection pass was already spent.
+    logger.info({ executionId, confidenceScore, reason: 'form_correction_attempted' },
+      'Diagnostic retry skipped: a form correction (package or requirements) already spent this execution\'s reflection pass');
   } else if (isInDiagnosticBand && agentSelfFlaggedBudget) {
     // Forensic visibility: log when we DECLINE to retry due to budget exhaustion.
     // Same-window retry would hit the same wall — manual-after-window-reset is the
@@ -224,5 +250,5 @@ export async function runDiagnosticRetry(
     }
   }
 
-  return { diagnosticRetryUsed, text, currentResponse, confidenceScore };
+  return { diagnosticRetryUsed, text, currentResponse, confidenceScore, ...(reflectionError ? { reflectionError } : {}) };
 }

@@ -41,11 +41,12 @@
 
 import { LLMProvider, DEFAULT_MAX_TOKENS, DEFAULT_MODEL_PARAMS } from '@/lib/services/llm/types';
 import { RUNTIME_LIMITS } from '@/lib/validation/runtime-limits';
-import { capabilitiesFor, clampEffort } from '@/lib/services/llm/model-capabilities';
+import { capabilitiesFor, clampEffort, bindsThinkingToPrefix } from '@/lib/services/llm/model-capabilities';
 import { AppError } from '@/lib/errors';
 import type { LLMRequestOptions } from '@/lib/services/llm/types';
 import { sanitizeChainedOutput, isR9OperatorEvent } from '@/lib/agents/harness/sanitize-chained-output';
 import { redactArtifactSecrets } from '@/lib/agents/harness/redact-artifact-secrets';
+import { DEFAULT_READ_BUDGET, readBudgetFor, type ReadBudget } from '@/lib/agents/role-read-budget';
 
 /**
  * Token-usage accumulation across an agentic loop's turns.
@@ -224,17 +225,28 @@ export function normalizeModelConfig(
  * The two call shapes (field matrix, all 8 sites):
  *  - 'full'       — initial + loop-continuation calls: tools available, webSearch
  *                   and extended thinking honored.
- *  - 'reflection' — #89 anti-fabrication correction + #90 diagnostic retry:
- *                   `functions: []` + `functionCall: 'none'` structurally prevent
- *                   loop re-entry; thinking disabled (simple rewrite); webSearch
- *                   omitted.
+ *  - 'reflection' — #89 anti-fabrication correction, budget fail-fast, form correction,
+ *                   #90 diagnostic retry: `functionCall: 'none'` structurally prevents
+ *                   loop re-entry. TWO shapes, chosen by the model's capability:
+ *                   · legacy (every model with `bindsThinkingToPrefix: false` — Sonnet 5 et al.,
+ *                     BYTE-IDENTICAL to before): `functions: []`, no thinking budget, no
+ *                     webSearch, no cacheControl, no effort.
+ *                   · append-only (`bindsThinkingToPrefix: true` — Opus 5.5, Fable 5.1): the
+ *                     FULL-mode options with ONLY `functionCall` switched to 'none'. Same tool
+ *                     set, same system representation, same effort/thinking/cache — because
+ *                     preserved thinking binds every replayed thinking block to the system +
+ *                     TOOL SET + earlier messages, and the no-tools shape invalidated all of
+ *                     them (400 when enforced). `tool_choice` is outside the binding. Requires
+ *                     the caller to pass `mcpFunctions` (all four sites do).
+ *                     Audit: cline_docs/reviews/opus55-loop-audit-2026-10-07/AUDIT.md (C1).
  */
 export type LlmCallMode = 'full' | 'reflection';
 
 export interface PerCallOptions {
   /** Execution-level AbortController signal — required on EVERY call (P4 rule). */
   signal: AbortSignal;
-  /** Tool definitions; only consumed in 'full' mode. */
+  /** Tool definitions. Consumed in 'full' mode, and in 'reflection' mode for models that bind thinking to the
+   *  tool set (`bindsThinkingToPrefix`) — there the SAME array the full calls sent must be passed again. */
   mcpFunctions?: LLMRequestOptions['functions'];
   /** Message history for continuation/reflection turns; omitted on the initial call. */
   messages?: LLMRequestOptions['messages'];
@@ -266,8 +278,10 @@ export function buildLlmCallOptions(
     signal: perCall.signal,
   };
 
-  if (mode === 'full') {
-    return {
+  // Preserved-thinking models: reflection = the full shape with tool_choice 'none' (see the type doc above).
+  // The 'full' object is built by the SAME expression, so the two cannot drift field-by-field.
+  if (mode === 'full' || bindsThinkingToPrefix(cfg.model)) {
+    const full: LLMRequestOptions = {
       ...base,
       // Zero-tool guard (token-optimizer, G review): no functions => structurally single-call =>
       // a cache write that is never read (+25% on one request). Only cache multi-turn-capable calls.
@@ -278,6 +292,9 @@ export function buildLlmCallOptions(
       thinkingBudgetTokens: cfg.thinkingBudgetTokens,
       effort: cfg.effort,
     };
+    if (mode === 'full') return full;
+    // 'reflection' on a preserved-thinking model: only the tool CHOICE changes (outside the binding).
+    return { ...full, functionCall: 'none' };
   }
 
   // reflection: no tools (structural loop-re-entry guard), no thinking,
@@ -364,8 +381,9 @@ export function truncateForLlm(
 /** Window sizing. max < MAX_TOOL_RESULT_LENGTH (8000) by an envelope+escaping margin so a served
  *  window is itself NEVER Tier-1-truncated (the read_more block bypasses truncateForLlm). */
 export const READ_MORE_WINDOW_BOUNDS = { min: 100, max: 7000, default: 6000 };
-/** Hard cap on windows served for ONE origin ref (anti-page-the-whole-thing; TO-1/SO-C5). */
-const READ_MORE_PAGES_PER_ORIGIN = 6;
+// The per-origin and per-run window caps are PER ROLE since 2026-10-12 (owner decision R1): they live in
+// lib/agents/role-read-budget.ts (default 6 / 8 for every role; the Program Architect 9 / 12) and are carried on the
+// PagerState, never a module constant — the trailer must report the EXECUTING role's real pages left.
 /** Per-execution store ceiling. Evict-oldest on overflow → a later read_more on an evicted ref
  *  returns a fact-shaped is_error (never a throw). Bounds memory on pathological runs. */
 const PAGER_STORE_MAX_BYTES = 2_000_000;
@@ -379,20 +397,24 @@ export interface PagerState {
   bytesStored: number;
   /** ref → windows served so far (per-origin cap). */
   pagesByRef: Map<number, number>;
+  /** Per-origin cap — the role's ReadBudget.pagesPerDocument (anti-page-the-whole-thing; TO-1/SO-C5). */
+  pagesPerDocument: number;
   /** read_more calls served this run (per-run cap). */
   pagerTurnsUsed: number;
-  /** min(8, floor(0.25 * maxToolTurns)) — computed once at creation. */
+  /** min(budget.pagesPerRun, floor(0.25 * maxToolTurns)) — computed once at creation. */
   maxPagerTurns: number;
 }
 
-export function createPagerState(maxToolTurns: number): PagerState {
+/** `budget` is the executing role's (readBudgetFor(agentRole)); the default is every non-listed role's 6 / 8. */
+export function createPagerState(maxToolTurns: number, budget: Readonly<ReadBudget> = DEFAULT_READ_BUDGET): PagerState {
   return {
     store: new Map(),
     nextRef: 1,
     bytesStored: 0,
     pagesByRef: new Map(),
+    pagesPerDocument: budget.pagesPerDocument,
     pagerTurnsUsed: 0,
-    maxPagerTurns: Math.min(8, Math.floor(0.25 * maxToolTurns)),
+    maxPagerTurns: Math.min(budget.pagesPerRun, Math.floor(0.25 * maxToolTurns)),
   };
 }
 
@@ -446,7 +468,7 @@ RETURNS raw text: a header [read_more ref=.. offset=..], the window, then either
  * `{ ref, offset }` and say "page only what the task needs". That is a price with no total: the
  * agent could see what a window COSTS and never what remained REACHABLE. Reach is the product of
  * two numbers and the agent holds only one — `READ_MORE_WINDOW_BOUNDS` is in the tool schema,
- * `READ_MORE_PAGES_PER_ORIGIN` is module-private and appears nowhere the model can see until it is
+ * the per-origin page cap (the role's `pagesPerDocument`) appears nowhere the model can see until it is
  * already spent. So an agent cannot compute its own ceiling even in principle, and "let the agent
  * pass `limit`" is not an achievable answer.
  *
@@ -473,13 +495,14 @@ export function buildMoreRemainsTrailer(
   pagesUsedOnRef: number,
   pagerTurnsUsed: number,
   maxPagerTurns: number,
+  pagesPerDocument: number,
 ): string {
   const remaining = fullLength - nextOffset;
   // Both caps bind; the smaller is the real one. Per-origin (SO-C5) and per-run are independent,
   // and on the live incident BOTH were at their limit — the run-budget message simply fired first
   // because its check sits higher. Reporting only one would name the wrong ceiling.
   const pagesLeft = Math.min(
-    READ_MORE_PAGES_PER_ORIGIN - pagesUsedOnRef,
+    pagesPerDocument - pagesUsedOnRef,
     maxPagerTurns - pagerTurnsUsed,
   );
   const scopeHint =
@@ -547,8 +570,8 @@ function pagerServe(
     return mkErr(`read_more: unknown or expired ref ${ref}. Refs are valid only within this execution and may expire under memory pressure — re-issue the original read (scoped/narrower) for fresh content.`, args);
   }
   const originPages = pager.pagesByRef.get(ref) ?? 0;
-  if (originPages >= READ_MORE_PAGES_PER_ORIGIN) {
-    return mkErr(`read_more: already paged ref ${ref} ${READ_MORE_PAGES_PER_ORIGIN} times. Stop paging this result — scope the original read narrower or flag the remaining tail as a gap.`, args);
+  if (originPages >= pager.pagesPerDocument) {
+    return mkErr(`read_more: already paged ref ${ref} ${pager.pagesPerDocument} times. Stop paging this result — scope the original read narrower or flag the remaining tail as a gap.`, args);
   }
   const offset = Number(args?.offset);
   if (!Number.isInteger(offset) || offset < 0 || offset >= full.length) {
@@ -569,6 +592,7 @@ function pagerServe(
   const trailer = nextOffset !== null
     ? buildMoreRemainsTrailer(
         ref, nextOffset, full.length, originPages + 1, pager.pagerTurnsUsed + 1, pager.maxPagerTurns,
+        pager.pagesPerDocument,
       )
     : `\n[end of result]`;
   const text = `${header}\n${win}${trailer}`;
@@ -971,6 +995,12 @@ export interface AgenticLoopInput {
    * forced to state a deadline instead of silently getting an unbounded one.
    */
   deadlineAt: number;
+  /**
+   * The executing agent's RESOLVED role (I-9 chain, the core's `agentRole`) — selects the read_more pager's
+   * per-role read budget (lib/agents/role-read-budget.ts; 2026-10-12, owner decision R1). REQUIRED for the same
+   * reason as deadlineAt: a fixture must state it; `null` = the default budget.
+   */
+  agentRole: string | null;
   executionId: string;
   taskId: string;
   userId?: string;
@@ -1043,6 +1073,10 @@ export interface AgenticLoopResult {
    *  half of the 2026-09-24 incident). The core threads THIS value to the quality layer and the
    *  result.json builder. A transcription (Protocol 10 fact), never a judgement of the text. */
   finalStopReason: string | null;
+  /** Reflection calls made INSIDE the loop (#89 correction, budget fail-fast) that ERRORED — provider error response or
+   *  throw. Empty when none did. The core appends form-correction / #90 entries and stamps the list as
+   *  `toolLoop.reflectionErrors` (only when non-empty). See `reflectionErrorFact`. */
+  reflectionErrors: ReflectionErrorFact[];
   /** Phase 2 (2026-07-05, C-1 resolution): the deliverable text = the FINAL turn's
    *  raw text (post-#89 correction, since `currentResponse` is replaced on correction).
    *  This is the SINGLE deliverable-text source both execution paths consume, so the
@@ -1252,12 +1286,178 @@ export function checkProviderErrorResponse(
   // WU-7 (SDK Phase 2): throw AppError carrying `.code` so the engine's errCode→errorCategory
   // plumbing surfaces the real category on error.json — e.g. CONTEXT_WINDOW_EXCEEDED or
   // LLM_STREAM_IDLE_TIMEOUT — instead of an undefined category from a plain Error.
-  throw new AppError(
+  const providerErr = new AppError(
     `LLM call failed at provider layer: ${apiErrMsg}` +
       (apiErrCode ? ` (code: ${apiErrCode})` : '') +
       `. See pino logs for full error details.`,
     apiErrCode || 'LLM_PROVIDER_ERROR'
   );
+  // COMPLETE-THEN-FAIL (2026-10-05, v2 §3.1 / BC-F-5): the THROW SITE marks this error as a provider failure
+  // and carries the provider's own error type + request id, read STRUCTURALLY from the SDK error — never
+  // regexed out of the message. The loop wrapper copies them into the attached partial state. Additive
+  // property only: `.message` / `.code` / `.name` are byte-unchanged for every existing reader.
+  // NON-ENUMERABLE (build review BC-H1): pino's err serializer and JSON.stringify copy every enumerable own property,
+  // so an enumerable mark would change every existing reader's output. Read by name only.
+  Object.defineProperty(providerErr, PROVIDER_ERROR_MARK, {
+    value: readProviderErrorStructure(response?.error?.details), enumerable: false, writable: true, configurable: true,
+  });
+  throw providerErr;
+}
+
+/** Property name of the throw-site provider mark (COMPLETE-THEN-FAIL). Not exported as a string anywhere else. */
+const PROVIDER_ERROR_MARK = 'agenticLoopProviderError';
+
+/**
+ * The provider's own error `type` and request id, read STRUCTURALLY from the SDK error the provider returned as
+ * `response.error.details` (anthropic-sdk-provider.ts catch). The envelope is unwrapped exactly as the provider's
+ * classifier does: on SDK 0.109 `APIError.error` is the FULL response envelope `{type:'error', error:{type,…},
+ * request_id}`, so the inner error is `envelope.error` when it is an object, else the envelope itself.
+ * Null fields when the structure is absent (a transport error has no envelope).
+ */
+/**
+ * REFLECTION-CALL ERROR FACT (Opus 5.5 loop audit, 2026-10-07). The four reflection passes (#89 correction, budget
+ * fail-fast, form correction, #90 diagnostic retry) are non-fatal by design: a failed call keeps the prior response.
+ * That made a failing pass INVISIBLE — and the one failure we know is coming is not ours to see: preserved thinking
+ * (Opus 5.5) 400s an edited history only for orgs created on/after 2026-08-31, i.e. BYOK CUSTOMERS, never the
+ * platform's own (older) org. So every errored reflection call is stamped (nested in `toolLoop`, E3b) and warned.
+ * A TRANSCRIPTION (Protocol 10 fact): the site, the HTTP status and the provider's structural error type — read from
+ * the SDK error object, never regexed out of a message. No cause is inferred; the message is in the warn line only.
+ */
+export type ReflectionSite = 'correction' | 'budget_failfast' | 'form_correction' | 'requirements_form_correction' | 'diagnostic_retry';
+export interface ReflectionErrorFact {
+  site: ReflectionSite;
+  /** HTTP status of the provider error (400, 429, 529…); null for a transport/abort/internal failure. */
+  status: number | null;
+  /** The provider's structural error type (`invalid_request_error`, `overloaded_error`…), or null. */
+  errorType: string | null;
+  /** The provider layer's classified code (`unknown_error`, `CONTEXT_WINDOW_EXCEEDED`…) or the thrown error's code. */
+  errorCode: string | null;
+}
+
+/** Build the fact from a provider ERROR RESPONSE (`{text:'', error:{message,code,details}}`) or a THROWN error.
+ *  Returns null when there is no error (the call succeeded — an empty text is not an error). */
+export function reflectionErrorFact(site: ReflectionSite, response: any, thrown?: unknown): ReflectionErrorFact | null {
+  if (thrown === undefined && !response?.error) return null;
+  const src: any = thrown !== undefined ? thrown : response.error.details;
+  const status = src && typeof src.status === 'number' ? src.status : null;
+  const errorCode = thrown !== undefined
+    ? (thrown && typeof (thrown as any).code === 'string' ? (thrown as any).code : null)
+    : (typeof response.error.code === 'string' ? response.error.code : null);
+  return { site, status, errorType: readProviderErrorStructure(src).providerErrorType, errorCode };
+}
+
+/** The loud half: ONE warn line per errored reflection call, carrying the message (the fact does not). */
+export function warnReflectionError(
+  logger: { warn: (obj: Record<string, unknown>, msg: string) => void },
+  executionId: string, fact: ReflectionErrorFact, message: string | undefined,
+): void {
+  logger.warn({ executionId, reflectionError: fact, apiErrorMessage: message ? String(message).slice(0, 500) : null },
+    'Reflection call errored — the pass did not run and the prior response stands (stamped toolLoop.reflectionErrors)');
+}
+
+export function readProviderErrorStructure(details: unknown): { providerErrorType: string | null; requestId: string | null } {
+  if (!details || typeof details !== 'object') return { providerErrorType: null, requestId: null };
+  const d = details as Record<string, unknown>;
+  const envelope = (d.error && typeof d.error === 'object') ? d.error as Record<string, unknown> : null;
+  const inner = envelope && envelope.error && typeof envelope.error === 'object'
+    ? envelope.error as Record<string, unknown>
+    : envelope;
+  const t = inner && typeof inner.type === 'string' && inner.type !== 'error' ? inner.type : null;
+  const rid = (envelope && typeof envelope.request_id === 'string' ? envelope.request_id : null)
+    ?? (typeof d.requestID === 'string' ? d.requestID : null)
+    ?? (typeof d.request_id === 'string' ? d.request_id : null);
+  return { providerErrorType: t, requestId: rid };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// COMPLETE-THEN-FAIL (2026-10-05, DESIGN-v2 §3.1, audit W1): partial loop state ATTACHED to the ORIGINAL error.
+//
+// When anything throws inside the loop, the wrapper below attaches what the loop had done so far to the SAME
+// error object under one namespaced property and rethrows THAT object. It never wraps: every existing reader of
+// the error (the adapter catches' message/code derivations, the stream's SSE error event, the engine safety net,
+// the mcp-dispatch handler) sees a byte-identical error. Two consumers read the attachment:
+//   - the core's post-completion rescue (predicate P1 requires it), and
+//   - both adapters' failure persist, which stamps `capturedUsage ?? partial.totalUsage` (F-c — before this, every
+//     FAILED row from a loop throw carried NULL tokens and its spend never reached token_usage_daily).
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** Brand checked by `readAgenticLoopPartial` — a plain object that merely has the property is not trusted. */
+export const AGENTIC_LOOP_PARTIAL_BRAND = 'agentic-loop-partial/v1' as const;
+/** The attachment's property name on the thrown error. */
+export const AGENTIC_LOOP_PARTIAL_KEY = 'agenticLoopPartial' as const;
+
+/** Which call the loop was in when it threw. */
+export type AgenticLoopPhase = 'initial' | 'pause_turn' | 'tool_execution' | 'continuation' | 'budget_failfast' | 'correction';
+
+export interface AgenticLoopPartial {
+  brand: typeof AGENTIC_LOOP_PARTIAL_BRAND;
+  toolCallResults: ToolCallRecord[];
+  failedToolCalls: number;
+  /** The accumulator at the throw (zeros when no response had usage yet). Never summed with a captured usage. */
+  totalUsage: AccumulatedUsage;
+  /** Same expression the core uses: the last good response's model, else the configured model. */
+  servingModel: string | null;
+  turnCount: number;
+  /** Stop reason of the last response that passed the provider check, or null. */
+  finalStopReason: string | null;
+  /** ISO time the loop caught the throw (the fact's `failedAt`). Optional so a hand-built partial stays valid. */
+  failedAt?: string;
+  phase: AgenticLoopPhase;
+  turn: number;
+  /** Set BY THE THROW SITE: 'provider' = the P2 provider-error guard (it marks its own AppError); 'abort' = the execution signal fired. */
+  causeClass: 'provider' | 'abort' | 'internal';
+  providerErrorType: string | null;
+  requestId: string | null;
+}
+
+/** The mutable progress record the inner loop keeps current. Per-call, never module-level (S1). */
+interface LoopTrack {
+  toolCallResults: ToolCallRecord[];
+  totalUsage: AccumulatedUsage | null;
+  turnCount: number;
+  lastResponse: any;
+  phase: AgenticLoopPhase;
+  turn: number;
+}
+
+/** Read a branded partial off a thrown value; null when absent or unbranded. */
+export function readAgenticLoopPartial(err: unknown): AgenticLoopPartial | null {
+  if (!err || typeof err !== 'object') return null;
+  const p = (err as Record<string, unknown>)[AGENTIC_LOOP_PARTIAL_KEY] as AgenticLoopPartial | undefined;
+  if (!p || typeof p !== 'object' || p.brand !== AGENTIC_LOOP_PARTIAL_BRAND) return null;
+  if (!Array.isArray(p.toolCallResults) || !p.totalUsage || typeof p.turnCount !== 'number') return null;
+  return p;
+}
+
+function attachAgenticLoopPartial(err: unknown, track: LoopTrack, input: AgenticLoopInput): void {
+  if (!err || typeof err !== 'object') return; // a thrown primitive cannot carry it — P1 then declines
+  const mark = (err as Record<string, unknown>)[PROVIDER_ERROR_MARK] as
+    { providerErrorType: string | null; requestId: string | null } | undefined;
+  // Abort FIRST (build review BC-L2): the SDK turns an aborted stream into an {error} response, which the P2 guard then
+  // marks — so a watchdog abort also carries the provider mark. The signal is the stronger fact.
+  const causeClass: AgenticLoopPartial['causeClass'] = input.signal?.aborted ? 'abort' : mark ? 'provider' : 'internal';
+  const partial: AgenticLoopPartial = {
+    brand: AGENTIC_LOOP_PARTIAL_BRAND,
+    toolCallResults: track.toolCallResults,
+    failedToolCalls: track.toolCallResults.filter((t) => !t.success).length,
+    totalUsage: track.totalUsage ? { ...track.totalUsage } : newAccumulatedUsage(undefined),
+    servingModel: track.lastResponse?.metadata?.model || input.cfg?.model || null,
+    turnCount: track.turnCount,
+    finalStopReason: track.lastResponse?.stopReason ?? null,
+    // The THROW moment (build review EF-F6) — the fact's `failedAt`, not the later rescue-evaluation time.
+    failedAt: new Date().toISOString(),
+    phase: track.phase,
+    turn: track.turn,
+    causeClass,
+    providerErrorType: mark?.providerErrorType ?? null,
+    requestId: mark?.requestId ?? null,
+  };
+  try {
+    // NON-ENUMERABLE (build review BC-H1): `toolCallResults` holds RAW tool results (pre-R9, untruncated, unredacted). An
+    // enumerable property would be copied by pino's err serializer into every `logger.error({ err })` of every loop
+    // throw — journald would receive the whole tool log 2–3 times per failure. Every consumer reads it by name.
+    Object.defineProperty(err, AGENTIC_LOOP_PARTIAL_KEY, { value: partial, enumerable: false, writable: true, configurable: true });
+  } catch { /* frozen error object — nothing to attach; the rescue declines (P1) and F-c falls back to null */ }
 }
 
 export async function runAgenticToolLoop(
@@ -1265,7 +1465,23 @@ export async function runAgenticToolLoop(
   deps: AgenticLoopDeps,
   observers: AgenticLoopObservers = {}
 ): Promise<AgenticLoopResult> {
-  const { prompt, cfg, mcpFunctions, maxToolTurns, signal, deadlineAt, executionId, taskId, userId } = input;
+  const track: LoopTrack = { toolCallResults: [], totalUsage: null, turnCount: 0, lastResponse: null, phase: 'initial', turn: 0 };
+  try {
+    return await runAgenticToolLoopInner(input, deps, observers, track);
+  } catch (err) {
+    // ATTACH, never wrap (audit W1): the SAME object is rethrown, so identity and every field readers use are kept.
+    attachAgenticLoopPartial(err, track, input);
+    throw err;
+  }
+}
+
+async function runAgenticToolLoopInner(
+  input: AgenticLoopInput,
+  deps: AgenticLoopDeps,
+  observers: AgenticLoopObservers,
+  track: LoopTrack,
+): Promise<AgenticLoopResult> {
+  const { prompt, cfg, mcpFunctions, maxToolTurns, signal, deadlineAt, agentRole, executionId, taskId, userId } = input;
   const now = deps.now ?? Date.now;
 
   // R4 Layer 1 state — shared across the three 'full' call sites; the truncation retry fires (or is
@@ -1320,18 +1536,22 @@ export async function runAgenticToolLoop(
   // The check itself lives in `checkProviderErrorResponse` so EVERY 'full' call
   // site shares it (2026-09-14: the continuation sites had no check at all).
   checkProviderErrorResponse(llmResponse, { executionId, taskId, turn: 0, phase: 'initial' }, deps.logger);
+  track.lastResponse = llmResponse;
 
   if (observers.onInitialResponse) {
     await observers.onInitialResponse(llmResponse, initialLlmDurationMs);
   }
 
   // ── The loop ──
-  const toolCallResults: ToolCallRecord[] = [];
+  // The SAME array the throw-time partial state reads (COMPLETE-THEN-FAIL) — pushed to, never reassigned.
+  const toolCallResults: ToolCallRecord[] = track.toolCallResults;
   // read_more pager (Phase 1, memory-backed) — per-execution, S1-local. Truncated results stash their
   // full post-R9 string here; the model pages them via read_more (injected into mcpFunctions at the
   // two build sites, served by the name-interceptor in executeToolTurn). See READ_MORE_FUNCTION_DEF.
-  const pager = createPagerState(maxToolTurns);
+  // Per-role read budget (2026-10-12, R1): default 6 / 8; the Program Architect 9 / 12 (role-read-budget.ts).
+  const pager = createPagerState(maxToolTurns, readBudgetFor(agentRole));
   const totalUsage = newAccumulatedUsage(llmResponse.usage);
+  track.totalUsage = totalUsage;
   // R4 Layer 1: fold the sunk truncated-initial-turn usage now that totalUsage exists.
   if (initialTruncatedPriorUsage) addUsage(totalUsage, initialTruncatedPriorUsage);
   let currentResponse = llmResponse;
@@ -1340,11 +1560,15 @@ export async function runAgenticToolLoop(
   // Budget fail-fast flag (follow-ups item 2): set when an all-budget-rejected turn switched
   // the continuation call into the final no-tools blocked-report turn.
   let budgetFailFastUsed = false;
+  // Reflection-call error facts (AUDIT 2026-10-07): budget fail-fast (in the loop) and #89 (after it) push here.
+  const reflectionErrors: ReflectionErrorFact[] = [];
 
   while (((currentResponse.stopReason === 'tool_use' && currentResponse.functionCalls?.length) ||
           currentResponse.stopReason === 'pause_turn') &&
          turnCount < maxToolTurns) {
     turnCount++;
+    track.turnCount = turnCount;
+    track.turn = turnCount;
 
     // WU-6 (SDK Phase 2): pause_turn — the model paused mid-turn (e.g., a long server-side tool such
     // as web_search). There are NO client tools to execute; re-send the accumulated assistant content
@@ -1356,6 +1580,7 @@ export async function runAgenticToolLoop(
       }
       deps.logger.info({ executionId, turn: turnCount }, 'Agentic tool loop: continuing paused turn (pause_turn)');
       messageHistory.push({ role: 'assistant', content: currentResponse.rawContentBlocks });
+      track.phase = 'pause_turn';
       const pauseAttemptStartedAt = now();
       currentResponse = await deps.generateText(prompt, buildLlmCallOptions(cfg, 'full', {
         signal,
@@ -1367,12 +1592,14 @@ export async function runAgenticToolLoop(
         r4Ctx(pauseAttemptStartedAt), deps, (u) => addUsage(totalUsage, u),
       );
       checkProviderErrorResponse(currentResponse, { executionId, taskId, turn: turnCount, phase: 'pause_turn' }, deps.logger);
+      track.lastResponse = currentResponse;
       addUsage(totalUsage, currentResponse.usage);
       continue;
     }
 
     // tool_use path — functionCalls is guaranteed non-empty by the while-guard above.
     const turnFunctionCalls = currentResponse.functionCalls!;
+    track.phase = 'tool_execution';
     deps.logger.info({ executionId, turn: turnCount, toolCount: turnFunctionCalls.length },
       'Agentic tool loop: starting turn');
 
@@ -1422,8 +1649,9 @@ export async function runAgenticToolLoop(
     }
 
     // Next LLM call WITH tool definitions AND signal — or, on budget fail-fast, the final
-    // no-tools blocked-report turn ('reflection' hardcodes functions:[] + functionCall:'none';
-    // omitting mcpFunctions is belt-and-braces). Degrade-to-(a): on throw, provider error, or
+    // no-tools blocked-report turn ('reflection' = functionCall:'none'; legacy models also get
+    // functions:[], preserved-thinking models keep the SAME tool set — mcpFunctions is passed for
+    // them and ignored by the legacy shape, AUDIT C1). Degrade-to-(a): on throw, provider error, or
     // empty text, synthesize the terminal (non-fatal catch mirrors #89's — the tool records
     // already carry the forensics; do not fail the run over a lost report-polish call).
     const toolPhaseDurationMs = Date.now() - toolPhaseStartTime;
@@ -1432,15 +1660,23 @@ export async function runAgenticToolLoop(
       deps.logger.warn({ executionId, turn: turnCount, rejectedToolCalls: toolCallRecords.length },
         'Agentic tool loop: budget fail-fast — all tool calls this turn budget-rejected; requesting blocked report (no tools)');
       budgetFailFastUsed = true;
+      track.phase = 'budget_failfast';
       try {
         currentResponse = await deps.generateText(prompt, buildLlmCallOptions(cfg, 'reflection', {
           signal,
+          mcpFunctions,
           messages: messageHistory as any,
         }), userId);
       } catch (failFastErr) {
         deps.logger.warn({ executionId, turn: turnCount, err: failFastErr instanceof Error ? failFastErr.message : String(failFastErr) },
           'Agentic tool loop: budget fail-fast blocked-report turn failed — synthesizing terminal');
+        const f = reflectionErrorFact('budget_failfast', null, failFastErr);
+        if (f) { reflectionErrors.push(f); warnReflectionError(deps.logger, executionId, f, failFastErr instanceof Error ? failFastErr.message : String(failFastErr)); }
         currentResponse = null;
+      }
+      {
+        const f = currentResponse?.error ? reflectionErrorFact('budget_failfast', currentResponse) : null;
+        if (f) { reflectionErrors.push(f); warnReflectionError(deps.logger, executionId, f, currentResponse.error.message); }
       }
       if (!currentResponse?.text?.trim() || currentResponse?.error) {
         const synthText = synthBlockedText(toolCallRecords, turnCount);
@@ -1452,6 +1688,7 @@ export async function runAgenticToolLoop(
         };
       }
     } else {
+      track.phase = 'continuation';
       const continuationAttemptStartedAt = now();
       currentResponse = await deps.generateText(prompt, buildLlmCallOptions(cfg, 'full', {
         signal,
@@ -1486,6 +1723,7 @@ export async function runAgenticToolLoop(
     // No-op on the budget fail-fast branch: that branch already replaced an error response
     // with synthesised blocked-report text (its degrade-to-(a) contract is deliberate).
     checkProviderErrorResponse(currentResponse, { executionId, taskId, turn: turnCount, phase: 'continuation' }, deps.logger);
+    track.lastResponse = currentResponse;
 
     // Accumulate tokens (input/output + cache — see addUsage)
     addUsage(totalUsage, currentResponse.usage);
@@ -1506,6 +1744,8 @@ export async function runAgenticToolLoop(
   // + NOT already budget-exhausted (regexes tuned to production error strings
   // — carry verbatim, per pipeline-harness review H1).
   let correctionTurnUsed = false;
+  // C2: history length before the #89 pushes (null = #89 never appended anything).
+  let correctionHistoryLength: number | null = null;
   const _failedToolCallsForCorrection = toolCallResults.filter(t => !t.success);
   // (Budget fail-fast guarantees this flag on its path — the two features are coupled: a
   // fail-fast run always carries budget-rejected records, so #89 never adds a second call.)
@@ -1535,7 +1775,12 @@ export async function runAgenticToolLoop(
         `- If the failures changed the outcome materially, say so explicitly (e.g., "X was attempted but failed because Y").\n` +
         `- Keep the structure and tone of your previous response; only correct the parts that were inaccurate.`;
 
-      // Append the model's previous answer + the correction request.
+      // Append the model's previous answer + the correction request. C2 (AUDIT 2026-10-07): if the correction is NOT
+      // adopted (empty, provider error, throw) both messages are removed again below — `correctionTurnUsed` stays false,
+      // so a later form-correction / #90 pass appends the SAME final turn itself, and leaving these two in place made
+      // that pass replay the final turn twice (after a dangling prompt). Truncating to the recorded length removes only
+      // the two messages THIS block appended (from the END) — never anything a later block was produced after.
+      correctionHistoryLength = messageHistory.length;
       messageHistory.push({ role: 'assistant', content: currentResponse.rawContentBlocks ?? currentResponse.text });
       messageHistory.push({ role: 'user', content: [{ type: 'text', text: correctionPrompt }] });
 
@@ -1546,17 +1791,21 @@ export async function runAgenticToolLoop(
         await observers.onCorrectionStart(_failedToolCallsForCorrection.length);
       }
 
+      track.phase = 'correction';
       const correctionStartTime = Date.now();
-      // 'reflection' mode: functions [] + functionCall 'none' structurally
-      // prevent loop re-entry; no thinking on a simple rewrite.
+      // 'reflection' mode: functionCall 'none' structurally prevents loop re-entry (legacy models: functions [] and no
+      // thinking budget; preserved-thinking models: the same tool set, AUDIT C1).
       const correctedResponse = await deps.generateText(prompt, buildLlmCallOptions(cfg, 'reflection', {
         signal,
+        mcpFunctions,
         messages: messageHistory as any,
       }), userId);
       const correctionDurationMs = Date.now() - correctionStartTime;
       // Log-only: a failed correction turn is non-fatal by design (the original response is kept),
       // but the CAUSE must not be discarded — without this the provider error is invisible here.
       checkProviderErrorResponse(correctedResponse, { executionId, taskId, turn: turnCount, phase: 'correction' }, deps.logger, 'log');
+      const corrErrFact = reflectionErrorFact('correction', correctedResponse);
+      if (corrErrFact) { reflectionErrors.push(corrErrFact); warnReflectionError(deps.logger, executionId, corrErrFact, correctedResponse.error.message); }
 
       if (correctedResponse?.text && correctedResponse.text.trim().length > 0) {
         // Accumulate correction-turn tokens (NOT counted toward maxToolTurns — H2)
@@ -1584,6 +1833,12 @@ export async function runAgenticToolLoop(
       // executionDegradation signals (P3/P4/P5) will still flag the artifact.
       deps.logger.warn({ err: correctionErr as any, executionId },
         'Anti-fabrication correction turn failed — keeping original response');
+      const f = reflectionErrorFact('correction', null, correctionErr);
+      if (f) { reflectionErrors.push(f); warnReflectionError(deps.logger, executionId, f, correctionErr instanceof Error ? correctionErr.message : String(correctionErr)); }
+    }
+    // C2: not adopted ⇒ drop the two messages this block appended (see the push site).
+    if (!correctionTurnUsed && correctionHistoryLength !== null) {
+      messageHistory.length = correctionHistoryLength;
     }
   }
 
@@ -1595,5 +1850,6 @@ export async function runAgenticToolLoop(
     truncationRetryStopReason: truncationRetry.retryStopReason, truncationRetryDiscardedChars: truncationRetry.discardedChars,
     // F2: the stop reason of the deliverable's own response (see AgenticLoopResult.finalStopReason).
     finalStopReason: currentResponse?.stopReason ?? null,
+    reflectionErrors,
   };
 }

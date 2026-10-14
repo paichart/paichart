@@ -43,7 +43,8 @@ They are independent: a `Solution Architect` (ARCHITECT / DEVELOPMENT) and a `Se
   do not duplicate them.
 - **`tags` must include the literal `'protocol'`** — required for the legacy `loadProtocols: true`
   load-all path (ALL `tag=protocol` ACTIVE prompts, `take: 10`, name-ordered — now the ROLLBACK
-  mode) and for protocol tooling. Under the live `loadProtocols: 'composed'` mode (2026-08-17) the
+  mode; 9 ACTIVE after promotion E retired value-chain-program, and that headroom matters only to this
+  path, which ran 0 executions in the 30 days to 2026-10-05) and for protocol tooling. Under the live `loadProtocols: 'composed'` mode (2026-08-17) the
   delta is loaded BY NAME from the task's stamp, and the base by the `protocol-base` tag.
 - **The title token IS the router now.** Since composed injection the platform resolves
   `(protocol: <name>)` from the title ONCE at first execution and stamps it — the harness never
@@ -148,7 +149,26 @@ They are independent: a `Solution Architect` (ARCHITECT / DEVELOPMENT) and a `Se
   omission a documented decision instead of a silent gap.
 - **CI enforces both:** `validate:role-guidance` (entry shape) + `validate:role-guidance-coverage` (every
   seeded role has an entry or a documented exemption). Both run in pre-commit and `test:all-validation`.
-- **Program-composable domain? Add your token to the Program Architect's vocabulary.** The Architect picks each program leg's `(protocol: <token>)` from a CLOSED list in the `program_architect` `ROLE_GUIDANCE_LIBRARY` entry; a domain missing from it has no sanctioned token, so the Architect composes one that resolves to nothing and fails only at leg execution, after the plan gate (live 2026-09-18 — `observability-config` sat absent for 8 days). `validate:role-guidance-coverage` now fails on any seeded protocol row missing from that list; a row that is genuinely not program-composable goes in `NON_PROGRAM_LEG_PROTOCOLS` **with a reason**. Then reseed `scripts/seed-program-templates.ts` — the only seed carrying `program_architect`.
+- **Declare your validation shape — or say you sanction none (pinned 2026-10-04).** Your protocol interpolates the
+  shared validation clause, and the `config_change_author` role grants a comparison shape only "where your active
+  protocol defines one for that step". So your protocol's OWN text must either define its non-literal shape (network's
+  presence assertion, observability's comparison/presence shape) or state that it sanctions none (kubernetes, terraform —
+  then pre-apply checks take a literal or a narrowed projection, and the first post-apply check is NAMED in the
+  apply-governance note). The mode-7 pairing pin in `test:validation-shape-contract` fails on a protocol that does
+  neither. Background: terraform's silence produced opposite reviewer verdicts on identical steps
+  (`cline_docs/reviews/pattern-h-corpus-measure-2026-10-03/`).
+- **Do not quote a role sentence in protocol text.** Role guidance changes on its own reseed cadence; a quoted sentence
+  silently goes stale (kubernetes 1.14.0 still quotes the pre-2026-10-04 comparison grant — a named, counted exception).
+  The quote-survives pin in `test:validation-shape-contract` fails on a new one. State the property instead.
+- **Program-composable domain? Add your token to the Program Architect's vocabulary.** The Architect picks each program leg's `(protocol: <token>)` from a CLOSED list in the `program_architect` `ROLE_GUIDANCE_LIBRARY` entry; a domain missing from it has no sanctioned token, so the Architect composes one that resolves to nothing and fails only at leg execution, after the plan gate (live 2026-09-18 — `observability-config` sat absent for 8 days). `validate:role-guidance-coverage` now fails on any seeded protocol row missing from that list; a row that is genuinely not program-composable goes in `NON_PROGRAM_LEG_PROTOCOLS` **with a reason**. Then reseed BOTH Architect owners — `scripts/seed-program-templates.ts` (`program_architect`) and `scripts/seed-value-chain-templates.ts` (`value_chain_architect`, a DEPRECATED row since promotion E that holds the SAME text: one `buildProgramArchitectGuidance()` constant, `===` pinned). Freshness cannot see the DEPRECATED row, so do not wait for it to read STALE.
+
+### 4b. Read budget — usually nothing to do (2026-10-12, size plan R1)
+
+A new role gets the default `read_more` budget with no change: 6 pages per document, 8 per run (`lib/agents/role-read-budget.ts`).
+Only a role that must read ONE large document to its end (today: the Program Architect, 9 / 12) needs an entry there — an
+owner decision, recorded in the file — AND a `maxToolTurns` in `lib/agents/role-model-params.ts` of at least 4 × its pages per
+run (the run cap is `min(pagesPerRun, 25% of tool turns)`). `test:role-read-budget` pins only that every other role keeps the
+default, so nothing reminds you: decide it here.
 
 ### 5. Deliverable / QA wiring is set at RUNTIME by the harness, not in the template
 - The harness (in CREATE mode) sets `metadata.deliverableSourceTaskId` on itself → the deliverable-producer
@@ -178,6 +198,29 @@ They are independent: a `Solution Architect` (ARCHITECT / DEVELOPMENT) and a `Se
   way, check `task.context` for the child stage + comments.
 
 ---
+
+## Adding a leg protocol that REUSES an existing domain's text (value-chain, 2026-10-02)
+
+`network-derivation` (the VALUE leg: Harvester → Derivation Architect → Derived Value Reviewer, no Author) shares most of
+`network-provisioning`'s text. How that was done without moving a single live network run — the procedure is
+**Protocol 15** (`protocols/isolated-variant-build-protocol.md`):
+
+- **Shared section constants, not copies.** The reused passages are `NETWORK_*` consts in `seed-protocol-prompts.ts`
+  (mode, self-provisioning, harvest discipline, anti-fabrication, the Phase 0 harvester bullet, and
+  `NETWORK_DERIVED_VALUES_PASSAGE(blockLocation)`); the original interpolates them and stays byte-identical
+  (`test:protocol-golden`). Parameterise a sentence that is false in the new leg (the block location) instead of
+  forking it; where a shared SECTION is wrong for the new leg (the Mode section names a change package), give the new
+  leg its own section and record the deviation.
+- **Frame what you reuse.** The shared text speaks of change packages; the new leg adds ONE framing paragraph with an
+  explicit SCOPE and substitutions ("the design" → the derivation, etc.) rather than editing shared text.
+- **Domain protocols stay rig-independent** (`test:no-rig-identifiers`); scanners follow `${CONST}` interpolation, so
+  moved text stays scanned.
+- **The reused template reads its OWN binding.** The value leg reuses the `Network State Harvester` row, which still
+  receives `network-provisioning` text; anything the new leg needs from it must reach it through its task DESCRIPTION
+  (network-derivation tells the leg harness to name the selecting attribute in the Harvester's brief).
+- **A leg TYPE, not just a domain.** If the new leg is selected by the platform (here `VALUE_LEG_PROTOCOLS` drives the
+  value-leg containment net), keep that set closed and pinned, and key code on the leg's stamp — never on a role regex.
+- **Child title prefixes may be machine-read** — pin them in a test against the protocol text.
 
 ## Gotchas (all observed, not hypothetical)
 - **Silent role fallback** (§4) — the #1 trap. CI now catches it.

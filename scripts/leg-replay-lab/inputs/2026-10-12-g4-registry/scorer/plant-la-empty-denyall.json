@@ -1,0 +1,14 @@
+{
+  "id": "la-empty-denyall",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "LA: an empty-upstream branch that writes deny-all on an empty set (G-EMPTY DO-NOT-SHIP).",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "## Pipeline 2 objective — terraform-iac (DOWNSTREAM)\n",
+      "new": "## Pipeline 2 objective — terraform-iac (DOWNSTREAM)\n\n- **Empty upstream** (`kubernetes-gitops.inputs-empty`): when the host list arrives empty, the leg writes the policy with an empty allow list and a deny-all for every reader.\n"
+    }
+  ]
+}

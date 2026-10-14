@@ -69,9 +69,16 @@ export interface CanonicalLineCheck {
 export interface TranscriptionCheck {
   /** false when no canonical stanza was found in the contract (nothing to check). */
   checked: boolean;
-  reason?: 'no-canonical-stanza' | 'no-fenced-blocks';
+  reason?: 'no-canonical-stanza' | 'no-fenced-blocks' | 'canonical-stanza-unsupported-shape';
   /** How many canonical stanzas the contract carried. */
   stanzasConsidered: number;
+  /** G7 (2026-10-10): the JSON SHAPES of canonical-stanza values this check cannot read (a stanza given as an array of
+   *  policy-statement objects, not a string). Present ONLY when such a value exists. With no string stanza beside it the
+   *  reason is `canonical-stanza-unsupported-shape` — never `no-canonical-stanza`, which would assert a false ABSENCE.
+   *  The array is deliberately NOT stringified to make the check run: on a leg that carries another leg's stanza in its
+   *  contract, every line would read missing (the R12 leg-intent false block). Per-leg stanza scope is a contract
+   *  question (register DIALECT-STANZA-SCOPE). */
+  stanzaShapes?: string[];
   /** Required lines that appear at least once, and the total required. Read TOGETHER before
    *  treating `missing` as a defect — see the intent caveat in `scope`. */
   linesPresent?: number;
@@ -207,7 +214,10 @@ export function extractBannedTokens(contract: unknown): string[] {
       if (/banned|forbidden/i.test(key)) {
         if (Array.isArray(value)) {
           for (const v of value) if (typeof v === 'string' && v.trim()) out.push(v.trim());
-        } else if (typeof value === 'string' && value.trim()) {
+        } else if (typeof value === 'string' && value.trim() && /token/i.test(key)) {
+          // G7 (2026-10-10, EF F5b): a SCALAR is a token only under a token-shaped key (`bannedToken`). Prose under
+          // `forbiddenNotes` / `forbiddenPrincipalRule` was being counted as a token — it could never match, but
+          // `tokensConsidered` then misreported what was checked.
           out.push(value.trim());
         }
       }
@@ -372,6 +382,14 @@ export interface FencedBlockLine {
    */
   restoreIntent: boolean;
   label: BlockLabel;
+  /**
+   * The block's heading ANCESTRY, nearest first, joined by a space — the same fence-aware walk the restore axis reads.
+   * Added 2026-10-13 for `quoteFidelity`'s Author point (VERBATIM-QUOTE-OMISSION, owner A3: desired state EXCLUDED),
+   * which must see a `## Desired-State Config File` heading even when the block's own label says "replaces the
+   * baseline" and `kind` therefore reads `harvested-state`. Read-only: no consumer of this module stamps it, and
+   * `kind` and both axes are computed exactly as before.
+   */
+  ancestry: string;
 }
 
 /**
@@ -513,8 +531,9 @@ export function fencedBlockLines(doc: string): FencedBlockLine[] {
       : VERIFICATION_PROSE.test(labelProse)
         ? 'verification'
         : null;
+    const ancestry = headings.join(' ');
     for (let b = 0; b < body.length; b++) {
-      out.push({ line: startLine + b + 1, text: body[b], kind, restoreIntent, label });
+      out.push({ line: startLine + b + 1, text: body[b], kind, restoreIntent, label, ancestry });
     }
     i = j + 1;
   }
@@ -609,6 +628,26 @@ export function extractCanonicalStanzas(contract: unknown): Array<{ key: string;
   };
   walk(contract);
   return out.slice(0, MAX_STANZAS);
+}
+
+/** G7: the shapes of canonical-stanza values that are NOT strings (same key predicate as extractCanonicalStanzas). */
+export function unsupportedCanonicalStanzaShapes(contract: unknown): string[] {
+  const shapes = new Set<string>();
+  const seen = new Set<unknown>();
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object' || seen.has(node)) return;
+    seen.add(node);
+    if (Array.isArray(node)) { for (const v of node) walk(v); return; }
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (/canonical/i.test(key) && /(stanza|exemplar|template)/i.test(key) && value !== null && value !== undefined && typeof value !== 'string') {
+        const empty = (Array.isArray(value) && value.length === 0) || (typeof value === 'object' && !Array.isArray(value) && Object.keys(value as object).length === 0);
+        if (!empty) shapes.add(Array.isArray(value) ? 'array' : typeof value);
+      }
+      walk(value);
+    }
+  };
+  walk(contract);
+  return [...shapes].sort();
 }
 
 /** A stanza line we cannot meaningfully assert: a separator, or empty. */
@@ -797,9 +836,12 @@ export function runDialectLint(
 
   // ── PRESENCE half (transcription completeness) — independent of the absence half. ──
   const derived = canonicalStanzaNeedles(contract);
+  const stanzaShapes = unsupportedCanonicalStanzaShapes(contract);
   let transcription: TranscriptionCheck;
   if (derived.stanzasConsidered === 0) {
-    transcription = noTranscription('no-canonical-stanza');
+    transcription = stanzaShapes.length
+      ? { ...noTranscription('canonical-stanza-unsupported-shape'), stanzaShapes }
+      : noTranscription('no-canonical-stanza');
   } else if (blockLines.length === 0) {
     transcription = {
       ...noTranscription('no-fenced-blocks'),
@@ -855,6 +897,9 @@ export function runDialectLint(
       scope: SCOPE_NOTE,
     };
   }
+  // G7: a non-string stanza BESIDE string ones is named too, so "checked" never hides an unread stanza. Appended last
+  // and only when present, so every existing fact keeps its bytes and key order.
+  if (stanzaShapes.length && !transcription.stanzaShapes) transcription = { ...transcription, stanzaShapes };
 
   // ── ABSENCE half (banned tokens) ──
   const tokens = extractBannedTokens(contract);

@@ -18,12 +18,10 @@
  */
 
 import type { PrismaClient } from '@prisma/client';
-import { REVIEWER_ROLES } from './parse-verdict';
+import { findLegReviewerTasks } from './leg-reviewers';
 import { computeVerdictFreshness } from './chained-predecessors';
 import { selectAuthoritativeExecution, CHAIN_SELECTION_OPTIONS } from '../../services/execution-selection';
 
-/** Bound on the reviewer scan: a leg stage holds a handful of specialists, and one or two reviewers. */
-const REVIEWER_SCAN_CAP = 20;
 
 export async function computeVerdictFreshnessFact(
   prisma: Pick<PrismaClient, 'task' | 'agentExecution' | 'agentArtifact' | 'taskDependency'>,
@@ -32,12 +30,8 @@ export async function computeVerdictFreshnessFact(
   if (programTier === true) return { checked: false, reason: 'program-tier', match: null };
   if (typeof stageId !== 'string' || !stageId) return { checked: false, reason: 'no-child-stage', match: null };
 
-  const reviewers = await prisma.task.findMany({
-    where: { stageId, OR: [{ agentRole: { in: [...REVIEWER_ROLES] } }, { agentTemplate: { templateType: 'REVIEWER' } }] },
-    select: { id: true },
-    orderBy: { createdAt: 'asc' },
-    take: REVIEWER_SCAN_CAP,
-  });
+  // The shared locator (leg-reviewers.ts) is this query, extracted unchanged — the wide reviewer set.
+  const reviewers = await findLegReviewerTasks(prisma, stageId);
   if (reviewers.length === 0) return { checked: false, reason: 'no-reviewer', match: null };
 
   const perReviewer: Array<Record<string, unknown>> = [];

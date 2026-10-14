@@ -43,6 +43,19 @@ export interface ModelCapabilities {
   /** false ⇒ the model rejects forced tool use (`tool_choice` type 'any' / 'tool' → 400): Claude Fable 5.1 and
    *  Mythos 5.1. The provider downgrades a forced choice to 'auto' and logs it (2026-09-08). */
   forcedToolChoice: boolean;
+  /** true ⇒ the model runs PRESERVED THINKING's history-editing check: a replayed `thinking` block's signature binds
+   *  the top-level `system`, the SET OF TOOLS in `tools`, and every earlier message, and a request that changes any
+   *  of them invalidates every later block (400 on accounts created on/after 2026-08-31 — and under BYOK that is per
+   *  CUSTOMER org — or wherever `prefix_mismatch_behavior` is set). Parameters OUTSIDE system/tools/messages
+   *  (`tool_choice`, `max_tokens`, `output_config.effort`, `cache_control` markers) do not invalidate.
+   *  Consumer: `buildLlmCallOptions` 'reflection' mode, which for these models keeps the full-mode tool set + system
+   *  representation and switches only `tool_choice` to 'none' (the documented append-only form). Every other model
+   *  keeps the legacy no-tools reflection request BYTE-IDENTICAL. Docs (claude-api skill, model-migration.md):
+   *  Fable 5.1 and Opus 5.5 run the check; Mythos 5.1 does NOT; Sonnet 5 / Opus 5 / Fable 5 predate it.
+   *  (Sonnet 5.5 also runs it but is not modelled here — `claude-sonnet-5-5` would fall into the Sonnet 5 branch,
+   *  which is wrong on forcedToolChoice too; model it as its own branch before selecting it.)
+   *  Audit: cline_docs/reviews/opus55-loop-audit-2026-10-07/AUDIT.md (C1). */
+  bindsThinkingToPrefix: boolean;
 }
 
 /** The model that re-serves a Fable refusal (the only supported fallback target at launch). */
@@ -64,7 +77,7 @@ export function capabilitiesFor(model: string): ModelCapabilities {
   // order matters: most-specific first
   if (/fable|mythos/.test(m))
     // Fable 5.1 / Mythos 5.1: same surface as Fable 5 except forced tool use returns a 400.
-    return { acceptsTemperature: false, thinkingMode: 'always-on', allowedEfforts: FULL, outputCeiling, serverSideFallback: true, forcedToolChoice: !/-5-1\b/.test(m) };
+    return { acceptsTemperature: false, thinkingMode: 'always-on', allowedEfforts: FULL, outputCeiling, serverSideFallback: true, forcedToolChoice: !/-5-1\b/.test(m), bindsThinkingToPrefix: /fable-5-1\b/.test(m) };
   // Opus 5 (2026-08-05): same request surface as Opus 4.8 — temperature/top_p REMOVED, FULL effort
   // set, 128K output — with two Opus-5-only notes:
   //  1. serverSideFallback TRUE. Opus 5 carries the same elevated cyber safeguards as Fable and can
@@ -98,13 +111,13 @@ export function capabilitiesFor(model: string): ModelCapabilities {
   //    (`clampEffort(source.effort ?? 'high')`, agentic-tool-loop.ts), so agent executions are
   //    unaffected; any other caller that omits effort silently gets `medium`.
   //  - PRESERVED THINKING: replayed thinking blocks are bound to a byte-identical prefix. Enforced by
-  //    default only for accounts created on/after 2026-08-31. Any loop path that edits earlier
-  //    history (truncation retry, correction turn, read_more paging) must be audited before a
-  //    production trial — see the Opus 5.5 trial note in the register.
+  //    default only for accounts created on/after 2026-08-31. AUDITED 2026-10-07
+  //    (cline_docs/reviews/opus55-loop-audit-2026-10-07/AUDIT.md): the loop is append-only except the
+  //    'reflection' calls, which dropped `tools` (C1) — now modelled as `bindsThinkingToPrefix: true`.
   if (/opus-5-5/.test(m))
-    return { acceptsTemperature: false, thinkingMode: 'adaptive', allowedEfforts: FULL, outputCeiling, serverSideFallback: true, forcedToolChoice: false };
+    return { acceptsTemperature: false, thinkingMode: 'adaptive', allowedEfforts: FULL, outputCeiling, serverSideFallback: true, forcedToolChoice: false, bindsThinkingToPrefix: true };
   if (/opus-5/.test(m))
-    return { acceptsTemperature: false, thinkingMode: 'adaptive', allowedEfforts: FULL, outputCeiling, serverSideFallback: true , forcedToolChoice: true };
+    return { acceptsTemperature: false, thinkingMode: 'adaptive', allowedEfforts: FULL, outputCeiling, serverSideFallback: true , forcedToolChoice: true, bindsThinkingToPrefix: false };
   // ⚠️ TWO MODELS, ONE BRANCH — and they are NOT interchangeable on every axis.
   // Verified identical on every field this interface carries TODAY (probed 2026-08-10:
   // capabilitiesFor('claude-opus-4-7') and ('-4-8') return byte-identical objects), which is why
@@ -123,24 +136,35 @@ export function capabilitiesFor(model: string): ModelCapabilities {
   // Same latent shape in /fable|mythos/ above: Mythos 5 = 512 but *Mythos Preview* = 2048. Also
   // unreachable today; same rule applies.
   if (/opus-4-(7|8)/.test(m))
-    return { acceptsTemperature: false, thinkingMode: 'adaptive', allowedEfforts: FULL, outputCeiling, serverSideFallback: false , forcedToolChoice: true };
+    return { acceptsTemperature: false, thinkingMode: 'adaptive', allowedEfforts: FULL, outputCeiling, serverSideFallback: false , forcedToolChoice: true, bindsThinkingToPrefix: false };
   if (/opus-4-6/.test(m))
-    return { acceptsTemperature: true, thinkingMode: 'adaptive', allowedEfforts: NO_XHIGH, outputCeiling, serverSideFallback: false , forcedToolChoice: true };
+    return { acceptsTemperature: true, thinkingMode: 'adaptive', allowedEfforts: NO_XHIGH, outputCeiling, serverSideFallback: false , forcedToolChoice: true, bindsThinkingToPrefix: false };
   if (/opus-4-5/.test(m))
-    return { acceptsTemperature: true, thinkingMode: 'adaptive', allowedEfforts: NO_XHIGH_NO_MAX, outputCeiling, serverSideFallback: false , forcedToolChoice: true };
+    return { acceptsTemperature: true, thinkingMode: 'adaptive', allowedEfforts: NO_XHIGH_NO_MAX, outputCeiling, serverSideFallback: false , forcedToolChoice: true, bindsThinkingToPrefix: false };
   // Sonnet 5 (2026-07-02): REJECTS temperature/top_p (the first non-Opus/Fable model to); adaptive
   // thinking by default; FULL effort set (first Sonnet with xhigh); 128K output. Checked before
   // sonnet-4-6; the pattern cannot false-match sonnet-4-5/4-6 (their substrings are sonnet-4-x).
   if (/sonnet-5/.test(m))
-    return { acceptsTemperature: false, thinkingMode: 'adaptive', allowedEfforts: FULL, outputCeiling, serverSideFallback: false , forcedToolChoice: true };
+    return { acceptsTemperature: false, thinkingMode: 'adaptive', allowedEfforts: FULL, outputCeiling, serverSideFallback: false , forcedToolChoice: true, bindsThinkingToPrefix: false };
   if (/sonnet-4-6/.test(m))
-    return { acceptsTemperature: true, thinkingMode: 'adaptive', allowedEfforts: NO_XHIGH, outputCeiling, serverSideFallback: false , forcedToolChoice: true };
+    return { acceptsTemperature: true, thinkingMode: 'adaptive', allowedEfforts: NO_XHIGH, outputCeiling, serverSideFallback: false , forcedToolChoice: true, bindsThinkingToPrefix: false };
   if (/haiku-4-5/.test(m))
-    return { acceptsTemperature: true, thinkingMode: 'none', allowedEfforts: [], outputCeiling, serverSideFallback: false , forcedToolChoice: true };
+    return { acceptsTemperature: true, thinkingMode: 'none', allowedEfforts: [], outputCeiling, serverSideFallback: false , forcedToolChoice: true, bindsThinkingToPrefix: false };
   throw new Error(
     `Unknown model "${model}" — add it to capabilitiesFor() (model-capabilities.ts) before use. ` +
     `Sending the legacy request shape to an unknown model risks a silent Anthropic 400.`
   );
+}
+
+/**
+ * Does this model bind replayed thinking blocks to their prefix (see `ModelCapabilities.bindsThinkingToPrefix`)?
+ * Returns false for an UNKNOWN model rather than throwing: unknown models are already rejected fail-loud at
+ * `normalizeModelConfig` and again at `buildAnthropicRequest`, so this predicate only chooses the reflection-call
+ * shape, and the legacy shape is the safe default for unit fixtures that use placeholder model names.
+ */
+export function bindsThinkingToPrefix(model: string | undefined): boolean {
+  if (!model) return false;
+  try { return capabilitiesFor(model).bindsThinkingToPrefix; } catch { return false; }
 }
 
 /** true if the model accepts any effort level. */

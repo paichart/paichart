@@ -58,12 +58,28 @@
  *                  8000 maxTokens pin — never flip this tier's model onto rows still
  *                  pinned at 8000 (the reseed writes model+maxTokens atomically).
  *   generic      — legacy/general templates and the MCP service-integration set
+ *   infraAuthor  — the `config_change_author` role ONLY, in all four infra domains (network-provisioning,
+ *                  terraform-iac, kubernetes-gitops, observability). Sonnet 5 → Opus 5.5 2026-10-07 (Steve's
+ *                  ruling: "pay the extra rather than take on the risks of a revised execution"). Evidence:
+ *                  leg replay lab, Reviewer fixed on Sonnet 5, today's texts — refused-case samples 9/25 → 2/25
+ *                  and control samples 3/30 → 1/30 pooled over the four domains; ≈1.6–2.0× cost per leg.
+ *                  Opus 5.5 at effort MEDIUM was rejected (worse than Sonnet on the same case). The other infra
+ *                  roles (harvester, architect, reviewer) stay on `infra`. Record: register MODEL-CHOICE;
+ *                  the Opus 5.5 tool-loop audit (register OPUS55) gates the production reseed.
+ *   requirementsAuthor — the `requirements_author` role ONLY (requirements-authoring). Sonnet 5 → Opus 5.5 by a GUI
+ *                  edit 2026-10-08 22:01:09Z (owner, n=1, NOT lab-gated); made permanent here by owner decision G8
+ *                  (2026-10-10, cline_docs/reviews/in-run-correction-post-review-2026-10-10/SYNTHESIS.md) so a reseed
+ *                  no longer reverts it silently. A SEPARATE tier from infraAuthor on purpose: different role, different
+ *                  evidence (VT-33: a three-run test passed on it; 5 of 6 Opus drafts overran the read limit vs 0 of 4
+ *                  Sonnet). No effort is set — the engine default (high) applies, as on the GUI-edited row.
  */
 export const AGENT_MODELS = {
   orchestrator: 'claude-sonnet-5',
   synthesis: 'claude-sonnet-5',
   infra: 'claude-sonnet-5',
   generic: 'claude-haiku-4-5',
+  infraAuthor: 'claude-opus-5-5',
+  requirementsAuthor: 'claude-opus-5-5',
 } as const;
 
 export type AgentTier = keyof typeof AGENT_MODELS;

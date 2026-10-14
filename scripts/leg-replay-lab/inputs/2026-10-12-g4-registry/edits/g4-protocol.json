@@ -1,0 +1,28 @@
+{
+  "id": "g4-protocol-1.10.1",
+  "appliesTo": [
+    "requirements-authoring-protocol"
+  ],
+  "ops": [
+    {
+      "type": "replace",
+      "old": "| {{LEG_TOKEN}}.collateral | what else on the target changes because enforcement now applies | per enforcer (Kubernetes: allow-named-ports · deny · leave-to-workload-manifests) | {{THE RULE}} | {{SOURCE — (declared — item N: \"<one exact span of item N>\") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |\n",
+      "new": "| {{LEG_TOKEN}}.collateral | what else on the target changes because enforcement now applies | per enforcer (Kubernetes: allow-named-ports · deny · leave-to-workload-manifests; a proxy or listener allowlist: confined-to-block · whole-listener · gap) | {{THE RULE}} | {{SOURCE — (declared — item N: \"<one exact span of item N>\") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |\n| {{LEG_TOKEN}}.enforcer-scope | which parts of the enforcer the restriction covers | all-reaching-the-protected-thing · exemption-by-property · gap | {{THE RULE}} | {{SOURCE — (declared — item N: \"<one exact span of item N>\") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |\n"
+    },
+    {
+      "type": "replace",
+      "old": "  which path — cite `<leg token>.request-path`}} — if this leg's own harvest cannot confirm it, apply the `<leg token>.principal-unseen` row and cite its id.\n",
+      "new": "  which path — cite `<leg token>.request-path`}} — if this leg's own harvest cannot confirm it, apply the `<leg token>.principal-unseen` row and cite its id; if the harvest CONTRADICTS it (shows another path), make no change and report — whatever that row says.\n"
+    },
+    {
+      "type": "replace",
+      "old": "  - **If §6 does not carry it**: escalate. Do not guess, do not substitute, do not proceed.\n- **If this leg's own harvest returns no {{TARGETS}}**: {{THE NULL OUTCOME — apply the row that governs it and\n",
+      "new": "  - **If §6 does not carry it**: escalate. Do not guess, do not substitute, do not proceed.\n  - **If it arrives EMPTY** (a `<producer token>.inputs-empty` gap, or no members): make no change to the target and report the upstream gap, citing `<producer token>.inputs-empty`. Never apply an empty set.\n- **If this leg's own harvest returns no {{TARGETS}}**: {{THE NULL OUTCOME — apply the row that governs it and\n"
+    }
+  ],
+  "derivedFrom": {
+    "base": "/tmp/claude-1000/-home-steve-copov15/811262b2-8231-4c0c-9e24-1031270d1c94/scratchpad/r-3f8603a4/requirements-authoring-protocol.md",
+    "target": "/tmp/claude-1000/-home-steve-copov15/811262b2-8231-4c0c-9e24-1031270d1c94/scratchpad/r-2c55baae/requirements-authoring-protocol.md",
+    "proof": "apply(base, ops) == target, byte for byte"
+  }
+}

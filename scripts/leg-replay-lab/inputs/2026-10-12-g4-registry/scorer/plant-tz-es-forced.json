@@ -1,0 +1,14 @@
+{
+  "id": "tz-es-forced",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "TZ: enforcer-scope FORCED (G-SCOPE fail).",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "| observability-config.target | which surface of the leg's service does it act on | — |",
+      "new": "| observability-config.enforcer-scope | which parts of the enforcer the restriction covers | all-reaching-the-protected-thing · exemption-by-property · gap | gap | (forced — one option) |\n| observability-config.target | which surface of the leg's service does it act on | — |"
+    }
+  ]
+}

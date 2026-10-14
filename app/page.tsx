@@ -11,7 +11,6 @@ export default function HomePage() {
 
   try {
     useEffect(() => {
-      console.log('accessToken:', accessToken);
       if (accessToken) {
         router.push('/dashboard');
       } else {

@@ -1043,6 +1043,28 @@ console.log('\n━━━━━━━━━━━━━━━━━━━━━�
   }
 }
 
+// ── G7 (2026-10-10, EF F5/F5b): an ARRAY canonical stanza is named, never read as a false absence ─────────────
+{
+  const POLICY = [{ Effect: 'Allow', Action: 's3:GetObject' }, { Effect: 'Deny', Action: 's3:GetObject' }];
+  const PKG = '```hcl\nresource "aws_s3_bucket_policy" "x" {}\n```\n';
+  const arr = runDialectLint(PKG, { platformDialect: { canonicalStanza: POLICY, forbiddenTokens: ['s3:*'] } });
+  check('G7: array-only canonical stanza → canonical-stanza-unsupported-shape + stanzaShapes [array] (NOT no-canonical-stanza)',
+    arr.transcription.checked === false && arr.transcription.reason === 'canonical-stanza-unsupported-shape'
+      && JSON.stringify(arr.transcription.stanzaShapes) === '["array"]', JSON.stringify(arr.transcription));
+  const none = runDialectLint(PKG, { platformDialect: { forbiddenTokens: ['s3:*'] } });
+  check('G7: no stanza at all → still no-canonical-stanza, no stanzaShapes key (bytes unchanged)',
+    none.transcription.reason === 'no-canonical-stanza' && !('stanzaShapes' in none.transcription), JSON.stringify(none.transcription));
+  const empty = runDialectLint(PKG, { platformDialect: { canonicalStanza: [], forbiddenTokens: ['s3:*'] } });
+  check('G7: an EMPTY array stanza is an absence, not an unsupported shape',
+    empty.transcription.reason === 'no-canonical-stanza' && !('stanzaShapes' in empty.transcription), JSON.stringify(empty.transcription));
+  const mixed = runDialectLint(PKG, { platformDialect: { canonicalStanza: 'resource "aws_s3_bucket_policy" "x" {}', canonicalStanzaPolicy: POLICY, forbiddenTokens: ['s3:*'] } });
+  check('G7: a string stanza beside an array one → checked, and the array is still named in stanzaShapes',
+    mixed.transcription.checked === true && JSON.stringify(mixed.transcription.stanzaShapes) === '["array"]', JSON.stringify(mixed.transcription).slice(0, 300));
+  const toks = extractBannedTokens({ platformDialect: { forbiddenTokens: ['s3:*'], forbiddenNotes: 'Never grant s3:* or a wildcard principal; prose about the rule.', forbiddenPrincipalRule: 'no wildcard principal', bannedToken: 'metric-style' } });
+  check('G7 F5b: prose under forbiddenNotes / forbidden*Rule is NOT a token; a scalar under a token-shaped key still is',
+    JSON.stringify(toks) === '["s3:*","metric-style"]', JSON.stringify(toks));
+}
+
 console.log(`Total Passed: ${passed}`);
 console.log(`Total Failed: ${failed}`);
 

@@ -45,6 +45,7 @@ How they differ from a generic pipeline:
 - **Self-provision lifecycle.** A conditional Phase-0 *Harvester* registers a **customer-governed read-only MCP service** from a descriptor carried in the task (register → read-only call → teardown). pAIchart stores no infrastructure credentials.
 - **The cognition/actuation seam — it never actuates.** The deliverable is a change *to be applied* (a config / manifest / HCL diff + validation facts + rollback); applying it is the customer's **out-of-band, human-gated** run (a deterministic applier / Argo-Flux reconcile / `terraform apply`).
 - **Read-only floor + secret discipline.** The customer service enforces a read-only verb-enum + redacts secrets at the source; pAIchart's *own* guards back it up — **R9** (`CONNECTED_OUTPUT_SANITIZE_ENABLED`) sanitizes harvested output before the reasoner, **R10** (`ARTIFACT_SECRET_REDACT_ENABLED`) redacts secrets from the persisted artifacts. Both are **enabled in prod** (2026-06-29).
+- **⚠️ A redacted line is not applicable.** R10 writes `<<REDACTED-SECRET>>` (a terraform harvest may show `<REDACTED-SECRET>`), and devices accept either as a literal value — device-verified 2026-10-13 on EOS (community / `secret 0` / enable / TACACS key), nginx (`proxy_set_header`) and otelcol (headers, auth). **Never apply a block containing either spelling, or any other `<REDACTED…>` / `<<REDACTED…>>` form** (Authors invent variants; check with `grep -nE '<{1,2}REDACTED' <package file>`). A green `nginx -t` / `otelcol validate` does not prove it safe, and on EOS a full config replace with a redacted password-hash line can delete the object (the only admin user included) while printing success. Hold and re-author. The leg's `report.md` lists such lines under **Platform warnings (non-blocking)** since 2026-10-13, and the absence of that section is not clearance. Full rule: [`PROGRAM-OPERATOR-GATE-PLAYBOOK.md`](./PROGRAM-OPERATOR-GATE-PLAYBOOK.md) (Apply gate, step 2).
 
 **References:** [`PIPELINE-DOMAIN-FIT-CATALOG.md`](./PIPELINE-DOMAIN-FIT-CATALOG.md) (which domains fit + why) · the per-domain RFCs under `network-provisioning/` · `kubernetes-gitops/` · `terraform-iac/` (decomposition + the customer integration spec + a validation-rig `DEMO-RUN-GUIDE`) · [`../domain/harness/harness-output-guards.md`](../domain/harness/harness-output-guards.md) (R9/R10). To **add** a new domain, follow the [Use-Case Design Playbook](./PIPELINE-USE-CASE-DESIGN-PLAYBOOK.md).
 
@@ -211,7 +212,7 @@ After every successful agent execution, the engine automatically posts a task co
 
 | Task type | dependents | metadata signal | JSON artifact | report.md? |
 |-----------|-----------|------------------|---------------|------------|
-| **PIPELINE** (harness root) | any | `metadata.deliverableSourceTaskId` set + source SUCCESS | `pipeline-index.json` | ✅ — engine extracts source's `finalResponse` (the customer deliverable) |
+| **PIPELINE** (harness root) | any | `metadata.deliverableSourceTaskId` set + source SUCCESS | `pipeline-index.json` | ✅ — engine extracts source's `finalResponse` (the customer deliverable); on an infra change leg, a platform-rendered **Reviewer warnings (non-blocking)** section is appended when the leg's reviewer labelled any (2026-10-08) |
 | **PIPELINE** (harness root) | any | metadata set, source NOT yet SUCCESS | `pipeline-index.json` | ❌ — Option A defense (prevents harness CREATE writing misleading content) |
 | **PIPELINE** (harness root) | any | (no metadata) | `pipeline-index.json` | ❌ — pre-existing pipelines or skipped Step 5a |
 | Non-PIPELINE, **leaf** | 0 | `metadata.suppressDefaultReportMd: true` | `result.json` | ❌ — leaf is QA gate; harness publishes the deliverable |
@@ -220,8 +221,8 @@ After every successful agent execution, the engine automatically posts a task co
 
 **Artifacts explained:**
 - `result.json` — Machine-readable: `finalResponse`, `confidenceScore`, `qualityMetrics`, `toolCalls`, optional `reportMdSource` provenance field, execution metadata
-- `report.md` — Human-readable customer deliverable: the LLM's `finalResponse` rendered verbatim (no `## Generated Content` wrapper, no metadata headings)
-- `pipeline-index.json` — Harness-only: forensic summary (the harness's own `finalResponse`) with quality gates, child roster, deliverable pointer
+- `report.md` — Human-readable customer deliverable: the LLM's `finalResponse` rendered verbatim (no `## Generated Content` wrapper, no metadata headings). On a harness root it is the source child's `finalResponse`, plus — on an infrastructure change leg or a program root — a platform-rendered **Reviewer warnings (non-blocking)** section listing the lines the reviewer(s) labelled `NON-BLOCKING WARNING (<id>):` (facts only; never a gate input; absent when there are none)
+- `pipeline-index.json` — Harness-only: forensic summary (the harness's own `finalResponse`) with quality gates, child roster, deliverable pointer — platform-authored instead when the index carries `postCompletionFailure` (the harness completed its task and a later call in the same run failed before its closing turn)
 
 **The customer-facing deliverable is on the harness root post-rework**: `fetch(id: "artifact-<harness's report.md>")`. Per-child `result.json` files are forensic deep-dive material, not customer-facing.
 

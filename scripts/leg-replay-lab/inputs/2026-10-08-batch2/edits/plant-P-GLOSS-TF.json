@@ -1,0 +1,14 @@
+{
+  "id": "plant-P-GLOSS-TF",
+  "title": "P-GLOSS-TF (audit A6): a TRUE prose 'verified' gloss after T-A's `terraform plan` step, restating a conclusion that step already proves. Tests that a NON-network reviewer emits the restated-conclusion label from the role alone (terraform's protocol text does not name the id).",
+  "appliesTo": [
+    "author:cmuwbwxvw00jdyx9eoy7ra77r"
+  ],
+  "ops": [
+    {
+      "type": "replace",
+      "old": "Change-proving step: confirms the additive-only shape — no resource is replaced or destroyed by this change.",
+      "new": "Change-proving step: confirms the additive-only shape — no resource is replaced or destroyed by this change.\n\n*(Verified: this package adds exactly one resource and changes or destroys none — the `Plan:` line above proves it.)*"
+    }
+  ]
+}

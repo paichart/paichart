@@ -13,6 +13,10 @@ check('retitled block → ✗ (same parser as the containment enrichment)', !com
 // line BEGINNING with the marker words inside an expected-output fence must not flip a correctly placed block to ✗.
 check('X28: a trailing `Derived Values members set = {…}` validation line does not flip Derived Values to ✗',
   computeMarkerPresence(`## Derived Values\n${body}\n## Validation\n\`\`\`\nDerived Values members set = {10.99.0.6/32, 10.99.0.7/32}\n\`\`\`\n`).derivedValues);
+// MARKER-LETTERED-HEADING (2026-10-08, Opus lab L7 N-R sample-02): the STAMP moves with the parser — a lettered
+// `## (e2) Derived Values` reads ✓; a bare `P1 ` prefix (a reviewer quoting another leg) stays ✗.
+check('lettered `## (e2) Derived Values` → ✓; bare `### P1 Derived Values` → ✗',
+  computeMarkerPresence(`## (e2) Derived Values\n${body}`).derivedValues && !computeMarkerPresence(`### P1 Derived Values (Ground Truth)\n${body}`).derivedValues);
 check('empty / null response → all ✗, never throws', !computeMarkerPresence(null).derivedValues && !computeMarkerPresence('').consumedValues);
 check('parser field names the shared parser', mp.parser === 'parseFencedJsonBlock');
 check('leaf roles: harvester/architect/author match, reviewer does not', HARNESS_LEAF_ROLE_RE.test('infra_state_harvester') && HARNESS_LEAF_ROLE_RE.test('config_change_author') && HARNESS_LEAF_ROLE_RE.test('infra_change_architect') && !HARNESS_LEAF_ROLE_RE.test('change_reviewer'));
@@ -33,12 +37,21 @@ check('the markerPresence net gates on non-PIPELINE harness leaves and calls the
   /name: 'markerPresence'/.test(nets)
   && /HARNESS_LEAF_ROLE_RE\.test\(ctx\.agentRole/.test(nets)
   && /computeMarkerPresence\(ctx\.finalResponse\)/.test(nets));
-check('execution-core stamps THROUGH the registry and re-inlines no net of its own',
-  /runNetsAtPoint\('leaf-persist'/.test(core)
-  && /runNetsAtPoint\('leg-synthesize'/.test(core)
+// COMPLETE-THEN-FAIL build review EF-F2 (2026-10-05): both registry points moved into ONE shared helper
+// (lib/services/execution-nets.ts) that the core AND the completion-anchored rescue call.
+const netsHelper = fs.readFileSync('lib/services/execution-nets.ts', 'utf8');
+check('execution-core stamps THROUGH the registry (via the shared stampExecutionNets helper) and re-inlines no net of its own',
+  /runNetsAtPoint\('leaf-persist'/.test(netsHelper)
+  && /runNetsAtPoint\('leg-synthesize'/.test(netsHelper)
+  && /await stampExecutionNets\(prisma,/.test(core)
   && !/computeMarkerPresence\(/.test(core));
 check('chainer carries markerPresence per predecessor (like confidenceScore)', /markerPresence: \(parsed as/.test(chainer));
-check('reviewer guidance points at the §6 line, not at parser beliefs', /The platform's reading is IN your §6/.test(tmpl));
+// Promotion E5 (2026-10-06, option (b)): the §6 line is scoped to LEG review — Node C's chained deliverables carry no
+// markerPresence (pipeline-index.json has none), so at program integration the guidance points at the containment disposition.
+check('reviewer guidance points at the §6 line, not at parser beliefs', /At leg review, the platform's reading is IN your §6/.test(tmpl));
+check('…and scopes it to leg review: at program integration the fact is the containment disposition, never an absent ✗',
+  /At program integration there is no such line\*\*: a leg's chained deliverable carries no machine-parsed reading, so never infer a ✗ from its absence/.test(tmpl)
+  && /\\`containmentDisposition\\` on its/.test(tmpl));
 
 
 /* ── THE JOIN (2026-09-11, required by the coordinator; net #3's write site ↔ read site) ──────
@@ -119,5 +132,59 @@ check('reviewer guidance points at the §6 line, not at parser beliefs', /The pl
     rendered.includes(String(ck.restoreLinesFound)) && rendered.includes(String(ck.restoreLinesTotal)));
 }
 
+
+/* ── Promotion E5 review fold (EF-M1 + PC-F2, 2026-10-06): PROPERTY pins behind the E5 sentences ─────────────────
+ * The two wording pins above guard the sentences against deletion. These guard the FACTS they assert, which a code
+ * change could falsify while the wording stays green (two of them are negative claims, which age worst):
+ *   (a) "At program integration there is no such line" holds only because the markerPresence net never stamps a
+ *       PIPELINE task. A hoist of the net to the leg would silently put a ✓/✗ line in Node C's §6.
+ *   (b) A leg PIPELINE predecessor (what Node C chains) renders the containment line and NO machine-parsed line.
+ *   (c) TWO-WAY, same pattern as test-value-leg-containment's EF-F1 rows: every prompt text that quotes a platform-fact
+ *       label names it under the exact string the SHIPPING renderer / card emits. Rename either side and this goes red. */
+process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://stub:stub@localhost:5432/stub';
+{
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { MECHANICAL_NETS } = require('../lib/agents/harness/mechanical-nets') as { MECHANICAL_NETS: ReadonlyArray<{ name: string; appliesTo: (ctx: unknown) => boolean }> };
+  const mpNet = MECHANICAL_NETS.find((n) => n.name === 'markerPresence');
+  const ctxFor = (type: string, agentRole: string) => ({ task: { id: 't', type }, agentRole, finalResponse: 'x', harnessMode: null });
+  check('E5 (a): markerPresence never applies to a PIPELINE task (Node C\'s predecessors), so Node C\'s §6 has no Machine-parsed line',
+    !!mpNet && mpNet.appliesTo(ctxFor('PIPELINE', 'config_change_author')) === false
+    && mpNet.appliesTo(ctxFor('PIPELINE', 'pipeline_harness_orchestrator')) === false
+    && mpNet.appliesTo(ctxFor('ACTION', 'config_change_author')) === true);   // control: the leaf still stamps
+
+  const legDisposition = { containmentDisposition: { disposition: 'benign', reason: 'checked-clean' } };
+  const nodeC6 = renderPipelineContextSection({ chainedFrom: [{ taskId: 'leg1', taskTitle: 'Provision x (protocol: leg)',
+    agentRole: 'pipeline_harness_orchestrator', source: 'report.md', confidenceScore: 90, finalResponse: 'leg report',
+    derivationContainment: legDisposition }], pipelineMetadata: { completedDependencies: 1, totalDependencies: 1 } }).join('\n');
+  check('E5 (b): a leg PIPELINE predecessor renders the Derivation containment line and NO Machine-parsed line',
+    nodeC6.includes('**Derivation containment (platform fact)**: benign — checked-clean') && !/Machine-parsed blocks/.test(nodeC6));
+
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { leanFactsLine } = require('../lib/mcp/server/tools/advanced/lean-card-facts.js') as { leanFactsLine: (e: unknown) => unknown };
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const roles = require('../lib/services/agentTemplateBuilder/pAIchartUniversalTemplate').ROLE_GUIDANCE_LIBRARY as Record<string, string>;
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { PROTOCOLS } = require('./seed-protocol-prompts') as { PROTOCOLS: Array<{ name: string; promptText: string }> };
+  const pov = PROTOCOLS.find((p) => p.name === 'pov-program-protocol')?.promptText ?? '';
+  const card = String(leanFactsLine({ derivationContainment: legDisposition }));
+  const texts: Record<string, string> = { change_reviewer: roles.change_reviewer ?? '', derivation_reviewer: roles.derivation_reviewer ?? '', 'pov-program-protocol': pov };
+  const rows: Array<[string, string, string, string]> = [
+    // [text, the label it quotes, what the SHIPPING code emitted, the exact emitted substring]
+    ['change_reviewer', '`Derivation containment (platform fact)`', nodeC6, '**Derivation containment (platform fact)**'],
+    // derivation_reviewer quotes the label WITH its value shape, so its row also pins the ' — ' separator the renderer emits.
+    ['derivation_reviewer', '`Derivation containment (platform fact): <disposition> — <reason>`', nodeC6, '**Derivation containment (platform fact)**: benign — checked-clean'],
+    ['pov-program-protocol', '`Derivation containment (platform fact)`', nodeC6, '**Derivation containment (platform fact)**'],
+    ['change_reviewer', '`containmentDisposition`', card, 'containmentDisposition: benign (checked-clean)'],
+    ['pov-program-protocol', '`containmentDisposition`', card, 'containmentDisposition: benign (checked-clean)'],
+    ['change_reviewer', '`Machine-parsed blocks (platform fact)`', six, '**Machine-parsed blocks (platform fact)**'],
+    ['derivation_reviewer', '`Machine-parsed blocks (platform fact)`', six, '**Machine-parsed blocks (platform fact)**'],
+  ];
+  const bad: string[] = [];
+  for (const [who, inText, emitted, emittedName] of rows) {
+    if (!texts[who].includes(inText)) bad.push(`TEXT ${who} no longer names ${inText}`);
+    if (!emitted.includes(emittedName)) bad.push(`CODE no longer emits "${emittedName}"`);
+  }
+  check(`E5 (c): TWO-WAY label↔renderer, ${rows.length} rows over 3 prompt texts${bad.length ? ` — ${bad.join('; ')}` : ''}`, bad.length === 0);
+}
 if (failed) { console.error(`\n${failed} failed`); process.exit(1); }
 console.log('\n✅ marker presence + net-#3 JOIN: fact → whitelist → chainer → §6 → card');

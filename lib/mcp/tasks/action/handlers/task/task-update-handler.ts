@@ -133,7 +133,13 @@ import { annotateQualityGateVerdictMismatch } from '@/lib/agents/harness/verdict
 import { enforceProtocolStampImmutable, stripAuditFacts } from '@/lib/tasks/services/protected-task-metadata';
 import { checkDependencyCycle, GraphLimits } from '@/lib/utils/graph';
 
-export async function handleTaskUpdate(parameters: any, user: TokenPayload, actionId: string) {
+export async function handleTaskUpdate(
+  parameters: any,
+  user: TokenPayload,
+  actionId: string,
+  /** COMPLETE-THEN-FAIL (v2 §2.2): present ONLY when the agent tool loop is the caller. Never read from parameters. */
+  routeOpts?: { callingExecutionId?: string }
+) {
   const {
     taskId,
     task_name,
@@ -751,7 +757,12 @@ export async function handleTaskUpdate(parameters: any, user: TokenPayload, acti
     if (statusChangingToCompleted) {
       const completionResult = await runTaskCompletionTx(tx, {
         taskId: finalTaskId,
-        actor: { userId: user.userId, source: 'MCP' },
+        actor: {
+          userId: user.userId,
+          source: 'MCP',
+          // COMPLETE-THEN-FAIL anchor — only from routeOpts (the loop). Layer 1 writes it last in the merge.
+          ...(routeOpts?.callingExecutionId ? { executionId: routeOpts.callingExecutionId } : {}),
+        },
         include: richInclude,
       });
       completionTx = { transitioned: completionResult.transitioned, taskType: completionResult.taskType };
@@ -906,7 +917,11 @@ export async function handleTaskUpdate(parameters: any, user: TokenPayload, acti
   if (completionTx?.transitioned) {
     await fireCompletionEffects(prisma, {
       taskId: finalTaskId,
-      actor: { userId: user.userId, source: 'MCP' },
+      actor: {
+        userId: user.userId,
+        source: 'MCP',
+        ...(routeOpts?.callingExecutionId ? { executionId: routeOpts.callingExecutionId } : {}),
+      },
       fireReactors: true, // FLIP A (2026-07-24): task.update completions fire the cascade
     }, completionTx);
   }
@@ -917,12 +932,13 @@ export async function handleTaskUpdate(parameters: any, user: TokenPayload, acti
   // forever — the stamp was a fact with no consumer. Fire the same idempotent cone-marking +
   // program-retrigger effector, post-commit, fire-and-forget (Pattern #46 reactor shape).
   // Invariant (ratified 2026-07-18): non-terminal = waiting-for-a-human, always.
-  // Scope (PH5): PIPELINE tasks only — matches where the terminal-persist non-terminal family
-  // lives. The AUTHORITATIVE fix for an in-loop stamp is the PRE_FLIGHT_BAIL branch inside
-  // runTerminalSuccessTx (same-tx, race-free); this hook is the belt for AT-REST stamps (a task
-  // whose execution already persisted — e.g. terminalizing an existing frozen specimen).
+  // Scope (PH5, widened by DN1 2026-10-05): PIPELINE tasks AND non-PIPELINE children inside a harness
+  // (the superseded duplicate Node C of 2026-10-04 hung its program until settled by hand). The scope
+  // decision lives in the effector (`agentStampedCannotRunScope` — a harness-owned non-PIPELINE child, never
+  // while in flight; a task outside every harness stays out of scope). The AUTHORITATIVE fix for an in-loop
+  // PIPELINE stamp is the PRE_FLIGHT_BAIL branch inside runTerminalSuccessTx (same-tx, race-free); this hook
+  // is the belt for AT-REST stamps (a task whose execution already persisted, or that never runs at all).
   if (
-    task?.type === 'PIPELINE' &&
     mergedMetadataLog?.keys.includes('cannotRun') &&
     (mergedMetadataLog.before['cannotRun'] === null || mergedMetadataLog.before['cannotRun'] === undefined)
   ) {
@@ -933,7 +949,8 @@ export async function handleTaskUpdate(parameters: any, user: TokenPayload, acti
           typeof mergedMetadataLog.after['cannotRun'] === 'string'
             ? (mergedMetadataLog.after['cannotRun'] as string)
             : JSON.stringify(mergedMetadataLog.after['cannotRun'] ?? ''),
-          user.userId
+          user.userId,
+          task?.type ?? null
         ).catch((err: unknown) => {
           mcpLogger.warn({ err, taskId: finalTaskId }, 'agent-stamped cannotRun persist failed (non-fatal)');
         })

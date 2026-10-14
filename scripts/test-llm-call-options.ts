@@ -12,6 +12,9 @@
  *
  * Run: npm run test:llm-call-options
  */
+// DATABASE_URL stub BEFORE any import: §3c imports the provider's request builder, which reaches lib/prisma.ts
+// transitively (same stub as test-anthropic-request-builder; CI has no database).
+process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://t:t@localhost:5432/t';
 import {
   normalizeModelConfig,
   normalizeCacheControl,
@@ -19,6 +22,7 @@ import {
   NormalizedModelConfig,
 } from '../lib/agents/harness/agentic-tool-loop';
 import { LLMProvider, DEFAULT_MAX_TOKENS } from '../lib/services/llm/types';
+import { buildAnthropicRequest } from '../lib/services/llm/anthropic-sdk-provider';
 
 let passed = 0, failed = 0;
 const failures: string[] = [];
@@ -110,6 +114,70 @@ console.log('\n── 3: reflection delta (B2/A2) ──');
     if (JSON.stringify((full as any)[k]) !== JSON.stringify((refl as any)[k])) unexpectedDelta = k;
   }
   ok(unexpectedDelta === '', `reflection differs in EXACTLY the 5 documented fields (unexpected: '${unexpectedDelta || 'none'}')`);
+}
+
+// ── 3b. Preserved-thinking models (AUDIT C1, 2026-10-07): reflection = FULL with ONLY functionCall → 'none' ──
+// A replayed thinking block is bound to system + TOOL SET + earlier messages (Opus 5.5, Fable 5.1). The legacy
+// no-tools reflection invalidated every replayed block (400 when enforced). §3 above still pins the legacy delta
+// for every other model; this block pins the append-only shape for the flagged ones.
+console.log('\n── 3b: reflection on preserved-thinking models (AUDIT C1) ──');
+{
+  const fns = [{ name: 't', description: 'x', parameters: {} }, { name: 'read_more', description: 'r', parameters: {} }] as any;
+  const msgs = [{ role: 'user', content: 'm' }] as any;
+  for (const model of ['claude-opus-5-5', 'claude-fable-5-1']) {
+    const cfg = normalizeModelConfig({ model, cacheControl: { type: 'ephemeral' }, effort: 'high' }, { apiKey: FAKE_KEY_A }, 'sys');
+    const full = buildLlmCallOptions(cfg, 'full', { signal, mcpFunctions: fns, messages: msgs });
+    const refl = buildLlmCallOptions(cfg, 'reflection', { signal, mcpFunctions: fns, messages: msgs });
+    ok(refl.functions === fns, `${model}: reflection re-sends the SAME tool array (not [])`);
+    ok(refl.functionCall === 'none', `${model}: reflection functionCall === 'none' (tool_choice is outside the binding)`);
+    ok(refl.cacheControl?.type === 'ephemeral' && refl.effort === full.effort,
+      `${model}: reflection keeps cacheControl + effort (same system representation; no effort default)`);
+    const diff = [...new Set([...Object.keys(full), ...Object.keys(refl)])]
+      .filter(k => k !== 'signal' && JSON.stringify((full as any)[k]) !== JSON.stringify((refl as any)[k]));
+    ok(diff.length === 1 && diff[0] === 'functionCall', `${model}: reflection differs from full ONLY in functionCall (got: ${diff.join(',') || 'none'})`);
+  }
+  // Every NON-flagged model keeps the legacy shape (functions []), incl. the two nearest neighbours.
+  for (const model of ['claude-sonnet-5', 'claude-opus-5', 'claude-mythos-5-1', 'claude-fable-5', 'claude-haiku-4-5']) {
+    const cfg = normalizeModelConfig({ model }, { apiKey: FAKE_KEY_A }, 'sys');
+    const refl = buildLlmCallOptions(cfg, 'reflection', { signal, mcpFunctions: fns, messages: msgs });
+    ok(Array.isArray(refl.functions) && refl.functions.length === 0 && refl.cacheControl === undefined,
+      `${model}: reflection keeps the LEGACY no-tools shape (mcpFunctions ignored)`);
+  }
+}
+
+// ── 3c. Sonnet 5 reflection REQUEST is byte-identical to before the C1 change (golden, captured pre-change) ──
+// The wire body, not the options object: built through the provider's single request builder. If this golden
+// changes, every Sonnet-5 reflection call (#89 / fail-fast / form correction / #90) changed shape — a series cut.
+console.log('\n── 3c: Sonnet 5 reflection wire body — byte-identical golden (pre-C1) ──');
+{
+  const fns = [{ name: 'perform', description: 'p', parameters: { type: 'object', properties: {} } },
+    { name: 'read_more', description: 'r', parameters: { type: 'object', properties: {} } }] as any;
+  const msgs = [{ role: 'user', content: 'do it' },
+    { role: 'assistant', content: [{ type: 'thinking', thinking: '', signature: 'SIG1' }, { type: 'tool_use', id: 'tu1', name: 'perform', input: {} }] },
+    { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu1', content: 'ok' }] },
+    { role: 'assistant', content: [{ type: 'thinking', thinking: '', signature: 'SIG2' }, { type: 'text', text: 'final' }] },
+    { role: 'user', content: [{ type: 'text', text: 'reflect' }] }] as any;
+  const wire = (model: string, mode: 'full' | 'reflection') => {
+    const cfg = normalizeModelConfig({ model, maxTokens: 48000, cacheControl: { type: 'ephemeral' } }, { apiKey: 'sk-test-FAKE' }, 'SYS');
+    const o: any = buildLlmCallOptions(cfg, mode, { signal, mcpFunctions: fns, messages: msgs });
+    delete o.signal;
+    return buildAnthropicRequest(o, msgs, { stream: false, fallbackModel: 'claude-haiku-4-5' }) as any;
+  };
+  const SONNET5_REFLECTION_GOLDEN =
+    '{"model":"claude-sonnet-5","max_tokens":48000,"system":"SYS","messages":[{"role":"user","content":"do it"},' +
+    '{"role":"assistant","content":[{"type":"thinking","thinking":"","signature":"SIG1"},{"type":"tool_use","id":"tu1","name":"perform","input":{}}]},' +
+    '{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"ok"}]},' +
+    '{"role":"assistant","content":[{"type":"thinking","thinking":"","signature":"SIG2"},{"type":"text","text":"final"}]},' +
+    '{"role":"user","content":[{"type":"text","text":"reflect"}]}]}';
+  ok(JSON.stringify(wire('claude-sonnet-5', 'reflection')) === SONNET5_REFLECTION_GOLDEN,
+    'claude-sonnet-5 reflection wire body === the pre-C1 golden (no tools, no tool_choice, no effort, string system)');
+  // Opus 5.5: the wire body equals the FULL body except tool_choice → {type:'none'} — tools, system, effort identical.
+  const of = wire('claude-opus-5-5', 'full'), orf = wire('claude-opus-5-5', 'reflection');
+  ok(JSON.stringify(orf.tools) === JSON.stringify(of.tools) && orf.tools?.length === 2, 'opus-5-5 reflection wire: SAME tools as full');
+  ok(JSON.stringify(orf.system) === JSON.stringify(of.system), 'opus-5-5 reflection wire: SAME system representation as full');
+  ok(orf.tool_choice?.type === 'none' && of.tool_choice?.type === 'auto', "opus-5-5 wire: tool_choice auto (full) → none (reflection)");
+  const { tool_choice: _a, ...ofRest } = of; const { tool_choice: _b, ...orfRest } = orf;
+  ok(JSON.stringify(ofRest) === JSON.stringify(orfRest), 'opus-5-5 wire: full and reflection bodies identical apart from tool_choice');
 }
 
 // ── 4. two-axis model resolution: model fails loud; tuning defaults; provider/key axis ──

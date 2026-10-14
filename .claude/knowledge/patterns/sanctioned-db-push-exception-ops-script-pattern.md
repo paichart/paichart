@@ -60,7 +60,7 @@ Every deviation from `db push` is a hygiene cost (raw-SQL indexes don't show up 
 
 | Script | Date | Type | Empirical |
 |---|---|---|---|
-| `prisma/migrations/20250811_add_execution_triggers/migration.sql` line 50 | Aug 2025 | Partial JSONB `idx_agent_executions_id_status` | **Survived 200+ `db push --accept-data-loss=false` deploys** since Dec 2025 drift-elimination switch — direct proof the exception is safe |
+| `prisma/migrations/20250811_add_execution_triggers/migration.sql` line 50 | Aug 2025 | Partial JSONB `idx_agent_executions_id_status` | **Survived 200+ `db push` deploys** (the `--accept-data-loss=false` form until 2026-10-14, which accepts data loss; plain push since) since Dec 2025 drift-elimination switch — direct proof the exception is safe |
 | `scripts/create-production-indices.sh` | Oct 28 2025 | 10× `CREATE INDEX CONCURRENTLY` on performance-critical tables | First canonical ops-script instance. Pattern precedent. |
 | `scripts/create-agent-execution-active-unique-index.sh` | Apr 18 2026 | Partial UNIQUE `idx_agent_executions_active_per_task` (L3) | Added full dev-ops hardening: ON_ERROR_STOP, duplicate pre-check, INVALID cleanup, indisvalid + WHERE-clause post-verify |
 | `scripts/create-tasks-pipeline-stage-jsonb-index.sh` | Apr 18 2026 | Partial JSONB expression `idx_tasks_pipeline_stage_id` (A6) | Refined the template: removed duplicate pre-check (non-unique), added informational stats log, added `ANALYZE tasks` post-create |

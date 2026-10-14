@@ -49,6 +49,7 @@ INDEX_SCRIPTS=(
     "create-agent-execution-active-unique-index.sh"   # correctness: one active execution per task
     "create-authoritative-execution-index.sh"          # perf: keep-best authoritative selector
     "create-tasks-pipeline-stage-jsonb-index.sh"       # perf: pipeline child-stage lookup
+    "create-mcp-tools-unique-indexes.sh"               # correctness: unique service name + endpoint (registration race)
 )
 
 echo "🗂️  Applying ${#INDEX_SCRIPTS[@]} raw-SQL index script(s) — $(date -Iseconds)"

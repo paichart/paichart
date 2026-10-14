@@ -85,7 +85,7 @@ git commit -m "feat(db): Add feature X"
 ```yaml
 # In .github/workflows/production-deploy.yml
 - name: Sync database schema
-  run: npx prisma db push --accept-data-loss=false
+  run: npx prisma db push   # (plain push since 2026-10-14 — see Safety Features)
 ```
 
 **Result**: Both use SAME command → **Drift impossible!** ✅
@@ -104,7 +104,7 @@ git commit -m "feat(db): Add feature X"
 npx prisma migrate deploy
 
 # AFTER (eliminates drift):
-npx prisma db push --accept-data-loss=false
+npx prisma db push   # (plain push since 2026-10-14 — see Safety Features)
 ```
 
 **2. Team Convention**:
@@ -193,19 +193,23 @@ npx prisma migrate status
 
 ## Safety Features
 
-### **`--accept-data-loss=false`** (Important!)
+### **Plain `npx prisma db push` — never `--accept-data-loss=false`** (corrected 2026-10-14)
 
-**Always use this flag in production**:
-```bash
-npx prisma db push --accept-data-loss=false
-```
+🔴 **The original advice here was inverted.** Prisma parses `--accept-data-loss` as an on/off flag and DISCARDS any
+`=value`, so `--accept-data-loss=false` means **accept** data loss. Proven 2026-10-14 on a scratch database under the
+deploy's conditions (stdin not a terminal, `CI` unset), Prisma 6.19.3, after removing a model whose table held a row:
 
-**What it does**:
-- Prompts before destructive changes (drop column, drop table)
-- Prevents accidental data loss
-- Safe for automated deployments (fails instead of losing data)
+| Command | Result |
+|---|---|
+| `npx prisma db push` | exit 1, *"Use the --accept-data-loss flag to ignore the data loss warnings"* — row kept |
+| `npx prisma db push --accept-data-loss=false` | exit 0, "in sync" — **table dropped** |
+| `npx prisma db push --accept-data-loss` | exit 0 — table dropped (the deliberate override) |
 
-**Without flag**: Silent data loss possible 🚨
+**The deploy now runs a plain push** (`scripts/deploy/blue-green-deploy.sh`, DATA-LOSS GUARD): a refusal stops the
+deploy before the flip, so the live release keeps running on the unchanged schema. The override is a hand-run
+`Production Deploy` workflow with input `accept_data_loss=true`, after reviewing the removal by hand. A plain push also
+stops on Prisma's other warnings (e.g. a new unique constraint on a populated table) — same remedy. Pinned by
+`npm run test:db-push-data-loss-guard`. Register: DB-PUSH-ACCEPT-DATA-LOSS-INVERTED.
 
 ---
 
@@ -371,7 +375,7 @@ npx prisma db push
   run: |
     echo "🗄️ Syncing database schema..."
     # Drift Elimination: Use db push to match development
-    npx prisma db push --accept-data-loss=false
+    npx prisma db push   # (plain push since 2026-10-14 — see Safety Features)
 
 - name: Regenerate Prisma client
   run: npx prisma generate
@@ -386,7 +390,7 @@ npx prisma db push
 ## Specialist Validation
 
 **database-manager-specialist** (97% confidence):
-> "Using db push everywhere eliminates drift by design. Schema.prisma becomes authoritative source. Safe with --accept-data-loss=false flag. Recommend for small teams prioritizing simplicity over migration history."
+> "Using db push everywhere eliminates drift by design. Schema.prisma becomes authoritative source. Safe with a plain push in a non-interactive deploy. [2026-10-14 correction: the original quote said "safe with --accept-data-loss=false" — that form ACCEPTS data loss; see Safety Features.] Recommend for small teams prioritizing simplicity over migration history."
 
 **Confidence**: 100% - Drift is mathematically impossible when same command used everywhere
 

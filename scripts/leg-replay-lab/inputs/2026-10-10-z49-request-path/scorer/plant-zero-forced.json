@@ -1,0 +1,14 @@
+{
+  "id": "zero-forced",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "A forced request-path row. Must FAIL G-ROW (never forced).",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "| terraform-iac.admitted-principal | who is admitted, and by which attribute the enforcer recognises them | source-address-range · named-identity · network-path · combination (state each part) | unanswered — gap report naming this row | OPEN — by which attribute the bucket's enforcer recognises the namespace's running pods; options: source-address-range · named-identity · network-path · combination (state each part) |\n",
+      "new": "| terraform-iac.admitted-principal | who is admitted, and by which attribute the enforcer recognises them | source-address-range · named-identity · network-path · combination (state each part) | unanswered — gap report naming this row | OPEN — by which attribute the bucket's enforcer recognises the namespace's running pods; options: source-address-range · named-identity · network-path · combination (state each part) |\n| terraform-iac.request-path | the path the admitted senders' requests take to the enforcer, which decides the attribute their address arrives in (asked when admitted-principal admits by address) | direct · private-endpoint · translated | gap | (forced — item 2 names the bucket) → gap |\n"
+    }
+  ]
+}

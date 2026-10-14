@@ -95,8 +95,9 @@ function mockDb(cfg: {
   protocols?: Array<{ name: string; description: string; promptText: string; version?: string | null }>;
   named?: { promptText: string; version?: string | null } | null;
   bases?: Array<{ name: string; description?: string | null; promptText: string; version?: string | null }>;
-  rows?: Record<string, { promptText: string; status?: string; version?: string | null }>;
-  throwOn?: 'findMany' | 'findFirst' | 'findMany-base';
+  rows?: Record<string, { promptText: string; status?: string; version?: string | null; description?: string | null }>;
+  // 'findFirst-unfiltered': throw only on a findFirst with NO status in its where (the named-miss retired-row read).
+  throwOn?: 'findMany' | 'findFirst' | 'findMany-base' | 'findFirst-unfiltered';
 }) {
   return {
     agentPromptLibrary: {
@@ -111,8 +112,15 @@ function mockDb(cfg: {
       },
       findFirst: async (args: any) => {
         if (cfg.throwOn === 'findFirst') throw new Error('db down');
+        if (cfg.throwOn === 'findFirst-unfiltered' && !args?.where?.status) throw new Error('db down');
         const name = args?.where?.name;
-        if (cfg.rows && name && name in cfg.rows) return cfg.rows[name];
+        if (cfg.rows && name && name in cfg.rows) {
+          // Honour a status filter (the named read is `status: 'ACTIVE'`; promotion E 2a). A row with no status
+          // is treated as matching, so every pre-existing rows-mode case is unchanged.
+          const row = cfg.rows[name];
+          if (args?.where?.status && row.status && row.status !== args.where.status) return null;
+          return row;
+        }
         if (cfg.rows) return null; // rows-mode: unknown name = nonexistent
         return cfg.named ?? null;
       },
@@ -417,6 +425,81 @@ await test('TIER-SPLIT program: pov-program-protocol row DRAFT → HARD-FAIL PRO
       composedDb({ rows: { 'pov-program-protocol': { promptText: 'PROG', status: 'DRAFT', version: '1.1.0' } } }), logger);
   } catch (e) { threw = (e as Error).message; }
   assert(threw.startsWith('PROTOCOL_ROW_NOT_ACTIVE'), `program tier must hard-fail, got: ${threw || 'no throw'}`);
+});
+
+// ── Promotion E (E2, 2026-10-05): the RETIRED program protocol, by its REAL name (AR-H1, AE-F4, AE-F2/F3, P8(i)) ──────
+// value-chain-program-protocol is a DEPRECATED tombstone. It fails loud ONLY because `value-chain-program` stays in
+// PROGRAM_PROTOCOL_NAMES — remove it and the row takes the LEG branch (base-only, Kind-B) and THIS case goes red.
+// The message (2a) states facts and carries the row's own description; engine code never names a successor.
+const RETIRED_DESC = 'Retired 2026-10, superseded by pov-program-protocol. A task stamped with this protocol cannot be re-routed (the stamp is fixed at first execution); relaunch as a new task titled with (protocol: pov-program). HOWTO-use-program-harness names the current program protocol.';
+await test('RETIRED program protocol: DEPRECATED value-chain-program-protocol (real name) on a composed stamp → THROWS PROTOCOL_ROW_NOT_ACTIVE, never degrades, carries the row description', async () => {
+  logs.length = 0;
+  let threw = '';
+  let out: unknown = undefined;
+  try {
+    out = await applySystemPromptInjectionsWithFact(BASE,
+      composedCtx({ taskProtocol: { protocol: 'value-chain-program-protocol', source: 'stamp' } }),
+      composedDb({ rows: { 'value-chain-program-protocol': { promptText: 'TOMBSTONE', status: 'DEPRECATED', version: '2.0.0', description: RETIRED_DESC } } }), logger);
+  } catch (e) { threw = (e as Error).message; }
+  assert(out === undefined, 'a DEPRECATED program row must NOT compose (base-only would be the Kind-B malformed program)');
+  assert(threw.startsWith('PROTOCOL_ROW_NOT_ACTIVE:'), `program tier must hard-fail with the pinned prefix, got: ${threw || 'no throw'}`);
+  assert(threw.includes('"value-chain-program-protocol" is DEPRECATED'), `names the row and its status: ${threw}`);
+  assert(threw.includes('cannot be re-routed in place'), `states the stamp fact: ${threw}`);
+  assert(threw.includes(`Protocol row description: ${RETIRED_DESC}`), `carries the seeded description verbatim: ${threw}`);
+  assert(!threw.includes('Activate the protocol'), 'a RETIRED row must never be advised to be re-activated (Protocol 10)');
+  assert(!/pov-program/.test(threw.replace(RETIRED_DESC, '')), 'engine text names no successor (AE-F3) — only the row description may');
+});
+await test('RETIRED program protocol, row has NO description → the HOWTO pointer, still no "Activate"', async () => {
+  let threw = '';
+  try {
+    await applySystemPromptInjections(BASE,
+      composedCtx({ taskProtocol: { protocol: 'value-chain-program-protocol', source: 'stamp' } }),
+      composedDb({ rows: { 'value-chain-program-protocol': { promptText: 'TOMBSTONE', status: 'DEPRECATED', version: '2.0.0', description: null } } }), logger);
+  } catch (e) { threw = (e as Error).message; }
+  assert(threw.startsWith('PROTOCOL_ROW_NOT_ACTIVE:') && threw.endsWith('HOWTO-use-program-harness names the current program protocol.'), threw);
+  assert(!threw.includes('Activate the protocol'), threw);
+});
+await test('DRAFT program protocol keeps "Activate the protocol or re-route the task." (2a changes the DEPRECATED message only)', async () => {
+  let threw = '';
+  try {
+    await applySystemPromptInjections(BASE,
+      composedCtx({ taskProtocol: { protocol: 'pov-program-protocol', source: 'stamp' } }),
+      composedDb({ rows: { 'pov-program-protocol': { promptText: 'PROG', status: 'DRAFT', version: '1.1.0', description: 'live description' } } }), logger);
+  } catch (e) { threw = (e as Error).message; }
+  assert(threw.startsWith('PROTOCOL_ROW_NOT_ACTIVE:') && threw.endsWith('Activate the protocol or re-route the task.'), threw);
+  assert(!threw.includes('live description'), 'a DRAFT row\'s description is not interpolated');
+});
+await test('RETIRED on the NAMED path: template bound to the DEPRECATED row → NAMED_PROTOCOL_NOT_FOUND with the retired wording + description', async () => {
+  logs.length = 0;
+  let threw = '';
+  try {
+    await applySystemPromptInjections(BASE, { ...noCtx, templateMetadata: { protocol: 'value-chain-program-protocol' } },
+      mockDb({ rows: { 'value-chain-program-protocol': { promptText: 'TOMBSTONE', status: 'DEPRECATED', version: '2.0.0', description: RETIRED_DESC } } }), logger);
+  } catch (e) { threw = (e as Error).message; }
+  assert(threw.startsWith('NAMED_PROTOCOL_NOT_FOUND:'), `pinned prefix kept: ${threw || 'no throw'}`);
+  assert(threw.includes('which is DEPRECATED (retired)'), threw);
+  assert(threw.includes(`Protocol row description: ${RETIRED_DESC}`), threw);
+  assert(!threw.includes('activate the protocol'), 'never advise re-activating a retired protocol');
+  assert(logs.some(l => l.level === 'warn' && (l.data as any).errorCode === 'NAMED_PROTOCOL_NOT_FOUND'), 'grep key logged');
+});
+await test('NAMED miss, the retired-row read itself FAILS → falls through to the generic message (never degrades, still throws)', async () => {
+  logs.length = 0;
+  let threw = '';
+  try {
+    await applySystemPromptInjections(BASE, { ...noCtx, templateMetadata: { protocol: 'value-chain-program-protocol' } },
+      mockDb({ rows: { 'value-chain-program-protocol': { promptText: 'TOMBSTONE', status: 'DEPRECATED', version: '2.0.0', description: RETIRED_DESC } },
+        throwOn: 'findFirst-unfiltered' }), logger);
+  } catch (e) { threw = (e as Error).message; }
+  assert(threw.startsWith('NAMED_PROTOCOL_NOT_FOUND:') && threw.endsWith('Fix the binding or activate the protocol.'), threw);
+  assert(logs.some(l => l.level === 'warn' && l.msg === 'Retired-row check failed on the named miss — generic message'), 'the failed read is logged');
+});
+await test('NAMED miss on a NONEXISTENT name with rows-mode mock → generic message unchanged', async () => {
+  let threw = '';
+  try {
+    await applySystemPromptInjections(BASE, { ...noCtx, templateMetadata: { protocol: 'ghost-protocol' } },
+      mockDb({ rows: { 'value-chain-program-protocol': { promptText: 'T', status: 'DEPRECATED' } } }), logger);
+  } catch (e) { threw = (e as Error).message; }
+  assert(threw.startsWith('NAMED_PROTOCOL_NOT_FOUND:') && threw.endsWith('Fix the binding or activate the protocol.'), threw);
 });
 
 await test('TIER-SPLIT leg: terraform row DRAFT → base-only + warn + degraded FACT (never a throw)', async () => {

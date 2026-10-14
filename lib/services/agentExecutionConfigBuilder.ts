@@ -124,7 +124,11 @@ export async function buildRichExecutionConfig(
 
   const config: Record<string, any> = {
     agentRole: task.agentRole || task.agentTemplate?.defaultRole,
-    prompt: task.prompt || task.agentTemplate?.promptTemplate,
+    // TEMPLATE-SENT-TWICE (fix A, 2026-10-07): the task's OWN directive only — never the template. The template is the
+    // SYSTEM prompt (resolved by buildSystemPrompt); a raw copy here was rendered again as the user `## Directive`
+    // (~18 KB, unresolved `${agentRole}`). Absent ⇒ buildAgentPromptBody synthesizes "As a <role>, complete …".
+    // Missed sibling of the 2026-06-09 Priority-3 universal-fallback removal. Pinned: test:config-prompt-no-template-fallback.
+    prompt: task.prompt || undefined,
     inputContext: task.inputContext,
     maxRetries: task.maxRetries ?? 3,
     timeout: msToExecutionTimeoutSeconds(task.timeout) ?? DEFAULT_EXECUTION_TIMEOUT_SECONDS, // X19: seconds; the template's value (spread) wins
@@ -149,7 +153,8 @@ export async function buildRichExecutionConfig(
   // deleted, task fields cleared, no model in template) — log loudly so the
   // regression doesn't hide. This warning caught the taskReadyReactor thin-config
   // bug on 2026-04-15; keep it.
-  const missingKeys = ['agentRole', 'prompt'].filter((k) => !config[k]);
+  // 'prompt' is NOT required: absent is the designed state for a task with no directive of its own (TEMPLATE-SENT-TWICE).
+  const missingKeys = ['agentRole'].filter((k) => !config[k]);
   if (missingKeys.length > 0) {
     log.warn(
       {

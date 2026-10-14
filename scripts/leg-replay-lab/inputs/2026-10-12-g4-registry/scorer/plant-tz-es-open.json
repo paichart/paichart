@@ -1,0 +1,14 @@
+{
+  "id": "tz-es-open",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "TZ: enforcer-scope OPEN with the three options (G-SCOPE pass for a zero draft).",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "| observability-config.target | which surface of the leg's service does it act on | — |",
+      "new": "| observability-config.enforcer-scope | which parts of the enforcer the restriction covers | all-reaching-the-protected-thing · exemption-by-property · gap | gap report (OPEN) | OPEN — options: all-reaching-the-protected-thing · exemption-by-property · gap |\n| observability-config.target | which surface of the leg's service does it act on | — |"
+    }
+  ]
+}

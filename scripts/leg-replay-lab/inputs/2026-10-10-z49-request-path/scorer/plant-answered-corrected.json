@@ -1,0 +1,34 @@
+{
+  "id": "answered-corrected",
+  "appliesTo": [
+    "draft"
+  ],
+  "why": "Run-2 draft as Z49 wants it: both statements condition on aws:VpcSourceIp, the forbidden list no longer names it, and the request-path row is declared from item 21. Must PASS G-STANZA and G-ROW (answered). The kubernetes-gitops request-path row is listed not-applicable in the owner block (the shipping coverage check requires it accounted).",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "\"Condition\": { \"IpAddress\": { \"aws:SourceIp\": [",
+      "new": "\"Condition\": { \"IpAddress\": { \"aws:VpcSourceIp\": ["
+    },
+    {
+      "type": "replace",
+      "old": "\"Condition\": { \"NotIpAddress\": { \"aws:SourceIp\": [",
+      "new": "\"Condition\": { \"NotIpAddress\": { \"aws:VpcSourceIp\": ["
+    },
+    {
+      "type": "replace",
+      "old": "  - the condition keys `aws:SourceVpc`, `aws:SourceVpce`, `aws:VpcSourceIp`, `aws:PrincipalArn` and `aws:PrincipalAccount`\n",
+      "new": "  - the condition keys `aws:SourceIp`, `aws:SourceVpc`, `aws:SourceVpce`, `aws:PrincipalArn` and `aws:PrincipalAccount`\n"
+    },
+    {
+      "type": "replace",
+      "old": "| terraform-iac.principal-unseen | the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path | gap · act-regardless | act-regardless; premise recorded UNTESTED | (declared — item 14: \"the cloud leg acts regardless (act-regardless)\") |\n",
+      "new": "| terraform-iac.request-path | the path the admitted senders' requests take to the enforcer, which decides the attribute their address arrives in (asked when admitted-principal admits by address) | direct · private-endpoint · translated | private-endpoint | (declared — item 21: \"The pods' requests reach the bucket through a private endpoint of the storage service (private-endpoint)\") |\n| terraform-iac.principal-unseen | the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path | gap · act-regardless | act-regardless; premise recorded UNTESTED | (declared — item 14: \"the cloud leg acts regardless (act-regardless)\") |\n"
+    },
+    {
+      "type": "replace",
+      "old": "kubernetes-gitops.principal-unseen — the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path — options: gap · act-regardless — governs: Pipeline 1 objective — tier: not-applicable — the leg neither grants nor removes access on its target (item 13)\n",
+      "new": "kubernetes-gitops.request-path — the path the admitted senders' requests take to the enforcer, which decides the attribute their address arrives in (asked when admitted-principal admits by address) — options: direct · private-endpoint · translated — governs: Pipeline 1 objective — tier: not-applicable — the leg neither grants nor removes access on its target\nkubernetes-gitops.principal-unseen — the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path — options: gap · act-regardless — governs: Pipeline 1 objective — tier: not-applicable — the leg neither grants nor removes access on its target (item 13)\n"
+    }
+  ]
+}

@@ -72,6 +72,9 @@
  * row was DRAFT and deliberately absent from the seed (register EARLY: cheap to register, silent
  * to forget). A warn-only reconciliation check (health-run) reports `domain:program`-tagged rows
  * missing from this list.
+ *
+ * Retiring a program protocol: set its ROW DEPRECATED and KEEP its name here (see `value-chain-program` below) —
+ * removal turns the retired token's loud failure into a base-only composition.
  */
 
 /**
@@ -90,6 +93,17 @@ export const PROGRAM_PROTOCOL_NAMES: readonly string[] = [
   // stamp, silently. Read-time tier evaluation makes early registration RETROACTIVE over
   // already-stamped tasks — the whole point of registering early.
   'research-program',
+  // RETIRED 2026-10 (promotion E; its value-leg text folded into pov-program 2.0.0, its row a DEPRECATED tombstone).
+  // KEPT PERMANENTLY — NEVER REMOVE, no expiry (owner decision D2). Load-bearing twice:
+  //  (a) read-time TIER for the tasks already stamped `value-chain-program-protocol` (9 program roots / 36 legs at
+  //      retirement): F12, the C3 clearance carry and contractApplicability evaluate the stamped NAME against this list;
+  //  (b) the DEPRECATED hard fail: execution-system-prompt.ts throws PROTOCOL_ROW_NOT_ACTIVE for a non-ACTIVE row ONLY
+  //      when isProgramProtocol(name) — removed from this list, a task stamped with it would compose base-only (the
+  //      Kind-B malformed one-child "program" the tier split exists to prevent).
+  // Tier is a property of the NAME, lifecycle a property of the ROW: live, not-yet and retired names belong here alike.
+  // Pinned by name in test-system-prompt-injections.ts (DEPRECATED value-chain-program-protocol ⇒ throws). A drift
+  // sweep over "value-chain-program" must EXCLUDE this entry and its pins (PLAN-v2 E9 fence).
+  'value-chain-program',
 ];
 
 /** Kebab-case protocol-name grammar (matches every library row name and the token grammar). */
@@ -288,6 +302,20 @@ export type OwningLegResolution =
   | { kind: 'ambiguous'; candidates: string[] }
   | { kind: 'one'; legTaskId: string; chainedFrom: unknown[] };
 
+/**
+ * THE owning-leg predicate — ONE source for every query that asks "which PIPELINE task owns this child stage?"
+ * (PLATFORM-HELD-BYTES Stage A, 2026-10-14, panel arch S4: the held-bytes capture needed the same question, and a
+ * hand-rolled copy had already dropped the `protocol IS NOT NULL` conjunct — the BC75 phantom-canonical class).
+ * `stage` is a bound value or a column expression; `alias` qualifies the columns for a join. Rendered without an alias it
+ * is byte-identical to resolveOwningLeg's former inline WHERE (pinned in test-resolve-owning-leg).
+ */
+export function owningLegPredicate(stage: string | Prisma.Sql, alias?: 'leg' | 'root'): Prisma.Sql {
+  const a = alias ? Prisma.raw(`${alias}.`) : Prisma.empty;
+  return Prisma.sql`${a}type = 'PIPELINE'
+       AND ${a}metadata->>'pipelineStageId' = ${stage}
+       AND ${a}metadata->>'protocol' IS NOT NULL`;
+}
+
 export async function resolveOwningLeg(
   db: { $queryRaw: <T = unknown>(query: Prisma.Sql) => Promise<T> },
   stageId: string
@@ -295,9 +323,7 @@ export async function resolveOwningLeg(
   const rows = await db.$queryRaw<Array<{ id: string; chained: unknown }>>(Prisma.sql`
     SELECT id, "inputContext"->'chainedFrom' AS chained
       FROM "tasks"
-     WHERE type = 'PIPELINE'
-       AND metadata->>'pipelineStageId' = ${stageId}
-       AND metadata->>'protocol' IS NOT NULL`);
+     WHERE ${owningLegPredicate(stageId)}`);
   if (rows.length === 0) return { kind: 'none' };
   if (rows.length > 1) return { kind: 'ambiguous', candidates: rows.map((r) => r.id) };
   const chained = rows[0].chained;

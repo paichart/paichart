@@ -53,8 +53,23 @@ export interface SystemPromptInjectionDb {
     // pre-existing inline behavior, preserved (byte gate). version/status are optional on the
     // row types so pre-Phase-C test mocks stay valid; the real selects request them.
     findMany(args: any): Promise<Array<{ name: string; description: string | null; promptText: string; version?: string | null }>>;
-    findFirst(args: any): Promise<{ promptText: string; status?: string; version?: string | null } | null>;
+    findFirst(args: any): Promise<{ promptText: string; status?: string; version?: string | null; description?: string | null } | null>;
   };
+}
+
+/**
+ * The pointer a DEPRECATED (retired) protocol row's failure message carries (promotion E 2a, 2026-10-05). The row's
+ * own seeded `description` when it has one — per-row DATA, written at retirement by the seed that knows it — else the
+ * HOWTO that names the current program protocol (program tier only). FACTS only: engine code never names a successor
+ * (AE-F3, C5).
+ * Bounded so a long description cannot swamp the error message (it is the caller's whole signal: `errorCode` is NULL
+ * for these plain Errors).
+ */
+function deprecatedRowPointer(description: string | null | undefined, programTier: boolean): string {
+  const d = typeof description === 'string' ? description.trim() : '';
+  if (d) return `Protocol row description: ${d.length > 500 ? `${d.slice(0, 500)}…` : d}`;
+  // The HOWTO pointer is true only of a PROGRAM protocol; a retired leg protocol with no description gets no pointer.
+  return programTier ? 'HOWTO-use-program-harness names the current program protocol.' : '';
 }
 
 export interface SystemPromptInjectionContext {
@@ -382,7 +397,7 @@ export async function buildSystemPromptInjectionBlocks(
           'composed mode: task carries no protocol stamp, no title token, and the template binds none — base-only');
       }
 
-      let deltaRow: { promptText: string; status?: string; version?: string | null } | null = null;
+      let deltaRow: { promptText: string; status?: string; version?: string | null; description?: string | null } | null = null;
       let deltaLoadFailed = false;
       if (deltaName) {
         try {
@@ -390,7 +405,9 @@ export async function buildSystemPromptInjectionBlocks(
           // are DIFFERENT failures here (the tier-split below needs to tell them apart).
           deltaRow = await db.agentPromptLibrary.findFirst({
             where: { name: deltaName },
-            select: { promptText: true, status: true, version: true },
+            // `description` rides the SAME read (no new query): a DEPRECATED program row's message carries it
+            // (promotion E 2a — the successor, when one is named, is per-row DATA written by the seed, never engine code).
+            select: { promptText: true, status: true, version: true, description: true },
           });
         } catch (err) {
           logger.warn({ err, protocol: deltaName }, 'Failed to load stamped protocol — degrading to base-only');
@@ -419,10 +436,20 @@ export async function buildSystemPromptInjectionBlocks(
               // elsewhere is automatic (a stamp must name it), so this throw is the lifecycle.
               logger.warn({ protocol: deltaName, status: deltaRow.status, errorCode: 'PROTOCOL_ROW_NOT_ACTIVE' },
                 'PROGRAM-tier protocol row exists but is not ACTIVE — hard-failing rather than base-only synthesis');
+              // 2a (promotion E, 2026-10-05; Protocol 10): a DEPRECATED row is RETIRED, not awaiting activation, so
+              // "Activate the protocol" is the wrong advice for it. Facts only + the row's own description (or the
+              // HOWTO pointer). Engine code never names a successor. "Activate" stays for DRAFT/INACTIVE.
+              // ⚠️ This branch is reached ONLY because the retired name stays in PROGRAM_PROTOCOL_NAMES — without it a
+              // DEPRECATED row takes the leg branch below and composes base-only (Kind-B). Pinned by name in
+              // test-system-prompt-injections.ts (the DEPRECATED value-chain-program-protocol case).
+              const remedy = deltaRow.status === 'DEPRECATED'
+                ? `A task's protocol stamp is fixed at its first execution (resolved here from: ${fact.stampSource}), ` +
+                  `so this task cannot be re-routed in place. ${deprecatedRowPointer(deltaRow.description, true)}`
+                : 'Activate the protocol or re-route the task.';
               throw new Error(
                 `PROTOCOL_ROW_NOT_ACTIVE: program-tier protocol "${deltaName}" is ${deltaRow.status}, not ACTIVE. ` +
                 `A program harness composed on the base alone would silently synthesize a malformed program ` +
-                `(the base carries no PLAN-SPAWN mechanics). Activate the protocol or re-route the task.`
+                `(the base carries no PLAN-SPAWN mechanics). ${remedy}`
               );
             }
             // LEG tier: task-authored state — degrade to base-only, loudly, with the fact +
@@ -506,10 +533,29 @@ export async function buildSystemPromptInjectionBlocks(
         { protocol: namedProtocol, errorCode: 'NAMED_PROTOCOL_NOT_FOUND' },
         'Bound protocol name does not resolve to an ACTIVE prompt-library row — refusing to run the agent with no protocol'
       );
+      // 2a (promotion E, 2026-10-05): the ACTIVE-filtered read cannot tell "no such row" from "a retired row", and
+      // "activate the protocol" is the wrong advice for a retired one. ONE status-unfiltered read, on this MISS
+      // branch only, inside its own try: any failure falls through to the generic message below (never degrades,
+      // never swallows the throw — the throw is outside the try).
+      let retired: { description: string | null } | null = null;
+      try {
+        const row = await db.agentPromptLibrary.findFirst({
+          where: { name: namedProtocol },
+          select: { status: true, description: true },
+        });
+        if (row && row.status === 'DEPRECATED') retired = { description: row.description ?? null };
+      } catch (err) {
+        logger.warn({ err, protocol: namedProtocol }, 'Retired-row check failed on the named miss — generic message');
+      }
       throw new Error(
-        `NAMED_PROTOCOL_NOT_FOUND: template metadata binds protocol "${namedProtocol}", ` +
-        `which is not an ACTIVE row in agent_prompt_library. Running the agent with no protocol at all ` +
-        `would silently produce unguided output. Fix the binding or activate the protocol.`
+        retired
+          ? `NAMED_PROTOCOL_NOT_FOUND: template metadata binds protocol "${namedProtocol}", ` +
+            `which is DEPRECATED (retired), not an ACTIVE row in agent_prompt_library. Running the agent with no ` +
+            `protocol at all would silently produce unguided output. A template bound to a retired protocol cannot run; ` +
+            `bind an ACTIVE one. ${deprecatedRowPointer(retired.description, isProgramProtocol(namedProtocol))}`.trimEnd()
+          : `NAMED_PROTOCOL_NOT_FOUND: template metadata binds protocol "${namedProtocol}", ` +
+            `which is not an ACTIVE row in agent_prompt_library. Running the agent with no protocol at all ` +
+            `would silently produce unguided output. Fix the binding or activate the protocol.`
       );
     } else {
       // Same single injection for the specialist path — one protocol, one preamble. Split into

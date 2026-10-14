@@ -66,10 +66,12 @@ exist today. See `cline_docs/reviews/r9-option-b-2026-07-26/TRACE-CORRECTION.md`
 ## 🆕 2026-07-26 — The `securityEvent` pino tag (a convention with a test-pinned NEGATIVE)
 
 ```bash
-# Every emit site. 19 files at 2026-09-25 (14 at 2026-07-26; F9 added R9 site B, context-chainer.ts):
+# Every emit site. 21 files at 2026-10-04 (19 at 2026-09-25; C2/C3 added the classify-only R9 sites C2-create
+# (task-create-handler.ts) and C2-inherit (prepare-task-for-execution.ts) — NOT wired to any alerting until F9-s5 is re-decided;
+# 14 at 2026-07-26; F9 added R9 site B, context-chainer.ts):
 # lib/services + harness, the MCP hub/security handlers, app/api routes. The tag marks an INTEGRITY
 # VIOLATION on a security boundary.
-grep -rln "securityEvent" lib/ app/ --include=*.ts --include=*.js
+grep -rln "securityEvent" lib/ app/ --include=*.ts --include=*.js | wc -l   # expect 21
 
 # The pinned NEGATIVE — a benign guard firing must NOT carry the tag.
 grep -n "securityEvent" scripts/test-reactor-race-guard.ts lib/services/reactor-skip-counter.ts
@@ -1483,3 +1485,30 @@ grep -c "its default is the NARROWEST choice, never the whole class" lib/service
 ```
 Record: `cline_docs/reviews/gs-r5-decision-guidance-2026-09-26/SYNTHESIS.md`. Publish-pass pre-filter for harvested state:
 `requirements-rules.py --lint` (public repo).
+
+## Pattern (h) — anti-fabrication review rules (added 2026-10-04)
+
+Before any change that relaxes or retries change-leg review findings, read the specialist § "Pattern (h): which
+'paperwork' review rules are anti-fabrication controls" and `cline_docs/reviews/pattern-h-corpus-measure-2026-10-03/
+REVIEW-sec-ops.md` — governance and presence/sourcing findings are never revision-round eligible.
+
+## `test:mcp-action-security` — policy-derived + fixed invariants (2026-10-04)
+
+Rewritten: expectations come from `role_permissions` (PoV/CREATE), plus invariants that hold whatever the table says (DEMO_USER never
+creates; SUPER_ADMIN always passes). Run locally with `.env` exported (CI skips it); never against prod (writes audit rows). REST
+`createTask` strips AUDIT_STRIP keys like every other client write path.
+
+```bash
+grep -c "INVARIANT: DEMO_USER" scripts/test-mcp-action-security.ts   # expect 1 — the table-independent DEMO_USER pin
+grep -c "stripAuditFacts" lib/tasks/services/task.ts                  # expect 3 — import + update path + the REST createTask fix
+```
+
+## PLATFORM-HELD-BYTES security invariants (2026-10-14, block Q)
+
+```bash
+grep -c "Q1 V2[012]\|Q1 V20\|Q1 V21\|Q1 V22" scripts/test-security-invariants.ts   # expect >=3
+```
+No hash of anything pre-R10 (one `createHash`, over B); the store is scope-keyed (never a bare-hash lookup); a held copy is
+refused `escaped-secret-residual` when R10's deep walk of B would redact more (V20–V22 — the deep(B) form; a deep(C) form
+lets key-name-blind arm 1 cancel); `raw-digest-present` uses a normalised family matcher with a closed token set; capture
+logs carry name / code / metaCode only (a Postgres DETAIL prints key values). Capture is shadow and off by default.

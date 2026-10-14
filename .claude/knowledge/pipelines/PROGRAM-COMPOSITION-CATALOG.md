@@ -106,7 +106,8 @@ Decide the right column in playbook Phase 2–3 for each new program use-case. T
 
 **Transfers for free (composition-layer, already built — D1–D12 / CC1–CC8):**
 - The **role triad** — Program Architect (`program_architect`, the one net-new role) → per-leg reviewers
-  (reused `change_reviewer`, per-pipeline conformance) → Node C (reused `change_reviewer`, cross-leg). D1/D2.
+  (reused `change_reviewer`, per-pipeline conformance) → Node C (reused `change_reviewer`, cross-leg — on the unbound
+  `Program Integration Reviewer` row since pov-program 2.0.0, so it reads no domain protocol). D1/D2.
 - **Sibling-only edges in one program stage** (cross-stage edges silently don't fire). D3.
 - **Template-less gates** as dependency nodes (reactor can't auto-queue → human `task.complete` is the only
   release). D4.
@@ -150,6 +151,18 @@ here is its shape mapping:
 Teaching point the firewall entry contributes to the general map: **the SAME path is S0, S1, or S2 depending
 only on vendor homogeneity, team boundaries, and whether a NAT introduces a runtime dependency** — the shape
 is a property of the boundaries, not the domain.
+
+## §Value-chain — one derived value, consumed across domains (live 2026-10-02; part of pov-program since 2.0.0)
+
+An S2 program in which the upstream leg is a **value leg**: it designs nothing and changes nothing, it derives one
+value from live state and publishes it with its derivation evidence; the downstream legs are ordinary change legs that
+consume it verbatim. It is a **leg type inside `pov-program`** (`leg type: value`, leg protocol `network-derivation`),
+approved by the human at the plan gate — the `value-chain-program` variant that proved it is RETIRED (promotion E,
+deploy 2). Worked case `program-artifacts/telemetry-export-genspec-t1zero-v2/` (fabric → k8s / terraform / observability).
+Choose it over plain S2 when the upstream's only output is a value, so you do not pay for a change package that will
+never be applied. Proven in the variant's window: 5 runs, value leg 5/5, program 1/5 (refusals all change-leg
+write-ups); the promotion's regression controls run after deploy 2. **Limit:** until the generated requirements template
+gains a slot for the "changes nothing" phrase, the shape comes only from a hand-shaped spec.
 
 ## §Candidate program use-cases (triage stubs — flesh out before Phase 2)
 

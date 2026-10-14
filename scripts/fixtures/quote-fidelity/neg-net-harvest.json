@@ -1,0 +1,896 @@
+{
+ "executionId": "cmtatlcq50057yxdz1s3c9ytc",
+ "taskId": "cmtatlagx0051yxdzvakwl0ne",
+ "legTaskId": "cmtat4u000021yxdzyiojbkdk",
+ "stageId": "cmtatl0nh004tyxdz1oycwzh6",
+ "agentRole": "infra_state_harvester",
+ "protocol": "network-provisioning-protocol",
+ "startTime": "2026-08-27T01:04:25.174",
+ "finalResponse": "## State Summary\n\n**Scope:** Read-only harvest of current OSPF/IS-IS state on `ceos1` (1.1.1.1) and `ceos2` (2.2.2.2), scoped to the point-to-point link (Ethernet1, area 0.0.0.0) and Loopback0 per this leg's design needs. **Completeness: FULL** — all planned reads succeeded, no partial/failed calls. **IS-IS existence check: CONFIRMED ABSENT on both devices** (expected outcome per contract `existenceAssumptions.p1Harvest`).\n\n**Self-provisioning:** Descriptor fetched via Browser Automation Service from `https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json`. Registered service `ceos-lab-readonly` (id `cmtatloee000cyxe02wf7xd9d`) → endpoint `https://ceos-lab.paichart.app/mcp`, category `automation`, tools `list_devices`/`fetch_data`/`show_commands` (show_commands allowlist-constrained). Landed `ACTIVE` immediately (auto-approving category) — no update step needed. Health check: ACTIVE, 100% success rate. **Teardown deferred to SYNTHESIZE** per protocol — service intentionally NOT deleted this run.\n\n**Secret hygiene:** the `config` (running) NAPALM getter returned two secret-bearing lines per device — a local `username admin ... secret sha512 $6$...` hash and an `snmp-server community ... ro` cleartext string. Neither is reproduced below; both are redacted to placeholders. No plaintext secret value is restated anywhere in this report.\n\n---\n\n### 1. OSPF neighbor state (point-to-point link, Ethernet1)\n\n**Command:** `show ip ospf neighbor` — **Device: ceos1**\n```\nNeighbor ID     Instance VRF      Pri State                  Dead Time   Address         Interface\n2.2.2.2         1        default  0   FULL                   00:00:34    10.0.12.2       Ethernet1\n```\n\n**Command:** `show ip ospf neighbor` — **Device: ceos2**\n```\nNeighbor ID     Instance VRF      Pri State                  Dead Time   Address         Interface\n1.1.1.1         1        default  0   FULL                   00:00:37    10.0.12.1       Ethernet1\n```\n\nAdjacency is FULL bidirectionally over Ethernet1 — healthy OSPF baseline.\n\n### 2. OSPF interface state + cost (area 0 baseline)\n\n**Command:** `show ip ospf interface brief` — **Device: ceos1**\n```\n   Interface          Instance VRF        Area            IP Address         Cost  State      Nbrs\n   Lo0                1        default    0.0.0.0         1.1.1.1/32         10    DR         0\n   Et1                1        default    0.0.0.0         10.0.12.1/30       10    P2P        1\n```\n\n**Command:** `show ip ospf interface brief` — **Device: ceos2**\n```\n   Interface          Instance VRF        Area            IP Address         Cost  State      Nbrs\n   Lo0                1        default    0.0.0.0         2.2.2.2/32         10    DR         0\n   Et1                1        default    0.0.0.0         10.0.12.2/30       10    P2P        1\n```\n\nBoth Ethernet1 and Loopback0 are in area 0.0.0.0; Ethernet1 network type is P2P (point-to-point, matches contract); **interface cost = 10 on both sides** — matches `interfaceMetrics.values` in the Program Interface Contract exactly (no discrepancy to report).\n\n### 3. IS-IS process existence check\n\n**Command:** `show isis neighbor` — **Device: ceos1**\n```\n(empty output)\n```\n**Command:** `show isis neighbor` — **Device: ceos2**\n```\n(empty output)\n```\nCorroborated by the absence of any `router isis` stanza in either device's running-config (§4 below). **No IS-IS process exists on either device** — CREATE is the correct downstream action, consistent with contract expectation.\n\n### 4. Interface config — Ethernet1 and Loopback0 (+ OSPF process), verbatim from `fetch_data(getters:[\"config\"], getters_options:{config:{retrieve:\"running\"}})`\n\n**Device: ceos1** (secrets redacted; interface/OSPF stanzas quoted exactly as returned)\n```\nusername admin privilege 15 role network-admin secret sha512 <<REDACTED-SECRET>>\n!\nsnmp-server community <<REDACTED-SECRET>> ro\n!\ninterface Ethernet1\n   description to-ceos2 (ospf cost 10)\n   no switchport\n   ip address 10.0.12.1/30\n   ip ospf cost 10\n   ip ospf network point-to-point\n!\ninterface Loopback0\n   description router-id / migration anchor\n   ip address 1.1.1.1/32\n!\nrouter ospf 1\n   router-id 1.1.1.1\n   passive-interface Loopback0\n   network 1.1.1.1/32 area 0.0.0.0\n   network 10.0.12.0/30 area 0.0.0.0\n   max-lsa 12000\n```\n\n**Device: ceos2** (secrets redacted; interface/OSPF stanzas quoted exactly as returned)\n```\nusername admin privilege 15 role network-admin secret sha512 <<REDACTED-SECRET>>\n!\nsnmp-server community <<REDACTED-SECRET>> ro\n!\ninterface Ethernet1\n   description to-ceos1 (ospf cost 10)\n   no switchport\n   ip address 10.0.12.2/30\n   ip ospf cost 10\n   ip ospf network point-to-point\n!\ninterface Loopback0\n   description router-id / migration anchor\n   ip address 2.2.2.2/32\n!\nrouter ospf 1\n   router-id 2.2.2.2\n   passive-interface Loopback0\n   network 2.2.2.2/32 area 0.0.0.0\n   network 10.0.12.0/30 area 0.0.0.0\n   max-lsa 12000\n```\n\n**Notable finding vs. contract:** the OSPF baseline in the contract states `interfaceCost: 10` at the link level but the harvested config sets cost via `ip ospf cost 10` directly under Ethernet1 (not via a process-wide default) — consistent, no conflict. Loopback0 is `passive-interface` under OSPF, matching `loopbackPassive.rule` (carried over to IS-IS is a P1 design task, not observed here). Router-IDs (1.1.1.1 / 2.2.2.2), Loopback0 addressing, link subnet (10.0.12.0/30) and per-side addressing (.1 / .2) all match the Program Interface Contract exactly — reported as an observation, not assumed.\n\n---\n\n## Cross-check against Program Interface Contract (observation only, not reconciliation)\n\n| Contract value | Harvested value | Match |\n|---|---|---|\n| link subnet 10.0.12.0/30 | 10.0.12.1/30 (ceos1 Et1), 10.0.12.2/30 (ceos2 Et1) | ✅ |\n| ceos1 routerId 1.1.1.1, Loopback0 1.1.1.1/32 | router-id 1.1.1.1, Lo0 1.1.1.1/32 | ✅ |\n| ceos2 routerId 2.2.2.2, Loopback0 2.2.2.2/32 | router-id 2.2.2.2, Lo0 2.2.2.2/32 | ✅ |\n| ospfBaseline.area 0.0.0.0 | area 0.0.0.0 on both interfaces | ✅ |\n| ospfBaseline.interfaceCost 10 | cost 10 on both Et1 (interface brief + running-config) | ✅ |\n| ospfBaseline.networkType point-to-point | Et1 state P2P, `ip ospf network point-to-point` configured | ✅ |\n| existenceAssumptions.p1Harvest: no IS-IS process | confirmed absent both devices | ✅ |\n| bgp: NONE | no `router bgp` stanza observed in either running-config | ✅ (no ASN entries below) |\n\nNo contradictions found between observed device state and the binding contract constants for this leg.\n\n```json\n## Harvested Allocations\n[\n  {\"kind\": \"cidr\", \"cidr\": \"10.0.12.0/30\", \"device\": \"ceos1\", \"interface\": \"Ethernet1\", \"source\": \"fetch_data(config, retrieve=running) — network 10.0.12.0/30 area 0.0.0.0 (router ospf 1)\"},\n  {\"kind\": \"cidr\", \"cidr\": \"10.0.12.1/30\", \"device\": \"ceos1\", \"interface\": \"Ethernet1\", \"source\": \"fetch_data(config, retrieve=running) — interface Ethernet1: ip address 10.0.12.1/30\"},\n  {\"kind\": \"cidr\", \"cidr\": \"10.0.12.0/30\", \"device\": \"ceos2\", \"interface\": \"Ethernet1\", \"source\": \"fetch_data(config, retrieve=running) — network 10.0.12.0/30 area 0.0.0.0 (router ospf 1)\"},\n  {\"kind\": \"cidr\", \"cidr\": \"10.0.12.2/30\", \"device\": \"ceos2\", \"interface\": \"Ethernet1\", \"source\": \"fetch_data(config, retrieve=running) — interface Ethernet1: ip address 10.0.12.2/30\"},\n  {\"kind\": \"cidr\", \"cidr\": \"1.1.1.1/32\", \"device\": \"ceos1\", \"interface\": \"Loopback0\", \"source\": \"fetch_data(config, retrieve=running) — interface Loopback0: ip address 1.1.1.1/32; also network 1.1.1.1/32 area 0.0.0.0\"},\n  {\"kind\": \"cidr\", \"cidr\": \"2.2.2.2/32\", \"device\": \"ceos2\", \"interface\": \"Loopback0\", \"source\": \"fetch_data(config, retrieve=running) — interface Loopback0: ip address 2.2.2.2/32; also network 2.2.2.2/32 area 0.0.0.0\"}\n]\n```\n\nNo `asn`-kind entries: neither device runs BGP (no `router bgp` stanza observed, consistent with contract `\"bgp\": \"NONE\"`); OSPF process ID 1 is a process identifier, not an AS number, and is not recorded as an allocation.\n\n**Handoff note:** Service `ceos-lab-readonly` remains registered/ACTIVE for downstream re-use if needed within this leg; teardown (`registry.delete`) executes at SYNTHESIZE per protocol, regardless of approve/escalate outcome.\n\nConfidence: 95 — All eight scoped read-only calls succeeded with literal, verbatim output; IS-IS absence corroborated two ways (empty neighbor output + no `router isis` stanza in config); every contract-bound value cross-checked with zero discrepancies. Minor uncertainty only in not having independently probed `show isis database`/`show isis hostname` (redundant given config-level confirmation of no IS-IS process), which is why this isn't 100.",
+ "toolCalls": [
+  {
+   "tool": "services",
+   "arguments": {
+    "action": "call",
+    "targetService": "Browser Automation Service",
+    "tool": "scrape_page",
+    "arguments": "{\"url\": \"https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json\", \"selectors\": {\"descriptor\": \"pre\"}}"
+   },
+   "result": {
+    "content": [
+     {
+      "type": "data",
+      "data": {
+       "success": true,
+       "targetService": "Browser Automation Service",
+       "tool": "scrape_page",
+       "arguments": {
+        "url": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json",
+        "selectors": {
+         "descriptor": "pre"
+        }
+       },
+       "result": {
+        "content": [
+         {
+          "type": "text",
+          "text": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"descriptor\": \"{\\n  \\\"_comment\\\": \\\"Phase-4 real-device validation descriptor for the network-provisioning pipeline. The Harvester FETCHES this from its raw GitHub URL (https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json) — put that URL in the pipeline task description. It points at sydasif/nornir-mcp-server fronting a Arista cEOS lab (2-node or the igp-triangle 3-node variant) on prod, reachable at the STABLE named cloudflared tunnel ceos-lab.paichart.app (systemd service on prod → localhost:3107). Declares the READ-ONLY harvest subset: list_devices + fetch_data(NAPALM getters) + show_commands CONSTRAINED to an enumerated allowlist of state-read commands (added 2026-08-23 after IGP-T1 R6's P2 leg correctly ESCALATED: zero-tolerance route parity was unverifiable because NAPALM has no route-table/IGP-adjacency getter). The SERVICE's show_commands accepts arbitrary strings — the enum below is descriptor-level scoping, the same restriction model as the rest of this file (not service-level R1 enforcement). apply_config/backup_configs remain deliberately NOT declared. All allowlisted commands except 'show ip route isis' were live-verified on EOS 4.32.2.1F during the IGP-T1 window; 'show ip route' is the guaranteed superset fallback. HONEST CAVEAT: nornir-mcp authenticates to the device with STATIC creds, NOT the JWKS-forwarded identity WS4 R2a mandates — so this is NOT WS4-conformant. It validates the COGNITION pipeline (harvest -> design -> change-package vs REAL EOS) + R9-at-the-wire, not the identity contract. Rig + runbook: copov15 .claude/knowledge/pipelines/network-provisioning/phase4-ceos-rig/.\\\",\\n  \\\"name\\\": \\\"ceos-lab-readonly\\\",\\n  \\\"description\\\": \\\"Read-only Arista EOS network-state harvest for the network-provisioning pipeline. Exposes list_devices, fetch_data (NAPALM getters: running-config, interfaces, facts, BGP neighbors, etc.), and show_commands restricted to an enumerated allowlist of state-read commands (route tables, OSPF/IS-IS neighbors, IS-IS hostname map) against a cEOS lab. Authenticates to devices with a static service credential (validation rig; not JWKS per-user identity). No preconditions; call fetch_data with getter names, or show_commands with allowlisted commands.\\\",\\n  \\\"endpoint\\\": \\\"https://ceos-lab.paichart.app/mcp\\\",\\n  \\\"category\\\": \\\"automation\\\",\\n  \\\"version\\\": \\\"0.3.0\\\",\\n  \\\"capabilities\\\": {\\n    \\\"transport\\\": \\\"streamable-http\\\",\\n    \\\"tools\\\": [\\n      {\\n        \\\"name\\\": \\\"list_devices\\\",\\n        \\\"description\\\": \\\"List network devices and inventory (devices, groups, or both). Read-only. Call this first to discover device names before fetch_data.\\\",\\n        \\\"inputSchema\\\": {\\n          \\\"type\\\": \\\"object\\\",\\n          \\\"properties\\\": {\\n            \\\"query_type\\\": {\\n              \\\"type\\\": \\\"string\\\",\\n              \\\"enum\\\": [\\n                \\\"devices\\\",\\n                \\\"groups\\\",\\n                \\\"all\\\"\\n              ],\\n              \\\"default\\\": \\\"all\\\",\\n              \\\"description\\\": \\\"Inventory data to return: 'devices', 'groups', or 'all'\\\"\\n            },\\n            \\\"details\\\": {\\n              \\\"type\\\": \\\"boolean\\\",\\n              \\\"default\\\": false,\\n              \\\"description\\\": \\\"Return full device attributes (for a devices query)\\\"\\n            },\\n            \\\"filter_name\\\": {\\n              \\\"type\\\": \\\"string\\\",\\n              \\\"description\\\": \\\"Filter by inventory device name (e.g. 'ceos1')\\\"\\n            },\\n            \\\"filter_hostname\\\": {\\n              \\\"type\\\": \\\"string\\\",\\n              \\\"description\\\": \\\"Filter by hostname / IP\\\"\\n            },\\n            \\\"filter_group\\\": {\\n              \\\"type\\\": \\\"string\\\",\\n              \\\"description\\\": \\\"Filter by group (e.g. 'arista_eos')\\\"\\n            },\\n            \\\"filter_platform\\\": {\\n              \\\"type\\\": \\\"string\\\",\\n              \\\"description\\\": \\\"Filter by platform (e.g. 'eos')\\\"\\n            }\\n          }\\n        }\\n      },\\n      {\\n        \\\"name\\\": \\\"fetch_data\\\",\\n        \\\"description\\\": \\\"Execute one or more READ-ONLY NAPALM getters against the EOS devices and return structured state (running-config, interfaces, facts, BGP neighbors, etc.). This is the Phase-0 harvest surface. Read-only by construction — NAPALM getters never mutate device state.\\\",\\n        \\\"inputSchema\\\": {\\n          \\\"type\\\": \\\"object\\\",\\n          \\\"required\\\": [\\n            \\\"getters\\\"\\n          ],\\n          \\\"properties\\\": {\\n            \\\"getters\\\": {\\n              \\\"type\\\": \\\"array\\\",\\n              \\\"description\\\": \\\"NAPALM getter names to run (short form, no 'get_' prefix). All entries are read-only EOS getters.\\\",\\n              \\\"minItems\\\": 1,\\n              \\\"items\\\": {\\n                \\\"type\\\": \\\"string\\\",\\n                \\\"enum\\\": [\\n                  \\\"config\\\",\\n                  \\\"facts\\\",\\n                  \\\"interfaces\\\",\\n                  \\\"interfaces_ip\\\",\\n                  \\\"interfaces_counters\\\",\\n                  \\\"lldp_neighbors\\\",\\n                  \\\"lldp_neighbors_detail\\\",\\n                  \\\"bgp_neighbors\\\",\\n                  \\\"bgp_config\\\",\\n                  \\\"environment\\\",\\n                  \\\"arp_table\\\",\\n                  \\\"mac_address_table\\\",\\n                  \\\"ntp_servers\\\",\\n                  \\\"snmp_information\\\",\\n                  \\\"users\\\",\\n                  \\\"optics\\\",\\n                  \\\"network_instances\\\"\\n                ]\\n              }\\n            },\\n            \\\"getters_options\\\": {\\n              \\\"type\\\": \\\"object\\\",\\n              \\\"description\\\": \\\"Optional per-getter options, e.g. {\\\\\\\"config\\\\\\\": {\\\\\\\"retrieve\\\\\\\": \\\\\\\"running\\\\\\\"}}.\\\",\\n              \\\"additionalProperties\\\": true\\n            },\\n            \\\"filter_name\\\": {\\n              \\\"type\\\": \\\"string\\\",\\n              \\\"description\\\": \\\"Restrict to one inventory device name (e.g. 'ceos1')\\\"\\n            },\\n            \\\"filter_hostname\\\": {\\n              \\\"type\\\": \\\"string\\\",\\n              \\\"description\\\": \\\"Restrict by hostname / IP\\\"\\n            },\\n            \\\"filter_group\\\": {\\n              \\\"type\\\": \\\"string\\\",\\n              \\\"description\\\": \\\"Restrict by group\\\"\\n            },\\n            \\\"filter_platform\\\": {\\n              \\\"type\\\": \\\"string\\\",\\n              \\\"description\\\": \\\"Restrict by platform\\\"\\n            }\\n          }\\n        }\\n      },\\n      {\\n        \\\"name\\\": \\\"show_commands\\\",\\n        \\\"description\\\": \\\"Execute READ-ONLY operational 'show' commands from the enumerated allowlist below and return raw CLI output. Added for route-table, IGP-adjacency and link-state-database state that NAPALM getters cannot retrieve (parity verification, neighbour baselines). NOTE on parity during protocol coexistence: while one IGP is administratively preferred, the other's routes are computed but NOT installed, so routing-table views show them as absent even on a healthy fabric — the link-state database is where that evidence lives. Commands outside the allowlist are not part of this service's declared surface — do not send them.\\\",\\n        \\\"inputSchema\\\": {\\n          \\\"type\\\": \\\"object\\\",\\n          \\\"required\\\": [\\n            \\\"commands\\\"\\n          ],\\n          \\\"properties\\\": {\\n            \\\"commands\\\": {\\n              \\\"type\\\": \\\"array\\\",\\n              \\\"minItems\\\": 1,\\n              \\\"description\\\": \\\"Allowlisted read-only show commands to run on the filtered devices.\\\",\\n              \\\"items\\\": {\\n                \\\"type\\\": \\\"string\\\",\\n                \\\"enum\\\": [\\n                  \\\"show ip route\\\",\\n                  \\\"show ip route ospf\\\",\\n                  \\\"show ip route isis\\\",\\n                  \\\"show ip ospf neighbor\\\",\\n                  \\\"show isis neighbor\\\",\\n                  \\\"show isis hostname\\\",\\n                  \\\"show ip ospf interface brief\\\",\\n                  \\\"show isis database\\\",\\n                  \\\"show isis database detail\\\"\\n                ]\\n              }\\n            },\\n            \\\"filter_name\\\": {\\n              \\\"type\\\": \\\"string\\\",\\n              \\\"description\\\": \\\"Restrict to one inventory device name (e.g. 'ceos1')\\\"\\n            },\\n            \\\"filter_hostname\\\": {\\n              \\\"type\\\": \\\"string\\\",\\n              \\\"description\\\": \\\"Restrict by hostname / IP\\\"\\n            },\\n            \\\"filter_group\\\": {\\n              \\\"type\\\": \\\"string\\\",\\n              \\\"description\\\": \\\"Restrict by group\\\"\\n            },\\n            \\\"filter_platform\\\": {\\n              \\\"type\\\": \\\"string\\\",\\n              \\\"description\\\": \\\"Restrict by platform\\\"\\n            }\\n          }\\n        }\\n      }\\n    ]\\n  }\\n}\\n\"\n    }\n  ],\n  \"pageCount\": 1,\n  \"timing\": {\n    \"startTime\": \"2026-08-27T01:04:30.057Z\",\n    \"endTime\": \"2026-08-27T01:04:30.920Z\",\n    \"durationMs\": 863\n  }\n}"
+         }
+        ]
+       },
+       "_meta": {
+        "tool": "services",
+        "timestamp": "2026-08-27T01:04:30.931Z",
+        "sdkNative": true
+       },
+       "metadata": {
+        "executionTime": 1104,
+        "maxExecutionTime": 300000,
+        "effectiveTimeout": 300000,
+        "requestedTimeout": null,
+        "timeoutClamped": false,
+        "targetServiceId": "browser-automation-service",
+        "sourceUser": "owner@example.invalid",
+        "endpoint": "http://localhost:3100/sse",
+        "timestamp": "2026-08-27T01:04:30.931Z"
+       },
+       "nextSteps": [
+        "✅ Service call completed",
+        "📝 Report results: perform(action: \"task.comment\", taskId: '...', comment: '| Tool | Status | Key Data | Notes |\\n|------|--------|----------|-------|')",
+        "Make another call (same service): services(action: \"call\", targetService: 'Browser Automation Service', tool: '...', arguments: {...})",
+        "New service workflow: registry(action: \"tools\", service_name: '...') → services(action: \"health\", service_name: '...') → services(action: \"call\")"
+       ]
+      },
+      "annotations": {
+       "dataType": "object",
+       "itemCount": 8
+      }
+     }
+    ],
+    "isError": false,
+    "_meta": {
+     "executionTime": 1787792670944,
+     "serverName": "paichart-embedded-mcp",
+     "toolName": "services"
+    }
+   },
+   "success": true,
+   "sanitized": false,
+   "resultTruncatedForLlm": true
+  },
+  {
+   "tool": "services",
+   "arguments": {
+    "action": "call",
+    "targetService": "ceos-lab-readonly",
+    "tool": "list_devices",
+    "arguments": "{\"query_type\": \"devices\", \"details\": false}"
+   },
+   "result": {
+    "content": [
+     {
+      "type": "data",
+      "data": {
+       "success": true,
+       "targetService": "ceos-lab-readonly",
+       "tool": "list_devices",
+       "arguments": {
+        "query_type": "devices",
+        "details": false
+       },
+       "result": {
+        "content": [
+         {
+          "type": "text",
+          "text": "{\"devices\":{\"total_devices\":2,\"devices\":[{\"name\":\"ceos1\",\"hostname\":\"172.30.32.11\",\"platform\":\"eos\",\"groups\":[\"arista_eos\"],\"data\":null},{\"name\":\"ceos2\",\"hostname\":\"172.30.32.12\",\"platform\":\"eos\",\"groups\":[\"arista_eos\"],\"data\":null}]}}"
+         }
+        ],
+        "structuredContent": {
+         "devices": {
+          "total_devices": 2,
+          "devices": [
+           {
+            "name": "ceos1",
+            "hostname": "172.30.32.11",
+            "platform": "eos",
+            "groups": [
+             "arista_eos"
+            ],
+            "data": null
+           },
+           {
+            "name": "ceos2",
+            "hostname": "172.30.32.12",
+            "platform": "eos",
+            "groups": [
+             "arista_eos"
+            ],
+            "data": null
+           }
+          ]
+         }
+        },
+        "isError": false
+       },
+       "_meta": {
+        "tool": "services",
+        "timestamp": "2026-08-27T01:04:56.548Z",
+        "sdkNative": true
+       },
+       "metadata": {
+        "executionTime": 287,
+        "maxExecutionTime": 30000,
+        "effectiveTimeout": 30000,
+        "requestedTimeout": null,
+        "timeoutClamped": false,
+        "targetServiceId": "cmtatloee000cyxe02wf7xd9d",
+        "sourceUser": "owner@example.invalid",
+        "endpoint": "https://ceos-lab.paichart.app/mcp",
+        "timestamp": "2026-08-27T01:04:56.548Z"
+       },
+       "nextSteps": [
+        "✅ Service call completed",
+        "📝 Report results: perform(action: \"task.comment\", taskId: '...', comment: '| Tool | Status | Key Data | Notes |\\n|------|--------|----------|-------|')",
+        "Make another call (same service): services(action: \"call\", targetService: 'ceos-lab-readonly', tool: '...', arguments: {...})",
+        "New service workflow: registry(action: \"tools\", service_name: '...') → services(action: \"health\", service_name: '...') → services(action: \"call\")"
+       ]
+      },
+      "annotations": {
+       "dataType": "object",
+       "itemCount": 8
+      }
+     }
+    ],
+    "isError": false,
+    "_meta": {
+     "executionTime": 1787792696558,
+     "serverName": "paichart-embedded-mcp",
+     "toolName": "services"
+    }
+   },
+   "success": true,
+   "sanitized": false,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "arguments": {
+    "action": "health",
+    "service_name": "ceos-lab-readonly"
+   },
+   "result": {
+    "content": [
+     {
+      "type": "data",
+      "data": {
+       "serviceName": "ceos-lab-readonly",
+       "status": "ACTIVE",
+       "lastHeartbeat": {},
+       "responseTime": 287,
+       "successRate": 100,
+       "errorCount": 0,
+       "errorCount7d": 0,
+       "version": "1.0.0",
+       "realtime": {
+        "available": true,
+        "latency": 71,
+        "statusCode": 406,
+        "healthCheckPath": "/health",
+        "lastChecked": "2026-08-27T01:04:56.646Z"
+       },
+       "endpoint": "https://ceos-lab.paichart.app/mcp",
+       "owner": "owner@example.invalid",
+       "nextSteps": [
+        "✅ Service \"ceos-lab-readonly\" is healthy and reliable",
+        "Ready to use - services(action: \"call\") to execute tools",
+        "Example: services(action: \"call\", targetService: \"ceos-lab-readonly\", tool: \"tool_name\", arguments: {...})"
+       ],
+       "recommendation": "use"
+      },
+      "annotations": {
+       "dataType": "object",
+       "itemCount": 14
+      }
+     }
+    ],
+    "isError": false,
+    "_meta": {
+     "executionTime": 1787792696650,
+     "serverName": "paichart-embedded-mcp",
+     "toolName": "services"
+    }
+   },
+   "success": true,
+   "sanitized": false,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "arguments": {
+    "action": "call",
+    "targetService": "ceos-lab-readonly",
+    "tool": "show_commands",
+    "arguments": "{\"commands\": [\"show ip ospf neighbor\"], \"filter_name\": \"ceos1\"}"
+   },
+   "result": {
+    "content": [
+     {
+      "type": "data",
+      "data": {
+       "success": true,
+       "targetService": "ceos-lab-readonly",
+       "tool": "show_commands",
+       "arguments": {
+        "commands": [
+         "show ip ospf neighbor"
+        ],
+        "filter_name": "ceos1"
+       },
+       "result": {
+        "content": [
+         {
+          "type": "text",
+          "text": "{\"hosts\":{\"ceos1\":{\"success\":true,\"output\":{\"show ip ospf neighbor\":\"Neighbor ID     Instance VRF      Pri State                  Dead Time   Address         Interface\\n2.2.2.2         1        default  0   FULL                   00:00:34    10.0.12.2       Ethernet1\"}}}}"
+         }
+        ],
+        "structuredContent": {
+         "hosts": {
+          "ceos1": {
+           "success": true,
+           "output": {
+            "show ip ospf neighbor": "Neighbor ID     Instance VRF      Pri State                  Dead Time   Address         Interface\n2.2.2.2         1        default  0   FULL                   00:00:34    10.0.12.2       Ethernet1"
+           }
+          }
+         }
+        },
+        "isError": false
+       },
+       "_meta": {
+        "tool": "services",
+        "timestamp": "2026-08-27T01:05:02.801Z",
+        "sdkNative": true
+       },
+       "metadata": {
+        "executionTime": 625,
+        "maxExecutionTime": 30000,
+        "effectiveTimeout": 30000,
+        "requestedTimeout": null,
+        "timeoutClamped": false,
+        "targetServiceId": "cmtatloee000cyxe02wf7xd9d",
+        "sourceUser": "owner@example.invalid",
+        "endpoint": "https://ceos-lab.paichart.app/mcp",
+        "timestamp": "2026-08-27T01:05:02.801Z"
+       },
+       "nextSteps": [
+        "✅ Service call completed",
+        "📝 Report results: perform(action: \"task.comment\", taskId: '...', comment: '| Tool | Status | Key Data | Notes |\\n|------|--------|----------|-------|')",
+        "Make another call (same service): services(action: \"call\", targetService: 'ceos-lab-readonly', tool: '...', arguments: {...})",
+        "New service workflow: registry(action: \"tools\", service_name: '...') → services(action: \"health\", service_name: '...') → services(action: \"call\")"
+       ]
+      },
+      "annotations": {
+       "dataType": "object",
+       "itemCount": 8
+      }
+     }
+    ],
+    "isError": false,
+    "_meta": {
+     "executionTime": 1787792702812,
+     "serverName": "paichart-embedded-mcp",
+     "toolName": "services"
+    }
+   },
+   "success": true,
+   "sanitized": false,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "arguments": {
+    "action": "call",
+    "targetService": "ceos-lab-readonly",
+    "tool": "show_commands",
+    "arguments": "{\"commands\": [\"show ip ospf neighbor\"], \"filter_name\": \"ceos2\"}"
+   },
+   "result": {
+    "content": [
+     {
+      "type": "data",
+      "data": {
+       "success": true,
+       "targetService": "ceos-lab-readonly",
+       "tool": "show_commands",
+       "arguments": {
+        "commands": [
+         "show ip ospf neighbor"
+        ],
+        "filter_name": "ceos2"
+       },
+       "result": {
+        "content": [
+         {
+          "type": "text",
+          "text": "{\"hosts\":{\"ceos2\":{\"success\":true,\"output\":{\"show ip ospf neighbor\":\"Neighbor ID     Instance VRF      Pri State                  Dead Time   Address         Interface\\n1.1.1.1         1        default  0   FULL                   00:00:37    10.0.12.1       Ethernet1\"}}}}"
+         }
+        ],
+        "structuredContent": {
+         "hosts": {
+          "ceos2": {
+           "success": true,
+           "output": {
+            "show ip ospf neighbor": "Neighbor ID     Instance VRF      Pri State                  Dead Time   Address         Interface\n1.1.1.1         1        default  0   FULL                   00:00:37    10.0.12.1       Ethernet1"
+           }
+          }
+         }
+        },
+        "isError": false
+       },
+       "_meta": {
+        "tool": "services",
+        "timestamp": "2026-08-27T01:05:03.339Z",
+        "sdkNative": true
+       },
+       "metadata": {
+        "executionTime": 520,
+        "maxExecutionTime": 30000,
+        "effectiveTimeout": 30000,
+        "requestedTimeout": null,
+        "timeoutClamped": false,
+        "targetServiceId": "cmtatloee000cyxe02wf7xd9d",
+        "sourceUser": "owner@example.invalid",
+        "endpoint": "https://ceos-lab.paichart.app/mcp",
+        "timestamp": "2026-08-27T01:05:03.339Z"
+       },
+       "nextSteps": [
+        "✅ Service call completed",
+        "📝 Report results: perform(action: \"task.comment\", taskId: '...', comment: '| Tool | Status | Key Data | Notes |\\n|------|--------|----------|-------|')",
+        "Make another call (same service): services(action: \"call\", targetService: 'ceos-lab-readonly', tool: '...', arguments: {...})",
+        "New service workflow: registry(action: \"tools\", service_name: '...') → services(action: \"health\", service_name: '...') → services(action: \"call\")"
+       ]
+      },
+      "annotations": {
+       "dataType": "object",
+       "itemCount": 8
+      }
+     }
+    ],
+    "isError": false,
+    "_meta": {
+     "executionTime": 1787792703348,
+     "serverName": "paichart-embedded-mcp",
+     "toolName": "services"
+    }
+   },
+   "success": true,
+   "sanitized": false,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "arguments": {
+    "action": "call",
+    "targetService": "ceos-lab-readonly",
+    "tool": "show_commands",
+    "arguments": "{\"commands\": [\"show ip ospf interface brief\"], \"filter_name\": \"ceos1\"}"
+   },
+   "result": {
+    "content": [
+     {
+      "type": "data",
+      "data": {
+       "success": true,
+       "targetService": "ceos-lab-readonly",
+       "tool": "show_commands",
+       "arguments": {
+        "commands": [
+         "show ip ospf interface brief"
+        ],
+        "filter_name": "ceos1"
+       },
+       "result": {
+        "content": [
+         {
+          "type": "text",
+          "text": "{\"hosts\":{\"ceos1\":{\"success\":true,\"output\":{\"show ip ospf interface brief\":\"   Interface          Instance VRF        Area            IP Address         Cost  State      Nbrs\\n   Lo0                1        default    0.0.0.0         1.1.1.1/32         10    DR         0\\n   Et1                1        default    0.0.0.0         10.0.12.1/30       10    P2P        1\"}}}}"
+         }
+        ],
+        "structuredContent": {
+         "hosts": {
+          "ceos1": {
+           "success": true,
+           "output": {
+            "show ip ospf interface brief": "   Interface          Instance VRF        Area            IP Address         Cost  State      Nbrs\n   Lo0                1        default    0.0.0.0         1.1.1.1/32         10    DR         0\n   Et1                1        default    0.0.0.0         10.0.12.1/30       10    P2P        1"
+           }
+          }
+         }
+        },
+        "isError": false
+       },
+       "_meta": {
+        "tool": "services",
+        "timestamp": "2026-08-27T01:05:03.860Z",
+        "sdkNative": true
+       },
+       "metadata": {
+        "executionTime": 504,
+        "maxExecutionTime": 30000,
+        "effectiveTimeout": 30000,
+        "requestedTimeout": null,
+        "timeoutClamped": false,
+        "targetServiceId": "cmtatloee000cyxe02wf7xd9d",
+        "sourceUser": "owner@example.invalid",
+        "endpoint": "https://ceos-lab.paichart.app/mcp",
+        "timestamp": "2026-08-27T01:05:03.860Z"
+       },
+       "nextSteps": [
+        "✅ Service call completed",
+        "📝 Report results: perform(action: \"task.comment\", taskId: '...', comment: '| Tool | Status | Key Data | Notes |\\n|------|--------|----------|-------|')",
+        "Make another call (same service): services(action: \"call\", targetService: 'ceos-lab-readonly', tool: '...', arguments: {...})",
+        "New service workflow: registry(action: \"tools\", service_name: '...') → services(action: \"health\", service_name: '...') → services(action: \"call\")"
+       ]
+      },
+      "annotations": {
+       "dataType": "object",
+       "itemCount": 8
+      }
+     }
+    ],
+    "isError": false,
+    "_meta": {
+     "executionTime": 1787792703874,
+     "serverName": "paichart-embedded-mcp",
+     "toolName": "services"
+    }
+   },
+   "success": true,
+   "sanitized": false,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "arguments": {
+    "action": "call",
+    "targetService": "ceos-lab-readonly",
+    "tool": "show_commands",
+    "arguments": "{\"commands\": [\"show ip ospf interface brief\"], \"filter_name\": \"ceos2\"}"
+   },
+   "result": {
+    "content": [
+     {
+      "type": "data",
+      "data": {
+       "success": true,
+       "targetService": "ceos-lab-readonly",
+       "tool": "show_commands",
+       "arguments": {
+        "commands": [
+         "show ip ospf interface brief"
+        ],
+        "filter_name": "ceos2"
+       },
+       "result": {
+        "content": [
+         {
+          "type": "text",
+          "text": "{\"hosts\":{\"ceos2\":{\"success\":true,\"output\":{\"show ip ospf interface brief\":\"   Interface          Instance VRF        Area            IP Address         Cost  State      Nbrs\\n   Lo0                1        default    0.0.0.0         2.2.2.2/32         10    DR         0\\n   Et1                1        default    0.0.0.0         10.0.12.2/30       10    P2P        1\"}}}}"
+         }
+        ],
+        "structuredContent": {
+         "hosts": {
+          "ceos2": {
+           "success": true,
+           "output": {
+            "show ip ospf interface brief": "   Interface          Instance VRF        Area            IP Address         Cost  State      Nbrs\n   Lo0                1        default    0.0.0.0         2.2.2.2/32         10    DR         0\n   Et1                1        default    0.0.0.0         10.0.12.2/30       10    P2P        1"
+           }
+          }
+         }
+        },
+        "isError": false
+       },
+       "_meta": {
+        "tool": "services",
+        "timestamp": "2026-08-27T01:05:04.410Z",
+        "sdkNative": true
+       },
+       "metadata": {
+        "executionTime": 527,
+        "maxExecutionTime": 30000,
+        "effectiveTimeout": 30000,
+        "requestedTimeout": null,
+        "timeoutClamped": false,
+        "targetServiceId": "cmtatloee000cyxe02wf7xd9d",
+        "sourceUser": "owner@example.invalid",
+        "endpoint": "https://ceos-lab.paichart.app/mcp",
+        "timestamp": "2026-08-27T01:05:04.410Z"
+       },
+       "nextSteps": [
+        "✅ Service call completed",
+        "📝 Report results: perform(action: \"task.comment\", taskId: '...', comment: '| Tool | Status | Key Data | Notes |\\n|------|--------|----------|-------|')",
+        "Make another call (same service): services(action: \"call\", targetService: 'ceos-lab-readonly', tool: '...', arguments: {...})",
+        "New service workflow: registry(action: \"tools\", service_name: '...') → services(action: \"health\", service_name: '...') → services(action: \"call\")"
+       ]
+      },
+      "annotations": {
+       "dataType": "object",
+       "itemCount": 8
+      }
+     }
+    ],
+    "isError": false,
+    "_meta": {
+     "executionTime": 1787792704420,
+     "serverName": "paichart-embedded-mcp",
+     "toolName": "services"
+    }
+   },
+   "success": true,
+   "sanitized": false,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "arguments": {
+    "action": "call",
+    "targetService": "ceos-lab-readonly",
+    "tool": "show_commands",
+    "arguments": "{\"commands\": [\"show isis neighbor\"], \"filter_name\": \"ceos1\"}"
+   },
+   "result": {
+    "content": [
+     {
+      "type": "data",
+      "data": {
+       "success": true,
+       "targetService": "ceos-lab-readonly",
+       "tool": "show_commands",
+       "arguments": {
+        "commands": [
+         "show isis neighbor"
+        ],
+        "filter_name": "ceos1"
+       },
+       "result": {
+        "content": [
+         {
+          "type": "text",
+          "text": "{\"hosts\":{\"ceos1\":{\"success\":true,\"output\":{\"show isis neighbor\":\"\"}}}}"
+         }
+        ],
+        "structuredContent": {
+         "hosts": {
+          "ceos1": {
+           "success": true,
+           "output": {
+            "show isis neighbor": ""
+           }
+          }
+         }
+        },
+        "isError": false
+       },
+       "_meta": {
+        "tool": "services",
+        "timestamp": "2026-08-27T01:05:11.100Z",
+        "sdkNative": true
+       },
+       "metadata": {
+        "executionTime": 560,
+        "maxExecutionTime": 30000,
+        "effectiveTimeout": 30000,
+        "requestedTimeout": null,
+        "timeoutClamped": false,
+        "targetServiceId": "cmtatloee000cyxe02wf7xd9d",
+        "sourceUser": "owner@example.invalid",
+        "endpoint": "https://ceos-lab.paichart.app/mcp",
+        "timestamp": "2026-08-27T01:05:11.100Z"
+       },
+       "nextSteps": [
+        "✅ Service call completed",
+        "📝 Report results: perform(action: \"task.comment\", taskId: '...', comment: '| Tool | Status | Key Data | Notes |\\n|------|--------|----------|-------|')",
+        "Make another call (same service): services(action: \"call\", targetService: 'ceos-lab-readonly', tool: '...', arguments: {...})",
+        "New service workflow: registry(action: \"tools\", service_name: '...') → services(action: \"health\", service_name: '...') → services(action: \"call\")"
+       ]
+      },
+      "annotations": {
+       "dataType": "object",
+       "itemCount": 8
+      }
+     }
+    ],
+    "isError": false,
+    "_meta": {
+     "executionTime": 1787792711109,
+     "serverName": "paichart-embedded-mcp",
+     "toolName": "services"
+    }
+   },
+   "success": true,
+   "sanitized": false,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "arguments": {
+    "action": "call",
+    "targetService": "ceos-lab-readonly",
+    "tool": "show_commands",
+    "arguments": "{\"commands\": [\"show isis neighbor\"], \"filter_name\": \"ceos2\"}"
+   },
+   "result": {
+    "content": [
+     {
+      "type": "data",
+      "data": {
+       "success": true,
+       "targetService": "ceos-lab-readonly",
+       "tool": "show_commands",
+       "arguments": {
+        "commands": [
+         "show isis neighbor"
+        ],
+        "filter_name": "ceos2"
+       },
+       "result": {
+        "content": [
+         {
+          "type": "text",
+          "text": "{\"hosts\":{\"ceos2\":{\"success\":true,\"output\":{\"show isis neighbor\":\"\"}}}}"
+         }
+        ],
+        "structuredContent": {
+         "hosts": {
+          "ceos2": {
+           "success": true,
+           "output": {
+            "show isis neighbor": ""
+           }
+          }
+         }
+        },
+        "isError": false
+       },
+       "_meta": {
+        "tool": "services",
+        "timestamp": "2026-08-27T01:05:11.647Z",
+        "sdkNative": true
+       },
+       "metadata": {
+        "executionTime": 530,
+        "maxExecutionTime": 30000,
+        "effectiveTimeout": 30000,
+        "requestedTimeout": null,
+        "timeoutClamped": false,
+        "targetServiceId": "cmtatloee000cyxe02wf7xd9d",
+        "sourceUser": "owner@example.invalid",
+        "endpoint": "https://ceos-lab.paichart.app/mcp",
+        "timestamp": "2026-08-27T01:05:11.647Z"
+       },
+       "nextSteps": [
+        "✅ Service call completed",
+        "📝 Report results: perform(action: \"task.comment\", taskId: '...', comment: '| Tool | Status | Key Data | Notes |\\n|------|--------|----------|-------|')",
+        "Make another call (same service): services(action: \"call\", targetService: 'ceos-lab-readonly', tool: '...', arguments: {...})",
+        "New service workflow: registry(action: \"tools\", service_name: '...') → services(action: \"health\", service_name: '...') → services(action: \"call\")"
+       ]
+      },
+      "annotations": {
+       "dataType": "object",
+       "itemCount": 8
+      }
+     }
+    ],
+    "isError": false,
+    "_meta": {
+     "executionTime": 1787792711655,
+     "serverName": "paichart-embedded-mcp",
+     "toolName": "services"
+    }
+   },
+   "success": true,
+   "sanitized": false,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "arguments": {
+    "action": "call",
+    "targetService": "ceos-lab-readonly",
+    "tool": "fetch_data",
+    "arguments": "{\"getters\": [\"config\"], \"getters_options\": {\"config\": {\"retrieve\": \"running\"}}, \"filter_name\": \"ceos1\"}"
+   },
+   "result": {
+    "content": [
+     {
+      "type": "data",
+      "data": {
+       "success": true,
+       "targetService": "ceos-lab-readonly",
+       "tool": "fetch_data",
+       "arguments": {
+        "getters": [
+         "config"
+        ],
+        "getters_options": {
+         "config": {
+          "retrieve": "running"
+         }
+        },
+        "filter_name": "ceos1"
+       },
+       "result": {
+        "content": [
+         {
+          "type": "text",
+          "text": "{\"hosts\":{\"ceos1\":{\"success\":true,\"output\":{\"config\":{\"startup\":\"\",\"running\":\"! Command: show running-config\\n! device: ceos1 (cEOSLab, EOS-4.32.2.1F-38881786.43221F (engineering build))\\n!\\nno aaa root\\n!\\nusername admin privilege 15 role network-admin secret sha512 <<REDACTED-SECRET>>\\n!\\nmanagement api http-commands\\n   protocol http\\n   no shutdown\\n   !\\n   vrf default\\n      no shutdown\\n!\\nno service interface inactive port-id allocation disabled\\n!\\ntransceiver qsfp default-mode 4x10G\\n!\\nservice routing protocols model multi-agent\\n!\\nhostname ceos1\\n!\\nsnmp-server community s3cr3tLabComm1 ro\\n!\\nspanning-tree mode mstp\\n!\\nsystem l1\\n   unsupported speed action error\\n   unsupported error-correction action error\\n!\\ninterface Ethernet1\\n   description to-ceos2 (ospf cost 10)\\n   no switchport\\n   ip address 10.0.12.1/30\\n   ip ospf cost 10\\n   ip ospf network point-to-point\\n!\\ninterface Loopback0\\n   description router-id / migration anchor\\n   ip address 1.1.1.1/32\\n!\\ninterface Management0\\n   ip address 172.30.32.11/24\\n!\\nip routing\\n!\\nrouter multicast\\n   ipv4\\n      software-forwarding kernel\\n   !\\n   ipv6\\n      software-forwarding kernel\\n!\\nrouter ospf 1\\n   router-id 1.1.1.1\\n   passive-interface Loopback0\\n   network 1.1.1.1/32 area 0.0.0.0\\n   network 10.0.12.0/30 area 0.0.0.0\\n   max-lsa 12000\\n!\\nend\\n\",\"candidate\":\"\"}}}}}"
+         }
+        ],
+        "structuredContent": {
+         "hosts": {
+          "ceos1": {
+           "success": true,
+           "output": {
+            "config": {
+             "startup": "",
+             "running": "! Command: show running-config\n! device: ceos1 (cEOSLab, EOS-4.32.2.1F-38881786.43221F (engineering build))\n!\nno aaa root\n!\nusername admin privilege 15 role network-admin secret sha512 <<REDACTED-SECRET>>\n!\nmanagement api http-commands\n   protocol http\n   no shutdown\n   !\n   vrf default\n      no shutdown\n!\nno service interface inactive port-id allocation disabled\n!\ntransceiver qsfp default-mode 4x10G\n!\nservice routing protocols model multi-agent\n!\nhostname ceos1\n!\nsnmp-server community <<REDACTED-SECRET>> ro\n!\nspanning-tree mode mstp\n!\nsystem l1\n   unsupported speed action error\n   unsupported error-correction action error\n!\ninterface Ethernet1\n   description to-ceos2 (ospf cost 10)\n   no switchport\n   ip address 10.0.12.1/30\n   ip ospf cost 10\n   ip ospf network point-to-point\n!\ninterface Loopback0\n   description router-id / migration anchor\n   ip address 1.1.1.1/32\n!\ninterface Management0\n   ip address 172.30.32.11/24\n!\nip routing\n!\nrouter multicast\n   ipv4\n      software-forwarding kernel\n   !\n   ipv6\n      software-forwarding kernel\n!\nrouter ospf 1\n   router-id 1.1.1.1\n   passive-interface Loopback0\n   network 1.1.1.1/32 area 0.0.0.0\n   network 10.0.12.0/30 area 0.0.0.0\n   max-lsa 12000\n!\nend\n",
+             "candidate": ""
+            }
+           }
+          }
+         }
+        },
+        "isError": false
+       },
+       "_meta": {
+        "tool": "services",
+        "timestamp": "2026-08-27T01:05:11.844Z",
+        "sdkNative": true
+       },
+       "metadata": {
+        "executionTime": 182,
+        "maxExecutionTime": 30000,
+        "effectiveTimeout": 30000,
+        "requestedTimeout": null,
+        "timeoutClamped": false,
+        "targetServiceId": "cmtatloee000cyxe02wf7xd9d",
+        "sourceUser": "owner@example.invalid",
+        "endpoint": "https://ceos-lab.paichart.app/mcp",
+        "timestamp": "2026-08-27T01:05:11.844Z"
+       },
+       "nextSteps": [
+        "✅ Service call completed",
+        "📝 Report results: perform(action: \"task.comment\", taskId: '...', comment: '| Tool | Status | Key Data | Notes |\\n|------|--------|----------|-------|')",
+        "Make another call (same service): services(action: \"call\", targetService: 'ceos-lab-readonly', tool: '...', arguments: {...})",
+        "New service workflow: registry(action: \"tools\", service_name: '...') → services(action: \"health\", service_name: '...') → services(action: \"call\")"
+       ]
+      },
+      "annotations": {
+       "dataType": "object",
+       "itemCount": 8
+      }
+     }
+    ],
+    "isError": false,
+    "_meta": {
+     "executionTime": 1787792711853,
+     "serverName": "paichart-embedded-mcp",
+     "toolName": "services"
+    }
+   },
+   "success": true,
+   "sanitized": false,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "arguments": {
+    "action": "call",
+    "targetService": "ceos-lab-readonly",
+    "tool": "fetch_data",
+    "arguments": "{\"getters\": [\"config\"], \"getters_options\": {\"config\": {\"retrieve\": \"running\"}}, \"filter_name\": \"ceos2\"}"
+   },
+   "result": {
+    "content": [
+     {
+      "type": "data",
+      "data": {
+       "success": true,
+       "targetService": "ceos-lab-readonly",
+       "tool": "fetch_data",
+       "arguments": {
+        "getters": [
+         "config"
+        ],
+        "getters_options": {
+         "config": {
+          "retrieve": "running"
+         }
+        },
+        "filter_name": "ceos2"
+       },
+       "result": {
+        "content": [
+         {
+          "type": "text",
+          "text": "{\"hosts\":{\"ceos2\":{\"success\":true,\"output\":{\"config\":{\"startup\":\"\",\"running\":\"! Command: show running-config\\n! device: ceos2 (cEOSLab, EOS-4.32.2.1F-38881786.43221F (engineering build))\\n!\\nno aaa root\\n!\\nusername admin privilege 15 role network-admin secret sha512 <<REDACTED-SECRET>>\\n!\\nmanagement api http-commands\\n   protocol http\\n   no shutdown\\n   !\\n   vrf default\\n      no shutdown\\n!\\nno service interface inactive port-id allocation disabled\\n!\\ntransceiver qsfp default-mode 4x10G\\n!\\nservice routing protocols model multi-agent\\n!\\nhostname ceos2\\n!\\nsnmp-server community s3cr3tLabComm2 ro\\n!\\nspanning-tree mode mstp\\n!\\nsystem l1\\n   unsupported speed action error\\n   unsupported error-correction action error\\n!\\ninterface Ethernet1\\n   description to-ceos1 (ospf cost 10)\\n   no switchport\\n   ip address 10.0.12.2/30\\n   ip ospf cost 10\\n   ip ospf network point-to-point\\n!\\ninterface Loopback0\\n   description router-id / migration anchor\\n   ip address 2.2.2.2/32\\n!\\ninterface Management0\\n   ip address 172.30.32.12/24\\n!\\nip routing\\n!\\nrouter multicast\\n   ipv4\\n      software-forwarding kernel\\n   !\\n   ipv6\\n      software-forwarding kernel\\n!\\nrouter ospf 1\\n   router-id 2.2.2.2\\n   passive-interface Loopback0\\n   network 2.2.2.2/32 area 0.0.0.0\\n   network 10.0.12.0/30 area 0.0.0.0\\n   max-lsa 12000\\n!\\nend\\n\",\"candidate\":\"\"}}}}}"
+         }
+        ],
+        "structuredContent": {
+         "hosts": {
+          "ceos2": {
+           "success": true,
+           "output": {
+            "config": {
+             "startup": "",
+             "running": "! Command: show running-config\n! device: ceos2 (cEOSLab, EOS-4.32.2.1F-38881786.43221F (engineering build))\n!\nno aaa root\n!\nusername admin privilege 15 role network-admin secret sha512 <<REDACTED-SECRET>>\n!\nmanagement api http-commands\n   protocol http\n   no shutdown\n   !\n   vrf default\n      no shutdown\n!\nno service interface inactive port-id allocation disabled\n!\ntransceiver qsfp default-mode 4x10G\n!\nservice routing protocols model multi-agent\n!\nhostname ceos2\n!\nsnmp-server community <<REDACTED-SECRET>> ro\n!\nspanning-tree mode mstp\n!\nsystem l1\n   unsupported speed action error\n   unsupported error-correction action error\n!\ninterface Ethernet1\n   description to-ceos1 (ospf cost 10)\n   no switchport\n   ip address 10.0.12.2/30\n   ip ospf cost 10\n   ip ospf network point-to-point\n!\ninterface Loopback0\n   description router-id / migration anchor\n   ip address 2.2.2.2/32\n!\ninterface Management0\n   ip address 172.30.32.12/24\n!\nip routing\n!\nrouter multicast\n   ipv4\n      software-forwarding kernel\n   !\n   ipv6\n      software-forwarding kernel\n!\nrouter ospf 1\n   router-id 2.2.2.2\n   passive-interface Loopback0\n   network 2.2.2.2/32 area 0.0.0.0\n   network 10.0.12.0/30 area 0.0.0.0\n   max-lsa 12000\n!\nend\n",
+             "candidate": ""
+            }
+           }
+          }
+         }
+        },
+        "isError": false
+       },
+       "_meta": {
+        "tool": "services",
+        "timestamp": "2026-08-27T01:05:12.055Z",
+        "sdkNative": true
+       },
+       "metadata": {
+        "executionTime": 195,
+        "maxExecutionTime": 30000,
+        "effectiveTimeout": 30000,
+        "requestedTimeout": null,
+        "timeoutClamped": false,
+        "targetServiceId": "cmtatloee000cyxe02wf7xd9d",
+        "sourceUser": "owner@example.invalid",
+        "endpoint": "https://ceos-lab.paichart.app/mcp",
+        "timestamp": "2026-08-27T01:05:12.055Z"
+       },
+       "nextSteps": [
+        "✅ Service call completed",
+        "📝 Report results: perform(action: \"task.comment\", taskId: '...', comment: '| Tool | Status | Key Data | Notes |\\n|------|--------|----------|-------|')",
+        "Make another call (same service): services(action: \"call\", targetService: 'ceos-lab-readonly', tool: '...', arguments: {...})",
+        "New service workflow: registry(action: \"tools\", service_name: '...') → services(action: \"health\", service_name: '...') → services(action: \"call\")"
+       ]
+      },
+      "annotations": {
+       "dataType": "object",
+       "itemCount": 8
+      }
+     }
+    ],
+    "isError": false,
+    "_meta": {
+     "executionTime": 1787792712066,
+     "serverName": "paichart-embedded-mcp",
+     "toolName": "services"
+    }
+   },
+   "success": true,
+   "sanitized": false,
+   "resultTruncatedForLlm": false
+  }
+ ],
+ "stamped": {},
+ "toolCallsNote": "services calls only (the witnessed results); platform calls dropped and e-mail addresses scrubbed (metadata.sourceUser) for the public export; password hashes the persisted raw carried replaced with <<REDACTED-SECRET>>"
+}

@@ -1,0 +1,36 @@
+== coverage (gen 5)
+coverage — work/log-archive-namespace-write-2026-10-09/draft-answered-4/report.md
+  legs ['kubernetes-gitops', 'terraform-iac'] · gates ['kubernetes-gitops', 'program-plan', 'terraform-iac'] · rows 20 {'declared': 20, 'derived': 0, 'forced': 0, 'open': 0, 'other': 0} · owner block 0 · not-applicable 0
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: receiver
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: admitted-principal
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: principal-unseen
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: granted-action
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: existing-grant
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: target-empty
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: enforcer-absent
+  ❌ what: missing auth row · leg: kubernetes-gitops · key: collateral
+  👁  what: no producer rows — confirm for each leg: the leg derives no value another leg consumes · legs: ['terraform-iac']
+  👁  what: no routing rows — confirm for each leg: the leg adds no advertised covering route and suppresses, filters, withdraws or replaces no routes · legs: ['kubernetes-gitops', 'terraform-iac']
+  8 error(s), 2 to read
+exit=1
+== citations (gen 5)
+citations: 20 total, 20 verbatim, 0 failing
+premise branches: terraform-iac ✓
+✅ citation + premise gate clean (the Reviewer still owns: does each quote select the same option as the item?)
+exit=0
+== lint
+✗ work/log-archive-namespace-write-2026-10-09/draft-answered-4/report.md: 13 state-shaped token(s) the document did not get from the template or the objective:
+  line   59  ARN                  'arn:aws:s3:::acme-app-logs/*' | terraform-iac.receiver | which workload/resource on the target is authorised | — | the objects of bucket `acme-app-logs`, with no key-pref
+  line  239  address              '192.0.2.4'            - Two Running pods at `192.0.2.4` and `192.0.2.5` are adjacent and aligned, so `192.0.2.4/31` covers both and nothing else. It is still a de
+  line  239  address              '192.0.2.5'            - Two Running pods at `192.0.2.4` and `192.0.2.5` are adjacent and aligned, so `192.0.2.4/31` covers both and nothing else. It is still a de
+  line  239  address              '192.0.2.4/31'         - Two Running pods at `192.0.2.4` and `192.0.2.5` are adjacent and aligned, so `192.0.2.4/31` covers both and nothing else. It is still a de
+  line  239  address              '192.0.2.4/32'         - Two Running pods at `192.0.2.4` and `192.0.2.5` are adjacent and aligned, so `192.0.2.4/31` covers both and nothing else. It is still a de
+  line  239  address              '192.0.2.5/32'         - Two Running pods at `192.0.2.4` and `192.0.2.5` are adjacent and aligned, so `192.0.2.4/31` covers both and nothing else. It is still a de
+  line  240  address              '192.0.2.5'            - Pods at `192.0.2.5` and `192.0.2.6` are adjacent but straddle a boundary. Their minimal cover is `192.0.2.4/30`, which also admits `.4` an
+  line  240  address              '192.0.2.6'            - Pods at `192.0.2.5` and `192.0.2.6` are adjacent but straddle a boundary. Their minimal cover is `192.0.2.4/30`, which also admits `.4` an
+  line  240  address              '192.0.2.4/30'         - Pods at `192.0.2.5` and `192.0.2.6` are adjacent but straddle a boundary. Their minimal cover is `192.0.2.4/30`, which also admits `.4` an
+  line  241  address              '192.0.2.11'           - A pod in phase `Pending` at `192.0.2.11` contributes no entry. A `Running` pod whose readiness is false still contributes one.
+  line  289  ARN                  'arn:aws:s3:::acme-app-logs/*' - **Resource**: the bucket's objects with no key-prefix limit, `arn:aws:s3:::acme-app-logs/*` (`terraform-iac.receiver`, item 4).
+  line  325  ARN                  'arn:aws:s3:::acme-app-logs/*' objects_only: (([$new[0].Resource] | flatten) == ["arn:aws:s3:::acme-app-logs/*"]),
+  line  370  ARN                  'arn:aws:s3:::acme-app-logs/*' 3. the terraform-iac leg's change adds exactly one statement: Allow, `s3:PutObject` only, on `arn:aws:s3:::acme-app-logs/*` only. It leaves 
+  Each is a CANDIDATE — read it. A harvested value belongs nowhere in the document: regenerate, never hand-edit.

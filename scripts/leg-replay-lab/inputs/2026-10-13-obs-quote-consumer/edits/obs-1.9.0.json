@@ -1,0 +1,29 @@
+{
+  "id": "obs-1.9.0",
+  "appliesTo": [
+    "observability-config-protocol"
+  ],
+  "comment": "DRAFT-C §2 (C1, C2a, C2b) + DRAFT-B §6.3 CONSUMED_ADDRESS_CLAUSE interpolated at the observability consumer bullet only, in RENDERED form. Proven byte-identical to rendering the HEAD seed with the DRAFT-C/DRAFT-B TS-source edits applied verbatim (LAB-PREREG-OBS.md §2, P2).",
+  "ops": [
+    {
+      "type": "replace",
+      "old": "Read-only only; never a write or lifecycle verb.",
+      "new": "Read-only only; never a write or lifecycle verb. **A config FILE the taxonomy marks \"the file IS the artifact\" is quoted byte for byte**: every line in its order — comment lines, blank lines and each line's trailing inline comment included — copied from the read, never retyped from memory (one changed character in a directive or variable name is a different file). Add nothing inside the fence: your notes about the source go in its label. A quote that leaves lines out is an EXCERPT: label it so, never \"verbatim\", and put `# [elided: <what>]` on its own line at each place lines were left out. The Prometheus rendering is not such a file; its row says how to quote it."
+    },
+    {
+      "type": "replace",
+      "old": "yes — quote it verbatim, never reconstruct. The rendering",
+      "new": "yes — for its VALUES, not its layout: every key and value a quote carries is one the rendering returned, unchanged, and none is added. Reflowing it (flow or block style) and leaving out expanded defaults are fine; leaving out anything else makes the quote an excerpt, labelled so. Never call such a quote verbatim — that word is kept for the two file rows below, where the bytes are the artifact. The rendering"
+    },
+    {
+      "type": "replace",
+      "old": "labeled with their witnessed source (e.g. \"verbatim from `get_prometheus_config`\")",
+      "new": "labeled with their witnessed source (e.g. \"values from `get_prometheus_config`\")"
+    },
+    {
+      "type": "replace",
+      "old": "so a coined kind turns a correct value into a false mismatch. ",
+      "new": "so a coined kind turns a correct value into a false mismatch. **Addresses are `cidr` values, a single address included.** When the value you apply is one address or a list of addresses (a host list, an allow set), declare it; never skip the block for it. Write one entry per address, `{\"kind\": \"cidr\", \"value\": \"<the address>/32\"}`, the address copied from your artifact, and declare it even when the upstream stamped no derived value to copy a kind from: whether a comparison can run is the platform's to decide, and a consumed value left undeclared is one the program review must reconstruct by hand. Never join several addresses into one entry and never declare an aggregate you computed over them, since neither matches what the upstream recorded; a range the upstream derived is declared as that one range, never split. The `/32` is the block's notation for exactly one address, not a covering prefix: the block is the platform's record, and your artifact keeps the form its target needs. "
+    }
+  ]
+}

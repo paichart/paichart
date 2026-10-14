@@ -60,7 +60,8 @@ import { canonicalProtocolName } from './program-protocol';
  * one this whole domain keeps relearning.
  *
  * `lane-not-supported` is a DELIBERATE no-check and is therefore BENIGN, which is not the same
- * thing as `no-harvest-text` (could-not-check ⇒ blocking). Keeping those two apart is the point.
+ * thing as `no-harvest-tool-results` (could-not-check ⇒ blocking; named `no-harvest-text` before E1, 2026-10-13, and
+ * archived stamps still carry that name). Keeping those two apart is the point.
  *
  * ⚠️ COMPARE CANONICALLY, NEVER BY STRING EQUALITY. A stamp always carries the LONG form
  * (`terraform-iac-protocol`); titles carry the SHORT one (`(protocol: terraform-iac)`). The first
@@ -332,10 +333,13 @@ export function computeRollbackDisposition(fact: Record<string, unknown>): Rollb
       case 'program-tier':
       case 'no-restore-blocks':
       case 'no-restore-form-lines':
-      // DELIBERATE no-check. Distinct from `no-harvest-text` below, which is could-NOT-check and
+      // DELIBERATE no-check. Distinct from `no-harvest-tool-results` (pre-E1: `no-harvest-text`), which is could-NOT-check and
       // fails closed. Conflating the two would either block every terraform leg or silently excuse
       // an unreadable harvest, and both are worse than saying which one happened.
       case 'lane-not-supported':
+      // value-chain B4 (audit A4, decision E-4): a VALUE leg authors no package, so there is nothing to roll back —
+      // structurally inapplicable, the same class as program-tier. Not publicly mirrored.
+      case 'value-leg-no-package':
         return { disposition: 'benign', reason: reason!, inputs };
       // The check SHOULD have run and could not. Fail closed — the one arm that does.
       default:

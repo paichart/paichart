@@ -33,11 +33,19 @@ export interface ProtocolDependencePair {
   note?: string;
 }
 
+/**
+ * Program-tier rows rendered by the one shared program builder (seed-protocol-prompts.ts buildProgramProtocol).
+ * value-chain-program-protocol LEFT this list at promotion E (E2, 2026-10-05): its row is a DEPRECATED tombstone that
+ * carries no base reference, and test-protocol-dependence-anchors reads rows status-blind, so keeping it would go red
+ * on every pair. Test data, not a fact producer.
+ */
+const PROGRAM_PROTOCOL_ROWS = ['pov-program-protocol'] as const;
+
 export const PROTOCOL_DEPENDENCE_ANCHORS: readonly ProtocolDependencePair[] = [
   // ── The shared override clause — identical across the four infra domains AND requirements-
   //    authoring (2026-09-21), which is NOT an infra domain but leans on the base identically (the
   //    single highest-value pin: the sentence that MAKES composition semantically coherent). ────
-  ...(['network-provisioning-protocol', 'kubernetes-gitops-protocol', 'terraform-iac-protocol', 'observability-config-protocol', 'requirements-authoring-protocol'] as const).map((delta) => ({
+  ...(['network-provisioning-protocol', 'kubernetes-gitops-protocol', 'terraform-iac-protocol', 'observability-config-protocol', 'requirements-authoring-protocol', 'network-derivation-protocol'] as const).map((delta) => ({
     delta,
     ref: 'Everything the default pipeline-orchestrator protocol states remains in force except where this protocol overrides it.',
     anchor: '# Pipeline Orchestrator Protocol (System Default)',
@@ -45,14 +53,14 @@ export const PROTOCOL_DEPENDENCE_ANCHORS: readonly ProtocolDependencePair[] = [
   })),
   // ── "per the standard rule" ×5 → the base's NAMED Step-5 confidence rule (B8: the name was
   //    added 2026-08-17; before that these references dangled in prod). ──────────────────────
-  ...(['network-provisioning-protocol', 'kubernetes-gitops-protocol', 'terraform-iac-protocol', 'observability-config-protocol', 'requirements-authoring-protocol'] as const).map((delta) => ({
+  ...(['network-provisioning-protocol', 'kubernetes-gitops-protocol', 'terraform-iac-protocol', 'observability-config-protocol', 'requirements-authoring-protocol', 'network-derivation-protocol'] as const).map((delta) => ({
     delta,
     ref: 'Aggregate child confidences into the harness confidence per the standard rule.',
     anchor: 'the standard rule — avg of children',
   })),
   // ── ×5 → orchestrator Step 5a (deliverable-wiring mechanics live base-side; surfaced by this
   //    file's own bidirectional count pin on its first run — the pin works) ────────────────────
-  ...(['network-provisioning-protocol', 'kubernetes-gitops-protocol', 'terraform-iac-protocol', 'observability-config-protocol', 'requirements-authoring-protocol'] as const).map((delta) => ({
+  ...(['network-provisioning-protocol', 'kubernetes-gitops-protocol', 'terraform-iac-protocol', 'observability-config-protocol', 'requirements-authoring-protocol', 'network-derivation-protocol'] as const).map((delta) => ({
     delta,
     ref: 'pipeline-orchestrator-protocol Step 5a for tool-call mechanics',
     anchor: '### Step 5a: Wire the deliverable metadata',
@@ -83,39 +91,40 @@ export const PROTOCOL_DEPENDENCE_ANCHORS: readonly ProtocolDependencePair[] = [
     anchor: '### Step 5a: Wire the deliverable metadata',
   },
   // ── pov-program: six base-references (ph's verified count, WS1 Phase C review) ──────────────
-  {
-    delta: 'pov-program-protocol',
+  //    (value-chain-program carried the same six through the shared builder until its retirement, promotion E.)
+  ...PROGRAM_PROTOCOL_ROWS.map((delta) => ({
+    delta,
     ref: 'Pre-flight per the default orchestrator',
     anchor: 'No duplicate pipeline.',
     note: 'references the base CREATE pre-flight (duplicate check + clearance channel)',
-  },
-  {
-    delta: 'pov-program-protocol',
+  })),
+  ...PROGRAM_PROTOCOL_ROWS.map((delta) => ({
+    delta,
     ref: "per the default orchestrator's ORCHESTRATE rules",
     anchor: '**ORCHESTRATE** — Rare.',
-  },
-  {
-    delta: 'pov-program-protocol',
+  })),
+  ...PROGRAM_PROTOCOL_ROWS.map((delta) => ({
+    delta,
     ref: 'the mode-detection comment (breadcrumb first line, per the default orchestrator)',
     anchor: 'child-stage breadcrumb',
-  },
-  {
-    delta: 'pov-program-protocol',
+  })),
+  ...PROGRAM_PROTOCOL_ROWS.map((delta) => ({
+    delta,
     ref: 'pipeline-orchestrator-protocol Step 5a for tool-call mechanics',
     anchor: '### Step 5a: Wire the deliverable metadata',
-  },
-  {
-    delta: 'pov-program-protocol',
+  })),
+  ...PROGRAM_PROTOCOL_ROWS.map((delta) => ({
+    delta,
     ref: '## Harness Context (Platform-Resolved)',
     anchor: '## Harness Context (Platform-Resolved)',
     note: 'both sides describe the platform-injected block; pinned so a heading rename moves together',
-  },
-  {
-    delta: 'pov-program-protocol',
+  })),
+  ...PROGRAM_PROTOCOL_ROWS.map((delta) => ({
+    delta,
     ref: "never the default orchestrator's average",
     anchor: 'the standard rule — avg of children',
     note: "THE SHOWCASE PAIR (R4): delta says 'average', base says 'avg' — grep-by-one-word concludes dangling; the pair records the human judgment that they refer to the same rule",
-  },
+  })),
 ] as const;
 
 /**
@@ -141,6 +150,11 @@ export const EXPECTED_MARKER_COUNTS: Readonly<Record<string, number>> = {
   // default pipeline-orchestrator" — names the base descriptively); pov-program's PLAN-SPAWN
   // warning "A child created WITHOUT its token silently routes to the default orchestrator"
   // (a routing FACT — under composition: no token → null stamp → base-only; still true).
+  // NAMED, NOT COUNTED (promotion E, E4 2026-10-05, PC-F11 / P19): pov-program's PLAN pre-flight says "same
+  // answer-channel rule as the orchestrator's duplicate check". "the orchestrator's" is not a marker phrase, so the
+  // count above cannot see it. Recorded rather than paired: the sentence is R1 (owned by W4, byte-unchanged in E), its
+  // own line already opens "Pre-flight per the default orchestrator" (counted), and adding a marker would re-measure
+  // every row for one reference whose wording W4 rewrites. Pair it when W4 edits that sentence.
   'artifact-synthesis-protocol': 2,
   'network-provisioning-protocol': 4,
   'kubernetes-gitops-protocol': 4,
@@ -154,4 +168,8 @@ export const EXPECTED_MARKER_COUNTS: Readonly<Record<string, number>> = {
   // locally seeded row, never counted from the source string.
   'requirements-authoring-protocol': 5,
   'pov-program-protocol': 7,
+  // value-chain build B2 (2026-10-02), MEASURED with --print-counts against the locally seeded row: network-derivation
+  // carries the same four sites as its network sibling (fence header, Mode override clause, Step 5a ref, SYNTHESIZE
+  // standard-rule sentence). (value-chain-program-protocol: 7 until promotion E retired it to a tombstone — removed.)
+  'network-derivation-protocol': 4,
 };

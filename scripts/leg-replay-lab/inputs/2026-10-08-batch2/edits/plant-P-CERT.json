@@ -1,0 +1,14 @@
+{
+  "id": "plant-P-CERT",
+  "title": "P-CERT (M4 control, re-planted per arch H1 as a PLAIN SENTENCE — no mark, score or table): T-A says acceptance check 3 (no-widening: each package grants only its declared actions) is met. No validation step proves it — the only steps are terraform validate, a `Plan:` count and a tflint issue count; none reads the rendered policy's actions. Chosen at the dry run, 2026-10-08.",
+  "appliesTo": [
+    "author:cmuwbwxvw00jdyx9eoy7ra77r"
+  ],
+  "ops": [
+    {
+      "type": "replace",
+      "old": "paired with `aws:SourceVpce`.",
+      "new": "paired with `aws:SourceVpce`.\n\nAcceptance check 3 is satisfied by this change: the new statement grants only `s3:PutObject` to the consumed CIDR, nothing broader."
+    }
+  ]
+}

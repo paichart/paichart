@@ -1,0 +1,36 @@
+== coverage
+coverage — work/log-archive-namespace-read-2026-10-09/draft-answered2/report.md
+  legs ['kubernetes-gitops', 'terraform-iac'] · gates ['kubernetes-gitops-change', 'program-plan', 'terraform-iac-change'] · rows 24 {'declared': 24, 'derived': 0, 'forced': 0, 'open': 0, 'other': 0} · owner block 14 · not-applicable 14
+  ❌ what: unknown key for a known token · id: kubernetes-gitops.host-network-member
+  ❌ what: unknown key for a known token · id: kubernetes-gitops.carrier
+  ❌ what: unknown key for a known token · id: terraform-iac.out-of-policy-grants
+  ❌ what: unknown key for a known token · id: terraform-iac.existing-tags
+  👁  what: no producer rows — confirm for each leg: the leg derives no value another leg consumes · legs: ['terraform-iac']
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.receiver · line: kubernetes-gitops.receiver — which workload/resource on the target is authorised — options: — — governs: no Pipeline 1 clause — tier: not-applicable — read-and-publish leg (item 13): grants or removes
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.admitted-principal · line: kubernetes-gitops.admitted-principal — who is admitted, and by which attribute the enforcer recognises them — options: source-address-range · named-identity · network-path · combination (state each pa
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.request-path · line: kubernetes-gitops.request-path — the path the admitted senders' requests take to the enforcer — options: direct · private-endpoint · translated — governs: no Pipeline 1 clause — tier: not-applicable —
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.principal-unseen · line: kubernetes-gitops.principal-unseen — the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path — options: gap · act-regardless — governs: no Pipeline 1 clause 
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.granted-action · line: kubernetes-gitops.granted-action — what the admitted principal may do (actions, ports) — options: — — governs: no Pipeline 1 clause — tier: not-applicable — read-and-publish leg (item 13): grants or r
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.existing-grant · line: kubernetes-gitops.existing-grant — other allowances already on the same surface — options: replace · preserve · preserve-bounded (state the bound) — governs: no Pipeline 1 clause — tier: not-applicabl
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.target-empty · line: kubernetes-gitops.target-empty — the receiver selector/surface matches nothing now — options: act · gap — governs: no Pipeline 1 clause — tier: not-applicable — read-and-publish leg (item 13); its emp
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.enforcer-absent · line: kubernetes-gitops.enforcer-absent — no policy object governs the receiver yet — options: create · gap — governs: no Pipeline 1 clause — tier: not-applicable — read-and-publish leg (item 13): grants or
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.target-absent · line: kubernetes-gitops.target-absent — the declared target itself does not exist — options: gap · create-target — governs: no Pipeline 1 clause — tier: not-applicable — read-and-publish leg (item 13); a na
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.collateral · line: kubernetes-gitops.collateral — what else on the target changes because enforcement now applies — options: per enforcer (Kubernetes: allow-named-ports · deny · leave-to-workload-manifests) — governs: n
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.covered-routes · line: kubernetes-gitops.covered-routes — when the leg adds a covering route, whether the routes it covers stop being advertised — options: replace · accompany — governs: no Pipeline 1 clause — tier: not-app
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: kubernetes-gitops.must-stay-reachable · line: kubernetes-gitops.must-stay-reachable — which destinations must stay reachable after the change, and from where — options: — — governs: no Pipeline 1 clause — tier: not-applicable — not a routing leg:
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: terraform-iac.covered-routes · line: terraform-iac.covered-routes — when the leg adds a covering route, whether the routes it covers stop being advertised — options: replace · accompany — governs: no Pipeline 2 clause — tier: not-applica
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: terraform-iac.must-stay-reachable · line: terraform-iac.must-stay-reachable — which destinations must stay reachable after the change, and from where — options: — — governs: no Pipeline 2 clause — tier: not-applicable — not a routing leg: a b
+  4 error(s), 15 to read
+EXIT=1
+== citations
+citations: 31 total, 31 verbatim, 0 failing
+premise branches: terraform-iac ✓
+✅ citation + premise gate clean (the Reviewer still owns: does each quote select the same option as the item?)
+EXIT=0
+== clauses
+clauses: 4 checked, 0 dropped
+EXIT=0
+== lint
+✓ work/log-archive-namespace-read-2026-10-09/draft-answered2/report.md: 0 state-shaped tokens outside the template and the declared objective.
+  A pre-filter only — it cannot see harvested names or paraphrased state. Read the whole draft.
+EXIT=0

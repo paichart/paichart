@@ -304,6 +304,198 @@ async function main() {
     assert(uc.green === false, 'a dirty duplicate must not be masked by a clean one');
   });
 
+  // ── PHASE4-CONTAINMENT-PROPAGATION (2026-10-12): end to end through the enrichment ──
+  // The C7 shape: a producer that DELEGATED (needs-node-c, 0 violations, derived nothing) and a consumer
+  // that declared the values it applied. Before: blocking consuming-leg-upstream-not-green, with check 1
+  // silently skipped (`upstreamDerived` empty ⇒ checkConsumedValues returns []).
+  const delegatingProducer = (id: string, extra: Record<string, unknown> = {}) => ({
+    taskId: id, source: 'report.md',
+    derivationContainment: { checked: false, reason: 'no-derived-values-block', harvestedCount: 2,
+      containmentDisposition: { disposition: 'needs-node-c', reason: 'harvested-pool-no-derivation-cannot-decide' }, ...extra },
+  });
+
+  await test('CP E-1: delegated upstream ⇒ needs-node-c consuming-leg-upstream-delegated; violations EMPTY and the skipped check 1 STATED', async () => {
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)),
+      { stageId: STAGE, chainedFrom: [delegatingProducer('k8s')] });
+    assert(fact.violations === undefined, `check 1 compared nothing — no violation can exist: ${JSON.stringify(fact.violations)}`);
+    const d = fact.containmentDisposition as { disposition: string; reason: string; inputs: Record<string, unknown> };
+    assert(d.disposition === 'needs-node-c' && d.reason === 'consuming-leg-upstream-delegated', JSON.stringify(d));
+    assert(d.inputs.consumedValueCheck === 'not-run-no-upstream-derived', JSON.stringify(d.inputs));
+    assert(JSON.stringify(d.inputs.upstreamDelegated) === JSON.stringify([{ taskId: 'k8s', dispositionReason: 'harvested-pool-no-derivation-cannot-decide' }]),
+      JSON.stringify(d.inputs.upstreamDelegated));
+  });
+
+  await test('CP E-2: the same producer carrying a violation ⇒ blocking consuming-leg-upstream-not-green (rule 1 through the enrichment)', async () => {
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)),
+      { stageId: STAGE, chainedFrom: [delegatingProducer('k8s', { violations: [{ reason: 'covered-not-member' }],
+        containmentDisposition: { disposition: 'blocking', reason: 'violations' } })] });
+    const d = fact.containmentDisposition as { disposition: string; reason: string; inputs: Record<string, unknown> };
+    assert(d.disposition === 'blocking' && d.reason === 'consuming-leg-upstream-not-green', JSON.stringify(d));
+    assert(!('upstreamDelegated' in d.inputs), 'no subject fields on a blocking stamp');
+  });
+
+  await test('CP E-3 (N-8 at the dedupe): a diamond keeps the WORSE disposition copy — direct delegated + via blocking ⇒ blocking, either order', async () => {
+    // hop p2 is itself a delegated consumer whose transcribed legs carry u1 as BLOCKING (a later re-run of u1).
+    const hop = { taskId: 'p2', source: 'report.md', derivationContainment: {
+      checked: false, reason: 'no-derived-values-block', consumedValues: [X],
+      containmentDisposition: { disposition: 'needs-node-c', reason: 'consuming-leg-upstream-delegated' },
+      upstreamContainment: { green: false, legs: [{ taskId: 'u1', checked: false, violations: 0, disposition: 'blocking', dispositionReason: 'hard-gap' }] } } };
+    for (const chainedFrom of [[delegatingProducer('u1'), hop], [hop, delegatingProducer('u1')]]) {
+      const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)), { stageId: STAGE, chainedFrom });
+      const d = fact.containmentDisposition as { disposition: string; reason: string };
+      assert(d.disposition === 'blocking' && d.reason === 'consuming-leg-upstream-not-green',
+        `order ${chainedFrom.map(c => c.taskId).join(',')}: ${JSON.stringify(d)} legs=${JSON.stringify((fact.upstreamContainment as { legs: unknown }).legs)}`);
+    }
+  });
+
+  await test('CP E-4: the dedupe change never touches `checked` (green is unchanged by it)', async () => {
+    const hop = { taskId: 'p2', source: 'report.md', derivationContainment: {
+      checked: false, reason: 'no-derived-values-block', consumedValues: [X],
+      containmentDisposition: { disposition: 'benign', reason: 'consuming-leg-consumed-discharged' },
+      upstreamContainment: { green: true, legs: [{ taskId: 'p1', checked: false, violations: 0, disposition: 'needs-node-c', dispositionReason: 'x' }] } } };
+    const direct = { taskId: 'p1', source: 'report.md', derivationContainment: { checked: true, violations: [], derivedValues: [X],
+      containmentDisposition: { disposition: 'benign', reason: 'checked-clean' } } };
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)), { stageId: STAGE, chainedFrom: [direct, hop] });
+    const uc = fact.upstreamContainment as { green: boolean; legs: Array<{ taskId: string; checked: boolean; disposition?: string }> };
+    const p1 = uc.legs.find(l => l.taskId === 'p1')!;
+    assert(p1.checked === true && p1.disposition === 'needs-node-c', `worse disposition copied, checked kept: ${JSON.stringify(p1)}`);
+    assert(uc.green === true, `green must not move: ${JSON.stringify(uc)}`);
+  });
+
+  await test('CP E-5 (review L4/G10/G15): a diamond with a NAMED delegated copy and an UNNAMED needs-node-c copy ⇒ blocking, either order; the kept copy carries the unnamed reason state', async () => {
+    const unnamedHop = { taskId: 'p2', source: 'report.md', derivationContainment: {
+      checked: false, reason: 'no-derived-values-block', consumedValues: [X],
+      containmentDisposition: { disposition: 'needs-node-c', reason: 'consuming-leg-upstream-delegated' },
+      upstreamContainment: { green: false, legs: [{ taskId: 'u1', checked: false, violations: 0, disposition: 'needs-node-c' }] } } };
+    for (const chainedFrom of [[delegatingProducer('u1'), unnamedHop], [unnamedHop, delegatingProducer('u1')]]) {
+      const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)), { stageId: STAGE, chainedFrom });
+      const d = fact.containmentDisposition as { disposition: string; reason: string };
+      assert(d.disposition === 'blocking' && d.reason === 'consuming-leg-upstream-not-green',
+        `order ${chainedFrom.map(c => c.taskId).join(',')}: ${JSON.stringify(d)} legs=${JSON.stringify((fact.upstreamContainment as { legs: unknown }).legs)}`);
+    }
+    // the dedupe proper (G15): named copy FIRST (via p3), unnamed copy second (via p2) — the kept u1 copy must take
+    // the worse disposition AND drop the better copy's reason, or the pure rule would see a named delegation.
+    const namedHop = { taskId: 'p3', source: 'report.md', derivationContainment: {
+      checked: false, reason: 'no-derived-values-block',
+      containmentDisposition: { disposition: 'needs-node-c', reason: 'consuming-leg-upstream-delegated' },
+      upstreamContainment: { green: false, legs: [{ taskId: 'u1', checked: false, violations: 0, disposition: 'needs-node-c',
+        dispositionReason: 'harvested-pool-no-derivation-cannot-decide' }] } } };
+    const merged = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)),
+      { stageId: STAGE, chainedFrom: [namedHop, unnamedHop] });
+    const u1 = (merged.upstreamContainment as { legs: Array<Record<string, unknown>> }).legs.filter(l => l.taskId === 'u1');
+    assert(u1.length === 1 && u1[0].disposition === 'needs-node-c' && !('dispositionReason' in u1[0]),
+      `the worse (unnamed) copy must win WITH its reason state: ${JSON.stringify(u1)}`);
+    const dm = merged.containmentDisposition as { disposition: string };
+    assert(dm.disposition === 'blocking', JSON.stringify(dm));
+  });
+
+  await test('CP E-6 (review L5): a nested copy with NO numeric violations is counted as a lookup miss, never read as clean ⇒ blocking', async () => {
+    const hop = { taskId: 'p2', source: 'report.md', derivationContainment: {
+      checked: false, reason: 'no-derived-values-block', consumedValues: [X],
+      containmentDisposition: { disposition: 'needs-node-c', reason: 'consuming-leg-upstream-delegated' },
+      upstreamContainment: { green: false, legs: [{ taskId: 'u1', checked: false, disposition: 'needs-node-c', dispositionReason: 'harvested-pool-no-derivation-cannot-decide' }] } } };
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)), { stageId: STAGE, chainedFrom: [hop] });
+    const uc = fact.upstreamContainment as { lookupMisses?: number; legs: Array<{ taskId: string }> };
+    assert(uc.lookupMisses === 1 && !uc.legs.some(l => l.taskId === 'u1'), `the copy must be a counted miss: ${JSON.stringify(uc)}`);
+    const d = fact.containmentDisposition as { disposition: string; reason: string };
+    assert(d.disposition === 'blocking' && d.reason === 'consuming-leg-upstream-not-green', JSON.stringify(d));
+  });
+
+  // ── PARSE-STEAL (2026-10-04): value-chain B7 run 1 S3 Author — an EMPTY `## Derived Values` heading
+  // followed by a `## Consumed Values` block. Shipped parser: derived = the CONSUMED block ⇒ checked path
+  // against an empty pool ⇒ benign/checked-clean, and check 1 never ran. The pins below are END TO END
+  // (Author text → fact → disposition) so the fail-OPEN direction is proven, not just the parse.
+  const S3_KIDS = [
+    { id: 'hs', title: 'Harvest current state', agentRole: 'infra_state_harvester' },
+    { id: 'as', title: 'Author HCL + validation + rollback', agentRole: 'config_change_author' },
+  ];
+  const UP = { kind: 'cidr', value: '10.99.0.0/27' };
+  const derivingUpstream = {
+    taskId: 'vleg', source: 'report.md',
+    derivationContainment: { checked: true, violations: [], derivedValues: [UP],
+      containmentDisposition: { disposition: 'benign', reason: 'checked-clean' } },
+  };
+  const s3Author = (consumedValue: string) =>
+    '## Pre-existing Allocations\n\n```json\n[]\n```\n\n## Derived Values\n\nNot carried forward — the Architect performed ' +
+    'no derivation. No block exists to carry.\n\n## Consumed Values\n\n```json\n' +
+    JSON.stringify([{ kind: 'cidr', value: consumedValue }]) + '\n```\n\nValue taken verbatim from the upstream leg.\n';
+  const s3Arts = (consumedValue: string) => ({
+    hs: block('## Harvested Allocations', []),
+    as: s3Author(consumedValue),
+  });
+
+  await test('PARSE-STEAL B7r1 shape, matching value: check 1 RUNS and discharges — consuming-leg-consumed-discharged, not checked-clean', async () => {
+    const fact = await computeDerivationContainmentFact(stubPrisma(S3_KIDS, s3Arts('10.99.0.0/27')),
+      { stageId: STAGE, chainedFrom: [derivingUpstream] });
+    assert(fact.checked === false && fact.reason === 'no-derived-values-block', `the empty heading is NOT a derivation: ${JSON.stringify(fact)}`);
+    const d = fact.containmentDisposition as { disposition: string; reason: string };
+    assert(d.disposition === 'benign' && d.reason === 'consuming-leg-consumed-discharged', JSON.stringify(d));
+    assert(fact.violations === undefined, `no mismatch expected: ${JSON.stringify(fact.violations)}`);
+  });
+
+  await test('PARSE-STEAL B7r1 shape, WIDENED value: check 1 now CATCHES the mismatch (shipped code read benign/checked-clean)', async () => {
+    const fact = await computeDerivationContainmentFact(stubPrisma(S3_KIDS, s3Arts('10.99.0.0/26')),
+      { stageId: STAGE, chainedFrom: [derivingUpstream] });
+    const v = (fact.violations ?? []) as Array<{ reason: string }>;
+    assert(v.some(x => x.reason === 'consumed-value-mismatch'), `check 1 must fire: ${JSON.stringify(fact)}`);
+    const d = fact.containmentDisposition as { disposition: string };
+    assert(d.disposition !== 'benign', `a widened consumed value must not read benign: ${JSON.stringify(d)}`);
+  });
+
+  await test('PARSE-STEAL, other order × CONSUMER-FAIL-OPEN: an EMPTY consumed heading before a derived block reads ABSENT ⇒ needs-node-c', async () => {
+    // A consuming leg (upstream chained) whose `## Consumed Values` heading carries no block must reach the
+    // 71ffd705 arm. The shipped parser let the empty consumed heading borrow the derived block below it.
+    const author = '## Consumed Values\n\nNone recorded here.\n\n## Notes\n\nSee below.\n\n**Derived Values** (none)\n\nnothing derived.\n';
+    const fact = await computeDerivationContainmentFact(
+      // The harvester emits NO harvest block: with an EMPTY parsed pool the leg would end on
+      // `harvested-pool-empty` instead, which 71ffd705 deliberately left ahead of this arm (see the report's
+      // open question on terraform consumers).
+      stubPrisma(S3_KIDS, { hs: 'harvest prose, no block', as: author + '\n## Appendix\n\n```json\n[{"kind":"cidr","value":"10.99.0.0/27"}]\n```\n' }),
+      { stageId: STAGE, chainedFrom: [derivingUpstream] });
+    assert(fact.consumedValues === undefined, `consumed must read ABSENT: ${JSON.stringify(fact)}`);
+    const d = fact.containmentDisposition as { disposition: string; reason: string };
+    assert(d.disposition === 'needs-node-c' && d.reason === 'consuming-leg-no-consumed-block', JSON.stringify(d));
+  });
+
+  // ── R5 (2026-10-05): the no-upstream reason names what is TRUE, end to end through the enrichment ──
+  const R5_KIDS = { a1: block('## Derived Values', [{ kind: 'cidr', value: '10.99.0.0/31', members: ['10.99.0.0/32', '10.99.0.1/32'] }]) };
+
+  await test('R5-E1: a PRODUCING leg (no chained predecessor) with derived values and no parseable harvest ⇒ ' +
+             'blocking harvest-missing-or-unparseable-no-upstream, and NO upstreamDeliverableMissing stamped', async () => {
+    const fact = await computeDerivationContainmentFact(stubPrisma(KIDS, R5_KIDS), { stageId: STAGE, chainedFrom: undefined });
+    const d = fact.containmentDisposition as { disposition: string; reason: string };
+    assert(fact.reason === 'harvest-block-missing-or-unparseable', `got ${String(fact.reason)}`);
+    assert(!('upstreamDeliverableMissing' in fact), `the count must be absent when nothing was chained: ${JSON.stringify(fact)}`);
+    assert(d.disposition === 'blocking' && d.reason === 'harvest-missing-or-unparseable-no-upstream', JSON.stringify(d));
+  });
+
+  await test('R5-E2: an ACTION-only chained predecessor (result.json) is not an upstream leg ⇒ still the no-upstream reason', async () => {
+    const fact = await computeDerivationContainmentFact(stubPrisma(KIDS, R5_KIDS),
+      { stageId: STAGE, chainedFrom: [{ taskId: 'act-1', source: 'result.json' }] });
+    const d = fact.containmentDisposition as { disposition: string; reason: string };
+    assert(!('upstreamDeliverableMissing' in fact), JSON.stringify(fact));
+    assert(d.reason === 'harvest-missing-or-unparseable-no-upstream', JSON.stringify(d));
+  });
+
+  await test('R5-E3: a CONSUMING leg whose PIPELINE predecessor arrived only via the pipeline-index.json fallback ⇒ ' +
+             'upstreamDeliverableMissing stamped, blocking consuming-leg-upstream-absent (the old name, where it is TRUE)', async () => {
+    const fact = await computeDerivationContainmentFact(stubPrisma(KIDS, R5_KIDS),
+      { stageId: STAGE, chainedFrom: [{ taskId: 'leg-up', source: 'pipeline-index.json' }] });
+    const d = fact.containmentDisposition as { disposition: string; reason: string; inputs: Record<string, unknown> };
+    assert(fact.upstreamDeliverableMissing === 1, JSON.stringify(fact));
+    assert(!('upstreamContainment' in fact), 'a fallback entry must NOT become a transcribed upstream leg (it never qualified)');
+    assert(d.disposition === 'blocking' && d.reason === 'consuming-leg-upstream-absent', JSON.stringify(d));
+    assert(d.inputs.upstreamDeliverableMissing === 1, 'the separating input must be transcribed into inputs');
+  });
+
+  await test('R5-E4: a report.md predecessor present ⇒ the count is NOT stamped (the green/not-green arms own that case)', async () => {
+    const fact = await computeDerivationContainmentFact(stubPrisma(KIDS, R5_KIDS),
+      { stageId: STAGE, chainedFrom: [{ taskId: 'leg-up', source: 'report.md' }, { taskId: 'leg-2', source: 'pipeline-index.json' }] });
+    assert(!('upstreamDeliverableMissing' in fact), JSON.stringify(fact));
+    assert((fact.containmentDisposition as { reason: string }).reason === 'consuming-leg-upstream-not-green',
+      JSON.stringify(fact.containmentDisposition));
+  });
+
   console.log(`\n📊 Results: ${passed} passed, ${failed} failed\n`);
   process.exit(failed > 0 ? 1 : 0);
 }

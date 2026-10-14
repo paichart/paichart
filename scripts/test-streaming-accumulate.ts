@@ -193,6 +193,26 @@ function baseFixture(overrides: Record<string, any> = {}) {
     ok(r.error?.code === 'unknown_error', '5.4e unrelated transport error stays unknown_error (no over-categorization)');
   }
 
+  // ── 5.4f provider overloaded_error → LLM_PROVIDER_OVERLOADED (F-b, COMPLETE-THEN-FAIL batch 2026-10-05) ──
+  {
+    // Both arrival shapes: an HTTP 529, and the 10-04 fixture's shape — a MID-STREAM SSE error event, which the SDK
+    // raises as an APIError with no status whose `.error` is the full envelope (incl. request_id).
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { readProviderErrorStructure } = require('../lib/agents/harness/agentic-tool-loop');
+    const envelope = { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' }, request_id: 'req_011CfgrD3E1UBLMa2snsT73f' };
+    for (const [label, apiErr] of [
+      ['529', (Anthropic as any).APIError.generate(529, envelope, undefined, new Headers())],
+      ['mid-stream', new (Anthropic as any).APIError(undefined, envelope, undefined, new Headers())],
+    ] as Array<[string, unknown]>) {
+      const cap: Capture = {};
+      const r = await makeProvider(baseFixture(), cap, apiErr).generateText('p', { apiKey: 'k', model: 'claude-sonnet-5' });
+      ok(r.error?.code === 'LLM_PROVIDER_OVERLOADED', `5.4f [${label}] overloaded_error → LLM_PROVIDER_OVERLOADED (countable, not unknown_error)`);
+      const s = readProviderErrorStructure(r.error?.details);
+      ok(s.providerErrorType === 'overloaded_error' && s.requestId === 'req_011CfgrD3E1UBLMa2snsT73f',
+        `5.4f [${label}] provider type + request id read STRUCTURALLY from error.details (got ${JSON.stringify(s)})`);
+    }
+  }
+
   // ── 5.5 ceiling acceptance (the flip test: FAILS on create(), passes on stream()) ──
   {
     const cap: Capture = {};

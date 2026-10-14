@@ -1,0 +1,108 @@
+{
+  "label": "z49-request-path",
+  "purpose": "PRE-REGISTERED 2026-10-10 (model-evaluation-specialist; NOT RUN — spend is Steve's call). Z49 Phase B (cline_docs/reviews/z49-request-path-2026-10-10/PLAN.md B1-B3, DESIGN.md; Protocol 16). QUESTION: does the Z49 change (requirements-authoring-protocol 1.9.0 with the `<token>.request-path` skeleton row, the requirements_author sentence 'An exemplar stanza conditions on the attribute the declared path carries and never forbids it', the requirements_reviewer 8.1 row + 8.4 premise-check line, and the registry row in the in-run check) make a requirements_author run (a) write an exemplar stanza that conditions the pods' addresses on the attribute a DECLARED private-endpoint path carries (`aws:VpcSourceIp`) and does not forbid it, and (b) ask/carry the request-path row correctly — without making the rest of the draft worse? LEVER (one per arm pair): base vs z49 = the Z49 ship set ONLY. base = today's production: protocol 1.8.0 + today's Requirements Author/Reviewer rows (pinned from the production rows 2026-10-10, each byte-identical to the seed render at 452dfe15 = origin/main) + the in-run check data at 452dfe15 (requirementsCheckAt, L-Z2). z49 = baseline + edits derived from the seed render at 0bcbfd7f (protocol 1.9.0, both role texts; base+edits == render, byte for byte) + the in-run check data at 0bcbfd7f. The check data is part of the lever ON PURPOSE: it ships with the text (Phase C), and HEAD's registry run on the base arm would make the base correction turn demand a row production does not ask for (measured: the 2026-10-09 scorer self-test fails 14 ways at HEAD and passes under 452dfe15 data). FIXED SIDE: Author claude-opus-5-5 effort high (production row) and the 2b correction turn ON (production REQUIREMENTS_FORM_CORRECTION_ENABLED=true, adoption rule v2 at HEAD) in BOTH arms (variant lever requirementsFormCorrection, not the env); Reviewer claude-sonnet-5 effort high (production row), rebuilt from the arm's Reviewer text; it is measured, never gated on its own (playbook Phase 0 step 2). NODES: A21 = the persisted run-2 answered Author node (harness cmv0hik5z003qyxmclqclywca) with ONE input edit (L-Z1, node-inputs/item-21-request-path.json): owner item 21, verbatim, appended after item 20 in the objective of record AND in the Author's and the Reviewer's brief copies (the harness transcribes the items there; the lab does not replay the harness), and the owner map gains 21 -> terraform-iac.request-path. The SAME edited node runs under both arms: base answers 'does declaring the path alone fix the stanza, with no text change?'. Z0 = the persisted run-1 zero-decision Author node (harness cmv0g162e000iyxmca3ydv6n2), objective unchanged, both arms. n = 3 per cell, 12 samples. INSTRUMENT NOTES: tool calls are stubbed (L-R3) — the run-2 Author called project pov.details; the Reviewer's brief tells it to fetch the objective of record (stubbed; its brief's reading copy carries item 21). Scoring: `z49-score` (score-z49.ts) for G-STANZA/G-ROW/G-NOWORSE inputs, `score` (score-requirements.ts) for the in-run checks; each arm scored under its own check data. Proxies narrow the read; every G-STANZA and G-ROW verdict is confirmed by READING the stanza, the forbidden list and the request-path rows of all 12 samples, and every Reviewer refusal is read (score the REASON, record the cited rule as a subcount). GATES and what each miss triggers: (G-STANZA, DO NOT SHIP) A21 x z49: in >= 3/3 samples the terraform-iac exemplar stanza (a) has >= 1 Allow conditioned on aws:VpcSourceIp, (b) EVERY statement carrying an address condition uses aws:VpcSourceIp and not aws:SourceIp (interpretation written before spend: a Deny on NotIpAddress aws:SourceIp also refuses the pods on a private-endpoint path, so 'conditions the pods' addresses on the endpoint-path attribute' covers the Deny too — the scorer reports the Allow-only count beside it), and (c) the forbidden list does not name aws:VpcSourceIp. MISS => stop; read every miss: a stanza the Author got right before an adopted correction changed it => agent-execution/execution-facts (correction), not the text; otherwise => prompt-construction revises the Author sentence and A21 x z49 is rerun at n=3. Measured on A21 x base and reported beside it (not a gate): base >= 2/3 => declaring the path (the objective) is what fixes the stanza, recorded for the ship decision (the text still earns its place through G-ROW); base <= 1/3 => the text is load-bearing. (G-ROW, REVISE) z49 arm: A21 — terraform-iac.request-path present in the decision table, form declared, citing item 21 with ONE contiguous verbatim span of item 21, in >= 3/3 samples; Z0 — terraform-iac.request-path OPEN with options `direct · private-endpoint · translated` (in that order), and kubernetes-gitops.request-path listed not-applicable (owner-block tier not-applicable) OR absent while every kubernetes-gitops authorisation row in the owner block is not-applicable, in >= 3/3; BOTH nodes — no request-path row anywhere derived or forced (0 of 6). MISS => prompt-construction revises the row text (skeleton row, Author block list / never-derived list) and the named cells are rerun at n=3. Measured: the shipping coverage check's request-path findings per sample (it requires the kubernetes-gitops row LISTED not-applicable; an absent row is one author-actionable finding the correction turn may add). (G-NOWORSE, REVISE) per node, mean over the 3 samples, z49 minus base, each arm under its own check data, request-path findings and the item-21 clause REMOVED (G-ROW owns them): author-actionable coverage <= +1.0; citation findings <= +1.0; dropped clauses <= +0.67; harvested-state lint hits <= +0.34; program-view median <= +1,500 chars; size-with-allowance passes (L-R5, +500) z49 >= base - 1. Tolerances (z49.noWorseTolerance) are set at about one sample's swing at n=3. MISS => read the samples that drive the delta; a delta from one sample's unrelated variance => extend that node's two cells to n=5 (pre-registered extension, about $10, its own cap) before deciding; a delta the read attributes to the new text => revise and rerun the node's z49 cell. (MEASURED, no gate) Reviewer verdict per cell (Z0 is expected REFUSED in both arms: a zero-decision draft has OPEN rows, each blocking); every z49 Reviewer block citing the new premise line (request-path / VpcSourceIp / 'attribute the declared path carries') is read — FOR a real stanza/path mismatch (correct) or a false block; correction attempted/adopted per cell and its failing checks; registrySha256 per sample (base 7a896d1ddc4c, z49 cd4cd7082a9e — any other value voids the cell); served-model fallback calls; max_tokens stops; cost and Author duration per cell. A rule found wrong is corrected for the NEXT run, never reinterpreted for this one (Protocol 16).",
+  "n": 3,
+  "flags": {
+    "CONNECTED_OUTPUT_SANITIZE_ENABLED": "true",
+    "FORM_CORRECTION_ENABLED": "true"
+  },
+  "baseline": {
+    "protocols": {
+      "requirements-authoring-protocol": {
+        "file": "protocols/requirements-authoring-protocol@1.8.0.baseline.md",
+        "version": "1.8.0",
+        "sha256": "9f4623569e6f154e0636cff827b77429e41fd483e4f4931e8a7b3ae850a5ea25"
+      }
+    },
+    "templates": {
+      "cmub1ql6f0001yx6695cga4zx": {
+        "file": "templates/requirements-author.baseline.md",
+        "name": "Requirements Author",
+        "role": "requirements_author",
+        "sha256": "8bc9d7c7bf22035f99b5aff463241ced279b3043b99387381c74970a14487265"
+      },
+      "cmub1ql6m0002yx66hrxgxcc3": {
+        "file": "templates/requirements-reviewer.baseline.md",
+        "name": "Requirements Reviewer",
+        "role": "requirements_reviewer",
+        "sha256": "670bb7c5ee97dd6c39c6b1cfa77d28101365090b885a6c006b67d07bf3846ed2"
+      }
+    }
+  },
+  "variants": {
+    "base": {
+      "edits": [],
+      "authorModel": "claude-opus-5-5",
+      "authorEffort": "high",
+      "reviewerModel": "claude-sonnet-5",
+      "reviewerEffort": "high",
+      "requirementsFormCorrection": true,
+      "dropTemplateDirective": true,
+      "requirementsCheckAt": "452dfe15a547a2f88bbcc0a0529cd9f7e20f3b26"
+    },
+    "z49": {
+      "edits": [
+        "edits/z49-protocol.json"
+      ],
+      "authorModel": "claude-opus-5-5",
+      "authorEffort": "high",
+      "reviewerModel": "claude-sonnet-5",
+      "reviewerEffort": "high",
+      "requirementsFormCorrection": true,
+      "dropTemplateDirective": true,
+      "templateEdits": [
+        "edits/z49-author-guidance.json",
+        "edits/z49-reviewer-guidance.json"
+      ],
+      "requirementsCheckAt": "0bcbfd7f5ce46d1b9c05692ab629064aaf1175b4"
+    }
+  },
+  "nodes": [
+    {
+      "id": "A21",
+      "authorExecutionId": "cmv0hmi8q006wyxmcyein2a3g",
+      "reviewerExecutionId": "cmv0hx28i002uyxmdfh7mclaz",
+      "kind": "gate",
+      "originalVersion": "1.8.0",
+      "inputEdits": "node-inputs/item-21-request-path.json",
+      "ownerRowItemMap": "owner-maps/log-archive-read-answered-z49.row-item-map.json",
+      "variants": [
+        "base",
+        "z49"
+      ],
+      "why": "Run-2 answered Author (2026-10-09 04:51Z, Opus 5.5, correction adopted on size; Reviewer APPROVED 92) — the draft whose exemplar stanza conditioned on aws:SourceIp and forbade aws:VpcSourceIp (the Z49 failure, published, program runs 2/3 releasable). Input edit: owner item 21 (request path = private-endpoint) + owner map 21 -> terraform-iac.request-path.",
+      "expect": "z49: G-STANZA 3/3 (Allow and Deny on aws:VpcSourceIp, not forbidden); terraform-iac.request-path declared from item 21 3/3; Reviewer approves >= 2/3 (measured; persisted APPROVED 92). base: stanza measured — prediction stated, not gated: 1-2/3 (item 21 names the path and says the bucket sees the address 'in the attribute that path carries', but the 1.8.0 text never connects path to attribute and item 11 still says 'no network path is admitted'); no request-path row (the 1.8.0 skeleton has none).",
+      "z49Mode": "answered"
+    },
+    {
+      "id": "Z0",
+      "authorExecutionId": "cmv0g801i001qyxmdt4ccpat4",
+      "reviewerExecutionId": "cmv0gj1cx002iyxmcmtq0u771",
+      "kind": "gate",
+      "originalVersion": "1.8.0",
+      "variants": [
+        "base",
+        "z49"
+      ],
+      "why": "Run-1 zero-decision Author (2026-10-09 04:11Z, Opus 5.5; Reviewer REFUSED — 20 OPEN rows, expected for a zero run). Objective unchanged.",
+      "expect": "z49: terraform-iac.request-path OPEN with the three options 3/3; kubernetes-gitops.request-path not-applicable (or absent with its auth rows not-applicable) 3/3; no derived/forced request-path. Reviewer REFUSED in both arms (OPEN rows are blocking). base: no request-path row (measured). G-NOWORSE vs base.",
+      "z49Mode": "zero"
+    }
+  ],
+  "measures": [],
+  "z49": {
+    "noWorseTolerance": {
+      "coverageAuthorActionable": 1,
+      "citationFindings": 1,
+      "clausesDropped": 0.67,
+      "lintHits": 0.34,
+      "viewMedianChars": 1500,
+      "sizePassDrop": 1
+    },
+    "item21": "21. The pods' requests reach the bucket through a private endpoint of the storage service (private-endpoint): the bucket sees each pod's own address in the attribute that path carries.",
+    "registrySha256": {
+      "base": "7a896d1ddc4ce325d50519a7ce0739908ba000bca580ffeb69996947278ef70c",
+      "z49": "cd4cd7082a9e97fcb62bdb14e4605b46827e15c96d9009df31f3f6f3906088a9"
+    }
+  }
+}

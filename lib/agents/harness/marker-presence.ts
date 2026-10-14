@@ -8,8 +8,9 @@
  * the containment stamp lands at the leg's SYNTHESIZE, after the review. Same family as R19 P4 — a
  * reviewer judging what it structurally cannot observe. This stamps the observation on the AUTHOR's
  * (and Harvester's/Architect's) own execution at persist time, the chainer carries it per predecessor,
- * and §6 renders it where the reviewer actually reads. Protocol 10: a fact, never a verdict — a ✗ for a
- * block the leg needs is the blocking FACT; a ✓ ends any format question.
+ * and §6 renders it where the reviewer actually reads. Protocol 10: a fact, never a verdict. Reviewer
+ * guidance (2026-10-03) makes two ✗ shapes blocking — Consumed ✗ on a package applying a received value,
+ * Derived ✗ on one applying a value derived in its leg; every other ✗ is expected; a ✓ ends any format question.
  *
  * Same-parser rule: `parseFencedJsonBlock` here IS the containment enrichment's parser. A second
  * extractor would be the two-extractor drift class (heading-tolerant vs token-locked, 2026-07-18).

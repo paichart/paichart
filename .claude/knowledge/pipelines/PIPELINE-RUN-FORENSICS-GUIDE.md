@@ -138,6 +138,12 @@ dispatched a child and is dated BEFORE 2026-09-26 is that artifact, not a skippe
 instances). Related facts on the same runs: `metadata.deadEndExempt` (an empty SYNTHESIZE NOT terminalized
 because a child was in flight or dispatched that run) and `metadata.reactorBudgetExhausted` (Guard 8).
 
+⚠️ **The third sanctioned exit — POST-COMPLETION (COMPLETE-THEN-FAIL, 2026-10-05).** A SYNTHESIZE that called
+`task.complete` and then failed on a later call is rescued and records `protocolValidation.postCompletionExempt: true`.
+**Reading rule:** a `PROTOCOL_STEP_SKIPPED` on a row with `postCompletionExempt: true` names ONLY a gap BEFORE
+completion; the Step-5 items the run never reached are in `postCompletionSteps`, never in `missingSteps`. See the
+program guide §5a for the rest of the rescued record (`postCompletionFailure`).
+
 ⚠️ **And a halt can never satisfy a step-profile at all.** Its correct behaviour is to do nothing —
 no stage, no children, no completion. Re-pointing it at the right profile does not help: judged as
 CREATE it simply fails on "stage.create not called", which is *true* and still wrong, because not
@@ -173,7 +179,7 @@ WHERE a.\"executionId\" = '<execution id>' AND (a.content::jsonb) ? 'protocolVal
 ```
 
 
-## ⚠️ 2026-09-16 · 2026-09-17 · 2026-09-19 · 2026-09-20 — SIX RULES FOR MEASURING, earned by getting each one wrong on a live run
+## ⚠️ 2026-09-16 · 2026-09-17 · 2026-09-19 · 2026-09-20 · 2026-10-07 — EIGHT RULES FOR MEASURING, earned by getting each one wrong on a live run
 
 A forensics guide is only as good as the queries it leads you to write. On 2026-09-16 a single
 investigation produced **five** wrong numbers before the right one, every time by measuring something
@@ -315,6 +321,34 @@ what makes the populations differ.
 ⚠️ **0 successes is an ABSENCE, not a rate.** terraform's "100% failing" was 0 parsed against 2
 attempts — a population that rarely derives at all. The first output said so and it was read past.
 
+### 7. Know which code produced a number before you read it
+
+A measurement belongs to the code that produced it, not to the code you are looking at now. When the code
+under test changes during an investigation, check the run's timestamps against the code's commit or
+modification time before using the result.
+
+Live example (2026-10-07, the form-correction replay): the first paid replay reported **14 of 15
+adopted**. It ran 20:28–20:35Z; the reviewed adoption guard and collateral metric were saved at
+20:42–20:44Z. The number described a guard that no longer existed. It was discarded and the run repeated
+on the committed code.
+
+> **Run timestamp vs code commit time: check it before quoting any result from a script that changed today.**
+
+### 8. Before believing a failure rate, diff ONE failing case
+
+A low pass rate can be the instrument's fault, not the subject's. Before reasoning from the rate,
+diff a single failing case against its input and look at what actually differs.
+
+Live example (2026-10-07): the re-run on the committed code reported **2 of 15 adopted**, rejected
+almost entirely as `prose-changed`. That read as "the model's corrections are bad". One diff showed
+the correction itself was exact (a hunk header `+1,19` → `+1,20`, nothing else), and the only other
+change was the confidence line: **our own correction prompt** had told the model to end with
+`"Confidence: N/100"` while the package's line was `Confidence: 70 — <rationale>`. The guard rejected
+the harmless reformat our prompt had asked for. The rate measured our prompt, not the model.
+
+> **A uniform failure reason across nearly every case ("outside-named 2" fifteen times) is a sign the
+> cause is shared — usually the harness, prompt or guard — not fifteen independent failures.**
+
 
 ## 0. The mental model — four layers of persisted evidence
 
@@ -429,6 +463,22 @@ Notes that keep the numbers honest:
 - **A truncation flag answers "lost from the agent's view?", never "lost from the record?"** — those are
   two different questions (harvest-truncation-safety.md §2 "THE TWO QUESTIONS"). ≤50 KB the full raw result
   is at Tier-2, so the §3 dissection can always tell you what sat past the cut that the LLM never saw.
+
+### 2a. Reading a PAGED read (`read_more`) — did the agent read the whole document? (2026-10-12, R2 + Phase 4 run 1)
+
+An agent's own claim ("paged to its end", "fully parsed") is not evidence. Read the `read_more` calls in order:
+- **Count pages correctly.** `read_more` calls are the pages; the first fetch is the 8,000-char first window, not a page. R2's
+  Architect said "7 paged reads" — it made 6 (`read_more` ×6), which was within the OLD cap, so the run never exercised the
+  new budget.
+- **Check the offsets are contiguous.** Each call's `offset` should be the previous one plus its `limit`. A jump is a skipped
+  span: R2 went 36,000 → 43,000 → **59,000**, leaving 16,000 chars unread (the writing-rules section, skipped by guidance).
+- **The real size is the tool result's `originalSize`, not a script's estimate.** The requirements size estimate ran ≈ 4.6%
+  high (68,445 estimated, 65,439 delivered).
+- **The last trailer tells you what is left, and whose text it is.** Phase 4 run 1 ended "334 characters remain": that tail
+  was the browser service's response wrapper (its "next steps" suggestions), not document content. Read what the final page
+  contained before calling a read short.
+- **Per-role caps:** a refusal "already paged … N times" is the role's budget (`lib/agents/role-read-budget.ts`; Program
+  Architect 9 per document / 12 per run, every other role 6 / 8), not a defect.
 
 ## 3. Payload-vs-envelope / content-position splits
 
@@ -609,6 +659,149 @@ Count the pages: `... AND tc->>'tool'='read_more'` (here: 6).
 **How to read a pager run:**
 - **The read_more ref and the `[truncated]` notice are NEVER persisted** (§2 — Tier-1 view only). You prove page-through from the **offset progression** in the read_more args (8000→43797 covers the full 43,797-char result) and from the **finalResponse** — the agent said it "handled the full 100-task dataset" and listed blockers from BOTH phases (Impl multicast + Validation PTP/latency/acceptance), i.e. tasks that sat past the 8K cut. Material recovery = "what the agent said," not a stored marker.
 - **Behavioral PASS criteria**: zero blind-broad-repeat (the broad `task.list` appears exactly once), truncated tail reachable (offset progression reaches result length), caching undisturbed (`inputTokens`=46 uncached, §6 — injection is a stable append, cache-safe). Pages carry `resultTruncatedForLlm:false` (windows ≤7000, never self-truncate).
-- **Caps visible in the trace**: 6 read_more on one ref = the per-origin cap (6). ~7000/window → ~42K of tail is pageable before the cap redirects to scope-or-flag. A >~42K-tail read (a POV well past ~110 tasks, or an external scrape) hits the cap mid-page **by design** — the "scope, don't page the ocean" backstop, not a bug.
+- **Caps visible in the trace**: 6 read_more on one ref = the per-origin cap (6) for every role EXCEPT the Program Architect, whose budget since R1 (2026-10-12) is 9 per document and 12 per run (`lib/agents/role-read-budget.ts`; maxToolTurns 48). Read the cap off `agentRole`, never assume 6. ~7000/window → ~42K of tail is pageable before the cap redirects to scope-or-flag. A >~42K-tail read (a POV well past ~110 tasks, or an external scrape) hits the cap mid-page **by design** — the "scope, don't page the ocean" backstop, not a bug.
 
 **Scope-vs-page is objective-dependent (why the nudge is a FACT, not an imperative):** here the agent paged the whole bounded list rather than scoping by status — and that is *correct* for a holistic blocker+workload+completion read (single-status scoping is incomplete; you need OPEN + IN_PROGRESS + COMPLETED, and ~113 tasks page in 6 windows within cap). For network config reads (`infra_state_harvester`) a narrower per-device/getter form genuinely exists and IS cheaper, so the same conditional nudge steers scoping there (and run-3's no-getter `spanning-tree` line is where paging is the ONLY recovery). This is exactly why the nudge ships the cost fact ("cheaper *when* a narrower form exists") not a "PREFER scoping" verdict (Protocol 10) — the preference is right for config, wrong for holistic lists. Reviewed + left as-is 2026-07-10.
+---
+
+### §7d. A deliverable that claims to be applicable: APPLY it, don't read it (2026-10-05, terraform source-read rehearsals)
+
+Two runs with the same objective on terraform-iac 1.12.0, then 1.12.1: root `cmuuwhx6w0007yxh83txc7yq6`, then `cmuuyf7be0005yxi82euve9u9`. The objective was an in-place `team` tag edit, and the source `.tf` was read from a commit-pinned raw GitHub URL.
+
+**The first run's diff read correctly, and the Reviewer did not object to it, yet `git apply` rejected it.** The quoted lines were exact. The hunk header was `@@ resource "aws_s3_bucket" "app_logs" (tags map) @@`, which has no line numbers, and the Author claimed that "CI recomputes exact hunk offsets", which no tool does. No reading of the package catches this, because the content is right and only the machine form is wrong. So whenever a package states the form of an artifact a person will run (a patch, a config file, a command), test that form with the tool that consumes it.
+
+```bash
+# 1. Pull the Author's finalResponse (newest execution per child) → extract the ```diff fence.
+# 2. Apply AS WRITTEN on the commit the package names, in a throwaway worktree:
+git -C ~/paichart worktree add -q --detach /tmp/wt <commit-sha>
+(cd /tmp/wt && git apply --check -v /path/as_written.patch; echo "exit=$?")   # non-zero IS the finding
+git -C ~/paichart worktree remove --force /tmp/wt
+# 3. If it fails, repair ONLY the header and re-check. That separates "content wrong" from "form wrong",
+#    which are different defects with different fixes.
+```
+
+**Fidelity check for a quoted source.** Diff the Harvester's verbatim block against the raw file at that commit, using `diff <raw> <quoted>`. The only differences allowed are the lines the protocol excludes. Measured results:
+- Run 1: exactly two lines differed. The R9-rewritten injection line was listed as a placeholder, and the AKIA-shaped value was replaced with `<REDACTED-SECRET>`.
+- Run 2: the same two lines differed, but the rewritten line stayed INSIDE the quote with its `[NEUTRALIZED-INJECTION:…]` marker visible. That is a compliance variance, filed.
+
+Any other differing line means the quote is not verbatim. ⚠️ Our own MCP client sees fewer escaping layers than the agent, so a fetch made from your seat that comes back "byte-intact" does not prove the agent's quote is.
+
+**A Reviewer block that names something the Author was never told to carry is a wiring finding, not a quality finding.** Run 1's Reviewer blocked because the package had no drift statement. The Architect had made one, but the Author's item list did not carry it, and the Reviewer reads only the Author. Before grading a refusal, check two things: did the protocol's clause for the producing role ask for that property, and does the consuming role have an edge to whoever did produce it? (Same class as Rule 5.)
+
+**Exit 0 is not proof either (2026-10-07).** A hunk header that counts FEWER lines than the body holds is
+applied without error **when it is the last hunk in its file**: `git apply --check`, `git apply` and GNU
+`patch` all exit 0, write the declared lines, and silently drop the rest — including intended trailing `-`
+deletions. (Followed by another hunk, the same undercount fails loudly: exit 128, "patch fragment without header".) Reviewers approved 7 of the
+9 terraform packages that had this defect (one replayed: 33 of 36 lines written, an unclosed HCL block).
+So after a successful apply, **compare the applied result with the package's body** (or recount each hunk
+header against its body) — a clean exit only proves the declared lines fitted. This class is now recorded
+mechanically as `toolLoop.formCheck` on `config_change_author` executions (from 2026-10-07; see
+`cline_docs/follow-ups/mechanical-reflection-trigger-2026-10-07.md`). A body SHORTER than its header fails
+loudly (exit 128) and is not silent.
+
+**psql trap:** `\pset format unaligned` prints `Output format is unaligned.` as the first line of output, which breaks a `json.load`. Use `psql -q`, or filter for lines that begin with `{`.
+
+### §7e. Root-causing a POPULATION of refusals (2026-10-07, network + observability since 09-28)
+
+A refusal RATE says how often; it never says why. To find text fixes, read every refusal in the window
+the same way, then count causes — not refusals. Worked example: `cline_docs/reviews/refusal-root-cause-2026-10-07/READ.md`
+(13 refusals; 6 already fixed at source and not recurred; the open 7 all one family).
+
+**Per refusal, six answers** (quote, don't paraphrase):
+1. **The block** — the reviewer's exact blocking item.
+2. **Instruction** — did the protocol or role guidance live AT THAT TIME ask the Author for that property?
+   Quote the clause and its version (the clause may have been added since — read the version the leg ran).
+3. **Inputs** — did the Author HOLD what it needed (harvest, §6 chain, contract)? Check its `inputContext`.
+4. **Correct?** — was the block right? Run the string test before accepting any provenance/fabrication-
+   shaped claim (`EVIDENCE-FLOW-DISCIPLINE.md`; ARCHITECTURE Invariant 6).
+5. **One cause class** — (a) never asked · (b) ambiguous/contradictory text · (c) clear text, Author ignored
+   it · (d) Author lacked the input · (e) reviewer wrong · (f) genuine content defect · (g) other, named.
+6. **Layer** — route it with `domain/harness/defect-layer-routing.md` (Step 0 first: does a control ship?).
+
+**Then measure fixes by NON-RECURRENCE, not by the overall rate.** A class fixed at version N is closed if
+it has not recurred on legs that ran ≥ N (here: network 3/3 approved since 1.18.1, obs 7/8 since 1.6.0). The
+overall rate mixes pre-fix and post-fix legs and will keep reporting the fixed causes.
+
+**Two signatures this read surfaced:**
+- **Opposite outcomes on the same step ⇒ contradictory TEXT (class b), not model variance.** Two approved obs
+  packages quoted an authored file; a refused one described it instead — because the shared Author guidance
+  forbade the quote while the domain protocol called the file the witnessed artifact. When the same move is
+  approved in one leg and blocked in another, look for two texts that disagree before blaming either agent.
+- **A correct finding can carry a wrong remedy.** A reviewer rightly found a missing check, then prescribed
+  `nc -z`, which cannot test an ACL evaluated after the TCP accept. Grade the finding and the remedy
+  separately; a text fix that encodes a reviewer's remedy inherits its error.
+
+**What a text fix cannot reach:** class (c) needs detection, not more prose; class (f) is the system working.
+Report them separately so the upper bound of a text batch is honest (here 4 of 13, all observability).
+
+
+### §7f. Test a text fix OFFLINE before shipping it — the leg replay lab (2026-10-07)
+
+§7e names a candidate text fix; this is how to measure it without a live program run. `npm run lab:leg-replay`
+(`scripts/leg-replay-lab/`) takes a persisted `config_change_author` execution (a NODE), rebuilds its exact prompt
+with the platform's own builders, substitutes the candidate protocol text, calls the real model, runs the shipping
+nets, chains the package into the rebuilt Reviewer prompt and parses the verdict with the shipping parser. Old and
+new texts run on the SAME nodes, so refusal counts are comparable. Production is read-only throughout.
+
+1. **Dry run first** (`run --experiment <dir>`, no `--spend`): $0. It prints the per-node CONTROLS and the cost
+   estimate. Proceed only if every control passes: leaf nets reproduce the persisted facts, chain patch identity,
+   shipping parser = persisted verdict. A failed control means the rebuild does not describe what ran.
+2. **Smoke on one APPROVED control** (`--only <control> --variants baseline --n 1 --spend --max-usd 1`). It must come
+   back approved, and `sample.json` `tokenFidelity` (replay first-call input vs persisted) should agree within ~1%.
+   First smoke: TF control APPROVED, 58,728 vs 58,873 tokens (0.25%), $0.51.
+3. **Every experiment carries approved controls beside the refused nodes.** A text that "fixes" a refusal by
+   making the reviewer refuse less in general shows up as a control flipping. Without controls the lab cannot see it.
+4. **Read one sample per cell before believing a count** (rule 8). Every prompt and output is saved under
+   `runs/<stamp>/<node>/<variant>/sample-NN/`. The manifest pins the commit, dirty files under lib/scripts/prisma and
+   each input text's sha256, and re-checks them at the end (rule 7).
+
+**Limits:** tool calls are stubbed; tool schemas, hub and template constraints are TODAY's, not the run's. The
+post-loop order is a ~40-line copy of `execution-core.ts` (unpinned, the one drift point). n=5 per cell detects only
+large effects. A lab result is evidence for a text change, not a substitute for the live watch after it ships.
+`runs/` and `cache/` hold production data and are gitignored. Never commit them.
+
+**Model and effort (since 2026-10-07):** a variant may set `authorModel` / `reviewerModel` and `authorEffort` /
+`reviewerEffort` (unset effort = `high`, which production sends). Change ONE side at a time — keep the Reviewer fixed when
+testing an Author model, or the instrument moves with the thing measured. The estimate does not model effort or a longer
+model's output (Opus ran ~60% over it); size `--max-usd` from a previous run's real cost per sample.
+For the WHOLE model-onboarding procedure around this (wire/capability audit before any paid run, node choice, the
+switch path and the post-switch watch), see `MODEL-ONBOARDING-PLAYBOOK.md`.
+
+**Write the decision rule down BEFORE the run** (refused-case target, control tolerance, what each outcome triggers), then
+apply it as written. Three of the 2026-10-07 runs reversed or stopped work on that basis: gap 3 (a control flipped 0→3/5 —
+reverted before deploy), Opus-medium (stopped at 4 samples), the template Directive (0/5 vs 0/5 → ship). Reuse a prior
+run's arm only when its prompts are byte-identical (`cmp` the saved `*.system.md` / `*.user.md`).
+
+**Side use, prompt forensics:** the saved `author.system.md` / `author.user.md` are the exact prompt, so prompt-shape
+questions are answered by reading them. The first smoke confirmed TEMPLATE-SENT-TWICE this way: the raw role template
+(~18 KB, `${agentRole}` unresolved) sits in the user message's `## Directive` while the resolved copy is in the
+system prompt (49 of 51 long lines duplicated), and the token match shows production sends the same.
+
+**When the REVIEWER is what changes** (its text or its model), refusal counts have no fixed instrument. Use the
+ground-truth bench instead: a persisted Author plus planted edits, with the right verdict known for each node, scored
+in both directions. Procedure and lessons: `MODEL-ONBOARDING-PLAYBOOK.md` Phase 2b.
+
+### §7g. Which replay? Two questions, three tools (2026-10-08)
+
+Every replay here runs over **persisted production records** instead of waiting for new runs. Pick by the question.
+
+| | **Byte-identity replay** — "did I break anything?" | **Leg replay lab** — "is this better?" |
+|---|---|---|
+| Use for | a CODE change to how facts or artifacts are produced | a MODEL, effort or agent-TEXT change |
+| Re-runs | the shipping code over stored inputs — **no model call** | rebuilt prompts against **the real model** |
+| Nature | deterministic, one pass | stochastic: n samples per cell, decision rule written first |
+| Cost | free (a read-only dump + local CPU) | paid (2026-10-07 comparisons: ~$17–32) |
+| Pass | **0 changed**, byte for byte | refused-case target met, approved controls not worse |
+| Proof it can fail | a **mutation** control must flip a known case; an **injection** control must show exactly the expected change | approved **controls** run beside the refused nodes |
+| Tools | `scripts/replay-nets-byte-identity.sh` (stamped net facts; Protocol 15 "existing runs unchanged") · `scripts/replay-reviewer-warnings.ts` (rendered `report.md`) | `npm run lab:leg-replay` (§7f) |
+
+**One change can need both.** WARNINGS-INVISIBLE batch 1 (code: a new net + a report.md section) was proven by the
+byte-identity replay — 461/461 `report.md` unchanged, the loose-grammar mutation flipped `cmuw8e6c90010yx9erg4d21t1`,
+the injection control added exactly one section in 3 domains. Its batch 2 (reviewer TEXT: clause-f demotion) goes
+through the lab. A byte-identity replay covers only the code it runs: text shipped in the same batch still changes
+every NEW run, so the batch keeps its version bumps and series cuts — never read the replay as covering them.
+
+**Shape of a byte-identity replay** (copy it for the next one): a read-only SQL dump of the inputs *as they stood when
+the artifact was written* (select upstream executions with `startTime <=` the artifact's execution — later re-runs must
+not leak in), the SHIPPING pure functions imported (never re-implemented), buckets that sum to the population, and
+both controls. The dump holds production data: keep it in the scratchpad, never in the repo.

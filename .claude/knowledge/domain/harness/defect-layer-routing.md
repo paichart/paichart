@@ -150,3 +150,19 @@ vocabularies, and been corrected each time it turned out to be about us instead 
 | Depth-vs-breadth conflated in the harvester's own guidance | **4 — role guidance** | Craft, not subject: it is about how to read, in any domain |
 | An unevidenced set bound | **not 5** | Machine-decidable only in part, and no consumer exists. Parked with triggers |
 | ~~A new `config_change_author` paragraph~~ | **WITHDRAWN** | Duplicated a shipped clause and was weaker than it |
+
+## The 2026-10-12 arc, routed — "every agent approved, the platform refused"
+
+Phase 4 attempt 2 run 1 (`cmv4wfvnc005oyx9kljrpehw7`): both legs and Node C approved, `programReleasable: false`. Record:
+`cline_docs/reviews/containment-propagation-2026-10-12/`; case study https://claude.ai/artifact/YYHKcGUUhRrgkYLVhg22gq.
+
+| finding | routed to | why |
+|---|---|---|
+| The Kubernetes Author read "emit `## Derived Values` when, and only when, a value was derived" (range-only examples) as excluding a SELECTED host list | **2 — domain protocol** (fix (b), deferred with its lab) | The CAUSE. Ambiguous prose; 6 of 8 comparable Authors read it the other way |
+| An undecided upstream (`needs-node-c`) turned the consumer into a block no Node C verdict could clear | **5 — mechanical net** (fix (a)) + **program protocol** (BRANCH D4) | What made the ambiguity FATAL: "not green" was treated as "dirty". Measured first: 7 archive cases, 3 of them this shape |
+| "Was it the requirements? A missing registry question?" | **not 6 — requirements** | The spec already called it a derivation; writing rule 3 forbids naming the platform's measure in a spec; registry questions are owner design choices, not platform mechanics |
+
+**The method lesson.** The first fix that suggests itself (code: let the block clear) was right but not the cause. The owner's
+question "is it the requirements?" forced the layer question, and reading the three texts — the protocol sentence, the spec,
+the role guidance — routed the cause to layer 2 and kept a platform rule out of the spec. Ask *which layer* before *which fix*,
+and expect a defect to have a cause layer and a separate "what made it fatal" layer.
