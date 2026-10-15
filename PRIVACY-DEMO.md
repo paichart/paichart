@@ -66,8 +66,17 @@ inactivity**, measured from your last sign-in.
 
 When a demo account is deleted, the user record and its associated data
 (including any workflow-execution history tied to the account) are **hard-deleted
-from the database** — not merely deactivated or hidden. There is no archival copy
-of the demo profile retained after deletion.
+from the database** — not merely deactivated or hidden. That includes any file
+contents an agent run read in the account's projects: the platform's held copies
+are removed with the run's history, and the copies inside the run's own task
+records and outputs are removed with those records. Held file contents that are no
+longer referenced anywhere are removed by a nightly sweep after a one-day grace
+period.
+
+Deletion removes data from the live database. Full-database copies that an
+operator takes before a maintenance procedure are kept outside the database and
+are not currently expired automatically, so a copy taken before your account was
+deleted can still contain it.
 
 If you sign in again before the 30-day window elapses, the clock resets and your
 demo account continues.
