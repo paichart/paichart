@@ -1,0 +1,29 @@
+{
+  "name": "k8s-obs-collector-senders-genspec",
+  "description": "A cross-domain program. A Kubernetes namespace runs pods that send telemetry to a telemetry collector through an ingress proxy in front of the collector's receiver. The cluster leg harvests the namespace's CURRENT running pods and publishes their addresses as a host list; the observability leg restricts which senders the proxy admits to the collector's OTLP sender endpoints to exactly that host list. Two domains, two rigs, one runtime-derived value crossing the boundary.",
+  "_whyThisPairing": "A Kubernetes producer feeding an observability consumer: the consumer speaks proxy configuration, the producer speaks Kubernetes, and neither shares the other's vocabulary. Both legs run against read-only rigs.",
+  "_topologyShape": "DOMAIN-STRUCTURED, not graph-shaped. Two separate systems joined by ONE derived value, not by cables. Inventing nodes and links to satisfy a graph schema would be inventing structure; the Architect should state this shape under Assumptions & Open Questions and confirm it is sufficient for the plan.",
+  "cluster": {
+    "namespace": "trading",
+    "workload": "the namespace's running pods",
+    "_whyThisIsUnarguablyRuntime": "Pod addresses are assigned by the CNI at SCHEDULE time. They are not in any manifest, they differ between clusters, and they CHANGE when a pod is rescheduled. Nothing outside a live harvest can know them; the published host list is valid only for the harvest that produced it.",
+    "podAddressesAreNotListedHere": "Discoverable ONLY by harvesting the live cluster. Do not assume, do not carry a value in from any other document."
+  },
+  "observability": {
+    "enforcer": "the ingress proxy in front of the telemetry collector's receiver",
+    "purpose": "The proxy is where senders reach the collector's OTLP sender endpoints (gRPC and HTTP). Which proxy blocks forward to those endpoints, and what access directives they carry today, are discoverable only by harvesting the as-deployed configuration.",
+    "proxyBlocksAreNotListedHere": "Discoverable ONLY by harvesting the observability rig. Do not assume block names, ports or paths, and do not carry them in from any other document."
+  },
+  "readOnlyServices": {
+    "_whyThisIsHere": "Each leg reaches its rig ONLY through a self-provisioned read-only MCP service. This document is topology data and declares no endpoint, category or tools of its own, so the descriptors below are the connection surfaces and EACH must be named in its own leg's task description. Omitting one is not a soft failure: the harvest role is correct to refuse to invent connection fields, and that leg blocks at Phase 0.",
+    "clusterDescriptorUrl": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json",
+    "observabilityDescriptorUrl": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/observability-readonly-descriptor.json",
+    "lifecycle": "Self-provision per each leg's active protocol: register from the descriptor, harvest read-only, then tear down the registration — on approval AND on escalation alike."
+  },
+  "interdependency": {
+    "direction": "cluster leg (UPSTREAM) → observability leg (DOWNSTREAM)",
+    "crossingValue": "ONE host list: the address of every running pod of the namespace that the population rule counts, one single-host entry per address.",
+    "consumedVerbatim": "The observability leg consumes the host list EXACTLY as published — never recomputed, never widened for convenience, never guessed. If it is absent from chained context, the leg makes no change and reports the upstream gap.",
+    "_whatThisTests": "A runtime value crossing a DOMAIN boundary, not merely a leg boundary."
+  }
+}
