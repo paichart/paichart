@@ -1,0 +1,19 @@
+{
+  "name": "held-k8s-window-p1",
+  "description": "A single-leg program: a PodDisruptionBudget for the orders-api workload in the trading namespace, authored as a change to the config-repo file the team keeps in Git.",
+  "cluster": {
+    "namespace": "trading",
+    "workload": "orders-api — a Deployment with more than one replica"
+  },
+  "configRepo": {
+    "_whyThisIsHere": "The file the change is made to. Name it in the leg's task description exactly as given here.",
+    "owner": "paichart",
+    "repo": "paichart-lab-configs",
+    "ref": "main",
+    "path": "k8s/sample-workloads.yaml"
+  },
+  "readOnlyServices": {
+    "clusterDescriptorUrl": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json",
+    "lifecycle": "Self-provision per the leg's active protocol: register from the descriptor, harvest read-only, then tear down the registration — on approval AND on escalation alike."
+  }
+}
