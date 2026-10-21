@@ -1,0 +1,17 @@
+{
+  "name": "held-terraform-window-p1",
+  "description": "A single-leg program: a prevent_destroy guard on the application log bucket, authored as a change to the configuration-repository file the team keeps in Git.",
+  "workspace": {
+    "name": "prod",
+    "resource": "aws_s3_bucket.app_logs — the application log bucket acme-app-logs"
+  },
+  "configRepo": {
+    "_whyThisIsHere": "The file the change is made to. Name it in the leg's task description exactly as given here.",
+    "owner": "paichart",
+    "repo": "paichart-lab-configs",
+    "path": "terraform/main.tf"
+  },
+  "readOnlyServices": {
+    "terraformDescriptorUrl": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/terraform-readonly-descriptor.json"
+  }
+}
