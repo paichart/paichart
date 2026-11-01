@@ -339,12 +339,18 @@ text verbatim (static by design). Hit counters and translation tables are dynami
 excluded. A NAT *translation* check is precluded by this phase (no partner traffic exists in the lab —
 rule 11) and must not be written as a validation step.
 
-- **Device sources** (network-provisioning ≥ 1.23.0 requires one line per device the leg changes; added 2026-11-01). The
-  leg's task description carries this block exactly:
+- **Device sources** (network-provisioning ≥ 1.23.0; revised 2026-11-02). **One block, the same for both network legs.**
+  It lists every switch the leg must READ: the switch it changes AND the other switch, whose allocations it must see —
+  pool freedom is fabric-wide, and the Harvester reads only the devices its block names (2026-11-01: a block naming
+  only the changed switch left the other unread and produced a colliding pool). A listed switch the leg does not
+  change is read as evidence and its kept copy is never edited. The leg's task description carries this block
+  exactly; because both network legs share it, it is also the contract's single `network-provisioning` Device
+  sources value.
 
 ```
 ## Device sources
 ceos1: device-read — service https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/descriptors/ceos-lab-readonly-descriptor.json
+ceos2: device-read — service https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/descriptors/ceos-lab-readonly-descriptor.json
 ```
 
 ## Pipeline 2 objective — Terraform IaC, DMZ security group (MIDSTREAM)
@@ -388,10 +394,12 @@ ceos1: device-read — service https://raw.githubusercontent.com/paichart/paicha
   with `ip access-group … in` on `Ethernet2`; no NAT stanza on this hop; config-presence validation only).
 
 
-- **Device sources** (added 2026-11-01). The leg's task description carries this block exactly:
+- **Device sources** (revised 2026-11-02). The same block as Pipeline 1 — both switches, read; only `ceos2` is
+  changed. The leg's task description carries this block exactly:
 
 ```
 ## Device sources
+ceos1: device-read — service https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/descriptors/ceos-lab-readonly-descriptor.json
 ceos2: device-read — service https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/descriptors/ceos-lab-readonly-descriptor.json
 ```
 
