@@ -339,6 +339,14 @@ text verbatim (static by design). Hit counters and translation tables are dynami
 excluded. A NAT *translation* check is precluded by this phase (no partner traffic exists in the lab —
 rule 11) and must not be written as a validation step.
 
+- **Device sources** (network-provisioning ≥ 1.23.0 requires one line per device the leg changes; added 2026-11-01). The
+  leg's task description carries this block exactly:
+
+```
+## Device sources
+ceos1: device-read — service https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/descriptors/ceos-lab-readonly-descriptor.json
+```
+
 ## Pipeline 2 objective — Terraform IaC, DMZ security group (MIDSTREAM)
 
 - Harvest the Terraform estate **read-only**. Service descriptor:
@@ -378,6 +386,14 @@ rule 11) and must not be written as a validation step.
   - **no rule matching the partner CIDR** (wrong-stage match, as above).
 - Platform dialect and validation shape: as Pipeline 1's two sections (same EOS access-list shape bound
   with `ip access-group … in` on `Ethernet2`; no NAT stanza on this hop; config-presence validation only).
+
+
+- **Device sources** (added 2026-11-01). The leg's task description carries this block exactly:
+
+```
+## Device sources
+ceos2: device-read — service https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/descriptors/ceos-lab-readonly-descriptor.json
+```
 
 ## Design constraints — split across the contract and the DAG
 
