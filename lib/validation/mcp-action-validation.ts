@@ -340,6 +340,16 @@ export function getActionSchemaShapeKeys(action: string): string[] | null {
 }
 
 // Action-specific parameter validation schemas
+/** The refusal task.update returns when it is sent an `interfaceContract` (a fact about the platform, Protocol 10). */
+export const INTERFACE_CONTRACT_CREATE_ONLY_MESSAGE =
+  'interfaceContract is accepted only by task.create: a task\'s contract is bound when the task is created, and task.update ' +
+  'cannot add or change it. If this task\'s task.create result said the platform stored the program plan\'s contract, the ' +
+  'task already holds it. Otherwise, to give a task a contract, create a replacement task with interfaceContract. ' +
+  // Q2 leg-contract heal (2026-10-17, D-3 + V8): two static FACTS — the refusal lives in the DB-blind schema layer, so it
+  // cannot name this task's state; a state-aware refusal is filed in the open register with its trigger.
+  'A reviewer child of a program stage that holds no contract receives the program plan\'s contract when it executes, if ' +
+  'every leg of that stage holds that plan.';
+
 export const MCPParameterSchemas = {
   'pov.create': z.object({
     title: SimpleTextField(500),
@@ -572,7 +582,17 @@ export const MCPParameterSchemas = {
       .optional(),
 
     // Nested updates object (backward compatibility)
-    updates: safePassthrough().optional()
+    updates: safePassthrough().optional(),
+
+    // CREATE-ONLY (PLAN-SPAWN-CONTRACT-OMISSION option A, 2026-10-17). A program child's contract is bound
+    // atomically at task.create (CC7: `inputContext.interfaceContract` + `requiresInterfaceContract`); no
+    // update path writes it. Declared here ONLY so it is never silently stripped: before this, a harness
+    // that created a child without a contract and then sent the contract on task.update got a generic
+    // NO_EFFECT that never said why — measured 5 of 5 times (2026-08-25 … 2026-10-17), each costing a turn
+    // and ~8–10 KB of output before the harness re-created the child. Any value refuses with the fact.
+    interfaceContract: z.any().superRefine((_v, ctx) => {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: INTERFACE_CONTRACT_CREATE_ONLY_MESSAGE });
+    }).optional(),
   }).refine(
     data => data.taskId || data.task_name || data.taskName,
     { message: "Either taskId or task_name/taskName (with POV context) is required" }
@@ -772,7 +792,14 @@ export const MCPParameterSchemas = {
 
   'agent.results': z.object({
     taskId: ValidationSchemas.TASK_ID.optional(),
-    executionId: z.string().regex(/^[a-zA-Z0-9_-]{1,50}$/, 'Invalid execution ID').optional()
+    executionId: z.string().regex(/^[a-zA-Z0-9_-]{1,50}$/, 'Invalid execution ID').optional(),
+    // X2 (2026-10-31): the handler always read these, but this schema stripped them, so every call ran the defaults
+    // (limit 5, includeAll false, includeOutput true) — five protocol call sites ask for `limit: 1`. Agents send them as
+    // strings ("1", "true"), so they are coerced BEFORE validation. The handler keeps the authoritative execution in the
+    // result even when `limit` would cut it (see agent-results-handler.ts), so honouring limit never hides it.
+    limit: z.preprocess((v) => (typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v.trim()) : v), z.number().int().min(1).max(20)).optional(),
+    includeAll: z.preprocess((v) => (v === 'true' ? true : v === 'false' ? false : v), z.boolean()).optional(),
+    includeOutput: z.preprocess((v) => (v === 'true' ? true : v === 'false' ? false : v), z.boolean()).optional(),
   }),
 
   'analytics.generate': z.object({

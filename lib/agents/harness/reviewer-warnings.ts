@@ -52,6 +52,7 @@
  */
 
 import { locateTerminalVerdict } from './parse-verdict';
+import { redactArtifactSecrets } from './redact-artifact-secrets';
 
 /** The literal the protocols write and this parser keys on. Exported so tests and text pins share it. */
 export const WARNING_LABEL = 'NON-BLOCKING WARNING';
@@ -115,7 +116,11 @@ export function computeReviewerWarnings(text: string | null | undefined): Review
     if (closer && !closedAtColon && t.endsWith(closer)) t = t.slice(0, -closer.length).trimEnd();
     if (t === '') continue;
     const w: ReviewerWarning = { id: m[2], text: t };
-    if (t.length > MAX_WARNING_TEXT_CHARS) { w.text = t.slice(0, MAX_WARNING_TEXT_CHARS); w.truncated = true; }
+    // WARNINGS-TRUNCATION-SPLITS-SECRET (2026-10-31, sec-ops F5): R10 runs later, at persist, over the whole artifact —
+    // a cut through a secret leaves a prefix its patterns may no longer match. So a line that WILL be cut is redacted
+    // first, then cut. Untruncated lines are untouched here (persist-time R10 covers them), so every other warning stays
+    // byte-identical.
+    if (t.length > MAX_WARNING_TEXT_CHARS) { w.text = redactArtifactSecrets(t).redacted.slice(0, MAX_WARNING_TEXT_CHARS); w.truncated = true; }
     matched.push(w);
   }
 

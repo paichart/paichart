@@ -28,6 +28,13 @@ if (!process.env.LOG_LEVEL) process.env.LOG_LEVEL = 'warn';
 import { computeQuoteFidelity } from '../../lib/agents/harness/quote-fidelity';
 import { fencedBlockLines } from '../../lib/agents/harness/dialect-lint';
 import { RECORDED_FILE_TOOLS } from './recorded-tools';
+import { GIT_FILE_READ_TOOL } from '../../lib/agents/harness/held-bytes/git-read-call';
+
+/** The tools a quote can pair with: the recorded file tools PLUS the Git file source read. L-T1 crib (2026-10-21): RECORDED_FILE_TOOLS
+ *  derives from the observability rig's descriptors only, so a `github-service.get_file_contents` quote was never paired and read
+ *  "not faithful" whatever its content. Kept separate from RECORDED_FILE_TOOLS on purpose — that list also keys recorded-tier
+ *  validity, which a fixture-served Git read must not enter. */
+export const QUOTE_FILE_TOOLS: readonly string[] = [...new Set([...RECORDED_FILE_TOOLS, GIT_FILE_READ_TOOL])];
 
 /** The label line the strict reading prepends — matches VERBATIM_CLAIM_RE, carries no negation. */
 export const STRICT_LABEL = 'Strict reading: verbatim.';
@@ -86,7 +93,7 @@ export interface QuoteScore {
 export function scoreHarvesterQuotes(text: string, toolCalls: unknown): QuoteScore {
   const lines = text.split('\n');
   const tcs = Array.isArray(toolCalls) ? toolCalls : [];
-  const byTool = new Map(RECORDED_FILE_TOOLS.map((t) => [t, tcs.filter((tc) => innerToolOf(tc) === t)]));
+  const byTool = new Map(QUOTE_FILE_TOOLS.map((t) => [t, tcs.filter((tc) => innerToolOf(tc) === t)]));
   const blocks: BlockScore[] = [];
   for (const b of blocksOf(text)) {
     const keep = new Set(b.lines);
@@ -136,7 +143,6 @@ export function scoreHarvesterQuotes(text: string, toolCalls: unknown): QuoteSco
 }
 
 if (require.main === module) {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { runReadOnlySql } = require('./snapshot') as typeof import('./snapshot');
   const ids = (process.argv[2] ?? '').split(',').filter(Boolean);
   const asJson = process.argv.includes('--json');

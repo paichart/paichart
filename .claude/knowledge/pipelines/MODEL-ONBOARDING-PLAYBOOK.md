@@ -182,7 +182,7 @@ rejected with their reasons (Opus-medium, revise mode), in the open register (`M
    SANCTIONED TIER, not that it equals the seed's model. It read 0 STALE BEFORE the reseed (filed
    FRESHNESS-MODEL-BLIND-SPOT). Also read its 📌 overrides section: a task with a pinned `metadata.modelParameters`
    is not reached by the reseed.
-7. **Record the series cut in CLAUDE.md** with the timestamp (2026-10-07 09:14:14Z). Name every series it splits:
+7. **Record the series cut in the series-cut ledger** (`.claude/knowledge/pipelines/SERIES-CUT-LEDGER.md`; was CLAUDE.md until 2026-10-29) with the timestamp (2026-10-07 09:14:14Z). Name every series it splits:
    refusal rate, cost/tokens/duration, the reviewer soak (the reviewer's input changes), form-check rates, and the
    non-literal and marker-placement rates.
 
@@ -242,8 +242,8 @@ production change made outside this playbook. Bring it under the playbook as fol
 | 3 | Decision rule pre-registered, dry-run controls pass, arms run | paid | `runs/<stamp>/summary.md` |
 | 4 | Every refusal read; approvals corroborated; length audited; cost per leg per domain | $0 | register entry |
 | 5 | Owner decision recorded with rejected arms | $0 | register `MODEL-CHOICE` |
-| 6 | anthropicModels + tier + all owning seeds + deploy + reseed + row verified + series cut | $0 | `agent_templates` row, CLAUDE.md |
-| 6b | (GUI switch only) cut recorded at once; live row read; own tier; Phases 0–5 still owed in the register | $0 | CLAUDE.md, register |
+| 6 | anthropicModels + tier + all owning seeds + deploy + reseed + row verified + series cut | $0 | `agent_templates` row, series-cut ledger |
+| 6b | (GUI switch only) cut recorded at once; live row read; own tier; Phases 0–5 still owed in the register | $0 | series-cut ledger, register |
 | 7 | Served model, reflection fact empty, refusal/cost vs prediction | $0 | first production legs |
 
 **Cost of the 2026-10-07 onboarding**: lab ≈ $16.78 (observability) + ≈ $31.69 (cross-domain) + the stopped

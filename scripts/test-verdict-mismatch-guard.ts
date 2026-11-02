@@ -52,10 +52,10 @@ function mockPrisma(siblingTypes: string[], reviewerApproved: boolean, extraExec
   };
 }
 
-async function run(opts: { outcome: string; siblingTypes: string[]; reviewerApproved: boolean; extra?: StubExecution[] }) {
+async function run(opts: { outcome: string; siblingTypes: string[]; reviewerApproved: boolean; extra?: StubExecution[]; heldEdit?: Record<string, unknown> }) {
   const pendingMerge: Record<string, any> = {
     pipelineStageId: STAGE,
-    qualityGate: { outcome: opts.outcome, reviewerScore: 42 },
+    qualityGate: { outcome: opts.outcome, reviewerScore: 42, ...(opts.heldEdit ? { heldEdit: opts.heldEdit } : {}) },
   };
   await annotateQualityGateVerdictMismatch(
     mockPrisma(opts.siblingTypes, opts.reviewerApproved, opts.extra) as any,
@@ -131,6 +131,18 @@ async function run(opts: { outcome: string; siblingTypes: string[]; reviewerAppr
     const g = await run({ outcome: 'approved', siblingTypes: ['ACTION'], reviewerApproved: true,
       extra: [{ id: 'ex-new', taskId: 'sib-0', createdAt: new Date(1_800_000_000_000), result: reject }] });
     assert(g.verdictMismatch === true, `expected a mismatch: ${JSON.stringify(g)}`);
+  });
+
+  // ── Phase 10 panel F7 (AR-S2, inventory P-5): every obs leg now carries heldEdit — PROGRAM tier must win ─────────
+  const HELD = { state: 'applied', reviewerSaw: 'rendered', agentOutcome: 'approved', forced: false, inScope: true };
+  await test('VMG-P5a a held obs leg in a PROGRAM stage is tiered `program`, and the dangerous direction is still flagged', async () => {
+    const g = await run({ outcome: 'approved', siblingTypes: ['PIPELINE', 'PIPELINE', 'ACTION'], reviewerApproved: false, heldEdit: HELD });
+    assert(g.verdictMismatchTier === 'program', `expected program, got ${g.verdictMismatchTier}`);
+    assert(g.verdictMismatch === true, 'dangerous direction must be flagged');
+  });
+  await test('VMG-P5b a held leg at PIPELINE tier keeps the held sub-frame `pipeline-held-variant`', async () => {
+    const g = await run({ outcome: 'approved', siblingTypes: ['ACTION'], reviewerApproved: false, heldEdit: HELD });
+    assert(g.verdictMismatchTier === 'pipeline-held-variant', `expected pipeline-held-variant, got ${g.verdictMismatchTier}`);
   });
 
   await test('VMG-8 tier detection is deterministic: ACTION-only siblings ⇒ pipeline tier', async () => {

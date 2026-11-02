@@ -23,7 +23,9 @@
  */
 
 import { sanitizeLLMForMarkdown } from './execution-artifacts';
+import { openFenceOf } from '@/lib/utils/markdown-fence';
 import { PLATFORM_WARNINGS_HEADING, APPLY_PLACEHOLDER_WARNING_ID } from '@/lib/agents/harness/apply-block-placeholder';
+import { heldEditOutcomeLine } from '@/lib/agents/harness/held-edit-carrier';
 
 export const WARNINGS_SECTION_HEADING = '## Reviewer warnings (non-blocking)';
 
@@ -59,15 +61,10 @@ function reviewerBlock(r: R): string[] {
   return [`Reviewer execution \`${ex}\`:`, ...lines];
 }
 
+
 function closeOpenFence(body: string): string {
-  // Track WHICH fence opened the block (sec-ops F6) and close with the same characters. trimEnd(), never /\s*$/:
-  // that regex is quadratic on long whitespace runs and runs inside the terminal transaction (sec-ops F1).
-  let fence: string | null = null;
-  for (const line of body.split('\n')) {
-    const m = line.match(/^[ \t]{0,3}(```|~~~)/);
-    if (!m) continue;
-    if (fence === null) fence = m[1]; else if (m[1] === fence) fence = null;
-  }
+  // trimEnd(), never /\s*$/: that regex is quadratic on long whitespace runs and runs inside the terminal transaction (sec-ops F1).
+  const fence = openFenceOf(body);
   return fence !== null ? `${body.trimEnd()}\n${fence}\n` : body;
 }
 
@@ -158,4 +155,14 @@ export function appendApplyBlockPlaceholderSection(
     `literal value, and a passing validation step does not show such a block is safe to apply as written.`;
   const body = closeOpenFence(reportMd).trimEnd();
   return { content: `${body}\n\n---\n\n${PLATFORM_WARNINGS_HEADING}\n\n${line}\n`, appended: 1 };
+}
+
+/**
+ * PLATFORM-HELD-BYTES Stage B V-9 (PC S-18): the leg deliverable's "Platform outcome" line, present IFF the carrier forced the
+ * leg's approval (`qualityGate.heldEdit.forced`). Same precedent and placement as the Platform-warnings append. Facts only.
+ */
+export function appendHeldEditOutcomeSection(reportMd: string, heldEdit: unknown): { content: string; appended: number } {
+  const line = heldEditOutcomeLine(heldEdit);
+  if (!line) return { content: reportMd, appended: 0 };
+  return { content: `${closeOpenFence(reportMd).trimEnd()}\n\n---\n\n${line}\n`, appended: 1 };
 }

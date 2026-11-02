@@ -298,7 +298,7 @@ test('LANE: a DELIBERATE no-check and a COULD-NOT-check must not share a disposi
 test('LANE: the list is a DENYLIST — an unknown protocol is ADJUDICATED, never silently skipped', () => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { isDesiredStateLane } = require('../lib/agents/harness/rollback-containment');
-  for (const p of ['observability-config', 'observability-config-protocol', 'network-provisioning',
+  for (const p of ['observability-config', 'observability-config-protocol', 'observability-config-held', 'observability-config-held-protocol', 'network-provisioning',
                    'network-provisioning-protocol', 'some-future-protocol', null, undefined, '']) {
     if (isDesiredStateLane(p)) {
       throw new Error(`${p} must NOT be treated as a desired-state lane — a coverage gap has to surface as visible escalation, not silence`);
@@ -375,6 +375,81 @@ test('ARM-4: an UNRESOLVABLE lane is ADJUDICATED, never silently skipped', async
   );
   if (fact.reason === 'lane-not-supported') {
     throw new Error('an unknown protocol must fall through to adjudication — a coverage gap has to surface, not go silent');
+  }
+});
+
+// ── K-4 (held-k8s 1f, 2026-10-18; EF S-5, AE S-4): desired-state ∧ held-capable NEVER reaches the content arms ─────────
+// Step 1 has no held-capable desired-state lane (k8s joins HELD_CAPABLE_PROTOCOLS at step 3), so the predicate is injected
+// through the test seam. Every arm below uses stubPrisma, whose read stub THROWS on a harvest read — a fall-through into the
+// content arms fails these tests loudly rather than taking `no-harvest-tool-results`.
+const K8S_LEG = 'Scale the web tier (protocol: kubernetes-gitops)';
+const K8S_HELD = { isHeldCapable: (p: string | null | undefined) => !!p && /kubernetes-gitops|observability-config/.test(p) };
+const HELD_ONLY_PKG = ['## Held File Edits', '', '<<<<<<< SEARCH H1', 'replicas: 2', '=======', 'replicas: 3', '>>>>>>> REPLACE', '',
+  '## Held File Rollback', '', 'restore H1', ''].join('\n');
+// The directive is FENCED here: only a fenced `restore H<n>` is classified as rollback content, so only it is EXCLUDED
+// (`held-restore-directive`) — the same rule as the obs lane (test-held-variant-protocol V-8a).
+const FENCED_HELD_PKG = HELD_ONLY_PKG.replace('restore H1', '```\nrestore H1\n```');
+const MIXED_PKG = [FENCED_HELD_PKG, '## 3. Rollback Plan', '', '```yaml', 'spec:', '  replicas: 2', '  minReadySeconds: 10', '```', '',
+  '**Command:**', '```bash', 'git revert <sha>', '```', ''].join('\n');
+const TWO_DIRECTIVES_PKG = HELD_ONLY_PKG + 'restore H9\n';
+
+test('K4-1 all held: every rollback directive restores a BASE-held handle and nothing else remains ⇒ restore-is-held-base', async () => {
+  const fact = await computeRollbackContainmentFact(stubPrisma({ stageId: 's1', legTitle: K8S_LEG }),
+    { taskId: 'a1', deliverable: HELD_ONLY_PKG, heldRollbackHandles: ['H1'] }, K8S_HELD);
+  expectEq(fact.reason, 'restore-is-held-base', 'reason: ');
+  expectEq(fact.heldRestores, 1, 'heldRestores: ');
+  expectEq((fact.rollbackDisposition as Record<string, unknown>).disposition, 'benign');
+});
+
+test('K4-2 mixed: a held restore beside a fenced desired-state block + git revert ⇒ lane-not-supported, never adjudicated', async () => {
+  if (scopeRestoreLines(MIXED_PKG).lines.length === 0) throw new Error('fixture drift: the mixed package must keep a non-directive line in scope');
+  const fact = await computeRollbackContainmentFact(stubPrisma({ stageId: 's1', legTitle: K8S_LEG }),
+    { taskId: 'a1', deliverable: MIXED_PKG, heldRollbackHandles: ['H1'] }, K8S_HELD);
+  expectEq(fact.reason, 'lane-not-supported', 'reason: ');
+  expectEq(fact.lane, 'kubernetes-gitops-protocol', 'lane: ');
+  expectEq(fact.heldRestores, 1, 'heldRestores nested (held context exists): ');
+  expectEq((fact.excluded as Record<string, number>)['held-restore-directive'], 1, 'held-restore-directive excluded: ');
+  expectEq((fact.rollbackDisposition as Record<string, unknown>).disposition, 'benign');
+});
+
+test('K4-3 partly unheld: `restore H1` (held) beside `restore H9` (not held) ⇒ lane-not-supported', async () => {
+  const fact = await computeRollbackContainmentFact(stubPrisma({ stageId: 's1', legTitle: K8S_LEG }),
+    { taskId: 'a1', deliverable: TWO_DIRECTIVES_PKG, heldRollbackHandles: ['H1'] }, K8S_HELD);
+  expectEq(fact.reason, 'lane-not-supported', 'reason: ');
+  expectEq(fact.heldRestores, 1, 'heldRestores: ');
+});
+
+test('K4-4 none: no directive and no held context ⇒ lane-not-supported, BYTE-IDENTICAL to the not-held-capable stamp', async () => {
+  const held = await computeRollbackContainmentFact(stubPrisma({ stageId: 's1', legTitle: K8S_LEG }),
+    { taskId: 'a1', deliverable: PROCEDURAL_PKG, heldRollbackHandles: [] }, K8S_HELD);
+  const plain = await computeRollbackContainmentFact(stubPrisma({ stageId: 's1', legTitle: K8S_LEG }),
+    { taskId: 'a1', deliverable: PROCEDURAL_PKG });
+  expectEq(held.reason, 'lane-not-supported', 'reason: ');
+  expectEq('heldRestores' in held, false, 'no held context ⇒ no heldRestores key: ');
+  expectEq(JSON.stringify(held), JSON.stringify(plain), 'stamp bytes (step 3 must not move a stored k8s Author with no held context): ');
+});
+
+// held-terraform step 3 (the join, terraform-iac 1.15.0): K4-5 INVERTED — it pinned terraform as desired-state and NOT held-capable
+// through step 2. With the DEFAULT predicate (HELD_CAPABLE_PROTOCOLS, nothing injected) terraform now takes the held-first branch.
+test('K4-5 terraform is desired-state AND held-capable (the join): the default predicate takes the held-first branch', async () => {
+  const TF_LEG = 'S3 bucket policy (protocol: terraform-iac)';
+  const mixed = await computeRollbackContainmentFact(stubPrisma({ stageId: 's1', legTitle: TF_LEG }),
+    { taskId: 'a1', deliverable: MIXED_PKG, heldRollbackHandles: ['H1'] });
+  expectEq(mixed.reason, 'lane-not-supported', 'mixed reason: ');
+  expectEq(mixed.heldRestores, 1, 'terraform now carries the held key (held context exists): ');
+  expectEq((mixed.excluded as Record<string, number>)['held-restore-directive'], 1, 'held-restore-directive excluded: ');
+  const held = await computeRollbackContainmentFact(stubPrisma({ stageId: 's1', legTitle: TF_LEG }),
+    { taskId: 'a1', deliverable: HELD_ONLY_PKG, heldRollbackHandles: ['H1'] });
+  expectEq(held.reason, 'restore-is-held-base', 'all-held reason: ');
+  const none = await computeRollbackContainmentFact(stubPrisma({ stageId: 's1', legTitle: TF_LEG }),
+    { taskId: 'a1', deliverable: PROCEDURAL_PKG, heldRollbackHandles: [] });
+  expectEq('heldRestores' in none, false, 'no held context ⇒ no held key (a stored pre-join terraform Author is unmoved): ');
+});
+
+test('K4-6 ROLLBACK_FACT_LANES = HELD_CAPABLE_PROTOCOLS ∪ {retired variant token} (the union keeps G3-era legs)', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'lib', 'agents', 'harness', 'context-chainer.ts'), 'utf8');
+  if (!/\[\.\.\.HELD_CAPABLE_PROTOCOLS, HELD_VARIANT_PROTOCOL\]/.test(src)) {
+    throw new Error('ROLLBACK_FACT_LANES must be derived as the UNION of HELD_CAPABLE_PROTOCOLS and HELD_VARIANT_PROTOCOL');
   }
 });
 
@@ -513,7 +588,8 @@ test('CHAIN-2: the carry is LANE-GUARDED — never a bare pass-through', () => {
   if (/rollbackContainment:\s*parsed\.rollbackContainment/.test(chainerSrc)) {
     throw new Error('the carry is an unguarded pass-through — the lane ruling has been bypassed');
   }
-  if (!/resolveRollbackLane\(depTask\)/.test(chainerSrc)) {
+  // `, db` since 2026-10-15 (PLATFORM-HELD-BYTES V-0): the guard reads through the chainer's injected client.
+  if (!/resolveRollbackLane\(depTask(?:, db)?\)/.test(chainerSrc)) {
     throw new Error('the lane guard is not consulted at the push site');
   }
 });

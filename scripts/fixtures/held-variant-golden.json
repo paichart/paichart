@@ -1,0 +1,166 @@
+{
+  "base": {
+    "name": "observability-config-protocol",
+    "version": "1.11.0",
+    "sha256": "c0ad8475f34529305c93c1ca928b2450f5f86ccc9a6fbe7ba5e53b2a33875628",
+    "chars": 41368
+  },
+  "roles": {
+    "config_change_author": {
+      "sha256": "351a6c16c5b2fd29ac78c784803399ced3db8f6bb27f16848956380ee806fbef",
+      "chars": 11518
+    },
+    "change_reviewer": {
+      "sha256": "c641a6ee0f0be516de5bc6226c6ffd6abcc0ade6fdc8e4a2938e9b4be966ca7f",
+      "chars": 17315
+    },
+    "infra_change_architect": {
+      "sha256": "3efd092b2b8f3b662a65f6bc0f35cd65edcfcd66f9be76f81c04278ea3eb846e",
+      "chars": 3226
+    },
+    "infra_state_harvester": {
+      "sha256": "207a778532535019a9513fab7783ab982a2214bf048c204ead3e8902bc655cbf",
+      "chars": 4812
+    }
+  },
+  "templates": {
+    "Observability State Harvester": {
+      "sha256": "d299a6b4ec8615b771310cbd9129e12490dc1ee0af0f9cd6cc141fc608b1b4d9",
+      "promptTemplateSha256": "425663d7b16e2c81d3a0f0cadb5ed8faeb05282ae4de6dd9bf5b2a365b5e86a6",
+      "model": "claude-sonnet-5",
+      "maxTokens": 48000,
+      "maxToolTurns": null,
+      "constraints": [
+        "Protocol First",
+        "Stay in Phase",
+        "Read-Only Stack Contact"
+      ]
+    },
+    "Observability Change Architect": {
+      "sha256": "8d461e87166bf5d7777b211c6c92bcf64055499ad04d8de7d4ec9b7622522a5d",
+      "promptTemplateSha256": "a2c2be990bf2ba6b90968a06aa3f1924533f0ef6e4f373053fc06b51063338a5",
+      "model": "claude-sonnet-5",
+      "maxTokens": 48000,
+      "maxToolTurns": null,
+      "constraints": [
+        "Protocol First",
+        "Stay in Phase",
+        "Read-Only Stack Contact"
+      ]
+    },
+    "Observability Config Rollback Author": {
+      "sha256": "bcb303b7fcacba844c6a0215f182f29382e8a968975b20c86f2e1e5168c239ce",
+      "promptTemplateSha256": "3b3bdce905a8c3a0fc8a575990d3eaa2ca46cdf91c91e8969c43f860b579bcc4",
+      "model": "claude-opus-5-5",
+      "maxTokens": 48000,
+      "maxToolTurns": null,
+      "constraints": [
+        "Protocol First",
+        "Stay in Phase",
+        "Read-Only Stack Contact",
+        "Held Files: Edits Only"
+      ]
+    },
+    "Observability Change Reviewer": {
+      "sha256": "58b6e96aa7ec29da7243a68b2519335a132d493f4bf3cd615371933da43e3755",
+      "promptTemplateSha256": "6799a196fc010421efbbfa1405071ca04794293b027bfea7d74ed44d14c51880",
+      "model": "claude-sonnet-5",
+      "maxTokens": 48000,
+      "maxToolTurns": null,
+      "constraints": [
+        "Protocol First",
+        "Stay in Phase",
+        "Read-Only Stack Contact",
+        "Held Diff: Unaccounted Lines Block"
+      ]
+    },
+    "Program Integration Reviewer": {
+      "sha256": "a6c3951d089ae46020e45a18908ff7aa2c09e095207f726d101e886ae42c42d2",
+      "promptTemplateSha256": "6799a196fc010421efbbfa1405071ca04794293b027bfea7d74ed44d14c51880",
+      "model": "claude-sonnet-5",
+      "maxTokens": 48000,
+      "maxToolTurns": null,
+      "constraints": [
+        "Terminal Verdict",
+        "Facts Over Claims",
+        "No Platform Re-Checks",
+        "Leg Warnings Are Not Findings",
+        "Held Edits Are The Package"
+      ]
+    },
+    "Value-Chain Program Integration Reviewer": {
+      "sha256": "4b605aea6cdc7507ed6838f447e015a186646a829d7b9e7569dcbb524ecf5396",
+      "promptTemplateSha256": "6799a196fc010421efbbfa1405071ca04794293b027bfea7d74ed44d14c51880",
+      "model": "claude-sonnet-5",
+      "maxTokens": 48000,
+      "maxToolTurns": null,
+      "constraints": [
+        "Terminal Verdict",
+        "Facts Over Claims",
+        "No Platform Re-Checks",
+        "Leg Warnings Are Not Findings",
+        "Held Edits Are The Package"
+      ]
+    }
+  },
+  "variant": {
+    "name": "observability-config-held-protocol",
+    "version": "1.0.0",
+    "sha256": "bd6179d6cd136abe360472336b01e7528dde51ca036c95d3201f70b477f110c3",
+    "chars": 254,
+    "baseSha256": "c0ad8475f34529305c93c1ca928b2450f5f86ccc9a6fbe7ba5e53b2a33875628",
+    "deltaChars": -41114,
+    "templates": {
+      "Observability Held State Harvester": {
+        "sha256": "da0782abd5f78a16d8f82f7f644e04c32335405aae15cd99d6303f80711122af",
+        "promptTemplateSha256": "425663d7b16e2c81d3a0f0cadb5ed8faeb05282ae4de6dd9bf5b2a365b5e86a6",
+        "model": "claude-sonnet-5",
+        "maxTokens": 48000,
+        "maxToolTurns": null,
+        "constraints": [
+          "Protocol First",
+          "Stay in Phase",
+          "Read-Only Stack Contact"
+        ]
+      },
+      "Observability Held Change Architect": {
+        "sha256": "79e41f6ba52e3d63b0b2239f54c27231c65f078dabfeb92edefcc61e2680a289",
+        "promptTemplateSha256": "a2c2be990bf2ba6b90968a06aa3f1924533f0ef6e4f373053fc06b51063338a5",
+        "model": "claude-sonnet-5",
+        "maxTokens": 48000,
+        "maxToolTurns": null,
+        "constraints": [
+          "Protocol First",
+          "Stay in Phase",
+          "Read-Only Stack Contact"
+        ]
+      },
+      "Observability Held Config Rollback Author": {
+        "sha256": "d72245f232cc80ff199b3d1f471948c8ff1b48c352ab28bc0eceb92d1e40a849",
+        "promptTemplateSha256": "3b3bdce905a8c3a0fc8a575990d3eaa2ca46cdf91c91e8969c43f860b579bcc4",
+        "model": "claude-opus-5-5",
+        "maxTokens": 48000,
+        "maxToolTurns": null,
+        "constraints": [
+          "Protocol First",
+          "Stay in Phase",
+          "Read-Only Stack Contact",
+          "Held Files: Edits Only"
+        ]
+      },
+      "Observability Held Change Reviewer": {
+        "sha256": "aae09d8c418e1aeb82bb163417b4ef356d0fdae08c56880d200555d33fb43576",
+        "promptTemplateSha256": "6799a196fc010421efbbfa1405071ca04794293b027bfea7d74ed44d14c51880",
+        "model": "claude-sonnet-5",
+        "maxTokens": 48000,
+        "maxToolTurns": null,
+        "constraints": [
+          "Protocol First",
+          "Stay in Phase",
+          "Read-Only Stack Contact",
+          "Held Diff: Unaccounted Lines Block"
+        ]
+      }
+    }
+  }
+}

@@ -33,7 +33,7 @@ grep -c "applySystemPromptInjectionsWithFact(" app/api/pov/agent/execute/stream/
 # thin wrapper nothing calls). A drifted grep returns zero and READS AS CLEAN, so the health-run
 # would have reported the shared tail intact without ever testing it (Protocol 11 Part C).
 
-# B. Protocol injection (metadata.loadProtocols → ALL cap-10 / metadata.protocol → ONE named) + the
+# B. Protocol injection (metadata.loadProtocols 'composed' → base + stamped ONE / metadata.protocol → ONE named; `true` load-all RETIRED 2026-10-16, throws) + the
 # Axis-5 constraints block — both in the shared tail; the adapters only pass templateMetadata/constraints.
 grep -n "loadProtocols\|templateMetadata?.protocol\|renderConstraintsBlock\|harnessContext" lib/services/execution-system-prompt.ts | head
 # Tail layout (execution-system-prompt.ts:24): protocols → harness context → HEAD → constraints → scope self-check.
@@ -1034,3 +1034,32 @@ grep -c "KNOWN_STALE_ROLE_QUOTES" scripts/test-validation-shape-contract.ts     
 npm run test:validation-shape-contract                                              # mode-7 pairing + quote-survives pins; expect exit 0
 ```
 Context: `cline_docs/reviews/pattern-h-corpus-measure-2026-10-03/`; specialist § "Pattern (h) text changes you now own".
+
+## terraform-iac 1.15.0 — the held join text (DEPLOYED 2026-10-21; expectation run before it was written)
+
+```bash
+grep -cF '${heldFilesSection(TF_HELD_EDIT_EXAMPLE' scripts/seed-protocol-prompts.ts   # expect 1 — the domain passes its example + intro; the SHARED held text is never edited
+```
+Next terraform text change: register TF-TEXT-BATCH-NEXT (one batch, one lab). Ledger LL-T-07, LL-T-08.
+
+## terraform-iac 1.16.0 — TF-TEXT-BATCH-NEXT (BUILT 2026-10-22, lab PASSED at `792d5733…`; each expectation run before it was written)
+
+```bash
+grep -c "never register, update or delete it" scripts/seed-protocol-prompts.ts   # expect 3 — k8s SF-5 + terraform item 1 (github-service is not part of the self-provision lifecycle) + network-provisioning 1.23.0 (held-network step 2, `947e5f475`: a service already registered in the hub is called as it is)
+grep -c "Never drop the ref, and never substitute the default branch for it." scripts/seed-protocol-prompts.ts   # expect 1 — owner 3c: the Phase 0 brief COPIES a named ref; the leg is forced needs-revision
+grep -c "this path at that ref is not readable" scripts/seed-protocol-prompts.ts   # expect 0 — the retired ADDENDUM (g) op told the harness to DROP the ref (the K8S-OFFREF-SUBSTITUTE risk)
+grep -c "argument you did not read could supply" scripts/seed-protocol-prompts.ts   # expect 1 — item 2 (TF-MERGE-KEY-ATTRIBUTION)
+grep -c "a wrong count either rejects the hunk or, on the last hunk, silently drops the lines past the count" scripts/seed-protocol-prompts.ts   # expect 1 — item 5 (TF-PROTOCOL-GIT-APPLY-CLAIM, protocol half)
+```
+Item 4 (T-LQ "stale") was DROPPED after its gates missed — its own lab, register TF-TLQ-STALE-WORDING. Item 5b (the form-correction
+prompt's matching sentence) was DEFERRED: that prompt is byte-pinned to a paid replay (`test:form-correction` M2), so a wording change
+needs `replay:form-correction --spend` first — check that pin before folding any sentence into `form-correction.ts`.
+
+## network-provisioning 1.25.0 — the held join text (DEPLOYED 2026-10-27 00:50:42.743Z; every expectation run before it was written)
+
+```bash
+grep -c "heldFilesSection(NET_HELD_EDIT_EXAMPLE, NET_HELD_FILES_INTRO)" scripts/seed-protocol-prompts.ts   # expect 1 — the domain passes its example + intro; the SHARED held text is never edited
+grep -c "export const NET_HELD_FILES_INTRO" lib/agents/harness/held-bytes/variant-protocol.ts   # expect 1 — the network intro (each device's declared Git file, else its running config)
+```
+HOWTO-use-pipeline-harness mirrors the join (2.8.10 live; 2.8.11 local at the close) — Protocol 11 Pass 5 mirror of the user guide.
+Record: `cline_docs/reviews/held-network-2026-10-22/NETWORK-CLOSEOUT.md`.

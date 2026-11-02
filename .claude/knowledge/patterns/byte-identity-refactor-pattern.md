@@ -4,6 +4,7 @@
 byte-identical after every step, a 2,196-task production replay with zero changed facts). Needs a second build to
 go higher.
 **Used by**: Protocol 15 (`protocols/isolated-variant-build-protocol.md`) phases 4–6.
+**Further instance (small, 2026-10-19, held-k8s step 3)**: a seed refactor (rows extracted into an importable `buildTemplateRow`) proved a NO-OP by comparing every built row with the LIVE prod row — `md5` for text columns, PARSED comparison for jsonb (Postgres re-orders keys, so a text hash of jsonb differs on identical data); and a shared-text parameterisation (`heldFilesSection(example)`) proved by the golden: 2 intended texts moved, 45 byte-identical including the original consumer. Records: `cline_docs/reviews/held-k8s-2026-10-18/STEP3-BUILD.md`.
 
 ## Problem
 
@@ -39,10 +40,13 @@ For fact-producing code, replay the shipping registry over the real population �
 children — at the BASE commit and at the new commit, back to back, against production through a session that cannot
 write (`default_transaction_read_only=on`; demonstrate a refused write first). Accept zero changed lines; account for
 every ADDED line exactly (value-chain: 1,731 added = one informational "does not apply" line per leaf task). Re-run
-after any later edit to the module. **Harness: `scripts/replay-nets-byte-identity.sh`** — it fetches the prod URL into
-memory only, opens the tunnel, forces and PROVES read-only, refuses to run with a run in flight, builds the population,
-runs both passes (re-using a complete base pass), resumes a cut-off pass, and prints the removed / unexplained-added /
-allowed-added accounting. It is a dry run of the shipping code: it shows what WOULD be stamped and writes nothing; it
+after any later edit to the module. **Harness: `scripts/replay-nets-byte-identity.sh`** — since 2026-10-26 (NETS-REPLAY-FAST-OFFLINE) it takes ONE
+read-only snapshot of production (prod URL in memory only, read-only forced and PROVED, one `REPEATABLE READ` transaction, no
+credential/configuration columns), restores it into a local scratch database, and runs both passes against that — so no pipeline
+needs pausing and a 3,087-task pass takes minutes, not an hour; a table outside the snapshot is dropped and any errored statement
+fails the pass (fail loud); a base pass is cached per commit + ids + snapshot; `--ids` / `--scope` narrow it; the snapshot expires
+after 24 h (NETS-REPLAY-SNAPSHOT-RETENTION). It builds the population and prints the removed / unexplained-added / allowed-added
+accounting (how to read it: forensics guide §7h). It is a dry run of the shipping code: it shows what WOULD be stamped and writes nothing; it
 cannot exercise a shape production does not have yet.
 
 ## Pitfalls (each observed)

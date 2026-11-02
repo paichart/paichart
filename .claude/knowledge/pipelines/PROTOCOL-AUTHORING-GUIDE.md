@@ -176,6 +176,16 @@ by competent agents for good reasons, the instruction is wrong — reshape it (e
 artifact is unusable; declare-and-proceed when it is merely different; an UNSTATED deviation becomes
 the defect) rather than restating it louder.
 
+### 2b. Three rules from the held-network windows (2026-10-24/25)
+- **Put a rule where the agent writes the output it governs.** The harness's brief beats the protocol (LL-T-07, LL-N-19): a negative
+  rule ("never write a brief that narrows the device read") failed 1 of 4; a POSITIVE instruction at the brief-writing point ("for
+  each device-read line, write: read the whole running configuration once") held 4 of 4. Likewise an exception belongs INSIDE the
+  sentence it qualifies ("quote exactly as returned, except that a secret value is written as `<value>`"), not in a separate paragraph.
+- **Write forward:** state only what is true before AND after the next platform step (OQ-5, LL-N-24) — "a ref outside the declared pin
+  is refused" holds now and when the platform force lands; "the leg stops" was false the day it shipped.
+- **Do not ask a model to compare two artifacts** where a mechanical comparison is possible — quote both exactly as evidence and leave
+  the comparison to a platform fact (LL-N-08; the model missed a stanza move 6/6 and once rebuilt one side).
+
 ## 3. What is mechanically enforced vs prose-only
 
 ⚠️ **Prose-only is more of the corpus than it looks, and an unenforced MUST reads exactly like an

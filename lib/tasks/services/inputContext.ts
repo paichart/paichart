@@ -67,6 +67,8 @@ export async function mergeTaskInputContext(
  * program plan, `plan-spawn-carry.ts`), so the reason is no longer capability: it is POLICY (Q2,
  * re-decided at E) — a leg created without its contract signals broken wiring, and that must stay
  * loud. The write itself now enforces the scope in-statement (`writeInterfaceContractIfAbsent`).
+ * Q2 NARROWED (2026-10-17): the program's own root harness door is healed AT CREATE (`task-create-handler.ts`,
+ * `arm:'create-absent'`), never here — this function's NON-PIPELINE scope is unchanged.
  */
 export async function inheritInterfaceContractIfAbsent(
   taskId: string,

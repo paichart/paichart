@@ -91,7 +91,7 @@
  * NOTE: control/zero-width chars are expressed as \uXXXX inside RegExp() strings so this
  * source file stays pure-ASCII (no invisible bytes).
  */
-import { detectPromptInjection } from '@/lib/security/prompt-injection-prevention';
+import { detectPromptInjection, INJECTION_PATTERNS } from '@/lib/security/prompt-injection-prevention';
 
 // Zero-width + bidi controls that hide/obfuscate injection tokens.
 const ZERO_WIDTH_BIDI = new RegExp('[\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u206F\\uFEFF]', 'g');
@@ -270,3 +270,36 @@ export function isR9OperatorEvent(classes: readonly string[] | undefined): boole
 const PIPELINE_ORDER: RewriteClass[] = [
   'nfkc', 'zero-width-bidi', 'ansi', 'control', 'quarantine-tag', 'injection-pattern', 'emptied', 'unclassified',
 ];
+
+/**
+ * R9's VERSION (PLATFORM-HELD-BYTES Stage B push 1, P1-2, 2026-10-14). Part of a held VIEW's key
+ * (`held_views.r9Version`): a view is `sanitizeChainedOutput(base).text`, so ANY change to what this function
+ * emits for some input changes the view. BUMP IT whenever that output can change: a local rule (ZERO_WIDTH_BIDI,
+ * CONTROL_CHARS, ANSI_CSI, OSC, PRIOR_OUTPUT_HEAD, the angle-quote stand-ins, NFKC, the marker or full-block text),
+ * an INJECTION_PATTERNS entry (source, flags or category), or the step order. test-security-invariants.ts §I pins a
+ * fingerprint (rule sources + outputs over a golden corpus incl. NFKC / zero-width inputs) per version and fails when
+ * they move without a bump. Nothing stamped today carries it; R9 switched off stamps `'none'` (r9VersionInEffect).
+ * History: paichart.r9/1 = the sanitizer as of 2026-10-14 (F9 + F9-s2).
+ */
+export const R9_VERSION = 'paichart.r9/1';
+
+/** The rules this module applies, in pipeline order -- input to the §I version fingerprint (read-only copy: the
+ *  RegExp objects stay private, since global regexes carry `lastIndex` state). */
+export const R9_RULE_SOURCES: readonly string[] = Object.freeze([
+  'nfkc:NFKC',
+  `zero-width-bidi:/${ZERO_WIDTH_BIDI.source}/${ZERO_WIDTH_BIDI.flags}`,
+  `ansi-csi:/${ANSI_CSI.source}/${ANSI_CSI.flags}`,
+  'ansi-osc:ESC]…(BEL|ESC\\)',
+  `control:/${CONTROL_CHARS.source}/${CONTROL_CHARS.flags}`,
+  `quarantine-tag:/${PRIOR_OUTPUT_HEAD.source}/${PRIOR_OUTPUT_HEAD.flags}:${SINGLE_LT}${SINGLE_GT}`,
+  ...INJECTION_PATTERNS.map((p) => `injection:${p.category}:/${p.pattern.source}/${p.pattern.flags}`),
+  'marker:[NEUTRALIZED-INJECTION:<category>]',
+  'emptied:[NEUTRALIZED-INJECTION:full-block]',
+  `order:${PIPELINE_ORDER.join(',')}`,
+]);
+
+/** The r9Version a stamp records: R9_VERSION when R9 runs (CONNECTED_OUTPUT_SANITIZE_ENABLED=true, the same gate as
+ *  both call sites), else 'none' -- never the constant for text R9 did not touch. */
+export function r9VersionInEffect(): string {
+  return process.env.CONNECTED_OUTPUT_SANITIZE_ENABLED === 'true' ? R9_VERSION : 'none';
+}

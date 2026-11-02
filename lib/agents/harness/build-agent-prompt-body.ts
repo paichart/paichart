@@ -22,6 +22,7 @@
  */
 import { mcpLogger } from '@/lib/logger';
 import { renderPipelineContextSection } from './render-pipeline-context';
+import { namedProtocolOfTemplate } from './protocol-marker-mandates';
 
 const logger = mcpLogger.child({ module: 'BuildAgentPromptBody' });
 
@@ -211,7 +212,9 @@ export function buildAgentPromptBody(task: any, config: any, context: any): stri
   }
 
   // §6: CHAINED CONTEXT — inputContext from previous tasks (shared renderer, D4 — single owner, no drift)
-  parts.push(...renderPipelineContextSection(task.inputContext));
+  // HS-FU5 (2026-10-31): the template's NAMED protocol binding decides whether a predecessor's marker line is a
+  // finding. The same template the system prompt injects from (engine: resolvedTemplate; stream: task.agentTemplate).
+  parts.push(...renderPipelineContextSection(task.inputContext, { boundProtocol: namedProtocolOfTemplate(context?.agentTemplate) }));
 
   // §7: AVAILABLE TOOLS — MCP tools
   if (config.mcpTools && config.mcpTools.length > 0) {

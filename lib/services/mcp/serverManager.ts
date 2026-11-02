@@ -3,6 +3,7 @@ import { mcpToolRegistry } from './toolRegistry';
 import { MCPServerConfig } from '../llm/mcp-integration';
 import { serverConfigStore } from './serverConfigStore';
 import { mcpLogger } from '@/lib/logger';
+import { stripAgentForbiddenActions } from './agent-tool-strip';
 
 /**
  * MCP Server Status
@@ -715,7 +716,7 @@ export class MCPServerManager extends EventEmitter {
     for (const toolName of toolNames) {
       const def = await this.getToolDefinition(toolName);
       if (def) {
-        definitions.push(def);
+        definitions.push({ ...def, tool: stripAgentForbiddenActions(def.tool) });
       }
     }
     return definitions;
@@ -840,3 +841,8 @@ export const mcpServerManager = globalThis.__mcpServerManager ?? createMCPServer
 if (!globalThis.__mcpServerManager) {
   globalThis.__mcpServerManager = mcpServerManager;
 }
+
+// PLATFORM-HELD-BYTES Stage B V-7: the agent tool strip lives in its own PURE module (HUB-P2-2, G3 entry 2026-10-16) so the
+// leg replay lab can apply the SAME function without loading this module (whose constructor starts a health-check interval).
+// Re-exported here so every existing importer is unchanged.
+export { AGENT_FORBIDDEN_ACTIONS, AGENT_FORBIDDEN_PARAMS, stripAgentForbiddenActions } from './agent-tool-strip';

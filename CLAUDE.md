@@ -13,6 +13,8 @@
 > | Security concern | `sec-ops-specialist` |
 > | Check patterns | `/.claude/knowledge/patterns/PATTERN-REGISTRY.md` |
 > | Find agents | `/.claude/agents/` (see grouped list below) |
+> | **Run a program (operator)** | **`/.claude/knowledge/pipelines/OPERATOR-RUNBOOK.md`** |
+> | **Maintain / ship (new maintainer)** | **`/.claude/knowledge/guides/MAINTAINER-ONBOARDING.md`** — rules + `scripts/run-gates-clean.sh` · `scripts/ship.sh` · `scripts/series-cut-draft.sh` |
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -526,11 +528,11 @@ I need to work on [YOUR TASK]. Please use the discovery-scout sub-agent to run r
 | 9. MCP SDK Upgrade | Every `@modelcontextprotocol/sdk` version bump | Prevents transport/session regressions |
 | 10. Signal Design (Fact vs. Verdict) | Adding/altering a client-facing signal an AI consumer acts on | Prevents misleading-signal regressions |
 | 11. Drift Sweep | After any rename/move/delete/retirement or pattern centralization | Prevents stale-doc-driven wrong analyses + re-add-the-dead-thing traps |
-| 12. Specialist Eviction & Size Budget | Adding a 4th dated session block; specialist >500 lines; quarterly size scan | Keeps agents loadable + reviews sharp (agent=router, knowledge=docs) |
+| 12. Specialist Eviction & Size Budget | Adding a 4th dated session block; specialist >500 lines; quarterly size scan — each triggers a LIVENESS REVIEW, not a size cut (R0, 2026-10-31) | Keeps agents loadable + reviews sharp (agent=router, knowledge=docs); stale lines go, live facts stay regardless of age |
 | 13. Program Workflow Evolution | A live program/pipeline run produced a defect, near-miss, or suspicious pass you intend to fix — **or the per-finding loop has stopped converging (step-back review: ledger → actor map → research → T0 → panel → grouped decisions)** | Fix lands at the right layer, live-validated, can't silently regress |
 | 14. Evidence-Graded Panel Review | A high-stakes change (classifier/gate, shared key, security, public surface, expected disagreement) needs a panel whose conclusion must be trusted — `.claude/knowledge/protocols/evidence-graded-panel-review-protocol.md` | Knowledge refresh, independent audit and blind ground truth catch the synthesis's own errors before the decision |
 | 15. Isolated Variant Build & Promotion | A step-back says a RELEASED protocol/program/leg shape must change, and its successful runs must not move — build an opt-in variant, prove existing runs byte-unchanged, gate it before ACTIVE, measure in a frozen window, then promote — `.claude/knowledge/protocols/isolated-variant-build-protocol.md` (phases 0-9 proven on value-chain 2026-10-03; phase 10 promotion proven 2026-10-05 — value-chain folded into pov-program 2.0.0, 4 controls, 0 stop-line hits; value-leg positive control owed) | Value-chain (2026-10-02): 41/41 texts byte-identical through 5 batches, 0 changed facts over 2,196 replayed prod tasks, a guaranteed first-run false refusal caught before go-live |
-| 16. Pre-registered Lab Gate | A change to what a pipeline agent reads (protocol, role guidance, template constraint) or to a role's model/effort, before push — pre-register the rule, score both directions (ground-truth bench when the REVIEWER changes), prove the bytes, hand-read, owner pays — `.claude/knowledge/protocols/pre-registered-lab-gate-protocol.md` | Batch 2 (2026-10-08): run 1 stopped a text that would have shipped four defects; two production parser faults found by reading samples |
+| 16. Pre-registered Lab Gate | A change to what a pipeline agent reads (protocol, role guidance, template constraint) or to a role's model/effort, before push — pre-register the rule, score both directions (ground-truth bench when the REVIEWER changes), prove the bytes, hand-read, owner pays — `.claude/knowledge/protocols/pre-registered-lab-gate-protocol.md` | Batch 2 (2026-10-08): run 1 stopped a text that would have shipped four defects; two production parser faults found by reading samples **Standing no-regression rule (2026-10-31):** a frozen golden set in every text lab, a canary after every text deploy |
 
 **Typical Workflow**: Discovery → Boundary mapping → Specialist review → Implementation → Pattern extraction
 

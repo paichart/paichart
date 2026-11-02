@@ -207,6 +207,7 @@ await test('P7: every metadata key the seed prescribes or an engine writer touch
     'harnessTaskId',   // run-key-exempt: STAGE metadata, not task metadata (put.ts:899-908 verified no editor exposure)
     'workflowResult',  // run-key-exempt: written by workflowEngine THROUGH the funnel — listing it would erase its own writer's output (panel V5)
     'type',            // legacy mirror, deleted-always inline at the funnel
+    'uid',             // NOT task metadata: kubernetes-gitops 1.17.0's drift section names a Kubernetes OBJECT's server-populated `metadata.uid` (beside `resourceVersion` / `managedFields`) as "not drift" — a pAIchart task never carries it (held-k8s step 2, 2026-10-18; rewording would move the L-K1-tested protocol bytes)
   ]);
   // Nested keys covered by their top-level carrier (panel: shallow-only rule):
   const NESTED = new Set<string>(['outcome', 'reviewerScore', 'reviewerPresent', 'existingStage', 'detectedAt']);

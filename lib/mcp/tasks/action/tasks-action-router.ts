@@ -52,7 +52,10 @@ export class TasksActionRouter {
     user: TokenPayload,
     actionId: string,
     /** Server-side routing extras (NOT client parameters — never validated as such).
-     *  callingExecutionId: retry provenance for agent.execute (keep-best 2026-07-04).
+     *  callingExecutionId: the agent-loop execution that made this call (server-set by mcpService, never client input).
+     *    Used for retry provenance (agent.execute, keep-best 2026-07-04), the completion anchor (task.update/complete),
+     *    agent-only refusals (RWF X17, model parameters) and — since 2026-10-17 — to ENABLE a write: task.create's Q2
+     *    leg-contract heal (the polarity change: its presence now grants, not only restricts).
      *  reportIgnoredParameters: compute + return + log the ignoredParameters fact (2026-09-25). Opt-in:
      *    only a caller that hands the router RAW client keys may set it (the perform Tier-1 site) —
      *    a pre-validated caller (REST route) would stamp a false [] (see utilities/ignored-parameters.ts).
@@ -102,6 +105,11 @@ export class TasksActionRouter {
       }
     }
 
+    // Q2 leg-contract heal (2026-10-17): task.create from an agent loop keeps a reference to the RAW parameters (after the
+    // CC7 hoist, before the strip) so the handler can tell a contract that was NEVER sent from one that was sent and dropped
+    // (which stays loud). The router forwards; the policy lives in the handler (architectural-review N-3).
+    const rawCreateParameters: unknown =
+      action === 'task.create' && routeOpts?.callingExecutionId ? parameters : undefined;
     const schema = MCPParameterSchemas[action as MCPAction];
     const normalizedFrom: Record<string, unknown> = {};
     // Raw keys as the client sent them (after the CC7 hoist above) — captured BEFORE safeParse strips.
@@ -171,7 +179,12 @@ export class TasksActionRouter {
         break;
 
       case 'task.create':
-        result = await handleTaskCreate(parameters, user, actionId);
+        // Q2 leg-contract heal: routeOpts (agent loop only) carries the caller + the raw keys the handler needs.
+        result = await handleTaskCreate(parameters, user, actionId, routeOpts?.callingExecutionId ? {
+          callingExecutionId: routeOpts.callingExecutionId,
+          rawParameters: rawCreateParameters,
+          unappliedTopLevelKeys: routeOpts.unappliedTopLevelKeys,
+        } : undefined);
         break;
 
       case 'task.update':
@@ -215,7 +228,7 @@ export class TasksActionRouter {
         break;
 
       case 'agent.results':
-        result = await handleAgentResults(parameters, user, actionId);
+        result = await handleAgentResults(parameters, user, actionId, routeOpts?.callingExecutionId ? { callingExecutionId: routeOpts.callingExecutionId } : undefined);
         break;
 
       case 'analytics.generate':

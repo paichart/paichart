@@ -13,8 +13,9 @@
  *   Converging any axis is a 5b+ flagged behavior change — do NOT fold heads in.
  *
  *   TAIL (byte-identical across paths — THIS module): harness-context injection,
- *   protocol injection (loadProtocols:true all-tagged cap-10 · loadProtocols:'composed'
- *   base+stamped-delta, WS1 Phase C 2026-08-17 · protocol:<name> named-single), and the
+ *   protocol injection (loadProtocols:'composed' base+stamped-delta, WS1 Phase C 2026-08-17 ·
+ *   protocol:<name> named-single; the legacy loadProtocols:true load-all mode was RETIRED
+ *   2026-10-16 and now throws UNKNOWN_PROTOCOL_MODE — PROTOCOL-LOAD-ALL-RETIRE), and the
  *   P10 Scope Self-Check append. Formerly inline-mirrored in
  *   agentExecutionEngine.ts buildSystemPrompt and stream/route.ts (:503-574
  *   region); prompt CONTENT was byte-identical, only pino log lines differed —
@@ -77,7 +78,7 @@ export interface SystemPromptInjectionContext {
   harnessContext: ResolvedHarnessContext | null;
   /** The resolved template row (for the metadata-null tripwire) — null when running templateless. */
   template: { id: string; name: string } | null;
-  /** template.metadata — drives protocol injection (loadProtocols: true|'composed' | protocol: 'name'). */
+  /** template.metadata — drives protocol injection (loadProtocols: 'composed' | protocol: 'name'; `true` is RETIRED and throws). */
   templateMetadata: Record<string, unknown> | null;
   /** template.constraints (Json — array or key→desc object). Durable system-prompt guardrails (Axis 5). */
   constraints?: unknown;
@@ -95,7 +96,9 @@ export interface SystemPromptInjectionContext {
 }
 
 /** The four injection modes. Parsed EXPLICITLY — an unrecognised truthy `loadProtocols` THROWS. */
-export type ProtocolInjectionMode = 'all' | 'composed' | 'named' | 'none';
+// 'all' (loadProtocols: true, load every ACTIVE protocol, take:10) was RETIRED 2026-10-16 (PROTOCOL-LOAD-ALL-RETIRE): no template
+// used it and 0 executions in 90 days injected in it. Stored facts from before then can still read mode 'all' — history, not a mode.
+export type ProtocolInjectionMode = 'composed' | 'named' | 'none';
 
 /**
  * The per-execution protocol-injection FACT (Protocol 10: verifiable truths only — what was
@@ -184,7 +187,7 @@ export function renderConstraintsBlock(constraints: unknown): string {
  *   TRANSIENT vs DETERMINISTIC (2026-08-08, WS4 panel): a DB blip on any load path DEGRADES to a
  *   protocol-less prompt (retry may help); a config state retrying cannot fix THROWS. Throwing
  *   conditions: a named binding that doesn't resolve to an ACTIVE row (`NAMED_PROTOCOL_NOT_FOUND`),
- *   an unrecognised truthy `loadProtocols` value (`UNKNOWN_PROTOCOL_MODE`), composed mode with
+ *   an unrecognised truthy `loadProtocols` value, including the retired `true` (`UNKNOWN_PROTOCOL_MODE`), composed mode with
  *   zero or multiple ACTIVE `protocol-base` rows (`PROTOCOL_BASE_NOT_FOUND` / `_AMBIGUOUS`), and a
  *   PROGRAM-tier stamped protocol whose row exists but is not ACTIVE (`PROTOCOL_ROW_NOT_ACTIVE`).
  *
@@ -235,18 +238,28 @@ export async function buildSystemPromptInjectionBlocks(
   // config error — same class as the base-cardinality throws); falsy stays falsy (legacy shape).
   const lp = templateMetadata?.loadProtocols;
   let mode: ProtocolInjectionMode;
-  if (lp === true) {
-    mode = 'all';
-  } else if (lp === 'composed') {
+  if (lp === 'composed') {
     mode = 'composed';
   } else if (!lp) {
     mode = templateMetadata?.protocol && typeof templateMetadata.protocol === 'string' ? 'named' : 'none';
+  } else if (lp === true) {
+    // RETIRED 2026-10-16 (PROTOCOL-LOAD-ALL-RETIRE). Load-all bundled every ACTIVE protocol into one prompt (capped at 10, name-
+    // ordered, so later ones fell off silently) — the failure selective injection replaced. A template still carrying `true`
+    // (e.g. a GUI edit) fails loud BEFORE any model call rather than silently loading everything. Same error code as any
+    // unrecognised value, so the deploy gate scripts/verify-template-mode-compat.ts refuses a deploy while an ACTIVE template
+    // carries it.
+    logger.warn({ loadProtocols: lp, templateId: template?.id, errorCode: 'UNKNOWN_PROTOCOL_MODE' },
+      'Template metadata.loadProtocols is true — the load-all mode was retired; refusing to run');
+    throw new Error(
+      `UNKNOWN_PROTOCOL_MODE: template metadata.loadProtocols is true — the load-all protocol mode was RETIRED (2026-10-16). ` +
+      `Use loadProtocols: 'composed' (base + the task's stamped protocol) or protocol: '<name>' (one named protocol).`
+    );
   } else {
     logger.warn({ loadProtocols: lp, templateId: template?.id, errorCode: 'UNKNOWN_PROTOCOL_MODE' },
       'Template metadata.loadProtocols carries an unrecognised truthy value — refusing to guess an injection mode');
     throw new Error(
       `UNKNOWN_PROTOCOL_MODE: template metadata.loadProtocols is ${JSON.stringify(lp)} — ` +
-      `recognised values are true (all), 'composed', and falsy (named/none). ` +
+      `recognised values are 'composed' and falsy (named/none). ` +
       `An unrecognised value silently landing on a different mode is exactly the failure this throw prevents.`
     );
   }
@@ -258,78 +271,13 @@ export async function buildSystemPromptInjectionBlocks(
   let preambleBlocks: InjectionBlock[] = [];
   // Protocol injection (protocol-as-prompt architecture, Apr 2026; composed added 2026-08-17)
   // Injects orchestration protocol content from agent_prompt_library into the
-  // system prompt based on template metadata flags. Three modes:
-  //   loadProtocols: true        → PIPELINE tasks get ALL protocol-tagged prompts (legacy)
+  // system prompt based on template metadata flags. Two modes (load-all retired 2026-10-16):
   //   loadProtocols: 'composed'  → base (protocol-base tag) + the task's ONE stamped protocol
   //   protocol: 'name'           → Specialist tasks get ONE named protocol
   // Design: TODO-PROTOCOL-EXPOSURE-v2.md | Plan: protocol-as-prompt-2026-04-10/ |
   //         cline_docs/reviews/ws1-phase-c-2026-08-17/SYNTHESIS.md
   // Pattern: prompt-library-gold-standard-pattern.md (Pattern #45)
-  if (mode === 'all') {
-    // ⚠️ BOTH-SET GUARD (2026-08-10, RE-SCOPED 2026-08-17). `loadProtocols: true` WINS and the
-    // named protocol is discarded — correct precedence (pinned by the mode-parse golden), but
-    // silent skipping is this codebase's most-repeated root cause, so it warns. SCOPE: this warn
-    // is `true`-only — in 'composed' mode `protocol:<name>` is a legitimate FALLBACK rung
-    // (template-metadata source), not a conflict, and does NOT warn.
-    if (templateMetadata?.protocol) {
-      logger.warn(
-        { loadProtocols: true, ignoredProtocol: templateMetadata.protocol, templateId: template?.id },
-        'Template sets BOTH loadProtocols and protocol — loadProtocols wins and the named protocol is IGNORED. ' +
-        'Remove one: loadProtocols:true is the harness/PIPELINE shape, protocol:<name> is the specialist shape.'
-      );
-    }
-    // NEW lattice cell (2026-08-17): a task STAMP under loadProtocols:true is quietly unused —
-    // by design (the rollback path: un-flipping the template to `true` must be quiet-usable while
-    // stamps keep being written). Info, not warn: nothing is wrong, the fact line records it.
-    if (taskProtocol?.protocol) {
-      logger.info(
-        { ignoredTaskProtocol: taskProtocol.protocol, stampSource: taskProtocol.source },
-        'loadProtocols:true injects ALL protocols — the task protocol stamp is not consulted in this mode'
-      );
-    }
-    // PIPELINE tasks: inject ALL protocol-tagged prompts
-    try {
-      const protocols = await db.agentPromptLibrary.findMany({
-        where: { tags: { has: 'protocol' }, status: 'ACTIVE' },
-        select: { name: true, description: true, promptText: true, version: true },
-        orderBy: { name: 'asc' },
-        // NOTE: this 10-cap is mirrored in the Skills Builder guide
-        // (components/prompt-library/PromptEditor.tsx "Tags & injection") — update both together.
-        // Name-ordered ⇒ alphabetically-late ACTIVE protocol skills fall off the cap first, silently.
-        take: 10, // Safety cap (prompt-construction-specialist Q7)
-      });
-      logger.info(
-        { protocolCount: protocols.length, names: protocols.map((p) => p.name) },
-        'Protocol injection for PIPELINE task'
-      );
-      // Cap-hit guard: findMany returning exactly the cap means an 11th+ ACTIVE protocol skill
-      // may exist and was silently excluded. Surface it (silent drops otherwise read as "covered").
-      if (protocols.length === 10) {
-        logger.warn(
-          { loadedProtocols: protocols.map((p) => p.name) },
-          'Protocol injection hit the 10-skill cap — later (name-ordered) ACTIVE protocol skills are silently excluded from PIPELINE tasks'
-        );
-      }
-      if (protocols.length > 0) {
-        const protocolSection = protocols
-          .map((p) => `### Protocol: ${p.name}\n${p.description}\n\n${p.promptText}`)
-          .join('\n\n---\n\n');
-        // UNIVERSAL_AGENT_RULES ONCE, ahead of all of them (2026-08-04, template-system rec #9).
-        // It used to be concatenated into every protocol's promptText at seed time, so a PIPELINE
-        // task loading six protocols received SIX copies — ~27 KB, 15% of the protocol block, every
-        // turn. One copy, at the top, where a preamble belongs. Split into TWO blocks (rules |
-        // protocols) whose join is byte-identical to the old single preambleBlock (goldens pin it).
-        preambleBlocks = [
-          { kind: 'rules', text: `${UNIVERSAL_AGENT_RULES}\n\n---\n\n` },
-          { kind: 'protocols', text: `## Available Orchestration Protocols\n\n${protocolSection}\n\n---\n\n` },
-        ];
-        fact.protocolNames = protocols.map((p) => p.name);
-      }
-    } catch (err) {
-      logger.warn({ err }, 'Failed to load protocols — harness will use fallback planning');
-      fact.degraded = 'PROTOCOL_LOAD_DB_ERROR';
-    }
-  } else if (mode === 'composed') {
+  if (mode === 'composed') {
     // ── COMPOSED: base + the task's ONE stamped protocol (WS1 Phase C, 2026-08-17) ──────────────
     // The task, not the template, names the delta — the template flip is one shared key on one
     // shared harness template; per-task identity rides the Phase A stamp via the caller's

@@ -520,8 +520,8 @@ export const POST = createHandler(
         }
 
         // Shared injection tail (convergence Phase 5a) — ONE implementation with the
-        // engine: harness-context block, protocol injection (loadProtocols/named, now
-        // with the engine-canonical cap-hit + not-found warns and the metadata-null
+        // engine: harness-context block, protocol injection (composed/named — load-all retired
+        // 2026-10-16 — with the engine-canonical not-found warns and the metadata-null
         // tripwire — log-only gains), P10 scope self-check. resolveHarnessMode stays
         // HERE (harnessContext also feeds result.json below). The resolution head
         // above stays stream-policy (stored-prompt gate → template → role-fallback;

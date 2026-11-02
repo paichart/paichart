@@ -1156,6 +1156,21 @@ test('E3b (2026-08-04): containmentDisposition survives the pick — it rides NE
   }
 });
 
+test('held-k8s G-1: result.json toolCalls never carry a github-service blob sha (elided at the ONE persist builder, index kept)', () => {
+  const sha = 'd5fe8e652d6cb7ac435ee9ba173f3e5da6d3fafc';
+  const args = { owner: 'paichart', repo: 'paichart-lab-configs', path: 'k8s/sample-workloads.yaml' };
+  const rec = { tool: 'services', success: true, arguments: { action: 'call', targetService: 'github-service', tool: 'get_file_contents', arguments: args },
+    result: { content: [{ type: 'data', data: { success: true, targetService: 'github-service', tool: 'get_file_contents', arguments: args,
+      result: { content: [{ type: 'text', text: `successfully downloaded text file (SHA: ${sha})` },
+        { type: 'resource', resource: { uri: 'repo://paichart/paichart-lab-configs/sha/0ea432e751cc622ffab91d7a90386c66cadf8733/contents/k8s/sample-workloads.yaml', text: 'kind: Namespace\n' } }] } } }] } };
+  const result = buildExecutionResultJson(baseInput({ toolCallResults: [rec] as any, successfulToolCalls: 1 }));
+  const s = JSON.stringify(result);
+  if (s.includes(sha)) throw new Error('the blob sha persisted in result.json');
+  const inner = (result as any).toolCalls[0].result.content[0].data.result.content;
+  if (inner.length !== 2 || inner[1].type !== 'resource') throw new Error('the resource item moved — the positional selector would break');
+  if (!JSON.stringify(rec).includes(sha)) throw new Error('the in-memory record was mutated (capture and the nets read it)');
+});
+
 // Summary
 // ========================================
 

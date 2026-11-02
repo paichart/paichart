@@ -12,7 +12,7 @@
 #
 # Sections (each maps to a kill criterion in the plan §10 / the follow-up):
 #   1. attempts and adoptions, by reason                     → criterion 2 (adoption < 50% over the first 10 attempts)
-#   2. 🔴 attempts on a NON-terraform leg                     → criterion 4 (must be 0)
+#   2. 🔴 attempts on a leg outside {terraform, k8s}          → criterion 4 (must be 0; k8s in scope since KC4 2026-10-19)
 #   3. 🔴 adopted with trigger hits remaining / non-undercount → criterion 3 (0 by construction)
 #   4. adopted corrections whose reviewer then BLOCKED, with the blocking items that name a form defect → criterion 1
 #      (a PRE-FILTER: read every row — "blocked on a form defect in the corrected block" is a reading, not a regex)
@@ -40,7 +40,7 @@ WITH fc AS (SELECT a."createdAt" t, (a.content::jsonb)->'toolLoop'->'formCheck' 
             WHERE a.name = 'result.json' AND a.content LIKE '{%' AND a.content LIKE '%"formCheck"%')
 SELECT coalesce(NULLIF('${CUT}', ''), to_char(min(t), 'YYYY-MM-DD HH24:MI:SS')) AS flag_on_since,
        CASE WHEN '${CUT}' <> '' THEN 'explicit (argument)' WHEN min(t) IS NULL THEN 'EMPTY — flag never observed on' ELSE 'derived' END AS basis
-FROM fc WHERE f->'correction'->>'attempted' = 'true' OR f->'correction'->>'notAttemptedReason' = 'hits-include-non-undercount';
+FROM fc WHERE f->'correction'->>'attempted' = 'true' OR f->'correction'->>'notAttemptedReason' IN ('hits-include-non-undercount', 'prior-pass-reserved:edit-correction');
 SQL
 )
 # Shared CTE prefix: the cut, every Author fact at/after it, and the owning PIPELINE leg's protocol.
@@ -49,7 +49,7 @@ WITH fcall AS (SELECT a."executionId" eid, a."createdAt" t, a.content::jsonb j F
             WHERE a.name = 'result.json' AND a.content LIKE '{%' AND a.content LIKE '%"formCheck"%'),
 cut AS (SELECT coalesce(NULLIF('${CUT}', '')::timestamp, min(t)) c FROM fcall
         WHERE j->'toolLoop'->'formCheck'->'correction'->>'attempted' = 'true'
-           OR j->'toolLoop'->'formCheck'->'correction'->>'notAttemptedReason' = 'hits-include-non-undercount'),
+           OR j->'toolLoop'->'formCheck'->'correction'->>'notAttemptedReason' IN ('hits-include-non-undercount', 'prior-pass-reserved:edit-correction')),
 fc AS (SELECT f.eid, f.t, f.j, f.j->'toolLoop'->'formCheck' x, e."taskId" tid, e."startTime" st, e."endTime" et, c.stage_id sid,
          (SELECT p.metadata->>'protocol' FROM tasks p WHERE p.type = 'PIPELINE' AND p.metadata->>'pipelineStageId' = c.stage_id LIMIT 1) proto
        FROM fcall f JOIN agent_executions e ON e.id = f.eid JOIN tasks c ON c.id = e."taskId"
@@ -75,11 +75,13 @@ UNION ALL SELECT '· adoption over the FIRST 10 attempts (criterion 2 fires belo
    FROM (SELECT x FROM att ORDER BY t LIMIT 10) f10);
 
 \echo
-\echo ============ 2. 🔴 ATTEMPTS ON A NON-TERRAFORM LEG (criterion 4: must be 0) ============
+\echo ============ 2. 🔴 ATTEMPTS ON A LEG OUTSIDE {terraform, kubernetes-gitops} (criterion 4, amended KC4 2026-10-19: must be 0) ============
 ${BASE}
-SELECT '🔴 attempts whose leg protocol is not terraform-iac-protocol' AS line, count(*) FILTER (WHERE proto IS DISTINCT FROM 'terraform-iac-protocol') AS n,
-  string_agg(CASE WHEN proto IS DISTINCT FROM 'terraform-iac-protocol' THEN eid || ' (' || coalesce(proto, 'no PIPELINE leg') || ')' END, ', ') AS executions_READ_EACH
-FROM att;
+SELECT '🔴 attempts whose leg protocol is neither terraform-iac nor kubernetes-gitops' AS line,
+  count(*) FILTER (WHERE proto IS NULL OR proto NOT IN ('terraform-iac-protocol', 'kubernetes-gitops-protocol')) AS n,
+  string_agg(CASE WHEN proto IS NULL OR proto NOT IN ('terraform-iac-protocol', 'kubernetes-gitops-protocol') THEN eid || ' (' || coalesce(proto, 'no PIPELINE leg') || ')' END, ', ') AS executions_READ_EACH
+FROM att
+UNION ALL SELECT '· kubernetes-gitops attempts (in scope since KC4; context)', count(*) FILTER (WHERE proto = 'kubernetes-gitops-protocol'), NULL FROM att;
 
 \echo
 \echo ============ 3. 🔴 ZERO BY CONSTRUCTION (criterion 3) ============

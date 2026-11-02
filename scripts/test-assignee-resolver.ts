@@ -68,5 +68,18 @@ test('an empty query throws', () =>
 test('a user with no name is reachable by email', () =>
   eq(chooseAssignee('svc@example.com', users).id, 'u-noname', 'null name'));
 
+// ASSIGNEE-DIRECTORY-DISCLOSURE (2026-10-31): the whole-table pool is admin-only.
+test('non-admin: no team match is NOT FOUND (no fall-through to the whole user table)', () =>
+  throwsWith(() => chooseAssignee('Bob', users, new Set(['u-jacob']), { includeAllUsers: false }), ['User not found'], 'no fallback'));
+test("non-admin: '@' cannot list the directory — only the POV's own people are searched", () => {
+  let msg = '';
+  try { chooseAssignee('@', users, new Set(['u-not-a-user']), { includeAllUsers: false }); } catch (e) { msg = (e as Error).message; }
+  if (msg.includes('steveterry66@example.com') || msg.includes('josh.allen@example.com')) throw new Error(`leaked foreign emails: ${msg}`);
+});
+test('non-admin: a team match still resolves', () =>
+  eq(chooseAssignee('Jacob', users, new Set(['u-jacob']), { includeAllUsers: false }).id, 'u-jacob', 'team resolve'));
+test('admin (default): the whole-table fallback is kept', () =>
+  eq(chooseAssignee('Bob', users, new Set(['u-jacob']), { includeAllUsers: true }).id, 'u-bob', 'admin fallback'));
+
 console.log(`\n📊 Results: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

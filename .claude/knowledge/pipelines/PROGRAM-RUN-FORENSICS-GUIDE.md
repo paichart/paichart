@@ -474,6 +474,20 @@ Reading rules:
   later persist/cascade threw — not rescuable, named so it is not mistaken for an unevaluated rescue.
   Census lines: `scripts/report-mechanism-inventory.sh` (MI-13, COMPLETE-THEN-FAIL section).
 
+> **Golden set (2026-10-31) — legs only.** The lab's frozen regression set (`PIPELINE-RUN-FORENSICS-GUIDE.md` §7f2) replays
+> LEGS; it cannot see a program root's SYNTHESIZE, Node C (GOLDEN-NODE-C-CELL) or cross-leg effects. The program-level check
+> after an agent-text deploy is the CANARY: re-run the latest released program from its published spec and require
+> `programReleasable: true` before the next text batch ships (`LIVE-WINDOW-CHECKLIST.md`).
+> **Read it with** `npm run report:canary -- --root <id> --expect <protocol>@<version> [--control <name>]` (read-only): VOID (no
+> execution ran the deployed text) / PENDING / PASS / FAIL, per-leg outcome + reviewer verdict + any forced reason, and each
+> pre-registered live control (UNEXERCISED is an absence, not a pass). Then hand-read the legs.
+>
+> **Containment, since 2026-10-31 (D3):** a consuming leg whose Architect/Author carried the upstream value under
+> `## Derived Values` now reads `consuming-leg-consumed-discharged` with `derivationContainment.carriedInDerivedBlock`
+> `{source, entries}` — the value was checked as CONSUMED against upstream. Before that cut such a leg read `checked-clean`, and that
+> clean was VACUOUS (its members were checked against its own harvest, which never held them — the HS-FU3 gap). Split any
+> containment series at that cut (series-cut ledger, 2026-10-31 04:49:19Z).
+
 ## 6. Quick-reference one-liners
 
 ```sql
@@ -587,6 +601,8 @@ module — `npm run replay:plan-contract -- --root <id>` (recomputes `planSha256
 -- run with -v root=<program root id>; verified syntax 2026-10-04 (pre-deploy rows read empty)
 SELECT left(t.title,45) child, t.type, t."agentRole",
   t.metadata->'interfaceContractSource'->>'source'          AS contract_source,
+  t.metadata->'interfaceContractSource'->>'arm'             AS contract_arm,      -- Q2 (2026-10-17): create | inherit | create-absent | create-absent-declined
+  t.metadata->'interfaceContractSource'->>'declineReason'   AS decline_reason,    -- Q2: set only on create-absent-declined
   t.metadata->'interfaceContractSource'->>'suppliedMatched' AS supplied_matched,
   t.metadata->'interfaceContractSource'->>'planResolution'  AS plan_resolution,
   t.metadata->'duplicateAcknowledgedCarry'->>'carries'      AS carries,
@@ -602,6 +618,11 @@ with no strip) — a `DIFFERS` there is investigated, not believed; the module d
 compare jsonb values in SQL and hashes only through `canonicalContractSha`. `interfaceContractSource` is true WHEN
 STAMPED: `agent.configure` and the POV editor can replace `inputContext` later, so recompute against the live row.
 Series break at this deploy for the contract-vs-plan deviation measure (it falls to 0 by construction).
+**Q2 (2026-10-17):** a leg the harness created WITHOUT a contract now reads `arm:'create-absent'` (plan stored; the result
+said so) or `arm:'create-absent-declined'` + `declineReason`. A `stage-legs-*` decline describes the stage's OTHER legs,
+so one bad leg can decline every later omitted sibling — count that cascade as ONE event. Exclude supplied creates made
+after an earlier `create-absent` sibling in the same stage from any `suppliedMatched` read (K13; MI-13 does this). A
+`create-absent` leg later superseded is the finding the K14 live control watches for.
 
 **Consumer-side checks — one fixed, one still open:**
 - **CONSUMER-FAIL-OPEN — FIXED, live 2026-10-03** (pattern (h) batch 2, `71ffd705`). A leg with an upstream resolved

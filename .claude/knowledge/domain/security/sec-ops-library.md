@@ -1427,4 +1427,12 @@ Security Features:
 
 ---
 
+## Carried from the join learnings ledgers (2026-10-31)
 
+Source: the held-network ledger `cline_docs/reviews/held-network-2026-10-22/LEARNINGS-LEDGER.md` (LL-N) and the terraform ledger `cline_docs/reviews/held-terraform-2026-10-19/LEARNINGS-LEDGER.md` (LL-T). Each line is the learning in one sentence; the ledger row holds the evidence.
+
+- **`Cli -c "<cmd> ?"` EXECUTES the command on EOS (LL-N-01).** Never probe a device's grammar with `?` from automation.
+- **Every check over agent output is a DoS surface (LL-N-30, LL-N-38).** Matchers must be linear, and budgets must charge every step.
+- **A redactor keyed on key shapes misses a bare value echoed in prose (LL-N-06).** Fixed by R10 v8 echo redaction; a fact that quotes lines must redact them in context (LL-N-31).
+- **A pre-registered service is the customer's (LL-N-4).** A run uses it as-is and never registers, updates or deletes it. Only a platform guard makes that true.
+- **Bug Class 86 — unscoped lookup before the access check (2026-10-31).** An error or response that names what a pre-access-check lookup matched is a cross-tenant disclosure even when the write is blocked. Fixed at 4 sites today plus the 2026-05-26 fuzzy-suggestion site; helpers fail closed on a missing userId. `bug-class-registry.md` § Bug Class 86; auth-permissions library § "Lookup scoping".

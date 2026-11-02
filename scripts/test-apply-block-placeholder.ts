@@ -156,7 +156,15 @@ check('M controls: every mutated case reads as pinned again once the mutation is
   check('G2 applies to config_change_author by EXACT role, never requirements_author / harvester / reviewer / a PIPELINE task',
     applies('config_change_author') && !applies('requirements_author') && !applies('infra_state_harvester')
     && !applies('change_reviewer') && !applies('config_change_author', 'PIPELINE'));
-  check('G3 is the LAST entry (appended: no existing entry\'s stamp or key order moves)', MECHANICAL_NETS[MECHANICAL_NETS.length - 1] === net);
+  // Was "the LAST entry" until the PLATFORM-HELD-BYTES Stage B held-variant nets were appended after it (2026-10-15). The
+  // property is unchanged: it sits right after quoteFidelity, and only later appends follow it.
+  {
+    const keys = MECHANICAL_NETS.map((n) => `${n.name}@${n.point}`);
+    const i = MECHANICAL_NETS.indexOf(net);
+    check('G3 is APPENDED (right after quoteFidelity; only later appends follow — no existing entry\'s stamp or key order moves)',
+      keys[i - 1] === 'quoteFidelity@leaf-persist'
+      && JSON.stringify(keys.slice(i + 1)) === JSON.stringify(['editApplication@leaf-persist', 'heldBytes@leaf-persist', 'reviewedEditDiff@leaf-persist', 'editApplication@leg-synthesize', 'validationToolCalls@leaf-persist', 'deviceSourceReads@leaf-persist', 'gitDeviceComparison@leaf-persist'])); // + validationToolCalls (2026-10-23, appended) + deviceSourceReads, gitDeviceComparison (2026-10-26, held-network step 3 batch 2b, appended)
+  }
   const picked = pickResultJsonSummary({ applyBlockPlaceholder: fact(EOS), toolLoop: { a: 1 } });
   check('G4 NOT whitelisted: off the lean card and the agent.results summary (it stays in the raw result.json a verbose read returns)',
     !('applyBlockPlaceholder' in picked) && 'toolLoop' in picked && !!net.summaryExcludedReason);

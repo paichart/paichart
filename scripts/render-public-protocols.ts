@@ -19,6 +19,8 @@
  * across re-renders of the same version. protocols/README.md is hand-authored (editorial status
  * notes) and NOT touched here.
  */
+import { heldExportRefusal } from './export/held-export-guard';
+import { HELD_FILES_HEADING } from '../lib/agents/harness/held-bytes/variant-protocol';
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -52,6 +54,10 @@ const NOT_PUBLISHED: Record<string, string> = {
   // 'some-internal-protocol': 'internal-only — references unpublished infrastructure',
   // E-3 entries removed at promotion E (E7, 2026-10-06): network-derivation is now in PROTOCOLS; value-chain-program is a
   // DEPRECATED tombstone, which the completeness guard (ACTIVE rows only) no longer sees, so it needs no entry here.
+  // PLATFORM-HELD-BYTES: the held-file variant was declared here while ACTIVE (G3). Phase 10 (2026-10-17) folded it into
+  // observability-config ≥ 1.10.0 and retired its row to a DEPRECATED tombstone, which the completeness guard no longer sees —
+  // same as value-chain-program above. The held text now rides obs, so the R6 hold is MECHANICAL again: the write path below refuses
+  // obs ≥ 1.10.0 until the self-host text exists (scripts/export/held-export-guard.ts; panel F14 / D6).
 };
 
 const PUB_DIR = process.env.PAICHART_PUBLIC_REPO
@@ -147,6 +153,16 @@ async function main() {
             : `❌ ${name.name}: DIVERGED — re-render (canonical: seed -> local DB -> render; never edit the public copy)`);
         }
       } else {
+        // PLATFORM-HELD-BYTES panel F14 / D6: the mechanical R6 hold (scripts/export/held-export-guard.ts).
+        const refusal = heldExportRefusal(name.name, name.version ?? '0.0.0', name.promptText);
+        if (refusal) { console.error(`❌ ${refusal}`); process.exit(1); }
+        // R6 / PH-7 (2026-11-01): the guard constant is now true, so the rule is held HERE: a protocol carrying the held-files section is
+        // written to the public repo only if that repo already carries the self-host text (export it first: export-public.py --into).
+        const selfHostDoc = path.join(PUB_DIR, '..', 'docs', 'SELF-HOST-KEPT-FILES.md');
+        if (rendered.includes(HELD_FILES_HEADING) && !fs.existsSync(selfHostDoc)) {
+          console.error(`❌ refusing to render ${name.name} v${name.version}: it carries the held-files section and the public repo has no ${selfHostDoc} — run the export (--into) first (R6 / PH-7).`);
+          process.exit(1);
+        }
         fs.writeFileSync(target, rendered);
         console.log(`📄 rendered ${name.name} v${name.version} (${rendered.length} chars)`);
       }

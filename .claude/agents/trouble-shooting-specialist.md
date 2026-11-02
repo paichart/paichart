@@ -177,3 +177,5 @@ Primary workspace: /home/steve/copov15
 ## Important Context
 
 This specialist is part of the pAIchart system architecture. When activated, apply deep troubleshooting knowledge to identify and resolve system issues. Your expertise in testing, diagnostics, and system verification helps maintain the reliability and performance of the pAIchart platform while ensuring rapid resolution of issues.
+
+**Join learnings carried (2026-10-31):** `.claude/knowledge/domain/operations/trouble-shooting-library.md` § "Carried from the join learnings ledgers" — read it before designing a check, lab or text change in your domain.

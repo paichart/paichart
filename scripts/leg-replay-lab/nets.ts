@@ -38,13 +38,17 @@ export interface NetRun {
 /** `toolCalls` (2026-10-13): the node execution's own result.json `toolCalls`, as production hands them to the nets
  *  (execution-nets.ts reads them off the BUILT resultJson). Omitted ⇒ `[]`, as before — the stubbed Author's calls carry
  *  nothing a net reads; a recorded-tools Harvester passes its served calls so `quoteFidelity` (harvest point) has its witness. */
-export async function runAuthorLeafNets(snap: Snapshot, role: string, text: string, replayExecutionId: string, toolCalls?: unknown): Promise<NetRun> {
+/** `held` (PLATFORM-HELD-BYTES Stage B): the variant stamps the core builds pre-tx and hands the nets (`editApplication` on a
+ *  held-variant Author) — absent on every other node, exactly as in production. */
+export async function runAuthorLeafNets(snap: Snapshot, role: string, text: string, replayExecutionId: string, toolCalls?: unknown,
+  held?: { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: readonly string[] | null }): Promise<NetRun> {
   const { client, queries } = buildReplayPrisma(snap, [{ taskId: snap.author.task.id, executionId: replayExecutionId, resultJson: { finalResponse: text, ...(toolCalls !== undefined ? { toolCalls } : {}) } }]);
   const t = taskRowToPrisma(snap.author.task);
   const ctx = buildNetContext({
     prisma: client, task: { id: t.id, type: t.type, metadata: t.metadata, inputContext: snap.author.exec.config?.inputContext ?? t.inputContext },
     agentRole: role, harnessMode: null, finalResponse: text, programTier: false, executionId: replayExecutionId,
     ...(toolCalls !== undefined ? { toolCalls } : {}),
+    ...(held ? { held } : {}),
   });
   return runPoint('leaf-persist', ctx, queries);
 }

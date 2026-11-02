@@ -42,6 +42,7 @@ import {
 } from '../lib/services/agentTemplateBuilder/pAIchartUniversalTemplate';
 import { AGENT_MODELS } from '../lib/agents/model-tiers';
 import { DEFAULT_MAX_TOKENS } from '../lib/services/llm/types';
+import { HELD_AUTHOR_CONSTRAINT, HELD_REVIEWER_CONSTRAINT } from '../lib/agents/harness/held-bytes/variant-protocol';
 
 const prisma = new PrismaClient();
 
@@ -68,10 +69,10 @@ const COMMON_MODEL_PARAMS = (timeout: number) => ({
   timeout,
 });
 
-const TEMPLATES: TemplateSeed[] = [
+export const TEMPLATES: TemplateSeed[] = [
   {
     name: 'Cluster State Harvester',
-    description: 'Phase 0 of the kubernetes-gitops-protocol (conditional) — self-provisions the read-only k8s service from the descriptor carried in the task (register → call), then performs READ-ONLY state collection via many narrow, scoped reads (manifests/values for the target scope, workload inventory, quota/policy baseline, secret metadata — names/keys, never values) and hands the snapshot to the Workload Architect via auto-chained pipeline context. Read-only only: never a mutating verb, never escalates privilege. Fires only when current cluster state is not already supplied in the task. Reads kubernetes-gitops-protocol before beginning work.',
+    description: 'Phase 0 of the kubernetes-gitops-protocol (conditional) — self-provisions the read-only k8s service from the descriptor carried in the task (register → call), then performs READ-ONLY state collection via many narrow, scoped reads (manifests/values for the target scope, workload inventory, quota/policy baseline, secret metadata — names/keys, never values) and hands the snapshot to the Workload Architect via auto-chained pipeline context. Read-only only: never a mutating verb, never escalates privilege. Fires when current cluster state is not already supplied in the task, or when the task names config-repo files — then it also reads each named repo file once through the platform Git file source (the held source) and compares declared fields for drift. Reads kubernetes-gitops-protocol before beginning work.',
     category: AgentCategory.AUTOMATION,
     templateType: TemplateType.ORCHESTRATOR,
     defaultRole: 'infra_state_harvester',
@@ -101,7 +102,7 @@ const TEMPLATES: TemplateSeed[] = [
   },
   {
     name: 'Manifest Rollback Author',
-    description: 'Phase 2 of the kubernetes-gitops-protocol — THE deliverable producer. Authors the GitOps change package: (a) declarative artifacts (manifest / kustomize overlay / Helm-values diff) — never imperative kubectl patch/scale; (b) deterministic validation facts (kubeconform schema, kustomize build, conftest/OPA policy — offline, never kubectl diff/server dry-run); (c) a rollback plan (prior revision / git revert); (d) recommended change ordering. Produces a change to be applied via GitOps reconcile, never an applied change — apply is out-of-band. Reads kubernetes-gitops-protocol before beginning work.',
+    description: 'Phase 2 of the kubernetes-gitops-protocol — THE deliverable producer. Authors the GitOps change package: (a) declarative artifacts (manifest / kustomize overlay / Helm values) — a held repo file (H<n>) is changed only by edits by reference, never rewritten whole; never imperative kubectl patch/scale; (b) deterministic validation facts (kubeconform schema, kustomize build, conftest/OPA policy — offline, never kubectl diff/server dry-run); (c) a rollback plan — restore H<n> for a held file, a prior revision / git revert for any other file; (d) recommended change ordering. Produces a change to be applied via GitOps reconcile, never an applied change — apply is out-of-band. Reads kubernetes-gitops-protocol before beginning work.',
     category: AgentCategory.AUTOMATION,
     templateType: TemplateType.DOCUMENTER,
     defaultRole: 'config_change_author',
@@ -116,7 +117,7 @@ const TEMPLATES: TemplateSeed[] = [
   },
   {
     name: 'GitOps Change Reviewer',
-    description: 'Phase 3 of the kubernetes-gitops-protocol — independent QA gate (not the deliverable). Reviews the change package for policy compliance, blast-radius, rollback adequacy, and approval readiness; checks that each validation step is a real fact (kubeconform/kustomize/OPA), not prose; emits a clear verdict (approved / needs-revision) with confidence and named blocking issues. Does not soften ratings. Reads kubernetes-gitops-protocol before beginning work.',
+    description: 'Phase 3 of the kubernetes-gitops-protocol — independent QA gate (not the deliverable). Reviews the change package for policy compliance, blast-radius, rollback adequacy, and approval readiness; checks that each validation step is a real fact (kubeconform/kustomize/OPA), not prose; reads the platform-rendered diff of held-file edits, where any line the package does not account for blocks; emits a clear verdict (approved / needs-revision) with confidence and named blocking issues. Does not soften ratings. Reads kubernetes-gitops-protocol before beginning work.',
     category: AgentCategory.AUTOMATION,
     templateType: TemplateType.REVIEWER,
     defaultRole: 'change_reviewer',
@@ -138,6 +139,48 @@ const TEMPLATES: TemplateSeed[] = [
 // ADMIN_EMAIL (self-host) → '' → the 'system' sentinel.
 const SEED_OWNER_EMAIL = (process.env.SEED_OWNER_EMAIL || process.env.ADMIN_EMAIL || '').trim().toLowerCase();
 
+/** The row a template seeds, without the DB write — moved verbatim out of main() (held-k8s step 3a, 2026-10-19; the obs V-0
+ *  shape) so a pin and a later seed read the rows without writing anything. */
+export function buildTemplateRow(template: (typeof TEMPLATES)[number]) {
+  // Resolve the prompt template with role-specific guidance. All four roles HAVE
+  // ROLE_GUIDANCE_LIBRARY entries (infra_state_harvester + infra_change_architect added
+  // WP-A3/A4; config_change_author + change_reviewer reused), so none falls back to generic.
+  const promptTemplate = PAICHART_UNIVERSAL_BASE_TEMPLATE.replace(
+    '${roleSpecificGuidance}',
+    getRoleSpecificGuidance(template.defaultRole)
+  );
+
+  const data = {
+    name: template.name,
+    description: template.description,
+    category: template.category,
+    templateType: template.templateType,
+    defaultRole: template.defaultRole,
+    promptTemplate,
+    capabilities: {
+      'Protocol-Driven': 'Reads kubernetes-gitops-protocol from injected context before acting',
+      'Context Chaining': 'Receives predecessor task output via pipeline context injection',
+      'GitOps Change, Not Apply': 'Produces a reviewable declarative change to be reconciled — never applies anything to a cluster',
+    },
+    constraints: {
+      'Protocol First': 'Must read the injected protocol before beginning work',
+      'Stay in Phase': 'Only perform the work for the specific phase assigned — do not skip ahead',
+      'No Cluster Mutation': 'No mutating/write verb anywhere in this pipeline; the Harvester is read-only, apply is out-of-band (GitOps reconcile)',
+      // held-k8s step 3 (the join, SYNTHESIS v3 §2 step 3, TS S1/S2): the held template constraints, spread LAST by role — the same
+      // text the obs Author and Reviewer carry (G3-measured); held text stays out of the shared role guidance.
+      ...(template.defaultRole === 'config_change_author' ? HELD_AUTHOR_CONSTRAINT
+        : template.defaultRole === 'change_reviewer' ? HELD_REVIEWER_CONSTRAINT : {}),
+    },
+    maxRetries: 2,
+    timeout: template.timeout,
+    priority: AgentPriority.HIGH,
+    isDefault: false,
+    tags: template.tags,
+    metadata: template.metadata,
+  };
+  return data;
+}
+
 async function main() {
   console.log('Seeding kubernetes-gitops templates...\n');
 
@@ -158,38 +201,7 @@ async function main() {
       where: { name: template.name },
     });
 
-    // Resolve the prompt template with role-specific guidance. All four roles HAVE
-    // ROLE_GUIDANCE_LIBRARY entries (infra_state_harvester + infra_change_architect added
-    // WP-A3/A4; config_change_author + change_reviewer reused), so none falls back to generic.
-    const promptTemplate = PAICHART_UNIVERSAL_BASE_TEMPLATE.replace(
-      '${roleSpecificGuidance}',
-      getRoleSpecificGuidance(template.defaultRole)
-    );
-
-    const data = {
-      name: template.name,
-      description: template.description,
-      category: template.category,
-      templateType: template.templateType,
-      defaultRole: template.defaultRole,
-      promptTemplate,
-      capabilities: {
-        'Protocol-Driven': 'Reads kubernetes-gitops-protocol from injected context before acting',
-        'Context Chaining': 'Receives predecessor task output via pipeline context injection',
-        'GitOps Change, Not Apply': 'Produces a reviewable declarative change to be reconciled — never applies anything to a cluster',
-      },
-      constraints: {
-        'Protocol First': 'Must read the injected protocol before beginning work',
-        'Stay in Phase': 'Only perform the work for the specific phase assigned — do not skip ahead',
-        'No Cluster Mutation': 'No mutating/write verb anywhere in this pipeline; the Harvester is read-only, apply is out-of-band (GitOps reconcile)',
-      },
-      maxRetries: 2,
-      timeout: template.timeout,
-      priority: AgentPriority.HIGH,
-      isDefault: false,
-      tags: template.tags,
-      metadata: template.metadata,
-    };
+    const data = buildTemplateRow(template);
 
     if (existing) {
       console.log(`  Already exists (id: ${existing.id}) — updating...`);
@@ -222,7 +234,8 @@ async function main() {
   await prisma.$disconnect();
 }
 
-main().catch((e) => {
+// held-k8s 3a: importable without writing (TEMPLATES + buildTemplateRow), like the obs seed (V-0).
+if (require.main === module) main().catch((e) => {
   console.error('Seed failed:', e);
   prisma.$disconnect();
   process.exit(1);

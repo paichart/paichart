@@ -7,7 +7,9 @@
  *   → runRequirementsFormStep (requirements_author; the SAME shared step the core calls — fact always, the correction
  *     turn when REQUIREMENTS_FORM_CORRECTION_ENABLED=true in the lab's env and the step decides `attempted`)
  *   → parseConfidenceScore/applyConfidenceCap
- *   → runDiagnosticRetry (the 50-69 band)
+ *   → runEditApplicationStep (PLATFORM-HELD-BYTES Stage B, held-variant config_change_author only; its one correction turn
+ *     when the arm enables it — HELD_EDIT_CORRECTION_ENABLED semantics, passed per arm, never via the env)
+ *   → runDiagnosticRetry (the 50-69 band) → recountEditApplication when #90 replaced the text
  * Every step is the shipping function; the lab only sequences them, because runExecutionCore itself also
  * PERSISTS (it cannot be called without writing to a database). That sequencing is a copy of ~40 lines of
  * ordering and is the one place this module could drift from the core — re-read execution-core.ts:200-372
@@ -22,6 +24,7 @@
  * the stored raw result of the node's production execution through the same seam; the shipping loop applies R9 and the
  * LLM cap to it. The loop's full records come back as `toolCallRecords` for the sample's result.json `toolCalls`.
  */
+import { HELD_VARIANT_PROTOCOL, HELD_OBS_PROTOCOL } from '../../lib/agents/harness/held-bytes/variant';
 import { runAgenticToolLoop, normalizeModelConfig } from '../../lib/agents/harness/agentic-tool-loop';
 import { finalizeTextForStopReason } from '../../lib/services/llm/finalize-response';
 import { computeFormCheckFact, isFormCheckEligible } from '../../lib/agents/harness/package-form-check';
@@ -36,12 +39,16 @@ import { costForExecution } from '../../lib/services/llm/model-pricing';
 import { LLMProvider } from '../../lib/services/llm/types';
 import type { RebuiltPrompt } from './rebuild';
 import type { RecordedToolServer } from './recorded-tools';
+import { runEditApplicationStep, recountEditApplication, isEditStepEligible, arbitrateReflectionPass, type EditStepResult, type ResolveHeldFiles } from '../../lib/services/held-edit-step';
+import type { OwningLegResolution } from '../../lib/agents/harness/held-bytes/variant';
+import { collectR10EchoSources } from '../../lib/agents/harness/redact-artifact-secrets';
+import { isBatchScope, batchCostUsd, batchTtl, BATCH_DEADLINE_EXTENSION_MS } from './batch-transport';
 
 export const TOOL_STUB_RESULT = {
   content: [{ type: 'text', text: 'LEG REPLAY LAB: tool calls are not executed in an offline replay. No live state, no other task\'s output and no comment was read or written. Continue from your prompt and your §6 Pipeline Context.' }],
 };
 
-export interface LlmCall { purpose: string; model: string | null; stopReason: string | null; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number; costUsd: number | null }
+export interface LlmCall { purpose: string; model: string | null; stopReason: string | null; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number; costUsd: number | null; /** LAB-BATCH-TRANSPORT: priced at batch rates. */ batched?: boolean }
 
 export interface LiveResult {
   finalResponse: string;
@@ -57,6 +64,8 @@ export interface LiveResult {
   /** requirements_author, when the correction turn was ATTEMPTED: the draft before it, the facts-only message the
    *  Author was sent, and the model's raw re-emission (kept even when NOT adopted — the read needs both sides). */
   requirementsCorrection?: { preCorrectionText: string; correctionPrompt: string | null; correctedRaw: string | null; enabledSource: string } | null;
+  /** PLATFORM-HELD-BYTES Stage B: the shipping edit step's result (null unless the arm runs the held variant). */
+  editStep?: EditStepResult | null;
   /** requirements_author: where the step's `enabled` came from — `arm:on|off` (the variant lever) or `env:on|off`. */
   requirementsFormCorrectionEnabledSource?: string | null;
   confidenceScore: number | null;
@@ -96,6 +105,15 @@ export function fakeGenerateText(text: string, model: string) {
     usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 }, metadata: { model } });
 }
 
+/** One call's cost for the lab meter: standard pricing, or — inside a LAB-BATCH-TRANSPORT scope — batch pricing (× 0.5, 1h writes). */
+function labCallCost(u: { inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheCreationTokens?: number }, model: string): number | null {
+  const now = new Date();
+  const std = costForExecution({ inputTokens: u.inputTokens, outputTokens: u.outputTokens, cacheReadTokens: u.cacheReadTokens, cacheCreationTokens: u.cacheCreationTokens }, model, now).costUsd ?? null;
+  if (!isBatchScope()) return std;
+  const write = costForExecution({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: u.cacheCreationTokens }, model, now).costUsd ?? 0;
+  return batchCostUsd(std, write, batchTtl());
+}
+
 export async function runLive(p: RebuiltPrompt, ctx: { executionId: string; taskId: string; taskType: string | null; apiKey: string;
   /** requirements_author: the harness row the snapshot carries (`snap.leg`) — the objective + owner map, no DB read. */
   requirementsHarnessRow?: Record<string, any> | null;
@@ -105,6 +123,13 @@ export async function runLive(p: RebuiltPrompt, ctx: { executionId: string; task
   requirementsFormCorrectionEnabled?: boolean;
   /** Recorded tools (2026-10-13): serve calls from the node's production record instead of the stub. One per sample. */
   toolServer?: RecordedToolServer | null;
+  /** PLATFORM-HELD-BYTES Stage B: the held-variant edit step's inputs (the arm's binding, the Author's PATCHED inputContext,
+   *  the lab's in-memory resolver, the arm's correction flag). Unset ⇒ no step, exactly as on a non-variant leaf. */
+  heldEdit?: { owningLeg: OwningLegResolution; inputContext: unknown; povId: string | null; resolveHeldFiles: ResolveHeldFiles; correctionEnabled: boolean; r9Version: string } | null;
+  /** SPEND METER (2026-10-19, L-K2 defect): called once per model call, the moment the call returns, with that call's cost. The lab
+   *  adds it to its running spend HERE — synchronously, never as `spent += await …` (which raced under concurrency and undercounted
+   *  invocation 3 by $5.20) — so a sample that later throws has still counted every call it made. */
+  onCall?: (c: LlmCall) => void;
   /** TEST ONLY: replaces the model call. Never set on a --spend run. */
   generateTextOverride?: (prompt: string, options: any, userId?: string) => Promise<any> }): Promise<LiveResult> {
   const llm = ctx.generateTextOverride ? null : (await import('../../lib/services/llm/llm-service')).llmService;
@@ -119,13 +144,18 @@ export async function runLive(p: RebuiltPrompt, ctx: { executionId: string; task
       const lastText = Array.isArray(last?.content) ? last.content.map((b: any) => b?.text ?? '').join('') : (typeof last?.content === 'string' ? last.content : null);
       corrCapture = { correctionPrompt: lastText, correctedRaw: typeof resp?.text === 'string' ? resp.text : null };
     }
-    const u = resp?.usage ?? {};
+    // TEST ONLY (pinned by test:leg-replay-lab, LK10): a fake model reports zero usage; LAB_TEST_FAKE_OUTPUT_TOKENS gives each FAKE call a
+    // known output-token count so the spend meter can be checked under concurrency. Ignored unless the model call is a fake.
+    const fakeOut = ctx.generateTextOverride ? Number(process.env.LAB_TEST_FAKE_OUTPUT_TOKENS ?? 0) : 0;
+    const u = fakeOut > 0 ? { inputTokens: 0, outputTokens: fakeOut, cacheReadTokens: 0, cacheCreationTokens: 0 } : (resp?.usage ?? {});
     const model = resp?.metadata?.model ?? p.model;
     calls.push({
       purpose, model, stopReason: resp?.stopReason ?? null,
       inputTokens: u.inputTokens ?? 0, outputTokens: u.outputTokens ?? 0, cacheReadTokens: u.cacheReadTokens ?? 0, cacheCreationTokens: u.cacheCreationTokens ?? 0,
-      costUsd: costForExecution({ inputTokens: u.inputTokens, outputTokens: u.outputTokens, cacheReadTokens: u.cacheReadTokens, cacheCreationTokens: u.cacheCreationTokens }, model, new Date()).costUsd ?? null,
+      costUsd: labCallCost(u, model),
+      ...(isBatchScope() ? { batched: true } : {}),
     });
+    ctx.onCall?.(calls[calls.length - 1]);
     return resp;
   };
   const quiet = { info: () => {}, debug: () => {}, warn: () => {}, error: (o: any, m: string) => console.warn('    [loop error]', m, o?.apiErrorMessage ?? o?.err?.message ?? '') } as any;
@@ -139,7 +169,9 @@ export async function runLive(p: RebuiltPrompt, ctx: { executionId: string; task
   // Other roles keep 600 s so earlier experiments' baselines stay comparable (a known lab/production divergence).
   const reqEligible = isRequirementsFormCheckEligible(p.role, ctx.taskType);
   const prodTurns = Math.min(Number.isFinite(p.maxToolTurns) && p.maxToolTurns > 0 ? p.maxToolTurns : RUNTIME_LIMITS.DEFAULT_TOOL_TURNS, RUNTIME_LIMITS.MAX_TOOL_TURNS);
-  const timeoutMs = reqEligible ? RUNTIME_LIMITS.EXECUTION_TIMEOUT_BASE_MS + prodTurns * RUNTIME_LIMITS.EXECUTION_TIMEOUT_PER_TURN_MS : 600_000;
+  if (reqEligible && isBatchScope()) throw new Error('LAB-BATCH-TRANSPORT: a requirements_author node cannot run batched — its 2b time decision reads the wall clock');
+  // LAB-BATCH-TRANSPORT: a batched turn takes minutes, so the deadline is extended (the time-budget decisions read time as ample — named).
+  const timeoutMs = (reqEligible ? RUNTIME_LIMITS.EXECUTION_TIMEOUT_BASE_MS + prodTurns * RUNTIME_LIMITS.EXECUTION_TIMEOUT_PER_TURN_MS : 600_000) + (isBatchScope() ? BATCH_DEADLINE_EXTENSION_MS : 0);
   const loopStartedAt = Date.now();
   const deadlineAt = loopStartedAt + timeoutMs;
   const timer = setTimeout(() => abort.abort(), timeoutMs);
@@ -167,6 +199,30 @@ export async function runLive(p: RebuiltPrompt, ctx: { executionId: string; task
     throw new Error(`replay produced no content (stopReason=${currentResponse?.stopReason}) — production would mark this execution FAILED`);
   }
 
+  // PLATFORM-HELD-BYTES Phase 10 panel D4: the retired variant token is no longer held-capable in lib (a leg titled with it composes
+  // base-only in production). A HISTORIC lab arm still serves the measured variant TEXT under that name (G1–G3 reproducibility), and
+  // that text is exactly obs's held mode — so the lab presents the binding fact to the step under the held-capable obs name. The
+  // served bytes do not change; only the binding check's input does. Lab-only: production never takes this path.
+  const asHeldCapableInjection = (fact: unknown) => {
+    const f = fact as { protocolNames?: unknown } | null;
+    if (!f || !Array.isArray(f.protocolNames)) return fact;
+    return { ...f, protocolNames: f.protocolNames.map((n) => (n === HELD_VARIANT_PROTOCOL ? HELD_OBS_PROTOCOL : n)) };
+  };
+  const he = ctx.heldEdit ?? null;
+  // R10-V8-RESIDUALS (b): the persist's tool-record echo sources — the same input execution-core hands the step.
+  const persistEchoTokens = he ? collectR10EchoSources(toolCallResults) : undefined;
+  // The edit step's input from the CURRENT deliverable (the form correction may replace it) — the shape execution-core builds.
+  const editStepInput = (decideOnly: boolean) => he ? ({
+    task: { id: ctx.taskId, type: ctx.taskType, povId: he.povId, inputContext: he.inputContext },
+    agentRole: p.role ?? null, finalResponse, owningLeg: he.owningLeg, protocolInjection: asHeldCapableInjection(p.fact) as never, r9Version: he.r9Version, persistEchoTokens,
+    authorStageId: he.owningLeg.kind === 'leg' ? he.owningLeg.ownStageId : null, decideOnly,
+    correction: {
+      enabled: he.correctionEnabled, correctionTurnUsed, formCorrectionAttempted,
+      budgetFlagged: !!budgetFailFastUsed || (!!finalResponse && BUDGET_SELF_FLAG_PATTERN.test(finalResponse.slice(0, 1500))),
+      deadlineAt, loopStartedAt, currentResponse, messageHistory, totalUsage, prompt: p.user, normalizedLlmConfig: cfg, mcpFunctions: p.tools as any,
+      executionId: ctx.executionId, userId: undefined, generateText, logger: quiet,
+    },
+  }) : null;
   let formCheck: any = null;
   let formCorrectionAttempted = false;
   if (isFormCheckEligible(p.role, ctx.taskType)) {
@@ -175,6 +231,8 @@ export async function runLive(p: RebuiltPrompt, ctx: { executionId: string; task
       budgetFlagged: !!budgetFailFastUsed || (!!finalResponse && BUDGET_SELF_FLAG_PATTERN.test(finalResponse.slice(0, 1500))),
       correctionEnabled: isFormCorrectionEnabled(),
     });
+    // F-T2-1 (b): the SAME arbitration production runs (held-edit-step.ts arbitrateReflectionPass).
+    if (he) formCheck = (await arbitrateReflectionPass(formCheck, editStepInput(true), he.resolveHeldFiles)).formCheck;
     if (formCheck.correction?.attempted) {
       purpose = 'form-correction';
       const fc = await runFormCorrection({
@@ -215,6 +273,20 @@ export async function runLive(p: RebuiltPrompt, ctx: { executionId: string; task
     }
   }
 
+  // PLATFORM-HELD-BYTES Stage B (V-5c position): the held-edit step, config_change_author on a VARIANT leg only.
+  let editStep: EditStepResult | null = null;
+  if (he && isEditStepEligible(p.role ?? null, ctx.taskType, he.owningLeg)) {
+    purpose = 'held-edit-correction';
+    editStep = await runEditApplicationStep(editStepInput(false)!, he.resolveHeldFiles);
+    if (editStep) {
+      formCorrectionAttempted = formCorrectionAttempted || editStep.correction.attempted;
+      if (editStep.textSource === 'edit-correction') {
+        finalResponse = editStep.text; currentResponse = editStep.currentResponse;
+        if (formCheck) formCheck = { ...computeFormCheckFact({ text: finalResponse, stopReason: currentResponse?.stopReason, textSource: 'edit-correction' }), correction: formCheck.correction };
+      }
+    }
+  }
+
   const failed = toolCallResults.filter((t: any) => !t.success).length;
   const cap = applyConfidenceCap(parseConfidenceScore(finalResponse), toolCallResults.length, failed);
   purpose = 'diagnostic-retry';
@@ -224,8 +296,11 @@ export async function runLive(p: RebuiltPrompt, ctx: { executionId: string; task
     mcpFunctions: p.tools as any, executionId: ctx.executionId, userId: undefined,
   }, { generateText, logger: quiet });
   finalResponse = retry.text;
+  // #90 replaced the deliverable: the PURE applier re-runs on the post-#90 text over the SAME verified files (core :495).
+  if (editStep && retry.diagnosticRetryUsed) editStep = recountEditApplication(editStep, finalResponse, he!.r9Version, persistEchoTokens);
 
   return {
+    editStep,
     finalResponse, finalStopReason: retry.currentResponse?.stopReason ?? loop.finalStopReason, turns: turnCount, toolCalls,
     toolCallRecords: toolCallResults as Array<Record<string, unknown>>,
     formCheck, requirementsFormCheck, requirementsCorrection, requirementsFormCorrectionEnabledSource, confidenceScore: retry.confidenceScore, diagnosticRetryUsed: retry.diagnosticRetryUsed, correctionTurnUsed,

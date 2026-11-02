@@ -198,7 +198,8 @@ test('Pattern: Service caller has MAX_CONCURRENT limit', () => {
 });
 
 test('Pattern: Service caller resolves endpoint via MCPTool table', () => {
-  expect(callerCode).toContain('prisma.mCPTool.findFirst');
+  // Stage B P1-5: id first, then name, through the shared resolver (resolve-service-ref.js)
+  expect(callerCode).toContain('findServiceByIdThenName(prisma.mCPTool');
   layer1Passed++;
 });
 

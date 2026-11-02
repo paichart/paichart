@@ -71,7 +71,7 @@ This discovery will map the current state and identify all integration points in
 - `defaultRole` (scalar) → SYS-HEAD (`${agentRole}`) + USER §1 Directive fallback (only when `config.prompt` absent).
 - `constraints` (Json OBJECT key→desc, or array) → **DOUBLE**: SYS-TAIL `renderConstraintsBlock` (Axis 5) AND USER §8. Two deliberate divergences — do NOT byte-match: the tail SANITIZES (`<>`-strip + 500-cap) + suppresses-empty; §8 renders RAW + always emits the header.
 - `outputSchema` (Json) → USER §2 Expected Output — **⚠ LATENT (0 templates set it; §2 is dead until populated)**.
-- `metadata` (Json) → THREE disjoint consumers, only ONE reaches the prompt: `loadProtocols:true`→ALL protocol-tagged (cap-10) / `protocol:'name'`→ONE named — SYS-TAIL injection; `modelParameters`→LLM call params (NOT prompt); `mcpToolConfiguration.selectedTools`→Builder validate/simulate ONLY, never runtime (**common trap: editing it changes nothing at runtime**). **⚠️ NOT the same key as `task.metadata.protocol` (WS2 Phase A 2026-08-17): the TASK-level key is a PLATFORM-WRITTEN routing stamp (resolved from the title token at first execution, write-protected `PROTOCOL_STAMP_IMMUTABLE`, merge-preserved on every surface) — same name, different object, different semantics; the object-discipline pin in `test-cc7-contract-guard` B1.2 guards which row each consumer reads.**
+- `metadata` (Json) → THREE disjoint consumers, only ONE reaches the prompt: `loadProtocols:true`→ALL protocol-tagged (cap-10) (⚠️ RETIRED 2026-10-16: `true` now throws `UNKNOWN_PROTOCOL_MODE`; flip script deleted — PROTOCOL-LOAD-ALL-RETIRE) / `protocol:'name'`→ONE named — SYS-TAIL injection; `modelParameters`→LLM call params (NOT prompt); `mcpToolConfiguration.selectedTools`→Builder validate/simulate ONLY, never runtime (**common trap: editing it changes nothing at runtime**). **⚠️ NOT the same key as `task.metadata.protocol` (WS2 Phase A 2026-08-17): the TASK-level key is a PLATFORM-WRITTEN routing stamp (resolved from the title token at first execution, write-protected `PROTOCOL_STAMP_IMMUTABLE`, merge-preserved on every surface) — same name, different object, different semantics; the object-discipline pin in `test-cc7-contract-guard` B1.2 guards which row each consumer reads.**
 - `capabilities` (Json object) → **⚠ NOWHERE — dead (hydrated but unconsumed; the stream's inline line was removed at Axis 5/6, the engine never rendered it). Candidate to DROP from `EXECUTION_TEMPLATE_SELECT`.**
 - `templateType` → not prompt. Its P9 consumer (`evaluateTemplateScopeMatch`) was deleted 2026-07-17; since RWF C1 (2026-09-26) it is read by `isReviewerSet` for the re-execution / keep-best / verdict-freshness policy (see P10 section). `maxRetries`/`timeout` → execution control (not prompt; `timeout` is SECONDS, X19). `id`/`name` → linkage/logging/metadata-null tripwire.
 - Two NON-field injectors share these sections: `${contextualInformation}` in SYS-HEAD = live TASK data (the ONE shared `buildContextSummary` — Axis 3 2026-07-07 merged both paths; the engine's `buildContextualInformation` was deleted), NOT a template field; USER §7 tools = TASK-level `config.mcpTools` (agent-configure), NOT `template.selectedTools`.
@@ -428,7 +428,8 @@ stamped delta) — and the GUI JSONB-overwrite hazard is no longer cosmetic: `bu
 `'composed'` on save = silent de-protocoling; explicit `null` removal warns), and the 2026-04-17
 "cosmetic only" KNOWN-DATA-LOSS comment is rewritten. Builder protocol dropdown filters DRAFT
 rows (admins get all statuses from the API; a DRAFT binding throws NAMED_PROTOCOL_NOT_FOUND on
-every run). The ONLY sanctioned mode flip is `scripts/flip-harness-protocol-mode.ts` (refusing,
+every run). (⚠️ 2026-10-16: load-all RETIRED and the flip script DELETED — `'composed'` is the only harness mode; `true` throws.) The ONLY sanctioned mode flip WAS `scripts/flip-harness-protocol-mode.ts` (refusing,
+⚠️ **Held-variant templates (flip checklist, PC-P2-9):** `scripts/seed-observability-held-templates.ts` writes status INACTIVE on EVERY run — a reseed after the ACTIVE flip would deactivate the four variant templates; fix before the flip (Stage B plan §6).
 one-key jsonb merge — NEVER re-run seed-harness-template.ts to flip); rollback drill = un-flip
 FIRST, verify `--render-hash` byte-equality, only then consider code reverts (a code revert with
 the template flipped de-protocols every harness — backstopped by the
@@ -498,3 +499,25 @@ sanctioned tier at maxTokens 48000. Prod after the EG-1 reseed: 0 STALE / 40 CUR
 `prompt` or `metadata.modelParameters` OUTRANK their template, so a reseed does not reach them. Read it after every reseed.
 Usually a person's GUI choice (legitimate — Steve keeps GUI editing); to make one follow its template again, clear the task's
 prompt / model parameters in the GUI. Prod 2026-09-27: 59 prompt overrides, 50 model pins. Local 2026-09-27: 0 / 1.
+
+**Pointer (2026-10-16, G3 entry decision 1):** the variant Reviewer template (`Observability Held Change Reviewer`) now carries ONE constraint, `Held Diff: Unaccounted Lines Block` (`HELD_REVIEWER_CONSTRAINT`), beside the Author's `Held Files: Edits Only`; constraints render in the system AND user prompt. Lab-gated before ACTIVE; seeded only at the flip (manual). Golden: only that template's entry moved. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/G3-ENTRY-BUILD.md`.
+
+**Pointer (2026-10-17, PLATFORM-HELD-BYTES Phase 10 — DEPLOYED + reseeded 04:46Z):** the 4 `Observability Held …` templates are
+DEPRECATED (`seed-observability-held-templates.ts`); the BASE obs Author ⊇ `Held Files: Edits Only`, Reviewer ⊇ `Held Diff: Unaccounted
+Lines Block`; Node C `Held Edits Are The Package` identical in `seed-program-templates.ts` + `seed-value-chain-templates.ts`. A Phase-10
+reseed is FOUR owning seeds verified by direct row reads (freshness cannot see constraints or status) — `PHASE10-PLAN.md` §10.2 / §10.10;
+rollback (revert order + inverse checks) §10.3.
+
+## Pointer (2026-10-19): k8s seed carries the held constraints (step 3, local)
+`seed-kubernetes-gitops-templates.ts` exports `TEMPLATES` + `buildTemplateRow` (3a, no-op proven vs prod) and spreads
+`HELD_AUTHOR_CONSTRAINT` / `HELD_REVIEWER_CONSTRAINT` last; two-way seed pin in `test:held-variant-protocol`. Reseed owed at the step-3 deploy.
+
+## Pointer (2026-10-22): terraform seed carries the held constraints (step 3, DEPLOYED 2026-10-21 21:16:37Z)
+`seed-terraform-iac-templates.ts` spreads `HELD_AUTHOR_CONSTRAINT` / `HELD_REVIEWER_CONSTRAINT` by role (HCL Rollback Author, Plan Policy Reviewer); the
+two-way pin in `test:held-variant-protocol` requires it now that terraform is held-capable. Prod reseed command (record it at every deploy — LL-T-33):
+`npx ts-node --project prisma/tsconfig.seed.json scripts/seed-terraform-iac-templates.ts` in the release dir with `.env.production` exported.
+
+## Pointer (2026-10-27): network owning seed carries the held constraints
+`seed-network-provisioning-templates.ts` spreads `HELD_AUTHOR_CONSTRAINT` / `HELD_REVIEWER_CONSTRAINT` by role (pinned both ways by `test:held-variant-protocol`); network kept files live 2026-10-27. Record `cline_docs/reviews/held-network-2026-10-22/NETWORK-CLOSEOUT.md`; discovery § Network owning seed.
+
+**Golden set (2026-10-31):** a ROLE_GUIDANCE_LIBRARY or template-constraint change (highest blast radius: `change_reviewer`, `config_change_author`) also replays the frozen golden set (Protocol 16 § "The standing no-regression rule"); the reseed still follows the deploy.

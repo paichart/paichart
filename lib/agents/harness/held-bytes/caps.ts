@@ -26,3 +26,8 @@ export const HELD_EXECUTION_FILE_CAP = 256;
 
 /** Columns bound per row of the blob upsert — HELD_EXECUTION_FILE_CAP × this must stay under Postgres's 65,535 binds. */
 export const HELD_ROW_BINDS = 6;
+
+/** Stage B V-3 (plan §3 V-3 `edit-set-too-large`): edit blocks per package, and summed SEARCH + REPLACE bytes (UTF-8). The
+ *  applier is linear in these (one indexOf scan per edit over the view), so the caps bound its time too (pinned). */
+export const HELD_EDIT_MAX_EDITS = 64;
+export const HELD_EDIT_MAX_BYTES = 256 * 1024;

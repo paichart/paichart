@@ -33,6 +33,7 @@ import { deriveMcpToolNames, buildHubToolGuidance } from '../../lib/services/exe
 import { resolveAgentRole } from '../../lib/services/execution-terminal-persist';
 import { resolveTaskProtocol } from '../../lib/agents/harness/program-protocol';
 import { READ_MORE_FUNCTION_DEF } from '../../lib/agents/harness/agentic-tool-loop';
+import { stripAgentForbiddenActions } from '../../lib/services/mcp/agent-tool-strip';
 import { RUNTIME_LIMITS } from '../../lib/validation/runtime-limits';
 import type { ExecBlock, Snapshot } from './snapshot';
 const { CONSOLIDATED_SCHEMAS, TOOL_SCHEMAS } = require('../../lib/mcp/server/config/tool-schemas');
@@ -121,14 +122,19 @@ export function hydrateTask(b: ExecBlock, status: string): Record<string, any> {
   };
 }
 
-function toolDefs(names: string[]): Array<{ name: string; description: string; parameters: unknown }> {
+export function toolDefs(names: string[]): Array<{ name: string; description: string; parameters: unknown }> {
   const out: Array<{ name: string; description: string; parameters: unknown }> = [];
   for (const name of names) {
     const schema = CONSOLIDATED_SCHEMAS[name] || TOOL_SCHEMAS[name];
     if (!schema) continue; // the engine's getToolDefinitions skips an unresolved name the same way
     let params: unknown;
     try { params = zodToJsonSchema(schema.inputSchema, { target: 'jsonSchema7' }); } catch { params = { type: 'object', properties: {}, additionalProperties: true }; }
-    out.push({ name, description: schema.description || `MCP tool: ${name}`, parameters: params || { type: 'object', properties: {}, required: [] } });
+    // HUB-P2-2 (G3 entry, 2026-10-16) — LAB SERIES CUT: production strips the agent-forbidden actions + their params at
+    // `getToolDefinitions` (the definition's `inputSchema`, before the engine maps it to `parameters`); the lab now applies the
+    // SAME function at the same position. Before this, G1/G2 cells (both arms) were offered `held.get`, which no production
+    // agent sees — fair between arms, but `hashes.tools` was not the production tools hash. Never re-applied to G1/G2 records.
+    const def = stripAgentForbiddenActions({ name, description: schema.description || `MCP tool: ${name}`, inputSchema: params });
+    out.push({ name, description: def.description, parameters: def.inputSchema || { type: 'object', properties: {}, required: [] } });
   }
   if (out.length > 0) out.push(READ_MORE_FUNCTION_DEF as any);
   return out;

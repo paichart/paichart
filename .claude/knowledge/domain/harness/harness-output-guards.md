@@ -1,6 +1,6 @@
 # Harness Output Guards & Their Feature Flags (R9 / R10)
 
-> Canonical reference for the two output-hardening guards that pAIchart runs on its **own** side (defense-in-depth for any connected-service pipeline — network, k8s, terraform-iac, …). **Default-OFF in code**, but **ENABLED in prod since 2026-06-29** (both `=true`). Pointed to from agent-execution / pipeline-harness / sec-ops / dev-ops specialists.
+> Canonical reference for the two output-hardening guards that pAIchart runs on its **own** side (defense-in-depth for any connected-service pipeline — network, k8s, terraform-iac, …). **Code defaults differ (corrected 2026-11-01): R9 runs only when `=true`; R10 runs unless `=false` (default-ON since 2026-08-28)**, and both are **ENABLED in prod since 2026-06-29** (both `=true`). `.env.example` sets both ON since 2026-11-01 (PH-7). Pointed to from agent-execution / pipeline-harness / sec-ops / dev-ops specialists.
 > Shipped 2026-06-24. Full reviews: `cline_docs/reviews/ws1-r9-sanitizer-2026-06-24/` · `cline_docs/reviews/ws2-r10-redactor-2026-06-24/`.
 
 ## The two guards
@@ -11,7 +11,7 @@
 | **Pure module** | `lib/agents/harness/sanitize-chained-output.ts` | `lib/agents/harness/redact-artifact-secrets.ts` (`redactArtifactSecrets`, `redactSecretsDeep`, shared `redactArtifactsForPersist`) |
 | **Call sites (both wired)** | `agentic-tool-loop.ts` (site A, gated to the `services` gateway) + `context-chainer.ts` (site B) | `agentExecutionEngine.ts` (engine persist) + `app/api/pov/agent/execute/stream/route.ts` (stream persist) — via the shared helper so they can't drift |
 | **Flag** | `CONNECTED_OUTPUT_SANITIZE_ENABLED` | `ARTIFACT_SECRET_REDACT_ENABLED` |
-| **Posture** | **Platform hardening** (all pipelines) — driving toward a global enable | **OPT-IN defense-in-depth** — NOT a global default (customer R10 + their governance do the primary work) |
+| **Posture** | **Platform hardening** (all pipelines) — driving toward a global enable | **Defense-in-depth, default-ON in code since 2026-08-28** (was OPT-IN — "NOT a global default" until then) (customer R10 + their governance do the primary work) |
 | **Enable-gate** | ⚠️ **HISTORICAL — this gate was NOT met; the flag was enabled anyway on 2026-06-29 (`f7398004`), accepting C1 as a known risk.** Read it as an OPEN question, not a blocking precondition. **C1**: `detectPromptInjection` false-positives on prose/device-logs (`system:`, `act as`, chat-role labels); the decision (detector high-signal subset vs mark-don't-mutate) is **routed to prompt-construction + sec-ops**. What changed 2026-07-26: site-A telemetry now *measures* the FP rate on live device output, so the corpus regression this row asks for can be run against real firings instead of guesses — see **Reading R9 firings** below. 🔴 **C1 FIRED LIVE 2026-08-23 — this risk is no longer hypothetical: see §C1 realised.** | Lower bar (opt-in). The egregious false-positives + the crash + parity are already fixed; flip per high-assurance engagement. |
 | **CI pins** | `scripts/test-security-invariants.ts` §I (behavioral + both-sites static) | `scripts/test-security-invariants.ts` §J |
 
@@ -28,7 +28,7 @@ pm2 restart <app>          # prod: ssh <PROD_USER>@<PROD_HOST> -> pm2 restart
 # OFF / kill-switch — set =false (or remove the line) -> pm2 restart. Instant.
 ```
 
-- **Default OFF in code** (absent or any non-`'true'` value → off; fail-safe, since both are *additive* defense). **ENABLED in prod 2026-06-29** (both `=true`) — for the terraform-iac validation rig and as the intended production posture.
+- **Code defaults DIFFER (corrected 2026-11-01, PH-7):** **R9** runs only when `=true` (absent or anything else → off). **R10** runs **unless** `=false` — default-ON in code since 2026-08-28 (`isR10Disabled()` = `=== 'false'`, `redact-artifact-secrets.ts`). Since 2026-11-01 `.env.example` sets BOTH `=true` (it used to set both `=false`, which switched R10 off for self-hosters). *(The earlier sentence, kept for history: "Default OFF in code (absent or any non-`'true'` value → off; fail-safe, since both are *additive* defense)." — true for R9 only since 2026-08-28.)* **ENABLED in prod 2026-06-29** (both `=true`) — for the terraform-iac validation rig and as the intended production posture.
 - **Durable enable (not a GitHub Secret — non-secret booleans):** a literal in `production-deploy.yml`'s *Create environment file* step (survives the `.env.production` regen on every deploy) **+** the `ecosystem.config.js` env-block passthrough (PM2's explicit allowlist). A `.env.production` hand-edit alone is a deploy-wiped stopgap. See `PRODUCTION_OPERATIONS_GUIDE.md` → "Non-secret feature flags". (`.env.example` / `.env.production.template` may still carry `=false` placeholders — those are the safe code default, not prod.)
 - The CI pins run the **pure modules directly**, so they validate R9/R10 **regardless** of the flag — the flag only gates the call sites.
 

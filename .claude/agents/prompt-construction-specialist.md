@@ -368,3 +368,30 @@ only the prompt copy is currently scanned.
 
 ## Pointer (2026-10-13): observability 1.9.0 — interim quoting + consumer rules
 C1 (every config file an as-deployed read returns is quoted byte for byte; the modified/restored file always whole; other files may be labelled excerpts with `# [elided: …]`; the Author never copies a marker), C2 (Prometheus = values, not layout, never "verbatim"), and `CONSUMED_ADDRESS_CLAUSE` (obs only: an address an upstream LEG produced is declared as cidr, /32 or bare; never own-harvest/brief/contract addresses). Shipped under a Protocol 16 owner exemption; live control passed (Phase 4 run 3). C1/C2 are INTERIM until PLATFORM-HELD-BYTES. Next-edit note in register CONTAINMENT-FIX-B-SELECTION. Record: `cline_docs/reviews/verbatim-quote-omission-2026-10-13/` (DRAFT-C, REVIEW-OBS-1.9.0).
+
+## Pointer (2026-10-16): the load-all injection mode is RETIRED
+`loadProtocols: true` throws `UNKNOWN_PROTOCOL_MODE` (retired wording) before any read; the `all` branch, `take: 10` and the both-set/stamp-ignored arms are deleted; modes = composed | named | none; `scripts/flip-harness-protocol-mode.ts` deleted; the deploy gate reports a `true` template with its one-key fix (`fec105ac3`, register PROTOCOL-LOAD-ALL-RETIRE).
+
+**Pointer (2026-10-16, PLATFORM-HELD-BYTES G3 entry — §6 held render, variant legs only):** `heldNone` one-line state (PC-P2-3); the Reviewer diff names a refused file (`· not applied · refused: …`), adds one `Refused by the platform (not applied): …` line, and heads a no-applied-edit package "no held-file edit was applied" (PC-P2-1, lab-gated); a predecessor's open fence is closed before held lines (PC-P2-7, `lib/utils/markdown-fence.ts`, shared with the report). Applied / restore-only renders byte-identical. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/G3-ENTRY-BUILD.md`.
+
+**Pointer (2026-10-17, PLATFORM-HELD-BYTES Phase 10 — DEPLOYED):** observability-config **1.10.0** carries the held text (shared constants in
+`held-bytes/variant-protocol.ts`; +3,952 chars over 1.9.0); the Reviewer held clause applies only to files the PLATFORM names as held (its
+held-files line or a diff header, never the package's own label) and exempts an unchanged quote; the out-of-scope render states facts only
+(`render-held.ts`). Live C-1: the Reviewer read the held clauses as not applying to a Prometheus-only package (correct). `PHASE10-PLAN.md` §10.8.
+
+2026-10-19 — K8S-TEXT-BATCH-NEXT (register `cline_docs/follow-ups/OPEN-REGISTER-2026-09-23.md`) is the next kubernetes-gitops text change, batched
+for ONE Protocol 16 lab: the R8 stale role-guidance quote (delete its `KNOWN_STALE_ROLE_QUOTES` exception in the same commit), "a
+`generation`/`revision` counter is not a cause witness", and the Architect's spec quote (watch-first). Trigger: the next k8s text change or
+the 2026-11-29 health-run.
+
+**2026-10-22 (held-terraform CLOSED):** terraform-iac 1.15.0 interpolates `heldFilesSection(TF_HELD_EDIT_EXAMPLE, <intro>)` — the shared held text is
+NEVER edited; a domain passes its example + intro and scopes its other-file rules in its own paragraph (LL-T-08). You co-own **TF-TEXT-BATCH-NEXT** (one
+terraform text batch, one lab: the github-service lifecycle sentence, merge-key attribution, the ADDENDUM (g) harness sentence — ignored live 2/2,
+LL-T-07 — the "stale" cause wording, the git-apply claim). Trigger: the next terraform text change or the 2026-11-29 health-run.
+
+## Pointer (2026-10-27): network held join text live
+network-provisioning 1.25.0 interpolates the SHARED held text via `heldFilesSection(NET_HELD_EDIT_EXAMPLE, NET_HELD_FILES_INTRO)` (all four change domains now held); HOWTO-use-pipeline-harness 2.8.10 live, 2.8.11 local. Record `cline_docs/reviews/held-network-2026-10-22/NETWORK-CLOSEOUT.md`; discovery § network-provisioning 1.25.0.
+
+**Join learnings carried (2026-10-31):** `.claude/knowledge/domain/harness/prompt-construction-library.md` § "Carried from the join learnings ledgers" — read it before designing a check, lab or text change in your domain.
+
+**Golden set (2026-10-31):** any change to protocol or agent-facing text goes through the lab WITH the frozen golden set (`scripts/leg-replay-lab/golden/`, Protocol 16 § "The standing no-regression rule"; how: LAB-USER-GUIDE); text that ships to all four domains needs golden cases from every domain. One flipped case is a do-not-ship miss.

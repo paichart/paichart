@@ -72,7 +72,7 @@ test('registering a name is the ONLY thing needed to opt in', () => {
 
 // ─── leg protocols must never match ────────────────────────────────────────────────────────
 test('LEG protocols must NOT be treated as program harnesses', () => {
-  for (const leg of ['network-provisioning', 'terraform-iac', 'kubernetes-gitops', 'artifact-synthesis']) {
+  for (const leg of ['network-provisioning', 'terraform-iac', 'kubernetes-gitops', 'artifact-synthesis', 'observability-config-held']) {
     assert(!isProgramProtocolTitle(`X (protocol: ${leg})`), `${leg} is a leg, not a program`);
   }
 });
@@ -157,7 +157,7 @@ test('tier: research-program is a program with its row DRAFT and ABSENT FROM THE
   assert(isProgramProtocol('research-program-protocol'), 'long');
 });
 test('tier: legs, near-misses, null, empty are NOT programs', () => {
-  for (const n of ['network-provisioning', 'terraform-iac-protocol', 'pov-program-lite', 'pov-programme']) {
+  for (const n of ['network-provisioning', 'terraform-iac-protocol', 'observability-config-held-protocol', 'pov-program-lite', 'pov-programme']) {
     assert(!isProgramProtocol(n), n);
   }
   assert(!isProgramProtocol(null) && !isProgramProtocol(undefined) && !isProgramProtocol(''), 'null-family');

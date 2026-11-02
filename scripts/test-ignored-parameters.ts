@@ -67,12 +67,34 @@ for (const [name, args] of CLEAN) {
   test(`C ${name} → []`, () => { const got = ignoredFor(args); assert(got.length === 0, `got ${JSON.stringify(got)}`); });
 }
 
+// PLAN-SPAWN-CONTRACT-OMISSION option A (2026-10-17): interfaceContract on task.update is DECLARED so it is never silently
+// stripped — it is no longer an "unapplied" key; validation REFUSES it with the create-only fact (5 of 5 harness cases before
+// this sent it on task.update and got a generic NO_EFFECT that never said why).
+{
+  const v = require('../lib/validation/mcp-action-validation') as typeof import('../lib/validation/mcp-action-validation');
+  test('A task.update + interfaceContract → declared (not unapplied), refused by validation with the create-only message', () => {
+    const got = ignoredFor({ action: 'task.update', parameters: { taskId: T, interfaceContract: { a: 1 } } });
+    assert(got.length === 0, `got ${JSON.stringify(got)}`);
+    const r = v.validateMCPActionRequest({ action: 'task.update', parameters: { taskId: T, interfaceContract: { a: 1 } } });
+    assert(r.success === false && JSON.stringify(r.errors).includes(v.INTERFACE_CONTRACT_CREATE_ONLY_MESSAGE), `got ${JSON.stringify(r)}`);
+    const shape = v.MCPParameterSchemas['task.update'];
+    const parsed = (shape as any).safeParse({ taskId: T, interfaceContract: { a: 1 } });
+    assert(!parsed.success && parsed.error.issues.some((i: any) => i.message === v.INTERFACE_CONTRACT_CREATE_ONLY_MESSAGE), 'router-path safeParse refuses too');
+    const ok = (shape as any).safeParse({ taskId: T, status: 'IN_PROGRESS' });
+    assert(ok.success, 'an ordinary update still validates');
+    // Q2 (D-3 + V8): the two static facts — the storage sentence pointer and the CONDITIONAL reviewer-arm fact.
+    for (const must of ["If this task's task.create result said the platform stored the program plan's contract, the task already holds it.",
+      'if every leg of that stage holds that plan.']) {
+      assert(v.INTERFACE_CONTRACT_CREATE_ONLY_MESSAGE.includes(must), `the refusal lost "${must}"`);
+    }
+  });
+}
+
 console.log('\n━━━ G: unapplied keys reported in the caller\'s vocabulary ━━━');
 const GENUINE: Array<[string, Record<string, unknown>, string[]]> = [
   ['task.create + role → role (not the layer copy agentRole)', { action: 'task.create', povId: P, title: 'x', role: 'r' }, ['role']],
   ['task.create + prompt', { action: 'task.create', povId: P, title: 'x', prompt: 'p' }, ['prompt']],
   ['task.create double-nested parameters (after nothing hoisted)', { action: 'task.create', parameters: { povId: P, title: 'x', parameters: { foo: 1 } } }, ['parameters']],
-  ['task.update + interfaceContract (task.create-only field)', { action: 'task.update', parameters: { taskId: T, interfaceContract: { a: 1 } } }, ['interfaceContract']],
   ['agent.results + format (not declared at L3 for agent.results)', { action: 'agent.results', taskId: T, format: 'detailed' }, ['format']],
   ['agent.assign + templateId AND a DIFFERENT explicit agentTemplateId → templateId unapplied', { action: 'agent.assign', parameters: { taskId: T, agentTemplateId: TPL, templateId: 'cmotherabcdefghijklmnopqr' } }, ['templateId']],
 ];

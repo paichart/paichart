@@ -31,9 +31,17 @@ import { sanitizeChainedOutput } from './sanitize-chained-output';
 export interface RawToolDocument {
   /** Index into `toolCalls`. */
   call: number;
-  /** `<service>.<tool>` for a `services` call, else the platform tool name. */
+  /** `<service>.<tool>` for a `services` call, else the platform tool name. The service half is what the CALLER wrote
+   *  (`arguments.targetService`) — a name or, since gateway id-first (2026-10-14), a registry id. Stamped as
+   *  `quoteFidelity.findings[].source.tool`, so it never changes; a lane reads `resolvedService` instead. */
   tool: string;
-  /** Key path inside the result (`…structuredContent.files.otlp-ingress.conf`) — how a file-artifact lane is read. */
+  /** held-k8s 1e (2026-10-18, EF S-4 / AE S-7): the service the GATEWAY resolved — the success envelope's
+   *  `content[0].data.targetService` (the same rule held-bytes capture identifies a call by, extract.ts `identify`), else
+   *  `arguments.targetService`, else null (a platform tool, or an unparseable call). Read by the quoteFidelity lane only;
+   *  never stamped. */
+  resolvedService: string | null;
+  /** Key path inside the result (`…structuredContent.files.otlp-ingress.conf`). Stamped as `source.path`; since quoteFidelity
+   *  v2 (held-k8s 1e) it no longer decides the lane — the descriptor table does (quote-fidelity.ts FILE_LANE_KEYS). */
   path: string;
   lines: string[];
   persistTruncated: boolean;
@@ -55,6 +63,30 @@ function toolNameOf(tc: Record<string, unknown>): string {
     return `${typeof ar.targetService === 'string' ? ar.targetService : '?'}.${ar.tool as string}`;
   }
   return base;
+}
+
+function argsOf(tc: Record<string, unknown>): Record<string, unknown> | null {
+  let a: unknown = tc.arguments;
+  if (typeof a === 'string') {
+    try { a = JSON.parse(a); } catch { a = null; }
+  }
+  return a && typeof a === 'object' && !Array.isArray(a) ? (a as Record<string, unknown>) : null;
+}
+
+/** See `RawToolDocument.resolvedService`. The envelope wins; the arguments are the fallback for a reply without one. */
+function resolvedServiceOf(tc: Record<string, unknown>): string | null {
+  const r = tc.result;
+  if (r && typeof r === 'object' && Array.isArray((r as Record<string, unknown>).content)) {
+    const first = ((r as Record<string, unknown>).content as unknown[])[0];
+    if (first && typeof first === 'object' && (first as Record<string, unknown>).type === 'data') {
+      const data = (first as Record<string, unknown>).data;
+      if (data && typeof data === 'object' && typeof (data as Record<string, unknown>).targetService === 'string') {
+        return (data as Record<string, unknown>).targetService as string;
+      }
+    }
+  }
+  const a = argsOf(tc);
+  return a && typeof a.targetService === 'string' ? a.targetService : null;
 }
 
 function walk(v: unknown, path: string, out: Array<{ path: string; text: string }>, trunc: { hit: boolean }): void {
@@ -98,9 +130,10 @@ export function extractRawToolDocuments(toolCalls: unknown): RawToolDocument[] {
     const trunc = { hit: false };
     walk(t.result, '', strs, trunc);
     const tool = toolNameOf(t);
+    const resolvedService = resolvedServiceOf(t);
     for (const s of strs) {
       docs.push({
-        call, tool, path: s.path, lines: s.text.split('\n'),
+        call, tool, resolvedService, path: s.path, lines: s.text.split('\n'),
         persistTruncated: trunc.hit,
         llmTruncated: t.resultTruncatedForLlm === true,
         rewritten: t.rewritten === true,

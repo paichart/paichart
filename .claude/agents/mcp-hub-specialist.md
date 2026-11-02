@@ -388,3 +388,40 @@ curl -X POST https://paichart.app/mcp -H "Accept: application/json" \
 
 ### To database-manager-specialist
 "MCPTool schema optimization or database performance concerns"
+
+## Pointer (2026-10-14): gateway id-first resolution + gateway meta (Stage B push 1)
+All three `targetService` resolvers go through `resolve-service-ref.js` (id first, then name; an id hit is terminal). Registration refuses cuid-shaped names and existing ids; seed guards in `scripts/mcp-tool-seed-guard.ts` (by-name arm on cloudflare only — register BY-NAME-SEED-GUARD-SCOPE). Failure `_meta` carries `targetServiceId`; an allowlisted copy reaches `result.json.toolCallGatewayMeta`, never the agent. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-B-PUSH1-BUILD.md`.
+
+## Pointer (2026-10-15): `held.get` on the agent surface
+The agent strip (`serverManager.ts` applies it at `getToolDefinitions`; since 2026-10-16 it is DEFINED in `lib/services/mcp/agent-tool-strip.ts`, re-exported by serverManager, so the leg replay lab applies the same function — HUB-P2-2) removes `held.get` AND its four parameters (`AGENT_FORBIDDEN_PARAMS`); the agent `project` definition is pinned byte-identical to the pre-held.get schema (`test:held-get`). External clients' `tools/list` does carry it. `held.get` numbers handles through the shared `harvesterHandles` (HUB-P2-4).
+
+## Pointer (2026-10-18): Git file-source pin at the call gate (held-k8s 1c, DEPLOYED 2026-10-18 04:23:03Z, release `release_20261018_041900`)
+`validateServiceCall` takes the RESOLVED service name as a 6th parameter (service-call + workflow handlers pass it — id-first
+safe) and applies `lib/mcp/server/config/git-file-source-pin.js` to `github-service` ⇒ `PINNED_ARGUMENT` CRITICAL (owner/repo
+case-folded ASCII, relative safe path, default branch only, no `sha`). The SAME function gates held capture — change it in one place.
+**1d built (your SF-5):** `refuseAgentMutationOfPlatformRow` refuses an agent's (`callingExecutionId`) registry delete/update of an ownerless row ⇒ `PLATFORM_SERVICE_AGENT_MUTATION_REFUSED`; `test:hub-platform-row-guard` (battery, mutation-checked). github-service rate limit 20/min per (user, service) is ample for one leg; count the step-4 program leg's reads before raising. Record: `cline_docs/reviews/held-k8s-2026-10-18/STEP1-BUILD.md`.
+**Owed to you (register HELD-K8S-SECOPS-STEP1):** SF-1 refuse a Git file source as a WORKFLOW step (`workflow-tools-handler.js`, `service-caller.ts`; `mcp_workflow_executions` stores file text unredacted) — **before step 2**; SF-3 add `checkGitArguments` to the `POST /api/workflows/run` external branch — before any `publicAccess` flip; HELD-K8S-GITHUB-RATE (count reads at the step-4 window). The pin's path rule is now a per-segment ALLOW-list `[A-Za-z0-9._@+-]` (SF-2).
+
+## Pointer (2026-10-19): held-k8s step 2 hub changes + CONCURRENT-SELF-PROVISION
+`git-file-source-pin.js` now owns two more hub controls, both deployed 2026-10-18: `gitFileSourceWorkflowRefusal` (both workflow step
+callers, resolved name) and `stripGitFileSourceUrlTokens` (service-call-handler's external success path, before the result is built).
+Filed CONCURRENT-SELF-PROVISION: parallel legs self-provisioning one descriptor collide on the unique name, reuse the first row (same
+owner only), and the FIRST teardown deletes it under the rest. Minor: `task.create` rejects a `stageName` with an em dash (pass `stageId`).
+
+2026-10-19 (K8S-CLOSEOUT) — status of your held-k8s items (register `cline_docs/follow-ups/OPEN-REGISTER-2026-09-23.md`):
+**CONCURRENT-SELF-PROVISION DECIDED (owner): sequence + re-home** — a per-run name is rejected (name AND endpoint are unique); build
+reference-counted teardown at the registry when a program spawns two parallel legs on one descriptor (yours + sec-ops review).
+**HELD-K8S-GITHUB-RATE CLOSED for k8s** (1 read per leg in the step-4 window; keep 20/min), re-homed to a Git-source trigger (≥ 3 parallel
+legs, a terraform leg naming > 10 files, or the first `RATE_LIMITED` refusal). HELD-K8S-SECOPS-STEP1 remainder: its own triggers stand.
+**2026-10-22 (held-terraform CLOSED):** a refused `services.call` is STORED in two shapes — production's agent loop: `success: true` +
+`result.isError` + the message in `result.content`; the leg replay lab's fixture tier: `success: false` + `result: null` + `error`. Verify a shape on a
+PRODUCTION row before keying a reader on it (MI-13 was re-keyed wrong once, LL-T-23). The hub's static refusal wording changed (F-T1, LL-T-06) and
+reaches every caller incl. external MCP clients. Terraform window legs ran ONE AT A TIME per descriptor (CONCURRENT-SELF-PROVISION decision held).
+
+## Pointer (2026-10-25): SF-1 agent mutation guard on run provenance (BUILT, not deployed)
+`refuseAgentMutationOfRowNotProvisionedByRun` (hub-shared-middleware) runs after the platform-row/IF-3 guard in registry delete AND update: an agent may mutate a row only as its registering execution (`configuration.provisionedByExecutionId`) or as the leg harness named by the create-time `configuration.provisionedByRunScope` — never re-derived from the rebindable stage back-pointer. Human/adopted rows carry no stamp ⇒ always refused to agents. `test:hub-agent-provisioned-guard`. Record: `cline_docs/reviews/held-network-2026-10-22/SF1-AGENT-DELETE-GUARD.md`; filed HUB-STAGE-BACKPOINTER-REBIND, HUB-RUN-ORPHAN-ROWS.
+
+## Pointer (2026-10-27): held-network CLOSED
+Network kept files live (1.25.0). Hub-side pieces: SF-1 run-scope guard (deployed 2026-10-24), descriptor-URL registration, P8 declared-git-line lane on unpinned customer Git rows (`GIT_LINE_DESCRIPTORS`, held-bytes). Record `cline_docs/reviews/held-network-2026-10-22/NETWORK-CLOSEOUT.md`.
+
+**Join learnings carried (2026-10-31):** `.claude/knowledge/domain/mcp/mcp-hub-library.md` § "Carried from the join learnings ledgers".

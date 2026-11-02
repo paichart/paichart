@@ -240,14 +240,25 @@ test('CTF-SEAM-6 (PLATFORM-HELD-BYTES Stage A): the capture halves sit where the
   assert(prep > pos(coreSrc, 'const executionTime') && prep < pos(coreSrc, 'buildSuccessLogs(')
     && prep < pos(coreSrc, 'assessExecutionQuality(') && prep < pos(coreSrc, 'buildExecutionResultJson('),
     'core: the pure half is after the duration and before buildSuccessLogs / assessExecutionQuality / buildExecutionResultJson');
-  // core: ONE I/O call after keep-best and before the persist, inside the post-loop region
-  assert(count(coreSrc, /await captureHeldFiles\(/g) === 1, 'core: exactly one await captureHeldFiles(');
-  const io = pos(coreSrc, 'await captureHeldFiles(');
-  assert(io > pos(coreSrc, '} catch (ksErr) {') && io < pos(coreSrc, 'persistTerminalSuccess(prisma'), 'core: the I/O half is after keep-best and before the persist');
+  // WI-B10: the ONE descriptor table is built (async) right BEFORE the pure half, at BOTH success paths.
+  assert(count(coreSrc, /await buildHeldDescriptorTable\(/g) === 1 && pos(coreSrc, 'await buildHeldDescriptorTable(') > pos(coreSrc, 'const executionTime')
+    && pos(coreSrc, 'await buildHeldDescriptorTable(') < prep, 'core: one buildHeldDescriptorTable, after the duration and before prepareHeldCapture (WI-B10)');
+  {
+    const fa = anchoredSrc.slice(pos(anchoredSrc, 'export async function persistCompletionAnchored'));
+    assert(pos(fa, 'await buildHeldDescriptorTable(') > 0 && pos(fa, 'await buildHeldDescriptorTable(') < pos(fa, 'prepareHeldCapture('), 'anchored: buildHeldDescriptorTable before prepareHeldCapture (WI-B10)');
+  }
+  // core: the I/O half at TWO sites, exactly one of which runs (Stage B V-5d, 2026-10-15): a VARIANT-leg batch captures
+  // BEFORE the nets (they transcribe its outcome — gated `variantLeaf ?`), every other batch keeps the Stage A position
+  // after keep-best and before the persist (gated `if (!variantLeaf)`). Both pre-tx, both inside the post-loop region.
+  assert(count(coreSrc, /await captureHeldFiles\(/g) === 2, 'core: exactly two await captureHeldFiles( sites (variant + Stage A)');
+  const ioVariant = pos(coreSrc, 'variantLeaf ? await captureHeldFiles(');
+  assert(ioVariant > 0 && ioVariant < pos(coreSrc, 'await stampExecutionNets('), 'core: the variant I/O half is gated on variantLeaf and before the nets');
+  const io = pos(coreSrc, 'if (!variantLeaf) heldCaptures = await captureHeldFiles(');
+  assert(io > pos(coreSrc, '} catch (ksErr) {') && io < pos(coreSrc, 'persistTerminalSuccess(prisma'), 'core: the Stage A I/O half (gated !variantLeaf) is after keep-best and before the persist');
   // The POST-LOOP try is the last `try {` before `} catch (postLoopErr) {` (code review AE N-2: not the first in the file).
   const postCatch = pos(coreSrc, '} catch (postLoopErr) {');
   const postTry = coreSrc.lastIndexOf('try {', coreSrc.lastIndexOf('const { toolCallResults', postCatch));
-  assert(postTry > 0 && prep > postTry && io < postCatch, 'core: both inside the post-loop region');
+  assert(postTry > 0 && prep > postTry && ioVariant > postTry && io < postCatch, 'core: every capture site inside the post-loop region');
   // anchored: the pure half BEFORE buildCompletionAnchoredResult (which runs the nets), the I/O half after `built`
   const fnA = anchoredSrc.slice(pos(anchoredSrc, 'export async function persistCompletionAnchored'));
   assert(pos(fnA, 'prepareHeldCapture(') > 0 && pos(fnA, 'prepareHeldCapture(') < pos(fnA, 'buildCompletionAnchoredResult('), 'anchored: pure half before buildCompletionAnchoredResult (AE D1)');

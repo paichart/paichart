@@ -37,6 +37,7 @@
 // directly without casting. This is intentional coupling: the helper exists
 // specifically to produce the result.json artifact, which IS the consumer of
 // these domain types.
+import { collectToolCallGatewayMeta } from '@/lib/services/mcp/gateway-meta';
 import type { ResolvedHarnessContext } from './harnessModeResolver';
 import type { AccumulatedUsage } from '@/lib/agents/harness/agentic-tool-loop';
 import { assessScoreIntegrity } from '@/lib/agents/harness/parse-confidence';
@@ -45,6 +46,7 @@ import { computeEvidenceGrading } from '@/lib/agents/harness/evidence-grading';
 import { computeReviewerWarnings } from '@/lib/agents/harness/reviewer-warnings';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { sliceSurrogateSafe } from '@/lib/utils/surrogate-safe';
+import { elideGitFileSourceStatus } from '@/lib/agents/harness/held-bytes/git-status-elision';
 import { stripHtmlEventHandlers } from '@/lib/utils/sanitization';
 
 /**
@@ -406,6 +408,10 @@ export interface ExecutionResultJsonInput {
    *  copied verbatim, survives the hoist with no whitelist edit). Emitted ONLY when non-empty: every clean execution's
    *  bytes and key order are unchanged. */
   reflectionErrors?: Array<{ site: string; status: number | null; errorType: string | null; errorCode: string | null }> | null;
+  /** PLATFORM-HELD-BYTES Stage B V-5c (AE S2): the held-edit correction turn's DECISION, as the step took it — an INPUT, so
+   *  the spender below and the editApplication net transcribe the SAME object. Absent on every non-variant execution
+   *  (bytes and key order unchanged). Only `attempted` is read here. */
+  editCorrection?: { attempted?: boolean } | null;
 
   // Path-specific extensions (Vercel-AI-SDK fields emitted by stream path only —
   // engine uses Anthropic SDK directly and doesn't surface these as artifact fields)
@@ -460,7 +466,10 @@ function truncateToolCallResults(
   executionId: string,
   logger: ExecutionResultJsonInput['logger']
 ): ToolCallEntry[] {
-  return toolCallResults.map(entry => {
+  return toolCallResults.map(original => {
+    // held-k8s G-1: a Git file source's blob ids never persist (held-bytes/git-status-elision.ts). FIRST, so the size test
+    // below measures what is stored. Persist-only: the in-memory records (capture, the nets) are never touched.
+    const entry = elideGitFileSourceStatus(original);
     if (!entry.success || !entry.result) return entry;
     const resultJson = JSON.stringify(entry.result);
     if (resultJson.length <= MAX_STORED_TOOL_RESULT_BYTES) return entry;
@@ -615,21 +624,23 @@ export function deriveChainedContextSignal(inputContext: unknown): ChainedContex
  * survive. Pinned by E3d in the parity suite and by RW1/RW2 in `test-lean-card-facts.ts` — the
  * read-side tripwire that would have caught the first defect the day it shipped.
  */
-export type ReflectionPassSpender = '#89' | 'form-correction' | 'requirements-form-correction' | '#90';
+export type ReflectionPassSpender = '#89' | 'form-correction' | 'requirements-form-correction' | 'edit-correction' | '#90';
 /** G6: the one reflection pass's spender, by the shipped precedence. An ATTEMPTED form or requirements correction
  *  spends it even when the call failed (llm-error) — the pattern doc names that trade. */
 export function reflectionPassSpentBy(i: {
   correctionTurnUsed?: boolean; diagnosticRetryUsed?: boolean; formCheck?: object | null; requirementsFormCheck?: object | null;
+  editCorrection?: { attempted?: boolean } | null;
 }): ReflectionPassSpender | null {
   const attempted = (f: object | null | undefined) => (f as { correction?: { attempted?: boolean } } | null | undefined)?.correction?.attempted === true;
   if (i.correctionTurnUsed) return '#89';
   if (attempted(i.formCheck)) return 'form-correction';
   if (attempted(i.requirementsFormCheck)) return 'requirements-form-correction';
+  if (i.editCorrection?.attempted === true) return 'edit-correction';
   if (i.diagnosticRetryUsed) return '#90';
   return null;
 }
 
-export const RESULT_JSON_SUMMARY_KEYS = ['toolLoop', 'confidenceScore', 'reviewerVerdict', 'derivationContainment', 'dialectLint', 'contractPropagation', 'protocolInjection', 'qualityMetrics', 'markerPresence', 'rollbackContainment', 'errorCategory', 'chainedContext', 'supersession', 'verdictFreshness', 'postCompletionFailure', 'reviewerWarnings', 'quoteFidelity'] as const; // markerPresence: H-4 (2026-09-10) and rollbackContainment: net #3 (2026-09-11) are DELIBERATE top-level additions — never unlisted siblings. rollbackDisposition rides NESTED inside rollbackContainment (E3b); promoting it here would strip it at the hoist. errorCategory + chainedContext (2026-09-16): see the header — both were canonical top-level keys of this builder that the card READ and this list DROPPED
+export const RESULT_JSON_SUMMARY_KEYS = ['toolLoop', 'confidenceScore', 'reviewerVerdict', 'derivationContainment', 'dialectLint', 'contractPropagation', 'protocolInjection', 'qualityMetrics', 'markerPresence', 'rollbackContainment', 'errorCategory', 'chainedContext', 'supersession', 'verdictFreshness', 'postCompletionFailure', 'reviewerWarnings', 'quoteFidelity', 'editApplication', 'heldBytes', 'reviewedEditDiff'] as const; // markerPresence: H-4 (2026-09-10) and rollbackContainment: net #3 (2026-09-11) are DELIBERATE top-level additions — never unlisted siblings. rollbackDisposition rides NESTED inside rollbackContainment (E3b); promoting it here would strip it at the hoist. errorCategory + chainedContext (2026-09-16): see the header — both were canonical top-level keys of this builder that the card READ and this list DROPPED
 // RWF C.3 (2026-09-26): `supersession` (keep-best's audit, written by computeSelfSupersession — NOT a net) and
 // `verdictFreshness` (a leg-synthesize net) are deliberate top-level additions: the pick stripped `supersession`
 // until now, so a retry that lost, or was skipped, was invisible on the card.
@@ -656,7 +667,9 @@ export const RESULT_JSON_BULKY_TAIL_KEYS = ['finalResponse', 'toolCalls', 'funct
  * not move `finalResponse`. It is still in the artifact, and a reader that pages (`read_more`) or fetches the raw
  * artifact can reach it — this reduces exposure, it does not remove it.
  */
-export const RESULT_JSON_OPERATOR_TAIL_KEYS = ['applyBlockPlaceholder'] as const;
+// `toolCallGatewayMeta` (Stage B P1-4, 2026-10-14): the gateway's allowlisted `_meta` per `services` call, `index` = the
+// call's position in `toolCalls` (lib/services/mcp/gateway-meta.ts). An operator fact, never in the record the agent read.
+export const RESULT_JSON_OPERATOR_TAIL_KEYS = ['applyBlockPlaceholder', 'toolCallGatewayMeta', 'validationToolCalls', 'deviceSourceReads', 'gitDeviceComparison'] as const; // + validationToolCalls (2026-10-23, network Author persist; appended) + deviceSourceReads, gitDeviceComparison (2026-10-26, held-network step 3 batch 2b: network Harvester / Author persist; appended)
 
 /**
  * PERSIST-TIME key order (RWF C.3, 2026-09-26). The builder above puts compact facts before the bulky
@@ -692,7 +705,7 @@ export function buildExecutionResultJson(input: ExecutionResultJsonInput): Recor
     chainedContext, protocolInjection, postCompletionFailure,
     turnCount, maxToolTurns, toolCallResults, successfulToolCalls, failedToolCalls,
     executionTime, tokensUsed, mcpFunctions,
-    correctionTurnUsed, diagnosticRetryUsed = false, budgetFailFastUsed = false,
+    correctionTurnUsed, diagnosticRetryUsed = false, budgetFailFastUsed = false, editCorrection = null,
     truncationRetryUsed = false, truncationRetryRecovered = false,
     truncationRetrySkippedReason = null, truncationRetryMaxTokens = null,
     truncationRetryStopReason = null, truncationRetryDiscardedChars = null,
@@ -830,10 +843,10 @@ export function buildExecutionResultJson(input: ExecutionResultJsonInput): Recor
       // Errored reflection calls (2026-10-07): only when non-empty, after formCheck, so absence changes no byte.
       ...(reflectionErrors && reflectionErrors.length ? { reflectionErrors } : {}),
       // G6 (2026-10-10, AR M3): WHO spent the run's ONE reflection pass, derived from the facts above in the
-      // documented precedence (#89 > form correction > requirements correction > #90). A transcription, not a new
+      // documented precedence (#89 > form correction > requirements correction > held-edit correction > #90). A transcription, not a new
       // decision; emitted only when a pass was spent, so a clean execution's bytes and key order are unchanged.
       ...(() => {
-        const by = reflectionPassSpentBy({ correctionTurnUsed, diagnosticRetryUsed, formCheck, requirementsFormCheck });
+        const by = reflectionPassSpentBy({ correctionTurnUsed, diagnosticRetryUsed, formCheck, requirementsFormCheck, editCorrection });
         return by ? { reflectionPassSpentBy: by } : {};
       })(),
     },
@@ -852,5 +865,11 @@ export function buildExecutionResultJson(input: ExecutionResultJsonInput): Recor
     ...(extensions.webSearchResults !== undefined ? { webSearchResults: extensions.webSearchResults } : {}),
     ...(extensions.citations !== undefined ? { citations: extensions.citations } : {}),
     ...(extensions.searchQueries !== undefined ? { searchQueries: extensions.searchQueries } : {}),
+    // Operator tail (Stage B P1-4): emitted only when some call carried gateway meta, so every other result.json is
+    // byte-identical. Read from the RECORDS (a non-enumerable property the toolCalls copy never carries).
+    ...(() => {
+      const gm = collectToolCallGatewayMeta(toolCallResults);
+      return gm.length ? { toolCallGatewayMeta: gm } : {};
+    })(),
   };
 }

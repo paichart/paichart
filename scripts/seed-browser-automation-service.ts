@@ -6,12 +6,14 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { assertSlugIdFree } from './mcp-tool-seed-guard';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('Registering Browser Automation Service...');
 
+  await assertSlugIdFree(prisma, 'browser-automation-service'); // Stage B P1-5: never shadow a same-named row under id-first resolution
   const service = await prisma.mCPTool.upsert({
     where: {
       id: 'browser-automation-service'

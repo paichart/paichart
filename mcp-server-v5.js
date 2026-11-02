@@ -129,7 +129,13 @@ class PureSDKNativeServer {
    *   - Initialization health tracking
    *   - Session context management
    */
-  constructor() {
+  /**
+   * @param {{ transport?: 'http' | 'stdio' }} [opts] — PLATFORM-HELD-BYTES Stage B V-7: HOW this server is reached, fixed at
+   *   construction. mcp-core (HTTP) passes nothing ⇒ 'http' (fail-closed: held.get needs an authMethod-bearing user); the stdio
+   *   entry point below passes 'stdio'. Never inferred from a context's shape.
+   */
+  constructor(opts = {}) {
+    this.transport = opts.transport === 'stdio' ? 'stdio' : 'http';
     // Initialize pure SDK server with enhanced capabilities
     this.server = new Server(
       {
@@ -1060,11 +1066,11 @@ Your AI-powered project management assistant with intelligent workflows.
     // Fix: wrap each of the 6 consolidated handlers with wrapWithSchema,
     // matching the pattern below at lines ~1097, 1116 (standalone tools).
     // Phantom-canonical case per `feedback_phantom_canonical_audit`.
-    const projectDispatcher = new ProjectDispatcher(this.basicTools, this.advancedTools);
+    const projectDispatcher = new ProjectDispatcher(this.basicTools, this.advancedTools, { transport: this.transport });
     const analyticsDispatcher = new AnalyticsDispatcher(this.advancedTools);
     const templateDispatcher = new TemplateDispatcher(this.basicTools);
     const servicesDispatcher = new ServicesDispatcher(this.hubTools);
-    const registryDispatcher = new RegistryDispatcher(this.hubTools);
+    const registryDispatcher = new RegistryDispatcher(this.hubTools, { transport: this.transport }); // WI-B10
 
     this.toolHandlers.set('project', wrapWithSchema('project', async (args, context) => {
       const userContext = resolveUserContext(context, 'project');
@@ -2045,7 +2051,8 @@ Your AI-powered project management assistant with intelligent workflows.
 
 // Main execution
 async function main() {
-  const server = new PureSDKNativeServer();
+  // The stdio entry point (Claude Desktop): the local single-operator trust model (V-7).
+  const server = new PureSDKNativeServer({ transport: 'stdio' });
   
   // Handle graceful shutdown
   const shutdownLog = stderrLoggers.mcpLogger.child({ component: 'sdk-v5' });

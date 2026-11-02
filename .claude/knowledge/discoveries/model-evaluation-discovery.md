@@ -44,7 +44,7 @@ grep -l "\"purpose\"" scripts/leg-replay-lab/inputs/*/experiment.json | wc -l   
 grep -l "\"authorSource\": \"persisted\"" scripts/leg-replay-lab/inputs/*/experiment.json | wc -l   # expect >=2 — ground-truth bench experiments (reviewer under test)
 
 # --- C. Gate + procedure docs ---
-grep -cE "^[1-9]\. \*\*" .claude/knowledge/protocols/pre-registered-lab-gate-protocol.md   # expect 9 — Protocol 16 non-negotiables
+grep -A24 "^## The non-negotiables" .claude/knowledge/protocols/pre-registered-lab-gate-protocol.md | grep -cE "^[1-9]\. \*\*"   # expect 9 — Protocol 16 non-negotiables (section-scoped since 2026-10-31: the no-regression rule added its own numbered list above them)
 grep -cE "^## Phase [0-7] " .claude/knowledge/pipelines/MODEL-ONBOARDING-PLAYBOOK.md   # expect 8 — playbook Phases 0..7
 grep -cE "^### Phase 6b " .claude/knowledge/pipelines/MODEL-ONBOARDING-PLAYBOOK.md   # expect 1 — codifying a GUI switch (2026-10-10)
 grep -c "^### Phase 2b" .claude/knowledge/pipelines/MODEL-ONBOARDING-PLAYBOOK.md   # expect 1 — the reviewer ground-truth bench
@@ -67,12 +67,12 @@ grep -cF 'IN (${REVIEWER_ROLE_LIST})' scripts/leg-replay-lab/snapshot.ts   # exp
 grep -cF "\"agentRole\" = 'change_reviewer'" scripts/leg-replay-lab/snapshot.ts   # expect 0 — the old hard-wired pairing must not return
 grep -c "requirementsFormCorrection?: boolean" scripts/leg-replay-lab/lab.ts   # expect 1 — the per-ARM 2b flag lever (L-R3)
 grep -c "requirementsFormCorrectionEnabled?: boolean" scripts/leg-replay-lab/live.ts   # expect 1 — the arm flag reaches the shipping step, not the env
-grep -c "one lever, two sources" scripts/leg-replay-lab/lab.ts   # expect 1 — an arm flag plus the env flag in experiment.flags is refused
+grep -c "sets requirementsFormCorrection while experiment.flags sets" scripts/leg-replay-lab/lab.ts   # expect 1 — an arm flag plus the env flag in experiment.flags is refused (keyed on the 2b refusal itself; 2026-10-15 the phrase "one lever, two sources" also guards heldEditCorrection and its comment)
 grep -c "^export const SIZE_ALLOWANCE_CHARS = 500;" scripts/leg-replay-lab/score-requirements.ts   # expect 1 — L-R5 allowance (measured: report.md +0 approved, +296 refused)
 
 # --- G. Z49 levers (2026-10-10; inputs/2026-10-10-z49-request-path) ---
 grep -c "inputEdits?: string" scripts/leg-replay-lab/lab.ts   # expect 1 — L-Z1 node input edit (objective of record + child briefs, on a snapshot COPY); the NodeSpec FIELD, not its position (2026-10-13: harvesterOnly/tools were appended after it)
-grep -c "requirementsCheckAt?: string }" scripts/leg-replay-lab/lab.ts   # expect 1 — L-Z2 per-arm in-run check data at a commit (a registry row ships WITH its text)
+grep -c "requirementsCheckAt?: string" scripts/leg-replay-lab/lab.ts   # expect 1 — L-Z2 per-arm in-run check data at a commit (a registry row ships WITH its text); the FIELD, not its position (2026-10-15: G1 variant fields were appended after it)
 grep -cF -- '-v2.ts`' scripts/leg-replay-lab/protocol-history.ts   # expect 1 — seed renders read seed-data AT the commit (v1 read today's skeleton at every commit)
 
 # --- H. Group 4 levers (2026-10-12; inputs/2026-10-12-g4-registry) ---
@@ -128,9 +128,56 @@ npm run test:leg-replay-lab   # expect >=26 — offline ($0) lab tests (R1-R5 re
    the owner the exact command and a `--max-usd` cap. Spend is the owner's call.
 6. **Read before counting**: every refusal on a planted/control node, one approval per cell, a label sample.
    Score the REASON of a refusal (is it FOR the planted item?), record the cited rule as a subcount.
+7. **Read every plant against EVERY input its reader holds — including the reader's TASK BRIEF** (two L-K1 Reviewer
+   plants were invalid: the prod brief said "no baseline supplied"; an override of a declared value draws the
+   chosen-value comparison rule). *(held-k8s LL-20)*
+8. **Score role-prefixed arms** (`k1-score --arm hk1|xk1|rk1`); an exact-match `--arm k1` reads every gate "not run". *(LL-21)*
+9. **Proxies flag, the hand read decides** — table-form drift and verbatim failed-read reports were scorer misses; keyword
+   hits ("reconcile", "HALT") were false. *(LL-22)*
+10. **Byte-prove fixtures against a live probe, incl. directory and missing cases**; a fixture digest covers listings and
+    missing-path text too; a default that is a prefix of live text fails. *(LL-23)*
+11. **Prove the candidate text reaches every arm** (count arm dirs carrying the new heading and lacking the old) and
+    re-assert the text sha at the push commit. *(LL-24)*
+12. **A stalled lab agent: check its artefacts before re-spawning** — most of the work may exist; finish in-session. *(LL-25)*
+13. **Close a predicted failure in the TEXT before paying to measure it.** If the pre-registration names a likely revise trigger
+    (L-K2: SG-DIFF — the text said "never whole" but not "a unified diff is not an edit", and still said "Helm-values diff"), fix
+    the text at $0 and re-pin; the lab then measures the fixed text instead of buying the known failure. *(held-k8s LL-26)*
+14. **Crib run first: split the most expensive invocation into `--n 1`, then `--n 4`.** Score the n=1 slice (≈ 1/5 of the cost)
+    and stop on any systematic miss; the scorer combines both runs, so a clean slice costs nothing extra. *(LL-27)*
+15. **Prove a novel output SHAPE through the real applier/parser at $0 before sampling it** — hand-write one correct package and
+    run it with `--fake-llm fixture:<dir>` (L-K2: inserting a new document into a held file applied 1/1). A shape the grammar
+    cannot express is a text/code fix, not a lab finding. **Reuse persisted production outputs as the base reading** where they
+    exist (L-K2 dropped a ~$11 sampled base Author arm). *(LL-28)*
 
 Worked example of the whole loop (two paid runs, rule corrections between them, platform defects found by reading
 samples): `cline_docs/reviews/warnings-invisible-2026-10-08/LAB-RESULTS-B2.md`.
+
+## PLATFORM-HELD-BYTES lab capabilities (2026-10-15, G1)
+
+The held-variant lab (Stage B G1, ledger L12/L12b) added: an in-memory held store and its prod identity check, variant binding by
+commit, held fields patched into frozen chain entries, the edit scorer, canned Author fixtures, raw tool-result plants and solo
+Architect cells. G2 (2026-10-15) added L-9 (a G1 sample as the fixed Author, refused unless its Author prompt is byte-identical), edit-op plants re-stamped by the PURE applier, `reviewerBaseEdit`, `diffMustShow`, the lever-delta report and `score-g2.ts`.
+```bash
+grep -c "cmd === 'edits-score'" scripts/leg-replay-lab/lab.ts   # expect 1
+grep -c "cmd === 'held-id-check'" scripts/leg-replay-lab/lab.ts   # expect 1
+grep -c "export function snapshotWithVariantBinding" scripts/leg-replay-lab/variant-binding.ts   # expect 1
+grep -c "harvester-toolcall:" scripts/leg-replay-lab/input-edits.ts   # expect >=1
+grep -c "architectOnly" scripts/leg-replay-lab/lab.ts   # expect >=1
+grep -c "LAB_SAMPLE_PREFIX" scripts/leg-replay-lab/lab.ts   # expect >=2 — L-9 BUILT 2026-10-15 (G2): node authorSourceByVariant 'lab-sample:<run>/<node>/<arm>/<i>'
+grep -c "export function pureStamp" scripts/leg-replay-lab/lab-sample.ts   # expect 1 — a plant re-stamps PURELY (never a correction turn, S-2)
+grep -c "reviewerBaseEdit" scripts/leg-replay-lab/lab.ts   # expect >=2 — the named-state case: Reviewer-side held bytes only
+grep -c "cmd === 'g2-score'" scripts/leg-replay-lab/lab.ts   # expect 1 — the G2 reason-scored Reviewer-bench scorer (score-g2.ts)
+# G3-entry lab changes (2026-10-16, 6b44c9cfe — G3-ENTRY-BUILD.md §2):
+grep -c "stripAgentForbiddenActions(" scripts/leg-replay-lab/rebuild.ts   # expect 1 — HUB-P2-2: lab tools = production's stripped tools (series cut)
+grep -c "export function r9VersionOfRun" scripts/leg-replay-lab/score-edits.ts   # expect 1 — ME-P2-5: R9 from the run manifest
+grep -c "process.env.CONNECTED_OUTPUT_SANITIZE_ENABLED" scripts/leg-replay-lab/score-edits.ts   # expect 0 — the scorer never reads the shell's R9
+grep -c "export function plantArmGaps" scripts/leg-replay-lab/lab.ts   # expect 1 — ME-P2-6: an unannounced unplanted arm is refused before any call
+# G3 Reviewer lab (2026-10-16, G3-LAB-PREREG.md):
+grep -c "cmd === 'g3-score'" scripts/leg-replay-lab/lab.ts   # expect 1 — G3 scorer (score-g3.ts, additive over score-g2): readings diff-rule / remit / partial-render + G3-NOFALSE identical-pair subcount
+grep -c "addedTemplateConstraint" scripts/leg-replay-lab/lab.ts   # expect 1 — lever report names variant-template constraint lines apart from "outside the held block" (HB8 was stale 51/1 at 8ce50c814 until this)
+```
+Records: `cline_docs/reviews/platform-held-bytes-2026-10-13/G1-LAB-PREREG.md`, `G1-LAB-RESULT.md`.
+**Phase 10 (2026-10-17):** variant folded into obs ≥ 1.10.0; historic `hb` arms render via the frozen `held-bytes/variant-protocol-stage-b.ts`; `score-edits.ts` imports `inOrderCoverage` from `held-bytes/whole-file.ts`.
 
 ## Integration points
 
@@ -141,3 +188,218 @@ samples): `cline_docs/reviews/warnings-invisible-2026-10-08/LAB-RESULTS-B2.md`.
 | New model wire safety | agent-execution-specialist | playbook Phase 1 audit, capability flag, live probe — BEFORE any paid arm |
 | Gate meaning | pipeline-harness-specialist | what an approved/refused verdict means at leg and program tier |
 | Switch delivery | template-system-specialist | tier constant, owning seeds, manual reseed, freshness report |
+
+## held-k8s 1k lab levers (2026-10-18 — DEPLOYED with step 1, `e4e0380d0`)
+
+```bash
+ls scripts/leg-replay-lab/fixture-tools.ts scripts/leg-replay-lab/harvester-source.ts scripts/leg-replay-lab/score-k1.ts | wc -l   # expect 3
+grep -c "validateServiceCall" scripts/leg-replay-lab/fixture-tools.ts   # expect >=1 — every served Git read passes the SHIPPING pin first
+grep -c "unserved-fixture" scripts/leg-replay-lab/fixture-tools.ts      # expect >=1 — an unmodelled github call is logged, never stubbed
+grep -c "k1-self-test" scripts/leg-replay-lab/lab.ts                    # expect >=1
+```
+L-K-a `fileFixture` (one pinned commit, probed shape, gateway envelope) · L-K-b `fixturePlants` · L-K-c `harvesterSourceByVariant`
+(`lab-sample:` refused unless byte-identical prompts/protocol/fixture, or `frozen:`) · L-K-d `score-k1.ts` (mutation-pinned self-test).
+**Owed before L-K1's pre-registration:** the real fixture at lab-repo commit `6d7d0c7` + the G-FIXTURE-ID admin probe + `fixture-id-check`;
+the forensics §7f lab-capability entry. Record: `cline_docs/reviews/held-k8s-2026-10-18/STEP1-BUILD.md` §1 (1k), §7.
+
+## L-K1 (held-k8s step 2, 2026-10-19; every expectation run before it was written)
+
+```bash
+grep -c "c.arm === arm" scripts/leg-replay-lab/score-k1.ts   # expect 1 — arms match EXACTLY: score `--arm hk1|xk1|rk1`, never `--arm k1` (reads every gate "not run")
+```
+Result + lessons (plants read against the Reviewer's TASK BRIEF; scorer proxies vs the hand read; fixture F1/F3):
+`cline_docs/reviews/held-k8s-2026-10-18/LAB-RESULT-L-K1.md`.
+
+
+## L-K2 lab levers (held-k8s step 3, the join; 2026-10-19; every expectation run before it was written)
+
+```bash
+grep -c "heldJoinSeed?: string" scripts/leg-replay-lab/lab.ts   # expect 1 — L-K-e: a JOINED domain's held arm (no variant; the owning seed's buildTemplateRow constraints)
+grep -c "export function snapshotWithHeldJoin" scripts/leg-replay-lab/variant-binding.ts   # expect 1 — refuses a leg this tree's lib does not make held-capable
+grep -c "gitFileSourceLeg: !!snap.leg && isGitFileSourceLeg(snap.leg)" scripts/leg-replay-lab/held-store.ts   # expect 1 — without it the lab store holds NOTHING from a Git read
+grep -c "cmd === 'k2-score'" scripts/leg-replay-lab/lab.ts   # expect 1 — score-k2.ts: SG-DOC, SG-DIFF, strict base diffs, independent G-AMBIG, DRIFT-CAUSE, k8s Reviewer gates
+grep -c "LK8 (L-K2)" scripts/test-leg-replay-lab.ts   # expect 1 — k2-self-test + its four mutations pinned
+```
+⚠️ A held-capable domain joins by NAME (`HELD_JOIN_VERSIONS`), so in a tree with the join, a BASE-arm leaf of that domain stamps
+`editApplication: step-not-run` (unrendered; prompts unchanged — L-K2 proved 73/73 cmp-identical against the release worktree).
+⚠️ A Git held path keeps the URI's leading slash (`/k8s/…`); a `create` must use the same form (register HELD-GIT-CREATE-PATH-SLASH).
+⚠️ One held file per k8s leg ⇒ `partial` is unreachable; any one bad SEARCH refuses the file (`refused`).
+Record: `cline_docs/reviews/held-k8s-2026-10-18/LAB-PREREG-L-K2.md`.
+
+## Lab spend + plant integrity (2026-10-19, L-K2; every expectation run before it was written)
+
+```bash
+grep -c "spendMismatch" scripts/leg-replay-lab/lab.ts                           # expect >=3 — run-end check: meter vs Σ sample.json (LAB-SPEND-COUNTER-RACE; pin LK10)
+grep -c -i "re-read" scripts/leg-replay-lab/input-edits.ts                     # expect >=2 — a plant is applied to EVERY stored copy and re-read (pin LK11)
+```
+⚠️ Cross-check any reported lab spend against Σ `sample.json` `costUsd` — before the fix the manifest under-reported concurrent
+Architect/Harvester runs (ledger L12/L16 corrected).
+
+## Lab-cost mechanics + L-K2 scorer refinements (2026-10-19, LAB-COST-REDUCTION ranks 1–5; every expectation run before it was written)
+
+```bash
+grep -c "^## Spend only where a sample can change the verdict" .claude/knowledge/protocols/pre-registered-lab-gate-protocol.md   # expect 1 — fixture-not-sample, re-apply-not-rerun, plant presence, base arms opt-in, curtailment, warm-first, batch
+ls .claude/knowledge/pipelines/LAB-ANATOMY.md | wc -l                                  # expect 1 — how to build a lab, L-K2 worked
+grep -c "export function plantPresence" scripts/leg-replay-lab/lab.ts                  # expect 1 — LAB-PLANT-PRESENCE-CHECK: planted vs UNPLANTED twin prompt
+grep -c "LAB-PLANT-PRESENCE-CHECK — plant" scripts/leg-replay-lab/lab.ts               # expect 2 — refused in the dry run on both persisted-Author paths (lab-sample, persisted)
+grep -c "export function warmFirstOrder" scripts/leg-replay-lab/lab.ts                 # expect 1 — LAB-WARM-FIRST (--no-warm-first to disable)
+grep -c "argv.includes('--batch')" scripts/leg-replay-lab/lab.ts                       # expect 1 — LAB-BATCH-TRANSPORT, paid only
+grep -c "export function toBatchParams" scripts/leg-replay-lab/batch-transport.ts      # expect 1 — the one body transform (drops betas/fallbacks, 1h TTL)
+grep -c "never touch the network" scripts/leg-replay-lab/batch-transport.ts            # expect 1 — capture mode ($0 proof) refuses messages.create
+grep -c "isBatchScope()" scripts/leg-replay-lab/live.ts                                # expect 4 — batch pricing, call stamp, deadline extension, requirements refusal
+grep -c "negation-blind" scripts/leg-replay-lab/score-k2.ts                            # expect 3 — DRIFT-CAUSE negation (mutation + type + check)
+grep -c "export function k8sArchQuotes" scripts/leg-replay-lab/score-k2.ts             # expect 1 — ARCH-QUOTE k8s document reading (a new object is not a quote)
+grep -c "export function countCitation" scripts/leg-replay-lab/score-k2.ts             # expect 1 — collateral: a rendered-count citation is FOR the plant
+grep -c "LK12 (lab-cost\|LK13 (LAB-BATCH" scripts/test-leg-replay-lab.ts               # expect 2
+```
+- **Batch byte proof** (`--fake-llm transport`, $0): the SHIPPING provider builds every request; the capture writes
+  `batch-proof/NNN.{production,batch}.json`. First run on L-K2 cells: 5 requests, 0 unexpected. Opus differs by
+  `betas`, `fallbacks` and two TTL leaves; Sonnet differs by the TTL leaves only.
+- **The ≈ $1 crib is the OWNER's**, and so is the ruling that the batch tier is a valid measurement tier.
+- **The batch divergences are named in the manifest**: no refusal fallback, the served tier, and a loop deadline that reads ample
+  time. requirements_author nodes are refused.
+- The plant-presence check filters ops by the arm's Author form (op-level `appliesTo`). G2 R-COLLATERAL carries ops for two forms.
+- The refined L-K2 readings print BESIDE the registered ones (ARCH-QUOTE "k8s document reading", COLLATERAL "with a rendered-count
+  citation"). Re-scored on the L-K2 runs they equal the hand reads: 19/20, 5/5, NOWIT 4/5, WIT 5/5.
+
+## L-T1 (held-terraform step 2, pre-registered 2026-10-21; every expectation run before it was written)
+
+```bash
+grep -c "cmd === 't1-score'" scripts/leg-replay-lab/lab.ts            # expect 1 — score-t1.ts: PATH (incl. browser bypass + ref/sha + forbidden paths), DESC/STATE, DIFF, CAUSE, REF, NOFALSE, HALT/ARCH
+grep -c "export function t1SelfTest" scripts/leg-replay-lab/score-t1.ts  # expect 1 — 8 mutations (refused-blind added in ADDENDUM (d)), each RED
+grep -c "HALT_AFTER_NEG_RE" scripts/leg-replay-lab/score-t1.ts          # expect 2 — the negation-AFTER fix ("HALT condition does not trigger"), found on the persisted "before" run
+grep -c "LT1 (L-T1)" scripts/test-leg-replay-lab.ts                     # expect 1
+grep -c "export const QUOTE_FILE_TOOLS" scripts/leg-replay-lab/score-quote.ts   # expect 1 — the strict quote scorer pairs the GIT read too (before: obs-rig tools only, so every Git quote read "not faithful")
+```
+- **The lab does not reproduce a non-github refusal**: a `scrape_page` of a pinned-repo URL falls to the recorded tier (unserved), where
+  production refuses `PINNED_SOURCE_BYPASS` — score the attempt from arguments, over samples valid OR not.
+- **`--batch` never batches a Harvester** (`lab.ts`: Harvesters stay standard) — price Harvester cells at the standard ledger rate.
+- **A `merge()` / `local` reference makes a "present in state, absent from the file" plant undecidable** — plant outside the merge, or a
+  literal key merge cannot remove (LL-20 applied to HCL).
+- Calibrate every new proxy on a `--fake-llm persisted` "before" run first ($0).
+- **A brief that orders a read beats the protocol text**: 15/15 Harvesters called a tag their brief named, through three text versions. Fix such a rule where the brief is WRITTEN (the harness), and keep a pin-refused attempt apart from a served off-path read (`refusedAttempts`, ADDENDUM (d)).
+- **One crib per text version**: each re-pin invalidates lab-sample harvests (byte-bound), so run Architect cells only after the last Harvester text change.
+Result: `cline_docs/reviews/held-terraform-2026-10-19/LAB-RESULT-L-T1.md` (PASS, $15.53).
+Record: `cline_docs/reviews/held-terraform-2026-10-19/LAB-PREREG-L-T1.md`.
+
+## L-T2 (held-terraform step 3, the join; PASSED 2026-10-22, $5.69; every expectation run before it was written)
+
+```bash
+grep -c "cmd === 't2-score'" scripts/leg-replay-lab/lab.ts                          # expect 1 — score-t2: score-k2 Author tables + HCL ARCH-QUOTE + score-t1 G-T-REF
+grep -c "export function hclArchQuotes" scripts/leg-replay-lab/score-t2.ts           # expect 1 — >= 3 NON-TRIVIAL held lines in order (bare } / blank never count)
+grep -c "otherValid:" scripts/leg-replay-lab/recorded-tools.ts                       # expect 2 — non-file services served rate; `valid` stays the FILE-tool rule
+grep -c "fact.state === 'unheld'" scripts/leg-replay-lab/score-edits.ts              # expect 1 — the digest recheck is not checkable on an unheld stamp (was a false miss)
+grep -c "LT3 (L-T2)\|LT2 (LAB-VALIDITY" scripts/test-leg-replay-lab.ts              # expect 2
+grep -c "arbitrateReflectionPass" scripts/leg-replay-lab/live.ts                     # expect 3 — the lab calls the SHARED F-T2-1 arbitration; never re-copy the post-loop order
+ls scripts/leg-replay-lab/inputs/2026-10-21-held-terraform-l-t2/fixtures-fake/*.md | wc -l   # expect 8 — the $0 fixture proofs (insert, bare-}, NFKC x2, placeholder x2, mixed + its correction)
+```
+- **Code-decided cells are fixtures, never samples:** the mixed-correction arbitration (F-T2-1), NFKC / R10 placeholder both ways, bare-`}`
+  ambiguity, the novel insert shape — all `--fake-llm fixture:`, $0. Only behaviour is sampled.
+- **Read the Reviewer's PRODUCTION brief before choosing a clean control**: L-T2's ordered "unified-diff headers", which a correct held
+  package cannot meet — a brief edit (the 1.15.0 transcription) made the control valid.
+- **`k2ReviewerGates` keys on k8s/G3 node NAMES** — a new domain's `R-*` cells read "not run" (score them with `scoreG2Sample`; register
+  T2-REVIEWER-GATE-KEYS).
+- **Calibrate on the persisted before-run, every new proxy**: the live F-W1 Harvester exposed a G-T-REF proxy that read its own failure as a
+  pass (fixed per sentence); markdown emphasis hid negations twice (now stripped before any negation is read).
+Records: `cline_docs/reviews/held-terraform-2026-10-19/LAB-PREREG-L-T2.md`, `LAB-RESULT-L-T2.md`.
+
+
+## L-N1 (held-network step 2, $0 build 2026-10-24; every expectation run before it was written)
+
+```bash
+grep -c "cmd === 'n1-score'" scripts/leg-replay-lab/lab.ts                                 # expect 1 — score-n1: REG, NOHAND, PATH, BASE, CANARY, CTRLX (do-not-ship) + SHAPE/REF/STOP/OUTAGE/QUOTE/SRC/DRIFT/CTRL/DERIV/ARCH
+grep -c "export function n1SelfTest" scripts/leg-replay-lab/score-n1.ts                     # expect 1 — 11 mutations, each RED
+grep -c "export function createNetworkToolServer" scripts/leg-replay-lab/network-fixtures.ts # expect 1 — B4 device pool (+ failure mode) · B5 catalogue (live probe bodies) · B6 register refusal (thrown)
+grep -c "LN1 (L-N1)\|LN2 (L-N1 B4/B5/B6)" scripts/test-leg-replay-lab.ts                   # expect 2
+grep -c "export const NET_APPLY_MODE_RE" scripts/leg-replay-lab/score-n1.ts                 # expect 1 — "out-of-band apply/management" is no drift cause (found on the persisted before-run)
+grep -c "templateEdits on a Harvester whose template" scripts/leg-replay-lab/lab.ts         # expect 1 — role guidance is now a lever on Harvester nodes
+```
+- **A Harvester's protocol is its TEMPLATE's named binding, not its leg's**: the value-leg (network-derivation) Harvester runs on
+  `Network State Harvester` ⇒ `network-provisioning-protocol`. Check the stored `protocolInjection.delta.name` before choosing an arm.
+- A role-guidance change reaches every owning seed's Harvester: add one control per domain whose protocol governs (G-N-CTRLX).
+- Records: `cline_docs/reviews/held-network-2026-10-22/LAB-PREREG-L-N1.md` (+ ADDENDUM (a)).
+
+## L-NB1 (network text batch 1, network-provisioning 1.24.0; $0 build 2026-10-25; every expectation run before it was written)
+
+```bash
+grep -c "cmd === 'nb1-score'" scripts/leg-replay-lab/lab.ts                          # expect 1 — score-nb1 (additive over score-n1): SECRET-RAW, B5-QUOTE, B3 unpinned read/src, B2-FIRST, NOPKG, NOFALSE
+grep -c "export function nb1SelfTest" scripts/leg-replay-lab/score-nb1.ts             # expect 1 — 7 mutations, each RED
+grep -c "unpinned?: boolean" scripts/leg-replay-lab/fixture-tools.ts                  # expect 1 — L-NB-a: a customer Git service with NO pin (refs map; refuses a pinned name or the platform-pinned repo)
+grep -c "export const AUTHOR_CHAINED_TARGET_RE" scripts/leg-replay-lab/input-edits.ts # expect 1 — L-NB-b: patch an Author's chained finalResponse in every copy, re-read
+grep -c "LNB1 (L-NB1)\|LNB2 (L-NB-a" scripts/test-leg-replay-lab.ts                   # expect 2
+```
+- **A secret rule is measured on the RAW model output** (`harvester.md` / `author.md` are pre-persist); the post-persist R10 survivor
+  count is a separate, platform gate. A persisted `<<REDACTED-SECRET>>` inside a quote means the agent wrote the value in clear.
+- **Put the measured item IN SCOPE on purpose**: in L-N1 only 1 of ~25 Git-quoting samples quoted the SNMP line at all, so a brief
+  sentence makes the touched range include it (named, read against the brief).
+- **An unpinned customer Git fixture cannot use the platform-pinned repo** — a non-pinned service naming it is refused
+  `PINNED_SOURCE_BYPASS`; rename the repo.
+- **Other masks (`...`, `<<REDACTED-SECRET>>`) are not clear values** — count them apart (`masked`), never as a secret hit.
+Record: `cline_docs/reviews/held-network-2026-10-22/LAB-PREREG-L-NB1.md`.
+
+## L-NB2 (network text batch 2, network-provisioning 1.25.0; $0 build 2026-10-25; every expectation run before it was written)
+
+```bash
+grep -c "cmd === 'nb2-score'" scripts/leg-replay-lab/lab.ts                          # expect 1 — score-nb2 (additive over score-nb1): per-quote source split, clear-quote MISS, Author B5, quotesExact, VOID rule
+grep -c "export function nb2SelfTest" scripts/leg-replay-lab/score-nb2.ts             # expect 1 — 5 mutations, each RED
+grep -c "export function plantDevicePool" scripts/leg-replay-lab/network-fixtures.ts  # expect 1 — L-NB2: named canary plants into a device pool, exact counts, proved by un-planting
+grep -c "cmd === 'nb2-fixtures'" scripts/leg-replay-lab/lab.ts                        # expect 1 — the pool from ONE cached Harvester snapshot + fixtures/device-plants.json
+grep -c "LNB3 (L-NB2)" scripts/test-leg-replay-lab.ts                                  # expect 1
+```
+- **Read the live miss before taking the brief's hypothesis**: F-NB1 was handed over as "long quotes"; the stored quotes were 1–2 lines,
+  and the unmeasured factor was that every stored device result is post-R10 (a device read never delivered a clear secret in the lab).
+- **A text that tightens a rule needs a SAMPLED baseline that reproduces the miss** (VOID rule: ≥ 2 base misses, else a ≥ n−1 bar cannot
+  separate the texts); run the baseline first and stop on VOID.
+- **Descriptor copies age**: L-NB1's `ceos-lab-readonly` 0.3.0 copy is refused by today's shipping check (tool description > 500); copy the
+  public descriptor the live leg registered, and serve its register + `registry tools` from the live record (`catalogueFallthrough`).
+- score-n1's Git QUOTE reading skips blocks under 3 lines — short quotes need `quotesExact`.
+Record: `cline_docs/reviews/held-network-2026-10-22/LAB-PREREG-L-NB2.md`.
+
+## L-N2 (held-network step 3, the join; DRAFT pre-registration 2026-10-26; every expectation run before it was written)
+
+```bash
+grep -c "cmd === 'n2-score'" scripts/leg-replay-lab/lab.ts                                   # expect 1 — score-n2 Author readings + the node-driven Reviewer bench in one report
+grep -c "export function n2SelfTest" scripts/leg-replay-lab/score-n2.ts                       # expect 1 — SG-CLI, G-RESTORE, G-N2, G-N5, unheld handle; 5 mutations RED (LN5)
+grep -c "export function reviewerBenchGates" scripts/leg-replay-lab/score-reviewer-bench.ts   # expect 1 — T2-REVIEWER-GATE-KEYS: nodes join by scoring.reviewerGate, never by name (LN6)
+grep -c "export function withComputedHarvesterComparison" scripts/leg-replay-lab/device-comparison-patch.ts   # expect 1 — L-N2-c: pre-net network Harvesters get gitDeviceComparison (LN7)
+grep -c "export function deviceLegOf" scripts/leg-replay-lab/held-store.ts                    # expect 1 — L-N2-a: the lab store passes declared Device sources (LN4)
+grep -c "mCPTool: {" scripts/leg-replay-lab/replay-prisma.ts                                  # expect 1 — validationToolCalls computes in the lab (it stamped an enrichment error before)
+```
+- **A network held store without the leg's declaration holds no device config** — pass `deviceLeg` (description + interface contract);
+  G-HOLD-ID names pre-device-lane extras (before 2026-10-26 02:20:23Z) instead of failing.
+- **Stored network Harvesters predate `gitDeviceComparison`**: compute it with the shipping function on a snapshot copy, or the Architect /
+  Reviewer §6 lacks a block production now sends. `chainEntryFromResult` carries the replayed Author's `validationToolCalls` + checked
+  comparison (it carried neither).
+- **Pre-redaction fixtures reverse to the stored base** (P-2): planting clear secrets where R10 left placeholders gives byte-equal held
+  bases; a bare echo elsewhere refuses the device (`echo-secret-residual`) — a fixture cell, never sampled.
+Record: `cline_docs/reviews/held-network-2026-10-22/LAB-PREREG-L-N2.md`.
+
+## NO-REGRESSION golden set (2026-10-31, Protocol 16 § The standing no-regression rule; every expectation run before it was written)
+
+```bash
+grep -c '"authorExecutionId"' scripts/leg-replay-lab/golden/golden-set.json   # expect 15 — golden v2 cases (4 network, 1 network value, 3 k8s, 4 terraform, 3 observability)
+grep -c '"shape": "value"' scripts/leg-replay-lab/golden/golden-set.json   # expect 1 — the value leg (NET-VALUE-C1, v2)
+grep -c '"version": "v2"' scripts/leg-replay-lab/golden/golden-set.json   # expect 2 — the set's version + its newest refreezes entry
+grep -c "if (goldenSpendRefusal) throw" scripts/leg-replay-lab/lab.ts   # expect 1 — --spend on an agent-text/model lab without a goldenSet declaration is refused before any call
+grep -c "export function buildGoldenCompanion" scripts/leg-replay-lab/golden-set.ts   # expect 1 — the companion builder (golden-build)
+grep -c "npm run test:golden-set" package.json   # expect 0 — out of CI like the lab suite (needs the snapshot cache)
+```
+
+```bash
+npm run --silent test:golden-set   # expect >=26 — GS1–GS7 incl. the $0 end-to-end (v2: 27 cells under --fake-llm persisted reproduce every stored outcome); floor, never an exact count
+npm run --silent lab:leg-replay -- golden-self-test   # expect 0 STALE — every case recomputes its stored outcome from the stored verdict + carrier stamp
+```
+
+- **Set:** `scripts/leg-replay-lab/golden/golden-set.json` (cases + provenance + expected `{legOutcome, agentApproved, platformReason}`),
+  today's texts pinned beside it (`golden-pin`, owner re-freeze only). **Code:** `scripts/leg-replay-lab/golden-set.ts` (header = the rules).
+- **Per lab:** `experiment.json` carries `"goldenSet": {"version": "v2", "targets"?: [...], "optOut"?: [...]}` (each with a reason);
+  `golden-build --experiment <lab>` → `<lab>/golden-v2/`; run it like any experiment (dry → `--fake-llm persisted` → `--spend`);
+  `golden-score --run … --experiment <lab>/golden-v2`. Unreached cases cost $0 (today's production text).
+- **Read:** leg outcome = agent verdict AND the carrier (run-level reasons carried, package-level recomputed by the shipping
+  `heldEditVerdict`). FLIPPED = DO-NOT-SHIP unless a target; a masked flip TOWARD approval = DO-NOT-SHIP; toward refusal = read.
+- **Not replayable yet:** Node C (GOLDEN-NODE-C-CELL) — named in `notReplayable`. **Value legs since v2 (2026-10-31):** `shape: 'value'`
+  (derivation_architect persisted + derivation_reviewer, `heldJoinSeedByProtocol` null, persisted Author only — GOLDEN-VALUE-LIVE);
+  proved at $0 on CANARY 1's value leg (`fidelity` 9 exact / 2 not checkable on both prompts, `--fake-llm persisted` reproduces).
+- **Re-freeze (owner decision only):** hand-read each candidate leg → add the case + a `refreezes` entry (added, excluded-with-reason,
+  pins moved) → `golden-pin` (read-only; only the new pins should move) → bump `version` → fixtures' `goldenSet.version` + test counts.
+- **Canary after every agent-text deploy:** `.claude/knowledge/pipelines/LIVE-WINDOW-CHECKLIST.md` § "After an agent-text deploy".

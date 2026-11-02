@@ -7,7 +7,7 @@ Each group is recorded when the owner accepts it. Item numbers are stable once w
 
 1. The kubernetes-gitops leg acts on the pods of the Kubernetes namespace `trading`. The permitted senders are drawn from that namespace only.
 2. The observability-config leg acts on the ingress proxy in front of the telemetry collector's receiver.
-3. The receiver authorised on the observability-config target is the collector's OTLP sender endpoints, gRPC and HTTP, exposed through the proxy. Every proxy block that forwards to one of the collector's OTLP receivers is a sender endpoint, whatever its description says, including any block described as outside the sender allowlist; no forwarding path into an OTLP receiver is exempt. Any other path the proxy forwards into the collector, one that does not reach an OTLP receiver, is not a sender endpoint.
+3. The receiver authorised on the observability-config target is the collector's OTLP sender endpoints, gRPC and HTTP, exposed through the proxy. Every proxy block that forwards to one of the collector's OTLP receivers is a sender endpoint, except a block exempted by item 23. Any other path the proxy forwards into the collector, one that does not reach an OTLP receiver, is not a sender endpoint.
 4. A member of the sender population is a pod in the declared namespace whose phase is Running, excluding pods on the host's network and pods whose deletion has been requested. The leg reports, in its own published deliverable (report.md), the literal criterion it applied.
 5. The sender set is expressed as a host list: one entry per member pod's address, with no covering prefix.
 6. The sender set is point-in-time as of the leg's harvest; the deliverable states the harvest time. Nothing maintains the set after the program.
@@ -29,7 +29,7 @@ Each group is recorded when the owner accepts it. Item numbers are stable once w
 
 ### Group D — existing allowances, empty and absent cases (accepted 2026-10-11)
 
-16. On every proxy block that forwards to one of the collector's OTLP receivers (item 3), the allowances are replaced by exactly the sender set, followed by a deny for everything else (replace). Blocks that forward other paths into the collector, ones that do not reach an OTLP receiver, are not sender endpoints (item 3); the leg leaves them unchanged and lists each one in its deliverable as unchanged by owner decision (item 3).
+16. On every sender endpoint (item 3), the allowances are replaced by exactly the sender set, followed by a deny for everything else (replace). Blocks that forward other paths into the collector, ones that do not reach an OTLP receiver, are not sender endpoints (item 3); the leg leaves them unchanged and lists each one in its deliverable as unchanged by owner decision (item 3).
 17. If no proxy block forwards to the OTLP sender endpoints, the observability-config leg reports a gap and authors nothing (gap).
 18. If a block forwarding to the sender endpoints carries no access directives, the observability-config leg adds them to that block (create).
 19. If the proxy does not exist, the observability-config leg reports a gap and creates nothing (gap).
@@ -41,11 +41,15 @@ Each group is recorded when the owner accepts it. Item numbers are stable once w
 
 ### Group G — sender-endpoint blocks (accepted 2026-10-11, after answered generation 1)
 
-22. A proxy block is a sender endpoint if it forwards to one of the collector's OTLP receivers, whatever its own description says (every-block-forwarding-to-an-OTLP-receiver). A block whose description places it outside the sender allowlist is restricted like every other sender endpoint, and senders that reach the collector through it today and are not members of the sender set are refused there (item 21).
+22. A proxy block is a sender endpoint if it forwards to one of the collector's OTLP receivers and item 23 does not exempt it (every-block-forwarding-to-an-OTLP-receiver, except item 23's exemption). Apart from that exemption, a block's own description does not decide whether it is a sender endpoint.
 
 ### Group H — enforcer scope (accepted 2026-10-12, attempt 2; group 4 registry row)
 
-23. The observability-config restriction covers every part of the proxy that reaches the collector's OTLP receivers (all-reaching-the-protected-thing).
+23. The observability-config restriction covers every part of the proxy that reaches the collector's OTLP receivers, except a block whose own description states that it is an operator path and not part of the sender allowlist (exemption-by-property). That block is not a sender endpoint: the leg leaves it and its existing allowances unchanged, does not judge the admitted-principal premise (items 13 and 14) on it, and lists it in its deliverable as exempt by owner decision, quoting the literal description line it matched. A block with no description does not carry this property. If the leg's harvest does not return the proxy's configuration with its description lines, so the property cannot be checked, the leg reports a gap and makes no change.
+
+### Group I — operator path exemption (accepted 2026-10-17, after program run C-3; amends items 3, 16, 22, 23)
+
+_Items 3, 16, 22 and 23 above carry the amended text; the 2026-10-12 wording is in `objective-answered-v3.txt`._
 
 ## Owner rationale
 
@@ -80,6 +84,14 @@ Not part of the objective: the merge stops each group at this heading.
 ### Owner rationale — Group H (2026-10-12)
 
 - Asked by group 4's `<token>.enforcer-scope` row, which did not exist when attempt 1 was answered. Same substance as item 22 (every block forwarding to an OTLP receiver is a sender endpoint); stated under the row's own option so the row is declared on the first generation. The kubernetes-gitops leg grants no access, so its enforcer-scope row is not applicable.
+
+### Owner rationale — Group I (2026-10-17)
+
+- Owner decision (Steve Terry, 2026-10-17, accepting the recommended option of open-register C3-SPEC-OPERATOR-PATH): the proxy's operator path is a NON-sender path. Keep its existing grant unchanged; the leg restricts only the real OTLP sender endpoints. This reverses the 2026-10-11 amendment of items 3, 16 and 22 ("no forwarding path into an OTLP receiver is exempt") and changes item 23's option from all-reaching-the-protected-thing to exemption-by-property.
+- Why: under the forward-target rule the operator path counted as a sender endpoint. Program run 3 (`cmv6a2xjq0005yxwtpr4rbti8`) replaced its grant with the sender set, which locks the operator out; program run C-3 (`cmvby7ybd006syxzpycdpw6tf`) found the admitted-principal premise contradicted on it and, by the contradiction arm, changed nothing on the proxy at all.
+- The exemption names a PROPERTY the leg reads (the block's own description: an operator path, not part of the sender allowlist), never the block, its file, its port or its grant — those are harvested state (registry: exemption-by-property names a property, never the parts). The leg quotes the literal line it matched, so the exemption is visible at the gate, never silent.
+- Rejected alternative: a general rule "where the premise is contradicted on a block, leave that block and restrict the rest" — it could leave a real sender endpoint open without anyone deciding it.
+- The premise contradiction arm (item 14, registry act-regardless) is unchanged: it now applies only to the sender endpoints, and a contradiction there still stops the leg. No new row is needed for it.
 
 ## Row → item map
 

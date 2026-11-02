@@ -39,7 +39,6 @@ export function requirementsTextsAt(commit: string) {
     if (/^import |require\(/m.test(src)) throw new Error(`${TPL_REL} at ${commit} has imports — render by hand`);
     fs.writeFileSync(file, src);
   }
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const mod = require(file);
   const tpl = (role: string) => mod.PAICHART_UNIVERSAL_BASE_TEMPLATE.replace('${roleSpecificGuidance}', mod.getRoleSpecificGuidance(role));
   return { commit: full, protocolVersion: proto.version, protocol: proto.text, author: tpl('requirements_author'), reviewer: tpl('requirements_reviewer') };

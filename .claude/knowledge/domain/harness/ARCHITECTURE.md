@@ -334,7 +334,7 @@ time. This enables **plug-and-play orchestration strategies** — adding a new
 planning protocol is a DB seed, not a code change.
 
 ```
-Template metadata: { loadProtocols: 'composed' } ← PIPELINE tasks (2026-08-17; 'true' = legacy load-all, the rollback path)
+Template metadata: { loadProtocols: 'composed' } ← PIPELINE tasks (2026-08-17; 'true' = load-all, RETIRED 2026-10-16 — now throws UNKNOWN_PROTOCOL_MODE)
                  or { protocol: 'specific-name' } ← Specialist tasks
                             ↓
 Engine queries agent_prompt_library WHERE tags has 'protocol'
@@ -352,7 +352,7 @@ Decomposes according to matched protocol's phases
 
 | Mode | Applied to | Purpose | Currently |
 |------|-----------|---------|-----------|
-| `loadProtocols: 'composed'` (since 2026-08-17; `true` = legacy load-all rollback) | Harness templates (Pipeline Harness) | Compose the `protocol-base`-tagged orchestration base + the ONE protocol the task's `metadata.protocol` stamp names (platform-resolved from the title token at first execution — never a model-side pick) (default: pipeline-orchestrator-protocol) | 1 template uses this |
+| `loadProtocols: 'composed'` (since 2026-08-17; `true` = load-all, RETIRED 2026-10-16, throws) | Harness templates (Pipeline Harness) | Compose the `protocol-base`-tagged orchestration base + the ONE protocol the task's `metadata.protocol` stamp names (platform-resolved from the title token at first execution — never a model-side pick) (default: pipeline-orchestrator-protocol) | 1 template uses this |
 | `protocol: 'name'` | Specialist templates in a multi-phase workflow (Artifact Harvester, Editorial Writer, Publication Reviewer) | Inject ONE specific protocol that coordinates cross-task behavior (shared vocab, output contracts, decision rules) | 3 templates use this, all binding artifact-synthesis-protocol |
 | Neither | All other templates (~17) | Zero injection — runs with role guidance only | Most templates |
 

@@ -179,7 +179,7 @@ pipeline run (check `agent_executions` RUNNING/PENDING read-only first).
 ## 🆕 2026-06-25 — Harness output-guard feature flags (env-var + restart to toggle)
 
 ```bash
-# The two flags + where they are documented; both default OFF (ships dark)
+# The two flags + where they are documented; R9 runs only when =true; R10 runs unless =false (default-ON in code since 2026-08-28). Since 2026-11-01 (PH-7) .env.example sets both ON
 grep -rn "CONNECTED_OUTPUT_SANITIZE_ENABLED\|ARTIFACT_SECRET_REDACT_ENABLED" .env.example .env.production.template lib/ app/
 ```
 `CONNECTED_OUTPUT_SANITIZE_ENABLED` (R9 sanitize) and `ARTIFACT_SECRET_REDACT_ENABLED` (R10 redact) are **env-var, default-OFF in code but ON in prod since 2026-06-29** (`f7398004` — durable literals in `production-deploy.yml` + the `ecosystem.config.js` passthrough, because `.env.production` is regenerated every deploy). No live toggle. To enable: set `=true` in `.env.production` + `pm2 restart <app>` (env is read at process start). To kill: `=false`/remove + restart. The `=false` in `.env.production.template` / `.env.example` is the safe CODE default and is NOT the prod state — check the deploy workflow or `pm2 jlist`, never the template. Full ref + enable-gates: `.claude/knowledge/domain/harness/harness-output-guards.md`.
@@ -1020,7 +1020,12 @@ echo "✅ DR system activated and monitoring" || echo "⚠️ DR system ready bu
 ## Phase 10: Docker MCP Services Architecture (NEW - 2026-01-06, Updated 2026-10-03: 8 services)
 
 > **⚠️ COUNT: 8 services as of 2026-10-03** (6 originals at 3100-3105, then snowflake **:3106** on 2026-06-15
-> and cloudflare **:3109** on 2026-07-12). Verify live: `grep -c 'container_name: mcp-' docker-compose.yml` → 8.
+> and cloudflare **:3109** on 2026-07-12). Verify live: `grep -c 'container_name: mcp-' docker-compose.yml` → 10 since the
+> GitHub pair (2026-10-18; was 8). Running services stay 8 until that pair's first Docker Services Deploy.
+> - `mcp-github` + `mcp-github-server` (2026-10-18) — read-only held-file source. A Caddy proxy (host **:3110**, `/livez`,
+>   deep `/healthz` 200/503, `/mcp`) holding the read-only GitHub token, in front of the official github-mcp-server
+>   (digest-pinned, IMAGE-ONLY: pulled by `up`, never built, no matrix need, no host port, no token). Own network
+>   `github-net`. Its first push's Docker run is expected red (release not yet flipped); see `services/github-service/README.md`.
 > - `mcp-snowflake` — `services/snowflake-service/`, External OAuth, `mcp-internal` network. ⚠️ UNHEALTHY since
 >   ~2026-09-29: its `testConnection` fails with "Your free trial has ended" — an account state, not a code fault.
 > - `mcp-cloudflare` — a Caddy reverse proxy (NOT a Node MCP server) to Cloudflare's hosted Code Mode MCP; host
@@ -1202,7 +1207,7 @@ npx ts-node scripts/register-internal-services.ts  # batch internal services
 # "Endpoint register blocked: Blocked private IPv4: 127.0.0.1"
 ```
 
-`SSRF_EXEMPT_SERVICES` (`lib/mcp/server/config/service-call-policy.js:161`) is a **seeded list**, not a user-facing self-service path. If a legitimate first-party self-registration use case emerges (e.g., runtime container provisioning), revisit `cline_docs/follow-ups/sec-ops-finding-b-ssrf-asymmetry.md` Decision 1 option (c).
+`SSRF_EXEMPT_SERVICES` (`lib/mcp/server/config/service-call-policy.js:168`) is a **seeded list**, not a user-facing self-service path. If a legitimate first-party self-registration use case emerges (e.g., runtime container provisioning), revisit `cline_docs/follow-ups/sec-ops-finding-b-ssrf-asymmetry.md` Decision 1 option (c).
 
 ### Expected Docker Services Outputs (PRODUCTION — 8 services; the 6 originals detailed below, snowflake + cloudflare in the Phase 10 note)
 ```
@@ -1660,4 +1665,11 @@ Steve publishes by hand; no npm token in CI or on the server. Register: `NPM-SCO
 npm view @paichart/containment-checks version 2>/dev/null || echo "not published"   # today: not published (by design)
 grep -c '"name": "@paichart/containment-checks"' ~/paichart/packages/containment-checks/package.json   # expect 1
 grep -rln "NPM_TOKEN" .github/ 2>/dev/null | wc -l   # expect 0 — no CI publish path without Steve's decision
+```
+
+## Nets-replay snapshot retention (NETS-REPLAY-SNAPSHOT-RETENTION, 2026-10-26; every expectation run before it was written)
+
+```bash
+grep -c "install-timer) MODE=install" scripts/replay-snapshot-gc.sh   # expect 1 — the hourly systemd USER timer installer
+grep -c "replay-snapshot-gc.sh" scripts/replay-nets-byte-identity.sh                # expect 3 — every replay run expires snapshots FIRST (production copies live 24 h on the dev machine)
 ```

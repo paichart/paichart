@@ -21,6 +21,15 @@ cd "$ROOT"
 [ -n "$MSG" ] || { echo "usage: $0 \"<public commit message>\" | --dry-run"; exit 2; }
 [ -z "$(git status --porcelain)" ] || { echo "❌ refusing: copov15 working tree is dirty — commit or stash first (rule 8: the tree projected must be the tree validated)"; exit 1; }
 HEAD_BEFORE=$(git rev-parse HEAD)
+# R6 / PH-7 (PLATFORM-HELD-BYTES Phase 10 re-review AR R-S1): the held-file capability is in observability-config ≥ 1.10.0 and
+# lib/agents/harness/held-bytes/**, both inside the public projection. Until the self-host / operator text exists
+# (SELF_HOST_HELD_TEXT_EXISTS in held-export-guard.ts), no public push. A dry run (export + chain, no push) stays allowed.
+# FAIL-CLOSED (re-review audit N-4): refuse unless the guard file says `= true` — a moved or reformatted guard refuses, never passes.
+if [ "$MSG" != "--dry-run" ] && ! grep -q "^export const SELF_HOST_HELD_TEXT_EXISTS = true;" scripts/export/held-export-guard.ts 2>/dev/null; then
+  echo "❌ refusing: the held-file capability would be published before its self-host text exists (R6 / PH-7)."
+  echo "   Write the self-host text, set SELF_HOST_HELD_TEXT_EXISTS = true in scripts/export/held-export-guard.ts in the same commit."
+  exit 1
+fi
 
 echo "▶ export --out ($HEAD_BEFORE)"
 rm -rf "$EXPORT"; python3 scripts/export-public.py --out "$EXPORT" | tail -1

@@ -2723,3 +2723,39 @@ Related: `cline_docs/reviews/expected-client-id-wiring-2026-05-24/` (Steve's tod
 
 ---
 
+## Lookup scoping (Bug Class 86) — 2026-10-31
+
+**The class:** a handler resolves an entity by name / title / id before it runs `validatePOVAccess`, and the lookup's error or
+success response names what it matched. The later access check still blocks the WRITE, so review reads it as safe; the
+disclosure is in the lookup itself. Registry: `bug-class-registry.md` § Bug Class 86.
+
+**Fixed sites (all deployed 2026-10-31, gates green, sec-ops GO-WITH-CHANGES 90 + auth-permissions GO 91):**
+
+| Site | Was | Now |
+|---|---|---|
+| task.update / task.assign / task.comment title lookup | unscoped `findMany`, ">1 match" error listed up to 20 POV titles + task ids across tenants | `scopeTaskTitleLookup` |
+| `assignee-resolver.ts` `chooseAssignee` | fell back to ALL users; ambiguity error listed `name <email>`; `assignee: "@"` = the directory | whole-table pool admin-only (`includeAllUsers`); `resolveUserByNameOrEmail` requires the caller |
+| task.assign team (`teamId`, `teamName`, "Available teams") + task.create `teamId` | any team, 50 names listed on a miss | `scopeTeamLookup` (accessible POV's team OR a team the caller belongs to) |
+| task.create / task.update `dependencyIds` | existence-only check | `scopeTaskIdLookup` (a foreign id behaves exactly like a missing one) |
+
+**Rule equivalence (auth-permissions review, 2026-10-31):** ADMIN/SUPER_ADMIN unchanged; USER = owner OR team member, the same as
+validatePOVAccess in practice. validatePOVAccess also has a tenant arm (`user.tenantId === pov.metadata.tenantId`) that the filter
+lacks, but it cannot fire: `tenantId` is a reserved POV-metadata key stripped by `lib/pov/sanitize-metadata.ts:20` and nothing writes
+it (owner: tenants are not in use). DEMO_USER: the lookup uses the READ rule (isDemo POVs included) while the writes require
+`requireWrite`, so the lookup is slightly wider than the write; nothing is disclosed that the demo user cannot already read.
+role null/unknown: non-admin, owner/member scoping (the engine's degraded `{userId, role: null}` context is rejected earlier by
+`buildTokenPayload`). Pipeline agents act as the TRIGGERING user's real role (`mcpService.ts:436-451`).
+
+**Regression evidence:** 0 of 1,761 agent perform calls in 90 days used a title lookup; 0 of 3,900 prod dependency edges cross a POV;
+every non-admin assignee that worked before was a POV team member (the POV pool is searched first). Visible change: a foreign title
+or povId now gets "No tasks found" instead of "Access denied".
+
+**Fail-closed detail (sec-ops):** Prisma DROPS `{ ownerId: undefined }`, so a user object missing `userId` would make the
+owner arm match every POV and silently reopen the leak — hence the throw in each helper. `buildPOVAccessFilter` itself does not
+throw (the chatgpt-connector comment that claimed it did was corrected).
+
+**Still open (register):** ASSIGN-USERID-EXISTENCE-ORACLE (LOW, kept filed). Closed: TEAM-ATTACH-DEMO-READ-ARM (accepted),
+TASK-CREATE-STAGE-PHASE-POV-CHECK (already guarded, `stage-resolver.ts` :89 + `assertPhaseInPov` :122).
+**Earlier instance of the same class:** the 2026-05-26 pentest Gap #1 — the `fetch` not-found fuzzy suggestions leaked cross-tenant
+titles + ids (fixed then, `chatgpt-connector-handler.js` ~:1418, scoped with `buildPOVAccessFilterWithRole`).
+

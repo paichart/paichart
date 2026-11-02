@@ -41,10 +41,10 @@ They are independent: a `Solution Architect` (ARCHITECT / DEVELOPMENT) and a `Se
   seed — safe to re-run; it does `findFirst`→update/create, no wipe).
 - **`promptText: UNIVERSAL_AGENT_RULES + YOUR_PROTOCOL`** — the universal rules are prepended at seed time;
   do not duplicate them.
-- **`tags` must include the literal `'protocol'`** — required for the legacy `loadProtocols: true`
-  load-all path (ALL `tag=protocol` ACTIVE prompts, `take: 10`, name-ordered — now the ROLLBACK
-  mode; 9 ACTIVE after promotion E retired value-chain-program, and that headroom matters only to this
-  path, which ran 0 executions in the 30 days to 2026-10-05) and for protocol tooling. Under the live `loadProtocols: 'composed'` mode (2026-08-17) the
+- **`tags` must include the literal `'protocol'`** — protocol tooling keys on it. (It also fed the
+  legacy `loadProtocols: true` load-all path — ALL `tag=protocol` ACTIVE prompts, `take: 10`,
+  name-ordered — which was RETIRED 2026-10-16 and now throws `UNKNOWN_PROTOCOL_MODE`; no ACTIVE-row cap
+  applies any more.) Under the live `loadProtocols: 'composed'` mode (2026-08-17) the
   delta is loaded BY NAME from the task's stamp, and the base by the `protocol-base` tag.
 - **The title token IS the router now.** Since composed injection the platform resolves
   `(protocol: <name>)` from the title ONCE at first execution and stamps it — the harness never
@@ -80,6 +80,18 @@ They are independent: a `Solution Architect` (ARCHITECT / DEVELOPMENT) and a `Se
   engine injects that one protocol into this specialist's system prompt).
 - `complexity` (if set): `AgentComplexity` is `SIMPLE | MEDIUM | COMPLEX | EXPERT` — **there is no `HIGH`**.
 - Deliverable/QA wiring is **NOT** in the template — see §5.
+
+### 2b. (File-source domains) Join held files — a separate, later step
+- If the domain's operator writes a FILE (a config-repo manifest, a `.tf` file, a collector config) and a read-only tool can return
+  it, the domain can become **held-capable** (Authors edit it by reference, the platform keeps the bytes). That is NOT part of adding
+  the domain: do it afterwards, by the procedure in `../patterns/kept-file-edit-by-reference-pattern.md` §3 (23 join items, the
+  anti-patterns, Addendum A) — worked examples: observability (Phase 10) and kubernetes-gitops (held-k8s, 2026-10-18/19); since then
+  terraform-iac (2026-10-21) and network-provisioning (2026-10-27, Addendum B — a domain whose source is DECLARED per device).
+- What it touches in THIS checklist: the owning seed spreads `HELD_AUTHOR_CONSTRAINT` / `HELD_REVIEWER_CONSTRAINT` LAST by `defaultRole`
+  (never in role guidance — the roles are shared by four domains), and the domain joins `HELD_JOIN_VERSIONS` (`held-bytes/variant.ts`)
+  at the protocol version that carries the held text. **A pin enforces both directions** (`test:held-variant-protocol`): an owning seed
+  carries the constraints IFF its protocol is held-capable — so add the seed to that test's owning-seed list in the same commit.
+- Until it joins, a domain is unaffected; State is never a held file (terraform), and a live API rendering is evidence, not a file.
 
 ### 3. (Provisional work) Tag it
 - If this is a spike / not-yet-blessed: tag templates `spike`/`provisional`, set the protocol
@@ -149,6 +161,12 @@ They are independent: a `Solution Architect` (ARCHITECT / DEVELOPMENT) and a `Se
   omission a documented decision instead of a silent gap.
 - **CI enforces both:** `validate:role-guidance` (entry shape) + `validate:role-guidance-coverage` (every
   seeded role has an entry or a documented exemption). Both run in pre-commit and `test:all-validation`.
+- **Declare which machine-parsed blocks your protocol mandates — in TWO places (2026-10-31, HS-FU5).** The seed's required
+  `ProtocolSeed.emitsMarkers` (`'none'` or the list of `## Harvested Allocations` / `## Derived Values` / `## Consumed Values`) AND its runtime
+  copy `PROTOCOL_MARKER_MANDATES` in `lib/agents/harness/protocol-marker-mandates.ts` (lib cannot import the seed). `test:protocol-marker-mandates`
+  pins the two equal in both directions, so a new protocol fails the battery until both carry it. The copy decides whether §6 shows the
+  predecessor marker line: `'none'` hides it (a reviewer on a marker-free domain otherwise spends an observation on ✗✗✗). DEPRECATED rows are
+  never copied. A new protocol-keyed table also passes `test:variant-protocol-sites` (name the retired obs variant, or an exclusion with its reason).
 - **Declare your validation shape — or say you sanction none (pinned 2026-10-04).** Your protocol interpolates the
   shared validation clause, and the `config_change_author` role grants a comparison shape only "where your active
   protocol defines one for that step". So your protocol's OWN text must either define its non-literal shape (network's

@@ -193,6 +193,22 @@ function baseFixture(overrides: Record<string, any> = {}) {
     ok(r.error?.code === 'unknown_error', '5.4e unrelated transport error stays unknown_error (no over-categorization)');
   }
 
+  // ── 5.4g provider credit exhaustion → LLM_PROVIDER_CREDIT_EXHAUSTED (OPS-CREDIT-EXHAUSTION-SIGNAL 2026-10-31) ──
+  {
+    // The prod 2026-10-06 body, verbatim: a 400 invalid_request_error with the credit-balance message.
+    const credit = { type: 'error', error: { details: null, type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.' }, request_id: 'req_011CfkZCSP3ah1uwanMZSwUV' };
+    const cap: Capture = {};
+    const r = await makeProvider(baseFixture(), cap, (Anthropic as any).APIError.generate(400, credit, undefined, new Headers())).generateText('p', { apiKey: 'k', model: 'claude-sonnet-5' });
+    ok(r.error?.code === 'LLM_PROVIDER_CREDIT_EXHAUSTED', `5.4g credit exhaustion → LLM_PROVIDER_CREDIT_EXHAUSTED (got ${r.error?.code})`);
+    ok(/run out of credit/.test(r.error?.message ?? '') && /credit balance is too low/.test(r.error?.message ?? ''),
+      '5.4g message carries the operator instruction AND the provider text');
+    // Negative: another invalid_request_error is NOT reclassified.
+    const other = { type: 'error', error: { type: 'invalid_request_error', message: 'max_tokens: must be at least 1' }, request_id: 'req_x' };
+    const cap2: Capture = {};
+    const r2 = await makeProvider(baseFixture(), cap2, (Anthropic as any).APIError.generate(400, other, undefined, new Headers())).generateText('p', { apiKey: 'k', model: 'claude-sonnet-5' });
+    ok(r2.error?.code === 'unknown_error', `5.4g an unrelated invalid_request_error stays unknown_error (got ${r2.error?.code})`);
+  }
+
   // ── 5.4f provider overloaded_error → LLM_PROVIDER_OVERLOADED (F-b, COMPLETE-THEN-FAIL batch 2026-10-05) ──
   {
     // Both arrival shapes: an HTTP 529, and the 10-04 fixture's shape — a MID-STREAM SSE error event, which the SDK

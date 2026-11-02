@@ -11,6 +11,20 @@ Nothing reaches production or the public repo without you saying yes.
 1. **Which systems?** Decide which systems your objective touches. Each one is reached through a read-only
    *descriptor* (a file in `~/paichart/descriptors/`: cluster, observability stack, network devices, Terraform, …).
    Name them in your opening line, or let Claude list them and pick with you — it will not pick silently.
+   A system can also be a service your team ALREADY registered in the hub: name it, and the run uses it as it is
+   (it never re-registers or removes it).
+   **Network changes (from network-provisioning 1.23.0):** the program reads each device's configuration only from
+   the source you declare. For every device the change touches, you will say where its configuration comes from:
+   a file in Git (which Git service, repo and path, and a branch or tag only if that service pins it), the device's
+   own running configuration (which device service), or neither (the package is written as commands). A device can
+   have both a Git file and a device read; then the Git file is the base and the device read is quoted as
+   evidence, without a comparison. A device you leave out stops that leg, so nothing is guessed. Claude checks each descriptor URL
+   before the first run: its tool descriptions are ≤ 500 characters, and any token is in the query string, not the
+   path. A URL with a token only works on a service a person registers, so that one is named by its name. Pasted
+   configs or counts never stand in for a source.
+   **Internal teams:** if colleagues' runs use a service you registered, grant the program's POV to it
+   (`registry update` with `heldGrantPovIds`; only you, its owner, can). A descriptor on a private host needs your
+   operator to allowlist it. A spec that cannot be published publicly is not supported yet; Claude stops and tells you.
 2. **Are they up — and connected the way the objective needs?** Ask Claude for a read-only pre-flight on THOSE
    systems. Expect: the services answer, no leftover rig services in the registry, nothing running. If the objective
    relies on something the services cannot show (for example, that one system can reach another, or that addresses
@@ -72,6 +86,8 @@ Each table keeps its cells short and gives every reason in full underneath, in p
 other (for example *how requests reach the enforcer* and *what to do if that can't be confirmed*) come as ONE table:
 *if you answer · what the program can do · likely outcome · recommendation* — ask **"why?"** whenever an outcome isn't clear.
 Pasted replies are read back to you before they are recorded.
+For a network change, Group A also asks each device's source (see *Before you start*, item 1). Your answer is written
+down as the leg's *Device sources* list, word for word.
 Before Group B, Claude shows the POV team and asks who else belongs on it and who is project manager; Group B then
 offers the team as a pick list. Say whether each approver releases their own gate or you release it for them.
 
@@ -94,7 +110,8 @@ numbered item and marks its row *added*, so the merge counts it as asked — no 
   Acceptance — you confirm no obligation was deleted. The publish tool will not go on until both are done.
 
 **Step 9 — Your read.** Claude walks you through the human read: no current addresses, names or **counts** anywhere,
-the worked example is made up, and the population matches your objective's words. Reply **"ok"** when satisfied.
+the worked example is made up, and the population matches your objective's words. For a network change, each
+network leg carries your Device sources list exactly as you gave it. Reply **"ok"** when satisfied.
 
 **Step 10 — Publish.** Claude runs the publish pass (dry run first, then for real), then shows you the push to the
 public repo. Reply **"yes"**. It then checks the published URLs until they answer and match.

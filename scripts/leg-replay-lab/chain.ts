@@ -32,6 +32,14 @@ export interface ReplayedAuthorResult {
   markerPresence: Record<string, unknown> | null;
   rollbackContainment: Record<string, unknown> | null;
   derivationContainment: Record<string, unknown> | null;
+  /** L-4 (PLATFORM-HELD-BYTES Stage B): the Author entry's `editDiff`, built by the SHIPPING pure builder
+   *  (held-chain.ts `editDiffEntryFields`). Absent ⇒ no key, exactly as the chainer writes for a non-variant Author. */
+  editDiff?: Record<string, unknown> | null;
+  /** L-N2 (2026-10-26): the replayed Author's own leaf stamps the chainer carries on its entry — `validationToolCalls` (any object;
+   *  context-chainer.ts) and `gitDeviceComparison` (only when `checked`, and only to the Architect / leg Reviewer, which are the only
+   *  consumers of a patched entry here). Undefined ⇒ the frozen entry's value stands (no replayed stamp to substitute). */
+  validationToolCalls?: Record<string, unknown> | null;
+  gitDeviceComparison?: Record<string, unknown> | null;
 }
 
 export function patchReviewerContext(snap: Snapshot, r: ReplayedAuthorResult): Record<string, any> {
@@ -39,8 +47,13 @@ export function patchReviewerContext(snap: Snapshot, r: ReplayedAuthorResult): R
   if (!frozen || !Array.isArray(frozen.chainedFrom)) throw new Error('reviewer has no frozen chainedFrom');
   const idx = frozen.chainedFrom.findIndex((e: any) => e.executionId === snap.author.exec.id);
   if (idx < 0) throw new Error(`reviewer's frozen chainedFrom carries no entry for author execution ${snap.author.exec.id}`);
-  const old = frozen.chainedFrom[idx];
+  const chainedFrom = [...frozen.chainedFrom];
+  chainedFrom[idx] = chainEntryFromResult(frozen.chainedFrom[idx], r);
+  return { ...frozen, chainedFrom };
+}
 
+/** The chainer's derived fields over a frozen entry (every other field kept). Shared by the Reviewer patch and L-K-c. */
+export function chainEntryFromResult(old: Record<string, any>, r: ReplayedAuthorResult): Record<string, any> {
   const r9 = process.env.CONNECTED_OUTPUT_SANITIZE_ENABLED === 'true' ? sanitizeChainedOutput(r.finalResponse) : null;
   let finalResponse = r9 ? r9.text : r.finalResponse;
   let truncated = false;
@@ -62,14 +75,60 @@ export function patchReviewerContext(snap: Snapshot, r: ReplayedAuthorResult): R
     executionId: r.executionId,
     truncated,
     originalChars: r.finalResponse.length,
+    ...(r.editDiff ? { editDiff: r.editDiff } : {}),
   };
+  if (r.validationToolCalls !== undefined) {
+    delete entry.validationToolCalls;
+    if (r.validationToolCalls && typeof r.validationToolCalls === 'object') entry.validationToolCalls = r.validationToolCalls;
+  }
+  if (r.gitDeviceComparison !== undefined) {
+    delete entry.gitDeviceComparison;
+    if (r.gitDeviceComparison && typeof r.gitDeviceComparison === 'object' && (r.gitDeviceComparison as { checked?: unknown }).checked === true) entry.gitDeviceComparison = r.gitDeviceComparison;
+  }
   for (const k of ['sanitized', 'rewritten', 'rewriteClasses', 'neutralizedCount', 'strippedControlChars']) delete entry[k];
   if (r9) Object.assign(entry, {
     sanitized: r9.strippedControlChars > 0 || r9.neutralizedInjections.length > 0,
     rewritten: r9.rewritten, rewriteClasses: r9.rewriteClasses,
     neutralizedCount: r9.neutralizedInjections.length, strippedControlChars: r9.strippedControlChars,
   });
+  return entry;
+}
+
+/**
+ * L-K-c (held-k8s step 1k): a consumer's (the Architect's) frozen context with its ONE Harvester entry rebuilt from a REPLAYED
+ * harvest — an L-K1 lab sample or a frozen hand-written fallback (harvester-source.ts) — by the same field rules as the Reviewer
+ * patch. Refused when the frozen entry carries held fields (`heldIndex` / `heldView`): those describe the PRODUCTION harvest's
+ * captures, which a replayed harvest does not share (k8s is not held-capable before step 3, so none is expected).
+ */
+export function patchHarvesterEntry(exec: { config?: Record<string, any> | null; id: string }, r: ReplayedAuthorResult): { ctx: Record<string, any>; frozenEntry: Record<string, any> } {
+  const frozen = exec.config?.inputContext;
+  if (!frozen || !Array.isArray(frozen.chainedFrom)) throw new Error(`${exec.id}: no frozen chainedFrom`);
+  const idx = frozen.chainedFrom.findIndex((e: any) => e?.agentRole === 'infra_state_harvester');
+  if (idx < 0) throw new Error(`${exec.id}: no frozen Harvester entry`);
+  if (frozen.chainedFrom.filter((e: any) => e?.agentRole === 'infra_state_harvester').length !== 1) throw new Error(`${exec.id}: more than one frozen Harvester entry`);
+  const old = frozen.chainedFrom[idx];
+  const held = ['heldIndex', 'heldView'].filter((k) => k in old);
+  if (held.length) throw new Error(`${exec.id}: the frozen Harvester entry carries ${held.join(', ')} — a replayed harvest cannot inherit the production capture`);
   const chainedFrom = [...frozen.chainedFrom];
-  chainedFrom[idx] = entry;
+  chainedFrom[idx] = chainEntryFromResult(old, r);
+  return { ctx: { ...frozen, chainedFrom }, frozenEntry: old };
+}
+
+/**
+ * L-3 / L-8b (PLATFORM-HELD-BYTES Stage B): the Author's (or the Architect's) frozen Harvester entry plus the held fields the
+ * chainer would add for a VARIANT consumer — `heldView` for the Author, `heldIndex` for the Architect — built by the SHIPPING
+ * pure builders (held-chain.ts) over the lab's in-memory store (held-store.ts). Every other field is the frozen entry's; the
+ * §6 render is the shipping renderer's (render-held.ts), reached through rebuildPrompt.
+ */
+export function patchHeldConsumerContext(exec: { config?: Record<string, any> | null; id: string }, fields: Record<string, unknown>): Record<string, any> {
+  const frozen = exec.config?.inputContext;
+  if (!frozen || !Array.isArray(frozen.chainedFrom)) throw new Error(`${exec.id}: no frozen chainedFrom`);
+  const idx = frozen.chainedFrom.findIndex((e: any) => e?.agentRole === 'infra_state_harvester');
+  if (idx < 0) throw new Error(`${exec.id}: no frozen Harvester entry`);
+  if (frozen.chainedFrom.filter((e: any) => e?.agentRole === 'infra_state_harvester').length !== 1) throw new Error(`${exec.id}: more than one frozen Harvester entry`);
+  const chainedFrom = [...frozen.chainedFrom];
+  chainedFrom[idx] = { ...frozen.chainedFrom[idx], ...fields };
   return { ...frozen, chainedFrom };
 }
+
+export const patchAuthorContext = (snap: Snapshot, heldViewFields: Record<string, unknown>) => patchHeldConsumerContext(snap.author.exec as any, heldViewFields);

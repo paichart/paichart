@@ -44,6 +44,9 @@ const ANTI_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
   // RWF D2 (2026-09-26): shared guidance must state the PROPERTY, never another document's clause letter. "clause (f)"
   // in change_reviewer meant a different rule in observability and nothing at all in k8s or Node C.
   { pattern: /\bclause \([a-z]\)/i,                     reason: 'cites a protocol clause letter (state the property instead)' },
+  // held-k8s TS N4 (2026-10-18; GS2): held-file text belongs in the protocol (HELD_FILES_SECTION) + template constraints, never in
+  // shared role guidance — a shared role key ships to four domains, three of which hold no file. 0 hits at authoring.
+  { pattern: /restore H<n>|Held File Edits/,             reason: 'held-file grammar in shared role guidance (belongs in the protocol + template constraints)' },
 ];
 
 interface RoleResult {

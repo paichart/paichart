@@ -147,7 +147,7 @@ Layer 1 (in-loop retry) is agent-execution's lane. `cline_docs/reviews/{nontermi
 grep -rln "sanitizeChainedOutput\|redactArtifactsForPersist" lib/agents/harness/ lib/services/ app/api/pov/agent/
 grep -rn "CONNECTED_OUTPUT_SANITIZE_ENABLED\|ARTIFACT_SECRET_REDACT_ENABLED" lib/ app/ .env*
 ```
-R9 neutralizes untrusted connected-service output before the reasoner (tool-loop site A + context-chainer site B); R10 redacts secrets from persisted report.md/result.json at the ONE shared terminal persist (`execution-terminal-persist.ts` `redactArtifactsForPersist` — engine and stream converge there since the 2026-07-05 convergence; the old "engine + stream persist" wording was stale, corrected 2026-09-27). Both **env-var, default-OFF in code but ON in prod since 2026-06-29** (`f7398004`; the `=false` in .env templates is the code default, NOT the prod posture — verify via the deploy workflow or `pm2 jlist`, never the template). No live toggle — `pm2 restart`. Modules, call-sites, enable-gates (R9 C1), CI pins: `.claude/knowledge/domain/harness/harness-output-guards.md`.
+R9 neutralizes untrusted connected-service output before the reasoner (tool-loop site A + context-chainer site B); R10 redacts secrets from persisted report.md/result.json at the ONE shared terminal persist (`execution-terminal-persist.ts` `redactArtifactsForPersist` — engine and stream converge there since the 2026-07-05 convergence; the old "engine + stream persist" wording was stale, corrected 2026-09-27). Both **env-var, default-OFF in code but ON in prod since 2026-06-29** (`f7398004`; the `=false` in .env templates is the code default, NOT the prod posture — verify via the deploy workflow or `pm2 jlist`, never the template). No live toggle — `pm2 restart`. Modules, call-sites, enable-gates (R9 C1), CI pins: `.claude/knowledge/domain/harness/harness-output-guards.md`. *(Corrected 2026-11-01, PH-7: the code defaults DIFFER — R9 runs only when `=true`; **R10 runs unless `=false`** (default-ON in code since 2026-08-28). `.env.example` sets both ON since 2026-11-01; its old `=false` had switched R10 off for self-hosters. Canonical: `domain/harness/harness-output-guards.md`.)*
 
 ## Phase 1: Stack Map Orientation
 
@@ -520,7 +520,7 @@ grep -rn "harnessTaskId" lib/ app/ --include='*.ts' --include='*.js' | grep -v n
 # comment), reactor-skip-counter.ts + errors.ts (log/error payload fields), protected-task-metadata.ts
 # (comment), reactor-budget-exhausted-persist.ts (RWF A2: an input FIELD name — it writes the harness TASK, never
 # the stage back-pointer). A NEW file here must be classified read-vs-write before it is accepted:
-grep -rl "harnessTaskId" lib/ app/ --include='*.ts' --include='*.js' | grep -v test | wc -l   # expect 13 — +requirements-form-correction.ts (2b, 2026-10-09: a FIELD name on the fact — the resolved harness id; a read, never the stage back-pointer); was 12, was 11; +leg-child-override.ts (RWF D1 3090ed42, 2026-09-27 — not X17 as first recorded; X17 reuses its isLegChild: READS stage.metadata.harnessTaskId to decide 'is this a pipeline child?' — a read, classified per the rule above); was 10 before orchestrator-reexecution.ts (RWF C1)
+grep -rl "harnessTaskId" lib/ app/ --include='*.ts' --include='*.js' | grep -v test | wc -l   # expect 16 — 2026-10-25: +hub-shared-middleware.js (SF-1 agent-delete guard READS the registering execution's stage back-pointer ONCE, at registration, to stamp `provisionedByRunScope`; never re-derived — sec-ops SF-1; a rebind BEFORE registration still stamps the wrong leg, register HUB-STAGE-BACKPOINTER-REBIND). Before that 15 — 2026-10-23: +validation-tool-calls-enrichment.ts (the Author reads its stage back-pointer to find the leg protocol). Before that 14 — +held-bytes/variant.ts (Stage B V-5a, 2026-10-15: resolveOwningLegProtocol reads the leaf's stage back-pointer). Before that 13 — +requirements-form-correction.ts (2b, 2026-10-09: a FIELD name on the fact — the resolved harness id; a read, never the stage back-pointer); was 12, was 11; +leg-child-override.ts (RWF D1 3090ed42, 2026-09-27 — not X17 as first recorded; X17 reuses its isLegChild: READS stage.metadata.harnessTaskId to decide 'is this a pipeline child?' — a read, classified per the rule above); was 10 before orchestrator-reexecution.ts (RWF C1)
 ```
 
 ### 5.4 Engine skip — the shared SUCCESS-persist core (post-Phase-6 convergence)
@@ -979,10 +979,11 @@ grep -nE "## Tool Execution \(Turn|finalResponse = \(finalResponse \|\| ''\) \+ 
   /home/steve/copov15/lib/services/agentExecutionEngine.ts \
   /home/steve/copov15/app/api/pov/agent/execute/stream/route.ts || echo "✓ no leak"
 
-# Confirm structured tool forensics still emitted (these MUST exist in result.json/pipeline-index.json)
-grep -nE "toolCalls:|qualityMetrics:|toolCallSuccess:|mcpToolsProvided:|toolLoop:" \
-  /home/steve/copov15/lib/services/agentExecutionEngine.ts \
-  /home/steve/copov15/app/api/pov/agent/execute/stream/route.ts
+# Confirm structured tool forensics still emitted (these MUST exist in result.json/pipeline-index.json).
+# ⚠️ Re-pointed 2026-10-16: since execution-path convergence (2026-07-05) the result.json builder is
+# buildExecutionResultJson in execution-artifacts.ts — the two callers carry none of these keys, so the
+# old grep on agentExecutionEngine.ts + stream/route.ts returned EMPTY and read as "lost".
+grep -cE "toolCalls:|qualityMetrics:|toolCallSuccess:|mcpToolsProvided:|toolLoop:" lib/services/execution-artifacts.ts  # expect 5
 ```
 
 ### 11.2 Artifact policy gate
@@ -1096,7 +1097,7 @@ grep -nE "128|512" lib/agents/harness/context-chainer.ts | head   # 128 KB/prede
 #    into the harness report.md at SYNTHESIZE-commit.
 grep -rn "deliverableSourceTaskId" lib/ scripts/seed-harness-template.ts | head
 
-# 4. Runtime injection TAIL (execution-system-prompt.ts) — loadProtocols cap-10 / named-single / Axis-5
+# 4. Runtime injection TAIL (execution-system-prompt.ts) — composed / named-single (load-all retired 2026-10-16) / Axis-5
 #    constraints (the harness template's OWN constraints inject here too) / harness-context mode block / P10.
 grep -n "loadProtocols\|renderConstraintsBlock\|harnessContext\|SCOPE_SELF_CHECK" lib/services/execution-system-prompt.ts | head
 ```
@@ -1232,7 +1233,7 @@ When completing this discovery, report back:
 - [ ] MCP task.create — maybeQueueIfDepFree
 - [ ] MCP agent.assign — maybeQueueIfDepFree
 - [ ] MCP task.update — maybeQueueIfDepFree (gap (e) door 2026-07-18: dep rewrite / template attach; PIPELINE + executionStatus=FAILED call-site guards)
-- [ ] Reactor-firing file set = 5 (Phase 4 intro); the 4 Finding-9 safety nets (4.2a) + F16 retrigger accounted for; nothing new unclassified
+- [ ] Reactor-firing file set = 7 (Phase 4 intro); the 4 Finding-9 safety nets (4.2a) + F16 retrigger accounted for; nothing new unclassified
 
 ### Anti-Fabrication Defense (3 layers)
 - [ ] Protocol rule present
@@ -1334,9 +1335,9 @@ whether to BUILD something. These pin its load-bearing claims.
 ```bash
 grep -c "| 'prefix-not-minimal'" lib/agents/harness/derivation-containment.ts   # expect 1 — the counterpart the map credits for requirements.md check 2b (minimality). If this goes to 0 the map's "covered" row is false and check 2b is exposed again
 grep -c "| 'covered-not-member'" lib/agents/harness/derivation-containment.ts   # expect 1 — the counterpart for check 3 (aggregate covers no existing allocation)
-grep -c "^    name: '" lib/agents/harness/mechanical-nets.ts                    # expect 11 — 2026-10-13 (2): +applyBlockPlaceholder@leaf-persist (PLACEHOLDER-APPLIES-AS-LITERAL interim guard). Before that 10 — 2026-10-13: +quoteFidelity@leaf-persist (VERBATIM-QUOTE-OMISSION). Before that 9; — (+reviewerWarnings@leg-synthesize, 2026-10-08) registrations, NOT distinct nets: rollbackContainment AND (since value-chain B4, 2026-10-02) derivationContainment each register at both points. 8 nets / 10 registrations (re-proven 2026-10-13: `grep -oE "^    name: '[A-Za-z]+'" … | sort -u | wc -l` = 8); both numbers must move together
-grep -c "point: 'leaf-persist'" lib/agents/harness/mechanical-nets.ts           # expect 5 — 2026-10-13 (2): +applyBlockPlaceholder (config_change_author leaves). Before that 4 — 2026-10-13: +quoteFidelity (Harvester + Author leaves). Before that 3; — (was 2; +derivationContainment on the value-leg Derivation Architect, value-chain B4 2026-10-02 — leaf-persist precisely so its disposition reaches the value leg's Reviewer) — a leaf-persist net reaches the leg Reviewer's §6 via the chainer; a leg-synthesize one cannot. Stamp point is a design constraint, so the split is worth pinning
-grep -c "point: 'leg-synthesize'" lib/agents/harness/mechanical-nets.ts         # expect 6 — +reviewerWarnings (WARNINGS-INVISIBLE 2026-10-08); was 5; was 4; +verdictFreshness (RWF C3 2026-09-26)
+grep -c "^    name: '" lib/agents/harness/mechanical-nets.ts                    # expect 18 — 2026-10-26 (held-network step 3 batch 2b): +deviceSourceReads, +gitDeviceComparison. Before that 16 — 2026-10-23: +validationToolCalls@leaf-persist (network config_change_author leaves). Before that 15 — 2026-10-15 (Stage B V-5f): +editApplication@leaf-persist, heldBytes@leaf-persist, reviewedEditDiff@leaf-persist, editApplication@leg-synthesize (variant-only). Before that 11 — 2026-10-13 (2): +applyBlockPlaceholder@leaf-persist (PLACEHOLDER-APPLIES-AS-LITERAL interim guard). Before that 10 — 2026-10-13: +quoteFidelity@leaf-persist (VERBATIM-QUOTE-OMISSION). Before that 9; — (+reviewerWarnings@leg-synthesize, 2026-10-08) registrations, NOT distinct nets: rollbackContainment AND (since value-chain B4, 2026-10-02) derivationContainment each register at both points. 8 nets / 10 registrations (re-proven 2026-10-13: `grep -oE "^    name: '[A-Za-z]+'" … | sort -u | wc -l` = 8); both numbers must move together
+grep -c "point: 'leaf-persist'" lib/agents/harness/mechanical-nets.ts           # expect 11 — 2026-10-26: +deviceSourceReads, +gitDeviceComparison (batch 2b). Before that 9 — 2026-10-23: +validationToolCalls. Before that 8 — 2026-10-15: +the three Stage B variant leaf nets. Before that 5 — 2026-10-13 (2): +applyBlockPlaceholder (config_change_author leaves). Before that 4 — 2026-10-13: +quoteFidelity (Harvester + Author leaves). Before that 3; — (was 2; +derivationContainment on the value-leg Derivation Architect, value-chain B4 2026-10-02 — leaf-persist precisely so its disposition reaches the value leg's Reviewer) — a leaf-persist net reaches the leg Reviewer's §6 via the chainer; a leg-synthesize one cannot. Stamp point is a design constraint, so the split is worth pinning
+grep -c "point: 'leg-synthesize'" lib/agents/harness/mechanical-nets.ts         # expect 7 — 2026-10-15: +editApplication hoist (Stage B V-5f). Before that 6 — +reviewerWarnings (WARNINGS-INVISIBLE 2026-10-08); was 5; was 4; +verdictFreshness (RWF C3 2026-09-26)
 grep -c "authored-value-not-derived" lib/agents/harness/derivation-containment.ts   # expect 0 — the check-1 leaf is EARNED, SPECCED and deliberately FILED (3 of 13 coverage, zero observed mismatches). A non-zero count means it was built, which is GOOD but makes the map's "EXPOSED" row stale: update the map and retire the health-run re-measure in the same commit
 ```
 
@@ -1423,14 +1424,15 @@ Suites: `test:child-stage-settled` (X4 D11-D18), `test:authoritative-result-read
 grep -c "writeReapedTaskStatuses(tx," lib/services/agentExecutionEngine.ts   # expect 2
 grep -c "executionStatus: null" lib/services/agentExecutionEngine.ts   # expect 0
 # B1 — the nets read the execution the chainer chained (helper + 3 enrichment files)
-grep -rl "readAuthoritativeResultField(" lib --include=*.ts | wc -l   # expect 8 — 2026-10-13: +quote-fidelity-enrichment.ts (the Author point reads the harvest's raw toolCalls through it). Before that 7; — (+reviewer-warnings-enrichment.ts, 2026-10-08: the reviewerWarnings net reads each reviewer's stamped verdict and each leg's stamped fact through the chainer's selection; was 6) (+plan-spawn-carry.ts, C2/C3 2026-10-04: the program PLAN read takes the Architect's AUTHORITATIVE execution, the same selection the chainer uses; was 5; was 4; +value-leg-containment-enrichment.ts, value-chain B4 2026-10-02: the harvest read at leaf-persist and the Architect-stamp hoist)
+grep -rl "readAuthoritativeResultField(" lib --include=*.ts | wc -l   # expect 11 — 2026-10-26: +device-source-facts-enrichment.ts (batch 2b). Before that 10 — 2026-10-23: +validation-tool-calls-enrichment.ts (the Author point reads the Harvester's toolCalls). Before that 9 — 2026-10-15: +held-bytes-nets.ts (the ONE held child selector, Stage B V-5f). Before that 8 — 2026-10-13: +quote-fidelity-enrichment.ts (the Author point reads the harvest's raw toolCalls through it). Before that 7; — (+reviewer-warnings-enrichment.ts, 2026-10-08: the reviewerWarnings net reads each reviewer's stamped verdict and each leg's stamped fact through the chainer's selection; was 6) (+plan-spawn-carry.ts, C2/C3 2026-10-04: the program PLAN read takes the Architect's AUTHORITATIVE execution, the same selection the chainer uses; was 5; was 4; +value-leg-containment-enrichment.ts, value-chain B4 2026-10-02: the harvest read at leaf-persist and the Architect-stamp hoist)
 # C1 — the cap + Reviewer rule run at the chokepoint, and the chained record is stamped explicitly
 grep -c "enforceOrchestratorReExecutionRules(prisma" lib/services/agent-execution-create.ts   # expect 1
 grep -c "ctx.chainedPredecessors = stamps.chainedPredecessors" lib/services/execution-context-build.ts   # expect 1 — moved out of agent-execution-create.ts by 0901c160 (a prisma-free module, so its test runs in CI); found drifted by MI-13
 # C2 — a changed-input retry gets no keep-best comparison
 grep -c "return skip(.changed-input.)" lib/services/execution-selection.ts   # expect 1
 # C3 — persist-time key order; the freshness net; the guard reads the authoritative reviewer
-grep -c "orderResultJsonForPersist(enrichedResultJson)" lib/services/execution-terminal-persist.ts   # expect 1
+grep -c "redactArtifactsForPersist(orderResultJsonForPersist(obj)" lib/services/execution-terminal-persist.ts   # expect 1 — the ONE result.json serializer orders first (Stage B V-5e moved the call into serializeResultJsonArtifact)
+grep -c "serializeResultJsonArtifact(enrichedResultJson, reportMdContent)" lib/services/execution-terminal-persist.ts   # expect 1 — the non-variant persist goes through it
 grep -c "name: .verdictFreshness." lib/agents/harness/mechanical-nets.ts   # expect 1
 grep -c "selectAuthoritativeExecution(prisma as any, s.id, CHAIN_SELECTION_OPTIONS)" lib/agents/harness/verdict-mismatch-guard.ts   # expect 1
 ```
@@ -1506,8 +1508,11 @@ grep -c "CanNeverRunError" lib/agents/harness/plan-spawn-carry.ts   # expect 1 �
 npm run test:plan-spawn-carry   # expect >=85 pass — pure (in CI)
 ```
 
-**Watch on reading these facts:** `interfaceContractSource` and `duplicateAcknowledgedCarry` are UNRENDERED and
-consumed by nothing but `agent.status` (`carries`). Hash comparisons go through `canonicalContractSha` only —
+**Watch on reading these facts:** `interfaceContractSource` and `duplicateAcknowledgedCarry` are UNRENDERED (one
+exception: the Q2 absent arm's storage sentence in the `task.create` result, 2026-10-17). They are consumed by
+`agent.status` (`carries`) and — since E4 — by the `INTERFACE_CONTRACT_MISSING` cause text (`interface-contract-missing.ts`,
+enum fields only; `arm` and, since Q2, `declineReason`). Q2 arms: `create-absent` (plan stored for an omitted leg) /
+`create-absent-declined` (+ `declineReason`); MI-13 has a Q2 section. Hash comparisons go through `canonicalContractSha` only —
 SQL `contract::text` orders keys by length then bytes and cannot reproduce `planSha256`. The live instrument is
 `npm run replay:plan-contract -- --root <id>`; the forensics §4c SQL is a cross-check.
 
@@ -1543,7 +1548,7 @@ base-only instead of failing loud. A drift sweep over "value-chain-program" EXCL
 ```bash
 grep -c "'value-chain-program'," lib/agents/harness/program-protocol.ts            # expect 1 — the PERMANENT membership (owner decision D2); 0 = the fence was swept
 grep -c "nodeCTemplate: 'Program Integration Reviewer'" scripts/seed-protocol-prompts.ts   # expect 1 — pov-program's Node C row (exact name: a missing exact name binds the nearest row SILENTLY, fuzzy contains-tier)
-grep -c "status: 'DEPRECATED'" scripts/seed-protocol-prompts.ts                    # expect 1 — the value-chain-program tombstone (status comes from the seed: a revert reseeds it ACTIVE)
+grep -c "status: 'DEPRECATED'" scripts/seed-protocol-prompts.ts                    # expect 2 — the value-chain-program tombstone + (Phase 10, 2026-10-17) the observability-config-held tombstone (status comes from the seed: a revert reseeds it ACTIVE)
 grep -c "status: 'DEPRECATED'" scripts/seed-value-chain-templates.ts              # expect 1 — Value-Chain Program Architect (ND6, per-entry status)
 grep -c "'value_chain_architect': PROGRAM_ARCHITECT_GUIDANCE" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # expect 1 — one Architect text for both keys (=== pinned in test:protocol-golden)
 grep -c "<ALL pipeline child ids — never a gate>" scripts/seed-protocol-prompts.ts   # expect 2 — PLAN-SPAWN steps 5 (producer) and 6 (Node C), E6 C1-a
@@ -1564,7 +1569,7 @@ The consumer-side greps for the in-run requirements form check moved to the requ
 ## PLATFORM-HELD-BYTES Stage A — shadow capture under the Harvester (2026-10-14)
 
 ```bash
-grep -c "captureHeldFiles(" lib/services/execution-core.ts   # expect 1
+grep -c "captureHeldFiles(" lib/services/execution-core.ts   # expect 2 — Stage B V-5: a variant leaf captures before the nets, every other at the Stage A position (CTF-SEAM-6 pins both)
 grep -c "captureHeldFiles(" lib/services/execution-completion-anchored.ts   # expect 1
 ```
 Observability Harvesters' declared file reads (`get_otel_config`, `get_ingress_config`) are captured, R10-redacted and held
@@ -1574,3 +1579,284 @@ descriptor table (`held-bytes/descriptors.ts`). Stage B (edit by reference: the 
 `heldBytes` fact wiring) builds on these tables. Record + G0 + review folds:
 `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-BUILD.md`; plan `STAGE-A-PLAN.md` §15 carries Stage B's
 preconditions.
+
+## PLATFORM-HELD-BYTES Stage B push 1 — series movers (2026-10-14)
+
+Push 1 (`4e9bebbd3` · `244c7f8b0` · `afab2567f`) ships the movers before the variant: `held_views` + relaxed refs (schema),
+`R9_VERSION`, R10 v3, `toolCallGatewayMeta` (result.json operator tail on executions with a failed `services` call), gateway
+id-first resolution. Nothing an agent reads changes except through R10 v3's redaction of persisted text. The variant
+(`observability-config-held`) is NOT in push 1. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-B-PUSH1-BUILD.md`.
+
+## PLATFORM-HELD-BYTES Stage B — the variant (built 2026-10-15; DEPLOYED as push 2 2026-10-15 — row DRAFT, templates unseeded)
+
+**[HISTORY — Stage B as built. Since Phase 10 (2026-10-17) the variant is FOLDED into obs 1.10.0: its row is a DEPRECATED tombstone, no anchor builder runs at seed, and `assertHeldVariantBase()` is gone (grep below expects 0). See the PHASE 10 block further down.]** The held-file variant `observability-config-held-protocol` is a PROTOCOLS row seeded **DRAFT**, built at seed load from the
+RENDERED obs base (`held-bytes/variant-protocol.ts`, `replaceExactlyOnce` per site — a moved anchor throws); its four templates
+(`seed-observability-held-templates.ts`) seed **INACTIVE**. `assertHeldVariantBase()` refuses the whole protocol seed when the
+rendered obs base differs from `scripts/fixtures/held-variant-golden.json` (D-L freeze; re-base deliberately with
+`test-held-variant-golden.ts --update`). Every protocol-keyed array/map/canonical call names the variant or an exclusion with a
+reason — `test:variant-protocol-sites` scans lib/app/scripts by AST. The variant leg's qualityGate passes through the fail-closed
+carrier (`held-edit-carrier.ts`) at the MCP `task.update` write.
+```bash
+grep -c "observability-config-held" scripts/test-variant-protocol-sites.ts   # expect >=1
+grep -c "await applyHeldEditCarrier(" lib/mcp/tasks/action/handlers/task/task-update-handler.ts   # expect 1
+grep -c "assertHeldVariantBase();" scripts/seed-protocol-prompts.ts   # expect 0 — Phase 10 (2026-10-17) removed the base-freeze guard with the fold
+```
+Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-B-VARIANT-BUILD.md`.
+
+**G1 (2026-10-15):** the grammar compares a heading's title after `machineHeadingTitle` strips a leading section number (one
+optional capital letter, digits with `.N` parts, optional `.`/`)`/`:`) — 6 of 50 G1 Authors numbered `## 2. Held File Edits` and
+were refused before the fix. `HELD_EDIT_CLAUSE` unchanged. Result: `cline_docs/reviews/platform-held-bytes-2026-10-13/G1-LAB-RESULT.md`.
+```bash
+grep -c "machineHeadingTitle(" lib/agents/harness/held-bytes/edits.ts   # expect 3
+```
+
+**G3 entry (built + pushed 2026-10-16, `6b44c9cfe` + `e574210d7`; variant still DRAFT — inert until the ACTIVE flip):** edge-state
+renders — a variant Harvester that held nothing stamps `heldBytes.reason` `capture-off`/`no-files` and its consumers get ONE named
+`heldNone` state (PC-P2-3); an absent stamped digest ⇒ editDiff `could-not-check` (BC-N1); the held-chain catch is role-aware, `{}`
+for an unresolved consumer (BC-N3); an open predecessor fence is closed before held lines (PC-P2-7, `lib/utils/markdown-fence.ts`).
+A8 forgives a retitle that folds to a machine heading (AE-P2-2; `## Edits` still refused). LAB-GATED, not yet measured: the
+variant Reviewer template constraint `Held Diff: Unaccounted Lines Block` (decision 1) + refusals rendered in the Reviewer diff
+(PC-P2-1). Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/G3-ENTRY-BUILD.md`.
+```bash
+grep -c "export function heldFailureFields" lib/agents/harness/held-chain.ts   # expect 1
+grep -c "export function heldNoneState" lib/agents/harness/held-chain.ts   # expect 1
+grep -c "export function refusalFactLine" lib/agents/harness/held-bytes/render-held.ts   # expect 1
+grep -c "openFenceOf" lib/agents/harness/render-pipeline-context.ts   # expect 2
+grep -c "export function foldMachineHeadingTitle" lib/agents/harness/held-edit-correction.ts   # expect 1
+grep -c "HELD_REVIEWER_CONSTRAINT" scripts/seed-observability-held-templates.ts   # expect 4 — Phase 10: re-exported from the lib text module (export + import + 2 uses)
+```
+
+**ACTIVE flip state (flip prep 2026-10-16, GO-MINIMAL; `FLIP-PREP-DECISIONS.md`).** PROPERTY greps on the seed SOURCE, which is the
+source of truth for status (F3). Before flip commit 2 the row reads `'DRAFT'`; a revert to DRAFT/INACTIVE is a rollback, never drift.
+```bash
+grep -c "status: 'DEPRECATED', version: '0.1.0'" scripts/seed-observability-held-templates.ts   # expect 2 — Phase 10 panel F9: the retired variant templates seed DEPRECATED on both writes (was ACTIVE ×2 from flip commit 1)
+grep -c "status: 'INACTIVE'" scripts/seed-observability-held-templates.ts   # expect 0 — DEPRECATED, not INACTIVE (panel TS-S2, value-chain ND6 precedent)
+grep -c "^- scripts/held-base-check.ts$" scripts/export/public-allowlist.rules   # expect 1 — the G3 operator base check stays private (O14 is the public tool, at promotion)
+```
+G3 legs are STANDALONE pipelines: a pov-program cannot release a variant leg (Program Architect token list + Node C retitle rule).
+
+**PHASE 10 — the FOLD (built 2026-10-17, LOCAL; `PHASE10-PLAN.md` W1–W10, owner decisions PH-1…PH-11 in `PHASE10-INVENTORY.md`).**
+Held is a platform CAPABILITY now, not a variant: `HELD_CAPABLE_PROTOCOLS` (`held-bytes/variant.ts`) = obs ONLY (panel D4 removed the
+retired token). The held text is IN the obs source (obs 1.10.0, shared `HELD_FILES_SECTION`), the variant row is a DEPRECATED tombstone
+(leg tier: composes base-only — never add it to `PROGRAM_PROTOCOL_NAMES`), the 4 variant templates seed INACTIVE, and the base obs
+Author/Reviewer carry the two held constraints. The carrier's SCOPE rule is ONE predicate, `held-bytes/scope.ts` `heldPackageOutOfScope` (panel §1a): state in the explicit D1 list
+AND no held grammar on the stamp; six readers express it (carrier, SYNTHESIZE, Reviewer, render, MI-13, card). A changed whole-file
+write of a held file is refused (`held-file-written-whole`, NOT_CORRECTABLE — no turn; an unchanged quote is exempt, D5). The Stage B anchor builder survives ONLY as the
+frozen `variant-protocol-stage-b.ts` for the lab's historic re-render. Once this ships, "a pov-program cannot release a variant leg"
+above is moot: every obs leg in a program IS held-capable.
+```bash
+grep -c "heldPackageOutOfScope(author.fact)" lib/agents/harness/held-edit-carrier.ts   # expect 1
+grep -c "export function heldPackageOutOfScope" lib/agents/harness/held-bytes/scope.ts   # expect 1
+grep -c "export const NOT_CORRECTABLE = \['held-file-written-whole'\]" lib/agents/harness/held-bytes/apply.ts   # expect 1
+grep -c "^export const SELF_HOST_HELD_TEXT_EXISTS = true" scripts/export/held-export-guard.ts   # expect 1 — flipped at PH-7 2026-11-01, was false, docs/SELF-HOST-KEPT-FILES.md landed in the same commit
+grep -cF '${HELD_FILES_SECTION}' scripts/seed-protocol-prompts.ts   # expect 1
+grep -c "CREATE TEMP VIEW _heldleg" scripts/report-mechanism-inventory.sh   # expect 1
+grep -c "HELD_CAPABLE_PROTOCOLS: readonly string\[\] = Object.freeze(Object.keys(HELD_JOIN_VERSIONS).filter((p) => !HELD_JOIN_AWAITING_TEXT.includes(p)))" lib/agents/harness/held-bytes/variant.ts   # expect 1 — the set is the keys of HELD_JOIN_VERSIONS minus HELD_JOIN_AWAITING_TEXT (held-network push 2 joined network at 1.25.0 awaiting its text; push 3's text commit, 2026-10-26, emptied the list — network is held-capable; held-k8s 1g before that)
+```
+
+## held-k8s step 1 (2026-10-18 — DEPLOYED 04:23:03Z, release `release_20261018_041900`): HELD_JOIN_VERSIONS, the generalised `_heldleg`, K-4
+
+```bash
+grep -c "export const HELD_JOIN_VERSIONS" lib/agents/harness/held-bytes/variant.ts                       # expect 1
+grep -c "\[...HELD_CAPABLE_PROTOCOLS, HELD_VARIANT_PROTOCOL\]" lib/agents/harness/context-chainer.ts      # expect 1
+grep -c "CREATE TEMP VIEW _heldjoin\|CREATE TEMP VIEW _execleg\|CREATE TEMP VIEW _gitsrcleg" scripts/report-mechanism-inventory.sh   # expect 3
+```
+- A domain becomes held-capable by adding ONE row to `HELD_JOIN_VERSIONS` (protocol → the version it joined at) AND the same pair to
+  MI-13's `_heldjoin` — a static pin in `test-held-bytes-store` fails CI if they differ. `_heldleg` keys on the leg's FIRST
+  pipeline-index composing that protocol at ≥ the version, never on the facts it audits (EF B-2).
+- `ROLLBACK_FACT_LANES` = `HELD_CAPABLE_PROTOCOLS ∪ {HELD_VARIANT_PROTOCOL}`: when k8s joins (step 3) EVERY k8s Reviewer starts
+  receiving a chained rollback fact — an input change for that step's series cut.
+- MI-13 positive control: `npm run test:mi13-held-git-control` (out-of-CI, local DB, temp shadow tables; every planted hit fires).
+Record: `cline_docs/reviews/held-k8s-2026-10-18/STEP1-BUILD.md` (plan SYNTHESIS v3 §6).
+
+**Late additions (2026-10-18):**
+```bash
+grep -c "AS held_srcrev" scripts/report-mechanism-inventory.sh   # expect 1 — the sourceRevision lines sit behind a column-exists guard (MI-13 must never abort)
+grep -c "merge-base --is-ancestor" .claude/knowledge/pipelines/kubernetes-gitops/phase4-kind-rig/reset-from-lab-repo.sh   # expect 1 — SF-4: the reset commit must be on origin/main
+grep -c "apply -f -" .claude/knowledge/pipelines/kubernetes-gitops/phase4-kind-rig/reset-from-lab-repo.sh   # expect >=1 — SF-4: the COMMITTED bytes are applied, never the working tree
+```
+⚠️ `tsc -p tsconfig.json` does not compile `scripts/`: after a lib type change, typecheck the scripts that build it (STEP1-BUILD §2
+finding 10 — MI-13 🔴 11 read UNMEASURED for a day; register SCRIPTS-TYPECHECK-GAP).
+
+## held-k8s step 2 (2026-10-18 — DEPLOYED, cut 08:21:02Z, k8s 1.17.0; L-K1 PASSED): k8s 1.17.0 repo read, SF-1, F2
+
+```bash
+grep -c "gitFileSourceWorkflowRefusal(serviceRecord)" lib/mcp/server/tools/hub/workflow-tools-handler.js   # expect 1 — SF-1: a Git file source is never a workflow step (the RESOLVED ROW since WI-B10 — a declared pin counts too; before the policy gate / mint)
+grep -c "gitFileSourceWorkflowRefusal(serviceInfo)" lib/services/workflow/integrations/service-caller.ts    # expect 1 — the other workflow step caller (row-aware since WI-B10), before trust resolution
+grep -c "stripGitFileSourceUrlTokens(targetService, response)" lib/mcp/server/tools/hub/service-call-handler.js   # expect 1 — F2: listing download_url tokens stripped before delivery to ANY caller (row-aware since WI-B10)
+grep -c "result: deliveredResponse," lib/mcp/server/tools/hub/service-call-handler.js   # expect 1 — the success envelope carries the STRIPPED response
+grep -c "GIT_URL_TOKEN_PLACEHOLDER = 'PLATFORM-STRIPPED'" lib/mcp/server/config/git-file-source-pin.js   # expect 1 — one module, the placeholder the L-K1 fixture listing carries
+grep -cF '${GIT_FILE_READ_CALL}' scripts/seed-protocol-prompts.ts   # expect 2 — ONE call shape in agent text, built from the descriptor table's service name: k8s 1.17.0 + terraform 1.14.0 (held-terraform step 2, 2026-10-21); each protocol interpolates it exactly once (pinned per domain in test:domain-carry-pins K8S-REPO-READ / TF-REPO-READ)
+grep -c "List a directory at most once" scripts/seed-protocol-prompts.ts   # expect 0 — the L-K1 run-1 defect sentence; its return re-opens G-K1-PATH
+grep -c "heldFilesSection(K8S_HELD_EDIT_EXAMPLE" scripts/seed-protocol-prompts.ts   # expect 1 — the held join (step 3, k8s 1.18.0, 2026-10-19) interpolates the k8s section once; it was zero through step 2
+```
+- k8s is a Git FILE SOURCE (capture) but still NOT held-capable at 1.17.0 — `HELD_JOIN_VERSIONS` gains k8s at step 3.
+- Pins: `test-security-invariants` §R7 (SF-1) + §R8 (F2) — 560; `test-gateway-id-first` §4 (both workflow callers × name/id) — 33;
+  `test-domain-carry-pins` K8S-REPO-READ ×3 + K8S-DRIFT 1.17.0 — 40. All mutation-checked.
+- Lab: `cline_docs/reviews/held-k8s-2026-10-18/LAB-RESULT-L-K1.md` (two runs, $9.93). Score the role-prefixed arms (`--arm hk1|xk1|rk1`),
+  never `--arm k1` (exact match → every gate reads "not run"). The Reviewer's APPROVE direction on a drift-PERFORMED package is NOT
+  measured — a pre-registered shadow-window check. Record: `STEP2-BUILD.md`.
+```bash
+grep -c "gitItemsWithheld > 0" lib/mcp/server/tools/hub/service-call-handler.js   # expect 1 — SF-7 fail-closed tripwire: a surviving credential-shaped token withholds the string + securityEvent
+grep -c "const RESIDUAL_TOKEN_RE" lib/mcp/server/config/git-file-source-pin.js   # expect 1 — the tripwire's ONE definition
+```
+sec-ops step-2 review: `cline_docs/reviews/held-k8s-2026-10-18/REVIEW-sec-ops-STEP2.md` (GO-WITH-CHANGES 87; SF-7 folded; B-W1/B-W2 before the window).
+
+**Shadow window (2026-10-18/19): 6/6 PASS, 0 STOP** — `cline_docs/reviews/held-k8s-2026-10-18/WINDOW-RUN-SHEET.md`. Two legs with the SAME
+objective in one phase halt as duplicates; clear with `metadata.duplicateAcknowledged` = an ARRAY of every prior `Pipeline:` stage, verified
+as jsonb `array` in the row before re-executing.
+
+## held-k8s step 3 — the join (2026-10-19; DEPLOYED, cut 04:47:32Z, release `release_20261019_044051`, k8s 1.18.0; L-K2 SHIP; every expectation run before it was written)
+
+```bash
+grep -c "'1.18.0'" lib/agents/harness/held-bytes/variant.ts                       # expect 1 — HELD_JOIN_VERSIONS carries kubernetes-gitops 1.18.0
+grep -c "source-not-pinned" lib/agents/harness/held-edit-carrier.ts              # expect >=4 — G-4/G-7: a refused Git read on the leg's authoritative Harvester forces needs-revision
+grep -c "target: ref.target, path: ref.path" lib/mcp/server/tools/held-get-handler.ts   # expect 1 — SF-5: held.get names a Git ref's target + path
+```
+Record: `cline_docs/reviews/held-k8s-2026-10-18/STEP3-BUILD.md`, `LAB-RESULT-L-K2.md`.
+
+## K8S-CLOSEOUT (2026-10-19; every expectation run before it was written)
+
+```bash
+grep -c "k8s/orders-api-flags.yaml" .claude/knowledge/pipelines/kubernetes-gitops/phase4-kind-rig/reset-from-lab-repo.sh   # expect 1 — the C-LQ one-object file the rig applies (lab repo c09f7fc)
+grep -c "90% at K8S-CLOSEOUT 2026-10-19" .claude/knowledge/patterns/kept-file-edit-by-reference-pattern.md   # expect 1 — promoted to 90% after the k8s live window; raised to 95% at TF-CLOSEOUT (the status line keeps the history)
+grep -c "RE-HOMED 2026-10-19 (K8S-CLOSEOUT)" scripts/test-validation-shape-contract.ts   # expect 1 — R8 rides K8S-TEXT-BATCH-NEXT
+grep -c "today \`observability-config\` only" lib/agents/harness/held-bytes/variant.ts   # expect 0 — the stale held-capable claim is gone (k8s joined at 1.18.0)
+```
+- A held blob is stored ONE ROW PER SCOPE: fetch it by the ref's scope (`held_file_refs.scope`), or an operator's base check reads the bytes
+  twice and STOPs `held-text-integrity` (step-4 window, B-K1).
+- `duplicateAcknowledged` set through MCP `task.update` merges into metadata as a jsonb array (verified live, CTRL) — no psql needed.
+```bash
+grep -c "Net byte-identity replay at EVERY step that touches shared code" .claude/knowledge/patterns/kept-file-edit-by-reference-pattern.md   # expect 1 — proof gate 0 of a held-domain join (added 2026-10-20 after k8s step 3 skipped it)
+```
+
+## held-terraform step 0 + step 1 (DEPLOYED 2026-10-20 21:55:03Z, release `release_20261020_215107`; every expectation run before it was written)
+
+Records: `cline_docs/reviews/held-terraform-2026-10-19/` (STEP1-BUILD.md, REVIEW-sec-ops-STEP1.md, L-T1-FIXTURE.md, STEP2-TEXT-DRAFT.md);
+the next step and its order: `cline_docs/follow-ups/held-terraform-continuation-2026-10-19.md`.
+```bash
+grep -c "export const TEMPLATES" scripts/seed-terraform-iac-templates.ts   # expect 1 — step 0: the seed is importable (the held two-way pin require()s it at step 3)
+grep -c "if (require.main === module) main()" scripts/seed-terraform-iac-templates.ts   # expect 1 — importing it never seeds the DB
+grep -c "canonicalProtocolName('kubernetes-gitops'), canonicalProtocolName('terraform-iac')," lib/agents/harness/held-bytes/variant.ts   # expect 1 — terraform is a Git file SOURCE (captures, shadow) but NOT held-capable until HELD_JOIN_VERSIONS gains it (step 3)
+grep -c "^function heldPathRefusal(filePath)" lib/mcp/server/config/git-file-source-pin.js   # expect 1 — ONE predicate for state/plan/variables paths, both gates
+grep -c "const pathRefusal = heldPathRefusal(path);" lib/mcp/server/config/git-file-source-pin.js   # expect 1 — the call gate refuses the read BEFORE any byte (sec-ops SF-1)
+grep -c "^export { heldPathRefusal };" lib/services/held-bytes-capture.ts   # expect 1 — capture re-exports the pin's function, never a copy
+grep -c "if (!a.ok && a.pathRefusal)" lib/agents/harness/held-bytes/extract.ts   # expect 1 — a refused state/tfvars/CLI-credentials path is `state-file`/`tfvars-file`/`credentials-file`, NEVER source-not-pinned (no G-4 force)
+grep -c "type: 'PINNED_SOURCE_BYPASS'" lib/mcp/server/config/service-call-policy.js   # expect 1 — T-2: the pinned repo via any other service is refused (a TRIPWIRE, not a boundary)
+grep -c "createPathInInheritedForm(" lib/agents/harness/held-bytes/apply.ts   # expect 2 — HELD-GIT-CREATE-PATH-SLASH: definition + the one call
+grep -c "createPaths.has(createPath)" lib/agents/harness/held-bytes/apply.ts   # expect 1 — a second create of one path refuses (sec-ops SF-3)
+grep -c "refusal = 'state-file'\|refusal = 'tfvars-file'" scripts/report-mechanism-inventory.sh   # expect 2 — the MI-13 ⚪ refusal counts (the two 🔴 lines re-derive the predicate)
+grep -c "refusal = 'credentials-file'" scripts/report-mechanism-inventory.sh   # expect 1 — TF-PATH-RULE-GAPS: its own ⚪ control
+grep -c "resolveOwningLegProtocol(db" scripts/replay-held-capture.ts   # expect 1 — the capture replay decides gitFileSourceLeg with PRODUCTION's resolver; without it every k8s/terraform capture replays as 'predicted 0' (found 2026-10-22: never checked before)
+grep -c "'tfplan', 'tfplan.out', 'plan.out', 'tfplan.json', 'tfplan.binary', '.terraformrc', 'terraform.rc', 'credentials.tfrc.json'" scripts/report-mechanism-inventory.sh   # expect 2 — both 🔴 re-derivations carry the CLOSED name lists (call gate + held ref) — keep equal to PLAN_FILE_NAMES + CLI_CREDENTIALS_FILE_NAMES
+grep -c "merge-base --is-ancestor" .claude/knowledge/pipelines/terraform-iac/phase4-localstack-rig/reset-from-lab-repo.sh   # expect 1 — T-8: the rig resets only to a commit ON origin/main
+```
+- **What a terraform leg does today:** nothing new — its Harvester text (1.13.0) still names no Git read. The step-2 text is DRAFTED,
+  not seeded, and is L-T1-gated. A browser read of the pinned repo is refused live (verified 2026-10-20 23:12Z, L-T1-FIXTURE §3 P6).
+- **R10 v6** (`paichart.r10/6`, cut 22:52:43Z) is the redactor every held base hashes — `R10-V6-BUILD.md`; owner sec-ops + execution-facts.
+
+## held-terraform step 2 (BUILT 2026-10-21, local — `cline_docs/reviews/held-terraform-2026-10-19/STEP2-BUILD.md`; every expectation run before it was written)
+
+```bash
+grep -c "^test('TF-REPO-READ:\|^test('TF-DRIFT" scripts/test-domain-carry-pins.ts   # expect 4 — the step-2 text pins (call once + browser route gone, read rules, T-F1 + never-copy-a-ref, T-6 + T-F2), mutation-checked red on 1.13.0
+grep -c "is outside the file source pin (" lib/mcp/server/config/service-call-policy.js   # expect 1 — F-T1: PINNED_ARGUMENT static text carries no character BC71 escapes (behavioural pin: test-security-invariants §F-T1, every violation type)
+grep -c "coalesce((v->'result')::text, '') || ' ' || coalesce(v->>'error', '')" scripts/report-mechanism-inventory.sh   # expect 1 — MI-13 refused-at-call-time control matches the hub message in BOTH stored shapes: production (success:true, result.isError, message in result.content) and the lab fixture tier (success:false, result:null, message under error) — the first re-key read only the lab shape (shadow window F-W3)
+grep -c "LIKE '%PINNED_ARGUMENT%'" scripts/report-mechanism-inventory.sh   # expect 0 — the old key read `result` for a word no message carries: 0 by construction
+grep -c "^  path text);" scripts/check-mi13-held-git-control.sh   # expect 1 — the out-of-CI control ABORTED from step 1 until this column existed
+```
+- **The text is frozen at the L-T1 sha** (terraform-iac 1.14.0 `2d8a41e5…`, 41,286): `test:protocol-golden` pins it; any text change is a new lab.
+- **Anchors read DB rows**: `test:protocol-dependence-anchors` proves only what the LOCAL DB holds — seed protocols locally before reading its green.
+- A refused hub call's message reaches the agent through BC71 (`sanitizeForResponse`, joined text capped at 200, `& < > " '` escaped): word every
+  static policy message without those characters; never remove the escape (it guards caller-chosen values).
+
+## held-terraform step 3 — the join + F-T2-1 (b) (BUILT 2026-10-22, local `caa97ed77`; L-T2 PASSED at `6becbd87…`; every expectation run before it was written)
+
+```bash
+grep -c "\[canonicalProtocolName('terraform-iac')\]: '1.15.0'," lib/agents/harness/held-bytes/variant.ts   # expect 1 — terraform joins HELD_JOIN_VERSIONS (≡ MI-13 _heldjoin, pinned)
+grep -c "('terraform-iac-protocol', '{1,15,0}'::int\[\])" scripts/report-mechanism-inventory.sh   # expect 1 — the MI-13 literal of the same pair
+grep -c "export const TF_HELD_EDIT_EXAMPLE" lib/agents/harness/held-bytes/clause.ts   # expect 1 — the domain example; the SHARED held text is untouched
+grep -cF '${heldFilesSection(TF_HELD_EDIT_EXAMPLE' scripts/seed-protocol-prompts.ts   # expect 1 — the terraform protocol interpolates the section once
+grep -c "HELD_AUTHOR_CONSTRAINT" scripts/seed-terraform-iac-templates.ts   # expect 2 — import + the spread by role (the two-way pin in test-held-variant-protocol requires it)
+grep -c "export async function arbitrateReflectionPass" lib/services/held-edit-step.ts   # expect 1 — F-T2-1 (b): the ONE arbitration of the reflection pass
+grep -c "arbitrateReflectionPass(" scripts/leg-replay-lab/live.ts   # expect 1 — the lab runs the SAME arbitration (it carried its own copy of the order before)
+grep -c "resolveOwningLegProtocol(prisma, task)" lib/services/execution-core.ts   # expect 1 — still ONE owning-leg resolution (moved ahead of the form correction)
+```
+- **F-T2-1 (b):** the one reflection pass goes to the held-edit correction when the form correction would run AND a refused held edit would
+  take it; the form correction stamps `prior-pass-reserved:edit-correction`. A `decideOnly` preview of the edit step decides it (no turn).
+  **A second copy of the post-loop order lived in `scripts/leg-replay-lab/live.ts`** — a fix in `execution-core.ts` alone did not reach the lab
+  (found by the A-T-MIXED fixture still reading form-correction). Any change to the correction order must land in the shared helper.
+- **Tests that used terraform as "the non-held domain"** moved to network-provisioning (test-held-variant, -held-variant-protocol V-8a,
+  -held-chain world, -held-edit-carrier PLAIN; K4-5 inverted). A text-search sweep missed two of them (title strings and a fixture world) — run
+  the held suites, do not trust the sweep.
+
+## held-network step 3 push 3 — THE JOIN TEXT (2026-10-26, built locally `1b860db57` + amend; every expectation run before it was written)
+
+network-provisioning 1.25.0 carries the held text (`heldFilesSection(NET_HELD_EDIT_EXAMPLE, NET_HELD_FILES_INTRO)`, Author (a)/(c)
+fragments, SYNTHESIZE lines, N1/N2/N4/N5/N6; N3 deferred) and `HELD_JOIN_AWAITING_TEXT` is EMPTY, so all four change domains are
+held-capable; network-derivation (the value leg) is the only domain protocol that is not. Record:
+`cline_docs/reviews/held-network-2026-10-22/STEP3-PUSH3-TEXT-BUILD.md`.
+```bash
+grep -c "export const HELD_JOIN_AWAITING_TEXT: readonly string\[\] = Object.freeze(\[\]);" lib/agents/harness/held-bytes/variant.ts   # expect 1 — emptied by the push-3 text commit (the J1 pin: listed iff the seed carries no held section)
+grep -c "\[canonicalProtocolName('network-provisioning')\]: '1.25.0'," lib/agents/harness/held-bytes/variant.ts   # expect 1 — the J1 join row (≡ MI-13 _heldjoin)
+grep -c "heldFilesSection(NET_HELD_EDIT_EXAMPLE, NET_HELD_FILES_INTRO)" scripts/seed-protocol-prompts.ts   # expect 1
+grep -c "export const NET_HELD_EDIT_EXAMPLE" lib/agents/harness/held-bytes/clause.ts   # expect 1
+grep -c "HELD_AUTHOR_CONSTRAINT" scripts/seed-network-provisioning-templates.ts   # expect 2 — the import + the by-role spread (J4)
+```
+- **Tests that used network-provisioning as "the non-held domain"** moved to network-derivation (test-held-variant, -held-variant-protocol
+  V-8a, -held-chain world, -held-edit-carrier PLAIN; the carrier's O-4 precedence test reads forced under the production predicate). The
+  next domain to join ahead of its text re-adds the `HELD_JOIN_AWAITING_TEXT` exclusion in `test-variant-protocol-sites.ts`.
+
+## TF-CLOSEOUT (2026-10-22; every expectation run before it was written)
+
+```bash
+grep -c "Status: PRODUCTION — Confidence 95%" .claude/knowledge/patterns/kept-file-edit-by-reference-pattern.md   # expect 1 — three domains, G-4 live (TF-CLOSEOUT)
+grep -c "Terraform: held — yes since 2026-10-21" .claude/knowledge/pipelines/PIPELINE-DOMAIN-FIT-CATALOG.md   # expect 1 — the catalog says terraform is held
+grep -c "### Terraform: kept .\.tf. files from your config repo" .claude/knowledge/pipelines/PIPELINE-HARNESS-USER-GUIDE.md   # expect 1 — the customer-facing subsection (written at step 4)
+grep -c "terraform today; k8s until step 3" lib/agents/harness/rollback-containment-enrichment.ts   # expect 0 — the stale comment is gone (rides the next code push)
+grep -c "terraform/archive.tf" .claude/knowledge/pipelines/terraform-iac/phase4-localstack-rig/reset-from-lab-repo.sh   # expect 1 — the one-resource held file the step-4 window added (the FILES line; the header names it as workspace/archive.tf)
+```
+- The rig's baseline is now lab commit `a027574e` (the reset script REFUSES a commit without `terraform/archive.tf`).
+- Live evidence the next pov-program batch needs: a spec topology with NO `lifecycle` line ⇒ Node C raised no teardown objection (P-T1).
+
+## NETWORK-CLOSEOUT (2026-10-27; network kept files released; every expectation run before it was written)
+
+```bash
+grep -c "Proven end to end in FOUR" .claude/knowledge/patterns/kept-file-edit-by-reference-pattern.md   # expect 1 — four held domains (network added at the close)
+grep -c "^## Addendum B — Network devices" .claude/knowledge/patterns/kept-file-edit-by-reference-pattern.md   # expect 1 — declared sources, D-1 force, apply model
+grep -c "Network: held — yes since 2026-10-27" .claude/knowledge/pipelines/PIPELINE-DOMAIN-FIT-CATALOG.md   # expect 1 — the catalog says network is held
+grep -c "### Network: kept device configurations" .claude/knowledge/pipelines/PIPELINE-HARNESS-USER-GUIDE.md   # expect 1 — the customer-facing subsection
+grep -c "#### Forced outcomes — what they are and why" .claude/knowledge/pipelines/PIPELINE-HARNESS-USER-GUIDE.md   # expect 1 — the forced-outcome reasons, network family included
+grep -c "Network kept files are RELEASED" cline_docs/reviews/held-network-2026-10-22/NETWORK-CLOSEOUT.md   # expect 1 — the close-out record
+grep -c "(LL-N-41)" .claude/knowledge/pipelines/LIVE-WINDOW-CHECKLIST.md   # expect 1 — duplicate check is POV-wide (program re-run clearance)
+grep -c "Device sources. is mandatory since network-provisioning 1.23.0" .claude/knowledge/pipelines/network-provisioning/phase4-ceos-rig/DEMO-RUN-GUIDE.md   # expect 1 — the demo task carries the block
+```
+- Records: `NETWORK-CLOSEOUT.md`, `J5-RUN-SHEET.md`, `LEARNINGS-LEDGER.md` (LL-N-01…44) in `cline_docs/reviews/held-network-2026-10-22/`;
+  post-MVP items `cline_docs/follow-ups/held-network-post-mvp-backlog-2026-10-26.md`; vendor-general claim waits on a second rig
+  (`vendor-agnostic-network-provisioning-2026-10-26.md`).
+- The join row + empty `HELD_JOIN_AWAITING_TEXT` greps are in the push-3 block above.
+- Stale code comment (rides the next code push): `held-edit-carrier.ts` still says "until push 3's text removes `HELD_JOIN_AWAITING_TEXT`".
+
+
+## held-network STEP 2 (pushed 2026-10-24 19:41:47Z, `947e5f475` text + SF-1 guard; lab L-N1 SHIP)
+
+The network Harvester reads the DECLARED per-device source (`## Device sources`: git-file · device-read · command-package;
+the harness stops a leg with no block); Git file + device read are NOT compared (owner — the platform compares mechanically
+at step 3); `infra_state_harvester` role guidance is service-agnostic (five owning seeds); `program_architect` carries
+`deviceSources["network-provisioning"]`. Records: `cline_docs/reviews/held-network-2026-10-22/` (STEP2-TEXT-DRAFT §8–§12,
+LAB-PREREG/RESULT-L-N1, REVIEW-sec-ops-STEP2-TEXT, SF1-AGENT-DELETE-GUARD). Step-3 preconditions: register R10-V8-RESIDUALS
+(a)/(b), HELD-CAPTURE-COMPARE-ELIGIBILITY, the mechanical file/device comparison, capture of a bundled config read.
+
+```bash
+grep -c "## Device sources — declared, never inferred" scripts/seed-protocol-prompts.ts   # expect 1
+grep -c "Do not compare them, and state no match or difference anywhere" scripts/seed-protocol-prompts.ts   # expect 1
+grep -c 'deviceSources\["network-provisioning"\]' lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # expect 1
+```
+
+## 2026-10-31 — Golden set coverage boundary (what the no-regression golden set does NOT see)
+The frozen golden set (`scripts/leg-replay-lab/golden/golden-set.json`, v2 since 2026-10-31, owner model-evaluation) replays LEGS only. Harness-side
+changes (agent.results read shape, keep-best selection, SYNTHESIZE, Node C, cross-leg chaining) are outside it: prove those with the
+nets replay and the canary re-run of the latest released program after the deploy (LIVE-WINDOW-CHECKLIST). Derive state:
+```bash
+ls scripts/leg-replay-lab/golden/golden-set.json | wc -l   # expect 1
+```
+

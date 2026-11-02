@@ -10,6 +10,7 @@
  */
 
 import { PrismaClient, MCPAuthType } from '@prisma/client';
+import { assertSlugIdFree } from './mcp-tool-seed-guard';
 
 const prisma = new PrismaClient();
 
@@ -111,6 +112,7 @@ async function registerInternalServices() {
   for (const service of INTERNAL_SERVICES) {
     console.log(`Registering: ${service.name}`);
 
+    await assertSlugIdFree(prisma, service.id); // Stage B P1-5: never shadow a same-named row under id-first resolution
     await prisma.mCPTool.upsert({
       where: { id: service.id },
       update: {
@@ -185,6 +187,7 @@ async function registerInternalServices() {
     credentials: {},
     permissions: { internal: true },
   };
+  await assertSlugIdFree(prisma, 'paichart-recommendation-engine');
   await prisma.mCPTool.upsert({
     where: { id: 'paichart-recommendation-engine' },
     update: recEngineData,
@@ -213,6 +216,7 @@ async function registerInternalServices() {
     credentials: {},
     permissions: { internal: true },
   };
+  await assertSlugIdFree(prisma, 'paichart-kpi-service');
   await prisma.mCPTool.upsert({
     where: { id: 'paichart-kpi-service' },
     update: kpiServiceData,

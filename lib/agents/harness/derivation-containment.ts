@@ -250,6 +250,10 @@ export interface UpstreamContainmentLeg {
   /** A copy of the hop's stamped disposition — attribution for replay, never an input to `green`. */
   disposition?: 'benign' | 'blocking' | 'needs-node-c';
   dispositionReason?: string;
+  /** Bug Class 85 G4 (2026-10-22): the KINDS the hop's own net could not machine-check (its
+   *  `unsupported[].kind`). Transcribed ONLY on a `checked:true` + `needs-node-c` copy — the one shape
+   *  the per-kind rule reads — so every other leg stays byte-identical. */
+  unsupportedKinds?: string[];
 }
 
 /** A value a CONSUMING leg declares it took from chained context and applied. */
@@ -326,12 +330,76 @@ export function checkConsumedValues(
  *
  * Empty input ⇒ false (fail closed): no upstream evidence is not evidence of a clean upstream.
  *
+ * BUG CLASS 85 (2026-10-22, owner decision "yes as recommended on all six rows"): `every` now asks
+ * whether each leg VOUCHES (`legVouches`), not merely whether it reports no violation. Before, one
+ * machine-checked leg carried along any sibling that was unchecked, undecided, unreadable or invisible
+ * ("one clean upstream masks the rest"). Measured 2026-10-22 (follow-up §6): 0 fan-ins ever, G4 twice
+ * (harmless), every stored green stamp unchanged by the new rule. Plain `every(checked)` was REFUTED:
+ * a benign discharged middle leg is `checked:false`, and that rule would have refused released program
+ * `cmu6a9ojp`. The options carry the two predecessor counts the legs cannot show (G1, G2) and the
+ * consumer's consumed kinds (G4).
+ *
  * PURE. Protocol 10: the caller stamps this alongside the transcribed legs, so a consumer can
  * always re-derive it from the same facts rather than trusting the boolean.
  */
-export function isUpstreamContainmentGreen(legs: UpstreamContainmentLeg[]): boolean {
+export function isUpstreamContainmentGreen(legs: UpstreamContainmentLeg[], opts: UpstreamGreenOptions = {}): boolean {
   if (!Array.isArray(legs) || legs.length === 0) return false;
-  return legs.some(l => l.checked && l.violations === 0) && legs.every(l => l.violations === 0);
+  if (typeof opts.lookupMisses === 'number' && opts.lookupMisses > 0) return false;                  // G2
+  if (typeof opts.fallbackPredecessors === 'number' && opts.fallbackPredecessors > 0) return false;  // G1
+  const consumedKinds = Array.isArray(opts.consumedKinds) ? opts.consumedKinds : [];
+  return legs.some(l => l.checked && l.violations === 0) && legs.every(l => legVouches(l, consumedKinds));
+}
+
+/** Inputs to `isUpstreamContainmentGreen` that the transcribed legs cannot carry themselves. */
+export interface UpstreamGreenOptions {
+  /** G2: report.md predecessors whose chained entry carried no readable containment (never became a leg). */
+  lookupMisses?: number;
+  /** G1: predecessors chained only through the `pipeline-index.json` fallback (deliverable never arrived). */
+  fallbackPredecessors?: number;
+  /** G4: the kinds this consumer declared in `## Consumed Values` (absent kind = `cidr`). */
+  consumedKinds?: string[];
+}
+
+/** Reasons a CONSUMING middle leg stamps when it discharged benign against its own green upstream. */
+export const DISCHARGED_HOP_REASONS: ReadonlySet<string> = new Set([
+  'consuming-leg-consumed-discharged', 'consuming-leg-upstream-discharged',
+]);
+
+/**
+ * Whether ONE transcribed upstream copy vouches for the consumer's green (Bug Class 85). A leg vouches
+ * when it carries 0 violations and is one of:
+ *  - machine-checked: `checked:true` and NOT stamped `blocking`/`needs-node-c`. A copy with no
+ *    disposition (pre-2026-08-04 transcriptions, 13 stored) vouches, as it always did;
+ *  - G4, per kind: `checked:true` + `needs-node-c unsupported-not-mechanically-covered`, when NO consumed
+ *    kind is one of its `unsupportedKinds` (the consumer applied only what the net checked). Unknown
+ *    unsupported kinds fail closed;
+ *  - the passed-clean middle leg: `benign` with a DISCHARGED_HOP_REASONS reason. Its own upstream legs are
+ *    flattened beside it and judged here themselves, and green still needs one machine-checked leg, so a
+ *    list of middle legs alone is never green.
+ * Anything else (benign-unchecked, undecided, blocking, a non-numeric violation count) does not vouch.
+ * PURE.
+ */
+export function legVouches(l: UpstreamContainmentLeg, consumedKinds: readonly string[] = []): boolean {
+  if (!l || typeof l !== 'object' || typeof l.violations !== 'number' || l.violations !== 0) return false;
+  if (l.disposition === 'blocking') return false;
+  if (l.checked === true) {
+    if (l.disposition !== 'needs-node-c') return true;
+    return isUncheckedKindsLeg(l) && uncheckedConsumedKinds(l, consumedKinds).length === 0;
+  }
+  return l.disposition === 'benign' && typeof l.dispositionReason === 'string' && DISCHARGED_HOP_REASONS.has(l.dispositionReason);
+}
+
+/** G4 shape: machine-checked, undecided ONLY because of named unsupported kinds. */
+function isUncheckedKindsLeg(l: UpstreamContainmentLeg): boolean {
+  return l.checked === true && l.disposition === 'needs-node-c'
+    && l.dispositionReason === 'unsupported-not-mechanically-covered'
+    && Array.isArray(l.unsupportedKinds) && l.unsupportedKinds.length > 0;
+}
+
+/** The consumed kinds a G4 leg could not machine-check, in consumed order, unique. */
+function uncheckedConsumedKinds(l: UpstreamContainmentLeg, consumedKinds: readonly string[]): string[] {
+  const unsupported = new Set(Array.isArray(l.unsupportedKinds) ? l.unsupportedKinds : []);
+  return Array.from(new Set(consumedKinds.filter(k => unsupported.has(k))));
 }
 
 // ── Shared section-bounded block primitives (exported 2026-10-04, C2/C3) ─────────────────────────
@@ -1035,19 +1103,37 @@ export interface ContainmentDisposition {
     /** PHASE4-CONTAINMENT-PROPAGATION (2026-10-12): stamped ONLY on `consuming-leg-upstream-delegated` —
      *  the SUBJECT of the delegation (F7 / VT-14 item 3): each upstream leg that delegated, by id, with
      *  the reason it stamped. Absent on every other disposition (byte-identical by construction). */
-    upstreamDelegated?: Array<{ taskId: string; dispositionReason: string }>;
+    upstreamDelegated?: UpstreamDelegatedSubject[];
     /** Same arm only: whether program check 1 (consumed-value-mismatch) ran. On this arm it cannot have
      *  run against anything — no delegated upstream derived a value — and `violations: 0` alone would
      *  read as "compared and equal". */
     consumedValueCheck?: ConsumedValueCheckState;
+    /** Bug Class 85 G4 (2026-10-22): check 1's state PER consumed kind. Stamped ONLY when some kind was
+     *  compared against an upstream value its own net never pool-checked, so every earlier stamp stays
+     *  byte-identical. pov-program BRANCH D4 reads the card line built from it. */
+    consumedValueCheckByKind?: Array<{ kind: string; state: ConsumedValueCheckState }>;
   };
+}
+
+/** One delegated upstream leg — the SUBJECT Node C must answer under BRANCH D4. */
+export interface UpstreamDelegatedSubject {
+  taskId: string;
+  dispositionReason: string;
+  /** G4: the consumed kinds this machine-checked leg could NOT check (present only on that shape). */
+  uncheckedKinds?: string[];
+  /** G5: this leg is a MIDDLE leg — the listed deriving legs were reached through it (present only then). */
+  middleLegFor?: string[];
 }
 
 /** Whether check 1 compared anything, as a closed set of named states (never a bare boolean). */
 export type ConsumedValueCheckState =
   | 'not-run-no-upstream-derived'
   | 'not-run-no-consumed-values'
-  | 'ran-no-mismatch';
+  | 'ran-no-mismatch'
+  /** G4: compared, but the upstream value of this kind was never pool-checked by its own net. */
+  | 'ran-against-unchecked-upstream'
+  /** Kinds disagree — read `consumedValueCheckByKind`. */
+  | 'mixed';
 
 /**
  * PHASE4-CONTAINMENT-PROPAGATION (2026-10-12; owner decisions A1-A3, B1). The NEW reason a consuming
@@ -1077,7 +1163,7 @@ export const UPSTREAM_DELEGATED_REASON = 'consuming-leg-upstream-delegated';
  * and widening it would turn a delegation into a pass with no Node C read at all (§3.3, rejected).
  * PURE.
  */
-function upstreamDelegatedSubjects(uc: unknown): Array<{ taskId: string; dispositionReason: string }> | null {
+function upstreamDelegatedSubjects(uc: unknown, consumedKinds: readonly string[] = []): UpstreamDelegatedSubject[] | null {
   const legs = uc && typeof uc === 'object' && Array.isArray((uc as { legs?: unknown }).legs)
     ? (uc as { legs: unknown[] }).legs : [];
   if (legs.length === 0) return null;
@@ -1085,16 +1171,29 @@ function upstreamDelegatedSubjects(uc: unknown): Array<{ taskId: string; disposi
   // is only COUNTED, as `lookupMisses`. An unread upstream is not a judged one, so it cannot be delegated past.
   const misses = (uc as { lookupMisses?: unknown }).lookupMisses;
   if (typeof misses === 'number' && misses > 0) return null;
-  const delegated: Array<{ taskId: string; dispositionReason: string }> = [];
+  const delegated: UpstreamDelegatedSubject[] = [];
   for (const raw of legs) {
     const l = raw as Partial<UpstreamContainmentLeg> | null;
     if (!l || typeof l !== 'object' || typeof l.taskId !== 'string') return null;
     if (typeof l.violations !== 'number' || l.violations !== 0) return null;
     if (l.disposition === 'benign' && l.checked === true) continue;
+    // Bug Class 85 (2026-10-22): a leg that VOUCHES for green is clean here too, so the two rules never
+    // disagree — the passed-clean middle leg (keep-green row) and a G4 leg whose unchecked kinds were not
+    // consumed. A copy with NO disposition still fails closed here (rule 2, unchanged): it vouches for
+    // green only because it always did.
+    if (l.disposition !== undefined && legVouches(l as UpstreamContainmentLeg, consumedKinds)) continue;
     if (l.disposition === 'needs-node-c'
         && typeof l.dispositionReason === 'string' && l.dispositionReason.trim().length > 0) { // L5: whitespace is unnamed
       if (!delegated.some(d => d.taskId === l.taskId && d.dispositionReason === l.dispositionReason)) {
-        delegated.push({ taskId: l.taskId, dispositionReason: l.dispositionReason });
+        const leg = l as UpstreamContainmentLeg;
+        // G4: name the consumed KIND that went unchecked, not only the upstream's reason (D4 requirement 1).
+        const unchecked = isUncheckedKindsLeg(leg) ? uncheckedConsumedKinds(leg, consumedKinds) : [];
+        // G5: name the MIDDLE leg (D4 requirement 2) — the deriving legs flattened through it, by `via`.
+        const through = Array.from(new Set((legs as Array<Partial<UpstreamContainmentLeg> | null>)
+          .filter(x => x && x.via === l.taskId && typeof x.taskId === 'string').map(x => x!.taskId as string)));
+        delegated.push({ taskId: l.taskId, dispositionReason: l.dispositionReason,
+          ...(unchecked.length > 0 ? { uncheckedKinds: unchecked } : {}),
+          ...(through.length > 0 ? { middleLegFor: through } : {}) });
       }
       continue;
     }
@@ -1103,13 +1202,38 @@ function upstreamDelegatedSubjects(uc: unknown): Array<{ taskId: string; disposi
   return delegated.length > 0 ? delegated : null;
 }
 
-/** Check 1's state on the delegated arm, computed from the stamp (Protocol 10: re-derivable). */
-function consumedValueCheckState(uc: unknown, consumedCount: number | undefined): ConsumedValueCheckState {
-  if (consumedCount === undefined || consumedCount === 0) return 'not-run-no-consumed-values';
+/**
+ * Check 1's state on the delegated arm, computed from the stamp (Protocol 10: re-derivable). Per kind since
+ * Bug Class 85 (D4 requirement 3): a kind is `ran-against-unchecked-upstream` when a leg deriving it is a G4
+ * leg whose unsupported kinds include it, `ran-no-mismatch` when it was compared against machine-checked
+ * values, `not-run-no-upstream-derived` when no upstream derived anything. The aggregate keeps its three
+ * original values whenever every kind agrees on one of them, so every earlier stamp is byte-identical;
+ * `byKind` is returned only when a kind reads the new state.
+ */
+function consumedValueCheckState(uc: unknown, consumedKinds: readonly string[]):
+  { state: ConsumedValueCheckState; byKind?: Array<{ kind: string; state: ConsumedValueCheckState }> } {
+  if (consumedKinds.length === 0) return { state: 'not-run-no-consumed-values' };
   const legs = uc && typeof uc === 'object' && Array.isArray((uc as { legs?: unknown }).legs)
-    ? (uc as { legs: Array<{ derivedValues?: unknown }> }).legs : [];
+    ? (uc as { legs: Array<Partial<UpstreamContainmentLeg> | null> }).legs : [];
   const anyDerived = legs.some(l => l && Array.isArray(l.derivedValues) && l.derivedValues.length > 0);
-  return anyDerived ? 'ran-no-mismatch' : 'not-run-no-upstream-derived';
+  if (!anyDerived) return { state: 'not-run-no-upstream-derived' };
+  const byKind = Array.from(new Set(consumedKinds)).map(kind => {
+    const unchecked = legs.some(l => l && Array.isArray(l.derivedValues)
+      && l.derivedValues.some(d => (d?.kind ?? 'cidr') === kind)
+      && isUncheckedKindsLeg(l as UpstreamContainmentLeg)
+      && (l.unsupportedKinds as string[]).includes(kind));
+    return { kind, state: (unchecked ? 'ran-against-unchecked-upstream' : 'ran-no-mismatch') as ConsumedValueCheckState };
+  });
+  if (!byKind.some(k => k.state === 'ran-against-unchecked-upstream')) return { state: 'ran-no-mismatch' };
+  const states = new Set(byKind.map(k => k.state));
+  return { state: states.size === 1 ? 'ran-against-unchecked-upstream' : 'mixed', byKind };
+}
+
+/** The consumer's declared kinds, in order (absent kind = `cidr`, matching check 1). */
+function consumedKindsOf(fact: Record<string, unknown>): string[] {
+  return Array.isArray(fact.consumedValues)
+    ? (fact.consumedValues as Array<{ kind?: unknown } | null>).map(c => (c && typeof c.kind === 'string' ? c.kind : 'cidr'))
+    : [];
 }
 
 /**
@@ -1195,15 +1319,24 @@ export function computeContainmentDisposition(fact: Record<string, unknown>): Co
   // every upstream copy is clean-or-delegated-with-a-named-subject (§3.1). The subject fields are
   // nested in `inputs` ONLY here, so every other disposition stays byte-identical.
   const upstreamNotGreen = (): ContainmentDisposition => {
-    const delegated = upstreamDelegatedSubjects(fact.upstreamContainment);
+    // Bug Class 85 G1 (2026-10-22): a predecessor whose deliverable never arrived (pipeline-index.json
+    // fallback) beside a report.md one is ABSENT evidence — Node C cannot compare a value that never
+    // arrived, so it is never delegated past. The count rides in `inputs` already.
+    if (upstreamDeliverableMissing !== undefined && upstreamDeliverableMissing > 0) {
+      return out('blocking', 'consuming-leg-upstream-not-green');
+    }
+    const consumedKinds = consumedKindsOf(fact);
+    const delegated = upstreamDelegatedSubjects(fact.upstreamContainment, consumedKinds);
     if (!delegated) return out('blocking', 'consuming-leg-upstream-not-green');
+    const check = consumedValueCheckState(fact.upstreamContainment, consumedKinds);
     return {
       disposition: 'needs-node-c',
       reason: UPSTREAM_DELEGATED_REASON,
       inputs: {
         ...inputs,
         upstreamDelegated: delegated,
-        consumedValueCheck: consumedValueCheckState(fact.upstreamContainment, consumedCount),
+        consumedValueCheck: check.state,
+        ...(check.byKind ? { consumedValueCheckByKind: check.byKind } : {}),
       },
     };
   };

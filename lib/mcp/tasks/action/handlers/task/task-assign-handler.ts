@@ -15,6 +15,7 @@ import type { TokenPayload } from '@/lib/types/auth';
 import { logTaskAssignment, logCommentAdded } from '@/lib/tasks/services/taskActivityService';
 import type { ActivityMetadata } from '@/lib/types/activity';
 import { mcpLogger } from '@/lib/logger';
+import { scopeTaskTitleLookup, scopeTeamLookup } from '@/lib/pov/auth/pov-access-filter';
 import { resolveUserByNameOrEmail, assertAssigneeInPovTeam } from '@/lib/mcp/tasks/action/utilities/assignee-resolver';
 
 /**
@@ -58,7 +59,8 @@ export async function handleTaskAssign(parameters: any, user: TokenPayload, acti
 
     // Find matching tasks
     const matchingTasks = await prisma.task.findMany({
-      where: searchCriteria,
+      // X9: only tasks in POVs the caller can access — the error below names every match.
+      where: scopeTaskTitleLookup(searchCriteria, user),
       include: {
         pov: { select: { id: true, title: true } },
         phase: { select: { id: true, name: true } }
@@ -126,7 +128,7 @@ export async function handleTaskAssign(parameters: any, user: TokenPayload, acti
     // If assignee is provided as a name/email instead of ID, look up the user.
     // Resolver shared with task.create (2026-09-25) — utilities/assignee-resolver.ts.
     if (!finalAssigneeId && assignee) {
-      finalAssigneeId = (await resolveUserByNameOrEmail(assignee, taskForAuth.pov)).id;
+      finalAssigneeId = (await resolveUserByNameOrEmail(assignee, taskForAuth.pov, user)).id;
     }
 
     // Validate that the user ID exists before trying to assign
@@ -146,6 +148,13 @@ export async function handleTaskAssign(parameters: any, user: TokenPayload, acti
 
   let finalTeamId = teamId;
 
+  // TEAM-LOOKUP-CROSS-TENANT (2026-10-31): a teamId passed in directly must be a team the caller can reach —
+  // never attach another POV's team to this task.
+  if (finalTeamId) {
+    const reachable = await prisma.team.findFirst({ where: scopeTeamLookup({ id: finalTeamId }, user), select: { id: true } });
+    if (!reachable) throw new Error(`Team not found: "${finalTeamId}"`);
+  }
+
   // If teamName is provided instead of teamId, look up the team
   if (!finalTeamId && teamName) {
     mcpLogger.debug('Looking up team by name');
@@ -158,16 +167,12 @@ export async function handleTaskAssign(parameters: any, user: TokenPayload, acti
     const [exactTeamMatch, partialTeamMatch] = await Promise.all([
       // Strategy 1: Exact team name match
       prisma.team.findFirst({
-        where: {
-          name: { equals: teamName, mode: 'insensitive' }
-        },
+        where: scopeTeamLookup({ name: { equals: teamName, mode: 'insensitive' } }, user),
         select: { id: true, name: true }
       }),
       // Strategy 2: Partial team name match
       prisma.team.findFirst({
-        where: {
-          name: { contains: teamName, mode: 'insensitive' }
-        },
+        where: scopeTeamLookup({ name: { contains: teamName, mode: 'insensitive' } }, user),
         select: { id: true, name: true }
       })
     ]);
@@ -181,6 +186,7 @@ export async function handleTaskAssign(parameters: any, user: TokenPayload, acti
     } else {
       // List available teams for debugging
       const allTeams = await prisma.team.findMany({
+        where: scopeTeamLookup({}, user), // only teams the caller can reach (TEAM-LOOKUP-CROSS-TENANT)
         select: { id: true, name: true },
         take: 50
       });

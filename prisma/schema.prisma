@@ -487,12 +487,17 @@ model HeldBlob {
   createdAt        DateTime      @default(now())
   lastReferencedAt DateTime      @default(now()) // touched by EVERY upsert; the GC grace clock
   refs             HeldFileRef[]
+  views            HeldView[]
 
   @@id([scope, sha256])
   @@map("held_blobs")
 }
 
 /// One row per held file per capturing execution (Stage A writes kind = CAPTURE only).
+/// Stage B (push 1, 2026-10-14) relaxes the four call-provenance columns (sourceTool, toolCallIndex, selector, declaredBy)
+/// to NULL for BASE / CANDIDATE rows and adds fromRefId; a CAPTURE row still carries all four (MI-13 🔴 "CAPTURE ref with a
+/// null in the 4 relaxed columns"). BASE / CANDIDATE ids come from newHeldRefId() in held-bytes-store.ts; CAPTURE keeps the
+/// column default. Plan: cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-B-PLAN.md P1-1 / §3.2.
 model HeldFileRef {
   id                          String         @id @default(cuid())
   scope                       String
@@ -503,13 +508,23 @@ model HeldFileRef {
   rootTaskId                  String? // null for a standalone (non-program) pipeline
   serviceId                   String // success envelope data.metadata.targetServiceId (gateway-resolved)
   serviceName                 String // success envelope data.targetService
-  sourceTool                  String
-  toolCallIndex               Int // index into toolCallResults = into result.json.toolCalls
-  selector                    String // RFC 6901 JSON Pointer with {key} resolved
+  sourceTool                  String? // CAPTURE: required; BASE / CANDIDATE: NULL (Stage B)
+  toolCallIndex               Int? // index into toolCallResults = into result.json.toolCalls; CAPTURE only
+  selector                    String? // RFC 6901 JSON Pointer with {key} resolved; CAPTURE only
   target                      String
   path                        String
-  declaredBy                  String // platform-default (A) | registration-descriptor | embedded-resource
-  descriptorVersion           Int? // the descriptor table version that captured it; null for embedded-resource
+  declaredBy                  String? // platform-default (A) | registrant (WI-B10, 2026-10-23) | embedded-resource; CAPTURE only
+  descriptorVersion           Int? // the extractor/grammar version that captured it; null for embedded-resource. The SHA (declarationSha256), not this, identifies a registrant declaration
+  /// WI-B10 (2026-10-23): the held_declarations sha a REGISTRANT capture was judged against. CAPTURE rows only, set when
+  /// declaredBy = 'registrant'; NULL on BASE/CANDIDATE (NOT inherited) and on platform-default captures. No FK.
+  /// ⚠️ NEVER revert this schema commit: a plain db push refuses once a value exists (the 4e9bebbd3 rule).
+  declarationSha256           String?
+  /// INTERNAL-FIT IF-3 (2026-10-24): the held eligibility the CAPTURE was taken under — closed set own | granted | platform |
+  /// install ('foreign' is never stored: it holds nothing). CAPTURE rows only; NULL on BASE/CANDIDATE (never inherited) and on
+  /// every pre-IF-3 row. grantPovId is set exactly when eligibility = 'granted' (the ONE POV that granted; never the list).
+  /// ⚠️ NEVER revert this schema commit (the 4e9bebbd3 rule).
+  eligibility                 String?
+  grantPovId                  String?
   hashBasis                   String // legacy-decoded-text (A) | canonical-v1
   /// Under legacy-decoded-text this is NOT what the service ran (Python universal newlines): it is the decode the
   /// operator must apply to reproduce baseHash.
@@ -523,6 +538,13 @@ model HeldFileRef {
   serviceReportsComplete      Boolean? // a transcription of the SERVICE's claim, never a platform judgement
   derivedRawByteLength        Int? // contract-v1 only
   placeholderPreexistingCount Int // counted on C before R10, one non-overlapping pattern
+  fromRefId                   String? // BASE: its CAPTURE ref; CANDIDATE: its BASE ref (NULL for create); no FK, no index
+  /// K-3 (held-k8s 2026-10-18, SYNTHESIS v3): the Git commit (40 lowercase hex) a CAPTURE was read at, parsed from the file
+  /// source's served URI. NULL means "this source has no revision" (e.g. the observability rig), NEVER "unknown" — a Git read
+  /// whose commit cannot be parsed is refused, not stored with NULL. BASE inherits its CAPTURE's; CANDIDATE inherits its BASE's
+  /// ("computed against base@revision"; a `create` inherits its onHandle base's). App-validated, no DB CHECK, no index.
+  /// ⚠️ NEVER revert this schema commit: a plain db push refuses once a value exists (the 4e9bebbd3 rule).
+  sourceRevision              String?
   createdAt                   DateTime       @default(now())
   blob                        HeldBlob       @relation(fields: [scope, blobSha256], references: [scope, sha256], onDelete: Restrict, onUpdate: NoAction)
   execution                   AgentExecution @relation(fields: [executionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -534,13 +556,32 @@ model HeldFileRef {
   @@map("held_file_refs")
 }
 
+/// PLATFORM-HELD-BYTES Stage B (push 1, 2026-10-14): the R9 view of a held blob, as rendered to an Author. One row per
+/// (blob, r9Version, viewVersion); written ON CONFLICT DO NOTHING and always read back, never updated. viewText = the R9
+/// sanitizer's output over the blob text; rewrittenLines = the lines R9 changed. Cascades with its blob (GC).
+/// Plan: cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-B-PLAN.md P1-1 / V-1 / V-2.
+model HeldView {
+  scope          String
+  baseSha256     String
+  r9Version      String
+  viewVersion    String // 'paichart.view/1'
+  viewText       String   @db.Text
+  lineCount      Int
+  rewrittenLines Int[]
+  createdAt      DateTime @default(now())
+  blob           HeldBlob @relation(fields: [scope, baseSha256], references: [scope, sha256], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([scope, baseSha256, r9Version, viewVersion], map: "held_views_pkey")
+  @@map("held_views")
+}
+
 /// A declared file the platform did not hold, by name. Lifetime = the execution (cascade). Identity columns are
 /// nullable: a refused call may carry no resolvable id (owner decision OA-20); identitySource says where it came from.
 model HeldCaptureRefusal {
   id                String         @id @default(cuid())
   executionId       String
   scope             String?
-  serviceId         String? // null unless the success envelope carried it
+  serviceId         String? // null unless the success envelope or the gateway meta (Stage B P1-4: SERVICE_CALL_FAILED / INTERNAL_SERVICE_ERROR) carried it
   serviceName       String?
   identitySource    String // envelope | gateway-meta | arguments
   sourceTool        String
@@ -552,12 +593,31 @@ model HeldCaptureRefusal {
   detail            Json? // never content; OMITTED when empty, never null
   declaredBy        String
   descriptorVersion Int?
+  /// WI-B10 (2026-10-23): the held_declarations sha a registrant refusal (source-not-pinned / declaration-*) was judged against. No FK.
+  declarationSha256 String?
+  /// INTERNAL-FIT IF-3: as on held_file_refs (closed set own | granted | platform | install; grantPovId ⇔ granted). No FK.
+  eligibility       String?
+  grantPovId        String?
   createdAt         DateTime       @default(now())
   execution         AgentExecution @relation(fields: [executionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([executionId])
   @@index([refusal, createdAt]) // MI-13 reads by name over a window
   @@map("held_capture_refusals")
+}
+
+/// WI-B10 (2026-10-23, design §9.1 D / §10 A-3): an IMMUTABLE registrant file declaration, content-addressed by the sha256
+/// of its canonical heldFiles JSON. Written ON CONFLICT DO NOTHING at registration, BEFORE the mcp_tools write; never
+/// updated; no GC in v1 (rows are tiny). NO FK to or from any table: refs and refusals must outlive a torn-down service.
+/// grammarVersion = the validator version that FIRST accepted this content.
+/// ⚠️ NEVER revert this schema commit (the 4e9bebbd3 rule).
+model HeldDeclaration {
+  sha256         String   @id
+  heldFiles      Json
+  grammarVersion Int
+  createdAt      DateTime @default(now())
+
+  @@map("held_declarations")
 }
 
 model Team {
@@ -1172,6 +1232,21 @@ model MCPTool {
   responseTime    Float?            // Average response time in ms
   successRate     Float?            // Success rate percentage
   errorCount      Int               @default(0)
+
+  // WI-B10 (2026-10-23): registrant file declarations. ONE writer module (lib/mcp/server/config/held-file-declaration.js
+  // callers only). NEVER inside `configuration` (listed whole and merged). Readers key on jsonb_typeof("heldFiles") = 'object'.
+  // ⚠️ NEVER revert this schema commit: a plain db push refuses once a value exists (the 4e9bebbd3 rule).
+  heldFiles           Json?     // the validated, canonical declaration { files: [...], notAFile: [...] } or DB NULL
+  heldFilesSha256     String?   // sha256 of canonical heldFiles = held_declarations.sha256 (identity, both producers)
+  declarationSource   String?   // fetched | direct
+  descriptorUrl       String?   // the URL the platform fetched, as STORED: never a fragment; query VALUES masked (`?k=***`) — INTERNAL-FIT I-7
+  descriptorSha256    String?   // sha256 of the RAW fetched bytes — provenance only (fetched rows)
+  descriptorFetchedAt DateTime?
+  // INTERNAL-FIT IF-3 (2026-10-24): POVs whose pipeline runs may call this row AND hold its files (an owner-written, scoped
+  // grant; registry update only, the row's owner strictly, ≤ 20 CUIDs, POVs the owner is a literal member of, never demo).
+  // @default([]) is mandatory for a db push onto populated rows; readers treat NULL as empty. Read by PK on the call path.
+  // ⚠️ NEVER revert this schema commit: every row holds '{}' from the push on (database-manager IF-3 SF-5).
+  heldGrantPovIds     String[]  @default([])
   
   // Relationships
   interactions    MCPInteraction[]

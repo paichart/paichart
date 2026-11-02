@@ -395,7 +395,7 @@ function input(text: string, over: Record<string, unknown> = {}) {
   });
   await test('F6: the form-check FACT block and the #90 recount are side-effect-free — no await, no assignment to the deliverable state', () => {
     const blockA = core.slice(core.indexOf('// PACKAGE FORM CHECK'), core.indexOf('// FORM CORRECTION (Step B'));
-    const blockB = core.slice(core.indexOf('if (formCheck && diagnosticRetryUsed)'), core.indexOf('// Token usage'));
+    const blockB = core.slice(core.indexOf('if (formCheck && diagnosticRetryUsed)'), core.indexOf('const endTime = new Date();')); // WI-B10: ends at the duration line — the async held-table pre-step that follows is not part of the recount
     ok(blockA.length > 200 && blockB.length > 50, `slices found: ${blockA.length} / ${blockB.length}`);
     for (const [name, src] of [['form-check block', blockA], ['#90 recount', blockB]] as Array<[string, string]>) {
       ok(!/\bawait\b/.test(src.replace(/\/\/.*$/gm, '')), `${name} contains an await`);

@@ -348,18 +348,38 @@ async function main() {
     }
   });
 
-  await test('CP E-4: the dedupe change never touches `checked` (green is unchanged by it)', async () => {
+  await test('BC85 G3 (was CP E-4, which pinned the bug): a diamond keeps the WORSE copy\'s `checked` with its disposition ⇒ the undecided twin is judged, not masked — delegated, p1 named', async () => {
+    // Review F11: before 2026-10-22 the merged p1 kept checked:true from the clean direct copy and green stayed TRUE
+    // over a needs-node-c twin. The owner decision (G3) moves `checked` with the worse copy.
     const hop = { taskId: 'p2', source: 'report.md', derivationContainment: {
       checked: false, reason: 'no-derived-values-block', consumedValues: [X],
       containmentDisposition: { disposition: 'benign', reason: 'consuming-leg-consumed-discharged' },
       upstreamContainment: { green: true, legs: [{ taskId: 'p1', checked: false, violations: 0, disposition: 'needs-node-c', dispositionReason: 'x' }] } } };
     const direct = { taskId: 'p1', source: 'report.md', derivationContainment: { checked: true, violations: [], derivedValues: [X],
       containmentDisposition: { disposition: 'benign', reason: 'checked-clean' } } };
-    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)), { stageId: STAGE, chainedFrom: [direct, hop] });
-    const uc = fact.upstreamContainment as { green: boolean; legs: Array<{ taskId: string; checked: boolean; disposition?: string }> };
-    const p1 = uc.legs.find(l => l.taskId === 'p1')!;
-    assert(p1.checked === true && p1.disposition === 'needs-node-c', `worse disposition copied, checked kept: ${JSON.stringify(p1)}`);
-    assert(uc.green === true, `green must not move: ${JSON.stringify(uc)}`);
+    for (const chainedFrom of [[direct, hop], [hop, direct]]) {
+      const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)), { stageId: STAGE, chainedFrom });
+      const uc = fact.upstreamContainment as { green: boolean; legs: Array<{ taskId: string; checked: boolean; disposition?: string }> };
+      const order = chainedFrom.map(c => c.taskId).join(',');
+      assert(uc.green === false, `order ${order}: green must be false over an undecided twin: ${JSON.stringify(uc)}`);
+      const d = fact.containmentDisposition as { disposition: string; reason: string; inputs: Record<string, unknown> };
+      assert(d.disposition === 'needs-node-c' && d.reason === 'consuming-leg-upstream-delegated', `order ${order}: ${JSON.stringify(d)}`);
+      assert(JSON.stringify((d.inputs.upstreamDelegated as Array<{ taskId: string }>).map(u => u.taskId)) === '["p1"]',
+        `order ${order}: subject must be p1 only: ${JSON.stringify(d.inputs.upstreamDelegated)}`);
+    }
+    // the merge proper: direct first, so the dedupe hits the nested copy — the kept p1 must read checked:false.
+    const merged = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)), { stageId: STAGE, chainedFrom: [direct, hop] });
+    const p1 = (merged.upstreamContainment as { legs: Array<{ taskId: string; checked: boolean; disposition?: string }> }).legs.filter(l => l.taskId === 'p1');
+    assert(p1.length === 1 && p1[0].checked === false && p1[0].disposition === 'needs-node-c', `worse copy wins, checked included: ${JSON.stringify(p1)}`);
+  });
+
+  await test('BC85 G3 control: a diamond of two CLEAN copies stays green and benign (the dedupe never fails a clean twin)', async () => {
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)),
+      { stageId: STAGE, chainedFrom: [dmzStamp({}), { ...dmzStamp({}), taskId: 'p2b' }] });
+    const uc = fact.upstreamContainment as { green: boolean; legs: Array<{ taskId: string; checked: boolean }> };
+    assert(uc.green === true && uc.legs.filter(l => l.taskId === 'p1').every(l => l.checked), JSON.stringify(uc));
+    const d = fact.containmentDisposition as { disposition: string; reason: string };
+    assert(d.disposition === 'benign' && d.reason === 'consuming-leg-consumed-discharged', JSON.stringify(d));
   });
 
   await test('CP E-5 (review L4/G10/G15): a diamond with a NAMED delegated copy and an UNNAMED needs-node-c copy ⇒ blocking, either order; the kept copy carries the unnamed reason state', async () => {
@@ -488,13 +508,186 @@ async function main() {
     assert(d.inputs.upstreamDeliverableMissing === 1, 'the separating input must be transcribed into inputs');
   });
 
-  await test('R5-E4: a report.md predecessor present ⇒ the count is NOT stamped (the green/not-green arms own that case)', async () => {
-    const fact = await computeDerivationContainmentFact(stubPrisma(KIDS, R5_KIDS),
-      { stageId: STAGE, chainedFrom: [{ taskId: 'leg-up', source: 'report.md' }, { taskId: 'leg-2', source: 'pipeline-index.json' }] });
-    assert(!('upstreamDeliverableMissing' in fact), JSON.stringify(fact));
-    assert((fact.containmentDisposition as { reason: string }).reason === 'consuming-leg-upstream-not-green',
-      JSON.stringify(fact.containmentDisposition));
+  await test('BC85 G1 (was R5-E4, which pinned the gap): a CLEAN report.md predecessor beside a fallback one ⇒ count stamped, NOT green, blocking (never delegated)', async () => {
+    const cleanUp = { taskId: 'p1', source: 'report.md', derivationContainment: { checked: true, violations: [], derivedValues: [X],
+      containmentDisposition: { disposition: 'benign', reason: 'checked-clean' } } };
+    const fallback = { taskId: 'leg-2', source: 'pipeline-index.json' };
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)), { stageId: STAGE, chainedFrom: [cleanUp, fallback] });
+    assert(fact.upstreamDeliverableMissing === 1, `the fallback must be counted beside a report.md one: ${JSON.stringify(fact)}`);
+    const uc = fact.upstreamContainment as { green: boolean; legs: unknown[] };
+    assert(uc.green === false && uc.legs.length === 1, `one clean sibling must not vouch for an absent deliverable: ${JSON.stringify(uc)}`);
+    const d = fact.containmentDisposition as { disposition: string; reason: string; inputs: Record<string, unknown> };
+    assert(d.disposition === 'blocking' && d.reason === 'consuming-leg-upstream-not-green', JSON.stringify(d));
+    assert(d.inputs.upstreamDeliverableMissing === 1 && !('upstreamDelegated' in d.inputs), JSON.stringify(d.inputs));
+    // and beside a DELEGATED predecessor: still blocking — absent evidence is never delegated past (G1 decision)
+    const deleg = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)),
+      { stageId: STAGE, chainedFrom: [delegatingProducer('k8s'), fallback] });
+    const dd = deleg.containmentDisposition as { disposition: string; reason: string };
+    assert(dd.disposition === 'blocking' && dd.reason === 'consuming-leg-upstream-not-green', JSON.stringify(dd));
   });
+
+  await test('BC85 G1 control: the same clean predecessor ALONE ⇒ green, benign, no count (unchanged)', async () => {
+    const cleanUp = { taskId: 'p1', source: 'report.md', derivationContainment: { checked: true, violations: [], derivedValues: [X],
+      containmentDisposition: { disposition: 'benign', reason: 'checked-clean' } } };
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)), { stageId: STAGE, chainedFrom: [cleanUp] });
+    assert(!('upstreamDeliverableMissing' in fact) && (fact.upstreamContainment as { green: boolean }).green === true, JSON.stringify(fact));
+    assert((fact.containmentDisposition as { reason: string }).reason === 'consuming-leg-consumed-discharged', JSON.stringify(fact.containmentDisposition));
+  });
+
+  await test('BC85 G2: a CLEAN predecessor beside an UNREADABLE one (no derivationContainment) ⇒ lookupMisses 1, NOT green, blocking', async () => {
+    const cleanUp = { taskId: 'p1', source: 'report.md', derivationContainment: { checked: true, violations: [], derivedValues: [X],
+      containmentDisposition: { disposition: 'benign', reason: 'checked-clean' } } };
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)),
+      { stageId: STAGE, chainedFrom: [cleanUp, { taskId: 'p9', source: 'report.md' }] });
+    const uc = fact.upstreamContainment as { green: boolean; lookupMisses?: number };
+    assert(uc.lookupMisses === 1 && uc.green === false, `an unread upstream must not be vouched for: ${JSON.stringify(uc)}`);
+    const d = fact.containmentDisposition as { disposition: string; reason: string };
+    assert(d.disposition === 'blocking' && d.reason === 'consuming-leg-upstream-not-green', JSON.stringify(d));
+  });
+
+  // G4 — the 2026-08-03 shape (follow-up §6.2): a network producer machine-checked its cidr, stamped needs-node-c ONLY for an
+  // unsupported vlan. The consumer is a terraform-like leg. Per kind (owner option b): harmless when only the cidr is consumed.
+  const VLAN = { kind: 'vlan', value: '100' };
+  const g4Producer = { taskId: 'net', source: 'report.md', derivationContainment: {
+    checked: true, violations: [], unsupported: [VLAN], derivedValues: [X, VLAN],
+    containmentDisposition: { disposition: 'needs-node-c', reason: 'unsupported-not-mechanically-covered' } } };
+
+  await test('BC85 G4 passing direction (the measured 2026-08-03 shape): consumed ONLY the checked cidr ⇒ green, benign — unchanged', async () => {
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)), { stageId: STAGE, chainedFrom: [g4Producer] });
+    const uc = fact.upstreamContainment as { green: boolean; legs: Array<Record<string, unknown>> };
+    assert(uc.green === true, JSON.stringify(uc));
+    assert(JSON.stringify(uc.legs[0].unsupportedKinds) === '["vlan"]', `the unsupported kinds ride on the leg: ${JSON.stringify(uc.legs[0])}`);
+    const d = fact.containmentDisposition as { disposition: string; reason: string };
+    assert(d.disposition === 'benign' && d.reason === 'consuming-leg-consumed-discharged', JSON.stringify(d));
+  });
+
+  await test('BC85 G4 escalation direction: consumed the UNCHECKED vlan (and the cidr) ⇒ NOT green, delegated; subject names the kind; check 1 per kind', async () => {
+    const kids = { h3: block('## Harvested Allocations', [{ kind: 'cidr', cidr: '10.99.0.3/32', device: 'ceos2' }]),
+                   a3: block('## Consumed Values', [X, VLAN]) };
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, kids), { stageId: STAGE, chainedFrom: [g4Producer] });
+    assert(fact.violations === undefined, `both values match the upstream's derived values: ${JSON.stringify(fact.violations)}`);
+    assert((fact.upstreamContainment as { green: boolean }).green === false, JSON.stringify(fact.upstreamContainment));
+    const d = fact.containmentDisposition as { disposition: string; reason: string; inputs: Record<string, unknown> };
+    assert(d.disposition === 'needs-node-c' && d.reason === 'consuming-leg-upstream-delegated', JSON.stringify(d));
+    assert(JSON.stringify(d.inputs.upstreamDelegated) === JSON.stringify([
+      { taskId: 'net', dispositionReason: 'unsupported-not-mechanically-covered', uncheckedKinds: ['vlan'] }]), JSON.stringify(d.inputs.upstreamDelegated));
+    assert(d.inputs.consumedValueCheck === 'mixed', String(d.inputs.consumedValueCheck));
+    assert(JSON.stringify(d.inputs.consumedValueCheckByKind) === JSON.stringify([
+      { kind: 'cidr', state: 'ran-no-mismatch' }, { kind: 'vlan', state: 'ran-against-unchecked-upstream' }]), JSON.stringify(d.inputs.consumedValueCheckByKind));
+  });
+
+  await test('BC85 G4 fail-closed: checked + needs-node-c unsupported with NO readable unsupported kinds ⇒ not green, delegated (never assumed harmless)', async () => {
+    const p = JSON.parse(JSON.stringify(g4Producer)); delete p.derivationContainment.unsupported;
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)), { stageId: STAGE, chainedFrom: [p] });
+    assert((fact.upstreamContainment as { green: boolean }).green === false, JSON.stringify(fact.upstreamContainment));
+    assert((fact.containmentDisposition as { reason: string }).reason === 'consuming-leg-upstream-delegated', JSON.stringify(fact.containmentDisposition));
+  });
+
+  // G5 — a three-leg chain whose MIDDLE leg is undecided, its deriving root checked clean (the stored chain shape, hop flipped).
+  const undecidedHop = { taskId: 'mid', source: 'report.md', derivationContainment: {
+    checked: false, reason: 'no-derived-values-block', harvestedCount: 2, consumedValues: [X],
+    containmentDisposition: { disposition: 'needs-node-c', reason: 'harvested-pool-no-derivation-cannot-decide' },
+    upstreamContainment: { green: true, legs: [{ taskId: 'root', checked: true, violations: 0, derivedValues: [X],
+      disposition: 'benign', dispositionReason: 'checked-clean' }] } } };
+
+  await test('BC85 G5: an UNDECIDED middle leg over a clean root ⇒ NOT green, delegated, the MIDDLE leg named with the leg reached through it; check 1 ran', async () => {
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)), { stageId: STAGE, chainedFrom: [undecidedHop] });
+    assert((fact.upstreamContainment as { green: boolean }).green === false, JSON.stringify(fact.upstreamContainment));
+    const d = fact.containmentDisposition as { disposition: string; reason: string; inputs: Record<string, unknown> };
+    assert(d.disposition === 'needs-node-c' && d.reason === 'consuming-leg-upstream-delegated', JSON.stringify(d));
+    assert(JSON.stringify(d.inputs.upstreamDelegated) === JSON.stringify([
+      { taskId: 'mid', dispositionReason: 'harvested-pool-no-derivation-cannot-decide', middleLegFor: ['root'] }]), JSON.stringify(d.inputs.upstreamDelegated));
+    assert(d.inputs.consumedValueCheck === 'ran-no-mismatch' && !('consumedValueCheckByKind' in d.inputs),
+      `the cidr WAS compared against the machine-checked root — never "NOT run": ${JSON.stringify(d.inputs)}`);
+  });
+
+  await test('BC85 keep-green: the stored chain shape (benign discharged middle leg, clean root) stays green and benign — the released cmu6a9ojp shape', async () => {
+    const fact = await computeDerivationContainmentFact(stubPrisma(CORE_KIDS, coreArtifacts(X)), { stageId: STAGE, chainedFrom: [dmzStamp({})] });
+    assert((fact.upstreamContainment as { green: boolean }).green === true, JSON.stringify(fact.upstreamContainment));
+    assert((fact.containmentDisposition as { reason: string }).reason === 'consuming-leg-consumed-discharged', JSON.stringify(fact.containmentDisposition));
+  });
+
+  // ── D3 (2026-10-31, K8S-ARCHITECT-CONSUMED-AS-DERIVED): a Derived Values entry EQUAL to an upstream derived value
+  // is routed to the CONSUMED path. The three live shapes (k8s Architect / obs Author / tf Author) + the negatives.
+  {
+    const R = '10.99.0.0/27';
+    const MEMBERS = ['10.99.0.1', '10.99.0.2', '10.99.0.4', '10.99.0.24', '10.99.0.26', '10.99.0.29'];
+    const fabric = { taskId: 'fabric', source: 'report.md', derivationContainment: {
+      checked: true, violations: [], derivedValues: [{ kind: 'cidr', value: R }],
+      containmentDisposition: { disposition: 'benign', reason: 'checked-clean' } } };
+    const D3_KIDS = [
+      { id: 'dh', title: 'Harvest current cluster state', agentRole: 'infra_state_harvester' },
+      { id: 'da', title: 'Design NetworkPolicy', agentRole: 'infra_change_architect' },
+      { id: 'du', title: 'Author manifest', agentRole: 'config_change_author' },
+    ];
+    const k8sHarvest = block('## Harvested Allocations', [
+      { kind: 'cidr', cidr: '10.244.0.29/32' }, { kind: 'cidr', cidr: '10.244.0.28/32' }, { kind: 'cidr', cidr: '10.96.141.22/32' }]);
+    const carriedBlock = block('## Derived Values', [{ kind: 'cidr', value: R, members: MEMBERS }]);
+    const consumedBlock = block('## Consumed Values', [{ kind: 'cidr', value: R }]);
+    const expectConsumedPath = (fact: Record<string, unknown>, source: string) => {
+      assert(fact.checked === false && fact.reason === 'no-derived-values-block', `not routed off the derived path: ${JSON.stringify(fact)}`);
+      assert(JSON.stringify(fact.carriedInDerivedBlock) === JSON.stringify({ source, entries: [{ kind: 'cidr', value: R }] }),
+        `carriedInDerivedBlock: ${JSON.stringify(fact.carriedInDerivedBlock)}`);
+      assert(JSON.stringify(fact.consumedValues) === JSON.stringify([{ kind: 'cidr', value: R }]), `consumedValues (deduped): ${JSON.stringify(fact.consumedValues)}`);
+      assert(fact.violations === undefined, `check 1 ran and matched: ${JSON.stringify(fact.violations)}`);
+      assert(fact.derivedValues === undefined, 'a carried value is NOT this leg\'s derivation — never re-published downstream as derived');
+      assert((fact.upstreamContainment as { green: boolean }).green === true, JSON.stringify(fact.upstreamContainment));
+      const d = fact.containmentDisposition as { disposition: string; reason: string };
+      assert(d.disposition === 'benign' && d.reason === 'consuming-leg-consumed-discharged', JSON.stringify(d));
+    };
+
+    await test('D3 k8s shape: the ARCHITECT carries the upstream range under Derived Values, the Author declares nothing ⇒ consumed path (check 1 + green run), source = the Architect', async () => {
+      const fact = await computeDerivationContainmentFact(stubPrisma(D3_KIDS, { dh: k8sHarvest, da: carriedBlock, du: 'manifest applying 10.99.0.0/27' }),
+        { stageId: STAGE, chainedFrom: [fabric] });
+      expectConsumedPath(fact, 'da');
+      assert(fact.harvestedCount === 3, `the leg's own pool is still reported: ${String(fact.harvestedCount)}`);
+    });
+
+    await test('D3 obs shape: the Author carries it under Derived AND declares it Consumed, harvest unparseable ⇒ consumed path, one consumed entry', async () => {
+      const fact = await computeDerivationContainmentFact(stubPrisma(D3_KIDS, { du: carriedBlock + consumedBlock }),
+        { stageId: STAGE, chainedFrom: [fabric] });
+      expectConsumedPath(fact, 'du');
+    });
+
+    await test('D3 tf shape: Author carries + declares, empty harvested pool ⇒ consumed path (harvestedCount 0 kept)', async () => {
+      const fact = await computeDerivationContainmentFact(stubPrisma(D3_KIDS, { dh: block('## Harvested Allocations', []), du: carriedBlock + consumedBlock }),
+        { stageId: STAGE, chainedFrom: [fabric] });
+      expectConsumedPath(fact, 'du');
+      assert(fact.harvestedCount === 0, String(fact.harvestedCount));
+    });
+
+    await test('D3 NEGATIVE: a genuinely derived value NOT equal to upstream stays DERIVED (checked against the pool, no reroute fact)', async () => {
+      const fact = await computeDerivationContainmentFact(stubPrisma(D3_KIDS, {
+        dh: k8sHarvest, da: block('## Derived Values', [{ kind: 'cidr', value: '10.99.0.0/31', members: ['10.99.0.0', '10.99.0.1'] }]),
+        du: 'uses 10.99.0.0/31' }), { stageId: STAGE, chainedFrom: [fabric] });
+      assert(fact.checked === true && fact.carriedInDerivedBlock === undefined, JSON.stringify(fact));
+      assert(JSON.stringify(fact.derivedValues) === JSON.stringify([{ kind: 'cidr', value: '10.99.0.0/31' }]), JSON.stringify(fact.derivedValues));
+    });
+
+    await test('D3 NEGATIVE: no upstream ⇒ nothing rerouted (a producer deriving the same literal is unaffected)', async () => {
+      const fact = await computeDerivationContainmentFact(stubPrisma(D3_KIDS, { dh: k8sHarvest, da: carriedBlock, du: 'x' }),
+        { stageId: STAGE, chainedFrom: undefined });
+      assert(fact.checked === true && fact.carriedInDerivedBlock === undefined, JSON.stringify(fact));
+    });
+
+    await test('D3 MIXED: one carried + one genuine ⇒ the genuine one is checked (checked:true), the carried one recorded', async () => {
+      const fact = await computeDerivationContainmentFact(stubPrisma(D3_KIDS, { dh: k8sHarvest,
+        da: block('## Derived Values', [{ kind: 'cidr', value: R, members: MEMBERS }, { kind: 'cidr', value: '10.98.0.0/31', members: ['10.98.0.0', '10.98.0.1'] }]),
+        du: '10.98.0.0/31 applied' }), { stageId: STAGE, chainedFrom: [fabric] });
+      assert(fact.checked === true, JSON.stringify(fact));
+      assert(JSON.stringify(fact.derivedValues) === JSON.stringify([{ kind: 'cidr', value: '10.98.0.0/31' }]), JSON.stringify(fact.derivedValues));
+      assert(JSON.stringify((fact.carriedInDerivedBlock as { entries: unknown }).entries) === JSON.stringify([{ kind: 'cidr', value: R }]), JSON.stringify(fact.carriedInDerivedBlock));
+    });
+
+    await test('D3 equality is check 1\'s: an equivalent CIDR spelling reroutes, a WIDER range does not', async () => {
+      const eq = await computeDerivationContainmentFact(stubPrisma(D3_KIDS, { du: block('## Derived Values', [{ kind: 'cidr', value: '10.99.0.3/27' }]) }),
+        { stageId: STAGE, chainedFrom: [fabric] });
+      assert(eq.carriedInDerivedBlock !== undefined, `same range, other spelling: ${JSON.stringify(eq)}`);
+      const wide = await computeDerivationContainmentFact(stubPrisma(D3_KIDS, { du: block('## Derived Values', [{ kind: 'cidr', value: '10.99.0.0/26' }]) }),
+        { stageId: STAGE, chainedFrom: [fabric] });
+      assert(wide.carriedInDerivedBlock === undefined, `a widening is not the upstream value: ${JSON.stringify(wide)}`);
+    });
+  }
 
   console.log(`\n📊 Results: ${passed} passed, ${failed} failed\n`);
   process.exit(failed > 0 ? 1 : 0);

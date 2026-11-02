@@ -6,6 +6,9 @@ import { mcpContextManager } from './contextManager';
 import { mcpToolRegistry } from './toolRegistry';
 import { ensureObject } from '@/lib/utils/ensure-object';
 import { mcpLogger } from '@/lib/logger';
+import { attachGatewayMeta } from './gateway-meta';
+// WI-B10 (2026-10-23, design §10 A-1): the server-only held-eligibility fact rides beside the result like gateway meta.
+import * as heldEligibility from '../../mcp/server/config/held-eligibility';
 
 // Dynamic imports for server-side only
 let Client: any = null;
@@ -479,6 +482,10 @@ export class MCPService {
           toolName
         }
       };
+      // MCPSERVICE-META-REBUILT option (b) (Stage B P1-4): the gateway's own `_meta` (allowlisted) rides BESIDE the result
+      // through a process-wide WeakMap (gateway-meta.ts) -- never in it, so what the calling agent reads is byte-identical.
+      attachGatewayMeta(result, toolName, response._meta);
+      if (toolName === 'services') heldEligibility.attachToResult(result, heldEligibility.takeForContext(toolContext));
 
       // Record token usage if user provided
       if (options?.userId) {

@@ -18,11 +18,20 @@ import { mergeTaskInputContext } from '@/lib/tasks/services/inputContext';
 import { sanitizeChainedOutput, isR9OperatorEvent } from '@/lib/agents/harness/sanitize-chained-output';
 import { selectAuthoritativeExecution, CHAIN_SELECTION_OPTIONS } from '@/lib/services/execution-selection';
 import { resolveTaskProtocol, canonicalProtocolName } from '@/lib/agents/harness/program-protocol';
+import { heldEntryFields, type HeldChainState } from '@/lib/agents/harness/held-chain';
+import { HELD_VARIANT_PROTOCOL, HELD_CAPABLE_PROTOCOLS } from '@/lib/agents/harness/held-bytes/variant';
 
 const log = logger.child({ module: 'ContextChainer' });
 
-/** The one lane whose rollback fact is carried to a Reviewer today (net #3, ruled 2026-09-11). */
-const ROLLBACK_FACT_LANE = 'observability-config';
+/** The lanes whose rollback fact is carried to a Reviewer (net #3, ruled 2026-09-11): observability-config, and since
+ *  PLATFORM-HELD-BYTES Stage B (V-6, 2026-10-15) its held variant — a scalar became a set, each compared canonically.
+ *  held-k8s 1f (EF S-5, AE S-4): DERIVED as HELD_CAPABLE_PROTOCOLS ∪ {HELD_VARIANT_PROTOCOL} — identical today (obs is the
+ *  one held-capable protocol). The UNION is load-bearing: the retired variant token is not held-capable, and dropping it
+ *  would strip the fact from every G3-era leg. When a domain joins HELD_CAPABLE_PROTOCOLS (k8s at step 3) EVERY one of its
+ *  Reviewers starts receiving a chained rollback fact — an agent-visible input change for that step's series cut. */
+const ROLLBACK_FACT_LANES: ReadonlySet<string> = new Set(
+  [...HELD_CAPABLE_PROTOCOLS, HELD_VARIANT_PROTOCOL].map((p) => canonicalProtocolName(p)),
+);
 
 /**
  * Is this predecessor's leg in the lane whose rollback fact we carry?
@@ -38,22 +47,39 @@ const ROLLBACK_FACT_LANE = 'observability-config';
  * So: ask the predecessor first, then fall back to its LEG via `stage.metadata.harnessTaskId`.
  * Two PK lookups, and only ever reached when a rollback fact actually exists to carry.
  */
+/** held-network step 3 batch 2b (owner S3-C): the roles the Git-file vs device comparison is shown to. */
+export const GIT_DEVICE_COMPARISON_READERS: ReadonlySet<string> = new Set(['infra_change_architect', 'change_reviewer']);
+
+/** The consuming task's agentRole (one PK read; null on a miss or an error — the comparison is then simply not carried). */
+async function consumerRoleOf(db: ChainerClient, taskId: string): Promise<string | null> {
+  try {
+    const t = await db.task.findUnique({ where: { id: taskId }, select: { agentRole: true } });
+    return t?.agentRole ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function resolveRollbackLane(
-  depTask: { title: string | null; metadata: unknown; stageId: string | null }
+  depTask: { title: string | null; metadata: unknown; stageId: string | null },
+  // The chainer's injected client (PLATFORM-HELD-BYTES V-0, 2026-10-15): this helper read the module-global client, so a
+  // caller passing `db` got every chainer read through it EXCEPT these two — the one gap in the DI the chainer offers
+  // (global-prisma-singleton-pattern: substitute by injection, never a second seam). Production passes the singleton.
+  db: ChainerClient
 ): Promise<boolean> {
   const direct = resolveTaskProtocol(depTask).protocol;
-  if (direct) return canonicalProtocolName(direct) === canonicalProtocolName(ROLLBACK_FACT_LANE);
+  if (direct) return ROLLBACK_FACT_LANES.has(canonicalProtocolName(direct));
   if (!depTask.stageId) return false;
-  const stage = await prisma.stage.findUnique({
+  const stage = await db.stage.findUnique({
     where: { id: depTask.stageId }, select: { metadata: true },
   });
   const legId = (stage?.metadata as Record<string, unknown> | null)?.harnessTaskId;
   if (typeof legId !== 'string' || !legId) return false;
-  const leg = await prisma.task.findUnique({
+  const leg = await db.task.findUnique({
     where: { id: legId }, select: { title: true, metadata: true },
   });
   const protocol = leg ? resolveTaskProtocol(leg).protocol : null;
-  return !!protocol && canonicalProtocolName(protocol) === canonicalProtocolName(ROLLBACK_FACT_LANE);
+  return !!protocol && ROLLBACK_FACT_LANES.has(canonicalProtocolName(protocol));
 }
 
 // A1 §6 chained-context cap (2026-06-06). A THIRD, distinct cap — NOT the 8KB
@@ -118,6 +144,18 @@ export interface ChainedContext {
      * here means "not yet produced", not "treat as blocking".
      */
     rollbackContainment: Record<string, unknown> | null;
+    /**
+     * validationToolCalls (2026-10-23): the predecessor network Author's stamp — each validation-step hub tool call compared with what
+     * the tool accepts. Carried ONLY when the Author's result.json has it (network Authors), so every other entry is byte-identical.
+     * Rendered to the leg Reviewer in §6; a fact, never a gate input.
+     */
+    validationToolCalls?: Record<string, unknown>;
+    /**
+     * held-network step 3 batch 2b (P5): the network Harvester's Git-file vs device comparison (or the Author's transcription of
+     * it). Carried ONLY to a consumer whose role is in GIT_DEVICE_COMPARISON_READERS (Architect, leg Reviewer) and only when the
+     * stamp is checked, so every other entry is byte-identical. Rendered in §6; a warning fact, never a gate input.
+     */
+    gitDeviceComparison?: Record<string, unknown>;
     finalResponse: string;
     executionId: string;
     // A1 truncation facts (Protocol-10 fact; pre-wires deferred D1 coverage signal)
@@ -159,6 +197,13 @@ export interface ChainedContext {
     // `interfaceContractInheritedFrom`: no user channel writes `chainedFrom` (every prepare rewrites it).
     inheritedFromLeg?: string;
     inheritedAt?: string;
+    /** PLATFORM-HELD-BYTES Stage B V-6 (variant legs only; absent everywhere else): held files for an Author (`heldView`),
+     *  their handle index for an Architect (`heldIndex`), the recomputed diff for a Reviewer (`editDiff`). held-chain.ts. */
+    heldView?: unknown[];
+    heldIndex?: unknown[];
+    /** PC-P2-3: one named state when the variant Harvester held no file at all (`held-chain.ts` heldNoneState). */
+    heldNone?: { state: string };
+    editDiff?: Record<string, unknown>;
   }>;
   pipelineMetadata: {
     chainedAt: string;
@@ -335,7 +380,7 @@ export type ChainerClient = typeof prisma;
 export async function chainDependencyContext(
   taskId: string,
   db: ChainerClient = prisma,
-  opts: { inject?: LegInjection | null } = {}
+  opts: { inject?: LegInjection | null; /** V-6: build missing held views (prepare only); every other caller reads. */ writeViews?: boolean } = {}
 ): Promise<ChainedContext | null> {
   // Find all tasks this task depends on
   const dependencies = await db.taskDependency.findMany({
@@ -389,6 +434,7 @@ export async function chainDependencyContext(
 
   // Check each dependency for a successful execution with result.json
   const chainedFrom: ChainedContext['chainedFrom'] = [];
+  let consumerRole: string | null | undefined; // held-network step 3 batch 2b: read lazily, only when a comparison is to be carried
   const notChained: ChainedContext['pipelineMetadata']['notChained'] = [];
 
   // F19 (2026-07-16): classify chain-capability ONCE — a template-less non-PIPELINE dep
@@ -399,6 +445,8 @@ export async function chainDependencyContext(
   const isChainCapable = (d: (typeof dependencies)[number]['dependsOn']) =>
     d.type === 'PIPELINE' || d.agentTemplateId != null;
   let degradedPredecessors = 0;
+  // V-6: the held-view budget is spent across the whole chain, in dependency (and then handle) order.
+  const heldState: HeldChainState = { budgetUsed: 0 };
 
   for (const dep of dependencies) {
     const depTask = dep.dependsOn;
@@ -602,9 +650,23 @@ export async function chainDependencyContext(
       // carry — which is every predecessor that is not an Author, i.e. most of them.
       const stampedRollback =
         (parsed as { rollbackContainment?: Record<string, unknown> }).rollbackContainment ?? null;
-      const rollbackFact = stampedRollback && (await resolveRollbackLane(depTask))
+      const rollbackFact = stampedRollback && (await resolveRollbackLane(depTask, db))
         ? stampedRollback
         : null;
+      // held-network step 3 batch 2b (P5 / S3-C): the network Harvester's Git-file vs device comparison (and the Author's
+      // transcription of it) reaches ONLY the two readers the owner named — the Architect and the leg Reviewer — never the Author,
+      // which also chains the Harvester. Carried only when the dependency stamped a CHECKED comparison; the consumer's role is
+      // read only then (one PK read), so every other entry and every other chain is byte-identical.
+      const stampedComparison = (parsed as { gitDeviceComparison?: unknown }).gitDeviceComparison;
+      const gitDeviceComparison = stampedComparison && typeof stampedComparison === 'object'
+        && (stampedComparison as { checked?: unknown }).checked === true
+        && GIT_DEVICE_COMPARISON_READERS.has((consumerRole ??= await consumerRoleOf(db, taskId)) ?? '')
+        ? (stampedComparison as Record<string, unknown>) : null;
+      // PLATFORM-HELD-BYTES Stage B V-6: only a dependency carrying a variant stamp reaches any read here; {} otherwise.
+      const heldFields = await heldEntryFields(db, {
+        consumerTaskId: taskId, depExecutionId: latestExec.id, parsed: parsed as Record<string, unknown>,
+        writeViews: opts.writeViews === true, state: heldState,
+      });
 
       chainedFrom.push({
         taskId: depTask.id,
@@ -642,6 +704,9 @@ export async function chainDependencyContext(
         // net was built for. The other lanes are not wrong, they are unruled — see
         // cline_docs/follow-ups/rollback-containment-context-entry-2026-09-11.md.
         rollbackContainment: rollbackFact,
+        ...((parsed as { validationToolCalls?: unknown }).validationToolCalls && typeof (parsed as { validationToolCalls?: unknown }).validationToolCalls === 'object'
+          ? { validationToolCalls: (parsed as { validationToolCalls: Record<string, unknown> }).validationToolCalls } : {}),
+        ...(gitDeviceComparison ? { gitDeviceComparison } : {}),
         finalResponse,
         executionId: latestExec.id,
         truncated,
@@ -656,6 +721,7 @@ export async function chainDependencyContext(
         } : {}),
         source,
         degraded,
+        ...heldFields,
       });
 
       log.info(

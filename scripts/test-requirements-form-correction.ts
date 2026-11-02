@@ -415,7 +415,7 @@ const rqOf = (r: Run) => r.persisted?.resultJson?.toolLoop?.requirementsFormChec
     const results = fs.readFileSync(path.join(__dirname, '..', 'lib', 'mcp', 'tasks', 'action', 'handlers', 'agent', 'agent-results-handler.ts'), 'utf8');
     // 1b (2026-10-12): the exclusion is a LIST (pre-correction + not-adopted correction), so a second operator artifact
     // cannot reach a reasoner through the lean card's ".md = report" picker or the verbose envelope.
-    ok(/where: \{ name: \{ notIn: \[\.\.\.REQUIREMENTS_OPERATOR_ARTIFACTS\] \} \}/.test(results), 'agent.results must exclude every operator artifact at the select');
+    ok(/where: \{ name: \{ notIn: \[\.\.\.REQUIREMENTS_OPERATOR_ARTIFACTS(, \.\.\.HELD_OPERATOR_ARTIFACTS)?\] \} \}/.test(results), 'agent.results must exclude every operator artifact at the select');
     const namesSrc = fs.readFileSync(path.join(__dirname, '..', 'lib', 'agents', 'harness', 'requirements-artifact-names.ts'), 'utf8');
     ok(/REQUIREMENTS_OPERATOR_ARTIFACTS[^=]*= \[REQUIREMENTS_PRE_CORRECTION_ARTIFACT, REQUIREMENTS_CORRECTION_NOT_ADOPTED_ARTIFACT\]/.test(namesSrc), 'the exclusion list names both artifacts');
     ok(persist.includes('name: REQUIREMENTS_CORRECTION_NOT_ADOPTED_ARTIFACT') && /correctionNotAdoptedText[\s\S]{0,200}task\.type !== 'PIPELINE'/.test(persist), 'the not-adopted text is persisted as its own artifact, non-PIPELINE only');
@@ -474,7 +474,10 @@ const rqOf = (r: Run) => r.persisted?.resultJson?.toolLoop?.requirementsFormChec
   await test('SOURCE PIN: the core reassigns the deliverable ONLY inside the adopted branch; the block sits before onStoringResults and #90', () => {
     const core = fs.readFileSync(path.join(__dirname, '..', 'lib', 'services', 'execution-core.ts'), 'utf8');
     const s = core.indexOf('// REQUIREMENTS FORM CHECK + CORRECTION');
-    const st = core.indexOf('await observers.onStoringResults');
+    // The requirements block ends where the NEXT post-loop step begins (PLATFORM-HELD-BYTES Stage B V-5c, 2026-10-15: the
+    // held-edit step sits between it and onStoringResults; its own adopted-only rule is pinned in test-held-variant).
+    const held = core.indexOf('// PLATFORM-HELD-BYTES Stage B V-5a/V-5c');
+    const st = held > 0 ? held : core.indexOf('await observers.onStoringResults');
     const fc = core.indexOf('runFormCorrection({');
     const d = core.indexOf('runDiagnosticRetry({');
     ok(fc > 0 && fc < s && s < st && st < d, `order ${[fc, s, st, d].join(' < ')}`);
@@ -656,6 +659,10 @@ const rqOf = (r: Run) => r.persisted?.resultJson?.toolLoop?.requirementsFormChec
       'lib/agents/harness/form-correction.ts', 'lib/agents/harness/package-form-check.ts',
       'lib/agents/harness/requirements-form-check.ts', 'lib/agents/harness/requirements-form-correction.ts',
       'lib/mcp/server/tools/advanced/lean-card-facts.js', 'lib/services/execution-artifacts.ts', 'lib/services/execution-core.ts',
+      // DECISION (F-T2-1 (b), held-terraform step 3, owner 2026-10-21): arbitrateReflectionPass reads the form-correction DECISION
+      // (`correction.attempted`) BEFORE the turn runs, to give the one reflection pass to the held-edit correction when a refused held
+      // edit would take it. A producer-side choice of WHICH correction turn runs — it never reads an outcome (`adopted`) and gates no release.
+      'lib/services/held-edit-step.ts',
     ]);
     const extra = files.filter((f) => !allowed.has(f));
     ok(extra.length === 0, `new reader(s) of the correction facts: ${extra.join(', ')} — decide and record before adding`);

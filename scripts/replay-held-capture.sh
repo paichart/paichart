@@ -11,7 +11,11 @@
 #   scripts/replay-held-capture.sh                      # the archive replay (§11.2)
 #   scripts/replay-held-capture.sh --predict <execId>…  # the predicted rows per execution
 #   scripts/replay-held-capture.sh --compare <execId>…  # §11.3 G-CAP-live: prediction vs table rows + hashes (exit 1 on a mismatch)
+#   scripts/replay-held-capture.sh --compare-all        # --compare over every execution with a CAPTURE ref or capture refusal
 #   scripts/replay-held-capture.sh --check-held         # MI-13 🔴 11 (prints UNMEASURED on any failure, never 0)
+#   scripts/replay-held-capture.sh --device-sources     # held-network step 3 batch 2b: Device sources grammar corpus over network legs
+#   scripts/replay-held-capture.sh --device-lane        # … the device-read lane + the two network Harvester facts over stored Harvesters
+#   HELD_REPLAY_DEVICE_LANE=off scripts/replay-held-capture.sh --compare-all   # predict WITHOUT the device lane (nothing else moved)
 # Env: HELD_REPLAY_SINCE (default 2026-08-01).
 set -u
 PROD=<PROD_USER>@<PROD_HOST>

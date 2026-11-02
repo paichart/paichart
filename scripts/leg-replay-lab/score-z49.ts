@@ -37,7 +37,7 @@ import { loadSnapshot } from './snapshot';
 import { parsedResult } from './rebuild';
 import { applyEdits, type EditSpec } from './edits';
 import { snapshotWithInputEdits } from './input-edits';
-import { useCheckDataAt } from './check-at';
+import { installCheckDataAt } from './check-at';
 import { nodeInputs, readOwnerMap, scoreText, SIZE_ALLOWANCE_CHARS } from './score-requirements';
 import { analyzeRequirementsForm, isRegistryCausedCoverageFinding } from '../../lib/agents/harness/requirements-form-check';
 import type { RequirementsFormInputs } from '../../lib/agents/harness/requirements-form-correction';
@@ -263,9 +263,9 @@ export function z49SelfTest(expDir: string): { rows: string[]; mismatches: strin
     }
     const inputs = nodeInputs(snap, readOwnerMap(expDir, nd.ownerRowItemMap));
     const z = scoreZ49(text, c.mode, objectiveItem(inputs.objective, 21));
-    useCheckDataAt(c.checkAt ?? null);
+    installCheckDataAt(c.checkAt ?? null);
     let nw: ReturnType<typeof noWorseMeasures>;
-    try { nw = noWorseMeasures(text, inputs); } finally { useCheckDataAt(null); }
+    try { nw = noWorseMeasures(text, inputs); } finally { installCheckDataAt(null); }
     const got: Record<string, unknown> = {
       gStanza: z.gStanza, allowEndpoint: z.stanza.allowEndpoint, sourceIpStatements: z.stanza.sourceIpStatements, endpointForbidden: z.forbidden.endpointForbidden,
       gRow: z.gRow.pass, gRowParts: z.gRow.parts, coverageRequestPath: nw.coverageRequestPath,
@@ -296,7 +296,7 @@ export function z49ScoreRun(runDirs: string[], expDir: string) {
       const item21 = objectiveItem(inputs.objective, 21);
       const ndir = path.join(runDir, node);
       for (const v of fs.readdirSync(ndir).filter((d) => fs.statSync(path.join(ndir, d)).isDirectory())) {
-        useCheckDataAt(exp.variants?.[v]?.requirementsCheckAt ?? null);
+        installCheckDataAt(exp.variants?.[v]?.requirementsCheckAt ?? null);
         try {
           for (const sd of fs.readdirSync(path.join(ndir, v)).filter((d) => d.startsWith('sample-'))) {
             const dir = path.join(ndir, v, sd);
@@ -319,7 +319,7 @@ export function z49ScoreRun(runDirs: string[], expDir: string) {
               costUsd: s.costUsd ?? null, authorDurationMs: s.author?.durationMs ?? null,
             });
           }
-        } finally { useCheckDataAt(null); }
+        } finally { installCheckDataAt(null); }
       }
     }
   }

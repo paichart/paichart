@@ -591,3 +591,70 @@ republished.
 Both are the SAME shape by different routes (wrong block parsed / no block parsed) and both fail OPEN on the consumer
 side. Neither touched configuration content in the window — the values were correct — but each let a gate input read
 benign without the mechanical check having run.
+
+## Carried from the join learnings ledgers (2026-10-31)
+
+Source: the held-network ledger `cline_docs/reviews/held-network-2026-10-22/LEARNINGS-LEDGER.md` (LL-N) and the terraform ledger `cline_docs/reviews/held-terraform-2026-10-19/LEARNINGS-LEDGER.md` (LL-T). Each line is the learning in one sentence; the ledger row holds the evidence.
+
+- **Never ask a model to compare two configs: make it a platform fact (LL-N-08).** Asked to compare, it compared values and missed a stanza move (6/6), and once presented a rebuilt device block as the device read. Have agents quote both sides exactly as evidence; the comparison belongs to the platform (`gitDeviceComparison`).
+- **Fabrication detection belongs in a fact, not only in text (LL-N-09).** `quoteFidelity` once paired a rebuilt device block as a non-file quote and passed it.
+- **A matcher over untrusted text must be linear (LL-N-30).** Every check over agent output is a DoS surface: the old placeholder regex never finished a 900 s timing test. Use linear globs and pin a timing test.
+- **A budget must charge every step, not only failures (LL-N-38).** A matcher's budget skipped matched steps and blank runs, so adversarial input ran 17 s unflagged. Assert the budget FLAG in tests, and keep wall-clock only as a loose ceiling (it flakes on a shared machine).
+- **A fact that quotes lines must redact them in context (LL-N-31).** A block-scoped secret (Junos `snmp { community }`) reached `quoteFidelity`'s changed/omitted lines in clear.
+- **Exempt by what content IS, never by its label (LL-N-37).** An honest excerpt already passes a stanza check, so a label waiver can only ever excuse a block that fails.
+- **Test a rule over a set at set size ≥ 2.** `some` and `every` agree on every list of one, which is why Bug Class 85 stayed invisible while every real input had one member (fan-in follow-up §3).
+- **A shared-code rule written for one domain needs every joining domain's shapes as fixtures (LL-N-39).** Terraform's no-edit cell hid F-N2-1 from every unit test.
+
+## quoteFidelity v6 — excerpt-labelled file-lane blocks are read strictly (2026-10-31, QUOTE-FIDELITY-EXCERPT-BLIND)
+
+- **The gap closed:** a FILE-lane block labelled "excerpt" read as a free narrowing, so a silent cut under that label passed clean — and
+  observability 1.9.0 C1 told Harvesters to label partial quotes "excerpt", so the stamped rate fell BY CONSTRUCTION after 1.9.0.
+- **v6 rule:** `claim: 'excerpt'` (negation-aware, `EXCERPT_CLAIM_RE`, file lane only) gets the SAME counting as verbatim — omitted,
+  added, stripped-inline-comment and changed lines are findings; named elisions, whole-unit cuts and adjacent comments (unless the quote
+  spans the whole document) stay exempt. Identical to the lab's validated strict scorer (`scripts/leg-replay-lab/score-quote.ts`, "as if
+  labelled verbatim"). Unlabelled and other-lane blocks: unchanged. `claims.excerpt` appears only when > 0.
+- **Series:** `QUOTE_FIDELITY_VERSION` 5 → 6. Never read the escalation rate across the cut as a deterioration — excerpt-labelled cuts
+  START counting at v6 (the 1.9.0 note above it said the opposite direction: never read the fall as an improvement).
+- **Tests:** `test:quote-fidelity` (v6 both directions, N1 + v6 negation, version pin); `test:leg-replay-lab` QS1 (shipping fact now agrees
+  with the strict score on excerpt labels; an UNLABELLED silent cut is still caught only by the score — by design).
+- **Alignment, same v6 (QUOTE-ALIGNMENT-AMBIGUITY):** through v5 every quote line took its FIRST in-order occurrence, so a quote of a
+  REPEATED stanza/key was aligned to the first one and the lines between read as omitted (verbatim blocks too; the v6 replay exposed it on
+  2 excerpt blocks). v6 judges a few candidate alignments (`alignmentCandidates`) by most in-order matched lines, then fewest unaccounted
+  raw lines inside the span (`gapCost`); a tie keeps v5's. ⚠️ **Never score alignments by FINDING count** — an exemption-aware score lets
+  the alignment buy a clean reading (moving the span turned run 2's dropped header into "adjacent to an excerpt": 11 suites red under that
+  mutation). A label "lines X–Y" (`labelLineRange`) is the CLAIMED span: honoured only when it holds as many matched lines as the best
+  alignment anywhere, its unquoted edge lines are omissions, `span.labelRange` on a finding. Fixtures `align-oct17-*`, `align-oct28-*`.
+
+## quoteFidelity v8 — the pairing path bounded (2026-11-01, QUOTEFIDELITY-PAIRING-COST)
+
+- **The gap closed:** the pairing path (rules 1–8, not the device matcher) had no bound; sec-ops (batch-2a) measured ~7 s on a served
+  document of 60,000 blank lines. Profiling found four quadratic scans, not one: the window rebuilt per unaligned quote line (blank
+  padding), `alignmentCandidates` filtering every occurrence per quote line (identical lines), the window's linear checks (non-blank
+  documents), and the similarity scan over same-head lines (`set`-form configs — hours on an adversary).
+- **Fast first, output-identical:** non-blank index, occurrence ranges with binary search, gap indexes (inline-stripped, whitespace,
+  head token), the per-segment cursor, index-based adjacent-run / outside / wholeDoc tests. ⚠️ Every one must return the SAME first match
+  in the SAME order as the scan it replaces — the lists are ascending raw indices for that reason.
+- **Then the bound:** `PAIRING_MATCH_BUDGET` 4,000,000 units per leaf (a line visit; a similarity table per 16 cells; 1 + quote length per
+  candidate alignment). Past it the block and every later block of the leaf are `budgetExceeded` findings: NOT CHECKED, span 0–0, nothing
+  listed, escalating (even on a truncated source), never `complete`. Live specimens use ≤ ~1k units; a contrived 13,000-line verbatim
+  quote ~1.1M.
+- **Series:** v7 → v8 because an over-budget block reads differently; replay: `version` only on all 781 stored stamps. The output-identical
+  half alone (`2cdbf271a`) is byte-identical and could ship without a cut.
+
+## quoteFidelity v7 — document ties (2026-11-01, QUOTE-PAIRING-TIE)
+
+- **The gap closed:** a block paired with the FIRST document holding the most of its lines. In network-provisioning one configuration is
+  held in the declared Git file AND the device's running/startup config, so a device-taken quote tied with the Git file (which comes
+  first in call order) and the file's extra comments / different stanza order read as omitted (`cmvq3k6on` L44, needs-node-c).
+- **v7 rule:** every document tied on the line-set count is aligned (`alignToDocument` = the unchanged v6 machinery); the most in-order
+  matched lines wins, then the lowest `gapCost`, strict; a remaining tie keeps the first document (v6's choice). ⚠️ **Keep matched
+  FIRST** — on the instance the wrong document has the LOWER gapCost (6 vs 9); a gapCost-only rule keeps the false escalation (mutation
+  M2 red). Never score documents by finding count (same reason as v6's alignments).
+- **Measured before building** (pre-registered, snapshot 20261031t200239z): 17 ties in 154 pairable blocks, all network-provisioning; the
+  tie-break changes the document on 3, the outcome on 1 (bin (i), hand-read). k8s/terraform have no multi-candidate block: an absence.
+- **Series:** `QUOTE_FIDELITY_VERSION` 6 → 7. Movers by construction: `version` on every stamp; one disposition (needs-node-c → benign);
+  two count-only (`lanes`, `elisions`). Not rendered, not consumed ⇒ the nets replay is the gate, the golden set is not reached.
+- **Not addressed (recorded):** a device-labelled quote tying with IDENTICAL scores across a Git file and a device read still counts in the
+  file lane (`cmvmze6p8` L60/L67) — only the label could break that; matters once the file-lane render (A2) ships.
+- **Tests:** `test:quote-fidelity` TIE ×4 (live benign; Git file alone ⇒ 4 omitted comments; a genuine cut against the device still flags and
+  names the device call; identical copies keep the first). Mutation-proven: tie-break off (3 red), gapCost-only (3 red), last-wins (1 red).

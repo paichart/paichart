@@ -30,7 +30,7 @@ import { loadSnapshot } from './snapshot';
 import { parsedResult } from './rebuild';
 import { applyEdits, type EditSpec } from './edits';
 import { snapshotWithInputEdits } from './input-edits';
-import { useCheckDataAt } from './check-at';
+import { installCheckDataAt } from './check-at';
 import { nodeInputs, readOwnerMap, scoreText } from './score-requirements';
 import { scoreZ49, objectiveItem } from './score-z49';
 import { analyzeRequirementsForm } from '../../lib/agents/harness/requirements-form-check';
@@ -299,9 +299,9 @@ export function g4SelfTest(expDir: string): { rows: string[]; mismatches: string
     const { nd, snap, inputs, cfg } = nodeContext(expDir, exp, c.node);
     let text = parsedResult(snap.author)!.finalResponse;
     for (const f of [].concat(c.plant ?? [])) text = applyEdits(text, [JSON.parse(fs.readFileSync(path.join(expDir, f), 'utf8')) as EditSpec], 'draft').text;
-    useCheckDataAt(c.checkAt ?? exp.variants?.[c.arm ?? 'g4']?.requirementsCheckAt ?? null);
+    installCheckDataAt(c.checkAt ?? exp.variants?.[c.arm ?? 'g4']?.requirementsCheckAt ?? null);
     let s: G4Score; let nw: ReturnType<typeof noWorseMeasures>;
-    try { s = scoreG4(text, cfg, inputs.objective, inputs.ownerMap, sealed, nd.id); nw = noWorseMeasures(text, inputs); } finally { useCheckDataAt(null); }
+    try { s = scoreG4(text, cfg, inputs.objective, inputs.ownerMap, sealed, nd.id); nw = noWorseMeasures(text, inputs); } finally { installCheckDataAt(null); }
     const got: Record<string, unknown> = {
       itemRows: s.itemRows.ids.length, itemRowViolations: s.itemRows.violations.map((v) => v.why), restates: s.invented.restates, asks: s.invented.asks,
       asksScope: s.invented.asksScope.length, overlapReads: s.invented.overlapReads,
@@ -328,7 +328,7 @@ export function g4NoWorseDump(expDir: string, checkAt: string): Record<string, R
   const repo = path.resolve(__dirname, '..', '..');
   const work = path.join(repo, '.claude', 'skills', 'requirements-spec', 'work');
   const out: Record<string, ReturnType<typeof noWorseFindings>> = {};
-  useCheckDataAt(checkAt);
+  installCheckDataAt(checkAt);
   try {
     for (const run of fs.readdirSync(work).filter((d) => fs.statSync(path.join(work, d)).isDirectory()).sort()) {
       for (const d of fs.readdirSync(path.join(work, run)).filter((x) => x.startsWith('draft-')).sort()) {
@@ -342,7 +342,7 @@ export function g4NoWorseDump(expDir: string, checkAt: string): Record<string, R
       const { snap, inputs } = nodeContext(expDir, exp, nd.id);
       out[`node/${nd.id}`] = noWorseFindings(parsedResult(snap.author)!.finalResponse, inputs);
     }
-  } finally { useCheckDataAt(null); }
+  } finally { installCheckDataAt(null); }
   return out;
 }
 
@@ -366,7 +366,7 @@ export function g4ScoreRun(runDirs: string[], expDir: string) {
       const { nd, inputs, cfg } = nodeContext(expDir, exp, node);
       const ndir = path.join(runDir, node);
       for (const v of fs.readdirSync(ndir).filter((d) => fs.statSync(path.join(ndir, d)).isDirectory())) {
-        useCheckDataAt(exp.variants?.[v]?.requirementsCheckAt ?? null);
+        installCheckDataAt(exp.variants?.[v]?.requirementsCheckAt ?? null);
         try {
           for (const sd of fs.readdirSync(path.join(ndir, v)).filter((d) => d.startsWith('sample-')).sort()) {
             const dir = path.join(ndir, v, sd);
@@ -390,7 +390,7 @@ export function g4ScoreRun(runDirs: string[], expDir: string) {
               costUsd: s.costUsd ?? null, authorDurationMs: s.author?.durationMs ?? null,
             });
           }
-        } finally { useCheckDataAt(null); }
+        } finally { installCheckDataAt(null); }
       }
     }
   }

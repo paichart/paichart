@@ -27,7 +27,7 @@ type Stage = { label: string; test: (u: ResolvedAssignee) => boolean };
  * + email, so the caller can retry by email); none falls through to the next stage.
  *
  * The POV's own people (owner + team members) are tried first, through all stages; the whole user
- * table only if none of them matches — so "Josh" resolves to the Josh on this POV even when another
+ * table only if none of them matches AND the caller is an admin (opts.includeAllUsers; 2026-10-31) — so "Josh" resolves to the Josh on this POV even when another
  * Josh exists elsewhere, and an admin (who bypasses the team check) is no longer handed a stranger
  * with the same first name.
  *
@@ -35,7 +35,12 @@ type Stage = { label: string; test: (u: ResolvedAssignee) => boolean };
  * the same name resolved to whichever the database returned first (live: two "Steve Terry" accounts),
  * and the name-parts stage OR-ed the words, so "Josh Allen" matched anyone named Josh OR Allen.
  */
-export function chooseAssignee(query: string, users: ResolvedAssignee[], teamIds?: Set<string>): ResolvedAssignee {
+export function chooseAssignee(
+  query: string,
+  users: ResolvedAssignee[],
+  teamIds?: Set<string>,
+  opts: { includeAllUsers?: boolean } = {}
+): ResolvedAssignee {
   const q = query.trim().toLowerCase();
   if (!q) throw new Error('Assignee is empty');
   const words = q.split(/\s+/).filter(Boolean);
@@ -49,7 +54,11 @@ export function chooseAssignee(query: string, users: ResolvedAssignee[], teamIds
   ];
   const pools: Array<{ scope: string; users: ResolvedAssignee[] }> = [];
   if (teamIds && teamIds.size > 0) pools.push({ scope: "this POV's owner and team", users: users.filter(u => teamIds.has(u.id)) });
-  pools.push({ scope: 'all users', users });
+  // ASSIGNEE-DIRECTORY-DISCLOSURE (2026-10-31, sec-ops X9 review): the whole-table pool is for ADMIN/SUPER_ADMIN
+  // only. For anyone else it could never yield a usable assignee (assertAssigneeInPovTeam refuses anyone outside
+  // the POV team), so its only effect was the ambiguity error listing `name <email>` across every tenant
+  // (`assignee: "@"` returned the whole directory).
+  if (opts.includeAllUsers !== false) pools.push({ scope: 'all users', users });
   for (const pool of pools) {
     for (const stage of stages) {
       const hits = pool.users.filter(stage.test);
@@ -69,20 +78,26 @@ export function chooseAssignee(query: string, users: ResolvedAssignee[], teamIds
  * when a scope is given (useful, and no wider than the caller's own POV), otherwise the user table as
  * before.
  */
-export async function resolveUserByNameOrEmail(assignee: string, scope?: PovScope): Promise<ResolvedAssignee> {
+export async function resolveUserByNameOrEmail(
+  assignee: string,
+  scope: PovScope | undefined,
+  caller: { role: string }
+): Promise<ResolvedAssignee> {
   mcpLogger.debug('Looking up user for assignment');
+  const isAdmin = caller.role === 'ADMIN' || caller.role === 'SUPER_ADMIN';
   const users = await prisma.user.findMany({ select: { id: true, name: true, email: true }, take: 5000 });
   const teamIds = scope
     ? new Set<string>([...(scope.ownerId ? [scope.ownerId] : []), ...((scope.team?.members ?? []).map(m => m.userId))])
     : undefined;
   try {
-    const found = chooseAssignee(assignee, users, teamIds);
+    const found = chooseAssignee(assignee, users, teamIds, { includeAllUsers: isAdmin });
     mcpLogger.debug({ userId: found.id }, 'User resolved for assignment');
     return found;
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     if (!msg.startsWith('User not found')) throw e;
-    const listed = teamIds && teamIds.size > 0 ? users.filter(u => teamIds.has(u.id)) : users.slice(0, 50);
+    // Non-admins are only ever shown their POV's people — never a slice of the whole user table.
+    const listed = teamIds && teamIds.size > 0 ? users.filter(u => teamIds.has(u.id)) : (isAdmin ? users.slice(0, 50) : []);
     mcpLogger.warn({ availableCount: listed.length }, 'User lookup failed for assignment');
     throw new Error(`${msg}. Available users: ${listed.map(u => u.name).join(', ')}`);
   }

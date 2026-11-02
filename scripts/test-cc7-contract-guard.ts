@@ -181,22 +181,46 @@ test('C2.1: the plan resolution runs AFTER the duplicate-title return and BEFORE
   assert(dupReturnIdx > 0 && callIdx > dupReturnIdx, 'resolution must follow the duplicate-title early return (a duplicate writes nothing)');
   assert(txIdx > 0 && callIdx < txIdx, 'resolution must precede prisma.$transaction (the fact is born with its row)');
 });
-test('C2.2: the resolution sits inside a try/catch (fail-open is TOTAL — no failure refuses a create)', () => {
-  let enclosed = false;
-  for (let i = handlerSrc.indexOf('try {'); i >= 0 && i < callIdx; i = handlerSrc.indexOf('try {', i + 1)) {
+const enclosedInTry = (at: number): boolean => {
+  for (let i = handlerSrc.indexOf('try {'); i >= 0 && i < at; i = handlerSrc.indexOf('try {', i + 1)) {
     let depth = 0; let j = handlerSrc.indexOf('{', i);
     for (; j < handlerSrc.length; j++) {
       if (handlerSrc[j] === '{') depth++;
       else if (handlerSrc[j] === '}' && --depth === 0) break;
     }
-    if (callIdx > i && callIdx < j && /^\s*catch\b/.test(handlerSrc.slice(j + 1, j + 40))) enclosed = true;
+    if (at > i && at < j && /^\s*catch\b/.test(handlerSrc.slice(j + 1, j + 40))) return true;
   }
-  assert(enclosed, 'resolveCreateContract is not inside a try { … } catch');
+  return false;
+};
+test('C2.2: the resolution sits inside a try/catch (fail-open is TOTAL — no failure refuses a create)', () => {
+  assert(enclosedInTry(callIdx), 'resolveCreateContract is not inside a try { … } catch');
+});
+// Q2 leg-contract heal (2026-10-17, SYNTHESIS v3 §8 V1/V4): the ABSENT arm has the same placement + fail-open law.
+const absentCallIdx = handlerSrc.indexOf('resolveAbsentLegContract(prisma');
+test('C2.1b/C2.2b (Q2): the absent-arm resolution runs after the duplicate return, before the tx, inside a try/catch', () => {
+  assert(absentCallIdx > 0, 'resolveAbsentLegContract call missing from the create handler');
+  assert(absentCallIdx > dupReturnIdx && absentCallIdx < txIdx, 'absent-arm resolution must sit between the duplicate return and the tx');
+  assert(enclosedInTry(absentCallIdx), 'resolveAbsentLegContract is not inside a try { … } catch');
+  const gate = handlerSrc.slice(handlerSrc.lastIndexOf('if (', absentCallIdx - 300), absentCallIdx);
+  for (const must of ["type === 'PIPELINE'", 'routeOpts?.callingExecutionId', 'interfaceContract === undefined']) {
+    assert(gate.includes(must), `the absent arm is not gated on ${must}`);
+  }
 });
 test('C2.3: interfaceContractSource rides the ONE tx.task.create metadata object — no post-create write', () => {
   const createIdx = handlerSrc.indexOf('tx.task.create(');
   const createWin = handlerSrc.slice(createIdx, handlerSrc.indexOf('include: {', createIdx));
-  assert(/metadata: createContractMetadata/.test(createWin), 'the platform-built metadata object is not written by tx.task.create');
+  // Q2 (V1): the contract write is ONE discriminated, pre-tx object spread once; the supplied arm is today's, byte-identical.
+  assert(/\.\.\.contractWrite,/.test(createWin), 'the discriminated contractWrite is not spread into tx.task.create');
+  assert(!/\b(inputContext|metadata):/.test(createWin), 'tx.task.create writes inputContext/metadata directly — it must come only via contractWrite');
+  const cwIdx = handlerSrc.indexOf('const contractWrite');
+  assert(cwIdx > 0 && cwIdx < txIdx, 'contractWrite must be built before the tx');
+  const cwWin = handlerSrc.slice(cwIdx, handlerSrc.indexOf(': {};', cwIdx));
+  assert(/interfaceContract && typeof interfaceContract === 'object'\s*\?\s*\{ inputContext: \{ interfaceContract: contractToStore \}[^\n]*metadata: createContractMetadata/.test(cwWin),
+    'the supplied arm of contractWrite is no longer exactly today\'s (any object ⇒ contractToStore + createContractMetadata)');
+  assert(/absentDecision\.kind === 'store'[\s\S]*requiresInterfaceContract: true, interfaceContractSource: absentDecision\.fact/.test(cwWin),
+    'the store arm does not write the flag + the absent fact');
+  assert(/absentDecision\.kind === 'decline'\s*\?\s*\{ metadata: \{ interfaceContractSource: absentDecision\.fact \}/.test(cwWin),
+    'the decline arm must write the fact ONLY (no contract, no flag)');
   const buildIdx = handlerSrc.indexOf('const createContractMetadata');
   assert(buildIdx > 0 && buildIdx < txIdx, 'createContractMetadata must be built before the tx');
   assert(/interfaceContractSource \? \{ interfaceContractSource \}/.test(handlerSrc.slice(buildIdx, buildIdx + 300)),
@@ -216,11 +240,86 @@ test('C2.4: neither task.create RETURN projection references the fact or the sub
       assert(!win.includes(banned), `${label} return projection references ${banned} — the PLAN-SPAWN model would see its own meter`);
     }
   }
+  // Q2 (D-8, V2/V3): the ONLY addition is the storage-fact sentence + field, both gated on the read-back-verified sha.
+  assert(!dupWin.includes('absentArmSentence') && !dupWin.includes('contractSuppliedFromPlan'), 'the duplicate projection must not carry the absent-arm sentence');
+  const msgIdx = handlerSrc.indexOf('message: `Task "${task.title}" created successfully', lastReturn);
+  const tail = handlerSrc.slice(msgIdx, handlerSrc.indexOf('created: true', msgIdx));
+  assert(/\(absentStoredPlanSha \? ` \$\{absentArmSentence\(absentStoredPlanSha\)\}` : ''\)/.test(tail), 'the sentence is not gated on absentStoredPlanSha');
+  assert(/\.\.\.\(absentStoredPlanSha \? \{ contractSuppliedFromPlan:/.test(tail), 'contractSuppliedFromPlan is not gated on absentStoredPlanSha');
+  const setIdx = handlerSrc.indexOf('absentStoredPlanSha = storedSha');
+  const assertIdx = handlerSrc.indexOf('await assertPersisted(', txIdx);
+  assert(setIdx > assertIdx && assertIdx > txIdx, 'absentStoredPlanSha must be set only AFTER the commit-durability assertion');
+  assert(/storedSha === absentArmPlanSha && row\.metadata\?\.requiresInterfaceContract === true/.test(handlerSrc.slice(setIdx - 200, setIdx)),
+    'the sentence is not gated on the returned row holding the plan sha AND the flag');
+});
+test('C2.5 (Q2 V3): tx.task.create uses include, never select — the read-back needs inputContext + metadata on the returned row', () => {
+  const createIdx = handlerSrc.indexOf('tx.task.create(');
+  const win = handlerSrc.slice(createIdx, handlerSrc.indexOf('// Wire dependencies', createIdx));
+  assert(/^\s{6}include: \{/m.test(win), 'tx.task.create lost its include');
+  assert(!/^\s{6}select: \{/m.test(win), 'tx.task.create uses select — the returned row would not carry inputContext/metadata and the sentence would silently never emit');
+});
+test('C2.6 (Q2): the absent arm reads the SERVER-set execution id only — never a parameter', () => {
+  const routerSrc = fs.readFileSync(path.join(process.cwd(), 'lib/mcp/tasks/action/tasks-action-router.ts'), 'utf8');
+  assert(/handleTaskCreate\(parameters, user, actionId, routeOpts\?\.callingExecutionId\s*\?\s*\{\s*callingExecutionId: routeOpts\.callingExecutionId/.test(routerSrc),
+    'the router does not hand the server-set callingExecutionId to handleTaskCreate');
+  assert(!/parameters\.callingExecutionId|parameters\?\.callingExecutionId/.test(handlerSrc), 'the create handler reads callingExecutionId from parameters');
+  // K9 hop: agent loop (executionId as sessionId) → mcpService (sessionId → callingExecutionId) → task-action-handler → router.
+  const loopSrc = fs.readFileSync(path.join(process.cwd(), 'lib/agents/harness/agentic-tool-loop.ts'), 'utf8');
+  assert(/\{ sessionId: ctx\.executionId,/.test(loopSrc), 'the agent loop no longer passes its executionId as the tool sessionId');
+  const svcSrc = fs.readFileSync(path.join(process.cwd(), 'lib/services/mcp/mcpService.ts'), 'utf8');
+  assert(/options\.sessionId \? \{ callingExecutionId: options\.sessionId \}/.test(svcSrc), 'mcpService no longer maps sessionId → callingExecutionId');
+  const tah = fs.readFileSync(path.join(process.cwd(), 'lib/mcp/server/tools/advanced/task-action-handler.js'), 'utf8');
+  const hop = tah.slice(tah.indexOf('context.callingExecutionId ? { callingExecutionId: context.callingExecutionId }') - 400, tah.indexOf('reportIgnoredParameters: true') + 40);
+  // V9: the K6 detector depends on this site reporting the RAW keys (unappliedTopLevelKeys) alongside the execution id.
+  assert(hop.includes('callingExecutionId: context.callingExecutionId') && hop.includes('reportIgnoredParameters: true') && hop.length < 1200,
+    'task-action-handler no longer hands the router callingExecutionId + reportIgnoredParameters:true together (K6 would go blind)');
+});
+
+// Q2 (V9): a contract SENT but dropped is detected on KEYS only, bounded — never on string values.
+const { interfaceContractKeySeen } = require('../lib/mcp/tasks/action/utilities/contract-key-seen') as typeof import('../lib/mcp/tasks/action/utilities/contract-key-seen');
+test('C2.7 (Q2 V9): interfaceContractKeySeen — keys only, bounded, unapplied keys count', () => {
+  assert(interfaceContractKeySeen({ title: 'x' }, ['interfaceContract']), 'an unapplied top-level key must count');
+  assert(interfaceContractKeySeen({ parameters: { interfaceContract: { a: 1 } } }, []), 'a double-nested contract must count');
+  assert(interfaceContractKeySeen({ x: [{ interfaceContract: null }] }, undefined), 'a key inside an array element counts (null is still SENT)');
+  assert(!interfaceContractKeySeen({ description: 'set interfaceContract later', title: 'interfaceContract' }, []), 'a string VALUE must never count');
+  assert(!interfaceContractKeySeen({ a: { b: { c: { d: { e: { interfaceContract: 1 } } } } } }, []), 'past the depth bound must not count');
+  assert(!interfaceContractKeySeen(undefined, undefined) && !interfaceContractKeySeen({ interfaceContract: undefined }, []), 'absent/undefined is not sent');
+  const routerSrc = fs.readFileSync(path.join(process.cwd(), 'lib/mcp/tasks/action/tasks-action-router.ts'), 'utf8');
+  const capIdx = routerSrc.indexOf('const rawCreateParameters');
+  const parseIdx = routerSrc.indexOf('safeParse(', capIdx);
+  assert(capIdx > 0 && parseIdx > capIdx, 'the raw create parameters must be captured BEFORE validation strips them');
+});
+
+// Q2 (AE §3 / G11): a healed leg (create-absent: contract stored + flagged) passes the F16 guard like any contract-bearing
+// leg — the guard keys on the contract's PRESENCE, never on the source arm — and its non-PIPELINE children then inherit
+// via the existing owning-leg arm (unchanged).
+test('C2.9 (Q2 AE §3): the F16 guard condition never reads interfaceContractSource / arm', () => {
+  const cond = guardSrc.indexOf('if ((requiresContract || structurallyRequiresContract) && !hasContract) {');
+  assert(cond > 0, 'guard condition not found');
+  const hasIdx = guardSrc.lastIndexOf('const hasContract', cond);
+  assert(hasIdx > 0, 'hasContract binding not found');
+  const def = guardSrc.slice(hasIdx, guardSrc.indexOf(';', hasIdx));
+  assert(/interfaceContract/.test(def) && !/interfaceContractSource|\barm\b|create-absent/.test(def), `hasContract must be presence-only: ${def}`);
+});
+
+// Q2 (V13): the absent arm declines unless the caller execution is RUNNING — so BOTH execution paths must write RUNNING
+// before the agent loop can call task.create (else every harness create would decline caller-not-running).
+test('C2.8 (Q2 V13): both execution paths hold the caller RUNNING; the caller read is a PK lookup with no lock', () => {
+  const eng = fs.readFileSync(path.join(process.cwd(), 'lib/services/agentExecutionEngine.ts'), 'utf8');
+  assert(/where: \{ id: execution\.id, status: 'PENDING' \},\s*data: \{\s*status: 'RUNNING'/.test(eng), 'engine path no longer claims PENDING → RUNNING');
+  const stream = fs.readFileSync(path.join(process.cwd(), 'app/api/pov/agent/execute/stream/route.ts'), 'utf8');
+  assert(/createAgentExecution\(\{[^}]*status: 'RUNNING'/.test(stream), 'stream path no longer creates its execution RUNNING');
+  const carry = fs.readFileSync(path.join(process.cwd(), 'lib/agents/harness/plan-spawn-carry.ts'), 'utf8');
+  const fn = carry.slice(carry.indexOf('export async function resolveAbsentLegContract'), carry.indexOf('// ── C2 reviewer arm'));
+  assert(/agentExecution\.findUnique\(\{ where: \{ id: opts\.callingExecutionId \}, select: \{ taskId: true, status: true \} \}\)/.test(fn), 'caller read is not the PK findUnique');
+  assert(!/FOR (SHARE|UPDATE)|\$queryRaw|\$executeRaw/.test(fn), 'the absent-arm resolver takes a lock or raw SQL');
+  const order = ['opts.contractKeySeen', "row.status !== 'RUNNING'", 'row.taskId !== programRootId', 'resolvePlanContract(', 'legBaseline('].map((k) => fn.indexOf(k));
+  assert(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1])), `check order is not key-seen → RUNNING → root → plan → legs: ${order}`);
 });
 
 // ── Promotion E (E4, 2026-10-05): the INTERFACE_CONTRACT_MISSING cause (PLAN-v2 §E4, SYNTHESIS §3 C6, AE-F5, PH-L1) ──
-// The cause is a PURE function of already-loaded fields, ABSENCE FIRST (the source fact exists only when a contract was
-// supplied at create, so the dominant firing case has none), one branch, enum fields only, the whole message ≤ 1,500
+// The cause is a PURE function of already-loaded fields, ABSENCE FIRST (no source fact ⇒ a door that records none; since
+// Q2 2026-10-17 the harness door records create-absent / create-absent-declined, each its own branch), one branch, enum fields only, the whole message ≤ 1,500
 // chars (the cap the program reads the refusal through), and no await between the guard condition and the throw.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { interfaceContractMissingCause } = require('../lib/agents/harness/interface-contract-missing') as typeof import('../lib/agents/harness/interface-contract-missing');
@@ -234,6 +333,12 @@ const CAUSES = {
   reviewerArm: interfaceContractMissingCause({ taskType: 'ACTION', flagged: true, sourceFact: { source: 'none', arm: 'inherit', planResolution: 'plan-differs-from-legs' } }),
   createArm: interfaceContractMissingCause({ taskType: 'PIPELINE', flagged: true, sourceFact: { source: 'plan', arm: 'create', planResolution: 'resolved' } }),
   createArmChild: interfaceContractMissingCause({ taskType: 'ACTION', flagged: true, sourceFact: { source: 'supplied', arm: 'create', planResolution: 'no-heading' } }),
+  // Q2 (2026-10-17): the absent arm stored the plan's contract (flagged) and it was lost afterwards.
+  createAbsentLoss: interfaceContractMissingCause({ taskType: 'PIPELINE', flagged: true, sourceFact: { source: 'plan', arm: 'create-absent', planResolution: 'resolved' } }),
+  declinedKeySeen: interfaceContractMissingCause({ taskType: 'PIPELINE', flagged: false, sourceFact: { source: 'none', arm: 'create-absent-declined', declineReason: 'contract-key-seen', planResolution: null } }),
+  declinedLegs: interfaceContractMissingCause({ taskType: 'PIPELINE', flagged: false, sourceFact: { source: 'none', arm: 'create-absent-declined', declineReason: 'stage-legs-legs-disagree', planResolution: 'resolved' } }),
+  declinedPlan: interfaceContractMissingCause({ taskType: 'PIPELINE', flagged: false, sourceFact: { source: 'none', arm: 'create-absent-declined', declineReason: 'plan-unresolved', planResolution: 'no-heading' } }),
+  declinedCaller: interfaceContractMissingCause({ taskType: 'PIPELINE', flagged: false, sourceFact: { source: 'none', arm: 'create-absent-declined', declineReason: 'caller-not-program-root', planResolution: null } }),
 };
 test('E4.1: the throw takes its cause from the pure interfaceContractMissingCause, and nothing is awaited between the guard condition and the throw', () => {
   const cond = guardSrc.indexOf('if ((requiresContract || structurallyRequiresContract) && !hasContract) {');
@@ -248,10 +353,28 @@ test('E4.1: the throw takes its cause from the pure interfaceContractMissingCaus
     .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, ''); // code only
   assert(!/^import /m.test(modSrc) && !/\bawait\b|\basync\b|prisma/.test(modSrc), 'interface-contract-missing.ts must stay pure (no imports, no I/O)');
 });
-test('E4.2: ABSENCE FIRST — an unflagged PIPELINE child with no source fact is told no contract was supplied at create (the dominant case)', () => {
-  assert(CAUSES.absentPipeline.includes('no contract was supplied when this child was created'), CAUSES.absentPipeline);
-  assert(CAUSES.absentPipeline.includes('only when the creating harness supplies one'), 'the create-time trigger is not stated');
+test('E4.2: ABSENCE FIRST — an unflagged PIPELINE child with no source fact is told no contract was stored and no reason recorded', () => {
+  assert(CAUSES.absentPipeline.includes('no contract was stored when this child was created, and the platform recorded no reason'), CAUSES.absentPipeline);
+  // Q2 (V11): the old trigger sentence is FALSE once the platform supplies the plan's contract on the harness door.
+  assert(!CAUSES.absentPipeline.includes('only when the creating harness supplies one'), 'the pre-Q2 trigger sentence is back');
+  for (const must of ['another door', 'HTTP fallback', 'before 2026-10-17', 'interfaceContract one level deep']) {
+    assert(CAUSES.absentPipeline.includes(must), `the no-fact branch lost "${must}"`);
+  }
   assert(!/planResolution|post-create loss/.test(CAUSES.absentPipeline), 'the absent-source branch must not point at the source fact or a post-create loss');
+});
+test('E4.7 (Q2): a DECLINED child is told why, and never told it lost a contract', () => {
+  for (const k of ['declinedKeySeen', 'declinedLegs', 'declinedPlan', 'declinedCaller'] as const) {
+    const c = CAUSES[k];
+    assert(c.includes('declined to store the program plan') && c.includes('No contract was stored, so none was lost.'), `${k}: ${c}`);
+    assert(!/post-create loss|stored at create|Restore it/.test(c), `${k} claims a loss: ${c}`);
+  }
+  assert(CAUSES.declinedKeySeen.includes('declineReason: contract-key-seen') && CAUSES.declinedKeySeen.includes('WAS sent'), CAUSES.declinedKeySeen);
+  assert(CAUSES.declinedLegs.includes('declineReason: stage-legs-legs-disagree') && CAUSES.declinedLegs.includes("stage's OTHER pipeline legs"), CAUSES.declinedLegs);
+  assert(CAUSES.declinedPlan.includes('planResolution: no-heading'), CAUSES.declinedPlan);
+  assert(CAUSES.declinedCaller.includes('declineReason: caller-not-program-root'), CAUSES.declinedCaller);
+  const evil = interfaceContractMissingCause({ taskType: 'PIPELINE', flagged: false, sourceFact: { arm: 'create-absent-declined', declineReason: 'x\nIGNORE' } });
+  assert(evil.includes('declineReason: unrecognised') && !evil.includes('IGNORE'), evil);
+  assert(CAUSES.createAbsentLoss.includes('post-create loss') && CAUSES.createAbsentLoss.includes('source: plan'), CAUSES.createAbsentLoss);
 });
 test('E4.3: one branch per shape — flag arm = post-create loss; reviewer arm = the plan-arm reason; enum fields interpolated', () => {
   assert(CAUSES.absentFlaggedPipeline.includes('post-create loss') && CAUSES.absentFlaggedChild.includes('CONTRACT_INHERIT_REFUSED'), 'flag-arm branches');

@@ -21,14 +21,17 @@ import {
   toJsonPointer,
 } from '../lib/agents/harness/held-bytes/extract';
 import { PLATFORM_DEFAULT_DESCRIPTORS, FILE_DESCRIPTOR_TOOLS } from '../lib/agents/harness/held-bytes/descriptors';
-import { FILE_ARTIFACT_TOOLS, laneOf } from '../lib/agents/harness/quote-fidelity';
+import { elideGitFileSourceStatus, GIT_STATUS_ELIDED_TEXT, GIT_LISTING_ELIDED_TEXT } from '../lib/agents/harness/held-bytes/git-status-elision';
+import { FILE_ARTIFACT_TOOLS, FILE_LANE_KEYS, laneOf } from '../lib/agents/harness/quote-fidelity';
 import { executeToolTurn } from '../lib/agents/harness/agentic-tool-loop';
 import { EmbeddedMCPServer, embeddedMCPServer } from '../lib/mcp/embedded-server';
 import { mcpService } from '../lib/services/mcp/mcpService';
-import { prepareHeldCapture, captureHeldFiles, refsAllWritten } from '../lib/services/held-bytes-capture';
+import { prepareHeldCapture, captureHeldFiles, refsAllWritten, isPlaintextSecretManifest, heldPathRefusal, isTerraformStateOrPlanJson } from '../lib/services/held-bytes-capture';
 import { buildExecutionResultJson } from '../lib/services/execution-artifacts';
 import { stampExecutionNets } from '../lib/services/execution-nets';
 import * as crypto from 'crypto';
+import { R10_VERSION } from '../lib/agents/harness/redact-artifact-secrets';
+import { recordGatewayMetaOf, setRecordGatewayMeta, collectToolCallGatewayMeta, hydrateToolCallGatewayMeta } from '../lib/services/mcp/gateway-meta';
 const { ServiceCallHandler } = require('../lib/mcp/server/tools/hub/service-call-handler');
 // The gateway's compliance block logs a security event through a DB-backed singleton; stub it so no DB is touched.
 const { ComplianceMonitor } = require('../lib/mcp/server/security/compliance-monitor');
@@ -71,7 +74,13 @@ function rigService(overrides: Rec = {}): Rec {
 }
 function makeHandler(service: Rec | null) {
   const prisma = {
-    mCPTool: { findFirst: async () => service },
+    // findUnique (Stage B P1-5: the gateway resolves id first, then name — resolve-service-ref.js); findFirst kept for any
+    // other lookup in the handler.
+    mCPTool: {
+      findFirst: async () => service,
+      findUnique: async ({ where }: { where: Rec }) =>
+        service && ((where.id !== undefined && where.id === service.id) || (where.name !== undefined && where.name === service.name)) ? service : null,
+    },
     activity: { create: async () => ({}) },
   };
   const utilities = { checkServiceAccess: async () => true, trackServiceInteraction: async () => undefined };
@@ -178,21 +187,54 @@ async function recordFor(service: Rec | null, args: Rec): Promise<Rec> {
   });
 
   // ── failure shapes, from the producers ─────────────────────────────────────────────────────────────────────────
-  test('SERVICE_CALL_FAILED on a declared file tool ⇒ is-error {level: envelope}, identity from the ARGUMENTS (as production records it)', () => {
+  test('producer (Stage B P1-4): the failed call\'s RECORD carries the gateway meta NON-ENUMERABLY — absent from JSON.stringify(record)', () => {
+    const gm = recordGatewayMetaOf(failedOtel);
+    eq(gm, { targetService: 'observability-readonly', requestedTool: 'get_otel_config', targetServiceId: SERVICE_ID, errorType: 'SERVICE_CALL_FAILED' });
+    ok(!Object.keys(failedOtel).includes('gatewayMeta') && !JSON.stringify(failedOtel).includes('targetServiceId'), 'not enumerable, not serialized');
+    ok(!JSON.stringify(failedOtel.result).includes('targetServiceId'), 'never in the result the agent read');
+  });
+  test('SERVICE_CALL_FAILED on a declared file tool ⇒ is-error {level: envelope}, identity from the GATEWAY META with the resolved serviceId (P1-4)', () => {
     const r = extractDeclaredFiles([failedOtel]);
     eq(r.files.length, 0);
     eq(r.refusals.map((x) => [x.refusal, x.detail, x.identitySource, x.serviceId, x.serviceName, x.sourceTool]),
-      [['is-error', { level: 'envelope' }, 'arguments', null, 'observability-readonly', 'get_otel_config']]);
+      [['is-error', { level: 'envelope' }, 'gateway-meta', SERVICE_ID, 'observability-readonly', 'get_otel_config']]);
   });
-  test('DEFENSIVE gateway-meta: an envelope that DOES carry _meta.targetService / requestedTool is identified by them (unreachable today)', () => {
-    const rec = clone(failedOtel);
-    (rec.result as Rec)._meta = { targetService: 'observability-readonly', requestedTool: 'get_ingress_config' };
-    eq(extractDeclaredFiles([rec]).refusals.map((x) => [x.identitySource, x.sourceTool]), [['gateway-meta', 'get_ingress_config']]);
+  test('identify reads the RECORD\'s gateway meta, never the result\'s `_meta` (mcpService rebuilds it; a forged one is ignored)', () => {
+    const rec = clone(failedOtel); // JSON clone: drops the non-enumerable meta
+    (rec.result as Rec)._meta = { targetService: 'observability-readonly', requestedTool: 'get_ingress_config', errorType: 'SERVICE_CALL_FAILED' };
+    eq(extractDeclaredFiles([rec]).refusals.map((x) => [x.identitySource, x.sourceTool]), [['arguments', 'get_otel_config']]);
+    setRecordGatewayMeta(rec, { targetService: 'observability-readonly', requestedTool: 'get_ingress_config', errorType: 'SERVICE_CALL_FAILED' });
+    eq(extractDeclaredFiles([rec]).refusals.map((x) => [x.identitySource, x.sourceTool, x.serviceId]), [['gateway-meta', 'get_ingress_config', null]]);
   });
-  test('a FAILED call that names the service by REGISTRY ID ⇒ nothing recorded, stats.failedUnmatched (context, CR-B1)', async () => {
+  test('gateway meta of another error type (RATE_LIMITED / VALIDATION) is not an identity source ⇒ the arguments', () => {
+    for (const errorType of ['RATE_LIMITED', 'VALIDATION'] as const) {
+      const rec = clone(failedOtel);
+      setRecordGatewayMeta(rec, { targetService: 'observability-readonly', requestedTool: 'get_ingress_config', targetServiceId: SERVICE_ID, errorType });
+      eq(extractDeclaredFiles([rec]).refusals.map((x) => [x.identitySource, x.sourceTool]), [['arguments', 'get_otel_config']], `${errorType} `);
+    }
+  });
+  test('a FAILED call that names the service by REGISTRY ID ⇒ now a refusal row (gateway-meta: the resolved name + id), and the SAME row replayed from the persisted tail key (P1-4)', async () => {
     const byId = await recordFor(rigService(), { action: 'call', targetService: SERVICE_ID, tool: 'get_otel_config', arguments: {} });
-    const r = extractDeclaredFiles([byId]);
-    eq([r.refusals.length, r.files.length, r.stats.failedUnmatched], [0, 0, 1]);
+    const live = extractDeclaredFiles([byId]);
+    eq([live.refusals.length, live.files.length, live.stats.failedUnmatched], [1, 0, 0]);
+    eq(live.refusals.map((x) => [x.refusal, x.identitySource, x.serviceId, x.serviceName, x.sourceTool]),
+      [['is-error', 'gateway-meta', SERVICE_ID, 'observability-readonly', 'get_otel_config']]);
+    // persist → parse → hydrate (what replay-held-capture.ts toolCallsOf does)
+    const stored = JSON.parse(JSON.stringify({ toolCalls: [byId], toolCallGatewayMeta: collectToolCallGatewayMeta([byId]) }));
+    eq(hydrateToolCallGatewayMeta(stored.toolCalls, stored.toolCallGatewayMeta), 1, 'hydrated ');
+    eq(extractDeclaredFiles(stored.toolCalls).refusals, live.refusals, 'replayed refusal ');
+  });
+  test('index alignment (boundary BS-1): [success, thrown, id-addressed failure] ⇒ the refusal and toolCallGatewayMeta both at index 2, live AND after persist → hydrate', async () => {
+    const byId = await recordFor(rigService(), { action: 'call', targetService: SERVICE_ID, tool: 'get_otel_config', arguments: {} });
+    const records = [RUN2_CALLS[1], threwNotFound, byId];
+    const live = extractDeclaredFiles(records);
+    const idRefusal = live.refusals.filter((x) => x.identitySource === 'gateway-meta');
+    eq(idRefusal.map((x) => x.toolCallIndex), [2], 'live refusal index ');
+    const gm = collectToolCallGatewayMeta(records);
+    eq(gm.map((e) => e.index), [2], 'tail-key index ');
+    const stored = JSON.parse(JSON.stringify({ toolCalls: records, toolCallGatewayMeta: gm }));
+    hydrateToolCallGatewayMeta(stored.toolCalls, stored.toolCallGatewayMeta);
+    eq(extractDeclaredFiles(stored.toolCalls).refusals, live.refusals, 'replayed refusals ');
   });
   test('RATE_LIMITED ⇒ is-error {level: envelope}, identity from the call\'s own arguments', () => {
     const r = extractDeclaredFiles([rateLimited]);
@@ -341,7 +383,22 @@ async function recordFor(service: Rec | null, args: Rec): Promise<Rec> {
     eq([...FILE_ARTIFACT_TOOLS], ['get_ingress_config', 'get_otel_config']);
     eq([...FILE_DESCRIPTOR_TOOLS], ['get_ingress_config', 'get_otel_config']);
   });
-  test('lane equivalence: laneOf unchanged over every document of every quote-fidelity fixture', () => {
+  test('lane equivalence (v2, held-k8s 1e): laneOf ≡ the frozen v1 lane on every fixture document EXCEPT the named M2 population', () => {
+    // v2 keys the lane on the RESOLVED <service>.<tool> in the descriptor table (quote-fidelity.ts FILE_LANE_KEYS). It
+    // disagrees with v1 on exactly two shapes, both named movers: a user-registered COPY of the rig (the M2 population),
+    // and a `files.` key on a non-descriptor service (the retired path arm). Neither occurs in these fixtures — so on them
+    // the two rules must agree on EVERY document. A disagreement of any OTHER shape is a defect, never a mover.
+    // A THIRD named shape since the held k8s/terraform joins (2026-10-19+): a Git file source read (a descriptor-table key that is not
+    // an observability tool, e.g. github-service.get_file_contents) is a file BY DESIGN under v2 and was 'other' under the frozen v1.
+    // Derived from FILE_LANE_KEYS, never hand-listed. First fixture to carry one: tie-net-harvest.json (QUOTE-PAIRING-TIE, 2026-11-01).
+    const isGitFileSource = (doc: { tool: string; resolvedService: string | null }) => {
+      const leaf = doc.tool.split('.').pop() ?? '';
+      return !['get_ingress_config', 'get_otel_config'].includes(leaf) && FILE_LANE_KEYS.includes(`${doc.resolvedService}.${leaf}`);
+    };
+    const isM2 = (doc: { tool: string; path: string; resolvedService: string | null }) =>
+      (doc.resolvedService !== 'observability-readonly' && ['get_ingress_config', 'get_otel_config'].includes(doc.tool.split('.').pop() ?? ''))
+      || /(^|\.)files\./.test(doc.path);
+    const isNamedMover = (doc: { tool: string; path: string; resolvedService: string | null }) => isM2(doc) || isGitFileSource(doc);
     const frozenLaneOf = (doc: { tool: string; path: string }) => {
       const leaf = doc.tool.split('.').pop() ?? '';
       if (['get_ingress_config', 'get_otel_config'].includes(leaf)) return 'file-artifact';
@@ -351,11 +408,18 @@ async function recordFor(service: Rec | null, args: Rec): Promise<Rec> {
     const dir = path.join(__dirname, 'fixtures', 'quote-fidelity');
     const { extractRawToolDocuments } = require('../lib/agents/harness/raw-tool-witness');
     let n = 0;
+    let movers = 0;
     for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.json'))) {
       const spec = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
-      for (const doc of extractRawToolDocuments(spec.toolCalls || [])) { eq(laneOf(doc), frozenLaneOf(doc), `${f} ${doc.tool} `); n++; }
+      for (const doc of extractRawToolDocuments(spec.toolCalls || [])) {
+        n++;
+        if (laneOf(doc) === frozenLaneOf(doc)) continue;
+        ok(isNamedMover(doc), `${f} ${doc.tool} ${doc.path}: lane moved ${frozenLaneOf(doc)} → ${laneOf(doc)} outside the named movers`);
+        if (isM2(doc)) movers++;
+      }
     }
     ok(n > 0, 'no documents compared');
+    eq(movers, 0, 'the fixtures carry no M2 document, so nothing moves on them: ');
   });
   test('static (SF-2): extract.ts imports nothing from R9 and never reads R9 sibling fields or a pager stash', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'lib', 'agents', 'harness', 'held-bytes', 'extract.ts'), 'utf8');
@@ -425,7 +489,7 @@ async function recordFor(service: Rec | null, args: Rec): Promise<Rec> {
       for (let i = 0; i < v.length; i += 4) keys.push(`${v[i]}|${v[i + 1]}`);
       eq(keys, [...new Set(keys)].sort(), 'sorted, unique ');
       ok(batch!.refs.every((r) => r.legTaskId === 'leg1' && r.rootTaskId === 'root1' && r.kind === 'CAPTURE'), 'leg/root/kind');
-      ok(batch!.refs.every((r) => r.redactorVersion === 'paichart.r10/2' && r.hashBasis === 'legacy-decoded-text'), 'facts');
+      ok(batch!.refs.every((r) => r.redactorVersion === R10_VERSION && r.hashBasis === 'legacy-decoded-text'), 'facts');
     });
   });
   test('the leg/root SELECT uses the SHARED owning-leg predicate (protocol conjunct on both joins)', async () => {
@@ -588,6 +652,33 @@ async function recordFor(service: Rec | null, args: Rec): Promise<Rec> {
       eq(plan.files[0].content, text);
     });
   });
+  test('R10-V8-RESIDUALS (a): a value keyed in ANOTHER record (or the deliverable) and bare in a held file ⇒ refused echo-secret-residual; its control holds', async () => {
+    await withFlag('true', async () => {
+      const v = 'Hq' + '4tZ9' + 'wLm2pX'; // runtime-built, echo-eligible
+      const held = 'server { listen 80; }\n# upstream credential ' + v + '\n';
+      const keyedElsewhere = ingressWith({ 'b.conf': 'auth:\n  bearer_token: ' + v + '\n' });
+      const plan = prepareHeldCapture({ toolCallResults: [ingressWith({ 'a.conf': held }), keyedElsewhere], task: TASK, logger })!;
+      eq(plan.refusals.filter((r) => r.refusal === 'echo-secret-residual').map((r) => r.path), ['/etc/nginx/conf.d/a.conf'], 'the bare-echo file is refused ');
+      ok(plan.files.some((f) => f.path === '/etc/nginx/conf.d/b.conf'), 'the keyed file is held (placeholder)');
+      const fromText = prepareHeldCapture({ toolCallResults: [ingressWith({ 'a.conf': held })], task: TASK, logger, echoSourceText: 'password: ' + v })!;
+      eq(fromText.refusals.map((r) => r.refusal), ['echo-secret-residual'], 'the deliverable is an echo source: ');
+      const ctl = prepareHeldCapture({ toolCallResults: [ingressWith({ 'a.conf': held })], task: TASK, logger })!;
+      eq([ctl.files.length, ctl.refusals.length], [1, 0], 'control (no keyed source anywhere) — held: ');
+    });
+  });
+  test('R10 v11: a held file whose ONLY echo match would be inside its placeholders is HELD when the deliverable masks with `<REDACTED` (devext); a real echo still refuses', async () => {
+    await withFlag('true', async () => {
+      const v = 'Hq' + '4tZ9' + 'wLm2pX'; // runtime-built, echo-eligible
+      // the SNMP community rule takes `\S+`, so the mask's `<REDACTED` becomes an echo token (bearer_token's secret-shape gate would not)
+      const held = 'hostname r2\nsnmp-server community ' + v + ' ro\nserver { listen 80; }\n';
+      const mask = 'Held file (verbatim):\nsnmp-server community <REDACTED — observed, not restated> ro\n';
+      const plan = prepareHeldCapture({ toolCallResults: [ingressWith({ 'a.conf': held })], task: TASK, logger, echoSourceText: mask })!;
+      eq([plan.files.length, plan.refusals.length], [1, 0], 'held (v10 refused echo-secret-residual): ');
+      ok(!plan.files[0].content.includes('<<<REDACTED'), 'never garbled');
+      const real = prepareHeldCapture({ toolCallResults: [ingressWith({ 'a.conf': held + '# note ' + v + '\n' })], task: TASK, logger, echoSourceText: mask })!;
+      eq(real.refusals.map((r) => r.refusal), ['echo-secret-residual'], 'control — a bare real echo still refuses: ');
+    });
+  });
   test('block Q (helper): V19 through the helper — sha256(C) appears NOWHERE in the batch; the token is gone', async () => {
     await withFlag('true', async () => {
       const C = 'auth:\n  bearer_token: ' + 'abcd' + 'efgh1234567890XYZ' + '\nnext: 1\n';
@@ -644,6 +735,200 @@ async function recordFor(service: Rec | null, args: Rec): Promise<Rec> {
     const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     ok(!src.includes('sanitize-chained-output'), 'R9 import');
     ok(!/\.(rewritten|sanitized|rewriteClasses)\b/.test(code), 'R9 sibling read');
+  });
+
+  // ── held-k8s step 1b: the GitHub file source (SYNTHESIS v3 §6; probed shapes 2026-10-17/18) ─────────────────────────────
+  const GH_REV = '0ea432e751cc622ffab91d7a90386c66cadf8733';
+  const GH_TEXT = 'apiVersion: v1\nkind: Namespace\nmetadata:\n  name: trading\n';
+  const ghArgs = (over: Rec = {}): Rec => ({ owner: 'paichart', repo: 'paichart-lab-configs', path: 'k8s/sample-workloads.yaml', ...over });
+  const NO_TEXT = Symbol('no-text');
+  const ghResource = (uriOwner = 'paichart', uriPath = 'k8s/sample-workloads.yaml', text: unknown = GH_TEXT): Rec => ({ type: 'resource',
+    resource: { uri: `repo://${uriOwner}/paichart-lab-configs/sha/${GH_REV}/contents/${uriPath}`, mimeType: 'text/plain; charset=utf-8',
+      ...(text === NO_TEXT ? { blob: 'AAEC' } : { text }) } });
+  const ghStatus = { type: 'text', text: 'successfully downloaded text file (SHA: d5fe8e652d6cb7ac435ee9ba173f3e5da6d3fafc)' };
+  /** The gateway success envelope as the loop records it (mirrors the stored run2 shape: content[0] = {type:'data', data}). */
+  const ghRecord = (args: Rec, content: unknown[], inner: Rec = {}): Rec => ({
+    tool: 'services', success: true, arguments: { action: 'call', targetService: 'github-service', tool: 'get_file_contents', arguments: args },
+    result: { content: [{ type: 'data', data: { success: true, targetService: 'github-service', tool: 'get_file_contents', arguments: args,
+      result: { content, ...inner }, metadata: { targetServiceId: 'github-service' } } }] },
+  });
+  const gh = (recs: Rec[], leg = true) => extractDeclaredFiles(deepFreeze(clone(recs)), undefined, { gitFileSourceLeg: leg });
+
+  test('held-k8s 1b: a github file on a Git-file-source leg ⇒ ONE file — positional pointer, const target, URI path, the commit', () => {
+    const r = gh([ghRecord(ghArgs(), [ghStatus, ghResource()])]);
+    eq(r.refusals, []);
+    eq(r.files.map((f) => [f.selector, f.target, f.path, f.sourceRevision, f.text === GH_TEXT, f.descriptorVersion]),
+      [['/content/1/resource/text', 'github:paichart:paichart-lab-configs', '/k8s/sample-workloads.yaml', GH_REV, true, 1]]);
+    const data = (ghRecord(ghArgs(), [ghStatus, ghResource()]).result as Rec).content as Rec[];
+    eq(resolveJsonPointer(((data[0] as Rec).data as Rec).result, r.files[0].selector), GH_TEXT, 're-extraction over an ARRAY step');
+  });
+  test('held-k8s 1b-scope: the same call on a NON-Git leg (e.g. observability) holds nothing, writes no row ⇒ stats.outOfScopeLane', () => {
+    const r = gh([ghRecord(ghArgs(), [ghStatus, ghResource()])], false);
+    eq([r.files.length, r.refusals.length, r.stats.outOfScopeLane], [0, 0, 1]);
+  });
+  test('held-k8s R4: a DIRECTORY listing ⇒ no row, stats.notAFileRead; a non-directory with no resource item ⇒ descriptor-mismatch absent', () => {
+    const dir = gh([ghRecord(ghArgs({ path: 'k8s' }), [{ type: 'text', text: '[{"name":"sample-workloads.yaml","type":"file"}]' }])]);
+    eq([dir.files.length, dir.refusals.length, dir.stats.notAFileRead], [0, 0, 1]);
+    const lost = gh([ghRecord(ghArgs(), [ghStatus])]);
+    eq(lost.refusals.map((x) => [x.refusal, x.detail]), [['descriptor-mismatch', { reason: 'absent' }]]);
+  });
+  // ── held-k8s G-1 (option c): the persisted toolCalls never carry the file source's blob ids (git-status-elision.ts) ─────
+  test('G-1: a FILE read\'s status item is REPLACED (index kept), the resource untouched, the input not mutated', () => {
+    const rec = deepFreeze(clone(ghRecord(ghArgs(), [ghStatus, ghResource()])));
+    const out = elideGitFileSourceStatus(rec) as Rec;
+    const inner = (((out.result as Rec).content as Rec[])[0].data as Rec).result as Rec;
+    eq(((inner.content as Rec[])[0] as Rec).text, GIT_STATUS_ELIDED_TEXT);
+    eq((inner.content as Rec[])[1], ghResource(), 'resource item unchanged at index 1 ');
+    ok(!JSON.stringify(out).includes('d5fe8e652d6cb7ac435ee9ba173f3e5da6d3fafc'), 'the blob sha does not persist');
+    ok(JSON.stringify(rec).includes('d5fe8e652d6cb7ac435ee9ba173f3e5da6d3fafc'), 'the input record was not mutated');
+    eq(elideGitFileSourceStatus(out), out, 'idempotent (same reference on an already-elided record) ');
+  });
+  test('G-1: capture over the ELIDED stored record holds the SAME file (positional selector survives) — replay parity', () => {
+    const live = gh([ghRecord(ghArgs(), [ghStatus, ghResource()])]);
+    const stored = gh([elideGitFileSourceStatus(ghRecord(ghArgs(), [ghStatus, ghResource()])) as Rec]);
+    eq(stored.files.map((f) => [f.selector, f.path, f.sourceRevision, f.text === GH_TEXT]), live.files.map((f) => [f.selector, f.path, f.sourceRevision, f.text === GH_TEXT]));
+    eq(stored.refusals, live.refusals);
+  });
+  test('G-1: a DIRECTORY listing is elided (each entry carries a blob sha), and capture over it still reads notAFileRead', () => {
+    const listing = '[{"name":"sample-workloads.yaml","type":"file","sha":"d5fe8e652d6cb7ac435ee9ba173f3e5da6d3fafc"}]';
+    const out = elideGitFileSourceStatus(ghRecord(ghArgs({ path: 'k8s' }), [{ type: 'text', text: listing }])) as Rec;
+    ok(!JSON.stringify(out).includes('d5fe8e65'), 'no blob sha persists from a listing');
+    ok(JSON.stringify(out).includes(JSON.stringify(GIT_LISTING_ELIDED_TEXT).slice(1, -1)), 'the listing placeholder is present');
+    const r = gh([out]);
+    eq([r.files.length, r.refusals.length, r.stats.notAFileRead], [0, 0, 1]);
+  });
+  test('G-1: keyed on the RESOLVED service; another service, an error text and a failed call are left as returned', () => {
+    const byId = ghRecord(ghArgs(), [ghStatus, ghResource()]);
+    ((byId.arguments as Rec).targetService) = 'cmgithubrowid000000000001';
+    ok(elideGitFileSourceStatus(byId) !== byId, 'id-addressed call (envelope names github-service) IS elided');
+    const other = clone(ghRecord(ghArgs(), [ghStatus, ghResource()]));
+    (((other.result as Rec).content as Rec[])[0].data as Rec).targetService = 'some-other-service';
+    eq(elideGitFileSourceStatus(other), other, 'non-Git service untouched ');
+    const missing = ghRecord(ghArgs({ path: 'k8s/none.yaml' }), [{ type: 'text', text: 'Failed to get file contents.' }], { isError: true });
+    eq(JSON.stringify(elideGitFileSourceStatus(missing)), JSON.stringify(missing), 'inner error text kept (no blob id, operator needs it) ');
+    const threw = { tool: 'services', success: false, arguments: '{}', result: 'boom' };
+    eq(elideGitFileSourceStatus(threw), threw, 'failed call untouched ');
+  });
+  test('held-k8s 1b: a missing path (inner isError, probed shape) ⇒ is-error {inner}; 2 resource items ⇒ ambiguous; a blob-only item ⇒ not-a-string', () => {
+    eq(gh([ghRecord(ghArgs({ path: 'k8s/none.yaml' }), [{ type: 'text', text: 'Failed to get file contents.' }], { isError: true })]).refusals.map((x) => [x.refusal, x.detail]),
+      [['is-error', { level: 'inner' }]]);
+    eq(gh([ghRecord(ghArgs(), [ghResource(), ghResource()])]).refusals.map((x) => [x.refusal, x.detail]), [['descriptor-mismatch', { reason: 'ambiguous' }]]);
+    eq(gh([ghRecord(ghArgs(), [ghStatus, ghResource('paichart', 'k8s/sample-workloads.yaml', NO_TEXT)])]).refusals.map((x) => [x.refusal, x.detail]),
+      [['descriptor-mismatch', { reason: 'not-a-string' }]]);
+  });
+  test('held-k8s pin (arguments): foreign owner / repo, sha, a PR ref, an unsafe path ⇒ source-not-pinned {field}; case + one leading "/" + ref main accepted', () => {
+    const cases: Array<[Rec, string | null]> = [
+      [ghArgs({ owner: 'attacker' }), 'owner'], [ghArgs({ repo: 'evil' }), 'repo'], [ghArgs({ sha: GH_REV }), 'sha'],
+      [ghArgs({ ref: 'refs/pull/1/head' }), 'ref'], [ghArgs({ path: 'k8s//x.yaml' }), 'path'], [ghArgs({ path: 'k8s/%2e%2e/x' }), 'path'],
+      [ghArgs({ path: undefined }), 'path'], [ghArgs({ owner: 'pаichart' }), 'owner'],
+      [ghArgs({ owner: 'PaiChart', repo: 'Paichart-Lab-Configs' }), null], [ghArgs({ path: '/k8s/sample-workloads.yaml' }), null],
+      [ghArgs({ ref: 'main' }), null], [ghArgs({ ref: 'refs/heads/main' }), null],
+    ];
+    for (const [a, field] of cases) {
+      const r = gh([ghRecord(a, [ghStatus, ghResource(String(a.owner ?? 'paichart'))])]);
+      if (field === null) eq([r.files.length, r.refusals.length], [1, 0], `${JSON.stringify(a)} `);
+      else eq([r.files.length, r.refusals.map((x) => [x.refusal, x.detail]), r.stats.pinViolations], [0, [['source-not-pinned', { field }]], 1], `${JSON.stringify(a)} `);
+    }
+  });
+  test('held-k8s pin (served URI): a URI naming another owner, another path, or not commit-form ⇒ source-not-pinned, counted OnSuccess', () => {
+    const other = gh([ghRecord(ghArgs(), [ghStatus, ghResource('attacker')])]);
+    eq([other.refusals.map((x) => [x.refusal, x.detail, x.selector]), other.stats.pinViolationsOnSuccess], [[['source-not-pinned', { field: 'owner' }, '/content/1/resource/text']], 1]);
+    eq(gh([ghRecord(ghArgs(), [ghStatus, ghResource('paichart', 'k8s/other.yaml')])]).refusals.map((x) => x.detail), [{ field: 'path' }]);
+    const ref = ghResource(); ((ref.resource as Rec).uri) = 'repo://paichart/paichart-lab-configs/refs/heads/main/contents/k8s/sample-workloads.yaml';
+    eq(gh([ghRecord(ghArgs(), [ghStatus, ref])]).refusals.map((x) => x.detail), [{ field: 'uri' }]);
+  });
+  test('held-k8s pin: a call that THREW (e.g. refused at the call-time gate) with a foreign repo is still COUNTED (pinViolations), not OnSuccess', () => {
+    const threw = { tool: 'services', success: false, arguments: JSON.stringify({ action: 'call', targetService: 'github-service', tool: 'get_file_contents', arguments: ghArgs({ repo: 'evil' }) }) };
+    const r = gh([threw]);
+    eq([r.refusals.map((x) => [x.refusal, x.detail, x.identitySource]), r.stats.pinViolations, r.stats.pinViolationsOnSuccess], [[['source-not-pinned', { field: 'repo' }, 'arguments']], 1, 0]);
+  });
+  test('held-k8s: a digest KEY added under the resource (a server upgrade) ⇒ raw-digest-present, never held; the blob SHA in content[0] TEXT does not trip it', () => {
+    const withKey = ghResource(); ((withKey.resource as Rec).sha) = 'd5fe8e652d6cb7ac435ee9ba173f3e5da6d3fafc';
+    eq(gh([ghRecord(ghArgs(), [ghStatus, withKey])]).refusals.map((x) => [x.refusal, x.detail]), [['raw-digest-present', { field: 'sha' }]]);
+    eq([digestFamily('sha'), digestFamily('SHA'), digestFamily('shape'), digestFamily('sha256')], ['sha', 'sha', null, 'sha256']);
+    eq(gh([ghRecord(ghArgs(), [ghStatus, ghResource()])]).files.length, 1, 'the SHA inside content[0].text (a string) is not a key');
+  });
+  test('held-k8s G-5: a plaintext kind: Secret (stringData or data) ⇒ secret-manifest, never held; SealedSecret / a Secret-named ConfigMap are holdable', () => {
+    for (const t of ['apiVersion: v1\nkind: Secret\nmetadata:\n  name: x\nstringData:\n  db-password: "p"\n',
+      'kind: ConfigMap\n---\nkind: Secret\ndata:\n  k: cGFzcw==\n', 'kind: "Secret"  # creds\ndata:\n  k: v\n']) ok(isPlaintextSecretManifest(t), t);
+    for (const t of ['kind: SealedSecret\nspec:\n  encryptedData:\n    k: AgB\n', 'kind: ConfigMap\nmetadata:\n  name: Secret\ndata:\n  a: b\n', GH_TEXT])
+      ok(!isPlaintextSecretManifest(t), t);
+  });
+  test('held-k8s G-5 (helper): a github read of a plaintext Secret manifest ⇒ the plan refuses it secret-manifest, holds nothing', () => {
+    const prev = process.env.HELD_BYTES_CAPTURE_ENABLED; process.env.HELD_BYTES_CAPTURE_ENABLED = 'true';
+    try {
+      const plan = prepareHeldCapture({ toolCallResults: [ghRecord(ghArgs(), [ghStatus, ghResource('paichart', 'k8s/sample-workloads.yaml', 'kind: Secret\nstringData:\n  a: b\n')])],
+        task: { id: 't', povId: 'p' }, logger: { warn: () => undefined }, gitFileSourceLeg: true });
+      eq([plan?.files.length, plan?.refusals.map((x) => x.refusal)], [0, ['secret-manifest']]);
+    } finally { if (prev === undefined) delete process.env.HELD_BYTES_CAPTURE_ENABLED; else process.env.HELD_BYTES_CAPTURE_ENABLED = prev; }
+  });
+  test('held-terraform T-3/T-4: heldPathRefusal — state paths ⇒ state-file, variables files ⇒ tfvars-file, case-insensitive; .tf, the lock file and obs paths are holdable', () => {
+    for (const p of ['/terraform/terraform.tfstate', '/terraform/terraform.tfstate.backup', '/x/prod.tfstate', '/x/a.TFSTATE', '/x/terraform.tfstate.lock.info',
+      '/terraform/.terraform/terraform.tfstate', '/terraform/.terraform/modules/m/main.tf', '/x/terraform.tfstate.d/dev/terraform.tfstate', '.terraform/x',
+      // sec-ops step-1 SF-2: anywhere in the name, and plan files
+      '/terraform/terraform.tfstate-old', '/terraform/terraform.tfstate_2024', '/terraform/plan.tfplan', '/terraform/x.tfplan.json',
+      // TF-PATH-RULE-GAPS: the suffix-less plan names (a closed list)
+      '/terraform/tfplan', '/terraform/TFPLAN', '/terraform/tfplan.out', '/terraform/plan.out', '/ci/tfplan.json', '/ci/tfplan.binary'])
+      eq(heldPathRefusal(p), 'state-file', p + ': ');
+    // TF-PATH-RULE-GAPS: the Terraform CLI credentials files
+    for (const p of ['/terraform/.terraformrc', '/terraform/terraform.rc', '/x/.TERRAFORMRC', '/x/.terraform.d/credentials.tfrc.json',
+      '/x/credentials.tfrc.json', '/.terraform.d/plugins/x'])
+      eq(heldPathRefusal(p), 'credentials-file', p + ': ');
+    for (const p of ['/terraform/prod.tfvars', '/terraform/prod.auto.tfvars', '/terraform/x.tfvars.json', '/T/Y.TFVARS', '/terraform/prod.tfvars.example', '/terraform/secrets.tfvars.bak', '/terraform/prod.tfvars-old'])
+      eq(heldPathRefusal(p), 'tfvars-file', p + ': ');
+    for (const p of ['/terraform/main.tf', '/terraform/.terraform.lock.hcl', '/terraform/tfstate-notes.md', '/terraform/variables.tf', '/x/main.tf.json',
+      // TF-PATH-RULE-GAPS: closed lists, so a look-alike name stays holdable
+      '/terraform/tfplan-notes.md', '/terraform/plan.out.md', '/terraform/terraformrc.md', '/terraform/rc.tf', '/x/plan.tf', '/k8s/plan.json',
+      '/etc/otelcol/config.yaml', '/etc/nginx/conf.d/x.conf', '/k8s/sample-workloads.yaml', '', null, undefined]) eq(heldPathRefusal(p as string), null, String(p) + ': ');
+  });
+  test('held-terraform T-3/T-4 (helper): a github read of a state or variables file ⇒ the plan refuses it by NAME before any text check, holds nothing; a .tf beside it is held', () => {
+    const prev = process.env.HELD_BYTES_CAPTURE_ENABLED; process.env.HELD_BYTES_CAPTURE_ENABLED = 'true';
+    try {
+      const run = (p: string, text: string) => prepareHeldCapture({ toolCallResults: [ghRecord(ghArgs({ path: p }), [ghStatus, ghResource('paichart', p, text)])],
+        task: { id: 't', povId: 'p' }, logger: { warn: () => undefined }, gitFileSourceLeg: true });
+      const st = run('terraform/terraform.tfstate', '{"version": 4, "resources": []}\n');
+      eq([st?.files.length, st?.refusals.map((x) => x.refusal)], [0, ['state-file']]);
+      const big = run('terraform/terraform.tfstate', 'x'.repeat(6 * 1024 * 1024)); // over the file cap: the PATH refusal wins (it runs first)
+      eq(big?.refusals.map((x) => x.refusal), ['state-file']);
+      const tv = run('terraform/prod.tfvars', 'db_password = "x"\n');
+      eq([tv?.files.length, tv?.refusals.map((x) => x.refusal)], [0, ['tfvars-file']]);
+      // SF-1: the PIN refused the path (as the call gate does) — named for what it is, and NOT a pin violation (no G-4 force)
+      const stp = prepareHeldCapture({ toolCallResults: [ghRecord(ghArgs({ path: 'terraform/terraform.tfstate' }), [ghStatus, ghResource('paichart', 'terraform/terraform.tfstate', '{}')])],
+        task: { id: 't', povId: 'p' }, logger: { warn: () => undefined }, gitFileSourceLeg: true });
+      eq([stp?.refusals.map((x) => x.refusal), stp?.stats.pinViolations ?? 0], [['state-file'], 0]);
+      // SF-2 content half: state / plan JSON under ANY name ⇒ state-file
+      const sj = run('terraform/state.json', '{\n  "version": 4,\n  "terraform_version": "1.9.8",\n  "serial": 3,\n  "lineage": "x",\n  "resources": []\n}\n');
+      eq([sj?.files.length, sj?.refusals.map((x) => x.refusal)], [0, ['state-file']]);
+      const pj = run('terraform/plan.json', '{"format_version":"1.2","terraform_version":"1.9.8","planned_values":{},"resource_changes":[]}\n');
+      eq(pj?.refusals.map((x) => x.refusal), ['state-file']);
+      const tf = run('terraform/main.tf', 'resource "aws_s3_bucket" "b" {\n  bucket = "x"\n}\n');
+      eq([tf?.files.length, tf?.refusals.length, tf?.files[0]?.path], [1, 0, '/terraform/main.tf']);
+    } finally { if (prev === undefined) delete process.env.HELD_BYTES_CAPTURE_ENABLED; else process.env.HELD_BYTES_CAPTURE_ENABLED = prev; }
+  });
+  test('sec-ops step-1 SF-2 (content): isTerraformStateOrPlanJson — the version key AND a state/plan key; HCL, a lone key, or a mention in prose is not', () => {
+    ok(isTerraformStateOrPlanJson('{"version":4,"terraform_version":"1.9.8","lineage":"a"}'), 'state');
+    ok(isTerraformStateOrPlanJson('{"terraform_version" : "1.5", "prior_state": {}}'), 'plan prior_state');
+    for (const t of ['terraform {\n  required_version = ">= 1.5"\n}\n', '{"terraform_version":"1.9.8"}', '{"lineage":"a"}', 'see "terraform_version" in the docs', GH_TEXT])
+      ok(!isTerraformStateOrPlanJson(t), t.slice(0, 40));
+  });
+  test('held-terraform T-3 (pin): STATE NEVER HELD BY CONSTRUCTION — no platform descriptor names a terraform service or a state/plan/workspace/run tool, nor any tool of the rig\'s read-only terraform service', () => {
+    // The rig descriptor lives under .claude/knowledge/ (PRIVATE — not in the public export). In the private source repo (recognised
+    // as export-public.py's SOURCE GUARD does: cline_docs/ + CLAUDE.md) its absence is a hard failure; in the export this one pin is
+    // skipped BY NAME (found by the 2026-11-02 export dry run).
+    const rigPath = path.join(__dirname, '..', '.claude/knowledge/pipelines/terraform-iac/phase4-localstack-rig/terraform-readonly-descriptor.json');
+    const isPrivateSource = fs.existsSync(path.join(__dirname, '..', 'cline_docs')) && fs.existsSync(path.join(__dirname, '..', 'CLAUDE.md'));
+    if (!fs.existsSync(rigPath) && !isPrivateSource) { console.log('   (public export: the private terraform rig descriptor is absent by design — pin skipped)'); return; }
+    const rig = JSON.parse(fs.readFileSync(rigPath, 'utf8'));
+    const rigTools: string[] = rig.capabilities.tools.map((t: { name: string }) => t.name);
+    ok(rigTools.includes('state_pull') && rigTools.includes('state_list'), 'the rig descriptor still lists its state tools (control)');
+    for (const d of PLATFORM_DEFAULT_DESCRIPTORS) {
+      ok(!/terraform/i.test(d.service) && d.service !== rig.name, `descriptor service ${d.service}`);
+      ok(!/state|plan|workspace|run|apply|provider|module|polic/i.test(d.tool), `descriptor tool ${d.service}.${d.tool}`);
+      ok(!rigTools.includes(d.tool), `descriptor tool ${d.tool} is a rig terraform tool`);
+    }
+  });
+  test('held-k8s 1b: FILE_DESCRIPTOR_TOOLS stays the obs rig\'s order-pinned leaf list (github enters the lane by service, never by leaf)', () => {
+    eq([...FILE_DESCRIPTOR_TOOLS], ['get_ingress_config', 'get_otel_config']);
   });
 
   for (const { d, fn } of pending) {

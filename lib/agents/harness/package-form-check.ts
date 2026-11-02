@@ -166,13 +166,17 @@ export interface PackageFormAnalysis {
   hits: AnalysisHit[];
 }
 
-export type FormCheckTextSource = 'loop' | 'diagnostic-retry' | 'form-correction';
+export type FormCheckTextSource = 'loop' | 'diagnostic-retry' | 'form-correction' | 'edit-correction'; // + held-edit correction (Stage B V-5c)
 export type FormCheckReason = 'checked' | 'not-end-turn' | 'empty-deliverable' | 'checker-error';
 export type FormCorrectionNotAttemptedReason =
   | 'not-checked' | 'no-trigger-hit' | 'prior-pass-used:anti-fabrication' | 'budget-flagged' | 'flag-off'
   /** Step B scope (Steve 2026-10-07; narrowed by review B-M1): a correction runs only when EVERY hit — fact-only kinds
    *  included — is a header undercount. */
-  | 'hits-include-non-undercount';
+  | 'hits-include-non-undercount'
+  /** F-T2-1 (b) (held-terraform step 3, owner 2026-10-21): the decision was `attempted`, but the same package carries a refused held
+   *  edit that the held-edit correction will take — the one reflection pass is reserved for it (the held fault forces the leg; the
+   *  form fault is on a file the platform does not hold). Set by execution-core, never by decideFormCorrection. */
+  | 'prior-pass-reserved:edit-correction';
 export type FormCorrectionNotAdoptedReason =
   | 'empty' | 'llm-error' | 'not-end-turn' | 'trigger-hits-remain' | 'new-hit' | 'block-changed'
   | 'placeholder-changed' | 'prose-changed' | 'confidence-missing' | 'confidence-changed' | 'header-start-changed'

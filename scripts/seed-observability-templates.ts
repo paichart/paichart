@@ -45,6 +45,7 @@
  * Run on prod:  NODE_ENV=production npx ts-node --project prisma/tsconfig.seed.json scripts/seed-observability-templates.ts
  */
 
+import { HELD_AUTHOR_CONSTRAINT, HELD_REVIEWER_CONSTRAINT } from '../lib/agents/harness/held-bytes/variant-protocol';
 import { PrismaClient, AgentCategory, AgentPriority, TemplateType } from '@prisma/client';
 import {
   PAICHART_UNIVERSAL_BASE_TEMPLATE,
@@ -55,7 +56,7 @@ import { DEFAULT_MAX_TOKENS } from '../lib/services/llm/types';
 
 const prisma = new PrismaClient();
 
-interface TemplateSeed {
+export interface TemplateSeed {
   name: string;
   description: string;
   category: AgentCategory;
@@ -78,7 +79,7 @@ const COMMON_MODEL_PARAMS = (timeout: number) => ({
   timeout,
 });
 
-const TEMPLATES: TemplateSeed[] = [
+export const TEMPLATES: TemplateSeed[] = [
   {
     name: 'Observability State Harvester',
     description: 'Phase 0 of the observability-config-protocol — self-provisions the read-only observability service from the descriptor carried in the task (register → read-only call → teardown), then performs a READ-ONLY harvest of the live monitoring stack via narrow scoped reads of the surfaces the objective touches: the running Prometheus config, scrape-target health, loaded rule groups, the collector’s as-deployed config file, the dashboard inventory and any board the objective names. Quotes witnessed renderings verbatim; treats the datasource read as inventory (names/types/uids), never a config source; harvests secret metadata, never values. Hands the snapshot to the Observability Change Architect via auto-chained pipeline context. Read-only only — never a write, reload, or lifecycle verb. Reads observability-config-protocol before beginning work.',
@@ -153,6 +154,51 @@ const TEMPLATES: TemplateSeed[] = [
 // ADMIN_EMAIL (self-host) → '' → the 'system' sentinel.
 const SEED_OWNER_EMAIL = (process.env.SEED_OWNER_EMAIL || process.env.ADMIN_EMAIL || '').trim().toLowerCase();
 
+/** The row a template seeds, without the DB write — moved verbatim out of main() (V-0, 2026-10-15) so its
+ *  prompt-reaching fields can be golden-pinned and reused without executing the seed. */
+export function buildTemplateRow(template: TemplateSeed) {
+  // Resolve the prompt template with role-specific guidance. All four roles are REUSED and HAVE
+  // ROLE_GUIDANCE_LIBRARY entries (no generic fallback). The harvester (infra_state_harvester)
+  // carries both bases (artifact_harvester + synthesis_source_acquirer) — preserved by this
+  // exact replace().
+  const promptTemplate = PAICHART_UNIVERSAL_BASE_TEMPLATE.replace(
+    '${roleSpecificGuidance}',
+    getRoleSpecificGuidance(template.defaultRole)
+  );
+
+  const data = {
+    name: template.name,
+    description: template.description,
+    category: template.category,
+    templateType: template.templateType,
+    defaultRole: template.defaultRole,
+    promptTemplate,
+    // Abstract statements ONLY (F-TS-3): capabilities is runtime-dead and its drift is
+    // undetectable — the 9-tool surface lives in the service descriptor, never here.
+    capabilities: {
+      'Protocol-Driven': 'Reads observability-config-protocol from injected context before acting',
+      'Context Chaining': 'Receives predecessor task output via pipeline context injection',
+      'Config Change, Not Apply': 'Produces a reviewable observability config change package (held files edited by reference, other files in full + validator citations + per-class rollback) to be applied by a human-gated reload or provisioning re-scan — never applies anything',
+    },
+    constraints: {
+      'Protocol First': 'Must read the injected protocol before beginning work',
+      'Stay in Phase': 'Only perform the work for the specific phase assigned — do not skip ahead',
+      'Read-Only Stack Contact': 'The Harvester is the only role that contacts the stack, read-only only — never a write, reload, or lifecycle verb; apply is out-of-band (human-gated config reload / provisioning re-scan)',
+      // PLATFORM-HELD-BYTES Phase 10 W6 (the fold): the held template constraints the G3 variant templates carried, now on the BASE
+      // Author and Reviewer. Text unchanged (G3-measured); the Reviewer's speaks only of diff lines, so it is inert without a diff.
+      ...(template.defaultRole === 'config_change_author' ? HELD_AUTHOR_CONSTRAINT
+        : template.defaultRole === 'change_reviewer' ? HELD_REVIEWER_CONSTRAINT : {}),
+    },
+    maxRetries: 2,
+    timeout: template.timeout,
+    priority: AgentPriority.HIGH,
+    isDefault: false,
+    tags: template.tags,
+    metadata: template.metadata,
+  };
+  return data;
+}
+
 async function main() {
   console.log('Seeding observability-config templates...\n');
 
@@ -173,41 +219,7 @@ async function main() {
       where: { name: template.name },
     });
 
-    // Resolve the prompt template with role-specific guidance. All four roles are REUSED and HAVE
-    // ROLE_GUIDANCE_LIBRARY entries (no generic fallback). The harvester (infra_state_harvester)
-    // carries both bases (artifact_harvester + synthesis_source_acquirer) — preserved by this
-    // exact replace().
-    const promptTemplate = PAICHART_UNIVERSAL_BASE_TEMPLATE.replace(
-      '${roleSpecificGuidance}',
-      getRoleSpecificGuidance(template.defaultRole)
-    );
-
-    const data = {
-      name: template.name,
-      description: template.description,
-      category: template.category,
-      templateType: template.templateType,
-      defaultRole: template.defaultRole,
-      promptTemplate,
-      // Abstract statements ONLY (F-TS-3): capabilities is runtime-dead and its drift is
-      // undetectable — the 9-tool surface lives in the service descriptor, never here.
-      capabilities: {
-        'Protocol-Driven': 'Reads observability-config-protocol from injected context before acting',
-        'Context Chaining': 'Receives predecessor task output via pipeline context injection',
-        'Config Change, Not Apply': 'Produces a reviewable observability config change package (full desired-state files + validator citations + per-class rollback) to be applied by a human-gated reload or provisioning re-scan — never applies anything',
-      },
-      constraints: {
-        'Protocol First': 'Must read the injected protocol before beginning work',
-        'Stay in Phase': 'Only perform the work for the specific phase assigned — do not skip ahead',
-        'Read-Only Stack Contact': 'The Harvester is the only role that contacts the stack, read-only only — never a write, reload, or lifecycle verb; apply is out-of-band (human-gated config reload / provisioning re-scan)',
-      },
-      maxRetries: 2,
-      timeout: template.timeout,
-      priority: AgentPriority.HIGH,
-      isDefault: false,
-      tags: template.tags,
-      metadata: template.metadata,
-    };
+    const data = buildTemplateRow(template);
 
     if (existing) {
       console.log(`  Already exists (id: ${existing.id}) — updating...`);
@@ -240,7 +252,9 @@ async function main() {
   await prisma.$disconnect();
 }
 
-main().catch((e) => {
+// Run only as a CLI (`npx ts-node scripts/<this>.ts`); an importer (scripts/test-held-variant-golden.ts, the
+// PLATFORM-HELD-BYTES variant seed) gets TEMPLATES + buildTemplateRow without writing anything (V-0, 2026-10-15).
+if (require.main === module) main().catch((e) => {
   console.error('Seed failed:', e);
   prisma.$disconnect();
   process.exit(1);

@@ -72,7 +72,11 @@ npm run db:seed                          # ~1–2 min; prints its own step count
 ```
 Build once, then run the **production** build — the demo should feel like the hosted service (fast, no dev tooling):
 ```bash
+unset NODE_ENV                                                  # the step above loaded .env into this shell; a build that inherits
+                                                                # NODE_ENV=development fails prerendering ("<Html> should not be imported",
+                                                                # "reading 'useContext'") and the web server then cannot start
 npm run build                                                   # 3–10 min; "✓ Compiled successfully" then the route table
+grep -q '"success": true' .next/export-detail.json && echo BUILD-OK   # expect BUILD-OK — a failed static export still prints a route table
 ```
 Then install the two **systemd units** that keep them running. Edit `User`, `Group` and `WorkingDirectory`
 in each file first — they ship with placeholders:
@@ -207,7 +211,14 @@ cd ~/paichart
 docker compose -f docker-compose.self-host.yml up -d --build   # first run: several minutes (image pull + build)
 curl -s localhost:3100/health                                  # expect "status":"healthy"
 npm run seed:browser-service                                   # registers it in the hub as a first-party service — ends "Status: ACTIVE"
+psql "$(grep ^DATABASE_URL .env | cut -d= -f2- | tr -d '"')" -At -c "select id, status from mcp_tools where id = 'browser-automation-service'"
+                                                               # expect: browser-automation-service|ACTIVE
 ```
+
+**Run the seed and the check from the clone you are testing** (`cd` into it first): the seed writes to whatever database that
+directory's `.env` names. On a machine with a second install, a seed run from the other clone registers the service *there*,
+the hub calls below can still succeed through the other install, and the program's Architect then finds no service and stops
+(found on a fresh install 2026-11-01). If you have two installs, also check which hub key your Claude Code session uses.
 
 Why a seed and not `registry(action: 'register')`: this service's name is **reserved** — the hub keeps the names of its
 first-party services exclusive, so a user-registered service can never capture one — and first-party services on the hub's
@@ -221,10 +232,12 @@ Then in Claude Code (`claude -c`), the same shape as step 9:
    → `registry(action: 'tools', service_name: 'Browser Automation Service')` → 7 tools with full schemas
    (`scrape_page`, `fill_form`, `click_element`, `take_screenshot`, `generate_pdf`, `run_script`, `trace_session`).
 2. *"Through the hub, ask the browser-automation-service to `scrape_page`
-   `https://raw.githubusercontent.com/paichart/paichart/main/program-artifacts/firewall-a3-partner-path-r2/requirements.md`
+   `https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/requirements.md`
    with selectors `{doc: 'pre'}`, and show me the call and the result."*
    → `services(action: 'call', targetService: 'browser-automation-service', tool: 'scrape_page', …)` → `success: true`
    and the document's text, *through your hub* — exactly the call a program's Program Architect makes in step 10.
+   **Check the text contains the spec's `## Device sources` lines** (`ceos1: device-read — service …`, `ceos2: …`). They prove you
+   are reading the current spec, the one step 10b launches; without them the network legs would stop (see 10b).
 
 The registry id is `browser-automation-service`, the display name `Browser Automation Service`: `services(action: 'call')`
 accepts either; `registry(action: 'tools')` wants the display name.
@@ -259,6 +272,19 @@ Two things come with the clone that make step 8 more than a connector:
 `usecases/firewall-a3-partner-path/` is a complete program (three sequenced pipelines) with its rigs. With
 step 9b done and the rigs up (that directory's README), this is the whole launch — five hub calls, typed to Claude
 in `~/paichart` or issued directly. Each line's response is what a working install returns.
+
+> **Status (2026-11-02): the corrected spec has not yet been re-run live as a full program.** A fresh-install run on
+> 2026-11-01 found three things, all fixed since: the edge leg read only the switch it changes and chose a NAT pool that
+> collided with the other switch (the program's integration review caught it, and the program correctly refused to release);
+> the Device sources block did not reach either network leg; and a kept copy of one switch was refused by an over-cautious
+> redaction check. The spec now declares both switches for both network legs, and the redaction check is fixed. Until the
+> next full live run, treat a refusal on this program as information to read, not as a broken install.
+
+> **Kept files are on by default (2026-11-01).** `.env.example` sets `HELD_BYTES_CAPTURE_ENABLED=true` with R9 and R10 on: the
+> network legs keep each switch's running configuration and edit it by reference. That is why the spec's network legs now carry a
+> `## Device sources` block (`ceos1` / `ceos2: device-read — service <descriptor>`): network-provisioning ≥ 1.23.0 refuses a network
+> change leg whose devices have no declared source. Read **[`SELF-HOST-KEPT-FILES.md`](SELF-HOST-KEPT-FILES.md)** — what is stored,
+> where, and who can read it — before you run this.
 
 1. **A POV to hold your use cases, with the phases named up front** (phases are created WITH the POV — there is no
    `phase.create`; a POV created without `phases` gets the default Planning/Execution/Review three):

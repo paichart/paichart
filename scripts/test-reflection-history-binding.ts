@@ -152,6 +152,22 @@ const okTool = async () => ({ ok: true });
 const throwTool = async () => { throw new Error('device unreachable'); };
 const budgetTool = async () => { throw new Error('Hourly limit reached: budget exceeded for this user'); };
 
+// PLATFORM-HELD-BYTES Stage B V-5c (AE S1): the held-edit correction turn — site 5 of the shared reflection primitive.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { runEditCorrectionTurn } = require('../lib/agents/harness/held-edit-correction');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { computeEditApplication } = require('../lib/agents/harness/held-bytes/apply');
+const HELD_BASE = 'a: 1\nb: 2\n';
+const HELD_FILES = [{ handle: 'H1', path: '/etc/x.yaml', state: 'rendered', baseText: HELD_BASE, viewText: HELD_BASE, rewrittenLines: [], redactorVersion: 'paichart.r10/3' }];
+const HELD_BAD = ['## Held File Edits', '<<<<<<< SEARCH H1', 'a: 9', '=======', 'a: 3', '>>>>>>> REPLACE'].join('\n');
+const HELD_FIXED = HELD_BAD.replace('a: 9', 'a: 1');
+function editPass(cfg: NormalizedModelConfig, gen: any, l: any, text: string, logger: any = silent) {
+  return runEditCorrectionTurn({
+    text, before: computeEditApplication(text, { files: HELD_FILES, r9Version: 'paichart.r9/1' }), files: HELD_FILES, r9Version: 'paichart.r9/1',
+    currentResponse: l.currentResponse, messageHistory: l.messageHistory, totalUsage: l.totalUsage,
+    prompt: PROMPT, normalizedLlmConfig: cfg, mcpFunctions: TOOLS, executionId: 'exec-binding', userId: 'u1', timeoutMs: 60_000,
+  }, { generateText: gen, logger });
+}
 function formPass(cfg: NormalizedModelConfig, gen: any, l: any, text: string, logger: any = silent) {
   return runFormCorrection({
     text, currentResponse: l.currentResponse, messageHistory: l.messageHistory, totalUsage: l.totalUsage,
@@ -275,6 +291,33 @@ async function main() {
     ok(llm.recs[2].tools.length === 0 && llm.recs[3].tools.length === 0,
       'S7: sonnet reflection calls (#89, form) still send NO tools — the legacy shape, byte-identical (golden: test-llm-call-options §3c)');
     assertBinding(llm.recs, 'S7', false);
+  }
+
+  // ── S11 (PLATFORM-HELD-BYTES Stage B V-5c, AE S1): the held-edit correction — site 5 ──
+  console.log('\n── S11: held-edit correction (opus-5-5: tools re-sent + tool_choice none; sonnet: byte-identical legacy shape) ──');
+  {
+    const llm = recorder([
+      { label: 'initial', resp: toolUse('a', 'project') },
+      { label: 'continuation', resp: final(HELD_BAD) },
+      { label: 'edit-correction', resp: final(HELD_FIXED) },
+    ]);
+    const l = await loop(OPUS, llm.generateText, okTool);
+    const r = await editPass(OPUS, llm.generateText, l, l.assembledText);
+    ok(r.outcome.adopted === true && llm.recs.length === 3, 'S11: the edit correction ran and was adopted (3 calls)');
+    ok(llm.recs[2].functionCall === 'none' && llm.recs[2].tools.length === 3, "S11 opus: the correction call RE-SENDS the tool set with tool_choice 'none'");
+    assertBinding(llm.recs, 'S11', true);
+  }
+  {
+    const llm = recorder([
+      { label: 'initial', resp: toolUse('a', 'project') },
+      { label: 'continuation', resp: final(HELD_BAD) },
+      { label: 'edit-correction', resp: final(HELD_BAD) },
+    ]);
+    const l = await loop(SONNET, llm.generateText, okTool);
+    const before = l.messageHistory.length;
+    const r = await editPass(SONNET, llm.generateText, l, l.assembledText);
+    ok(r.outcome.adopted === false && llm.recs[2].tools.length === 0 && llm.recs[2].functionCall === 'none', 'S11 sonnet: legacy reflection shape (no tools), not adopted');
+    ok(l.messageHistory.length === before, 'S11 sonnet: C2 — the two appended messages are removed when not adopted');
   }
 
   // ── S8. An ERRORED reflection call is a visible FACT + a warn, at every site (AUDIT 2026-10-07 follow-on) ──

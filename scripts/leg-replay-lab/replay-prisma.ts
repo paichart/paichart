@@ -226,9 +226,12 @@ export function buildReplayPrisma(snap: Snapshot, subs: ReplaySubstitution[] = [
     // read targets pipeline-index.json, which no snapshot holds — it stays unsupported and throws (never a guess).
     // `toolCalls` added 2026-10-13: E1 (rollbackContainment) and quoteFidelity's Author point read the leg Harvester's
     // raw tool results through it; without it both nets stamped their errorFact on every replayed Author (D1 went red).
+    // `gitDeviceComparison` added 2026-10-26 (L-N2): the network Author TRANSCRIBES its Harvester's stamp through this read.
+    // `editApplication` / `reviewedEditDiff` added 2026-10-15 (Stage B G2): a held-variant leg's hoist and carrier read them; the lab
+    // runs a variant arm's leg nets on the REBOUND leg, where they apply (same literal projection shape as the others).
     $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const sql = Array.from(strings ?? []).join('$?').replace(/\s+/g, ' ').trim();
-      const m = sql.match(/^SELECT \(content::jsonb\)->>'(finalResponse|rollbackContainment|derivationContainment|reviewerVerdict|toolCalls)' AS v FROM agent_artifacts WHERE name = 'result\.json' AND content LIKE '\{%' AND "executionId" = \$\? ORDER BY "createdAt" DESC LIMIT 1$/);
+      const m = sql.match(/^SELECT \(content::jsonb\)->>'(finalResponse|rollbackContainment|derivationContainment|reviewerVerdict|toolCalls|editApplication|reviewedEditDiff|gitDeviceComparison)' AS v FROM agent_artifacts WHERE name = 'result\.json' AND content LIKE '\{%' AND "executionId" = \$\? ORDER BY "createdAt" DESC LIMIT 1$/);
       if (!m || values.length !== 1) throw new ReplayStubUnsupported(`$queryRaw ${sql.slice(0, 120)}`);
       queries.push(`$queryRaw ->>${m[1]} executionId=${String(values[0])}`);
       const art = order(artifacts.filter((a) => a.name === 'result.json' && a.executionId === values[0] && String(a.content).startsWith('{')), { createdAt: 'desc' })[0];
@@ -237,6 +240,13 @@ export function buildReplayPrisma(snap: Snapshot, subs: ReplaySubstitution[] = [
       try { parsed = JSON.parse(art.content); } catch { throw new ReplayStubUnsupported('result.json that JSON.parse rejects (Postgres would cast or error differently)'); }
       const v = parsed[m[1]];
       return [{ v: v === undefined || v === null ? null : typeof v === 'string' ? v : jsonbText(v) }];
+    },
+    // L-N2 (held-network J3, 2026-10-26): `validationToolCalls`' enrichment reads the resolved service ROW's tool schemas by id. The
+    // snapshot's `mcpTools` carry no id, and the network rows these legs used were self-provisioned and DELETED at teardown (absent in
+    // production today too) — so the row read answers null, as production would now, and the fact falls back to the Harvester's
+    // registration / harvest-observed source (named on the fact). A served row would need the snapshot to carry ids (not built).
+    mCPTool: {
+      async findUnique(args: any = {}) { queries.push(`mCPTool.findUnique ${JSON.stringify(args.where ?? {})} → null (no ids in the snapshot)`); return null; },
     },
     $transaction: refuse('$transaction'),
   };

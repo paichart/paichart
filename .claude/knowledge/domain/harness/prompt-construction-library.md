@@ -490,3 +490,12 @@ the PROPERTY, or its false flags train authors to distrust it.
 template's author-addressed lines outside a trash-can block into AUTHORING NOTEs so `--skeleton` strips them
 mechanically; 1.6.0 (GS-R5) — the objective's DECLARED BLOCKS (design decisions, approvers, descriptor URLs) go
 verbatim into the generated spec. Panel: `cline_docs/reviews/gs-r5-decision-guidance-2026-09-26/`.
+
+## Carried from the join learnings ledgers (2026-10-31)
+
+Source: the held-network ledger `cline_docs/reviews/held-network-2026-10-22/LEARNINGS-LEDGER.md` (LL-N) and the terraform ledger `cline_docs/reviews/held-terraform-2026-10-19/LEARNINGS-LEDGER.md` (LL-T). Each line is the learning in one sentence; the ledger row holds the evidence.
+
+- **The harness's brief beats the protocol (LL-N-19, LL-T-07).** A negative rule ("never narrow the device read") held 3 of 4. A POSITIVE instruction at the point where the harness writes the brief ("read the whole running config once") held 4 of 4. When a child misbehaves, fix the text where its BRIEF is written. Where it must hold every time, make it a platform pin or force, not prose.
+- **Write texts forward (LL-N-24).** Say only what is true both before and after the next planned step ("a ref outside the pin is refused" held before and after the step-3 force).
+- **Role guidance names no service, vendor or device (LL-N-10, owner rule).** It defers to the protocol, task or requirements; platform tools stay nameable. Pinned by `test:no-rig-identifiers`.
+- **Value legs share the Harvester template with change legs (LL-N-7).** A rule written for change legs ("no block ⇒ stop") stops every value leg. Scope each rule to the leg type it is for.

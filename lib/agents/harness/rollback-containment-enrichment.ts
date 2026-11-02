@@ -36,6 +36,8 @@ import {
 import { resolveTaskProtocol } from './program-protocol';
 import { readAuthoritativeResultField } from './authoritative-result-read';
 import { buildRawWitness } from './raw-tool-witness';
+import { isHeldCapableProtocol } from './held-bytes/variant';
+import { parseHeldEdits } from './held-bytes/edits';
 
 /** Same narrow surface, same three reasons, as `ContainmentPrisma` — see that module's note. */
 export type RollbackPrisma = Pick<Prisma.TransactionClient, 'task' | 'stage' | 'agentExecution' | 'agentArtifact' | '$queryRaw'>;
@@ -60,17 +62,30 @@ export interface ComputeRollbackContainmentInput {
   taskId: string;
   /** The Author's final response: the change package a human would receive. */
   deliverable: string | null | undefined;
+  /** Stage B V-8a: the handles whose BASE the platform holds and the package restores (`editApplication.rollback`, built
+   *  pre-tx by prepareHeldPackage). Read ONLY on a held-variant leg; absent elsewhere and on replays. */
+  heldRollbackHandles?: readonly string[] | null;
 }
 
 /**
  * Resolve the rollback-containment fact for an Author leaf.
  * Reads the DB, returns the fact; stamps nothing, logs nothing, never throws by design.
  */
+/** Test seam only (held-k8s 1f): the held-capable predicate, so the desired-state ∧ held-capable arms are pinned BEFORE a
+ *  desired-state lane joins HELD_CAPABLE_PROTOCOLS (step 3). Production passes nothing and reads the shared predicate. */
+export interface RollbackContainmentDeps {
+  isHeldCapable?: (protocol: string | null | undefined) => boolean;
+}
+
 export async function computeRollbackContainmentFact(
   prisma: RollbackPrisma,
-  { taskId, deliverable }: ComputeRollbackContainmentInput
+  { taskId, deliverable, heldRollbackHandles }: ComputeRollbackContainmentInput,
+  deps: RollbackContainmentDeps = {},
 ): Promise<Record<string, unknown>> {
+  const heldCapableOf = deps.isHeldCapable ?? isHeldCapableProtocol;
+  let heldRestores: number | null = null; // non-null ONLY on a held-capable leg WITH held context (V-8a; Phase 10 W1), so every other stamp keeps its bytes
   const withDisposition = (fact: Record<string, unknown>): Record<string, unknown> => {
+    if (heldRestores !== null) fact.heldRestores = heldRestores;
     // NESTED under the fact, never a sibling — `pickResultJsonSummary` is a strict whitelist and a
     // sibling is stripped at the hoist, leaving it invisible on the card and ABSENT at the gate (E3b).
     fact.rollbackDisposition = computeRollbackDisposition(fact);
@@ -121,11 +136,52 @@ export async function computeRollbackContainmentFact(
         where: { id: legId }, select: { title: true, metadata: true },
       });
       const protocol = leg ? resolveTaskProtocol(leg).protocol : null;
-      if (isDesiredStateLane(protocol)) {
+      const desiredState = isDesiredStateLane(protocol);
+      const heldCapable = heldCapableOf(protocol);
+      // A desired-state lane that is NOT held-capable: unchanged since 2026-09-11 (no such lane today — kubernetes-gitops joined held at 1.18.0, terraform-iac at 1.15.0).
+      if (desiredState && !heldCapable) {
         return withDisposition({
           checked: false, reason: 'lane-not-supported', lane: protocol,
           blocksScanned: scope.blocksScanned, excluded: scope.excluded, scope: ROLLBACK_SCOPE_NOTE,
         });
+      }
+      // ── Stage B V-8a — HELD VARIANT ONLY (this net's own leg lookup), BEFORE the content arms. A `restore H<n>` directive
+      // line is a named exclusion (`held-restore-directive`): a FENCED one is classified as rollback content by the shared
+      // classifier and would otherwise be adjudicated against the harvest. `heldRestores` counts the package's rollback-section
+      // directives whose handle the platform holds as BASE (from ctx). Every restore held ⇒ `restore-is-held-base` (benign);
+      // otherwise the remaining lines are adjudicated as today, with `heldRestores` nested on the fact.
+      if (heldCapable) {
+        const held = new Set(heldRollbackHandles ?? []);
+        // EF-P2-3: the exclusion is keyed on the lines the PARSER recognised as rollback-section directives (an indented or
+        // malformed `restore` the applier never records stays adjudicated as content), and the benign arm needs EVERY such
+        // directive to restore a BASE-held handle — `restore H1` beside an unheld `restore H9` is not "every rollback is held".
+        const rollbackDirectives = parseHeldEdits(deliverable ?? '').restores.filter((r) => r.section === 'rollback');
+        // Phase 10 (the fold): every obs leg is held-capable now, but a leg with NO held context (no BASE-held handle, no rollback
+        // directive — e.g. a Prometheus-only change whose Harvester read no file) keeps its pre-fold bytes exactly: no key.
+        if (held.size > 0 || rollbackDirectives.length > 0) heldRestores = rollbackDirectives.filter((r) => held.has(r.handle)).length;
+        const directiveLines = new Set(rollbackDirectives.map((r) => r.line));
+        const directives = scope.lines.filter((l) => directiveLines.has(l.line));
+        if (directives.length) {
+          scope.lines = scope.lines.filter((l) => !directiveLines.has(l.line));
+          scope.excluded['held-restore-directive'] = (scope.excluded['held-restore-directive'] ?? 0) + directives.length;
+        }
+        if (scope.lines.length === 0 && rollbackDirectives.length > 0 && heldRestores === rollbackDirectives.length) {
+          return withDisposition({
+            checked: false, reason: 'restore-is-held-base',
+            blocksScanned: scope.blocksScanned, excluded: scope.excluded, scope: ROLLBACK_SCOPE_NOTE,
+          });
+        }
+        // K-4 (held-k8s 1f; EF S-5, AE S-4): a desired-state lane NEVER reaches the content arms. Mixed (a held restore beside
+        // any other rollback line), none (no directive, no held context) or partly unheld ⇒ `lane-not-supported` exactly as
+        // before the lane was held-capable, carrying `heldRestores` (only when held context exists) and the
+        // `held-restore-directive` exclusion. Falling through would adjudicate desired state against the harvest — the lane
+        // this net ruled never adjudicated — and would move every stored k8s Author stamp at step 3.
+        if (desiredState) {
+          return withDisposition({
+            checked: false, reason: 'lane-not-supported', lane: protocol,
+            blocksScanned: scope.blocksScanned, excluded: scope.excluded, scope: ROLLBACK_SCOPE_NOTE,
+          });
+        }
       }
     }
   }

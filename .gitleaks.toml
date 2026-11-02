@@ -47,6 +47,25 @@ regexes = [
   # closing dashes and the next line is base64, which never contains a backtick (inspected: 5 matches in
   # REVIEW-P1-P2.md / REVIEW-P1-P2-PATTERNS.md, none with a key body).
   '''-----BEGIN[ A-Z0-9_-]*PRIVATE KEY(?: BLOCK)?-----[^\n]*`''',
+  '''^abc123def456$''',
+  '''^0123456789abcdef0123456789abcdef$''',     # synthetic Datadog-shaped key in the R10 v3 golden corpus (test-security-invariants.ts): two runs of 0-f counting, not a credential (inspected 2026-10-14)
+  '''^0123456789abcdefSynth3tic0123456$''',     # synthetic Datadog-shaped key in the R10 v3 must-redact fixtures: counting + "Synth3tic", not a credential (inspected 2026-10-14)
+  '''^Synth3ticLEAK9$''',                       # synthetic planted value in scripts/replay-r10-versions.ts --self-test (the test asserts it is never PRINTED); invented, not a credential (inspected 2026-10-14)
+  '''^Synth3ticTok9$''',                        # synthetic value in the Stage B sec-ops delta re-score (example of a block-context secret an edit could add); named "Synth3tic", invented for the review, not a credential (inspected 2026-10-14)                        # synthetic R10 test value in the Stage B sec-ops review (a proposed pin: "an edit body api_key: <this> refuses"); counting digits + hex letters, not a credential (inspected 2026-10-14)
+  # R10 v4 (R10-CODE-ASSIGN) must-redact fixtures in scripts/test-security-invariants.ts: invented values named "Synth3tic", shaped
+  # like a GitHub PAT / AWS key id so the := literal rule and its config siblings are exercised; not credentials (inspected 2026-10-19).
+  '''^ghp_Synth3tic9$''',
+  '''^ghp_Synth3ticSynth3tic9999$''',
+  '''^ghp_Synth3ticSynth3tic9999abc$''',
+  '''^ghp_Synth3ticSynth3ticSynth3tic9999$''',
+  '''^AKIAABCDEF1234567890$''',
+  # R10 v5 (sec-ops R10v5 B-1 / (a)) probe values in test-security-invariants.ts + REVIEW-sec-ops-R10v5.md: invented human-style
+  # passwords shaped like an HCL expression, used to prove the expression exemption is case-sensitive / to name a residual; not credentials (inspected 2026-10-19).
+  '''^Count\.Dracula1$''',
+  '''^var\.Hunter2x9$''',
+  # L-K2 (held-k8s step 3 lab) canary plant in LAB-PREREG-L-K2.md + its experiment: an invented value named "LK2CANARY", planted to prove
+  # R10 redacts it at capture and it never reaches an agent prompt; not a credential (inspected 2026-10-19).
+  '''^LK2CANARYw8Rq4Zt1Xm6$''',
 ]
 paths = [
   '''node_modules''',

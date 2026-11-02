@@ -298,3 +298,7 @@ C2 CONTRACT COPY (2026-10-04, `d7762f17`): MCP `task.create` in a PROGRAM stage 
 of the model's transcription (`resolveCreateContract` in `lib/agents/harness/plan-spawn-carry.ts`, one call before the `$transaction`
 in `task-create-handler.ts` ~:657-669); provenance in `metadata.interfaceContractSource` (AUDIT_STRIP), fail-open with a stamped reason.
 REST `createTask` (`task.ts`) now calls `stripAuditFacts` (was the one client write path without it).
+Q2 ABSENT ARM (2026-10-17): a PIPELINE child created WITHOUT a contract by the program's own root harness (server-set
+`callingExecutionId`) → `resolveAbsentLegContract` stores the plan (`arm:'create-absent'`, flagged) or declines (`create-absent-declined`
++ `declineReason`, metadata only). All contract writes go through ONE pre-tx `contractWrite` spread; the result sentence reads back the
+row `tx.task.create` RETURNS — it must keep `include`, never `select` (pin C2.5). Record: `cline_docs/reviews/q2-leg-contract-heal-2026-10-17/`.

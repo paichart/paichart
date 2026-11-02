@@ -80,6 +80,8 @@ export function renderRollbackContainmentForPrompt(
     out.push(`- **Rollback provenance (platform fact)**: NOT CHECKED (\`${reason ?? 'no reason given'}\`).`);
     if (reason === 'no-restore-blocks' || reason === 'no-restore-form-lines') {
       out.push('  - The package quoted no restore content for this check to adjudicate. **That is not an approval of anything** — whether the package is complete, and whether its evidence is present and restated, remains entirely your judgement.');
+    } else if (reason === 'restore-is-held-base') {
+      out.push(`  - Every rollback here is a \`restore H<n>\` of a file the platform holds (${typeof fact.heldRestores === 'number' ? fact.heldRestores : 0}): the platform restores those bytes, so there is no quoted content to check. This is not a finding.`);
     } else if (reason === 'lane-not-supported') {
       // A DELIBERATE no-check, and it must not read like a failed one. In a desired-state lane the
       // rollback quotes what the package intends to exist, not a line any harvest ever rendered, so

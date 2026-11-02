@@ -108,7 +108,10 @@ export type ExclusionClass =
   | 'validation-command-in-restore-section'
   /** Every line is an operator command or a comment: the rollback is a PROCEDURE (git revert,
    *  kubectl rollout undo), not restored content. Live: the June 2026 k8s package. */
-  | 'procedural-rollback-block';
+  | 'procedural-rollback-block'
+  /** PLATFORM-HELD-BYTES Stage B V-8a, held-variant legs only: a `restore H<n>` directive line. The platform restores the
+   *  held bytes, so the line quotes nothing to contain (a fenced one would otherwise be adjudicated as restore content). */
+  | 'held-restore-directive';
 
 /** One line the package promises to restore, with where it was found. */
 export interface RestoreLine {
@@ -340,6 +343,9 @@ export function computeRollbackDisposition(fact: Record<string, unknown>): Rollb
       // value-chain B4 (audit A4, decision E-4): a VALUE leg authors no package, so there is nothing to roll back —
       // structurally inapplicable, the same class as program-tier. Not publicly mirrored.
       case 'value-leg-no-package':
+      // Stage B V-8a (held variant only): every restore is a `restore H<n>` of a BASE-held file — the platform restores the
+      // held bytes, so there is no quoted content to contain. Not publicly mirrored until promotion (cf. value-leg-no-package).
+      case 'restore-is-held-base':
         return { disposition: 'benign', reason: reason!, inputs };
       // The check SHOULD have run and could not. Fail closed — the one arm that does.
       default:

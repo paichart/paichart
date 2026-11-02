@@ -30,6 +30,7 @@ const rel = (p: string) => path.relative(ROOT, p);
 const ALLOWLIST: Record<string, string> = {
   'app/api/pov/route.ts': 'pov.create — capability-gated via checkPermission (DEMO=false); no instance to scope',
   'app/api/tasks/search/route.ts': 'POST-but-read (search); no mutation',
+  'lib/mcp/server/tools/held-get-handler.ts': 'held.get (PLATFORM-HELD-BYTES V-7) is READ-ONLY (returns held bytes, writes only its own audit Activity row); it refuses DEMO_USER and a demo POV BEFORE validatePOVAccess, so isDemo can never grant anything here',
   'app/api/mcp/tasks/action/route.ts': 'delegates to TasksActionRouter → per-handler validatePOVAccess(requireWrite) (mcp-hub verified convergence)',
   'lib/mcp/tasks/action/handlers/agent/agent-status-handler.ts': 'read — execution status fetch',
   'lib/mcp/tasks/action/handlers/agent/agent-results-handler.ts': 'read — results/artifacts fetch',

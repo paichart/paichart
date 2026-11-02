@@ -406,3 +406,6 @@ grep -rn "MCPWorkflowExecution\|WORKFLOW_EXECUTED" lib/ --include="*.ts" | head 
 - Confirm POV Editor integration approach
 - Test activity logging overhead
 - **NEW**: Verify 18 TaskActivityAction types with WORKFLOW_EXECUTED
+
+> **2026-10-17 — Q2 leg-contract heal:** task.create has an absent-contract arm for program legs (`resolveAbsentLegContract`,
+> `arm: create-absent | create-absent-declined`); pins in `test:cc7-contract-guard` C2.1b–C2.9. Record: `cline_docs/reviews/q2-leg-contract-heal-2026-10-17/`.

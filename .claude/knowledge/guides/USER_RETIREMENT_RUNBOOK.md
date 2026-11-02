@@ -54,6 +54,7 @@ Use when you want to **preserve** the user's POVs (reassign) or are scripting. A
 **Connect** (prod): `ssh <PROD_USER>@<PROD_HOST>` → `cd /var/www/paichart-app/current && source .env.production && psql "$DATABASE_URL"`
 
 **Step 0 — backup**: `pg_dump -Fc "$DATABASE_URL" -f /root/retire-<user>-$(date +%F-%H%M%S).dump`
+  - **Delete this dump once the retirement is verified** (`rm -v /root/retire-<user>-….dump`): it is a full copy of every account, kept with no expiry, so leaving it undoes the retirement for privacy purposes. Recovery rests on the nightly backups pulled to the operator's machine (`/home/steve/disaster-recovery`). (Added 2026-10-16 after four such dumps were found months old — register PROD-ROOT-DUMPS.)
 
 **Step 1 — impact analysis** (substitute the user id):
 ```sql

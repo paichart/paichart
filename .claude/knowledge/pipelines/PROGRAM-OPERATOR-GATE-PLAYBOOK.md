@@ -8,6 +8,9 @@
 >
 > Read this if you are the person completing gate tasks. It is deliberately about *what you do*, not
 > about how the harness works.
+>
+> **Evidence first (2026-11-01):** `npm run report:gate -- <gate id>` prints each gate's checks from the stored facts (✓/✗, with the
+> reviewer's blocking reasons). Read-only; it decides nothing. Start from `OPERATOR-RUNBOOK.md` if you are new.
 
 ## The one-line principle
 
@@ -66,7 +69,11 @@ only while the plan gate is held — once released, the legs start with whatever
    also expect `metadata.interfaceContractSource.source = 'plan'` on every contract-bearing row and the live contract's sha
    equal to `storedAtWriteSha256`. Primary instrument: `npm run replay:plan-contract -- --root <root id>` (the shipped
    resolver; the SQL in the forensics guide is a cross-check). `source:'supplied'` or `'none'` on any row is a finding —
-   read its `planResolution`. Keep the plan-comparison above until the first live run has verified this.
+   read its `planResolution`, its `arm` and (since Q2, 2026-10-17) its `declineReason`. `arm:'create-absent'` (source
+   plan) is the platform storing the plan for a leg the harness created without one — expected, not a finding; read
+   whether the harness then superseded it (it should not). `arm:'create-absent-declined'` (source none) names why the
+   platform declined; a `stage-legs-*` reason describes the stage's OTHER legs, and one cause can decline several
+   children — count a cascade as one event. Keep the plan-comparison above until the first live run has verified this.
 7. **The clearance reached every leg** (from the second run in a POV onward). Each PIPELINE leg's
    `metadata.duplicateAcknowledged` must CONTAIN every id in the root's list (⊇, not equal — the harness computes each
    leg's list and may legitimately add the leg-stage ids; a NARROWER list is the defect: one pov-program run carried 25

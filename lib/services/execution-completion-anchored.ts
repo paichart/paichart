@@ -30,7 +30,8 @@ import type { PrismaClient } from '@prisma/client';
 import { childTasksDispatchedBy } from './harness-dispatch-fact';
 import { buildExecutionResultJson, deriveChainedContextSignal } from './execution-artifacts';
 import { persistTerminalSuccess } from './execution-terminal-persist';
-import { prepareHeldCapture, captureHeldFiles } from './held-bytes-capture';
+import { prepareHeldCapture, captureHeldFiles, isHeldCaptureEnabled } from './held-bytes-capture';
+import { buildHeldDescriptorTable } from './held-descriptor-table';
 import { anchoredSelfSupersession, selectAuthoritativeExecution } from './execution-selection';
 import { stampExecutionNets } from './execution-nets';
 import { assessExecutionQuality } from '@/lib/agents/harness/execution-quality';
@@ -401,8 +402,11 @@ export async function persistCompletionAnchored(
 ): Promise<PersistCompletionAnchoredResult> {
   // PLATFORM-HELD-BYTES Stage A (2026-10-14): the PURE half FIRST — buildCompletionAnchoredResult itself runs
   // buildExecutionResultJson and the nets over these same records (panel AE D1). Shadow; never throws.
+  // WI-B10: the ONE descriptor table first (async, reads frozen facts only — never mutates a record), then the pure half.
+  const heldTable = await buildHeldDescriptorTable(db as never, input.partial?.toolCallResults ?? [], isHeldCaptureEnabled());
   const heldPlan = prepareHeldCapture({
     toolCallResults: input.partial?.toolCallResults ?? [], task: { id: input.task.id, povId: input.task.povId }, logger: input.logger,
+    heldTable, live: true,
   });
   const built = await buildCompletionAnchoredResult(db, input);
   const logs = input.buildSuccessLogs({

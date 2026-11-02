@@ -23,7 +23,7 @@ process.env.PAICHART_SKIP_DB_CONNECT = 'true';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { MECHANICAL_NETS } = require('../lib/agents/harness/mechanical-nets') as typeof import('../lib/agents/harness/mechanical-nets');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { assertRegistryWellFormed, runNetsAtPoint } = require('../lib/agents/harness/net-registry') as typeof import('../lib/agents/harness/net-registry');
+const { assertRegistryWellFormed, runNetsAtPoint, NOT_STAMPED } = require('../lib/agents/harness/net-registry') as typeof import('../lib/agents/harness/net-registry');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { RESULT_JSON_SUMMARY_KEYS } = require('../lib/services/execution-artifacts') as typeof import('../lib/services/execution-artifacts');
 
@@ -96,6 +96,25 @@ const DISPOSITION_KEYS = ['containmentDisposition', 'rollbackDisposition'];
       assertRegistryWellFormed([{ ...MECHANICAL_NETS[0], renderCard: null, renderNullReason: undefined }]);
       return false;
     } catch { return true; }
+  })());
+
+  // ── R6c/R6d/R6e (PLATFORM-HELD-BYTES Stage B V-5b, 2026-10-15): NOT_STAMPED is a POPULATION answer only for a net that
+  // DECLARES it. Declared ⇒ nothing stamped + the named reason reported; undeclared ⇒ the net's errorFact (it can never be
+  // inert by omission); a reason that is not a kebab token is refused at load (the replay prints it).
+  {
+    const stamped: Record<string, unknown> = {}; const notStamped: string[] = []; let errs = 0;
+    const declared = { ...MECHANICAL_NETS[0], name: 'condNet', appliesTo: () => true, enrich: async () => NOT_STAMPED, conditionalStampReason: 'not-variant-leg' };
+    await runNetsAtPoint(declared.point, {} as never, [declared], (n, f) => { stamped[n] = f; }, () => { errs++; }, (n, r) => { notStamped.push(`${n}:${r}`); });
+    check('R6c: a DECLARED conditional net returning NOT_STAMPED stamps nothing and reports its reason',
+      !('condNet' in stamped) && notStamped.join() === 'condNet:not-variant-leg' && errs === 0, JSON.stringify({ stamped, notStamped }));
+    const undeclared = { ...declared, conditionalStampReason: undefined };
+    const s2: Record<string, unknown> = {}; let e2 = 0;
+    await runNetsAtPoint(undeclared.point, {} as never, [undeclared], (n, f) => { s2[n] = f; }, () => { e2++; }, () => undefined);
+    check('R6d: an UNDECLARED NOT_STAMPED stamps the net\'s errorFact (never inert by omission)',
+      (s2.condNet as Record<string, unknown> | undefined)?.reason === 'enrichment-error' && e2 === 1, JSON.stringify(s2));
+  }
+  check('R6e: a conditionalStampReason that is not a kebab token is refused at load', (() => {
+    try { assertRegistryWellFormed([{ ...MECHANICAL_NETS[0], conditionalStampReason: 'Not a token' }]); return false; } catch { return true; }
   })());
 
   // ── R7: THE GUARANTEE. A net whose enrich throws still STAMPS — its errorFact. The only way to

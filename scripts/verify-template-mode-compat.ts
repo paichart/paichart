@@ -26,7 +26,8 @@ const silentLogger = { info: () => {}, warn: () => {} };
 async function valueUnderstood(value: unknown): Promise<boolean> {
   const stubDb = {
     agentPromptLibrary: {
-      // one base row so 'composed' probes past the cardinality checks; empty protocol list for 'all'
+      // one base row so 'composed' probes past the cardinality checks ('all' / loadProtocols:true was RETIRED 2026-10-16 and now
+      // throws UNKNOWN_PROTOCOL_MODE, so a template still carrying it is reported INCOMPATIBLE here)
       findMany: async (args: { where?: { tags?: { has?: string } } }) =>
         args?.where?.tags?.has === 'protocol-base'
           ? [{ name: 'probe-base', description: null, promptText: 'x', version: '0' }]
@@ -65,19 +66,15 @@ async function valueUnderstood(value: unknown): Promise<boolean> {
         console.log(`✅ ${t.name}: loadProtocols=${JSON.stringify(t.lp)} understood`);
       } else {
         console.log(`❌ ${t.name} (${t.id}): loadProtocols=${JSON.stringify(t.lp)} is NOT understood by the deployed injection code — every execution of this template will throw UNKNOWN_PROTOCOL_MODE`);
+        // loadProtocols:true = the RETIRED load-all mode (2026-10-16). A self-host seeded before 2026-09-09 (E35) can still carry
+        // it; the one-key fix (BC19-safe jsonb merge):
+        if (t.lp === true) console.log(`   fix: UPDATE agent_templates SET metadata = metadata || '{"loadProtocols":"composed"}'::jsonb WHERE id = '${t.id}';`);
         bad++;
       }
     }
     if (carriers.length === 0) console.log('ℹ️ no ACTIVE template carries loadProtocols — nothing to verify');
-    // E35 (2026-09-09): a Pipeline Harness still on legacy load-all while a composed base exists is a
-    // FINDING (every self-host seeded before the seed wrote 'composed' looks like this) — reported, not
-    // fatal: `true` is a valid state the rollback drill deliberately returns to.
-    const baseRows = await prisma.agentPromptLibrary.count({ where: { status: 'ACTIVE', tags: { has: 'protocol-base' } } });
-    for (const t of carriers) {
-      if (t.lp === true && baseRows > 0) {
-        console.log(`⚠️ ${t.name} (${t.id}): loadProtocols=true (legacy load-all) while ${baseRows} protocol-base row(s) exist — prod runs 'composed'; flip with scripts/flip-harness-protocol-mode.ts --flip (E35)`);
-      }
-    }
+    // (The E35 warn for a harness still on `true` is gone: since the load-all retirement, 2026-10-16, `true` is NOT understood and
+    // is reported ❌ above, with its fix.)
     await prisma.$disconnect();
     process.exit(bad > 0 ? 1 : 0);
   } catch (e) {

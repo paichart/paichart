@@ -255,7 +255,10 @@ const KNOWN_STALE_ROLE_QUOTES: Record<string, Record<string, string>> = {
     "specify the COMPARISON to perform instead of the output to expect, per your active protocol's comparison shape":
       'A1 (Steve, 2026-10-04): k8s 1.14.0 left byte-identical through pattern (h) batch 3, which made this config_change_author ' +
       'grant conditional; the conclusion k8s draws (no shape here, the literal stands) still holds. FILED in OPEN-REGISTER ' +
-      '"DECIDED Group A"; fix at the next k8s edit or the consolidation pass, then DELETE this entry.',
+      '"DECIDED Group A". RE-FILED 2026-10-18 (held-k8s SYNTHESIS v3 R8): k8s 1.17.0 (step 2) and 1.18.0 (step 3) are L-K-lab-gated, ' +
+      'and fixing an Author sentence inside them confounds those labs. RE-HOMED 2026-10-19 (K8S-CLOSEOUT): a protocol text change is ' +
+      'Protocol 16 work, so it rides the NEXT lab-gated kubernetes-gitops text batch with the L-K2 carry-forwards (cause-witness wording, ' +
+      'Architect spec quote) — fix there, then DELETE this entry.',
   },
 };
 

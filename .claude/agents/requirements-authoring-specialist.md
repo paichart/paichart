@@ -249,6 +249,21 @@ grep -cE '^- \[ \] Z[0-9]+' .claude/skills/requirements-spec/work/REGISTER.md   
 No domain library yet. Depth lives in the canonical homes above and in the skill's work folders. Create
 `.claude/knowledge/domain/requirements-authoring/` only when evicted depth exists.
 
+**Pointer (2026-10-17, C3-SPEC-OPERATOR-PATH):** telemetry-collector answers amended (items 3/16/22/23 — an operator path exempted
+BY PROPERTY, never by port or file name); objective v4 ready; generation 4 owed after the owner confirms the item 23 wording; publish as
+`k8s-obs-collector-senders-genspec-v2` (direct `~/paichart` push — not the blocked `publish.sh`). REGISTER Z69.
+
+## Pointer (2026-10-19): a spec topology must not carry a teardown `lifecycle` line
+A hand-shaped spec's `readOnlyServices.lifecycle` line was copied by the Program Architect into the interface contract, and Node C then
+refused a correct program because it cannot see a leg's teardown (register NODE-C-TEARDOWN-UNSEEABLE, `cline_docs/follow-ups/OPEN-REGISTER-2026-09-23.md`;
+2 of 84 Node C verdicts). Until that is decided, generated and hand-shaped specs name the descriptor URL only — the lifecycle is the leg
+protocol's job. Both `held-k8s-window-p1` and `k8s-tf-podrange-authz` carry the line today.
+
 ## Working Directory
 
 `/home/steve/copov15`
+
+## Pointer (2026-10-27): network legs need declared device sources
+A network change leg needs `## Device sources` (or the contract's `deviceSources["network-provisioning"]`, written by the Program Architect); since 1.25.0 the declared source is a kept file and a missing or unreadable one forces needs-revision. Record `cline_docs/reviews/held-network-2026-10-22/NETWORK-CLOSEOUT.md`.
+
+**Golden set gap (2026-10-31):** the frozen golden set (v2 since 2026-10-31: 15 legs, 14 infrastructure change legs + 1 network value leg) has NO requirements-authoring cases, so a requirements Author/Reviewer text change currently has no golden regression check — register REQ-GOLDEN-CASES. Add cases at the next requirements text batch (Protocol 16 § "The standing no-regression rule").

@@ -169,6 +169,11 @@ addressing/naming/flow constants). PLAN-SPAWN passes it as a **sibling of `title
 child's `task.create` (exactly one level deep); the platform stores it as `inputContext.interfaceContract`
 and renders it FIRST in that child's §6 as a BINDING block. **A pipeline child that reaches execution
 without its contract FAILS LOUD (`INTERFACE_CONTRACT_MISSING`)** — it can never silently compose (VT-01).
+*Since 2026-10-17 (Q2 leg-contract heal):* when the program's own harness creates a pipeline child **without**
+`interfaceContract`, the platform stores the program plan's contract itself (the same one a create carrying it stores) and
+the `task.create` result says so in one sentence; or it records why it declined (`metadata.interfaceContractSource.arm =
+'create-absent-declined'` + `declineReason`), and the leg then fails loud naming that reason. Any other way of creating a
+leg without its contract (GUI, REST, an external client) still fails loud as above.
 This is the *declarative* coordination. For *runtime* interdependencies (a leg needs an upstream leg's
 designed output), the DAG wires an edge and the downstream leg chains the upstream's `report.md` into
 its §6 (see `firewall-policy-use-case.md` §2/§3 Approach 3).
@@ -256,7 +261,7 @@ It works only if the rules are fixed BEFORE the run and the record says who deci
 ## 6. Reading the result
 
 - **`programReleasable`** (on the program task's `metadata`): a deterministic AND over facts — `true` only
-  when every child pipeline's `qualityGate.outcome` is `approved`, no child carries `verdictMismatch: true`,
+  when every child pipeline's `qualityGate.outcome` is `approved` (a leg the platform **forced** to needs-revision — e.g. a kept file or device source it could not hold; *Forced outcomes* in the pipeline guide — is not approved, so the program is not releasable until that leg is fixed and re-run), no child carries `verdictMismatch: true`,
   no child's `derivationContainment` lists a violation (or an unaccounted-for `unsupported[]` entry, and any
   `checked: false` has a benign reason), Node C's terminal verdict is APPROVED with no blocking issues, and
   coverage is clean for the producer and Node C (`predecessors === chainCapablePredecessors`,
@@ -264,6 +269,16 @@ It works only if the rules are fixed BEFORE the run and the record says who deci
   never gated on (pov-program 1.0.10, 2026-07-18; runs before that also gated `reviewerScore ≥ 85`). The
   canonical formula is the pov-program protocol's SYNTHESIZE gate step. It is an **input to a human release
   decision, never the decision** (VT-06).
+- **`needs-node-c` — a decision handed to Node C.** Some facts on a leg cannot be decided by the leg alone (e.g. a consuming leg whose
+  upstream value was checked by a different leg, or a rollback line its own harvest did not witness). The leg stamps `needs-node-c`
+  with a reason instead of guessing; **Node C** (the program integration reviewer) must answer it explicitly — e.g. confirm the value
+  the leg used equals the value the upstream leg published, quoting both. An unanswered `needs-node-c` keeps `programReleasable` false.
+- **What Node C checks:** that every leg's protocol token and leg type match the approved plan; that values one leg publishes and another
+  consumes agree; the program's own numbered acceptance checks from the spec; and every `needs-node-c` delegated to it. It is a
+  reviewer, not a re-runner: it reads the legs' facts and deliverables, never re-executes them.
+- **A forced or refused leg:** a leg the platform forced to needs-revision, or one whose Reviewer refused, is not `approved`, so the
+  program is not releasable until that leg is fixed and re-run as a fresh task (with the duplicate clearance — pipeline guide,
+  *Re-running*).
 - **Reviewer warnings** (2026-10-08, WARNINGS-INVISIBLE): lines a leg reviewer (or Node C) labelled
   `NON-BLOCKING WARNING (<id>):`. The platform transcribes them (`reviewerVerdict.warnings`), stamps them on each
   leg and on the program (`reviewerWarnings`; card: `reviewerWarnings: N (ids)`, `0` = checked and none, no segment =

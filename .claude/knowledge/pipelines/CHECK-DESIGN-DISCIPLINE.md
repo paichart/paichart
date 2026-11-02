@@ -309,6 +309,15 @@ only what it looks like when it escapes. If the answer is "a round", the trigger
 recurrence, not on escape. And when a filed item's instance count rises while its trigger stays
 unmet, **that mismatch is itself the signal** — re-read the trigger before re-reading the evidence.
 
+*Second instance, 2026-10-17 (Q2, program-leg contract omission).* Q2's re-decision trigger was *"any
+INTERFACE_CONTRACT_MISSING on a program leg after ship"* — it watched for ESCAPE. The cost shape was RECURRENCE: a program
+harness created a child without its ~9 KB contract five times (3 in the last 4 runs), caught its own omission every time,
+and paid a wasted turn + ~8–10 KB of retyped output + an orphan task each time, while the trigger correctly read "not
+yet". Resolution: Q2 was NARROWED (the platform stores the plan's contract on the harness door only, every other door
+stays loud), recorded as a decision on its own evidence — not as the old trigger firing. Record:
+`cline_docs/reviews/q2-leg-contract-heal-2026-10-17/` (SYNTHESIS K15) and the C2/C3 decision lineage in
+`cline_docs/reviews/value-chain-post-window-2026-10-04/`.
+
 ## 5f. A check must be scoped to the UNIT it is counting — five instances in one day
 
 §1 says a rule is a proxy for a property. The commonest way that goes wrong in practice is not a

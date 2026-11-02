@@ -20,6 +20,7 @@ import {
   checkDerivationContainment,
   checkConsumedValues,
   isUpstreamContainmentGreen,
+  legVouches,
   minimalCoveringPrefixLength,
   parseAsn,
   harvestCounts,
@@ -1087,10 +1088,18 @@ test('D10: hard-gap reasons block, including the two moved there by arch F1', ()
 });
 
 test('H-2 predicate: a `via` (transitive) leg counts exactly like a direct one — clean deriving via-leg ⇒ green; any via-leg violation ⇒ not green', () => {
+  // Bug Class 85 (2026-10-22): the hop vouches only as a passed-clean MIDDLE leg (its stamped discharge reason);
+  // both stored chains carry exactly this shape (follow-up §6.3). A hop with NO disposition is indistinguishable
+  // from a benign-unchecked contradiction (C4), so it no longer vouches — fail closed.
+  const HOP = { taskId: 'p2', checked: false, violations: 0, disposition: 'benign' as const, dispositionReason: 'consuming-leg-consumed-discharged' };
+  assert(isUpstreamContainmentGreen([
+    HOP,
+    { taskId: 'p1', checked: true, violations: 0, via: 'p2' },
+  ]) === true, 'clean deriving leg reached via a passed-clean middle leg must make the list green');
   assert(isUpstreamContainmentGreen([
     { taskId: 'p2', checked: false, violations: 0 },
     { taskId: 'p1', checked: true, violations: 0, via: 'p2' },
-  ]) === true, 'clean deriving leg reached via a hop must make the list green');
+  ]) === false, 'a middle leg with NO disposition does not vouch (Bug Class 85: unknown ⇒ not green)');
   assert(isUpstreamContainmentGreen([
     { taskId: 'p2', checked: false, violations: 0 },
     { taskId: 'p1', checked: true, violations: 1, via: 'p2' },
@@ -1537,8 +1546,10 @@ test('CP N-14 (review L5): a whitespace-only dispositionReason is unnamed ⇒ bl
 test('CP P-4: two-hop — a delegated consumer hop + its delegated via root ⇒ delegated, BOTH subjects named in order', () => {
   const d = computeContainmentDisposition(consumer([NNC('hop', DELEGATED), NNC('root', 'harvested-pool-no-derivation-cannot-decide', { via: 'hop' })]));
   assert(d.disposition === 'needs-node-c' && d.reason === DELEGATED, JSON.stringify(d));
+  // Bug Class 85 G5 (2026-10-22): `hop` has a via child, so it is named as the MIDDLE leg (D4 requirement 2).
   assert(JSON.stringify(d.inputs.upstreamDelegated) === JSON.stringify([
-    { taskId: 'hop', dispositionReason: DELEGATED }, { taskId: 'root', dispositionReason: 'harvested-pool-no-derivation-cannot-decide' }]),
+    { taskId: 'hop', dispositionReason: DELEGATED, middleLegFor: ['root'] },
+    { taskId: 'root', dispositionReason: 'harvested-pool-no-derivation-cannot-decide' }]),
   JSON.stringify(d.inputs.upstreamDelegated));
 });
 
@@ -1564,6 +1575,90 @@ test('CP P-6: a clean machine-checked copy alongside a delegated one is allowed 
 test('CP P-7: green:true still discharges BENIGN, unchanged — the new arm never touches the green route', () => {
   const d = computeContainmentDisposition({ ...consumer([NNC('u1')]), upstreamContainment: { green: true, legs: [NNC('u1')] } });
   assert(d.disposition === 'benign' && d.reason === 'consuming-leg-consumed-discharged', JSON.stringify(d));
+});
+
+// ── BUG CLASS 85 (2026-10-22) — "one clean upstream masks the rest", owner decision all six rows ──────────
+// cline_docs/follow-ups/containment-green-path-gaps-2026-10-12.md §6 (measure) + §6.7 (decision).
+const CLEAN = (taskId: string, extra: Record<string, unknown> = {}) =>
+  ({ taskId, checked: true, violations: 0, disposition: 'benign' as const, dispositionReason: 'checked-clean', ...extra });
+const MID = (taskId: string) =>
+  ({ taskId, checked: false, violations: 0, disposition: 'benign' as const, dispositionReason: 'consuming-leg-consumed-discharged' });
+const G4LEG = (taskId: string, kinds: string[] = ['vlan']) =>
+  ({ taskId, checked: true, violations: 0, disposition: 'needs-node-c' as const, dispositionReason: 'unsupported-not-mechanically-covered',
+     derivedValues: [{ kind: 'cidr', value: '10.99.0.8/31' }, { kind: 'vlan', value: '100' }], unsupportedKinds: kinds });
+
+test('BC85 keep-green: the stored chain shape (passed-clean middle leg + clean root via it) is green; a list of middle legs alone is not', () => {
+  assert(isUpstreamContainmentGreen([MID('m'), { ...CLEAN('r'), via: 'm' }]) === true, 'stored chain shape must stay green');
+  assert(isUpstreamContainmentGreen([MID('m')]) === false, 'no machine-checked leg ⇒ never green');
+  assert(isUpstreamContainmentGreen([{ ...MID('m'), dispositionReason: 'nothing-to-derive' }, { ...CLEAN('r'), via: 'm' }]) === false,
+    'a benign-UNCHECKED middle leg (C4 contradiction) does not vouch');
+});
+
+test('BC85 legacy: a checked:true copy with NO disposition (13 stored, pre-2026-08-04) still vouches — byte-identical green', () => {
+  assert(isUpstreamContainmentGreen([{ taskId: 'old', checked: true, violations: 0 }]) === true, 'legacy copy');
+  assert(legVouches({ taskId: 'old', checked: true, violations: 0 }) === true, 'legacy copy vouches');
+});
+
+test('BC85 G0/G5 at the predicate: a clean leg no longer carries an undecided or benign-unchecked sibling', () => {
+  for (const sib of [
+    { taskId: 's', checked: false, violations: 0, disposition: 'needs-node-c' as const, dispositionReason: 'harvested-pool-no-derivation-cannot-decide' },
+    { taskId: 's', checked: false, violations: 0, disposition: 'benign' as const, dispositionReason: 'nothing-to-derive' },
+    { taskId: 's', checked: false, violations: 0, disposition: 'blocking' as const, dispositionReason: 'hard-gap' },
+    { taskId: 's', checked: false, violations: 0 },
+  ]) {
+    assert(isUpstreamContainmentGreen([CLEAN('c'), sib]) === false, `masked sibling ${JSON.stringify(sib)}`);
+  }
+});
+
+test('BC85 G1/G2 at the predicate: a fallback or a lookup miss beside a clean leg ⇒ not green; zero counts change nothing', () => {
+  assert(isUpstreamContainmentGreen([CLEAN('c')], { fallbackPredecessors: 1 }) === false, 'G1');
+  assert(isUpstreamContainmentGreen([CLEAN('c')], { lookupMisses: 1 }) === false, 'G2');
+  assert(isUpstreamContainmentGreen([CLEAN('c')], { fallbackPredecessors: 0, lookupMisses: 0 }) === true, 'zero counts');
+});
+
+test('BC85 G4 per kind (option b): a checked+unsupported leg vouches only when no consumed kind is unsupported; unknown kinds fail closed', () => {
+  assert(isUpstreamContainmentGreen([G4LEG('n')], { consumedKinds: ['cidr'] }) === true, 'the measured 2026-08-03 shape');
+  assert(isUpstreamContainmentGreen([G4LEG('n')], { consumedKinds: ['cidr', 'vlan'] }) === false, 'vlan consumed');
+  assert(isUpstreamContainmentGreen([G4LEG('n')], { consumedKinds: [] }) === true, 'nothing consumed (the :1217 arm)');
+  const noKinds = { ...G4LEG('n') } as Record<string, unknown>; delete noKinds.unsupportedKinds;
+  assert(isUpstreamContainmentGreen([noKinds as never], { consumedKinds: ['cidr'] }) === false, 'unknown unsupported kinds ⇒ not green');
+});
+
+test('BC85 G4 disposition: vlan consumed ⇒ delegated; subject names the unchecked kind; check 1 per kind (mixed)', () => {
+  const d = computeContainmentDisposition(consumer([G4LEG('n')], { consumedValues: [{ kind: 'cidr', value: '10.99.0.8/31' }, { kind: 'vlan', value: '100' }] }));
+  assert(d.disposition === 'needs-node-c' && d.reason === DELEGATED, JSON.stringify(d));
+  assert(JSON.stringify(d.inputs.upstreamDelegated) === JSON.stringify([{ taskId: 'n', dispositionReason: 'unsupported-not-mechanically-covered', uncheckedKinds: ['vlan'] }]),
+    JSON.stringify(d.inputs.upstreamDelegated));
+  assert(d.inputs.consumedValueCheck === 'mixed' && JSON.stringify(d.inputs.consumedValueCheckByKind) === JSON.stringify(
+    [{ kind: 'cidr', state: 'ran-no-mismatch' }, { kind: 'vlan', state: 'ran-against-unchecked-upstream' }]), JSON.stringify(d.inputs));
+  const onlyVlan = computeContainmentDisposition(consumer([G4LEG('n')], { consumedValues: [{ kind: 'vlan', value: '100' }] }));
+  assert(onlyVlan.inputs.consumedValueCheck === 'ran-against-unchecked-upstream'
+    && JSON.stringify(onlyVlan.inputs.consumedValueCheckByKind) === JSON.stringify([{ kind: 'vlan', state: 'ran-against-unchecked-upstream' }]),
+  `a uniform NEW state still carries byKind: ${JSON.stringify(onlyVlan.inputs)}`);
+});
+
+test('BC85 G4 beside a delegated leg: a G4 leg whose unchecked kinds were NOT consumed is clean in the delegation too (the two rules agree)', () => {
+  const d = computeContainmentDisposition(consumer([G4LEG('n'), NNC('u1')]));
+  assert(d.reason === DELEGATED && JSON.stringify((d.inputs.upstreamDelegated ?? []).map(u => u.taskId)) === '["u1"]', JSON.stringify(d));
+});
+
+test('BC85 G5 disposition: an undecided MIDDLE leg over a clean root ⇒ delegated, middle leg named with the leg reached through it, check 1 ran', () => {
+  const d = computeContainmentDisposition(consumer([NNC('mid'), { ...CLEAN('root', { derivedValues: [{ kind: 'cidr', value: '10.244.0.4/30' }] }), via: 'mid' }]));
+  assert(d.disposition === 'needs-node-c' && d.reason === DELEGATED, JSON.stringify(d));
+  assert(JSON.stringify(d.inputs.upstreamDelegated) === JSON.stringify([
+    { taskId: 'mid', dispositionReason: 'harvested-pool-no-derivation-cannot-decide', middleLegFor: ['root'] }]), JSON.stringify(d.inputs.upstreamDelegated));
+  assert(d.inputs.consumedValueCheck === 'ran-no-mismatch' && !('consumedValueCheckByKind' in d.inputs), JSON.stringify(d.inputs));
+});
+
+test('BC85 G1 disposition: upstreamDeliverableMissing beside a delegated leg ⇒ blocking, never delegated', () => {
+  const d = computeContainmentDisposition(consumer([NNC('u1')], { upstreamDeliverableMissing: 1 }));
+  assert(d.disposition === 'blocking' && d.reason === NOT_GREEN && !('upstreamDelegated' in d.inputs), JSON.stringify(d));
+});
+
+test('BC85 byte-identity: a delegated stamp with no G4/G5 shape carries exactly the pre-BC85 subject and check-state fields', () => {
+  const d = computeContainmentDisposition(consumer([NNC('u1')]));
+  assert(JSON.stringify(d.inputs.upstreamDelegated) === JSON.stringify([{ taskId: 'u1', dispositionReason: 'harvested-pool-no-derivation-cannot-decide' }]), JSON.stringify(d.inputs));
+  assert(d.inputs.consumedValueCheck === 'not-run-no-upstream-derived' && !('consumedValueCheckByKind' in d.inputs), JSON.stringify(d.inputs));
 });
 
 console.log(`\n📊 Results: ${passed} passed, ${failed} failed`);

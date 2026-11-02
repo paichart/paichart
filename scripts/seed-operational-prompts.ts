@@ -2348,7 +2348,7 @@ What you just ran are **prompts** — guided, ready-made templates you invoke wi
     status: AgentTemplateStatus.ACTIVE,
     isPublic: true,
     tags: ['mcp', 'interactive', 'domain:general'],
-    version: "1.0.0",
+    version: "1.1.0", // 2026-10-26 (held-network step 3 push 3, mcp-hub SF-2 / J2-TEXT-DRAFT N7): one line — a device service's held file is `device:<device>` at `/running-config`.
     variables: {} as any,
     examples: {} as any,
     promptText: `# MCP Hub Service Registration Guide
@@ -2874,6 +2874,8 @@ endpoint: "http://localhost:3100/sse"
 
 **Why Streamable HTTP is recommended**: No VPN required, works through corporate firewalls, perfect for external services.
 
+**Device services (held files):** A device service declares its held file as \`device:<device>\` at \`/running-config\`; any other form is not held.
+
 ---
 
 ### Version Management
@@ -3102,6 +3104,22 @@ registry(action: "update", {
 \`\`\`javascript
 services(action: "discover")  // See all registered services
 \`\`\`
+
+---
+
+### Error: "…is shaped like a platform id; names shaped like a platform id are reserved"
+
+**Cause**: The name looks like a platform id (\`c\` followed by 24 lowercase letters/digits). Services are addressed by name OR by id, so a name must never look like one.
+
+**Solution**: Use a descriptive name, e.g. \`weather-api\`.
+
+---
+
+### Error: "…equals the id of an existing service; a name that equals a platform id is reserved"
+
+**Cause**: The name is exactly another service's **id** (e.g. a first-party slug such as \`browser-automation-service\`). Calls resolve the id first, so that name could never be reached.
+
+**Solution**: Choose a different name — \`services(action: "discover")\` shows the ids already in use.
 
 ---
 

@@ -19,15 +19,29 @@
 
 export const DESCRIPTOR_VERSION = 1;
 
-/** A value source: a constant, a template over the selected key (`{key}`), or a named argument of the call. */
-export type ValueSource = { const: string } | { template: string } | { argument: string };
+/** A value source: a constant, a template over the selected key (`{key}`), a named argument of the call, or (held-k8s,
+ *  2026-10-18) the PATH parsed from the served resource URI of a pinned Git file source (`{ uri: 'path' }` — '/' + the URI's
+ *  `/contents/<path>` tail; the argument path must agree, else `source-not-pinned`). */
+export type ValueSource = { const: string } | { template: string } | { argument: string } | { uri: 'path' };
 
 export interface FileSpec {
-  /** Closed dotted grammar from the tool result root (`data.result`): e.g. `structuredContent.yaml`, or
-   *  `structuredContent.files.*` (at most one trailing `.*` over an object's keys). */
+  /** Closed dotted grammar from the tool result root (`data.result`): `seg ('.' seg)* ('.*')?` where a seg is a key `name`
+   *  or (held-k8s) `name[field=literal]` — the ONE element of the array `name` whose `field` equals `literal` (0 ⇒ see
+   *  `directoryWhenNone`, ≥ 2 ⇒ `descriptor-mismatch {ambiguous}`). A bracketed seg never combines with a trailing `.*`.
+   *  e.g. `structuredContent.yaml`, `structuredContent.files.*`, `content[type=resource].resource.text`. */
   select: string;
   target: ValueSource;
   path: ValueSource;
+  /** held-k8s: the Git file-source pin applies (lib/mcp/server/config/git-file-source-pin.js, keyed by the service NAME):
+   *  arguments + served URI checked, `sourceRevision` taken from the URI. */
+  gitPin?: true | { owner: string; repo: string; ref?: string };
+  /** held-k8s (SYNTHESIS v3 R4): when the bracketed selector matches NO element and `content[0].text` parses as a JSON
+   *  ARRAY, the call was a directory listing — NO row, a stats count; MI-13 🔴 9/10 carry the same named exemption. */
+  directoryWhenNone?: 'content0-json-array';
+  /** held-network step 3 batch 2b (P4): the star-bound key NAMES A DEVICE — held only when the leg's Device sources declare that
+   *  device `device-read` for the call's service (device-read-scope.ts); and a call in which NO member carries the tail is not a
+   *  config read (no row — a stats count), never a `descriptor-mismatch`. Only on the device-read lane. */
+  deviceKey?: true;
 }
 
 export interface Descriptor {
@@ -36,9 +50,21 @@ export interface Descriptor {
   tool: string;
   files?: readonly FileSpec[];
   notAFile?: string;
+  /** held-k8s (SYNTHESIS v3 §6.2 1b-scope): capture ONLY when the owning leg's protocol is a Git-file-source protocol
+   *  (`GIT_FILE_SOURCE_PROTOCOLS`, held-bytes/variant.ts) — any other execution calling the service holds nothing. */
+  legScope?: 'git-file-source' | 'device-read';
+  /** WI-B10 (2026-10-23): a REGISTRANT entry, built at capture from the immutable held_declarations snapshot the call was stamped
+   *  with. Matched on the resolved serviceId + sha (never the name); for that service it REPLACES the defaults as a whole. */
+  declaredBy?: 'registrant';
+  serviceId?: string;
+  declarationSha256?: string;
+  /** WI-B10: tools the registrant declared notAFile — calls to them hold nothing and count nothing. */
+  notAFileTools?: readonly string[];
 }
 
 const RIG = 'observability-readonly';
+/** held-k8s (2026-10-18): the read-only GitHub MCP held-file source (services/github-service). Platform-registered. */
+export const GITHUB_FILE_SOURCE = 'github-service';
 const NOT_A_FILE_READ = 'read-only inspection data, not a configuration file the operator writes';
 
 /** Deep-frozen (code review CR-N5): the entries and their `files` arrays too, so "frozen at descriptorVersion 1" holds. */
@@ -56,6 +82,13 @@ export const PLATFORM_DEFAULT_DESCRIPTORS: readonly Descriptor[] = deepFreeze([
     descriptorVersion: DESCRIPTOR_VERSION, service: RIG, tool: 'get_otel_config',
     files: [{ select: 'structuredContent.yaml', target: { const: 'obs-otelcol' }, path: { const: '/etc/otelcol/config.yaml' } }],
   },
+  // held-k8s step 1b (SYNTHESIS v3 §6): the GitHub file source. Its own entry version (1) — the GLOBAL DESCRIPTOR_VERSION is
+  // unchanged, so observability refs and refusals keep their bytes. Closed world: the server runs `--tools get_file_contents`.
+  {
+    descriptorVersion: 1, service: GITHUB_FILE_SOURCE, tool: 'get_file_contents', legScope: 'git-file-source',
+    files: [{ select: 'content[type=resource].resource.text', target: { const: 'github:paichart:paichart-lab-configs' },
+      path: { uri: 'path' }, gitPin: true, directoryWhenNone: 'content0-json-array' }],
+  },
   { descriptorVersion: DESCRIPTOR_VERSION, service: RIG, tool: 'get_prometheus_config',
     notAFile: 'API rendering of the running config, not the file the operator writes (BC N2)' },
   { descriptorVersion: DESCRIPTOR_VERSION, service: RIG, tool: 'stack_health', notAFile: NOT_A_FILE_READ },
@@ -67,9 +100,57 @@ export const PLATFORM_DEFAULT_DESCRIPTORS: readonly Descriptor[] = deepFreeze([
   { descriptorVersion: DESCRIPTOR_VERSION, service: RIG, tool: 'get_grafana_dashboard', notAFile: NOT_A_FILE_READ },
 ] as Descriptor[]);
 
-/** Tools whose entry declares files, in TABLE order (see the ORDER note above). */
+/**
+ * held-network step 3 batch 2b (P4 / S3-B, S3-D, 2026-10-26) — the DEVICE-READ lane: the platform default for a device service's
+ * STRUCTURED config getter. A SEPARATE table on purpose: it is keyed by DECLARATION, not by service name, so it never enters the
+ * name-keyed lookups of PLATFORM_DEFAULT_DESCRIPTORS (and none of that table's pins — MI-13's declared pairs, the registrant
+ * reserved names, the quoteFidelity file lanes — move). It applies ONLY on a Device-sources leg (variant.ts
+ * DEVICE_SOURCE_PROTOCOLS), ONLY to a call whose service the leg declares `device-read` (device-read-scope.ts), and ONLY to the
+ * hosts (devices) declared for that service. A service with a REGISTRANT declaration uses that instead (WI-B10: it replaces the
+ * defaults as a whole).
+ *
+ * The shape is the one measured on stored production and lab records (2026-10-26, 58 distinct calls in the lab snapshot cache):
+ * `structuredContent.hosts.<device>.output.config.{running,startup,candidate}` — the structured getter's `config` output, one or
+ * several hosts per call, possibly BUNDLED with other getters in the same call (their output sits beside `config` and is ignored).
+ * Never the CLI-text tool's output (`show_commands`): a rendering of a command, not the running configuration the getter returns.
+ * Target `device:<host>` (the device a base belongs to; `device:` is a namespace no other entry writes), path `/running-config`.
+ */
+export const DEVICE_READ_SERVICE = '(the service a Device sources line declares device-read)';
+export const DEVICE_READ_TARGET_PREFIX = 'device:';
+export const DEVICE_READ_PATH = '/running-config';
+export const DEVICE_READ_DESCRIPTORS: readonly Descriptor[] = deepFreeze([
+  {
+    descriptorVersion: 1, service: DEVICE_READ_SERVICE, tool: 'fetch_data', legScope: 'device-read',
+    files: [{ select: 'structuredContent.hosts.*.output.config.running', target: { template: 'device:{key}' },
+      path: { const: '/running-config' }, deviceKey: true }],
+  },
+] as Descriptor[]);
+
+/**
+ * held-network step 3 push 2 (P8 / S3-E, sec-ops step-2 N-2) — the DECLARED-GIT-LINE lane: an UNPINNED customer Git service on a
+ * Device-sources leg. A service the leg declares `git-file` for (and which has no name-keyed platform entry — the platform Git file
+ * source keeps its pin — and no registrant declaration — a registrant's own `gitPin` keeps its pin) is read with the same shape the
+ * platform Git file source declares (a `get_file_contents` resource item; the served URI yields the path and the commit). The PIN is
+ * the declared LINE: the call's owner / repo / path (and the line's ref, when it names one) must equal ONE declared line for that
+ * service, and the served URI must agree — else nothing is held (`git-file-not-declared`, the field named). Declaration-keyed, so
+ * none of PLATFORM_DEFAULT_DESCRIPTORS' pins move.
+ * ⚠️ mcp-hub push-2 NOTE 6: only `tool` and `select` are read (extract.ts extractGitLine). `target` / `path` / `gitPin` below are
+ * DOCUMENTATION of what the lane produces — the target and path come from the matched LINE, the pin is the line — never take
+ * `gitPin: true` here at face value in a loop over descriptor tables.
+ */
+export const GIT_LINE_DESCRIPTORS: readonly Descriptor[] = deepFreeze([
+  {
+    descriptorVersion: 1, service: '(the service a Device sources line declares git-file)', tool: 'get_file_contents', legScope: 'git-file-source',
+    files: [{ select: 'content[type=resource].resource.text', target: { template: 'github:{key}' }, path: { uri: 'path' }, gitPin: true,
+      directoryWhenNone: 'content0-json-array' }],
+  },
+] as Descriptor[]);
+
+/** Tools whose entry declares files, in TABLE order (see the ORDER note above). OBSERVABILITY RIG ONLY (held-k8s, SYNTHESIS v3
+ *  1e / AE S-7): this tool-LEAF list feeds the lab's order-pinned scorer and the quoteFidelity lane; the GitHub entry joins the
+ *  lane through the service-keyed lane source (1e), never through this leaf list. */
 export const FILE_DESCRIPTOR_TOOLS: readonly string[] = Object.freeze(
-  PLATFORM_DEFAULT_DESCRIPTORS.filter((d) => !d.notAFile).map((d) => d.tool),
+  PLATFORM_DEFAULT_DESCRIPTORS.filter((d) => d.service === RIG && !d.notAFile).map((d) => d.tool),
 );
 
 /** Does this service carry any descriptor at all? (No ⇒ its calls are not a file lane and record nothing.) */

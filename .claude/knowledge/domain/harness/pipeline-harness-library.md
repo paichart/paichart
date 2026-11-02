@@ -1092,7 +1092,7 @@ DEPRECATED (ND6); E4 stale-text corrections + DN1 (one disposed-child definition
 exit; E5 `change_reviewer` scoping; E6 producer/Node C wired to the legs only. **Cost (R9, as corrected — net):** about
 +4.5K chars per root execution AND per Architect (named read of pov-program) + ~2.7K role text on the Architect (≈ +7.2K),
 against Node C's ~−45K once it stops reading network-provisioning: ≈ +$0.04 gross / **+$0.01 net** per run —
-informational, never a gate. The 10 → 9 ACTIVE-protocol headroom matters only to the unused load-all path. Regression
+informational, never a gate. The 10 → 9 ACTIVE-protocol headroom mattered only to the unused load-all path (RETIRED 2026-10-16 — no cap applies any more). Regression
 controls (E10) follow deploy 2; the successor sentence in the tombstone's description lands only after they pass (ND8).
 
 
@@ -1113,3 +1113,147 @@ textual dependences are PINNED: `lib/agents/harness/protocol-dependence-anchors.
 `test:protocol-dependence-anchors` (DB, health-run; bidirectional count pin — new base-reference
 without a pair fails). Cross-DELTA references are BANNED (R8 — the other delta is no longer in
 the prompt). Record: `cline_docs/reviews/ws1-phase-c-2026-08-17/SYNTHESIS.md`.
+
+## Carried from the join learnings ledgers (2026-10-31)
+
+Source: `cline_docs/reviews/held-network-2026-10-22/LEARNINGS-LEDGER.md` (LL-N). Each line is the learning in one sentence; the ledger row holds the evidence.
+
+- **The duplicate check is POV-wide, not per phase (LL-N-41).** Re-running a published program spec in a new phase of the same POV halts. Before launch, set `metadata.duplicateAcknowledged` to an ARRAY holding the prior program stage AND each prior leg's `Pipeline:` stage.
+- **A refusal leg proves the reason, not the override (LL-N-42).** When agents refuse for the same cause, the carrier records `forced: false`. To show the force direction, design a leg the agents would approve.
+- **Internal customer setups are the norm (LL-N-03).** Classify every held-path rule as platform, correctness or customer; a rule judged only against our hosted lab blocks an internal team.
+- **"Held by default" needs a declared source per device (LL-N-02).** A missing declaration STOPS; a source is never inferred.
+
+## Evicted 2026-10-31 — held-joins build pointers (liveness review; VERBATIM from the agent file)
+
+Moved by the liveness test (owner 2026-10-31): build-step status for finished joins and self-declared superseded lines. Live responder facts were kept in the agent file.
+
+## Pointer (2026-10-13): Phase 4 run 3 RELEASED
+Root `cmv6a2xjq0005yxwtpr4rbti8`: `programReleasable: true`; BRANCH D4 exercised for the first time and discharged by Node C via the spec's acceptance check 1 (no Node C text change). Live control under the new Protocol 16 owner exemption (`LIVE-CONTROL-RUN3.md`). The k8s selection leg ran harvest-only with no text change (PLAN-SPAWN brief variance) — owner decision owed, register VALUE-LEG-K8S. Next design: PLATFORM-HELD-BYTES (edit by reference).
+
+## Pointer (2026-10-14): PLATFORM-HELD-BYTES Stage A BUILT (shadow; deployed 2026-10-14, capture ON 03:00Z)
+Eight local commits (`e0ea6e5a2` … `f8ff23a6b`): three tables, capture halves on both success paths, savepoint write, GC,
+digest builders, rehearsal, archive replay, MI-13 section. Panel 93.2; seven WI-14 code reviews GO for the flag-off push.
+Deploy = moment 1 (switch absent), then the flip + live window (§11.3) — both Steve's call. Record:
+`cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-BUILD.md`.
+Stage B push 1 (series movers, no variant): `held_views` + relaxed refs, `R9_VERSION`, R10 v3, `toolCallGatewayMeta`, gateway id-first. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-B-PUSH1-BUILD.md`.
+Stage B variant BUILT locally 2026-10-15 (not pushed): DRAFT `observability-config-held-protocol` built over the rendered obs base, 4 INACTIVE templates, `held.get`, the fail-closed carrier at the qualityGate write, MI-13 HELD VARIANT. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-B-VARIANT-BUILD.md`. G1 lab CLOSED 2026-10-15 (L12/L12b, `G1-LAB-RESULT.md`); the edit grammar accepts a numbered machine heading (`machineHeadingTitle`, `7cacf7931`); next G2 then push 2.
+**Stage B push 2 DEPLOYED 2026-10-15** (`release_20261015_183825`): variant row DRAFT, templates NOT seeded; nine-lane review folded (`stage-b-panel/CODE-REVIEW-P2-SYNTHESIS.md`). Responder facts: the carrier is the ONLY writer of `qualityGate.heldEdit` (an inbound one is deleted on every write), reads the leg's STORED `pipelineStageId`, and forces `stage-rebind` / `author-not-of-leg`; a Reviewer counts as having seen the diff only when its own `chainedPredecessors` chained that Author. Next: G3 entry — `cline_docs/follow-ups/platform-held-bytes-g3-entry-continuation-2026-10-16.md`.
+
+## Pointer (2026-10-16): PLATFORM-HELD-BYTES G3 entry BUILT + pushed (`6b44c9cfe` + `e574210d7`)
+Responder facts (variant legs only; inert while the row is DRAFT): a variant Harvester that held nothing ⇒ `heldBytes.reason` `capture-off`/`no-files` + one `heldNone` §6 state; absent stamped digest ⇒ editDiff `could-not-check`; held-chain failures role-aware (`{}` for an unresolved consumer); A8 forgives a retitle folding to a machine heading. Lab-gated next: variant Reviewer constraint + refusals in the Reviewer diff — G3 lab (model-evaluation, cap $10, stop before spend). Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/G3-ENTRY-BUILD.md`.
+
+## Pointer (2026-10-16, later): PLATFORM-HELD-BYTES GO-MINIMAL — G3 lab PASSED, flip prep DONE; the "Lab-gated next" line above is superseded
+Plan is `cline_docs/reviews/platform-held-bytes-2026-10-13/GO-MINIMAL-DETERMINATION.md` (flip prep → two flip deploys → G3 window); records `FLIP-PREP-DECISIONS.md`, `G3-RUN-SHEET.md`, `FLIP-CHECKLIST.md`. Flip commits `b785fe9e3` (templates ACTIVE) + `086ae0cb9` (row ACTIVE) were LOCAL at close; push flip 1 ALONE first (`git push origin b785fe9e3:main`), reseed templates, then the row.
+⚠️ **[SUPERSEDED by Phase 10 once deployed: the variant is folded into obs, so every obs leg in a program IS held-capable — see the 2026-10-17 pointer at the end.]** **Durable fact (pre-fold): a pov-program cannot release a VARIANT leg** — the Program Architect writes only the five sanctioned tokens, and pov-program 2.2.0 PLAN-SPAWN makes "a leg retitled away from its plan's token" BLOCKING at Node C. So G3 runs as STANDALONE pipelines titled `(protocol: observability-config-held)` (F5); a variant in a program needs the Architect token list + Node C text, i.e. promotion.
+Operator base check before any apply: `scripts/held-base-check.ts` (private; fixture test unwired, run by hand).
+
+## Pointer (2026-10-17): PLATFORM-HELD-BYTES Phase 10 — the FOLD (DEPLOYED 2026-10-17; controls done)
+Owner decisions PH-1…PH-11 + PD-1/PD-2 (`PHASE10-INVENTORY.md`), plan + build record `PHASE10-PLAN.md`. Held is a CAPABILITY of the obs
+protocol (obs 1.10.0), not a variant: one batch, no Architect token change. Carrier scope: `no-edits`/`no-base` never forced (M1 19/53
+obs legs change no held file); `held-file-written-whole` refuses a whole write (SG-WIN, 0.90). The retired variant row is a LEG-tier
+tombstone — composes base-only, never a `PROGRAM_PROTOCOL_NAMES` member. Other domains join `HELD_CAPABLE_PROTOCOLS` only once their rig
+returns the file the operator writes (k8s → terraform → network, PH-11). ⚠️ The held text now publishes with obs: no public export
+until the self-host text exists (PH-7).
+**Status 2026-10-17:** panel + re-review + audit folded (`phase10-panel/`); THE out-of-scope predicate = `held-bytes/scope.ts` (six
+readers; MI-13 re-derives it). Controls (`PHASE10-PLAN.md` §10.10–10.13): C-1 PASS (Prometheus-only ⇒ `no-base`, out of scope) · C-2 PASS
+(applied, 2a MATCH, byte-identical to G3 L1) · C-3 PASS on the out-of-scope program path, applied-in-program NOT exercised (spec gap
+C3-SPEC-OPERATOR-PATH; re-run after the generation-4 spec). `publish.sh` + the renderer now refuse ANY public push until PH-7. Filed:
+C3-RELEASABLE-NO-CHANGE · C3-PROOF-SCOPE (a premise proof covers EVERY block the spec counts as a sender) · PAICHART-REPO-VISIBILITY
+(pre-flight fetches each spec URL and compares bytes). Next: k8s on a Git file source (HELD-GIT-MCP: network option C; terraform-mcp-server
+evidence-only, read allowlist + state/write-tool pins).
+
+## Pointer (2026-10-17): Q2 NARROWED — leg-contract heal at the harness door (built; deploy pending)
+When the program's OWN root harness (RUNNING, server-set `callingExecutionId`) creates a PIPELINE leg WITHOUT `interfaceContract`,
+the platform stores the plan's contract (`interfaceContractSource.arm:'create-absent'`, flagged; result sentence + `contractSuppliedFromPlan`)
+or declines with a reason (`create-absent-declined` + `declineReason`; F16 names it). A contract SENT but dropped stays loud
+(`CONTRACT_SENT_BUT_DROPPED`); every other door unchanged. MI-13 Q2 section; K14 live control pre-registered (a supersede of a
+create-absent leg is the finding); text debt PQ-4 (Step 4 "FAILS LOUD") + option B ride the next pov-program batch. A `stage-legs-*`
+decline describes the stage's OTHER legs — count a cascade as one event. Record: `cline_docs/reviews/q2-leg-contract-heal-2026-10-17/` (SYNTHESIS v3 §8-§9).
+
+## Pointer (2026-10-18): kept-file pattern (CANDIDATE) + GitHub file source LIVE
+`.claude/knowledge/patterns/kept-file-edit-by-reference-pattern.md` (80%, candidate): the mechanism, the 8-item domain-join procedure,
+proof gates, anti-patterns, and Addendum A (the GitHub file source's checkable properties). **Start any k8s/terraform held join from
+it**, then correct it with what the join contradicts; promote after the k8s live window. `github-service` is live (admin-only;
+`services/github-service/README.md`); descriptor hard requirements are in register HELD-GIT-MCP-K8S-TERRAFORM.
+
+## Pointer (2026-10-18): held-k8s STEP 1 COMPLETE — DEPLOYED 2026-10-18 04:23:03Z, release `release_20261018_041900`
+Plan: `cline_docs/reviews/held-k8s-2026-10-18/SYNTHESIS.md` v3 §6 (K-1…K-10, G-1…G-7 approved). Built: the `sourceRevision`
+column (never revert), GitHub capture + ONE pin at both gates; then (same day) 1d hub guard · 1e quoteFidelity v2 · 1f K-4 · 1g MI-13
+(`HELD_JOIN_VERSIONS` = the one held-capable table) + G-1 elision · 1h `held-base-check --git` · 1i R10 lab controls (lab-repo push
+owed) · 1j clause per domain + export hold keyed on the heading · 1l rig reset script · TS N4. Open: 1k (model-evaluation), 1m
+(series cut, at push), §4 gates, owner checkpoint before the push. **PUSHED 2026-10-18 (`53ae4dc7f`)**; next: STEP1-BUILD §6 post-deploy, then step 2 (`cline_docs/follow-ups/held-k8s-step2-continuation-2026-10-18.md`).
+Record: `cline_docs/reviews/held-k8s-2026-10-18/STEP1-BUILD.md` (§2 findings 1–10, §6 post-deploy DONE, §7 step-2 entry gate); continuation:
+`cline_docs/follow-ups/held-k8s-step2-continuation-2026-10-18.md`. Step 2 waits on two entry items: the L-K1 fixture probe (model-evaluation) and sec-ops SF-1 (mcp-hub). MI-13's `sourceRevision` lines sit behind a column-exists guard; the rig reset applies COMMITTED bytes of a commit on `origin/main`; and `scripts/` is not typechecked by the build (finding 10 — typecheck the scripts that build a type you change).
+
+## Pointer (2026-10-19): held-k8s STEP 2 DEPLOYED (cut 2026-10-18 08:21:02Z, k8s 1.17.0) — shadow window 6/6 PASS, 0 STOP
+L-K1 passed on run 2 ($9.93; run 1 failed PATH/NOGUESS on a "list a directory at most once" sentence — replaced). Window (non-demo POV
+`cmvdkz04s…`): A-K1..A-K5 + a non-admin CTRL all PASS; the drift-performed Reviewer approve direction is now measured. Filed:
+R10-CODE-ASSIGN (fix = R10 v4, sec-ops review), CONCURRENT-SELF-PROVISION, K8S-HUNK-COUNT, DRIFT-CAUSE-WORDING (for 1.18.0). ⚠️ Two legs
+with the same objective in one phase halt as duplicates — clear with `metadata.duplicateAcknowledged` = an ARRAY of every prior `Pipeline:`
+stage. Records: `cline_docs/reviews/held-k8s-2026-10-18/` STEP2-BUILD.md, LAB-RESULT-L-K1.md, WINDOW-RUN-SHEET.md. Next: the program leg
+(G-3) or step 3 (held join, 1.18.0, L-K2).
+
+
+## Pointer (2026-10-19): held-k8s STEP 3 DEPLOYED (cut 04:47:32Z, `release_20261019_044051`) — L-K2 SHIP ($46.17)
+k8s 1.18.0 held join (sha `89c5e243…`), G-4/G-7 carrier force, SF-5, the label-token heading rule. Deploy checklist + stop lines:
+`cline_docs/reviews/held-k8s-2026-10-18/STEP3-BUILD.md`; result `LAB-RESULT-L-K2.md`. The rollback is rehearsed and its revert order is NEWEST FIRST (the written order conflicted). Next = the step-4 live window, then K8S-CLOSEOUT before terraform.
+
+## Pointer (2026-10-19): K8S-CLOSEOUT — step-4 window PASS, kept-file pattern PRODUCTION (90%)
+Window (`WINDOW-RUN-SHEET.md` "STEP 4"): 7 legs, every held item PASS, G-4 live-UNEXERCISED (the Harvester refused the off-pin ref in prose —
+the pin is a fixture-proven backstop), 0 STOP, $17.64; MI-13 all 🔴 0. Record: `cline_docs/reviews/held-k8s-2026-10-18/K8S-CLOSEOUT.md`.
+Found: NODE-C-TEARDOWN-UNSEEABLE (Node C judges a leg teardown it can never see — 2 of 84 verdicts; fix = a teardown FACT or remit removal,
+decide at the next pov-program batch) · STATED-OUTPUT-NOT-PRINTED · REGO-V0-SYNTAX · K8S-TEXT-BATCH-NEXT. Next: terraform (plan T-1..T-12).
+
+## Pointer (2026-10-20): held-terraform STEP 0 + STEP 1 DEPLOYED (cut 21:55:03Z) · R10 v6 DEPLOYED (cut 22:52:43Z) · step 2 DRAFTED
+Step 1 is inert platform code: T-2 `PINNED_SOURCE_BYPASS` (a tripwire, not a boundary), state/plan/variables paths refused at the CALL gate
+and at capture (one `heldPathRefusal`, never a G-4 force), terraform in `GIT_FILE_SOURCE_PROTOCOLS` (not held-capable), create-path slash +
+duplicate-create refusal. R10 v6 is the redactor terraform held bases will hash. Step-2 prerequisites done at $0 (G-FIXTURE-ID 5/5, the
+LocalStack rig reset to the lab repo — plan No changes); the step-2 Harvester text is a DRAFT awaiting **L-T1** (model-evaluation). Start from
+`cline_docs/follow-ups/held-terraform-continuation-2026-10-19.md` step 4c; discovery greps in the paired discovery's held-terraform section.
+**Step 2 BUILT 2026-10-21 (local, awaiting the owner go):** terraform-iac 1.14.0 = the L-T1 text `2d8a41e5…` + HOWTO 2.8.5 + F-T1 (every static
+hub policy refusal free of `& < > " '` — BC71 escapes them; reaches EVERY caller); battery 0, nets replay byte-identical (143), sec-ops GO 90.
+⚠️ CORRECTED 2026-10-21 (shadow window F-W3): production stores a refusal `success:true` + `result.isError` (message in `result.content`); `success:false` + `error` is the LAB fixture tier's shape — MI-13 now reads both. Record: `STEP2-BUILD.md`, `WINDOW-RUN-SHEET.md`.
+**Step 3 (the join) BUILT 2026-10-22, local `caa97ed77`:** terraform-iac 1.15.0 `6becbd87…` + F-T2-1 (b) — the reflection-pass order lives in ONE helper (`arbitrateReflectionPass`); the leg replay lab's `live.ts` had a second copy. Record: `STEP3-BUILD.md`.
+
+## Pointer (2026-10-22): TF-CLOSEOUT — held-terraform CLOSED (terraform-iac 1.15.0 held since 2026-10-21 21:16:37Z)
+Step-4 window PASS, 0 STOP, $13.97: first live terraform held edits, a one-resource file with drift, a releasable program, and **the G-4 force fired
+live** (T-L4) ⇒ the kept-file pattern is PRODUCTION 95% (three domains). F-T2-1 (b) is fixture-proven only. Text carry-forwards bundled in register
+TF-TEXT-BATCH-NEXT. Record: `cline_docs/reviews/held-terraform-2026-10-19/TF-CLOSEOUT.md`; learnings `LEARNINGS-LEDGER.md` (LL-T-01…39 — **append at
+EVERY step close of the next join**, LL-T-35; start the network inventory from it, LL-T-36).
+
+## Pointer (2026-10-22, later): terraform-iac 1.16.0 DEPLOYED (cut 07:51:41Z) + network join continuation
+TF-TEXT-BATCH-NEXT shipped items 1/2/3c/5 (lab-passed `792d5733…`; item 4 → TF-TLQ-STALE-WORDING, 5b → TF-FORMCORR-GITAPPLY-SENTENCE). **3c:** the
+terraform Phase 0 brief COPIES a named ref and the leg is forced — live 3/3; reuse this wording for network, never k8s's. TF-PATH-RULE-GAPS
+CLOSED (new capture refusal `credentials-file`). NODE-C-TEARDOWN-UNSEEABLE: (c) no `lifecycle` in hand-shaped topologies — 17 of 40 published
+carry it, generated half with requirements-authoring; (a) the teardown fact at the next pov-program batch. Next join: `cline_docs/follow-ups/
+held-network-continuation-2026-10-22.md` (Phase 0 = owner group N-1…N-7; whole-replace lockout + placeholder hazards). Ledger LL-T-40…44.
+
+## Pointer (2026-10-22): held-network Phase 0 DECIDED (N-1…N-7 as recommended)
+Record `cline_docs/reviews/held-network-2026-10-22/NETWORK-PHASE0-INVENTORY.md`: device read = evidence, Git file = held; the operator applies the EDITS to its own repo file and replaces in ONE session with declared out-of-band sections (login, Management0, secrets) + commit timer — never the held candidate; every network base is redacted, so the Git base check needs a redaction-aware mode (register HELD-BASE-CHECK-REDACTION-AWARE); R10-NETWORK-FAMILIES before step 1. ⚠️ `Cli -c "<cmd> ?"` EXECUTES the command on EOS (LL-N-01). Next: step 0.
+Revised same day (record §4b, owner "held by default"): held edits are the DEFAULT for a text-file device config, CLI only by a DECLARED field; base = declared Git file, else the device running-config (R10-NETWORK-FAMILIES a hard precondition); no whole-file install ⇒ the package states the gap, the operator applies the difference — the Author never translates to CLI. UAT: existing network legs need no protection.
+
+## Pointer (2026-10-24): held-network STEP 2 pushed (19:41:47Z) — lab L-N1 SHIP ($18.95) + R10 v8 + SF-1 guard
+Network Harvesters read the declared per-device source; no Git-file/device comparison (owner; mechanical at step 3); role guidance
+service-agnostic (reseed 5 Harvester + 2 Architect owners after deploy). Discovery section "held-network STEP 2"; records
+`cline_docs/reviews/held-network-2026-10-22/` (STEP2-TEXT-DRAFT §8–§12). Step-3 preconditions in the register (R10-V8-RESIDUALS a/b,
+HELD-CAPTURE-COMPARE-ELIGIBILITY).
+
+## Pointer (2026-10-26): the nets replay no longer freezes production
+`replay-nets-byte-identity.sh --snapshot` reads an offline read-only snapshot (minutes per pass, no pipeline pause; any errored
+statement fails the pass). Production data on this machine expires after 24 h (NETS-REPLAY-SNAPSHOT-RETENTION). Owner execution-facts;
+how to read a result: forensics §7h.
+
+## Pointer (2026-10-27): held-network CLOSED — network kept files released
+network-provisioning 1.25.0 (cut 2026-10-27 00:50:42.743Z); L-N2 SHIP 19/19; J5 6/6 correct, 0 false releases; operator apply proven
+(device diff = package, auto-revert). Record `cline_docs/reviews/held-network-2026-10-22/NETWORK-CLOSEOUT.md`; post-MVP backlog and
+vendor follow-up in `cline_docs/follow-ups/`. Forced outcomes now documented for users (PIPELINE-HARNESS-USER-GUIDE). Next: USER-GUIDE-GAPS.
+
+## Shared-worktree hygiene — parallel building agents (2026-10-31)
+A pathspec commit keeps other people's FILES out, but it includes the WHOLE of every file named — including edits another agent
+made to the same file in the shared working tree. Twice on 2026-10-31: model-evaluation's `test:golden-set` script line rode
+into the X2 commit via `package.json`, and its register edits rode into an archive commit. Both harmless, both avoidable.
+- **Building sub-agents get their own worktree** (the Agent tool's `isolation: "worktree"`); reviewers stay read-only in the shared tree.
+- **Before committing a SHARED file** (`package.json`, the register files, CLAUDE.md), read its `git diff` hunks; pathspec alone is
+  not enough when someone else may have edited it.
+- **Run gates in a clean worktree at HEAD** when anyone else is editing the tree — the gates then test exactly what will be pushed.
+

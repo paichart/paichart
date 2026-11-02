@@ -29,6 +29,17 @@ grep -A 1 "enum:" lib/mcp/server/config/tool-schemas.js
 ```
 **Check**: Every dispatcher action must appear in the corresponding schema enum
 
+**Agent-forbidden actions (PLATFORM-HELD-BYTES Stage B V-7, built locally 2026-10-15).** `project` carries `held.get` (an OPERATOR
+read of held file bytes) in VALID_ACTIONS and the schema enum, but agents never see it: `serverManager.getToolDefinitions` (the
+one choke both agent build sites use) strips every action in `AGENT_FORBIDDEN_ACTIONS` from the enum AND the description, on a
+CLONE (the registry keeps it). Its principal rule keys on the dispatcher's construction flag (`transport`: `http` default,
+`stdio` from mcp-server-v5's `main()`, `embedded` from the agent tool server — always refused), never on context shape.
+```bash
+grep -c "AGENT_FORBIDDEN_ACTIONS" lib/services/mcp/agent-tool-strip.ts   # expect >=2 — MOVED 2026-10-16 (HUB-P2-2, `6b44c9cfe`): the strip lives in this pure module so the leg replay lab applies the same function
+grep -c "from './agent-tool-strip'" lib/services/mcp/serverManager.ts   # expect >=2 — serverManager imports the strip for getToolDefinitions AND re-exports all three names
+grep -c "transport: 'embedded'" lib/mcp/embedded-server.ts   # expect 2 — ProjectDispatcher + RegistryDispatcher (WI-B10 2026-10-23: the registry refuses agent declarations on the embedded transport)
+```
+
 ### 1.3 Verify getToolCapabilities iterates both schema objects
 ```bash
 grep -A 5 "getToolCapabilities" mcp-server-v5.js | head -20
@@ -338,3 +349,6 @@ Service Registry:  [PASS/FAIL] - paichart-project-service active
 
 Overall Health: [HEALTHY/NEEDS-ATTENTION/CRITICAL]
 ```
+
+> **2026-10-17 — Q2 leg-contract heal:** task.create has an absent-contract arm for program legs (`resolveAbsentLegContract`,
+> `arm: create-absent | create-absent-declined`); pins in `test:cc7-contract-guard` C2.1b–C2.9. Record: `cline_docs/reviews/q2-leg-contract-heal-2026-10-17/`.

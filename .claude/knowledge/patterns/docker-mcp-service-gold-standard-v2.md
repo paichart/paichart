@@ -394,6 +394,13 @@ CMD ["node", "dist/index.js"]
 
 ---
 
+### Image-only sidecar (third-party server you do not build) — added 2026-10-18
+
+A compose service with only `image:` (e.g. the official `github-mcp-server`, pinned by digest) is PULLED by `up`, never built
+by the deploy's `docker compose build`, so it needs NO matrix entry — but it DOES need an entry in the workflow's
+`docker rm -f` cleanup list. If such a server takes a credential per request, put a token-injecting proxy in front (the
+cloudflare / github shape), keep the server token-less with no host port, and put the pair on their OWN network.
+
 ## Step 9: Compliance Policy Configuration
 
 ### service-call-policy.js (ALL services)
@@ -466,6 +473,15 @@ tool work fine — the exempt check matches the existing record.
 
 **Critical pattern lesson (May 2026)**: do NOT use `upsert({ where: { id: 'canonical-name' }, ... })`. That pattern only works if the row in production also has the canonical id. If the service was ever registered via the user-facing MCP `registry.register` tool — even once, even months ago — its DB id is an auto-CUID (`cmlzz8gwu...`), not `'service-name'`. A canonical-id upsert will then **create a duplicate row** instead of updating the existing one.
 
+> **Seed guards (2026-10-14, PLATFORM-HELD-BYTES Stage B P1-5).** The gateway now resolves a `targetService` by **id first,
+> then name**, so a row whose id equals ANOTHER row's name shadows it. Use `scripts/mcp-tool-seed-guard.ts`:
+> - an `upsert({ where: { id: '<slug>' } })` seed calls `await assertSlugIdFree(prisma, '<slug>')` before the upsert (refuses to
+>   CREATE an id that another row carries as its name; the update arm passes);
+> - a `findFirst({ name })` → `update` seed calls `assertByNameSeedOwnsRow(existing, SERVICE_NAME)` **only when its production row
+>   has the canonical id** (cloudflare today). Rows that carry an auto-CUID id (weather, eia, eodhd, token-validator) would be
+>   refused by it — leave them unguarded (register BY-NAME-SEED-GUARD-SCOPE).
+> Registration also refuses a name shaped like a platform id (`^c[a-z0-9]{24}$`) or equal to an existing id.
+
 The robust pattern is `findFirst` by name, then `update` (if found, preserving the existing id) or `create` (if not, with canonical id):
 
 ```typescript
@@ -498,7 +514,9 @@ const CANONICAL_DATA = {
     transport: 'sse',
     category: 'data-services',
     serviceType: 'mcp_service',
-    healthCheck: '/health',
+    healthCheckPath: '/health',  // ⚠️ the Hub reads healthCheckPath (hub-utilities.js, service-health-handler.js); a
+                                 // `healthCheck` key is INERT (2026-10-18 github-service review). Return 503, not 4xx, on
+                                 // unhealthy: the Hub counts any status < 500 as healthy.
     timeout: 60000,
   },
   credentials: {} as object,
@@ -542,7 +560,7 @@ A service registered via the user-facing MCP tool acquires registration-event me
 
 | Field | Source | Keep in seed? |
 |---|---|---|
-| `endpoint`, `transport`, `category`, `serviceType`, `healthCheck`, `timeout` | Canonical service identity | ✅ Yes |
+| `endpoint`, `transport`, `category`, `serviceType`, `healthCheckPath`, `timeout` | Canonical service identity | ✅ Yes |
 | `ownerId`, `ownerEmail`, `createdBy` | Set by user-registration handler | ❌ Drop |
 | `approvalStatus`, `approvalNote` | Compliance evaluation event | ❌ Drop |
 | `evaluationResult` (1–3KB blob) | Compliance evaluator output | ❌ Drop |
@@ -1125,7 +1143,11 @@ SELECT CURRENT_TIMESTAMP();  -- but doesn't engage warehouse either
 | 3104 | eodhd | Production |
 | 3105 | test-auth | Production |
 | 3106 | snowflake | Production |
-| 3107 | (next available) | — |
+| 3107 | igp-tunnel (sshd rig reverse tunnel) | Reserved |
+| 3109 | cloudflare (Caddy proxy) | Production |
+| 3110 | github (Caddy proxy; server container has no host port) | Production (2026-10-18) |
+| 3112–3114 | rig reverse tunnels (k8s / tf / obs) | Reserved |
+| 3108, 3111, 3115+ | (available — re-check `ss -ltnp` on prod first; this table drifted once) | — |
 
 ---
 

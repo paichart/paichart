@@ -34,6 +34,10 @@
  *    prior stages by a named rule (`basis`); the same-stage duplicate decision stays the model's.
  *  - UNRENDERED: neither fact reaches §6, the lean card, the Harness Context or the task.create result
  *    (no agent-facing text may move in this batch; the measured population must not see its meter).
+ *    ONE recorded exception (Q2 leg-contract heal, 2026-10-17, owner decision D-8): on the ABSENT arm the task.create
+ *    result carries one storage-fact sentence + `contractSuppliedFromPlan.planSha256Prefix` — never the fact itself, never
+ *    on the supplied arm or the duplicate return. Pinned: test-cc7-contract-guard C2.4/C2.5. K13 excludes the exposed
+ *    supplied creates from the `suppliedMatched` series (MI-13 Q2 section).
  */
 
 import { createHash } from 'crypto';
@@ -68,7 +72,9 @@ export const PLAN_RESPONSE_MAX_BYTES = 262144;
 /** `deepStripDangerousKeys` stops stripping past depth 20 (`MAX_STRIP_DEPTH`), so a `__proto__` at
  *  depth 21 would survive the strip. A deeper plan is refused (fail-open) rather than half-stripped. */
 export const PLAN_CONTRACT_MAX_DEPTH = 20;
-export const RESOLVER_VERSION = 1;
+/** 2 (2026-10-17, Q2 leg-contract heal): + `callerExecutionId` / `callerTaskId` / `declineReason`; arms `create-absent` /
+ *  `create-absent-declined`; `planResolution` may be null (plan not read). */
+export const RESOLVER_VERSION = 2;
 /** Bound on every stage-scoped scan (a program stage holds ≤ 8 legs plus a handful of children; a phase holds
  *  tens of stages). Far above any real population, so it never truncates a measurement — it bounds a
  *  pathological one (pagination rule). */
@@ -143,10 +149,30 @@ export interface R9Fact {
   input: 'rendered-contract';
 }
 
+/**
+ * Why the platform did NOT supply an absent program-leg contract at create (Q2 leg-contract heal, 2026-10-17;
+ * cline_docs/reviews/q2-leg-contract-heal-2026-10-17/SYNTHESIS.md §9 G-C). A FACT naming which conjunct failed — never a verdict.
+ * Checked in this order (§9 G-D): contract-key-seen → caller row → RUNNING → program-root binding → plan → stage legs.
+ */
+export type DeclineReason =
+  | 'contract-key-seen'
+  | 'caller-execution-not-found'
+  | 'caller-not-running'
+  | 'caller-not-program-root'
+  | 'plan-unresolved'
+  | 'stage-legs-leg-without-contract'
+  | 'stage-legs-legs-disagree'
+  | 'stage-legs-plan-differs-from-legs'
+  | 'resolver-error';
+
 export interface InterfaceContractSourceFact {
   source: 'plan' | 'supplied' | 'plan-inherited' | 'none';
-  arm: 'create' | 'inherit';
-  planResolution: PlanResolution | ComparandReason;
+  /** `create` — a contract was supplied at create; `inherit` — the reviewer arm at execution prep; `create-absent` — the platform
+   *  supplied the plan's contract to a PIPELINE child the program harness created WITHOUT one; `create-absent-declined` — the same
+   *  shape of create, but a conjunct failed (`declineReason`). */
+  arm: 'create' | 'inherit' | 'create-absent' | 'create-absent-declined';
+  /** The PLAN's status when the plan was read; null when it was not read (a caller / key-seen decline). */
+  planResolution: PlanResolution | ComparandReason | null;
   architectTaskId: string | null;
   architectExecutionId: string | null;
   planSha256: string | null;
@@ -158,6 +184,12 @@ export interface InterfaceContractSourceFact {
   suppliedDiffPathCount: number | null;
   legBaseline: LegBaseline | null;
   r9: R9Fact | null;
+  /** The agent-loop execution that made the create call, when there was one (server-set, never model input). */
+  callerExecutionId: string | null;
+  /** That execution's task — retention-proof (executions are pruned; the root task is not). */
+  callerTaskId: string | null;
+  /** Set only on `create-absent-declined`. */
+  declineReason: DeclineReason | null;
   resolverVersion: number;
   at: string;
 }
@@ -166,7 +198,7 @@ export interface InterfaceContractSourceFact {
 export const INTERFACE_CONTRACT_SOURCE_KEYS: ReadonlyArray<keyof InterfaceContractSourceFact> = [
   'source', 'arm', 'planResolution', 'architectTaskId', 'architectExecutionId', 'planSha256',
   'storedAtWriteSha256', 'suppliedSha256', 'suppliedMatched', 'suppliedDiffPaths', 'suppliedDiffPathCount',
-  'legBaseline', 'r9', 'resolverVersion', 'at',
+  'legBaseline', 'r9', 'callerExecutionId', 'callerTaskId', 'declineReason', 'resolverVersion', 'at',
 ];
 
 export interface CarryAttempt {
@@ -512,13 +544,13 @@ export async function legBaseline(
 
 /** Build an `interfaceContractSource` fact with EVERY key present (explicit null where empty). */
 export function buildSourceFact(
-  p: Partial<InterfaceContractSourceFact> & Pick<InterfaceContractSourceFact, 'source' | 'arm' | 'planResolution'>,
+  p: Partial<InterfaceContractSourceFact> & Pick<InterfaceContractSourceFact, 'source' | 'arm'>,
   at: string,
 ): InterfaceContractSourceFact {
   return {
     source: p.source,
     arm: p.arm,
-    planResolution: p.planResolution,
+    planResolution: p.planResolution ?? null,
     architectTaskId: p.architectTaskId ?? null,
     architectExecutionId: p.architectExecutionId ?? null,
     planSha256: p.planSha256 ?? null,
@@ -529,6 +561,9 @@ export function buildSourceFact(
     suppliedDiffPathCount: p.suppliedDiffPathCount ?? null,
     legBaseline: p.legBaseline ?? null,
     r9: p.r9 ?? null,
+    callerExecutionId: p.callerExecutionId ?? null,
+    callerTaskId: p.callerTaskId ?? null,
+    declineReason: p.declineReason ?? null,
     resolverVersion: RESOLVER_VERSION,
     at,
   };
@@ -566,9 +601,12 @@ export function decideCreateContract(input: {
   plan: PlanContractResult | null;
   legBaseline: LegBaseline | null;
   resolveError?: unknown;
+  /** The calling agent-loop execution, when the create came from one (§9 G-B: the supplied arm records it too). */
+  caller?: CallerIds | null;
   at: string;
 }): CreateContractDecision {
   const { supplied, programRootId, plan, at } = input;
+  const callerIds = { callerExecutionId: input.caller?.executionId ?? null, callerTaskId: input.caller?.taskId ?? null };
   const signals: CreateContractDecision['signals'] = {
     suppliedMismatch: false, divergesFromLegs: false, resolveError: input.resolveError ?? null, operatorEvent: null,
   };
@@ -583,7 +621,7 @@ export function decideCreateContract(input: {
       stored: supplied,
       sourceFact: buildSourceFact({
         source: 'supplied', arm: 'create', planResolution: 'resolver-error',
-        storedAtWriteSha256: safeSha(supplied), suppliedSha256: safeSha(supplied), r9: r9Of(supplied),
+        storedAtWriteSha256: safeSha(supplied), suppliedSha256: safeSha(supplied), r9: r9Of(supplied), ...callerIds,
       }, at),
       signals,
     };
@@ -596,7 +634,7 @@ export function decideCreateContract(input: {
       sourceFact: buildSourceFact({
         source: 'supplied', arm: 'create', planResolution: plan?.status ?? 'resolver-error',
         architectTaskId: plan?.architectTaskId, architectExecutionId: plan?.architectExecutionId,
-        storedAtWriteSha256: safeSha(supplied), suppliedSha256: safeSha(supplied), r9: r9Of(supplied),
+        storedAtWriteSha256: safeSha(supplied), suppliedSha256: safeSha(supplied), r9: r9Of(supplied), ...callerIds,
       }, at),
       signals,
     };
@@ -610,15 +648,37 @@ export function decideCreateContract(input: {
   signals.divergesFromLegs = !!lb && lb.legCount > 0 && lb.equalsPlan !== true;
   return {
     stored: plan.contract,
-    sourceFact: buildSourceFact({
-      source: 'plan', arm: 'create', planResolution: 'resolved',
-      architectTaskId: plan.architectTaskId, architectExecutionId: plan.architectExecutionId,
-      planSha256: plan.planSha256, storedAtWriteSha256: plan.planSha256,
-      suppliedSha256, suppliedMatched: matched, suppliedDiffPaths: diff.paths, suppliedDiffPathCount: diff.count,
-      legBaseline: lb, r9: r9Of(plan.contract),
+    sourceFact: buildPlanStoredFact({
+      plan, legBaseline: lb, arm: 'create', r9: r9Of(plan.contract), caller: input.caller ?? null,
+      supplied: { suppliedSha256, suppliedMatched: matched, suppliedDiffPaths: diff.paths, suppliedDiffPathCount: diff.count },
     }, at),
     signals,
   };
+}
+
+export interface CallerIds { executionId: string; taskId: string | null }
+
+/**
+ * THE one builder for a fact whose stored contract is the PLAN's (shared by the supplied arm `create` and the absent arm
+ * `create-absent` — two arms, one shape; the two-extractor class, Q2 synthesis K7). `supplied` is null on `create-absent`
+ * (its `supplied*` keys are explicit null — nothing was supplied).
+ */
+export function buildPlanStoredFact(p: {
+  plan: PlanContractResult;
+  legBaseline: LegBaseline | null;
+  arm: 'create' | 'create-absent';
+  r9: R9Fact | null;
+  caller: CallerIds | null;
+  supplied: { suppliedSha256: string; suppliedMatched: boolean; suppliedDiffPaths: string[]; suppliedDiffPathCount: number } | null;
+}, at: string): InterfaceContractSourceFact {
+  return buildSourceFact({
+    source: 'plan', arm: p.arm, planResolution: 'resolved',
+    architectTaskId: p.plan.architectTaskId, architectExecutionId: p.plan.architectExecutionId,
+    planSha256: p.plan.planSha256, storedAtWriteSha256: p.plan.planSha256,
+    ...(p.supplied ?? {}),
+    legBaseline: p.legBaseline, r9: p.r9,
+    callerExecutionId: p.caller?.executionId ?? null, callerTaskId: p.caller?.taskId ?? null,
+  }, at);
 }
 
 /**
@@ -632,15 +692,99 @@ export async function resolveCreateContract(
   stageId: string,
   supplied: Record<string, unknown>,
   now: () => string = () => new Date().toISOString(),
+  callingExecutionId: string | null = null,
 ): Promise<CreateContractDecision> {
   try {
     const programRootId = await findProgramParentForStage(db, stageId);
     if (!programRootId) return decideCreateContract({ supplied, programRootId: null, plan: null, legBaseline: null, at: now() });
+    // §9 G-B: the supplied arm records its caller too (a PK read, only for a program-stage child created from an agent loop).
+    let caller: CallerIds | null = null;
+    if (callingExecutionId) {
+      const row = await db.agentExecution.findUnique({ where: { id: callingExecutionId }, select: { taskId: true } });
+      caller = { executionId: callingExecutionId, taskId: row?.taskId ?? null };
+    }
     const plan = await resolvePlanContract(db, stageId);
     const lb = plan.status === 'resolved' ? (await legBaseline(db, stageId, null, plan.planSha256)).baseline : null;
-    return decideCreateContract({ supplied, programRootId, plan, legBaseline: lb, at: now() });
+    return decideCreateContract({ supplied, programRootId, plan, legBaseline: lb, caller, at: now() });
   } catch (err) {
     return decideCreateContract({ supplied, programRootId: null, plan: null, legBaseline: null, resolveError: err ?? new Error('unknown'), at: now() });
+  }
+}
+
+// ── Q2 leg-contract heal: the ABSENT arm (2026-10-17) ─────────────────────────────────────────────
+
+/**
+ * The decision for a PIPELINE child created WITHOUT a contract by a call from an agent loop (`callingExecutionId` present).
+ * Record: cline_docs/reviews/q2-leg-contract-heal-2026-10-17/ (DESIGN, five-specialist panel, SYNTHESIS v3 §8-§9, two audits).
+ *
+ *  - `none`    — the stage is not a program stage: nothing is stamped (unchanged behaviour).
+ *  - `store`   — the program's OWN root harness created it and the plan resolves: store the PLAN's contract,
+ *                `arm:'create-absent'`. Q2 is NARROWED, not reversed: every other door still fails loud (F16).
+ *  - `decline` — a conjunct failed: stamp `arm:'create-absent-declined'` + `declineReason`; no contract, no flag, so F16's
+ *                structural arm fires at execution and its cause text names the reason.
+ *
+ * Check order (§9 G-D): contract-key-seen FIRST (Q2's real broken-wiring class — a contract SENT but dropped in transit must stay
+ * loud) → caller row → RUNNING → program-root binding (read from the ROW, never model input) → plan → stage legs.
+ *
+ * ⚠️ DELIBERATE ASYMMETRY with the supplied arm (do not "unify"): on diverging legs the supplied arm stores the plan anyway and
+ * stamps `equalsPlan:false` (QS6 ii); this arm DECLINES — with no model copy there is nothing to record a mismatch against, and
+ * F16 stays the signal. Zero legs is accepted (`no-leg-baseline` — the first leg is the common case); the reviewer arm refuses it
+ * for its own reason (the Node C deploy-straddle), which does not apply at create.
+ *
+ * Fail-open: any throw ⇒ `decline` with `resolver-error` (never a refusal of the create). Client-free (`PlanDb` Pick).
+ */
+export type AbsentLegDecision =
+  | { kind: 'none' }
+  | { kind: 'store'; contract: Record<string, unknown>; fact: InterfaceContractSourceFact; planSha256: string;
+      operatorEvent: { matches: string[]; classes: string[] } | null }
+  | { kind: 'decline'; fact: InterfaceContractSourceFact };
+
+export async function resolveAbsentLegContract(
+  db: PlanDb,
+  stageId: string,
+  opts: { callingExecutionId: string; contractKeySeen: boolean },
+  now: () => string = () => new Date().toISOString(),
+): Promise<AbsentLegDecision> {
+  let caller: CallerIds = { executionId: opts.callingExecutionId, taskId: null };
+  const decline = (declineReason: DeclineReason, extra: Partial<InterfaceContractSourceFact> = {}): AbsentLegDecision => ({
+    kind: 'decline',
+    fact: buildSourceFact({
+      source: 'none', arm: 'create-absent-declined', declineReason,
+      callerExecutionId: caller.executionId, callerTaskId: caller.taskId, ...extra,
+    }, now()),
+  });
+  let programRootId: string | null = null;
+  try {
+    programRootId = await findProgramParentForStage(db, stageId);
+    if (!programRootId) return { kind: 'none' };
+    if (opts.contractKeySeen) return decline('contract-key-seen');
+    const row = await db.agentExecution.findUnique({ where: { id: opts.callingExecutionId }, select: { taskId: true, status: true } });
+    if (!row) return decline('caller-execution-not-found');
+    caller = { executionId: opts.callingExecutionId, taskId: row.taskId };
+    if (row.status !== 'RUNNING') return decline('caller-not-running');
+    if (row.taskId !== programRootId) return decline('caller-not-program-root');
+    const plan = await resolvePlanContract(db, stageId);
+    if (plan.status !== 'resolved' || !plan.contract || !plan.planSha256) {
+      return decline('plan-unresolved', {
+        planResolution: plan.status, architectTaskId: plan.architectTaskId, architectExecutionId: plan.architectExecutionId,
+      });
+    }
+    const lb = await legBaseline(db, stageId, null, plan.planSha256);
+    if (lb.comparand !== null && lb.comparand !== 'no-leg-baseline') {
+      return decline(`stage-legs-${lb.comparand}` as DeclineReason, {
+        planResolution: 'resolved', architectTaskId: plan.architectTaskId, architectExecutionId: plan.architectExecutionId,
+        planSha256: plan.planSha256, legBaseline: lb.baseline,
+      });
+    }
+    const r = safeR9(plan.contract);
+    return {
+      kind: 'store', contract: plan.contract, planSha256: plan.planSha256,
+      operatorEvent: r?.operatorEvent ? { matches: r.matches, classes: r.fact.wouldRewriteClasses } : null,
+      fact: buildPlanStoredFact({ plan, legBaseline: lb.baseline, arm: 'create-absent', r9: r?.fact ?? null, caller, supplied: null }, now()),
+    };
+  } catch {
+    // A throw before the stage is known to be a program stage stamps nothing (a non-program task never carries this fact).
+    return programRootId ? decline('resolver-error') : { kind: 'none' };
   }
 }
 

@@ -56,7 +56,7 @@ import { roleToolTurnParams } from '../lib/agents/role-model-params';
 
 const prisma = new PrismaClient();
 
-interface TemplateSeed {
+export interface TemplateSeed {
   name: string;
   description: string;
   category: AgentCategory;
@@ -86,7 +86,7 @@ const modelParameters = (model: string, timeout: number, role: string) => ({
   timeout,
 });
 
-const TEMPLATES: TemplateSeed[] = [
+export const TEMPLATES: TemplateSeed[] = [
   {
     name: 'Program Architect',
     // Description + capabilities brought to parity with the folded role (promotion E, E3, 2026-10-05; TS-L3 / SYNTHESIS P7):
@@ -139,9 +139,50 @@ const TEMPLATES: TemplateSeed[] = [
       // report.md; this keeps them from being re-raised as blocking at program tier (measured: 2 of 44 Node C verdicts put a
       // non-blocking clause under Blocking issues). Same text in BOTH seed files.
       'Leg Warnings Are Not Findings': "A leg reviewer's warning in a chained report is that reviewer's record, not your finding. Never move it into Blocking issues. Block only on what you establish from evidence you hold, and cite it.",
+      // PLATFORM-HELD-BYTES Phase 10 W7 (2026-10-17, PHASE10-PLAN.md; owner exemption PH-5, live control C-3): every observability leg can
+      // now edit its held files by reference, so a program reaches Node C with packages that carry EDITS, not whole files. Panel F11
+      // (2026-10-17): conditional on the card, names `restore H<n>`, explains the out-of-scope states (PC-S3, AR-N2, audit A-M3). Same text
+      // in BOTH seed files. Not pov-program text: that protocol sits at its ND7 ceiling.
+      'Held Edits Are The Package': "A leg may change a held file by EDITS (SEARCH/REPLACE blocks under Held File Edits) instead of writing the file whole, and roll it back with `restore H<n>`. The leg card's editApplication says whether the platform applied those edits (`applied`, or a refusal or other state), and heldFiles names the held files; both are platform facts. Judge conformance on the edit lines. An absent whole file, or an absent quote of its prior content, is not a gap. `no-edits` / `no-base` mean the platform found no held edit in the package / held no file for the leg; a card whose editApplication reads `out of scope` was not forced by the held rule, and the leg is judged as a full-file leg.",
     },
   },
 ];
+
+/** The row a template seeds, without the DB write — moved verbatim out of main() (V-0, 2026-10-15) so its
+ *  prompt-reaching fields can be golden-pinned and reused without executing the seed. */
+export function buildTemplateRow(template: TemplateSeed) {
+  // Resolve the prompt template with role-specific guidance (baked at seed time —
+  // the runtime re-read path was deleted, commit 4077c049; re-run this seed after
+  // any ROLE_GUIDANCE_LIBRARY edit to the program_architect or change_reviewer entry)
+  const promptTemplate = PAICHART_UNIVERSAL_BASE_TEMPLATE.replace(
+    '${roleSpecificGuidance}',
+    getRoleSpecificGuidance(template.defaultRole)
+  );
+
+  const data = {
+    name: template.name,
+    description: template.description,
+    category: template.category,
+    templateType: template.templateType,
+    defaultRole: template.defaultRole,
+    promptTemplate,
+    capabilities: template.capabilities,
+    constraints: template.constraints,
+    maxRetries: 2,
+    timeout: template.timeout,
+    priority: AgentPriority.HIGH,
+    isDefault: false,
+    tags: template.tags,
+    metadata: {
+      modelParameters: modelParameters(template.model, template.timeout, template.defaultRole),
+      hasModelParameters: true,
+      modelParamsVersion: '1.0.0',
+      // Engine injects this protocol into the system prompt; an unbound entry OMITS the key (never stored as null).
+      ...(template.protocol ? { protocol: template.protocol } : {}),
+    },
+  };
+  return data;
+}
 
 async function main() {
   console.log('Seeding POV Program templates...\n');
@@ -171,36 +212,7 @@ async function main() {
   for (const { template, existingId } of plans) {
     console.log(`Seeding: "${template.name}"...`);
 
-    // Resolve the prompt template with role-specific guidance (baked at seed time —
-    // the runtime re-read path was deleted, commit 4077c049; re-run this seed after
-    // any ROLE_GUIDANCE_LIBRARY edit to the program_architect or change_reviewer entry)
-    const promptTemplate = PAICHART_UNIVERSAL_BASE_TEMPLATE.replace(
-      '${roleSpecificGuidance}',
-      getRoleSpecificGuidance(template.defaultRole)
-    );
-
-    const data = {
-      name: template.name,
-      description: template.description,
-      category: template.category,
-      templateType: template.templateType,
-      defaultRole: template.defaultRole,
-      promptTemplate,
-      capabilities: template.capabilities,
-      constraints: template.constraints,
-      maxRetries: 2,
-      timeout: template.timeout,
-      priority: AgentPriority.HIGH,
-      isDefault: false,
-      tags: template.tags,
-      metadata: {
-        modelParameters: modelParameters(template.model, template.timeout, template.defaultRole),
-        hasModelParameters: true,
-        modelParamsVersion: '1.0.0',
-        // Engine injects this protocol into the system prompt; an unbound entry OMITS the key (never stored as null).
-        ...(template.protocol ? { protocol: template.protocol } : {}),
-      },
-    };
+    const data = buildTemplateRow(template);
 
     if (existingId) {
       console.log(`  Already exists (id: ${existingId}) — updating...`);
@@ -233,7 +245,9 @@ async function main() {
   await prisma.$disconnect();
 }
 
-main().catch((e) => {
+// Run only as a CLI (`npx ts-node scripts/<this>.ts`); an importer (scripts/test-held-variant-golden.ts, the
+// PLATFORM-HELD-BYTES variant seed) gets TEMPLATES + buildTemplateRow without writing anything (V-0, 2026-10-15).
+if (require.main === module) main().catch((e) => {
   console.error('Seed failed:', e);
   prisma.$disconnect();
   process.exit(1);

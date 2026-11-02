@@ -48,6 +48,14 @@ import { computeQuoteFidelity } from './quote-fidelity';
 import { computeAuthorQuoteFidelityFact } from './quote-fidelity-enrichment';
 import { computeApplyBlockPlaceholderFact } from './apply-block-placeholder';
 import { FORM_CHECK_ELIGIBLE_ROLE } from './package-form-check';
+import { computeValidationToolCallsFact } from './validation-tool-calls-enrichment';
+import { renderValidationToolCallsForPrompt, VALIDATION_TOOL_CALLS_SCOPE } from './validation-tool-calls';
+import { NOT_STAMPED } from './net-registry';
+import { computeDeviceSourceReadsFact, computeGitDeviceComparisonHarvesterFact, transcribeGitDeviceComparisonFact } from './device-source-facts-enrichment';
+import { renderGitDeviceComparisonForPrompt } from './git-device-comparison';
+import { resolveOwningLegProtocol, isHeldCapableLeg } from './held-bytes/variant';
+import { selectLegEditApplication, hoistedEditApplication, reviewedEditDiffFromContext, HELD_EDIT_REVIEWER_ROLE } from './held-bytes-nets';
+import { readChainedRecord } from './chained-record';
 
 /** quoteFidelity's Harvester point. Matches every harvest role (infra_state_harvester, artifact_harvester). */
 export const HARVEST_LEAF_ROLE_RE = /harvest/i;
@@ -100,6 +108,9 @@ export const MECHANICAL_NETS: readonly MechanicalNet[] = [
     enrich: (ctx) => computeRollbackContainmentFact(ctx.prisma, {
       taskId: ctx.task.id,
       deliverable: ctx.finalResponse,
+      // Stage B V-8a: read only on a held-variant leg (the enrichment's own lane lookup decides). The BASE-held handles come on
+      // ctx from prepareHeldPackage — never from the digest's `rollback`, which the overflow fallback drops (EF-P2-3).
+      heldRollbackHandles: Array.isArray(ctx.held?.baseHeldHandles) ? ctx.held!.baseHeldHandles : null,
     }),
     errorFact: () => ({
       checked: false, reason: 'enrichment-error',
@@ -186,6 +197,8 @@ export const MECHANICAL_NETS: readonly MechanicalNet[] = [
         stageId: (ctx.task.metadata as Record<string, unknown> | null)?.pipelineStageId,
         interfaceContract: (ctx.task.inputContext as { interfaceContract?: unknown } | null)?.interfaceContract,
         programTier: ctx.programTier,
+        // Stage B V-8b (A12): the leg itself is the task here (leg-synthesize).
+        ...(isHeldCapableLeg(ctx.task) ? { heldVariant: true } : {}),
       });
       // LAST, exactly as the call site assigned it — JSON.stringify is order-sensitive and the
       // equivalence gate compares serialized bytes.
@@ -354,5 +367,146 @@ export const MECHANICAL_NETS: readonly MechanicalNet[] = [
       'owner decision (a) 2026-10-13: kept off the lean card and the agent.results summary. NOT invisible: it is in the raw '
       + 'result.json a verbose agent.results returns, persisted after toolCalls (RESULT_JSON_OPERATOR_TAIL_KEYS) so it sits '
       + 'past the 8 KB tool-result head in practice.',
+  },
+  // ── PLATFORM-HELD-BYTES Stage B V-5f (2026-10-15): the held-variant facts. All CONDITIONAL (`not-variant-leg`): on a
+  // non-variant task the enrichment returns NOT_STAMPED — a population answer, never a fact — so every existing result.json
+  // is byte-identical. A leg resolution that THREW is not a population answer: it stamps the errorFact (fail-closed).
+  // They TRANSCRIBE: the Author/Harvester stamps were built pre-tx by the core (one object with the persist overlay — AE
+  // S2); the Reviewer's comes from its prepared snapshot; the hoist reads the selected Author's stamp.
+  {
+    name: 'editApplication',
+    point: 'leaf-persist',
+    conditionalStampReason: 'not-variant-leg',
+    appliesTo: (ctx) => ctx.task.type !== 'PIPELINE' && ctx.agentRole === FORM_CHECK_ELIGIBLE_ROLE,
+    enrich: async (ctx) => {
+      const leg = ctx.owningLeg ? await ctx.owningLeg() : await resolveOwningLegProtocol(ctx.prisma as never, ctx.task as never);
+      if (leg.kind === 'could-not-check') throw new Error(`owning-leg resolution: ${leg.reason}`);
+      if (!leg.heldCapable) return NOT_STAMPED;
+      return ctx.held?.editApplication ?? { version: 1, state: 'could-not-check', reason: 'step-not-run' };
+    },
+    errorFact: () => ({ version: 1, checked: false, reason: 'enrichment-error', state: 'could-not-check' }),
+    renderCard: 'lean-card-facts',
+    renderPrompt: null,
+    renderNullReason: 'the Reviewer reads the application through the V-6 `editDiff` entry (a SERVER-SIDE recompute of the diff), never this stamp',
+  },
+  {
+    name: 'heldBytes',
+    point: 'leaf-persist',
+    conditionalStampReason: 'not-variant-leg',
+    appliesTo: (ctx) => ctx.task.type !== 'PIPELINE' && HARVEST_LEAF_ROLE_RE.test(ctx.agentRole ?? ''),
+    enrich: async (ctx) => {
+      const leg = ctx.owningLeg ? await ctx.owningLeg() : await resolveOwningLegProtocol(ctx.prisma as never, ctx.task as never);
+      if (leg.kind === 'could-not-check') throw new Error(`owning-leg resolution: ${leg.reason}`);
+      if (!leg.heldCapable) return NOT_STAMPED;
+      return ctx.held?.heldBytes ?? { held: 0, refused: {}, reason: 'no-capture' };
+    },
+    errorFact: () => ({ checked: false, reason: 'enrichment-error' }),
+    renderCard: null,
+    renderPrompt: null,
+    renderNullReason: 'card: an operator digest of what was held — the Author is shown the files themselves (§6 held block), so a count on the card adds nothing an agent acts on; prompt: the held block IS the §6 render',
+  },
+  {
+    name: 'reviewedEditDiff',
+    point: 'leaf-persist',
+    conditionalStampReason: 'not-variant-leg',
+    appliesTo: (ctx) => ctx.task.type !== 'PIPELINE' && ctx.agentRole === HELD_EDIT_REVIEWER_ROLE,
+    enrich: async (ctx) => {
+      const leg = ctx.owningLeg ? await ctx.owningLeg() : await resolveOwningLegProtocol(ctx.prisma as never, ctx.task as never);
+      if (leg.kind === 'could-not-check') throw new Error(`owning-leg resolution: ${leg.reason}`);
+      if (!leg.heldCapable) return NOT_STAMPED;
+      // BC-P2-3: only an Author entry THIS run's chokepoint chained counts as reviewed — read the server-written record.
+      const exec = ctx.executionId
+        ? await (ctx.prisma as never as { agentExecution: { findUnique: (a: unknown) => Promise<{ context: unknown; config: unknown } | null> } })
+          .agentExecution.findUnique({ where: { id: ctx.executionId }, select: { context: true, config: true } })
+        : null;
+      return reviewedEditDiffFromContext(ctx.task.inputContext, exec ? readChainedRecord(exec).record : null);
+    },
+    errorFact: () => ({ version: 1, checked: false, reason: 'enrichment-error', state: 'could-not-check' }),
+    renderCard: null,
+    renderPrompt: null,
+    renderNullReason: 'a CARRIER input (V-9: the leg cannot be approved unless its Reviewer saw the selected Author\'s rendered diff); the Reviewer saw the diff itself in §6, so neither surface needs the stamp',
+  },
+  {
+    name: 'editApplication',
+    point: 'leg-synthesize',
+    conditionalStampReason: 'not-variant-leg',
+    appliesTo: (ctx) => ctx.task.type === 'PIPELINE' && ctx.harnessMode === 'SYNTHESIZE' && !ctx.programTier,
+    enrich: async (ctx) => {
+      const leg = ctx.owningLeg ? await ctx.owningLeg() : await resolveOwningLegProtocol(ctx.prisma as never, ctx.task as never);
+      if (!leg.heldCapable) return NOT_STAMPED;
+      return hoistedEditApplication(await selectLegEditApplication(ctx.prisma as never, ctx.stageId));
+    },
+    errorFact: () => ({ version: 1, checked: false, reason: 'enrichment-error', state: 'no-author-stamp' }),
+    renderCard: 'lean-card-facts',
+    renderPrompt: null,
+    renderNullReason: 'the hoist is the GATE\'s copy (the carrier and SYNTHESIZE read it); the Reviewer read the diff in §6',
+  },
+  // ── validationToolCalls (NETWORK-VALIDATION-RELEASE-RATE §4; owner go 2026-10-23, design amended at build start; built after the
+  // WI-B10 push). Does each hub tool call written in a network Author package's VALIDATION steps match what the tool accepts —
+  // against the resolved service ROW's schema, else the Harvester's registration, else the leg's own SUCCESSFUL harvest calls of that
+  // tool (a weaker, labelled observation)? APPENDED, so every existing entry's stamp and key order is untouched. CONDITIONAL: off a
+  // network-provisioning leg the enrichment returns NOT_STAMPED (a population answer), so every other domain's result.json is
+  // byte-identical. A FACT for the leg Reviewer (§6, via the chainer), NOT a gate: no qualityGate / programReleasable input
+  // (pipeline-harness owns consumption). NOT whitelisted (operator tail), so the lean card — read by SYNTHESIZE and the program gate —
+  // never carries it, and the result.json head offset is unchanged.
+  {
+    name: 'validationToolCalls',
+    point: 'leaf-persist',
+    conditionalStampReason: 'not-network-leg',
+    appliesTo: (ctx) => ctx.task.type !== 'PIPELINE' && ctx.agentRole === FORM_CHECK_ELIGIBLE_ROLE,
+    enrich: async (ctx) => computeValidationToolCallsFact(ctx.prisma as never, { taskId: ctx.task.id, deliverable: ctx.finalResponse }),
+    errorFact: () => ({ version: 1, scope: VALIDATION_TOOL_CALLS_SCOPE, checked: false, reason: 'enrichment-error', findings: [] }),
+    renderCard: null,
+    renderPrompt: (fact) => renderValidationToolCallsForPrompt(fact),
+    renderNullReason:
+      'owner/consumer decision 2026-10-23 (network-held-1): a fact for the leg REVIEWER only — rendered in §6, never on the lean card, '
+      + 'which feeds leg SYNTHESIZE and the program gate (no gate input by design).',
+    summaryExcludedReason:
+      'kept off the lean card and the agent.results summary (no gate consumer); persisted in the operator tail after toolCalls '
+      + '(RESULT_JSON_OPERATOR_TAIL_KEYS) so the 8 KB head and the finalResponse offset do not move. NOT invisible: the chainer reads '
+      + 'the full result.json and carries it to the Reviewer, and a verbose agent.results returns it.',
+  },
+  // ── held-network step 3 batch 2b (STEP3-INVENTORY P3 / P5; owner S3-A / S3-C, 2026-10-25). Two Harvester facts on a Device-sources
+  // leg (network-provisioning), APPENDED so every existing entry's stamp and key order is untouched. CONDITIONAL: off such a leg the
+  // enrichment returns NOT_STAMPED, so every other domain's result.json is byte-identical. Neither is whitelisted (operator tail):
+  // the lean card — read by SYNTHESIZE and the program gate — never carries them, and the 8 KB head offset does not move. FACTS,
+  // NOT gates: no qualityGate / programReleasable input (pipeline-harness owns consumption; owner: warn-by-default).
+  {
+    name: 'deviceSourceReads',
+    point: 'leaf-persist',
+    conditionalStampReason: 'not-device-source-leg',
+    appliesTo: (ctx) => ctx.task.type !== 'PIPELINE' && HARVEST_LEAF_ROLE_RE.test(ctx.agentRole ?? '') && !SPECIFICATION_ROLE_RE.test(ctx.agentRole ?? ''),
+    enrich: async (ctx) => computeDeviceSourceReadsFact(ctx),
+    errorFact: () => ({ version: 1, checked: false, reason: 'enrichment-error' }),
+    renderCard: null,
+    renderPrompt: null,
+    renderNullReason:
+      'F-NW1 platform half (owner S3-A, 2026-10-25): an OPERATOR fact — read by MI-13 and the live window (did the Harvester read each '
+      + 'declared source?). The Harvester\'s own output already names each source it read; an agent render is earned from outcomes, '
+      + 'never shipped ahead of them.',
+    summaryExcludedReason:
+      'an operator fact with no gate consumer; persisted in the operator tail (RESULT_JSON_OPERATOR_TAIL_KEYS) so the 8 KB head and '
+      + 'the finalResponse offset do not move. A verbose agent.results returns it.',
+  },
+  {
+    name: 'gitDeviceComparison',
+    point: 'leaf-persist',
+    conditionalStampReason: 'not-device-source-leg',
+    appliesTo: (ctx) => ctx.task.type !== 'PIPELINE' && !SPECIFICATION_ROLE_RE.test(ctx.agentRole ?? '')
+      && (HARVEST_LEAF_ROLE_RE.test(ctx.agentRole ?? '') || ctx.agentRole === FORM_CHECK_ELIGIBLE_ROLE),
+    // Harvester: computed from its own tool calls. Author: the Harvester's stamp TRANSCRIBED (never recomputed), so the chainer
+    // carries one comparison to both readers — the Architect (Harvester entry) and the leg Reviewer (Author entry).
+    enrich: async (ctx) => (HARVEST_LEAF_ROLE_RE.test(ctx.agentRole ?? '')
+      ? computeGitDeviceComparisonHarvesterFact(ctx) : transcribeGitDeviceComparisonFact(ctx)),
+    errorFact: () => ({ version: 1, checked: false, reason: 'enrichment-error' }),
+    renderCard: null,
+    renderPrompt: (fact) => renderGitDeviceComparisonForPrompt(fact),
+    renderNullReason:
+      'owner S3-C (2026-10-25): a warning fact for the network Architect and leg Reviewer only — rendered in §6 (the chainer carries it '
+      + 'to those two roles), never on the lean card, which feeds leg SYNTHESIZE and the program gate (gates nothing by design).',
+    summaryExcludedReason:
+      'kept off the lean card and the agent.results summary (no gate consumer); persisted in the operator tail so the 8 KB head and '
+      + 'the finalResponse offset do not move. NOT invisible: the chainer reads the full result.json and carries it to the Architect '
+      + 'and the Reviewer, and a verbose agent.results returns it.',
   },
 ];

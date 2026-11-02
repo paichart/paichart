@@ -20,7 +20,7 @@ grep -rln "sanitizeChainedOutput\|redactArtifactSecrets\|redactArtifactsForPersi
 grep -rn "CONNECTED_OUTPUT_SANITIZE_ENABLED\|ARTIFACT_SECRET_REDACT_ENABLED" lib/ app/ .env* scripts/test-security-invariants.ts
 ```
 **Both flags are ON in prod since 2026-06-29** (`f7398004`) — the `=false` in `.env.example` / `.env.production.template` is the code default only.
-R9 (`CONNECTED_OUTPUT_SANITIZE_ENABLED`) neutralizes untrusted connected-service output before pAIchart's reasoner; R10 (`ARTIFACT_SECRET_REDACT_ENABLED`) redacts secrets from persisted artifacts. Both **env-var, default-OFF in code** (see the prod-state note above) — these are *additive transforms* (a disable-flag on a real security *gate* would be a bypass; here OFF is fail-safe). R9 **enable-gate = C1** (detector false-positives — routed to prompt-construction + sec-ops). CI pins in `scripts/test-security-invariants.ts` §I/§J. Full ref: `.claude/knowledge/domain/harness/harness-output-guards.md`.
+R9 (`CONNECTED_OUTPUT_SANITIZE_ENABLED`) neutralizes untrusted connected-service output before pAIchart's reasoner; R10 (`ARTIFACT_SECRET_REDACT_ENABLED`) redacts secrets from persisted artifacts. Both **env-var, default-OFF in code** (see the prod-state note above) — these are *additive transforms* (a disable-flag on a real security *gate* would be a bypass; here OFF is fail-safe). R9 **enable-gate = C1** (detector false-positives — routed to prompt-construction + sec-ops). CI pins in `scripts/test-security-invariants.ts` §I/§J. Full ref: `.claude/knowledge/domain/harness/harness-output-guards.md`. *(Corrected 2026-11-01, PH-7: the code defaults DIFFER — R9 runs only when `=true`; **R10 runs unless `=false`** (default-ON in code since 2026-08-28). `.env.example` sets both ON since 2026-11-01; its old `=false` had switched R10 off for self-hosters. Canonical: `domain/harness/harness-output-guards.md`.)*
 
 ## 🆕 2026-07-26 — `services.call` gating: the approved-tools whitelist does NOT cover internal services
 
@@ -51,7 +51,7 @@ whitelist covers us" is FALSE for internal services. Check this before adding a 
 service, especially one that returns stored content.
 
 **Related, and the reason this was looked at**: `fetch` IS in the static whitelist
-(`service-call-policy.js:33`), so the policy gate would not block `services.call(tool:'fetch')`
+(`service-call-policy.js:34`), so the policy gate would not block `services.call(tool:'fetch')`
 against an EXTERNAL service either. What makes that safe today is that no registered service exposes
 a `fetch` tool and none points back at pAIchart's own MCP (verified 2026-07-26 across all 15
 registered services). Registration would not stop someone building it: `assertEndpointSafe`
@@ -71,7 +71,9 @@ exist today. See `cline_docs/reviews/r9-option-b-2026-07-26/TRACE-CORRECTION.md`
 # 14 at 2026-07-26; F9 added R9 site B, context-chainer.ts):
 # lib/services + harness, the MCP hub/security handlers, app/api routes. The tag marks an INTEGRITY
 # VIOLATION on a security boundary.
-grep -rln "securityEvent" lib/ app/ --include=*.ts --include=*.js | wc -l   # expect 21
+# held-k8s step 1 (2026-10-18) +3: held-bytes/extract.ts + held-bytes-capture.ts (a Git pin violation on a COMPLETED call),
+# hub-shared-middleware.js (an agent mutating a platform service row, SF-5). A FLOOR from here: emitters are added by healthy work.
+grep -rln "securityEvent" lib/ app/ --include=*.ts --include=*.js | wc -l   # expect >=24
 
 # The pinned NEGATIVE — a benign guard firing must NOT carry the tag.
 grep -n "securityEvent" scripts/test-reactor-race-guard.ts lib/services/reactor-skip-counter.ts
@@ -1512,3 +1514,74 @@ No hash of anything pre-R10 (one `createHash`, over B); the store is scope-keyed
 refused `escaped-secret-residual` when R10's deep walk of B would redact more (V20–V22 — the deep(B) form; a deep(C) form
 lets key-name-blind arm 1 cancel); `raw-digest-present` uses a normalised family matcher with a closed token set; capture
 logs carry name / code / metaCode only (a Postgres DETAIL prints key values). Capture is shadow and off by default.
+
+## held-k8s step 1 (2026-10-18 — DEPLOYED 04:23:03Z, release `release_20261018_041900`): Git file source — pin, elision, platform-row guard
+
+```bash
+grep -c "type: 'PINNED_ARGUMENT'" lib/mcp/server/config/service-call-policy.js            # expect >=1
+grep -c "elideGitFileSourceStatus(" lib/services/execution-artifacts.ts                    # expect 1
+grep -c "PLATFORM_SERVICE_AGENT_MUTATION_REFUSED" lib/mcp/server/tools/hub/hub-shared-middleware.js   # expect >=1
+```
+- The pin (owner/repo ASCII lower-cased, safe path, default-branch ref only, `sha` refused, served-URI agreement as a CONSISTENCY check —
+  the URI echoes the caller's spelling) is enforced at call time AND capture time from one module; `test-security-invariants` §R pins
+  both gates with a negative control. A held `kind: Secret` with `data`/`stringData` is refused `secret-manifest` (G-5).
+- **G-1 (owner option c — sec-ops confirmation owed at the step-1 review):** a Git source's blob ids (status line, directory listing)
+  never persist in toolCalls; replaced in place. The model saw them in-loop only.
+- **Known R10 gaps on GitOps shapes (measured, not fixed):** `secretGenerator.literals` and a quoted Helm `token:` value pass R10
+  unredacted; G-5 does not catch them (not `kind: Secret`). Before the first customer repo. STEP1-BUILD §2 finding 8.
+Record: `cline_docs/reviews/held-k8s-2026-10-18/STEP1-BUILD.md` (plan SYNTHESIS v3 §6).
+
+**Late additions (sec-ops step-1 review folds, 2026-10-18):**
+```bash
+grep -c "SEGMENT_RE.test(s)" lib/mcp/server/config/git-file-source-pin.js   # expect 1 — SF-2: every path segment on an ALLOW-list [A-Za-z0-9._@+-]
+```
+`?`, `#`, soft hyphen, fullwidth dots and spaces are refused at both MCP gates (§R cases ×2). NOT yet pinned at the admin
+`POST /api/workflows/run` route (SF-3, register HELD-K8S-SECOPS-STEP1).
+
+## held-k8s step 2 + R10 v4 (2026-10-19; every expectation run before it was written)
+
+Step-2 controls (deployed 2026-10-18 08:21Z): a Git file source is never a workflow step, and a github-service result's `token` query
+VALUES are stripped before delivery with a fail-closed tripwire — greps in `pipeline-harness-discovery.md` § held-k8s step 2. Review:
+`cline_docs/reviews/held-k8s-2026-10-18/REVIEW-sec-ops-STEP2.md` (the lab repo is PRIVATE). R10 v4 (R10-CODE-ASSIGN):
+```bash
+grep -c "R10_VERSION = 'paichart.r10/11'" lib/agents/harness/redact-artifact-secrets.ts   # expect 1 — re-measured 2026-11-02: r10/11 (CEOS2-ECHO-SECRET-RESIDUAL: echo matches only between placeholder spans; plain arm unchanged) superseded r10/10. r10/10 (2026-10-26, held-network step 3 push 2 O-3: the login USERNAME on a credential line; record cline_docs/reviews/held-network-2026-10-22/STEP3-PUSH2-BUILD.md). Before that r10/9 (2026-10-26, held-network step 3 batch 2a: structured keys/fields R-2 + the read_more page boundary R-1; record cline_docs/reviews/held-network-2026-10-22/STEP3-BATCH2A-BUILD.md). Before that r10/8 (2026-10-24, R10-ECHO-REDACTION: ECHO redaction at persist — a value a directive-anchored rule redacted in the same persist is also redacted where it reappears BARE; plain arm output unchanged; cline_docs/reviews/held-network-2026-10-22/r10-v8/R10-V8-BUILD.md). Prior: r10/7 since 2026-10-23 02:07:00Z (R10-V7 network families: the pre-shared-key type-word leak + the self-masking class, SNMPv3/SNMP host/IS-IS/NTP/VRRP-HSRP/AAA/Junos $9$ + crypt hashes + SNMP communities, line-bound rules, linear arm 2; cline_docs/reviews/held-network-2026-10-22/r10-v7/R10-V7-BUILD.md; CLAUDE.md series cut). Prior: r10/6 since 2026-10-20 22:52:43Z (R10-V6-TERRAFORM; was r10/5 since 2026-10-19, r10/4)
+grep -cF ':=[ \t]*\\?(["' lib/agents/harness/redact-artifact-secrets.ts               # expect 1 — a quoted (" ' `) `:=` secret literal is redacted, operator + quotes kept (v3 left it in clear behind a placeholder)
+```
+Review: `cline_docs/reviews/held-k8s-2026-10-18/REVIEW-sec-ops-R10v4.md`.
+
+## R10 v5 (2026-10-19, deployed cut 21:34:03Z; every expectation run before it was written)
+
+```bash
+grep -c "gh\[pousr\]_" lib/agents/harness/redact-artifact-secrets.ts            # expect >=3 — SF-6 GitHub token shapes inline
+grep -c "EXPR_RHS_EXEMPT" lib/agents/harness/redact-artifact-secrets.ts          # expect 2 — whole-token, case-sensitive expression-RHS exemption (sec-ops B-1/B-2)
+```
+Review: `cline_docs/reviews/held-k8s-2026-10-18/REVIEW-sec-ops-R10v5.md`; remainder filed (R10-EXPR-RHS narrowed, R10-PREFIXED-PASSWORD-KEYS, R10-QUOTED-LETTERS-TOKEN, R10-GHUC-TOKEN-OTHER-SERVICES).
+
+## F-T1 — hub policy refusal text (held-terraform step 2, DEPLOYED 2026-10-21; every expectation run before it was written)
+
+```bash
+grep -c "§F-T1" scripts/test-security-invariants.ts   # expect 1 — every call-gate violation type: static text free of & < > " ', alone ≤ 200, reaches the agent byte for byte; the BC71 escape still escapes a caller quote
+```
+Caller values (tool names, matched text, URLs) stay escaped — the pin guards the WORDING, never the sanitizer. Ledger LL-T-06.
+
+## SF-1 — agent registry delete/update only on a row its run registered (held-network step 2, DEPLOYED 2026-10-24 20:31:12Z cut; every expectation run before it was written)
+
+```bash
+grep -c "await refuseAgentMutationOfRowNotProvisionedByRun(" lib/mcp/server/tools/hub/service-delete-handler.js   # expect 1
+grep -c "await refuseAgentMutationOfRowNotProvisionedByRun(" lib/mcp/server/tools/hub/service-update-handler.js   # expect 1
+grep -cE "AGENT_(DELETE|UPDATE)_NOT_PROVISIONED_BY_RUN" lib/mcp/server/tools/hub/hub-shared-middleware.js         # expect >=2
+grep -c "provisionedBy.provisionedByRunScope = runScope;" lib/mcp/server/tools/hub/service-registration-handler.js   # expect 1 — scope stamped at CREATE
+```
+An agent (isAgentCaller) may mutate a row only as its registering execution (`configuration.provisionedByExecutionId`) or as an
+execution of the PIPELINE task stamped `configuration.provisionedByRunScope` at registration (the leg harness). Never re-derived at
+delete time: `stage.metadata.harnessTaskId` is rebindable by a harness `task.update` (sec-ops build review SF-1). A human or adopted
+row carries no stamp ⇒ always refused to agents. Pins: `test:hub-agent-provisioned-guard` (battery, 13 mutations red) + the SF-1
+block in `test-security-invariants`. Record: `cline_docs/reviews/held-network-2026-10-22/SF1-AGENT-DELETE-GUARD.md`.
+
+## Device sources snapshot is platform-written only (held-network step 3 push 2 O-2, DEPLOYED 2026-10-26; expectation run before it was written)
+
+```bash
+grep -c "'deviceSourcesSnapshot'," lib/tasks/services/protected-task-metadata.ts   # expect 1 — AUDIT_STRIP_KEYS: no client surface (MCP included) can re-declare a leg's sources
+```
+Capture holds a device / Git base only for what this snapshot declares (written at the leg's first execution). R10 is `paichart.r10/11` since 2026-11-02 (was `paichart.r10/10`)
+(login username) — grep above. Record: `cline_docs/reviews/held-network-2026-10-22/STEP3-PUSH2-BUILD.md`.

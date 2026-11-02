@@ -189,7 +189,7 @@ Full expectations (with proven counts) live in the discovery — these are the o
 | `lib/agents/harness/evidence-grading.ts` | reviewer evidence-grading fact, pure. Nests on `reviewerVerdict`; scanned over the WHOLE `finalResponse`, never `raw` |
 | `lib/agents/harness/contract-propagation-enrichment.ts` | shares dialect-lint's canonical-stanza needles |
 | `lib/agents/harness/net-registry.ts` | the registry contract — `(name, point)`, `appliesTo`, `errorFact`, the two render slots, and the three things it deliberately does NOT do |
-| `lib/agents/harness/mechanical-nets.ts` | the seven entries (six names; `rollbackContainment` at two points). ⚠️ key ORDER is part of the contract — the equivalence gate compares serialized bytes |
+| `lib/agents/harness/mechanical-nets.ts` | the registry entries — 16 over 13 names at 2026-10-23, after `validationToolCalls` (`rollbackContainment`, `derivationContainment` and `editApplication` each at two points); count it with `grep -c "^    name: '"`, never trust this number. ⚠️ key ORDER is part of the contract — the equivalence gate compares serialized bytes |
 | `lib/agents/harness/net-context.ts` | `ctx` — memoized `children()` + `contractApplicability()` |
 | `lib/services/execution-nets.ts` | the ONE call site (`stampExecutionNets`, 2026-10-05) — two `runNetsAtPoint` calls, not six hand-wired blocks; called by `execution-core.ts` AND the COMPLETE-THEN-FAIL rescue (`execution-completion-anchored.ts`), so their net inputs cannot fork |
 | `lib/services/execution-artifacts.ts` | `RESULT_JSON_SUMMARY_KEYS` + `pickResultJsonSummary` (the contract) |
@@ -315,14 +315,14 @@ greps outrank it.
 - `toolLoop.reflectionErrors: [{site, status, errorType, errorCode}]` — an errored reflection call (#89 · budget_failfast · form_correction · diagnostic_retry), nested in `toolLoop`, present only when non-empty (OPUS55). Yours to surface if it ever fires.
 - FORM-CORRECTION-PROSE-ECHO (register): a correct undercount fix is refused (`prose-changed`) when the Author echoes the count in prose — the guard's call.
 
-## quoteFidelity + E1 raw witness (pointer, 2026-10-13 — built locally, not yet deployed)
+## quoteFidelity + E1 raw witness (pointer, 2026-10-13 — deployed 2026-10-13 02:56Z)
 - `quoteFidelity@leaf-persist` (Harvester pure; Author = reproduction blocks only, desired state excluded incl. by heading
   ancestry). Escalate-only, consumed by nothing, rendered NOWHERE until the Group C lab (owner A1/B1–B3). Series key:
   `quoteFidelity.version`; render selector: `findings[].source.lane = 'file-artifact'`.
 - E1: `rollbackContainment`'s witness is the harvest's RAW `toolCalls` (`raw-tool-witness.ts`, shared — never fork it); key
   `witness.source`. Record + replay + series-cut draft: `cline_docs/reviews/verbatim-quote-omission-2026-10-13/BUILD-A-E.md`.
 
-## applyBlockPlaceholder (pointer, 2026-10-13 — built locally, not yet deployed)
+## applyBlockPlaceholder (pointer, 2026-10-13 — deployed 2026-10-13 12:59Z)
 - Warning-only fact on every `config_change_author` leaf (owner (a), PLACEHOLDER-APPLIES-AS-LITERAL): a placeholder in a desired/rollback
   fence of the PERSISTED package. NOT whitelisted (`summaryExcludedReason`, R4 = whitelisted XOR reason); its one render is the leg
   report.md "Platform warnings (non-blocking)" section. Record + residuals: `cline_docs/reviews/platform-held-bytes-2026-10-13/PLACEHOLDER-GUARD-BUILD.md`.
@@ -351,7 +351,7 @@ Rules of thumb:
 `value: <kind> <v>`, `orphanCheck: not applicable (value leg)`; rollback `value-leg-no-package` benign. Dispatch is an
 EXACT role match (`derivation_architect`) — never a regex. Changes to the module re-run
 `scripts/replay-nets-byte-identity.sh` (pattern `byte-identity-refactor-pattern.md`; at ~2,300 tasks a pass takes ~60-65
-min — two passes exceed a 2 h background limit, run them separately). **CONSUMER-FAIL-OPEN is FIXED (live 2026-10-03,
+min — two passes exceed a 2 h background limit, run them separately; **superseded 2026-10-26 — offline snapshot, minutes; see the NETS-REPLAY pointer at the end**). **CONSUMER-FAIL-OPEN is FIXED (live 2026-10-03,
 `71ffd705`):** a consuming leg with no parsed consumed block now stamps `needs-node-c (consuming-leg-no-consumed-block)`.
 **PARSE-STEAL is FIXED** (`8fe8ad56`, 2026-10-04 — a marker owns only the fenced block inside its own section; was
 `parseBlockAt` taking the first fence after a heading; `cline_docs/reviews/parse-steal-2026-10-03/`). **Promotion E
@@ -425,3 +425,133 @@ The shipped `quoteFidelity` reports omissions/added lines only on blocks labelle
 
 ## Pointer (2026-10-14): PLATFORM-HELD-BYTES facts side
 `FILE_ARTIFACT_TOOLS` is now derived from `held-bytes/descriptors.ts` (value + order pinned; `laneOf` unchanged — OA-22). `heldBytes` digest/manifest builders exist (`held-bytes/held-bytes-fact.ts`) but are NOT stamped or whitelisted until Stage B. MI-13 has a HELD BYTES section. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-BUILD.md`.
+
+## Pointer (2026-10-14): R9_VERSION + R10 v3 (Stage B push 1)
+`R9_VERSION paichart.r9/1` keys held views; R10 `paichart.r10/3` (whole-token per-family reference exemption, two fingerprints — an arm-2-only change bumps the version too). Before/after any R10 change: `scripts/replay-r10-versions.sh` (NEW-MISS must be 0) and the fixed `scripts/measure-r10-gaps.sh`. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-B-PUSH1-BUILD.md`.
+Stage B variant nets BUILT locally 2026-10-15: `editApplication`/`heldBytes`/`reviewedEditDiff` (variant-only, undeclared in NET_SPECIMENS on purpose), V-8a `restore-is-held-base`, V-8b dialect-lint variant filter. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-B-VARIANT-BUILD.md`.
+
+## Pointer (2026-10-15): Stage B push 2 — your tooling + nets
+REPLAY-STDOUT-INTERLEAVE FIXED (`scripts/replay-report-preload.js`; `replay-nets-byte-identity.sh` writes stdout-free reports, `OUT` absolute, a short pass FAILS); `replay-held-variant.sh` fails on a short/empty pass and runs its base TRANSPILE-ONLY (proven byte-identical to a type-checked base, 2,834 tasks) — the driver copies the new runner INTO the base worktree, so never reuse that worktree for `replay-nets-byte-identity.sh`. V-8a keys its exclusion on the parser's rollback-directive LINES and is benign only when EVERY directive is BASE-held (handles on `ctx.held.baseHeldHandles`); `isRestoreDirectiveLine` deleted. The Reviewer's `reviewedEditDiff` reads `not-chained-this-run` unless its own `chainedPredecessors` chained that Author. MI-13 HELD VARIANT reads `_a` (the manifest line keeps an inline surrogate filter — `_a` admits result.json + pipeline-index.json only). Record: `stage-b-panel/CODE-REVIEW-P2-SYNTHESIS.md`.
+- **Phase 10 re-review fold (2026-10-17):** the D5 quote exemption is computed over the UNION of a handle's base and view (a line ADDS
+  only if in neither — EF NEW-1); `outOfScope` stamp, card `; out of scope` and the MI-13 state list + grammar terms are pinned against
+  `scope.ts`. Live C-1: `rollbackContainment` reads `needs-node-c` when an Author's rollback `rm`s a file the change itself CREATES (it cannot
+  be in a harvest) — noted in `PHASE10-PLAN.md` §10.11, file if it recurs.
+- **Phase 10 (2026-10-17, DEPLOYED 2026-10-17 (release `release_20261017_043829`; reseed cut 04:46:14.769Z)):** carrier scope rule (`no-edits`/`no-base` out of scope, `heldEdit.inScope`), new refusal `held-file-written-whole` (`held-bytes/whole-file.ts`, the lab's SG-WIN, one definition), MI-13 HELD VARIANT → **HELD LEGS** keyed on view `_heldleg`. `PHASE10-PLAN.md` W2/W3/W8.
+
+**Pointer (2026-10-16, PLATFORM-HELD-BYTES G3 entry, EF-P2-8):** `replay-nets.ts` now hydrates `held` from stored variant leaf stamps (`hydrateHeldCtx`), passes the execution id and drops the title — a stored variant stamp reproduces. Replay-tool mover: value-leg `derivationContainment` records the execution id (base trees before `6b44c9cfe` show it). New `heldBytes.reason` `capture-off`/`no-files`. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/G3-ENTRY-BUILD.md` §2.
+
+## Pointer (2026-10-18): held-k8s step 1 capture changes (DEPLOYED 2026-10-18 04:23:03Z, release `release_20261018_041900`)
+Held-bytes extractor: selector grammar `name[field=literal]` (exactly one element; GitHub `content[type=resource].resource.text`);
+`resolveJsonPointer` walks arrays; new refusals `source-not-pinned` (`detail.field` = component only) and `secret-manifest` (a
+plaintext `kind: Secret` is never held); a directory listing writes NO row (`stats.notAFileRead`); a bare `sha` KEY is now a digest
+family (GitHub's blob-id key — was held silently before). Github captures only on `GIT_FILE_SOURCE_PROTOCOLS` legs.
+**Since built (2026-10-18; deployed with step 1):** quoteFidelity **v2** — lane = `resolvedService.<leaf>` ∈ `FILE_LANE_KEYS` (the `files.` arm
+retired; movers: `version` everywhere, `lane` on rig copies) · K-4 (desired-state ∧ held-capable never reaches the content arms) ·
+G-1 persist elision of a Git source's status line / listing (`git-status-elision.ts`) · MI-13 rekey (`HELD_JOIN_VERSIONS`, positive
+control `test:mi13-held-git-control`) · R10 gaps measured on GitOps shapes (secretGenerator literals, Helm `token:`) — §2 finding 8.
+Reviewed at step 1 by sec-ops only (GO 88) — an execution-facts read of 1e/1f is optional, not owed. Series cut: CLAUDE.md "SERIES CUT 2026-10-18 04:23:03Z" (`quoteFidelity.version` 2 everywhere; narrowed replay 87 changes, all named). Open for you: HELD-K8S-G5-OVERREFUSAL. Record: `cline_docs/reviews/held-k8s-2026-10-18/STEP1-BUILD.md`.
+
+## Pointer (2026-10-19): R10 v4 + K8S-HUNK-COUNT (held-k8s window)
+R10 v4 (`paichart.r10/4`): rules 23/28 no longer read a `:=` code assignment as a secret (Rego `key := sprintf(...)` was corrupted and its
+package refused); a new rule redacts a quoted `:=` literal. Replay v3→v4: 0 of 220,227 stored leaves move. K8S-HUNK-COUNT (filed): the
+package form check is terraform-scoped, so a k8s Author's hunk-header undercount reached its Reviewer — one instance; measure the k8s
+Author corpus before extending. Records: `cline_docs/reviews/held-k8s-2026-10-18/WINDOW-RUN-SHEET.md`.
+
+## Pointer (2026-10-19): edit grammar — the label-token PROPERTY rule (`ae75b242b`)
+`machineHeadingTitle`: one ≤ 5-char label containing a non-letter before `Held File Edits` is decoration (supersedes the G1 variant list;
+133 recorded samples re-applied, 7 pre-explained movers). Also: `heldBytes` authoritative-read field (G-4). Open for you:
+HELD-CORRECTION-HEADING-GUARD, HELD-GIT-CREATE-PATH-SLASH, HELD-SINGLE-OBJECT-LIVEQUOTE.
+2026-10-19 (K8S-CLOSEOUT) — fact-production candidates filed: a leg TEARDOWN fact Node C can see (NODE-C-TEARDOWN-UNSEEABLE, one option) ·
+persist the pre-correction refusal reason(s) on `editApplication.correction` (HELD-GIT-CREATE-PATH-SLASH note) · a stated-output check
+(STATED-OUTPUT-NOT-PRINTED; model-evaluation's scorer first). HELD-SINGLE-OBJECT-LIVEQUOTE CLOSED (C-LQ not forced, n = 1).
+
+2026-10-22 (TF-CLOSEOUT) — terraform joined held at 1.15.0: `HELD_JOIN_VERSIONS` + MI-13 `_heldjoin` carry it; MI-13's git-file-source positive
+control now plants a state-path ref + a state-JSON blob (both 🔴 lines fire); the refused-at-call-time ⚪ reads BOTH stored refusal shapes
+(production `result.isError` + `result.content`; the lab fixture tier `success:false` + `error`). R10-V6-RESIDUALS N1/N2 re-homed (trigger: a
+terraform held ref with redactedCount > 0).
+
+## Pointer (2026-10-22): Bug Class 85 — `green` reads every leg (`legVouches`)
+Measured first (0 fan-ins ever; G4 occurred twice, harmless — consumed kind was the checked cidr; new G5 = undecided middle leg),
+then owner decision "all six rows as recommended": every leg must VOUCH (machine-checked · G4 per kind · passed-clean middle leg);
+G1/G2 blocking; G3 dedupe merges `checked` (compare ranks FIRST); G4/G5 delegate with `uncheckedKinds` / `middleLegFor` and
+check 1 per kind. ⚠️ Plain `every(checked)` refuses released `cmu6a9ojp` — never "simplify" to it. Public mirror bump OWED (PH-7).
+Record: `cline_docs/follow-ups/containment-green-path-gaps-2026-10-12.md` §6–§7; discovery block "2026-10-22 — Bug Class 85".
+
+## Pointer (2026-10-23): R10 v7 (`paichart.r10/7`, network families) — DEPLOYED 2026-10-23 02:07:00Z (release `release_20261023_020348`)
+The item-12 lesson generalises: in every `<keyword> <type-word> <value>` rule the TYPE words belong to the prefix AND must be refused as the
+token, or regex backtracking (plain or arm 2) lands on them (count 1, secret in clear — found 9 times in one build). Every v7 rule is
+line-bound (`[ \t]`); arm 2 is linear (`[^\n\\]`). Measure on the public Batfish corpus + the repo corpus before review — it found 6 draft
+defects. Record: `cline_docs/reviews/held-network-2026-10-22/r10-v7/R10-V7-BUILD.md`; register R10-V7-RESIDUALS.
+
+## Pointer (2026-10-23): `validationToolCalls` — DEPLOYED 2026-10-23 11:36:01Z (release `release_20261023_113242`)
+Network `config_change_author` leaf only (`NOT_STAMPED not-network-leg` elsewhere); operator tail, not whitelisted; §6 line to the leg
+Reviewer, no card; gates nothing. Sources row → registration → labelled `harvest-observed` (never "requires"). Acceptance for an ADDITIVE
+net is a hunk classification: the replay driver's `--allow-added` is a BASIC regex applied per line (`\|`, not `|`), so a stamp's
+multi-line body always reads "unexplained". Record: `cline_docs/reviews/held-network-2026-10-22/VALIDATION-TOOL-CALLS-BUILD.md`; live
+control owed; (b) text half = its own cut.
+
+## Pointer (2026-10-24): R10 v8 echo redaction (`paichart.r10/8`) — built, not pushed
+A value a keyed R10 rule redacts anywhere in one persist is also redacted where it reappears BARE (result.json leaves + keys, report.md); plain arm unchanged (held bases unchanged); guard `echoEligible` corpus-justified; prefix tries (linear), overflow counted + logged. Accident control, not exfiltration defence. Measure with `scripts/measure-r10-echo.ts` (masked by default) and the `persist` population of `scripts/replay-r10-versions.sh`. Residuals R10-V8-RESIDUALS (two must close before held-network step 3). Record: `cline_docs/reviews/held-network-2026-10-22/r10-v8/R10-V8-BUILD.md`.
+
+## Pointer (2026-10-25): held-network step 3 batch 1 — P1 echo parity, P2 capture compare, P6 quoteFidelity v3 (built, not pushed)
+- `canonicalBase` refuses `echo-secret-residual` (self-echo, a persist-keyed value, or matcher overflow) — refused, never echo-redacted into B; no base or `R10_VERSION` moves. `persistEchoTokens` (= `collectR10EchoSources(toolCallResults)`, in memory only) reaches every candidate-producing applier call.
+- `quoteFidelity` v3: device-read claims (`deviceReads` / `deviceFindings`, other-lane documents only, linear `globMatch` — never a regex there); every emitted line now redacted IN CONTEXT. `replay-held-capture --compare` is the pure `compareCapture` (`unverifiable (eligibility|echo)`, never a false ❌); `--compare-all`.
+- Record: `cline_docs/reviews/held-network-2026-10-22/STEP3-BATCH1-BUILD.md` (sec-ops GO after fold).
+
+## Pointer (2026-10-26): held-network step 3 batch 2a — R10 v9 + quoteFidelity v4 (built, not pushed)
+- R10 `paichart.r10/9`: structured keys/fields (eAPI command-as-key, credential fields via rule 23 itself — never a bare `token` field —,
+  network field set with BGP communities kept, community-keyed maps, JSON TEXT results re-serialized only on redaction, then the text rules);
+  R-1 `pagerPersistLead` — the persisted read_more record carries the cut line (≤ 512), the model's view unchanged. Plain arm unchanged.
+- quoteFidelity v4: the device claim is a rebuilt TEXT config — label comments dropped, stanzas may be picked/reordered but each must sit
+  INSIDE one served stanza (no unbounded in-order fast path: it accepted re-parenting), `DEVICE_MATCH_BUDGET`, failed blocks excluded by
+  named reason in `deviceReads.excluded`. Prod replay: the 13 v3 findings → 0, nothing else moved. Owner H-1 (2026-10-26): the `excerpt` waiver DROPPED (an excerpt label is a
+  verbatim claim); H-2: the `parse-passwd`-class structured over-redaction accepted as priced. sec-ops final: GO 90.
+- R10 replay compares JSON text leaves structurally (a line compare of re-serialized one-line JSON reads formatting as NEW-MISS).
+  Record: `cline_docs/reviews/held-network-2026-10-22/STEP3-BATCH2A-BUILD.md`.
+
+## Pointer (2026-10-26): held-network step 3 batch 2b — declared device-read capture, Git-vs-device fact (built, not pushed)
+- ONE strict Device sources grammar (`device-sources.ts`; contract value else task body, conflict/absent/unparseable hold nothing); declaration-keyed
+  `DEVICE_READ_DESCRIPTORS` (structured getter `hosts.<device>.output.config.running`, `device:<host>`) held only for a declared device of a declared service.
+- Facts `deviceSourceReads` (F-NW1 platform half) + `gitDeviceComparison` (parent-context lines, R10 in context; §6 to Architect + leg Reviewer only), operator tail, gate nothing.
+- Owed before J1: snapshot the declaration immutably (sec-ops SF-1). Record: `cline_docs/reviews/held-network-2026-10-22/STEP3-BATCH2B-BUILD.md`.
+
+## Pointer (2026-10-26): held-network step 3 push 2 — J1 preconditions + J1 (built, not pushed)
+- O-2: the Device sources declaration is SNAPSHOTTED at a network leg's first execution (`metadata.deviceSourcesSnapshot`, AUDIT_STRIP_KEYS);
+  capture, facts and the O-4 carrier govern from it (`governingDeviceSources`: snapshot-absent / -unreadable / -changed hold nothing, named).
+- P8: an unpinned customer Git row holds a file only when it equals ONE declared line (`GIT_LINE_DESCRIPTORS`, the line is the pin); one held
+  base per device (`withDeviceEvidenceOnly`: a held Git file makes the device read evidence). O-4: a declared device-read device with no held
+  base forces `device-read-not-held`. J1: network in `HELD_JOIN_VERSIONS` 1.25.0 but `HELD_JOIN_AWAITING_TEXT` keeps it inert until push 3.
+- R10 v10 (login username, never an echo source) · gitDeviceComparison v2 (`inside-sub-block`, hierarchy forms — `config-hierarchy.ts`) ·
+  quoteFidelity v5 (g). Record: `cline_docs/reviews/held-network-2026-10-22/STEP3-PUSH2-BUILD.md`.
+
+## Pointer (2026-10-26): NETS-REPLAY-FAST-OFFLINE — the nets replay reads an offline snapshot
+`scripts/replay-nets-byte-identity.sh --snapshot <scratchpad dir>`: one read-only `REPEATABLE READ` dump (no credentials/configuration
+columns) restored into a local `nets_replay_<id>` DB; tables outside the snapshot DROPPED and any errored statement fails the pass
+(caught a missed `agent_templates` relation read on run 1). No production freeze; 3,087 tasks ≈ 6–9 min/pass; base pass cached per
+commit + ids + snapshot; `--ids`, `--scope`. The slowness was tunnel query latency, not process start-up. Retention: 24 h (register
+NETS-REPLAY-SNAPSHOT-RETENTION). Record `cline_docs/reviews/nets-replay-fast-offline-2026-10-26/BUILD.md`; forensics §7h.
+
+
+**Pointer (2026-10-26): held-network push 3 code (owner D-1)** — the carrier's device force covers every declared non-command-package device: `git-file-not-held` (a held device config never stands in for a declared Git file) > `device-read-not-held`; a snapshot with no block forces `device-sources-absent`; inert while awaiting. Record `cline_docs/reviews/held-network-2026-10-22/STEP3-PUSH3-CODE-BUILD.md`.
+
+**Pointer (2026-10-27): F-N2-1 (built, not pushed; rides push 3)** — applier precedence 6 counts an `unheld`/`base-not-held` entry only when the package NAMES it (held-but-unshown states, binding-invalid, package-level states stay global; `NAMING_EXEMPT_STATES`); a `create` may never overwrite any entry's path (`samePath`); a judged package's digest covers rendered entries; `device-read-evidence-only` gets no handle (`HANDLELESS_CAPTURE_REFUSALS`, numbering kept). Nets replay cannot see applier changes (it transcribes stamps) — measure from Author `heldView` items. Record `cline_docs/reviews/held-network-2026-10-22/F-N2-1-BUILD.md`.
+
+**Pointer (2026-10-27): held-network CLOSED** — F-N2-1 is LIVE (pushed with push 3, cut 2026-10-27 00:50:42.743Z); record `cline_docs/reviews/held-network-2026-10-22/NETWORK-CLOSEOUT.md`; discovery § F-N2-1. ⚠️ This file is over the 500-line budget — Protocol 12 eviction owed (register).
+
+**Join learnings carried (2026-10-31):** `.claude/knowledge/domain/execution-facts/execution-facts-library.md` § "Carried from the join learnings ledgers" — read it before designing a check, lab or text change in your domain.
+
+**Golden set boundary (2026-10-31):** a change to how a STORED fact is computed needs the nets byte-identity replay; a fact that is RENDERED to agents (§6, the lean card) changes what agents read, so it also needs the golden set (Protocol 16 § "The standing no-regression rule"; forensics guide §7f2).
+
+## Pointer (2026-10-31): Wave 3 — D3 reroute + HS-FU5 (shipped, cut 04:49:19Z)
+D3: `derivationContainment.carriedInDerivedBlock` (consumed value under Derived Values ⇒ consumed path; replay 2 movers). HS-FU5:
+`PROTOCOL_MARKER_MANDATES` (runtime copy of the seed's `emitsMarkers`, non-DEPRECATED rows). **Gate lesson:** a new protocol-keyed table
+must pass `test:variant-protocol-sites` (name the retired obs variant or add an exclusion with its reason) — it was missed in the
+build's own suite list and stopped the battery at the coordinator's gate run. Discovery: execution-facts-discovery (two blocks).
+
+## Pointer (2026-11-01): quoteFidelity v7 — document ties (QUOTE-PAIRING-TIE, built, not pushed)
+Tied documents (same line-set count) are aligned each; matched first, then gapCost, a remaining tie keeps the first. Measured first (17 ties,
+1 mover). Replay gate: 1 outcome mover + 2 count-only + `version` 7. Library § "quoteFidelity v7"; discovery block 2026-11-01.
+
+## Pointer (2026-11-01): quoteFidelity v8 — pairing budget (QUOTEFIDELITY-PAIRING-COST, built, not pushed)
+`PAIRING_MATCH_BUDGET` bounds the pairing path per leaf (`budgetExceeded` = NOT CHECKED, escalates); every gap scan was made index-driven
+first and output-identical (replay: version-only on 781 stamps). Library § "quoteFidelity v8"; discovery block 2026-11-01 (v8).

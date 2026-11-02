@@ -123,7 +123,7 @@ payloads evade). `lib/agents/harness/sanitize-chained-output.ts`.
 `production-deploy.yml` + the `ecosystem.config.js` passthrough). **Do not read the `=false` in
 `.env.example` / `.env.production.template` as the prod posture** — that error produced three wrong
 answers in one session on 2026-07-26. Verify via the deploy workflow or `pm2 jlist`, never the
-template.
+template. *(Corrected 2026-11-01, PH-7: the code defaults DIFFER — R9 runs only when `=true`; **R10 runs unless `=false`** (default-ON in code since 2026-08-28). `.env.example` sets both ON since 2026-11-01; its old `=false` had switched R10 off for self-hosters. Canonical: `domain/harness/harness-output-guards.md`.)*
 
 **Telemetry (since `94ca63fb` / `abad5d43`)**: both boundaries now record. Site A stamps
 `sanitized` / `neutralizedCount` / `strippedControlChars` / `neutralizedCategories` on every result

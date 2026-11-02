@@ -88,3 +88,6 @@ gh_*.tar.gz
 # Python bytecode (rig / export / service helpers) — never commit
 __pycache__/
 *.pyc
+
+# --- merged from platform export ---
+*.tsbuildinfo

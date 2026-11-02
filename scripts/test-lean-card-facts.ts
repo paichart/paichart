@@ -455,6 +455,46 @@ test('G2-5: a malformed disposition object falls back to the ABSENT token, not a
 // `!verbose && length > 3000`. A small response and any verbose:true call returned NO **Facts:**
 // line, while the taxonomy tells the gate to read the fact off exactly that line.
 
+// BUG CLASS 85 (2026-10-22) — pipeline-harness's three D4 build requirements, one pin per card line. Each fact's
+// disposition is COMPUTED by the shipping function and carried through the REAL pick, so dropping the stamp, the
+// nesting or the render turns these red. Full lines, byte for byte.
+function bc85Card(fact: Record<string, unknown>): string {
+  const { computeContainmentDisposition } = require('../lib/agents/harness/derivation-containment');
+  fact.containmentDisposition = computeContainmentDisposition(fact);
+  return leanFactsLine(pickResultJsonSummary({ derivationContainment: fact })) as string;
+}
+const BC85_G4_LEG = { taskId: 'cmnet', checked: true, violations: 0, disposition: 'needs-node-c', dispositionReason: 'unsupported-not-mechanically-covered',
+  derivedValues: [{ kind: 'cidr', value: '10.99.0.8/31' }, { kind: 'vlan', value: '100' }], unsupportedKinds: ['vlan'] };
+
+test('BC85-R1 (D4 req 1 + 3): G4 — the card names the consumed KIND that went unchecked, and check 1 per kind (cidr ran, vlan against an unchecked value)', () => {
+  expectEq(bc85Card({ checked: false, reason: 'no-derived-values-block',
+    consumedValues: [{ kind: 'cidr', value: '10.99.0.8/31' }, { kind: 'vlan', value: '100' }],
+    upstreamContainment: { green: false, legs: [BC85_G4_LEG] } }),
+  '**Facts:** derivationContainment: NOT checked (no-derived-values-block) | containmentDisposition: needs-node-c (consuming-leg-upstream-delegated) [program-gate conjunct] | upstreamContainment: NOT green (1 leg) | upstreamDelegated: cmnet (unsupported-not-mechanically-covered; consumed vlan NOT machine-checked upstream) | consumedValueCheck: cidr: check 1 ran (ran-no-mismatch); vlan: check 1 ran against an upstream value never machine-checked (ran-against-unchecked-upstream)');
+});
+
+test('BC85-R2 (D4 req 2 + 3): G5 — the card names the MIDDLE leg and the leg reached through it, and check 1 RAN (never "NOT run": the cidr was compared)', () => {
+  const line = bc85Card({ checked: false, reason: 'no-derived-values-block', consumedValues: [{ kind: 'cidr', value: '10.244.0.4/30' }],
+    upstreamContainment: { green: false, legs: [
+      { taskId: 'cmmid', checked: false, violations: 0, disposition: 'needs-node-c', dispositionReason: 'harvested-pool-no-derivation-cannot-decide' },
+      { taskId: 'cmroot', checked: true, violations: 0, via: 'cmmid', disposition: 'benign', dispositionReason: 'checked-clean',
+        derivedValues: [{ kind: 'cidr', value: '10.244.0.4/30' }] }] } });
+  expectEq(line,
+    '**Facts:** derivationContainment: NOT checked (no-derived-values-block) | containmentDisposition: needs-node-c (consuming-leg-upstream-delegated) [program-gate conjunct] | upstreamContainment: NOT green (2 legs) | upstreamDelegated: cmmid (harvested-pool-no-derivation-cannot-decide; middle leg — values reached through it from cmroot) | consumedValueCheck: check 1 ran (ran-no-mismatch)');
+  if (line.includes('NOT run')) throw new Error('requirement 3: a compared kind must never read NOT run');
+});
+
+test('BC85-R3 (D4 req 3): only the unchecked kind consumed — the per-kind line names it; the G4 PASSING shape renders NO delegation segments', () => {
+  const only = bc85Card({ checked: false, reason: 'no-derived-values-block', consumedValues: [{ kind: 'vlan', value: '100' }],
+    upstreamContainment: { green: false, legs: [BC85_G4_LEG] } });
+  expectEq(only.endsWith('| consumedValueCheck: vlan: check 1 ran against an upstream value never machine-checked (ran-against-unchecked-upstream)'), true);
+  // the measured 2026-08-03 shape (cidr only): green, benign — no upstreamDelegated / consumedValueCheck at all
+  const passing = bc85Card({ checked: false, reason: 'no-derived-values-block', consumedValues: [{ kind: 'cidr', value: '10.99.0.8/31' }],
+    upstreamContainment: { green: true, legs: [BC85_G4_LEG] } });
+  expectEq(passing,
+    '**Facts:** derivationContainment: NOT checked (no-derived-values-block) | containmentDisposition: benign (consuming-leg-consumed-discharged) [program-gate conjunct] | upstreamContainment: green (1 leg)');
+});
+
 const EXEC_WITH_FACT = { confidenceScore: 92, derivationContainment: {
   checked: false, reason: 'no-derived-values-block', violations: [{ reason: 'consumed-value-mismatch' }] } };
 
@@ -702,6 +742,44 @@ function execViaBuilder(overrides: Partial<ExecutionResultJsonInput>): Record<st
   });
   return pickResultJsonSummary(built);
 }
+
+test('HELD (EF-P2-4): the three held facts are SUMMARY keys, survive the REAL pick when the nets stamp them, and the card renders editApplication + heldFiles', () => {
+  for (const k of ['editApplication', 'heldBytes', 'reviewedEditDiff']) {
+    if (!(RESULT_JSON_SUMMARY_KEYS as readonly string[]).includes(k)) throw new Error(`${k} is not whitelisted — it would be present in the artifact and ABSENT at the gate (E3b)`);
+  }
+  // Built, then stamped the way stampExecutionNets stamps (after the build), then the real pick — never a hand-rolled exec.
+  const built = buildExecutionResultJson({
+    taskId: 'cmtaskid00000000000000001', taskTitle: 'T', agentRole: 'config_change_author', modelUsed: 'm',
+    finalResponse: 'x'.repeat(20000), confidenceScore: 80, turnCount: 1, maxToolTurns: 30, toolCallResults: [],
+    successfulToolCalls: 0, failedToolCalls: 0, executionTime: 1000, tokensUsed: 100, correctionTurnUsed: false,
+    executionId: 'cmexecid000000000000000001', logger: quietLogger,
+  }) as Record<string, unknown>;
+  built.editApplication = { version: 1, state: 'partial', applied: 1, total: 2, refused: { 'search-not-found': 1 }, candidateDigest8: 'abcd1234',
+    files: [{ handle: 'H1', path: '/etc/otelcol/config.yaml' }, { handle: 'H2', path: '/etc/nginx/conf.d/otlp.conf' }] };
+  built.heldBytes = { held: 2, refused: {} };
+  built.reviewedEditDiff = { version: 1, state: 'rendered', authorExecutionId: 'cmexecid000000000000000001', candidateDigest8: 'abcd1234' };
+  const exec = pickResultJsonSummary(built);
+  for (const k of ['editApplication', 'heldBytes', 'reviewedEditDiff']) if (!(k in exec)) throw new Error(`${k} stripped by the real pick`);
+  const line = leanFactsLine(exec) as string;
+  for (const want of ['editApplication: partial (1/2; refused: search-not-found×1)', 'heldFiles: H1 /etc/otelcol/config.yaml, H2 /etc/nginx/conf.d/otlp.conf']) {
+    if (!line.includes(want)) throw new Error(`expected "${want}" in: ${line}`);
+  }
+});
+
+test('HELD (re-review AR R-N1 / PC N-D): a stamp carrying outOfScope:true renders "; out of scope" on the card; without it, no segment', () => {
+  const card = (ea: Record<string, unknown>) => leanFactsLine(pickResultJsonSummary({ ...execViaBuilder({}), editApplication: ea }) as never) as string;
+  const yes = card({ version: 1, state: 'no-edits', applied: 0, total: 0, outOfScope: true, files: [{ handle: 'H1', path: '/etc/otelcol/config.yaml' }] });
+  if (!yes.includes('editApplication: no-edits (0/0; out of scope)')) throw new Error(`expected out-of-scope segment in: ${yes}`);
+  const no = card({ version: 1, state: 'no-edits', applied: 0, total: 0, files: [{ handle: 'H1', path: '/etc/otelcol/config.yaml' }] });
+  if (/out of scope/.test(no)) throw new Error(`segment without the stamp: ${no}`);
+});
+
+test('HELD (EF-P2-4): a NON-variant artifact carries none of the held keys after the real pick, and its card has no held segment', () => {
+  const exec = execViaBuilder({});
+  for (const k of ['editApplication', 'heldBytes', 'reviewedEditDiff']) if (k in exec) throw new Error(`${k} present on a non-variant artifact`);
+  const line = (leanFactsLine(exec) as string | null) ?? '';
+  if (/editApplication:|heldFiles:/.test(line)) throw new Error(`held segment on a non-variant card: ${line}`);
+});
 
 test('CC1 (F1): chainedContext SURVIVES the whitelist and renders — the branch fires on a built artifact', () => {
   const exec = execViaBuilder({ chainedContext: {
@@ -1003,6 +1081,34 @@ test('CTF-Q5: a summary carrying postCompletionFailure renders the SAME Facts li
     if (!out.startsWith(`${plain} | formCheck: `)) throw new Error(out);
   });
 }
+
+// D3 (2026-10-31): a Derived Values entry equal to an upstream value is checked as CONSUMED and the card names it.
+test('D3a: carriedInDerivedBlock renders WHAT was rerouted, after upstreamContainment', () => {
+  expectEq(
+    leanFactsLine({ derivationContainment: {
+      checked: false, reason: 'no-derived-values-block', consumedValues: [{ kind: 'cidr', value: '10.99.0.0/27' }],
+      carriedInDerivedBlock: { source: 'arch1', entries: [{ kind: 'cidr', value: '10.99.0.0/27' }] },
+      upstreamContainment: { green: true, legs: [{ taskId: 'p1', checked: true, violations: 0 }] },
+      containmentDisposition: { disposition: 'benign', reason: 'consuming-leg-consumed-discharged' },
+    } }),
+    '**Facts:** derivationContainment: NOT checked (no-derived-values-block) | containmentDisposition: benign (consuming-leg-consumed-discharged) [program-gate conjunct] | upstreamContainment: green (1 leg) | carriedInDerivedBlock: cidr 10.99.0.0/27 (equals upstream; checked as consumed)'
+  );
+});
+
+test('D3b: no carriedInDerivedBlock ⇒ NO segment (every other card byte-identical — the F4b shape unchanged)', () => {
+  const line = leanFactsLine({ derivationContainment: {
+    checked: false, reason: 'harvest-block-missing-or-unparseable',
+    upstreamContainment: { green: true, legs: [{ taskId: 'p1', checked: true, violations: 0 }] },
+  } });
+  expectEq(line.includes('carriedInDerivedBlock'), false);
+});
+
+test('D3c: carriedInDerivedBlock survives the real pick NESTED inside derivationContainment (E3b)', () => {
+  const picked = pickResultJsonSummary({ derivationContainment: { checked: false, reason: 'no-derived-values-block',
+    carriedInDerivedBlock: { source: 'a', entries: [{ kind: 'cidr', value: '10.0.0.0/30' }] } }, carriedInDerivedBlock: 'sibling' }) as Record<string, any>;
+  expectEq(JSON.stringify(picked.derivationContainment.carriedInDerivedBlock), JSON.stringify({ source: 'a', entries: [{ kind: 'cidr', value: '10.0.0.0/30' }] }));
+  expectEq('carriedInDerivedBlock' in picked, false); // a top-level sibling is stripped — the nesting is the only legal shape
+});
 
 // --- Summary ---
 console.log('\n=====================================');

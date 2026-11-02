@@ -30,7 +30,7 @@ import { execFileSync } from 'child_process';
 import { loadSnapshot, utc, type Snapshot } from './snapshot';
 import { parsedResult } from './rebuild';
 import { snapshotWithInputEdits } from './input-edits';
-import { useCheckDataAt } from './check-at';
+import { installCheckDataAt } from './check-at';
 import { PER_FILE_MAX } from '../../lib/agents/harness/requirements-size-lint';
 import {
   computeRequirementsFormCheckStamp, decideRequirementsFormCorrection, estimateRequirementsCorrectionTime,
@@ -121,8 +121,8 @@ export function scoreSelfTest(expDir: string): { mismatches: string[]; rows: str
   const cfg = JSON.parse(fs.readFileSync(path.join(expDir, 'scorer-self-test.json'), 'utf8'));
   // L-Z2 (2026-10-10): the trial drafts were written, and stage A was computed, under the check data of their day — a
   // later registry row (Z49 request-path) adds a finding to every one of them by construction. `checkAt` pins that data.
-  useCheckDataAt(cfg.checkAt ?? null);
-  try { return scoreSelfTestUnder(expDir, cfg); } finally { useCheckDataAt(null); }
+  installCheckDataAt(cfg.checkAt ?? null);
+  try { return scoreSelfTestUnder(expDir, cfg); } finally { installCheckDataAt(null); }
 }
 
 /** Is `commit` in this tree's history? (0 = yes, 1 = no; anything else — an unknown commit — fails loud.) */
@@ -263,10 +263,10 @@ export function scoreRun(runDir: string, expDir: string) {
     for (const v of fs.readdirSync(ndir).filter((d) => fs.statSync(path.join(ndir, d)).isDirectory())) {
       const requested = manifest.nodes[node].variants?.[v]?.models?.author ?? null;
       // L-Z2: score each arm under the check data it ran (scoring is synchronous, so the swap is exact).
-      useCheckDataAt(exp.variants?.[v]?.requirementsCheckAt ?? null);
+      installCheckDataAt(exp.variants?.[v]?.requirementsCheckAt ?? null);
       try {
         for (const sd of fs.readdirSync(path.join(ndir, v)).filter((d) => d.startsWith('sample-'))) all.push(scoreSample(path.join(ndir, v, sd), inputs, requested));
-      } finally { useCheckDataAt(null); }
+      } finally { installCheckDataAt(null); }
     }
   }
   // Per cell.

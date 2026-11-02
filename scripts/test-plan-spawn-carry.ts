@@ -27,6 +27,7 @@ import {
   legBaseline,
   decideCreateContract,
   resolveCreateContract,
+  resolveAbsentLegContract,
   resolveInheritDecision,
   buildSourceFact,
   clearanceTokens,
@@ -86,6 +87,11 @@ class FakeDb {
     },
   };
   agentExecution = {
+    findUnique: async ({ where }: any) => {
+      this.guard('agentExecution.findUnique');
+      const e = this.execs.find((x) => x.id === where.id);
+      return e ? { taskId: e.taskId, status: e.status } : null;
+    },
     findMany: async ({ where }: any) => {
       this.guard('agentExecution.findMany');
       return this.execs.filter((e) => e.taskId === where.taskId && e.status === 'SUCCESS' && e.supersededById === null)
@@ -429,6 +435,99 @@ const AT = '2026-10-04T00:00:00.000Z';
     eq([d.action, d.fact.planResolution], ['refuse', 'empty-object'], 'd');
   });
 
+  console.log('\n── Q2 absent arm: resolveAbsentLegContract (SYNTHESIS v3 §8-§9) ──');
+  const ROOT_EXEC = 'crootexec0000000000000001';
+  const absentDb = (rootStatus = 'RUNNING') => {
+    const db = programDb();
+    db.execs.push({ id: ROOT_EXEC, taskId: 'croot', status: rootStatus, supersededById: null, createdAt: new Date(1_700_000_000_000) });
+    return db;
+  };
+  const absent = (db: FakeDb, opts: Partial<{ callingExecutionId: string; contractKeySeen: boolean }> = {}) =>
+    resolveAbsentLegContract(db.asDb(), STAGE, { callingExecutionId: ROOT_EXEC, contractKeySeen: false, ...opts }, () => AT);
+  await test('root harness, plan resolves, no legs yet → STORE the plan; arm create-absent; caller ids stamped', async () => {
+    const d = await absent(absentDb());
+    assert(d.kind === 'store', `got ${d.kind}`);
+    eq([d.contract, d.planSha256, d.fact.source, d.fact.arm, d.fact.planResolution, d.fact.storedAtWriteSha256],
+      [CONTRACT, planSha, 'plan', 'create-absent', 'resolved', planSha], 'store');
+    eq([d.fact.callerExecutionId, d.fact.callerTaskId, d.fact.declineReason, d.fact.suppliedSha256], [ROOT_EXEC, 'croot', null, null], 'caller');
+  });
+  await test('every existing leg holds the plan → STORE', async () => {
+    const db = absentDb(); db.addLeg('cl1', STAGE, CONTRACT); db.addLeg('cl2', STAGE, CONTRACT);
+    const d = await absent(db);
+    eq([d.kind, d.kind === 'store' ? d.fact.legBaseline?.equalsPlan : null], ['store', true], 'd');
+  });
+  for (const [label, setup, want] of [
+    ['a leg without a contract → decline stage-legs-leg-without-contract', (db: FakeDb) => { db.addLeg('cl1', STAGE, CONTRACT); db.addLeg('cl2', STAGE, undefined); }, 'stage-legs-leg-without-contract'],
+    ['legs disagree → decline stage-legs-legs-disagree', (db: FakeDb) => { db.addLeg('cl1', STAGE, CONTRACT); db.addLeg('cl2', STAGE, PARA); }, 'stage-legs-legs-disagree'],
+    ['legs ≠ plan → decline stage-legs-plan-differs-from-legs', (db: FakeDb) => { db.addLeg('cl1', STAGE, PARA); }, 'stage-legs-plan-differs-from-legs'],
+  ] as Array<[string, (db: FakeDb) => void, string]>) {
+    await test(label, async () => {
+      const db = absentDb(); setup(db);
+      const d = await absent(db);
+      assert(d.kind === 'decline', `got ${d.kind}`);
+      eq([d.fact.source, d.fact.arm, d.fact.declineReason, d.fact.planResolution, d.fact.planSha256, d.fact.callerTaskId],
+        ['none', 'create-absent-declined', want, 'resolved', planSha, 'croot'], 'd');
+    });
+  }
+  await test('contract key SEEN (sent but dropped) → decline contract-key-seen, BEFORE any caller/plan read', async () => {
+    const db = absentDb(); db.throwOn = 'agentExecution.findUnique';
+    const d = await absent(db, { contractKeySeen: true });
+    eq([d.kind, d.kind === 'decline' ? d.fact.declineReason : null, d.kind === 'decline' ? d.fact.callerTaskId : 'x'], ['decline', 'contract-key-seen', null], 'd');
+  });
+  await test('caller execution not found → decline caller-execution-not-found', async () => {
+    const d = await absent(absentDb(), { callingExecutionId: 'cnosuchexec00000000000001' });
+    eq([d.kind, d.kind === 'decline' ? d.fact.declineReason : null], ['decline', 'caller-execution-not-found'], 'd');
+  });
+  await test('caller not RUNNING → decline caller-not-running', async () => {
+    const d = await absent(absentDb('SUCCESS'));
+    eq([d.kind, d.kind === 'decline' ? d.fact.declineReason : null], ['decline', 'caller-not-running'], 'd');
+  });
+  await test('caller is another task (a leg harness, a child agent) → decline caller-not-program-root, its task id stamped', async () => {
+    const db = absentDb();
+    db.execs.push({ id: 'cotherexec000000000000001', taskId: 'cl9', status: 'RUNNING', supersededById: null, createdAt: new Date(1_700_000_000_000) });
+    const d = await absent(db, { callingExecutionId: 'cotherexec000000000000001' });
+    assert(d.kind === 'decline', `got ${d.kind}`);
+    eq([d.fact.declineReason, d.fact.callerExecutionId, d.fact.callerTaskId], ['caller-not-program-root', 'cotherexec000000000000001', 'cl9'], 'd');
+  });
+  await test('K10 negatives: the Program Architect and Node C executions (RUNNING, same stage) → caller-not-program-root', async () => {
+    for (const [execId, taskId] of [['carchexec0000000000000001', 'carch'], ['cnodecexec000000000000001', 'cnodec']]) {
+      const db = absentDb();
+      db.execs.push({ id: execId, taskId, status: 'RUNNING', supersededById: null, createdAt: new Date(1_700_000_000_000) });
+      const d = await absent(db, { callingExecutionId: execId });
+      eq([d.kind, d.kind === 'decline' ? d.fact.declineReason : null], ['decline', 'caller-not-program-root'], taskId);
+    }
+  });
+  await test('plan unresolved → decline plan-unresolved with the planResolution', async () => {
+    const db = programDb(plan('{}'));
+    db.execs.push({ id: ROOT_EXEC, taskId: 'croot', status: 'RUNNING', supersededById: null, createdAt: new Date(1_700_000_000_000) });
+    const d = await absent(db);
+    assert(d.kind === 'decline', `got ${d.kind}`);
+    eq([d.fact.declineReason, d.fact.planResolution], ['plan-unresolved', 'empty-object'], 'd');
+  });
+  await test('not a program stage → none (no fact on a non-program task)', async () => {
+    const d = await resolveAbsentLegContract(new FakeDb().asDb(), STAGE, { callingExecutionId: ROOT_EXEC, contractKeySeen: false }, () => AT);
+    eq(d.kind, 'none', 'd');
+  });
+  await test('a throw AFTER the program stage is known → decline resolver-error; BEFORE it → none', async () => {
+    for (const op of ['agentExecution.findUnique', 'task.findMany', '$queryRaw']) {
+      const db = absentDb(); db.throwOn = op;
+      const d = await absent(db);
+      eq([d.kind, d.kind === 'decline' ? d.fact.declineReason : null], ['decline', 'resolver-error'], `throw at ${op}`);
+    }
+    const db = absentDb(); db.throwOn = 'task.findFirst';
+    eq((await absent(db)).kind, 'none', 'throw at the program lookup');
+  });
+  await test('supplied arm stamps the caller too; with no caller its fact is byte-identical apart from the three null keys', async () => {
+    const db = absentDb();
+    const withCaller = await resolveCreateContract(db.asDb(), STAGE, PARA, () => AT, ROOT_EXEC);
+    eq([withCaller.sourceFact?.arm, withCaller.sourceFact?.callerExecutionId, withCaller.sourceFact?.callerTaskId, withCaller.sourceFact?.declineReason],
+      ['create', ROOT_EXEC, 'croot', null], 'with caller');
+    const noCaller = await resolveCreateContract(db.asDb(), STAGE, PARA, () => AT);
+    eq([noCaller.sourceFact?.callerExecutionId, noCaller.sourceFact?.callerTaskId], [null, null], 'no caller');
+    const strip = (f: any) => { const { callerExecutionId, callerTaskId, ...rest } = f; void callerExecutionId; void callerTaskId; return rest; };
+    eq(strip(withCaller.sourceFact), strip(noCaller.sourceFact), 'only the caller keys differ');
+  });
+
   console.log('\n── Shape pins: every key present, explicit null (BC-L2) ──');
   const shapeOk = (f: Record<string, unknown>, keys: readonly string[], label: string) => {
     eq(Object.keys(f), keys, `${label} key set/order`);
@@ -445,6 +544,13 @@ const AT = '2026-10-04T00:00:00.000Z';
     shapeOk(dInh.fact as any, INTERFACE_CONTRACT_SOURCE_KEYS as string[], 'plan-inherited');
     shapeOk(dNone.fact as any, INTERFACE_CONTRACT_SOURCE_KEYS as string[], 'none');
     shapeOk(buildSourceFact({ source: 'none', arm: 'inherit', planResolution: 'resolver-error' }, AT) as any, INTERFACE_CONTRACT_SOURCE_KEYS as string[], 'resolver-error');
+    const aDb = programDb(); aDb.execs.push({ id: 'crootexec0000000000000001', taskId: 'croot', status: 'RUNNING', supersededById: null, createdAt: new Date(1_700_000_000_000) });
+    const dStore = await resolveAbsentLegContract(aDb.asDb(), STAGE, { callingExecutionId: 'crootexec0000000000000001', contractKeySeen: false }, () => AT);
+    const dDecl = await resolveAbsentLegContract(aDb.asDb(), STAGE, { callingExecutionId: 'crootexec0000000000000001', contractKeySeen: true }, () => AT);
+    assert(dStore.kind === 'store' && dDecl.kind === 'decline', 'absent-arm fixtures');
+    shapeOk((dStore as any).fact, INTERFACE_CONTRACT_SOURCE_KEYS as string[], 'create-absent');
+    shapeOk((dDecl as any).fact, INTERFACE_CONTRACT_SOURCE_KEYS as string[], 'create-absent-declined');
+    eq(INTERFACE_CONTRACT_SOURCE_KEYS.slice(-5), ['callerExecutionId', 'callerTaskId', 'declineReason', 'resolverVersion', 'at'], 'Q2 keys appended before resolverVersion/at');
     eq([dPlan.sourceFact?.source, dSup.sourceFact?.source, dInh.fact.source, dNone.fact.source], ['plan', 'supplied', 'plan-inherited', 'none'], 'variants');
     assert(dNone.fact.r9 === null, 'r9 is null for source none');
   });

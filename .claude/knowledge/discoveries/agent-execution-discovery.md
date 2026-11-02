@@ -52,7 +52,7 @@ grep -c "runFormCorrection(" lib/services/agentExecutionEngine.ts               
 grep -c "runFormCorrection(" app/api/pov/agent/execute/stream/route.ts                     # expect 0 — the stream delegates (it wires 2 observers only)
 grep -c "correctionEnabled: formCorrectionEnabled" lib/services/execution-core.ts          # expect 1 — flag read ONCE via isFormCorrectionEnabled(); never a literal true
 grep -c "undercountOnly: true" lib/services/execution-core.ts                              # expect 1 — the turn re-asserts the Step B scope itself
-grep -c "correctionTurnUsed, formCorrectionAttempted," lib/services/execution-core.ts      # expect 1 — #90's 5th disqualifier is threaded
+grep -c "correctionTurnUsed, formCorrectionAttempted," lib/services/execution-core.ts      # expect 2 — 2026-10-15: +the Stage B held edit step's enabled/budget input (V-5c; the line moved to the `editStepInput` builder at the F-T2-1 refactor, 2026-10-21); was 1 — #90's 5th disqualifier is threaded
 grep -c "!formCorrectionAttempted" lib/agents/harness/diagnostic-retry.ts                  # expect 1 — the 5th trigger condition
 grep -c "'hits-include-non-undercount'" lib/agents/harness/package-form-check.ts       # expect 3 — header doc + the reason in the union + the decision arm (flag-off is decided FIRST)
 grep -c "allUndercount: allHitsAreUndercounts(a)" lib/agents/harness/package-form-check.ts # expect 1 — B-M1: the scope is every HIT, not every trigger hit
@@ -170,7 +170,7 @@ the hoisted facts (else unreachable without `verbose:true`). Records:
 
 ```bash
 grep -c "'derivationContainment'" lib/services/execution-artifacts.ts                     # expect 1 — the QUOTED whitelist entry, beside reviewerVerdict (same hoist path). Quoted on purpose: a bare count broke on 2026-08-04 when a header comment added two prose mentions
-grep -c "pipeline-index.json" lib/mcp/tasks/action/handlers/agent/agent-results-handler.ts # EXPECT 2 — E1: hoist matches result.json OR pipeline-index.json (was result.json only = 0% hit for PIPELINE execs; also retro-fixed reviewerVerdict/qualityMetrics hoisting there)
+grep -c "a.name === 'result.json' || a.name === 'pipeline-index.json'" lib/mcp/tasks/action/handlers/agent/agent-results-handler.ts # EXPECT 1 — E1 (PROPERTY grep since 2026-10-31: the old mention count drifted with an F9-s7 comment): hoist matches result.json OR pipeline-index.json (was result.json only = 0% hit for PIPELINE execs; also retro-fixed reviewerVerdict/qualityMetrics hoisting there)
 grep -c "leanFactsLine" lib/mcp/server/tools/advanced/task-action-handler.js              # EXPECT 2 — GAP-1: the lean card prints the hoisted facts via the SHARED helper (import + call); the sibling agent-results-handler.js builder consumes it too
 grep -c "derivationContainment" lib/mcp/server/tools/advanced/lean-card-facts.js          # EXPECT 5 — the shared **Facts:** line surfaces confidence | reviewerVerdict | derivationContainment (+containmentDisposition, nested under it, 2026-08-03)
 grep -c "^test(" scripts/test-lean-card-facts.ts                                          # expect >=64 — (+4 2026-09-16: CC3/CC4/CC5/CC6, the A11/C8 cross-pipeline INHERITED facts — that they survive the whitelist NESTED inside chainedContext, that a leg offering nothing renders the pre-fix line byte-identically, and that entries OFFERED-and-none-taken render the denominator and the skip reason instead of a silent zero, and that a leg whose entries were all POLICY-FILTERED — denominator 0, skip rows present — still renders the rows that explain the zero) (+6 2026-09-16: CC1-2/EC1-2 built through the real whitelist for chainedContext + errorCategory, and RW1/RW2 — the READ-side tripwire that every exec.<key> the card reads is a key the results handler emits, plus the no-literal-after-the-spread collision pin; boundary review cline_docs/reviews/boundary-summary-keys-2026-09-16) (+6 2026-09-12: DL1-DL3/CP1-CP2/CA1, the stage-2b card renders for dialectLint and contractPropagation, which were stamped and whitelisted from 2026-08-25/26 and rendered on NO card line until then) — (+6 2026-09-11: RC1-RC6, net #3 rollbackContainment's render + the write-site/read-site COUPLING pin; a test that only checked "a render function exists" would pass through the 2026-08-03 A1 defect, where neither file was wrong in isolation and the PAIRING was) — (+1 2026-09-09: F4b, the program-tier fact renders benign — H-3) — (+1 2026-09-09: F4b, the program-tier fact renders benign — H-3) — the shared-helper pin (dedup'd + pinned by the born-ready session; do not re-fold). Was 12 at authoring; the suite grew through the asn-kind, containmentDisposition and F7 work. A count that only ever grows is a weak pin — it catches deletion, not drift
@@ -1634,3 +1634,43 @@ primitives-only plan) and an I/O half (just before `persistTerminalSuccess`). Bo
 `HELD_BYTES_CAPTURE_ENABLED === 'true'`. The terminal SUCCESS tx gains `SAVEPOINT held_capture` + up to two `createMany`
 only when the batch has rows; the failure path never captures (rows ⇔ SUCCESS). Pinned by CTF-SEAM-6
 (`test-execution-core-boundary.ts`, incl. "exactly two `persistTerminalSuccess` callers"). Duration series do not move.
+
+**Stage B variant path (built 2026-10-15; DEPLOYED as push 2 2026-10-15 — row DRAFT, so no live variant traffic until the ACTIVE flip; code-review folds: package + stamps only on a resolved variant leaf, heldBytes Harvester-only, #90 recount carries its text).** On a held-variant leaf only (`resolveOwningLegProtocol`, resolved
+ONCE after the loop and threaded on): the edit step + one correction turn run before the nets, `prepareHeldPackage` mints BASE /
+CANDIDATE rows pre-tx, the Harvester's capture moves before the nets, and the persist picks the variant's serialized result
+after its `held_package` savepoint. Every non-variant execution keeps Stage A's position and bytes (CTF-SEAM-6 pins both capture
+sites). Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-B-VARIANT-BUILD.md`.
+**Phase 10 (2026-10-17, DEPLOYED 2026-10-17 (release `release_20261017_043829`; reseed cut 04:46:14.769Z)):** the variant path above runs on every HELD-CAPABLE leaf (`heldCapable`, `held-bytes/variant.ts` `HELD_CAPABLE_PROTOCOLS` = observability-config ONLY — the retired token is NOT a member (panel D4; corrected 2026-10-18, AE N-8); since held-k8s 1g it is `Object.keys(HELD_JOIN_VERSIONS)`). `PHASE10-PLAN.md` W1.
+
+> **2026-10-17 — Q2 leg-contract heal:** task.create has an absent-contract arm for program legs (`resolveAbsentLegContract`,
+> `arm: create-absent | create-absent-declined`); pins in `test:cc7-contract-guard` C2.1b–C2.9. Record: `cline_docs/reviews/q2-leg-contract-heal-2026-10-17/`.
+
+## held-k8s step 1 (2026-10-18 — DEPLOYED 04:23:03Z, release `release_20261018_041900`): persist-time elision, held-capable source
+
+```bash
+grep -c "elideGitFileSourceStatus(" lib/services/execution-artifacts.ts        # expect 1 — the ONE result.json toolCalls builder, both paths
+grep -c "Object.keys(HELD_JOIN_VERSIONS)" lib/agents/harness/held-bytes/variant.ts   # expect 1
+```
+- `truncateToolCallResults` now first calls `elideGitFileSourceStatus` (held-k8s G-1): on a successful call whose RESOLVED service is a
+  Git file source, `data.result.content[0]` (a text item) is REPLACED by a placeholder — the status line beside a file, or a directory
+  listing. Persist-only; the in-memory records (capture, the nets) are untouched; indices kept so positional held selectors resolve.
+- `HELD_CAPABLE_PROTOCOLS` is now derived (`Object.keys(HELD_JOIN_VERSIONS)`), the same set (observability-config only at held-k8s 1g; + kubernetes-gitops since 2026-10-19 and terraform-iac since 2026-10-21).
+- Capture of a Git file source runs only when the owning leg's protocol ∈ `GIT_FILE_SOURCE_PROTOCOLS` (`OwningLegResolution.gitFileSource`).
+Record: `cline_docs/reviews/held-k8s-2026-10-18/STEP1-BUILD.md` (plan SYNTHESIS v3 §6).
+
+## held-terraform step 3 — F-T2-1 (b), the reflection-pass arbitration (DEPLOYED 2026-10-21; every expectation run before it was written)
+
+```bash
+grep -c "arbitrateReflectionPass(" lib/services/execution-core.ts      # expect 1 — the ONE arbitration, BEFORE the form correction (pinned by test:held-variant F-T2-1)
+grep -c "arbitrateReflectionPass(" scripts/leg-replay-lab/live.ts      # expect 1 — the lab runs the SAME helper (it carried its own copy of the order before)
+grep -c "resolveOwningLegProtocol(prisma, task)" lib/services/execution-core.ts   # expect 1 — still ONE owning-leg resolution, now ahead of the form correction
+```
+A form correction that stands down for a refused held edit stamps `notAttemptedReason: prior-pass-reserved:edit-correction`. Ledger LL-T-10
+(`cline_docs/reviews/held-terraform-2026-10-19/LEARNINGS-LEDGER.md`).
+
+## held-network step 3 push 2 — the Device sources snapshot at first execution (DEPLOYED 2026-10-26; expectation run before it was written)
+
+```bash
+grep -c "DEVICE_SOURCES_SNAPSHOT_KEY" lib/agents/harness/prepare-task-for-execution.ts   # expect 2 — import + the write beside the protocol stamp (first execution only)
+```
+A leg first executed before push 2 reads `device-sources-snapshot-absent`. Record: `cline_docs/reviews/held-network-2026-10-22/STEP3-PUSH2-BUILD.md`.

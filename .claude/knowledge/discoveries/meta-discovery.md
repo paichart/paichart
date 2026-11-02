@@ -295,6 +295,19 @@ Key patterns for updating discovery prompts based on implementation learnings:
 - **Registry Maintenance**: Include commands to update AGENT-REGISTRY.md
 - **Gold Standard Usage**: Reference gold standard template for specialist creation
 
+## Documentation entry points (2026-11-02) — verify they still exist before pointing anyone at them
+
+```bash
+ls .claude/knowledge/pipelines/OPERATOR-RUNBOOK.md .claude/knowledge/guides/MAINTAINER-ONBOARDING.md .claude/knowledge/guides/HEALTH-RUN.md | wc -l   # expect 3
+ls scripts/run-gates-clean.sh scripts/ship.sh scripts/series-cut-draft.sh | wc -l   # expect 3
+ls docs/RUNNING.md docs/SELF-HOST-RUN-SHEET.md docs/SELF-HOST-KEPT-FILES.md docs/VERIFYING-SELF-HOST.md | wc -l   # expect 4
+grep -cE '"report:(gate|canary|canary-plan)"' package.json   # expect 3
+grep -c "Entry points for people" .claude/KNOWLEDGE-BASE-GUIDELINES.md   # expect 1
+```
+
+A mismatch means a doc moved or was renamed: update the map in `.claude/KNOWLEDGE-BASE-GUIDELINES.md`, the discovery-scout pointer and this
+block in the same commit (Protocol 11). The rest of this prompt is stale (META-DISCOVERY-REFRESH, filed 2026-10-19).
+
 ## Recent Updates
 
 ### /prompt Command System (2025-01-13)

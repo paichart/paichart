@@ -95,8 +95,8 @@ async function seed() {
       // protocol. Prod has run composed since the 2026-08-17 flip (scripts/flip-harness-protocol-mode.ts,
       // a one-off DB write this seed never encoded), so every FRESH install — every self-host — was getting
       // the legacy load-all regime: all six protocols concatenated (~194 K chars), no `Protocol binding:`
-      // line, the base's misroute guard silent by construction. The seed is the source of truth; the flip
-      // script stays for the rollback drill only.
+      // line, the base's misroute guard silent by construction. The seed is the source of truth. Load-all (`true`) was RETIRED
+      // 2026-10-16 (it now throws UNKNOWN_PROTOCOL_MODE) and the flip script was deleted with it.
       loadProtocols: 'composed',
     },
   };

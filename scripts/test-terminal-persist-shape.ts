@@ -89,7 +89,8 @@ interface MockFixture {
   /** COMPLETE-THEN-FAIL: the task row the in-tx reads return (status/metadata/stage) — defaults keep old fixtures. */
   taskRow?: { type?: string; status?: string; metadata?: Record<string, unknown>; stageId?: string | null; title?: string; stage?: { name: string } | null };
   /** PLATFORM-HELD-BYTES WI-6: make one held createMany throw a REAL Prisma error shape. */
-  heldThrow?: { on: 'ref' | 'refusal'; err: unknown };
+  /** `nth` (ref only, 1-based): throw on that heldFileRef.createMany call only — DB-P2-4 fails ONE of two batches. */
+  heldThrow?: { on: 'ref' | 'refusal'; err: unknown; nth?: number };
 }
 
 function makeMockTx(fixture: MockFixture, calls: RecordedCall[]) {
@@ -214,7 +215,9 @@ function makeMockTx(fixture: MockFixture, calls: RecordedCall[]) {
     heldFileRef: {
       createMany: (args: any) => {
         calls.push({ op: 'heldFileRef.createMany', args });
-        return fixture.heldThrow?.on === 'ref' ? Promise.reject(fixture.heldThrow.err) : Promise.resolve({ count: args.data.length });
+        const nthRef = calls.filter((c) => c.op === 'heldFileRef.createMany').length;
+        const hit = fixture.heldThrow?.on === 'ref' && (fixture.heldThrow.nth === undefined || fixture.heldThrow.nth === nthRef);
+        return hit ? Promise.reject(fixture.heldThrow!.err) : Promise.resolve({ count: args.data.length });
       },
     },
     heldCaptureRefusal: {
@@ -972,6 +975,98 @@ await test('HELD PIPELINE fixture: pipeline-index.json + report.md content byte-
   await runTerminalSuccessTx(makeMockTx(PIPELINE_FIXTURE, b), mk(true));
   assertEq(artifactData(b), artifactData(a), 'PIPELINE artifacts byte-equal');
   assert(b.some(c => c.op === 'heldFileRef.createMany'), 'capture rows written');
+});
+// ── PLATFORM-HELD-BYTES Stage B V-5e (2026-10-15): the variant pick ───────────────────────────────────────────
+const PKG_ROW = { ...HELD_REF(0), id: 'cbaseaaaaaaaaaaaaaaaaaaa1', kind: 'BASE', sourceTool: null, toolCallIndex: null, selector: null,
+  declaredBy: null, descriptorVersion: null, fromRefId: 'ccapaaaaaaaaaaaaaaaaaaaa1' };
+const HV = (kind: 'package' | 'capture') => ({
+  kind,
+  overlay: (rw: string) => (kind === 'package' ? { editApplication: { state: rw === 'committed' ? 'applied' : 'unheld', refWrite: rw } } : { heldBytes: { held: rw === 'committed' ? 2 : 0, refWrite: rw } }),
+  manifests: [{ name: kind === 'package' ? 'edit-application.manifest.json' : 'held-bytes.manifest.json',
+    build: (rw: string) => ({ refWrite: rw, files: [{ handle: 'H1', ...(rw === 'committed' ? { baseRefId: 'cbase' } : {}) }] }) }],
+  ...(kind === 'package' ? { packageRows: [PKG_ROW] } : {}),
+}) as any;
+const persisted = (calls: RecordedCall[], name: string) => {
+  const d = calls.filter((c) => c.op === 'agentArtifact.createMany').flatMap((c) => c.args.data).find((x: any) => x.name === name);
+  return d ? JSON.parse(d.content) : null;
+};
+
+await test('HELD E (V-5e): package COMMITTED — ONE SAVEPOINT held_package around the refs, BEFORE the artifacts; the committed variants are persisted', async () => {
+  const calls: RecordedCall[] = [];
+  await runTerminalSuccessTx(makeMockTx({}, calls), successInput({ heldVariant: HV('package') }));
+  const ops = opsOf(calls);
+  assertEq(ops.slice(ops.indexOf('$executeRaw SAVEPOINT held_package'), ops.indexOf('agentArtifact.createMany') + 1),
+    ['$executeRaw SAVEPOINT held_package', 'heldFileRef.createMany', '$executeRaw RELEASE SAVEPOINT', 'agentArtifact.createMany'], 'package statement order');
+  assertEq(ops.filter((o) => /SAVEPOINT held_/.test(o) && !/RELEASE|ROLLBACK/.test(o)).length, 1, 'exactly one savepoint');
+  assertEq(persisted(calls, 'result.json').editApplication, { state: 'applied', refWrite: 'committed' }, 'committed result.json');
+  assertEq(persisted(calls, 'edit-application.manifest.json').files[0].baseRefId, 'cbase', 'committed manifest');
+});
+await test('HELD F (V-5e forced failure): package rows fail ⇒ ROLLBACK TO, tx continues, result.json AND the manifest are the ROLLED-BACK variants', async () => {
+  const calls: RecordedCall[] = [];
+  const err = Object.assign(new Error('fk'), { name: 'PrismaClientKnownRequestError', code: 'P2003', meta: { code: '23503' } });
+  await runTerminalSuccessTx(makeMockTx({ heldThrow: { on: 'ref', err } }, calls), successInput({ heldVariant: HV('package') }));
+  const ops = opsOf(calls);
+  assert(ops.includes('$executeRaw ROLLBACK TO') && ops.indexOf('$executeRaw ROLLBACK TO') < ops.indexOf('agentArtifact.createMany'), `order: ${ops.join(', ')}`);
+  assertEq(ops[ops.length - 1], 'task.update', 'the transaction continued to the task update');
+  assertEq(persisted(calls, 'result.json').editApplication, { state: 'unheld', refWrite: 'rolled-back' }, 'rolled-back result.json');
+  const m = persisted(calls, 'edit-application.manifest.json');
+  assert(m.refWrite === 'rolled-back' && !('baseRefId' in m.files[0]), 'A3: the rolled-back manifest names no base');
+});
+await test('HELD G (V-5e): a VARIANT Harvester capture batch is written BEFORE the artifacts (its heldBytes pick depends on it); failure ⇒ held 0', async () => {
+  const ok: RecordedCall[] = []; const bad: RecordedCall[] = [];
+  await runTerminalSuccessTx(makeMockTx({}, ok), successInput({ heldCaptures: BATCH_A, heldVariant: HV('capture') }));
+  const ops = opsOf(ok);
+  assert(ops.indexOf('$executeRaw SAVEPOINT held_capture') < ops.indexOf('agentArtifact.createMany'), `order: ${ops.join(', ')}`);
+  assertEq(ops.filter((o) => o === '$executeRaw SAVEPOINT held_capture').length, 1, 'one capture savepoint (not again after the artifacts)');
+  assertEq(persisted(ok, 'result.json').heldBytes, { held: 2, refWrite: 'committed' }, 'capture committed');
+  const err = Object.assign(new Error('x'), { name: 'PrismaClientValidationError' });
+  await runTerminalSuccessTx(makeMockTx({ heldThrow: { on: 'ref', err } }, bad), successInput({ heldCaptures: BATCH_A, heldVariant: HV('capture') }));
+  assertEq(persisted(bad, 'result.json').heldBytes, { held: 0, refWrite: 'rolled-back' }, 'capture rolled back');
+});
+// DB-P2-4 (G3 entry, 2026-10-16): a variant AUTHOR whose own reads also produced a capture batch (prepareHeldCapture is
+// role-agnostic) gets BOTH savepoints — held_package before the artifacts, held_capture after — independent of each other.
+const spOrder = (ops: string[]) => ops.filter((o) => /^\$executeRaw (SAVEPOINT|RELEASE|ROLLBACK)/.test(o) || o === 'agentArtifact.createMany');
+await test('HELD I (DB-P2-4): package + capture on one Author ⇒ SAVEPOINT held_package … RELEASE, the artifacts, then SAVEPOINT held_capture … RELEASE', async () => {
+  const calls: RecordedCall[] = [];
+  await runTerminalSuccessTx(makeMockTx({}, calls), successInput({ heldCaptures: BATCH_A, heldVariant: HV('package') }));
+  assertEq(spOrder(opsOf(calls)), ['$executeRaw SAVEPOINT held_package', '$executeRaw RELEASE SAVEPOINT', 'agentArtifact.createMany',
+    '$executeRaw SAVEPOINT held_capture', '$executeRaw RELEASE SAVEPOINT'], 'two savepoints, package first, capture after the artifacts');
+  assertEq(persisted(calls, 'result.json').editApplication, { state: 'applied', refWrite: 'committed' }, 'committed result.json');
+});
+await test('HELD J (DB-P2-4): the PACKAGE batch fails ⇒ only held_package rolls back; the capture batch still commits; result.json is the rolled-back variant', async () => {
+  const calls: RecordedCall[] = [];
+  const err = Object.assign(new Error('fk'), { name: 'PrismaClientKnownRequestError', code: 'P2003', meta: { code: '23503' } });
+  await runTerminalSuccessTx(makeMockTx({ heldThrow: { on: 'ref', err, nth: 1 } }, calls), successInput({ heldCaptures: BATCH_A, heldVariant: HV('package') }));
+  assertEq(spOrder(opsOf(calls)), ['$executeRaw SAVEPOINT held_package', '$executeRaw ROLLBACK TO', 'agentArtifact.createMany',
+    '$executeRaw SAVEPOINT held_capture', '$executeRaw RELEASE SAVEPOINT'], 'package rolled back, capture released');
+  assertEq(persisted(calls, 'result.json').editApplication, { state: 'unheld', refWrite: 'rolled-back' }, 'rolled-back result.json');
+  assertEq(opsOf(calls)[opsOf(calls).length - 1], 'task.update', 'the transaction continued');
+});
+await test('HELD K (DB-P2-4): the CAPTURE batch fails ⇒ only held_capture rolls back; the package stays committed and result.json is the committed variant', async () => {
+  const calls: RecordedCall[] = [];
+  const err = Object.assign(new Error('x'), { name: 'PrismaClientValidationError' });
+  await runTerminalSuccessTx(makeMockTx({ heldThrow: { on: 'ref', err, nth: 2 } }, calls), successInput({ heldCaptures: BATCH_A, heldVariant: HV('package') }));
+  assertEq(spOrder(opsOf(calls)), ['$executeRaw SAVEPOINT held_package', '$executeRaw RELEASE SAVEPOINT', 'agentArtifact.createMany',
+    '$executeRaw SAVEPOINT held_capture', '$executeRaw ROLLBACK TO'], 'package released, capture rolled back');
+  assertEq(persisted(calls, 'result.json').editApplication, { state: 'applied', refWrite: 'committed' }, 'committed result.json');
+  assertEq(opsOf(calls)[opsOf(calls).length - 1], 'task.update', 'the transaction continued');
+});
+await test('HELD H (V-5e, AE N1): two R10+stringify passes over a ~5.7 MB variant result.json stay far inside the 5 s transaction timeout', async () => {
+  const big = { ...RESULT_JSON, toolCalls: Array.from({ length: 120 }, (_, i) => ({ tool: 'services', result: { text: `line ${i} `.repeat(6000) } })) };
+  assert(JSON.stringify(big).length > 5_000_000, `fixture ${JSON.stringify(big).length}`);
+  const calls: RecordedCall[] = [];
+  const t0 = Date.now();
+  await runTerminalSuccessTx(makeMockTx({}, calls), successInput({ resultJson: big as any, heldCaptures: BATCH_A, heldVariant: HV('capture') }));
+  const ms = Date.now() - t0;
+  const art = calls.filter((c) => c.op === 'agentArtifact.createMany').flatMap((c) => c.args.data).find((d: any) => d.name === 'result.json');
+  console.log(`   (persisted result.json: ${art?.content.length ?? 0} chars)`);
+  assert((art?.content.length ?? 0) > 4_000_000, 'the fixture reached the serializer at full size (a fast pin over a small payload measures nothing)');
+  console.log(`   (in-tx persist with two variants: ${ms} ms)`);
+  assert(ms < 3000, `${ms} ms`);
+});
+await test('HELD source (V-5e): the completion-anchored rescue never passes heldVariant (a variant Author/Harvester is never rescued)', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'lib', 'services', 'execution-completion-anchored.ts'), 'utf8');
+  assert(!/heldVariant/.test(src), 'execution-completion-anchored.ts names heldVariant');
 });
 await test('HELD source: no held rows on the failure path (rows ⇔ SUCCESS)', () => {
   const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'lib', 'services', 'execution-terminal-persist.ts'), 'utf8');

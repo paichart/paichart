@@ -24,7 +24,7 @@ exports the typed block list (facade joins; deferred cache-split consumes it). T
 preambleChars) threads adapter→ExecutionCoreInput→canonical builder, emitted BEFORE
 finalResponse + whitelisted in `RESULT_JSON_SUMMARY_KEYS`. Ops: deploy gate
 `verify-template-mode-compat.ts` (UNKNOWN-mode red, no rollback); the ONLY flip =
-`scripts/flip-harness-protocol-mode.ts` (refusing, one-key jsonb merge, --render-hash rollback
+`scripts/flip-harness-protocol-mode.ts` (refusing, one-key jsonb merge, --render-hash rollback [DELETED 2026-10-16 with the load-all mode — PROTOCOL-LOAD-ALL-RETIRE]
 drill). Gate: test:system-prompt-injections `# expect >=43` (floor — was 37 at Phase C; frozen control arm, pre-C goldens never
 edited). Promotion E 2a (2026-10-05): a DEPRECATED (retired) row's message carries its row `description` (≤500 chars) or, for a
 program-tier name, the HOWTO-use-program-harness pointer — on BOTH the composed and the named path; `errorCode` stays NULL.
@@ -257,7 +257,7 @@ surface, synchronously vs asynchronously, and which are deliberately internal (`
 inferred. Read it before adding a new code, changing what `agent.status`/`agent.results` project, or
 answering "why didn't the caller see the error?".
 
-**Harness output guards (R9/R10) & their flags** — `CONNECTED_OUTPUT_SANITIZE_ENABLED` (R9 sanitize, wired at the tool-loop + context-chainer) and `ARTIFACT_SECRET_REDACT_ENABLED` (R10 redact, wired at the engine + stream persist sites), both **env-var, default-OFF in code but ENABLED IN PROD since 2026-06-29** (`f7398004`) (no live toggle — `pm2 restart` to apply; same var = kill-switch). What they enable, the modules/call-sites, the enable-gates: `.claude/knowledge/domain/harness/harness-output-guards.md`.
+**Harness output guards (R9/R10) & their flags** — `CONNECTED_OUTPUT_SANITIZE_ENABLED` (R9 sanitize, wired at the tool-loop + context-chainer) and `ARTIFACT_SECRET_REDACT_ENABLED` (R10 redact, wired at the engine + stream persist sites), both **env-var, default-OFF in code but ENABLED IN PROD since 2026-06-29** (`f7398004`) (no live toggle — `pm2 restart` to apply; same var = kill-switch). What they enable, the modules/call-sites, the enable-gates: `.claude/knowledge/domain/harness/harness-output-guards.md`. *(Corrected 2026-11-01, PH-7: the code defaults DIFFER — R9 runs only when `=true`; **R10 runs unless `=false`** (default-ON in code since 2026-08-28). `.env.example` sets both ON since 2026-11-01; its old `=false` had switched R10 off for self-hosters. Canonical: `domain/harness/harness-output-guards.md`.)*
 
 **Tool-call success-flag invariant (the K4 contract, 2026-06-27)** — the loop sets `success: true` on the NORMAL return path (`agentic-tool-loop.ts:669`); `success = false` ONLY in the catch (a genuine throw). `mcpService.callExternalTool` **RETURNS** `{isError}` (does NOT throw on a tool-level error, `:546`), so an MCP `isError:true` result is recorded `success:true` — it **cannot** trip #89 anti-fabrication or `executionDegradation` (both key off `!success`, `:657`). Consequence: a confined-harvest verb-enum/RBAC denial reported as `isError` is **non-degrading by construction**; only a *throw* degrades. So the fix for "denials shouldn't degrade the harvester" is a service **contract** (return `isError`, not a throw — `K8S-SERVICE-INTEGRATION-SPEC.md §6.5`), NOT engine classification (don't string-match customer error text — Protocol-10 verdict-smell). Any change that starts gating `success` on `isError` silently degrades connected-service pipelines — pinned by `scripts/test-security-invariants.ts` §L.
 
@@ -358,6 +358,9 @@ Two things that matter for this domain:
   was found to be measuring a *comment* and passing under mutation). If it fires on a non-PIPELINE
   child, inheritance already ran and DECLINED: grep `CONTRACT_INHERIT_REFUSED` for the named reason
   rather than re-creating the task.
+- **Q2 (2026-10-17):** the cause text gained a `create-absent-declined` branch naming `declineReason` (a decline is never a
+  "post-create loss"). Both paths writing the execution RUNNING before any tool call is now LOAD-BEARING — the create-time heal
+  declines `caller-not-running` otherwise (pin C2.8). Record: `cline_docs/reviews/q2-leg-contract-heal-2026-10-17/`.
 
 Live-proven on IGP-T1 R12 (4/4 children on every leg). Detail:
 `cline_docs/reviews/contract-inheritance-2026-08-26/IMPLEMENTATION-PLAN.md`.
@@ -503,3 +506,22 @@ Depth: `cline_docs/reviews/complete-then-fail-2026-10-05/` (DESIGN-v2, BUILD-REP
 
 ## Pointer (2026-10-14): PLATFORM-HELD-BYTES capture halves
 `lib/services/held-bytes-capture.ts` — pure half right after `executionTime` (before every reader of `toolCallResults`), I/O half just before `persistTerminalSuccess`, on BOTH success paths (rescue: before `buildCompletionAnchoredResult`). Never throws; off unless `HELD_BYTES_CAPTURE_ENABLED === 'true'`. Pinned by CTF-SEAM-6. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-BUILD.md`.
+Stage B push 1: the tool-loop record carries the gateway meta NON-ENUMERABLY; the shared builder emits `toolCallGatewayMeta` (operator tail) only when present — what the model reads is byte-identical. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-B-PUSH1-BUILD.md`.
+Stage B variant BUILT locally 2026-10-15 (not pushed): on a held-variant leaf the edit step + correction turn, `prepareHeldPackage` and the capture run before the nets; non-variant executions unchanged. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-B-VARIANT-BUILD.md`.
+**Stage B push 2 DEPLOYED 2026-10-15** (`release_20261015_183825`, variant DRAFT). Code-review folds in the core: the package + its stamps exist ONLY on a resolved variant leaf (`could-not-check` ⇒ the net errorFact stands, BC-P2-4); the heldBytes stamp/manifest is the Harvester's only (AE-P2-1); the #90 recount carries its text (AE-P2-3); V-5d rescue pins exist (AE-P2-4). Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/stage-b-panel/CODE-REVIEW-P2-SYNTHESIS.md`.
+- **Phase 10 live (2026-10-17):** D4 — the retired token is NOT held-capable, so a re-run G3-era leaf stamps nothing: never re-run a
+  G3-era leaf or leg SYNTHESIZE (MI-13's approval 🔴 would fire on nothing). Live controls C-1…C-3: `PHASE10-PLAN.md` §10.11–10.13.
+- **Phase 10 (2026-10-17, DEPLOYED 2026-10-17 (release `release_20261017_043829`; reseed cut 04:46:14.769Z)):** held is a CAPABILITY — `OwningLegResolution.heldCapable` (was `variant`), true for obs legs; the step/capture/package path now runs on every held-capable obs leaf. `PHASE10-PLAN.md` W1.
+
+**Pointer (2026-10-18, held-k8s step 1, DEPLOYED 2026-10-18 04:23:03Z, release `release_20261018_041900`):** the ONE result.json toolCalls builder (`truncateToolCallResults`) first runs `elideGitFileSourceStatus` (G-1: a Git source's status line / listing replaced at `content[0]`, persist-only, index kept); `HELD_CAPABLE_PROTOCOLS` = `Object.keys(HELD_JOIN_VERSIONS)` (obs only — the retired token is NOT a member, your N-8 corrected in the discovery). Record: `cline_docs/reviews/held-k8s-2026-10-18/STEP1-BUILD.md`.
+
+**Pointer (2026-10-16, PLATFORM-HELD-BYTES G3 entry):** `execution-core` stamps a planless variant Harvester `heldBytes.reason` `capture-off`/`no-files` (no rows, no manifest); AE-P2-2 SHIPPED — adoption rule A8 also forgives a heading whose title folds to a machine title (`foldMachineHeadingTitle`; `## Edits` refused, pinned). G3 runs with `HELD_EDIT_CORRECTION_ENABLED` ON. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/G3-ENTRY-BUILD.md`.
+
+**Pointer (2026-10-22, held-terraform step 3 — F-T2-1 (b), DEPLOYED 2026-10-21 21:16:37Z):** `execution-core.ts` now resolves the owning leg BEFORE
+the form correction (one read, same value) and calls `arbitrateReflectionPass` (`held-edit-step.ts`, `decideOnly` preview): when the form correction
+would run AND a refused held edit would take the held-edit correction, the form correction stands down (`prior-pass-reserved:edit-correction`).
+**The leg replay lab's `scripts/leg-replay-lab/live.ts` carried its own copy of the post-loop order** — it now calls the same helper; any change to the
+correction order lands in that helper, never inline (ledger LL-T-10, `cline_docs/reviews/held-terraform-2026-10-19/LEARNINGS-LEDGER.md`).
+
+## Pointer (2026-10-27): Device sources snapshot at first execution
+`prepare-task-for-execution.ts` writes `deviceSourcesSnapshot` beside the protocol stamp at a Device-sources leg's FIRST execution; network kept files live 2026-10-27. Record `cline_docs/reviews/held-network-2026-10-22/NETWORK-CLOSEOUT.md`; discovery § held-network step 3 push 2.

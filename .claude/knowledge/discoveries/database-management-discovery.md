@@ -43,7 +43,7 @@ Run this discovery to understand:
 echo "=== DATABASE SCHEMA ANALYSIS ==="
 echo "--- Model Count and Distribution ---"
 grep -c "^model " prisma/schema.prisma   # expect >=48
-echo "Total models in main schema (48 at 2026-10-14: + the three PLATFORM-HELD-BYTES tables)"
+echo "Total models in main schema (49 at 2026-10-14: + the three PLATFORM-HELD-BYTES tables, + held_views in Stage B push 1)"
 
 ls prisma/*.prisma   # expect exactly ONE file: prisma/schema.prisma
 echo "Single unified schema — prisma/domains/ was DELETED 2025-11-18 (1b1f2be7, abandoned modular design); do not re-add"
@@ -671,3 +671,31 @@ just-touched blob (reproduced on PG 16). Shipping form: target predicate + `FOR 
 `scripts/rehearse-held-gc-race.ts` (throwaway DB, v1 positive control). Prisma reports raw-SQL errors as `P2010` with the
 SQLSTATE in `err.meta.code`; `meta.message` carries the Postgres DETAIL (key values) — never log it. Record:
 `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-BUILD.md`.
+
+## PLATFORM-HELD-BYTES Stage B push 1 schema (2026-10-14)
+
+```bash
+grep -c "model HeldView" prisma/schema.prisma            # expect 1 — held_views, PK held_views_pkey (scope, baseSha256, r9Version, viewVersion)
+grep -c "kind = 'CAPTURE'" scripts/report-mechanism-inventory.sh   # expect >=8 — the MI-13 per-line kind disposition
+npx ts-node -r tsconfig-paths/register scripts/rehearse-held-schema-b.ts   # throwaway local DB; expect 5/5
+```
+`held_views` cascades with its blob (GC); never updated (insert DO NOTHING, read back). `held_file_refs` now holds CAPTURE,
+BASE and CANDIDATE rows: `sourceTool`/`toolCallIndex`/`selector`/`declaredBy` are NULL on BASE/CANDIDATE (MI-13 🔴 catches a
+CAPTURE with a null), `fromRefId` chains CAPTURE→BASE→CANDIDATE (no FK, no index). BASE/CANDIDATE ids come only from
+`newHeldRefId()` (`held-bytes-store.ts`; the tree has no app-side cuid generator and cuid2 ids fail `^c[a-z0-9]{24}$`).
+`gcBatchSql` is kind-blind by design (pinned). Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-B-PUSH1-BUILD.md`.
+
+## held-k8s step 1 (2026-10-18 — DEPLOYED 04:23:03Z, release `release_20261018_041900`): `held_file_refs.sourceRevision`
+
+```bash
+grep -c "sourceRevision" prisma/schema.prisma   # expect 1 — nullable; NEVER revert 44c51e63f (a plain db push refuses once a value exists)
+```
+The Git commit a CAPTURE was read at (from the served URI, 40 lowercase hex or null); BASE inherits from its CAPTURE, CANDIDATE from its
+BASE (`fromRefId`). No index, no blob-sha column (derivable with `git rev-parse <rev>:<path>`, DB §5). MI-13 gains: a github CAPTURE
+with NULL revision 🔴, a malformed revision 🔴, a BASE/CANDIDATE whose revision ≠ its `fromRefId` row 🔴, revisions by service ⚪.
+Rehearsal: `scripts/rehearse-held-source-revision.ts` (local only). Record: `cline_docs/reviews/held-k8s-2026-10-18/STEP1-BUILD.md` (plan SYNTHESIS v3 §6).
+
+**Late addition (finding 10, 2026-10-18):**
+```bash
+grep -c "sourceRevision: f.sourceRevision" scripts/replay-held-capture.ts   # expect 1 — every builder of a held row type sets the REQUIRED key (MI-13 🔴 11 runs this script)
+```

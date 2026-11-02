@@ -1132,7 +1132,8 @@ the library outside a JSDoc comment fails `validate:role-guidance` (the one comm
 ```bash
 grep -c "loadProtocols" lib/pov/api/agent-templates-adapter.ts               # expect 15 — raw round-trip everywhere
 grep -c "loadProtocols: template.metadata?.loadProtocols === true" lib/pov/api/agent-templates-adapter.ts  # expect 0 — the coercion form is retired (a reappearance is the 'composed'-wipe bug)
-grep -c "flip-harness-protocol-mode" scripts/deploy/blue-green-deploy.sh # expect 1 — the gate's error text names the sanctioned flip path (the deploy logic moved from the workflow into this script; this grep never ran until the audit's path check was fixed, 2026-09-25)
+grep -c "RETIRED load-all mode" scripts/deploy/blue-green-deploy.sh # expect 1 — the gate's error text names the fix for a template still on loadProtocols:true (load-all RETIRED 2026-10-16; the flip script it used to name is deleted — PROTOCOL-LOAD-ALL-RETIRE)
+ls scripts/flip-harness-protocol-mode.ts 2>/dev/null | wc -l # expect 0 — the flip script is deleted; un-flipping to load-all now throws UNKNOWN_PROTOCOL_MODE
 ```
 
 ## Pattern (h) role state (added 2026-10-04)
@@ -1143,3 +1144,40 @@ grep -c "consuming-leg-no-consumed-block" lib/services/agentTemplateBuilder/pAIc
 ```
 `config_change_author` is at the GS2 10-bullet ceiling after batch 3 — the next addition must replace, not append.
 Context: specialist § "Pattern (h) role changes".
+
+## held-k8s step 1 (2026-10-18 — DEPLOYED 04:23:03Z, release `release_20261018_041900`): held text plumbing, no agent byte moved
+
+```bash
+grep -c "heldEditClause(ex)" lib/agents/harness/held-bytes/variant-protocol.ts      # expect 1 — heldFilesSection(example) threads the domain example
+grep -c "heldFilesSection(K8S_HELD_EDIT_EXAMPLE" scripts/seed-protocol-prompts.ts       # expect 1 — step 3 (k8s 1.18.0, the held join, 2026-10-19) interpolates it once (updated as this line said)
+grep -c "Held File Edits/" scripts/audit-role-guidance-contract.ts                  # expect 1 — held grammar refused in SHARED role guidance (TS N4)
+```
+`heldEditClause(example)` / `heldFilesSection(example)` default to the observability example (sha-identical; `test:protocol-golden`
+without `--update`). The k8s example (`K8S_HELD_EDIT_EXAMPLE`, generic names, SEARCH anchored on the container `- name:` line) is
+defined and parse-pinned but interpolated NOWHERE until step 3 (the held join). The public-export hold now keys on the held-files heading in the
+TEXT, so a second held domain is held back by construction. Record: `cline_docs/reviews/held-k8s-2026-10-18/STEP1-BUILD.md` (plan SYNTHESIS v3 §6).
+
+## held-k8s step 3 — k8s seed held constraints (2026-10-19; every expectation run before it was written)
+
+```bash
+grep -c "HELD_AUTHOR_CONSTRAINT" scripts/seed-kubernetes-gitops-templates.ts      # expect 2 — import + the Author spread (held constraints LAST by defaultRole)
+grep -c "seeded IFF the owning seed binds a held-capable protocol" scripts/test-held-variant-protocol.ts   # expect 1 — the two-way seed pin: a held-capable domain's owning seed carries both constraints, others none
+```
+A reseed is OWED after the step-3 deploy (`seed-kubernetes-gitops-templates.ts`; descriptions + constraints moved).
+
+## Terraform owning seed carries the held constraints (held-terraform step 3, DEPLOYED 2026-10-21; expectation run before it was written)
+
+```bash
+grep -c "HELD_AUTHOR_CONSTRAINT" scripts/seed-terraform-iac-templates.ts   # expect 2 — import + the spread by role (the two-way pin in test:held-variant-protocol requires it)
+```
+Prod reseed command (record it at every deploy): `npx ts-node --project prisma/tsconfig.seed.json scripts/seed-terraform-iac-templates.ts` in the
+release dir with `.env.production` exported. Ledger LL-T-01, LL-T-33.
+
+## Network owning seed carries the held constraints (held-network step 3 push 3, DEPLOYED 2026-10-27; every expectation run before it was written)
+
+```bash
+grep -c "HELD_AUTHOR_CONSTRAINT" scripts/seed-network-provisioning-templates.ts     # expect 2 — import + the spread by role (two-way pin in test:held-variant-protocol)
+grep -c "HELD_REVIEWER_CONSTRAINT" scripts/seed-network-provisioning-templates.ts   # expect 2 — import + the spread by role
+```
+Prod reseed: `npx ts-node --project prisma/tsconfig.seed.json scripts/seed-network-provisioning-templates.ts` in the release dir with
+`.env.production` exported. Record: `cline_docs/reviews/held-network-2026-10-22/NETWORK-CLOSEOUT.md`.

@@ -1,0 +1,4 @@
+role	executions	truncation_retry	reviewer_approved
+infra_state_harvester	1	f	
+requirements_author	1	f	
+requirements_reviewer	1	f	true

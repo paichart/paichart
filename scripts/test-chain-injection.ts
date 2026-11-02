@@ -277,7 +277,9 @@ function stub(deps: Array<{ id: string; fr: string; inFlight?: boolean }>) {
   const prep = fs.readFileSync(path.join(__dirname, '../lib/agents/harness/prepare-task-for-execution.ts'), 'utf8');
   const throwIdx = prep.indexOf('throw new CanNeverRunError(');
   const resolveIdx = prep.indexOf('resolveOwningLeg(prisma, contractCheck.stageId)');
-  const chainIdx = prep.indexOf('chainDependencyContext(taskId, prisma, { inject })');
+  // `writeViews: true` joined the options in PLATFORM-HELD-BYTES Stage B V-6 (prepare is the ONE caller that builds held views);
+  // the property pinned is still the order and that `inject` is passed.
+  const chainIdx = prep.indexOf('chainDependencyContext(taskId, prisma, { inject, writeViews: true })');
   check('PIN: prepare resolves the owning leg AFTER the CC7 throw and BEFORE the chain call, and passes `inject`',
     throwIdx > 0 && resolveIdx > throwIdx && chainIdx > resolveIdx);
   check('PIN: leg resolution is NON-PIPELINE only', /contractCheck\.type !== 'PIPELINE' && contractCheck\.stageId/.test(prep));

@@ -49,6 +49,7 @@ import {
 } from '../lib/services/agentTemplateBuilder/pAIchartUniversalTemplate';
 import { AGENT_MODELS } from '../lib/agents/model-tiers';
 import { DEFAULT_MAX_TOKENS } from '../lib/services/llm/types';
+import { HELD_AUTHOR_CONSTRAINT, HELD_REVIEWER_CONSTRAINT } from '../lib/agents/harness/held-bytes/variant-protocol';
 
 const prisma = new PrismaClient();
 
@@ -75,10 +76,10 @@ const COMMON_MODEL_PARAMS = (timeout: number) => ({
   timeout,
 });
 
-const TEMPLATES: TemplateSeed[] = [
+export const TEMPLATES: TemplateSeed[] = [
   {
     name: 'IaC State Harvester',
-    description: 'Phase 0 of the terraform-iac-protocol (conditional) — self-provisions the read-only Terraform service from the descriptor carried in the task (register → call), then performs READ-ONLY state collection via many narrow, address-scoped reads (state list for the addresses, then targeted state pull per address — which render saved state and launch NO providers), capturing resource shape + addresses + drift, sensitive metadata not values. Hands the snapshot to the Infrastructure Architect via auto-chained pipeline context. Read-only render only: never a mutating verb, never runs plan/validate/init (they launch providers = arbitrary code + a state lock). Fires only when current (redacted) state is not already supplied in the task. Reads terraform-iac-protocol before beginning work.',
+    description: 'Phase 0 of the terraform-iac-protocol (conditional) — self-provisions the read-only Terraform service from the descriptor carried in the task (register → call), then performs READ-ONLY state collection via many narrow, address-scoped reads (state list for the addresses, then targeted state pull per address — which render saved state and launch NO providers), capturing resource shape + addresses + drift, sensitive metadata not values; when the task names .tf files of the configuration repository, also reads each one through the platform Git file source (the platform holds it for edits by reference). Hands the snapshot to the Infrastructure Architect via auto-chained pipeline context. Read-only render only: never a mutating verb, never runs plan/validate/init (they launch providers = arbitrary code + a state lock). Fires only when current (redacted) state is not already supplied in the task. Reads terraform-iac-protocol before beginning work.',
     category: AgentCategory.AUTOMATION,
     templateType: TemplateType.ORCHESTRATOR,
     defaultRole: 'infra_state_harvester',
@@ -110,7 +111,7 @@ const TEMPLATES: TemplateSeed[] = [
   },
   {
     name: 'HCL Rollback Author',
-    description: 'Phase 2 of the terraform-iac-protocol — THE deliverable producer. Authors the HCL change package: (a) a declarative HCL/module diff as a PR — never imperative terraform CLI commands; (b) EXPECTED validation facts (the terraform validate / tflint / expected plan add-change-destroy counts / OPA/conftest/Sentinel checks the team CI will run, with expected results) — does NOT run plan/validate/init/tflint itself (they lock state + launch providers on authored HCL); (c) a rollback plan (revert the HCL + apply / state rollback); (d) recommended change ordering; (e) restates the harvested policy/constraint baseline — the OPA/Sentinel/conftest policies, tag/naming standards, provider quotas, and target workspace — so the Reviewer can verify constraint-fit independently. Produces a change to be applied via a governed terraform apply run, never an applied change — apply is out-of-band. Reads terraform-iac-protocol before beginning work.',
+    description: 'Phase 2 of the terraform-iac-protocol — THE deliverable producer. Authors the HCL change package: (a) a declarative HCL change as a PR — a held repo file (H<n>) is changed only by edits by reference, never rewritten whole; any other file, an HCL/module diff; never imperative terraform CLI commands; (b) EXPECTED validation facts (the terraform validate / tflint / expected plan add-change-destroy counts / OPA/conftest/Sentinel checks the team CI will run, with expected results) — does NOT run plan/validate/init/tflint itself (they lock state + launch providers on authored HCL); (c) a rollback plan — restore H<n> for a held file, revert the HCL + apply (or a state rollback) for any other file; (d) recommended change ordering; (e) restates the harvested policy/constraint baseline — the OPA/Sentinel/conftest policies, tag/naming standards, provider quotas, and target workspace — so the Reviewer can verify constraint-fit independently. Produces a change to be applied via a governed terraform apply run, never an applied change — apply is out-of-band. Reads terraform-iac-protocol before beginning work.',
     category: AgentCategory.AUTOMATION,
     templateType: TemplateType.DOCUMENTER,
     defaultRole: 'config_change_author',
@@ -125,7 +126,7 @@ const TEMPLATES: TemplateSeed[] = [
   },
   {
     name: 'Plan Policy Reviewer',
-    description: 'Phase 3 of the terraform-iac-protocol — independent QA gate (not the deliverable). Reviews the change package for policy compliance, plan diff-boundedness (flags any unintended destroy/replace in the expected plan), rollback adequacy, and drift handling (in-scope reconciled, out-of-scope halted); checks that each validation step is a real expected fact (validate/tflint/plan-counts/OPA), not prose; emits a clear verdict (approved / needs-revision) with confidence and named blocking issues. Does not soften ratings. Reads terraform-iac-protocol before beginning work.',
+    description: 'Phase 3 of the terraform-iac-protocol — independent QA gate (not the deliverable). Reviews the change package for policy compliance, plan diff-boundedness (flags any unintended destroy/replace in the expected plan), rollback adequacy, and drift handling (in-scope reconciled, out-of-scope halted); checks that each validation step is a real expected fact (validate/tflint/plan-counts/OPA), not prose; reads the platform-rendered diff of held-file edits, where any line the package does not account for blocks; emits a clear verdict (approved / needs-revision) with confidence and named blocking issues. Does not soften ratings. Reads terraform-iac-protocol before beginning work.',
     category: AgentCategory.AUTOMATION,
     templateType: TemplateType.REVIEWER,
     defaultRole: 'change_reviewer',
@@ -147,6 +148,48 @@ const TEMPLATES: TemplateSeed[] = [
 // ADMIN_EMAIL (self-host) → '' → the 'system' sentinel.
 const SEED_OWNER_EMAIL = (process.env.SEED_OWNER_EMAIL || process.env.ADMIN_EMAIL || '').trim().toLowerCase();
 
+/** The row a template seeds, without the DB write — moved verbatim out of main() (held-terraform step 0, 2026-10-21; the k8s
+ *  3a / obs V-0 shape) so a pin and a later seed read the rows without writing anything. */
+export function buildTemplateRow(template: (typeof TEMPLATES)[number]) {
+  // Resolve the prompt template with role-specific guidance. All four roles are REUSED and HAVE
+  // ROLE_GUIDANCE_LIBRARY entries (no generic fallback). The harvester (infra_state_harvester) carries
+  // both bases (artifact_harvester + synthesis_source_acquirer) — preserved by this exact replace().
+  const promptTemplate = PAICHART_UNIVERSAL_BASE_TEMPLATE.replace(
+    '${roleSpecificGuidance}',
+    getRoleSpecificGuidance(template.defaultRole)
+  );
+
+  const data = {
+    name: template.name,
+    description: template.description,
+    category: template.category,
+    templateType: template.templateType,
+    defaultRole: template.defaultRole,
+    promptTemplate,
+    capabilities: {
+      'Protocol-Driven': 'Reads terraform-iac-protocol from injected context before acting',
+      'Context Chaining': 'Receives predecessor task output via pipeline context injection',
+      'HCL Change, Not Apply': 'Produces a reviewable HCL change package (a PR) to be applied by a governed terraform apply run — never applies anything',
+    },
+    constraints: {
+      'Protocol First': 'Must read the injected protocol before beginning work',
+      'Stay in Phase': 'Only perform the work for the specific phase assigned — do not skip ahead',
+      'No State Mutation, No Plan/Validate': 'No mutating verb anywhere; the Harvester is read-only render only (state list / state pull); no specialist runs terraform plan/validate/init (state lock + provider code-exec); apply is out-of-band',
+      // held-terraform step 3 (the join; inventory §1 item 4): the held template constraints, spread LAST by role — the same text the obs
+      // and k8s Authors and Reviewers carry (G3-measured); held text stays out of the shared role guidance (four-domain keys).
+      ...(template.defaultRole === 'config_change_author' ? HELD_AUTHOR_CONSTRAINT
+        : template.defaultRole === 'change_reviewer' ? HELD_REVIEWER_CONSTRAINT : {}),
+    },
+    maxRetries: 2,
+    timeout: template.timeout,
+    priority: AgentPriority.HIGH,
+    isDefault: false,
+    tags: template.tags,
+    metadata: template.metadata,
+  };
+  return data;
+}
+
 async function main() {
   console.log('Seeding terraform-iac templates...\n');
 
@@ -167,38 +210,7 @@ async function main() {
       where: { name: template.name },
     });
 
-    // Resolve the prompt template with role-specific guidance. All four roles are REUSED and HAVE
-    // ROLE_GUIDANCE_LIBRARY entries (no generic fallback). The harvester (infra_state_harvester) carries
-    // both bases (artifact_harvester + synthesis_source_acquirer) — preserved by this exact replace().
-    const promptTemplate = PAICHART_UNIVERSAL_BASE_TEMPLATE.replace(
-      '${roleSpecificGuidance}',
-      getRoleSpecificGuidance(template.defaultRole)
-    );
-
-    const data = {
-      name: template.name,
-      description: template.description,
-      category: template.category,
-      templateType: template.templateType,
-      defaultRole: template.defaultRole,
-      promptTemplate,
-      capabilities: {
-        'Protocol-Driven': 'Reads terraform-iac-protocol from injected context before acting',
-        'Context Chaining': 'Receives predecessor task output via pipeline context injection',
-        'HCL Change, Not Apply': 'Produces a reviewable HCL change package (a PR) to be applied by a governed terraform apply run — never applies anything',
-      },
-      constraints: {
-        'Protocol First': 'Must read the injected protocol before beginning work',
-        'Stay in Phase': 'Only perform the work for the specific phase assigned — do not skip ahead',
-        'No State Mutation, No Plan/Validate': 'No mutating verb anywhere; the Harvester is read-only render only (state list / state pull); no specialist runs terraform plan/validate/init (state lock + provider code-exec); apply is out-of-band',
-      },
-      maxRetries: 2,
-      timeout: template.timeout,
-      priority: AgentPriority.HIGH,
-      isDefault: false,
-      tags: template.tags,
-      metadata: template.metadata,
-    };
+    const data = buildTemplateRow(template);
 
     if (existing) {
       console.log(`  Already exists (id: ${existing.id}) — updating...`);
@@ -231,7 +243,8 @@ async function main() {
   await prisma.$disconnect();
 }
 
-main().catch((e) => {
+// held-terraform step 0: importable without writing (TEMPLATES + buildTemplateRow), like the k8s (3a) and obs (V-0) seeds.
+if (require.main === module) main().catch((e) => {
   console.error('Seed failed:', e);
   prisma.$disconnect();
   process.exit(1);

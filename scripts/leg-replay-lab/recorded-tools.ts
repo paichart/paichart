@@ -41,7 +41,11 @@ import { parsedResult } from './rebuild';
 export const RECORDED_FILE_TOOLS: readonly string[] = [...FILE_ARTIFACT_TOOLS, 'get_prometheus_config'];
 export const RECORDED_VALIDITY_MIN = 0.9;
 
-export type ServeTier = 'exact' | 'canonical' | 'services-tool' | 'repeat' | 'same-action' | 'unserved' | 'unserved-truncated';
+/** The fixture tiers (L-K-a, fixture-tools.ts) share this log when a node carries a file fixture: one entry per call, in order. */
+export type ServeTier = 'exact' | 'canonical' | 'services-tool' | 'repeat' | 'same-action' | 'unserved' | 'unserved-truncated'
+  | 'fixture-file' | 'fixture-directory' | 'fixture-missing' | 'fixture-refused' | 'unserved-fixture'
+  /** L-N1 network tiers (network-fixtures.ts) share this log too. */
+  | 'device-pool' | 'device-failure' | 'unserved-device' | 'catalogue' | 'unserved-catalogue' | 'register-refused';
 export interface ServeLogEntry { tool: string; action: string | null; innerTool: string | null; fileTool: boolean; tier: ServeTier; storedIndex: number | null }
 export interface StoredCall { index: number; tool: string; server: string | null; args: unknown; result: unknown; error: string | null; success: boolean; truncatedAtPersist: boolean }
 
@@ -157,6 +161,13 @@ export interface RecordedToolsReport {
   fileServed: number;
   fileServedRate: number | null;
   valid: boolean;
+  /** LAB-VALIDITY-OTHER-CALLS (2026-10-21): the NON-file `services` calls (state / cluster / descriptor reads; fixture-tier Git reads
+   *  count as served). `valid` stays the file-tool rule above, unchanged, so earlier labs keep their readings; a lab that pre-registers
+   *  "≥ 90% of other calls served" reads `otherValid` (score-t1 does). Platform calls (project / registry / perform) are not counted. */
+  otherServicesCalls: number;
+  otherServicesServed: number;
+  otherServicesServedRate: number | null;
+  otherValid: boolean;
   /** A file tool the PRODUCTION execution called that this sample never called (reported, not a validity input). */
   productionFileToolsNotCalled: string[];
   log: ServeLogEntry[];
@@ -170,9 +181,15 @@ export function recordedToolsReport(log: ServeLogEntry[], stored: StoredCall[]):
   const rate = file.length ? fileServed / file.length : null;
   const called = new Set(file.map((e) => e.innerTool));
   const prodFile = [...new Set(stored.filter((s) => isFileCall(s.tool, s.args)).map((s) => innerToolOf(s.tool, s.args)!))];
+  const other = log.filter((e) => e.tool === 'services' && !e.fileTool);
+  // Every `unserved*` tier (unserved, -truncated, -fixture, and L-N1's -device / -catalogue) is unserved; same-action never counts.
+  const otherServed = other.filter((e) => !e.tier.startsWith('unserved') && e.tier !== 'same-action').length;
+  const otherRate = other.length ? otherServed / other.length : null;
   return {
     calls: log.length, tiers, fileCalls: file.length, fileServed, fileServedRate: rate,
     valid: rate === null || rate >= RECORDED_VALIDITY_MIN,
+    otherServicesCalls: other.length, otherServicesServed: otherServed, otherServicesServedRate: otherRate,
+    otherValid: otherRate === null || otherRate >= RECORDED_VALIDITY_MIN,
     productionFileToolsNotCalled: prodFile.filter((t) => !called.has(t)),
     log,
   };

@@ -172,6 +172,18 @@ def main():
         else:
             shutil.copy2(src, dst)
 
+    # R6 / PH-7 (2026-11-01): a protocol carrying the held-files section must never cross without the self-host text beside it.
+    # The guard constant is now true, so this is what keeps the rule mechanical on every export.
+    HELD_HEADING = '## Held files — edits by reference'   # = HELD_FILES_HEADING, lib/agents/harness/held-bytes/variant-protocol.ts
+    # protocols/ is written by render-public-protocols.ts straight into the public repo, so scan the OUTPUT dir (present with --into),
+    # not just the files this export copied.
+    pdir = os.path.join(out, 'protocols')
+    held_rendered = sorted('protocols/' + f for f in (os.listdir(pdir) if os.path.isdir(pdir) else []) if f.endswith('.md')
+                           and HELD_HEADING in open(os.path.join(pdir, f), encoding='utf-8', errors='replace').read())
+    if held_rendered and 'docs/SELF-HOST-KEPT-FILES.md' not in written:
+        sys.exit(f'REFUSING (R6 / PH-7): {len(held_rendered)} exported protocol(s) carry the held-files section '
+                 f'({", ".join(held_rendered[:4])}) but docs/SELF-HOST-KEPT-FILES.md is not in the export — fix public-allowlist.rules.')
+
     removed = []
     if into:
         gone = sorted(prev_manifest - set(written))

@@ -203,7 +203,7 @@ pino logging section · Core Knowledge depth · Key Information · Learning Note
 patterns · evicted session blocks. Canonical pattern files in `.claude/knowledge/patterns/` take precedence
 where they exist; the paired discovery's greps derive CURRENT state from the tree and outrank both.
 
-**Harness output guards (R9/R10) & their flags** — `CONNECTED_OUTPUT_SANITIZE_ENABLED` (R9: sanitize untrusted connected-service output before the reasoner) and `ARTIFACT_SECRET_REDACT_ENABLED` (R10: redact secrets from persisted artifacts), both **env-var, default-OFF in code but ENABLED IN PROD since 2026-06-29** (`f7398004`; durable via production-deploy.yml + ecosystem.config.js — the `=false` in .env templates is the code default, NOT prod). No live toggle — a flag that disables a *security gate* would be a bypass; these are *additive transforms*, so OFF is fail-safe; `pm2 restart` to apply). The R9 **enable-gate is C1** (detector false-positives — routed to prompt-construction + sec-ops). Full ref + CI pins: `.claude/knowledge/domain/harness/harness-output-guards.md`.
+**Harness output guards (R9/R10) & their flags** — `CONNECTED_OUTPUT_SANITIZE_ENABLED` (R9: sanitize untrusted connected-service output before the reasoner) and `ARTIFACT_SECRET_REDACT_ENABLED` (R10: redact secrets from persisted artifacts), both **env-var, default-OFF in code but ENABLED IN PROD since 2026-06-29** (`f7398004`; durable via production-deploy.yml + ecosystem.config.js — the `=false` in .env templates is the code default, NOT prod). No live toggle — a flag that disables a *security gate* would be a bypass; these are *additive transforms*, so OFF is fail-safe; `pm2 restart` to apply). The R9 **enable-gate is C1** (detector false-positives — routed to prompt-construction + sec-ops). Full ref + CI pins: `.claude/knowledge/domain/harness/harness-output-guards.md`. *(Corrected 2026-11-01, PH-7: the code defaults DIFFER — R9 runs only when `=true`; **R10 runs unless `=false`** (default-ON in code since 2026-08-28). `.env.example` sets both ON since 2026-11-01; its old `=false` had switched R10 off for self-hosters. Canonical: `domain/harness/harness-output-guards.md`.)*
 
 
 ## Success Metrics
@@ -338,3 +338,52 @@ item. Also: REST `createTask` now strips AUDIT_STRIP keys (a POV writer could fo
 
 ## Pointer (2026-10-14): PLATFORM-HELD-BYTES block Q
 No pre-R10 hash; scope-keyed store; `escaped-secret-residual` on deep(B) > B (V20–V22 — a deep(C) form cancels); closed digest-family tokens; capture logs name/code/metaCode only. R10 exports `isR10Disabled()` (the one R10-off predicate) and `looksSerialized`. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-BUILD.md`.
+
+## Pointer (2026-10-14): R10 v3 reference exemption (Stage B push 1)
+A reference is exempt only as a WHOLE token followed by its own family's terminator; no bare `$NAME` (only `proxy_set_header`); block-context patterns lost their bare-`$` exemption. Mutation pins and 1 MB linearity in `test-security-invariants.ts` §J v3; replay `scripts/replay-r10-versions.sh`. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-B-PUSH1-BUILD.md`.
+
+## Pointer (2026-10-15): `held.get` + the demo-write gate
+`lib/mcp/server/tools/held-get-handler.ts` is ALLOWLISTED in `scripts/test-demo-write-coverage.ts` (read-only; refuses DEMO_USER and demo POVs BEFORE `validatePOVAccess`). The carrier's fail-closed stage binding (SEC-P2-1: stored stage only, `stage-rebind`, `author-not-of-leg`) is folded; public `PRIVACY-DEMO.md` now names the held copies and the unexpired operator dumps (WI-B16).
+
+## Pointer (2026-10-18): the Git file-source pin is a security control (held-k8s 1b/1c, DEPLOYED 2026-10-18 04:23:03Z, release `release_20261018_041900`)
+The pin (`lib/mcp/server/config/git-file-source-pin.js`) stops an injected Harvester holding an attacker's file (the token reads
+any public repo). Two gates, one function; `test-security-invariants` §R carries 17 cases at both gates + a negative control. Your step-1
+review is DONE — **GO 88** (`cline_docs/reviews/held-k8s-2026-10-18/REVIEW-sec-ops-STEP1.md`; G-1 confirmed incl. listings; SF-2 + SF-4
+folded; SF-1/3/5/6 + N1–N5 filed as register HELD-K8S-SECOPS-STEP1; SF-6 R10 GitHub token shapes + HELD-K8S-R10-GITOPS-SHAPES are yours). **G-1 as built:** the status item is REPLACED, not removed
+(positional selectors + MI-13 🔴 12 resolve on stored records), and a DIRECTORY LISTING is elided too (each entry carries a blob sha) —
+both design calls beyond the ruling, yours to confirm. Also yours: R10 misses `secretGenerator.literals` and a quoted Helm `token:`
+(and the `ghp_` shape); G-5 over-refuses SOPS/Helm Secret templates (§2 finding 8). 1d platform-row guard tags `securityEvent`. Record: `cline_docs/reviews/held-k8s-2026-10-18/STEP1-BUILD.md`.
+
+## Pointer (2026-10-19): held-k8s step 2 + R10 v4
+`cline_docs/reviews/held-k8s-2026-10-18/REVIEW-sec-ops-STEP2.md` (GO-WITH-CHANGES 87): SF-1 (Git file source never a workflow step) and
+F2/SF-7 (listing `?token=` stripped before delivery, fail-closed tripwire) DEPLOYED 2026-10-18 08:21Z. **The lab repo is PRIVATE** (the
+step-1 "public" premise was false). Open: B-W1/B-W2 done; SF-6 raised, SF-9 (`publicAccess` flip discloses the private repo), SF-10, N6–N11.
+R10 v4 (`paichart.r10/4`, R10-CODE-ASSIGN): a credential-named `:=` code assignment is no longer redacted; a quoted literal still is —
+`REVIEW-sec-ops-R10v4.md`.
+
+## Pointer (2026-10-19): R10 v5 deployed (`paichart.r10/5`, cut 21:34:03Z)
+GitHub token shapes, list-marker secret keys, whole-token case-sensitive expression-RHS exemption (your B-1/B-2 folded).
+Filed remainder: R10-EXPR-RHS (narrowed), R10-PREFIXED-PASSWORD-KEYS (L-K2 F-5), R10-QUOTED-LETTERS-TOKEN, R10-GHUC-TOKEN-OTHER-SERVICES.
+
+2026-10-19 (K8S-CLOSEOUT) — your held-k8s items are RE-HOMED, not closed (register `cline_docs/follow-ups/OPEN-REGISTER-2026-09-23.md`):
+HELD-K8S-R10-GITOPS-SHAPES (remainder → R10 v6 with R10-PREFIXED-PASSWORD-KEYS / R10-EXPR-RHS), HELD-K8S-SECOPS-STEP1 and
+HELD-K8S-G5-OVERREFUSAL — all "before the first customer repo". The step-4 live window found no credential in any held view, blob or prompt.
+2026-10-19 — **SELF-HOST-HELD-TEXT is yours and due NOW** (register `cline_docs/follow-ups/OPEN-REGISTER-2026-09-23.md`): the PH-7 self-host
+guide (P3-S4, SEC-P2-4, BC-N6, HUB-P2-5, stdio trust model) + `SELF_HOST_HELD_TEXT_EXISTS = true` in ONE commit; every public export waits on it.
+
+## Pointer (2026-10-20): R10 v6 deployed (`paichart.r10/6`, cut 22:52:43Z)
+R10-V6-TERRAFORM, reviewed by this specialist (`cline_docs/reviews/held-terraform-2026-10-19/REVIEW-sec-ops-R10v6.md`, B-1 + SF-1..SF-6 folded):
+prefixed password keys + Terraform `_wo`, one-line HCL objects, a letters-only quoted-password waiver (HCL ` = `, 12+), arm-2 whole-escape tokens
+(never a control/quote/backslash `\u` escape or a double-encoded newline); resource references and Terraform BUILT-IN calls exempt after an HCL
+` = ` (closed list — an open `name(` exempted INI literals). Record `R10-V6-BUILD.md`; residuals R10-V6-RESIDUALS, R10-ARM2-UNICODE-NL.
+Also live since 2026-10-20 21:55Z (held-terraform step 1, your `REVIEW-sec-ops-STEP1.md`): `PINNED_SOURCE_BYPASS` (a tripwire, not a boundary)
+and state/plan/variables paths refused at the call gate (`heldPathRefusal`, one function in `git-file-source-pin.js`).**2026-10-22 (held-terraform CLOSED, TF-CLOSEOUT):** F-T1 shipped — the STATIC text of PINNED_ARGUMENT / PINNED_SOURCE_BYPASS / UNAPPROVED_TOOL /
+BLOCKED_PATTERN carries no `& < > " '` (BC71 escapes them; caller values still escaped), pinned `test-security-invariants` §F-T1 (LL-T-06). Yours,
+filed: **TF-PATH-RULE-GAPS** (owner decision 2026-10-22: left for you — `tfplan` / `plan.out` / `.terraformrc` / `terraform.rc` in `heldPathRefusal` + the
+MI-13 re-derivation), **TF-RANDOM-PASSWORD-REDACT** (re-homed: the first customer Terraform service), R10-V6-RESIDUALS N1/N2 (re-homed: a terraform held
+ref with redactedCount > 0). Lesson for exemptions: a closed list beats an open grammar (LL-T-05).
+
+## Pointer (2026-10-27): held-network CLOSED
+R10 `paichart.r10/10` (login username); `deviceSourcesSnapshot` is an AUDIT_STRIP_KEYS member (an agent cannot re-declare its sources); P8 — on an unpinned Git row the declared line is the pin; real lab secrets 0 hits in 200 J5 documents. Record `cline_docs/reviews/held-network-2026-10-22/NETWORK-CLOSEOUT.md`; discovery § Device sources snapshot.
+
+**Join learnings carried (2026-10-31):** `.claude/knowledge/domain/security/sec-ops-library.md` § "Carried from the join learnings ledgers" — read it before designing a check, lab or text change in your domain.

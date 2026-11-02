@@ -248,7 +248,7 @@ export function AgentTemplateBloombergView({
                           <span className="cursor-help border-b border-dotted border-sky-400/50">—</span>
                         </TooltipTrigger>
                         <TooltipContent side="bottom">
-                          <p className="text-xs max-w-[220px]">Meta-agent: uses <span className="font-mono">loadProtocols</span> — every protocol-tagged prompt is injected and the harness selects the matching one per task. Spans <em>all</em> protocols, not one.</p>
+                          <p className="text-xs max-w-[220px]">Meta-agent: uses <span className="font-mono">loadProtocols</span> — each run gets the orchestration base plus the ONE protocol its task is stamped with. Spans <em>all</em> protocols, one per task.</p>
                         </TooltipContent>
                       </Tooltip>
                     ) : (

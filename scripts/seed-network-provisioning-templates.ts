@@ -41,6 +41,7 @@ import {
 } from '../lib/services/agentTemplateBuilder/pAIchartUniversalTemplate';
 import { AGENT_MODELS } from '../lib/agents/model-tiers';
 import { DEFAULT_MAX_TOKENS } from '../lib/services/llm/types';
+import { HELD_AUTHOR_CONSTRAINT, HELD_REVIEWER_CONSTRAINT } from '../lib/agents/harness/held-bytes/variant-protocol';
 
 const prisma = new PrismaClient();
 
@@ -69,10 +70,10 @@ const COMMON_MODEL_PARAMS = (timeout: number) => ({
   timeout,
 });
 
-const TEMPLATES: TemplateSeed[] = [
+export const TEMPLATES: TemplateSeed[] = [
   {
     name: 'Network State Harvester',
-    description: 'Phase 0 of the network-provisioning-protocol (conditional) — self-provisions the device read service from the descriptor carried in the task (register → update → call), then performs READ-ONLY state collection (running config, VLAN/IP allocation, topology/neighbours, software versions) and hands the snapshot to the Network Design Architect via auto-chained pipeline context. Read-only only: never runs a mutating device command, never escalates privilege. Fires only when current device state is not already supplied in the task. Reads network-provisioning-protocol before beginning work.',
+    description: 'Phase 0 of the network-provisioning-protocol (conditional) — self-provisions the device read service from the descriptor carried in the task (register → update → call), then performs READ-ONLY state collection (running config, VLAN/IP allocation, topology/neighbours, software versions) and hands the snapshot to the Network Design Architect via auto-chained pipeline context. Reads each device\'s declared source; a device-read device\'s whole running configuration is read once, and the platform holds what a declared source returns as that device\'s held file. Read-only only: never runs a mutating device command, never escalates privilege. Fires only when current device state is not already supplied in the task. Reads network-provisioning-protocol before beginning work.',
     category: AgentCategory.AUTOMATION,
     templateType: TemplateType.ORCHESTRATOR,
     defaultRole: 'infra_state_harvester',
@@ -102,7 +103,7 @@ const TEMPLATES: TemplateSeed[] = [
   },
   {
     name: 'Config Change-Package Author',
-    description: 'Phase 2 of the network-provisioning-protocol — THE deliverable producer. Authors the change package: (a) per-device candidate configuration blocks; (b) deterministic validation steps (the exact show command(s) and expected output that prove each change — facts the apply step will run, never "verify it looks correct"); (c) a rollback plan per device; (d) recommended change ordering + maintenance-window note. Produces a change to be applied, never an applied change — apply is out-of-band. Reads network-provisioning-protocol before beginning work.',
+    description: 'Phase 2 of the network-provisioning-protocol — THE deliverable producer. Authors the change package: (a) a held device configuration (H<n>) is changed only by edits by reference, never rewritten whole and never as configuration-mode commands; per-device candidate configuration blocks for any other device; (b) deterministic validation steps (the exact show command(s) and expected output that prove each change — facts the apply step will run, never "verify it looks correct"); (c) a rollback plan — restore H<n> for a held file, the prior configuration for any other device; (d) recommended change ordering + maintenance-window note. Produces a change to be applied, never an applied change — apply is out-of-band. Reads network-provisioning-protocol before beginning work.',
     category: AgentCategory.AUTOMATION,
     templateType: TemplateType.DOCUMENTER,
     defaultRole: 'config_change_author',
@@ -117,7 +118,7 @@ const TEMPLATES: TemplateSeed[] = [
   },
   {
     name: 'Change Reviewer',
-    description: 'Phase 3 of the network-provisioning-protocol — independent QA gate (not the deliverable). Reviews the change package for standards/lint, blast-radius, rollback adequacy, and approval/maintenance-window readiness; emits a clear verdict (approved / needs-revision) with confidence and named blocking issues. Does not soften ratings. Reads network-provisioning-protocol before beginning work.',
+    description: 'Phase 3 of the network-provisioning-protocol — independent QA gate (not the deliverable). Reviews the change package for standards/lint, blast-radius, rollback adequacy, and approval/maintenance-window readiness; reads the platform-rendered diff of held-file edits, where any line the package does not account for blocks; emits a clear verdict (approved / needs-revision) with confidence and named blocking issues. Does not soften ratings. Reads network-provisioning-protocol before beginning work.',
     category: AgentCategory.AUTOMATION,
     templateType: TemplateType.REVIEWER,
     defaultRole: 'change_reviewer',
@@ -140,6 +141,48 @@ const TEMPLATES: TemplateSeed[] = [
 // ADMIN_EMAIL (self-host) → '' → the 'system' sentinel.
 const SEED_OWNER_EMAIL = (process.env.SEED_OWNER_EMAIL || process.env.ADMIN_EMAIL || '').trim().toLowerCase();
 
+/** The row a template seeds, without the DB write — moved verbatim out of main() (held-network step 0, 2026-10-22; the
+ *  terraform step 0 / k8s 3a / obs V-0 shape) so a pin and a later seed read the rows without writing anything. */
+export function buildTemplateRow(template: (typeof TEMPLATES)[number]) {
+  // Resolve the prompt template with role-specific guidance. The four roles are
+  // new; getRoleSpecificGuidance falls back to generic guidance for unknown
+  // roles (the injected protocol carries the domain-specific instructions).
+  const promptTemplate = PAICHART_UNIVERSAL_BASE_TEMPLATE.replace(
+    '${roleSpecificGuidance}',
+    getRoleSpecificGuidance(template.defaultRole)
+  );
+
+  const data = {
+    name: template.name,
+    description: template.description,
+    category: template.category,
+    templateType: template.templateType,
+    defaultRole: template.defaultRole,
+    promptTemplate,
+    capabilities: {
+      'Protocol-Driven': 'Reads network-provisioning-protocol from injected context before acting',
+      'Context Chaining': 'Receives predecessor task output via pipeline context injection',
+      'Change Package, Not Apply': 'Produces a reviewable change to be applied — never applies anything to a device',
+    },
+    constraints: {
+      'Protocol First': 'Must read the injected protocol before beginning work',
+      'Stay in Phase': 'Only perform the work for the specific phase assigned — do not skip ahead',
+      'No Device Mutation': 'No mutating device command anywhere in this pipeline; the Harvester is read-only, apply is out-of-band',
+      // held-network step 3 push 3 (the join, J4; the k8s/terraform precedent): the held template constraints, spread LAST by role — the
+      // same text the obs/k8s/terraform Author and Reviewer carry; held text stays out of the shared role guidance.
+      ...(template.defaultRole === 'config_change_author' ? HELD_AUTHOR_CONSTRAINT
+        : template.defaultRole === 'change_reviewer' ? HELD_REVIEWER_CONSTRAINT : {}),
+    },
+    maxRetries: 2,
+    timeout: template.timeout,
+    priority: AgentPriority.HIGH,
+    isDefault: false,
+    tags: template.tags,
+    metadata: template.metadata,
+  };
+  return data;
+}
+
 async function main() {
   console.log('Seeding network-provisioning templates...\n');
 
@@ -160,38 +203,7 @@ async function main() {
       where: { name: template.name },
     });
 
-    // Resolve the prompt template with role-specific guidance. The four roles are
-    // new; getRoleSpecificGuidance falls back to generic guidance for unknown
-    // roles (the injected protocol carries the domain-specific instructions).
-    const promptTemplate = PAICHART_UNIVERSAL_BASE_TEMPLATE.replace(
-      '${roleSpecificGuidance}',
-      getRoleSpecificGuidance(template.defaultRole)
-    );
-
-    const data = {
-      name: template.name,
-      description: template.description,
-      category: template.category,
-      templateType: template.templateType,
-      defaultRole: template.defaultRole,
-      promptTemplate,
-      capabilities: {
-        'Protocol-Driven': 'Reads network-provisioning-protocol from injected context before acting',
-        'Context Chaining': 'Receives predecessor task output via pipeline context injection',
-        'Change Package, Not Apply': 'Produces a reviewable change to be applied — never applies anything to a device',
-      },
-      constraints: {
-        'Protocol First': 'Must read the injected protocol before beginning work',
-        'Stay in Phase': 'Only perform the work for the specific phase assigned — do not skip ahead',
-        'No Device Mutation': 'No mutating device command anywhere in this pipeline; the Harvester is read-only, apply is out-of-band',
-      },
-      maxRetries: 2,
-      timeout: template.timeout,
-      priority: AgentPriority.HIGH,
-      isDefault: false,
-      tags: template.tags,
-      metadata: template.metadata,
-    };
+    const data = buildTemplateRow(template);
 
     if (existing) {
       console.log(`  Already exists (id: ${existing.id}) — updating...`);
@@ -224,7 +236,8 @@ async function main() {
   await prisma.$disconnect();
 }
 
-main().catch((e) => {
+// held-network step 0: importable without writing (TEMPLATES + buildTemplateRow), like the terraform, k8s and obs seeds.
+if (require.main === module) main().catch((e) => {
   console.error('Seed failed:', e);
   prisma.$disconnect();
   process.exit(1);

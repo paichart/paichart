@@ -13,6 +13,20 @@
 - scripts/archive/**
 - scripts/deploy/**
 - scripts/mcp-tools-output/**
+# Lab DATA stays internal (owner, 2026-11-02 export scope: "labs stay internal"): recorded run inputs, fixtures, the golden set and
+# lab run output carry real run ids, the lab rig's management addresses and its planted secrets. The lab CODE (runners, scorers)
+# stays public. The three scorers below embed the rig's planted secret strings, so they stay internal too.
+# One exception: the L-K1 fixture (a public-repo directory listing — no run ids, addresses or secrets) that test-security-invariants
+# reads in the battery.
++ scripts/leg-replay-lab/fixtures/l-k1-6d7d0c7/fixture.json
+- scripts/leg-replay-lab/inputs/**
+- scripts/leg-replay-lab/fixtures/**
+- scripts/leg-replay-lab/golden/**
+- scripts/leg-replay-lab/runs/**
+- scripts/leg-replay-lab/cache/**
+- scripts/leg-replay-lab/score-n1.ts
+- scripts/leg-replay-lab/score-nb1.ts
+- scripts/leg-replay-lab/score-nb2.ts
 - .github/workflows/production-deploy.yml
 - .github/workflows/production-rollback.yml
 - .github/workflows/docker-services-deploy.yml
@@ -75,6 +89,10 @@
 + scripts/seed-weather-service.ts
 + scripts/seed-browser-automation-service.ts
 - scripts/seed-*-service.ts
+# PLATFORM-HELD-BYTES G3 operator base check — PRIVATE by decision (GO-MINIMAL §2a, 2026-10-16): the public operator tool is
+# O14's promotion deliverable. Its fixture test is unwired, so decision 3 drops it too; both named so a later wiring cannot leak it.
+- scripts/held-base-check.ts
+- scripts/test-held-base-check.ts
 
 # ── .claude/: ship ~2/3 (CLAUDE-DIR-SCAN.md); runbooks + incident diagnostics stay ──
 - .claude/knowledge/smoke-tests/**
@@ -122,6 +140,9 @@
 # Lab/ingress topology stays private (Steve, 2026-09-27): RIG-HOSTING maps the lab host (LAN IP, ssh login) and the
 # cloudflared -> prod-loopback -> reverse-tunnel ingress path; no secrets, so gitleaks and the IP sweeps pass it.
 - .claude/knowledge/pipelines/RIG-HOSTING.md
+# 2026-11-01: the quarterly health-run procedure moved out of CLAUDE.md (whose section is already dropped from the public render as
+# production procedure — SSH, psql, prod baselines). Same decision for its new home.
+- .claude/knowledge/guides/HEALTH-RUN.md
 # Harness domain: unpublished writing, run evidence, and business outreach stay private (Steve, 2026-09-06)
 - .claude/knowledge/domain/harness/WHITEPAPER-*
 - .claude/knowledge/domain/harness/archive/**
@@ -156,6 +177,9 @@
 + data/geographical-default.json
 + docs/OAUTH-SETUP.md
 + docs/VERIFYING-SELF-HOST.md
+# PH-7 (2026-11-01): the self-host kept-files text MUST cross with the held protocols (R6) — above `- docs/**`, pinned by
+# test:held-variant-protocol and enforced on the export tree by export-public.py.
++ docs/SELF-HOST-KEPT-FILES.md
 # Self-host systemd units, referenced by SELF-HOST-RUN-SHEET.md. These MUST be above the
 # `- docs/**` line below: rules are ordered, first match wins, so without an explicit `+`
 # they silently never export and the run sheet points at a file that does not exist in

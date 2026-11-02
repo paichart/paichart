@@ -15,7 +15,7 @@
  * a copy that can drift.
  *
  * ⚠️ This template is DELIBERATELY THIN and must stay that way: it defines WHO the harness is and
- * points at `pipeline-orchestrator-protocol` (database, injected via `loadProtocols: true`) for HOW.
+ * points at `pipeline-orchestrator-protocol` (database, injected via `loadProtocols: 'composed'` — base + the stamped protocol) for HOW.
  * Procedures, mode-detection rules and tool-call sequences belong in the protocol. Putting them here
  * recreates the "template says X, protocol says Y" contradiction that v2 hit.
  */
@@ -24,7 +24,7 @@
  * The template is intentionally thin. It defines WHO the harness is and points
  * at the protocol for HOW. All step-by-step procedures, mode detection rules,
  * and tool-call sequences live in pipeline-orchestrator-protocol (database),
- * which is injected into the system prompt via loadProtocols: true.
+ * which is injected into the system prompt via loadProtocols: 'composed' (load-all `true` retired 2026-10-16).
  *
  * This split prevents the "template says X, protocol says Y" contradiction
  * problem we hit in v2.

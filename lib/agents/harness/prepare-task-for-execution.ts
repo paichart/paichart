@@ -38,6 +38,8 @@ import { resolveProtocolStamp, findProgramParentForStage, resolveOwningLeg } fro
 import type { LegInjection } from './context-chainer';
 import { recordFromChained, type ChainedRecord } from './chained-predecessors';
 import { interfaceContractMissingCause } from './interface-contract-missing';
+import { DEVICE_SOURCE_PROTOCOLS } from './held-bytes/variant';
+import { buildDeviceSourcesSnapshot, contractDeviceSourcesValue, resolveLegDeviceSources, DEVICE_SOURCES_SNAPSHOT_KEY } from './device-sources';
 
 const log = logger.child({ module: 'PrepareTaskForExecution' });
 
@@ -119,6 +121,12 @@ export async function prepareTaskForExecutionWithRecord(
   // deterministic hop up, so heal-WITH-EVIDENCE beats fail. The evidence is the log line below;
   // without it this would merely institutionalise the harness's paraphrase failure and make
   // adherence regressions invisible.
+  //
+  // Q2 NARROWED (2026-10-17, cline_docs/reviews/q2-leg-contract-heal-2026-10-17/): when the program's OWN root harness
+  // creates a leg WITHOUT a contract, the platform now stores the plan's contract AT CREATE (`arm:'create-absent'`,
+  // flagged) — or records why it declined (`arm:'create-absent-declined'` + `declineReason`, F16 then fires naming it).
+  // That heal lives at the CREATE door, never here: every other door (GUI, REST, external MCP, another agent, a
+  // contract sent but dropped in transit) still reaches this guard with no contract and fails loud, as before.
   //
   // The two populations are DISJOINT by construction — inheritance is non-PIPELINE only, the F16
   // structural arm is PIPELINE only — so the guard can never demand a contract this declines to
@@ -296,8 +304,10 @@ export async function prepareTaskForExecutionWithRecord(
     // `agentRole` is read by the injection EXCLUSION policy below (INJECTION_EXCLUDED_ROLES). Without it
     // every child reads undefined, no role is ever excluded, and the harvest-poisoning case ships
     // silently — a predicate on an unselected column is fail-OPEN (caught 2026-09-16 before ship).
-    select: { title: true, metadata: true, inputContext: true, type: true, stageId: true, agentRole: true },
+    select: { title: true, metadata: true, inputContext: true, type: true, stageId: true, agentRole: true, description: true },
   });
+  // `description` (above) is read ONLY for the Device sources snapshot below (a PIPELINE leg of a Device-sources protocol, first
+  // execution — held-network push 2, O-2).
 
   // ── PROTOCOL STAMP (WS2 Phase A, 2026-08-17) — write-if-absent at the execution chokepoint ──
   // The title token is a CREATE-TIME INPUT, consumed ONCE here at the task's first execution and
@@ -320,10 +330,27 @@ export async function prepareTaskForExecutionWithRecord(
         'title carries multiple (protocol: …) tokens — first wins'
       );
     }
+    const resolvedAt = new Date().toISOString();
+    // held-network step 3 push 2 (O-2, the J1 entry gate — sec-ops batch-2b SF-1): a PIPELINE leg of a Device-sources protocol gets
+    // its declaration SNAPSHOT here, at its FIRST execution (the protocol stamp's absence is what "first" means — the same
+    // write-if-absent), in the SAME statement, before any child exists. Capture and the device facts read this snapshot, never the
+    // live description an agent can rewrite (device-sources-read.ts). `deviceSourcesSnapshot` is an AUDIT_STRIP_KEYS member: no
+    // client surface — MCP included — can write it. A leg with no snapshot holds nothing on the device lane (fail closed, named).
+    const snapshot = contractCheck.type === 'PIPELINE' && resolved.protocol && DEVICE_SOURCE_PROTOCOLS.includes(resolved.protocol)
+      ? buildDeviceSourcesSnapshot(resolveLegDeviceSources({
+          contractValue: contractDeviceSourcesValue((contractCheck.inputContext as Record<string, unknown> | null)?.interfaceContract),
+          taskBody: contractCheck.description,
+        }), resolvedAt)
+      : null;
     const stampJson = JSON.stringify({
       protocol: resolved.protocol,
-      protocolResolvedAt: new Date().toISOString(),
+      protocolResolvedAt: resolvedAt,
+      ...(snapshot ? { [DEVICE_SOURCES_SNAPSHOT_KEY]: snapshot } : {}),
     });
+    if (snapshot) {
+      log.info({ taskId, state: snapshot.resolution.state, entries: snapshot.resolution.state === 'parsed' ? snapshot.resolution.entries.length : 0,
+        errorCode: 'DEVICE_SOURCES_SNAPSHOT_TAKEN' }, 'Device sources declaration snapshotted at the leg\'s first execution');
+    }
     await prisma.$executeRaw`
       UPDATE tasks SET metadata = COALESCE(metadata, '{}'::jsonb) || ${stampJson}::jsonb
       WHERE id = ${taskId}`;
@@ -376,8 +403,9 @@ export async function prepareTaskForExecutionWithRecord(
       `binding design constants (silent-composition guard). ` +
       // Promotion E (E4, 2026-10-05): the cause is a PURE function of fields already loaded above (task type, the
       // flag, the interfaceContractSource fact) — no await between the condition and this throw, so it stays
-      // outside every try by construction. ABSENCE FIRST: the source fact exists only when a contract was supplied at
-      // create, so the dominant case (a PIPELINE child created without one) has none. One branch; enum fields only.
+      // outside every try by construction. ABSENCE FIRST: no source fact ⇒ the child came through a door that records
+      // none (Q2, 2026-10-17: the harness door now records `create-absent-declined` + `declineReason`, a branch of its
+      // own). One branch; enum fields only.
       interfaceContractMissingCause({ taskType: contractCheck?.type, flagged: requiresContract,
         sourceFact: taskMeta.interfaceContractSource })
     );
@@ -416,7 +444,8 @@ export async function prepareTaskForExecutionWithRecord(
   }
 
   try {
-    const chained = await chainDependencyContext(taskId, prisma, { inject });
+    // V-6 (PLATFORM-HELD-BYTES Stage B): the ONE caller that builds held views; every other caller reads them.
+    const chained = await chainDependencyContext(taskId, prisma, { inject, writeViews: true });
     // No dependencies AND nothing to inject is a benign no-op for CHAINING — but if inheritance
     // wrote, the caller still needs the authoritative merged row. The leg's FIRST child (the
     // harvester) is dep-free and is exactly the child that most needs the contract, so returning

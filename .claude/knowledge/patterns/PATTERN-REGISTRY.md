@@ -2,9 +2,9 @@
 
 **Purpose**: Quick reference for all proven implementation patterns in pAIchart knowledge library
 
-**Last Updated**: October 10, 2026
+**Last Updated**: October 31, 2026
 
-**Total Patterns**: 69 documented patterns
+**Total Patterns**: 71 documented patterns
 
 ---
 
@@ -148,7 +148,13 @@
 
 ---
 
-## Architecture Patterns (12 patterns)
+## Architecture Patterns (13 patterns)
+
+### **facts-only-tighten-pattern.md** - 92% Confidence ✅ (NEW - Oct 2026)
+**When to use**: Agents (or any judgement source) propose outcomes AND mechanical checks can see what the agent can't — and you are tempted to let the verdict decide, or a fact rescue a refusal
+**Results**: symmetric verdict consumption measured and rejected 2026-08-29 (would have released 2 wrong legs to block 1); a third case 2026-09-20; the kept-file force fires live (golden case TF-TL4)
+**Key features**: outcome = AND(transcribed verdict, facts, coverage) · overrides write only the stricter value, with a stamped reason · confidence is never a conjunct · the AND is recomputable by hand · a person releases
+**Anti-patterns**: "the reviewer is usually right" · rescue overrides · confidence as a bar · rephrasing the verdict · silent veto
 
 ### **agent-prompt-assembly-pattern.md** - 95% Confidence ✅
 **When to use**: Agent prompt construction — system prompt, user message, directive synthesis, context injection
@@ -410,7 +416,7 @@
 
 ---
 
-## Automation Patterns (8 patterns)
+## Automation Patterns (9 patterns)
 
 ### **byte-identity-refactor-pattern.md** - 85% Confidence ✅ (NEW - Oct 2026)
 **When to use**: Restructuring text LIVE agents read (protocol bodies, role guidance) or code that stamps facts LIVE gates read, so a new consumer can share it — while every existing run must stay byte-unchanged
@@ -418,6 +424,12 @@
 **Key features**: four proofs in order — (1) golden-pin the RECEIVED bytes first (present-and-equal, new keys allowed, mutation-proven) · (2) draft the new text, then cut builder seams + shared constants · (3) scanner output DIFFED identical, scanners taught to follow interpolation (mutation-proven) · (4) read-only back-to-back replay of the shipping code over the production population
 **Anti-patterns**: "suites green" as proof after moving text · editing a builder line shared with a live role · whole-text vocabulary checks
 **Used by**: Protocol 15 (isolated variant build) phases 4–6
+
+### **kept-file-edit-by-reference-pattern.md** - 95% Confidence ✅ (NEW - Oct 2026; PRODUCTION since 2026-10-19; 95% at TF-CLOSEOUT 2026-10-22 — four domains since the network close-out 2026-10-27, G-4 live)
+**When to use**: A pipeline agent must CHANGE a file an operator owns and the changed file is what gets deployed — and a read-only source can return THE FILE the operator writes (never a rendering, a live object or Terraform state)
+**Results**: observability (2026-10-14 → 10-17) — lab 25/25 edits applied; every live leg's operator base check MATCH; the same objective twice ⇒ a byte-identical candidate; an applied edit released inside a program. **kubernetes-gitops on a Git file source (2026-10-19)** — L-K2 SHIP (Reviewer caught the other-document defect 5/5 vs base 0/5); live window 7 legs, both scope directions + one-object-with-drift + non-admin + program leg PASS, every Git base check MATCH, 0 wrongly forced. Removes the retyping class (28 of 42 harvests had dropped lines from a "verbatim" quote) **terraform-iac on the same Git file source (2026-10-21/22)** — L-T2 every gate; live window 5 legs + a releasable program, 3/3 in-scope edits applied first time, a one-resource held file with drift applied, the G-4 force fired live, every base check MATCH.
+**Key features**: the model writes SEARCH/REPLACE edits against a handle, never the file · the platform keeps the bytes, applies (exactly-once match or refused), and shows the Reviewer ITS diff · ONE scope predicate (`held-bytes/scope.ts`) with six readers · a carrier forces needs-revision on an unapplied in-scope edit · held is a CAPABILITY (`HELD_CAPABLE_PROTOCOLS`), not a variant · an 8-item domain-join procedure · Addendum A: the GitHub file source's checkable properties (two-layer read-only, token-less server, 200/503 health on `healthCheckPath`, select by `type:'resource'`, owner/repo pinned in the descriptor)
+**Anti-patterns**: retyping "verbatim" · holding a rendering or state · several in-scope rules · selecting by position · a variant protocol · unscoped series
 
 ### **seed-time-artifact-carrier-pattern.md** - 85% Confidence ✅ (NEW - Sep 2026)
 **When to use**: An agent must receive a VERBATIM artifact it fills, transcribes or checks against — a template, schema, canonical stanza or reference document — whose exact bytes matter and which is authored elsewhere (often another repo)

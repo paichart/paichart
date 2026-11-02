@@ -43,11 +43,24 @@ import { llmService } from './llm/llm-service';
 import { finalizeTextForStopReason } from './llm/finalize-response';
 import { buildExecutionResultJson, deriveChainedContextSignal } from './execution-artifacts';
 import { persistTerminalSuccess } from './execution-terminal-persist';
-import { prepareHeldCapture, captureHeldFiles } from './held-bytes-capture';
+import { prepareHeldCapture, captureHeldFiles, isHeldCaptureEnabled } from './held-bytes-capture';
+import { buildHeldDescriptorTable } from './held-descriptor-table';
 import { computeSelfSupersession } from './execution-selection';
 // The five facts are no longer imported one by one: they are ENTRIES in the shared registry, and
 // the point of the registry is that this file cannot know one of them and forget another.
 import { stampExecutionNets } from './execution-nets';
+import { resolveOwningLegProtocol, type OwningLegResolution } from '@/lib/agents/harness/held-bytes/variant';
+import { readLegDeviceSources } from '@/lib/agents/harness/device-sources-read';
+import { buildDeviceReadScope } from '@/lib/agents/harness/held-bytes/device-read-scope';
+import { runEditApplicationStep, recountEditApplication, resolveHeldFilesFromStore, isEditStepEligible, arbitrateReflectionPass, type EditStepResult } from './held-edit-step';
+import { collectR10EchoSources } from '@/lib/agents/harness/redact-artifact-secrets';
+import { isHeldEditCorrectionEnabled } from '@/lib/agents/harness/held-edit-correction';
+import { prepareHeldPackage, type PreparedHeldPackage } from './held-package';
+import { buildEditApplicationFact } from '@/lib/agents/harness/held-bytes/edit-fact';
+import { buildEditApplicationManifest, EDIT_APPLICATION_MANIFEST_NAME } from '@/lib/agents/harness/held-bytes/edit-manifest';
+import { buildHeldBytesDigest, buildHeldBytesManifest, HELD_BYTES_MANIFEST_NAME } from '@/lib/agents/harness/held-bytes/held-bytes-fact';
+import { r9VersionInEffect } from '@/lib/agents/harness/sanitize-chained-output';
+import type { HeldVariantPersist } from './execution-terminal-persist';
 import { assessExecutionQuality } from '@/lib/agents/harness/execution-quality';
 import { runDiagnosticRetry, BUDGET_SELF_FLAG_PATTERN } from '@/lib/agents/harness/diagnostic-retry';
 import { computeFormCheckFact, isFormCheckEligible } from '@/lib/agents/harness/package-form-check';
@@ -65,6 +78,7 @@ import { parseConfidenceScore, applyConfidenceCap, CONFIDENCE_CAP_CEILING } from
 import { mcpLogger } from '@/lib/logger';
 import { rescueOrRethrow, annotatePostLoopThrowOrRethrow } from './execution-completion-anchored';
 import type { ResolvedHarnessContext } from './harnessModeResolver';
+import { HARVEST_LEAF_ROLE_RE } from '@/lib/agents/harness/mechanical-nets';
 
 type CoreLogger = Pick<typeof mcpLogger, 'info' | 'warn' | 'error' | 'debug'>;
 
@@ -305,6 +319,36 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
     // One insertion serves BOTH adapters (engine + stream both call runExecutionCore) and every PROCESS that runs them:
     // paichart-web (poller, GUI stream) AND paichart-mcp (agent.execute runs executeById in-process) — review B-H1.
     let formCorrectionAttempted = false;
+    // The ONE owning-leg resolution (Stage B V-5a, A6) — resolved HERE, before the form correction, so the held-edit step can be
+    // previewed (F-T2-1 (b), below). A pure read of the task's leg; nothing between here and its old position changes its inputs.
+    const r9Version = r9VersionInEffect();
+    const owningLeg: OwningLegResolution | null = task.type === 'PIPELINE' ? null : await resolveOwningLegProtocol(prisma, task);
+    // The edit step's input, built from the CURRENT deliverable each time it is called (the form correction may replace it).
+    // R10-V8-RESIDUALS (b): the persist's tool-record echo sources, computed once and only for an edit-step-eligible Author (the
+    // values ARE secrets — in memory only, never logged or stamped).
+    let persistEchoTokens: ReadonlySet<string> | undefined;
+    const echoTokensForEditStep = (): ReadonlySet<string> => (persistEchoTokens ??= collectR10EchoSources(toolCallResults));
+    const editStepInput = (decideOnly: boolean) => ({
+      task: { id: task.id, type: task.type, povId: task.povId, inputContext: task.inputContext },
+      agentRole: agentRole ?? null, finalResponse: finalResponse ?? '', owningLeg: owningLeg as OwningLegResolution,
+      protocolInjection: protocolInjection as never, r9Version, decideOnly,
+      persistEchoTokens: isEditStepEligible(agentRole ?? null, task.type, owningLeg) ? echoTokensForEditStep() : undefined,
+      authorStageId: owningLeg?.kind === 'leg' ? owningLeg.ownStageId : null,
+      correction: {
+        enabled: isHeldEditCorrectionEnabled(), correctionTurnUsed, formCorrectionAttempted,
+        budgetFlagged: !!budgetFailFastUsed || (!!finalResponse && BUDGET_SELF_FLAG_PATTERN.test(finalResponse.slice(0, 1500))),
+        deadlineAt, loopStartedAt, currentResponse, messageHistory, totalUsage, prompt, normalizedLlmConfig, mcpFunctions,
+        executionId, userId, generateText: (p: string, o: any, u?: string) => llmService.generateText(p, o, u), logger,
+      },
+    });
+    // F-T2-1 (b): the ONE reflection pass is arbitrated by arbitrateReflectionPass (held-edit-step.ts — shared with the leg replay lab):
+    // a refused held edit the held-edit correction would take reserves the pass before the form correction spends it.
+    {
+      const arb = await arbitrateReflectionPass(formCheck, owningLeg ? editStepInput(true) : null, resolveHeldFilesFromStore(prisma as never));
+      formCheck = arb.formCheck;
+      if (arb.reserved) logger.info({ executionId, taskId: task.id, refusals: arb.refusals },
+        'form correction: the reflection pass is reserved for the held-edit correction (F-T2-1 (b))');
+    }
     // Errored reflection calls (AUDIT 2026-10-07): the loop's (#89, budget fail-fast) + form correction + #90 below.
     // Stamped as toolLoop.reflectionErrors ONLY when non-empty — every clean execution's result.json is byte-unchanged.
     const reflectionErrors = [...(loopResult.reflectionErrors ?? [])];
@@ -392,6 +436,32 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
         'requirements form check: stamped on toolLoop.requirementsFormCheck');
     }
 
+    // PLATFORM-HELD-BYTES Stage B V-5a/V-5c (2026-10-15): the ONE owning-leg resolution for a non-PIPELINE task (A6) —
+    // threaded to the edit step, the capture position, prepareHeldPackage and the nets (a PIPELINE task is its own leg;
+    // the nets resolve it lazily through the same function). Never throws. Then the held-edit step: config_change_author on
+    // a VARIANT leg only (every other execution: null, result.json byte-identical). An ATTEMPTED correction spends the run's
+    // one reflection pass (#90 disqualified, as for the form and requirements corrections).
+    let editStep: EditStepResult | null = null;
+    if (isEditStepEligible(agentRole ?? null, task.type, owningLeg)) {
+      editStep = await runEditApplicationStep(editStepInput(false), resolveHeldFilesFromStore(prisma as never));
+    }
+    if (editStep) {
+      if (editStep.reflectionError) reflectionErrors.push(editStep.reflectionError);
+      formCorrectionAttempted = formCorrectionAttempted || editStep.correction.attempted;
+      if (editStep.textSource === 'edit-correction') {
+        finalResponse = editStep.text;
+        currentResponse = editStep.currentResponse;
+        // The adopted text is the persisted package: its form check is re-run on it (textSource 'edit-correction').
+        if (formCheck) {
+          formCheck = { ...computeFormCheckFact({ text: finalResponse, stopReason: currentResponse?.stopReason, textSource: 'edit-correction',
+            onCheckerError: (message) => logger.warn({ executionId, taskId: task.id, err: message },
+              'package form check: checker-error on the held-edit correction re-check — fact stamped checked:false') }), correction: formCheck.correction };
+        }
+      }
+      logger.info({ executionId, taskId: task.id, state: editStep.application.state, refusedTotal: editStep.application.refusedTotal,
+        correction: editStep.correction }, 'held edit application: step complete');
+    }
+
     await observers.onStoringResults?.({ executionTime: loopExecutionTime, contentLength: finalResponse?.length || 0 });
 
     // Build quality metrics for harness consumption
@@ -442,6 +512,8 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
         correction: formCheck.correction,
       };
     }
+    // #90 replaced the deliverable ⇒ the PURE applier re-runs on the post-#90 text over the same verified files.
+    if (editStep && diagnosticRetryUsed) editStep = recountEditApplication(editStep, finalResponse ?? '', r9Version, persistEchoTokens);
     if (requirementsFormCheck && requirementsInputs && diagnosticRetryUsed) {
       requirementsFormCheck = recountRequirementsStamp(requirementsFormCheck, {
         text: finalResponse, stopReason: currentResponse?.stopReason, inputs: requirementsInputs,
@@ -460,7 +532,17 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
     // executionTime does not move) and BEFORE anything reads toolCallResults (assessExecutionQuality,
     // buildExecutionResultJson, the nets), so no later mutation of a shared record can change what is held. Shadow only;
     // a no-op unless HELD_BYTES_CAPTURE_ENABLED === 'true'. Never throws. (OA-8 as amended; panel AE S3 / D5.)
-    const heldPlan = prepareHeldCapture({ toolCallResults, task: { id: task.id, povId: task.povId }, logger });
+    // WI-B10 (design §9.1 E): the ONE descriptor table — defaults + the registrant snapshots this run's calls were STAMPED with
+    // at call time. Async, outside the tx, reads frozen non-enumerable facts only; skipped when capture is off or nothing is stamped.
+    const heldTable = await buildHeldDescriptorTable(prisma as never, toolCallResults, isHeldCaptureEnabled());
+    // held-network step 3 batch 2b (P3 / S3-A): the leg's declared Device sources — ONE read, only on a Device-sources leg (network);
+    // every other execution reads nothing and passes no device scope (its capture is byte-identical). Shared with the nets (primed).
+    const legDeviceSources = (owningLeg?.kind === 'leg' || owningLeg?.kind === 'self') && owningLeg.deviceSource === true
+      ? await readLegDeviceSources(prisma as never, owningLeg) : null;
+    const heldPlan = prepareHeldCapture({ toolCallResults, task: { id: task.id, povId: task.povId }, logger, heldTable, live: true,
+      echoSourceText: finalResponse ?? null, // R10-V8-RESIDUALS (a): part of the persist's echo source
+      ...(legDeviceSources ? { deviceRead: buildDeviceReadScope(legDeviceSources, toolCallResults) } : {}),
+      gitFileSourceLeg: (owningLeg?.kind === 'leg' || owningLeg?.kind === 'self') && owningLeg.gitFileSource === true }); // held-k8s 1b-scope (SYNTHESIS v3 §6.2)
 
     // Token usage — 0.5b: computed AFTER the #90 retry fold so result.json / logs / persist agree.
     // Raw-sum semantic: 0 is a legitimate fact.
@@ -549,6 +631,7 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
       ...(formCheck ? { formCheck } : {}),
       ...(requirementsFormCheck ? { requirementsFormCheck } : {}),
       ...(reflectionErrors.length ? { reflectionErrors } : {}),
+      ...(editStep ? { editCorrection: editStep.correction } : {}),
       ...(extensions ? { extensions } : {}),
       chainedContext: deriveChainedContextSignal(task.inputContext),
       logger,
@@ -612,6 +695,56 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
     // way to see what a program parent stamped was a live program run.
     // EF-F2 (COMPLETE-THEN-FAIL build review): the ctx construction + BOTH invocation points live in ONE shared helper,
     // which the completion-anchored rescue calls too — so the two paths cannot fork their net inputs.
+    // PLATFORM-HELD-BYTES Stage B V-5d (2026-10-15): on a VARIANT leg the I/O halves run BEFORE the nets, so the nets
+    // transcribe their outcome — the Harvester's capture (moved from its Stage A position below) and the Author's package
+    // (BASE touch-and-verify, CANDIDATE upsert only when applied). Both pre-tx, both never throw; no output or executionTime
+    // change (CTF-SEAM-6). A non-variant execution keeps every Stage A position and statement.
+    const variantLeaf = owningLeg?.heldCapable === true; // Phase 10: a held-capable leaf (glossary: held-bytes/variant.ts)
+    let heldCaptures = variantLeaf ? await captureHeldFiles(prisma, { executionId, taskId: task.id, plan: heldPlan, logger }) : null;
+    let heldPackage: PreparedHeldPackage | null = null;
+    // BC-P2-4: the package and its stamps exist ONLY on a resolved variant leaf. On `could-not-check` the step still runs (it
+    // computes the named state) but nothing is written or overlaid: the net's errorFact stands (V-5a), the carrier forces.
+    if (editStep && variantLeaf) {
+      heldPackage = await prepareHeldPackage(prisma as never, {
+        executionId, step: editStep, r9Version, legTaskId: owningLeg?.kind === 'leg' ? owningLeg.legId : null, rootTaskId: null,
+        persistEchoTokens,
+      });
+    }
+    // The variant stamps, built ONCE: the nets transcribe the 'committed' build; the persist picks committed / rolled-back
+    // by what its savepoint did (AE S2: the same builder, the same inputs).
+    let heldVariant: HeldVariantPersist | null = null;
+    let heldStamps: { editApplication?: Record<string, unknown>; heldBytes?: Record<string, unknown>; baseHeldHandles?: string[] } | undefined;
+    if (variantLeaf && editStep && heldPackage) {
+      const step = editStep; const pkg = heldPackage;
+      const hasRows = pkg.rows.length > 0;
+      const factFor = (rw: 'committed' | 'rolled-back') => buildEditApplicationFact({
+        app: rw === 'rolled-back' && hasRows ? { ...pkg.application, state: 'unheld', candidateFiles: 0 } : pkg.application,
+        heldFiles: step.files, refWrite: hasRows ? rw : 'none', textSource: step.textSource, correction: step.correction,
+        baseShaByHandle: pkg.baseShaByHandle,
+      });
+      const manifestFor = (rw: 'committed' | 'rolled-back') => buildEditApplicationManifest(
+        rw === 'rolled-back' && hasRows ? { ...pkg.application, state: 'unheld', candidateFiles: 0 } : pkg.application,
+        { refWrite: hasRows ? rw : 'none', files: pkg.refs.map((r) => ({ handle: r.handle, path: String((r.row as { path?: unknown }).path ?? ''),
+          baseRefId: pkg.baseRefIdByHandle[r.handle], candidateRefId: pkg.candidateRefIdByHandle[r.handle], r9Version: r.r9Version, viewVersion: r.viewVersion })) });
+      // EF-P2-3: V-8a reads the BASE-held handles from here, never from the digest's `rollback` (the overflow fallback drops it).
+      heldStamps = { editApplication: factFor('committed'), baseHeldHandles: Object.keys(pkg.baseRefIdByHandle) };
+      heldVariant = { kind: 'package', overlay: (rw) => ({ editApplication: factFor(rw) }),
+        manifests: [{ name: EDIT_APPLICATION_MANIFEST_NAME, build: manifestFor }], packageRows: pkg.rows };
+    } else if (variantLeaf && heldCaptures && heldPlan && HARVEST_LEAF_ROLE_RE.test(agentRole ?? '')) {
+      // AE-P2-1: the capture ROWS are written for any role (Stage A), but the heldBytes stamp + manifest are the HARVESTER's
+      // (the net's own population) — a Reviewer that read a config file gets neither.
+      const batch = heldCaptures; const storedBytes = heldPlan.files.reduce((n, f) => n + f.storedByteLength, 0);
+      const digestFor = (rw: 'committed' | 'rolled-back') => buildHeldBytesDigest({ refs: batch.refs, refusals: batch.refusals, storedBytes }, undefined, { refWrite: rw }) as unknown as Record<string, unknown>;
+      heldStamps = { heldBytes: digestFor('committed') };
+      heldVariant = { kind: 'capture', overlay: (rw) => ({ heldBytes: digestFor(rw) }),
+        manifests: [{ name: HELD_BYTES_MANIFEST_NAME, build: (rw) => ({ refWrite: rw, ...buildHeldBytesManifest({ refs: batch.refs, refusals: batch.refusals, storedBytes }) }) }] };
+    } else if (variantLeaf && !heldPlan && HARVEST_LEAF_ROLE_RE.test(agentRole ?? '')) {
+      // PC-P2-3 (G3 entry, 2026-10-16): a variant HARVESTER with no capture plan names WHY — the switch was off, or no as-deployed
+      // file was read (incl. the D-C non-default service name) — instead of the net's generic `no-capture` fallback. The chain
+      // renders it to the Author/Architect as one named state (`heldNone`). No rows, no manifest: nothing was captured.
+      heldStamps = { heldBytes: { held: 0, refused: {}, reason: isHeldCaptureEnabled() ? 'no-files' : 'capture-off' } };
+    }
+
     await stampExecutionNets(prisma, {
       task: { id: task.id, type: task.type, metadata: task.metadata, inputContext: task.inputContext },
       agentRole: agentRole ?? null,
@@ -619,6 +752,9 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
       finalResponse,
       executionId,
       logger,
+      owningLeg,
+      ...(legDeviceSources ? { deviceSources: legDeviceSources } : {}),
+      ...(heldStamps ? { held: heldStamps } : {}),
     }, resultJson as Record<string, unknown>);
 
     // ── Per-net operator telemetry. Deliberately OUTSIDE the registry: these lines are specific
@@ -686,7 +822,7 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
     // PLATFORM-HELD-BYTES Stage A: the I/O capture half (leg SELECT + autocommit blob upsert + validation), as late as
     // possible so the window before the terminal transaction is short. It never receives toolCallResults or resultJson
     // — only the primitives-only plan. Never throws.
-    const heldCaptures = await captureHeldFiles(prisma, { executionId, taskId: task.id, plan: heldPlan, logger });
+    if (!variantLeaf) heldCaptures = await captureHeldFiles(prisma, { executionId, taskId: task.id, plan: heldPlan, logger });
 
     // Terminal SUCCESS persist — the ONE shared implementation (Phase 4b): atomic tx (artifacts +
     // execution + task) plus the core-owned post-commit tail (reactors, auto-comment). prune/fireReactors
@@ -699,6 +835,7 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
       ...(requirementsPreCorrectionDraft ? { preCorrectionDraft: requirementsPreCorrectionDraft } : {}),
       ...(requirementsCorrectionNotAdoptedText ? { correctionNotAdoptedText: requirementsCorrectionNotAdoptedText } : {}),
       ...(heldCaptures && (heldCaptures.refs.length || heldCaptures.refusals.length) ? { heldCaptures } : {}),
+      ...(heldVariant ? { heldVariant } : {}),
       logs: executionLogs,
       endTime,
       executionCreatedAt: execution.createdAt ?? null,

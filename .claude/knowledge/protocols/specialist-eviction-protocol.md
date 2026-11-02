@@ -12,12 +12,24 @@
 
 ### R1 — Session-pointer cap: **3 dated blocks per specialist**
 
-A specialist may carry at most the **3 newest** `## 🆕 <date> Session` blocks. Adding a 4th evicts the oldest in the SAME commit, per the disposition table (R3).
+A specialist may carry at most the **3 newest** `## 🆕 <date> Session` blocks. Adding a 4th triggers the R0 liveness review in the SAME commit: the oldest block moves unless it is still live. If it is, fold its live facts into the file's standing sections and move the rest (R3).
+
+### R0 — The trigger is a LIVENESS REVIEW, not a cut (amended 2026-10-31, owner)
+
+The line counts in R1/R2 are **review triggers, not eviction targets.** Crossing one starts a liveness review of the file. The review classifies every block by whether it is still live, and it is finished when nothing stale or superseded is left, **not when a number is hit**. Size alone never moves:
+- **responder facts**: still true, and needed to diagnose a run or to act correctly on a typical invocation;
+- **standing rules**: owner decisions, invariants, tripwires.
+
+What the review moves (verbatim, to the domain library, per R3):
+- **build-step status for finished work** (deploy/push/commit-id/"next:" lines of a closed arc). Fold each closed arc to one line pointing at its close-out record.
+- **self-declared superseded lines.** These are wrong by their own account, and an agent can act on them.
+
+A file still over budget after the review is acceptable when everything left is live. Record that in the commit message, then split the file at the next quarterly health-run only if it keeps growing. *Why (owner, 2026-10-31, near MVP):* "an inflexible rule". A size-driven cut risks evicting a live fact for being old, while the real hazard is a STALE line still in the file. First application: `pipeline-harness-specialist` went from 635 to 538 lines (119 lines of closed-join build pointers to the library; the responder facts kept).
 
 ### R2 — Size budget: **soft 500 lines / hard 800 lines per specialist**
 
-- \> 500 lines: flagged in the quarterly health-run size scan (see §Quarterly hook) — schedule a split.
-- \> 800 lines: do not append anything further; run the split first.
+- \> 500 lines: flagged in the quarterly health-run size scan (see §Quarterly hook) — run the R0 liveness review (a split only if live content keeps growing).
+- \> 800 lines: do not append anything further; run the R0 liveness review first, then split if it is still over.
 - Discoveries get a looser budget (they hold the grep library): soft 800 total / **hard 800 PROSE lines** (total − fenced-code lines). CALIBRATED 2026-06-11 by the Phase 2 pilot: the original "hard 1,500 total" was uncalibrated; boundary-contract-discovery post-trim sits at 1,533 total but only ~700 prose with 54% executable greps — cutting further would cut the accuracy engine itself. Prose is the accretion surface; code is the product. CAVEAT (mcp-hub Phase 2): fenced blocks that are NOT executable commands — status snapshots, sample outputs — evade the prose metric; evict those by MERIT (stale-claim surface) regardless of the number. Measure: `awk '/^\x60\x60\x60/{f=!f;next} !f{n++} END{print n}' <file>`.
 
 ### R3 — Eviction dispositions (every evicted block gets exactly one)

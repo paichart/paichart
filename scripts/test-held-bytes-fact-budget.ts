@@ -26,17 +26,17 @@ function ok(cond: unknown, what: string) { if (!cond) throw new Error(what); }
 const ref = (i: number, target: string, path: string, redacted = 0): HeldFileRefRow => ({
   scope: 'p1', blobSha256: 'a'.repeat(64), executionId: 'e1', kind: 'CAPTURE', legTaskId: null, rootTaskId: null,
   serviceId: 's1', serviceName: 'observability-readonly', sourceTool: 'get_ingress_config', toolCallIndex: i,
-  selector: '/structuredContent/files/x', target, path, declaredBy: 'platform-default', descriptorVersion: 1,
+  selector: '/structuredContent/files/x', target, path, declaredBy: 'platform-default', descriptorVersion: 1, declarationSha256: null, eligibility: null, grantPovId: null,
   hashBasis: 'legacy-decoded-text', decodeVersion: 'paichart.text/1', redactorVersion: 'paichart.r10/2',
   redactedCount: redacted, lineCount: 99999, newline: null, bom: null, finalNewline: null, serviceReportsComplete: null,
-  derivedRawByteLength: null, placeholderPreexistingCount: 0,
+  derivedRawByteLength: null, placeholderPreexistingCount: 0, sourceRevision: null,
 });
 const NAMES = ['not-declared', 'no-scope', 'is-error', 'raw-digest-present', 'over-cap', 'descriptor-mismatch', 'path-invalid',
   'nul-byte', 'lone-surrogate', 'decode-violated', 'legacy-bom', 'line-map-broken', 'escaped-secret-residual', 'store-error'];
 const refusal = (i: number, name: string, target: string | null, path: string | null): HeldCaptureRefusalRow => ({
   executionId: 'e1', scope: 'p1', serviceId: null, serviceName: 'observability-readonly', identitySource: 'envelope',
   sourceTool: 'get_otel_config', toolCallIndex: i, selector: null, target, path, refusal: name, declaredBy: 'platform-default',
-  descriptorVersion: 1,
+  descriptorVersion: 1, declarationSha256: null, eligibility: null, grantPovId: null,
 });
 const MAX_TARGET = 'A' + 'z'.repeat(252);                     // 253 chars, the P3 §4.2 bound
 const ESCAPEY = '"\u0001"\u0002'.repeat(300);                   // every char costs 2–6 when serialised

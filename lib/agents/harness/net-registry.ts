@@ -47,6 +47,15 @@ export type StampPoint = 'leaf-persist' | 'leg-synthesize';
 export type Fact = Record<string, unknown>;
 
 /**
+ * PLATFORM-HELD-BYTES Stage B V-5b (2026-10-15): the value a CONDITIONAL net returns when its fact does not exist on THIS
+ * task — a positive "this is not the population", never a failure (the held-variant nets on every non-variant leaf). It is
+ * an identity-compared frozen object typed as a Fact — the plan's "NOT_STAMPED Symbol" with no union in `enrich`'s return
+ * type, so every existing caller of `enrich` keeps its type. Only a net that DECLARES `conditionalStampReason` may return
+ * it; from any other net it is an undeclared return and the loop stamps that net's `errorFact()` (R6).
+ */
+export const NOT_STAMPED: Fact = Object.freeze({}) as Fact;
+
+/**
  * Everything the six sites already read, resolved ONCE per persist, plus the derivations more than
  * one net needs.
  *
@@ -98,6 +107,18 @@ export interface NetContext {
   children(): Promise<Array<{ id: string; title: string; agentRole: string | null }>>;
   /** Contract applicability, memoized; `null` at program tier and when the tier is unresolvable. */
   contractApplicability(): Promise<Record<string, unknown> | null>;
+  /**
+   * PLATFORM-HELD-BYTES Stage B (§0.1 A6): the task's owning-leg protocol resolution, memoized — PRIMED with the core's one
+   * answer, or resolved lazily (once) for a caller that passes none (rescue, replays, the lab, the equivalence gate), so every
+   * caller sees the same value and a net that does not apply triggers no read. Optional only so hand-built test contexts
+   * stay valid; `buildNetContext` always sets it.
+   */
+  owningLeg?: () => Promise<import('./held-bytes/variant').OwningLegResolution>;
+  /** held-network step 3 batch 2b: the leg's declared Device sources, memoized (primed by the core, else lazy). Optional so
+   *  hand-built test contexts stay valid; `buildNetContext` always sets it. */
+  deviceSources?: () => Promise<import('./device-sources-read').LegDeviceSourcesResolution>;
+  /** Stage B: the variant stamps the core BUILT pre-tx (V-5d/V-5g), transcribed by the held nets (AE S2: one object). */
+  held?: { editApplication?: Fact | null; heldBytes?: Fact | null; /** BASE-held handles (V-8a; EF-P2-3) */ baseHeldHandles?: readonly string[] | null };
 }
 
 export interface MechanicalNet {
@@ -150,6 +171,11 @@ export interface MechanicalNet {
   renderPrompt: ((fact: Fact) => string[] | null) | null;
   /** Required when either render slot is `null`. Free text; its presence is what is enforced. */
   renderNullReason?: string;
+  /**
+   * Stage B V-5b: present ONLY on a net that may return `NOT_STAMPED`, naming why it stamps nothing there (a kebab token
+   * the replay runner prints — `not stamped (<reason>)` — e.g. `not-variant-leg`). Its presence is the declaration.
+   */
+  conditionalStampReason?: string;
 }
 
 /**
@@ -164,17 +190,28 @@ export async function runNetsAtPoint(
   ctx: NetContext,
   nets: readonly MechanicalNet[],
   stamp: (name: string, fact: Fact) => void,
-  onError: (name: string, err: unknown) => void
+  onError: (name: string, err: unknown) => void,
+  onNotStamped?: (name: string, reason: string) => void
 ): Promise<void> {
   for (const net of nets) {
     if (net.point !== point) continue;
     if (!net.appliesTo(ctx)) continue;
+    let fact: Fact;
     try {
-      stamp(net.name, await net.enrich(ctx));
+      fact = await net.enrich(ctx);
     } catch (err) {
       stamp(net.name, net.errorFact());
       onError(net.name, err);
+      continue;
     }
+    if (fact === NOT_STAMPED) {
+      if (net.conditionalStampReason) { onNotStamped?.(net.name, net.conditionalStampReason); continue; }
+      // An UNDECLARED NOT_STAMPED is a defect, not a population: it would make the net inert by omission.
+      stamp(net.name, net.errorFact());
+      onError(net.name, new Error('returned NOT_STAMPED without a declared conditionalStampReason'));
+      continue;
+    }
+    stamp(net.name, fact);
   }
 }
 
@@ -192,6 +229,9 @@ export function assertRegistryWellFormed(nets: readonly MechanicalNet[]): void {
       throw new Error(`net-registry: duplicate entry ${key} — one key, one point, one net`);
     }
     seen.add(key);
+    if (net.conditionalStampReason !== undefined && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(net.conditionalStampReason)) {
+      throw new Error(`net-registry: ${key} conditionalStampReason must be a kebab token (the replay prints it)`);
+    }
     if ((net.renderCard === null || net.renderPrompt === null) && !net.renderNullReason) {
       throw new Error(
         `net-registry: ${key} declares a null render slot without renderNullReason — ` +

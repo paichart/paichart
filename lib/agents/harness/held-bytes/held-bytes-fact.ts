@@ -17,6 +17,7 @@
  * Plan: cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-PLAN.md WI-9 / §10.
  */
 import type { HeldFileRefRow, HeldCaptureRefusalRow } from '../../../services/held-bytes-store';
+import { assignHandles, orderHeldObjects } from './handles';
 
 export const HELD_BYTES_DIGEST_MAX = 1024;
 export const HELD_BYTES_FIELD_MAX = 40;
@@ -32,11 +33,19 @@ export interface HeldBytesFactInput {
 
 export interface ManifestObject {
   handleIndex: number;
+  /** Stage B V-5h: the file's handle (`assignHandles`) — `H<n>` of the pair's first object; a re-read shares it. */
+  handle?: string;
   toolCallIndex: number;
+  /** Stage B V-5h: with toolCallIndex, the manifest KEY (unique by MI-13 🔴 6). No ref ids — the chainer reads CAPTURE ids
+   *  from held_file_refs at chain time (DB SF-2 option a). */
+  selector?: string | null;
   target: string | null;
   path: string | null;
   sourceTool: string;
   held: boolean;
+  /** K-3 (held-k8s): the Git commit a held file was read at — present ONLY when non-null (an obs manifest stays byte-identical).
+   *  Never in the `heldBytes` fact or §6 (SYNTHESIS v3 R9: the 1,024-char digest bound and its no-hex rule). */
+  sourceRevision?: string;
   lineCount?: number;
   redactedCount?: number;
   refusal?: string;
@@ -55,6 +64,7 @@ export interface DigestRow {
 
 export interface HeldBytesDigest {
   held: number;
+  refWrite?: 'committed' | 'rolled-back';
   refused: Record<string, number>;
   totals: { files: number; storedBytes: number; redactedFiles: number };
   lane: 'file-artifact';
@@ -63,20 +73,32 @@ export interface HeldBytesDigest {
   rowsOmitted?: number;
 }
 
-/** Every object, ordered by tool call then held-before-refused, with its handle index. */
+/** Every object, in the HANDLE order (`orderHeldObjects`: tool call, then selector, then held-before-refused — Stage B
+ *  V-5h; Stage A ordered by tool call then held-first, which left two files of one call unordered), with its handle index
+ *  and handle. Shared with `assignHandles`, so a manifest index and an Author's handle can never disagree. */
 export function buildHeldBytesManifest(input: HeldBytesFactInput): { objects: ManifestObject[] } {
-  const objs: Array<Omit<ManifestObject, 'handleIndex'>> = [
+  const objs = [
     ...input.refs.map((r) => ({
-      toolCallIndex: r.toolCallIndex, target: r.target, path: r.path, sourceTool: r.sourceTool, held: true,
-      lineCount: r.lineCount, redactedCount: r.redactedCount,
+      toolCallIndex: r.toolCallIndex, selector: r.selector ?? null, target: r.target, path: r.path, sourceTool: r.sourceTool, held: true,
+      lineCount: r.lineCount, redactedCount: r.redactedCount, blobSha256: r.blobSha256,
+      ...(typeof r.sourceRevision === 'string' ? { sourceRevision: r.sourceRevision } : {}),
     })),
     ...input.refusals.map((r) => ({
-      toolCallIndex: r.toolCallIndex, target: r.target, path: r.path, sourceTool: r.sourceTool, held: false,
+      toolCallIndex: r.toolCallIndex, selector: r.selector ?? null, target: r.target, path: r.path, sourceTool: r.sourceTool, held: false,
       refusal: r.refusal, ...(r.detail ? { detail: r.detail } : {}),
     })),
   ];
-  objs.sort((a, b) => a.toolCallIndex - b.toolCallIndex || Number(b.held) - Number(a.held));
-  return { objects: objs.map((o, handleIndex) => ({ handleIndex, ...o })) };
+  const ordered = orderHeldObjects(objs);
+  const handleOf = new Map<string, string>();
+  for (const h of assignHandles(ordered)) if (h.target !== null && h.path !== null) handleOf.set(JSON.stringify([h.target, h.path]), h.handle);
+  return {
+    // blobSha256 drives assignHandles (in memory) and is NEVER in the manifest (no hash anywhere — C5, P3-B1).
+    objects: ordered.map((full, handleIndex) => { const { blobSha256: _omit, ...o } = full as typeof full & { blobSha256?: string }; void _omit; return {
+      handleIndex,
+      handle: (o.target !== null && o.path !== null ? handleOf.get(JSON.stringify([o.target, o.path])) : undefined) ?? `H${handleIndex + 1}`,
+      ...o,
+    }; }),
+  };
 }
 
 /** Cut `s` so its JSON-serialised form (minus the quotes) is ≤ max, on a code-point boundary. */
@@ -94,7 +116,9 @@ const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
 
 /** `maxChars` defaults to the 1,024 budget; tests lower it to exercise the guard (the measured worst case of this row
  *  shape is ~1,014, so at 1,024 the guard is a backstop that rarely fires). */
-export function buildHeldBytesDigest(input: HeldBytesFactInput, maxChars: number = HELD_BYTES_DIGEST_MAX): HeldBytesDigest {
+/** `opts.refWrite` (Stage B V-5e): the persist pick — omitted ⇒ the Stage A digest, byte for byte; `'rolled-back'` ⇒ the
+ *  capture rows were rolled back to their savepoint, so nothing is held (`held: 0`). */
+export function buildHeldBytesDigest(input: HeldBytesFactInput, maxChars: number = HELD_BYTES_DIGEST_MAX, opts: { refWrite?: 'committed' | 'rolled-back' } = {}): HeldBytesDigest {
   const { objects } = buildHeldBytesManifest(input);
   const refused: Record<string, number> = {};
   for (const r of input.refusals) refused[r.refusal] = (refused[r.refusal] ?? 0) + 1; // sparse by construction
@@ -119,7 +143,8 @@ export function buildHeldBytesDigest(input: HeldBytesFactInput, maxChars: number
     };
   });
   const digest: HeldBytesDigest = {
-    held: input.refs.length,
+    held: opts.refWrite === 'rolled-back' ? 0 : input.refs.length,
+    ...(opts.refWrite ? { refWrite: opts.refWrite } : {}),
     refused,
     totals: {
       files: input.refs.length + input.refusals.length,

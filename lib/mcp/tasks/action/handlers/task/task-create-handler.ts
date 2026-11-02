@@ -137,12 +137,16 @@ import { logTaskCreated } from '@/lib/tasks/services/taskActivityService';
 import type { ActivityMetadata } from '@/lib/types/activity';
 import { mcpLogger } from '@/lib/logger';
 import { checkDependencyCycle, GraphLimits } from '@/lib/utils/graph';
-import { resolveCreateContract, operatorEventOnce, type InterfaceContractSourceFact } from '@/lib/agents/harness/plan-spawn-carry';
+import { resolveCreateContract, resolveAbsentLegContract, canonicalContractSha, operatorEventOnce, type InterfaceContractSourceFact, type AbsentLegDecision } from '@/lib/agents/harness/plan-spawn-carry';
+import { interfaceContractKeySeen } from '@/lib/mcp/tasks/action/utilities/contract-key-seen';
+import { scopeTeamLookup, scopeTaskIdLookup } from '@/lib/pov/auth/pov-access-filter';
 
 export async function handleTaskCreate(
   parameters: any,
   user: TokenPayload,
-  actionId: string
+  actionId: string,
+  /** Server-side only (the router, agent-loop calls): the calling execution + the RAW parameters (Q2 leg-contract heal). */
+  routeOpts?: { callingExecutionId?: string; rawParameters?: unknown; unappliedTopLevelKeys?: string[] }
 ) {
   const {
     title, description, assigneeId, teamId, povId, phaseId, phaseName, priority, status, type, dueDate, stageId, stageName, parentTask,
@@ -306,6 +310,13 @@ export async function handleTaskCreate(
     });
   }
 
+  // TEAM-LOOKUP-CROSS-TENANT (2026-10-31): a caller-supplied teamId must be a team the caller can reach — never
+  // attach another POV's team. (The POV-inherited team needs no check: the caller just passed this POV's access check.)
+  if (teamId) {
+    const reachable = await prisma.team.findFirst({ where: scopeTeamLookup({ id: teamId }, user), select: { id: true } });
+    if (!reachable) throw new Error(`task.create: team "${teamId}" was not found and no task was created.`);
+  }
+
   // Person assignee by name/email — resolved AFTER the access check (the resolver's not-found error
   // lists user names, which a caller without POV access must not see) and BEFORE stage resolution
   // (which can auto-create a stage) and the create transaction, so a failure leaves nothing behind.
@@ -315,7 +326,7 @@ export async function handleTaskCreate(
       throw new Error(`task.create: assignee "${assigneeNameParam}" was not applied and no task was created. POV "${povId}" was not found.`);
     }
     try {
-      const resolved = await resolveUserByNameOrEmail(assigneeNameParam, povWithTeam);
+      const resolved = await resolveUserByNameOrEmail(assigneeNameParam, povWithTeam, user);
       assertAssigneeInPovTeam(user, povWithTeam, resolved.id);
       finalAssigneeId = resolved.id;
     } catch (e: unknown) {
@@ -659,14 +670,16 @@ export async function handleTaskCreate(
   //    `resolver-error`. The resolver never throws by construction; the try/catch here is the belt.
   //  - Runs AFTER the duplicate-title early return (a duplicate writes nothing) and BEFORE the tx, so
   //    the fact is born with its row inside the ONE tx.task.create (no post-create update).
-  //  - The task.create RESULT is unchanged: neither return projection may reference the fact or the
-  //    substituted contract (the PLAN-SPAWN model is the population `suppliedMatched` measures).
+  //  - The task.create RESULT is unchanged on this (supplied) arm: neither return projection may reference the fact or
+  //    the substituted contract (the PLAN-SPAWN model is the population `suppliedMatched` measures). The ONE recorded
+  //    exception is the Q2 ABSENT arm below (owner decision D-8, 2026-10-17): its result carries one storage-fact sentence.
   //  - Not a program stage → byte-unchanged, no key written.
   let contractToStore: unknown = interfaceContract;
   let interfaceContractSource: InterfaceContractSourceFact | null = null;
   if (interfaceContract && typeof interfaceContract === 'object' && !Array.isArray(interfaceContract)) {
     try {
-      const decision = await resolveCreateContract(prisma, finalStageId, interfaceContract as Record<string, unknown>);
+      const decision = await resolveCreateContract(prisma, finalStageId, interfaceContract as Record<string, unknown>,
+        undefined, routeOpts?.callingExecutionId ?? null);
       contractToStore = decision.stored;
       interfaceContractSource = decision.sourceFact;
       const f = decision.sourceFact;
@@ -709,6 +722,56 @@ export async function handleTaskCreate(
     ...(interfaceContractSource ? { interfaceContractSource } : {}),
   };
 
+  // ── Q2 leg-contract heal (2026-10-17): the ABSENT arm ─────────────────────────────────────────
+  // A PIPELINE child created WITHOUT a contract by an agent-loop call. When it is the program's OWN root harness and the plan
+  // resolves, the platform stores the PLAN's contract (what a supplied create stores since C2-a). Q2 is NARROWED, not reversed:
+  // every other door (GUI, REST, external MCP, other agents, a contract sent but dropped in transit) stays loud at F16.
+  // Record: cline_docs/reviews/q2-leg-contract-heal-2026-10-17/ (SYNTHESIS v3 §8-§9). After the duplicate-title return (a
+  // duplicate writes nothing), before the tx (the fact is born with its row). Fail-open: a throw stores today's (no contract).
+  let absentDecision: AbsentLegDecision = { kind: 'none' };
+  if ((interfaceContract === undefined || interfaceContract === null) && type === 'PIPELINE' && routeOpts?.callingExecutionId && finalStageId) {
+    try {
+      const contractKeySeen = interfaceContractKeySeen(routeOpts.rawParameters, routeOpts.unappliedTopLevelKeys);
+      absentDecision = await resolveAbsentLegContract(prisma, finalStageId, { callingExecutionId: routeOpts.callingExecutionId, contractKeySeen });
+      const af = absentDecision.kind === 'none' ? null : absentDecision.fact;
+      const base = { stageId: finalStageId, title, callerExecutionId: af?.callerExecutionId ?? null, callerTaskId: af?.callerTaskId ?? null };
+      if (absentDecision.kind === 'store') {
+        mcpLogger.warn({ ...base, planSha256: absentDecision.planSha256, errorCode: 'CONTRACT_SUPPLIED_ABSENT_AT_CREATE' },
+          "program harness created a pipeline child without interfaceContract — the platform stores the program plan's contract");
+        if (absentDecision.operatorEvent && operatorEventOnce(af?.architectExecutionId ?? null, absentDecision.planSha256)) {
+          mcpLogger.warn({ securityEvent: true, site: 'C2-create-absent', stageId: finalStageId,
+            rewriteClasses: absentDecision.operatorEvent.classes, matches: absentDecision.operatorEvent.matches,
+            planSha256: absentDecision.planSha256 }, 'R9 would rewrite the rendered program contract (classified, not applied)');
+        }
+      } else if (absentDecision.kind === 'decline') {
+        if (af?.declineReason === 'contract-key-seen') {
+          mcpLogger.error({ ...base, declineReason: af.declineReason, errorCode: 'CONTRACT_SENT_BUT_DROPPED' },
+            'an interfaceContract was sent in this task.create but did not survive to the validated parameters — not supplied (F16 stays loud)');
+        } else {
+          mcpLogger.warn({ ...base, declineReason: af?.declineReason ?? null, planResolution: af?.planResolution ?? null,
+            errorCode: 'CONTRACT_ABSENT_NOT_SUPPLIED' }, 'the platform declined to supply the program plan contract at create');
+        }
+      }
+    } catch (err) {
+      absentDecision = { kind: 'none' };
+      mcpLogger.error({ stageId: finalStageId, errorClass: (err as Error)?.name, errorCode: 'CONTRACT_ABSENT_RESOLVE_FAILED' },
+        'absent-contract resolution threw at create — nothing supplied (as before)');
+    }
+  }
+  // ONE discriminated, pre-tx contract write (SYNTHESIS v3 V1): store / decline / none, spread once into the ONE tx.task.create.
+  // The supplied-arm condition is EXACTLY today's (any object — `{}` included) and byte-identical. Keys are omitted, never null.
+  const contractWrite: Partial<Pick<Prisma.TaskUncheckedCreateInput, 'inputContext' | 'metadata'>> =
+    interfaceContract && typeof interfaceContract === 'object'
+      ? { inputContext: { interfaceContract: contractToStore } as Prisma.InputJsonValue, metadata: createContractMetadata as Prisma.InputJsonValue }
+      : absentDecision.kind === 'store'
+        ? { inputContext: { interfaceContract: absentDecision.contract } as Prisma.InputJsonValue,
+            metadata: { requiresInterfaceContract: true, interfaceContractSource: absentDecision.fact } as unknown as Prisma.InputJsonValue }
+        : absentDecision.kind === 'decline'
+          ? { metadata: { interfaceContractSource: absentDecision.fact } as unknown as Prisma.InputJsonValue }
+          : {};
+  // The comparand for the post-tx read-back, held in a const NOT named after the fact (keeps pin C2.3 green).
+  const absentArmPlanSha: string | null = absentDecision.kind === 'store' ? absentDecision.planSha256 : null;
+
   // BC47/BC19 FIX (2026-06-08): a plain $transaction does NOT prevent the duplicate-order race —
   // at READ COMMITTED the max-order findFirst takes no lock, so two concurrent default-appends both
   // read the same max and write the same order (silent — `order` has no unique constraint). Lock the
@@ -748,10 +811,7 @@ export async function handleTaskCreate(
         // (and flagged so prepare-task-for-execution fails LOUD if the contract is ever
         // lost before execution). Nested-parameters form only (flat top-level is
         // schema-stripped, same as waitForCompletion).
-        ...(interfaceContract && typeof interfaceContract === 'object' ? {
-          inputContext: { interfaceContract: contractToStore } as Prisma.InputJsonValue,
-          metadata: createContractMetadata as Prisma.InputJsonValue,
-        } : {}),
+        ...contractWrite,
         createdAt: new Date(),
         updatedAt: new Date()
       },
@@ -770,7 +830,8 @@ export async function handleTaskCreate(
     // not-yet-created sibling tasks (race condition in pipeline creation)
     if (dependencyIds && Array.isArray(dependencyIds) && dependencyIds.length > 0) {
       const existingTasks = await tx.task.findMany({
-        where: { id: { in: dependencyIds } },
+        // DEPENDENCY-IDS-UNSCOPED: only tasks in POVs the caller can access (a foreign id = a missing id).
+        where: scopeTaskIdLookup({ id: { in: dependencyIds } }, user),
         select: { id: true },
       });
       const existingIds = new Set(existingTasks.map(t => t.id));
@@ -806,6 +867,26 @@ export async function handleTaskCreate(
   );
 
   mcpLogger.info({ taskId: task.id, povId: task.povId, stageId: task.stageId, actionId }, 'Task created successfully');
+
+  // Q2 absent arm — the storage-fact sentence (owner decision D-8, SYNTHESIS v3 V2/V3). Emitted ONLY when: the pre-tx arm is
+  // `create-absent` AND the row the create RETURNED holds an object contract whose canonical sha equals the plan's AND the flag
+  // is set. The guarantee is BOTH reads together: the returned row proves WHAT was written; the `{id}` durability assertion above
+  // proves the COMMIT landed — neither is redundant. A mismatch or a throw NEVER throws after commit: no sentence, an error log.
+  // ⚠️ Relies on the create using `include` (not `select`), so `inputContext` + `metadata` ride the returned row (pinned).
+  let absentStoredPlanSha: string | null = null;
+  if (absentArmPlanSha) {
+    try {
+      const row = task as unknown as { inputContext?: { interfaceContract?: unknown } | null; metadata?: { requiresInterfaceContract?: unknown } | null };
+      const stored = row.inputContext?.interfaceContract;
+      const storedSha = stored !== null && typeof stored === 'object' && !Array.isArray(stored) ? canonicalContractSha(stored) : null;
+      if (storedSha === absentArmPlanSha && row.metadata?.requiresInterfaceContract === true) absentStoredPlanSha = storedSha;
+      else mcpLogger.error({ taskId: task.id, planSha256: absentArmPlanSha, storedSha256: storedSha, errorCode: 'CONTRACT_ABSENT_READBACK_MISMATCH' },
+        'the created row does not hold the program plan contract the absent arm decided to store — no result sentence');
+    } catch (err) {
+      mcpLogger.error({ taskId: task.id, planSha256: absentArmPlanSha, errorClass: (err as Error)?.name, errorCode: 'CONTRACT_ABSENT_READBACK_MISMATCH' },
+        'absent-arm read-back threw — no result sentence');
+    }
+  }
 
   // 🎯 RICH ACTIVITY LOGGING (Phase 2.3 - 2025-12-31)
   // Fire-and-forget pattern - logs task creation with title in details
@@ -875,8 +956,15 @@ export async function handleTaskCreate(
           name: task.team.name
         } : null
       },
-      message: `Task "${task.title}" created successfully via MCP${task.stage ? ` in stage "${task.stage.name}"` : ''}${task.phase ? ` of phase "${task.phase.name}"` : ''}`,
+      message: `Task "${task.title}" created successfully via MCP${task.stage ? ` in stage "${task.stage.name}"` : ''}${task.phase ? ` of phase "${task.phase.name}"` : ''}`
+        + (absentStoredPlanSha ? ` ${absentArmSentence(absentStoredPlanSha)}` : ''),
+      ...(absentStoredPlanSha ? { contractSuppliedFromPlan: { planSha256Prefix: absentStoredPlanSha.slice(0, 8) } } : {}),
       created: true
     }
   };
+}
+
+/** The Q2 absent-arm storage fact (owner decision D-8): what the platform stored, from which plan sha. Facts only — no advice. */
+export function absentArmSentence(planSha256: string): string {
+  return `interfaceContract was not in this call; the platform stored the program plan's contract (plan sha256 ${planSha256.slice(0, 8)}), the same contract a create carrying interfaceContract stores.`;
 }

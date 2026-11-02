@@ -36,6 +36,32 @@ process.env.PAICHART_SKIP_DB_CONNECT = 'true';
 import * as fs from 'fs';
 import * as path from 'path';
 import { authoritativeReadStub } from './fixtures/authoritative-read-stub';
+import { isHeldCapableLeg } from '../lib/agents/harness/held-bytes/variant';
+import { canonicalProtocolName, resolveTaskProtocol } from '../lib/agents/harness/program-protocol';
+
+/**
+ * PLATFORM-HELD-BYTES Phase 10 (the fold, 2026-10-17): every observability-config leg is HELD-CAPABLE now, so the three conditional
+ * held nets stamp on an obs specimen leg that production — before the fold — left bare. That is the intended series move, not an
+ * over-application. The exemption is PRECISE: only a held net, only on a held-capable specimen leg, only where production did not
+ * stamp it; reported NOT COVERED (never silently dropped). On every OTHER domain's specimen a held key still fails E1a/E2a, so the
+ * gate keeps catching a held net stamping where it must not (the property the Stage B note below protects).
+ */
+const HELD_NETS: ReadonlySet<string> = new Set(['editApplication', 'heldBytes', 'reviewedEditDiff']);
+const PRE_FOLD_WHY = 'Phase 10 fold (2026-10-17): this obs specimen predates the fold, so production never stamped the held net here';
+/**
+ * validationToolCalls (2026-10-23): a CONDITIONAL net scoped to network-provisioning legs (NOT_STAMPED elsewhere). Same precise shape as
+ * the held exemption above, and deliberately NOT declared `legs: 'none'` (that would blind E2a to the one failure that matters for a
+ * conditional net — stamping on ANOTHER domain): only this net, only on a network-provisioning specimen leg, only where production did
+ * not stamp it ⇒ NOT COVERED. On every other domain's specimen its key still fails E2a.
+ */
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { VALIDATION_TOOL_CALLS_SCOPE } = require('../lib/agents/harness/validation-tool-calls') as typeof import('../lib/agents/harness/validation-tool-calls');
+const NETWORK_SCOPED_NETS: ReadonlySet<string> = new Set(['validationToolCalls', 'deviceSourceReads', 'gitDeviceComparison']); // + the two held-network step 3 batch 2b facts (2026-10-26): NOT_STAMPED off a network leg
+const NETWORK_NEW_WHY = 'validationToolCalls (2026-10-23) / deviceSourceReads + gitDeviceComparison (2026-10-26) are newer than this network specimen; fixture-proven (test-validation-tool-calls, test-git-device-comparison) and replayed over production';
+const isNetworkSpecimenLeg = (leg: unknown): boolean => {
+  const p = leg ? resolveTaskProtocol(leg as never).protocol : null;
+  return !!p && canonicalProtocolName(p) === canonicalProtocolName(VALIDATION_TOOL_CALLS_SCOPE);
+};
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { MECHANICAL_NETS } = require('../lib/agents/harness/mechanical-nets') as typeof import('../lib/agents/harness/mechanical-nets');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -234,6 +260,11 @@ const NET_SPECIMENS: Record<string,
   // stored-corpus replay is replay-apply-block-placeholder.ts (PLACEHOLDER-GUARD-BUILD.md).
   'applyBlockPlaceholder@leaf-persist': { legs: 'none',
     why: 'shipped 2026-10-13, after every specimen leg; fixture-proven (test-apply-block-placeholder) and replayed over every stored Author package' },
+  // PLATFORM-HELD-BYTES Stage B V-5f (2026-10-15): the four held-variant nets are DELIBERATELY NOT declared here. Declaring
+  // a net `legs: 'none'` makes E2a skip it (the "newer than every specimen" rule), which would blind the gate to the one
+  // failure that matters for a CONDITIONAL net: stamping on a NON-variant task. Undeclared, every specimen child and leg
+  // replays through them and E2a requires exactly production's keys — so a held net that stamped instead of returning
+  // NOT_STAMPED fails here (mutation-proven 2026-10-15: declared ⇒ the mutation stayed green; undeclared ⇒ RED).
   'reviewerWarnings@leg-synthesize': { legs: 'none',
     why: 'shipped 2026-10-08, after every specimen leg; fixture-proven only until a post-deploy leg is archived' },
 
@@ -366,7 +397,10 @@ function stubPrisma(s: Specimen) {
       // RWF C.3 (execution-facts review §4.5): a net NEWER than every specimen stamps a key production never had
       // the chance to stamp. Compare only keys whose net's window covers this leg, PLUS every key production
       // did stamp, so the over-application guard still bites for every in-window net (mutation-proven).
+      const preFold = (k: string) => HELD_NETS.has(k) && isHeldCapableLeg(s.leg as never) && !prodKeys.includes(k);
+      for (const k of Object.keys(stamped).filter(preFold)) reportNotCovered(`${s.legTaskId.slice(-6)} · ${k}@leg-synthesize`, PRE_FOLD_WHY);
       const ourKeys = Object.keys(stamped)
+        .filter((k) => !preFold(k))
         .filter((k) => covers(`${k}@leg-synthesize`, s.legTaskId) || prodKeys.includes(k))
         .sort();
       check(`E1a ${s.legTaskId.slice(-6)}: stamps exactly the keys production stamped (no net over-applied)`,
@@ -411,7 +445,11 @@ function stubPrisma(s: Specimen) {
         const newer = Object.keys(leafStamped).filter((k) =>
           NET_SPECIMENS[`${k}@leaf-persist`]?.legs === 'none' && !prodKeys.includes(k));
         for (const k of newer) reportNotCovered(`${c.id.slice(-6)} · ${k}@leaf-persist`, NET_SPECIMENS[`${k}@leaf-persist`].why);
-        const ourKeys = Object.keys(leafStamped).filter((k) => !newer.includes(k)).sort();
+        const preFoldLeaf = Object.keys(leafStamped).filter((k) => HELD_NETS.has(k) && isHeldCapableLeg(s.leg as never) && !prodKeys.includes(k));
+        for (const k of preFoldLeaf) reportNotCovered(`${c.id.slice(-6)} · ${k}@leaf-persist`, PRE_FOLD_WHY);
+        const networkNew = Object.keys(leafStamped).filter((k) => NETWORK_SCOPED_NETS.has(k) && isNetworkSpecimenLeg(s.leg) && !prodKeys.includes(k));
+        for (const k of networkNew) reportNotCovered(`${c.id.slice(-6)} · ${k}@leaf-persist`, NETWORK_NEW_WHY);
+        const ourKeys = Object.keys(leafStamped).filter((k) => !newer.includes(k) && !preFoldLeaf.includes(k) && !networkNew.includes(k)).sort();
         check(`E2a ${c.id.slice(-6)}: stamps exactly the keys production stamped (no net over-applied)`,
           JSON.stringify(ourKeys) === JSON.stringify(prodKeys),
           `registry : ${ourKeys}\n     prod     : ${prodKeys}`);

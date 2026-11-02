@@ -63,6 +63,11 @@ Four design outputs, in dependency order:
 ### 2a. The two ingestion artifacts (what the Program Architect reads)
 - **`topology.json`** — the path/graph as code: the ordered hops, each hop's vendor/tool/team, the zones or
   segments, the trust edges. This is the machine-readable ground truth the Architect turns into a DAG.
+  **Describe the service, never its lifecycle** — no `lifecycle` field (register / harvest / tear down). The Architect copies such a
+  line into the interface contract, and Node C then judges a leg's teardown it can never see (no platform fact carries it): a correct
+  one-leg program was refused on it (k8s P-K1, 2026-10-19); the same shape without the line was approved (terraform P-T1, 2026-10-22).
+  The leg's protocol already owns the lifecycle. Register NODE-C-TEARDOWN-UNSEEABLE (fix (a), a teardown FACT, rides the next pov-program
+  batch). ⚠️ The publish pass copies `topology.json` byte-identical from `--topology-from`, so pick a source without the field.
 - **`requirements.md`** — the human intent: the end-to-end objective ("permit HTTPS from partner-CIDR to
   internal-app:443, deny all else, consistent logging, no asymmetric holes"), constraints, and the
   acceptance shape. Prose, but precise — it becomes the Architect's charter.
@@ -91,6 +96,9 @@ passes as a sibling of `title` into each leg (`inputContext.interfaceContract`),
   pipeline id**; the context-chainer's PIPELINE-predecessor branch chains the upstream leg's real `report.md`
   into the downstream leg's §6, and the settledness predicate (F18) holds it until the upstream deliverable
   is fully persisted. Use ONLY for genuine runtime interdependency.
+- **Fan-in / diamond** (a leg with TWO or more upstream legs — never run yet): same mechanism, more than one upstream id.
+  Read `PROGRAM-COMPOSITION-CATALOG.md` §Fan-in and diamond first — every upstream must be judged, and which upstream a
+  value came from is not checked.
 - **Design constraint (D3, KEYSTONE)**: program edges connect **sibling legs in the one program stage**.
   Each leg's OWN children live in that leg's separate child stage (a disconnected subgraph — adds no program
   depth). **Cross-stage pipeline edges silently don't fire — never design them.**

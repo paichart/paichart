@@ -1,0 +1,10 @@
+{
+  "owner": "paichart",
+  "repo": "paichart-lab-configs",
+  "commit": "6d7d0c7300ff4c751ed3b160894a2f9c04c9b90a",
+  "source": "gh api (operator, read-only) 2026-10-18; missingText verbatim from the G-FIXTURE-ID admin services.call 2026-10-18T05:03Z (file @main, k8s directory @main, missing path @main); see cline_docs/reviews/held-k8s-2026-10-18/L-K1-FIXTURE.md",
+  "missingText": "Failed to get file contents. The path does not point to a file or directory, or the file does not exist in the repository.",
+  "listings": {
+    "k8s": "[{\"type\":\"file\",\"size\":1494,\"name\":\"sample-workloads.yaml\",\"path\":\"k8s/sample-workloads.yaml\",\"sha\":\"94bfb3f759193ecb96175900e278479087b55ff2\",\"url\":\"https://api.github.com/repos/paichart/paichart-lab-configs/contents/k8s/sample-workloads.yaml?ref=6d7d0c7300ff4c751ed3b160894a2f9c04c9b90a\",\"git_url\":\"https://api.github.com/repos/paichart/paichart-lab-configs/git/blobs/94bfb3f759193ecb96175900e278479087b55ff2\",\"html_url\":\"https://github.com/paichart/paichart-lab-configs/blob/6d7d0c7300ff4c751ed3b160894a2f9c04c9b90a/k8s/sample-workloads.yaml\",\"download_url\":\"https://raw.githubusercontent.com/paichart/paichart-lab-configs/6d7d0c7300ff4c751ed3b160894a2f9c04c9b90a/k8s/sample-workloads.yaml?token=PLATFORM-STRIPPED\"},{\"type\":\"file\",\"size\":1157,\"name\":\"secret-fixture.yaml\",\"path\":\"k8s/secret-fixture.yaml\",\"sha\":\"43d9c2d7dedb22ea888b4fd95eb4e184d709b102\",\"url\":\"https://api.github.com/repos/paichart/paichart-lab-configs/contents/k8s/secret-fixture.yaml?ref=6d7d0c7300ff4c751ed3b160894a2f9c04c9b90a\",\"git_url\":\"https://api.github.com/repos/paichart/paichart-lab-configs/git/blobs/43d9c2d7dedb22ea888b4fd95eb4e184d709b102\",\"html_url\":\"https://github.com/paichart/paichart-lab-configs/blob/6d7d0c7300ff4c751ed3b160894a2f9c04c9b90a/k8s/secret-fixture.yaml\",\"download_url\":\"https://raw.githubusercontent.com/paichart/paichart-lab-configs/6d7d0c7300ff4c751ed3b160894a2f9c04c9b90a/k8s/secret-fixture.yaml?token=PLATFORM-STRIPPED\"}]"
+  }
+}

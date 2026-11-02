@@ -495,6 +495,24 @@ export class AnthropicSdkProvider extends BaseLLMProvider {
             errorCode = 'LLM_PROVIDER_OVERLOADED';
           }
 
+          // OPS-CREDIT-EXHAUSTION-SIGNAL (2026-10-31): an exhausted provider account returns a 400
+          // `invalid_request_error` whose message says the credit balance is too low (prod 2026-10-06: "Your credit
+          // balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase
+          // credits.", 6 executions). It used to land in `unknown_error`, indistinguishable from any other failure and
+          // invisible to the operator. The provider gives no dedicated type for it, so this one keys on the message
+          // wording, narrowly (credit balance + low), and only inside invalid_request_error. A named code is a FACT the
+          // health monitor alerts on (scripts/enterprise-health-monitor.sh check_provider_credit). The provider's own
+          // message is kept after a plain operator instruction.
+          if ('type' in apiError && apiError.type === 'invalid_request_error' && errorCode === 'unknown_error') {
+            const creditMsg = 'message' in apiError ? String((apiError as any).message) : '';
+            if (/credit balance is too low/i.test(creditMsg)) {
+              errorCode = 'LLM_PROVIDER_CREDIT_EXHAUSTED';
+              errorMessage =
+                `The LLM provider account has run out of credit, so no model call can succeed until it is topped up. ` +
+                `Top up the account (or switch to a key with credit), then re-run this task. (${creditMsg})`;
+            }
+          }
+
           // WU-7 (SDK Phase 2): context-window-exceeded → a categorized errorCode so the engine surfaces
           // errorCategory='CONTEXT_WINDOW_EXCEEDED' (GUI degradation banner) instead of a generic failure.
           // model_context_window_exceeded is NOT a stop_reason in the SDK union (Phase-0-deep) — it arrives

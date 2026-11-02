@@ -31,7 +31,8 @@
 import type { Prisma } from '@prisma/client';
 import { selectAuthoritativeExecution, CHAIN_SELECTION_OPTIONS } from '../../services/execution-selection';
 
-export type ResultField = 'finalResponse' | 'rollbackContainment' | 'derivationContainment' | 'reviewerVerdict' | 'reviewerWarnings' | 'toolCalls';
+export type ResultField = 'finalResponse' | 'rollbackContainment' | 'derivationContainment' | 'reviewerVerdict' | 'reviewerWarnings' | 'toolCalls'
+  | 'editApplication' | 'reviewedEditDiff' | 'heldBytes' | 'gitDeviceComparison';
 
 export type AuthoritativeReadClient = Pick<Prisma.TransactionClient, 'agentExecution' | 'agentArtifact' | '$queryRaw'>;
 
@@ -101,6 +102,40 @@ export async function readAuthoritativeResultField(
     case 'toolCalls':
       rows = await client.$queryRaw<Array<{ v: string | null }>>`
         SELECT (content::jsonb)->>'toolCalls' AS v FROM agent_artifacts
+        WHERE name = 'result.json' AND content LIKE '{%'
+          AND "executionId" = ${executionId}
+        ORDER BY "createdAt" DESC LIMIT 1`;
+      break;
+    // PLATFORM-HELD-BYTES Stage B V-5f / V-9 (2026-10-15): the variant leg's Author edit stamp and its Reviewer's
+    // reviewed-diff stamp — read from the execution the chainer hands on, so the hoist, V-6 and the carrier judge the
+    // SAME Author and Reviewer the leg's agents saw. One more literal each.
+    case 'editApplication':
+      rows = await client.$queryRaw<Array<{ v: string | null }>>`
+        SELECT (content::jsonb)->>'editApplication' AS v FROM agent_artifacts
+        WHERE name = 'result.json' AND content LIKE '{%'
+          AND "executionId" = ${executionId}
+        ORDER BY "createdAt" DESC LIMIT 1`;
+      break;
+    case 'reviewedEditDiff':
+      rows = await client.$queryRaw<Array<{ v: string | null }>>`
+        SELECT (content::jsonb)->>'reviewedEditDiff' AS v FROM agent_artifacts
+        WHERE name = 'result.json' AND content LIKE '{%'
+          AND "executionId" = ${executionId}
+        ORDER BY "createdAt" DESC LIMIT 1`;
+      break;
+    // held-k8s step 3 (G-4): the Harvester's held-bytes stamp — the carrier needs only the authoritative execution id it rides on.
+    case 'heldBytes':
+      rows = await client.$queryRaw<Array<{ v: string | null }>>`
+        SELECT (content::jsonb)->>'heldBytes' AS v FROM agent_artifacts
+        WHERE name = 'result.json' AND content LIKE '{%'
+          AND "executionId" = ${executionId}
+        ORDER BY "createdAt" DESC LIMIT 1`;
+      break;
+    // held-network step 3 batch 2b (P5): the network Harvester's Git-file vs device comparison, TRANSCRIBED (never recomputed) at
+    // the Author's persist so the chainer carries it to the leg Reviewer — read from the execution the chainer hands on.
+    case 'gitDeviceComparison':
+      rows = await client.$queryRaw<Array<{ v: string | null }>>`
+        SELECT (content::jsonb)->>'gitDeviceComparison' AS v FROM agent_artifacts
         WHERE name = 'result.json' AND content LIKE '{%'
           AND "executionId" = ${executionId}
         ORDER BY "createdAt" DESC LIMIT 1`;

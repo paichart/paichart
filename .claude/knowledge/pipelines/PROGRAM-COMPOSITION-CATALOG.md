@@ -164,6 +164,57 @@ never be applied. Proven in the variant's window: 5 runs, value leg 5/5, program
 write-ups); the promotion's regression controls run after deploy 2. **Limit:** until the generated requirements template
 gains a slot for the "changes nothing" phrase, the shape comes only from a hand-shaped spec.
 
+## §Fan-in and diamond — a leg with two or more upstream legs (added 2026-10-23; 🟡 NEVER RUN)
+
+Not a new shape: a DAG property inside **S2** (or the sequenced slice of **S3**). Every program run so far fans **out**, so each
+consumer has had exactly ONE upstream leg; **0 of 713 PIPELINE tasks have ever had two** (measured 2026-10-22). Nothing in the
+platform prevents it — this entry exists so it is chosen on purpose, not stumbled into.
+
+```
+ Chain              Fan-out (every program so far)     Fan-in                 Diamond
+ A ─► B ─► C        A ─┬─► B                           A ─┐                     ┌─► B ─┐
+                       ├─► C                              ├─► C              A ─┤      ├─► D
+ C sees A via B        └─► D                           B ─┘                     └─► C ─┘
+                    each consumer has ONE upstream     C has TWO upstreams     D reaches A twice
+```
+
+**How it is built.** Exactly like a sequenced edge (playbook §2c): the downstream leg's `dependencyIds` holds its team gate
+**plus every upstream sibling pipeline id** — two ids is a fan-in. The leg runs only when ALL of them are COMPLETED and
+settled (F18), and the context-chainer chains EACH upstream leg's `report.md` + stamped facts into the leg's §6
+(`chainDependencyContext`, in upstream creation order). A diamond adds no new mechanism: D depends on B and C, which both
+depend on A, so A's facts reach D twice (once through each); the containment enrichment merges the two copies, keeping the
+worse one.
+
+**Where fan-in is natural** (examples — none built yet):
+
+| Use-case | Upstream legs | Why it cannot be a contract (S1) |
+|---|---|---|
+| A terraform security-group leg that allows traffic from two sites | two network legs (site A, site B) | each site's addresses are DERIVED from that site's live state |
+| A device leg that needs a loopback pool AND an ASN | two value legs (pool, ASN) | both are derived at run time, by different derivations |
+| An observability leg that scrapes pods and ships to a collector | a k8s leg (pod range) + a network leg (collector address) | both values come from live state in two domains |
+| A cutover leg after two migrations (a diamond) | two migration legs that share one upstream design leg | the cutover must see BOTH applied results |
+
+**Rule of thumb.** If the values are knowable up front, prefer an **interface contract** (S1, parallel) — it is cheaper and
+shallower. Use fan-in only when a leg genuinely needs RUNTIME outputs from two legs. Every edge must name what crosses it and
+which leg OWNS that value (one owner per value).
+
+**What fan-in changes — read before planning one:**
+- **Every upstream is judged.** Containment `green` requires EVERY upstream leg to vouch (Bug Class 85, deployed 2026-10-22):
+  one clean leg no longer carries an unchecked, undecided, unreadable or missing sibling. A fan-in consumer is therefore only
+  as releasable as its least-decided upstream — plan for Node C to be asked about each.
+- ⚠️ **"Which upstream did this value come from?" is NOT checked.** Check 1 compares each consumed value against the UNION of
+  every upstream's derived values, so a consumer that applied leg B's range where it needed leg A's still passes. On a chain
+  this cannot happen; on a fan-in it can. Open: `cline_docs/follow-ups/fan-in-program-graphs-2026-10-23.md` (provenance is
+  its own fact if ever earned — never folded into containment).
+- **Depth.** A diamond adds one level on each path; keep within the topology cap (playbook §2c, CC4).
+- **Edges connect sibling legs in the ONE program stage** (D3) — a cross-stage edge silently never fires.
+- **The plan gate is where you see it.** If the plan shows a leg with two upstream legs, ask: do we mean it, and does each
+  edge name its value and owner?
+
+**Proven?** 🟡 Never run. The first fan-in or diamond program is also the live control for Bug Class 85
+(`containment-green-path-gaps-2026-10-12.md` §7.2). Run one small, deliberate fan-in program (the follow-up above) before a
+customer-shaped one.
+
 ## §Candidate program use-cases (triage stubs — flesh out before Phase 2)
 
 | Use-case | Likely shape | The boundary that forces a program | The seam Node C checks | Notes |

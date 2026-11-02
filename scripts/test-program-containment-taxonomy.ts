@@ -256,7 +256,7 @@ test('COUPLING: the enrichment emits the upstreamContainment fact the taxonomy r
     'the taxonomy gates on derivationContainment.upstreamContainment but the enrichment never stamps it — the branch would be permanently unavailable (fail-closed => permanent false park, which is exactly what Run 15 did)');
   assert(/source === 'report\.md'/.test(enrichSource),
     'the upstream filter no longer requires the report.md deliverable — a pipeline-index.json fallback means the deliverable never arrived and must not qualify');
-  assert(/green: isUpstreamContainmentGreen\(legs\)/.test(enrichSource),
+  assert(/green: isUpstreamContainmentGreen\(legs, \{ lookupMisses, fallbackPredecessors: fallback, consumedKinds \}\)/.test(enrichSource),
     'the green flag is no longer computed by the shared predicate — an inline re-implementation can drift from the unit-tested one');
   assert(/lookupMisses/.test(enrichSource),
     'lookupMisses is gone: absent-vs-empty upstreamContainment must stay distinguishable. Run 15 stamped NOTHING here and the total inertness took a day to find');

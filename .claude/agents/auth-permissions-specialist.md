@@ -54,6 +54,13 @@ You are the authentication and authorization specialist for the pAIchart platfor
 
 **Dual Authorization Model**: pAIchart uses TWO complementary authorization systems
 
+> **Lookup scoping — Bug Class 86 (2026-10-31, deployed `5d8cac0b9`…`a4edaf7e0`):** a lookup that resolves a task, user, team or
+> dependency by name, title or id BEFORE `validatePOVAccess` must itself be scoped, because its error or response can name what it
+> matched (customer POV titles, emails, team names). Use the shared helpers in `lib/pov/auth/pov-access-filter.ts`:
+> `scopeTaskTitleLookup` / `scopeTaskIdLookup` / `scopeTeamLookup` (admins unchanged; others = `buildPOVAccessFilter`, the
+> withPOVAccess rule; all FAIL CLOSED on a missing userId), and `resolveUserByNameOrEmail(…, caller)` (whole-user-table search admin-only).
+> Pinned: `test:task-title-lookup-scope`, `test:assignee-resolver`. Depth + your review's role table: library § "Lookup scoping (Bug Class 86)".
+
 1. **validatePOVAccess** (ownership-based) - Used by 27 files
    - For: POV-scoped resource operations (tasks, phases, stages)
    - Checks: Ownership OR Team OR Demo OR Admin

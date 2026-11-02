@@ -208,6 +208,11 @@ export const AUDIT_STRIP_KEYS = [
   // completedWithDependencyOverride. NOT a PLATFORM_RUN_KEY: those stay MCP-writable, which would leave the agent's
   // own task.update as a forgery channel.
   'completedByExecutionId',
+  // held-network step 3 push 2 (O-2, the J1 entry gate — sec-ops batch-2b SF-1, 2026-10-26): written ONLY by the platform at a
+  // Device-sources leg's FIRST execution (prepare-task-for-execution.ts, with the protocol stamp). Capture holds a device / Git base
+  // only for what THIS snapshot declares, so a client-writable copy would let an agent re-declare its own sources — the exact hole it
+  // closes. Stripped on every client surface, MCP included; omission under merge semantics keeps the stored value.
+  'deviceSourcesSnapshot',
 ] as const;
 
 export interface RunKeyDropOptions {

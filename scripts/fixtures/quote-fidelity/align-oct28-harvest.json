@@ -1,0 +1,336 @@
+{
+ "executionId": "cmvrt4qfh014yyxvthybisp8k",
+ "taskId": "cmvrt44ai013ryxvtdm1n64py",
+ "legTaskId": "cmvrsr3e600xfyxvts7wzzxae",
+ "stageId": "cmvrt3x07013jyxvteh57iq8s",
+ "agentRole": "infra_state_harvester",
+ "protocol": "observability-config-protocol",
+ "startTime": "2026-10-28T07:43:05.120",
+ "finalResponse": "## State Summary\n\n**Scope:** Read-only harvest of the OTLP ingress sender-restriction surface for the `observability-config` leg, per the task description and the program interface contract (`observability` static constants: ports TCP 4317 gRPC / TCP 4318 HTTP, change-kind = sender-restriction on these two listeners only, held config files reviewed via platform diff).\n\n**Self-provisioning:** Descriptor fetched from the GitHub URL named in the task via `browser-automation-service` \u2192 `scrape_page`. Registered `observability-readonly` (serviceId `cmvrt5344016lyxvtx36lt2ti`, endpoint `http://127.0.0.1:3114/mcp`, category `monitoring`) with its 10 read-only tools. `stack_health` confirms `prometheus: up`, `grafana: up`, `otel_collector: up` \u2014 live stack, no connectivity failure. No write/reload/admin tool exists on this surface (descriptor states the Prometheus lifecycle endpoint is never proxied). Teardown (`registry.delete`) is deliberately **not** performed here \u2014 it runs at pipeline SYNTHESIZE per protocol.\n\n**Target existence:** The declared ingress target **exists** and its declared ports **carry configuration** \u2014 neither `observability-config.target-absent` nor `observability-config.target-empty` applies. Branch condition in force: **`observability-config.existing-grant`** \u2192 *\"replace \u2014 the exporter range is the only permitted sender on these two ports; other listeners are untouched.\"*\n\n### 1. OTLP ingress (nginx, as-deployed) \u2014 `get_ingress_config`\n\nTwo files returned, both quoted byte-for-byte (verbatim, no elisions) per the witnessed-artifact taxonomy (\"Proxy / listener config in front of the collector\" row \u2014 the FILE is the witnessed artifact):\n\n**`otlp-ingress.conf`** \u2014 governs TCP 4317 and TCP 4318, the declared targets:\n\n```\n# OTLP ingress: fronts the collector's OTLP receivers, gRPC (4317) and HTTP (4318).\n# The collector listens only on a private network shared with this proxy, so these two server\n# blocks are the only way in. nginx evaluates allow/deny in order; the first match wins.\n# Reload after a change: docker exec obs-ingress nginx -s reload\n\n# OTLP/gRPC\nserver {\n    listen 4317;\n    http2 on;\n\n    location / {\n        allow all;\n\n        grpc_pass grpc://172.31.114.10:4317;\n    }\n}\n\n# OTLP/http\nserver {\n    listen 4318;\n    client_max_body_size 16m;          # OTLP batches; nginx's 1m default would 413 real exporters\n\n    location / {\n        allow all;\n\n        proxy_pass http://172.31.114.10:4318;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Forwarded-For $remote_addr;\n    }\n}\n```\n\n**Existing allowance fact (for the Architect):** both listeners currently carry `allow all;` with no `deny` \u2014 i.e. **open to any sender, no restriction configured today**. This is the `existing-grant` condition: the Architect's design must **replace** `allow all;` with `allow <exporter-range-CIDR>; deny all;` on each `location /` block \u2014 the exporter range becomes the *only* permitted sender on 4317 and 4318. Note the file's own comment: nginx evaluates `allow`/`deny` in order, first match wins, and the apply step is `docker exec obs-ingress nginx -s reload` (operator-gated, out of scope for this harvest and for this pipeline's apply boundary).\n\n**`operator-access.conf`** \u2014 a **separate, untouched listener** on the same component (confirms scope boundary per task instruction \"confirm other listeners are untouched\"):\n\n```\n# Operator access: a separate listener (14318) for operator-submitted test telemetry.\n# Not part of the OTLP sender policy in otlp-ingress.conf. Reachable only from the host.\n\nserver {\n    listen 14318;\n    client_max_body_size 16m;\n\n    location / {\n        allow 172.20.0.1;\n        deny all;\n\n        proxy_pass http://172.31.114.10:4318;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n    }\n}\n```\n\nThis listener is on port 14318 (distinct from the declared 4317/4318), already has its own restrictive `allow 172.20.0.1; deny all;`, and its own comment states it is explicitly **not part of the OTLP sender policy**. It is in scope only to confirm it is unaffected \u2014 the design must not touch it.\n\n### 2. otel-collector config (as-deployed) \u2014 `get_otel_config`\n\nQuoted byte-for-byte (same taxonomy row \u2014 the file IS the artifact; the collector has no config API):\n\n```\n# OpenTelemetry Collector configuration (as deployed).\nextensions:\n  health_check:\n    endpoint: 0.0.0.0:13133\n\nreceivers:\n  otlp:\n    protocols:\n      # Bound to the PRIVATE otlp network only \u2014 reachable solely through obs-ingress (docker-compose.yml).\n      grpc: { endpoint: 172.31.114.10:4317 }\n      http: { endpoint: 172.31.114.10:4318 }\n\nprocessors:\n  batch: {}\n  memory_limiter:\n    check_interval: 1s\n    limit_mib: 204\n    spike_limit_mib: 51\n\nexporters:\n  prometheus:\n    endpoint: 0.0.0.0:8889\n\nservice:\n  extensions: [health_check]\n  telemetry:\n    metrics:\n      readers:\n        - pull:\n            exporter:\n              prometheus: { host: 0.0.0.0, port: 8888 }\n  pipelines:\n    metrics:\n      receivers: [otlp]\n      processors: [memory_limiter, batch]\n      exporters: [prometheus]\n```\n\n**Key confirmation:** the collector's own `otlp` receiver is bound only to the private network IP `172.31.114.10` (ports 4317/4318), not to `0.0.0.0` \u2014 it has **no source-address control of its own** and is reachable only via `obs-ingress`. This corroborates the descriptor's statement that `get_ingress_config`'s nginx layer is \"the enforcement point for which sender addresses may export telemetry\" \u2014 the collector config is NOT a candidate location for the sender-restriction edit; `otlp-ingress.conf` is. (`memory_limiter.limit_mib: 204` / `spike_limit_mib: 51` are reported here only as baseline facts present in the harvested file \u2014 not consumed or interpreted further; this leg does not size collector resource limits.)\n\n### Gaps / anomalies\n\nNone. No `observability-config.target-absent` or `observability-config.target-empty` condition found. No read was denied (`isError`) \u2014 all four calls (`stack_health`, `get_ingress_config`, `get_otel_config`, plus the initial descriptor fetch) succeeded cleanly against a live, fully-up stack. No secret values were present in any of the three quoted files (no credentials in nginx/otel-collector config); `get_grafana_datasources` was not called as it is out of scope for this ingress-focused harvest.\n\n### Facts for downstream (Phase 1 Architect / Phase 2 Author)\n\n| Fact | Value | Source |\n|---|---|---|\n| Declared target exists | Yes \u2014 `otlp-ingress.conf` governs both 4317 (gRPC) and 4318 (HTTP) | `get_ingress_config` |\n| Existing sender restriction on 4317/4318 | **None** \u2014 `allow all;` on both | `get_ingress_config`, quoted above |\n| Branch condition | `observability-config.existing-grant` \u2192 **replace** rule applies | interface contract |\n| Other listeners on same nginx component | `operator-access.conf` :14318 \u2014 separate, already restricted, explicitly out of policy scope \u2014 **leave untouched** | `get_ingress_config`, quoted above |\n| Enforcement point | nginx ingress (`otlp-ingress.conf`), not the collector \u2014 collector has no source-address control | `get_otel_config` + descriptor |\n| Apply mechanism named in the file | `docker exec obs-ingress nginx -s reload` (operator-gated, out-of-band) | `otlp-ingress.conf` comment |\n| Stack liveness | prometheus/grafana/otel_collector all `up` | `stack_health` |\n\nConfidence: 92 \u2014 All four harvest reads succeeded cleanly against a live stack, target/port existence and the exact current \"allow all\" state are directly witnessed and quoted verbatim with no truncation. Minor deduction only because the exporter-range CIDR itself (consumed from the network-derivation leg) is not yet available at this harvest stage \u2014 that is expected and out of this task's scope, not a gap in the harvest.",
+ "toolCalls": [
+  {
+   "tool": "services",
+   "turn": 1,
+   "result": {
+    "_meta": {
+     "toolName": "services",
+     "serverName": "paichart-embedded-mcp",
+     "executionTime": 1793173390359
+    },
+    "content": [
+     {
+      "data": {
+       "tool": "scrape_page",
+       "_meta": {
+        "tool": "services",
+        "sdkNative": true,
+        "timestamp": "2026-10-28T07:43:10.351Z"
+       },
+       "result": {
+        "content": [
+         {
+          "text": "{\"success\":true,\"data\":[{\"descriptor\":\"{\\n  \\\"name\\\": \\\"observability-readonly\\\",\\n  \\\"description\\\": \\\"Read-only harvest of a live Prometheus + Grafana + otel-collector stack: running Prometheus config/targets/rules (witnessed renderings), instant PromQL reads, Grafana datasource/dashboard inventory (credentials deep-redacted), and the collector's as-deployed config file. Read-only by construction \u2014 no reload/apply/write/admin tool exists on this surface; Prometheus's lifecycle endpoint is never proxied. Phase-4 promstack validation rig.\\\",\\n  \\\"endpoint\\\": \\\"http://127.0.0.1:3114/mcp\\\",\\n  \\\"category\\\": \\\"monitoring\\\",\\n  \\\"capabilities\\\": {\\n    \\\"tools\\\": [\\n      { \\\"name\\\": \\\"stack_health\\\", \\\"description\\\": \\\"Liveness of Prometheus/Grafana/otel-collector (read-only).\\\",\\n        \\\"inputSchema\\\": { \\\"type\\\": \\\"object\\\", \\\"additionalProperties\\\": false, \\\"properties\\\": {} } },\\n      { \\\"name\\\": \\\"get_prometheus_config\\\", \\\"description\\\": \\\"The RUNNING Prometheus configuration as the server reports it (/api/v1/status/config) plus its witnessed config-file path (/api/v1/status/flags --config.file).\\\",\\n        \\\"inputSchema\\\": { \\\"type\\\": \\\"object\\\", \\\"additionalProperties\\\": false, \\\"properties\\\": {} } },\\n      { \\\"name\\\": \\\"get_scrape_targets\\\", \\\"description\\\": \\\"Active scrape targets: job, instance, health, lastError (lean fields).\\\",\\n        \\\"inputSchema\\\": { \\\"type\\\": \\\"object\\\", \\\"additionalProperties\\\": false, \\\"properties\\\": {} } },\\n      { \\\"name\\\": \\\"get_rules\\\", \\\"description\\\": \\\"Loaded recording/alerting rule groups.\\\",\\n        \\\"inputSchema\\\": { \\\"type\\\": \\\"object\\\", \\\"additionalProperties\\\": false, \\\"properties\\\": {} } },\\n      { \\\"name\\\": \\\"query_metric\\\", \\\"description\\\": \\\"Instant PromQL query (read-only, <=512 chars, result capped at 50 series).\\\",\\n        \\\"inputSchema\\\": { \\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"query\\\"], \\\"additionalProperties\\\": false,\\n          \\\"properties\\\": { \\\"query\\\": { \\\"type\\\": \\\"string\\\", \\\"maxLength\\\": 512 } } } },\\n      { \\\"name\\\": \\\"get_grafana_datasources\\\", \\\"description\\\": \\\"Provisioned Grafana datasources, credentials deep-redacted by key.\\\",\\n        \\\"inputSchema\\\": { \\\"type\\\": \\\"object\\\", \\\"additionalProperties\\\": false, \\\"properties\\\": {} } },\\n      { \\\"name\\\": \\\"list_grafana_dashboards\\\", \\\"description\\\": \\\"Dashboard inventory (uid, title, folder).\\\",\\n        \\\"inputSchema\\\": { \\\"type\\\": \\\"object\\\", \\\"additionalProperties\\\": false, \\\"properties\\\": {} } },\\n      { \\\"name\\\": \\\"get_grafana_dashboard\\\", \\\"description\\\": \\\"One dashboard's full JSON model by uid (as-provisioned artifact).\\\",\\n        \\\"inputSchema\\\": { \\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"uid\\\"], \\\"additionalProperties\\\": false,\\n          \\\"properties\\\": { \\\"uid\\\": { \\\"type\\\": \\\"string\\\", \\\"pattern\\\": \\\"^[A-Za-z0-9_-]{1,64}$\\\" } } } },\\n      { \\\"name\\\": \\\"get_otel_config\\\", \\\"description\\\": \\\"The otel-collector config AS DEPLOYED (read-only file mount; the collector has no config API).\\\",\\n        \\\"inputSchema\\\": { \\\"type\\\": \\\"object\\\", \\\"additionalProperties\\\": false, \\\"properties\\\": {} } },\\n      { \\\"name\\\": \\\"get_ingress_config\\\", \\\"description\\\": \\\"The OTLP ingress configuration AS DEPLOYED: every nginx config file in front of the collector's OTLP gRPC and HTTP receivers (read-only file mount). The enforcement point for which sender addresses may export telemetry; the collector itself has no source-address control.\\\",\\n        \\\"inputSchema\\\": { \\\"type\\\": \\\"object\\\", \\\"additionalProperties\\\": false, \\\"properties\\\": {} } }\\n    ]\\n  }\\n}\\n\"}],\"pageCount\":1,\"timing\":{\"startTime\":\"2026-10-28T07:43:09.604Z\",\"endTime\":\"2026-10-28T07:43:10.344Z\",\"durationMs\":740}}",
+          "type": "text"
+         }
+        ]
+       },
+       "success": true,
+       "metadata": {
+        "endpoint": "http://localhost:3100/sse",
+        "timestamp": "2026-10-28T07:43:10.351Z",
+        "sourceUser": "user@example.invalid",
+        "executionTime": 750,
+        "timeoutClamped": false,
+        "targetServiceId": "browser-automation-service",
+        "effectiveTimeout": 300000,
+        "maxExecutionTime": 300000,
+        "requestedTimeout": null
+       },
+       "arguments": {
+        "url": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/observability-readonly-descriptor.json",
+        "selectors": {
+         "descriptor": "pre"
+        }
+       },
+       "nextSteps": [
+        "\u2705 Service call completed",
+        "\ud83d\udcdd Report results: perform(action: \"task.comment\", taskId: '...', comment: '| Tool | Status | Key Data | Notes |\\n|------|--------|----------|-------|')",
+        "Make another call (same service): services(action: \"call\", targetService: 'Browser Automation Service', tool: '...', arguments: {...})",
+        "New service workflow: registry(action: \"tools\", service_name: '...') \u2192 services(action: \"health\", service_name: '...') \u2192 services(action: \"call\")"
+       ],
+       "targetService": "Browser Automation Service"
+      },
+      "type": "data",
+      "annotations": {
+       "dataType": "object",
+       "itemCount": 8
+      }
+     }
+    ],
+    "isError": false
+   },
+   "server": "paichart-embedded-mcp",
+   "success": true,
+   "arguments": {
+    "tool": "scrape_page",
+    "action": "call",
+    "arguments": "{\"url\":\"https://raw.githubusercontent.com/paichart/paichart/main/descriptors/observability-readonly-descriptor.json\",\"selectors\":{\"descriptor\":\"pre\"}}",
+    "targetService": "Browser Automation Service"
+   },
+   "rewritten": false,
+   "sanitized": false,
+   "timestamp": "2026-10-28T07:43:10.359Z",
+   "durationMs": 769,
+   "resultChars": 6166,
+   "rewriteClasses": [],
+   "neutralizedCount": 0,
+   "strippedControlChars": 0,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "turn": 3,
+   "result": {
+    "_meta": {
+     "toolName": "services",
+     "serverName": "paichart-embedded-mcp",
+     "executionTime": 1793173401862
+    },
+    "content": [
+     {
+      "data": {
+       "tool": "stack_health",
+       "_meta": {
+        "tool": "services",
+        "sdkNative": true,
+        "timestamp": "2026-10-28T07:43:21.856Z"
+       },
+       "result": {
+        "content": [
+         {
+          "text": "(full payload in structuredContent; serialized text twin suppressed)",
+          "type": "text"
+         }
+        ],
+        "isError": false,
+        "structuredContent": {
+         "stack": {
+          "grafana": "up",
+          "prometheus": "up",
+          "otel_collector": "up"
+         }
+        }
+       },
+       "success": true,
+       "metadata": {
+        "endpoint": "http://127.0.0.1:3114/mcp",
+        "timestamp": "2026-10-28T07:43:21.856Z",
+        "sourceUser": "user@example.invalid",
+        "executionTime": 1254,
+        "timeoutClamped": false,
+        "targetServiceId": "cmvrt5344016lyxvtx36lt2ti",
+        "effectiveTimeout": 30000,
+        "maxExecutionTime": 30000,
+        "requestedTimeout": null
+       },
+       "arguments": {},
+       "nextSteps": [
+        "\u2705 Service call completed",
+        "\ud83d\udcdd Report results: perform(action: \"task.comment\", taskId: '...', comment: '| Tool | Status | Key Data | Notes |\\n|------|--------|----------|-------|')",
+        "Make another call (same service): services(action: \"call\", targetService: 'observability-readonly', tool: '...', arguments: {...})",
+        "New service workflow: registry(action: \"tools\", service_name: '...') \u2192 services(action: \"health\", service_name: '...') \u2192 services(action: \"call\")"
+       ],
+       "targetService": "observability-readonly"
+      },
+      "type": "data",
+      "annotations": {
+       "dataType": "object",
+       "itemCount": 8
+      }
+     }
+    ],
+    "isError": false
+   },
+   "server": "paichart-embedded-mcp",
+   "success": true,
+   "arguments": {
+    "tool": "stack_health",
+    "action": "call",
+    "arguments": "{}",
+    "targetService": "observability-readonly"
+   },
+   "rewritten": false,
+   "sanitized": false,
+   "timestamp": "2026-10-28T07:43:21.862Z",
+   "durationMs": 1267,
+   "resultChars": 1983,
+   "rewriteClasses": [],
+   "neutralizedCount": 0,
+   "strippedControlChars": 0,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "turn": 3,
+   "result": {
+    "_meta": {
+     "toolName": "services",
+     "serverName": "paichart-embedded-mcp",
+     "executionTime": 1793173402070
+    },
+    "content": [
+     {
+      "data": {
+       "tool": "get_ingress_config",
+       "_meta": {
+        "tool": "services",
+        "sdkNative": true,
+        "timestamp": "2026-10-28T07:43:22.064Z"
+       },
+       "result": {
+        "content": [
+         {
+          "text": "(full payload in structuredContent; serialized text twin suppressed)",
+          "type": "text"
+         }
+        ],
+        "isError": false,
+        "structuredContent": {
+         "files": {
+          "otlp-ingress.conf": "# OTLP ingress: fronts the collector's OTLP receivers, gRPC (4317) and HTTP (4318).\n# The collector listens only on a private network shared with this proxy, so these two server\n# blocks are the only way in. nginx evaluates allow/deny in order; the first match wins.\n# Reload after a change: docker exec obs-ingress nginx -s reload\n\n# OTLP/gRPC\nserver {\n    listen 4317;\n    http2 on;\n\n    location / {\n        allow all;\n\n        grpc_pass grpc://172.31.114.10:4317;\n    }\n}\n\n# OTLP/http\nserver {\n    listen 4318;\n    client_max_body_size 16m;          # OTLP batches; nginx's 1m default would 413 real exporters\n\n    location / {\n        allow all;\n\n        proxy_pass http://172.31.114.10:4318;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Forwarded-For $remote_addr;\n    }\n}\n",
+          "operator-access.conf": "# Operator access: a separate listener (14318) for operator-submitted test telemetry.\n# Not part of the OTLP sender policy in otlp-ingress.conf. Reachable only from the host.\n\nserver {\n    listen 14318;\n    client_max_body_size 16m;\n\n    location / {\n        allow 172.20.0.1;\n        deny all;\n\n        proxy_pass http://172.31.114.10:4318;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n    }\n}\n"
+         },
+         "fronts": "otel-collector OTLP gRPC :4317 and OTLP/http :4318",
+         "source": "as-deployed files (ro mount)"
+        }
+       },
+       "success": true,
+       "metadata": {
+        "endpoint": "http://127.0.0.1:3114/mcp",
+        "timestamp": "2026-10-28T07:43:22.064Z",
+        "sourceUser": "user@example.invalid",
+        "executionTime": 196,
+        "timeoutClamped": false,
+        "targetServiceId": "cmvrt5344016lyxvtx36lt2ti",
+        "effectiveTimeout": 30000,
+        "maxExecutionTime": 30000,
+        "requestedTimeout": null
+       },
+       "arguments": {},
+       "nextSteps": [
+        "\u2705 Service call completed",
+        "\ud83d\udcdd Report results: perform(action: \"task.comment\", taskId: '...', comment: '| Tool | Status | Key Data | Notes |\\n|------|--------|----------|-------|')",
+        "Make another call (same service): services(action: \"call\", targetService: 'observability-readonly', tool: '...', arguments: {...})",
+        "New service workflow: registry(action: \"tools\", service_name: '...') \u2192 services(action: \"health\", service_name: '...') \u2192 services(action: \"call\")"
+       ],
+       "targetService": "observability-readonly"
+      },
+      "type": "data",
+      "annotations": {
+       "dataType": "object",
+       "itemCount": 8
+      }
+     }
+    ],
+    "isError": false
+   },
+   "server": "paichart-embedded-mcp",
+   "success": true,
+   "arguments": {
+    "tool": "get_ingress_config",
+    "action": "call",
+    "arguments": "{}",
+    "targetService": "observability-readonly"
+   },
+   "rewritten": false,
+   "sanitized": false,
+   "timestamp": "2026-10-28T07:43:22.070Z",
+   "durationMs": 208,
+   "resultChars": 3392,
+   "rewriteClasses": [],
+   "neutralizedCount": 0,
+   "strippedControlChars": 0,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "turn": 4,
+   "result": {
+    "_meta": {
+     "toolName": "services",
+     "serverName": "paichart-embedded-mcp",
+     "executionTime": 1793173407818
+    },
+    "content": [
+     {
+      "data": {
+       "tool": "get_otel_config",
+       "_meta": {
+        "tool": "services",
+        "sdkNative": true,
+        "timestamp": "2026-10-28T07:43:27.810Z"
+       },
+       "result": {
+        "content": [
+         {
+          "text": "(full payload in structuredContent; serialized text twin suppressed)",
+          "type": "text"
+         }
+        ],
+        "isError": false,
+        "structuredContent": {
+         "yaml": "# OpenTelemetry Collector configuration (as deployed).\nextensions:\n  health_check:\n    endpoint: 0.0.0.0:13133\n\nreceivers:\n  otlp:\n    protocols:\n      # Bound to the PRIVATE otlp network only \u2014 reachable solely through obs-ingress (docker-compose.yml).\n      grpc: { endpoint: 172.31.114.10:4317 }\n      http: { endpoint: 172.31.114.10:4318 }\n\nprocessors:\n  batch: {}\n  memory_limiter:\n    check_interval: 1s\n    limit_mib: 204\n    spike_limit_mib: 51\n\nexporters:\n  prometheus:\n    endpoint: 0.0.0.0:8889\n\nservice:\n  extensions: [health_check]\n  telemetry:\n    metrics:\n      readers:\n        - pull:\n            exporter:\n              prometheus: { host: 0.0.0.0, port: 8888 }\n  pipelines:\n    metrics:\n      receivers: [otlp]\n      processors: [memory_limiter, batch]\n      exporters: [prometheus]\n",
+         "source": "as-deployed file (ro mount)"
+        }
+       },
+       "success": true,
+       "metadata": {
+        "endpoint": "http://127.0.0.1:3114/mcp",
+        "timestamp": "2026-10-28T07:43:27.810Z",
+        "sourceUser": "user@example.invalid",
+        "executionTime": 347,
+        "timeoutClamped": false,
+        "targetServiceId": "cmvrt5344016lyxvtx36lt2ti",
+        "effectiveTimeout": 30000,
+        "maxExecutionTime": 30000,
+        "requestedTimeout": null
+       },
+       "arguments": {},
+       "nextSteps": [
+        "\u2705 Service call completed",
+        "\ud83d\udcdd Report results: perform(action: \"task.comment\", taskId: '...', comment: '| Tool | Status | Key Data | Notes |\\n|------|--------|----------|-------|')",
+        "Make another call (same service): services(action: \"call\", targetService: 'observability-readonly', tool: '...', arguments: {...})",
+        "New service workflow: registry(action: \"tools\", service_name: '...') \u2192 services(action: \"health\", service_name: '...') \u2192 services(action: \"call\")"
+       ],
+       "targetService": "observability-readonly"
+      },
+      "type": "data",
+      "annotations": {
+       "dataType": "object",
+       "itemCount": 8
+      }
+     }
+    ],
+    "isError": false
+   },
+   "server": "paichart-embedded-mcp",
+   "success": true,
+   "arguments": {
+    "tool": "get_otel_config",
+    "action": "call",
+    "arguments": "{}",
+    "targetService": "observability-readonly"
+   },
+   "rewritten": false,
+   "sanitized": false,
+   "timestamp": "2026-10-28T07:43:27.818Z",
+   "durationMs": 367,
+   "resultChars": 2760,
+   "rewriteClasses": [],
+   "neutralizedCount": 0,
+   "strippedControlChars": 0,
+   "resultTruncatedForLlm": false
+  }
+ ],
+ "toolCallsNote": "services calls only (the witnessed results); platform calls dropped and e-mail addresses scrubbed for the public export"
+}

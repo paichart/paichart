@@ -94,6 +94,144 @@ export interface ChainedFromEntry {
   source?: unknown;
 }
 
+/**
+ * The leg's `report.md` predecessors' stamped containment, transcribed ONCE (pure — no DB: the chainer already
+ * carried each predecessor's fact). Hoisted out of the `checked:false` block on 2026-10-31 (D3) because the
+ * Derived-Values reroute needs the SAME upstream union check 1 compares against, before the leg's own derivation is
+ * decided. Computed exactly as the inline block computed it; still only STAMPED inside `checked:false`.
+ */
+interface UpstreamTranscription {
+  upstream: ChainedFromEntry[];
+  fallback: number;
+  legs: UpstreamContainmentLeg[];
+  lookupMisses: number;
+  /** Union of every upstream `derivedValues` (direct entries, then transcribed legs incl. `via`), deduped by kind+value. */
+  upstreamDerived: Array<{ kind: string; value: string }>;
+}
+
+function transcribeUpstream(chainedFrom: unknown): UpstreamTranscription {
+  const entries: ChainedFromEntry[] = Array.isArray(chainedFrom) ? (chainedFrom as ChainedFromEntry[]) : [];
+  // `source: 'report.md'` marks a PIPELINE predecessor's REAL deliverable (context-chainer CC2);
+  // a pipeline-index.json fallback means the deliverable never arrived, so it does not qualify.
+  const upstream = entries.filter(c => c?.source === 'report.md' && typeof c?.taskId === 'string');
+  // R5 (2026-10-05) / Bug Class 85 G1 (2026-10-22): pipeline-index.json fallbacks, counted whether or not a
+  // report.md predecessor exists (stamped by the caller only when non-zero).
+  const fallback = entries.filter(c => c?.source === 'pipeline-index.json' && typeof c?.taskId === 'string').length;
+  const legs: UpstreamContainmentLeg[] = [];
+  let lookupMisses = 0;
+  for (const entry of upstream) {
+    // The predecessor's stamp is carried BY THE CHAINER, which already resolved the correct
+    // facts artifact for the predecessor's type (context-chainer:216 branches PIPELINE ->
+    // pipeline-index.json). Re-resolving it here is what shipped defect 3; the field below is
+    // the single source. A missing value is counted, never silently dropped — absence of the
+    // field must not conflate "no upstream" with "upstream found but unreadable".
+    const dc = (entry as { derivationContainment?: unknown }).derivationContainment as
+      { checked?: unknown; violations?: unknown; derivedValues?: unknown; unsupported?: unknown;
+        containmentDisposition?: { disposition?: unknown; reason?: unknown } | null;
+        upstreamContainment?: { legs?: unknown } | null } | null | undefined;
+    if (dc && typeof dc === 'object') {
+      const derived = Array.isArray(dc.derivedValues)
+        ? (dc.derivedValues as Array<{ kind?: unknown; value?: unknown }>)
+          .filter(v => typeof v?.value === 'string')
+          .map(v => ({ kind: typeof v.kind === 'string' ? v.kind : 'cidr', value: v.value as string }))
+        : undefined;
+      const disp = dc.containmentDisposition && typeof dc.containmentDisposition === 'object'
+        ? dc.containmentDisposition : null;
+      // Bug Class 85 G4 (2026-10-22): the kinds this upstream could not machine-check, transcribed ONLY on
+      // the shape the per-kind rule reads (checked + needs-node-c), so every other leg is byte-identical.
+      const unsupportedKinds = dc.checked === true && disp?.disposition === 'needs-node-c' && Array.isArray(dc.unsupported)
+        ? Array.from(new Set((dc.unsupported as Array<{ kind?: unknown } | null>)
+          .map(u => (u && typeof u.kind === 'string' ? u.kind : null)).filter((k): k is string => !!k)))
+        : [];
+      legs.push({
+        taskId: entry.taskId as string,
+        checked: dc.checked === true,
+        violations: Array.isArray(dc.violations) ? dc.violations.length : 0,
+        ...(derived && derived.length > 0 ? { derivedValues: derived } : {}),
+        ...(disp && typeof disp.disposition === 'string'
+          ? { disposition: disp.disposition as 'benign' | 'blocking' | 'needs-node-c',
+              ...(typeof disp.reason === 'string' ? { dispositionReason: disp.reason } : {}) }
+          : {}),
+        ...(unsupportedKinds.length > 0 ? { unsupportedKinds } : {}),
+      });
+      // H-2 (2026-09-09): FLATTEN the predecessor's own transcribed legs into this leg's list,
+      // tagged `via`. The predecessor already resolved THEM once (the same single-resolution
+      // rule as the comment above — nothing is re-fetched here; CC3 carried the whole object).
+      // A predecessor WITHOUT `upstreamContainment` contributes itself only and inherits
+      // nothing — a pre-CC3 or unreadable stamp can never become green (invariant 2).
+      // Dedup by taskId (diamond shapes): keep the first record, but violations take the MAX so
+      // a dirty reading is never masked by a clean duplicate (fail-closed).
+      const nested = Array.isArray(dc.upstreamContainment?.legs) ? dc.upstreamContainment!.legs as unknown[] : [];
+      for (const n of nested) {
+        const nl = n as { taskId?: unknown; checked?: unknown; violations?: unknown; derivedValues?: unknown;
+          disposition?: unknown; dispositionReason?: unknown; unsupportedKinds?: unknown };
+        if (!nl || typeof nl.taskId !== 'string') continue;
+        // Review L5 (2026-10-13): a nested copy with no numeric `violations` was read as 0, i.e. as clean.
+        // Fail closed instead: it is unreadable, so it is COUNTED as a lookup miss and never transcribed —
+        // the delegation arm then refuses (M2). 0 stored facts carry such a copy (prod, 2026-10-13).
+        if (typeof nl.violations !== 'number') { lookupMisses++; continue; }
+        const rec: UpstreamContainmentLeg = {
+          taskId: nl.taskId,
+          checked: nl.checked === true,
+          violations: nl.violations,
+          via: entry.taskId as string,
+          ...(Array.isArray(nl.derivedValues) && nl.derivedValues.length > 0
+            ? { derivedValues: nl.derivedValues as Array<{ kind: string; value: string }> } : {}),
+          ...(typeof nl.disposition === 'string'
+            ? { disposition: nl.disposition as 'benign' | 'blocking' | 'needs-node-c',
+                ...(typeof nl.dispositionReason === 'string' ? { dispositionReason: nl.dispositionReason } : {}) }
+            : {}),
+          ...(Array.isArray(nl.unsupportedKinds) && nl.unsupportedKinds.length > 0
+            ? { unsupportedKinds: (nl.unsupportedKinds as unknown[]).filter((k): k is string => typeof k === 'string') } : {}),
+        };
+        const dup = legs.find(l => l.taskId === rec.taskId);
+        if (dup) {
+          dup.violations = Math.max(dup.violations, rec.violations);
+          // Bug Class 85 G3 (2026-10-22, owner decision): `checked` now follows the WORSE copy too. Before,
+          // it was deliberately untouched, so a benign-UNCHECKED twin of a checked copy was masked and
+          // green stayed true (review F11). Unchecked in either copy ⇒ unchecked; unsupported kinds union.
+          // 0 diamonds have ever existed (0 fan-ins, follow-up §6), so every stored fact is byte-identical.
+          // Ranks are compared BEFORE `checked` is merged: merging first turns a clean copy into benign-unchecked
+          // (rank 2), so an undecided twin (rank 1) would no longer read as worse and its disposition would be lost.
+          const recIsWorse = dispositionRank(rec) > dispositionRank(dup);
+          dup.checked = dup.checked && rec.checked;
+          if (rec.unsupportedKinds) {
+            dup.unsupportedKinds = Array.from(new Set([...(dup.unsupportedKinds ?? []), ...rec.unsupportedKinds]));
+          }
+          // 2026-10-12 (PHASE4-CONTAINMENT-PROPAGATION, N-8): the disposition copy is now READ —
+          // by the consumer arm's delegation rule — so a diamond keeps the WORSE copy of it too,
+          // for the same reason violations take the max: a clean or delegated duplicate must
+          // never mask a blocking one.
+          if (recIsWorse) {
+            if (rec.disposition !== undefined) dup.disposition = rec.disposition; else delete dup.disposition;
+            if (rec.dispositionReason !== undefined) dup.dispositionReason = rec.dispositionReason;
+            else delete dup.dispositionReason;
+          }
+          continue;
+        }
+        legs.push(rec);
+      }
+    } else {
+      lookupMisses++;
+    }
+  }
+  const seen = new Set<string>();
+  const upstreamDerived: Array<{ kind: string; value: string }> = [];
+  const addDerived = (vals: unknown) => {
+    if (!Array.isArray(vals)) return;
+    for (const v of vals as Array<{ kind?: unknown; value?: unknown }>) {
+      if (typeof v?.value !== 'string') continue;
+      const kind = typeof v.kind === 'string' ? v.kind : 'cidr';
+      const key = `${kind}:${v.value}`;
+      if (seen.has(key)) continue;
+      seen.add(key); upstreamDerived.push({ kind, value: v.value });
+    }
+  };
+  for (const e of upstream) addDerived((e as { derivationContainment?: { derivedValues?: unknown } }).derivationContainment?.derivedValues);
+  for (const l of legs) addDerived(l.derivedValues);
+  return { upstream, fallback, legs, lookupMisses, upstreamDerived };
+}
+
 export interface ComputeContainmentInput {
   /** `task.metadata.pipelineStageId` — the leg's child stage. */
   stageId: unknown;
@@ -129,6 +267,9 @@ export async function computeDerivationContainmentFact(
   // Parsed inside the stage block (that is where the author's text is in hand) and consumed by the
   // checked:false branch below — a CONSUMING leg declares what it took from §6 and applied.
   let consumed: ConsumedValue[] | null = null;
+  const up = transcribeUpstream(chainedFrom);
+  // D3 (2026-10-31): entries of the leg's `## Derived Values` block that EQUAL an upstream derived value.
+  let carried: { source: string; entries: Array<{ kind: string; value: string }> } | null = null;
 
   if (typeof stageId === 'string' && stageId) {
     const children = await prisma.task.findMany({
@@ -184,8 +325,39 @@ export async function computeDerivationContainmentFact(
           if (alt) { derived = alt; derivedFromId = c.id; break; }
         }
       }
+      // D3 — K8S-ARCHITECT-CONSUMED-AS-DERIVED (owner decision 2026-10-31, platform-side only). A consuming leg
+      // that files the value it RECEIVED under `## Derived Values` (k8s Architect cmvra9tal…, obs Author cmu7komb…,
+      // tf Author cmuqryak…: all three carried the upstream value verbatim and labelled it consumed) read as a
+      // DERIVATION — checked against its own pool — and check 1 never ran. An entry whose (kind, value) equals an
+      // upstream `derivedValues` entry, by check 1's OWN equality (checkConsumedValues: CIDR by range, asn
+      // canonical), is routed to the CONSUMED path: removed from the derivation, added to the consumed list, and
+      // recorded as a FACT (`carriedInDerivedBlock`, nested in this fact — E3b). The green rule and check 1 then
+      // run exactly as for a declared `## Consumed Values` entry. A value NOT equal to any upstream value stays
+      // derived; with no upstream nothing is ever rerouted.
+      // Mixed block (some carried, some genuinely derived — measured absent): the derived entries are checked as
+      // before and the leg stays `checked:true`; the carried ones are recorded, and — as for any deriving leg that
+      // also declares Consumed Values — check 1 does not run on a checked leg (pre-existing behaviour).
+      if (derived && up.upstreamDerived.length > 0) {
+        const keep: DerivedValue[] = [];
+        const moved: Array<{ kind: string; value: string }> = [];
+        for (const d of derived) {
+          const kind = d?.kind ?? 'cidr';
+          const value = d?.value === undefined || d?.value === null ? '' : String(d.value);
+          if (value.length > 0 && checkConsumedValues([{ kind, value }], up.upstreamDerived).length === 0) moved.push({ kind, value });
+          else keep.push(d);
+        }
+        if (moved.length > 0) {
+          carried = { source: derivedFromId, entries: moved };
+          derived = keep.length > 0 ? keep : null;
+        }
+      }
       // Same text, no extra query: a consuming leg emits `## Consumed Values` instead of deriving.
       consumed = parseFencedJsonBlock<ConsumedValue>(authorText, CONSUMED_VALUES_MARKER);
+      if (carried) {
+        const declared = consumed ?? [];
+        const extra = carried.entries.filter(c => !declared.some(d => (d?.kind ?? 'cidr') === c.kind && d?.value === c.value));
+        consumed = [...declared, ...extra];
+      }
       // Ordering is load-bearing (finding (f), run 10 2026-07-18): derivation-EXISTENCE first.
       // A leg that declares NO derivations is benign regardless of its harvest block — a
       // terraform/k8s harvester legitimately emits no '## Harvested Allocations' (that marker
@@ -265,6 +437,9 @@ export async function computeDerivationContainmentFact(
     }
   }
 
+  // D3: stamped only when an entry was rerouted, so every other fact is byte-identical.
+  if (carried) fact.carriedInDerivedBlock = carried;
+
   // Consuming-leg containment attribution. A CONSUMING leg (e.g. terraform-iac) has no allocation
   // pool of its own to check a derivation against; containment for the value it consumes was
   // discharged UPSTREAM (machine-checked against the real pool) and is re-verified at the program
@@ -275,102 +450,19 @@ export async function computeDerivationContainmentFact(
   // consumer agrees: a clean deriving predecessor exists AND no predecessor carries a violation
   // (ALL, deliberately not at-least-one — a clean sibling must not mask a dirty one).
   if (fact.checked === false) {
-    const entries: ChainedFromEntry[] = Array.isArray(chainedFrom) ? (chainedFrom as ChainedFromEntry[]) : [];
-    // `source: 'report.md'` marks a PIPELINE predecessor's REAL deliverable (context-chainer CC2);
-    // a pipeline-index.json fallback means the deliverable never arrived, so it does not qualify.
-    const upstream = entries.filter(c => c?.source === 'report.md' && typeof c?.taskId === 'string');
-    // R5 (2026-10-05): no report.md predecessor, yet a PIPELINE predecessor WAS chained through the
-    // pipeline-index.json fallback (its deliverable never arrived). Counted so the disposition can
-    // name a CONSUMING leg with absent upstream evidence apart from a leg with no upstream at all.
-    // Stamped only when non-zero, so every other fact stays byte-identical.
-    if (upstream.length === 0) {
-      const fallback = entries.filter(c => c?.source === 'pipeline-index.json' && typeof c?.taskId === 'string').length;
-      if (fallback > 0) fact.upstreamDeliverableMissing = fallback;
-    }
+    // Transcribed once, before the stage block (transcribeUpstream) — the values this block used to compute inline.
+    const { upstream, fallback, legs, lookupMisses, upstreamDerived } = up;
+    if (fallback > 0) fact.upstreamDeliverableMissing = fallback;
     if (upstream.length > 0) {
-      const legs: UpstreamContainmentLeg[] = [];
-      let lookupMisses = 0;
-      for (const entry of upstream) {
-        // The predecessor's stamp is carried BY THE CHAINER, which already resolved the correct
-        // facts artifact for the predecessor's type (context-chainer:216 branches PIPELINE ->
-        // pipeline-index.json). Re-resolving it here is what shipped defect 3; the field below is
-        // the single source. A missing value is counted, never silently dropped — absence of the
-        // field must not conflate "no upstream" with "upstream found but unreadable".
-        const dc = (entry as { derivationContainment?: unknown }).derivationContainment as
-          { checked?: unknown; violations?: unknown; derivedValues?: unknown;
-            containmentDisposition?: { disposition?: unknown; reason?: unknown } | null;
-            upstreamContainment?: { legs?: unknown } | null } | null | undefined;
-        if (dc && typeof dc === 'object') {
-          const derived = Array.isArray(dc.derivedValues)
-            ? (dc.derivedValues as Array<{ kind?: unknown; value?: unknown }>)
-              .filter(v => typeof v?.value === 'string')
-              .map(v => ({ kind: typeof v.kind === 'string' ? v.kind : 'cidr', value: v.value as string }))
-            : undefined;
-          const disp = dc.containmentDisposition && typeof dc.containmentDisposition === 'object'
-            ? dc.containmentDisposition : null;
-          legs.push({
-            taskId: entry.taskId as string,
-            checked: dc.checked === true,
-            violations: Array.isArray(dc.violations) ? dc.violations.length : 0,
-            ...(derived && derived.length > 0 ? { derivedValues: derived } : {}),
-            ...(disp && typeof disp.disposition === 'string'
-              ? { disposition: disp.disposition as 'benign' | 'blocking' | 'needs-node-c',
-                  ...(typeof disp.reason === 'string' ? { dispositionReason: disp.reason } : {}) }
-              : {}),
-          });
-          // H-2 (2026-09-09): FLATTEN the predecessor's own transcribed legs into this leg's list,
-          // tagged `via`. The predecessor already resolved THEM once (the same single-resolution
-          // rule as the comment above — nothing is re-fetched here; CC3 carried the whole object).
-          // A predecessor WITHOUT `upstreamContainment` contributes itself only and inherits
-          // nothing — a pre-CC3 or unreadable stamp can never become green (invariant 2).
-          // Dedup by taskId (diamond shapes): keep the first record, but violations take the MAX so
-          // a dirty reading is never masked by a clean duplicate (fail-closed).
-          const nested = Array.isArray(dc.upstreamContainment?.legs) ? dc.upstreamContainment!.legs as unknown[] : [];
-          for (const n of nested) {
-            const nl = n as { taskId?: unknown; checked?: unknown; violations?: unknown; derivedValues?: unknown;
-              disposition?: unknown; dispositionReason?: unknown };
-            if (!nl || typeof nl.taskId !== 'string') continue;
-            // Review L5 (2026-10-13): a nested copy with no numeric `violations` was read as 0, i.e. as clean.
-            // Fail closed instead: it is unreadable, so it is COUNTED as a lookup miss and never transcribed —
-            // the delegation arm then refuses (M2). 0 stored facts carry such a copy (prod, 2026-10-13).
-            if (typeof nl.violations !== 'number') { lookupMisses++; continue; }
-            const rec: UpstreamContainmentLeg = {
-              taskId: nl.taskId,
-              checked: nl.checked === true,
-              violations: nl.violations,
-              via: entry.taskId as string,
-              ...(Array.isArray(nl.derivedValues) && nl.derivedValues.length > 0
-                ? { derivedValues: nl.derivedValues as Array<{ kind: string; value: string }> } : {}),
-              ...(typeof nl.disposition === 'string'
-                ? { disposition: nl.disposition as 'benign' | 'blocking' | 'needs-node-c',
-                    ...(typeof nl.dispositionReason === 'string' ? { dispositionReason: nl.dispositionReason } : {}) }
-                : {}),
-            };
-            const dup = legs.find(l => l.taskId === rec.taskId);
-            if (dup) {
-              dup.violations = Math.max(dup.violations, rec.violations);
-              // 2026-10-12 (PHASE4-CONTAINMENT-PROPAGATION, N-8): the disposition copy is now READ —
-              // by the consumer arm's delegation rule — so a diamond keeps the WORSE copy of it too,
-              // for the same reason violations take the max: a clean or delegated duplicate must
-              // never mask a blocking one. `checked` is deliberately untouched (it feeds `green`).
-              if (dispositionRank(rec) > dispositionRank(dup)) {
-                if (rec.disposition !== undefined) dup.disposition = rec.disposition; else delete dup.disposition;
-                if (rec.dispositionReason !== undefined) dup.dispositionReason = rec.dispositionReason;
-                else delete dup.dispositionReason;
-              }
-              continue;
-            }
-            legs.push(rec);
-          }
-        } else {
-          lookupMisses++;
-        }
-      }
       // Emitted whenever report.md predecessors EXIST, even with zero readable legs — so an empty
       // result is diagnosable as a miss rather than looking like "this leg has no upstream".
       // Run 15 stamped nothing at all here and the inertness took a day to find.
+      // Bug Class 85 (2026-10-22): green reads the two predecessor counts the legs cannot show (G1, G2) and the
+      // kinds this leg consumed (G4 per kind). `consumed` was parsed above, from the Author's block.
+      const consumedKinds = Array.isArray(consumed)
+        ? consumed.filter(c => typeof c?.value === 'string' && c.value.length > 0).map(c => c.kind ?? 'cidr') : [];
       fact.upstreamContainment = {
-        green: isUpstreamContainmentGreen(legs),
+        green: isUpstreamContainmentGreen(legs, { lookupMisses, fallbackPredecessors: fallback, consumedKinds }),
         legs,
         ...(lookupMisses > 0 ? { lookupMisses } : {}),
       };
@@ -390,20 +482,6 @@ export async function computeDerivationContainmentFact(
       // entries) carries each deriving leg's transcribed `derivedValues`, so check 1 compares
       // against the TRUE origin at every hop — not against a relay. Direct entries are read from the
       // chained object as before; the union is de-duplicated by kind+value.
-      const seen = new Set<string>();
-      const upstreamDerived: Array<{ kind: string; value: string }> = [];
-      const addDerived = (vals: unknown) => {
-        if (!Array.isArray(vals)) return;
-        for (const v of vals as Array<{ kind?: unknown; value?: unknown }>) {
-          if (typeof v?.value !== 'string') continue;
-          const kind = typeof v.kind === 'string' ? v.kind : 'cidr';
-          const key = `${kind}:${v.value}`;
-          if (seen.has(key)) continue;
-          seen.add(key); upstreamDerived.push({ kind, value: v.value });
-        }
-      };
-      for (const e of upstream) addDerived((e as { derivationContainment?: { derivedValues?: unknown } }).derivationContainment?.derivedValues);
-      for (const l of legs) addDerived(l.derivedValues);
       if (Array.isArray(consumed) && consumed.length > 0) {
         // Stamped even when it matches, so a consumer can see WHAT was compared rather than
         // inferring it from the absence of a violation.

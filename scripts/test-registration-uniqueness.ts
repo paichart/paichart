@@ -103,7 +103,9 @@ async function main(): Promise<void> {
     upd.includes('await endpointOwnerName(this.prisma, safeUpdates.endpoint, finalServiceId)') && upd.includes('throw endpointTakenError(safeUpdates.endpoint, takenBy, { forUpdate: true })'));
   check('D3b update\'s outer catch passes a uniqueness refusal through un-wrapped (boundary U1)',
     /catch \(error\) \{\s*\n(\s*\/\/[^\n]*\n)*\s*if \(error && error\.isRegistryUniquenessError\) throw error;/.test(upd));
-  check('D4 the update write is caught', /mCPTool\.update\([\s\S]{0,400}?\}\)\.catch\(\(err\) => rethrowUniqueViolation\(err, \{[\s\S]{0,200}?op: 'update'/.test(upd));
+  // INTERNAL-FIT IF-3: the update runs through writeRow (plain, or inside the grant+audit $transaction); the catch covers BOTH.
+  check('D4 the update write is caught', /const writeRow = \(db\) => db\.mCPTool\.update\(/.test(upd)
+    && /writeRow\(this\.prisma\) : this\.prisma\.\$transaction\([\s\S]{0,900}?\}\)\)\.catch\(\(err\) => rethrowUniqueViolation\(err, \{[\s\S]{0,200}?op: 'update'/.test(upd));
 
   const schema = fs.readFileSync(path.join(ROOT, 'prisma/schema.prisma'), 'utf8');
   const model = schema.slice(schema.indexOf('model MCPTool {'), schema.indexOf('\n}', schema.indexOf('model MCPTool {')));

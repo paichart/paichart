@@ -21,10 +21,17 @@ import type { TokenPayload } from '@/lib/types/auth';
 import { mcpLogger } from '@/lib/logger';
 import { pickResultJsonSummary } from '@/lib/services/execution-artifacts';
 import { REQUIREMENTS_OPERATOR_ARTIFACTS } from '@/lib/agents/harness/requirements-artifact-names';
+import { EDIT_APPLICATION_MANIFEST_NAME } from '@/lib/agents/harness/held-bytes/edit-manifest';
+import { HELD_BYTES_MANIFEST_NAME } from '@/lib/agents/harness/held-bytes/held-bytes-fact';
+
+/** PLATFORM-HELD-BYTES V-5h (built in push-2 code review, BC-P2-2 / EF-P2-6): the two held manifests are consumed only by the
+ *  platform's own readers (V-6's chain recompute, `held.get`) — handles, paths and live ref ids, never a result a reasoner reads. */
+export const HELD_OPERATOR_ARTIFACTS: readonly string[] = [EDIT_APPLICATION_MANIFEST_NAME, HELD_BYTES_MANIFEST_NAME];
 import { selectAuthoritativeExecution, CHAIN_SELECTION_OPTIONS } from '@/lib/services/execution-selection';
 import { computeVerdictFreshness, freshnessWord } from '@/lib/agents/harness/chained-predecessors';
 import { isReviewerSet } from '@/lib/agents/harness/parse-verdict';
 import type { Prisma } from '@prisma/client';
+import { stripToolCallResultsFromJsonText } from '@/lib/agents/harness/strip-tool-call-results';
 
 const log = mcpLogger.child({ module: 'AgentResultsHandler' });
 
@@ -56,14 +63,21 @@ const RESULTS_EXECUTION_SELECT = {
   // correction) are OPERATOR artifacts (diff reads), never a result a
   // reasoner reads — excluded here so neither the lean card's ".md = report" picker nor the verbose envelope sees it.
   artifacts: {
-    where: { name: { notIn: [...REQUIREMENTS_OPERATOR_ARTIFACTS] } },
+    where: { name: { notIn: [...REQUIREMENTS_OPERATOR_ARTIFACTS, ...HELD_OPERATOR_ARTIFACTS] } },
     select: { id: true, name: true, type: true, content: true, createdAt: true },
   },
 } satisfies Prisma.AgentExecutionSelect;
 
 type ResultsExecution = Prisma.AgentExecutionGetPayload<{ select: typeof RESULTS_EXECUTION_SELECT }>;
 
-export async function handleAgentResults(parameters: any, user: TokenPayload, actionId: string) {
+export async function handleAgentResults(
+  parameters: any,
+  user: TokenPayload,
+  actionId: string,
+  routeOpts?: { callingExecutionId?: string }
+) {
+  // F9-s7: an agent-loop caller (server-set callingExecutionId, never client input) never receives raw tool results.
+  const agentCaller = !!routeOpts?.callingExecutionId;
   // `includeMetrics` was accepted here until 2026-07-26 and did nothing: it gated a read of
   // `exec.metrics`, a column that has never existed (Bug Class 80). It was in NO tool schema —
   // only internal callers passed it — so removing it changes no client-visible contract. Deleted
@@ -129,6 +143,8 @@ export async function handleAgentResults(parameters: any, user: TokenPayload, ac
   let executions: ResultsExecution[] = [];
   // RWF C.3: which execution downstream actually reads (the chainer's selection), and the retries that lost.
   let authoritativeExecutionId: string | null = null;
+  // X2: set when the authoritative execution was appended past `limit` (marks that row; explains total > limit).
+  let appendedAuthoritativeId: string | null = null;
   let supersededRetries: Array<{ id: string; supersededById: string | null }> = [];
 
   if (executionId) {
@@ -174,6 +190,18 @@ export async function handleAgentResults(parameters: any, user: TokenPayload, ac
     ]);
     authoritativeExecutionId = authoritative.execution?.id ?? null;
     supersededRetries = superseded.map((r) => ({ id: r.id, supersededById: r.supersededById }));
+
+    // X2 (2026-10-31): honouring `limit` must never hide the AUTHORITATIVE (keep-best) execution — the one downstream reads.
+    // The order stays newest-first, so executions[0] is unchanged (the harness's Step 1 reads a child's latest failure there,
+    // and verdict freshness / the lean card read the head). When the limit cut the authoritative execution off it is
+    // APPENDED: it is older than every returned row, so the list stays strictly newest-first. Measured: 2 of 2,424 tasks have
+    // a newest FAILED over an older authoritative SUCCESS; one is a program leg whose root read it on 2026-10-04 with a FLAT
+    // `limit: "1"` — dropped at the perform layer back then (not in flatParams), so it received up to 5. With limit now
+    // honoured, this append is what keeps that root receiving both the failure and the authoritative success.
+    if (authoritativeExecutionId && !executions.some((e) => e.id === authoritativeExecutionId)) {
+      const auth = await prisma.agentExecution.findUnique({ where: { id: authoritativeExecutionId }, select: RESULTS_EXECUTION_SELECT });
+      if (auth) { executions = [...executions, auth]; appendedAuthoritativeId = auth.id; }
+    }
 
   }
 
@@ -276,6 +304,9 @@ export async function handleAgentResults(parameters: any, user: TokenPayload, ac
       // that never existed and therefore reported 0 for every execution, including completed ones.
       errorCategory,
       supersededById: exec.supersededById,
+      // X2 (review N3): a FACT — this row is in the result only because it is the authoritative (keep-best) execution and
+      // `limit` would have cut it; undefined (dropped by JSON) on every other row.
+      appendedAsAuthoritative: exec.id === appendedAuthoritativeId ? true : undefined,
       // RWF C.3: set below for a reviewer's latest SUCCESS only (read-time verdict freshness); undefined
       // otherwise, which JSON drops. Declared here so the card's reads stay pinned to emitted keys (RW1).
       verdictFresh: undefined as string | undefined,
@@ -296,12 +327,19 @@ export async function handleAgentResults(parameters: any, user: TokenPayload, ac
 
         // Include full content when requested
         if (includeOutput && artifact.content) {
-          formattedArtifact.content = artifact.content;
+          // F9-s7: for an agent caller, drop toolCalls[].result/.error from any artifact carrying toolCalls
+          // (result.json, pipeline-index.json). Ungated by artifact type on purpose (sec-ops SF-1): the helper
+          // returns non-JSON and toolCalls-less text byte-identical, so a type gate could only FAIL OPEN on a JSON row
+          // stored under a non-json type. Every human caller is byte-identical.
+          const content = agentCaller
+            ? stripToolCallResultsFromJsonText(artifact.content).text
+            : artifact.content;
+          formattedArtifact.content = content;
 
           // Add artifact viewer hint for Claude Desktop
           if (artifact.type.includes('json')) {
             try {
-              formattedArtifact.parsedContent = JSON.parse(artifact.content);
+              formattedArtifact.parsedContent = JSON.parse(content);
               formattedArtifact.viewerHint = 'json';
             } catch {
               formattedArtifact.viewerHint = 'text';

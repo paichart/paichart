@@ -56,18 +56,18 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { AppError } from '@/lib/errors';
 import type { AccumulatedUsage } from '@/lib/agents/harness/agentic-tool-loop';
-import { redactArtifactsForPersist, redactExtraArtifactForPersist } from '@/lib/agents/harness/redact-artifact-secrets';
+import { redactArtifactsForPersist, redactExtraArtifactForPersist, redactSecretsDeep } from '@/lib/agents/harness/redact-artifact-secrets';
 import { REQUIREMENTS_PRE_CORRECTION_ARTIFACT, REQUIREMENTS_CORRECTION_NOT_ADOPTED_ARTIFACT } from '@/lib/agents/harness/requirements-artifact-names';
 import { getReportMdDecision } from './agentArtifactPolicy';
 import { selectAuthoritativeExecution } from './execution-selection';
 import { buildTokenUsageColumns, rollUpAndDeleteExecutions, sanitizeLLMForMarkdown, orderResultJsonForPersist } from './execution-artifacts';
-import { appendReviewerWarningsSection, appendApplyBlockPlaceholderSection } from './report-warnings-section';
+import { appendReviewerWarningsSection, appendApplyBlockPlaceholderSection, appendHeldEditOutcomeSection } from './report-warnings-section';
 import { selectExecutionsToDelete, PRUNE_ON_COMPLETE_RETENTION } from './execution-retention';
 import { markForwardConeBlocked } from './mark-forward-cone';
 import { sliceSurrogateSafe, stringifyWellFormed } from '@/lib/utils/surrogate-safe';
 import { countUnsettledChildren } from './child-stage-settled';
 import { childTasksDispatchedBy, maybeSelfCheckLostWakeup } from './harness-dispatch-fact';
-import { errorFacts, type HeldCaptureBatch } from './held-bytes-store';
+import { errorFacts, insertHeldPackageRows, type HeldCaptureBatch, type HeldPackageRefRow, type HeldRefWrite } from './held-bytes-store';
 
 // BC38: truncate artifact content to prevent database bloat (5MB per artifact).
 // Formerly duplicated as an inline const in BOTH paths.
@@ -262,6 +262,42 @@ export interface TerminalSuccessInput {
    * SAVEPOINT held_capture so a bad row costs the shadow measurement, never this SUCCESS (owner decision OA-19).
    */
   heldCaptures?: HeldCaptureBatch | null;
+  /**
+   * PLATFORM-HELD-BYTES Stage B V-5e: present ONLY for a variant-leg package batch (`kind: 'package'`, an Author with BASE /
+   * CANDIDATE rows) or a variant-leg Harvester capture batch (`kind: 'capture'`). Built pre-tx by the core. The persist
+   * serializes BOTH result.json variants and BOTH manifest variants BEFORE the savepoint, writes the rows inside exactly one
+   * savepoint, then pushes the PICKED strings (`refWrite` = what the savepoint did). Absent ⇒ every byte and statement of
+   * this persist is unchanged. The completion-anchored rescue never passes it (a variant Author/Harvester is never rescued —
+   * `rescueOrRethrow` rethrows outside PIPELINE SYNTHESIZE).
+   */
+  heldVariant?: HeldVariantPersist | null;
+}
+
+export interface HeldVariantPersist {
+  kind: 'package' | 'capture';
+  /** The result.json keys that differ by refWrite (e.g. `{ editApplication }` / `{ heldBytes }`). */
+  overlay: (refWrite: HeldRefWrite) => Record<string, unknown>;
+  /** Manifests persisted beside result.json, one object per refWrite; built through R10's deep walk, then stringified. */
+  manifests: Array<{ name: string; build: (refWrite: HeldRefWrite) => Record<string, unknown> }>;
+  /** kind 'package': the BASE + CANDIDATE rows (validated pre-tx). */
+  packageRows?: HeldPackageRefRow[];
+}
+
+/**
+ * Stage B V-5e: THE result.json serializer — order → R10 (with report.md) → well-formed stringify → truncate. Extracted
+ * verbatim from runTerminalSuccessTx so the variant pick serializes each candidate the same way; a non-variant batch's
+ * output is byte-identical (the persist calls it once, exactly as before).
+ */
+export function serializeResultJsonArtifact(obj: Record<string, unknown>, reportMdContent: string | null) {
+  const persistRedaction = redactArtifactsForPersist(orderResultJsonForPersist(obj), reportMdContent);
+  const wellFormed = stringifyWellFormed(persistRedaction.resultJson, 2);
+  return { persistRedaction, wellFormed, content: truncate(wellFormed.json) };
+}
+
+/** A manifest object → R10's deep walk (both arms; JSON-escaped secrets included) → stringify → truncate. */
+export function serializeManifestArtifact(obj: Record<string, unknown>): { content: string; redactedCount: number } {
+  const r = redactSecretsDeep(obj);
+  return { content: truncate(JSON.stringify(r.value, null, 2)), redactedCount: r.redactedCount };
 }
 
 export interface TerminalSuccessTxResult {
@@ -314,15 +350,16 @@ export function stripPreHeadingPreamble(text: string): { text: string; stripped:
  * SAVEPOINT held_capture: ANY error between SAVEPOINT and RELEASE rolls back to it and the transaction continues, so
  * capture can never fail a Harvester (owner decision OA-19; panel DB-3(c), proven on Prisma 6.19.3). That makes a lost
  * batch silent here — MI-13 🔴 9 is its witness. The warn carries name / code / metaCode only, never the message or
- * meta.message (a Postgres DETAIL prints the key values — panel SF-3, DB NEW-1). Stage A ONLY: Stage B's
- * "package ⇒ refs exist" invariant needs the strict form and re-decides.
+ * meta.message (a Postgres DETAIL prints the key values — panel SF-3, DB NEW-1). Stage B RE-DECIDED (V-5e): the savepoint
+ * stays (a capture never fails a SUCCESS), and the outcome is RETURNED, so a variant Harvester's result.json says
+ * `heldBytes.refWrite` truthfully; the package refs use their own savepoint (`insertHeldPackageRows`, held-bytes-store.ts).
  */
 async function insertHeldCaptureRows(
   tx: Prisma.TransactionClient,
   batch: HeldCaptureBatch,
   logger: TerminalPersistLogger,
   executionId: string,
-): Promise<void> {
+): Promise<HeldRefWrite> {
   await tx.$executeRaw`SAVEPOINT held_capture`;
   try {
     if (batch.refs.length > 0) await tx.heldFileRef.createMany({ data: batch.refs });
@@ -332,12 +369,14 @@ async function insertHeldCaptureRows(
       });
     }
     await tx.$executeRaw`RELEASE SAVEPOINT held_capture`;
+    return 'committed';
   } catch (err) {
     await tx.$executeRaw`ROLLBACK TO SAVEPOINT held_capture`;
     logger.warn(
       { executionId, ...errorFacts(err), refs: batch.refs.length, refusals: batch.refusals.length },
       'held-bytes: shadow capture rows rolled back to savepoint (the SUCCESS persist continues)',
     );
+    return 'rolled-back';
   }
 }
 
@@ -419,7 +458,7 @@ export async function runTerminalSuccessTx(
   const jsonArtifactName = task.type === 'PIPELINE' ? 'pipeline-index.json' : 'result.json';
 
   let reportMdContent: string | null = null;
-  let reportMdSource: { mode: 'self' | 'upstream'; sourceTaskId?: string; extractFailureReason?: string; preambleStripped?: number; reviewerWarnings?: 'not-stamped'; reviewerWarningsAppended?: number; applyBlockPlaceholderAppended?: number } | null = null;
+  let reportMdSource: { mode: 'self' | 'upstream'; sourceTaskId?: string; extractFailureReason?: string; preambleStripped?: number; reviewerWarnings?: 'not-stamped'; reviewerWarningsAppended?: number; applyBlockPlaceholderAppended?: number; heldEditOutcomeAppended?: number } | null = null;
   // The upstream source's own `applyBlockPlaceholder` stamp, read off the SAME parsed artifact the extraction reads
   // (no extra query inside the transaction). Undefined for a self-sourced report or a source that carries no stamp.
   let sourceApplyBlockPlaceholder: unknown = undefined;
@@ -492,12 +531,12 @@ export async function runTerminalSuccessTx(
             sourceApplyBlockPlaceholder = sourceJson.applyBlockPlaceholder;
             const candidate = sourceJson.finalResponse;
             if (typeof candidate === 'string' && candidate.length > 0) {
-              // ⚠️ NOT sanitised here — and, contrary to what this comment said until 2026-10-08, NOT sanitised
-              // upstream either: a leg's source child (Author / producer / requirements author) has a dependent, so
-              // its own report.md decision is produce:false and its finalResponse never passed sanitizeLLMForMarkdown
-              // (WARNINGS-INVISIBLE panel AE F7 / MA F2; filed for sec-ops — LOW: no viewer renders raw HTML). Do not
-              // rely on this body being clean: the reviewer-warnings section below sanitises its own text.
-              const upStrip = stripPreHeadingPreamble(candidate);
+              // SEC-UPSTREAM-REPORT-UNSANITISED (2026-10-31): sanitised HERE, for parity with the self branch. A leg's
+              // source child (Author / producer / requirements author) has a dependent, so its own report.md decision is
+              // produce:false and its finalResponse never passed sanitizeLLMForMarkdown (WARNINGS-INVISIBLE panel AE F7 /
+              // MA F2). Measured before applying (X26 once rewrote valid config): 0 of 509 stored harness report.md bodies
+              // contain anything this sanitiser changes (<script>, <iframe>, an event handler inside a tag).
+              const upStrip = stripPreHeadingPreamble(sanitizeLLMForMarkdown(candidate));
               extractedPreambleChars = upStrip.stripped ? upStrip.stripped.length : 0;
               extracted = upStrip.text;
               if (upStrip.stripped) {
@@ -641,6 +680,18 @@ export async function runTerminalSuccessTx(
           reportMdSource = { ...reportMdSource, applyBlockPlaceholderAppended: appended };
         }
       }
+
+      // ── PLATFORM OUTCOME LINE (PLATFORM-HELD-BYTES Stage B V-9, PC S-18 / v4 N-20) ─────────────────────────────────────
+      // Present IFF the fail-closed carrier forced this leg's approval (`qualityGate.heldEdit.forced` in the FRESH metadata —
+      // stamped by the harness during this run). Every other report is byte-identical. Appended BEFORE R10 below.
+      if (reportMdContent !== null && reportMdSource) {
+        const { content, appended } = appendHeldEditOutcomeSection(
+          reportMdContent, (freshMeta?.qualityGate as Record<string, unknown> | undefined)?.heldEdit);
+        if (appended > 0) {
+          reportMdContent = content;
+          reportMdSource = { ...reportMdSource, heldEditOutcomeAppended: appended };
+        }
+      }
     }
   }
 
@@ -657,12 +708,32 @@ export async function runTerminalSuccessTx(
   // mutated. See redact-artifact-secrets.ts.
   // RWF C.3: every compact fact before the bulky payloads, including the ones appended after the builder
   // (net stamps, supersession, reportMdSource). See orderResultJsonForPersist.
-  const persistRedaction = redactArtifactsForPersist(orderResultJsonForPersist(enrichedResultJson), reportMdContent);
+  // Stage B V-5e: a variant batch serializes BOTH variants here (before its savepoint) and picks after it.
+  const hv = input.heldVariant ?? null;
+  const variants = hv
+    ? {
+        committed: serializeResultJsonArtifact({ ...enrichedResultJson, ...hv.overlay('committed') }, reportMdContent),
+        'rolled-back': serializeResultJsonArtifact({ ...enrichedResultJson, ...hv.overlay('rolled-back') }, reportMdContent),
+      }
+    : null;
+  const manifestVariants = hv
+    ? hv.manifests.map((m) => ({ name: m.name, committed: serializeManifestArtifact(m.build('committed')), 'rolled-back': serializeManifestArtifact(m.build('rolled-back')) }))
+    : [];
+  let heldRefWrite: HeldRefWrite | null = null;
+  if (hv?.kind === 'package') {
+    heldRefWrite = await insertHeldPackageRows(tx, hv.packageRows ?? [], logger, executionId);
+  } else if (hv?.kind === 'capture') {
+    heldRefWrite = input.heldCaptures && (input.heldCaptures.refs.length > 0 || input.heldCaptures.refusals.length > 0)
+      ? await insertHeldCaptureRows(tx, input.heldCaptures, logger, executionId)
+      : 'committed';
+  }
+  const picked = variants ? variants[heldRefWrite ?? 'committed'] : serializeResultJsonArtifact(enrichedResultJson, reportMdContent);
+  const persistRedaction = picked.persistRedaction;
 
   // X11 (2026-09-27): the JSON artifact is serialised with every string made well-formed. A lone UTF-16 surrogate
   // (a cut through an emoji — ours, or an external service's in a tool result) otherwise persists as a `\udXXX` escape
   // that Postgres rejects as jsonb, breaking every query that casts this row. Repair is U+FFFD; the count is logged.
-  const wellFormed = stringifyWellFormed(persistRedaction.resultJson, 2);
+  const wellFormed = picked.wellFormed;
   if (wellFormed.repaired > 0) {
     logger.warn(
       { executionId, taskId: task.id, artifact: jsonArtifactName, repairedStrings: wellFormed.repaired },
@@ -674,9 +745,16 @@ export async function runTerminalSuccessTx(
       executionId,
       name: jsonArtifactName,
       type: 'application/json',
-      content: truncate(wellFormed.json),
+      content: picked.content,
     },
   ];
+  // Stage B V-5h: the picked manifest variants (hidden from agent.results; read by V-6 only).
+  let manifestRedacted = 0;
+  for (const m of manifestVariants) {
+    const v = m[heldRefWrite ?? 'committed'];
+    manifestRedacted += v.redactedCount;
+    artifactData.push({ executionId, name: m.name, type: 'application/json', content: v.content });
+  }
   if (reportMdContent !== null) {
     artifactData.push({
       executionId,
@@ -709,17 +787,21 @@ export async function runTerminalSuccessTx(
       content: truncate(r.text),
     });
   }
+  preCorrectionRedacted += manifestRedacted;
   if (persistRedaction.redactedCount + preCorrectionRedacted > 0) {
     // Protocol-10 FACT (not a verdict): N matched token(s) redacted before persist.
     logger.warn(
-      { executionId, taskId: task.id, redactedCount: persistRedaction.redactedCount + preCorrectionRedacted, securityEvent: true },
+      // R10 v8: the echo share and the echo literal overflow (counts only — never a value; sec-ops R10v8 B-1).
+      { executionId, taskId: task.id, redactedCount: persistRedaction.redactedCount + preCorrectionRedacted,
+        echoRedactedCount: persistRedaction.echoRedactedCount, echoOverflow: persistRedaction.echoOverflow, securityEvent: true },
       'R10 backstop: redacted matched token(s) from persisted artifact(s) before write'
     );
   }
   await tx.agentArtifact.createMany({ data: artifactData });
 
-  // PLATFORM-HELD-BYTES Stage A (2026-10-14): shadow capture rows, only when the pre-tx batch has ≥ 1 row.
-  if (input.heldCaptures && (input.heldCaptures.refs.length > 0 || input.heldCaptures.refusals.length > 0)) {
+  // PLATFORM-HELD-BYTES Stage A (2026-10-14): shadow capture rows, only when the pre-tx batch has ≥ 1 row. A VARIANT-leg
+  // Harvester's capture batch was already written above (before the artifacts — its heldBytes pick depends on it).
+  if (hv?.kind !== 'capture' && input.heldCaptures && (input.heldCaptures.refs.length > 0 || input.heldCaptures.refusals.length > 0)) {
     await insertHeldCaptureRows(tx, input.heldCaptures, logger, executionId);
   }
 

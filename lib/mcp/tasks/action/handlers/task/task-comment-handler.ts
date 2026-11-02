@@ -86,6 +86,7 @@ import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import { logCommentAdded } from '@/lib/tasks/services/taskActivityService';
 import type { ActivityMetadata } from '@/lib/types/activity';
 import { mcpLogger } from '@/lib/logger';
+import { scopeTaskTitleLookup } from '@/lib/pov/auth/pov-access-filter';
 
 const log = mcpLogger.child({ module: 'TaskCommentHandler' });
 
@@ -118,7 +119,8 @@ export async function handleTaskComment(
 
     // Find matching tasks
     const matchingTasks = await prisma.task.findMany({
-      where: searchCriteria,
+      // X9: only tasks in POVs the caller can access — the error below names every match.
+      where: scopeTaskTitleLookup(searchCriteria, user),
       include: {
         pov: { select: { id: true, title: true } },
         phase: { select: { id: true, name: true } }

@@ -49,6 +49,11 @@ const INTENTIONALLY_UNBOUNDED: Record<string, string> = {
   'lib/tasks/services/complete-task-terminally.ts': 'Scoped by stageId — ALL PIPELINE children needed; a cap yields a wrong aggregate quality-gate score',
   'lib/agents/harness/context-chainer.ts': 'Scoped by taskId — the tail-first trim invariant ("earliest/most-foundational output survives whole", CC2b) requires the complete ordered list',
   'lib/agents/harness/verdict-mismatch-guard.ts': 'Scoped by stageId — needs all siblings to detect PIPELINE tier (F21); a partial set silently mis-tiers the guard',
+  // PLATFORM-HELD-BYTES Stage B (V-6, V-7): handles (H1, H2, …) are numbered over the COMPLETE set of one execution's CAPTURE refs
+  // + capture refusals (`assignHandles`); a cap would renumber or drop handles, so an Author's `H2` would bind to another file.
+  // Both reads are scoped to one executionId; the row count is bounded upstream by that execution's tool calls.
+  'lib/agents/harness/held-chain.ts': 'Scoped by executionId — handle numbering (assignHandles) needs every CAPTURE ref + refusal of the execution; a cap would rebind handles to other files',
+  'lib/mcp/server/tools/held-get-handler.ts': 'Scoped by executionId — resolving H<n> needs the same complete set assignHandles numbered; a cap would return another file',
 
   // --- Bounded by IN clause (array of known IDs from paginated parent) ---
   'app/api/tasks/bulk/move/route.ts': 'Bounded by { in: taskIds } or { in: povIds }',

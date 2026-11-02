@@ -13,12 +13,23 @@
  * @returns the §6 lines (caller joins with '\n'); [] when there is no inputContext to render.
  * @created 2026-06-08
  */
-export function renderPipelineContextSection(inputContext: unknown): string[] {
+export interface PipelineContextRenderOptions {
+  /**
+   * HS-FU5 (2026-10-31): the protocol the rendering task's template binds in NAMED mode
+   * (`namedProtocolOfTemplate`). When it is a KNOWN protocol that declares no machine-parsed block
+   * (`emitsMarkers: 'none'`), the predecessor `markerPresence` line is not rendered — three ✗ there
+   * are not a finding about the leg. Absent/unknown ⇒ rendered exactly as before.
+   */
+  boundProtocol?: string | null;
+}
+
+export function renderPipelineContextSection(inputContext: unknown, opts: PipelineContextRenderOptions = {}): string[] {
   if (!inputContext || typeof inputContext !== 'object' || Object.keys(inputContext).length === 0) {
     return [];
   }
   const ctx = inputContext as any;
   const parts: string[] = [];
+  const markersNotMandated = protocolMandatesNoMarkers(opts.boundProtocol);
 
   // CC7 (2026-07-15, program-harness design / boundary B1): the program interface contract
   // rides its OWN structured channel — rendered FIRST (before any chained prose), verbatim,
@@ -130,7 +141,10 @@ export function renderPipelineContextSection(inputContext: unknown): string[] {
       // where the Reviewer actually looks. Two ✗ shapes are blocking per change_reviewer guidance (2026-10-03:
       // Consumed ✗ on a package applying a received value, Derived ✗ on one applying a value derived in its
       // leg); a ✓ ends any format question — the reviewer never guesses what the parser accepted.
-      {
+      // HS-FU5 (2026-10-31): not rendered where the task's bound protocol mandates no block — a KNOWN
+      // `emitsMarkers: 'none'` protocol (requirements-authoring, artifact-synthesis, …). Every marker-mandating
+      // protocol, and every unknown one, renders byte-identically to before.
+      if (!markersNotMandated) {
         const mpLine = renderMarkerPresence((prev as { markerPresence?: Record<string, unknown> | null }).markerPresence);
         if (mpLine) parts.push(`- **Machine-parsed blocks (platform fact)**: ${mpLine}`);
       }
@@ -159,6 +173,23 @@ export function renderPipelineContextSection(inputContext: unknown): string[] {
           (prev as { rollbackContainment?: Record<string, unknown> | null }).rollbackContainment
         );
         if (rcLines) parts.push(...rcLines);
+      }
+      // validationToolCalls (2026-10-23, NETWORK-VALIDATION-RELEASE-RATE §4): the predecessor network Author's validation-step tool
+      // calls compared with what each tool accepts — the schema the Reviewer cannot see from its seat (Invariant 6; 4 of 7 measured
+      // invalid calls were approved). A PURE function of the carried fact; the chainer carries it only on network Author entries.
+      {
+        const vtLines = renderValidationToolCallsForPrompt(
+          (prev as { validationToolCalls?: Record<string, unknown> | null }).validationToolCalls
+        );
+        if (vtLines) parts.push(...vtLines);
+      }
+      // held-network step 3 batch 2b (P5 / S3-C): the Git file vs device configuration comparison — a PURE function of the carried
+      // fact; the chainer carries it only to the network Architect (Harvester entry) and the leg Reviewer (Author entry).
+      {
+        const gdLines = renderGitDeviceComparisonForPrompt(
+          (prev as { gitDeviceComparison?: Record<string, unknown> | null }).gitDeviceComparison
+        );
+        if (gdLines) parts.push(...gdLines);
       }
       // Net #1 (2026-09-17): the predecessor's DERIVATION CONTAINMENT disposition. Added last of the
       // three, and the reason it was missing is worth keeping: for SIBLING entries it is stamped at
@@ -286,7 +317,16 @@ export function renderPipelineContextSection(inputContext: unknown): string[] {
       }
       parts.push('');
       parts.push('<prior_output role="context_only">');
-      parts.push(prev.finalResponse || '*No output available.*');
+      // PLATFORM-HELD-BYTES Stage B V-6: held files / index / diff, INSIDE the quarantine and after the predecessor's own
+      // text; nothing at all when the entry carries none (every non-variant §6 byte-identical).
+      const heldLines = renderHeldForEntry(prev as never);
+      const ownText = prev.finalResponse || '*No output available.*';
+      // PC-P2-7 (G3 entry, 2026-10-16): a predecessor text cut mid-fence (the 128 KB chain cap) would swallow the held header,
+      // and the view's own closing fence would close the PREDECESSOR's block instead. Close it first — with the same
+      // characters, the report's tracker — ONLY when held lines follow, so an entry with none stays byte-identical.
+      const openFence = heldLines.length ? openFenceOf(ownText) : null;
+      if (openFence !== null) parts.push(ownText.trimEnd(), openFence); else parts.push(ownText);
+      parts.push(...heldLines);
       parts.push('</prior_output>');
       parts.push('');
     }
@@ -337,5 +377,10 @@ export function renderPipelineContextSection(inputContext: unknown): string[] {
 
   return parts;
 }import { renderMarkerPresence } from './marker-presence';
+import { protocolMandatesNoMarkers } from './protocol-marker-mandates';
 import { renderRollbackContainmentForPrompt } from './render-rollback-containment';
+import { renderValidationToolCallsForPrompt } from './validation-tool-calls';
+import { renderGitDeviceComparisonForPrompt } from './git-device-comparison';
+import { renderHeldForEntry } from './held-bytes/render-held';
+import { openFenceOf } from '../../utils/markdown-fence';
 

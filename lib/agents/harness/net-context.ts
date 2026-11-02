@@ -15,7 +15,9 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { findProgramParentForStage } from './program-protocol';
-import type { NetContext } from './net-registry';
+import type { NetContext, Fact } from './net-registry';
+import { owningLegMemo, type OwningLegResolution } from './held-bytes/variant';
+import { legDeviceSourcesMemo, type LegDeviceSourcesResolution } from './device-sources-read';
 
 /** Mirrors the per-net cap; see `pagination-safety-cap-pattern` and the SEARCH-vs-AGGREGATE note. */
 const STAGE_CHILD_SCAN_CAP = 50;
@@ -35,6 +37,12 @@ export interface BuildNetContextInput {
   toolCalls?: unknown;
   /** Surfaced so a lookup failure is a recorded fact rather than silence (the call site logged it). */
   onContractApplicabilityError?: (err: unknown) => void;
+  /** Stage B (A6): the core's one owning-leg resolution; absent ⇒ resolved lazily, once, by the same function. */
+  owningLeg?: OwningLegResolution | null;
+  /** Stage B: the variant stamps the core built pre-tx. */
+  held?: { editApplication?: Fact | null; heldBytes?: Fact | null; /** the handles whose BASE the package holds (V-8a; EF-P2-3) */ baseHeldHandles?: readonly string[] | null };
+  /** held-network step 3 batch 2b: the core's one read of the leg's declared Device sources; absent ⇒ resolved lazily, once. */
+  deviceSources?: LegDeviceSourcesResolution | null;
 }
 
 export function buildNetContext(input: BuildNetContextInput): NetContext {
@@ -43,6 +51,7 @@ export function buildNetContext(input: BuildNetContextInput): NetContext {
 
   let childrenPromise: Promise<Array<{ id: string; title: string; agentRole: string | null }>> | null = null;
   let applicabilityPromise: Promise<Record<string, unknown> | null> | null = null;
+  const owningLeg = owningLegMemo(input.prisma as never, input.task as never, input.owningLeg ?? null);
 
   return {
     prisma: input.prisma,
@@ -54,6 +63,9 @@ export function buildNetContext(input: BuildNetContextInput): NetContext {
     programTier: input.programTier,
     executionId: input.executionId ?? null,
     toolCalls: input.toolCalls ?? [],
+    owningLeg,
+    deviceSources: legDeviceSourcesMemo(input.prisma as never, owningLeg, input.deviceSources ?? null),
+    ...(input.held ? { held: input.held } : {}),
 
     children() {
       if (!childrenPromise) {

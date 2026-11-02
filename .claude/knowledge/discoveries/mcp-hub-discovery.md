@@ -167,6 +167,10 @@ The MCP Hub represents a paradigm shift in AI service architecture - transformin
 - [ ] Verify localhost endpoint allowed via isTrustedInternalService() (BC70: checks both name and id)
 - [ ] Test service connection pooling
 - [ ] Compare seed script vs `registry(action: 'register')` tool paths (seeded = title-case name, registered = kebab-case)
+- [ ] `github-service` (2026-10-18): `:3110/mcp` streamable-http, STATELESS server, by-name seed with `assertByNameSeedOwnsRow`,
+  SSRF-exempt + NOT trusted, `publicAccess:false` (admin-only; the token reads any PUBLIC repo — flip is an owner decision),
+  `healthCheckPath: '/healthz'` (the Hub reads `healthCheckPath`, never `healthCheck`). File reads arrive as an embedded
+  `type:'resource'` item — select by type, never via `workflow.execute`. Review: `cline_docs/reviews/github-service-2026-10-18/`.
 
 ### 21. Hub Tools Enhancement Phase 1+2 (Jan 2026)
 - [ ] Test `registry(action: 'tools')` for AI parameter discovery
@@ -1576,3 +1580,71 @@ grep -n "'mcp_" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts
 - **Agent Template Gold Standard**: Pattern #44 at `/.claude/knowledge/patterns/agent-template-gold-standard-pattern.md` — 8 standards for template creation/maintenance
 - **MAX_TOOL_TURNS**: Increased from 10 to 30 (Apr 2026) for workflow orchestration agents. Timeout 1080s (18min)
 - **Validation error flow**: Zod validation details now propagated through `route.ts` → `api-client.js` → LLM error formatter, enabling self-correction on first retry
+
+## Gateway id-first resolution + gateway meta (PLATFORM-HELD-BYTES Stage B push 1, 2026-10-14)
+
+```bash
+grep -rnPzl 'OR:\s*\[\s*\{\s*id:' lib app | tr '\0' '\n' | grep -c .   # expect 2 — plan-spawn-carry.ts (Stage), team-activity route (User): deliberate
+grep -rln "findServiceByIdThenName(" lib | wc -l                              # expect 4 — the helper + its three callers
+npm run test:gateway-id-first   # adversarial mocks: restoring the OR query turns the resolver pins RED
+```
+A `targetService` resolves ID FIRST, then by name (`lib/mcp/server/tools/hub/resolve-service-ref.js`) in service-call-handler,
+workflow-tools-handler and orchestration `service-caller.ts`; an id hit is terminal whatever its status. Registration refuses a
+cuid-shaped name and a name equal to an existing id (own texts, never "already registered"); `updates: { name }` stays refused.
+Seeds: `scripts/mcp-tool-seed-guard.ts` before every upsert-by-id; the by-name arm on cloudflare only (register
+BY-NAME-SEED-GUARD-SCOPE: weather/eia/eodhd/token-validator rows carry CUID ids). The gateway's failure `_meta` now carries
+`targetServiceId` (+ `requestedTool`); mcpService keeps an allowlisted copy BESIDE the result (`lib/services/mcp/gateway-meta.ts`)
+which reaches `result.json.toolCallGatewayMeta` (operator tail key) — agents never see it.
+
+## held-k8s step 1 (2026-10-18 — DEPLOYED 04:23:03Z, release `release_20261018_041900`): platform-row guard + the Git file-source pin
+
+```bash
+grep -c "refuseAgentMutationOfPlatformRow(existingService, context" lib/mcp/server/tools/hub/service-delete-handler.js   # expect 1
+grep -c "refuseAgentMutationOfPlatformRow(existingService, context" lib/mcp/server/tools/hub/service-update-handler.js   # expect 1
+grep -rl "git-file-source-pin" lib --include=*.ts --include=*.js | wc -l      # expect >=3 — policy gate, capture, persist elision
+```
+- **SF-5 (1d):** registry delete/update of a row with no `configuration.ownerId` (platform-seeded, e.g. `github-service`) is refused
+  `PLATFORM_SERVICE_AGENT_MUTATION_REFUSED` when `context.callingExecutionId` is present (only mcpService sets it, for agent tool-loop
+  calls). By-name lookups already filtered on `ownerId = caller`; this closes BY ID. Human admins and agents on run-owned rows unchanged.
+  Pin: `test:hub-platform-row-guard` (in the battery).
+- **Pin (1c):** `lib/mcp/server/config/git-file-source-pin.js` — ONE plain-CJS module used by `validateServiceCall` (resolved service
+  name = its 6th parameter ⇒ `PINNED_ARGUMENT`) and by capture (`source-not-pinned`). github-service stays admin-only; its rate limit is
+  20/min per (user, service), shared across a program's legs (STEP1-BUILD §2 finding 9).
+Record: `cline_docs/reviews/held-k8s-2026-10-18/STEP1-BUILD.md` (plan SYNTHESIS v3 §6).
+
+**Late addition (SF-2, 2026-10-18):**
+```bash
+grep -c "SEGMENT_RE.test(s)" lib/mcp/server/config/git-file-source-pin.js   # expect 1 — the pin's per-segment path ALLOW-list
+```
+Owed here (register HELD-K8S-SECOPS-STEP1): SF-1 refuse a Git file source as a WORKFLOW step (before step 2); SF-3 pin the
+`service-caller.ts` external branch (before any `publicAccess` flip).
+
+## held-k8s step 2 — hub controls in the pin module (2026-10-19; every expectation run before it was written)
+
+```bash
+grep -c "gitFileSourceWorkflowRefusal(" lib/mcp/server/tools/hub/workflow-tools-handler.js   # expect 1 — workflow step refused on the RESOLVED name
+grep -c "gitFileSourceWorkflowRefusal(" lib/services/workflow/integrations/service-caller.ts  # expect 1 — the other workflow step caller
+grep -c "stripGitFileSourceUrlTokens(targetService, response)" lib/mcp/server/tools/hub/service-call-handler.js   # expect 1 — before the result is built (takes the ROW since WI-B10, 2026-10-23)
+```
+**CONCURRENT-SELF-PROVISION (filed):** parallel legs self-provisioning one descriptor collide on the unique service name; the later legs
+reuse the first row (same owner only) and the FIRST teardown deletes it under the rest. `task.create` rejects a `stageName` containing an
+em dash — pass `stageId`.
+
+## A refused services.call is stored in TWO shapes (held-terraform window F-W3, 2026-10-21; expectation run before it was written)
+
+```bash
+grep -cF "coalesce((v->'result')::text, '') || ' ' || coalesce(v->>'error', '')" scripts/report-mechanism-inventory.sh   # expect 1 — MI-13's refused-at-call-time column reads BOTH shapes
+```
+Production's agent loop: `success: true` + `result.isError` + the message in `result.content`. The leg replay lab's fixture tier: `success: false` +
+`result: null` + `error`. Verify a stored shape on a PRODUCTION row before keying a reader on it. Ledger LL-T-23.
+
+## SF-1 agent mutation guard — run provenance (held-network step 2, 2026-10-25, BUILT — not deployed; expectations run before written)
+
+```bash
+grep -c "refuseAgentMutationOfRowNotProvisionedByRun(existingService, context" lib/mcp/server/tools/hub/service-delete-handler.js   # expect 1
+grep -c "refuseAgentMutationOfRowNotProvisionedByRun(existingService, context" lib/mcp/server/tools/hub/service-update-handler.js   # expect 1
+npm run test:hub-agent-provisioned-guard   # adopted/human rows refused to agents; leg harness tears down its own Harvester's row
+```
+After `refuseAgentMutationOfPlatformRow` (no ownerId) and IF-3 (launcher owns the row): an agent mutates only a row ITS RUN
+registered — the registering execution, or the leg harness named by the create-time `provisionedByRunScope`. A `descriptorUrl`
+adoption writes nothing, so an adopted customer row can never be torn down by a run. Paired: `security-discovery.md` § SF-1.

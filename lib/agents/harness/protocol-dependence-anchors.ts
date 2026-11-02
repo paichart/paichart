@@ -163,6 +163,8 @@ export const EXPECTED_MARKER_COUNTS: Readonly<Record<string, number>> = {
   // siblings — fence header, Mode override clause, Step 5a deliverable-wiring ref, SYNTHESIZE
   // standard-rule sentence. MEASURED via --print-counts against the locally seeded row.
   'observability-config-protocol': 4,
+  // observability-config-held-protocol: REMOVED Phase 10 (2026-10-17) — folded into observability-config ≥ 1.10.0; its row is a
+  // DEPRECATED tombstone that composes nothing (same treatment as the value-chain-program tombstone).
   // requirements-authoring (2026-09-21): 4 paired + 1 UNPAIRED-BY-DESIGN (the fence header names
   // the base descriptively, same as all six siblings). MEASURED with --print-counts against the
   // locally seeded row, never counted from the source string.

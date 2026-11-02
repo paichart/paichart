@@ -124,12 +124,14 @@ import {
 import { logStageFieldChange } from '@/lib/pov/services/stageActivityService';
 import type { ActivityMetadata } from '@/lib/types/activity';
 import { mcpLogger } from '@/lib/logger';
+import { scopeTaskTitleLookup, scopeTaskIdLookup } from '@/lib/pov/auth/pov-access-filter';
 import { validateTaskStatusTransition } from '@/lib/tasks/services/task';
 import {
   runTaskCompletionTx,
   fireCompletionEffects,
 } from '@/lib/tasks/services/complete-task-terminally';
 import { annotateQualityGateVerdictMismatch } from '@/lib/agents/harness/verdict-mismatch-guard';
+import { applyHeldEditCarrier } from '@/lib/agents/harness/held-edit-carrier';
 import { enforceProtocolStampImmutable, stripAuditFacts } from '@/lib/tasks/services/protected-task-metadata';
 import { checkDependencyCycle, GraphLimits } from '@/lib/utils/graph';
 
@@ -191,7 +193,8 @@ export async function handleTaskUpdate(
 
     // Find matching tasks
     const matchingTasks = await prisma.task.findMany({
-      where: searchCriteria,
+      // X9: only tasks in POVs the caller can access — the error below names every match.
+      where: scopeTaskTitleLookup(searchCriteria, user),
       include: {
         pov: { select: { id: true, title: true } },
         phase: { select: { id: true, name: true } }
@@ -378,7 +381,7 @@ export async function handleTaskUpdate(
   if (resolvedAssigneeId === undefined && typeof assignee === 'string' && assignee.trim() !== '') {
     const { resolveUserByNameOrEmail } = await import('@/lib/mcp/tasks/action/utilities/assignee-resolver');
     try {
-      resolvedAssigneeId = (await resolveUserByNameOrEmail(assignee, taskForAuth.pov)).id;
+      resolvedAssigneeId = (await resolveUserByNameOrEmail(assignee, taskForAuth.pov, user)).id;
     } catch (e: unknown) {
       const reason = e instanceof Error ? e.message : String(e);
       throw new Error(`task.update: assignee "${assignee}" was not applied and the task was not updated. ${reason}`);
@@ -546,8 +549,12 @@ export async function handleTaskUpdate(
   if (pendingMergeForGuard && typeof pendingMergeForGuard === 'object' && pendingMergeForGuard.qualityGate) {
     const taskForGuard = await prisma.task.findUnique({
       where: { id: finalTaskId },
-      select: { type: true, metadata: true },
+      select: { id: true, type: true, metadata: true, title: true },
     });
+    // PLATFORM-HELD-BYTES Stage B V-9 (D-I): the FAIL-CLOSED carrier, BEFORE the guard (which then compares the agent's own
+    // outcome, `heldEdit.agentOutcome`) and BEFORE the tx below; deliberately NOT inside the guard's swallow-all try/catch —
+    // it never throws (every failure is a forcing state). A no-op on every non-variant task.
+    await applyHeldEditCarrier(prisma as never, taskForGuard, pendingMergeForGuard);
     await annotateQualityGateVerdictMismatch(
       prisma,
       finalTaskId,
@@ -822,7 +829,8 @@ export async function handleTaskUpdate(
       await tx.taskDependency.deleteMany({ where: { taskId: finalTaskId } });
       if (dependencyIds.length > 0) {
         const existingTasks = await tx.task.findMany({
-          where: { id: { in: dependencyIds } },
+          // DEPENDENCY-IDS-UNSCOPED: only tasks in POVs the caller can access (a foreign id = a missing id).
+          where: scopeTaskIdLookup({ id: { in: dependencyIds } }, user),
           select: { id: true },
         });
         const existingIds = new Set(existingTasks.map(t => t.id));

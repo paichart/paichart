@@ -19,6 +19,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { runDialectLint } from './dialect-lint';
 import { readAuthoritativeResultField } from './authoritative-result-read';
+import { parseHeldEdits } from './held-bytes/edits';
 
 /**
  * Bound on the stage-children scan — same gap, same fix, same cap as the sibling enrichments.
@@ -45,11 +46,13 @@ export interface ComputeDialectLintInput {
    * a "tidier" object is a behavioural change wearing a refactor's clothes.
    */
   programTier?: boolean;
+  /** Stage B V-8b: the leg is the held variant (`isHeldCapableLeg(ctx.task)` at leg-synthesize; Phase 10: a held-capable leg). Absent/false ⇒ unchanged. */
+  heldVariant?: boolean;
 }
 
 export async function computeDialectLintFact(
   prisma: PrismaClient,
-  { stageId, interfaceContract, programTier }: ComputeDialectLintInput
+  { stageId, interfaceContract, programTier, heldVariant }: ComputeDialectLintInput
 ): Promise<Record<string, unknown>> {
   if (programTier === true) {
     return { checked: false, reason: 'program-tier', tier: 'program', applicable: false, tokensConsidered: [], violations: [] };
@@ -82,5 +85,11 @@ export async function computeDialectLintFact(
 
   // runDialectLint owns the remaining named reasons (no-contract / no-banned-token-list /
   // no-fenced-blocks) — do not re-derive them here.
-  return runDialectLint(authorText, interfaceContract) as unknown as Record<string, unknown>;
+  // Phase 10 (the fold): every obs leg is held-capable, but only a package that CONTAINS held grammar (an edit/create block or a
+  // restore directive) takes the held path — a package with none (a Prometheus-only change) keeps its pre-fold stamp byte-for-byte,
+  // with no `heldEditSearchLines` key and no `presence-not-checkable-held-edit` transcription.
+  const held = heldVariant ? parseHeldEdits(authorText) : null;
+  return (held && (held.blocks.length > 0 || held.restores.length > 0)
+    ? runDialectLint(authorText, interfaceContract, { heldEdits: held })
+    : runDialectLint(authorText, interfaceContract)) as unknown as Record<string, unknown>;
 }

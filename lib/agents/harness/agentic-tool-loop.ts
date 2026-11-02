@@ -45,7 +45,9 @@ import { capabilitiesFor, clampEffort, bindsThinkingToPrefix } from '@/lib/servi
 import { AppError } from '@/lib/errors';
 import type { LLMRequestOptions } from '@/lib/services/llm/types';
 import { sanitizeChainedOutput, isR9OperatorEvent } from '@/lib/agents/harness/sanitize-chained-output';
-import { redactArtifactSecrets } from '@/lib/agents/harness/redact-artifact-secrets';
+import { redactArtifactSecrets, pagerPersistLead } from '@/lib/agents/harness/redact-artifact-secrets';
+import { gatewayMetaOf, setRecordGatewayMeta } from '@/lib/services/mcp/gateway-meta';
+import * as heldEligibility from '@/lib/mcp/server/config/held-eligibility';
 import { DEFAULT_READ_BUDGET, readBudgetFor, type ReadBudget } from '@/lib/agents/role-read-budget';
 
 /**
@@ -596,15 +598,18 @@ function pagerServe(
       )
     : `\n[end of result]`;
   const text = `${header}\n${win}${trailer}`;
+  // R10 v9 (R-1): the PERSISTED record carries the line the boundary cut, whole; the model's block below is `text`, unchanged.
+  const lead = pagerPersistLead(full, offset);
 
   pager.pagesByRef.set(ref, originPages + 1);
   pager.pagerTurnsUsed += 1;
 
   return {
     record: {
-      turn: ctx.turn, tool: 'read_more', arguments: args, result: text, success: true,
+      turn: ctx.turn, tool: 'read_more', arguments: args, result: lead ? `${header}\n${lead}${win}${trailer}` : text, success: true,
       durationMs: Date.now() - startedAt, timestamp: new Date().toISOString(),
       resultTruncatedForLlm: false, resultChars: text.length,
+      ...(lead ? { persistLeadChars: lead.length } : {}),
     },
     block: { type: 'tool_result', tool_use_id: toolCall.id, content: text },
   };
@@ -678,6 +683,11 @@ export type ToolCallRecord = {
    *  :420 serialization), so it will NOT match Tier-2's compact 50KB byte measure nor raw
    *  record.result when R9 rewrote the copy; failure records carry it too (error-JSON length). */
   resultChars?: number;
+  /** R10 v9 (R-1, step 3 batch 2a): a read_more record only — the persisted `result` carries this many characters of the SAME
+   *  result BEFORE the window's `offset` (back to the previous line start, ≤ R10_PAGER_LEAD_MAX), placed right after the header,
+   *  so the persist's R10 sees a whole line where the window boundary cut one. The model's view (the tool_result block) and the
+   *  header offsets are unchanged; absent when the window starts at a line start or at offset 0. */
+  persistLeadChars?: number;
   /** R9 site-A observability (2026-07-26). Emit-only FACTS (Protocol 10). Names mirror site B's
    *  per-predecessor facts (context-chainer.ts:327-329) so one grep covers both boundaries.
    *
@@ -829,6 +839,11 @@ export async function executeToolTurn(
         arguments: parsedArgs, result: toolResult, success: true,
         durationMs: Date.now() - toolStartTime, timestamp: new Date().toISOString()
       };
+      // Stage B P1-4: the gateway meta, NON-ENUMERABLE on the record (absent from every JSON.stringify of it: the SSE
+      // card, toolCalls persistence); buildExecutionResultJson moves it to the `toolCallGatewayMeta` tail key.
+      setRecordGatewayMeta(record, gatewayMetaOf(toolResult));
+      // WI-B10: the held-eligibility fact, NON-ENUMERABLE (never persisted, never in an SSE card) — capture reads it.
+      heldEligibility.setOnRecord(record, heldEligibility.ofResult(toolResult));
     } catch (toolError) {
       success = false;
       const errorMsg = toolError instanceof Error ? toolError.message : 'Unknown error';
@@ -1323,7 +1338,8 @@ const PROVIDER_ERROR_MARK = 'agenticLoopProviderError';
  * A TRANSCRIPTION (Protocol 10 fact): the site, the HTTP status and the provider's structural error type — read from
  * the SDK error object, never regexed out of a message. No cause is inferred; the message is in the warn line only.
  */
-export type ReflectionSite = 'correction' | 'budget_failfast' | 'form_correction' | 'requirements_form_correction' | 'diagnostic_retry';
+export type ReflectionSite = 'correction' | 'budget_failfast' | 'form_correction' | 'requirements_form_correction' | 'diagnostic_retry'
+  | 'held_edit_correction'; // PLATFORM-HELD-BYTES Stage B V-5c (AE S1): the held-edit correction turn
 export interface ReflectionErrorFact {
   site: ReflectionSite;
   /** HTTP status of the provider error (400, 429, 529…); null for a transport/abort/internal failure. */

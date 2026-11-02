@@ -1,0 +1,61 @@
+[
+  {
+    "name": "get_file_contents",
+    "description": "Get the contents of a file or directory from a GitHub repository",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "type",
+              "name",
+              "path",
+              "size",
+              "sha",
+              "url",
+              "git_url",
+              "html_url",
+              "download_url"
+            ]
+          },
+          "description": "Subset of fields to return for each entry when the path is a directory. If omitted, all fields are returned. Ignored when the path is a single file. Use this to reduce response size when listing directories and you only need specific fields, e.g. just 'name' and 'type'."
+        },
+        "owner": {
+          "type": "string",
+          "description": "Repository owner (username or organization)",
+          "x-mcp-header": "owner"
+        },
+        "path": {
+          "type": "string",
+          "description": "Path to file/directory",
+          "default": "/"
+        },
+        "ref": {
+          "type": "string",
+          "description": "Accepts optional git refs such as `refs/tags/{tag}`, `refs/heads/{branch}` or `refs/pull/{pr_number}/head`"
+        },
+        "repo": {
+          "type": "string",
+          "description": "Repository name",
+          "x-mcp-header": "repo"
+        },
+        "sha": {
+          "type": "string",
+          "description": "Accepts optional commit SHA. If specified, it will be used instead of ref"
+        }
+      },
+      "required": [
+        "owner",
+        "repo"
+      ]
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true,
+      "title": "Get file or directory contents"
+    }
+  }
+]

@@ -534,11 +534,12 @@ export class EmbeddedMCPServer {
     const hubTools = new HubToolsHandler(prisma);
 
     // Consolidated tool dispatchers (19 tools -> 6)
-    const projectDispatcher = new ProjectDispatcher(basicTools, advancedTools);
+    // V-7: the in-process AGENT tool server — held.get is always refused here (and stripped from agent tool definitions).
+    const projectDispatcher = new ProjectDispatcher(basicTools, advancedTools, { transport: 'embedded' });
     const analyticsDispatcher = new AnalyticsDispatcher(advancedTools);
     const templateDispatcher = new TemplateDispatcher(basicTools);
     const servicesDispatcher = new ServicesDispatcher(hubTools);
-    const registryDispatcher = new RegistryDispatcher(hubTools);
+    const registryDispatcher = new RegistryDispatcher(hubTools, { transport: 'embedded' }); // WI-B10: agent tool server
 
     // Phase 1.5 (2026-05-17) — wrapWithSchema makes GS14 enforcement
     // structural at the registration site. The 3-line safeParse-and-

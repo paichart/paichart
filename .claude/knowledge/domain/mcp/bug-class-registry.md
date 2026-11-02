@@ -5283,7 +5283,7 @@ and the truncated-window gate approval ("don't conclude from a window you chose 
 
 ## Bug Class 85: One Clean Sibling Vouches for the Rest (`some` where `every` is needed)
 
-**Status**: IDENTIFIED — 4 known sites, 0 observed instances, 0 fixed (class named 2026-10-12)
+**Status**: FIXED — deployed 2026-10-22 22:52:22Z (release `release_20261022_224901`, `e4a743ac3`; MI-13 all 🔴 0) — 5 known shapes; **2 observed instances (G4, 2026-08-03, both harmless)**, the rest 0 (class named 2026-10-12; measured 2026-10-22). *(Was: "4 known sites, 0 observed instances, 0 fixed" — the measure found G4 had occurred and a fifth shape, G5.)*
 **Severity**: HIGH when reachable (FAIL-OPEN: a gate passes with an input nobody checked); dormant today
 **Source**: independent containment review, 2026-10-12 (`cline_docs/reviews/containment-propagation-2026-10-12/REVIEW-A-B3.md` L1, M2, F11, F12)
 **Record / plan**: `cline_docs/follow-ups/containment-green-path-gaps-2026-10-12.md` (open register CONTAINMENT-FALLBACK-PREDECESSOR)
@@ -5313,3 +5313,98 @@ list that never compares the number of judged members to the number of members.
 
 Require EVERY member to be judged (verified, or explicitly delegated with a named reason), and count members that could not
 be read or seen as unjudged. Never let absence of failure stand in for presence of a check.
+
+### Measured 2026-10-22 (follow-up §6, read-only)
+
+- **0 fan-ins ever** (713 PIPELINE tasks: none with two upstream legs, a fallback predecessor or a lookup miss), so G1–G3
+  have never occurred and cannot on single-edge plans.
+- **G4 occurred twice** (network producers `cmsczw76d`, `cmsdp7kbu`, 2026-08-03: cidr machine-checked, `vlan` unsupported ⇒
+  `needs-node-c`). Both terraform consumers read green, and **both consumed only the checked cidr**, so the green was true for
+  what they applied. Neither program released. The fail-open is real only when a consumed value's KIND is one the upstream
+  could not check: 0 instances.
+- **G5 (new): an undecided MIDDLE leg in a three-leg chain**, masked by the clean deriving leg reached through it. No fan-in
+  needed; reachable on today's network S2 chains; 0 instances.
+- 🔴 **The obvious guard is wrong here.** "Every member checked" would have REFUSED released program `cmu6a9ojp`: a middle
+  leg that passed cleanly is `checked:false` by construction. The guard below reads each member's DISPOSITION, not a single
+  boolean. **Lesson for the class:** before tightening `some` to `every`, enumerate the members that are legitimately
+  unverified-but-sound (here: a relay whose own inputs are judged beside it) and corpus-check the tightened rule against
+  released outcomes.
+
+### Fix (owner decision "yes as recommended on all six rows"; deployed 2026-10-22 22:52:22Z, `release_20261022_224901`)
+
+`isUpstreamContainmentGreen(legs, { lookupMisses, fallbackPredecessors, consumedKinds })` + `legVouches`: every leg must
+VOUCH — machine-checked (not `blocking`/`needs-node-c`; legacy no-disposition copies unchanged), a G4 leg whose unchecked
+kinds were not consumed, or a passed-clean middle leg (`consuming-leg-consumed-discharged` / `-upstream-discharged`). G1/G2
+counts force not-green. The dedupe merges `checked` with the worse copy (G3). G1 ⇒ blocking; G2 ⇒ blocking; G4 (consumed an
+unchecked kind) and G5 ⇒ `needs-node-c consuming-leg-upstream-delegated`, the subject naming the unchecked kind
+(`uncheckedKinds`) or the middle leg (`middleLegFor`), with check 1 per kind (`consumedValueCheckByKind`). pov-program
+BRANCH D4 discharges both with no text change (pipeline-harness). Pins: `BC85 …` in `test-derivation-containment.ts`,
+`test-containment-enrichment-branches.ts`, `BC85-R1..R3` in `test-lean-card-facts.ts`; 17 mutations, each red on its own pin.
+Public mirror `@paichart/containment-checks` bump OWED (PH-7). Record: the follow-up §7.
+**Replay before deploy:** 3,031 stored tasks — 3,029 byte-identical; the 2026-08-03 G4 pair gain `unsupportedKinds` on a leg copy
+only (green, disposition, card unchanged). Live control: pipeline-harness, follow-up §7.2.
+
+### Class sweep, 2026-10-23 — 0 further sites
+
+Searched by the class SHAPE, not by field names (the "find more sites" grep above keys on names like `checked`/`ok` and matched
+only the fixed site plus one false positive — `ok` inside the word `token`, `program-protocol.ts:173`):
+
+```bash
+grep -rnE "\.some\(.*\.every\(|\.every\(.*\.some\(" lib/ app/ --include=*.ts --include=*.js          # some+every in one verdict
+grep -rniE "(green|clean|releasable|allClear|approved|passed|ready|safe|verified)[A-Za-z]*\s*[:=]\s*[^=;]*\.some\(" lib/ app/ --include=*.ts --include=*.js   # a verdict-named flag from .some(
+```
+
+Three candidates outside the fixed site, each READ, none a member: `redact-artifact-secrets.ts` `pemRunsLookLikeKey` (a shape
+heuristic — some + every-but-last is deliberate, and a false yes only over-redacts); `service-approval-policy.js`
+`isSafeEndpoint` (an endpoint matching ANY allowlisted pattern is correct "any" semantics, and a miss only warns);
+`agentic-tool-loop.ts` `_budgetExhaustedAlready` (detects that a condition is PRESENT — `some` is the right quantifier).
+**Re-run both greps whenever a new set-wide verdict is added**, and test any such rule at set size ≥ 2: `some` and `every` agree
+on every list of one, which is why this class stayed invisible while every real input had one member.
+
+## Bug Class 86: Unscoped Lookup Before the Access Check (the error names what it matched)
+
+**Status**: FIXED at every known site — deployed 2026-10-31 (`5d8cac0b9`, `7950b859a`, `de54d74dc`, `a4edaf7e0`; full gates exit 0);
+sec-ops GO-WITH-CHANGES 90, auth-permissions GO 91 (no regression for any role)
+**Severity**: MEDIUM (cross-tenant disclosure of customer POV titles, task ids, user emails, team names to any authenticated
+caller incl. DEMO_USER; writes were always blocked by the later access check). Static only: no live probe was possible (the
+coordinator's account can access every POV even as USER); audience measured instead (10 non-admin accounts lack some POVs).
+**Source**: register X9 (RWF-X sec-ops static read, 2026-09-26), confirmed in code 2026-10-31; siblings from the sec-ops and
+auth-permissions reviews the same day. **Earlier instance:** 2026-05-26 pentest Gap #1 (fetch not-found fuzzy suggestions).
+
+### Description
+
+A handler resolves an entity by a caller-supplied name, title, substring or id BEFORE it runs `validatePOVAccess`, and the lookup
+itself leaks: an ambiguity or not-found error lists what matched, a success response echoes the matched record, or the matched id is
+written into the caller's own record. Review reads it as safe because the later access check refuses the write — the disclosure has
+already happened in the error. Typical shapes: "Multiple X found … Found in: <list>", "Available X: <list>", an email→id echo.
+
+### Sites (all fixed)
+
+| Site | Leak | Guard |
+|---|---|---|
+| `task-update-handler.ts` / `task-assign-handler.ts` / `task-comment-handler.ts` title lookup | >1 match lists ≤20 POV titles + task ids | `scopeTaskTitleLookup` |
+| `assignee-resolver.ts` `chooseAssignee` all-users pool | `name <email>` across tenants; `"@"` = whole directory; not-found lists 50 names | pool admin-only (`includeAllUsers`), caller required |
+| `task-assign-handler.ts` team (`teamId`/`teamName`/"Available teams") + `task-create-handler.ts` `teamId` | team names; a foreign team attachable | `scopeTeamLookup` |
+| `task-create-handler.ts` / `task-update-handler.ts` `dependencyIds` | existence-only; foreign edge wireable | `scopeTaskIdLookup` (foreign = missing) |
+| `chatgpt-connector-handler.js` fetch fuzzy suggestions (2026-05-26) | cross-tenant titles + ids | `buildPOVAccessFilterWithRole` |
+
+### Defense
+
+Shared helpers in `lib/pov/auth/pov-access-filter.ts`: admins unchanged; everyone else AND-ed with `buildPOVAccessFilter` (the
+withPOVAccess rule). **All FAIL CLOSED on a missing `userId`** — Prisma drops `{ ownerId: undefined }`, so the owner arm would match
+every POV and silently reopen the leak. A foreign match is treated exactly like no match (no existence oracle).
+
+### Prevention
+
+`test:task-title-lookup-scope` (CI): helpers in both directions + fail-closed + WIRING over every handler emitting "Found in POVs",
+every `prisma.team.find*` in task.assign, task.create's teamId check, both dependencyIds lookups (mutation-checked red).
+`test:assignee-resolver` pins the admin-only pool both ways. Discovery greps: `auth-permissions-discovery.md` § Lookup scoping.
+
+### Class sweep (sec-ops, 2026-10-31) — checked CLEAN, do not re-file
+
+task.create reference/duplicate title lookups (after the access check, :305); stage-resolver "Available stages" (after the check) and
+cross-POV `stageId`/`phaseId` (rejected :89 / :122); stage.create phase lists; sdk-native POV-by-name (scoped `/api/pov`);
+agent-results / task-context (scoped `/api/tasks`); task.list name filters (unscoped lookups, but only ids flow into a scoped query and
+no names are emitted); agent templates (global by design). **Residual, kept filed:** ASSIGN-USERID-EXISTENCE-ORACLE (an unguessable
+CUID's existence; LOW). **When adding a handler that resolves by name/title/id, run the discovery greps and read the error paths.**
+

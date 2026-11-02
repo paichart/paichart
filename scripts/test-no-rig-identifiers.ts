@@ -142,6 +142,74 @@ function scanFormCorrection(): Hit[] {
   return hits;
 }
 
+/**
+ * ROLE GUIDANCE NAMES NO SERVICE (owner, 2026-10-24: "we should not mention a service to be used and remain service
+ * agnostic … keep role guidance service/vendor/device etc agnostic"). Role guidance ships to every domain and every
+ * install; which service reads a URL or a file is the protocol's or the task's to say, and the platform's own lab
+ * services (the browser, our Git service) may be superseded or absent on a customer's install. Platform TOOLS
+ * (`registry`, `services`, `project`, `perform`) are not services and stay nameable.
+ * Named exemptions shrink, never grow: each is a text not yet rewritten, with the batch that owes it.
+ */
+const ROLE_GUIDANCE_SERVICE_NAMES = ['browser-automation-service', 'Browser Automation Service', 'browser service', 'scrape_page', 'github-service'];
+const ROLE_GUIDANCE_SERVICE_EXEMPT: Record<string, string> = {
+  buildProgramArchitectGuidance: 'Program Architect URL fetch — owed by its own text batch (live-control gated; register ROLE-GUIDANCE-AGNOSTIC)',
+};
+function scanRoleGuidanceServiceNames(): { hits: Hit[]; exempted: string[] } {
+  const file = 'lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts';
+  const src = readFileSync(join(ROOT, file), 'utf8');
+  const start = src.indexOf('ROLE_GUIDANCE_LIBRARY');
+  if (start < 0) throw new Error('ROLE_GUIDANCE_LIBRARY not found — this guard is scanning nothing');
+  const hits: Hit[] = [];
+  const exempted = new Set<string>();
+  let owner = '';
+  const startLine = src.slice(0, start).split('\n').length - 1;
+  src.split('\n').forEach((text, i) => {
+    const fn = text.match(/^(?:export\s+)?function\s+([A-Za-z0-9_]+)/) || text.match(/^(?:export\s+)?const\s+([A-Za-z0-9_]+)/);
+    if (fn) owner = fn[1];
+    const role = text.match(/^\s{2}'([a-z_]+)':/);
+    if (role) owner = role[1];
+    if (i < startLine) return; // the library and the builders after it; nothing above it ships to agents as role guidance
+    if (/^\s*(\/\/|\*|\/\*)/.test(text)) return;
+    for (const id of ROLE_GUIDANCE_SERVICE_NAMES) {
+      const at = text.indexOf(id);
+      if (at < 0) continue;
+      if (ROLE_GUIDANCE_SERVICE_EXEMPT[owner]) { exempted.add(owner); continue; }
+      hits.push({ file, owner, id, line: i + 1, excerpt: text.slice(Math.max(0, at - 70), at + 70) });
+    }
+  });
+  return { hits, exempted: [...exempted] };
+}
+const svc = scanRoleGuidanceServiceNames();
+for (const e of Object.keys(ROLE_GUIDANCE_SERVICE_EXEMPT)) {
+  if (!svc.exempted.includes(e)) {
+    console.log(`❌ role-guidance service exemption "${e}" no longer needed — remove it (exemptions shrink, never linger)`);
+    process.exit(1);
+  }
+  console.log(`⚪ role guidance names a service in ${e} — EXEMPT: ${ROLE_GUIDANCE_SERVICE_EXEMPT[e]}`);
+}
+if (svc.hits.length) {
+  console.log(`❌ ${svc.hits.length} service name(s) in ROLE GUIDANCE (role guidance stays service-agnostic):\n`);
+  for (const h of svc.hits) console.log(`  ${h.file}:${h.line}  [${h.owner}]  "${h.id}"\n     …${h.excerpt.replace(/\s+/g, ' ')}…\n`);
+  process.exit(1);
+}
+console.log(`✅ role guidance names no service (${ROLE_GUIDANCE_SERVICE_NAMES.length} names checked)`);
+// L-N1 crib (2026-10-24): the Harvester's descriptor-URL route is the PLATFORM tool, stated in the role (a protocol that names
+// no route — requirements-authoring — must not be left to guess, and must not be told its protocol "states" one).
+{
+  const ug = readFileSync(join(ROOT, 'lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts'), 'utf8');
+  if (!ug.includes("Register a descriptor URL through the platform's \\`registry\\` tool with \\`descriptorUrl\\` alone — the platform takes the name and every other field from the descriptor — unless your protocol names another route.")
+      || ug.includes('which states how a descriptor URL is handled')) {
+    console.log('❌ infra_state_harvester descriptor-URL route sentence missing, or the false "protocol states how" claim returned');
+    process.exit(1);
+  }
+  // held-network step 2 (owner 2026-10-24): the Program Architect carries each network change leg's Device sources into the
+  // contract; without it every network program leg stops at Phase 0 once network-provisioning 1.23.0 is live.
+  if (!ug.includes('as \\`deviceSources["network-provisioning"]\\`, copied exactly from the requirements; a leg without them stops.')) {
+    console.log('❌ program_architect deviceSources carry sentence missing');
+    process.exit(1);
+  }
+}
+
 const hits = [...scanSeed(), ...scanRoleGuidance(), ...scanFormCorrection()];
 if (hits.length === 0) {
   console.log(`✅ no rig identifiers in agent-facing text (${RIG_IDENTIFIERS.length} identifiers checked)`);

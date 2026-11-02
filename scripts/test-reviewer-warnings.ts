@@ -165,6 +165,21 @@ t('WG-NEVERGATE: a warning line never changes approved or blocking[]', () => {
   eq(parseReviewerVerdict(nrW)!.blocking, parseReviewerVerdict(nrBase)!.blocking);
 });
 
+t('WG-TRUNC-SECRET: a secret straddling the cap is redacted BEFORE the cut (WARNINGS-TRUNCATION-SPLITS-SECRET)', () => {
+  // An inline GitHub token is a shape R10 catches anywhere — but its CUT prefix (ghp_ + 8) no longer matches, so
+  // cut-then-redact (persist-time R10) would leave it in clear. Place it so 12 token chars fall before the cap.
+  const tok = 'ghp_' + 'A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8';
+  const pad = 'x'.repeat(MAX_WARNING_TEXT_CHARS - ' token '.length - 12);
+  const r = computeReviewerWarnings(`Body.\nNON-BLOCKING WARNING (secret-check): ${pad} token ${tok} trailing words here` + V_OK);
+  eq(r.warnings[0].truncated, true);
+  if (r.warnings[0].text.includes('ghp_A1b2')) throw new Error(`token prefix survived: ${r.warnings[0].text.slice(-30)}`);
+});
+t('WG-TRUNC-SECRET: an untruncated warning is byte-identical (no early redaction)', () => {
+  const tok = 'ghp_' + 'A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8';
+  const r = computeReviewerWarnings(`Body.\nNON-BLOCKING WARNING (plain): token ${tok} stays as written here` + V_OK);
+  eq(r.warnings[0].text, `token ${tok} stays as written here`); // persist-time R10 redacts it; the parser leaves it
+});
+
 console.log('\n' + '─'.repeat(50));
 console.log(`✅ Passed: ${passed}`);
 if (failed) { console.log(`❌ Failed: ${failed}`); process.exit(1); }

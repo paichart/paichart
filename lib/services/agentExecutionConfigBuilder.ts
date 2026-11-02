@@ -96,11 +96,11 @@ export async function buildRichExecutionConfig(
     return null;
   }
 
-  // Model parameters priority chain (mirrors agentTaskService.ts:211-241 and
-  // the earlier fix in pipelineRetriggerReactorService.ts):
+  // Model parameters priority chain (shared with agentTaskService via buildTemplateModelParameters):
   //   1. task.metadata.modelParameters (non-empty) — explicit per-task override
-  //   2. agent template defaults merged with template.metadata.modelParameters
-  //   3. hardcoded fallback (claude-haiku-4-5, temp 0.7)
+  //   2. the agent template's own fields (buildTemplateModelParameters)
+  // There is NO hardcoded fallback model: the old haiku/0.7 base was removed in the 2026-06-18 cleanup (SK-1b,
+  // comment corrected 2026-10-31).
   let modelParameters: Record<string, any> = {};
   const taskMeta = (task.metadata as any) || {};
   if (taskMeta.modelParameters && Object.keys(taskMeta.modelParameters).length > 0) {

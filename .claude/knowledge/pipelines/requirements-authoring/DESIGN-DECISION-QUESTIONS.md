@@ -414,7 +414,7 @@ VT-34-DRAFT).
      measure and pin it, never the rule.**
 6. **Step 9: deliver.**
    - Release `20261010_065211`; protocol seeded 06:56:01Z; reseed 06:57:56Z, 0 STALE.
-   - CLAUDE.md series cut.
+   - Series cut in the series-cut ledger (`.claude/knowledge/pipelines/SERIES-CUT-LEDGER.md`).
    - The public template waits for a full public export. Pushed alone, it breaks the public repo's skeleton parity
      CI.
 7. **Live** (Phase D):

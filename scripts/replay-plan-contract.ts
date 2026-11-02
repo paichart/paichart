@@ -180,13 +180,19 @@ async function live(rootId: string) {
     const c = (k.inputContext as Record<string, unknown> | null)?.interfaceContract;
     const f = (k.metadata as Record<string, any> | null)?.interfaceContractSource;
     const liveSha = isObj(c) ? canonicalContractSha(c) : null;
-    const ok = !isObj(c) || (f?.source === 'plan' || f?.source === 'plan-inherited') && f?.storedAtWriteSha256 === p.planSha256 && liveSha === p.planSha256;
+    // Q2 (2026-10-17, AUDIT-V3): a row whose fact says the platform STORED the plan (source plan / plan-inherited — incl. the
+    // absent arm, arm create-absent) but which holds NO object contract now is a post-create loss — it FAILS. Before Q2 a
+    // contract-less row passed unconditionally, which would have hidden exactly the loss the absent arm's flag guards.
+    const factSaysStored = f?.source === 'plan' || f?.source === 'plan-inherited';
+    const ok = isObj(c)
+      ? factSaysStored && f?.storedAtWriteSha256 === p.planSha256 && liveSha === p.planSha256
+      : !factSaysStored;
     if (!ok) bad++;
-    console.log(`  ${ok ? '✅' : '❌'} ${k.id} ${k.type.padEnd(8)} ${(k.agentRole ?? '—').padEnd(22)} source=${f?.source ?? '—'} ` +
+    console.log(`  ${ok ? '✅' : '❌'} ${k.id} ${k.type.padEnd(8)} ${(k.agentRole ?? '—').padEnd(22)} source=${f?.source ?? '—'} arm=${f?.arm ?? '—'}${f?.declineReason ? ` declineReason=${f.declineReason}` : ''} ` +
       `resolution=${f?.planResolution ?? '—'} suppliedMatched=${f?.suppliedMatched ?? '—'} live=${liveSha?.slice(0, 12) ?? 'none'} ` +
       `stored=${f?.storedAtWriteSha256?.slice(0, 12) ?? '—'} carry=${JSON.stringify((k.metadata as any)?.duplicateAcknowledgedCarry?.lastAttempt ?? null)}`);
   }
-  console.log(bad ? `❌ ${bad} row(s) off-plan — read their planResolution` : '✅ every contract-bearing row holds the plan (stored = plan = live)');
+  console.log(bad ? `❌ ${bad} row(s) off-plan or lost — read their planResolution / arm` : '✅ every contract-bearing row holds the plan (stored = plan = live), and no row the platform stored a plan into has lost it');
   if (bad) process.exitCode = 1;
 }
 

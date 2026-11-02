@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# pre-push: warnings only (never blocks). stdin: <local ref> <local sha> <remote ref> <remote sha>
+while read -r _lref lsha _rref rsha; do
+  [ "$lsha" = "0000000000000000000000000000000000000000" ] && continue
+  base="$rsha"; [ "$rsha" = "0000000000000000000000000000000000000000" ] && base="origin/main"
+  bash scripts/check-series-cut-owed.sh "$base" "$lsha"
+done
+exit 0

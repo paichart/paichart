@@ -238,7 +238,7 @@ export async function runDiagnosticRetry(
   } else if (isInDiagnosticBand && formCorrectionAttempted) {
     // Forensic visibility: the band matched but the run's one reflection pass was already spent.
     logger.info({ executionId, confidenceScore, reason: 'form_correction_attempted' },
-      'Diagnostic retry skipped: a form correction (package or requirements) already spent this execution\'s reflection pass');
+      'Diagnostic retry skipped: a correction turn (package form, requirements or held-edit) already spent this execution\'s reflection pass');
   } else if (isInDiagnosticBand && agentSelfFlaggedBudget) {
     // Forensic visibility: log when we DECLINE to retry due to budget exhaustion.
     // Same-window retry would hit the same wall — manual-after-window-reset is the

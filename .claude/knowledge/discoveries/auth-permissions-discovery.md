@@ -163,6 +163,17 @@ works); user-mgmt GUI is SUPER_ADMIN-only while the API allows `[ADMIN, SUPER_AD
 **NOT dead code** — reserved for a future custom-role GUI; do not delete it as unused.
 Verify: `grep -rn "customRoleId" lib/admin app/api/admin && cat components/admin/CustomRoleSelect.tsx | head`.
 
+**Lookup scoping — Bug Class 86 (2026-10-31).** Any by-name/title/id lookup that runs BEFORE `validatePOVAccess` and can name what it
+matched must be scoped (helpers in `lib/pov/auth/pov-access-filter.ts`; depth: library § "Lookup scoping (Bug Class 86)"). Derive state:
+```bash
+grep -rn "scopeTaskTitleLookup(\|scopeTeamLookup(\|scopeTaskIdLookup(" lib/mcp/tasks/action/handlers | wc -l   # expect >=10
+grep -rln "Found in POVs" lib/mcp/tasks/action/handlers | xargs grep -L "scopeTaskTitleLookup(" | wc -l          # expect 0
+grep -rn "includeAllUsers: isAdmin" lib/mcp/tasks/action/utilities/assignee-resolver.ts | wc -l                  # expect 1
+npm run test:task-title-lookup-scope   # expect >=18
+```
+A NEW lookup site that emits matched names/titles without a scope helper is a Bug Class 86 regression — the wiring checks in
+`test-task-title-lookup-scope.ts` catch the known emitters only; sweep new handlers by reading them.
+
 - [ ] Token security (encryption, signing)
 - [ ] Password hashing and storage
 - [ ] Rate limiting implementation

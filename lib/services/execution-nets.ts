@@ -29,6 +29,14 @@ export interface StampExecutionNetsInput {
   finalResponse: string | null | undefined;
   executionId: string;
   logger: { warn: (obj: Record<string, unknown>, msg: string) => void };
+  /** Stage B (A6): the core's one owning-leg resolution. Absent (rescue path, replays) ⇒ the net context resolves it
+   *  lazily through the same function, so both see the same value. */
+  owningLeg?: import('@/lib/agents/harness/held-bytes/variant').OwningLegResolution | null;
+  /** held-network step 3 batch 2b: the core's one read of the leg's declared Device sources (the same object capture used).
+   *  Absent ⇒ the net context resolves it lazily through the same reader. */
+  deviceSources?: import('@/lib/agents/harness/device-sources-read').LegDeviceSourcesResolution | null;
+  /** Stage B: the variant stamps built pre-tx (V-5d/V-5g). */
+  held?: { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: readonly string[] | null };
 }
 
 /** Stamp every applicable net onto `resultJson` (mutated in place). Resolves when both points have run. */
@@ -52,6 +60,9 @@ export async function stampExecutionNets(
     // VERBATIM-QUOTE-OMISSION (2026-10-13): read off the BUILT resultJson, here, so the core and the rescue cannot hand
     // the nets different tool results (one chokepoint; the builder has already applied the persist truncation).
     toolCalls: resultJson.toolCalls,
+    owningLeg: input.owningLeg ?? null,
+    deviceSources: input.deviceSources ?? null,
+    ...(input.held ? { held: input.held } : {}),
     onContractApplicabilityError: (err) =>
       logger.warn({ executionId, err: err instanceof Error ? err.message : String(err) },
         'contract-applicability lookup failed — facts stamped without it'),

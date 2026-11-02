@@ -14,9 +14,11 @@ import { prisma } from '@/lib/prisma';
 import { ensureObject } from '@/lib/utils/ensure-object';
 import { logger } from '@/lib/logger';
 import { mintMcpToken } from '@/lib/auth/token-manager';
+import { gitFileSourceWorkflowRefusal } from '@/lib/mcp/server/config/git-file-source-pin';
 import { UserRole as AuthUserRole } from '@/lib/types/auth';
 
 const { audienceForService } = require('@/lib/mcp/server/tools/hub/audience-policy');
+const { findServiceByIdThenName } = require('@/lib/mcp/server/tools/hub/resolve-service-ref');
 
 const callerLogger = logger.child({ module: 'ServiceCaller' });
 
@@ -157,6 +159,8 @@ interface ServiceRecord {
   };
   // F-SWEEP-2: publicAccess lives in the permissions COLUMN (post-Jan-2026
   // standardization), not configuration — trust-level.js reads it there.
+  /** WI-B10: the registrant declaration (row-aware Git pin). */
+  heldFiles?: unknown;
   permissions: {
     publicAccess?: boolean;
   };
@@ -171,23 +175,19 @@ interface ServiceRecord {
  * @returns Service record with endpoint and configuration, or null if not found/inactive
  */
 async function resolveServiceEndpoint(serviceId: string): Promise<ServiceRecord | null> {
-  const service = await prisma.mCPTool.findFirst({
-    where: {
-      OR: [
-        { id: serviceId },
-        { name: serviceId }  // Allow lookup by name or ID
-      ],
-      status: 'ACTIVE'  // Only active services
-    },
-    select: {
+  // ID FIRST, then name (Stage B P1-5, resolve-service-ref.js); only ACTIVE services. An id hit is terminal whatever its
+  // status: an INACTIVE id hit returns null and never falls through to a row NAMED after that id.
+  const service: { id: string; name: string; status: string; configuration: unknown; permissions: unknown; heldFiles?: unknown } | null =
+    await findServiceByIdThenName(prisma.mCPTool, serviceId, {
       id: true,
       name: true,
+      status: true,
       configuration: true,
-      permissions: true  // F-SWEEP-2: trust-level reads permissions.publicAccess
-    }
-  });
+      permissions: true,  // F-SWEEP-2: trust-level reads permissions.publicAccess
+      heldFiles: true     // WI-B10: a declared Git file source is refused as a workflow step too
+    });
 
-  if (!service) {
+  if (!service || service.status !== 'ACTIVE') {
     return null;
   }
 
@@ -213,7 +213,8 @@ async function resolveServiceEndpoint(serviceId: string): Promise<ServiceRecord 
     endpoint,
     transportType,
     configuration: config || {},
-    permissions: (service.permissions as { publicAccess?: boolean } | null) || {}
+    permissions: (service.permissions as { publicAccess?: boolean } | null) || {},
+    heldFiles: service.heldFiles ?? null,
   };
 }
 
@@ -305,6 +306,21 @@ class OrchestrationServiceCaller {
         return {
           success: false,
           error: `Service not found or inactive: ${service}`,
+          executionTime: Date.now() - startTime,
+          service,
+          tool,
+        };
+      }
+
+      // held-k8s SF-1: a Git file source is never a workflow step (the ONE refusal in git-file-source-pin.js), keyed on the
+      // RESOLVED name and checked before trust resolution, token minting or any network call.
+      const gitWorkflowRefusal = gitFileSourceWorkflowRefusal(serviceInfo); // WI-B10: row-aware
+      if (gitWorkflowRefusal) {
+        callerLogger.warn({ securityEvent: true, service, tool, resolvedService: serviceInfo.name, userId: context.user.id },
+          'Git file source refused as a workflow step');
+        return {
+          success: false,
+          error: gitWorkflowRefusal,
           executionTime: Date.now() - startTime,
           service,
           tool,

@@ -13,6 +13,12 @@
  *     persisted result.json leaf gets — would place MORE placeholders than B carries, the file is refused rather than held
  *     less redacted than result.json. The deep walk is used ONLY for that comparison; B and baseHash never come from it.
  *   - No Unicode normalisation, no splitting on anything but "\n", no trimming (P3 §3.2).
+ *   - `echo-secret-residual` (R10-V8-RESIDUALS (a), held-network step 3 P1, 2026-10-25): since R10 v8 the PERSIST redacts a
+ *     value a keyed rule took anywhere in the persist wherever it reappears BARE (echo). The plain arm does not echo, so a
+ *     held file carrying a bare echo — of a value keyed in the SAME file, or (`echoTokens`) keyed anywhere in the execution's
+ *     persist — would be held LESS redacted than result.json. It is REFUSED, never echo-redacted into B: refusing moves no
+ *     held base's bytes or hash and needs no R10_VERSION bump (B is still exactly R10_plain(C)), and the self-echo half is a
+ *     pure function of C, so an offline operator recompute refuses the same file. Same guard as the persist (echoEligible).
  *
  * Contract: cline_docs/reviews/platform-held-bytes-2026-10-13/P3-SERVICE-CONTRACT.md §3.
  * Plan: cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-PLAN.md WI-2.
@@ -22,15 +28,17 @@ import {
   R10_VERSION,
   redactArtifactSecrets,
   redactSecretsDeep,
+  buildEchoMatcher,
+  redactEchoes,
+  PLACEHOLDER_ANY,
 } from '../redact-artifact-secrets';
 
 export const DECODE_VERSION = 'paichart.text/1';
 export const HASH_BASIS_LEGACY = 'legacy-decoded-text';
 export const REDACTOR_VERSION_NONE = 'none';
 
-/** Both placeholder spellings in ONE non-overlapping pattern: `<REDACTED-SECRET>` is a substring of PLACEHOLDER, so two
- *  separate counts would double-count (panel BC-N3). */
-const PLACEHOLDER_ANY = /<<?REDACTED-SECRET>>?/g;
+// PLACEHOLDER_ANY (both placeholder spellings, one non-overlapping pattern — panel BC-N3) lives in redact-artifact-secrets.ts since
+// R10 v11: the echo pass never matches inside it, so the count here and the echo exclusion share ONE definition.
 
 export function countPlaceholders(text: string): number {
   return (text.match(PLACEHOLDER_ANY) || []).length;
@@ -125,7 +133,7 @@ export function checkLegacyText(s: string): LegacyRefusal | null {
 
 // ── The canonical base ─────────────────────────────────────────────────────────────────────────────────────────────
 
-export type CanonicalRefusal = 'line-map-broken' | 'escaped-secret-residual';
+export type CanonicalRefusal = 'line-map-broken' | 'escaped-secret-residual' | 'echo-secret-residual';
 
 export interface CanonicalBase {
   ok: true;
@@ -142,17 +150,18 @@ export interface CanonicalBase {
 
 export type CanonicalResult = CanonicalBase | { ok: false; refusal: CanonicalRefusal };
 
-export function canonicalBase(C: string, opts: { redact: boolean }): CanonicalResult {
+export function canonicalBase(C: string, opts: { redact: boolean; echoTokens?: Iterable<string> }): CanonicalResult {
   const preexistingPlaceholders = countPlaceholders(C);
   let B: string;
   let redactedCount: number;
   let redactorVersion: string;
+  const sink = new Set<string>(); // the tokens the plain arm took from C (R10 v8 collection — B's bytes do not depend on it)
   if (!opts.redact) {
     B = C;
     redactedCount = 0;
     redactorVersion = REDACTOR_VERSION_NONE;
   } else {
-    const r = redactArtifactSecrets(C); // PLAIN arm only
+    const r = redactArtifactSecrets(C, sink); // PLAIN arm only
     B = r.redacted;
     redactedCount = r.redactedCount;
     redactorVersion = R10_VERSION;
@@ -167,6 +176,12 @@ export function canonicalBase(C: string, opts: { redact: boolean }): CanonicalRe
     const deep = redactSecretsDeep({ l: B }).value as { l: unknown };
     const deepText = typeof deep.l === 'string' ? deep.l : B;
     if (countPlaceholders(deepText) > countPlaceholders(B)) return { ok: false, refusal: 'escaped-secret-residual' };
+    // R10 v8 echo parity (R10-V8-RESIDUALS (a)): a bare reappearance in B of a value the plain arm took from C, or of one the
+    // caller's persist will key (echoTokens), would be redacted in result.json and kept here — refuse. Comparison only.
+    const tokens = opts.echoTokens ? new Set<string>([...sink, ...opts.echoTokens]) : sink;
+    // sec-ops batch-1 SF-4: past the matcher's literal cap the dropped literals can differ from the persist's — fail CLOSED.
+    const matcher = tokens.size > 0 ? buildEchoMatcher(tokens) : null;
+    if (matcher && (matcher.overflow > 0 || redactEchoes(B, matcher).redactedCount > 0)) return { ok: false, refusal: 'echo-secret-residual' };
   }
   const baseHash = createHash('sha256').update(Buffer.from(B, 'utf8')).digest('hex');
   return { ok: true, B, baseHash, redactedCount, redactorVersion, lineCount: countLines(B), preexistingPlaceholders };

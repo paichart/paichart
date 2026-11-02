@@ -1,0 +1,80 @@
+{
+  "V-0": {
+    "note": "Variant token on the SHIPPING code before any variant work (base = STAGE-B-BASELINE 7d9b283b6 + V-0). Each mover is a protocol-keyed site the plan names: title = the control itself; reviewerWarnings.renderScope = reviewer-warnings-enrichment.ts protocol scope (V-8 site table: include); the Reviewer's chained Author rollbackContainment (+ its meta.totalChars and §6 lines) = context-chainer ROLLBACK_FACT_LANE scalar (V-6: becomes a set incl. the variant). The Author's own rollbackContainment stamp does NOT move (V-8a adds the variant arm). Measured 2026-10-15 on obs legs cmv6ah2tq001dyxwu0jxzsobb, cmv5sc47g001cyxghwlw2y2zv; identical sets.",
+    "movers": [
+      "change_reviewer|entry:config_change_author.rollbackContainment",
+      "change_reviewer|meta.totalChars",
+      "change_reviewer|§6",
+      "pipeline_harness_orchestrator|net:reviewerWarnings.renderScope",
+      "pipeline_harness_orchestrator|title"
+    ]
+  },
+  "V-5": {
+    "movers": [
+      "change_reviewer|entry:config_change_author.rollbackContainment",
+      "change_reviewer|meta.totalChars",
+      "change_reviewer|net:reviewedEditDiff",
+      "change_reviewer|§6",
+      "config_change_author|card",
+      "config_change_author|net:editApplication",
+      "infra_state_harvester|net:heldBytes",
+      "pipeline_harness_orchestrator|card",
+      "pipeline_harness_orchestrator|net:editApplication",
+      "pipeline_harness_orchestrator|net:reviewerWarnings.renderScope",
+      "pipeline_harness_orchestrator|title"
+    ],
+    "note": "V-0's five + six held movers, values read 2026-10-15 on both controls: Author editApplication could-not-check (step-not-run — the replay does not run the step) + its card segment; Harvester heldBytes {held:0, reason:no-capture} (stored pre-variant run held nothing); Reviewer reviewedEditDiff no-edit-diff-entry (the stored chain carries no editDiff); leg hoist editApplication no-author-stamp + its card segment. Population pass: 0 removed/changed; added = 1,539 'not stamped (not-variant-leg)' + 5,783 'does not apply at <point> on this task' (the registry's applicability listing for the three new nets)."
+  },
+  "V-10": {
+    "movers": [
+      "change_reviewer|net:reviewedEditDiff",
+      "config_change_author|card",
+      "config_change_author|net:editApplication",
+      "config_change_author|net:rollbackContainment.heldRestores",
+      "infra_state_harvester|net:heldBytes",
+      "pipeline_harness_orchestrator|card",
+      "pipeline_harness_orchestrator|net:dialectLint.heldEditSearchLines",
+      "pipeline_harness_orchestrator|net:dialectLint.transcription.byStanza",
+      "pipeline_harness_orchestrator|net:dialectLint.transcription.checked",
+      "pipeline_harness_orchestrator|net:dialectLint.transcription.lines",
+      "pipeline_harness_orchestrator|net:dialectLint.transcription.linesPresent",
+      "pipeline_harness_orchestrator|net:dialectLint.transcription.linesRequired",
+      "pipeline_harness_orchestrator|net:dialectLint.transcription.missing",
+      "pipeline_harness_orchestrator|net:dialectLint.transcription.reason",
+      "pipeline_harness_orchestrator|net:editApplication",
+      "pipeline_harness_orchestrator|title"
+    ],
+    "note": "Final pass at 321813055 (G1 build commit), values read 2026-10-15. The V-0/V-5 site movers are GONE by design: V-6 (ROLLBACK_FACT_LANES) and V-8 (reviewer-warnings scope) now treat the variant like obs, so plain and variant agree there. New on the variant: Author rollbackContainment.heldRestores 0 and leg dialectLint.heldEditSearchLines 0 (stored pre-variant packages carry no edits); on cmv5sc47g only (its contract carries a canonical stanza) dialectLint.transcription → presence-not-checkable-held-edit (7 sub-keys). Held nets as at V-5 (could-not-check / no-author-stamp / no-edit-diff-entry / heldBytes no-capture). The union of both legs is recorded. Population pass: BYTE-IDENTICAL (0 removed/changed; 7,322 added, all the two named forms).",
+    "byLeg": {
+      "cmv6ah2tq001dyxwu0jxzsobb": [
+        "change_reviewer|net:reviewedEditDiff",
+        "config_change_author|card",
+        "config_change_author|net:editApplication",
+        "config_change_author|net:rollbackContainment.heldRestores",
+        "infra_state_harvester|net:heldBytes",
+        "pipeline_harness_orchestrator|card",
+        "pipeline_harness_orchestrator|net:dialectLint.heldEditSearchLines",
+        "pipeline_harness_orchestrator|net:editApplication",
+        "pipeline_harness_orchestrator|title"
+      ],
+      "cmv5sc47g001cyxghwlw2y2zv": [
+        "change_reviewer|net:reviewedEditDiff",
+        "config_change_author|card",
+        "config_change_author|net:editApplication",
+        "config_change_author|net:rollbackContainment.heldRestores",
+        "infra_state_harvester|net:heldBytes",
+        "pipeline_harness_orchestrator|card",
+        "pipeline_harness_orchestrator|net:dialectLint.heldEditSearchLines",
+        "pipeline_harness_orchestrator|net:dialectLint.transcription.byStanza",
+        "pipeline_harness_orchestrator|net:dialectLint.transcription.checked",
+        "pipeline_harness_orchestrator|net:dialectLint.transcription.lines",
+        "pipeline_harness_orchestrator|net:dialectLint.transcription.linesPresent",
+        "pipeline_harness_orchestrator|net:dialectLint.transcription.linesRequired",
+        "pipeline_harness_orchestrator|net:dialectLint.transcription.missing",
+        "pipeline_harness_orchestrator|net:dialectLint.transcription.reason",
+        "pipeline_harness_orchestrator|net:editApplication",
+        "pipeline_harness_orchestrator|title"
+      ]
+    }
+  }
+}

@@ -42,7 +42,7 @@ import { ROLE_GUIDANCE_LIBRARY } from '../lib/services/agentTemplateBuilder/pAIc
 // roles whose guidance legitimately comes from elsewhere.
 const INTENTIONALLY_GENERIC_ROLES: Record<string, string> = {
   pipeline_harness_orchestrator:
-    'Harness meta-agent — its instructions come from the injected pipeline-orchestrator-protocol (loadProtocols:true), not ROLE_GUIDANCE_LIBRARY.',
+    'Harness meta-agent — its instructions come from the injected pipeline-orchestrator-protocol (loadProtocols: composed), not ROLE_GUIDANCE_LIBRARY.',
   // network_state_harvester removed 2026-07-01 — network-provisioning Phase 0 now uses the shared
   // `infra_state_harvester` (which HAS a library entry), so the generic-fallback escape hatch is no longer needed.
 };

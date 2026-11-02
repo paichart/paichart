@@ -42,6 +42,8 @@ export const LEG_SECTION_PROTOCOLS: ReadonlySet<string> = new Set([
   'terraform-iac-protocol',
   'kubernetes-gitops-protocol',
   'observability-config-protocol',
+  // PLATFORM-HELD-BYTES Stage B V-8 (D-7 include): the held variant reuses the obs leg roles and reviewer.
+  'observability-config-held-protocol',
 ]);
 /** Program-root protocols whose report.md gets the program section (O1). */
 export const PROGRAM_SECTION_PROTOCOLS: ReadonlySet<string> = new Set(['pov-program-protocol']);
@@ -60,6 +62,7 @@ export const REGISTERED_WARNING_IDS: Readonly<Record<string, readonly string[]>>
   'terraform-iac-protocol': ['restated-conclusion'],
   'kubernetes-gitops-protocol': ['restated-conclusion'],
   'observability-config-protocol': ['restated-conclusion'],
+  'observability-config-held-protocol': ['restated-conclusion'],
 };
 
 type Client = Pick<PrismaClient, 'task' | 'agentExecution'> & AuthoritativeReadClient;

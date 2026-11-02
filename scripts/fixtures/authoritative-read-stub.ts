@@ -103,6 +103,15 @@ export function authoritativeReadStub(executions: StubExecution[], opts: { deps?
         const dc = e.result.derivationContainment;
         return [{ v: dc === undefined ? null : JSON.stringify(dc) }];
       }
+      // PLATFORM-HELD-BYTES Stage B (V-5f / V-9): the held child selector reads the Author's and the Reviewer's stamps.
+      if (sql.includes("->>'heldBytes'")) { // held-k8s step 3 (G-4): the Harvester's held-bytes stamp
+        const f = e.result.heldBytes;
+        return [{ v: f === undefined || f === null ? null : JSON.stringify(f) }];
+      }
+      if (sql.includes("->>'editApplication'") || sql.includes("->>'reviewedEditDiff'")) {
+        const f = sql.includes("->>'editApplication'") ? e.result.editApplication : e.result.reviewedEditDiff;
+        return [{ v: f === undefined ? null : JSON.stringify(f) }];
+      }
       // WARNINGS-INVISIBLE (2026-10-08): the reviewerWarnings net reads a reviewer's stamped verdict (result.json) and,
       // at a program root, each leg's stamped leg fact (pipeline-index.json — the stub models both as `result`).
       if (sql.includes("->>'reviewerVerdict'")) {
@@ -117,6 +126,11 @@ export function authoritativeReadStub(executions: StubExecution[], opts: { deps?
       if (sql.includes("->>'toolCalls'")) {
         const tc = e.result.toolCalls;
         return [{ v: tc === undefined ? null : JSON.stringify(tc) }];
+      }
+      // held-network step 3 batch 2b (P5): the network Author transcribes its Harvester's Git-file vs device comparison.
+      if (sql.includes("->>'gitDeviceComparison'")) {
+        const g = e.result.gitDeviceComparison;
+        return [{ v: g === undefined || g === null ? null : JSON.stringify(g) }];
       }
       throw new Error(`authoritativeReadStub: unmodelled field in $queryRaw — ${sql.slice(0, 90)}`);
     },

@@ -1051,3 +1051,10 @@ The MCP Hub represents a paradigm shift from traditional service registries to c
 123. **Phase 5 boy-scout cleanup (May 17)**: `validateToolInput` converted from `.parse()` to `.safeParse()` (3 sites); `validPovStatuses` hardcoded enum → `Object.values(POVStatus)` from Prisma; `parameter-normalizer.toolSpecificRules` added missing `template`/`services`/`registry` entries; 5 .ts FIELD_LIMITS adoption sites converted. tool-schemas.js .js sites deliberately skipped (bare-Node load constraint — same pattern as inline DANGEROUS_KEYS).
 
 The successful transformation validates the revolutionary approach of repurposing existing infrastructure for new paradigms rather than building from scratch.
+
+## Carried from the join learnings ledgers (2026-10-31)
+
+Source: `cline_docs/reviews/held-network-2026-10-22/LEARNINGS-LEDGER.md` (LL-N). Each line is the learning in one sentence; the ledger row holds the evidence.
+
+- **A descriptor must pass the hub's own register schema (LL-N-05).** A published network descriptor carried a 618-char tool description (the limit is 500), so every leg registering by URL would have failed. Validate published descriptors against the register schema.
+- **A pre-registered service is the customer's (LL-N-04).** A run uses it as-is and never registers, updates or deletes it. Only a platform guard (a `descriptorUrl` register from a run never touches an existing row) makes that true.

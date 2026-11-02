@@ -232,3 +232,13 @@ not the task's `executionStatus`, when classifying failures after this date. The
 
 ## Pointer (2026-10-14): PLATFORM-HELD-BYTES Stage A tables
 Three new models (`held_blobs` with the first `Bytes` column, `held_file_refs`, `held_capture_refusals`); blob upsert pre-tx (autocommit, de-duplicated, sorted), refs/refusals in the SUCCESS tx inside `SAVEPOINT held_capture`; GC grace predicate ON THE DELETE TARGET + `FOR UPDATE SKIP LOCKED` (EvalPlanQual lesson). Rehearsal: `scripts/rehearse-held-gc-race.ts`. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-BUILD.md`.
+
+## Pointer (2026-10-14): PLATFORM-HELD-BYTES Stage B push 1 schema
+`held_views` (PK `held_views_pkey`, cascades with its blob); `held_file_refs` holds CAPTURE/BASE/CANDIDATE — four call-provenance columns NULL on BASE/CANDIDATE, `fromRefId` (no FK); ids from `newHeldRefId()` only; `gcBatchSql` kind-blind (pinned); MI-13 per-line `kind` disposition. Rehearsal: `scripts/rehearse-held-schema-b.ts`. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-B-PUSH1-BUILD.md`.
+
+**Pointer (2026-10-16, DB-P2-4 closed):** package + capture savepoints on one variant Author are pinned — `test-terminal-persist-shape` HELD I/J/K (order: `held_package` before the artifacts, `held_capture` after; each rolls back alone). Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/G3-ENTRY-BUILD.md`.
+
+## Pointer (2026-10-18): `held_file_refs.sourceRevision` (held-k8s K-3, DEPLOYED 2026-10-18 04:23:03Z, release `release_20261018_041900`; prod `check-held-bytes-schema.sql` 18/18 ALL OK)
+Schema commit `44c51e63f` — **NEVER revert** (rehearsed: a reverted push refuses once a value exists and silently drops an all-NULL
+column; `scripts/rehearse-held-source-revision.ts`). Nullable text, 40 lowercase hex, app-validated; BASE/CANDIDATE inherit;
+`check-held-bytes-schema.sql` now 18 rows. Your SF-1…SF-4 are folded. Two operator scripts lacked the required key at first (finding 10: `scripts/` is not typechecked — MI-13 🔴 11 read UNMEASURED until fixed); MI-13 now carries three `sourceRevision` 🔴 lines (github CAPTURE NULL, malformed, BASE/CANDIDATE ≠ its `fromRefId` row) + a positive control over temp shadow tables (`scripts/check-mi13-held-git-control.sh`). Record: `cline_docs/reviews/held-k8s-2026-10-18/STEP1-BUILD.md`.

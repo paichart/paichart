@@ -15,6 +15,48 @@ The `.claude/knowledge/` directory contains **permanent, reusable reference mate
 
 ---
 
+## The working-record map — what each document answers (added 2026-10-19)
+
+Long programs (held-k8s, PLATFORM-HELD-BYTES, …) leave a set of working records in `cline_docs/`. Each answers ONE question; a new
+session finds them through the latest **continuation note**. `<program>` = a review folder such as `cline_docs/reviews/held-k8s-2026-10-18/`.
+
+| Doc | Where | Answers | Lifespan |
+|---|---|---|---|
+| **Continuation note** | `cline_docs/follow-ups/<program>-*-continuation-*.md` | **"Where do I start?"** — state, next steps with exact commands, which docs to read first, the launch line. The ENTRY POINT. | Rewritten at each handover; the old one is marked SUPERSEDED |
+| **Open register** | `cline_docs/follow-ups/OPEN-REGISTER-2026-09-23.md` | "What is still open?" — every filed item with owner + **trigger**. "Filed" means written here. | Living; items closed in place, never deleted |
+| **Weekly hand-read log** | `cline_docs/follow-ups/WEEKLY-HAND-READ-LOG.md` | "What did the last read of real production output find?" — draw rule + one section per weekly read | Living; append only |
+| **Learnings ledger** | `<program>/LEARNINGS-LEDGER.md` | "What did this program teach us?" — LL ids tagged P (pattern) / L (lab) / O (operations) / F (filed) | Per program; folded into patterns, discoveries, checklists |
+| **Build records** | `<program>/STEP<n>-BUILD.md`, `R10-V<n>-BUILD.md` | "What did this step change, how was it proven, what moves at deploy?" — series-cut draft, rollback, deploy checklist | Per step; the deploy reads it |
+| **Lab pre-registration / result** | `<program>/LAB-PREREG-<id>.md`, `LAB-RESULT-<id>.md` | "What does the lab test, what counts as pass?" — written BEFORE spend (Protocol 16) | Per lab |
+| **Plans / panels** | `<program>/SYNTHESIS.md`, `*-PHASE0-INVENTORY.md`, panel reviews | "What did we decide to build, and why?" | Per design |
+| **Live-window run sheet** | `<program>/WINDOW-RUN-SHEET.md` | "What did the live window test, what counted as pass/stop, what did each leg do?" — pre-registered BEFORE any leg, results appended per leg | Per window |
+| **Close-out record** | `<program>/<DOMAIN>-CLOSEOUT.md` (e.g. `K8S-CLOSEOUT.md`) | "Is this program finished?" — the definition of done, each box ticked with its evidence, what was re-homed | Final record of a program |
+| **Question answers** | `cline_docs/reviews/<topic>-<date>/ANSWER.md` | "What did a specialist answer when asked X?" (e.g. lab-cost-reduction-2026-10-19) — decisions taken on it go to the register | Per question |
+| **Lab experiment ledger** | `.claude/knowledge/pipelines/LAB-EXPERIMENT-LEDGER.md` | "What did every lab cost and decide?" | Permanent |
+| **Patterns / checklists** | `.claude/knowledge/patterns/`, `.claude/knowledge/pipelines/LIVE-WINDOW-CHECKLIST.md`, `.claude/knowledge/pipelines/LAB-ANATOMY.md` (how to build a lab, L-K2 worked) | "How do we do this in general / what do I tick off?" — the permanent form of the learnings | Permanent |
+| **CLAUDE.md** | repo root | Standing rules + an index of the latest series cuts; the full **series-cut log** (what changed in prod, when) is `.claude/knowledge/pipelines/SERIES-CUT-LEDGER.md` since 2026-10-29 | Permanent |
+
+**Entry points for people (added 2026-11-02)** — start a newcomer HERE, not in the records above:
+
+| Doc | Where | Answers | Audience |
+|---|---|---|---|
+| **Operator runbook** | `.claude/knowledge/pipelines/OPERATOR-RUNBOOK.md` | "How do I run a program, from objective to the change package I apply?" | People who run programs |
+| **Maintainer onboarding** | `.claude/knowledge/guides/MAINTAINER-ONBOARDING.md` | "What rules keep the platform safe to change, and which script enforces each?" — names `scripts/run-gates-clean.sh` (gates on a clean tree), `scripts/ship.sh` (safe push + deploy watch), `scripts/series-cut-draft.sh` (ledger entry draft), `npm run report:gate` / `report:canary` / `report:canary-plan` | New maintainers |
+| **Health-run procedure** | `.claude/knowledge/guides/HEALTH-RUN.md` | "What does the quarterly health-run check, with which queries?" — moved verbatim out of CLAUDE.md 2026-11-01; CLAUDE.md keeps a stub with the dates | Whoever runs the health-run |
+| **Self-host docs (public)** | `docs/RUNNING.md`, `docs/SELF-HOST-RUN-SHEET.md`, `docs/SELF-HOST-KEPT-FILES.md`, `docs/VERIFYING-SELF-HOST.md` | "How do I install, test, run kept files on, and verify a self-hosted install?" — exported to the public repo | Self-hosters |
+
+**The flow:** a finding → the register (with a trigger) · a lesson → the ledger → a pattern / discovery / checklist · a build → its build
+record → its deploy → its series-cut ledger entry (CLAUDE.md before 2026-10-29) · a handover → a new continuation note.
+
+**Finding a filed item by its ID** (e.g. `K8S-TEXT-BATCH-NEXT`): every ID is a bold heading in the open register —
+`grep -n "\*\*K8S-TEXT-BATCH-NEXT" cline_docs/follow-ups/OPEN-REGISTER-2026-09-23.md`. Its later status lines (✅ CLOSED / 🔁 RE-HOMED /
+⏰ TRIGGER FIRED) follow on the indented lines directly under it.
+
+**Resuming a session:** `claude --agent <owning specialist>`, then *"Continue from `<latest continuation note>`. Read it first and follow its
+order."* Find the latest with `ls -t cline_docs/follow-ups/*continuation*.md | head`.
+
+---
+
 ## Knowledge Base Structure
 
 ```
@@ -812,3 +854,24 @@ This allows the user to make informed decisions about knowledge base inclusion d
 
 **Guidelines Status**: ✅ Ready for use
 **Next Step**: Execute knowledge base migration per migration plan
+
+## The open register — four files and two standing rules (2026-10-31, owner)
+
+Location: `cline_docs/follow-ups/`.
+
+| File | Holds |
+|---|---|
+| `OPEN-REGISTER-2026-09-23.md` | ACTIVE work: the family index plus the active items |
+| `REGISTER-PARKED.md` | open items waiting on a stated trigger |
+| `REGISTER-IDEAS.md` | research and ideas, no owner action implied |
+| `REGISTER-ARCHIVE-2026.md` | closed entries, verbatim, with an index |
+
+1. **An item that closes moves to the archive, verbatim, in the same commit that closes it.**
+2. **A new item names an owner and a trigger, or it goes to Ideas.** "Filed" means written in one of these files.
+
+At each quarterly health run:
+- re-read Parked for triggers that have fired, and promote those items;
+- re-read Ideas for anything to promote or drop.
+
+Any move between the files is conservation-checked: every line of the old file appears in exactly one new file. Record: `cline_docs/follow-ups/REGISTER-RATIONALIZATION-PLAN-2026-10-31.md`.
+

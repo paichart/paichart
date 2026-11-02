@@ -39,6 +39,8 @@
  * cline_docs/follow-ups/igp-t1-campaign-followups-2026-08-23.md item 2.
  */
 
+import type { ParsedHeldEdits } from './held-bytes/edits';
+
 export interface DialectLintViolation {
   /** The banned token found. */
   token: string;
@@ -69,7 +71,10 @@ export interface CanonicalLineCheck {
 export interface TranscriptionCheck {
   /** false when no canonical stanza was found in the contract (nothing to check). */
   checked: boolean;
-  reason?: 'no-canonical-stanza' | 'no-fenced-blocks' | 'canonical-stanza-unsupported-shape';
+  reason?: 'no-canonical-stanza' | 'no-fenced-blocks' | 'canonical-stanza-unsupported-shape'
+    /** Stage B V-8b, held-variant packages only: the package carries edits, not whole files, so the PRESENCE half would see
+     *  REPLACE fragments only — named instead of a false absence. */
+    | 'presence-not-checkable-held-edit';
   /** How many canonical stanzas the contract carried. */
   stanzasConsidered: number;
   /** G7 (2026-10-10): the JSON SHAPES of canonical-stanza values this check cannot read (a stanza given as an array of
@@ -145,6 +150,8 @@ export interface DialectLintResult {
    *  its presence). Present ONLY when non-empty. Named rather than silently dropped, so a reader
    *  can see the exemption fired and audit it. */
   searchPatternExempt?: DialectLintViolation[];
+  /** Stage B V-8b: SEARCH lines excluded from the scan — present ONLY on held-variant stamps. */
+  heldEditSearchLines?: number;
   /** PRESENCE half — independent of the banned-token (absence) half above: a package can be
    *  banned-token clean and still fatally incomplete (IGP-T1 R7). Always emitted. */
   transcription: TranscriptionCheck;
@@ -798,7 +805,38 @@ export function canonicalStanzaNeedles(
 
 export function runDialectLint(
   deliverable: string | null | undefined,
-  contract: unknown
+  contract: unknown,
+  /** Stage B V-8b: present ONLY on a held-variant leg (the enrichment decides). Absent ⇒ byte-identical to before. */
+  opts?: { heldEdits?: ParsedHeldEdits }
+): DialectLintResult {
+  if (opts?.heldEdits) {
+    const r = runDialectLintCore(deliverable, contract, opts.heldEdits);
+    return { ...r, heldEditSearchLines: opts.heldEdits.blocks.reduce((n, b) => n + b.searchLines.length, 0) };
+  }
+  return runDialectLintCore(deliverable, contract, null);
+}
+
+/**
+ * Stage B V-8b — the POST-CLASSIFICATION filter for a held-variant package (EF S-V3-1). The classifier is SHARED (with
+ * applyBlockPlaceholder and rollbackContainment), so it is not bumped: its output is filtered here. SEARCH lines (the held
+ * bytes being replaced) and the grammar's own marker lines leave the scan; every REPLACE and `create` line is scanned as
+ * CANDIDATE CONFIG, fenced or not. So a removal edit (token in SEARCH only) is not flagged and an introducing edit is.
+ */
+function heldEditBlockLines(blockLines: FencedBlockLine[], held: ParsedHeldEdits): FencedBlockLine[] {
+  const drop = new Set<number>();
+  const scan: FencedBlockLine[] = [];
+  for (const b of held.blocks) {
+    for (const n of [...b.searchLines, ...b.markerLines, ...b.replaceLines]) drop.add(n);
+    if (b.section !== 'edits') continue;
+    b.replaceLines.forEach((n, i) => scan.push({ line: n, text: b.replace[i] ?? '', kind: 'candidate-config', restoreIntent: false, label: null, ancestry: '' }));
+  }
+  return [...blockLines.filter((l) => !drop.has(l.line)), ...scan].sort((a, b) => a.line - b.line);
+}
+
+function runDialectLintCore(
+  deliverable: string | null | undefined,
+  contract: unknown,
+  held: ParsedHeldEdits | null
 ): DialectLintResult {
   const noTranscription = (reason: TranscriptionCheck['reason']): TranscriptionCheck => ({
     checked: false,
@@ -822,7 +860,7 @@ export function runDialectLint(
   }
 
   const doc = deliverable ?? '';
-  const blockLines = fencedBlockLines(doc);
+  const blockLines = held ? heldEditBlockLines(fencedBlockLines(doc), held) : fencedBlockLines(doc);
   // PRESENCE counts occurrences in CANDIDATE-CONFIG blocks only (2026-08-28). The original code
   // scanned every block kind on the reasoning that "looking for a required line cannot
   // false-positive" — true for a raw COUNT, false once the count drives per-stanza ATTRIBUTION.
@@ -838,7 +876,9 @@ export function runDialectLint(
   const derived = canonicalStanzaNeedles(contract);
   const stanzaShapes = unsupportedCanonicalStanzaShapes(contract);
   let transcription: TranscriptionCheck;
-  if (derived.stanzasConsidered === 0) {
+  if (held && derived.stanzasConsidered > 0) {
+    transcription = { ...noTranscription('presence-not-checkable-held-edit'), stanzasConsidered: derived.stanzasConsidered, separators: derived.separators };
+  } else if (derived.stanzasConsidered === 0) {
     transcription = stanzaShapes.length
       ? { ...noTranscription('canonical-stanza-unsupported-shape'), stanzaShapes }
       : noTranscription('no-canonical-stanza');

@@ -41,7 +41,7 @@ const rows: Row[] = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).ma
 const b = { identical: 0, changed: 0, noReviewer: 0, noVerdict: 0, factOnly: 0 };
 const changed: string[] = [];
 let injected = 0; const injectedOk: string[] = [];
-const injectDomains = new Set(['network-provisioning-protocol', 'terraform-iac-protocol', 'observability-config-protocol']);
+const injectDomains = new Set(['network-provisioning-protocol', 'terraform-iac-protocol', 'observability-config-protocol', 'observability-config-held-protocol']); // + Stage B variant (D-7 include, arch N-5′)
 
 for (const r of rows) {
   const proto = r.protocol;

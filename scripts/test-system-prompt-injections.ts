@@ -162,26 +162,20 @@ await test('harness reason {{-sanitization: {{VAR}} → \\{\\{VAR}} (prompt-cons
   assert(!out.includes('Reason: Stage {{STAGE}}'), 'raw {{ must not survive');
 });
 
-await test('loadProtocols (2 protocols) → golden section, name-joined with ---, PREPENDED above harness (layout pin)', async () => {
+await test('RETIRED: loadProtocols:true → THROWS UNKNOWN_PROTOCOL_MODE (load-all retired 2026-10-16) BEFORE any DB read', async () => {
+  // PROTOCOL-LOAD-ALL-RETIRE: load-all bundled every ACTIVE protocol (take:10, name-ordered) into one prompt. No template used it
+  // and 0 executions in 90 days ran it; a template still carrying `true` (e.g. a GUI edit) must fail loud, never load everything.
   logs.length = 0;
-  const protocols = [
-    { name: 'alpha-protocol', description: 'First.', promptText: 'Do alpha.' },
-    { name: 'beta-protocol', description: 'Second.', promptText: 'Do beta.' },
-  ];
-  const out = await applySystemPromptInjections(BASE,
-    { harnessContext: HC(), template: { id: 't1', name: 'Harness' }, templateMetadata: { loadProtocols: true } },
-    mockDb({ protocols }), logger);
-  // 2026-08-04: UNIVERSAL_AGENT_RULES is now injected ONCE here rather than concatenated into every
-  // protocol's promptText at seed time (a PIPELINE task previously received SIX copies). A visible
-  // consequence is that the preamble is now the FIRST text in the prompt — it used to sit buried
-  // inside the first protocol entry's body. That position change is deliberate: a preamble read
-  // first is the point of a preamble. These goldens pin it so it cannot drift back or vanish.
-  const goldenSection = `${UNIVERSAL_AGENT_RULES}\n\n---\n\n## Available Orchestration Protocols\n\n` +
-    `### Protocol: alpha-protocol\nFirst.\n\nDo alpha.\n\n---\n\n### Protocol: beta-protocol\nSecond.\n\nDo beta.` +
-    `\n\n---\n\n`;
-  assertEq(out, goldenSection + goldenHarnessBlock('SYNTHESIZE', 'All child tasks terminal', '2026-07-05T00:00:00.000Z') + BASE + GOLDEN_SCOPE_CHECK, 'loadProtocols layout: protocols → harness → HEAD → scope');
-  assert(logs.some(l => l.level === 'info' && l.msg === 'Protocol injection for PIPELINE task'), 'engine-canonical info log');
-  assert(!logs.some(l => l.level === 'warn'), 'no cap-hit warn under the cap');
+  let reads = 0;
+  const db = { agentPromptLibrary: { findMany: async () => { reads++; return []; }, findFirst: async () => { reads++; return null; } } };
+  for (const md of [{ loadProtocols: true }, { loadProtocols: true, protocol: 'p1' }]) {
+    let threw = '';
+    try { await applySystemPromptInjections(BASE, { harnessContext: HC(), template: { id: 't1', name: 'H' }, templateMetadata: md } as any, db as any, logger); }
+    catch (e) { threw = (e as Error).message; }
+    assert(threw.startsWith('UNKNOWN_PROTOCOL_MODE') && threw.includes('RETIRED'), `loadProtocols:true must throw the retired message, got: ${threw || 'no throw'}`);
+  }
+  assert(reads === 0, `no protocol read before the throw (got ${reads})`);
+  assert(logs.some(l => l.level === 'warn' && (l.data as any).errorCode === 'UNKNOWN_PROTOCOL_MODE'), 'structured errorCode logged');
 });
 
 await test('ORDER: the rendered sequence is preamble → protocols → mode → base → constraints → scope', async () => {
@@ -190,14 +184,18 @@ await test('ORDER: the rendered sequence is preamble → protocols → mode → 
   // justify the Harness Context position as "BEFORE protocol injection" (citing a pattern doc at 98%
   // confidence) while the mode block actually rendered AFTER ~30 KB of protocol prose. Asserting
   // order directly is the guard that was previously impossible to write.
+  // Composed mode since the load-all retirement (2026-10-16) — the only mode with a harness, a base and a delta.
   const out = await applySystemPromptInjections(BASE,
-    { harnessContext: HC(), template: { id: 't1', name: 'H' }, templateMetadata: { loadProtocols: true } },
-    mockDb({ protocols: [{ name: 'alpha-protocol', description: 'First.', promptText: 'Do alpha.' }] }),
+    { harnessContext: HC(), template: { id: 't1', name: 'H' }, templateMetadata: { loadProtocols: 'composed' },
+      taskProtocol: { protocol: 'terraform-iac-protocol', source: 'stamp' } } as any,
+    mockDb({ bases: [{ name: 'pipeline-execution-protocol', description: 'base', promptText: 'BASEBODY', version: '3.11.0' }],
+      rows: { 'terraform-iac-protocol': { promptText: 'DELTABODY', status: 'ACTIVE', version: '1.2.1' } } }),
     logger);
 
   const seq = [
     '## Universal Agent Rules',
-    '## Available Orchestration Protocols',
+    '## Harness Operating Base',
+    '## Active Protocol: terraform-iac-protocol',
     '## Harness Context (Platform-Resolved)',
     BASE,
   ].map(marker => ({ marker, at: out.indexOf(marker) }));
@@ -214,7 +212,7 @@ await test('ORDER: the rendered sequence is preamble → protocols → mode → 
     'scope self-check must render after the base prompt');
 });
 
-await test('REC-9: the preamble appears EXACTLY ONCE per prompt, in both injection modes', async () => {
+await test('REC-9: the preamble appears EXACTLY ONCE per prompt, in both live injection modes (composed, named)', async () => {
   // The regression this guards is the whole point of the change. Before 2026-08-04 the rules were
   // concatenated into every protocol's promptText at seed time, so a PIPELINE task loading six
   // protocols carried SIX copies (~27 KB, 15% of its protocol block, every turn). Now one injection
@@ -222,10 +220,13 @@ await test('REC-9: the preamble appears EXACTLY ONCE per prompt, in both injecti
   // if that site stops firing, every protocol-reading agent silently loses the preamble and nothing
   // about the prompt looks wrong. Count, do not merely assert presence.
   const marker = '## Universal Agent Rules';
-  const six = Array.from({ length: 6 }, (_, i) => ({ name: `p${i}`, description: 'd', promptText: 'body' }));
+  // Composed (base + delta) since the load-all retirement: two protocol blocks, ONE preamble.
   const multi = await applySystemPromptInjections(BASE,
-    { ...noCtx, templateMetadata: { loadProtocols: true } }, mockDb({ protocols: six }), logger);
-  assert(multi.split(marker).length - 1 === 1, `loadProtocols: preamble must appear exactly once across six protocols, found ${multi.split(marker).length - 1}`);
+    { ...noCtx, template: { id: 't1', name: 'H' }, templateMetadata: { loadProtocols: 'composed' },
+      taskProtocol: { protocol: 'terraform-iac-protocol', source: 'stamp' } } as any,
+    mockDb({ bases: [{ name: 'pipeline-execution-protocol', description: 'base', promptText: 'body', version: '1' }],
+      rows: { 'terraform-iac-protocol': { promptText: 'body', status: 'ACTIVE', version: '1' } } }), logger);
+  assert(multi.split(marker).length - 1 === 1, `composed: preamble must appear exactly once across base + delta, found ${multi.split(marker).length - 1}`);
 
   const single = await applySystemPromptInjections(BASE,
     { ...noCtx, templateMetadata: { protocol: 'network-provisioning-protocol' } },
@@ -238,27 +239,11 @@ await test('REC-9: the preamble appears EXACTLY ONCE per prompt, in both injecti
   assert(none.split(marker).length - 1 === 0, 'no protocol injected ⇒ no preamble — it rides protocol injection by design');
 });
 
-await test('loadProtocols cap-hit (exactly 10) → cap warn with loadedProtocols names', async () => {
-  logs.length = 0;
-  const ten = Array.from({ length: 10 }, (_, i) => ({ name: `p${i}`, description: 'd', promptText: 't' }));
-  await applySystemPromptInjections(BASE, { ...noCtx, templateMetadata: { loadProtocols: true } }, mockDb({ protocols: ten }), logger);
-  const warn = logs.find(l => l.level === 'warn' && l.msg.includes('10-skill cap'));
-  assert(warn, 'cap-hit warn fired');
-  assert(Array.isArray((warn!.data as any).loadedProtocols) && (warn!.data as any).loadedProtocols.length === 10, 'warn carries the loaded names');
-});
-
-await test('loadProtocols db-throw → warn, prompt degrades to protocol-less (never throws)', async () => {
-  logs.length = 0;
-  const out = await applySystemPromptInjections(BASE, { ...noCtx, templateMetadata: { loadProtocols: true } }, mockDb({ throwOn: 'findMany' }), logger);
-  assertEq(out, BASE + GOLDEN_SCOPE_CHECK, 'protocol-less degradation');
-  assert(logs.some(l => l.level === 'warn' && l.msg === 'Failed to load protocols — harness will use fallback planning'), 'engine-canonical failure warn');
-});
-
 await test('named protocol found → golden ## Protocol prepend + info log', async () => {
   logs.length = 0;
   const out = await applySystemPromptInjections(BASE, { ...noCtx, templateMetadata: { protocol: 'net-provision' } }, mockDb({ named: { promptText: 'Provision carefully.' } }), logger);
-  // Same single-injection change as the loadProtocols golden above — the specialist path gets the
-  // preamble once, first, instead of receiving it inside the protocol body.
+  // The single-injection change (2026-08-04): the specialist path gets the preamble once, first, instead of receiving it inside
+  // the protocol body.
   assertEq(out, `${UNIVERSAL_AGENT_RULES}\n\n---\n\n## Protocol\n\nProvision carefully.\n\n---\n\n` + BASE + GOLDEN_SCOPE_CHECK, 'named-protocol output');
   assert(logs.some(l => l.level === 'info' && l.msg === 'Injected named protocol into specialist system prompt'), 'engine-canonical info log');
 });
@@ -298,26 +283,6 @@ await test('metadata-null tripwire: template present + null metadata → loud wa
   assertEq(out, BASE + GOLDEN_SCOPE_CHECK, 'content unchanged by tripwire');
   const warn = logs.find(l => l.level === 'warn' && l.msg.includes('metadata is null'));
   assert(warn && (warn.data as any).templateName === 'Analyst' && (warn.data as any).templateId === 'tpl1', 'tripwire warn with template identity');
-});
-
-await test('loadProtocols=true wins over protocol name when both set (else-if pin) — AND warns', async () => {
-  logs.length = 0;
-  const out = await applySystemPromptInjections(BASE, { ...noCtx, templateMetadata: { loadProtocols: true, protocol: 'ignored' } },
-    mockDb({ protocols: [{ name: 'a', description: 'd', promptText: 't' }], named: { promptText: 'MUST NOT APPEAR' } }), logger);
-  assert(out.includes('## Available Orchestration Protocols') && !out.includes('MUST NOT APPEAR'), 'loadProtocols branch exclusive');
-  // The precedence is correct; what was wrong was that it happened SILENTLY. Silent skipping is
-  // this codebase's most-repeated root cause, so the discard must be visible (2026-08-10).
-  const w = logs.find(l => l.level === 'warn' && l.msg.includes('BOTH loadProtocols and protocol'));
-  assert(w, 'both-set warn fired');
-  assert((w!.data as any).ignoredProtocol === 'ignored', 'warn names the protocol that was discarded');
-});
-
-await test('loadProtocols alone does NOT fire the both-set warn (no false positive)', async () => {
-  logs.length = 0;
-  await applySystemPromptInjections(BASE, { ...noCtx, templateMetadata: { loadProtocols: true } },
-    mockDb({ protocols: [{ name: 'a', description: 'd', promptText: 't' }] }), logger);
-  assert(!logs.some(l => l.level === 'warn' && l.msg.includes('BOTH loadProtocols and protocol')),
-    'no both-set warn when only loadProtocols is set — the 93% path stays quiet');
 });
 
 // ── WS1 Phase C: composed mode (base + one), mode parse, tier-split, fact ────
@@ -578,18 +543,6 @@ await test('mode parse: falsy loadProtocols stays legacy (false/0/"" → named-o
   }
 });
 
-// ── NEW lattice cell (D6): the rollback path stays quiet-usable ──────────────
-await test('loadProtocols:true + task STAMP → stamp ignored + INFO, output = all-mode golden (rollback cell)', async () => {
-  logs.length = 0;
-  const out = await applySystemPromptInjections(BASE,
-    { ...noCtx, templateMetadata: { loadProtocols: true }, taskProtocol: STAMPED } as any,
-    mockDb({ protocols: [{ name: 'a', description: 'd', promptText: 't' }] }), logger);
-  const expected = `${UNIVERSAL_AGENT_RULES}\n\n---\n\n## Available Orchestration Protocols\n\n### Protocol: a\nd\n\nt\n\n---\n\n` + BASE + GOLDEN_SCOPE_CHECK;
-  assertEq(out, expected, 'all-mode output unchanged by stamp');
-  assert(logs.some(l => l.level === 'info' && l.msg.includes('not consulted in this mode')), 'stamp-ignored info');
-  assert(!logs.some(l => l.level === 'warn'), 'quiet-usable: no warns');
-});
-
 // ── Facade + block-list equivalence (the Phase B amendment, D1.4) ────────────
 await test('buildSystemPromptInjectionBlocks: join(blocks.text) === applySystemPromptInjections (facade equivalence)', async () => {
   const ctx = composedCtx({ harnessContext: HC(), taskProtocol: STAMPED, constraints: ['no secrets'] });
@@ -601,10 +554,9 @@ await test('buildSystemPromptInjectionBlocks: join(blocks.text) === applySystemP
     'block kinds in RENDER order');
 });
 
-// ── Observability fires in all four modes (B2) ───────────────────────────────
-await test('observability: the fact line fires in all/named/composed/none', async () => {
+// ── Observability fires in all three live modes (B2; 'all' retired 2026-10-16) ─
+await test('observability: the fact line fires in named/composed/none', async () => {
   const runs: Array<[string, () => Promise<unknown>]> = [
-    ['all', () => applySystemPromptInjections(BASE, { ...noCtx, templateMetadata: { loadProtocols: true } }, mockDb({ protocols: [{ name: 'a', description: 'd', promptText: 't' }] }), logger)],
     ['named', () => applySystemPromptInjections(BASE, { ...noCtx, templateMetadata: { protocol: 'p1' } }, mockDb({ named: { promptText: 'X' } }), logger)],
     ['composed', () => applySystemPromptInjections(BASE, composedCtx({ taskProtocol: STAMPED }), composedDb(), logger)],
     ['none', () => applySystemPromptInjections(BASE, noCtx, mockDb({}), logger)],

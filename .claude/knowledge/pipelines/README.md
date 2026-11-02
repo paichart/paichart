@@ -12,6 +12,8 @@ This README originally described only the per-use-case design-proposal conventio
 directory has since accumulated the canonical guides, and a reader landing here had no map.
 **Pick your door by what you are trying to do:**
 
+> **New here and want to RUN a program?** Start with `OPERATOR-RUNBOOK.md` — five steps (spec → launch → gates → read → apply), each linking to the detail below. **Maintaining the platform?** `../guides/MAINTAINER-ONBOARDING.md` — the rules, the scripts that enforce them, where things live.
+
 ### Pipeline tier (a single pipeline of specialists)
 | doc | for |
 |---|---|
@@ -19,8 +21,10 @@ directory has since accumulated the canonical guides, and a reader landing here 
 | `PIPELINE-USE-CASE-DESIGN-PLAYBOOK.md` | designing a new pipeline use case (6 phases) |
 | `ADD-A-PIPELINE-HARNESS-AGENT.md` | adding a domain/agent to the leg tier |
 | `PIPELINE-RUN-FORENSICS-GUIDE.md` | assessing a run from persisted records |
+| `walkthroughs/` | touring a real run stop by stop, to explain or demo it (one per leg domain + the program tier) |
 | `PIPELINE-DOMAIN-FIT-CATALOG.md` | does a candidate domain fit at all? (seam test) |
 | `MODEL-ONBOARDING-PLAYBOOK.md` | evaluating a new model (or effort) for a pipeline role, then switching it (wire audit → lab → decision → reseed → watch) |
+| `LIVE-WINDOW-CHECKLIST.md` | running a pre-registered live control or shadow window (POV, rig reset, distinct objectives, role flips, teardown) |
 
 ### Program tier (a program of pipelines)
 | doc | for |

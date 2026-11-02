@@ -1064,8 +1064,8 @@ export class AgentExecutionEngine extends EventEmitter {
     }
 
     // Shared injection tail (convergence Phase 5a): metadata-null tripwire,
-    // harness-context block, protocol injection (loadProtocols/named, cap-10 with
-    // cap-hit warn), P10 scope self-check — ONE implementation with the stream
+    // harness-context block, protocol injection (composed/named; load-all retired
+    // 2026-10-16), P10 scope self-check — ONE implementation with the stream
     // route. The resolution HEAD above stays engine-policy (template → dead
     // userSystemPrompt → fail-loud). Golden-byte gate: test:system-prompt-injections.
     const templateMetadata = agentTemplate?.metadata as Record<string, any> | null;

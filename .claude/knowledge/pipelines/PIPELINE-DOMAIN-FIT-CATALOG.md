@@ -29,6 +29,18 @@ has this shape is a candidate. The seam test is the gate; this catalog is the wo
 | **Terraform / cloud IaC** | `describe`/`list` APIs, `terraform plan`, state read | HCL diff / **plan output** / PR to the IaC repo | `terraform apply` — native converge + rollback (state) | ✅ **GO** (see §Terraform — cleanest seam, strongest moat) |
 | **DB schema** | introspect schema | a migration file | a deterministic migrator | 🟡 candidate |
 | **Observability config** (Prometheus / Grafana / OTel) | Prometheus `/api/v1/targets` `/status/config`, Grafana provisioning API, collector config reads | scrape/pipeline/dashboard change package (config + `promtool`/`otelcol validate` steps + rollback) | human-gated apply / GitOps reconcile | ✅ **GO** (see §Observability) |
+> **Held files (PLATFORM-HELD-BYTES Phase 10, 2026-10-17):** the platform holds the bytes of a file the operator writes, read from its
+> source, and Authors edit it by reference. **Observability config: held — yes** (collector config and proxy/listener files, via the
+> descriptor's file tools; Prometheus/Grafana are API renderings, not held). **Kubernetes (GitOps): held — yes since 2026-10-19**
+> (kubernetes-gitops 1.18.0): the held file is the CONFIG-REPO file, read through the Git file source (`github-service`, one pinned
+> repository, default branch); a live API object is never held. **Terraform: held — yes since 2026-10-21** (terraform-iac 1.15.0): the held file is a repo `.tf` file, read through the same Git
+> file source; Terraform STATE is never held (the call gate and capture refuse state, plan and variables paths). **Network: held — yes since 2026-10-27**
+> (network-provisioning 1.25.0): each device declares its source (`## Device sources` — `git-file` · `device-read` · `command-package`);
+> the held base is the declared Git file, else the device's running config read whole; a device that declares a Git file holds only the
+> file (the device read is evidence only). Proven on one platform family (EOS); record
+> `cline_docs/reviews/held-network-2026-10-22/NETWORK-CLOSEOUT.md`. A domain joins when its rig returns the file the operator writes — ONE row in `HELD_JOIN_VERSIONS` (+ the
+> MI-13 `_heldjoin` literal); the join procedure is `.claude/knowledge/patterns/kept-file-edit-by-reference-pattern.md` §3.
+
 | **Firewall / SG / DNS** | read current policy/zone/config | desired-state artifact | the domain's apply tool / GitOps | 🟡 candidate (firewall itself live-proven as a network-provisioning use case, FW-A3) |
 
 ## What transfers vs what is domain-specific

@@ -20,6 +20,7 @@
  */
 
 import { parseReviewerVerdict, REVIEWER_ROLES, type ReviewerVerdict } from './parse-verdict';
+import { heldEditWouldForce } from './held-edit-carrier';
 import { selectAuthoritativeExecution, CHAIN_SELECTION_OPTIONS } from '../../services/execution-selection';
 
 // Method-shorthand signatures (bivariant) so the real PrismaClient is directly assignable.
@@ -66,7 +67,10 @@ export async function annotateQualityGateVerdictMismatch(
     if (taskType !== 'PIPELINE') return;
     const qualityGate = pendingMerge?.qualityGate as Record<string, unknown> | undefined;
     if (!qualityGate) return;
-    const outcome = qualityGate.outcome;
+    // Stage B V-9 (arch S-B′): on a held-variant leg the carrier may have rewritten the outcome; compare the AGENT'S own
+    // outcome (`heldEdit.agentOutcome`) in both directions, so a forced store never hides the dangerous direction.
+    const heldEdit = qualityGate.heldEdit && typeof qualityGate.heldEdit === 'object' ? qualityGate.heldEdit as Record<string, unknown> : null;
+    const outcome = heldEdit && typeof heldEdit.agentOutcome === 'string' ? heldEdit.agentOutcome : qualityGate.outcome;
     // 'escalated' is an orchestrator-level call (child confidence < 50) with no reviewer
     // counterpart — only approved/needs-revision are comparable to the reviewer's verdict.
     if (outcome !== 'approved' && outcome !== 'needs-revision') return;
@@ -175,12 +179,24 @@ export async function annotateQualityGateVerdictMismatch(
     // only the unearned verdict. (A program-wide exemption would be WRONG — it would blind the
     // approved+REJECTED direction, which is the dangerous one.)
     const benignProgramDivergence = isProgramTier && !stampedApproved && verdict.approved;
+    // Stage B V-9: the BENIGN variant direction — the agent stamped needs-revision over an approving Reviewer and the carrier
+    // WOULD force (one shared predicate, arch v4 S-G). The dangerous direction is never suppressed.
+    const benignHeldDivergence = !!heldEdit && !stampedApproved && verdict.approved && heldEditWouldForce(heldEdit);
 
     qualityGate.reviewerVerdict = { approved: verdict.approved, blocking: verdict.blocking };
     // `tier` rides alongside the flag so a consumer (and the quarterly tally) can tell WHICH
     // comparison frame produced it, instead of inferring it — the field that would have made this
     // whole class self-evident.
-    qualityGate.verdictMismatchTier = isProgramTier ? 'program' : 'pipeline';
+    // `pipeline-held-variant` is a SUB-FRAME of the pipeline tier: a tier-scoped tally reads IN ('pipeline','pipeline-held-variant').
+    // Phase 10 panel F7 (AR-S2, inventory P-5): PROGRAM tier first. Since the fold every obs leg carries `heldEdit`, so the old
+    // held-first order relabelled an obs PROGRAM leg into the pipeline-tier population the verdict-consumption decision is tallied
+    // from. The held sub-frame now applies to pipeline-tier legs only; the benign checks above are computed independently of it.
+    qualityGate.verdictMismatchTier = isProgramTier ? 'program' : heldEdit ? 'pipeline-held-variant' : 'pipeline';
+    if (benignHeldDivergence) {
+      logger.info?.({ taskId, outcome, reviewerApproved: verdict.approved, tier: qualityGate.verdictMismatchTier, reason: heldEdit?.reason },
+        'Held-variant leg: the agent blocked over an approving Reviewer where the carrier would force — fact annotated, no mismatch flagged.');
+      return;
+    }
     if (benignProgramDivergence) {
       logger.info?.(
         { taskId, outcome, reviewerApproved: verdict.approved, tier: 'program' },

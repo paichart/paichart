@@ -14,6 +14,16 @@
 
 ---
 
+
+> **Reliability bar (owner decision, 2026-10-19 — "the goal should be that a pipeline run works at least 9 out of 10 runs"):**
+> (1) **Correct-outcome rate ≥ 90% per domain** over a rolling window of LIVE runs — a correct outcome is a correct package released OR a
+> correct refusal/escalation (refusing a bad change is the pipeline working); (2) **false releases: 0** — each one is a stop line + a root
+> cause; (3) **fix priority:** below 90% ⇒ fix; above it ⇒ fix only false-release risks or a cheap fix that GENERALISES — everything else
+> is filed and waits (no perfection-chasing on 1-in-25 safe failures); (4) read at the health-run with COST-PER-RELEASED-LEG. Lab gates
+> already follow this shape (G-APPLY ≥ 23/25 is the 9-in-10 side; the `0` gates are the false-release side).
+> **Score every run assessment against it:** classify each run as correct-release / correct-refusal / false-refusal /
+> **false-release**, and state the domain's rolling rate.
+
 ## 🆕 2026-09-15 — WHICH SURFACE HOLDS WHICH FACT (read this before concluding a fact is absent)
 
 Three times in one session a fact was reported ABSENT when it was present on a different surface.
@@ -359,6 +369,7 @@ Every pipeline run leaves a layered forensic record. Know which layer answers wh
 | **Execution facts** | `agent_executions` row | status, model, `inputTokens`/`outputTokens`/`cacheReadTokens`/`cacheCreationTokens`, timestamps; the `logs` array carries per-run lines like `"Agentic loop: N turn(s), M tool call(s)"` |
 | **Evidence-flow facts** (2026-07-18; disposition 2026-08-03) | `pipeline-index.json` → `derivationContainment` | **READ `containmentDisposition` FIRST — it is the answer.** `{ disposition: blocking \| benign \| needs-node-c, reason, inputs }`, computed by `computeContainmentDisposition`. Do **NOT** re-derive a verdict from `checked` + the reason string: `checked:false` is NOT "blocking", and `no-derived-values-block` is a benign *candidate* whose outcome turns on `harvestedCount`. That re-derivation produced a wrong, retracted finding on 2026-08-11. If a reading contradicts the stamp, that is a DEFECT to report, not a judgement to exercise. Supporting fields: `derivedValues` (the value that crossed the DAG edge), `violations[]` (do NOT enumerate the classes here — this list said "covered-not-member / member-not-covered" while FOUR then SIX existed; the authoritative set is the `reason` union in `lib/agents/harness/derivation-containment.ts`), `harvestedCount`, `harvestSource`/`derivedSource` artifact ids. **Consuming legs** (terraform-iac, kubernetes-gitops) carry `consumedValues` + `upstreamContainment{legs[],green}` instead of deriving — a clean one stamps `checked:false` / `nothing-to-derive` / **benign**, which is a *satisfied* state, not a miss. See EVIDENCE-FLOW-DISCIPLINE.md |
 | **Rollback provenance fact** (2026-09-11) | the **AUTHOR child's** `result.json` → `rollbackContainment` (NOT pipeline-index.json — it is stamped at the Author leaf's persist so it reaches the Reviewer; SYNTHESIZE hoists it); the Reviewer's `task.inputContext.chainedFrom[].rollbackContainment` shows what the Reviewer actually SAW (null outside the observability-config lane — a withheld field, not a stamp; see the two-lane comment at `render-pipeline-context.ts`) | **READ `rollbackDisposition` FIRST** — nested `{disposition, reason, inputs}`. `restoreLinesFound/restoreLinesTotal` + `missing[{line, blockLine}]` are the fact; `excluded{class: n}` names what was NOT adjudicated (separator, inverse-line, expected-output, verification, comment-line, procedural-rollback-block). **Asymmetric with derivationContainment**: `needs-node-c` / `unmatched-restore-lines` means "lines the check could not adjudicate" — NOT evidence of fabrication, never blocking; the only blocking arm is could-not-check (`enrichment-error`). `checked:false` + `lane-not-supported` (HCL/desired-state legs) is a deliberate no-check, benign, "no opinion" — not a miss. `no-restore-blocks` approves NOTHING (package completeness stays the reviewer's). Before theorizing about a provenance-shaped refusal, run the string test (each disputed line ⊆ the leg's harvest artifact) — three refusals of correct packages preceded this fact (R19 P4, R3a-3, R3b-2); classify (a) evidence-absent vs (b) content-correct-but-unverifiable per EVIDENCE-FLOW-DISCIPLINE §2026-09-11 |
+| **Validation tool-call fact** (2026-10-23, network legs only) | the **AUTHOR child's** `result.json` → `validationToolCalls`, in the OPERATOR TAIL after `toolCalls` (a head-only read misses it) | for each tool call written in a validation step: the arguments the tool accepts vs the call (`findings[].source` = `service-row` / `harvest-registration` = schema-backed, `harvest-observed` = observation only); read it first when a network Reviewer refused, or a device rejected, a validation `services` call. A WARNING fact — it gates nothing |
 | **Tool-call forensics** | `agent_artifacts` → `result.json` → `toolCalls[]` | every call's `tool`, `arguments`, `result` (Tier-2 ≤50KB), `success`, `durationMs`, and the C2 fields `resultTruncatedForLlm`/`resultChars` |
 | **Run structure** | `tasks` rows + `metadata` | root→children linkage (`metadata.pipelineStageId`), `qualityGate` stamp, `deliverableSourceTaskId`; comments carry execution summaries + escalations |
 | **Deliverables** | `report.md`, `pipeline-index.json` | what the customer/auditor sees; the harness's own forensic index |
@@ -592,6 +603,41 @@ WHERE a."executionId"='<exec>' AND a.name IN ('result.json','pipeline-index.json
 SELECT id, (metadata->'qualityGate')::text FROM tasks WHERE metadata ? 'qualityGate';
 ```
 
+### 6b. Live-window reads (held-network windows, 2026-10-24/25) — every one used repeatedly
+
+```sql
+-- a leg and its children (the leg's own row + every task in its child stage), with the leg outcome
+SELECT t.id, t."agentRole", t.status, e.status es, to_char(e."endTime",'HH24:MI:SS') et
+FROM tasks t LEFT JOIN agent_executions e ON e."taskId"=t.id
+WHERE t.id='<leg>' OR t.stage_id=(SELECT metadata->>'pipelineStageId' FROM tasks WHERE id='<leg>')
+ORDER BY e."startTime";
+SELECT status, "executionStatus", metadata->'qualityGate', metadata->>'cannotRun' FROM tasks WHERE id='<leg>';
+
+-- what the harness told the Harvester (the brief beats the protocol — read it first)
+SELECT description FROM tasks WHERE id='<harvester task>';
+
+-- what the Harvester actually called, in order (service + arguments)
+SELECT tc->>'tool', left(tc->>'arguments',160) FROM agent_artifacts a
+JOIN agent_executions e ON e.id=a."executionId", jsonb_array_elements((a.content::jsonb)->'toolCalls') tc
+WHERE e."taskId"='<harvester task>' AND a.name='result.json' AND tc->>'tool' IN ('registry','services');
+
+-- held capture: refs (kind, eligibility, path, revision) and refusals (named reason) for a leg's executions
+SELECT r.kind, r."serviceId", r.eligibility, r.path, left(r."sourceRevision",10)
+FROM held_file_refs r JOIN agent_executions e ON e.id=r."executionId" WHERE e."taskId"='<task>';
+SELECT row_to_json(r)::text FROM held_capture_refusals r JOIN agent_executions e ON e.id=r."executionId" WHERE e."taskId"='<task>';
+
+-- secrets: a real lab value in ANY persisted artifact of the window's POV (expect 0), and leftover self-provisioned rows (expect 0)
+SELECT count(*) FILTER (WHERE a.content LIKE '%<lab secret prefix>%'), count(*) FROM agent_artifacts a
+JOIN agent_executions e ON e.id=a."executionId" JOIN tasks t ON t.id=e."taskId" WHERE t.pov_id='<pov>';
+SELECT name FROM mcp_tools WHERE name ILIKE '%<service>%';
+```
+- **A persisted `<<REDACTED-SECRET>>` inside an agent's fenced quote means the AGENT wrote the value in clear and R10 removed it
+  at persist** — confirm on the persist log line (`grep "R10 backstop" /var/log/paichart/mcp-out-0.log` → `redactedCount`,
+  `echoRedactedCount`, `echoOverflow` per execution). A 0-secret scan of persisted bytes does not prove the agent obeyed the rule.
+- `agent_executions` has no cost column; read cost from the lab summary or the token columns × the pricing table.
+- Read the stored record before explaining a miss (L-NB2: the first explanation of F-NB1 — "long copies" — was wrong; the quotes
+  were short and the fixture had never served a clear secret).
+
 
 ---
 
@@ -781,6 +827,51 @@ system prompt (49 of 51 long lines duplicated), and the token match shows produc
 ground-truth bench instead: a persisted Author plus planted edits, with the right verdict known for each node, scored
 in both directions. Procedure and lessons: `MODEL-ONBOARDING-PLAYBOOK.md` Phase 2b.
 
+**Cost mechanics (2026-10-19, LAB-COST-REDUCTION).** All three are in `scripts/leg-replay-lab/`:
+- The dry run refuses a planted arm whose Reviewer prompt does not differ from its unplanted twin by the plant
+  (`plantPresence`, LK12).
+- Each cell's sample 1 writes the cache before its siblings start (warm-first; `--no-warm-first`).
+- `--batch` (paid only) sends Author/Reviewer/Architect calls through the Message Batches API at 50%:
+  - the body is production's except `betas`/`fallbacks` (Opus) and a 1h cache TTL;
+  - the proof is `--fake-llm transport` ($0, `batch-transport.ts`, LK13);
+  - requirements_author nodes are refused;
+  - it is not for a real lab until the owner's ≈ $1 crib and tier ruling.
+
+When to spend at all: Protocol 16 "Spend only where a sample can change the verdict". How to build a lab: `LAB-ANATOMY.md`.
+
+### §7f2. The golden set — a frozen regression check inside every lab (2026-10-31)
+
+**What it is.** Fifteen real legs whose outcomes were judged correct by hand (four domains, both directions — releases and
+correct refusals — the platform-forced class, and since v2 one network value leg), frozen as lab cases:
+`scripts/leg-replay-lab/golden/golden-set.json` (v2, 2026-10-31 (owner re-freeze: + CANARY 1's value, terraform and observability legs)). The rule is Protocol 16 § "The standing no-regression rule": every agent-text or model lab replays it, and one
+flipped case is a do-not-ship miss unless that lab's pre-registration names it as the intended target. How to run, read
+and cost it: `LAB-USER-GUIDE.md` (owner: model-evaluation).
+
+**Where forensics comes in — both ends:**
+- **A run becomes a golden case by being READ.** A case enters the set only with a hand-read verdict from its stored
+  records — the leg outcome, the agent's verdict, and the platform reason when one forced it — plus provenance (task id,
+  run sheet, why the outcome is correct). Use this guide's method for that read; a case whose correctness rests on
+  memory or a summary does not go in (the 2026-10-28 observability refusal entered only after the owner's recorded read).
+- **A flip is a forensic question.** When a lab flips a case, read the flipped case's STORED run against the lab output
+  the same way you would a live refusal: which input moved (protocol text, role guidance, model), which line of the
+  verdict changed, and whether the stored outcome is still correct under today's text. A flip that turns out to be the
+  stored outcome going stale is retired by recorded owner decision — never by editing the expectation to make it pass.
+
+**What it cannot catch — say this out loud.** It replays LEGS on their own frozen inputs. It does not see:
+- how a harness reads its children (`agent.results`, keep-best, the X2 class);
+- the program root's SYNTHESIZE, Node C (filed GOLDEN-NODE-C-CELL) or cross-leg effects;
+- fact computation (that is the byte-identity replay, §7g);
+- requirements-authoring text (no requirements cases yet — register gap entry).
+Those go to the nets replay, the canary re-run after every agent-text deploy (LIVE-WINDOW-CHECKLIST), and the
+program forensics guide. "Golden set passed" means "these fifteen legs still decide as they did", not "nothing regressed". A value leg is scored on
+its persisted derivation only (the scorer does not model the containment net for a live derivation — register GOLDEN-VALUE-LIVE).
+
+**The $0 self-test is not a lab run.** `npm run test:golden-set` (in the gates) proves every stored case still SCORES as recorded;
+it re-runs no agent on new text. Only a paid lab with `goldenSet` declared tests a text change against the cases. A gate list that
+shows "golden-set 24/24" after a text change has proved the instrument, not the change (Wave 3, 2026-10-31: none of D2 / D3 /
+HS-FU5 had a lab — D2's reader is the program root, so its gate was the canary; D3 is a fact, so its gate was the nets replay;
+HS-FU5 reached requirements roles, which have no golden cases — byte-identity + a hand read stood in, register REQ-GOLDEN-CASES).
+
 ### §7g. Which replay? Two questions, three tools (2026-10-08)
 
 Every replay here runs over **persisted production records** instead of waiting for new runs. Pick by the question.
@@ -805,3 +896,67 @@ every NEW run, so the batch keeps its version bumps and series cuts — never re
 the artifact was written* (select upstream executions with `startTime <=` the artifact's execution — later re-runs must
 not leak in), the SHIPPING pure functions imported (never re-implemented), buckets that sum to the population, and
 both controls. The dump holds production data: keep it in the scratchpad, never in the repo.
+
+### §7h. Reading a nets byte-identity replay result (2026-10-26, worked example: held-network step 3 batch 1, P6)
+
+`scripts/replay-nets-byte-identity.sh` ends with one summary line and a `replay.diff`. How to run it is in the script header;
+this section is how to READ it.
+
+**How it runs since 2026-10-26 (NETS-REPLAY-FAST-OFFLINE).** Both passes read an OFFLINE SNAPSHOT, never live production:
+`--snapshot <scratchpad dir>` (required) is dumped once, read-only, into the scratchpad and restored into a local scratch
+database; it is reused while you pass the same dir. So **no pipeline freeze** is needed during a replay, a pass takes about a
+minute for 254 tasks (was ~7; 3,087 tasks: see the build record), and a base pass is CACHED per base commit + population +
+snapshot. A pass whose database sessions hit ANY error (a table or column the snapshot does not hold) FAILS LOUD and compares
+nothing. `--ids <file>` replays a stored run's population; `--scope protocol=<p>` / `role=<r>` narrows a routine check (keep
+the full window for releases and health-runs). Take a FRESH snapshot for a release: the summary prints the snapshot's age.
+**Retention: 24 h** — every run first calls `scripts/replay-snapshot-gc.sh`, which (also hourly from a systemd user timer) deletes registered snapshot dirs, `--out` dirs and `nets_replay_*` databases whose snapshot is older than 24 h, so a snapshot older than that is re-dumped, never reused.
+Record: `cline_docs/reviews/nets-replay-fast-offline-2026-10-26/BUILD.md`. Worked example: `quoteFidelity` v3, base `97351b574`, `--since 2026-07-18`, 3,087 tasks
+(record `cline_docs/reviews/held-network-2026-10-22/STEP3-BATCH1-BUILD.md` §8).
+
+**1. Check the run is comparable before reading anything.** `tasks: base N · new N` must match, and both passes must name
+the same `snapshot <id>` (they do by construction since 2026-10-26; a REUSED base pass is keyed on the snapshot id). Before
+2026-10-26 both passes read live production and the header had to read `in-flight executions: 0` — a pipeline that ran
+between the passes made the two read different data, and every difference it caused looked like a code change. If you are
+reading such an older run, that rule still applies: re-run; never explain such a diff away. A STALE snapshot is a different
+question (it misses tasks newer than its `taken` time) — it never makes the two passes disagree.
+
+**2. The summary's buckets are not verdicts.** `removed/changed` counts every `<` line, `unexplained added` every `>` line
+your `--allow-added` regex did not match. A field whose VALUE moves (`"version": 2` → `3`) is a CHANGED line, never an
+added one — so a version bump reads `❌ DIFFERS` with an allow-list that never fires. Here: `776 removed/changed · 1120
+unexplained added · allowed 0`, and every one of them was expected.
+
+**3. Bucket the diff by content, not by position.** Count `<` lines and `>` lines by their text:
+```bash
+grep '^< ' replay.diff | sed 's/^< *//' | sort | uniq -c | sort -rn | head
+grep '^> ' replay.diff | sed 's/^> *//' | sort | uniq -c | sort -rn | head -40
+```
+Then account for every bucket against what the change was MEANT to move (the draft series-cut text is the list):
+- **by construction** — a stamped version, a field every stamp gains (here 740 × `version` 2→3);
+- **the change's own subject** — here 9 stamps gaining `deviceReads` with findings (11 tasks, 13 findings) and the
+  disposition moves they cause (`benign` → `needs-node-c` ×7, `no-pairable-quotes` / `all-quotes-complete` →
+  `quote-omits-or-changes-lines` ×21);
+- **anything else** — a field of ANOTHER net, a card line, a different disposition. That is the finding, even if small.
+A bucket you cannot name is the finding. Name the fact each moved field belongs to — map diff lines back to tasks through
+`new.out` (each task opens with a `cm…  [TYPE] title` header and `role=… point=…`, then one `▶ <fact>` block per net).
+
+**4. A moved verdict is read by hand, every one.** The replay proves WHAT moved; it cannot say whether the new value is
+RIGHT. For each task whose disposition moved, fetch the stored deliverable (`perform agent.results … verbose:true` — the
+envelope lands in a tool-results file; slice the `finalResponse` out of it, it is JSON inside JSON) and read the flagged
+block with its surrounding prose. Classify each: **true positive** · **false positive (detector defect — name the
+shape)** · **true by the rule but low value**. The example's 13: 0 fabricated blocks; 5 false positives in two shapes
+(a `! <device>` label comment the agent prepends to a real excerpt; a rollback/command block taken as a device-read
+claim from nearby prose); 8 true by the rule (a rendering of a structured result, a reformatted Prometheus API config, or
+a stitched excerpt, each SAID to be exact/verbatim) — values faithful, label overclaimed. The lab corpus could not show
+any of these: every one is a production shape (LL-N-17 again — a fixture only tests what it serves).
+
+**5. Write the allow-list narrow, or not at all.** `--allow-added` matches whole added lines; a broad regex (`quoteFidelity`)
+silently passes a moved field that merely shares a word. Prefer reading the content buckets (step 3) over widening it.
+An allow-list never covers a changed line.
+
+**6. Record it.** In the build record: base commit, window, task count, the summary line, each bucket with its count, the
+hand-read classification, and what follows (a fix, a filing, or "expected"). In the CLAUDE.md series cut: the base, window
+and count, and what moved. A replay result recorded as "byte-identical" must have been — say "N changed lines, all X" when
+it was not.
+
+**What it cannot show:** capture- and apply-time behaviour (a new held refusal fires at capture, not on recompute) — that is
+the capture replay's and the battery's job, and the first live instance's.

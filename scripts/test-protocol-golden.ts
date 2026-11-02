@@ -86,7 +86,9 @@ function budgetCheck(): number {
   // never a silent edit of this number.
   // Raised 2026-10-12 by explicit owner decision (Steve: "approve"; PHASE4-CONTAINMENT-PROPAGATION B3): +1,000 to fit
   // BRANCH D4 (net +950, pov-program 2.2.0). Never a silent drift: any further raise is another owner decision.
-  const POV_PROGRAM_CEILING = 66752;
+  // Raised 2026-10-31 by explicit owner decision (Steve: "go with your recommendation, raise to 68,000"; Wave 3 D2): pov-program
+  // 2.2.1 left 5 chars of room, so any next fix would block on this number. +1,248 headroom; D2's sentence stays short.
+  const POV_PROGRAM_CEILING = 68000;
   if (pov) check(pov.length <= POV_PROGRAM_CEILING, `pov-program ${pov.length} ≤ ${POV_PROGRAM_CEILING.toLocaleString()} (ND7)`);
   if (nd) {
     check(nd.length <= 30000, `network-derivation ${nd.length} ≤ 30,000`);
@@ -140,7 +142,7 @@ function budgetCheck(): number {
   // became strict equality — replaced in the SAME commit that deleted auditValueChainVocabulary, so nothing in CI loses
   // coverage of value_chain_architect. A fork of either key fails here.
   check(!!pa && !!vca && vca === pa, `value_chain_architect === program_architect (${vca?.length} vs ${pa?.length} chars; one constant)`);
-  check(!!pa && pa.length <= 21304, `program_architect ≤ 21,304 chars (${pa?.length}) — absolute ceiling (E3 review PC-L3 / AR-F5)`);
+  check(!!pa && pa.length <= 21500, `program_architect ≤ 21,500 chars (${pa?.length}) — absolute ceiling (E3 review PC-L3 / AR-F5; raised 21,304 → 21,500 by owner 2026-10-24 for the held-network deviceSources sentence)`);
   if (da) check(da.length <= 4500, `derivation_architect ${da.length} ≤ 4,500`);
   if (dr) check(dr.length <= 6000, `derivation_reviewer ${dr.length} ≤ 6,000`);
   return bad;

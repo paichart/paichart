@@ -9,40 +9,40 @@
       "chars": 30736
     },
     "network-provisioning-protocol": {
-      "sha256": "0a764869882176453d4e596507be6a7fbe2724a1e26adb2336a16c07a826cd8e",
-      "chars": 48105
+      "sha256": "4df1b4c8baff9ef51aad7897f0bb292b91df5020dcec6e1f06f2384a7f627202",
+      "chars": 59024
     },
     "kubernetes-gitops-protocol": {
-      "sha256": "4aadeed48421c7faaa9fff22abb011f38fac96a5972225f39c73d1c10da98518",
-      "chars": 42054
+      "sha256": "89c5e243487f0d15fa27738f40930e45535ae0ddbeddd757e0cb5df8e09ab0d9",
+      "chars": 51953
     },
     "terraform-iac-protocol": {
-      "sha256": "d66c6d5d770e30b4a6cc6a6ee654bd28869d05849d8208bd9693c352bf58cdde",
-      "chars": 39006
+      "sha256": "792d57331e8f726d5bb2f9ba3c6dea8fbda15578ff5a0bface4b23e124d36b09",
+      "chars": 47226
     },
     "observability-config-protocol": {
-      "sha256": "655a75db46746fbe6ad9b54f1e817eea9701707687d918d9195c2e3adde46a9b",
-      "chars": 34345
+      "sha256": "c0ad8475f34529305c93c1ca928b2450f5f86ccc9a6fbe7ba5e53b2a33875628",
+      "chars": 41368
     },
     "pov-program-protocol": {
-      "sha256": "d741a805df3e03a040a509a686dc93688405cacff31d8843744b11a261ed0895",
-      "chars": 66718
+      "sha256": "aa7c48b33af1d0abd49b2c1a8365067272260b56867337da1d98ca8df3e8b0cc",
+      "chars": 66747
     },
     "value-chain-program-protocol": {
       "sha256": "d566d008b93283cd77479cdecd3301119bf2a0c54cc5dc4ea7d2f4150532817e",
       "chars": 546
     },
     "network-derivation-protocol": {
-      "sha256": "b928aacb777183c07c570fe539b3939b5f5a4cdcdcaeee9b7f6e5982511eacc6",
-      "chars": 22022
+      "sha256": "41fc72d0e765f82ce12bc6e0bfa68d446a2956eed0a934a7fa9a19fac0de51f5",
+      "chars": 22862
     },
     "requirements-authoring-protocol": {
       "sha256": "fd4b55a8e292b01b250a074eebd10b072ce4bead924e79ccde38770c4d2cbdef",
       "chars": 51209
     },
     "HOWTO-use-pipeline-harness": {
-      "sha256": "6b0a14a936970c4839f63801c0f2fb57f0ee0deb9ff18bb30cddfb95fdea2a1e",
-      "chars": 62083
+      "sha256": "2abc09f4a94f8cb5ff24d6713933a1f920d73ea83e04e55ed2f3e0912f8c5709",
+      "chars": 67907
     },
     "HOWTO-use-program-harness": {
       "sha256": "7240fb31d1a082d2ce70f0735e62befd899e84b732733a222e9cdfe3211f1443",
@@ -59,6 +59,10 @@
     "HOWTO-mcp-tools": {
       "sha256": "179fc799b6f9a23033d9c5ecb2bebd7f00043003fc593a981d922445d5d9a0ac",
       "chars": 16222
+    },
+    "observability-config-held-protocol": {
+      "sha256": "bd6179d6cd136abe360472336b01e7528dde51ca036c95d3201f70b477f110c3",
+      "chars": 254
     }
   },
   "roles": {
@@ -151,16 +155,16 @@
       "chars": 3226
     },
     "infra_state_harvester": {
-      "sha256": "382927e0aab709536215c47eb73242fe528f7b66d43a818b780288d1c70a71ef",
-      "chars": 4295
+      "sha256": "207a778532535019a9513fab7783ab982a2214bf048c204ead3e8902bc655cbf",
+      "chars": 4812
     },
     "program_architect": {
-      "sha256": "132b65fce81dd937ed5ee9c7a609b0bc0fbffd8f67c05c75929870d99d85e675",
-      "chars": 21256
+      "sha256": "cffc33d214c8aab29a932cf1ca4f65c21e899b92b11074ba660f8081ec1be81a",
+      "chars": 21436
     },
     "value_chain_architect": {
-      "sha256": "132b65fce81dd937ed5ee9c7a609b0bc0fbffd8f67c05c75929870d99d85e675",
-      "chars": 21256
+      "sha256": "cffc33d214c8aab29a932cf1ca4f65c21e899b92b11074ba660f8081ec1be81a",
+      "chars": 21436
     },
     "derivation_architect": {
       "sha256": "42ce2145fdc4f2d3a843e96e7eece48322f1b428f20f9240ff2f5ab5f4a23a18",

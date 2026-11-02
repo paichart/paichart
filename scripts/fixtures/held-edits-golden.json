@@ -1,0 +1,134 @@
+[
+  {
+    "fixture": "search-not-found",
+    "sha256": "d95468ec7ef381a8421206348060ea9d7aa8491fc3def9db324ec20d5367e3cb"
+  },
+  {
+    "fixture": "search-not-unique",
+    "sha256": "8af1248d17321b59ac95d65428da901f03938cf7ee53261665cdcb2b69439100"
+  },
+  {
+    "fixture": "count-mismatch",
+    "sha256": "e18ffd71d01accaddc5332c35c50f327d4bcfc573256b72270f53ca167df08ff"
+  },
+  {
+    "fixture": "search-empty",
+    "sha256": "60d77ffe1536b339ff23db4bd858e212a73efb020773cf07f266a1aab0911e66"
+  },
+  {
+    "fixture": "overlapping-edits",
+    "sha256": "73dd882b2119727d10626402e1adef0aa5697262b516f4661dcf7bce14d04c9b"
+  },
+  {
+    "fixture": "ambiguous-markers",
+    "sha256": "8244dde2d860b24df702d78fec8719129eabaa981b44a1932254b7568839310d"
+  },
+  {
+    "fixture": "touches-redacted-line",
+    "sha256": "7e875ad26ec2c9357d788b873925adb53066307b31ffd31e12c4df7033324a75"
+  },
+  {
+    "fixture": "touches-rewritten-line",
+    "sha256": "91c2dc896b3715ba376bd50172382826fc3c0fd4537d6df20c1d00f8279a07c3"
+  },
+  {
+    "fixture": "edit-carries-placeholder",
+    "sha256": "0fd857e4db9e8d0c4a0e9e22122d0b360c92454ba370884683bb1d34209219c3"
+  },
+  {
+    "fixture": "edit-introduces-secret-literal",
+    "sha256": "a5ba80a84887446650edeaa8c9a6903c6aea5e125c039c7df4f1702203b5ec15"
+  },
+  {
+    "fixture": "edit-redacted-at-persist",
+    "sha256": "648d1c058e38024cb0fc9aaaadcb08b2f0df58c4294f703fe03d8af7d28e6b52"
+  },
+  {
+    "fixture": "replace-unbindable",
+    "sha256": "49a7376495129e50cd9d02d99da3de193dc95e5a3a37e054666ee232fa128603"
+  },
+  {
+    "fixture": "replace-not-reviewable",
+    "sha256": "6822532b477ff26a5b453590d21bd1b0435a66a78e1ddde9c6403e15a195c25d"
+  },
+  {
+    "fixture": "unknown-handle",
+    "sha256": "5fde7bfd9e5ec1b81b01712e4c698ac784fa21e12b118dc24e733d409a02329b"
+  },
+  {
+    "fixture": "edit-set-too-large",
+    "sha256": "e6b3527d5e3a6f37cc9baad2f563b2923274d8835532479440fe58d88a317b6b"
+  },
+  {
+    "fixture": "edit-in-rollback-section",
+    "sha256": "8872f16387f2fc7bc370f6babef64a4ead793b76375730bee51c18554ca35432"
+  },
+  {
+    "fixture": "edits-outside-section",
+    "sha256": "f1fd15a60c47e5ce1b36659e81538655682e7eae0550448449b44f5ee3f79e7b"
+  },
+  {
+    "fixture": "create-path-invalid",
+    "sha256": "448ed6641449fa636f452f12e90614840cf93d6ce69033002723fd056adcc13e"
+  },
+  {
+    "fixture": "candidate-secret-residual",
+    "sha256": "6c6141d4364bedd1594fb74ee91a5b1f3cdfbe8e498d09c6ed17674822f9ffb8"
+  },
+  {
+    "fixture": "held-file-written-whole",
+    "sha256": "d45a55594317bd879a14b98da530f928eae2b7a06c20a46b71c3881e8587dace"
+  },
+  {
+    "fixture": "handle-ambiguous",
+    "sha256": "c19d4982d4a37a3ce5e3552f5941b1bcdb8afe7df40dbdb5c39856038cfc3a42"
+  },
+  {
+    "fixture": "base-superseded",
+    "sha256": "efcf82254015f717f6e7385a7fc5c039059691329b1523ffbca8db0416ba6772"
+  },
+  {
+    "fixture": "binding-invalid",
+    "sha256": "3061877259b1e6798b43b2b00df9a4115f4b8c3e16d52b0e76f8dbea953be938"
+  },
+  {
+    "fixture": "view-not-rendered",
+    "sha256": "7cfbc988b3824f872fa5281882d5436d37418c4d7a92cceb741ac3d3687c3152"
+  },
+  {
+    "fixture": "view-over-budget",
+    "sha256": "c01734d27edd18dd5229eec96f2f4cf3a1a780f343f5eed6e6e7b17d5fa93b61"
+  },
+  {
+    "fixture": "view-line-map-unstable",
+    "sha256": "9169e6dc32c46390cdb02aefd004a2f719129134658eef7102daf2fabe6637ad"
+  },
+  {
+    "fixture": "base-not-held",
+    "sha256": "ededef9856f9fce7b1f5b9fbcdb3b33cc995a550b7739a7ea46c6a38de4af091"
+  },
+  {
+    "fixture": "unheld",
+    "sha256": "5f424212f5467d44ecf65b29b5324518be3545ca526f27785a4277bc3d2e0d61"
+  },
+  {
+    "fixture": "handle-namespace-ambiguous",
+    "sha256": "6944c64e1cf0a0a6dbbf50d84a842c83b0347d3b3734d1357836c6b4c066d027"
+  },
+  {
+    "fixture": "diff-over-budget",
+    "sha256": "526a3bf045f85a7f7351f370e06607dc190315e023b9d8de4b1e7ad3a47df19a"
+  },
+  {
+    "fixture": "happy",
+    "sha256": "8abd46d4850525a27449ed10f4c74f79fa206164b1327d4b917c6a68bf0b5f72"
+  },
+  {
+    "fixture": "happy.diff",
+    "sha256": "9eabec030c2a25b9a553a0b0e2b34fcae49d0712e8c1c0c4d23a6a08098c8f9d"
+  },
+  {
+    "fixture": "clause",
+    "sha256": "d482bd287a7c9f145f8c8aa707da69fb24af0663181977b9e8db6d62ce4837e3"
+  }
+]

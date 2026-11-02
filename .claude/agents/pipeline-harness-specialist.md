@@ -287,7 +287,7 @@ Depth evicted per **Protocol 12** lives at `.claude/knowledge/domain/harness/pip
 Key Information, Learning Notes, pino, archives, evicted 🆕 blocks, and (2026-09-27, X14) the retry-band, F14, k8s-review mechanics and May artifact-builder history. Canonical patterns +
 the paired discovery's PROVEN greps outrank it.
 
-**Harness output guards (R9/R10) & their flags** — `CONNECTED_OUTPUT_SANITIZE_ENABLED` (R9 sanitize, both boundaries: tool-loop + context-chainer) and `ARTIFACT_SECRET_REDACT_ENABLED` (R10 redact, at the ONE shared terminal persist — engine and stream converge there; re-verified 2026-09-27), both **env-var, default-OFF in code but ENABLED IN PROD since 2026-06-29** (`f7398004` — do NOT read the `=false` in .env templates as the prod posture; that error cost three wrong answers on 2026-07-26). No live toggle — `pm2 restart` to apply; same var = kill-switch). What they enable, the modules/call-sites, the enable-gates (incl. WS1 C1): `.claude/knowledge/domain/harness/harness-output-guards.md`.
+**Harness output guards (R9/R10) & their flags** — `CONNECTED_OUTPUT_SANITIZE_ENABLED` (R9 sanitize, both boundaries: tool-loop + context-chainer) and `ARTIFACT_SECRET_REDACT_ENABLED` (R10 redact, at the ONE shared terminal persist — engine and stream converge there; re-verified 2026-09-27), both **env-var, default-OFF in code but ENABLED IN PROD since 2026-06-29** (`f7398004` — do NOT read the `=false` in .env templates as the prod posture; that error cost three wrong answers on 2026-07-26). No live toggle — `pm2 restart` to apply; same var = kill-switch). What they enable, the modules/call-sites, the enable-gates (incl. WS1 C1): `.claude/knowledge/domain/harness/harness-output-guards.md`. *(Corrected 2026-11-01, PH-7: the code defaults DIFFER — R9 runs only when `=true`; **R10 runs unless `=false`** (default-ON in code since 2026-08-28). `.env.example` sets both ON since 2026-11-01; its old `=false` had switched R10 off for self-hosters. Canonical: `domain/harness/harness-output-guards.md`.)*
 
 ## Interface-contract inheritance + the successor problem (2026-08-26, IGP-T1 R12)
 
@@ -428,7 +428,7 @@ history on a fresh POV. The evicted text is in that specialist's live invariants
 
 ## WS1 Phase C — composed harness prompt (evicted 2026-10-05 → library)
 
-The harness prompt is the orchestration BASE + the ONE protocol the task's Phase-A stamp names (never load-all); wrong binding ⇒ `metadata.cannotRun` escalation; delta→base dependences pinned by `test:protocol-dependence-anchors`. Full text: library § "Evicted 2026-10-05 — WS1 Phase C".
+The harness prompt is the orchestration BASE + the ONE protocol the task's Phase-A stamp names (never load-all); wrong binding ⇒ `metadata.cannotRun` escalation; delta→base dependences pinned by `test:protocol-dependence-anchors`. Full text: library § "Evicted 2026-10-05 — WS1 Phase C". The `loadProtocols: true` load-all mode is RETIRED (2026-10-16, `fec105ac3`): it throws `UNKNOWN_PROTOCOL_MODE` before spend; the flip script is deleted.
 
 ## needs-node-c: the delegated-decision path (pointer, 2026-09-11)
 
@@ -450,7 +450,7 @@ and the open VT-14 fail-closed question are **owned by `execution-facts-speciali
   `cline_docs/follow-ups/containment-green-path-gaps-2026-10-12.md`.
 - **BRANCH D4 (pov-program 2.2.0, live 21:22:09Z):** `consuming-leg-upstream-delegated` discharges ONLY from a Node C response that
   answers each delegated upstream and quotes both value sets; Node C has no instruction to write it (H1 option B — register
-  NODE-C-D4-GUIDANCE, decide on the re-run's evidence). ND7 ceiling 66,752.
+  NODE-C-D4-GUIDANCE, decide on the re-run's evidence). ND7 ceiling 68,000 (raised 2026-10-31, Wave 3 D2; was 66,752).
 
 ## 🆕 2026-09-16 — Bug Class 84: a payload delivered to a CONTAINER is not delivered to the thing inside it
 
@@ -495,11 +495,50 @@ other role receives **by default with no case made** (`data_analyst`, `technical
 Depth: `cline_docs/reviews/cross-pipeline-value-delivery-2026-09-16/` (4 panels, 3 plan drafts,
 TRACEABILITY + MASTER-TRACKER) · VT-25 · `cline_docs/follow-ups/upstream-delivery-as-a-per-predecessor-fact-2026-09-17.md`.
 
-## Pointer (2026-10-13): Phase 4 run 3 RELEASED
-Root `cmv6a2xjq0005yxwtpr4rbti8`: `programReleasable: true`; BRANCH D4 exercised for the first time and discharged by Node C via the spec's acceptance check 1 (no Node C text change). Live control under the new Protocol 16 owner exemption (`LIVE-CONTROL-RUN3.md`). The k8s selection leg ran harvest-only with no text change (PLAN-SPAWN brief variance) — owner decision owed, register VALUE-LEG-K8S. Next design: PLATFORM-HELD-BYTES (edit by reference).
+## Held joins — all CLOSED (liveness review 2026-10-31; build pointers moved verbatim to the library § "Evicted 2026-10-31 — held-joins build pointers")
+obs (fold into obs 1.10.0, 2026-10-17, `platform-held-bytes-2026-10-13/PHASE10-PLAN.md`) · k8s 1.18.0 (closed 2026-10-19, `held-k8s-2026-10-18/K8S-CLOSEOUT.md`) ·
+terraform 1.15.0/1.16.0 (closed 2026-10-22, `held-terraform-2026-10-19/TF-CLOSEOUT.md`) · network 1.25.0 (closed 2026-10-27, `held-network-2026-10-22/NETWORK-CLOSEOUT.md`).
+Start any further join from `patterns/kept-file-edit-by-reference-pattern.md` (PRODUCTION) + both LEARNINGS-LEDGERs (append at every step close).
 
-## Pointer (2026-10-14): PLATFORM-HELD-BYTES Stage A BUILT (shadow, not yet deployed)
-Eight local commits (`e0ea6e5a2` … `f8ff23a6b`): three tables, capture halves on both success paths, savepoint write, GC,
-digest builders, rehearsal, archive replay, MI-13 section. Panel 93.2; seven WI-14 code reviews GO for the flag-off push.
-Deploy = moment 1 (switch absent), then the flip + live window (§11.3) — both Steve's call. Record:
-`cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-BUILD.md`.
+## Held-edit responder facts (live — kept by the liveness test)
+- **The carrier is the ONLY writer of `qualityGate.heldEdit`** (an inbound one is deleted on every write); it reads the leg's STORED `pipelineStageId` and
+  forces `stage-rebind` / `source-not-pinned` / `author-not-of-leg` (that precedence). A Reviewer has seen the diff only when its OWN `chainedPredecessors` chained that Author.
+- Held is a CAPABILITY of a protocol (`HELD_JOIN_VERSIONS` = the one held-capable table); the retired obs variant row is a LEG-tier tombstone, never a
+  `PROGRAM_PROTOCOL_NAMES` member. THE out-of-scope predicate = `held-bytes/scope.ts` (MI-13 re-derives it): `no-edits`/`no-base` are never forced;
+  `held-file-written-whole` refuses a whole write. A Harvester that held nothing ⇒ `heldBytes.reason` `capture-off`/`no-files`; an absent digest ⇒ editDiff `could-not-check`.
+- Terraform: state/plan/variables/CLI-credential paths are refused at the CALL gate and at capture (one `heldPathRefusal`, never a G-4 force);
+  `PINNED_SOURCE_BYPASS` is a tripwire, not a boundary. The terraform Phase 0 brief COPIES a named ref and the leg is forced — reuse that wording, never k8s's.
+- Network: device read = evidence, Git file = held; held edits are the DEFAULT for a text-file config, CLI only by a DECLARED field; the Author never
+  translates to CLI; the operator applies the EDITS in one session with declared out-of-band sections + a commit timer. ⚠️ `Cli -c "<cmd> ?"` EXECUTES on EOS.
+- Production stores a refusal `success:true` + `result.isError`; `success:false` + `error` is the LAB fixture shape. The reflection-pass order lives in
+  ONE helper (`arbitrateReflectionPass`). Rollbacks revert NEWEST FIRST. The rig reset applies COMMITTED bytes of an `origin/main` commit.
+  `scripts/` is not typechecked by the build — typecheck the scripts that build a type you change. Operator base check: `scripts/held-base-check.ts` (redaction-aware Git mode).
+- ⚠️ **No public export until the self-host held text exists (PH-7)** — `publish.sh` and the renderer refuse.
+- **Q2 leg-contract heal (live since 2026-10-17):** when the program's OWN root harness creates a PIPELINE leg WITHOUT `interfaceContract`, the platform
+  stores the plan's (`interfaceContractSource.arm:'create-absent'`, `contractSuppliedFromPlan`) or declines with `declineReason`; a contract SENT but
+  dropped stays loud (`CONTRACT_SENT_BUT_DROPPED`). A `stage-legs-*` decline describes the stage's OTHER legs — count a cascade as one event. PQ-4 text debt open.
+- The nets replay runs offline: `replay-nets-byte-identity.sh --snapshot` (no pipeline pause; prod data on this machine expires after 24 h; forensics §7h).
+
+## Reliability bar (owner, 2026-10-19)
+**Reliability bar (owner decision, 2026-10-19 — "the goal should be that a pipeline run works at least 9 out of 10 runs"):**
+(1) **Correct-outcome rate ≥ 90% per domain** over a rolling window of LIVE runs — a correct outcome is a correct package released OR a
+correct refusal/escalation (refusing a bad change is the pipeline working); (2) **false releases: 0** — each one is a stop line + a root
+cause; (3) **fix priority:** below 90% ⇒ fix; above it ⇒ fix only false-release risks or a cheap fix that GENERALISES — everything else
+is filed and waits (no perfection-chasing on 1-in-25 safe failures); (4) read at the health-run with COST-PER-RELEASED-LEG. Lab gates
+already follow this shape (G-APPLY ≥ 23/25 is the 9-in-10 side; the `0` gates are the false-release side).
+
+**No-regression rule (owner, 2026-10-31 — "we cannot risk any regressions to delivering a successful run"):** gate by blast radius,
+the frozen golden set in every agent-text lab, a released-program canary after every agent-text deploy, fewer smaller text batches —
+Protocol 16 § "The standing no-regression rule". Safe failures above the bar wait behind a measured trigger.
+
+2026-10-20 — **A held-domain join replays at EVERY shared-code step** (`scripts/replay-nets-byte-identity.sh`, owner execution-facts;
+pattern proof gate 0; terraform inventory §5 item 4b). The golden proves texts, the replay proves facts on stored legs; k8s step 3 skipped it.
+
+**Join learnings carried (2026-10-31):** `.claude/knowledge/domain/harness/pipeline-harness-library.md` § "Carried from the join learnings ledgers".
+
+**Golden set (2026-10-31, v1 built by model-evaluation):** `scripts/leg-replay-lab/golden/` — 15 hand-judged legs (v2 since 2026-10-31: + CANARY 1's value/tf/obs legs) replayed in every agent-text/model lab (Protocol 16 § "The standing no-regression rule"). It does NOT cover harness reading of children (agent.results / keep-best / X2), program SYNTHESIZE, Node C or cross-leg effects — those are the canary re-run (LIVE-WINDOW-CHECKLIST) and the nets replay. Forensics guide §7f2.
+**Canary + push tooling (2026-10-31):** `npm run report:canary` (read-only verdict + pre-registered controls in `scripts/canary-check.ts`
+CONTROLS — add a shipped change's control BEFORE its deploy); `.githooks/pre-push` → `scripts/check-series-cut-owed.sh` (warns on a
+cut-relevant push with no ledger edit; extend its path list when a new fact producer or agent read surface ships). Pattern #71
+`facts-only-tighten-pattern.md` = the asymmetric-authority rule behind every gate. A program-root text change (e.g. pov-program) has
+no lab: its gate is a pre-registered live control on the canary.

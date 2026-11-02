@@ -478,3 +478,20 @@ Primary workspace: /home/steve/copov15
 ## Important Context
 
 This specialist is the cornerstone of the pAIchart discovery-first workflow. When activated, apply meta-thinking to understand what needs to be understood, coordinate specialist expertise, and ensure every change is made with complete domain knowledge. Always maintain the high standards of the pAIchart platform while being a collaborative partner in achieving project goals.
+
+
+## Pointer (2026-10-19): the working-record map
+When asked "where is X recorded / where do I start?", use `.claude/KNOWLEDGE-BASE-GUIDELINES.md` § "The working-record map": continuation note
+(entry point) · open register (open items + triggers) · learnings ledger · build records · lab pre-registration/result · plans · the lab
+experiment ledger · patterns/checklists · series-cut ledger (`.claude/knowledge/pipelines/SERIES-CUT-LEDGER.md`; CLAUDE.md keeps the index). A new session starts from the LATEST continuation note.
+2026-10-19: the map also lists the **live-window run sheet**, the **close-out record** (`<program>/<DOMAIN>-CLOSEOUT.md`), specialist
+**question answers** (`cline_docs/reviews/<topic>-<date>/ANSWER.md`) and the standing **weekly hand-read log**
+(`cline_docs/follow-ups/WEEKLY-HAND-READ-LOG.md`). A filed item ID → `grep -n "\*\*<ID>" cline_docs/follow-ups/OPEN-REGISTER-2026-09-23.md`.
+**Patterns — use the index, not filename guesses:** `.claude/knowledge/patterns/PATTERN-REGISTRY.md` lists every pattern (70 at
+2026-10-19) with its confidence and status (✅ production / ⚠️ CANDIDATE — e.g. `kept-file-edit-by-reference-pattern.md` 80%, promote
+after the k8s live window). Check it BEFORE proposing an approach (Pattern-First Protocol); a candidate pattern is guidance to correct, not law.
+**Pointer (2026-11-02): entry points for people.** The working-record map now has an "Entry points for people" table: the **operator runbook**
+(`.claude/knowledge/pipelines/OPERATOR-RUNBOOK.md`), **maintainer onboarding** (`.claude/knowledge/guides/MAINTAINER-ONBOARDING.md`, which names
+`scripts/run-gates-clean.sh` · `ship.sh` · `series-cut-draft.sh` and `npm run report:gate|canary|canary-plan`), the **health-run** procedure
+(`.claude/knowledge/guides/HEALTH-RUN.md`, moved out of CLAUDE.md 2026-11-01) and the public **self-host docs** (`docs/RUNNING.md`,
+`SELF-HOST-RUN-SHEET.md`, `SELF-HOST-KEPT-FILES.md`, `VERIFYING-SELF-HOST.md`). Point a newcomer there before any working record.

@@ -1,5 +1,7 @@
 # Pre-registered Lab Gate Protocol (Protocol 16)
 
+> **New to labs?** Start with `.claude/knowledge/pipelines/LAB-USER-GUIDE.md` (what a lab tests, your part, how to read a result, a catalogue of what labs have caught). This protocol is the rules.
+
 > **Purpose**: decide WHEN a change to what a pipeline agent reads, or to the model that reads it, must pass an
 > offline lab run before it ships, and what that run may not skip. The HOW lives elsewhere and is not repeated here.
 > **Owner**: pipeline-harness-specialist (coordination) · execution-facts-specialist (lab code, measures, replay).
@@ -75,6 +77,77 @@ so P1 would have passed while the fix failed; P1 moved to a strict scorer (regis
   $0), and score every lab sample offline with the shipping checks. A replay of stored runs never REPLACES the lab — it
   rescores outputs; only a re-run shows what an agent writes under new text — but it decides where the paid samples go.
 
+## Spend only where a sample can change the verdict (added 2026-10-19, register LAB-COST-REDUCTION)
+
+Measured over L12–L17 ($162.02): ≈ 31% bought nothing a $0 method could not give (`cline_docs/reviews/lab-cost-reduction-2026-10-19/ANSWER.md`).
+These rules sit beside the non-negotiables; none of them removes the candidate arm, the Reviewer bench, n on a DO-NOT-SHIP
+gate, or the hand read.
+
+- **A gate decided by code is proven by fixture, not sampled.** When the gate's outcome is fixed by deterministic code (the
+  applier, R9, R10, the carrier: an NFKC-rewritten line, a secret placeholder, a non-unique SEARCH), prove it with hand-written
+  packages through the shipping step (`--fake-llm fixture:<dir>`), both directions, at $0, and run the canary scan over every
+  paid sample. Buy a model cell (n = 1) only when the candidate text changes the sentence the plant targets. A gate already
+  proven by an earlier lab is INHERITED while its code is byte-unchanged (re-assert by its goldens and a $0 re-apply).
+- **Re-apply, never re-run, a platform-reading change.** When the change is how the platform reads a reply (parser, applier,
+  scorer) and every prompt is byte-identical, re-apply the recorded samples at $0. Re-run only cells whose correction-turn path
+  the change reaches (L12b, $13.16, was such a re-run; L-K2 re-applied 133 samples instead).
+- **Prove every plant reaches its reader before spend.** The dry run builds a planted arm's Reviewer prompt beside its
+  UNPLANTED twin and refuses the run when the prompts are identical, a line the plant adds is absent, or a line it removes is
+  still present (`plantPresence`, LAB-PLANT-PRESENCE-CHECK; raw tool-result plants are re-read in every stored copy, LK11). Lines
+  that differ outside the plant are derived renders: read them. Checklist item 7 (read each plant against everything its reader
+  holds, incl. the task brief) stays a written tick in the pre-registration.
+- **Measured-only base arms are OPT-IN.** A base arm that gates nothing is not run by default. Cite the last `cmp`-proven base
+  cell from the ledger, or the persisted production output of the base version, and say so. Run one only when the owner opts in
+  at pre-registration for the contrast.
+- **Curtail a "≥ k of n" cell once its outcome is fixed** (the rule as written, not a reinterpretation): stop when k passes are in,
+  or when n − k + 1 misses are in. **Never** curtail a "0 instances" cell in the pass direction (G-CANARY must see every sample),
+  and **never** a cell whose bar is decided by the hand read (curtail revise-level count cells only). Name each curtailed cell
+  and its count in the result. The lab does not curtail automatically: split the invocation (`--n` slices, as the crib run does).
+- **Warm first, then fan out** (automatic, `--no-warm-first` to disable): each cell's sample 1 writes the cache before its
+  siblings start. Not model-visible; only start times move.
+- **Batch transport (`--batch`, paid runs only):** Author / Reviewer / Architect calls go to the Message Batches API (50%).
+  The request body is production's except `betas` + `fallbacks` (Opus) and a 1h cache TTL, proved by `--fake-llm transport`
+  ($0) and named in the manifest. Named divergences: no server-side refusal fallback, the batch served tier, and a loop deadline
+  that reads ample time (requirements_author nodes are refused). **Owner ruling 2026-10-19 (Steve): the batch tier IS a valid
+  measurement tier for Author / Reviewer / Architect cells — EXCEPT any experiment whose question involves a time-budget behaviour
+  (truncation retry, the held edit-correction time check, any correction or retry gated on time left): those run at the standard tier,
+  because batch makes every time check read "ample".** Each pre-registration states the tier per cell and, when batch is used, why no
+  gate depends on time. **Crib read 2026-10-20 (owner-run, $0.97): the cache survives BOTH between sibling samples' batches and between
+  one agent's turns** — Reviewer cell $0.118/sample vs $0.280 standard (−58%), Author one sample $0.376 vs $0.522 (−28%, it pays its own
+  cache write); outcomes unchanged (Reviewer 0/5 refused = production; held edit applied 1/1). **Batch is cleared for use.**
+
+## The standing no-regression rule (added 2026-10-31, owner: "we cannot risk any regressions to delivering a successful run")
+
+Runs release reliably now, so the default risk of any change is a REGRESSION rather than an unfixed defect. A lab only tests the cases its author picked, and nothing re-ran a known-good case after a deploy. This rule closes both gaps. It holds alongside the non-negotiables below and never replaces them.
+
+1. **Size the gate by blast radius:**
+
+   | Change | Must pass before push |
+   |---|---|
+   | Docs, ops alerts, test tooling: nothing an agent reads, no fact computation | the battery |
+   | How a stored fact is computed (nets, stamps, renderers) | the nets replay, byte-identical (`scripts/replay-nets-byte-identity.sh --snapshot`); every moved fact explained |
+   | Agent-facing text (protocol, role guidance, template constraint), or a role's model/effort | this protocol's lab **plus the golden set** (2) |
+   | A SHARED role key: `change_reviewer` (four domains + Node C), `config_change_author` (four domains), or any role guidance every domain reads | the lab plus the golden set **from every domain the key ships to** |
+
+2. **The golden set.** A frozen set of real legs whose outcomes are known correct is replayed in EVERY agent-text or model lab. It is fixed for all labs and never chosen per lab. It holds:
+   - the legs of released programs;
+   - legs from the passing live windows;
+   - a few correct REFUSALS, so an over-permissive change is caught too.
+
+   Each golden case must reproduce its outcome: approved stays approved, refused stays refused, a forced outcome stays forced. **One flip is a do-not-ship miss** unless the pre-registration names that case as the change's intended target. Owner: model-evaluation-specialist (register NO-REGRESSION-GOLDEN-SET). Add a case when a program releases or a window passes; remove one only by recorded owner decision.
+   **Built 2026-10-31 (v1, 12 cases, all four domains); re-frozen v2 the same day by owner decision (15 cases: + CANARY 1's network value leg, terraform and observability legs — the set's `refreezes` record names each addition and what was left out):** `scripts/leg-replay-lab/golden/golden-set.json` + `golden-set.ts`. The lab declares `goldenSet` in `experiment.json` (a paid run is refused without it); `golden-build` carries its arms onto the golden cases as a companion experiment; `golden-score` reads each case as REPRODUCED or FLIPPED. Node C cannot be replayed yet (named in the set's `notReplayable`); a value leg (network-derivation) is replayed on its persisted derivation with the derivation_reviewer re-run (Reviewer cells only, since v2).
+3. **One canary after every agent-text deploy.**
+   - Re-run the latest released program from its published spec, on a fresh stage with the clearance metadata set (≈ $12).
+   - It must come back `programReleasable: true`, and its legs must be hand-read, before the NEXT agent-text batch ships.
+   - If it does not: roll back (newest first) and treat the cause as a finding before anything else ships.
+   - Read it with `npm run report:canary -- --root <canary root> --expect <protocol>@<version> [--control <name>]` (read-only;
+     VOID / PENDING / PASS / FAIL + each pre-registered control). A shipped change's live control is added to `scripts/canary-check.ts`
+     CONTROLS before its deploy (first: `d2-contract-omission`, pov-program 2.2.1). The hand read still happens.
+4. **Fewer, smaller text batches, filtered by the reliability bar.**
+   - When a domain is at or above 90% correct outcomes with 0 false releases, a text change ships only for a false-release risk, or for a cheap fix that generalises.
+   - Safe failures (false refusals, wording, tidiness) wait behind a measured trigger, or ride the next change that must touch the same text anyway.
+   - A batch touching a shared key carries no unrelated items.
+
 ## The non-negotiables
 
 1. **Pre-register the rule in `experiment.json` before any spend.** For each node: the expected verdict. For the
@@ -102,7 +175,7 @@ so P1 would have passed while the fix failed; P1 moved to a strict scorer (regis
 
 ## Outcome
 
-- All do-not-ship gates met, revise gates met ⇒ build, push, reseed, series cut (CLAUDE.md).
+- All do-not-ship gates met, revise gates met ⇒ build, push, reseed, series cut (the series-cut ledger, `.claude/knowledge/pipelines/SERIES-CUT-LEDGER.md`).
 - A revise gate missed ⇒ revise the text (drafter + independent audit), rerun the cells it names, or the whole
   arm when every cell's prompt changed.
 - A do-not-ship gate missed ⇒ stop; return to the design.

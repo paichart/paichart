@@ -83,7 +83,7 @@ agent loop ends (end_turn) ─► CHECK (pure, deterministic) ─► stamp FACT 
    named ones. With a regression guard, only that no MEASURED check worsens. Text no check measures can still be
    lost (see condition 4).
 7. **Envelope.** A default-OFF env flag read through one helper (literal `'true'` only); kill criteria; an MI-13 row;
-   a recorded card decision; the prompt pinned by hash; a CLAUDE.md series cut at switch-on. **Time bound — the
+   a recorded card decision; the prompt pinned by hash; a series cut at switch-on (series-cut ledger, `.claude/knowledge/pipelines/SERIES-CUT-LEDGER.md`). **Time bound — the
    instances differ:**
    - requirements derives a budget from the R4 constants and skips with `insufficient-time`, never overrunning;
    - terraform has NO deadline check, only a fixed 600 s abort, and its decision has no time arm.
@@ -117,7 +117,7 @@ through it.
 | Check | `package-form-check.ts`: diff hunk headers vs bodies | `requirements-form-check.ts` (TS port of the publish checks): size/program view, stray rule citations, coverage, citations, clauses, lint, residue |
 | Trigger | hunk-header undercount only (narrow, by design) | every failing trigger check; registry-caused coverage findings EXCLUDED (the agent does not own them). Lint is a pre-filter and should be guard-only (G3) |
 | Adoption guard | **per-line provenance** — every changed line must come from a named source (`content-not-from-named-source`, `header-start-changed`) | **regression-based** — no measured check worsens + one improves; headings/placeholders/confidence structural guards. **Rule v2 (G1 A, built 2026-10-10):** frozen before-map, citations/clauses-checked may not fall, all coverage findings guarded, clause findings by identity; probes P0–P6 pinned (P2–P4 still adopted — the measured blind spot). **Rule v3 (2026-10-12, panel `cline_docs/reviews/correction-adoption-severity-2026-10-11/`):** size cleared to 0 adopts over ≤ 1 newly flagged clause (`unwaivable-cleared` arm, owner P1 = C); the read is enforced at publish, never by a waiver |
-| Flag + eligibility | `FORM_CORRECTION_ENABLED` (ON 2026-10-06 23:52:54Z). **One global flag; eligibility is role-wide, so it covers all four domains that share the role**, though only terraform triggers today | `REQUIREMENTS_FORM_CORRECTION_ENABLED` (ON 2026-10-09 04:00:17Z, before run 1 of the three-run test). **Hold on new generations until G1 A ships** |
+| Flag + eligibility | `FORM_CORRECTION_ENABLED` (ON 2026-10-06 23:52:54Z). **One global flag; eligibility is role-wide, so it covers all four domains that share the role**, though only terraform triggers today *(2026-10-19: no longer — k8s 1.17.0 makes the k8s Author write unified diffs, and a k8s correction was attempted and adopted (A-K1); owner decision KC4 accepts k8s into scope and kill criterion 4 now watches every domain OUTSIDE {terraform, kubernetes-gitops}; `hunk-side-overflow` stays a non-trigger until measured — register K8S-HUNK-COUNT)* | `REQUIREMENTS_FORM_CORRECTION_ENABLED` (ON 2026-10-09 04:00:17Z, before run 1 of the three-run test). **Hold on new generations until G1 A ships** |
 | Time bound | fixed 600 s abort; no deadline check | R4-derived budget, `insufficient-time` skip |
 | Original kept? | the package by reference; on adoption the changed lines are on the fact (`edits`, ≤ 8) | `requirements.pre-correction.md` on every attempt + sha pointer + before-lists (G1 B, built 2026-10-10); since rule 3 the NOT-adopted correction too (`requirements.correction-not-adopted.md`) + after-lists; both hashed on the persisted (post-R10) bytes. Before G1 B: not persisted |
 | **Gates actually run** | live shadow + Protocol 16 lab | stage A replay of stored drafts + the three-run go/no-go. **No live shadow window (<2 h), no lab, no blind read of adopted vs original** |
@@ -202,7 +202,7 @@ user, and the three-run test stood in. It is not a precedent. See "Gates actuall
 
 `test:package-form-check`, `test:form-correction`, `test:form-correction-core`, `test:requirements-form-correction`
 (all in `test:all-validation`). The requirements check's own suites (`test:requirements-form-check`, `-parity`,
-`-data`) are NOT in CI. **Terraform only:** kill criteria `scripts/report-form-correction-kill-criteria.sh` (prices
+`-data`) are NOT in CI. **Terraform (and kubernetes-gitops since KC4, 2026-10-19):** kill criteria `scripts/report-form-correction-kill-criteria.sh` (prices
 attempts at Sonnet rates; the terraform Author is on Opus 5.5 since 2026-10-07, so cost is under-stated about 2×),
 MI-13 rows `PACKAGE FORM CHECK` / `PACKAGE FORM CORRECTION`. The requirements instance has no kill criteria and no
 MI-13 row yet (G5). **Owed:** a pin that no `qualityGate` or gate conjunct reads `toolLoop.*Check.correction`. Today

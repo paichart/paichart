@@ -23,7 +23,7 @@ import {
   countLines,
   DECODE_VERSION,
 } from '../lib/agents/harness/held-bytes/canonical-text';
-import { R10_VERSION } from '../lib/agents/harness/redact-artifact-secrets';
+import { R10_VERSION, collectR10EchoSources } from '../lib/agents/harness/redact-artifact-secrets';
 import { HELD_FILE_CAP } from '../lib/agents/harness/held-bytes/caps';
 
 console.log('🧾 held-bytes canonical text (WI-2)\n');
@@ -239,6 +239,71 @@ test('control: a clean nginx log_format with a literal \\n is HELD (no false res
   const r = canonicalBase(C, { redact: true });
   ok(r.ok && r.redactedCount === 0, JSON.stringify(r));
 });
+// ── R10-V8-RESIDUALS (a) (held-network step 3 P1): echo parity — refused, never echo-redacted into B ─────────────────
+const COMM = 'Lb' + '7rQx' + '92Kzt'; // built at runtime (gitleaks discipline); echo-eligible (mixed, digits, 11 chars)
+test('ECHO (a) SELF: a value keyed in the file AND bare elsewhere in the same file ⇒ echo-secret-residual (result.json would blank the bare copy)', () => {
+  const C = 'hostname sw1\nsnmp-server community ' + COMM + ' ro\ninterface Ethernet1\n   description uplink ' + COMM + '\n';
+  const r = canonicalBase(C, { redact: true });
+  ok(!r.ok && r.refusal === 'echo-secret-residual', JSON.stringify(r));
+});
+test('ECHO (a) CROSS: a value keyed only in ANOTHER record of the persist (echoTokens) and bare in this file ⇒ echo-secret-residual', () => {
+  const C = 'hostname sw1\ninterface Ethernet1\n   description uplink ' + COMM + '\n';
+  const r = canonicalBase(C, { redact: true, echoTokens: [COMM] });
+  ok(!r.ok && r.refusal === 'echo-secret-residual', JSON.stringify(r));
+  const held = canonicalBase(C, { redact: true });
+  ok(held.ok, 'control: without the cross source the file is held');
+});
+test('ECHO (a) controls: a keyed-only file is HELD with B and baseHash byte-identical to the plain arm (no base moves); R10 off never refuses', () => {
+  const C = 'hostname sw1\nsnmp-server community ' + COMM + ' ro\n';
+  const r = canonicalBase(C, { redact: true, echoTokens: ['unrelatedValue99'] });
+  ok(r.ok && r.redactedCount === 1 && r.B === 'hostname sw1\nsnmp-server community <<REDACTED-SECRET>> ro\n' && r.baseHash === sha(r.B), JSON.stringify(r));
+  const off = canonicalBase('a ' + COMM + '\n', { redact: false, echoTokens: [COMM] });
+  ok(off.ok && off.redactorVersion === 'none', 'redact:false ⇒ held as C');
+  // an ineligible token (short, number-like) never refuses — the persist's own guard (echoEligible)
+  ok(canonicalBase('vlan 1234567\n', { redact: true, echoTokens: ['1234567'] }).ok, 'number-like never echoes');
+});
+
+test('ECHO (a) SF-4 (sec-ops): past the echo matcher\'s literal cap the file is refused (fail closed), never held on a partial matcher', () => {
+  const many = Array.from({ length: 8300 }, (_, i) => `Tok${i}x` + 'Q7z' + i.toString(36).padStart(4, 'k'));
+  const r = canonicalBase('hostname sw1\nno echo here\n', { redact: true, echoTokens: many });
+  ok(!r.ok && r.refusal === 'echo-secret-residual', JSON.stringify(r).slice(0, 200));
+  ok(canonicalBase('hostname sw1\nno echo here\n', { redact: true, echoTokens: many.slice(0, 100) }).ok, 'control: under the cap, no echo ⇒ held');
+});
+
+// ── R10 v11 (CEOS2-ECHO-SECRET-RESIDUAL, 2026-11-02): a placeholder is platform text and never an echo. The devext reproduction shape
+// with SYNTHETIC values only: an EOS running-config with a login hash and an SNMP community (B carries three placeholders), and the
+// Harvester's "verbatim" block masking both with an unclosed `<REDACTED …` after the directive — a `\S+` rule takes `<REDACTED`.
+const HASH11 = '$6$' + 'Synth3ticSalt' + '$' + 'Synth3ticHashValue'.repeat(5); // runtime-built
+const COMM11 = 'Synth3' + 'ticCm7q';
+const EOS11 = 'hostname ceos2\nusername admin privilege 15 role network-admin secret sha512 ' + HASH11 + '\nsnmp-server community ' + COMM11 + ' ro\ninterface Ethernet1\n   description core\n';
+const MASK11 = 'Held file (verbatim):\nusername admin privilege 15 role network-admin secret sha512 <REDACTED — unredacted secret observed; referenced by directive, not restated>\nsnmp-server community <REDACTED — unredacted secret observed; referenced by directive, not restated> ro\n';
+test('ECHO v11 devext shape: placeholders in B + the model mask `<REDACTED` as an echo token ⇒ HELD, B and baseHash = the plain arm', () => {
+  const tokens = collectR10EchoSources([{ result: EOS11 }], MASK11);
+  ok(tokens.has('<REDACTED'), 'precondition: the mask is an echo token');
+  const r = canonicalBase(EOS11, { redact: true, echoTokens: tokens });
+  ok(r.ok && r.redactedCount === 3 && !r.B.includes(HASH11) && !r.B.includes(COMM11) && r.baseHash === sha(r.B), JSON.stringify(r).slice(0, 300));
+  const plain = canonicalBase(EOS11, { redact: true });
+  ok(plain.ok && r.ok && plain.B === r.B && plain.baseHash === r.baseHash, 'B never moves: identical to the capture with no echo source');
+});
+test('ECHO v11 control: the same + a real secret echoed BARE in the held file ⇒ still echo-secret-residual', () => {
+  const C = EOS11 + 'banner motd community is ' + COMM11 + '\n';
+  const r = canonicalBase(C, { redact: true, echoTokens: collectR10EchoSources([{ result: EOS11 }], MASK11) });
+  ok(!r.ok && r.refusal === 'echo-secret-residual', JSON.stringify(r).slice(0, 200));
+  const adj = canonicalBase('hostname sw1\nkey: <<REDACTED-SECRET>>' + COMM11 + '\n', { redact: true, echoTokens: [COMM11, '<REDACTED'] });
+  ok(!adj.ok && adj.refusal === 'echo-secret-residual', 'a real echo ADJACENT to a placeholder is still refused');
+});
+
+test('ECHO collectR10EchoSources: the keyed tokens of strings and trees; EMPTY with R10 switched off (the persist echoes nothing then)', () => {
+  const tree = { toolCalls: [{ result: 'snmp-server community ' + COMM + ' ro' }] };
+  ok(collectR10EchoSources(tree).has(COMM), 'a tree');
+  ok(collectR10EchoSources('password: ' + COMM).has(COMM), 'a string');
+  const prev = process.env.ARTIFACT_SECRET_REDACT_ENABLED;
+  process.env.ARTIFACT_SECRET_REDACT_ENABLED = 'false';
+  try { eq(collectR10EchoSources(tree).size, 0, 'R10 off: '); } finally {
+    if (prev === undefined) delete process.env.ARTIFACT_SECRET_REDACT_ENABLED; else process.env.ARTIFACT_SECRET_REDACT_ENABLED = prev;
+  }
+});
+
 test('placeholders: both spellings counted once each, never double (BC-N3); counted on C before R10', () => {
   eq(countPlaceholders('x <<REDACTED-SECRET>> y <REDACTED-SECRET> z'), 2);
   const r = canonicalBase('key: <<REDACTED-SECRET>>\n', { redact: true });
@@ -271,14 +336,16 @@ test('static: redactSecretsDeep is called once, only inside the residual compari
   ok(deepAt > 0 && residualAt > deepAt, 'the deep walk must sit in the residual comparison');
   const assigns = CODE.match(/\bB = [^;]+;/g) || [];
   eq(assigns.sort(), ['B = C;', 'B = r.redacted;'].sort(), 'B assignments ');
-  ok(/const r = redactArtifactSecrets\(C\)/.test(CODE), 'r must be the plain arm over C');
+  // R10-V8-RESIDUALS (a): the plain arm may COLLECT its tokens (a sink) — its output, and so B, does not depend on it.
+  ok(/const r = redactArtifactSecrets\(C(, sink)?\)/.test(CODE), 'r must be the plain arm over C');
 });
 test('static: isR10Disabled is the ONE R10-off flag expression in the R10 module (D6)', () => {
   const r10Code = R10.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   eq((r10Code.match(/=== 'false'/g) || []).length, 1, "=== 'false' count ");
   ok(/export function isR10Disabled\(\): boolean \{\s*return process\.env\.ARTIFACT_SECRET_REDACT_ENABLED === 'false';/.test(r10Code),
     'isR10Disabled body');
-  eq((r10Code.match(/isR10Disabled\(\)/g) || []).length, 3, 'definition + two call sites ');
+  // definition + the persist + the extra artifact + collectR10EchoSources (R10-V8-RESIDUALS, the pre-persist echo source)
+  eq((r10Code.match(/isR10Disabled\(\)/g) || []).length, 4, 'definition + three call sites ');
 });
 
 console.log(`\n📊 Total Tests:  ${passed + failed}`);

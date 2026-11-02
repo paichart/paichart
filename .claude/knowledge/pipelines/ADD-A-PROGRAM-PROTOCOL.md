@@ -45,9 +45,9 @@ Under composed injection the base is loaded by its **`protocol-base` tag** with 
 contract (`findMany take:2` — zero or multiple ACTIVE base rows THROW; the health-run pins it), so
 the old hazard — `pipeline-orchestrator-protocol` being just one alphabetical row in a
 `take: 10` window that names sorting before it could push out — is retired. What remains yours:
-never tag a second row `protocol-base`, and know the legacy `loadProtocols: true` mode (the
-rollback state) still uses the name-ordered `take: 10` window, where alphabetical position
-matters again.
+never tag a second row `protocol-base`. (The legacy `loadProtocols: true` mode and its name-ordered
+`take: 10` window were RETIRED 2026-10-16 — `true` now throws `UNKNOWN_PROTOCOL_MODE` — so alphabetical
+position no longer matters anywhere.)
 
 Today 3 of 6 sort before the base; it falls off the window at 10 such names. Not imminent — but a
 research programme producing several variants can get there, and **the drop is silent to the
@@ -295,7 +295,7 @@ The tag lever is tempting and half-works. There are **two** injection queries
 (`execution-system-prompt.ts`) and they filter differently:
 
 ```
-loadProtocols:true       → where { tags has 'protocol',      status: 'ACTIVE' }  (legacy load-all)
+loadProtocols:true       → RETIRED 2026-10-16 — throws UNKNOWN_PROTOCOL_MODE before any read (was: legacy load-all)
 loadProtocols:'composed' → base:  { tags has 'protocol-base', status: 'ACTIVE' }
                            delta: { name: <task stamp> }   ← no tag filter, no status filter
                                     (status checked AFTER load: program-tier non-ACTIVE throws,
@@ -568,6 +568,10 @@ interpolated DIRECTLY into the builder (so `test:no-rig-identifiers` and `test:p
 params object hides text from both scanners). The architect role is `buildProgramArchitectGuidance()` with NO
 parameters, rendered once into `PROGRAM_ARCHITECT_GUIDANCE` and held by both `program_architect` and
 `value_chain_architect` (`===` pinned by golden). A future variant re-introduces exactly the parameters it needs.
+
+> **Since 2026-10-31 (HS-FU5):** a new program protocol (`emitsMarkers: 'none'`) also needs its row in the runtime copy
+> `PROTOCOL_MARKER_MANDATES` (`lib/agents/harness/protocol-marker-mandates.ts`); `test:protocol-marker-mandates` fails until it is there.
+
 ⚠️ **Never edit a SHARED line for the variant's sake** — the `## Pipeline DAG` deliverable line is shared with the live
 `program_architect`; a variant-only requirement goes in the variant's own parameter (B6 audit A8).
 
@@ -672,7 +676,7 @@ That makes the cost a step function:
 | rename while… | what happens to the orphan | cost |
 |---|---|---|
 | **`DRAFT`** (today) | orphan is DRAFT ⇒ injected nowhere, invisible to routing | **≈ zero** — delete the row at leisure, or leave it |
-| **`ACTIVE`** | orphan stays ACTIVE and protocol-tagged ⇒ **still injected into every PIPELINE prompt**, a stale duplicate competing for a `take: 10` slot | manual row deletion required, and a live duplicate until you do it |
+| **`ACTIVE`** | orphan stays ACTIVE and protocol-tagged ⇒ **still injected into any task whose stamp or title token names it** (composed injection), a stale duplicate (the load-all `take: 10` slot competition this row once described was retired 2026-10-16) | manual row deletion required, and a live duplicate until you do it |
 
 **So: rename while it is still DRAFT and the whole question costs nothing.** After it goes ACTIVE
 you inherit a cleanup step and a window where two versions of the same protocol are both live.
