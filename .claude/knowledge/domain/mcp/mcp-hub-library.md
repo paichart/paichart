@@ -239,6 +239,7 @@ Expert in pAIchart's revolutionary MCP Hub - the world's first conversational AI
 - **Documentation Updated**: Streamable HTTP now recommended for external services
 
 ### 22. MCP SDK Upgrade to v1.25.3 (Jan 23, 2026)
+> **Superseded 2026-11-02:** hub on 1.32.1 (Protocol 9 §2026-11-02); services follow in batch C.
 - **Previous Version**: `@modelcontextprotocol/sdk@1.17.5` (6 months old)
 - **Current Version**: `@modelcontextprotocol/sdk@1.25.3` (8 versions, 2 months of fixes)
 - **Critical Fix**: PR #1214 (v1.24.3) - "Release HTTP connections after POST responses"

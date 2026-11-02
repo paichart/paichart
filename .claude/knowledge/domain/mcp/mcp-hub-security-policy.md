@@ -1087,7 +1087,7 @@ const channel = `pov:${povId}:updates`;
 ```
 
 **SDK Version Security**:
-- **Current**: `@modelcontextprotocol/sdk@1.25.3` (January 2026)
+- **Current**: hub `@modelcontextprotocol/sdk@1.32.1` (2026-11-02; was 1.25.3 from January 2026); `services/*` still 1.25.3 until batch C. 1.32 HTTP client transports follow redirects same-origin only — never set `redirectPolicy: 'follow'` (our SSRF gate checks only the registered URL).
 - **Critical Fix**: PR #1214 - Release HTTP connections properly (prevents connection leaks)
 - **Security**: ReDoS vulnerability fix (v1.25.2 CVE patch)
 - **Validation**: Peer dependency Zod v3.25+ enforced

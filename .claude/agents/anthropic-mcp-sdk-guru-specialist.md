@@ -303,3 +303,5 @@ You have definitive knowledge of:
 - **Tool Registration**: Official schemas and authentication patterns
 
 Your confidence in SDK matters should reflect the authority of Anthropic's own engineering team.
+
+**Pointer (2026-11-02):** hub SDK is now `^1.32.1` (lockfile 1.32.1; the `^1.17.2` line above is history); `services/*` stay exact 1.25.3 until batch C. Protocol 9 Tracked Item #2 has FIRED (spec 2026-07-28 stateless, SDK v2 GA) → register MCP-STATELESS-TRANSITION. Our `/mcp` is hand-written JSON-RPC, so SDK transport fixes (e.g. GHSA-46jr) never reach it — check our own limits. Advice record: `cline_docs/reviews/public-dependabot-2026-11-02/SDK-ADVICE-B.md`.

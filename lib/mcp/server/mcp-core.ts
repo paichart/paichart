@@ -143,6 +143,35 @@ export interface MCPCoreManagerOpts {
  * Construction is cheap (just stores deps); the real work happens in
  * `init()` called from server-class `start()`.
  */
+
+/** B2 (2026-11-02): the most JSON values (objects, arrays and primitives, counted together) one tools/call may carry. */
+export const MCP_TOOL_ARGUMENT_NODE_CAP = 20_000;
+
+/**
+ * True once more than `cap` JSON values would be seen — iterative (no recursion), and the early exit is checked as values are
+ * QUEUED (seen + queued), so a wide array or object stops at the cap instead of being pushed whole (sec-ops B2 F1).
+ */
+export function exceedsArgumentNodeCap(value: unknown, cap: number): boolean {
+  const stack: unknown[] = [value];
+  let seen = 0;
+  while (stack.length > 0) {
+    const v = stack.pop();
+    if (++seen > cap) return true;
+    if (v !== null && typeof v === 'object') {
+      if (Array.isArray(v)) {
+        if (seen + stack.length + v.length > cap) return true;
+        for (let i = 0; i < v.length; i++) stack.push(v[i]);
+      } else {
+        for (const k in v as Record<string, unknown>) {
+          if (seen + stack.length + 1 > cap) return true;
+          stack.push((v as Record<string, unknown>)[k]);
+        }
+      }
+    }
+  }
+  return false;
+}
+
 export class MCPCoreManager {
   private readonly logger: Logger;
   private readonly prismaClient: PrismaClient;
@@ -469,6 +498,17 @@ export class MCPCoreManager {
         case 'tools/call': {
           const toolName = req.params?.name || '';
           const toolArgs = req.params?.arguments || {};
+
+          // B2 (PUBLIC-DEPENDABOT-301, 2026-11-02): bound the work any AUTHENTICATED caller can hand a handler (tools/call is not
+          // a public method — authMiddleware returns 401 first; the 1 MB body limit is the pre-auth control). Counted with early
+          // exit BEFORE dispatch. A real 64 KB interface contract is ~850 values.
+          if (exceedsArgumentNodeCap(toolArgs, MCP_TOOL_ARGUMENT_NODE_CAP)) {
+            throw {
+              code: -32602,
+              message: `Tool arguments exceed ${MCP_TOOL_ARGUMENT_NODE_CAP} JSON values; send a smaller request`,
+              data: { tool: toolName, limit: MCP_TOOL_ARGUMENT_NODE_CAP },
+            };
+          }
 
           // P1.1: Enforce tool security before execution (top-of-file import per mcp-protocol-debug I1)
           try {

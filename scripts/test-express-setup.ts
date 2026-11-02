@@ -289,7 +289,7 @@ async function main() {
 
   // ─── Tests 2-3 ───────────────────────────────────────────────────────
   // Task #142 (2026-05-21): rawBody verify callback DROPPED. Block 1 now
-  // only configures express.json's limit:'10mb' + strict:true. These
+  // only configures express.json's limit (MCP_JSON_BODY_LIMIT, '1mb' since B2 2026-11-02; was '10mb') + strict:true. These
   // tests pin the new behavior:
   //   2. Body is still parsed correctly (req.body populated)
   //   3. req.rawBody is undefined (no verify callback assigns it)
@@ -308,6 +308,28 @@ async function main() {
     await httpPost(port, '/echo', JSON.stringify({ test: 'small' }));
     assertEqual(capturedBody, { test: 'small' }, 'Test 2: req.body parsed correctly');
 
+    await new Promise<void>((res) => server.close(() => res()));
+  }
+
+  console.log('\nTest 2b: B2 (2026-11-02) — JSON body limit is 1 MB (was 10 MB): 0.9 MB parsed, 1.5 MB refused 413 before any route');
+  {
+    const app = express();
+    configureExpressMiddleware(app, { corsOrigin: 'https://localhost', logger: makeLogger() });
+    let reached = 0;
+    app.post('/echo', (_req: Request, res: Response) => { reached++; res.status(200).json({ ok: true }); });
+    const server = app.listen(0);
+    const port = (server.address() as { port: number }).port;
+    const ok = await httpPost(port, '/echo', JSON.stringify({ a: 'x'.repeat(900 * 1024) }));
+    assertEqual(ok.status, 200, 'Test 2b: a 0.9 MB body is accepted');
+    const big = await httpPost(port, '/echo', JSON.stringify({ a: 'x'.repeat(1536 * 1024) }));
+    assertEqual(big.status, 413, 'Test 2b: a 1.5 MB body is refused 413');
+    assertEqual(reached, 1, 'Test 2b: the refused body never reaches the route');
+    // Form limit 64 KB — ONE large parameter (many small ones would trip body-parser's 1,000-parameter limit and pass for the wrong reason)
+    const formOk = await httpPost(port, '/echo', 'p=' + 'x'.repeat(60 * 1024), { 'Content-Type': 'application/x-www-form-urlencoded' });
+    assertEqual(formOk.status, 200, 'Test 2b: a 60 KB form body is accepted');
+    const formBig = await httpPost(port, '/echo', 'p=' + 'x'.repeat(80 * 1024), { 'Content-Type': 'application/x-www-form-urlencoded' });
+    assertEqual(formBig.status, 413, 'Test 2b: an 80 KB single-parameter form body is refused 413');
+    assertEqual(reached, 2, 'Test 2b: the refused form body never reaches the route');
     await new Promise<void>((res) => server.close(() => res()));
   }
 

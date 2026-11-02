@@ -300,6 +300,27 @@ console.log('\nTest 11: initializeAuthContext JWT claim fallbacks (sub → userI
 }
 
 // ──────────────────────────────────────────────────────────────────────
+// ─── Test B2: tools/call argument node cap refuses before dispatch (sec-ops B2 F7) ───
+console.log('\nTest B2: tools/call argument node cap — 20,001 values refused -32602 with the handler never called; 20,000 dispatched');
+{
+  let handlerCalls = 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mgr = new MCPCoreManager({ logger: noopLogger as any, prismaClient: mockPrismaClient, sessionStore: mockSessionStore });
+  const stubMcp = {
+    setUserContext: () => { /* noop */ },
+    toolHandlers: new Map([['project', async () => { handlerCalls++; return { content: [{ type: 'text', text: 'ok' }] }; }]]),
+  } as unknown as PureSDKNativeServerShape;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (mgr as any)._mcpServer = stubMcp;
+  const admin = { id: 'u-b2', userId: 'u-b2', email: 'b2@example.com', role: 'ADMIN', authMethod: 'api_key' };
+  const call = (n: number) => mgr.processRequest({ jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'project', arguments: { a: Array(n).fill(0) } } }, admin);
+  const over = await call(19999) as { error?: { code?: number } };   // args object + array + 19,999 = 20,001
+  assertEqual(over?.error?.code, -32602, 'Test B2: 20,001 values → JSON-RPC -32602');
+  assertEqual(handlerCalls, 0, 'Test B2: the handler is never called for an over-cap request');
+  await call(19998);                                                   // = 20,000 values
+  assertEqual(handlerCalls, 1, 'Test B2: exactly 20,000 values is dispatched to the handler');
+}
+
 console.log(`\n${'─'.repeat(60)}`);
 console.log(`Results: ${passed} passed, ${failed} failed`);
 if (failed > 0) {

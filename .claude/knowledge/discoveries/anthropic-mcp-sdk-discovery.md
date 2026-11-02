@@ -240,6 +240,7 @@ grep -r "WIP\|TODO.*MCP\|IN.*PROGRESS" . | head -5
 
 ### Implementation Quality
 - **SDK compliance**: Using @modelcontextprotocol/sdk ^1.25.3 (verify against package.json — drifts with every Protocol 9 bump; was ^1.17.2 at the May-2026 validation)
+  - 2026-11-02: hub now `^1.32.1` (lockfile 1.32.1); `services/*` still exact 1.25.3 until batch C. Advice: `cline_docs/reviews/public-dependabot-2026-11-02/SDK-ADVICE-B.md`.
 - **Protocol version**: Should advertise 2025-06-18 for Claude.ai compatibility
 - **Error handling**: JSON-RPC 2.0 compliant error responses
 - **Performance**: Shared connection pooling, parameter normalization

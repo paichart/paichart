@@ -284,15 +284,28 @@ null/infinite requested TTL; OAuth discovery-caching/scopes improvements.
 
 ---
 
+## 2026-11-02 assessment + MERGE — 1.25.3 → 1.32.1 (PUBLIC-DEPENDABOT-301 batch B)
+
+Advice: `cline_docs/reviews/public-dependabot-2026-11-02/SDK-ADVICE-B.md` (anthropic-mcp-sdk-guru, read-only). Hub bumped to **1.32.1**
+(lockfile pinned, floor `^1.32.1`); the 7 `services/*` exact pins stay 1.25.3 → batch C. **No source edits.** Step 1: protocol unchanged
+(`2025-11-25` both). Step 2: 1.32.0 HTTP **client** transports follow redirects same-origin only — closes a latent redirect-SSRF (our SSRF
+gate checks only the registered URL); never set `redirectPolicy: 'follow'`; pre-deploy check: 0 registered endpoints redirect. 1.30.0 stdio
+read buffer capped 10 MB. Step 3 (#1): **DEFER** (no sliding TTL in 1.32; SDK example now closes idle sessions — supports option 2).
+Step 4 (#2): **TRIGGER FIRED → TRANSITION-PLANNING** — spec 2026-07-28 adopted SEP-2567 + SEP-2575 (no protocol sessions, no initialize
+handshake, `server/discover`, HTTP+SSE deprecated, 12-month window); SDK v2 GA 2026-07-27; 1.x does NOT implement it (not a blocker). Filed
+MCP-STATELESS-TRANSITION. Step 5 / 6.5: no-ops (no new SDK session APIs). Advisories: GHSA-345p / 22jm / 6qxp not reachable; GHSA-46jr not
+fixed for `/mcp` by any bump (hand-written transport; our own 10 MB pre-auth body limit) → batch B2. zod peer `^3.25 || ^4.0` (zod 4 NOT
+needed). Tests outside the battery run separately: `test:mcp-core`, `test:mcp-method-classifier`, `test:routes-mcp-transport`.
+
 ## Procedure Status Snapshot — Last Run
 
 | Field | Value |
 |---|---|
-| Last upgrade reviewed | **2026-06-20 — assessment only (no merge)**: 1.25.3→1.29.0 delta + GHSA-345p exposure verdict NOT-EXPOSED (see §2026-06-20 above). 1.29 = DO near-term (cheap, not urgent); v2-alpha = BACKLOG. |
-| Last SDK version | `@modelcontextprotocol/sdk@1.25.3` (still installed — 1.29 bump pending) |
+| Last upgrade reviewed | **2026-11-02 — MERGED 1.25.3 → 1.32.1** (hub; services → batch C; see §2026-11-02). Previously: **2026-06-20 — assessment only (no merge)**: 1.25.3→1.29.0 delta + GHSA-345p exposure verdict NOT-EXPOSED (see §2026-06-20 above). 1.29 = DO near-term (cheap, not urgent); v2-alpha = BACKLOG. |
+| Last SDK version | hub `@modelcontextprotocol/sdk@1.32.1` (2026-11-02); `services/*` still exact `1.25.3` (batch C) |
 | Last spec version | `2025-11-25` |
-| Tracked Item #1 status | WATCH (sliding-TTL still not shipped; 1.29 only disallows null/infinite TTL) |
-| Tracked Item #2 status | WATCH (SEPs in proposal; `2.0.0-alpha` IS the stateless track — re-eval at GA) |
+| Tracked Item #1 status | DEFER (2026-11-02: no sliding TTL in 1.32). Previously WATCH (sliding-TTL still not shipped; 1.29 only disallows null/infinite TTL) |
+| Tracked Item #2 status | **TRANSITION-PLANNING (2026-11-02 — trigger fired: spec 2026-07-28, SDK v2 GA; register MCP-STATELESS-TRANSITION)**. Previously WATCH (SEPs in proposal; `2.0.0-alpha` IS the stateless track — re-eval at GA) |
 
 Update this table on every upgrade.
 

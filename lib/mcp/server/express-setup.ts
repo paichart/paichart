@@ -69,6 +69,17 @@ export interface ExpressMiddlewareOptions {
  *
  * No return value. No state captured. Pure side-effect setup.
  */
+
+/**
+ * B2 (PUBLIC-DEPENDABOT-301, 2026-11-02): body limits for the MCP server app. Bodies are parsed BEFORE auth, so the limit is
+ * what an unauthenticated caller can make the process buffer and parse. Measured (cline_docs/reviews/public-dependabot-2026-11-02/
+ * B2-BODY-LIMIT.md): a worst-shape 10 MB body cost ~297 MB heap + ~2.1 s event-loop time; 1 MB ≤ 29 MB / ≤ 0.15 s. The largest
+ * legitimate field is a 64 KB interface contract; files are referenced by URL, never uploaded. This app receives POSTs only on
+ * /mcp (JSON) and /oauth/token (form).
+ */
+export const MCP_JSON_BODY_LIMIT = '1mb';
+export const MCP_FORM_BODY_LIMIT = '64kb';
+
 export function configureExpressMiddleware(
   app: Application,
   options: ExpressMiddlewareOptions
@@ -76,7 +87,7 @@ export function configureExpressMiddleware(
   const { corsOrigin, logger } = options;
 
   // ─────────────────────────────────────────────────────────────────────
-  // BLOCK 1 — JSON body parser (10MB limit, strict mode)
+  // BLOCK 1 — JSON body parser (1MB limit since B2 2026-11-02 — was 10MB; strict mode)
   //
   // Previously included a `verify` callback that captured the raw body
   // string to `req.rawBody` (with a 100KB DoS-protection truncation
@@ -87,14 +98,14 @@ export function configureExpressMiddleware(
   // DoS protection without the per-request string allocation.
   // ─────────────────────────────────────────────────────────────────────
   app.use(express.json({
-    limit: '10mb',
+    limit: MCP_JSON_BODY_LIMIT, // B2 2026-11-02: was '10mb' (see the constant)
     strict: true, // Enforce strict JSON parsing
   }));
 
   // ─────────────────────────────────────────────────────────────────────
   // BLOCK 2 — URL-encoded body parser (OAuth token endpoint uses form)
   // ─────────────────────────────────────────────────────────────────────
-  app.use(express.urlencoded({ extended: true, limit: '10mb' })); // OAuth token requests use form encoding
+  app.use(express.urlencoded({ extended: true, limit: MCP_FORM_BODY_LIMIT })); // B2 2026-11-02: was '10mb' // OAuth token requests use form encoding
 
   // ─────────────────────────────────────────────────────────────────────
   // BLOCK 3 — CORS with exposed headers for OAuth discovery

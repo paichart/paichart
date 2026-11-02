@@ -237,7 +237,7 @@ function createMcpServer(): Server {
 
 // Express app for SSE transport and health checks
 const app = express();
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '1mb' })); // PUBLIC-DEPENDABOT-301 batch C (2026-11-02): was 50mb; the hub caps services.call arguments at 25 KB
 
 // Track active SSE transports
 const activeTransports = new Map<string, SSEServerTransport>();

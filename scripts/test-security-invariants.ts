@@ -2253,6 +2253,33 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
   check('IF-2 SF-2 NEGATIVE CONTROL: the predicate catches an env line, a heredoc line and an ecosystem key',
     setsSwitch('export DESCRIPTOR_FETCH_ALLOW_HTTP=true', 'DESCRIPTOR_FETCH_ALLOW_HTTP') && setsSwitch('  DESCRIPTOR_FETCH_ALLOW_HTTP: "true"', 'DESCRIPTOR_FETCH_ALLOW_HTTP')
     && setsSwitch("DESCRIPTOR_FETCH_ALLOW_HTTP = 'true'", 'DESCRIPTOR_FETCH_ALLOW_HTTP') && !setsSwitch('reads DESCRIPTOR_FETCH_ALLOW_HTTP from the env', 'DESCRIPTOR_FETCH_ALLOW_HTTP'));
+  // B2 (PUBLIC-DEPENDABOT-301, 2026-11-02): the MCP server app's pre-auth body limits and the tools/call argument node cap.
+  {
+    const es = fs.readFileSync(path.join(ROOT, 'lib/mcp/server/express-setup.ts'), 'utf8');
+    check("B2 express.json limit is MCP_JSON_BODY_LIMIT = '1mb'", /export const MCP_JSON_BODY_LIMIT = '1mb';/.test(es) && /limit: MCP_JSON_BODY_LIMIT/.test(es) && !/limit: '10mb'/.test(es));
+    check("B2 urlencoded limit is MCP_FORM_BODY_LIMIT = '64kb'", /export const MCP_FORM_BODY_LIMIT = '64kb';/.test(es) && /limit: MCP_FORM_BODY_LIMIT/.test(es));
+    const core = fs.readFileSync(path.join(ROOT, 'lib/mcp/server/mcp-core.ts'), 'utf8');
+    const callIdx = core.indexOf("case 'tools/call':");
+    const capIdx = core.indexOf('exceedsArgumentNodeCap(toolArgs, MCP_TOOL_ARGUMENT_NODE_CAP)', callIdx);
+    const dispIdx = core.indexOf('mcpServer.toolHandlers.get(toolName)', callIdx);
+    check('B2 tools/call checks the argument node cap BEFORE handler dispatch', callIdx > 0 && capIdx > callIdx && dispIdx > capIdx);
+    const { exceedsArgumentNodeCap: ex, MCP_TOOL_ARGUMENT_NODE_CAP: CAP } = require('../lib/mcp/server/mcp-core');
+    const arr = (n: number) => Array(n).fill(0);
+    check('B2 node cap is 20,000', CAP === 20000);
+    check('B2 node cap boundary: root + 19,999 values = 20,000 → allowed', ex({ a: arr(19998) }, CAP) === false); // obj + array + 19,998 = 20,000
+    check('B2 node cap boundary: 20,001 values → refused', ex({ a: arr(19999) }, CAP) === true);
+    check('B2 node cap counts keys and nesting, not bytes', ex(Object.fromEntries(Array.from({ length: 25000 }, (_, i) => ['k' + i, {}])), CAP) === true);
+    check('B2 node cap NEGATIVE CONTROL: a contract-sized argument (~850 values) passes', ex({ c: Array.from({ length: 140 }, () => ({ a: 1, b: 'x', c: [1, 2], d: { e: 1 } })) }, CAP) === false);
+  }
+  // ENDPOINT-DNS-REBIND (2026-11-02, sec-ops review of SDK 1.32.1, F4b): the hub's health-check fetches of a REGISTERED endpoint
+  // must never follow a redirect — the SSRF gate vets only the registered URL, so a followed 3xx is an internal port / metadata
+  // oracle. Every `fetch(` call in the two health-check modules carries `redirect: 'manual'` inside its options.
+  for (const f of ['lib/mcp/server/tools/hub/service-health-handler.js', 'lib/mcp/server/tools/hub/hub-utilities.js']) {
+    const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    const calls = [...src.matchAll(/await fetch\(/g)].map((m) => src.slice(m.index!, m.index! + 600));
+    check(`ENDPOINT-DNS-REBIND ${path.basename(f)}: every health-check fetch sets redirect: 'manual' (${calls.length})`,
+      calls.length > 0 && calls.every((c) => /^[\s\S]*?\{[\s\S]*?redirect: 'manual'[\s\S]*?\}\)/.test(c.slice(0, c.indexOf('});') + 3))));
+  }
   // ── sec-ops IF-3 build SF-1: owner-only COLUMNS never reach an authenticated non-owner (full-row fixture + negative control) ──
   {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
