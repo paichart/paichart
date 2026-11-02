@@ -21,7 +21,7 @@ COPY src/ ./src/
 RUN npm run build
 
 # Stage 2: Production
-# Must match playwright version in package.json (currently 1.57.0)
+# Must match playwright version in package.json (currently 1.57.0, pinned EXACT since 2026-11-03 — a caret range let npm update move it to 1.64.1 and broke every browser launch)
 FROM mcr.microsoft.com/playwright:v1.57.0-jammy
 
 # Set working directory
