@@ -9,6 +9,7 @@ import { logTemplateApplication, logSecurityViolation } from '@/lib/auth/audit';
 import { detectPromptInjection } from '@/lib/security/prompt-injection-prevention';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * POST /api/agent-templates/[templateId]/apply
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ temp
     }
 
     // ✅ ENHANCED: Zod validation with injection detection (Week 5 Task 1.4)
-    const body = await request.json();
+    const body = await readJsonBody(request);
 
     // ✅ P1 FIX: Use safeParse instead of try/catch with .parse()
     const validation = ApplyTemplateRequestSchema.safeParse(body);

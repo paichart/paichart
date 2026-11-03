@@ -11,6 +11,7 @@ import { isNonSelectableUser } from '@/lib/utils/team-member-guard';
 import { povLogger } from '@/lib/logger';
 import { povListCache } from '@/app/api/pov/pov-cache';
 import { taskListCache } from '@/lib/tasks/handlers/get';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * POST /api/pov/[povId]/team/members/batch
@@ -22,7 +23,7 @@ export const POST = withPOVAccess(async (request, { params, user, pov }) => {
     // ✅ POV already loaded and validated by middleware
 
     // 1. Parse and validate request body using safeParse
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validation = BatchAddTeamMembersSchema.safeParse(body);
 
     if (!validation.success) {

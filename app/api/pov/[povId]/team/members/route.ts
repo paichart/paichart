@@ -12,6 +12,7 @@ import { parsePaginationParams } from '@/lib/utils/pagination';
 import { povLogger } from '@/lib/logger';
 import { povListCache } from '@/app/api/pov/pov-cache';
 import { taskListCache } from '@/lib/tasks/handlers/get';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * GET /api/pov/[povId]/team/members
@@ -119,7 +120,7 @@ export const POST = withPOVAccess(async (request, { params, user, pov }) => {
     // ✅ POV already loaded and validated by middleware
 
     // 1. Parse and validate request body using safeParse
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validation = AddTeamMemberSchema.safeParse(body);
 
     if (!validation.success) {

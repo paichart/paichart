@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getTaskHandler, updateTaskHandler } from '@/lib/tasks/handlers/task';
 import { taskLogger } from '@/lib/logger';
 import { DependencyNotSatisfiedError, PipelineInvariantError, InvalidTransitionError, ProtocolStampImmutableError } from '@/lib/errors';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 export async function GET(
   req: NextRequest,
@@ -28,7 +29,7 @@ export async function PUT(
   const params = await props.params;
   try {
     // Parse request body
-    const data = await req.json();
+    const data = await readJsonBody(req);
     taskLogger.debug({ taskId: params.taskId }, 'task PUT');
 
     // Validate taskId

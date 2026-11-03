@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { MCPRecommendationStatus } from '@prisma/client';
 import { parseEnumParam } from '@/lib/utils/parse-enum-param';
 import { mcpLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * GET /api/mcp/service-recommendations
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const { serviceId } = body;
 
     if (!serviceId) {

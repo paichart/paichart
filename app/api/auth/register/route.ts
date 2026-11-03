@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { registrationLimiter } from '@/lib/middleware/rate-limit';
 import { defaultUserRole, registrationAllowed, mailProviderConfigured } from '@/lib/auth/registration-policy';
 import { authLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 // Comprehensive User Registration validation schema
 const RegisterUserSchema = z.object({
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
     }
 
     // ✅ Enhanced validation with Zod
-    const data = await request.json();
+    const data = await readJsonBody(request);
 
     // ✅ P1 FIX: Use safeParse instead of try/catch with .parse()
     const result = RegisterUserSchema.safeParse(data);

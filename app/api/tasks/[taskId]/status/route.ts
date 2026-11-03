@@ -9,6 +9,7 @@ import { TaskStatus } from '@/lib/tasks/types/index';
 import { trackActivity } from '@/lib/auth/audit';
 import { taskLogger } from '@/lib/logger';
 import { DependencyNotSatisfiedError, PipelineInvariantError, InvalidTransitionError } from '@/lib/errors';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 // PATCH /api/tasks/[taskId]/status - Update task status
 export async function PATCH(req: NextRequest, props: { params: Promise<{ taskId: string }> }) {
@@ -34,7 +35,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ taskId:
     }
 
     // ✅ 3. Zod Validation with safeParse (P1 fix - proper error handling)
-    const data = await req.json();
+    const data = await readJsonBody(req);
     const result = UpdateTaskStatusSchema.safeParse(data);
 
     if (!result.success) {

@@ -27,6 +27,7 @@ import { createAgentExecution, stripReservedContextKeys } from '@/lib/services/a
 import { AuthError, NoTemplateAssignedError, DuplicateActiveExecutionError } from '@/lib/errors';
 import { listUnsatisfiedDeps } from '@/lib/services/taskReadyReactorService';
 import { DependencyNotSatisfiedError } from '@/lib/errors';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * POST /api/pov/agent/execute/stream
@@ -46,7 +47,7 @@ export const POST = createHandler(
     }
 
     // Parse request body
-    const rawBody = await req.json();
+    const rawBody = await readJsonBody(req);
 
     // SECURITY: Validate request with prompt injection detection (parity with non-streaming route)
     const validation = AgentExecuteSchema.safeParse(rawBody);

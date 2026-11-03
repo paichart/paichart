@@ -7,6 +7,7 @@ import { povLogger } from '@/lib/logger';
 import { validateTaskStatusTransition } from '@/lib/tasks/services/status-transitions';
 import { completeTaskTerminally } from '@/lib/tasks/services/complete-task-terminally';
 import { DependencyNotSatisfiedError, PipelineInvariantError, InvalidTransitionError } from '@/lib/errors';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * POST /api/pov/[povId]/phase/[phaseId]/task/[taskId]/move
@@ -52,7 +53,7 @@ export const POST = withPOVAccess(async (
     // (which would drift if Prisma TaskStatus enum evolved) + inline bounds
     // checks. MoveTaskRequestSchema enforces nativeEnum(TaskStatus), CUID on
     // newStageId, and 0..1_000_000 on newOrder.
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validation = MoveTaskRequestSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(

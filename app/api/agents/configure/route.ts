@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { configureAgent, ConfigureAgentParams } from '@/lib/agents/services/agent-configuration-service';
 import { MCPParameterSchemas } from '@/lib/validation/mcp-action-validation';
 import { mcpLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 const log = mcpLogger.child({ module: 'AgentsConfigureAPI' });
 
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
 
     const validation = AgentConfigureSchema.safeParse(body);
     if (!validation.success) {

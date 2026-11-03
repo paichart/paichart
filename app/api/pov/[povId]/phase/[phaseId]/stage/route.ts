@@ -11,6 +11,7 @@ import { CreateStageSchema, UpdateStageSchema } from '@/lib/validation/pov';
 import { validateCUIDFormat } from '@/lib/validation/id-validation';
 import { povLogger } from '@/lib/logger';
 import { logStageFieldChange, TaskActivityAction } from '@/lib/pov/services/stageActivityService';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 // Helper function to get the next stage order with atomic transaction protection
 // Uses 1000 increment pattern (industry standard) matching task ordering
@@ -111,7 +112,7 @@ export async function POST(
     }
 
     // Parse request body
-    const body = await request.json();
+    const body = await readJsonBody(request);
 
     // Schema validation
     const validation = CreateStageSchema.safeParse({ ...body, phaseId });
@@ -365,7 +366,7 @@ export async function PUT(
     }
 
     // Parse request body
-    const body = await request.json();
+    const body = await readJsonBody(request);
 
     // Schema validation
     const validation = UpdateStageSchema.safeParse({ ...body, stageId, phaseId });

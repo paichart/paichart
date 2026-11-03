@@ -7,6 +7,7 @@ import { TaskActivityActionSchema } from '@/lib/validation/activity-validation';
 import { getPOVFromTask } from '@/lib/utils/pov-helpers';
 import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import { taskLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 // 2026-05-14 P1: schema closes two gaps simultaneously —
 // (a) action is now a strict enum (was unbounded string),
@@ -107,7 +108,7 @@ const postTaskActivityHandler: ApiHandler = async (
   }
 
   try {
-    const body = await req.json();
+    const body = await readJsonBody(req);
 
     // 2026-05-14 P1: schema validation (sec-ops F-02 + api-efficiency #9 +
     // validation-engine missing-schema-application).

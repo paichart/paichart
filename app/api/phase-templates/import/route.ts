@@ -5,6 +5,7 @@ import { PhaseTemplate } from '@/lib/pov/phase-templates/types';
 import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { ImportPhaseTemplatesSchema } from '@/lib/validation/phase-template-validation';
 import { logger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
  
  export async function POST(request: NextRequest) {
    try {
@@ -17,7 +18,7 @@ import { logger } from '@/lib/logger';
        );
      }
 
-     const body = await request.json();
+     const body = await readJsonBody(request, { maxBytes: 10 * 1024 * 1024 }) /* large bodies are legitimate here (base64 file / template import); Next's own cap is 10 MB; the 20k value cap still applies */;
 
      // ✅ SECURITY: Centralized validation with .safeParse() and injection detection
      const result = ImportPhaseTemplatesSchema.safeParse(body);

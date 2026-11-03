@@ -4,6 +4,7 @@ import { templateService } from '@/lib/pov/templates/service';
 import { ApiError } from '@/lib/errors';
 import { UpdatePOVTemplateSchema } from '@/lib/validation/pov-template-validation';
 import { povLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * GET /api/pov-templates/[id]
@@ -58,7 +59,7 @@ export async function PUT(request: NextRequest, props: { params: Promise<{ id: s
     }
 
     const { id } = params;
-    const data = await request.json();
+    const data = await readJsonBody(request);
 
     // ✅ P1 FIX: API-layer validation (defense-in-depth with service-layer validation)
     const validation = UpdatePOVTemplateSchema.safeParse(data);

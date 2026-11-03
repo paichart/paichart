@@ -251,7 +251,8 @@ accepts either; `registry(action: 'tools')` wants the display name.
 Pipelines that change Kubernetes, Terraform or network config can read the **file of record** from a Git repo, keep its exact
 bytes, and have the Author change it only by edits to that kept file (`docs/SELF-HOST-KEPT-FILES.md`). The hub reads Git through
 the shipped `services/github-service`: GitHub's official read-only MCP server plus a small proxy that adds your token. Skip this
-step if you have no config repo yet; nothing else depends on it.
+step if you have no config repo yet; nothing else depends on it. **To try it first without a repo of your own,** pin the public
+`paichart/paichart-configs` — configuration files of record plus released use cases (`usecases/README.md` there says how to run one).
 
 **1. A token (one minute).** GitHub → Settings → Developer settings → Fine-grained tokens → Generate:
 - a **public** config repo: Repository access = *Public repositories (read-only)*, no permissions;

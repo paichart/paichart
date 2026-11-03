@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { detectPromptInjection } from '@/lib/security/prompt-injection-prevention';
 import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { logger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * Agent Template Builder API Endpoint
@@ -139,7 +140,7 @@ export async function POST(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
-    const body = await request.json();
+    const body = await readJsonBody(request);
 
     // SECURITY: Validate based on action type (Week 5 gap fix - Nov 3, 2025)
     let validation;

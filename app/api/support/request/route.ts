@@ -5,6 +5,7 @@ import { trackActivity } from '@/lib/auth/audit';
 import { CreateSupportRequestSchema } from '@/lib/validation/support-validation';
 import { supportRequestLimiter } from '@/lib/middleware/rate-limit';
 import { logger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const data = await req.json();
+    const data = await readJsonBody(req);
 
     // ✅ SECURITY: Validate with multi-layer defense (31 patterns, sanitization)
     const validation = CreateSupportRequestSchema.safeParse(data);

@@ -3,6 +3,7 @@ import { createPhaseHandler } from '@/lib/pov/handlers/post';
 import { createPhaseSchema } from '@/lib/validation/pov';
 import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { povLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 interface RouteParams {
   params: Promise<{
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest, params: RouteParams) {
   try {
     // Route-level validation (defense-in-depth)
     const user = await getAuthUser(req);
-    const body = await req.json();
+    const body = await readJsonBody(req);
 
     const validation = createPhaseSchema.safeParse(body);
     if (!validation.success) {

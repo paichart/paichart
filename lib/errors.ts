@@ -369,6 +369,8 @@ export const ErrorCode = {
   MISSING_REQUIRED_FIELD: 'MISSING_REQUIRED_FIELD',
   INVALID_FIELD_VALUE: 'INVALID_FIELD_VALUE',
   BAD_REQUEST: 'BAD_REQUEST',
+  // 2026-11-03 (zod alert #305): a request body over the byte or JSON value-count cap (readJsonBody).
+  PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
 
   // Database errors
   DATABASE_ERROR: 'DATABASE_ERROR',
@@ -420,6 +422,8 @@ function getStatusCodeForError(code: ErrorCodeType): number {
     case ErrorCode.RECORD_NOT_FOUND:
     case ErrorCode.NOT_FOUND:
       return 404;
+    case ErrorCode.PAYLOAD_TOO_LARGE:
+      return 413;
     case ErrorCode.RATE_LIMIT_EXCEEDED:
       return 429;
     case ErrorCode.SERVICE_UNAVAILABLE:

@@ -14,6 +14,7 @@ import { povLogger } from '@/lib/logger';
 import { buildPOVAccessFilterWithRole } from '@/lib/pov/auth/pov-access-filter';
 import { findBlockedTeamMemberIds } from '@/lib/utils/team-member-guard';
 import { POVStatus, Priority, TaskStatus } from '@prisma/client';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 // Jan Marshal's Simple & Reliable Approach
 const DEFAULT_LIMIT = 50;
@@ -377,7 +378,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'You do not have permission to create POVs' }, { status: 403 });
     }
 
-    const data = await request.json();
+    const data = await readJsonBody(request);
 
     // ✅ SECURITY: Filter privileged fields BEFORE validation (defense-in-depth)
     // Source of truth: user.userId (prevents privilege escalation)

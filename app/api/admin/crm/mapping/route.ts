@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { trackActivity } from "@/lib/auth/audit";
 import { parsePaginationParams, paginationResponse } from '@/lib/utils/pagination';
 import { logger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 // ✅ Zod validation for CRM mapping (Week 2 Enhancement)
 const CreateCRMFieldMappingSchema = z.object({
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
 
-  const data = await request.json();
+  const data = await readJsonBody(request);
 
   // ✅ Zod validation with safeParse (P1 fix - proper error handling)
   const result = CreateCRMFieldMappingSchema.safeParse(data);
@@ -132,7 +133,7 @@ export async function PUT(request: NextRequest) {
       return Response.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
 
-  const data = await request.json();
+  const data = await readJsonBody(request);
 
   // ✅ Zod validation with safeParse (P1 fix - proper error handling)
   const result = UpdateCRMFieldMappingSchema.safeParse(data);

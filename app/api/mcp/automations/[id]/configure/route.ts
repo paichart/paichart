@@ -7,6 +7,7 @@ import { logFieldChange, TaskActivityAction } from '@/lib/tasks/services/taskAct
 import type { ActivityMetadata } from '@/lib/types/activity';
 import { mcpLogger } from '@/lib/logger';
 import { AutomationConfigUpdateSchema } from '@/lib/validation/mcp-automations-validation';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 type ApiHandler<T = any> = (
   req: NextRequest,
@@ -231,7 +232,7 @@ const updateAutomationConfigHandler: ApiHandler = async (
 
   try {
     const { id } = context.params;
-    const rawBody = await req.json();
+    const rawBody = await readJsonBody(req);
 
     // BC30 FIX: Validate request body with Zod schema (was completely unvalidated)
     const parseResult = AutomationConfigUpdateSchema.safeParse(rawBody);

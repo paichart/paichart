@@ -9,6 +9,7 @@ import { safeRecord } from '@/lib/validation/zod-helpers';
 import { getPOVFromTask } from '@/lib/utils/pov-helpers';
 import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import { taskLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 // 2026-05-14 P1: schema preserves the existing permissive `action` shape
 // (downstream actionTypeMap accepts lowercase forms and falls back to
@@ -149,7 +150,7 @@ const createActivityHandler: ApiHandler = async (
 
   try {
     const { taskId } = context.params;
-    const body = await req.json();
+    const body = await readJsonBody(req);
 
     // 2026-05-14 P1: schema validation (sec-ops F-02 + api-efficiency #9).
     const validation = CreateTaskActivityWithDetailsSchema.safeParse(body);

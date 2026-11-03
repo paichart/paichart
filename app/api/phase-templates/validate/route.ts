@@ -4,6 +4,7 @@ import { schemaValidator } from '@/lib/pov/phase-templates/validator';
 import { schemaRegistry } from '@/lib/pov/phase-templates/schema-registry';
 import { ApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * POST /api/phase-templates/validate
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { schema, data, schemaId } = await request.json();
+    const { schema, data, schemaId } = await readJsonBody(request);
     
     let validationSchema = schema;
     

@@ -8,6 +8,7 @@ import { createErrorResponse, createSuccessResponse } from '@/lib/api/error-hand
 import { prisma } from '@/lib/prisma';
 import { trackActivity } from '@/lib/auth/audit';
 import { taskLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 // POST /api/tasks/[taskId]/attachments - Upload attachment
 export async function POST(req: NextRequest, props: { params: Promise<{ taskId: string }> }) {
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ taskId: 
     }
 
     // ✅ 3. Parse multipart form data with safeParse (P1 fix - proper error handling)
-    const data = await req.json();
+    const data = await readJsonBody(req, { maxBytes: 10 * 1024 * 1024 }) /* large bodies are legitimate here (base64 file / template import); Next's own cap is 10 MB; the 20k value cap still applies */;
     const result = TaskAttachmentSchema.safeParse(data);
 
     if (!result.success) {

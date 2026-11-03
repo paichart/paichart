@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { mcpServerLimiter } from '@/lib/middleware/rate-limit';
 import { mcpLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 interface ExtendedMCPServerConfig extends MCPServerConfig {
   id: string;
@@ -215,7 +216,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ✅ 3. Validation
-    const data = await request.json();
+    const data = await readJsonBody(request);
 
     // ✅ P1 FIX: Use safeParse instead of try/catch with .parse()
     const validation = MCPServerConfigSchema.safeParse(data);

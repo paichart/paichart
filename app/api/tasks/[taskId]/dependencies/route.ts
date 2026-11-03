@@ -8,6 +8,7 @@ import { checkDependencyCycle, GraphLimits } from '@/lib/utils/graph';
 import { prisma } from '@/lib/prisma';
 import { trackActivity } from '@/lib/auth/audit';
 import { taskLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 // POST /api/tasks/[taskId]/dependencies - Add task dependency
 export async function POST(req: NextRequest, props: { params: Promise<{ taskId: string }> }) {
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ taskId: 
     }
 
     // ✅ 3. Zod Validation with safeParse (P1 fix - proper error handling)
-    const data = await req.json();
+    const data = await readJsonBody(req);
     const result = TaskDependencySchema.safeParse(data);
 
     if (!result.success) {

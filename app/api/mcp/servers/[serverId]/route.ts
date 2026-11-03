@@ -4,6 +4,7 @@ import { MCPServerConfig } from '@/lib/services/llm/mcp-integration';
 import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { createErrorResponse, createSuccessResponse } from '@/lib/api/error-handler';
 import { mcpLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 // ✅ Enhanced validation schema with command whitelist (Pre-Phase Fix A)
 const UpdateMCPServerSchema = z.object({
@@ -119,7 +120,7 @@ export async function PUT(request: NextRequest, props: { params: Promise<{ serve
     }
 
     // ✅ 3. Validation
-    const data = await request.json();
+    const data = await readJsonBody(request);
 
     // ✅ P1 FIX: Use safeParse instead of try/catch with .parse()
     const result = UpdateMCPServerSchema.safeParse(data);

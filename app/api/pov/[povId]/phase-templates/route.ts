@@ -5,6 +5,7 @@ import { ApiError } from '@/lib/errors';
 import { ensureObject } from '@/lib/utils/ensure-object';
 import { withPOVAccess } from '@/lib/auth/validate-pov-access';
 import { povLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 // 2026-05-14 P1: route was writing data.phaseTemplateIds verbatim to
 // pov.metadata.phaseTemplates jsonb with no element shape, no length cap.
@@ -91,7 +92,7 @@ export const POST = withPOVAccess(async (
     
     // 2026-05-14 P1 wire-up: schema enforces DoS cap (max 50) +
     // per-element CUID validation. Previously ad-hoc Array.isArray check.
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validation = AssignPhaseTemplatesSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(

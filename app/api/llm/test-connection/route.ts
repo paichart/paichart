@@ -3,6 +3,7 @@ import createHandler from '@/lib/api-handler';
 import { AnthropicSdkProvider } from '@/lib/services/llm/anthropic-sdk-provider';
 import { LLMProvider } from '@/lib/services/llm/types';
 import { logger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 export const POST = createHandler(
   async (req: NextRequest) => {
@@ -11,7 +12,7 @@ export const POST = createHandler(
       // plainly: there is NO user-supplied URL on this route. The only path constructs
       // AnthropicSdkProvider(apiKey), which targets Anthropic's fixed endpoint, so opening
       // this route to non-admins below adds no SSRF surface.
-      const { provider, apiKey } = await req.json();
+      const { provider, apiKey } = await readJsonBody(req);
       
       // Validate required parameters
       if (!provider) {

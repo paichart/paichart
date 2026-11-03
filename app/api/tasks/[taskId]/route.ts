@@ -16,6 +16,7 @@ import {
   TaskActivityAction,
 } from '@/lib/tasks/services/taskActivityService';
 import type { ActivityMetadata } from '@/lib/types/activity';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 type ApiHandler<T = any> = (
   req: NextRequest,
@@ -206,7 +207,7 @@ const updateTaskHandler: ApiHandler = async (
 
   try {
     const { taskId } = context.params;
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { searchParams } = new URL(req.url);
 
     // ✅ ENHANCEMENT: POV access validation (Week 3 - cross-tenant protection)

@@ -6,6 +6,7 @@ import { povService } from "@/lib/pov/services/pov"
 import { prisma } from '@/lib/prisma'
 import { createErrorResponse, createSuccessResponse, handleZodError } from '@/lib/api/error-handler'
 import { povLogger } from '@/lib/logger'
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 const localLogger = povLogger.child({ module: 'DeleteHandler' })
 
@@ -43,7 +44,7 @@ export async function deleteMultiplePhasesHandler(
   request: NextRequest,
   { params, user, pov }: { params: { povId: string }, user: any, pov: any }
 ) {
-  const data = await request.json()
+  const data = await readJsonBody(request)
 
   // ✅ Zod validation with .safeParse() pattern (proper error handling)
   const validation = DeleteMultiplePhasesSchema.safeParse(data);

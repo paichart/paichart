@@ -7,6 +7,7 @@ import { GenerateAPIKeySchema } from '@/lib/validation/admin-user-validation';
 import { trackActivity } from '@/lib/auth/audit';
 import { adminAPIKeyLimiter } from '@/lib/middleware/rate-limit';
 import { logger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 type ApiHandler<T = any> = (
   req: NextRequest,
@@ -143,7 +144,7 @@ const generateApiKeyHandler: ApiHandler = async (
   }
 
   try {
-    const body = await req.json();
+    const body = await readJsonBody(req);
 
     // ✅ ENHANCEMENT: Zod validation with safeParse (P1 fix - proper error handling)
     const result = GenerateAPIKeySchema.safeParse({

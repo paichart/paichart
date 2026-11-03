@@ -7,6 +7,7 @@ import { trackActivity } from '@/lib/auth/audit';
 import { UpdateLLMSettingsSchema } from '@/lib/validation/settings-validation';
 import { adminSettingsLimiter } from '@/lib/middleware/rate-limit';
 import { logger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 // Get the global LLM settings
 export async function GET(req: NextRequest) {
@@ -99,7 +100,7 @@ export async function PUT(req: NextRequest) {
     }
 
     // ✅ Validate the settings
-    const body = await req.json();
+    const body = await readJsonBody(req);
 
     const validation = UpdateLLMSettingsSchema.safeParse(body);
 

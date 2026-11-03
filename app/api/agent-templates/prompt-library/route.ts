@@ -8,6 +8,7 @@ import { CreatePromptLibrarySchema, ListPromptsQuerySchema } from '@/lib/validat
 import { promptCreationLimiter } from '@/lib/middleware/rate-limit';
 import { getPromptRegistryEventEmitter } from '@/lib/events/prompt-registry-events';
 import { logger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 export async function GET(request: NextRequest) {
   try {
@@ -191,7 +192,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
 
     // Zod validation with comprehensive checks
     const validation = CreatePromptLibrarySchema.safeParse(body);

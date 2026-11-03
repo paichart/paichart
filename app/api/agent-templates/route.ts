@@ -9,6 +9,7 @@ import { CreateAgentTemplateSchema } from '@/lib/validation/agent-template-valid
 import { generateCacheKey } from '@/lib/utils/lru-cache';
 import { logger } from '@/lib/logger';
 import { templateListCache } from './template-cache';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * GET /api/agent-templates
@@ -213,7 +214,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
 
     // ✅ P0 FIX: Validate with comprehensive schema (Quarterly Review Q1 2026)
     const validation = CreateAgentTemplateSchema.safeParse(body);

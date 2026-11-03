@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createTaskHandler, getPhaseTasksHandler, getTaskHandler, updateTaskHandler } from '@/lib/tasks/handlers/task';
 import { povLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 export async function POST(
   req: NextRequest,
@@ -8,7 +9,7 @@ export async function POST(
 ) {
   const params = await props.params;
   try {
-    const data = await req.json();
+    const data = await readJsonBody(req);
     const response = await createTaskHandler(req, params.povId, params.phaseId, data);
     return NextResponse.json(response);
   } catch (error) {

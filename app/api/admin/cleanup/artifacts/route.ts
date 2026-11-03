@@ -4,6 +4,7 @@ import { TokenPayload } from '@/lib/types/auth';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { trackActivity } from '@/lib/auth/audit';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 const ArtifactCleanupSchema = z.object({
   keepLastNExecutions: z.coerce.number().int()
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ✅ SECURITY: Validate with Zod schema (range checks prevent deleting all artifacts)
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validation = ArtifactCleanupSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(

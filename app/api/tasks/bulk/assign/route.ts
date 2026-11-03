@@ -5,6 +5,8 @@ import { TaskBulkService } from '@/lib/services/taskBulkService';
 import { BulkAssignTasksSchema } from '@/lib/validation/task-validation';
 import { bulkOperationLimiter } from '@/lib/utils/rate-limiter';
 import { taskLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
+import { summarizeZodIssues } from '@/lib/utils/zod-issue-summary';
 
 type ApiHandler<T = any> = (
   req: NextRequest,
@@ -28,17 +30,17 @@ const bulkAssignTasksHandler: ApiHandler = async (
   }
 
   try {
-    const body = await req.json();
+    const body = await readJsonBody(req);
 
     // ✅ SECURITY: Validate bulk assign request (P0-3 CRITICAL - DoS protection)
     const validation = BulkAssignTasksSchema.safeParse(body);
     if (!validation.success) {
       // Security logging for monitoring attack attempts
-      taskLogger.warn({ endpoint: 'POST /api/tasks/bulk/assign', userId: user?.userId, errors: validation.error.issues, taskCount: body.taskIds?.length || 0 }, 'Bulk assign validation failed');
+      taskLogger.warn({ endpoint: 'POST /api/tasks/bulk/assign', userId: user?.userId, issues: summarizeZodIssues(validation.error).issues, issueCount: validation.error.issues.length, taskCount: Array.isArray(body?.taskIds) ? body.taskIds.length : 0 }, 'Bulk assign validation failed');
 
       return {
         error: {
-          message: 'Validation failed: ' + validation.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', '),
+          message: 'Validation failed: ' + summarizeZodIssues(validation.error).message,
           code: 'VALIDATION_ERROR',
         },
       };

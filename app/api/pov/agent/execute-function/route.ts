@@ -4,6 +4,7 @@ import { UserRole } from '@/lib/types/auth';
 import { ExecuteFunctionSchema, getAllowedFunctionsList } from '@/lib/validation/agent/execute-function-validation';
 import { executeFunction } from '@/lib/services/agent/function-registry';
 import { povLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * POST /api/pov/agent/execute-function
@@ -18,7 +19,7 @@ import { povLogger } from '@/lib/logger';
  */
 export const POST = createHandler(
   async (req: NextRequest) => {
-    const body = await req.json();
+    const body = await readJsonBody(req);
 
     // LAYER 1: Validation with whitelist enforcement
     const result = ExecuteFunctionSchema.safeParse(body);

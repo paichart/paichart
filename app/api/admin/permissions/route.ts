@@ -7,6 +7,7 @@ import { z } from "zod"
 import { logger } from '@/lib/logger'
 import { logPermissionChange } from "@/lib/auth/audit"
 import { permissionCache } from "@/lib/auth/cache"
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 const updatePermissionSchema = z.object({
   role: z.nativeEnum(UserRole),
@@ -42,7 +43,7 @@ export const GET = createHandler(
 export const PUT = createHandler(
   async (req: NextRequest, context, user) => {
     // Validate request
-    const body = (await req.json()) as UpdatePermissionRequest
+    const body = (await readJsonBody(req)) as UpdatePermissionRequest
     const result = updatePermissionSchema.safeParse(body)
     if (!result.success) {
       throw new ApiError(

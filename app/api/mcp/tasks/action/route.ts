@@ -8,6 +8,7 @@ import { taskListCache } from '@/lib/tasks/handlers/get';
 
 import { mcpLogger } from '@/lib/logger';
 import { AppError, PipelineStageMismatchError } from '@/lib/errors';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 // F6 (2026-07-25): MCP actions that mutate a task row and therefore invalidate cached task-list
 // reads. Derived from the router's action set: task.assign/comment/complete/create/update change
 // the row itself; agent.configure/execute change agent fields ON the task (the list surfaces
@@ -103,7 +104,7 @@ const mcpTaskActionHandler: ApiHandler = async (
   
   try {
     // Step 1: Single body read
-    const rawBody = await req.json();
+    const rawBody = await readJsonBody(req);
 
     // Step 2: Pre-normalize parameters BEFORE validation (fixes execution order issue)
     const normalizedBody = preNormalizeParameters(rawBody);

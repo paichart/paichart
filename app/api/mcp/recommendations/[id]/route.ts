@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import { mcpLogger } from '@/lib/logger';
 import { z } from 'zod';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 // Dismiss (REJECTED) is the live use case from the Automation tab's thumbs-down button;
 // REVIEWED is allowed for parity with the implement path's terminal states.
@@ -35,7 +36,7 @@ const patchRecommendationHandler: ApiHandler = async (
 
   try {
     const { id } = context.params;
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const parsed = PatchSchema.safeParse(body);
     if (!parsed.success) {
       return { error: { message: 'Invalid status: must be REJECTED or REVIEWED', code: 'VALIDATION_ERROR' } };

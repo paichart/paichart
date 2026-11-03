@@ -7,6 +7,7 @@ import { PhaseType } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { withPOVAccess } from '@/lib/auth/validate-pov-access';
 import { parsePaginationParams } from '@/lib/utils/pagination';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 export const dynamic = 'force-dynamic'
 
@@ -101,7 +102,7 @@ export const POST = withPOVAccess(async (
 
   const { povId } = params
 
-  const data = await request.json()
+  const data = await readJsonBody(request)
 
   // Validate request body
   const schema = z.object({
@@ -144,7 +145,7 @@ export const PUT = withPOVAccess(async (
 
   const { povId } = params
 
-  const data = await request.json()
+  const data = await readJsonBody(request)
 
   // Check if this is a reorder request
   if (data.type === "reorder") {

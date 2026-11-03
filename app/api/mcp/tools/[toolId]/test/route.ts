@@ -2,6 +2,7 @@ import { createHandler } from '@/lib/api-handler';
 import { NextRequest } from 'next/server';
 import { TokenPayload, ApiResponse, UserRole } from '@/lib/types/auth';
 import { mcpLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 type ApiHandler<T = any> = (
   req: NextRequest,
@@ -85,7 +86,7 @@ const testMCPToolHandler: ApiHandler = async (
         }
         
         // Get request body parameters
-        const body = await request.json().catch(() => ({}));
+        const body = await readJsonBody(request).catch(() => ({}));
         
         // Execute tool on embedded server with actual parameters
         const result = await embeddedMCPServer.callTool(toolName, body);

@@ -6,6 +6,7 @@ import { SystemSettings, UpdateSettingRequest } from '../types';
 import { ApiError, ErrorCode } from '@/lib/errors';
 import { trackActivity } from '@/lib/auth/audit';
 import { UpdateSystemSettingsSchema } from '@/lib/validation/settings-validation';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 const settingsHandlerLogger = logger.child({ module: 'AdminSettingsHandler' });
 
@@ -42,7 +43,7 @@ export async function updateAdminSettingsHandler(
       throw new ApiError(ErrorCode.FORBIDDEN, 'Not authorized to modify admin settings');
     }
 
-    const data = await req.json();
+    const data = await readJsonBody(req);
 
     // ✅ Zod validation with safeParse
     const validation = UpdateSystemSettingsSchema.safeParse(data);

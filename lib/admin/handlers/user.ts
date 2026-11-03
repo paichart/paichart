@@ -5,6 +5,7 @@ import { AdminUserService } from '../services/user';
 import { AdminUserResponse } from '../types';
 import { CreateUserSchema, ListUsersSchema } from '@/lib/validation/admin-user-validation';
 import { trackActivity } from '@/lib/auth/audit';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 const adminHandlerLogger = authLogger.child({ module: 'AdminUserHandler' });
 
@@ -83,7 +84,7 @@ export async function createUserHandler(
       return { error: { message: 'Unauthorized - Admin access required', code: 'UNAUTHORIZED' } };
     }
 
-    const data = await req.json();
+    const data = await readJsonBody(req);
 
     const validation = CreateUserSchema.safeParse(data);
     if (!validation.success) {
@@ -167,7 +168,7 @@ export async function updateUserHandler(
       return { error: { message: 'User ID is required', code: 'VALIDATION_ERROR' } };
     }
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
 
     const { UpdateUserSchema } = await import('@/lib/validation/admin-user-validation');
     const result = UpdateUserSchema.safeParse(body);

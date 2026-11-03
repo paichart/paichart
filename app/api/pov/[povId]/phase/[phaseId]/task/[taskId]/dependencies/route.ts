@@ -5,6 +5,7 @@ import { mapTaskFromPrisma } from '@/lib/tasks/prisma/mappers';
 import { withPOVAccess } from '@/lib/auth/validate-pov-access';
 import { checkDependencyCycle, GraphLimits } from '@/lib/utils/graph';
 import { povLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * GET /api/pov/[povId]/phase/[phaseId]/task/[taskId]/dependencies
@@ -61,7 +62,7 @@ export const PUT = withPOVAccess(async (
     // user and pov already validated by withPOVAccess middleware! ✅
 
     // Parse request body
-    const { dependencyIds } = await request.json();
+    const { dependencyIds } = await readJsonBody(request);
     
     if (!Array.isArray(dependencyIds)) {
       return NextResponse.json(
@@ -181,7 +182,7 @@ export const POST = withPOVAccess(async (
     // user and pov already validated by withPOVAccess middleware! ✅
 
     // Parse request body
-    const { dependsOnId } = await request.json();
+    const { dependsOnId } = await readJsonBody(request);
     
     if (!dependsOnId) {
       return NextResponse.json(

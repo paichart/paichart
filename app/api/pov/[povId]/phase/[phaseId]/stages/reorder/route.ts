@@ -8,6 +8,7 @@ import { logPhaseStageOperation } from '@/lib/auth/audit';
 import { phaseService } from '@/lib/pov/services/phase';
 import { ReorderStagesSchema } from '@/lib/validation/pov';
 import { povLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * POST /api/pov/[povId]/phase/[phaseId]/stages/reorder
@@ -46,7 +47,7 @@ export const POST = withPOVAccess(async (
     // 2026-05-14 P1 wire-up: schema replaces ad-hoc Array.isArray check.
     // Old shape: no DoS cap at all. New shape: ReorderStagesSchema enforces
     // min 1, max 50 and per-element CUID validation.
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validation = ReorderStagesSchema.safeParse({ ...body, phaseId });
     if (!validation.success) {
       return NextResponse.json(

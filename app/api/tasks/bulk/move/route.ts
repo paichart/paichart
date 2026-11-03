@@ -4,6 +4,8 @@ import { TokenPayload, ApiResponse } from '@/lib/types/auth';
 import { TaskBulkService } from '@/lib/services/taskBulkService';
 import { BulkMoveTasksSchema } from '@/lib/validation/task-validation';
 import { taskLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
+import { summarizeZodIssues } from '@/lib/utils/zod-issue-summary';
 
 type ApiHandler<T = any> = (
   req: NextRequest,
@@ -27,17 +29,17 @@ const bulkMoveTasksHandler: ApiHandler = async (
   }
 
   try {
-    const body = await req.json();
+    const body = await readJsonBody(req);
 
     // ✅ SECURITY: Validate bulk move request (P0-3 CRITICAL - DoS protection)
     const validation = BulkMoveTasksSchema.safeParse(body);
     if (!validation.success) {
       // Security logging for monitoring attack attempts
-      taskLogger.warn({ endpoint: 'POST /api/tasks/bulk/move', userId: user?.userId, errors: validation.error.issues, taskCount: body.taskIds?.length || 0 }, 'Bulk move validation failed');
+      taskLogger.warn({ endpoint: 'POST /api/tasks/bulk/move', userId: user?.userId, issues: summarizeZodIssues(validation.error).issues, issueCount: validation.error.issues.length, taskCount: Array.isArray(body?.taskIds) ? body.taskIds.length : 0 }, 'Bulk move validation failed');
 
       return {
         error: {
-          message: 'Validation failed: ' + validation.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', '),
+          message: 'Validation failed: ' + summarizeZodIssues(validation.error).message,
           code: 'VALIDATION_ERROR',
         },
       };

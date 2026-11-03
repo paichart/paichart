@@ -13,6 +13,7 @@ import { logPhaseStageOperation } from '@/lib/auth/audit';
 import { povLogger } from '@/lib/logger';
 import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import { getPOVForAccess } from '@/lib/tasks/helpers/pov-access';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 const localLogger = povLogger.child({ module: 'PostHandler' });
 
@@ -43,7 +44,7 @@ export async function createPhaseHandler(
   // Instance-scoped: phase-create requires owner / team-member / admin access to the parent POV
   validatePOVAccess(user, pov, { throwOnDeny: true, requireWrite: true, logContext: 'Phase Create' });
 
-  const data = await request.json();
+  const data = await readJsonBody(request);
 
   // Validate request body
   const validatedData = createPhaseSchema.safeParse(data);

@@ -5,6 +5,7 @@ import { validatePOVAccess } from "@/lib/auth/validate-pov-access"
 import { prisma } from "@/lib/prisma"
 import { StageStatus } from "@prisma/client"
 import { logger } from '@/lib/logger'
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * POST /api/stages/[stageId]/validate
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ stag
     }
 
     // Parse request body
-    const body = await request.json().catch(() => ({}));
+    const body = await readJsonBody(request).catch(() => ({}));
     const { targetStatus, invalidateCache = false } = body;
 
     // Validate target status

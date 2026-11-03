@@ -3,6 +3,7 @@ import { logger } from '@/lib/logger';
 import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { updateUserSettings } from '../services/settings';
 import { UpdateUserSettingsSchema } from '@/lib/validation/settings-validation';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 const settingsPutLogger = logger.child({ module: 'SettingsPutHandler' });
 
@@ -16,7 +17,7 @@ export async function handlePutSettings(req: NextRequest) {
       );
     }
 
-    const data = await req.json();
+    const data = await readJsonBody(req);
 
     // ✅ SECURITY: Validate with strict schema (prevent injection, unknown fields)
     const validation = UpdateUserSettingsSchema.safeParse(data);

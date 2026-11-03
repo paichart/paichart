@@ -9,6 +9,7 @@ import { createAgentExecution } from '@/lib/services/agent-execution-create';
 import { listUnsatisfiedDeps } from '@/lib/services/taskReadyReactorService';
 import { DependencyNotSatisfiedError } from '@/lib/errors';
 import { DuplicateActiveExecutionError } from '@/lib/errors';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 type ApiHandler<T = any> = (
   req: NextRequest,
@@ -33,7 +34,7 @@ const executeAgentHandler: ApiHandler = async (
 
   try {
     const { taskId } = context.params;
-    const body = await req.json();
+    const body = await readJsonBody(req);
 
     // ✅ SECURITY: Validate agent execution request (P0-2 CRITICAL - Prompt injection protection)
     const validation = TaskAgentExecuteSchema.safeParse(body);

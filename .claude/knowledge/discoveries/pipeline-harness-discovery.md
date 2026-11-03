@@ -1868,6 +1868,6 @@ ls scripts/leg-replay-lab/golden/golden-set.json | wc -l   # expect 1
 - **Not "kept by default":** network is per declared device; k8s/terraform keep a NAMED repo file; observability keeps the service's
   heldFiles. One `## Config sources` design for k8s/terraform/observability is filed under GITHUB-ONLY-MODE.
 ```bash
-python3 scripts/lab-configs/sync-public-configs.py --help >/dev/null && echo ok      # expect ok — the mirror exists
+python3 scripts/lab-configs/sync-public-configs.py --help >/dev/null && echo ok      # expect ok — the mirror exists (PRIVATE: not in the public repo)
 grep -c "^DROP = {" scripts/lab-configs/sync-public-configs.py                        # expect 1 — the ONE drop list
 ```

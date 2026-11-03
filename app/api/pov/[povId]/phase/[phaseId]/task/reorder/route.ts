@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withPOVAccess } from '@/lib/auth/validate-pov-access';
 import { ReorderTasksSchema } from '@/lib/validation/task-validation';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * POST /api/pov/[povId]/phase/[phaseId]/task/reorder
@@ -46,7 +47,7 @@ export const POST = withPOVAccess(async (
   // Old shape: ad-hoc Array.isArray + length > 500 (overshot DoS cap).
   // New shape: ReorderTasksSchema enforces min 1, max 100 (5× stricter)
   // and per-element CUID validation.
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const validation = ReorderTasksSchema.safeParse({ ...body, phaseId });
   if (!validation.success) {
     return NextResponse.json(

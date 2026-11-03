@@ -5,6 +5,7 @@ import { searchAndFilterTasks, quickTaskSearch, getSearchSuggestions } from '@/l
 import { TaskPriority, TaskStatus } from '@/lib/tasks/types';
 import { TaskSearchQuerySchema } from '@/lib/validation/task-validation';
 import { taskLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 type ApiHandler<T = any> = (
   req: NextRequest,
@@ -156,7 +157,7 @@ const postTaskSearchHandler: ApiHandler = async (
   }
 
   try {
-    const body = await req.json();
+    const body = await readJsonBody(req);
     taskLogger.debug({ hasTextQuery: !!body.query }, 'advanced task search request');
 
     // Validate and sanitize filters

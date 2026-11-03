@@ -5,6 +5,7 @@ import { templateService } from '@/lib/services/template-service';
 import { PhaseType } from '@prisma/client';
 import { PhaseTemplateSchema } from '@/lib/validation/phase-template-validation';
 import { logger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * GET /api/phase-templates/[id]
@@ -111,7 +112,7 @@ export async function PUT(request: NextRequest, props: { params: Promise<{ id: s
       );
     }
 
-    const data = await request.json();
+    const data = await readJsonBody(request);
 
     // ✅ P0 FIX: Comprehensive validation with PhaseTemplateSchema (Quarterly Review Q1 2026)
     const validation = PhaseTemplateSchema.safeParse(data);

@@ -7,6 +7,7 @@ import { logPhaseStageOperation, calculateDeleteSeverity } from "@/lib/auth/audi
 import { updatePhaseSchema } from "@/lib/validation/pov"
 import { validateCUIDFormat } from "@/lib/validation/id-validation"
 import { povLogger } from "@/lib/logger"
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * GET /api/pov/[povId]/phase/[phaseId]
@@ -114,7 +115,7 @@ export const PUT = withPOVAccess(async (
     }
 
     const { phaseId } = params;
-    const data = await request.json()
+    const data = await readJsonBody(request)
 
     // Route-level validation (defense-in-depth)
     const validation = updatePhaseSchema.safeParse(data);

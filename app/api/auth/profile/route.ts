@@ -5,6 +5,7 @@ import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { ProfileUpdateSchema } from '@/lib/validation/user-validation';
 import { authLogger } from '@/lib/logger';
 import { createExpiredTokenCookies } from '@/lib/cookies';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 export async function PUT(request: NextRequest) {
   try {
@@ -18,7 +19,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // ✅ SECURITY: Validate with Zod schema (XSS on name, email format, password lengths, cross-field rule)
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validation = ProfileUpdateSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(

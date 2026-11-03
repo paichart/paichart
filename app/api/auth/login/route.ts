@@ -13,6 +13,7 @@ import { getClientIP } from '@/lib/utils/client-ip';
 import { trackActivity } from '@/lib/auth/audit';
 import { z } from 'zod';
 import { authLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 // P1.2 (2026-05-24): per-email login failure window. Defeats IP-rotation
 // credential stuffing — a botnet trying <maintainer-email> from 10,000
@@ -178,7 +179,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse and validate request body with Zod
-    const data = await request.json();
+    const data = await readJsonBody(request);
     const validation = LoginSchema.safeParse(data);
 
     if (!validation.success) {

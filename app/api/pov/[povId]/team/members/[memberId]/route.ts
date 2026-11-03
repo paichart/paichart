@@ -11,6 +11,7 @@ import { validateCUIDFormat } from '@/lib/validation/id-validation';
 import { povListCache } from '@/app/api/pov/pov-cache';
 import { taskListCache } from '@/lib/tasks/handlers/get';
 import { povLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * DELETE /api/pov/[povId]/team/members/[memberId]
@@ -127,7 +128,7 @@ export async function DELETE(
     // 8b. Parse optional body for reassignment
     let reassignTasksTo: string | null = null;
     try {
-      const body = await request.json();
+      const body = await readJsonBody(request);
       reassignTasksTo = body?.reassignTasksTo || null;
     } catch {
       // No body or invalid JSON - that's fine, original behavior
@@ -275,7 +276,7 @@ export async function PUT(
     }
 
     // 2. Parse and validate request body using safeParse
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const validation = UpdateTeamMemberRoleSchema.safeParse(body);
 
     if (!validation.success) {

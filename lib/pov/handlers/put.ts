@@ -20,6 +20,7 @@ import { povLogger } from '@/lib/logger';
 import { logStageFieldChange, TaskActivityAction } from '@/lib/pov/services/stageActivityService';
 import { applyTeamUpdate } from '@/lib/pov/services/team';
 import { enforceProtocolStampImmutable, dropPlatformRunKeys, stripAuditFacts } from '@/lib/tasks/services/protected-task-metadata';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 // Helper function to ensure phases are created from templates
 export async function ensurePhasesFromTemplates(povId: string, phaseTemplateIds: string[]) {
@@ -334,7 +335,7 @@ export async function updatePoVHandler(
       povLogger.debug({ povId }, 'using pre-validated auth context');
     }
 
-    const requestData = await request.json()
+    const requestData = await readJsonBody(request)
 
     // ✅ 3. Validation
     // 2026-05-14 P1: migrated from .parse() (throws into try/catch) to
@@ -1301,7 +1302,7 @@ export async function updatePhaseHandler(
   { params }: { params: { povId: string; phaseId: string } }
 ) {
   const { phaseId } = params
-  const data = await request.json()
+  const data = await readJsonBody(request)
 
   const phase = await povService.updatePhase(phaseId, data)
   return Response.json(phase)

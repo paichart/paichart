@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { SalesTheatre } from '@prisma/client';
 import { logger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 // GET /api/user/preferences
 // Get the current user's geographical preferences
@@ -69,7 +70,7 @@ export async function PUT(req: NextRequest) {
     }
     
     // Parse request body
-    const body = await req.json();
+    const body = await readJsonBody(req);
 
     // ✅ P1-3 FIX: Zod validation with safeParse (replaces manual validation)
     const { UserPreferencesSchema } = await import('@/lib/validation/user-validation');

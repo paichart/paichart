@@ -6,6 +6,7 @@ import { templateStorage } from '@/lib/pov/phase-templates/storage';
 import { PhaseTemplate, Stage, Task } from '@/lib/pov/phase-templates/types';
 import { PhaseTemplateSchema } from '@/lib/validation/phase-template-validation';
 import { logger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
  
  /**
   * GET /api/phase-templates
@@ -76,7 +77,7 @@ import { logger } from '@/lib/logger';
        );
      }
  
-     const data = await request.json();
+     const data = await readJsonBody(request);
 
      // ✅ SECURITY: Centralized validation with .safeParse() and injection detection
      const result = PhaseTemplateSchema.safeParse(data);

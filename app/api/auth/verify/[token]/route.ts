@@ -3,11 +3,12 @@ import { prisma } from '../../../../../lib/prisma';
 import bcrypt from 'bcryptjs';
 import { config } from '../../../../../lib/config';
 import { authLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 export async function POST(request: NextRequest, props: { params: Promise<{ token: string }> }) {
   const params = await props.params;
   try {
-    const { password } = await request.json();
+    const { password } = await readJsonBody(request);
     const { token } = params;
 
     // Validate password

@@ -1806,6 +1806,7 @@ lib/utils/ensure-object.ts
 lib/utils/fetch-utils.d.ts
 lib/utils/fetch-utils.ts
 lib/utils/graph.ts
+lib/utils/json-node-cap.ts
 lib/utils/local-date.ts
 lib/utils/lru-cache.ts
 lib/utils/markdown-fence.ts
@@ -1816,6 +1817,7 @@ lib/utils/pov-helpers.ts
 lib/utils/povColors.ts
 lib/utils/prisma-helpers.ts
 lib/utils/rate-limiter.ts
+lib/utils/read-json-body.ts
 lib/utils/safe-regex.ts
 lib/utils/sanitization.ts
 lib/utils/sanitize-filename.ts
@@ -1829,6 +1831,7 @@ lib/utils/taskTypes.ts
 lib/utils/team-member-guard.ts
 lib/utils/template-schema-validator.ts
 lib/utils/url-safety.js
+lib/utils/zod-issue-summary.ts
 lib/validation/activity-validation.ts
 lib/validation/admin-user-validation.ts
 lib/validation/agent-template-validation.ts
@@ -2364,6 +2367,7 @@ scripts/test-publish-generated-spec.py
 scripts/test-quote-fidelity.ts
 scripts/test-reactor-budget-exhausted.ts
 scripts/test-reactor-race-guard.ts
+scripts/test-read-json-body.ts
 scripts/test-reflection-history-binding.ts
 scripts/test-refresh-race.ts
 scripts/test-refresh-rate-limit.ts

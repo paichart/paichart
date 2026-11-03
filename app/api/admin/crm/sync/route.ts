@@ -6,6 +6,7 @@ import { trackActivity } from "@/lib/auth/audit";
 import { adminCRMLimiter } from "@/lib/middleware/rate-limit";
 import { CRMSyncSchema } from "@/lib/validation/crm-validation";
 import { logger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ✅ SECURITY: Validate with Zod schema (syncType enum, povId CUID format)
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const validation = CRMSyncSchema.safeParse(body);
   if (!validation.success) {
     return Response.json(

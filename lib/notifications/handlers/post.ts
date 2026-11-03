@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { createNotification } from '../services/delivery';
 import { CreateNotificationRequest, Notification } from '../types';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 export async function createNotificationHandler(
   req: NextRequest
@@ -11,7 +12,7 @@ export async function createNotificationHandler(
     throw new Error('Unauthorized');
   }
 
-  const data = await req.json() as CreateNotificationRequest;
+  const data = await readJsonBody(req) as CreateNotificationRequest;
 
   // Validate required fields
   if (!data.title?.trim()) {

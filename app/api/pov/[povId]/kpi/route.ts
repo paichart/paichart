@@ -7,6 +7,7 @@ import {
   KPICreateSchema,
   KPIUpdateSchema,
 } from '@/lib/validation/kpi-validation'
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 export const GET = withPOVAccess(async (req, { params, user, pov }) => {
   const url = new URL(req.url)
@@ -45,7 +46,7 @@ export const POST = withPOVAccess(async (req, { params, user, pov }) => {
   const url = new URL(req.url)
   const povId = params.povId
   const type = url.searchParams.get('type')
-  const body = await req.json()
+  const body = await readJsonBody(req)
 
   if (type === 'template') {
     // BC30 FIX: Zod validation replaces TypeScript `as` cast
@@ -82,7 +83,7 @@ export const PUT = withPOVAccess(async (req, { params, user, pov }) => {
   }
 
   if (type === 'template') {
-    const rawData = await req.json()
+    const rawData = await readJsonBody(req)
     // BC30 FIX: Zod validation replaces TypeScript `as` cast
     const result = KPITemplateUpdateSchema.safeParse(rawData)
     if (!result.success) {
@@ -112,7 +113,7 @@ export const PUT = withPOVAccess(async (req, { params, user, pov }) => {
   }
 
   // Default: update KPI
-  const rawData = await req.json()
+  const rawData = await readJsonBody(req)
   // BC30 FIX: Zod validation replaces TypeScript `as` cast
   const updateResult = KPIUpdateSchema.safeParse(rawData)
   if (!updateResult.success) {

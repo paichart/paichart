@@ -3,6 +3,7 @@ import { TokenPayload, ApiResponse, UserRole } from '@/lib/types/auth';
 import { logger } from '@/lib/logger';
 import { AdminActivityService } from '../services/activity';
 import { ActivityResponse, ActivityCreateResponse, ActivityFilters } from '../types';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 const activityHandlerLogger = logger.child({ module: 'AdminActivityHandler' });
 
@@ -85,7 +86,7 @@ export async function logAdminActivityHandler(
       };
     }
 
-    const data = await req.json();
+    const data = await readJsonBody(req);
     const activity = await AdminActivityService.logActivity({
       userId: user.userId, // Always use the authenticated user's ID
       type: data.type,

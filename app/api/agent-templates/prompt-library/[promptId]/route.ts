@@ -8,6 +8,7 @@ import { promptDeletionLimiter } from '@/lib/middleware/rate-limit';
 import { getPromptRegistryEventEmitter } from '@/lib/events/prompt-registry-events';
 import { PromptLibraryUpdateSchema } from '@/lib/validation/agent-template-validation';
 import { logger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 export async function GET(request: NextRequest, props: { params: Promise<{ promptId: string }> }) {
   const params = await props.params;
@@ -81,7 +82,7 @@ export async function PUT(request: NextRequest, props: { params: Promise<{ promp
     }
 
     const { promptId } = params;
-    const body = await request.json();
+    const body = await readJsonBody(request);
 
     // ✅ P1 FIX: Comprehensive validation (Quarterly Review Q1 2026)
     // Prevents dangerous ...body spread that could inject usageCount, successRate, etc.

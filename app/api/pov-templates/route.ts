@@ -5,6 +5,7 @@ import { templateService as povTemplateService } from '@/lib/pov/templates/servi
 import { ApiError } from '@/lib/errors';
 import { CreatePOVTemplateSchema } from '@/lib/validation/pov-template-validation';
 import { povLogger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * GET /api/pov-templates
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const data = await request.json();
+    const data = await readJsonBody(request);
 
     // ✅ P1 FIX: Comprehensive validation with CreatePOVTemplateSchema (Quarterly Review Q1 2026)
     const validation = CreatePOVTemplateSchema.safeParse(data);

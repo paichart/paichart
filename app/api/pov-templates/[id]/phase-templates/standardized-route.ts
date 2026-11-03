@@ -5,6 +5,7 @@ import { templateService } from '@/lib/services/template-service';
 import { validateTemplateSchema, updatePhaseTemplateIds } from '@/lib/utils/template-schema-validator';
 import { povLogger } from '@/lib/logger';
 import { ensureObject } from '@/lib/utils/ensure-object';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 // Define a consistent structure for template data
 interface TemplateMetadata {
@@ -318,7 +319,7 @@ export async function POST(
     // Parse request body with error handling
     let phaseTemplateIds: string[] = [];
     try {
-      const requestData = await request.json();
+      const requestData = await readJsonBody(request);
 
       if (!requestData || typeof requestData !== 'object') {
         povLogger.warn({ povTemplateId }, 'Invalid request data for phase template update');

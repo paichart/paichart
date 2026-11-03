@@ -20,7 +20,7 @@ export const createTaskHandler: ApiHandler<TaskResponse> = async (
   _context: { params: Record<string, string> },
   user: TokenPayload
 ) => {
-  const data = (await req.json()) as CreateTaskData;
+  const data = (await readJsonBody(req)) as CreateTaskData;
 
   // ✅ ENHANCEMENT: Zod validation (Week 3 P0 Fix #3)
   const validation = CreateTaskSchema.safeParse(data);
@@ -100,3 +100,5 @@ export const createTaskHandler: ApiHandler<TaskResponse> = async (
 
   return { data: mapTaskFromPrisma(task) };
 };
+
+import { readJsonBody } from '@/lib/utils/read-json-body';

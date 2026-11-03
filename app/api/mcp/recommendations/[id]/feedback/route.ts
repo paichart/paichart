@@ -6,6 +6,7 @@ import { logCommentAdded } from '@/lib/tasks/services/taskActivityService';
 import type { ActivityMetadata } from '@/lib/types/activity';
 import { mcpLogger } from '@/lib/logger';
 import { z } from 'zod';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 const FeedbackSchema = z.object({
   rating: z.number().int().min(1).max(5),
@@ -38,7 +39,7 @@ const recommendationFeedbackHandler: ApiHandler = async (
 
   try {
     const { id } = context.params;
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const parsed = FeedbackSchema.safeParse(body);
     if (!parsed.success) {
       return { error: { message: 'Invalid feedback: rating must be 1-5, comment max 2000 chars', code: 'VALIDATION_ERROR' } };

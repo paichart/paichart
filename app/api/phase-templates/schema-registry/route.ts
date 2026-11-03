@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { schemaRegistry } from '@/lib/pov/phase-templates/schema-registry';
 import { ApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * GET /api/phase-templates/schema-registry
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { id, schema } = await request.json();
+    const { id, schema } = await readJsonBody(request);
     
     if (!id) {
       return NextResponse.json(

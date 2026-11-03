@@ -7,6 +7,7 @@ import type {
   CRMSyncResult
 } from '@/lib/pov/types/crm'
 import type { CRMFieldMapping, CRMSyncHistory } from '@prisma/client'
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 export const GET = withPOVAccess(async (req, { params, user, pov }) => {
   const url = new URL(req.url)
@@ -35,7 +36,7 @@ export const POST = withPOVAccess(async (req, { params, user, pov }) => {
   const type = url.searchParams.get('type')
 
   if (type === 'mapping') {
-    const data = await req.json() as CRMFieldMappingCreateInput
+    const data = await readJsonBody(req) as CRMFieldMappingCreateInput
     const mapping = await crmService.createFieldMapping(data)
     return NextResponse.json({ data: mapping })
   }
@@ -56,7 +57,7 @@ export const PUT = withPOVAccess(async (req, { params, user, pov }) => {
     )
   }
 
-  const data = await req.json() as CRMFieldMappingUpdateInput
+  const data = await readJsonBody(req) as CRMFieldMappingUpdateInput
   const mapping = await crmService.updateFieldMapping(mappingId, data)
   return NextResponse.json({ data: mapping })
 })

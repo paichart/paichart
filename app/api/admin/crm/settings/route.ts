@@ -4,6 +4,7 @@ import { ApiError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { adminCRMLimiter } from "@/lib/middleware/rate-limit";
 import { CRMSettingsSchema } from "@/lib/validation/crm-validation";
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ✅ SECURITY: Validate with Zod schema (URL format, string maxes, numeric ranges, coercion)
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const validation = CRMSettingsSchema.safeParse(body);
   if (!validation.success) {
     throw new ApiError("BAD_REQUEST", validation.error.errors.map(e => e.message).join(', '));

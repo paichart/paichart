@@ -3,6 +3,7 @@ import { stageValidationService } from "@/lib/pov/services/stageValidationServic
 import { getAuthUser } from "@/lib/auth/get-auth-user"
 import { StageStatus } from "@prisma/client"
 import { logger } from '@/lib/logger'
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 /**
  * POST /api/stages/validate/bulk
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse request body
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const { validations, invalidateCache = false } = body;
 
     // Validate input format

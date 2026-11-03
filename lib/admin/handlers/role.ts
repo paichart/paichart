@@ -5,6 +5,7 @@ import { getAuthUser } from "@/lib/auth"
 import type { ApiResponse } from "@/lib/types/auth"
 import type { Role, RoleResponse } from "../types"
 import { trackActivity } from "@/lib/auth/audit"
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 interface RouteParams {
   params: {
@@ -61,7 +62,7 @@ export async function updateRoleHandler(req: NextRequest, { params }: RouteParam
       throw new ApiError(ErrorCode.BAD_REQUEST, 'Role ID is required');
     }
 
-    const data = await req.json();
+    const data = await readJsonBody(req);
     const role = await AdminRoleService.updateRole(params.roleId, data);
 
     // P2.4 (2026-05-24): SOC 2 CC6.1 evidence — role mutation audit
@@ -87,7 +88,7 @@ export async function createRoleHandler(req: NextRequest): Promise<ApiResponse<R
       throw new ApiError(ErrorCode.FORBIDDEN, 'Unauthorized - requires admin access');
     }
 
-    const data = await req.json();
+    const data = await readJsonBody(req);
     const role = await AdminRoleService.createRole(data);
 
     // P2.4 (2026-05-24): SOC 2 CC6.1 evidence — role creation audit

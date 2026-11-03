@@ -7,6 +7,7 @@ import { CreateRecommendationSchema } from '@/lib/validation/mcp-automations-val
 import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import { MCPRecommendationType, MCPImpact } from '@prisma/client';
 import { parseEnumParam } from '@/lib/utils/parse-enum-param';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 type ApiHandler<T = any> = (
   req: NextRequest,
@@ -291,7 +292,7 @@ const createMCPRecommendationHandler: ApiHandler = async (
   }
 
   try {
-    const rawBody = await req.json();
+    const rawBody = await readJsonBody(req);
 
     // BC30 FIX: Validate with Zod schema (was manual validation + unvalidated JSON fields)
     const parseResult = CreateRecommendationSchema.safeParse(rawBody);

@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { ensureObject } from '@/lib/utils/ensure-object';
 import { executeOrchestrationWorkflow } from '@/lib/services/workflow';
 import { TokenPayload } from '@/lib/types/auth';
+import { readJsonBody } from '@/lib/utils/read-json-body';
 
 const workflowLogger = logger.child({ module: 'WorkflowHandlers' });
 import { z } from 'zod';
@@ -131,7 +132,7 @@ export async function handleCreateWorkflow(
   context: { params: Record<string, string> },
   user?: TokenPayload
 ) {
-  const body = await req.json();
+  const body = await readJsonBody(req);
   const validation = CreateWorkflowSchema.safeParse(body);
 
   if (!validation.success) {
@@ -246,7 +247,7 @@ export async function handleUpdateWorkflow(
   user?: TokenPayload
 ) {
   const { id } = context.params;
-  const body = await req.json();
+  const body = await readJsonBody(req);
   const validation = UpdateWorkflowSchema.safeParse(body);
 
   if (!validation.success) {
@@ -306,7 +307,7 @@ export async function handleRunWorkflow(
   context: { params: Record<string, string> },
   user?: TokenPayload
 ) {
-  const body = await req.json();
+  const body = await readJsonBody(req);
   const validation = RunWorkflowSchema.safeParse(body);
 
   if (!validation.success) {
