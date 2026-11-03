@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
-export default function EditRedirectPage({ params }: { params: { povId: string } }) {
+export default function EditRedirectPage(props: { params: Promise<{ povId: string }> }) {
+  const params = use(props.params);
   const router = useRouter();
 
   useEffect(() => {

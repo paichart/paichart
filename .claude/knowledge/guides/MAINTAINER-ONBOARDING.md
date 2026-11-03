@@ -35,6 +35,7 @@ read or how a fact is computed has to prove it broke nothing before it ships. Ev
 ```
 scripts/run-gates-clean.sh                 # lint, naming, access checks, full battery, golden set, build — in a clean copy
 scripts/ship.sh                            # shows what goes out, refuses if a run is in flight, pushes, watches Production Deploy
+GATES=1 scripts/ship.sh                    # same, but a deploying push first passes the full gates + the public export dry-run (each on its own exit status)
 scripts/series-cut-draft.sh <push time>    # only if the push changed what agents read or how a fact is computed
 ```
 

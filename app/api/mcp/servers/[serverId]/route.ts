@@ -53,10 +53,8 @@ const UpdateMCPServerSchema = z.object({
 });
 
 // GET /api/mcp/servers/[serverId] - Get server details
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { serverId: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ serverId: string }> }) {
+  const params = await props.params;
   try {
     // ✅ 1. Authentication
     const user = await getAuthUser(request);
@@ -106,10 +104,8 @@ export async function GET(
 }
 
 // PUT /api/mcp/servers/[serverId] - Update server
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { serverId: string } }
-) {
+export async function PUT(request: NextRequest, props: { params: Promise<{ serverId: string }> }) {
+  const params = await props.params;
   try {
     // ✅ 1. Authentication
     const user = await getAuthUser(request);
@@ -170,10 +166,8 @@ export async function PUT(
 }
 
 // DELETE /api/mcp/servers/[serverId] - Remove server
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { serverId: string } }
-) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ serverId: string }> }) {
+  const params = await props.params;
   try {
     // ✅ 1. Authentication
     const user = await getAuthUser(request);

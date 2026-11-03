@@ -10,10 +10,8 @@ import { trackActivity } from '@/lib/auth/audit';
 import { taskLogger } from '@/lib/logger';
 
 // POST /api/tasks/[taskId]/attachments - Upload attachment
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { taskId: string } }
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ taskId: string }> }) {
+  const params = await props.params;
   try {
     // ✅ 1. Authentication
     const user = await getAuthUser(req);

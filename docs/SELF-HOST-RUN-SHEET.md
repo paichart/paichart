@@ -22,11 +22,16 @@ claude --version && claude                            # first run: sign in (brow
 From here you can paste to Claude: *"Follow ~/paichart/docs/SELF-HOST-RUN-SHEET.md from step 3, exactly as written,
 with HOST=… and ADMIN_EMAIL=…; stop at step 7 and tell me the printed password."* Or keep typing.
 
-## 3. Prerequisites the docs assume (Node 20, PostgreSQL 16, an empty database)
+## 3. Prerequisites the docs assume (Node 20.19+ or 22, PostgreSQL 16, an empty database)
+
+> **Node 20.19 or newer.** A dependency (`sanitize-html`) now loads an ES-module-only package through `require()`, which Node
+> supports from 20.19 (22.12 on the 22 line). On an older Node 20 the server still starts and answers health checks, but its
+> background services fail to initialise (`require() of ES Module … not supported` in the log) and agent runs cannot stream.
+> NodeSource's `setup_20.x` installs a current 20.x; check `node -v` reads `v20.19` or later.
 ```bash
 sudo apt-get install -y postgresql-16 postgresql-client-16 openssl
 curl -fsSL https://deb.nodesource.com/setup_20.x -o /tmp/ns.sh && sudo -E bash /tmp/ns.sh && sudo apt-get install -y nodejs
-node -v && npm -v && psql --version && sudo systemctl is-active postgresql   # expect v20.x / 10.x / 16.x / active
+node -v && npm -v && psql --version && sudo systemctl is-active postgresql   # expect v20.19+ (or 22.x) / 10.x / 16.x / active
 
 PW=$(openssl rand -hex 16); echo "$PW" > ~/.paichart-dbpw; chmod 600 ~/.paichart-dbpw
 sudo -u postgres psql -qc "CREATE USER paichart WITH PASSWORD '$PW';"
@@ -76,7 +81,7 @@ unset NODE_ENV                                                  # the step above
                                                                 # NODE_ENV=development fails prerendering ("<Html> should not be imported",
                                                                 # "reading 'useContext'") and the web server then cannot start
 npm run build                                                   # 3–10 min; "✓ Compiled successfully" then the route table
-grep -q '"success": true' .next/export-detail.json && echo BUILD-OK   # expect BUILD-OK — a failed static export still prints a route table
+test -f .next/BUILD_ID && echo BUILD-OK   # expect BUILD-OK — Next writes BUILD_ID only when the build completes (export-detail.json is deleted after a successful build, so it cannot be the check)
 ```
 Then install the two **systemd units** that keep them running. Edit `User`, `Group` and `WorkingDirectory`
 in each file first — they ship with placeholders:
@@ -241,6 +246,57 @@ Then in Claude Code (`claude -c`), the same shape as step 9:
 
 The registry id is `browser-automation-service`, the display name `Browser Automation Service`: `services(action: 'call')`
 accepts either; `registry(action: 'tools')` wants the display name.
+
+### 9c. Optional — the GitHub file source (kept files from your config repo)
+Pipelines that change Kubernetes, Terraform or network config can read the **file of record** from a Git repo, keep its exact
+bytes, and have the Author change it only by edits to that kept file (`docs/SELF-HOST-KEPT-FILES.md`). The hub reads Git through
+the shipped `services/github-service`: GitHub's official read-only MCP server plus a small proxy that adds your token. Skip this
+step if you have no config repo yet; nothing else depends on it.
+
+**1. A token (one minute).** GitHub → Settings → Developer settings → Fine-grained tokens → Generate:
+- a **public** config repo: Repository access = *Public repositories (read-only)*, no permissions;
+- a **private** one: Resource owner = the repo's owner, *Only select repositories* → that repo, Repository permissions →
+  *Contents: Read-only*.
+
+The server refuses every request without a token, so this step is not optional for the service.
+
+**2. Tell the hub which repo it may read (the pin).** In the hub's `.env` (not `.env.production`), add
+`GIT_FILE_SOURCE_PIN=<owner>/<repo>` and restart the hub. Agents can read **only** that repo through this service; the pin, not the
+token, is the boundary. The repo's **default branch must be `main`**, and protect it: it is what every run reads. The full rules
+and limits are in [SELF-HOST-KEPT-FILES.md → Reading kept files from Git](SELF-HOST-KEPT-FILES.md#reading-kept-files-from-git-optional).
+
+**3. Start it and register it.**
+```bash
+cd ~/paichart
+cp services/github-service/.env.example services/github-service/.env && chmod 600 services/github-service/.env
+# edit it: paste the token (the one line)
+docker compose -f docker-compose.self-host.yml --profile git up -d --build
+curl -s localhost:3110/livez                                   # expect: ok
+curl -s -o /dev/null -w '%{http_code}\n' localhost:3110/healthz # expect: 200 (503 = token missing, revoked or expired)
+npm run seed:github-service                                    # prints the ONE repo agents may read — your pin; a ⚠️ line means it is unset
+psql "$(grep ^DATABASE_URL .env | cut -d= -f2- | tr -d '"')" -At -c "select id, status from mcp_tools where id = 'github-service'"
+                                                               # expect: github-service|ACTIVE
+```
+Same rule as 9b: run the seed from the clone you are testing.
+
+**4. Prove the read and the pin** in Claude Code (`claude -c`):
+1. *"Through the hub, ask github-service to `get_file_contents` owner `<owner>`, repo `<repo>`, path `<a file in it>`, ref
+   `main`."* → the file's text and the commit it was read at.
+2. The same call with any other repo → refused with `PINNED_ARGUMENT`. That refusal is the pin working.
+
+Rotation: replace the token line in `services/github-service/.env`, then `docker compose -f docker-compose.self-host.yml
+--profile git up -d`. Anything on this host that can reach `127.0.0.1:3110` gets the token added to its requests (the same
+host-level trust as the rest of the stack) — keep the port local. The background health check reads GitHub once every
+5 minutes; with a token that is far inside GitHub's limit.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `/healthz` answers 503 | token missing, revoked or expired (health checks the token only) | new token line in `services/github-service/.env`, then `up -d` |
+| a read is refused `PINNED_ARGUMENT` | the call named another repo, a commit, or a ref other than `main` — or the pin is unset (the seed printed ⚠️) | set `GIT_FILE_SOURCE_PIN` in the hub's `.env`, restart the hub |
+| reads still refused after you set the pin | the pin is read once, when the hub starts | restart the hub (between runs: a restart stops runs in flight) |
+| the hub's MCP server will not start, `GIT_FILE_SOURCE_PIN is malformed` | the value is not exactly `<owner>/<repo>` | fix the value; letters, digits, `.` `_` `-` only, no branch |
+| health is 200 but a read fails (404) | the token cannot see that repo (a private repo needs it selected, Contents read-only) | regenerate the token for that repo |
+| a read with `ref: main` fails | the repo has no `main` branch | make `main` the repo's default branch |
 
 ## 10. Operate it from Claude — the GUI is not how pAIchart is run
 Two things come with the clone that make step 8 more than a connector:

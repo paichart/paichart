@@ -1,0 +1,72 @@
+# GitHub MCP (read-only held-file source) — token-injecting reverse proxy.
+#
+# The official github-mcp-server in HTTP mode takes the GitHub token PER REQUEST (Authorization: Bearer) and ignores its
+# environment. The pAIchart Hub cannot attach a downstream bearer, so this proxy injects the read-only token and forwards
+# localhost:3110 (container :8000) -> github-mcp:8082 (the server container: NO token, no host port, own network).
+#
+# Hardening (reviews 2026-10-18, cline_docs/reviews/github-service-2026-10-18/SYNTHESIS.md):
+#  - only /livez, /healthz (GET/HEAD) and /mcp (POST/GET/DELETE) are served; everything else is 404 (sec-ops F3);
+#  - every X-MCP-* and Mcp-Param-* request header is stripped (sec-ops F2/F4). Measured: the server's flags already cap the
+#    surface (X-MCP-* widen nothing), and it does NOT enforce Mcp-Param-* against the tool arguments, so the repo pin
+#    belongs to the platform's held-file descriptor, not here;
+#  - /healthz maps GitHub's answer to 200 (2xx) or 503 (anything else), because the Hub reads any status < 500 as healthy
+#    (dev-ops B2, mcp-hub SF-1) — a revoked/expired token (401), a lost grant (404) or a refusal (403) must read UNHEALTHY.
+{
+	admin off
+	auto_https off
+}
+
+:8000 {
+	# Proxy liveness — the container healthcheck. Never reaches GitHub, so a GitHub outage does not restart the container.
+	handle /livez {
+		respond "ok" 200
+	}
+
+	# DEEP health for the Hub: is the TOKEN valid? One authenticated GET /rate_limit (counts against no limit, names no repo,
+	# so nothing here has to match the hub's GIT_FILE_SOURCE_PIN). A missing, revoked or expired token answers 401 → 503 (probed
+	# 2026-11-03: an EMPTY `Bearer ` header and a bogus token both get 401 from /rate_limit, though it serves anonymous callers). It
+	# does NOT prove the token can see the pinned repo — a lost grant shows on the first read instead. GET/HEAD only, the
+	# caller's query and body are dropped, and only the mapped status leaves the proxy (no GitHub body).
+	@health {
+		path /healthz
+		method GET HEAD
+	}
+	handle @health {
+		request_body {
+			max_size 0
+		}
+		rewrite * /rate_limit?
+		reverse_proxy https://api.github.com {
+			method GET
+			header_up Host api.github.com
+			header_up Authorization "Bearer {$GITHUB_PERSONAL_ACCESS_TOKEN}"
+			header_up Accept "application/vnd.github+json"
+			header_up User-Agent "paichart-github-service-health"
+			@ok status 2xx
+			handle_response @ok {
+				respond "ok" 200
+			}
+			handle_response {
+				respond "github read failed: {rp.status_code}" 503
+			}
+		}
+	}
+
+	# MCP: token injected, configuration headers stripped.
+	@mcp {
+		path /mcp
+		method POST GET DELETE
+	}
+	handle @mcp {
+		reverse_proxy github-mcp:8082 {
+			header_up Authorization "Bearer {$GITHUB_PERSONAL_ACCESS_TOKEN}"
+			header_up -X-MCP-*
+			header_up -Mcp-Param-*
+			flush_interval -1
+		}
+	}
+
+	handle {
+		respond 404
+	}
+}

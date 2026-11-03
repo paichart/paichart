@@ -4,10 +4,8 @@ import bcrypt from 'bcryptjs';
 import { config } from '../../../../../lib/config';
 import { authLogger } from '@/lib/logger';
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { token: string } }
-) {
+export async function POST(request: NextRequest, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   try {
     const { password } = await request.json();
     const { token } = params;

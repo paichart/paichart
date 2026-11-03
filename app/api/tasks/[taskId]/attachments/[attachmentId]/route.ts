@@ -10,8 +10,9 @@ import { taskLogger } from '@/lib/logger';
 // DELETE /api/tasks/[taskId]/attachments/[attachmentId] - Remove attachment
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { taskId: string; attachmentId: string } }
+  props: { params: Promise<{ taskId: string; attachmentId: string }> }
 ) {
+  const params = await props.params;
   try {
     // ✅ 1. Authentication
     const user = await getAuthUser(req);

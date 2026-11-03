@@ -1860,3 +1860,14 @@ nets replay and the canary re-run of the latest released program after the deplo
 ls scripts/leg-replay-lab/golden/golden-set.json | wc -l   # expect 1
 ```
 
+### 2026-11-03 — configs of record + released use cases (LAB-CONFIGS Phase 0 / Builds 1–2) — PROVEN greps
+- **Configs of record:** private `paichart/paichart-lab-configs` (rig source, canaries, the hosted pin) → one-way mirror
+  `scripts/lab-configs/sync-public-configs.py` → public `paichart/paichart-configs` (+ `usecases/`: 3 RELEASED use cases).
+- **held-k8s-window-p1 fails the release bar** (its only program run `programReleasable: false`) — check releases from STORED ROOTS,
+  never from a run sheet.
+- **Not "kept by default":** network is per declared device; k8s/terraform keep a NAMED repo file; observability keeps the service's
+  heldFiles. One `## Config sources` design for k8s/terraform/observability is filed under GITHUB-ONLY-MODE.
+```bash
+python3 scripts/lab-configs/sync-public-configs.py --help >/dev/null && echo ok      # expect ok — the mirror exists
+grep -c "^DROP = {" scripts/lab-configs/sync-public-configs.py                        # expect 1 — the ONE drop list
+```

@@ -297,7 +297,7 @@ test('static (held-k8s 1g, EF B-2): every MI-13 literal table equals its TypeScr
   const inv = fs.readFileSync(path.join(ROOT, 'scripts', 'report-mechanism-inventory.sh'), 'utf8');
   const { HELD_JOIN_VERSIONS, GIT_FILE_SOURCE_PROTOCOLS } = require('../lib/agents/harness/held-bytes/variant');
   const { PLATFORM_DEFAULT_DESCRIPTORS } = require('../lib/agents/harness/held-bytes/descriptors');
-  const { GIT_FILE_SOURCE_PINS } = require('../lib/mcp/server/config/git-file-source-pin');
+  const { GIT_FILE_SOURCE_PINS, DEFAULT_GIT_FILE_SOURCE_PIN } = require('../lib/mcp/server/config/git-file-source-pin');
   const { GIT_LISTING_ELIDED_TEXT } = require('../lib/agents/harness/held-bytes/git-status-elision');
   const block = (start: string, end: string) => { const i = inv.indexOf(start); ok(i >= 0, `missing: ${start}`); return inv.slice(i, inv.indexOf(end, i)); };
   // _heldjoin ≡ HELD_JOIN_VERSIONS (name + version as an int[] literal)
@@ -315,7 +315,9 @@ test('static (held-k8s 1g, EF B-2): every MI-13 literal table equals its TypeScr
   // the SQL pin re-derivation ≡ GIT_FILE_SOURCE_PINS (one Git source today; a second needs its own SQL arm)
   const pins = Object.entries(GIT_FILE_SOURCE_PINS) as Array<[string, any]>;
   eq(pins.length, 1, 'one Git file source — MI-13 re-derives exactly one pin ');
-  const [svc, pin] = pins[0];
+  // MI-13 measures the DEFAULT platform pin (a production measurement; GIT_FILE_SOURCE_PIN is unset there) — register MI13-PIN-LITERAL.
+  const [svc] = pins[0];
+  const pin = { owner: DEFAULT_GIT_FILE_SOURCE_PIN.owner, repo: DEFAULT_GIT_FILE_SOURCE_PIN.repo, refs: ['main', 'refs/heads/main'] };
   const gp = block("g AS (SELECT *, regexp_replace(coalesce(sa->>'path'", "AS violates FROM g)");
   ok(inv.includes(`FROM gcalls WHERE svc = '${svc}'`), 'pin arm keyed on the pinned service name');
   ok(gp.includes(`lower(sa->>'owner') = '${pin.owner}'`) && gp.includes(`lower(sa->>'repo') = '${pin.repo}'`), 'owner/repo literals');

@@ -18,10 +18,8 @@ import { mcpLogger } from '@/lib/logger';
  *
  * v4 Performance: Uses cached POV context from metadata.povContext (5ms validation)
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { uri: string[] } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ uri: string[] }> }) {
+  const params = await props.params;
   try {
     // 1. Authentication check
     const user = await getAuthUser(request);

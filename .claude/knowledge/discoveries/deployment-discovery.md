@@ -1025,7 +1025,7 @@ echo "✅ DR system activated and monitoring" || echo "⚠️ DR system ready bu
 > - `mcp-github` + `mcp-github-server` (2026-10-18) — read-only held-file source. A Caddy proxy (host **:3110**, `/livez`,
 >   deep `/healthz` 200/503, `/mcp`) holding the read-only GitHub token, in front of the official github-mcp-server
 >   (digest-pinned, IMAGE-ONLY: pulled by `up`, never built, no matrix need, no host port, no token). Own network
->   `github-net`. Its first push's Docker run is expected red (release not yet flipped); see `services/github-service/README.md`.
+>   `github-net`. ~~Its first push's Docker run is expected red (release not yet flipped)~~ — superseded 2026-11-03 by the DOCKER-DEPLOY-RACE fix: the services run waits for `current` to contain the commit (or fails without deploying). Prod ops: `.claude/knowledge/domain/operations/github-service-prod-ops.md` (moved out of the public README).
 > - `mcp-snowflake` — `services/snowflake-service/`, External OAuth, `mcp-internal` network. ⚠️ UNHEALTHY since
 >   ~2026-09-29: its `testConnection` fails with "Your free trial has ended" — an account state, not a code fault.
 > - `mcp-cloudflare` — a Caddy reverse proxy (NOT a Node MCP server) to Cloudflare's hosted Code Mode MCP; host
@@ -1672,4 +1672,18 @@ grep -rln "NPM_TOKEN" .github/ 2>/dev/null | wc -l   # expect 0 — no CI publis
 ```bash
 grep -c "install-timer) MODE=install" scripts/replay-snapshot-gc.sh   # expect 1 — the hourly systemd USER timer installer
 grep -c "replay-snapshot-gc.sh" scripts/replay-nets-byte-identity.sh                # expect 3 — every replay run expires snapshots FIRST (production copies live 24 h on the dev machine)
+```
+
+### 2026-11-03 — deploy-race fix, seed-config gate, heredoc rule, Node plan — PROVEN greps
+- **DOCKER-DEPLOY-RACE fixed:** the services deploy waits until `current` contains the commit and re-checks before build; a failed or
+  queued main deploy ⇒ it fails and deploys nothing. A push not touching `services/**` never starts it (dispatch by hand).
+- **The deploy compiles the protocol seed under `prisma/tsconfig.seed.json` (no allowJs, no paths)** — a TS file the seed reaches that
+  `import`s plain JS fails TS7016 and ABORTS the deploy pre-flip (happened 2026-11-03). Gate: `npm run test:seed-config-compiles`.
+- **No backticks inside the unquoted `.env.production` heredoc** — they run as commands on the runner (workflow-lint SC2287).
+- **Node 20 is past end of life** — plan Node 24 (register NODE20-EOL).
+```bash
+grep -c "merge-base --is-ancestor" .github/workflows/docker-services-deploy.yml   # expect 2 — the wait step + the build-time re-check
+grep -c "Playwright version parity" .github/workflows/docker-services-deploy.yml  # expect 1
+grep -c '"test:seed-config-compiles"' package.json                                # expect 1
+awk '/cat > .env.production << ENVFILE/{f=1} f&&/^          ENVFILE$/{f=0} f&&/`/' .github/workflows/production-deploy.yml | wc -l   # expect 0
 ```

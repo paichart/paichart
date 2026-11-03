@@ -21,10 +21,8 @@ import { authLogger } from '@/lib/logger';
 import { trackActivity } from '@/lib/auth/audit';
 import { PUBLIC_BASE_URL } from '@/lib/auth/public-base-url';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { provider: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ provider: string }> }) {
+  const params = await props.params;
   try {
     const provider = params.provider;
     const searchParams = request.nextUrl.searchParams;
@@ -197,5 +195,5 @@ export async function GET(
  */
 export async function POST(request: NextRequest) {
   // Handle any POST requests to callback (some providers may use POST)
-  return GET(request, { params: { provider: 'unknown' } });
+  return GET(request, { params: Promise.resolve({ provider: 'unknown' }) });
 }

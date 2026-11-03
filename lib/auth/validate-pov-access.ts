@@ -369,9 +369,13 @@ type POVRouteHandler = (
 export function withPOVAccess(handler: POVRouteHandler) {
   return async (
     request: NextRequest,
-    { params }: { params: { povId: string; [key: string]: string } }
+    { params: paramsPromise }: { params: Promise<{ povId: string; [key: string]: string }> }
   ): Promise<NextResponse> => {
+    // Next 15: route params arrive as a Promise; resolved once (inside the try, so a failure keeps the error envelope) so every
+    // wrapped handler keeps a plain object.
+    let params: { povId: string; [key: string]: string } = { povId: '' };
     try {
+      params = await paramsPromise;
       // 1. Authentication
       const user = await getAuthUser(request);
       if (!user) {

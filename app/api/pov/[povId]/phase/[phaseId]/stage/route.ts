@@ -44,8 +44,9 @@ async function getNextStageOrder(phaseId: string, tx: any = prisma): Promise<num
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { povId: string; phaseId: string } }
+  props: { params: Promise<{ povId: string; phaseId: string }> }
 ) {
+  const params = await props.params;
   try {
     povLogger.debug({ phaseId: params.phaseId }, 'creating stage');
 
@@ -289,8 +290,9 @@ export async function POST(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { povId: string; phaseId: string } }
+  props: { params: Promise<{ povId: string; phaseId: string }> }
 ) {
+  const params = await props.params;
   try {
     // Extract stageId from URL search params
     const url = new URL(request.url);
@@ -472,8 +474,9 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { povId: string; phaseId: string } }
+  props: { params: Promise<{ povId: string; phaseId: string }> }
 ) {
+  const params = await props.params;
   try {
     // Extract stageId from URL search params since it's not in the route params
     const url = new URL(request.url);

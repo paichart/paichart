@@ -310,3 +310,7 @@ metadata key on a finished root is a run output) and change only:
 
 Before launch: probe the lab services, confirm nothing is running (a push mid-run orphans it), confirm the POV team
 holds every declared approver.
+
+> **Listing a spec as a working run (2026-11-03, LAB-CONFIGS D5):** only when its program run's STORED root says
+> `programReleasable: true` — read the root, never a run sheet (held-k8s-window-p1 was recorded "current" and is `false`). The public
+> catalogue of released use cases is `paichart/paichart-configs/usecases/`; its runbook is `scripts/lab-configs/RUNBOOK.md`.

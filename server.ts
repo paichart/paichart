@@ -3,6 +3,12 @@ import type { IncomingMessage, ServerResponse } from 'http';
 const { createServer } = require('http');
 const { parse } = require('url');
 const next = require('next');
+// Next 15: install Next's server environment (globalThis.AsyncLocalStorage + WebSocket shim) BEFORE any of our own lib/ requires.
+// In Next 15, `next/server` eagerly loads `after` → the work async-storage, which throws "AsyncLocalStorage accessed in runtime where
+// it is not available" when a module reaches `next/server` from plain Node (ts-node) before Next's own server has loaded this module
+// (found by the 2026-11-03 local production boot: lib/services/workflow/integrations/service-caller → lib/auth/token-manager →
+// lib/middleware/rate-limit → next/server). This is the module Next's own next-server.js requires.
+require('next/dist/server/node-environment');
 const { initializeServer } = require('./lib/server-init');
 const { errorCounter } = require('./lib/monitoring/error-counter');
 
@@ -58,9 +64,9 @@ const app = next({
   port,
   customServer: true,
   conf: {
-    experimental: {
-      serverComponentsExternalPackages: ['@modelcontextprotocol/sdk']
-    }
+    // Next 15: was experimental.serverComponentsExternalPackages (Next migrates the old key silently today; renamed so a release
+    // that drops that migration cannot lose this list). NOTE: a custom-server `conf` replaces next.config.js at runtime.
+    serverExternalPackages: ['@modelcontextprotocol/sdk']
   }
 });
 

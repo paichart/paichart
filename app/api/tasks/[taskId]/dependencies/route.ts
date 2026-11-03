@@ -10,10 +10,8 @@ import { trackActivity } from '@/lib/auth/audit';
 import { taskLogger } from '@/lib/logger';
 
 // POST /api/tasks/[taskId]/dependencies - Add task dependency
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { taskId: string } }
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ taskId: string }> }) {
+  const params = await props.params;
   try {
     // ✅ 1. Authentication
     const user = await getAuthUser(req);
@@ -113,10 +111,8 @@ export async function POST(
 }
 
 // DELETE /api/tasks/[taskId]/dependencies - Remove task dependency
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { taskId: string } }
-) {
+export async function DELETE(req: NextRequest, props: { params: Promise<{ taskId: string }> }) {
+  const params = await props.params;
   try {
     // ✅ 1. Authentication
     const user = await getAuthUser(req);

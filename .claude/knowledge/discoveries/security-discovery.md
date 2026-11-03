@@ -1585,3 +1585,15 @@ grep -c "'deviceSourcesSnapshot'," lib/tasks/services/protected-task-metadata.ts
 ```
 Capture holds a device / Git base only for what this snapshot declares (written at the leg's first execution). R10 is `paichart.r10/11` since 2026-11-02 (was `paichart.r10/10`)
 (login username) — grep above. Record: `cline_docs/reviews/held-network-2026-10-22/STEP3-PUSH2-BUILD.md`.
+
+### 2026-11-03 — the Git pin is host configuration (LAB-CONFIGS Build 1; sec-ops GO-WITH-CHANGES 88) — PROVEN greps
+The platform pin is read once from `GIT_FILE_SOURCE_PIN` at module load (ASCII, lower-cased, malformed ⇒ throws), never from a task,
+spec or agent; both gates use the one map; already-kept files are never re-checked against it. The UNSET default must never be a
+public repo (register PIN-DEFAULT-NEVER-PUBLIC). Open: an absent `ref` reads the repo's default branch (PIN-ABSENT-REF-DEFAULT-BRANCH).
+Public configs repo `paichart/paichart-configs`: ruleset `protect-main`, secret scanning + push protection, fork-safe CI; its mirror
+script and the private repo's fixtures never export.
+```bash
+grep -c "parseGitFileSourcePinEnv(process.env.GIT_FILE_SOURCE_PIN)" lib/mcp/server/config/git-file-source-pin.js  # expect 1
+grep -c "^- scripts/lab-configs/\*\*" scripts/export/public-allowlist.rules        # expect 1 — the mirror (names private fixtures) never exports
+grep -c "GIT_FILE_SOURCE_PIN is set in this shell" package.json                    # expect 1 — the battery refuses to run with a pin set
+```

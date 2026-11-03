@@ -17,6 +17,11 @@
  * Plan: cline_docs/reviews/platform-held-bytes-2026-10-13/STAGE-A-PLAN.md WI-3. Contract: P3-SERVICE-CONTRACT.md §6.
  */
 
+// A typed require, relative, on purpose: this table loads in scripts run without tsconfig-paths (arch Build 1 M2) AND under the
+// deploy's protocol seed config (prisma/tsconfig.seed.json: no allowJs), where an `import` of this plain-JS module fails TS7016
+// and aborts the deploy (2026-11-03, release_20261103_053050 — aborted pre-flip, old release stayed live).
+const { PLATFORM_GIT_TARGET } = require('../../../mcp/server/config/git-file-source-pin') as { PLATFORM_GIT_TARGET: string };
+
 export const DESCRIPTOR_VERSION = 1;
 
 /** A value source: a constant, a template over the selected key (`{key}`), a named argument of the call, or (held-k8s,
@@ -86,7 +91,7 @@ export const PLATFORM_DEFAULT_DESCRIPTORS: readonly Descriptor[] = deepFreeze([
   // unchanged, so observability refs and refusals keep their bytes. Closed world: the server runs `--tools get_file_contents`.
   {
     descriptorVersion: 1, service: GITHUB_FILE_SOURCE, tool: 'get_file_contents', legScope: 'git-file-source',
-    files: [{ select: 'content[type=resource].resource.text', target: { const: 'github:paichart:paichart-lab-configs' },
+    files: [{ select: 'content[type=resource].resource.text', target: { const: PLATFORM_GIT_TARGET },
       path: { uri: 'path' }, gitPin: true, directoryWhenNone: 'content0-json-array' }],
   },
   { descriptorVersion: DESCRIPTOR_VERSION, service: RIG, tool: 'get_prometheus_config',

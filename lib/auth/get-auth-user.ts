@@ -51,7 +51,7 @@ export async function getAuthUserFromServer(): Promise<AuthUser | null> {
     // Dynamic import to avoid loading next/headers at module load time
     // This prevents AsyncLocalStorage errors when the module is imported but function not called
     const { cookies } = await import('next/headers');
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get(config.cookie.accessToken)?.value;
 
     if (!token) {

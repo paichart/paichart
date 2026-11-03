@@ -1648,3 +1648,18 @@ npm run test:hub-agent-provisioned-guard   # adopted/human rows refused to agent
 After `refuseAgentMutationOfPlatformRow` (no ownerId) and IF-3 (launcher owns the row): an agent mutates only a row ITS RUN
 registered — the registering execution, or the leg harness named by the create-time `provisionedByRunScope`. A `descriptorUrl`
 adoption writes nothing, so an adopted customer row can never be torn down by a run. Paired: `security-discovery.md` § SF-1.
+
+### 2026-11-03 — github-service: pin from the host env, token-only health, self-host packaging (LAB-CONFIGS Build 1) — PROVEN greps
+The platform pin is `GIT_FILE_SOURCE_PIN=<owner>/<repo>` (always `main`; unset = the private lab repo, byte-identical to the old
+literal; malformed throws at module load). Every target derives from it. `/healthz` checks only the TOKEN (`GET /rate_limit`; empty or
+bad token ⇒ 401 ⇒ 503 — probed). Self-host: compose profile `git`, `npm run seed:github-service` (prints the pin, ⚠️ when unset), run
+sheet 9c. Customer repos stay on WI-B10 `gitPin` rows. Public configs repo: `paichart/paichart-configs` (nobody's platform pin yet —
+register HOSTED-DEMO-GIT-SOURCE). Record: `cline_docs/reviews/lab-configs-central-repo-2026-11-02/`.
+```bash
+grep -c "parseGitFileSourcePinEnv(process.env.GIT_FILE_SOURCE_PIN)" lib/mcp/server/config/git-file-source-pin.js  # expect 1 — read ONCE, at load
+grep -rc "github:paichart:paichart-lab-configs" lib | grep -v ":0$" | wc -l      # expect 0 — no second literal in lib (all derive)
+grep -c "PLATFORM_GIT_TARGET" lib/agents/harness/held-bytes/descriptors.ts        # expect 2 — typed require + the descriptor const
+grep -c "rewrite \* /rate_limit?" services/github-service/Caddyfile               # expect 1 — token-only deep health
+grep -c 'profiles: \["git"\]' docker-compose.self-host.yml                       # expect 2 — both GitHub containers opt-in
+grep -c '"seed:github-service"' package.json                                       # expect 1
+```

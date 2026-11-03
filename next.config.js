@@ -9,9 +9,7 @@ const nextConfig = {
   // Enable gzip compression
   compress: true,
 
-  experimental: {
-    serverComponentsExternalPackages: ['@modelcontextprotocol/sdk', 'node-fetch', 'jose']
-  },
+  serverExternalPackages: ['@modelcontextprotocol/sdk', 'node-fetch', 'jose'], // Next 15: was experimental.serverComponentsExternalPackages
   // BC45 FIX: Application-level security headers (defense-in-depth with nginx)
   async headers() {
     return [{

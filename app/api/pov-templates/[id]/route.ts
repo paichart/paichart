@@ -9,10 +9,8 @@ import { povLogger } from '@/lib/logger';
  * GET /api/pov-templates/[id]
  * Get a template by ID
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const user = await getAuthUser(request);
     if (!user) {
@@ -43,10 +41,8 @@ export async function GET(
  * PUT /api/pov-templates/[id]
  * Update a template
  */
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const user = await getAuthUser(request);
     if (!user) {
@@ -116,10 +112,8 @@ export async function PUT(
  * DELETE /api/pov-templates/[id]
  * Delete a template
  */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const user = await getAuthUser(request);
     if (!user) {

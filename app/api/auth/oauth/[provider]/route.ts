@@ -8,10 +8,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { oauthService } from '@/lib/auth/oauth/oauth-service';
 import { authLogger } from '@/lib/logger';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { provider: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ provider: string }> }) {
+  const params = await props.params;
   try {
     const provider = params.provider;
     const returnTo = request.nextUrl.searchParams.get('returnTo');

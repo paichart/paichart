@@ -1,10 +1,11 @@
 import { PasswordResetForm } from '@/components/auth/PasswordResetForm';
 
-export default function ResetPasswordPage({
-  searchParams,
-}: {
-  searchParams: { token?: string };
-}) {
+export default async function ResetPasswordPage(
+  props: {
+    searchParams: Promise<{ token?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   if (!searchParams.token) {
     return (
       <div className="min-h-screen bg-background flex flex-col justify-center py-12 sm:px-6 lg:px-8">

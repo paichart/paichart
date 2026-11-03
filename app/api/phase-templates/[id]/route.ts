@@ -13,10 +13,8 @@ import { logger } from '@/lib/logger';
  * DELETE /api/phase-templates/[id]
  * Deletes a specific phase template by ID
  */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     // Get the authenticated user
     const user = await getAuthUser(request);
@@ -84,10 +82,8 @@ export async function DELETE(
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     // Get the authenticated user
     const user = await getAuthUser(request);
@@ -202,10 +198,8 @@ export async function PUT(
   }
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     // Get the authenticated user
     const user = await getAuthUser(request);

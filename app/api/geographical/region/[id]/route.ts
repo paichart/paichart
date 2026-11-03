@@ -3,10 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { logger } from '@/lib/logger';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     // Check authentication
     const user = await getAuthUser(request);

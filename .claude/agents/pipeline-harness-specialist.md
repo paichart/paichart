@@ -542,3 +542,8 @@ CONTROLS — add a shipped change's control BEFORE its deploy); `.githooks/pre-p
 cut-relevant push with no ledger edit; extend its path list when a new fact producer or agent read surface ships). Pattern #71
 `facts-only-tighten-pattern.md` = the asymmetric-authority rule behind every gate. A program-root text change (e.g. pov-program) has
 no lab: its gate is a pre-registered live control on the canary.
+
+## Pointer (2026-11-03): configs of record + released use cases (LAB-CONFIGS)
+- Private `paichart-lab-configs` (rig source, canaries, the hosted pin) → one-way mirror `scripts/lab-configs/sync-public-configs.py` → public `paichart/paichart-configs` (+ `usecases/`, 3 released). Plan + decisions: `cline_docs/reviews/lab-configs-central-repo-2026-11-02/PHASE0-SUMMARY.md`.
+- Check a "working run" against its STORED ROOT (`programReleasable`), never a run sheet — held-k8s-window-p1 was listed current and is `false`.
+- Next work rides triggers: GITHUB-ONLY-MODE (one `## Config sources` design for k8s/terraform/observability), DEVEXT-FRESH-INSTALL, HOSTED-DEMO-GIT-SOURCE.

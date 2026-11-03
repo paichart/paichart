@@ -1,0 +1,6 @@
+{
+  "//": "test:seed-config-compiles — compiles the protocol seed under the DEPLOY's own seed config (no allowJs, no paths). A TS file the seed reaches that imports plain JS fails TS7016 here instead of aborting the deploy (2026-11-03, release_20261103_053050).",
+  "extends": "./tsconfig.seed.json",
+  "compilerOptions": { "noEmit": true },
+  "files": ["../scripts/seed-protocol-prompts.ts"]
+}

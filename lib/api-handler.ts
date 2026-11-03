@@ -55,8 +55,12 @@ export function createHandler<T = any>(
   handler: ApiHandler<T>,
   options: ApiHandlerOptions = {}
 ) {
-  return async (req: NextRequest, context: { params: Record<string, string> }) => {
+  return async (req: NextRequest, rawContext: { params: Promise<Record<string, string>> }) => {
+    // Next 15: route params arrive as a Promise; resolved once (inside the try, so a failure keeps the app's error shape) so every
+    // wrapped handler keeps a plain object.
+    let context: { params: Record<string, string> } = { params: {} };
     try {
+      context = { params: await rawContext?.params };
       // BC45 FIX: Reject oversized request bodies before parsing (defense-in-depth)
       const contentLength = parseInt(req.headers.get('content-length') || '0', 10);
       const maxBody = options.maxBodySize || 1_048_576; // 1MB default

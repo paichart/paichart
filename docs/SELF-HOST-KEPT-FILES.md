@@ -19,6 +19,35 @@ manifest or a Terraform file in Git, a file a read-only service serves, or a net
 variable means off, and `=false` turns it off). A file is kept only when a pipeline reads it through a service that declares it. That means a Git file source, a network device declared `device-read` in the task's `## Device sources` block, or a read-only
 service whose registration declares held files (the hub registry's `heldFiles` field on `registry(action: "register")`, accepted on human registrations only).
 
+## Reading kept files from Git (optional)
+
+Kubernetes, Terraform and network pipelines can read the **file of record** from a Git repository, so the base the Author edits
+is the committed file rather than a copy typed into a task. The hub reads Git through the shipped GitHub file source
+(`services/github-service`): GitHub's official read-only MCP server plus a small proxy that adds your token. It is optional; skip it
+until you have a config repo. Set-up is [run sheet step 9c](SELF-HOST-RUN-SHEET.md); the service's shape, rules and upgrade checks
+are in [`services/github-service/README.md`](../services/github-service/README.md).
+
+- **The pin, not the token, is the boundary.** A GitHub token can read every public repo, so the hub lets agents read through this
+  service from **one** repository only: `GIT_FILE_SOURCE_PIN=<owner>/<repo>` in the hub's `.env`. Only host configuration sets it —
+  never a task, a spec or an agent (put it in `.env`, which both hub processes read — not `.env.production`). A call naming any other repo is refused (`PINNED_ARGUMENT`), and a file that does not come from
+  the pin is never kept (`source-not-pinned`). A malformed value stops the hub's MCP server at startup on purpose.
+- **Always the `main` branch.** Pipelines read `main`, and a read that names no branch gets the repo's default branch, so the
+  repo's **default branch must be `main`**. Protect it (pull requests only, review, no force-push) and make working changes on other
+  branches. A commit or tag cannot be named.
+- **What is recorded:** each file kept from Git carries the commit it was read at, so you can see exactly which version a package
+  was built on.
+- **More than one repo** (a team's own config repo beside yours): register a separate read-only service whose held-file declaration
+  names its own repo — set only by a human registrant. Never register the pinned repo as a second source: its files are kept
+  only through the pin.
+- **Limits on a self-host.**
+  - There is no independent operator check of a kept file against Git: the base-check tool stays private. Compare a package's base
+    with the commit it names yourself before you apply it.
+  - Changing the pin later governs **new reads only**: files already kept from the old repo stay usable (they are never re-checked
+    against the pin) and still name the repo they came from. A new pin takes effect when the hub restarts, and a restart stops any
+    run in flight — change it between runs.
+  - Without a live read (no cluster, state or device service named), a pipeline checks against the Git file only, not the running
+    system. The package's checks are then your apply-time check against reality.
+
 ## What is stored, where, and for how long
 
 - **Stored:** for each kept file, the copy **as read** (`CAPTURE`), the **base** the edits apply to (`BASE`), and the **candidate** after

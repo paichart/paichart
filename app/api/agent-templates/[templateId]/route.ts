@@ -15,10 +15,8 @@ import { buildPOVAccessFilter } from '@/lib/pov/auth/pov-access-filter';
  *
  * Security: Requires authentication + authorization (P0 fix - Nov 8, 2025)
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { templateId: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ templateId: string }> }) {
+  const params = await props.params;
   try {
     // ✅ P0 FIX: Authentication required (Issue #2)
     const user = await getAuthUser(request);
@@ -144,10 +142,8 @@ export async function GET(
  * PUT /api/agent-templates/[templateId]
  * Update an agent template
  */
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { templateId: string } }
-) {
+export async function PUT(request: NextRequest, props: { params: Promise<{ templateId: string }> }) {
+  const params = await props.params;
   try {
     // ✅ ENHANCED: Authentication (Week 5 Task 2.1)
     const user = await getAuthUser(request);
@@ -359,10 +355,8 @@ export async function PUT(
  * DELETE /api/agent-templates/[templateId]
  * Delete an agent template (soft delete by setting status to DEPRECATED)
  */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { templateId: string } }
-) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ templateId: string }> }) {
+  const params = await props.params;
   try {
     // ✅ ENHANCED: Authentication (Week 5 Task 2.1)
     const user = await getAuthUser(request);

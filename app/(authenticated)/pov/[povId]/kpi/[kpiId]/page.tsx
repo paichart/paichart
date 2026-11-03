@@ -4,7 +4,7 @@ export const metadata: Metadata = {
   title: 'KPI Details'
 }
 
-export default function KPIDetailsPage({ params }: { params: { kpiId: string } }) {
+export default function KPIDetailsPage({ params: _params }: { params: Promise<{ kpiId: string }> }) {
   return (
     <div>
       <h1>KPI Details</h1>

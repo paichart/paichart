@@ -18,8 +18,9 @@ import { povLogger } from '@/lib/logger';
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { povId: string; memberId: string } }
+  props: { params: Promise<{ povId: string; memberId: string }> }
 ) {
+  const params = await props.params;
   try {
     // Validate member ID format (consistent CUID validation)
     const memberIdCheck = validateCUIDFormat(params.memberId, 'member ID');
@@ -153,13 +154,13 @@ export async function DELETE(
 
       // Verify target user exists and is on the team (or is the POV owner)
       const targetIsOwner = reassignTasksTo === pov.ownerId;
-      const targetIsTeamMember = targetIsOwner || await prisma.teamMember.findFirst({
+      const targetIsTeamMember = targetIsOwner || (await prisma.teamMember.findFirst({
         where: {
           userId: reassignTasksTo,
           teamId: pov.teamId!
         },
         select: { id: true }
-      });
+      }));
 
       if (!targetIsTeamMember) {
         return NextResponse.json(
@@ -263,8 +264,9 @@ export async function DELETE(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { povId: string; memberId: string } }
+  props: { params: Promise<{ povId: string; memberId: string }> }
 ) {
+  const params = await props.params;
   try {
     // 1. Authentication
     const user = await getAuthUser(request);

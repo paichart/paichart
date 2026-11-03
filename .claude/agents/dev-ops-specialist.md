@@ -500,3 +500,8 @@ The battery is NOT the whole CI gate set — `validation-reusable.yml` also runs
 Network kept files live (cut 2026-10-27 00:50:42.743Z); the network owning-seed reseed command is in template-system-discovery; snapshot-retention greps in deployment-discovery. Record `cline_docs/reviews/held-network-2026-10-22/NETWORK-CLOSEOUT.md`.
 
 **Join learnings carried (2026-10-31):** `.claude/knowledge/domain/operations/dev-ops-library.md` § "Carried from the join learnings ledgers" — read it before designing a check, lab or text change in your domain.
+
+## Pointer (2026-11-03): deploy race fixed, seed-config gate, heredoc rule, Node plan
+- Docker Services Deploy now waits for `current` to contain the commit (fails, deploying nothing, if the main deploy did not land); a push not touching `services/**` never starts it — dispatch by hand (ask the owner first).
+- The deploy compiles the protocol seed under `prisma/tsconfig.seed.json` (no allowJs): a TS `import` of plain JS aborts the deploy pre-flip. Gate: `npm run test:seed-config-compiles`. No backticks in the `.env.production` heredoc.
+- Node 20 is end of life — plan Node 24 (register NODE20-EOL). Discovery: deployment-discovery § 2026-11-03.

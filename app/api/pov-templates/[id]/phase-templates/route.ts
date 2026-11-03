@@ -211,10 +211,8 @@ function getPhaseTemplateIds(template: any): string[] {
  * 
  * This implementation uses the standardized data structure
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const povTemplateId = params.id;
   povLogger.debug({ povTemplateId }, 'GET phase templates request');
 
@@ -292,10 +290,8 @@ export async function GET(
  * 
  * This implementation uses the standardized data structure
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const povTemplateId = params.id;
   povLogger.debug({ povTemplateId }, 'POST phase templates request');
 

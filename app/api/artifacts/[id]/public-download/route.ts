@@ -58,10 +58,8 @@ function verifyDownloadToken(token: string, artifactId: string): boolean {
  * GET /api/artifacts/[id]/public-download
  * Download artifact with signed URL token
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const misconfigured = assertSigningKeyConfigured();
   if (misconfigured) return misconfigured;
   try {

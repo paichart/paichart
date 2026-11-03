@@ -8,6 +8,11 @@
 #
 # The service binds to 127.0.0.1 only: reachable from the hub on the same host, never from the network.
 # Then `npm run seed:browser-service` registers it in the hub — run sheet step 9b.
+#
+# OPTIONAL — the GitHub file source (kept files read from a Git repo; run sheet step 9c). Its two containers sit behind the
+# `git` profile, so the default `up` above never needs its token file:
+#   docker compose -f docker-compose.self-host.yml --profile git up -d --build
+# It needs services/github-service/.env (copy .env.example there: a read-only GitHub token). Then `npm run seed:github-service`.
 
 services:
   browser-automation:
@@ -30,3 +35,79 @@ services:
       options:
         max-size: "20m"
         max-file: "2"
+
+  # GitHub file source — the official read-only server (no token, no host port) and a Caddy proxy that injects the read-only
+  # token. Same images/hardening as production (scripts/test-git-file-source-pin-env.ts P5 pins the digest). Profile `git`.
+  github-mcp:
+    container_name: paichart-github-server
+    profiles: ["git"]
+    # PINNED BY DIGEST (v2.0.2). Re-pin only with production's docker-compose.yml.
+    image: ghcr.io/github/github-mcp-server@sha256:ffced0d76e77428532a2ced185516992d77fd146d69eec2f244e6237d1a97796
+    command: ["http", "--port", "8082", "--read-only", "--tools", "get_file_contents"]
+    restart: unless-stopped
+    user: "65534:65534"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "2"
+    networks:
+      - github-net  # own bridge: no other container can use the token-injecting proxy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  github:
+    container_name: paichart-github
+    profiles: ["git"]
+    build:
+      context: ./services/github-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - github-mcp
+    ports:
+      - "127.0.0.1:3110:8000"  # localhost only — the proxy that injects the read-only GitHub token
+    env_file:
+      - ./services/github-service/.env
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "2"
+    networks:
+      - github-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8000/livez"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    user: "65534:65534"
+    read_only: true
+    tmpfs:
+      - /tmp:uid=65534,gid=65534
+      - /data:uid=65534,gid=65534
+      - /config:uid=65534,gid=65534
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  github-net:
+    driver: bridge

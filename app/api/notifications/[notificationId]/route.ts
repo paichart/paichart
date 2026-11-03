@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { markAsReadHandler } from '@/lib/notifications/handlers/read';
 import { logger } from '@/lib/logger';
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { notificationId: string } }
-) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ notificationId: string }> }) {
+  const params = await props.params;
   try {
     const data = await markAsReadHandler(req, params.notificationId);
     return NextResponse.json(data);

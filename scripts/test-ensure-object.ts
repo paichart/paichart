@@ -211,8 +211,11 @@ test(`Pattern: inlined ensureObject in service packages (floor=${MIN_INLINED_SER
   // packages are present than the floor, assert the PROPERTY instead — every package that is
   // there inlines the guard — and skip the private floors/baseline. (First public CI run failed here.)
   const servicesDir = path.resolve(__dirname, '..', 'services');   // same base as countInlinedEnsureObject
+  // A service PACKAGE is a Node MCP server (it has a package.json) — the guard is JS. LAB-CONFIGS Build 1 (2026-11-03) ships
+  // services/github-service, a Caddy proxy in front of GitHub's own server: no JS of ours, nothing to inline, not counted.
   const present = fs.existsSync(servicesDir)
-    ? fs.readdirSync(servicesDir).filter(n => fs.statSync(path.join(servicesDir, n)).isDirectory()).length  // statSync follows symlinks
+    ? fs.readdirSync(servicesDir).filter(n => fs.statSync(path.join(servicesDir, n)).isDirectory()  // statSync follows symlinks
+        && fs.existsSync(path.join(servicesDir, n, 'package.json'))).length
     : 0;
   console.log(`   (found ${count} service packages with inlined ensureObject; ${present} service packages present)`);
   if (present < MIN_INLINED_SERVICES) {

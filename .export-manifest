@@ -1902,6 +1902,7 @@ prisma/migrations/20251212_add_team_member_indices/migration.sql
 prisma/migrations/migration_lock.toml
 prisma/schema.prisma
 prisma/schema.prisma.backup-20260217
+prisma/tsconfig.seed-check.json
 prisma/tsconfig.seed.json
 public/.well-known/agent-card.json
 public/.well-known/glama.json
@@ -2148,6 +2149,7 @@ scripts/seed-data/requirements-skeleton.tmpl
 scripts/seed-database.ts
 scripts/seed-example-workflows.ts
 scripts/seed-geographical-data.js
+scripts/seed-github-service.ts
 scripts/seed-harness-template.ts
 scripts/seed-kpi-templates.ts
 scripts/seed-kubernetes-gitops-templates.ts
@@ -2263,6 +2265,7 @@ scripts/test-gateway-id-first.ts
 scripts/test-gateway-meta.ts
 scripts/test-geographical-seed-data.ts
 scripts/test-git-device-comparison.ts
+scripts/test-git-file-source-pin-env.ts
 scripts/test-golden-set.ts
 scripts/test-harness-dispatch-fact.ts
 scripts/test-harness-mode-resolver.ts
@@ -2475,6 +2478,10 @@ services/browser-automation-service/src/tools/scrape-page.ts
 services/browser-automation-service/src/tools/take-screenshot.ts
 services/browser-automation-service/src/tools/trace-session.ts
 services/browser-automation-service/tsconfig.json
+services/github-service/.env.example
+services/github-service/Caddyfile
+services/github-service/Dockerfile
+services/github-service/README.md
 services/weather-service/.env.example
 services/weather-service/Dockerfile
 services/weather-service/README.md

@@ -8,10 +8,8 @@ import { logger } from '@/lib/logger';
  * GET /api/phase-templates/schema-registry/[id]
  * Get a schema by ID
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const user = await getAuthUser(request);
     if (!user) {
@@ -47,10 +45,8 @@ export async function GET(
  * DELETE /api/phase-templates/schema-registry/[id]
  * Delete a schema
  */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const user = await getAuthUser(request);
     if (!user) {

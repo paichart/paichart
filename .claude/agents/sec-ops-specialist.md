@@ -387,3 +387,7 @@ ref with redactedCount > 0). Lesson for exemptions: a closed list beats an open 
 R10 `paichart.r10/10` (login username); `deviceSourcesSnapshot` is an AUDIT_STRIP_KEYS member (an agent cannot re-declare its sources); P8 — on an unpinned Git row the declared line is the pin; real lab secrets 0 hits in 200 J5 documents. Record `cline_docs/reviews/held-network-2026-10-22/NETWORK-CLOSEOUT.md`; discovery § Device sources snapshot.
 
 **Join learnings carried (2026-10-31):** `.claude/knowledge/domain/security/sec-ops-library.md` § "Carried from the join learnings ledgers" — read it before designing a check, lab or text change in your domain.
+
+## Pointer (2026-11-03): the Git pin is host configuration (LAB-CONFIGS Build 1, GO-WITH-CHANGES 88)
+- `GIT_FILE_SOURCE_PIN` read once at load, malformed ⇒ throws; both gates; kept files never re-checked. The unset default must never become a public repo (PIN-DEFAULT-NEVER-PUBLIC); open: absent `ref` reads the default branch (PIN-ABSENT-REF-DEFAULT-BRANCH).
+- Public `paichart/paichart-configs`: ruleset `protect-main` (admin bypass — single maintainer), secret scanning + push protection, fork-safe CI. Review: `cline_docs/reviews/lab-configs-central-repo-2026-11-02/BUILD1-SECOPS-REVIEW.md`.

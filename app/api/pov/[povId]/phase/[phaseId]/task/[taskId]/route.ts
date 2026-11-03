@@ -5,8 +5,9 @@ import { DependencyNotSatisfiedError, PipelineInvariantError, InvalidTransitionE
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { povId: string; phaseId: string; taskId: string } }
+  props: { params: Promise<{ povId: string; phaseId: string; taskId: string }> }
 ) {
+  const params = await props.params;
   taskLogger.debug({ taskId: params.taskId }, 'task GET');
   try {
     const response = await getTaskHandler(req, params.povId, params.phaseId, params.taskId);
@@ -22,8 +23,9 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { povId: string; phaseId: string; taskId: string } }
+  props: { params: Promise<{ povId: string; phaseId: string; taskId: string }> }
 ) {
+  const params = await props.params;
   try {
     // Parse request body
     const data = await req.json();

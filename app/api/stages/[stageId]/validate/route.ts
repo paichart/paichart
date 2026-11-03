@@ -14,10 +14,8 @@ import { logger } from '@/lib/logger'
  * - Target response time: <75ms
  * - Pre-computed validation state with TTL-based cache
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { stageId: string } }
-) {
+export async function POST(request: NextRequest, props: { params: Promise<{ stageId: string }> }) {
+  const params = await props.params;
   try {
     // Authentication validation
     const user = await getAuthUser(request);
@@ -113,10 +111,8 @@ export async function POST(
  * 
  * Get current validation state without updating cache
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { stageId: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ stageId: string }> }) {
+  const params = await props.params;
   try {
     // Authentication validation
     const user = await getAuthUser(request);

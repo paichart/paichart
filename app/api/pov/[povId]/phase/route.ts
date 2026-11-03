@@ -5,9 +5,9 @@ import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { povLogger } from '@/lib/logger';
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     povId: string;
-  };
+  }>;
 }
 
 /**
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest, params: RouteParams) {
 
     const validation = createPhaseSchema.safeParse(body);
     if (!validation.success) {
-      povLogger.warn({ userId: user?.userId, povId: params.params.povId, errors: validation.error.errors }, 'phase create validation failed');
+      povLogger.warn({ userId: user?.userId, povId: (await params.params).povId, errors: validation.error.errors }, 'phase create validation failed');
 
       return NextResponse.json({
         error: 'Validation failed',
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest, params: RouteParams) {
     }
 
     // Handler also validates (defense-in-depth is good!)
-    const response = await createPhaseHandler(req, params);
+    const response = await createPhaseHandler(req, { params: await params.params });
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
     povLogger.error({ err: error }, 'phase create error');

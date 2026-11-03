@@ -14,10 +14,8 @@ import { logger } from '@/lib/logger';
  * POST /api/agent-templates/[templateId]/apply
  * Apply an agent template to a task
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { templateId: string } }
-) {
+export async function POST(request: NextRequest, props: { params: Promise<{ templateId: string }> }) {
+  const params = await props.params;
   try {
     // ✅ CRITICAL FIX: Add authentication (Week 5 Task 1.2)
     const user = await getAuthUser(request);

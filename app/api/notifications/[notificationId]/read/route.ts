@@ -4,10 +4,8 @@ import { markAsRead } from '@/lib/notifications/services/delivery';
 import { logger } from '@/lib/logger';
 import { corsPreflightResponse } from '@/lib/utils/cors';
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { notificationId: string } }
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ notificationId: string }> }) {
+  const params = await props.params;
   try {
     logger.info({ notificationId: params.notificationId }, 'Marking notification as read');
     const user = await getAuthUser(req);

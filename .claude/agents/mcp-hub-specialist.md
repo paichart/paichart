@@ -425,3 +425,7 @@ reaches every caller incl. external MCP clients. Terraform window legs ran ONE A
 Network kept files live (1.25.0). Hub-side pieces: SF-1 run-scope guard (deployed 2026-10-24), descriptor-URL registration, P8 declared-git-line lane on unpinned customer Git rows (`GIT_LINE_DESCRIPTORS`, held-bytes). Record `cline_docs/reviews/held-network-2026-10-22/NETWORK-CLOSEOUT.md`.
 
 **Join learnings carried (2026-10-31):** `.claude/knowledge/domain/mcp/mcp-hub-library.md` § "Carried from the join learnings ledgers".
+
+## Pointer (2026-11-03): github-service pin from the host env, token-only health, self-host packaging
+- Platform pin = `GIT_FILE_SOURCE_PIN=<owner>/<repo>` (always `main`; unset = the private lab repo, unchanged; malformed throws at load); every target derives from it. Customer repos stay on WI-B10 `gitPin` rows. The platform — never the service — enforces it (owner, 2026-11-03).
+- `/healthz` checks only the token (`GET /rate_limit`). Self-host: compose profile `git`, `npm run seed:github-service`, run sheet 9c. Discovery: mcp-hub-discovery § 2026-11-03.

@@ -12,8 +12,9 @@ import { povLogger } from '@/lib/logger';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { povId: string; phaseId: string; stageId: string } }
+  props: { params: Promise<{ povId: string; phaseId: string; stageId: string }> }
 ) {
+  const params = await props.params;
   try {
     povLogger.debug({ stageId: params.stageId }, 'getting tasks for stage');
     

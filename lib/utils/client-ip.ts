@@ -16,11 +16,11 @@ import type { NextRequest } from 'next/server';
  *    upstreams. This is the L6 fix — see
  *    cline_docs/reviews/loopback-refresh-rate-limit-2026-06-13/ + the ledger.
  * 2. XFF / x-real-ip — ONLY when TRUSTED_PROXY is set (BC54: else spoofable).
- * 3. request.ip || 'direct' — dev/local fallback (no Cloudflare in front).
+ * 3. 'direct' — dev/local fallback (no Cloudflare in front). (Next 15 removed NextRequest.ip; it was already empty here.)
  *
  * Why CF-Connecting-IP must be primary: TRUSTED_PROXY is unset in prod, so
  * without (1) every request fell to (3), which is a CONSTANT behind the
- * nginx→localhost custom server (request.ip empty) — collapsing every IP-keyed
+ * nginx→localhost custom server (request.ip was empty there) — collapsing every IP-keyed
  * limiter into ONE global bucket (false-locks the platform at scale).
  *
  * Pure (header reads + env only) → Edge-runtime safe.
@@ -43,5 +43,5 @@ export function getClientIP(request: NextRequest): string {
     if (ip) return ip.trim();
   }
   // Fallback (dev/local, no Cloudflare): stable identifier, not spoofable headers.
-  return request.ip || 'direct';
+  return 'direct'; // prod resolves CF-Connecting-IP above; XFF is read only when TRUSTED_PROXY is set (unset in prod)
 }

@@ -65,7 +65,8 @@ carry them: the objective declares them and the §2 read checks them.
    ``| `network-provisioning.item-<N>` (added <date>: Device sources, network-provisioning 1.23.0) | N |``
    (OWNER-ANSWER-SESSION, *A question added … AFTER the zero-decision run*). Expect that row in the answered draft.
 2. **A device may carry one `git-file` line AND one `device-read` line.** The Git file is the base and the device
-   read is quoted as evidence; the pipeline does not compare them (`drift: not checked`). `command-package` stands
+   read is quoted as evidence; the platform compares them mechanically and shows the result to the Architect and the leg
+   Reviewer (it gates nothing; the agents write `drift: not checked`). `command-package` stands
    alone. A spec never states a drift cause ("the device was edited out of band", "the change was never applied")
    unless it also supplies the witness that shows it.
 3. **Value legs (`network-derivation`) need no Device sources block.** Do not add the item for them.

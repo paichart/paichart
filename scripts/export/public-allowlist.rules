@@ -82,16 +82,22 @@
 # only the latter; prod's docker-compose.yml (excluded below) is private infrastructure.
 + services/weather-service/**
 + services/browser-automation-service/**
+# LAB-CONFIGS Build 1 (owner D1, 2026-11-03): the GitHub file source ships, opt-in (compose profile `git`, run sheet 9c).
++ services/github-service/**
 - services/**
 + docker-compose.self-host.yml
 # their seed scripts follow the same decision. The browser service is SEEDED, not registered: its name is
 # reserved (service-registration-handler.js reserved-name guard) and first-party by design — run sheet 9b.
 + scripts/seed-weather-service.ts
 + scripts/seed-browser-automation-service.ts
++ scripts/seed-github-service.ts
 - scripts/seed-*-service.ts
 # PLATFORM-HELD-BYTES G3 operator base check — PRIVATE by decision (GO-MINIMAL §2a, 2026-10-16): the public operator tool is
 # O14's promotion deliverable. Its fixture test is unwired, so decision 3 drops it too; both named so a later wiring cannot leak it.
 - scripts/held-base-check.ts
+# LAB-CONFIGS Build 2 (2026-11-03): the private→public lab-configs mirror script + its static files name the PRIVATE repo's
+# fixtures; the public repo (paichart/paichart-configs) is its OUTPUT, not its source.
+- scripts/lab-configs/**
 - scripts/test-held-base-check.ts
 
 # ── .claude/: ship ~2/3 (CLAUDE-DIR-SCAN.md); runbooks + incident diagnostics stay ──

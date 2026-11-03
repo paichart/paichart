@@ -4,8 +4,9 @@ import { povLogger } from '@/lib/logger';
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { povId: string; phaseId: string } }
+  props: { params: Promise<{ povId: string; phaseId: string }> }
 ) {
+  const params = await props.params;
   try {
     const data = await req.json();
     const response = await createTaskHandler(req, params.povId, params.phaseId, data);
@@ -21,8 +22,9 @@ export async function POST(
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { povId: string; phaseId: string; taskId?: string } }
+  props: { params: Promise<{ povId: string; phaseId: string; taskId?: string }> }
 ) {
+  const params = await props.params;
   try {
     // Get the taskId from the URL if it exists
     const url = new URL(req.url);

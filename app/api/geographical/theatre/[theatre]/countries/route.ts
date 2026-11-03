@@ -5,10 +5,8 @@ import { ApiError } from '@/lib/errors';
 import { TheatreParamSchema } from '@/lib/validation/geographical-validation';
 import { logger } from '@/lib/logger';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { theatre: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ theatre: string }> }) {
+  const params = await props.params;
   try {
     // Verify authentication
     const user = await getAuthUser(request);

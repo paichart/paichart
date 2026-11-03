@@ -4,6 +4,10 @@
 #
 #   scripts/ship.sh            # interactive: asks before pushing
 #   YES=1 scripts/ship.sh      # no prompt (the in-flight refusal still applies)
+#   GATES=1 scripts/ship.sh    # a push that DEPLOYS first runs the full gates on a clean copy of HEAD, then the public export
+#                              # dry-run (export + its chain) from a clean worktree — each judged on ITS OWN exit status — and
+#                              # refuses if either fails or HEAD moved meanwhile. Docs-only pushes skip both. (2026-11-03: a
+#                              # hand-chained version once pushed past failed gates because it read `tail`'s exit status.)
 #
 # Rules it encodes (CLAUDE.md / memory):
 #   - a push to main auto-deploys when code or scripts change, and the deploy restart orphans running pipeline executions ⇒
@@ -26,9 +30,26 @@ echo "── commits to push ($(echo "$OUT" | wc -l)):"; echo "$OUT" | sed 's/^/
 FILES="$(git diff --name-only origin/main..HEAD)"
 echo "── files: $(echo "$FILES" | wc -l)"
 DEPLOYS=0
-if echo "$FILES" | grep -qvE '^(cline_docs/|\.claude/|CLAUDE\.md$|README|.*\.md$)'; then DEPLOYS=1; fi
+# Mirrors production-deploy.yml paths-ignore: .github/**, *.md, docs/**, cline_docs/**, .claude/**, .gitignore
+if echo "$FILES" | grep -qvE '^(cline_docs/|\.claude/|\.github/|docs/|\.gitignore$|.*\.md$)'; then DEPLOYS=1; fi
 [ "$DEPLOYS" = "1" ] && echo "   ⚠️  includes code/scripts — this push DEPLOYS" || echo "   docs only — expected not to deploy"
 echo "$FILES" | grep -vE '^(cline_docs/|\.claude/)' | sed 's/^/   /' | head -20
+
+if [ "${GATES:-0}" = "1" ] && [ "$DEPLOYS" = "1" ]; then
+  H="$(git rev-parse HEAD)"; LOGD="$(mktemp -d)"
+  echo "── GATES=1: full gates on a clean copy of $(git rev-parse --short HEAD) (log $LOGD/gates.log) …"
+  if ! scripts/run-gates-clean.sh "$H" > "$LOGD/gates.log" 2>&1; then
+    tail -15 "$LOGD/gates.log" | sed 's/^/   /'; echo "── gates FAILED — refusing to push"; exit 5
+  fi
+  echo "   ✅ gates passed"
+  echo "── GATES=1: public export dry-run from a clean worktree (log $LOGD/export.log) …"
+  WT="$LOGD/export-wt"; git worktree add -q --detach "$WT" "$H" && ln -s "$ROOT/node_modules" "$WT/node_modules"
+  ( cd "$WT" && scripts/export/publish.sh --dry-run ) > "$LOGD/export.log" 2>&1; ERC=$?
+  git worktree remove --force "$WT" >/dev/null 2>&1
+  if [ "$ERC" -ne 0 ]; then tail -15 "$LOGD/export.log" | sed 's/^/   /'; echo "── export dry-run FAILED — refusing to push"; exit 5; fi
+  echo "   ✅ export dry-run passed"
+  [ "$(git rev-parse HEAD)" = "$H" ] || { echo "── HEAD moved while the gates ran — refusing (re-run on the new HEAD)"; exit 5; }
+fi
 
 INFLIGHT="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "$PROD" 'cd /var/www/paichart-app/current && source .env.production && psql "$DATABASE_URL" -tA -c "SELECT count(*) FROM agent_executions WHERE status IN ('"'"'RUNNING'"'"','"'"'PENDING'"'"','"'"'QUEUED'"'"');"' 2>/dev/null | tr -d '[:space:]')"
 case "$INFLIGHT" in

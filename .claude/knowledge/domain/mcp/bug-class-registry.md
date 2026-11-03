@@ -1771,7 +1771,7 @@ Webpack's server chunk bundler does not correctly handle native ES class field i
 
 ```bash
 # Check if any packages with class hierarchies are missing from externals
-grep -rn 'serverComponentsExternalPackages' next.config.js
+grep -rn 'serverExternalPackages' next.config.js server.ts   # Next 15 (2026-11-03): was experimental.serverComponentsExternalPackages
 
 # Check production logs for the telltale error
 ssh <PROD_USER>@<PROD_HOST> "pm2 logs paichart-web --lines 200 --nostream 2>&1 | grep 'Must call super constructor'"
@@ -2142,7 +2142,7 @@ grep -rn 'new RegExp.*\${' --include='*.ts' lib/ | grep -v safeRegex | grep -v I
 # Expected: 0 results — use replaceAll or safeRegex instead
 
 # Bug Class 25: Packages with class hierarchies not externalized from webpack SSR
-grep 'serverComponentsExternalPackages' next.config.js
+grep 'serverExternalPackages' next.config.js   # Next 15 (2026-11-03): was experimental.serverComponentsExternalPackages
 # If a new package causes "Must call super constructor" in production, add it to this array
 
 # Bug Class 26: Dashboard/analytics endpoints without role-based scoping

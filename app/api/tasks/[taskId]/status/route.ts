@@ -11,10 +11,8 @@ import { taskLogger } from '@/lib/logger';
 import { DependencyNotSatisfiedError, PipelineInvariantError, InvalidTransitionError } from '@/lib/errors';
 
 // PATCH /api/tasks/[taskId]/status - Update task status
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { taskId: string } }
-) {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ taskId: string }> }) {
+  const params = await props.params;
   try {
     // ✅ 1. Authentication
     const user = await getAuthUser(req);

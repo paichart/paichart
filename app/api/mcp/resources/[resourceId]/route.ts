@@ -19,10 +19,8 @@ import { mcpLogger } from '@/lib/logger';
  * Uses MCPResourceManager (TS) which has colon-prefixed keys (execution:{id}, artifact:{id}).
  * The resource's metadata.povId and metadata.povContext are used for POV validation.
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { resourceId: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ resourceId: string }> }) {
+  const params = await props.params;
   try {
     // 1. Authentication check
     const user = await getAuthUser(request);

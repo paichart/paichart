@@ -1,8 +1,10 @@
 "use client";
+import { use } from "react";
 
 import { PhaseTemplateSelector } from '@/components/pov/phases/PhaseTemplateSelector';
 
-export default function PhaseTemplatesPage({ params }: { params: { povId: string } }) {
+export default function PhaseTemplatesPage(props: { params: Promise<{ povId: string }> }) {
+  const params = use(props.params);
   return (
     <div className="container mx-auto py-6">
       <h1 className="text-3xl font-bold mb-6">Select a Phase Template</h1>

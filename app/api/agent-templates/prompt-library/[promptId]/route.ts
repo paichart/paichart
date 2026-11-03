@@ -9,10 +9,8 @@ import { getPromptRegistryEventEmitter } from '@/lib/events/prompt-registry-even
 import { PromptLibraryUpdateSchema } from '@/lib/validation/agent-template-validation';
 import { logger } from '@/lib/logger';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { promptId: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ promptId: string }> }) {
+  const params = await props.params;
   try {
     // SECURITY FIX: Add authentication
     const user = await getAuthUser(request);
@@ -54,10 +52,8 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { promptId: string } }
-) {
+export async function PUT(request: NextRequest, props: { params: Promise<{ promptId: string }> }) {
+  const params = await props.params;
   try {
     const user = await getAuthUser(request);
     if (!user) {
@@ -196,10 +192,8 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { promptId: string } }
-) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ promptId: string }> }) {
+  const params = await props.params;
   // Rate limiting
   const rateLimitResponse = await promptDeletionLimiter(request);
   if (rateLimitResponse) {
