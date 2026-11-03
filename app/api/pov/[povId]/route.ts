@@ -60,6 +60,16 @@ export const PUT = withPOVAccess(async (req, { params, user, pov }) => {
     // Handler returns Response, wrap in NextResponse for type safety
     return result as unknown as NextResponse
   } catch (error) {
+    // TEAM-RULE-500 (2026-11-04): the team service throws `FORBIDDEN:<reason>` for a member whose role cannot be on a team.
+    // Map it to 403 with the reason, as the team-members batch route does — not a generic 500 the editor cannot explain.
+    const errMsg = error instanceof Error ? error.message : '';
+    if (errMsg.startsWith('FORBIDDEN:')) {
+      povLogger.warn({ userId: user.userId, povId: params.povId }, 'POV PUT refused: team rule');
+      return NextResponse.json(
+        { success: false, error: { message: errMsg.slice('FORBIDDEN:'.length), code: 'FORBIDDEN' } },
+        { status: 403 }
+      );
+    }
     povLogger.error({ err: error }, 'POV PUT error')
     const errorResponse = handleApiError(error)
     return errorResponse as unknown as NextResponse

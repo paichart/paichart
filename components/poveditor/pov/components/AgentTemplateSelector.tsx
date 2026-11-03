@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/Dialog';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/Command';
-import { ScrollArea } from '@/components/ui/ScrollArea';
 import { Badge } from '@/components/ui/Badge';
 import { Loader2, Search, Tag, Clock, Sparkles, Zap, Shield } from 'lucide-react';
 import { AgentTemplateService, AgentTemplate } from '@/lib/pov/api/agent-templates-adapter';
@@ -155,8 +154,9 @@ export const AgentTemplateSelector: React.FC<AgentTemplateSelectorProps> = ({ on
                 </Button>
               </div>
             ) : (
-              <CommandList>
-                <ScrollArea className="h-[300px]">
+              <CommandList className="max-h-[300px]">
+                {/* AGENT-PICKER-NO-SCROLL (2026-11-04): this CommandList is the ONE scroller (max-h + overflow-y-auto); a nested
+                    Radix ScrollArea inside it swallowed the wheel and the list could not scroll. */}
                   {filteredTemplates.length === 0 ? (
                     <CommandEmpty>No templates found.</CommandEmpty>
                   ) : (
@@ -235,7 +235,6 @@ export const AgentTemplateSelector: React.FC<AgentTemplateSelectorProps> = ({ on
                       ))}
                     </CommandGroup>
                   )}
-                </ScrollArea>
               </CommandList>
             )}
           </Command>

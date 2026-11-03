@@ -10,6 +10,7 @@ enableMapSet();
 import { POVStatus, TaskStatus, PhaseType, StageStatus, TaskType, Priority, TaskPriority } from '@prisma/client';
 import { depIds, dependsOn, checkForDependencyCycles } from './utils/taskDependencies';
 import type { Task, TaskDependency } from './types/EntityTypes';
+import { toast } from '@/lib/hooks/useToast';
 
 // Define the normalized state structure
 export interface EditorState {
@@ -511,8 +512,10 @@ async function savePovData(povId: string | undefined, data: any) {
   });
   
   if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.message || 'Failed to save POV data');
+    // TEAM-RULE-500 (2026-11-04): the API sends `{ error: { message } }` (or `{ error: '<text>' }`); read every shape.
+    const errorData = await response.json().catch(() => ({}));
+    const message = errorData?.error?.message || (typeof errorData?.error === 'string' ? errorData.error : '') || errorData?.message;
+    throw new Error(message || `Failed to save POV data (HTTP ${response.status})`);
   }
   
   return response.json();
@@ -1026,7 +1029,8 @@ export function PovEditorProvider({ children, povId }: PovEditorProviderProps) {
         queryClient.setQueryData(['pov', povId], context.previousData);
       }
       
-      // Error saving POV - toast notification would be shown here
+      // TEAM-RULE-500 (2026-11-04): say WHY the save failed — it used to fail silently.
+      toast({ title: 'Could not save the POV', description: error instanceof Error ? error.message : String(error), variant: 'destructive' });
       dispatch({ type: 'SET_SUBMITTING', isSubmitting: false });
     },
     onSuccess: (responseData) => {
