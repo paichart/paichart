@@ -1,0 +1,17 @@
+{
+  "name": "held-network-window-p1-vlg",
+  "description": "A two-leg network program: a value leg derives one free telemetry-exporter address per switch from the exporter pool; a change leg configures a new loopback on each switch with those addresses.",
+  "fabric": {
+    "devices": ["ceos1", "ceos2"],
+    "exporterPool": "10.99.0.0/24"
+  },
+  "configRepo": {
+    "_whyThisIsHere": "The switches' configuration files in Git, named in the Device sources blocks (Pipeline 1: ceos1 and ceos2; Pipeline 2: ceos1).",
+    "owner": "paichart",
+    "repo": "paichart-lab-configs",
+    "paths": ["network/base/ceos1-startup.cfg", "network/base/ceos2-startup.cfg"]
+  },
+  "readOnlyServices": {
+    "deviceDescriptorUrl": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json"
+  }
+}
