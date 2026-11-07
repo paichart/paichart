@@ -18,6 +18,7 @@ import { findProgramParentForStage } from './program-protocol';
 import type { NetContext, Fact } from './net-registry';
 import { owningLegMemo, type OwningLegResolution } from './held-bytes/variant';
 import { legDeviceSourcesMemo, type LegDeviceSourcesResolution } from './device-sources-read';
+import { computeDeviceSourceReads } from './device-source-facts';
 
 /** Mirrors the per-net cap; see `pagination-safety-cap-pattern` and the SEARCH-vs-AGGREGATE note. */
 const STAGE_CHILD_SCAN_CAP = 50;
@@ -43,6 +44,8 @@ export interface BuildNetContextInput {
   held?: { editApplication?: Fact | null; heldBytes?: Fact | null; /** the handles whose BASE the package holds (V-8a; EF-P2-3) */ baseHeldHandles?: readonly string[] | null };
   /** held-network step 3 batch 2b: the core's one read of the leg's declared Device sources; absent ⇒ resolved lazily, once. */
   deviceSources?: LegDeviceSourcesResolution | null;
+  /** Config-sources network push 1a: the persisting execution's own `protocolInjection` (result.json shape); absent ⇒ undefined. */
+  protocolInjection?: unknown;
 }
 
 export function buildNetContext(input: BuildNetContextInput): NetContext {
@@ -52,6 +55,8 @@ export function buildNetContext(input: BuildNetContextInput): NetContext {
   let childrenPromise: Promise<Array<{ id: string; title: string; agentRole: string | null }>> | null = null;
   let applicabilityPromise: Promise<Record<string, unknown> | null> | null = null;
   const owningLeg = owningLegMemo(input.prisma as never, input.task as never, input.owningLeg ?? null);
+  const deviceSources = legDeviceSourcesMemo(input.prisma as never, owningLeg, input.deviceSources ?? null);
+  let readRecordPromise: Promise<Fact> | null = null;
 
   return {
     prisma: input.prisma,
@@ -64,7 +69,10 @@ export function buildNetContext(input: BuildNetContextInput): NetContext {
     executionId: input.executionId ?? null,
     toolCalls: input.toolCalls ?? [],
     owningLeg,
-    deviceSources: legDeviceSourcesMemo(input.prisma as never, owningLeg, input.deviceSources ?? null),
+    deviceSources,
+    // Config-sources network push 1a: ONE read record per persist, shared by `deviceSourceReads` and `liveEvidence`.
+    deviceSourceReadRecord: () => (readRecordPromise ??= deviceSources().then((src) => computeDeviceSourceReads(src, input.toolCalls ?? []))),
+    ...(input.protocolInjection !== undefined ? { protocolInjection: input.protocolInjection } : {}),
     ...(input.held ? { held: input.held } : {}),
 
     children() {

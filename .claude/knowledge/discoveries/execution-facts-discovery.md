@@ -71,7 +71,7 @@ grep -c "computeRollbackContainmentFact\|hoistRollbackContainment" lib/agents/ha
 ### B. The whitelist and the E3b nesting law
 
 ```bash
-grep -c "RESULT_JSON_SUMMARY_KEYS" lib/services/execution-artifacts.ts   # expect 3 — the definition plus its uses. This is a STRICT whitelist: an unlisted key is dropped with no error, so a new top-level sibling of a fact is silently stripped and reads ABSENT at the gate
+grep -c "RESULT_JSON_SUMMARY_KEYS" lib/services/execution-artifacts.ts   # expect 4 — re-measured 2026-11-08: +1 is the owner-decision-6 COMMENT (`935416553`, Config-sources push 1a, :660 "NOT on RESULT_JSON_SUMMARY_KEYS"), not a new use. Before that 3 — the definition plus its uses. This is a STRICT whitelist: an unlisted key is dropped with no error, so a new top-level sibling of a fact is silently stripped and reads ABSENT at the gate
 grep -c "test('E3b" scripts/test-execution-artifacts-parity.ts   # expect 3+ — re-measured 2026-09-11 (+E3b-2 rollbackDisposition inside rollbackContainment, +E3b-3 contractApplicability inside BOTH dialectLint and contractPropagation). The nesting pins: a disposition survives the pick because it rides NESTED inside its fact; a top-level SIBLING is stripped. Each is mutation-verified in BOTH directions (nested survives / promoted is dropped), and each new fact carrying a sub-object needs its own — the trap does not generalise for free
 grep -rln "pickResultJsonSummary" lib/ scripts/ | wc -l   # expect >=16 — a FLOOR since 2026-10-13 (healthy work adds callers; 16th = scripts/test-requirements-form-correction.ts). Re-measured 2026-10-07 (+lib/agents/harness/package-form-check.ts, the form-check fact; +scripts/test-reflection-history-binding.ts, the OPUS55 reflectionErrors pin). Before that 13 — re-measured 2026-10-02 (was 12): +test-value-leg-containment.ts (value-chain B4/B5: E3b-5 pins legShape + orphanCheck survive NESTED and a promoted sibling is stripped). 2026-09-26 (was 11): +test-verdict-freshness.ts (RWF C3: W1 pins that supersession and verdictFreshness survive the pick). 2026-09-25 (was 10): +test-truncation-incident-replay.ts, which hoists the REAL incident artifacts through the real pick before rendering the card (register E1). Prior 2026-09-16 (was 9): +test-lean-card-facts.ts, which now BUILDS its boundary fixtures through the real pick instead of hand-rolling exec objects (CC1/CC2/EC1/EC2) — a hand-made exec is exactly what let the chainedContext render pass green for six days while the whitelist stripped it. Prior 2026-09-12 (was 7): +net-registry.ts and +net-context.ts, both E3b notes rather than new consumers. Any new consumer must be added deliberately; the hoist is where a nesting mistake becomes invisible
 ```
@@ -663,7 +663,7 @@ grep -c "needs-node-c" lib/agents/harness/derivation-containment.ts             
 # all carry it. Two live defects on 2026-08-03 were exactly this seam (violations unrendered on the
 # checked:false branch; unsupported rendered as a count with identities stripped).
 # — the VT-11 refusal / run-2/3 silent-drop fail-safe. Conflating the two made a first fix INERT.
-grep "## Harvested Allocations" scripts/seed-protocol-prompts.ts | grep -vc "Prior:"   # expect 19 — re-measured 2026-10-18 (+1 from kubernetes-gitops 1.17.0, held-k8s step 2: the Repo read section places each repo-file quote "before ## Harvested Allocations" — a PLACEMENT mention, not a new contract site). Before that 18 — re-measured 2026-10-07 (+1 from terraform-iac 1.12.0 `de4f1f82`, TF-SOURCE-READ harvester, 2026-10-05). Before that 17 — re-measured 2026-10-02 (was documented 13, actually 15 before value-chain B1): +2 UNRECORDED from the 2026-10-01 Program Run 8 fix — the network-provisioning and terraform-iac dependency-wiring "Chain:" lines that route the harvest block to the Author verbatim; +2 READ-mentions from the value-chain B6 fold — the Node C paragraph (a ✗ for it on a value leg is expected) and network-derivation's "name the selecting attribute" instruction (the block does not carry it). Earlier: 13 CONTRACT SITES — PROPERTY grep, replacing the mention count 2026-09-17 (was 17 mentions, drifting on changelog edits). Rose 11 -> 13 with kubernetes-gitops v1.8.0: the domain could not be an UPSTREAM producer before it, because derivation-containment anchors on the HARVESTER and this protocol asked it for no block.
+grep "## Harvested Allocations" scripts/seed-protocol-prompts.ts | grep -vc "Prior:"   # expect 21 — re-measured 2026-11-08: +1 network-provisioning 1.26.0 (`0b89ccd1f` text, the `live-read` Device sources bullet) and +1 network-provisioning 1.27.0 (`2095d3dae`, network text batch 1, the "Git file and device read." paragraph) — both PLACEMENT/READ mentions, not new contract sites. Before that 19 — re-measured 2026-10-18 (+1 from kubernetes-gitops 1.17.0, held-k8s step 2: the Repo read section places each repo-file quote "before ## Harvested Allocations" — a PLACEMENT mention, not a new contract site). Before that 18 — re-measured 2026-10-07 (+1 from terraform-iac 1.12.0 `de4f1f82`, TF-SOURCE-READ harvester, 2026-10-05). Before that 17 — re-measured 2026-10-02 (was documented 13, actually 15 before value-chain B1): +2 UNRECORDED from the 2026-10-01 Program Run 8 fix — the network-provisioning and terraform-iac dependency-wiring "Chain:" lines that route the harvest block to the Author verbatim; +2 READ-mentions from the value-chain B6 fold — the Node C paragraph (a ✗ for it on a value leg is expected) and network-derivation's "name the selecting attribute" instruction (the block does not carry it). Earlier: 13 CONTRACT SITES — PROPERTY grep, replacing the mention count 2026-09-17 (was 17 mentions, drifting on changelog edits). Rose 11 -> 13 with kubernetes-gitops v1.8.0: the domain could not be an UPSTREAM producer before it, because derivation-containment anchors on the HARVESTER and this protocol asked it for no block.
 grep -c "isHeadingShapedAt(text, starts" lib/agents/harness/derivation-containment.ts   # expect 1 — X28 (2026-09-28, PROPERTY grep): parseFencedJsonBlock walks back from the last marker match to the last one whose block PARSES, but stops at a HEADING-shaped match that does not (fail-closed: a broken corrected re-statement stays null, never the stale earlier block). If this hits 0 either the walk-back is gone (Run 4 FABRIC false-ABSENT is back: `Derived Values members set = {…}` in a validation fence displaced the real block) or the stop is gone (an unbounded walk-back — rejected: it substitutes an earlier block). Corpus-measured on 826 result.json texts x 3 markers: 4 changed stamps, all null to array, 3 fixed / 1 neutral / 0 regressed; the "heading-shaped only" alternative regressed 19. Public mirror: needs @paichart/containment-checks 0.6.1
 grep -c "markerSectionEnd(text, lastIdx)" lib/agents/harness/derivation-containment.ts   # expect 1 — PARSE-STEAL (2026-10-04, PROPERTY grep): a marker owns only the block in ITS OWN SECTION — up to the next ATX heading of equal-or-higher level, or the next heading-shaped line of ANY of the three markers, outside fences; an in-fence (FW-A3.4) marker stays unbounded. If this hits 0 the parser takes the first fence ANYWHERE after the marker again: an empty `## Derived Values` heading claims the Consumed block and check 1 is skipped (fails OPEN — value-chain B7 run 1). Corpus 1,056 texts × 3: 10 changed, all array→null. Report: cline_docs/reviews/value-chain-post-window-2026-10-04/B-PARSE-STEAL-REPORT.md
 grep -cF '\\([a-z]\\d{0,2}\\)' lib/agents/harness/derivation-containment.ts   # expect 1 — MARKER-LETTERED-HEADING (2026-10-08, PROPERTY grep): HEADING_PREFIX_SRC accepts a PARENTHESISED lettered ordinal (`(f)`, `(e2)`, `(G)`) beside the numeric one. If this hits 0, an Opus Author's `## (e2) Derived Values` reads ABSENT again (lab L7 N-R s02 refusal). Deliberately NOT accepted: bare `P1 `/`e2 `, dotted `7.2 `, free text (live non-markers: reviewers quoting legs, technical_writer sections). Corpus 1,187 texts x 3: 3,561/3,561 parses byte-identical (2 newly-matching prod lines are wrappers above a canonical heading, same block). Coverage of a FACT widened, not a verdict (Protocol 10). Public mirror NOT synced (was already diverged)
@@ -673,7 +673,7 @@ grep -c "member-not-covered" scripts/test-derivation-containment.ts         # ex
 ## containmentDisposition delivery (added 2026-08-04; moved here 2026-09-11)
 
 ```bash
-grep -c "RESULT_JSON_SUMMARY_KEYS" lib/services/execution-artifacts.ts   # expect 3 — const + its use + the header comment
+grep -c "RESULT_JSON_SUMMARY_KEYS" lib/services/execution-artifacts.ts   # expect 4 — re-measured 2026-11-08: +1 the owner-decision-6 comment (`935416553`, :660). Before that 3 — const + its use + the header comment
 grep -c "fact.containmentDisposition = " lib/agents/harness/derivation-containment-enrichment.ts  # expect 1 — (property: the ASSIGNMENT count; a mention-count drifted to 4 with H-2's transcription of each hop's disposition, 2026-09-09) — the nested assign
 ```
 `containmentDisposition` is **not** on the whitelist and must not be added: it rides NESTED on the fact,
@@ -966,7 +966,7 @@ execution-terminal-persist from the SOURCE Author's stamp on the artifact the ex
 grep -c "name: 'applyBlockPlaceholder'" lib/agents/harness/mechanical-nets.ts   # expect 1
 grep -c "RESULT_JSON_SUMMARY_KEYS = \[.*'applyBlockPlaceholder'" lib/services/execution-artifacts.ts   # expect 0 — NOT on the summary whitelist (owner (a)), so not on the lean card or the summary; a hit means the summary/card now carries it. ⚠️ It is NOT invisible to agents: it is in the raw result.json a verbose agent.results returns (review B1, 2026-10-13)
 grep -c "RESULT_JSON_OPERATOR_TAIL_KEYS = \['applyBlockPlaceholder'," lib/services/execution-artifacts.ts   # expect 1 — first operator tail key (Stage B P1-4 added 'toolCallGatewayMeta' after it); persisted AFTER toolCalls, past the 8 KB tool-result head (B1 mitigation); G5/G6 in the suite pin the order
-grep -c "summaryExcludedReason" lib/agents/harness/mechanical-nets.ts   # expect 4 — re-measured 2026-10-26 (push 2): +deviceSourceReads +gitDeviceComparison (batch 2b, both operator tail). 2026-10-23: +validationToolCalls (operator tail, not whitelisted). Before that 1 — applyBlockPlaceholder
+grep -c "summaryExcludedReason" lib/agents/harness/mechanical-nets.ts   # expect 6 — re-measured 2026-11-08: +2 liveEvidence (`935416553`, Config-sources push 1a, owner decision 6 — leaf + leg entries, operator tail, off the summary). Before that 4 — re-measured 2026-10-26 (push 2): +deviceSourceReads +gitDeviceComparison (batch 2b, both operator tail). 2026-10-23: +validationToolCalls (operator tail, not whitelisted). Before that 1 — applyBlockPlaceholder
 grep -c "sourceApplyBlockPlaceholder = sourceJson.applyBlockPlaceholder" lib/services/execution-terminal-persist.ts   # expect 1 — the render reads the stamp off the artifact the extraction parsed, no new query
 grep -c "{APPLY_PLACEHOLDER_WARNING_ID} — " lib/services/report-warnings-section.ts   # expect 1 — the platform line is `- placeholder-in-apply-block — …`, never the reviewer label literal (prompt-construction F2; R2 in the suite pins the rendered text)
 npm run test:apply-block-placeholder   # expect >=43
@@ -1139,12 +1139,12 @@ configmap lists). The R10 replay now compares differing JSON text leaves by stru
 
 Record: `cline_docs/reviews/held-network-2026-10-22/STEP3-BATCH2B-BUILD.md`.
 ```bash
-grep -c "^export function" lib/agents/harness/device-sources.ts                         # expect 10 — re-measured 2026-10-26 (push 2): +buildDeviceSourcesSnapshot +readDeviceSourcesSnapshot +sameDeclaration (O-2). Was 7 — the ONE strict Device sources grammar (line, lines, block, contract value, leg resolution, URL test, contract key); a contract value's ONE leading heading line is dropped (prod: the Architect copies it)
+grep -c "^export function" lib/agents/harness/device-sources.ts                         # expect 14 — re-measured 2026-11-04 (Config-sources push 1a Phase A, bf15fbaf9: +__setLiveReadKindForLab +liveReadKindEnabled +assertNeverKind +grammarVersionOfEntries — the live-read kind gate, its lab lever and the kind-exhaustiveness default). Was 10 — re-measured 2026-10-26 (push 2): +buildDeviceSourcesSnapshot +readDeviceSourcesSnapshot +sameDeclaration (O-2). Was 7 — the ONE strict Device sources grammar (line, lines, block, contract value, leg resolution, URL test, contract key); a contract value's ONE leading heading line is dropped (prod: the Architect copies it)
 grep -c "export const DEVICE_READ_DESCRIPTORS" lib/agents/harness/held-bytes/descriptors.ts   # expect 1 — the DECLARATION-keyed device lane (never in PLATFORM_DEFAULT_DESCRIPTORS: none of its pins move)
 grep -c "function extractDeviceRead" lib/agents/harness/held-bytes/extract.ts            # expect 1 — declared device of a declared service only; no config output ⇒ notAConfigRead (no row)
 grep -c "readLegDeviceSources(" lib/services/execution-core.ts                            # expect 1 — ONE leg read per network leaf, handed to capture AND primed into the nets' ctx.deviceSources
 grep -c "name: 'deviceSourceReads'\|name: 'gitDeviceComparison'" lib/agents/harness/mechanical-nets.ts   # expect 2 — APPENDED, NOT_STAMPED off a network leg (not-device-source-leg)
-grep -c "deviceSourceReads', 'gitDeviceComparison'\] as const" lib/services/execution-artifacts.ts   # expect 1 — the OPERATOR TAIL, never the summary whitelist
+grep -c "deviceSourceReads', 'gitDeviceComparison', 'liveEvidence'\] as const" lib/services/execution-artifacts.ts   # expect 1 — the OPERATOR TAIL (re-measured 2026-11-04: +liveEvidence appended, Config-sources push 1a — which is ALSO on the summary whitelist, deliberately; the two device facts are not)
 grep -c "GIT_DEVICE_COMPARISON_READERS" lib/agents/harness/context-chainer.ts            # expect 3 — the comparison reaches the Architect and the leg Reviewer ONLY (the Author also chains the Harvester)
 grep -c "CREATE TEMP VIEW _devsrcleg" scripts/report-mechanism-inventory.sh               # expect 1 — MI-13 DEVICE-READ lane block; pinned equal to DEVICE_SOURCE_PROTOCOLS by test-device-read-capture C16
 ```
@@ -1289,3 +1289,56 @@ Replay v10 → v11 (read-only, prod): result.json 1,865 · report.md 708 · held
 echo measure (3,624 raw role outputs): byte-identical v10 vs v11. ⚠️ A stored result.json is POST-persist, so a placeholder already
 stored garbled is never un-garbled by a replay: count garbled rows with the FINDINGS query, not with the replay.
 
+## 2026-11-04 — Config-sources PUSH 0: the read record matches refs normalised (no version bump; series cut with 0 measured movers)
+`deviceSourceReads` (v1) / `gitDeviceComparison` (v2) compare a Git read's ref with the line's ref after folding absent ⇒ `main` and `refs/heads/<x>` ⇒ `<x>`
+(execution-facts design-review B1; sec-ops PUSH0 S-2). Pinned by `test:git-device-comparison` F-P0 (mutation-checked). Nets replay over 393 tasks:
+byte-identical. Decision S-6 (series cut instead of a version bump) is this domain's to confirm.
+```bash
+grep -c "normalisedRef(args.ref) === normalisedRef(e.ref)" lib/agents/harness/device-source-facts.ts   # expect 1
+grep -c "r.startsWith('refs/heads/') ? r.slice('refs/heads/'.length) : r" lib/agents/harness/device-source-facts.ts   # expect 1
+```
+
+## 2026-11-04 — Config-sources network push 1a, fact half: `liveEvidence` (built on `cs-net-1a-facts`, not pushed; every expectation run before it was written)
+For each declared device: live configuration read whole, a live read declared but not read whole, a Git file only, or no read applies
+(`command-package`). Counts first, plus capped name lists. It is computed through the ctx memo's ONE read record, shared with
+`deviceSourceReads`. VERSION-KEYED: NOT_STAMPED unless the persisting execution's own `protocolInjection.delta` is network-provisioning
+≥ 1.26.0, so every stored leg replays byte-identical. The Author transcribes the Harvester's stamp, the leg hoists it through
+`selectLegChildStamp`, and §6 renders it to `LIVE_EVIDENCE_READERS`. There is NO card segment (owner G4-b). It is never a gate and
+never a `containmentDisposition` reason. Record: `cline_docs/reviews/config-sources-design-2026-11-04/PUSH1A-FACTS-BUILD.md`.
+```bash
+grep -c "^    name: 'liveEvidence'" lib/agents/harness/mechanical-nets.ts   # expect 2 — leaf-persist + leg-synthesize, the LAST two entries (LE8)
+grep -c "liveEvidence" lib/services/execution-artifacts.ts   # expect 7 — OPERATOR_TAIL_KEYS + the E3b note + (VALUE-LEG-GIT G2-d, 2026-11-06) the NARROW value-card hoist `RESULT_JSON_SUMMARY_NARROW_KEYS` and its guard/comments; still NOT on SUMMARY_KEYS (owner decision 6) — re-measured 2026-11-07, was 2
+grep -c "LIVE_EVIDENCE_READERS" lib/agents/harness/context-chainer.ts   # expect 4 — the set, its doc, the leaf-only role-scoped carry
+grep -c "liveEvidence" lib/mcp/server/tools/advanced/lean-card-facts.js   # expect 3 — the VALUE card only (VALUE-LEG-GIT G2-d, 2026-11-06: `liveEvidence: <word> (declared devices)` beside `value:`); change-leg cards still carry none (G4-b DEFER stands for them, flips with the Node C batch) — re-measured 2026-11-07, was 0
+grep -c "'1.26.0'" lib/agents/harness/live-evidence.ts   # expect 1 — LIVE_EVIDENCE_MIN_VERSIONS; MI-13 carries the same pair (LE14)
+grep -c "LIVE_EVIDENCE_SCOPE_CLAUSE" lib/agents/harness/live-evidence-render.ts   # expect 2 — F-fold 2026-11-05: the const + the checked line; the summary word is OF THE DECLARED DEVICES on every word (LE10b)
+grep -c "CONTRACT_NOT_DECLARED_LABEL" lib/agents/harness/live-evidence-render.ts   # expect 2 — contract-devices fold 2026-11-05 (owner option 1): the const + the one §6 sub-line; data-only names, no scope word (LE16)
+grep -c "no-device-list" lib/agents/harness/live-evidence.ts   # expect 3 — the four stored deviceSources shapes: no list, a prose note (nothing parses) and the doc table (LE18)
+```
+
+## 2026-11-07 — `derived-value-held`: a value leg's free address that a device already holds (VALUE-FREE-ADDRESS-BLIND platform half, owner G10-c; every expectation run before it was written)
+A free address lists ITSELF as its member, so the shared checker's member exemption let a harvested `/32` equal to it through and the
+leg read `benign checked-clean` (lab L-VLG F-2). Now, on a VALUE leg only, a cidr derived value in the self-member shape that equals or
+contains a harvested allocation the exemption let through stamps `derived-value-held` (derived, harvested, and the harvest entry's
+device / interface / source) into the SAME `violations` array ⇒ `blocking (violations)` — no taxonomy change, no card or §6 change (both
+already read `blocking (violations)`). Appended after the shared checker in `value-leg-containment-enrichment.ts`; the publicly mirrored
+`derivation-containment.ts` is untouched (its private `cidrRange` is copied verbatim, VFH5 pins the copy). INERT BY CONSTRUCTION: a stamp
+without a collision gets no new field. Corpus 2026-11-07 (snapshot `20261106t195504z-4f52f2f609`): nets replay 3,302 tasks, 0 changed; 20
+stored value-leg Architects, 5 in the free shape (10 entries), 0 hits. ⚠️ NEVER extend it to change legs as is: the same shape on 2
+RELEASED kubernetes-gitops Authors is a host list of held pod addresses (10.244.0.5/32, .6/32) — the self-member shape is not "free" there.
+```bash
+grep -c "derivedValueHeldViolations" lib/agents/harness/value-leg-containment-enrichment.ts   # expect 2 — the definition + the one call after checkDerivationContainment
+grep -c "^function cidrRange(" lib/agents/harness/value-leg-containment-enrichment.ts   # expect 1 — the verbatim copy (VFH5 compares it to derivation-containment.ts)
+grep -c "derived-value-held" lib/agents/harness/derivation-containment.ts lib/agents/harness/derivation-containment-enrichment.ts   # expect 0 and 0 — value legs only; the mirrored module is untouched
+```
+
+## 2026-11-07 — the change lane's `git-only` word, released with network-provisioning 1.27.0 (network text batch 1; every expectation run before it was written)
+`liveEvidenceOptionsFor` (now exported) gives the CHANGE lane `gitOnlyWord: gitOnlyWordApplies(<the Harvester's own protocolInjection>)`
+— true only at network-provisioning ≥ 1.27.0 (`GIT_ONLY_WORD_MIN_VERSIONS`), whose Reviewer sentence names the card word. The value lane
+stays unconditional. Only the Harvester point computes the word; the Author transcribes and the leg hoists its stamp. Inert at push:
+nets replay 3,302 tasks, 0 changed (snapshot `20261106t195504z-4f52f2f609`). ⚠️ The lab's `live-evidence-patch.ts` mirrors these
+options by hand — it must take the delta too (or import the exported function).
+```bash
+grep -c "'1.27.0'" lib/agents/harness/live-evidence.ts   # expect 1 — GIT_ONLY_WORD_MIN_VERSIONS (LE19c pins the exact map)
+grep -c "gitOnlyWordApplies" lib/agents/harness/live-evidence-enrichment.ts   # expect 2 — the import + the change-lane option
+```

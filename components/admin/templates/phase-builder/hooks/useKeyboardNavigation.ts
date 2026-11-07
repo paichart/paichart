@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react';
 import { TaskNodeData } from '../components/graph/types';
 
 interface UseKeyboardNavigationProps {
-  containerRef: React.RefObject<HTMLDivElement>;
+  containerRef: React.RefObject<HTMLDivElement | null>;
   nodes: TaskNodeData[];
   selectedTaskId: string | null;
   showMinimap: boolean;

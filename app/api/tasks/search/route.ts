@@ -5,7 +5,7 @@ import { searchAndFilterTasks, quickTaskSearch, getSearchSuggestions } from '@/l
 import { TaskPriority, TaskStatus } from '@/lib/tasks/types';
 import { TaskSearchQuerySchema } from '@/lib/validation/task-validation';
 import { taskLogger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 type ApiHandler<T = any> = (
   req: NextRequest,
@@ -202,6 +202,7 @@ const postTaskSearchHandler: ApiHandler = async (
     };
 
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     taskLogger.error({ err: error }, 'advanced task search failed');
     return {
       error: {

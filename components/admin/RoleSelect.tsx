@@ -47,7 +47,7 @@ export default function RoleSelect({
   error,
   mode,
   initialRole,
-}: RoleSelectProps): JSX.Element {
+}: RoleSelectProps): React.JSX.Element {
   const [localError, setLocalError] = React.useState<string | undefined>(error);
 
   const handleChange = (newRole: string) => {

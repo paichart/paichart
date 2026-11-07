@@ -8,7 +8,7 @@ import { promptDeletionLimiter } from '@/lib/middleware/rate-limit';
 import { getPromptRegistryEventEmitter } from '@/lib/events/prompt-registry-events';
 import { PromptLibraryUpdateSchema } from '@/lib/validation/agent-template-validation';
 import { logger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 export async function GET(request: NextRequest, props: { params: Promise<{ promptId: string }> }) {
   const params = await props.params;
@@ -181,6 +181,7 @@ export async function PUT(request: NextRequest, props: { params: Promise<{ promp
     });
 
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     logger.error({ err: error }, 'failed to update prompt');
     return NextResponse.json(
       {

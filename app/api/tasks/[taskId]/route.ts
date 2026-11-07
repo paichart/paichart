@@ -16,7 +16,7 @@ import {
   TaskActivityAction,
 } from '@/lib/tasks/services/taskActivityService';
 import type { ActivityMetadata } from '@/lib/types/activity';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 type ApiHandler<T = any> = (
   req: NextRequest,
@@ -287,6 +287,7 @@ const updateTaskHandler: ApiHandler = async (
       return { data: task };
     }
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     taskLogger.error({ err: error }, 'PUT /api/tasks/[taskId] failed');
 
     // 2.14 (completion-path P2): typed guard errors are structured 4xx FACTS, never a 500

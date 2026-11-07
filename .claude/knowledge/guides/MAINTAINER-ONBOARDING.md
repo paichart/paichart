@@ -13,7 +13,7 @@ read or how a fact is computed has to prove it broke nothing before it ships. Ev
 | # | Rule | Why | What enforces it |
 |---|---|---|---|
 | 1 | **Facts only tighten.** A computed fact may turn an approval into a refusal, never the reverse. Confidence is never a pass mark. | A reviewer deciding alone released 2 wrong legs to block 1 (2026-08-29). | Pattern #71 `patterns/facts-only-tighten-pattern.md`; code structure (overrides only write the stricter value); the verdict-mismatch guard tests |
-| 2 | **Lab before an agent-text or model change.** Pre-register the rule, score both directions, and replay the golden set. | A text that passed its own tests failed a reviewer in the lab (2026-10-28). | Protocol 16 (`protocols/pre-registered-lab-gate-protocol.md`); the lab's spend gate refuses a run with no `goldenSet` declared |
+| 2 | **Lab before an agent-text or model change.** Pre-register the rule, score both directions, and replay the golden set plus the standing-bench cases it reaches. | A text that passed its own tests failed a reviewer in the lab (2026-10-28). | Protocol 16 (`protocols/pre-registered-lab-gate-protocol.md`); the lab's spend gate refuses a run with no `goldenSet` declared |
 | 3 | **Replay before a fact change.** Old code against new over every stored run; zero unexplained changes. | Quote-check v6 had green tests and would have moved 2 correct outcomes (2026-10-31). | `scripts/replay-nets-byte-identity.sh --snapshot` (read-only snapshot); a person reads every mover |
 | 4 | **Canary after an agent-text deploy.** Re-run the latest released program; it must release again before the next text change. | Regression is the main risk once things work. | `npm run report:canary-plan` (prints the launch, filled in) → launch through MCP → `npm run report:canary` (the verdict); `pipelines/LIVE-WINDOW-CHECKLIST.md` § canary |
 | 5 | **Gates in a clean copy before a push.** | The checkout is shared; a gate can pass on someone else's edit. | `scripts/run-gates-clean.sh` |
@@ -22,6 +22,7 @@ read or how a fact is computed has to prove it broke nothing before it ships. Ev
 | 8 | **Templates are reseeded by hand after a role-guidance change.** The deploy seeds protocols only. | A correct fix can sit unused while agents run old text. | `npm run report:template-freshness` names stale roles; run the owning seed script |
 | 9 | **Commit by pathspec in the shared checkout:** `git commit -- <paths>`, and check the hunks of shared files. Never `git stash` or `git reset`. | Other sessions have uncommitted work in the same tree. | Habit plus the pre-commit hooks; `domain/harness/pipeline-harness-library.md` § shared-worktree hygiene |
 | 10 | **The register is the source of truth.** "Filed" means written in it; a closed item moves to the archive in the same commit. Customer claims follow the MVP statement §3, changed only by the owner. | Status copied into several places drifts. | `.claude/KNOWLEDGE-BASE-GUIDELINES.md`; `cline_docs/reviews/mvp-statement-2026-11-01/MVP-STATEMENT.md` |
+| 11 | **Candidate agent text lives on a local-only branch until its lab passes, and nothing is committed on `main` while a `ship.sh` run is in flight.** | `ship.sh` pushes whatever `main` points to; an unmeasured candidate reached origin once and a fix landed on `main` mid-ship (2026-11-06, LL-CS-39/40). | Habit; `ship.sh` gates the HEAD it pushes, not later commits |
 
 **Standing rules that are not about code:**
 - No AI co-author trailers on commits.
@@ -45,7 +46,7 @@ scripts/series-cut-draft.sh <push time>    # only if the push changed what agent
 |---|---|
 | Docs, alerts, test tooling | the battery |
 | How a stored fact is computed | the replay (rule 3) |
-| Agent-facing text, or a model change | a lab plus the golden set (rule 2), then the canary (rule 4) |
+| Agent-facing text, or a model change | a lab plus the golden set and the standing-bench cases it reaches (rule 2), then the canary (rule 4) |
 | Text that only the program root reads (a lab cannot replay it) | a pre-registered live control on the canary |
 
 ## Where things live

@@ -42,7 +42,7 @@ export default function CustomRoleSelect({
   jobTitles,
   onRoleCreated,
   onDialogOpenChange
-}: CustomRoleSelectProps): JSX.Element {
+}: CustomRoleSelectProps): React.JSX.Element {
   const [openDialog, setOpenDialog] = React.useState(false);
   const [newRoleName, setNewRoleName] = React.useState('');
   const [localError, setLocalError] = React.useState<string | undefined>(error);

@@ -33,7 +33,7 @@ has this shape is a candidate. The seam test is the gate; this catalog is the wo
 > source, and Authors edit it by reference. **Observability config: held — yes** (collector config and proxy/listener files, via the
 > descriptor's file tools; Prometheus/Grafana are API renderings, not held). **Kubernetes (GitOps): held — yes since 2026-10-19**
 > (kubernetes-gitops 1.18.0): the held file is the CONFIG-REPO file, read through the Git file source (`github-service`, one pinned
-> repository, default branch); a live API object is never held. **Terraform: held — yes since 2026-10-21** (terraform-iac 1.15.0): the held file is a repo `.tf` file, read through the same Git
+> repository, `main` branch); a live API object is never held. **Terraform: held — yes since 2026-10-21** (terraform-iac 1.15.0): the held file is a repo `.tf` file, read through the same Git
 > file source; Terraform STATE is never held (the call gate and capture refuse state, plan and variables paths). **Network: held — yes since 2026-10-27**
 > (network-provisioning 1.25.0): each device declares its source (`## Device sources` — `git-file` · `device-read` · `command-package`);
 > the held base is the declared Git file, else the device's running config read whole; a device that declares a Git file holds only the

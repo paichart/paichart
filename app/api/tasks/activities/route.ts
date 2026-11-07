@@ -7,7 +7,7 @@ import { TaskActivityActionSchema } from '@/lib/validation/activity-validation';
 import { getPOVFromTask } from '@/lib/utils/pov-helpers';
 import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import { taskLogger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 // 2026-05-14 P1: schema closes two gaps simultaneously —
 // (a) action is now a strict enum (was unbounded string),
@@ -168,6 +168,7 @@ const postTaskActivityHandler: ApiHandler = async (
     };
 
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     taskLogger.error({ err: error }, 'failed to create task activity');
     return {
       error: {

@@ -82,6 +82,87 @@ function valueLegShape(protocol: string | null, harvestExecutionId: string | nul
   };
 }
 
+/**
+ * `derived-value-held` (VALUE-FREE-ADDRESS-BLIND, lab L-VLG F-2; owner decision G10-c 2026-11-07) — a FACT, not a verdict.
+ *
+ * THE BLIND SPOT. The shared checker's only harvest-side class is covered-not-member: a harvested allocation inside a
+ * derived range that is NOT a declared member. A free address lists ITSELF as its member (`{"value": "10.99.0.3/32",
+ * "members": ["10.99.0.3/32"]}`), so a harvested 10.99.0.3/32 is exempted as "a member" and the leg reads benign
+ * checked-clean while deriving an address a device already holds.
+ *
+ * THE RULE. For a cidr derived value that lists ITSELF among its members (the self-member shape — an aggregate's members
+ * are the harvested allocations it covers, never the aggregate), every harvested cidr allocation inside its range
+ * (equal to it, or contained in it) that the member exemption let through is a violation. A harvested allocation inside
+ * it that is NOT a member is already covered-not-member — never stamped twice. Named WHAT, no adjective: the derived
+ * value, the harvested allocation, and the harvest entry's device / interface / source when the entry carries them.
+ *
+ * NOT PROVENANCE (2026-09-20 ruling): this asks only whether the derived range overlaps a harvested allocation of the
+ * same kind — containment — never where the value came from. Value legs only (the change leg is measured, not built:
+ * see the build record). The disposition is the shared one: any violation ⇒ `blocking (violations)`.
+ */
+export interface DerivedValueHeldViolation {
+  reason: 'derived-value-held';
+  derived: string;
+  harvested: string;
+  harvestedDevice?: string;
+  harvestedInterface?: string;
+  harvestedSource?: string;
+}
+
+export function derivedValueHeldViolations(
+  harvested: HarvestedAllocation[],
+  derived: DerivedValue[],
+): DerivedValueHeldViolation[] {
+  const out: DerivedValueHeldViolation[] = [];
+  for (const d of derived) {
+    if ((d.kind ?? 'cidr') !== 'cidr' || typeof d.value !== 'string') continue;
+    const dRange = cidrRange(d.value);
+    if (!dRange) continue;
+    const members = Array.isArray(d.members) ? d.members.filter((m): m is string => typeof m === 'string') : [];
+    if (!members.some((m) => sameCidrRange(m, d.value as string))) continue;   // not the self-member shape
+    for (const h of harvested) {
+      if ((h.kind ?? 'cidr') !== 'cidr' || typeof h.cidr !== 'string' || !h.cidr) continue;
+      const hRange = cidrRange(h.cidr);
+      if (!hRange || hRange.lo < dRange.lo || hRange.hi > dRange.hi) continue;
+      if (!members.some((m) => sameCidrRange(m, h.cidr as string))) continue;   // covered-not-member already names it
+      out.push({
+        reason: 'derived-value-held',
+        derived: d.value,
+        harvested: h.cidr,
+        ...(typeof h.device === 'string' && h.device ? { harvestedDevice: h.device } : {}),
+        ...(typeof h.interface === 'string' && h.interface ? { harvestedInterface: h.interface } : {}),
+        ...(typeof h.source === 'string' && h.source ? { harvestedSource: h.source } : {}),
+      });
+    }
+  }
+  return out;
+}
+
+// A VERBATIM copy of derivation-containment.ts's private cidrRange: that module is publicly mirrored
+// (@paichart/containment-checks), so exporting from it is a two-repo edit. Pinned by test:value-leg-containment
+// (the two function texts must be identical) so the copy cannot fork.
+/** Parse an IPv4 CIDR (or bare address = /32) into a numeric range. Null on malformed input. */
+function cidrRange(cidr: string): { lo: number; hi: number } | null {
+  const m = String(cidr).trim().match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?:\/(\d{1,2}))?$/);
+  if (!m) return null;
+  const octets = [m[1], m[2], m[3], m[4]].map(Number);
+  if (octets.some(o => o > 255)) return null;
+  const len = m[5] === undefined ? 32 : Number(m[5]);
+  if (len > 32) return null;
+  // >>> 0 keeps unsigned arithmetic
+  const addr = (((octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3]) >>> 0);
+  const mask = len === 0 ? 0 : ((0xffffffff << (32 - len)) >>> 0);
+  const lo = (addr & mask) >>> 0;
+  const hi = (lo | (~mask >>> 0)) >>> 0;
+  return { lo, hi };
+}
+
+function sameCidrRange(a: string, b: string): boolean {
+  const ra = cidrRange(a);
+  const rb = cidrRange(b);
+  return !!ra && !!rb && ra.lo === rb.lo && ra.hi === rb.hi;
+}
+
 /** Disposition computed LAST, on the assembled fact (the G4 ordering rule). */
 function finish(fact: Record<string, unknown>): Record<string, unknown> {
   fact.containmentDisposition = computeContainmentDisposition(fact);
@@ -152,6 +233,10 @@ export async function computeValueLegContainmentFact(
       derivedSource: taskId, ...shape });
   }
   const contained = checkDerivationContainment(harvested, derived);
+  // VALUE-FREE-ADDRESS-BLIND (owner G10-c, 2026-11-07): appended AFTER the shared checker, so every stamp without a
+  // collision is byte-identical by construction (no new field on a clean fact) — inert-by-construction, not version-keyed.
+  const held = derivedValueHeldViolations(harvested, derived);
+  if (held.length) contained.violations = [...(contained.violations ?? []), ...(held as unknown as NonNullable<typeof contained.violations>)];
   return finish({ ...contained, harvestSource: harvestChild.id, derivedSource: taskId, ...shape });
 }
 

@@ -5,7 +5,7 @@ import { mapTaskFromPrisma } from '@/lib/tasks/prisma/mappers';
 import { withPOVAccess } from '@/lib/auth/validate-pov-access';
 import { checkDependencyCycle, GraphLimits } from '@/lib/utils/graph';
 import { povLogger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 /**
  * GET /api/pov/[povId]/phase/[phaseId]/task/[taskId]/dependencies
@@ -159,6 +159,7 @@ export const PUT = withPOVAccess(async (
       message: 'Dependencies updated successfully'
     });
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     povLogger.error({ err: error }, 'task dependencies PUT error');
     return NextResponse.json(
       { error: 'Failed to update task dependencies' },
@@ -274,6 +275,7 @@ export const POST = withPOVAccess(async (
       message: 'Dependency added successfully'
     });
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     povLogger.error({ err: error }, 'task dependencies POST error');
 
     // Check for unique constraint violation

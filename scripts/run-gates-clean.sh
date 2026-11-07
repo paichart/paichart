@@ -31,6 +31,9 @@ trap cleanup EXIT
 
 git -C "$ROOT" worktree add -q --detach "$TREE" "$SHA" || { echo "could not create the clean copy"; exit 2; }
 ln -s "$ROOT/node_modules" "$TREE/node_modules"
+# The leg-replay lab cache is gitignored: without it the golden set falls through to the read-only PRODUCTION snapshot channel
+# (LL-CS-17, LL-CS-28). Link the main checkout's cache so a gate run never reads production.
+[ -d "$ROOT/scripts/leg-replay-lab/cache" ] && ln -s "$ROOT/scripts/leg-replay-lab/cache" "$TREE/scripts/leg-replay-lab/cache"
 [ -f "$ROOT/.env" ] && cp "$ROOT/.env" "$TREE/.env"   # local test settings (the battery's local-DB suites read it)
 echo "gates for $SHA ($(git -C "$ROOT" log -1 --format=%s "$SHA" | cut -c1-80))"
 

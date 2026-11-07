@@ -1,7 +1,8 @@
 /**
  * held-network step 3 batch 2b — the IMPURE half of `deviceSourceReads` and `gitDeviceComparison` (device-source-facts.ts).
  *
- * Population: a leaf whose owning leg declares Device sources (variant.ts DEVICE_SOURCE_PROTOCOLS — network-provisioning). Every
+ * Population: a leaf whose owning leg declares Device sources (variant.ts DEVICE_SOURCE_PROTOCOLS — network-provisioning, and a
+ * network-derivation VALUE leg that declared a block, VALUE-LEG-GIT 2026-11-06 — facts only, never held). Every
  * other leaf gets NOT_STAMPED (a population answer), so every other domain's result.json is byte-identical. The declaration is the
  * net context's memo — PRIMED with the same object capture used (execution-core), or read lazily once through the same reader.
  *
@@ -19,7 +20,7 @@ import { GIT_DEVICE_COMPARISON_METHOD, GIT_DEVICE_COMPARISON_VERSION } from './g
 
 const STAGE_CHILD_SCAN_CAP = 50;
 
-async function declarationFor(ctx: NetContext): Promise<LegDeviceSourcesResolution> {
+export async function declarationFor(ctx: NetContext): Promise<LegDeviceSourcesResolution> {
   if (ctx.deviceSources) return ctx.deviceSources();
   const leg = ctx.owningLeg ? await ctx.owningLeg() : await resolveOwningLegProtocol(ctx.prisma as never, ctx.task as never);
   return readLegDeviceSources(ctx.prisma as never, leg);
@@ -28,7 +29,8 @@ async function declarationFor(ctx: NetContext): Promise<LegDeviceSourcesResoluti
 export async function computeDeviceSourceReadsFact(ctx: NetContext): Promise<Record<string, unknown>> {
   const src = await declarationFor(ctx);
   if (src.state === 'not-device-source-leg') return NOT_STAMPED;
-  return computeDeviceSourceReads(src, ctx.toolCalls);
+  // Config-sources push 1a: the ctx memo's ONE read record (shared with `liveEvidence`) — the same function over the same inputs.
+  return ctx.deviceSourceReadRecord ? ctx.deviceSourceReadRecord() : computeDeviceSourceReads(src, ctx.toolCalls);
 }
 
 export async function computeGitDeviceComparisonHarvesterFact(ctx: NetContext): Promise<Record<string, unknown>> {

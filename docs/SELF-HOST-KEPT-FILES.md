@@ -32,9 +32,9 @@ are in [`services/github-service/README.md`](../services/github-service/README.m
   service from **one** repository only: `GIT_FILE_SOURCE_PIN=<owner>/<repo>` in the hub's `.env`. Only host configuration sets it —
   never a task, a spec or an agent (put it in `.env`, which both hub processes read — not `.env.production`). A call naming any other repo is refused (`PINNED_ARGUMENT`), and a file that does not come from
   the pin is never kept (`source-not-pinned`). A malformed value stops the hub's MCP server at startup on purpose.
-- **Always the `main` branch.** Pipelines read `main`, and a read that names no branch gets the repo's default branch, so the
-  repo's **default branch must be `main`**. Protect it (pull requests only, review, no force-push) and make working changes on other
-  branches. A commit or tag cannot be named.
+- **Always the `main` branch.** Pipelines read `main`, and a read that names no branch is read as `main` — never as whatever the
+  repo's default branch happens to be — so the repo **must have a `main` branch**. Protect it (pull requests only, review, no
+  force-push) and make working changes on other branches. A commit or tag cannot be named.
 - **What is recorded:** each file kept from Git carries the commit it was read at, so you can see exactly which version a package
   was built on.
 - **More than one repo** (a team's own config repo beside yours): register a separate read-only service whose held-file declaration

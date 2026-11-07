@@ -48,7 +48,13 @@ const ROLLBACK_FACT_LANES: ReadonlySet<string> = new Set(
  * Two PK lookups, and only ever reached when a rollback fact actually exists to carry.
  */
 /** held-network step 3 batch 2b (owner S3-C): the roles the Git-file vs device comparison is shown to. */
-export const GIT_DEVICE_COMPARISON_READERS: ReadonlySet<string> = new Set(['infra_change_architect', 'change_reviewer']);
+// VALUE-LEG-GIT (2026-11-06): + the value leg's Architect and Reviewer (both chain the Harvester directly). Inert by declaration: a
+// value-leg Harvester stamps these facts only when its leg declares Device sources (variant.ts isDeviceSourceLeg, G4-c).
+export const GIT_DEVICE_COMPARISON_READERS: ReadonlySet<string> = new Set(['infra_change_architect', 'change_reviewer', 'derivation_architect', 'derivation_reviewer']);
+/** Config-sources network push 1a (DESIGN v2 §1.4, EF-S4.3): the roles the live-evidence fact is shown to — the Architect and the
+ *  Author (both chain the Harvester entry) and the leg Reviewer (chains the Author's TRANSCRIPTION). The Author also stamps the
+ *  transcription; its own §6 holds only the Harvester entry, and the renderer prints one Harvester's fact once per §6. */
+export const LIVE_EVIDENCE_READERS: ReadonlySet<string> = new Set(['infra_change_architect', 'config_change_author', 'change_reviewer', 'derivation_architect', 'derivation_reviewer']);
 
 /** The consuming task's agentRole (one PK read; null on a miss or an error — the comparison is then simply not carried). */
 async function consumerRoleOf(db: ChainerClient, taskId: string): Promise<string | null> {
@@ -156,6 +162,12 @@ export interface ChainedContext {
      * stamp is checked, so every other entry is byte-identical. Rendered in §6; a warning fact, never a gate input.
      */
     gitDeviceComparison?: Record<string, unknown>;
+    /**
+     * Config-sources network push 1a: the network Harvester's live-evidence fact (or the Author's transcription of it). Carried ONLY
+     * from a LEAF dependency that stamped it (≥ 1.26.0 network legs — NOT_STAMPED everywhere else) and ONLY to a consumer whose role
+     * is in LIVE_EVIDENCE_READERS, so every other entry and every other chain is byte-identical. Rendered in §6; never a gate input.
+     */
+    liveEvidence?: Record<string, unknown>;
     finalResponse: string;
     executionId: string;
     // A1 truncation facts (Protocol-10 fact; pre-wires deferred D1 coverage signal)
@@ -662,6 +674,12 @@ export async function chainDependencyContext(
         && (stampedComparison as { checked?: unknown }).checked === true
         && GIT_DEVICE_COMPARISON_READERS.has((consumerRole ??= await consumerRoleOf(db, taskId)) ?? '')
         ? (stampedComparison as Record<string, unknown>) : null;
+      // Config-sources network push 1a: the live-evidence fact from a LEAF dependency (never a pipeline predecessor's hoist — another
+      // leg's evidence is not this leg's), to LIVE_EVIDENCE_READERS only; the role is read only when a stamp exists.
+      const stampedLive = (parsed as { liveEvidence?: unknown }).liveEvidence;
+      const liveEvidence = !isPipelinePredecessor && stampedLive && typeof stampedLive === 'object' && !Array.isArray(stampedLive)
+        && LIVE_EVIDENCE_READERS.has((consumerRole ??= await consumerRoleOf(db, taskId)) ?? '')
+        ? (stampedLive as Record<string, unknown>) : null;
       // PLATFORM-HELD-BYTES Stage B V-6: only a dependency carrying a variant stamp reaches any read here; {} otherwise.
       const heldFields = await heldEntryFields(db, {
         consumerTaskId: taskId, depExecutionId: latestExec.id, parsed: parsed as Record<string, unknown>,
@@ -707,6 +725,7 @@ export async function chainDependencyContext(
         ...((parsed as { validationToolCalls?: unknown }).validationToolCalls && typeof (parsed as { validationToolCalls?: unknown }).validationToolCalls === 'object'
           ? { validationToolCalls: (parsed as { validationToolCalls: Record<string, unknown> }).validationToolCalls } : {}),
         ...(gitDeviceComparison ? { gitDeviceComparison } : {}),
+        ...(liveEvidence ? { liveEvidence } : {}),
         finalResponse,
         executionId: latestExec.id,
         truncated,

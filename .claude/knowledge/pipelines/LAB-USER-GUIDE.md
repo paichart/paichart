@@ -38,7 +38,7 @@ $0, over every stored leg (`scripts/replay-nets-byte-identity.sh`). One batch of
 **The golden set rides every agent-text or model lab (2026-10-31).** Besides the lab's own cells, 15 frozen real legs (v2; released
 programs, passed windows, correct refusals and forced outcomes, all four domains plus one network value leg) must reproduce their stored outcome under every arm
 that reaches them. One flip is do-not-ship unless the pre-registration names that case as the target. A paid run is refused until the
-experiment declares `goldenSet`. Commands: `golden-build`, then `run` on `<lab>/golden-v2`, then `golden-score`
+experiment declares `goldenSet`. Commands: `golden-build`, then `run` on `<lab>/golden-v3` (v3 since 2026-11-06), then `golden-score`
 (`scripts/leg-replay-lab/golden-set.ts`). Typical extra cost: ≈ $0.35–1.50 batch for a one-domain change, ≈ $4.75 batch for a
 shared-key Author + Reviewer change (§8).
 
@@ -140,6 +140,59 @@ fixed, the spend, and what was carried to the live window.
 **Base vs candidate:** "no worse" gates compare the new text with production's stored behaviour on the same legs. A base that does
 worse is good news, never a gate.
 
+**Golden NEEDS-READ (2026-11-08).** `golden-score` can say NEEDS-READ when four things hold together:
+- a LIVE-Author cell;
+- of a case expected to approve;
+- whose Reviewer refuses;
+- where the refusal points at a line the stored package does not have.
+
+The live Author wrote a different package, so the stored approval cannot decide the cell. NEEDS-READ is **never a pass**. A hand read
+records one of three readings:
+1. the refusal is wrong (a flip: do-not-ship unless you override it beside the gate);
+2. the live package is defective (an Author regression);
+3. the refusal is right for that package.
+
+The worked case is NB1 L106: a correct `network` placement was refused, and a rig check proved it correct.
+
+## 6a. The standing bench: known-wrong outcomes every lab must overturn
+
+**What a standing case is.** A real leg whose STORED outcome was wrong, usually a release that should have been refused. Its CORRECT
+outcome is known by hand read, and for some cases by a check on the rig.
+
+**Why it is not a golden case.** A golden case must REPRODUCE its stored outcome: `golden-self-test` recomputes the stored outcome,
+and the lab checks that the new text still gives it. A standing case must OVERTURN its stored outcome, so it cannot sit in the golden
+set. It lives in `scripts/leg-replay-lab/golden/standing-bench.json`.
+
+**When a lab must carry one.** A lab carries a case whenever one of its arms changes something the case's reader reads:
+- protocol edits on the case's protocol;
+- template edits on the reader's role;
+- a non-production Reviewer model or effort.
+
+That arm must run the case as a node, with the case's do-not-ship gate. A paid run without it is refused before any call (the spend
+lock). `golden-build` carries every reached case into the golden companion as `STAND-<case>`, and `golden-score` reads each one by its
+gate.
+
+**How to add one** (all $0, in one commit):
+1. The case's inputs: the stored leg's cached snapshot, plus any plant or input edit, committed under `golden/standing/<case>/` and
+   sha-pinned in the registry entry.
+2. The registry entry: reader, Author and Reviewer executions, provenance, the stored (wrong) outcome, the correct outcome, the clauses
+   it tests, and the record. Bump the bench version.
+3. A self-test: `standing-self-test` must reproduce the stored wrong outcome under the shipping parser. That proves the frozen record,
+   never the correct answer, which only a lab sample can show.
+4. A lock proof: a reaching lab without the node is refused; with it and the exact gate, it passes.
+5. The golden-build carry: a test that a reaching lab's companion now carries `STAND-<case>`.
+
+**An override sits beside the gate, never in it.** When a case cannot be fixed in the text under test, the owner may override it for
+one ship decision, with a written reason (G13 for NET-FWA3-EDGE). The gate still reads as written in every run.
+
+**The cases today:**
+
+| Case | Reader | Stored (wrong) | Correct | Why it exists |
+|---|---|---|---|---|
+| NET-FWA3-EDGE | change Reviewer, network | approved 92 | refuse: the derived NAT pool collides with ceos2, which the leg never read | a measured false release (self-host run, 2026-11-01). Not fixable in Reviewer text, so it is read beside the owner's G13 override |
+| VLG-I3-GIT-ONLY | derived-value Reviewer, network-derivation | approved, no warning | approve WITH a `git-file-only` warning naming ceos1 and ceos2 | a value resting on Git files only must say so. A planted case (the stored leg recast by committed inputs) |
+| NET-APPLY-WHOLE-FILE (2026-11-08) | change Reviewer, network | approved 90 | refuse: the package loads ceos1's drifted Git file whole | canary B's released package. Its Git file differs from the device, so a whole-file load would not land. NB1 measured the catch at 4/5 then 5/5 |
+
 ## 7. What the lab has caught, and how each was fixed
 
 Each row: what happened, how it was found, the fix, the record. **Defects in the text under test:**
@@ -155,7 +208,11 @@ Each row: what happened, how it was found, the fix, the record. **Defects in the
 | 7 | L-T1 (L19–L23) | the Harvester still TRIED the named tag 15/15 over two texts, because the brief ordered it | G-T-REFUSED | owner-accepted (the pin is the control); the fix moved upstream to the harness, never copy a ref into a brief |
 | 8 | L-T1 design | the Architect clause read literally switched off HALT for an out-of-scope difference (T-F2) | the design read, $0 | fixed before spend: "still classified by scope … out of scope ⇒ HALT" |
 | 8a | L-OA (L55–L75) | a sanctioned literal `403` for the refused side was approved on the package's word by the Reviewer: Revision 2 2/4 refused, Revision 3 4/5, with the remap directive in plain view in the diff | R4 bench cell, DO NOT SHIP | owner dropped the literal (Revision 4: comparison only); Revision 4 passed every gate, 64/65, 0 false releases |
+| **L-CS-N (L76–L88)** | **82** | **$15.73** | Config sources, network 1.26.0: three crib stops on one open case ($5.17), owner override of that gate, then every other gate passed (cap $25; one-pass estimate $10.7) |
 | 8b | L-OA design | a lab premise ("the Reviewer sees only the edited lines") was false: the held diff renders the whole file up to 200 lines. It cost one text revision | a $0 dry-run placement check (R4b before 1 / after 1) | rule: read the renderer before designing on what an agent sees |
+| 8c | L-CS-N (L76–L88) | a Reviewer approved a derived value colliding with a device the leg never declared, because the package said the check "belongs to Node C"; five Reviewer-side levers (rule text, a backstop sentence, fact wording, a contract-devices line, a neutral brief) did not move it, while a DECLARED, unread device was blocked 5/5 | the standing-bench stop line (R-FWA3), three crib stops | not fixable in Reviewer text: owner override of the gate (1.25.0 approves the same shape, no regression), shipped on the other gates; the fix moves upstream (UNDECLARED-SCOPE-DEVICE-UPSTREAM) |
+
+| 8d | NB1 (L95–L107) | four text defects on one network batch, in turn: the Harvester read a Git-only device live (fixed by scoping the sentence to "that device"); the Harvester restated device-only values beside the Git file, 6/6 across two wordings (NC1 re-registered: a true, safe-direction restatement is a counted warning); the git-file-only label was folded mid-line, so the platform dropped it (the label now starts its own line); the change Reviewer approved a package for a device whose source was refused (the base rate; the fix added the Reviewer's own blocking item) | crib stops S1/S7, the R-GIT standing gate, the golden JL3 masked flip, two measurement experiments (NB1-JL3, NB1-JP1) | SHIP on 1.27.0 `fb22f5bb` + 1.3.1 `68864acc`, with one golden over-block overridden beside the gate (OVR-NB1-JP1: a rig check showed the refused placement was correct) |
 
 **Defects in the platform found by a lab:**
 
@@ -182,6 +239,18 @@ Each row: what happened, how it was found, the fix, the record. **Defects in the
   twin.
 - **A scorer that couldn't see Git quotes** (L-T1): every Git-sourced quote read "not faithful". Fixed.
 - **A recorded test count trusted after a text change** (G3 HB8). Now the lab suite runs at the commit.
+- **A lab regex standing in for a shipping parser** (L-CS-N, three times in one lab: allocations in a fence-inverted block, "held" said of
+  another device, a heading repeated inside the Derived Values fence). Each raised a false alarm or a blank; each was caught by the hand
+  read. The scorer now calls the shipping parser.
+- **A plant that changed a device's source kind in some inputs but not all** (L-CS-N: a package citation and the contract's
+  `deviceSources`). Found by a blind second reader and by the real Reviewer. Re-cast every copy that names the kind.
+- **A gate overridden by rewriting it** (L-CS-N). The standing-bench lock refused the spend; the override now sits beside the gate.
+- **A gate defined against a fact that cannot see the claim** (NB1 (d), caught at $0). The first wording keyed NC1 on the
+  Git-vs-device fact, which counts device-only lines but never names them, so every true claim would have stayed a miss.
+- **Scorer thresholds** (NB1). `vlg-score` read a standing cell at 80% (now every sample), and it read an undeclared Git ref as a miss
+  (now accepted when the line declares no ref).
+- **A golden flip that was the live Author's different package** (NB1 L106). It is now NEEDS-READ, never auto-read as a text flip,
+  and never a pass (§6).
 
 ## 8. Cost — and why it fell
 
@@ -197,6 +266,7 @@ Each row: what happened, how it was found, the fix, the record. **Defects in the
 | **L-NB1 (L47–L49)** | **25** | **$5.21** | network text batch 1; crib clean, every gate passed (est. $7.46) |
 | L-NB2 (L50) | 11 | $1.77 | VOID by its own rule: the baseline did not reproduce the miss, so the candidate was never paid for |
 | **L-N2 (L51–L54)** | **42** | **$9.01** | the network held join; F-N2-1 caught at $0 first; every gate passed, 19/19 Author outcomes correct (est. $10.7–13.6) |
+| NB1 value-leg Git batch (L95–L107) | ≈ 270 over 13 runs | $46.43 | four text fixes, two owner re-registrations, two measurement experiments (JL3 $5.70, JP1 $3.20); owner raised the cap $35.44 → $53.44 |
 | L-OA (L55–L75) | 174 valid samples over 3 revisions | $34.05 recorded (≈ $34.6–35.3 with an estimate) | obs sender-restriction admission check: Revision 2 $11.49 and Revision 3 $9.19 stopped on the R4 DO-NOT-SHIP cell; **Revision 4 $13.37, PASS** (cap $20) |
 
 **The golden set's share of every text/model lab** (n = 1 per reached cell; ledger $/sample: Reviewer Sonnet 5 $0.054–0.118 batch,

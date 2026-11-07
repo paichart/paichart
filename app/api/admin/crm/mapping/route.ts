@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { trackActivity } from "@/lib/auth/audit";
 import { parsePaginationParams, paginationResponse } from '@/lib/utils/pagination';
 import { logger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 // ✅ Zod validation for CRM mapping (Week 2 Enhancement)
 const CreateCRMFieldMappingSchema = z.object({
@@ -116,6 +116,7 @@ export async function POST(request: NextRequest) {
 
     return Response.json(mapping);
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     logger.error({ err: error }, 'CRM Mapping POST error');
     return Response.json({ error: 'Failed to create CRM mapping' }, { status: 500 });
   }
@@ -186,6 +187,7 @@ export async function PUT(request: NextRequest) {
 
     return Response.json(mapping);
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     logger.error({ err: error }, 'CRM Mapping PUT error');
     return Response.json({ error: 'Failed to update CRM mapping' }, { status: 500 });
   }

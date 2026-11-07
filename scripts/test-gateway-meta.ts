@@ -109,7 +109,7 @@ check('builder: absent when no record carries meta (every other result.json byte
 check('builder: no toolCalls[i] carries gatewayMeta', !JSON.stringify(withMeta.toolCalls).includes('targetServiceId'));
 const keys = Object.keys(orderResultJsonForPersist(withMeta));
 check('persist order: toolCallGatewayMeta is the LAST key (operator tail, after toolCalls)', keys[keys.length - 1] === 'toolCallGatewayMeta' && keys.indexOf('toolCalls') < keys.indexOf('toolCallGatewayMeta'));
-check('RESULT_JSON_OPERATOR_TAIL_KEYS carries it after applyBlockPlaceholder (validationToolCalls appended after it, 2026-10-23; deviceSourceReads + gitDeviceComparison, 2026-10-26)', JSON.stringify(RESULT_JSON_OPERATOR_TAIL_KEYS) === JSON.stringify(['applyBlockPlaceholder', 'toolCallGatewayMeta', 'validationToolCalls', 'deviceSourceReads', 'gitDeviceComparison']));
+check('RESULT_JSON_OPERATOR_TAIL_KEYS carries it after applyBlockPlaceholder (validationToolCalls appended after it, 2026-10-23; deviceSourceReads + gitDeviceComparison, 2026-10-26; liveEvidence, 2026-11-04)', JSON.stringify(RESULT_JSON_OPERATOR_TAIL_KEYS) === JSON.stringify(['applyBlockPlaceholder', 'toolCallGatewayMeta', 'validationToolCalls', 'deviceSourceReads', 'gitDeviceComparison', 'liveEvidence']));
 check('collect: one entry per record with meta, in order', JSON.stringify(collectToolCallGatewayMeta([plain, rec, plain, rec]).map((e) => e.index)) === '[1,3]');
 
 // ── replay hydration ─────────────────────────────────────────────────────────────────────────────────────────────────

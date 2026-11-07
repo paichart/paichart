@@ -58,7 +58,8 @@ export const LEG_SECTION_REVIEWER_ROLE = 'change_reviewer';
  * `restated-conclusion` (batch 2, 2026-10-08) is defined once, in the shared role, so all four leg protocols carry it.
  */
 export const REGISTERED_WARNING_IDS: Readonly<Record<string, readonly string[]>> = {
-  'network-provisioning-protocol': ['reachability-after-suppression', 'restated-conclusion'],
+  // `git-file-only` (network-provisioning 1.26.0 R1 v2, Config sources): a derived value checked against a Git-only device, unstated.
+  'network-provisioning-protocol': ['git-file-only', 'reachability-after-suppression', 'restated-conclusion'],
   'terraform-iac-protocol': ['restated-conclusion'],
   'kubernetes-gitops-protocol': ['restated-conclusion'],
   'observability-config-protocol': ['restated-conclusion'],

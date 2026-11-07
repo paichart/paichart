@@ -3,7 +3,7 @@ import { logger } from '@/lib/logger';
 import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { updateUserSettings } from '../services/settings';
 import { UpdateUserSettingsSchema } from '@/lib/validation/settings-validation';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 const settingsPutLogger = logger.child({ module: 'SettingsPutHandler' });
 
@@ -50,6 +50,7 @@ export async function handlePutSettings(req: NextRequest) {
       throw error;
     }
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     settingsPutLogger.error({ err: error }, 'Failed to update settings');
     return NextResponse.json(
       { error: 'Failed to update settings' },

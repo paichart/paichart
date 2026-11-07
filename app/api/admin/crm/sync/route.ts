@@ -6,7 +6,7 @@ import { trackActivity } from "@/lib/auth/audit";
 import { adminCRMLimiter } from "@/lib/middleware/rate-limit";
 import { CRMSyncSchema } from "@/lib/validation/crm-validation";
 import { logger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 export const dynamic = 'force-dynamic';
 
@@ -148,6 +148,7 @@ export async function POST(request: NextRequest) {
       message: 'CRM sync initiated successfully'
     });
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     logger.error({ err: error }, 'CRM Sync error');
     return Response.json({ error: 'Failed to initiate CRM sync' }, { status: 500 });
   }

@@ -377,16 +377,18 @@ Record: `cline_docs/reviews/held-network-2026-10-22/LAB-PREREG-L-N2.md`.
 ## NO-REGRESSION golden set (2026-10-31, Protocol 16 § The standing no-regression rule; every expectation run before it was written)
 
 ```bash
-grep -c '"authorExecutionId"' scripts/leg-replay-lab/golden/golden-set.json   # expect 15 — golden v2 cases (4 network, 1 network value, 3 k8s, 4 terraform, 3 observability)
-grep -c '"shape": "value"' scripts/leg-replay-lab/golden/golden-set.json   # expect 1 — the value leg (NET-VALUE-C1, v2)
-grep -c '"version": "v2"' scripts/leg-replay-lab/golden/golden-set.json   # expect 2 — the set's version + its newest refreezes entry
+grep -c '"authorExecutionId"' scripts/leg-replay-lab/golden/golden-set.json   # expect 17 — golden v3 cases (5 network, 2 network value, 3 k8s, 4 terraform, 3 observability)
+grep -c '"shape": "value"' scripts/leg-replay-lab/golden/golden-set.json   # expect 2 — the value legs (NET-VALUE-C1 v2, NET-VALUE-C126 v3)
+grep -c '"version": "v4"' scripts/leg-replay-lab/golden/golden-set.json   # expect 2 — the set's version + its newest refreezes entry (v4 2026-11-06: pin move only, network-derivation 1.2.0 → 1.3.0)
+grep -c '"version": "1.3.0"' scripts/leg-replay-lab/golden/golden-set.json   # expect 1 — the network-derivation pin (deployed 2026-11-06 07:28Z, L-VLG SHIP)
+grep -c '"version": "1.26.0"' scripts/leg-replay-lab/golden/golden-set.json   # expect 1 — the network pin (v3; it was stale at 1.25.0 from the 2026-11-05 deploy until v3)
 grep -c "if (goldenSpendRefusal) throw" scripts/leg-replay-lab/lab.ts   # expect 1 — --spend on an agent-text/model lab without a goldenSet declaration is refused before any call
 grep -c "export function buildGoldenCompanion" scripts/leg-replay-lab/golden-set.ts   # expect 1 — the companion builder (golden-build)
 grep -c "npm run test:golden-set" package.json   # expect 0 — out of CI like the lab suite (needs the snapshot cache)
 ```
 
 ```bash
-npm run --silent test:golden-set   # expect >=26 — GS1–GS7 incl. the $0 end-to-end (v2: 27 cells under --fake-llm persisted reproduce every stored outcome); floor, never an exact count
+npm run --silent test:golden-set   # expect >=26 — GS1–GS7 incl. the $0 end-to-end (v3: 29 cells under --fake-llm persisted reproduce every stored outcome); floor, never an exact count
 npm run --silent lab:leg-replay -- golden-self-test   # expect 0 STALE — every case recomputes its stored outcome from the stored verdict + carrier stamp
 ```
 
@@ -397,9 +399,115 @@ npm run --silent lab:leg-replay -- golden-self-test   # expect 0 STALE — every
   `golden-score --run … --experiment <lab>/golden-v2`. Unreached cases cost $0 (today's production text).
 - **Read:** leg outcome = agent verdict AND the carrier (run-level reasons carried, package-level recomputed by the shipping
   `heldEditVerdict`). FLIPPED = DO-NOT-SHIP unless a target; a masked flip TOWARD approval = DO-NOT-SHIP; toward refusal = read.
+  NEEDS-READ (2026-11-08): a LIVE-Author refusal of an approve-expected case that points at a line the stored package lacks
+  (`refusalPointsAtLiveOnly`) is never a pass. The golden result is NEEDS-READ (or DO-NOT-SHIP beside a real flip) until a hand read
+  records FLIPPED / Author regression / legitimate refusal. A refusal at stored lines stays FLIPPED.
 - **Not replayable yet:** Node C (GOLDEN-NODE-C-CELL) — named in `notReplayable`. **Value legs since v2 (2026-10-31):** `shape: 'value'`
   (derivation_architect persisted + derivation_reviewer, `heldJoinSeedByProtocol` null, persisted Author only — GOLDEN-VALUE-LIVE);
   proved at $0 on CANARY 1's value leg (`fidelity` 9 exact / 2 not checkable on both prompts, `--fake-llm persisted` reproduces).
 - **Re-freeze (owner decision only):** hand-read each candidate leg → add the case + a `refreezes` entry (added, excluded-with-reason,
   pins moved) → `golden-pin` (read-only; only the new pins should move) → bump `version` → fixtures' `goldenSet.version` + test counts.
 - **Canary after every agent-text deploy:** `.claude/knowledge/pipelines/LIVE-WINDOW-CHECKLIST.md` § "After an agent-text deploy".
+- **v3 (2026-11-06, owner):** + NET-C126 (the 1.26.0 canary's held network leg, PERSISTED Author only — its live form duplicates NET-JP1)
+  and NET-VALUE-C126 (free-address value leg); network pin 1.25.0 → 1.26.0 from the S-1 candidate file (no `golden-pin`: proved by
+  `fidelity` 9/2 on both nodes, seed render at HEAD = `550fb2a0…`, template pins = the snapshot rows). **A text deploy leaves its golden
+  pin stale** (nothing re-pins; `golden-build` refuses a lab on the new text until a re-freeze). **Golden Reviewer cells are not yet
+  byte-production** (`frozen-cmp`, $0): held change cells send `rollbackContainment` `no-restore-blocks` where production showed
+  `restore-is-held-base` (no `persistedEditApplication`; with it NET-C126 is byte-identical) — register GOLDEN-REVIEWER-BYTE-FIDELITY (a),
+  still open. **(b) FIXED 2026-11-06:** an unplanted persisted value Architect carries its STORED `derivationContainment` (`persistedAuthorResult`,
+  lab.ts; the replay cannot recompute it — `$queryRaw` outside the stub), so NET-VALUE-C1 / C126 Reviewer prompts = the frozen production
+  rebuild (`frozen-cmp` ✅ both; every other cell's prompt byte-unchanged; mutation caught). Pinned in GS6 (`test:golden-set`).
+
+## L-CS-N (Config sources, network step; $0 levers built 2026-11-04 on branch `cs-net-lab`; every expectation run before it was written)
+
+```bash
+grep -c "export function kindGateCheck" scripts/leg-replay-lab/kind-gate.ts                         # expect 1 — per-arm live-read kind gate (S3/F15): open arm refuses a planted block that does not resolve parsed
+grep -c "liveReadKind?: 'open' | 'closed'" scripts/leg-replay-lab/lab.ts                           # expect 1 — the variant lever; run() groups samples by gate (module state)
+grep -c "export function runReadOnlySqlLocal" scripts/leg-replay-lab/snapshot.ts                     # expect 1 — self-host snapshot source (snapshot --source local-db:<lab_db> --dump <file>; provenance stamped)
+grep -c "export function selfHostProvenanceChecks" scripts/leg-replay-lab/self-host-provenance.ts   # expect 1 — provenance-check P0-P4 (install shas = lab pins, tiers, persisted verdict)
+grep -c '"id": "NET-FWA3-EDGE"' scripts/leg-replay-lab/golden/standing-bench.json                   # expect 1 — the standing bench (owner G4-c), not golden
+grep -c "if (standingSpendRefusal) throw" scripts/leg-replay-lab/lab.ts                              # expect 1 — a reaching lab without its standing node is refused at --spend
+grep -c "export function buildRigPool" scripts/leg-replay-lab/network-fixtures.ts                     # expect 1 — PRE-redaction pool, rig per entry, identity + reversal + witness (cs-fixtures)
+grep -c "N1_KIND_UNION_PIN" scripts/leg-replay-lab/score-n1.ts                                       # expect 1 — scorer kind union pinned to the shipping DeviceSourceKind
+grep -c "export function withComputedLiveEvidence" scripts/leg-replay-lab/live-evidence-patch.ts     # expect 1 — L-CS-a (not-built while lib/agents/harness/live-evidence.ts is absent; never stubbed)
+grep -c "persistedEditApplication?: boolean" scripts/leg-replay-lab/lab.ts                           # expect 1 — a persisted held Author's leaf nets read its stored editApplication (R-FWA3 Reviewer prompt byte = production)
+grep -c "LCS[1-6] (" scripts/test-leg-replay-lab.ts                                                  # expect 6 — LCS1-LCS6, each mutation-checked RED by hand
+```
+- **A persisted held Author on a held arm rebuilt the Reviewer prompt from leaf stamps the lab recomputed WITHOUT the stored
+  `editApplication`** — R-FWA3's prompt differed from production at line 199 (`rollbackContainment`). `persistedEditApplication` fixes it
+  (opt-in; earlier experiments unmoved). Prove any persisted bench prompt by `cmp` against the frozen rebuild before spend.
+- **The fact half's enrichment is version-keyed on `ctx.protocolInjection`; the lab's leaf nets pass none**, so on the merged 1a tree
+  every arm would read NOT_STAMPED for the Author transcription (probe 2026-11-04) — pass the arm's composed protocolInjection (O-2(a)).
+- Records: `cline_docs/reviews/config-sources-design-2026-11-04/LAB-PREREG-L-CS-N.md` (DRAFT; slots S-1 text, S-2 merged 1a tree).
+
+### L-CS-N build 2 (2026-11-05, branch `cs-net-lab-2`; every expectation run before it was written)
+
+```bash
+grep -c "export function armProtocolInjection" scripts/leg-replay-lab/lab.ts                         # expect 1 — the arm's composed delta reaches the leaf/leg nets (liveEvidence population rule)
+grep -c "protocolInjection?: unknown, opts: ReplayPrismaOptions = {}): Promise<NetRun>" scripts/leg-replay-lab/nets.ts   # expect 1 — runAuthorLeafNets takes it (+ `opts` legReads since VALUE-LEG-GIT d3c39d9e9)
+grep -c "export function splitMultiGetterEntries" scripts/leg-replay-lab/network-fixtures.ts           # expect 1 — O-4: single-getter entries derived from a stored multi-getter read
+grep -c "identity?: { to: string; from: string\[\] }" scripts/leg-replay-lab/network-fixtures.ts       # expect 1 — a second registration's id re-stamped (else capture: device-service-not-declared)
+grep -c "export const SCOPE_DEFINITION" scripts/leg-replay-lab/score-csn.ts                          # expect 1 — F3: quoted verbatim from the candidate (csn-self-test --experiment proves it)
+grep -c "cmd === 'frozen-cmp'" scripts/leg-replay-lab/lab.ts                                         # expect 1 — a base arm's Reviewer prompt = the frozen production rebuild
+grep -cF 'sameAs ${rep}' scripts/leg-replay-lab/golden-set.ts                                     # expect 1 — identical-lever arms build golden cells once
+grep -c "liveReadKind: (v as any).liveReadKind" scripts/leg-replay-lab/golden-set.ts                 # expect 1 — the companion carries the kind gate (+ composedVersion)
+```
+- **A golden companion must carry every lever that travels with the text** (the kind gate, the composed version) — the first build dropped
+  them and the candidate golden cells would have run without the fact; and a model lever equal to production is still a lever (54 cells).
+- **A persisted Author's leaf nets must read the snapshot that carries the computed Harvester stamp**, or its transcription reads
+  `harvester-not-stamped` (the golden `r` cells did).
+- **A pool assembled from two legs' records carries two registrations** — re-stamp to the replayed leg's, or the shipping capture refuses
+  the second device by identity, not by the rule under test (found by a $0 capture probe).
+- **Read the Reviewer's own brief before trusting a bench node**: R-FWA3's brief item 10 hands cross-switch collision to Node C — the
+  measured R-FWA3-NB cell separates "brief" from "text".
+
+## L-CS-N ADDENDUM (e) + Protocol 16 blind reads (2026-11-05; every expectation run before it was written)
+```bash
+grep -c "CONTRACT_TARGET = 'contract:interfaceContract'" scripts/leg-replay-lab/input-edits.ts       # expect 1 — an input edit can plant the stored interface contract (every copy, LCS11)
+grep -c "await test('LCS11" scripts/test-leg-replay-lab.ts                                          # expect 1
+grep -c -- "--mode must be fixture or contradiction" scripts/leg-replay-lab/second-read/prepare-second-read.sh   # expect 1 — blind-read prep, both modes
+grep -c "Optional blind reads of composed prompts" .claude/knowledge/protocols/pre-registered-lab-gate-protocol.md   # expect 1
+```
+- **A consistent plant must re-check every citation the stored text makes against the NEW held bytes.** The Git-only plants kept a V2
+  "copied exactly from H1" line that was true only of the device running-config. A blind fixture read found it; the real Reviewer did not.
+- **Blind readers are stricter than the real Reviewer.** Use them for checkable findings (fixture defects, prompt contradictions), never as a
+  verdict pre-screen (7/14 agreement, decisive cell the wrong way). No skill (owner 2026-11-05): a session runs it from Protocol 16 § "Optional blind reads" alone.
+
+## L-VLG (VALUE-LEG-GIT, network-derivation 1.3.0; $0 build 2026-11-06; every expectation run before it was written)
+```bash
+grep -c "export interface ReplayPrismaOptions { legReads?: boolean }" scripts/leg-replay-lab/replay-prisma.ts   # expect 1 — opt-in leg-row reads (owning leg by stage, declaration columns, contract); default still throws
+grep -c "export function withFirstExecutionSnapshot\|export async function withValueHarvest\|export async function valueArchitectContainment" scripts/leg-replay-lab/value-lane.ts   # expect 3 — L-VLG-a/b/c
+grep -c "deviceSourcesSnapshot?: 'first-execution'" scripts/leg-replay-lab/lab.ts   # expect 1 — the node lever (+ valueHarvest)
+grep -c "export const PLANT3" scripts/leg-replay-lab/value-lane-fixtures.ts         # expect 1 — the I3 plant (ceos1 Loopback15 10.99.0.3/32, 4 sites, reversal-proved)
+grep -c "export const VLG_CELLS" scripts/leg-replay-lab/score-vlg.ts               # expect 1 — vlg-score / vlg-self-test (6 mutations, each RED)
+grep -c "export function textReachProblems\|export function armReachSpec" scripts/leg-replay-lab/text-reach.ts   # expect 2 — TEXT REACH (NB1 blind-read defect, 2026-11-07): every run refuses a prompt that composes an edited text without the arm's candidate (or still carries the released template op)
+grep -c "  await test('LVLG[1-9]\b\|  await test('LVLG1[01] " scripts/test-leg-replay-lab.ts   # expect 11 — LVLG9 text reach (refuses the defective NB1 dry run), LVLG10 change-lane git-only = production (44cf00704), LVLG11 a superseded render + a template-CONSTRAINT edit refused;
+grep -c "export function snapshotWithSeedConstraints" scripts/leg-replay-lab/variant-binding.ts   # expect 1 — NB1 (G15): the `constraintsSeed` arm lever (a template-constraint edit; architectOnly cells); text reach checks each changed row LVLG5 standing-lock role (addendum c), LVLG6 the I3 standing case, LVLG7 golden-build carries reached standing nodes (B12), LVLG8 lane-aware live-evidence patch (B9)
+grep -c "export function reviewerLeverKey\|export function reachingArmsWhy\|export function scoreStandingInRuns" scripts/leg-replay-lab/standing-bench.ts   # expect 3 — B12: same-Reviewer-lever coverage, the reach rule, golden-score reads carried STAND-* nodes (a miss = DO-NOT-SHIP)
+grep -c 'const id = `STAND-' scripts/leg-replay-lab/golden-set.ts            # expect 1 — golden-build carries every reached standing case (B12), on a persisted cell of the case's own protocol
+grep -c "export function laneOf" scripts/leg-replay-lab/live-evidence-patch.ts   # expect 1 — B9: the leg's contract key + lane options (pinned against the shipping enrichment, LVLG8)
+grep -c '"id": "VLG-I3-GIT-ONLY"' scripts/leg-replay-lab/golden/standing-bench.json   # expect 1 — standing bench s2 (owner 2026-11-07): the PLANTED I3 case, reader derivation_reviewer
+grep -c '"version": "s3"' scripts/leg-replay-lab/golden/standing-bench.json          # expect 1 — s3 (2026-11-08, owner 2026-11-07): + NET-APPLY-WHOLE-FILE
+grep -c '"id": "NET-APPLY-WHOLE-FILE"' scripts/leg-replay-lab/golden/standing-bench.json   # expect 1 — RECORDED case, reader change_reviewer: canary B's released package loads ceos1's drifted Git file whole (stored approved 90)
+grep -c '"id": "' scripts/leg-replay-lab/golden/standing-bench.json                   # expect 3 — the standing cases (LAB-USER-GUIDE § 6a lists each with why it exists)
+grep -c "  await test('LSB3 " scripts/test-leg-replay-lab.ts                             # expect 1 — the new case's frozen record, lock proof on the NB1 experiment, gate both directions
+grep -c "export function refusalPointsAtLiveOnly" scripts/leg-replay-lab/golden-set.ts  # expect 1 — golden NEEDS-READ (2026-11-08): a live-Author refusal pointing at content the stored package lacks; never a pass
+grep -c "export function requiredCount" scripts/leg-replay-lab/score-vlg.ts             # expect 1 — vlg-score: a standing cell needs every sample (a miss is do-not-ship)
+grep -c '^## Worked example 2: NB1' .claude/knowledge/pipelines/LAB-ANATOMY.md        # expect 1 — the multi-round worked example (owner yes 2026-11-08)
+grep -c '^## When a lab fails in a way the text may not explain' .claude/knowledge/protocols/pre-registered-lab-gate-protocol.md   # expect 1 — Protocol 16 NB1 rules 1–5
+grep -c "export function evaluateStandingGate\|export function plantedNodeProblems\|export function standingGateSelfTest" scripts/leg-replay-lab/standing-bench.ts   # expect 3 — approve-with-warning gate (devices NAMED, not lines), byte-identical planted inputs, both-direction gate self-test
+```
+- **A value leg needs its first-execution snapshot simulated** (`deviceSourcesSnapshot: "first-execution"`) or it stays off the
+  Device-sources lane (G4-c) and every device fact reads NOT_STAMPED. The value-leg Harvester composes network-provisioning: the
+  1.3.0 lever reaches it only through the Phase 0 brief (input edit).
+- **GOLDEN-VALUE-LIVE is modelled**: the shipping containment net runs per Architect sample (L-VLG-c, LVLG2 both directions). It
+  cannot see a free-address collision (F-2: a free /32 is its own member) — score freeness from the harvest block, never from the fact.
+- `gitDeviceComparison` never names device-only lines (F-3), so a live-only allocation is visible only in the harvest itself.
+- Record: `cline_docs/reviews/value-leg-git-2026-11-06/LAB-PREREG-VLG.md`.
+- **Standing bench s2 (2026-11-07):** VLG-I3-GIT-ONLY is a PLANTED case: every lab whose lever reaches the derivation_reviewer
+  (network-derivation edits, its template, or a Reviewer model/effort on a value node) declares a node with byte-identical inputs
+  (`golden/standing/VLG-I3/*` + `cache/vlg/harvest-git-only.calls.json`) and the exact gate `approve-with-warning` / `git-file-only` /
+  ceos1 + ceos2 / `devices-named`. **B12 (2026-11-07): golden-build now carries every reached standing case** as `STAND-<case>` on a persisted cell of the case's own
+  protocol (one per Reviewer-side lever set); the lock counts a reaching arm covered when a node-carrying arm has byte-identical
+  Reviewer-side levers, and a production-tier Reviewer model (infra, high — golden-build's default) is no standing lever.
+  golden-score reads the carried nodes by their gate.

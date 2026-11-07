@@ -33,7 +33,7 @@ export default function StatusSelect({
   value,
   onChange,
   error,
-}: StatusSelectProps): JSX.Element {
+}: StatusSelectProps): React.JSX.Element {
   const [localError, setLocalError] = React.useState<string | undefined>(error);
 
   const handleChange = (newStatus: string) => {

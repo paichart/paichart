@@ -5,7 +5,7 @@ import { validatePOVAccess } from "@/lib/auth/validate-pov-access"
 import { prisma } from "@/lib/prisma"
 import { StageStatus } from "@prisma/client"
 import { logger } from '@/lib/logger'
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 /**
  * POST /api/stages/[stageId]/validate
@@ -95,6 +95,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ stag
     });
 
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     logger.error({ err: error, stageId: params.stageId }, 'POST /api/stages/[stageId]/validate error');
     
     return NextResponse.json(

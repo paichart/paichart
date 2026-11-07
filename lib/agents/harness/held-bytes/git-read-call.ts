@@ -20,3 +20,17 @@ export const GIT_FILE_READ_TOOL = 'get_file_contents';
 export const GIT_FILE_READ_CALL =
   `\`services(action:'call', targetService:'${GITHUB_FILE_SOURCE}', tool:'${GIT_FILE_READ_TOOL}', ` +
   `arguments:{ owner:'<owner>', repo:'<repo>', path:'<path>', ref:'main' })\``;
+
+/**
+ * Config-sources (DESIGN v2 §8.2; prompt-construction B4/S6): the DECLARED-source call — the same tool, with two slots a declared
+ * line fills: the Git service THE LINE NAMES (never an implicit platform default — PIN-DEFAULT-NEVER-PUBLIC) and the ref the line
+ * names, or `main` (push 0: an absent ref is read as `main`, so the text always passes one). Adopted per domain at that domain's
+ * Config-sources step: network-provisioning 1.26.0 first; kubernetes-gitops and terraform-iac keep `GIT_FILE_READ_CALL` until their
+ * own steps, and the old constant is deleted with terraform's. Interim pins (`test-domain-carry-pins` CS-GIT-CALL): each protocol
+ * interpolates exactly one of the two; both name `GIT_FILE_READ_TOOL`; no protocol names `targetService:'github-service'` in a Git
+ * read outside the old constant. Capture keys on the declared line, so a service the text names that the capture does not hold is a
+ * named force (`git-file-not-held`), never a silent zero.
+ */
+export const GIT_FILE_READ_CALL_DECLARED =
+  `\`services(action:'call', targetService:'<the Git service the line names>', tool:'${GIT_FILE_READ_TOOL}', ` +
+  `arguments:{ owner:'<owner>', repo:'<repo>', path:'<path>', ref:'<the ref the line names, or main>' })\``;

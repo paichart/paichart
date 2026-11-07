@@ -5,7 +5,7 @@ import { trackActivity } from '@/lib/auth/audit';
 import { CreateSupportRequestSchema } from '@/lib/validation/support-validation';
 import { supportRequestLimiter } from '@/lib/middleware/rate-limit';
 import { logger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 export async function POST(req: NextRequest) {
   try {
@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ data: { request } });
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     logger.error({ err: error, endpoint: 'POST /api/support/request' }, 'Failed to create support request');
     return NextResponse.json(
       { error: 'Failed to create support request' },

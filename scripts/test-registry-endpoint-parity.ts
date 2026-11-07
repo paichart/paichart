@@ -128,6 +128,26 @@ for (const c of CASES) {
   );
 }
 
+// MCP-UPDATES-STRING-SKIPS-STRICT (2026-11-04, sec-ops B2 F3): the JSON-STRING form of `updates` must accept and reject exactly
+// as the object form does — it used to skip every per-field cap and the unknown-key refusal.
+console.log('\n=== Layer 4: updates as a JSON STRING behaves exactly like the object form ===');
+const upd = (u: unknown) => schema.safeParse({ action: 'update', service_name: 'parity-probe-service', updates: u }).success;
+for (const c of CASES) {
+  const asObject = upd({ endpoint: c.endpoint });
+  const asString = upd(JSON.stringify({ endpoint: c.endpoint }));
+  check(`string   ${c.endpoint.padEnd(34)} (object=${asObject}, string=${asString})`, asObject === asString,
+    'the JSON-string form of updates disagrees with the object form');
+}
+for (const [label, u] of [
+  ['unknown key refused', { description: 'A valid service description here', typo: 1 }],
+  ['over-long description refused', { description: 'x'.repeat(5000) }],
+  ['bad rateLimit refused', { rateLimit: { requests: 0 } }],
+] as Array<[string, unknown]>) {
+  check(`string   ${label}`, upd(u) === false && upd(JSON.stringify(u)) === false, 'object or string form accepted an invalid update');
+}
+check('string   a valid update accepted', upd(JSON.stringify({ description: 'A valid service description here' })) === true,
+  'a valid JSON-string update was refused');
+
 console.log('\n' + '='.repeat(70));
 console.log(`Total: ${passed + failed} | Passed: ${passed} | Failed: ${failed}`);
 if (failed > 0) {

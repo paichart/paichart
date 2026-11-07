@@ -19,7 +19,7 @@ import { MECHANICAL_NETS } from '../../lib/agents/harness/mechanical-nets';
 import { runNetsAtPoint } from '../../lib/agents/harness/net-registry';
 import { buildNetContext } from '../../lib/agents/harness/net-context';
 import { isProgramHarnessTask } from '../../lib/agents/harness/program-protocol';
-import { buildReplayPrisma, taskRowToPrisma, type ReplaySubstitution } from './replay-prisma';
+import { buildReplayPrisma, taskRowToPrisma, type ReplaySubstitution, type ReplayPrismaOptions } from './replay-prisma';
 import type { Snapshot } from './snapshot';
 
 export const LEG_NETS_EXCLUDED: Record<string, string> = {
@@ -40,21 +40,42 @@ export interface NetRun {
  *  nothing a net reads; a recorded-tools Harvester passes its served calls so `quoteFidelity` (harvest point) has its witness. */
 /** `held` (PLATFORM-HELD-BYTES Stage B): the variant stamps the core builds pre-tx and hands the nets (`editApplication` on a
  *  held-variant Author) — absent on every other node, exactly as in production. */
+/** `protocolInjection` (L-CS-N O-2(a), 2026-11-05): the replayed execution's OWN composed protocol injection, as execution-nets.ts hands
+ *  it (`resultJson.protocolInjection`) — `{delta: {name, version}}`. Read today only by liveEvidence's population rule (NOT_STAMPED below
+ *  network-provisioning 1.26.0). Undefined ⇒ the net ctx carries none (every replay before this lever: NOT_STAMPED). */
 export async function runAuthorLeafNets(snap: Snapshot, role: string, text: string, replayExecutionId: string, toolCalls?: unknown,
-  held?: { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: readonly string[] | null }): Promise<NetRun> {
-  const { client, queries } = buildReplayPrisma(snap, [{ taskId: snap.author.task.id, executionId: replayExecutionId, resultJson: { finalResponse: text, ...(toolCalls !== undefined ? { toolCalls } : {}) } }]);
+  held?: { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: readonly string[] | null },
+  protocolInjection?: unknown, opts: ReplayPrismaOptions = {}): Promise<NetRun> {
+  const { client, queries } = buildReplayPrisma(snap, [{ taskId: snap.author.task.id, executionId: replayExecutionId, resultJson: { finalResponse: text, ...(toolCalls !== undefined ? { toolCalls } : {}) } }], opts);
   const t = taskRowToPrisma(snap.author.task);
   const ctx = buildNetContext({
     prisma: client, task: { id: t.id, type: t.type, metadata: t.metadata, inputContext: snap.author.exec.config?.inputContext ?? t.inputContext },
     agentRole: role, harnessMode: null, finalResponse: text, programTier: false, executionId: replayExecutionId,
     ...(toolCalls !== undefined ? { toolCalls } : {}),
     ...(held ? { held } : {}),
+    ...(protocolInjection !== undefined ? { protocolInjection } : {}),
+  });
+  return runPoint('leaf-persist', ctx, queries);
+}
+
+/** VALUE-LEG-GIT (L-VLG-a): the SHIPPING leaf nets for ANY child task row of the snapshot (the Harvester of a value-leg node whose
+ *  `author` is its Architect), the replayed text added as that task's newest SUCCESS execution. `legReads` lets the device-source facts
+ *  and the value-leg containment net read the leg row (replay-prisma). Same buildNetContext + runNetsAtPoint as runAuthorLeafNets. */
+export async function runLeafNetsFor(snap: Snapshot, taskRow: Record<string, any>, role: string, text: string, replayExecutionId: string,
+  toolCalls: unknown | undefined, protocolInjection: unknown | undefined, opts: ReplayPrismaOptions = {}, inputContext?: unknown): Promise<NetRun> {
+  const { client, queries } = buildReplayPrisma(snap, [{ taskId: String(taskRow.id), executionId: replayExecutionId, resultJson: { finalResponse: text, ...(toolCalls !== undefined ? { toolCalls } : {}) } }], opts);
+  const t = taskRowToPrisma(taskRow);
+  const ctx = buildNetContext({
+    prisma: client, task: { id: t.id, type: t.type, metadata: t.metadata, inputContext: inputContext ?? t.inputContext },
+    agentRole: role, harnessMode: null, finalResponse: text, programTier: false, executionId: replayExecutionId,
+    ...(toolCalls !== undefined ? { toolCalls } : {}),
+    ...(protocolInjection !== undefined ? { protocolInjection } : {}),
   });
   return runPoint('leaf-persist', ctx, queries);
 }
 
 /** The leg's SYNTHESIZE view with the replayed Author (and Reviewer, when given) as the authoritative children. */
-export async function runLegSynthesizeNets(snap: Snapshot, subs: ReplaySubstitution[]): Promise<NetRun | null> {
+export async function runLegSynthesizeNets(snap: Snapshot, subs: ReplaySubstitution[], protocolInjection?: unknown): Promise<NetRun | null> {
   if (!snap.leg) return null;
   const { client, queries } = buildReplayPrisma(snap, subs);
   const leg = taskRowToPrisma(snap.leg);
@@ -62,6 +83,7 @@ export async function runLegSynthesizeNets(snap: Snapshot, subs: ReplaySubstitut
   const ctx = buildNetContext({
     prisma: client, task: { id: leg.id, type: leg.type, metadata: leg.metadata, inputContext: leg.inputContext },
     agentRole: leg.agentRole, harnessMode: 'SYNTHESIZE', finalResponse: null, programTier, executionId: 'lab-leg-synthesize',
+    ...(protocolInjection !== undefined ? { protocolInjection } : {}),
   });
   return runPoint('leg-synthesize', ctx, queries);
 }

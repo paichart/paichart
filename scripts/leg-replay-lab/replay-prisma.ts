@@ -124,7 +124,19 @@ export interface ReplaySubstitution {
  * Build the stub. `subs` adds a replayed execution as the newest SUCCESS execution of its task.
  * `queries` records every call, so a report can show what the nets actually read.
  */
-export function buildReplayPrisma(snap: Snapshot, subs: ReplaySubstitution[] = []) {
+/** VALUE-LEG-GIT (L-VLG-a, 2026-11-06): `legReads` serves the three LEG-ROW projections the device-source facts and the value-leg
+ *  containment net issue (production SQL, normalised whitespace): the owning-leg lookup by child stage (program-protocol.ts
+ *  resolveOwningLeg), the leg's declaration columns (device-sources-read.ts readLegDeviceSources) and the leg's interface contract
+ *  (live-evidence-enrichment.ts legInterfaceContract) — each from the snapshot's own task rows. OPT-IN: without it those shapes
+ *  still THROW (every earlier experiment's nets stamp exactly what they stamped before). */
+export interface ReplayPrismaOptions { legReads?: boolean }
+const LEG_READ_SHAPES: Array<{ name: string; re: RegExp }> = [
+  { name: 'owning-leg', re: /^SELECT id, "inputContext"->'chainedFrom' AS chained FROM "tasks" WHERE type = 'PIPELINE' AND metadata->>'pipelineStageId' = \$\? AND metadata->>'protocol' IS NOT NULL$/ },
+  { name: 'leg-declaration', re: /^SELECT description, \("inputContext" -> 'interfaceContract'\) AS contract, \(metadata -> 'deviceSourcesSnapshot'\) AS snapshot FROM tasks WHERE id = \$\?$/ },
+  { name: 'leg-contract', re: /^SELECT \("inputContext" -> 'interfaceContract'\) AS contract FROM tasks WHERE id = \$\?$/ },
+];
+
+export function buildReplayPrisma(snap: Snapshot, subs: ReplaySubstitution[] = [], opts: ReplayPrismaOptions = {}) {
   const queries: string[] = [];
   const tasks: Row[] = [];
   const seen = new Set<string>();
@@ -227,11 +239,33 @@ export function buildReplayPrisma(snap: Snapshot, subs: ReplaySubstitution[] = [
     // `toolCalls` added 2026-10-13: E1 (rollbackContainment) and quoteFidelity's Author point read the leg Harvester's
     // raw tool results through it; without it both nets stamped their errorFact on every replayed Author (D1 went red).
     // `gitDeviceComparison` added 2026-10-26 (L-N2): the network Author TRANSCRIBES its Harvester's stamp through this read.
+    // `liveEvidence` added 2026-11-04 (L-CS-a): the same transcription read for the Config-sources fact (inert until push 1a's enrichment).
     // `editApplication` / `reviewedEditDiff` added 2026-10-15 (Stage B G2): a held-variant leg's hoist and carrier read them; the lab
     // runs a variant arm's leg nets on the REBOUND leg, where they apply (same literal projection shape as the others).
-    $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
+    $queryRaw: async (stringsIn: TemplateStringsArray | { strings: readonly string[]; values: readonly unknown[] }, ...valuesIn: unknown[]) => {
+      // A `Prisma.sql` object (one argument) carries its own flattened strings + values; the tagged-template form passes them apart.
+      const isSql = !!stringsIn && !Array.isArray(stringsIn) && Array.isArray((stringsIn as any).strings) && Array.isArray((stringsIn as any).values);
+      const strings = isSql ? (stringsIn as any).strings as readonly string[] : (stringsIn as TemplateStringsArray);
+      const values = isSql ? [...(stringsIn as any).values] as unknown[] : valuesIn;
       const sql = Array.from(strings ?? []).join('$?').replace(/\s+/g, ' ').trim();
-      const m = sql.match(/^SELECT \(content::jsonb\)->>'(finalResponse|rollbackContainment|derivationContainment|reviewerVerdict|toolCalls|editApplication|reviewedEditDiff|gitDeviceComparison)' AS v FROM agent_artifacts WHERE name = 'result\.json' AND content LIKE '\{%' AND "executionId" = \$\? ORDER BY "createdAt" DESC LIMIT 1$/);
+      if (opts.legReads) {
+        const shape = LEG_READ_SHAPES.find((x) => x.re.test(sql));
+        if (shape) {
+          if (values.length !== 1) throw new ReplayStubUnsupported(`$queryRaw ${shape.name} with ${values.length} values`);
+          queries.push(`$queryRaw ${shape.name} ${String(values[0])}`);
+          if (shape.name === 'owning-leg') {
+            return tasks.filter((t) => t.type === 'PIPELINE' && t.metadata && typeof t.metadata === 'object' && (t.metadata as any).pipelineStageId === values[0]
+              && (t.metadata as any).protocol !== undefined && (t.metadata as any).protocol !== null)
+              .map((t) => ({ id: t.id, chained: (t.inputContext as any)?.chainedFrom ?? null }));
+          }
+          const row = tasks.find((t) => t.id === values[0]);
+          if (!row) return [];
+          const contract = (row.inputContext as any)?.interfaceContract ?? null;
+          if (shape.name === 'leg-contract') return [{ contract }];
+          return [{ description: row.description ?? null, contract, snapshot: (row.metadata as any)?.deviceSourcesSnapshot ?? null }];
+        }
+      }
+      const m = sql.match(/^SELECT \(content::jsonb\)->>'(finalResponse|rollbackContainment|derivationContainment|reviewerVerdict|toolCalls|editApplication|reviewedEditDiff|gitDeviceComparison|liveEvidence)' AS v FROM agent_artifacts WHERE name = 'result\.json' AND content LIKE '\{%' AND "executionId" = \$\? ORDER BY "createdAt" DESC LIMIT 1$/);
       if (!m || values.length !== 1) throw new ReplayStubUnsupported(`$queryRaw ${sql.slice(0, 120)}`);
       queries.push(`$queryRaw ->>${m[1]} executionId=${String(values[0])}`);
       const art = order(artifacts.filter((a) => a.name === 'result.json' && a.executionId === values[0] && String(a.content).startsWith('{')), { createdAt: 'desc' })[0];

@@ -204,7 +204,8 @@ console.log(`✅ role guidance names no service (${ROLE_GUIDANCE_SERVICE_NAMES.l
   }
   // held-network step 2 (owner 2026-10-24): the Program Architect carries each network change leg's Device sources into the
   // contract; without it every network program leg stops at Phase 0 once network-provisioning 1.23.0 is live.
-  if (!ug.includes('as \\`deviceSources["network-provisioning"]\\`, copied exactly from the requirements; a leg without them stops.')) {
+  // VALUE-LEG-GIT (2026-11-06): the sentence now carries both network lanes — the change leg's key + its stop, and the value leg's own key.
+  if (!ug.includes('a change leg\'s as \\`deviceSources["network-provisioning"]\\` (a change leg without them stops), and a value leg\'s as \\`deviceSources["network-derivation"]\\` ONLY when the requirements give that value leg lines of its own. Otherwise emit no \\`network-derivation\\` key at all')) {
     console.log('❌ program_architect deviceSources carry sentence missing');
     process.exit(1);
   }

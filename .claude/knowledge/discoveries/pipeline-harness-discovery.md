@@ -1335,9 +1335,9 @@ whether to BUILD something. These pin its load-bearing claims.
 ```bash
 grep -c "| 'prefix-not-minimal'" lib/agents/harness/derivation-containment.ts   # expect 1 — the counterpart the map credits for requirements.md check 2b (minimality). If this goes to 0 the map's "covered" row is false and check 2b is exposed again
 grep -c "| 'covered-not-member'" lib/agents/harness/derivation-containment.ts   # expect 1 — the counterpart for check 3 (aggregate covers no existing allocation)
-grep -c "^    name: '" lib/agents/harness/mechanical-nets.ts                    # expect 18 — 2026-10-26 (held-network step 3 batch 2b): +deviceSourceReads, +gitDeviceComparison. Before that 16 — 2026-10-23: +validationToolCalls@leaf-persist (network config_change_author leaves). Before that 15 — 2026-10-15 (Stage B V-5f): +editApplication@leaf-persist, heldBytes@leaf-persist, reviewedEditDiff@leaf-persist, editApplication@leg-synthesize (variant-only). Before that 11 — 2026-10-13 (2): +applyBlockPlaceholder@leaf-persist (PLACEHOLDER-APPLIES-AS-LITERAL interim guard). Before that 10 — 2026-10-13: +quoteFidelity@leaf-persist (VERBATIM-QUOTE-OMISSION). Before that 9; — (+reviewerWarnings@leg-synthesize, 2026-10-08) registrations, NOT distinct nets: rollbackContainment AND (since value-chain B4, 2026-10-02) derivationContainment each register at both points. 8 nets / 10 registrations (re-proven 2026-10-13: `grep -oE "^    name: '[A-Za-z]+'" … | sort -u | wc -l` = 8); both numbers must move together
-grep -c "point: 'leaf-persist'" lib/agents/harness/mechanical-nets.ts           # expect 11 — 2026-10-26: +deviceSourceReads, +gitDeviceComparison (batch 2b). Before that 9 — 2026-10-23: +validationToolCalls. Before that 8 — 2026-10-15: +the three Stage B variant leaf nets. Before that 5 — 2026-10-13 (2): +applyBlockPlaceholder (config_change_author leaves). Before that 4 — 2026-10-13: +quoteFidelity (Harvester + Author leaves). Before that 3; — (was 2; +derivationContainment on the value-leg Derivation Architect, value-chain B4 2026-10-02 — leaf-persist precisely so its disposition reaches the value leg's Reviewer) — a leaf-persist net reaches the leg Reviewer's §6 via the chainer; a leg-synthesize one cannot. Stamp point is a design constraint, so the split is worth pinning
-grep -c "point: 'leg-synthesize'" lib/agents/harness/mechanical-nets.ts         # expect 7 — 2026-10-15: +editApplication hoist (Stage B V-5f). Before that 6 — +reviewerWarnings (WARNINGS-INVISIBLE 2026-10-08); was 5; was 4; +verdictFreshness (RWF C3 2026-09-26)
+grep -c "^    name: '" lib/agents/harness/mechanical-nets.ts                    # expect 20 — 2026-11-04 (Config-sources network push 1a): +liveEvidence@leaf-persist, +liveEvidence@leg-synthesize (appended last; version-keyed, NOT_STAMPED on every stored leg). Was 18 — 2026-10-26 (held-network step 3 batch 2b): +deviceSourceReads, +gitDeviceComparison. Before that 16 — 2026-10-23: +validationToolCalls@leaf-persist (network config_change_author leaves). Before that 15 — 2026-10-15 (Stage B V-5f): +editApplication@leaf-persist, heldBytes@leaf-persist, reviewedEditDiff@leaf-persist, editApplication@leg-synthesize (variant-only). Before that 11 — 2026-10-13 (2): +applyBlockPlaceholder@leaf-persist (PLACEHOLDER-APPLIES-AS-LITERAL interim guard). Before that 10 — 2026-10-13: +quoteFidelity@leaf-persist (VERBATIM-QUOTE-OMISSION). Before that 9; — (+reviewerWarnings@leg-synthesize, 2026-10-08) registrations, NOT distinct nets: rollbackContainment AND (since value-chain B4, 2026-10-02) derivationContainment each register at both points. 8 nets / 10 registrations (re-proven 2026-10-13: `grep -oE "^    name: '[A-Za-z]+'" … | sort -u | wc -l` = 8); both numbers must move together
+grep -c "point: 'leaf-persist'" lib/agents/harness/mechanical-nets.ts           # expect 12 — 2026-11-04: +liveEvidence (Harvester computes, Author transcribes). Was 11 — 2026-10-26: +deviceSourceReads, +gitDeviceComparison (batch 2b). Before that 9 — 2026-10-23: +validationToolCalls. Before that 8 — 2026-10-15: +the three Stage B variant leaf nets. Before that 5 — 2026-10-13 (2): +applyBlockPlaceholder (config_change_author leaves). Before that 4 — 2026-10-13: +quoteFidelity (Harvester + Author leaves). Before that 3; — (was 2; +derivationContainment on the value-leg Derivation Architect, value-chain B4 2026-10-02 — leaf-persist precisely so its disposition reaches the value leg's Reviewer) — a leaf-persist net reaches the leg Reviewer's §6 via the chainer; a leg-synthesize one cannot. Stamp point is a design constraint, so the split is worth pinning
+grep -c "point: 'leg-synthesize'" lib/agents/harness/mechanical-nets.ts         # expect 8 — 2026-11-04: +liveEvidence hoist (Config-sources push 1a). Was 7 — 2026-10-15: +editApplication hoist (Stage B V-5f). Before that 6 — +reviewerWarnings (WARNINGS-INVISIBLE 2026-10-08); was 5; was 4; +verdictFreshness (RWF C3 2026-09-26)
 grep -c "authored-value-not-derived" lib/agents/harness/derivation-containment.ts   # expect 0 — the check-1 leaf is EARNED, SPECCED and deliberately FILED (3 of 13 coverage, zero observed mismatches). A non-zero count means it was built, which is GOOD but makes the map's "EXPOSED" row stale: update the map and retire the health-run re-measure in the same commit
 ```
 
@@ -1424,7 +1424,7 @@ Suites: `test:child-stage-settled` (X4 D11-D18), `test:authoritative-result-read
 grep -c "writeReapedTaskStatuses(tx," lib/services/agentExecutionEngine.ts   # expect 2
 grep -c "executionStatus: null" lib/services/agentExecutionEngine.ts   # expect 0
 # B1 — the nets read the execution the chainer chained (helper + 3 enrichment files)
-grep -rl "readAuthoritativeResultField(" lib --include=*.ts | wc -l   # expect 11 — 2026-10-26: +device-source-facts-enrichment.ts (batch 2b). Before that 10 — 2026-10-23: +validation-tool-calls-enrichment.ts (the Author point reads the Harvester's toolCalls). Before that 9 — 2026-10-15: +held-bytes-nets.ts (the ONE held child selector, Stage B V-5f). Before that 8 — 2026-10-13: +quote-fidelity-enrichment.ts (the Author point reads the harvest's raw toolCalls through it). Before that 7; — (+reviewer-warnings-enrichment.ts, 2026-10-08: the reviewerWarnings net reads each reviewer's stamped verdict and each leg's stamped fact through the chainer's selection; was 6) (+plan-spawn-carry.ts, C2/C3 2026-10-04: the program PLAN read takes the Architect's AUTHORITATIVE execution, the same selection the chainer uses; was 5; was 4; +value-leg-containment-enrichment.ts, value-chain B4 2026-10-02: the harvest read at leaf-persist and the Architect-stamp hoist)
+grep -rl "readAuthoritativeResultField(" lib --include=*.ts | wc -l   # expect 12 — 2026-11-04: +live-evidence-enrichment.ts (the Author transcription reads the Harvester's liveEvidence). Was 11 — 2026-10-26: +device-source-facts-enrichment.ts (batch 2b). Before that 10 — 2026-10-23: +validation-tool-calls-enrichment.ts (the Author point reads the Harvester's toolCalls). Before that 9 — 2026-10-15: +held-bytes-nets.ts (the ONE held child selector, Stage B V-5f). Before that 8 — 2026-10-13: +quote-fidelity-enrichment.ts (the Author point reads the harvest's raw toolCalls through it). Before that 7; — (+reviewer-warnings-enrichment.ts, 2026-10-08: the reviewerWarnings net reads each reviewer's stamped verdict and each leg's stamped fact through the chainer's selection; was 6) (+plan-spawn-carry.ts, C2/C3 2026-10-04: the program PLAN read takes the Architect's AUTHORITATIVE execution, the same selection the chainer uses; was 5; was 4; +value-leg-containment-enrichment.ts, value-chain B4 2026-10-02: the harvest read at leaf-persist and the Architect-stamp hoist)
 # C1 — the cap + Reviewer rule run at the chokepoint, and the chained record is stamped explicitly
 grep -c "enforceOrchestratorReExecutionRules(prisma" lib/services/agent-execution-create.ts   # expect 1
 grep -c "ctx.chainedPredecessors = stamps.chainedPredecessors" lib/services/execution-context-build.ts   # expect 1 — moved out of agent-execution-create.ts by 0901c160 (a prisma-free module, so its test runs in CI); found drifted by MI-13
@@ -1847,7 +1847,7 @@ LAB-PREREG/RESULT-L-N1, REVIEW-sec-ops-STEP2-TEXT, SF1-AGENT-DELETE-GUARD). Step
 (a)/(b), HELD-CAPTURE-COMPARE-ELIGIBILITY, the mechanical file/device comparison, capture of a bundled config read.
 
 ```bash
-grep -c "## Device sources — declared, never inferred" scripts/seed-protocol-prompts.ts   # expect 1
+grep -c "## Device sources — declared, never inferred" scripts/seed-protocol-prompts.ts   # expect 2 — re-measured 2 2026-11-08 (network-derivation 1.3.0 gained its own section, VALUE-LEG-GIT); was 1 (network-provisioning only)
 grep -c "Do not compare them, and state no match or difference anywhere" scripts/seed-protocol-prompts.ts   # expect 1
 grep -c 'deviceSources\["network-provisioning"\]' lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # expect 1
 ```
@@ -1871,3 +1871,59 @@ ls scripts/leg-replay-lab/golden/golden-set.json | wc -l   # expect 1
 python3 scripts/lab-configs/sync-public-configs.py --help >/dev/null && echo ok      # expect ok — the mirror exists (PRIVATE: not in the public repo)
 grep -c "^DROP = {" scripts/lab-configs/sync-public-configs.py                        # expect 1 — the ONE drop list
 ```
+
+## 2026-11-04 — Config-sources PUSH 0 (security, no agent text; DEPLOYED, cut 09:41:51.73Z) — every expectation run before it was written
+Design + records: `cline_docs/reviews/config-sources-design-2026-11-04/` (DESIGN v2, PUSH0-BUILD.md, LEARNINGS-LEDGER LL-CS-*). An absent Git `ref` is checked
+AS `main` inside the pin and forwarded/echoed as `ref:'main'` (`_meta.refDefaulted`); the never-held path predicate runs on every UNPINNED `get_file_contents`
+(`NEVER_READ_PATH`); the read record compares refs normalised. Next Config-sources step: network (DESIGN §3), when its credit is available.
+```bash
+grep -c "^const DEFAULT_REF = 'main';" lib/mcp/server/config/git-file-source-pin.js   # expect 1 — an absent ref MEANS main (never "the repo's default branch")
+grep -c "if (!pin.refs.includes(refDefaulted ? DEFAULT_REF : a.ref)) return { ok: false, field: 'ref' };" lib/mcp/server/config/git-file-source-pin.js   # expect 1 — checked AS main: a declared-ref row refuses a no-ref call (the closed bypass)
+grep -c "^function unpinnedFileReadPathRefusal(tool, args)" lib/mcp/server/config/git-file-source-pin.js   # expect 1 — the never-held predicate keyed on the TOOL, not the pin
+grep -c "type: 'NEVER_READ_PATH'," lib/mcp/server/config/service-call-policy.js   # expect 1 — its own type, neutral text (reaches any get_file_contents caller)
+grep -c "gitArguments: gitPin.ok && gitPin.pinned ? gitPin.args : null," lib/mcp/server/config/service-call-policy.js   # expect 1 — the gate returns the object it checked
+grep -c "if (policyCheck.gitArguments) validatedArgs.arguments = policyCheck.gitArguments;" lib/mcp/server/tools/hub/service-call-handler.js   # expect 1 — forwarded = checked = echoed (R-P0.12 pins the order)
+grep -c "normalisedRef(args.ref) === normalisedRef(e.ref)" lib/agents/harness/device-source-facts.ts   # expect 1 — the read record folds absent / refs/heads/<x> on both sides
+grep -c "default branch, a relative path" lib/mcp/server/config/service-call-policy.js   # expect 0 — the old refusal text is gone
+grep -c "^    check('R-P0\\." scripts/test-security-invariants.ts   # expect 12 — the push-0 pins (R-P0.8b counts with R-P0.8)
+```
+
+## 2026-11-05 — network-provisioning 1.26.0 merged locally: the `live-read` KIND GATE is OPEN (not yet deployed until the 1.26.0 push)
+`LIVE_READ_KIND_ENABLED = true` rides the text merge; tests that pinned the closed reading now bind it through `__setLiveReadKindForLab(false)`
+(LL-CS-13). Record: `cline_docs/reviews/config-sources-design-2026-11-04/TEXT-1.26.0-BUILD.md`.
+```bash
+grep -c "^export const LIVE_READ_KIND_ENABLED = true;" lib/agents/harness/device-sources.ts   # expect 1
+```
+
+## 2026-11-06 — VALUE-LEG-GIT: a value leg declares its own Device sources (network-derivation 1.3.0; every expectation run before it was written)
+
+```bash
+grep -c "export const DEVICE_SOURCE_LANES" lib/agents/harness/held-bytes/variant.ts                         # expect 1 — the lane table (change = network-provisioning, value = network-derivation, own contract key each); DEVICE_SOURCE_PROTOCOLS is its keys
+grep -c "export function heldCaptureTakesDeviceScope\|export function carrierAppliesDeviceForce" lib/agents/harness/held-bytes/variant.ts   # expect 2 — a VALUE leg never holds (capture scope + carrier forces are change-lane only, exhaustive switch)
+grep -c "\[canonicalProtocolName('network-derivation')\]: '1.3.0'" lib/agents/harness/live-evidence.ts       # expect 1 — liveEvidence version row; `git-only` word on the value lane only (G4-a)
+grep -c "RESULT_JSON_SUMMARY_NARROW_KEYS = \['liveEvidence'\]" lib/services/execution-artifacts.ts           # expect 1 — the value card's {checked, summary} hoist (G2-d); liveEvidence stays OFF RESULT_JSON_SUMMARY_KEYS (owner decision 6)
+grep -c "'vlg-" scripts/canary-check.ts                                                                       # expect 7 — the value-leg canary controls (twin, pa1, pa3, h1–h4)
+grep -c "ONLY when the requirements give that value leg lines of its own" lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts   # expect 1 — the G9 Architect sentence (no key, never a note, when requirements give none)
+grep -c "## Device sources — declared, never inferred" scripts/seed-protocol-prompts.ts                       # expect 2 — network-provisioning + network-derivation 1.3.0
+```
+- **Inert by declaration (G4-c):** a value leg joins the device lane ONLY when its first-execution snapshot declares a block; no block ⇒
+  descriptor path and the brief says "read no Git file" (BR-1, proved live: canary B `vlg-h2`, 0 Git reads).
+- **The contract fold** skips the value key on a change leg and names it (`contractDevices.excludedKeys`); stored contracts key by LEG,
+  so never narrow the fold to "own key only" (LL-CS-33).
+- **The Program Architect is not lab-replayable:** its sentence is proved only by canary control `vlg-pa3-no-prose-key` (LL-CS-31).
+- Records: `cline_docs/reviews/value-leg-git-2026-11-06/` (PLAN G1–G9, BLIND-READ-1.3.0, LAB-PREREG/CRIB/RESULT-VLG, CANARY-RUN-SHEET).
+
+## 2026-11-08 — network text batch 1 SHIPPED (network-provisioning 1.27.0 + network-derivation 1.3.1; lab NB1; every expectation run before it was written)
+
+```bash
+grep -c "version: '1.27.0', // SHIPPED 2026-11-07T21:33:01Z" scripts/seed-protocol-prompts.ts                 # expect 1 — the shipped change-leg text
+grep -c "version: '1.3.1', // SHIPPED 2026-11-07T21:33:01Z" scripts/seed-protocol-prompts.ts                  # expect 1 — the shipped value-leg text
+grep -c "GIT_ONLY_WORD_MIN_VERSIONS" lib/agents/harness/live-evidence.ts                                      # expect 2 — change-lane `git-only` word gated at >= 1.27.0 (now live)
+grep -c "'nb1-[a-z0-9-]*': {" scripts/canary-check.ts                                                         # expect 6 — the NB1 live controls
+grep -c "'vlg-" scripts/canary-check.ts                                                                       # expect 7 — unchanged by NB1
+grep -c '"id": "NET-APPLY-WHOLE-FILE"' scripts/leg-replay-lab/golden/standing-bench.json                      # expect 1 — standing case s3 (R-APPLY-MISS shape)
+grep -c "^| 11 | \*\*Candidate agent text lives on a local-only branch" .claude/knowledge/guides/MAINTAINER-ONBOARDING.md   # expect 1
+```
+- Check live rows match the lab renders by sha256 of `agent_prompt_library."promptText"` (read-only), never by version alone.
+- `nb1-apply-base` reads a placeholder whole-file line (`copy flash:<device>-… session-config`) as naming every device — canary B's shape.
+

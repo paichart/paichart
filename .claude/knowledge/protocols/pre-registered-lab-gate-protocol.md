@@ -135,7 +135,8 @@ Runs release reliably now, so the default risk of any change is a REGRESSION rat
    - a few correct REFUSALS, so an over-permissive change is caught too.
 
    Each golden case must reproduce its outcome: approved stays approved, refused stays refused, a forced outcome stays forced. **One flip is a do-not-ship miss** unless the pre-registration names that case as the change's intended target. Owner: model-evaluation-specialist (register NO-REGRESSION-GOLDEN-SET). Add a case when a program releases or a window passes; remove one only by recorded owner decision.
-   **Built 2026-10-31 (v1, 12 cases, all four domains); re-frozen v2 the same day by owner decision (15 cases: + CANARY 1's network value leg, terraform and observability legs — the set's `refreezes` record names each addition and what was left out):** `scripts/leg-replay-lab/golden/golden-set.json` + `golden-set.ts`. The lab declares `goldenSet` in `experiment.json` (a paid run is refused without it); `golden-build` carries its arms onto the golden cases as a companion experiment; `golden-score` reads each case as REPRODUCED or FLIPPED. Node C cannot be replayed yet (named in the set's `notReplayable`); a value leg (network-derivation) is replayed on its persisted derivation with the derivation_reviewer re-run (Reviewer cells only, since v2).
+   **Built 2026-10-31 (v1, 12 cases, all four domains); re-frozen v2 the same day by owner decision (15 cases: + CANARY 1's network value leg, terraform and observability legs — the set's `refreezes` record names each addition and what was left out):** `scripts/leg-replay-lab/golden/golden-set.json` + `golden-set.ts`. The lab declares `goldenSet` in `experiment.json` (a paid run is refused without it); `golden-build` carries its arms onto the golden cases as a companion experiment; `golden-score` reads each case as REPRODUCED or FLIPPED. Node C cannot be replayed yet (named in the set's `notReplayable`); a value leg (network-derivation) is replayed on its persisted derivation with the derivation_reviewer re-run (Reviewer cells only, since v2). **Re-frozen v3 on 2026-11-06 by owner decision (17 cases: + the network-provisioning 1.26.0 canary's change leg, persisted Author only, and its value leg; the network pin moved to 1.26.0).**
+   **The golden set's twin, the STANDING BENCH:** real legs whose stored outcome was WRONG, so a lab must OVERTURN it, not reproduce it. Every lab whose lever reaches a case's reader carries it, with a do-not-ship gate and a spend lock (`golden/standing-bench.json`: NET-FWA3-EDGE, VLG-I3-GIT-ONLY, NET-APPLY-WHOLE-FILE since 2026-11-08). What it is, when it applies, and how to add a case: `LAB-USER-GUIDE.md` § 6a. A live-Author golden refusal that points at content the stored package lacks reads NEEDS-READ (2026-11-08): never a pass, decided by hand read (§ 6).
 3. **One canary after every agent-text deploy.**
    - Re-run the latest released program from its published spec, on a fresh stage with the clearance metadata set (≈ $12).
    - It must come back `programReleasable: true`, and its legs must be hand-read, before the NEXT agent-text batch ships.
@@ -147,6 +148,69 @@ Runs release reliably now, so the default risk of any change is a REGRESSION rat
    - When a domain is at or above 90% correct outcomes with 0 false releases, a text change ships only for a false-release risk, or for a cheap fix that generalises.
    - Safe failures (false refusals, wording, tidiness) wait behind a measured trigger, or ride the next change that must touch the same text anyway.
    - A batch touching a shared key carries no unrelated items.
+
+## When a text reaches its size ceiling (added 2026-11-07, owner: "yes, write it into Protocol 16")
+
+**Why this exists.** VALUE-LEG-GIT G9 (2026-11-06): to fit program_architect's 21,500 ceiling, one sentence was compressed to
+"a value leg's as `deviceSources["network-derivation"]` (none: its descriptor)". The Program Architect read the parenthetical as
+content and wrote a prose note under the key, which the platform resolves as an `unparseable` declaration, live in production
+until a canary caught it (LL-CS-31). The lab could not see it: the Architect is not lab-replayable, and the lab's cells only
+exercised the branch the change was for.
+
+**The procedure, in order:**
+1. **Write the sentence at its natural length first, and render it.** Never draft to the budget: you cannot judge what a
+   sentence instructs while you are squeezing it.
+2. **Read why the ceiling exists before treating it as fixed.** Every ceiling's reason is in its `test:protocol-golden` message.
+   If that reason still bites, the ceiling stands; if it no longer does, go to step 5.
+3. **Make room by REMOVING, not compressing.** A liveness read of the same text (Protocol 12 R0 spirit): sentences now enforced
+   by a platform fact (facts over prose), rules duplicated between the protocol and the role, stale caveats about retired
+   behaviour. Each removal is itself a text change and goes into the same lab.
+4. **Move content to its layer.** A rule that applies to one domain belongs in that domain's protocol, not a shared role (which
+   reaches every domain that uses it — and makes the lab span them all).
+5. **Otherwise raise the ceiling by owner decision:** a small, recorded step, with the reason written into the test message
+   itself (e.g. "21,500 → 21,800 by owner 2026-11-06 for …").
+6. **Never fold a condition into a parenthetical, abbreviation or symbol.** A condition, an "otherwise" or an exception stays a
+   full clause.
+7. **Every branch of a reworded rule gets its own pre-registered cell** — a lab cell, or a LIVE CONTROL where the reader cannot be
+   replayed (§ "When the lab cannot replay the reader") — not only the branch the change was made for.
+8. **Offer a blind contradiction read** (§ "Optional blind reads", $0) of the composed prompt after any compression or removal.
+
+**Early warning (mechanical).** `test:protocol-golden` prints a `⚠ headroom` line (a warning, never a failure) when a budgeted
+text is within 2% of its ceiling, so the pressure is visible a batch before it bites.
+
+## When a lab fails in a way the text may not explain (added 2026-11-08, owner: "yes", from NB1)
+
+**Why this exists.** NB1 (network text batch 1, ledger L95–L107) went through five rounds. Two of its failures were not the
+candidate text's fault:
+- a golden flip that the released text also produces (NB1-JL3);
+- a refusal of a placement that a rig check proved correct (NB1-JP1).
+
+A third was a model habit that two rewordings did not move (NC1). Fixing each one as a text defect would have spent rounds on the wrong
+cause. Worked example: `LAB-ANATOMY.md` § "Worked example 2: NB1".
+
+**The rules:**
+1. **Before fixing a golden flip, measure the released text.**
+   - Run the flipped case at n≥3 on the released (or previous) text and on the candidate, as its own pre-registered side lab with
+     the standing lock carried.
+   - Pre-register the readings: text effect, base rate, or not separated.
+   - Only a text effect calls for a text fix. A base rate or a non-reproduction goes to the owner (an override beside the gate, or a
+     re-freeze).
+   - Worked: NB1-JL3, where the released 1.26.0 missed 1/3, so the flip was the base rate.
+2. **A refusal that turns on device or tool semantics gets a rig check before it is called a defect.**
+   - Examples: where a configuration line lands, what a command renders.
+   - One owner-approved, read-only or aborted session on the rig settles what the lab cannot.
+   - Worked: NB1-JP1. A top-level `network` entry landed under `address-family ipv4` on cEOS, so the refusal was an over-block.
+3. **A model habit that beats two rewordings is measured, and its gate re-examined, before a third rewording.**
+   - Read every miss for what the model is trying to do.
+   - Ask whether the gate scores harm or only wording.
+   - Re-register the gate by owner decision if it scores a safe, true behaviour.
+   - Worked: NC1. 6/6 restatements of a true device-only value were re-registered as counted warnings (D1–D2).
+4. **A gate is re-registered only before the next spend, never applied to samples already taken.**
+   - Write a dated ADDENDUM before the next paid run.
+   - Samples read under the old rule keep their registered reading and are not pooled under the new one (NB1 (d), (e)).
+5. **Wording rules for a new blocking item** belong to prompt-construction's guidance, and that guidance is the home for them:
+   - its trigger words must not collide with existing vocabulary ("HELD" vs held bytes);
+   - an anchor sentence states only what is true.
 
 ## The non-negotiables
 
@@ -172,6 +236,79 @@ Runs release reliably now, so the default risk of any change is a REGRESSION rat
    (`.claude/knowledge/pipelines/LAB-EXPERIMENT-LEDGER.md`; estimators undershoot longer models), and a `--max-usd` cap.
 9. **Write the result against every gate** in the review folder, record it in the open register and a row in
    `LAB-EXPERIMENT-LEDGER.md` (same commit), and only then build. A parser or measure fault the run exposes is fixed and pinned before ship (batch 2 found two).
+
+## Optional blind reads of composed prompts (added 2026-11-05, owner; a $0-proof aid, NOT a gate)
+
+A blind reader is a Claude Code subagent (`sonnet`). It is given ONLY one frozen system + user prompt pair, copied to blind names, and
+is told to open nothing else. **None of these uses is evidence that a text works.** Each one warns and never blocks. None of them
+replaces a lab sample, and nothing they say about a verdict is ever counted.
+
+**Calibration** (`cline_docs/reviews/config-sources-design-2026-11-04/PROXY-CALIBRATION.md`, LL-CS-18):
+- Blind readers agreed with the real Reviewer on 7/14 L-CS-N verdicts.
+- Every miss was STRICTER than the real Reviewer.
+- On the decisive cell (R-FWA3, T+F) the blind reader refused 3/3 while the real model approved. A verdict pre-screen would have said
+  the text worked when it did not.
+- What they ARE good for is checkable findings.
+
+**How a session runs it.** These steps work from this protocol alone.
+
+To start one, a person or session says: **"Protocol 16 blind read — contradiction | fixture — on <run folder / cell / role>"**. A session
+OFFERS it, it does not run it, after any change to what an agent reads (CLAUDE.md, Protocol 16 row).
+
+1. **Have a $0 dry-run folder** of the experiment, from `npm run lab:leg-replay -- run --experiment <dir>`. It holds each cell's composed
+   `<role>.system.md` + `<role>.user.md`.
+2. **Copy to blind names and check for leaks ($0):**
+   `scripts/leg-replay-lab/second-read/prepare-second-read.sh --mode fixture|contradiction --run <run folder> [--cells A,B] [--roles reviewer,author] --out <scratch dir>`.
+   - It writes `blind/pN.{system,user}.md` (shuffled), `key.tsv` (kept outside `blind/`) and `briefs/pN.txt` (the mode's brief with the
+     pair's paths filled in).
+   - It FAILS LOUD on lab vocabulary in a copy: cell ids, the run label, must-block, crib, plant, golden, ADDENDUM, lab execution ids. On a
+     failure, fix the leak; use `--accept '<regex>'` only for a token a human confirmed is production text.
+3. **ASK the owner before spawning.** Say how many pairs × 2 readers, and that it uses Claude plan usage, not API credit. Wait for an
+   explicit yes.
+4. **Two blind runs per pair.** Spawn 2 `general-purpose` subagents with `model: sonnet`. Send each one `briefs/pN.txt` verbatim and
+   nothing else: no cell name, no expected verdict, no repo context.
+5. **String-test every finding yourself.** Using `key.tsv`, check that each quoted line occurs byte for byte in the source file, then
+   check the claimed mismatch or clash against the bytes.
+   - Confirmed or false alarm; nothing in between.
+   - Ignore every verdict a reader gives.
+6. **Report the confirmed findings,** each with its quotes and the string-test result.
+   - `fixture`: fix the plant or input edit, re-run the $0 proofs, record it in the experiment's addendum.
+   - `contradiction`: the finding is not acted on before the lab.
+7. **Register.**
+   - Each confirmed `contradiction` finding becomes an open-register row with an owner. A change to the text still needs the lab.
+   - Every use gets a tally row in `cline_docs/reviews/config-sources-design-2026-11-04/PROXY-CALIBRATION.md`: confirmed findings and
+     false alarms.
+
+**Use 1 — fixture second read (mode `fixture`).**
+- *When:* after a cell is built or edited by plant (S6 consistent-plant cells, input edits) and its $0 proofs pass, before its first paid
+  run. Not for untouched stored cells.
+- *Asks for:* byte-checkable self-disagreements only, with every line quoted verbatim, file and line number given. A finding is a line that does not match what it cites, a value stated two ways, or a referent that is absent. No verdict.
+- *On a finding:* confirmed ⇒ fix the plant, re-run the $0 proofs, and record it in the addendum. Unconfirmed ⇒ log it as a false alarm.
+- *Record:* it found the L-CS-N Git-plant V2 citation defect that the real Reviewer missed 2/2 (ADDENDUM (e) §e.3). That is 1 confirmed,
+  0 false alarms.
+
+**Use 2 — whole-prompt contradiction review (mode `contradiction`).**
+- *When:* after any change to what an agent reads (protocol, role guidance, template constraint, brief shape). Run it on the composed
+  prompts from a $0 dry run, before the lab.
+- *Asks for:* contradictions, ambiguities, missing referents and buried rules, each with verbatim quotes and line numbers, ranked. No
+  advice, no rewrites, at most 10 findings.
+- *On a finding:* confirmed ⇒ the open register, with an owner. A confirmed clash says nothing about whether it changes the real model;
+  that is the lab's job.
+- *Record:* it found the known cross-layer clash (brief item 10 vs R1 v2) in 2/2 blind runs, plus 3 further confirmed clashes, for 1
+  shared false alarm.
+
+**Use 3 — HYPOTHESIS, tracked, not a rule: a wording-vs-compliance diagnostic for a text change that FAILED in the lab.**
+- *What:* run the blind reader on the failing cell's candidate prompts.
+  - If it also misses the rule, the wording may be unclear, and a rewording round may be worth paying for.
+  - If it finds and applies the rule while the real model does not, the wording is already clear. More rewording is unlikely to help, so
+    route the fix to a fact or a structural change ("mechanical beats prose").
+- *Evidence:* one case. On L-CS-N R-FWA3/NB with T+F, the blind reader refused 5/5 while the real model approved 4/4. The owner chose a
+  fact (option 1); it did NOT move the Reviewer either (L-CS-N ADDENDUM (f)), so the case is unconfirmed.
+- *Tally:* tracked in PROXY-CALIBRATION.md as separate rows (case, proxy result, real result, route chosen, did the route work).
+- *Promotion:* it becomes guidance only after at least 2 more confirming cases and no contradicting one. It is never evidence that a
+  text works.
+
+**Review:** after 5 uses of Use 1 or Use 2, keep or drop each one on its tally of confirmed findings against false alarms.
 
 ## Outcome
 

@@ -5,7 +5,7 @@ import { AdminUserService } from '../services/user';
 import { AdminUserResponse } from '../types';
 import { CreateUserSchema, ListUsersSchema } from '@/lib/validation/admin-user-validation';
 import { trackActivity } from '@/lib/auth/audit';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 const adminHandlerLogger = authLogger.child({ module: 'AdminUserHandler' });
 
@@ -144,6 +144,7 @@ export async function createUserHandler(
       data: { users: [newUser] },
     };
   } catch (error) {
+    if (payloadTooLargeResponse(error)) throw error; // createHandler maps it to 413
     // Handle duplicate email (Prisma unique constraint violation)
     if (error instanceof Error && error.message.includes('Unique constraint')) {
       return { error: { message: 'A user with this email already exists', code: 'VALIDATION_ERROR' } };
@@ -229,6 +230,7 @@ export async function updateUserHandler(
       data: { users: [updatedUser] },
     };
   } catch (error) {
+    if (payloadTooLargeResponse(error)) throw error; // createHandler maps it to 413
     adminHandlerLogger.error({ err: error }, 'Failed to update user');
     throw error;
   }

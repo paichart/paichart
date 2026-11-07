@@ -24,8 +24,13 @@ read-only and produce a change package (G2). **Your services' security is your r
   and the stored URL keeps the query keys with every value masked. Use a read-only, single-repository, short-lived token.
 - **Kept (held) files** are declared only in the descriptor's `heldFiles`. A pipeline can never write that declaration.
   *Network (since 2026-10-27, network-provisioning 1.25.0):* on an unpinned Git service, the task's declared `git-file` line is the
-  pin — only a read equal to that line (owner/repo/path, its ref or the default branch) is kept; the declaration is snapshotted
+  pin — only a read equal to that line (owner/repo/path, its ref or `main`) is kept; the declaration is snapshotted
   when the leg first runs, so the run cannot rewrite it.
+- **Declaring network devices (most teams: Git files only):** each device the leg changes OR must see gets a line — a switch needed only
+  for its allocations is declared `git-file` too (kept, never edited). A Git-only device cannot reveal anything configured on the
+  device but never committed to Git. ⚠️ A device you leave out is not checked by that leg at all, and its Reviewer may approve a
+  value that collides there (known limitation, accepted 2026-11-05) — when in doubt, list it. See `PIPELINE-HARNESS-USER-GUIDE.md`
+  § "Which devices to list".
 - **Changing a descriptor:** delete the service and register it again from the new URL (no refresh action yet).
 
 ## 2. Let your colleagues' pipelines use a shared service
@@ -49,15 +54,27 @@ platform keeps (holds) its files only for the owner — unless you grant a POV:
   block, one line per device:
   - `<device>: git-file — service <name | descriptor URL> ; <owner>/<repo>/<path> [@ <branch|tag|commit>]`
   - `<device>: device-read — service <name | descriptor URL>`
+  - `<device>: live-read — service <name | descriptor URL>` (from network-provisioning 1.26.0: a device the leg must see but
+    never changes — read whole as evidence, never kept or edited, alone on its device)
   - `<device>: command-package`
 
-  A device with no line stops the leg. A device may have both a `git-file` and a `device-read` line: the Git file is the
+  A device the change touches with no line stops the leg. A device left out of the block is not checked by that leg, and its
+  Reviewer may approve a value that clashes with it (a known limitation): list every device a leg must see, not only the ones it
+  changes (PIPELINE-HARNESS-USER-GUIDE.md § Which devices to list). A device may have both a `git-file` and a `device-read` line: the Git file is the
   base and the device read is quoted as evidence only; the agents do not compare them (`drift: not checked`) — since held-network step 3 the
   platform does, as a warning fact (*Git file vs device configuration*), never a gate. Pasted device state is treated as evidence,
-  never as the starting file. A pipeline that only derives a value for others (a value leg) changes no configuration and
-  needs no block.
-- **Branches:** the Git file source reads the repository's default branch, or the one ref its descriptor's `gitPin.ref`
-  declares. A branch, tag or commit the service does not declare is refused and the leg stops.
+  never as the starting file. A pipeline that only derives a value for others (a value leg) changes no configuration. It
+  needs no block, and with none it reads through its service descriptor and reads no Git file. Since network-derivation 1.3.0
+  (2026-11-06) it MAY declare its own block (in a program: its own `## Device sources` section, carried as
+  `deviceSources["network-derivation"]`) to derive from your Git files: allowed and stated, never blocked — its card reads
+  `liveEvidence: git-only (declared devices)` (PIPELINE-HARNESS-USER-GUIDE.md § Which devices to list).
+- **Branches:** the Git file source reads `main`, or the one ref its descriptor's `gitPin.ref` declares. A read that names no
+  branch is read as `main` (since 2026-11-04) — never the repository's default branch — so a repo whose default is `master` must
+  still have a `main` branch, and a service that pins `release` refuses a read naming no branch. A branch, tag or commit the service
+  does not declare is refused and the leg stops.
+- **Paths never read through any file read (since 2026-11-04):** Terraform state, plan, variables and CLI-credential files and a
+  Nornir inventory are refused at the call gate on EVERY `get_file_contents` call, pinned or not — including your own GitHub MCP
+  service used in chat (`NEVER_READ_PATH`, logged as a blocked call). Name `.tf` and device configuration files only.
   *Network legs (since network-provisioning 1.24.0/1.25.0):* a refused ref does not stop the leg — that device is HELD (listed first,
   nothing packaged) and the leg's outcome is needs-revision (platform-forced if needed); on an unpinned customer Git service the ref
   in the declared line is read as named.

@@ -62,6 +62,9 @@ export async function stampExecutionNets(
     toolCalls: resultJson.toolCalls,
     owningLeg: input.owningLeg ?? null,
     deviceSources: input.deviceSources ?? null,
+    // Config-sources network push 1a (EF-S3): the version key `liveEvidence` is stamped on — read off the BUILT resultJson, like
+    // toolCalls, so the core and the rescue hand the nets the same value.
+    protocolInjection: resultJson.protocolInjection,
     ...(input.held ? { held: input.held } : {}),
     onContractApplicabilityError: (err) =>
       logger.warn({ executionId, err: err instanceof Error ? err.message : String(err) },

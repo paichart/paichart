@@ -38,7 +38,7 @@ import { resolveProtocolStamp, findProgramParentForStage, resolveOwningLeg } fro
 import type { LegInjection } from './context-chainer';
 import { recordFromChained, type ChainedRecord } from './chained-predecessors';
 import { interfaceContractMissingCause } from './interface-contract-missing';
-import { DEVICE_SOURCE_PROTOCOLS } from './held-bytes/variant';
+import { DEVICE_SOURCE_PROTOCOLS, deviceSourceContractKeyOf, deviceSourceLaneOf } from './held-bytes/variant';
 import { buildDeviceSourcesSnapshot, contractDeviceSourcesValue, resolveLegDeviceSources, DEVICE_SOURCES_SNAPSHOT_KEY } from './device-sources';
 
 const log = logger.child({ module: 'PrepareTaskForExecution' });
@@ -336,11 +336,17 @@ export async function prepareTaskForExecutionWithRecord(
     // write-if-absent), in the SAME statement, before any child exists. Capture and the device facts read this snapshot, never the
     // live description an agent can rewrite (device-sources-read.ts). `deviceSourcesSnapshot` is an AUDIT_STRIP_KEYS member: no
     // client surface — MCP included — can write it. A leg with no snapshot holds nothing on the device lane (fail closed, named).
-    const snapshot = contractCheck.type === 'PIPELINE' && resolved.protocol && DEVICE_SOURCE_PROTOCOLS.includes(resolved.protocol)
-      ? buildDeviceSourcesSnapshot(resolveLegDeviceSources({
-          contractValue: contractDeviceSourcesValue((contractCheck.inputContext as Record<string, unknown> | null)?.interfaceContract),
+    // VALUE-LEG-GIT (G2-a, G4-c): each protocol reads its OWN contract key; a VALUE leg is snapshotted only when it DECLARES a block
+    // (an `absent` resolution takes no snapshot, so the leg stays off the device lane and runs today's path, byte-identical).
+    const laneResolution = contractCheck.type === 'PIPELINE' && resolved.protocol && DEVICE_SOURCE_PROTOCOLS.includes(resolved.protocol)
+      ? resolveLegDeviceSources({
+          contractValue: contractDeviceSourcesValue((contractCheck.inputContext as Record<string, unknown> | null)?.interfaceContract,
+            deviceSourceContractKeyOf(resolved.protocol) ?? undefined),
           taskBody: contractCheck.description,
-        }), resolvedAt)
+        })
+      : null;
+    const snapshot = laneResolution && (deviceSourceLaneOf(resolved.protocol) === 'change' || laneResolution.state !== 'absent')
+      ? buildDeviceSourcesSnapshot(laneResolution, resolvedAt)
       : null;
     const stampJson = JSON.stringify({
       protocol: resolved.protocol,

@@ -8,7 +8,7 @@ import { checkDependencyCycle, GraphLimits } from '@/lib/utils/graph';
 import { prisma } from '@/lib/prisma';
 import { trackActivity } from '@/lib/auth/audit';
 import { taskLogger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 // POST /api/tasks/[taskId]/dependencies - Add task dependency
 export async function POST(req: NextRequest, props: { params: Promise<{ taskId: string }> }) {
@@ -106,6 +106,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ taskId: 
 
     return createSuccessResponse(dependency, 'Dependency added successfully');
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     taskLogger.error({ err: error, endpoint: 'POST /api/tasks/[taskId]/dependencies' }, 'Failed to add dependency');
     return createErrorResponse('INTERNAL_ERROR', 'Failed to add dependency');
   }

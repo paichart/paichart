@@ -40,6 +40,10 @@ export interface ReplayedAuthorResult {
    *  consumers of a patched entry here). Undefined ⇒ the frozen entry's value stands (no replayed stamp to substitute). */
   validationToolCalls?: Record<string, unknown> | null;
   gitDeviceComparison?: Record<string, unknown> | null;
+  /** L-CS-a (Config sources): the replayed Author's TRANSCRIPTION of its Harvester's `liveEvidence` — carried as context-chainer.ts
+   *  (cs-net-1a-facts a692e2542) carries it: from a leaf dependency that stamped it, to LIVE_EVIDENCE_READERS (the leg Reviewer is
+   *  one), whatever `checked` says. Undefined ⇒ the frozen entry's value stands. */
+  liveEvidence?: Record<string, unknown> | null;
 }
 
 export function patchReviewerContext(snap: Snapshot, r: ReplayedAuthorResult): Record<string, any> {
@@ -85,6 +89,10 @@ export function chainEntryFromResult(old: Record<string, any>, r: ReplayedAuthor
     delete entry.gitDeviceComparison;
     if (r.gitDeviceComparison && typeof r.gitDeviceComparison === 'object' && (r.gitDeviceComparison as { checked?: unknown }).checked === true) entry.gitDeviceComparison = r.gitDeviceComparison;
   }
+  if (r.liveEvidence !== undefined) {
+    delete entry.liveEvidence;
+    if (r.liveEvidence && typeof r.liveEvidence === 'object' && !Array.isArray(r.liveEvidence)) entry.liveEvidence = r.liveEvidence;
+  }
   for (const k of ['sanitized', 'rewritten', 'rewriteClasses', 'neutralizedCount', 'strippedControlChars']) delete entry[k];
   if (r9) Object.assign(entry, {
     sanitized: r9.strippedControlChars > 0 || r9.neutralizedInjections.length > 0,
@@ -100,7 +108,11 @@ export function chainEntryFromResult(old: Record<string, any>, r: ReplayedAuthor
  * patch. Refused when the frozen entry carries held fields (`heldIndex` / `heldView`): those describe the PRODUCTION harvest's
  * captures, which a replayed harvest does not share (k8s is not held-capable before step 3, so none is expected).
  */
-export function patchHarvesterEntry(exec: { config?: Record<string, any> | null; id: string }, r: ReplayedAuthorResult): { ctx: Record<string, any>; frozenEntry: Record<string, any> } {
+export function patchHarvesterEntry(exec: { config?: Record<string, any> | null; id: string }, r: ReplayedAuthorResult,
+  /** L-CS-N ARCH-LR (ADDENDUM (h)): a HELD arm whose harvest is a LAB SAMPLE replaces the production capture with the sample's own
+   *  (the caller sets heldIndex from the sample's store right after). Only then are the frozen held fields DROPPED rather than refused;
+   *  every other caller keeps the refusal. */
+  opts: { dropProductionHeld?: boolean } = {}): { ctx: Record<string, any>; frozenEntry: Record<string, any> } {
   const frozen = exec.config?.inputContext;
   if (!frozen || !Array.isArray(frozen.chainedFrom)) throw new Error(`${exec.id}: no frozen chainedFrom`);
   const idx = frozen.chainedFrom.findIndex((e: any) => e?.agentRole === 'infra_state_harvester');
@@ -108,9 +120,11 @@ export function patchHarvesterEntry(exec: { config?: Record<string, any> | null;
   if (frozen.chainedFrom.filter((e: any) => e?.agentRole === 'infra_state_harvester').length !== 1) throw new Error(`${exec.id}: more than one frozen Harvester entry`);
   const old = frozen.chainedFrom[idx];
   const held = ['heldIndex', 'heldView'].filter((k) => k in old);
-  if (held.length) throw new Error(`${exec.id}: the frozen Harvester entry carries ${held.join(', ')} — a replayed harvest cannot inherit the production capture`);
+  if (held.length && !opts.dropProductionHeld) throw new Error(`${exec.id}: the frozen Harvester entry carries ${held.join(', ')} — a replayed harvest cannot inherit the production capture`);
+  const base = { ...old };
+  for (const k of held) delete base[k];
   const chainedFrom = [...frozen.chainedFrom];
-  chainedFrom[idx] = chainEntryFromResult(old, r);
+  chainedFrom[idx] = chainEntryFromResult(base, r);
   return { ctx: { ...frozen, chainedFrom }, frozenEntry: old };
 }
 

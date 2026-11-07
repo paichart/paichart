@@ -5,7 +5,7 @@ import { templateService } from '@/lib/services/template-service';
 import { validateTemplateSchema, updatePhaseTemplateIds } from '@/lib/utils/template-schema-validator';
 import { povLogger } from '@/lib/logger';
 import { ensureObject } from '@/lib/utils/ensure-object';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 // Define a consistent structure for template data
 interface TemplateMetadata {
@@ -335,6 +335,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         );
       }
     } catch (parseError) {
+    const tooLarge = payloadTooLargeResponse(parseError); if (tooLarge) return tooLarge;
       povLogger.error({ err: parseError, povTemplateId }, 'Failed to parse phase template update request body');
       return NextResponse.json(
         { error: 'Invalid request format' },

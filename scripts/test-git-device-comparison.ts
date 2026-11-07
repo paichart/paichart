@@ -145,7 +145,9 @@ const GIT = [
   await test('F2 gitDeviceComparison named states: no device with both ⇒ not checked; a Git read at another ref / path ⇒ no-git-file-text; no device read ⇒ no-device-config-text', () => {
     const one = computeGitDeviceComparison(resolveLegDeviceSources({ contractValue: [lines[1]], taskBody: null }), records) as Rec;
     assert(one.checked === false && one.reason === 'no-device-declares-both-sources', JSON.stringify(one));
-    const atRef = computeGitDeviceComparison(resolveLegDeviceSources({ contractValue: [`${lines[0]} @ main`, lines[1]], taskBody: null }), records) as Rec;
+    // Config-sources push 0 (D3): a missing ref IS main, so `@ main` vs a call with no ref is now the SAME read (see F-P0); the case this
+    // assertion guards — a line naming a ref the call did not pass — moves to a non-main ref.
+    const atRef = computeGitDeviceComparison(resolveLegDeviceSources({ contractValue: [`${lines[0]} @ release`, lines[1]], taskBody: null }), records) as Rec;
     assert(atRef.devices[0].state === 'no-git-file-text', `a ref the call did not pass is not that read: ${JSON.stringify(atRef)}`);
     const noDev = computeGitDeviceComparison(sources, [gitCall]) as Rec;
     assert(noDev.devices[0].state === 'no-device-config-text', JSON.stringify(noDev));
@@ -169,6 +171,31 @@ const GIT = [
     assert(absent.checked === false && absent.reason === 'device-sources-absent' && absent.declaration.state === 'absent', JSON.stringify(absent));
   });
 
+  await test('F-P0 push 0 (D3, execution-facts B1): a missing ref is main on BOTH sides — explicit main, refs/heads/main and a gate-rewritten echo still read', () => {
+    const withRef = (ref: string) => {
+      const c = JSON.parse(JSON.stringify(gitCall));
+      const set = (o: Rec) => { if (o && typeof o === 'object' && o.owner !== undefined && o.path !== undefined) o.ref = ref; };
+      const walk = (o: Rec): void => { if (!o || typeof o !== 'object') return; set(o); for (const v of Object.values(o)) walk(v as Rec); };
+      walk(c);
+      if (typeof c.arguments === 'string') { const a = JSON.parse(c.arguments); walk(a); c.arguments = JSON.stringify(a); }
+      return c;
+    };
+    for (const ref of ['main', 'refs/heads/main']) {
+      const f = computeDeviceSourceReads(sources, [withRef(ref), configCall]) as Rec;
+      const git = (f.devices[0].sources as Rec[]).find((x) => x.kind === 'git-file')!;
+      assert(git.read.state === 'read', `a call carrying ref ${ref} on a line naming no ref must read: ${JSON.stringify(git)}`);
+      const c = computeGitDeviceComparison(sources, [withRef(ref), configCall]) as Rec;
+      assert(c.devices[0].state === 'compared', `comparison must find the Git text at ref ${ref}: ${JSON.stringify(c.devices[0])}`);
+    }
+    const atMain = computeDeviceSourceReads(resolveLegDeviceSources({ contractValue: [`${lines[0]} @ main`, lines[1]], taskBody: null }), records) as Rec;
+    assert((atMain.devices[0].sources as Rec[]).find((x) => x.kind === 'git-file')!.read.state === 'read', `a line @ main matches a call with no ref (D3): ${JSON.stringify(atMain)}`);
+    // sec-ops PUSH0 S-2: `refs/heads/<x>` folds to `<x>` — a line @ release matches a call at refs/heads/release (both gates admit it)
+    const atRel = computeDeviceSourceReads(resolveLegDeviceSources({ contractValue: [`${lines[0]} @ release`, lines[1]], taskBody: null }), [withRef('refs/heads/release'), configCall]) as Rec;
+    assert((atRel.devices[0].sources as Rec[]).find((x) => x.kind === 'git-file')!.read.state === 'read', `refs/heads/release reads a line @ release: ${JSON.stringify(atRel)}`);
+    const other = computeDeviceSourceReads(sources, [withRef('release'), configCall]) as Rec;
+    assert((other.devices[0].sources as Rec[]).find((x) => x.kind === 'git-file')!.read.state === 'not-read', 'NEGATIVE CONTROL: a call at another ref is still not that read');
+  });
+
   await test('F4 the §6 SEAM: a carried checked comparison renders facts (no verdict words); an entry without it renders no line', () => {
     const moved = GIT.replace('   ip address 10.0.12.1/30\n', '').replace('   ip address 1.1.1.1/32\n', '   ip address 1.1.1.1/32\n   ip address 10.0.12.1/30\n');
     const f = computeGitDeviceComparison(sources, [{ ...gitCall, result: JSON.parse(JSON.stringify(gitCall.result).split(JSON.stringify(GIT)).join(JSON.stringify(moved))) }, configCall]) as Rec;
@@ -182,7 +209,8 @@ const GIT = [
   });
 
   await test('F5 the chainer carries the comparison to the Architect and the leg Reviewer only (source pin: role-scoped, checked-only, conditional spread)', () => {
-    assert([...GIT_DEVICE_COMPARISON_READERS].sort().join() === 'change_reviewer,infra_change_architect', [...GIT_DEVICE_COMPARISON_READERS].join());
+    // VALUE-LEG-GIT (2026-11-06): + the value leg's Architect and Reviewer (both chain the Harvester directly; G1-c must-catch needs both).
+    assert([...GIT_DEVICE_COMPARISON_READERS].sort().join() === 'change_reviewer,derivation_architect,derivation_reviewer,infra_change_architect', [...GIT_DEVICE_COMPARISON_READERS].join());
     const src = fs.readFileSync(path.join(__dirname, '../lib/agents/harness/context-chainer.ts'), 'utf-8');
     assert(src.includes('...(gitDeviceComparison ? { gitDeviceComparison } : {}),'), 'conditional spread in chainedFrom.push');
     assert(/\(stampedComparison as \{ checked\?: unknown \}\)\.checked === true\s*\n\s*&& GIT_DEVICE_COMPARISON_READERS\.has\(/.test(src), 'checked-only and role-scoped');

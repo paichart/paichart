@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { mcpServerLimiter } from '@/lib/middleware/rate-limit';
 import { mcpLogger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 interface ExtendedMCPServerConfig extends MCPServerConfig {
   id: string;
@@ -253,6 +253,7 @@ export async function POST(request: NextRequest) {
       message: 'Server added successfully'
     });
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     mcpLogger.error({ err: error }, 'Failed to add server');
     return NextResponse.json({
       success: false,

@@ -8,7 +8,7 @@ import { taskListCache } from '@/lib/tasks/handlers/get';
 
 import { mcpLogger } from '@/lib/logger';
 import { AppError, PipelineStageMismatchError } from '@/lib/errors';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 // F6 (2026-07-25): MCP actions that mutate a task row and therefore invalidate cached task-list
 // reads. Derived from the router's action set: task.assign/comment/complete/create/update change
 // the row itself; agent.configure/execute change agent fields ON the task (the list surfaces
@@ -435,6 +435,7 @@ Use:
       data: result
     };
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     // ITEM 3g.1 (2026-04-25): preserve typed-error discriminators across
     // the MCP boundary. Without this check, all AppError subclasses
     // (DuplicateActiveExecutionError, PipelineStageMismatchError,

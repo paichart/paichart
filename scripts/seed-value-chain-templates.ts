@@ -131,7 +131,7 @@ export const TEMPLATES: TemplateSeed[] = [
     },
     constraints: {
       'Protocol First': 'Must read the injected protocol before beginning work',
-      'Harvest-Anchored': 'Every member names the harvest entry it came from; an empty population is a gap, never an invented value',
+      'Harvest-Anchored': 'Every member names the harvest entry it came from. Where the objective asks for free addresses, every allocation they must avoid names its harvest entry instead, and the chosen addresses are not in the harvest. An empty population is a gap, never an invented value',
       'No Device Contact': 'Reads only the chained harvest; the Harvester is the only device contact in this leg',
     },
   },

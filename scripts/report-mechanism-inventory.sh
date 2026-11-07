@@ -661,7 +661,20 @@ UNION ALL SELECT '⚪ CAPTURE refs by service: refs / with a revision / distinct
 -- `device:<host>`, path /running-config) and the two network Harvester facts. Every 🔴 is 0 by construction on correct code; each ⚪
 -- is its control (0 device refs ⇒ the 🔴 beside them are unmeasured — an ABSENCE until a declared device-read leg runs after the deploy).
 -- _devsrcleg MUST equal variant.ts DEVICE_SOURCE_PROTOCOLS (pinned by test-device-read-capture).
-CREATE TEMP VIEW _devsrcleg AS SELECT * FROM (VALUES ('network-provisioning-protocol')) v(name);
+-- VALUE-LEG-GIT (2026-11-06): network-derivation joins as the VALUE lane — it declares Device sources but NEVER holds (G2-b); the
+-- _devsrcvalue 🔴 lines below are 0 by construction (capture takes no device scope there; the carrier applies no device force).
+CREATE TEMP VIEW _devsrcleg AS SELECT * FROM (VALUES ('network-provisioning-protocol'), ('network-derivation-protocol')) v(name);
+CREATE TEMP VIEW _devsrcvalue AS SELECT * FROM (VALUES ('network-derivation-protocol')) v(name);
+SELECT '🔴 a CAPTURE ref (any target) on an execution whose owning leg is a VALUE-lane Device-sources leg (G2-b: value legs never hold)' AS line, count(*)::text AS value
+  FROM held_file_refs r JOIN _execleg x ON x.eid = r."executionId" WHERE r.kind = 'CAPTURE' AND x.legproto IN (SELECT name FROM _devsrcvalue)
+UNION ALL SELECT '🔴 a held-edit force reason on a VALUE-lane leg (G2-b: the carrier never forces there)', count(*)::text
+  FROM tasks t WHERE t.type = 'PIPELINE' AND t.metadata->>'protocol' IN (SELECT name FROM _devsrcvalue) AND t.metadata->'qualityGate' ? 'heldEdit'
+UNION ALL SELECT '⚪ VALUE-lane legs carrying a declaration snapshot (G4-c: taken only when the leg declares a block), by state — '
+  || coalesce(t.metadata->'deviceSourcesSnapshot'->'resolution'->>'state', '(unreadable)'), count(*)::text
+  FROM tasks t WHERE t.type = 'PIPELINE' AND t.metadata->>'protocol' IN (SELECT name FROM _devsrcvalue) AND t.metadata ? 'deviceSourcesSnapshot' GROUP BY 1
+UNION ALL SELECT '🔴 a VALUE-lane leg snapshot whose state is absent (G4-c: an absent declaration takes no snapshot)', count(*)::text
+  FROM tasks t WHERE t.type = 'PIPELINE' AND t.metadata->>'protocol' IN (SELECT name FROM _devsrcvalue)
+   AND t.metadata->'deviceSourcesSnapshot'->'resolution'->>'state' = 'absent';
 SELECT '⚪ device-read lane CAPTURE refs (target device:<host>)' AS line, count(*)::text AS value
   FROM held_file_refs WHERE kind = 'CAPTURE' AND target LIKE 'device:%' AND "declaredBy" = 'platform-default'
 UNION ALL SELECT '⚪ device-read lane refusals by name — ' || refusal, count(*)::text FROM held_capture_refusals
@@ -681,6 +694,24 @@ UNION ALL SELECT '· deviceSourceReads: stamps with an undeclared device config 
 UNION ALL SELECT '⚪ gitDeviceComparison Harvester stamps: compared devices / devices with ≥ 1 difference', coalesce(sum((a.j->'gitDeviceComparison'->>'comparedDevices')::int), 0) || ' / '
   || count(*) FILTER (WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(a.j->'gitDeviceComparison'->'devices') = 'array' THEN a.j->'gitDeviceComparison'->'devices' ELSE '[]' END) d WHERE (d->>'differencesTotal')::int > 0))
   FROM _a a WHERE a.name = 'result.json' AND a.j->'gitDeviceComparison'->>'point' = 'harvester'
+-- Config-sources network push 1a (2026-11-04): a declared `live-read` device read is moved by CAPTURE to the handleless refusal
+-- `live-read-evidence-only` (never a held base) — it does not match the `device-%` refusal line above, so it is counted here. And the
+-- `liveEvidence` fact, stamped only on an execution composed at/above its released version — '{1,26,0}' MUST equal live-evidence.ts
+-- LIVE_EVIDENCE_MIN_VERSIONS (pinned by test-live-evidence LE14). Both ⚪ read 0 until network 1.26.0 runs; the 🔴 are 0 by construction.
+UNION ALL SELECT '⚪ live-read evidence refusals (live-read-evidence-only: a declared live read, never a held base)', count(*)::text
+  FROM held_capture_refusals WHERE refusal = 'live-read-evidence-only'
+UNION ALL SELECT '🔴 a live-read-evidence-only refusal on an execution whose owning leg does not declare Device sources', count(*)::text
+  FROM held_capture_refusals r LEFT JOIN _execleg x ON x.eid = r."executionId"
+ WHERE r.refusal = 'live-read-evidence-only' AND coalesce(x.legproto, '') NOT IN (SELECT name FROM _devsrcleg)
+UNION ALL SELECT '⚪ liveEvidence stamps by point / summary — ' || coalesce(a.j->'liveEvidence'->>'point', '(none)') || ' / '
+  || coalesce(a.j->'liveEvidence'->>'summary', 'not checked: ' || coalesce(a.j->'liveEvidence'->>'reason', '(none)')), count(*)::text
+  FROM _a a WHERE a.name IN ('result.json', 'pipeline-index.json') AND a.j ? 'liveEvidence' GROUP BY 1
+UNION ALL SELECT '🔴 a liveEvidence stamp on an execution composed below network-provisioning 1.26.0 / network-derivation 1.3.0 (EF-S3: stored legs never stamp)', count(*)::text
+  FROM _a a WHERE a.name IN ('result.json', 'pipeline-index.json') AND a.j ? 'liveEvidence'
+   AND NOT ((a.j->'protocolInjection'->'delta'->>'name' = 'network-provisioning-protocol'
+        AND coalesce(string_to_array(substring(a.j->'protocolInjection'->'delta'->>'version' FROM '^[0-9]+\.[0-9]+\.[0-9]+'), '.')::int[], '{0}') >= '{1,26,0}'::int[])
+     OR (a.j->'protocolInjection'->'delta'->>'name' = 'network-derivation-protocol'
+        AND coalesce(string_to_array(substring(a.j->'protocolInjection'->'delta'->>'version' FROM '^[0-9]+\.[0-9]+\.[0-9]+'), '.')::int[], '{0}') >= '{1,3,0}'::int[]))
 -- held-network step 3 push 2 (O-2, the J1 entry gate): capture governs from the leg's FIRST-EXECUTION declaration snapshot
 -- (metadata.deviceSourcesSnapshot, prepare-task-for-execution.ts). The 🔴 is scoped to refs written after the first snapshot ever
 -- (a ref from a leg first executed before push 2 deployed predates the rule); while the ⚪ reads nothing it is unmeasured.

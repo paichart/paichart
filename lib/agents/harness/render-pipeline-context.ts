@@ -105,6 +105,9 @@ export function renderPipelineContextSection(inputContext: unknown, opts: Pipeli
       }
       parts.push('');
     }
+    // Config-sources network push 1a: one Harvester's live-evidence fact renders ONCE per §6 (keyed by the Harvester execution: the
+    // stamp's own entry, or a transcription's `harvesterExecutionId`) — never twice when a consumer chains the Harvester and an Author.
+    const liveEvidenceRendered = new Set<string>();
     for (const prev of ctx.chainedFrom) {
       if (isInherited(prev)) {
         // WHAT WAS CHAINED decides the heading, and it is keyed on `source`, NOT on `degraded`.
@@ -190,6 +193,19 @@ export function renderPipelineContextSection(inputContext: unknown, opts: Pipeli
           (prev as { gitDeviceComparison?: Record<string, unknown> | null }).gitDeviceComparison
         );
         if (gdLines) parts.push(...gdLines);
+      }
+      // Config-sources network push 1a (DESIGN v2 §1.4, F8): the platform's live-evidence fact — a PURE function of the carried fact;
+      // the chainer carries it only from a leaf dependency to LIVE_EVIDENCE_READERS (Architect, Author, leg Reviewer).
+      {
+        const le = (prev as { liveEvidence?: Record<string, unknown> | null }).liveEvidence;
+        if (le && typeof le === 'object' && !isInherited(prev)) {
+          const key = typeof le.harvesterExecutionId === 'string' ? le.harvesterExecutionId : String((prev as { executionId?: unknown }).executionId ?? '');
+          if (!liveEvidenceRendered.has(key)) {
+            liveEvidenceRendered.add(key);
+            const leLines = renderLiveEvidenceForPrompt(le);
+            if (leLines) parts.push(...leLines);
+          }
+        }
       }
       // Net #1 (2026-09-17): the predecessor's DERIVATION CONTAINMENT disposition. Added last of the
       // three, and the reason it was missing is worth keeping: for SIBLING entries it is stamped at
@@ -382,5 +398,6 @@ import { renderRollbackContainmentForPrompt } from './render-rollback-containmen
 import { renderValidationToolCallsForPrompt } from './validation-tool-calls';
 import { renderGitDeviceComparisonForPrompt } from './git-device-comparison';
 import { renderHeldForEntry } from './held-bytes/render-held';
+import { renderLiveEvidenceForPrompt } from './live-evidence-render'; // client-safe: no server imports (AgentBuilderPreview bundles this file)
 import { openFenceOf } from '../../utils/markdown-fence';
 

@@ -41,7 +41,10 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     // When asChild is true, we need to ensure we're passing a single child to Slot
     if (asChild && React.Children.count(props.children) === 1) {
       const Comp = Slot;
-      const child = React.Children.only(props.children) as React.ReactElement;
+      // React 19 types an element's props as `unknown`; name the fields this clone reads (type-only, behaviour unchanged).
+      const child = React.Children.only(props.children) as React.ReactElement<
+        { className?: string; children?: React.ReactNode } & Record<string, unknown>
+      >;
       
       // Clone the child element with the button's classes
       return (

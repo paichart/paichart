@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { MCPRecommendationStatus } from '@prisma/client';
 import { parseEnumParam } from '@/lib/utils/parse-enum-param';
 import { mcpLogger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 /**
  * GET /api/mcp/service-recommendations
@@ -149,6 +149,7 @@ export async function POST(request: NextRequest) {
       count
     });
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     mcpLogger.error({ err: error }, 'Failed to generate service recommendations');
     return NextResponse.json(
       {

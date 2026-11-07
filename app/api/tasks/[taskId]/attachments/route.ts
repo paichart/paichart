@@ -8,7 +8,7 @@ import { createErrorResponse, createSuccessResponse } from '@/lib/api/error-hand
 import { prisma } from '@/lib/prisma';
 import { trackActivity } from '@/lib/auth/audit';
 import { taskLogger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 // POST /api/tasks/[taskId]/attachments - Upload attachment
 export async function POST(req: NextRequest, props: { params: Promise<{ taskId: string }> }) {
@@ -108,6 +108,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ taskId: 
 
     return createSuccessResponse(attachment, 'Attachment uploaded successfully');
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     taskLogger.error({ err: error, endpoint: 'POST /api/tasks/[taskId]/attachments' }, 'Failed to upload attachment');
     return createErrorResponse('INTERNAL_ERROR', 'Failed to upload attachment');
   }

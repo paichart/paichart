@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { SalesTheatre } from '@prisma/client';
 import { logger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 // GET /api/user/preferences
 // Get the current user's geographical preferences
@@ -158,6 +158,7 @@ export async function PUT(req: NextRequest) {
     
     return NextResponse.json({ success: true, data: updatedUser });
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     logger.error({ err: error }, 'User Preferences API error (PUT)');
     return NextResponse.json(
       { success: false, error: 'Failed to update user preferences' },

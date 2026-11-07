@@ -5,7 +5,7 @@ import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { ProfileUpdateSchema } from '@/lib/validation/user-validation';
 import { authLogger } from '@/lib/logger';
 import { createExpiredTokenCookies } from '@/lib/cookies';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 export async function PUT(request: NextRequest) {
   try {
@@ -113,6 +113,7 @@ export async function PUT(request: NextRequest) {
       message: 'Profile updated successfully'
     });
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     authLogger.error({ err: error }, 'Profile update failed');
     return NextResponse.json(
       { error: 'Internal server error' },

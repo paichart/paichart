@@ -547,3 +547,36 @@ no lab: its gate is a pre-registered live control on the canary.
 - Private `paichart-lab-configs` (rig source, canaries, the hosted pin) → one-way mirror `scripts/lab-configs/sync-public-configs.py` → public `paichart/paichart-configs` (+ `usecases/`, 3 released). Plan + decisions: `cline_docs/reviews/lab-configs-central-repo-2026-11-02/PHASE0-SUMMARY.md`.
 - Check a "working run" against its STORED ROOT (`programReleasable`), never a run sheet — held-k8s-window-p1 was listed current and is `false`.
 - Next work rides triggers: GITHUB-ONLY-MODE (one `## Config sources` design for k8s/terraform/observability), DEVEXT-FRESH-INSTALL, HOSTED-DEMO-GIT-SOURCE.
+
+## Pointer (2026-11-04): Config sources — design v2 decided, push 0 live
+- One `## Config sources` model for all four domains (`live-read` = evidence, never held/forced; `liveEvidence` fact; R1 v2 coverage rule with "a Node C acceptance
+  check is a backstop, not a substitute"), every owner row decided (groups 1–5; budget Option C, domain by domain): `cline_docs/reviews/config-sources-design-2026-11-04/`
+  (DESIGN.md v2, SYNTHESIS, AUDIT, G1E-RESULT, PUSH0-BUILD, LEARNINGS-LEDGER LL-CS-*). Continuation: `cline_docs/follow-ups/config-sources-continuation-2026-11-04.md`.
+- Push 0 (cut 09:41:51.73Z): an absent Git ref is checked AS `main` inside the pin and forwarded/echoed as such; `NEVER_READ_PATH` on unpinned file reads. Next: the network step.
+
+## Pointer (2026-11-05): network-provisioning 1.26.0 merged locally — `live-read` kind gate OPEN
+`LIVE_READ_KIND_ENABLED = true` ships WITH the 1.26.0 text (owner SHIP after L-CS-N, gate-2 override = known limitation UNDECLARED-SCOPE-DEVICE-UPSTREAM). Build, gates, rollback, deploy steps: `cline_docs/reviews/config-sources-design-2026-11-04/TEXT-1.26.0-BUILD.md`.
+
+## Pointer (2026-11-06): VALUE-LEG-GIT — a value leg declares its own Device sources (network-derivation 1.3.0, LIVE, canaries A+B PASS)
+- `DEVICE_SOURCE_LANES` (variant.ts): change = network-provisioning, value = network-derivation, own contract key each. A value leg joins
+  only by declaring a block (snapshot), NEVER holds; Git-only is a stated limit (card `liveEvidence: git-only (declared devices)`,
+  `git-file-only` warning), never a block; no block ⇒ descriptor path, reads no Git file. Program Architect: the key ONLY when
+  requirements give the value leg lines (G9, ceiling 21,800). Record + controls: `cline_docs/reviews/value-leg-git-2026-11-06/`;
+  discovery § VALUE-LEG-GIT; LL-CS-31..37. Open follow-ups (shared Harvester own key + `git-only` on change legs at network-provisioning's
+  next text; free-address containment blind spot) are in PLAN §9 / the register list.
+
+## Pointer (2026-11-05): Config sources network step — L-CS-N closed, 1.26.0 shipping
+- **Shipped shape:** `live-read` (evidence only; static gate opens with the 1.26.0 text) · `liveEvidence` incl. `contractNotDeclared` (devices the leg's contract names that the leg did not declare; data-rendered) · R1 v2 Reviewer coverage rule. Records: `cline_docs/reviews/config-sources-design-2026-11-04/` (LAB-RESULT-L-CS-N, TEXT-1.26.0-BUILD, LEARNINGS-LEDGER LL-CS-*).
+- **Owner override + KNOWN LIMITATION:** an in-scope device left out of a leg's list, with the package deferring the check to Node C, is APPROVED by the leg Reviewer (5 Reviewer-side levers failed; it blocks only when the device is DECLARED and not read). Documented in the user guides; fix order in register UNDECLARED-SCOPE-DEVICE-UPSTREAM (requirements ask → brief/Author deferral → GIT-EVIDENCE-KIND). **LL-CS-20: a Reviewer defers to the package's own scope sentence — fix the shape upstream before adding Reviewer text.**
+- Security: chained-fact forgery GO/LOW (human POV writers only) — `REVIEW-sec-ops-FORGEABLE.md`; residuals LIVE-EVIDENCE-CHAINED-HARDENING.
+
+## Pointer (2026-11-08): network text batch 1 SHIPPED — network-provisioning 1.27.0 + network-derivation 1.3.1 (lab NB1)
+- **Live** since restart 2026-11-07T21:33:01.791Z (renders `fb22f5bb` / `68864acc`, = lab); derivation_architect reseeded 21:40:59Z. Cut + keys:
+  SERIES-CUT-LEDGER 2026-11-07. New: the change Reviewer's OWN blocking item for an unread declared source; Apply base (drifted device ⇒
+  incremental / Git-sync first); change-lane `git-only` card word. Records: `cline_docs/reviews/value-leg-git-2026-11-06/LAB-RESULT-NB1*.md`.
+- **Owner overrides beside gates:** OVR-NB1-JP1 (one golden sample, rig-proven over-block), G13 (NET-FWA3-EDGE). Never rewrite a gate.
+- **Live controls:** six `nb1-*` in `scripts/canary-check.ts`; `nb1-apply-base` FINDING on the released canary B is the NB1 defect, by design.
+- **Ops lessons (LL-CS-39..43, MAINTAINER-ONBOARDING rule 11):** candidate text on a LOCAL-ONLY branch until its lab passes (`ship.sh` pushes
+  whatever `main` is); no commits on `main` mid-ship; re-run a failing gate's suite before calling it broken; a device-semantics refusal gets
+  a rig check; ping lab readers when a run ends (their watch can miss it).
+- **Open:** a Reviewer over-reads `inside-sub-block` nesting as drift (JP1, 1 in 8) — general fix only after more evidence.

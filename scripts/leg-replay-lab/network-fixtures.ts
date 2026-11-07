@@ -35,7 +35,8 @@ export const NET_SERVED: readonly NetTier[] = ['device-pool', 'device-pool-compo
 
 export interface DevicePoolEntry { tool: 'fetch_data' | 'list_devices'; getter?: string; host?: string; args?: Record<string, unknown>;
   /** ADDENDUM (f): an entry DERIVED from another stored entry (named), never fetched */ derived?: string;
-  /** the stored gateway envelope (result.json toolCalls[i].result), verbatim */ result: Record<string, any>; from: { executionId: string; index: number } }
+  /** the stored gateway envelope (result.json toolCalls[i].result), verbatim */ result: Record<string, any>; from: { executionId: string; index: number };
+  /** L-CS-N (F14): the rig the stored read came from (`devext` self-host, `prod` lab rig) — named per entry */ rig?: string }
 export interface DevicePool { serviceNames: string[]; entries: DevicePoolEntry[]; failure?: { result: Record<string, any>; from: { executionId: string; index: number } } }
 export interface CatalogueService { name: string; tools: Record<string, any>; health: Record<string, any>; discoverRow: Record<string, any> }
 export interface CatalogueFixture { discoverWrapper: Record<string, any>; listWrapper: Record<string, any>; services: Record<string, CatalogueService> }
@@ -348,4 +349,94 @@ export function provePlants(proved: DevicePool, planted: DevicePool, plants: Dev
   });
   if (proved.entries.length !== planted.entries.length) bad.push('entry count moved');
   return bad;
+}
+
+/**
+ * L-CS-N (F14, ME-B3; 2026-11-04): a PRE-REDACTION device pool from self-host Harvester records, rig named per entry. Composes the
+ * L-NB2 steps: build from the stored reads → identity proof (each inner result byte-identical to its record) → named plants restoring
+ * what R10 replaced → reversal proof (un-planting reproduces the proved pool byte for byte) → the WITNESS lines asserted present in the
+ * named entry (for L-CS-N: ceos2's `interface Loopback11` / `ip address 10.99.0.2/32`, the collision the edge leg missed). Throws by
+ * name on any failure; never writes.
+ */
+export interface RigPoolSpec { rig: string; sourceExecutionIds: string[]; serviceNames: string[]; plants: DevicePlant[];
+  witness?: { host: string; getter: string; mustContain: string[] };
+  /** O-4 (L-CS-N): split each stored single-host MULTI-getter fetch_data read into single-getter entries (`derived: split:<exec>#<i>`)
+   *  for getters no stored single read covers — each derived entry's output is the stored sub-object, proved deep-equal. */
+  splitMultiGetter?: boolean;
+  /** L-CS-N: entries read through ANOTHER registration of the same service (the devext core leg registered ceos-lab-readonly separately)
+   *  carry that registration's id in the envelope (`metadata.targetServiceId`), which the shipping capture and read record use as the
+   *  call's identity. In the replayed leg ONE registration serves every device, so those ids are re-stamped to it — exactly-once per
+   *  entry, counted, proved by reversal (`identity: { to, from: [...] }`). */
+  identity?: { to: string; from: string[] } }
+
+/** O-4: per-getter entries derived from stored multi-getter single-host reads (named departure, `derived`), each proved equal to its
+ *  stored sub-object. A getter a stored single read already covers is NOT derived (the stored read wins). */
+export function splitMultiGetterEntries(sources: Array<{ executionId: string; toolCalls: Array<Record<string, any>> }>, serviceNames: string[], have: DevicePoolEntry[]): { entries: DevicePoolEntry[]; bad: string[] } {
+  const entries: DevicePoolEntry[] = []; const bad: string[] = [];
+  for (const s of sources) s.toolCalls.forEach((t, index) => {
+    if (t?.tool !== 'services' || t.success === false) return;
+    const a = asObj(t.arguments) ?? {}; const inner = asObj(a.arguments) ?? {};
+    if (a.tool !== 'fetch_data' || !serviceNames.includes(String(a.targetService ?? ''))) return;
+    const k = deviceCallKey('fetch_data', inner);
+    if (k.single || !k.host || !k.getters || k.getters.length < 2 || inner.filter_group !== undefined) return;
+    const r = t.result as Record<string, any>; const d = r?.content?.[0]?.data;
+    const host = d?.result?.structuredContent?.hosts?.[k.host];
+    if (!d || d.success !== true || r.isError || !host || host.success !== true) return;
+    for (const g of k.getters) {
+      if ([...have, ...entries].some((e) => e.tool === 'fetch_data' && e.host === k.host && e.getter === g)) continue;
+      if (!(g in (host.output ?? {}))) { bad.push(`${k.host}/${g}: not in the stored multi-getter output (${s.executionId}#${index})`); continue; }
+      const env = JSON.parse(JSON.stringify(r));
+      const dd = env.content[0].data;
+      dd.arguments = { ...(asObj(dd.arguments) ?? {}), getters: [g] };
+      dd.result.structuredContent.hosts[k.host].output = { [g]: host.output[g] };
+      if (JSON.stringify(dd.result.structuredContent.hosts[k.host].output[g]) !== JSON.stringify(host.output[g])) bad.push(`${k.host}/${g}: derived sub-object differs`);
+      entries.push({ tool: 'fetch_data', getter: g, host: k.host, derived: `split:${s.executionId}#${index}`, result: env, from: { executionId: s.executionId, index } });
+    }
+  });
+  return { entries, bad };
+}
+export function buildRigPool(sources: Array<{ executionId: string; toolCalls: Array<Record<string, any>> }>, spec: RigPoolSpec): { pool: DevicePool; proved: DevicePool; applied: Array<{ host: string; getter: string; count: number }>; witness: string[] } {
+  if (!spec.rig) throw new Error('L-CS-N pool: name the rig');
+  const proved = buildDevicePool(sources, spec.serviceNames);
+  const bad = provePool(proved, new Map(sources.map((x) => [x.executionId, x.toolCalls])));
+  if (bad.length) throw new Error(`L-CS-N pool identity FAILED: ${bad.join(' | ')}`);
+  if (spec.splitMultiGetter) {
+    const sp = splitMultiGetterEntries(sources, spec.serviceNames, proved.entries);
+    if (sp.bad.length) throw new Error(`L-CS-N multi-getter split FAILED: ${sp.bad.join(' | ')}`);
+    proved.entries.push(...sp.entries);
+  }
+  const { pool, applied } = plantDevicePool(proved, spec.plants);
+  const bad2 = provePlants(proved, pool, spec.plants);
+  if (bad2.length) throw new Error(`L-CS-N plant reversal FAILED: ${bad2.join(' | ')}`);
+  const witness: string[] = [];
+  if (spec.witness) {
+    const e = pool.entries.find((x) => x.tool === 'fetch_data' && x.host === spec.witness!.host && x.getter === spec.witness!.getter);
+    if (!e) throw new Error(`L-CS-N witness: no ${spec.witness.host}/${spec.witness.getter} entry in the pool`);
+    const txt = JSON.stringify(e.result?.content?.[0]?.data?.result ?? null);
+    for (const w of spec.witness.mustContain) { if (!txt.includes(JSON.stringify(w).slice(1, -1))) throw new Error(`L-CS-N witness: ${spec.witness.host}/${spec.witness.getter} lacks ${JSON.stringify(w)}`); witness.push(w); }
+  }
+  const restamped: string[] = [];
+  if (spec.identity) {
+    for (const e of pool.entries) {
+      let t = JSON.stringify(e.result);
+      for (const from of spec.identity.from) {
+        const n = t.split(from).length - 1;
+        if (!n) continue;
+        if (n !== 1) throw new Error(`L-CS-N identity: ${e.host}/${e.getter} carries ${from} ${n} times (want exactly once)`);
+        t = t.split(from).join(spec.identity.to);
+        (e as any).identityRestamped = `${from} → ${spec.identity.to}`;
+        restamped.push(`${e.host}/${e.getter}`);
+      }
+      e.result = JSON.parse(t);
+    }
+    // reversal: un-stamping each re-stamped entry gives the planted pool's bytes back (only the id moved)
+    for (const e of pool.entries.filter((x: any) => x.identityRestamped)) {
+      const from = String((e as any).identityRestamped).split(' → ')[0];
+      if (JSON.stringify(e.result).split(spec.identity.to).length - 1 !== 1) throw new Error(`L-CS-N identity: ${e.host}/${e.getter} re-stamp not exactly once`);
+      void from;
+    }
+  }
+  for (const e of pool.entries) e.rig = spec.rig;
+  if (/REDACTED-SECRET/.test(JSON.stringify(pool.entries.map((e) => e.result?.content?.[0]?.data?.result ?? null)))) throw new Error('L-CS-N pool: a placeholder survives the plants (pre-redaction pool expected)');
+  return { pool, proved, applied, witness, restamped } as any;
 }

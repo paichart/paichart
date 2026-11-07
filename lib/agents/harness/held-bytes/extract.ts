@@ -78,7 +78,11 @@ export type ExtractRefusal = 'not-declared' | 'is-error' | 'raw-digest-present' 
   | 'git-file-not-declared'
   /** push 2 (owner Phase-0 §4b): a device whose declared Git file IS held this capture — its device read is evidence, not a held
    *  file (file level; the comparison and deviceSourceReads still read it). */
-  | 'device-read-evidence-only';
+  | 'device-read-evidence-only'
+  /** Config-sources network step (grammar v2): a device declared `live-read` — its running config is EVIDENCE only, never a held base
+   *  (file level, no blob, no handle — HANDLELESS_CAPTURE_REFUSALS); the read record and the comparison still read the extractor's own
+   *  result, so the read is counted. */
+  | 'live-read-evidence-only';
 
 interface CallIdentity {
   serviceName: string;
@@ -762,13 +766,18 @@ function extractDeviceRead(
  * result, so the comparison and deviceSourceReads still see the device text.
  */
 export function withDeviceEvidenceOnly(ex: ExtractResult, scope: DeviceReadScope | null | undefined): ExtractResult {
-  if (!scope || scope.state !== 'declared' || !scope.gitLines || scope.gitLines.length === 0) return ex;
-  const gitDeclared = new Set(scope.gitLines.map((l) => l.device));
+  if (!scope || scope.state !== 'declared') return ex;
+  const gitDeclared = new Set((scope.gitLines ?? []).map((l) => l.device));
+  // Config-sources network step (execution-facts B2 fix 2): a `live-read` device is moved HERE, at capture only — never inside
+  // extractDeviceRead, or the read record would see no text and a successful evidence read would read `not-read`.
+  const liveDeclared = new Set(scope.liveDevices ?? []);
+  if (gitDeclared.size === 0 && liveDeclared.size === 0) return ex;
   const files: ExtractedFile[] = []; const moved: ExtractedRefusal[] = [];
   for (const f of ex.files) {
-    if (f.target.startsWith(DEVICE_READ_TARGET_PREFIX) && gitDeclared.has(f.target.slice(DEVICE_READ_TARGET_PREFIX.length))) {
+    const dev = f.target.startsWith(DEVICE_READ_TARGET_PREFIX) ? f.target.slice(DEVICE_READ_TARGET_PREFIX.length) : null;
+    if (dev !== null && (gitDeclared.has(dev) || liveDeclared.has(dev))) {
       const { text: _t, sourceRevision: _r, ...rest } = f; void _t; void _r;
-      moved.push({ ...rest, target: null, path: null, refusal: 'device-read-evidence-only' });
+      moved.push({ ...rest, target: null, path: null, refusal: liveDeclared.has(dev) ? 'live-read-evidence-only' : 'device-read-evidence-only' });
     } else files.push(f);
   }
   return moved.length ? { ...ex, files, refusals: [...ex.refusals, ...moved] } : ex;

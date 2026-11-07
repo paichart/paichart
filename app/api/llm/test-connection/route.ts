@@ -3,7 +3,7 @@ import createHandler from '@/lib/api-handler';
 import { AnthropicSdkProvider } from '@/lib/services/llm/anthropic-sdk-provider';
 import { LLMProvider } from '@/lib/services/llm/types';
 import { logger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 export const POST = createHandler(
   async (req: NextRequest) => {
@@ -88,6 +88,7 @@ export const POST = createHandler(
         provider
       });
     } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
       logger.error({ err: error }, 'LLM connection test failed');
       return NextResponse.json(
         {

@@ -20,7 +20,7 @@ import { povLogger } from '@/lib/logger';
 import { logStageFieldChange, TaskActivityAction } from '@/lib/pov/services/stageActivityService';
 import { applyTeamUpdate } from '@/lib/pov/services/team';
 import { enforceProtocolStampImmutable, dropPlatformRunKeys, stripAuditFacts } from '@/lib/tasks/services/protected-task-metadata';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 // Helper function to ensure phases are created from templates
 export async function ensurePhasesFromTemplates(povId: string, phaseTemplateIds: string[]) {
@@ -1269,6 +1269,7 @@ export async function updatePoVHandler(
       }
     });
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     povLogger.error({ err: error, povId: params?.povId }, 'error updating POV');
 
     // 2.14 (completion-path P2): nested-write guard rejections are client errors (facts the
@@ -1295,17 +1296,6 @@ export async function updatePoVHandler(
       { status: 500 }
     );
   }
-}
-
-export async function updatePhaseHandler(
-  request: NextRequest,
-  { params }: { params: { povId: string; phaseId: string } }
-) {
-  const { phaseId } = params
-  const data = await readJsonBody(request)
-
-  const phase = await povService.updatePhase(phaseId, data)
-  return Response.json(phase)
 }
 
 // reorderPhasesHandler deleted 2026-05-14 alongside its orphaned route.

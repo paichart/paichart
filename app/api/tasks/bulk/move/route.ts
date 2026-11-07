@@ -4,7 +4,7 @@ import { TokenPayload, ApiResponse } from '@/lib/types/auth';
 import { TaskBulkService } from '@/lib/services/taskBulkService';
 import { BulkMoveTasksSchema } from '@/lib/validation/task-validation';
 import { taskLogger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 import { summarizeZodIssues } from '@/lib/utils/zod-issue-summary';
 
 type ApiHandler<T = any> = (
@@ -162,6 +162,7 @@ const bulkMoveTasksHandler: ApiHandler = async (
       data: enhancedResult
     };
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     taskLogger.error({ err: error, endpoint: 'POST /api/tasks/bulk/move' }, 'Failed to perform bulk task move');
     return {
       error: {

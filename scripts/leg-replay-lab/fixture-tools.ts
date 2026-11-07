@@ -285,7 +285,9 @@ export function createFixtureToolServer(fx: LoadedFixture, fallback: RecordedToo
       entry.kind = r.kind;
       if (r.listingSource) entry.listingSource = r.listingSource;
       entry.tier = logEntry.tier = r.kind === 'file' ? 'fixture-file' : r.kind === 'directory' ? 'fixture-directory' : 'fixture-missing';
-      return fixtureEnvelope(target, a.arguments, r.inner);
+      // Config-sources push 0 (sec-ops PUSH0 S-4): echo what production echoes — the arguments the pin CHECKED and forwarded (an absent
+      // ref became `ref: 'main'`), never the caller's raw object, or lab envelopes diverge from production's from push 0 on.
+      return fixtureEnvelope(target, (policy as { gitArguments?: unknown }).gitArguments ?? a.arguments, r.inner);
     },
   };
 }

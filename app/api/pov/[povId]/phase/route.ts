@@ -3,7 +3,7 @@ import { createPhaseHandler } from '@/lib/pov/handlers/post';
 import { createPhaseSchema } from '@/lib/validation/pov';
 import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { povLogger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 interface RouteParams {
   params: Promise<{
@@ -38,6 +38,7 @@ export async function POST(req: NextRequest, params: RouteParams) {
     const response = await createPhaseHandler(req, { params: await params.params });
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     povLogger.error({ err: error }, 'phase create error');
     return NextResponse.json(
       { error: 'Failed to create phase' },

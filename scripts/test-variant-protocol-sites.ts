@@ -30,10 +30,16 @@ export const EXCLUSIONS: Readonly<Record<string, string>> = {
     'held-capable legs are adjudicated by the held arm FIRST (V-8a restore-is-held-base, keyed on isHeldCapableProtocol); a held-capable desired-state lane never reaches the content arms (K-4, held-k8s 1f)',
   'lib/agents/harness/held-bytes/variant.ts::GIT_FILE_SOURCE_PROTOCOLS':
     'held-k8s 1b: scopes which legs may CAPTURE a Git file-source read (github-service) — a different question from held-capability; the retired obs variant reads no Git file source, and HELD_CAPABLE_PROTOCOLS is checked separately',
-  'lib/agents/harness/held-bytes/variant.ts::DEVICE_SOURCE_PROTOCOLS':
-    'held-network step 3 batch 2b: scopes which legs declare Device sources (the device-read capture lane) — a capture-scope set like GIT_FILE_SOURCE_PROTOCOLS, a different question from held-capability; the retired obs variant declares no device sources',
+  'lib/agents/harness/held-bytes/variant.ts::DEVICE_SOURCE_LANES':
+    'held-network step 3 batch 2b (+ VALUE-LEG-GIT 2026-11-06: the lane table DEVICE_SOURCE_PROTOCOLS is derived from): scopes which legs declare Device sources (the device-read capture lane, change lane only) — a capture-scope set like GIT_FILE_SOURCE_PROTOCOLS, a different question from held-capability; the retired obs variant declares no device sources',
   'lib/agents/harness/held-bytes/variant.ts::HELD_JOIN_VERSIONS':
     'held-k8s 1g/step 3: this IS the held-capable table (HELD_CAPABLE_PROTOCOLS = its keys minus HELD_JOIN_AWAITING_TEXT); a domain joins by adding its row, and the retired variant is deliberately not a member (Phase 10 D4)',
+  'scripts/test-leg-replay-lab.ts::mk':
+    'LVLG7 (B12, 2026-11-07): a test fixture builder that copies the two NETWORK golden protocol pins into a scratch lab to prove golden-build carries reached standing nodes — it lists the protocols a lab EDITS, not a held-capability set; no variant applies',
+  'lib/agents/harness/live-evidence.ts::LIVE_EVIDENCE_MIN_VERSIONS':
+    'Config-sources network push 1a (EF-S3): the released Config-sources VERSION per protocol that liveEvidence is stamped at — a version key on the leg\'s composed protocol, a different question from held-capability; the retired obs variant has no Config-sources text and observability joins with its own row at its own code push',
+  'lib/agents/harness/live-evidence.ts::GIT_ONLY_WORD_MIN_VERSIONS':
+    'network text batch 1 (2026-11-07): the protocol version from which the CHANGE lane\'s liveEvidence summary may read `git-only` — a Config-sources version key on the Harvester\'s composed protocol (same reason as LIVE_EVIDENCE_MIN_VERSIONS), not held-capability; the retired obs variant has no Config-sources text',
   // held-network push 3: the HELD_JOIN_AWAITING_TEXT exclusion was removed with network's entry (the list is empty, so no site);
   // a domain that next joins ahead of its text re-adds it (reason: the subtraction from the held-capable table).
   'lib/agents/harness/protocol-marker-mandates.ts::PROTOCOL_MARKER_MANDATES':
@@ -54,6 +60,16 @@ export const EXCLUSIONS: Readonly<Record<string, string>> = {
   'scripts/test-program-protocol-token.ts::test:canonicalProtocolName: pure suffix rule, no I/O, idempotent': 'a pure suffix-rule example; no protocol set',
   'scripts/test-held-variant.ts::test:held-k8s 1b-scope + step 3: a leaf under a kubernetes-gitops':
     'held-terraform step 1: pins GIT_FILE_SOURCE_PROTOCOLS (a capture-scope set, excluded above for the same reason) — the retired obs variant reads no Git file source',
+  'scripts/test-device-read-capture.ts::test:VLG1 the lane table: change = network-provisioning, value = ':
+    'VALUE-LEG-GIT (2026-11-06): pins the Device-sources LANE table (DEVICE_SOURCE_LANES, excluded above for the same reason) — a capture-scope set, not held-capability; the retired obs variant declares no device sources',
+  'scripts/test-device-read-capture.ts::deviceSources':
+    'VALUE-LEG-GIT VLG4 fixture: an interfaceContract.deviceSources keyed by the network protocols\' own contract keys — a contract shape, not a protocol selection; obs declares no device sources',
+  'scripts/test-live-evidence.ts::test:LE6 version keying: stamped only at/above the released Confi':
+    'pins LIVE_EVIDENCE_MIN_VERSIONS (excluded above for the same reason: a Config-sources version key, not held-capability)',
+  'scripts/test-live-evidence.ts::deviceSources':
+    'VALUE-LEG-GIT LE21 fixture: an interfaceContract.deviceSources keyed by the network protocols\' own contract keys — a contract shape, not a protocol selection; obs declares no device sources',
+  'scripts/leg-replay-lab/render-tree-protocols.ts::<top>':
+    'lab render tool (L-CS-N S-1 re-pin): writes the named protocol texts of a tree to disk to compare render shas; it never selects or composes a protocol for a run, so no held-variant decision applies',
 };
 
 type Site = { key: string; file: string; line: number; text: string; kind: string };

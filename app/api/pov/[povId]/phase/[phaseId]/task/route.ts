@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createTaskHandler, getPhaseTasksHandler, getTaskHandler, updateTaskHandler } from '@/lib/tasks/handlers/task';
 import { povLogger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 export async function POST(
   req: NextRequest,
@@ -13,6 +13,7 @@ export async function POST(
     const response = await createTaskHandler(req, params.povId, params.phaseId, data);
     return NextResponse.json(response);
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     povLogger.error({ err: error }, 'task create error');
     return NextResponse.json(
       { error: 'Failed to create task' },

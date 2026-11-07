@@ -9,7 +9,7 @@ import { TaskStatus } from '@/lib/tasks/types/index';
 import { trackActivity } from '@/lib/auth/audit';
 import { taskLogger } from '@/lib/logger';
 import { DependencyNotSatisfiedError, PipelineInvariantError, InvalidTransitionError } from '@/lib/errors';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 // PATCH /api/tasks/[taskId]/status - Update task status
 export async function PATCH(req: NextRequest, props: { params: Promise<{ taskId: string }> }) {
@@ -106,6 +106,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ taskId:
 
     return createSuccessResponse(updated, 'Task status updated successfully');
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     taskLogger.error({ err: error, endpoint: 'PATCH /api/tasks/[taskId]/status' }, 'Failed to update task status');
     return createErrorResponse('INTERNAL_ERROR', 'Failed to update task status');
   }

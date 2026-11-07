@@ -12,6 +12,7 @@
  * Anything short of a parsed declaration holds nothing on the device lane: `refuse` with the named reason.
  */
 import type { LegDeviceSourcesResolution } from '../device-sources-read';
+import { assertNeverKind } from '../device-sources';
 
 export type DeviceReadRefusal = 'device-sources-absent' | 'device-sources-unparseable' | 'device-sources-conflict' | 'device-sources-unresolved'
   // push 2 (O-2): the declaration that governs is the immutable snapshot taken at the leg's first execution (device-sources-read.ts)
@@ -41,7 +42,11 @@ export type DeviceReadScope =
       gitServices?: readonly DeclaredGitFileService[];
       /** push 2 (owner Phase-0 §4b): every declared `git-file` line — a device whose Git file is held keeps its device read as
        *  EVIDENCE only (held-bytes-capture.ts). */
-      gitLines?: readonly DeclaredGitFileLine[] }
+      gitLines?: readonly DeclaredGitFileLine[];
+      /** Config-sources network step (grammar v2): every device declared `live-read` — read whole as EVIDENCE. Its read is DECLARED (so
+       *  the read record and the comparison see it, never `device-not-declared`), and capture moves its config to the handleless refusal
+       *  `live-read-evidence-only` (extract.ts withDeviceEvidenceOnly): never a held base, never a handle. Absent before grammar v2. */
+      liveDevices?: readonly string[] }
   | { state: 'refuse'; refusal: DeviceReadRefusal };
 
 type Obj = Record<string, unknown>;
@@ -84,6 +89,7 @@ export function buildDeviceReadScope(sources: LegDeviceSourcesResolution, record
   const byService = new Map<string, Set<string>>();
   const gitByService = new Map<string, DeclaredGitFileLine[]>();
   const gitLines: DeclaredGitFileLine[] = [];
+  const liveDevices: string[] = [];
   for (const e of sources.entries) {
     if (e.kind === 'git-file') {
       const line = { device: e.device, owner: e.owner, repo: e.repo, path: e.path, ref: e.ref };
@@ -91,7 +97,10 @@ export function buildDeviceReadScope(sources: LegDeviceSourcesResolution, record
       gitByService.set(e.service, [...(gitByService.get(e.service) ?? []), line]);
       continue;
     }
-    if (e.kind !== 'device-read') continue;
+    // execution-facts B2 site 3: an explicit arm per kind — `live-read` is a DECLARED read (else `device-not-declared` gives it a handle).
+    if (e.kind === 'command-package') continue;
+    if (e.kind === 'live-read') liveDevices.push(e.device);
+    else if (e.kind !== 'device-read') assertNeverKind(e);
     byService.set(e.service, (byService.get(e.service) ?? new Set<string>()).add(e.device));
   }
   const regs = registrationsByDescriptorUrl(records);
@@ -118,7 +127,7 @@ export function buildDeviceReadScope(sources: LegDeviceSourcesResolution, record
     if (!r) { if (!unresolved.includes(declared)) unresolved.push(declared); continue; }
     gitServices.push({ declared, lines, ...r });
   }
-  return { state: 'declared', services, unresolvedServices: unresolved, gitServices, gitLines };
+  return { state: 'declared', services, unresolvedServices: unresolved, gitServices, gitLines, ...(liveDevices.length ? { liveDevices } : {}) };
 }
 
 /** push 2: is this held file the declared Git file of `line`? (target `github:<owner>:<repo>` and path `/<path>`, owner/repo compared

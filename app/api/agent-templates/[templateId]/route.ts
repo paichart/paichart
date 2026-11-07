@@ -8,7 +8,7 @@ import { UpdateAgentTemplateSchema } from '@/lib/validation/agent-template-valid
 import { templateListCache } from '../template-cache';
 import { logger } from '@/lib/logger';
 import { buildPOVAccessFilter } from '@/lib/pov/auth/pov-access-filter';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 /**
  * GET /api/agent-templates/[templateId]
@@ -341,6 +341,7 @@ export async function PUT(request: NextRequest, props: { params: Promise<{ templ
     });
 
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     logger.error({ err: error }, 'AgentTemplate API PUT error');
     return NextResponse.json(
       {

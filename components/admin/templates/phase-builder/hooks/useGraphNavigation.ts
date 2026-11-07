@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { GraphTransform, GraphDimensions } from '../components/graph/types';
 
 export function useGraphNavigation(
-  containerRef: React.RefObject<HTMLDivElement>,
+  containerRef: React.RefObject<HTMLDivElement | null>,
   svgDimensions: GraphDimensions
 ) {
   const [transform, setTransform] = useState<GraphTransform>({ x: 0, y: 0, scale: 1 });

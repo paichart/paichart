@@ -48,6 +48,16 @@
  * toward refusal is recorded and read (the safe direction). A sample with no parseable verdict or an error is UNSCORED,
  * which blocks a PASS until it is re-run.
  *
+ * NEEDS-READ (owner 2026-11-08, after NB1 L106/L107): a LIVE-Author cell of an approve-expected case whose Reviewer REFUSES (agent
+ * refusal, no platform force) is not auto-read as a text flip when the refusal points at package content the STORED package does
+ * not have. The test: some line of the live package that contains a span the blocking item quotes in backticks is absent from the
+ * stored package, or the blocking quotes nothing. The live Author wrote a different package, so the stored approval does not decide
+ * whether this refusal is right. NEEDS-READ is NEVER a pass: the golden result is NEEDS-READ until a hand read records one of:
+ * - the refusal is wrong for that package (= FLIPPED, do-not-ship unless the owner overrides beside the gate);
+ * - the live package is genuinely defective (an Author regression, do-not-ship);
+ * - the package differs legitimately and the refusal is right (recorded with the reason).
+ * A refusal whose quoted lines all occur in the stored package stays FLIPPED.
+ *
  * Production is read-only throughout: `golden-pin` reads today's protocol and template rows through snapshot.ts.
  */
 import * as fs from 'fs';
@@ -201,7 +211,7 @@ export function validateGoldenDeclaration(exp: LabExperiment, gs: GoldenSet): st
 }
 
 export interface CompanionCell { case: string; arm: string; cell: string; form: 'persisted' | 'live'; reach: string[] }
-export interface CompanionReport { lab: string; labLabel: string; goldenVersion: string; cells: CompanionCell[]; unreached: Array<{ case: string; arm: string; why: string }>; optedOut: string[]; targets: string[] }
+export interface CompanionReport { lab: string; labLabel: string; goldenVersion: string; cells: CompanionCell[]; unreached: Array<{ case: string; arm: string; why: string }>; optedOut: string[]; targets: string[]; /** B12: the standing cases carried as nodes (case → node id) */ standing?: Array<{ case: string; node: string }> }
 
 /**
  * Build the golden COMPANION of a lab: `<labDir>/golden-<version>/experiment.json` plus its pinned baselines, the lab's edit files
@@ -264,9 +274,24 @@ export function buildGoldenCompanion(labDir: string, gs: GoldenSet = loadGoldenS
     }
     return editCopies.get(k)!;
   };
+  // L-CS-N (2026-11-05): arms whose levers are IDENTICAL (same edit bytes, template edits, models/efforts, kind gate, composed version)
+  // measure the same golden cells — build them ONCE, under the arm that can carry a live Author (a persisted-Author arm's cells are a
+  // subset). The others are reported as `sameAs`, never silently dropped.
+  const leverKey = (v: (typeof lab.variants)[string]) => JSON.stringify({
+    e: (v.edits ?? []).map((f) => fs.readFileSync(path.join(labDir, f), 'utf8')), t: (v.templateEdits ?? []).map((f) => fs.readFileSync(path.join(labDir, f), 'utf8')),
+    am: v.authorModel ?? null, ae: v.authorEffort ?? null, rm: v.reviewerModel ?? null, re: v.reviewerEffort ?? null,
+    lr: (v as any).liveReadKind ?? null, cv: (v as any).composedVersion ?? null });
+  const representative = new Map<string, string>();
+  for (const [arm, v] of Object.entries(lab.variants)) {
+    if (!armLevers(v).length) continue;
+    const k = leverKey(v); const cur = representative.get(k);
+    if (!cur || (lab.variants[cur].authorSource === 'persisted' && v.authorSource !== 'persisted')) representative.set(k, arm);
+  }
   for (const [arm, v] of Object.entries(lab.variants)) {
     const levers = armLevers(v);
     if (!levers.length) continue;
+    const rep = representative.get(leverKey(v))!;
+    if (rep !== arm) { for (const c of gs.cases) if (!optedOut.has(c.id)) unreached.push({ case: c.id, arm, why: `sameAs ${rep}: identical levers — the cells run once, under ${rep}` }); continue; }
     if (!/^[A-Za-z0-9]+$/.test(arm)) throw new Error(`golden-build: arm name ${arm} must be alphanumeric (it names companion cells)`);
     const pEdits = (v.edits ?? []).map((f) => readEdit(labDir, f));
     const tEdits = (v.templateEdits ?? []).map((f) => readEdit(labDir, f));
@@ -290,6 +315,12 @@ export function buildGoldenCompanion(labDir: string, gs: GoldenSet = loadGoldenS
         edits: (v.edits ?? []).map((f) => copyEdit(arm, f)),
         ...(v.templateEdits?.length ? { templateEdits: v.templateEdits.map((f) => copyEdit(arm, f)) } : {}),
         reviewerModel: v.reviewerModel ?? AGENT_MODELS.infra, reviewerEffort: v.reviewerEffort ?? 'high',
+        // L-CS-N: the text's companion levers travel with it — the kind gate the text commit flips and the version the text ships as
+        // (production's liveEvidence population rule reads it; L-CS-a computes the fact only at a released version).
+        ...((v as any).liveReadKind ? { liveReadKind: (v as any).liveReadKind } : {}),
+        ...((v as any).composedVersion ? { composedVersion: (v as any).composedVersion } : {}),
+        // NB1 (G15): `constraintsSeed` does NOT travel — a golden value cell is a persisted-Author Reviewer node (the Architect prompt is
+        // never sent; the Reviewer's rows are unchanged), and the lever is built for architectOnly cells only.
       };
       const add = (cell: string, form: 'persisted' | 'live', reach: string[], spec: Record<string, unknown>) => {
         variants[cell] = variants[cell] ?? { ...base, ...spec, comment: `golden ${gs.version}: arm ${arm} on ${dom} (${form} Author)` };
@@ -321,13 +352,49 @@ export function buildGoldenCompanion(labDir: string, gs: GoldenSet = loadGoldenS
     expect: `${c.expected.legOutcome} (agent ${c.expected.agentApproved ? 'approved' : 'refused'}${c.expected.platformReason ? `, platform ${c.expected.platformReason}` : ''})`,
     why: c.why, n: 1,
   }));
+  // VLG-LAB-TOOLING B12 (2026-11-07): carry every STANDING case the companion REACHES (the role-keyed lock rule, standing-bench.ts) as a
+  // node on its persisted-Author reaching arms, built from the CASE (never the lab's copy): the case's executions, provenance, gate and —
+  // for a planted case — its sha-pinned inputs referenced in place. A live-Author arm is covered by the persisted arm with the same
+  // Reviewer-side levers (the lock's rule). The companion then passes the lock without a hand edit.
+  const sbm = require('./standing-bench') as typeof import('./standing-bench');
+  const standingNodes: Array<Record<string, unknown>> = [];
+  const standingDecl: Array<{ case: string; node: string }> = [];
+  const pre = { variants, nodes, standingBench: [] as Array<{ case: string; node: string }> };
+  for (const sc of sbm.loadStandingBench().cases) {
+    // Carry it on a persisted-Author cell of the case's OWN protocol (the domain binding the node needs), one per distinct Reviewer-side
+    // lever set; every other reaching cell is covered by the lock's same-lever rule.
+    const reaching = sbm.reachingArms(pre as any, out, sc);
+    if (!reaching.length) continue;
+    const cellProto = new Map(cells.map((x) => [x.cell, gs.cases.find((c) => c.id === x.case)!.protocol]));
+    const seen = new Set<string>(); const arms: string[] = [];
+    for (const a of reaching.filter((x) => (variants[x] as any).authorSource === 'persisted' && cellProto.get(x) === sc.protocol)) {
+      const k = sbm.reviewerLeverKey(pre as any, out, a); if (!seen.has(k)) { seen.add(k); arms.push(a); }
+    }
+    const uncovered = reaching.filter((a) => !seen.has(sbm.reviewerLeverKey(pre as any, out, a)));
+    if (uncovered.length) throw new Error(`golden-build: standing case ${sc.id} is reached by ${uncovered.join(', ')}, and no persisted ${sc.protocol} cell of the companion carries the same Reviewer-side levers — carry it in the lab, or opt the arm's value out with a reason`);
+    const g = sbm.caseGate(sc);
+    const rel = (f: string) => path.relative(out, path.join(sbm.LAB_DIR, f));
+    const pn = sc.node ?? {};
+    const id = `STAND-${sc.id}`;
+    standingNodes.push({ id, authorExecutionId: sc.authorExecutionId, reviewerExecutionId: sc.reviewerExecutionId,
+      ...(sc.provenance.kind !== 'production' ? { provenance: sc.provenance.kind } : {}),
+      kind: `STANDING BENCH ${sc.id} (carried by golden-build, B12) — reader ${sc.reader}`, variants: arms, n: 1,
+      expect: g.expect === 'refuse-for-plant' ? `refuse — ${sc.correctOutcome}` : `APPROVE + NON-BLOCKING WARNING (${g.warningId}) naming ${(g.devices ?? []).join(' and ')} — ${sc.correctOutcome}`,
+      scoring: { reviewerGate: { gate: id, ...g, bar: [1, 1] } },
+      ...(pn.inputEdits ? { inputEdits: rel(pn.inputEdits.file) } : {}),
+      ...(pn.deviceSourcesSnapshot ? { deviceSourcesSnapshot: pn.deviceSourcesSnapshot } : {}),
+      ...(pn.valueHarvest ? { valueHarvest: { text: rel(pn.valueHarvest.text.file), toolCalls: rel(pn.valueHarvest.toolCalls.file) } } : {}),
+      ...(pn.authorPlant ? { authorPlant: rel(pn.authorPlant.file) } : {}) });
+    standingDecl.push({ case: sc.id, node: id });
+  }
   const report: CompanionReport = { lab: path.basename(labDir), labLabel: lab.label, goldenVersion: gs.version, cells, unreached,
-    optedOut: [...optedOut], targets: (d.targets ?? []).map((t) => t.case) };
+    optedOut: [...optedOut], targets: (d.targets ?? []).map((t) => t.case), standing: standingDecl };
   const experiment = {
     label: `golden-${gs.version}-${lab.label}`,
     purpose: `GOLDEN COMPANION of ${lab.label} (Protocol 16 § The standing no-regression rule). Each golden case must reproduce its stored outcome under every arm of the lab that reaches it; one flip is DO-NOT-SHIP unless the lab's pre-registration names the case in goldenSet.targets. Read with golden-score. Generated by golden-build — never hand-edited.`,
     n: 1, flags: { ...gs.flags, ...lab.flags },
-    baseline: { protocols, templates }, variants, nodes, measures: [],
+    baseline: { protocols, templates }, variants, nodes: [...nodes, ...standingNodes], measures: [],
+    ...(standingDecl.length ? { standingBench: standingDecl } : {}),
     goldenCompanion: report,
   };
   fs.writeFileSync(path.join(out, 'experiment.json'), JSON.stringify(experiment, null, 2) + '\n');
@@ -350,7 +417,19 @@ export function caseTemplateIds(c: GoldenCase, gs: GoldenSet): { author: string;
 
 export interface GoldenSampleRead { sample: string; agentApproved: boolean | null; platformReason: string | null; legOutcome: GoldenOutcome | null; error: string | null }
 export interface GoldenCellScore { case: string; cell: string; arm: string; form: string; expected: GoldenCase['expected']; samples: GoldenSampleRead[];
-  status: 'REPRODUCED' | 'FLIPPED' | 'MASKED-TOWARD-APPROVAL' | 'MASKED-TOWARD-REFUSAL' | 'UNSCORED'; direction?: string; target: boolean }
+  status: 'REPRODUCED' | 'FLIPPED' | 'MASKED-TOWARD-APPROVAL' | 'MASKED-TOWARD-REFUSAL' | 'NEEDS-READ' | 'UNSCORED'; direction?: string; target: boolean }
+
+/** NEEDS-READ test: does a refusal point at live-package content the stored package lacks? Spans = backticked text (≥ 4 chars) in the
+ *  blocking items; a pointed line = a live-package line containing a span; "lacks" = that line (whitespace-normalised) is not a stored
+ *  line. No span quoted, or no stored text ⇒ true (the scorer cannot tell; the hand read must). */
+export function refusalPointsAtLiveOnly(blocking: unknown[], liveText: string, storedText: string | null): boolean {
+  if (!storedText) return true;
+  const spans = [...new Set(blocking.flatMap((b) => String(b).match(/`([^`]{4,})`/g) ?? []).map((x) => x.slice(1, -1)))];
+  if (!spans.length) return true;
+  const norm = (l: string) => l.split(/\s+/).filter(Boolean).join(' ');
+  const stored = new Set(storedText.split('\n').map(norm));
+  return spans.some((sp) => liveText.split('\n').some((l) => l.includes(sp) && !stored.has(norm(l))));
+}
 
 /** The platform's carrier reason for one sample. Run-level ⇒ the stored reason (an input the lab holds fixed); otherwise the
  *  shipping `heldEditVerdict` over the sample's own `editApplication`, with the Reviewer taken to have seen the platform's
@@ -386,18 +465,20 @@ export function classifyCell(c: GoldenCase, reads: GoldenSampleRead[]): Pick<Gol
   return { status: 'REPRODUCED' };
 }
 
-export function goldenVerdict(cells: GoldenCellScore[]): { verdict: 'PASS' | 'DO-NOT-SHIP' | 'INCOMPLETE'; reasons: string[] } {
+export function goldenVerdict(cells: GoldenCellScore[]): { verdict: 'PASS' | 'DO-NOT-SHIP' | 'INCOMPLETE' | 'NEEDS-READ'; reasons: string[] } {
   const bad = cells.filter((x) => !x.target && (x.status === 'FLIPPED' || x.status === 'MASKED-TOWARD-APPROVAL'));
   const unscored = cells.filter((x) => x.status === 'UNSCORED');
-  if (bad.length) return { verdict: 'DO-NOT-SHIP', reasons: bad.map((x) => `${x.case} ${x.cell}: ${x.status} ${x.direction ?? ''}`) };
+  const read = cells.filter((x) => !x.target && x.status === 'NEEDS-READ');
+  if (bad.length) return { verdict: 'DO-NOT-SHIP', reasons: [...bad, ...read].map((x) => `${x.case} ${x.cell}: ${x.status} ${x.direction ?? ''}`) };
   if (unscored.length) return { verdict: 'INCOMPLETE', reasons: unscored.map((x) => `${x.case} ${x.cell}: UNSCORED (${x.samples.map((s) => s.error).filter(Boolean).join('; ') || 'no samples'}) — re-run the cell`) };
+  if (read.length) return { verdict: 'NEEDS-READ', reasons: read.map((x) => `${x.case} ${x.cell}: NEEDS-READ ${x.direction ?? ''} — hand read decides: FLIPPED (refusal wrong for that package), Author regression (package defective), or a recorded legitimate refusal; never a pass`) };
   return { verdict: 'PASS', reasons: [] };
 }
 
 /** Score one or more run folders of a companion. `stored(case)` returns the stored leg's qualityGate (carrier modelled iff it
  *  carries `heldEdit`) and the stored Author's `editApplication` (the fact a PERSISTED-Author sample carries: the lab re-uses the
  *  stored package, so its stamp is the stored one). A live sample's own stamp is its `editApplication.json` (written by the run). */
-export function scoreGolden(runDirs: string[], companionDir: string, stored: (c: GoldenCase) => { qualityGate: Record<string, any> | null; editApplication: Record<string, any> | null }, gs: GoldenSet = loadGoldenSet()): { cells: GoldenCellScore[]; unreached: CompanionReport['unreached']; verdict: ReturnType<typeof goldenVerdict> } {
+export function scoreGolden(runDirs: string[], companionDir: string, stored: (c: GoldenCase) => { qualityGate: Record<string, any> | null; editApplication: Record<string, any> | null; authorText?: string | null }, gs: GoldenSet = loadGoldenSet()): { cells: GoldenCellScore[]; unreached: CompanionReport['unreached']; verdict: ReturnType<typeof goldenVerdict> } {
   const exp = JSON.parse(fs.readFileSync(path.join(companionDir, 'experiment.json'), 'utf8'));
   const report = exp.goldenCompanion as CompanionReport;
   if (!report) throw new Error(`${companionDir} is not a golden companion`);
@@ -409,6 +490,7 @@ export function scoreGolden(runDirs: string[], companionDir: string, stored: (c:
     const st = stored(c);
     const carrier = !!st.qualityGate?.heldEdit;
     const reads: GoldenSampleRead[] = [];
+    const pointsLiveOnly: Record<string, boolean> = {};
     for (const rd of runDirs) {
       const d = path.join(rd, `GOLD-${c.id}`, cell.cell);
       if (!fs.existsSync(d)) continue;
@@ -419,10 +501,21 @@ export function scoreGolden(runDirs: string[], companionDir: string, stored: (c:
         const eaFile = path.join(d, s, 'editApplication.json');
         const ea = sample.editApplication ?? (fs.existsSync(eaFile) ? JSON.parse(fs.readFileSync(eaFile, 'utf8')).fact : null)
           ?? (cell.form === 'persisted' ? st.editApplication : null);
-        reads.push(readGoldenSample(c, carrier, { ...sample, editApplication: ea }, `${path.basename(rd)}/${s}`));
+        const name = `${path.basename(rd)}/${s}`;
+        reads.push(readGoldenSample(c, carrier, { ...sample, editApplication: ea }, name));
+        const af = path.join(d, s, 'author.md');
+        if (cell.form === 'live' && sample.verdict?.approved === false && fs.existsSync(af))
+          pointsLiveOnly[name] = refusalPointsAtLiveOnly(sample.verdict?.blocking ?? [], fs.readFileSync(af, 'utf8'), st.authorText ?? null);
       }
     }
-    cells.push({ case: c.id, cell: cell.cell, arm: cell.arm, form: cell.form, expected: c.expected, samples: reads, target: targets.has(c.id), ...classifyCell(c, reads) });
+    let cls = classifyCell(c, reads);
+    // NEEDS-READ: every flipped sample is an agent refusal (no platform force) of an approve-expected case that points at live-only content.
+    const flips = reads.filter((x) => x.legOutcome !== c.expected.legOutcome);
+    if (cls.status === 'FLIPPED' && cell.form === 'live' && c.expected.legOutcome === 'approved' && flips.length
+      && flips.every((x) => x.agentApproved === false && !x.platformReason && pointsLiveOnly[x.sample] === true)) {
+      cls = { status: 'NEEDS-READ', direction: `live Author's package differs from the stored one where the refusal points (${flips.map((x) => x.sample).join(', ')})` };
+    }
+    cells.push({ case: c.id, cell: cell.cell, arm: cell.arm, form: cell.form, expected: c.expected, samples: reads, target: targets.has(c.id), ...cls });
   }
   return { cells, unreached: report.unreached, verdict: goldenVerdict(cells) };
 }

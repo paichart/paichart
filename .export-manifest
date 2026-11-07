@@ -1340,6 +1340,9 @@ lib/agents/harness/held-edit-carrier.ts
 lib/agents/harness/held-edit-correction.ts
 lib/agents/harness/interface-contract-missing.ts
 lib/agents/harness/leg-reviewers.ts
+lib/agents/harness/live-evidence-enrichment.ts
+lib/agents/harness/live-evidence-render.ts
+lib/agents/harness/live-evidence.ts
 lib/agents/harness/marker-presence.ts
 lib/agents/harness/mechanical-nets.ts
 lib/agents/harness/net-context.ts
@@ -2061,12 +2064,15 @@ scripts/leg-replay-lab/device-comparison-patch.ts
 scripts/leg-replay-lab/edits.ts
 scripts/leg-replay-lab/fixture-tools.ts
 scripts/leg-replay-lab/fixtures/l-k1-6d7d0c7/fixture.json
+scripts/leg-replay-lab/git-harvest-plant.ts
 scripts/leg-replay-lab/golden-set.ts
 scripts/leg-replay-lab/harvester-source.ts
 scripts/leg-replay-lab/held-store.ts
 scripts/leg-replay-lab/input-edits.ts
+scripts/leg-replay-lab/kind-gate.ts
 scripts/leg-replay-lab/lab-sample.ts
 scripts/leg-replay-lab/lab.ts
+scripts/leg-replay-lab/live-evidence-patch.ts
 scripts/leg-replay-lab/live.ts
 scripts/leg-replay-lab/nets.ts
 scripts/leg-replay-lab/network-fixtures.ts
@@ -2074,7 +2080,9 @@ scripts/leg-replay-lab/protocol-history.ts
 scripts/leg-replay-lab/rebuild.ts
 scripts/leg-replay-lab/recorded-tools.ts
 scripts/leg-replay-lab/render-requirements-texts.ts
+scripts/leg-replay-lab/render-tree-protocols.ts
 scripts/leg-replay-lab/replay-prisma.ts
+scripts/leg-replay-lab/score-csn.ts
 scripts/leg-replay-lab/score-edits.ts
 scripts/leg-replay-lab/score-g2.ts
 scripts/leg-replay-lab/score-g3.ts
@@ -2088,8 +2096,17 @@ scripts/leg-replay-lab/score-requirements.ts
 scripts/leg-replay-lab/score-reviewer-bench.ts
 scripts/leg-replay-lab/score-t1.ts
 scripts/leg-replay-lab/score-t2.ts
+scripts/leg-replay-lab/score-vlg.ts
 scripts/leg-replay-lab/score-z49.ts
+scripts/leg-replay-lab/second-read/brief-contradiction.md
+scripts/leg-replay-lab/second-read/brief-fixture.md
+scripts/leg-replay-lab/second-read/prepare-second-read.sh
+scripts/leg-replay-lab/self-host-provenance.ts
 scripts/leg-replay-lab/snapshot.ts
+scripts/leg-replay-lab/standing-bench.ts
+scripts/leg-replay-lab/text-reach.ts
+scripts/leg-replay-lab/value-lane-fixtures.ts
+scripts/leg-replay-lab/value-lane.ts
 scripts/leg-replay-lab/variant-binding.ts
 scripts/mcp-tool-seed-guard.ts
 scripts/measure-preamble-tokens.ts
@@ -2299,6 +2316,7 @@ scripts/test-jwt-key-age.ts
 scripts/test-keep-best-selection.ts
 scripts/test-lean-card-facts.ts
 scripts/test-leg-replay-lab.ts
+scripts/test-live-evidence.ts
 scripts/test-llm-call-options.ts
 scripts/test-marker-contract-claims.ts
 scripts/test-marker-presence.ts
@@ -2324,6 +2342,7 @@ scripts/test-model-capabilities.ts
 scripts/test-model-resolution-parity.ts
 scripts/test-net-registry-equivalence.ts
 scripts/test-net-registry.ts
+scripts/test-next15-guards.ts
 scripts/test-no-rig-identifiers.ts
 scripts/test-nonterminal-family-pins.ts
 scripts/test-null-template-guard.ts
@@ -2406,6 +2425,7 @@ scripts/test-security-invariants.ts
 scripts/test-seed-model-params-guard.ts
 scripts/test-semantic-mapping-scope.ts
 scripts/test-serialization-retry-boundary.ts
+scripts/test-series-cut-paths.ts
 scripts/test-service-call-args-coercion.ts
 scripts/test-session-store.ts
 scripts/test-settings-redaction.ts

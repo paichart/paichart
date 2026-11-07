@@ -5,7 +5,7 @@ import { templateService } from '@/lib/services/template-service';
 import { PhaseType } from '@prisma/client';
 import { PhaseTemplateSchema } from '@/lib/validation/phase-template-validation';
 import { logger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 /**
  * GET /api/phase-templates/[id]
@@ -191,6 +191,7 @@ export async function PUT(request: NextRequest, props: { params: Promise<{ id: s
 
     return NextResponse.json(normalizedTemplate);
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     logger.error({ err: error }, 'Error updating phase template');
     return NextResponse.json(
       { error: 'Failed to update phase template' },

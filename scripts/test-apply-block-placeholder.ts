@@ -163,7 +163,7 @@ check('M controls: every mutated case reads as pinned again once the mutation is
     const i = MECHANICAL_NETS.indexOf(net);
     check('G3 is APPENDED (right after quoteFidelity; only later appends follow — no existing entry\'s stamp or key order moves)',
       keys[i - 1] === 'quoteFidelity@leaf-persist'
-      && JSON.stringify(keys.slice(i + 1)) === JSON.stringify(['editApplication@leaf-persist', 'heldBytes@leaf-persist', 'reviewedEditDiff@leaf-persist', 'editApplication@leg-synthesize', 'validationToolCalls@leaf-persist', 'deviceSourceReads@leaf-persist', 'gitDeviceComparison@leaf-persist'])); // + validationToolCalls (2026-10-23, appended) + deviceSourceReads, gitDeviceComparison (2026-10-26, held-network step 3 batch 2b, appended)
+      && JSON.stringify(keys.slice(i + 1)) === JSON.stringify(['editApplication@leaf-persist', 'heldBytes@leaf-persist', 'reviewedEditDiff@leaf-persist', 'editApplication@leg-synthesize', 'validationToolCalls@leaf-persist', 'deviceSourceReads@leaf-persist', 'gitDeviceComparison@leaf-persist', 'liveEvidence@leaf-persist', 'liveEvidence@leg-synthesize'])); // + liveEvidence at both points (Config-sources push 1a, 2026-11-04, appended last) // + validationToolCalls (2026-10-23, appended) + deviceSourceReads, gitDeviceComparison (2026-10-26, held-network step 3 batch 2b, appended)
   }
   const picked = pickResultJsonSummary({ applyBlockPlaceholder: fact(EOS), toolLoop: { a: 1 } });
   check('G4 NOT whitelisted: off the lean card and the agent.results summary (it stays in the raw result.json a verbose read returns)',

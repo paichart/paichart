@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { registrationLimiter } from '@/lib/middleware/rate-limit';
 import { defaultUserRole, registrationAllowed, mailProviderConfigured } from '@/lib/auth/registration-policy';
 import { authLogger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 // Comprehensive User Registration validation schema
 const RegisterUserSchema = z.object({
@@ -251,6 +251,7 @@ export async function POST(request: Request) {
       }, { status: 201 });
     }
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     authLogger.error({ err: error }, 'registration error');
     return NextResponse.json(
       { error: 'Internal server error' },

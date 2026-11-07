@@ -219,7 +219,9 @@ test('F-N2-1 (b): an evidence-only device read gets no handle; numbering is unch
   for (const r of ['source-not-pinned', 'git-file-not-declared', 'secret-manifest', 'echo-secret-residual', 'device-config-empty', 'path-invalid']) {
     eq(harvesterHandles([git, dev2] as never, [{ ...evid, refusal: r }]).map((h) => `${h.handle}:${h.state}`), ['H1:bound', 'H2:unheld', 'H3:bound'], `${r} keeps its handle: `);
   }
-  eq([...HANDLELESS_CAPTURE_REFUSALS], ['device-read-evidence-only'], 'one member, by decision: ');
+  // Config-sources network step (execution-facts B2 fix 3, 2026-11-04): `live-read-evidence-only` added BY DECISION — a declared evidence read is
+  // never an unheld item shown to the Author. A third member is again a decision, never a sweep.
+  eq([...HANDLELESS_CAPTURE_REFUSALS], ['device-read-evidence-only', 'live-read-evidence-only'], 'two members, by decision: ');
   // through the chainer (the production read): Author heldView and Architect heldIndex both omit it
   for (const role of ['config_change_author', 'infra_change_architect']) {
     const w = world({ consumerRole: role, refs: [git, dev2], views: { [GITSHA]: VIEW.viewText, [SHA]: VIEW.viewText }, blobs: { [GITSHA]: BASE, [SHA]: BASE } });

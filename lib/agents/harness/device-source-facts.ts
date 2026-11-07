@@ -17,7 +17,7 @@ import { extractDeclaredFiles, type ExtractResult } from './held-bytes/extract';
 import { PLATFORM_DEFAULT_DESCRIPTORS, DEVICE_READ_TARGET_PREFIX } from './held-bytes/descriptors';
 import { buildDeviceReadScope, registrationsByDescriptorUrl } from './held-bytes/device-read-scope';
 import type { LegDeviceSourcesResolution } from './device-sources-read';
-import type { DeviceSourceLine } from './device-sources';
+import { assertNeverKind, type DeviceSourceLine } from './device-sources';
 import { compareGitWithDevice, GIT_DEVICE_COMPARISON_METHOD, GIT_DEVICE_COMPARISON_VERSION } from './git-device-comparison';
 
 export const DEVICE_SOURCE_READS_VERSION = 1;
@@ -85,10 +85,19 @@ function serviceMatcher(records: readonly unknown[]) {
   };
 }
 
+/** Config-sources push 0 (DESIGN v2 §2 item 0.2, execution-facts B1, 2026-11-04): D3's "a missing ref is `main`", applied to the READ
+ *  RECORD on both sides. The call gate now forwards (and echoes) `ref:'main'` for an absent ref, and the texts pass the line's ref or
+ *  `main` — so a line naming no ref must match a call carrying `main` (and `refs/heads/main`), or every unbranched git-file line reads
+ *  `not-read` while every force stays right: a silently wrong fact the nets replay cannot see (stored calls carry no `ref`). */
+function normalisedRef(ref: unknown): string {
+  const r = typeof ref === 'string' && ref !== '' ? ref : 'main';
+  // sec-ops PUSH0 S-2: both gates admit `refs/heads/<x>` for a pin on `<x>` (pinFromDeclaration), so the read record folds it the same way.
+  return r.startsWith('refs/heads/') ? r.slice('refs/heads/'.length) : r;
+}
+
 function gitArgsMatch(e: Extract<DeviceSourceLine, { kind: 'git-file' }>, args: Obj): boolean {
   const p = typeof args.path === 'string' ? args.path.replace(/^\/+/, '') : null;
-  const ref = typeof args.ref === 'string' && args.ref !== '' ? args.ref : null;
-  return args.owner === e.owner && args.repo === e.repo && p === e.path && ref === e.ref;
+  return args.owner === e.owner && args.repo === e.repo && p === e.path && normalisedRef(args.ref) === normalisedRef(e.ref);
 }
 
 function declarationOf(sources: LegDeviceSourcesResolution): Obj {
@@ -125,7 +134,7 @@ export function computeDeviceSourceReads(sources: LegDeviceSourcesResolution, to
     if (!row) { row = { device: e.device, sources: [] }; devices.push(row); }
     if (e.kind === 'command-package') { row.sources.push({ kind: 'command-package' }); continue; }
     let read: Obj;
-    if (e.kind === 'device-read') {
+    if (e.kind === 'device-read' || e.kind === 'live-read') { // execution-facts B2 site 4: `live-read` is a whole-config read too (evidence)
       const held = ex.files.find((f) => f.target === `${DEVICE_READ_TARGET_PREFIX}${e.device}` && matches(e.service, { service: f.serviceName, serviceId: f.serviceId }));
       const empty = ex.refusals.find((r) => r.refusal === 'device-config-empty' && typeof r.selector === 'string'
         && r.selector.split('/').includes(e.device) && matches(e.service, { service: r.serviceName, serviceId: r.serviceId }));
@@ -135,14 +144,16 @@ export function computeDeviceSourceReads(sources: LegDeviceSourcesResolution, to
       else if (mine.some((c) => c.truncated)) read = { state: 'result-truncated', toolCallIndex: mine.find((c) => c.truncated)!.index };
       else if (mine.some((c) => !c.ok)) read = { state: 'read-failed', toolCallIndex: mine.find((c) => !c.ok)!.index };
       else read = { state: 'not-read', otherCallsNamingDevice: mine.length };
-      row.sources.push({ kind: 'device-read', service: shownService(e.service), read });
-    } else {
+      row.sources.push({ kind: e.kind, service: shownService(e.service), read });
+    } else if (e.kind === 'git-file') {
       const mine = calls.filter((c) => matches(e.service, c) && gitArgsMatch(e, c.args));
       const okCall = mine.find((c) => c.ok);
       if (okCall) read = { state: 'read', toolCallIndex: okCall.index, ...(okCall.truncated ? { resultTruncated: true } : {}) };
       else if (mine.length) read = { state: 'read-failed', toolCallIndex: mine[0].index };
       else read = { state: 'not-read' };
       row.sources.push({ kind: 'git-file', service: shownService(e.service), path: e.path, ref: e.ref, read });
+    } else {
+      return assertNeverKind(e);
     }
     if (read.state === 'not-read') notRead++;
   }

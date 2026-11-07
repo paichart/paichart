@@ -5,7 +5,7 @@ import { trackActivity } from '@/lib/auth/audit';
 import { CreateFeatureRequestSchema } from '@/lib/validation/support-validation';
 import { featureRequestLimiter } from '@/lib/middleware/rate-limit';
 import { logger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 export async function POST(req: NextRequest) {
   try {
@@ -80,6 +80,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ data: { request } });
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     logger.error({ err: error, endpoint: 'POST /api/support/feature' }, 'Failed to create feature request');
     return NextResponse.json(
       { error: 'Failed to create feature request' },

@@ -75,6 +75,30 @@ export function snapshotWithHeldJoin(snap: Snapshot, seedModule: string): { snap
   return { snap: copy, report: { legTitle: copy.leg.title ?? null, legProtocol: String(copy.leg.metadata?.protocol ?? ''), templates } };
 }
 
+/** NB1 (2026-11-07, owner G15): a TEMPLATE-CONSTRAINT lever for a non-held arm. Each leg-role template the snapshot carries takes the
+ *  constraints its OWNING seed builds in THIS tree (`buildTemplateRow`, never by running the seed), in jsonb key order — the same binding
+ *  as the held join without the held-capable precondition (a value leg is never held). Refuses a template the seed does not own. Returns
+ *  per role the RELEASED (snapshot) and CANDIDATE (seed) constraints, which text reach compares. */
+export function snapshotWithSeedConstraints(snap: Snapshot, seedModule: string): { snap: Snapshot; report: VariantBindingReport; constraints: Record<'author' | 'reviewer', { released: Record<string, unknown> | null; candidate: Record<string, unknown> | null }> } {
+  const copy: Snapshot = JSON.parse(JSON.stringify(snap));
+  if (!/^seed-[a-z0-9-]+-templates$/.test(seedModule)) throw new Error(`constraintsSeed must name a scripts/seed-*-templates module, got ${seedModule}`);
+  const seed = require(`../${seedModule}`) as { TEMPLATES?: Array<Record<string, any>>; buildTemplateRow?: (t: any) => Record<string, any> };
+  if (!Array.isArray(seed.TEMPLATES) || typeof seed.buildTemplateRow !== 'function') throw new Error(`${seedModule} does not export TEMPLATES + buildTemplateRow (the V-0 shape)`);
+  const templates: VariantBindingReport['templates'] = [];
+  const constraints = { author: { released: null, candidate: null }, reviewer: { released: null, candidate: null } } as Record<'author' | 'reviewer', { released: Record<string, unknown> | null; candidate: Record<string, unknown> | null }>;
+  for (const role of ['author', 'reviewer'] as const) {
+    const t = copy[role]?.template;
+    if (!t) continue;
+    const spec = seed.TEMPLATES.find((x) => x.name === t.name);
+    if (!spec) throw new Error(`constraintsSeed: ${seedModule} owns no template named "${t.name}" (${role})`);
+    const row = seed.buildTemplateRow(spec);
+    constraints[role] = { released: (t.constraints as Record<string, unknown>) ?? null, candidate: row.constraints ?? null };
+    t.constraints = jsonbKeyOrder(row.constraints);
+    templates.push({ role, from: String(t.name), to: String(t.name), constraintsSha256: sha(JSON.stringify(row.constraints)) });
+  }
+  return { snap: copy, report: { legTitle: copy.leg?.title ?? null, legProtocol: String(copy.leg?.metadata?.protocol ?? ''), templates }, constraints };
+}
+
 export function snapshotWithVariantBinding(snap: Snapshot, protocolName: string): { snap: Snapshot; report: VariantBindingReport } {
   const copy: Snapshot = JSON.parse(JSON.stringify(snap));
   if (!copy.leg) throw new Error('L-2: the snapshot carries no leg to rebind');

@@ -68,7 +68,7 @@ const FILE_LEVEL = new Set(['raw-digest-present', 'descriptor-mismatch', 'path-i
   // held-network step 3 batch 2b (P3/P4): per-device refusals on the device-read lane (file level: one per host)
   'device-not-declared', 'device-config-empty',
   // push 2: P8 (a Git file that is not a declared line) and the one-base-per-device rule (a device read kept as evidence)
-  'git-file-not-declared', 'device-read-evidence-only']);
+  'git-file-not-declared', 'device-read-evidence-only', 'live-read-evidence-only']);
 
 /**
  * held-k8s G-5 (SYNTHESIS v3, sec-ops S1a): a held file must never contain a credential, and R10 misses plaintext Kubernetes

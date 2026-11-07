@@ -653,6 +653,14 @@ export const RESULT_JSON_SUMMARY_KEYS = ['toolLoop', 'confidenceScore', 'reviewe
 // VERBATIM-QUOTE-OMISSION (2026-10-13): `quoteFidelity` — a deliberate top-level addition (a new net), stamped on
 // Harvester and Author leaves. Its findings and `quoteFidelityDisposition` ride NESTED inside it (E3b). Whitelisted so
 // agent.results returns it; deliberately RENDERED NOWHERE (no card segment, no §6) until the Group C lab (owner B1/B2).
+// Config-sources network push 1a (2026-11-04, EF-S4.4): `liveEvidence` — a deliberate top-level addition (a new net). The leg's HOIST
+// is what the summary is for; its summary + counts + capped name lists ride NESTED inside it (E3b) — a promoted `summary` sibling is
+// stripped. The same key is ALSO an operator-tail key (below): one key name serves the leaf stamp and the hoist, so both sit past
+// `toolCalls` on persist (the 8 KB head and the finalResponse offset do not move) and both are picked here. NO card segment (owner
+// G4-b). OWNER DECISION 6 (2026-11-04, "it works, avoid complexity"): NOT on RESULT_JSON_SUMMARY_KEYS for now — the summary is what
+// agent.results hands leg SYNTHESIZE and Node C, and Node C (the program's last gate) cannot be replayed in any lab; its input stays
+// unchanged until the Node C batch puts it back. The operator-tail key keeps it in result.json; the chainer reads the raw artifact,
+// so the §6 render to the leg readers (and the 1c Reviewer rule) is unaffected.
 
 /**
  * The bulky payloads of a result.json, in their builder order. Everything else (every compact fact) goes
@@ -669,7 +677,7 @@ export const RESULT_JSON_BULKY_TAIL_KEYS = ['finalResponse', 'toolCalls', 'funct
  */
 // `toolCallGatewayMeta` (Stage B P1-4, 2026-10-14): the gateway's allowlisted `_meta` per `services` call, `index` = the
 // call's position in `toolCalls` (lib/services/mcp/gateway-meta.ts). An operator fact, never in the record the agent read.
-export const RESULT_JSON_OPERATOR_TAIL_KEYS = ['applyBlockPlaceholder', 'toolCallGatewayMeta', 'validationToolCalls', 'deviceSourceReads', 'gitDeviceComparison'] as const; // + validationToolCalls (2026-10-23, network Author persist; appended) + deviceSourceReads, gitDeviceComparison (2026-10-26, held-network step 3 batch 2b: network Harvester / Author persist; appended)
+export const RESULT_JSON_OPERATOR_TAIL_KEYS = ['applyBlockPlaceholder', 'toolCallGatewayMeta', 'validationToolCalls', 'deviceSourceReads', 'gitDeviceComparison', 'liveEvidence'] as const; // + liveEvidence (2026-11-04, Config-sources network push 1a: Harvester / Author persist + leg hoist; appended) + validationToolCalls (2026-10-23, network Author persist; appended) + deviceSourceReads, gitDeviceComparison (2026-10-26, held-network step 3 batch 2b: network Harvester / Author persist; appended)
 
 /**
  * PERSIST-TIME key order (RWF C.3, 2026-09-26). The builder above puts compact facts before the bulky
@@ -689,10 +697,27 @@ export function orderResultJsonForPersist<T extends Record<string, unknown>>(jso
 }
 
 /** Pick the RESULT_JSON_SUMMARY_KEYS fields present on a parsed result.json (null/undefined skipped). */
+/** Keys the pick emits NARROWLY — never whitelisted, only under a stated condition (below). RW1 (test:lean-card-facts) counts them as
+ *  emitted so a card read of one is legal; each condition is pinned by its own test. */
+export const RESULT_JSON_SUMMARY_NARROW_KEYS = ['liveEvidence'] as const;
+/** sec-ops N1 (2026-11-06): the closed set of liveEvidence summary words (live-evidence.ts) — anything else is never hoisted. Kept as a
+ *  literal here (this module stays free of the harness fact modules); test:lean-card-facts pins it against live-evidence.ts. */
+export const LIVE_EVIDENCE_SUMMARY_WORDS: readonly string[] = ['no-items', 'some-not-read', 'none-declared', 'git-only', 'some-git-only', 'all-read'];
+
 export function pickResultJsonSummary(parsed: Record<string, unknown>): Record<string, unknown> {
   const summary: Record<string, unknown> = {};
   for (const key of RESULT_JSON_SUMMARY_KEYS) {
     if (parsed[key] != null) summary[key] = parsed[key];
+  }
+  // VALUE-LEG-GIT (owner G2-d, 2026-11-06): a VALUE leg's card carries its live-evidence SUMMARY WORD beside its value. Owner decision 6
+  // (2026-11-04) keeps `liveEvidence` off this whitelist for every other leg (Node C's input), so this is the narrow exception G2-d
+  // decided: ONLY a value-shaped derivationContainment stamp, ONLY a checked fact, and ONLY `{checked, summary}` — never the buckets
+  // or the device names. Every other execution's summary is byte-identical (no value leg declares Device sources before 1.3.0).
+  const dc = parsed.derivationContainment as { legShape?: { shape?: unknown } } | null | undefined;
+  const le = parsed.liveEvidence as { checked?: unknown; summary?: unknown } | null | undefined;
+  if (dc && typeof dc === 'object' && dc.legShape && typeof dc.legShape === 'object' && dc.legShape.shape === 'value'
+    && le && typeof le === 'object' && le.checked === true && typeof le.summary === 'string' && LIVE_EVIDENCE_SUMMARY_WORDS.includes(le.summary)) {
+    summary.liveEvidence = { checked: true, summary: le.summary };
   }
   return summary;
 }

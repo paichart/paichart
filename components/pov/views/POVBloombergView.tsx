@@ -4,9 +4,10 @@ import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { ExtendedPoVDetails } from '@/lib/pov/hooks/usePOVList';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
+import { useSettings } from '@/lib/hooks/useSettings';
 import { Button } from '@/components/ui/Button';
 import {
-  Edit,
+  Eye,
   GitBranch,
   Trash2
 } from 'lucide-react';
@@ -64,12 +65,40 @@ function getDaysColor(days: number): string {
   return 'text-green-400';
 }
 
-type SortField = 'revenue' | 'endDate' | 'status' | 'title' | 'owner';
+/**
+ * UAT 2026-11-04 (owner): the Created column — compact, in the user's timezone and day/month order from their profile
+ * (settings.timezone + settings.display.dateFormat; month-first when no format is set). A short month name keeps it
+ * unambiguous in ~6 characters: "4 Nov" / "Nov 4", plus a 2-digit year when not this year. Hover shows the full date and time.
+ */
+function formatCreated(value: Date | string, timeZone: string | undefined, dateFormat: string | undefined) {
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return { short: '—', full: '' };
+  const tz = timeZone || undefined;
+  const monthFirst = !dateFormat || dateFormat.trim().toUpperCase().startsWith('M');
+  const part = (opts: Intl.DateTimeFormatOptions) => {
+    try { return new Intl.DateTimeFormat('en-US', { timeZone: tz, ...opts }).format(d); }
+    catch { return new Intl.DateTimeFormat('en-US', opts).format(d); }
+  };
+  const day = part({ day: 'numeric' });
+  const month = part({ month: 'short' });
+  const year = part({ year: 'numeric' });
+  const thisYear = part({ year: 'numeric' }) === (() => { try { return new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric' }).format(new Date()); } catch { return String(new Date().getFullYear()); } })();
+  const yy = year.slice(-2);
+  const short = monthFirst ? `${month} ${day}${thisYear ? '' : ` '${yy}`}` : `${day} ${month}${thisYear ? '' : ` ${yy}`}`;
+  const time = part({ hour: '2-digit', minute: '2-digit', hour12: false });
+  const full = monthFirst ? `${month} ${day}, ${year} ${time}` : `${day} ${month} ${year} ${time}`;
+  return { short, full: tz ? `${full} (${tz})` : full };
+}
+
+type SortField = 'createdAt' | 'revenue' | 'endDate' | 'status' | 'title' | 'owner';
 type SortDirection = 'asc' | 'desc';
 
 export function POVBloombergView({ povs, onPovDeleted }: POVBloombergViewProps) {
   const router = useRouter();
-  const [sortField, setSortField] = useState<SortField>('revenue');
+  const { settings } = useSettings();
+  // UAT 2026-11-04 (owner): newest POV first by default, so the one just created is at the top. No column is shown for it;
+  // clicking a header sorts by that column as before.
+  const [sortField, setSortField] = useState<SortField>('createdAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
 
@@ -141,6 +170,9 @@ export function POVBloombergView({ povs, onPovDeleted }: POVBloombergViewProps) 
       let comparison = 0;
 
       switch (sortField) {
+        case 'createdAt':
+          comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
         case 'revenue':
           const revA = a.revenue ? parseFloat(a.revenue.toString()) : 0;
           const revB = b.revenue ? parseFloat(b.revenue.toString()) : 0;
@@ -222,8 +254,8 @@ export function POVBloombergView({ povs, onPovDeleted }: POVBloombergViewProps) 
         </div>
 
         {/* Column Headers */}
-        <div className="grid grid-cols-[auto_1fr_100px_80px_80px_100px_80px_100px] gap-2 px-3 py-2 bg-muted/50 border-b border-border text-xs uppercase tracking-wide">
-          <div className="w-6 text-muted-foreground">#</div>
+        <div className="grid grid-cols-[64px_1fr_100px_80px_80px_100px_80px_100px] gap-2 px-3 py-2 bg-muted/50 border-b border-border text-xs uppercase tracking-wide">
+          <SortHeader field="createdAt" label="Created" />
           <SortHeader field="title" label="POV" />
           <SortHeader field="revenue" label="Revenue" className="text-right" />
           <SortHeader field="endDate" label="Close" className="text-center" />
@@ -246,18 +278,23 @@ export function POVBloombergView({ povs, onPovDeleted }: POVBloombergViewProps) 
               <div
                 key={pov.id}
                 className={cn(
-                  "grid grid-cols-[auto_1fr_100px_80px_80px_100px_80px_100px] gap-2 px-3 py-2 cursor-pointer transition-colors",
+                  "grid grid-cols-[64px_1fr_100px_80px_80px_100px_80px_100px] gap-2 px-3 py-2 cursor-pointer transition-colors",
                   isHovered ? "bg-accent" : index % 2 === 0 ? "bg-background" : "bg-muted/30"
                 )}
-                onClick={() => router.push(`/pov/view/${pov.id}`)}
+                onClick={() => router.push(`/pov/edit/${pov.id}?mode=project`)}
                 onContextMenu={(e) => handleContextMenu(e, pov)}
                 onMouseEnter={() => setHoveredRow(pov.id)}
                 onMouseLeave={() => setHoveredRow(null)}
               >
-                {/* Row Number */}
-                <div className="w-6 text-muted-foreground text-xs flex items-center">
-                  {(index + 1).toString().padStart(2, '0')}
-                </div>
+                {/* Created (replaces the row number) */}
+                {(() => {
+                  const c = formatCreated(pov.createdAt, settings.timezone, settings.display?.dateFormat);
+                  return (
+                    <div className="text-muted-foreground text-xs flex items-center whitespace-nowrap" title={c.full}>
+                      {c.short}
+                    </div>
+                  );
+                })()}
 
                 {/* Title + Customer */}
                 <Tooltip>
@@ -322,8 +359,8 @@ export function POVBloombergView({ povs, onPovDeleted }: POVBloombergViewProps) 
         </div>
 
         {/* Footer - Summary Row */}
-        <div className="grid grid-cols-[auto_1fr_100px_80px_80px_100px_80px_100px] gap-2 px-3 py-2 bg-muted border-t border-border text-xs font-bold">
-          <div className="w-6"></div>
+        <div className="grid grid-cols-[64px_1fr_100px_80px_80px_100px_80px_100px] gap-2 px-3 py-2 bg-muted border-t border-border text-xs font-bold">
+          <div></div>
           <div className="text-amber-400">TOTAL ({totals.count})</div>
           <div className="text-right text-green-400">${formatCurrency(totals.totalRevenue)}</div>
           <div></div>
@@ -349,15 +386,16 @@ export function POVBloombergView({ povs, onPovDeleted }: POVBloombergViewProps) 
           }}
           onClick={(e) => e.stopPropagation()}
         >
+          {/* UAT 2026-11-04 (owner): a plain click opens the task editor (?mode=project); the menu offers View / Edit / Delete. */}
           <button
             className="relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
             onClick={() => {
-              router.push(`/pov/edit/${contextMenu.pov.id}?mode=project`);
+              router.push(`/pov/view/${contextMenu.pov.id}`);
               setContextMenu(null);
             }}
           >
-            <Edit className="mr-2 h-4 w-4" />
-            Edit Tasks
+            <Eye className="mr-2 h-4 w-4" />
+            View POV
           </button>
           <button
             className="relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"

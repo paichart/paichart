@@ -3,7 +3,8 @@
  * device-sources.ts). Used by capture (execution-core, before the pure capture half) and by the device nets (through the
  * net context's memo, primed with the core's answer), so both see the same declaration. Replays reach it through the same memo.
  *
- * Reads, only when the owning leg's protocol declares device sources (DEVICE_SOURCE_PROTOCOLS — network-provisioning):
+ * Reads, only when the owning leg's protocol declares device sources (DEVICE_SOURCE_PROTOCOLS — network-provisioning; and since
+ * VALUE-LEG-GIT 2026-11-06 a network-derivation leg that DECLARED a block, read under its own contract key `network-derivation`):
  *   ONE PK read of the leg row's `description`, `inputContext -> 'interfaceContract'` (a jsonb projection — never the whole
  *   inputContext, which carries chained entries) and `metadata -> 'deviceSourcesSnapshot'`. Every other leg reads nothing.
  * NEVER THROWS: a read failure is `could-not-check` (capture then holds nothing on the device lane, named, and the net says so).
@@ -18,7 +19,16 @@ import {
   contractDeviceSourcesValue, resolveLegDeviceSources, readDeviceSourcesSnapshot, sameDeclaration, DEVICE_SOURCES_GRAMMAR_VERSION,
   type LegDeviceSources,
 } from './device-sources';
-import type { OwningLegResolution } from './held-bytes/variant';
+import { DEVICE_SOURCE_LANES, type OwningLegResolution } from './held-bytes/variant';
+
+/** VALUE-LEG-GIT (G2-a): the contract key a resolved owning leg reads — its lane's protocol key. One protocol per lane today; a second
+ *  protocol on a lane makes this throw rather than guess (the reader then reports `could-not-check`, named). */
+export function contractKeyForOwningLeg(owningLeg: OwningLegResolution): string {
+  const lane = (owningLeg.kind === 'self' || owningLeg.kind === 'leg') && owningLeg.deviceSourceLane === 'value' ? 'value' : 'change';
+  const keys = Object.values(DEVICE_SOURCE_LANES).filter((x) => x.lane === lane).map((x) => x.contractKey);
+  if (keys.length !== 1) throw new Error(`device-source lane ${lane}: ${keys.length} protocols — the contract key is ambiguous`);
+  return keys[0];
+}
 
 export type LegDeviceSourcesResolution =
   | LegDeviceSources
@@ -29,12 +39,12 @@ export type LegDeviceSourcesResolution =
 type Db = { $queryRaw: <T = unknown>(query: Prisma.Sql) => Promise<T> };
 
 /** The governing declaration from the leg row's three columns — PURE (shared by the read and the replay tooling). */
-export function governingDeviceSources(row: { description: string | null; contract: unknown; snapshot: unknown }): LegDeviceSourcesResolution {
+export function governingDeviceSources(row: { description: string | null; contract: unknown; snapshot: unknown }, contractKey?: string): LegDeviceSourcesResolution {
   const g = DEVICE_SOURCES_GRAMMAR_VERSION;
   const snap = readDeviceSourcesSnapshot(row.snapshot === null || row.snapshot === undefined ? null : { deviceSourcesSnapshot: row.snapshot });
   if (snap === null) return { state: 'snapshot-absent', grammarVersion: g };
   if (snap === 'unreadable') return { state: 'snapshot-unreadable', grammarVersion: g };
-  const live = resolveLegDeviceSources({ contractValue: contractDeviceSourcesValue(row.contract), taskBody: row.description });
+  const live = resolveLegDeviceSources({ contractValue: contractDeviceSourcesValue(row.contract, contractKey), taskBody: row.description });
   if (!sameDeclaration(live, snap.resolution)) return { state: 'snapshot-changed', grammarVersion: g };
   return snap.resolution;
 }
@@ -51,7 +61,7 @@ export async function readLegDeviceSources(db: Db, owningLeg: OwningLegResolutio
     if (!Array.isArray(rows) || rows.length !== 1) {
       return { state: 'could-not-check', grammarVersion: DEVICE_SOURCES_GRAMMAR_VERSION, reason: 'leg-row-missing' };
     }
-    return governingDeviceSources(rows[0]);
+    return governingDeviceSources(rows[0], contractKeyForOwningLeg(owningLeg));
   } catch {
     return { state: 'could-not-check', grammarVersion: DEVICE_SOURCES_GRAMMAR_VERSION, reason: 'read-threw' };
   }

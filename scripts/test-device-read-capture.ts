@@ -363,6 +363,128 @@ const outcomes = (x: ReturnType<typeof extractDeclaredFiles>) =>
     assert(JSON.stringify(names) === JSON.stringify([...DEVICE_SOURCE_PROTOCOLS].sort()), `${names} vs ${DEVICE_SOURCE_PROTOCOLS}`);
   });
 
+  // ── Config-sources network step, Phase A — `live-read` through the device lane (execution-facts B2 sites 3–5, fix 2–3) ─────────────
+  await test('LR-C1 a `live-read` device read is DECLARED (never device-not-declared): the extractor keeps its text; CAPTURE moves it to the handleless `live-read-evidence-only`', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const DS = require('../lib/agents/harness/device-sources') as typeof import('../lib/agents/harness/device-sources');
+    DS.__setLiveReadKindForLab(true);
+    try {
+      const recs = [...configCalls];
+      const lines = [`${DEV}: device-read — service ${SVC}`, `${DEV2}: live-read — service ${SVC}`];
+      const sc = scopeOf(lines, recs);
+      assert(sc.state === 'declared' && JSON.stringify(sc.liveDevices) === JSON.stringify([DEV2]), `scope: ${JSON.stringify(sc)}`);
+      const x = extractDeclaredFiles(recs, undefined, { gitFileSourceLeg: true, deviceRead: sc });
+      assert(x.files.some((f) => f.target === `device:${DEV2}`), `extractor must keep the evidence text: ${JSON.stringify(outcomes(x))}`);
+      assert(!x.refusals.some((r) => r.refusal === 'device-not-declared' || r.refusal === 'device-service-not-declared'), `an evidence read is not undeclared: ${JSON.stringify(outcomes(x))}`);
+      const cap = withDeviceEvidenceOnly(x, sc);
+      assert(cap.files.some((f) => f.target === `device:${DEV}`) && !cap.files.some((f) => f.target === `device:${DEV2}`), `capture: ${JSON.stringify(outcomes(cap))}`);
+      const moved = cap.refusals.find((r) => r.refusal === 'live-read-evidence-only');
+      assert(moved && moved.target === null && moved.path === null, `moved refusal: ${JSON.stringify(moved)}`);
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { HANDLELESS_CAPTURE_REFUSALS } = require('../lib/agents/harness/held-chain') as { HANDLELESS_CAPTURE_REFUSALS: ReadonlySet<string> };
+      assert(HANDLELESS_CAPTURE_REFUSALS.has('live-read-evidence-only'), 'the evidence refusal must get no handle');
+    } finally { DS.__setLiveReadKindForLab(null); }
+  });
+  await test('LR-C2 the read record reads a `live-read` device as a whole-config read (its own kind); the undeclared-read counter stays 0; the carrier NEVER forces for it — held or not', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const DS = require('../lib/agents/harness/device-sources') as typeof import('../lib/agents/harness/device-sources');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { computeDeviceSourceReads } = require('../lib/agents/harness/device-source-facts') as { computeDeviceSourceReads: (s: unknown, t: unknown) => Rec };
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { deviceReadForce } = require('../lib/agents/harness/held-edit-carrier') as { deviceReadForce: (s: unknown, refs: unknown[], r?: string | null) => Rec | null };
+    DS.__setLiveReadKindForLab(true);
+    try {
+      const recs = [...configCalls];
+      const res = resolveLegDeviceSources({ contractValue: undefined, taskBody: body([`${DEV}: device-read — service ${SVC}`, `${DEV2}: live-read — service ${SVC}`]) });
+      const f = computeDeviceSourceReads(res, recs);
+      const lr = (f.devices as Rec[]).find((d) => d.device === DEV2)!.sources[0];
+      assert(lr.kind === 'live-read' && lr.read.state === 'whole-config' && f.undeclaredDeviceConfigReads === 0, JSON.stringify(f));
+      // the changed device is held, the evidence device is not: no force
+      assert(deviceReadForce(res, [{ target: `device:${DEV}`, path: '/running-config' }]) === null, 'an evidence device not held must never force');
+      // NEGATIVE CONTROL: the CHANGED device not held still forces (the D-1 force is unchanged for a held kind)
+      const forced = deviceReadForce(res, []);
+      assert(forced && forced.reason === 'device-read-not-held' && JSON.stringify(forced.devicesNotHeld) === JSON.stringify([DEV]), JSON.stringify(forced));
+      // a `live-read` read that FAILED is recorded, not forced
+      const failed = clone(configCalls[1]); failed.success = false;
+      const ff = computeDeviceSourceReads(res, [configCalls[0], failed]);
+      assert((ff.devices as Rec[]).find((d) => d.device === DEV2)!.sources[0].read.state === 'read-failed', JSON.stringify(ff));
+      assert(deviceReadForce(res, [{ target: `device:${DEV}`, path: '/running-config' }]) === null, 'a failed evidence read never forces');
+    } finally { DS.__setLiveReadKindForLab(null); }
+  });
+
+  // ── VALUE-LEG-GIT (owner G1–G4, 2026-11-06): network-derivation joins as the VALUE lane — declared by snapshot, never held ─────────
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const V = require('../lib/agents/harness/held-bytes/variant') as typeof import('../lib/agents/harness/held-bytes/variant');
+  const valueSnap = (lines: string[]) => JSON.parse(JSON.stringify(buildDeviceSourcesSnapshot(
+    resolveLegDeviceSources({ contractValue: undefined, taskBody: body(lines) }), '2026-11-06T00:00:00.000Z')));
+  const NP = { title: 'x', metadata: { protocol: 'network-provisioning-protocol' } };
+  const ND = { title: 'x', metadata: { protocol: 'network-derivation-protocol' } };
+  const NDdecl = { title: 'x', metadata: { protocol: 'network-derivation-protocol', deviceSourcesSnapshot: valueSnap([`${DEV}: device-read — service ${SVC}`]) } };
+
+  await test('VLG1 the lane table: change = network-provisioning, value = network-derivation; DEVICE_SOURCE_PROTOCOLS is its keys; each protocol its own contract key (G2-a)', () => {
+    assert(JSON.stringify([...V.DEVICE_SOURCE_PROTOCOLS].sort()) === JSON.stringify(['network-derivation-protocol', 'network-provisioning-protocol']), String(V.DEVICE_SOURCE_PROTOCOLS));
+    assert(V.deviceSourceLaneOf('network-provisioning') === 'change' && V.deviceSourceLaneOf('network-derivation-protocol') === 'value' && V.deviceSourceLaneOf('terraform-iac-protocol') === null, 'lanes');
+    assert(V.deviceSourceContractKeyOf('network-derivation') === 'network-derivation' && V.deviceSourceContractKeyOf('network-provisioning') === 'network-provisioning', 'keys');
+    assert(!V.GIT_FILE_SOURCE_PROTOCOLS.includes('network-derivation-protocol'), 'a value leg is never a Git file-source CAPTURE leg (G2-b)');
+  });
+
+  await test('VLG2 inert by DECLARATION (G4-c): a value leg is a Device-sources leg ONLY with a snapshot; a change leg by protocol; the change-leg resolution keeps its exact shape', async () => {
+    assert(V.isDeviceSourceLeg(NP) === true && V.isDeviceSourceLeg(ND) === false && V.isDeviceSourceLeg(NDdecl) === true, 'predicate');
+    assert(V.isDeviceSourceLeg({ ...ND, metadata: { ...ND.metadata, deviceSourcesSnapshot: null } }) === false, 'null snapshot ⇒ not declared');
+    const selfNP = await V.resolveOwningLegProtocol({} as never, { id: 'L', type: 'PIPELINE', ...NP });
+    assert(JSON.stringify(selfNP) === JSON.stringify({ kind: 'self', legId: 'L', heldCapable: true, gitFileSource: true, deviceSource: true }), JSON.stringify(selfNP));
+    const selfND = await V.resolveOwningLegProtocol({} as never, { id: 'L', type: 'PIPELINE', ...ND });
+    assert(JSON.stringify(selfND) === JSON.stringify({ kind: 'self', legId: 'L', heldCapable: false, gitFileSource: false, deviceSource: false }), `undeclared value leg = today: ${JSON.stringify(selfND)}`);
+    const selfNDd = await V.resolveOwningLegProtocol({} as never, { id: 'L', type: 'PIPELINE', ...NDdecl });
+    assert(selfNDd.kind === 'self' && selfNDd.deviceSource === true && selfNDd.deviceSourceLane === 'value' && selfNDd.heldCapable === false, JSON.stringify(selfNDd));
+  });
+
+  await test('VLG3 a value leg NEVER holds (G2-b): capture takes no device scope there and the carrier applies no device force; the change lane is unchanged', () => {
+    assert(V.heldCaptureTakesDeviceScope({ kind: 'leg', legId: 'L', heldCapable: true, ownStageId: 's', deviceSource: true }) === true, 'change lane holds');
+    assert(V.heldCaptureTakesDeviceScope({ kind: 'leg', legId: 'L', heldCapable: false, ownStageId: 's', deviceSource: true, deviceSourceLane: 'value' }) === false, 'value lane never');
+    assert(V.heldCaptureTakesDeviceScope({ kind: 'leg', legId: 'L', heldCapable: true, ownStageId: 's', deviceSource: false }) === false && V.heldCaptureTakesDeviceScope(null) === false
+      && V.heldCaptureTakesDeviceScope({ kind: 'no-leg', reason: 'no-stage', heldCapable: false }) === false, 'off a Device-sources leg');
+    assert(V.carrierAppliesDeviceForce(NP) === true && V.carrierAppliesDeviceForce(NDdecl) === false && V.carrierAppliesDeviceForce(ND) === false, 'carrier');
+    const core = fs.readFileSync(path.join(__dirname, '../lib/services/execution-core.ts'), 'utf8');
+    assert(core.includes('const captureDeviceSources = legDeviceSources && heldCaptureTakesDeviceScope(owningLeg) ? legDeviceSources : null;')
+      && core.includes('...(captureDeviceSources ? { deviceRead: buildDeviceReadScope(captureDeviceSources, toolCallResults) } : {}),')
+      && !core.includes('deviceRead: buildDeviceReadScope(legDeviceSources'), 'capture reads its scope ONLY through the change-lane gate (source pin)');
+    const carrier = fs.readFileSync(path.join(__dirname, '../lib/agents/harness/held-edit-carrier.ts'), 'utf8');
+    assert(carrier.includes('if (carrierAppliesDeviceForce({ title: task.title ?? null, metadata: task.metadata }))') && !/isDeviceSourceLeg\(/.test(carrier), 'carrier force gated by lane (source pin)');
+    // and end to end: the SAME declared device-read on a VALUE leg holds nothing when no scope is passed (capture's value-lane input)
+    const lines = [`${DEV}: device-read — service ${SVC}`];
+    const scoped = prepareHeldCapture({ toolCallResults: configCalls, task: { id: 't', povId: 'pov' }, logger: { warn: () => undefined, info: () => undefined }, deviceRead: buildDeviceReadScope(resolveLegDeviceSources({ contractValue: undefined, taskBody: body(lines) }), configCalls) });
+    const unscoped = prepareHeldCapture({ toolCallResults: configCalls, task: { id: 't', povId: 'pov' }, logger: { warn: () => undefined, info: () => undefined } });
+    assert(JSON.stringify(scoped).includes(`device:${DEV}`) && !JSON.stringify(unscoped).includes(`device:${DEV}`), 'with the change-lane scope the device is held; without it (value lane) nothing is');
+  });
+
+  await test('VLG4 the reader reads the VALUE lane\'s OWN contract key; the change lane its own; a body block governs either way (G2-a)', async () => {
+    const valueLines = [`${DEV}: device-read — service ${SVC}`];
+    const contract = { deviceSources: { 'network-provisioning': [`${DEV2}: device-read — service ${SVC}`], 'network-derivation': valueLines } };
+    const snapV = JSON.parse(JSON.stringify(buildDeviceSourcesSnapshot(resolveLegDeviceSources({ contractValue: valueLines, taskBody: null }), '2026-11-06T00:00:00.000Z')));
+    const v = await readLegDeviceSources({ $queryRaw: async () => [{ description: null, contract, snapshot: snapV }] } as never,
+      { kind: 'self', legId: 'L', heldCapable: false, deviceSource: true, deviceSourceLane: 'value' });
+    assert(v.state === 'parsed' && JSON.stringify((v as Rec).entries.map((e: Rec) => e.device)) === JSON.stringify([DEV]), `value lane reads network-derivation: ${JSON.stringify(v)}`);
+    const c = await readLegDeviceSources({ $queryRaw: async () => [{ description: null, contract, snapshot: snapV }] } as never,
+      { kind: 'self', legId: 'L', heldCapable: true, deviceSource: true });
+    assert(c.state === 'snapshot-changed', `the change lane re-resolves its OWN key (network-provisioning ≠ the value snapshot): ${JSON.stringify(c)}`);
+    const prep = fs.readFileSync(path.join(__dirname, '../lib/agents/harness/prepare-task-for-execution.ts'), 'utf8');
+    assert(prep.includes("deviceSourceContractKeyOf(resolved.protocol) ?? undefined") && prep.includes("(deviceSourceLaneOf(resolved.protocol) === 'change' || laneResolution.state !== 'absent')"),
+      'the writer: own key, and a value leg is snapshotted only when it declares a block (source pin)');
+  });
+
+  await test('VLG5 MI-13 _devsrcvalue equals the VALUE lane pair for pair, and carries the never-held 🔴 lines', () => {
+    const sh = fs.readFileSync(path.join(__dirname, 'report-mechanism-inventory.sh'), 'utf8');
+    const m = /CREATE TEMP VIEW _devsrcvalue AS SELECT \* FROM \(VALUES ([^;]*?)\) v\(name\);/.exec(sh);
+    assert(m, '_devsrcvalue view present');
+    const names = [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]).sort();
+    const want = Object.entries(V.DEVICE_SOURCE_LANES).filter(([, x]) => x.lane === 'value').map(([k]) => k).sort();
+    assert(JSON.stringify(names) === JSON.stringify(want), `${names} vs ${want}`);
+    for (const l of ['🔴 a CAPTURE ref (any target) on an execution whose owning leg is a VALUE-lane Device-sources leg', '🔴 a held-edit force reason on a VALUE-lane leg', '🔴 a VALUE-lane leg snapshot whose state is absent']) {
+      assert(sh.includes(l), `MI-13 line missing: ${l}`);
+    }
+  });
+
   console.log(`\n📊 Results: ${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
 })();

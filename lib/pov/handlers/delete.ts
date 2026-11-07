@@ -28,15 +28,6 @@ export async function deletePoVHandler(
   return createSuccessResponse(null, 'POV deleted successfully')
 }
 
-export async function deletePhaseHandler(
-  request: NextRequest,
-  { params }: { params: { povId: string; phaseId: string } }
-) {
-  const { phaseId } = params
-  await povService.deletePhase(phaseId)
-  return createSuccessResponse(null, 'Phase deleted successfully')
-}
-
 // ✅ ENHANCEMENT: Use centralized validation schema
 import { DeleteMultiplePhasesSchema } from '@/lib/validation/pov';
 

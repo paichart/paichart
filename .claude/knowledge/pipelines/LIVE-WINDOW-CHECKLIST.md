@@ -75,7 +75,9 @@
 - [ ] **If it does not:** roll back newest first and treat the cause as a finding before anything else ships.
 - [ ] **Record it** in the run sheet of the deploy it checks and in the series-cut entry; a passing canary is also a candidate golden case
       (add by owner decision, register NO-REGRESSION-GOLDEN-SET; CANARY 1's legs were hand-read and entered golden v2 on 2026-10-31,
-      a near-duplicate leg left out with its reason in the set's `refreezes`).
+      a near-duplicate leg left out with its reason in the set's `refreezes`; the network-provisioning 1.26.0 canary entered golden v3
+      on 2026-11-06). **A deploy that changes a pinned text leaves the golden pin stale** until the next re-freeze (nothing else
+      re-pins; a lab on the new text is refused by `golden-build`): name the pin move in that re-freeze.
 
 ## Committing the records
 - [ ] **Gitleaks on synthetic secret-shaped fixtures:** allowlist EXACT values with a dated comment + a negative control,

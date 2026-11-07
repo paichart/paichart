@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import { mcpLogger } from '@/lib/logger';
 import { z } from 'zod';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 // Dismiss (REJECTED) is the live use case from the Automation tab's thumbs-down button;
 // REVIEWED is allowed for parity with the implement path's terminal states.
@@ -89,6 +89,7 @@ const patchRecommendationHandler: ApiHandler = async (
 
     return { data: { success: true, recommendationId: id, status } };
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     mcpLogger.error({ err: error }, 'Failed to update recommendation status');
     return { error: { message: 'Failed to update recommendation', code: 'UPDATE_FAILED' } };
   }

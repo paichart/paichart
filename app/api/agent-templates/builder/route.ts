@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { detectPromptInjection } from '@/lib/security/prompt-injection-prevention';
 import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { logger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 /**
  * Agent Template Builder API Endpoint
@@ -190,6 +190,7 @@ export async function POST(request: NextRequest) {
         );
     }
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     logger.error({ err: error }, 'agent template builder POST error');
     return NextResponse.json(
       { 

@@ -389,5 +389,8 @@ R10 `paichart.r10/10` (login username); `deviceSourcesSnapshot` is an AUDIT_STRI
 **Join learnings carried (2026-10-31):** `.claude/knowledge/domain/security/sec-ops-library.md` § "Carried from the join learnings ledgers" — read it before designing a check, lab or text change in your domain.
 
 ## Pointer (2026-11-03): the Git pin is host configuration (LAB-CONFIGS Build 1, GO-WITH-CHANGES 88)
-- `GIT_FILE_SOURCE_PIN` read once at load, malformed ⇒ throws; both gates; kept files never re-checked. The unset default must never become a public repo (PIN-DEFAULT-NEVER-PUBLIC); open: absent `ref` reads the default branch (PIN-ABSENT-REF-DEFAULT-BRANCH).
+- `GIT_FILE_SOURCE_PIN` read once at load, malformed ⇒ throws; both gates; kept files never re-checked. The unset default must never become a public repo (PIN-DEFAULT-NEVER-PUBLIC); open: absent `ref` reads the default branch (PIN-ABSENT-REF-DEFAULT-BRANCH) — **CLOSED 2026-11-04 by Config-sources push 0** (absent ref checked AS `main` inside `checkGitArguments`, forwarded = checked = echoed; `NEVER_READ_PATH` on unpinned `get_file_contents`; review `cline_docs/reviews/config-sources-design-2026-11-04/REVIEW-sec-ops-PUSH0.md`; residuals CONFIG-SOURCES-PUSH0-RESIDUALS).
 - Public `paichart/paichart-configs`: ruleset `protect-main` (admin bypass — single maintainer), secret scanning + push protection, fork-safe CI. Review: `cline_docs/reviews/lab-configs-central-repo-2026-11-02/BUILD1-SECOPS-REVIEW.md`.
+
+## Pointer (2026-11-05): chained-fact forgery decision
+- LIVE-EVIDENCE-CHAINED-COPY-FORGEABLE → GO/LOW for network 1.26.0: only human POV writers can set `inputContext.chainedFrom`; no agent-loop door; the Reviewer's copy is rebuilt at prepare. `cline_docs/reviews/config-sources-design-2026-11-04/REVIEW-sec-ops-FORGEABLE.md`; hardening H1–H4 in register LIVE-EVIDENCE-CHAINED-HARDENING.

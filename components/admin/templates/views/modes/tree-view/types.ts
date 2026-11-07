@@ -21,8 +21,8 @@ export interface TreeNodeData {
 
 export interface MinimapProps {
   nodes: TreeNodeData[];
-  containerRef: React.RefObject<HTMLDivElement>;
-  viewportRef: React.RefObject<HTMLDivElement>;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  viewportRef: React.RefObject<HTMLDivElement | null>;
   focusedStageId: string | null;
   selectedNodeId: string | null;
 }

@@ -1,6 +1,6 @@
 import { useCallback, RefObject } from 'react';
 
-export function useExportGraph(svgRef: RefObject<SVGSVGElement>, templateName: string) {
+export function useExportGraph(svgRef: RefObject<SVGSVGElement | null>, templateName: string) {
   const handleExportSVG = useCallback(() => {
     if (!svgRef.current) return;
     

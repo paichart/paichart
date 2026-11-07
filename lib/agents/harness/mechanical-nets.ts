@@ -53,6 +53,8 @@ import { renderValidationToolCallsForPrompt, VALIDATION_TOOL_CALLS_SCOPE } from 
 import { NOT_STAMPED } from './net-registry';
 import { computeDeviceSourceReadsFact, computeGitDeviceComparisonHarvesterFact, transcribeGitDeviceComparisonFact } from './device-source-facts-enrichment';
 import { renderGitDeviceComparisonForPrompt } from './git-device-comparison';
+import { computeLiveEvidenceHarvesterFact, transcribeLiveEvidenceFact, hoistLiveEvidenceFact } from './live-evidence-enrichment';
+import { renderLiveEvidenceForPrompt } from './live-evidence';
 import { resolveOwningLegProtocol, isHeldCapableLeg } from './held-bytes/variant';
 import { selectLegEditApplication, hoistedEditApplication, reviewedEditDiffFromContext, HELD_EDIT_REVIEWER_ROLE } from './held-bytes-nets';
 import { readChainedRecord } from './chained-record';
@@ -508,5 +510,47 @@ export const MECHANICAL_NETS: readonly MechanicalNet[] = [
       'kept off the lean card and the agent.results summary (no gate consumer); persisted in the operator tail so the 8 KB head and '
       + 'the finalResponse offset do not move. NOT invisible: the chainer reads the full result.json and carries it to the Architect '
       + 'and the Reviewer, and a verbose agent.results returns it.',
+  },
+  // ── Config-sources network push 1a (DESIGN v2 §1.4; execution-facts S1/S3/S4, 2026-11-04): `liveEvidence` — for each declared
+  // device, was its live configuration read, read from a Git file only, or does no read apply? APPENDED (key order is the
+  // equivalence contract). CONDITIONAL and VERSION-KEYED: NOT_STAMPED unless the persisting execution's own stamped protocol version
+  // is a released Config-sources version (network-provisioning ≥ 1.26.0) on a Device-sources leg — every stored leg, every value leg
+  // and every other domain replays byte-identical. A FACT, never a gate: no qualityGate / programReleasable input and never a
+  // containmentDisposition reason (EF-N2). Harvester: computed through the ctx memo's read record. Author: the Harvester stamp
+  // TRANSCRIBED so it reaches the leg Reviewer. Leg: the authoritative Harvester's stamp HOISTED through the one child selector.
+  {
+    name: 'liveEvidence',
+    point: 'leaf-persist',
+    conditionalStampReason: 'not-config-sources-version',
+    appliesTo: (ctx) => ctx.task.type !== 'PIPELINE' && !SPECIFICATION_ROLE_RE.test(ctx.agentRole ?? '')
+      && (HARVEST_LEAF_ROLE_RE.test(ctx.agentRole ?? '') || ctx.agentRole === FORM_CHECK_ELIGIBLE_ROLE),
+    enrich: async (ctx) => (HARVEST_LEAF_ROLE_RE.test(ctx.agentRole ?? '')
+      ? computeLiveEvidenceHarvesterFact(ctx) : transcribeLiveEvidenceFact(ctx)),
+    errorFact: () => ({ version: 1, checked: false, reason: 'enrichment-error' }),
+    renderCard: null,
+    renderPrompt: (fact) => renderLiveEvidenceForPrompt(fact),
+    renderNullReason:
+      'owner G4-b DEFER (2026-11-04, SYNTHESIS C1): no lean-card segment — the card is leg SYNTHESIZE\'s and Node C\'s input, and a '
+      + 'token there changes what Node C reads with no lab and no golden program case. The consumer requirement is met by the §6 '
+      + 'render to LIVE_EVIDENCE_READERS (Architect, Author, leg Reviewer). The card segment ships with the Node C batch.',
+    summaryExcludedReason:
+      'owner decision 6 (2026-11-04): off the agent.results summary until the Node C batch — leg SYNTHESIZE and Node C read that '
+      + 'summary and Node C cannot be lab-replayed; the fact stays in result.json (operator tail) and reaches the leg readers via §6.',
+  },
+  {
+    name: 'liveEvidence',
+    point: 'leg-synthesize',
+    conditionalStampReason: 'not-config-sources-version',
+    appliesTo: (ctx) => ctx.task.type === 'PIPELINE' && ctx.harnessMode === 'SYNTHESIZE' && !ctx.programTier,
+    enrich: async (ctx) => hoistLiveEvidenceFact(ctx),
+    errorFact: () => ({ version: 1, point: 'leg', checked: false, reason: 'enrichment-error' }),
+    renderCard: null,
+    renderPrompt: null,
+    renderNullReason:
+      'owner G4-b DEFER (2026-11-04): the hoist is the leg\'s copy for the record and the later Node C batch — no card segment '
+      + 'until then; §6 is rendered from the leaf stamps (the chainer carries leaf entries only, never a pipeline predecessor\'s hoist).',
+    summaryExcludedReason:
+      'owner decision 6 (2026-11-04): off the agent.results summary until the Node C batch — leg SYNTHESIZE and Node C read that '
+      + 'summary and Node C cannot be lab-replayed; the fact stays in result.json (operator tail) and reaches the leg readers via §6.',
   },
 ];

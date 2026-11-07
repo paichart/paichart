@@ -24,7 +24,7 @@
  * refs must name this leg (`legTaskId`, written at the Author's persist from its own stage back-pointer), or `author-not-of-leg`
  * — so a two-step re-point (re-point, then approve) also forces.
  */
-import { isHeldCapableLeg, isDeviceSourceLeg } from './held-bytes/variant';
+import { isHeldCapableLeg, carrierAppliesDeviceForce } from './held-bytes/variant';
 import { readLegDeviceSources, type LegDeviceSourcesResolution } from './device-sources-read';
 import { isFileOfGitLine } from './held-bytes/device-read-scope';
 import { GIT_FILE_SOURCE_PINS } from '@/lib/mcp/server/config/git-file-source-pin';
@@ -165,7 +165,7 @@ export async function applyHeldEditCarrier(
       notPinned = (await db.heldCaptureRefusal.count({ where: { executionId: harvester.executionId, refusal: 'source-not-pinned' } })) > 0;
     }
     // push 2 (O-4) + push 3 (D-1): a declared non-command-package device with no held base forces (a no-op off a Device-sources leg).
-    if (isDeviceSourceLeg({ title: task.title ?? null, metadata: task.metadata })) {
+    if (carrierAppliesDeviceForce({ title: task.title ?? null, metadata: task.metadata })) { // VALUE-LEG-GIT: change lane only (G2-b)
       const refs = harvester.executionId
         ? await db.heldFileRef.findMany({ where: { executionId: harvester.executionId, kind: 'CAPTURE' }, select: { target: true, path: true }, take: 1000 }) // one Harvester's capture refs (held-file caps bound it far lower); a cut can only ADD a force — the safe direction
         : [];

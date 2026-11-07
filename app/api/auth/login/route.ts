@@ -13,7 +13,7 @@ import { getClientIP } from '@/lib/utils/client-ip';
 import { trackActivity } from '@/lib/auth/audit';
 import { z } from 'zod';
 import { authLogger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 // P1.2 (2026-05-24): per-email login failure window. Defeats IP-rotation
 // credential stuffing — a botnet trying <maintainer-email> from 10,000
@@ -378,6 +378,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     authLogger.error({ err: error }, 'login error');
     return NextResponse.json(
       { error: 'Internal server error' },

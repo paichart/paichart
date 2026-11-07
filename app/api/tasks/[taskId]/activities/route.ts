@@ -9,7 +9,7 @@ import { safeRecord } from '@/lib/validation/zod-helpers';
 import { getPOVFromTask } from '@/lib/utils/pov-helpers';
 import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import { taskLogger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 // 2026-05-14 P1: schema preserves the existing permissive `action` shape
 // (downstream actionTypeMap accepts lowercase forms and falls back to
@@ -229,6 +229,7 @@ const createActivityHandler: ApiHandler = async (
 
     return { data: activity };
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     taskLogger.error({ err: error, endpoint: 'POST /api/tasks/[taskId]/activities' }, 'Failed to create task activity');
     return {
       error: {

@@ -4,7 +4,7 @@ import { MCPServerConfig } from '@/lib/services/llm/mcp-integration';
 import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { createErrorResponse, createSuccessResponse } from '@/lib/api/error-handler';
 import { mcpLogger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 // ✅ Enhanced validation schema with command whitelist (Pre-Phase Fix A)
 const UpdateMCPServerSchema = z.object({
@@ -161,6 +161,7 @@ export async function PUT(request: NextRequest, props: { params: Promise<{ serve
 
     return createSuccessResponse(updatedConfig, 'Server updated successfully');
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     mcpLogger.error({ err: error, serverId: params.serverId }, 'Failed to update server');
     return createErrorResponse('INTERNAL_ERROR', 'Failed to update server');
   }

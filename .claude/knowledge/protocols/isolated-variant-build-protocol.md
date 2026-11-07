@@ -183,7 +183,7 @@ Outcome (value-chain → pov-program 2.0.0): ND2 plan-gate PASS; control 1 relea
 not releasable on a pre-existing kubernetes drift-paperwork gap; control 3 releasable (90). 0 stop-line hits; Node C on
 its new unbound row gave the right verdict 4/4; the fact-producing code differed from the base only in comments. **Owed:**
 the value-leg positive control — the spec used for it typed its derivation leg as a change leg (it also asks the leg to
-advertise the range), correctly under the promoted rules; a corrected spec is needed.
+advertise the range), correctly under the promoted rules; a corrected spec is needed. **PASSED 2026-10-06** on the corrected spec (`telemetry-export-value-leg`: `programReleasable: true`, MIN 87) — no longer owed.
 
 ## Working disciplines (each earned during the value-chain build)
 

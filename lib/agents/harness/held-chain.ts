@@ -154,7 +154,9 @@ export function harvesterHandles(refs: readonly HeldCaptureRefLike[], refusals: 
  * one of them would turn "this file is not held" into silence, and an Author that then retypes the file whole falls back to the pre-held
  * behaviour unseen. Adding a member is a decision, never a sweep.
  */
-export const HANDLELESS_CAPTURE_REFUSALS: ReadonlySet<string> = new Set(['device-read-evidence-only']);
+// Config-sources network step: + `live-read-evidence-only` — a deliberate membership decision (execution-facts B2 fix 3): a declared
+// evidence read is never an unheld item the Author is shown, exactly as `device-read-evidence-only`.
+export const HANDLELESS_CAPTURE_REFUSALS: ReadonlySet<string> = new Set(['device-read-evidence-only', 'live-read-evidence-only']);
 
 /** Harvester → Architect: handles, paths, line counts. Never the file. */
 export function heldIndexEntryFields(handles: ReturnType<typeof harvesterHandles>, refs: readonly HeldCaptureRefLike[]): Record<string, unknown> {

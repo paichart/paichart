@@ -841,6 +841,10 @@ When to spend at all: Protocol 16 "Spend only where a sample can change the verd
 
 ### §7f2. The golden set — a frozen regression check inside every lab (2026-10-31)
 
+> **Its twin (2026-11-08):** the golden set only catches a case that STOPS reproducing a correct stored outcome. Known-WRONG stored
+> outcomes, which a lab must overturn, live in the STANDING BENCH (`golden/standing-bench.json`, carried by every reaching lab with a
+> spend lock): `LAB-USER-GUIDE.md` § 6a.
+
 **What it is.** Fifteen real legs whose outcomes were judged correct by hand (four domains, both directions — releases and
 correct refusals — the platform-forced class, and since v2 one network value leg), frozen as lab cases:
 `scripts/leg-replay-lab/golden/golden-set.json` (v2, 2026-10-31 (owner re-freeze: + CANARY 1's value, terraform and observability legs)). The rule is Protocol 16 § "The standing no-regression rule": every agent-text or model lab replays it, and one

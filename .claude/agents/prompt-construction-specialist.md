@@ -395,3 +395,15 @@ network-provisioning 1.25.0 interpolates the SHARED held text via `heldFilesSect
 **Join learnings carried (2026-10-31):** `.claude/knowledge/domain/harness/prompt-construction-library.md` § "Carried from the join learnings ledgers" — read it before designing a check, lab or text change in your domain.
 
 **Golden set (2026-10-31):** any change to protocol or agent-facing text goes through the lab WITH the frozen golden set (`scripts/leg-replay-lab/golden/`, Protocol 16 § "The standing no-regression rule"; how: LAB-USER-GUIDE); text that ships to all four domains needs golden cases from every domain. One flipped case is a do-not-ship miss.
+
+## Pointer (2026-11-05): network-provisioning 1.26.0 + HOWTO 2.8.14 merged locally (render `550fb2a0…`)
+L-CS-N complete; owner SHIP with gate-2 override (UNDECLARED-SCOPE-DEVICE-UPSTREAM = known limitation, mirrored in HOWTO 2.8.14 and the user guides). Record: `cline_docs/reviews/config-sources-design-2026-11-04/TEXT-1.26.0-BUILD.md`; discovery § network-provisioning 1.26.0.
+
+- **VALUE-LEG-GIT (2026-11-06, live):** network-derivation 1.3.0 (a value leg's own Device sources; Git-only = stated limit; no block ⇒ read no Git file) and the program_architect sentence "the key ONLY when requirements give the value leg lines" (G9 — a budget-compressed parenthetical made the Architect write a prose note, LL-CS-31; ceiling 21,800). Yours, open: the shared Harvester reading its own leg's key + `git-only` on change legs at network-provisioning's next text; blind-read BR-2/BR-3/BR-5; canary-A shape notes. Record: `cline_docs/reviews/value-leg-git-2026-11-06/`.
+
+**NB1 text-authoring lessons (2026-11-08; network-provisioning 1.27.0 / network-derivation 1.3.1, shipped `2095d3dae`; record `cline_docs/reviews/value-leg-git-2026-11-06/`):**
+- **Check a fix's trigger word against the protocol's WHOLE vocabulary.** "held" means an unread source AND platform-held bytes in the same text; a Reviewer item keyed on "HELD" could have blocked every held-edit package (`9b6c13601` → `00cfb175a`: key on the condition, pin the exclusion sentence).
+- **A sentence asserting another agent's behaviour cites, per lane, the clause that makes it true.** "The Architect counts every listed value as in use" was false on the value lane (network-derivation Phase 1 takes running config over Git); keep only what is true (`67d16ed47`).
+- **Reach the motive, not the word.** Two rewordings of the no-compare rule did not stop the "note for the Architect" habit (NC1 6/6); answering why the agent wrote it did.
+- **A label the platform parses is stated in the parser's exact shapes and probe-pinned** — run the parser in the pin on the allowed and forbidden shapes (ND-WARNING-LINE-START, reviewer-warnings G1).
+- **A shared protocol edit reaches every role that composes it** (the value-leg Harvester composes network-provisioning, LL-CS-32): name every reached arm in the reach report.

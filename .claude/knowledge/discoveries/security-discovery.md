@@ -1589,11 +1589,26 @@ Capture holds a device / Git base only for what this snapshot declares (written 
 ### 2026-11-03 — the Git pin is host configuration (LAB-CONFIGS Build 1; sec-ops GO-WITH-CHANGES 88) — PROVEN greps
 The platform pin is read once from `GIT_FILE_SOURCE_PIN` at module load (ASCII, lower-cased, malformed ⇒ throws), never from a task,
 spec or agent; both gates use the one map; already-kept files are never re-checked against it. The UNSET default must never be a
-public repo (register PIN-DEFAULT-NEVER-PUBLIC). Open: an absent `ref` reads the repo's default branch (PIN-ABSENT-REF-DEFAULT-BRANCH).
+public repo (register PIN-DEFAULT-NEVER-PUBLIC). Open: an absent `ref` reads the repo's default branch (PIN-ABSENT-REF-DEFAULT-BRANCH). **→ CLOSED 2026-11-04 by Config-sources push 0 (block below).**
 Public configs repo `paichart/paichart-configs`: ruleset `protect-main`, secret scanning + push protection, fork-safe CI; its mirror
 script and the private repo's fixtures never export.
 ```bash
 grep -c "parseGitFileSourcePinEnv(process.env.GIT_FILE_SOURCE_PIN)" lib/mcp/server/config/git-file-source-pin.js  # expect 1
 grep -c "^- scripts/lab-configs/\*\*" scripts/export/public-allowlist.rules        # expect 1 — the mirror (names private fixtures) never exports
 grep -c "GIT_FILE_SOURCE_PIN is set in this shell" package.json                    # expect 1 — the battery refuses to run with a pin set
+```
+
+## Config-sources PUSH 0 — absent ref is main, never-held paths on every file read (DEPLOYED 2026-11-04, cut 09:41:51.73Z; every expectation run before it was written)
+sec-ops build review `cline_docs/reviews/config-sources-design-2026-11-04/REVIEW-sec-ops-PUSH0.md` (GO-WITH-CHANGES 90). Residuals (other tools on an unpinned
+GitHub MCP, `service-caller.ts` without the policy gate, the `refs/heads/main` probe, chat-user reach of `NEVER_READ_PATH`): register CONFIG-SOURCES-PUSH0-RESIDUALS.
+```bash
+grep -c "^const DEFAULT_REF = 'main';" lib/mcp/server/config/git-file-source-pin.js   # expect 1 — an absent ref MEANS main (never "the repo's default branch")
+grep -c "if (!pin.refs.includes(refDefaulted ? DEFAULT_REF : a.ref)) return { ok: false, field: 'ref' };" lib/mcp/server/config/git-file-source-pin.js   # expect 1 — checked AS main: a declared-ref row refuses a no-ref call (the closed bypass)
+grep -c "^function unpinnedFileReadPathRefusal(tool, args)" lib/mcp/server/config/git-file-source-pin.js   # expect 1 — the never-held predicate keyed on the TOOL, not the pin
+grep -c "type: 'NEVER_READ_PATH'," lib/mcp/server/config/service-call-policy.js   # expect 1 — its own type, neutral text (reaches any get_file_contents caller)
+grep -c "gitArguments: gitPin.ok && gitPin.pinned ? gitPin.args : null," lib/mcp/server/config/service-call-policy.js   # expect 1 — the gate returns the object it checked
+grep -c "if (policyCheck.gitArguments) validatedArgs.arguments = policyCheck.gitArguments;" lib/mcp/server/tools/hub/service-call-handler.js   # expect 1 — forwarded = checked = echoed (R-P0.12 pins the order)
+grep -c "normalisedRef(args.ref) === normalisedRef(e.ref)" lib/agents/harness/device-source-facts.ts   # expect 1 — the read record folds absent / refs/heads/<x> on both sides
+grep -c "default branch, a relative path" lib/mcp/server/config/service-call-policy.js   # expect 0 — the old refusal text is gone
+grep -c "^    check('R-P0\\." scripts/test-security-invariants.ts   # expect 12 — the push-0 pins (R-P0.8b counts with R-P0.8)
 ```

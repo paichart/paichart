@@ -3,7 +3,7 @@ import { prisma } from '../../../../../lib/prisma';
 import bcrypt from 'bcryptjs';
 import { config } from '../../../../../lib/config';
 import { authLogger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 export async function POST(request: NextRequest, props: { params: Promise<{ token: string }> }) {
   const params = await props.params;
@@ -70,6 +70,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ toke
       message: 'Email verified and password set successfully'
     });
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     authLogger.error({ err: error }, 'Email verification failed');
     return NextResponse.json(
       { error: 'Internal server error' },

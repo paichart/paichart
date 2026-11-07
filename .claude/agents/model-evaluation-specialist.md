@@ -291,3 +291,37 @@ only — follow-up GOLDEN-VALUE-LIVE), TF-C1 (standalone bucket-policy form), OB
 near-duplicate of K8S-PROG (reason in `refreezes`). Companion dir `<lab>/golden-v2`; GS6 = 27 cells. A Reviewer model lever reaches the
 value leg (shared `infra` tier, opt out with a reason); an Author model lever never does (`infraAuthor` = config_change_author only).
 Re-freeze procedure: hand-read → case + `refreezes` entry → `golden-pin` (only new pins should move) → bump `version` → fixtures + tests.
+
+## Pointer (2026-11-04): Config sources — network lab L-CS-N is next
+- The lab fixture now echoes the CHECKED Git arguments (push 0, `fixture-tools.ts`). Owed $0 builds before L-CS-N (DESIGN v2 §3.4): L-CS-a `withComputedLiveEvidence`,
+  the devext snapshot source (restore `~/backups/devext/devext-paichart_test-selfhost-2026-11-01-run.dump`, provenance check), the per-arm kind-gate override,
+  `standingBench` (NET-FWA3-EDGE), the pre-redaction ceos2 pool entry. Records: `cline_docs/reviews/config-sources-design-2026-11-04/`.
+
+## Pointer (2026-11-05): Protocol 16 optional blind reads (fixture | contradiction)
+- Protocol 16 § "Optional blind reads of composed prompts"; `scripts/leg-replay-lab/second-read/` (prep script, two briefs, inactive skill draft). It warns and never counts; ask the owner before spawning; tally in `cline_docs/reviews/config-sources-design-2026-11-04/PROXY-CALIBRATION.md`.
+
+## Pointer (2026-11-05): L-CS-N closed — SHIP 1.26.0 at 550fb2a0 (gate 2 owner-overridden)
+- `cline_docs/reviews/config-sources-design-2026-11-04/LAB-RESULT-L-CS-N.md` (13 paid runs, $15.73; ledger L76–L88). Lessons LL-CS-21..25: the standing-bench lock (an override sits BESIDE a gate; golden-build does not copy the standing case), set caps from the lab's own estimate +20%, use production parsers in scorers. Open: GIT-PLANT-CONTRACT-SOURCE-MISMATCH (yours), LAB-UNSERVED-NOTICE-LEAK.
+
+## Pointer (2026-11-06): golden set re-frozen v3 (owner; $0, two approved snapshots only)
+17 cases: + NET-C126 (1.26.0 canary held network leg, persisted only — live form = NET-JP1 duplicate, in `refreezes`) + NET-VALUE-C126
+(free-address value leg). Network pin → 1.26.0 from the S-1 candidate file, proved by fidelity + seed render, not `golden-pin` (the
+pin had been stale since the 2026-11-05 deploy). GS6 = 29 cells. Open: GOLDEN-REVIEWER-BYTE-FIDELITY (frozen-cmp gaps). Discovery § golden v3.
+
+## Pointer (2026-11-06): L-VLG pre-registered (VALUE-LEG-GIT, network-derivation 1.3.0) — $0 done, spend = owner's
+- `cline_docs/reviews/value-leg-git-2026-11-06/LAB-PREREG-VLG.md`, `inputs/2026-11-06-value-leg-git`, levers `value-lane.ts` (L-VLG-a first-execution
+  snapshot, -b frozen value harvest with shipping device facts, -c shipping containment per Architect sample = GOLDEN-VALUE-LIVE modelled), `score-vlg.ts`
+  (LVLG1–4). Found at $0: D-1 shared-Harvester block-vs-contract stop rule; F-2 containment blind to free-address collisions; F-3 comparison never names
+  device-only lines. Discovery § "L-VLG".
+
+## Pointer (2026-11-08): NB1 closed SHIP; standing bench s3; golden NEEDS-READ
+- NB1 (L95–L107, $46.43) shipped 1.27.0 `fb22f5bb` + 1.3.1 `68864acc` with OVR-NB1-JP1 beside the golden gate. Records:
+  `cline_docs/reviews/value-leg-git-2026-11-06/LAB-RESULT-NB1{,-JL3,-JP1}.md`.
+- Standing bench s3: + NET-APPLY-WHOLE-FILE (recorded, change_reviewer). The plain-language rules are in `LAB-USER-GUIDE.md` § 6a.
+- golden-score NEEDS-READ: a live-Author refusal pointing at content the stored package lacks is never a pass; a hand read decides.
+- Open: GOLDEN-REVIEWER-BYTE-FIDELITY also covers STAND-* carries. On a golden persisted arm (no `persistedEditApplication`) the
+  rollback-provenance line reads `no-restore-blocks`, where production reads `restore-is-held-base`.
+- NB1 learnings (owner yes 2026-11-08): `LAB-ANATOMY.md` § "Worked example 2: NB1" (the multi-round loop, side labs, an override
+  beside the gate, re-registration) plus seven new traps; Protocol 16 § "When a lab fails in a way the text may not explain" (measure
+  the released text before fixing a golden flip; a rig check before calling a device-semantics refusal a defect; measure a habit
+  before a third rewording; re-register only before the next spend).

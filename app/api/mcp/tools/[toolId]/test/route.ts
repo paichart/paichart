@@ -2,7 +2,7 @@ import { createHandler } from '@/lib/api-handler';
 import { NextRequest } from 'next/server';
 import { TokenPayload, ApiResponse, UserRole } from '@/lib/types/auth';
 import { mcpLogger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 type ApiHandler<T = any> = (
   req: NextRequest,
@@ -145,6 +145,7 @@ const testMCPToolHandler: ApiHandler = async (
         mcpLogger.info({ serverName, toolName, responseTimeMs: testResult.responseTime }, 'external tool test successful');
       }
     } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
       const endTime = Date.now();
       testResult = {
         success: false,

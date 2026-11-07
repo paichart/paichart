@@ -1063,3 +1063,35 @@ grep -c "export const NET_HELD_FILES_INTRO" lib/agents/harness/held-bytes/varian
 ```
 HOWTO-use-pipeline-harness mirrors the join (2.8.10 live; 2.8.11 local at the close) — Protocol 11 Pass 5 mirror of the user guide.
 Record: `cline_docs/reviews/held-network-2026-10-22/NETWORK-CLOSEOUT.md`.
+
+## network-provisioning 1.26.0 — Config sources `live-read` text (MERGED to main 2026-11-05, owner SHIP decision after L-CS-N; render `550fb2a0…`; every expectation run before it was written)
+
+```bash
+grep -c "^export const LIVE_READ_KIND_ENABLED = true;" lib/agents/harness/device-sources.ts   # expect 1 — the static kind gate flips WITH the text (test:device-sources LR8: gate ⇔ the kind line)
+grep -c "live-read — service <name | descriptor URL>" scripts/seed-protocol-prompts.ts   # expect 2 — protocol H2 kind line + HOWTO-use-pipeline-harness 2.8.14
+grep -c "the platform's live-evidence fact counts only the declared devices" scripts/seed-protocol-prompts.ts   # expect 1 — the T-fold sentence (Reviewer bullet only; never derivation_reviewer)
+grep -c "Known limitation: a device left out of a leg's block is not checked by that leg" scripts/seed-protocol-prompts.ts   # expect 1 — HOWTO 2.8.14, the UNDECLARED-SCOPE-DEVICE-UPSTREAM mirror
+```
+Record: `cline_docs/reviews/config-sources-design-2026-11-04/TEXT-1.26.0-BUILD.md` (+ TEXT-CANDIDATE-1.26.0.md, LAB-PREREG-L-CS-N.md (g)/(h)).
+
+## network-provisioning 1.27.0 + network-derivation 1.3.1 — network text batch 1 (SHIPPED 2026-11-07, main `2095d3dae`, restart 21:33:01.791Z; lab NB1; every expectation run before it was written, 2026-11-08)
+
+```bash
+grep -c "version: '1.27.0', // " scripts/seed-protocol-prompts.ts   # expect 1 — network-provisioning 1.27.0
+grep -c "version: '1.3.1', // SHIPPED 2026-11-07" scripts/seed-protocol-prompts.ts   # expect 1 — network-derivation 1.3.1 (comment marked SHIPPED in f267e8c4e; a second '1.3.1' row is another protocol)
+grep -c "\[canonicalProtocolName('network-provisioning')\]: '1.27.0'" lib/agents/harness/live-evidence.ts   # expect 1 — GIT_ONLY_WORD_MIN_VERSIONS: change-lane `git-only` ships WITH the text
+grep -c "A device whose declared source could not be read is a blocking issue of yours" scripts/seed-protocol-prompts.ts   # expect 1 — Reviewer item keyed on the UNREAD source (never the word "held")
+grep -c "this check never fires on it" scripts/seed-protocol-prompts.ts   # expect 1 — the held-edit exclusion (a device the platform DID hold is approvable)
+grep -c "On a value leg only, because the platform holds nothing there and the leg has no package, no device is ever HELD" scripts/seed-protocol-prompts.ts   # expect 1 — value-leg exception, scoped in the value-leg paragraph
+grep -c "On a value leg the HELD rule above does not apply" scripts/seed-protocol-prompts.ts   # expect 0 — the placement right after the HELD rule (GOLD-NET-JL3 suspect) is gone
+grep -c "That label starts its own line." scripts/seed-protocol-prompts.ts   # expect 1 — 1.3.1 Reviewer git-file-only label, in G1's accepted shapes
+grep -c "never name a line or a value that one source shows and another lacks" scripts/seed-protocol-prompts.ts   # expect 1 — no-compare rule, motive reached (NC1)
+grep -c "the Architect counts every value listed there as in use" scripts/seed-protocol-prompts.ts   # expect 0 — the false value-lane claim stays out
+grep -c "\*\*Apply base — when a Git file differs from its device.\*\*" scripts/seed-protocol-prompts.ts   # expect 1 — ONE paragraph; role bullets carry a pointer
+grep -c "^test('NET-REVIEWER-HELD-BLOCKS" scripts/test-domain-carry-pins.ts   # expect 1
+grep -c "^test('ND-WARNING-LINE-START" scripts/test-domain-carry-pins.ts   # expect 1 — runs reviewer-warnings G1 on the allowed and forbidden shapes
+grep -c "^test('NET-VALUE-NOT-HELD" scripts/test-domain-carry-pins.ts   # expect 1
+grep -c "^test('NET-NO-COMPARE-REASON" scripts/test-domain-carry-pins.ts   # expect 1
+```
+HOWTO-use-pipeline-harness / user-guide mirror (Protocol 11 Pass 5) of these changes: open at this commit, owner to ask.
+Record: `cline_docs/reviews/value-leg-git-2026-11-06/` (PLAN G10–G16, BLIND-READ-BATCH1.md, LAB-PREREG-NB1.md + ADDENDA, LAB-CRIB-NB1.md).

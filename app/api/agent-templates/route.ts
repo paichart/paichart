@@ -9,7 +9,7 @@ import { CreateAgentTemplateSchema } from '@/lib/validation/agent-template-valid
 import { generateCacheKey } from '@/lib/utils/lru-cache';
 import { logger } from '@/lib/logger';
 import { templateListCache } from './template-cache';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 /**
  * GET /api/agent-templates
@@ -334,6 +334,7 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
 
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     logger.error({ err: error }, 'AgentTemplates API POST error');
     return NextResponse.json(
       {

@@ -32,6 +32,39 @@ export function runReadOnlySql(sql: string): string {
   return execFileSync('ssh', ['<PROD_USER>@<PROD_HOST>', REMOTE], { input: sql, maxBuffer: 1024 * 1024 * 1024 }).toString();
 }
 
+/**
+ * L-CS-N (ME-B3, F14; 2026-11-04): a SELF-HOST snapshot source. A node whose rows live in a self-host install (the devext firewall-a3
+ * run, `paichart_test`) is snapshotted from a LOCAL scratch database restored from the operator's read-only dump — never from the
+ * install itself, never from production. The SAME `snapshotSql` runs, under `default_transaction_read_only=on`, through local `psql`.
+ * Every snapshot so taken carries `provenance` (kind `self-host`, the local db, the dump's sha256), and a cached self-host snapshot is
+ * never silently re-fetched from production (`loadSnapshot` refuses `--refresh` without the same source). The cache stays gitignored.
+ */
+export interface SnapshotProvenance { kind: 'self-host'; source: string; dumpPath: string | null; dumpSha256: string | null; takenAt: string; note?: string }
+export type SnapshotSource = { kind: 'prod' } | { kind: 'local-db'; db: string; dumpPath?: string | null; dumpSha256?: string | null; note?: string };
+
+const LOCAL_DB_RE = /^lab_[a-z0-9_]{1,60}$/;
+/** The local admin URL: LAB_LOCAL_PG, else the main checkout's .env DATABASE_URL. Refused unless the host is local. */
+export function localPgUrl(db: string): string {
+  if (!LOCAL_DB_RE.test(db)) throw new Error(`local snapshot db must match ${LOCAL_DB_RE} (a lab scratch db), got ${db}`);
+  let base = process.env.LAB_LOCAL_PG ?? '';
+  if (!base) {
+    for (const f of [path.join(LAB_DIR, '..', '..', '.env'), '/home/steve/copov15/.env']) {
+      if (!fs.existsSync(f)) continue;
+      const m = fs.readFileSync(f, 'utf8').match(/^DATABASE_URL=["']?([^"'\n]+)["']?$/m);
+      if (m) { base = m[1]; break; }
+    }
+  }
+  if (!base) throw new Error('no local Postgres URL: set LAB_LOCAL_PG');
+  const u = new URL(base);
+  if (u.hostname !== 'localhost' && u.hostname !== '127.0.0.1') throw new Error(`ABORT: a self-host snapshot source must be a LOCAL scratch db (host ${u.hostname})`);
+  u.pathname = `/${db}`; u.search = '';
+  return u.toString();
+}
+export function runReadOnlySqlLocal(db: string, sql: string): string {
+  return execFileSync('psql', [localPgUrl(db), '-At', '-P', 'pager=off', '-v', 'ON_ERROR_STOP=1'],
+    { input: sql, maxBuffer: 1024 * 1024 * 1024, env: { ...process.env, PGOPTIONS: '-c default_transaction_read_only=on' } }).toString();
+}
+
 /** L-R1 (2026-10-09): pair by the SHIPPING reviewer-role set, not a hard-wired `change_reviewer`. */
 export const REVIEWER_ROLE_LIST = [...REVIEWER_ROLES].map((r) => {
   if (!/^[a-z_]+$/.test(r)) throw new Error(`not a role: ${r}`);
@@ -113,6 +146,8 @@ export interface Snapshot {
   childExecutions: Array<Record<string, any>>;
   childArtifacts: Array<{ executionId: string; name: string; createdAt: string; content: string }>;
   mcpTools: Array<{ name: string; capabilities: unknown }>;
+  /** L-CS-N: present only on a snapshot taken from a self-host source (absent ⇒ production, read-only). */
+  provenance?: SnapshotProvenance;
 }
 
 export interface ExecBlock {
@@ -142,8 +177,13 @@ export function snapshotPath(authorExecutionId: string): string {
 }
 
 /** Load from cache, or fetch (read-only) and cache. `refresh` forces a re-fetch. */
-export function loadSnapshot(authorExecutionId: string, opts: { refresh?: boolean; reviewerExecutionId?: string | null } = {}): Snapshot {
+export function loadSnapshot(authorExecutionId: string, opts: { refresh?: boolean; reviewerExecutionId?: string | null; source?: SnapshotSource } = {}): Snapshot {
   const p = snapshotPath(authorExecutionId);
+  const src = opts.source ?? { kind: 'prod' as const };
+  if (opts.refresh && src.kind === 'prod' && fs.existsSync(p)) {
+    const cached = JSON.parse(fs.readFileSync(p, 'utf8')) as Snapshot;
+    if (cached.provenance) throw new Error(`snapshot ${authorExecutionId}: the cached copy came from ${cached.provenance.source} (${cached.provenance.kind}) — a --refresh from production is refused; re-take it with the same --source`);
+  }
   if (!opts.refresh && fs.existsSync(p)) {
     const cached = JSON.parse(fs.readFileSync(p, 'utf8')) as Snapshot;
     // A node that NAMES its reviewer must get that reviewer — a cached snapshot paired differently is not silently reused.
@@ -152,11 +192,15 @@ export function loadSnapshot(authorExecutionId: string, opts: { refresh?: boolea
     }
     return cached;
   }
-  const out = runReadOnlySql(snapshotSql(authorExecutionId, opts.reviewerExecutionId));
+  const sql = snapshotSql(authorExecutionId, opts.reviewerExecutionId);
+  const out = src.kind === 'local-db' ? runReadOnlySqlLocal(src.db, sql) : runReadOnlySql(sql);
   const line = out.split('\n').find((l) => l.trim().startsWith('{'));
   if (!line) throw new Error(`snapshot for ${authorExecutionId}: no row returned`);
   const snap = JSON.parse(line) as Snapshot;
   if (!snap.author) throw new Error(`snapshot for ${authorExecutionId}: no such execution`);
+  if (src.kind === 'local-db') {
+    snap.provenance = { kind: 'self-host', source: `local-db:${src.db}`, dumpPath: src.dumpPath ?? null, dumpSha256: src.dumpSha256 ?? null, takenAt: new Date().toISOString(), ...(src.note ? { note: src.note } : {}) };
+  }
   fs.mkdirSync(SNAPSHOT_DIR, { recursive: true });
   fs.writeFileSync(p, JSON.stringify(snap, null, 1));
   return snap;

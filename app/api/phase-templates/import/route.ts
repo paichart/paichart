@@ -5,7 +5,7 @@ import { PhaseTemplate } from '@/lib/pov/phase-templates/types';
 import { getAuthUser } from '@/lib/auth/get-auth-user';
 import { ImportPhaseTemplatesSchema } from '@/lib/validation/phase-template-validation';
 import { logger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
  
  export async function POST(request: NextRequest) {
    try {
@@ -146,6 +146,7 @@ import { readJsonBody } from '@/lib/utils/read-json-body';
        }
      });
    } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
      logger.error({ err: error }, 'Error importing phase templates');
      return NextResponse.json(
        { error: 'Failed to import phase templates' },

@@ -106,7 +106,7 @@ gaps were found only in code *(LL-T-36)*. **Keep a learnings ledger and append a
    `view-over-budget` becomes the dominant state.
 9. **ONE call-shape constant** for the agent-facing read, built from the descriptor table and pinned to it by a test (text naming a
    service capture does not key on = silent zero captures). *(held-k8s LL-02)*
-10. **ONE pin module per file source** owns every control: call-time pin, capture pin, workflow refusal, delivery strip. *(LL-03)*
+10. **ONE pin module per file source** owns every control: call-time pin, capture pin, workflow refusal, delivery strip. *(LL-03)* **Normalise inside the ONE check function and forward the object it checked** — an absent `ref` means the repo's DEFAULT branch, so it is checked AS `main` and forwarded/echoed as `ref:'main'`; a normalisation applied after the check, or only to the forwarded copy, forwards an unchecked value. *(Config-sources push 0, LL-CS-02)*
 11. **Close EVERY route to the source, not only `services.call`** — enumerate by code search: workflow steps (both callers), named DB
     workflows, REST workflow run, batch; refuse on the RESOLVED name. *(LL-04)*
 12. **Strip what the reasoner must never hold at DELIVERY, not only at persist** (a persist-only elision leaves it in-loop), matching the
@@ -137,6 +137,8 @@ gaps were found only in code *(LL-T-36)*. **Keep a learnings ledger and append a
 21. **What must NEVER be held is refused at BOTH gates by ONE predicate** — call gate (before any byte) and capture, by name anywhere in the
     path and by CONTENT (terraform: state/plan/variables/CLI-credentials files and state/plan JSON under any name; name lists are CLOSED, LL-T-05), recorded as its own refusal
     (`state-file` / `tfvars-file` / `credentials-file`), never `source-not-pinned`, so it never trips the G-4 force *(LL-T-03)*.
+    **Key the call-gate predicate on the TOOL, not the pin** — inside the pin branch it never runs for an unpinned service, which text naming
+    "the service the line names" makes the honest route (`NEVER_READ_PATH`, Config-sources push 0, LL-CS-04).
 22. **Platform refusal TEXT is agent input and passes an HTML escape** (BC71, joined text capped at 200): static policy messages carry no
     `& < > " '` (caller values stay escaped); a wording change reaches EVERY caller, external MCP clients included — name it in the series
     cut *(LL-T-06)*.

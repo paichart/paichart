@@ -11,7 +11,7 @@
  * GS3  the companion builder: reach (a one-domain text arm reaches only that domain), model arms reach all, deterministic
  * GS4  the pre-registration check and the lab-text pin check refuse what they must
  * GS5  the scorer, both directions (mutation-pinned): every flip class, the asymmetric masked rule, targets, unscored
- * GS6  END TO END, $0: the full companion under `--fake-llm persisted` reproduces all 27 stored outcomes (v2: incl. the value leg); one tampered sample ⇒ DO-NOT-SHIP
+ * GS6  END TO END, $0: the full companion under `--fake-llm persisted` reproduces all 29 stored outcomes (v3: incl. both value legs); one tampered sample ⇒ DO-NOT-SHIP
  * GS7  `run --spend` on an agent-text/model lab with no goldenSet declaration is refused before any call
  */
 if (!process.env.DATABASE_URL) process.env.DATABASE_URL = 'postgresql://leg-replay-lab:never@127.0.0.1:1/never_connects';
@@ -23,7 +23,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 import {
-  loadGoldenSet, buildGoldenCompanion, validateGoldenDeclaration, goldenStoredSelfTest, scoreGolden, classifyCell, goldenVerdict,
+  loadGoldenSet, buildGoldenCompanion, validateGoldenDeclaration, goldenStoredSelfTest, scoreGolden, classifyCell, goldenVerdict, refusalPointsAtLiveOnly,
   readGoldenSample, labNeedsGolden, GOLDEN_DIR, type GoldenCase, type GoldenCellScore,
 } from './leg-replay-lab/golden-set';
 import { loadSnapshot } from './leg-replay-lab/snapshot';
@@ -43,15 +43,15 @@ function scratchCopy(fixture: string): string {
 }
 const lab = (args: string[]) => execFileSync('npx', ['ts-node', '-r', 'tsconfig-paths/register', 'scripts/leg-replay-lab/lab.ts', ...args],
   { cwd: REPO, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ANTHROPIC_API_KEY: '' }, maxBuffer: 256 * 1024 * 1024 });
-const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId); return { qualityGate: sn.leg?.metadata?.qualityGate ?? null, editApplication: parsedResult(sn.author)?.editApplication ?? null }; };
+const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId); return { qualityGate: sn.leg?.metadata?.qualityGate ?? null, editApplication: parsedResult(sn.author)?.editApplication ?? null, authorText: (parsedResult(sn.author)?.finalResponse as string | undefined) ?? null }; };
 
 (async () => {
   const gs = loadGoldenSet();
   const byId = (id: string) => gs.cases.find((c) => c.id === id)!;
 
   console.log('GS1 the frozen set');
-  await t('loads, every pin unedited (sha256), v2: 15 cases, 5 protocols, 10 templates; the re-freeze record names every case', () => {
-    assert(gs.version === 'v2' && gs.cases.length === 15, `${gs.version} cases ${gs.cases.length}`);
+  await t('loads, every pin unedited (sha256), v4 (v3 cases, network-derivation pin 1.3.0): 17 cases, 5 protocols, 10 templates; the re-freeze record names every case', () => {
+    assert(gs.version === 'v4' && gs.cases.length === 17, `${gs.version} cases ${gs.cases.length}`);
     assert(Object.keys(gs.pins.protocols).length === 5 && Object.keys(gs.pins.templates).length === 10, 'pins');
     const added = (gs.refreezes ?? []).flatMap((r) => r.added).sort().join();
     assert(added === gs.cases.map((c) => c.id).sort().join(), `refreezes added ≠ cases: ${added}`);
@@ -96,23 +96,23 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
   });
 
   console.log('GS2 stored outcomes recompute (needs the snapshot cache)');
-  await t('all 15 cases: stored verdict + stored carrier stamp ⇒ the stored leg outcome = the expectation', () => {
+  await t('all 17 cases: stored verdict + stored carrier stamp ⇒ the stored leg outcome = the expectation', () => {
     const rows = goldenStoredSelfTest((id) => loadSnapshot(id));
     const bad = rows.filter((r) => !r.ok);
     assert(!bad.length, bad.map((r) => `${r.case}: ${r.detail}`).join(' | '));
   });
 
   console.log('GS3 the companion builder');
-  await t('a one-line observability text arm reaches only the observability cases (5 cells), the other 12 are UNREACHED', () => {
+  await t('a one-line observability text arm reaches only the observability cases (5 cells), the other 14 are UNREACHED', () => {
     const r = buildGoldenCompanion(scratchCopy('obs-text-lab'), gs).report;
     assert(r.cells.map((c) => `${c.case}:${c.form}`).sort().join(',') === 'OBS-C1:live,OBS-C1:persisted,OBS-DEMO-REF:persisted,OBS-PROG:live,OBS-PROG:persisted', r.cells.map((c) => c.cell).join(','));
-    assert(r.unreached.length === 12, `unreached ${r.unreached.length}`);
+    assert(r.unreached.length === 14, `unreached ${r.unreached.length}`);
     assert(r.targets.join() === 'OBS-DEMO-REF', 'target carried');
   });
-  await t('a model arm reaches every case: 15 Reviewer cells + 12 Author cells (Author-defect refusals and the value leg stay persisted)', () => {
+  await t('a model arm reaches every case: 17 Reviewer cells + 12 Author cells (Author-defect refusals, the value legs and NET-C126 stay persisted)', () => {
     const r = buildGoldenCompanion(scratchCopy('model-lab'), gs).report;
-    assert(r.cells.filter((c) => c.form === 'persisted').length === 15 && r.cells.filter((c) => c.form === 'live').length === 12, `${r.cells.length}`);
-    assert(!r.cells.some((c) => c.form === 'live' && ['K8S-AK5', 'OBS-DEMO-REF', 'NET-VALUE-C1'].includes(c.case)), 'live cell on an Author-defect refusal or the value leg');
+    assert(r.cells.filter((c) => c.form === 'persisted').length === 17 && r.cells.filter((c) => c.form === 'live').length === 12, `${r.cells.length}`);
+    assert(!r.cells.some((c) => c.form === 'live' && ['K8S-AK5', 'OBS-DEMO-REF', 'NET-VALUE-C1', 'NET-VALUE-C126', 'NET-C126'].includes(c.case)), 'live cell on an Author-defect refusal or the value leg');
     assert(r.cells.some((c) => c.case === 'NET-VALUE-C1' && c.form === 'persisted' && c.reach.join() === 'reviewer-model'), 'the value leg Reviewer cell (shared infra tier)');
   });
   await t('an Author-only model arm (infraAuthor tier) never reaches the value leg: UNREACHED, named by tier', () => {
@@ -130,7 +130,8 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
     const b = fs.readFileSync(path.join(buildGoldenCompanion(dir, gs).dir, 'experiment.json'), 'utf8');
     assert(a === b, 'rebuild differs');
     const e = JSON.parse(a);
-    for (const n of e.nodes) { const c = byId(n.id.replace(/^GOLD-/, '')); for (const v of n.variants) assert((e.variants[v].heldJoinSeed ?? null) === gs.heldJoinSeedByProtocol[c.protocol], `${n.id}/${v}`); }
+    // B12: carried standing nodes (STAND-*) are not golden cases
+    for (const n of e.nodes.filter((x: any) => !/^STAND-/.test(x.id))) { const c = byId(n.id.replace(/^GOLD-/, '')); for (const v of n.variants) assert((e.variants[v].heldJoinSeed ?? null) === gs.heldJoinSeedByProtocol[c.protocol], `${n.id}/${v}`); }
   });
   await t('the candidate text reaches the companion: the observability cell\'s materialized protocol = pin + the arm\'s edit', () => {
     const { dir, experiment } = buildGoldenCompanion(scratchCopy('obs-text-lab'), gs);
@@ -209,16 +210,33 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
     assert(x.status === 'UNSCORED' && y.status === 'UNSCORED' && goldenVerdict([x, y]).verdict === 'INCOMPLETE', `${x.status} ${y.status}`);
   });
 
+  await t('NEEDS-READ (owner 2026-11-08): a refusal pointing at a live-only line ⇒ true; at stored lines only ⇒ false; nothing quoted or no stored text ⇒ true (the hand read must); a NEEDS-READ cell is never a PASS, and a real flip beside it stays DO-NOT-SHIP', () => {
+    const storedPkg = 'Edit 2: add `network 10.99.0.3/32` under `router bgp 65001` › `address-family ipv4`.\nV1: show ip bgp';
+    const livePkg = 'Edit 2: add `network 10.99.0.3/32` under `router bgp 65001`.\nV1: show ip bgp';
+    assert(refusalPointsAtLiveOnly(['enters `network 10.99.0.3/32` at the top level'], livePkg, storedPkg) === true, 'a live-only line');
+    assert(refusalPointsAtLiveOnly(['enters `network 10.99.0.3/32` at the top level'], storedPkg, storedPkg) === false, 'MUTATION same package ⇒ FLIPPED');
+    assert(refusalPointsAtLiveOnly(['no quoted span here'], livePkg, storedPkg) === true && refusalPointsAtLiveOnly(['`network 10.99.0.3/32`'], livePkg, null) === true, 'undecidable ⇒ hand read');
+    const nr = { ...cell(byId('NET-JL1'), [{ verdict: { approved: false }, editApplication: applied }]), status: 'NEEDS-READ' as const, direction: 'x' };
+    assert(goldenVerdict([nr]).verdict === 'NEEDS-READ', `NEEDS-READ alone: ${goldenVerdict([nr]).verdict}`);
+    const flip = cell(byId('OBS-DEMO-REF'), [{ verdict: { approved: true }, editApplication: applied }]);
+    assert(goldenVerdict([nr, flip]).verdict === 'DO-NOT-SHIP', 'a real flip beside a NEEDS-READ is still DO-NOT-SHIP');
+  });
+
   console.log('GS6 end to end, $0 (--fake-llm persisted over the full companion)');
-  await t('27 cells (15 cases, both Author forms, all four domains + the value leg, held binding) reproduce every stored outcome; a tampered sample ⇒ DO-NOT-SHIP', () => {
+  await t('29 cells (17 cases, both Author forms, all four domains + both value legs, held binding) reproduce every stored outcome; a tampered sample ⇒ DO-NOT-SHIP', () => {
     const dir = scratchCopy('model-lab');
     const comp = buildGoldenCompanion(dir, gs).dir;
     const runDir = path.join(path.dirname(dir), 'run-fake');
     lab(['run', '--experiment', comp, '--fake-llm', 'persisted', '--out', runDir, '--concurrency', '6']);
     const r = scoreGolden([runDir], comp, stored, gs);
-    assert(r.cells.length === 27, `cells ${r.cells.length}`);
-    assert(r.cells.filter((c) => c.case === 'NET-VALUE-C1').every((c) => c.status === 'REPRODUCED'), 'value leg cell');
+    assert(r.cells.length === 29, `cells ${r.cells.length}`);
+    assert(['NET-VALUE-C1', 'NET-VALUE-C126', 'NET-C126'].every((id) => r.cells.some((c) => c.case === id) && r.cells.filter((c) => c.case === id).every((c) => c.status === 'REPRODUCED')), 'value leg / 1.26.0 canary cells');
     assert(r.verdict.verdict === 'PASS', `${r.verdict.verdict}: ${r.verdict.reasons.join(' | ')}`);
+    // GOLDEN-REVIEWER-BYTE-FIDELITY (b): a value cell's Reviewer sees the Derivation Architect's STORED containment stamp, as production's did.
+    for (const id of ['NET-VALUE-C1', 'NET-VALUE-C126']) {
+      const u = fs.readFileSync(path.join(runDir, `GOLD-${id}`, 'gmxnetvaluer', 'reviewer.user.md'), 'utf8');
+      assert(u.includes('**Derivation containment (platform fact)**: benign — checked-clean'), `${id}: the stored derivation-containment line is missing from the Reviewer prompt`);
+    }
     // Mutation: one approved case's Reviewer now refuses — the scorer must catch it.
     const f = path.join(runDir, 'GOLD-OBS-PROG', 'gmxobservabilityr', 'sample-01', 'sample.json');
     const s = JSON.parse(fs.readFileSync(f, 'utf8')); s.verdict.approved = false; fs.writeFileSync(f, JSON.stringify(s));
@@ -229,6 +247,21 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
     const sv = JSON.parse(fs.readFileSync(fv, 'utf8')); sv.verdict.approved = false; fs.writeFileSync(fv, JSON.stringify(sv));
     const m2 = scoreGolden([runDir], comp, stored, gs);
     assert(m2.verdict.reasons.length === 2 && m2.verdict.reasons.some((x) => /NET-VALUE-C1/.test(x)), m2.verdict.reasons.join(' | '));
+    // NEEDS-READ end to end: a LIVE-arm refusal of an approve-expected case. Quoting a line the live package shares with the stored one ⇒
+    // FLIPPED; after the live package's line is changed (the live Author wrote something else there) ⇒ NEEDS-READ.
+    const liveCell = r.cells.find((x) => x.case === 'NET-JL1' && x.form === 'live')!;
+    const ld = path.join(runDir, 'GOLD-NET-JL1', liveCell.cell, 'sample-01');
+    const lsj = JSON.parse(fs.readFileSync(path.join(ld, 'sample.json'), 'utf8'));
+    const pkg = fs.readFileSync(path.join(ld, 'author.md'), 'utf8');
+    const line = pkg.split('\n').find((l) => /`[^`]{6,}`/.test(l))!;
+    const span = line.match(/`([^`]{6,})`/)![1];
+    lsj.verdict = { ...lsj.verdict, approved: false, blocking: [`the package's \`${span}\` is wrong here`] }; fs.writeFileSync(path.join(ld, 'sample.json'), JSON.stringify(lsj));
+    const m3 = scoreGolden([runDir], comp, stored, gs).cells.find((x) => x.case === 'NET-JL1' && x.form === 'live')!;
+    assert(m3.status === 'FLIPPED', `a refusal at a line the stored package has stays FLIPPED: ${m3.status}`);
+    fs.writeFileSync(path.join(ld, 'author.md'), pkg.replace(line, `${line} (live Author's own wording)`));
+    const m4 = scoreGolden([runDir], comp, stored, gs);
+    const c4 = m4.cells.find((x) => x.case === 'NET-JL1' && x.form === 'live')!;
+    assert(c4.status === 'NEEDS-READ' && m4.verdict.verdict === 'DO-NOT-SHIP' && m4.verdict.reasons.some((x) => /NET-JL1 .*NEEDS-READ/.test(x)), `${c4.status} ${m4.verdict.verdict}`);
   });
 
   console.log('GS7 the spend gate');

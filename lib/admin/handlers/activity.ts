@@ -3,7 +3,7 @@ import { TokenPayload, ApiResponse, UserRole } from '@/lib/types/auth';
 import { logger } from '@/lib/logger';
 import { AdminActivityService } from '../services/activity';
 import { ActivityResponse, ActivityCreateResponse, ActivityFilters } from '../types';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 const activityHandlerLogger = logger.child({ module: 'AdminActivityHandler' });
 
@@ -100,6 +100,7 @@ export async function logAdminActivityHandler(
       },
     };
   } catch (error) {
+    if (payloadTooLargeResponse(error)) throw error; // createHandler maps it to 413
     activityHandlerLogger.error({ err: error }, 'Failed to log admin activity');
     return {
       error: {

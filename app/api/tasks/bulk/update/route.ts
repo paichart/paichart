@@ -4,7 +4,7 @@ import { TokenPayload, ApiResponse } from '@/lib/types/auth';
 import { prisma } from '@/lib/prisma';
 import { BulkUpdateTasksSchema } from '@/lib/validation/task-validation';
 import { taskLogger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 import { summarizeZodIssues } from '@/lib/utils/zod-issue-summary';
 
 type ApiHandler<T = any> = (
@@ -101,6 +101,7 @@ const bulkUpdateTasksHandler: ApiHandler = async (
       data: result
     };
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     taskLogger.error({ err: error, endpoint: 'POST /api/tasks/bulk/update' }, 'Failed to perform bulk task update');
     return {
       error: {

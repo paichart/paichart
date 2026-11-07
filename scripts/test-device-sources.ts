@@ -12,7 +12,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-  parseDeviceSourceLine, parseDeviceSourcesBlock, parseDeviceSourcesContractValue, resolveLegDeviceSources, contractDeviceSourcesValue,
+  parseDeviceSourceLine, parseDeviceSourceLines, parseDeviceSourcesBlock, parseDeviceSourcesContractValue, resolveLegDeviceSources, contractDeviceSourcesValue,
   DEVICE_SOURCES_CONTRACT_KEY, SOURCE_SEPARATOR,
   buildDeviceSourcesSnapshot, readDeviceSourcesSnapshot, sameDeclaration, DEVICE_SOURCES_SNAPSHOT_KEY,
 } from '../lib/agents/harness/device-sources';
@@ -57,10 +57,10 @@ function instances(tpl: string): Array<{ line: string; service: string; ref: str
   return out;
 }
 
-test('T1 the protocol prints exactly three templates, one per kind, and every slot is one this suite fills', () => {
-  assert(PROTOCOL_TEMPLATES.length === 3, `templates: ${JSON.stringify(PROTOCOL_TEMPLATES)}`);
+test('T1 the protocol prints exactly four templates, one per kind (network 1.26.0 adds `live-read`), and every slot is one this suite fills', () => {
+  assert(PROTOCOL_TEMPLATES.length === 4, `templates: ${JSON.stringify(PROTOCOL_TEMPLATES)}`);
   const kinds = PROTOCOL_TEMPLATES.map((t) => /^<device>: ([a-z-]+)/.exec(t)?.[1]).sort();
-  assert(JSON.stringify(kinds) === JSON.stringify(['command-package', 'device-read', 'git-file']), JSON.stringify(kinds));
+  assert(JSON.stringify(kinds) === JSON.stringify(['command-package', 'device-read', 'git-file', 'live-read']), JSON.stringify(kinds));
   for (const t of [...PROTOCOL_TEMPLATES, ...HOWTO_TEMPLATES]) {
     const slots = [...t.matchAll(/<[^<>]+>(?:\/<[^<>]+>\/<[^<>]+>)?/g)].map((m) => m[0]);
     for (const s of slots) assert(KNOWN_SLOTS.has(s), `unknown slot ${s} in ${t}`);
@@ -272,7 +272,76 @@ test('S5 the WRITER (source pins): the snapshot is written only in the first-exe
   stripAuditFacts(incoming);
   assert(!(DEVICE_SOURCES_SNAPSHOT_KEY in incoming) && incoming.other === 1, 'a forged snapshot survived the client strip');
   const rd = fs.readFileSync(path.join(__dirname, '../lib/agents/harness/device-sources-read.ts'), 'utf8');
-  assert(rd.includes("(metadata -> 'deviceSourcesSnapshot') AS snapshot") && rd.includes('return governingDeviceSources(rows[0]);'), 'the reader governs from the snapshot');
+  assert(rd.includes("(metadata -> 'deviceSourcesSnapshot') AS snapshot") && rd.includes('return governingDeviceSources(rows[0], contractKeyForOwningLeg(owningLeg));'), 'the reader governs from the snapshot (VALUE-LEG-GIT: re-resolving the live text under the leg\'s OWN contract key)');
+});
+
+// ── Config-sources network step, Phase A (DESIGN v2 §1.2, §3.1; execution-facts B2/S8; audit F15) — grammar v2 `live-read` ─────────────
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const DS = require('../lib/agents/harness/device-sources') as typeof import('../lib/agents/harness/device-sources');
+const LR = 'ceos2: live-read — service ceos-lab-readonly';
+const withGate = <T>(on: boolean | null, fn: () => T): T => { DS.__setLiveReadKindForLab(on); try { return fn(); } finally { DS.__setLiveReadKindForLab(null); } };
+
+test('LR1 the KIND GATE opens with network 1.26.0 (this tree); the lab lever closed (base arm) reads `live-read` as unknown-kind exactly as before', () => {
+  assert(DS.LIVE_READ_KIND_ENABLED === true && DS.liveReadKindEnabled() === true, 'the gate must be OPEN in a tree whose network text carries the kind line (1.26.0)');
+  const open = parseDeviceSourceLine(LR); assert(open.ok && open.line.kind === 'live-read', JSON.stringify(open));
+  withGate(false, () => { const r = parseDeviceSourceLine(LR); assert(!r.ok && r.problem === 'unknown-kind', JSON.stringify(r)); });
+});
+test('LR2 gate open (lab lever): `live-read` parses as an evidence line with its service; it stands ALONE on a device', () => withGate(true, () => {
+  const r = parseDeviceSourceLine(LR); assert(r.ok && r.line.kind === 'live-read' && (r.line as { service: string }).service === 'ceos-lab-readonly', JSON.stringify(r));
+  const alone = parseDeviceSourceLines([`ceos1: device-read — service ceos-lab-readonly`, LR]); assert(alone.state === 'parsed', JSON.stringify(alone));
+  for (const other of ['ceos2: device-read — service ceos-lab-readonly', 'ceos2: git-file — service github-service ; o/r/ceos2.cfg', 'ceos2: command-package']) {
+    const b = parseDeviceSourceLines([LR, other]); assert(b.state === 'unparseable' && b.problem === (other.endsWith('command-package') ? 'command-package-not-alone' : 'live-read-not-alone'), `${other}: ${JSON.stringify(b)}`);
+  }
+}));
+test('LR3 VERSION RULE (execution-facts S8): a block of v1 kinds resolves v1 even with the gate open; a block using `live-read` resolves v2; every NON-parsed state stays v1', () => withGate(true, () => {
+  const v1 = resolveLegDeviceSources({ contractValue: undefined, taskBody: '## Device sources\nceos1: device-read — service s' });
+  const v2 = resolveLegDeviceSources({ contractValue: undefined, taskBody: `## Device sources\nceos1: device-read — service s\n${LR}` });
+  const bad = resolveLegDeviceSources({ contractValue: undefined, taskBody: `## Device sources\n${LR}\nceos2: command-package` });
+  const absent = resolveLegDeviceSources({ contractValue: undefined, taskBody: 'nothing' });
+  const conflict = resolveLegDeviceSources({ contractValue: [LR], taskBody: '## Device sources\nceos1: device-read — service s' });
+  eq([v1.grammarVersion, v2.grammarVersion, bad.grammarVersion, absent.grammarVersion, conflict.grammarVersion], [1, 2, 1, 1, 1], 'versions: ');
+}));
+test('LR4 the snapshot READER accepts v1 and v2, validates each entry against ITS version, refuses a non-parsed v2 and a v1 snapshot carrying `live-read`', () => withGate(true, () => {
+  const v2 = resolveLegDeviceSources({ contractValue: undefined, taskBody: `## Device sources\nceos1: device-read — service s\n${LR}` });
+  const snap = buildDeviceSourcesSnapshot(v2, '2026-11-04T00:00:00Z');
+  const back = readDeviceSourcesSnapshot({ [DEVICE_SOURCES_SNAPSHOT_KEY]: snap });
+  assert(back && back !== 'unreadable' && back.resolution.state === 'parsed' && back.resolution.grammarVersion === 2, JSON.stringify(back));
+  const forgedV1 = JSON.parse(JSON.stringify(snap)); forgedV1.resolution.grammarVersion = 1;
+  eq(readDeviceSourcesSnapshot({ [DEVICE_SOURCES_SNAPSHOT_KEY]: forgedV1 }), 'unreadable', 'v1 with a live-read entry: ');
+  const v2NoLive = JSON.parse(JSON.stringify(snap)); v2NoLive.resolution.entries = [v2NoLive.resolution.entries[0]];
+  eq(readDeviceSourcesSnapshot({ [DEVICE_SOURCES_SNAPSHOT_KEY]: v2NoLive }), 'unreadable', 'v2 using no v2 kind: ');
+  const v2Absent = { version: 1, takenAt: 'x', resolution: { state: 'absent', grammarVersion: 2 } };
+  eq(readDeviceSourcesSnapshot({ [DEVICE_SOURCES_SNAPSHOT_KEY]: v2Absent }), 'unreadable', 'a non-parsed v2: ');
+  const v1 = resolveLegDeviceSources({ contractValue: undefined, taskBody: '## Device sources\nceos1: device-read — service s' });
+  const v1back = readDeviceSourcesSnapshot({ [DEVICE_SOURCES_SNAPSHOT_KEY]: buildDeviceSourcesSnapshot(v1, 't') });
+  assert(v1back && v1back !== 'unreadable' && v1back.resolution.grammarVersion === 1, 'a stored v1 snapshot must stay readable');
+}));
+test('LR5 identity keys `live-read` WITH its service (execution-facts B2 site 1): an evidence-service edit reads as a different declaration', () => withGate(true, () => {
+  const a = resolveLegDeviceSources({ contractValue: undefined, taskBody: `## Device sources\n${LR}` });
+  const b = resolveLegDeviceSources({ contractValue: undefined, taskBody: '## Device sources\nceos2: live-read — service attacker-svc' });
+  assert(!sameDeclaration(a, b), 'service change compared equal');
+  const c = resolveLegDeviceSources({ contractValue: [LR], taskBody: '## Device sources\nceos2: live-read — service attacker-svc' });
+  eq(c.state, 'conflict', 'contract vs body differing service: ');
+}));
+test('LR6 KIND EXHAUSTIVENESS: every kind round-trips the parser, the identity key and the snapshot reader at its version (a new kind added without arms reds here)', () => withGate(true, () => {
+  const lineFor: Record<string, string> = { 'git-file': 'd: git-file — service g ; o/r/p.cfg', 'device-read': 'd: device-read — service s', 'command-package': 'd: command-package', 'live-read': 'd: live-read — service s' };
+  eq(Object.keys(lineFor).sort(), [...DS.DEVICE_SOURCE_KINDS].sort(), 'kind list: ');
+  for (const k of DS.DEVICE_SOURCE_KINDS) {
+    const r = resolveLegDeviceSources({ contractValue: undefined, taskBody: `## Device sources\n${lineFor[k]}` });
+    assert(r.state === 'parsed' && r.entries[0].kind === k, `${k}: ${JSON.stringify(r)}`);
+    const back = readDeviceSourcesSnapshot({ [DEVICE_SOURCES_SNAPSHOT_KEY]: buildDeviceSourcesSnapshot(r, 't') });
+    assert(back && back !== 'unreadable' && sameDeclaration(back.resolution, r), `${k}: snapshot round-trip`);
+  }
+}));
+test('LR7 the lab override is reachable ONLY from the lab and tests (production never calls it)', () => {
+  const { execSync } = require('child_process') as typeof import('child_process');
+  const hits = execSync(`grep -rln "__setLiveReadKindForLab" lib app scripts services --include=*.ts --include=*.js || true`, { cwd: path.join(__dirname, '..') }).toString().trim().split('\n').filter(Boolean);
+  const bad = hits.filter((f) => f !== 'lib/agents/harness/device-sources.ts' && !f.startsWith('scripts/leg-replay-lab/') && !/^scripts\/test-/.test(f));
+  eq(bad, [], 'callers outside the lab/tests: ');
+});
+test('LR8 the gate is false ⇔ the seeded network text carries no `live-read` kind line (the TEXT commit flips both together)', () => {
+  const textHasKind = /`<device>: live-read — service/.test(SECTION);
+  eq(DS.LIVE_READ_KIND_ENABLED, textHasKind, 'gate vs text: ');
 });
 
 console.log(`\n📊 Results: ${passed} passed, ${failed} failed`);

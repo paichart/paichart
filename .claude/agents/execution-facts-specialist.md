@@ -555,3 +555,24 @@ Tied documents (same line-set count) are aligned each; matched first, then gapCo
 ## Pointer (2026-11-01): quoteFidelity v8 — pairing budget (QUOTEFIDELITY-PAIRING-COST, built, not pushed)
 `PAIRING_MATCH_BUDGET` bounds the pairing path per leaf (`budgetExceeded` = NOT CHECKED, escalates); every gap scan was made index-driven
 first and output-identical (replay: version-only on 781 stamps). Library § "quoteFidelity v8"; discovery block 2026-11-01 (v8).
+
+## Pointer (2026-11-04): Config sources — your build items
+- Push 0 (live): the read record folds refs (absent ⇒ main, `refs/heads/<x>` ⇒ `<x>`); confirm decision S-6 (series cut, no version bump). Next, in the network step: the
+  `liveEvidence` build spec (DESIGN v2 §1.4 — counts-first, NOT_STAMPED off released versions, five kind-switch sites + exhaustiveness pin), `configSourceReads`, and
+  SERIES-CUT-PATHS-GAP (`CUT_PATHS` lacks `device-source-facts.ts`). Records: `cline_docs/reviews/config-sources-design-2026-11-04/`.
+
+**Pointer (2026-11-04): Config-sources network push 1a, fact half: `liveEvidence` (built on `cs-net-1a-facts`, not pushed).** `live-evidence.ts`
+is pure (`computeLiveEvidence(sources, toolCalls)`, the lab lever's signature). `live-evidence-enrichment.ts` covers three points: the Harvester
+computes, the Author transcribes, the leg hoists. It is version-keyed: `LIVE_EVIDENCE_MIN_VERSIONS` on the execution's own `protocolInjection.delta`,
+so stored legs are NOT_STAMPED forever. `ctx.deviceSourceReadRecord` is the one read record shared with `deviceSourceReads`. There is no card
+segment (G4-b). Record: `cline_docs/reviews/config-sources-design-2026-11-04/PUSH1A-FACTS-BUILD.md`; discovery block of the same date.
+
+## Pointer (2026-11-05): liveEvidence folds (F + contract devices)
+- F-fold: the §6 line says its summary and counts are "of the declared devices" (`LIVE_EVIDENCE_SCOPE_CLAUSE`). Contract-devices fold: `contractDevices` + `contractNotDeclared` from the leg's `interfaceContract.deviceSources` (four stored shapes pinned, LE18). Record: `cline_docs/reviews/config-sources-design-2026-11-04/PUSH1A-FACTS-BUILD.md`. Neither moved the lab's false-approval case (LL-CS-20); both stay.
+- Owed: LIVE-EVIDENCE-CHAINED-HARDENING (H1 render only entries matching `chainedPredecessors.ids`; H3 `!isInherited` for gitDeviceComparison; H4 false comments) — register.
+
+- **VALUE-LEG-GIT (2026-11-06, live):** `liveEvidence` now stamps on a DECLARED value leg (network-derivation@1.3.0; lane options: `git-only` word on the value lane, change-lane fold skips the value key and names it `contractDevices.excludedKeys`); the value card carries `{checked, summary}` through the narrow hoist `RESULT_JSON_SUMMARY_NARROW_KEYS` (liveEvidence stays off the whitelist, owner decision 6). Yours, open: free-address containment blind spot (lab F-2) and device-only lines in gitDeviceComparison (F-3). Record: `cline_docs/reviews/value-leg-git-2026-11-06/`.
+
+**Pointer (2026-11-07): `derived-value-held` (VALUE-FREE-ADDRESS-BLIND platform half, owner G10-c)** — on a value leg, a self-member cidr derived value equal to (or containing) a harvested allocation is a violation ⇒ `blocking (violations)`; value legs only (2 released k8s change-leg Authors use the same shape for held pod addresses). Inert by construction (0 of 3,302 replayed tasks changed). Discovery block of the same date.
+
+**Pointer (2026-11-08, NB1 lesson): a net that reads a block must read it the way the TEXT tells agents to read it.** `derived-value-held` checks every `## Harvested Allocations` entry whatever its source, while network-derivation tells the Architect to prefer a both-sources device's device read over its Git file, so an allocation only in a stale Git file can false-block (register DERIVED-VALUE-HELD-GIT-ONLY-STALE, safe direction; measure on its trigger). When a text release changes source precedence, re-check every net that reads that block.

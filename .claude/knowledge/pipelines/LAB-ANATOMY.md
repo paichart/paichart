@@ -12,6 +12,8 @@
 **Worked example: L-K2** (held-k8s step 3, kubernetes-gitops 1.18.0 joins held bytes; ledger L17; 137 samples, $46.17, SHIP).
 Records: `cline_docs/reviews/held-k8s-2026-10-18/LAB-PREREG-L-K2.md` (+ addenda a/b/c) and `LAB-RESULT-L-K2.md`.
 Experiment: `scripts/leg-replay-lab/inputs/2026-10-19-held-k8s-l-k2/`.
+**Second worked example: NB1** (multi-round: stops, text fixes, side labs, an override, gate re-registration). See § "Worked
+example 2: NB1" below.
 
 ## The ten steps
 
@@ -80,6 +82,8 @@ The dry run must also show:
 - each plant reaching its reader: "plant reaches the Reviewer prompt vs its unplanted twin ✓". A plant that does not is REFUSED.
   The VOID class cost $10.85 historically, and L-K2's NOWIT cell was one of them.
 
+**Optional (owner-approved, plan usage):** a blind read of the composed prompts. Use `--mode fixture` on plant-built cells, or `--mode contradiction` after a change to what an agent reads. It warns and never counts: Protocol 16 § "Optional blind reads", `scripts/leg-replay-lab/second-read/`.
+
 *L-K2:*
 - the candidate sha re-pinned in addendum (b);
 - 73/73 base prompts `cmp`-identical against the release worktree;
@@ -136,6 +140,43 @@ All three refinements are now in `score-k2.ts` and equal the hand reads on the L
 - Fix and pin any lab or platform defect the run exposed before ship. L-K2 found four (heading rule, spend race, single-copy
   plant, scorer file); each is pinned (LK10, LK11, LL-29).
 
+## Worked example 2: NB1, a multi-round lab (2026-11-06 → 2026-11-08)
+
+**NB1** = network text batch 1: network-provisioning 1.27.0 + network-derivation 1.3.1 + derivation_architect guidance. Ledger
+L95–L107, about 270 samples, $46.43, SHIP. Records: `cline_docs/reviews/value-leg-git-2026-11-06/LAB-PREREG-NB1.md` (addenda a–f),
+`LAB-CRIB-NB1.md`, `LAB-RESULT-NB1.md`, `LAB-RESULT-NB1-JL3.md`, `LAB-RESULT-NB1-JP1.md`. L-K2 shows the ten steps once. NB1 shows
+what happens when a step fails and the lab has to go round again.
+
+**1. Stop → text fix → dated addendum → re-crib.** Each failure went through the same loop:
+1. read it by hand;
+2. fix the text (prompt-construction drafts, the owner decides);
+3. write a dated ADDENDUM before any further spend;
+4. re-pin and re-prove at $0;
+5. re-crib every cell the fixed text reaches.
+
+| Round | Failure | Fix | Addendum |
+|---|---|---|---|
+| crib (L95) | S1: H-BOTH read a Git-only device live | scope the narrow-read sentence to "that device" | (a) |
+| re-crib, 2a-1 (L96–L97) | NC1: the Harvester restated a device-only value beside the Git file | reword the no-compare rule (option A) | (b) split 2a, (c) |
+| re-crib 2 (L98) | NC1 again, 6/6 across two wordings | re-register NC1 (option B) | (d) |
+| 2a (L99) | the R-GIT standing gate at 4/5: the label was folded mid-line; X-APPLY 3/5 | the label starts its own line; re-register X-APPLY (E2) | (e) |
+| golden (L102) | NET-JL3 live arm masked flip toward approval | measure first (NB1-JL3), then the Reviewer's own blocking item | (f) |
+
+**2. Measure the released text before fixing a golden flip.** Two golden flips each got a small side lab. Each ran the flipped case
+at n=3 on the released or previous text and on the candidate, with the standing lock carried:
+- **NB1-JL3** (L103, $5.70): the released 1.26.0 missed too (1/3), so the flip was the base rate, not a regression. The fix arm passed
+  its gate, which included over-block controls.
+- **NB1-JP1** (L107, $3.20): both texts approved 6/6, so the flip did not reproduce. A rig check then showed the refused placement was
+  correct.
+
+**3. An override sits BESIDE the gate.** When a miss is the known limitation (G13, NET-FWA3-EDGE) or a proven false refusal
+(OVR-NB1-JP1), the owner overrides that one sample, for one ship decision, with a written reason and scope. The gate still reads
+DO-NOT-SHIP as written in every run that carried it.
+
+**4. Re-register a gate only before the next spend.** NC1 (D1–D2) and X-APPLY (E2) were rewritten as dated addenda before the next
+run, and applied only to new samples. The samples already taken kept their registered reading: re-crib 2's H-BOTH stayed a miss under
+the old rule and was not pooled.
+
 ## Where things go wrong (each one cost money once)
 
 | Trap | Seen in | Guard now |
@@ -147,3 +188,9 @@ All three refinements are now in `score-k2.ts` and equal the hand reads on the L
 | Concurrent spend counter undercounting | L12, L16, L-K2 3 | per-call meter + run-end mismatch check (LK10) |
 | Scoring `--arm k1` instead of the role-prefixed arms | L-K1 | checklist 8 |
 | A recorded count trusted after a prompt-moving change | G3 HB8 | run `test:leg-replay-lab` at the commit |
+| A shared-protocol change reaches every cell that reads it: assuming "this sentence is only for the Reviewer" | NB1 (f): the Reviewer-only fix moved every h/x/a/r prompt | scope a re-run by `cmp` of the rendered prompts, never by intent; reuse only byte-identical cells ((e): 33/33, (f): 44/44) |
+| A cap below the uncached bound | NB1 (e) step 1 ($4.70 cap, $4.75 uncached) | cap = max(estimate + 20%, the uncached bound), so poor caching cannot stop a run mid-cell |
+| Budgeting a multi-round lab on the one-pass estimate | NB1: estimate $25.32 → actual $46.43 | expect about twice the one-pass estimate once a lab has a stop; say so in the pre-registration |
+| A later failure the crib could not show | NB1: every stop-rule hit showed in an n=1 crib (S1 at L95; the NC1 miss at L96 and L98), but the R-GIT 4/5 and both golden flips showed only at n=4 or in golden | the crib catches large effects; rates and golden still need the full run |
+| A background watch that never woke | NB1 re-crib 2 (a watch keyed on `summary.md`) | match every terminal state (manifest spend, sample count), or wait for the owner's ping |
+| A proxy that mispaired or misread | NB1: the quote scorer paired ceos2's device block with ceos1's Git file ("edited 10"); vlg-score read an undeclared Git ref as a miss | proxies flag, hand reads decide; fix the scorer and pin it |

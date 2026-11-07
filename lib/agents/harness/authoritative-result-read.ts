@@ -32,7 +32,7 @@ import type { Prisma } from '@prisma/client';
 import { selectAuthoritativeExecution, CHAIN_SELECTION_OPTIONS } from '../../services/execution-selection';
 
 export type ResultField = 'finalResponse' | 'rollbackContainment' | 'derivationContainment' | 'reviewerVerdict' | 'reviewerWarnings' | 'toolCalls'
-  | 'editApplication' | 'reviewedEditDiff' | 'heldBytes' | 'gitDeviceComparison';
+  | 'editApplication' | 'reviewedEditDiff' | 'heldBytes' | 'gitDeviceComparison' | 'liveEvidence';
 
 export type AuthoritativeReadClient = Pick<Prisma.TransactionClient, 'agentExecution' | 'agentArtifact' | '$queryRaw'>;
 
@@ -136,6 +136,15 @@ export async function readAuthoritativeResultField(
     case 'gitDeviceComparison':
       rows = await client.$queryRaw<Array<{ v: string | null }>>`
         SELECT (content::jsonb)->>'gitDeviceComparison' AS v FROM agent_artifacts
+        WHERE name = 'result.json' AND content LIKE '{%'
+          AND "executionId" = ${executionId}
+        ORDER BY "createdAt" DESC LIMIT 1`;
+      break;
+    // Config-sources network push 1a: the network Harvester's live-evidence fact — TRANSCRIBED at the Author's persist (the
+    // Reviewer chains the Author only) and HOISTED at the leg's SYNTHESIZE, both from the execution the chainer hands on.
+    case 'liveEvidence':
+      rows = await client.$queryRaw<Array<{ v: string | null }>>`
+        SELECT (content::jsonb)->>'liveEvidence' AS v FROM agent_artifacts
         WHERE name = 'result.json' AND content LIKE '{%'
           AND "executionId" = ${executionId}
         ORDER BY "createdAt" DESC LIMIT 1`;

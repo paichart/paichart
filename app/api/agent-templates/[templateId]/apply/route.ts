@@ -9,7 +9,7 @@ import { logTemplateApplication, logSecurityViolation } from '@/lib/auth/audit';
 import { detectPromptInjection } from '@/lib/security/prompt-injection-prevention';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 /**
  * POST /api/agent-templates/[templateId]/apply
@@ -201,6 +201,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ temp
     });
 
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     logger.error({ err: error }, 'AgentTemplate Apply API POST error');
     return NextResponse.json(
       {

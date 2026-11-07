@@ -111,6 +111,8 @@ const PRE_Z49 = '452dfe15a547a2f88bbcc0a0529cd9f7e20f3b26';
 const EXP = path.join(LAB, 'inputs', '2026-10-07-gaps-1-3');
 let pass = 0; let fail = 0;
 async function test(name: string, fn: () => Promise<void> | void) {
+  // LAB_TEST_ONLY=<regex> runs the matching tests only (a developer filter; the full suite is the gate).
+  if (process.env.LAB_TEST_ONLY && !new RegExp(process.env.LAB_TEST_ONLY).test(name)) return;
   try { await fn(); pass++; console.log(`  ✅ ${name}`); } catch (e) { fail++; console.log(`  ❌ ${name}\n     ${(e as Error).message}`); }
 }
 function assert(c: unknown, m: string): asserts c { if (!c) throw new Error(m); }
@@ -1568,6 +1570,530 @@ const commitText = (name: string, commit: string): ProtocolText => {
     const l4 = await runAuthorLeafNets(nl4, 'config_change_author', fr(nl4), 'lab-ln7b');
     const v: any = l4.stamped.validationToolCalls;
     assert(v?.checked === true && Array.isArray(v.findings) && v.findings.length === 2 && !l4.errors.validationToolCalls, `N-L4 validationToolCalls ${JSON.stringify(v)?.slice(0, 200)}`);
+  });
+
+  // ── Config sources L-CS-N ($0 levers, 2026-11-04) ──
+  const FWA3 = 'cmvyb2anc008djef0pzv52byj';
+  const loadCached = (id: string) => { const f = path.join(__dirname, 'leg-replay-lab/cache/snapshots', `${id}.json`); assert(fs.existsSync(f), `needs the lab snapshot cache (${id}; self-host: snapshot --source local-db:<db>)`); return JSON.parse(fs.readFileSync(f, 'utf8')); };
+  const withBlock = (snap: any, block: string) => { const c = JSON.parse(JSON.stringify(snap)); const d: string = c.leg.description; const i = d.indexOf('## Device sources'); assert(i >= 0, 'leg has a Device sources block'); const j = d.indexOf('\n## ', i + 3); c.leg.description = d.slice(0, i) + block + (j >= 0 ? d.slice(j) : ''); return c; };
+  const LR_BLOCK = '## Device sources\nceos1: device-read — service ceos-lab-readonly\nceos2: live-read — service ceos-lab-readonly\n';
+  await test('LCS1 (kind-gate.ts, S3/F15) the per-arm gate: open parses a planted live-read line, closed reads unknown-kind (reported, not refused), an open arm whose block does not parse is REFUSED; the gate is restored after every bind; a bad value is refused', async () => {
+    const KG = require('./leg-replay-lab/kind-gate');
+    const DS = require('../lib/agents/harness/device-sources');
+    assert(KG.armKindGate(undefined, 'a') === null && KG.armKindGate({ liveReadKind: 'open' }, 'a') === 'open', 'armKindGate');
+    let threw = false; try { KG.armKindGate({ liveReadKind: 'yes' }, 'a'); } catch { threw = true; } assert(threw, 'a bad liveReadKind is refused');
+    const snap = withBlock(loadCached(FWA3), LR_BLOCK);
+    const open = await KG.withArmKindGate('open', () => KG.kindGateCheck(snap, 'open', 'x/rc'));
+    // 2026-11-05 (1.26.0 merged, the tree constant is now TRUE): was `=== false` (the constant while the text was a lab candidate). Same intent, stated against the constant itself (LL-CS-13).
+    assert(DS.liveReadKindEnabled() === DS.LIVE_READ_KIND_ENABLED, 'the gate is restored to the tree constant after withArmKindGate');
+    assert(open.effectiveOpen && open.leg.state === 'parsed' && open.leg.liveReadEntries === 1 && open.refusal === null, `open ${JSON.stringify(open.leg)}`);
+    const closed = await KG.withArmKindGate('closed', () => KG.kindGateCheck(snap, 'closed', 'x/rb'));
+    assert(!closed.effectiveOpen && closed.leg.state === 'unparseable' && closed.closedArmUnknownKind && closed.refusal === null, `closed ${JSON.stringify(closed.leg)}`);
+    const bad = withBlock(loadCached(FWA3), '## Device sources\nceos2: device-read — service ceos-lab-readonly\nceos2: live-read — service ceos-lab-readonly\n');
+    const refused = await KG.withArmKindGate('open', () => KG.kindGateCheck(bad, 'open', 'x/rc'));
+    assert(refused.refusal && /live-read-not-alone/.test(refused.refusal), `an unparseable open-arm block is refused: ${refused.refusal}`);
+    // 2026-11-05: the tree constant is now TRUE, so an un-bound read cannot show a leak; the leak is measured inside an outer CLOSED bind (same intent, LL-CS-13).
+    let leaked = false; await KG.withArmKindGate('closed', async () => { try { await KG.withArmKindGate('open', () => { throw new Error('boom'); }); } catch { leaked = DS.liveReadKindEnabled(); } }); assert(!leaked, 'a throw inside the bind does not leak an open gate');
+    const stored = await KG.withArmKindGate('open', () => KG.kindGateCheck(loadCached(FWA3), 'open', 'x/rc'));
+    assert(stored.refusal === null && stored.leg.liveReadLine === false, 'a stored v1 block on an open arm is not refused');
+  });
+  await test('LCS2 (snapshot.ts + self-host-provenance.ts, ME-B3/F14) the R-FWA3 self-host snapshot carries provenance; P0-P4 pass against the lab pins (protocol 4df1b4c8, both templates, opus-5-5/sonnet-5, approved/92); a wrong pin, a production snapshot and a wrong expectation each fail', () => {
+    const { selfHostProvenanceChecks } = require('./leg-replay-lab/self-host-provenance');
+    const g = JSON.parse(fs.readFileSync(path.join(__dirname, 'leg-replay-lab/golden/golden-set.json'), 'utf8'));
+    const snap = loadCached(FWA3);
+    assert(snap.provenance?.kind === 'self-host' && /^3422efe1/.test(snap.provenance.dumpSha256 ?? ''), `provenance ${JSON.stringify(snap.provenance)}`);
+    const pins = { protocols: { 'network-provisioning-protocol': { version: '1.25.0', sha256: g.pins.protocols['network-provisioning-protocol'].sha256 } }, templates: Object.fromEntries(Object.values<any>(g.pins.templates).map((t) => [t.name, { role: t.role, sha256: t.sha256 }])) };
+    const rows = [{ name: 'network-provisioning-protocol', version: '1.25.0', sha256: g.pins.protocols['network-provisioning-protocol'].sha256 }];
+    const ok = selfHostProvenanceChecks(snap, rows, pins, { approved: true, confidence: 92 });
+    assert(ok.length === 8 && ok.every((c: any) => c.ok), `all pass: ${ok.filter((c: any) => !c.ok).map((c: any) => c.name + ' ' + c.detail).join(' | ')}`);
+    const wrongPin = selfHostProvenanceChecks(snap, [{ ...rows[0], sha256: 'f'.repeat(64) }], pins);
+    assert(wrongPin.filter((c: any) => !c.ok).map((c: any) => c.name).join() === 'P1 protocol (author),P1 protocol (reviewer)', 'a wrong install sha fails P1');
+    assert(!selfHostProvenanceChecks(snap, rows, pins, { approved: false, confidence: 92 }).find((c: any) => c.name === 'P4 persisted verdict').ok, 'a wrong expectation fails P4');
+    const prod = loadCached('cmvn5amvd0059yxyawefjeq0t');
+    assert(!selfHostProvenanceChecks(prod, rows, pins)[0].ok, 'a production snapshot fails P0');
+    const { provenanceRefusals } = require('./leg-replay-lab/lab');
+    assert(provenanceRefusals([{ id: 'R', authorExecutionId: FWA3, provenance: 'self-host' }], loadCached).length === 0, 'declared self-host = cached self-host');
+    assert(provenanceRefusals([{ id: 'R', authorExecutionId: FWA3 }], loadCached).length === 1, 'a self-host snapshot under a node that does not declare it is refused');
+    assert(provenanceRefusals([{ id: 'B', authorExecutionId: 'cmvn5amvd0059yxyawefjeq0t', provenance: 'self-host' }], loadCached).length === 1, 'a production snapshot under a self-host node is refused');
+  });
+  await test('LCS3 (standing-bench.ts, owner G4-c) NET-FWA3-EDGE reproduces its STORED (wrong) outcome approved/92; a reaching lab must declare it on every reaching arm with a do-not-ship refuse gate; a lab that does not reach it owes nothing', () => {
+    const sb = require('./leg-replay-lab/standing-bench');
+    const rows = sb.standingBenchSelfTest(loadCached);
+    // s2 (2026-11-07): VLG-I3-GIT-ONLY joined the bench — check NET-FWA3-EDGE by id and every case's frozen record.
+    assert(rows.length === sb.loadStandingBench().cases.length && rows.every((r: any) => r.ok) && rows.some((r: any) => r.id === 'NET-FWA3-EDGE'), `self-test ${JSON.stringify(rows)}`);
+    const dir = path.join(__dirname, 'leg-replay-lab/inputs/2026-11-04-config-sources-net-l-cs-n');
+    const exp = JSON.parse(fs.readFileSync(path.join(dir, 'experiment.json'), 'utf8'));
+    // s3 (2026-11-08): NET-APPLY-WHOLE-FILE joined after L-CS-N ran; L-CS-N's lock is read on the cases it was registered under.
+    const lcsnProblems = (e: any) => sb.standingBenchProblems(e, dir).filter((p: string) => !/NET-APPLY-WHOLE-FILE/.test(p));
+    assert(lcsnProblems(exp).length === 0, `L-CS-N declares it: ${lcsnProblems(exp).join(' | ')}`);
+    const noDecl = { ...exp, standingBench: [] };
+    assert(sb.standingBenchProblems(noDecl, dir).some((p: string) => /not declared/.test(p)), 'an undeclared reached case is a problem');
+    const oneArm = { ...exp, nodes: exp.nodes.map((n: any) => (n.id === 'R-FWA3' ? { ...n, variants: ['rb'] } : n)) };
+    assert(sb.standingBenchProblems(oneArm, dir).some((p: string) => /does not run on reaching arm/.test(p)), 'a reaching arm without the node is a problem');
+    const noGate = { ...exp, nodes: exp.nodes.map((n: any) => (n.id === 'R-FWA3' ? { ...n, scoring: {} } : n)) };
+    assert(sb.standingBenchProblems(noGate, dir).some((p: string) => /doNotShip/.test(p)), 'a node without the do-not-ship refuse gate is a problem');
+    // an arm whose only nodes are Harvester cells (or that is authorOnly) runs no Reviewer: the standing case is not reached by it
+    const hOnly = { variants: { hc: { edits: ['edits/network-provisioning-1.26.0.json'] }, ac: { edits: ['edits/network-provisioning-1.26.0.json'], authorOnly: true } }, nodes: [{ id: 'H', authorExecutionId: 'x', variants: ['hc'], harvesterOnly: true }, { id: 'A', authorExecutionId: 'y', variants: ['ac'] }] };
+    assert(sb.standingBenchProblems(hOnly, dir).length === 0, `harvester-only / authorOnly arms reach no Reviewer: ${sb.standingBenchProblems(hOnly, dir).join(' | ')}`);
+    const unreached = { variants: { base: { edits: [] } }, nodes: [] };
+    assert(sb.standingBenchProblems(unreached, dir).length === 0, 'a lab with no lever on the reader owes nothing');
+  });
+  await test('LCS4 (network-fixtures.ts buildRigPool, F14) the devext PRE-redaction pool: identity-proved, every placeholder (incl. the R10 v10 garble) restored and reversed byte for byte, the ceos2 Loopback11 10.99.0.2/32 witness present, rig named per entry; a wrong plant count, a missing witness and a surviving placeholder each refuse', () => {
+    const nf = require('./leg-replay-lab/network-fixtures');
+    const spec = JSON.parse(fs.readFileSync(path.join(__dirname, 'leg-replay-lab/inputs/2026-11-04-config-sources-net-l-cs-n/fixtures/device-plants.json'), 'utf8'));
+    const sources = spec.sourceExecutionIds.map((id: string) => ({ executionId: id, toolCalls: JSON.parse(loadCached(id).author.resultJson).toolCalls }));
+    const r = nf.buildRigPool(sources, spec);
+    assert(r.pool.entries.length === 6 && r.pool.entries.every((e: any) => e.rig === 'devext') && r.witness.length === 2, `pool ${r.pool.entries.length} entries`);
+    // O-4: ceos2 interfaces / interfaces_ip DERIVED from the stored multi-getter read, each = its stored sub-object
+    const der = r.pool.entries.filter((e: any) => e.derived);
+    assert(der.length === 2 && der.every((e: any) => e.host === 'ceos2' && /^split:cmvyboicf00cxjef0n63qykau#3$/.test(e.derived)), `derived ${JSON.stringify(der.map((e: any) => [e.host, e.getter, e.derived]))}`);
+    const core = JSON.parse(loadCached('cmvyboicf00cxjef0n63qykau').author.resultJson).toolCalls[3].result.content[0].data.result.structuredContent.hosts.ceos2.output;
+    for (const e of der) {
+      const o = e.result.content[0].data.result.structuredContent.hosts.ceos2.output;
+      assert(JSON.stringify(Object.keys(o)) === JSON.stringify([e.getter]) && JSON.stringify(o[e.getter]) === JSON.stringify(core[e.getter]), `${e.getter}: exactly the stored sub-object`);
+      assert(JSON.stringify(e.result.content[0].data.arguments.getters) === JSON.stringify([e.getter]), `${e.getter}: single-getter arguments`);
+    }
+    // IDENTITY: the core registration id re-stamped to the edge's on every ceos2 entry, exactly once
+    assert(JSON.stringify(r.restamped) === JSON.stringify(['ceos2/config', 'ceos2/interfaces', 'ceos2/interfaces_ip']) && !JSON.stringify(r.pool.entries.map((e: any) => e.result)).includes('cmvybolq0008ojeem0x71vu7m'), `restamped ${JSON.stringify(r.restamped)}`);
+    const thr = (f: () => unknown, re: RegExp) => { try { f(); return false; } catch (e) { return re.test((e as Error).message); } };
+    assert(thr(() => nf.buildRigPool(sources, { ...spec, plants: spec.plants.map((p: any, i: number) => (i === 0 ? { ...p, count: 2 } : p)) }), /occurs 1 times/), 'a wrong plant count refuses');
+    assert(thr(() => nf.buildRigPool(sources, { ...spec, witness: { ...spec.witness, mustContain: ['ip address 10.99.0.250/32'] } }), /witness/), 'a missing witness refuses');
+    assert(thr(() => nf.buildRigPool(sources, { ...spec, plants: spec.plants.slice(0, 5) }), /placeholder survives/), 'a surviving placeholder refuses');
+  });
+  await test('LCS5 (live-evidence-patch.ts, L-CS-a / ME-B1) the seam: absent module ⇒ not-built + snapshot UNCHANGED; through an injected computer every stored Harvester copy is stamped and re-read, an already-stamped copy is left alone, a non-network leg is untouched, the computer receives the leg declaration resolved under the bound gate; a module with a different export shape throws', async () => {
+    const LE = require('./leg-replay-lab/live-evidence-patch');
+    const KG = require('./leg-replay-lab/kind-gate');
+    const bl2 = loadCached('cmvn5amvd0059yxyawefjeq0t');
+    const absent = LE.withComputedLiveEvidence(bl2, LE.loadLiveEvidenceComputer(path.join(__dirname, 'leg-replay-lab/__no_such_module__')));
+    assert(absent.report.state === 'not-built' && absent.snap === bl2, 'absent ⇒ not-built, the same snapshot object');
+    const seen: any[] = [];
+    const fake = (sources: any, toolCalls: any) => { seen.push({ state: sources.state, kinds: sources.state === 'parsed' ? sources.entries.map((e: any) => e.kind) : [], calls: Array.isArray(toolCalls) ? toolCalls.length : -1 }); return { items: 2, liveDeclared: 1, liveRead: 1, liveNotRead: [], gitOnly: [], notApplicable: 0, summary: 'all-read' }; };
+    const r = LE.withComputedLiveEvidence(bl2, fake);
+    assert(r.report.state === 'computed' && r.report.copies >= 1 && r.fact.point === 'harvester', `computed ${JSON.stringify(r.report)}`);
+    const h = r.report.harvesterExecutionId;
+    for (const a of r.snap.childArtifacts.filter((x: any) => x.executionId === h && x.name === 'result.json')) assert(JSON.parse(a.content).liveEvidence?.summary === 'all-read', 'every copy stamped');
+    assert(!JSON.parse(bl2.childArtifacts.find((x: any) => x.executionId === h && x.name === 'result.json').content).liveEvidence, 'the cached snapshot is not written');
+    assert(LE.withComputedLiveEvidence(r.snap, fake).report.state === 'already-stamped', 'an already-stamped copy is left alone');
+    assert(LE.withComputedLiveEvidence(loadCached('cmvhpeoer00c8yxb8jf45osnm'), fake).report.state === 'not-device-source-leg', 'terraform untouched');
+    const fw = withBlock(loadCached(FWA3), LR_BLOCK);
+    await KG.withArmKindGate('open', () => LE.withComputedLiveEvidence(fw, fake));
+    assert(JSON.stringify(seen[seen.length - 1].kinds) === '["device-read","live-read"]', `the computer saw the open-gate declaration ${JSON.stringify(seen[seen.length - 1])}`);
+    const applies = (pi: any) => /^1\.(2[6-9]|[3-9]\d)\./.test(String(pi?.delta?.version ?? ''));
+    const below = LE.withComputedLiveEvidence(bl2, fake, { protocol: { name: 'network-provisioning-protocol', version: '1.25.0' }, versionApplies: applies });
+    assert(below.report.state === 'not-stamped-version' && below.snap === bl2, 'below the released version ⇒ NOT_STAMPED, snapshot unchanged (ME-B4)');
+    const at = LE.withComputedLiveEvidence(bl2, fake, { protocol: { name: 'network-provisioning-protocol', version: '1.26.0' }, versionApplies: applies });
+    assert(at.report.state === 'computed', 'at the released version ⇒ computed');
+    const { armComposedProtocol } = require('./leg-replay-lab/lab');
+    assert(armComposedProtocol({ variants: { rc: { composedVersion: '1.26.0' } } }, 'rc', { name: 'n', version: '1.25.0+rc' }).version === '1.26.0'
+      && armComposedProtocol({ variants: { rb: {} } }, 'rb', { name: 'n', version: '1.25.0' }).version === '1.25.0', 'armComposedProtocol');
+    const tmp = path.join(out, 'bad-live-evidence.js'); fs.writeFileSync(tmp, 'exports.computeLiveEvidence = function (a) { return {}; };');
+    let threw = false; try { LE.loadLiveEvidenceComputer(tmp); } catch (e) { threw = /seam expects 3/.test((e as Error).message); } assert(threw, 'a one-parameter export is refused');
+  });
+  await test('LCS6 (score-n1.ts kind union) the scorer kind union = the shipping DeviceSourceKind list; n1-self-test green and its live-read-blind mutation RED', () => {
+    const { N1_KIND_UNION_PIN, n1SelfTest } = require('./leg-replay-lab/score-n1');
+    const DS = require('../lib/agents/harness/device-sources');
+    assert(JSON.stringify(Object.keys(N1_KIND_UNION_PIN).sort()) === JSON.stringify([...DS.DEVICE_SOURCE_KINDS].sort()), 'union = shipping kinds');
+    assert(n1SelfTest().ok, `n1 self-test ${n1SelfTest().failures.join(' | ')}`);
+    assert(!n1SelfTest({ mutate: 'live-read-blind' }).ok, 'live-read-blind is RED');
+  });
+
+  await test('LCS7 (L-CS-N capture, LL-N-39) through the SHIPPING capture: a live-read device read whole is NOT held (live-read-evidence-only, gate open) while the same read declared device-read IS held (gate closed) — on the devext edge harvest + the re-stamped pool ceos2 read', async () => {
+    const { buildLabHeldStore, frozenHarvesterEntry } = require('./leg-replay-lab/held-store');
+    const KG = require('./leg-replay-lab/kind-gate');
+    const base = loadCached(FWA3); const h = frozenHarvesterEntry(base);
+    const pool = JSON.parse(fs.readFileSync(path.join(__dirname, 'leg-replay-lab/cache/cs-n/device-pool-devext.json'), 'utf8'));
+    const c2 = pool.entries.find((e: any) => e.host === 'ceos2' && e.getter === 'config');
+    const URL = 'https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/descriptors/ceos-lab-readonly-descriptor.json';
+    const store = async (gate: string, kind: string) => {
+      const s = JSON.parse(JSON.stringify(base));
+      s.leg.description = s.leg.description.replace(`ceos1: device-read — service ${URL}`, `ceos1: device-read — service ${URL}\nceos2: ${kind} — service ${URL}`);
+      for (const a of s.childArtifacts.filter((x: any) => x.executionId === h.executionId && x.name === 'result.json')) {
+        const r = JSON.parse(a.content);
+        const t = JSON.parse(JSON.stringify(r.toolCalls.find((c: any) => JSON.stringify(c.arguments).includes('getters') && JSON.stringify(c.arguments).includes('config'))));
+        const args = typeof t.arguments === 'string' ? JSON.parse(t.arguments) : t.arguments;
+        args.arguments = JSON.stringify({ getters: ['config'], filter_name: 'ceos2', getters_options: { config: { retrieve: 'running' } } });
+        t.arguments = args; t.result = c2.result; r.toolCalls.push(t); a.content = JSON.stringify(r);
+      }
+      return KG.withArmKindGate(gate, () => buildLabHeldStore(s));
+    };
+    const open = await store('open', 'live-read');
+    assert(open.refs.length === 1 && open.refusals.length === 1 && open.refusals[0].refusal === 'live-read-evidence-only', `open ${JSON.stringify(open.refusals)}`);
+    const closed = await store('closed', 'device-read');
+    assert(closed.refs.length === 2 && closed.refusals.length === 0, `closed refs ${closed.refs.length} refusals ${JSON.stringify(closed.refusals)}`);
+  });
+  await test('LCS8 (O-2(a) protocol injection) the arm\'s composed delta reaches the leaf nets: at 1.26.0 the Author transcribes the Harvester\'s liveEvidence, at 1.25.0 (and with none) it is NOT_STAMPED — production\'s population rule, on the deployed lib', async () => {
+    const LE = require('./leg-replay-lab/live-evidence-patch');
+    const { runAuthorLeafNets } = require('./leg-replay-lab/nets');
+    const { armProtocolInjection } = require('./leg-replay-lab/lab');
+    const s = loadCached(FWA3);
+    const patched = LE.withComputedLiveEvidence(s, undefined, { protocol: { name: 'network-provisioning-protocol', version: '1.26.0' } });
+    assert(patched.report.state === 'computed', `patch ${JSON.stringify(patched.report)}`);
+    const text = JSON.parse(s.author.resultJson).finalResponse;
+    const pi = (v: string) => armProtocolInjection({ variants: { x: { composedVersion: v } } }, 'x', { name: 'network-provisioning-protocol', version: '1.25.0' });
+    const at = await runAuthorLeafNets(patched.snap, 'config_change_author', text, 'lcs8-a', undefined, undefined, pi('1.26.0'));
+    const below = await runAuthorLeafNets(patched.snap, 'config_change_author', text, 'lcs8-b', undefined, undefined, pi('1.25.0'));
+    const none = await runAuthorLeafNets(patched.snap, 'config_change_author', text, 'lcs8-c');
+    assert((at.stamped.liveEvidence as any)?.checked === true && (at.stamped.liveEvidence as any)?.point === 'author-transcription', `1.26.0 ${JSON.stringify(at.stamped.liveEvidence)?.slice(0, 160)}`);
+    assert(!below.stamped.liveEvidence && !none.stamped.liveEvidence, `below/none stamped: ${JSON.stringify(below.stamped.liveEvidence)} ${JSON.stringify(none.stamped.liveEvidence)}`);
+    const direct = LE.withComputedLiveEvidence(s, (_src: any, calls: any) => ({ items: Array.isArray(calls) ? calls.length : -1 }), { protocol: { name: 'network-provisioning-protocol', version: '1.26.0' }, versionApplies: () => true }, { toolCalls: [1, 2, 3] });
+    assert(direct.report.state === 'computed' && direct.fact.items === 3 && direct.snap === s, 'direct mode computes over the given calls and patches nothing');
+  });
+  await test('LCS9 (score-csn.ts) the L-CS-N scorer reads every case as pre-registered, the scope definition and the git-file-only warning id are the candidate text VERBATIM, and each of its 9 mutations is RED', () => {
+    const { csnSelfTest } = require('./leg-replay-lab/score-csn');
+    const cand = fs.readFileSync(path.join(__dirname, 'leg-replay-lab/inputs/2026-11-04-config-sources-net-l-cs-n/protocols/network-provisioning-protocol@1.25.0.rc.md'), 'utf8');
+    const ok = csnSelfTest({ candidateText: cand });
+    assert(ok.ok, ok.failures.join(' | '));
+    for (const m of ['held-blind', 'held-loose', 'alloc-regex', 'alloc-blind', 'dv-regex', 'ref-blind', 'nopkg-blind', 'limit-blind', 'overlap-blind', 'reason-blind', 'void-blind', 'warn-blind']) assert(!csnSelfTest({ mutate: m }).ok, `${m} is not caught`);
+  });
+
+  await test('LCS10 (git-harvest-plant.ts + restampPersisted, owner 2026-11-05) the Git-only re-cast: the frozen Harvester\'s calls become fixture Git reads (shipping persist shape), the shipping capture holds both Git files, L-CS-a reads gitOnly [ceos1, ceos2], and the planted R-FWA3-GIT-BOTH package re-stamps PURELY 2/2 with the free pool in the diff', async () => {
+    const GH = require('./leg-replay-lab/git-harvest-plant');
+    const { buildLabHeldStore, labResolveHeldFiles, labHeldViewFields } = require('./leg-replay-lab/held-store');
+    const LE = require('./leg-replay-lab/live-evidence-patch');
+    const KG = require('./leg-replay-lab/kind-gate');
+    const { pureStamp } = require('./leg-replay-lab/lab-sample');
+    const { r9VersionInEffect } = require('../lib/agents/harness/sanitize-chained-output');
+    const { applyEdits } = require('./leg-replay-lab/edits');
+    const E = path.join(__dirname, 'leg-replay-lab/inputs/2026-11-04-config-sources-net-l-cs-n');
+    const URL = 'https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/descriptors/ceos-lab-readonly-descriptor.json';
+    const base = JSON.parse(JSON.stringify(loadCached(FWA3)));
+    base.leg.description = base.leg.description.replace(`ceos1: device-read — service ${URL}`, 'ceos1: git-file — service github-service ; paichart/paichart-lab-configs/network/base/ceos1-startup.cfg\nceos2: git-file — service github-service ; paichart/paichart-lab-configs/network/base/ceos2-startup.cfg');
+    const g = await GH.withGitHarvest(base, E, { fixture: '../../fixtures/l-n1-0b35ce3', paths: ['network/base/ceos1-startup.cfg', 'network/base/ceos2-startup.cfg'] });
+    assert(g.report.calls === 2 && g.report.commit.startsWith('0b35ce31') && g.snap !== base, `report ${JSON.stringify(g.report)}`);
+    const store = await KG.withArmKindGate('open', () => buildLabHeldStore(g.snap));
+    assert(JSON.stringify(store.refs.map((r: any) => r.path)) === JSON.stringify(['/network/base/ceos1-startup.cfg', '/network/base/ceos2-startup.cfg']) && store.refusals.length === 0, `held ${JSON.stringify(store.refs.map((r: any) => r.path))} ${JSON.stringify(store.refusals)}`);
+    const le = await KG.withArmKindGate('open', () => LE.withComputedLiveEvidence(g.snap, undefined, { protocol: { name: 'network-provisioning-protocol', version: '1.26.0' } }));
+    assert(JSON.stringify((le.fact as any).gitOnly.map((x: any) => x.device)) === '["ceos1","ceos2"]' && (le.fact as any).liveDeclared === 0, `fact ${JSON.stringify(le.fact)?.slice(0, 200)}`);
+    const plant = JSON.parse(fs.readFileSync(path.join(E, 'plants/R-FWA3-GIT-BOTH.plant.json'), 'utf8'));
+    const text = applyEdits(JSON.parse(base.author.resultJson).finalResponse, [plant], `author:${FWA3}`).text;
+    const r9 = r9VersionInEffect();
+    const fields = await labHeldViewFields(store);
+    const resolved = await labResolveHeldFiles(store, r9)(fields.heldView, { authorTaskId: String(base.author.task.id), authorStageId: base.author.task.stage_id ?? null, scope: base.author.task.pov_id ?? null, legTaskId: String(base.leg.id) });
+    const st = pureStamp(text, resolved.files, resolved.refs, r9);
+    assert(st.fact.state === 'applied' && st.fact.applied === 2 && st.fact.total === 2, `stamp ${JSON.stringify(st.fact).slice(0, 200)}`);
+  });
+  await test('LCS11 (input-edits contract:interfaceContract + contract-devices fold, ADDENDUM (e)) R-CONTRACT-OOS patches EVERY stored contract copy (leg, Author/Reviewer task + exec config) and the live-evidence fact then names oob-console1 as contract-named, not declared; R-FWA3 names ceos2, R-FWA3-GIT-BOTH names nothing; a copy that does not take the edit is REFUSED (mutation RED)', async () => {
+    const { snapshotWithInputEdits } = require('./leg-replay-lab/input-edits');
+    const LE = require('./leg-replay-lab/live-evidence-patch');
+    const KG = require('./leg-replay-lab/kind-gate');
+    const E = path.join(__dirname, 'leg-replay-lab/inputs/2026-11-04-config-sources-net-l-cs-n');
+    const ic = (x: any) => (typeof x === 'string' ? JSON.parse(x) : x);
+    const fact = async (snap: any) => (await KG.withArmKindGate('open', () => LE.withComputedLiveEvidence(snap, undefined, { protocol: { name: 'network-provisioning-protocol', version: '1.26.0' } }))).fact as any;
+    const oos = snapshotWithInputEdits(E, { id: 'R-CONTRACT-OOS', inputEdits: 'node-inputs/r-contract-oos.json' }, loadCached(FWA3));
+    const copies: string[] = oos.report.targets['contract:interfaceContract'].copies;
+    assert(copies.length === 5 && copies.includes('leg.inputContext') && copies.includes('reviewer.exec.config.inputContext'), `copies ${JSON.stringify(copies)}`);
+    for (const c of [oos.snap.leg.inputContext, oos.snap.author.task.inputContext, oos.snap.author.exec.config.inputContext, oos.snap.reviewer.task.inputContext, oos.snap.reviewer.exec.config.inputContext]) {
+      const k = ic(c).interfaceContract;
+      assert(k.deviceSources['network-provisioning-core'].some((l: string) => l.startsWith('oob-console1: device-read')) && k.outOfScope.some((l: string) => l.startsWith('oob-console1,')), 'a copy lacks the planted contract');
+    }
+    const fOos = await fact(oos.snap);
+    assert(JSON.stringify(fOos.contractNotDeclared) === '["oob-console1"]', `OOS contractNotDeclared ${JSON.stringify(fOos.contractNotDeclared)}`);
+    const fFwa3 = await fact(loadCached(FWA3));
+    assert(JSON.stringify(fFwa3.contractNotDeclared) === '["ceos2"]', `R-FWA3 contractNotDeclared ${JSON.stringify(fFwa3.contractNotDeclared)}`);
+    const both = snapshotWithInputEdits(E, { id: 'R-FWA3-GIT-BOTH', inputEdits: 'node-inputs/r-fwa3-git-both.json' }, loadCached(FWA3));
+    const fBoth = await fact(both.snap);
+    assert(!fBoth.contractNotDeclared || fBoth.contractNotDeclared.length === 0, `GIT-BOTH contractNotDeclared ${JSON.stringify(fBoth.contractNotDeclared)}`);
+    // Mutation: one copy (the Reviewer's frozen config) no longer carries the anchor — the patch must refuse, never patch the rest.
+    const bad = JSON.parse(JSON.stringify(loadCached(FWA3)));
+    const rc = ic(bad.reviewer.exec.config.inputContext); rc.interfaceContract.outOfScope = [];
+    bad.reviewer.exec.config.inputContext = typeof bad.reviewer.exec.config.inputContext === 'string' ? JSON.stringify(rc) : rc;
+    let refused = false; try { snapshotWithInputEdits(E, { id: 'R-CONTRACT-OOS', inputEdits: 'node-inputs/r-contract-oos.json' }, bad); } catch (e) { refused = /reviewer\.exec\.config\.inputContext|anchor occurs 0/.test((e as Error).message); }
+    assert(refused, 'a contract copy that does not take the edit must be refused');
+  });
+  await test('LCS12 (ADDENDUM (h)) harvestFromSample re-casts the frozen Harvester with a step-3 LR-EDGE lab sample (every stored copy; the sample\'s protocol sha pinned; a wrong sha REFUSED) and the computed fact reads ceos2 live-read READ; patchHarvesterEntry still refuses a frozen heldIndex unless a held lab-sample arm drops it', async () => {
+    const GH = require('./leg-replay-lab/git-harvest-plant');
+    const { patchHarvesterEntry } = require('./leg-replay-lab/chain');
+    const { snapshotWithInputEdits } = require('./leg-replay-lab/input-edits');
+    const LE = require('./leg-replay-lab/live-evidence-patch');
+    const KG = require('./leg-replay-lab/kind-gate');
+    const E = path.join(__dirname, 'leg-replay-lab/inputs/2026-11-04-config-sources-net-l-cs-n');
+    const SRC = 'lab-sample:2026-11-05T01-37-45-2026-11-04-config-sources-net-l-cs-n/LR-EDGE/hc/1';
+    const runDir = path.join(__dirname, 'leg-replay-lab/runs/2026-11-05T01-37-45-2026-11-04-config-sources-net-l-cs-n');
+    if (!fs.existsSync(runDir)) { console.log('   (LCS12 skipped: the step-3 run folder is not in this tree — runs/ is gitignored)'); return; }
+    const sha = require('crypto').createHash('sha256').update(fs.readFileSync(path.join(runDir, 'LR-EDGE/hc/protocol.md'), 'utf8'), 'utf8').digest('hex');
+    const base = snapshotWithInputEdits(E, { id: 'R-FWA3-FIXED', inputEdits: 'node-inputs/r-le-none.json' }, loadCached(FWA3)).snap;
+    const r = GH.withSampleHarvest(base, SRC, sha);
+    assert(r.report.copies >= 1 && r.report.calls === 5, `report ${JSON.stringify(r.report)}`);
+    let refused = false; try { GH.withSampleHarvest(base, SRC, '0'.repeat(64)); } catch (e) { refused = /protocol/.test((e as Error).message); }
+    assert(refused, 'a sample that read another protocol text must be refused');
+    const fact = (await KG.withArmKindGate('open', () => LE.withComputedLiveEvidence(r.snap, undefined, { protocol: { name: 'network-provisioning-protocol', version: '1.26.0' } }))).fact as any;
+    assert(fact.summary === 'all-read' && fact.liveRead === 2 && (!fact.liveNotRead || fact.liveNotRead.length === 0), `fact ${JSON.stringify(fact).slice(0, 240)}`);
+    const before = (await KG.withArmKindGate('open', () => LE.withComputedLiveEvidence(base, undefined, { protocol: { name: 'network-provisioning-protocol', version: '1.26.0' } }))).fact as any;
+    assert(before.summary === 'some-not-read', `unplanted twin reads ${before.summary} (must be some-not-read: the plant must move the fact)`);
+    const arch = loadCached('cmvyb0tr70084jef0j273kup8');
+    const rr = { executionId: 'lab-x', finalResponse: 'x'.repeat(40), confidenceScore: 80, qualityMetrics: null, markerPresence: null, rollbackContainment: null, derivationContainment: null };
+    let held = false; try { patchHarvesterEntry(arch.author.exec, rr); } catch (e) { held = /carries heldIndex/.test((e as Error).message); }
+    assert(held, 'a frozen heldIndex must still be refused by default');
+    const { ctx } = patchHarvesterEntry(arch.author.exec, rr, { dropProductionHeld: true });
+    const he = ctx.chainedFrom.find((e: any) => e?.agentRole === 'infra_state_harvester');
+    assert(!('heldIndex' in he) && he.executionId === 'lab-x', 'the dropped production capture must not survive on the replayed entry');
+  });
+
+  // ── VALUE-LEG-GIT (2026-11-06, model-evaluation): the value lane (value-lane.ts L-VLG-a/b/c, replay-prisma `legReads`). ──
+  const VLG_E = path.join(__dirname, 'leg-replay-lab/inputs/2026-11-06-value-leg-git');
+  const VLG_H = 'cmw478njh002kyx2v0v0t3goy', VLG_X = 'cmw47bixl0032yx31135j69pn', VLG_X1 = 'cmvvz3xmh003hyx8jwcqt4xmp';
+  await test('LVLG1 replay-prisma legReads serves the three leg-row projections production issues (owning leg by stage, declaration columns, contract) through the SHIPPING readers — and only when asked (default: the shape still throws)', async () => {
+    const { buildReplayPrisma } = require('./leg-replay-lab/replay-prisma');
+    const { resolveOwningLeg } = require('../lib/agents/harness/program-protocol');
+    const snap = loadCached(VLG_H);
+    const stageId = snap.leg.metadata.pipelineStageId;
+    const on = buildReplayPrisma(snap, [], { legReads: true }).client;
+    const r = await resolveOwningLeg(on, stageId);
+    assert(r.kind === 'one' && r.legTaskId === snap.leg.id, `owning leg ${JSON.stringify(r).slice(0, 160)}`);
+    const off = buildReplayPrisma(snap, []).client;
+    let threw = false; try { await resolveOwningLeg(off, stageId); } catch (e) { threw = /unsupported query shape/.test((e as Error).message); }
+    assert(threw, 'without legReads the owning-leg query must still THROW (every earlier experiment unchanged)');
+    const { readLegDeviceSources } = require('../lib/agents/harness/device-sources-read');
+    const d = await readLegDeviceSources(on, { kind: 'self', legId: snap.leg.id, heldCapable: false, deviceSource: true, deviceSourceLane: 'value' });
+    assert(d.state === 'snapshot-absent', `the stored canary value leg took no snapshot — reads ${d.state}`);
+  });
+  await test('LVLG2 (GOLDEN-VALUE-LIVE) the shipping value-leg containment net over a replayed Architect text: the PERSISTED C126 and C1 texts reproduce their STORED stamps exactly; a /26 for C1 reads blocking (prefix-not-minimal); a block that swallows a held /32 not named as a member reads blocking; a free /32 EQUAL to a harvested /32 reads blocking derived-value-held (F-2 CLOSED 2026-11-07, VALUE-FREE-ADDRESS-BLIND platform half, owner G10-c)', async () => {
+    const VL = require('./leg-replay-lab/value-lane');
+    for (const id of [VLG_X, VLG_X1]) {
+      const snap = loadCached(id); const ares = JSON.parse(snap.author.resultJson);
+      const c = await VL.valueArchitectContainment(snap, ares.finalResponse, snap.author.exec.id);
+      assert(!c.error && JSON.stringify(c.fact) === JSON.stringify(ares.derivationContainment), `${id}: computed ${JSON.stringify(c.fact).slice(0, 200)} ≠ stored`);
+    }
+    const c1 = loadCached(VLG_X1); const t1 = JSON.parse(c1.author.resultJson).finalResponse as string;
+    const bad = await VL.valueArchitectContainment(c1, t1.split('10.99.0.0/27').join('10.99.0.0/26'), 'lab-lvlg2-a');
+    assert(bad.fact?.containmentDisposition?.disposition === 'blocking', `C1 /26 reads ${VL.containmentLine(bad.fact)}`);
+    const x = loadCached(VLG_X); const tx = JSON.parse(x.author.resultJson).finalResponse as string;
+    const swallow = tx.replace('{"kind": "cidr", "value": "10.99.0.3/32", "members": ["10.99.0.3/32"]}', '{"kind": "cidr", "value": "10.99.0.0/30", "members": ["10.99.0.3/32"]}');
+    assert(swallow !== tx, 'swallow edit did not apply');
+    const sw = await VL.valueArchitectContainment(x, swallow, 'lab-lvlg2-b');
+    assert(sw.fact?.containmentDisposition?.disposition === 'blocking' && (sw.fact?.violations ?? []).length > 0, `swallow reads ${VL.containmentLine(sw.fact)}`);
+    const collide = tx.split('10.99.0.3/32').join('10.99.0.2/32');
+    const co = await VL.valueArchitectContainment(x, collide, 'lab-lvlg2-c');
+    const held = (co.fact?.violations ?? []).filter((v: any) => v.reason === 'derived-value-held');
+    assert(co.fact?.containmentDisposition?.disposition === 'blocking' && held.length >= 1 && held.every((v: any) => v.derived === '10.99.0.2/32' && v.harvested === '10.99.0.2/32' && v.harvestedDevice === 'ceos2'),
+      `F-2 closed (2026-11-07): a free /32 equal to a held /32 must read blocking derived-value-held — got ${VL.containmentLine(co.fact)} ${JSON.stringify(co.fact?.violations)}`);
+  });
+  await test('LVLG3 withFirstExecutionSnapshot mirrors production\'s writer: the stored canary value leg (no own key, no block) takes NO snapshot; with its own key planted it takes one (contract source, 2 entries) and becomes a value-lane Device-sources leg; a second take is refused', async () => {
+    const VL = require('./leg-replay-lab/value-lane');
+    const { snapshotWithInputEdits } = require('./leg-replay-lab/input-edits');
+    const { isDeviceSourceLeg, deviceSourceLaneOfLeg } = require('../lib/agents/harness/held-bytes/variant');
+    const raw = loadCached(VLG_X);
+    assert(VL.withFirstExecutionSnapshot(raw).report.state === 'absent-no-snapshot', 'stored leg must take no snapshot');
+    const planted = snapshotWithInputEdits(VLG_E, { id: 'A-GIT', inputEdits: 'node-inputs/nd-git.json' }, raw).snap;
+    const r = VL.withFirstExecutionSnapshot(planted);
+    assert(r.report.state === 'taken' && r.report.source === 'contract' && r.report.entries === 2 && r.report.lane === 'value', JSON.stringify(r.report));
+    assert(isDeviceSourceLeg(r.snap.leg) && deviceSourceLaneOfLeg(r.snap.leg) === 'value', 'the planted leg must read as a value-lane Device-sources leg');
+    assert(!isDeviceSourceLeg(raw.leg), 'the stored leg must stay off the lane');
+    assert(VL.withFirstExecutionSnapshot(r.snap).report.state === 'already-snapshotted', 'a second take must be refused');
+  });
+  await test('LVLG4 withValueHarvest: the frozen harvests stamp the SHIPPING device facts on the value lane (Git-only: git-only, gitOnly [ceos1, ceos2], no comparison; Git+live: some-git-only, ceos1 read whole, comparison checked) into the Architect\'s AND the Reviewer\'s frozen contexts; without the snapshot the leg is off the lane and no liveEvidence is stamped', async () => {
+    const VL = require('./leg-replay-lab/value-lane');
+    const { snapshotWithInputEdits } = require('./leg-replay-lab/input-edits');
+    if (!fs.existsSync(path.join(__dirname, 'leg-replay-lab/cache/vlg/harvest-git-only.calls.json'))) { console.log('   (LVLG4 skipped: run `lab:leg-replay -- vlg-fixtures` first — cache/vlg is gitignored)'); return; }
+    const raw = loadCached(VLG_X);
+    const prep = (inputs: string) => VL.withFirstExecutionSnapshot(snapshotWithInputEdits(VLG_E, { id: 'x', inputEdits: inputs }, raw).snap).snap;
+    const g = await VL.withValueHarvest(VLG_E, prep('node-inputs/nd-git.json'), { text: 'harvests/git-only.md', toolCalls: '../../cache/vlg/harvest-git-only.calls.json' });
+    const gl = g.report.liveEvidence as any;
+    assert(gl?.summary === 'git-only' && JSON.stringify((gl.gitOnly ?? []).map((x: any) => x.device)) === '["ceos1","ceos2"]', `git-only fact ${JSON.stringify(gl).slice(0, 200)}`);
+    assert(g.report.chainEntries.length === 4, `chain entries ${g.report.chainEntries}`);
+    const he = g.snap.reviewer.exec.config.inputContext.chainedFrom.find((e: any) => e?.agentRole === 'infra_state_harvester');
+    assert(he.liveEvidence?.summary === 'git-only' && he.finalResponse.includes('paichart-lab-configs/network/base/ceos2-startup.cfg'), 'the Reviewer\'s Harvester entry must carry the frozen harvest and its fact');
+    const l = await VL.withValueHarvest(VLG_E, prep('node-inputs/nd-live.json'), { text: 'harvests/git-live.md', toolCalls: '../../cache/vlg/harvest-git-live.calls.json' });
+    const ll = l.report.liveEvidence as any;
+    assert(ll?.summary === 'some-git-only' && ll.liveRead === 1 && (l.report.gitDeviceComparison as any)?.checked === true, `git-live facts ${JSON.stringify(ll).slice(0, 200)} / ${JSON.stringify(l.report.gitDeviceComparison).slice(0, 120)}`);
+    const off = await VL.withValueHarvest(VLG_E, snapshotWithInputEdits(VLG_E, { id: 'x', inputEdits: 'node-inputs/nd-git.json' }, raw).snap, { text: 'harvests/git-only.md', toolCalls: '../../cache/vlg/harvest-git-only.calls.json' });
+    assert(!off.report.liveEvidence || (off.report.liveEvidence as any).checked !== true, `no snapshot ⇒ off the lane, yet liveEvidence ${JSON.stringify(off.report.liveEvidence).slice(0, 160)}`);
+  });
+
+  await test('LVLG5 (ADDENDUM (c)) the standing-bench lock reaches a change_reviewer case only through a node whose Reviewer IS a change_reviewer: the golden netvalue companion (derivation_reviewer, production-tier reviewerModel) is NOT reached; the same arm on an uncached node fails closed (reached); L-CS-N without its standingBench declaration is still refused', async () => {
+    const SB = require('./leg-replay-lab/standing-bench');
+    const gd = path.join(__dirname, 'leg-replay-lab/inputs/2026-11-06-value-leg-git/golden-v3');
+    const g = JSON.parse(fs.readFileSync(path.join(gd, 'experiment.json'), 'utf8'));
+    assert(SB.reviewerRoleOf(g.nodes[0]) === 'derivation_reviewer', `role ${SB.reviewerRoleOf(g.nodes[0])}`);
+    // s2 (2026-11-07): the companion IS reached by VLG-I3-GIT-ONLY (derivation_reviewer, network-derivation edits) — never by NET-FWA3-EDGE.
+    assert(!SB.standingBenchProblems(g, gd).some((p: string) => /NET-FWA3-EDGE/.test(p)), `golden netvalue companion must not reach NET-FWA3-EDGE: ${SB.standingBenchProblems(g, gd).join(' | ')}`);
+    // B12: a production-tier reviewerModel is no lever, so give the arm a REAL Reviewer model lever: the cached derivation_reviewer node still
+    // does not reach NET-FWA3-EDGE (role), and the same arm on an uncached node fails closed (reached).
+    const lever = { ...g, variants: Object.fromEntries(Object.entries(g.variants).map(([k, v]: any) => [k, { ...v, reviewerModel: 'claude-opus-5-5' }])) };
+    assert(!SB.standingBenchProblems(lever, gd).some((p: string) => /NET-FWA3-EDGE/.test(p)), 'a model lever on a derivation_reviewer-only arm does not reach NET-FWA3-EDGE');
+    const unk = { ...lever, nodes: g.nodes.map((n: any) => ({ ...n, authorExecutionId: 'cznotcachedlvlg5000000000' })) };
+    assert(SB.standingBenchProblems(unk, gd).some((p: string) => /NET-FWA3-EDGE is reached/.test(p)), 'an uncached node must fail closed (reached)');
+    const cd = path.join(__dirname, 'leg-replay-lab/inputs/2026-11-04-config-sources-net-l-cs-n');
+    const c = JSON.parse(fs.readFileSync(path.join(cd, 'experiment.json'), 'utf8'));
+    // s3 (2026-11-08): NET-APPLY-WHOLE-FILE joined after L-CS-N ran (read on the cases it was registered under).
+    assert(SB.standingBenchProblems(c, cd).filter((p: string) => !/NET-APPLY-WHOLE-FILE/.test(p)).length === 0, 'L-CS-N as declared passes');
+    const { standingBench, ...noDecl } = c; void standingBench;
+    assert(SB.standingBenchProblems(noDecl, cd).some((p: string) => /NET-FWA3-EDGE is reached/.test(p)), 'L-CS-N without its declaration must still be refused');
+  });
+
+  await test('LVLG6 (standing bench s2) VLG-I3-GIT-ONLY: a derivation_reviewer lab with network-derivation edits must declare it; a declaring node with byte-identical planted inputs + the exact gate passes; a rewritten gate, a changed plant or a dropped snapshot is refused; a change_reviewer-only lab is not reached; the gate reads the L-VLG 2a R-GIT samples MET 5/5 and the crib\'s unlabelled approval MISSED', async () => {
+    const SB = require('./leg-replay-lab/standing-bench');
+    const dir = path.join(__dirname, 'leg-replay-lab/inputs/2026-11-06-value-leg-git');
+    const exp = JSON.parse(fs.readFileSync(path.join(dir, 'experiment.json'), 'utf8'));
+    const i3 = SB.loadStandingBench().cases.find((c: any) => c.id === 'VLG-I3-GIT-ONLY');
+    assert(i3 && i3.kind === 'planted' && i3.reader === 'derivation_reviewer', 'the case is in the bench');
+    assert(SB.standingBenchProblems(exp, dir).some((p: string) => /VLG-I3-GIT-ONLY is reached/.test(p)), 'an undeclaring network-derivation lab is refused');
+    const gate = { ...i3.gate };
+    const decl = (over: any = {}) => ({ ...exp, standingBench: [{ case: 'VLG-I3-GIT-ONLY', node: 'R-GIT' }],
+      nodes: exp.nodes.map((n: any) => (n.id === 'R-GIT' ? { ...n, expect: 'rc: APPROVE + NON-BLOCKING WARNING (git-file-only) naming ceos1 and ceos2', scoring: { reviewerGate: gate }, ...over } : n)) });
+    if (!fs.existsSync(path.join(__dirname, 'leg-replay-lab/cache/vlg/harvest-git-only.calls.json'))) { console.log('   (LVLG6 lock half skipped: run vlg-fixtures — cache/vlg is gitignored)'); return; }
+    const ok = SB.standingBenchProblems(decl(), dir);
+    assert(ok.length === 0, `declared as the case: ${ok.join(' | ')}`);
+    assert(SB.standingBenchProblems(decl({ scoring: { reviewerGate: { ...gate, devices: ['ceos1'] } } }), dir).some((p: string) => /exactly/.test(p)), 'a rewritten gate is refused');
+    assert(SB.standingBenchProblems(decl({ authorPlant: 'plants/R-LIVE.plant.json' }), dir).some((p: string) => /authorPlant/.test(p)), 'a different plant is refused');
+    assert(SB.standingBenchProblems(decl({ deviceSourcesSnapshot: undefined }), dir).some((p: string) => /deviceSourcesSnapshot/.test(p)), 'a dropped snapshot is refused');
+    const cd = path.join(__dirname, 'leg-replay-lab/inputs/2026-11-04-config-sources-net-l-cs-n');
+    const c = JSON.parse(fs.readFileSync(path.join(cd, 'experiment.json'), 'utf8'));
+    assert(!SB.standingBenchProblems(c, cd).some((p: string) => /VLG-I3/.test(p)), 'a change_reviewer-only lab is not reached by I3');
+    const runs = path.join(__dirname, 'leg-replay-lab/runs');
+    const r2a = path.join(runs, '2026-11-06T05-42-27-2026-11-06-value-leg-git/R-GIT/rc'), crib = path.join(runs, '2026-11-06T04-45-04-2026-11-06-value-leg-git/R-GIT/rc/sample-01/sample.json');
+    if (!fs.existsSync(r2a) || !fs.existsSync(crib)) { console.log('   (LVLG6 sample half skipped: the L-VLG run folders are not in this tree — runs/ is gitignored)'); return; }
+    const met = fs.readdirSync(r2a).filter((d) => d.startsWith('sample-')).map((d) => SB.evaluateStandingGate(i3, JSON.parse(fs.readFileSync(path.join(r2a, d, 'sample.json'), 'utf8')).verdict));
+    assert(met.length === 4 && met.every((m: any) => m.met), `2a R-GIT: ${met.map((m: any) => m.why).join(' | ')}`);
+    const miss = SB.evaluateStandingGate(i3, JSON.parse(fs.readFileSync(crib, 'utf8')).verdict);
+    assert(!miss.met && /without a git-file-only warning/.test(miss.why), `crib R-GIT must read MISSED: ${miss.why}`);
+  });
+
+  await test('LVLG7 (B12) golden-build carries every REACHED standing case into the companion: a network-derivation text lab gets STAND-VLG-I3-GIT-ONLY on its persisted value arm only (planted inputs referenced in place, sha-equal) and the companion passes the lock; a network-provisioning-only lab gets STAND-NET-FWA3-EDGE and not I3; removing a carried node is refused; a live-Author arm is covered by its persisted twin', async () => {
+    const G = require('./leg-replay-lab/golden-set');
+    const SB = require('./leg-replay-lab/standing-bench');
+    const gs = G.loadGoldenSet();
+    if (!fs.existsSync(path.join(__dirname, 'leg-replay-lab/cache/vlg/harvest-git-only.calls.json'))) { console.log('   (LVLG7 skipped: run vlg-fixtures — cache/vlg is gitignored)'); return; }
+    const mk = (name: string, protos: string[], arms: Record<string, any>) => {
+      const d = path.join(out, `b12-${name}`); fs.mkdirSync(path.join(d, 'protocols'), { recursive: true }); fs.mkdirSync(path.join(d, 'edits'), { recursive: true });
+      const baseline: any = { protocols: {} };
+      for (const pn of ['network-provisioning-protocol', 'network-derivation-protocol']) {
+        const pin = gs.pins.protocols[pn]; const f = `protocols/${pn}@${pin.version}.baseline.md`;
+        fs.copyFileSync(path.join(__dirname, 'leg-replay-lab/golden', pin.file), path.join(d, f)); baseline.protocols[pn] = { file: f, version: pin.version, sha256: pin.sha256 };
+      }
+      const A = '## Device sources — declared, never inferred';
+      fs.writeFileSync(path.join(d, 'edits/probe.json'), JSON.stringify({ id: 'b12-probe', appliesTo: protos, ops: [{ type: 'replace', old: A, new: `${A}\n\n(B12 probe line.)` }] }));
+      fs.writeFileSync(path.join(d, 'experiment.json'), JSON.stringify({ label: `b12-${name}`, purpose: 'B12 test', n: 1, flags: {}, goldenSet: { version: gs.version }, baseline, variants: arms, nodes: [], measures: [] }));
+      return G.buildGoldenCompanion(d);
+    };
+    const v = mk('vd', ['network-derivation-protocol'], { xr: { edits: ['edits/probe.json'], authorSource: 'persisted' } });
+    const stand = v.experiment.nodes.filter((n: any) => /^STAND-/.test(n.id)).map((n: any) => n.id);
+    assert(JSON.stringify(stand) === '["STAND-VLG-I3-GIT-ONLY"]', `value-text companion carries ${JSON.stringify(stand)}`);
+    const i3 = v.experiment.nodes.find((n: any) => n.id === 'STAND-VLG-I3-GIT-ONLY');
+    assert(i3.variants.length === 1 && /netvalue/.test(i3.variants[0]), `I3 runs on ${i3.variants} (the value arm only)`);
+    assert(SB.standingBenchProblems(v.experiment, v.dir).length === 0, `value companion lock: ${SB.standingBenchProblems(v.experiment, v.dir).join(' | ')}`);
+    const dropped = { ...v.experiment, nodes: v.experiment.nodes.filter((n: any) => n.id !== 'STAND-VLG-I3-GIT-ONLY') };
+    assert(SB.standingBenchProblems(dropped, v.dir).some((p: string) => /VLG-I3-GIT-ONLY/.test(p)), 'a companion missing a reached node is refused');
+    const np = mk('np', ['network-provisioning-protocol'], { xr: { edits: ['edits/probe.json'], authorSource: 'persisted' } });
+    const standNp = np.experiment.nodes.filter((n: any) => /^STAND-/.test(n.id)).map((n: any) => n.id);
+    // s3 (2026-11-08): a network-provisioning lab also reaches NET-APPLY-WHOLE-FILE (change_reviewer).
+    assert(JSON.stringify(standNp) === '["STAND-NET-FWA3-EDGE","STAND-NET-APPLY-WHOLE-FILE"]', `change-text companion carries ${JSON.stringify(standNp)}`);
+    assert(SB.standingBenchProblems(np.experiment, np.dir).length === 0, `change companion lock: ${SB.standingBenchProblems(np.experiment, np.dir).join(' | ')}`);
+    const live = mk('live', ['network-provisioning-protocol'], { xa: { edits: ['edits/probe.json'] } });
+    const fwa = live.experiment.nodes.find((n: any) => n.id === 'STAND-NET-FWA3-EDGE');
+    assert(fwa && fwa.variants.every((a: string) => live.experiment.variants[a].authorSource === 'persisted'), 'the carried node runs on persisted arms only');
+    assert(Object.values(live.experiment.variants).some((x: any) => x.authorSource !== 'persisted'), 'the companion has a live-Author arm');
+    assert(SB.standingBenchProblems(live.experiment, live.dir).length === 0, `a live arm is covered by its persisted twin: ${SB.standingBenchProblems(live.experiment, live.dir).join(' | ')}`);
+  });
+
+  await test('LSB3 (standing bench s3, owner 2026-11-07) NET-APPLY-WHOLE-FILE: the frozen record reproduces its STORED (wrong) approval 90 under the shipping parser; a network-provisioning lab whose change_reviewer arm does not declare it is refused (lock proof on the NB1 experiment); the NB1 R-APPLY-MISS node declared with the do-not-ship refuse gate passes; a node with a rewritten gate is refused; the gate reads the NB1 (f) R-APPLY-MISS samples MET and an approval MISSED', () => {
+    const SB = require('./leg-replay-lab/standing-bench');
+    const row = SB.standingBenchSelfTest(loadCached).find((r: any) => r.id === 'NET-APPLY-WHOLE-FILE');
+    assert(row && row.ok && /approved\/90/.test(row.detail), `self-test ${JSON.stringify(row)}`);
+    const dir = path.join(__dirname, 'leg-replay-lab/inputs/2026-11-07-network-text-batch-1');
+    const exp = JSON.parse(fs.readFileSync(path.join(dir, 'experiment.json'), 'utf8'));
+    assert(SB.standingBenchProblems(exp, dir).some((p: string) => /NET-APPLY-WHOLE-FILE is reached/.test(p)), `NB1 as committed (pre-s3) must be refused for the new case: ${SB.standingBenchProblems(exp, dir).join(' | ')}`);
+    const gate = { gate: 'STAND-NET-APPLY-WHOLE-FILE', expect: 'refuse-for-plant', doNotShip: true };
+    const decl = (scoring: any) => ({ ...exp, standingBench: [...exp.standingBench, { case: 'NET-APPLY-WHOLE-FILE', node: 'R-APPLY-MISS' }],
+      nodes: exp.nodes.map((n: any) => (n.id === 'R-APPLY-MISS' ? { ...n, scoring } : n)) });
+    const ok = SB.standingBenchProblems(decl({ reviewerGate: gate }), dir).filter((p: string) => /NET-APPLY-WHOLE-FILE/.test(p));
+    assert(ok.length === 0, `declared with the gate passes: ${ok.join(' | ')}`);
+    assert(SB.standingBenchProblems(decl({ reviewerGate: { ...gate, doNotShip: false } }), dir).some((p: string) => /NET-APPLY-WHOLE-FILE/.test(p)), 'a gate without do-not-ship is refused');
+    const c = SB.loadStandingBench().cases.find((x: any) => x.id === 'NET-APPLY-WHOLE-FILE');
+    assert(SB.evaluateStandingGate(c, { approved: false, blocking: ['whole-file load of ceos1'] }).met, 'a refusal reads MET');
+    assert(!SB.evaluateStandingGate(c, { approved: true, blocking: [] }).met, 'an approval reads MISSED (the stored false release)');
+    const runs = path.join(__dirname, 'leg-replay-lab/runs/2026-11-07T08-38-09-2026-11-07-network-text-batch-1/R-APPLY-MISS/r');
+    if (fs.existsSync(runs)) {
+      const v = fs.readdirSync(runs).filter((x: string) => x.startsWith('sample-')).map((x: string) => JSON.parse(fs.readFileSync(path.join(runs, x, 'sample.json'), 'utf8')).verdict);
+      assert(v.length === 4 && v.every((x: any) => SB.evaluateStandingGate(c, x).met), `NB1 (f)-2a R-APPLY-MISS samples MET: ${v.map((x: any) => x?.approved)}`);
+    } else console.log('   (LSB3: NB1 (f)-2a run folder not on this machine — sample check skipped)');
+  });
+
+  await test('LVLG8 (B9) live-evidence-patch is lane-aware: on a VALUE leg it reads the leg\'s own contract key and its fact EQUALS the shipping Harvester enrichment (git-only); on a CHANGE leg whose contract also carries a network-derivation key, that key\'s devices stay out of contractNotDeclared (production\'s fold), which the old 3-argument call did not do', async () => {
+    const LE = require('./leg-replay-lab/live-evidence-patch');
+    const VL = require('./leg-replay-lab/value-lane');
+    const { snapshotWithInputEdits } = require('./leg-replay-lab/input-edits');
+    if (!fs.existsSync(path.join(__dirname, 'leg-replay-lab/cache/vlg/harvest-git-only.calls.json'))) { console.log('   (LVLG8 skipped: run vlg-fixtures)'); return; }
+    const E = path.join(__dirname, 'leg-replay-lab/inputs/2026-11-06-value-leg-git');
+    const raw = loadCached('cmw47bixl0032yx31135j69pn');
+    const snap = VL.withFirstExecutionSnapshot(snapshotWithInputEdits(E, { id: 'x', inputEdits: 'node-inputs/nd-git.json' }, raw).snap).snap;
+    const ship = await VL.withValueHarvest(E, snap, { text: 'harvests/git-only.md', toolCalls: '../../cache/vlg/harvest-git-only.calls.json' });
+    const calls = JSON.parse(fs.readFileSync(path.join(__dirname, 'leg-replay-lab/cache/vlg/harvest-git-only.calls.json'), 'utf8'));
+    const lab = LE.withComputedLiveEvidence(snap, undefined, { protocol: { name: 'network-provisioning-protocol', version: '1.26.0' } }, { toolCalls: calls }).fact;
+    const strip = (f: any) => { const { point, ...r } = f ?? {}; void point; return r; };
+    assert(JSON.stringify(strip(lab)) === JSON.stringify(strip(ship.report.liveEvidence)), `value lane: lab ${JSON.stringify(lab).slice(0, 200)} ≠ shipping ${JSON.stringify(ship.report.liveEvidence).slice(0, 200)}`);
+    const cd = path.join(__dirname, 'leg-replay-lab/inputs/2026-11-04-config-sources-net-l-cs-n');
+    const ch = snapshotWithInputEdits(cd, { id: 'R-FWA3-GIT-BOTH', inputEdits: 'node-inputs/r-fwa3-git-both.json' }, loadCached('cmvyb2anc008djef0pzv52byj')).snap;
+    const leg = ch.leg as any; leg.inputContext = { ...leg.inputContext, interfaceContract: { ...(leg.inputContext?.interfaceContract ?? {}), deviceSources: { ...(leg.inputContext?.interfaceContract?.deviceSources ?? {}), 'network-derivation': ['zzvalue9: git-file — service github-service ; o/r/zz.cfg'] } } };
+    const f = LE.withComputedLiveEvidence(ch, undefined, { protocol: { name: 'network-provisioning-protocol', version: '1.26.0' } }, { toolCalls: [] }).fact as any;
+    assert(f && !JSON.stringify(f.contractNotDeclared ?? []).includes('zzvalue9'), `change lane folded a value-lane device: ${JSON.stringify(f?.contractNotDeclared)}`);
+    const old = LE.loadLiveEvidenceComputer()(require('../lib/agents/harness/device-sources').resolveLegDeviceSources({ contractValue: require('../lib/agents/harness/device-sources').contractDeviceSourcesValue(leg.inputContext.interfaceContract), taskBody: leg.description }), [], leg.inputContext.interfaceContract);
+    assert(JSON.stringify(old.contractNotDeclared ?? []).includes('zzvalue9'), 'control: the 3-argument call (the old lab path) does fold it — the test would not see the difference otherwise');
+  });
+
+  await test('LVLG9 (NB1 blind-read defect) TEXT REACH: the batch-1 dry run that composed the RELEASED derivation_architect guidance on all four xv cells is refused (candidate fragment missing, released fragment present); a prompt composing the base protocol is refused; a prompt composing another domain\'s protocol is out of reach', async () => {
+    const TR = require('./leg-replay-lab/text-reach');
+    const dir = path.join(__dirname, 'leg-replay-lab/inputs/2026-11-07-network-text-batch-1');
+    const exp = JSON.parse(fs.readFileSync(path.join(dir, 'experiment.json'), 'utf8'));
+    const xv = TR.armReachSpec(dir, exp, 'xv');
+    assert(xv.templateOps.length > 0 && xv.protocols.some((p: any) => p.name === 'network-derivation-protocol'), 'the xv arm carries the BR-5 template edit and 1.3.1');
+    const old = path.join(__dirname, 'leg-replay-lab/runs/2026-11-06T20-39-21-2026-11-07-network-text-batch-1-dry');
+    if (fs.existsSync(old)) {
+      for (const n of ['A-LIVE', 'A-GIT', 'A-C126', 'A-C1']) {
+        const sys = fs.readFileSync(path.join(old, n, 'xv', 'author.system.md'), 'utf8');
+        const pr = TR.textReachProblems(xv, [{ label: n, role: 'derivation_architect', system: sys }]);
+        assert(pr.some((p: string) => /candidate fragment is missing/.test(p)) && pr.some((p: string) => /RELEASED text is still there/.test(p)), `${n} (the defective dry run) must be refused: ${pr.join(' | ')}`);
+      }
+    } else console.log('   (LVLG9 run-folder half skipped: the defective dry run is not in this tree — runs/ is gitignored)');
+    const np = TR.armReachSpec(dir, exp, 'r').protocols.find((p: any) => p.name === 'network-provisioning-protocol');
+    const spec = { arm: 'r', protocols: [np], templateOps: [] };
+    assert(TR.textReachProblems(spec, [{ label: 'base', role: 'change_reviewer', system: `x\n${np.base}\ny` }]).some((p: string) => /BASE/.test(p)), 'a prompt composing the base is refused');
+    assert(TR.textReachProblems(spec, [{ label: 'cand', role: 'change_reviewer', system: `x\n${np.candidate}\ny` }]).length === 0, 'a prompt composing the candidate passes');
+    assert(TR.textReachProblems(spec, [{ label: 'other', role: 'change_reviewer', system: 'a k8s prompt' }]).length === 0, 'a prompt composing neither is out of reach');
+  });
+
+  await test('LVLG10 (44cf00704) the lab\'s liveEvidence on a Git-only CHANGE leg EQUALS the shipping Harvester enrichment at both versions: network-provisioning 1.27.0 reads git-only, 1.26.0 reads none-declared (one definition: liveEvidenceOptionsFor imported)', async () => {
+    const LE = require('./leg-replay-lab/live-evidence-patch');
+    const VL = require('./leg-replay-lab/value-lane');
+    const GH = require('./leg-replay-lab/git-harvest-plant');
+    const N = require('./leg-replay-lab/nets');
+    const { snapshotWithInputEdits } = require('./leg-replay-lab/input-edits');
+    const { frozenHarvesterEntry } = require('./leg-replay-lab/held-store');
+    const cd = path.join(__dirname, 'leg-replay-lab/inputs/2026-11-04-config-sources-net-l-cs-n');
+    const base = snapshotWithInputEdits(cd, { id: 'x', inputEdits: 'node-inputs/r-fwa3-git-both.json' }, loadCached('cmvyb2anc008djef0pzv52byj')).snap;
+    const g = await GH.withGitHarvest(base, cd, { fixture: '../../fixtures/l-n1-0b35ce3', paths: ['network/base/ceos1-startup.cfg', 'network/base/ceos2-startup.cfg'] });
+    // The planted world's snapshot is the one production would take from the PLANTED block (the stored devext leg carries its own,
+    // which production would read as snapshot-changed against the plant): drop it, then take it the shipping way.
+    const g2 = JSON.parse(JSON.stringify(g.snap)); delete g2.leg.metadata.deviceSourcesSnapshot;
+    const fs1 = VL.withFirstExecutionSnapshot(g2); assert(fs1.report.state === 'taken', `snapshot ${fs1.report.state}`); const snap = fs1.snap;
+    const h = frozenHarvesterEntry(snap);
+    const art = snap.childArtifacts.find((a: any) => a.executionId === h.executionId && a.name === 'result.json');
+    const rj = JSON.parse(art.content);
+    const hTask = snap.children.find((c: any) => c.id === h.taskId);
+    const strip = (f: any) => { const { point, ...r } = f ?? {}; void point; return r; };
+    for (const [ver, want] of [['1.27.0', 'git-only'], ['1.26.0', 'none-declared']] as const) {
+      const lab = LE.withComputedLiveEvidence(snap, undefined, { protocol: { name: 'network-provisioning-protocol', version: ver } }, { toolCalls: rj.toolCalls }).fact as any;
+      const prod = (await N.runLeafNetsFor(snap, hTask, 'infra_state_harvester', rj.finalResponse, h.executionId, rj.toolCalls, { delta: { name: 'network-provisioning-protocol', version: ver } }, { legReads: true })).stamped.liveEvidence as any;
+      assert(lab?.summary === want, `${ver}: lab reads ${lab?.summary} (want ${want})`);
+      assert(JSON.stringify(strip(lab)) === JSON.stringify(strip(prod)), `${ver}: lab ${JSON.stringify(lab).slice(0, 220)} ≠ shipping ${JSON.stringify(prod).slice(0, 220)}`);
+    }
+  });
+
+  await test('LVLG11 (NB1 final candidate) TEXT REACH refuses a superseded render: the c3f02e27 dry run\'s network prompts fail the 8f142a6a spec; a template-CONSTRAINT edit is checked both ways (the released Harvest-Anchored row refused, the candidate row passes)', async () => {
+    const TR = require('./leg-replay-lab/text-reach');
+    const dir = path.join(__dirname, 'leg-replay-lab/inputs/2026-11-07-network-text-batch-1');
+    const exp = JSON.parse(fs.readFileSync(path.join(dir, 'experiment.json'), 'utf8'));
+    const old = path.join(__dirname, 'leg-replay-lab/runs/2026-11-06T21-00-13-2026-11-07-network-text-batch-1-dry');
+    if (fs.existsSync(path.join(dir, 'protocols/network-provisioning-protocol@1.26.0.r.md')) && fs.existsSync(old)) {
+      const r = TR.armReachSpec(dir, exp, 'r');
+      const sys = fs.readFileSync(path.join(old, 'R-APPLY-MISS', 'r', 'reviewer.system.md'), 'utf8');
+      const pr = TR.textReachProblems(r, [{ label: 'c3f02e27', role: 'change_reviewer', system: sys }]);
+      assert(pr.some((p: string) => /neither its base nor arm r's candidate/.test(p)), `the superseded render must be refused: ${pr.join(' | ')}`);
+    } else console.log('   (LVLG11 run-folder half skipped: build-candidates output or the c3f02e27 dry run not in this tree)');
+    const released = { 'Harvest-Anchored': 'Every member names the harvest entry it came from; an empty population is a gap, never an invented value' };
+    const candidate = { 'Harvest-Anchored': 'Every member names the harvest entry it came from. Where the objective asks for free addresses, every allocation they must avoid names its harvest entry instead, and the chosen addresses are not in the harvest. An empty population is a gap, never an invented value' };
+    assert(TR.constraintReachProblems('rel', `x ${released['Harvest-Anchored']} y`, { released, candidate }).length === 2, 'a prompt with the released row: candidate missing AND released present');
+    assert(TR.constraintReachProblems('cand', `x ${candidate['Harvest-Anchored']} y`, { released, candidate }).length === 0, 'a prompt with the candidate row passes');
   });
 
   fs.rmSync(out, { recursive: true, force: true });

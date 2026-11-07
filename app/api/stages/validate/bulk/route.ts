@@ -3,7 +3,7 @@ import { stageValidationService } from "@/lib/pov/services/stageValidationServic
 import { getAuthUser } from "@/lib/auth/get-auth-user"
 import { StageStatus } from "@prisma/client"
 import { logger } from '@/lib/logger'
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 /**
  * POST /api/stages/validate/bulk
@@ -110,6 +110,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     logger.error({ err: error }, 'POST /api/stages/validate/bulk error');
     
     return NextResponse.json(

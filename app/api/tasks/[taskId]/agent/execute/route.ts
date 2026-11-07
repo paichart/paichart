@@ -9,7 +9,7 @@ import { createAgentExecution } from '@/lib/services/agent-execution-create';
 import { listUnsatisfiedDeps } from '@/lib/services/taskReadyReactorService';
 import { DependencyNotSatisfiedError } from '@/lib/errors';
 import { DuplicateActiveExecutionError } from '@/lib/errors';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 type ApiHandler<T = any> = (
   req: NextRequest,
@@ -324,6 +324,7 @@ const executeAgentHandler: ApiHandler = async (
       }
     };
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     taskLogger.error({ err: error, endpoint: 'POST /api/tasks/[taskId]/agent/execute' }, 'Failed to execute agent');
     return {
       error: {

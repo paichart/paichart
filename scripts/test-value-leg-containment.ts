@@ -130,6 +130,77 @@ async function main() {
     assert(f.checked === true && disp(f).reason === 'checked-clean',
       `if this ever turns non-clean, a membership check has landed — update derivation_reviewer's remit: ${JSON.stringify(disp(f))}`);
   });
+  // ── VALUE-FREE-ADDRESS-BLIND (owner G10-c, 2026-11-07): derived-value-held ──
+  // The canary C126 Architect's own derived-block line shape, over the lab's R-LIVE-MISS harvest (ceos1 Loopback15 holds .3).
+  const FREE_LINE = (v: string) => `{"kind": "cidr", "value": "${v}", "members": ["${v}"]}`;
+  const C126_DERIVED = (a: string, b: string) =>
+    `prose\n\n\`\`\`json\n## Derived Values\n[\n  ${FREE_LINE(a)},\n  ${FREE_LINE(b)}\n]\n\`\`\`\n`;
+  const PLANT_HARVEST = block('## Harvested Allocations', [
+    ...SIX.map((a, i) => ({ kind: 'cidr', cidr: `${a}/32`, device: `ceos${(i % 2) + 1}`, interface: `Loopback${10 + i}`, source: 'show running-config' })),
+    { kind: 'cidr', cidr: '10.99.0.3/32', device: 'ceos1', interface: 'Loopback15', source: 'show running-config' },
+  ]);
+  const plantExec = (): StubExecution => ({ id: 'eh1', taskId: 'h1', createdAt: at(1), result: { finalResponse: PLANT_HARVEST } });
+  const heldOf = (f: Record<string, unknown>) =>
+    ((f.violations as Array<Record<string, unknown>>) ?? []).filter((v) => v.reason === 'derived-value-held');
+
+  await test('VFH1 (R-LIVE-MISS shape) a free /32 EQUAL to a held /32 ⇒ derived-value-held, naming the derived value, the ' +
+             'harvested allocation and its harvest entry ⇒ blocking (violations)', async () => {
+    const f = await leaf(C126_DERIVED('10.99.0.3/32', '10.99.0.5/32'), { executions: [plantExec()] });
+    const h = heldOf(f);
+    assert(h.length === 1, JSON.stringify(f.violations));
+    assert(JSON.stringify(h[0]) === JSON.stringify({ reason: 'derived-value-held', derived: '10.99.0.3/32', harvested: '10.99.0.3/32',
+      harvestedDevice: 'ceos1', harvestedInterface: 'Loopback15', harvestedSource: 'show running-config' }), JSON.stringify(h[0]));
+    assert((f.violations as unknown[]).length === 1, 'no other class fires on the free shape');
+    assert(disp(f).disposition === 'blocking' && disp(f).reason === 'violations', JSON.stringify(disp(f)));
+    const keys = Object.keys(f);
+    assert(keys[keys.length - 1] === 'containmentDisposition', 'disposition still LAST (G4)');
+  });
+  await test('VFH2 (C126 as released) two free /32s held by nobody ⇒ benign checked-clean, NO new field (inert by construction)', async () => {
+    const free = await leaf(C126_DERIVED('10.99.0.3/32', '10.99.0.5/32'));   // HARVEST holds the six, not .3/.5
+    assert(disp(free).reason === 'checked-clean' && (free.violations as unknown[]).length === 0, JSON.stringify(free));
+    assert(!JSON.stringify(free).includes('derived-value-held'), 'a clean stamp must carry no trace of the class');
+  });
+  await test('VFH3 the CONTAINING case: a self-member /30 that also lists the two held /32 inside it ⇒ two derived-value-held; ' +
+             'the same /30 NOT listing them ⇒ covered-not-member only (never stamped twice)', async () => {
+    const listed = await leaf(block('## Derived Values', [{ kind: 'cidr', value: '10.99.0.0/30',
+      members: ['10.99.0.0/30', '10.99.0.1/32', '10.99.0.2/32'] }]));
+    assert(JSON.stringify(heldOf(listed).map((v) => v.harvested)) === '["10.99.0.1/32","10.99.0.2/32"]', JSON.stringify(listed.violations));
+    assert(disp(listed).disposition === 'blocking', JSON.stringify(disp(listed)));
+    const unlisted = await leaf(block('## Derived Values', [{ kind: 'cidr', value: '10.99.0.0/30', members: ['10.99.0.0/30'] }]));
+    const reasons = ((unlisted.violations as Array<{ reason: string }>) ?? []).map((v) => v.reason);
+    assert(JSON.stringify(reasons) === '["covered-not-member","covered-not-member"]', JSON.stringify(unlisted.violations));
+  });
+  await test('VFH4 an AGGREGATE (members are the harvested allocations, not itself) never reads derived-value-held; ' +
+             'nor does a bare-address free value held by nobody', async () => {
+    const agg = await leaf(DERIVED_SIX);
+    assert(heldOf(agg).length === 0 && disp(agg).reason === 'checked-clean', JSON.stringify(agg.violations));
+    const bare = await leaf(block('## Derived Values', [{ kind: 'cidr', value: '10.99.0.7', members: ['10.99.0.7/32'] }]));
+    assert(heldOf(bare).length === 0 && disp(bare).reason === 'checked-clean', JSON.stringify(bare));
+    const bareHeld = await leaf(block('## Derived Values', [{ kind: 'cidr', value: '10.99.0.4', members: ['10.99.0.4/32'] }]));
+    assert(heldOf(bareHeld).length === 1 && heldOf(bareHeld)[0].harvested === '10.99.0.4/32', JSON.stringify(bareHeld));
+  });
+  await test('VFH5 the private cidrRange copy is TEXTUALLY identical to derivation-containment.ts (the copy cannot fork)', () => {
+    const fs = require('fs') as typeof import('fs');
+    const fn = (p: string) => {
+      const s = fs.readFileSync(require.resolve(p), 'utf8');
+      const i = s.indexOf('function cidrRange(');
+      assert(i >= 0, `${p}: cidrRange not found`);
+      return s.slice(i, s.indexOf('\n}\n', i) + 2);
+    };
+    assert(fn('../lib/agents/harness/derivation-containment.ts') === fn('../lib/agents/harness/value-leg-containment-enrichment.ts'),
+      'cidrRange copies differ');
+  });
+  await test('VFH6 seam: the violation rides NESTED in derivationContainment through the whitelist; card + §6 read blocking (violations)', async () => {
+    const f = await leaf(C126_DERIVED('10.99.0.3/32', '10.99.0.5/32'), { executions: [plantExec()] });
+    const picked = pickResultJsonSummary({ derivationContainment: f, notAFact: 1 }) as Record<string, any>;
+    assert(picked.derivationContainment?.violations?.[0]?.reason === 'derived-value-held', JSON.stringify(picked).slice(0, 300));
+    const line = String(leanFactsLine({ derivationContainment: f }));
+    assert(line.includes('derivationContainment: checked, 1 violation(s)') && line.includes('containmentDisposition: blocking (violations)'), line);
+    const s6 = renderPipelineContextSection({ chainedFrom: [{ taskTitle: 'Derive x', agentRole: 'derivation_architect',
+      confidenceScore: 90, finalResponse: 'derivation', derivationContainment: f }] }).join('\n');
+    assert(s6.includes('**Derivation containment (platform fact)**: blocking — violations'), s6);
+  });
+
   await test('LEAF no derived block ⇒ value-leg-no-derived-block ⇒ BLOCKING (unrecognised-reason, audit A3)', async () => {
     const f = await leaf('no block here');
     assert(f.reason === 'value-leg-no-derived-block', String(f.reason));

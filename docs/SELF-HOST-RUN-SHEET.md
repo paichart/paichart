@@ -22,16 +22,16 @@ claude --version && claude                            # first run: sign in (brow
 From here you can paste to Claude: *"Follow ~/paichart/docs/SELF-HOST-RUN-SHEET.md from step 3, exactly as written,
 with HOST=… and ADMIN_EMAIL=…; stop at step 7 and tell me the printed password."* Or keep typing.
 
-## 3. Prerequisites the docs assume (Node 20.19+ or 22, PostgreSQL 16, an empty database)
+## 3. Prerequisites the docs assume (Node 24, PostgreSQL 16, an empty database)
 
-> **Node 20.19 or newer.** A dependency (`sanitize-html`) now loads an ES-module-only package through `require()`, which Node
-> supports from 20.19 (22.12 on the 22 line). On an older Node 20 the server still starts and answers health checks, but its
-> background services fail to initialise (`require() of ES Module … not supported` in the log) and agent runs cannot stream.
-> NodeSource's `setup_20.x` installs a current 20.x; check `node -v` reads `v20.19` or later.
+> **Node 24 (the current LTS).** Node 20 reached end of life in April 2026; pAIchart is built and tested on Node 24. The minimum the code
+> accepts is 20.19 (`engines` in `package.json`): a dependency (`sanitize-html`) loads an ES-module-only package through
+> `require()`, which Node supports from 20.19 (22.12 on the 22 line). On an older Node the server still starts and answers health
+> checks, but its background services fail to initialise (`require() of ES Module … not supported`) and agent runs cannot stream.
 ```bash
 sudo apt-get install -y postgresql-16 postgresql-client-16 openssl
-curl -fsSL https://deb.nodesource.com/setup_20.x -o /tmp/ns.sh && sudo -E bash /tmp/ns.sh && sudo apt-get install -y nodejs
-node -v && npm -v && psql --version && sudo systemctl is-active postgresql   # expect v20.19+ (or 22.x) / 10.x / 16.x / active
+curl -fsSL https://deb.nodesource.com/setup_24.x -o /tmp/ns.sh && sudo -E bash /tmp/ns.sh && sudo apt-get install -y nodejs
+node -v && npm -v && psql --version && sudo systemctl is-active postgresql   # expect v24.x / 11.x / 16.x / active
 
 PW=$(openssl rand -hex 16); echo "$PW" > ~/.paichart-dbpw; chmod 600 ~/.paichart-dbpw
 sudo -u postgres psql -qc "CREATE USER paichart WITH PASSWORD '$PW';"
@@ -263,7 +263,8 @@ The server refuses every request without a token, so this step is not optional f
 
 **2. Tell the hub which repo it may read (the pin).** In the hub's `.env` (not `.env.production`), add
 `GIT_FILE_SOURCE_PIN=<owner>/<repo>` and restart the hub. Agents can read **only** that repo through this service; the pin, not the
-token, is the boundary. The repo's **default branch must be `main`**, and protect it: it is what every run reads. The full rules
+token, is the boundary. The repo **must have a `main` branch** (a read that names no branch is read as `main`), and protect it:
+it is what every run reads. The full rules
 and limits are in [SELF-HOST-KEPT-FILES.md → Reading kept files from Git](SELF-HOST-KEPT-FILES.md#reading-kept-files-from-git-optional).
 
 **3. Start it and register it.**
@@ -297,7 +298,7 @@ host-level trust as the rest of the stack) — keep the port local. The backgrou
 | reads still refused after you set the pin | the pin is read once, when the hub starts | restart the hub (between runs: a restart stops runs in flight) |
 | the hub's MCP server will not start, `GIT_FILE_SOURCE_PIN is malformed` | the value is not exactly `<owner>/<repo>` | fix the value; letters, digits, `.` `_` `-` only, no branch |
 | health is 200 but a read fails (404) | the token cannot see that repo (a private repo needs it selected, Contents read-only) | regenerate the token for that repo |
-| a read with `ref: main` fails | the repo has no `main` branch | make `main` the repo's default branch |
+| a read with `ref: main` fails | the repo has no `main` branch | create a protected `main` branch (it need not be the default branch) |
 
 ## 10. Operate it from Claude — the GUI is not how pAIchart is run
 Two things come with the clone that make step 8 more than a connector:

@@ -117,6 +117,13 @@ export interface NetContext {
   /** held-network step 3 batch 2b: the leg's declared Device sources, memoized (primed by the core, else lazy). Optional so
    *  hand-built test contexts stay valid; `buildNetContext` always sets it. */
   deviceSources?: () => Promise<import('./device-sources-read').LegDeviceSourcesResolution>;
+  /** Config-sources network push 1a: the device lane's READ RECORD (`computeDeviceSourceReads` over the governing declaration and
+   *  `toolCalls`), memoized — consumed by `deviceSourceReads` and `liveEvidence`, so both read ONE record (a derived value consumed
+   *  by 2+ nets belongs on ctx). Optional so hand-built test contexts stay valid; `buildNetContext` always sets it. */
+  deviceSourceReadRecord?: () => Promise<Fact>;
+  /** Config-sources network push 1a (EF-S3): the persisting execution's OWN `protocolInjection` (result.json shape), read off the
+   *  built resultJson in `stampExecutionNets` — the version key `liveEvidence` is stamped on. Absent ⇒ not a released version. */
+  protocolInjection?: unknown;
   /** Stage B: the variant stamps the core BUILT pre-tx (V-5d/V-5g), transcribed by the held nets (AE S2: one object). */
   held?: { editApplication?: Fact | null; heldBytes?: Fact | null; /** BASE-held handles (V-8a; EF-P2-3) */ baseHeldHandles?: readonly string[] | null };
 }

@@ -43,7 +43,7 @@ Beyond generic objective-decomposition, the harness runs **domain-specific conne
 How they differ from a generic pipeline:
 
 - **Self-provision lifecycle.** A conditional Phase-0 *Harvester* registers a **customer-governed read-only MCP service** from a descriptor carried in the task (register → read-only call → teardown). pAIchart stores no infrastructure credentials.
-- **Network: declare each device's source (network-provisioning ≥ 1.23.0; kept files since 1.25.0).** A `## Device sources` block, one line per device — `<device>: git-file — service <name | descriptor URL> ; <owner>/<repo>/<path> [@ <ref>]`, `<device>: device-read — service <name | descriptor URL>`, or `<device>: command-package`. A device with no line stops the leg (the pipeline never guesses a source); a device may carry both a git-file and a device-read line (the Git file is the kept base; the device read is evidence, compared by a platform warning fact). A ref outside the Git service's pin is refused: that device is HELD and the leg is needs-revision (forced if needed); on an unpinned customer Git service the ref is read as named. Pasted state is evidence, never a base. A service named by name is used as already registered (never registered or deleted by the run). Value legs (network-derivation) need no block. See *Network: kept device configurations* below.
+- **Network: declare each device's source (network-provisioning ≥ 1.23.0; kept files since 1.25.0).** A `## Device sources` block, one line per device — `<device>: git-file — service <name | descriptor URL> ; <owner>/<repo>/<path> [@ <ref>]`, `<device>: device-read — service <name | descriptor URL>`, `<device>: live-read — service <name | descriptor URL>` (since 1.26.0: a device the leg reads as evidence but never changes — alone on its device, never kept), or `<device>: command-package`. A device with no line stops the leg (the pipeline never guesses a source); a device may carry both a git-file and a device-read line (the Git file is the kept base; the device read is evidence, compared by a platform warning fact). A ref outside the Git service's pin is refused: that device is HELD and the leg is needs-revision (forced if needed); on an unpinned customer Git service the ref is read as named. Pasted state is evidence, never a base. A service named by name is used as already registered (never registered or deleted by the run). Value legs (network-derivation) need no block. See *Network: kept device configurations* below.
 - **The cognition/actuation seam — it never actuates.** The deliverable is a change *to be applied* (a config / manifest / HCL diff + validation facts + rollback); applying it is the customer's **out-of-band, human-gated** run (a deterministic applier / Argo-Flux reconcile / `terraform apply`).
 - **Read-only floor + secret discipline.** The customer service enforces a read-only verb-enum + redacts secrets at the source; pAIchart's *own* guards back it up — **R9** (`CONNECTED_OUTPUT_SANITIZE_ENABLED`) sanitizes harvested output before the reasoner, **R10** (`ARTIFACT_SECRET_REDACT_ENABLED`) redacts secrets from the persisted artifacts. Both are **enabled in prod** (2026-06-29).
 - **⚠️ A redacted line is not applicable.** R10 writes `<<REDACTED-SECRET>>` (a terraform harvest may show `<REDACTED-SECRET>`), and devices accept either as a literal value — device-verified 2026-10-13 on EOS (community / `secret 0` / enable / TACACS key), nginx (`proxy_set_header`) and otelcol (headers, auth). **Never apply a block containing either spelling, or any other `<REDACTED…>` / `<<REDACTED…>>` form** (Authors invent variants; check with `grep -nE '<{1,2}REDACTED' <package file>`). A green `nginx -t` / `otelcol validate` does not prove it safe, and on EOS a full config replace with a redacted password-hash line can delete the object (the only admin user included) while printing success. Hold and re-author. The leg's `report.md` lists such lines under **Platform warnings (non-blocking)** since 2026-10-13, and the absence of that section is not clearance. Full rule: [`PROGRAM-OPERATOR-GATE-PLAYBOOK.md`](./PROGRAM-OPERATOR-GATE-PLAYBOOK.md) (Apply gate, step 2).
@@ -181,7 +181,7 @@ check that file by hand. The Git file source is admin-only, and reads only the o
 
 - **Name the file in the task.** One line per file, e.g. *"Config-repo file to read (Repo read): owner `acme`, repo
   `cluster-config`, ref `main`, path `apps/orders/deploy.yaml`"*. Name the override values file (`values-prod.yaml`), never a
-  chart's default `values.yaml`. Only the **default branch** of the pinned repository is read; a task naming another branch,
+  chart's default `values.yaml`. Only the **`main` branch** of the pinned repository is read (a read naming no branch is read as `main`); a task naming another branch,
   repository or commit gets no read (the Harvester says so), and the package falls back to writing new files in full.
 - **What changes in the package.** The file you named is `H1`; the Author edits it in place (a new document can be appended to
   it). A brand-new file appears as `create H2 on H1 <path>` beside it. Rollback is `restore H1` for a kept file and a `git revert`
@@ -197,7 +197,7 @@ check that file by hand. The Git file source is admin-only, and reads only the o
 ### Terraform: kept `.tf` files from your config repo (terraform-iac 1.15.0, since 2026-10-21)
 
 - **Name the file in the task.** One line per file, e.g. *"Source file to read (repo read): owner `acme`, repo `infra-live`, path
-  `terraform/storage.tf`"*. Only the **default branch** of the pinned repository is read. A task naming a branch, tag or commit is not
+  `terraform/storage.tf`"*. Only the **`main` branch** of the pinned repository is read (a read naming no branch is read as `main`). A task naming a branch, tag or commit is not
   read: the leg returns `needs-revision` (the platform refused the read) or builds its package without that file. **Never name a state,
   plan or variables file** (`*.tfstate*`, `*.tfplan`, `*.tfvars*`, `.terraform/`) — the platform refuses those reads; state comes from your
   read-only Terraform service.
@@ -215,8 +215,9 @@ check that file by hand. The Git file source is admin-only, and reads only the o
 ### Network: kept device configurations (network-provisioning 1.25.0, since 2026-10-27)
 
 - **Declare each device's source** in a `## Device sources` block (see *Domain Pipelines* above): `git-file` (your config file in a Git
-  repo), `device-read` (the running configuration read from the device through your read-only device service), or `command-package`
-  (no kept file — the package is written as commands, as before).
+  repo), `device-read` (the running configuration read from the device through your read-only device service), `live-read` (since
+  network-provisioning 1.26.0: a device the leg must see but never changes — its running configuration is read whole as evidence, never
+  kept and never edited), or `command-package` (no kept file — the package is written as commands, as before).
 - **What is kept.** For each device, the declared **Git file**; for a device with no Git file, its **running configuration** as the device
   returned it. A device that declares both: the Git file is the kept file; the device read is **evidence only** (no handle), and a
   platform fact compares the two (*Git file vs device configuration* — a warning, never a gate). Handle numbers can have gaps (`H1`, `H3`).
@@ -271,10 +272,11 @@ Read-only harvest, change package only — nothing is applied by this run.
 
 | Line for a device | The platform keeps | The package gives you |
 |---|---|---|
-| `<device>: git-file — service <name or descriptor URL> ; <owner>/<repo>/<path>` | your config file from Git (default branch) | edits by reference to `H<n>`, `restore H<n>` rollback |
+| `<device>: git-file — service <name or descriptor URL> ; <owner>/<repo>/<path>` | your config file from Git (`main`, or the branch the line names) | edits by reference to `H<n>`, `restore H<n>` rollback |
 | `… ; <owner>/<repo>/<path> @ <branch\|tag\|commit>` | that ref — **only if the Git service's pin admits it**; otherwise the device is HELD and the leg needs-revision | as above, or nothing for that device |
 | `<device>: device-read — service <name or descriptor URL>` | the device's running configuration, read whole | edits by reference, `restore H<n>` |
 | both a `git-file` and a `device-read` line for one device | the Git file (the device read is evidence only) | edits to the Git file + a *Git file vs device configuration* warning listing real differences |
+| `<device>: live-read — service <name or descriptor URL>` (alone — no other line for that device; 1.26.0) | nothing: the running configuration is read whole as **evidence only** — never kept, never edited. A device the change touches is never `live-read` only (the leg stops); a failed read is reported, not held | nothing for that device; its allocations are checked against the change |
 | `<device>: command-package` (alone — no other line for that device) | nothing (no kept file) | **the original method**: candidate configuration as commands, validation steps and a per-device rollback, with no platform-applied edits or rendered diff |
 
 - **Service** — a name uses a service already registered in your hub as-is (never changed or deleted by the run); a descriptor URL is
@@ -285,6 +287,51 @@ Read-only harvest, change package only — nothing is applied by this run.
 - **What stops a leg:** a device with no line, a line the platform cannot parse, a task body that disagrees with a program's contract.
   **Pasted state** (a config pasted into the description) is evidence, never a base — the platform keeps only what it read itself.
 
+#### Which devices to list (read this before writing the block)
+
+- **List every device the leg must SEE, not only the devices it changes.** The Harvester reads only the devices the block names. If
+  the change derives a value that must not collide with anything on another device — a NAT pool, an address range, an AS number —
+  that other device must be listed too, or its allocations are never read and a colliding value can be chosen. (Live, 2026-11-01: an
+  edge leg listed only the switch it changed, never read the second switch, and chose a NAT pool that switch already used. The
+  program's integration review caught it; the leg's own review did not.)
+
+  > ⚠️ **Known limitation (accepted 2026-11-05) — an undeclared device is not checked by the leg.** If a device the leg must see is
+  > left out of its block, the leg's Reviewer can APPROVE a derived value that collides on that device. This is most likely when
+  > the package explains the gap ("that device was not read; the cross-device check belongs to the program integration review") —
+  > measured: the Reviewer accepted that explanation in every lab sample, even with the platform naming the undeclared device. The
+  > only check left is the program's integration review (it caught the 2026-11-01 case), and a standalone pipeline has none.
+  > **The fix is in your hands: list the device.** Once it is listed, the leg reads it (`live-read` / `git-file`) and checks the
+  > value against it; if it cannot be read, the Reviewer refuses (measured 3/3). Record of the decision: open register row
+  > UNDECLARED-SCOPE-DEVICE-UPSTREAM.
+- **A device you only need for information can be declared `live-read` (1.26.0) or `git-file`.** `live-read` checks against what is
+  running on the device and keeps nothing. With `git-file` its file is read and its allocations are checked; it is
+  kept, but the Author never edits it, so it adds nothing to the package. If its file cannot be read (wrong path, missing file, a
+  branch the service does not allow) the leg stops with needs-revision — you learn the evidence is missing instead of getting an
+  unchecked value.
+- **"Git-only"** describes a device declared with a `git-file` line and no `device-read`: everything the leg knows about it came from
+  Git. That works, and is the expected setup for most teams. Its one limit: anything configured on the device but never committed to
+  Git cannot be seen without reading the device. The package should say that a value was checked against the Git file only.
+- **A value leg (`(protocol: network-derivation)`, network-derivation ≥ 1.3.0, since 2026-11-06) has its OWN block.** It derives a
+  value other legs consume (a free address, an aggregate) and changes nothing. In a program, give it its own `## Device sources`
+  section in `requirements.md`; the Program Architect copies it as `deviceSources["network-derivation"]`, separate from the change
+  legs' `deviceSources["network-provisioning"]`, so the value leg can list every switch it must see without changing what the change
+  legs declare. List every switch whose allocations the value must avoid.
+  - `git-file` only (the common case): the value is derived from your committed files. That is allowed and **stated, never blocked**:
+    the leg's card reads `liveEvidence: git-only (declared devices)`, the Reviewer records a `NON-BLOCKING WARNING (git-file-only)`
+    naming each such switch, and the leg's summary names them. Its limit is the Git-only limit above: an address configured on a
+    switch by hand and never committed is not seen, so the value may already be in use on the running switch.
+  - `git-file` + `device-read` on the same switch: the value rests on the running configuration (what the change will meet); the
+    Git file is evidence, and the platform shows any Git-vs-device difference.
+  - `live-read`: as for a change leg (read whole, evidence only, alone on its switch).
+  - No block for the value leg: it reads through its service descriptor exactly as before and reads no Git file. Do not write a note
+    in its place — leave the section out.
+  - A value leg never holds files: nothing is kept for it, whatever its lines say.
+- **Several network change legs can share ONE block** when they need the same lines (e.g. two legs each changing a different switch, each
+  needing the other as evidence, both declared `git-file`). Two legs that need DIFFERENT lines for the same switch are not supported
+  yet — use one block that serves both.
+- Size: every declared `git-file` is kept and shown to the Author. Two to a few switches is nothing; for a large fabric where the
+  change touches a few switches, list the evidence devices anyway and tell us if the view runs into size limits.
+
 ### Kubernetes / Terraform: name the repo file
 
 ```
@@ -292,7 +339,7 @@ Set CPU and memory requests and limits on the web Deployment, leaving every othe
 
 Source file to read (repo read): owner `acme`, repo `infra-live`, path `k8s/web/deployment.yaml`
 ```
-Default branch only; one line per file; for Terraform never name state, plan or variables files (`*.tfstate*`, `*.tfplan`, `*.tfvars*`,
+`main` only (a read naming no branch is read as `main`); one line per file; for Terraform never name state, plan or variables files (`*.tfstate*`, `*.tfplan`, `*.tfvars*`,
 `.terraform/`). Live state comes from your read-only cluster / Terraform service (descriptor in the task) and is evidence, never the kept file.
 
 ### Observability: the self-provisioned stack

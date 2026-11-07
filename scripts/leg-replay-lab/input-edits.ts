@@ -39,6 +39,12 @@ export const HARVESTER_TOOLCALL_TARGET_RE = /^harvester-toolcall:([a-z0-9]{20,40
  *  prompt rebuild reads, and `author.task.inputContext`) — then re-reads each copy. It stands in for upstream text the Author would
  *  receive if the persist redactor had not recognised a secret (named in the manifest); it never edits a tool result. */
 export const AUTHOR_CHAINED_TARGET_RE = /^author-chained:([a-z0-9]{20,40})$/;
+/** L-CS-N ADDENDUM (e) (2026-11-05, owner's over-block cell): `contract:interfaceContract` edits the leg's stored PROGRAM INTERFACE
+ *  CONTRACT — in EVERY copy the snapshot carries (`leg.inputContext`, the one the platform's live-evidence fact reads; the Author's and
+ *  the Reviewer's task row and frozen `exec.config.inputContext`, the ones their prompts render). Each op is an exactly-once replace on
+ *  the copy's COMPACT JSON (`JSON.stringify`); the result must parse as an object. Every copy is re-read afterwards: the op's new text
+ *  present and its old text gone, and all copies equal — a copy the walk missed would render an unplanted contract. */
+export const CONTRACT_TARGET = 'contract:interfaceContract';
 export type InputEditTarget = typeof INPUT_EDIT_TARGETS[number];
 
 export interface InputEditReport { file: string; edit: string; targets: Record<string, { beforeChars: number; afterChars: number; copies?: string[] }> }
@@ -46,7 +52,7 @@ export interface InputEditReport { file: string; edit: string; targets: Record<s
 export function snapshotWithInputEdits(dir: string, node: { id: string; inputEdits?: string }, snap: Snapshot): { snap: Snapshot; report: InputEditReport | null } {
   if (!node.inputEdits) return { snap, report: null };
   const spec: EditSpec = JSON.parse(fs.readFileSync(path.join(dir, node.inputEdits), 'utf8'));
-  const unknown = spec.appliesTo.filter((t) => !(INPUT_EDIT_TARGETS as readonly string[]).includes(t) && !HARVESTER_TOOLCALL_TARGET_RE.test(t) && !AUTHOR_CHAINED_TARGET_RE.test(t));
+  const unknown = spec.appliesTo.filter((t) => !(INPUT_EDIT_TARGETS as readonly string[]).includes(t) && !HARVESTER_TOOLCALL_TARGET_RE.test(t) && !AUTHOR_CHAINED_TARGET_RE.test(t) && t !== CONTRACT_TARGET);
   if (unknown.length) throw new Error(`${node.id}: input edit ${node.inputEdits} targets ${unknown.join(', ')} — allowed: ${INPUT_EDIT_TARGETS.join(', ')}`);
   if (!spec.appliesTo.length) throw new Error(`${node.id}: input edit ${node.inputEdits} targets nothing`);
   const copy: Snapshot = JSON.parse(JSON.stringify(snap));
@@ -66,6 +72,7 @@ export function snapshotWithInputEdits(dir: string, node: { id: string; inputEdi
     if (hm) { targets[t] = patchHarvesterToolCall(copy, hm[1], Number(hm[2]), spec, t, node.id); continue; }
     const cm = AUTHOR_CHAINED_TARGET_RE.exec(t);
     if (cm) { targets[t] = patchAuthorChained(copy, cm[1], spec, t, node.id); continue; }
+    if ((t as string) === CONTRACT_TARGET) { targets[t] = patchInterfaceContract(copy, spec, t, node.id); continue; }
     if (t === 'leg:description') patch(t, copy.leg, 'harness (leg) row');
     else if (t === 'author-task:description') patch(t, copy.author?.task, 'Author task');
     else patch(t, copy.reviewer?.task, 'Reviewer task');
@@ -136,6 +143,42 @@ function patchHarvesterToolCall(copy: Snapshot, executionId: string, index: numb
     }
   }
   return { ...sizes!, copies: holders.map((h) => h.name) };
+}
+
+/** ADDENDUM (e): patch every stored copy of the leg's interface contract (see CONTRACT_TARGET). */
+function patchInterfaceContract(copy: Snapshot, spec: EditSpec, target: string, nodeId: string): { beforeChars: number; afterChars: number; copies: string[] } {
+  const c: any = copy;
+  const holders: Array<{ name: string; owner: any; key: string }> = [];
+  const add = (name: string, owner: any, key: string) => { if (owner && owner[key] !== undefined && owner[key] !== null) holders.push({ name, owner, key }); };
+  add('leg.inputContext', c.leg, 'inputContext');
+  add('author.task.inputContext', c.author?.task, 'inputContext');
+  add('author.exec.config.inputContext', c.author?.exec?.config, 'inputContext');
+  add('reviewer.task.inputContext', c.reviewer?.task, 'inputContext');
+  add('reviewer.exec.config.inputContext', c.reviewer?.exec?.config, 'inputContext');
+  const read = (h: { owner: any; key: string }) => (typeof h.owner[h.key] === 'string' ? JSON.parse(h.owner[h.key]) : h.owner[h.key]);
+  const write = (h: { owner: any; key: string }, ic: any) => { h.owner[h.key] = typeof h.owner[h.key] === 'string' ? JSON.stringify(ic) : ic; };
+  const withContract = holders.filter((h) => { const ic = read(h); return ic && typeof ic === 'object' && ic.interfaceContract && typeof ic.interfaceContract === 'object'; });
+  if (!withContract.some((h) => h.name === 'leg.inputContext')) throw new Error(`${nodeId}: ${target} — the leg row carries no interface contract (the live-evidence fact reads that copy)`);
+  let sizes: { beforeChars: number; afterChars: number } | null = null;
+  for (const h of withContract) {
+    const ic = read(h);
+    const before = JSON.stringify(ic.interfaceContract);
+    const r = applyEdits(before, [spec], target);
+    if (!r.applied.length) throw new Error(`${nodeId}: input edit ${spec.id} did not apply to ${target} (${h.name})`);
+    let parsed: unknown;
+    try { parsed = JSON.parse(r.text); } catch { throw new Error(`${nodeId}: ${target} — the edited contract no longer parses (${h.name})`); }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(`${nodeId}: ${target} — the edited contract is not an object (${h.name})`);
+    ic.interfaceContract = parsed;
+    write(h, ic);
+    sizes = sizes ?? { beforeChars: before.length, afterChars: r.text.length };
+  }
+  const after = withContract.map((h) => JSON.stringify(read(h).interfaceContract));
+  if (new Set(after).size !== 1) throw new Error(`${nodeId}: ${target} — after the edit the contract copies differ (${withContract.map((h) => h.name).join(', ')})`);
+  for (const o of spec.ops.filter((x) => !x.appliesTo || x.appliesTo.includes(target))) {
+    if (!o.new.includes(o.old) && after[0].includes(o.old)) throw new Error(`${nodeId}: ${target} — after the edit the contract still holds the op's old text`);
+    if (o.new && !after[0].includes(o.new)) throw new Error(`${nodeId}: ${target} — after the edit the contract does not hold the op's new text`);
+  }
+  return { ...sizes!, copies: withContract.map((h) => h.name) };
 }
 
 /** L-NB-b: patch the chained entry's `finalResponse` in every copy of the Author's input context; refuse a copy that does not take

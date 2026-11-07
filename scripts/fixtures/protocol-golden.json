@@ -9,8 +9,8 @@
       "chars": 30736
     },
     "network-provisioning-protocol": {
-      "sha256": "4df1b4c8baff9ef51aad7897f0bb292b91df5020dcec6e1f06f2384a7f627202",
-      "chars": 59024
+      "sha256": "fb22f5bb92a129862b838b93f83ed73c51d573b491b041e6e0f356c75a04fe15",
+      "chars": 67673
     },
     "kubernetes-gitops-protocol": {
       "sha256": "89c5e243487f0d15fa27738f40930e45535ae0ddbeddd757e0cb5df8e09ab0d9",
@@ -33,16 +33,16 @@
       "chars": 546
     },
     "network-derivation-protocol": {
-      "sha256": "41fc72d0e765f82ce12bc6e0bfa68d446a2956eed0a934a7fa9a19fac0de51f5",
-      "chars": 22862
+      "sha256": "68864acc56521b0c3cb3a7e763840ad36397b7f71ce7eae8956b2b463708b4d3",
+      "chars": 26979
     },
     "requirements-authoring-protocol": {
       "sha256": "fd4b55a8e292b01b250a074eebd10b072ce4bead924e79ccde38770c4d2cbdef",
       "chars": 51209
     },
     "HOWTO-use-pipeline-harness": {
-      "sha256": "bc53a5e2a337c3680cd5d67332ef1d5201f8d9c9df980872153d5db6554e5dd4",
-      "chars": 68051
+      "sha256": "fc71a3b9b3504fb282f03d34bb13d34fc8505899515152fdaefb541e1f87dc73",
+      "chars": 69881
     },
     "HOWTO-use-program-harness": {
       "sha256": "7240fb31d1a082d2ce70f0735e62befd899e84b732733a222e9cdfe3211f1443",
@@ -159,16 +159,16 @@
       "chars": 4812
     },
     "program_architect": {
-      "sha256": "cffc33d214c8aab29a932cf1ca4f65c21e899b92b11074ba660f8081ec1be81a",
-      "chars": 21436
+      "sha256": "7a78795860fc5a73b8f6a6bc74fd4040802a628062a47413ea0c0f37314c8b2b",
+      "chars": 21741
     },
     "value_chain_architect": {
-      "sha256": "cffc33d214c8aab29a932cf1ca4f65c21e899b92b11074ba660f8081ec1be81a",
-      "chars": 21436
+      "sha256": "7a78795860fc5a73b8f6a6bc74fd4040802a628062a47413ea0c0f37314c8b2b",
+      "chars": 21741
     },
     "derivation_architect": {
-      "sha256": "42ce2145fdc4f2d3a843e96e7eece48322f1b428f20f9240ff2f5ab5f4a23a18",
-      "chars": 4080
+      "sha256": "4fb4c93a78ee0358ed8380b421452233c968007a9f5d38db96dec06d3e803401",
+      "chars": 5295
     },
     "derivation_reviewer": {
       "sha256": "4cf10c8cff33dc6bcfcd6bcf1ba17f04f86c63b7544a961cab8a362f5b7e1463",

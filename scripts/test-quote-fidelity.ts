@@ -1080,7 +1080,9 @@ test('REGISTRY: APPENDED after every entry that predates it, so no existing entr
   // (2026-10-15). Exact, so a reorder or an insertion BEFORE them still fails.
   eq(names.slice(names.indexOf('quoteFidelity@leaf-persist') + 1), ['applyBlockPlaceholder@leaf-persist',
     'editApplication@leaf-persist', 'heldBytes@leaf-persist', 'reviewedEditDiff@leaf-persist', 'editApplication@leg-synthesize',
-    'validationToolCalls@leaf-persist', 'deviceSourceReads@leaf-persist', 'gitDeviceComparison@leaf-persist']); // + validationToolCalls (2026-10-23, appended) + deviceSourceReads, gitDeviceComparison (2026-10-26, held-network step 3 batch 2b, appended)
+    'validationToolCalls@leaf-persist', 'deviceSourceReads@leaf-persist', 'gitDeviceComparison@leaf-persist',
+    // + liveEvidence at both points (Config-sources network push 1a, 2026-11-04 — appended last, execution-facts S4.1)
+    'liveEvidence@leaf-persist', 'liveEvidence@leg-synthesize']); // + validationToolCalls (2026-10-23, appended) + deviceSourceReads, gitDeviceComparison (2026-10-26, held-network step 3 batch 2b, appended)
 });
 
 test('ERROR ARM: enrichment-error carries a named BLOCKING disposition (G3)', () => {

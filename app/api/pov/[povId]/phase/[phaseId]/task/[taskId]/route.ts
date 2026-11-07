@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getTaskHandler, updateTaskHandler } from '@/lib/tasks/handlers/task';
 import { taskLogger } from '@/lib/logger';
 import { DependencyNotSatisfiedError, PipelineInvariantError, InvalidTransitionError, ProtocolStampImmutableError } from '@/lib/errors';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 export async function GET(
   req: NextRequest,
@@ -44,6 +44,7 @@ export async function PUT(
     const response = await updateTaskHandler(req, params.povId, params.phaseId, params.taskId, data);
     return NextResponse.json(response);
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     taskLogger.error({ err: error, taskId: params.taskId }, 'task PUT error');
 
     // 2.14 (completion-path P2): typed guard errors are structured 4xx FACTS, never a 500.

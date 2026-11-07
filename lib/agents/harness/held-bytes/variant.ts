@@ -102,19 +102,64 @@ export function isGitFileSourceLeg(leg: { title?: string | null; metadata?: unkn
  *  (device-sources.ts). Capture holds a device configuration (the device-read lane, descriptors.ts DEVICE_READ_DESCRIPTORS) only on
  *  such a leg and only for a device the block declares `device-read`. Distinct from HELD_CAPABLE_PROTOCOLS on purpose: network is
  *  NOT held-capable until J1 — until then a device base is SHADOW only (written to the store, shown to no agent). Canonical form. */
-export const DEVICE_SOURCE_PROTOCOLS: readonly string[] = Object.freeze([canonicalProtocolName('network-provisioning')]);
+// VALUE-LEG-GIT (owner G1–G4, 2026-11-06): network-derivation joins as a VALUE lane. A value leg never holds anything (G2-b): its
+// declaration feeds the READ record and the device facts (deviceSourceReads, gitDeviceComparison, liveEvidence) only — capture never
+// receives a device scope and the carrier never forces on it (`deviceSourceLane`, below; every consumer switches exhaustively).
+export type DeviceSourceLane = 'change' | 'value';
+/** The ONE table: protocol (canonical long form) → its lane and its key under `interfaceContract.deviceSources` (G2-a: each protocol
+ *  its own key, so a value leg can list every switch it must see without changing what the change legs declare). */
+export const DEVICE_SOURCE_LANES: Readonly<Record<string, { lane: DeviceSourceLane; contractKey: string }>> = Object.freeze({
+  [canonicalProtocolName('network-provisioning')]: { lane: 'change', contractKey: 'network-provisioning' },
+  [canonicalProtocolName('network-derivation')]: { lane: 'value', contractKey: 'network-derivation' },
+});
+export const DEVICE_SOURCE_PROTOCOLS: readonly string[] = Object.freeze(Object.keys(DEVICE_SOURCE_LANES));
+
+/** Exhaustiveness guard (LL-CS-05): a new lane added to `DeviceSourceLane` fails to compile at every switch that uses it. */
+export function assertNeverLane(lane: never): never {
+  throw new Error(`device-source lane not handled: ${String(lane)}`);
+}
+
+/** The lane of a protocol, or null when it declares no Device sources. */
+export function deviceSourceLaneOf(protocol: string | null | undefined): DeviceSourceLane | null {
+  return protocol ? DEVICE_SOURCE_LANES[canonicalProtocolName(protocol)]?.lane ?? null : null;
+}
+
+/** The leg's key under `interfaceContract.deviceSources` (null when its protocol declares no Device sources). */
+export function deviceSourceContractKeyOf(protocol: string | null | undefined): string | null {
+  return protocol ? DEVICE_SOURCE_LANES[canonicalProtocolName(protocol)]?.contractKey ?? null : null;
+}
+
+/** G4-c (inert by DECLARATION): a value leg is a Device-sources leg only when its first-execution snapshot exists — and the snapshot is
+ *  taken for a value leg only when it declares a block (prepare-task-for-execution.ts). No snapshot ⇒ today's path, byte-identical. A
+ *  change leg keeps its rule: its protocol decides (a missing snapshot there is a named fail-closed state, device-sources-read.ts). */
+function hasDeviceSourcesSnapshot(metadata: unknown): boolean {
+  return !!metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    && (metadata as Record<string, unknown>).deviceSourcesSnapshot !== undefined && (metadata as Record<string, unknown>).deviceSourcesSnapshot !== null;
+}
 
 export function isDeviceSourceLeg(leg: { title?: string | null; metadata?: unknown }): boolean {
-  const p = resolveTaskProtocol(leg).protocol;
-  return !!p && DEVICE_SOURCE_PROTOCOLS.includes(canonicalProtocolName(p));
+  const lane = deviceSourceLaneOf(resolveTaskProtocol(leg).protocol);
+  if (lane === null) return false;
+  switch (lane) {
+    case 'change': return true;
+    case 'value': return hasDeviceSourcesSnapshot(leg.metadata);
+    default: return assertNeverLane(lane);
+  }
+}
+
+/** The lane of a leg that IS a Device-sources leg (isDeviceSourceLeg), else null. */
+export function deviceSourceLaneOfLeg(leg: { title?: string | null; metadata?: unknown }): DeviceSourceLane | null {
+  return isDeviceSourceLeg(leg) ? deviceSourceLaneOf(resolveTaskProtocol(leg).protocol) : null;
 }
 
 export type OwningLegResolution =
   | { kind: 'self'; legId: string; heldCapable: boolean; /** held-k8s 1b-scope; absent ⇒ false */ gitFileSource?: boolean;
-      /** held-network step 3 batch 2b: the leg declares Device sources (DEVICE_SOURCE_PROTOCOLS); absent ⇒ false */ deviceSource?: boolean }
+      /** held-network step 3 batch 2b: the leg declares Device sources (DEVICE_SOURCE_PROTOCOLS); absent ⇒ false */ deviceSource?: boolean;
+      /** VALUE-LEG-GIT: present ONLY on a value-lane Device-sources leg (`'value'`); absent ⇒ the change lane */ deviceSourceLane?: 'value' }
   | { kind: 'leg'; legId: string; heldCapable: boolean; /** the LEAF's own stage, read here (the step's binding check) */ ownStageId: string;
       /** held-k8s 1b-scope: the leg may read a Git file source; absent ⇒ false */ gitFileSource?: boolean;
-      /** held-network step 3 batch 2b: the leg declares Device sources; absent ⇒ false */ deviceSource?: boolean }
+      /** held-network step 3 batch 2b: the leg declares Device sources; absent ⇒ false */ deviceSource?: boolean;
+      /** VALUE-LEG-GIT: present ONLY on a value-lane Device-sources leg (`'value'`); absent ⇒ the change lane */ deviceSourceLane?: 'value' }
   | { kind: 'no-leg'; reason: 'no-stage' | 'no-harness-task-id'; heldCapable: false }
   | { kind: 'could-not-check'; reason: 'read-threw' | 'leg-row-missing' | 'task-row-missing'; heldCapable: false };
 
@@ -123,11 +168,23 @@ type Db = {
   stage: { findUnique: (a: { where: { id: string }; select: Record<string, true> }) => Promise<unknown> };
 };
 
+/** The value-lane marker, spread into a resolution: `{}` on every leg but a declared value leg, so every change-leg and non-device
+ *  resolution keeps its exact shape. */
+function valueLaneField(leg: { title?: string | null; metadata?: unknown }): { deviceSourceLane?: 'value' } {
+  const lane = deviceSourceLaneOfLeg(leg);
+  if (lane === null) return {};
+  switch (lane) {
+    case 'change': return {};
+    case 'value': return { deviceSourceLane: 'value' };
+    default: return assertNeverLane(lane);
+  }
+}
+
 export async function resolveOwningLegProtocol(
   db: Db,
   task: { id: string; type?: string | null; title?: string | null; metadata?: unknown },
 ): Promise<OwningLegResolution> {
-  if (task.type === 'PIPELINE') return { kind: 'self', legId: task.id, heldCapable: isHeldCapableLeg(task), gitFileSource: isGitFileSourceLeg(task), deviceSource: isDeviceSourceLeg(task) };
+  if (task.type === 'PIPELINE') return { kind: 'self', legId: task.id, heldCapable: isHeldCapableLeg(task), gitFileSource: isGitFileSourceLeg(task), deviceSource: isDeviceSourceLeg(task), ...valueLaneField(task) };
   try {
     const own = (await db.task.findUnique({ where: { id: task.id }, select: { stageId: true } })) as { stageId: string | null } | null;
     if (!own) return { kind: 'could-not-check', reason: 'task-row-missing', heldCapable: false };
@@ -138,9 +195,32 @@ export async function resolveOwningLegProtocol(
     const leg = (await db.task.findUnique({ where: { id: legId }, select: { title: true, metadata: true } })) as
       { title: string | null; metadata: unknown } | null;
     if (!leg) return { kind: 'could-not-check', reason: 'leg-row-missing', heldCapable: false };
-    return { kind: 'leg', legId, heldCapable: isHeldCapableLeg(leg), ownStageId: own.stageId, gitFileSource: isGitFileSourceLeg(leg), deviceSource: isDeviceSourceLeg(leg) };
+    return { kind: 'leg', legId, heldCapable: isHeldCapableLeg(leg), ownStageId: own.stageId, gitFileSource: isGitFileSourceLeg(leg), deviceSource: isDeviceSourceLeg(leg), ...valueLaneField(leg) };
   } catch {
     return { kind: 'could-not-check', reason: 'read-threw', heldCapable: false };
+  }
+}
+
+/** VALUE-LEG-GIT (G2-b): does held capture take this Device-sources leg's declaration as its device scope? The change lane only — a
+ *  value leg has no Author, so a held base there is size and a handle nobody uses. Exhaustive over the lane (LL-CS-05). */
+export function heldCaptureTakesDeviceScope(owningLeg: OwningLegResolution | null | undefined): boolean {
+  if (!owningLeg || (owningLeg.kind !== 'self' && owningLeg.kind !== 'leg') || owningLeg.deviceSource !== true) return false;
+  const lane: DeviceSourceLane = owningLeg.deviceSourceLane === 'value' ? 'value' : 'change';
+  switch (lane) {
+    case 'change': return true;
+    case 'value': return false;
+    default: return assertNeverLane(lane);
+  }
+}
+
+/** VALUE-LEG-GIT (G2-b): does the held-edit carrier apply the Device-sources forces (D-1, O-4) to this leg? The change lane only. */
+export function carrierAppliesDeviceForce(leg: { title?: string | null; metadata?: unknown }): boolean {
+  const lane = deviceSourceLaneOfLeg(leg);
+  if (lane === null) return false;
+  switch (lane) {
+    case 'change': return true;
+    case 'value': return false;
+    default: return assertNeverLane(lane);
   }
 }
 

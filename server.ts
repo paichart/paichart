@@ -1,7 +1,6 @@
 require('dotenv').config(); // Load environment variables from .env file
 import type { IncomingMessage, ServerResponse } from 'http';
 const { createServer } = require('http');
-const { parse } = require('url');
 const next = require('next');
 // Next 15: install Next's server environment (globalThis.AsyncLocalStorage + WebSocket shim) BEFORE any of our own lib/ requires.
 // In Next 15, `next/server` eagerly loads `after` → the work async-storage, which throws "AsyncLocalStorage accessed in runtime where
@@ -63,11 +62,10 @@ const app = next({
   hostname, 
   port,
   customServer: true,
-  conf: {
-    // Next 15: was experimental.serverComponentsExternalPackages (Next migrates the old key silently today; renamed so a release
-    // that drops that migration cannot lose this list). NOTE: a custom-server `conf` replaces next.config.js at runtime.
-    serverExternalPackages: ['@modelcontextprotocol/sdk']
-  }
+  // NEXT15-FOLLOWUPS (6), 2026-11-04: a custom-server `conf` REPLACES next.config.js at runtime, so this used to carry only
+  // serverExternalPackages while the build used the full next.config.js (headers, poweredByHeader, compress, three externals).
+  // Pass the ONE config so build and runtime cannot diverge; test-next-config-parity pins it.
+  conf: require('./next.config.js')
 });
 
 const handle = app.getRequestHandler();
@@ -75,11 +73,13 @@ const handle = app.getRequestHandler();
 app.prepare().then(() => {
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
-      const parsedUrl = parse(req.url!, true);
+      // Node 24 (2026-11-04): WHATWG URL instead of the deprecated url.parse() (DEP0169). Next parses the URL itself when no
+      // parsed object is passed, so only our own proxy check needs the pathname.
+      const pathname = new URL(req.url || '/', 'http://localhost').pathname;
       // E28 (2026-09-09): a self-host DEMO runs the production build without a reverse proxy — SINGLE_ORIGIN_PROXY=true
       // keeps the built-in /mcp + /oauth/* proxy on in production. Never set it behind nginx (double routing).
-      if ((dev || process.env.SINGLE_ORIGIN_PROXY === 'true') && shouldProxy(parsedUrl.pathname)) { proxyToMcp(req, res); return; }
-      await handle(req, res, parsedUrl);
+      if ((dev || process.env.SINGLE_ORIGIN_PROXY === 'true') && shouldProxy(pathname)) { proxyToMcp(req, res); return; }
+      await handle(req, res);
     } catch (err) {
       try { errorCounter.increment('ssr'); } catch {}
       console.error('Error occurred handling request:', err);

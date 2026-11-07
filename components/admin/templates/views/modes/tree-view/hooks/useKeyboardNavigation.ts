@@ -2,8 +2,8 @@ import { useCallback, useEffect } from 'react';
 import { TreeNodeData } from '../types';
 
 interface UseKeyboardNavigationProps {
-  containerRef: React.RefObject<HTMLDivElement>;
-  viewportRef: React.RefObject<HTMLDivElement>;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  viewportRef: React.RefObject<HTMLDivElement | null>;
   flattenedNodes: TreeNodeData[];
   selectedNodeId: string | null;
   setSelectedNodeId: React.Dispatch<React.SetStateAction<string | null>>;

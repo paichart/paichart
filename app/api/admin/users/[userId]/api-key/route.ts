@@ -7,7 +7,7 @@ import { GenerateAPIKeySchema } from '@/lib/validation/admin-user-validation';
 import { trackActivity } from '@/lib/auth/audit';
 import { adminAPIKeyLimiter } from '@/lib/middleware/rate-limit';
 import { logger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 type ApiHandler<T = any> = (
   req: NextRequest,
@@ -221,6 +221,7 @@ const generateApiKeyHandler: ApiHandler = async (
       }
     };
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     logger.error({ err: error }, 'POST /api/admin/users/[userId]/api-key failed');
     return {
       error: {

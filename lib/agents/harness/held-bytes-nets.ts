@@ -33,7 +33,7 @@ export type ChildStamp =
 
 /** The leg's child with the EXACT role, and its stamp `field`, from the execution the chainer hands on. Throws on a read
  *  error (the caller maps a throw to its could-not-check arm — never to "no stamp"). */
-export async function selectLegChildStamp(db: SelectorDb, legStageId: unknown, role: string, field: 'editApplication' | 'reviewedEditDiff' | 'heldBytes'): Promise<ChildStamp> {
+export async function selectLegChildStamp(db: SelectorDb, legStageId: unknown, role: string, field: 'editApplication' | 'reviewedEditDiff' | 'heldBytes' | 'liveEvidence'): Promise<ChildStamp> {
   if (typeof legStageId !== 'string' || !legStageId) return { state: 'no-child-stage' };
   const children = await db.task.findMany({ where: { stageId: legStageId }, select: { id: true, title: true, agentRole: true }, orderBy: { createdAt: 'asc' }, take: STAGE_CHILD_SCAN_CAP });
   const child = children.find((c) => c.agentRole === role);

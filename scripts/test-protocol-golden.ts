@@ -81,6 +81,12 @@ function budgetCheck(): number {
   const pov = text('pov-program-protocol'), nd = text('network-derivation-protocol');
   let bad = 0;
   const check = (ok: boolean, msg: string) => { console.log(`  ${ok ? '✓' : '❌'} budget: ${msg}`); if (!ok) bad++; };
+  // Protocol 16 § "When a text reaches its size ceiling" (2026-11-07): a WARNING, never a failure, when a budgeted text is within 2%
+  // of its ceiling — the pressure is visible a batch before it bites (VALUE-LEG-GIT G9 / LL-CS-31: a sentence compressed to fit
+  // changed what it instructed).
+  const headroom = (name: string, len: number | undefined, ceiling: number) => {
+    if (typeof len === 'number' && len > ceiling * 0.98) console.log(`  ⚠ headroom: ${name} ${len.toLocaleString()} is within 2% of its ${ceiling.toLocaleString()} ceiling — see Protocol 16 § "When a text reaches its size ceiling" before adding text`);
+  };
   // Absolute ceiling (owner decision ND7, 2026-10-05): 65,752 = value-chain-program 1.1.1 (64,752) + 1,000. Kept only if
   // promotion E's corrections replace obsolete text; a raise (to ~66,300) is an explicit owner decision recorded here,
   // never a silent edit of this number.
@@ -89,8 +95,10 @@ function budgetCheck(): number {
   // Raised 2026-10-31 by explicit owner decision (Steve: "go with your recommendation, raise to 68,000"; Wave 3 D2): pov-program
   // 2.2.1 left 5 chars of room, so any next fix would block on this number. +1,248 headroom; D2's sentence stays short.
   const POV_PROGRAM_CEILING = 68000;
+  if (pov) headroom('pov-program', pov.length, POV_PROGRAM_CEILING);
   if (pov) check(pov.length <= POV_PROGRAM_CEILING, `pov-program ${pov.length} ≤ ${POV_PROGRAM_CEILING.toLocaleString()} (ND7)`);
   if (nd) {
+    headroom('network-derivation', nd.length, 30000);
     check(nd.length <= 30000, `network-derivation ${nd.length} ≤ 30,000`);
     for (const banned of ['Phase 2 — Config Change-Package Author', '## Validation = facts', 'Phase 3 — Change Reviewer', 'aggregate into the final change package', '## Consumed Values']) {
       check(!nd.includes(banned), `network-derivation carries no "${banned}"`);
@@ -142,8 +150,11 @@ function budgetCheck(): number {
   // became strict equality — replaced in the SAME commit that deleted auditValueChainVocabulary, so nothing in CI loses
   // coverage of value_chain_architect. A fork of either key fails here.
   check(!!pa && !!vca && vca === pa, `value_chain_architect === program_architect (${vca?.length} vs ${pa?.length} chars; one constant)`);
-  check(!!pa && pa.length <= 21500, `program_architect ≤ 21,500 chars (${pa?.length}) — absolute ceiling (E3 review PC-L3 / AR-F5; raised 21,304 → 21,500 by owner 2026-10-24 for the held-network deviceSources sentence)`);
-  if (da) check(da.length <= 4500, `derivation_architect ${da.length} ≤ 4,500`);
+  headroom('program_architect', pa?.length, 22500);
+  check(!!pa && pa.length <= 22500, `program_architect ≤ 22,500 chars (${pa?.length}) — absolute ceiling (E3 review PC-L3 / AR-F5; raised 21,304 → 21,500 by owner 2026-10-24 for the held-network deviceSources sentence; 21,500 → 21,800 by owner 2026-11-06 for the VALUE-LEG-GIT "no key unless lines" sentence — canary B found the compressed form wrote a prose note under the key; 21,800 → 22,500 by owner 2026-11-07 to make room so the next sentence is never compressed — Protocol 16 § size ceiling step 5)`);
+  headroom('derivation_architect', da?.length, 6000);
+  headroom('derivation_reviewer', dr?.length, 6000);
+  if (da) check(da.length <= 6000, `derivation_architect ${da.length} ≤ 6,000 (raised 4,500 → 6,000 by owner 2026-11-07: a soft AU-3 budget for a small role read whole; no head-keep reason; matches derivation_reviewer — Protocol 16 § size ceiling step 5)`);
   if (dr) check(dr.length <= 6000, `derivation_reviewer ${dr.length} ≤ 6,000`);
   return bad;
 }

@@ -4,7 +4,7 @@ import { TokenPayload } from '@/lib/types/auth';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { trackActivity } from '@/lib/auth/audit';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 const ArtifactCleanupSchema = z.object({
   keepLastNExecutions: z.coerce.number().int()
@@ -106,6 +106,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     logger.error({ err: error }, 'Error during artifact cleanup');
     return NextResponse.json(
       { error: 'Failed to cleanup artifacts' },

@@ -7,7 +7,7 @@ import { logPhaseStageOperation, calculateDeleteSeverity } from "@/lib/auth/audi
 import { updatePhaseSchema } from "@/lib/validation/pov"
 import { validateCUIDFormat } from "@/lib/validation/id-validation"
 import { povLogger } from "@/lib/logger"
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 /**
  * GET /api/pov/[povId]/phase/[phaseId]
@@ -189,6 +189,7 @@ export const PUT = withPOVAccess(async (
 
     return NextResponse.json({ phase: updatedPhase })
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     povLogger.error({ err: error }, 'phase PUT error')
     return NextResponse.json(
       { error: "Failed to update phase" },

@@ -7,7 +7,7 @@ import { CreateRecommendationSchema } from '@/lib/validation/mcp-automations-val
 import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import { MCPRecommendationType, MCPImpact } from '@prisma/client';
 import { parseEnumParam } from '@/lib/utils/parse-enum-param';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 type ApiHandler<T = any> = (
   req: NextRequest,
@@ -415,6 +415,7 @@ const createMCPRecommendationHandler: ApiHandler = async (
       }
     };
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     mcpLogger.error({ err: error }, 'Failed to create MCP recommendation');
     return {
       error: {

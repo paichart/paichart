@@ -267,3 +267,6 @@ protocol's job. Both `held-k8s-window-p1` and `k8s-tf-podrange-authz` carry the 
 A network change leg needs `## Device sources` (or the contract's `deviceSources["network-provisioning"]`, written by the Program Architect); since 1.25.0 the declared source is a kept file and a missing or unreadable one forces needs-revision. Record `cline_docs/reviews/held-network-2026-10-22/NETWORK-CLOSEOUT.md`.
 
 **Golden set gap (2026-10-31):** the frozen golden set (v2 since 2026-10-31: 15 legs, 14 infrastructure change legs + 1 network value leg) has NO requirements-authoring cases, so a requirements Author/Reviewer text change currently has no golden regression check — register REQ-GOLDEN-CASES. Add cases at the next requirements text batch (Protocol 16 § "The standing no-regression rule").
+
+## Pointer (2026-11-05): REQUIREMENTS-DEVICE-SOURCES-QUESTION is now the NEXT priority
+- The owner accepted a known limitation: a device left out of a network leg's Device sources is not checked by that leg, and its Reviewer may approve a colliding value. The first fix is input-side: the generated `requirements.md` asks, per leg, every device it must SEE (the planner only copies). Register rows REQUIREMENTS-DEVICE-SOURCES-QUESTION + UNDECLARED-SCOPE-DEVICE-UPSTREAM.

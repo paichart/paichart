@@ -5,7 +5,7 @@ import { getAuthUser } from "@/lib/auth"
 import type { ApiResponse } from "@/lib/types/auth"
 import type { Role, RoleResponse } from "../types"
 import { trackActivity } from "@/lib/auth/audit"
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 interface RouteParams {
   params: {
@@ -75,6 +75,7 @@ export async function updateRoleHandler(req: NextRequest, { params }: RouteParam
 
     return { data: role };
   } catch (error) {
+    if (payloadTooLargeResponse(error)) throw error; // createHandler maps it to 413
     throw error;
   }
 }
@@ -101,6 +102,7 @@ export async function createRoleHandler(req: NextRequest): Promise<ApiResponse<R
 
     return { data: role };
   } catch (error) {
+    if (payloadTooLargeResponse(error)) throw error; // createHandler maps it to 413
     throw error;
   }
 }

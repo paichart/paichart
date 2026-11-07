@@ -7,7 +7,7 @@ import { trackActivity } from '@/lib/auth/audit';
 import { UpdateLLMSettingsSchema } from '@/lib/validation/settings-validation';
 import { adminSettingsLimiter } from '@/lib/middleware/rate-limit';
 import { logger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 // Get the global LLM settings
 export async function GET(req: NextRequest) {
@@ -239,6 +239,7 @@ export async function PUT(req: NextRequest) {
       message: 'LLM settings updated successfully'
     });
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     logger.error({ err: error }, 'Admin LLM Settings PUT error');
     return NextResponse.json(
       { error: 'Failed to update LLM settings' },

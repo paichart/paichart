@@ -49,7 +49,7 @@ import { computeSelfSupersession } from './execution-selection';
 // The five facts are no longer imported one by one: they are ENTRIES in the shared registry, and
 // the point of the registry is that this file cannot know one of them and forget another.
 import { stampExecutionNets } from './execution-nets';
-import { resolveOwningLegProtocol, type OwningLegResolution } from '@/lib/agents/harness/held-bytes/variant';
+import { resolveOwningLegProtocol, heldCaptureTakesDeviceScope, type OwningLegResolution } from '@/lib/agents/harness/held-bytes/variant';
 import { readLegDeviceSources } from '@/lib/agents/harness/device-sources-read';
 import { buildDeviceReadScope } from '@/lib/agents/harness/held-bytes/device-read-scope';
 import { runEditApplicationStep, recountEditApplication, resolveHeldFilesFromStore, isEditStepEligible, arbitrateReflectionPass, type EditStepResult } from './held-edit-step';
@@ -539,9 +539,11 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
     // every other execution reads nothing and passes no device scope (its capture is byte-identical). Shared with the nets (primed).
     const legDeviceSources = (owningLeg?.kind === 'leg' || owningLeg?.kind === 'self') && owningLeg.deviceSource === true
       ? await readLegDeviceSources(prisma as never, owningLeg) : null;
+    // VALUE-LEG-GIT (G2-b): a VALUE leg never holds — its declaration feeds the device facts (primed below), never capture's scope.
+    const captureDeviceSources = legDeviceSources && heldCaptureTakesDeviceScope(owningLeg) ? legDeviceSources : null;
     const heldPlan = prepareHeldCapture({ toolCallResults, task: { id: task.id, povId: task.povId }, logger, heldTable, live: true,
       echoSourceText: finalResponse ?? null, // R10-V8-RESIDUALS (a): part of the persist's echo source
-      ...(legDeviceSources ? { deviceRead: buildDeviceReadScope(legDeviceSources, toolCallResults) } : {}),
+      ...(captureDeviceSources ? { deviceRead: buildDeviceReadScope(captureDeviceSources, toolCallResults) } : {}),
       gitFileSourceLeg: (owningLeg?.kind === 'leg' || owningLeg?.kind === 'self') && owningLeg.gitFileSource === true }); // held-k8s 1b-scope (SYNTHESIS v3 §6.2)
 
     // Token usage — 0.5b: computed AFTER the #90 retry fold so result.json / logs / persist agree.

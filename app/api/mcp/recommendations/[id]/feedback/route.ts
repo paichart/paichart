@@ -6,7 +6,7 @@ import { logCommentAdded } from '@/lib/tasks/services/taskActivityService';
 import type { ActivityMetadata } from '@/lib/types/activity';
 import { mcpLogger } from '@/lib/logger';
 import { z } from 'zod';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 const FeedbackSchema = z.object({
   rating: z.number().int().min(1).max(5),
@@ -120,6 +120,7 @@ const recommendationFeedbackHandler: ApiHandler = async (
     };
 
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     mcpLogger.error({ err: error }, 'Failed to record recommendation feedback');
     return {
       error: {

@@ -70,7 +70,7 @@ export default function UserForm({
   currentUserRole,
   jobTitles = [],
   onRoleCreated
-}: UserFormProps): JSX.Element {
+}: UserFormProps): React.JSX.Element {
   const [error, setError] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isRoleDialogOpen, setIsRoleDialogOpen] = React.useState(false);

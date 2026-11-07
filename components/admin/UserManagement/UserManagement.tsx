@@ -16,7 +16,7 @@ const UserManagement = ({
   onBulkActivate,
   roles,
   jobTitles
-}: UserManagementProps): JSX.Element => {
+}: UserManagementProps): React.JSX.Element => {
   const [selectedUsers, setSelectedUsers] = useState<AdminUser[]>([]);
   const [filters, setFilters] = useState<UserFilters>({
     role: 'all',

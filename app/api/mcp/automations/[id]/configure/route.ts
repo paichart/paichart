@@ -7,7 +7,7 @@ import { logFieldChange, TaskActivityAction } from '@/lib/tasks/services/taskAct
 import type { ActivityMetadata } from '@/lib/types/activity';
 import { mcpLogger } from '@/lib/logger';
 import { AutomationConfigUpdateSchema } from '@/lib/validation/mcp-automations-validation';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 type ApiHandler<T = any> = (
   req: NextRequest,
@@ -359,6 +359,7 @@ const updateAutomationConfigHandler: ApiHandler = async (
     };
 
   } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
     mcpLogger.error({ err: error }, 'Failed to update automation config');
     return {
       error: {

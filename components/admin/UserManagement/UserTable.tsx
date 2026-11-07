@@ -54,7 +54,7 @@ const getRoleVariant = (role: UserRole): "default" | "secondary" | "outline" => 
   }
 };
 
-function UserTable({ users, onEdit, onDelete, onSelectionChange }: UserTableProps): JSX.Element {
+function UserTable({ users, onEdit, onDelete, onSelectionChange }: UserTableProps): React.JSX.Element {
   const [order, setOrder] = useState<Order>('asc');
   const [orderBy, setOrderBy] = useState<OrderBy>('');
   const [selected, setSelected] = useState<string[]>([]);

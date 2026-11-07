@@ -1,6 +1,6 @@
 # Program Harness User Guide
 
-**Version**: 1.0 | **Created**: 2026-07-16 | **Updated**: 2026-10-06 (promotion E: value legs + unbound Node C, pov-program 2.0.0 at deploy 2) | **Status**: Production (T2–T5 passed at v1.0.8, customer demo POV published)
+**Version**: 1.0 | **Created**: 2026-07-16 | **Updated**: 2026-11-07 (VALUE-LEG-GIT: a value leg's own Device sources key, network-derivation 1.3.0) · 2026-10-06 (promotion E: value legs + unbound Node C, pov-program 2.0.0 at deploy 2) | **Status**: Production (T2–T5 passed at v1.0.8, customer demo POV published)
 
 > **This guide = how to RUN/USE a program** (a pipeline-of-pipelines). For a single pipeline, see the
 > sibling [`PIPELINE-HARNESS-USER-GUIDE.md`](./PIPELINE-HARNESS-USER-GUIDE.md) — a program's legs ARE
@@ -177,6 +177,18 @@ leg without its contract (GUI, REST, an external client) still fails loud as abo
 This is the *declarative* coordination. For *runtime* interdependencies (a leg needs an upstream leg's
 designed output), the DAG wires an edge and the downstream leg chains the upstream's `report.md` into
 its §6 (see `firewall-policy-use-case.md` §2/§3 Approach 3).
+
+**Network legs: the `## Device sources` block rides the contract.** Write each network leg's block in `requirements.md`; the Architect
+copies it exactly into the contract as `deviceSources["network-provisioning"]`. **List every switch a leg must SEE, not only the one it
+changes** (a value derived on one switch must not collide with another's allocations — the FW-A3 lesson of 2026-11-01).
+⚠️ **Known limitation (accepted 2026-11-05):** a switch left out of a leg's block is not checked by that leg, and its Reviewer can approve
+a colliding value (it accepts the package's "that check belongs to the integration review" in every lab sample); Node C is then the only
+check — it caught the 2026-11-01 case. Listing the switch closes it. Two network
+change legs can share one block when they need the same lines; different lines per change leg for the same switch are not supported
+yet. **A value leg has its own key (network-derivation ≥ 1.3.0, 2026-11-06):** give it its own `## Device sources` section in
+`requirements.md` and the Architect copies it as `deviceSources["network-derivation"]`; give it none and the Architect emits no such key
+(the value leg reads through its descriptor and reads no Git file). Git-only is allowed and stated, never blocked — the value card reads
+`liveEvidence: git-only (declared devices)`. Details: `PIPELINE-HARNESS-USER-GUIDE.md` § "Which devices to list".
 
 ## 5. Releasing gates (important operational detail)
 
@@ -481,6 +493,11 @@ before any child or spend** — relaunch it as a new task with the pov-program t
   nothing" phrase, so a value leg comes **only from a hand-shaped requirements document** (e.g. a published program view,
   `requirements.program.md`). A generated spec yields change legs only. Two network legs (one value, one change) are kept
   on the change token until you answer by re-planning.
+- **Device sources on a value leg (network-derivation ≥ 1.3.0, live and canaried 2026-11-06):** optional, under its own contract key
+  `deviceSources["network-derivation"]` (above, § 4). At the plan gate check that a value leg WITH a section in requirements.md carries
+  exactly those lines, and one WITHOUT carries no `network-derivation` key at all (a prose note there is a defect — `report:canary`
+  control `vlg-pa3-no-prose-key`). On its card: `liveEvidence: git-only (declared devices)` means the value came from Git files only,
+  a stated limit you accept when you approve the program (live-only allocations are not seen).
 - Gates: plan → a gate after the value leg (approve the published value; it starts the consumers) → one change-method
   gate per consuming leg, as the plan's gate table says.
 - Node C is the unbound `Program Integration Reviewer` on every pov-program run whose PLAN-SPAWN ran under 2.0.0 (launched

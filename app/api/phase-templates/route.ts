@@ -6,7 +6,7 @@ import { templateStorage } from '@/lib/pov/phase-templates/storage';
 import { PhaseTemplate, Stage, Task } from '@/lib/pov/phase-templates/types';
 import { PhaseTemplateSchema } from '@/lib/validation/phase-template-validation';
 import { logger } from '@/lib/logger';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
  
  /**
   * GET /api/phase-templates
@@ -139,6 +139,7 @@ import { readJsonBody } from '@/lib/utils/read-json-body';
  
      return NextResponse.json(standardizedTemplate);
    } catch (error) {
+    const tooLarge = payloadTooLargeResponse(error); if (tooLarge) return tooLarge;
      logger.error({ err: error }, 'Error creating phase template');
      return NextResponse.json(
        { error: 'Failed to create phase template' },

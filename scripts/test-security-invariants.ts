@@ -2147,6 +2147,87 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
     check('WI-B10 a declared Git source is refused as a workflow step (row-aware refusal)',
       pm.gitFileSourceWorkflowRefusal(customer) !== null && pm.gitFileSourceWorkflowRefusal({ name: 'acme-devices', configuration: { ownerId: 'u1' } }) === null);
   }
+  // ── R-P0: Config-sources push 0 (DESIGN v2 §2, sec-ops B-1/B-3/N-1, 2026-11-04) ─────────────────────────────────────────────
+  // An absent ref is read AS `main` (never "the repo's default branch"), checked as main against the pin, and the SAME object is
+  // forwarded and echoed; a declared-ref row refuses it at BOTH gates (it was an existing bypass); the never-held path predicate runs on
+  // every call of the Git file-read tool, pinned or not.
+  {
+    type P0Check = { ok: boolean; field?: string; pinned?: boolean; refDefaulted?: boolean; args?: Record<string, unknown>; pathRefusal?: string };
+    const pm0 = pinMod as unknown as {
+      checkGitArguments: (s: unknown, a: unknown) => P0Check; GIT_FILE_READ_TOOL: string; DEFAULT_REF: string;
+      unpinnedFileReadPathRefusal: (tool: string, a: unknown) => { pathRefusal: string } | null;
+    };
+    const pol0 = policy as unknown as {
+      validateServiceCall: (t: string, tool: string, p: unknown, c: unknown, reg: string[], resolved?: string, row?: unknown) =>
+        { allowed: boolean; violations: Array<{ type: string; message: string }>; gitArguments: Record<string, unknown> | null; refDefaulted: boolean };
+    };
+    const noRef = { ...good };
+    const a0 = pm0.checkGitArguments(GH, noRef);
+    check('R-P0.1 absent ref ⇒ pinned pass, refDefaulted, forwarded args carry ref main (a COPY — the caller object is not mutated)',
+      a0.ok === true && a0.pinned === true && a0.refDefaulted === true && a0.args?.ref === 'main' && a0.args !== noRef && !('ref' in noRef));
+    const withRef = { ...good, ref: 'main' };
+    const a1 = pm0.checkGitArguments(GH, withRef);
+    check('R-P0.2 an explicit ref ⇒ refDefaulted false and the forwarded args ARE the caller object', a1.ok === true && a1.refDefaulted === false && a1.args === withRef);
+    const v0 = pol0.validateServiceCall(GH, 'get_file_contents', noRef, {}, ['get_file_contents'], GH);
+    check('R-P0.3 the call gate returns the checked args for forwarding (forwarded = checked)',
+      v0.allowed === true && v0.refDefaulted === true && v0.gitArguments?.ref === 'main' && v0.gitArguments?.path === good.path);
+    const relRow = { name: 'acme-git', configuration: { ownerId: 'u1' }, heldFiles: { files: [{ tool: 'get_file_contents', gitPin: { owner: 'acme', repo: 'cfg', ref: 'release' } }] } };
+    const relArgs = { owner: 'acme', repo: 'cfg', path: 'k8s/a.yaml' };
+    check('R-P0.4 a declared-ref (release) row REFUSES an absent ref — capture gate (the pre-push-0 bypass served the default branch)',
+      pm0.checkGitArguments(relRow, relArgs).ok === false && pm0.checkGitArguments(relRow, relArgs).field === 'ref');
+    const vRel = pol0.validateServiceCall('acme-git', 'get_file_contents', relArgs, {}, ['get_file_contents'], 'acme-git', relRow);
+    check('R-P0.5 … and the call gate (PINNED_ARGUMENT), with no "default branch" in the refusal text (N-1)',
+      vRel.allowed === false && vRel.violations.some((x) => x.type === 'PINNED_ARGUMENT' && x.message.includes('the main branch or the branch the service pins') && !x.message.includes('default branch')));
+    check('R-P0.6 the release row admits its own branch', pm0.checkGitArguments(relRow, { ...relArgs, ref: 'release' }).ok === true);
+    // R-P0.7 (replaces an inert literal control, sec-ops PUSH0 NOTE): the declared-LINE lane — a line `@ release` is a pin on release,
+    // so a call with NO ref (read as main) is refused there too, at capture (matchDeclaredGitLine, the P8 lane).
+    {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const ex = require('../lib/agents/harness/held-bytes/extract') as { matchDeclaredGitLine: (l: unknown[], a: unknown, u: unknown) => { ok: boolean; field?: string } };
+      const line = { device: 'sw1', owner: 'acme', repo: 'cfg', path: 'net/sw1.cfg', ref: 'release' };
+      const uri = 'repo://acme/cfg/sha/' + 'a'.repeat(40) + '/contents/net/sw1.cfg';
+      const noRefM = ex.matchDeclaredGitLine([line], { owner: 'acme', repo: 'cfg', path: 'net/sw1.cfg' }, uri);
+      const relM = ex.matchDeclaredGitLine([line], { owner: 'acme', repo: 'cfg', path: 'net/sw1.cfg', ref: 'release' }, uri);
+      check('R-P0.7 a declared line @ release: a call with no ref is refused (field ref), a call at release matches', noRefM.ok === false && noRefM.field === 'ref' && relM.ok === true);
+    }
+    // B-3: the predicate on every Git file-read call, pinned or not
+    const unpinnedRow = { name: 'acme-github', configuration: { ownerId: 'u1' } }; // a general-purpose GitHub MCP row, no gitPin
+    const vState = pol0.validateServiceCall('acme-github', 'get_file_contents', { owner: 'acme', repo: 'infra', path: 'terraform/terraform.tfstate' }, {}, ['get_file_contents'], 'acme-github', unpinnedRow);
+    check('R-P0.8 an UNPINNED row reading terraform.tfstate is refused at the call gate (bytes never reach the reasoner), with its own type and NEUTRAL text (S-3: no "Git file source")',
+      vState.allowed === false && vState.violations.some((x) => x.type === 'NEVER_READ_PATH' && x.message.includes('Terraform state') && !x.message.includes('Git file source'))
+      && !vState.violations.some((x) => x.type === 'PINNED_ARGUMENT'));
+    check('R-P0.8b percent-encoded and ./-prefixed forms are refused too (S-1: the pinned gate refuses any %, this gate decodes ≤ 2 rounds)',
+      ['terraform%2Etfstate', 'terraform%252Etfstate', './terraform.tfstate', 'env/prod%2etfvars', '%2Eterraformrc'].every((p) => pm0.unpinnedFileReadPathRefusal('get_file_contents', { path: p }) !== null)
+      && pm0.unpinnedFileReadPathRefusal('get_file_contents', { path: 'bad%zz/main.tf' }) === null);
+    check('R-P0.9 … tfvars and CLI credentials too; a Nornir inventory gets its own message',
+      pm0.unpinnedFileReadPathRefusal('get_file_contents', { path: '/env/prod.tfvars' })?.pathRefusal === 'tfvars-file'
+      && pm0.unpinnedFileReadPathRefusal('get_file_contents', { path: '.terraformrc' })?.pathRefusal === 'credentials-file'
+      && pol0.validateServiceCall('acme-github', 'get_file_contents', { path: 'nornir/hosts.yaml' }, {}, ['get_file_contents'], 'acme-github', unpinnedRow).violations.some((x) => x.message.includes('device inventory')));
+    check('R-P0.10 no false positive: an unpinned read of an ordinary file, and another tool with a state-like path, are allowed',
+      pol0.validateServiceCall('acme-github', 'get_file_contents', { owner: 'acme', repo: 'infra', path: 'terraform/main.tf' }, {}, ['get_file_contents'], 'acme-github', unpinnedRow).allowed === true
+      && pm0.unpinnedFileReadPathRefusal('get_weather', { path: 'terraform.tfstate' }) === null);
+    check('R-P0.11 the gate\'s file-read tool IS the descriptor table\'s Git read tool (one name)',
+      desc.PLATFORM_DEFAULT_DESCRIPTORS.some((d) => d.service === GH && d.tool === pm0.GIT_FILE_READ_TOOL) && pm0.DEFAULT_REF === 'main');
+    // forwarded = checked = echoed, structurally: the handler replaces the arguments with the checked object BEFORE the forward and
+    // the echo read them, and the echo carries the refDefaulted fact.
+    const handlerSrc = fs.readFileSync(path.join(__dirname, '../lib/mcp/server/tools/hub/service-call-handler.js'), 'utf8');
+    const iReplace = handlerSrc.indexOf('if (policyCheck.gitArguments) validatedArgs.arguments = policyCheck.gitArguments;');
+    const iForward = handlerSrc.indexOf("const callArguments = ensureObject(validatedArgs.arguments, {}, 'Service Call');");
+    const iEcho = handlerSrc.indexOf('          arguments: validatedArgs.arguments,\n          result: deliveredResponse,');
+    const iPolicy = handlerSrc.indexOf('const policyCheck = validateServiceCall(');
+    check('R-P0.12 handler order: policy check < replace-with-checked-args < forward < echo; the echo _meta carries refDefaulted',
+      iPolicy > 0 && iReplace > iPolicy && iForward > iReplace && iEcho > iForward && handlerSrc.includes('...(refDefaulted ? { refDefaulted: true } : {})'));
+    // R-P0.13 (replaces an inert literal control): the order rule above, applied to a MUTATED copy of the real handler source with
+    // the replace moved after the forward, must fail — so R-P0.12 can go red on the shipped file.
+    {
+      const line = 'if (policyCheck.gitArguments) validatedArgs.arguments = policyCheck.gitArguments;';
+      const fwd = "const callArguments = ensureObject(validatedArgs.arguments, {}, 'Service Call');";
+      const mutated = handlerSrc.replace(line, '').replace(fwd, fwd + '\n' + line);
+      check('R-P0.13 NEGATIVE CONTROL on the real source: replace moved after the forward ⇒ the order rule fails',
+        mutated !== handlerSrc && !(mutated.indexOf(line) < mutated.indexOf(fwd)));
+    }
+  }
+
   check('R8 NEGATIVE CONTROL: a handler delivering the raw response is detected', /\n\s+result: response,/.test('{\n  result: response,\n}'));
   // NEGATIVE CONTROL: the ordering rule reads a call placed AFTER the mint as a failure (proves R7 can fail)
   check('R7 NEGATIVE CONTROL: a refusal placed after the mint is detected',
@@ -2165,6 +2246,9 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
     ['PINNED_ARGUMENT (ref)', () => policy.validateServiceCall(GH, 'get_file_contents', { ...good, ref: 'v1' }, {}, ['get_file_contents'], GH)],
     ['PINNED_ARGUMENT (state path)', () => policy.validateServiceCall(GH, 'get_file_contents', { ...good, path: 'terraform/terraform.tfstate' }, {}, ['get_file_contents'], GH)],
     ['PINNED_SOURCE_BYPASS', () => scrape('https://raw.githubusercontent.com/paichart/paichart-lab-configs/main/terraform/main.tf')],
+    // Config-sources push 0 (sec-ops PUSH0 S-3): the never-held predicate on an UNPINNED file read — both message variants.
+    ['NEVER_READ_PATH (state path, unpinned)', () => policy.validateServiceCall('acme-github', 'get_file_contents', { owner: 'acme', repo: 'infra', path: 'terraform.tfstate' }, {}, ['get_file_contents'], 'acme-github')],
+    ['NEVER_READ_PATH (device inventory, unpinned)', () => policy.validateServiceCall('acme-github', 'get_file_contents', { owner: 'acme', repo: 'infra', path: 'nornir/hosts.yaml' }, {}, ['get_file_contents'], 'acme-github')],
     ['UNAPPROVED_TOOL', () => policy.validateServiceCall('some-service', 'frobnicate', {}, {}, [], 'some-service')],
     ['BLOCKED_PATTERN (tool name)', () => policy.validateServiceCall('some-service', 'netcat', {}, {}, ['netcat'], 'some-service')],
     ['BLOCKED_PATTERN (parameters)', () => policy.validateServiceCall('some-service', 'run', { cmd: 'rm -rf tmp' }, {}, ['run'], 'some-service')],
@@ -2185,7 +2269,7 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
       check(`F-T1 ${label}: ${x.type} reaches the agent byte-for-byte`, sanitizeForResponse(x.message) === x.message);
     }
   }
-  check('F-T1 every violation type the call gate can emit is exercised', ['PINNED_ARGUMENT', 'PINNED_SOURCE_BYPASS', 'UNAPPROVED_TOOL', 'BLOCKED_PATTERN', 'BLOCKED_URL', 'SIZE_LIMIT', 'CALL_DEPTH']
+  check('F-T1 every violation type the call gate can emit is exercised', ['PINNED_ARGUMENT', 'PINNED_SOURCE_BYPASS', 'NEVER_READ_PATH', 'UNAPPROVED_TOOL', 'BLOCKED_PATTERN', 'BLOCKED_URL', 'SIZE_LIMIT', 'CALL_DEPTH']
     .every((t) => seenTypes.has(t)) && (pol.match(/\btype: '[A-Z_]+'/g) || []).filter((t) => !/SENSITIVE_DATA|RESPONSE_|HARMFUL|PROCESSING/.test(t)).every((t) => seenTypes.has(t.slice(7, -1))));
   for (const { desc: d, hint } of (policy as unknown as { BLOCKED_PATTERNS_WITH_DESC: Array<{ desc: string; hint: string }> }).BLOCKED_PATTERNS_WITH_DESC) {
     check(`F-T1 pattern text carries none of & < > " ' (${d})`, !ESC.test(d) && !ESC.test(hint));

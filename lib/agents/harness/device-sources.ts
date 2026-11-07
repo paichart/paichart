@@ -28,17 +28,56 @@
  */
 
 export const DEVICE_SOURCES_GRAMMAR_VERSION = 1;
+/**
+ * Config-sources network step (DESIGN v2 §1.2, §3.1; owner G3-a, 2026-11-04): grammar v2 adds ONE kind, `live-read` — the device's
+ * running configuration read whole as EVIDENCE: never held, never edited, never forced. VERSION RULE: a PARSED block resolves to the
+ * highest version among the kinds it uses (a block of v1 kinds stays v1, byte-identical to every stored snapshot and stamp); every
+ * NON-parsed state (absent / unparseable / conflict / snapshot-* / could-not-check) stays `DEVICE_SOURCES_GRAMMAR_VERSION` (1)
+ * permanently — those stamps copy it, and moving it would move every stored `snapshot-absent` stamp on replay (execution-facts S8).
+ */
+export const DEVICE_SOURCES_GRAMMAR_VERSION_LIVE_READ = 2;
+/** The grammar versions a stored snapshot may carry (the reader validates each entry against ITS version's kinds). */
+export const DEVICE_SOURCES_GRAMMAR_VERSIONS: readonly number[] = Object.freeze([1, 2]);
+/**
+ * THE KIND GATE — static, pinned, flipped by the network TEXT commit (network-provisioning 1.26.0), never by seed or DB state (the parser
+ * is pure and the offline replay must not read the protocol table; execution-facts S8). While false, `live-read` is `unknown-kind`
+ * exactly as before this code shipped, so a stored or in-flight 1.25.0 leg never sees a block resolve differently. `test:device-sources`
+ * LR8 pins "the gate ⇔ the seed's network-provisioning text carries the `live-read` kind line" (true since 1.26.0).
+ */
+export const LIVE_READ_KIND_ENABLED = true; // flipped WITH network-provisioning 1.26.0 (merged to main 2026-11-05, owner SHIP decision after L-CS-N)
+let liveReadKindLabOverride: boolean | null = null;
+/** LAB ONLY (DESIGN v2 §1.2 / audit F15): the leg replay lab binds the kind gate per arm (candidate open, base closed). Pinned by
+ *  `test:device-sources`: no file outside `scripts/leg-replay-lab/` and `scripts/test-*` calls it. Production never does. */
+export function __setLiveReadKindForLab(on: boolean | null): void { liveReadKindLabOverride = on; }
+export function liveReadKindEnabled(): boolean { return liveReadKindLabOverride ?? LIVE_READ_KIND_ENABLED; }
 /** The interface-contract key the Program Architect writes (`deviceSources["network-provisioning"]`). */
 export const DEVICE_SOURCES_CONTRACT_KEY = 'network-provisioning';
 /** The separator the protocol prints: SPACE, U+2014 EM DASH, SPACE. Nothing else is accepted. */
 export const SOURCE_SEPARATOR = ' — ';
 
-export type DeviceSourceKind = 'git-file' | 'device-read' | 'command-package';
+export type DeviceSourceKind = 'git-file' | 'device-read' | 'command-package' | 'live-read';
+/** Every kind, in grammar order — the kind-exhaustiveness pin walks THIS list through every kind switch. */
+export const DEVICE_SOURCE_KINDS: readonly DeviceSourceKind[] = Object.freeze(['git-file', 'device-read', 'command-package', 'live-read']);
+/** The kinds each grammar version admits (a stored v1 snapshot may never carry a `live-read` entry). */
+export const DEVICE_SOURCE_KINDS_BY_VERSION: Readonly<Record<number, readonly DeviceSourceKind[]>> = Object.freeze({
+  1: Object.freeze(['git-file', 'device-read', 'command-package'] as DeviceSourceKind[]),
+  2: Object.freeze(['git-file', 'device-read', 'command-package', 'live-read'] as DeviceSourceKind[]),
+});
 
 export type DeviceSourceLine =
   | { device: string; kind: 'git-file'; service: string; owner: string; repo: string; path: string; ref: string | null }
   | { device: string; kind: 'device-read'; service: string }
-  | { device: string; kind: 'command-package' };
+  | { device: string; kind: 'command-package' }
+  /** grammar v2: the running configuration read whole as EVIDENCE — never held, never edited, never forced. Stands ALONE on a device. */
+  | { device: string; kind: 'live-read'; service: string };
+
+/** Exhaustiveness helper for kind switches: a new kind that reaches this is a compile error and, at runtime, a throw. */
+export function assertNeverKind(k: never): never { throw new Error(`unhandled device source kind: ${String(k)}`); }
+
+/** The grammar version a PARSED entry set resolves to: the highest version any of its kinds needs. */
+export function grammarVersionOfEntries(entries: readonly DeviceSourceLine[]): number {
+  return entries.some((e) => e.kind === 'live-read') ? DEVICE_SOURCES_GRAMMAR_VERSION_LIVE_READ : DEVICE_SOURCES_GRAMMAR_VERSION;
+}
 
 export type LineProblem =
   | 'not-a-source-line'       // no `<device>: <kind>` head
@@ -51,7 +90,9 @@ export type LineProblem =
   | 'trailing-text';          // `command-package` followed by anything
 
 export type BlockProblem = LineProblem
-  | 'multiple-blocks' | 'empty-block' | 'duplicate-source' | 'command-package-not-alone' | 'contract-value-not-lines' | 'too-many-lines';
+  | 'multiple-blocks' | 'empty-block' | 'duplicate-source' | 'command-package-not-alone' | 'contract-value-not-lines' | 'too-many-lines'
+  /** grammar v2: `live-read` beside any other line for the same device (the both-declared pair stays `git-file` + `device-read`). */
+  | 'live-read-not-alone';
 
 export type DeviceSourcesParse =
   | { state: 'absent' }
@@ -96,12 +137,13 @@ export function parseDeviceSourceLine(raw: string): { ok: true; line: DeviceSour
   if (kind === 'command-package') {
     return rest === '' ? { ok: true, line: { device, kind } } : { ok: false, problem: 'trailing-text' };
   }
-  if (kind !== 'git-file' && kind !== 'device-read') return { ok: false, problem: 'unknown-kind' };
+  const liveRead = kind === 'live-read' && liveReadKindEnabled();
+  if (kind !== 'git-file' && kind !== 'device-read' && !liveRead) return { ok: false, problem: 'unknown-kind' };
   const lead = `${SOURCE_SEPARATOR}service `;
   if (!rest.startsWith(lead)) return { ok: false, problem: 'separator-invalid' };
   const body = rest.slice(lead.length);
-  if (kind === 'device-read') {
-    return serviceProblem(body) ? { ok: false, problem: 'service-invalid' } : { ok: true, line: { device, kind, service: body } };
+  if (kind === 'device-read' || kind === 'live-read') {
+    return serviceProblem(body) ? { ok: false, problem: 'service-invalid' } : { ok: true, line: { device, kind, service: body } as DeviceSourceLine };
   }
   // git-file: `<service> ; <owner>/<repo>/<path> [@ <ref>]` — exactly one ` ; `, at most one ` @ `.
   const semi = body.split(' ; ');
@@ -136,6 +178,7 @@ export function parseDeviceSourceLines(lines: readonly string[]): DeviceSourcesP
   for (const e of entries) byDevice.set(e.device, [...(byDevice.get(e.device) ?? []), e.kind]);
   for (const kinds of byDevice.values()) {
     if (kinds.includes('command-package') && kinds.length > 1) return { state: 'unparseable', problem: 'command-package-not-alone', lineIndex: null };
+    if (kinds.includes('live-read') && kinds.length > 1) return { state: 'unparseable', problem: 'live-read-not-alone', lineIndex: null };
     if (new Set(kinds).size !== kinds.length) return { state: 'unparseable', problem: 'duplicate-source', lineIndex: null };
   }
   return { state: 'parsed', entries };
@@ -179,10 +222,17 @@ export function parseDeviceSourcesContractValue(value: unknown): DeviceSourcesPa
 }
 
 /** Order-insensitive identity of a parsed entry set (contract vs task body). */
+function entryKey(e: DeviceSourceLine): unknown[] {
+  switch (e.kind) {
+    case 'git-file': return [e.device, e.kind, e.service, e.owner, e.repo, e.path, e.ref];
+    // execution-facts B2: `live-read` is keyed WITH its service — an edit of the evidence service must read `snapshot-changed`.
+    case 'device-read': case 'live-read': return [e.device, e.kind, e.service];
+    case 'command-package': return [e.device, e.kind];
+    default: return assertNeverKind(e);
+  }
+}
 function entrySetKey(entries: readonly DeviceSourceLine[]): string {
-  return entries.map((e) => JSON.stringify(e.kind === 'git-file'
-    ? [e.device, e.kind, e.service, e.owner, e.repo, e.path, e.ref]
-    : e.kind === 'device-read' ? [e.device, e.kind, e.service] : [e.device, e.kind])).sort().join('\n');
+  return entries.map((e) => JSON.stringify(entryKey(e))).sort().join('\n');
 }
 
 /**
@@ -195,12 +245,12 @@ export function resolveLegDeviceSources(input: { contractValue: unknown; taskBod
   const b = parseDeviceSourcesBlock(input.taskBody);
   if (c.state === 'unparseable') return { state: 'unparseable', grammarVersion: g, source: 'contract', problem: c.problem, lineIndex: c.lineIndex };
   if (c.state === 'parsed') {
-    if (b.state === 'absent') return { state: 'parsed', grammarVersion: g, source: 'contract', entries: c.entries };
+    if (b.state === 'absent') return { state: 'parsed', grammarVersion: grammarVersionOfEntries(c.entries), source: 'contract', entries: c.entries };
     if (b.state === 'unparseable' || entrySetKey(b.entries) !== entrySetKey(c.entries)) return { state: 'conflict', grammarVersion: g };
-    return { state: 'parsed', grammarVersion: g, source: 'contract', entries: c.entries };
+    return { state: 'parsed', grammarVersion: grammarVersionOfEntries(c.entries), source: 'contract', entries: c.entries };
   }
   if (b.state === 'unparseable') return { state: 'unparseable', grammarVersion: g, source: 'task-body', problem: b.problem, lineIndex: b.lineIndex };
-  if (b.state === 'parsed') return { state: 'parsed', grammarVersion: g, source: 'task-body', entries: b.entries };
+  if (b.state === 'parsed') return { state: 'parsed', grammarVersion: grammarVersionOfEntries(b.entries), source: 'task-body', entries: b.entries };
   return { state: 'absent', grammarVersion: g };
 }
 
@@ -228,13 +278,14 @@ export function buildDeviceSourcesSnapshot(resolution: LegDeviceSources, takenAt
 }
 
 const isStr = (v: unknown): v is string => typeof v === 'string';
-function validEntry(e: unknown): e is DeviceSourceLine {
+function validEntry(e: unknown, grammarVersion: number = DEVICE_SOURCES_GRAMMAR_VERSION): e is DeviceSourceLine {
   if (!e || typeof e !== 'object' || Array.isArray(e)) return false;
   const x = e as Record<string, unknown>;
   if (!isStr(x.device) || !DEVICE_RE.test(x.device)) return false;
+  if (!(DEVICE_SOURCE_KINDS_BY_VERSION[grammarVersion] ?? []).includes(x.kind as DeviceSourceKind)) return false;
   if (x.kind === 'command-package') return Object.keys(x).length === 2;
   if (!isStr(x.service) || serviceProblem(x.service)) return false;
-  if (x.kind === 'device-read') return Object.keys(x).length === 3;
+  if (x.kind === 'device-read' || x.kind === 'live-read') return Object.keys(x).length === 3;
   if (x.kind !== 'git-file') return false;
   return isStr(x.owner) && OWNER_REPO_RE.test(x.owner) && isStr(x.repo) && OWNER_REPO_RE.test(x.repo) && isStr(x.path)
     && x.path.split('/').every((p) => PATH_SEG_RE.test(p) && p !== '.' && p !== '..')
@@ -251,15 +302,20 @@ export function readDeviceSourcesSnapshot(metadata: unknown): DeviceSourcesSnaps
   const s = raw as Record<string, unknown>;
   if (s.version !== DEVICE_SOURCES_SNAPSHOT_VERSION || !isStr(s.takenAt)) return 'unreadable';
   const r = s.resolution as Record<string, unknown> | null;
-  if (!r || typeof r !== 'object' || r.grammarVersion !== DEVICE_SOURCES_GRAMMAR_VERSION) return 'unreadable';
+  // Config-sources network step: v1 AND v2 snapshots are readable; each entry is validated against ITS version's kinds, and only a
+  // PARSED resolution may carry v2 (every non-parsed state is v1 forever). A v2 snapshot must actually use a v2 kind.
+  if (!r || typeof r !== 'object' || !DEVICE_SOURCES_GRAMMAR_VERSIONS.includes(r.grammarVersion as number)) return 'unreadable';
+  if (r.grammarVersion !== DEVICE_SOURCES_GRAMMAR_VERSION && r.state !== 'parsed') return 'unreadable';
   const src = r.source === 'contract' || r.source === 'task-body';
   if (r.state === 'absent' || r.state === 'conflict') return { version: 1, takenAt: s.takenAt, resolution: { state: r.state, grammarVersion: DEVICE_SOURCES_GRAMMAR_VERSION } };
   if (r.state === 'unparseable' && src && isStr(r.problem) && (r.lineIndex === null || typeof r.lineIndex === 'number')) {
     return { version: 1, takenAt: s.takenAt, resolution: { state: 'unparseable', grammarVersion: DEVICE_SOURCES_GRAMMAR_VERSION,
       source: r.source as 'contract' | 'task-body', problem: r.problem as BlockProblem, lineIndex: r.lineIndex as number | null } };
   }
-  if (r.state === 'parsed' && src && Array.isArray(r.entries) && r.entries.length > 0 && r.entries.length <= MAX_LINES && r.entries.every(validEntry)) {
-    return { version: 1, takenAt: s.takenAt, resolution: { state: 'parsed', grammarVersion: DEVICE_SOURCES_GRAMMAR_VERSION,
+  if (r.state === 'parsed' && src && Array.isArray(r.entries) && r.entries.length > 0 && r.entries.length <= MAX_LINES
+    && r.entries.every((e) => validEntry(e, r.grammarVersion as number))
+    && grammarVersionOfEntries(r.entries as DeviceSourceLine[]) === r.grammarVersion) {
+    return { version: 1, takenAt: s.takenAt, resolution: { state: 'parsed', grammarVersion: r.grammarVersion as number,
       source: r.source as 'contract' | 'task-body', entries: r.entries as DeviceSourceLine[] } };
   }
   return 'unreadable';
@@ -280,12 +336,14 @@ export function isDescriptorUrlService(service: string): boolean {
 }
 
 /** The contract value at the documented key, or undefined. The contract is a plain object; anything else carries none. */
-export function contractDeviceSourcesValue(interfaceContract: unknown): unknown {
+export function contractDeviceSourcesValue(interfaceContract: unknown, contractKey: string = DEVICE_SOURCES_CONTRACT_KEY): unknown {
   if (!interfaceContract || typeof interfaceContract !== 'object' || Array.isArray(interfaceContract)) return undefined;
   const ds = (interfaceContract as Record<string, unknown>).deviceSources;
   if (ds === undefined || ds === null) return undefined;
   // `deviceSources` must be an object keyed by protocol token. Any other shape is NOT read as lines (that would be inferring
   // which leg it meant) — it is handed on as a non-line value, which parses `contract-value-not-lines`.
   if (typeof ds !== 'object' || Array.isArray(ds)) return { deviceSourcesNotKeyedByToken: true };
-  return (ds as Record<string, unknown>)[DEVICE_SOURCES_CONTRACT_KEY];
+  // VALUE-LEG-GIT (G2-a): the leg's OWN protocol key (variant.ts DEVICE_SOURCE_LANES); the default is the change lane's key, so every
+  // existing caller reads exactly what it read before.
+  return (ds as Record<string, unknown>)[contractKey];
 }

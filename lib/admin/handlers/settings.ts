@@ -6,7 +6,7 @@ import { SystemSettings, UpdateSettingRequest } from '../types';
 import { ApiError, ErrorCode } from '@/lib/errors';
 import { trackActivity } from '@/lib/auth/audit';
 import { UpdateSystemSettingsSchema } from '@/lib/validation/settings-validation';
-import { readJsonBody } from '@/lib/utils/read-json-body';
+import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 const settingsHandlerLogger = logger.child({ module: 'AdminSettingsHandler' });
 
@@ -78,6 +78,7 @@ export async function updateAdminSettingsHandler(
       data: settings,
     };
   } catch (error) {
+    if (payloadTooLargeResponse(error)) throw error; // createHandler maps it to 413
     settingsHandlerLogger.error({ err: error }, 'Failed to update admin settings');
     throw error;
   }

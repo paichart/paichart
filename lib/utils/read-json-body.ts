@@ -14,6 +14,7 @@
  * Every `request.json()` / `req.json()` on an incoming request in app/api and lib goes through this helper —
  * scripts/test-read-json-body.ts pins that no direct call remains.
  */
+import { NextResponse } from 'next/server';
 import { ApiError, ErrorCode } from '@/lib/errors';
 import { exceedsArgumentNodeCap } from '@/lib/utils/json-node-cap';
 
@@ -52,4 +53,15 @@ export async function readJsonBody<T = any>(req: Request, opts: ReadJsonBodyOpti
   const parsed = JSON.parse(text);   // '' or malformed ⇒ SyntaxError, as request.json() did
   if (exceedsArgumentNodeCap(parsed, maxValues)) throw tooLarge('JSON values', maxValues);
   return parsed as T;
+}
+
+/**
+ * PAYLOAD-413-RAW-CATCH (2026-11-04, sec-ops ZOD-305-FIX-REVIEW (3)): routes with their own catch turned readJsonBody's 413 into
+ * a 500 logged at error level. Their catch now starts with `const tooLarge = payloadTooLargeResponse(err); if (tooLarge) return tooLarge;`.
+ */
+export function payloadTooLargeResponse(error: unknown): NextResponse | null {
+  if (error instanceof ApiError && error.code === ErrorCode.PAYLOAD_TOO_LARGE) {
+    return NextResponse.json({ error: { message: error.message, code: error.code } }, { status: 413 });
+  }
+  return null;
 }
