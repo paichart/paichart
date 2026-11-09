@@ -433,14 +433,15 @@ the prose above, because two readings of the same sentence produce two different
   derivation is correct — the checker verifies containment, not that you met the requirement.
   **Satisfy the requirements; do not target the checker.**
 
-### Device sources — a network leg only
+### Device sources — a network leg only (delete this sub-section on a leg on any other token)
 
 > **🗑 AUTHORING NOTE — the Device sources slot.** Keep this sub-section only on a leg on the `network-provisioning` token
 > (value or change) and delete it on every other leg. It is the LAST part of the leg's section. Copy the owner's item that
 > the leg's `sources` row cites into the fence: its `## Device sources` heading line and every line under it, character
 > for character (the U+2014 em dash included), never retyped, reordered, shortened or completed from the harvest. Keep
 > exactly one of the two lane sentences. An item that declares no lines for a value leg: keep the bullet with the item's
-> words and no fence. While the row is OPEN, the bullet states only its gap, naming the row id, and carries no fence.
+> words and no fence. While the row is OPEN, the slot is this ONE line and nothing else, with no lane sentence and no fence:
+> `` - **Device sources** (row `<token>.sources`, OPEN): no block until the owner declares this leg's sources. ``
 
 - **Device sources** (row `{{LEG_TOKEN}}.sources`, item {{N}}). {{LANE SENTENCE — keep one: This leg changes device configuration. · This leg changes no device configuration.}}
   The leg's task description carries this `## Device sources` block exactly:
@@ -486,14 +487,15 @@ the prose above, because two readings of the same sentence produce two different
   prominently**: {{WHAT THE FURTHER LEG CONSUMES — named by rule and producer, never by value}} —
   the same obligation, and the same validation form, Pipeline 1 carries.
 
-### Device sources — a network leg only
+### Device sources — a network leg only (delete this sub-section on a leg on any other token)
 
 > **🗑 AUTHORING NOTE — the Device sources slot.** Keep this sub-section only on a leg on the `network-provisioning` token
 > (value or change) and delete it on every other leg. It is the LAST part of the leg's section. Copy the owner's item that
 > the leg's `sources` row cites into the fence: its `## Device sources` heading line and every line under it, character
 > for character (the U+2014 em dash included), never retyped, reordered, shortened or completed from the harvest. Keep
 > exactly one of the two lane sentences. An item that declares no lines for a value leg: keep the bullet with the item's
-> words and no fence. While the row is OPEN, the bullet states only its gap, naming the row id, and carries no fence.
+> words and no fence. While the row is OPEN, the slot is this ONE line and nothing else, with no lane sentence and no fence:
+> `` - **Device sources** (row `<token>.sources`, OPEN): no block until the owner declares this leg's sources. ``
 
 - **Device sources** (row `{{LEG_TOKEN}}.sources`, item {{N}}). {{LANE SENTENCE — keep one: This leg changes device configuration. · This leg changes no device configuration.}}
   The leg's task description carries this `## Device sources` block exactly:
