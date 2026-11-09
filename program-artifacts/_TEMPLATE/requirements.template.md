@@ -132,7 +132,7 @@
 >   A forced row's *rule or named target* cell reads `gap` — a gap report naming what is absent — and nothing else.
 > - `OPEN — <the question>; options: <the row's options>` — with NO default.
 >
-> `admitted-principal`, `request-path`, `principal-unseen`, `granted-action`, `existing-grant`, `target-empty`, `collateral`, `enforcer-scope`, `covered-routes` and `must-stay-reachable` are NEVER derived and NEVER forced.
+> `admitted-principal`, `request-path`, `principal-unseen`, `granted-action`, `existing-grant`, `target-empty`, `collateral`, `enforcer-scope`, `covered-routes`, `must-stay-reachable` and `sources` are NEVER derived and NEVER forced.
 > An `admitted-principal` answer rests on a premise — that the enforcer SEES that attribute on the path the sender's traffic
 > takes (a source address that is translated or never reaches the enforcer cannot be matched): state it as an
 > existence-assumption branch the leg's harvest decides — the *Admitted-principal premise* slot of each authorisation leg —
@@ -147,7 +147,8 @@
 > objective line that applies to every leg (e.g. "absent enforcers are created") must be a NUMBERED item, so rows can cite it.
 > An authorisation row is deleted only if the leg neither grants nor removes access on its target, and `request-path` also
 > when `admitted-principal` admits no address; on a routing leg,
-> `covered-routes` is deleted only when the leg adds no advertised covering route, and `must-stay-reachable` is never deleted.
+> `covered-routes` is deleted only when the leg adds no advertised covering route, and `must-stay-reachable` is never deleted;
+> `sources` is never deleted on a network leg.
 > A deleted row is listed in the owner block as `not-applicable — <why the row does not apply>`. Never delete a row to avoid answering it.
 > An owner item that states a choice for a leg which no row of that leg cites gets ONE row on that leg keyed by the item's
 > NUMBER, `<token>.item-<N>`: options `—`, source `(declared — item N: "<one exact span of item N>")` with the same N; never
@@ -227,6 +228,22 @@
 > 2026-10-05 — a cover advertised in place of the routes it covered on both devices of a pair, so cross-device reachability
 > to the covered hosts may be lost, inferred and not applied, and nobody had asked which destinations must stay reachable.
 > The "in place of" choice came from a hand-written topology note; no generated spec made it.)
+
+### A network leg (configuration sources)
+
+| id | question | options | rule or named target | source |
+|---|---|---|---|---|
+| {{LEG_TOKEN}}.sources | which devices the leg reads (the ones it changes and the ones it only needs to see), and where each one's configuration is read from | — | {{THE OWNER'S BLOCK, BY ITEM — one block per lane}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+
+> **🗑 Sources block.** A SOURCES leg is any leg on the `network-provisioning` token, a value leg or a change leg, whatever
+> its work: the one class keyed on the token, because only that protocol stops (a change leg) or reads Git files only
+> (a value leg) by a declared block. Delete this block on every other leg; on a network leg it is never deleted.
+> `sources` is declared or OPEN, never derived and never forced: a harvest shows which devices exist, never which
+> configuration is the source of truth or which devices the leg must see. The answer is a numbered item whose text IS the
+> block: every device the leg reads, the ones it changes AND the ones it only needs to see, each with its source. Every
+> change leg carries the same block (the platform carries one block per lane); a value leg carries its own block or, when
+> its item declares no lines, none. The leg's *Device sources* slot transcribes it. (Earned: firewall-a3, 2026-11-01 — a
+> block naming only the changed switch left the other unread, and the leg produced a colliding pool.)
 
 ## Decisions needed from the owner
 
@@ -416,6 +433,22 @@ the prose above, because two readings of the same sentence produce two different
   derivation is correct — the checker verifies containment, not that you met the requirement.
   **Satisfy the requirements; do not target the checker.**
 
+### Device sources — a network leg only
+
+> **🗑 AUTHORING NOTE — the Device sources slot.** Keep this sub-section only on a leg on the `network-provisioning` token
+> (value or change) and delete it on every other leg. It is the LAST part of the leg's section. Copy the owner's item that
+> the leg's `sources` row cites into the fence: its `## Device sources` heading line and every line under it, character
+> for character (the U+2014 em dash included), never retyped, reordered, shortened or completed from the harvest. Keep
+> exactly one of the two lane sentences. An item that declares no lines for a value leg: keep the bullet with the item's
+> words and no fence. While the row is OPEN, the bullet states only its gap, naming the row id, and carries no fence.
+
+- **Device sources** (row `{{LEG_TOKEN}}.sources`, item {{N}}). {{LANE SENTENCE — keep one: This leg changes device configuration. · This leg changes no device configuration.}}
+  The leg's task description carries this `## Device sources` block exactly:
+
+```
+{{THE OWNER'S BLOCK — its heading line and every line under it, exactly as the cited item gives it}}
+```
+
 ## Pipeline 2 objective — {{DOMAIN_2}} {{(DOWNSTREAM)}}
 
 > **🗑 AUTHORING NOTE.** A downstream leg still harvests its own domain, still has preconditions, and
@@ -452,6 +485,22 @@ the prose above, because two readings of the same sentence produce two different
 - {{If a FURTHER leg consumes from this one}}: **the deliverable MUST publish, explicitly and
   prominently**: {{WHAT THE FURTHER LEG CONSUMES — named by rule and producer, never by value}} —
   the same obligation, and the same validation form, Pipeline 1 carries.
+
+### Device sources — a network leg only
+
+> **🗑 AUTHORING NOTE — the Device sources slot.** Keep this sub-section only on a leg on the `network-provisioning` token
+> (value or change) and delete it on every other leg. It is the LAST part of the leg's section. Copy the owner's item that
+> the leg's `sources` row cites into the fence: its `## Device sources` heading line and every line under it, character
+> for character (the U+2014 em dash included), never retyped, reordered, shortened or completed from the harvest. Keep
+> exactly one of the two lane sentences. An item that declares no lines for a value leg: keep the bullet with the item's
+> words and no fence. While the row is OPEN, the bullet states only its gap, naming the row id, and carries no fence.
+
+- **Device sources** (row `{{LEG_TOKEN}}.sources`, item {{N}}). {{LANE SENTENCE — keep one: This leg changes device configuration. · This leg changes no device configuration.}}
+  The leg's task description carries this `## Device sources` block exactly:
+
+```
+{{THE OWNER'S BLOCK — its heading line and every line under it, exactly as the cited item gives it}}
+```
 
 ## Design constraints — split across the contract and the DAG
 
