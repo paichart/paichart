@@ -13,11 +13,6 @@ interface of that switch, or inside any prefix that switch originates in BGP. An
 ceos2 uses it. Nothing outside the two switches is consulted. Of the free addresses, the lowest is taken, and the pool's
 first and last addresses are never taken.
 
-The new loopback takes the lowest loopback number that is above every telemetry-exporter loopback any of the leg's
-declared sources for ceos2 shows, and that none of those sources shows in use. It carries the same description as the existing
-telemetry-exporter loopbacks on ceos2, and its address is advertised in BGP by the same mechanism they use. The change leg
-states the number, the description and the mechanism it applied.
-
 Which address is free is not known in advance. One leg works it out from the switches' configuration files in Git. The
 other leg makes the change with the address the first leg published, and does not choose again.
 
@@ -39,7 +34,8 @@ with it.
 ## Pipeline 1 objective — exporter address (network-derivation, value)
 
 Harvest ceos1 and ceos2 read-only from the sources its Device sources block declares, and derive one free exporter address
-from `10.99.0.0/24` by the rules above. Publish it for the second leg. Changes nothing.
+from `10.99.0.0/24` by the rules above. Publish it for the second leg. Pipeline 1 derives the address and nothing else.
+Changes nothing.
 
 The leg's task description carries this `## Device sources` block exactly:
 
@@ -51,7 +47,13 @@ ceos2: git-file — service github-service ; paichart/paichart-lab-configs/netwo
 
 ## Pipeline 2 objective — exporter loopback on ceos2 (network-provisioning, change) — depends on Pipeline 1
 
-On ceos2, configure the new loopback with the address Pipeline 1 published, and its BGP advertisement, by the rules above.
+On ceos2, configure one new loopback with the address Pipeline 1 published, and advertise that address in BGP.
+
+Pipeline 2 chooses the loopback number: the lowest loopback number that is above every telemetry-exporter loopback any of
+Pipeline 2's declared sources for ceos2 shows, and that none of those sources shows in use. The new loopback carries the same
+description as the existing telemetry-exporter loopbacks on ceos2, and its address is advertised in BGP by the same mechanism
+they use. Pipeline 2 states the number, the description and the mechanism it applied.
+
 Never applied by this run.
 
 The leg's task description carries this `## Device sources` block exactly:
