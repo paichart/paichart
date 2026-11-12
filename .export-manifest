@@ -568,6 +568,7 @@
 CLAUDE.md
 CONTRIBUTING.md
 LICENSE
+NOTICE
 SECURITY.md
 app/(auth)/layout.tsx
 app/(auth)/login/page.tsx

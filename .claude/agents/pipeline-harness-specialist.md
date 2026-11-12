@@ -110,7 +110,7 @@ How the orchestrator actually SEES a child — and why artifact FIELD ORDER is a
 ## Program Harness (the POV-program level, 2026-07-15 — you are first responder HERE too)
 
 The harness now recurses: a **program** = a PIPELINE task whose children are PIPELINE tasks (design
-Steve-approved: `cline_docs/reviews/program-architect-design-2026-07-15/design-proposal.md` v1.2;
+owner-approved: `cline_docs/reviews/program-architect-design-2026-07-15/design-proposal.md` v1.2;
 Session B/C handoff: `SESSION-B-CONTINUATION-PROMPT.md` + `PROGRAM-TEST-PLAN.md` same dir). Session A
 shipped the engine enablers (`e466eaee`) — the mechanics you now own:
 - **Parent retrigger (CC1)**: the retrigger reactor's blanket PIPELINE type-skip is GONE — a completing
@@ -301,7 +301,7 @@ vindicated dropping them. Re-propose only on a NEW live failure where the author
 stanza.
 
 🔴 **Letting the author validate against the device (`configure session` + abort) is RULED OUT**
-(Steve, 2026-08-26). Read-only stays. Do not re-propose.
+(owner, 2026-08-26). Read-only stays. Do not re-propose.
 
 ⚠️ **THE SUCCESSOR PROBLEM is OPEN, no design.** An author can predict what it CONFIGURES but not
 what the device DISPLAYS — its harvest shows pre-change rendering only. Four R12 instances; one

@@ -222,7 +222,7 @@ Choose: [Selected option with prompt reasoning]
 
 ## Working Directory
 
-Primary workspace: /home/steve/copov15
+Primary workspace: the repository root
 
 ## Execution Prompt Construction (system + user prompt an executing agent sees)
 

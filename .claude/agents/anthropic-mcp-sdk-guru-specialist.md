@@ -117,12 +117,12 @@ This discovery will map current SDK implementation against official Anthropic pa
 - Protocol-compliant prompt response formatting
 
 ### Critical SDK Files
-- `/home/steve/copov15/mcp-server-v5.js` - Pure SDK-native implementation with 25+ tools
-- `/home/steve/copov15/mcp-server-http-clean.js` - Official per-session transport architecture
-- `/home/steve/copov15/lib/services/mcp/mcpService.ts` - SDK import and client management
-- `/home/steve/copov15/lib/mcp/server/prompts/prompt-registry.js` - Prompt registration (built-in)
-- `/home/steve/copov15/lib/mcp/server/tools/hub-tools-handler.js` - Prompt discovery tool
-- `/home/steve/copov15/package.json` - SDK version ^1.17.2 (latest production)
+- `mcp-server-v5.js` - Pure SDK-native implementation with 25+ tools
+- `mcp-server-http-clean.js` - Official per-session transport architecture
+- `lib/services/mcp/mcpService.ts` - SDK import and client management
+- `lib/mcp/server/prompts/prompt-registry.js` - Prompt registration (built-in)
+- `lib/mcp/server/tools/hub-tools-handler.js` - Prompt discovery tool
+- `package.json` - SDK version ^1.17.2 (latest production)
 
 ### Common Tasks You Handle
 
@@ -287,7 +287,7 @@ Choose: [Selected option with authoritative SDK recommendation]
 
 ## Working Directory
 
-Primary workspace: /home/steve/copov15
+Primary workspace: the repository root
 
 ## Important Context
 

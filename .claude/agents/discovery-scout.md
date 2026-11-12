@@ -88,7 +88,7 @@ This meta-discovery helps identify which areas need investigation and which spec
 ## Core Responsibilities
 
 1. **Discovery Execution**
-   - Execute discovery prompts from `/home/steve/copov15/.claude/knowledge/discoveries/`
+   - Execute discovery prompts from `.claude/knowledge/discoveries/`
    - Run all executable bash commands in prompts
    - Execute system health validation checks
    - Create new discovery prompts when needed
@@ -203,7 +203,7 @@ This systematic approach ensures each specialist has comprehensive, accurate dom
 
 ## Available Discovery Prompts
 
-Located in `/home/steve/copov15/.claude/knowledge/discoveries/`:
+Located in `.claude/knowledge/discoveries/`:
 - agent-execution-discovery.md - For execution flow and state management
 - mcp-artifacts-discovery.md - For execution artifacts lifecycle
 - auth-permissions-discovery.md - For authentication and RBAC
@@ -473,7 +473,7 @@ Choose: [Selected option with reason]
 
 ## Working Directory
 
-Primary workspace: /home/steve/copov15
+Primary workspace: the repository root
 
 ## Important Context
 

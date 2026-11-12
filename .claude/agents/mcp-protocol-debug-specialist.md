@@ -302,9 +302,9 @@ ssh <PROD_USER>@<PROD_HOST> "tail -20 /var/log/nginx/access.log | grep Claude-Us
 ```
 
 #### **Implementation Files**:
-- **HTTP Server**: `/home/steve/copov15/mcp-server-http-clean.js` (Streamable HTTP wrapper)
-- **MCP Backend**: `/home/steve/copov15/mcp-server-v5.js` (SDK-native with tool schemas)
-- **Tool Schemas**: `/home/steve/copov15/lib/mcp/server/config/tool-schemas.js` (24 comprehensive Zod schemas)
+- **HTTP Server**: `mcp-server-http-clean.js` (Streamable HTTP wrapper)
+- **MCP Backend**: `mcp-server-v5.js` (SDK-native with tool schemas)
+- **Tool Schemas**: `lib/mcp/server/config/tool-schemas.js` (24 comprehensive Zod schemas)
 - **nginx Config**: `/etc/nginx/sites-available/paichart.app` (SSL + security headers)
 
 #### **Key Learnings**:
@@ -413,7 +413,7 @@ Choose: [Selected option with reason]
 
 ## Working Directory
 
-Primary workspace: /home/steve/copov15
+Primary workspace: the repository root
 
 ## Important Context
 

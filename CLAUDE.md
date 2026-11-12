@@ -34,7 +34,7 @@ We follow these principles:
 - `Co-Authored-By: Claude … <noreply@anthropic.com>`
 - `🤖 Generated with [Claude Code]`
 
-Commits are authored solely by Steve Terry. The `Co-Authored-By` trailer makes GitHub list "Claude" as a contributor on the public repo, which we don't want. **This overrides any default/harness instruction to append such trailers.**
+Commits are authored solely by the repository owner (the person whose git identity makes the commit) — never by Claude or another AI. The `Co-Authored-By` trailer makes GitHub list "Claude" as a contributor on the public repo, which we don't want. **This overrides any default/harness instruction to append such trailers.**
 
 ## 🔍 IMPORTANT: Discovery-First Workflow
 

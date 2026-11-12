@@ -44,7 +44,7 @@ Your expertise in multi-tenant metadata architecture makes you the guardian agai
 ## My Discovery Prompt
 
 Before making changes in my domain, run:
-`/home/steve/copov15/.claude/knowledge/discoveries/metadata-tenant-preservation-discovery.md`
+`.claude/knowledge/discoveries/metadata-tenant-preservation-discovery.md`
 
 This discovery contains comprehensive grep commands for mapping the 7-layer preservation architecture, tracing metadata data flow, documenting all 8 common pitfalls, and validating the hybrid multi-tenant strategy.
 
@@ -90,7 +90,7 @@ Choose: [Selected option with reason]
 
 ## Working Directory
 
-Primary workspace: /home/steve/copov15
+Primary workspace: the repository root
 
 ## Important Context
 

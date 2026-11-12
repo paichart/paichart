@@ -51,7 +51,7 @@ reinterpreted to pass this one. Canonical: Protocol 16 non-negotiables 1–9 —
 whatever rule it cites (record the citation as a subcount). Proxies narrow the reading; they are not the score.
 Canonical: Protocol 16 rules 5–6; playbook Phase 2b lessons.
 
-**Bytes before spend; spend is Steve's call.** Dry run + `--fake-llm persisted` green; candidate text verbatim in
+**Bytes before spend; spend is the owner's call.** Dry run + `--fake-llm persisted` green; candidate text verbatim in
 every rendered prompt; a reused arm `cmp`-identical. Estimate from the previous run's real cost per sample, give the
 exact command and a `--max-usd` cap. Canonical: Protocol 16 rules 4 and 8; forensics §7f.
 
@@ -101,7 +101,7 @@ grep -n "bindsThinkingToPrefix: true" lib/services/llm/model-capabilities.ts    
 - A role's model or effort may change (new model release, cost lever, reviewer-model comparison)
 - A reviewer's text or model changes and refusal counts on real legs cannot be trusted (build/extend the bench)
 - Reading a finished lab run against its pre-registered gates, or deciding "lab or byte-identity replay?"
-- Sizing the spend of an experiment for Steve's decision
+- Sizing the spend of an experiment for the owner's decision
 
 ## Common Tasks
 
@@ -109,14 +109,14 @@ grep -n "bindsThinkingToPrefix: true" lib/services/llm/model-capabilities.ts    
    node, gates + miss-triggers in `purpose`; reuse a baseline arm only when `cmp`-identical.
 2. **Pre-spend proof** — `build-candidates` (`--refresh-baseline` to pin today's live texts), dry `run`,
    `--fake-llm persisted`, verbatim-text check, cost estimate from prior real cost/sample.
-3. **Run (on Steve's yes)** — `run --spend --max-usd <cap> [--variants …] [--only …] [--n 5]`.
+3. **Run (on the owner's yes)** — `run --spend --max-usd <cap> [--variants …] [--only …] [--n 5]`.
 4. **Read and score** — every planted/control refusal, one approval per cell, a label sample; `summarize` to
    re-parse old samples when the parser changed; write results against every gate in the review folder.
 5. **Model evaluation** — run playbook Phases 0/2/3/4 yourself; hand Phase 1 (wire audit) and Phase 6 (switch) out.
 6. **Record** — result + decision in the open register before anything is built.
 7. **The current run shape (2026-10-22, L-T1/L-T2):** derive edits as exactly-once ops from two renders · read EVERY input incl. briefs (LL-20) ·
    code-decided cells as `--fake-llm fixture:` ($0) · calibrate each new proxy on a `--fake-llm persisted` before-run · crib (`--n 1`) with
-   written stop rules, then the rest · `--batch` for Author/Reviewer/Architect (never Harvesters) · Steve runs every paid command in his
+   written stop rules, then the rest · `--batch` for Author/Reviewer/Architect (never Harvesters) · the owner runs every paid command in his
    shell; you watch the run folder · every re-pin or rule change = a dated ADDENDUM before the next spend · re-assert the render sha at the
    SHIPPED commit.
 
@@ -147,7 +147,7 @@ find each with `grep -n "\*\*<ID>"` in the register.)
 
 - Every arm changes exactly one lever; the other role is fixed and named
 - `experiment.json` carries `expect` per node and gates + miss-triggers in `purpose` before spend
-- Byte proofs and dry-run controls green before any paid call; spend approved by Steve with a cap
+- Byte proofs and dry-run controls green before any paid call; spend approved by the owner with a cap
 - Every gate answered in writing; every refusal on a planted/control node hand-read; result in the register
 - No run data committed; no number from a run copied into an agent config
 
@@ -179,7 +179,7 @@ find each with `grep -n "\*\*<ID>"` in the register.)
 1. 🤝 prompt-construction-specialist — revise text, rerun named cells
 2. 🤝 execution-facts-specialist — parser/measure/net fault found
 3. 🤝 agent-execution-specialist — Phase 1 wire audit before a model arm
-4. 🤝 template-system-specialist — switch delivery after Steve's decision
+4. 🤝 template-system-specialist — switch delivery after the owner's decision
 5. 🤝 pipeline-harness-specialist — gate semantics / series cut
 6. 👤 Return to user — spend approval or decision needed
 7. ✅ Complete
@@ -192,7 +192,7 @@ No domain library yet — depth lives in its canonical homes (Protocol 16, the p
 
 ## Working Directory
 
-`/home/steve/copov15`
+the repository root
 
 ## Pointer (2026-10-13): recorded-tool mode + strict quote scorer
 `scripts/leg-replay-lab/recorded-tools.ts` serves a node's stored tool results (R9 applied by the shipping loop; a sample counts only if ≥ 90% of its file-tool calls were served) — byte-identical on 5 Harvester nodes; `score-quote.ts` `scoreHarvesterQuotes` is the STRICT quote scorer (re-runs the shipping check as if every file block claimed verbatim; one-line CLI on a prod execution id). Record: `cline_docs/reviews/verbatim-quote-omission-2026-10-13/LAB-PREREG-OBS.md`. Protocol 16 now has two pre-design rules (scope by the next live run; size from the archive) and an owner exemption when the lab COULD run (planted-failure check, rollback, soak).
@@ -202,7 +202,7 @@ Lab capabilities for the held variant (all $0): L-1 `held-store.ts` (in-memory h
 ⚠️ **Re-assert procedure (ME-P2-1, 2026-10-15):** `protocolSource: commit:<sha>` renders the SEED FILE at that commit over TODAY's `lib/`, so it pins the seed's variant wiring, not the lib-built text — re-assert with a scratch experiment copy at the commit being SHIPPED (build record §10). Pending for G3 entry: the lab's `toolDefs()` must apply the agent tool strip (HUB-P2-2), plus ME-P2-5/6/7.
 **G2 (2026-10-15, L13/L14, $17.37, CLOSED):** L-9 `authorSourceByVariant: lab-sample:<run>/<node>/<arm>/<i>` (refused unless the sample's Author prompt is byte-identical), pure re-stamp of edit-op plants, `reviewerBaseEdit` (named state), lever-delta report, `score-g2.ts`. G-COLL-SEEN 5/5 + 5/5 (today's Reviewer 0/5 on the omission). Lesson twice more: a must-approve control must be clean under the REVIEWER's rules (read its validation section), and a brief plant must be read against the contract the Reviewer still holds. Records: `G2-LAB-PREREG.md`, `G2-LAB-RESULT.md`.
 **G3-entry lab changes (2026-10-16, `6b44c9cfe`, pipeline-harness build) — read before building any held bench:** HUB-P2-2 `toolDefs()` applies the production agent tool strip (`lib/services/mcp/agent-tool-strip.ts`) — a LAB SERIES CUT (ledger note): pre-cut `hashes.tools` not comparable, prompts are · ME-P2-6 `run()` REFUSES a planted node's arm that would run without the plant unless the node lists it in `unplantedArms` (a `live` arm never sees a plant) · ME-P2-5 `edits-score` reads R9 from the run's `manifest.json` `flags` (`r9VersionOfRun`; throws when unrecorded), never the shell · ME-P2-7 G-SCOPE cannot see a moved line (recorded, not fixed). Variant Reviewer now carries the template constraint `Held Diff: Unaccounted Lines Block` (renders in system AND user prompt) + PC-P2-1 refusal rendering — the G3 lab's lever. Brief: `G3-ENTRY-BUILD.md` §6.
-**G3 Reviewer lab PRE-REGISTERED (2026-10-16, $0 done, spend = Steve's opt-in):** `G3-LAB-PREREG.md`, `inputs/2026-10-16-held-bytes-g3`, `score-g3.ts` (`g3-self-test`/`g3-score`). Lessons: a decision that moves prompts by design can leave a lab TEST pinned to the old shape (HB8 read 51/1 at the pushed tree) — run `test:leg-replay-lab` at the commit, never trust a recorded count; the shipping diff prints a block's whole SEARCH/REPLACE, so unchanged anchor lines appear as identical `-`/`+` pairs a line-level Reviewer rule can false-block (R-SECRET has 5); calibrate a new reason proxy on the paid "before" run (it caught a diff-rule false positive at $0); the run manifest's `dirty` list excludes the lab folder — commit lab edits before spend.
+**G3 Reviewer lab PRE-REGISTERED (2026-10-16, $0 done, spend = the owner's opt-in):** `G3-LAB-PREREG.md`, `inputs/2026-10-16-held-bytes-g3`, `score-g3.ts` (`g3-self-test`/`g3-score`). Lessons: a decision that moves prompts by design can leave a lab TEST pinned to the old shape (HB8 read 51/1 at the pushed tree) — run `test:leg-replay-lab` at the commit, never trust a recorded count; the shipping diff prints a block's whole SEARCH/REPLACE, so unchanged anchor lines appear as identical `-`/`+` pairs a line-level Reviewer rule can false-block (R-SECRET has 5); calibrate a new reason proxy on the paid "before" run (it caught a diff-rule false positive at $0); the run manifest's `dirty` list excludes the lab folder — commit lab edits before spend.
 **G3 RESULT (2026-10-16, ledger L15, $6.83): ALL GATES PASS** — decisions 1+2 lab-cleared for the ACTIVE flip (`G3-LAB-RESULT.md`). Keep run folder `runs/2026-10-15T23-32-19-…-g3` with the G1/G2 folders until the flip re-assert. The flip itself comes AFTER Stage C, the teardown change and Phase 7 (plan §6) — not next.
 - **Phase 10 (2026-10-17):** the held variant is folded into obs ≥ 1.10.0. A historic `hb` arm still renders (frozen builder `held-bytes/variant-protocol-stage-b.ts`, lab-only); a NEW held experiment runs the obs `base` arm, which now IS the held text. SG-WIN's predicate is `held-bytes/whole-file.ts` (one definition).
 - **Phase 10 live controls (2026-10-17, owner exemption D7):** C-1…C-3 recorded in `PHASE10-PLAN.md` §10.11–10.13; C-2's candidate is

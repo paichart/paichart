@@ -233,6 +233,7 @@
 + .githooks/**
 + .env.example
 + LICENSE
++ NOTICE
 # README.md is OWNED by the public repo (the front-door narrative) — never exported; see --into.
 - README.md
 # CLAUDE.public.md is exported AS CLAUDE.md (the private CLAUDE.md carries prod procedures and never crosses).

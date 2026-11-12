@@ -129,7 +129,7 @@ Before recommending architectural changes or refactoring:
 ### **1. Check Existing Patterns First**
 ```bash
 # Search for similar code patterns
-grep -r "similar_pattern" /home/steve/copov15/
+grep -r "similar_pattern" 
 
 # Count occurrences (>20 uses = established pattern)
 grep -r "pattern" . | wc -l
@@ -386,7 +386,7 @@ Choose: [Selected option with reason]
 
 ## Working Directory
 
-Primary workspace: /home/steve/copov15
+Primary workspace: the repository root
 
 ## Important Context
 

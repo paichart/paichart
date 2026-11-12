@@ -109,7 +109,7 @@ without knowing how to land it is half a procedure, and the half that leaves age
 
 The deploy seeds **protocols only** — `npm run seed:protocols`, `scripts/deploy/blue-green-deploy.sh`,
 run PRE-flip so the MCP prompt cache picks it up. It never touches `agent_templates`. **Operative policy
-(Steve, 2026-08-26): the seed scripts / `ROLE_GUIDANCE_LIBRARY` are the SOURCE OF TRUTH, and templates
+(owner, 2026-08-26): the seed scripts / `ROLE_GUIDANCE_LIBRARY` are the SOURCE OF TRUTH, and templates
 are re-seeded MANUALLY after the deploy lands.** So a STALE row after a deploy is EXPECTED, not an
 incident — it is the pending half of a two-step delivery.
 
@@ -200,10 +200,10 @@ Turning a switch ON from absent works with the plain form; OFF does not. Registe
 
 ## npm registry — the `@paichart` scope (2026-10-08)
 
-- **The npm organisation `paichart` exists** (owner Steve, free public plan, 2FA), so the `@paichart` scope is
+- **The npm organisation `paichart` exists** (owner the owner, free public plan, 2FA), so the `@paichart` scope is
   reserved. **Nothing is published yet**: `npm view @paichart/containment-checks` returns 404 by design. Record:
   open register `NPM-SCOPE @paichart`.
-- **Only Steve publishes.** He runs `npm login` + `npm publish --access public` himself; never handle, store or
+- **Only the owner publishes.** He runs `npm login` + `npm publish --access public` himself; never handle, store or
   request an npm token, and never add an `NPM_TOKEN` secret or a publish step to CI without his explicit decision.
 - **First publish has preconditions** (register entry): a clean package build without internal comments
   (execution ids, `cline_docs/` paths — a version is permanent after 72 h), tied to the external engineer test.
@@ -354,11 +354,11 @@ lives here — not in a new specialist — until a public release produces recur
   `.env.example`, `package.json` scripts, seeds, or the auth/OAuth boot path. Template drift is silent:
   `.env.example` had carried a retired secret, wrong `_EXPIRY` names, 8 phantom `RATE_LIMIT_*` knobs and a
   DUPLICATE `APP_BASE_URL` (prod value first — dotenv keeps the first) for months; nothing else would have said so.
-- **Export boundary (Steve's rule)**: server management NEVER exports — `infra/`, monitors, dead-man's-switch,
+- **Export boundary (the owner's rule)**: server management NEVER exports — `infra/`, monitors, dead-man's-switch,
   health email, `deploy/`, prod smoke tests. App code that touches ops services (`lib/email.ts`) ships env-driven.
 - **PUBLISHED 2026-09-04** — `paichart/paichart` (the existing front-door repo; Elastic License 2.0 since 2026-09-07, Apache 2.0 before). Re-export = `export-public.py
   --out` → full `test:all-validation` ON THE EXPORT (mandatory before any public push; never rebuild the export under a
-  running chain) → `--into ~/paichart` → review → commit as Steve → push. Manifest propagates removals; guards refuse
+  running chain) → `--into ~/paichart` → review → commit as the owner → push. Manifest propagates removals; guards refuse
   wrong-repo runs and >10% removals. **Next**: devext second-machine deployment — start from
   `cline_docs/follow-ups/open-source-continuation-2026-09-06.md`. Known public-doc gap: OAUTH-SETUP.md omits that the
   ChatGPT connector uses MICROSOFT OAuth.
@@ -484,16 +484,16 @@ Choose: [Selected option with reason]
 
 ## Working Directory
 
-Primary workspace: /home/steve/copov15
+Primary workspace: the repository root
 
 ## Important Context
 
 Deployment model: push-to-main → GitHub Actions validate+deploy → release symlink + pm2 restart;
-Steve verifies in browser (no SSH deploy-polling). Prod: <PROD_HOST>, .env.production,
+The owner verifies in browser (no SSH deploy-polling). Prod: <PROD_HOST>, .env.production,
 db push everywhere (zero drift). Full operational narrative: domain library §Important Context.
 
 ## Pointer (2026-10-16): deploy gates + backups
-The battery is NOT the whole CI gate set — `validation-reusable.yml` also runs workflow-only steps (demo-write + resource-authz gates, no-dual-files, uuid scan); one blocked deploy run 38776222113 (2026-10-15). **Backups run from the operator's LOCAL machine** (`/home/steve/disaster-recovery`, local crontab: DB 23:00, config 22:00, app 00:00, weekly full Sun 21:00, verify 01:00; DB sets older than 7 days removed Sun 03:00) — the server has none of its own, so a server-side check finds nothing. Four ad-hoc full `pg_dump`s also sit in `/root` on the server, unexpired (register PROD-ROOT-DUMPS).
+The battery is NOT the whole CI gate set — `validation-reusable.yml` also runs workflow-only steps (demo-write + resource-authz gates, no-dual-files, uuid scan); one blocked deploy run 38776222113 (2026-10-15). **Backups run from the operator's LOCAL machine** (`a disaster-recovery folder on the operator's own machine`, local crontab: DB 23:00, config 22:00, app 00:00, weekly full Sun 21:00, verify 01:00; DB sets older than 7 days removed Sun 03:00) — the server has none of its own, so a server-side check finds nothing. Four ad-hoc full `pg_dump`s also sit in `/root` on the server, unexpired (register PROD-ROOT-DUMPS).
 **Dev-machine prod snapshots expire at 24 h** (2026-10-26): `scripts/replay-snapshot-gc.sh` (registry + marker, never path-guessing; refuses git work trees) runs at every nets-replay start and from an hourly systemd USER timer (`--install-timer`, Persistent=true — owner installs; its header has install/uninstall).
 
 ## Pointer (2026-10-27): held-network CLOSED

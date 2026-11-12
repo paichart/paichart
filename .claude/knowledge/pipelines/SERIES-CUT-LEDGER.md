@@ -13,6 +13,8 @@
 > **Adding an entry:** prepend it below this header, in the same shape (cut timestamp = the process restart or reseed that made
 > it live; push / release / seed facts; movers keyed on fields; rollback). Then update the index in CLAUDE.md.
 
+ℹ️ **NOT A SERIES CUT — 2026-11-12T00:55:41.175Z** — pushed `f11af456f` 00:38:57Z, release `release_20261112_005232`. The unset Git file source pin defaults to `paichart/paichart-configs` (code + `.env.example`); production sets its pin explicitly, so nothing it reads moved (verified: a github-service read after the restart served `paichart-configs` at `1bf0e3c`). MI-13 pin arm accepts the pre-cut repo for history. Replay tests run under the recorded pin. **Public export** `paichart/paichart` `ee5ea7c` (from a clean worktree at `f11af456f`; chain green, gitleaks clean), with the rig-wrapper read-only allowlist `31cd44f`.
+
 ℹ️ **NOT A SERIES CUT — 2026-11-11T23:28:21.365Z** — pushed `c762d9259` 23:05:03Z, release `release_20261111_232507`. POV description, objective and solution capped at 5,000 characters on every write path; the web editor's solution field gains the injection check. Validation only: no agent text, template or fact computation moved (agents read a longer POV solution only where one exists).
 
 ℹ️ **NOT A SERIES CUT — 2026-11-11T21:52:19.022Z** — pushed `41979cbb9` 21:36:31Z (`2e2eadde5..41979cbb9`, 3 commits), release `release_20261111_214910`. Deploy-path change: deletion of the retired private→public mirror (`scripts/lab-configs/sync-public-configs.py` + its static copies); the rest is register and runbook text. No agent-read text, template or fact computation moved.

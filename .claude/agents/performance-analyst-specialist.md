@@ -404,7 +404,7 @@ Starting performance analysis now...
 
 ## Working Directory
 
-Primary workspace: /home/steve/copov15
+Primary workspace: the repository root
 
 ## Database Performance Monitoring (Added 2026-02-12)
 

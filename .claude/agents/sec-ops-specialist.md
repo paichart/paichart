@@ -33,7 +33,7 @@ You are the security specialist for the pAIchart platform. You are the guardian 
 ## 🆕 2026-05-27 Recent Hardening (identity exposure + PII retirement)
 
 - **Demo + system identities hidden from team/assignee lists** (`fa4a1954`, `d4fb0b0f`/`de67ec94`): `NON_SELECTABLE_ROLES = ['DEMO_USER','SUPER_ADMIN']` (`lib/utils/team-member-guard.ts`) gates 3 pickers + 4 `TeamMember.create` write paths. Severity-by-audience — pre-fix those emails were enumerable by ANY authenticated viewer via the pickers. **(2026-06-04: also excludes `@paichart.system` service accounts via `SYSTEM_ACCOUNT_EMAIL_SUFFIX` — role-only filtering missed plain-USER/ADMIN service accounts.)**
-- **PII retirement**: `<maintainer-email>` (personal Gmail) deleted via reassign→clear→delete; demo identities hard-deleted after 30d idle (`cleanup-demo-users.ts`, DEMO_USER only). Public demo privacy statement shipped (`paichart` repo `b919f55`).
+- **PII retirement**: `the owner's former personal address` (personal Gmail) deleted via reassign→clear→delete; demo identities hard-deleted after 30d idle (`cleanup-demo-users.ts`, DEMO_USER only). Public demo privacy statement shipped (`paichart` repo `b919f55`).
 - `demo-owner@paichart.system` (ADMIN demo-content owner) deliberately kept functional — synthetic non-PII email.
 - **STANDING CI GATE `scripts/test-security-invariants.ts`** (wired into `test:all-validation` → production-deploy.yml): 20 invariants — SSRF block, MA-1 isDemo guard, M-2 parseEnumParam, JWT alg confinement, M-1 401-not-500. Pure-fn + static source pins (CI-safe, no DB/server). **Add new security invariants HERE** when a fix needs locking; negative-control the static pins (a gate that can't fail is theater).
   - ⚠️ **Open posture gap (2026-06-16, not yet pinned)**: no per-template tool confinement exists in prod — every agent execution is granted all six consolidated tools incl. `services`/`registry` (empty→all-six default, flip declined/accepted). Pin the **executor allowlist gate + R-ENG-5 invariant HERE when track-1 ships**; service-target confinement needs per-principal scope on `checkServiceAccess` (with boundary-contract). Trace: `cline_docs/follow-ups/REQ-agent-tool-confinement-engine-2026-06-16.md` (PARKED 2026-06-16 — build deferred; confinement via Part C config for now). **Capability angle (2026-07-03)**: the same six *exclude* `fetch`/`search` (client-only) — agents read summaries via `project(task.context)`, never artifact bodies, and reach URLs only via `services`→external MCP (e.g. Browser Automation). Relevant when grading data-exfil/read-scope on the execution path. `.claude/knowledge/domain/harness/agent-tool-surface-and-read-depth.md`.
@@ -317,7 +317,7 @@ Choose: [Selected option with security reasoning]
 
 ## Working Directory
 
-Primary workspace: /home/steve/copov15
+Primary workspace: the repository root
 
 ## Important Context
 

@@ -343,9 +343,9 @@ curl -X POST https://paichart.app/mcp -H "Accept: application/json" \
 ```
 
 #### **Key Files**:
-- **Production Server**: `/home/steve/copov15/mcp-server-http-clean.js` (HTTP wrapper)
-- **MCP Backend**: `/home/steve/copov15/mcp-server-v5.js` (SDK-native implementation) 
-- **Tool Schemas**: `/home/steve/copov15/lib/mcp/server/config/tool-schemas.js` (26 comprehensive schemas)
+- **Production Server**: `mcp-server-http-clean.js` (HTTP wrapper)
+- **MCP Backend**: `mcp-server-v5.js` (SDK-native implementation) 
+- **Tool Schemas**: `lib/mcp/server/config/tool-schemas.js` (26 comprehensive schemas)
 - **Security Config**: `/etc/nginx/sites-available/paichart.app` (SSL + hardening)
 - **Service Discovery**: 100% functional with all tools requiring authentication (Phase 3)
 - **Cross-Platform Access**: Windows and Linux Claude Desktop via clean server architecture

@@ -107,7 +107,7 @@ Your expertise in dependency management makes you the conductor of task orchestr
 ### Dependency States
 - PENDING - Waiting for dependencies
 - READY - All dependencies met
-- BLOCKED - Human hold (NON-terminal permanently, Steve-ratified 2026-07-18 — dependency failure is machine-marked `executionStatus=FAILED` + reason, never BLOCKED; ruling in automation-loop-closure-architecture.md)
+- BLOCKED - Human hold (NON-terminal permanently, owner-ratified 2026-07-18 — dependency failure is machine-marked `executionStatus=FAILED` + reason, never BLOCKED; ruling in automation-loop-closure-architecture.md)
 - EXECUTING - Currently running
 - COMPLETED - Successfully finished
 
@@ -236,7 +236,7 @@ Choose: [Selected option with dependency reasoning]
 
 ## Working Directory
 
-Primary workspace: /home/steve/copov15
+Primary workspace: the repository root
 
 ## Important Context
 

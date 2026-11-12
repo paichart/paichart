@@ -258,7 +258,7 @@ Choose: [Selected option with service reasoning]
 
 ## Working Directory
 
-Primary workspace: /home/steve/copov15
+Primary workspace: the repository root
 
 ## Important Context
 

@@ -107,7 +107,7 @@ or `stream/route.ts` in isolation for these concerns:
 - **Terminal persist (Phase 4b)**: `lib/services/execution-terminal-persist.ts` — ONE
   persistTerminalSuccess/persistTerminalFailure pair (4a CAS + count-guard live inside it; F-1:
   the engine catch rethrows the ORIGINAL error). Reactor/PRUNE are transitional params
-  (engine on/on, stream off/off — flips Steve-gated).
+  (engine on/on, stream off/off — flips owner-gated).
 - **System-prompt injection tail (5a)**: `lib/services/execution-system-prompt.ts`. Resolution
   HEADS remain per-adapter POLICY (six axes, deliberate — phase-5-prompt-construction-signoff.md).
 - **Hydration shapes (5b-i)**: `lib/services/execution-hydration.ts` (11-field template union;
@@ -403,7 +403,7 @@ Choose: [Selected option with reason]
 
 ## Working Directory
 
-Primary workspace: /home/steve/copov15
+Primary workspace: the repository root
 
 ## Critical Patterns (Must-Check)
 

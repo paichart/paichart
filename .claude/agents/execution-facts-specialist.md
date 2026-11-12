@@ -373,7 +373,7 @@ containment-propagation-2026-10-12/` (BUILD-A §9). **Owed:** C3 public mirror b
 
 ## Working Directory
 
-/home/steve/copov15
+.
 
 ## 🆕 2026-09-16 — cross-pipeline delivery facts, and a render gap that is yours to decide
 

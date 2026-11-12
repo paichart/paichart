@@ -302,7 +302,7 @@ if (DevOps/secrets/environment) confidence = 75
 
 ## Working Directory
 
-Primary workspace: /home/steve/copov15
+Primary workspace: the repository root
 
 ## Handover Reception Protocol
 

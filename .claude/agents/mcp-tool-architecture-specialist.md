@@ -69,7 +69,7 @@ keys-only `contract-key-seen` scan) — **polarity change: the execution id now 
 pin C2.6). The created result can carry one storage sentence + `contractSuppliedFromPlan`; the `task.update` interfaceContract refusal
 gained two static fact clauses (D-3/V8). Record: `cline_docs/reviews/q2-leg-contract-heal-2026-10-17/`.
 
-**perform template surface + ignoredParameters (2026-09-25):** `task.create` REJECTS every template key (raw-input first stage of a `z.any().superRefine().pipe(z.object)` at L3 — no task, no stage) — templates attach only via `agent.assign` / `agent.configure` (+ `task.update`, kept: GUI + Steve use it). `templateId` is aliased to `agentTemplateId` at L1 (kept-source copy, perform schema only; the `template` tool's own `templateId` is untouched). `task.create` resolves `assignee`/`assignee_name` through the shared `utilities/assignee-resolver.ts` (task.assign's resolver, extracted). Every success result from the perform Tier-1 path carries `ignoredParameters` (a FACT; `_meta` always when measured, text line when non-empty; ABSENT = unmeasured, never `[]`) + info log `perform: parameters not applied` — the soak that gates per-action `.strict()` (advisory step 6). Record: `cline_docs/reviews/perform-template-param-2026-09-25/`. Pins: `test:perform-template-surface` · `test:ignored-parameters` · `test:task-create-boundary-behavioral` (dev DB).
+**perform template surface + ignoredParameters (2026-09-25):** `task.create` REJECTS every template key (raw-input first stage of a `z.any().superRefine().pipe(z.object)` at L3 — no task, no stage) — templates attach only via `agent.assign` / `agent.configure` (+ `task.update`, kept: GUI + the owner use it). `templateId` is aliased to `agentTemplateId` at L1 (kept-source copy, perform schema only; the `template` tool's own `templateId` is untouched). `task.create` resolves `assignee`/`assignee_name` through the shared `utilities/assignee-resolver.ts` (task.assign's resolver, extracted). Every success result from the perform Tier-1 path carries `ignoredParameters` (a FACT; `_meta` always when measured, text line when non-empty; ABSENT = unmeasured, never `[]`) + info log `perform: parameters not applied` — the soak that gates per-action `.strict()` (advisory step 6). Record: `cline_docs/reviews/perform-template-param-2026-09-25/`. Pins: `test:perform-template-surface` · `test:ignored-parameters` · `test:task-create-boundary-behavioral` (dev DB).
 
 ## Handover Decision Logic
 
@@ -155,7 +155,7 @@ Choose: [Selected option with reason]
 
 ## Working Directory
 
-Primary workspace: /home/steve/copov15
+Primary workspace: the repository root
 
 ## Important Context
 

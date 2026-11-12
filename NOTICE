@@ -1,0 +1,19 @@
+pAIchart
+Copyright (c) 2026 Steve Terry (pAIchart)
+
+This software is licensed under the Elastic License 2.0 (see LICENSE). The licensor is Steve Terry.
+
+Under that license you may not alter, remove or obscure any licensing, copyright or other notices of the licensor in the
+software — this NOTICE file is one of them. Anyone who receives a copy of any part of the software from you must also
+receive a copy of the license terms, and if you modify the software you must include prominent notices in the modified
+copies stating that you have modified it.
+
+pAIchart is source-available: you may use, modify, self-host and redistribute it under those terms. You may not provide it
+to third parties as a hosted or managed service that gives them access to a substantial set of its features, and you may not
+move, change, disable or circumvent any license-key functionality.
+
+Third-party components keep their own licenses: the npm dependencies listed in package.json and package-lock.json, the
+upstream MCP servers the services/ and usecases/ directories build on (each named in its own Dockerfile or README), and the
+Arista cEOS images the network labs use, which are not redistributed here and are obtained from Arista under Arista's terms.
+
+Project home: https://github.com/paichart/paichart

@@ -113,7 +113,7 @@ This discovery will map the current state and identify all integration points in
 
 ### Template Ownership Model (decided Apr 2026, task #83)
 
-🔴 **SOURCE OF TRUTH IS THE SEED SCRIPT, NOT THE GUI** (operative policy, Steve 2026-08-27).
+🔴 **SOURCE OF TRUTH IS THE SEED SCRIPT, NOT THE GUI** (operative policy, the owner 2026-08-27).
 This section asserted the opposite until then — "source of truth for templates is the GUI (Agent
 Builder), not the `.ts` files" — and that inversion is the root of a lot of accumulated confusion:
 it is why per-incident reseed scripts were built to REFUSE overwriting GUI rows, and why the
@@ -185,7 +185,7 @@ is how pipeline children run): `prompt` = override → `task.prompt` → `templa
 `overrideConfig.modelParameters` → non-empty `task.metadata.modelParameters` → `buildTemplateModelParameters(template)`
 (no hardcoded model — tiers live in `lib/agents/model-tiers.ts` `AGENT_MODELS`). So **a reseed does not reach a task
 that carries its own prompt or model pin** — `report:template-freshness` lists them under 📌 TASKS OVERRIDING THEIR
-TEMPLATE (X21; prod 2026-09-27: 59 prompt overrides, 50 model pins, 0 matching their template). Steve keeps GUI
+TEMPLATE (X21; prod 2026-09-27: 59 prompt overrides, 50 model pins, 0 matching their template). The owner keeps GUI
 editing of agent params; a GUI save with no prompt writes a SYNTHESISED one.
 
 **Locks (all in `lib/services/leg-child-override.ts` unless noted; codes map to 400 in `lib/errors.ts`):**
@@ -397,7 +397,7 @@ greps and Pattern #44 outrank it.
 
 ## Working Directory
 
-Primary workspace: /home/steve/copov15
+Primary workspace: the repository root
 
 ## Important Context
 
@@ -437,7 +437,7 @@ the template flipped de-protocols every harness — backstopped by the
 
 ## 🆕 Prompt-claim validation (2026-07-25)
 
-> _Protocol-12: Steve authorized keeping this block on 2026-07-25 when the file was over 500 lines.
+> _Protocol-12: the owner authorized keeping this block on 2026-07-25 when the file was over 500 lines.
 > The 2026-09-27 eviction brought the file under budget WITHOUT evicting it — do not evict it at the
 > quarterly health-run without re-reading that decision._
 
@@ -497,7 +497,7 @@ sanctioned tier at maxTokens 48000. Prod after the EG-1 reseed: 0 STALE / 40 CUR
 
 **📌 TASKS OVERRIDING THEIR TEMPLATE** (X21 `26a7ad05`) — a FACT section, not a state and not an exit code: tasks whose own
 `prompt` or `metadata.modelParameters` OUTRANK their template, so a reseed does not reach them. Read it after every reseed.
-Usually a person's GUI choice (legitimate — Steve keeps GUI editing); to make one follow its template again, clear the task's
+Usually a person's GUI choice (legitimate — the owner keeps GUI editing); to make one follow its template again, clear the task's
 prompt / model parameters in the GUI. Prod 2026-09-27: 59 prompt overrides, 50 model pins. Local 2026-09-27: 0 / 1.
 
 **Pointer (2026-10-16, G3 entry decision 1):** the variant Reviewer template (`Observability Held Change Reviewer`) now carries ONE constraint, `Held Diff: Unaccounted Lines Block` (`HELD_REVIEWER_CONSTRAINT`), beside the Author's `Held Files: Edits Only`; constraints render in the system AND user prompt. Lab-gated before ACTIVE; seeded only at the flip (manual). Golden: only that template's entry moved. Record: `cline_docs/reviews/platform-held-bytes-2026-10-13/G3-ENTRY-BUILD.md`.
