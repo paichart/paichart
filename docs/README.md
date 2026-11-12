@@ -11,7 +11,7 @@ pAIchart; the documents you do need from it are linked below.
 |---|---|
 | [INSTALL.md](INSTALL.md) | Every command, in order, from a bare Ubuntu 24.04 machine to Claude Code talking to your own pAIchart. About 40 minutes. |
 | [FIRST-RUN.md](FIRST-RUN.md) | See a finished run, run the same one on your install with nothing but the configs repository, then a bigger example. |
-| [RUNNING.md](RUNNING.md) | What each install step does and why: the two processes, roles, `APP_BASE_URL`, production notes. |
+| [RUNNING.md](RUNNING.md) | Reference for how pAIchart runs: the two processes, roles, `APP_BASE_URL`, registering services on your own network, production notes — and a short development-mode quick start. |
 | [VERIFYING-SELF-HOST.md](VERIFYING-SELF-HOST.md) | Checks that prove your install owns its identity: every token and OAuth document comes from your own `APP_BASE_URL`. |
 
 ## See a run before you run one

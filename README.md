@@ -90,23 +90,29 @@ That's also why there is no separate scheduler to operate, and why forensics com
 
 ## Get Started
 
-pAIchart is a hosted MCP hub configured as a claude connector or ChatGPT app so nothing to install. Point your AI client at the endpoint, authenticate, and state the objective.
+**See it first — nothing to install.** Sign in at [paichart.app](https://paichart.app), in the web app or from your AI client:
 
 - Hub: `https://paichart.app/mcp`
-- Connect with: Claude Desktop (GitHub OAuth) or ChatGPT (Microsoft OAuth) — or use the web app
-- First thing to say: *"Help me get started with paichart"* — or run `list_prompts()` for every guided workflow
+- Connect with: Claude Desktop (GitHub sign-in) or ChatGPT (Microsoft sign-in) — or use the web app
 - Privacy: [PRIVACY-DEMO.md](./PRIVACY-DEMO.md) — what a demo account holds, what it can do, 30-day auto-deletion
 
-**To run a program (DAG)**, you supply two files at any fetchable location (a GitHub repo works):
+A first sign-in is a **demo account, and it is read-only.** Open **Dashboard > Projects** to browse six finished program runs —
+each one a use case from the public [`paichart/paichart-configs`](https://github.com/paichart/paichart-configs) repository.
+Open a run to see how a program is built: every task with its title, its description and the agent assigned to it, the gates
+a person released, and the result. Start with **Fabric Telemetry Expansion**. In an AI client, try
+*"list my POVs and show me the details"* (a POV is a project) or `list_prompts()` for every guided workflow.
+
+**Run your own — install pAIchart from this repository** (next section). Your own instance runs programs you define. A program
+takes two files at any location your install can fetch (a GitHub repository works):
 
 | File | What it is |
 |---|---|
-| `requirements.md` | your HLD — the objective and its constraints, in prose |
-| `topology.json` | the devices/targets in scope and how they connect |
+| `requirements.md` | your high-level design — the objective and its constraints, in prose |
+| `topology.json` | the devices or targets in scope and how they connect |
 
-Then in an AI client ask to load the 'HOWTO-use-pov-program' prompt or in the GUI create one task, and the graph runs.
-See lots of examples in the shared pov in the gui or ask to 'list my povs and show me the details'
-Or start smaller:
+The use cases in `paichart-configs` are ready-made pairs: run one as it is, then copy its shape for a change of your own.
+[docs/FIRST-RUN.md](docs/FIRST-RUN.md) runs the first one call by call. The in-hub guides are the `HOWTO-use-program-harness`
+and `HOWTO-use-pipeline-harness` prompts. Once you are running:
 
 - *Use the HOWTO-use-pipeline-harness prompt, then ask "Provision a Loopback0 per switch and advertise it into BGP"* — one pipeline, one domain, a reviewed package back
 - *"Which of my POVs are at risk?"* — delivery analytics, answered directly
@@ -115,9 +121,10 @@ Or start smaller:
 ## Run it yourself
 
 **Complete install on a fresh Ubuntu 24.04 machine or VM — [docs/INSTALL.md](docs/INSTALL.md).** All documentation, by what you are doing: **[docs/README.md](docs/README.md)**.
-Every command in order, nothing assumed: PostgreSQL 16 and Node 24 installed, the database created, the app
-cloned, configured, seeded and started, the first login, an admin account, Claude Code installed and connected
-to your hub, and (optionally) services on your own network registered. About 40 minutes, most of it `npm ci`.
+Every command in order: PostgreSQL 16 and Node 24 installed, the database created, the app cloned, configured,
+seeded and started, the first login, your own account, Claude Code installed and connected to your hub, and the two
+services your first run needs. You need a machine with about 16 GB RAM, an Anthropic API key, a Claude account and a
+GitHub account. About an hour.
 
 Already have Node 24 (20.19 is the minimum), PostgreSQL 16 and an empty database? The short form:
 

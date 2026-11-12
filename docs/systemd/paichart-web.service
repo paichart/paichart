@@ -2,7 +2,7 @@
 #
 # Install (see docs/INSTALL.md):
 #   sudo cp docs/systemd/paichart-web.service /etc/systemd/system/
-#   sudo nano /etc/systemd/system/paichart-web.service      # set User/Group/WorkingDirectory to yours
+#   sudo sed -i "s/YOUR_USER/$USER/g" /etc/systemd/system/paichart-web.service   # User/Group/WorkingDirectory (clone at ~/paichart)
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now paichart-web
 #

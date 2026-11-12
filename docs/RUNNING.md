@@ -5,7 +5,7 @@ pAIchart is **two processes** behind one origin:
 | Process | Command | Port | Serves |
 |---|---|---|---|
 | Web app (Next.js + custom server) | `npm run dev` (prod: `npm run start`) | 3000 | UI, `/api/*`, `/api/auth/jwks`, `/.well-known/mcp.json` |
-| MCP HTTP server | `npm run mcp:http:dev` (prod: PM2 → `mcp-server-http-clean.js`) | 8080 | `/mcp`, `/oauth/authorize`, `/oauth/token`, `/oauth/callback`, `/.well-known/oauth-*`, `/health` |
+| MCP HTTP server | `npm run mcp:http:dev` (the hosted service: PM2 → `mcp-server-http-clean.js`; a self-host: the systemd unit in `docs/systemd/`) | 8080 | `/mcp`, `/oauth/authorize`, `/oauth/token`, `/oauth/callback`, `/.well-known/oauth-*`, `/health` |
 
 In production a reverse proxy presents both as one host (`APP_BASE_URL`) — see the last section.
 
@@ -15,7 +15,10 @@ In production a reverse proxy presents both as one host (`APP_BASE_URL`) — see
 - `openssl` (for key generation)
 - **A machine to run it on:** a Linux VM with about **16 GB RAM, 8 vCPU and 200 GB disk** runs the app, the MCP server and PostgreSQL together (the sizing the project's own hosts use; a lab rig such as containerlab switches needs its own headroom on top)
 
-## First run — seven commands
+## Quick start in development mode — seven commands
+
+This is the short developer path (`npm run dev`, two terminals). For a complete install that survives a reboot — the
+production build under systemd — follow [INSTALL.md](INSTALL.md); for your first program, [FIRST-RUN.md](FIRST-RUN.md).
 
 ```bash
 git clone <repo> paichart && cd paichart

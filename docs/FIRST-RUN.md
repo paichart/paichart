@@ -64,15 +64,28 @@ Type each call to Claude Code in `~/paichart`, or issue it directly.
 5. **Read the plan, then release the plan gate.** When the plan is ready the program comments
    `⏸ PROGRAM PLAN AWAITING APPROVAL` on your task, with the gate's id. The plan should show **two legs — a value leg and a
    change leg — and three gates**. The approvers named in the spec are placeholders (`…@example.com`), so each gate falls to
-   you as the project's owner. `npm run report:gate -- <gate id>` prints what to check, from stored facts. Then:
+   you as the project's owner. `npm run report:gate -- <gate id>` (run in `~/paichart`) prints what to check, from stored facts. Then:
    ```
    perform(action: 'task.complete', parameters: { taskId: '<plan gate id>' })
    ```
+   → the reply names the gate. **Read the gate's status back** — `project(action: 'task.context', taskId: '<gate id>')` must
+   show `Status: COMPLETED`. A release sent within seconds of the step before it finishing can be refused while the state
+   settles; send it again (it took up to five tries over about 50 seconds on a laptop).
+
+   **Finding the other two gates.** All three gates are tasks of type `APPROVAL` in the program's own stage (their titles
+   usually start `APPROVE`): `project(action: 'task.list', povId: '<pov id>')` lists them with their ids and status. A gate can be released only when
+   the step before it has finished.
 6. **The address gate.** The value leg publishes one address inside `10.99.0.0/24` that neither switch file uses, and changes
-   nothing. Check the address, then release the gate the same way. The change leg starts.
+   nothing. `npm run report:gate -- <address gate id>` prints the address and whether the leg's reviewer approved it; the
+   leg's own report is `perform(action: 'agent.results', parameters: { taskId: '<value leg task id>', verbose: true })`
+   (the leg is the `PIPELINE` task in the same list whose title ends `(protocol: network-derivation)`). Check the address,
+   then release the gate with `task.complete` as in step 5. The change leg starts.
 7. **The network change gate.** The change leg produces a package: edits to `network/base/ceos2-startup.cfg` that add one
-   loopback and a BGP `network` statement, plus a rollback. The program's integration review runs before this gate. Read the
-   package, then release the gate.
+   loopback and a BGP `network` statement, plus a rollback. The program's integration review runs before this gate.
+   `npm run report:gate -- <network change gate id>` prints the facts to check; the package itself is the change leg's report:
+   `perform(action: 'agent.results', parameters: { taskId: '<change leg task id>', verbose: true })` (the `PIPELINE` task whose
+   title ends `(protocol: network-provisioning)`), or open that task in the web app and read its report. Read the package,
+   then release the gate the same way.
 
 `project(action: 'task.context', taskId: '<task id>')` shows where the run is at any time.
 
@@ -108,7 +121,8 @@ but could not READ — check the rig README's readiness probes, not the containe
 
 
 `usecases/firewall-a3-partner-path/` is a complete program (three sequenced pipelines) with its rigs. With
-[INSTALL.md](INSTALL.md) step 9b done and the rigs up (that directory's README), this is the whole launch — five hub calls, typed to Claude
+[INSTALL.md](INSTALL.md) step 9b done and the rigs up (that directory's README — the network lab is a recipe: you supply the
+switch image yourself, from a free vendor account), this is the whole launch — five hub calls, typed to Claude
 in `~/paichart` or issued directly. Each line's response is what a working install returns.
 
 > **Status (2026-11-02): the corrected spec has not yet been re-run live as a full program.** A fresh-install run on

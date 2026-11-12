@@ -9,7 +9,8 @@ identity"). Below, `BASE` means the exact value you set — e.g. `https://paicha
 `http://localhost:3000` for a local check — and `MCP` means where the MCP paths answer. In development the web
 server proxies them, and behind your reverse proxy nginx does, so **`MCP=$BASE` in both** (RUNNING.md → "Two
 ports, one origin"); use `http://localhost:8080` only to bypass the proxy and hit the MCP process directly
-(`npm run start` with no reverse proxy is the one shape where that is the *only* way). Both servers must be running.
+(`npm run start` with no reverse proxy is the one shape where that is the *only* way — unless `SINGLE_ORIGIN_PROXY=true` is
+set, as [INSTALL.md](INSTALL.md) step 4 does: then the web server proxies them and `MCP=$BASE`). Both servers must be running.
 
 ```bash
 BASE=http://localhost:3000; MCP=$BASE                     # dev, or behind the proxy
@@ -72,7 +73,7 @@ ChatGPT follow — if it names another host, your users are sent to *that* host 
 
 ## 4. Tokens carry your issuer, and foreign tokens are rejected
 
-Log in, then **Settings → API Keys → create one**. Decode its payload (no verification needed — you only want
+Log in, then the **pAIchart logo** (top-right) → **Profile Settings** → **MCP API Key** → **Generate New API Key**. Decode its payload (no verification needed — you only want
 to read the claims):
 
 ```bash

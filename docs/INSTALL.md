@@ -5,8 +5,14 @@ fresh Ubuntu 24.04 laptop on a home LAN (2026-09-07). Replace `HOST` with the ad
 reach this one (`192.168.1.50`, a hostname, or `localhost` if only this machine will use it) — it becomes
 `APP_BASE_URL`, and **`APP_BASE_URL` is your install's identity** (see RUNNING.md).
 
-Assumes: Ubuntu 24.04 (or similar), a user with `sudo`, outbound internet, and **an Anthropic API key** (the agents run on it;
-you paste it in step 8). Time: ~40 min, most of it `npm ci`.
+**Before you start, have:**
+- a machine: Ubuntu 24.04 (or similar) with about **16 GB RAM, 8 vCPU and 200 GB disk**, a user with `sudo`, outbound internet.
+  A 2–4 GB machine will fail at the build in step 5;
+- **an Anthropic API key** — the agents run on it; you paste it in step 8;
+- **a Claude account** — step 2 installs Claude Code and signs in through a browser;
+- **a GitHub account** — only for step 9c (a read-only token), which your first run needs.
+
+Time: about an hour — `npm ci` and the build are most of it, and step 9b pulls a 1.5 GB image.
 Order is deliberate: **clone, install Claude Code, then let Claude follow the rest** — steps 3–9 are written to be pasted.
 
 ## 1. Clone
@@ -22,6 +28,9 @@ claude --version && claude                            # first run: sign in (brow
 ```
 From here you can paste to Claude: *"Follow ~/paichart/docs/INSTALL.md from step 3, exactly as written,
 with HOST=…; stop after step 5 and tell me the printed password."* (Steps 6–8 are yours, in a browser.) Or keep typing.
+Two things an assistant cannot do for you: type your `sudo` password (run `sudo -v` in the same terminal first, or type the
+`sudo` commands yourself), and the log-out-and-back-in that Docker needs in step 3 (do step 3's Docker block yourself, before
+you start Claude Code).
 
 ## 3. Prerequisites the docs assume (Node 24, PostgreSQL 16, an empty database)
 
@@ -152,13 +161,11 @@ write your own with the same shape and pass `--file my-geo.json`) and re-run
 alone — it does not rename or delete; an invalid file is refused with the reasons listed. A **new theatre is a schema change** (`SalesTheatre` enum in
 `prisma/schema.prisma`, then `npm run db:seed`, which pushes the schema after the indexes it depends on); the full procedure is `.claude/knowledge/guides/GEOGRAPHICAL_DATA_MANAGEMENT.md`.
 
-Then prove the install owns its identity: `docs/VERIFYING-SELF-HOST.md` with `BASE=http://HOST:3000; MCP=$BASE`.
-
 ## 7. Your own account (in the GUI) — required
 The account you logged in with, `admin@paichart.local`, is the built-in **Super Admin** — administration only, and not a
 mailbox. Now create **your own account, with your real email**: it is the one you work as, the one that holds your Anthropic
 key and your MCP API key (step 8), and the one that owns your projects.
-**Settings** → the **pAIchart logo** (top-right corner) → **Admin Dashboard** (only the **Super Admin** sees this option —
+The **pAIchart logo** (top-right corner) → **Admin Dashboard** (only the **Super Admin** sees this option —
 which is why this step is done now, before you switch accounts) → **User Management** → **Create User**
 → fill in email and name, set **System Role** to **System Admin** (the dialog defaults to *User* — check it before you
 save; a User cannot administer the hub), and **set a password** in the dialog (blank means
@@ -188,6 +195,9 @@ claude mcp list                                       # (from another shell) exp
 ```
 The hub's tools now appear as `mcp__paichart__*`. First thing to try: `prompt_command("/prompt HOWTO-get-started")`,
 then your first run ([FIRST-RUN.md](FIRST-RUN.md)). The key is stored in plaintext in `~/.claude.json`; it expires on the date you chose.
+
+**Then prove the install owns its identity:** [VERIFYING-SELF-HOST.md](VERIFYING-SELF-HOST.md) with
+`BASE=http://HOST:3000; MCP=$BASE` (its step 4 uses the MCP API key you just made).
 
 Claude Desktop cannot send a header: use OAuth (`docs/OAUTH-SETUP.md` §B.1, callback `http://HOST:3000/oauth/callback`)
 or the `mcp-remote --header` stanza the setup sheet shows.
@@ -223,7 +233,7 @@ is listening — and
 Programs ([FIRST-RUN.md](FIRST-RUN.md)) fetch their design artifacts — `requirements.md`, `topology.json` — through a browser-automation
 service the hub calls; the hub has no URL-fetch tool of its own, by design: the fetch runs in a container, not in the hub
 process. This repo ships that service (`services/browser-automation-service` — Playwright, no keys) and a compose file that
-runs only it. Needs Docker (step 3's optional block); the image is a 1.5 GB download (~3 GB on disk) and the container is
+runs only it. Needs Docker (step 3's Docker block); the image is a 1.5 GB download (~3 GB on disk) and the container is
 capped at 1.5 GB RAM.
 
 ```bash
@@ -262,12 +272,13 @@ Then in Claude Code (`claude -c`), the same shape as step 9:
 The registry id is `browser-automation-service`, the display name `Browser Automation Service`: `services(action: 'call')`
 accepts either; `registry(action: 'tools')` wants the display name.
 
-### 9c. Optional — the GitHub file source (kept files from your config repo)
+### 9c. The GitHub file source (kept files from a config repo) — needed for your first run
 Pipelines that change Kubernetes, Terraform or network config can read the **file of record** from a Git repo, keep its exact
 bytes, and have the Author change it only by edits to that kept file (`docs/SELF-HOST-KEPT-FILES.md`). The hub reads Git through
-the shipped `services/github-service`: GitHub's official read-only MCP server plus a small proxy that adds your token. Skip this
-step if you have no config repo yet; nothing else depends on it. **To try it first without a repo of your own,** pin the public
-`paichart/paichart-configs` — configuration files of record plus released use cases (`usecases/README.md` there says how to run one).
+the shipped `services/github-service`: GitHub's official read-only MCP server plus a small proxy that adds your token. Your
+first run ([FIRST-RUN.md](FIRST-RUN.md)) reads its two switch files this way, from the public `paichart/paichart-configs` —
+configuration files of record plus released use cases — which is the repository `.env.example` already pins. You need no
+repository of your own for that; pin your own later. (Skip this step only if you will not run a use case that reads files from Git.)
 
 **1. A token (one minute).** GitHub → Settings → Developer settings → Fine-grained tokens → Generate:
 - a **public** config repo: Repository access = *Public repositories (read-only)*, no permissions;
@@ -278,7 +289,7 @@ The server refuses every request without a token, so this step is not optional f
 
 **2. Tell the hub which repo it may read (the pin).** The hub's `.env` (copied from `.env.example`) already sets
 `GIT_FILE_SOURCE_PIN=paichart/paichart-configs`, so you can run its network use cases as is. To read your own repo, change it
-to `<owner>/<repo>` and restart the hub. Agents can read **only** that repo through this service; the pin, not the
+to `<owner>/<repo>` and restart the hub (`sudo systemctl restart paichart-mcp`). Agents can read **only** that repo through this service; the pin, not the
 token, is the boundary. The repo **must have a `main` branch** (a read that names no branch is read as `main`), and protect it:
 it is what every run reads. The full rules
 and limits are in [SELF-HOST-KEPT-FILES.md → Reading kept files from Git](SELF-HOST-KEPT-FILES.md#reading-kept-files-from-git-optional).
@@ -331,7 +342,7 @@ Two things come with the clone that make step 8 more than a connector:
     (it will ask for anything the schema needs — a description, phases — and report the POV id).
   - *"List the POVs in progress and their open tasks"* → `project(action: 'pov.list' / 'task.list')`.
   - *"Register my weather service at http://127.0.0.1:3105/mcp with its full tool schemas"* → `registry(action: 'register', …)`
-    (a private address needs the allowlist line in step 9b).
+    (a private address needs the allowlist line in [RUNNING.md](RUNNING.md) § "Registering a service on your own network").
   - *"Run the health check on ceos-lab-readonly and call list_devices"* → `services(action: 'health' / 'call', …)`.
 - **Programs and pipelines.** For a multi-specialist delivery — a reviewed change package from a requirements
   document and a topology — you don't drive the steps yourself; the harness does (plan, the plan-approval gate, the
@@ -347,8 +358,8 @@ Two things come with the clone that make step 8 more than a connector:
 (it needs only steps 8, 9b and 9c: no lab, no switches), then a bigger example with its own lab.
 
 **You are done installing when:** the four `curl` checks at the end of step 5 print `200`, `200`, your own origin and `401`;
-step 6's page shows `http://HOST:3000/mcp`; your Anthropic key is saved (step 8); and `claude mcp list` shows
-`paichart … ✔ Connected`.
+step 6's page shows `http://HOST:3000/mcp`; your Anthropic key is saved (step 8); `claude mcp list` shows
+`paichart … ✔ Connected`; and, for your first run, steps 9b and 9c ended with their checks passing.
 
 ## Things that will bite (each cost real time)
 - **Late bind** (the most repeatable false failure in this guide): both servers log "ready" 10–60 s before they listen.
