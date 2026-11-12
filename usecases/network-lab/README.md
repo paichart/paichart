@@ -50,15 +50,21 @@ all three files.
 
 ## What makes the service read-only
 
-It exposes **NAPALM getters only** — `get_facts`, `get_interfaces`, `get_bgp_neighbors`,
-`get_config` and friends. There is no `cli`, no `load_merge_candidate`, no `commit_config`: a mutating
-call is not refused at runtime, it **does not exist to be called**. That is the strongest form of the
-read-only floor in this repo, because it is structural rather than enforced.
+The upstream server registers mutating tools too (`apply_config`, `backup_configs`). The wrapper in
+`nornir-mcp-docker/run_http.py` deletes every tool except three before the server starts, so a mutating call
+**does not exist to be called** — it is not refused at runtime, it is simply not there:
+
+- `list_devices` — the inventory;
+- `fetch_data` — NAPALM getters (`facts`, `interfaces`, `interfaces_ip`, `bgp_config`, `config`, …);
+- `show_commands` — `show` commands.
+
+A pAIchart descriptor lists the same three, but that limit only binds callers that go through the hub; the
+wrapper is what holds for anyone who reaches the port directly. If the upstream adds a tool later, it stays off.
 
 Verify it the way you should verify any of these services — by trying:
 
 ```bash
-# list the tools the service actually exposes; there is nothing that writes
+# list the tools the service actually exposes: exactly list_devices, fetch_data, show_commands — nothing that writes
 curl -s -X POST http://127.0.0.1:3107/mcp \
   -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | head -c 400

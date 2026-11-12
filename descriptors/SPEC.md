@@ -67,8 +67,9 @@ Three rules, in decreasing order of what they guarantee:
    mutating tools, leave them out of `capabilities.tools` — the pipeline never sees or offers what
    the descriptor doesn't declare. **Be honest about what this is**: a restriction of the offer
    surface, not an authorization boundary. Rule 1 is what actually stops a mutation; rule 2 is what
-   stops it being *attempted*. The cEOS example does exactly this (declares `list_devices` +
-   `fetch_data`; the underlying service also exposes `apply_config`, undeclared).
+   stops it being *attempted*. The cEOS example declares `list_devices`, `fetch_data` and `show_commands`;
+   its wrapper also deletes the upstream service's mutating tools (`apply_config`, `backup_configs`) before the
+   server starts — that is rule 1 for that service, so a direct caller cannot reach them either.
 3. **Out-of-policy calls return `isError`, not a protocol error.** When a caller asks for something
    your allowlist refuses (a secret *value*, an exec, a mutating verb), return an MCP tool result
    with `isError: true` and a plain-prose reason — do not throw. The pipeline treats an `isError`

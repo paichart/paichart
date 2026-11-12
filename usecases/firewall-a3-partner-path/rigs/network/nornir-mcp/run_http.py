@@ -22,6 +22,17 @@ from typing import Any
 
 from nornir_mcp.server import mcp
 
+# READ-ONLY ALLOWLIST: the upstream server also registers mutating tools (apply_config, backup_configs). A pAIchart
+# descriptor exposes only the three read tools, but that limit binds callers that go through the hub, not a caller that
+# reaches this port directly. Keep exactly the read tools and drop everything else, so a write tool the upstream adds later
+# is also off. Apply changes on the switch itself, never through this service.
+READ_ONLY_TOOLS = {"list_devices", "fetch_data", "show_commands"}
+for _name in [n for n in mcp._tool_manager._tools if n not in READ_ONLY_TOOLS]:
+    del mcp._tool_manager._tools[_name]
+_missing = READ_ONLY_TOOLS - set(mcp._tool_manager._tools)
+if _missing:
+    raise SystemExit(f"read-only allowlist names tools the server does not have: {sorted(_missing)}")
+
 
 def _stub_serializer(data: Any) -> str:
     return "(full payload in structuredContent; serialized text twin suppressed)"
