@@ -80,7 +80,7 @@ async function main() {
   } else {
     console.log(`  ⚠️  GIT_FILE_SOURCE_PIN is NOT set in .env here — agents can read ONLY ${pin.owner}/${pin.repo} (the platform default).`);
     console.log(`     On a self-host with your own config repo: add GIT_FILE_SOURCE_PIN=<owner>/<repo> to the hub's .env and restart`);
-    console.log('     the hub (run sheet step 9c). Every read of any other repo is refused until you do.');
+    console.log('     the hub (install guide step 9c). Every read of any other repo is refused until you do.');
   }
   const existing = await prisma.mCPTool.findFirst({ where: { name: SERVICE_NAME } });
   // Stage B P1-5 (hub v3 N-b): update only this seed's OWN row (id === SERVICE_NAME); the self-match passes, so a re-seed works.

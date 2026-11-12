@@ -17,7 +17,7 @@ const problems: string[] = validateGeographicalData(data);
 check(`shipped file is valid (${problems.join('; ') || 'no problems'})`, problems.length === 0);
 check('shipped file covers the four theatres', ['NORTH_AMERICA', 'LAC', 'EMEA', 'APJ'].every((t) => Array.isArray(data[t]) && data[t].length > 0));
 const countries = Object.values(data).flat() as Array<{ code: string; regions?: unknown[] }>;
-check(`shipped file has 15 countries (got ${countries.length}) — update RUNNING.md / the run sheet if this changes`, countries.length === 15);
+check(`shipped file has 15 countries (got ${countries.length}) — update RUNNING.md / the install guide if this changes`, countries.length === 15);
 
 // negative controls — the validator must actually fail
 check('rejects an unknown theatre (enum)', validateGeographicalData({ AFRICA: [] }).some((p) => /unknown theatre/.test(p)));

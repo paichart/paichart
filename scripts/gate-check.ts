@@ -18,6 +18,7 @@
  */
 import 'dotenv/config';
 import { PrismaClient, Prisma } from '@prisma/client';
+import { DEVICE_SOURCE_LANES, deviceSourceContractKeyOf } from '../lib/agents/harness/held-bytes/variant';
 
 type Tx = Prisma.TransactionClient;
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -46,6 +47,18 @@ async function planGate(tx: Tx, gate: T, architect: T) {
   const siblings = await stageTasks(tx, gate.stage_id);
   const legs = siblings.filter(t => t.type === 'PIPELINE');
   line(legs.length > 0, `${legs.length} leg(s) created (check: one per system you expected)`);
+  // Device sources keys (ARCHITECT-CONTRACT-KEY-BY-LEG, 2026-11-12): the platform reads `deviceSources` ONLY at a protocol key
+  // (DEVICE_SOURCE_LANES). A plan that keys it by leg name or anything else leaves every leg reading no Device sources, silently.
+  const knownKeys = Object.values(DEVICE_SOURCE_LANES).map(x => x.contractKey);
+  const contractOf = (l: T) => (isObj(l.inputContext) && isObj((l.inputContext as Record<string, unknown>).interfaceContract) ? (l.inputContext as Record<string, Record<string, unknown>>).interfaceContract : null);
+  const anyDs = legs.map(contractOf).find(c => c && c.deviceSources !== undefined)?.deviceSources;
+  if (anyDs !== undefined) {
+    if (!isObj(anyDs)) line(false, `the contract's deviceSources is not an object keyed by protocol token — no leg will read Device sources from it`);
+    else {
+      const unknown = Object.keys(anyDs).filter(k => !knownKeys.includes(k));
+      line(unknown.length === 0, `the contract's deviceSources keys: ${Object.keys(anyDs).join(', ') || 'none'}${unknown.length ? ` — NOT read by the platform: ${unknown.join(', ')} (it reads only ${knownKeys.join(', ')})` : ''}`);
+    }
+  }
   for (const l of legs) {
     const tok = tokenOf(l.title), m = meta(l), src = isObj(m.interfaceContractSource) ? m.interfaceContractSource : {};
     const ic = isObj(l.inputContext) && isObj((l.inputContext as Record<string, unknown>).interfaceContract) ? (l.inputContext as Record<string, Record<string, unknown>>).interfaceContract : null;
@@ -54,6 +67,8 @@ async function planGate(tx: Tx, gate: T, architect: T) {
     const kind = tok.includes('derivation') ? 'VALUE' : 'CHANGE';
     console.log(`    leg ${l.id}  ${kind}  (protocol: ${tok})  ${l.title.slice(0, 70)}`);
     line(m.requiresInterfaceContract === true && !!ic, `      holds the interface contract (source: ${String(src.source ?? src.arm ?? '—')})`);
+    const dsKey = deviceSourceContractKeyOf(tok), ds = ic && isObj(ic.deviceSources) ? ic.deviceSources : null;
+    if (dsKey && ds) line(ds[dsKey] !== undefined || null, `      Device sources for this leg (key ${dsKey}): ${ds[dsKey] !== undefined ? 'present' : 'none — the leg reads no Git file or device by declaration; check that is intended'}`);
     if (kind === 'CHANGE') line(repos.length > 0 || null, `      config files named in its contract: ${repos.length ? repos.join(' · ') : 'none (a service-held or device leg — check its descriptor)'}`);
   }
   const deps = await tx.$queryRaw<Array<{ taskId: string; dependsOnId: string }>>`SELECT "taskId", "dependsOnId" FROM task_dependencies WHERE "taskId" = ANY(${siblings.map(s => s.id)})`;

@@ -22,6 +22,34 @@ CIDR = re.compile(r'\b\d{1,3}(?:\.\d{1,3}){3}/\d{1,2}\b')
 URL = re.compile(r'https?://[^\s"\'`)>\]]+')
 DECISION_KEY = re.compile(r'assum|polic|rule|decision|must|should|prefer|exclude|allow|deny', re.I)
 EXPLAINER_KEY = re.compile(r'^(description|name|_.*)$')
+LEG_HEADING = re.compile(r'^(#{2,4})\s.*\(([a-z0-9-]+),\s*(change|value)\)', re.I)
+VALUE_MARK = re.compile(r'changes nothing', re.I)
+
+
+def leg_type_marks(text):
+    """Warnings where a leg section's stated type and the value-leg phrase disagree (2026-11-12). The planner reads "Changes
+    nothing." as the mark of a value leg, so the phrase inside a change leg's section can turn it into a value leg, and a value leg
+    without it may be planned as a change leg. Only the leg's own section is read (to the next heading of the same or a higher level):
+    a success criterion elsewhere that says "Pipeline 2 changes nothing beyond …" is not a leg section."""
+    warnings, lines = [], text.splitlines()
+    for i, line in enumerate(lines):
+        m = LEG_HEADING.match(line)
+        if not m:
+            continue
+        level, kind = len(m.group(1)), m.group(3).lower()
+        body = []
+        for nxt in lines[i + 1:]:
+            h = re.match(r'^(#{1,6})\s', nxt)
+            if h and len(h.group(1)) <= level:
+                break
+            body.append(nxt)
+        has = bool(VALUE_MARK.search('\n'.join(body)))
+        title = line.strip()[:90]
+        if kind == 'change' and has:
+            warnings.append(f'leg section "{title}" is a change leg but says "changes nothing": the planner reads that phrase as a value leg. Reword it')
+        if kind == 'value' and not has:
+            warnings.append(f'leg section "{title}" is a value leg but never says "Changes nothing.": the planner may plan it as a change leg')
+    return warnings
 
 
 def spec_facts(text):
@@ -119,6 +147,8 @@ def compare(spec_text, topo_text):
             warnings.append(f'topology key "{p}" reads like a decision. State it in the spec, where the gate reviewers see it; the topology holds facts')
         elif len(v) > 120 and not v.startswith('http'):
             warnings.append(f'topology key "{p}" holds {len(v)} characters of prose. A decision or rule belongs in the spec')
+    # 6. leg type vs the value-leg phrase (spec only)
+    warnings.extend(leg_type_marks(spec_text))
     return errors, warnings, notes
 
 
@@ -166,6 +196,11 @@ def self_test():
     t = json.loads(json.dumps(SELF_TOPO)); t['description'] = 'x' * 300
     cases.append(('a long description is not a decision', run(t)[1] == []))
     cases.append(('a spec with no sources block is reported as not checked', len(run(SELF_TOPO, '# t\n10.99.0.0/24 https://example.test/d.json\n')[2]) == 1))
+    legs = SELF_SPEC + '## Pipeline 1 objective — pick (network-derivation, value)\nWorks out one address. Changes nothing.\n' \
+        '## Pipeline 2 objective — add (network-provisioning, change)\nAdds a loopback.\n## Success criteria\nPipeline 2 changes nothing beyond it.\n'
+    cases.append(('correctly marked legs (and the phrase in another section) give no finding', run(SELF_TOPO, legs) == ([], [], [])))
+    cases.append(('the phrase inside a change leg warns', len(run(SELF_TOPO, legs.replace('Adds a loopback.', 'Adds a loopback; changes nothing else.'))[1]) == 1))
+    cases.append(('a value leg without the phrase warns', len(run(SELF_TOPO, legs.replace(' Changes nothing.', ''))[1]) == 1))
     failed = [name for name, ok in cases if not ok]
     for name, ok in cases:
         print(('PASS ' if ok else 'FAIL ') + name)

@@ -46,7 +46,7 @@ A Tier-1 violation blocks regardless of who approved above it.
 
 ## The proof is we publish the rounds we failed
 
-Most of this category asks you to trust a demo. We provide **21 verification documents**, each stating its expected observables before the run, then recording what actually happened.
+Most of this category asks you to trust a demo. We provide **33 verification documents**, each stating its expected observables before the run, then recording what actually happened.
 
 See also the ones that went wrong. **VT-12**: a program self-certified `programReleasable: true` while shipping an authorization widening. Five tiers passed it, so minimality is now checked in code rather than in prose.
 
@@ -114,12 +114,12 @@ Or start smaller:
 
 ## Run it yourself
 
-**Complete install on a fresh Ubuntu 24.04 machine or VM — [docs/SELF-HOST-RUN-SHEET.md](docs/SELF-HOST-RUN-SHEET.md).**
-Every command in order, nothing assumed: PostgreSQL 16 and Node 20 installed, the database created, the app
+**Complete install on a fresh Ubuntu 24.04 machine or VM — [docs/INSTALL.md](docs/INSTALL.md).** All documentation, by what you are doing: **[docs/README.md](docs/README.md)**.
+Every command in order, nothing assumed: PostgreSQL 16 and Node 24 installed, the database created, the app
 cloned, configured, seeded and started, the first login, an admin account, Claude Code installed and connected
 to your hub, and (optionally) services on your own network registered. About 40 minutes, most of it `npm ci`.
 
-Already have Node 20, PostgreSQL 16 and an empty database? The short form:
+Already have Node 24 (20.19 is the minimum), PostgreSQL 16 and an empty database? The short form:
 
 ```bash
 git clone https://github.com/paichart/paichart && cd paichart && npm ci
@@ -198,7 +198,7 @@ registry(action: "register", {
 
 ## Learn
 
-- **[Verification pack](verification/)** — 20 documents, each stating its expected observables before the run. **Including the rounds that failed.**
+- **[Verification pack](verification/)** — 33 documents, each stating its expected observables before the run. **Including the rounds that failed.**
 - **[The protocols](protocols/)** — the exact agent-facing contracts the pack holds runs against, published verbatim and byte-parity-checked against the platform seed. Every version stamp in the decision log has a readable text here.
 - **[Open questions](verification/OPEN-QUESTIONS.md)** — for researchers. Three findings we think are interesting (three reviewer tiers once approved a defect at *rising* confidence), one hypothesis we lack the power to settle, and lab run data we will share.
 - **Case studies** — three walkthroughs of the same real network→cloud program: [Checked by Machine](case-studies/coordinated-infra-change.md) (*can you trust it*), [You Approve; You Don't Author](case-studies/you-approve-you-dont-author.md) (*what it buys you*), [Inside a Multi-Domain Program](case-studies/inside-a-multi-domain-program.md) (*how it's built* — the DAG, the review tiers, how far it scales).
@@ -210,7 +210,7 @@ registry(action: "register", {
 - **Hub (connect here)**: [paichart.app/mcp](https://paichart.app/mcp)
 - **JWKS**: `https://paichart.app/api/auth/jwks`
 - **Verification**: [verification/](verification/)
-- **Documentation**: an MCP resource in your AI client, or `list_prompts()`
+- **Documentation**: [docs/README.md](docs/README.md) — install, administer, operate, write a spec, contribute. In your AI client: an MCP resource, or `list_prompts()`
 - **Source & self-hosting**: this repository — [docs/RUNNING.md](docs/RUNNING.md)
 
 ## Credits

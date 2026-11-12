@@ -4,7 +4,7 @@ The **file source** for kept files: the platform reads the exact bytes of a conf
 through GitHub's official MCP server, keeps them, and applies an Author's edits to them by reference. Live reads (cluster,
 Terraform state, device) stay evidence. Domains that read it: kubernetes-gitops, terraform-iac, network-provisioning.
 
-**Self-host:** optional, behind the compose profile `git` — `docs/SELF-HOST-RUN-SHEET.md` step 9c (token, pin, start, seed, prove).
+**Self-host:** optional, behind the compose profile `git` — `docs/INSTALL.md` step 9c (token, pin, start, seed, prove).
 
 ## Shape
 

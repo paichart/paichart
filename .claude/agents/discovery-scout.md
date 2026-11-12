@@ -494,4 +494,4 @@ after the k8s live window). Check it BEFORE proposing an approach (Pattern-First
 (`.claude/knowledge/pipelines/OPERATOR-RUNBOOK.md`), **maintainer onboarding** (`.claude/knowledge/guides/MAINTAINER-ONBOARDING.md`, which names
 `scripts/run-gates-clean.sh` · `ship.sh` · `series-cut-draft.sh` and `npm run report:gate|canary|canary-plan`), the **health-run** procedure
 (`.claude/knowledge/guides/HEALTH-RUN.md`, moved out of CLAUDE.md 2026-11-01) and the public **self-host docs** (`docs/RUNNING.md`,
-`SELF-HOST-RUN-SHEET.md`, `SELF-HOST-KEPT-FILES.md`, `VERIFYING-SELF-HOST.md`). Point a newcomer there before any working record.
+`INSTALL.md`, `SELF-HOST-KEPT-FILES.md`, `VERIFYING-SELF-HOST.md`). Point a newcomer there before any working record.

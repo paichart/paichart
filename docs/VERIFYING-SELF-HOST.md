@@ -188,4 +188,4 @@ pre-2026-09-13 behaviour with a file that looks like protection.
 stat -c '%a %n' ~/paichart/.env                    # expect: 600
 ```
 `cp .env.example .env` under Ubuntu's default umask produces `0664` — group- and world-readable. The
-run sheet mandates `chmod 600`; this confirms it took.
+install guide mandates `chmod 600`; this confirms it took.

@@ -49,4 +49,7 @@ fi
 
 echo "▶ export --into $PUBLIC"
 python3 scripts/export-public.py --into "$PUBLIC" | tail -1
+# Docs homologation P1 (2026-11-12): R1–R3 over the user docs of the tree about to be published (every path/link/own-repo URL in
+# docs/**/*.md exists; none is private-only; each is ≤ 2 clicks from docs/README.md). WARN for now — block at P7 (owner decision 5.1).
+( cd "$PUBLIC" && git add -A ) && python3 scripts/docs-inventory.py --public "$PUBLIC" --user-docs || true
 ( cd "$PUBLIC" && git add -A && git commit -q -m "$MSG" && git push -q origin main && echo "✅ public pushed: $(git rev-parse --short HEAD)" )

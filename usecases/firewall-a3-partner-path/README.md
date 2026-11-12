@@ -26,12 +26,12 @@ confidence 88/100 (2026-08-22).
 These are the self-host variants of `program-artifacts/firewall-a3-partner-path-r2/` and `descriptors/`:
 identical text and tool schemas, with the service endpoints pointing at rigs running **on the same host
 as your hub**. The Program Architect fetches `requirements.md` + `topology.json` from their raw GitHub
-URLs through your hub's browser-automation service (run sheet step 9b); each pipeline's Harvester fetches
+URLs through your hub's browser-automation service (`docs/INSTALL.md` step 9b); each pipeline's Harvester fetches
 its descriptor the same way and registers → reads → tears down the service by itself.
 
 ## Prerequisites
 
-1. A running self-host through step 9b of `docs/SELF-HOST-RUN-SHEET.md` (production build, Claude Code
+1. A running self-host through step 9b of `docs/INSTALL.md` (production build, Claude Code
    connected, browser-automation service seeded).
 2. **Both rigs on the hub's host**, and the hub allowed to reach them:
    ```bash
@@ -48,7 +48,7 @@ its descriptor the same way and registers → reads → tears down the service b
 
 ## Run it — five hub calls
 
-The exact sequence, with the responses a working install returns, is `docs/SELF-HOST-RUN-SHEET.md` **step 10b**.
+The exact sequence, with the responses a working install returns, is `docs/INSTALL.md` **step 10b**.
 In short — from Claude Code inside your clone, or as direct tool calls:
 
 1. `perform(action: 'pov.create', …)` — a POV `pAIchart Use Cases` (country of your choice) with its phases named

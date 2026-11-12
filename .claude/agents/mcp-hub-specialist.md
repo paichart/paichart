@@ -428,4 +428,4 @@ Network kept files live (1.25.0). Hub-side pieces: SF-1 run-scope guard (deploye
 
 ## Pointer (2026-11-03): github-service pin from the host env, token-only health, self-host packaging
 - Platform pin = `GIT_FILE_SOURCE_PIN=<owner>/<repo>` (always `main`; unset = the private lab repo, unchanged; malformed throws at load); every target derives from it. Customer repos stay on WI-B10 `gitPin` rows. The platform — never the service — enforces it (owner, 2026-11-03).
-- `/healthz` checks only the token (`GET /rate_limit`). Self-host: compose profile `git`, `npm run seed:github-service`, run sheet 9c. Discovery: mcp-hub-discovery § 2026-11-03.
+- `/healthz` checks only the token (`GET /rate_limit`). Self-host: compose profile `git`, `npm run seed:github-service`, install guide 9c. Discovery: mcp-hub-discovery § 2026-11-03.

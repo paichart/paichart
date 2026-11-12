@@ -300,7 +300,7 @@ Key patterns for updating discovery prompts based on implementation learnings:
 ```bash
 ls .claude/knowledge/pipelines/OPERATOR-RUNBOOK.md .claude/knowledge/guides/MAINTAINER-ONBOARDING.md .claude/knowledge/guides/HEALTH-RUN.md | wc -l   # expect 3
 ls scripts/run-gates-clean.sh scripts/ship.sh scripts/series-cut-draft.sh | wc -l   # expect 3
-ls docs/RUNNING.md docs/SELF-HOST-RUN-SHEET.md docs/SELF-HOST-KEPT-FILES.md docs/VERIFYING-SELF-HOST.md | wc -l   # expect 4
+ls docs/RUNNING.md docs/INSTALL.md docs/SELF-HOST-KEPT-FILES.md docs/VERIFYING-SELF-HOST.md | wc -l   # expect 4
 grep -cE '"report:(gate|canary|canary-plan)"' package.json   # expect 3
 grep -c "Entry points for people" .claude/KNOWLEDGE-BASE-GUIDELINES.md   # expect 1
 ```

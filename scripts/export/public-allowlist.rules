@@ -82,12 +82,12 @@
 # only the latter; prod's docker-compose.yml (excluded below) is private infrastructure.
 + services/weather-service/**
 + services/browser-automation-service/**
-# LAB-CONFIGS Build 1 (owner D1, 2026-11-03): the GitHub file source ships, opt-in (compose profile `git`, run sheet 9c).
+# LAB-CONFIGS Build 1 (owner D1, 2026-11-03): the GitHub file source ships, opt-in (compose profile `git`, install guide 9c).
 + services/github-service/**
 - services/**
 + docker-compose.self-host.yml
 # their seed scripts follow the same decision. The browser service is SEEDED, not registered: its name is
-# reserved (service-registration-handler.js reserved-name guard) and first-party by design — run sheet 9b.
+# reserved (service-registration-handler.js reserved-name guard) and first-party by design — install guide 9b.
 + scripts/seed-weather-service.ts
 + scripts/seed-browser-automation-service.ts
 + scripts/seed-github-service.ts
@@ -162,6 +162,7 @@
 - .claude/knowledge/domain/harness/GUIDE-OUTREACH-RESEARCH.md
 - .claude/knowledge/domain/harness/MARKET-LANDSCAPE-*
 + .claude/KNOWLEDGE-BASE-GUIDELINES.md
++ .claude/README.md
 + .claude/agents/**
 + .claude/knowledge/**
 # Skills (incl. requirements-spec work folders: trial drafts, owner answers, findings register) — exported (Steve,
@@ -179,6 +180,10 @@
 
 # ── docs: stranger-facing only ────────────────────────────────────────────────────
 + docs/RUNNING.md
++ docs/INSTALL.md
+# Docs homologation P1 (2026-11-12): the index, and the three-line stub left at the old install path (outside links to it cannot
+# be counted; removed at the second health-run after the rename — open register DOCS-HOMOLOGATION).
++ docs/README.md
 + docs/SELF-HOST-RUN-SHEET.md
 + data/geographical-default.json
 + docs/OAUTH-SETUP.md
@@ -186,9 +191,9 @@
 # PH-7 (2026-11-01): the self-host kept-files text MUST cross with the held protocols (R6) — above `- docs/**`, pinned by
 # test:held-variant-protocol and enforced on the export tree by export-public.py.
 + docs/SELF-HOST-KEPT-FILES.md
-# Self-host systemd units, referenced by SELF-HOST-RUN-SHEET.md. These MUST be above the
+# Self-host systemd units, referenced by INSTALL.md. These MUST be above the
 # `- docs/**` line below: rules are ordered, first match wins, so without an explicit `+`
-# they silently never export and the run sheet points at a file that does not exist in
+# they silently never export and the install guide points at a file that does not exist in
 # the user's clone. Nothing else catches that.
 #
 # These describe the SELF-HOSTER's box, not ours — no prod hostname, no secret, no path

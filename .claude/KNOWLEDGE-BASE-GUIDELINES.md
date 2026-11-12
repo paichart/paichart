@@ -43,7 +43,7 @@ session finds them through the latest **continuation note**. `<program>` = a rev
 | **Operator runbook** | `.claude/knowledge/pipelines/OPERATOR-RUNBOOK.md` | "How do I run a program, from objective to the change package I apply?" | People who run programs |
 | **Maintainer onboarding** | `.claude/knowledge/guides/MAINTAINER-ONBOARDING.md` | "What rules keep the platform safe to change, and which script enforces each?" — names `scripts/run-gates-clean.sh` (gates on a clean tree), `scripts/ship.sh` (safe push + deploy watch), `scripts/series-cut-draft.sh` (ledger entry draft), `npm run report:gate` / `report:canary` / `report:canary-plan` | New maintainers |
 | **Health-run procedure** | `.claude/knowledge/guides/HEALTH-RUN.md` | "What does the quarterly health-run check, with which queries?" — moved verbatim out of CLAUDE.md 2026-11-01; CLAUDE.md keeps a stub with the dates | Whoever runs the health-run |
-| **Self-host docs (public)** | `docs/RUNNING.md`, `docs/SELF-HOST-RUN-SHEET.md`, `docs/SELF-HOST-KEPT-FILES.md`, `docs/VERIFYING-SELF-HOST.md` | "How do I install, test, run kept files on, and verify a self-hosted install?" — exported to the public repo | Self-hosters |
+| **Self-host docs (public)** | `docs/RUNNING.md`, `docs/INSTALL.md`, `docs/SELF-HOST-KEPT-FILES.md`, `docs/VERIFYING-SELF-HOST.md` | "How do I install, test, run kept files on, and verify a self-hosted install?" — exported to the public repo | Self-hosters |
 
 **The flow:** a finding → the register (with a trigger) · a lesson → the ledger → a pattern / discovery / checklist · a build → its build
 record → its deploy → its series-cut ledger entry (CLAUDE.md before 2026-10-29) · a handover → a new continuation note.

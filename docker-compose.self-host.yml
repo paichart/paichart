@@ -1,5 +1,5 @@
 # Self-host compose — ONLY the reference service a pAIchart self-host needs for programs.
-# (The hub itself runs on the host per docs/SELF-HOST-RUN-SHEET.md; this is not the production
+# (The hub itself runs on the host per docs/INSTALL.md; this is not the production
 # compose, which carries private services.)
 #
 #   docker compose -f docker-compose.self-host.yml up -d --build   # build image (~1.5 GB pull) + start
@@ -7,9 +7,9 @@
 #   docker compose -f docker-compose.self-host.yml down            # stop
 #
 # The service binds to 127.0.0.1 only: reachable from the hub on the same host, never from the network.
-# Then `npm run seed:browser-service` registers it in the hub — run sheet step 9b.
+# Then `npm run seed:browser-service` registers it in the hub — install guide step 9b.
 #
-# OPTIONAL — the GitHub file source (kept files read from a Git repo; run sheet step 9c). Its two containers sit behind the
+# OPTIONAL — the GitHub file source (kept files read from a Git repo; install guide step 9c). Its two containers sit behind the
 # `git` profile, so the default `up` above never needs its token file:
 #   docker compose -f docker-compose.self-host.yml --profile git up -d --build
 # It needs services/github-service/.env (copy .env.example there: a read-only GitHub token). Then `npm run seed:github-service`.

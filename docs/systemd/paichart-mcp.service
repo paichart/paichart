@@ -1,6 +1,6 @@
 # pAIchart self-host unit — MCP server (:8080)
 #
-# Install (see docs/SELF-HOST-RUN-SHEET.md):
+# Install (see docs/INSTALL.md):
 #   sudo cp docs/systemd/paichart-mcp.service /etc/systemd/system/
 #   sudo nano /etc/systemd/system/paichart-mcp.service      # set User/Group/WorkingDirectory to yours
 #   sudo systemctl daemon-reload

@@ -24,7 +24,7 @@ service whose registration declares held files (the hub registry's `heldFiles` f
 Kubernetes, Terraform and network pipelines can read the **file of record** from a Git repository, so the base the Author edits
 is the committed file rather than a copy typed into a task. The hub reads Git through the shipped GitHub file source
 (`services/github-service`): GitHub's official read-only MCP server plus a small proxy that adds your token. It is optional; skip it
-until you have a config repo. Set-up is [run sheet step 9c](SELF-HOST-RUN-SHEET.md); the service's shape, rules and upgrade checks
+until you have a config repo. Set-up is [install guide step 9c](INSTALL.md); the service's shape, rules and upgrade checks
 are in [`services/github-service/README.md`](../services/github-service/README.md). To try it before pointing it at your own repo, pin
 `paichart/paichart-configs`: public configuration files of record and released use cases that run against them.
 

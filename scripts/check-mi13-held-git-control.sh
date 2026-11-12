@@ -27,7 +27,7 @@ CREATE TEMP TABLE agent_artifacts (id text, name text, "executionId" text, "crea
 CREATE TEMP TABLE held_file_refs (id text, kind text, "executionId" text, "toolCallIndex" int, selector text, "sourceTool" text, "declaredBy" text,
   "serviceId" text, "serviceName" text, "blobSha256" text, scope text, "redactedCount" int DEFAULT 0, "redactorVersion" text DEFAULT 'paichart.r10/3',
   "fromRefId" text, "sourceRevision" text, "createdAt" timestamptz DEFAULT now(), "storedByteLength" int,
-  path text);  -- held-terraform step 2: MI-13's state/variables-path 🔴 line (step 1) reads it; without it this control aborted
+  path text, target text DEFAULT 'file');  -- held-terraform step 2: MI-13's state/variables-path 🔴 line (step 1) reads it; without it this control aborted
 CREATE TEMP TABLE held_capture_refusals (id text, "executionId" text, "toolCallIndex" int, refusal text, "identitySource" text, "createdAt" timestamptz DEFAULT now());
 CREATE TEMP TABLE held_blobs (sha256 text, scope text, content bytea, "storedByteLength" int, "lastReferencedAt" timestamptz DEFAULT now());
 CREATE TEMP TABLE held_views ("rewrittenLines" int);

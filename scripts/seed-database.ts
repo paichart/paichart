@@ -39,7 +39,7 @@ const steps: Array<[string, string]> = [
   // service you have not registered is inert data until you run it, which is the intended state).
   ['Named workflows (the HOWTO above teaches these — without them it teaches an empty list)', 'npx ts-node -r tsconfig-paths/register scripts/seed-named-workflows.ts'],
   // E15 (devext clean-slate replay, 2026-09-08): a first install landed in a GUI with NO agent templates — db:seed
-  // seeded protocols and prompts only, and the templates were an "optional next step" the run sheet never named.
+  // seeded protocols and prompts only, and the templates were an "optional next step" the install guide never named.
   // A complete install needs them; every seed is idempotent (findFirst → update/create) and prod never runs
   // db:seed (prod re-seeds templates by hand after a deploy — that policy is unchanged).
   ['Agent templates — generic roles', 'npx ts-node -r tsconfig-paths/register scripts/seed-agent-templates.ts'],

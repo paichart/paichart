@@ -43,15 +43,15 @@ grep -c '"llm:init"' package.json  # expect 1 — E32: the app never reads ANTHR
 grep -c "secure: PUBLIC_BASE_URL.startsWith('https://')" lib/config.ts  # expect 1 — E33: cookie Secure from the origin's scheme, never NODE_ENV (a production build on plain http bounced every page to /login)
 # 2026-09-13 additions — supervision. A PostgreSQL restart killed the self-host MCP server and nothing brought it back for 68 minutes
 # while the GUI kept returning 200; production never saw it because pm2 restarts within seconds. Review: cline_docs/reviews/self-host-supervision-and-listen-replay-2026-09-13/
-grep -c 'nohup npm run start\|nohup node mcp-server-http-clean' docs/SELF-HOST-RUN-SHEET.md   # expect 0 — the unsupervised PRODUCTION start, reintroduced. NOT a bare 'nohup' count: the doc legitimately contains prose about the incident and a dev-server step
-grep -c 'systemctl enable --now' docs/SELF-HOST-RUN-SHEET.md  # expect 1 — enable, not start; `start` alone does not survive a reboot and looks configured
+grep -c 'nohup npm run start\|nohup node mcp-server-http-clean' docs/INSTALL.md   # expect 0 — the unsupervised PRODUCTION start, reintroduced. NOT a bare 'nohup' count: the doc legitimately contains prose about the incident and a dev-server step
+grep -c 'systemctl enable --now' docs/INSTALL.md  # expect 1 — enable, not start; `start` alone does not survive a reboot and looks configured
 grep -hc 'AssertEnvironment=NODE_ENV=production' docs/systemd/paichart-web.service  # expect 1 — a dropped Environment= boots Next in DEV mode against a production build, silently, with no other detector
 grep -hc '^EnvironmentFile' docs/systemd/paichart-web.service docs/systemd/paichart-mcp.service | grep -vc '^0$'   # expect 0 — ONE env parser. Anchored to line start: both files DISCUSS EnvironmentFile in comments explaining why it is refused, and counting the word rather than the directive is the drifted-grep class this file exists to prevent. systemd's differs from dotenv's and silently wins: 'X=true   # comment' fails its === 'true' test, which would disable the R9 sanitiser
 grep -hc '^BindsTo\|^Requires=' docs/systemd/paichart-web.service docs/systemd/paichart-mcp.service | grep -vc '^0$'   # expect 0 (anchored — both files name these in comments as REJECTED alternatives) — a dependency-caused stop does NOT trigger Restart=, so BindsTo recreates the 68-minute outage behind a file that looks like protection
 grep -c '^+ docs/systemd/' scripts/export/public-allowlist.rules  # expect 2 — docs/** is excluded with first-match-wins includes above it; without these the units silently never ship. NOTE: necessary but NOT sufficient — the exporter reads `git ls-files`, so an untracked file cannot cross however correct the rule. Run the exporter, do not trust the rule
 grep -c 'SIGKILL paichart-mcp' docs/VERIFYING-SELF-HOST.md  # expect 1 — the step that actually tests the UNITS. Since the 2026-09-13 pool fix a Postgres restart kills nothing, so the DB-restart drill verifies the CODE and would pass where Restart= never fires
 grep -c 'pg_stat_activity' docs/VERIFYING-SELF-HOST.md  # expect 1 — the DEAFNESS check. SIGKILL tests liveness; the 2026-09-12 failure was a LIVE process returning 200 from every surface with zero listeners. Only the DB can see it, so this is the sole probe that would have caught it — or will catch its regression
-grep -c 'chmod 600 .env' docs/SELF-HOST-RUN-SHEET.md  # expect 1 — `cp .env.example .env` under Ubuntu's umask yields 0664 on a file holding DATABASE_URL, the Anthropic key and JWT material
+grep -c 'chmod 600 .env' docs/INSTALL.md  # expect 1 — `cp .env.example .env` under Ubuntu's umask yields 0664 on a file holding DATABASE_URL, the Anthropic key and JWT material
 grep -c '"seed:browser-service"' package.json  # expect 1 — E29: the browser-automation service is SEEDED (reserved first-party name), never registered
 grep -c 'test:cookie-secure-derivation' package.json  # expect 2 — E33 pin: script + chain slot
 grep -c 'test:marker-contract-claims' package.json  # expect 2 — the machine-parsed-marker clause is pinned to the parser it describes, both directions
@@ -86,13 +86,13 @@ PY
 ```
 
 **Replay procedure** (manual, ~10 min; run after changes to `.env.example`, npm scripts, seeds, the auth/OAuth
-boot path, **`docs/SELF-HOST-RUN-SHEET.md`, or `docs/systemd/*.service`** — record the result in
+boot path, **`docs/INSTALL.md`, or `docs/systemd/*.service`** — record the result in
 `cline_docs/reviews/open-source-readiness-2026-09-03/PHASE3-COLDSTART.md`):
 
 > **Who runs it** (added 2026-09-13): drive it with `dev-ops-specialist`, whose discovery prompt IS this
 > file. That is not ceremony — on 2026-09-13 the coordinator installed on devext by hand, skipped
 > `npm run build` after a 23-commit pull and started without `NODE_ENV=production`, then debugged the
-> resulting `SyntaxError` as if it were a code regression. Both steps were written in the run sheet. A
+> resulting `SyntaxError` as if it were a code regression. Both steps were written in the install guide. A
 > specialist that reads its discovery first would have read the sheet before touching the box.
 >
 > **Why devext specifically**: it is a real self-host of the PUBLIC repo, and therefore the only place the

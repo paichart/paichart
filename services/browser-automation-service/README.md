@@ -17,7 +17,7 @@ docker compose -f docker-compose.self-host.yml up -d --build    # from the repo 
 curl -s localhost:3100/health
 ```
 Then `npm run seed:browser-service` (from the repo root, `.env` present) registers it in the hub as a first-party
-service — its name is reserved, so it is seeded rather than registered. `docs/SELF-HOST-RUN-SHEET.md` step 9b.
+service — its name is reserved, so it is seeded rather than registered. `docs/INSTALL.md` step 9b.
 
 ## Tools
 `scrape_page`, `fill_form`, `click_element`, `take_screenshot`, `generate_pdf`, `run_script`, `trace_session`

@@ -1,0 +1,15 @@
+{
+  "public_head": "6126f94",
+  "counts": {
+    "markdown_files": 654,
+    "user_reachable_by_clicks": 110,
+    "user_reachable_by_clicks_under_claude": 0,
+    "user_reachable_by_named_path": 195,
+    "docs_unreachable_from_any_entry": 77,
+    "private_only_refs": 1172,
+    "in_neither_refs": 486,
+    "agent_files": 48,
+    "agent_files_with_missing_paths": 36,
+    "agent_files_with_private_only_paths": 34
+  }
+}

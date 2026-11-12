@@ -1,4 +1,5 @@
 .claude/KNOWLEDGE-BASE-GUIDELINES.md
+.claude/README.md
 .claude/agents/AGENT-REGISTRY.md
 .claude/agents/DOMAIN-ANALYSIS-TEMPLATE.md
 .claude/agents/GOLD-STANDARD-TEMPLATE.md
@@ -1297,7 +1298,9 @@ config/logrotate/paichart-oauth
 data/geographical-default.json
 dev-server.js
 docker-compose.self-host.yml
+docs/INSTALL.md
 docs/OAUTH-SETUP.md
+docs/README.md
 docs/RUNNING.md
 docs/SELF-HOST-KEPT-FILES.md
 docs/SELF-HOST-RUN-SHEET.md
@@ -1997,8 +2000,10 @@ scripts/create-vendor-povs.ts
 scripts/detect-dead-block-comments.sh
 scripts/detect-dual-files.sh
 scripts/discover-validation-schemas.js
+scripts/docs-inventory.py
 scripts/ensure-system-user.ts
 scripts/export-public.py
+scripts/export/docs-baseline.json
 scripts/export/held-export-guard.ts
 scripts/export/public-allowlist.rules
 scripts/export/publish.sh
@@ -2189,6 +2194,7 @@ scripts/replay-rollback-containment.ts
 scripts/replay-snapshot-gc.sh
 scripts/report-form-correction-kill-criteria.sh
 scripts/report-mechanism-inventory.sh
+scripts/report-run-cost.ts
 scripts/report-run-liveness.ts
 scripts/report-template-freshness.ts
 scripts/requirements-adoption-probes.ts

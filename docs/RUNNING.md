@@ -10,7 +10,7 @@ pAIchart is **two processes** behind one origin:
 In production a reverse proxy presents both as one host (`APP_BASE_URL`) — see the last section.
 
 ## Prerequisites
-- Node **20** (tested on 20.18), npm 10
+- Node **24** (the minimum the code accepts is 20.19 — [INSTALL.md](INSTALL.md) step 3 says why), npm 10 or later
 - PostgreSQL **16** with an empty database you can connect to
 - `openssl` (for key generation)
 - **A machine to run it on:** a Linux VM with about **16 GB RAM, 8 vCPU and 200 GB disk** runs the app, the MCP server and PostgreSQL together (the sizing the project's own hosts use; a lab rig such as containerlab switches needs its own headroom on top)
@@ -88,7 +88,7 @@ Then prove the install owns its identity: [VERIFYING-SELF-HOST.md](VERIFYING-SEL
 |---|---|
 | Agent / phase templates | already seeded by `db:seed`; re-run `npm run db:agents`, `npm run db:templates` or a domain `scripts/seed-*-templates.ts` after editing the library (idempotent) |
 | Your own sales theatres / countries / regions | a default set is seeded (4 theatres, 15 countries); `Settings → Geographical` is per-user defaults for new POVs, not an editor. Add countries/regions by editing `data/geographical-default.json` (or your own file via `node scripts/seed-geographical-data.js --file my-geo.json`) and re-running the seed (adds missing rows; never renames or deletes). A new theatre is a schema change (`SalesTheatre` enum → `npm run db:seed`; on an existing install a bare `npx prisma db push` refuses until the unique service-name index exists, which `db:seed` creates first) — `.claude/knowledge/guides/GEOGRAPHICAL_DATA_MANAGEMENT.md` |
-| Services in the hub registry | **empty by design** — prod's services are private infrastructure; register your own (below). Shipped references: `services/browser-automation-service` (Playwright; **programs need it** — run sheet step 9b: `docker compose -f docker-compose.self-host.yml up -d --build`, then `npm run seed:browser-service`; a first-party seeded service, no allowlist) and `services/weather-service` (the write-your-own pattern; needs a weather API key, `WEATHER_SERVICE_PORT=3102`) |
+| Services in the hub registry | **empty by design** — prod's services are private infrastructure; register your own (below). Shipped references: `services/browser-automation-service` (Playwright; **programs need it** — install guide step 9b: `docker compose -f docker-compose.self-host.yml up -d --build`, then `npm run seed:browser-service`; a first-party seeded service, no allowlist) and `services/weather-service` (the write-your-own pattern; needs a weather API key, `WEATHER_SERVICE_PORT=3102`) |
 | An API key for Claude Code / Claude Desktop / ChatGPT | log in → pAIchart logo (top-right) → **Profile Settings** → **MCP API Key** → **Generate New API Key** (an RS256 first-party token, shown once); paste as `X-API-Key` |
 | Client configuration (Claude Desktop / ChatGPT / Gemini) | log in, then open **`${APP_BASE_URL}/auth/oauth/success`** — the per-client setup sheet, pre-filled with this install's MCP URL; every login lands there |
 | Kept files (pipelines that edit your config files by reference) | read **[`SELF-HOST-KEPT-FILES.md`](SELF-HOST-KEPT-FILES.md)** first — what is stored, the R9/R10 configuration it is designed for (on by default in `.env.example`), and the five operator facts |
