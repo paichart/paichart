@@ -1944,16 +1944,16 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
   };
   const desc = require('../lib/agents/harness/held-bytes/descriptors') as { PLATFORM_DEFAULT_DESCRIPTORS: ReadonlyArray<Record<string, any>> };
   const GH = 'github-service';
-  const good = { owner: 'paichart', repo: 'paichart-lab-configs', path: 'k8s/sample-workloads.yaml' };
+  const good = { owner: 'paichart', repo: 'paichart-configs', path: 'k8s/sample-workloads.yaml' };
   const cases: Array<[string, Record<string, unknown>, string | null]> = [
     ['R1 legitimate read', good, null],
-    ['R1 owner/repo case-folded (GitHub folds case)', { ...good, owner: 'PaiChart', repo: 'PAICHART-LAB-CONFIGS' }, null],
+    ['R1 owner/repo case-folded (GitHub folds case)', { ...good, owner: 'PaiChart', repo: 'PAICHART-CONFIGS' }, null],
     ['R1 one leading slash', { ...good, path: '/k8s/sample-workloads.yaml' }, null],
     ['R1 ref main', { ...good, ref: 'main' }, null],
     ['R2 foreign owner', { ...good, owner: 'attacker' }, 'owner'],
     ['R2 foreign repo (public repos ARE readable by the token)', { ...good, owner: 'github', repo: 'github-mcp-server' }, 'owner'],
     ['R2 Unicode look-alike owner', { ...good, owner: 'pаichart' }, 'owner'],
-    ['R2 whitespace-padded repo', { ...good, repo: ' paichart-lab-configs' }, 'repo'],
+    ['R2 whitespace-padded repo', { ...good, repo: ' paichart-configs' }, 'repo'],
     ['R2 sha (fork-network objects)', { ...good, sha: 'a'.repeat(40) }, 'sha'],
     ['R2 PR head ref', { ...good, ref: 'refs/pull/7/head' }, 'ref'],
     ['R2 other branch (v1 default branch only)', { ...good, ref: 'dev' }, 'ref'],
@@ -1968,7 +1968,7 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
     ['R2 space', { ...good, path: 'k8s/a b.yaml' }, 'path'],
     ['R2 allowed punctuation', { ...good, path: 'k8s/app@v1+x_y-z.yaml' }, null],
     ['R2 empty segment', { ...good, path: 'k8s//x' }, 'path'],
-    ['R2 omitted path (lists the repo root)', { owner: 'paichart', repo: 'paichart-lab-configs' }, 'path'],
+    ['R2 omitted path (lists the repo root)', { owner: 'paichart', repo: 'paichart-configs' }, 'path'],
     ['R2 bidi control', { ...good, path: 'k8s/‮x.yaml' }, 'path'],
   ];
   for (const [label, a, field] of cases) {
@@ -1981,11 +1981,11 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
   check('R3 a non-Git service is never pinned (no false positive)', pinMod.checkGitArguments('weather-service', { owner: 'x' }).ok === true
     && policy.validateServiceCall('weather-service', 'get_weather', { owner: 'x', path: 'y' }, {}, ['get_weather'], 'weather-service').allowed === true);
   // served URI: consistency check (the server echoes the request — probed 2026-10-18)
-  const uri = (o: string, p: string, rev = '0ea432e751cc622ffab91d7a90386c66cadf8733') => `repo://${o}/paichart-lab-configs/sha/${rev}/contents/${p}`;
+  const uri = (o: string, p: string, rev = '0ea432e751cc622ffab91d7a90386c66cadf8733') => `repo://${o}/paichart-configs/sha/${rev}/contents/${p}`;
   check('R4 served URI agreeing ⇒ ok + the 40-hex commit', pinMod.checkGitServedUri(GH, uri('PaiChart', 'k8s/a.yaml'), 'k8s/a.yaml').revision === '0ea432e751cc622ffab91d7a90386c66cadf8733');
   check('R4 served URI naming another owner ⇒ refused', pinMod.checkGitServedUri(GH, uri('attacker', 'k8s/a.yaml'), 'k8s/a.yaml').field === 'owner');
   check('R4 served URI with another path ⇒ refused', pinMod.checkGitServedUri(GH, uri('paichart', 'k8s/b.yaml'), 'k8s/a.yaml').field === 'path');
-  check('R4 served URI not commit-form (a ref name) ⇒ refused fail-closed', pinMod.checkGitServedUri(GH, 'repo://paichart/paichart-lab-configs/refs/heads/main/contents/k8s/a.yaml', 'k8s/a.yaml').field === 'uri');
+  check('R4 served URI not commit-form (a ref name) ⇒ refused fail-closed', pinMod.checkGitServedUri(GH, 'repo://paichart/paichart-configs/refs/heads/main/contents/k8s/a.yaml', 'k8s/a.yaml').field === 'uri');
   check('R4 served URI with an UPPER-case commit ⇒ refused (40 lowercase hex only)', pinMod.checkGitServedUri(GH, uri('paichart', 'k8s/a.yaml', 'A'.repeat(40)), 'k8s/a.yaml').field === 'uri');
   // static: every platform descriptor for a Git file source carries the pin on EVERY file spec, and the Git leg scope
   const gitDescriptorProblems = (table: ReadonlyArray<Record<string, any>>): string[] => table
@@ -2013,25 +2013,25 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
   const BR = 'browser-automation-service';
   const scrape = (url: string, resolved = BR, target = BR) => policy.validateServiceCall(target, 'scrape_page', { url }, {}, ['scrape_page'], resolved);
   const bypassed = (v: { allowed: boolean; violations: Array<{ type: string }> }) => !v.allowed && v.violations.some((x) => x.type === 'PINNED_SOURCE_BYPASS');
-  for (const url of ['https://raw.githubusercontent.com/paichart/paichart-lab-configs/main/terraform/main.tf',
-    'https://github.com/paichart/paichart-lab-configs/blob/main/terraform/main.tf', 'https://GitHub.com/PaiChart/PAICHART-LAB-CONFIGS/raw/dev/k8s/x.yaml',
-    'https://raw.githubusercontent.com%2Fpaichart%2Fpaichart-lab-configs%2Fmain%2Fx', 'raw.githubusercontent.com/paichart/paichart-lab-configs/abc123/terraform/main.tf',
-    'https://api.github.com/repos/paichart/paichart-lab-configs/contents/terraform/main.tf', 'https://codeload.github.com/paichart/paichart-lab-configs/tar.gz/main',
-    'https://github.com/paichart/paichart-lab-configs.git',
+  for (const url of ['https://raw.githubusercontent.com/paichart/paichart-configs/main/terraform/main.tf',
+    'https://github.com/paichart/paichart-configs/blob/main/terraform/main.tf', 'https://GitHub.com/PaiChart/PAICHART-CONFIGS/raw/dev/k8s/x.yaml',
+    'https://raw.githubusercontent.com%2Fpaichart%2Fpaichart-configs%2Fmain%2Fx', 'raw.githubusercontent.com/paichart/paichart-configs/abc123/terraform/main.tf',
+    'https://api.github.com/repos/paichart/paichart-configs/contents/terraform/main.tf', 'https://codeload.github.com/paichart/paichart-configs/tar.gz/main',
+    'https://github.com/paichart/paichart-configs.git',
     // sec-ops step-1 T-2 fold: subdomains, the legacy raw host, media, backslash separators, a tab / newline inside the URL
-    'https://www.github.com/paichart/paichart-lab-configs/blob/main/x.tf', 'https://raw.github.com/paichart/paichart-lab-configs/main/x.tf',
-    'https://media.githubusercontent.com/media/paichart/paichart-lab-configs/main/x.tf', 'https:\\\\raw.githubusercontent.com\\paichart\\paichart-lab-configs\\main\\x.tf',
-    'https://raw.githubusercontent.com/pai\tchart/paichart-lab-configs/main/x.tf', 'https://raw.githubusercontent.com/paichart/paichart-lab-\nconfigs/main/x.tf']) check(`R9 a pinned repo through ${BR} is refused (${url.slice(0, 60)})`, bypassed(scrape(url)));
-  check('R9 refused by registry id too (keyed on the RESOLVED name)', bypassed(scrape('https://raw.githubusercontent.com/paichart/paichart-lab-configs/main/terraform/main.tf', BR, 'cmregistryid0000000000000')));
+    'https://www.github.com/paichart/paichart-configs/blob/main/x.tf', 'https://raw.github.com/paichart/paichart-configs/main/x.tf',
+    'https://media.githubusercontent.com/media/paichart/paichart-configs/main/x.tf', 'https:\\\\raw.githubusercontent.com\\paichart\\paichart-configs\\main\\x.tf',
+    'https://raw.githubusercontent.com/pai\tchart/paichart-configs/main/x.tf', 'https://raw.githubusercontent.com/paichart/paichart-\nconfigs/main/x.tf']) check(`R9 a pinned repo through ${BR} is refused (${url.slice(0, 60)})`, bypassed(scrape(url)));
+  check('R9 refused by registry id too (keyed on the RESOLVED name)', bypassed(scrape('https://raw.githubusercontent.com/paichart/paichart-configs/main/terraform/main.tf', BR, 'cmregistryid0000000000000')));
   for (const url of ['https://raw.githubusercontent.com/paichart/paichart/main/.claude/knowledge/pipelines/terraform-iac/phase4-localstack-rig/terraform-readonly-descriptor.json',
-    'https://github.com/paichart/paichart-lab-configs-fork/blob/main/x', 'https://notgithub.com/paichart/paichart-lab-configs/x', 'https://example.com/paichart-lab-configs'])
+    'https://github.com/paichart/paichart-configs-fork/blob/main/x', 'https://notgithub.com/paichart/paichart-configs/x', 'https://example.com/paichart-configs'])
     check(`R9 no false positive: ${url.slice(0, 70)}`, !scrape(url).violations.some((x) => x.type === 'PINNED_SOURCE_BYPASS'));
   // FIELDS arm: a second GitHub MCP given the pin's owner/repo as fields (the structured second route)
   check('R9 owner/repo fields matching a pin on another service are refused', bypassed(policy.validateServiceCall('my-github', 'get_file_contents',
-    { owner: 'PaiChart', repo: 'paichart-lab-configs', path: 'terraform/main.tf' }, {}, ['get_file_contents'], 'my-github')));
+    { owner: 'PaiChart', repo: 'paichart-configs', path: 'terraform/main.tf' }, {}, ['get_file_contents'], 'my-github')));
   check('R9 FIELDS no false positive: another repo, or owner alone', !policy.validateServiceCall('my-github', 'get_file_contents', { owner: 'paichart', repo: 'paichart' }, {}, ['get_file_contents'], 'my-github')
     .violations.some((x) => x.type === 'PINNED_SOURCE_BYPASS') && !policy.validateServiceCall('my-github', 'list', { owner: 'paichart' }, {}, ['list'], 'my-github').violations.some((x) => x.type === 'PINNED_SOURCE_BYPASS'));
-  check('R9 no false positive on look-alike hosts (notgithub.com, evil-github.com)', ['https://notgithub.com/paichart/paichart-lab-configs/x', 'https://evil-github.com/paichart/paichart-lab-configs/x']
+  check('R9 no false positive on look-alike hosts (notgithub.com, evil-github.com)', ['https://notgithub.com/paichart/paichart-configs/x', 'https://evil-github.com/paichart/paichart-configs/x']
     .every((u) => !scrape(u).violations.some((x) => x.type === 'PINNED_SOURCE_BYPASS')));
   // R9b (sec-ops step-1 SF-1): a state / plan / variables PATH is refused at the CALL gate, before any byte is delivered, with its
   // own message; capture names it `state-file` / `tfvars-file`, never `source-not-pinned` (no G-4 force — no base was lost)
@@ -2057,7 +2057,7 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
     .every((p) => pinMod.checkGitArguments(GH, { ...good, path: p }).ok === true));
   check('R9b a .tf file and a name without the leading dot stay readable', ['terraform/main.tf', 'terraform/tfstate-notes.md', 'terraform/.terraform.lock.hcl']
     .every((p) => pinMod.checkGitArguments(GH, { ...good, path: p }).ok === true));
-  check('R9 the Git file source itself is never a bypass of itself', !policy.validateServiceCall(GH, 'get_file_contents', { ...good, note: 'https://github.com/paichart/paichart-lab-configs' }, {}, ['get_file_contents'], GH)
+  check('R9 the Git file source itself is never a bypass of itself', !policy.validateServiceCall(GH, 'get_file_contents', { ...good, note: 'https://github.com/paichart/paichart-configs' }, {}, ['get_file_contents'], GH)
     .violations.some((x) => x.type === 'PINNED_SOURCE_BYPASS'));
 
   // R7 — sec-ops step-1 review SF-1: a Git file source is NEVER a workflow step. A workflow envelope escapes the status-line
@@ -2099,7 +2099,7 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
   check('R8 the input is never mutated', dirResp.content[0].text === listing);
   check('R8 idempotent: a stripped listing strips nothing more', strip.stripGitFileSourceUrlTokens(GH, d.response).stripped === 0);
   const fileText = `apiVersion: v1\n# see https://example.invalid/x?token=${tok}\n`;
-  const fileResp = { content: [{ type: 'text', text: 'successfully downloaded text file (SHA: x)' }, { type: 'resource', resource: { uri: 'repo://paichart/paichart-lab-configs/sha/0ea432e751cc622ffab91d7a90386c66cadf8733/contents/k8s/a.yaml', text: fileText } }] };
+  const fileResp = { content: [{ type: 'text', text: 'successfully downloaded text file (SHA: x)' }, { type: 'resource', resource: { uri: 'repo://paichart/paichart-configs/sha/0ea432e751cc622ffab91d7a90386c66cadf8733/contents/k8s/a.yaml', text: fileText } }] };
   const f = strip.stripGitFileSourceUrlTokens(GH, fileResp);
   check('R8 a FILE\'s resource text (the held base) is never touched, even when it contains token=', f.stripped === 0 && f.response === fileResp);
   check('R8 structuredContent strings are stripped too', strip.stripGitFileSourceUrlTokens(GH, { content: [], structuredContent: { items: [{ download_url: `https://x/y?token=${tok}` }] } }).stripped === 1);
@@ -2143,7 +2143,7 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
       pm.gitPinForRow(platformRow) !== null && pm.gitPinForRow(squat) === null);
     check('WI-B10 a declared gitPin is enforced at the call gate: own repo passes, another repo is refused on owner',
       pm.checkGitArguments(customer, { owner: 'acme', repo: 'net-configs', path: 'net/ceos1.cfg' }).ok === true
-      && pm.checkGitArguments(customer, { owner: 'paichart', repo: 'paichart-lab-configs', path: 'k8s/a.yaml' }).field === 'owner');
+      && pm.checkGitArguments(customer, { owner: 'paichart', repo: 'paichart-configs', path: 'k8s/a.yaml' }).field === 'owner');
     check('WI-B10 a declared Git source is refused as a workflow step (row-aware refusal)',
       pm.gitFileSourceWorkflowRefusal(customer) !== null && pm.gitFileSourceWorkflowRefusal({ name: 'acme-devices', configuration: { ownerId: 'u1' } }) === null);
   }
@@ -2245,7 +2245,7 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
     ['PINNED_ARGUMENT (field)', () => policy.validateServiceCall(GH, 'get_file_contents', { ...good, owner: 'attacker' }, {}, ['get_file_contents'], GH)],
     ['PINNED_ARGUMENT (ref)', () => policy.validateServiceCall(GH, 'get_file_contents', { ...good, ref: 'v1' }, {}, ['get_file_contents'], GH)],
     ['PINNED_ARGUMENT (state path)', () => policy.validateServiceCall(GH, 'get_file_contents', { ...good, path: 'terraform/terraform.tfstate' }, {}, ['get_file_contents'], GH)],
-    ['PINNED_SOURCE_BYPASS', () => scrape('https://raw.githubusercontent.com/paichart/paichart-lab-configs/main/terraform/main.tf')],
+    ['PINNED_SOURCE_BYPASS', () => scrape('https://raw.githubusercontent.com/paichart/paichart-configs/main/terraform/main.tf')],
     // Config-sources push 0 (sec-ops PUSH0 S-3): the never-held predicate on an UNPINNED file read — both message variants.
     ['NEVER_READ_PATH (state path, unpinned)', () => policy.validateServiceCall('acme-github', 'get_file_contents', { owner: 'acme', repo: 'infra', path: 'terraform.tfstate' }, {}, ['get_file_contents'], 'acme-github')],
     ['NEVER_READ_PATH (device inventory, unpinned)', () => policy.validateServiceCall('acme-github', 'get_file_contents', { owner: 'acme', repo: 'infra', path: 'nornir/hosts.yaml' }, {}, ['get_file_contents'], 'acme-github')],

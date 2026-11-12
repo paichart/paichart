@@ -62,7 +62,9 @@ platform keeps (holds) its files only for the owner — unless you grant a POV:
   Reviewer may approve a value that clashes with it (a known limitation): list every device a leg must see, not only the ones it
   changes (PIPELINE-HARNESS-USER-GUIDE.md § Which devices to list). A device may have both a `git-file` and a `device-read` line: the Git file is the
   base and the device read is quoted as evidence only; the agents do not compare them (`drift: not checked`) — since held-network step 3 the
-  platform does, as a warning fact (*Git file vs device configuration*), never a gate. Pasted device state is treated as evidence,
+  platform does, as a warning fact (*Git file vs device configuration*), never a gate. Since network-provisioning 1.27.0, when that
+  fact lists Git-file lines the device does not have, the package applies that device incrementally (only the changed lines, in a
+  session) instead of loading the whole file; some listed lines are rendering differences. A Git-only device gets no device-service call. Pasted device state is treated as evidence,
   never as the starting file. A pipeline that only derives a value for others (a value leg) changes no configuration. It
   needs no block, and with none it reads through its service descriptor and reads no Git file. Since network-derivation 1.3.0
   (2026-11-06) it MAY declare its own block (in a program: its own `## Device sources` section, carried as
@@ -76,8 +78,8 @@ platform keeps (holds) its files only for the owner — unless you grant a POV:
   Nornir inventory are refused at the call gate on EVERY `get_file_contents` call, pinned or not — including your own GitHub MCP
   service used in chat (`NEVER_READ_PATH`, logged as a blocked call). Name `.tf` and device configuration files only.
   *Network legs (since network-provisioning 1.24.0/1.25.0):* a refused ref does not stop the leg — that device is HELD (listed first,
-  nothing packaged) and the leg's outcome is needs-revision (platform-forced if needed); on an unpinned customer Git service the ref
-  in the declared line is read as named.
+  nothing packaged) and the leg's outcome is needs-revision (platform-forced if needed; since 1.27.0 the change Reviewer also refuses it,
+  naming the device); on an unpinned customer Git service the ref in the declared line is read as named.
 
 ## 4. Self-host operator settings (all off by default)
 

@@ -117,6 +117,20 @@ pages × 7,000). Never raise a cap to fit. A draft over the cap is regenerated o
 - **Open:** Z64 draft banner, Z67 (Phase 4 spec passages weaker than run 3), Z68 (overlap row: READ or ERROR — owner),
   SIZE-ESTIMATE-CALIBRATION (estimate ≈ 4–5% high vs `originalSize`), WRITING-RULES-POINTER.
 
+**Shipped 2026-11-09 — config-sources STEP 1 (the `sources` class; requirements-authoring 1.11.0)** (cut 10:22:03.195Z,
+key `registrySha256` `e8f7f8bcf803`; templates reseeded 10:32:30–33Z; ledger entry in SERIES-CUT-LEDGER):
+- **Phase A:** `scripts/check-requirements-sources.ts` imports the SHIPPING `device-sources.ts` (no second parser; Python only calls
+  it). S1–S4 are errors (lane sentence/one block per leg; parses both ways; equals the owner item; change blocks equal); S5 is printed
+  "not checked". `test:requirements-sources` is in the battery (C1 skips by name in the public export: `cline_docs/` is not exported).
+- **Phase B:** the `<token>.sources` row (class `sources`, a named exception to work-not-token; declared · OPEN only), ask per leg and
+  emit one block per LANE (limits L1–L4 stated), the slot is the last part of each network Pipeline section, and coverage flags a
+  missing/deleted row, a filled row on another token, and a slot left on a non-network leg.
+- **Golden v7** has two requirements cases (REQ-OBS-SENDERS approved, REQ-LOGARCH-F1 refused); every requirements text lab replays them.
+- **Open:** REQ-SPEC-SIZE-RAISE (own batch: Architect 12 pages/doc ⇒ checked 85,000, with a canary), REQ-SPEC-SIZE-TRIM,
+  REQ-GOLDEN-B-REASON-DRIFT, REQ-PROMPT-TOOL-CALL-CLASH + REQ-TEMPLATE-CONTRADICTIONS (blind read, pre-existing), the in-run port of
+  the sources check (G3-c trigger). Records: `cline_docs/reviews/config-sources-plans-2026-11-09/` (plan G1–G5, LAB-PREREG addenda
+  (a)–(d), BLIND-READ-REQ-SOURCES). First generated network spec + Architect canary: in progress (same folder).
+
 **Most of it is decided at generation.** In the generation description, as "transcribe, do not infer", DECLARE the
 non-enumerable **scope** (namespace, workspace or account), the **derivation rule**, and the **gate → approver mapping**.
 

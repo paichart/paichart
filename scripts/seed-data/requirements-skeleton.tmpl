@@ -58,6 +58,12 @@
 | {{LEG_TOKEN}}.covered-routes | when the leg adds a covering route, whether the routes it covers stop being advertised | replace · accompany | {{THE RULE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 | {{LEG_TOKEN}}.must-stay-reachable | which destinations must stay reachable after the change, and from where | — | {{DESTINATIONS, AND FROM WHERE}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
 
+### A network leg (configuration sources)
+
+| id | question | options | rule or named target | source |
+|---|---|---|---|---|
+| {{LEG_TOKEN}}.sources | which devices the leg reads (the ones it changes and the ones it only needs to see), and where each one's configuration is read from | — | {{THE OWNER'S BLOCK, BY ITEM — one block per lane}} | {{SOURCE — (declared — item N: "<one exact span of item N>") · (derived — basis: <read> shows <property>) · (forced — <item>) → gap · OPEN — <question>; options: <enum>}} |
+
 ## Decisions needed from the owner
 
 <!-- one line per row that is not simply declared:
@@ -225,6 +231,15 @@ the prose above, because two readings of the same sentence produce two different
   derivation is correct — the checker verifies containment, not that you met the requirement.
   **Satisfy the requirements; do not target the checker.**
 
+### Device sources — a network leg only (delete this sub-section on a leg on any other token)
+
+- **Device sources** (row `{{LEG_TOKEN}}.sources`, item {{N}}). {{LANE SENTENCE — keep one: This leg changes device configuration. · This leg changes no device configuration.}}
+  The leg's task description carries this `## Device sources` block exactly:
+
+```
+{{THE OWNER'S BLOCK — its heading line and every line under it, exactly as the cited item gives it}}
+```
+
 ## Pipeline 2 objective — {{DOMAIN_2}} {{(DOWNSTREAM)}}
 
 - Harvest {{TARGETS}} **read-only**. Service descriptor: `{{DESCRIPTOR_URL}}`
@@ -255,6 +270,15 @@ the prose above, because two readings of the same sentence produce two different
 - {{If a FURTHER leg consumes from this one}}: **the deliverable MUST publish, explicitly and
   prominently**: {{WHAT THE FURTHER LEG CONSUMES — named by rule and producer, never by value}} —
   the same obligation, and the same validation form, Pipeline 1 carries.
+
+### Device sources — a network leg only (delete this sub-section on a leg on any other token)
+
+- **Device sources** (row `{{LEG_TOKEN}}.sources`, item {{N}}). {{LANE SENTENCE — keep one: This leg changes device configuration. · This leg changes no device configuration.}}
+  The leg's task description carries this `## Device sources` block exactly:
+
+```
+{{THE OWNER'S BLOCK — its heading line and every line under it, exactly as the cited item gives it}}
+```
 
 ## Design constraints — split across the contract and the DAG
 

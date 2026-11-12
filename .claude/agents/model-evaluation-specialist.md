@@ -325,3 +325,14 @@ pin had been stale since the 2026-11-05 deploy). GS6 = 29 cells. Open: GOLDEN-RE
   beside the gate, re-registration) plus seven new traps; Protocol 16 § "When a lab fails in a way the text may not explain" (measure
   the released text before fixing a golden flip; a rig check before calling a device-semantics refusal a defect; measure a habit
   before a third rewording; re-register only before the next spend).
+
+## Pointer (2026-11-09): golden v5–v7; requirements lab (L108–L112)
+- **v5** `31067658c` re-pin to network-provisioning 1.27.0 / network-derivation 1.3.1 (+ derivation_architect BR-5). **v6** `2954550e5`
+  GOLDEN-REVIEWER-BYTE-FIDELITY (a): per-node `persistedEditApplication` on 14 held cases + 2 standing (frozen-cmp 12/17 identical;
+  named residuals: pre-1.26.0 liveEvidence line, K8S-AK5 pre-join). **v7** `02524dee0` adds REQ-OBS-SENDERS + REQ-LOGARCH-F1 (a
+  `requirements` case shape; pins from read-only prod reads — the next `golden-pin` re-pins them).
+- **Requirements labs cannot batch** (the 2b time rule reads the wall clock). Phase B spent $70.15 (ledger L108–L112).
+- **Open:** REQ-GOLDEN-B-REASON-DRIFT (score REQ-LOGARCH-F1 on its reason or replace it), LAB-VIEW-TOLERANCE (1,500 view tolerance is
+  below the n=3 spread), LAB-PLANT-BRIEF-COUNT (a planted item must update every copy that counts items — LL-CS-23), and the leaf-net
+  control line still reading rollbackContainment ✗ on held cells.
+

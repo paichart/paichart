@@ -29,13 +29,13 @@ const { parseGitFileSourcePinEnv, GIT_FILE_SOURCE_PINS, PLATFORM_GIT_TARGET, DEF
 test('P1 unset / empty / whitespace ⇒ the default pin, byte-identical to the old literal', () => {
   for (const raw of [undefined, '', '   ']) {
     const p = parseGitFileSourcePinEnv(raw);
-    ok(JSON.stringify(p) === JSON.stringify({ owner: 'paichart', repo: 'paichart-lab-configs', refs: ['main', 'refs/heads/main'] }), `raw=${JSON.stringify(raw)} → ${JSON.stringify(p)}`);
+    ok(JSON.stringify(p) === JSON.stringify({ owner: 'paichart', repo: 'paichart-configs', refs: ['main', 'refs/heads/main'] }), `raw=${JSON.stringify(raw)} → ${JSON.stringify(p)}`);
     ok(Object.isFrozen(p) && Object.isFrozen(p.refs), 'frozen');
   }
-  ok(DEFAULT_GIT_FILE_SOURCE_PIN.owner === 'paichart' && DEFAULT_GIT_FILE_SOURCE_PIN.repo === 'paichart-lab-configs', 'default constant');
+  ok(DEFAULT_GIT_FILE_SOURCE_PIN.owner === 'paichart' && DEFAULT_GIT_FILE_SOURCE_PIN.repo === 'paichart-configs', 'default constant');
   if (!process.env.GIT_FILE_SOURCE_PIN) {
-    ok(PLATFORM_GIT_TARGET === 'github:paichart:paichart-lab-configs', `target ${PLATFORM_GIT_TARGET}`);
-    ok(GIT_FILE_SOURCE_PINS['github-service'].repo === 'paichart-lab-configs', 'map default');
+    ok(PLATFORM_GIT_TARGET === 'github:paichart:paichart-configs', `target ${PLATFORM_GIT_TARGET}`);
+    ok(GIT_FILE_SOURCE_PINS['github-service'].repo === 'paichart-configs', 'map default');
   }
 });
 
@@ -67,10 +67,10 @@ test('P4 with the env SET, every derived target equals the map (modules re-loade
     ok(pin.PLATFORM_GIT_TARGET === 'github:acme:cfg', `target ${pin.PLATFORM_GIT_TARGET}`);
     ok(gh.files[0].target.const === pin.PLATFORM_GIT_TARGET, `descriptor const ${gh.files[0].target.const}`);
     ok(decl.PLATFORM_DECLARATION_TARGETS.includes(pin.PLATFORM_GIT_TARGET)
-      && !decl.PLATFORM_DECLARATION_TARGETS.includes('github:paichart:paichart-lab-configs'), `declaration targets ${decl.PLATFORM_DECLARATION_TARGETS}`);
+      && !decl.PLATFORM_DECLARATION_TARGETS.includes('github:paichart:paichart-configs'), `declaration targets ${decl.PLATFORM_DECLARATION_TARGETS}`);
     const call = pin.checkGitArguments('github-service', { owner: 'Acme', repo: 'Cfg', path: 'a.yaml', ref: 'main' });
     ok(call.ok === true && call.pinned === true, `pinned read refused: ${JSON.stringify(call)}`);
-    const off = pin.checkGitArguments('github-service', { owner: 'paichart', repo: 'paichart-lab-configs', path: 'a.yaml' });
+    const off = pin.checkGitArguments('github-service', { owner: 'paichart', repo: 'paichart-configs', path: 'a.yaml' });
     ok(off.ok === false && off.field === 'owner', `the default repo must be OFF-pin once the env names another: ${JSON.stringify(off)}`);
   } finally {
     if (saved === undefined) delete process.env.GIT_FILE_SOURCE_PIN; else process.env.GIT_FILE_SOURCE_PIN = saved;

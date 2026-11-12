@@ -1,6 +1,6 @@
 # Pipeline Harness User Guide
 
-**Version**: 3.1 | **Updated**: 2026-06-29
+**Version**: 3.1 | **Updated**: 2026-11-08 (network-provisioning 1.27.0 + network-derivation 1.3.1 mirror) · 2026-06-29
 **Status**: Production — three-mode (CREATE + ORCHESTRATE + SYNTHESIZE), platform-resolved
 
 > **This guide = how to RUN/USE the harness.** To **design + add a new domain pipeline** (the triage → decompose → build → validate → promote process), see the sibling [`PIPELINE-USE-CASE-DESIGN-PLAYBOOK.md`](./PIPELINE-USE-CASE-DESIGN-PLAYBOOK.md). Which domains exist + why they fit: [`PIPELINE-DOMAIN-FIT-CATALOG.md`](./PIPELINE-DOMAIN-FIT-CATALOG.md). To compose MULTIPLE pipelines into a plan-gated **program** (pipeline-of-pipelines): [`PROGRAM-HARNESS-USER-GUIDE.md`](./PROGRAM-HARNESS-USER-GUIDE.md).
@@ -223,13 +223,29 @@ check that file by hand. The Git file source is admin-only, and reads only the o
   platform fact compares the two (*Git file vs device configuration* — a warning, never a gate). Handle numbers can have gaps (`H1`, `H3`).
 - **What changes in the package.** The Author edits each kept configuration by reference — never as configuration-mode commands, never as
   the whole file — and the rollback is `restore H<n>`. A device whose source could not be read is listed **first** as held, nothing is
-  packaged for it, and the leg is **needs-revision** (forced if the agents did not say so — see *Forced outcomes*).
+  packaged for it, and the leg is **needs-revision** (forced if the agents did not say so — see *Forced outcomes*). Since
+  network-provisioning 1.27.0 the change Reviewer refuses such a leg itself and names the device and the reason (the service could
+  not be reached, the read was refused, or it returned no configuration): fix that source and run a fresh leg. A device whose
+  configuration the platform **did** keep, and which the package edits by reference, is not this case; it is reviewed on its merits.
 - **Secrets.** Kept configurations are redacted at capture; an edit never anchors on, or carries, a redacted line. Never load a file that
   contains a placeholder (`<<REDACTED-SECRET>>`) onto a device.
 - **Apply** (the package states it by reference): apply the edits to **your own** copy of the file (never the kept candidate, which carries
   placeholders), load it with the device's own tooling in a configuration session, review the **device's own diff** before committing,
   and commit with a timer that **reverts unless you confirm it** where the device offers one; a device without an atomic whole-file replace
   gets the difference applied with its own tooling. Base check: `held-base-check.ts --git` for a Git file; `--device` for a device base.
+- **Apply base — when a device's Git file differs from its running configuration (network-provisioning 1.27.0).** If the platform's
+  *Git file vs device configuration* fact lists lines of the Git file that the device does not have under the same block, loading the
+  whole edited file would carry those differences to the device too, and the device's own diff would stop the load. So the package
+  says so in that device's change list and gives it an **incremental apply**: enter only the lines the edits add or change, in a
+  configuration session, review that session's diff, and commit with the same revert timer — or bring the Git file in line with the
+  device first. It never loads that whole file, and the change Reviewer refuses a package that does. Some listed lines are rendering
+  differences rather than real drift: in our lab a top-level BGP `network` line in the Git file is shown by the device under
+  `address-family ipv4`. The incremental apply is still the safe shape for that device.
+- **Markers on new members.** When the change adds a member to a population the objective, the contract or the existing members
+  identify by a marker (for example the description every existing exporter interface carries), the new member carries the same
+  marker, in plain ASCII, so a later value leg that selects by it sees the new member. Known cosmetic case: when the existing
+  descriptions carry an extra note (in our lab, `telemetry-exporter (existing allocation)`), the new member may copy the whole
+  description, note included (register VALUE-MARKER-CONTINUITY).
 - **Proven on one platform family** (Arista EOS in our lab); other vendors are designed for but not yet live-proven.
 
 ### Limits worth knowing
@@ -264,7 +280,7 @@ Every example below ran live (2026-10-27 window); copy and change the work, the 
 Add a remote syslog host 192.0.2.50 on both lab switches (ceos1, ceos2), keeping every other line of their configuration unchanged.
 
 ## Device sources
-ceos1: git-file — service github-service ; paichart/paichart-lab-configs/network/base/ceos1-startup.cfg
+ceos1: git-file — service github-service ; paichart/paichart-configs/network/base/ceos1-startup.cfg
 ceos2: device-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json
 
 Read-only harvest, change package only — nothing is applied by this run.
@@ -275,7 +291,7 @@ Read-only harvest, change package only — nothing is applied by this run.
 | `<device>: git-file — service <name or descriptor URL> ; <owner>/<repo>/<path>` | your config file from Git (`main`, or the branch the line names) | edits by reference to `H<n>`, `restore H<n>` rollback |
 | `… ; <owner>/<repo>/<path> @ <branch\|tag\|commit>` | that ref — **only if the Git service's pin admits it**; otherwise the device is HELD and the leg needs-revision | as above, or nothing for that device |
 | `<device>: device-read — service <name or descriptor URL>` | the device's running configuration, read whole | edits by reference, `restore H<n>` |
-| both a `git-file` and a `device-read` line for one device | the Git file (the device read is evidence only) | edits to the Git file + a *Git file vs device configuration* warning listing real differences |
+| both a `git-file` and a `device-read` line for one device | the Git file (the device read is evidence only) | edits to the Git file + a *Git file vs device configuration* fact listing Git-file lines the device does not have under the same block (some may be rendering differences); when it lists any, that device is applied incrementally (1.27.0) |
 | `<device>: live-read — service <name or descriptor URL>` (alone — no other line for that device; 1.26.0) | nothing: the running configuration is read whole as **evidence only** — never kept, never edited. A device the change touches is never `live-read` only (the leg stops); a failed read is reported, not held | nothing for that device; its allocations are checked against the change |
 | `<device>: command-package` (alone — no other line for that device) | nothing (no kept file) | **the original method**: candidate configuration as commands, validation steps and a per-device rollback, with no platform-applied edits or rendered diff |
 
@@ -310,7 +326,9 @@ Read-only harvest, change package only — nothing is applied by this run.
   unchecked value.
 - **"Git-only"** describes a device declared with a `git-file` line and no `device-read`: everything the leg knows about it came from
   Git. That works, and is the expected setup for most teams. Its one limit: anything configured on the device but never committed to
-  Git cannot be seen without reading the device. The package should say that a value was checked against the Git file only.
+  Git cannot be seen without reading the device. The package should say that a value was checked against the Git file only. A
+  Git-only device gets **no call to any device service**: its state comes from its Git file. Since network-provisioning 1.27.0 a
+  change leg whose declared devices are all Git-only shows `liveEvidence: git-only` on its card (it showed `none-declared` before).
 - **A value leg (`(protocol: network-derivation)`, network-derivation ≥ 1.3.0, since 2026-11-06) has its OWN block.** It derives a
   value other legs consume (a free address, an aggregate) and changes nothing. In a program, give it its own `## Device sources`
   section in `requirements.md`; the Program Architect copies it as `deviceSources["network-derivation"]`, separate from the change
@@ -318,10 +336,12 @@ Read-only harvest, change package only — nothing is applied by this run.
   legs declare. List every switch whose allocations the value must avoid.
   - `git-file` only (the common case): the value is derived from your committed files. That is allowed and **stated, never blocked**:
     the leg's card reads `liveEvidence: git-only (declared devices)`, the Reviewer records a `NON-BLOCKING WARNING (git-file-only)`
-    naming each such switch, and the leg's summary names them. Its limit is the Git-only limit above: an address configured on a
+    naming each such switch, and the leg's summary names them. Since network-derivation 1.3.1 that warning is a line of its own,
+    starting with the label, and the leg's report lists it (a label written mid-sentence is not read by the platform, so it is not a
+    warning). The value leg's brief gives each Git-only switch a line saying no device-service call is made for it. Its limit is the Git-only limit above: an address configured on a
     switch by hand and never committed is not seen, so the value may already be in use on the running switch.
   - `git-file` + `device-read` on the same switch: the value rests on the running configuration (what the change will meet); the
-    Git file is evidence, and the platform shows any Git-vs-device difference.
+    Git file is evidence, and the platform shows any Git-vs-device difference. The brief limits the narrow reads to that switch.
   - `live-read`: as for a change leg (read whole, evidence only, alone on its switch).
   - No block for the value leg: it reads through its service descriptor exactly as before and reads no Git file. Do not write a note
     in its place — leave the section out.

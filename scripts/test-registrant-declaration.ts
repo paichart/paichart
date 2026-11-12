@@ -140,7 +140,7 @@ const okFetch = (json: object = DESC) => async () => ({ ok: true, json, sha256: 
     eq([v.ok, typeof v.sha256, v.declaration.files.length], [true, 'string', 1]);
   });
   await test('the platform pin is refused for a customer gitPin', () => {
-    const v = rd.buildDeclaration([{ tool: 'get_file_contents', select: 'content[type=resource].resource.text', path: { uri: 'path' }, gitPin: { owner: 'paichart', repo: 'paichart-lab-configs' } }], { serviceName: 'acme-git', capabilities: { tools: ['get_file_contents'] } });
+    const v = rd.buildDeclaration([{ tool: 'get_file_contents', select: 'content[type=resource].resource.text', path: { uri: 'path' }, gitPin: { owner: 'paichart', repo: 'paichart-configs' } }], { serviceName: 'acme-git', capabilities: { tools: ['get_file_contents'] } });
     eq([v.ok, v.reason], [false, 'git-pin-is-platform']);
   });
 

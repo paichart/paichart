@@ -20,7 +20,7 @@
  *   npm run lab:leg-replay -- vlg-score --run <runDir>[,<runDir>] [--experiment <dir>]   # VALUE-LEG-GIT readings + do-not-ship proxies, $0
  *   npm run lab:leg-replay -- vlg-fixtures                                             # VALUE-LEG-GIT: device pools + frozen harvest calls (cache/vlg/), cached snapshots only, $0
  *   npm run lab:leg-replay -- cs-fixtures --experiment <dir>                           # L-CS-N: PRE-redaction self-host device pool (rig per entry), identity + reversal + witness proved, $0
- *   npm run lab:leg-replay -- frozen-cmp --experiment <dir> --run <dryRunDir> [--only R] [--variants rb]   # a base arm's Reviewer prompt = the frozen production rebuild, byte for byte, $0
+ *   npm run lab:leg-replay -- frozen-cmp --experiment <dir> --run <dryRunDir> [--only R] [--variants rb] [--dump]   # a base arm's Reviewer prompt = the frozen production rebuild, byte for byte, $0 (--dump: frozen.reviewer.*.md beside a differing cell)
  *   npm run lab:leg-replay -- csn-self-test [--experiment <dir>] [--mutate held-blind|held-loose|alloc-regex|alloc-blind|dv-regex|ref-blind|nopkg-blind|limit-blind|overlap-blind|reason-blind|void-blind|warn-blind]  # L-CS-N scorer, $0
  *   npm run lab:leg-replay -- csn-score --run <runDir>[,<runDir>] --experiment <dir>   # L-CS-N readings + do-not-ship proxies (score-csn.ts), $0
  *   npm run lab:leg-replay -- standing-self-test                                     # standing bench (golden/standing-bench.json): each frozen record reproduces its STORED (wrong) outcome, $0
@@ -117,6 +117,7 @@ import { LAB_SAMPLE_PREFIX, loadLabSample, pureStamp, sampleReproduces } from '.
 import { loadFileFixture, createFixtureToolServer, fixtureToolsReport, fixtureCaptureReadiness, LAB_PERSIST_LOGGER, type LoadedFixture } from './fixture-tools';
 import { loadHarvesterLabSample, loadFrozenHarvest, HARVESTER_SOURCE_FROZEN_PREFIX } from './harvester-source';
 import { loadNetworkFixture, createNetworkToolServer, networkToolsReport, type NetworkFixtureSpec, type LoadedNetworkFixture } from './network-fixtures';
+import { objectiveOfRecordSource, createObjectiveToolServer, objectiveSummary, type ObjectiveSource } from './objective-of-record';
 export { applyEdits };
 
 const REPO = path.resolve(__dirname, '..', '..');
@@ -152,7 +153,7 @@ const RUNS_DIR = path.join(__dirname, 'runs');
  *  `scoring` on these nodes is score-k1.ts K1Scoring. */
 /** L-N1 (held-network step 2): `networkFixture` — the B4 device tier, B5 catalogue tier and B6 register refusal (network-fixtures.ts) in front of
  *  a HARVESTER node's recorded tier. */
-interface NodeSpec { /** VALUE-LEG-GIT L-VLG-a (value-lane.ts): simulate the Device-sources snapshot production's writer takes at the leg's FIRST execution, over the (input-edited) leg row. */ deviceSourcesSnapshot?: 'first-execution'; /** VALUE-LEG-GIT L-VLG-b: a frozen harvest (committed text + toolCalls) replaces a VALUE leg's stored Harvester, its device facts computed by the shipping nets. */ valueHarvest?: import('./value-lane').ValueHarvestSpec; /** L-CS-N (owner 2026-11-05): replace the frozen Harvester's calls by Git reads served from a fixture (git-harvest-plant.ts). */ harvestFromFixture?: import('./git-harvest-plant').HarvestFromFixture; /** L-CS-N ADDENDUM (h): replace the frozen Harvester's calls by a step-3 Harvester LAB SAMPLE's calls (git-harvest-plant.ts withSampleHarvest). */ harvestFromSample?: string; /** L-CS-N: re-stamp a PERSISTED (planted) Author purely over the arm's held files (the L-9 pure applier), as the edit step would. */ restampPersisted?: boolean; /** L-CS-N: score-csn.ts readings for this node (CsnScoring). */ csn?: import('./score-csn').CsnScoring; /** L-CS-N (ME-B3): the node's rows come from a self-host install — its cached snapshot must carry that provenance (and a node without it must not). */ provenance?: 'self-host'; /** L-CS-N: the stored verdict the provenance check must reproduce (R-FWA3: approved/92). */ provenanceExpect?: { approved: boolean; confidence: number }; /** ME-P2-6: arms of a planted node that DELIBERATELY run without the plant (named, never silent). */ unplantedArms?: string[]; networkFixture?: NetworkFixtureSpec; fileFixture?: string; fixturePlants?: string[]; harvesterSourceByVariant?: Record<string, string>; authorSourceByVariant?: Record<string, string>; reviewerBaseEdit?: string; diffMustShow?: string[]; architectOnly?: boolean; scoring?: import('./score-edits').NodeScoring | import('./score-k1').K1Scoring; id: string; authorExecutionId: string; kind: string; originalVersion?: string; variants: string[]; why?: string; authorPlant?: string; expect?: string; reviewerExecutionId?: string; ownerRowItemMap?: string; n?: number; nByVariant?: Record<string, number>; inputEdits?: string; harvesterOnly?: boolean; tools?: 'stub' | 'recorded' }
+interface NodeSpec { /** GOLDEN-REVIEWER-BYTE-FIDELITY (a): this node's persisted held Author cells read its stored `editApplication` (the variant flag, per case; set by golden-build). */ persistedEditApplication?: boolean; /** VALUE-LEG-GIT L-VLG-a (value-lane.ts): simulate the Device-sources snapshot production's writer takes at the leg's FIRST execution, over the (input-edited) leg row. */ deviceSourcesSnapshot?: 'first-execution'; /** VALUE-LEG-GIT L-VLG-b: a frozen harvest (committed text + toolCalls) replaces a VALUE leg's stored Harvester, its device facts computed by the shipping nets. */ valueHarvest?: import('./value-lane').ValueHarvestSpec; /** L-CS-N (owner 2026-11-05): replace the frozen Harvester's calls by Git reads served from a fixture (git-harvest-plant.ts). */ harvestFromFixture?: import('./git-harvest-plant').HarvestFromFixture; /** L-CS-N ADDENDUM (h): replace the frozen Harvester's calls by a step-3 Harvester LAB SAMPLE's calls (git-harvest-plant.ts withSampleHarvest). */ harvestFromSample?: string; /** L-CS-N: re-stamp a PERSISTED (planted) Author purely over the arm's held files (the L-9 pure applier), as the edit step would. */ restampPersisted?: boolean; /** L-CS-N: score-csn.ts readings for this node (CsnScoring). */ csn?: import('./score-csn').CsnScoring; /** L-CS-N (ME-B3): the node's rows come from a self-host install — its cached snapshot must carry that provenance (and a node without it must not). */ provenance?: 'self-host'; /** L-CS-N: the stored verdict the provenance check must reproduce (R-FWA3: approved/92). */ provenanceExpect?: { approved: boolean; confidence: number }; /** ME-P2-6: arms of a planted node that DELIBERATELY run without the plant (named, never silent). */ unplantedArms?: string[]; networkFixture?: NetworkFixtureSpec; fileFixture?: string; fixturePlants?: string[]; harvesterSourceByVariant?: Record<string, string>; authorSourceByVariant?: Record<string, string>; reviewerBaseEdit?: string; diffMustShow?: string[]; architectOnly?: boolean; scoring?: import('./score-edits').NodeScoring | import('./score-k1').K1Scoring; id: string; authorExecutionId: string; kind: string; originalVersion?: string; variants: string[]; why?: string; authorPlant?: string; expect?: string; reviewerExecutionId?: string; ownerRowItemMap?: string; n?: number; nByVariant?: Record<string, number>; inputEdits?: string; harvesterOnly?: boolean; tools?: 'stub' | 'recorded' }
 interface Measure { name: string; kind: 'count' | 'expected-output-blocks'; regex?: string; flags?: string; contentRegex?: string; lineRegex?: string; why?: string }
 interface Experiment {
   label: string; n: number; flags: Record<string, string>;
@@ -697,7 +698,9 @@ interface Job { node: NodeSpec; variant: string; protocol: ProtocolText; snap: S
   /** L-CS-N: the arm's bound `live-read` kind gate (null ⇒ the tree's constant). */
   kindGate?: ArmKindGate | null;
   /** O-2(a): the protocol injection production would stamp on this arm's executions (set for every job after prepare). */
-  armProtocolInjection?: { delta: { name: string; version: string } } }
+  armProtocolInjection?: { delta: { name: string; version: string } };
+  /** 2026-11-10 (objective-of-record.ts): a requirements Reviewer's objective fetch source (null ⇒ not a requirements Reviewer). */
+  objective?: ObjectiveSource | null }
 
 async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants: string[] | null, out: string, protocolOverride?: ProtocolText) {
   const jobs: Job[] = [];
@@ -716,7 +719,9 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
       jobs.push(...h.jobs); nodeReports[node.id] = h.report;
       continue;
     }
-    const { snap: snapE0, report: inputEditReport } = snapshotWithInputEdits(dir, node, loadSnapshot(node.authorExecutionId, { reviewerExecutionId: node.reviewerExecutionId ?? null }));
+    const rawSnap = loadSnapshot(node.authorExecutionId, { reviewerExecutionId: node.reviewerExecutionId ?? null });
+    const rawLegDescription: string | null = typeof rawSnap.leg?.description === 'string' ? rawSnap.leg.description : null;
+    const { snap: snapE0, report: inputEditReport } = snapshotWithInputEdits(dir, node, rawSnap);
     // VALUE-LEG-GIT: the first-execution snapshot + the frozen value harvest (value-lane.ts), before every downstream build.
     const valueLane = await applyValueLane(dir, node, snapE0);
     const snap0 = valueLane.snap;
@@ -740,6 +745,7 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
     //    rebuild; the PERSISTED Reviewer output through the shipping parser. Each step is compared with what ran.
     const ares = parsedResult(snap.author)!;
     const rres = parsedResult(snap.reviewer)!;
+    const objective = objectiveOfRecordSource(snap, rawLegDescription);
     const leaf = await runAuthorLeafNets(snap, ares.agentRole, ares.finalResponse, snap.author.exec.id);
     // L-R2 (2026-10-09): a net that does not APPLY to this role (markerPresence / rollbackContainment exclude ^requirements_)
     // and that production did not stamp either is a PASS, reported as n/a — not a mismatch and not a silent null===null.
@@ -805,8 +811,11 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
       measuresOnPersisted: computeMeasures(ares.finalResponse, exp.measures),
       ...(gitHarvest ? { gitHarvest: gitHarvest.report } : {}), ...(sampleHarvest ? { sampleHarvest: sampleHarvest.report } : {}),
       ...(valueLane.report ? { valueLane: valueLane.report } : {}),
+      // 2026-11-10: the requirements Reviewer's objective fetch — served from its stored answer, or the stub with the reason BY NAME.
+      objectiveOfRecord: objective.state === 'not-requirements-reviewer' ? null : objectiveSummary(objective),
       variants: {},
     };
+    if (objective.state !== 'not-requirements-reviewer') console.log(`   · ${node.id} objective of record: ${objective.state.startsWith('served') ? 'SERVED' : `NOT SERVED (${objective.state}) — the stub answers the Reviewer's fetch`} — ${objective.reason}`);
     fs.writeFileSync(path.join(nodeDir, 'persisted.author.md'), ares.finalResponse);
     fs.writeFileSync(path.join(nodeDir, 'persisted.reviewer.md'), rres.finalResponse);
 
@@ -1027,8 +1036,11 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
         // (`persistedEditApplication`), the leaf nets read that stamp and the held handles, as the core hands them at persist, so a
         // held-aware net (rollbackContainment `restore-is-held-base`) reproduces what the Reviewer saw. Off by default: every earlier
         // experiment's bytes stand.
-        const peaOpt = !!exp.variants[v]?.persistedEditApplication && !!held && !plant.editId && ares.editApplication && typeof ares.editApplication === 'object';
-        if (exp.variants[v]?.persistedEditApplication && !peaOpt) throw new Error(`${node.id}/${v}: persistedEditApplication needs a held arm, an unplanted persisted Author and a stored editApplication`);
+        // GOLDEN-REVIEWER-BYTE-FIDELITY (a) (2026-11-09): also per NODE — golden-build sets it on each case whose stored Author has an
+        // `editApplication` (a domain cell is shared by cases with and without one, e.g. K8S-AK5 pre-join, so never per arm there).
+        const peaWant = !!exp.variants[v]?.persistedEditApplication || !!node.persistedEditApplication;
+        const peaOpt = peaWant && !!held && !plant.editId && ares.editApplication && typeof ares.editApplication === 'object';
+        if (peaWant && !peaOpt) throw new Error(`${node.id}/${v}: persistedEditApplication needs a held arm, an unplanted persisted Author and a stored editApplication`);
         // L-CS-a (golden companion, 2026-11-05): where the arm's Harvester carries the COMPUTED liveEvidence (only on a released-version
         // arm — every earlier experiment reads `not-built`/`not-stamped-version`, so its bytes stand), the persisted Author's leaf nets read
         // the bound snapshot that carries it, or the Author transcription reads `harvester-not-stamped` (found on the golden dry run).
@@ -1053,7 +1065,8 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
       }
       jobs.push({ node, variant: v, protocol, snap, author, reviewerBase, reviewerTemplate, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective, reviewerModel, reviewerEffort, persistedAuthor,
         requirementsFormCorrection: typeof armFlag === 'boolean' ? armFlag : null, requirementsHarnessRow: reqRow, checkAt,
-        stored: node.tools === 'recorded' ? storedCallsOf(snap.author) : null, held, authorOnly: !!exp.variants[v]?.authorOnly });
+        stored: node.tools === 'recorded' ? storedCallsOf(snap.author) : null, held, authorOnly: !!exp.variants[v]?.authorOnly,
+        objective: objective.state === 'not-requirements-reviewer' ? null : objective });
     }
   }
   return { jobs, nodeReports };
@@ -1385,7 +1398,7 @@ async function run(args: Args) {
   if (!args.fakeLlm && !apiKey.startsWith('sk-ant-')) throw new Error('ANTHROPIC_API_KEY is not set to an Anthropic key in this shell — refusing to spend');
   const maxUsd = args.maxUsd ?? Math.ceil(est.upper * 1.25);
   console.log(args.fakeLlm ? '\n▶ FAKE model (persisted outputs) — $0, exercises the live path only' : `\n▶ spending, cap $${maxUsd} (--max-usd) · concurrency ${args.concurrency ?? 4}${args.noWarmFirst ? ' · warm-first OFF' : ' · warm-first (sample 1 of each cell writes the cache first)'}`);
-  const { runLive, fakeGenerateText } = await import('./live');
+  const { runLive, fakeGenerateText, fakeReplayToolCalls, TOOL_STUB_RESULT } = await import('./live');
   const fake = (b: 'author' | 'reviewer', snap: Snapshot) => providerFake
     ? fakeGenerateText(parsedResult(b === 'author' ? snap.author : snap.reviewer)!.finalResponse, (b === 'author' ? snap.author : snap.reviewer!).exec.modelUsed) : undefined;
   // L-6: `--fake-llm fixture:<dir>` answers a held arm's Author from a canned package (null ⇒ the persisted fake).
@@ -1525,7 +1538,13 @@ async function run(args: Args) {
       }
       fs.writeFileSync(path.join(sd, 'reviewer.user.md'), reviewer.user);
       const rId = `lab-${job.node.id}-${job.variant}-${i}-r`;
-      const r = await runLive(reviewer, { executionId: rId, taskId: job.snap.reviewer!.task.id, taskType: job.snap.reviewer!.task.type, apiKey, generateTextOverride: fake('reviewer', job.snap), onCall });
+      // 2026-11-10 (objective-of-record.ts): a requirements Reviewer's objective fetch is served its stored answer; under
+      // --fake-llm persisted the Reviewer replays its STORED calls through that tier (final text = the stored verdict).
+      const objServer = job.objective ? createObjectiveToolServer(job.objective, TOOL_STUB_RESULT) : null;
+      const rres = parsedResult(job.snap.reviewer)!;
+      const rFake = providerFake && job.objective?.state.startsWith('served') ? fakeReplayToolCalls(rres.toolCalls ?? [], rres.finalResponse, job.snap.reviewer!.exec.modelUsed) : fake('reviewer', job.snap);
+      const r = await runLive(reviewer, { executionId: rId, taskId: job.snap.reviewer!.task.id, taskType: job.snap.reviewer!.task.type, apiKey, generateTextOverride: rFake, onCall, toolServer: objServer });
+      const reviewerTools = job.objective ? objectiveSampleReport(job.objective, objServer!, r.toolCallRecords as Array<Record<string, any>>, rres.toolCalls ?? null) : null;
       fs.writeFileSync(path.join(sd, 'reviewer.md'), r.finalResponse);
       const verdict = parseReviewerVerdict(r.finalResponse);
       // The Reviewer's stamped verdict as production nests it (warnings included) — what the leg nets read (L0d).
@@ -1552,6 +1571,7 @@ async function run(args: Args) {
         author: { confidence: a.confidenceScore, stopReason: a.finalStopReason, turns: a.turns, toolCalls: a.toolCalls, diagnosticRetryUsed: a.diagnosticRetryUsed, formCheck: a.formCheck, chars: a.finalResponse.length,
           ...(a.requirementsFormCheck ? { requirementsFormCheck: a.requirementsFormCheck, requirementsFormCorrectionEnabledSource: a.requirementsFormCorrectionEnabledSource ?? null } : {}), durationMs: a.durationMs },
         reviewer: { stopReason: r.finalStopReason, turns: r.turns, toolCalls: r.toolCalls, diagnosticRetryUsed: r.diagnosticRetryUsed },
+        ...(reviewerTools ? { reviewerTools } : {}),
         leafFacts: summarizeFacts(leaf.stamped), leafNetErrors: leaf.errors,
         legFacts: leg ? summarizeFacts(leg.stamped) : null, legNetErrors: leg?.errors ?? null,
         measures: computeMeasures(a.finalResponse, exp.measures),
@@ -1793,6 +1813,30 @@ async function prepareArchitect(exp: Experiment, dir: string, node: NodeSpec, va
       persistedAuthor: null, requirementsFormCorrection: null, requirementsHarnessRow: null, checkAt: null, stored: null, held: null, authorOnly: true, architectOnly: true, constraintsBound });
   }
   return { jobs, report };
+}
+
+/**
+ * 2026-11-10 (objective-of-record.ts): a requirements Reviewer sample's tool record — the objective source (by name), the
+ * serve log, and the bytes check: each served fetch's loop record carries the stored raw result, and its R9 / LLM-cap facts
+ * equal the production record's (read_more never reaches the server, so it is skipped on the record side).
+ */
+function objectiveSampleReport(src: ObjectiveSource, server: { log: Array<{ tool: string; action: string | null; tier: string; storedIndex: number | null }> },
+  records: Array<Record<string, any>>, prodCalls: Array<Record<string, any>> | null) {
+  const recs = records.filter((t) => t.tool !== 'read_more');
+  const bytes = { served: 0, identical: 0, r9Compared: 0, r9Equal: 0, mismatches: [] as string[] };
+  server.log.forEach((e, k) => {
+    if (e.tier !== 'objective-of-record' || e.storedIndex === null || !src.stored) return;
+    bytes.served++;
+    const rec = recs[k];
+    if (rec && JSON.stringify(rec.result) === JSON.stringify(src.answer)) bytes.identical++; else bytes.mismatches.push(`call ${k}: served result differs from stored call ${e.storedIndex}`);
+    const prod = prodCalls?.[e.storedIndex];
+    if (rec && typeof prod?.rewritten === 'boolean') {
+      bytes.r9Compared++;
+      if (rec.rewritten === prod.rewritten && rec.resultTruncatedForLlm === prod.resultTruncatedForLlm && rec.resultChars === prod.resultChars) bytes.r9Equal++;
+      else bytes.mismatches.push(`call ${k}: R9/LLM-cap facts differ (chars ${rec.resultChars}/${prod.resultChars}, truncatedForLlm ${rec.resultTruncatedForLlm}/${prod.resultTruncatedForLlm})`);
+    }
+  });
+  return { objectiveOfRecord: objectiveSummary(src), log: server.log.map((e) => `${e.tool}${e.action ? `.${e.action}` : ''}:${e.tier}${e.storedIndex !== null ? `@${e.storedIndex}` : ''}`), objectiveBytes: bytes };
 }
 
 /** L-8: ONE Architect sample — the shipping loop with stub tools (an Architect has no stack contact), output saved for scoring. */
@@ -2344,6 +2388,8 @@ if (require.main === module) {
           const sys = fs.readFileSync(path.join(vd, 'reviewer.system.md'), 'utf8') === fr.system;
           const usr = fs.readFileSync(path.join(vd, 'reviewer.user.md'), 'utf8') === fr.user;
           if (!sys || !usr) bad++;
+          // GOLDEN-REVIEWER-BYTE-FIDELITY (2026-11-09): --dump writes the frozen rebuild beside a differing cell, so the difference is read
+          if ((!sys || !usr) && process.argv.includes('--dump')) { fs.writeFileSync(path.join(vd, 'frozen.reviewer.system.md'), fr.system); fs.writeFileSync(path.join(vd, 'frozen.reviewer.user.md'), fr.user); }
           console.log(`   ${sys && usr ? '✅' : '≠ '} ${nd.id}/${v}: reviewer.system.md ${sys ? 'identical' : 'differs'} · reviewer.user.md ${usr ? 'identical' : 'differs'} to the frozen production rebuild`);
         }
       }

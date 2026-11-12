@@ -1,0 +1,45 @@
+== coverage
+coverage — work/lab-exporter-loopback-ceos2-2026-11-10/draft-answered/report.md
+  legs ['network-provisioning'] · gates ['change', 'plan', 'value'] · rows 23 {'declared': 18, 'derived': 1, 'forced': 1, 'open': 3, 'other': 0} · owner block 31 · not-applicable 13
+  ❌ what: duplicate row · id: network-provisioning.target
+  ❌ what: duplicate row · id: network-provisioning.population
+  ❌ what: duplicate row · id: network-provisioning.inputs-empty
+  ❌ what: duplicate row · id: network-provisioning.sources
+  ❌ what: invented key asks a decision no key or item asks (owner decision; registry candidate) · id: network-provisioning.value-in-use
+  ❌ what: invented key asks a decision no key or item asks (owner decision; registry candidate) · id: network-provisioning.exemplar-disagree
+  ❌ what: invented key asks a decision no key or item asks (owner decision; registry candidate) · id: network-provisioning.sources-disagree
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: network-provisioning.receiver · line: network-provisioning.receiver — which workload/resource on the target is authorised — options: — — governs: none, row deleted from Pipeline 2 — tier: not-applicable — Pipeline 2 adds one loopback inte
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: network-provisioning.admitted-principal · line: network-provisioning.admitted-principal — who is admitted, and by which attribute the enforcer recognises them — options: source-address-range · named-identity · network-path · combination (state each
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: network-provisioning.request-path · line: network-provisioning.request-path — the path the admitted senders' requests take to the enforcer, which decides the attribute their address arrives in — options: direct · private-endpoint · translated
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: network-provisioning.principal-unseen · line: network-provisioning.principal-unseen — the leg's own harvest cannot confirm the enforcer sees the admitted attribute on the sender's path — options: gap · act-regardless — governs: none, row deleted 
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: network-provisioning.granted-action · line: network-provisioning.granted-action — what the admitted principal may do (actions, ports) — options: — — governs: none, row deleted from Pipeline 2 — tier: not-applicable — Pipeline 2 adds one loopbac
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: network-provisioning.existing-grant · line: network-provisioning.existing-grant — other allowances already on the same surface — options: replace · preserve · preserve-bounded (state the bound) — governs: none, row deleted from Pipeline 2 — tie
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: network-provisioning.target-empty · line: network-provisioning.target-empty — the receiver selector/surface matches nothing now — options: act · gap — governs: none, row deleted from Pipeline 2 — tier: not-applicable — Pipeline 2 adds one loo
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: network-provisioning.enforcer-absent · line: network-provisioning.enforcer-absent — no policy object governs the receiver yet — options: create · gap — governs: none, row deleted from Pipeline 2 — tier: not-applicable — Pipeline 2 adds one loopb
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: network-provisioning.target-absent · line: network-provisioning.target-absent — the declared target itself does not exist — options: gap · create-target — governs: none, row deleted from Pipeline 2 — tier: not-applicable — Pipeline 2 adds one 
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: network-provisioning.collateral · line: network-provisioning.collateral — what else on the target changes because enforcement now applies — options: per enforcer — governs: none, row deleted from Pipeline 2 — tier: not-applicable — Pipeline
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: network-provisioning.enforcer-scope · line: network-provisioning.enforcer-scope — which parts of the enforcer the restriction covers — options: all-reaching-the-protected-thing · exemption-by-property · gap — governs: none, row deleted from Pip
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: network-provisioning.covered-routes · line: network-provisioning.covered-routes — when the leg adds a covering route, whether the routes it covers stop being advertised — options: replace · accompany — governs: none, row deleted from Pipeline 2
+  👁  what: not-applicable — read the reason (a reason stating today's state is a defect) · id: network-provisioning.must-stay-reachable · line: network-provisioning.must-stay-reachable — which destinations must stay reachable after the change, and from where — options: — — governs: none, row deleted from Pipeline 2 — tier: not-applicable — Pi
+  7 error(s), 13 to read
+exit 1
+== citations
+citations: 18 total, 18 verbatim, 0 failing
+premise branches: no authorisation legs found
+✅ citation + premise gate clean (the Reviewer still owns: does each quote select the same option as the item?)
+exit 0
+== clauses
+clauses: 3 checked, 0 dropped
+exit 0
+== sources
+usage: check-requirements-sources.ts --draft <requirements.md> [--objective <objective.txt>] [--json]
+== sources (run)
+requirements sources check (generated spec): 2 block(s)
+  - "Pipeline 1 objective — network-provisioning value leg (UPSTREAM)" line 351: lane value (sentence), 2 line(s)
+  - "Pipeline 2 objective — network-provisioning change leg (DOWNSTREAM)" line 459: lane change (sentence), 3 line(s)
+OK: S1-S4 clean
+NOT CHECKED (S5):
+  - that the block lists every device in the leg's scope (the owner's declaration; a device left out is not checked by that leg - plan L4)
+  - that a ref is inside the Git service's pin (refused at run time)
+  - that a descriptor URL registers (the skill checks it at step 0)
+exit 0

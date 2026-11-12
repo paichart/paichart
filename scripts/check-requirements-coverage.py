@@ -16,6 +16,9 @@ What it checks (rule source in brackets):
   ERROR  a leg carries SOME keys of a class but not all (row or `not-applicable` line)  [8.1 every key of its class]
   ERROR  an authorisation leg lists any authorisation key `not-applicable`              [8.1 deleting ANY auth row on a leg that grants]
   ERROR  `must-stay-reachable` listed `not-applicable`                                   [registry: never deleted on a routing leg]
+  ERROR  a network leg without its `sources` row, or with it listed `not-applicable`; a `sources` row on another token
+  ERROR  a `### Device sources` slot left in a leg section whose heading names only another token      [owner R1, 2026-11-09]
+                                                                                        [registry: the sources class, keyed on the token]
   ERROR  a gate without `approver.<gate>`, or a non-plan gate without `gate.<gate>.position`  [8.1 every gate]
   ERROR  a row keyed on an unknown token or shape                                        [8.1 leg tokens are exactly …]
   ERROR  an invented key (neither a registry key nor `item-<N>`) on a known token, sorted (B-2 / R2, 2026-10-12):
@@ -44,6 +47,9 @@ import re
 import sys
 
 LEG_TOKENS = ('network-provisioning', 'kubernetes-gitops', 'terraform-iac', 'observability-config')
+# The `sources` class (STEP 1 Phase B, 2026-11-09, owner G2-b): keyed on the TOKEN — the tokens whose protocol reads a declared
+# configuration-sources block. A domain joins only with its own text batch (plan §6). Mirrored by requirements-coverage.ts.
+SOURCES_TOKENS = ('network-provisioning',)
 FORCE_ELIGIBLE = ('target-absent', 'inputs-empty')
 TIER_FOR = {'open': 'blocking', 'derived': 'confirm', 'forced': 'default'}
 ITEM_KEY = re.compile(r'^item-(\d+)[a-z]?$')   # B-2 item row: `<token>.item-<N>` (a letter suffix: two decisions)
@@ -167,7 +173,7 @@ def check(draft_text, registry):
         by_id[r['id']] = r
     na = {o['id']: o for o in owner if o['tier'] == 'not-applicable'}
 
-    leg_keys = {k for cls in ('leg', 'producer', 'auth', 'routing') for k in registry.get(cls, [])}
+    leg_keys = {k for cls in ('leg', 'producer', 'auth', 'routing', 'sources') for k in registry.get(cls, [])}
     legs, gates = set(), set()
     for rid in list(by_id) + list(na):
         parts = rid.split('.')
@@ -224,6 +230,17 @@ def check(draft_text, registry):
     for t in LEG_TOKENS:  # a leg whose objective heading names the token but has no row at all
         if re.search(rf'^## Pipeline \d+ objective\b.*\b{re.escape(t)}\b', draft_text, re.M | re.I):
             legs.add(t)
+    # Owner R1 (2026-11-09, sources lab step b: 1 of 3 drafts left the slot on its 3 non-network legs): a `### Device sources`
+    # slot in a leg section whose heading names only tokens outside SOURCES_TOKENS is left-over template, Author-actionable.
+    # A heading that names no token cannot be told apart and is not flagged (fail-open, as the leg detection above).
+    for m in re.finditer(r'^## Pipeline \d+ objective\b.*$', draft_text, re.M):
+        named = [t for t in LEG_TOKENS if re.search(rf'\b{re.escape(t)}\b', m.group(0), re.I)]
+        if not named or any(t in SOURCES_TOKENS for t in named):
+            continue
+        rest = draft_text[m.end():]
+        nxt = re.search(r'^## ', rest, re.M)
+        if re.search(r'^### Device sources\b', rest[:nxt.start()] if nxt else rest, re.M):
+            errors.append({'what': 'Device sources slot on a leg whose protocol reads no sources block — delete it', 'leg': named[0]})
 
     def accounted(rid):
         return rid in by_id or rid in na
@@ -259,6 +276,16 @@ def check(draft_text, registry):
         is_routing = any(f'{leg}.{k}' in by_id for k in registry.get('routing', []))
         if is_routing and f'{leg}.must-stay-reachable' in na:
             errors.append({'what': 'must-stay-reachable is never deleted on a routing leg', 'leg': leg})
+        # The sources class (2026-11-09): asked on every leg of a SOURCES_TOKENS token, never deleted there, never on another.
+        for k in registry.get('sources', []):
+            rid = f'{leg}.{k}'
+            if leg in SOURCES_TOKENS:
+                if rid in na:
+                    errors.append({'what': 'sources row is never deleted on a network leg', 'leg': leg, 'key': k})
+                elif rid not in by_id:
+                    errors.append({'what': 'missing sources row', 'leg': leg, 'key': k})
+            elif rid in by_id:   # a TABLE row; a not-applicable listing on another token is correct (owner 2026-11-09, R1 re-measure)
+                errors.append({'what': 'sources row on a leg whose protocol reads no sources block', 'leg': leg, 'key': k})
 
     for cls in ('producer', 'auth', 'routing'):
         if absent.get(cls):

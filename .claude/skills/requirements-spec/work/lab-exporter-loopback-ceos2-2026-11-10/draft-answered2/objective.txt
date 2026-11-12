@@ -1,0 +1,39 @@
+Objective. Produce the requirements document for a program that would add one more telemetry-exporter loopback on lab switch ceos2 only, on a /32 in the exporter pool 10.99.0.0/24 that neither lab switch uses, and advertise it in BGP. One system is involved: the lab switches.
+
+This is a DRAFT SPECIFICATION for human review. Do not launch a program.
+
+DESIGN DECISIONS - DECLARED, NOT INFERRED. Each item below is a choice made by the POV owner. Transcribe each one; do not substitute a different choice, and do not treat any of them as a description of current state - the program's legs observe current state for themselves.
+
+1. The program has two network legs. Pipeline 1 is a value leg: it reads lab switches ceos1 and ceos2, selects the free /32 in the exporter pool 10.99.0.0/24 and publishes it. This leg changes no device configuration.
+2. Pipeline 2 is a change leg: on lab switch ceos2 it applies the /32 that Pipeline 1 published (the new loopback, its description and its BGP advertisement) and does not re-select. This leg changes device configuration.
+3. The program changes lab switch ceos2 only: exactly one new loopback interface and the BGP advertisement of its /32. No configuration change on any other device.
+4. A /32 is used by a lab switch when it lies inside any IPv4 prefix configured on any interface of that switch, or inside any prefix that switch originates in BGP. The value leg reads every such prefix of ceos1 and ceos2 that overlaps the pool, and never selects a candidate that overlaps one. An address is free when neither lab switch uses it; nothing outside the two switches is consulted.
+5. If no /32 in the pool is free, the value leg reports a gap and publishes nothing.
+6. The selected value is expressed as one aligned prefix: a single /32.
+7. When more than one /32 in the pool is free, the value leg selects the lowest free one.
+8. The pool's first and last addresses are never selected.
+9. The new loopback takes the next loopback number after the highest-numbered existing telemetry-exporter loopback on that switch; if that number is already in use, it takes the next unused loopback number above it.
+10. The new loopback carries the same description as the existing telemetry-exporter loopbacks; the leg reports, in its own published deliverable, the literal description it applied.
+11. The new /32 is advertised in BGP by the same mechanism the existing telemetry-exporter loopbacks use; the leg reports the mechanism it applied.
+12. Device sources for the network value leg:
+   ## Device sources
+   ceos1: git-file — service github-service ; paichart/paichart-lab-configs/network/base/ceos1-startup.cfg
+   ceos2: git-file — service github-service ; paichart/paichart-lab-configs/network/base/ceos2-startup.cfg
+13. Device sources for every network change leg:
+   ## Device sources
+   ceos2: git-file — service github-service ; paichart/paichart-lab-configs/network/base/ceos2-startup.cfg
+   ceos2: device-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json
+   ceos1: live-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json
+14. The program plan gate is approved by Jacob Wilcox (jacob.wilcox@paichart.com).
+15. A value gate approves the /32 produced by Pipeline 1. It is approved by Josh Allen (josh.allen@paichart.com) and its position is after-producer-before-consumers: the value reaches Pipeline 2 only after this gate is released.
+16. The network change gate approves the change package for ceos2 produced by Pipeline 2. It is approved by Steve Terry (steve.terry@paichart.com) and its position is after-leg-before-completion.
+17. If the change leg's own harvest finds the /32 that Pipeline 1 published already used, in item 4's sense, on ceos1 or ceos2, the change leg reports a gap and authors no change package.
+18. If the existing telemetry-exporter loopbacks on ceos2 do not share one description, or do not share one BGP advertisement mechanism, the change leg reports a gap and authors no change package.
+19. When ceos2's Git file and its device read differ on a line the change leg reads, the Git file governs: it is the base the change package edits, and the device read is evidence.
+20. An existing telemetry-exporter loopback is a loopback whose description contains "telemetry-exporter"; the leg reports the literal criterion it applied.
+
+Phase 0 is REQUIRED - harvest live state; nothing is supplied inline. Self-provision the descriptor below, harvest it, emit a per-domain section, and record every registration you create so the harness can tear down every one of them at SYNTHESIZE:
+
+- network   https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json
+
+Harvest scope: the network harvest reads the interfaces and addresses of lab switches ceos1 and ceos2, and their BGP configuration and state.

@@ -29,6 +29,13 @@
  * model lever does not (`infraAuthor` is config_change_author only). It is scored on the persisted Author only: its leg
  * outcome is also decided by the derivation-containment net, which this scorer does not model for a live derivation.
  *
+ * REQUIREMENTS LEGS (v7, owner 2026-11-09, REQ-GOLDEN-CASES): a case with `shape: 'requirements'` (requirements-authoring) replays the
+ * persisted requirements_author and the requirements_reviewer that reviewed it, with no held binding and no carrier (its leg outcome is
+ * the harness row's qualityGate). Persisted Author only: a live Requirements Author needs the whole owner-answer input set and its
+ * correction turn reads the wall clock. A Reviewer model lever reaches it (fail-closed, as for value legs); an Author model lever does
+ * not (`requirementsAuthor` is its own tier). `ownerRowItemMap` names the run's stored owner map, copied into the node so the lab's
+ * in-run form-check control reads the map the run had (no prompt byte depends on it).
+ *
  * RE-FREEZE (owner decision only): add a case when a program releases or a window passes, with a hand-read verdict and
  * provenance; record it in `refreezes` (what was added, what was left out and why, which pins moved) and bump `version`
  * whenever the case list or a pin changes — a lab declares the version it ran, and a companion built for an older version
@@ -68,6 +75,8 @@ import { AGENT_MODELS } from '../../lib/agents/model-tiers';
 import { heldEditVerdict } from '../../lib/agents/harness/held-edit-carrier';
 
 export const GOLDEN_DIR = path.join(__dirname, 'golden');
+/** v7: the one protocol a `requirements` case runs (no held binding). */
+export const REQUIREMENTS_PROTOCOL = 'requirements-authoring-protocol';
 
 export type GoldenOutcome = 'approved' | 'needs-revision';
 export interface GoldenCase {
@@ -81,11 +90,14 @@ export interface GoldenCase {
   /** `value` (v2, 2026-10-31): a VALUE leg (network-derivation) — its node is the persisted derivation_architect and the
    *  derivation_reviewer that chained it, no held binding (heldJoinSeedByProtocol maps its protocol to null), no carrier.
    *  Omitted = a change leg (config_change_author + change_reviewer). */
-  shape?: 'change' | 'value';
+  shape?: 'change' | 'value' | 'requirements';
+  /** requirements (v7): the run's stored owner row→item map (a file under golden/), carried into the node for the form-check control. */
+  ownerRowItemMap?: string;
   runSheet: string; why: string; caveat?: string;
 }
 /** The two roles a case's node replays: the persisted/live "Author" slot and the Reviewer. */
 export function caseRoles(c: Pick<GoldenCase, 'shape'>): { author: string; reviewer: string } {
+  if (c.shape === 'requirements') return { author: 'requirements_author', reviewer: 'requirements_reviewer' };
   return c.shape === 'value' ? { author: 'derivation_architect', reviewer: 'derivation_reviewer' } : { author: 'config_change_author', reviewer: 'change_reviewer' };
 }
 export interface GoldenSet {
@@ -102,7 +114,7 @@ export interface GoldenSet {
   notReplayable: Array<{ id: string; what: string; why: string; followUp: string }>;
   costBasis: Record<string, unknown>;
   /** Owner re-freezes, newest last: what each version added or left out, and the decision that made it. */
-  refreezes?: Array<{ version: string; date: string; decision: string; added: string[]; excluded: Array<{ leg: string; why: string }>; pinsMoved: string[] }>;
+  refreezes?: Array<{ version: string; date: string; decision: string; added: string[]; excluded: Array<{ leg: string; why: string }>; pinsMoved: string[]; /** v6: a companion-only change (no case or pin moved) */ companion?: string[]; /** v7: the $0 proof recorded with the decision */ proof?: string[] }>;
 }
 /** The declaration every agent-text / model lab's experiment.json carries (refused at --spend without it). */
 export interface GoldenDeclaration { version: string; targets?: Array<{ case: string; reason: string }>; optOut?: Array<{ case: string; reason: string }> }
@@ -122,7 +134,11 @@ export function loadGoldenSet(dir = GOLDEN_DIR): GoldenSet {
     ids.add(c.id);
     if (!gs.pins.protocols[c.protocol]) throw new Error(`golden set: case ${c.id} runs ${c.protocol}, which has no pin`);
     if (!(c.protocol in gs.heldJoinSeedByProtocol)) throw new Error(`golden set: no heldJoinSeed entry for ${c.protocol}`);
-    if ((gs.heldJoinSeedByProtocol[c.protocol] === null) !== (c.shape === 'value')) throw new Error(`golden set: case ${c.id} — a value leg (and only a value leg) runs a protocol with no held binding`);
+    if ((gs.heldJoinSeedByProtocol[c.protocol] === null) !== (c.shape === 'value' || c.shape === 'requirements')) throw new Error(`golden set: case ${c.id} — a value leg or a requirements leg (and only those) runs a protocol with no held binding`);
+    if ((c.shape === 'requirements') !== (c.protocol === REQUIREMENTS_PROTOCOL)) throw new Error(`golden set: case ${c.id} — a requirements case (and only a requirements case) runs ${REQUIREMENTS_PROTOCOL}`);
+    if (c.shape === 'requirements' && c.authorForms.join() !== 'persisted') throw new Error(`golden set: case ${c.id} — a requirements case is scored with the persisted Author only`);
+    if (c.ownerRowItemMap && c.shape !== 'requirements') throw new Error(`golden set: case ${c.id} — ownerRowItemMap is for a requirements case only`);
+    if (c.ownerRowItemMap && !fs.existsSync(path.join(dir, c.ownerRowItemMap))) throw new Error(`golden set: case ${c.id} owner map ${c.ownerRowItemMap} missing`);
     const want: GoldenOutcome = c.expected.agentApproved && !c.expected.platformReason ? 'approved' : 'needs-revision';
     if (want !== c.expected.legOutcome) throw new Error(`golden set: case ${c.id} expects ${c.expected.legOutcome}, but its agent verdict + platform reason give ${want}`);
     if (c.authorForms.includes('live') && c.class === 'correct-refusal' && !isRunLevelReason(c.expected.platformReason)) {
@@ -229,7 +245,7 @@ export function buildGoldenCompanion(labDir: string, gs: GoldenSet = loadGoldenS
   // The lab's protocol edits apply to the golden PIN of the same protocol; the lab must have pinned the same text.
   for (const [name, b] of Object.entries(lab.baseline.protocols)) {
     const pin = gs.pins.protocols[name];
-    if (!pin) continue; // a protocol no golden case runs (e.g. requirements-authoring)
+    if (!pin) continue; // a protocol no golden case runs
     const edited = Object.values(lab.variants).some((v) => (v.edits ?? []).some((f) => readEdit(labDir, f).appliesTo.includes(name)));
     if (!edited) continue;
     const labText = fs.readFileSync(path.join(labDir, b.file), 'utf8');
@@ -306,7 +322,7 @@ export function buildGoldenCompanion(labDir: string, gs: GoldenSet = loadGoldenS
       // reaches a value leg's derivation_architect (tier `infra`). A Reviewer model lever reaches every case: change_reviewer
       // and derivation_reviewer share the `infra` tier (fail-closed; a lab whose lever is change_reviewer-only opts the value
       // case out WITH a reason).
-      const authorModelReach = (v.authorModel || v.authorEffort) && c.shape !== 'value';
+      const authorModelReach = (v.authorModel || v.authorEffort) && c.shape !== 'value' && c.shape !== 'requirements';
       const reachA = [protoReach && 'protocol', authTplReach && 'author-template', authorModelReach && 'author-model'].filter(Boolean) as string[];
       const dom = c.domain;
       const seed = gs.heldJoinSeedByProtocol[c.protocol];
@@ -330,11 +346,12 @@ export function buildGoldenCompanion(labDir: string, gs: GoldenSet = loadGoldenS
       let any = false;
       if (reachR.length) { add(`g${arm}${dom}r`, 'persisted', reachR, { authorSource: 'persisted' }); any = true; }
       if (reachA.length && c.authorForms.includes('live') && v.authorSource !== 'persisted') {
-        add(`g${arm}${dom}a`, 'live', reachA, { authorModel: v.authorModel ?? (c.shape === 'value' ? AGENT_MODELS.infra : AGENT_MODELS.infraAuthor), authorEffort: v.authorEffort ?? 'high', heldEditCorrection: v.heldEditCorrection ?? true });
+        add(`g${arm}${dom}a`, 'live', reachA, { authorModel: v.authorModel ?? (c.shape === 'value' ? AGENT_MODELS.infra : c.shape === 'requirements' ? AGENT_MODELS.requirementsAuthor : AGENT_MODELS.infraAuthor), authorEffort: v.authorEffort ?? 'high', heldEditCorrection: v.heldEditCorrection ?? true });
         any = true;
       }
       if (!any) unreached.push({ case: c.id, arm, why: reachA.length ? 'the lever reaches only the Author, and this case is scored on the persisted Author'
         : (v.authorModel || v.authorEffort) && c.shape === 'value' ? `arm ${arm}'s Author model lever is the config_change_author tier; this value leg's Author is a derivation_architect`
+        : (v.authorModel || v.authorEffort) && c.shape === 'requirements' ? `arm ${arm}'s Author model lever is the config_change_author tier; this requirements leg's Author is a requirements_author (persisted only)`
         : `arm ${arm}'s levers (${levers.join(', ')}) do not reach ${c.protocol} or its templates` });
     }
   }
@@ -346,8 +363,23 @@ export function buildGoldenCompanion(labDir: string, gs: GoldenSet = loadGoldenS
       if (r.applied.length) fs.writeFileSync(path.join(out, p.file.replace(/\.baseline\.md$/, `.${cell}.md`)), r.text);
     }
   }
+  // GOLDEN-REVIEWER-BYTE-FIDELITY (a) (2026-11-09): a HELD case whose stored Author carries `editApplication` — production's edit step
+  // stamped it and the leaf nets read it with the held handles — sets `persistedEditApplication` on its node, so the persisted Reviewer
+  // cell sees production's rollback-provenance line (`restore-is-held-base`), not `no-restore-blocks`. Per case, never per arm: a case
+  // with no stored stamp (K8S-AK5, pre-join) is refused the flag by the lab. Read from the cached snapshot (the stored Author row).
+  const pea = (authorExecutionId: string, reviewerExecutionId: string | undefined, held: boolean): boolean => {
+    if (!held) return false;
+    const { loadSnapshot } = require('./snapshot') as typeof import('./snapshot');
+    const { parsedResult } = require('./rebuild') as typeof import('./rebuild');
+    const ea = parsedResult(loadSnapshot(authorExecutionId, { reviewerExecutionId: reviewerExecutionId ?? null }).author)?.editApplication;
+    return !!ea && typeof ea === 'object';
+  };
+  // v7: a requirements case's stored owner map, copied beside the companion (the node path is relative to it).
+  const copyOwnerMap = (f: string) => { const rel = `owner-maps/${path.basename(f)}`; fs.mkdirSync(path.join(out, 'owner-maps'), { recursive: true }); fs.copyFileSync(path.join(goldenDir, f), path.join(out, rel)); return rel; };
   const nodes = gs.cases.filter((c) => nodeVariants.has(c.id)).map((c) => ({
     id: `GOLD-${c.id}`, authorExecutionId: c.authorExecutionId, reviewerExecutionId: c.reviewerExecutionId,
+    ...(pea(c.authorExecutionId, c.reviewerExecutionId, gs.heldJoinSeedByProtocol[c.protocol] !== null) ? { persistedEditApplication: true } : {}),
+    ...(c.ownerRowItemMap ? { ownerRowItemMap: copyOwnerMap(c.ownerRowItemMap) } : {}),
     kind: `golden ${c.class} (${c.domain}) — expect leg ${c.expected.legOutcome}`, variants: nodeVariants.get(c.id)!,
     expect: `${c.expected.legOutcome} (agent ${c.expected.agentApproved ? 'approved' : 'refused'}${c.expected.platformReason ? `, platform ${c.expected.platformReason}` : ''})`,
     why: c.why, n: 1,
@@ -384,7 +416,10 @@ export function buildGoldenCompanion(labDir: string, gs: GoldenSet = loadGoldenS
       ...(pn.inputEdits ? { inputEdits: rel(pn.inputEdits.file) } : {}),
       ...(pn.deviceSourcesSnapshot ? { deviceSourcesSnapshot: pn.deviceSourcesSnapshot } : {}),
       ...(pn.valueHarvest ? { valueHarvest: { text: rel(pn.valueHarvest.text.file), toolCalls: rel(pn.valueHarvest.toolCalls.file) } } : {}),
-      ...(pn.authorPlant ? { authorPlant: rel(pn.authorPlant.file) } : {}) });
+      ...(pn.authorPlant ? { authorPlant: rel(pn.authorPlant.file) } : {}),
+      // GOLDEN-REVIEWER-BYTE-FIDELITY (a): the same per-case rule for an UNPLANTED standing case on a held protocol (a planted one's
+      // Author is the plant, re-stamped by the lab).
+      ...(!pn.authorPlant && pea(sc.authorExecutionId, sc.reviewerExecutionId, gs.heldJoinSeedByProtocol[sc.protocol] !== null && gs.heldJoinSeedByProtocol[sc.protocol] !== undefined) ? { persistedEditApplication: true } : {}) });
     standingDecl.push({ case: sc.id, node: id });
   }
   const report: CompanionReport = { lab: path.basename(labDir), labLabel: lab.label, goldenVersion: gs.version, cells, unreached,

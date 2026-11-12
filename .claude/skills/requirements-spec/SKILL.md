@@ -44,56 +44,107 @@ Also outside: an objective whose CORE decision has no registry row (a few Author
 the trial's final generation added four; a missing row for the main decision means the registry cannot ask it), and a
 re-run of an objective that already has a published spec (reuse it).
 
-## Network change legs — Device sources (from network-provisioning 1.23.0)
+## Network legs — Device sources (change legs from network-provisioning 1.23.0; value legs from network-derivation 1.3.0)
 
-**From network-provisioning 1.23.0 (held-network step 2), a network CHANGE leg reads only the configuration sources
-the spec DECLARES.** Before that version is deployed, the block below is harmless but is not read. Check the version
-first: the CLAUDE.md series cut for 1.23.0, or the leg root's `protocolInjection.delta.version`. These rules apply
-to every objective with a `network-provisioning` leg. No registry row asks them yet (proposed, lab-gated), so YOU
-carry them: the objective declares them and the §2 read checks them.
+**A network CHANGE leg reads only the configuration sources the spec DECLARES (network-provisioning ≥ 1.23.0), and a
+network VALUE leg reads a Git file only when the spec gives it lines of its own (network-derivation ≥ 1.3.0).** Check
+the live versions first: the series-cut ledger, or the leg root's `protocolInjection.delta.version`. These rules apply
+to every objective with a network leg. From requirements-authoring 1.11.0 the registry row `network-provisioning.sources`
+asks them (the zero draft shows it OPEN on every network leg; map the item to that row). Before 1.11.0 no row asks
+them, so YOU carry them as an added item (item 5 below). Either way the objective
+declares them, the publish pass checks them (`scripts/check-requirements-sources.ts`, the shipping parser), and the §2
+read checks them again.
 
-1. **Every network change leg declares a `## Device sources` block**, one line per device the change touches:
+1. **Ask it per leg, in Group A, beside the leg's TARGET row:**
+   > **Pipeline N: which devices does this leg read, and where is each one's configuration?** List every device in this
+   > leg's scope: the ones it **changes**, and the ones whose state it only needs to **see** (for example to keep a pool
+   > free across the fabric). For each one, say where its configuration comes from: a **Git file** (service,
+   > owner/repo/path, optional branch), the **running device** (device service), **both**, or, for a device the leg
+   > changes, **no read** (the package writes commands).
+
+   Recommend listing every device the zero-decision harvest found in the leg's scope, using Git where the owner keeps
+   Git. The harvest's names are evidence for the owner's answer; only the owner's answer is written down. A device left
+   out is not checked by that leg (2026-11-01: a block naming only the changed switch left the other unread, and the
+   leg produced a colliding pool).
+2. **Write each answer down mechanically, one line per device.** The grammar is the protocol's, character for character
+   (U+2014 em dash; nothing else parses):
    - `<device>: git-file — service <name | descriptor URL> ; <owner>/<repo>/<path> [@ <branch|tag|commit>]`
    - `<device>: device-read — service <name | descriptor URL>`
+   - `<device>: live-read — service <name | descriptor URL>`
    - `<device>: command-package`
 
-   In a program, the leg's interface contract may carry it as `deviceSources["network-provisioning"]`. The leg harness
-   STOPS the leg when the block is missing, or when it does not list a device the change touches. Nothing guesses a
-   source. Write it in the objective as ONE numbered item per network change leg. Its text is the block itself (the
-   heading line, then one line per device). No draft row asks it, so ask it in the owner-answer session, in Group A
-   beside the leg's TARGET row, and map it in the ROW-ITEM-MAP as
-   ``| `network-provisioning.item-<N>` (added <date>: Device sources, network-provisioning 1.23.0) | N |``
+   | Owner says | change leg (network-provisioning) | value leg (network-derivation) |
+   |---|---|---|
+   | changes it, Git file | `git-file` | — (a value leg changes nothing) |
+   | changes it, running device | `device-read` | — |
+   | changes it, both | `git-file` + `device-read` | — |
+   | changes it, no read | `command-package` | — |
+   | sees it, running device | `live-read` (never kept) | `live-read` |
+   | sees it, Git file only | `git-file` (KEPT, see L3) | `git-file` (never kept on a value leg; card `git-only`) |
+   | sees it, both | `git-file` + `device-read` (both kept, never edited) | `git-file` + `device-read` (the value rests on the running device) |
+
+   `live-read` and `command-package` each stand alone on their device. A device may carry `git-file` + `device-read`:
+   the Git file is the base, the device read is evidence, and the platform compares them (it gates nothing; the agents
+   write `drift: not checked`). A spec never states a drift cause ("the device was edited out of band") unless it also
+   supplies the witness that shows it.
+3. **Emit ONE block per LANE, not per leg.** The platform carries one block per protocol key:
+   `deviceSources["network-provisioning"]` for every change leg and `deviceSources["network-derivation"]` for a value
+   leg (the Program Architect copies them; it writes the value key only when the value leg has lines of its own). So:
+   - every change leg gets the SAME block: merge the change legs' answers, each device at the strictest kind any change
+     leg needs (changes > sees; `git-file` + `device-read` covers both);
+   - every value leg gets the same value block, or none (no lines ⇒ the value leg reads the running devices through its
+     descriptor, as before 1.3.0);
+   - if no single line fits a device (L2 below), STOP and show the owner L2. Never pick for the owner.
+4. **Show the owner the four limits, one line each, before recording the group:**
+   - **L1:** all change legs in one program read one device list (register G1-a).
+   - **L2:** a device one change leg changes can't be "see only, running device" for another change leg.
+   - **L3:** on a change leg, a device that only has a Git file is still kept, even when the leg only sees it: its file
+     enters the Author's view, and an unreadable file stops the leg (register GIT-EVIDENCE-KIND, parked).
+   - **L4:** a device the owner leaves out is not checked by that leg.
+5. **Record it as ONE numbered item per lane.** The item's text is a one-line lead, then the block INDENTED under it (the
+   merge script refuses a column-0 `#` line inside an item, Z58), for example:
+
+   ```
+   7. Device sources for every network change leg:
+      ## Device sources
+      edge-sw-01: git-file — service netops-git ; netops/device-configs/configs/edge-sw-01.cfg
+      edge-sw-02: live-read — service netops-devices
+   ```
+   Map it in the ROW-ITEM-MAP to `network-provisioning.sources` (requirements-authoring ≥ 1.11.0: the zero draft asks it),
+   or, on an older protocol, as ``| `network-provisioning.item-<N>` (added <date>: Device sources) | N |``
    (OWNER-ANSWER-SESSION, *A question added … AFTER the zero-decision run*). Expect that row in the answered draft.
-2. **A device may carry one `git-file` line AND one `device-read` line.** The Git file is the base and the device
-   read is quoted as evidence; the platform compares them mechanically and shows the result to the Architect and the leg
-   Reviewer (it gates nothing; the agents write `drift: not checked`). `command-package` stands
-   alone. A spec never states a drift cause ("the device was edited out of band", "the change was never applied")
-   unless it also supplies the witness that shows it.
-3. **Value legs (`network-derivation`) need no Device sources block.** Do not add the item for them.
-4. **Name the service; never leave the SOURCE to discovery.** A service already registered in the hub, named by its
+6. **What the answered draft must carry** (the sources check refuses anything else): in each network leg's
+   `## Pipeline N objective` section, exactly one fenced `## Device sources` block equal to its lane's item, and exactly
+   one of these two lane sentences, word for word:
+   - change leg: `This leg changes device configuration.`
+   - value leg: `This leg changes no device configuration.`
+
+   The value sentence is also the "changes nothing" phrase the Program Architect quotes for `leg type: value`. Put the
+   lane sentence in the leg's objective item, so the Author transcribes it with the leg.
+7. **Name the service; never leave the SOURCE to discovery.** A service already registered in the hub, named by its
    registered name, is used as it is. The run never registers, updates or deletes it. Any other service is given as a
    descriptor URL, and the platform registers it for that run (the run removes only what it registered). Role
    guidance names no service and defers to the task, the contract and the requirements (owner rule 2026-10-24, register
    ROLE-GUIDANCE-AGNOSTIC). The spec is therefore the only place the source is chosen. Example values you write in
    this skill's tables or an objective must not be the lab rig's names. Use neutral ones, such as
    `edge-sw-01: git-file — service netops-git ; netops/device-configs/configs/edge-sw-01.cfg`.
-5. **A descriptor URL must be registrable.** Check it at step 0, before any generation:
+8. **A descriptor URL must be registrable.** Check it at step 0, before any generation:
    - every tool description is ≤ 500 characters (`capabilities.tools[].description`). The published network
      descriptor failed this once (`paichart` `1d5faf1`, register CEOS-DESCRIPTOR-OVER-LIMIT);
    - the service name and every other field come from the descriptor alone. A registration that adds a name of its
      own is refused `DESCRIPTOR_FIELD_DISAGREES` (register HARVESTER-DESCRIPTORURL-SINCE-WIB10);
    - a token goes only in the URL's QUERY string, never the path. A URL with a query registers only from a HUMAN, so
-     a run cannot self-provision it: a human pre-registers that service, and the spec names it by name (rule 4);
+     a run cannot self-provision it: a human pre-registers that service, and the spec names it by name (rule 7);
    - held-file declarations (`heldFiles`, incl. `gitPin`) come only from the descriptor. A spec or a run never
      supplies them.
-6. **A named branch, tag or commit must be the one the Git service pins.** That is the `ref` in its descriptor's
+9. **A named branch, tag or commit must be the one the Git service pins.** That is the `ref` in its descriptor's
    held-file declaration (`heldFiles.files[].gitPin.ref`, read in `git-file-source-pin.js` 2026-10-24). With no
    `ref` declared, only `main` passes. The line's owner/repo must also be the pinned repo. Any other ref is refused,
    and the leg reports the refusal and stops. Read the descriptor before you accept a `@ <ref>` from the owner.
-7. **Pasted device state is evidence, never a base.** No pasted configs, and no counts or lists taken from them, may
+10. **Pasted device state is evidence, never a base.** No pasted configs, and no counts or lists taken from them, may
    stand in for a declared source in the objective or the spec. This extends rule 3 below (harvested state belongs
    nowhere). The L-N1 lab twice saw a count derived from pasted state.
-8. **Internal setups** (INTERNAL-FIT, `cline_docs/reviews/held-network-2026-10-22/INTERNAL-FIT-INVENTORY.md`):
+11. **Internal setups** (INTERNAL-FIT, `cline_docs/reviews/held-network-2026-10-22/INTERNAL-FIT-INVENTORY.md`):
    - **A team's shared service** (registered once by one person, used by colleagues' runs): its OWNER grants the
      objective's POV with `registry update` → `heldGrantPovIds` (IF-3). Only the owner can do this: not an admin and
      not an agent. The owner and the person launching must both be literal members of that POV. Without the grant, a

@@ -68,6 +68,10 @@ export const EXCLUSIONS: Readonly<Record<string, string>> = {
     'pins LIVE_EVIDENCE_MIN_VERSIONS (excluded above for the same reason: a Config-sources version key, not held-capability)',
   'scripts/test-live-evidence.ts::deviceSources':
     'VALUE-LEG-GIT LE21 fixture: an interfaceContract.deviceSources keyed by the network protocols\' own contract keys — a contract shape, not a protocol selection; obs declares no device sources',
+  'scripts/test-canary-req-sources.ts::GOOD':
+    'first generated network spec canary (2026-11-10) fixture: an interfaceContract.deviceSources keyed by the network protocols\' own contract keys - a contract shape, not a protocol selection; obs declares no device sources',
+  'scripts/test-canary-req-sources.ts::<top>':
+    'first generated network spec canary (2026-11-10) fixtures: leg carriers stamped with the network protocols (value and change lane) and contracts keyed by their contract keys - a contract shape, not a protocol selection; obs declares no device sources',
   'scripts/leg-replay-lab/render-tree-protocols.ts::<top>':
     'lab render tool (L-CS-N S-1 re-pin): writes the named protocol texts of a tree to disk to compare render shas; it never selects or composes a protocol for a run, so no held-variant decision applies',
 };

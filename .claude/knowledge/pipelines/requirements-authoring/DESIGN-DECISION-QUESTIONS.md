@@ -34,7 +34,7 @@ the owner or OPEN, with no default.
   (it goes to the owner, with no default). Details: § The four answer forms.
 - **Row ids.** `<leg token>.<key>` (e.g. `terraform-iac.granted-action`); gates use `approver.<gate>` and
   `gate.<gate>.position`.
-- **Five classes of key**, each with its own "who gets it" test:
+- **Six classes of key**, each with its own "who gets it" test:
 
   | class | who gets it | keys |
   |---|---|---|
@@ -43,6 +43,7 @@ the owner or OPEN, with no default.
   | gate | every approval gate | `approver`, `position` (not for the program plan gate) |
   | auth | a leg that grants or removes access | `receiver`, `admitted-principal`, `request-path` (only when it admits by address), `principal-unseen`, `granted-action`, `existing-grant`, `target-empty`, `enforcer-absent`, `target-absent`, `collateral`, `enforcer-scope` |
   | routing | a leg that advertises a covering route or suppresses routes | `covered-routes`, `must-stay-reachable` |
+  | sources | a leg on a token whose protocol reads a declared configuration-sources block (`network-provisioning` today) — the one class keyed on the token | `sources` |
 
 - **Every key records the run that earned it** (the table's last column): a run where that decision was made
   silently and went wrong. That is the admission rule (§ Adding or changing a question).
@@ -73,7 +74,7 @@ Row ids are `<protocol token>.<key>`. Leg tokens are exactly `network-provisioni
 same observability leg). Gates use `approver.<gate>` and `gate.<gate>.position`.
 
 <!-- REGISTRY-TABLE — parsed by scripts/test-requirements-guidance-anchors.ts. One row per key; the `class` cell is
-     one of: leg · producer · gate · auth · routing. Keep the id in backticks in the first cell. -->
+     one of: leg · producer · gate · auth · routing · sources. Keep the id in backticks in the first cell. -->
 | id | class | question | options | may be | earned by |
 |---|---|---|---|---|---|
 | `<token>.target` | leg | which surface of the leg's service does it act on | — (a named target) | declared · derived · OPEN | pre-Phase-1 (GS-R5); Rev 10–14: an unnamed bucket is right only while it is the only one |
@@ -95,8 +96,9 @@ same observability leg). Gates use `approver.<gate>` and `gate.<gate>.position`.
 | `<token>.enforcer-scope` | auth | which parts of the enforcer the restriction covers | all-reaching-the-protected-thing · exemption-by-property · gap | declared · OPEN — never derived, never forced; never deleted on an authorisation leg (how many parts exist is harvested state); `exemption-by-property` names a PROPERTY the leg's harvest can check, never the parts, and the leg reports the literal value it matched | Z60 (2026-10-11, Phase 4 attempt 1, answered run 1): the answered harvest found a second block forwarding to the same receiver; no row asked which blocks the restriction covers, the Author invented `sender-blocks` and the Reviewer blocked on it; the owner answered it as a new item. Owner decision 2026-10-11 (Group 4a): no owner-named option, because naming the parts puts harvested names in the spec |
 | `<token>.covered-routes` | routing | when the leg adds a covering route, whether the routes it covers stop being advertised | replace · accompany | declared · OPEN — never derived, never forced; asked only when the cover is advertised | program control 2 (2026-10-05): a fabric leg advertised a cover in place of the routes it covered on both devices of a pair, so cross-device reachability to the covered hosts may be lost (inferred, not applied). The choice was never asked: 9 of 10 telemetry-export `topology.json` `existenceAssumption`s say "advertise the covering range in place of the individual routes" (hand-written; the generator never reads them), and the hand-written four-domain spec says "in place of the individual host routes". No generated spec chose it |
 | `<token>.must-stay-reachable` | routing | which destinations must stay reachable after the change, and from where | — (a list or rule) | declared · OPEN — never derived, never forced | program control 2 (2026-10-05): the package proved the covered routes were gone and never established which destinations had to stay reachable, or from where — nobody asked. Consumer reference (not evidence): network-provisioning 1.19.0 Author (b2) |
+| `<token>.sources` | sources | which devices the leg reads — the ones it changes and the ones it only needs to see — and where each one's configuration is read from (Git file, running device, both, or for a changed device no read) | — (the owner's item IS the block; one block per lane: every change leg shares one, a value leg has its own or none) | declared · OPEN — never derived (a harvest cannot choose a source of truth), never forced, never not-applicable on a network leg | firewall-a3, 2026-11-01 (devext): a hand-written block named only the changed switch, the other went unread, and the leg produced a colliding pool; the same program lost both legs' blocks to a per-leg contract key the platform does not read (DEVICE-SOURCES-MULTI-NETWORK-LEG). No generated spec could ask it (Z71, proposed 2026-10-24 without a miss). Admitted by the owner 2026-11-09 (step-1 plan G2-a) |
 
-**Which legs get which rows.** Every leg: `target`. A producing leg: `population`, `representation`, `inputs-empty`.
+**Which legs get which rows.** Every leg: `target`. A **sources leg** — any leg on the `network-provisioning` token, value or change, whatever its work: `sources` (never deleted on it; never asked on another token until that domain's protocol reads a declared block, plan §6). A producing leg: `population`, `representation`, `inputs-empty`.
 Every gate: `approver`; every gate except the program plan gate: `position` (the platform fixes the plan gate's
 position). An **authorisation leg** — one that consumes a chained value into a source, allow, admit, policy or
 selector field, or whose work adds, removes, allows, denies or restricts a sender or principal — carries the whole
@@ -128,6 +130,19 @@ silent. The miss that earned both rows is a network leg, and **no non-network pr
 (b2) analogue), so off-network the rows only ask. **Revisit trigger: hand-read the first non-network leg that carries a
 routing block** (history below). It is not folded into `auth` because the deletion rules differ and either block can apply
 without the other (a leg can be both). A value-only leg (it derives a value and changes nothing) is not a routing leg.
+
+**Why `sources` is keyed on the TOKEN — the one named exception to "keyed on the work, never the token" (owner decision
+G2-b, 2026-11-09; `cline_docs/reviews/config-sources-plans-2026-11-09/STEP1-REQUIREMENTS-PLAN.md`).** The question exists
+only because a domain PROTOCOL stops, or reads differently, without a declared block: network-provisioning ≥ 1.23.0 stops a
+change leg with no block, and network-derivation ≥ 1.3.0 reads Git files only from one. That is a property of the leg's
+protocol, not of its work, so a work-keyed test would put an OPEN row on every infrastructure leg before its protocol reads
+the answer. A network value leg carries the token `network-provisioning` here too (requirements rows keyed
+`network-provisioning.*` apply to the network leg whichever token the Program Architect gives it), so the row is asked on
+both lanes. The answer is a numbered owner item whose text IS the block; the leg's *Device sources* slot carries it in a
+fence with one lane sentence, and the publish check (`scripts/check-requirements-sources.ts`, the shipping parser) proves
+the transcription. Each other domain joins this class only with its own text batch (Kubernetes `## Config sources` at
+kubernetes-gitops 1.19.0, observability per held target, Terraform after the owner's review — plan §6). **Not this row:**
+whether the leg changes anything (the objective's "changes nothing" phrase, which the Architect quotes for `leg type: value`).
 
 **Why a rule-defined `population` must also require the leg to REPORT the literal criterion it applied.** When the owner
 declares membership by a RULE ("interfaces whose description marks them as telemetry exporters") rather than a list, the
@@ -161,6 +176,8 @@ The split follows `.claude/knowledge/domain/harness/ARCHITECTURE.md` Invariant 6
   (one numbered item can answer it for every routing leg) or OPEN.
 - **"How it behaves" questions are never derived or forced** (`admitted-principal`, `principal-unseen`, `granted-action`,
   `existing-grant`, `target-empty`, `collateral`, `enforcer-scope`, `covered-routes`): no harvest selects a behaviour.
+  **`sources` is never derived either** (owner G2-c, 2026-11-09): a harvest can show which devices exist and answer, never
+  which configuration is the source of truth, nor which devices a leg must see — that is the owner's declaration.
   Which parts of the enforcer are in scope is a scope decision, and an exemption WIDENS what stays open, so
   `enforcer-scope` is never derived. Whether a covering
   route replaces or accompanies the routes it covers is a behaviour; wording that says "in place of" outside a numbered
@@ -277,6 +294,17 @@ REGISTRY-TABLE on purpose (one block per key with enumerated options).
   - exemption-by-property → parts carrying your stated property stay open and are listed as your exemption; the leg
     reports the literal value it matched; if its harvest cannot tell the parts apart by it, gap
   - gap → no change and a report
+- `<token>.sources` (network legs) — per device the owner lists
+  - changes it, Git file → the Git file is the kept base the package edits; an unreadable file stops the leg
+  - changes it, running device → the device's running configuration is the kept base
+  - changes it, both → the Git file is the base, the device read is evidence, and the platform compares them (gates nothing)
+  - changes it, no read → the package writes device commands as text
+  - sees it, running device → read as evidence only, never kept and never changed
+  - sees it, Git file only → on a change leg the file is still KEPT (it enters the Author's view; an unreadable file stops
+    the leg); on a value leg it is read, never kept, and the value is stated as derived from Git only
+  - a device left out → that leg does not read or check it
+  - limits: every change leg in one program reads one list; a device one change leg changes can't be "sees it, running
+    device" for another
 - `<token>.collateral` — interacts with: `enforcer-scope`
   - Kubernetes: allow-named-ports → the other named ports on the selected pods are allowed explicitly · deny → all
     other ingress to them is refused · leave-to-workload-manifests → this leg does not decide; other policies do (a

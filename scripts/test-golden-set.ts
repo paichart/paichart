@@ -11,7 +11,8 @@
  * GS3  the companion builder: reach (a one-domain text arm reaches only that domain), model arms reach all, deterministic
  * GS4  the pre-registration check and the lab-text pin check refuse what they must
  * GS5  the scorer, both directions (mutation-pinned): every flip class, the asymmetric masked rule, targets, unscored
- * GS6  END TO END, $0: the full companion under `--fake-llm persisted` reproduces all 29 stored outcomes (v3: incl. both value legs); one tampered sample ⇒ DO-NOT-SHIP
+ * GS6  END TO END, $0: the full companion under `--fake-llm persisted` reproduces all 31 stored outcomes (v7: + both requirements legs) (v3: incl. both value legs); one tampered sample ⇒ DO-NOT-SHIP;
+ *       v6: the persisted Reviewer cells equal the frozen production rebuild (frozen-cmp) but for two named differences
  * GS7  `run --spend` on an agent-text/model lab with no goldenSet declaration is refused before any call
  */
 if (!process.env.DATABASE_URL) process.env.DATABASE_URL = 'postgresql://leg-replay-lab:never@127.0.0.1:1/never_connects';
@@ -23,7 +24,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 import {
-  loadGoldenSet, buildGoldenCompanion, validateGoldenDeclaration, goldenStoredSelfTest, scoreGolden, classifyCell, goldenVerdict, refusalPointsAtLiveOnly,
+  loadGoldenSet, caseRoles, REQUIREMENTS_PROTOCOL, buildGoldenCompanion, validateGoldenDeclaration, goldenStoredSelfTest, scoreGolden, classifyCell, goldenVerdict, refusalPointsAtLiveOnly,
   readGoldenSample, labNeedsGolden, GOLDEN_DIR, type GoldenCase, type GoldenCellScore,
 } from './leg-replay-lab/golden-set';
 import { loadSnapshot } from './leg-replay-lab/snapshot';
@@ -50,9 +51,9 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
   const byId = (id: string) => gs.cases.find((c) => c.id === id)!;
 
   console.log('GS1 the frozen set');
-  await t('loads, every pin unedited (sha256), v4 (v3 cases, network-derivation pin 1.3.0): 17 cases, 5 protocols, 10 templates; the re-freeze record names every case', () => {
-    assert(gs.version === 'v4' && gs.cases.length === 17, `${gs.version} cases ${gs.cases.length}`);
-    assert(Object.keys(gs.pins.protocols).length === 5 && Object.keys(gs.pins.templates).length === 10, 'pins');
+  await t('loads, every pin unedited (sha256), v7 (+ the two requirements cases and their 3 pins): 19 cases, 6 protocols, 12 templates; the re-freeze record names every case', () => {
+    assert(gs.version === 'v7' && gs.cases.length === 19, `${gs.version} cases ${gs.cases.length}`);
+    assert(Object.keys(gs.pins.protocols).length === 6 && Object.keys(gs.pins.templates).length === 12, 'pins');
     const added = (gs.refreezes ?? []).flatMap((r) => r.added).sort().join();
     assert(added === gs.cases.map((c) => c.id).sort().join(), `refreezes added ≠ cases: ${added}`);
     assert(gs.refreezes!.at(-1)!.version === gs.version, 'the newest re-freeze names the current version');
@@ -67,6 +68,24 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
     fs.writeFileSync(path.join(d, 'golden-set.json'), JSON.stringify(j));
     let threw = false; try { loadGoldenSet(d); } catch (e) { threw = /value leg/.test((e as Error).message); }
     assert(threw, 'a value case on a held-bound protocol must be refused');
+  });
+  await t('the requirements legs (v7): shape requirements, requirements-authoring 1.10.1 with no held binding, persisted Author only, one approved + one correct refusal; the shape is refused on any other protocol, live form refused, a held seed refused', () => {
+    const rq = gs.cases.filter((c) => c.shape === 'requirements');
+    assert(rq.map((c) => c.id).sort().join() === 'REQ-LOGARCH-F1,REQ-OBS-SENDERS', rq.map((c) => c.id).join());
+    assert(rq.every((c) => c.protocol === REQUIREMENTS_PROTOCOL && c.authorForms.join() === 'persisted' && gs.heldJoinSeedByProtocol[c.protocol] === null), 'requirements case shape');
+    assert(gs.pins.protocols[REQUIREMENTS_PROTOCOL].version === '1.10.1' && gs.pins.protocols[REQUIREMENTS_PROTOCOL].sha256.startsWith('fd4b55a8'), 'requirements pin');
+    assert(rq.map((c) => c.expected.legOutcome).sort().join() === 'approved,needs-revision', 'both directions');
+    assert(caseRoles(rq[0]).author === 'requirements_author' && caseRoles(rq[0]).reviewer === 'requirements_reviewer', 'roles');
+    const refused = (mut: (j: any) => void, re: RegExp) => {
+      const d = fs.mkdtempSync(path.join(os.tmpdir(), 'golden-set-')); fs.cpSync(GOLDEN_DIR, d, { recursive: true });
+      const j = JSON.parse(fs.readFileSync(path.join(d, 'golden-set.json'), 'utf8')); mut(j); fs.writeFileSync(path.join(d, 'golden-set.json'), JSON.stringify(j));
+      try { loadGoldenSet(d); return false; } catch (e) { return re.test((e as Error).message); }
+    };
+    const req = (j: any) => j.cases.find((c: any) => c.id === 'REQ-OBS-SENDERS');
+    assert(refused((j) => { req(j).authorForms = ['persisted', 'live']; }, /persisted Author only/), 'live form refused');
+    assert(refused((j) => { req(j).protocol = 'network-derivation-protocol'; }, /requirements case/), 'requirements shape on another protocol refused');
+    assert(refused((j) => { j.heldJoinSeedByProtocol[REQUIREMENTS_PROTOCOL] = 'seed-network-provisioning-templates'; }, /requirements leg/), 'held seed refused');
+    assert(refused((j) => { delete req(j).shape; }, /requirements case|requirements leg/), 'a requirements-protocol case without the shape refused');
   });
   await t('both directions in every domain the shared keys ship to (an approved leg AND a needs-revision leg)', () => {
     for (const d of ['network', 'k8s', 'terraform', 'observability']) {
@@ -96,23 +115,24 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
   });
 
   console.log('GS2 stored outcomes recompute (needs the snapshot cache)');
-  await t('all 17 cases: stored verdict + stored carrier stamp ⇒ the stored leg outcome = the expectation', () => {
+  await t('all 19 cases: stored verdict + stored carrier stamp ⇒ the stored leg outcome = the expectation', () => {
     const rows = goldenStoredSelfTest((id) => loadSnapshot(id));
     const bad = rows.filter((r) => !r.ok);
     assert(!bad.length, bad.map((r) => `${r.case}: ${r.detail}`).join(' | '));
   });
 
   console.log('GS3 the companion builder');
-  await t('a one-line observability text arm reaches only the observability cases (5 cells), the other 14 are UNREACHED', () => {
+  await t('a one-line observability text arm reaches only the observability cases (5 cells), the other 16 are UNREACHED', () => {
     const r = buildGoldenCompanion(scratchCopy('obs-text-lab'), gs).report;
     assert(r.cells.map((c) => `${c.case}:${c.form}`).sort().join(',') === 'OBS-C1:live,OBS-C1:persisted,OBS-DEMO-REF:persisted,OBS-PROG:live,OBS-PROG:persisted', r.cells.map((c) => c.cell).join(','));
-    assert(r.unreached.length === 14, `unreached ${r.unreached.length}`);
+    assert(r.unreached.length === 16, `unreached ${r.unreached.length}`);
     assert(r.targets.join() === 'OBS-DEMO-REF', 'target carried');
   });
-  await t('a model arm reaches every case: 17 Reviewer cells + 12 Author cells (Author-defect refusals, the value legs and NET-C126 stay persisted)', () => {
+  await t('a model arm reaches every case: 19 Reviewer cells + 12 Author cells (Author-defect refusals, the value legs, NET-C126 and the requirements legs stay persisted)', () => {
     const r = buildGoldenCompanion(scratchCopy('model-lab'), gs).report;
-    assert(r.cells.filter((c) => c.form === 'persisted').length === 17 && r.cells.filter((c) => c.form === 'live').length === 12, `${r.cells.length}`);
-    assert(!r.cells.some((c) => c.form === 'live' && ['K8S-AK5', 'OBS-DEMO-REF', 'NET-VALUE-C1', 'NET-VALUE-C126', 'NET-C126'].includes(c.case)), 'live cell on an Author-defect refusal or the value leg');
+    assert(r.cells.filter((c) => c.form === 'persisted').length === 19 && r.cells.filter((c) => c.form === 'live').length === 12, `${r.cells.length}`);
+    assert(!r.cells.some((c) => c.form === 'live' && ['K8S-AK5', 'OBS-DEMO-REF', 'NET-VALUE-C1', 'NET-VALUE-C126', 'NET-C126', 'REQ-OBS-SENDERS', 'REQ-LOGARCH-F1'].includes(c.case)), 'live cell on an Author-defect refusal, the value leg or a requirements leg');
+    assert(['REQ-OBS-SENDERS', 'REQ-LOGARCH-F1'].every((id) => r.cells.some((c) => c.case === id && c.form === 'persisted' && c.reach.join() === 'reviewer-model')), 'the requirements Reviewer cells (Reviewer model lever; the Author model lever never reaches a requirements_author)');
     assert(r.cells.some((c) => c.case === 'NET-VALUE-C1' && c.form === 'persisted' && c.reach.join() === 'reviewer-model'), 'the value leg Reviewer cell (shared infra tier)');
   });
   await t('an Author-only model arm (infraAuthor tier) never reaches the value leg: UNREACHED, named by tier', () => {
@@ -223,13 +243,14 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
   });
 
   console.log('GS6 end to end, $0 (--fake-llm persisted over the full companion)');
-  await t('29 cells (17 cases, both Author forms, all four domains + both value legs, held binding) reproduce every stored outcome; a tampered sample ⇒ DO-NOT-SHIP', () => {
+  await t('31 cells (19 cases, both Author forms, all four domains + both value legs + both requirements legs, held binding) reproduce every stored outcome; a tampered sample ⇒ DO-NOT-SHIP', () => {
     const dir = scratchCopy('model-lab');
     const comp = buildGoldenCompanion(dir, gs).dir;
     const runDir = path.join(path.dirname(dir), 'run-fake');
     lab(['run', '--experiment', comp, '--fake-llm', 'persisted', '--out', runDir, '--concurrency', '6']);
     const r = scoreGolden([runDir], comp, stored, gs);
-    assert(r.cells.length === 29, `cells ${r.cells.length}`);
+    assert(r.cells.length === 31, `cells ${r.cells.length}`);
+    assert(['REQ-OBS-SENDERS', 'REQ-LOGARCH-F1'].every((id) => r.cells.filter((c) => c.case === id).length === 1 && r.cells.filter((c) => c.case === id).every((c) => c.status === 'REPRODUCED')), 'requirements cells (v7)');
     assert(['NET-VALUE-C1', 'NET-VALUE-C126', 'NET-C126'].every((id) => r.cells.some((c) => c.case === id) && r.cells.filter((c) => c.case === id).every((c) => c.status === 'REPRODUCED')), 'value leg / 1.26.0 canary cells');
     assert(r.verdict.verdict === 'PASS', `${r.verdict.verdict}: ${r.verdict.reasons.join(' | ')}`);
     // GOLDEN-REVIEWER-BYTE-FIDELITY (b): a value cell's Reviewer sees the Derivation Architect's STORED containment stamp, as production's did.
@@ -237,6 +258,27 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
       const u = fs.readFileSync(path.join(runDir, `GOLD-${id}`, 'gmxnetvaluer', 'reviewer.user.md'), 'utf8');
       assert(u.includes('**Derivation containment (platform fact)**: benign — checked-clean'), `${id}: the stored derivation-containment line is missing from the Reviewer prompt`);
     }
+    // GOLDEN-REVIEWER-BYTE-FIDELITY (a) (v6): every held case with a stored editApplication carries the per-case flag (K8S-AK5 and the
+    // value legs do not), and frozen-cmp reads every persisted Reviewer cell byte-identical to the frozen production rebuild EXCEPT the
+    // two named differences: the computed liveEvidence line on the four pre-1.26.0 network legs (production adds it from 1.26.0), and
+    // K8S-AK5's system prompt (pre-join; the held-join seed's constraint row). Reverting the flag in golden-set.ts reads 13 differing.
+    const ce = JSON.parse(fs.readFileSync(path.join(comp, 'experiment.json'), 'utf8'));
+    const flagged = ce.nodes.filter((n: any) => n.persistedEditApplication).map((n: any) => n.id.replace(/^GOLD-/, '')).sort().join();
+    assert(flagged === gs.cases.filter((c) => !['K8S-AK5', 'NET-VALUE-C1', 'NET-VALUE-C126', 'REQ-OBS-SENDERS', 'REQ-LOGARCH-F1'].includes(c.id)).map((c) => c.id).sort().join(), `flagged: ${flagged}`);
+    let fc = '';
+    try { fc = lab(['frozen-cmp', '--experiment', comp, '--run', runDir, '--dump']); } catch (x: any) { fc = String(x.stdout ?? ''); }
+    const differ = [...fc.matchAll(/≠ +GOLD-([A-Z0-9-]+)\//g)].map((x) => x[1]).sort().join();
+    assert(differ === 'K8S-AK5,NET-JL1,NET-JL3,NET-JL4,NET-JP1,REQ-LOGARCH-F1', `frozen-cmp differs on: ${differ}`);
+    assert((fc.match(/✅/g) ?? []).length === 13, `frozen-cmp identical cells: ${(fc.match(/✅/g) ?? []).length}`);
+    // v7 (§2.2a fidelity gate, owner-accepted exception): REQ-OBS-SENDERS is byte-identical; REQ-LOGARCH-F1 (authored under 1.8.0) differs
+    // in the SYSTEM prompt only, on exactly two lines — today's requirements_reviewer guidance 8.1 and 8.4.
+    assert(/✅ +GOLD-REQ-OBS-SENDERS\/\S+: reviewer\.system\.md identical · reviewer\.user\.md identical/.test(fc), 'REQ-OBS-SENDERS byte-identical');
+    assert(/≠ +GOLD-REQ-LOGARCH-F1\/\S+: reviewer\.system\.md differs · reviewer\.user\.md identical/.test(fc), 'REQ-LOGARCH-F1 differs in the system prompt only');
+    const rqd = path.join(runDir, 'GOLD-REQ-LOGARCH-F1', fs.readdirSync(path.join(runDir, 'GOLD-REQ-LOGARCH-F1')).find((x) => /^g\w+requirementsr$/.test(x))!);
+    const fl = fs.readFileSync(path.join(rqd, 'frozen.reviewer.system.md'), 'utf8').split('\n'); const cl = fs.readFileSync(path.join(rqd, 'reviewer.system.md'), 'utf8').split('\n');
+    const dl = cl.map((l, i) => (l !== fl[i] ? l.trim().slice(0, 4) : null)).filter((x) => x !== null);
+    assert(fl.length === cl.length && dl.join() === '8.1 ,8.4 ', `REQ-LOGARCH-F1 system lines differing: ${dl.join(' | ')} (lengths ${fl.length}/${cl.length})`);
+    assert(/≠ +GOLD-K8S-AK5\/\S+: reviewer\.system\.md differs · reviewer\.user\.md identical/.test(fc), 'K8S-AK5 differs in the system prompt only');
     // Mutation: one approved case's Reviewer now refuses — the scorer must catch it.
     const f = path.join(runDir, 'GOLD-OBS-PROG', 'gmxobservabilityr', 'sample-01', 'sample.json');
     const s = JSON.parse(fs.readFileSync(f, 'utf8')); s.verdict.approved = false; fs.writeFileSync(f, JSON.stringify(s));
@@ -262,6 +304,22 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
     const m4 = scoreGolden([runDir], comp, stored, gs);
     const c4 = m4.cells.find((x) => x.case === 'NET-JL1' && x.form === 'live')!;
     assert(c4.status === 'NEEDS-READ' && m4.verdict.verdict === 'DO-NOT-SHIP' && m4.verdict.reasons.some((x) => /NET-JL1 .*NEEDS-READ/.test(x)), `${c4.status} ${m4.verdict.verdict}`);
+  });
+
+  await t('v6: a network text lab carries the unplanted STANDING network cases with persistedEditApplication (their stored Author has editApplication); the planted VLG-I3 never', () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'golden-'));
+    const lab0 = path.join(d, 'netlab'); for (const x of ['edits', 'protocols']) fs.mkdirSync(path.join(lab0, x), { recursive: true });
+    const pin = gs.pins.protocols['network-provisioning-protocol'];
+    const text = fs.readFileSync(path.join(REPO, 'scripts/leg-replay-lab/golden', pin.file), 'utf8');
+    fs.writeFileSync(path.join(lab0, 'protocols/np.baseline.md'), text);
+    const anchor = text.split('\n').find((l) => l.length > 60 && text.split(l).length === 2)!;
+    fs.writeFileSync(path.join(lab0, 'edits/identity.json'), JSON.stringify({ id: 'identity', appliesTo: ['network-provisioning-protocol'], ops: [{ type: 'replace', old: anchor, new: anchor }] }));
+    fs.writeFileSync(path.join(lab0, 'experiment.json'), JSON.stringify({ label: 'golden-fixture-identity-net', purpose: 'test only, never spent', n: 1, flags: {},
+      baseline: { protocols: { 'network-provisioning-protocol': { file: 'protocols/np.baseline.md', version: pin.version, sha256: pin.sha256 } } },
+      variants: { base: { edits: [] }, nx: { edits: ['edits/identity.json'], authorSource: 'persisted' } }, nodes: [], measures: [], goldenSet: { version: gs.version } }));
+    const e = buildGoldenCompanion(lab0, gs).experiment as any;
+    const st = e.nodes.filter((n: any) => n.id.startsWith('STAND-'));
+    assert(st.map((n: any) => n.id).sort().join() === 'STAND-NET-APPLY-WHOLE-FILE,STAND-NET-FWA3-EDGE' && st.every((n: any) => n.persistedEditApplication === true), JSON.stringify(st.map((n: any) => [n.id, n.persistedEditApplication])));
   });
 
   console.log('GS7 the spend gate');

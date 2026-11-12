@@ -1,0 +1,29 @@
+== coverage
+coverage — work/lab-exporter-loopback-ceos2-2026-11-10/draft-answered2/report.md
+  legs ['network-provisioning'] · gates ['network-change', 'plan', 'value'] · rows 5 {'declared': 5, 'derived': 0, 'forced': 0, 'open': 0, 'other': 0} · owner block 0 · not-applicable 0
+  ❌ what: missing row · leg: network-provisioning · key: target
+  ❌ what: missing sources row · leg: network-provisioning · key: sources
+  👁  what: no producer rows — confirm for each leg: the leg derives no value another leg consumes · legs: ['network-provisioning']
+  👁  what: no auth rows — confirm for each leg: the leg neither grants nor removes access on its target (no sender/principal is allowed, denied, admitted or restricted, and no chained value lands in a source/allow/admit/policy/selector field) · legs: ['n
+  👁  what: no routing rows — confirm for each leg: the leg adds no advertised covering route and suppresses, filters, withdraws or replaces no routes · legs: ['network-provisioning']
+  2 error(s), 3 to read
+== citations
+citations: 21 total, 19 verbatim, 2 failing
+premise branches: no authorisation legs found
+❌ NOT publishable — 2 finding(s):
+  - line 96: item 12 — not a verbatim span of the item: "Device sources for the network value leg (Pipeline 1):"
+  - line 97: item 13 — not a verbatim span of the item: "Device sources for the network change leg (Pipeline 2):"
+exit 1
+== clauses
+clauses: 4 checked, 0 dropped
+exit 0
+== sources
+requirements sources check (generated spec): 2 block(s)
+  - "Pipeline 1 objective — network-provisioning value leg (UPSTREAM)" line 370: lane value (sentence), 2 line(s)
+  - "Pipeline 2 objective — network-provisioning change leg (DOWNSTREAM)" line 432: lane change (sentence), 3 line(s)
+OK: S1-S4 clean
+NOT CHECKED (S5):
+  - that the block lists every device in the leg's scope (the owner's declaration; a device left out is not checked by that leg - plan L4)
+  - that a ref is inside the Git service's pin (refused at run time)
+  - that a descriptor URL registers (the skill checks it at step 0)
+exit 0

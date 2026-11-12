@@ -246,6 +246,7 @@ test('panel D6 (F14): the mechanical export hold refuses obs ≥ 1.10.0 until th
   const envEx = fs.readFileSync(path.join(__dirname, '..', '.env.example'), 'utf8');
   ok(/^CONNECTED_OUTPUT_SANITIZE_ENABLED=true\b/m.test(envEx) && /^ARTIFACT_SECRET_REDACT_ENABLED=true\b/m.test(envEx), '.env.example ships R9 and R10 ON');
   ok(/^HELD_BYTES_CAPTURE_ENABLED=true\b/m.test(envEx), '.env.example ships kept files ON (matching production; owner 2026-11-01)');
+  ok(/^GIT_FILE_SOURCE_PIN=paichart\/paichart-configs$/m.test(envEx) && !/paichart-lab-configs/.test(envEx), '.env.example pins the public paichart/paichart-configs and never names the retired repo (owner 2026-11-12)');
   const hg = fs.readFileSync(path.join(__dirname, '..', 'lib', 'mcp', 'server', 'tools', 'held-get-handler.ts'), 'utf8');
   ok(hg.includes('redactorVersion: ref.redactorVersion') && hg.includes('applicable: placeholders === 0'), 'held.get still emits redactorVersion and applicable (the self-host text tells operators to read them)');
   const xp = fs.readFileSync(path.join(__dirname, 'export-public.py'), 'utf8');

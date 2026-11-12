@@ -36,13 +36,14 @@ const text = readFileSync(VENDORED, 'utf8');
 
 // 1. INVARIANTS — the properties the protocol body depends on
 check('skeleton is non-empty and substantial', text.length > 15000, `${text.length} chars`);
-// 19 since 2026-10-06 (registry routing rows: + ### A leg that changes routes). 18 since 2026-09-28 (decision
+// 22 since 2026-11-09 (STEP 1 Phase B: + ### A network leg (configuration sources), + ### Device sources — a network leg
+// only, in both Pipeline sections). 19 since 2026-10-06 (registry routing rows: + ### A leg that changes routes). 18 since 2026-09-28 (decision
 // surfacing Phase 1: + ### Every leg, + ### A leg that grants or removes access,
 // + ## Decisions needed from the owner). Was 15 since 2026-09-26 (GS-R5: + Design decisions, + Open questions).
 // A deliberate SHAPE pin — it guards against a truncated skeleton; CI has no ~/paichart to derive it from, so a
 // template heading change updates it here.
-check('carries all 19 template headings',
-  (text.match(/^#{1,4} /gm) || []).length === 19, `${(text.match(/^#{1,4} /gm) || []).length}`);
+check('carries all 22 template headings',
+  (text.match(/^#{1,4} /gm) || []).length === 22, `${(text.match(/^#{1,4} /gm) || []).length}`);
 // A FLOOR, not a count (115 on 2026-09-28; was 78 under a floor of 70) — the same ~90% slack, so healthy edits
 // that add slots never rot it, and a truncation that loses the decision inventory's rows (37 of them) still fails.
 check('carries the placeholder set', (text.match(/\{\{/g) || []).length >= 105,
@@ -51,7 +52,7 @@ check('carries the placeholder set', (text.match(/\{\{/g) || []).length >= 105,
 // the closed forced-eligible list (target-absent, inputs-empty) literally, and counts every key per leg. A key renamed
 // or dropped here makes that count look for a row the Author was never offered — silently. Pin the Author-visible side.
 const DECISION_KEYS = ['target', 'population', 'representation', 'inputs-empty', 'receiver', 'admitted-principal', 'request-path', 'principal-unseen', 'granted-action',
-  'existing-grant', 'target-empty', 'enforcer-absent', 'target-absent', 'collateral', 'enforcer-scope', 'covered-routes', 'must-stay-reachable'];
+  'existing-grant', 'target-empty', 'enforcer-absent', 'target-absent', 'collateral', 'enforcer-scope', 'covered-routes', 'must-stay-reachable', 'sources'];
 const missingKeys = DECISION_KEYS.filter(k => !new RegExp('^\\| \\{\\{(?:LEG|PRODUCER)_TOKEN\\}\\}\\.' + k + ' \\|', 'm').test(text));
 check('carries every decision-inventory question key as a table row', missingKeys.length === 0,
   `missing: ${missingKeys.join(', ')}`);

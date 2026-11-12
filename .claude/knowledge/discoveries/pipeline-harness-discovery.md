@@ -1861,15 +1861,15 @@ ls scripts/leg-replay-lab/golden/golden-set.json | wc -l   # expect 1
 ```
 
 ### 2026-11-03 — configs of record + released use cases (LAB-CONFIGS Phase 0 / Builds 1–2) — PROVEN greps
-- **Configs of record:** private `paichart/paichart-lab-configs` (rig source, canaries, the hosted pin) → one-way mirror
-  `scripts/lab-configs/sync-public-configs.py` → public `paichart/paichart-configs` (+ `usecases/`: 3 RELEASED use cases).
+- **Configs of record (superseded 2026-11-12 — ONE repo):** the public `paichart/paichart-configs` is the only source (configs, fake-secret
+  fixtures, `usecases/`); the private `paichart-lab-configs` and the one-way mirror script were retired. Runbook: `scripts/lab-configs/RUNBOOK.md`.
 - **held-k8s-window-p1 fails the release bar** (its only program run `programReleasable: false`) — check releases from STORED ROOTS,
   never from a run sheet.
 - **Not "kept by default":** network is per declared device; k8s/terraform keep a NAMED repo file; observability keeps the service's
   heldFiles. One `## Config sources` design for k8s/terraform/observability is filed under GITHUB-ONLY-MODE.
 ```bash
-python3 scripts/lab-configs/sync-public-configs.py --help >/dev/null && echo ok      # expect ok — the mirror exists (PRIVATE: not in the public repo)
-grep -c "^DROP = {" scripts/lab-configs/sync-public-configs.py                        # expect 1 — the ONE drop list
+test -e scripts/lab-configs/sync-public-configs.py && echo present || echo retired   # expect retired — one repo since 2026-11-12
+grep -c "One repository since 2026-11-12" scripts/lab-configs/RUNBOOK.md            # expect 1
 ```
 
 ## 2026-11-04 — Config-sources PUSH 0 (security, no agent text; DEPLOYED, cut 09:41:51.73Z) — every expectation run before it was written
@@ -1927,3 +1927,25 @@ grep -c "^| 11 | \*\*Candidate agent text lives on a local-only branch" .claude/
 - Check live rows match the lab renders by sha256 of `agent_prompt_library."promptText"` (read-only), never by version alone.
 - `nb1-apply-base` reads a placeholder whole-file line (`copy flash:<device>-… session-config`) as naming every device — canary B's shape.
 
+## 2026-11-09 — Config sources step 1 shipped (requirements side); steps 2–4 planned (every expectation run before it was written)
+```bash
+ls cline_docs/reviews/config-sources-plans-2026-11-09/STEPS-2-4-PLAN.md cline_docs/reviews/config-sources-plans-2026-11-09/STEP1-REQUIREMENTS-PLAN.md | wc -l   # expect 2
+grep -c "test:requirements-sources" package.json   # expect >=1 — the Phase A check is in the battery
+grep -c "CONFIG_SOURCE" lib/agents/harness/held-bytes/variant.ts   # expect 0 — no k8s/tf/obs Config-sources code yet (step 2 builds config-sources.ts)
+```
+- Steps 2–4 carry the golden replay fidelity gate (STEPS-2-4-PLAN §2.2a). Requirements specs: the publish pass refuses a block the
+  shipping parser rejects (`scripts/check-requirements-sources.ts`).
+
+
+### Hand-written program specs (added 2026-11-11, paired with the specialist's pointer of that date)
+
+The owner's route for a program's input is a short hand-written spec plus the checklist. Confirm both exist and the check runs:
+
+```bash
+ls .claude/knowledge/pipelines/PROGRAM-SPEC-CHECKLIST.md                    # expect: the file
+grep -c "^| M[0-9][a-c]* | \*\*" .claude/knowledge/pipelines/PROGRAM-SPEC-CHECKLIST.md   # expect 9 Tier 1 rows (M1–M5, M6a–c, M7)
+python3 scripts/check-spec-topology.py --self-test | grep -c "^PASS"        # expect 9, and no FAIL line
+```
+
+State and triggers (reviewer-rule policy decided but not built; generated path archived by tag):
+`cline_docs/follow-ups/requirements-stepback-continuation-2026-11-11.md`.

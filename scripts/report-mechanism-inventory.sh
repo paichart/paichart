@@ -605,7 +605,8 @@ WITH gcalls AS (
 g AS (SELECT *, regexp_replace(coalesce(sa->>'path', ''), '^/', '') p FROM gcalls WHERE svc = 'github-service'),
 gp AS (SELECT *, NOT (
     coalesce(sa->>'owner', '') ~ '^[A-Za-z0-9._-]+$' AND lower(sa->>'owner') = 'paichart'
-    AND coalesce(sa->>'repo', '') ~ '^[A-Za-z0-9._-]+$' AND lower(sa->>'repo') = 'paichart-lab-configs'
+    -- the platform pin: paichart-configs (default + production since 2026-11-11 06:06Z); paichart-lab-configs = every read before that cut
+    AND coalesce(sa->>'repo', '') ~ '^[A-Za-z0-9._-]+$' AND (lower(sa->>'repo') = 'paichart-configs' OR lower(sa->>'repo') = 'paichart-lab-configs')
     AND NOT coalesce(sa ? 'sha', false)
     AND (sa->>'ref' IS NULL OR sa->>'ref' IN ('main', 'refs/heads/main'))
     AND p <> '' AND length(p) <= 1024 AND p !~ '[%\\]' AND p !~ '[[:cntrl:]]' AND ('/' || p || '/') !~ '/(\.{1,2})?/'
@@ -764,7 +765,7 @@ UNION ALL SELECT '🔴 a registrant CAPTURE on a tool its own snapshot does not 
    AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(d."heldFiles"->'files') = 'array' THEN d."heldFiles"->'files' ELSE '[]' END) f WHERE f->>'tool' = r."sourceTool")
 UNION ALL SELECT '🔴 a stored declaration whose gitPin equals a platform pin (WB-1: never the platform Git source; the validator refuses it)', count(*)::text
   FROM held_declarations d, jsonb_array_elements(CASE WHEN jsonb_typeof(d."heldFiles"->'files') = 'array' THEN d."heldFiles"->'files' ELSE '[]' END) f
- WHERE lower(f->'gitPin'->>'owner') = 'paichart' AND lower(f->'gitPin'->>'repo') = 'paichart-lab-configs'
+ WHERE lower(f->'gitPin'->>'owner') = 'paichart' AND lower(f->'gitPin'->>'repo') IN ('paichart-configs', 'paichart-lab-configs')
 UNION ALL SELECT '🔴 an mcp_tools declaration on a platform-default service name (F(a): refused at registration)', count(*)::text
   FROM mcp_tools WHERE jsonb_typeof("heldFiles") = 'object' AND name IN ('observability-readonly', 'github-service')
 UNION ALL SELECT '🔴 an mcp_tools row whose heldFilesSha256 has no snapshot (the snapshot is written BEFORE the row)', count(*)::text

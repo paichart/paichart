@@ -544,7 +544,7 @@ cut-relevant push with no ledger edit; extend its path list when a new fact prod
 no lab: its gate is a pre-registered live control on the canary.
 
 ## Pointer (2026-11-03): configs of record + released use cases (LAB-CONFIGS)
-- Private `paichart-lab-configs` (rig source, canaries, the hosted pin) → one-way mirror `scripts/lab-configs/sync-public-configs.py` → public `paichart/paichart-configs` (+ `usecases/`, 3 released). Plan + decisions: `cline_docs/reviews/lab-configs-central-repo-2026-11-02/PHASE0-SUMMARY.md`.
+- **One repo since 2026-11-12:** public `paichart/paichart-configs` (~/paichart-configs) holds the configs of record, the fake-secret fixtures and `usecases/`, and is production's Git file source (pin cut 2026-11-11). The private `paichart-lab-configs` and its mirror script are RETIRED (keep it readable: old runs' held refs + lab fixtures name its commits). Runbook: `scripts/lab-configs/RUNBOOK.md`. Plan + decisions: `cline_docs/reviews/lab-configs-central-repo-2026-11-02/PHASE0-SUMMARY.md`.
 - Check a "working run" against its STORED ROOT (`programReleasable`), never a run sheet — held-k8s-window-p1 was listed current and is `false`.
 - Next work rides triggers: GITHUB-ONLY-MODE (one `## Config sources` design for k8s/terraform/observability), DEVEXT-FRESH-INSTALL, HOSTED-DEMO-GIT-SOURCE.
 
@@ -580,3 +580,20 @@ no lab: its gate is a pre-registered live control on the canary.
   whatever `main` is); no commits on `main` mid-ship; re-run a failing gate's suite before calling it broken; a device-semantics refusal gets
   a rig check; ping lab readers when a run ends (their watch can miss it).
 - **Open:** a Reviewer over-reads `inside-sub-block` nesting as drift (JP1, 1 in 8) — general fix only after more evidence.
+
+## Pointer (2026-11-09): Config sources — step 1 SHIPPED; steps 2–4 planned and decided
+- **Plans + every owner decision:** `cline_docs/reviews/config-sources-plans-2026-11-09/` — STEP1-REQUIREMENTS-PLAN (G1–G5) and
+  STEPS-2-4-PLAN (groups P, K, O, T). Order k8s → obs → tf, each as credit allows; the Terraform corpus count runs at the START of step 4.
+- **Step 1 live:** requirements-authoring 1.11.0 (cut 10:22:03.195Z, key `registrySha256` `e8f7f8bcf803`) — SERIES-CUT-LEDGER.
+  First generated network spec + Architect canary in progress (three `req-src-*` canary controls being added).
+- **New rule for steps 2–4 (§2.2a):** a fact a Reviewer prompt renders ships WITH its lab lever, gated by a frozen-cmp of every golden
+  and standing Reviewer cell of that domain (golden v6 `2954550e5` fixed the held-cell gap; v7 `02524dee0` adds two REQ cases).
+- **Decided, do not reopen:** k8s drift = declared-field compare INSIDE the read-only service (server-side diff needs `patch`: filed);
+  obs label = a held FILE (`<target>` / `<target>.<key>`); Terraform: state only when declared `live-read`, agent ".tf vs state" report
+  deleted after the corpus count, refresh-only filed (the tf service is zero-provider by construction). Program Architect contract-key
+  sentence at natural length (owner extends the ceiling).
+- **Ops lesson LL-CS-44:** check for a paid run in a worktree before committing to it; the hold message can arrive late.
+
+## Pointer (2026-11-11): hand-written program specs + the reviewer-rule policy
+- **Hand-written specs are the owner's route.** Live checklist: `.claude/knowledge/pipelines/PROGRAM-SPEC-CHECKLIST.md` (Tier 1 must-answer M1–M7, Tier 2 C1–C18, topology rules; `scripts/check-spec-topology.py`). You own it; registry-sourced questions change with requirements-authoring.
+- **Why:** of 80 unreleased programs since 2026-08-21 a spec design gap was the known cause of about 1 in 9; package format breaks were the largest past cause and fell sharply after 2026-10-07. Studies, the reviewer-rule policy (decided, NOT built) and its two triggers: `cline_docs/follow-ups/requirements-stepback-continuation-2026-11-11.md`.

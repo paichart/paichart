@@ -24,6 +24,8 @@ Three subcommands. None of them commits, pushes, or writes production; the publi
             check-requirements-coverage.py                       (any ERROR ⇒ STOP; READ items printed)
             owner block: any `tier: blocking` line ⇒ STOP (an OPEN decision is never publishable)
             check-requirements-citations.py --objective           (a finding ⇒ STOP unless --waiver lists it)
+            check-requirements-sources.ts (TS: the SHIPPING Device sources parser; Python parses nothing)
+                                                   (any S1–S4 ERROR ⇒ STOP; never waivable — each is a run-time stop)
             check-requirements-clauses.py                          (a flag ⇒ STOP until READ and named in --clause-read;
                                                     a real drop ⇒ regenerate; --waiver NEVER clears a clause flag)
             in-run correction (from fetch's author-correction.json; STOP if the fetched run directory lacks it):
@@ -112,8 +114,8 @@ def die(msg):
     sys.exit(1)
 
 
-def run(cmd, check=False):
-    p = subprocess.run(cmd, capture_output=True, text=True)
+def run(cmd, check=False, cwd=None):
+    p = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
     if check and p.returncode != 0:
         die(f'{" ".join(cmd)} failed:\n{p.stdout}{p.stderr}')
     return p
@@ -285,6 +287,19 @@ def cmd_prepare(a):
         ok('citation findings present and accepted ONLY because --waiver was given — the waiver must name each one')
     else:
         ok('citation gate: 0 findings')
+
+    # STEP 1 Phase A (2026-11-09, owner G3-a/G3-b): the configuration-sources blocks, read by the SHIPPING parser
+    # (lib/agents/harness/device-sources.ts) through a TS CLI. Python never parses a block. No waiver clears an ERROR: a block
+    # that fails here would stop the leg, or be read differently, at run time.
+    root = os.path.dirname(HERE)
+    src = run([os.path.join(root, 'node_modules', '.bin', 'ts-node'), '-r', 'tsconfig-paths/register',
+               os.path.join(HERE, 'check-requirements-sources.ts'), '--draft', req, '--objective', a.objective], cwd=root)
+    print(src.stdout.rstrip())
+    if src.returncode == 1:
+        die('configuration-sources check has ERRORS — regenerate (a published spec is never hand-edited); a waiver never clears these')
+    if src.returncode != 0:
+        die(f'configuration-sources check did not run:\n{src.stdout}{src.stderr}')
+    ok('configuration sources: S1–S4 clean (S5 printed as not checked)')
 
     # ── Phase 4 group 1 (2026-10-12): the in-run correction record, then the two enforced READS ──────────────────
     src_dir = os.path.dirname(os.path.abspath(a.source))

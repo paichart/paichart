@@ -740,10 +740,10 @@ async function recordFor(service: Rec | null, args: Rec): Promise<Rec> {
   // ── held-k8s step 1b: the GitHub file source (SYNTHESIS v3 §6; probed shapes 2026-10-17/18) ─────────────────────────────
   const GH_REV = '0ea432e751cc622ffab91d7a90386c66cadf8733';
   const GH_TEXT = 'apiVersion: v1\nkind: Namespace\nmetadata:\n  name: trading\n';
-  const ghArgs = (over: Rec = {}): Rec => ({ owner: 'paichart', repo: 'paichart-lab-configs', path: 'k8s/sample-workloads.yaml', ...over });
+  const ghArgs = (over: Rec = {}): Rec => ({ owner: 'paichart', repo: 'paichart-configs', path: 'k8s/sample-workloads.yaml', ...over });
   const NO_TEXT = Symbol('no-text');
   const ghResource = (uriOwner = 'paichart', uriPath = 'k8s/sample-workloads.yaml', text: unknown = GH_TEXT): Rec => ({ type: 'resource',
-    resource: { uri: `repo://${uriOwner}/paichart-lab-configs/sha/${GH_REV}/contents/${uriPath}`, mimeType: 'text/plain; charset=utf-8',
+    resource: { uri: `repo://${uriOwner}/paichart-configs/sha/${GH_REV}/contents/${uriPath}`, mimeType: 'text/plain; charset=utf-8',
       ...(text === NO_TEXT ? { blob: 'AAEC' } : { text }) } });
   const ghStatus = { type: 'text', text: 'successfully downloaded text file (SHA: d5fe8e652d6cb7ac435ee9ba173f3e5da6d3fafc)' };
   /** The gateway success envelope as the loop records it (mirrors the stored run2 shape: content[0] = {type:'data', data}). */
@@ -758,7 +758,7 @@ async function recordFor(service: Rec | null, args: Rec): Promise<Rec> {
     const r = gh([ghRecord(ghArgs(), [ghStatus, ghResource()])]);
     eq(r.refusals, []);
     eq(r.files.map((f) => [f.selector, f.target, f.path, f.sourceRevision, f.text === GH_TEXT, f.descriptorVersion]),
-      [['/content/1/resource/text', 'github:paichart:paichart-lab-configs', '/k8s/sample-workloads.yaml', GH_REV, true, 1]]);
+      [['/content/1/resource/text', 'github:paichart:paichart-configs', '/k8s/sample-workloads.yaml', GH_REV, true, 1]]);
     const data = (ghRecord(ghArgs(), [ghStatus, ghResource()]).result as Rec).content as Rec[];
     eq(resolveJsonPointer(((data[0] as Rec).data as Rec).result, r.files[0].selector), GH_TEXT, 're-extraction over an ARRAY step');
   });
@@ -821,7 +821,7 @@ async function recordFor(service: Rec | null, args: Rec): Promise<Rec> {
       [ghArgs({ owner: 'attacker' }), 'owner'], [ghArgs({ repo: 'evil' }), 'repo'], [ghArgs({ sha: GH_REV }), 'sha'],
       [ghArgs({ ref: 'refs/pull/1/head' }), 'ref'], [ghArgs({ path: 'k8s//x.yaml' }), 'path'], [ghArgs({ path: 'k8s/%2e%2e/x' }), 'path'],
       [ghArgs({ path: undefined }), 'path'], [ghArgs({ owner: 'pаichart' }), 'owner'],
-      [ghArgs({ owner: 'PaiChart', repo: 'Paichart-Lab-Configs' }), null], [ghArgs({ path: '/k8s/sample-workloads.yaml' }), null],
+      [ghArgs({ owner: 'PaiChart', repo: 'Paichart-Configs' }), null], [ghArgs({ path: '/k8s/sample-workloads.yaml' }), null],
       [ghArgs({ ref: 'main' }), null], [ghArgs({ ref: 'refs/heads/main' }), null],
     ];
     for (const [a, field] of cases) {
@@ -834,7 +834,7 @@ async function recordFor(service: Rec | null, args: Rec): Promise<Rec> {
     const other = gh([ghRecord(ghArgs(), [ghStatus, ghResource('attacker')])]);
     eq([other.refusals.map((x) => [x.refusal, x.detail, x.selector]), other.stats.pinViolationsOnSuccess], [[['source-not-pinned', { field: 'owner' }, '/content/1/resource/text']], 1]);
     eq(gh([ghRecord(ghArgs(), [ghStatus, ghResource('paichart', 'k8s/other.yaml')])]).refusals.map((x) => x.detail), [{ field: 'path' }]);
-    const ref = ghResource(); ((ref.resource as Rec).uri) = 'repo://paichart/paichart-lab-configs/refs/heads/main/contents/k8s/sample-workloads.yaml';
+    const ref = ghResource(); ((ref.resource as Rec).uri) = 'repo://paichart/paichart-configs/refs/heads/main/contents/k8s/sample-workloads.yaml';
     eq(gh([ghRecord(ghArgs(), [ghStatus, ref])]).refusals.map((x) => x.detail), [{ field: 'uri' }]);
   });
   test('held-k8s pin: a call that THREW (e.g. refused at the call-time gate) with a foreign repo is still COUNTED (pinViolations), not OnSuccess', () => {

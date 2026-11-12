@@ -152,12 +152,12 @@ test('push 2 O-4: a declared device-read device with no held base ⇒ device-rea
   eq([all.qualityGate.outcome, all.qualityGate.heldEdit.forced, all.qualityGate.heldEdit.reason], ['approved', false, undefined]);
 });
 test('push 2 O-4 + owner Phase-0 §4b: a device declaring BOTH sources is held when its GIT FILE is held (the device read is evidence); neither held ⇒ forced (git-file-not-held since D-1)', async () => {
-  const both = ['sw1: git-file — service github-service ; paichart/paichart-lab-configs/network/sw1.cfg', 'sw1: device-read — service devsvc'];
+  const both = ['sw1: git-file — service github-service ; paichart/paichart-configs/network/sw1.cfg', 'sw1: device-read — service devsvc'];
   const git = merge('approved');
-  await applyHeldEditCarrier(netWorld(outOf, null, legRow(SNAP(both), both), { captureRefs: [{ target: 'github:paichart:paichart-lab-configs', path: '/network/sw1.cfg' }] }).db, NETLEG, git, HELD);
+  await applyHeldEditCarrier(netWorld(outOf, null, legRow(SNAP(both), both), { captureRefs: [{ target: 'github:paichart:paichart-configs', path: '/network/sw1.cfg' }] }).db, NETLEG, git, HELD);
   eq([git.qualityGate.outcome, git.qualityGate.heldEdit.forced], ['approved', false], 'a held Git file is the base: ');
   const other = merge('approved');
-  await applyHeldEditCarrier(netWorld(outOf, null, legRow(SNAP(both), both), { captureRefs: [{ target: 'github:paichart:paichart-lab-configs', path: '/network/sw9.cfg' }] }).db, NETLEG, other, HELD);
+  await applyHeldEditCarrier(netWorld(outOf, null, legRow(SNAP(both), both), { captureRefs: [{ target: 'github:paichart:paichart-configs', path: '/network/sw9.cfg' }] }).db, NETLEG, other, HELD);
   eq([other.qualityGate.heldEdit.reason, other.qualityGate.heldEdit.gitFileDevicesNotHeld, 'devicesNotHeld' in other.qualityGate.heldEdit], ['git-file-not-held', ['sw1'], false], 'another file of the repo is not its base: ');
 });
 test('push 2 O-4 FAIL CLOSED: no snapshot / an unreadable one / an unparseable declaration / NO block (D-1 item 2) force by that name', async () => {
@@ -179,8 +179,8 @@ test('push 2 O-4 FAIL CLOSED: no snapshot / an unreadable one / an unparseable d
 });
 
 // ── held-network push 3 (owner D-1, 2026-10-26; sec-ops push-2 SF-4): EVERY declared non-command-package device needs a held base ──
-const GIT1 = 'sw1: git-file — service github-service ; paichart/paichart-lab-configs/network/sw1.cfg';
-const GIT1_REF = { target: 'github:paichart:paichart-lab-configs', path: '/network/sw1.cfg' };
+const GIT1 = 'sw1: git-file — service github-service ; paichart/paichart-configs/network/sw1.cfg';
+const GIT1_REF = { target: 'github:paichart:paichart-configs', path: '/network/sw1.cfg' };
 test('push 3 D-1: a git-file-only device whose Git file is not held ⇒ git-file-not-held, device named, even out of scope; held ⇒ no force', async () => {
   const notHeld = merge('approved');
   await applyHeldEditCarrier(netWorld(outOf, null, legRow(SNAP([GIT1]), [GIT1])).db, NETLEG, notHeld, HELD);
@@ -190,16 +190,16 @@ test('push 3 D-1: a git-file-only device whose Git file is not held ⇒ git-file
   await applyHeldEditCarrier(netWorld(outOf, null, legRow(SNAP([GIT1]), [GIT1]), { captureRefs: [GIT1_REF] }).db, NETLEG, held, HELD);
   eq([held.qualityGate.outcome, held.qualityGate.heldEdit.forced, 'reason' in held.qualityGate.heldEdit], ['approved', false, false]);
   const sameRepoOtherCase = merge('approved'); // the target compare is case-insensitive (the held target is lower-cased at capture)
-  await applyHeldEditCarrier(netWorld(outOf, null, legRow(SNAP([GIT1]), [GIT1]), { captureRefs: [{ target: 'github:Paichart:Paichart-Lab-Configs', path: '/network/sw1.cfg' }] }).db, NETLEG, sameRepoOtherCase, HELD);
+  await applyHeldEditCarrier(netWorld(outOf, null, legRow(SNAP([GIT1]), [GIT1]), { captureRefs: [{ target: 'github:Paichart:Paichart-Configs', path: '/network/sw1.cfg' }] }).db, NETLEG, sameRepoOtherCase, HELD);
   eq(sameRepoOtherCase.qualityGate.heldEdit.forced, false);
 });
 test('push 3 sec-ops SF-1: a line on the PLATFORM pin repo at a ref the pin never admits is never satisfied by a file held at the same path (another revision); the default branch / main is', async () => {
-  const atRef = 'sw1: git-file — service github-service ; paichart/paichart-lab-configs/network/sw1.cfg @ feature-x';
+  const atRef = 'sw1: git-file — service github-service ; paichart/paichart-configs/network/sw1.cfg @ feature-x';
   const m = merge('approved');
   await applyHeldEditCarrier(netWorld(outOf, null, legRow(SNAP([atRef]), [atRef]), { captureRefs: [GIT1_REF] }).db, NETLEG, m, HELD);
   eq([m.qualityGate.outcome, m.qualityGate.heldEdit.reason, m.qualityGate.heldEdit.gitFileDevicesNotHeld], ['needs-revision', 'git-file-not-held', ['sw1']]);
   for (const ref of ['main', 'refs/heads/main']) {
-    const line = `sw1: git-file — service github-service ; paichart/paichart-lab-configs/network/sw1.cfg @ ${ref}`;
+    const line = `sw1: git-file — service github-service ; paichart/paichart-configs/network/sw1.cfg @ ${ref}`;
     const ok2 = merge('approved');
     await applyHeldEditCarrier(netWorld(outOf, null, legRow(SNAP([line]), [line]), { captureRefs: [GIT1_REF] }).db, NETLEG, ok2, HELD);
     eq(ok2.qualityGate.heldEdit.forced, false, `@ ${ref}: `);
@@ -227,7 +227,7 @@ test('push 3 D-1: a command-package device never forces; mixed legs name each li
   const mx = merge('approved');
   await applyHeldEditCarrier(netWorld(outOf, null, legRow(SNAP(mixed), mixed)).db, NETLEG, mx, HELD);
   eq([mx.qualityGate.heldEdit.reason, mx.qualityGate.heldEdit.gitFileDevicesNotHeld, mx.qualityGate.heldEdit.devicesNotHeld], ['git-file-not-held', ['sw1'], ['sw2']]);
-  const many = Array.from({ length: 23 }, (_, i) => `d${i}: git-file — service github-service ; paichart/paichart-lab-configs/network/d${i}.cfg`);
+  const many = Array.from({ length: 23 }, (_, i) => `d${i}: git-file — service github-service ; paichart/paichart-configs/network/d${i}.cfg`);
   const mn = merge('approved');
   await applyHeldEditCarrier(netWorld(outOf, null, legRow(SNAP(many), many)).db, NETLEG, mn, HELD);
   eq([mn.qualityGate.heldEdit.gitFileDevicesNotHeld.length, mn.qualityGate.heldEdit.gitFileDevicesNotHeldTotal], [20, 23]);
@@ -244,8 +244,8 @@ test('push 3 D-1 precedence: source-not-pinned > git-file-not-held > author-not-
   eq(nol.qualityGate.heldEdit.reason, 'git-file-not-held');
 });
 test('push 2 sec-ops SF-1: a declaration CHANGED after the snapshot forces by name even on a git-file-only leg; a snapshot refusal the capture recorded forces too', async () => {
-  const gitOnly = ['sw1: git-file — service github-service ; paichart/paichart-lab-configs/network/sw1.cfg'];
-  const edited = ['sw1: git-file — service github-service ; paichart/paichart-lab-configs/network/other.cfg'];
+  const gitOnly = ['sw1: git-file — service github-service ; paichart/paichart-configs/network/sw1.cfg'];
+  const edited = ['sw1: git-file — service github-service ; paichart/paichart-configs/network/other.cfg'];
   const m = merge('approved');
   await applyHeldEditCarrier(netWorld(outOf, null, legRow(SNAP(gitOnly), edited)).db, NETLEG, m, HELD);
   eq([m.qualityGate.outcome, m.qualityGate.heldEdit.reason], ['needs-revision', 'device-sources-snapshot-changed']);

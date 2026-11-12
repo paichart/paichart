@@ -109,7 +109,7 @@ export const UpdatePOVSchemaComprehensive = z.object({
   // Text fields with injection detection - use nullable + transform for form compatibility
   title: InjectionSafeOptional(FIELD_LIMITS.TITLE, 'Title', 1),
   description: InjectionSafeOptional(FIELD_LIMITS.METADATA, 'Description'),
-  objective: InjectionSafeOptional(FIELD_LIMITS.DESCRIPTION, 'Objective'),
+  objective: InjectionSafeOptional(FIELD_LIMITS.METADATA, 'Objective'),
 
   // Use Prisma enums to prevent drift (already using FormField ✅)
   status: FormField.optional(PrismaEnum.povStatus),
@@ -144,7 +144,9 @@ export const UpdatePOVSchemaComprehensive = z.object({
   regionId: FormField.optionalCUID('region ID'),
 
   // Business fields - use FormField helper
-  solution: FormField.optionalString(FIELD_LIMITS.MODERATE_TEXT),
+  // 2026-11-12 (owner): POV description, objective and solution all cap at METADATA (5,000), and solution takes the same
+  // injection check as every other write path (it was the one path without it; agent prompts read POV.solution).
+  solution: InjectionSafeOptional(FIELD_LIMITS.METADATA, 'Solution'),
   // 2026-05-15: injection refine added per BC75 sibling-drift follow-up.
   // Pre-existing drift: CreatePOVSchema (pov.ts:267-270) and CreatePOVDirectPathSchema
   // (pov.ts:338-342) both had the refine; Update side (this line) did not.
@@ -272,7 +274,7 @@ export const CreatePOVSchemaInline = z.object({
       .refine((val) => detectPromptInjection(val).isSafe, {
         message: 'Description contains HTML tags or instruction override patterns. Please use plain text.'
       }),
-    objective: InjectionSafeOptional(FIELD_LIMITS.DESCRIPTION, 'Objective'),
+    objective: InjectionSafeOptional(FIELD_LIMITS.METADATA, 'Objective'),
 
     // Use Prisma enums to prevent drift
     status: z.nativeEnum(POVStatus),
@@ -305,7 +307,7 @@ export const CreatePOVSchemaInline = z.object({
     regionId: FormField.optionalCUID('region ID'),
 
     // Business fields — text fields use InjectionSafeOptional for refine.
-    solution: InjectionSafeOptional(FIELD_LIMITS.MODERATE_TEXT, 'Solution'),
+    solution: InjectionSafeOptional(FIELD_LIMITS.METADATA, 'Solution'),
     competitors: FormField.optional(z.array(
       z.string().max(FIELD_LIMITS.NAME).refine((val) => detectPromptInjection(val).isSafe, {
         message: 'Competitor contains HTML tags or instruction override patterns. Please use plain text.'
@@ -352,7 +354,7 @@ export const CreatePOVSchemaInline = z.object({
       message: 'Description contains HTML tags or instruction override patterns. Please use plain text.'
     })
     .optional(),
-  objective: InjectionSafeOptional(FIELD_LIMITS.DESCRIPTION, 'Objective'),
+  objective: InjectionSafeOptional(FIELD_LIMITS.METADATA, 'Objective'),
   // Step 3d: Fixed hardcoded enums → z.nativeEnum (prevents drift)
   status: z.nativeEnum(POVStatus).optional(),
   // Step 3e: Fixed hardcoded enum → z.nativeEnum (prevents drift)
@@ -375,7 +377,7 @@ export const CreatePOVSchemaInline = z.object({
   customerContact: InjectionSafeOptional(FIELD_LIMITS.NAME, 'Customer contact'),
   partnerName: InjectionSafeOptional(FIELD_LIMITS.NAME, 'Partner name'),
   partnerContact: InjectionSafeOptional(FIELD_LIMITS.NAME, 'Partner contact'),
-  solution: InjectionSafeOptional(FIELD_LIMITS.MODERATE_TEXT, 'Solution'),
+  solution: InjectionSafeOptional(FIELD_LIMITS.METADATA, 'Solution'),
   opportunityName: InjectionSafeOptional(FIELD_LIMITS.NAME, 'Opportunity name'),
   competitors: z.array(
     z.string().max(FIELD_LIMITS.NAME).refine((val) => detectPromptInjection(val).isSafe, {

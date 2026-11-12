@@ -75,7 +75,7 @@ Forty rows collapse to about a dozen decisions. The grouping used on run 2:
 
 | group | rows | decides |
 |---|---|---|
-| A. What to act on | targets, receivers, population, representation | which namespace/bucket/ingress/workloads/members, and the value's form |
+| A. What to act on | targets, receivers, population, representation; on a network leg also its Device sources (`network-provisioning.sources` from requirements-authoring 1.11.0; before it, an added `network-provisioning.item-<N>`) | which namespace/bucket/ingress/workloads/members, and the value's form; on a network leg, every device it changes or only sees and each one's source — asked per leg, recorded as ONE item per lane, with the limits L1–L4 shown (SKILL.md § *Network legs*) |
 | B. Who approves and when | `approver.*`, `gate.*.position` | people, and each gate's moment |
 | C. Who is admitted, what they may do | `admitted-principal`, `request-path` (when admitted by address), `principal-unseen`, `granted-action` per leg | principal form + the path its requests take + grant; show `request-path` × `principal-unseen` as ONE combined table (U12) |
 | D. How the change behaves | `existing-grant`, `target-empty`, `enforcer-absent`, `target-absent` per leg | replace/preserve, empty/absent outcomes |

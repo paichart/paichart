@@ -60,10 +60,13 @@ Browser Automation Service; pAIchart has no generic URL-fetch tool).
 is a run's input of record. One published spec serves every run of its objective, so you make one **per objective**, not
 per run. Two routes:
 
-- **Hand-written** — from `program-artifacts/_TEMPLATE/` (`requirements.template.md`, `topology.example.json`,
-  `writing-rules.md`). Fits a small objective whose few design decisions you can state yourself. Nothing checks that you
-  covered every decision a generated spec would have asked, so prefer the generated route for anything with two or more
-  legs or any leg that grants access or changes routes.
+- **Hand-written** — a short spec (about one page) in the shape of a released example, written with
+  **`PROGRAM-SPEC-CHECKLIST.md`** (this directory): seven questions you must answer before launch and eighteen you answer
+  only where you care, the rest being decided by the planner or a leg and read at a gate. This is the owner's preferred route
+  since 2026-11-11 (a 4,858-character hand-written two-leg spec ran on 2026-11-10 with both legs approved first time; the
+  generated route for the same objective did not publish). For a leg that grants access in production or changes routing, the
+  checklist's Tier 2 caution makes more questions must-answer. `program-artifacts/_TEMPLATE/` still holds the long template
+  and the writing rules; the checklist's Part 1 names two short published examples to copy from instead.
 - **Generated** — the `requirements-authoring` pipeline drafts the spec from a plain objective and **asks** every design
   decision instead of making it (a fixed list per kind of leg: target, population, who is admitted, what they may do,
   existing allowances, side effects, routing, approvers, gate positions …). You answer them once, the answers are merged
@@ -181,6 +184,14 @@ its §6 (see `firewall-policy-use-case.md` §2/§3 Approach 3).
 **Network legs: the `## Device sources` block rides the contract.** Write each network leg's block in `requirements.md`; the Architect
 copies it exactly into the contract as `deviceSources["network-provisioning"]`. **List every switch a leg must SEE, not only the one it
 changes** (a value derived on one switch must not collide with another's allocations — the FW-A3 lesson of 2026-11-01).
+**A generated `requirements.md` asks for it (requirements-authoring 1.11.0, 2026-11-09):** the requirements generator asks, for each
+network leg, which switches it changes and which it only needs to see, and where each one's configuration is read from (the
+`network-provisioning.sources` question; it stays OPEN until you answer it, and never comes from the harvest). It writes one block per
+lane — one for the change legs, one for a value leg — and the publish step checks each block with the same parser the platform uses.
+A hand-written spec still carries the block you write.
+⚠️ **Known limit (2026-11-10): a GENERATED spec with two network legs (a value leg plus a change leg) cannot pass publish yet.** The
+generator has no row-id rule for two legs on one token, so the publish checks misread the draft (first live run, three generations,
+none publishable). Write that shape by hand until it is fixed; a generated spec with one network leg is unaffected.
 ⚠️ **Known limitation (accepted 2026-11-05):** a switch left out of a leg's block is not checked by that leg, and its Reviewer can approve
 a colliding value (it accepts the package's "that check belongs to the integration review" in every lab sample); Node C is then the only
 check — it caught the 2026-11-01 case. Listing the switch closes it. Two network
@@ -188,7 +199,10 @@ change legs can share one block when they need the same lines; different lines p
 yet. **A value leg has its own key (network-derivation ≥ 1.3.0, 2026-11-06):** give it its own `## Device sources` section in
 `requirements.md` and the Architect copies it as `deviceSources["network-derivation"]`; give it none and the Architect emits no such key
 (the value leg reads through its descriptor and reads no Git file). Git-only is allowed and stated, never blocked — the value card reads
-`liveEvidence: git-only (declared devices)`. Details: `PIPELINE-HARNESS-USER-GUIDE.md` § "Which devices to list".
+`liveEvidence: git-only (declared devices)`. Since network-derivation 1.3.1 its `git-file-only` warning is a line of its own and reaches
+the leg report. On a change leg (network-provisioning ≥ 1.27.0) a Git file that differs from its device is applied incrementally, never
+loaded whole, and a declared source that could not be read is refused by the leg's own Reviewer. Details: `PIPELINE-HARNESS-USER-GUIDE.md`
+§ "Which devices to list" and § "Network: kept device configurations".
 
 ## 5. Releasing gates (important operational detail)
 

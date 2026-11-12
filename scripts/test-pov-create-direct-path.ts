@@ -227,7 +227,7 @@ test('Layer 2.5: size limits — solution > 5000 chars rejected', () => {
     solution: 'a'.repeat(5001),
   });
   if (result.success) {
-    throw new Error('Oversized solution accepted (DoS vector). MODERATE_TEXT limit not enforced.');
+    throw new Error('Oversized solution accepted (DoS vector). the 5,000 (METADATA) solution limit not enforced.');
   }
   layer2Passed++;
 });

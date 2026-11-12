@@ -45,7 +45,9 @@ export const RECORDED_VALIDITY_MIN = 0.9;
 export type ServeTier = 'exact' | 'canonical' | 'services-tool' | 'repeat' | 'same-action' | 'unserved' | 'unserved-truncated'
   | 'fixture-file' | 'fixture-directory' | 'fixture-missing' | 'fixture-refused' | 'unserved-fixture'
   /** L-N1 network tiers (network-fixtures.ts) share this log too. */
-  | 'device-pool' | 'device-failure' | 'unserved-device' | 'catalogue' | 'unserved-catalogue' | 'register-refused';
+  | 'device-pool' | 'device-failure' | 'unserved-device' | 'catalogue' | 'unserved-catalogue' | 'register-refused'
+  /** A requirements Reviewer's objective fetch, served from its own stored answer (objective-of-record.ts, 2026-11-10). */
+  | 'objective-of-record';
 export interface ServeLogEntry { tool: string; action: string | null; innerTool: string | null; fileTool: boolean; tier: ServeTier; storedIndex: number | null }
 export interface StoredCall { index: number; tool: string; server: string | null; args: unknown; result: unknown; error: string | null; success: boolean; truncatedAtPersist: boolean }
 

@@ -49,6 +49,7 @@ def clean_rows():
     rows = [row('network-provisioning.target', DECL), row('network-provisioning.population', DECL),
             row('network-provisioning.representation', DECL),
             row('network-provisioning.inputs-empty', '(forced — item 2 rules out a substitute) → gap'),
+            row('network-provisioning.sources', DECL),   # the sources class (2026-11-09): every network leg carries it
             row('terraform-iac.target', DECL)]
     rows += [row(f'terraform-iac.{k}', DECL) for k in AUTH]
     rows += [row('approver.program-plan', DECL), row('approver.value-gate', DECL),
@@ -154,6 +155,47 @@ mut('must-stay-reachable listed not-applicable',
     OWNER_CLEAN + '\n- network-provisioning.must-stay-reachable — q — options: — — governs: P1 — tier: not-applicable',
     'never deleted')
 
+# The sources class (STEP 1 Phase B, 2026-11-09): keyed on the TOKEN — every network-provisioning leg carries `.sources`,
+# never deleted there, and no other token carries it.
+mut('sources: a network leg without its sources row', lambda r: [x for x in r if 'network-provisioning.sources' not in x],
+    OWNER_CLEAN, 'missing sources row')
+mut('sources: listed not-applicable on a network leg', lambda r: [x for x in r if 'network-provisioning.sources' not in x],
+    OWNER_CLEAN + '\n- network-provisioning.sources — q — options: — — governs: P1 — tier: not-applicable', 'never deleted on a network leg')
+mut('sources: a sources row on another token', lambda r: r + [row('terraform-iac.sources', DECL)],
+    OWNER_CLEAN, 'reads no sources block')
+mut('sources: an OPEN sources row on another token is still an ERROR', lambda r: r + [row('terraform-iac.sources', 'OPEN — q; options: —')],
+    OWNER_CLEAN + '\n- terraform-iac.sources — q — options: — — governs: P2 — tier: blocking', 'reads no sources block')
+mut('sources: another token listing sources not-applicable is NOT a finding (owner 2026-11-09, R1 re-measure CARRY s3)',
+    lambda r: r, OWNER_CLEAN + '\n- terraform-iac.sources — q — options: — — governs: P2 — tier: not-applicable — the leg is not on the network-provisioning token',
+    'sources', 0)
+mut('sources: OPEN on a network leg is fine here (it reaches the owner block; 8.5 blocks the publish)',
+    lambda r: [x.replace(DECL, 'OPEN — q; options: —') if 'network-provisioning.sources' in x else x for x in r],
+    OWNER_CLEAN + '\n- network-provisioning.sources — q — options: — — governs: P1 — tier: blocking', 'sources', 0)
+
+
+# Owner R1 (2026-11-09): a `### Device sources` slot left on a leg whose heading names only another token is an ERROR.
+SLOT = '\n### Device sources — a network leg only (delete this sub-section on a leg on any other token)\n\n- **Device sources** (row `x.sources`, OPEN): no block.\n'
+
+
+def with_slots(p1_slot, p2_slot, p1_head='network-provisioning (UPSTREAM)', p2_head='terraform-iac'):
+    text = build(clean_rows(), OWNER_CLEAN)
+    i = text.index('## Pipeline 1 objective')
+    return (text[:i] + f'## Pipeline 1 objective — {p1_head}\n' + (SLOT if p1_slot else '')
+            + f'\n## Pipeline 2 objective — {p2_head}\n' + (SLOT if p2_slot else ''))
+
+
+def slot_cases():
+    e, _ = errs(with_slots(True, False))
+    assert e == [], f'a slot on the network leg is clean, got {e}'
+    e, _ = errs(with_slots(True, True))
+    assert whats(e) == ['Device sources slot on a leg whose protocol reads no sources block — delete it'] and e[0]['leg'] == 'terraform-iac', e
+    e, _ = errs(with_slots(False, True, p2_head='Cloud storage bucket (DOWNSTREAM)'))
+    assert e == [], f'a heading that names no token is not flagged (fail-open), got {e}'
+    e, _ = errs(with_slots(False, False))
+    assert e == [], e
+
+
+t('R1: a Device sources slot left on a non-network leg is an ERROR; on the network leg, or under a token-less heading, it is not', slot_cases)
 
 def na_counts_as_accounted():
     rows = clean_rows() + [row('network-provisioning.must-stay-reachable', DECL)]
@@ -185,7 +227,8 @@ def regression_run2():
     assert sum(1 for x in e if x.get('key') == 'enforcer-scope') == 3, e   # group 4 (2026-10-12): one per authorisation leg, by construction
     assert w.count('source is not one of the four forms') == 4, w   # the four gate positions "fixed by gate kind"
     assert w.count('wrong tier in owner block') == 2, w   # representation (hybrid) + inputs-empty ("OPEN structurally")
-    assert len(e) == 15, w
+    assert w.count('missing sources row') == 1, w   # STEP 1 Phase B (2026-11-09): the network leg predates the sources class
+    assert len(e) == 16, w
 
 
 t('regression: worked-example zero-decision draft (the step-3 deviations, found mechanically)', regression_run2)
@@ -198,9 +241,10 @@ def regression_published():
         return
     e, _ = errs(open(p, encoding='utf-8').read())
     # Z49 (2026-10-10) and group 4 (2026-10-12): the spec predates `request-path` and `enforcer-scope` — one missing row
-    # each per authorisation leg, nothing else new.
-    pre = [x for x in e if not (x['what'] == 'missing auth row' and x.get('key') in ('request-path', 'enforcer-scope'))]
-    assert len(e) - len(pre) == 6, e
+    # each per authorisation leg; and STEP 1 Phase B (2026-11-09) the `sources` row on its network leg. Nothing else new.
+    pre = [x for x in e if not (x['what'] == 'missing auth row' and x.get('key') in ('request-path', 'enforcer-scope'))
+           and not (x['what'] == 'missing sources row' and x.get('leg') == 'network-provisioning')]
+    assert len(e) - len(pre) == 7, e
     assert whats(pre) == ['owner block reads "none" but the table has non-declared rows'], e
 
 

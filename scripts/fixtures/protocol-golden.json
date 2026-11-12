@@ -37,16 +37,16 @@
       "chars": 26979
     },
     "requirements-authoring-protocol": {
-      "sha256": "fd4b55a8e292b01b250a074eebd10b072ce4bead924e79ccde38770c4d2cbdef",
-      "chars": 51209
+      "sha256": "50a548c3c2d7a18eedc049e07104febe3bbffbfd19d42d6621efb9b1fcc9a979",
+      "chars": 52647
     },
     "HOWTO-use-pipeline-harness": {
-      "sha256": "fc71a3b9b3504fb282f03d34bb13d34fc8505899515152fdaefb541e1f87dc73",
-      "chars": 69881
+      "sha256": "e40a01fedbf69a2228882b2f71d0b5953f0ac658272ef866b9a0c86823c0a9b4",
+      "chars": 71781
     },
     "HOWTO-use-program-harness": {
-      "sha256": "7240fb31d1a082d2ce70f0735e62befd899e84b732733a222e9cdfe3211f1443",
-      "chars": 38045
+      "sha256": "ed90f544c4f94bf83738550dc8ea44c2ecb543083b077c527114b00b04e334eb",
+      "chars": 39940
     },
     "HOWTO-program-workflow": {
       "sha256": "06c5ad3f771b9685d4af140c0bdc333b87fff8fba9ff7cda72cad7abc44283ea",
@@ -175,12 +175,12 @@
       "chars": 5801
     },
     "requirements_author": {
-      "sha256": "3e8cc02b3be0bba7d62209b40049dabafcc61fde57b9300e949742e5a5448df0",
-      "chars": 39009
+      "sha256": "ecaa0cd76904c7e8b0f6018b9be0713f2ef3e4f8483055c314ced50d40c131ea",
+      "chars": 40626
     },
     "requirements_reviewer": {
-      "sha256": "3b6a403bef2980121dd4b910ed24d386ae2365fdfaec08b70cbec85fc58aea7d",
-      "chars": 21982
+      "sha256": "d860965bdeb255896bfa62d5585f385e4484c155d6a94b393460e932f77f9643",
+      "chars": 22370
     }
   },
   "shared": {

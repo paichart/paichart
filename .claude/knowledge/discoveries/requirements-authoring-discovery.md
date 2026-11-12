@@ -16,8 +16,8 @@ turn, the publish pass and URL verification, and the `requirements-spec` skill t
 ## Run These Greps FIRST
 
 ```bash
-# The registry — rows by id (leg · producer · gate · auth · routing)
-grep -cE '^\| .(<token>|<producer>|approver|gate)\.' .claude/knowledge/pipelines/requirements-authoring/DESIGN-DECISION-QUESTIONS.md   # expect 19
+# The registry — rows by id (leg · producer · gate · auth · routing · sources)
+grep -cE '^\| .(<token>|<producer>|approver|gate)\.' .claude/knowledge/pipelines/requirements-authoring/DESIGN-DECISION-QUESTIONS.md   # expect 20 (19 until the sources class, requirements-authoring 1.11.0 candidate 2026-11-09)
 
 # The three pipeline roles and their owning seed (infra_state_harvester is SHARED with four infra domains)
 grep -c "defaultRole: '" scripts/seed-requirements-authoring-templates.ts   # expect 3
@@ -33,7 +33,7 @@ grep -c "requirementsAuthor: 'claude-" lib/agents/model-tiers.ts   # expect 1
 ls lib/agents/harness/requirements-*.ts | wc -l   # expect 9
 
 # Requirements test suites in package.json (6 in test:all-validation; the 3 Python suites are out of CI)
-grep -cE '^    "test:requirements-' package.json   # expect 9
+grep -cE '^    "test:requirements-' package.json   # expect 10 (9 until 2026-11-09: + test:requirements-sources, Phase A)
 
 # The correction turn's kill switch is read in three lib files
 grep -rl "REQUIREMENTS_FORM_CORRECTION_ENABLED" lib --include=*.ts | wc -l   # expect 3
@@ -165,3 +165,10 @@ grep -c "test:form-correction-core && npm run test:requirements-form-correction"
 ```
 - Before trusting a clause finding, read the fact's `inputs.ownerRowItemMap` — the derive-from-draft fallback missed gen 6's drop (Z44).
 - Open: the release-gate conjunct itself (facts AND the Reviewer's judgement checklist — REQ-SPEC-REVIEWER-VARIANCE) is not built yet; the fact has no `publishable` field by design.
+
+## 2026-11-09 — the `sources` class (1.11.0) and the publish-side sources check (every expectation run before it was written)
+```bash
+grep -c "from '../lib/agents/harness/device-sources'" scripts/check-requirements-sources.ts   # expect 1 — one parser (the shipping one)
+grep -c "check-requirements-sources" scripts/publish-generated-spec.py   # expect >=1 — Python calls it, never parses a block
+grep -c '^| `<token>.sources` | sources |' .claude/knowledge/pipelines/requirements-authoring/DESIGN-DECISION-QUESTIONS.md   # expect 1
+```

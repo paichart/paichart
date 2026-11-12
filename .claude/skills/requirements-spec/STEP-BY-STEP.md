@@ -13,12 +13,17 @@ Nothing reaches production or the public repo without you saying yes.
    Name them in your opening line, or let Claude list them and pick with you — it will not pick silently.
    A system can also be a service your team ALREADY registered in the hub: name it, and the run uses it as it is
    (it never re-registers or removes it).
-   **Network changes (from network-provisioning 1.23.0):** the program reads each device's configuration only from
-   the source you declare. For every device the change touches, you will say where its configuration comes from:
-   a file in Git (which Git service, repo and path, and a branch or tag only if that service pins it), the device's
-   own running configuration (which device service), or neither (the package is written as commands). A device can
-   have both a Git file and a device read; then the Git file is the base and the device read is quoted as
-   evidence, without a comparison. A device you leave out stops that leg, so nothing is guessed. Claude checks each descriptor URL
+   **Network legs:** the program reads each device's configuration only from the source you declare. For each
+   network leg you list every device it reads: the ones it **changes**, and the ones whose state it only needs to
+   **see**. For each device you say where its configuration comes from: a file in Git (which Git service, repo and
+   path, and a branch or tag only if that service pins it), the device's own running configuration (which device
+   service), both (the Git file is the base, the device read is evidence, and the platform compares them), or, for a
+   device the leg changes, neither (the package is written as commands). A value leg (one that changes nothing)
+   needs a list only if it should read Git files; without one it reads the running devices. A change leg missing a
+   device it changes stops, so nothing is guessed. Four limits, stated before you answer: every change leg in one
+   program reads the same list; a device one leg changes can't be "see only, running device" for another; a seen
+   device that only has a Git file is still kept on a change leg (an unreadable file stops the leg); and a device you
+   leave out is not checked by that leg. Claude checks each descriptor URL
    before the first run: its tool descriptions are ≤ 500 characters, and any token is in the query string, not the
    path. A URL with a token only works on a service a person registers, so that one is named by its name. Pasted
    configs or counts never stand in for a source.
@@ -86,8 +91,9 @@ Each table keeps its cells short and gives every reason in full underneath, in p
 other (for example *how requests reach the enforcer* and *what to do if that can't be confirmed*) come as ONE table:
 *if you answer · what the program can do · likely outcome · recommendation* — ask **"why?"** whenever an outcome isn't clear.
 Pasted replies are read back to you before they are recorded.
-For a network change, Group A also asks each device's source (see *Before you start*, item 1). Your answer is written
-down as the leg's *Device sources* list, word for word.
+For a network leg, Group A also asks which devices the leg reads and where each one's configuration is (see *Before
+you start*, item 1). Your answer is written down as the *Device sources* list, word for word: one list for all change
+legs, one for a value leg.
 Before Group B, Claude shows the POV team and asks who else belongs on it and who is project manager; Group B then
 offers the team as a pick list. Say whether each approver releases their own gate or you release it for them.
 
@@ -110,8 +116,8 @@ numbered item and marks its row *added*, so the merge counts it as asked — no 
   Acceptance — you confirm no obligation was deleted. The publish tool will not go on until both are done.
 
 **Step 9 — Your read.** Claude walks you through the human read: no current addresses, names or **counts** anywhere,
-the worked example is made up, and the population matches your objective's words. For a network change, each
-network leg carries your Device sources list exactly as you gave it. Reply **"ok"** when satisfied.
+the worked example is made up, and the population matches your objective's words. For a network leg, each
+leg carries your Device sources list exactly as you gave it (the publish check also proves this mechanically). Reply **"ok"** when satisfied.
 
 **Step 10 — Publish.** Claude runs the publish pass (dry run first, then for real), then shows you the push to the
 public repo. Reply **"yes"**. It then checks the published URLs until they answer and match.

@@ -128,11 +128,11 @@ const GIT = [
   const gitCall = {
     tool: 'services', success: true, arguments: { action: 'call', targetService: 'github-service', tool: 'get_file_contents' },
     result: { content: [{ type: 'data', data: { success: true, targetService: 'github-service', tool: 'get_file_contents', metadata: { targetServiceId: 'svc-gh' },
-      arguments: { owner: 'paichart', repo: 'paichart-lab-configs', path: `network/base/${DEV}-startup.cfg` },
+      arguments: { owner: 'paichart', repo: 'paichart-configs', path: `network/base/${DEV}-startup.cfg` },
       result: { content: [{ type: 'text', text: 'successfully downloaded text file' }, { type: 'resource', resource: {
-        uri: `repo://paichart/paichart-lab-configs/sha/${'a'.repeat(40)}/contents/network/base/${DEV}-startup.cfg`, mimeType: 'text/plain', text: GIT } }] } } }] },
+        uri: `repo://paichart/paichart-configs/sha/${'a'.repeat(40)}/contents/network/base/${DEV}-startup.cfg`, mimeType: 'text/plain', text: GIT } }] } } }] },
   };
-  const lines = [`${DEV}: git-file — service github-service ; paichart/paichart-lab-configs/network/base/${DEV}-startup.cfg`, `${DEV}: device-read — service ${SVC}`];
+  const lines = [`${DEV}: git-file — service github-service ; paichart/paichart-configs/network/base/${DEV}-startup.cfg`, `${DEV}: device-read — service ${SVC}`];
   const sources = resolveLegDeviceSources({ contractValue: lines, taskBody: null });
   const records = [gitCall, configCall];
 

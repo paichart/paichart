@@ -388,7 +388,7 @@ export const MCPParameterSchemas = {
     revenue: z.number().min(0).optional(),
     estimatedBudget: z.number().min(0).optional(),
     opportunityName: SimpleTextField(255).optional(),
-    objective: SimpleTextField(2000).optional(),
+    objective: SimpleTextField(FIELD_LIMITS.METADATA).optional(),
 
     // Dates
     forecastDate: z.string().datetime().optional()  // POV forecast date
@@ -413,12 +413,12 @@ export const MCPParameterSchemas = {
     // ── Text fields with injection refines ──
     title: InjectionSafeOptional(FIELD_LIMITS.TITLE, 'Title', 1),
     description: InjectionSafeOptional(FIELD_LIMITS.METADATA, 'Description'),
-    objective: InjectionSafeOptional(FIELD_LIMITS.DESCRIPTION, 'Objective'),
+    objective: InjectionSafeOptional(FIELD_LIMITS.METADATA, 'Objective'),
     customerName: InjectionSafeOptional(FIELD_LIMITS.NAME, 'Customer name'),
     customerContact: InjectionSafeOptional(FIELD_LIMITS.NAME, 'Customer contact'),
     partnerName: InjectionSafeOptional(FIELD_LIMITS.NAME, 'Partner name'),
     partnerContact: InjectionSafeOptional(FIELD_LIMITS.NAME, 'Partner contact'),
-    solution: InjectionSafeOptional(FIELD_LIMITS.MODERATE_TEXT, 'Solution'),
+    solution: InjectionSafeOptional(FIELD_LIMITS.METADATA, 'Solution'),
     opportunityName: InjectionSafeOptional(FIELD_LIMITS.NAME, 'Opportunity name'),
 
     // ── Enums (Prisma source — auto-syncs) ──

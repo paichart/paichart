@@ -377,11 +377,15 @@ Record: `cline_docs/reviews/held-network-2026-10-22/LAB-PREREG-L-N2.md`.
 ## NO-REGRESSION golden set (2026-10-31, Protocol 16 § The standing no-regression rule; every expectation run before it was written)
 
 ```bash
-grep -c '"authorExecutionId"' scripts/leg-replay-lab/golden/golden-set.json   # expect 17 — golden v3 cases (5 network, 2 network value, 3 k8s, 4 terraform, 3 observability)
+grep -c '"authorExecutionId"' scripts/leg-replay-lab/golden/golden-set.json   # expect 19 — golden v7 cases (5 network, 2 network value, 3 k8s, 4 terraform, 3 observability, 2 requirements)
+grep -c '"shape": "requirements"' scripts/leg-replay-lab/golden/golden-set.json   # expect 2 — the requirements legs (v7: REQ-OBS-SENDERS approved, REQ-LOGARCH-F1 correct refusal)
 grep -c '"shape": "value"' scripts/leg-replay-lab/golden/golden-set.json   # expect 2 — the value legs (NET-VALUE-C1 v2, NET-VALUE-C126 v3)
-grep -c '"version": "v4"' scripts/leg-replay-lab/golden/golden-set.json   # expect 2 — the set's version + its newest refreezes entry (v4 2026-11-06: pin move only, network-derivation 1.2.0 → 1.3.0)
-grep -c '"version": "1.3.0"' scripts/leg-replay-lab/golden/golden-set.json   # expect 1 — the network-derivation pin (deployed 2026-11-06 07:28Z, L-VLG SHIP)
-grep -c '"version": "1.26.0"' scripts/leg-replay-lab/golden/golden-set.json   # expect 1 — the network pin (v3; it was stale at 1.25.0 from the 2026-11-05 deploy until v3)
+grep -c '"version": "v7"' scripts/leg-replay-lab/golden/golden-set.json   # expect 2 — the set's version + its newest refreezes entry (v7 2026-11-09, owner: + 2 requirements cases + 3 pins; v6 = persistedEditApplication per held case; v5 = the network pin move)
+grep -c '"version": "1.10.1"' scripts/leg-replay-lab/golden/golden-set.json   # expect 1 — the requirements-authoring pin (v7)
+grep -c "persistedEditApplication: true" scripts/leg-replay-lab/golden-set.ts   # expect 2 — GOLDEN-REVIEWER-BYTE-FIDELITY (a): golden-build sets the flag per held case with a stored editApplication, and per unplanted standing case
+grep -c "node.persistedEditApplication" scripts/leg-replay-lab/lab.ts   # expect 1 — the node-level form of the flag (a domain cell is shared by cases with and without a stored stamp)
+grep -c '"version": "1.3.1"' scripts/leg-replay-lab/golden/golden-set.json   # expect 1 — the network-derivation pin (deployed 2026-11-07 21:33Z, NB1 SHIP; v5)
+grep -c '"version": "1.27.0"' scripts/leg-replay-lab/golden/golden-set.json   # expect 1 — the network pin (v5; stale at 1.26.0 from the 2026-11-07 NB1 deploy until v5, as 1.25.0 was until v3)
 grep -c "if (goldenSpendRefusal) throw" scripts/leg-replay-lab/lab.ts   # expect 1 — --spend on an agent-text/model lab without a goldenSet declaration is refused before any call
 grep -c "export function buildGoldenCompanion" scripts/leg-replay-lab/golden-set.ts   # expect 1 — the companion builder (golden-build)
 grep -c "npm run test:golden-set" package.json   # expect 0 — out of CI like the lab suite (needs the snapshot cache)
@@ -417,6 +421,18 @@ npm run --silent lab:leg-replay -- golden-self-test   # expect 0 STALE — every
   still open. **(b) FIXED 2026-11-06:** an unplanted persisted value Architect carries its STORED `derivationContainment` (`persistedAuthorResult`,
   lab.ts; the replay cannot recompute it — `$queryRaw` outside the stub), so NET-VALUE-C1 / C126 Reviewer prompts = the frozen production
   rebuild (`frozen-cmp` ✅ both; every other cell's prompt byte-unchanged; mutation caught). Pinned in GS6 (`test:golden-set`).
+- **(a) FIXED 2026-11-09 (golden v6):** golden-build sets `persistedEditApplication` per NODE on each held case whose stored Author has an
+  `editApplication` (14 cases; not K8S-AK5, pre-join) and on the unplanted standing network cases. `frozen-cmp --dump` writes the frozen
+  rebuild beside a differing cell. Model-lab companion: 12/17 Reviewer cells byte-identical (was 4). Named residue: the computed liveEvidence
+  line on NET-JL1/JP1/JL3/JL4 + STAND-NET-FWA3-EDGE (pre-1.26.0 runs; production adds it today), and K8S-AK5's system prompt (the held-join
+  constraint row its pre-join Reviewer lacked). RED mutation: 13 differ again. Pinned in GS6.
+- **Requirements legs (v7, 2026-11-09, owner; REQ-GOLDEN-CASES):** `shape: 'requirements'` (requirements_author persisted +
+  requirements_reviewer, no held binding, persisted only; validation ties the shape to requirements-authoring-protocol and back).
+  REQ-OBS-SENDERS (approved 93, no network leg — the Phase B Device-sources row must leave it unchanged) and REQ-LOGARCH-F1 (needs-revision
+  88, F1 dropped owner clause). `ownerRowItemMap` carries the run's stored owner map into the node (form-check control only). Pinned in GS6:
+  REQ-OBS-SENDERS frozen-cmp identical; REQ-LOGARCH-F1 system prompt differs on exactly the 8.1 + 8.4 guidance lines (authored under 1.8.0;
+  owner-accepted exception). The 17 earlier cases' prompts are byte-unchanged (162 files, v6 vs v7 companion). RED: drop the shape from
+  `caseRoles` ⇒ 8 golden tests fail. A requirements text lab now needs `goldenSet` like any other agent-text lab.
 
 ## L-CS-N (Config sources, network step; $0 levers built 2026-11-04 on branch `cs-net-lab`; every expectation run before it was written)
 

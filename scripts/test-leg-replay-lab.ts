@@ -104,6 +104,7 @@ import { createRecordedToolServer, recordedToolsReport, storedCallsOf, type Stor
 import { scoreHarvesterQuotes } from './leg-replay-lab/score-quote';
 import { computeQuoteFidelity, VERBATIM_CLAIM_RE } from '../lib/agents/harness/quote-fidelity';
 import { TOOL_STUB_RESULT } from './leg-replay-lab/live';
+import { objectiveOfRecordSource, createObjectiveToolServer } from './leg-replay-lab/objective-of-record';
 
 const LAB = path.join(__dirname, 'leg-replay-lab');
 /** origin/main before Z49 (0bcbfd7f added the request-path registry row): the in-run check data of the 2026-10-09 drafts. */
@@ -2094,6 +2095,67 @@ const commitText = (name: string, commit: string): ProtocolText => {
     const candidate = { 'Harvest-Anchored': 'Every member names the harvest entry it came from. Where the objective asks for free addresses, every allocation they must avoid names its harvest entry instead, and the chosen addresses are not in the harvest. An empty population is a gap, never an invented value' };
     assert(TR.constraintReachProblems('rel', `x ${released['Harvest-Anchored']} y`, { released, candidate }).length === 2, 'a prompt with the released row: candidate missing AND released present');
     assert(TR.constraintReachProblems('cand', `x ${candidate['Harvest-Anchored']} y`, { released, candidate }).length === 0, 'a prompt with the candidate row passes');
+  });
+
+  // 2026-11-10 (owner; REQ-PROMPT-TOOL-CALL-CLASH): a requirements Reviewer's objective fetch is served its OWN stored answer.
+  const OR_NODES = [['cmvc184ff00l8yxzpxz3j7chn', 'cmvc1gli700llyxzpwrb4nkas'], ['cmv00armk00b5yxlremi97y0a', 'cmv00fjvr00beyxlrztgown0x']] as const;
+  const orCheck = async () => {
+    for (const [aid] of OR_NODES) {
+      const snap = loadSnapshot(aid);
+      const src = objectiveOfRecordSource(snap);
+      assert(src.state === 'served' && src.legId === snap.leg!.id, `${aid}: source ${src.state} (${src.reason})`);
+      const stored = (JSON.parse(snap.reviewer!.resultJson!).toolCalls as any[]).find((t) => t.tool === 'project' && t.arguments?.action === 'task.context');
+      const srv = createObjectiveToolServer(src, TOOL_STUB_RESULT);
+      const got: any = await srv.executeToolOnServer('s', 'project', { action: 'task.context', taskId: snap.leg!.id });
+      assert(JSON.stringify(got) === JSON.stringify(stored.result), `${aid}: served answer ≠ the stored task.context result byte for byte`);
+      assert(got.content.map((c: any) => c.text).join('').includes(snap.leg!.description), `${aid}: served answer does not carry the leg description verbatim`);
+      assert(await srv.executeToolOnServer('s', 'project', { action: 'task.context', taskId: 'cm-other-task' }) === TOOL_STUB_RESULT, `${aid}: another task's context was served`);
+      assert(await srv.executeToolOnServer('s', 'perform', { action: 'task.comment', taskId: snap.leg!.id }) === TOOL_STUB_RESULT, `${aid}: a non-fetch call was served`);
+      assert(srv.log.map((e) => e.tier).join() === 'objective-of-record,unserved,unserved', `${aid}: tiers ${srv.log.map((e) => e.tier).join()}`);
+    }
+  };
+  await test('OR1 objective of record: each requirements golden Reviewer\'s fetch is served its stored task.context answer byte for byte (the leg description inside); other calls stub; RED: unserve ⇒ the check fails', async () => {
+    await orCheck();
+    process.env.LAB_TEST_OBJECTIVE_MUTATION = 'unserve';
+    let red = false;
+    try { await orCheck(); } catch (e) { red = /served answer ≠ the stored/.test((e as Error).message); } finally { delete process.env.LAB_TEST_OBJECTIVE_MUTATION; }
+    assert(red, 'RED mutation: with the fetch unserved the check still passed');
+  });
+
+  await test('OR2 objective of record: an input-edited objective is served with its one pre-edit span replaced (exactly once, else the stub); falls back BY NAME on no stored fetch or a non-requirements Reviewer', () => {
+    const snap = loadSnapshot(OR_NODES[0][0]);
+    const edited = JSON.parse(JSON.stringify(snap)); edited.leg.description = `${edited.leg.description}\nPLANTED LINE`;
+    assert(objectiveOfRecordSource(edited).state === 'objective-edited', 'an edited objective with no pre-edit text was served');
+    const ie = objectiveOfRecordSource(edited, snap.leg!.description);
+    const ieText = (ie.answer as any)?.content?.map((c: any) => c.text).join('') ?? '';
+    const stText = (JSON.parse(snap.reviewer!.resultJson!).toolCalls as any[]).find((t) => t.tool === 'project').result.content.map((c: any) => c.text).join('');
+    assert(ie.state === 'served-input-edited' && ieText === stText.replace(snap.leg!.description, edited.leg.description), `input-edited objective: ${ie.state} (${ie.reason})`);
+    const twice = JSON.parse(JSON.stringify(edited)); const rj2 = JSON.parse(twice.reviewer.resultJson); const tc2 = rj2.toolCalls.find((t: any) => t.tool === 'project'); tc2.result.content[0].text += snap.leg!.description; twice.reviewer.resultJson = JSON.stringify(rj2);
+    assert(objectiveOfRecordSource(twice, snap.leg!.description).state === 'objective-edited', 'a stored answer with TWO copies of the pre-edit objective was patched');
+    const noFetch = JSON.parse(JSON.stringify(snap)); const rj = JSON.parse(noFetch.reviewer.resultJson); rj.toolCalls = rj.toolCalls.filter((t: any) => t.tool !== 'project'); noFetch.reviewer.resultJson = JSON.stringify(rj);
+    assert(objectiveOfRecordSource(noFetch).state === 'no-stored-fetch', 'a Reviewer with no stored fetch was served');
+    const other = JSON.parse(JSON.stringify(snap)); other.reviewer.task.agentRole = 'change_reviewer';
+    assert(objectiveOfRecordSource(other).state === 'not-requirements-reviewer', 'a non-requirements Reviewer got the tier');
+    const srv = createObjectiveToolServer(objectiveOfRecordSource(edited), TOOL_STUB_RESULT);
+    return srv.executeToolOnServer('s', 'project', { action: 'task.context', taskId: snap.leg!.id }).then((r) => assert(r === TOOL_STUB_RESULT, 'a not-served source served the fetch'));
+  });
+
+  await test('OR3 through the SHIPPING loop under --fake-llm persisted: both requirements golden cells replay their stored calls, the fetch is served the stored bytes, every stored verdict reproduces; RED: unserve ⇒ 0 served', () => {
+    const REQG = path.join(LAB, 'inputs', '2026-11-09-req-golden-cases');
+    const read = (dir: string) => ['REQ-A-OBS-SENDERS', 'REQ-B-LOGARCH-F1'].map((id) => ({ id, m: JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')).nodes[id], s: JSON.parse(fs.readFileSync(path.join(dir, id, 'gr', 'sample-01', 'sample.json'), 'utf8')) }));
+    const dir = path.join(out, 'or-fake');
+    runLab(['run', '--experiment', REQG, '--out', dir, '--fake-llm', 'persisted', '--n', '1']);
+    for (const { id, m, s } of read(dir)) {
+      assert(!s.error, `${id}: ${s.error}`);
+      assert(m.objectiveOfRecord?.state === 'served', `${id}: manifest objectiveOfRecord ${JSON.stringify(m.objectiveOfRecord)}`);
+      const b = s.reviewerTools?.objectiveBytes;
+      assert(b && b.served === 1 && b.identical === 1 && !b.mismatches.length, `${id}: objective bytes ${JSON.stringify(b)}`);
+      assert(s.verdict.approved === m.persisted.approved && JSON.stringify(s.verdict.blocking) === JSON.stringify(m.persisted.blocking), `${id}: replayed verdict ≠ stored`);
+    }
+    const red = path.join(out, 'or-fake-red');
+    execFileSync('npx', ['ts-node', '-r', 'tsconfig-paths/register', path.join(LAB, 'lab.ts'), 'run', '--experiment', REQG, '--out', red, '--fake-llm', 'persisted', '--n', '1'],
+      { cwd: path.join(__dirname, '..'), env: { ...process.env, ANTHROPIC_API_KEY: '', LAB_TEST_OBJECTIVE_MUTATION: 'unserve' }, maxBuffer: 64 * 1024 * 1024 });
+    for (const { id, s } of read(red)) assert(s.reviewerTools?.objectiveBytes?.served === 0 && s.reviewerTools.log[0] === 'project.task.context:unserved', `${id}: RED mutation still served (${JSON.stringify(s.reviewerTools)})`);
   });
 
   fs.rmSync(out, { recursive: true, force: true });

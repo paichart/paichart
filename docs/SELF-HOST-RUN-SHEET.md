@@ -261,8 +261,9 @@ step if you have no config repo yet; nothing else depends on it. **To try it fir
 
 The server refuses every request without a token, so this step is not optional for the service.
 
-**2. Tell the hub which repo it may read (the pin).** In the hub's `.env` (not `.env.production`), add
-`GIT_FILE_SOURCE_PIN=<owner>/<repo>` and restart the hub. Agents can read **only** that repo through this service; the pin, not the
+**2. Tell the hub which repo it may read (the pin).** The hub's `.env` (copied from `.env.example`) already sets
+`GIT_FILE_SOURCE_PIN=paichart/paichart-configs`, so you can run its network use cases as is. To read your own repo, change it
+to `<owner>/<repo>` and restart the hub. Agents can read **only** that repo through this service; the pin, not the
 token, is the boundary. The repo **must have a `main` branch** (a read that names no branch is read as `main`), and protect it:
 it is what every run reads. The full rules
 and limits are in [SELF-HOST-KEPT-FILES.md → Reading kept files from Git](SELF-HOST-KEPT-FILES.md#reading-kept-files-from-git-optional).

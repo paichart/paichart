@@ -19,6 +19,9 @@
  *                         `name` must carry `version`, and at least one must exist — otherwise VOID. Read from
  *                         `pipeline-index.json` for PIPELINE executions (they write no result.json) and `result.json` else.
  *
+ * --spec <requirements.md> the published spec the program read (the req-src-* controls compare the contracts and snapshots with
+ *                         its Device sources blocks, read by the publish check and the shipping parser). Required by those controls.
+ *
  * --control <name>        a pre-registered LIVE CONTROL for one shipped change (CONTROLS below). Each control classifies
  *                         itself as PASS / PASS-DECLINED / UNEXERCISED / FINDING. UNEXERCISED is an absence, not a pass.
  *
@@ -32,6 +35,8 @@ import { parseDeviceSourceLine } from '../lib/agents/harness/device-sources';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { leanFactsLine } = require('../lib/mcp/server/tools/advanced/lean-card-facts');
 import { pickResultJsonSummary } from '../lib/services/execution-artifacts';
+import * as fs from 'fs';
+import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, type Carrier } from './canary-req-sources';
 
 type Tx = Prisma.TransactionClient;
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -40,6 +45,8 @@ const many = (flag: string) => args.flatMap((a, i) => (a === flag && args[i + 1]
 const ROOT = many('--root')[0];
 const EXPECT = many('--expect').map(s => { const at = s.lastIndexOf('@'); return { name: s.slice(0, at), version: s.slice(at + 1) }; });
 const CONTROL_NAMES = many('--control');
+const SPEC_PATH = many('--spec')[0];
+const SPEC_CONTROLS = new Set(['req-src-contract-equals-spec', 'req-src-snapshot-contract']);
 
 interface TaskRow { id: string; title: string; type: string; status: string; agentRole: string | null; metadata: unknown; stage_id: string | null; created_at: Date; description?: string | null; contract?: unknown }
 interface ExecRow { id: string; taskId: string; status: string; errorCode: string | null; createdAt: Date; logs: string[]; art: string | null; artName: string | null }
@@ -414,11 +421,42 @@ const CONTROLS: Record<string, { what: string; run: (c: Ctx) => ControlResult }>
       return { verdict: finding ? 'FINDING' : 'PASS', lines: [...lines, '  hand-read: the brief\'s lines match the block (every Git-only device has a no-call line)'] };
     },
   },
+
+  // ── STEP 1 first generated network spec (requirements-authoring 1.11.0; STEP1-REQUIREMENTS-PLAN section 7 item 6, owner go
+  // 2026-11-10). The Program Architect copies the spec's Device sources blocks; it is not lab-replayable, so these carry the live
+  // evidence. Logic in canary-req-sources.ts (pure; `test:canary-req-sources` proves each fires on a fault).
+  'req-src-contract-equals-spec': {
+    what: 'program_architect - every contract carrying deviceSources["network-provisioning"] / ["network-derivation"] holds exactly the --spec block for that lane (shipping parser, sameDeclaration); each leg of a lane the spec gives a block carries it; no key for a lane without a block',
+    run: ({ legs, nodeC }) => contractEqualsSpec(carriersOf(legs, nodeC), specText()),
+  },
+  'req-src-keys-parse': {
+    what: 'program_architect - every key under deviceSources on every contract (legs and Node C) is source lines the shipping parser reads as parsed: no prose note, no key that no protocol reads',
+    run: ({ legs, nodeC }) => keysParse(carriersOf(legs, nodeC)),
+  },
+  'req-src-snapshot-contract': {
+    what: 'device-sources snapshot - each Device-sources leg\'s deviceSourcesSnapshot is parsed, source contract, equal to the --spec block of its lane (a value leg the spec gives no block has none)',
+    run: ({ legs, nodeC }) => snapshotContract(carriersOf(legs, nodeC), specText()),
+  },
+  'req-src-value-card-git-only': {
+    what: 'network-derivation card - a declared value leg\'s card reads liveEvidence: git-only (declared devices), equal to the stored fact (vlg-h4 checks card = fact only)',
+    run: ({ legs, execs }) => valueCardGitOnly(valueLegs(legs).filter((x) => isObj(meta(x).deviceSourcesSnapshot)).flatMap((l) => {
+      const idx = latestResult(execs, l.id, 'pipeline-index.json'); if (!idx) return [];
+      const card = String(leanFactsLine(pickResultJsonSummary(idx)) ?? '');
+      return [{ legId: l.id, card, factSummary: isObj(idx.liveEvidence) ? idx.liveEvidence.summary : null }];
+    })),
+  },
 };
+const carriersOf = (legs: TaskRow[], nodeC: TaskRow[]): Carrier[] => [
+  ...legs.map((l) => ({ id: l.id, kind: 'leg' as const, protocol: typeof meta(l).protocol === 'string' ? (meta(l).protocol as string) : null, contract: l.contract, metadata: l.metadata })),
+  ...nodeC.map((n) => ({ id: n.id, kind: 'nodeC' as const, protocol: null, contract: n.contract, metadata: n.metadata })),
+];
+let specCache: string | null = null;
+const specText = (): string => (specCache ??= fs.readFileSync(SPEC_PATH, 'utf8'));
 
 async function main() {
   if (!ROOT) { console.error('usage: canary-check.ts --root <id> [--expect name@version ...] [--control name ...]'); process.exit(2); }
   for (const c of CONTROL_NAMES) if (!CONTROLS[c]) { console.error(`unknown control "${c}" — known: ${Object.keys(CONTROLS).join(', ')}`); process.exit(2); }
+  if (CONTROL_NAMES.some((c) => SPEC_CONTROLS.has(c)) && (!SPEC_PATH || !fs.existsSync(SPEC_PATH))) { console.error(`--spec <requirements.md> is required by ${[...SPEC_CONTROLS].join(', ')}`); process.exit(2); }
   const prisma = new PrismaClient();
   try {
     await prisma.$transaction(async (tx) => {

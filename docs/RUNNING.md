@@ -13,6 +13,7 @@ In production a reverse proxy presents both as one host (`APP_BASE_URL`) — see
 - Node **20** (tested on 20.18), npm 10
 - PostgreSQL **16** with an empty database you can connect to
 - `openssl` (for key generation)
+- **A machine to run it on:** a Linux VM with about **16 GB RAM, 8 vCPU and 200 GB disk** runs the app, the MCP server and PostgreSQL together (the sizing the project's own hosts use; a lab rig such as containerlab switches needs its own headroom on top)
 
 ## First run — seven commands
 

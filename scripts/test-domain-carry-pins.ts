@@ -823,5 +823,21 @@ test('DA-CHOOSE-ANCHOR / GIT-ONLY-COVERED (derivation_architect, blind re-read D
   assert(order > 0 && order < DA.indexOf('→ the `## Derived Values` block'), 'derivation_architect (D3): Git-only line missing from, or misplaced in, the deliverable order');
 });
 
+test('HOWTO-MIRROR-NB1 (HOWTO-use-pipeline-harness 2.8.16, Protocol 11 Pass 5): the operator HOWTO mirrors network-provisioning 1.27.0 + network-derivation 1.3.1', () => {
+  const H = text('HOWTO-use-pipeline-harness');
+  has(H, ['A Git-only device gets no call to any device service: its state comes from its Git file.',
+    'a change leg whose declared devices are all Git-only shows `liveEvidence: git-only` on its card',
+    'Since network-provisioning 1.27.0 the change Reviewer refuses such a leg itself and names the device: fix that source and run a fresh leg.',
+    'A device whose configuration the platform did hold, and which the package edits by reference, is not this case',
+    'the package says so and applies that device incrementally instead (since 1.27.0)', 'That whole file is never loaded.',
+    'Some listed lines can be rendering differences',
+    'That warning is a line of its own that starts with its label, and the leg\'s report lists it',
+    "the contract's block under its own key"], 'HOWTO-use-pipeline-harness (NB1 mirror)');
+  // Negative claim aged by 1.27.0: the program block-mismatch stop no longer compares against "the contract's" block unqualified.
+  lacks(H, ["a different Device sources block from the contract's stops and names both"], 'HOWTO (pre-1.27.0 block-mismatch wording)');
+  // Caller-read text: it never carries the literal label (CLAUSE-F DEMOTED #13 keeps the label carriers closed).
+  lacks(H, ['NON-BLOCKING WARNING ('], 'HOWTO (literal warning label)');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

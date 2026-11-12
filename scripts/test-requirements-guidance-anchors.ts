@@ -214,7 +214,7 @@ ANCHORS.push(
     'decision 1, Reviewer side (replaces "a less specific prefix")'],
   ['requirements_author', 'wording outside a numbered item — an existence assumption, a topology note, a leg description that says "in place of" — is not an answer',
     'control 2 (2026-10-05): the suppression choice came from hand-written topology wording ("in place of the individual routes"), never asked'],
-  ['requirements_author', '`collateral`, `enforcer-scope`, `covered-routes` and `must-stay-reachable` are NEVER derived and NEVER forced',
+  ['requirements_author', '`collateral`, `enforcer-scope`, `covered-routes`, `must-stay-reachable` and `sources` are NEVER derived and NEVER forced',
     'decision 3 + L3: both routing rows are owner-only; a derived must-stay-reachable is the platform deciding which destinations matter (Protocol 10)'],
   ['requirements_author', 'ONLY on a target or scope row (`target`, `population`, `representation`, `receiver`);',
     'decision 3: the derived list is exactly these four — must-stay-reachable must not return to it'],
@@ -240,6 +240,24 @@ ANCHORS.push(
     'routing class detection: the Reviewer quotes the classifying phrase, as for authorisation'],
   ['requirements_reviewer', 'a deleted `must-stay-reachable` is BLOCKING',
     'routing deletion rule, reviewer side'],
+);
+// ── STEP 1 Phase B: the `sources` class (2026-11-09, cline_docs/reviews/config-sources-plans-2026-11-09/STEP1-REQUIREMENTS-PLAN.md,
+//    owner G2-a/b/c): every leg on the network-provisioning token carries `.sources`; the one class keyed on the TOKEN.
+ANCHORS.push(
+  ['requirements_author', 'a SOURCES leg — any leg on the `network-provisioning` token, value or change, whatever its work (the one class keyed on the token',
+    'G2-b: the named exception to "keyed on the work, never the token" — only that protocol stops or reads differently without a block'],
+  ['requirements_reviewer', 'Every SOURCES leg — any leg on the `network-provisioning` token, value or change, whatever its work (the one class keyed on the token)',
+    'G2-b, Reviewer 8.1 key list: the same test as the Author'],
+  ['requirements_author', 'The owner\'s item IS the block',
+    'the answer is transcribed, never composed: a retyped block parses differently or not at all (shipping parser, LL-CS-22)'],
+  ['requirements_author', 'never retyped, reordered, shortened or completed from the harvest',
+    'firewall-a3 2026-11-01: a block naming only the changed switch let the leg produce a colliding pool; the harvest never completes the list'],
+  ['requirements_author', 'Every change leg carries the same block, because the platform carries one block per lane',
+    'plan L1 / DEVICE-SOURCES-MULTI-NETWORK-LEG: one contract key per lane'],
+  ['requirements_author', '`This leg changes device configuration.` or `This leg changes no device configuration.`',
+    'the two lane sentences scripts/check-requirements-sources.ts reads (S1); the value one is the Architect\'s "changes nothing" phrase'],
+  ['requirements_reviewer', 'a block that differs from that item, or a sources row on another token, is BLOCKING',
+    'G3: the Reviewer side of S3; the mechanical check is the gate, this keeps the Reviewer from approving a drifted block'],
 );
 // The protocol half: read the seed as TEXT (no import — the seed module connects to a database).
 // ── RPR Phase 0 batch 2a+2b (2026-10-01, requirements-pipeline-review SYNTHESIS §3 items 1-2) ──────────────────────
@@ -368,7 +386,8 @@ for (const [phrase, why] of PROTOCOL_ANCHORS) {
 // never from a hardcoded list here — a fourth copy would drift the same way.
 // 'routing' joined 2026-10-06 (registry-routing-rows): a leg whose work changes routes carries covered-routes +
 // must-stay-reachable, whatever its token — the routing analogue of the authorisation class.
-const CLASSES = ['leg', 'producer', 'gate', 'auth', 'routing'] as const;
+// 'sources' joined 2026-11-09 (STEP 1 Phase B): every leg on the network-provisioning token carries `.sources` — keyed on the TOKEN (G2-b).
+const CLASSES = ['leg', 'producer', 'gate', 'auth', 'routing', 'sources'] as const;
 type KeyClasses = Record<typeof CLASSES[number], string[]>;
 const norm = (k: string): string => k
   .replace(/^(<token>|<producer token>|<producer>|\{\{LEG_TOKEN\}\}|\{\{PRODUCER_TOKEN\}\})?\./, '.')
@@ -379,6 +398,7 @@ const KEY_RE = /`((?:<token>|<producer>)?\.[a-z-]+|approver\.<gate>|gate\.<gate>
 function classify(seg: string): string | null {
   if (/permitted principal/.test(seg)) return 'auth';
   if (/ROUTING leg/.test(seg)) return 'routing';
+  if (/SOURCES leg/.test(seg)) return 'sources';
   if (/producing leg/.test(seg)) return 'producer';
   if (/gate/.test(seg) && /approver\.<gate>/.test(seg)) return 'gate';
   if (/Every leg/i.test(seg)) return 'leg';
@@ -399,10 +419,10 @@ function keysFromSkeleton(tmpl: string): KeyClasses | string {
   if (s < 0 || e < 0) return 'could not locate ## Design decisions in the skeleton';
   const c: Record<string, Set<string>> = {}; let block = '';
   for (const line of tmpl.slice(s, e).split('\n')) {
-    if (line.startsWith('### ')) { block = line.includes('grants or removes access') ? 'auth' : line.includes('changes routes') ? 'routing' : line.includes('Every leg') ? 'every' : '?'; continue; }
+    if (line.startsWith('### ')) { block = line.includes('grants or removes access') ? 'auth' : line.includes('changes routes') ? 'routing' : line.includes('configuration sources') ? 'sources' : line.includes('Every leg') ? 'every' : '?'; continue; }
     const m = line.match(/^\|\s*([^|\s]+)\s*\|/); if (!m || m[1] === 'id' || /^-+$/.test(m[1])) continue;
     const id = m[1];
-    const cls = block === 'auth' ? 'auth' : block === 'routing' ? 'routing' : id.startsWith('{{PRODUCER_TOKEN}}') ? 'producer'
+    const cls = block === 'auth' ? 'auth' : block === 'routing' ? 'routing' : block === 'sources' ? 'sources' : id.startsWith('{{PRODUCER_TOKEN}}') ? 'producer'
       : /^(approver|gate)\./.test(id) ? 'gate' : id.startsWith('{{LEG_TOKEN}}') ? 'leg' : `UNCLASSIFIED(${block})`;
     (c[cls] ||= new Set()).add(norm(id));
   }
@@ -416,7 +436,7 @@ function keysFromRegistry(doc: string): KeyClasses | string {
   const c: Record<string, Set<string>> = {}; let inTable = false;
   for (const line of doc.slice(s).split('\n').slice(1)) {
     if (line.startsWith('|')) inTable = true; else if (inTable) break; else continue;
-    const m = line.match(/^\|\s*`([^`]+)`\s*\|\s*(leg|producer|gate|auth|routing)\s*\|/); if (!m) continue;
+    const m = line.match(/^\|\s*`([^`]+)`\s*\|\s*(leg|producer|gate|auth|routing|sources)\s*\|/); if (!m) continue;
     (c[m[2]] ||= new Set()).add(norm(m[1]));
   }
   return finish(c);

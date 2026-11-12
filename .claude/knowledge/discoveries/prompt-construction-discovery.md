@@ -994,6 +994,11 @@ decision class, `routing` (`<token>.covered-routes`, `<token>.must-stay-reachabl
 move with it. Class parity (5 classes, 17 keys) is pinned by `npm run test:requirements-guidance-anchors`; how to add a class:
 `.claude/knowledge/pipelines/requirements-authoring/DESIGN-DECISION-QUESTIONS.md` § Adding a class. Record:
 `cline_docs/reviews/registry-routing-rows-2026-10-06/BUILD-REPORT.md`.
+**Sources class (2026-11-09, LOCAL branch `req-sources-phase-b`, unpushed, lab-gated)**: requirements-authoring **1.11.0** — the embedded
+skeleton gains a sixth class (`### A network leg (configuration sources)`, row `{{LEG_TOKEN}}.sources`, keyed on the network-provisioning
+token) and a `### Device sources — a network leg only` slot at the end of each Pipeline section; `requirements_author` / `requirements_reviewer`
+8.1 gain the SOURCES segment. Record: `cline_docs/reviews/config-sources-plans-2026-11-09/` (STEP1-REQUIREMENTS-PLAN §4.2, LAB-PREREG-REQ-SOURCES).
+
 **Group 4 registry batch (2026-10-12, LOCAL commit G, unpushed, lab-gated)**: requirements-authoring **1.10.0** — the embedded
 skeleton gains the auth row `<token>.enforcer-scope`, the proxy/listener `collateral` options, the premise slot's contradiction arm
 (D2) and the consumed-value EMPTY-upstream branch (D3); item rows `<token>.item-<N>` (B-2) live in the role guidance only. Key

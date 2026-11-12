@@ -13,6 +13,9 @@
 import { pyFinditer, pyLstrip, pyMatch, pyRe, pySearch, pyStrip, cpSlice, reEscape } from './requirements-pysem';
 
 export const LEG_TOKENS = ['network-provisioning', 'kubernetes-gitops', 'terraform-iac', 'observability-config'] as const;
+/** The `sources` class (STEP 1 Phase B, 2026-11-09, owner G2-b): keyed on the TOKEN — the tokens whose protocol reads a declared
+ *  configuration-sources block. A domain joins only with its own text batch. Mirrors check-requirements-coverage.py SOURCES_TOKENS. */
+export const SOURCES_TOKENS = ['network-provisioning'] as const;
 const FORCE_ELIGIBLE = ['target-absent', 'inputs-empty'];
 const TIER_FOR: Record<string, string> = { open: 'blocking', derived: 'confirm', forced: 'default' };
 const OWNER_LINE = pyRe('^\\s*(?:[-*]\\s+)?`?([a-z0-9][a-z0-9-]*(?:\\.[a-z0-9][a-z0-9-]*)+)`?\\s*—(.*)$');
@@ -172,7 +175,7 @@ export function checkCoverage(draftText: string, registry: RequirementsRegistry)
   for (const o of owner) if (o.tier === 'not-applicable') na.set(o.id, o);
 
   const cls = registry.classes;
-  const legKeys = new Set<string>(['leg', 'producer', 'auth', 'routing'].flatMap(c => cls[c] || []));
+  const legKeys = new Set<string>(['leg', 'producer', 'auth', 'routing', 'sources'].flatMap(c => cls[c] || []));
   const legs = new Set<string>(), gates = new Set<string>();
   for (const rid of [...byId.keys(), ...na.keys()]) {
     const parts = rid.split('.');
@@ -224,6 +227,17 @@ export function checkCoverage(draftText: string, registry: RequirementsRegistry)
     const re = pyRe(`^## Pipeline \\d+ objective\\b.*\\b${reEscape(t)}\\b`, { m: true, i: true });
     if (pySearch(re, draftText)) legs.add(t);
   }
+  // Owner R1 (2026-11-09) — mirrors check-requirements-coverage.py: a `### Device sources` slot in a leg section whose heading
+  // names only tokens outside SOURCES_TOKENS is left-over template (Author-actionable); a heading naming no token is not flagged.
+  for (const m of pyFinditer(pyRe('^## Pipeline \\d+ objective\\b.*$', { m: true }), draftText)) {
+    const named = LEG_TOKENS.filter(t => pySearch(pyRe(`\\b${reEscape(t)}\\b`, { i: true }), m[0]));
+    if (named.length === 0 || named.some(t => (SOURCES_TOKENS as readonly string[]).includes(t))) continue;
+    const rest = draftText.slice(m.index + m[0].length);
+    const nxt = pySearch(pyRe('^## ', { m: true }), rest);
+    if (pySearch(pyRe('^### Device sources\\b', { m: true }), nxt ? rest.slice(0, nxt.index) : rest)) {
+      errors.push({ what: 'Device sources slot on a leg whose protocol reads no sources block — delete it', leg: named[0] });
+    }
+  }
 
   const accounted = (rid: string) => byId.has(rid) || na.has(rid);
   const absent = new Map<string, string[]>();
@@ -255,6 +269,15 @@ export function checkCoverage(draftText: string, registry: RequirementsRegistry)
     }
     const isRouting = (cls.routing || []).some(k => byId.has(`${leg}.${k}`));
     if (isRouting && na.has(`${leg}.must-stay-reachable`)) errors.push({ what: 'must-stay-reachable is never deleted on a routing leg', leg });
+    // The sources class (2026-11-09) — mirrors check-requirements-coverage.py: asked on every leg of a SOURCES_TOKENS token,
+    // never deleted there, never on another token.
+    for (const k of cls.sources || []) {
+      const rid = `${leg}.${k}`;
+      if ((SOURCES_TOKENS as readonly string[]).includes(leg)) {
+        if (na.has(rid)) errors.push({ what: 'sources row is never deleted on a network leg', leg, key: k });
+        else if (!byId.has(rid)) errors.push({ what: 'missing sources row', leg, key: k });
+      } else if (byId.has(rid)) errors.push({ what: 'sources row on a leg whose protocol reads no sources block', leg, key: k });   // a TABLE row; a not-applicable listing on another token is correct (owner 2026-11-09)
+    }
   }
 
   for (const c of ['producer', 'auth', 'routing']) {

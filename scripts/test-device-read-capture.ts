@@ -341,8 +341,8 @@ const outcomes = (x: ReturnType<typeof extractDeclaredFiles>) =>
     noUri.result.content[0].data.result.content[1].resource.uri = undefined;
     const a = ext([noUri], [LINE]);
     assert(a.files.length === 0 && a.refusals[0]?.refusal === 'git-file-not-declared' && a.refusals[0]?.detail?.field === 'uri', JSON.stringify(outcomes(a)));
-    const plat = { owner: 'paichart', repo: 'paichart-lab-configs', path: 'network/sw1.cfg' };
-    const b = ext([gitRead('acme-git', plat)], [`${DEV}: git-file — service acme-git ; paichart/paichart-lab-configs/network/sw1.cfg`]);
+    const plat = { owner: 'paichart', repo: 'paichart-configs', path: 'network/sw1.cfg' };
+    const b = ext([gitRead('acme-git', plat)], [`${DEV}: git-file — service acme-git ; paichart/paichart-configs/network/sw1.cfg`]);
     assert(b.files.length === 0 && b.refusals[0]?.refusal === 'path-invalid' && b.refusals[0]?.detail?.reason === 'reserved-target', JSON.stringify(outcomes(b)));
     const mixed = ext([gitRead('acme-git', { owner: 'Acme', repo: 'Net-Configs', path: 'network/sw1.cfg' })], [`${DEV}: git-file — service acme-git ; Acme/Net-Configs/network/sw1.cfg`]);
     assert(mixed.files.length === 1 && mixed.files[0].target === 'github:acme:net-configs', `mixed case: ${JSON.stringify(outcomes(mixed))}`);
