@@ -14,9 +14,9 @@ Each group is recorded when the owner accepts it. Item numbers are stable once w
 
 ### Group B — approvers and gate positions (accepted 2026-10-11)
 
-7. The program plan gate is approved by jacob.wilcox@paichart.com.
-8. The kubernetes-gitops change gate is approved by josh.allen@paichart.com.
-9. The observability-config change gate is approved by steve.terry@paichart.com.
+7. The program plan gate is approved by approver-0003@example.com.
+8. The kubernetes-gitops change gate is approved by approver-02@example.com.
+9. The observability-config change gate is approved by approver-001@example.com.
 10. The kubernetes-gitops change gate approves the sender set produced by the kubernetes-gitops leg, and sits after that leg and before the observability-config leg (after-producer-before-consumers).
 11. The observability-config change gate approves the change package produced by the observability-config leg, and sits after that leg and before its completion (after-leg-before-completion).
 

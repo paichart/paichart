@@ -44,9 +44,9 @@
 | kubernetes-gitops.representation | how the derived value is expressed | one aligned prefix · a set of prefixes · a host list | a host list: each population pod's address exactly, one entry per address, never summarised into a prefix | (declared — item 14: "expressed as a host list - each running pod's address exactly") |
 | kubernetes-gitops.inputs-empty | the derivation's inputs are empty | gap | gap: a gap report naming what was absent; no value is produced | (declared — item 15: "If no running pod is found in the namespace of item 2, the cluster leg reports a gap and produces no value (gap)") |
 | kubernetes-gitops.target-absent | the declared target itself does not exist | gap · create-target | gap: report a gap; never create the namespace | (declared — item 16: "If the namespace of item 2 does not exist, the cluster leg reports a gap (gap); it never creates the namespace") |
-| approver.program-plan | who approves this gate | — | Steve Terry, steve.terry@paichart.com | (declared — item 6: "The program plan gate is approved by steve.terry@paichart.com") |
-| approver.kubernetes-gitops-change | who approves this gate | — | Josh Allen, josh.allen@paichart.com | (declared — item 7: "The kubernetes-gitops change gate is approved by josh.allen@paichart.com") |
-| approver.terraform-iac-change | who approves this gate | — | Jacob Wilcox, jacob.wilcox@paichart.com | (declared — item 8: "The terraform-iac change gate is approved by jacob.wilcox@paichart.com") |
+| approver.program-plan | who approves this gate | — | Steve Terry, approver-001@example.com | (declared — item 6: "The program plan gate is approved by approver-001@example.com") |
+| approver.kubernetes-gitops-change | who approves this gate | — | Josh Allen, approver-02@example.com | (declared — item 7: "The kubernetes-gitops change gate is approved by approver-02@example.com") |
+| approver.terraform-iac-change | who approves this gate | — | Jacob Wilcox, approver-0003@example.com | (declared — item 8: "The terraform-iac change gate is approved by approver-0003@example.com") |
 | gate.kubernetes-gitops-change.position | when this gate sits (every gate except the program plan gate) | before-leg · after-leg-before-completion · after-producer-before-consumers | before-leg: it approves the method (which namespace, which pods count, how the value is derived) before the kubernetes-gitops leg runs | (declared — item 9: "sits before the cluster leg (before-leg)") |
 | gate.terraform-iac-change.position | when this gate sits (every gate except the program plan gate) | before-leg · after-leg-before-completion · after-producer-before-consumers | after-producer-before-consumers: it approves the host list produced by the kubernetes-gitops leg, once it exists, before the terraform-iac leg uses it | (declared — item 10: "sits after the producer and before the consumers (after-producer-before-consumers)") |
 
@@ -117,9 +117,9 @@ assigned four of five gates to different people.
 
 **Declared approvers confirmed on the POV team** — the platform routes a gate only to a MEMBER; a declared
 approver who is not one silently falls to the POV owner, so a board meant to show several approvers shows one:
-- program plan approver is Steve Terry steve.terry@paichart.com (declared): member (POV owner)
-- kubernetes-gitops change approver is Josh Allen josh.allen@paichart.com (declared): member
-- terraform-iac change approver is Jacob Wilcox jacob.wilcox@paichart.com (declared): member
+- program plan approver is Steve Terry approver-001@example.com (declared): member (POV owner)
+- kubernetes-gitops change approver is Josh Allen approver-02@example.com (declared): member
+- terraform-iac change approver is Jacob Wilcox approver-0003@example.com (declared): member
 
 ### Every gate declares WHAT it approves and WHEN it sits — and the two must agree
 

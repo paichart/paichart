@@ -41,9 +41,9 @@
 | observability-config.target | which surface of the leg's service does it act on | — | the ingress proxy in front of the telemetry collector's receiver | (declared — item 2: "acts on the ingress proxy in front of the telemetry collector's receiver") |
 | observability-config.item-20 | what the leg does when no sender set is published upstream | — | make no change to the proxy, and report the upstream gap; never write a deny-everything rule from an empty set | (declared — item 20: "If no sender set is published, the observability-config leg makes no change to the proxy and reports the upstream gap; it never writes a deny-everything rule from an empty set") |
 | observability-config.item-22 | whether a block's description decides sender-endpoint membership | — | apart from the exemption in `observability-config.enforcer-scope`, a block's own description does not decide whether it is a sender endpoint | (declared — item 22: "Apart from that exemption, a block's own description does not decide whether it is a sender endpoint") |
-| approver.program-plan | who approves this gate | — | Jacob Wilcox, jacob.wilcox@paichart.com | (declared — item 7: "The program plan gate is approved by jacob.wilcox@paichart.com") |
-| approver.kubernetes-gitops-change | who approves this gate | — | Josh Allen, josh.allen@paichart.com | (declared — item 8: "The kubernetes-gitops change gate is approved by josh.allen@paichart.com") |
-| approver.observability-config-change | who approves this gate | — | Steve Terry, steve.terry@paichart.com | (declared — item 9: "The observability-config change gate is approved by steve.terry@paichart.com") |
+| approver.program-plan | who approves this gate | — | Jacob Wilcox, approver-0003@example.com | (declared — item 7: "The program plan gate is approved by approver-0003@example.com") |
+| approver.kubernetes-gitops-change | who approves this gate | — | Josh Allen, approver-02@example.com | (declared — item 8: "The kubernetes-gitops change gate is approved by approver-02@example.com") |
+| approver.observability-config-change | who approves this gate | — | Steve Terry, approver-001@example.com | (declared — item 9: "The observability-config change gate is approved by approver-001@example.com") |
 | gate.kubernetes-gitops-change.position | when this gate sits (every gate except the program plan gate) | before-leg · after-leg-before-completion · after-producer-before-consumers | after-producer-before-consumers: after the kubernetes-gitops leg, before the observability-config leg | (declared — item 10: "sits after that leg and before the observability-config leg (after-producer-before-consumers)") |
 | gate.observability-config-change.position | when this gate sits (every gate except the program plan gate) | before-leg · after-leg-before-completion · after-producer-before-consumers | after-leg-before-completion: after the observability-config leg, before its completion | (declared — item 11: "sits after that leg and before its completion (after-leg-before-completion)") |
 
@@ -106,9 +106,9 @@ assigned four of five gates to different people.
 approver who is not one silently falls to the POV owner, so a board meant to show several approvers shows one.
 
 All three were confirmed against the POV team roster read on 2026-10-17:
-- Program plan approver is Jacob Wilcox jacob.wilcox@paichart.com (declared) — member (PROJECT_MANAGER)
-- kubernetes-gitops change approver is Josh Allen josh.allen@paichart.com (declared) — member (SALES_ENGINEER)
-- observability-config change approver is Steve Terry steve.terry@paichart.com (declared) — member (OWNER)
+- Program plan approver is Jacob Wilcox approver-0003@example.com (declared) — member (PROJECT_MANAGER)
+- kubernetes-gitops change approver is Josh Allen approver-02@example.com (declared) — member (SALES_ENGINEER)
+- observability-config change approver is Steve Terry approver-001@example.com (declared) — member (OWNER)
 
 ### Every gate declares WHAT it approves and WHEN it sits — and the two must agree
 
@@ -122,9 +122,9 @@ it goes wrong.** A gate has a KIND, and the kind fixes the moment:
 
 | gate | approves | moment — runs AFTER | blocks | approver |
 |---|---|---|---|---|
-| program plan | the plan and the interface contract | the Program Architect | every leg | Jacob Wilcox, jacob.wilcox@paichart.com (declared) |
-| kubernetes-gitops change | the sender set produced by the kubernetes-gitops leg (a produced value; its producer is the kubernetes-gitops leg) | the kubernetes-gitops leg | the observability-config leg | Josh Allen, josh.allen@paichart.com (declared) |
-| observability-config change | the change package produced by the observability-config leg (a produced value; its producer is the observability-config leg) | the observability-config leg | the observability-config leg's completion. No change package is released as approved until this gate passes; it governs no later leg. | Steve Terry, steve.terry@paichart.com (declared) |
+| program plan | the plan and the interface contract | the Program Architect | every leg | Jacob Wilcox, approver-0003@example.com (declared) |
+| kubernetes-gitops change | the sender set produced by the kubernetes-gitops leg (a produced value; its producer is the kubernetes-gitops leg) | the kubernetes-gitops leg | the observability-config leg | Josh Allen, approver-02@example.com (declared) |
+| observability-config change | the change package produced by the observability-config leg (a produced value; its producer is the observability-config leg) | the observability-config leg | the observability-config leg's completion. No change package is released as approved until this gate passes; it governs no later leg. | Steve Terry, approver-001@example.com (declared) |
 
 ⚠️ **Write "the value produced by X", never a bare "the PRODUCED value".** A bare "PRODUCED" has no
 producer, and the phrase that follows it usually attaches the value to the CONSUMER's artifact

@@ -37,9 +37,9 @@
 | kubernetes-gitops.representation | how the derived value is expressed | one aligned prefix · a set of prefixes · a host list | a host list — each running pod's address exactly | declared — item 14: "expressed as a host list — each running pod's address exactly" |
 | kubernetes-gitops.inputs-empty | the derivation's inputs are empty | gap | gap — the cluster leg reports a gap and produces no value | declared — item 15: "the cluster leg reports a gap and produces no value (gap)" |
 | kubernetes-gitops.target-absent *(added — this leg's own target namespace, though the leg is not an authorisation leg)* | the declared namespace itself does not exist | gap · create-target | gap — the cluster leg reports a gap; it never creates the namespace | declared — item 16: "the cluster leg reports a gap (gap); it never creates the namespace" |
-| approver.plan | who approves the program plan gate | — | Steve Terry, steve.terry@paichart.com | declared — item 6: "The program plan gate is approved by steve.terry@paichart.com." |
-| approver.kubernetes-gitops | who approves the kubernetes-gitops change gate | — | Josh Allen, josh.allen@paichart.com | declared — item 7: "The kubernetes-gitops change gate is approved by josh.allen@paichart.com." |
-| approver.terraform-iac | who approves the terraform-iac change gate | — | Jacob Wilcox, jacob.wilcox@paichart.com | declared — item 8: "The terraform-iac change gate is approved by jacob.wilcox@paichart.com." |
+| approver.plan | who approves the program plan gate | — | Steve Terry, approver-001@example.com | declared — item 6: "The program plan gate is approved by approver-001@example.com." |
+| approver.kubernetes-gitops | who approves the kubernetes-gitops change gate | — | Josh Allen, approver-02@example.com | declared — item 7: "The kubernetes-gitops change gate is approved by approver-02@example.com." |
+| approver.terraform-iac | who approves the terraform-iac change gate | — | Jacob Wilcox, approver-0003@example.com | declared — item 8: "The terraform-iac change gate is approved by approver-0003@example.com." |
 | gate.kubernetes-gitops.position | when this gate sits | before-leg · after-leg-before-completion · after-producer-before-consumers | before-leg | declared — item 9: "sits before the cluster leg (before-leg)" |
 | gate.terraform-iac.position | when this gate sits | before-leg · after-leg-before-completion · after-producer-before-consumers | after-producer-before-consumers | declared — item 10: "sits after the producer and before the consumers (after-producer-before-consumers)" |
 | terraform-iac.target | which surface of the leg's service does it act on | — | the bucket policy of `aws_s3_bucket.app_logs` (bucket `acme-app-logs`, workspace `prod`) | declared — item 3: "The target bucket is the Terraform resource `aws_s3_bucket.app_logs` in workspace `prod` (bucket `acme-app-logs`); it is the log archive." |
@@ -95,9 +95,9 @@ or worse, leave a stale address admitted after the pod that held it is gone.
 mapping declared in this program's objective (items 6–8) and marked `(declared)`.
 
 **Declared approvers confirmed on the POV team:**
-- Program plan gate approver is Steve Terry steve.terry@paichart.com (declared) — member (OWNER)
-- kubernetes-gitops change gate approver is Josh Allen josh.allen@paichart.com (declared) — member (SALES_ENGINEER)
-- terraform-iac change gate approver is Jacob Wilcox jacob.wilcox@paichart.com (declared) — member (SALES_ENGINEER)
+- Program plan gate approver is Steve Terry approver-001@example.com (declared) — member (OWNER)
+- kubernetes-gitops change gate approver is Josh Allen approver-02@example.com (declared) — member (SALES_ENGINEER)
+- terraform-iac change gate approver is Jacob Wilcox approver-0003@example.com (declared) — member (SALES_ENGINEER)
 
 ### Every gate declares WHAT it approves and WHEN it sits
 

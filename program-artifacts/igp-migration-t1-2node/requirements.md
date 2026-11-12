@@ -94,7 +94,7 @@ in the plan. See *Design constraints*.
 ## Approvals — one gate per phase, plus the program plan gate
 
 Team provisioned for this POV:
-- Network lead / migration approver is Steve Terry steveterry66@gmail.com
+- Network lead / migration approver is Steve Terry approver-1@example.com
 
 - The **migration design (the plan)** requires approval before any phase may run.
 - **G1** (after P1): the approver applies P1's package and confirms coexistence before P2 may run.

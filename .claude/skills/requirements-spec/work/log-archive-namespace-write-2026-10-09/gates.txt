@@ -5,9 +5,9 @@ coverage — work/log-archive-namespace-write-2026-10-09/draft-answered/report.m
   ❌ what: source is not one of the four forms · id: kubernetes-gitops.population · source: declared — item 5: "every running pod in the namespace of item 2"
   ❌ what: source is not one of the four forms · id: kubernetes-gitops.representation · source: declared — item 14: "expressed as a host list — each running pod's address exactly"
   ❌ what: source is not one of the four forms · id: kubernetes-gitops.inputs-empty · source: declared — item 15: "the cluster leg reports a gap and produces no value (gap)"
-  ❌ what: source is not one of the four forms · id: approver.plan · source: declared — item 6: "The program plan gate is approved by steve.terry@paichart.com."
-  ❌ what: source is not one of the four forms · id: approver.kubernetes-gitops · source: declared — item 7: "The kubernetes-gitops change gate is approved by josh.allen@paichart.com."
-  ❌ what: source is not one of the four forms · id: approver.terraform-iac · source: declared — item 8: "The terraform-iac change gate is approved by jacob.wilcox@paichart.com."
+  ❌ what: source is not one of the four forms · id: approver.plan · source: declared — item 6: "The program plan gate is approved by approver-001@example.com."
+  ❌ what: source is not one of the four forms · id: approver.kubernetes-gitops · source: declared — item 7: "The kubernetes-gitops change gate is approved by approver-02@example.com."
+  ❌ what: source is not one of the four forms · id: approver.terraform-iac · source: declared — item 8: "The terraform-iac change gate is approved by approver-0003@example.com."
   ❌ what: source is not one of the four forms · id: gate.kubernetes-gitops.position · source: declared — item 9: "sits before the cluster leg (before-leg)"
   ❌ what: source is not one of the four forms · id: gate.terraform-iac.position · source: declared — item 10: "sits after the producer and before the consumers (after-producer-before-consumers)"
   ❌ what: source is not one of the four forms · id: terraform-iac.target · source: declared — item 3: "The target bucket is the Terraform resource `aws_s3_bucket.app_logs` in workspace `prod` (bucket `ac

@@ -43,10 +43,10 @@ Both legs are on the `network-provisioning` token, so every row is keyed `networ
 | network-provisioning.population | which members of the class the derivation reads (value leg) | — | every IPv4 prefix configured on any interface of ceos1 or ceos2, and every prefix either switch originates in BGP, that overlaps 10.99.0.0/24. Nothing outside the two switches is consulted. | (declared — item 4: "The value leg reads every such prefix of ceos1 and ceos2 that overlaps the pool") |
 | network-provisioning.representation | how the derived value is expressed (value leg) | one aligned prefix · a set of prefixes · a host list | one aligned prefix: a single /32 | (declared — item 6: "expressed as one aligned prefix: a single /32") |
 | network-provisioning.inputs-empty | the derivation's inputs are empty (value leg) | gap | gap: no /32 in the pool is free, so the leg reports a gap and publishes nothing | (declared — item 5: "If no /32 in the pool is free, the value leg reports a gap and publishes nothing.") |
-| approver.plan | who approves this gate | — | Jacob Wilcox, jacob.wilcox@paichart.com | (declared — item 14: "The program plan gate is approved by Jacob Wilcox (jacob.wilcox@paichart.com).") |
-| approver.value | who approves this gate | — | Josh Allen, josh.allen@paichart.com | (declared — item 15: "It is approved by Josh Allen (josh.allen@paichart.com)") |
+| approver.plan | who approves this gate | — | Jacob Wilcox, approver-0003@example.com | (declared — item 14: "The program plan gate is approved by Jacob Wilcox (approver-0003@example.com).") |
+| approver.value | who approves this gate | — | Josh Allen, approver-02@example.com | (declared — item 15: "It is approved by Josh Allen (approver-02@example.com)") |
 | gate.value.position | when this gate sits (every gate except the program plan gate) | before-leg · after-leg-before-completion · after-producer-before-consumers | after-producer-before-consumers | (declared — item 15: "its position is after-producer-before-consumers") |
-| approver.network-change | who approves this gate | — | Steve Terry, steve.terry@paichart.com | (declared — item 16: "It is approved by Steve Terry (steve.terry@paichart.com)") |
+| approver.network-change | who approves this gate | — | Steve Terry, approver-001@example.com | (declared — item 16: "It is approved by Steve Terry (approver-001@example.com)") |
 | gate.network-change.position | when this gate sits (every gate except the program plan gate) | before-leg · after-leg-before-completion · after-producer-before-consumers | after-leg-before-completion | (declared — item 16: "its position is after-leg-before-completion") |
 
 ### Item rows and further decisions
@@ -162,9 +162,9 @@ assigned four of five gates to different people.
 
 **Declared approvers confirmed on the POV team** — the platform routes a gate only to a MEMBER; a declared
 approver who is not one silently falls to the POV owner, so a board meant to show several approvers shows one:
-- Program plan gate approver is Jacob Wilcox jacob.wilcox@paichart.com (declared, item 14) — member
-- Value gate approver is Josh Allen josh.allen@paichart.com (declared, item 15) — member
-- Network change gate approver is Steve Terry steve.terry@paichart.com (declared, item 16) — member
+- Program plan gate approver is Jacob Wilcox approver-0003@example.com (declared, item 14) — member
+- Value gate approver is Josh Allen approver-02@example.com (declared, item 15) — member
+- Network change gate approver is Steve Terry approver-001@example.com (declared, item 16) — member
 
 ### Every gate declares WHAT it approves and WHEN it sits — and the two must agree
 

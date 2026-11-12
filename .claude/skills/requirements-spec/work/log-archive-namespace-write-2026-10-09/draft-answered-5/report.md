@@ -35,9 +35,9 @@
 | cluster.population | which members of the class the derivation reads | — | every pod in `trading` whose `status.phase == Running`, excluding any pod with `hostNetwork: true`; readiness is not a criterion | (declared — item 5: "every pod in the namespace of item 2 whose phase is Running; readiness is not a criterion; a pod with hostNetwork: true is excluded") |
 | cluster.representation | how the derived value is expressed | one aligned prefix · a set of prefixes · a host list | a host list — each qualifying pod's address exactly, one entry per pod, no aggregation | (declared — item 14: "The derived value is expressed as a host list - each running pod's address exactly") |
 | cluster.inputs-empty | the derivation's inputs are empty | gap | gap — report a gap naming that no Running, non-hostNetwork pod exists in `trading`; produce no value; author nothing | (declared — item 15: "If no running pod is found in the namespace of item 2, the cluster leg reports a gap and produces no value (gap)") |
-| approver.plan | who approves this gate | — | Steve Terry, steve.terry@paichart.com | (declared — item 6: "The program plan gate is approved by steve.terry@paichart.com") |
-| approver.kubernetes-gitops | who approves this gate | — | Josh Allen, josh.allen@paichart.com | (declared — item 7: "The kubernetes-gitops change gate is approved by josh.allen@paichart.com") |
-| approver.terraform-iac | who approves this gate | — | Jacob Wilcox, jacob.wilcox@paichart.com | (declared — item 8: "The terraform-iac change gate is approved by jacob.wilcox@paichart.com") |
+| approver.plan | who approves this gate | — | Steve Terry, approver-001@example.com | (declared — item 6: "The program plan gate is approved by approver-001@example.com") |
+| approver.kubernetes-gitops | who approves this gate | — | Josh Allen, approver-02@example.com | (declared — item 7: "The kubernetes-gitops change gate is approved by approver-02@example.com") |
+| approver.terraform-iac | who approves this gate | — | Jacob Wilcox, approver-0003@example.com | (declared — item 8: "The terraform-iac change gate is approved by approver-0003@example.com") |
 | gate.kubernetes-gitops.position | when this gate sits | before-leg · after-leg-before-completion · after-producer-before-consumers | before-leg | (declared — item 9: "The kubernetes-gitops change gate sits before the cluster leg (before-leg)") |
 | gate.terraform-iac.position | when this gate sits | before-leg · after-leg-before-completion · after-producer-before-consumers | after-producer-before-consumers | (declared — item 10: "The terraform-iac change gate sits after the producer and before the consumers (after-producer-before-consumers)") |
 
@@ -95,9 +95,9 @@ gate still green, because nothing downstream re-derives the list from the cluste
 mapping declared in this program's objective, and marked `(declared)`.
 
 **Declared approvers confirmed on the POV team:**
-- Program plan gate approver is Steve Terry steve.terry@paichart.com (declared) — member.
-- kubernetes-gitops change gate approver is Josh Allen josh.allen@paichart.com (declared) — member.
-- terraform-iac change gate approver is Jacob Wilcox jacob.wilcox@paichart.com (declared) — member.
+- Program plan gate approver is Steve Terry approver-001@example.com (declared) — member.
+- kubernetes-gitops change gate approver is Josh Allen approver-02@example.com (declared) — member.
+- terraform-iac change gate approver is Jacob Wilcox approver-0003@example.com (declared) — member.
 
 ### Every gate declares WHAT it approves and WHEN it sits — and the two must agree
 

@@ -59,7 +59,7 @@ export function probes(): Probe[] {
     { id: 'P0 control', corrected: base, ownerMap: true, expectAdopted: true },
     { id: 'P1 delete the item-4 decision row', corrected: dropLine(base, /^\| kubernetes-gitops\.population \|/), ownerMap: true, expectAdopted: false, expectReason: 'regressed' },
     { id: 'P2 s3:GetObject → s3:* in the Pipeline 2 body', corrected: editSection(base, '## Pipeline 2 objective', (b) => b.map((l) => l.split('s3:GetObject').join('s3:*'))), ownerMap: true, expectAdopted: true },
-    { id: 'P3 swap the terraform approver email in Approvals', corrected: editSection(base, '## Approvals', (b) => b.map((l) => l.split('jacob.wilcox@paichart.com').join('someone.else@paichart.com'))), ownerMap: true, expectAdopted: true },
+    { id: 'P3 swap the terraform approver email in Approvals', corrected: editSection(base, '## Approvals', (b) => b.map((l) => l.split('approver-0003@example.com').join('someone.else@paichart.com'))), ownerMap: true, expectAdopted: true },
     { id: 'P4 Acceptance body → "See above."', corrected: editSection(base, '## Acceptance', () => ['', 'See above.', '']), ownerMap: true, expectAdopted: true },
     { id: 'P5 no owner map + delete the item-13 decision row', corrected: dropLine(base, /^\| kubernetes-gitops\.writes \|/), ownerMap: false, expectAdopted: false, expectReason: 'regressed' },
     { id: 'P6 add an invented row key', corrected: base.replace(/^(\| kubernetes-gitops\.writes \|.*)$/m, '$1\n| terraform-iac.invented-thing | an invented question | — | something | (declared — item 13: "The cluster leg is read-and-publish") |'), ownerMap: true, expectAdopted: false, expectReason: 'regressed' },

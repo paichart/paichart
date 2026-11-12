@@ -100,8 +100,8 @@ that leg had already done the work, which makes it a record rather than a contro
 
 **Team provisioned for this POV** — every approver named above must be a member of the POV team, or
 the platform cannot route the gate to them and every gate falls to the POV owner instead:
-- Steve Terry `steve.terry@paichart.com` · Josh Allen `josh.allen@paichart.com`
-- Chris Terry `chris.terry@paichart.com` · Jacob Wilcox `jacob.wilcox@paichart.com`
+- Steve Terry `approver-001@example.com` · Josh Allen `approver-02@example.com`
+- Chris Terry `approver-004@example.com` · Jacob Wilcox `approver-0003@example.com`
 - Rika Smith `rika@example.com`
 
 **Dependency consequence, stated so no planner has to infer it**: each downstream pipeline

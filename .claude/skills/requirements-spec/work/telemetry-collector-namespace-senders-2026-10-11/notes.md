@@ -17,7 +17,7 @@ Incidental exposure (recorded, not an answer key): reading the prior log-archive
 format showed its harvested namespace on the same cluster. Not used; the owner supplies the namespace in Group A.
 
 ## Step 2 — zero-decision generation (owner "yes" 2026-10-11)
-- Pre-flight: MCP identity steve.terry@paichart.com ADMIN; registry holds no rig services.
+- Pre-flight: MCP identity approver-001@example.com ADMIN; registry holds no rig services.
 - POV `cmv3i00vf000byx17h1828s1c` "Telemetry collector access control" (phases Requirements, Program; countryCode AU).
 - Stage `cmv3i04gy000myx17penzsixd` "Requirements — collector senders (zero)".
 - Task `cmv3i0fnt000oyx17rt47bpad` PIPELINE, Pipeline Harness `cmnjoo31t0000yx3s8e9hc7k8`; no duplicateAcknowledged (new POV).

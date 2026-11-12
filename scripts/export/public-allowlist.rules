@@ -165,8 +165,16 @@
 + .claude/README.md
 + .claude/agents/**
 + .claude/knowledge/**
-# Skills (incl. requirements-spec work folders: trial drafts, owner answers, findings register) — exported (Steve,
-# 2026-10-14); two battery suites read the work folders, so without them public CI fails.
+# requirements-spec skill (owner 2026-11-13: "we don't use it now" — hand-written specs are the route): the files that MAKE it a
+# skill stop crossing, so Claude Code on a self-host does not offer it. Its `work/` folders still cross: they are the fixtures
+# the exported requirements-check suites read (form-check, form-correction, sources, coverage, citations, clauses).
+- .claude/skills/requirements-spec/SKILL.md
+- .claude/skills/requirements-spec/STEP-BY-STEP.md
+- .claude/skills/requirements-spec/README.md
+- .claude/skills/requirements-spec/scripts/**
+- .claude/skills/requirements-spec/docs/**
+# Skills (requirements-spec work folders: trial drafts, owner answers, findings register) — exported (owner, 2026-10-14);
+# the battery suites read the work folders, so without them public CI fails.
 + .claude/skills/**
 - .claude/**
 

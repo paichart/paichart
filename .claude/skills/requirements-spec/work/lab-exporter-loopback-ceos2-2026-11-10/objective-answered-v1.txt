@@ -24,9 +24,9 @@ DESIGN DECISIONS - DECLARED, NOT INFERRED. Each item below is a choice made by t
    ceos2: git-file — service github-service ; paichart/paichart-lab-configs/network/base/ceos2-startup.cfg
    ceos2: device-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json
    ceos1: live-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json
-14. The program plan gate is approved by Jacob Wilcox (jacob.wilcox@paichart.com).
-15. A value gate approves the /32 produced by Pipeline 1. It is approved by Josh Allen (josh.allen@paichart.com) and its position is after-producer-before-consumers: the value reaches Pipeline 2 only after this gate is released.
-16. The network change gate approves the change package for ceos2 produced by Pipeline 2. It is approved by Steve Terry (steve.terry@paichart.com) and its position is after-leg-before-completion.
+14. The program plan gate is approved by Jacob Wilcox (approver-0003@example.com).
+15. A value gate approves the /32 produced by Pipeline 1. It is approved by Josh Allen (approver-02@example.com) and its position is after-producer-before-consumers: the value reaches Pipeline 2 only after this gate is released.
+16. The network change gate approves the change package for ceos2 produced by Pipeline 2. It is approved by Steve Terry (approver-001@example.com) and its position is after-leg-before-completion.
 
 Phase 0 is REQUIRED - harvest live state; nothing is supplied inline. Self-provision the descriptor below, harvest it, emit a per-domain section, and record every registration you create so the harness can tear down every one of them at SYNTHESIZE:
 

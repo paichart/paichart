@@ -5,7 +5,7 @@
   Read for shape only: `cline_docs/reviews/requirements-decision-surfacing-2026-09-28/T0-zero-objective.txt` (telemetry-export, a different objective).
 - Owner decisions at step 1 (Steve, 2026-10-09): harvest scope = the narrow rule (now in `objective-zero.txt`); "nothing wider" reworded
   to "nothing wider than the design decisions declare" (PUBLISH §0 warning); run on a NEW POV.
-- MCP identity: steve.terry@paichart.com, ADMIN. Registry: no leftover rig services.
+- MCP identity: approver-001@example.com, ADMIN. Registry: no leftover rig services.
 
 ## Zero-decision generation (step 2) — launched on owner "yes"
 - POV `cmuzydjud0007yxlrpfucufiu` "Log archive write — requirements spec" (team `cmuzydjuk0008yxlrp1f8o4a1`, owner only)

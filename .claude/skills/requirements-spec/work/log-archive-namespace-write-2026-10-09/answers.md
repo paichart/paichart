@@ -18,9 +18,9 @@ Each group is recorded the turn the owner accepts it. Item numbers are what the 
 
 ### Group B — who approves, and when (accepted 2026-10-09)
 
-6. The program plan gate is approved by steve.terry@paichart.com.
-7. The kubernetes-gitops change gate is approved by josh.allen@paichart.com.
-8. The terraform-iac change gate is approved by jacob.wilcox@paichart.com.
+6. The program plan gate is approved by approver-001@example.com.
+7. The kubernetes-gitops change gate is approved by approver-02@example.com.
+8. The terraform-iac change gate is approved by approver-0003@example.com.
 9. The kubernetes-gitops change gate sits before the cluster leg (before-leg): it approves the method - which namespace, which pods count, how the value is derived - before the cluster leg runs.
 10. The terraform-iac change gate sits after the producer and before the consumers (after-producer-before-consumers): it approves the produced value, once it exists, before the bucket leg uses it.
 

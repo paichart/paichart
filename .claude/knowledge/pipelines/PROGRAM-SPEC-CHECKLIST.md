@@ -192,7 +192,7 @@ C2 on network legs only. Until it is shown more widely, read the package at each
 
 | Questions | Source |
 |---|---|
-| M1, M6a–c, M7 (gates), C5–C17 | the generated-spec question registry (`.claude/skills/requirements-spec/docs/DESIGN-DECISION-QUESTIONS.md`), reworded and checked by its owner. All 20 of its questions have a counterpart here |
+| M1, M6a–c, M7 (gates), C5–C17 | the generated-spec question registry (`.claude/knowledge/pipelines/requirements-authoring/DESIGN-DECISION-QUESTIONS.md`), reworded and checked by its owner. All 20 of its questions have a counterpart here |
 | M2 | the Device sources grammar and the Git-only limit |
 | M3 | the released example; one refused run |
 | M4, M5 | two question types the registry does not ask, each with three or more stopped runs behind it |

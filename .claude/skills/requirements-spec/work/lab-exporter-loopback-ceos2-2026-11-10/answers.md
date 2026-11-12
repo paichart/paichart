@@ -33,9 +33,9 @@ Leg class (owner, 2026-11-10): no leg grants or removes access; no leg is a rout
    ceos1: live-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json
 
 ### Group B — who approves and when (accepted 2026-11-10; three gates)
-14. The program plan gate is approved by Jacob Wilcox (jacob.wilcox@paichart.com).
-15. A value gate approves the /32 produced by Pipeline 1. It is approved by Josh Allen (josh.allen@paichart.com) and its position is after-producer-before-consumers: the value reaches Pipeline 2 only after this gate is released.
-16. The network change gate approves the change package for ceos2 produced by Pipeline 2. It is approved by Steve Terry (steve.terry@paichart.com) and its position is after-leg-before-completion.
+14. The program plan gate is approved by Jacob Wilcox (approver-0003@example.com).
+15. A value gate approves the /32 produced by Pipeline 1. It is approved by Josh Allen (approver-02@example.com) and its position is after-producer-before-consumers: the value reaches Pipeline 2 only after this gate is released.
+16. The network change gate approves the change package for ceos2 produced by Pipeline 2. It is approved by Steve Terry (approver-001@example.com) and its position is after-leg-before-completion.
 
 ### Group N2 — decisions answered run 1 added (accepted 2026-11-10)
 17. If the change leg's own harvest finds the /32 that Pipeline 1 published already used, in item 4's sense, on ceos1 or ceos2, the change leg reports a gap and authors no change package.

@@ -90,6 +90,10 @@ t('T7 coverage ERROR without a waiver ⇒ refused', refuses(SRC, 'coverage check
 
 def t8():
     k = os.path.join(HERE, '..', '.claude', 'skills', 'requirements-spec')
+    # The skill's operative files are not exported (owner 2026-11-13). In the PRIVATE repo (it has cline_docs/) they must exist
+    # and this check runs; in the public tree they are absent by design and it is skipped out loud.
+    if not os.path.isdir(os.path.join(k, 'scripts')) and not os.path.isdir(os.path.join(HERE, '..', 'cline_docs')):
+        print('  · T8 skipped: the requirements-spec skill is not part of the public export'); return
     links = [os.path.join(k, sub, f) for sub in ('scripts', 'docs') for f in os.listdir(os.path.join(k, sub))
              if f != '__pycache__']   # Python's bytecode cache (git-ignored) appears when a linked script is imported
     assert len(links) == 9, f'expected 9 links in the skill folder, found {len(links)}'

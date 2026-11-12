@@ -9,7 +9,7 @@ Risk named: admitted-principal / principal-unseen (Group C) — a principal need
 Z27: k8s descriptor cannot list namespaces (namespace required on every read) ⇒ zero run harvests no pods; target OPEN.
 
 ## Run 1 of 3 — zero-decision generation (owner "yes" 2026-10-09)
-- Pre-flight: 0 RUNNING/PENDING; registry clean (identity steve.terry@paichart.com ADMIN); k8s-lab + tf-lab answer.
+- Pre-flight: 0 RUNNING/PENDING; registry clean (identity approver-001@example.com ADMIN); k8s-lab + tf-lab answer.
 - POV `cmv0g0xc50005yxmckbtjrx64` "Log archive access control" (phases Requirements `cmv0g0xcq000ayxmc9351551n`, Program).
   `countryCode: AU` added — pov.create requires a country (not a design decision).
 - Stage `cmv0g0zco000gyxmc5htw928h` "Requirements — log archive read (zero)".

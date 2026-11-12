@@ -42,11 +42,11 @@
 | network-provisioning.population | which members of the class the derivation reads | — | interfaces whose description carries the declared exporter marker literal, across every device in the fabric's inventory | (declared — item 5: "interfaces whose description marks them as telemetry exporters. No other fabric address is an exporter address.") |
 | network-provisioning.representation | how the derived value is expressed | one aligned prefix · a set of prefixes · a host list | the smallest CIDR block, aligned to a valid prefix boundary, containing every one of the fabric's exporter addresses (one aligned prefix) | (declared — item 6: "the fabric leg computes the smallest CIDR block, aligned to a valid prefix boundary, that contains every one of the fabric's exporter addresses.") |
 | network-provisioning.inputs-empty | the derivation's inputs are empty | gap | gap — report that no interface across the fabric's inventory carries the declared exporter marker; produce no derived range | (forced — item 5: "No other fabric address is an exporter address.") → gap — a substitute population is outside item 5's declaration |
-| approver.plan | who approves this gate | — | Josh Allen (josh.allen@paichart.com) | (declared — item 7: "program plan — Josh Allen (josh.allen@paichart.com)") |
-| approver.fabric-exporter-value | who approves this gate | — | Steve Terry (steve.terry@paichart.com) | (declared — item 7: "fabric exporter value (network-provisioning) — Steve Terry (steve.terry@paichart.com)") |
-| approver.kubernetes-change-method | who approves this gate | — | Jacob Wilcox (jacob.wilcox@paichart.com) | (declared — item 7: "Kubernetes change method (kubernetes-gitops) — Jacob Wilcox (jacob.wilcox@paichart.com)") |
-| approver.cloud-storage-change-method | who approves this gate | — | Josh Allen (josh.allen@paichart.com) | (declared — item 7: "cloud storage change method (terraform-iac) — Josh Allen (josh.allen@paichart.com)") |
-| approver.observability-change-method | who approves this gate | — | Jacob Wilcox (jacob.wilcox@paichart.com) | (declared — item 7: "observability change method (observability-config) — Jacob Wilcox (jacob.wilcox@paichart.com)") |
+| approver.plan | who approves this gate | — | Josh Allen (approver-02@example.com) | (declared — item 7: "program plan — Josh Allen (approver-02@example.com)") |
+| approver.fabric-exporter-value | who approves this gate | — | Steve Terry (approver-001@example.com) | (declared — item 7: "fabric exporter value (network-provisioning) — Steve Terry (approver-001@example.com)") |
+| approver.kubernetes-change-method | who approves this gate | — | Jacob Wilcox (approver-0003@example.com) | (declared — item 7: "Kubernetes change method (kubernetes-gitops) — Jacob Wilcox (approver-0003@example.com)") |
+| approver.cloud-storage-change-method | who approves this gate | — | Josh Allen (approver-02@example.com) | (declared — item 7: "cloud storage change method (terraform-iac) — Josh Allen (approver-02@example.com)") |
+| approver.observability-change-method | who approves this gate | — | Jacob Wilcox (approver-0003@example.com) | (declared — item 7: "observability change method (observability-config) — Jacob Wilcox (approver-0003@example.com)") |
 | gate.fabric-exporter-value.position | when this gate sits | before-leg · after-leg-before-completion · after-producer-before-consumers | after-producer-before-consumers | (declared — item 8: "the fabric exporter value gate sits after the fabric leg and before the three consuming legs.") |
 | gate.kubernetes-change-method.position | when this gate sits | before-leg · after-leg-before-completion · after-producer-before-consumers | after-leg-before-completion | (declared — item 8: "Each of the Kubernetes, cloud storage and observability change-method gates sits AFTER its own leg and approves that leg's produced change package before the program completes; it does not block the leg's authoring.") |
 | gate.cloud-storage-change-method.position | when this gate sits | before-leg · after-leg-before-completion · after-producer-before-consumers | after-leg-before-completion | (declared — item 8: "Each of the Kubernetes, cloud storage and observability change-method gates sits AFTER its own leg and approves that leg's produced change package before the program completes; it does not block the leg's authoring.") |
@@ -127,11 +127,11 @@ four legs.
 declared in this program's objective (item 7), and marked `(declared)`.
 
 **Declared approvers confirmed on the POV team:**
-- program plan is Josh Allen josh.allen@paichart.com (declared) — member (PROJECT_MANAGER)
-- fabric exporter value (network-provisioning) is Steve Terry steve.terry@paichart.com (declared) — member (OWNER)
-- Kubernetes change method (kubernetes-gitops) is Jacob Wilcox jacob.wilcox@paichart.com (declared) — member (SALES_ENGINEER)
-- cloud storage change method (terraform-iac) is Josh Allen josh.allen@paichart.com (declared) — member (PROJECT_MANAGER)
-- observability change method (observability-config) is Jacob Wilcox jacob.wilcox@paichart.com (declared) — member (SALES_ENGINEER)
+- program plan is Josh Allen approver-02@example.com (declared) — member (PROJECT_MANAGER)
+- fabric exporter value (network-provisioning) is Steve Terry approver-001@example.com (declared) — member (OWNER)
+- Kubernetes change method (kubernetes-gitops) is Jacob Wilcox approver-0003@example.com (declared) — member (SALES_ENGINEER)
+- cloud storage change method (terraform-iac) is Josh Allen approver-02@example.com (declared) — member (PROJECT_MANAGER)
+- observability change method (observability-config) is Jacob Wilcox approver-0003@example.com (declared) — member (SALES_ENGINEER)
 
 ### Every gate declares WHAT it approves and WHEN it sits — and the two must agree
 

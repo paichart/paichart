@@ -1,6 +1,6 @@
 ## Owner waiver
 
-- **Approver of record:** Steve Terry (steve.terry@paichart.com), POV owner — 2026-10-09
+- **Approver of record:** Steve Terry (approver-001@example.com), POV owner — 2026-10-09
 - **Source:** generation 9, task `cmv07axmf00ygyxlr4q0rgizv` (requirements-authoring), Reviewer **APPROVED 94**;
   Author served by `claude-opus-5-5` (execution `modelUsed`).
 - **Scope:** the coverage-check ERRORS (1–4) and two write-up items from the human read (5–6), and nothing else. Citation gate: 23/23 verbatim, premise branch present —

@@ -10,9 +10,9 @@ DESIGN DECISIONS - DECLARED, NOT INFERRED. Each item below is a choice made by t
 4. A member of the sender population is a pod in the declared namespace whose phase is Running, excluding pods on the host's network and pods whose deletion has been requested. The leg reports, in its own published deliverable (report.md), the literal criterion it applied.
 5. The sender set is expressed as a host list: one entry per member pod's address, with no covering prefix.
 6. The sender set is point-in-time as of the leg's harvest; the deliverable states the harvest time. Nothing maintains the set after the program.
-7. The program plan gate is approved by jacob.wilcox@paichart.com.
-8. The kubernetes-gitops change gate is approved by josh.allen@paichart.com.
-9. The observability-config change gate is approved by steve.terry@paichart.com.
+7. The program plan gate is approved by approver-0003@example.com.
+8. The kubernetes-gitops change gate is approved by approver-02@example.com.
+9. The observability-config change gate is approved by approver-001@example.com.
 10. The kubernetes-gitops change gate approves the sender set produced by the kubernetes-gitops leg, and sits after that leg and before the observability-config leg (after-producer-before-consumers).
 11. The observability-config change gate approves the change package produced by the observability-config leg, and sits after that leg and before its completion (after-leg-before-completion).
 12. The observability-config leg admits senders by source address: the member pods' addresses, as the host list in item 5.

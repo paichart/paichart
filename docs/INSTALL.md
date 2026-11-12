@@ -10,7 +10,8 @@ reach this one (`192.168.1.50`, a hostname, or `localhost` if only this machine 
   A 2–4 GB machine will fail at the build in step 5;
 - **an Anthropic API key** — the agents run on it; you paste it in step 8;
 - **a Claude account** — step 2 installs Claude Code and signs in through a browser;
-- **a GitHub account** — only for step 9c (a read-only token), which your first run needs.
+- **a GitHub account** (free: [github.com/signup](https://github.com/signup)) — for step 9c, which your first run needs. You
+  create one read-only token there; step 9c shows how and why it is harmless.
 
 Time: about an hour — `npm ci` and the build are most of it, and step 9b pulls a 1.5 GB image.
 Order is deliberate: **clone, install Claude Code, then let Claude follow the rest** — steps 3–9 are written to be pasted.
@@ -145,8 +146,12 @@ curl -s -o /dev/null -w '%{http_code}\n' localhost:3000/mcp                     
 ```
 
 ## 6. Log in (a real browser — some failures only a browser can show)
-Open `http://HOST:3000/login` → click the **lock** icon → `admin@paichart.local` + the password step 5 printed. You land on the
-**setup sheet** (`/auth/oauth/success`); it must show **`http://HOST:3000/mcp`** as the MCP URL.
+Open `http://HOST:3000` — you get the login page. It shows **GitHub, Microsoft and Google** buttons: those do not work yet
+(they need [OAUTH-SETUP.md](OAUTH-SETUP.md), which is optional), so ignore them. **Click the small lock icon at the top of the
+page**: that reveals the email-and-password form. Sign in as `admin@paichart.local` with the password step 5 printed.
+
+You land on a welcome page (`/auth/oauth/success`) with two boxes, **Explore Dashboard** and **User Settings**; it must show
+**`http://HOST:3000/mcp`** as the MCP URL. Either box takes you into the app.
 If the page is unstyled with dead icons: press `Ctrl+Shift+R` once; if it persists, open DevTools → Console and
 look for `ERR_SSL_PROTOCOL_ERROR` — report it, that class is supposed to be fixed.
 
@@ -165,17 +170,21 @@ alone — it does not rename or delete; an invalid file is refused with the reas
 The account you logged in with, `admin@paichart.local`, is the built-in **Super Admin** — administration only, and not a
 mailbox. Now create **your own account, with your real email**: it is the one you work as, the one that holds your Anthropic
 key and your MCP API key (step 8), and the one that owns your projects.
-The **pAIchart logo** (top-right corner) → **Admin Dashboard** (only the **Super Admin** sees this option —
-which is why this step is done now, before you switch accounts) → **User Management** → **Create User**
+Click the **pAIchart logo** (top-right corner) — its menu has **Profile Settings**, **Admin Dashboard** and **Logout**.
+Choose **Admin Dashboard** (only a **Super Admin** sees this option — which is why this step is done now, before you switch
+accounts) → **User Management** → **Create User**
 → fill in email and name, set **System Role** to **System Admin** (the dialog defaults to *User* — check it before you
 save; a User cannot administer the hub), and **set a password** in the dialog (blank means
-"will sign in with OAuth", and an account without one cannot log in) → Create.
+"will sign in with OAuth", and an account without one cannot log in) → Create. (Choose **Super Admin** instead if you want
+your own account to see the Admin Dashboard too.)
 
 ## 8. Your Anthropic key, an MCP API key, then connect Claude Code to your hub — required before your first POV
-Log out and log in as the new System Admin. Then: the **pAIchart logo** (top-right) → **Profile Settings**.
+Log out (**pAIchart logo** → **Logout**) and log in as yourself — the lock icon again, your email and the password you just
+set. Then: the **pAIchart logo** (top-right) → **Profile Settings** (the welcome page's **User Settings** box opens the same page).
 
-**First, your Anthropic API key** — without it every agent run fails at its first step. In the **LLM** section switch
-**Use System Provider** off, paste the key into **Anthropic API Key**, and press **Save Changes**. The key is stored for
+**First, your Anthropic API key** — without it every agent run fails at its first step. In the **AI Provider Settings**
+section switch **Use System Provider** off, paste the key into **Anthropic API Key**, and press **Save Changes** — the button
+is at the **top right of the page**, not beside the field; the key is not stored until you press it. The key is stored for
 your account and is never shown again; the field then reads "A key is saved". (One shared key for every user instead: put
 it in `.env` as `ANTHROPIC_API_KEY`, then run `set -a; . ./.env; set +a; npm run llm:init` — after `db:seed`, never before —
 and leave **Use System Provider** on. The app never reads the variable itself.)
@@ -185,10 +194,14 @@ and leave **Use System Provider** on. The app never reads the variable itself.)
 something shorter for a lab). The key's `role` claim is a mint-time snapshot: the hub authorises from the live database,
 so changing a user's role takes effect on existing keys immediately, and the claim can read stale.
 
-Back in Claude Code (running inside `~/paichart`), just ask:
-*"Create an MCP connection to http://HOST:3000/mcp using this API key: &lt;paste the key&gt;"* — Claude runs
-`claude mcp add --transport http paichart http://HOST:3000/mcp --header "X-API-Key: …"` for you. The connection
-only appears after a restart, so type `exit`, then at the shell:
+**Claude Code must be running inside `~/paichart` for this.** The specialist sub-agents load from the clone, and Claude Code
+saves an MCP connection for the directory you add it in. If you started it somewhere else (your home directory, say): type
+`exit`, then `cd ~/paichart && claude`.
+
+Then just ask — you do not need to know the command:
+*"Please connect me to pAIchart at http://HOST:3000/mcp using HTTP transport and this API key: &lt;paste the key&gt;"* — Claude
+runs `claude mcp add --transport http paichart http://HOST:3000/mcp --header "X-API-Key: …"` for you. The connection
+only appears after a restart, so type `exit`, then at the shell (still in `~/paichart`):
 ```bash
 claude -c                                             # -c continues the same conversation with the new connection loaded
 claude mcp list                                       # (from another shell) expect: paichart … ✔ Connected
@@ -273,19 +286,37 @@ The registry id is `browser-automation-service`, the display name `Browser Autom
 accepts either; `registry(action: 'tools')` wants the display name.
 
 ### 9c. The GitHub file source (kept files from a config repo) — needed for your first run
-Pipelines that change Kubernetes, Terraform or network config can read the **file of record** from a Git repo, keep its exact
-bytes, and have the Author change it only by edits to that kept file (`docs/SELF-HOST-KEPT-FILES.md`). The hub reads Git through
-the shipped `services/github-service`: GitHub's official read-only MCP server plus a small proxy that adds your token. Your
-first run ([FIRST-RUN.md](FIRST-RUN.md)) reads its two switch files this way, from the public `paichart/paichart-configs` —
-configuration files of record plus released use cases — which is the repository `.env.example` already pins. You need no
-repository of your own for that; pin your own later. (Skip this step only if you will not run a use case that reads files from Git.)
 
-**1. A token (one minute).** GitHub → Settings → Developer settings → Fine-grained tokens → Generate:
-- a **public** config repo: Repository access = *Public repositories (read-only)*, no permissions;
-- a **private** one: Resource owner = the repo's owner, *Only select repositories* → that repo, Repository permissions →
-  *Contents: Read-only*.
+**What this step is for.** pAIchart changes a configuration by reading the **file of record** from a Git repository, keeping
+its exact bytes, and having the Author change it only by edits to that kept file ([SELF-HOST-KEPT-FILES.md](SELF-HOST-KEPT-FILES.md)).
+It reads Git through the shipped `services/github-service`: GitHub's own read-only MCP server, plus a small proxy that adds a token.
 
-The server refuses every request without a token, so this step is not optional for the service.
+**Start with the public test repository, [`paichart/paichart-configs`](https://github.com/paichart/paichart-configs).** It holds
+switch configuration files and **released use cases — requirements that have already produced an approved change package**. Your install is already pinned to it
+(`.env.example`), so your first runs ([FIRST-RUN.md](FIRST-RUN.md)) read proven inputs and you can see what a good result looks
+like before you write anything. You need no repository of your own for this; point the pin at your own later (step 2 below).
+
+**Why you are asked for a GitHub token, and why it is harmless.** You need a GitHub account for this. GitHub's server will not
+answer without a token — it says who is asking, so your install gets a normal request allowance. It grants nothing: with the
+settings below it can read only what anyone on the internet can already read, and it can change nothing. **Any GitHub account
+can create it**, in about a minute, and it is not tied to `paichart-configs`.
+
+**For security, the GitHub service is pinned to ONE repository.** Agents can read only the repository the pin names
+(`GIT_FILE_SOURCE_PIN` in `.env`), and only its `main` branch — a request for any other repository is refused, whatever the
+token could reach. The pin, not the token, is the boundary. It ships set to the test repository,
+`https://github.com/paichart/paichart-configs`. The token stays on your machine (`services/github-service/.env`,
+mode 600) and is never sent to pAIchart's agents.
+
+(Skip this whole step only if you will never run a use case that reads files from Git.)
+
+**1. Create the token.** GitHub → your avatar → **Settings** → **Developer settings** → **Personal access tokens** →
+**Fine-grained tokens** → **Generate new token**:
+- to read `paichart-configs` or any other **public** repository: *Repository access* = **Public repositories (read-only)**, and
+  leave every permission unset — this is the one you want now;
+- later, for a **private** repository of your own: *Resource owner* = the repository's owner, *Only select repositories* → that
+  repository, *Repository permissions* → **Contents: Read-only**.
+
+Copy the token when GitHub shows it; it is shown once.
 
 **2. Tell the hub which repo it may read (the pin).** The hub's `.env` (copied from `.env.example`) already sets
 `GIT_FILE_SOURCE_PIN=paichart/paichart-configs`, so you can run its network use cases as is. To read your own repo, change it

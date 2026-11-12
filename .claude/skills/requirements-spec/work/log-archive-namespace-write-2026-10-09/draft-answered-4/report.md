@@ -42,9 +42,9 @@
 | kubernetes-gitops.representation | how the derived value is expressed | one aligned prefix · a set of prefixes · a host list | a host list: one entry per Running pod, each denoting exactly that pod's address and no other | (declared — item 14: "The derived value is expressed as a host list") |
 | kubernetes-gitops.inputs-empty | the derivation's inputs are empty | gap | gap. The leg reports the gap and produces no value. | (declared — item 15: "the cluster leg reports a gap and produces no value (gap)") |
 | kubernetes-gitops.target-absent | the declared target itself does not exist | gap · create-target | gap. The leg never creates the namespace. | (declared — item 16: "If the namespace of item 2 does not exist, the cluster leg reports a gap (gap); it never creates the namespace") |
-| approver.program-plan | who approves this gate | — | steve.terry@paichart.com | (declared — item 6: "The program plan gate is approved by steve.terry@paichart.com") |
-| approver.kubernetes-gitops | who approves this gate | — | josh.allen@paichart.com | (declared — item 7: "The kubernetes-gitops change gate is approved by josh.allen@paichart.com") |
-| approver.terraform-iac | who approves this gate | — | jacob.wilcox@paichart.com | (declared — item 8: "The terraform-iac change gate is approved by jacob.wilcox@paichart.com") |
+| approver.program-plan | who approves this gate | — | approver-001@example.com | (declared — item 6: "The program plan gate is approved by approver-001@example.com") |
+| approver.kubernetes-gitops | who approves this gate | — | approver-02@example.com | (declared — item 7: "The kubernetes-gitops change gate is approved by approver-02@example.com") |
+| approver.terraform-iac | who approves this gate | — | approver-0003@example.com | (declared — item 8: "The terraform-iac change gate is approved by approver-0003@example.com") |
 | gate.kubernetes-gitops.position | when this gate sits (every gate except the program plan gate) | before-leg · after-leg-before-completion · after-producer-before-consumers | before-leg | (declared — item 9: "sits before the cluster leg (before-leg)") |
 | gate.terraform-iac.position | when this gate sits (every gate except the program plan gate) | before-leg · after-leg-before-completion · after-producer-before-consumers | after-producer-before-consumers | (declared — item 10: "sits after the producer and before the consumers (after-producer-before-consumers)") |
 
@@ -122,9 +122,9 @@ assigned four of five gates to different people.
 
 **Declared approvers confirmed on the POV team** — the platform routes a gate only to a MEMBER; a declared
 approver who is not one silently falls to the POV owner, so a board meant to show several approvers shows one:
-- Program plan approver is Steve Terry steve.terry@paichart.com (declared) — member
-- kubernetes-gitops change approver is Josh Allen josh.allen@paichart.com (declared) — member
-- terraform-iac change approver is Jacob Wilcox jacob.wilcox@paichart.com (declared) — member
+- Program plan approver is Steve Terry approver-001@example.com (declared) — member
+- kubernetes-gitops change approver is Josh Allen approver-02@example.com (declared) — member
+- terraform-iac change approver is Jacob Wilcox approver-0003@example.com (declared) — member
 
 ### Every gate declares WHAT it approves and WHEN it sits — and the two must agree
 
@@ -138,9 +138,9 @@ it goes wrong.** A gate has a KIND, and the kind fixes the moment:
 
 | gate | approves | moment — runs AFTER | blocks | approver |
 |---|---|---|---|---|
-| program plan | the plan and the interface contract | the Program Architect | every leg | steve.terry@paichart.com (declared) |
-| kubernetes-gitops change | **intent / method**: which namespace, which pods count, and how the value is derived (item 9) | the program plan gate | the kubernetes-gitops leg | josh.allen@paichart.com (declared) |
-| terraform-iac change | **produced value**: the host list produced by the kubernetes-gitops leg, once it exists, before the terraform-iac leg uses it (item 10) | the kubernetes-gitops leg (the producer) | the terraform-iac leg | jacob.wilcox@paichart.com (declared) |
+| program plan | the plan and the interface contract | the Program Architect | every leg | approver-001@example.com (declared) |
+| kubernetes-gitops change | **intent / method**: which namespace, which pods count, and how the value is derived (item 9) | the program plan gate | the kubernetes-gitops leg | approver-02@example.com (declared) |
+| terraform-iac change | **produced value**: the host list produced by the kubernetes-gitops leg, once it exists, before the terraform-iac leg uses it (item 10) | the kubernetes-gitops leg (the producer) | the terraform-iac leg | approver-0003@example.com (declared) |
 
 ⚠️ **Write "the value produced by X", never a bare "the PRODUCED value".** A bare "PRODUCED" has no
 producer, and the phrase that follows it usually attaches the value to the CONSUMER's artifact

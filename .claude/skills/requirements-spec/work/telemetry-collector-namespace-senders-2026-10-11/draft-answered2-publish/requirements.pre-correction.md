@@ -41,9 +41,9 @@
 | kubernetes-gitops.inputs-empty | the derivation's inputs are empty | gap | gap: publish no sender set, and report a gap naming what was absent | (declared — item 20: "the kubernetes-gitops leg publishes no sender set and reports a gap naming what was absent (gap)") |
 | kubernetes-gitops.freshness | whether the sender set is maintained after the program | point-in-time · maintained | point-in-time as of the leg's harvest. The deliverable states the harvest time, and nothing maintains the set afterwards | (declared — item 6: "point-in-time as of the leg's harvest") |
 | observability-config.target | which surface of the leg's service does it act on | — | the ingress proxy in front of the telemetry collector's receiver | (declared — item 2: "acts on the ingress proxy in front of the telemetry collector's receiver") |
-| approver.program-plan | who approves this gate | — | jacob.wilcox@paichart.com | (declared — item 7: "The program plan gate is approved by jacob.wilcox@paichart.com") |
-| approver.kubernetes-gitops-change | who approves this gate | — | josh.allen@paichart.com | (declared — item 8: "The kubernetes-gitops change gate is approved by josh.allen@paichart.com") |
-| approver.observability-config-change | who approves this gate | — | steve.terry@paichart.com | (declared — item 9: "The observability-config change gate is approved by steve.terry@paichart.com") |
+| approver.program-plan | who approves this gate | — | approver-0003@example.com | (declared — item 7: "The program plan gate is approved by approver-0003@example.com") |
+| approver.kubernetes-gitops-change | who approves this gate | — | approver-02@example.com | (declared — item 8: "The kubernetes-gitops change gate is approved by approver-02@example.com") |
+| approver.observability-config-change | who approves this gate | — | approver-001@example.com | (declared — item 9: "The observability-config change gate is approved by approver-001@example.com") |
 | gate.kubernetes-gitops-change.position | when this gate sits (every gate except the program plan gate) | before-leg · after-leg-before-completion · after-producer-before-consumers | after-producer-before-consumers | (declared — item 10: "sits after that leg and before the observability-config leg (after-producer-before-consumers)") |
 | gate.observability-config-change.position | when this gate sits (every gate except the program plan gate) | before-leg · after-leg-before-completion · after-producer-before-consumers | after-leg-before-completion | (declared — item 11: "sits after that leg and before its completion (after-leg-before-completion)") |
 
@@ -121,9 +121,9 @@ assigned four of five gates to different people.
 
 **Declared approvers confirmed on the POV team** — the platform routes a gate only to a MEMBER; a declared
 approver who is not one silently falls to the POV owner, so a board meant to show several approvers shows one:
-- Program plan approver is Jacob Wilcox jacob.wilcox@paichart.com (declared) — member (PROJECT_MANAGER)
-- kubernetes-gitops change approver is Josh Allen josh.allen@paichart.com (declared) — member (SALES_ENGINEER)
-- observability-config change approver is Steve Terry steve.terry@paichart.com (declared) — member (OWNER)
+- Program plan approver is Jacob Wilcox approver-0003@example.com (declared) — member (PROJECT_MANAGER)
+- kubernetes-gitops change approver is Josh Allen approver-02@example.com (declared) — member (SALES_ENGINEER)
+- observability-config change approver is Steve Terry approver-001@example.com (declared) — member (OWNER)
 
 ### Every gate declares WHAT it approves and WHEN it sits — and the two must agree
 
@@ -137,9 +137,9 @@ it goes wrong.** A gate has a KIND, and the kind fixes the moment:
 
 | gate | approves | moment — runs AFTER | blocks | approver |
 |---|---|---|---|---|
-| program plan | the plan and the interface contract | the Program Architect | every leg | jacob.wilcox@paichart.com (declared) |
-| kubernetes-gitops change | produced value: the sender set (host list) produced by the kubernetes-gitops leg | the kubernetes-gitops leg | the observability-config leg | josh.allen@paichart.com (declared) |
-| observability-config change | produced value: the change package produced by the observability-config leg | the observability-config leg | completion of the observability-config leg, which releases the package for out-of-band apply | steve.terry@paichart.com (declared) |
+| program plan | the plan and the interface contract | the Program Architect | every leg | approver-0003@example.com (declared) |
+| kubernetes-gitops change | produced value: the sender set (host list) produced by the kubernetes-gitops leg | the kubernetes-gitops leg | the observability-config leg | approver-02@example.com (declared) |
+| observability-config change | produced value: the change package produced by the observability-config leg | the observability-config leg | completion of the observability-config leg, which releases the package for out-of-band apply | approver-001@example.com (declared) |
 
 The observability-config change gate sits after the leg it approves, and that is deliberate (item 11). It approves a produced value, the change package, and it blocks that package's release for apply. Because apply is out-of-band and human-gated, this gate is a control on what gets applied. It is not a record of work already in effect.
 
@@ -162,7 +162,7 @@ a program exists precisely because the halves are approved by different people. 
 DECLARED mapping, never a licence to reassign: if the declaration puts one person on both halves, keep it as
 declared and raise it as an open question.
 
-The declared mapping puts different people on the two domain gates (josh.allen@paichart.com and steve.terry@paichart.com). No open question is raised.
+The declared mapping puts different people on the two domain gates (approver-02@example.com and approver-001@example.com). No open question is raised.
 
 **Dependency consequence:**
 - Program plan gate → kubernetes-gitops leg, and program plan gate → observability-config leg.

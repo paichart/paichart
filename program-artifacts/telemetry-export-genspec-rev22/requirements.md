@@ -64,11 +64,11 @@ be computed against what the FABRIC leg actually found, not what someone assumed
 declared in this program's objective, and marked `(declared)`.
 
 **Declared approvers confirmed on the POV team**:
-- program plan is Josh Allen josh.allen@paichart.com (declared) — confirmed member [PROJECT_MANAGER]
-- fabric exporter value is Steve Terry steve.terry@paichart.com (declared) — confirmed member [OWNER]
-- Kubernetes change method is Jacob Wilcox jacob.wilcox@paichart.com (declared) — confirmed member [SALES_ENGINEER]
-- cloud storage change method is Josh Allen josh.allen@paichart.com (declared) — confirmed member [PROJECT_MANAGER]
-- observability change method is Jacob Wilcox jacob.wilcox@paichart.com (declared) — confirmed member [SALES_ENGINEER]
+- program plan is Josh Allen approver-02@example.com (declared) — confirmed member [PROJECT_MANAGER]
+- fabric exporter value is Steve Terry approver-001@example.com (declared) — confirmed member [OWNER]
+- Kubernetes change method is Jacob Wilcox approver-0003@example.com (declared) — confirmed member [SALES_ENGINEER]
+- cloud storage change method is Josh Allen approver-02@example.com (declared) — confirmed member [PROJECT_MANAGER]
+- observability change method is Jacob Wilcox approver-0003@example.com (declared) — confirmed member [SALES_ENGINEER]
 
 Josh Allen and Jacob Wilcox each hold two gates. This is per the declared approver mapping and is
 intentional — it is not raised here as an anomaly.

@@ -9,9 +9,9 @@ DESIGN DECISIONS - DECLARED, NOT INFERRED. Each item below is a choice made by t
 3. The restriction governs the whole bucket.
 4. The pods that count are the pods in the declared namespace whose phase is Running at the time of the leg's read; readiness is not a criterion; pods on the host's network are excluded; the leg reports, in its report.md, the literal criterion it applied and the time of the read.
 5. The published set is a host list.
-6. The program plan gate is approved by steve.terry@paichart.com.
-7. The cluster (`kubernetes-gitops`) change gate is approved by josh.allen@paichart.com.
-8. The cloud (`terraform-iac`) change gate is approved by jacob.wilcox@paichart.com.
+6. The program plan gate is approved by approver-001@example.com.
+7. The cluster (`kubernetes-gitops`) change gate is approved by approver-02@example.com.
+8. The cloud (`terraform-iac`) change gate is approved by approver-0003@example.com.
 9. The cluster gate's position is before-leg: it approves the method (which namespace, which pods count, how the list is derived) before the cluster leg runs.
 10. The cloud gate's position is after-producer-before-consumers: it approves the host list produced by the cluster leg, once it exists, before the cloud leg uses it.
 11. The cloud leg's admitted principal is source-address-range: the pods' addresses, as the host list of item 5; no identity and no network path is admitted.

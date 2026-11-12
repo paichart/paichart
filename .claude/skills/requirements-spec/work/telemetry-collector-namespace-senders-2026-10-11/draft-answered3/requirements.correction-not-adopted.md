@@ -34,9 +34,9 @@
 | kubernetes-gitops.representation | how the derived value is expressed | one aligned prefix · a set of prefixes · a host list | a host list: one entry per member pod's address, no covering prefix | (declared — item 5: "expressed as a host list: one entry per member pod's address, with no covering prefix") |
 | kubernetes-gitops.inputs-empty | the derivation's inputs are empty | gap | gap: publish no sender set, and report a gap naming what was absent | (declared — item 20: "If no pod in the declared namespace meets item 4, the kubernetes-gitops leg publishes no sender set and reports a gap naming what was absent (gap)") |
 | kubernetes-gitops.item-6 | as of when the sender set is valid, and whether anything maintains it after the program | — | point-in-time as of the leg's harvest; the deliverable states the harvest time; nothing maintains the set after the program | (declared — item 6: "The sender set is point-in-time as of the leg's harvest; the deliverable states the harvest time. Nothing maintains the set after the program") |
-| approver.program-plan | who approves this gate | — | Jacob Wilcox, jacob.wilcox@paichart.com | (declared — item 7: "The program plan gate is approved by jacob.wilcox@paichart.com") |
-| approver.kubernetes-gitops-change | who approves this gate | — | Josh Allen, josh.allen@paichart.com | (declared — item 8: "The kubernetes-gitops change gate is approved by josh.allen@paichart.com") |
-| approver.observability-config-change | who approves this gate | — | Steve Terry, steve.terry@paichart.com | (declared — item 9: "The observability-config change gate is approved by steve.terry@paichart.com") |
+| approver.program-plan | who approves this gate | — | Jacob Wilcox, approver-0003@example.com | (declared — item 7: "The program plan gate is approved by approver-0003@example.com") |
+| approver.kubernetes-gitops-change | who approves this gate | — | Josh Allen, approver-02@example.com | (declared — item 8: "The kubernetes-gitops change gate is approved by approver-02@example.com") |
+| approver.observability-config-change | who approves this gate | — | Steve Terry, approver-001@example.com | (declared — item 9: "The observability-config change gate is approved by approver-001@example.com") |
 | gate.kubernetes-gitops-change.position | when this gate sits (every gate except the program plan gate) | before-leg · after-leg-before-completion · after-producer-before-consumers | after-producer-before-consumers | (declared — item 10: "sits after that leg and before the observability-config leg (after-producer-before-consumers)") |
 | gate.observability-config-change.position | when this gate sits (every gate except the program plan gate) | before-leg · after-leg-before-completion · after-producer-before-consumers | after-leg-before-completion | (declared — item 11: "sits after that leg and before its completion (after-leg-before-completion)") |
 
@@ -114,9 +114,9 @@ assigned four of five gates to different people.
 
 **Declared approvers confirmed on the POV team** — the platform routes a gate only to a MEMBER; a declared
 approver who is not one silently falls to the POV owner, so a board meant to show several approvers shows one:
-- Program plan approver is Jacob Wilcox jacob.wilcox@paichart.com (declared) — member (PROJECT_MANAGER)
-- kubernetes-gitops change approver is Josh Allen josh.allen@paichart.com (declared) — member (SALES_ENGINEER)
-- observability-config change approver is Steve Terry steve.terry@paichart.com (declared) — member (OWNER)
+- Program plan approver is Jacob Wilcox approver-0003@example.com (declared) — member (PROJECT_MANAGER)
+- kubernetes-gitops change approver is Josh Allen approver-02@example.com (declared) — member (SALES_ENGINEER)
+- observability-config change approver is Steve Terry approver-001@example.com (declared) — member (OWNER)
 
 ### Every gate declares WHAT it approves and WHEN it sits — and the two must agree
 
@@ -399,7 +399,7 @@ the prose above, because two readings of the same sentence produce two different
 - Population criterion: phase Running, not on the host's network, no deletion requested (item 4)
 - Representation: a host list, one entry per member pod's address, no covering prefix (item 5)
 - Admission attribute and path: source address, direct (items 12, 13)
-- Approvers: jacob.wilcox@paichart.com, josh.allen@paichart.com, steve.terry@paichart.com (items 7–9)
+- Approvers: approver-0003@example.com, approver-02@example.com, approver-001@example.com (items 7–9)
 
 **Runtime → the DAG edge** (not knowable up front — see the rationale section):
 - The sender set — produced by the kubernetes-gitops leg, chained into the observability-config leg's §6, settled before that leg starts. It is approved at the kubernetes-gitops change gate.

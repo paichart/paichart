@@ -27,9 +27,9 @@ with it.
 
 | gate | approves | runs after | blocks | approver |
 |---|---|---|---|---|
-| program plan | the plan, the leg types and the interface contract | the Program Architect | both legs | Jacob Wilcox, jacob.wilcox@paichart.com |
-| address | the address Pipeline 1 published | Pipeline 1 publishing the address | Pipeline 2 | Josh Allen, josh.allen@paichart.com |
-| network change | the change package Pipeline 2 produced for ceos2 | Pipeline 2 producing its change package | program completion only, not Pipeline 2's own work | Steve Terry, steve.terry@paichart.com |
+| program plan | the plan, the leg types and the interface contract | the Program Architect | both legs | Jacob Wilcox, approver-0003@example.com |
+| address | the address Pipeline 1 published | Pipeline 1 publishing the address | Pipeline 2 | Josh Allen, approver-02@example.com |
+| network change | the change package Pipeline 2 produced for ceos2 | Pipeline 2 producing its change package | program completion only, not Pipeline 2's own work | Steve Terry, approver-001@example.com |
 
 ## Pipeline 1 objective — exporter address (network-derivation, value)
 

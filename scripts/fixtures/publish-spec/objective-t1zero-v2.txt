@@ -11,11 +11,11 @@ DESIGN DECISIONS - DECLARED, NOT INFERRED. Each item below is a choice made by t
 5. Exporter population: the fabric's exporter addresses are the IPv4 addresses of interfaces whose description marks them as telemetry exporters. No other fabric address is an exporter address. The fabric leg reports, in its own deliverable, the description marker it applied.
 6. Representation: the fabric leg computes the smallest CIDR block, aligned to a valid prefix boundary, that contains every one of the fabric's exporter addresses. That block is the range the other three systems authorise.
 7. Approvers (one per gate):
-   - program plan - Josh Allen (josh.allen@paichart.com)
+   - program plan - Josh Allen (approver-02@example.com)
    - fabric exporter value (network-provisioning) - Steve Terry (<maintainer-email>)
-   - Kubernetes change method (kubernetes-gitops) - Jacob Wilcox (jacob.wilcox@paichart.com)
-   - cloud storage change method (terraform-iac) - Josh Allen (josh.allen@paichart.com)
-   - observability change method (observability-config) - Jacob Wilcox (jacob.wilcox@paichart.com)
+   - Kubernetes change method (kubernetes-gitops) - Jacob Wilcox (approver-0003@example.com)
+   - cloud storage change method (terraform-iac) - Josh Allen (approver-02@example.com)
+   - observability change method (observability-config) - Jacob Wilcox (approver-0003@example.com)
    Josh Allen and Jacob Wilcox each holding two gates is intentional.
 8. Gate positions: the fabric exporter value gate sits after the fabric leg and before the three consuming legs. Each of the Kubernetes, cloud storage and observability change-method gates sits AFTER its own leg and approves that leg's produced change package before the program completes; it does not block the leg's authoring.
 9. Admitted principal: on the Kubernetes receiver pods and the observability stack's OTLP ingress, the admitted sender is identified by its source address, which must lie in the exporter range of item 6. On the archive bucket, the admitted principal is the IAM role arn:aws:iam::000000000000:role/telemetry-exporter-writer, and only when its request arrives through the VPC endpoint vpce-0a1b2c3d4e5f60718 from a source address in the exporter range (conditions aws:SourceVpce and aws:VpcSourceIp); aws:SourceIp is not used. No other principal is granted by this change. The role and the VPC endpoint are provisioned outside this program: the program authors the bucket policy that references them and does not create or verify them.

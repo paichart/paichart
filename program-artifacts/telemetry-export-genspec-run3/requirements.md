@@ -291,10 +291,10 @@ earned by a failed or false-passing run.
 ## Approvals — one gate per domain, plus the program plan gate
 
 **Team provisioned for this POV** — every approver below is a member of the POV team; unnamed approvers would silently route to the POV owner:
-- Program Manager is Chris Terry (chris.terry@paichart.com)
-- Fabric value approver is Steve Terry (steve.terry@paichart.com)
-- Kubernetes change approver is Jacob Wilcox (jacob.wilcox@paichart.com)
-- Cloud change approver is Josh Allen (josh.allen@paichart.com)
+- Program Manager is Chris Terry (approver-004@example.com)
+- Fabric value approver is Steve Terry (approver-001@example.com)
+- Kubernetes change approver is Jacob Wilcox (approver-0003@example.com)
+- Cloud change approver is Josh Allen (approver-02@example.com)
 - Observability change approver is Rika Smith (rika@example.com)
 
 ### Every gate declares WHAT it approves and WHEN it sits

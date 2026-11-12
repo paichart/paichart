@@ -26,11 +26,11 @@
 | Exporter population | The fabric's exporter addresses are the IPv4 addresses of interfaces whose description marks them as telemetry exporters. No other fabric address is an exporter address. | (declared) |
 | Representation | The FABRIC leg computes the smallest CIDR block, aligned to a valid prefix boundary, that contains every one of the fabric's exporter addresses. That block is the range the other three systems authorise. | (declared) |
 | Archive write scope | The exporter range is authorised for `s3:PutObject` on objects in the declared bucket only — no read, list, or delete. | (declared) |
-| Program plan approver | Josh Allen (josh.allen@paichart.com) | (declared) |
-| Fabric exporter value approver | Steve Terry (steve.terry@paichart.com) | (declared) |
-| Kubernetes change method approver | Jacob Wilcox (jacob.wilcox@paichart.com) | (declared) |
-| Cloud storage change method approver | Josh Allen (josh.allen@paichart.com) | (declared) |
-| Observability change method approver | Jacob Wilcox (jacob.wilcox@paichart.com) | (declared) |
+| Program plan approver | Josh Allen (approver-02@example.com) | (declared) |
+| Fabric exporter value approver | Steve Terry (approver-001@example.com) | (declared) |
+| Kubernetes change method approver | Jacob Wilcox (approver-0003@example.com) | (declared) |
+| Cloud storage change method approver | Josh Allen (approver-02@example.com) | (declared) |
+| Observability change method approver | Jacob Wilcox (approver-0003@example.com) | (declared) |
 | Receiver readiness | The Kubernetes policy is authored against the declared selector whether or not any pod matches it at execution time, including a namespace holding no pods at all; the leg reports the number of matching pods, and a zero is reported, not treated as an error. | (declared) |
 | Existing authorisations — receiver surfaces | On the pods the declared receiver selector selects, and on the observability stack's OTLP ingress (TCP 4317/4318), the exporter range is the only permitted sender; any other sender allowance on those surfaces is replaced, not kept. Rules for other ports and other workloads are not touched. | (declared) |
 | Existing authorisations — archive bucket | The change to the bucket is additive: the exporter range gains `s3:PutObject` and nothing else; existing statements for other principals or purposes are kept; no statement may grant the exporter range more than `s3:PutObject`. | (declared) |
@@ -51,11 +51,11 @@ Between CLUSTER, CLOUD, and OBSERVABILITY themselves, the test answers **Yes**: 
 ## Approvals — one gate per domain, plus the program plan gate
 
 **Declared approvers confirmed on the POV team:**
-- Program plan approver is Josh Allen (josh.allen@paichart.com) (declared) — member (PROJECT_MANAGER).
-- Fabric exporter value approver is Steve Terry (steve.terry@paichart.com) (declared) — member (OWNER).
-- Kubernetes change method approver is Jacob Wilcox (jacob.wilcox@paichart.com) (declared) — member (SALES_ENGINEER).
-- Cloud storage change method approver is Josh Allen (josh.allen@paichart.com) (declared) — member (PROJECT_MANAGER).
-- Observability change method approver is Jacob Wilcox (jacob.wilcox@paichart.com) (declared) — member (SALES_ENGINEER).
+- Program plan approver is Josh Allen (approver-02@example.com) (declared) — member (PROJECT_MANAGER).
+- Fabric exporter value approver is Steve Terry (approver-001@example.com) (declared) — member (OWNER).
+- Kubernetes change method approver is Jacob Wilcox (approver-0003@example.com) (declared) — member (SALES_ENGINEER).
+- Cloud storage change method approver is Josh Allen (approver-02@example.com) (declared) — member (PROJECT_MANAGER).
+- Observability change method approver is Jacob Wilcox (approver-0003@example.com) (declared) — member (SALES_ENGINEER).
 
 Josh Allen and Jacob Wilcox each hold two gates. This is declared as written in the objective and is kept as declared — it is not this document's place to reassign it, only to note that a program normally separates producer and approver, and this mapping puts the same two people across four of the five gates between them.
 

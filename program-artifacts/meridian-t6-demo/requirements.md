@@ -61,9 +61,9 @@ terraform leg, **not** the interface contract.
 ## Approvals (multi-team — one gate per domain, plus the program plan gate)
 
 The team for this project (or pov) have been provisioned and are the following;
-- Project Manager is Steve Terry steve.terry@paichart.com
-- Network Engineer is Josh Allen josh.allen@paichart.com
-- Cloud Engineer is Jacob Wilcox jacob.wilcox@paichart.com
+- Project Manager is Steve Terry approver-001@example.com
+- Network Engineer is Josh Allen approver-02@example.com
+- Cloud Engineer is Jacob Wilcox approver-0003@example.com
 
 - The **network change** requires its own approval before the network pipeline may run.
   Approver: **Josh Allen** (network engineering).

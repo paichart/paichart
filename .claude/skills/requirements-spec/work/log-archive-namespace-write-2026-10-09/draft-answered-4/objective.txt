@@ -9,9 +9,9 @@ DESIGN DECISIONS - DECLARED, NOT INFERRED. Each item below is a choice made by t
 3. The target bucket is the Terraform resource `aws_s3_bucket.app_logs` in workspace `prod` (bucket `acme-app-logs`); it is the log archive.
 4. On the bucket, the authorised resource is its objects, with no key-prefix limit.
 5. The derivation's population is every pod in the namespace of item 2 whose phase is Running; readiness is not a criterion; the leg reports, in its own published deliverable (report.md), the literal criterion it applied.
-6. The program plan gate is approved by steve.terry@paichart.com.
-7. The kubernetes-gitops change gate is approved by josh.allen@paichart.com.
-8. The terraform-iac change gate is approved by jacob.wilcox@paichart.com.
+6. The program plan gate is approved by approver-001@example.com.
+7. The kubernetes-gitops change gate is approved by approver-02@example.com.
+8. The terraform-iac change gate is approved by approver-0003@example.com.
 9. The kubernetes-gitops change gate sits before the cluster leg (before-leg): it approves the method - which namespace, which pods count, how the value is derived - before the cluster leg runs.
 10. The terraform-iac change gate sits after the producer and before the consumers (after-producer-before-consumers): it approves the produced value, once it exists, before the bucket leg uses it.
 11. The bucket admits by source address (source-address-range): the admitted principal is the source-address value the cluster leg produces (items 1 and 5). No VPC endpoint is declared.

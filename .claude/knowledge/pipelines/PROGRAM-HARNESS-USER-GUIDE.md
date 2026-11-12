@@ -505,7 +505,7 @@ before any child or spend** — relaunch it as a new task with the pov-program t
   change package, changes nothing**. A leg that derives a value AND changes a device stays a `change` leg.
 - ⚠️ **Limit (until the F lane lands):** the generated requirements template has no slot for the "this leg changes
   nothing" phrase, so a value leg comes **only from a hand-shaped requirements document** (e.g. a published program view,
-  `requirements.program.md`). A generated spec yields change legs only. Two network legs (one value, one change) are kept
+  `requirements.md`). A generated spec yields change legs only. Two network legs (one value, one change) are kept
   on the change token until you answer by re-planning.
 - **Device sources on a value leg (network-derivation ≥ 1.3.0, live and canaried 2026-11-06):** optional, under its own contract key
   `deviceSources["network-derivation"]` (above, § 4). At the plan gate check that a value leg WITH a section in requirements.md carries

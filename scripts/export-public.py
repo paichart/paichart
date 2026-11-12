@@ -31,6 +31,10 @@ RULES = os.path.join(ROOT, 'scripts', 'export', 'public-allowlist.rules')
 PROD_IP = '<PROD_HOST>'
 PERSONAL = ['<maintainer-email>', '<maintainer-email>', '<maintainer-email>']
 WORK_ADDRESS = '<maintainer-email>'
+# Other people's work addresses that appear in fixtures and probes (owner 2026-11-13: replace them in what is published).
+# Same-LENGTH placeholders: several suites pin fixture byte sizes, and these files are read by the export chain.
+COLLEAGUES = {'approver-02@example.com': 'approver-02@example.com', 'approver-0003@example.com': 'approver-0003@example.com',
+              'approver-004@example.com': 'approver-004@example.com'}
 WORK_ADDRESS_KEPT_UNDER = ('.claude/skills/',)  # the last is the operator's work address — docs mention it as the prod admin identity
 TEXT_EXT = {'.md', '.ts', '.tsx', '.js', '.mjs', '.cjs', '.json', '.yml', '.yaml', '.sh', '.txt', '.toml', '.py', '.sql', '.tf', '.conf', '.env', '.example', '.rules', '.css'}
 
@@ -166,6 +170,8 @@ def main():
                 if e == WORK_ADDRESS and p.startswith(WORK_ADDRESS_KEPT_UNDER):
                     continue
                 c = t.count(e); t = t.replace(e, a.maintainer_email); sweeps['personal-email'] += c
+            for e, repl in COLLEAGUES.items():
+                c = t.count(e); t = t.replace(e, repl); sweeps['colleague-email'] += c
             if t != n0: swept_files[p.split('/')[0]] += 1
             with open(dst, 'w', encoding='utf-8') as f: f.write(t)
             shutil.copymode(src, dst)

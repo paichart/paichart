@@ -247,9 +247,9 @@ them — conflating design order with apply order is a known error class for seq
 ## Approvals — one gate per domain, plus the program plan gate
 
 Team provisioned for this POV:
-- Network security lead is Steve Terry steveterry66@gmail.com
-- Cloud platform lead is Steve Terry steveterry66@gmail.com
-- Core network lead is Steve Terry steveterry66@gmail.com
+- Network security lead is Steve Terry approver-1@example.com
+- Cloud platform lead is Steve Terry approver-1@example.com
+- Core network lead is Steve Terry approver-1@example.com
 
 - The **edge (ceos1) change** requires its own approval before that pipeline may run.
 - The **dmz (Terraform) change** requires its own approval before that pipeline may run.

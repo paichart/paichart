@@ -32,11 +32,11 @@
 | kubernetes-gitops.target | which surface of the leg's service does it act on | — | the Kubernetes namespace `trading` | (declared — item 1: "the Kubernetes namespace `trading`. No other namespace is in scope.") |
 | terraform-iac.target | which surface of the leg's service does it act on | — | the S3 bucket managed by Terraform resource `aws_s3_bucket.app_logs` in workspace `prod` | (declared — item 2: "the S3 bucket managed by Terraform resource `aws_s3_bucket.app_logs` in workspace `prod`") |
 | observability-config.target | which surface of the leg's service does it act on | — | the observability stack's OTLP ingress, on TCP 4317 and TCP 4318 | (declared — item 4: "the observability stack's OTLP ingress in front of the collector, on TCP 4317 (OTLP gRPC) and TCP 4318 (OTLP HTTP)") |
-| approver.program-plan | who approves this gate | — | Josh Allen, josh.allen@paichart.com | (declared — item 7: "program plan - Josh Allen (josh.allen@paichart.com)") |
-| approver.fabric-exporter-value | who approves this gate | — | Steve Terry, steve.terry@paichart.com | (declared — item 7: "fabric exporter value (network-provisioning) - Steve Terry (steve.terry@paichart.com)") |
-| approver.kubernetes-change-method | who approves this gate | — | Jacob Wilcox, jacob.wilcox@paichart.com | (declared — item 7: "Kubernetes change method (kubernetes-gitops) - Jacob Wilcox (jacob.wilcox@paichart.com)") |
-| approver.cloud-storage-change-method | who approves this gate | — | Josh Allen, josh.allen@paichart.com | (declared — item 7: "cloud storage change method (terraform-iac) - Josh Allen (josh.allen@paichart.com)") |
-| approver.observability-change-method | who approves this gate | — | Jacob Wilcox, jacob.wilcox@paichart.com | (declared — item 7: "observability change method (observability-config) - Jacob Wilcox (jacob.wilcox@paichart.com)") |
+| approver.program-plan | who approves this gate | — | Josh Allen, approver-02@example.com | (declared — item 7: "program plan - Josh Allen (approver-02@example.com)") |
+| approver.fabric-exporter-value | who approves this gate | — | Steve Terry, approver-001@example.com | (declared — item 7: "fabric exporter value (network-provisioning) - Steve Terry (approver-001@example.com)") |
+| approver.kubernetes-change-method | who approves this gate | — | Jacob Wilcox, approver-0003@example.com | (declared — item 7: "Kubernetes change method (kubernetes-gitops) - Jacob Wilcox (approver-0003@example.com)") |
+| approver.cloud-storage-change-method | who approves this gate | — | Josh Allen, approver-02@example.com | (declared — item 7: "cloud storage change method (terraform-iac) - Josh Allen (approver-02@example.com)") |
+| approver.observability-change-method | who approves this gate | — | Jacob Wilcox, approver-0003@example.com | (declared — item 7: "observability change method (observability-config) - Jacob Wilcox (approver-0003@example.com)") |
 | gate.fabric-exporter-value.position | when this gate sits | before-leg · after-leg-before-completion · after-producer-before-consumers | after-producer-before-consumers | (declared — item 8: "the fabric exporter value gate sits after the fabric leg and before the three consuming legs") |
 | gate.kubernetes-change-method.position | when this gate sits | before-leg · after-leg-before-completion · after-producer-before-consumers | after-leg-before-completion | (declared — item 8: "sits AFTER its own leg and approves that leg's produced change package before the program completes; it does not block the leg's authoring") |
 | gate.cloud-storage-change-method.position | when this gate sits | before-leg · after-leg-before-completion · after-producer-before-consumers | after-leg-before-completion | (declared — item 8: "sits AFTER its own leg and approves that leg's produced change package before the program completes; it does not block the leg's authoring") |
@@ -105,11 +105,11 @@ Guessing the CIDR up front (e.g. from a design-time assumption about the fabric'
 **Approvers are DECLARED, never chosen.** Every approver below is TRANSCRIBED from the approver mapping declared in this program's objective, and marked `(declared)`.
 
 **Declared approvers confirmed on the POV team** (POV roster: Steve Terry — OWNER, Josh Allen — PROJECT_MANAGER, Jacob Wilcox — SALES_ENGINEER):
-- Program plan approver is Josh Allen, josh.allen@paichart.com (declared) — member (PROJECT_MANAGER)
-- Fabric exporter value approver is Steve Terry, steve.terry@paichart.com (declared) — member (OWNER)
-- Kubernetes change method approver is Jacob Wilcox, jacob.wilcox@paichart.com (declared) — member (SALES_ENGINEER)
-- Cloud storage change method approver is Josh Allen, josh.allen@paichart.com (declared) — member (PROJECT_MANAGER)
-- Observability change method approver is Jacob Wilcox, jacob.wilcox@paichart.com (declared) — member (SALES_ENGINEER)
+- Program plan approver is Josh Allen, approver-02@example.com (declared) — member (PROJECT_MANAGER)
+- Fabric exporter value approver is Steve Terry, approver-001@example.com (declared) — member (OWNER)
+- Kubernetes change method approver is Jacob Wilcox, approver-0003@example.com (declared) — member (SALES_ENGINEER)
+- Cloud storage change method approver is Josh Allen, approver-02@example.com (declared) — member (PROJECT_MANAGER)
+- Observability change method approver is Jacob Wilcox, approver-0003@example.com (declared) — member (SALES_ENGINEER)
 
 Josh Allen and Jacob Wilcox each holding two gates is intentional (declared — item 7: "Josh Allen and Jacob Wilcox each holding two gates is intentional").
 

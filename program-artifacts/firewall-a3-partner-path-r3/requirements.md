@@ -87,9 +87,9 @@ them — conflating design order with apply order is a known error class for seq
 
 Team provisioned for this POV — each approver must be a MEMBER of the POV team, or the platform
 cannot route the gate to them and it silently falls to the POV owner:
-- Network security lead is Josh Allen josh.allen@paichart.com
-- Cloud platform lead is Jacob Wilcox jacob.wilcox@paichart.com
-- Core network lead is Chris Terry chris.terry@paichart.com
+- Network security lead is Josh Allen approver-02@example.com
+- Cloud platform lead is Jacob Wilcox approver-0003@example.com
+- Core network lead is Chris Terry approver-004@example.com
 
 - The **edge (ceos1) change** requires its own approval before that pipeline may run. Approver: **Josh Allen**.
 - The **dmz (Terraform) change** requires its own approval before that pipeline may run. Approver: **Jacob Wilcox**.

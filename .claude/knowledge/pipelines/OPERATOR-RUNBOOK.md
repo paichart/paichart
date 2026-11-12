@@ -7,19 +7,20 @@ You do not need to know how the platform works inside. **Start here;** each step
 rollback, and the checks to run before and after you apply it. **Nothing is ever applied for you.** Agents are read-only, and
 applying is your step.
 
-**Scope:** the hosted platform on its lab rigs, per the MVP statement (`cline_docs/reviews/mvp-statement-2026-11-01/MVP-STATEMENT.md`
-§3 — what we claim and what we do not).
+**Scope:** programs run against lab environments — that is what has been proven so far. The steps are the same on the hosted
+platform and on your own install.
 
 ---
 
 ## Step 1 — Write the objective and its spec (once per objective)
 
-A program reads two published files: **`requirements.program.md`** (the objective, the rules, who approves what, the final checks) and
+A program reads two published files: **`requirements.md`** (the objective, the rules, who approves what, the final checks) and
 **`topology.json`** (where each system's configuration lives). It never takes addresses or device lists from you; the agents read
 those from live state.
 
-- **Generate and publish a spec:** the `requirements-spec` skill. It turns an objective into an answered requirements file, asks you
-  the design questions it cannot decide, checks the result, and publishes it.
+- **Write the spec by hand:** about one page, in the shape of a released example, using `PROGRAM-SPEC-CHECKLIST.md` (this
+  directory). Put both files in any repository whose raw URLs your hub can fetch; if a leg reads configuration files from Git,
+  that repository must be the one your hub's Git pin names. This is the route in use.
 - **Re-run a spec that has already released:** use its published URLs unchanged.
 - **Detail:** `PROGRAM-USE-CASE-DESIGN-PLAYBOOK.md` (designing a new kind of program); `PROGRAM-COMPOSITION-CATALOG.md` (shapes).
 - **For a network leg:** each device's configuration source goes in a `## Device sources` block (`git-file`, `device-read` or

@@ -13,9 +13,9 @@ Each group is recorded as soon as the owner accepts it.
 
 ### Group B — who approves and when (accepted 2026-10-09)
 
-6. The program plan gate is approved by steve.terry@paichart.com.
-7. The cluster (`kubernetes-gitops`) change gate is approved by josh.allen@paichart.com.
-8. The cloud (`terraform-iac`) change gate is approved by jacob.wilcox@paichart.com.
+6. The program plan gate is approved by approver-001@example.com.
+7. The cluster (`kubernetes-gitops`) change gate is approved by approver-02@example.com.
+8. The cloud (`terraform-iac`) change gate is approved by approver-0003@example.com.
 9. The cluster gate's position is before-leg: it approves the method (which namespace, which pods count, how the list is derived) before the cluster leg runs.
 10. The cloud gate's position is after-producer-before-consumers: it approves the host list produced by the cluster leg, once it exists, before the cloud leg uses it.
 

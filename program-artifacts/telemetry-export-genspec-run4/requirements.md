@@ -29,11 +29,11 @@ The Kubernetes, Cloud Storage, and Observability legs do not, in turn, need anyt
 ## Approvals — one gate per domain, plus the program plan gate
 
 **Team provisioned for this POV** — every approver named below must be a MEMBER of the POV team, or the platform cannot route the gate to them:
-- Program Plan Approver is Josh Allen josh.allen@paichart.com
-- Fabric Exporter Value Approver is Steve Terry steve.terry@paichart.com
-- Kubernetes Change Method Approver is Jacob Wilcox jacob.wilcox@paichart.com
-- Cloud Storage Change Method Approver is Josh Allen josh.allen@paichart.com
-- Observability Change Method Approver is Jacob Wilcox jacob.wilcox@paichart.com
+- Program Plan Approver is Josh Allen approver-02@example.com
+- Fabric Exporter Value Approver is Steve Terry approver-001@example.com
+- Kubernetes Change Method Approver is Jacob Wilcox approver-0003@example.com
+- Cloud Storage Change Method Approver is Josh Allen approver-02@example.com
+- Observability Change Method Approver is Jacob Wilcox approver-0003@example.com
 
 **Named gap**: whether each of the above is currently a member of this POV's team was not verifiable during authoring (no team-roster read is in scope for this role); this must be confirmed by the customer/project manager before the plan gate is approved, or routing will silently fall to the POV owner instead of the named approver.
 

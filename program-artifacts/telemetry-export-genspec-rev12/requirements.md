@@ -69,11 +69,11 @@ approver for would be written `UNASSIGNED — no approver declared` and listed u
 no such gate exists in this program; all five gates have a declared approver.
 
 **Declared approvers confirmed on the POV team**:
-- Program plan approver is Josh Allen (josh.allen@paichart.com) (declared) — member (Project Manager)
-- Fabric exporter value approver is Steve Terry (steve.terry@paichart.com) (declared) — member (Owner)
-- Kubernetes change method approver is Jacob Wilcox (jacob.wilcox@paichart.com) (declared) — member (Sales Engineer)
-- Cloud storage change method approver is Josh Allen (josh.allen@paichart.com) (declared) — member (Project Manager)
-- Observability change method approver is Jacob Wilcox (jacob.wilcox@paichart.com) (declared) — member (Sales Engineer)
+- Program plan approver is Josh Allen (approver-02@example.com) (declared) — member (Project Manager)
+- Fabric exporter value approver is Steve Terry (approver-001@example.com) (declared) — member (Owner)
+- Kubernetes change method approver is Jacob Wilcox (approver-0003@example.com) (declared) — member (Sales Engineer)
+- Cloud storage change method approver is Josh Allen (approver-02@example.com) (declared) — member (Project Manager)
+- Observability change method approver is Jacob Wilcox (approver-0003@example.com) (declared) — member (Sales Engineer)
 
 Josh Allen and Jacob Wilcox each holding two gates is a declared choice, not a coverage gap — it is
 not reassigned here for "balance."

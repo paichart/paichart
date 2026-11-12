@@ -220,10 +220,18 @@ test('PIN2 the Python publish pass calls the check and parses no block itself', 
   assert(PY.includes("'check-requirements-sources.ts'"), 'publish-generated-spec.py no longer calls the sources check');
   assert(!PY.includes(SOURCE_SEPARATOR.trim() + ' service') && !DEVICE_SOURCE_KINDS.some((k) => PY.includes(`'${k}'`)), 'publish-generated-spec.py parses sources itself');
 });
-const SKILL = fs.readFileSync(path.join(ROOT, '.claude/skills/requirements-spec/SKILL.md'), 'utf8');
-test('PIN3 the skill states both lane sentences exactly as the check reads them', () => {
-  for (const s of Object.values(LANE_SENTENCES)) assert(SKILL.includes(s), `SKILL.md lacks "${s}"`);
-});
+// The skill's operative files are not exported (owner 2026-11-13). In the PRIVATE repo (it has cline_docs/) SKILL.md must exist
+// and this pin runs; in the public tree it is absent by design and the pin is skipped out loud — never skipped silently in private.
+const SKILL_PATH = path.join(ROOT, '.claude/skills/requirements-spec/SKILL.md');
+const PRIVATE_REPO = fs.existsSync(path.join(ROOT, 'cline_docs'));
+if (fs.existsSync(SKILL_PATH) || PRIVATE_REPO) {
+  const SKILL = fs.readFileSync(SKILL_PATH, 'utf8');
+  test('PIN3 the skill states both lane sentences exactly as the check reads them', () => {
+    for (const s of Object.values(LANE_SENTENCES)) assert(SKILL.includes(s), `SKILL.md lacks "${s}"`);
+  });
+} else {
+  console.log('  · PIN3 skipped: the requirements-spec skill is not part of the public export');
+}
 test('PIN4 the CLI exits 1 on an ERROR and 0 when clean (the publish pass keys on the exit code)', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'req-sources-'));
   try {

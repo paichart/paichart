@@ -28,7 +28,7 @@ declaration (owner's statement). Per-device kind (changes / sees, which source) 
 ## Step 1 — objective-zero.txt accepted by owner ("ok", 2026-11-10)
 
 ## Step 2 — zero-decision generation (owner "yes" 2026-11-10)
-- MCP identity steve.terry@paichart.com ADMIN; registry holds no rig services.
+- MCP identity approver-001@example.com ADMIN; registry holds no rig services.
 - POV `cmwa172uj0007yxwvkdt3yds3` "Lab Exporter Address Expansion" (phases Requirements, Program; AU; owner only).
 - Stage `cmwa174mm000iyxwv7uhs2yxq` "Requirements — exporter loopback (zero)".
 - Task `cmwa1786e000kyxwvllenp8pp` PIPELINE, Pipeline Harness `cmnjoo31t0000yx3s8e9hc7k8`; no duplicateAcknowledged (new POV).

@@ -64,10 +64,10 @@ Both legs carry the protocol token `network-provisioning`, so each leg has its o
 
 | id | question | options | rule or named target | source |
 |---|---|---|---|---|
-| approver.plan | who approves this gate | — | Jacob Wilcox, jacob.wilcox@paichart.com | (declared — item 14: "The program plan gate is approved by Jacob Wilcox (jacob.wilcox@paichart.com)") |
-| approver.value | who approves this gate | — | Josh Allen, josh.allen@paichart.com | (declared — item 15: "It is approved by Josh Allen (josh.allen@paichart.com)") |
+| approver.plan | who approves this gate | — | Jacob Wilcox, approver-0003@example.com | (declared — item 14: "The program plan gate is approved by Jacob Wilcox (approver-0003@example.com)") |
+| approver.value | who approves this gate | — | Josh Allen, approver-02@example.com | (declared — item 15: "It is approved by Josh Allen (approver-02@example.com)") |
 | gate.value.position | when this gate sits (every gate except the program plan gate) | before-leg · after-leg-before-completion · after-producer-before-consumers | after-producer-before-consumers | (declared — item 15: "its position is after-producer-before-consumers") |
-| approver.change | who approves this gate | — | Steve Terry, steve.terry@paichart.com | (declared — item 16: "It is approved by Steve Terry (steve.terry@paichart.com)") |
+| approver.change | who approves this gate | — | Steve Terry, approver-001@example.com | (declared — item 16: "It is approved by Steve Terry (approver-001@example.com)") |
 | gate.change.position | when this gate sits (every gate except the program plan gate) | before-leg · after-leg-before-completion · after-producer-before-consumers | after-leg-before-completion | (declared — item 16: "its position is after-leg-before-completion") |
 
 ### A leg that grants or removes access (authorisation)
@@ -145,9 +145,9 @@ assigned four of five gates to different people.
 
 **Declared approvers confirmed on the POV team** — the platform routes a gate only to a MEMBER; a declared
 approver who is not one silently falls to the POV owner, so a board meant to show several approvers shows one:
-- Program plan approver is Jacob Wilcox jacob.wilcox@paichart.com (declared) — member
-- Network value gate approver is Josh Allen josh.allen@paichart.com (declared) — member
-- Network change gate approver is Steve Terry steve.terry@paichart.com (declared) — member
+- Program plan approver is Jacob Wilcox approver-0003@example.com (declared) — member
+- Network value gate approver is Josh Allen approver-02@example.com (declared) — member
+- Network change gate approver is Steve Terry approver-001@example.com (declared) — member
 
 ### Every gate declares WHAT it approves and WHEN it sits — and the two must agree
 
