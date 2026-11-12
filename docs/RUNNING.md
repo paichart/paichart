@@ -27,11 +27,13 @@ npm run --silent jwt:keys >> .env # RS256 signing key pair — appends the three
                                   # --silent matters: without it npm's "> jwt:keys" banner lands in .env too (harmless to the
                                   # servers, but `source .env` then runs it as a command and creates a stray file)
 #  → OAUTH_STATE_SECRET: any strong random string (openssl rand -hex 32)
-#  → ANTHROPIC_API_KEY — NOT read by the app at runtime. After the seed, `npm run llm:init` copies it into the
-#    system provider settings (Admin → Settings → LLM), which every user on "use system provider" inherits;
-#    a user can instead paste their own key in Profile Settings → LLM. No key = every agent execution fails at start.
+#  → Your Anthropic key: after first login, Profile Settings → LLM → switch "Use System Provider" off, paste the key, Save
+#    Changes. No key = every agent execution fails at start. (One shared key for every user instead: set ANTHROPIC_API_KEY
+#    here and run `npm run llm:init` AFTER the seed — it copies the key into the system provider settings, which every
+#    user on "use system provider" inherits. The app never reads the variable itself.)
 
-#  → ADMIN_EMAIL=you@example.com (your first login; ADMIN_PASSWORD optional — generated + printed once if unset)
+#  → ADMIN_EMAIL stays as shipped (admin@paichart.local, the built-in administrator — a login name, not a mailbox);
+#    ADMIN_PASSWORD optional — generated + printed once if unset. Create your own account after first login.
 
 npm run db:seed                   # one shot, idempotent, safe to re-run: db push → generate → raw-SQL indexes →
                                   # role grants → first SUPER_ADMIN → "system" sentinel → theatres/countries → protocols → hub prompts →
@@ -41,7 +43,7 @@ npm run dev                       # terminal 1 → http://localhost:3000
 npm run mcp:http:dev              # terminal 2 → http://localhost:8080/health
 ```
 
-Log in at http://localhost:3000/login with `ADMIN_EMAIL` and the password you set or were shown. Password login
+Log in at http://localhost:3000/login as `admin@paichart.local` with the password you set or were shown, then create your own account (Admin Dashboard → User Management). Password login
 works without any OAuth provider configured; OAuth providers are optional and covered in [OAUTH-SETUP.md](OAUTH-SETUP.md).
 
 The individual steps `db:seed` runs (`db:indexes`, `db:permissions`, `db:admin`, `db:system-user`,

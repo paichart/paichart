@@ -34,11 +34,11 @@ After=paichart-mcp.service
 Type=exec
 
 # EDIT THESE THREE for your install.
-User=steve
-Group=steve
+User=YOUR_USER
+Group=YOUR_USER
 # A literal absolute path. NOT %h — in a SYSTEM unit %h resolves to root's home,
 # not the home of the User= you set.
-WorkingDirectory=/home/steve/paichart
+WorkingDirectory=/home/YOUR_USER/paichart
 
 # NODE_ENV is load-bearing TWICE: server.js gates ts-node registration on it (without
 # it the app dies with a SyntaxError on a TypeScript `import type` line, which looks

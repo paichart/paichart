@@ -123,12 +123,14 @@ Already have Node 24 (20.19 is the minimum), PostgreSQL 16 and an empty database
 
 ```bash
 git clone https://github.com/paichart/paichart && cd paichart && npm ci
-cp .env.example .env               # set DATABASE_URL, APP_BASE_URL and ADMIN_EMAIL; then:
+cp .env.example .env               # set DATABASE_URL and APP_BASE_URL; then:
 npm run --silent jwt:keys >> .env  # RS256 signing keys (--silent keeps npm's banner out of .env)
-npm run db:seed                    # schema, grants, first SUPER_ADMIN (password printed once), protocols, hub prompts
+npm run db:seed                    # schema, grants, the built-in admin admin@paichart.local (password printed once), protocols, hub prompts
 npm run dev                        # web app  → http://localhost:3000
 npm run mcp:http:dev               # MCP hub  → http://localhost:8080/mcp
 ```
+
+Sign in as `admin@paichart.local`, create your own account in the Admin Dashboard, then sign in as yourself, open **Profile Settings → LLM**, switch **Use System Provider** off and paste your Anthropic API key: the agents run on it, and without it every agent run fails at its first step. Your first run, call by call: [docs/FIRST-RUN.md](docs/FIRST-RUN.md).
 
 - [docs/RUNNING.md](docs/RUNNING.md) — what each step does: the two-process shape, roles, `APP_BASE_URL`, production notes
 - [docs/VERIFYING-SELF-HOST.md](docs/VERIFYING-SELF-HOST.md) — prove your install owns its identity: every token and OAuth document derives from **your** `APP_BASE_URL`, and tokens for anyone else's issuer are rejected

@@ -31,7 +31,10 @@ import { AgentCategory, AgentComplexity, AgentTemplateStatus } from '@prisma/cli
 
 // Contact address shown inside seeded hub prompts. No personal address in code (open-source, 2026-09-06):
 // SUPPORT_CONTACT (the hosted deploy pins its value) → ADMIN_EMAIL (self-host) → the generic support box.
-const SUPPORT_CONTACT = process.env.SUPPORT_CONTACT || process.env.ADMIN_EMAIL || 'support@paichart.com';
+// 2026-11-12: the shipped ADMIN_EMAIL is the built-in administrator `admin@paichart.local` — a login name, not a mailbox —
+// so a `.local` address is never shown to users as a contact.
+const ADMIN_MAILBOX = /\.local$/i.test((process.env.ADMIN_EMAIL || '').trim()) ? '' : process.env.ADMIN_EMAIL;
+const SUPPORT_CONTACT = process.env.SUPPORT_CONTACT || ADMIN_MAILBOX || 'support@paichart.com';
 
 const prisma = new PrismaClient();
 

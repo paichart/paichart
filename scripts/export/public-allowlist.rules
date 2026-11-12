@@ -184,6 +184,7 @@
 # Docs homologation P1 (2026-11-12): the index, and the three-line stub left at the old install path (outside links to it cannot
 # be counted; removed at the second health-run after the rename — open register DOCS-HOMOLOGATION).
 + docs/README.md
++ docs/FIRST-RUN.md
 + docs/SELF-HOST-RUN-SHEET.md
 + data/geographical-default.json
 + docs/OAUTH-SETUP.md

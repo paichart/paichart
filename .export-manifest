@@ -1298,6 +1298,7 @@ config/logrotate/paichart-oauth
 data/geographical-default.json
 dev-server.js
 docker-compose.self-host.yml
+docs/FIRST-RUN.md
 docs/INSTALL.md
 docs/OAUTH-SETUP.md
 docs/README.md

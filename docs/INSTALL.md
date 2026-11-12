@@ -5,7 +5,8 @@ fresh Ubuntu 24.04 laptop on a home LAN (2026-09-07). Replace `HOST` with the ad
 reach this one (`192.168.1.50`, a hostname, or `localhost` if only this machine will use it) — it becomes
 `APP_BASE_URL`, and **`APP_BASE_URL` is your install's identity** (see RUNNING.md).
 
-Assumes: Ubuntu 24.04 (or similar), a user with `sudo`, outbound internet. Time: ~40 min, most of it `npm ci`.
+Assumes: Ubuntu 24.04 (or similar), a user with `sudo`, outbound internet, and **an Anthropic API key** (the agents run on it;
+you paste it in step 8). Time: ~40 min, most of it `npm ci`.
 Order is deliberate: **clone, install Claude Code, then let Claude follow the rest** — steps 3–9 are written to be pasted.
 
 ## 1. Clone
@@ -20,7 +21,7 @@ curl -fsSL https://claude.ai/install.sh | bash        # native installer, no Nod
 claude --version && claude                            # first run: sign in (browser)
 ```
 From here you can paste to Claude: *"Follow ~/paichart/docs/INSTALL.md from step 3, exactly as written,
-with HOST=… and ADMIN_EMAIL=…; stop at step 7 and tell me the printed password."* Or keep typing.
+with HOST=…; stop after step 5 and tell me the printed password."* (Steps 6–8 are yours, in a browser.) Or keep typing.
 
 ## 3. Prerequisites the docs assume (Node 24, PostgreSQL 16, an empty database)
 
@@ -38,7 +39,8 @@ sudo -u postgres psql -qc "CREATE USER paichart WITH PASSWORD '$PW';"
 sudo -u postgres createdb -O paichart paichart
 ```
 
-**Optional, needed for step 9b and for programs (step 10):** Docker. Ubuntu's own package is enough:
+**Docker — needed for steps 9b and 9c, and so for every program** (skip it only if you will not run programs). After `usermod`
+below you must log out and back in before `docker` works without `sudo`: Ubuntu's own package is enough:
 ```bash
 sudo apt-get install -y docker.io docker-compose-v2 && sudo usermod -aG docker "$USER"   # log out/in for the group
 docker compose version   # expect v2.x
@@ -50,8 +52,8 @@ cd ~/paichart
 npm ci                                   # 1–20 min depending on the box; npm reports ~1050 packages. It also prints deprecation warnings and a
                                          # vulnerability count — that is not a failure; rc=0 is
 cp .env.example .env
-chmod 600 .env                           # DO NOT SKIP. .env holds DATABASE_URL (with the password), your
-                                         # Anthropic key, and JWT signing material. Ubuntu's default umask
+chmod 600 .env                           # DO NOT SKIP. .env holds DATABASE_URL (with the password)
+                                         # and JWT signing material. Ubuntu's default umask
                                          # (0002) makes this copy 0664 — group- AND world-readable. The only
                                          # thing containing it is your home directory being 0700, which is a
                                          # default you may not have.
@@ -59,7 +61,8 @@ HOST=192.168.1.50                        # ← yours
 sed -i "s#^DATABASE_URL=.*#DATABASE_URL=\"postgresql://paichart:$(cat ~/.paichart-dbpw)@localhost:5432/paichart\"#" .env
 sed -i "s#^APP_BASE_URL=.*#APP_BASE_URL=http://$HOST:3000#" .env
 sed -i "s#^OAUTH_STATE_SECRET=.*#OAUTH_STATE_SECRET=\"$(openssl rand -hex 32)\"#" .env
-sed -i "s#^ADMIN_EMAIL=.*#ADMIN_EMAIL=you@example.com#" .env                  # ← your first login
+                                         # ADMIN_EMAIL stays as shipped: admin@paichart.local, the built-in administrator (a login
+                                         # name, not a mailbox). Your own account comes in step 7 — do not put your email here.
 npm run --silent jwt:keys >> .env        # --silent matters: without it npm's banner lands in .env and `source .env` executes it
 sed -i "s#^\# ARTIFACT_SIGNING_KEY=.*#ARTIFACT_SIGNING_KEY=\"$(openssl rand -hex 32)\"#" .env   # production signs artifact download links with it
 echo 'SINGLE_ORIGIN_PROXY=true' >> .env      # no reverse proxy in this demo: the web server proxies /mcp + /oauth/* to the MCP process
@@ -68,7 +71,7 @@ grep -c "^JWT_" .env                     # expect 3
 
 ## 5. Seed and start
 ```bash
-set -a; . ./.env; set +a; npm run llm:init   # copies ANTHROPIC_API_KEY from .env into the hub's system LLM settings (the app never reads the env var itself)
+set -a; . ./.env; set +a                 # load .env into this shell for the commands below
 npm run db:seed                          # ~1–2 min; prints its own step count as it runs, ends "✅ db:seed complete"; the SUPER_ADMIN password is printed ONCE — copy it now.
                                          # Expect pino JSON lines and a "[DEV] SLOW QUERY" or two in the middle — noise, not errors. Safe to re-run
                                          # after a git pull: every step is add-only (a re-run never deletes; --force-recreate on db:templates does)
@@ -83,12 +86,13 @@ unset NODE_ENV                                                  # the step above
 npm run build                                                   # 3–10 min; "✓ Compiled successfully" then the route table
 test -f .next/BUILD_ID && echo BUILD-OK   # expect BUILD-OK — Next writes BUILD_ID only when the build completes (export-detail.json is deleted after a successful build, so it cannot be the check)
 ```
-Then install the two **systemd units** that keep them running. Edit `User`, `Group` and `WorkingDirectory`
-in each file first — they ship with placeholders:
+Then install the two **systemd units** that keep them running. They ship with the placeholder `YOUR_USER` in `User`,
+`Group` and `WorkingDirectory`; the `sed` below sets it to the account you are logged in as (the clone must be at
+`~/paichart`, as in step 1 — otherwise edit `WorkingDirectory` by hand):
 ```bash
 sudo cp docs/systemd/paichart-web.service docs/systemd/paichart-mcp.service /etc/systemd/system/
-sudo nano /etc/systemd/system/paichart-web.service    # set User= Group= WorkingDirectory=
-sudo nano /etc/systemd/system/paichart-mcp.service    # same
+sudo sed -i "s/YOUR_USER/$USER/g" /etc/systemd/system/paichart-web.service /etc/systemd/system/paichart-mcp.service
+grep -h '^User=\|^WorkingDirectory=' /etc/systemd/system/paichart-web.service   # expect your user and /home/<you>/paichart
 sudo systemctl daemon-reload
 sudo systemctl enable --now paichart-mcp paichart-web   # `enable --now`, NOT `start`
 ```
@@ -102,6 +106,7 @@ journalctl -u paichart-web --since -1h    # last hour, after something went wron
 ```
 One-time, so the journal cannot grow without bound:
 ```bash
+sudo mkdir -p /etc/systemd/journald.conf.d   # not there on a fresh Ubuntu 24.04
 echo -e '[Journal]\nSystemMaxUse=500M' | sudo tee /etc/systemd/journald.conf.d/paichart.conf
 sudo systemctl restart systemd-journald
 ```
@@ -131,7 +136,7 @@ curl -s -o /dev/null -w '%{http_code}\n' localhost:3000/mcp                     
 ```
 
 ## 6. Log in (a real browser — some failures only a browser can show)
-Open `http://HOST:3000/login` → click the **lock** icon → `ADMIN_EMAIL` + the printed password. You land on the
+Open `http://HOST:3000/login` → click the **lock** icon → `admin@paichart.local` + the password step 5 printed. You land on the
 **setup sheet** (`/auth/oauth/success`); it must show **`http://HOST:3000/mcp`** as the MCP URL.
 If the page is unstyled with dead icons: press `Ctrl+Shift+R` once; if it persists, open DevTools → Console and
 look for `ERR_SSL_PROTOCOL_ERROR` — report it, that class is supposed to be fixed.
@@ -149,16 +154,26 @@ alone — it does not rename or delete; an invalid file is refused with the reas
 
 Then prove the install owns its identity: `docs/VERIFYING-SELF-HOST.md` with `BASE=http://HOST:3000; MCP=$BASE`.
 
-## 7. An account for daily work (in the GUI)
-The account you logged in with is the **Super Admin** — administration only. Create the one you will work as:
+## 7. Your own account (in the GUI) — required
+The account you logged in with, `admin@paichart.local`, is the built-in **Super Admin** — administration only, and not a
+mailbox. Now create **your own account, with your real email**: it is the one you work as, the one that holds your Anthropic
+key and your MCP API key (step 8), and the one that owns your projects.
 **Settings** → the **pAIchart logo** (top-right corner) → **Admin Dashboard** (only the **Super Admin** sees this option —
 which is why this step is done now, before you switch accounts) → **User Management** → **Create User**
 → fill in email and name, set **System Role** to **System Admin** (the dialog defaults to *User* — check it before you
 save; a User cannot administer the hub), and **set a password** in the dialog (blank means
 "will sign in with OAuth", and an account without one cannot log in) → Create.
 
-## 8. An API key, then connect Claude Code to your hub — required before your first POV
-Log out and log in as the new System Admin. Then: the **pAIchart logo** (top-right) → **Profile Settings** → scroll to
+## 8. Your Anthropic key, an MCP API key, then connect Claude Code to your hub — required before your first POV
+Log out and log in as the new System Admin. Then: the **pAIchart logo** (top-right) → **Profile Settings**.
+
+**First, your Anthropic API key** — without it every agent run fails at its first step. In the **LLM** section switch
+**Use System Provider** off, paste the key into **Anthropic API Key**, and press **Save Changes**. The key is stored for
+your account and is never shown again; the field then reads "A key is saved". (One shared key for every user instead: put
+it in `.env` as `ANTHROPIC_API_KEY`, then run `set -a; . ./.env; set +a; npm run llm:init` — after `db:seed`, never before —
+and leave **Use System Provider** on. The app never reads the variable itself.)
+
+**Then the MCP API key:** scroll to
 **MCP API Key** → **Generate New API Key** → copy it now (it is shown once; the default expiry is **one year** — pick
 something shorter for a lab). The key's `role` claim is a mint-time snapshot: the hub authorises from the live database,
 so changing a user's role takes effect on existing keys immediately, and the claim can read stale.
@@ -172,7 +187,7 @@ claude -c                                             # -c continues the same co
 claude mcp list                                       # (from another shell) expect: paichart … ✔ Connected
 ```
 The hub's tools now appear as `mcp__paichart__*`. First thing to try: `prompt_command("/prompt HOWTO-get-started")`,
-then your first POV (step 10). The key is stored in plaintext in `~/.claude.json`; it expires on the date you chose.
+then your first run ([FIRST-RUN.md](FIRST-RUN.md)). The key is stored in plaintext in `~/.claude.json`; it expires on the date you chose.
 
 Claude Desktop cannot send a header: use OAuth (`docs/OAUTH-SETUP.md` §B.1, callback `http://HOST:3000/oauth/callback`)
 or the `mcp-remote --header` stanza the setup sheet shows.
@@ -205,7 +220,7 @@ is listening — and
 (`descriptors/descriptor.schema.json` and `descriptors/SPEC.md`).
 
 ### 9b. A service on your own network — the shipped Browser Automation Service (programs need it)
-Programs (step 10) fetch their design artifacts — `requirements.md`, `topology.json` — through a browser-automation
+Programs ([FIRST-RUN.md](FIRST-RUN.md)) fetch their design artifacts — `requirements.md`, `topology.json` — through a browser-automation
 service the hub calls; the hub has no URL-fetch tool of its own, by design: the fetch runs in a container, not in the hub
 process. This repo ships that service (`services/browser-automation-service` — Playwright, no keys) and a compose file that
 runs only it. Needs Docker (step 3's optional block); the image is a 1.5 GB download (~3 GB on disk) and the container is
@@ -240,9 +255,9 @@ Then in Claude Code (`claude -c`), the same shape as step 9:
    `https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/requirements.md`
    with selectors `{doc: 'pre'}`, and show me the call and the result."*
    → `services(action: 'call', targetService: 'browser-automation-service', tool: 'scrape_page', …)` → `success: true`
-   and the document's text, *through your hub* — exactly the call a program's Program Architect makes in step 10.
+   and the document's text, *through your hub* — exactly the call a program's Program Architect makes.
    **Check the text contains the spec's `## Device sources` lines** (`ceos1: device-read — service …`, `ceos2: …`). They prove you
-   are reading the current spec, the one step 10b launches; without them the network legs would stop (see 10b).
+   are reading the current spec, the one [FIRST-RUN.md](FIRST-RUN.md) § 4 launches; without them the network legs would stop.
 
 The registry id is `browser-automation-service`, the display name `Browser Automation Service`: `services(action: 'call')`
 accepts either; `registry(action: 'tools')` wants the display name.
@@ -316,104 +331,24 @@ Two things come with the clone that make step 8 more than a connector:
     (it will ask for anything the schema needs — a description, phases — and report the POV id).
   - *"List the POVs in progress and their open tasks"* → `project(action: 'pov.list' / 'task.list')`.
   - *"Register my weather service at http://127.0.0.1:3105/mcp with its full tool schemas"* → `registry(action: 'register', …)`
-    (step 9 applies for private addresses).
+    (a private address needs the allowlist line in step 9b).
   - *"Run the health check on ceos-lab-readonly and call list_devices"* → `services(action: 'health' / 'call', …)`.
 - **Programs and pipelines.** For a multi-specialist delivery — a reviewed change package from a requirements
   document and a topology — you don't drive the steps yourself; the harness does (plan, the plan-approval gate, the
-  legs, synthesis, the verdict). 10b below is the shipped use case, launched call by call. The in-hub guides are
+  legs, synthesis, the verdict). [FIRST-RUN.md](FIRST-RUN.md) launches one call by call. The in-hub guides are
   `prompt_command("/prompt HOWTO-use-pipeline-harness")` and `/prompt HOWTO-use-program-harness`; `verification/`
   holds real program runs with their evidence (VT-01 onward) — read one before your first run so you know what a
   releasable result looks like. To add a domain of your own: `.claude/knowledge/pipelines/ADD-A-PIPELINE-HARNESS-AGENT.md`
   and `ADD-A-PROGRAM-PROTOCOL.md`.
 
-### 10b. Your first program — the shipped use case, exactly as it ran
+### 10b. Your first run
 
-`usecases/firewall-a3-partner-path/` is a complete program (three sequenced pipelines) with its rigs. With
-step 9b done and the rigs up (that directory's README), this is the whole launch — five hub calls, typed to Claude
-in `~/paichart` or issued directly. Each line's response is what a working install returns.
+**[FIRST-RUN.md](FIRST-RUN.md)** — look at a finished run on the hosted site, then run the same use case on this install
+(it needs only steps 8, 9b and 9c: no lab, no switches), then a bigger example with its own lab.
 
-> **Status (2026-11-02): the corrected spec has not yet been re-run live as a full program.** A fresh-install run on
-> 2026-11-01 found three things, all fixed since: the edge leg read only the switch it changes and chose a NAT pool that
-> collided with the other switch (the program's integration review caught it, and the program correctly refused to release);
-> the Device sources block did not reach either network leg; and a kept copy of one switch was refused by an over-cautious
-> redaction check. The spec now declares both switches for both network legs, and the redaction check is fixed. Until the
-> next full live run, treat a refusal on this program as information to read, not as a broken install.
-
-> **Kept files are on by default (2026-11-01).** `.env.example` sets `HELD_BYTES_CAPTURE_ENABLED=true` with R9 and R10 on: the
-> network legs keep each switch's running configuration and edit it by reference. That is why the spec's network legs now carry a
-> `## Device sources` block (`ceos1` / `ceos2: device-read — service <descriptor>`): network-provisioning ≥ 1.23.0 refuses a network
-> change leg whose devices have no declared source. Read **[`SELF-HOST-KEPT-FILES.md`](SELF-HOST-KEPT-FILES.md)** — what is stored,
-> where, and who can read it — before you run this.
-
-1. **A POV to hold your use cases, with the phases named up front** (phases are created WITH the POV — there is no
-   `phase.create`; a POV created without `phases` gets the default Planning/Execution/Review three):
-   ```
-   perform(action: 'pov.create', parameters: { title: 'pAIchart Use Cases', countryName: 'Australia',
-     description: 'Runnable use cases for a self-hosted pAIchart …',
-     phases: [ { name: 'Firewall Rules Change', type: 'EXECUTION' },
-               { name: 'Network and Terraform', type: 'EXECUTION' },
-               { name: 'OSPF ISIS Migration',   type: 'EXECUTION' } ] })
-   ```
-   → `✅ POV Created` with the POV id, `Sales Theatre: APJ` (from the country), `Phases Created: 3` in that order,
-   dates spread across the POV's 90 days. Keep the POV id.
-2. **A stage for the run**, in the first phase:
-   ```
-   perform(action: 'stage.create', parameters: { povId: '<pov id>', phaseName: 'Firewall Rules Change', name: 'FW-A3 Program Run' })
-   ```
-   → `Stage ID: <stage id>`. Keep it.
-3. **The program task** — `type: 'PIPELINE'`, the protocol token in the title, the two artifact URLs in the description
-   and nothing else there (the Architect fetches ONLY what the description names):
-   ```
-   perform(action: 'task.create', parameters: { povId: '<pov id>', stageId: '<stage id>', type: 'PIPELINE', priority: 'MEDIUM',
-     title: 'Partner-HTTPS security policy path with edge SNAT (protocol: pov-program)',
-     description: 'Program intent: end-to-end partner-HTTPS policy across ceos1 (edge, SNAT) -> LocalStack dmz-sg -> ceos2 (core), three sequenced pipelines with transitive chaining.\n\nDesign artifacts for the Program Architect (fetch ONLY these two URLs):\n- topology-as-code: https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/topology.json\n- requirements: https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/requirements.md' })
-   ```
-   → `Task ID: <task id>`, `Status: OPEN`.
-4. **Give it the harness.** The Pipeline Harness template was seeded by `db:seed`; `template(action: 'list')` shows its id.
-   ```
-   perform(action: 'agent.assign',  parameters: { taskId: '<task id>', agentTemplateId: '<Pipeline Harness template id>' })
-   perform(action: 'agent.execute', parameters: { taskId: '<task id>', waitForCompletion: false })
-   ```
-   → `Execution Status: RUNNING` with an execution id. The harness's first pass takes ~30 s: it creates a child stage
-   `Program: … (Run <timestamp>)` and spawns the **Program Architect** as the sole child of step PLAN — that is a
-   `task.comment` on your task, and the harness execution ends `SUCCESS` (it exits on purpose; the reactor re-triggers
-   it when the Architect finishes).
-5. **Read the plan, release the gate.** The Architect fetches the two URLs through your browser-automation service
-   (paging the 14 KB requirements with `read_more`), self-provisions nothing yet, and writes the program plan —
-   `## Interface Contract` first (real subnets, VLAN/ASN, tags — as ONE JSON block), the pipeline DAG, and
-   **Assumptions & open questions**. When it lands, the harness comments `⏸ PROGRAM PLAN AWAITING APPROVAL` with the
-   roster and the gate id. Read the assumptions — that list is your disambiguation checklist — then:
-   ```
-   perform(action: 'task.complete', parameters: { taskId: '<G0 gate id from the comment>' })
-   ```
-   Nothing runs before that. After it: the three legs in sequence (each self-provisions its rig service from the
-   descriptor, harvests read-only, designs, is reviewed, tears the registration down), one human gate per domain, the
-   producer's deliverable and Node C's verdict, and a final comment with the gate table and `programReleasable`.
-   `project(action: 'task.context', taskId: '<task id>')` at any time shows where it is.
-
-**What a finished run looks like** (Run 7 of this use case on one laptop hosting hub + both rigs, 2026-09-10 — `programReleasable: true` in ~42 minutes):
-Architect ~2 min → three legs of ~8–12 min each (harvest → design → author → review; each self-provisions its rig service
-at `127.0.0.1` and the reviewer approves or escalates) → Producer + Node C ~4 min → program synthesis. The stamp on the
-program task is the machine fact — `programReleasable`, `qualityGate.outcome`, and each leg's `containmentDisposition` —
-and the release is still your decision: a run can show every leg approved and Node C approved, and still stamp
-`programReleasable: false` on a mechanical containment conjunct. Read the facts, not the adjectives.
-
-**Re-running a program** (an escalated leg, a corrected artifact): a finished program cannot be re-run in place.
-Create a fresh PIPELINE task in the same stage and stamp the prior program stage on it — the harness's pre-flight
-halts on a duplicate `Program: …` stage and accepts only a machine-checkable clearance, never prose in the description:
-```
-perform(action: 'task.update', parameters: { taskId: '<new task id>', metadata: { duplicateAcknowledged: '<prior Program: … stage id>' } })
-```
-then `agent.assign` + `agent.execute` as in step 4. Stamp the MOST RECENT prior `Program: …` stage id (the harness's
-first comment on that run names it; `project(action: 'pov.details')` lists the stages).
-
-**Releasing a gate**: after `perform(action: 'task.complete', …)` on a gate, read the gate's own status back — a release
-issued within seconds of the upstream leg completing can be rejected while the dependency state settles (it took up to
-five attempts over ~50 s on a laptop). The action's reply text is not the state; `Status: COMPLETED` on the gate is.
-
-A failure at step 4 with `llm_initialized` means the running user has no resolvable LLM key (step 5's `llm:init`,
-or Profile Settings → LLM). A leg that escalates on its harvest usually means a rig service answered `initialize`
-but could not READ — check the rig README's readiness probes, not the container list.
+**You are done installing when:** the four `curl` checks at the end of step 5 print `200`, `200`, your own origin and `401`;
+step 6's page shows `http://HOST:3000/mcp`; your Anthropic key is saved (step 8); and `claude mcp list` shows
+`paichart … ✔ Connected`.
 
 ## Things that will bite (each cost real time)
 - **Late bind** (the most repeatable false failure in this guide): both servers log "ready" 10–60 s before they listen.
@@ -421,8 +356,7 @@ but could not READ — check the rig README's readiness probes, not the containe
 - `pkill -f "some-pattern"` typed inside an `ssh host '…'` command matches the ssh shell itself — use `patter[n]`.
 - Stopping the `npm` wrapper leaves the node child on the port; find it with `ss -ltnp | grep :3000` and kill that.
 - **The MCP process does not hot-reload.** After a `git pull` that touches `lib/`, `scripts/` or `mcp-server-http-clean.js`,
-  restart it (`pkill -f "mcp-server-http-clea[n]"; sleep 2;` then `nohup npm run mcp:http:dev …` — the `sleep` matters: without it
-  the dying process still holds the log while the shell truncates it, and the new process's first boot lines vanish); the web dev server reloads itself,
-  the MCP server keeps running the old code until you do. Same for re-seeded prompts — it reads the prompt list at boot.
+  restart it (`sudo systemctl restart paichart-mcp`): it keeps running the old code until you do. Same for re-seeded
+  prompts — it reads the prompt list at boot.
 - The MCP process binds loopback only; nothing else needs to reach :8080 — the web server on :3000 proxies `/mcp` and `/oauth/*` to it.
-- `curl` cannot see CSP; only a browser can. Step 3 is not optional.
+- `curl` cannot see CSP; only a browser can. Step 6 is not optional.

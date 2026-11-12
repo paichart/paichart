@@ -48,7 +48,7 @@ its descriptor the same way and registers → reads → tears down the service b
 
 ## Run it — five hub calls
 
-The exact sequence, with the responses a working install returns, is `docs/INSTALL.md` **step 10b**.
+The exact sequence, with the responses a working install returns, is `docs/FIRST-RUN.md` **§ 4**.
 In short — from Claude Code inside your clone, or as direct tool calls:
 
 1. `perform(action: 'pov.create', …)` — a POV `pAIchart Use Cases` (country of your choice) with its phases named

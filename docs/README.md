@@ -10,6 +10,7 @@ pAIchart; the documents you do need from it are linked below.
 | Document | What it gives you |
 |---|---|
 | [INSTALL.md](INSTALL.md) | Every command, in order, from a bare Ubuntu 24.04 machine to Claude Code talking to your own pAIchart. About 40 minutes. |
+| [FIRST-RUN.md](FIRST-RUN.md) | See a finished run, run the same one on your install with nothing but the configs repository, then a bigger example. |
 | [RUNNING.md](RUNNING.md) | What each install step does and why: the two processes, roles, `APP_BASE_URL`, production notes. |
 | [VERIFYING-SELF-HOST.md](VERIFYING-SELF-HOST.md) | Checks that prove your install owns its identity: every token and OAuth document comes from your own `APP_BASE_URL`. |
 
@@ -18,8 +19,9 @@ pAIchart; the documents you do need from it are linked below.
 Sign in at [paichart.app](https://paichart.app). A Claude client signs in with GitHub; a ChatGPT client signs in with Microsoft. A
 first sign-in has demo access, which is read-only. Open **Dashboard > Projects** and open **Fabric Telemetry Expansion**: a completed
 program in which one pipeline works out a free address and a second writes the switch change that uses it. It is the same use case
-you can run on your own install — [`loopback-ceos2/git-only`](https://github.com/paichart/paichart-configs/tree/main/usecases/loopback-ceos2)
-in the configs repository, which needs nothing but the files in that repository.
+you can run on your own install: [FIRST-RUN.md](FIRST-RUN.md) gives every call. It is
+[`loopback-ceos2/git-only`](https://github.com/paichart/paichart-configs/tree/main/usecases/loopback-ceos2) in the configs
+repository, and needs nothing but the files in that repository.
 
 ## Administer
 
@@ -27,7 +29,7 @@ in the configs repository, which needs nothing but the files in that repository.
 |---|---|
 | [OAUTH-SETUP.md](OAUTH-SETUP.md) | Register your own GitHub, Google or Microsoft sign-in apps. Optional: password sign-in works without them. |
 | [SELF-HOST-KEPT-FILES.md](SELF-HOST-KEPT-FILES.md) | How pAIchart reads configuration files from your Git repository, keeps their exact bytes, and changes them only by edits. |
-| [INSTALL.md § 9](INSTALL.md) | Connect your own services to the hub: a remote MCP server, the browser service, the GitHub file source. |
+| [INSTALL.md, step 9](INSTALL.md#9-your-first-external-service--a-remote-mcp-server-through-the-hub) | Connect your own services to the hub: a remote MCP server, the browser service, the GitHub file source. |
 | [systemd/](systemd/) | The two service units the install guide uses to keep pAIchart running across reboots. |
 
 ## Operate

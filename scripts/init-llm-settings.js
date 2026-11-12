@@ -4,6 +4,15 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function main() {
+  // 2026-11-12 (cold read B1): .env.example ships a placeholder. Storing it as the SYSTEM key makes every user on "use system
+  // provider" fail at the provider with an authentication error instead of a clear "no key" message. Refuse, and say what to do.
+  const key = (process.env.ANTHROPIC_API_KEY || '').trim();
+  if (!key || key === 'your-anthropic-api-key') {
+    console.error('llm:init: ANTHROPIC_API_KEY is ' + (key ? 'still the placeholder from .env.example' : 'not set') + ' — nothing stored.');
+    console.error('  Either set a real key in .env and load it (set -a; . ./.env; set +a) before running this,');
+    console.error('  or skip this command and paste your own key in the web app: Profile Settings → LLM.');
+    process.exit(1);
+  }
   try {
     console.log('Checking for existing LLM settings...');
     
