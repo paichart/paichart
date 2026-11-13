@@ -1,6 +1,6 @@
 # Program Composition Catalog
 
-> **Purpose**: the companion to [`PROGRAM-USE-CASE-DESIGN-PLAYBOOK.md`](design/DESIGNING-A-PROGRAM.md).
+> **Purpose**: the companion to [`DESIGNING-A-PROGRAM.md`](design/DESIGNING-A-PROGRAM.md).
 > The playbook is the *procedure* (how to take one program use-case from seam-triage → shipped). This is
 > the *map*: **which composition SHAPES exist, the axes that select one, what transfers between them, and a
 > worked entry per candidate.** Add an entry here before you start Phase 2 on a new program use-case.
@@ -71,7 +71,7 @@ only a fresh harvest can answer it, and you are in S4.
   tell what you did before completing it — so **nothing verifies that an apply actually happened**.
   Release a gate without applying and the next leg honestly reports the change absent, which is
   indistinguishable from the package being wrong. The discipline is entirely operator-side; the
-  rituals are in `PROGRAM-OPERATOR-GATE-PLAYBOOK.md`.
+  rituals are in `GATES.md`.
 - **Capture a pre-change baseline before every apply**, and for a destructive phase (removing a
   protocol, deleting a resource) snapshot the full config first. On IGP-T1 R10 that snapshot was the
   only independent check on a rollback the leg reviewer could grade only ACCEPTED-FROM-CLAIMS.
@@ -137,7 +137,7 @@ deterministic gate** (D11) — design it as an advisory, not a check.
 
 ## §Firewall — end-to-end security policy across a path (canonical worked entry)
 
-The first fully-worked program use-case. `firewall-policy-use-case.md` + `firewall-examples/` are the detail;
+The first fully-worked program use-case. `FIREWALL-POLICY-USE-CASE.md` + `firewall-examples/` are the detail;
 here is its shape mapping:
 
 | firewall approach | shape | why |
@@ -229,6 +229,6 @@ new leg domain is involved, a pipeline-catalog entry first. Add the fleshed-out 
 
 ## See also
 
-- Design procedure: [`PROGRAM-USE-CASE-DESIGN-PLAYBOOK.md`](design/DESIGNING-A-PROGRAM.md)
-- Run a program: [`PROGRAM-HARNESS-USER-GUIDE.md`](PROGRAMS.md)
-- Canonical worked entry: [`firewall-policy-use-case.md`](design/FIREWALL-POLICY-USE-CASE.md)
+- Design procedure: [`DESIGNING-A-PROGRAM.md`](design/DESIGNING-A-PROGRAM.md)
+- Run a program: [`PROGRAMS.md`](PROGRAMS.md)
+- Canonical worked entry: [`FIREWALL-POLICY-USE-CASE.md`](design/FIREWALL-POLICY-USE-CASE.md)

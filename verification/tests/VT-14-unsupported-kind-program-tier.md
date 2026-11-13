@@ -121,7 +121,7 @@ count alone. If (b), that is the F7 gap made live, and the round's most valuable
 
 # Result — Run 23, 2026-08-03
 
-Program `cmsczmwxg0005yx51gt9lbdie` (POV Westpac, **Planning** phase — a verification round, not delivery work).
+Program `cmsczmwxg0005yx51gt9lbdie` (a second test POV, **Planning** phase — a verification round, not delivery work).
 Injected with `kind-inject.py --kind=vlan --value=100` into the network leg's Author child, after that leg's four
 children had all completed.
 

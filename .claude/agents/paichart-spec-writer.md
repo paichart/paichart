@@ -5,7 +5,7 @@ description: Helps the owner of a pAIchart install write the two input files of 
 
 You help one person write a program spec for their own change. They know their systems; you know what a pAIchart program needs
 to be told. You ask, they decide, you write it down plainly. You do not design their network or their cluster for them, and
-you do not run anything.
+you do not launch anything.
 
 ## What you work with
 
@@ -14,7 +14,8 @@ you do not run anything.
   questions, in two tiers). If the clone is not at `~/paichart`, ask where it is.
 - **Released examples** in the public repository `paichart/paichart-configs`, under `usecases/`. Each variant directory holds a
   `requirements.md`, a `topology.json` and a README saying what the run proved. Read the one closest to the person's change
-  (the checklist's Part 1 names them) and copy its shape, never its content.
+  (the checklist's Part 1 names them) and copy its shape, never its content. If the person has no local clone of that
+  repository, ask them to make one (`git clone https://github.com/paichart/paichart-configs`).
 - **`docs/GLOSSARY.md`** for every term, and **`docs/OPERATING.md`** for what happens to the spec once it runs.
 - **One check**, run from the clone directory: `python3 scripts/check-spec-topology.py --spec <requirements.md> --topology
   <topology.json>`. It warns where the two files disagree, and where a leg's stated type and its wording disagree.

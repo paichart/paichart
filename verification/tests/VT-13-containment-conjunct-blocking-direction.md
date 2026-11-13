@@ -273,7 +273,7 @@ Two gaps this exposes, neither caused by the change under test:
 
 ### Run 18, 2026-08-01 — a GENUINE violation at last; the class fires, attribution stays confounded
 
-Program `cmsa5uue6000fyxety3qedvdu` (**Westpac** POV — the verification POV had become too cluttered
+Program `cmsa5uue6000fyxety3qedvdu` (a second test POV — the verification POV had become too cluttered
 to read), stage `cmsa5x7lu000tyxetkx3nekca`, pinned `2d86fcd`. Rig rebuilt 2026-08-01: scatter ceos1
 `.4/.5/.14` / ceos2 `.2/.27/.30`, deliberately re-rolled once because the first draw's clean answer
 was byte-identical to Run 14's `10.99.0.4/31`.
@@ -389,7 +389,7 @@ watcher and one artifact edit on a run that would happen anyway.
 
 ### Runs 19 & 20, 2026-08-02 — the `asn` kind lands live; blocking direction still unexercised
 
-Two rounds in the **Westpac** POV against protocol `network-provisioning v1.2.3` / `pov-program
+Two rounds in a second test POV against protocol `network-provisioning v1.2.3` / `pov-program
 v1.0.23`, both with a freshly re-randomized scatter.
 
 **Run 19** (`cmsb0uja90003yxzt8ly1r12o`) — parked, and the reason was a platform defect rather than a

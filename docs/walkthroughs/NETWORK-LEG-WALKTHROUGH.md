@@ -171,7 +171,7 @@ ceos1, the Git-backed switch, follows the team's Git flow.
 > **Since network-provisioning 1.27.0 (2026-11-07):** when the platform's *Git file vs device configuration* fact lists lines of a
 > switch's Git file that the switch does not have, step 3 is not a whole-file load: the package applies that switch incrementally (enter
 > only the added or changed lines in a session, read that session's diff, commit with the timer) or syncs Git first. This run predates
-> the rule; see `PIPELINE-HARNESS-USER-GUIDE.md` § "Network: kept device configurations".
+> the rule; see `PIPELINES.md` § "Network: kept device configurations".
 
 **Validation V1–V5:**
 - V1: before the change, nothing is configured (a gate);

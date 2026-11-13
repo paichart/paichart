@@ -1,16 +1,16 @@
 {
-  "public_head": "fb44b4d",
+  "public_head": "c5991a4",
   "counts": {
-    "markdown_files": 656,
-    "user_reachable_by_clicks": 149,
+    "markdown_files": 379,
+    "user_reachable_by_clicks": 152,
     "user_reachable_by_clicks_under_claude": 29,
-    "user_reachable_by_named_path": 267,
-    "docs_unreachable_from_any_entry": 75,
-    "private_only_refs": 1160,
-    "in_neither_refs": 486,
+    "user_reachable_by_named_path": 169,
+    "docs_unreachable_from_any_entry": 83,
+    "private_only_refs": 272,
+    "in_neither_refs": 90,
     "readme_links_index": 1,
-    "agent_files": 48,
-    "agent_files_with_missing_paths": 36,
-    "agent_files_with_private_only_paths": 34
+    "agent_files": 2,
+    "agent_files_with_missing_paths": 0,
+    "agent_files_with_private_only_paths": 0
   }
 }

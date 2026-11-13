@@ -3,10 +3,10 @@
 **Version**: 1.0 | **Created**: 2026-07-16 | **Updated**: 2026-11-07 (VALUE-LEG-GIT: a value leg's own Device sources key, network-derivation 1.3.0) · 2026-10-06 (promotion E: value legs + unbound Node C, pov-program 2.0.0 at deploy 2) | **Status**: Production (T2–T5 passed at v1.0.8, customer demo POV published)
 
 > **This guide = how to RUN/USE a program** (a pipeline-of-pipelines). For a single pipeline, see the
-> sibling [`PIPELINE-HARNESS-USER-GUIDE.md`](PIPELINES.md) — a program's legs ARE
+> sibling [`PIPELINES.md`](PIPELINES.md) — a program's legs ARE
 > pipelines, so everything there applies to each leg; this guide covers only the composition layer.
-> To **design** a new program use-case: [`PROGRAM-USE-CASE-DESIGN-PLAYBOOK.md`](design/DESIGNING-A-PROGRAM.md)
-> (the procedure) + [`firewall-policy-use-case.md`](design/FIREWALL-POLICY-USE-CASE.md) (decision framework +
+> To **design** a new program use-case: [`DESIGNING-A-PROGRAM.md`](design/DESIGNING-A-PROGRAM.md)
+> (the procedure) + [`FIREWALL-POLICY-USE-CASE.md`](design/FIREWALL-POLICY-USE-CASE.md) (decision framework +
 > worked examples). Public claim narrative + proofs: `github.com/paichart/paichart/tree/main/verification`.
 
 ## 1. What a program is
@@ -24,7 +24,7 @@ approved-but-unapplied change packages; apply stays out-of-band and human-gated.
 
 **When to use a program (vs one pipeline)**: multiple vendors/teams/domains needing separate specialist
 chains AND separate approvals, coordinated across a shared design. A few same-vendor devices under one
-team = one pipeline. Full decision matrix: `firewall-policy-use-case.md` §4.
+team = one pipeline. Full decision matrix: `FIREWALL-POLICY-USE-CASE.md` §4.
 
 ## 2. Launch a program
 
@@ -110,7 +110,7 @@ run's completed stage reads it as history rather than as itself.
 
 | | root title | what the legs did |
 |---|---|---|
-| Westpac Run 24 | `… (Run 24) (protocol: pov-program)` | legs carried NO clearance and still proceeded — *"prior runs' pipelines (19-23) are historical, unrelated to this execution"* |
+| A second test project, Run 24 | `… (Run 24) (protocol: pov-program)` | legs carried NO clearance and still proceeded — *"prior runs' pipelines (19-23) are historical, unrelated to this execution"* |
 | A run titled without one | `Authorise the telemetry export path…` | leg stage named `(Run 20260922-0638)`; the next run's fabric leg read it as a duplicate and **HALTED** |
 
 A bare timestamp discriminates for a machine but not for a reader deciding *"is that me, or is that
@@ -120,7 +120,7 @@ history?"* — which is the judgement the duplicate check actually makes.
 retry — so this costs a whole run's setup when you get it wrong.
 
 **Exception — measurement windows (2026-10-04):** a run number tells agents where they sit in a measured series, so a
-measurement window drops it and relies on the clearance instead — see `PROGRAM-OPERATOR-GATE-PLAYBOOK.md` § "Run titles in
+measurement window drops it and relies on the clearance instead — see `GATES.md` § "Run titles in
 a MEASUREMENT window" (the clearance check before every plan-gate release then becomes mandatory).
 
 ### The clearance burden grows by one leg per run
@@ -129,7 +129,7 @@ Each completed run leaves **its own leg child stages** behind in the phase, and 
 legible against all of them. The root's `PRE-FLIGHT CLEARANCE` should name prior **`Program:`** stages
 by exact ID; the run number is what handles the **`Pipeline:`** leg stages underneath them. A
 successful run is what makes the next one harder — which is counter-intuitive enough to be worth
-stating. Westpac reached Run 26 on this convention, so it scales; it just has to be adopted from
+stating. That project reached Run 26 on this convention, so it scales; it just has to be adopted from
 Run 1, not retrofitted at Run 6.
 
 ## 3. The lifecycle you'll observe
@@ -180,7 +180,7 @@ the `task.create` result says so in one sentence; or it records why it declined 
 leg without its contract (GUI, REST, an external client) still fails loud as above.
 This is the *declarative* coordination. For *runtime* interdependencies (a leg needs an upstream leg's
 designed output), the DAG wires an edge and the downstream leg chains the upstream's `report.md` into
-its §6 (see `firewall-policy-use-case.md` §2/§3 Approach 3).
+its §6 (see `FIREWALL-POLICY-USE-CASE.md` §2/§3 Approach 3).
 
 **Network legs: the `## Device sources` block rides the contract.** Write each network leg's block in `requirements.md`; the Architect
 copies it exactly into the contract as `deviceSources["network-provisioning"]`. **List every switch a leg must SEE, not only the one it
@@ -202,7 +202,7 @@ yet. **A value leg has its own key (network-derivation ≥ 1.3.0, 2026-11-06):**
 (the value leg reads through its descriptor and reads no Git file). Git-only is allowed and stated, never blocked — the value card reads
 `liveEvidence: git-only (declared devices)`. Since network-derivation 1.3.1 its `git-file-only` warning is a line of its own and reaches
 the leg report. On a change leg (network-provisioning ≥ 1.27.0) a Git file that differs from its device is applied incrementally, never
-loaded whole, and a declared source that could not be read is refused by the leg's own Reviewer. Details: `PIPELINE-HARNESS-USER-GUIDE.md`
+loaded whole, and a declared source that could not be read is refused by the leg's own Reviewer. Details: `PIPELINES.md`
 § "Which devices to list" and § "Network: kept device configurations".
 
 ## 5. Releasing gates (important operational detail)
@@ -340,9 +340,9 @@ It works only if the rules are fixed BEFORE the run and the record says who deci
   redacted password-hash line can delete the object (the only admin user included) while printing
   success. Hold and re-author instead. A leg's `report.md` flags such lines under **Platform warnings
   (non-blocking)** since 2026-10-13; the absence of that section is not clearance. Full rule:
-  [`PROGRAM-OPERATOR-GATE-PLAYBOOK.md`](GATES.md) (Apply gate, step 2).
+  [`GATES.md`](GATES.md) (Apply gate, step 2).
 - **≤ 8 child pipelines per program** — a deliberate blast-radius/cost cap; group devices if the path is
-  wider (`firewall-policy-use-case.md` §5).
+  wider (`FIREWALL-POLICY-USE-CASE.md` §5).
 - **Contract loud-fail** — a pipeline child without its contract aborts loudly, never silently composes.
 - **Human gates everywhere** — the plan gate + per-team gates are dependency nodes the platform can
   never auto-complete; release + the final release decision are always human.
@@ -421,28 +421,7 @@ even work: `verdictMismatch: true` is an independent conjunct and survives the e
 tamper-evidence, and it is deliberate.
 
 **Why there is no leg-exclusion mechanism, and why we are not building one.** Measured across the whole
-corpus (2026-09-22) — re-run the queries, do not trust these numbers:
-
-```bash
-# Three numbers, one call: (1) bad legs + how many were ever re-run, (2) the blocked-program
-# distribution by bad-leg count, (3) legs replicated inside a program stage.
-ssh <PROD_USER>@<PROD_HOST> 'cd /var/www/paichart-app/current && source .env.production && psql "$DATABASE_URL" -P pager=off -c "
-WITH prog AS (SELECT p.id, p.metadata->>'"'"'pipelineStageId'"'"' sid, p.metadata->>'"'"'programReleasable'"'"' rel
-  FROM tasks p WHERE p.type='"'"'PIPELINE'"'"' AND p.metadata->>'"'"'programReleasable'"'"' IS NOT NULL),
-legs AS (SELECT g.id pid, g.rel, c.id lid, left(c.title,34) t,
-  c.metadata->'"'"'qualityGate'"'"'->>'"'"'outcome'"'"' oc FROM prog g
-  JOIN tasks c ON c.stage_id=g.sid AND c.type='"'"'PIPELINE'"'"')
-SELECT '"'"'bad-legs-ever-rerun'"'"' metric,
-  count(*) FILTER (WHERE oc <> '"'"'approved'"'"')::text AS a,
-  count(*) FILTER (WHERE oc <> '"'"'approved'"'"' AND (SELECT count(*) FROM agent_executions e WHERE e.\"taskId\"=lid) > 2)::text AS b
-FROM legs
-UNION ALL SELECT '"'"'blocked-programs / of-which-zero-bad-legs'"'"',
-  count(DISTINCT pid) FILTER (WHERE rel='"'"'false'"'"')::text,
-  count(DISTINCT pid) FILTER (WHERE rel='"'"'false'"'"' AND pid NOT IN (SELECT pid FROM legs WHERE oc <> '"'"'approved'"'"'))::text
-FROM legs
-UNION ALL SELECT '"'"'legs-replicated-in-stage'"'"',
-  (SELECT count(*) FROM (SELECT pid,t FROM legs GROUP BY pid,t HAVING count(*)>1) x)::text, '"'"'-'"'"';"'
-```
+corpus (2026-09-22):
 
 **37 bad legs, 0 ever re-executed at leg level, 0 ever replicated inside a program stage.** The only
 child-level re-execution in the corpus is the telemetry-export cloud leg written up above — created
@@ -519,7 +498,7 @@ before any child or spend** — relaunch it as a new task with the pov-program t
   (the "third population" — not a fault). On a 2.0.0 plan Node C checks every leg's
   title token and leg type against the approved plan (a mismatch is BLOCKING) and is the only reviewer of whether a
   consumer that declared nothing applied the published value.
-- Before releasing the plan gate, run the hold-window checks in PROGRAM-RUN-FORENSICS-GUIDE §4c and the operator
+- Before releasing the plan gate, run the hold-window checks in the maintainers' forensics guide (not in this repository) §4c and the operator
   playbook (clearance on the ROOT, every child holds the PLAN's contract, producer/Node C depend on the legs only).
 
 Measured in the variant's window (5 runs, 2026-10-03): the value leg approved 5/5, $1.46 per run on average (−28% vs the
@@ -529,11 +508,11 @@ controls (E10) run after it.
 
 ## 11. See also
 
-- Design a use-case: [`PROGRAM-USE-CASE-DESIGN-PLAYBOOK.md`](design/DESIGNING-A-PROGRAM.md) ·
-  [`firewall-policy-use-case.md`](design/FIREWALL-POLICY-USE-CASE.md) · [`PROGRAM-COMPOSITION-CATALOG.md`](PROGRAM-SHAPES.md).
-- Leg-level detail: [`PIPELINE-HARNESS-USER-GUIDE.md`](PIPELINES.md).
+- Design a use-case: [`DESIGNING-A-PROGRAM.md`](design/DESIGNING-A-PROGRAM.md) ·
+  [`FIREWALL-POLICY-USE-CASE.md`](design/FIREWALL-POLICY-USE-CASE.md) · [`PROGRAM-SHAPES.md`](PROGRAM-SHAPES.md).
+- Leg-level detail: [`PIPELINES.md`](PIPELINES.md).
 - **Make the requirements.md** (§2 "Where the two artifacts come from"): by hand, from [WRITING-A-SPEC.md](WRITING-A-SPEC.md).
-- **Run the human side of the gates**: [`PROGRAM-OPERATOR-GATE-PLAYBOOK.md`](GATES.md) — plan-gate probing, mechanical package checks, apply discipline, and the read-raw-output rule. Every device-facing defect across two campaigns was caught by an operator step, not an agent tier.
+- **Run the human side of the gates**: [`GATES.md`](GATES.md) — plan-gate probing, mechanical package checks, apply discipline, and the read-raw-output rule. Every device-facing defect across two campaigns was caught by an operator step, not an agent tier.
 - A run that stopped: [TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md).
 - Public proofs: `github.com/paichart/paichart/tree/main/verification` (OVERVIEW + ARCHITECTURE + VT-01..08).
 
@@ -579,13 +558,13 @@ the raw harvest rather than the curated summary — the provenance-shaped case.
 
 ### The architectural answer: scale legs per program, not nodes per leg
 
-The composition catalog (`PROGRAM-COMPOSITION-CATALOG.md`, S2/S3 shapes) already prescribes this,
+The composition catalog (`PROGRAM-SHAPES.md`, S2/S3 shapes) already prescribes this,
 and the firewall campaign proved it live: edge/core/dmz ran as separate legs chained through the
 interface contract, each harvesting only its own devices. Every cap above **resets per leg**.
 
 - A 20-device change = a 4–5-leg program at 4–5 devices each, NOT a 20-device leg.
 - The per-leg grouping seam should follow real change-window boundaries (team, site, vendor,
-  blast radius) — the same axes as the decision matrix in `firewall-policy-use-case.md`.
+  blast radius) — the same axes as the decision matrix in `FIREWALL-POLICY-USE-CASE.md`.
 
 ### If a use-case genuinely forces more depth per leg
 

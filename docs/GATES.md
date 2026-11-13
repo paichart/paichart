@@ -3,8 +3,8 @@
 > **What this is**: the choreography for the HUMAN/operator half of a `pov-program` run — what to do
 > at a plan gate, at a package gate, and at an apply gate. Earned across two campaigns (FW-A3, five
 > rounds; IGP-T1, nine) where **every defect that reached a device-facing decision was caught by an
-> operator step, not by an agent tier**. Companions: `PROGRAM-HARNESS-USER-GUIDE.md` (mechanics),
-> `PROGRAM-RUN-FORENSICS-GUIDE.md` (reading a finished run).
+> operator step, not by an agent tier**. Companions: `PROGRAMS.md` (mechanics),
+> the maintainers' forensics guide (not in this repository) (reading a finished run).
 >
 > Read this if you are the person completing gate tasks. It is deliberately about *what you do*, not
 > about how the harness works.
@@ -59,7 +59,7 @@ only while the plan gate is held — once released, the legs start with whatever
 
 6. **Every leg and Node C holds the PLAN'S contract — compare each to the plan, never to each other.** The plan is the
    fenced JSON under `## Interface Contract` in the Architect's report; compare it to each child's
-   `inputContext.interfaceContract` as **jsonb** (key-order-insensitive) — the query is in PROGRAM-RUN-FORENSICS-GUIDE §4c.
+   `inputContext.interfaceContract` as **jsonb** (key-order-insensitive) — the query is in the maintainers' forensics guide (not in this repository) §4c.
    Expect `SAME AS PLAN` on every row. ⚠️ *Corrected 2026-10-04:* this check used to compare md5 ACROSS legs, which is
    blind to a paraphrase every leg shares — measured, it missed 17 of 23 deviations, and passed B7 runs 1-2 and
    re-measure run 1 while their contracts had been re-typed (value-chain: 5 of 7 runs differ from the plan). *B7 runs 3-4:
@@ -129,11 +129,11 @@ gate, the program synthesises on Node C's verdict about the OLD package — the 
 reachable by the new order. Re-run Node C after the leg (its input changed, so it is not a same-input re-roll), or record
 the deviation before release.
 
-The SQL for 6-8 (one query, read-only) is in `PROGRAM-RUN-FORENSICS-GUIDE.md` §4c.
+The SQL for 6-8 (one query, read-only) is in the maintainers' forensics guide (not in this repository) §4c.
 
 ### Run titles in a MEASUREMENT window — no run number, so the clearance must be perfect
 
-`PROGRAM-HARNESS-USER-GUIDE.md` §2 says put a run number in the title: it lets a leg read a prior run's stage as
+`PROGRAMS.md` §2 says put a run number in the title: it lets a leg read a prior run's stage as
 history instead of a duplicate of itself. In a measurement window that number tells agents where they sit in the series
 (B7 run 4's Architect quoted "Run 4 of a declared ≥5-run window" and the stop line), so the re-measure window drops it —
 plain identical title, a timestamped fresh stage per run, and NO measurement criteria in phase/stage text. The cost is

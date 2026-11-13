@@ -10,6 +10,7 @@ What is here in the public repository:
 | `agents/paichart-spec-writer.md` | An agent that works through the spec checklist with you and writes `requirements.md` and `topology.json`. |
 | `knowledge/protocols/` | How this code is developed: when a change needs review, how to sweep its blast radius, how to test it. |
 | `knowledge/patterns/` | Implementation patterns used in the code; start at `PATTERN-REGISTRY.md`. |
+| `knowledge/pipelines/requirements-authoring/DESIGN-DECISION-QUESTIONS.md` | The registry of design questions the spec checklist draws on. The spec coverage check reads it. |
 | `skills/requirements-spec/work/` | Test fixtures. Seven test suites read them. |
 
 To use the two agents from any directory: `mkdir -p ~/.claude/agents && cp .claude/agents/paichart-*.md ~/.claude/agents/`.

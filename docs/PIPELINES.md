@@ -3,7 +3,7 @@
 **Version**: 3.1 | **Updated**: 2026-11-08 (network-provisioning 1.27.0 + network-derivation 1.3.1 mirror) · 2026-06-29
 **Status**: Production — three-mode (CREATE + ORCHESTRATE + SYNTHESIZE), platform-resolved
 
-> **This guide = how to RUN/USE the harness.** To compose MULTIPLE pipelines into a plan-gated **program** (pipeline-of-pipelines): [`PROGRAM-HARNESS-USER-GUIDE.md`](PROGRAMS.md).
+> **This guide = how to RUN/USE the harness.** To compose MULTIPLE pipelines into a plan-gated **program** (pipeline-of-pipelines): [`PROGRAMS.md`](PROGRAMS.md).
 
 ---
 
@@ -46,7 +46,7 @@ How they differ from a generic pipeline:
 - **Network: declare each device's source (network-provisioning ≥ 1.23.0; kept files since 1.25.0).** A `## Device sources` block, one line per device — `<device>: git-file — service <name | descriptor URL> ; <owner>/<repo>/<path> [@ <ref>]`, `<device>: device-read — service <name | descriptor URL>`, `<device>: live-read — service <name | descriptor URL>` (since 1.26.0: a device the leg reads as evidence but never changes — alone on its device, never kept), or `<device>: command-package`. A device with no line stops the leg (the pipeline never guesses a source); a device may carry both a git-file and a device-read line (the Git file is the kept base; the device read is evidence, compared by a platform warning fact). A ref outside the Git service's pin is refused: that device is HELD and the leg is needs-revision (forced if needed); on an unpinned customer Git service the ref is read as named. Pasted state is evidence, never a base. A service named by name is used as already registered (never registered or deleted by the run). Value legs (network-derivation) need no block. See *Network: kept device configurations* below.
 - **The cognition/actuation seam — it never actuates.** The deliverable is a change *to be applied* (a config / manifest / HCL diff + validation facts + rollback); applying it is the customer's **out-of-band, human-gated** run (a deterministic applier / Argo-Flux reconcile / `terraform apply`).
 - **Read-only floor + secret discipline.** The customer service enforces a read-only verb-enum + redacts secrets at the source; pAIchart's *own* guards back it up — **R9** (`CONNECTED_OUTPUT_SANITIZE_ENABLED`) sanitizes harvested output before the reasoner, **R10** (`ARTIFACT_SECRET_REDACT_ENABLED`) redacts secrets from the persisted artifacts. Both are **enabled in prod** (2026-06-29).
-- **⚠️ A redacted line is not applicable.** R10 writes `<<REDACTED-SECRET>>` (a terraform harvest may show `<REDACTED-SECRET>`), and devices accept either as a literal value — device-verified 2026-10-13 on EOS (community / `secret 0` / enable / TACACS key), nginx (`proxy_set_header`) and otelcol (headers, auth). **Never apply a block containing either spelling, or any other `<REDACTED…>` / `<<REDACTED…>>` form** (Authors invent variants; check with `grep -nE '<{1,2}REDACTED' <package file>`). A green `nginx -t` / `otelcol validate` does not prove it safe, and on EOS a full config replace with a redacted password-hash line can delete the object (the only admin user included) while printing success. Hold and re-author. The leg's `report.md` lists such lines under **Platform warnings (non-blocking)** since 2026-10-13, and the absence of that section is not clearance. Full rule: [`PROGRAM-OPERATOR-GATE-PLAYBOOK.md`](GATES.md) (Apply gate, step 2).
+- **⚠️ A redacted line is not applicable.** R10 writes `<<REDACTED-SECRET>>` (a terraform harvest may show `<REDACTED-SECRET>`), and devices accept either as a literal value — device-verified 2026-10-13 on EOS (community / `secret 0` / enable / TACACS key), nginx (`proxy_set_header`) and otelcol (headers, auth). **Never apply a block containing either spelling, or any other `<REDACTED…>` / `<<REDACTED…>>` form** (Authors invent variants; check with `grep -nE '<{1,2}REDACTED' <package file>`). A green `nginx -t` / `otelcol validate` does not prove it safe, and on EOS a full config replace with a redacted password-hash line can delete the object (the only admin user included) while printing success. Hold and re-author. The leg's `report.md` lists such lines under **Platform warnings (non-blocking)** since 2026-10-13, and the absence of that section is not clearance. Full rule: [`GATES.md`](GATES.md) (Apply gate, step 2).
 
 **Internal setups (one person registers the team's services, many run pipelines):** register by descriptor URL (the platform takes the name and every field from the descriptor; each tool description ≤ 500 characters; a token only in the URL's query string, accepted only from a person); a private descriptor host needs the operator's `HUB_PRIVATE_ENDPOINT_ALLOWLIST`; to let colleagues' pipelines hold a shared service the owner grants their POV (`heldGrantPovIds`). Full rules: [CONNECTING-YOUR-SERVICES.md](CONNECTING-YOUR-SERVICES.md) (internal draft).
 
@@ -389,7 +389,7 @@ Design artifacts for the Program Architect (fetch ONLY these two URLs):
 ```
 The requirements file carries each network leg's `## Device sources` block; the Program Architect copies it into the interface contract
 and every leg reads it from there. Put a **run number** in the title, and set the duplicate clearance before re-running (see
-`PROGRAM-HARNESS-USER-GUIDE.md` §2).
+`PROGRAMS.md` §2).
 
 ## Reading a pipeline's result
 
@@ -544,10 +544,10 @@ Need an old run's evidence later? Copy what matters into your own records — pr
 
 | Reader | Reads |
 |---|---|
-| **You (running or reviewing pipelines)** | this guide; `PROGRAM-HARNESS-USER-GUIDE.md` for programs |
+| **You (running or reviewing pipelines)** | this guide; `PROGRAMS.md` for programs |
 | **Your AI client** (Claude Desktop, ChatGPT, Claude Code via MCP) | the `HOWTO-*` prompts (`list_prompts()`; e.g. `HOWTO-use-pipeline-harness`) — kept in step with this guide |
 | **The pipeline's own agents** | their protocol and role guidance — never this guide |
-| **Someone investigating a run** | `PIPELINE-RUN-FORENSICS-GUIDE.md` / `PROGRAM-RUN-FORENSICS-GUIDE.md` |
+| **Someone investigating a run** | the maintainers' forensics guide (not in this repository) / the maintainers' forensics guide (not in this repository) |
 | **Someone setting up internal services** | [CONNECTING-YOUR-SERVICES.md](CONNECTING-YOUR-SERVICES.md) |
 | **Anyone checking our claims** | the public verification pack (`github.com/paichart/paichart/tree/main/verification`) |
 
@@ -1014,4 +1014,4 @@ Fires only when `metadata.pipelineStageId` is set AND child stage has tasks but 
 - `scripts/seed-harness-template.ts` — Pipeline Harness template definition
 - `scripts/seed-protocol-prompts.ts` — protocol prose: `pipeline-orchestrator-protocol` v3.7.1, `artifact-synthesis-protocol` v1.3.0
 
-**See also**: `HARNESS-MENTAL-MODEL.md` (concepts), `PIPELINE-DATAFLOW-REFERENCE.md` (per-role I/O), `PIPELINE-OBSERVABILITY-GUIDE.md` (admin runtime investigation).
+**See also**: `HOW-IT-WORKS.md` (concepts), `PIPELINE-DATAFLOW-REFERENCE.md` (per-role I/O), `PIPELINE-OBSERVABILITY-GUIDE.md` (admin runtime investigation).

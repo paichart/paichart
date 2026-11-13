@@ -38,7 +38,7 @@ test('token is anchored on BOTH sides — the closing paren is the fix', () => {
 
 test('a real production title matches', () => {
   // Verbatim shape from prod: 33 live tasks carry exactly this token.
-  assert(isProgramProtocolTitle('Westpac infrastructure change program (Run 2) (protocol: pov-program)'),
+  assert(isProgramProtocolTitle('Example infrastructure change program (Run 2) (protocol: pov-program)'),
     'the canonical live form must still match — anchoring must not break 33 existing program tasks');
 });
 

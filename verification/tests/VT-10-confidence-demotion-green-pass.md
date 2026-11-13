@@ -97,7 +97,7 @@ which every one of those nets was armed — and none fired.
 
 # Re-verification — Run 25, 2026-08-04
 
-**Task**: `cmsdt6tkx0003yxom1ncoraiy` — "Westpac sequenced telemetry-export authorization (Run 25)",
+**Task**: `cmsdt6tkx0003yxom1ncoraiy` — "[project name] sequenced telemetry-export authorization (Run 25)",
 COMPLETED 2026-08-03 22:36 UTC.
 
 ⚠️ **Honesty note, and it is the reason this section exists in this form.** Every other round in this

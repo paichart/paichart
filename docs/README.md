@@ -3,8 +3,8 @@
 Everything you need to install, run and operate pAIchart starts on this page. Pick the heading that matches what you are doing.
 A word you do not know: [GLOSSARY.md](GLOSSARY.md).
 
-The `.claude/` directory is the knowledge base the Claude agents use to maintain the code. You do not need it to install or run
-pAIchart; the documents you do need from it are linked below.
+The `.claude/` directory holds two agents for Claude Code and the maintainers' development method (protocols and patterns). You do
+not need it to install or run pAIchart.
 
 ## Install
 

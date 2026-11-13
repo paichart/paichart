@@ -142,7 +142,7 @@ platform-rendered difference between them, not the Author's description.
 4. **Apply through your normal flow:** a PR with the candidate (or the same edits), CI runs the package's validation steps, merge, and the
    reconciler or `kubectl apply` takes it. **Rollback** = `restore H1` (the held base).
 
-Reference: `../PIPELINE-HARNESS-USER-GUIDE.md` *Applying a kept-file package safely*.
+Reference: `../PIPELINES.md` *Applying a kept-file package safely*.
 
 **Key takeaway:** *"The AI proposes edits. The platform applies them to a sealed copy of your file so the reviewer sees the exact diff.
 Your repository changes only when your own people merge it."*

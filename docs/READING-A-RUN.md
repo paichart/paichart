@@ -208,6 +208,6 @@ The platform's facts are narrow on purpose. These are judged by people, or not a
 ## Related
 - The tours: [PROGRAM-WALKTHROUGH.md](walkthroughs/PROGRAM-WALKTHROUGH.md), [K8S-LEG-WALKTHROUGH.md](walkthroughs/K8S-LEG-WALKTHROUGH.md), [TERRAFORM-LEG-WALKTHROUGH.md](walkthroughs/TERRAFORM-LEG-WALKTHROUGH.md), [OBSERVABILITY-LEG-WALKTHROUGH.md](walkthroughs/OBSERVABILITY-LEG-WALKTHROUGH.md),
   [NETWORK-LEG-WALKTHROUGH.md](walkthroughs/NETWORK-LEG-WALKTHROUGH.md).
-- Forced outcomes in detail, and applying a kept-file package: [PIPELINE-HARNESS-USER-GUIDE.md](PIPELINES.md).
+- Forced outcomes in detail, and applying a kept-file package: [PIPELINES.md](PIPELINES.md).
 - A run that stopped: [TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md).
 - The design rule behind section 1: [signal-design-protocol.md](../.claude/knowledge/protocols/signal-design-protocol.md) (Protocol 10, fact vs verdict).

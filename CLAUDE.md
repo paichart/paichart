@@ -166,7 +166,7 @@ npm run test:security        # POV domain security validation
 
 **Multi-Server Architecture**:
 - Main Server (`server.ts`) - HTTP/Next.js
-- MCP Server (`mcp-server-v5.js`) - AI integration
+- MCP Server (`mcp-server-http-clean.js`) - AI integration
 - Real-time updates via PostgreSQL NOTIFY/LISTEN (no separate WebSocket server)
 
 **Key Directories**:

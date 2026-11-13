@@ -377,12 +377,9 @@ host-level trust as the rest of the stack) — keep the port local. The backgrou
 ## 10. Operate it from Claude — the GUI is not how pAIchart is run
 Two things come with the clone that make step 8 more than a connector:
 
-- **Purpose-built sub-agents (advanced — for when you change the code, not for running programs).** `.claude/agents/` holds
-  the specialist agents and `CLAUDE.md` tells Claude Code how to use them. They load only when you start Claude Code **inside
-  the clone** (`cd ~/paichart && claude`); you do not need them for your first runs, and Claude Code works for everything in
-  this guide from any directory. `discovery-scout` maps a subsystem before you change it; `mcp-hub-specialist`,
-  `template-system-specialist`, `dev-ops-specialist` and the rest each own a domain; `pipeline-harness-specialist`
-  drives autonomous pipelines and programs.
+- **Two agents for Claude Code.** `.claude/agents/` holds `paichart-operator` (runs a program with you and diagnoses a
+  stopped run) and `paichart-spec-writer` (writes a spec with you). The copy command at the end of this guide makes them
+  available from any directory. You do not need them for your first run.
 - **The MCP tools are the operating surface.** Day-to-day administration and operation happen by asking Claude,
   which calls the hub's tools (`project`, `perform`, `registry`, `services`, `template`, `analytics`, …); the web
   GUI is for reading, approvals and the occasional setting. Examples, typed to Claude as written:

@@ -4,9 +4,9 @@
 
 > **This guide = how to DESIGN a new program use-case** — the procedure that turns a multi-domain
 > objective into a plan-gated program of pipelines that ships. To *run* an already-designed program,
-> see [`PROGRAM-HARNESS-USER-GUIDE.md`](../PROGRAMS.md). A program leg IS a pipeline; the
+> see [`PROGRAMS.md`](../PROGRAMS.md). A program leg IS a pipeline; the
 > inside of a leg is governed by its domain's protocol ([`protocols/`](../../protocols/README.md)). This playbook covers only
-> the composition layer. Full worked reference: [`firewall-policy-use-case.md`](FIREWALL-POLICY-USE-CASE.md).
+> the composition layer. Full worked reference: [`FIREWALL-POLICY-USE-CASE.md`](FIREWALL-POLICY-USE-CASE.md).
 
 ## The one-sentence job
 
@@ -95,7 +95,7 @@ passes as a sibling of `title` into each leg (`inputContext.interfaceContract`),
   into the downstream leg's §6, and the settledness predicate (F18) holds it until the upstream deliverable
   is fully persisted. Use ONLY for genuine runtime interdependency.
 - **Fan-in / diamond** (a leg with TWO or more upstream legs — never run yet): same mechanism, more than one upstream id.
-  Read `PROGRAM-COMPOSITION-CATALOG.md` §Fan-in and diamond first — every upstream must be judged, and which upstream a
+  Read `PROGRAM-SHAPES.md` §Fan-in and diamond first — every upstream must be judged, and which upstream a
   value came from is not checked.
 - **Design constraint (D3, KEYSTONE)**: program edges connect **sibling legs in the one program stage**.
   Each leg's OWN children live in that leg's separate child stage (a disconnected subgraph — adds no program
@@ -134,7 +134,7 @@ Then design **Node C** (the program integration reviewer, `change_reviewer` role
 
 ## Phase 4 — Author the docs 📝
 
-- The **use-case doc** (like `firewall-policy-use-case.md`): problem, anchor scenario, the shape choice +
+- The **use-case doc** (like `FIREWALL-POLICY-USE-CASE.md`): problem, anchor scenario, the shape choice +
   why, the decision matrix, caveats as worked sub-examples, and where it rides on the existing engine.
 - The **worked artifact set**, one directory per shape:
   `topology.json`, `requirements.md`, `interface-contract.json`, and a README that explains why it's THIS
@@ -186,8 +186,8 @@ use-case doc + illustrative artifacts → validate against the VT guarantees →
 
 ## See also
 
-- Run it: [`PROGRAM-HARNESS-USER-GUIDE.md`](../PROGRAMS.md)
-- The shape map: [`PROGRAM-COMPOSITION-CATALOG.md`](../PROGRAM-SHAPES.md)
+- Run it: [`PROGRAMS.md`](../PROGRAMS.md)
+- The shape map: [`PROGRAM-SHAPES.md`](../PROGRAM-SHAPES.md)
 - Worked reference: [the firewall policy use case](FIREWALL-POLICY-USE-CASE.md)
 - Public proofs: `github.com/paichart/paichart/tree/main/verification`
 
