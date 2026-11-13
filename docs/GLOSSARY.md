@@ -31,14 +31,14 @@ The words pAIchart's documents use, in plain terms. Each entry says what the thi
 
 | Term | Meaning |
 |---|---|
-| **Gate** | A point where the program stops until a person approves. Your approvals are how a person regulates the agents in the graph: the work behind a gate does not start until you release it. A gate is a task; releasing it means marking it completed. |
+| **Gate** (also **approval gate**, **release gate**) | A point where the program stops until a person approves. Your approvals are how a person regulates the agents in the graph: the work behind a gate does not start until you release it. A gate is a task; releasing it means marking it completed, in the web app or by asking your AI client, and the run then continues. |
 | **Plan gate** | The first gate. Nothing runs before you have read the plan and released it. |
 | **Value gate** | The gate after a leg that works out a value (an address, a range). You approve the value before any leg uses it. |
 | **Change gate** | The gate for one change package. The detailed guides also call it a package gate or a change-method gate. |
 | **Apply gate** | A gate whose description says *apply, then confirm*: a person applies one phase of a change and releases the gate so the next leg reads the changed state. Most programs have none. |
 | **Change package** | What a change leg gives you: the edits, a rollback, and the checks to run before and after. **Nothing is applied for you** — applying it is your step. |
 | **Approved**, **needs-revision**, **escalated** | The outcome of a leg. *Approved*: its reviewer found nothing blocking. *Needs-revision*: the reviewer refused it and said why — a refusal of a wrong change is the pipeline working. *Escalated*: it stopped and asks a person to decide. |
-| **`programReleasable`** | The stored fact that says a program's result may be released: every leg approved, the integration review approved, and every mechanical check clean. `true` or `false`; it is computed, not an opinion. |
+| **`programReleasable`** | The stored fact that says a program's result may be released: every leg approved, the integration review approved, and every mechanical check clean. `true` or `false`; it is computed, not an opinion. Where a diagram shows a "release gate" at the very end of a program, it means this check followed by your own decision. |
 | **Reviewer score**, **confidence** | Numbers a reviewer or an agent reports. They are recorded for you to read; they do not decide whether a program is releasable. |
 | **Containment** | A mechanical check that a value a leg uses really is the value another leg worked out (or really lies inside the range it was drawn from). `checked-clean` means it holds. |
 | **Fact** and **verdict** | A *fact* is something the platform measured and can be checked (a hash, a count, a diff). A *verdict* is an agent's judgement. pAIchart's release decision rests on facts. |

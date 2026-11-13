@@ -24,6 +24,21 @@ perform(action: "agent.execute", parameters: { taskId: "<the new task id>", wait
 The *Pipeline Harness* template is assigned to a `PIPELINE` task automatically. `project(action: 'task.list', povId: …)` shows
 progress. Starting a pipeline spends your Anthropic credit.
 
+**What you get at the end.** A pipeline has no gate of its own: it runs through and finishes. On the pipeline task you will find:
+
+- **`report.md`: the deliverable.** For a change pipeline this is the change package. The platform takes it from the final
+  answer of the agent that wrote it (the Author), so it is that text, not a retelling, and adds its own lines where it has
+  something to say: an outcome it forced, warnings.
+- **`pipeline-index.json`: the pipeline's own summary.** A table of each agent's result, the reviewer's verdict, and the outcome
+  (`approved`, `needs-revision` or `escalated`).
+- **A final comment** naming the outcome and pointing to the deliverable.
+
+Each agent's task also keeps its own `result.json` (its full answer and the facts the platform recorded about it) and usually a
+`report.md`. The Author's `result.json` is where to look for the package together with its recorded facts.
+
+`approved` means the reviewer found nothing blocking; it does not mean applied. Read the result as in "Reading a pipeline's
+result" below, then apply the package yourself ([GATES.md](GATES.md), "Applying a package").
+
 ## Kept files — edits by reference
 
 *Available in **observability-config**, **kubernetes-gitops**, **terraform-iac** and **network-provisioning** — k8s and terraform with files from a Git config repo, network with

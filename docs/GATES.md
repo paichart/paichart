@@ -82,6 +82,13 @@ A leg has produced a change package. Read the facts first, then the package.
    `npm run check:package -- --package <file> --contract <file>`. It reports forbidden text that is present and required lines
    that are absent. Both halves matter: a package can be clean of forbidden text and still be missing a required line.
 
+**Saving a package, or a kept file, to a file.** Ask your AI client: *"save the change package to a file"*, or *"save the base
+and candidate copies of the edited file and check their hashes"*. It can write the text to disk by script and compare the file's
+sha256 with the one the platform recorded, so nothing is retyped. Or download it from the web app: **Projects** → the project →
+the task → **Agents → Artifacts** → `report.md` (or any other artifact) → the download button. The contract for `check:package`
+is the JSON block under "Interface Contract" in the plan: ask your AI client to save that block to a file. Whatever you save
+has secrets replaced by a placeholder.
+
 **Releasing a change gate applies nothing.** It records that you accept the package. To release any gate with a note:
 `perform(action: 'task.complete', parameters: { taskId: '<gate task id>', summary: '<your note, under 500 characters>' })`.
 

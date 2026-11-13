@@ -64,6 +64,12 @@ Keep it short. Do not restate a leg protocol's rules. Do not copy device state i
   edit: write "makes no edit".
 - **Do not write "if X, then Y" rules for a leg.** The planner copies each one into the plan as a branch the leg must
   evaluate, and a careless "if" becomes a rule nobody meant. Say it as one sentence with no "if".
+- **Say where you want gates in plain words.** For example: "An approval gate sits before the change legs for the network
+  domain." The gate table then lists each one. For a change that must be live before the next leg runs, say that too: "A person
+  applies leg 2's package and confirms before leg 3 starts." If your AI client writes the spec with you (the
+  `paichart-spec-writer` agent), it asks where each gate goes.
+- **Add each approver to the project's team first.** In the web app: **Projects**, right-click the project, **Edit POV**, **Team**.
+  Do it straight after creating the project.
 - **Never word a check as something a leg must prove about itself,** and never ask a leg to report a difference between two
   sources of one device (a Git file and a device read). The platform compares them.
 

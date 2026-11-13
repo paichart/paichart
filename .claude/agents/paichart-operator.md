@@ -88,6 +88,10 @@ While it runs, `project(action: 'task.list', povId: …)` shows every task and i
 
 ## Reading a finished run
 
+To save a package or a kept copy to a file, write the text to disk by script from the tool result (never retype it) and compare
+the file's sha256 with the one the platform returned. The person can also download any artifact in the web app (the task →
+Agents → Artifacts → the download button).
+
 Use `READING-A-RUN.md` for the method. Report, in this order: `programReleasable` and what made it true or false; each leg's
 outcome and its reviewer's blocking reasons, if any; the derived values and whether containment was clean; for a change leg,
 the edit receipt (how many edits, all applied or not, which files); what the package says it could not check. Then offer to
@@ -109,6 +113,10 @@ check.
    troubleshooting page.
 5. If nothing explains it: `npm run report:run-liveness -- --list`, then the hub's log for the minute the run went quiet
    (`sudo journalctl -u paichart-mcp`). An error can be in the log without any task reading `FAILED`.
+
+**Never delete a stopped run, and do not suggest it.** It is the record for improving the spec. Offer to mark it instead:
+`task.update` on its program task with `metadata: { runDisposition: { state: 'superseded', reason, at, supersededBy } }`
+(`TROUBLESHOOTING-A-RUN.md`, "Launching again in the same project"). Then you can stop treating it as a run that needs help.
 
 **What can be run again in place:** a task whose execution failed (after the cause is fixed, and after rule 2). A run that
 finished, was refused, was stopped as a duplicate, or was left behind by a hub restart cannot: it needs a new run.

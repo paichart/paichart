@@ -205,8 +205,8 @@ itself when it returns. `engine-dead` means the hub's own database client is bro
 exits, and systemd starts a fresh one (`sudo journalctl -u paichart-mcp --since -5min | grep 'engine in this process is gone'` shows it). While the
 database cannot be reached the hub answers requests with "cannot reach its database … do not sign in again" — that is accurate:
 signing in again does not help. After a hub restart, reconnect Claude Code (`/mcp`) and launch the run again: a run that was in flight when the hub restarted
-cannot be resumed. Either delete the stopped run's tasks and stages in the web app first and launch as in section 2 (no stamp
-needed), or keep them and stamp the new task as described under "Re-running a program" below.
+cannot be resumed. Keep the stopped run (mark it superseded: [TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md), "Launching again in
+the same project") and stamp the new task as described under "Re-running a program" below, or launch in a new project (no stamp needed).
 
 **Re-running a program** (an escalated leg, a corrected artifact): a finished program cannot be re-run in place.
 Create a fresh PIPELINE task with a run number in its title (`… (Run 2) (protocol: pov-program)`) and stamp the prior program stage on it

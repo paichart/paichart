@@ -119,8 +119,8 @@ No gate is waiting, nothing has failed, and nothing has changed for 15 minutes.
    recorded reason. Two of its labels need your attention. `SETTLED (harness not re-entered)`: the run's tasks have all
    stopped and the program has not picked up again; a few minutes of this is normal, longer usually means a task failed.
    `UNEXPLAINED`: no recorded reason, typically a task left *In Progress* with nothing running behind it after a hub restart.
-4. **After a hub restart**, a run that was in flight cannot be resumed. Reconnect your AI client, then either delete the
-   stopped run's tasks and stages in the web app and launch again, or keep them and launch a new run as described next.
+4. **After a hub restart**, a run that was in flight cannot be resumed. Reconnect your AI client, keep the stopped run, and
+   launch a new one as described next.
    This differs from a failed task. A task the restart left *In Progress* has no recorded failure, and running it again is
    not a tested way back; launching again is the way known to work.
 
@@ -129,7 +129,7 @@ No gate is waiting, nothing has failed, and nothing has changed for 15 minutes.
 A new run of the same objective in a project that already holds one stops at its first step with a duplicate notice, unless you
 tell it the earlier run is known. Two ways:
 
-- **Simplest:** launch in a new project, or delete the earlier run's tasks and stages first.
+- **Simplest:** launch in a new project.
 - **Keep the earlier run:** create a new task whose title carries a run number, for example
   `… (Run 2) (protocol: pov-program)`. The number does two things: a task with the same title in the same stage is not created
   again (the call returns the existing one), and each leg reads the earlier run's stages as history, not as itself. Then stamp
@@ -141,7 +141,17 @@ tell it the earlier run is known. Two ways:
   `Pipeline: …` stages (for a single pipeline: its `Pipeline: …` stage). `project(action: 'pov.details', povId: '<pov id>')`
   lists the stages. A list that leaves one out stops the new run again. The program passes the list on to its legs.
 
-This is the one rule for running again; the other guides point here. **What can and cannot be run again in place:** a task whose
+This is the one rule for running again; the other guides point here. **Keep a stopped run; do not delete it.** It is the record of what went wrong, and the place to look when you want to improve
+a spec. Mark it instead, so that neither you nor your AI client mistakes it for a run that still needs help. Ask your AI
+client *"mark that run as superseded by the new one"*, or:
+```
+perform(action: 'task.update', parameters: { taskId: '<the stopped run's program task id>',
+    metadata: { runDisposition: { state: 'superseded', reason: '<why>', at: '<today, ISO date>', supersededBy: '<the new task id>' } } })
+```
+`state` is `superseded` (another run replaced it), `abandoned` (nobody will continue it) or `preserved` (kept on purpose, do
+not touch). The mark is a record: it does not close the run's tasks, and `report:run-liveness` then lists the run as disposed.
+
+**What can and cannot be run again in place:** a task whose
 execution **failed** ("A task failed" above) can be run again, and the run carries on. A program or leg that **finished**, was
 **refused**, was stopped as a **duplicate**, or was left behind by a hub restart cannot: launch a new run.
 
