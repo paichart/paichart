@@ -366,6 +366,13 @@ class CleanMCPHTTPServer {
             id: req.body?.id ?? null,
           });
         }
+        if (err && err.name === 'AuthDatabaseUnavailable') {
+          // HUB-DEAF-TO-DATABASE (2026-11-13): the caller's credentials could not be CHECKED because this process cannot
+          // reach its database. A 401 here told every MCP client to "sign in again" — the wrong cause, and re-signing-in
+          // cannot help. 503 says what is true and that retrying later is the right move. Still a refusal: nothing is let in.
+          res.setHeader('Retry-After', '15');
+          return res.status(503).json({ ...err.jsonRpcErrorWithoutId, id: req.body?.id ?? null });
+        }
         // Non-AuthMiddlewareReject error → 500 (unchanged behavior)
         this.logger.error('Authentication error:', err);
         return res.status(500).json({
@@ -909,6 +916,14 @@ class CleanMCPHTTPServer {
         throw mcpInitError;
       }
 
+      // HUB-DEAF-TO-DATABASE (2026-11-13): probe the shared client every 15 s. /health reports the result; an engine that is
+      // gone for two probes cannot be recovered in place (measured), so the process exits and the supervisor restarts it. A
+      // database that is merely unreachable (PostgreSQL restarting) is reported and never exits. lib/database/database-liveness.ts
+      {
+        const { startDatabaseLiveness } = require('./lib/database/database-liveness');
+        startDatabaseLiveness({ probe: () => prisma.$queryRaw`SELECT 1`, logger: bootLog });
+      }
+
       // Per-session transports created dynamically in route handlers
 
       // Initialize authentication context from API key if present
@@ -950,6 +965,8 @@ class CleanMCPHTTPServer {
   async shutdown() {
     try {
       this.logger.info('🔄 Received shutdown signal, shutting down...');
+      // Stop the database probe FIRST: shutdown disconnects the client, and a probe after that would read as a dead engine.
+      require('./lib/database/database-liveness').stopDatabaseLiveness();
 
       // AuthManager Phase 3.3 (2026-05-20): idempotent destroy — safe even if
       // noCleanup:true skipped the rate-limit interval. Clears the empty Map too.

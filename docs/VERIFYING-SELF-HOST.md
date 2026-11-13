@@ -183,6 +183,16 @@ systemctl is-active paichart-mcp                   # expect: active  (Restart= f
 If step 3 does not return `active`, the unit is installed but not supervising, and you have the
 pre-2026-09-13 behaviour with a file that looks like protection.
 
+**The hub also watches its own database connection.** `/health` is not a fixed "ok": every 15 seconds the hub runs one query and
+reports the result.
+```bash
+curl -s -w '\n%{http_code}\n' localhost:8080/health | tail -3      # expect "database":{"state":"ok",…} and 200
+```
+`unreachable` (with **503**) means PostgreSQL cannot be reached; the hub stays up and reconnects when it returns — that is step 2
+above. `engine-dead` (with **503**) means the hub's own database client is broken, which cannot be repaired inside the running
+process: after two such checks the hub logs a fatal line and exits, and the unit's `Restart=` starts a healthy one. That is why
+the units must be supervising (step 3). To keep the report but never exit, set `DATABASE_LIVENESS_EXIT=false` in `.env`.
+
 ### Check the secrets file is not world-readable
 
 ```bash

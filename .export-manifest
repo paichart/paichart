@@ -1459,6 +1459,7 @@ lib/dashboard/types/enums.ts
 lib/dashboard/types/index.ts
 lib/dashboard/types/risk.ts
 lib/database/README.md
+lib/database/database-liveness.ts
 lib/database/dev-query-logger.ts
 lib/database/query-mappers.ts
 lib/database/serialization-retry.ts
@@ -2273,6 +2274,7 @@ scripts/test-context-chainer-inflight.ts
 scripts/test-contract-propagation-enrichment.ts
 scripts/test-cookie-secure-derivation.ts
 scripts/test-cross-pov-isolation.ts
+scripts/test-database-liveness.ts
 scripts/test-db-push-data-loss-guard.ts
 scripts/test-demo-write-coverage.ts
 scripts/test-derivation-containment.ts

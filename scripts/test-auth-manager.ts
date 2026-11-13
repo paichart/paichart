@@ -38,7 +38,8 @@ const teardownEnv = installTestKeysIntoEnv();
 
 // Now require the modules that read env at module-load time
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { AuthManager, AuthMiddlewareReject } = require('../lib/auth/oauth/auth-manager');
+const { AuthManager, AuthMiddlewareReject, AuthDatabaseUnavailable } = require('../lib/auth/oauth/auth-manager');
+const dbLiveness = require('../lib/database/database-liveness');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { SessionStore } = require('../lib/auth/oauth/session-store');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -668,6 +669,74 @@ async function run() {
     assertEqual(req.user?.authMethod, 'mcp_token', 'authMethod = mcp_token');
     assertEqual(audit.events.some((e: any) => e.action === 'auth_success_mcp_token'), true, 'audit event emitted (D6 dual-emit)');
     am.destroy();
+  });
+
+  // 23b–23e — HUB-DEAF-TO-DATABASE (2026-11-13): credentials that could not be CHECKED because the database is unavailable get a
+  // 503 (AuthDatabaseUnavailable), never a 401 that tells the client to sign in again. Both directions, and nothing is let in.
+  await test('createMiddleware: a valid token whose user lookup hits a dead database engine → AuthDatabaseUnavailable, not 401', async () => {
+    dbLiveness.__resetDatabaseLivenessForTests();
+    const keys = getTestKeys();
+    const token = await signTestToken(keys.current, { userId: 'u_dead', email: 'dead@test.local', role: 'USER' });
+    const prisma = makeMockPrisma({
+      findUnique: async () => { const e: any = new Error('\nInvalid `prisma.user.findUnique()` invocation:\n\n\nEngine is not yet connected.\nBacktrace []'); e.name = 'PrismaClientUnknownRequestError'; throw e; },
+    });
+    const { am, audit } = makeAuthManager({ prisma });
+    await am.initialize();
+    const req = makeMockReq({ authHeader: `Bearer ${token}`, method: 'tools/call' });
+    let thrown: any = null; let nextCalled = false;
+    try { await am.createMiddleware()(req, makeMockRes(), () => { nextCalled = true; }); } catch (err) { thrown = err; }
+    assertEqual(thrown instanceof AuthDatabaseUnavailable, true, 'throws AuthDatabaseUnavailable');
+    assertEqual(thrown instanceof AuthMiddlewareReject, false, 'NOT a 401/403 reject');
+    assertEqual(thrown?.jsonRpcErrorWithoutId?.error?.data?.reason, 'database-unavailable', 'reason says database-unavailable');
+    assertEqual(thrown?.jsonRpcErrorWithoutId?.error?.data?.kind, 'engine-dead', 'kind is the classified failure');
+    assertEqual(/do not sign in again/i.test(thrown?.jsonRpcErrorWithoutId?.error?.message ?? ''), true, 'message tells the client not to sign in again');
+    assertEqual(nextCalled, false, 'the request is NOT let in');
+    assertEqual(req.user, undefined, 'req.user NOT populated');
+    assertEqual(audit.events.some((e: any) => e.action === 'auth_middleware_503_database_unavailable'), true, 'audit event emitted');
+    am.destroy();
+  });
+
+  await test('createMiddleware: NO credentials while the database is down → still 401 (there was nothing to check)', async () => {
+    dbLiveness.__resetDatabaseLivenessForTests();
+    await dbLiveness.probeDatabaseOnce({ probe: async () => { throw new Error('Engine is not yet connected.'); }, logger: { warn() {}, fatal() {}, info() {} }, onFatal: () => {} });
+    assertEqual(dbLiveness.isDatabaseDown(), true, 'precondition: the probe says the database is down');
+    const { am } = makeAuthManager({});
+    await am.initialize();
+    const req = makeMockReq({ method: 'tools/call' });
+    let thrown: any = null;
+    try { await am.createMiddleware()(req, makeMockRes(), () => {}); } catch (err) { thrown = err; }
+    assertEqual(thrown instanceof AuthMiddlewareReject, true, 'no credentials → AuthMiddlewareReject');
+    assertEqual(thrown?.statusCode, 401, '401');
+    am.destroy();
+    dbLiveness.__resetDatabaseLivenessForTests();
+  });
+
+  await test('createMiddleware: an unacceptable token while the probe says the database is down → AuthDatabaseUnavailable', async () => {
+    dbLiveness.__resetDatabaseLivenessForTests();
+    await dbLiveness.probeDatabaseOnce({ probe: async () => { const e: any = new Error("Can't reach database server at `localhost:5432`"); e.name = 'PrismaClientInitializationError'; throw e; }, logger: { warn() {}, fatal() {}, info() {} }, onFatal: () => {} });
+    const { am } = makeAuthManager({});
+    await am.initialize();
+    const req = makeMockReq({ authHeader: 'Bearer not-a-token', method: 'tools/call' });
+    let thrown: any = null;
+    try { await am.createMiddleware()(req, makeMockRes(), () => {}); } catch (err) { thrown = err; }
+    assertEqual(thrown instanceof AuthDatabaseUnavailable, true, 'credentials presented + database down → cannot be checked → 503 class');
+    assertEqual(thrown?.jsonRpcErrorWithoutId?.error?.data?.kind, 'unreachable', 'kind from the probe');
+    am.destroy();
+    dbLiveness.__resetDatabaseLivenessForTests();
+  });
+
+  await test('createMiddleware: an unacceptable token with a HEALTHY database → 401, unchanged', async () => {
+    dbLiveness.__resetDatabaseLivenessForTests();
+    await dbLiveness.probeDatabaseOnce({ probe: async () => 1, logger: { warn() {}, fatal() {}, info() {} }, onFatal: () => {} });
+    const { am } = makeAuthManager({});
+    await am.initialize();
+    const req = makeMockReq({ authHeader: 'Bearer not-a-token', method: 'tools/call' });
+    let thrown: any = null;
+    try { await am.createMiddleware()(req, makeMockRes(), () => {}); } catch (err) { thrown = err; }
+    assertEqual(thrown instanceof AuthMiddlewareReject, true, 'bad token + healthy database → AuthMiddlewareReject');
+    assertEqual(thrown?.statusCode, 401, '401');
+    am.destroy();
+    dbLiveness.__resetDatabaseLivenessForTests();
   });
 
   // 24 — HS256 Bearer is REJECTED (HS256 acceptance removed 2026-05-28). Was formerly a

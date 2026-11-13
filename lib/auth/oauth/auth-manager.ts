@@ -46,6 +46,7 @@ import { UserRole } from '../../types/auth';
 // the classifier is a pure function with no `this.*` coupling, extracted
 // in Wave 1; importing directly is the cleanest path.
 import { isProtectedMethod } from '../mcp-method-classifier';
+import { classifyDatabaseError, getDatabaseLiveness, isDatabaseDown } from '../../database/database-liveness';
 
 // ============================================================================
 // Interfaces — every field grep-verified against actual call sites
@@ -256,6 +257,27 @@ const CLIENT_PROVIDER_MAP: ClientMatch[] = [
  *   - Link (RFC 9728 backup discovery)
  *   - Access-Control-Expose-Headers (CORS preflight for the above two)
  */
+/**
+ * HUB-DEAF-TO-DATABASE (2026-11-13): thrown INSTEAD of a 401 when credentials were presented and could not be checked because
+ * this process cannot reach its database. The wrapper answers 503 with `Retry-After`. It is still a refusal — the request is not
+ * let in — but it does not tell the client to sign in again, which cannot help and hides the cause.
+ */
+export class AuthDatabaseUnavailable extends Error {
+  public readonly jsonRpcErrorWithoutId: { jsonrpc: '2.0'; error: { code: number; message: string; data: Record<string, unknown> } };
+  constructor(kind: string) {
+    super('database unavailable during authentication');
+    this.name = 'AuthDatabaseUnavailable';
+    this.jsonRpcErrorWithoutId = {
+      jsonrpc: '2.0',
+      error: {
+        code: -32603,
+        message: 'pAIchart cannot reach its database right now, so it could not check your sign-in. Your credentials have NOT been rejected — do not sign in again. Try again shortly; if it persists, the hub needs restarting.',
+        data: { reason: 'database-unavailable', kind, retryAfterSeconds: 15 },
+      },
+    };
+  }
+}
+
 export class AuthMiddlewareReject extends Error {
   constructor(
     public readonly statusCode: 401 | 403,
@@ -454,6 +476,11 @@ export class AuthManager {
         '[AuthManager] auth middleware processing'
       );
 
+      // HUB-DEAF-TO-DATABASE (2026-11-13): set when a credential check below failed BECAUSE the database could not be reached.
+      // Read only at the reject site, to answer 503 instead of 401. It never lets a request in.
+      let dbFailureKind: string | null = null;
+      const noteDbFailure = (e: unknown) => { dbFailureKind = dbFailureKind ?? classifyDatabaseError(e); };
+
       const authHeader = req.headers.authorization;
       if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
         const token = authHeader.substring(7);
@@ -514,13 +541,17 @@ export class AuthManager {
           }
           // Non-RS256 or no kid → fall through to fallback verify path 1c (HS256 is rejected there since 2026-05-28)
         } catch (mcpError: unknown) {
+          noteDbFailure(mcpError);
           const errMsg = mcpError instanceof Error ? mcpError.message : String(mcpError);
           this.logger.debug({ err: errMsg }, '[AuthManager] MCP token verification failed (trying other methods)');
         }
 
         // Path 1c: fallback verify (non-fast-path Bearer) — uses claims.role per the D7 note
         // above; HS256 is rejected here, so this no longer succeeds in practice.
-        try {
+        // HUB-DEAF-TO-DATABASE (2026-11-13): NOT taken when path 1a's fresh-role lookup failed because the database could not be
+        // reached. Falling back here would accept the token with the role written in it — the stale role D7 exists to prevent —
+        // exactly when it cannot be checked. That request gets the 503 below instead.
+        if (!dbFailureKind) try {
           const claims = await this.verifyMcpToken(token);
           const rawPayload = this.decodeJwtPayload(token) ?? ({} as RawJwtPayload);
           this.populateReqUser(
@@ -549,6 +580,7 @@ export class AuthManager {
           });
           return next();
         } catch (jwtError: unknown) {
+          noteDbFailure(jwtError);
           const errMsg = jwtError instanceof Error ? jwtError.message : String(jwtError);
           this.logger.debug({ err: errMsg }, '[AuthManager] JWT verification failed');
         }
@@ -587,6 +619,7 @@ export class AuthManager {
           });
           return next();
         } catch (jwtError: unknown) {
+          noteDbFailure(jwtError);
           const errMsg = jwtError instanceof Error ? jwtError.message : String(jwtError);
           this.logger.debug({ err: errMsg }, '[AuthManager] API key JWT verification failed');
         }
@@ -597,6 +630,17 @@ export class AuthManager {
       const methodRequiresAuth = isProtectedMethod(method);
 
       if (methodRequiresAuth) {
+        // HUB-DEAF-TO-DATABASE (2026-11-13): credentials WERE presented and could not be checked because this process cannot
+        // reach its database — either a check above failed with a database error, or the liveness probe says the database is
+        // down (a verifier that wraps its error still lands here). Answer 503, not 401: "sign in again" is false and cannot
+        // help. A request with NO credentials keeps its 401 — there was nothing to check.
+        const presented = (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) || typeof apiKey === 'string';
+        if (presented && (dbFailureKind || isDatabaseDown())) {
+          const kind = dbFailureKind ?? getDatabaseLiveness().state;
+          this.logger.error({ method, path: req.path, kind }, '[Auth] credentials could not be checked — the database is unavailable');
+          this.oauthAuditLogger.log({ action: 'auth_middleware_503_database_unavailable', success: false, userId: 'unknown', metadata: { method: method || req.method, path: req.path, kind } });
+          throw new AuthDatabaseUnavailable(kind);
+        }
         // Dual-emit 401 (D6)
         this.logger.info(
           {

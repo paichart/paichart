@@ -134,6 +134,45 @@ Type each call to Claude Code (any directory), or simply ask for it in plain wor
    title ends `(protocol: network-provisioning)`), or open that task in the web app and read its report. Read the package,
    then release the gate the same way.
 
+8. **See exactly what changed** — the most convincing part of the run. pAIchart kept the exact bytes of the switch file as it
+   was read from Git (the **base**) and as the Author left it (the **candidate**). Fetch both and compare them; the comparison is
+   evidence, not an agent's description. The simplest way is to ask Claude:
+
+   *"Show me what the change leg did to the switch file. Find the Author task in my project, get its execution id and edit
+   receipt, fetch the BASE and CANDIDATE kept copies of the edited file with held.get, save them and show me a unified diff.
+   Do not paraphrase the diff."*
+
+   The calls behind that request:
+   ```
+   project(action: 'task.list', pov_name: 'First runs')                                   # the task whose title starts "Author config change-package"
+   perform(action: 'agent.results', parameters: { taskId: '<Author task id>', verbose: true })   # the execution id ("• ID: c…", 25 characters) and the edit receipt
+   project(action: 'held.get', executionId: '<execution id>', handle: 'H1', kind: 'BASE')
+   project(action: 'held.get', executionId: '<execution id>', handle: 'H1', kind: 'CANDIDATE')
+   ```
+   (`verbose: true` is needed for now: the short result card shows only the last 8 characters of the execution id. The edit
+   receipt names each kept file and its handle — `H1` is the edited file here.) What you should see, as on the fresh install this
+   guide was checked on:
+   ```diff
+   +interface Loopback14
+   +   description telemetry-exporter (existing allocation)
+   +   ip address 10.99.0.3/32
+   +!
+    router bgp 65002
+    …
+   +   network 10.99.0.3/32
+   ```
+   Two insertions, nothing removed: 64 lines before, 69 after, every original line still there in the same order, and the address
+   is the one the first leg worked out and you approved. The other switch file has a base copy and **no** candidate (`held.get`
+   answers `not-found` for it) — it was read and never edited. Each `held.get` also returns a hash of the copy and writes a
+   record of who read it.
+
+   **Two things to know about the kept copies.** They are stored with secrets replaced: the file's SNMP line reads
+   `snmp-server community <<REDACTED-SECRET>> ro` in both copies (that value in the test repository is a deliberate fake, there so
+   you can see this happen), and `held.get` marks them `applicable: false`, `mode: "diff-only"`. So the comparison is exact, but
+   **a kept copy is not a file to load onto a switch**. To apply the change you apply the added lines; to undo it you remove them,
+   or restore the file from Git at the commit the copy names (`sourceRevision`).
+   [SELF-HOST-KEPT-FILES.md](SELF-HOST-KEPT-FILES.md) explains what is stored, where, and who can read it.
+
 `project(action: 'task.context', taskId: '<task id>')` shows where the run is at any time.
 
 **You are done when** the program task carries `programReleasable: true` and its final comment lists every leg and the
@@ -151,12 +190,14 @@ how to read one.
 in the project, by model and by task. The run this guide was checked on, on a fresh install on 2026-11-13: USD 5.39, 17 agent
 runs, 21.5 minutes including the gates.
 
-**If a run stops for no visible reason** — a leg sits *In Progress* for more than ten minutes with nothing new, or Claude Code
-says the hub "needs you to sign in again" — the hub may have lost its database connection while still reporting healthy. Check:
-`sudo journalctl -u paichart-mcp --since -5min | grep -c 'Engine is not yet connected'`. A number above 0 means that is what
-happened: `sudo systemctl restart paichart-mcp`, reconnect Claude Code (`/mcp`), and launch the run again in a new stage (the
-stopped run cannot be resumed; you can delete its tasks in the web app or leave them). Please report it — it is a known defect
-being worked on.
+**If a run stops for no visible reason** — a leg sits *In Progress* for more than ten minutes with nothing new — check whether the
+hub can reach its database: `curl -s localhost:8080/health` shows `"database": { "state": … }`. `ok` means the hub is fine and the
+run is waiting on something else (a gate, usually). `unreachable` means PostgreSQL is down or restarting; the hub reconnects by
+itself when it returns. `engine-dead` means the hub's own database client is broken; the hub notices within about 30 seconds,
+exits, and systemd starts a fresh one (`sudo journalctl -u paichart-mcp --since -5min | grep -i fatal` shows it). While the
+database cannot be reached the hub answers requests with "cannot reach its database … do not sign in again" — that is accurate:
+signing in again does not help. After a hub restart, reconnect Claude Code (`/mcp`) and launch the run again in a new stage: a
+run that was in flight when the hub restarted cannot be resumed (delete its tasks in the web app, or leave them).
 
 **Re-running a program** (an escalated leg, a corrected artifact): a finished program cannot be re-run in place.
 Create a fresh PIPELINE task in the same stage and stamp the prior program stage on it — the harness's pre-flight

@@ -5,7 +5,10 @@
  * Verbatim move — no behavioral changes from the pre-extraction shape.
  *
  * Single endpoint:
- *   GET /health — liveness probe + session/oauthRequest counts.
+ *   GET /health — liveness probe + session/oauthRequest counts + whether THIS process can reach its database
+ *   (HUB-DEAF-TO-DATABASE, 2026-11-13: 200 `ok` while the hub could not run a single query hid a wedged run for 20 minutes).
+ *   200 `status: 'ok'` normally; **503 `status: 'degraded'`** once a database probe has failed and none has succeeded since.
+ *   The body is the same shape either way, plus `database: { state, lastCheckedAt, lastOkAt, consecutiveFailures }`.
  *
  * `/mcp/health` alias was dropped in Phase 0.6 (`a24df016`) — zero hits in
  * 14-day nginx access logs.
@@ -21,6 +24,7 @@
 
 import type { Request, Response } from 'express';
 import type { RouteContext } from './route-context';
+import { getDatabaseLiveness, isDatabaseDown } from '../../../database/database-liveness';
 // E26 (devext, 2026-09-09): the allowlist's boot-log report can be lost when a restart truncates the log the dying
 // process still holds; /health carries live COUNTS so an operator can verify state without the log. Counts only —
 // the entries are private addresses, and /health is unauthenticated (LAN topology must not leak here).
@@ -64,8 +68,9 @@ export function registerHealthRoutes(ctx: RouteContext): void {
   };
 
   ctx.app.get('/health', (_req: Request, res: Response) => {
-    res.json({
-      status: 'ok',
+    const down = isDatabaseDown();
+    res.status(down ? 503 : 200).json({
+      status: down ? 'degraded' : 'ok',
       transport: 'clean-http',
       timestamp: new Date().toISOString(),
       version: '1.0.0',
@@ -79,6 +84,7 @@ export function registerHealthRoutes(ctx: RouteContext): void {
         backend: 'mcp-server-v5',
       },
       endpointAllowlist: (() => { const r = getEndpointAllowlistReport(); return { entries: r.entries.length, rejected: r.rejected.length }; })(),
+      database: getDatabaseLiveness(),
     });
   });
 }
