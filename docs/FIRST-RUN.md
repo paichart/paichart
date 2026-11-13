@@ -8,7 +8,7 @@ checked value. A **program** is several pipelines coordinated as one change; eac
 applying it is your step.
 
 **Why there are gates.** A program is a graph of AI agents, and **your approvals are how a person regulates that graph**. The
-agents cannot pass a gate themselves: the work behind it does not start until you have looked at what was produced and said
+agents are never asked to pass a gate themselves: the work behind it does not start until you have looked at what was produced and said
 yes. A gate is where you check the plan before any agent acts on it, check a value before another agent builds on it, and
 check a change package before you would apply it. Saying no — leaving a gate closed — is a normal outcome, not a failure.
 
@@ -82,15 +82,15 @@ Type each call to Claude Code (any directory), or simply ask for it in plain wor
    ```
    → `Stage ID: <stage id>`. Keep it.
 3. **The program task** — `type: 'PIPELINE'`, the protocol token in the title (the `(protocol: …)` text, which tells pAIchart
-   which set of rules to follow), and the two input files in the description and
-   nothing else there (the planner fetches only what the description names):
+   which set of rules to follow), and in the description one line of intent and the two spec URLs, nothing else
+   (the planner fetches only what the description names):
    ```
    perform(action: 'task.create', parameters: { povId: '<pov id>', stageId: '<stage id>', type: 'PIPELINE', priority: 'MEDIUM',
      title: 'Add a telemetry-exporter loopback to ceos2 on a free address (protocol: pov-program)',
      description: 'Design artifacts for the Program Architect (fetch ONLY these two URLs):\n- topology-as-code: https://raw.githubusercontent.com/paichart/paichart-configs/main/usecases/loopback-ceos2/git-only/topology.json\n- requirements: https://raw.githubusercontent.com/paichart/paichart-configs/main/usecases/loopback-ceos2/git-only/requirements.md' })
    ```
    → `Task ID: <task id>`, `Status: OPEN`.
-4. **Give it the harness and start it.** The harness is the coordinating agent: it creates the other tasks and starts them in order. `template(action: 'list')` shows the id of the **Pipeline Harness** template: find the entry named exactly `Pipeline Harness` and copy its id (a 25-character string beginning with `c`).
+4. **Give it the harness and start it.** The harness is the coordinating agent: it creates the other tasks and starts them in order. (`agent.execute` attaches it to a `PIPELINE` task that has none, so the `agent.assign` call is optional; it is shown so you can see what runs.) `template(action: 'list')` shows the id of the **Pipeline Harness** template: find the entry named exactly `Pipeline Harness` and copy its id (a 25-character string beginning with `c`).
    ```
    perform(action: 'agent.assign',  parameters: { taskId: '<task id>', agentTemplateId: '<Pipeline Harness template id>' })
    perform(action: 'agent.execute', parameters: { taskId: '<task id>', waitForCompletion: false })
@@ -266,8 +266,8 @@ in `~/paichart` or issued directly. Each line's response is what a working insta
    perform(action: 'stage.create', parameters: { povId: '<pov id>', phaseName: 'Firewall Rules Change', name: 'FW-A3 Program Run' })
    ```
    → `Stage ID: <stage id>`. Keep it.
-3. **The program task** — `type: 'PIPELINE'`, the protocol token in the title, the two artifact URLs in the description
-   and nothing else there (the Architect fetches ONLY what the description names):
+3. **The program task** — `type: 'PIPELINE'`, the protocol token in the title, and in the description one line of intent and the two spec URLs, nothing else
+   (the planner fetches only what the description names):
    ```
    perform(action: 'task.create', parameters: { povId: '<pov id>', stageId: '<stage id>', type: 'PIPELINE', priority: 'MEDIUM',
      title: 'Partner-HTTPS security policy path with edge SNAT (protocol: pov-program)',

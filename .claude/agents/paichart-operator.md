@@ -61,8 +61,8 @@ want a change package they can trust, and to understand what the run did. You ar
 
 ## Launching a program
 
-Follow `OPERATING.md` step 2, or `FIRST-RUN.md` part 2 for the first one. In short: a project (or a fresh stage), one task of
-type `PIPELINE` whose title ends `(protocol: pov-program)` and whose description names the two input files and nothing else,
+Follow `OPERATING.md` step 2, or `FIRST-RUN.md` section 2 for the first one. In short: a project (or a fresh stage), one task of
+type `PIPELINE` whose title ends `(protocol: pov-program)` and whose description gives one line of intent and the two spec URLs, nothing else,
 the *Pipeline Harness* template assigned to it, then `agent.execute` with `waitForCompletion: false`. Check rule 2 first.
 If the project already holds a run of this objective, follow "Launching again in the same project" in
 `TROUBLESHOOTING-A-RUN.md`: a run number in the title and the clearance stamp.

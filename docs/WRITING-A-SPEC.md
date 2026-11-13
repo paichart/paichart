@@ -1,17 +1,9 @@
 # Checklist for a hand-written program spec
 
-**For:** any engineer writing a short `requirements.md` for a program by hand. **Owner:** pipeline-harness-specialist, with
-requirements-authoring-specialist for the questions that come from its registry.
-**Status (2026-11-12):** in use. Used on seven program runs (2026-11-10 to 2026-11-12). Four released (`loopback-ceos2` and
-`firewall-partner-path-r2`, each Git-only and Git + live). One was correctly refused at the integration review because the spec
-left the return route unstated and bound a rule to an interface the traffic never crossed — the routing caution under Tier 2 (C16)
-exists for exactly that. One plan was stopped at its gate for a planner defect, not a spec gap. The first run (2026-11-10) found one
-correction to the spec at the plan gate. Reviewed by prompt-construction and by
-requirements-authoring. No agent reads this file.
+**For:** any engineer writing a short `requirements.md` for a program by hand.
 
-**What it does.** It asks, before the first run, the design questions that stopped earlier programs. In the record of 80
-programs that did not release (2026-08-21 to 2026-11-10), a design gap or an unstated decision was the known cause of about
-1 in 9, at most about 3 in 10.
+**What it does.** It asks, before the first run, the design questions that have stopped earlier programs. An unstated design
+decision is one of the common reasons a program does not release.
 
 **What it does not do.** It does nothing about the other causes: a leg's change package breaking one of its own format rules,
 platform defects and outages. A program can be "not releasable" for one of those with a perfectly good spec. The release decision
@@ -19,7 +11,9 @@ is then yours: read the reason in the program's summary.
 
 **How to use it.** Write the spec from the shape in Part 1. Answer every Tier 1 question in Part 2 that applies, as one plain
 sentence in the spec. Answer a Tier 2 question only where you care about the outcome; otherwise the planner or the leg decides,
-and you read its decision at the plan gate or in the leg's package. A gate can accept or refuse a decision; it cannot change one.
+and you read its decision at the plan gate or in the leg's package. A gate can accept or refuse a decision a leg has made; it cannot
+change one. The one exception is at the plan gate, before any leg has run: there you can still answer a planner's open question
+([GATES.md](GATES.md), "Plan gate").
 
 **Words used here.** *Leg*: one pipeline of the program. *Planner*: the Program Architect, which reads the spec and writes the
 plan you approve at the first gate. *Package*: what a leg that changes something produces for approval.
@@ -35,15 +29,13 @@ input; the README says what must be running, which values are placeholders and w
   a stated reachability rule; released `git-only/` 2026-11-11 and `git-live/` 2026-11-12. (`firewall-partner-path/` is its
   superseded first revision, kept as that run's input.)
 
-- `ssh-access-triangle/` — one change leg that adds an access rule on three switches; released `git-only/` 2026-11-12 (after
-  the count in the status line above). The Tier 2 access caution applies.
+- `ssh-access-triangle/` — one change leg that adds an access rule on three switches; released `git-only/`.
+  The Tier 2 access caution applies.
 
 Prepared, not yet released: `igp-migration-2node-r18/live` (a person applies each phase between legs).
 
-⚠️ The older examples under `paichart/paichart` `program-artifacts/` (`held-network-window-p1-vlg/`, `lab-exporter-loopback-ceos2/`)
-name the retired repository `paichart/paichart-lab-configs` in their Device sources lines; production's Git file source has read only
-`paichart/paichart-configs` since 2026-11-11 06:06Z, so a run launched from either as published is refused at its first Git read.
-Copy their shape, never their repository name.
+⚠️ Do not copy from `program-artifacts/` in this repository: it is a frozen archive of earlier runs' inputs, and its network
+examples name a retired configuration repository, so a run launched from one is refused at its first Git read.
 
 | Section | What goes in it |
 |---|---|
@@ -120,14 +112,16 @@ wrote before you launch.
 **The idea.** State the outcome and the boundaries. Leave small choices to others. Some unstated choices are made by the
 Program Architect, listed under its assumptions, and shown at the PLAN gate. The rest are made by a leg and shown in its
 package at that leg's gate. So a choice you did not state is reviewed after it is made, not declared before. A gate cannot
-send an answer back to a leg: you can accept the choice or refuse it, not change it. Refusing costs a re-run.
+send an answer back to a leg that has run: you can accept the choice or refuse it, not change it. Refusing costs a new run. (At the
+plan gate no leg has run yet, and you can still write an answer into a leg's description before you release:
+[GATES.md](GATES.md), "Plan gate".)
 
 ### Tier 1: MUST ANSWER. A run has stopped on each of these
 
 | # | Question | Applies to | Why it is here |
 |---|---|---|---|
 | M1 | **What exactly does the leg act on?** Name the device, file, bucket, namespace or policy | every leg | an unnamed target is right only while it is the only one |
-| M2 | **Which devices does the leg read, and where is each one's configuration?** List every device the leg **changes** and every device it only needs to **see** (for example the other switches that share an address pool). A device you leave out is not checked. For each: a Git file, the running device, or both; for a device the leg changes you may also say "no read" (kind `command-package`: the package then only writes commands). The four kinds are in [GLOSSARY.md](GLOSSARY.md), *Device sources*. All change legs in one program share one list. A leg that only works out a value has its own list. If a leg has only Git files, it claims nothing about live state. The exact line format is in the model spec's Device sources blocks (Part 1) | every leg | a leg reads nothing it is not given; a device left off the list was not read and a colliding value was produced |
+| M2 | **Which devices does the leg read, and where is each one's configuration?** List every device the leg **changes** and every device it only needs to **see** (for example the other switches that share an address pool). A device you leave out is not checked. For each: a Git file, the running device, or both; for a device the leg changes you may also say "no read" (kind `command-package`: the package then only writes commands). The four kinds are in [GLOSSARY.md](GLOSSARY.md), *Device sources*. All change legs in one program share one list. A leg that only works out a value has its own list. If a leg has only Git files, it claims nothing about live state. The exact line format is in [PIPELINES.md](PIPELINES.md), "Network: choosing each device's source" | every leg | a leg reads nothing it is not given; a device left off the list was not read and a colliding value was produced |
 | M3 | **What must not change?** ("nothing beyond …") | every leg that changes something | a widened change was refused at program review |
 | M4 | **Is there anything already on the target that looks wrong but is known and must be left alone?** A deliberate difference between the running device and its file, a planted test value, a setting someone else owns. Declare each by what it is (a property, not a copy of the value). Then say what the leg does with anything else it finds that this change does not touch: leave it, or stop for a person. This file cannot switch off a stop the leg's own rules require: on Kubernetes and Terraform legs, a difference outside the change's scope that you did not declare stops the leg for a person. Never ask a leg to report a difference between a device's Git file and the running device; the platform compares them | every leg | 3–5 runs stopped here with no answer in the spec |
 | M5 | **For each success check, which read proves it, and is that read one the leg has?** The reads a leg has are its Device sources (M2) and the tools listed in its read-only service's descriptor. A check on live behaviour (a session is up, traffic passes) cannot be proven from a Git file. A check on the whole fabric cannot be proven from one device. If no read the leg has proves a check, change the check or give the leg the read; do not launch with it. Never word a check as something a leg must prove about itself | every check | 3 runs (one campaign) stopped on a check that could not be proven or that the real state failed |
@@ -199,25 +193,5 @@ One sentence each, in the section of the leg that applies it. Skip any you are h
   the change allows. The record shows authors split on them, or decided them silently, when the spec was silent.
 - **A value that becomes "who is admitted": C6 is Tier 1.** One range can admit addresses that are not members.
 
-**Not shown yet:** that a leg left to decide a Tier 2 point always writes its decision in its package. It is shown for C1 and
+**Not yet established:** that a leg left to decide a Tier 2 point always writes its decision in its package. It is shown for C1 and
 C2 on network legs only. Until it is shown more widely, read the package at each gate for the choices you left open.
-
----
-
-## Where the questions come from
-
-| Questions | Source |
-|---|---|
-| M1, M6a–c, M7 (gates), C5–C17 | the generated-spec question registry ([DESIGN-DECISION-QUESTIONS.md](../.claude/knowledge/pipelines/requirements-authoring/DESIGN-DECISION-QUESTIONS.md)), reworded and checked by its owner. All 20 of its questions have a counterpart here |
-| M2 | the Device sources grammar and the Git-only limit |
-| M3 | the released example; one refused run |
-| M4, M5 | two question types the registry does not ask, each with three or more stopped runs behind it |
-| M7 (apply order), C4, C18 | single recorded cases |
-| C1–C3 | a paper test against one objective's 20 recorded owner decisions |
-
-
-## Keeping this current
-
-- After each program written with it, record which questions applied, which could not be answered, the outcome, and the cause
-  if it did not release. A question that is asked and never matters can go; a stop on something not asked becomes a question.
-- A change to the registry's questions is a change here too (requirements-authoring-specialist).

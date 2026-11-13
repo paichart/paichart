@@ -19,7 +19,7 @@ feel like a program are not: a few devices of one vendor, changed by one team, a
 
 | Shape | What it is | How the legs are coordinated | Gates |
 |---|---|---|---|
-| **Single pipeline** (not a program) | one team, one vendor; one designer can hold the whole change | nothing to coordinate | one |
+| **Single pipeline** (not a program) | one team, one vendor; one designer can hold the whole change | nothing to coordinate | none: it runs through, and you read the result and decide |
 | **Parallel legs** | several legs for different vendors or teams; everything they must agree on is known up front | the interface contract | the plan, then one per leg |
 | **Sequenced legs** | a later leg needs what an earlier leg *produced* (a value, a design) | the earlier leg's result is handed to the later leg | the plan, then one per leg |
 | **Grouped legs** | more than eight systems, or a mix of parallel and sequenced | systems are grouped into legs; the parallel part by contract, the sequenced part by hand-over | the plan, then one per leg |

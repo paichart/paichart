@@ -27,8 +27,8 @@ design. A few devices of one vendor under one team are a single pipeline
 
 ## 2. Launch a program
 
-Create a task of type `PIPELINE` whose title ends `(protocol: pov-program)` and whose description gives the two spec URLs and
-nothing else, assign the *Pipeline Harness* template, and start it:
+Create a task of type `PIPELINE` whose title ends `(protocol: pov-program)` and whose description gives one line of intent and the two spec URLs, nothing else,
+and start it (`agent.execute` attaches the *Pipeline Harness* template if you have not assigned it):
 
 ```
 perform(action: "task.create", parameters: {

@@ -23,7 +23,7 @@ states what is configured on them now. The agents read that from the sources the
 - **Re-run a spec that has already released:** use its published URLs unchanged.
 - **Detail:** [DESIGNING-A-PROGRAM.md](design/DESIGNING-A-PROGRAM.md) (designing a new kind of program); [PROGRAM-SHAPES.md](PROGRAM-SHAPES.md) (shapes).
 - **For a network leg:** each device's configuration source goes in a `## Device sources` block (`git-file`, `device-read`,
-  `live-read` or `command-package`: [GLOSSARY.md](GLOSSARY.md), *Device sources*). See [PIPELINES.md](PIPELINES.md), "Device sources".
+  `live-read` or `command-package`: [GLOSSARY.md](GLOSSARY.md), *Device sources*). See [PIPELINES.md](PIPELINES.md), "Network: choosing each device's source".
 
 ## Step 2 — Launch
 

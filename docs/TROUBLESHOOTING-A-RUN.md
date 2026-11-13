@@ -3,7 +3,7 @@
 A run has stopped, or you cannot tell whether it has. This page finds out which, and what to do. Work down it in order: the
 first three checks answer most cases. Every term is in [GLOSSARY.md](GLOSSARY.md).
 
-Two things a run never does: it never applies a change to your systems, and it never passes a gate by itself. So the worst
+Two things a run never does: it never applies a change to your systems, and its own machinery never passes a gate. So the worst
 case is a run that stops, never one that did something you did not approve.
 
 ## First: where is the run?
@@ -153,7 +153,8 @@ not touch). The mark is a record: it does not close the run's tasks, and `report
 
 **What can and cannot be run again in place:** a task whose
 execution **failed** ("A task failed" above) can be run again, and the run carries on. A program or leg that **finished**, was
-**refused**, was stopped as a **duplicate**, or was left behind by a hub restart cannot: launch a new run.
+**refused**, was stopped as a **duplicate**, or was left behind by a hub restart cannot: launch a new run. (A pipeline that stopped only to ask you a question is different: edit its task description to answer,
+then start that task again.)
 
 ## Your AI client has lost the hub
 

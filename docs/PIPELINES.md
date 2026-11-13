@@ -21,7 +21,7 @@ perform(action: "task.create", parameters: { povId: "<pov id>", stageId: "<stage
 perform(action: "agent.execute", parameters: { taskId: "<the new task id>", waitForCompletion: false })
 ```
 
-The *Pipeline Harness* template is assigned to a `PIPELINE` task automatically. `project(action: 'task.list', povId: …)` shows
+`agent.execute` attaches the *Pipeline Harness* template to a `PIPELINE` task that has none; assigning it first (`agent.assign`) is optional. `project(action: 'task.list', povId: …)` shows
 progress. Starting a pipeline spends your Anthropic credit.
 
 **What you get at the end.** A pipeline has no gate of its own: it runs through and finishes. On the pipeline task you will find:
@@ -86,7 +86,7 @@ On the leg's card and in `qualityGate.heldEdit`:
 | `heldEdit.inScope: false` (card: `; out of scope`) | the package touched no kept file; the held rule did not force it (a `forced` with a named `reason` can still appear for a run-level failure) |
 | `reviewerSaw: rendered` | the Reviewer was shown the platform's diff |
 
-A forced needs-revision is a fact, not a judgement: re-run the leg; do not hand-edit the package to "fix" it.
+A forced needs-revision is a fact, not a judgement: do not hand-edit the package to "fix" it. For a pipeline on its own, run a fresh task; for a leg of a program, launch a new run of the program ("run a fresh leg" in the table below means exactly that).
 
 #### Forced outcomes — what they are and why
 
@@ -195,7 +195,7 @@ check that file by hand. The Git file source is admin-only, and reads only the o
 
 ### Network: kept device configurations
 
-- **Declare each device's source** in a `## Device sources` block ("Device sources" below): `git-file` (your config file in a Git
+- **Declare each device's source** in a `## Device sources` block ("Network: choosing each device's source" below): `git-file` (your config file in a Git
   repo), `device-read` (the running configuration read from the device through your read-only device service), `live-read` (since
   network-provisioning 1.26.0: a device the leg must see but never changes — its running configuration is read whole as evidence, never
   kept and never edited), or `command-package` (no kept file — the package is written as commands, as before).
