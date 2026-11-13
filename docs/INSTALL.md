@@ -90,10 +90,11 @@ grep -c "^JWT_" .env                     # expect 3
 ## 5. Seed and start
 ```bash
 set -a; . ./.env; set +a                 # load .env into this shell for the commands below
-npm run db:seed                          # ~1–2 min; prints its own step count as it runs, ends "✅ db:seed complete"; the admin password is printed ONCE, EARLY in the output: look for `▶ 6/22 First SUPER_ADMIN` and the line "Generated password (shown ONCE — store it now)" under it — scroll up and copy it now.
+npm run db:seed 2>&1 | tee ~/paichart-seed.log   # ~1–2 min; prints its own step count as it runs, ends "✅ db:seed complete"; the admin password is printed ONCE, EARLY in the output: look for `▶ 6/22 First SUPER_ADMIN` and the line "Generated password (shown ONCE — store it now)" under it — scroll up and copy it now.
                                          # Expect pino JSON lines and a "[DEV] SLOW QUERY" or two in the middle — noise, not errors. Safe to re-run
                                          # after a git pull: every step is add-only (a re-run never deletes; --force-recreate on db:templates does)
                                          # (schema, grants, admin, protocols, hub prompts, named workflows, agent/harness/program/domain/phase templates)
+grep -A1 'Generated password' ~/paichart-seed.log   # the admin password: store it, then `rm ~/paichart-seed.log`
                                          # lost it? npm run db:admin -- --reset-password
 ```
 Build once, then run the **production** build — the demo should feel like the hosted service (fast, no dev tooling):
@@ -132,12 +133,9 @@ echo -e '[Journal]\nSystemMaxUse=500M' | sudo tee /etc/systemd/journald.conf.d/p
 sudo systemctl restart systemd-journald
 ```
 
-> **Why supervised, and why this is not a "Later".** Until 2026-09-13 this guide started both processes as
-> bare `nohup`s. On 2026-09-12 a routine PostgreSQL restart killed the MCP server on our own test box and
-> **nothing brought it back for 68 minutes**, while the web GUI kept returning 200 and the error message
-> pointed at the wrong cause. We never hit it in production because production runs a supervisor — the
-> perimeter that hid the defect was ours, not the self-hoster's. Details, including the rejected
-> alternatives and why each would recreate the fault, are in the unit files themselves.
+> **Why supervised.** A process started by hand is not restarted when it dies. A routine PostgreSQL restart can stop the hub,
+> and the web app keeps answering while it is down. The unit files explain the choices made.
+
 After a `git pull`, run `npm run db:seed` first if the pull touched `prisma/schema.prisma` or `scripts/create-*index*.sh`
 (it applies the schema and the raw-SQL indexes in the order they need, and is add-only), then `npm run build` again and
 `sudo systemctl restart paichart-mcp paichart-web`: a production build never reloads. Do not run a bare `npx prisma db push`
@@ -224,7 +222,7 @@ something.) Next: your first run ([FIRST-RUN.md](FIRST-RUN.md)). The key is stor
 `BASE=http://HOST:3000; MCP=$BASE` (its step 4 uses the MCP API key you just made).
 
 Claude Desktop cannot send a header: use OAuth (`docs/OAUTH-SETUP.md` §B.1, callback `http://HOST:3000/oauth/callback`)
-or the `mcp-remote --header` stanza the setup sheet shows.
+or the `mcp-remote --header` stanza shown on the page you land on after signing in (`/auth/oauth/success`).
 
 ## 9. Your first external service — a remote MCP server, through the hub
 The hub's point is other MCP services: register them once, then every AI client reaches them through `${APP_BASE_URL}/mcp`

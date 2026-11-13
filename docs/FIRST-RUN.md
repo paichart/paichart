@@ -90,7 +90,7 @@ Type each call to Claude Code (any directory), or simply ask for it in plain wor
      description: 'Design artifacts for the Program Architect (fetch ONLY these two URLs):\n- topology-as-code: https://raw.githubusercontent.com/paichart/paichart-configs/main/usecases/loopback-ceos2/git-only/topology.json\n- requirements: https://raw.githubusercontent.com/paichart/paichart-configs/main/usecases/loopback-ceos2/git-only/requirements.md' })
    ```
    → `Task ID: <task id>`, `Status: OPEN`.
-4. **Give it the harness and start it.** The harness is the coordinating agent: it creates the other tasks and starts them in order. `template(action: 'list')` shows the id of the **Pipeline Harness** template.
+4. **Give it the harness and start it.** The harness is the coordinating agent: it creates the other tasks and starts them in order. `template(action: 'list')` shows the id of the **Pipeline Harness** template: find the entry named exactly `Pipeline Harness` and copy its id (a 25-character string beginning with `c`).
    ```
    perform(action: 'agent.assign',  parameters: { taskId: '<task id>', agentTemplateId: '<Pipeline Harness template id>' })
    perform(action: 'agent.execute', parameters: { taskId: '<task id>', waitForCompletion: false })
@@ -198,14 +198,14 @@ how to read one.
 in the project, by model and by task. The run this guide was checked on, on a fresh install on 2026-11-13: USD 5.39, 17 agent
 runs, 21.5 minutes including the gates.
 
-**If a run stops** — [TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md) covers every case. The one specific to a fresh install: a leg sits *In Progress* for more than ten minutes with nothing new — check whether the
+**If a run stops** — [TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md) covers every case. The one specific to a fresh install: a leg sits *In Progress* for more than 15 minutes with nothing new — check whether the
 hub can reach its database: `curl -s localhost:8080/health` shows `"database": { "state": … }`. `ok` means the hub is fine and the
 run is waiting on something else (a gate, usually). `unreachable` means PostgreSQL is down or restarting; the hub reconnects by
 itself when it returns. `engine-dead` means the hub's own database client is broken; the hub notices within about 30 seconds,
 exits, and systemd starts a fresh one (`sudo journalctl -u paichart-mcp --since -5min | grep 'engine in this process is gone'` shows it). While the
 database cannot be reached the hub answers requests with "cannot reach its database … do not sign in again" — that is accurate:
 signing in again does not help. After a hub restart, reconnect Claude Code (`/mcp`) and launch the run again: a run that was in flight when the hub restarted
-cannot be resumed. Either delete the stopped run's tasks and stages in the web app first and launch as in part 2 (no stamp
+cannot be resumed. Either delete the stopped run's tasks and stages in the web app first and launch as in section 2 (no stamp
 needed), or keep them and stamp the new task as described under "Re-running a program" below.
 
 **Re-running a program** (an escalated leg, a corrected artifact): a finished program cannot be re-run in place.
@@ -213,16 +213,17 @@ Create a fresh PIPELINE task with a run number in its title (`… (Run 2) (proto
 ([TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md), "Launching again in the same project") — the harness's pre-flight
 halts on a duplicate `Program: …` stage and accepts only a machine-checkable clearance, never prose in the description:
 ```
-perform(action: 'task.update', parameters: { taskId: '<new task id>', metadata: { duplicateAcknowledged: '<prior Program: … stage id>' } })
+perform(action: 'task.update', parameters: { taskId: '<new task id>', metadata: { duplicateAcknowledged: ['<stage id>', …] } })
 ```
-then `agent.assign` + `agent.execute` as in step 4 above. Stamp the MOST RECENT prior `Program: …` stage id (the harness's
-first comment on that run names it; `project(action: 'pov.details')` lists the stages).
+then `agent.assign` + `agent.execute` as in section 2, step 4. The list names every earlier run's `Program: …` stage and each of its
+legs' `Pipeline: …` stages (`project(action: 'pov.details')` lists the stages): the full rule is in
+[TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md), "Launching again in the same project".
 
 **Releasing a gate**: after `perform(action: 'task.complete', …)` on a gate, read the gate's own status back — a release
 issued within seconds of the upstream leg completing can be rejected while the dependency state settles (it took up to
 five attempts over ~50 s on a laptop). The action's reply text is not the state; `Status: COMPLETED` on the gate is.
 
-A failure at step 4 (the launch) with `llm_initialized` means the running user has no resolvable LLM key ([INSTALL.md](INSTALL.md) step 8:
+A failure at section 2, step 4 (the launch) with `llm_initialized` means the running user has no resolvable LLM key ([INSTALL.md](INSTALL.md) step 8:
 Profile Settings → AI Provider Settings). A leg that escalates on its harvest usually means a rig service answered `initialize`
 but could not READ — check the rig README's readiness probes, not the container list.
 

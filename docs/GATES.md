@@ -23,8 +23,11 @@ Nothing is built yet, so this is the cheapest place to catch a mistake. Read the
    what that leg actually does. A leg that works out a value *and* changes a system is a change leg.
 2. **The systems.** The devices, files and services each leg will read are the ones you meant.
 3. **Every value the plan works out or states.** Recompute it yourself.
-4. **"Assumptions & Open Questions".** Each item is a decision the planner made for you, or one it refused to make. Where you are
-   the person who decides, decide it: write the answer in the note you release the gate with.
+4. **"Assumptions & Open Questions".** Each item is a decision the planner made for you, or one it refused to make. If you
+   release, the stated default applies. If your answer should change what a leg does, write it into that leg's task description
+   **before** you release (`perform(action: 'task.update', parameters: { taskId: '<leg task id>', description: '<the description with your answer added>' })`):
+   the legs already exist while the plan gate is held, and a leg reads its own description. The note you release a gate with
+   is a record for people; no agent reads it.
 5. **A configuration form you have not used on that platform before.** Try it on the device in a configuration session and abort
    the session: nothing changes, and you learn in seconds whether the platform accepts it.
 
@@ -32,7 +35,7 @@ Nothing is built yet, so this is the cheapest place to catch a mistake. Read the
 
 | What is wrong | What to do |
 |---|---|
-| a value, or an open question (the shape of the plan is right) | answer it in the gate note and release; the legs read the note |
+| a value, or an open question (the shape of the plan is right) | write the answer into the description of each leg it affects, then release |
 | the shape: a leg missing or of the wrong type, a field the legs need is absent | fix the spec ([WRITING-A-SPEC.md](WRITING-A-SPEC.md)) and launch a new run. Re-running the planner does not help: legs already created never receive a corrected plan |
 
 A new run costs one planning step. A run on a wrong plan costs the whole run and gives you evidence you cannot trust.
@@ -65,7 +68,8 @@ A leg has produced a change package. Read the facts first, then the package.
    `npm run check:package -- --package <file> --contract <file>`. It reports forbidden text that is present and required lines
    that are absent. Both halves matter: a package can be clean of forbidden text and still be missing a required line.
 
-**Releasing a change gate applies nothing.** It records that you accept the package.
+**Releasing a change gate applies nothing.** It records that you accept the package. To release any gate with a note:
+`perform(action: 'task.complete', parameters: { taskId: '<gate task id>', summary: '<your note, under 500 characters>' })`.
 
 ## Applying a package
 
@@ -140,5 +144,5 @@ depends on each leg's outcome and not on the gate.
   The agent then avoids that one line, and the run proves nothing more. State the property you need.
 - **Do not run a stopped leg again in place.** A leg stopped by the duplicate check freezes everything after it. Launch a new run
   ([TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md), "Launching again in the same project").
-- **Running a leg again after the final review has read it leaves that review out of date.** Run the review again, or record
-  the deviation before you release.
+- **Running a leg again after the final review has read it leaves that review out of date,** and does not make a refused
+  program releasable. Launch a new run.

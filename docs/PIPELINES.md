@@ -127,10 +127,10 @@ Nothing in the pipeline writes. When the gate releases and you apply:
    - **MATCH** → proceed. **MISMATCH** or a refusal → **STOP**: the file changed since the run; re-run, never merge by hand.
    - **placeholders > 0** → *not applicable as-is*: the candidate contains a redacted secret (`<<REDACTED-SECRET>>`), which
      devices accept as a literal. Never apply it; re-author with the secret referenced (`${env:NAME}`) or as an operator step.
-3. **Apply** the candidate (the domain guide says how — copy into place, or a pull request), run the package's validators
+3. **Apply** the candidate (the Kubernetes, Terraform and Network sections below say how — copy into place, or a pull request), run the package's validators
    and post-apply checks. Rollback = the `restore` in the package (the kept original).
 
-The base check is an operator tool, run from a copy of this repo; it is not published yet.
+The base check is an operator tool, run from a copy of this repository.
 
 **Files kept from a Git repository** (the file source for kubernetes-gitops; k8s legs are held since 2026-10-19, 1.18.0): the
 kept original then comes from a commit, and `held.get`'s metadata carries that commit as `sourceRevision` plus the repository
@@ -181,7 +181,7 @@ check that file by hand. The Git file source is admin-only, and reads only the o
 
 ### Network: kept device configurations (network-provisioning 1.25.0, since 2026-10-27)
 
-- **Declare each device's source** in a `## Device sources` block (see *Domain Pipelines* above): `git-file` (your config file in a Git
+- **Declare each device's source** in a `## Device sources` block ("Device sources" below): `git-file` (your config file in a Git
   repo), `device-read` (the running configuration read from the device through your read-only device service), `live-read` (since
   network-provisioning 1.26.0: a device the leg must see but never changes — its running configuration is read whole as evidence, never
   kept and never edited), or `command-package` (no kept file — the package is written as commands, as before).
@@ -355,8 +355,8 @@ Design artifacts for the Program Architect (fetch ONLY these two URLs):
 - requirements: https://…/requirements.md
 ```
 The requirements file carries each network leg's `## Device sources` block; the Program Architect copies it into the interface contract
-and every leg reads it from there. Put a **run number** in the title, and set the duplicate clearance before re-running (see
-`PROGRAMS.md` §2).
+and every leg reads it from there. In a project that already holds a run, put a **run number** in the title and set the duplicate clearance
+([TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md), "Launching again in the same project").
 
 ## Reading a pipeline's result
 
@@ -413,25 +413,26 @@ anything already observed (e.g. a pre-change check, or the package's own config 
 
 | What you see | Means | Fix |
 |---|---|---|
-| a comment "duplicate …" + `metadata.duplicateHalt` | the same objective already ran (see *Re-running* below) | add the clearance, or close the task |
+| a comment "duplicate …" + `metadata.duplicateHalt` | the same objective already ran (see *Re-running* below) | launch a new task with the clearance set ([TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md), "Launching again in the same project"); a stopped task is not started again |
 | `metadata.cannotRun` (+ `executionStatus: FAILED`, `AGENT_STAMPED_CANNOT_RUN`) | the harness found the pipeline can never run as configured — e.g. no `## Device sources` block for a network device, a required upstream value missing | fix what it names, then create a fresh task |
 | `NAMED_PROTOCOL_NOT_FOUND` / `PROTOCOL_ROW_NOT_ACTIVE` in the execution error | the `(protocol: …)` token in the title names no active protocol (typo, or a retired name) | use a current token (`HOWTO-use-pipeline-harness` lists them) |
-| `INTERFACE_CONTRACT_MISSING` | a program leg that needs the plan's interface contract has none | re-run the program's plan step; never hand-copy a contract |
-| a question in a comment, nothing else | the objective was ambiguous; the harness asked rather than guessed | answer by editing the task description, then re-run |
+| `INTERFACE_CONTRACT_MISSING` | a program leg that needs the plan's interface contract has none | launch the program again; never hand-copy a contract |
+| a question in a comment, nothing else | the objective was ambiguous; the harness asked rather than guessed | answer by editing the task description, then start the task again |
 
 These refusals happen **before any agent spends** on the work (the platform ones before any model call).
 
 ### Re-running a pipeline and the duplicate check
 
-- **A completed pipeline cannot be re-run in place.** Create a **fresh** PIPELINE task (same wording is fine).
+- **A completed pipeline cannot be re-run in place.** Create a **fresh** PIPELINE task with a run number in its title: a task with
+  the same title in the same stage is not created again.
 - **The duplicate check.** Before it starts, a pipeline looks for an earlier run with the same (or a near-identical) objective. A
   pipeline checks the stages of its phase; a program found a duplicate in **another phase of the same POV** — treat the check as
   **POV-wide**. A semantic subset ("add X" after "add X and Y") can match too.
 - **To re-run on purpose,** set the clearance in the task's metadata BEFORE launching (MCP `task.update`, `parameters.metadata`):
   `duplicateAcknowledged: ["<prior stage id>", …]` — an **array** naming every earlier run's stage: for a pipeline its
   `Pipeline: …` stage (`metadata.pipelineStageId` of the earlier task), for a program its `Program: …` stage **and** each leg's
-  `Pipeline: …` stage. A single id when several runs exist will halt again. Check it stored as an array (`jsonb_typeof = 'array'`), then
-  launch; a program carries the list onto its legs.
+  `Pipeline: …` stage. A single id when several runs exist will halt again. Then
+  launch; a program carries the list onto its legs. `project(action: 'pov.details', povId: …)` lists the stages.
 - **Never on a halted program leg:** a leg the platform halted as a duplicate freezes its downstream work; re-run with a fresh task.
 - The clearance is task metadata, never words in the description (descriptions are customer-visible).
 

@@ -18,6 +18,7 @@ want a change package they can trust, and to understand what the run did. You ar
   |---|---|
   | `FIRST-RUN.md` | launching a first program; the exact calls |
   | `OPERATING.md` | running any program: the five steps and the gate table |
+  | `GATES.md` | what to check before releasing each kind of gate; applying a package |
   | `READING-A-RUN.md` | saying what a result proves and what it cannot |
   | `TROUBLESHOOTING-A-RUN.md` | a run has stopped, or it is unclear whether it has |
   | `WRITING-A-SPEC.md` | the spec is the problem (then hand over to the `paichart-spec-writer` agent) |

@@ -35,9 +35,9 @@ perform(action: "task.create", parameters: {
   povId, stageId,                              // a host stage in an EXECUTION phase
   title: "<program objective> (protocol: pov-program)",
   type: "PIPELINE",
-  description: "Program intent: <one line>.\n\nDesign artifacts for the Program Architect (fetch ONLY these two URLs):\n- topology-as-code: https://raw.githubusercontent.com/<owner>/<repo>/main/program-artifacts/<name>/topology.json\n- requirements: https://raw.githubusercontent.com/<owner>/<repo>/main/program-artifacts/<name>/requirements.md"
+  description: "Program intent: <one line>.\n\nDesign artifacts for the Program Architect (fetch ONLY these two URLs):\n- topology-as-code: https://raw.githubusercontent.com/<owner>/<repo>/main/<directory>/topology.json\n- requirements: https://raw.githubusercontent.com/<owner>/<repo>/main/<directory>/requirements.md"
 })
-perform(action: "agent.assign", taskId: "<program task id>", agentTemplateName: "Pipeline Harness")
+perform(action: "agent.assign", parameters: { taskId: "<program task id>", agentTemplateId: "<Pipeline Harness template id>" })   // template(action: "list") shows the id
 perform(action: "agent.execute", parameters: { taskId: "<program task id>", waitForCompletion: false })
 ```
 
@@ -68,8 +68,8 @@ or changes routing, more of those questions become must-answer.
 
 Put a run number in the title (`<objective> (Run 2) (protocol: pov-program)`) and stamp the clearance on the new task before
 you start it: [TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md), "Launching again in the same project". A first run in a
-fresh project needs neither. Each finished run leaves its stages behind, so the clearance must name every earlier run's
-`Program: …` stage.
+fresh project needs neither. Each finished run leaves its stages behind, so the clearance names every earlier run's
+`Program: …` stage and its legs' `Pipeline: …` stages.
 
 ## 3. The lifecycle you'll observe
 
@@ -147,8 +147,8 @@ loaded whole, and a declared source that could not be read is refused by the leg
 ## 5. Releasing gates (important operational detail)
 
 - Gates are **born `IN_PROGRESS`** ("with the human"), so release is a **single MCP `task.complete`
-  call**: `perform(action: "task.complete", taskId: "<gate id>")`.
-- **Release via MCP `task.complete` or the GUI Approve button — either surface works.** Both fire the
+  call**: `perform(action: "task.complete", parameters: { taskId: "<gate id>" })`.
+- **Release via MCP `task.complete` or in the web app (open the gate task, set its status to **Completed**, **Save Changes**) — either works.** Both fire the
   dependency-completion reactor, and gate completion is dependency-ENFORCED (an out-of-order release is
   structurally rejected with DEPENDENCY_NOT_SATISFIED). (The historic GUI reactor gap was closed by the
   completion-path unification, Flip A 2026-07-24 — this bullet's old trigger line has fired.)
@@ -167,10 +167,8 @@ Before `task.complete` on a plan gate, read the Architect's deliverable and chec
 1. **`## Assumptions & Open Questions`** — any item phrased *"Human: confirm …"* or *"confirm before
    approval"* is a question you are answering by approving. **If your answer should change what a leg
    does, write it into that leg's DESCRIPTION (`task.update`) before you release the gate that holds
-   it** — or fix the requirements and re-run. A gate's completion comment is a record for humans; no
-   agent ever reads it, so an answer written there changes nothing and the leg runs its default
-   (G1, 2026-09-24: a leg's scope was deferred to "customer confirmation at the gate" — a channel the
-   leg cannot read).
+   it** — or fix the requirements and re-run. A gate's completion note is a record for people; no
+   agent ever reads it, so an answer written there changes nothing and the leg runs its default.
 2. **The `## Pipeline DAG` "Depends on" column** — this is the graph that will be built. Check that
    each gate blocks the leg you intended. A gate that depends on the leg it was meant to govern is a
    **record, not a control**.
@@ -227,7 +225,7 @@ It works only if the rules are fixed BEFORE the run and the record says who deci
 ## 6. Reading the result
 
 - **`programReleasable`** (on the program task's `metadata`): a deterministic AND over facts — `true` only
-  when every child pipeline's `qualityGate.outcome` is `approved` (a leg the platform **forced** to needs-revision — e.g. a kept file or device source it could not hold; *Forced outcomes* in the pipeline guide — is not approved, so the program is not releasable until that leg is fixed and re-run), no child carries `verdictMismatch: true`,
+  when every child pipeline's `qualityGate.outcome` is `approved` (a leg the platform **forced** to needs-revision — e.g. a kept file or device source it could not hold; *Forced outcomes* in the pipeline guide — is not approved, so the program is not releasable: fix the cause and launch a new run), no child carries `verdictMismatch: true`,
   no child's `derivationContainment` lists a violation (or an unaccounted-for `unsupported[]` entry, and any
   `checked: false` has a benign reason), Node C's terminal verdict is APPROVED with no blocking issues, and
   coverage is clean for the producer and Node C (`predecessors === chainCapablePredecessors`,
@@ -243,8 +241,8 @@ It works only if the rules are fixed BEFORE the run and the record says who deci
   consumes agree; the program's own numbered acceptance checks from the spec; and every `needs-node-c` delegated to it. It is a
   reviewer, not a re-runner: it reads the legs' facts and deliverables, never re-executes them.
 - **A forced or refused leg:** a leg the platform forced to needs-revision, or one whose Reviewer refused, is not `approved`, so the
-  program is not releasable until that leg is fixed and re-run as a fresh task (with the duplicate clearance — pipeline guide,
-  *Re-running*).
+  program is not releasable, and re-running that leg does not change this: fix the cause and launch a new run
+  ([TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md), "Launching again in the same project").
 - **Reviewer warnings** (2026-10-08, WARNINGS-INVISIBLE): lines a leg reviewer (or Node C) labelled
   `NON-BLOCKING WARNING (<id>):`. The platform transcribes them (`reviewerVerdict.warnings`), stamps them on each
   leg and on the program (`reviewerWarnings`; card: `reviewerWarnings: N (ids)`, `0` = checked and none, no segment =

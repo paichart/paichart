@@ -120,7 +120,7 @@ and `HOWTO-use-pipeline-harness` prompts. Once you are running:
 
 ## Run it yourself
 
-**Complete install on a fresh Ubuntu 24.04 machine or VM — [docs/INSTALL.md](docs/INSTALL.md).** All documentation, by what you are doing: **[docs/README.md](docs/README.md)**.
+**Complete install on a fresh Ubuntu 24.04 machine or VM — [docs/INSTALL.md](docs/INSTALL.md).** All documentation, by what you are doing: **[docs/README.md](docs/README.md)**. After installing: [your first run](docs/FIRST-RUN.md), [operating](docs/OPERATING.md), [troubleshooting a run](docs/TROUBLESHOOTING-A-RUN.md), [writing a spec](docs/WRITING-A-SPEC.md).
 Every command in order: PostgreSQL 16 and Node 24 installed, the database created, the app cloned, configured,
 seeded and started, the first login, your own account, Claude Code installed and connected to your hub, and the two
 services your first run needs. You need a machine with about 16 GB RAM, an Anthropic API key (about USD 6 of credit for the first run), a Claude account
@@ -134,7 +134,7 @@ cp .env.example .env               # set DATABASE_URL, APP_BASE_URL and OAUTH_ST
 npm run --silent jwt:keys >> .env  # RS256 signing keys (--silent keeps npm's banner out of .env)
 npm run db:seed                    # schema, grants, the built-in admin admin@paichart.local (password printed once), protocols, hub prompts
 npm run dev                        # web app  → http://localhost:3000
-npm run mcp:http:dev               # MCP hub  → http://localhost:8080/mcp
+npm run mcp:http:dev               # MCP hub on :8080 (AI clients connect through the web app, http://HOST:3000/mcp)
 ```
 
 Sign in as `admin@paichart.local`, create your own account in the Admin Dashboard, then sign in as yourself, open **Profile Settings → AI Provider Settings**, switch **Use System Provider** off, paste your Anthropic API key and press **Save Changes** (top right): the agents run on it, and without it every agent run fails at its first step. Your first run, call by call: [docs/FIRST-RUN.md](docs/FIRST-RUN.md).

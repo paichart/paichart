@@ -133,14 +133,17 @@ tell it the earlier run is known. Two ways:
 - **Keep the earlier run:** create a new task whose title carries a run number, for example
   `… (Run 2) (protocol: pov-program)`. The number does two things: a task with the same title in the same stage is not created
   again (the call returns the existing one), and each leg reads the earlier run's stages as history, not as itself. Then stamp
-  the earlier run's stage on the new task before you start it:
+  the earlier runs' stages on the new task before you start it, as a list:
   ```
-  perform(action: 'task.update', parameters: { taskId: '<new task id>', metadata: { duplicateAcknowledged: '<earlier Program: … stage id>' } })
+  perform(action: 'task.update', parameters: { taskId: '<new task id>', metadata: { duplicateAcknowledged: ['<stage id>', '<stage id>', …] } })
   ```
-  `project(action: 'pov.details', povId: '<pov id>')` lists the stages. If there were several earlier runs, give all their
-  stage ids as a list.
+  The list names, for **every** earlier run of this objective in the project, its `Program: …` stage and each of its legs'
+  `Pipeline: …` stages (for a single pipeline: its `Pipeline: …` stage). `project(action: 'pov.details', povId: '<pov id>')`
+  lists the stages. A list that leaves one out stops the new run again. The program passes the list on to its legs.
 
-This is the one rule for running again; the other guides point here. A finished or stopped program is never re-run in place.
+This is the one rule for running again; the other guides point here. **What can and cannot be run again in place:** a task whose
+execution **failed** ("A task failed" above) can be run again, and the run carries on. A program or leg that **finished**, was
+**refused**, was stopped as a **duplicate**, or was left behind by a hub restart cannot: launch a new run.
 
 ## Your AI client has lost the hub
 
