@@ -168,7 +168,7 @@ curl -s -o /dev/null -w '%{http_code}\n' localhost:8080/health   # expect 200
 #     original 2026-09-12 failure. That process was ALIVE, every HTTP surface returned
 #     200, and it held zero LISTEN channels. Liveness probes cannot see it; `is-active`
 #     cannot see it; the GUI cannot see it. Only the database can say who is listening.
-psql "$DATABASE_URL" -tAc "SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'LISTEN%';"
+psql "$DATABASE_URL" -tAc "SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'LISTEN%';"   # needs .env loaded: set -a; . ./.env; set +a
 # expect >= 2  (paichart-web and paichart-mcp each hold at least one)
 
 # 3. Survive an actual kill. THIS is the step that tests the UNITS.
@@ -190,7 +190,7 @@ curl -s -w '\n%{http_code}\n' localhost:8080/health | tail -3      # expect "dat
 ```
 `unreachable` (with **503**) means PostgreSQL cannot be reached; the hub stays up and reconnects when it returns — that is step 2
 above. `engine-dead` (with **503**) means the hub's own database client is broken, which cannot be repaired inside the running
-process: after two such checks the hub logs a fatal line and exits, and the unit's `Restart=` starts a healthy one. That is why
+process: after two such checks the hub logs "the database engine in this process is gone … exiting" and exits, and the unit's `Restart=` starts a healthy one. That is why
 the units must be supervising (step 3). To keep the report but never exit, set `DATABASE_LIVENESS_EXIT=false` in `.env`.
 
 ### Check the secrets file is not world-readable

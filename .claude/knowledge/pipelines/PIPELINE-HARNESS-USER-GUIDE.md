@@ -431,7 +431,7 @@ reach the Reviewer and the full `agent.results` output.
 `quoteFidelity` checks that a quoted configuration matches what the tool returned. It reads a quote by its label: **verbatim** (every
 omitted, added or changed line is a finding), **excerpt** (file sources, since v6: the same, except gaps marked `# [elided: …]`, whole
 stanzas left out, or comments beside the excerpt), or **unlabelled** (free to narrow; only a changed line is a finding). It flags, never
-blocks. Why it matters and what to do when it flags: `walkthroughs/READING-A-RUN.md` § "Facts about the package's own text".
+blocks. Why it matters and what to do when it flags: `docs/READING-A-RUN.md` § "Facts about the package's own text".
 
 ### "Presence assertion" in a validation step
 

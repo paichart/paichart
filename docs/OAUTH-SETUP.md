@@ -79,8 +79,8 @@ Tokens are RS256, signed with the key from `npm run jwt:keys`, verifiable at `${
 Audiences are per resource (`…/api` for web tokens, `…/mcp` for MCP tokens) and never interchangeable.
 
 ## Without OAuth
-Skip all of the above. Password login (`npm run db:admin` creates the first account) and API keys minted in
-Settings → API Keys cover local development and single-operator installs.
+Skip all of the above. Password login (`npm run db:admin` creates the first account) and API keys generated in
+Profile Settings → MCP API Key cover local development and single-operator installs.
 
 ## Troubleshooting
 - `redirect_uri_mismatch` → the provider's registered callback ≠ `APP_BASE_URL` + the path above (scheme and trailing slash count).

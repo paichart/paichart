@@ -10,7 +10,7 @@
 > about how the harness works.
 >
 > **Evidence first (2026-11-01):** `npm run report:gate -- <gate id>` prints each gate's checks from the stored facts (✓/✗, with the
-> reviewer's blocking reasons). Read-only; it decides nothing. Start from `OPERATOR-RUNBOOK.md` if you are new.
+> reviewer's blocking reasons). Read-only; it decides nothing. Start from `docs/OPERATING.md` if you are new.
 
 ## The one-line principle
 

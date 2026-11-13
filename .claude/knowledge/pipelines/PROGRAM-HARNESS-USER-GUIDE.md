@@ -61,7 +61,7 @@ is a run's input of record. One published spec serves every run of its objective
 per run. Two routes:
 
 - **Hand-written** — a short spec (about one page) in the shape of a released example, written with
-  **`PROGRAM-SPEC-CHECKLIST.md`** (this directory): seven questions you must answer before launch and eighteen you answer
+  **`docs/WRITING-A-SPEC.md`** (this directory): seven questions you must answer before launch and eighteen you answer
   only where you care, the rest being decided by the planner or a leg and read at a gate. This is the owner's preferred route
   since 2026-11-11 (a 4,858-character hand-written two-leg spec ran on 2026-11-10 with both legs approved first time; the
   generated route for the same objective did not publish). For a leg that grants access in production or changes routing, the

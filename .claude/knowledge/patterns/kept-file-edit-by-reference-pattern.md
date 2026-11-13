@@ -35,7 +35,7 @@ failure class cannot occur on a held file: the bytes never pass through the mode
 
 **Quote fidelity is the problem this removes — for the files being EDITED.** Quotes used as EVIDENCE (device reads, unheld files, a
 Harvester's narrative) still pass through the model, and `quoteFidelity` (execution-facts) is the fact that checks them: verbatim
-and, since v6, excerpt-labelled file-lane quotes are read strictly; an unlabelled quote may narrow freely. Users: READING-A-RUN.md
+and, since v6, excerpt-labelled file-lane quotes are read strictly; an unlabelled quote may narrow freely. Users: docs/READING-A-RUN.md
 § "Facts about the package's own text".
 
 ---

@@ -491,7 +491,7 @@ experiment ledger · patterns/checklists · series-cut ledger (`.claude/knowledg
 2026-10-19) with its confidence and status (✅ production / ⚠️ CANDIDATE — e.g. `kept-file-edit-by-reference-pattern.md` 80%, promote
 after the k8s live window). Check it BEFORE proposing an approach (Pattern-First Protocol); a candidate pattern is guidance to correct, not law.
 **Pointer (2026-11-02): entry points for people.** The working-record map now has an "Entry points for people" table: the **operator runbook**
-(`.claude/knowledge/pipelines/OPERATOR-RUNBOOK.md`), **maintainer onboarding** (`.claude/knowledge/guides/MAINTAINER-ONBOARDING.md`, which names
+(`docs/OPERATING.md`), **maintainer onboarding** (`.claude/knowledge/guides/MAINTAINER-ONBOARDING.md`, which names
 `scripts/run-gates-clean.sh` · `ship.sh` · `series-cut-draft.sh` and `npm run report:gate|canary|canary-plan`), the **health-run** procedure
 (`.claude/knowledge/guides/HEALTH-RUN.md`, moved out of CLAUDE.md 2026-11-01) and the public **self-host docs** (`docs/RUNNING.md`,
 `INSTALL.md`, `SELF-HOST-KEPT-FILES.md`, `VERIFYING-SELF-HOST.md`). Point a newcomer there before any working record.

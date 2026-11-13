@@ -21,7 +21,7 @@
 > | Security concern | `sec-ops-specialist` |
 > | Check patterns | `/.claude/knowledge/patterns/PATTERN-REGISTRY.md` |
 > | Find agents | `/.claude/agents/` (see grouped list below) |
-> | **Run a program (operator)** | **`/.claude/knowledge/pipelines/OPERATOR-RUNBOOK.md`** |
+> | **Run a program (operator)** | **`/docs/OPERATING.md`** |
 > | **Maintain / ship (new maintainer)** | **`/.claude/knowledge/guides/MAINTAINER-ONBOARDING.md`** — rules + `scripts/run-gates-clean.sh` · `scripts/ship.sh` · `scripts/series-cut-draft.sh` |
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.

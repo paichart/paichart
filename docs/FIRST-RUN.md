@@ -1,6 +1,7 @@
 # Your first run
 
-Three steps: look at a finished run, run the same one yourself, then try a bigger one. Words used here: a **pipeline** is one
+Look at a finished run (section 1), run the same one yourself (section 2), then try a bigger one (section 4); section 3 is reference for every run. Words used here (all of them, and more,
+are in [GLOSSARY.md](GLOSSARY.md)): a **pipeline** is one
 chain of agents (harvest the current state → design → author → review) that produces one reviewed change package or one
 checked value. A **program** is several pipelines coordinated as one change; each pipeline in a program is called a **leg**. A
 **gate** is a point where the program stops until a person approves. pAIchart never applies a change: you get a package, and
@@ -18,10 +19,11 @@ Releasing a gate means marking that task completed — in the web app, or with t
 
 In the web app, step by step:
 - **To read what an agent produced** (the plan, a leg's result): click the project, click the task (for the plan, the one
-  whose title starts *Produce program plan*). Two menus appear, **Tasks** and **Agents**. Choose **Agents → Artifacts** and
+  whose title starts *Produce program plan*). Two tabs appear, **Tasks** and **Agents**. Choose **Agents → Artifacts** and
   open the report.
-- **To release a gate:** in the project, open the phase menu (named after your phase — *First run* here), select the gate task
-  (for the plan gate, the one whose title starts *APPROVE PROGRAM PLAN*), open the **Tasks** menu, change the status from
+- **To release a gate:** in the project, open the phase (named after your phase — *First run* here; the run's tasks sit in the
+  stage the program created inside it), select the gate task (for the plan gate, the one whose title starts *APPROVE PROGRAM
+  PLAN*), open the **Tasks** tab, change the status from
   **In Progress** to **Completed**, and press **Save Changes**.
 - **Or just say it to Claude** — the simplest way: *"If the plan looks good, release the gate."* Claude reads what was produced,
   tells you what it found, and releases the gate for you.
@@ -29,12 +31,12 @@ In the web app, step by step:
 ## 1. See a finished run (no install needed)
 
 Sign in at [paichart.app](https://paichart.app). A Claude client signs in with GitHub; a ChatGPT client signs in with
-Microsoft. A first sign-in has demo access, which is read-only. Open **Dashboard > Projects** and open **Fabric Telemetry
+Microsoft. A first sign-in has demo access, which is read-only. Choose **Explore Dashboard**, then **Projects** in the left sidebar, and open **Fabric Telemetry
 Expansion**. It is a completed program with two legs: the first works out one free address from a pool by reading two switch
 configuration files; the second writes the change that adds a loopback with that address. Look at the plan, the three gates,
 each leg's result and the final comment on the program task.
 
-[`walkthroughs/READING-A-RUN.md`](../.claude/knowledge/pipelines/walkthroughs/READING-A-RUN.md) explains what each stored fact
+[`READING-A-RUN.md`](READING-A-RUN.md) explains what each stored fact
 proves and what it cannot.
 
 ## 2. Run it on your own install
@@ -66,7 +68,8 @@ and its pin — and it shows you, on a small proven example, exactly what you wi
 
 Type each call to Claude Code (any directory), or simply ask for it in plain words.
 
-1. **A project (POV) to hold the run.** POV stands for proof of value: the project a run lives in.
+1. **A project (POV) to hold the run.** POV stands for proof of value: the project a run lives in. A project is divided into
+   phases, and a phase into stages; a stage holds the tasks.
    ```
    perform(action: 'pov.create', parameters: { title: 'First runs', countryName: 'Australia',
      description: 'My first pAIchart runs.', phases: [ { name: 'First run', type: 'EXECUTION' } ] })
@@ -77,7 +80,8 @@ Type each call to Claude Code (any directory), or simply ask for it in plain wor
    perform(action: 'stage.create', parameters: { povId: '<pov id>', phaseName: 'First run', name: 'Loopback run' })
    ```
    → `Stage ID: <stage id>`. Keep it.
-3. **The program task** — `type: 'PIPELINE'`, the protocol token in the title, and the two input files in the description and
+3. **The program task** — `type: 'PIPELINE'`, the protocol token in the title (the `(protocol: …)` text, which tells pAIchart
+   which set of rules to follow), and the two input files in the description and
    nothing else there (the planner fetches only what the description names):
    ```
    perform(action: 'task.create', parameters: { povId: '<pov id>', stageId: '<stage id>', type: 'PIPELINE', priority: 'MEDIUM',
@@ -85,7 +89,7 @@ Type each call to Claude Code (any directory), or simply ask for it in plain wor
      description: 'Design artifacts for the Program Architect (fetch ONLY these two URLs):\n- topology-as-code: https://raw.githubusercontent.com/paichart/paichart-configs/main/usecases/loopback-ceos2/git-only/topology.json\n- requirements: https://raw.githubusercontent.com/paichart/paichart-configs/main/usecases/loopback-ceos2/git-only/requirements.md' })
    ```
    → `Task ID: <task id>`, `Status: OPEN`.
-4. **Give it the harness and start it.** `template(action: 'list')` shows the id of the **Pipeline Harness** template.
+4. **Give it the harness and start it.** The harness is the coordinating agent: it creates the other tasks and starts them in order. `template(action: 'list')` shows the id of the **Pipeline Harness** template.
    ```
    perform(action: 'agent.assign',  parameters: { taskId: '<task id>', agentTemplateId: '<Pipeline Harness template id>' })
    perform(action: 'agent.execute', parameters: { taskId: '<task id>', waitForCompletion: false })
@@ -94,7 +98,10 @@ Type each call to Claude Code (any directory), or simply ask for it in plain wor
    which reads the two files and writes the plan. **The plan takes about five minutes**; nothing needs you until then. To see
    where it is, ask for `project(action: 'task.context', taskId: '<task id>')` every minute or so.
 5. **Read the plan, then release the plan gate.** When the plan is ready the program comments
-   `⏸ PROGRAM PLAN AWAITING APPROVAL` on your task, with the gate's id. **To read the plan itself**, in the web app open **Projects** → your project → the task whose title starts *Produce program
+   `⏸ PROGRAM PLAN AWAITING APPROVAL` on your task, with the gate's id — `project(action: 'task.context', taskId: '<task id>')`
+   shows the comment. Every task of the run, with its id, type and status, is listed by
+   `project(action: 'task.list', povId: '<pov id>')`: the plan is the task whose title starts *Produce program plan*, the gates
+   are the tasks of type `APPROVAL`, the legs are the tasks of type `PIPELINE`. **To read the plan itself**, in the web app open **Projects** → your project → the task whose title starts *Produce program
    plan* → **Agents → Artifacts** — the easiest way — or ask for
    `perform(action: 'agent.results', parameters: { taskId: '<Program Architect task id>', verbose: true })`. (The comment also
    offers a `fetch(id: …)` line; on some versions that id does not resolve — use one of the two ways above.) The comment may
@@ -181,7 +188,7 @@ use, and say which rule it applied. The package says its values were checked aga
 stated limit of a Git-only run, not a defect.
 
 If a leg is refused, read why before assuming the install is broken: a refusal names its reason, and refusing a wrong change
-is the pipeline working. [`walkthroughs/READING-A-RUN.md`](../.claude/knowledge/pipelines/walkthroughs/READING-A-RUN.md) shows
+is the pipeline working. [`READING-A-RUN.md`](READING-A-RUN.md) shows
 how to read one.
 
 ## 3. Things every run shares
@@ -194,10 +201,11 @@ runs, 21.5 minutes including the gates.
 hub can reach its database: `curl -s localhost:8080/health` shows `"database": { "state": … }`. `ok` means the hub is fine and the
 run is waiting on something else (a gate, usually). `unreachable` means PostgreSQL is down or restarting; the hub reconnects by
 itself when it returns. `engine-dead` means the hub's own database client is broken; the hub notices within about 30 seconds,
-exits, and systemd starts a fresh one (`sudo journalctl -u paichart-mcp --since -5min | grep -i fatal` shows it). While the
+exits, and systemd starts a fresh one (`sudo journalctl -u paichart-mcp --since -5min | grep 'engine in this process is gone'` shows it). While the
 database cannot be reached the hub answers requests with "cannot reach its database … do not sign in again" — that is accurate:
-signing in again does not help. After a hub restart, reconnect Claude Code (`/mcp`) and launch the run again in a new stage: a
-run that was in flight when the hub restarted cannot be resumed (delete its tasks in the web app, or leave them).
+signing in again does not help. After a hub restart, reconnect Claude Code (`/mcp`) and launch the run again: a run that was in flight when the hub restarted
+cannot be resumed. Either delete the stopped run's tasks and stages in the web app first and launch as in part 2 (no stamp
+needed), or keep them and stamp the new task as described under "Re-running a program" below.
 
 **Re-running a program** (an escalated leg, a corrected artifact): a finished program cannot be re-run in place.
 Create a fresh PIPELINE task in the same stage and stamp the prior program stage on it — the harness's pre-flight
@@ -213,10 +221,12 @@ issued within seconds of the upstream leg completing can be rejected while the d
 five attempts over ~50 s on a laptop). The action's reply text is not the state; `Status: COMPLETED` on the gate is.
 
 A failure at step 4 (the launch) with `llm_initialized` means the running user has no resolvable LLM key ([INSTALL.md](INSTALL.md) step 8:
-Profile Settings → LLM). A leg that escalates on its harvest usually means a rig service answered `initialize`
+Profile Settings → AI Provider Settings). A leg that escalates on its harvest usually means a rig service answered `initialize`
 but could not READ — check the rig README's readiness probes, not the container list.
 
 ## 4. A bigger example, with its own lab
+
+This section uses more of pAIchart's vocabulary than the first run did — [GLOSSARY.md](GLOSSARY.md) has every term.
 
 
 `usecases/firewall-a3-partner-path/` is a complete program (three sequenced pipelines) with its rigs. With
@@ -292,8 +302,8 @@ and the release is still your decision: a run can show every leg approved and No
 
 ## Next
 
-- [Operator runbook](../.claude/knowledge/pipelines/OPERATOR-RUNBOOK.md) — running programs day to day.
-- [Program spec checklist](../.claude/knowledge/pipelines/PROGRAM-SPEC-CHECKLIST.md) — writing the two input files for a
+- [Operator runbook](OPERATING.md) — running programs day to day.
+- [Program spec checklist](WRITING-A-SPEC.md) — writing the two input files for a
   change of your own. Put them in any repository whose raw URLs your hub's browser service can fetch; if a leg reads
   configuration files from Git, that repository must be the one `GIT_FILE_SOURCE_PIN` names.
 - [Other use cases](https://github.com/paichart/paichart-configs/tree/main/usecases) in the configs repository.

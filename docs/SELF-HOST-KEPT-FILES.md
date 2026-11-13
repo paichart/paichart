@@ -1,8 +1,8 @@
 # Kept files on a self-hosted pAIchart
 
 **Read this before you run pipelines on your own install: kept files are on by default.** It says what kept files store, where, for how long and who can read
-them, the configuration they are designed for, and the operator facts that follow. It complements [`RUNNING.md`](RUNNING.md)
-(installing) and [`VERIFYING-SELF-HOST.md`](VERIFYING-SELF-HOST.md) (identity).
+them, the configuration they are designed for, and the operator facts that follow. It complements [`INSTALL.md`](INSTALL.md)
+(installing), [`RUNNING.md`](RUNNING.md) (how it runs) and [`VERIFYING-SELF-HOST.md`](VERIFYING-SELF-HOST.md) (identity).
 
 ## What kept files are
 
@@ -23,8 +23,8 @@ service whose registration declares held files (the hub registry's `heldFiles` f
 
 Kubernetes, Terraform and network pipelines can read the **file of record** from a Git repository, so the base the Author edits
 is the committed file rather than a copy typed into a task. The hub reads Git through the shipped GitHub file source
-(`services/github-service`): GitHub's official read-only MCP server plus a small proxy that adds your token. It is optional; skip it
-until you have a config repo. Set-up is [install guide step 9c](INSTALL.md); the service's shape, rules and upgrade checks
+(`services/github-service`): GitHub's official read-only MCP server plus a small proxy that adds your token. pAIchart as a whole runs
+without it, but the first run in [FIRST-RUN.md](FIRST-RUN.md) reads its switch files this way, so set it up at install time. Set-up is [install guide step 9c](INSTALL.md); the service's shape, rules and upgrade checks
 are in [`services/github-service/README.md`](../services/github-service/README.md). To try it before pointing it at your own repo, pin
 `paichart/paichart-configs`: public configuration files of record and released use cases that run against them.
 

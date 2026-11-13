@@ -595,5 +595,5 @@ no lab: its gate is a pre-registered live control on the canary.
 - **Ops lesson LL-CS-44:** check for a paid run in a worktree before committing to it; the hold message can arrive late.
 
 ## Pointer (2026-11-11): hand-written program specs + the reviewer-rule policy
-- **Hand-written specs are the owner's route.** Live checklist: `.claude/knowledge/pipelines/PROGRAM-SPEC-CHECKLIST.md` (Tier 1 must-answer M1–M7, Tier 2 C1–C18, topology rules; `scripts/check-spec-topology.py`). You own it; registry-sourced questions change with requirements-authoring.
+- **Hand-written specs are the owner's route.** Live checklist: `docs/WRITING-A-SPEC.md` (Tier 1 must-answer M1–M7, Tier 2 C1–C18, topology rules; `scripts/check-spec-topology.py`). You own it; registry-sourced questions change with requirements-authoring.
 - **Why:** of 80 unreleased programs since 2026-08-21 a spec design gap was the known cause of about 1 in 9; package format breaks were the largest past cause and fell sharply after 2026-10-07. Studies, the reviewer-rule policy (decided, NOT built) and its two triggers: `cline_docs/follow-ups/requirements-stepback-continuation-2026-11-11.md`.

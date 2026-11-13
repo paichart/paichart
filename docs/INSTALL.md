@@ -8,8 +8,10 @@ reach this one (`192.168.1.50`, a hostname, or `localhost` if only this machine 
 **Before you start, have:**
 - a machine: Ubuntu 24.04 (or similar) with about **16 GB RAM, 8 vCPU and 200 GB disk**, a user with `sudo`, outbound internet.
   A 2–4 GB machine will fail at the build in step 5;
-- **an Anthropic API key** — the agents run on it; you paste it in step 8;
-- **a Claude account** — step 2 installs Claude Code and signs in through a browser;
+- **an Anthropic API key** with about USD 6 of credit for your first run — pAIchart's agents run on it; you paste it in step 8;
+- **a Claude account that can use Claude Code** (a paid Claude plan, or an Anthropic Console account billed by usage) — step 2
+  installs Claude Code and signs in through a browser. This is separate from the API key above: the sign-in runs the assistant
+  on your machine, the API key runs pAIchart's agents, and neither covers the other;
 - **a GitHub account** (free: [github.com/signup](https://github.com/signup)) — for step 9c, which your first run needs. You
   create one read-only token there; step 9c shows how and why it is harmless.
 
@@ -23,6 +25,8 @@ git clone https://github.com/paichart/paichart.git ~/paichart && cd ~/paichart
 ```
 
 ## 2. Install Claude Code — then let it drive the rest of this guide
+**If you will let Claude follow the guide for you, do step 3's Docker block first** — it needs you to log out and back in, which
+an assistant cannot do mid-session — then come back here.
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash        # native installer, no Node needed; adds ~/.local/bin (open a new shell or `export PATH="$HOME/.local/bin:$PATH"`)
 claude --version && claude                            # first run: sign in (browser)
@@ -30,8 +34,9 @@ claude --version && claude                            # first run: sign in (brow
 From here you can paste to Claude: *"Follow ~/paichart/docs/INSTALL.md from step 3, exactly as written,
 with HOST=…; stop after step 5 and tell me the printed password."* (Steps 6–8 are yours, in a browser.) Or keep typing.
 Two things an assistant cannot do for you: type your `sudo` password (run `sudo -v` in the same terminal first, or type the
-`sudo` commands yourself), and the log-out-and-back-in that Docker needs in step 3 (do step 3's Docker block yourself, before
-you start Claude Code).
+`sudo` commands yourself), and the log-out-and-back-in that Docker needs (the note above). After your browser steps, a second
+prompt covers the services: *"Follow ~/paichart/docs/INSTALL.md steps 9, 9b and 9c exactly as written; stop when you need my
+GitHub token — I will paste it into the file myself — and stop again at 'Installing ends here'."*
 
 ## 3. Prerequisites the docs assume (Node 24, PostgreSQL 16, an empty database)
 
@@ -85,7 +90,7 @@ grep -c "^JWT_" .env                     # expect 3
 ## 5. Seed and start
 ```bash
 set -a; . ./.env; set +a                 # load .env into this shell for the commands below
-npm run db:seed                          # ~1–2 min; prints its own step count as it runs, ends "✅ db:seed complete"; the admin password is printed ONCE, EARLY in the output (at step 6 of 22, in a box) — scroll up to it and copy it now.
+npm run db:seed                          # ~1–2 min; prints its own step count as it runs, ends "✅ db:seed complete"; the admin password is printed ONCE, EARLY in the output: look for `▶ 6/22 First SUPER_ADMIN` and the line "Generated password (shown ONCE — store it now)" under it — scroll up and copy it now.
                                          # Expect pino JSON lines and a "[DEV] SLOW QUERY" or two in the middle — noise, not errors. Safe to re-run
                                          # after a git pull: every step is add-only (a re-run never deletes; --force-recreate on db:templates does)
                                          # (schema, grants, admin, protocols, hub prompts, named workflows, agent/harness/program/domain/phase templates)
@@ -184,7 +189,7 @@ save; a User cannot administer the hub), and **set a password** in the dialog (b
 "will sign in with OAuth", and an account without one cannot log in) → Create. (Choose **Super Admin** instead if you want
 your own account to see the Admin Dashboard too.)
 
-## 8. Your Anthropic key, an MCP API key, then connect Claude Code to your hub — required before your first POV
+## 8. Your Anthropic key, an MCP API key, then connect Claude Code to your hub — required before your first project (a POV)
 Log out (**pAIchart logo** → **Logout**) and log in as yourself — the lock icon again, your email and the password you just
 set. Then: the **pAIchart logo** (top-right) → **Profile Settings** (the welcome page's **User Settings** box opens the same page).
 
@@ -309,8 +314,8 @@ can create it**, in about a minute, and it is not tied to `paichart-configs`.
 
 **For security, the GitHub service is pinned to ONE repository.** Agents can read only the repository the pin names
 (`GIT_FILE_SOURCE_PIN` in `.env`), and only its `main` branch — a request for any other repository is refused, whatever the
-token could reach. The pin, not the token, is the boundary. It ships set to the test repository,
-`https://github.com/paichart/paichart-configs`. The token stays on your machine (`services/github-service/.env`,
+token could reach. The pin, not the token, is the boundary. It ships set to the test repository, written as
+`paichart/paichart-configs` — owner and name, never a URL (the repository is at https://github.com/paichart/paichart-configs). The token stays on your machine (`services/github-service/.env`,
 mode 600) and is never sent to pAIchart's agents.
 
 (Skip this whole step only if you will never run a use case that reads files from Git.)
@@ -363,7 +368,7 @@ host-level trust as the rest of the stack) — keep the port local. The backgrou
 | Symptom | Cause | Fix |
 |---|---|---|
 | `/healthz` answers 503 | token missing, revoked or expired (health checks the token only) | new token line in `services/github-service/.env`, then `up -d` |
-| a read is refused "outside the file source pin" (`PINNED_ARGUMENT` in the hub's log) | the call named another repo, a commit, or a ref other than `main` — or the pin is unset (the seed printed ⚠️) | set `GIT_FILE_SOURCE_PIN` in the hub's `.env`, restart the hub |
+| a read is refused "outside the file source pin" (`PINNED_ARGUMENT` in the hub's log) | the call named another repo, a commit, or a ref other than `main`. (With the pin unset the seed prints ⚠️ and agents can read only the default, `paichart/paichart-configs`.) | read from the pinned repo, or set `GIT_FILE_SOURCE_PIN=<owner>/<repo>` in the hub's `.env` and restart the hub |
 | reads still refused after you set the pin | the pin is read once, when the hub starts | restart the hub (between runs: a restart stops runs in flight) |
 | the hub's MCP server will not start, `GIT_FILE_SOURCE_PIN is malformed` | the value is not exactly `<owner>/<repo>` | fix the value; letters, digits, `.` `_` `-` only, no branch |
 | health is 200 but a read fails (404) | the token cannot see that repo (a private repo needs it selected, Contents read-only) | regenerate the token for that repo |
@@ -385,8 +390,10 @@ Two things come with the clone that make step 8 more than a connector:
     (it will ask for anything the schema needs — a description, phases — and report the POV id).
   - *"List the POVs in progress and their open tasks"* → `project(action: 'pov.list' / 'task.list')`.
   - *"Register my weather service at http://127.0.0.1:3105/mcp with its full tool schemas"* → `registry(action: 'register', …)`
+    (an example — you have no such service yet; do not run it)
     (a private address needs the allowlist line in [RUNNING.md](RUNNING.md) § "Registering a service on your own network").
-  - *"Run the health check on ceos-lab-readonly and call list_devices"* → `services(action: 'health' / 'call', …)`.
+  - *"Run the health check on ceos-lab-readonly and call list_devices"* → `services(action: 'health' / 'call', …)` (also an
+    example: it names a service from a lab you have not set up).
 - **Programs and pipelines.** For a multi-specialist delivery — a reviewed change package from a requirements
   document and a topology — you don't drive the steps yourself; the harness does (plan, the plan-approval gate, the
   legs, synthesis, the verdict). [FIRST-RUN.md](FIRST-RUN.md) launches one call by call. The in-hub guides are

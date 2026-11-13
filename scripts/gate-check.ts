@@ -4,7 +4,7 @@
  *
  *   npm run report:gate -- <gate task id>
  *
- * The operator runbook (`.claude/knowledge/pipelines/OPERATOR-RUNBOOK.md` Step 3) lists what to check at each gate; this prints those
+ * The operator runbook (`docs/OPERATING.md` Step 3) lists what to check at each gate; this prints those
  * checks with the facts behind them, so anyone can release a gate with the same evidence the coordinator uses. It decides nothing:
  * every line is a stored fact (Protocol 10), marked ✓ / ✗ / · (informational) against the runbook's check, and the last line says the
  * release is the person's decision. Gate type is derived from what the gate depends on:

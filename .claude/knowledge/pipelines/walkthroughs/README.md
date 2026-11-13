@@ -24,7 +24,7 @@ Each walks one real run as its worked example, so every number can be checked. I
 | `OBSERVABILITY-LEG-WALKTHROUGH.md` | the observability-config leg (service-held files, not Git; existing grant replaced; a non-blocking warning) | done (draft 2026-10-28) |
 | `NETWORK-LEG-WALKTHROUGH.md` | the network legs: A. value (derivation, arithmetic, containment); B. change (Device sources, Git and device bases, redaction, apply procedure, forced outcomes, Git-vs-device comparison) | done (draft 2026-10-28) |
 
-**Start here for the idea underneath every tour:** `READING-A-RUN.md` — facts versus verdicts, the list of signals a run records (what each proves and cannot prove), how a release is composed, the hand-read checklist, and what nothing checks.
+**Start here for the idea underneath every tour:** `docs/READING-A-RUN.md` — facts versus verdicts, the list of signals a run records (what each proves and cannot prove), how a release is composed, the hand-read checklist, and what nothing checks.
 
 **Companion guides (the reference, not the tour):** `../PIPELINE-HARNESS-USER-GUIDE.md` (how to run, read results, forced outcomes, applying
 a kept-file package) · `../PROGRAM-HARNESS-USER-GUIDE.md` · `../PIPELINE-RUN-FORENSICS-GUIDE.md` / `../PROGRAM-RUN-FORENSICS-GUIDE.md` (how to

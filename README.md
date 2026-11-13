@@ -96,7 +96,7 @@ That's also why there is no separate scheduler to operate, and why forensics com
 - Connect with: Claude Desktop (GitHub sign-in) or ChatGPT (Microsoft sign-in) — or use the web app
 - Privacy: [PRIVACY-DEMO.md](./PRIVACY-DEMO.md) — what a demo account holds, what it can do, 30-day auto-deletion
 
-A first sign-in is a **demo account, and it is read-only.** Open **Dashboard > Projects** to browse six finished program runs —
+A first sign-in is a **demo account**: you can browse the demo projects and use any public MCP service, but you cannot create or edit projects or run agents. Choose **Explore Dashboard**, then **Projects** in the left sidebar, to browse six finished program runs —
 each one a use case from the public [`paichart/paichart-configs`](https://github.com/paichart/paichart-configs) repository.
 Open a run to see how a program is built: every task with its title, its description and the agent assigned to it, the gates
 a person released, and the result. Start with **Fabric Telemetry Expansion**. In an AI client, try
@@ -123,21 +123,21 @@ and `HOWTO-use-pipeline-harness` prompts. Once you are running:
 **Complete install on a fresh Ubuntu 24.04 machine or VM — [docs/INSTALL.md](docs/INSTALL.md).** All documentation, by what you are doing: **[docs/README.md](docs/README.md)**.
 Every command in order: PostgreSQL 16 and Node 24 installed, the database created, the app cloned, configured,
 seeded and started, the first login, your own account, Claude Code installed and connected to your hub, and the two
-services your first run needs. You need a machine with about 16 GB RAM, an Anthropic API key, a Claude account and a
-GitHub account. About an hour.
+services your first run needs. You need a machine with about 16 GB RAM, an Anthropic API key (about USD 6 of credit for the first run), a Claude account
+that can use Claude Code, and a GitHub account. About an hour.
 
 Already have Node 24 (20.19 is the minimum), PostgreSQL 16 and an empty database? The short form:
 
 ```bash
 git clone https://github.com/paichart/paichart && cd paichart && npm ci
-cp .env.example .env               # set DATABASE_URL and APP_BASE_URL; then:
+cp .env.example .env               # set DATABASE_URL, APP_BASE_URL and OAUTH_STATE_SECRET (openssl rand -hex 32); then:
 npm run --silent jwt:keys >> .env  # RS256 signing keys (--silent keeps npm's banner out of .env)
 npm run db:seed                    # schema, grants, the built-in admin admin@paichart.local (password printed once), protocols, hub prompts
 npm run dev                        # web app  → http://localhost:3000
 npm run mcp:http:dev               # MCP hub  → http://localhost:8080/mcp
 ```
 
-Sign in as `admin@paichart.local`, create your own account in the Admin Dashboard, then sign in as yourself, open **Profile Settings → LLM**, switch **Use System Provider** off and paste your Anthropic API key: the agents run on it, and without it every agent run fails at its first step. Your first run, call by call: [docs/FIRST-RUN.md](docs/FIRST-RUN.md).
+Sign in as `admin@paichart.local`, create your own account in the Admin Dashboard, then sign in as yourself, open **Profile Settings → AI Provider Settings**, switch **Use System Provider** off, paste your Anthropic API key and press **Save Changes** (top right): the agents run on it, and without it every agent run fails at its first step. Your first run, call by call: [docs/FIRST-RUN.md](docs/FIRST-RUN.md).
 
 - [docs/RUNNING.md](docs/RUNNING.md) — what each step does: the two-process shape, roles, `APP_BASE_URL`, production notes
 - [docs/VERIFYING-SELF-HOST.md](docs/VERIFYING-SELF-HOST.md) — prove your install owns its identity: every token and OAuth document derives from **your** `APP_BASE_URL`, and tokens for anyone else's issuer are rejected

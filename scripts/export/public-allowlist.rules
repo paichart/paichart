@@ -193,6 +193,12 @@
 # be counted; removed at the second health-run after the rename — open register DOCS-HOMOLOGATION).
 + docs/README.md
 + docs/FIRST-RUN.md
+# P3a (2026-11-13): the operator runbook, Reading a run and the spec checklist moved here from .claude/knowledge/pipelines/
+# (the cold reads found these three written for a user; the gate playbook and the two guides stay until they are split).
++ docs/OPERATING.md
++ docs/READING-A-RUN.md
++ docs/WRITING-A-SPEC.md
++ docs/GLOSSARY.md
 + docs/SELF-HOST-RUN-SHEET.md
 + data/geographical-default.json
 + docs/OAUTH-SETUP.md

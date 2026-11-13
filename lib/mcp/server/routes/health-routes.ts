@@ -37,9 +37,9 @@ const { getEndpointAllowlistReport } = require('../../../utils/endpoint-allowlis
  *
  * Response shape (locked per Plan v2 Response-Shape Reference Table):
  * ```
- * 200 OK
+ * 200 OK  (503 with status: 'degraded' when the database probe has failed and none has succeeded since)
  * {
- *   status: 'ok',
+ *   status: 'ok' | 'degraded',
  *   transport: 'clean-http',
  *   timestamp: ISO-8601,
  *   version: '1.0.0',
@@ -51,7 +51,9 @@ const { getEndpointAllowlistReport } = require('../../../utils/endpoint-allowlis
  *     maxOAuthRequests: number,
  *     evictions: object,
  *     backend: 'mcp-server-v5'
- *   }
+ *   },
+ *   endpointAllowlist: { entries: number, rejected: number },
+ *   database: { state: 'unknown'|'ok'|'unreachable'|'engine-dead', lastCheckedAt, lastOkAt, consecutiveFailures }
  * }
  * ```
  */

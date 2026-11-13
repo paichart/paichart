@@ -30,7 +30,7 @@ npm run --silent jwt:keys >> .env # RS256 signing key pair — appends the three
                                   # --silent matters: without it npm's "> jwt:keys" banner lands in .env too (harmless to the
                                   # servers, but `source .env` then runs it as a command and creates a stray file)
 #  → OAUTH_STATE_SECRET: any strong random string (openssl rand -hex 32)
-#  → Your Anthropic key: after first login, Profile Settings → LLM → switch "Use System Provider" off, paste the key, Save
+#  → Your Anthropic key: after first login, Profile Settings → AI Provider Settings → switch "Use System Provider" off, paste the key, Save
 #    Changes. No key = every agent execution fails at start. (One shared key for every user instead: set ANTHROPIC_API_KEY
 #    here and run `npm run llm:init` AFTER the seed — it copies the key into the system provider settings, which every
 #    user on "use system provider" inherits. The app never reads the variable itself.)
@@ -102,7 +102,7 @@ Then prove the install owns its identity: [VERIFYING-SELF-HOST.md](VERIFYING-SEL
 ## Verify
 ```bash
 curl -s localhost:3000/api/health                              # {"status":"ok",…}
-curl -s localhost:8080/health                                  # {"status":"ok","transport":"clean-http",…}
+curl -s localhost:8080/health                                  # {"status":"ok","transport":"clean-http",…,"database":{"state":"ok",…}} — 503 and "degraded" when the hub cannot reach its database
 curl -s localhost:8080/.well-known/oauth-authorization-server  # issuer must equal your APP_BASE_URL
 curl -s -o /dev/null -w '%{http_code}\n' localhost:8080/mcp    # 401 — correct without a token
 ```

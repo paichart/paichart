@@ -12,7 +12,7 @@ This README originally described only the per-use-case design-proposal conventio
 directory has since accumulated the canonical guides, and a reader landing here had no map.
 **Pick your door by what you are trying to do:**
 
-> **New here and want to RUN a program?** Start with `OPERATOR-RUNBOOK.md` — five steps (spec → launch → gates → read → apply), each linking to the detail below. **Maintaining the platform?** `../guides/MAINTAINER-ONBOARDING.md` — the rules, the scripts that enforce them, where things live.
+> **New here and want to RUN a program?** Start with `docs/OPERATING.md` — five steps (spec → launch → gates → read → apply), each linking to the detail below. **Maintaining the platform?** `../guides/MAINTAINER-ONBOARDING.md` — the rules, the scripts that enforce them, where things live.
 
 ### Pipeline tier (a single pipeline of specialists)
 | doc | for |

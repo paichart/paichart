@@ -57,8 +57,8 @@ scripts/series-cut-draft.sh <push time>    # only if the push changed what agent
 | Picking up where someone left off | the latest `cline_docs/follow-ups/*continuation*.md`; the working-record map in `.claude/KNOWLEDGE-BASE-GUIDELINES.md` |
 | What changed when (for comparing numbers) | `.claude/knowledge/pipelines/SERIES-CUT-LEDGER.md` |
 | A live run's record | `cline_docs/reviews/<topic>/RUN-SHEET.md` or `WINDOW-RUN-SHEET.md` |
-| How to run a program | `pipelines/OPERATOR-RUNBOOK.md` (gate evidence: `npm run report:gate -- <gate id>`) |
-| How to read a run | `pipelines/walkthroughs/READING-A-RUN.md` |
+| How to run a program | `pipelines/docs/OPERATING.md` (gate evidence: `npm run report:gate -- <gate id>`) |
+| How to read a run | `pipelines/docs/READING-A-RUN.md` |
 | How to investigate one | `pipelines/PIPELINE-RUN-FORENSICS-GUIDE.md`, `pipelines/PROGRAM-RUN-FORENSICS-GUIDE.md` |
 | Proven implementation patterns | `patterns/PATTERN-REGISTRY.md` |
 | The quarterly health run | `guides/HEALTH-RUN.md` (the full procedure; CLAUDE.md keeps the dates and the list of checks — next due 2026-11-29) |
@@ -80,7 +80,7 @@ There are 41 specialists (`.claude/agents/`), each owning one domain. Day to day
 
 ## Your first week
 
-1. Read `pipelines/OPERATOR-RUNBOOK.md` and `walkthroughs/READING-A-RUN.md`, then one domain walkthrough.
+1. Read `pipelines/docs/OPERATING.md` and `docs/READING-A-RUN.md`, then one domain walkthrough.
 2. Read one released run end to end in its run sheet. The telemetry program, `telemetry-held-program-2026-10-28/RUN-SHEET.md`, is a
    good one.
 3. Run `scripts/run-gates-clean.sh` once, so you know what green looks like.

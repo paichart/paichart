@@ -1,6 +1,7 @@
 # pAIchart documentation
 
 Everything you need to install, run and operate pAIchart starts on this page. Pick the heading that matches what you are doing.
+A word you do not know: [GLOSSARY.md](GLOSSARY.md).
 
 The `.claude/` directory is the knowledge base the Claude agents use to maintain the code. You do not need it to install or run
 pAIchart; the documents you do need from it are linked below.
@@ -9,7 +10,7 @@ pAIchart; the documents you do need from it are linked below.
 
 | Document | What it gives you |
 |---|---|
-| [INSTALL.md](INSTALL.md) | Every command, in order, from a bare Ubuntu 24.04 machine to Claude Code talking to your own pAIchart. About 40 minutes. |
+| [INSTALL.md](INSTALL.md) | Every command, in order, from a bare Ubuntu 24.04 machine to Claude Code talking to your own pAIchart. About an hour. |
 | [FIRST-RUN.md](FIRST-RUN.md) | See a finished run, run the same one on your install with nothing but the configs repository, then a bigger example. |
 | [RUNNING.md](RUNNING.md) | Reference for how pAIchart runs: the two processes, roles, `APP_BASE_URL`, registering services on your own network, production notes — and a short development-mode quick start. |
 | [VERIFYING-SELF-HOST.md](VERIFYING-SELF-HOST.md) | Checks that prove your install owns its identity: every token and OAuth document comes from your own `APP_BASE_URL`. |
@@ -17,7 +18,7 @@ pAIchart; the documents you do need from it are linked below.
 ## See a run before you run one
 
 Sign in at [paichart.app](https://paichart.app). A Claude client signs in with GitHub; a ChatGPT client signs in with Microsoft. A
-first sign-in has demo access, which is read-only. Open **Dashboard > Projects** and open **Fabric Telemetry Expansion**: a completed
+first sign-in has demo access, which is read-only. Choose **Explore Dashboard**, then **Projects** in the left sidebar, and open **Fabric Telemetry Expansion**: a completed
 program in which one pipeline works out a free address and a second writes the switch change that uses it. It is the same use case
 you can run on your own install: [FIRST-RUN.md](FIRST-RUN.md) gives every call. It is
 [`loopback-ceos2/git-only`](https://github.com/paichart/paichart-configs/tree/main/usecases/loopback-ceos2) in the configs
@@ -36,18 +37,19 @@ repository, and needs nothing but the files in that repository.
 
 | Document | What it gives you |
 |---|---|
-| [Operator runbook](../.claude/knowledge/pipelines/OPERATOR-RUNBOOK.md) | Run a program from start to finish: launch, check the plan, release gates, read the result. |
-| [Gate playbook](../.claude/knowledge/pipelines/PROGRAM-OPERATOR-GATE-PLAYBOOK.md) | What to check before you release each kind of gate, and what a refusal means. |
-| [Program guide](../.claude/knowledge/pipelines/PROGRAM-HARNESS-USER-GUIDE.md) | Programs: several pipelines coordinated as one change, with values passed between them. |
-| [Pipeline guide](../.claude/knowledge/pipelines/PIPELINE-HARNESS-USER-GUIDE.md) | A single pipeline: harvest, design, author, review. |
-| [Reading a run](../.claude/knowledge/pipelines/walkthroughs/READING-A-RUN.md) | How to read a completed run and decide whether to trust it. |
+| [Operator runbook](OPERATING.md) | Run a program from start to finish: launch, check the plan, release gates, read the result. |
+| [Gate playbook](../.claude/knowledge/pipelines/PROGRAM-OPERATOR-GATE-PLAYBOOK.md) | Detailed reference on what to check before each kind of gate. Start with the gate table in the operator runbook (step 3); this file also carries the maintainers' working history. |
+| [Program guide](../.claude/knowledge/pipelines/PROGRAM-HARNESS-USER-GUIDE.md) | Detailed reference on programs: several pipelines coordinated as one change, with values passed between them. Long, and partly written for maintainers. |
+| [Pipeline guide](../.claude/knowledge/pipelines/PIPELINE-HARNESS-USER-GUIDE.md) | Detailed reference on a single pipeline. Its first part describes internals; the parts for someone running one start at "Writing a domain pipeline task". |
+| [Reading a run](READING-A-RUN.md) | How to read a completed run and decide whether to trust it. |
+| [GLOSSARY.md](GLOSSARY.md) | Every term these documents use, in plain words. |
 | [Walkthroughs](../.claude/knowledge/pipelines/walkthroughs/README.md) | One guided tour per domain (network, Kubernetes, Terraform, observability) and one of a whole program. |
 
 ## Write a spec
 
 | Document | What it gives you |
 |---|---|
-| [Program spec checklist](../.claude/knowledge/pipelines/PROGRAM-SPEC-CHECKLIST.md) | What a hand-written `requirements.md` must answer, and the checks to run on it before a launch. |
+| [Program spec checklist](WRITING-A-SPEC.md) | What a hand-written `requirements.md` must answer, and the checks to run on it before a launch. |
 | [paichart-configs](https://github.com/paichart/paichart-configs) | The configuration files of record and the released use cases; copy the shape of one. |
 | [Use cases](../usecases/README.md) | The lab environments and use cases that ship in this repository. |
 

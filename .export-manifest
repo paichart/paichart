@@ -1287,13 +1287,17 @@ data/geographical-default.json
 dev-server.js
 docker-compose.self-host.yml
 docs/FIRST-RUN.md
+docs/GLOSSARY.md
 docs/INSTALL.md
 docs/OAUTH-SETUP.md
+docs/OPERATING.md
+docs/READING-A-RUN.md
 docs/README.md
 docs/RUNNING.md
 docs/SELF-HOST-KEPT-FILES.md
 docs/SELF-HOST-RUN-SHEET.md
 docs/VERIFYING-SELF-HOST.md
+docs/WRITING-A-SPEC.md
 docs/systemd/paichart-mcp.service
 docs/systemd/paichart-web.service
 ecosystem.config.js

@@ -1942,8 +1942,8 @@ grep -c "CONFIG_SOURCE" lib/agents/harness/held-bytes/variant.ts   # expect 0 �
 The owner's route for a program's input is a short hand-written spec plus the checklist. Confirm both exist and the check runs:
 
 ```bash
-ls .claude/knowledge/pipelines/PROGRAM-SPEC-CHECKLIST.md                    # expect: the file
-grep -c "^| M[0-9][a-c]* | \*\*" .claude/knowledge/pipelines/PROGRAM-SPEC-CHECKLIST.md   # expect 9 Tier 1 rows (M1–M5, M6a–c, M7)
+ls docs/WRITING-A-SPEC.md                    # expect: the file
+grep -c "^| M[0-9][a-c]* | \*\*" docs/WRITING-A-SPEC.md   # expect 9 Tier 1 rows (M1–M5, M6a–c, M7)
 python3 scripts/check-spec-topology.py --self-test | grep -c "^PASS"        # expect 9, and no FAIL line
 ```
 
