@@ -46,7 +46,7 @@ The words pAIchart's documents use, in plain terms. Each entry says what the thi
 |---|---|
 | **Read-only service** | A service you register with the hub through which agents read your systems (a switch, a cluster, cloud state). It offers no way to change anything. |
 | **Descriptor** | A small JSON file that describes a service to the hub: its address and what it can read. |
-| **Device sources** | The block in a spec that says, for each device, where its configuration is read from: `git-file` (a file in your Git repository), `device-read` or `live-read` (the running device). |
+| **Device sources** | The block in a spec that says, for each device, where its configuration is read from. Four kinds: **`git-file`** — a file in your Git repository; the leg edits a kept copy of it. **`device-read`** — the running configuration, read whole from the device; the leg edits a kept copy of it. Declared together with `git-file` for one device, the Git file is edited and the device read is evidence. **`live-read`** — the running configuration read as evidence only, never kept or edited; for a device the leg needs to see and does not change. **`command-package`** — no read; the package is written as commands ("no read" in the spec checklist). |
 | **Kept file** (also **held file**) | A configuration file whose exact bytes pAIchart stored when it was read, so the Author changes it only by edits to that stored copy. **Base** is the copy as read; **candidate** is the copy after the edits. |
 | **Git file source** | The service that reads files from a Git repository for kept files. |
 | **Pin** | The one repository the Git file source may read (`GIT_FILE_SOURCE_PIN`). A request for any other repository is refused. |

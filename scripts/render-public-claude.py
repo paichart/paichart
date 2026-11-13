@@ -10,34 +10,50 @@ import re, subprocess, sys, os
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 src = open(os.path.join(ROOT, 'CLAUDE.md'), encoding='utf-8').read()
 parts = re.split(r'(?m)^(?=## )', src); head, secs = parts[0], parts[1:]
-KEEP = ['## 🤝 Collaboration Principles', '## ✍️ Commit Attribution', '## 🔍 IMPORTANT: Discovery-First Workflow',
-        '## 📖 Understanding: The 4-Layer System', '## 🔍 Protocol 1', '## 🎯 Protocol 2', '## 🔄 Protocol 3',
-        '## 🔒 Protocol 4', '## 🐛 Protocol 6', '## 🔬 Protocol 7', '## 🔁 Protocol 8', '## ⬆️ Protocol 9',
-        '## 🪧 Protocol 10', '## 🧹 Protocol 11', '## 📚 Protocol Summary', '## 🔧 Toolkit',
-        '## Development Commands', '## Architecture Overview']
+# 2026-11-13 (owner, docs homologation group 5): the public repository ships user agents only and, of `.claude/knowledge`,
+# only `protocols/` and `patterns/`. So the public CLAUDE.md is a SHORT self-hoster file: a static head (below), then the three
+# sections that describe the code itself. The specialist-agent map, the discovery-first workflow and the per-protocol sections no
+# longer cross: they name agents and discovery prompts the public repository does not have.
+KEEP = ['## Development Commands', '## Architecture Overview']
 # Protocol 5 (forensic investigation) is a production-log runbook — dropped with its section.
 kept = [s for s in secs if any(s.startswith(k) for k in KEEP)]
-out = head + ''.join(kept)
+assert head.startswith('# CLAUDE.md\n'), 'the title line moved — update render-public-claude.py'
+out = '# CLAUDE.md\n' + ''.join(kept)   # the private head (version table, agent quick-reference) does not cross
+# sub-sections that only make sense with the maintainers' guides or agents
+out = re.sub(r'(?ms)^### Geographical Data Management\n.*?(?=^### )', '', out)
+out = re.sub(r'(?m)^\*\*Discovery-Based Documentation\*\*.*\n?', '', out)
+out = re.sub(r'(?ms)^\*\*Quarterly Security Audit\*\*.*?^```[a-z]*\n.*?^```\n', '', out)
 out = re.sub(r'(?m)^.*(137\.184\.247\.110|ssh root@|psql "\$DATABASE_URL"|BASE_URL=https://paichart\.app|PAICHART_MONITOR_TOKEN|cline_docs|smoke-tests|phase-3-jwt-deployment-readiness|knowledge/frameworks|knowledge/prompts/|knowledge/templates/|knowledge/TODO).*\n', '', out)  # private paths (Steve, 2026-09-06)
 out = re.sub(r'(?m)^\| 5\. Forensic Investigation \|.*\n', '', out)   # summary-table row for the dropped protocol
 out = out.replace('**Protocols**: `/.claude/knowledge/protocols/`', '**Protocols**: `/.claude/knowledge/protocols/`')
 # Public wording that must survive every regeneration (2026-11-12: the attribution line was hand-edited in the output and the next
 # regeneration put the owner's name back; 2026-11-13: the fresh-install reader found this file steering an assistant that was only
 # following docs/INSTALL.md into discovery agents and reviews).
-ATTR = 'Commits are authored solely by Steve Terry.'
-assert out.count(ATTR) == 1, 'the attribution sentence moved — update render-public-claude.py'
-out = out.replace(ATTR, 'Commits are authored solely by the repository owner (the person whose git identity makes the commit) — never by Claude or another AI.')
-PREAMBLE = ('> **Installing or running pAIchart? You do not need this file.** Start at [`docs/README.md`](docs/README.md)\n'
-            '> ([`docs/INSTALL.md`](docs/INSTALL.md), then [`docs/FIRST-RUN.md`](docs/FIRST-RUN.md)). This file is for people CHANGING the\n'
-            '> code: it tells Claude Code how to work in this repository — specialist agents, discovery before a change, review protocols.\n'
-            '> **If you were asked to follow the install guide or the first-run guide, follow that guide exactly as written and ignore\n'
-            '> everything below**: no discovery agents, no specialist reviews. Paths under `cline_docs/` are the maintainers\' private\n'
-            '> records and are not in this repository.\n\n')
+PREAMBLE = ("""> **Installing or running pAIchart? Start at [`docs/README.md`](docs/README.md)** ([`docs/INSTALL.md`](docs/INSTALL.md), then
+> [`docs/FIRST-RUN.md`](docs/FIRST-RUN.md)). If you were asked to follow one of those guides, follow it exactly as written.
+
+## Working in this repository (for Claude Code)
+
+- **Helping someone run pAIchart.** Two agents are in `.claude/agents/`: `paichart-operator` (launch a program, explain each gate,
+  read a result, diagnose a stopped run) and `paichart-spec-writer` (write `requirements.md` and `topology.json` for a change).
+  The documents they work from are in `docs/`. Never release an approval gate the person has not approved, and never start
+  something that spends their Anthropic credit without saying so first.
+- **Changing the code.** The maintainers' method is in `.claude/knowledge/protocols/` (when a change needs review, how to sweep
+  its blast radius, how to test it) and `.claude/knowledge/patterns/` (start at `PATTERN-REGISTRY.md`). Those documents name
+  specialist agents, discovery prompts and records (`cline_docs/…`, other `.claude/knowledge/…` paths) that live in the
+  maintainers' private repository. Treat such a reference as unavailable, not as an error, and do not try to recreate it.
+- **Before proposing a change:** `npm run lint`, then `npm run test:all-validation`.
+- **Commits** are authored solely by the repository owner (the person whose git identity makes the commit). Never add a
+  Claude or AI co-author trailer or a "Generated with" line.
+
+""")
+# lines that cite a part of the maintainers' repository the public one does not have
+out = re.sub(r'(?m)^.*\.claude/(agents/(?!paichart-)|knowledge/(discoveries|domain|guides|toolkits|pipelines|workflows|frameworks)).*\n', '', out)
 assert out.count('# CLAUDE.md\n') == 1, 'the title line moved — update render-public-claude.py'
 out = out.replace('# CLAUDE.md\n', '# CLAUDE.md\n\n' + PREAMBLE, 1)
 banner = ('<!-- PUBLIC VARIANT — generated by scripts/render-public-claude.py from the private CLAUDE.md by section\n'
-          '     allowlist. The private one carries production procedures (SSH, psql, deploy runbooks) that never\n'
-          '     cross. Regenerate after editing CLAUDE.md; do not hand-edit this file. -->\n')
+          '     allowlist, with a static head for self-hosters. The private one carries production procedures and the\n'
+          '     maintainers\' agent system, which never cross. Regenerate after editing CLAUDE.md; do not hand-edit this file. -->\n')
 open(os.path.join(ROOT, 'CLAUDE.public.md'), 'w', encoding='utf-8').write(banner + out)
 # every cited .claude path must survive the export rules
 rules = subprocess.run([sys.executable, '-c', '''

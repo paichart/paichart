@@ -39,13 +39,19 @@ repository, and needs nothing but the files in that repository.
 | Document | What it gives you |
 |---|---|
 | [Operator runbook](OPERATING.md) | Run a program from start to finish: launch, check the plan, release gates, read the result. |
-| [Gate playbook](../.claude/knowledge/pipelines/PROGRAM-OPERATOR-GATE-PLAYBOOK.md) | Detailed reference on what to check before each kind of gate. Start with the gate table in the operator runbook (step 3); this file also carries the maintainers' working history. |
-| [Program guide](../.claude/knowledge/pipelines/PROGRAM-HARNESS-USER-GUIDE.md) | Detailed reference on programs: several pipelines coordinated as one change, with values passed between them. Long, and partly written for maintainers. |
-| [Pipeline guide](../.claude/knowledge/pipelines/PIPELINE-HARNESS-USER-GUIDE.md) | Detailed reference on a single pipeline. Its first part describes internals; the parts for someone running one start at "Writing a domain pipeline task". |
+| [Gate playbook](GATES.md) | Detailed reference on what to check before each kind of gate. Start with the gate table in the operator runbook (step 3); this file also carries the maintainers' working history. |
+| [Connecting your own services](CONNECTING-YOUR-SERVICES.md) | Register your team's device, Git and cloud services, share them, and name them in a task or a spec. |
+| [How a pipeline works](HOW-IT-WORKS.md) | A short account of how one pipeline runs, what cannot go wrong by construction, and what you can change without code. |
+| [Security](SECURITY.md) | What protects a run, the two output guards you control, and the security properties of agents handing work to each other. |
+| [Program shapes](PROGRAM-SHAPES.md) | Which shape of program suits which change: one leg, parallel legs, sequenced legs, grouped legs. |
+| [Designing a program](design/DESIGNING-A-PROGRAM.md) | The procedure for turning a multi-system objective into a program, from the domains that exist. |
+| [Firewall policy use case](design/FIREWALL-POLICY-USE-CASE.md) | A worked decision: one pipeline, parallel legs or sequenced legs for a change across several devices. |
+| [Program guide](PROGRAMS.md) | Detailed reference on programs: several pipelines coordinated as one change, with values passed between them. Long, and partly written for maintainers. |
+| [Pipeline guide](PIPELINES.md) | Detailed reference on a single pipeline. Its first part describes internals; the parts for someone running one start at "Writing a domain pipeline task". |
 | [Reading a run](READING-A-RUN.md) | How to read a completed run and decide whether to trust it. |
 | [Troubleshooting a run](TROUBLESHOOTING-A-RUN.md) | A run has stopped, or you cannot tell whether it has: where it is, why, and what to do. |
 | [GLOSSARY.md](GLOSSARY.md) | Every term these documents use, in plain words. |
-| [Walkthroughs](../.claude/knowledge/pipelines/walkthroughs/README.md) | One guided tour per domain (network, Kubernetes, Terraform, observability) and one of a whole program. |
+| [Walkthroughs](walkthroughs/README.md) | One guided tour per domain (network, Kubernetes, Terraform, observability) and one of a whole program. |
 
 ## Two agents that help (Claude Code)
 
@@ -69,9 +75,9 @@ They are in the clone's `.claude/agents/`. To use them from any directory: `mkdi
 | Document | What it gives you |
 |---|---|
 | [CONTRIBUTING.md](../CONTRIBUTING.md) · [SECURITY.md](../SECURITY.md) | How to contribute, and how to report a vulnerability. |
-| [CLAUDE.md](../CLAUDE.md) | How Claude Code works in this repository: the specialist agents, protocols and commands. |
-| [Add a pipeline domain](../.claude/knowledge/pipelines/ADD-A-PIPELINE-HARNESS-AGENT.md) | The procedure for a new domain or specialist agent. |
-| [Design a pipeline use case](../.claude/knowledge/pipelines/PIPELINE-USE-CASE-DESIGN-PLAYBOOK.md) · [Design a program](../.claude/knowledge/pipelines/PROGRAM-USE-CASE-DESIGN-PLAYBOOK.md) | From "could pAIchart do this?" to a validated use case. |
+| [CLAUDE.md](../CLAUDE.md) | How Claude Code is told to work in this repository, and the development commands. |
+| [Protocols](../.claude/knowledge/protocols/) | How this code is developed: when a change needs review, how to sweep it, how to test it. They name agents and records the maintainers keep privately. |
+| [Design a program](design/DESIGNING-A-PROGRAM.md) | From "could pAIchart do this?" to a validated use case. |
 | [Pattern registry](../.claude/knowledge/patterns/PATTERN-REGISTRY.md) | The implementation patterns the code follows. |
 | [Descriptor spec](../descriptors/SPEC.md) | How a service you host is described to the hub. |
 
@@ -81,4 +87,5 @@ They are in the clone's `.claude/agents/`. To use them from any directory: `mkdi
 - [Protocols](../protocols/README.md) — the agent-facing contracts, published verbatim.
 - [Examples](../examples/README.md) — change reports the pipelines produced.
 - [Case studies](../case-studies/README.md)
+- [Academic project briefs](../academic/README.md) — project proposals offered to universities and their students.
 - [Demo privacy statement](../PRIVACY-DEMO.md)

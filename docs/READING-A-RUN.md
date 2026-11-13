@@ -206,8 +206,8 @@ The platform's facts are narrow on purpose. These are judged by people, or not a
 ---
 
 ## Related
-- The tours: [PROGRAM-WALKTHROUGH.md](../.claude/knowledge/pipelines/walkthroughs/PROGRAM-WALKTHROUGH.md), [K8S-LEG-WALKTHROUGH.md](../.claude/knowledge/pipelines/walkthroughs/K8S-LEG-WALKTHROUGH.md), [TERRAFORM-LEG-WALKTHROUGH.md](../.claude/knowledge/pipelines/walkthroughs/TERRAFORM-LEG-WALKTHROUGH.md), [OBSERVABILITY-LEG-WALKTHROUGH.md](../.claude/knowledge/pipelines/walkthroughs/OBSERVABILITY-LEG-WALKTHROUGH.md),
-  [NETWORK-LEG-WALKTHROUGH.md](../.claude/knowledge/pipelines/walkthroughs/NETWORK-LEG-WALKTHROUGH.md).
-- Forced outcomes in detail, and applying a kept-file package: [PIPELINE-HARNESS-USER-GUIDE.md](../.claude/knowledge/pipelines/PIPELINE-HARNESS-USER-GUIDE.md).
-- Investigating a run from stored records: [PIPELINE-RUN-FORENSICS-GUIDE.md](../.claude/knowledge/pipelines/PIPELINE-RUN-FORENSICS-GUIDE.md), [PROGRAM-RUN-FORENSICS-GUIDE.md](../.claude/knowledge/pipelines/PROGRAM-RUN-FORENSICS-GUIDE.md).
+- The tours: [PROGRAM-WALKTHROUGH.md](walkthroughs/PROGRAM-WALKTHROUGH.md), [K8S-LEG-WALKTHROUGH.md](walkthroughs/K8S-LEG-WALKTHROUGH.md), [TERRAFORM-LEG-WALKTHROUGH.md](walkthroughs/TERRAFORM-LEG-WALKTHROUGH.md), [OBSERVABILITY-LEG-WALKTHROUGH.md](walkthroughs/OBSERVABILITY-LEG-WALKTHROUGH.md),
+  [NETWORK-LEG-WALKTHROUGH.md](walkthroughs/NETWORK-LEG-WALKTHROUGH.md).
+- Forced outcomes in detail, and applying a kept-file package: [PIPELINE-HARNESS-USER-GUIDE.md](PIPELINES.md).
+- A run that stopped: [TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md).
 - The design rule behind section 1: [signal-design-protocol.md](../.claude/knowledge/protocols/signal-design-protocol.md) (Protocol 10, fact vs verdict).

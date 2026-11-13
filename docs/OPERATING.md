@@ -21,9 +21,9 @@ states what is configured on them now. The agents read that from the sources the
 - **Write the spec by hand:** about one page, in the shape of a released example, using [WRITING-A-SPEC.md](WRITING-A-SPEC.md). Put both files in any repository whose raw URLs your hub can fetch; if a leg reads configuration files from Git,
   that repository must be the one your hub's Git pin names. This is the route in use.
 - **Re-run a spec that has already released:** use its published URLs unchanged.
-- **Detail:** [PROGRAM-USE-CASE-DESIGN-PLAYBOOK.md](../.claude/knowledge/pipelines/PROGRAM-USE-CASE-DESIGN-PLAYBOOK.md) (designing a new kind of program); [PROGRAM-COMPOSITION-CATALOG.md](../.claude/knowledge/pipelines/PROGRAM-COMPOSITION-CATALOG.md) (shapes).
-- **For a network leg:** each device's configuration source goes in a `## Device sources` block (`git-file`, `device-read` or
-  `command-package`). See [PIPELINE-HARNESS-USER-GUIDE.md](../.claude/knowledge/pipelines/PIPELINE-HARNESS-USER-GUIDE.md) § Device sources.
+- **Detail:** [PROGRAM-USE-CASE-DESIGN-PLAYBOOK.md](design/DESIGNING-A-PROGRAM.md) (designing a new kind of program); [PROGRAM-COMPOSITION-CATALOG.md](PROGRAM-SHAPES.md) (shapes).
+- **For a network leg:** each device's configuration source goes in a `## Device sources` block (`git-file`, `device-read`,
+  `live-read` or `command-package`: [GLOSSARY.md](GLOSSARY.md), *Device sources*). See [PIPELINE-HARNESS-USER-GUIDE.md](PIPELINES.md) § Device sources.
 
 ## Step 2 — Launch
 
@@ -36,7 +36,7 @@ states what is configured on them now. The agents read that from the sources the
 4. **Start it:** `agent.execute` with `waitForCompletion: false`. If your client times out, the run is still going: check the
    executions before you try again.
 
-**Detail:** [PROGRAM-HARNESS-USER-GUIDE.md](../.claude/knowledge/pipelines/PROGRAM-HARNESS-USER-GUIDE.md) §2 (launch) and §3 (the lifecycle you will see).
+**Detail:** [PROGRAM-HARNESS-USER-GUIDE.md](PROGRAMS.md) §2 (launch) and §3 (the lifecycle you will see).
 
 ## Step 3 — Release the gates
 
@@ -61,7 +61,7 @@ It decides nothing; it shows the evidence, including the reviewer's blocking rea
 Complete a gate with `task.complete` and a note saying what you checked. **A leg that comes back needs-revision is often the pipeline
 working:** read why before anything else. A correct refusal counts as success.
 
-**Detail:** [PROGRAM-OPERATOR-GATE-PLAYBOOK.md](../.claude/knowledge/pipelines/PROGRAM-OPERATOR-GATE-PLAYBOOK.md) (what to do at each gate, and the traps); [PROGRAM-HARNESS-USER-GUIDE.md](../.claude/knowledge/pipelines/PROGRAM-HARNESS-USER-GUIDE.md) §5.
+**Detail:** [PROGRAM-OPERATOR-GATE-PLAYBOOK.md](GATES.md) (what to do at each gate, and the traps); [PROGRAM-HARNESS-USER-GUIDE.md](PROGRAMS.md) §5.
 
 ## Step 4 — Read the result
 
@@ -88,11 +88,11 @@ The package names, per system: the edits, the rollback, and the validation steps
    - nginx-style configs: `nginx -t` in a throwaway container.
 2. **Apply in your own change process,** then run the package's checks before and after.
 3. **For a network device:** apply the edits to your own copy, in a configuration session. Check the device's own diff against the
-   package, and use a revert timer. See [PIPELINE-HARNESS-USER-GUIDE.md](../.claude/knowledge/pipelines/PIPELINE-HARNESS-USER-GUIDE.md) § Kept files.
+   package, and use a revert timer. See [PIPELINE-HARNESS-USER-GUIDE.md](PIPELINES.md) § Kept files.
 
 **Remember:** whether the real system enforces the change is a stated, untested premise until you apply it and its checks pass.
 
 ---
 
-**If a run stops, or something looks wrong:** [TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md) finds where the run is and why. For a refusal, read the leg's facts line and its reviewer's reasons first. Then see [PROGRAM-HARNESS-USER-GUIDE.md](../.claude/knowledge/pipelines/PROGRAM-HARNESS-USER-GUIDE.md) §7
-(failure semantics: a run never hangs and never applies) and [PROGRAM-RUN-FORENSICS-GUIDE.md](../.claude/knowledge/pipelines/PROGRAM-RUN-FORENSICS-GUIDE.md).
+**If a run stops, or something looks wrong:** [TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md) finds where the run is and why. For a refusal, read the leg's facts line and its reviewer's reasons first. Then see [PROGRAM-HARNESS-USER-GUIDE.md](PROGRAMS.md) §7
+(failure semantics: a run never hangs and never applies).

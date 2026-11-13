@@ -19,6 +19,8 @@ import sys
 
 SOURCE_LINE = re.compile(r'^\s*([A-Za-z0-9_.-]+):\s*(git-file|device-read|live-read|command-package)\s+—\s+service\s+(\S+)(?:\s*;\s*(\S+))?')
 CIDR = re.compile(r'\b\d{1,3}(?:\.\d{1,3}){3}/\d{1,2}\b')
+HOST = re.compile(r'(?<![\w./-])\d{1,3}(?:\.\d{1,3}){3}(?![\w/-]|\.\d)')  # not a version (4.32.2.1F), not a CIDR
+EMAIL = re.compile(r'[^\s|@]+@[^\s|@]+\.[^\s|@]+')
 URL = re.compile(r'https?://[^\s"\'`)>\]]+')
 DECISION_KEY = re.compile(r'assum|polic|rule|decision|must|should|prefer|exclude|allow|deny', re.I)
 EXPLAINER_KEY = re.compile(r'^(description|name|_.*)$')
@@ -49,6 +51,26 @@ def leg_type_marks(text):
             warnings.append(f'leg section "{title}" is a change leg but says "changes nothing": the planner reads that phrase as a value leg. Reword it')
         if kind == 'value' and not has:
             warnings.append(f'leg section "{title}" is a value leg but never says "Changes nothing.": the planner may plan it as a change leg')
+    return warnings
+
+
+def approver_marks(text):
+    """Warnings for a gate-table row whose approver cell has no email (2026-11-13). The program matches approvers by email:
+    a name alone gives an unassigned gate."""
+    warnings, col = [], None
+    for line in text.splitlines():
+        if not line.strip().startswith('|'):
+            col = None
+            continue
+        cells = [c.strip() for c in line.strip().strip('|').split('|')]
+        if col is None:
+            idx = [i for i, c in enumerate(cells) if c.lower().startswith('approver')]
+            col = idx[0] if idx else -1
+            continue
+        if col < 0 or col >= len(cells) or set(cells[col]) <= set('-: '):
+            continue
+        if not EMAIL.search(cells[col]):
+            warnings.append(f'gate "{cells[0]}": the approver "{cells[col]}" has no email. The program matches approvers by email; a name alone gives an unassigned gate')
     return warnings
 
 
@@ -139,6 +161,10 @@ def compare(spec_text, topo_text):
     for c in sorted(set(CIDR.findall(all_text)) - spec['cidrs']):
         warnings.append(f'address range {c} is in the topology but the spec never states it')
 
+    for h in sorted(set(HOST.findall(URL.sub(' ', all_text)))):
+        if not re.search(r'(?<![\d.])' + re.escape(h) + r'(?![\d]|\.\d)', spec_text):
+            warnings.append(f'address {h} is in the topology but the spec never states it')
+
     # 5. decisions stated only here
     for p, k, v in strings:
         if EXPLAINER_KEY.match(k):
@@ -149,6 +175,8 @@ def compare(spec_text, topo_text):
             warnings.append(f'topology key "{p}" holds {len(v)} characters of prose. A decision or rule belongs in the spec')
     # 6. leg type vs the value-leg phrase (spec only)
     warnings.extend(leg_type_marks(spec_text))
+    # 7. a gate approver with no email (spec only)
+    warnings.extend(approver_marks(spec_text))
     return errors, warnings, notes
 
 
@@ -201,6 +229,13 @@ def self_test():
     cases.append(('correctly marked legs (and the phrase in another section) give no finding', run(SELF_TOPO, legs) == ([], [], [])))
     cases.append(('the phrase inside a change leg warns', len(run(SELF_TOPO, legs.replace('Adds a loopback.', 'Adds a loopback; changes nothing else.'))[1]) == 1))
     cases.append(('a value leg without the phrase warns', len(run(SELF_TOPO, legs.replace(' Changes nothing.', ''))[1]) == 1))
+    t = json.loads(json.dumps(SELF_TOPO)); t['fabric']['server'] = '10.50.0.20'
+    cases.append(('a bare host address the spec never states warns', len(run(t)[1]) == 1))
+    cases.append(('a bare host address the spec states (also as a /32) gives no finding', run(t, SELF_SPEC + 'Server 10.50.0.20/32.\n')[1] == []))
+    t = json.loads(json.dumps(SELF_TOPO)); t['readOnlyServices']['other'] = 'http://192.0.2.7:3000/x'
+    cases.append(('an address inside a URL is not a bare host address', len(run(t)[1]) == 1))
+    gates = SELF_SPEC + '| gate | approves | approver |\n|---|---|---|\n| plan | the plan | Dana W, dana@example.com |\n| change | the change | Sam Ortega |\n'
+    cases.append(('an approver with no email warns, one with an email does not', len(run(SELF_TOPO, gates)[1]) == 1))
     failed = [name for name, ok in cases if not ok]
     for name, ok in cases:
         print(('PASS ' if ok else 'FAIL ') + name)

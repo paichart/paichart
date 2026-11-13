@@ -92,9 +92,9 @@
 + scripts/seed-browser-automation-service.ts
 + scripts/seed-github-service.ts
 - scripts/seed-*-service.ts
-# PLATFORM-HELD-BYTES G3 operator base check — PRIVATE by decision (GO-MINIMAL §2a, 2026-10-16): the public operator tool is
-# O14's promotion deliverable. Its fixture test is unwired, so decision 3 drops it too; both named so a later wiring cannot leak it.
-- scripts/held-base-check.ts
+# PLATFORM-HELD-BYTES G3 operator base check — PUBLIC since 2026-11-13 (owner: docs/PIPELINES.md tells a self-hoster to run it before
+# applying a kept-file package; every module it imports is exported). It was private by GO-MINIMAL §2a (2026-10-16). Its fixture test
+# stays private (unwired).
 # LAB-CONFIGS Build 2 (2026-11-03): the private→public lab-configs mirror script + its static files name the PRIVATE repo's
 # fixtures; the public repo (paichart/paichart-configs) is its OUTPUT, not its source.
 - scripts/lab-configs/**
@@ -108,12 +108,6 @@
 - .claude/knowledge/domain/oauth/*quick-ref*
 - .claude/knowledge/domain/oauth/nginx-oauth-analysis*
 # domain/oauth: design docs ship; dated status/incident reports do not (design-vs-what-happened test)
-+ .claude/knowledge/domain/oauth/oauth-architecture-clarification.md
-+ .claude/knowledge/domain/oauth/oauth-audience-architecture.md
-+ .claude/knowledge/domain/oauth/oauth-implementation-summary.md
-+ .claude/knowledge/domain/oauth/oauth-multi-client-library.md
-+ .claude/knowledge/domain/oauth/oauth-multi-provider-library.md
-+ .claude/knowledge/domain/oauth/oauth-timeout-settings-explained.md
 - .claude/knowledge/domain/oauth/**
 - .claude/knowledge/protocols/forensic-security-investigation-protocol.md
 - .claude/knowledge/protocols/system-health-stress-test-protocol.md
@@ -141,6 +135,8 @@
 # Exception (Steve, 2026-10-14): the design-decision question registry ships — its rows are already embedded in the
 # exported lib/agents/harness/requirements-form-check.generated.ts, and check-requirements-coverage.py /
 # build-answered-objective.py / test:requirements-form-check-parity read it by path. The rest of the folder stays private.
+# Owner 2026-11-13: marked INTERNAL ONLY in its own first line (file:line references, private pointers) and was public.
+- .claude/knowledge/domain/harness/prompt-injection-answer.md
 + .claude/knowledge/pipelines/requirements-authoring/DESIGN-DECISION-QUESTIONS.md
 - .claude/knowledge/pipelines/requirements-authoring/**
 # Lab/ingress topology stays private (Steve, 2026-09-27): RIG-HOSTING maps the lab host (LAN IP, ssh login) and the
@@ -161,10 +157,19 @@
 - .claude/knowledge/domain/harness/EMAIL-*
 - .claude/knowledge/domain/harness/GUIDE-OUTREACH-RESEARCH.md
 - .claude/knowledge/domain/harness/MARKET-LANDSCAPE-*
-+ .claude/KNOWLEDGE-BASE-GUIDELINES.md
+# ── THE FLIP (owner 2026-11-13, docs homologation group 5): the public repository ships the two USER agents and, of
+# .claude/knowledge, only protocols/ and patterns/ ("how this code is developed"). Everything a self-hoster needs was moved
+# into docs/ (cherry-pick groups 1-4). The one other file that crosses is the design-question registry (above): the spec
+# coverage check and two requirements suites read it. The specialist agents, discoveries, domain libraries, the remaining
+# pipeline documents, guides, toolkits and workflows stay in the private repository.
 + .claude/README.md
-+ .claude/agents/**
-+ .claude/knowledge/**
++ .claude/agents/paichart-operator.md
++ .claude/agents/paichart-spec-writer.md
+- .claude/agents/**
++ .claude/knowledge/protocols/**
++ .claude/knowledge/patterns/**
+- .claude/knowledge/**
+- .claude/KNOWLEDGE-BASE-GUIDELINES.md
 # requirements-spec skill (owner 2026-11-13: "we don't use it now" — hand-written specs are the route): the files that MAKE it a
 # skill stop crossing, so Claude Code on a self-host does not offer it. Its `work/` folders still cross: they are the fixtures
 # the exported requirements-check suites read (form-check, form-correction, sources, coverage, citations, clauses).
@@ -200,6 +205,19 @@
 + docs/WRITING-A-SPEC.md
 + docs/GLOSSARY.md
 + docs/TROUBLESHOOTING-A-RUN.md
+# Cherry-pick group 1 (owner 2026-11-13): the gate playbook, the two harness guides, the shapes catalog and five walkthroughs.
++ docs/GATES.md
++ docs/PROGRAMS.md
++ docs/PIPELINES.md
++ docs/PROGRAM-SHAPES.md
++ docs/walkthroughs/**
+# Cherry-pick group 2 (owner 2026-11-13): designing a program + the firewall decision example.
++ docs/design/**
+# Cherry-pick group 3 (owner 2026-11-13): how a pipeline works; security (the two guards + the orchestration security posture).
++ docs/HOW-IT-WORKS.md
++ docs/SECURITY.md
+# Cherry-pick group 4 (owner 2026-11-13): 4.3 only.
++ docs/CONNECTING-YOUR-SERVICES.md
 + docs/SELF-HOST-RUN-SHEET.md
 + data/geographical-default.json
 + docs/OAUTH-SETUP.md
@@ -229,7 +247,9 @@
 + public/**
 + types/**
 + test/**
-+ tests/**
+# Owner 2026-11-13 (stale): five old OAuth/search tests no script runs; a logrotate file for the hosted server only.
+- tests/**
+- config/logrotate/**
 + config/**
 + scripts/**
 + server.ts

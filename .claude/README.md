@@ -1,13 +1,21 @@
-# `.claude/` — the agents' knowledge base
+# `.claude/` — for Claude Code
 
-This directory is what the Claude agents read to maintain pAIchart: the specialist agent definitions (`agents/`), their
-discovery prompts, patterns, protocols and domain notes (`knowledge/`), and skills (`skills/`). It is not user documentation.
-**To install, run or operate pAIchart, start at [`docs/README.md`](../docs/README.md).**
+**To install, run or operate pAIchart, start at [`docs/README.md`](../docs/README.md).** This directory is not user documentation.
 
-Two conventions when reading here:
+What is here in the public repository:
 
-- **Paths under `cline_docs/` are the maintainers' private decision records. They are not in this repository.** Read them as
-  citations (where a decision was made and when), not as files to open.
-- A path marked "(private)" names a file the maintainers keep outside this repository for the same reason.
+| Path | What it is |
+|---|---|
+| `agents/paichart-operator.md` | An agent that runs a program with you: launches it, explains each gate, reads the result, diagnoses a stopped run. |
+| `agents/paichart-spec-writer.md` | An agent that works through the spec checklist with you and writes `requirements.md` and `topology.json`. |
+| `knowledge/protocols/` | How this code is developed: when a change needs review, how to sweep its blast radius, how to test it. |
+| `knowledge/patterns/` | Implementation patterns used in the code; start at `PATTERN-REGISTRY.md`. |
+| `skills/requirements-spec/work/` | Test fixtures. Seven test suites read them. |
 
-How Claude Code uses this directory is described in [`CLAUDE.md`](../CLAUDE.md).
+To use the two agents from any directory: `mkdir -p ~/.claude/agents && cp .claude/agents/paichart-*.md ~/.claude/agents/`.
+
+**The maintainers' repository holds more than this one.** The protocols, the patterns and comments in the code name specialist
+agents, discovery prompts, domain notes (other `.claude/knowledge/…` paths) and decision records (`cline_docs/…`) that are not
+in this repository. Read such a path as a citation of where something was decided, not as a file to open.
+
+How Claude Code is told to work here: [`CLAUDE.md`](../CLAUDE.md).

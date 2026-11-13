@@ -175,7 +175,7 @@ not edit the list (there is no GUI for that yet). The set is data, not code: `da
 write your own with the same shape and pass `--file my-geo.json`) and re-run
 `set -a; . ./.env; set +a; node scripts/seed-geographical-data.js`: it adds what is missing and leaves existing rows
 alone — it does not rename or delete; an invalid file is refused with the reasons listed. A **new theatre is a schema change** (`SalesTheatre` enum in
-`prisma/schema.prisma`, then `npm run db:seed`, which pushes the schema after the indexes it depends on); the full procedure is `.claude/knowledge/guides/GEOGRAPHICAL_DATA_MANAGEMENT.md`.
+`prisma/schema.prisma`, then `npm run db:seed`, which pushes the schema after the indexes it depends on).
 
 ## 7. Your own account (in the GUI) — required
 The account you logged in with, `admin@paichart.local`, is the built-in **Super Admin** — administration only, and not a
@@ -399,8 +399,7 @@ Two things come with the clone that make step 8 more than a connector:
   legs, synthesis, the verdict). [FIRST-RUN.md](FIRST-RUN.md) launches one call by call. The in-hub guides are
   `prompt_command("/prompt HOWTO-use-pipeline-harness")` and `/prompt HOWTO-use-program-harness`; `verification/`
   holds real program runs with their evidence (VT-01 onward) — read one before your first run so you know what a
-  releasable result looks like. To add a domain of your own: `.claude/knowledge/pipelines/ADD-A-PIPELINE-HARNESS-AGENT.md`
-  and `ADD-A-PROGRAM-PROTOCOL.md`.
+  releasable result looks like.
 
 ### 10b. Your first run
 
