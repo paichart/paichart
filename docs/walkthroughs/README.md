@@ -14,6 +14,8 @@ Each walks one real run as its worked example, so every number can be checked. I
 
 **Worked example:** the kept-file telemetry program, root `cmvr9hd78000uyxvn32ctl8xc`, POV "Telemetry Export Authorisation — Kept Files"
 (2026-10-27/28).
+The run dates from before 2026-11-11, when the configuration repository was `paichart/paichart-lab-configs`. That repository is
+retired; the same files are now in `paichart/paichart-configs`.
 
 | Walkthrough | Covers | Status |
 |---|---|---|

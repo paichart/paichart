@@ -39,15 +39,15 @@ repository, and needs nothing but the files in that repository.
 | Document | What it gives you |
 |---|---|
 | [Operator runbook](OPERATING.md) | Run a program from start to finish: launch, check the plan, release gates, read the result. |
-| [Gate playbook](GATES.md) | Detailed reference on what to check before each kind of gate. Start with the gate table in the operator runbook (step 3); this file also carries the maintainers' working history. |
+| [Gates](GATES.md) | What to check before you release each kind of gate, and how to apply a change package. |
 | [Connecting your own services](CONNECTING-YOUR-SERVICES.md) | Register your team's device, Git and cloud services, share them, and name them in a task or a spec. |
 | [How a pipeline works](HOW-IT-WORKS.md) | A short account of how one pipeline runs, what cannot go wrong by construction, and what you can change without code. |
 | [Security](SECURITY.md) | What protects a run, the two output guards you control, and the security properties of agents handing work to each other. |
 | [Program shapes](PROGRAM-SHAPES.md) | Which shape of program suits which change: one leg, parallel legs, sequenced legs, grouped legs. |
 | [Designing a program](design/DESIGNING-A-PROGRAM.md) | The procedure for turning a multi-system objective into a program, from the domains that exist. |
 | [Firewall policy use case](design/FIREWALL-POLICY-USE-CASE.md) | A worked decision: one pipeline, parallel legs or sequenced legs for a change across several devices. |
-| [Program guide](PROGRAMS.md) | Detailed reference on programs: several pipelines coordinated as one change, with values passed between them. Long, and partly written for maintainers. |
-| [Pipeline guide](PIPELINES.md) | Detailed reference on a single pipeline. Its first part describes internals; the parts for someone running one start at "Writing a domain pipeline task". |
+| [Programs](PROGRAMS.md) | Reference on programs: several pipelines coordinated as one change, with values passed between them. |
+| [Pipelines](PIPELINES.md) | Reference on a single pipeline: kept files, writing a task, where each device's configuration is read from, reading a result. |
 | [Reading a run](READING-A-RUN.md) | How to read a completed run and decide whether to trust it. |
 | [Troubleshooting a run](TROUBLESHOOTING-A-RUN.md) | A run has stopped, or you cannot tell whether it has: where it is, why, and what to do. |
 | [GLOSSARY.md](GLOSSARY.md) | Every term these documents use, in plain words. |

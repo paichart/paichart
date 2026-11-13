@@ -209,7 +209,8 @@ cannot be resumed. Either delete the stopped run's tasks and stages in the web a
 needed), or keep them and stamp the new task as described under "Re-running a program" below.
 
 **Re-running a program** (an escalated leg, a corrected artifact): a finished program cannot be re-run in place.
-Create a fresh PIPELINE task in the same stage and stamp the prior program stage on it — the harness's pre-flight
+Create a fresh PIPELINE task with a run number in its title (`… (Run 2) (protocol: pov-program)`) and stamp the prior program stage on it
+([TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md), "Launching again in the same project") — the harness's pre-flight
 halts on a duplicate `Program: …` stage and accepts only a machine-checkable clearance, never prose in the description:
 ```
 perform(action: 'task.update', parameters: { taskId: '<new task id>', metadata: { duplicateAcknowledged: '<prior Program: … stage id>' } })

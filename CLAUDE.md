@@ -33,7 +33,7 @@
 ### Database Commands
 
 **Schema Changes** (Drift Elimination):
-- `npx prisma db push` - Sync schema to database (PREFERRED - eliminates drift)
+- `npx prisma db push` - Sync schema to database (PREFERRED - eliminates drift). On an EXISTING install run `npm run db:seed` instead: it creates the raw-SQL indexes the push depends on, then pushes; a bare push refuses since 2026-10-14
 - `npx prisma generate` - Generate Prisma client (run after schema changes)
 - `npx prisma studio` - Open Prisma Studio (visual database browser)
 - `npx prisma db seed` - Seed database with sample data

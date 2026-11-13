@@ -1,8 +1,7 @@
 # Use case: end-to-end security policy across a path of firewalls
 
 > **Status**: a decision framework, with the sequenced approach (Approach 3) validated live in August 2026 (public record
-> VT-18). The runnable example is `usecases/firewall-partner-path-r2/` in `paichart/paichart-configs`. Where §3 calls
-> Approach 3 less mature, that is history: it is the proven one.
+> VT-18). The runnable example is [`firewall-partner-path-r2`](https://github.com/paichart/paichart-configs/tree/main/usecases/firewall-partner-path-r2) in the `paichart/paichart-configs` repository.
 > **Audience**: anyone deciding how to model a multi-device network-security change on the pAIchart
 > pipeline/program stack. Read this BEFORE designing the topology artifact or the interface contract.
 
@@ -44,10 +43,9 @@ A **program** is a PIPELINE task whose children are pipelines. It coordinates it
   pipeline child that reaches execution without its contract FAILS LOUD (`INTERFACE_CONTRACT_MISSING`).
   Use this when the interdependency is **knowable up front** (agreed constants).
 - **Runtime — DAG edges + inter-pipeline chaining.** A child pipeline's `dependencyIds` can include
-  **upstream sibling pipeline ids** (Step PLAN-SPAWN #4), and the context chainer's PIPELINE-predecessor
-  branch (`lib/agents/harness/context-chainer.ts:208+`) chains an upstream pipeline's **actual
-  deliverable (`report.md`)** into the downstream pipeline's §6 — the same "children populate the
-  context of the one below," now BETWEEN pipelines. The settledness predicate (F18) makes the
+  **upstream sibling pipeline ids**, and the platform hands the upstream pipeline's **actual
+  deliverable (`report.md`)** to the downstream pipeline as reference context — the same "children populate the
+  context of the one below," now BETWEEN pipelines. The platform makes the
   downstream wait until the upstream's deliverable is fully persisted, so it never chains a half-built
   design. Use this when a downstream device genuinely needs the upstream's **designed output**, not just
   an agreed constant.
@@ -109,10 +107,7 @@ addresses, which do not exist until the edge design is done.
 - **Node C** still checks end-to-end conformance.
 
 **Why sequenced:** the interdependency is runtime (post-NAT addresses), not resolvable into a static
-contract constant. **Maturity caveat:** this path is fully built (the dependency edges, the
-PIPELINE-predecessor chainer, and the settledness/coverage facts exist for exactly it) and
-unit/mechanism-tested, but the demo wave exercised the *parallel* topology, not a sequenced
-inter-pipeline chain end-to-end. Treat the first sequenced-dependency program as a validation round (§7).
+contract constant. This approach has since been validated on live runs (public record VT-18).
 
 ## 4. Decision framework
 
@@ -151,42 +146,3 @@ Rules of thumb:
   resolves it up front, and both pipelines design against the agreed constant.
 - **Granularity is a real choice, re-check it per scenario.** The same path can be one pipeline, three
   parallel pipelines, or three sequenced pipelines — the axes in §4 decide, not habit.
-
-## 6. Where this rides on the existing engine (no new machinery needed for 1 & 2)
-
-- Interface contract: pov-program protocol Step PLAN-SPAWN #4; `inputContext.interfaceContract`;
-  `INTERFACE_CONTRACT_MISSING` structural loud-fail (VT-01).
-- Inter-pipeline DAG edges + chaining: `dependencyIds` sibling-pipeline edges; chainer
-  PIPELINE-predecessor branch (`context-chainer.ts:208+`); settledness predicate (F18, VT-06); coverage
-  facts `chainCapablePredecessors`/`degradedPredecessors` (VT-05/VT-06).
-- Node C cross-pipeline conformance; deterministic `programReleasable` gate (VT-04/VT-06); human release.
-- Domain protocol per device via the title token (`network-provisioning` / `terraform-iac` /
-  `kubernetes-gitops`). A new firewall-vendor domain (e.g. a PAN-OS or ASA read-only service + specialist
-  roles) is a **use-case configuration exercise** (like the k8s/terraform use-cases), not an engine change.
-- Public claim narrative + proofs: `github.com/paichart/paichart/tree/main/verification`.
-
-## 7. Next steps to flesh this out
-
-1. **Three worked artifact sets** — per approach: `topology.json` (path + zones + vendors),
-   `requirements.md` (the anchor intent), and for 2 & 3 the resulting interface-contract JSON + the DAG.
-   These are **illustrative design
-   examples** kept by the maintainers (not in the public repository) — because there is no live PAN-OS /
-   ASA read-only service behind them, and the verification pack's honesty rule forbids publishing
-   non-runnable configs as if runnable. **Graduation status (2026-08-23)**: the RUNNABLE Approach-3
-   embodiment IS public — `program-artifacts/firewall-a3-partner-path{,-r2}/` (cEOS + LocalStack as
-   the vendor-analogs, five live rounds, VT-18). The PAN-OS/ASA-flavored illustrative sets stay
-   knowledge-base-only until a real firewall-vendor harvest service exists (§7.4 panel gate) — that
-   remains the honest line, and it is a narrower residue than this item originally described. **DONE: all three** —
-   `approach-1-single-pipeline-multidevice/` (one vendor/one team, single pipeline, no program machinery — the
-   NAT-is-a-non-issue-in-one-context contrast), `approach-2-parallel-multivendor/` (3-vendor path, shared
-   contract, parallel legs + Node C), `approach-3-sequenced-nat/` (Approach-2 path + edge SNAT → runtime
-   dependency → DAG-sequenced legs + inter-pipeline chaining + the design-order≠apply-order gotcha). Each has a
-   README explaining why it's THAT shape and what Node C (or the single reviewer) checks.
-2. **HOWTO section** — fold into the pov-program HOWTO (already a tracked follow-up): "Use case:
-   end-to-end firewall policy" with the three modelings + this decision guide.
-3. **Validation round — Approach 3 — ✅ DONE 2026-08-21/22 (VT-18)**: five live rounds on the cEOS/tf rigs; R5 programReleasable:true; transitive chaining, settledness, containment taxonomy (all arms), gate composition and duplicate-halt choreography all live-proven. Remaining from this item: graduate the examples + HOWTO fold (items 1-2). Original text: run a sequenced-pipeline program on the
-   cEOS/tf rigs so inter-pipeline chaining is proven end-to-end → a VT doc + a demo exhibit.
-4. **Specialist design panel** at the point of designing a REAL firewall protocol/contract for a run: a
-   firewall-security lens on policy semantics, boundary-contract on the interface-contract shape,
-   pipeline-harness on the sequencing. (Not needed for the docs/examples; needed before a runnable
-   firewall use-case ships.)

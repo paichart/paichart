@@ -1,13 +1,11 @@
-# Program Harness User Guide
-
-**Version**: 1.0 | **Created**: 2026-07-16 | **Updated**: 2026-11-07 (VALUE-LEG-GIT: a value leg's own Device sources key, network-derivation 1.3.0) · 2026-10-06 (promotion E: value legs + unbound Node C, pov-program 2.0.0 at deploy 2) | **Status**: Production (T2–T5 passed at v1.0.8, customer demo POV published)
+# Programs
 
 > **This guide = how to RUN/USE a program** (a pipeline-of-pipelines). For a single pipeline, see the
 > sibling [`PIPELINES.md`](PIPELINES.md) — a program's legs ARE
 > pipelines, so everything there applies to each leg; this guide covers only the composition layer.
 > To **design** a new program use-case: [`DESIGNING-A-PROGRAM.md`](design/DESIGNING-A-PROGRAM.md)
 > (the procedure) + [`FIREWALL-POLICY-USE-CASE.md`](design/FIREWALL-POLICY-USE-CASE.md) (decision framework +
-> worked examples). Public claim narrative + proofs: `github.com/paichart/paichart/tree/main/verification`.
+> worked examples). Evidence for each claim: the [verification pack](../verification/README.md).
 
 ## 1. What a program is
 
@@ -59,78 +57,19 @@ Browser Automation Service; pAIchart has no generic URL-fetch tool).
 `topology.json` and `requirements.md` live in a NEW directory, one per objective, in a repository whose raw URLs your hub can
 fetch ([WRITING-A-SPEC.md](WRITING-A-SPEC.md), "Where the two files go") — never edit a published one; it is a run's input of
 record. (`program-artifacts/` in this repository is the frozen archive of earlier runs' inputs; nothing new goes there.) One published spec serves every run of its objective, so you make one **per objective**, not
-per run. Two routes:
+per run.
 
-- **Hand-written** — a short spec (about one page) in the shape of a released example, written with
-  **`docs/WRITING-A-SPEC.md`** (this directory): seven questions you must answer before launch and eighteen you answer
-  only where you care, the rest being decided by the planner or a leg and read at a gate. This is the owner's preferred route
-  since 2026-11-11 (a 4,858-character hand-written two-leg spec ran on 2026-11-10 with both legs approved first time; the
-  generated route for the same objective did not publish). For a leg that grants access in production or changes routing, the
-  checklist's Tier 2 caution makes more questions must-answer. `program-artifacts/_TEMPLATE/` still holds the long template
-  and the writing rules; the checklist's Part 1 names two short published examples to copy from instead.
-- **Generated** — the `requirements-authoring` pipeline drafts the spec from a plain objective and **asks** every design
-  decision instead of making it (a fixed list per kind of leg: target, population, who is admitted, what they may do,
-  existing allowances, side effects, routing, approvers, gate positions …). You answer them once, the answers are merged
-  into the objective, the spec is regenerated, and a publish pass splices the canonical writing rules
-  (`scripts/requirements-rules.py --insert/--check`), lints for harvested state, checks the read size, and verifies the
-  raw URLs. Unanswered design decisions were the main cause of refusals on multi-leg objectives; on a fully answered
-  spec they essentially stop (2026-10, telemetry objective: 1 of 14 refusals related to a decision, and that one was an
-  answer the leg did not act on).
+Write the spec by hand: a short document (about one page) in the shape of a released example, using
+[WRITING-A-SPEC.md](WRITING-A-SPEC.md). It has seven questions you must answer before launch and eighteen you answer only where
+you care; the rest are decided by the planner or a leg and you read them at a gate. For a leg that grants access in production
+or changes routing, more of those questions become must-answer.
 
-**In the source repo, `/requirements-spec` walks the generated route end to end** (Claude Code project skill,
-`.claude/skills/requirements-spec/`; not part of the public export). Start it with the objective you want specified,
-e.g. *"/requirements-spec — specify a program that restricts writes to an archive bucket to one namespace's running
-pods, and nothing wider"*. It drafts the zero-decision objective with you, then STOPS for your OK before every launch, push and
-program task, and for your decision on every answer group and any waiver; between those stops it runs the scripts
-(coverage check, answer merge, citation gate, publish pass, URL verify) and refuses to continue on a failed gate. It
-never answers a design question or edits a spec for you. Its working files land in its `work/` folder, one sub-folder
-per objective. **The owner's plain-English walk-through** (each step, what to reply, and why a draft can ask questions the
-registry does not have) is a maintainer procedure that is not in the public repository.
+### Running again in a project that already holds a run
 
-**Where the generated route fits — and where it does not (2026-10-09).** It works only when the program's end state is
-fully determined by, and checkable from, the targets its legs harvest: a **closed** objective ("only these pods may write
-to this bucket" — the bucket's own policy shows who can), **named** targets, a **rule-shaped** population, and changes to
-**existing** enforcers. It does not fit a grant-only or additive objective ("also let these pods write") where effective
-access also comes from surfaces no leg reads — "nothing wider" is then uncheckable, and a blind trial showed the generated
-spec answering every question and still stating a false expected result; nor "every bucket / whatever needs access"
-targets, hand-picked membership, or objectives that first need new infrastructure designed. For those, an architect
-writes the requirements.md by hand. The skill runs this fit check before drafting anything and stops if it fails.
-
-### 🔴 Put a RUN NUMBER in the title. It looks cosmetic and it is not.
-
-`title: "<objective> (Run N) (protocol: pov-program)"`
-
-Every leg runs its own duplicate check against the stages in its phase, and **a leg's check is not
-cleared by the root's clearance** — PLAN-SPAWN composes leg descriptions from the plan and carries no
-`PRE-FLIGHT CLEARANCE` block into them. What a leg CAN do is place itself in a series: the run number
-propagates from the root title into every leg title and child-stage name, so a leg meeting a prior
-run's completed stage reads it as history rather than as itself.
-
-**Proven both ways, same week:**
-
-| | root title | what the legs did |
-|---|---|---|
-| A second test project, Run 24 | `… (Run 24) (protocol: pov-program)` | legs carried NO clearance and still proceeded — *"prior runs' pipelines (19-23) are historical, unrelated to this execution"* |
-| A run titled without one | `Authorise the telemetry export path…` | leg stage named `(Run 20260922-0638)`; the next run's fabric leg read it as a duplicate and **HALTED** |
-
-A bare timestamp discriminates for a machine but not for a reader deciding *"is that me, or is that
-history?"* — which is the judgement the duplicate check actually makes.
-
-⚠️ **The halt is TERMINAL** (F17, one-way forward-cone freeze). Recovery is a fresh task tree, not a
-retry — so this costs a whole run's setup when you get it wrong.
-
-**Exception — measurement windows (2026-10-04):** a run number tells agents where they sit in a measured series, so a
-measurement window drops it and relies on the clearance instead — see `GATES.md` § "Run titles in
-a MEASUREMENT window" (the clearance check before every plan-gate release then becomes mandatory).
-
-### The clearance burden grows by one leg per run
-
-Each completed run leaves **its own leg child stages** behind in the phase, and the next run must be
-legible against all of them. The root's `PRE-FLIGHT CLEARANCE` should name prior **`Program:`** stages
-by exact ID; the run number is what handles the **`Pipeline:`** leg stages underneath them. A
-successful run is what makes the next one harder — which is counter-intuitive enough to be worth
-stating. That project reached Run 26 on this convention, so it scales; it just has to be adopted from
-Run 1, not retrofitted at Run 6.
+Put a run number in the title (`<objective> (Run 2) (protocol: pov-program)`) and stamp the clearance on the new task before
+you start it: [TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md), "Launching again in the same project". A first run in a
+fresh project needs neither. Each finished run leaves its stages behind, so the clearance must name every earlier run's
+`Program: …` stage.
 
 ## 3. The lifecycle you'll observe
 
@@ -144,7 +83,7 @@ only at `task.create`, and pipeline children start only via dependency-completio
    order: **`## Interface Contract` FIRST** (one JSON block, deliberately in the head so truncation
    can't eat it) → `## Intent` → `## Pipeline DAG` → `## Assumptions & Open Questions` → `## Cost & Time
    Estimate`. Since pov-program 2.0.0 every DAG entry states its **leg type** (`leg type: change` or
-   `leg type: value` — §10b), and the plan gate's description lists them: you approve leg types there.
+   `leg type: value` — §10), and the plan gate's description lists them: you approve leg types there.
 3. **PLAN-SPAWN (execution 2, auto-retriggered)** — the harness reads the plan (fetches the Architect's
    report.md), enforces the **≤ 8-pipeline cap**, then creates the full roster in ONE program stage:
    - the mandatory **plan-approval gate** (template-less `APPROVAL`, born `IN_PROGRESS`);
@@ -323,7 +262,7 @@ It works only if the rules are fixed BEFORE the run and the record says who deci
 | Situation | What the program does | Proof |
 |---|---|---|
 | A leg **can never run** (contract lost post-gate) | leg + its forward cone marked FAILED with attribution; healthy legs preserved; program **escalates** naming the root leg; `programReleasable:false`; awaits human | VT-02 / Exhibit 2 |
-| A leg's reviewer returns **needs-revision** | `programReleasable:false`, keyed on the OUTCOME (a high score can't rescue a needs-revision). **Fixing the cause does NOT make the program green — see §9b before re-running anything** | VT-04 |
+| A leg's reviewer returns **needs-revision** | `programReleasable:false`, keyed on the OUTCOME (a high score can't rescue a needs-revision). **Fixing the cause does NOT make the program green — see §9 before re-running anything** | VT-04 |
 | A leg's **deliverable goes missing** | coverage facts (`degradedPredecessors`) block release — a count that "looks complete" can't mask a missing deliverable | VT-05 |
 | **Hostile content in harvested state** (prompt-injection / secret) | design step refuses/escalates, release blocks; not obeyed, not leaked | VT-07 / Exhibit 3 |
 | A synthesis turn **truncates** at the token ceiling | auto-recovered: retried with headroom in-loop; a residual is terminalized + escalated, never a silent hang (R4) | truncation-r4 review |
@@ -347,164 +286,34 @@ It works only if the rules are fixed BEFORE the run and the record says who deci
 - **Human gates everywhere** — the plan gate + per-team gates are dependency nodes the platform can
   never auto-complete; release + the final release decision are always human.
 
-## 9. Retries — why a leg re-runs its children, and when to worry (live-proven FW-A3 campaign, 2026-08)
+## 9. Retries, and running a leg again
 
-Three mechanisms, one design rule: **judgment decides whether to retry; code guarantees a retry can
-never regress and never runs away.**
+**Retries the platform performs.** A leg may run one of its agents a second time when that agent's result scores in a middle
+band; you will see two executions on that task. A second attempt can never make the leg worse: the platform keeps the better
+result. Each agent is re-run at most once per run of the leg, and a leg that runs out of attempts ends as failed, never
+hanging.
 
-1. **In-execution repairs** (engine, invisible when healthy): truncation retry-with-headroom,
-   diagnostic retry, one correction turn on unaddressed failed tool calls. At most a fact in the
-   artifact (`truncationRetryUsed`, `correctionTurnUsed`).
-2. **Quality-gate retry band** (leg SYNTHESIZE, per child confidence): **>=70 accept · 50-69
-   re-execute once · <50 escalate**. Safety is code: keep-best selection makes a worse retry
-   self-supersede (a retry can never regress the leg); the generation budget (10 per pipeline leg, 25 per
-   program root — since 2026-09-26 an exhausted budget ends the harness FAILED instead of hanging it) bounds
-   the whole retrigger chain. A leg that re-runs a child and exits is recorded as `reExecutionExit`, and is
-   never marked FAILED while that child is still running (`deadEndExempt` explains why). Known limit: the retried child runs on byte-identical inputs (blind re-roll) —
-   it fixes stochastic failures, wastes a run on systematic ones; feedback-wiring is deliberately
-   deferred until keep-best logs earn the design.
-3. **Staleness re-execution** (not confidence-driven): a child whose inputs changed under it — a
-   reviewer whose verdict predates a re-authored package — is re-run to restore coherence. The
-   repair cascades in causal order (design -> author -> review), tracked by the harness itself.
+**Running a leg again by hand.** A leg came back `needs-revision`, you found the cause, and you want the program to release.
+**It will not.** Once a leg of a program has been refused, `programReleasable: true` cannot be reached in that program, by
+design: the record of the refusal stays. Fix the cause (usually the spec) and launch a new run
+([TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md), "A leg came back refused").
 
-**What NEVER retries**: a well-executed reviewer's NEEDS-REVISION (a verdict is a quality outcome,
-not a weak execution — re-rolling it would turn the band into "roll until it passes" and destroy
-the trust model), and FAILED executions (they escalate). **Normal signature** (observed twice,
-FW-A3.2/A3.3 dmz legs): band-retry the Designer -> staleness re-run Author -> staleness re-run
-Reviewer -> accept, <=4 generations, zero human touches. **Worry signature**: the same child
-re-executed repeatedly with no staleness rationale, or generations approaching the budget.
+## 10. Value legs
 
-### 9b. Re-running a leg BY HAND after it completed — three paths, and none of them reaches `true`
+Use a **value leg** when one leg's job is to work out a value from what it reads (a free address, the range covering a set of
+addresses) and other legs use it. A value leg changes nothing and produces no change package.
 
-§9 is about retries the platform performs. This is about the one YOU perform: a leg completed
-`needs-revision`, you found the cause, you fixed it, and you want the program to go green.
-
-🔴 **It will not go green. `programReleasable: true` is not recoverable once a leg has gone bad, and
-that is the design, not a limitation you are working around.** Read this before spending an hour
-discovering it.
-
-The gate (pov-program Step 5) is *"a deterministic AND, no judgment calls"*, and its first two
-conjuncts are `every child pipeline qualityGate.outcome === "approved"` AND `no child has
-verdictMismatch: true`. Every path below leaves at least one of those false.
-
-| path | deliverable | stamped outcome | result |
-|---|---|---|---|
-| **In-place re-execute** the leg's children, then the leg | ✅ refreshed and authoritative | ❌ frozen — `task.complete` rejects COMPLETED→COMPLETED | `false`, **plus** a `verdictMismatch: true` you created |
-| **Replicate the leg** as a new PIPELINE task in the program stage | ✅ new leg fine | ❌ the OLD leg is still a child pipeline carrying its bad outcome | `false` — and risks an F17 duplicate-halt |
-| **Park + standalone completion round** (§10, the sanctioned path) | ✅ | verdict deliberately **preserved** | `false` *by design* — *"the program completes with its original verdict PRESERVED"* |
-
-**What in-place re-execution IS good for.** It is the cheapest way to prove your fix works. Done on the
-telemetry-export cloud leg (2026-09-22) after a planted-artifact declaration gap was closed, every hop
-improved: harvester clean, architect 78→90, author 74→88, reviewer 85/not-approved→87/approved with
-zero blocking. The refreshed `report.md` IS authoritative for downstream consumers —
-`selectAuthoritativeExecution` is newest-non-superseded-SUCCESS with the R8 non-empty floor, shared by
-the chainer, the `report.md` policy and terminal persist. So the producer and Node C read the good
-deliverable. Only the STAMP is stuck.
-
-⚠️ **One distinction the protocol text currently misses.** pov-program calls in-place re-execution
-*"a blind re-roll on identical inputs"*. True of a bare `agent.execute` — and NOT true if you edit the
-task description first, because the description is, in that same paragraph's words, *"the ONLY channel
-that reaches the round's agents"*. In-place + unchanged inputs is a blind re-roll; in-place + an edited
-description carries the lesson. That is why the run above improved at every hop instead of re-rolling
-the same dice.
-
-⚠️ **In-place re-execution mints a metric artifact you must not leave unlabelled.** The refreshed
-SYNTHESIZE stamps `reviewerVerdict.approved: true` against a frozen `needs-revision`, so the guard
-records `verdictMismatch: true`. **Nothing disagreed** — the stamp is stale by construction. The
-quarterly verdict-consumption tally counts exactly these, so CLAUDE.md carries an exclusion rule and a
-mechanical separator (the harness writes `RE-EXECUTED` into its own `qualityGate.note`). The mechanism has open questions, recorded by the maintainers.
-
-🔴 **Do not "reconcile" the stamp by hand.** Editing `qualityGate.outcome` to `approved` is not
-reconciling two views of the truth — it is editing a gate's inputs until it emits the verdict you want,
-and nothing in the record would distinguish it from falsifying a gate (the VT-24 shape). It would not
-even work: `verdictMismatch: true` is an independent conjunct and survives the edit. That is
-tamper-evidence, and it is deliberate.
-
-**Why there is no leg-exclusion mechanism, and why we are not building one.** Measured across the whole
-corpus (2026-09-22):
-
-**37 bad legs, 0 ever re-executed at leg level, 0 ever replicated inside a program stage.** The only
-child-level re-execution in the corpus is the telemetry-export cloud leg written up above — created
-while investigating this very question. In 37 opportunities nobody has needed it. Two further reasons it would be wrong even with a population:
-**11 of the 40 blocked programs have ZERO bad legs** (they block on Node C, coverage, containment or
-`verdictMismatch`), so exclusion is irrelevant to over a quarter of the failures it appears to address;
-and the mechanism's job would be to distinguish *"this leg's failure was superseded"* from *"this leg
-failed"*, which nothing mechanical can decide — the platform already refuses the identical inference
-elsewhere and says why: *"Deriving 'no author was expected' from 'no author exists' is circular, so the
-platform refuses to guess."*
-
-**What to do instead**: §10. Park the program at its gate, run the completion round as a standalone
-pipeline, and let the program's record say what actually happened. A program's verdict is a record, not
-a target.
-
-## 10. Running a remediation campaign (multi-round operations — FW-A3, five rounds to green)
-
-When a round ends non-green and you re-run after a fix, the choreography that made FW-A3 work:
-
-- **Archive, never delete.** A non-green round is the *provenance* of its fix: disposition comment
-  on the program root naming defect/fix/continuation; gates left unreleased (parked-at-gate is an
-  honest terminal-for-humans state); next round in a SIBLING stage.
-- **Clearances up front — on the ROOT.** The duplicate check recurses (program root AND each leg). Put
-  the clearance on the program ROOT: `metadata.duplicateAcknowledged` = every prior `Program: …` stage
-  id (a LIST when there have been several prior runs), or a `PRE-FLIGHT CLEARANCE:` description block.
-  Since pov-program 1.8.5 the harness CARRIES a root clearance to each leg in PLAN-SPAWN
-  (`duplicateAcknowledged` = the prior `Pipeline: …` stage ids + `duplicateAcknowledgedFrom` = the
-  root). **Verify before releasing the plan gate**: the approval comment reports each leg's RECORDED
-  list, or read a leg's metadata. A program leg's duplicate-halt is TERMINAL — a missing stamp is not
-  recoverable after release. If the root carried no clearance and the comment WARNS instead, stamp each
-  leg yourself in the gate hold (race-free).
-- **Wait for the full roster before releasing ANY gate** (it spawns progressively; count against
-  the plan's DAG: architect + gates + legs + producer + Node C).
-- **Review the produced value at each domain gate**, from the lean-card FACTS: at the
-  post-derivation gate expect `derivationContainment: checked, 0 violations`; at the consuming
-  gates expect consumed == produced verbatim + `upstreamContainment: green` + coverage clean. A
-  surprising fact ⇒ read the actual report.md BEFORE releasing (twice in this campaign the stamped
-  reason and the naive reading of it differed).
-- **Fix at the right layer, then re-run as validation**: rig/input gaps -> topology+inputs; craft
-  slips -> role guidance (+ TARGETED reseed — template rows never auto-reseed); contract ambiguity
-  -> protocol clause (auto-seeds on deploy); format variance that recurs -> mechanical tolerance
-  (code + fixtures; the FW-A3 rule of thumb: the same prose contract failing on a second axis is
-  the corpus evidence that earns the code fix).
-- **Ops interleave** (shared prod host): teardown -> push/deploy -> reseed if roles changed ->
-  rebuild rig (re-randomize seed) -> pre-flight -> launch. Never push while a rig is up.
-
-Worked record: VT-18 (public verification pack).
-
-## 10b. Value legs in a pov-program (since pov-program 2.0.0; `value-chain-program` is RETIRED)
-
-Use a **value leg** when one leg's job is to **derive a value** from live state (e.g. the CIDR covering a set of exporter
-addresses) and the other legs **consume** it. It runs under the ordinary `(protocol: pov-program)` token — the
-`value-chain-program` variant that proved the shape (Protocol 15 frozen window, 2026-10-02/03) is folded into pov-program
-2.0.0 and its token is retired: a task titled `(protocol: value-chain-program)` **fails loudly at its first execution,
-before any child or spend** — relaunch it as a new task with the pov-program token (a stamped task cannot be re-routed).
-
-- The plan types each leg `leg type: value | change`, quotes the requirements phrase a value leg relies on, and you
-  approve the types at the plan gate (a type you do not accept ⇒ do not release; re-plan). The **value leg**
-  (`network-derivation`) runs Harvester → Network Derivation Architect → Network Derived Value Reviewer — **no Author, no
-  change package, changes nothing**. A leg that derives a value AND changes a device stays a `change` leg.
-- ⚠️ **Limit (until the F lane lands):** the generated requirements template has no slot for the "this leg changes
-  nothing" phrase, so a value leg comes **only from a hand-shaped requirements document** (e.g. a published program view,
-  `requirements.md`). A generated spec yields change legs only. Two network legs (one value, one change) are kept
-  on the change token until you answer by re-planning.
-- **Device sources on a value leg (network-derivation ≥ 1.3.0, live and canaried 2026-11-06):** optional, under its own contract key
-  `deviceSources["network-derivation"]` (above, § 4). At the plan gate check that a value leg WITH a section in requirements.md carries
-  exactly those lines, and one WITHOUT carries no `network-derivation` key at all (a prose note there is a defect — `report:canary`
-  control `vlg-pa3-no-prose-key`). On its card: `liveEvidence: git-only (declared devices)` means the value came from Git files only,
-  a stated limit you accept when you approve the program (live-only allocations are not seen).
-- Gates: plan → a gate after the value leg (approve the published value; it starts the consumers) → one change-method
-  gate per consuming leg, as the plan's gate table says.
-- Node C is the unbound `Program Integration Reviewer` on every pov-program run whose PLAN-SPAWN ran under 2.0.0 (launched
-  after deploy 2), value leg or not. A root planned before deploy 2 and released later keeps its `Change Reviewer` Node C
-  (the "third population" — not a fault). On a 2.0.0 plan Node C checks every leg's
-  title token and leg type against the approved plan (a mismatch is BLOCKING) and is the only reviewer of whether a
-  consumer that declared nothing applied the published value.
-- Before releasing the plan gate, run the hold-window checks in the maintainers' forensics guide (not in this repository) §4c and the operator
-  playbook (clearance on the ROOT, every child holds the PLAN's contract, producer/Node C depend on the legs only).
-
-Measured in the variant's window (5 runs, 2026-10-03): the value leg approved 5/5, $1.46 per run on average (−28% vs the
-network-provisioning fabric leg it replaces); the program released 1/5 — every refusal was a change leg's write-up, never
-the configuration. Promotion state: deploy 2 of promotion E; the regression
-controls (E10) run after it.
+- The plan gives every leg a type, `value` or `change`, and quotes the phrase in your spec a value leg rests on. You approve
+  the types at the plan gate. A leg that works out a value *and* changes a system is a change leg.
+- In the spec, a value leg's section says "Changes nothing." and its heading names the protocol and type, for example
+  `(network-derivation, value)` ([WRITING-A-SPEC.md](WRITING-A-SPEC.md), Part 1).
+- Gates: the plan, then a gate after the value leg (you approve the value, and releasing it starts the legs that use it), then
+  one change gate per change leg.
+- A value leg may declare its own Device sources. When it reads Git files only, its result says
+  `liveEvidence: git-only (declared devices)`: the value was worked out from the files, and anything configured on a device
+  but not committed was not seen.
+- The final review checks every leg's protocol and type against the plan you approved, and that each leg that uses the value
+  applied exactly the value that was published.
 
 ## 11. See also
 
@@ -520,70 +329,8 @@ controls (E10) run after it.
 
 ## How big a program can be
 
-**Authored** 2026-08-31, from measured corpus data (56 archived leg pipelines) + the twin-suppression
-fix landing the same week. **Answer up front: ~5–6 EOS nodes per leg is the comfortable ceiling
-under current caps; the devext lab host caps at 7–8 regardless; beyond that, scale LEGS PER
-PROGRAM, not nodes per leg.**
-
-### Measured basis
-
-- 2–3-node harvests persisted at **68–125KB `result.json`** across the archived corpus —
-  measured PRE-twin-fix (FastMCP serialized-text duplication ≈ half the bytes; fixed at both rig
-  producers 2026-08-31).
-- Post-fix planning figure: **~12–20KB of real harvest content per node** under the protocol's
-  scoped-read discipline (config sections + IGP state + route table per device).
-- Re-measure after any harvest-discipline or rig change (adjust the stage/POV filter):
-
-```bash
-## Per-leg harvest artifact sizes, newest first (run on prod)
-psql "$DATABASE_URL" -c "SELECT c.title, length(a.content)/1024 AS kb, a.\"createdAt\"::date
-  FROM tasks c JOIN agent_executions e ON e.\"taskId\"=c.id
-  JOIN agent_artifacts a ON a.\"executionId\"=e.id AND a.name='result.json'
-  WHERE c.title ~* 'harvest' ORDER BY a.\"createdAt\" DESC LIMIT 10;"
-```
-
-### The limits, in the order they bind
-
-| Limit | Value (source of truth) | Nodes before it binds |
-|---|---|---|
-| Downstream read depth: 8K Tier-1 window + `read_more` (6 pages/origin, ~8/run; Program Architect 9/12 since 2026-10-12 — `role-read-budget.ts`) | `agentic-tool-loop.ts` `MAX_TOOL_RESULT_LENGTH` + pager caps | **~4–5** if a consumer must page the RAW harvest (R19 P4 hit this at 3 nodes pre-twin-fix) |
-| `agent.results` verbose ceiling | 100KB (`VERBOSE_MAX_CHARS`, task-action-handler) | ~5–8 |
-| §6 chain cap (harvester finalResponse → author) | 128KB/predecessor (`context-chainer.ts`) | ~8–10, and only if the finalResponse bloats — discipline keeps it a curated summary |
-| Harvest tool turns (3–6 scoped reads/device) | loop turn budget | ~8–10 |
-| Author output budget (package ~2–4KB/device) | maxTokens 48000 — but ~66–79% of a Sonnet-5 call's output is adaptive thinking (measured 2026-09-24), so budget ~10–16K tokens (~40–60KB) of visible text | ~10+, not the constraint |
-| **Lab host RAM** (cEOS ≈ 2GB each) | devext: 19GB usable | **7–8, hard** |
-
-The binding LLM constraint is **downstream read depth**, and it binds only when a consumer needs
-the raw harvest rather than the curated summary — the provenance-shaped case.
-
-### The architectural answer: scale legs per program, not nodes per leg
-
-The composition catalog (`PROGRAM-SHAPES.md`, S2/S3 shapes) already prescribes this,
-and the firewall campaign proved it live: edge/core/dmz ran as separate legs chained through the
-interface contract, each harvesting only its own devices. Every cap above **resets per leg**.
-
-- A 20-device change = a 4–5-leg program at 4–5 devices each, NOT a 20-device leg.
-- The per-leg grouping seam should follow real change-window boundaries (team, site, vendor,
-  blast radius) — the same axes as the decision matrix in `FIREWALL-POLICY-USE-CASE.md`.
-
-### If a use-case genuinely forces more depth per leg
-
-Levers in preference order (none currently needed):
-1. Raise the `read_more` per-run page budget — since R1 (2026-10-12) a PER-ROLE table, Layer 1
-   (`lib/agents/role-read-budget.ts`, read by `agentic-tool-loop.ts`; agent-execution-specialist's domain). Raise it for
-   the role that needs it, never globally (the Program Architect precedent: 9 / 12).
-2. Only then consider the 8K Tier-1 window — it is calibrated to context economics
-   (`harvest-truncation-safety.md`), not arbitrary; raising it taxes every run.
-
-Do NOT relax harvest scoping to "read the whole config once" — the narrow-read discipline is what
-keeps per-node cost at 12–20KB (and is load-bearing for R10/secret hygiene).
-
-### Freshness triggers for this doc
-
-- Twin-fix regression (`structuredContent` duplication returning) — re-run the per-service twin
-  query in the r10 follow-up; per-node cost roughly doubles if it comes back.
-- A rig host change (RAM ceiling row).
-- A cap change in `agentic-tool-loop.ts` / `context-chainer.ts` / `VERBOSE_MAX_CHARS` (Protocol 11
-  sweep should touch this table).
-- A live leg failing a read-depth limit at ≤5 nodes — that contradicts this doc's envelope and IS
-  a finding.
+**Keep each leg to about five or six devices, and add legs, not devices per leg.** Every limit on how much an agent can read
+applies per leg and resets for the next one. A change across 20 devices is a program of four or five legs, not one leg of 20.
+Group the legs along real boundaries: team, site, vendor, or how much one change window may touch
+([design/FIREWALL-POLICY-USE-CASE.md](design/FIREWALL-POLICY-USE-CASE.md) has the decision matrix). A program holds at most
+eight pipelines.

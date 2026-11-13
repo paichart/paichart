@@ -1,224 +1,89 @@
-# Program Use-Case Design Playbook
+# Designing a program
 
-**Version**: 1.0 | **Created**: 2026-07-16 | **Status**: Production — pov-program v1.0.8 live
+How to turn an objective that spans several systems into a program. Read [PROGRAM-SHAPES.md](../PROGRAM-SHAPES.md) for the
+shapes, and [FIREWALL-POLICY-USE-CASE.md](FIREWALL-POLICY-USE-CASE.md) for one decision worked through. When the design is
+settled, write the spec with [WRITING-A-SPEC.md](../WRITING-A-SPEC.md). Terms are in [GLOSSARY.md](../GLOSSARY.md).
 
-> **This guide = how to DESIGN a new program use-case** — the procedure that turns a multi-domain
-> objective into a plan-gated program of pipelines that ships. To *run* an already-designed program,
-> see [`PROGRAMS.md`](../PROGRAMS.md). A program leg IS a pipeline; the
-> inside of a leg is governed by its domain's protocol (its text is in [`scripts/seed-protocol-prompts.ts`](../../scripts/seed-protocol-prompts.ts)). This playbook covers only
-> the composition layer. Full worked reference: [`FIREWALL-POLICY-USE-CASE.md`](FIREWALL-POLICY-USE-CASE.md).
+## 1. Do you need a program at all?
 
-## The one-sentence job
+A program adds a plan gate, a gate per leg, a shared contract and a final review. Earn it. Ask, in order:
 
-Decide whether the objective even needs a program (Phase 1), then design the **two ingestion artifacts**
-(topology-as-code + requirements), the **interface contract**, and the **DAG** (parallel vs sequenced +
-per-team gates) so the Program Architect can plan it, humans can gate it, and Node C can prove it cohered
-— all **within** a set of engine invariants you design around, never against.
+1. **Is there more than one real boundary?** A boundary is a different vendor or tool, a different team that must approve
+   separately, or something one part must produce before another part can be designed. With no boundary it is a single
+   pipeline: one pipeline can change several devices of one vendor for one team.
+2. **What kind of boundary?** Vendors or teams only, with everything shared known up front: parallel legs. A later part needs
+   what an earlier part produces (an address after translation, a derived range): sequenced legs.
+3. **More than eight parts?** A program holds at most eight pipelines. Group the systems: one leg per segment or vendor group,
+   not one per device. Twelve devices are three legs of four.
 
-## Reference implementations — study these first
+Write down, in one paragraph, why it is a program and why this shape. A wrong answer here is the most expensive mistake,
+because everything after inherits it.
 
-- **[The firewall policy use case](FIREWALL-POLICY-USE-CASE.md)** — the canonical
-  worked program use-case: anchor scenario, the two coordination mechanisms, three approaches, decision
-  matrix. Its runnable example is `usecases/firewall-partner-path-r2/` in `paichart/paichart-configs`.
-- **The demo POV "pAIchart Verified Delivery — Live Exhibits"** (prod) — Exhibit 1 = a fully green program;
-  Exhibits 2–4 = the failure modes a well-designed program produces on purpose.
-- **The verification pack** (`github.com/paichart/paichart/tree/main/verification`) — VT-01..08 map each
-  design guarantee to its proof; read them as the acceptance criteria your use-case must also satisfy.
+## 2. The two input files
 
-## Source-of-truth files (anchor design claims to these, prove-before-write)
+- **`topology.json`** holds facts: the systems, in order where order matters, which vendor or tool each is, where each one's
+  configuration is read from, and the read-only services to use. **Describe a service, never what to do with it.** A line
+  about registering or removing a service gets copied into the plan, and the final review is then asked to judge something it
+  cannot see; a correct program has been refused for exactly that.
+- **`requirements.md`** holds the intent: the outcome, the boundaries ("nothing else changes"), who approves what, and the
+  final checks. It is the planner's brief.
 
-- **Design rationale D1–D12 + CC1–CC8** — the maintainers' design decisions this playbook operationalizes (their record is not in the public repository). When you assert an invariant below, it traces to a D-number.
-- **The protocol prose**: the `pov-program` protocol (seeded; `scripts/seed-protocol-prompts.ts` Step 8) —
-  the PLAN / PLAN-SPAWN / PROGRAM-SYNTHESIZE steps are the executable spec.
-- **Test/acceptance ledger**: `.../program-architect-design-2026-07-15/PROGRAM-TEST-PLAN.md` (T2–T5, F16–F21).
+Both files are fetched by URL and read by an agent, so treat them as you would any input: no secrets, and nothing copied from
+an untrusted source.
 
-## Phase 1 — Program-or-pipeline fit triage (the seam test) 🚦
+## 3. The interface contract
 
-**Do NOT reach for a program by default.** A program adds a plan gate, per-team gates, a shared contract, a
-Node C reviewer, and a ≤8-leg cap — real machinery with real cost (~$30–60 per program command, CC3). Earn
-it. Ask, in order:
+List what **every leg must use exactly** and that is known before any leg runs: a flow definition, a naming rule, an address
+plan, a default-deny rule. The planner turns these into the contract and every leg receives it as fixed values.
 
-1. **Is there more than one real boundary?** A *boundary* = a different vendor/tool needing a different
-   specialist chain, OR a different team needing a separate approval, OR a genuine runtime dependency
-   between sub-designs. **Zero boundaries → it's a single pipeline** (`network-provisioning` multi-device
-   handles several same-vendor devices in one designer's context). Stop here; use the pipeline playbook.
-2. **If boundaries exist, what KIND?** This picks the program shape (Phase 2):
-   - vendor/team only, constants knowable up front → **parallel program + shared contract** (Approach 2, the default program shape, live-proven).
-   - a downstream sub-design needs an upstream sub-design's *designed output* (e.g. post-NAT addresses) →
-     **sequenced program + DAG edges + inter-pipeline chaining** (Approach 3, less-exercised — treat first run as a validation round).
-3. **Does it exceed the ≤8-pipeline cap** (D-cap, pov-program PLAN-SPAWN #2)? If the path is wider, **group
-   devices** — one pipeline per segment/vendor-group (a multi-device pipeline nested as a program leg), not
-   one pipeline per device. A 12-device path = 3 segment-legs of 4, not 12 legs.
+- **Make each item data, not prose.** A value, a name, a range. If something can only be said as a sentence, it is a
+  requirement for the planner, not a contract value.
+- **Two legs that each need the other's result cannot be sequenced.** Decide the shared value up front and put it in the
+  contract; both legs then design against it.
 
-Record the verdict as a one-paragraph "why a program / why this shape" — the firewall example's "Why this is
-Approach 2 (not 1, not 3)" is the template. **A wrong Phase-1 call is the most expensive mistake in this
-playbook** — everything downstream inherits it.
+## 4. The legs and their order
 
-## Phase 2 — Compose design: the two artifacts, the contract, the DAG ✏️
+- **Parallel** is the default: no leg waits for another.
+- **Sequenced:** a leg waits for an earlier leg and receives its result. Use it only where the later leg cannot be designed
+  without that result. A value handed on is used exactly as given; the later leg may not choose another.
+- **A leg with two upstream legs** has never been run and has a known gap: read the caution in
+  [PROGRAM-SHAPES.md](../PROGRAM-SHAPES.md) before you design one.
+- **Keep it shallow.** A long chain of legs each waiting on a gate is slow and fragile. Prefer parallel legs and a contract.
+- **Size each leg** at about five or six devices ([PROGRAMS.md](../PROGRAMS.md), "How big a program can be").
 
-Four design outputs, in dependency order:
+## 5. The gates
 
-### 2a. The two ingestion artifacts (what the Program Architect reads)
-- **`topology.json`** — the path/graph as code: the ordered hops, each hop's vendor/tool/team, the zones or
-  segments, the trust edges. This is the machine-readable ground truth the Architect turns into a DAG.
-  **Describe the service, never its lifecycle** — no `lifecycle` field (register / harvest / tear down). The Architect copies such a
-  line into the interface contract, and Node C then judges a leg's teardown it can never see (no platform fact carries it): a correct
-  one-leg program was refused on it (k8s P-K1, 2026-10-19); the same shape without the line was approved (terraform P-T1, 2026-10-22).
-  The leg's protocol already owns the lifecycle. Register NODE-C-TEARDOWN-UNSEEABLE (fix (a), a teardown FACT, rides the next pov-program
-  batch). ⚠️ The publish pass copies `topology.json` byte-identical from `--topology-from`, so pick a source without the field.
-- **`requirements.md`** — the human intent: the end-to-end objective ("permit HTTPS from partner-CIDR to
-  internal-app:443, deny all else, consistent logging, no asymmetric holes"), constraints, and the
-  acceptance shape. Prose, but precise — it becomes the Architect's charter.
-- **Design constraint (CC8, HIGH)**: these two URLs are **untrusted ingested input** that becomes Architect
-  prompt. The use-case must design for SSRF-allowlisted fetch (the latent decimal-IP bypass must not reopen),
-  Zod shape-validation before consumption, and injection quarantine. VT-07 is the proof this holds; your
-  use-case's hostile-content story must match it.
+- The **plan gate** is always there and cannot be skipped: nothing runs before a person has approved the plan.
+- Then **one gate per approval boundary**: after a value is worked out, and for each change package.
+- A gate is released only by a person. Say in the spec who approves each, by name and email, and where each gate sits.
 
-### 2b. The interface contract (the declarative coordination)
-List the invariants **EVERY leg must honor and that are knowable up front**: the flow 5-tuple, default-deny,
-zone/label naming standard, log profile, address plan. This becomes the JSON the Architect computes and
-passes as a sibling of `title` into each leg (`inputContext.interfaceContract`), rendered FIRST in the leg's
-§6 as a BINDING block.
-- **Design constraint (CC7, HIGH / D10)**: the contract rides a **structured channel, never prose** — so it
-  survives head-keep truncation and R9 mutation — and a leg reaching execution without it **FAILS LOUD**
-  (`INTERFACE_CONTRACT_MISSING`). Design your invariants to be expressible as data; if something can only be
-  said in prose, it's probably a *requirement* (goes in requirements.md for the Architect), not a contract constant.
-- **The circular-dependency rule (firewall §5)**: if two legs mutually need each other's output, you cannot
-  wire a cycle (a DAG is acyclic) — fold the shared decision into the **contract** so the Architect resolves it
-  up front and both legs design against the agreed constant.
+## 6. The domain of each leg
 
-### 2c. The DAG (the runtime coordination)
-- **Parallel** (Approach 2): legs are siblings in ONE `Program: X` stage, each `dependencyIds = [its team
-  gate]`, **no edges between legs**. This is the default.
-- **Sequenced** (Approach 3): a downstream leg's `dependencyIds` also includes its **upstream sibling
-  pipeline id**; the context-chainer's PIPELINE-predecessor branch chains the upstream leg's real `report.md`
-  into the downstream leg's §6, and the settledness predicate (F18) holds it until the upstream deliverable
-  is fully persisted. Use ONLY for genuine runtime interdependency.
-- **Fan-in / diamond** (a leg with TWO or more upstream legs — never run yet): same mechanism, more than one upstream id.
-  Read `PROGRAM-SHAPES.md` §Fan-in and diamond first — every upstream must be judged, and which upstream a
-  value came from is not checked.
-- **Design constraint (D3, KEYSTONE)**: program edges connect **sibling legs in the one program stage**.
-  Each leg's OWN children live in that leg's separate child stage (a disconnected subgraph — adds no program
-  depth). **Cross-stage pipeline edges silently don't fire — never design them.**
-- **Design constraint (CC4)**: keep the program topology shallow. Parallel programs are ~3–4 deep; a fully
-  sequential gated chain approaches the depth cap (≥20 reconciled) — prefer parallel + contract over deep sequencing.
+Each leg runs under one domain's rules, named in its title: `network-provisioning` and `network-derivation` (network devices),
+`kubernetes-gitops`, `terraform-iac`, `observability-config`. Use these. A leg for a system none of them covers needs a new
+domain, which is beyond what these documents describe.
 
-### 2d. The gates
-- The **mandatory plan-approval gate** (template-less APPROVAL, born IN_PROGRESS — D4/D8) is non-bypassable
-  for customer programs; `full_auto` only re-runs an already-approved plan.
-- **Per-team gates** (one per approval boundary) sit between the plan gate and each team's leg.
-- **Design constraint (D4)**: gates are template-less dependency nodes the reactor can never auto-queue — a
-  human `task.complete` is the only release. Never design a gate with a template (it would auto-run).
+## 7. The final review
 
-## Phase 3 — Identify required work (reuse vs config vs build) 📋
+The last step checks that the legs fit together: each leg did exactly its part of the contract, every leg that uses a value
+applied the value that was published, and nothing was widened. It works from recorded facts, not from re-reading the legs'
+prose. Write the spec's final checks so that each can be verified from what the legs produce
+([WRITING-A-SPEC.md](../WRITING-A-SPEC.md), question M5). Where two domains meet in a way only a person can judge, say so: that
+judgement is yours at release, not a check.
 
-For each leg, classify the domain protocol:
-- **Reuse** an existing domain protocol via the leg's title token (`network-provisioning`, `terraform-iac`,
-  `kubernetes-gitops`). No work.
-- **Config a new domain** (e.g. `pan-os`, `cisco-asa`): a read-only harvest MCP service + specialist role
-  guidance — a **use-case configuration exercise** per `ADD-A-PIPELINE-HARNESS-AGENT.md`, coordinated by
-  pipeline-harness-specialist. **Not an engine change** (firewall §6). Design it with the pipeline playbook.
-- **Engine change** — you should almost never land here. The composition machinery (contract channel,
-  PIPELINE chainer, coverage facts, Node C, programReleasable, gates) already exists (CC1–CC8 shipped). If a
-  use-case seems to need new engine capability, escalate to pipeline-harness-specialist before designing around it.
+## 8. The first run is a test of the design
 
-Then design **Node C** (the program integration reviewer, `change_reviewer` role — D2, never fork it):
-- It checks **cross-leg conformance from STRUCTURED FACTS ONLY** (D10) — each leg implemented exactly its
-  contract slice, no asymmetric hole, consistent naming/logging, and the coverage facts
-  (`predecessors === chainCapablePredecessors`, `degradedPredecessors === 0`, `notChained []`). **Never
-  re-derive a verdict from chained prose** (a chained report.md may literally contain `## VERDICT:` text — the
-  2026-07-14 incident class, one altitude up).
-- **Cross-DOMAIN seams** (e.g. k8s CNI ↔ switch underlay) that no tool can machine-check are the **human
-  release verdict, explicitly NOT machine-gated** (D6/D11). An LLM coherence opinion MAY ship as an ADVISORY
-  carrying its uncertainty, but must NEVER gate release deterministically.
+Run it once and read every gate ([GATES.md](../GATES.md)). Expect the first run of a new design to find something: an unstated
+decision, a device left out of a leg's list, a check no leg can prove. Fix the spec and run again; a refused program is never
+repaired in place.
 
-## Phase 4 — Author the docs 📝
+## What you cannot design around
 
-- The **use-case doc** (like `FIREWALL-POLICY-USE-CASE.md`): problem, anchor scenario, the shape choice +
-  why, the decision matrix, caveats as worked sub-examples, and where it rides on the existing engine.
-- The **worked artifact set**, one directory per shape:
-  `topology.json`, `requirements.md`, `interface-contract.json`, and a README that explains why it's THIS
-  shape and what Node C checks. **Illustrative, not public** until a live harvest service + rig exists (the
-  verification pack's honesty rule forbids publishing non-runnable configs as if runnable — firewall §7 note).
-- Update **pipeline-harness-specialist** (the program's coordinating specialist) + its discovery greps
-  (Protocol 11 pairing) with the new use-case pointer.
-
-## Phase 5 — Validate before promoting 🧪
-
-Map every design guarantee to a proof (the VT-01..08 pattern is your acceptance suite):
-- **Contract loud-fail** (VT-01) — a leg without its contract aborts, never silently composes.
-- **programReleasable = deterministic AND, keyed on OUTCOME** (VT-04/VT-06) — a high score can't rescue a
-  needs-revision; a human converts the fact to the decision.
-- **Coverage blocks on a missing deliverable** (VT-05) — a count that looks complete can't mask a gap.
-- **Partial failure freezes the forward cone + escalates naming the leg** (VT-02 / D9) — healthy legs preserved.
-- **Parked gate parks** (VT-03) — no timeout misfire.
-- **Hostile ingested content refuses/escalates** (VT-07 / CC8).
-- **Sequenced (Approach-3) programs**: the FIRST one is a validation round — inter-pipeline chaining is
-  mechanism-tested but the demo wave exercised the parallel topology (firewall §7.3). Run it on a rig, write its VT.
-
-## Phase 6 — Promote to shipped 🚀
-
-1. If a new domain was configured: publish read-only harvest descriptors + stand up the read-only MCP
-   service(s) (mirror the ceos-lab / tf-readonly rigs).
-2. Move the now-runnable artifacts to public `program-artifacts/<usecase>/`, run the program on the rigs,
-   author the VT doc + a demo exhibit.
-3. Seed any HOWTO prose (`scripts/seed-protocol-prompts.ts`); deploy self-seeds protocols (templates stay manual).
-
-## The procedure, in one breath
-
-Earn the program (Phase 1 seam test — zero boundaries = one pipeline) → pick the shape from the KIND of
-interdependency (parallel+contract default; sequenced+DAG only for runtime deps) → design the two ingestion
-artifacts, the data-shaped contract (loud-fail, never prose), the DAG (sibling-only edges, gates are
-template-less), Node C on structured facts only → reuse/config the leg domains (rarely engine) → author the
-use-case doc + illustrative artifacts → validate against the VT guarantees → promote once a live rig exists.
-
-## The invariants you design WITHIN (never against)
-
-| Invariant | Source | Consequence if ignored |
-|---|---|---|
-| Cross-stage pipeline edges silently don't fire | D3 | a "sequenced" design that never sequences |
-| Contract rides a structured channel + loud-fails if absent | CC7 / D10 | silent mis-composition under truncation |
-| Release gate is deterministic AND, facts-only; advisory may inform but never gate | D5/D11 | a verdict that's wrong for a whole class, silently |
-| Gates are template-less (reactor can't auto-queue) | D4 | a gate that auto-runs = no human approval |
-| ≤8 legs; group devices if wider | CC3/cap | budget/blast-radius blowout |
-| Ingested artifacts are untrusted (SSRF + Zod + injection quarantine) | CC8 | the design artifact becomes an injection vector |
-| pAIchart orchestrates, does not certify the customer's half | D12/WS3 | building CI you shouldn't own |
-
-## See also
-
-- Run it: [`PROGRAMS.md`](../PROGRAMS.md)
-- The shape map: [`PROGRAM-SHAPES.md`](../PROGRAM-SHAPES.md)
-- Worked reference: [the firewall policy use case](FIREWALL-POLICY-USE-CASE.md)
-- Public proofs: `github.com/paichart/paichart/tree/main/verification`
-
----
-
-## 2026-09-16 — the crossing value now reaches the consuming AGENT, not just the leg
-
-Until this date a program's crossing value reached the downstream **leg** and stopped: its children
-held only their own siblings, and the value reached them as *prose* the harness had paraphrased into
-their task descriptions. **51 of 51 edges reached the leg; 3 of 51 reached any child.** A consuming
-Architect that took the `consumptionRule` literally escalated rather than trust it — correctly.
-
-**Design consequences, now that delivery works:**
-
-1. **You may write a `consumptionRule` that demands verbatim consumption from chained context, and it
-   is satisfiable.** Before this it was not, at the child tier, for any program.
-2. **The value reaches CONSUMING roles only.** `infra_change_architect`, `config_change_author`, and
-   anything new by default. **Harvest-shaped roles and reviewers are excluded** — see the
-   defense-stack pattern for why (ground-truth poisoning; a second reviewable document). If your
-   decomposition puts the consumer in a harvest-shaped seat, it will not receive the value.
-3. **Do not design around the old gap.** Restating the value into a child's task description is what
-   the platform now does properly; a hand-carried restatement is prose, and a strict consumer will
-   refuse it.
-4. **A leg whose ENTIRE input is the upstream publication** — no local harvest — is the dep-free
-   case. It is served in code but **unproven in production**: the podrange topology cannot exercise
-   it because its consumers each hold a sibling edge. Fixture-proven only; design one deliberately
-   if you want it validated.
-
-**Coverage**: protocol-agnostic. Verified across network-provisioning, terraform-iac,
-kubernetes-gitops and observability-config — they share an identical four-role skeleton, so one
-exclusion list covers all four. artifact-synthesis has never been a program leg; its
-`publication_reviewer` was added to the exclusion list 2026-09-17 before it can be.
-
-**Record**: VT-25 (public verification pack).
+| Fact | If you ignore it |
+|---|---|
+| A program never applies a change | a design that expects a later leg to see an earlier leg's change, without a person applying it between them, sees nothing |
+| The plan gate cannot be skipped | — |
+| At most eight pipelines | group systems into legs |
+| The contract is fixed when the legs are created | a corrected plan does not reach legs that already exist: launch again |
+| Release depends on every leg's outcome, from recorded facts | a high score does not rescue a refused leg, and a refused leg cannot be re-run to a release |
+| The two input files are read by an agent | anything written in them can steer it |

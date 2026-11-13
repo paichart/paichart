@@ -30,7 +30,8 @@ states what is configured on them now. The agents read that from the sources the
 1. **Create a fresh POV, or a fresh stage.** Its name and description describe the work, never the test: agents read them. A fresh POV
    is cleanest, because it needs no duplicate clearance and agents cannot reach older runs.
 2. **Create one PIPELINE task:**
-   - title ends `(protocol: pov-program)`;
+   - title ends `(protocol: pov-program)`; in a project that already holds a run of this objective, put a run number before it
+     (`… (Run 2) (protocol: pov-program)`) and stamp the clearance: [TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md), "Launching again";
    - the description states the intent and gives the two spec URLs ("fetch ONLY these two URLs").
 3. **Attach the Pipeline Harness template** (`agent.assign`). A pipeline task never starts on assign.
 4. **Start it:** `agent.execute` with `waitForCompletion: false`. If your client times out, the run is still going: check the

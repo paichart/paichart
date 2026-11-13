@@ -130,12 +130,17 @@ A new run of the same objective in a project that already holds one stops at its
 tell it the earlier run is known. Two ways:
 
 - **Simplest:** launch in a new project, or delete the earlier run's tasks and stages first.
-- **Keep the earlier run:** create the new task, then stamp the earlier run's stage on it before you start it:
+- **Keep the earlier run:** create a new task whose title carries a run number, for example
+  `… (Run 2) (protocol: pov-program)`. The number does two things: a task with the same title in the same stage is not created
+  again (the call returns the existing one), and each leg reads the earlier run's stages as history, not as itself. Then stamp
+  the earlier run's stage on the new task before you start it:
   ```
   perform(action: 'task.update', parameters: { taskId: '<new task id>', metadata: { duplicateAcknowledged: '<earlier Program: … stage id>' } })
   ```
   `project(action: 'pov.details', povId: '<pov id>')` lists the stages. If there were several earlier runs, give all their
   stage ids as a list.
+
+This is the one rule for running again; the other guides point here. A finished or stopped program is never re-run in place.
 
 ## Your AI client has lost the hub
 
