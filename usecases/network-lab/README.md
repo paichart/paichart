@@ -9,7 +9,7 @@ drives it, and the **read-only MCP service** the pipeline harvests through.
 > a lab you can `docker compose up`** — everything else here is complete and runs unmodified. If you
 > have real Arista devices, skip containerlab entirely: point `nornir/hosts.yaml` at them and read on.
 
-Pairs with: [`protocols/network-provisioning-protocol.md`](../../protocols/network-provisioning-protocol.md) ·
+Pairs with: the `network-provisioning-protocol` text in [`scripts/seed-protocol-prompts.ts`](../../scripts/seed-protocol-prompts.ts) ·
 [`descriptors/ceos-lab-readonly-descriptor.json`](../../descriptors/ceos-lab-readonly-descriptor.json) ·
 worked outputs in [`examples/network-provisioning-change-report.md`](../../examples/network-provisioning-change-report.md)
 and the [PTP timing change](../../examples/network-provisioning-ptp-change-report.md).

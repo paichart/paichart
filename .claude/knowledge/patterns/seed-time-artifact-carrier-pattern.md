@@ -155,7 +155,7 @@ protocol, and every consequence follows from that one fact.
 | 3 | `npm run test:requirements-skeleton-parity` | proves the vendored copy is byte-identical to a fresh emit, and re-checks the invariants (no author-addressed blocks, no generic placeholders, no front matter, NFKC-stable, the three-way marker pin, and the canonical rules file) |
 | 4 | **bump the protocol version** in `scripts/seed-protocol-prompts.ts` | the protocol's text changed; a content change under an unchanged version is how a consumer concludes nothing moved |
 | 5 | local reseed — `npx ts-node --transpile-only scripts/seed-protocol-prompts.ts` | the DB row is the source of truth for the public render, and the render script FAILS if the seed file is newer than the row |
-| 6 | re-render the public mirror — `npx ts-node --transpile-only scripts/render-public-protocols.ts` | the mirror is published and customer-facing; it goes stale silently, and `test:protocol-public-parity` is out-of-CI so nothing else catches it |
+| 6 | ~~re-render the public mirror~~ — RETIRED 2026-11-13: the public repository no longer carries a `protocols/` mirror (the texts are public in the seed script) | nothing to do; the renderer skips out loud |
 | 7 | `npm run test:protocol-dependence-anchors` + `npm run test:protocol-stamp-guards` | textual dependences between base and delta are pinned; a skeleton edit can cross one |
 
 **Prod needs no manual step** — `blue-green-deploy.sh` runs `npm run seed:protocols` on every

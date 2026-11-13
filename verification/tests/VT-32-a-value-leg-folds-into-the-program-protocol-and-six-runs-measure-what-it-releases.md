@@ -70,8 +70,8 @@ account). The Kubernetes, Terraform and observability legs run against the labs 
     leg changes nothing. It harvests read-only and publishes one derived value, the exporter-range CIDR; it changes no
     device and produces no configuration, no change package and no rollback plan."* (`PUBLISH-NOTES.md` lists every
     edit.)
-- Protocols, as stamped on each execution: [`pov-program`](../../protocols/pov-program-protocol.md) 2.0.0 on every root
-  execution · `pipeline-orchestrator` 3.18.0 · [`network-derivation`](../../protocols/network-derivation-protocol.md)
+- Protocols, as stamped on each execution: `pov-program` 2.0.0 on every root
+  execution · `pipeline-orchestrator` 3.18.0 · `network-derivation`
   1.0.1 · `network-provisioning` 1.18.1 (controls 1–2), **1.19.0** (regression run) · `kubernetes-gitops` 1.14.0
   (controls 2–3, value-leg control), **1.15.0** (regression and demo runs) · `terraform-iac` 1.12.1 ·
   `observability-config` 1.6.0.

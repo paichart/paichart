@@ -56,7 +56,7 @@ resembles is **zero**.
 
 - Protocols: `observability-config` **v1.0.2** at round time (v1.0.3 followed, adding the chosen-value
   rationale clause); `pipeline-orchestrator` base v3.14.0. Both published verbatim under
-  [`protocols/`](../../protocols/) and byte-parity-checked against the platform seed.
+  the platform seed, [`scripts/seed-protocol-prompts.ts`](../../scripts/seed-protocol-prompts.ts).
 - Role guidance: `change_reviewer` (a key shared by four domains) reseeded on production immediately
   before the round with one added rule — *a provenance claim you cannot check against the source is an
   UNVERIFIABLE SUSPICION, never a proven fabrication; where your context carries the platform's

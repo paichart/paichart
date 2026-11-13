@@ -84,7 +84,7 @@ They are in the clone's `.claude/agents/`. To use them from any directory: `mkdi
 ## Published as-is
 
 - [Verification pack](../verification/README.md) — what each claim was tested against, including the rounds that failed.
-- [Protocols](../protocols/README.md) — the agent-facing contracts, published verbatim.
+- [Protocols](../scripts/seed-protocol-prompts.ts) — the agent-facing contracts are in the platform seed script, exactly as the agents receive them.
 - [Examples](../examples/README.md) — change reports the pipelines produced.
 - [Case studies](../case-studies/README.md)
 - [Academic project briefs](../academic/README.md) — project proposals offered to universities and their students.

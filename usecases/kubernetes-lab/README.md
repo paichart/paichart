@@ -3,7 +3,7 @@
 A single-node `kind` cluster with a workload that has real, checkable gaps, plus the **read-only MCP
 service** the pipeline harvests through. Everything here is free software; no account needed.
 
-Pairs with: [`protocols/kubernetes-gitops-protocol.md`](../../protocols/kubernetes-gitops-protocol.md) ·
+Pairs with: the `kubernetes-gitops-protocol` text in [`scripts/seed-protocol-prompts.ts`](../../scripts/seed-protocol-prompts.ts) ·
 [`descriptors/k8s-readonly-descriptor.json`](../../descriptors/k8s-readonly-descriptor.json) ·
 worked outputs in [`examples/`](../../examples/kubernetes-gitops-change-report.md).
 

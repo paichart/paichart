@@ -3,7 +3,7 @@
 Prometheus + Grafana + an OpenTelemetry collector, plus the **read-only MCP service** the pipeline
 harvests through. Free software; no account needed.
 
-Pairs with: [`protocols/observability-config-protocol.md`](../../protocols/observability-config-protocol.md) ·
+Pairs with: the `observability-config-protocol` text in [`scripts/seed-protocol-prompts.ts`](../../scripts/seed-protocol-prompts.ts) ·
 [`descriptors/observability-readonly-descriptor.json`](../../descriptors/observability-readonly-descriptor.json) ·
 worked output in [`examples/observability-config-change-report.md`](../../examples/observability-config-change-report.md).
 

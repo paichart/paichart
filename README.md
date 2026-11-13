@@ -54,7 +54,7 @@ See also the ones that went wrong. **VT-12**: a program self-certified `programR
 - A check that couldn't run is a block, not a pass. "We couldn't verify it" never rounds up to "it's fine."
 - Three *correct* change packages were refused because a reviewer judged something it structurally could not see — one wrote "I cannot independently re-verify this comparison" and asserted the conclusion anyway. Better prose closed one lane and the class reappeared in the next, so the comparison is now computed where the evidence lives and handed to the reviewer — who still keeps every judgement the fact does not make (VT-21).
 
-→ **[Verification pack](verification/)** · every claim linked to its machine record · **[Protocols](protocols/)** · the agent-facing contracts those runs are held against, published verbatim and byte-parity-checked against the platform seed
+→ **[Verification pack](verification/)** · every claim linked to its machine record · **[Protocols](scripts/seed-protocol-prompts.ts)** · the agent-facing contracts those runs are held against are in the platform seed, exactly as the agents receive them
 
 ## Five domains, one harness
 
@@ -208,7 +208,7 @@ registry(action: "register", {
 ## Learn
 
 - **[Verification pack](verification/)** — 33 documents, each stating its expected observables before the run. **Including the rounds that failed.**
-- **[The protocols](protocols/)** — the exact agent-facing contracts the pack holds runs against, published verbatim and byte-parity-checked against the platform seed. Every version stamp in the decision log has a readable text here.
+- **[The protocols](scripts/seed-protocol-prompts.ts)** — the exact agent-facing contracts the pack holds runs against are in the platform seed script, at their current versions. Earlier versions named in the decision log are in that file's Git history.
 - **[Open questions](verification/OPEN-QUESTIONS.md)** — for researchers. Three findings we think are interesting (three reviewer tiers once approved a defect at *rising* confidence), one hypothesis we lack the power to settle, and lab run data we will share.
 - **Case studies** — three walkthroughs of the same real network→cloud program: [Checked by Machine](case-studies/coordinated-infra-change.md) (*can you trust it*), [You Approve; You Don't Author](case-studies/you-approve-you-dont-author.md) (*what it buys you*), [Inside a Multi-Domain Program](case-studies/inside-a-multi-domain-program.md) (*how it's built* — the DAG, the review tiers, how far it scales).
 - **[`@paichart/containment-checks`](packages/containment-checks/)** — the Tier-1 arithmetic, extracted verbatim as an MIT library with its incident-fixture test suite: mechanical checks for LLM-derived infrastructure values (`cidr`, `asn` — extensible by `kind`), where an unimplemented check reports *not mechanically covered*, never a pass.

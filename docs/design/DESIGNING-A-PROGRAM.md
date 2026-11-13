@@ -5,7 +5,7 @@
 > **This guide = how to DESIGN a new program use-case** — the procedure that turns a multi-domain
 > objective into a plan-gated program of pipelines that ships. To *run* an already-designed program,
 > see [`PROGRAMS.md`](../PROGRAMS.md). A program leg IS a pipeline; the
-> inside of a leg is governed by its domain's protocol ([`protocols/`](../../protocols/README.md)). This playbook covers only
+> inside of a leg is governed by its domain's protocol (its text is in [`scripts/seed-protocol-prompts.ts`](../../scripts/seed-protocol-prompts.ts)). This playbook covers only
 > the composition layer. Full worked reference: [`FIREWALL-POLICY-USE-CASE.md`](FIREWALL-POLICY-USE-CASE.md).
 
 ## The one-sentence job

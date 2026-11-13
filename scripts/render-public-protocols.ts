@@ -82,6 +82,13 @@ ${body}
 }
 
 async function main() {
+  // RETIRED 2026-11-13 (owner: "we don't need to publish the protocols anymore"): the public repository no longer carries a
+  // protocols/ mirror — the texts are public in the seed script itself. This script must not recreate the directory, and the parity
+  // check has nothing to compare. Kept (not deleted) because two battery suites still read this file's source; register
+  // PUBLIC-PROTOCOL-MIRROR-RETIRED tracks deleting it with them.
+  console.log(`⏭️  SKIPPED: the public protocols/ mirror was retired 2026-11-13 (${CHECK ? 'nothing to check' : 'nothing rendered'}).`);
+  return;
+
   if (!fs.existsSync(path.dirname(PUB_DIR))) {
     console.log(`⏭️  SKIP (named, counted): public repo not present at ${path.dirname(PUB_DIR)} — parity unverified on this machine, not clean.`);
     process.exit(0);

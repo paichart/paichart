@@ -3,7 +3,7 @@
 LocalStack standing in for AWS, a small Terraform workspace with real state, and the **read-only MCP
 service** the pipeline harvests through. Free software; no cloud account, no credentials, no spend.
 
-Pairs with: [`protocols/terraform-iac-protocol.md`](../../protocols/terraform-iac-protocol.md) ·
+Pairs with: the `terraform-iac-protocol` text in [`scripts/seed-protocol-prompts.ts`](../../scripts/seed-protocol-prompts.ts) ·
 [`descriptors/terraform-readonly-descriptor.json`](../../descriptors/terraform-readonly-descriptor.json) ·
 worked output in [`examples/terraform-iac-change-report.md`](../../examples/terraform-iac-change-report.md).
 

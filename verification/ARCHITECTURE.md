@@ -4,7 +4,7 @@ This document stays at the **invariant level**: behaviors guarded by regression 
 server-side checks. Version-specific protocol behaviors live in the decision log at the bottom with
 explicit version stamps, so drift is visible rather than silent — and since 2026-08-16 every stamped
 version has a readable primary source: the protocol texts are published verbatim in
-[`protocols/`](../protocols/), byte-parity-checked against the platform seed.
+the platform seed, [`scripts/seed-protocol-prompts.ts`](../scripts/seed-protocol-prompts.ts).
 
 ## Execution model (pipeline layer)
 
@@ -215,7 +215,7 @@ rather than passing.
   degradation fact.
 
 **Catch-up, 2026-08-17 → 2026-10-06.** The entries below cover five of the versions now published in
-[`protocols/`](../protocols/). `pipeline-orchestrator` 3.18.0 and `observability-config` 1.6.0 are published but not
+the platform seed, [`scripts/seed-protocol-prompts.ts`](../scripts/seed-protocol-prompts.ts). `pipeline-orchestrator` 3.18.0 and `observability-config` 1.6.0 are published but not
 itemised here, and nor are intermediate versions; for those, the VT documents of the period and the protocol texts are
 the record.
 
