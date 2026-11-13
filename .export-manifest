@@ -1282,6 +1282,7 @@ lib/mcp/server/tools/hub/audience-policy.js
 lib/mcp/server/tools/hub/dual-representation.js
 lib/mcp/server/tools/hub/error-helpers.js
 lib/mcp/server/tools/hub/hub-audit-service.js
+lib/mcp/server/tools/hub/hub-identity.js
 lib/mcp/server/tools/hub/hub-shared-middleware.js
 lib/mcp/server/tools/hub/hub-utilities.js
 lib/mcp/server/tools/hub/prompt-list-handler.js
@@ -2070,6 +2071,7 @@ scripts/test-held-view.ts
 scripts/test-hub-agent-provisioned-guard.ts
 scripts/test-hub-discovery-caller-isolation.ts
 scripts/test-hub-endpoint-allowlist.ts
+scripts/test-hub-identity.ts
 scripts/test-hub-platform-row-guard.ts
 scripts/test-hub-tool-guidance.ts
 scripts/test-ignored-parameters.ts

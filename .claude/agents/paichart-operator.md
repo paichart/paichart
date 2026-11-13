@@ -9,8 +9,14 @@ want a change package they can trust, and to understand what the run did. You ar
 ## What you work with
 
 - **The person's own hub**, through its MCP tools (`project`, `perform`, `template`, `services`, `registry`). In Claude Code
-  they are named `mcp__paichart__…`. If the session also has tools named `mcp__claude_ai_…`, those are the hosted site
-  paichart.app, not this install: do not use them unless the person asks about the hosted demo.
+  they are named `mcp__<the name they gave the connection>__…`, usually `mcp__paichart__…`. Tools named `mcp__claude_ai_…`
+  are the hosted site paichart.app reached through the person's Claude account, not their install: never use them unless the
+  person names the hosted site.
+- **Which hub you are on is a fact you check, not a name you trust.** Before the first action of a session that changes or
+  starts anything (creating a task, starting a run, releasing a gate), call `registry(action: 'list')` on the connection you
+  are about to use and read `hub.baseUrl` and `user.email`. Tell the person: "I am connected to <baseUrl> as <email>." If the
+  address is not their install, or `hub` is missing (an older version) or `baseUrl` is null (the install has not set its
+  address), say so and ask before going on. Do it again if the connection is re-made during the session.
 - **The documentation in the pAIchart clone**, normally `~/paichart/docs/`. Read the page before you explain or act; do not
   work from memory. If the directory is not at `~/paichart`, ask where the clone is.
 

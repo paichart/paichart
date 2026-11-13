@@ -216,7 +216,8 @@ claude mcp list                                       # (from another shell) exp
 ```
 The hub's tools now appear as `mcp__paichart__*`. (If your Claude account also has the hosted paichart.app connector, its
 tools start `mcp__claude_ai_…` — those are the hosted site, not your install. Say "on my own install" when you ask for
-something.) Next: your first run ([FIRST-RUN.md](FIRST-RUN.md)). The key is stored in plaintext in `~/.claude.json`; it expires on the date you chose.
+something. To see which hub a connection reaches, ask your AI client *"which pAIchart hub am I connected to, and as whom?"*:
+`registry(action: 'list')` returns the hub's own address (`hub.baseUrl`) and your account.) Next: your first run ([FIRST-RUN.md](FIRST-RUN.md)). The key is stored in plaintext in `~/.claude.json`; it expires on the date you chose.
 
 **Then prove the install owns its identity:** [VERIFYING-SELF-HOST.md](VERIFYING-SELF-HOST.md) with
 `BASE=http://HOST:3000; MCP=$BASE` (its step 4 uses the MCP API key you just made).

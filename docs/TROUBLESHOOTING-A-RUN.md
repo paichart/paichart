@@ -166,7 +166,8 @@ then start that task again.)
 - `claude mcp list` should show `paichart … ✔ Connected`. If it shows nothing, the connection was saved for a different
   directory: add it again and say "save it for all my projects" ([INSTALL.md](INSTALL.md) step 8).
 - If your Claude account also has the hosted paichart.app connector, its tools start `mcp__claude_ai_…`. Those are the hosted
-  site, not your install.
+  site, not your install. To check which hub a connection reaches, ask your AI client *"which pAIchart hub am I connected to,
+  and as whom?"*: `registry(action: 'list')` returns the hub's own address (`hub.baseUrl`) and your account.
 
 ## What did it cost?
 
