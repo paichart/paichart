@@ -1,12 +1,12 @@
 {
-  "public_head": "fad29ca",
+  "public_head": "fb44b4d",
   "counts": {
-    "markdown_files": 658,
-    "user_reachable_by_clicks": 142,
-    "user_reachable_by_clicks_under_claude": 26,
+    "markdown_files": 656,
+    "user_reachable_by_clicks": 149,
+    "user_reachable_by_clicks_under_claude": 29,
     "user_reachable_by_named_path": 267,
     "docs_unreachable_from_any_entry": 75,
-    "private_only_refs": 1172,
+    "private_only_refs": 1160,
     "in_neither_refs": 486,
     "readme_links_index": 1,
     "agent_files": 48,

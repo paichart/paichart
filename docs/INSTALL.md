@@ -404,6 +404,13 @@ Two things come with the clone that make step 8 more than a connector:
 
 ### 10b. Your first run
 
+**Two agents for running pAIchart (optional, one command).** The clone ships two Claude Code agents written for you: one runs
+programs with you and diagnoses a stopped run, the other helps you write a spec. Make them available in every directory:
+```bash
+mkdir -p ~/.claude/agents && cp ~/paichart/.claude/agents/paichart-*.md ~/.claude/agents/
+```
+Then, in Claude Code: *"use the paichart-operator agent to run my first program"*.
+
 **Installing ends here.** The next thing is a separate step with its own cost, so **stop and decide** — and if an assistant
 has been following this guide for you, it must stop here too, tell you the install is complete, and ask before going further.
 

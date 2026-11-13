@@ -18,7 +18,8 @@ pAIchart; the documents you do need from it are linked below.
 ## See a run before you run one
 
 Sign in at [paichart.app](https://paichart.app). A Claude client signs in with GitHub; a ChatGPT client signs in with Microsoft. A
-first sign-in has demo access, which is read-only. Choose **Explore Dashboard**, then **Projects** in the left sidebar, and open **Fabric Telemetry Expansion**: a completed
+first sign-in is a demo account: you can browse the demo projects and use any public MCP service. Until the account is promoted
+to a standard user, you cannot create or edit projects or run agents. Choose **Explore Dashboard**, then **Projects** in the left sidebar, and open **Fabric Telemetry Expansion**: a completed
 program in which one pipeline works out a free address and a second writes the switch change that uses it. It is the same use case
 you can run on your own install: [FIRST-RUN.md](FIRST-RUN.md) gives every call. It is
 [`loopback-ceos2/git-only`](https://github.com/paichart/paichart-configs/tree/main/usecases/loopback-ceos2) in the configs
@@ -42,8 +43,18 @@ repository, and needs nothing but the files in that repository.
 | [Program guide](../.claude/knowledge/pipelines/PROGRAM-HARNESS-USER-GUIDE.md) | Detailed reference on programs: several pipelines coordinated as one change, with values passed between them. Long, and partly written for maintainers. |
 | [Pipeline guide](../.claude/knowledge/pipelines/PIPELINE-HARNESS-USER-GUIDE.md) | Detailed reference on a single pipeline. Its first part describes internals; the parts for someone running one start at "Writing a domain pipeline task". |
 | [Reading a run](READING-A-RUN.md) | How to read a completed run and decide whether to trust it. |
+| [Troubleshooting a run](TROUBLESHOOTING-A-RUN.md) | A run has stopped, or you cannot tell whether it has: where it is, why, and what to do. |
 | [GLOSSARY.md](GLOSSARY.md) | Every term these documents use, in plain words. |
 | [Walkthroughs](../.claude/knowledge/pipelines/walkthroughs/README.md) | One guided tour per domain (network, Kubernetes, Terraform, observability) and one of a whole program. |
+
+## Two agents that help (Claude Code)
+
+| Agent | What it does |
+|---|---|
+| `paichart-operator` | Runs a program with you: launches it, explains each gate and what to check, reads the result, and diagnoses a run that has stopped. |
+| `paichart-spec-writer` | Works through the spec checklist with you and writes `requirements.md` and `topology.json` for a change of your own. It never decides for you and never launches a run. |
+
+They are in the clone's `.claude/agents/`. To use them from any directory: `mkdir -p ~/.claude/agents && cp ~/paichart/.claude/agents/paichart-*.md ~/.claude/agents/`, then start Claude Code and say, for example, *"use the paichart-operator agent: where is my run?"*
 
 ## Write a spec
 
@@ -69,5 +80,5 @@ repository, and needs nothing but the files in that repository.
 - [Verification pack](../verification/README.md) — what each claim was tested against, including the rounds that failed.
 - [Protocols](../protocols/README.md) — the agent-facing contracts, published verbatim.
 - [Examples](../examples/README.md) — change reports the pipelines produced.
-- [Case studies](../case-studies/README.md) · [Tutorials](../tutorials/README.md)
+- [Case studies](../case-studies/README.md)
 - [Demo privacy statement](../PRIVACY-DEMO.md)

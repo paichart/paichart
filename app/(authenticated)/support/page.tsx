@@ -6,16 +6,14 @@ import { Button } from '@/components/ui/Button';
 import { Download, HelpCircle, Lightbulb, FileText } from 'lucide-react';
 import Link from 'next/link';
 
+// Keep in step with ALLOWED_FILES in app/api/support/knowledge/[filename]/route.ts (the route's allowlist is what is enforced).
 const KNOWLEDGE_BASE_DOCS = [
-  { filename: 'getting_started.md', title: 'Getting Started' },
-  { filename: 'security_policy.md', title: 'Security Policy' },
-  { filename: 'architecture_sanitized.md', title: 'Architecture Overview' },
-  { filename: 'paichart_features.md', title: 'pAIchart Features' },
-  { filename: 'trust_levels.md', title: 'Trust Levels' },
-  { filename: 'validation_showcase.md', title: 'Validation Showcase' },
-  { filename: 'external_service_auth.md', title: 'External Service Authentication' },
-  { filename: 'workflow_guide.md', title: 'Workflow Guide' },
-  { filename: 'register_guide.md', title: 'Registration Guide' },
+  { filename: 'READING-A-RUN.md', title: 'Reading a run', description: 'How to follow a run and judge its result: what is a measured fact and what is an agent\'s judgement.' },
+  { filename: 'TROUBLESHOOTING-A-RUN.md', title: 'Troubleshooting a run', description: 'A run has stopped, or you cannot tell whether it has: where it is, why, and what to do.' },
+  { filename: 'OPERATING.md', title: 'Operating: running a program', description: 'From a spec to a change package you apply: launch, gates, the result.' },
+  { filename: 'WRITING-A-SPEC.md', title: 'Writing a spec', description: 'The checklist for writing the two input files of a program for a change of your own.' },
+  { filename: 'FIRST-RUN.md', title: 'Your first run', description: 'See a finished run, then run the same use case on your own install.' },
+  { filename: 'GLOSSARY.md', title: 'Glossary', description: 'Every term these documents use, in plain words.' },
 ];
 
 export default function SupportPage() {
@@ -27,7 +25,8 @@ export default function SupportPage() {
       <Card className="p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">Knowledge Base</h2>
         <p className="text-muted-foreground mb-4">
-          Download documentation and reference guides for the platform.
+          Download the guides for running pAIchart. The full set, including installation, is in the docs/ folder of the
+          public repository.
         </p>
         <div className="divide-y">
           {KNOWLEDGE_BASE_DOCS.map((doc) => (
@@ -37,7 +36,10 @@ export default function SupportPage() {
             >
               <div className="flex items-center gap-3">
                 <FileText className="h-4 w-4 text-muted-foreground" />
-                <span className="font-medium">{doc.title}</span>
+                <div>
+                  <span className="font-medium">{doc.title}</span>
+                  <p className="text-sm text-muted-foreground">{doc.description}</p>
+                </div>
               </div>
               <a
                 href={`/api/support/knowledge/${doc.filename}`}

@@ -96,7 +96,7 @@ That's also why there is no separate scheduler to operate, and why forensics com
 - Connect with: Claude Desktop (GitHub sign-in) or ChatGPT (Microsoft sign-in) — or use the web app
 - Privacy: [PRIVACY-DEMO.md](./PRIVACY-DEMO.md) — what a demo account holds, what it can do, 30-day auto-deletion
 
-A first sign-in is a **demo account**: you can browse the demo projects and use any public MCP service, but you cannot create or edit projects or run agents. Choose **Explore Dashboard**, then **Projects** in the left sidebar, to browse six finished program runs —
+A first sign-in is a **demo account**: you can browse the demo projects and use any public MCP service. Until the account is promoted to a standard user, you cannot create or edit projects or run agents. Choose **Explore Dashboard**, then **Projects** in the left sidebar, to browse six finished program runs —
 each one a use case from the public [`paichart/paichart-configs`](https://github.com/paichart/paichart-configs) repository.
 Open a run to see how a program is built: every task with its title, its description and the agent assigned to it, the gates
 a person released, and the result. Start with **Fabric Telemetry Expansion**. In an AI client, try
@@ -211,7 +211,6 @@ registry(action: "register", {
 - **[The protocols](protocols/)** — the exact agent-facing contracts the pack holds runs against, published verbatim and byte-parity-checked against the platform seed. Every version stamp in the decision log has a readable text here.
 - **[Open questions](verification/OPEN-QUESTIONS.md)** — for researchers. Three findings we think are interesting (three reviewer tiers once approved a defect at *rising* confidence), one hypothesis we lack the power to settle, and lab run data we will share.
 - **Case studies** — three walkthroughs of the same real network→cloud program: [Checked by Machine](case-studies/coordinated-infra-change.md) (*can you trust it*), [You Approve; You Don't Author](case-studies/you-approve-you-dont-author.md) (*what it buys you*), [Inside a Multi-Domain Program](case-studies/inside-a-multi-domain-program.md) (*how it's built* — the DAG, the review tiers, how far it scales).
-- **MCP Tool Excellence** — a 12-chapter series on building MCP tools AI clients can call without external docs, extracted from pAIchart's own production audits: [tutorials/README.md](tutorials/README.md)
 - **[`@paichart/containment-checks`](packages/containment-checks/)** — the Tier-1 arithmetic, extracted verbatim as an MIT library with its incident-fixture test suite: mechanical checks for LLM-derived infrastructure values (`cidr`, `asn` — extensible by `kind`), where an unimplemented check reports *not mechanically covered*, never a pass.
 
 ## Links

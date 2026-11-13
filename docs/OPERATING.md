@@ -15,8 +15,8 @@ platform and on your own install.
 ## Step 1 — Write the objective and its spec (once per objective)
 
 A program reads two published files: **`requirements.md`** (the objective, the rules, who approves what, the final checks) and
-**`topology.json`** (where each system's configuration lives). It never takes addresses or device lists from you; the agents read
-those from live state.
+**`topology.json`** (where each system's configuration lives). The spec names the systems and the fixed values (a pool, a port); it never
+states what is configured on them now. The agents read that from the sources the spec declares.
 
 - **Write the spec by hand:** about one page, in the shape of a released example, using [WRITING-A-SPEC.md](WRITING-A-SPEC.md). Put both files in any repository whose raw URLs your hub can fetch; if a leg reads configuration files from Git,
   that repository must be the one your hub's Git pin names. This is the route in use.
@@ -94,5 +94,5 @@ The package names, per system: the edits, the rollback, and the validation steps
 
 ---
 
-**If something looks wrong:** read the leg's facts line and its reviewer's reasons first. Then see [PROGRAM-HARNESS-USER-GUIDE.md](../.claude/knowledge/pipelines/PROGRAM-HARNESS-USER-GUIDE.md) §7
+**If a run stops, or something looks wrong:** [TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md) finds where the run is and why. For a refusal, read the leg's facts line and its reviewer's reasons first. Then see [PROGRAM-HARNESS-USER-GUIDE.md](../.claude/knowledge/pipelines/PROGRAM-HARNESS-USER-GUIDE.md) §7
 (failure semantics: a run never hangs and never applies) and [PROGRAM-RUN-FORENSICS-GUIDE.md](../.claude/knowledge/pipelines/PROGRAM-RUN-FORENSICS-GUIDE.md).

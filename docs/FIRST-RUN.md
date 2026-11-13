@@ -31,7 +31,8 @@ In the web app, step by step:
 ## 1. See a finished run (no install needed)
 
 Sign in at [paichart.app](https://paichart.app). A Claude client signs in with GitHub; a ChatGPT client signs in with
-Microsoft. A first sign-in has demo access, which is read-only. Choose **Explore Dashboard**, then **Projects** in the left sidebar, and open **Fabric Telemetry
+Microsoft. A first sign-in is a demo account: you can browse the demo projects and use any public MCP service. Until the
+account is promoted to a standard user, you cannot create or edit projects or run agents. Choose **Explore Dashboard**, then **Projects** in the left sidebar, and open **Fabric Telemetry
 Expansion**. It is a completed program with two legs: the first works out one free address from a pool by reading two switch
 configuration files; the second writes the change that adds a loopback with that address. Look at the plan, the three gates,
 each leg's result and the final comment on the program task.
@@ -197,7 +198,7 @@ how to read one.
 in the project, by model and by task. The run this guide was checked on, on a fresh install on 2026-11-13: USD 5.39, 17 agent
 runs, 21.5 minutes including the gates.
 
-**If a run stops for no visible reason** — a leg sits *In Progress* for more than ten minutes with nothing new — check whether the
+**If a run stops** — [TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md) covers every case. The one specific to a fresh install: a leg sits *In Progress* for more than ten minutes with nothing new — check whether the
 hub can reach its database: `curl -s localhost:8080/health` shows `"database": { "state": … }`. `ok` means the hub is fine and the
 run is waiting on something else (a gate, usually). `unreachable` means PostgreSQL is down or restarting; the hub reconnects by
 itself when it returns. `engine-dead` means the hub's own database client is broken; the hub notices within about 30 seconds,

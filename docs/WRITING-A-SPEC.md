@@ -35,8 +35,10 @@ input; the README says what must be running, which values are placeholders and w
   a stated reachability rule; released `git-only/` 2026-11-11 and `git-live/` 2026-11-12. (`firewall-partner-path/` is its
   superseded first revision, kept as that run's input.)
 
-Prepared, not yet released: `ssh-access-triangle/git-only` (an access change; the Tier 2 access caution applies) and
-`igp-migration-2node/live` (a person applies each phase between legs).
+- `ssh-access-triangle/` — one change leg that adds an access rule on three switches; released `git-only/` 2026-11-12 (after
+  the count in the status line above). The Tier 2 access caution applies.
+
+Prepared, not yet released: `igp-migration-2node-r18/live` (a person applies each phase between legs).
 
 ⚠️ The older examples under `paichart/paichart` `program-artifacts/` (`held-network-window-p1-vlg/`, `lab-exporter-loopback-ceos2/`)
 name the retired repository `paichart/paichart-lab-configs` in their Device sources lines; production's Git file source has read only
@@ -128,6 +130,10 @@ send an answer back to a leg: you can accept the choice or refuse it, not change
 | M7 | **In what order are the legs' changes applied? Who approves each gate (name and email)? Where does each gate sit:** before its leg starts; after its leg has produced its result and before the program completes; or after a leg has handed on a value and before any other leg uses it? (The plan gate always sits first.) | the program | a missing apply order was refused; gates with no named approver were assigned differently run to run |
 
 If you cannot answer a Tier 1 question, do not launch.
+
+**M6c on a leg that reads Git files only.** A configuration file cannot show which address requests arrive from. So on such a
+leg "stop" always means the leg makes no change. Settle M6b yourself first, then answer M6c "go ahead" (the leg states the
+address was taken from the spec, not observed), or give the leg a read of the running device.
 
 ### Tier 2: ANSWER ONLY IF YOU CARE. Left unstated, the leg (or the planner) decides without asking, and writes what it decided in its package or plan
 

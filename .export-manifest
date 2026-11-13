@@ -29,6 +29,8 @@
 .claude/agents/multi-tenancy-specialist.md
 .claude/agents/oauth-multi-client-specialist.md
 .claude/agents/oauth-multi-provider-specialist.md
+.claude/agents/paichart-operator.md
+.claude/agents/paichart-spec-writer.md
 .claude/agents/parameter-normalizer-specialist.md
 .claude/agents/performance-analyst-specialist.md
 .claude/agents/phase-stage-specialist.md
@@ -1296,6 +1298,7 @@ docs/README.md
 docs/RUNNING.md
 docs/SELF-HOST-KEPT-FILES.md
 docs/SELF-HOST-RUN-SHEET.md
+docs/TROUBLESHOOTING-A-RUN.md
 docs/VERIFYING-SELF-HOST.md
 docs/WRITING-A-SPEC.md
 docs/systemd/paichart-mcp.service

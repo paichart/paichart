@@ -1,6 +1,6 @@
 # Demo User Privacy Statement
 
-_Last updated: 2026-05-27_
+_Last updated: 2026-11-13_
 
 pAIchart offers a **demo experience** so you can explore the MCP Hub platform
 using your existing AI client (Claude or ChatGPT) without creating a separate
@@ -45,16 +45,20 @@ do not sell it, and we do not contact you.
 
 ## What a demo account can do
 
-Demo accounts are intentionally limited to **read and explore**:
+When you first sign in, your account is a **demo account**. It stays one until it
+is promoted to a standard user. Demo accounts are intentionally limited to **read
+and explore**:
 
 - **Demo resources** — read-only. You can view demonstration POVs, phases,
   tasks, and related content, but cannot create, edit, or delete them.
 - **MCP services** — read and execute. You can discover registered services and
   run (execute) the approved public services exposed for demos. You **cannot**
   register, modify, or delete services.
-- **Agents** — demo accounts cannot run AI agents using platform credentials. To
-  run an agent you must supply your **own API key** (e.g. your own Anthropic
-  key), so any such usage is billed to you, not to pAIchart.
+- **Agents** — demo accounts cannot run AI agents. Running an agent changes a
+  project, and a demo account cannot change projects. An account can run agents
+  only after it has been promoted to a standard user, and then only with its **own
+  API key** (e.g. your own Anthropic key): paichart.app holds no shared key, so the
+  usage is billed to you, not to pAIchart.
 
 Demo accounts are also excluded from team-member and assignee lists, so your
 identity is not presented to other users as a selectable collaborator.

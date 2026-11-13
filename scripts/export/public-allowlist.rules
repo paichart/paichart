@@ -199,6 +199,7 @@
 + docs/READING-A-RUN.md
 + docs/WRITING-A-SPEC.md
 + docs/GLOSSARY.md
++ docs/TROUBLESHOOTING-A-RUN.md
 + docs/SELF-HOST-RUN-SHEET.md
 + data/geographical-default.json
 + docs/OAUTH-SETUP.md
