@@ -46,6 +46,11 @@ const steps: Array<[string, string]> = [
   ['Pipeline Harness template', 'npx ts-node -r tsconfig-paths/register scripts/seed-harness-template.ts'],
   ['Artifact-synthesis templates', 'npx ts-node --project prisma/tsconfig.seed.json scripts/seed-artifact-synthesis-templates.ts'],
   ['Program templates (pipeline-of-pipelines)', 'npx ts-node -r tsconfig-paths/register scripts/seed-program-templates.ts'],
+  // 2026-11-13 (devext fresh install, first program): a program's VALUE leg — `(protocol: network-derivation)` — needs the
+  // Network Derivation Architect and the Network Derived Value Reviewer. They live in this seed, which db:seed never ran, so on a
+  // self-host the leg's harness failed `Agent template not found: "Network Derivation Architect"` and the first run in
+  // docs/FIRST-RUN.md could not complete. Same miss as the observability comment below: the PROTOCOL seeded, its TEMPLATES did not.
+  ['Value-leg templates (network derivation)', 'npx ts-node --project prisma/tsconfig.seed.json scripts/seed-value-chain-templates.ts'],
   ['Domain templates — network provisioning', 'npx ts-node -r tsconfig-paths/register scripts/seed-network-provisioning-templates.ts'],
   ['Domain templates — Terraform IaC', 'npx ts-node -r tsconfig-paths/register scripts/seed-terraform-iac-templates.ts'],
   ['Domain templates — Kubernetes GitOps', 'npx ts-node -r tsconfig-paths/register scripts/seed-kubernetes-gitops-templates.ts'],

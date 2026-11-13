@@ -6,6 +6,26 @@ checked value. A **program** is several pipelines coordinated as one change; eac
 **gate** is a point where the program stops until a person approves. pAIchart never applies a change: you get a package, and
 applying it is your step.
 
+**Why there are gates.** A program is a graph of AI agents, and **your approvals are how a person regulates that graph**. The
+agents cannot pass a gate themselves: the work behind it does not start until you have looked at what was produced and said
+yes. A gate is where you check the plan before any agent acts on it, check a value before another agent builds on it, and
+check a change package before you would apply it. Saying no — leaving a gate closed — is a normal outcome, not a failure.
+
+**You can watch and approve in the web app.** Open your install in a browser, choose **Projects** in the left sidebar
+(refresh the page if the project is not listed yet), and click the project: every task of the run is there with its title,
+its description, the agent assigned to it and its result, and each gate is a task whose title usually starts `APPROVE`.
+Releasing a gate means marking that task completed — in the web app, or with the call shown below.
+
+In the web app, step by step:
+- **To read what an agent produced** (the plan, a leg's result): click the project, click the task (for the plan, the one
+  whose title starts *Produce program plan*). Two menus appear, **Tasks** and **Agents**. Choose **Agents → Artifacts** and
+  open the report.
+- **To release a gate:** in the project, open the phase menu (named after your phase — *First run* here), select the gate task
+  (for the plan gate, the one whose title starts *APPROVE PROGRAM PLAN*), open the **Tasks** menu, change the status from
+  **In Progress** to **Completed**, and press **Save Changes**.
+- **Or just say it to Claude** — the simplest way: *"If the plan looks good, release the gate."* Claude reads what was produced,
+  tells you what it found, and releases the gate for you.
+
 ## 1. See a finished run (no install needed)
 
 Sign in at [paichart.app](https://paichart.app). A Claude client signs in with GitHub; a ChatGPT client signs in with
@@ -33,14 +53,25 @@ from that repository and nothing else: no lab, no switches.
 **What it costs:** the released run of this use case on 2026-11-11 used about USD 5.50 of Anthropic usage across 17 agent
 runs, and took 25 minutes including the time spent at its three gates.
 
-Type each call to Claude Code in `~/paichart`, or issue it directly.
+> **Stop here before you launch.** Installing is finished; what follows is a separate thing — your first program — and it
+> **spends money on your Anthropic key**. Nothing below should start without your say-so. **If an assistant is following this
+> guide for you, it must stop at this point**, tell you in plain words what it is about to do (run one released use case from
+> the test repository: two pipelines, three gates you approve, a change package at the end, nothing applied to any device),
+> what it will cost and how long it will take, and wait for you to say go. **At each gate it must also stop**, and not just
+> say "release the gate": it must say what the gate is for, what the agents produced, where you can read it yourself in the
+> web app (Projects → the project), and only then ask for your decision.
+
+Why do it: it proves the whole chain on your install — the hub, your Anthropic key, the browser service, the Git file source
+and its pin — and it shows you, on a small proven example, exactly what you will later do with a change of your own.
+
+Type each call to Claude Code (any directory), or simply ask for it in plain words.
 
 1. **A project (POV) to hold the run.** POV stands for proof of value: the project a run lives in.
    ```
    perform(action: 'pov.create', parameters: { title: 'First runs', countryName: 'Australia',
      description: 'My first pAIchart runs.', phases: [ { name: 'First run', type: 'EXECUTION' } ] })
    ```
-   → `✅ POV Created` with the POV id. Keep it.
+   → `✅ POV Created` with the POV id. Keep it. The project now appears in the web app under **Projects** (refresh the page).
 2. **A stage for the run.**
    ```
    perform(action: 'stage.create', parameters: { povId: '<pov id>', phaseName: 'First run', name: 'Loopback run' })
@@ -60,9 +91,15 @@ Type each call to Claude Code in `~/paichart`, or issue it directly.
    perform(action: 'agent.execute', parameters: { taskId: '<task id>', waitForCompletion: false })
    ```
    → `Execution Status: RUNNING`. Within a minute the program creates its own stage and starts the **Program Architect**,
-   which reads the two files and writes the plan.
+   which reads the two files and writes the plan. **The plan takes about five minutes**; nothing needs you until then. To see
+   where it is, ask for `project(action: 'task.context', taskId: '<task id>')` every minute or so.
 5. **Read the plan, then release the plan gate.** When the plan is ready the program comments
-   `⏸ PROGRAM PLAN AWAITING APPROVAL` on your task, with the gate's id. The plan should show **two legs — a value leg and a
+   `⏸ PROGRAM PLAN AWAITING APPROVAL` on your task, with the gate's id. **To read the plan itself**, in the web app open **Projects** → your project → the task whose title starts *Produce program
+   plan* → **Agents → Artifacts** — the easiest way — or ask for
+   `perform(action: 'agent.results', parameters: { taskId: '<Program Architect task id>', verbose: true })`. (The comment also
+   offers a `fetch(id: …)` line; on some versions that id does not resolve — use one of the two ways above.) The comment may
+   say the gates are **unassigned, please reassign**: that is because the spec's approvers are placeholders. You do not need
+   to reassign anything — as the project's owner you can release each gate yourself. The plan should show **two legs — a value leg and a
    change leg — and three gates**. The approvers named in the spec are placeholders (`…@example.com`), so each gate falls to
    you as the project's owner. `npm run report:gate -- <gate id>` (run in `~/paichart`) prints what to check, from stored facts. Then:
    ```
@@ -75,6 +112,16 @@ Type each call to Claude Code in `~/paichart`, or issue it directly.
    **Finding the other two gates.** All three gates are tasks of type `APPROVAL` in the program's own stage (their titles
    usually start `APPROVE`): `project(action: 'task.list', povId: '<pov id>')` lists them with their ids and status. A gate can be released only when
    the step before it has finished.
+   **Releasing the plan gate starts the first agent pipeline** — we call it a **leg**. Here it is the leg that works out the
+   address; it takes a few minutes, and the next gate cannot be released until it has finished.
+
+   **From here you can hand the rest to Claude.** Say: *"Check if the leg is completed and, if it looks good, release the next
+   two approval gates."* Claude waits for each leg, reads its result, tells you what it found, and releases the address gate
+   and then the network change gate. The program runs on until it finishes with **`programReleasable: true`** — every leg and
+   the integration review approved — or stops with **needs-revision**, which names what was refused and why. On this small,
+   proven example that is a reasonable way to see a whole run; on a change of your own, read each result yourself before you
+   approve. Steps 6 and 7 say what each gate is about.
+
 6. **The address gate.** The value leg publishes one address inside `10.99.0.0/24` that neither switch file uses, and changes
    nothing. `npm run report:gate -- <address gate id>` prints the address and whether the leg's reviewer approved it; the
    leg's own report is `perform(action: 'agent.results', parameters: { taskId: '<value leg task id>', verbose: true })`

@@ -49,17 +49,20 @@ sudo -u postgres psql -qc "CREATE USER paichart WITH PASSWORD '$PW';"
 sudo -u postgres createdb -O paichart paichart
 ```
 
-**Docker — needed for steps 9b and 9c, and so for every program** (skip it only if you will not run programs). After `usermod`
-below you must log out and back in before `docker` works without `sudo`: Ubuntu's own package is enough:
+**Docker — needed for steps 9b and 9c, and so for every program** (skip it only if you will not run programs).
+**If `docker --version` already works on this machine, do NOT run the install line** — it can replace a Docker you already
+use; just run the last two lines. Otherwise Ubuntu's own package is enough; after `usermod` you must log out and back in
+before `docker` works without `sudo`:
 ```bash
 sudo apt-get install -y docker.io docker-compose-v2 && sudo usermod -aG docker "$USER"   # log out/in for the group
-docker compose version   # expect v2.x
+docker compose version   # expect v2 or later
+ss -ltnp | grep -E ':(3000|8080|3100|3110)\b' || echo PORTS-FREE   # expect PORTS-FREE: pAIchart needs these four ports
 ```
 
 ## 4. Configure
 ```bash
 cd ~/paichart
-npm ci                                   # 1–20 min depending on the box; npm reports ~1050 packages. It also prints deprecation warnings and a
+npm ci                                   # 1–20 min depending on the box; npm reports about 1,000 packages. It also prints deprecation warnings and a
                                          # vulnerability count — that is not a failure; rc=0 is
 cp .env.example .env
 chmod 600 .env                           # DO NOT SKIP. .env holds DATABASE_URL (with the password)
@@ -67,7 +70,7 @@ chmod 600 .env                           # DO NOT SKIP. .env holds DATABASE_URL 
                                          # (0002) makes this copy 0664 — group- AND world-readable. The only
                                          # thing containing it is your home directory being 0700, which is a
                                          # default you may not have.
-HOST=192.168.1.50                        # ← yours
+HOST=192.168.1.50                        # ← CHANGE THIS to your machine's address before you paste the rest of the block
 sed -i "s#^DATABASE_URL=.*#DATABASE_URL=\"postgresql://paichart:$(cat ~/.paichart-dbpw)@localhost:5432/paichart\"#" .env
 sed -i "s#^APP_BASE_URL=.*#APP_BASE_URL=http://$HOST:3000#" .env
 sed -i "s#^OAUTH_STATE_SECRET=.*#OAUTH_STATE_SECRET=\"$(openssl rand -hex 32)\"#" .env
@@ -82,7 +85,7 @@ grep -c "^JWT_" .env                     # expect 3
 ## 5. Seed and start
 ```bash
 set -a; . ./.env; set +a                 # load .env into this shell for the commands below
-npm run db:seed                          # ~1–2 min; prints its own step count as it runs, ends "✅ db:seed complete"; the SUPER_ADMIN password is printed ONCE — copy it now.
+npm run db:seed                          # ~1–2 min; prints its own step count as it runs, ends "✅ db:seed complete"; the admin password is printed ONCE, EARLY in the output (at step 6 of 22, in a box) — scroll up to it and copy it now.
                                          # Expect pino JSON lines and a "[DEV] SLOW QUERY" or two in the middle — noise, not errors. Safe to re-run
                                          # after a git pull: every step is add-only (a re-run never deletes; --force-recreate on db:templates does)
                                          # (schema, grants, admin, protocols, hub prompts, named workflows, agent/harness/program/domain/phase templates)
@@ -90,10 +93,13 @@ npm run db:seed                          # ~1–2 min; prints its own step count
 ```
 Build once, then run the **production** build — the demo should feel like the hosted service (fast, no dev tooling):
 ```bash
-unset NODE_ENV                                                  # the step above loaded .env into this shell; a build that inherits
-                                                                # NODE_ENV=development fails prerendering ("<Html> should not be imported",
-                                                                # "reading 'useContext'") and the web server then cannot start
-npm run build                                                   # 3–10 min; "✓ Compiled successfully" then the route table
+unset NODE_ENV                                                  # in case your shell has NODE_ENV=development set: a build that inherits it
+                                                                # fails prerendering ("<Html> should not be imported", "reading 'useContext'")
+                                                                # and the web server then cannot start
+npm run build                                                   # 3–10 min; "✓ Compiled successfully" then the route table.
+                                                                # While it collects page data it prints a few long JSON lines that LOOK like
+                                                                # failures ("Router bridge failed to load — falling back…", "Dynamic server
+                                                                # usage… Auth error") — they are expected at build time; BUILD-OK below is the check
 test -f .next/BUILD_ID && echo BUILD-OK   # expect BUILD-OK — Next writes BUILD_ID only when the build completes (export-detail.json is deleted after a successful build, so it cannot be the check)
 ```
 Then install the two **systemd units** that keep them running. They ship with the placeholder `YOUR_USER` in `User`,
@@ -114,7 +120,7 @@ Logs go to the journal, so they survive restarts and rotate themselves:
 journalctl -u paichart-mcp -e -f          # follow
 journalctl -u paichart-web --since -1h    # last hour, after something went wrong
 ```
-One-time, so the journal cannot grow without bound:
+One-time, so the journal cannot grow without bound (note: this caps the WHOLE machine's journal at 500 MB, not only pAIchart's):
 ```bash
 sudo mkdir -p /etc/systemd/journald.conf.d   # not there on a fresh Ubuntu 24.04
 echo -e '[Journal]\nSystemMaxUse=500M' | sudo tee /etc/systemd/journald.conf.d/paichart.conf
@@ -194,20 +200,20 @@ and leave **Use System Provider** on. The app never reads the variable itself.)
 something shorter for a lab). The key's `role` claim is a mint-time snapshot: the hub authorises from the live database,
 so changing a user's role takes effect on existing keys immediately, and the claim can read stale.
 
-**Claude Code must be running inside `~/paichart` for this.** The specialist sub-agents load from the clone, and Claude Code
-saves an MCP connection for the directory you add it in. If you started it somewhere else (your home directory, say): type
-`exit`, then `cd ~/paichart && claude`.
-
-Then just ask — you do not need to know the command:
-*"Please connect me to pAIchart at http://HOST:3000/mcp using HTTP transport and this API key: &lt;paste the key&gt;"* — Claude
-runs `claude mcp add --transport http paichart http://HOST:3000/mcp --header "X-API-Key: …"` for you. The connection
-only appears after a restart, so type `exit`, then at the shell (still in `~/paichart`):
+**Now connect Claude Code to your hub.** Stay where you are — it works from any directory, including your home directory. Just
+ask; you do not need to know the command:
+*"Please connect me to pAIchart at http://HOST:3000/mcp using HTTP transport and this API key, and save it for all my
+projects: &lt;paste the key&gt;"* — Claude runs
+`claude mcp add --scope user --transport http paichart http://HOST:3000/mcp --header "X-API-Key: …"` for you. ("For all my
+projects" matters: without it the connection is saved only for the directory you are in, and Claude Code started anywhere
+else shows no pAIchart tools.) The connection only appears after a restart, so type `exit`, then at the shell:
 ```bash
 claude -c                                             # -c continues the same conversation with the new connection loaded
 claude mcp list                                       # (from another shell) expect: paichart … ✔ Connected
 ```
-The hub's tools now appear as `mcp__paichart__*`. First thing to try: `prompt_command("/prompt HOWTO-get-started")`,
-then your first run ([FIRST-RUN.md](FIRST-RUN.md)). The key is stored in plaintext in `~/.claude.json`; it expires on the date you chose.
+The hub's tools now appear as `mcp__paichart__*`. (If your Claude account also has the hosted paichart.app connector, its
+tools start `mcp__claude_ai_…` — those are the hosted site, not your install. Say "on my own install" when you ask for
+something.) Next: your first run ([FIRST-RUN.md](FIRST-RUN.md)). The key is stored in plaintext in `~/.claude.json`; it expires on the date you chose.
 
 **Then prove the install owns its identity:** [VERIFYING-SELF-HOST.md](VERIFYING-SELF-HOST.md) with
 `BASE=http://HOST:3000; MCP=$BASE` (its step 4 uses the MCP API key you just made).
@@ -219,7 +225,7 @@ or the `mcp-remote --header` stanza the setup sheet shows.
 The hub's point is other MCP services: register them once, then every AI client reaches them through `${APP_BASE_URL}/mcp`
 with one identity. This repository ships a descriptor for a public, keyless one — Context7 (library documentation) —
 so you can see the whole path without running anything else. Because the endpoint is public HTTPS, no allowlist is
-involved. In Claude Code (inside `~/paichart`), ask, in this order:
+involved. In Claude Code, ask, in this order:
 
 1. *"I'm new to this. Register the MCP service described in `descriptors/context7-descriptor.json` with the hub, using
    its full tool schemas, and show me the registry's response verbatim."*
@@ -329,11 +335,16 @@ and limits are in [SELF-HOST-KEPT-FILES.md → Reading kept files from Git](SELF
 ```bash
 cd ~/paichart
 cp services/github-service/.env.example services/github-service/.env && chmod 600 services/github-service/.env
-# edit it: paste the token (the one line)
+```
+**Stop and edit that file now** — `nano services/github-service/.env` — paste your token on its one line and save. The next
+commands fail (a `503` on `healthz`) if the placeholder is still there.
+```bash
 docker compose -f docker-compose.self-host.yml --profile git up -d --build
 curl -s localhost:3110/livez                                   # expect: ok
 curl -s -o /dev/null -w '%{http_code}\n' localhost:3110/healthz # expect: 200 (503 = token missing, revoked or expired)
-npm run seed:github-service                                    # prints the ONE repo agents may read — your pin; a ⚠️ line means it is unset
+npm run seed:github-service                                    # prints the ONE repo agents may read — your pin; a ⚠️ line means it is unset.
+                                                               # It adds "the hub uses it after its next restart": on a fresh install no restart is
+                                                               # needed (the pin was in .env before the hub first started); after CHANGING the pin, restart
 psql "$(grep ^DATABASE_URL .env | cut -d= -f2- | tr -d '"')" -At -c "select id, status from mcp_tools where id = 'github-service'"
                                                                # expect: github-service|ACTIVE
 ```
@@ -341,8 +352,8 @@ Same rule as 9b: run the seed from the clone you are testing.
 
 **4. Prove the read and the pin** in Claude Code (`claude -c`):
 1. *"Through the hub, ask github-service to `get_file_contents` owner `<owner>`, repo `<repo>`, path `<a file in it>`, ref
-   `main`."* → the file's text and the commit it was read at.
-2. The same call with any other repo → refused with `PINNED_ARGUMENT`. That refusal is the pin working.
+   `main`."* (with the shipped pin: owner `paichart`, repo `paichart-configs`, path `network/base/ceos2-startup.cfg`) → the file's text and the commit it was read at.
+2. The same call with any other repo → refused: "repo is outside the file source pin" (logged as `PINNED_ARGUMENT`). That refusal is the pin working.
 
 Rotation: replace the token line in `services/github-service/.env`, then `docker compose -f docker-compose.self-host.yml
 --profile git up -d`. Anything on this host that can reach `127.0.0.1:3110` gets the token added to its requests (the same
@@ -352,7 +363,7 @@ host-level trust as the rest of the stack) — keep the port local. The backgrou
 | Symptom | Cause | Fix |
 |---|---|---|
 | `/healthz` answers 503 | token missing, revoked or expired (health checks the token only) | new token line in `services/github-service/.env`, then `up -d` |
-| a read is refused `PINNED_ARGUMENT` | the call named another repo, a commit, or a ref other than `main` — or the pin is unset (the seed printed ⚠️) | set `GIT_FILE_SOURCE_PIN` in the hub's `.env`, restart the hub |
+| a read is refused "outside the file source pin" (`PINNED_ARGUMENT` in the hub's log) | the call named another repo, a commit, or a ref other than `main` — or the pin is unset (the seed printed ⚠️) | set `GIT_FILE_SOURCE_PIN` in the hub's `.env`, restart the hub |
 | reads still refused after you set the pin | the pin is read once, when the hub starts | restart the hub (between runs: a restart stops runs in flight) |
 | the hub's MCP server will not start, `GIT_FILE_SOURCE_PIN is malformed` | the value is not exactly `<owner>/<repo>` | fix the value; letters, digits, `.` `_` `-` only, no branch |
 | health is 200 but a read fails (404) | the token cannot see that repo (a private repo needs it selected, Contents read-only) | regenerate the token for that repo |
@@ -361,9 +372,10 @@ host-level trust as the rest of the stack) — keep the port local. The backgrou
 ## 10. Operate it from Claude — the GUI is not how pAIchart is run
 Two things come with the clone that make step 8 more than a connector:
 
-- **Purpose-built sub-agents.** `.claude/agents/` holds the specialist agents and `CLAUDE.md` tells Claude Code how to use
-  them. They load automatically when you start Claude Code **inside the clone** — so run `claude` from `~/paichart`,
-  not from your home directory. `discovery-scout` maps a subsystem before you change it; `mcp-hub-specialist`,
+- **Purpose-built sub-agents (advanced — for when you change the code, not for running programs).** `.claude/agents/` holds
+  the specialist agents and `CLAUDE.md` tells Claude Code how to use them. They load only when you start Claude Code **inside
+  the clone** (`cd ~/paichart && claude`); you do not need them for your first runs, and Claude Code works for everything in
+  this guide from any directory. `discovery-scout` maps a subsystem before you change it; `mcp-hub-specialist`,
   `template-system-specialist`, `dev-ops-specialist` and the rest each own a domain; `pipeline-harness-specialist`
   drives autonomous pipelines and programs.
 - **The MCP tools are the operating surface.** Day-to-day administration and operation happen by asking Claude,
@@ -385,8 +397,12 @@ Two things come with the clone that make step 8 more than a connector:
 
 ### 10b. Your first run
 
+**Installing ends here.** The next thing is a separate step with its own cost, so **stop and decide** — and if an assistant
+has been following this guide for you, it must stop here too, tell you the install is complete, and ask before going further.
+
 **[FIRST-RUN.md](FIRST-RUN.md)** — look at a finished run on the hosted site, then run the same use case on this install
-(it needs only steps 8, 9b and 9c: no lab, no switches), then a bigger example with its own lab.
+(it needs only steps 8, 9b and 9c: no lab, no switches; about USD 5.50 of Anthropic usage and 25 minutes), then a bigger
+example with its own lab.
 
 **You are done installing when:** the four `curl` checks at the end of step 5 print `200`, `200`, your own origin and `401`;
 step 6's page shows `http://HOST:3000/mcp`; your Anthropic key is saved (step 8); `claude mcp list` shows

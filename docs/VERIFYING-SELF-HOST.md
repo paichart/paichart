@@ -175,7 +175,7 @@ psql "$DATABASE_URL" -tAc "SELECT count(*) FROM pg_stat_activity WHERE query LIK
 #    Step 2 no longer kills anything, so on its own it verifies the code fix and would
 #    pass on a box where Restart= was never going to fire. SIGKILL bypasses the graceful
 #    shutdown path and is the cheapest analogue of an OOM kill — the likeliest residual cause.
-sudo systemctl kill -s SIGKILL paichart-mcp
+sudo systemctl kill --kill-whom=main -s SIGKILL paichart-mcp   # this drops every connected MCP client and stops any run in flight — do it between runs
 sleep 15
 systemctl is-active paichart-mcp                   # expect: active  (Restart= fired)
 ```
