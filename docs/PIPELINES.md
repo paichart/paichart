@@ -26,8 +26,7 @@ progress. Starting a pipeline spends your Anthropic credit.
 
 ## Kept files — edits by reference
 
-*Live in: **observability-config** (since 2026-10-17), **kubernetes-gitops** (since 2026-10-19), **terraform-iac** (since
-2026-10-21) and **network-provisioning** (since 2026-10-27, 1.25.0) — k8s and terraform with files from a Git config repo, network with
+*Available in **observability-config**, **kubernetes-gitops**, **terraform-iac** and **network-provisioning** — k8s and terraform with files from a Git config repo, network with
 each device's declared Git file or, where it has none, its running configuration read from the device.*
 
 ### What it is
@@ -132,7 +131,7 @@ Nothing in the pipeline writes. When the gate releases and you apply:
 
 The base check is an operator tool, run from a copy of this repository.
 
-**Files kept from a Git repository** (the file source for kubernetes-gitops; k8s legs are held since 2026-10-19, 1.18.0): the
+**Files kept from a Git repository** (the file source for kubernetes-gitops): the
 kept original then comes from a commit, and `held.get`'s metadata carries that commit as `sourceRevision` plus the repository
 (`target`) and the file's `path`. Check it against the repository instead of a live file, with **your own** GitHub CLI
 login (never the platform's file source):
@@ -161,7 +160,7 @@ check that file by hand. The Git file source is admin-only, and reads only the o
 - **Apply** = merge the candidate as a pull request after the Git base check reads MATCH (above); re-run the check just before
   you merge.
 
-### Terraform: kept `.tf` files from your config repo (terraform-iac 1.15.0, since 2026-10-21)
+### Terraform: kept `.tf` files from your config repo
 
 - **Name the file in the task.** One line per file, e.g. *"Source file to read (repo read): owner `acme`, repo `infra-live`, path
   `terraform/storage.tf`"*. Only the **`main` branch** of the pinned repository is read (a read naming no branch is read as `main`). A task naming a branch, tag or commit is not
@@ -179,7 +178,7 @@ check that file by hand. The Git file source is admin-only, and reads only the o
 - **Who can run it.** The Git file source is admin-only: a non-admin's run gets no kept file and is judged in full, as before (not forced).
 - **Apply** = merge the candidate as a pull request after the Git base check reads MATCH (above), then your governed `terraform apply`.
 
-### Network: kept device configurations (network-provisioning 1.25.0, since 2026-10-27)
+### Network: kept device configurations
 
 - **Declare each device's source** in a `## Device sources` block ("Device sources" below): `git-file` (your config file in a Git
   repo), `device-read` (the running configuration read from the device through your read-only device service), `live-read` (since
@@ -206,14 +205,14 @@ check that file by hand. The Git file source is admin-only, and reads only the o
   says so in that device's change list and gives it an **incremental apply**: enter only the lines the edits add or change, in a
   configuration session, review that session's diff, and commit with the same revert timer — or bring the Git file in line with the
   device first. It never loads that whole file, and the change Reviewer refuses a package that does. Some listed lines are rendering
-  differences rather than real drift: in our lab a top-level BGP `network` line in the Git file is shown by the device under
+  differences rather than real drift: for example, a top-level BGP `network` line in the Git file is shown by the device under
   `address-family ipv4`. The incremental apply is still the safe shape for that device.
 - **Markers on new members.** When the change adds a member to a population the objective, the contract or the existing members
   identify by a marker (for example the description every existing exporter interface carries), the new member carries the same
   marker, in plain ASCII, so a later value leg that selects by it sees the new member. Known cosmetic case: when the existing
-  descriptions carry an extra note (in our lab, `telemetry-exporter (existing allocation)`), the new member may copy the whole
-  description, note included (register VALUE-MARKER-CONTINUITY).
-- **Proven on one platform family** (Arista EOS in our lab); other vendors are designed for but not yet live-proven.
+  descriptions carry an extra note (for example `telemetry-exporter (existing allocation)`), the new member may copy the whole
+  description, note included.
+- **Proven on one platform family** (Arista EOS); other vendors are designed for but not yet live-proven.
 
 ### Limits worth knowing
 
@@ -230,7 +229,7 @@ Design and evidence: [`kept-file-edit-by-reference-pattern.md`](../.claude/knowl
 
 ## Writing a domain pipeline task
 
-Every example below ran live (2026-10-27 window); copy and change the work, the devices and the sources.
+Every example below has run live; copy and change the work, the devices and the sources.
 
 ### Anatomy of a good task
 
@@ -274,18 +273,17 @@ Read-only harvest, change package only — nothing is applied by this run.
 
 - **List every device the leg must SEE, not only the devices it changes.** The Harvester reads only the devices the block names. If
   the change derives a value that must not collide with anything on another device — a NAT pool, an address range, an AS number —
-  that other device must be listed too, or its allocations are never read and a colliding value can be chosen. (Live, 2026-11-01: an
+  that other device must be listed too, or its allocations are never read and a colliding value can be chosen. (This has happened: an
   edge leg listed only the switch it changed, never read the second switch, and chose a NAT pool that switch already used. The
   program's integration review caught it; the leg's own review did not.)
 
-  > ⚠️ **Known limitation (accepted 2026-11-05) — an undeclared device is not checked by the leg.** If a device the leg must see is
+  > ⚠️ **Known limitation — an undeclared device is not checked by the leg.** If a device the leg must see is
   > left out of its block, the leg's Reviewer can APPROVE a derived value that collides on that device. This is most likely when
   > the package explains the gap ("that device was not read; the cross-device check belongs to the program integration review") —
   > measured: the Reviewer accepted that explanation in every lab sample, even with the platform naming the undeclared device. The
-  > only check left is the program's integration review (it caught the 2026-11-01 case), and a standalone pipeline has none.
+  > only check left is the program's integration review (it has caught such a case), and a standalone pipeline has none.
   > **The fix is in your hands: list the device.** Once it is listed, the leg reads it (`live-read` / `git-file`) and checks the
-  > value against it; if it cannot be read, the Reviewer refuses (measured 3/3). Record of the decision: open register row
-  > UNDECLARED-SCOPE-DEVICE-UPSTREAM.
+  > value against it; if it cannot be read, the Reviewer refuses.
 - **A device you only need for information can be declared `live-read` (1.26.0) or `git-file`.** `live-read` checks against what is
   running on the device and keeps nothing. With `git-file` its file is read and its allocations are checked; it is
   kept, but the Author never edits it, so it adds nothing to the package. If its file cannot be read (wrong path, missing file, a
@@ -296,7 +294,7 @@ Read-only harvest, change package only — nothing is applied by this run.
   Git cannot be seen without reading the device. The package should say that a value was checked against the Git file only. A
   Git-only device gets **no call to any device service**: its state comes from its Git file. Since network-provisioning 1.27.0 a
   change leg whose declared devices are all Git-only shows `liveEvidence: git-only` on its card (it showed `none-declared` before).
-- **A value leg (`(protocol: network-derivation)`, network-derivation ≥ 1.3.0, since 2026-11-06) has its OWN block.** It derives a
+- **A value leg (`(protocol: network-derivation)`) has its OWN block.** It derives a
   value other legs consume (a free address, an aggregate) and changes nothing. In a program, give it its own `## Device sources`
   section in `requirements.md`; the Program Architect copies it as `deviceSources["network-derivation"]`, separate from the change
   legs' `deviceSources["network-provisioning"]`, so the value leg can list every switch it must see without changing what the change
@@ -317,7 +315,7 @@ Read-only harvest, change package only — nothing is applied by this run.
   needing the other as evidence, both declared `git-file`). Two legs that need DIFFERENT lines for the same switch are not supported
   yet — use one block that serves both.
 - Size: every declared `git-file` is kept and shown to the Author. Two to a few switches is nothing; for a large fabric where the
-  change touches a few switches, list the evidence devices anyway and tell us if the view runs into size limits.
+  change touches a few switches, list the evidence devices anyway.
 
 ### Kubernetes / Terraform: name the repo file
 
@@ -367,8 +365,9 @@ and how to apply it). `approved` means the package passed its Reviewer and every
 device, cluster, account or file — every pipeline harvests read-only and writes nothing outside pAIchart. Applying is **your** step, done
 with your own tooling and change process, after a human decides to release.
 
-Three things no pipeline or agent ever does: **apply** a change, **choose** a configuration source for you (you declare it — e.g. the
-network `## Device sources` block), or **approve** a gate on your behalf. `needs-revision` means the package must not be applied as it
+Two things no pipeline or agent ever does: **apply** a change, or **choose** a configuration source for you (you declare it — e.g. the
+network `## Device sources` block). And none is asked to **approve** a gate: gates wait for a person ([GATES.md](GATES.md), "Who can
+release a gate"). `needs-revision` means the package must not be applied as it
 stands — read the reasons (the Reviewer's blocking items, or a *forced outcome* above).
 
 ### The Facts line on a leg's card
@@ -396,7 +395,7 @@ stands — read the reasons (the Reviewer's blocking items, or a *forced outcome
 Some facts are stamped but not shown on the card (e.g. `quoteFidelity`, `validationToolCalls`, the network `gitDeviceComparison`); they
 reach the Reviewer and the full `agent.results` output.
 `quoteFidelity` checks that a quoted configuration matches what the tool returned. It reads a quote by its label: **verbatim** (every
-omitted, added or changed line is a finding), **excerpt** (file sources, since v6: the same, except gaps marked `# [elided: …]`, whole
+omitted, added or changed line is a finding), **excerpt** (file sources: the same, except gaps marked `# [elided: …]`, whole
 stanzas left out, or comments beside the excerpt), or **unlabelled** (free to narrow; only a changed line is a finding). It flags, never
 blocks. Why it matters and what to do when it flags: `docs/READING-A-RUN.md` § "Facts about the package's own text".
 
@@ -476,13 +475,13 @@ Measured on real runs (lab rigs), model prices of the day; a guide, not a quote.
 
 | Run | Cost | Time |
 |---|---|---|
-| Standalone terraform leg | ≈ $1.88 mean (5 legs, 2026-10-22, range $1.78–2.08) | ≈ 7–10 min |
-| Standalone kubernetes leg | ≈ $2.21 mean (6 legs, 2026-10-19, range $1.82–2.67) | ≈ 7–10 min |
+| Standalone terraform leg | ≈ $1.88 mean (5 legs, range $1.78–2.08) | ≈ 7–10 min |
+| Standalone kubernetes leg | ≈ $2.21 mean (6 legs, range $1.82–2.67) | ≈ 7–10 min |
 | Standalone network leg | ≈ $2–3 (window estimates; not yet metered per leg) | ≈ 7–10 min |
 | One-leg program (plan + gate + leg + producer + Node C) | ≈ $4.40–4.60 (k8s / terraform) | ≈ 20–40 min + your gate wait |
 
 The change author runs on a larger model (Opus) than the other roles; a leg's cost is mostly that author plus the size of the
-configuration it reads. Reliability target (owner): ≥ 90% correct outcomes per domain, **0 false releases** — a correct refusal counts
+configuration it reads. Reliability target: ≥ 90% correct outcomes per domain, **0 false releases** — a correct refusal counts
 as a correct outcome.
 
 ### Retries and re-runs inside a pipeline (what the platform does on its own)
@@ -504,7 +503,6 @@ as a correct outcome.
 | Kept files (held bytes) | while a stored reference uses them; unreferenced copies are removed by the nightly sweep after a one-day grace |
 | Secrets | never stored — redacted before saving (see *Secrets and redaction*) |
 | Demo POV data | deleted after 30 days (public `PRIVACY-DEMO.md`) |
-| Operator replay snapshots (production copies on an operator's machine) | expire after 24 h (an operator tool, not part of a run) |
 
 Need an old run's evidence later? Copy what matters into your own records — pruning is by count, not by importance.
 

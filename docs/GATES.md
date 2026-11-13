@@ -7,6 +7,20 @@ the detail behind it. Terms are in [GLOSSARY.md](GLOSSARY.md).
 **Start every gate with the stored facts:** `npm run report:gate -- <gate task id>` (in the pAIchart directory) prints the checks
 for that gate, each marked ✓ or ✗, with the reviewer's blocking reasons. It reads only and decides nothing.
 
+## Who can release a gate
+
+The owner of the project, any member of the project's team, or a system administrator. **The person a gate is assigned to has
+no special right:** the assignment shows who is expected to decide, and the platform does not enforce it. A demo account cannot
+release a gate on a demo project. The rule is the same in the web app and through an AI client.
+
+Each release is recorded in the task's activity history with the account that made it and the time. An AI client releases a
+gate as you, through your key. The platform's own machinery never completes a gate, and no pipeline agent is asked to; but
+that is by design and instruction, not by a lock. If you need to verify that a gate was not completed from inside a run, look
+at the gate task's `metadata`: a completion made by an agent's run carries `completedByExecutionId`; one made by a person or
+their AI client does not.
+
+A gate is released in order: one whose earlier tasks are not finished is refused (`DEPENDENCY_NOT_SATISFIED`).
+
 ## The principle
 
 **A gate is not a rubber stamp on an agent's verdict. It is your own evidence step.** A reviewer's approval and its score are an

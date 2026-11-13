@@ -55,7 +55,9 @@ plan, a default-deny rule. The planner turns these into the contract and every l
 
 - The **plan gate** is always there and cannot be skipped: nothing runs before a person has approved the plan.
 - Then **one gate per approval boundary**: after a value is worked out, and for each change package.
-- A gate is released only by a person. Say in the spec who approves each, by name and email, and where each gate sits.
+- A gate waits for a person: the project's owner, a team member or an administrator releases it ([GATES.md](../GATES.md),
+  "Who can release a gate"). Say in the spec who approves each, by name and email, and where each gate sits. The named
+  approver is who is asked; the platform does not restrict release to them.
 
 ## 6. The domain of each leg
 

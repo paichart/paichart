@@ -12,8 +12,9 @@ handing work to each other. Terms are in [GLOSSARY.md](GLOSSARY.md).
   descriptor lists.
 - **The Git file source is pinned to one repository** (`GIT_FILE_SOURCE_PIN`, [INSTALL.md](INSTALL.md) step 9c). A spec that
   names any other repository is refused at its first read.
-- **Approval gates.** The work behind a gate does not start until a person on the project releases it
-  ([OPERATING.md](OPERATING.md), step 3).
+- **Approval gates.** The work behind a gate does not start until the gate is released. The platform's own machinery never
+  releases one. Release is open to the project's owner, its team members and administrators, not only to the named
+  approver, and it is recorded ([GATES.md](GATES.md), "Who can release a gate").
 - **Facts are recorded by the platform, not claimed by an agent.** What a release rests on (containment checks, the edit
   receipt, the reviewer's transcribed verdict) is computed and stored by the platform ([READING-A-RUN.md](READING-A-RUN.md)).
 - **Kept copies and stored results are redacted** (the second guard below). A copy fetched with `held.get` has secrets

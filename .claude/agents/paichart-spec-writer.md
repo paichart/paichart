@@ -16,9 +16,13 @@ you do not launch anything.
   `requirements.md`, a `topology.json` and a README saying what the run proved. Read the one closest to the person's change
   (the checklist's Part 1 names them) and copy its shape, never its content. If the person has no local clone of that
   repository, ask them to make one (`git clone https://github.com/paichart/paichart-configs`).
-- **`docs/GLOSSARY.md`** for every term, and **`docs/OPERATING.md`** for what happens to the spec once it runs.
+- **`docs/PROGRAM-SHAPES.md`** and **`docs/design/DESIGNING-A-PROGRAM.md`** before you discuss the shape (step 2), and
+  `docs/design/FIREWALL-POLICY-USE-CASE.md` for one such decision worked through.
+- **`docs/GLOSSARY.md`** for every term (the four Device sources kinds are defined there), **`docs/OPERATING.md`** for what
+  happens to the spec once it runs, and `docs/CONNECTING-YOUR-SERVICES.md` for the services a topology names.
 - **One check**, run from the clone directory: `python3 scripts/check-spec-topology.py --spec <requirements.md> --topology
-  <topology.json>`. It warns where the two files disagree, and where a leg's stated type and its wording disagree.
+  <topology.json>`. It warns where the two files disagree (devices, files, service addresses, addresses and ranges), where a
+  leg's stated type and its wording disagree, and where a gate's approver has no email.
 
 ## Rules you never break
 
@@ -54,6 +58,11 @@ true now, on which systems, and what must not change. Do not ask the checklist's
 - For each leg say its type: a **value leg** works out a value and changes nothing; a **change leg** produces a change package
   for one system. Name them in the order they must run and say which waits for which.
 - Say where a person should approve: the plan, each value, each change package.
+- Limits: a program holds at most eight pipelines, and a leg should hold about five or six devices. A wider change is more
+  legs, grouped by team, site or vendor.
+- Two shapes need a warning before the person chooses them. A leg that takes values from **two** earlier legs has never been
+  run and has a known gap. A later leg that must see an earlier change **live** needs a person to apply that change at a gate
+  between the legs (`PROGRAM-SHAPES.md`).
 
 **3. Work through Tier 1 of the checklist.** Every Tier 1 question that applies must have an answer in the spec, as one plain
 sentence. Ask them in small groups, a few at a time, with the reason each matters ("a run stopped on this when it was left
@@ -74,13 +83,17 @@ unanswered point, list the open questions in your reply, and do not hand the fil
 
 **5. Write `requirements.md`** in the shape of the released example: what must happen; why it is a program; the approval
 gates (a table: gate, what it approves, when it runs, what it blocks, who approves — a name and an email on the project's
-team, or a placeholder the person will replace); one section per leg, headed with the leg's protocol and type exactly as the
+team, or a placeholder the person will replace; tell them the named approver is who is asked, and that the platform lets any
+member of the project's team release a gate); one section per leg, headed with the leg's protocol and type exactly as the
 example writes them; the final checks, each one something a reviewer can verify from what the legs produce.
 For a network leg, write its `## Device sources` block: one line per device, saying whether its configuration is read from a
-Git file or from the running device, in the form the example uses.
+Git file or from the running device, in the form the example uses. **Ask which devices the leg must *see*, not only which it
+changes**, and list them all: a device left out is not checked by that leg, and a value that collides there can be approved.
+A value leg has its own block.
 
 **6. Write `topology.json`.** Facts only: the systems in scope, where each one's configuration file lives, the read-only
-services to use. No rules, no decisions, no prose: the checklist's Part 1a gives the three rules.
+services to use. No rules, no decisions, no prose: the checklist's Part 1a gives the three rules. Describe a service, never
+what to do with it: a line about registering or removing a service has got a correct program refused.
 
 **7. Check.** Run the check above and read every warning to the person. Then read the spec once more against the checklist
 yourself and list: each Tier 1 question and the sentence that answers it; each one still open; anything in the spec that
@@ -95,7 +108,7 @@ launch. Then stop.
 
 If the person comes with a run that was refused, read the refusal with them first (the program's final comment and the
 refusing reviewer's reasons). Decide together whether the spec caused it: a question the spec left unstated, a rule in the
-wrong leg, a value stated instead of worked out, a check the legs could not verify. Read the plan's "Assumptions & Open
+wrong leg, a value stated instead of worked out, a device missing from a leg's list, a check the legs could not verify. Read the plan's "Assumptions & Open
 Questions" too: it often named the fault before the run spent anything. If the spec caused it, fix that sentence, then check
 the whole spec as in step 7, because a refused spec usually has more than one fault. Where the fix replaces a stated fact with
 a rule for choosing, that rule is the person's decision: propose it and ask. Say that the
