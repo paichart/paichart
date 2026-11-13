@@ -1876,6 +1876,7 @@ scripts/measure-r10-echo.ts
 scripts/measure-r10-gaps.sh
 scripts/measure-r10-gaps.ts
 scripts/named-workflows.json
+scripts/named-workflows.self-host.json
 scripts/pairing-diff-scan.sh
 scripts/populate-phase-templates-improved.ts
 scripts/probe-cache-breakpoint.ts

@@ -3462,7 +3462,7 @@ services(action: "workflow.execute", {
     status: AgentTemplateStatus.ACTIVE,
     isPublic: true,
     tags: ['mcp', 'interactive', 'domain:general'],
-    version: "2.0.0", // 2026-07-09: v2 rewrite (Claude Desktop collab) — Quick Start (single call before first workflow), Retry & Resilience, 4-step consumer path, timeout-ambiguity flagged, bug fixes (totalCount->total, completionNotes->completionNote). Schema claims verified live. Removed broken interactive-builder prompt ref (x3). // 2026-07-08: Section 0.
+    version: "2.1.0", // 2026-11-14 (owner; self-host workflow set): the pre-built table lists the three that run on any install and, separately, those that need a registered service. 2026-07-09: v2 rewrite (Claude Desktop collab) — Quick Start (single call before first workflow), Retry & Resilience, 4-step consumer path, timeout-ambiguity flagged, bug fixes (totalCount->total, completionNotes->completionNote). Schema claims verified live. Removed broken interactive-builder prompt ref (x3). // 2026-07-08: Section 0.
     variables: {} as any,
     examples: {} as any,
     promptText: `# MCP Hub Workflow Orchestration Guide
@@ -3517,7 +3517,7 @@ Direct calls are really good: for one operation against a public-access service,
 - **Two or more operations that belong together** — ordering, output chaining, a shared failure policy, one audit record
 - **Identity forwarding (JWKS token passing)** — **only workflows carry your authenticated identity to the target service.** A workflow execution can pass a Hub-signed JWT (validated by the service via JWKS) so the service knows *who* is calling, at what trust level (OWNER / TEAM_MEMBER / SCOPED / ANONYMOUS), and can keep user-scoped audit trails. Direct \`services(call)\` does not forward your identity this way. Attach POV context with the \`povId\` parameter on \`workflow.execute\` — trust level depends on your team membership in that POV.
   - ✅ **Live example**: the registered \`snowflake-service\` states it outright — "Calls require workflow.execute with a povId where the caller has team membership for identity forwarding." A direct \`call\` to a service like this won't authenticate; even a **single-step workflow** is the right shape when the service needs to know who you are.
-  - Deep dives: \`ABOUT-trust-levels\` (the 4 trust levels and when tokens are issued) and \`HOWTO-validate-jwt-tokens\` (validating them in your own service). Try it live: \`services({ action: "workflow.execute", workflowName: "trust-level-basic-demo" })\`.
+  - Deep dives: \`ABOUT-trust-levels\` (the 4 trust levels and when tokens are issued) and \`HOWTO-validate-jwt-tokens\` (validating them in your own service). Try it live, where \`token-validator-service\` is registered: \`services({ action: "workflow.execute", workflowName: "trust-level-basic-demo" })\`.
 
 Rule of thumb: **anonymous data in, one shot → \`call\`; identity, ordering, or chaining → \`workflow.execute\`** (even for a single step, if the service demands a token).
 
@@ -3527,18 +3527,29 @@ Read on for each piece — or just try a pre-built workflow first.
 
 ## 🎁 Pre-Built Named Workflows (try these first)
 
-| Workflow | Purpose | Measured time | Mode |
-|----------|---------|------|------|
-| **trust-level-basic-demo** | Learn trust levels & token passing | ~10s | Sequential |
-| **jwks-validation-advanced-demo** | Get code examples (TS, JS, Python) | ~15s | Parallel |
-| **token-troubleshooting-demo** | Debug trust level issues | ~20s | Sequential |
-| **daily-energy-weather** | Multi-service: TX grid mix + capacity + Austin weather & forecast | **~4.5s** ✅ measured (was listed "<1s") | Sequential |
+**These three run on any install** (they call only the built-in project service, and for the third the Browser Automation Service):
+
+| Workflow | Purpose | Mode |
+|----------|---------|------|
+| **pov-status-report** | List the projects that are In Progress | Sequential |
+| **weekly-pov-digest** | Three lists: In Progress, Validation and Stalled projects | Sequential |
+| **screenshot-documentation** | Screenshot + PDF of a public web page (needs the Browser Automation Service) | Parallel |
 
 \`\`\`javascript
-services({ action: "workflow.execute", workflowName: "daily-energy-weather" })
+services({ action: "workflow.execute", workflowName: "weekly-pov-digest" })
 \`\`\`
 
-✅ **Verified live**: \`daily-energy-weather\` ran 4/4 steps COMPLETED across eia-service + weather-service in 4,496ms. External API steps dominate the runtime (1.7–1.8s each for EIA; 0.1–0.6s for weather) — expect seconds, not sub-second, for anything calling external services.
+A new project starts as PROJECTED, so the two reports return empty lists until a project's status is changed.
+
+**These need a service you register.** They run where that service exists (the hosted site has them); on a self-host they are installed PAUSED as examples to read, and \`workflow.execute\` answers "not found" for a paused workflow:
+
+| Workflow | Purpose | Needs |
+|----------|---------|-------|
+| **trust-level-basic-demo** | Learn trust levels & token passing | token-validator-service |
+| **jwks-validation-advanced-demo** | Code examples (TS, JS, Python) | token-validator-service |
+| **token-troubleshooting-demo** | Debug trust level issues | token-validator-service |
+| **task-completion-notify** | Complete a task and notify | notification-service |
+| **daily-energy-weather** | Multi-service: grid mix + capacity + weather (~4.5s measured) | eia-service, weather-service |
 
 ---
 
@@ -3781,7 +3792,7 @@ Design: start with 2–3 steps; choose sequential for dependent work, parallel f
 ---
 
 **Version**: 2.0 | **Updated**: 2026-07-09 | **Status**: Production-ready with two items flagged for platform verification (timeout precedence; retry/timeout interaction)
-**Verification**: live runs 2026-07-09 — \`daily-energy-weather\` (4/4, 4.5s) and a custom variable-chained workflow (2/2, 252ms, chain resolution confirmed)`,
+**Verification**: live runs 2026-07-09 on the hosted site — \`daily-energy-weather\` (4/4, 4.5s) and a custom variable-chained workflow (2/2, 252ms, chain resolution confirmed). 2026-11-14: the pre-built list now says which workflows run on any install and which need a registered service.`,
   },
   {
     name: 'HOWTO-validate-jwt-tokens',

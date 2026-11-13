@@ -94,6 +94,8 @@ npm run db:seed 2>&1 | tee ~/paichart-seed.log   # ~1–2 min; prints its own st
                                          # Expect pino JSON lines and a "[DEV] SLOW QUERY" or two in the middle — noise, not errors. Safe to re-run
                                          # after a git pull: every step is add-only (a re-run never deletes; --force-recreate on db:templates does)
                                          # (schema, grants, admin, protocols, hub prompts, named workflows, agent/harness/program/domain/phase templates)
+                                         # Workflows: three run on a self-host (pov-status-report, weekly-pov-digest, screenshot-documentation);
+                                         # four more are installed PAUSED as examples that need a service you would register
 grep -A1 'Generated password' ~/paichart-seed.log   # the admin password: store it, then `rm ~/paichart-seed.log`
                                          # lost it? npm run db:admin -- --reset-password
 ```

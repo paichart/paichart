@@ -28,7 +28,7 @@ states what is configured on them now. The agents read that from the sources the
 ## Step 2 — Launch
 
 1. **Create a fresh POV, or a fresh stage,** and add the approvers to its team straight away (web app: **Projects**, right-click the
-   project, **Edit POV**, **Team**). Its name and description describe the work, never the test: agents read them. A fresh POV
+   project, **Edit POV**, **Team**). A new project starts with the status **Projected**. While you are in **Edit POV**, set it to **In Progress**: reports and workflows that list active projects only see those in progress. Its name and description describe the work, never the test: agents read them. A fresh POV
    is cleanest, because it needs no duplicate clearance and agents cannot reach older runs.
 2. **Create one PIPELINE task:**
    - title ends `(protocol: pov-program)`; in a project that already holds a run of this objective, put a run number before it

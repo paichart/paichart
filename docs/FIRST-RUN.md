@@ -76,6 +76,8 @@ Type each call to Claude Code (any directory), or simply ask for it in plain wor
      description: 'My first pAIchart runs.', phases: [ { name: 'First run', type: 'EXECUTION' } ] })
    ```
    → `✅ POV Created` with the POV id. Keep it. The project now appears in the web app under **Projects** (refresh the page).
+   It starts with the status **Projected**. Set it to **In Progress** (right-click the project, **Edit POV**), so that reports
+   and workflows that list active projects include it. This does not affect the run itself.
 2. **A stage for the run.**
    ```
    perform(action: 'stage.create', parameters: { povId: '<pov id>', phaseName: 'First run', name: 'Loopback run' })

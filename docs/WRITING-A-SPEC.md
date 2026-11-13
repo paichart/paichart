@@ -61,7 +61,8 @@ Keep it short. Do not restate a leg protocol's rules. Do not copy device state i
   applies leg 2's package and confirms before leg 3 starts." If your AI client writes the spec with you (the
   `paichart-spec-writer` agent), it asks where each gate goes.
 - **Add each approver to the project's team first.** In the web app: **Projects**, right-click the project, **Edit POV**, **Team**.
-  Do it straight after creating the project.
+  Do it straight after creating the project, and set the project's status to **In Progress** at the same time (a new project
+  starts as **Projected**).
 - **Never word a check as something a leg must prove about itself,** and never ask a leg to report a difference between two
   sources of one device (a Git file and a device read). The platform compares them.
 

@@ -35,9 +35,10 @@ const steps: Array<[string, string]> = [
   // 2026-09-23, E13 again one layer down: the step ABOVE installs HOWTO-use-workflows, and without this
   // one a self-host that follows that guide finds ZERO workflows to use. The seed exists precisely
   // because named workflows lived only in the production database and no fix to them was reproducible.
-  // Safe on an empty DB: it touches mcp_workflows only — no service lookup, no FK (a workflow naming a
-  // service you have not registered is inert data until you run it, which is the intended state).
-  ['Named workflows (the HOWTO above teaches these — without them it teaches an empty list)', 'npx ts-node -r tsconfig-paths/register scripts/seed-named-workflows.ts'],
+  // 2026-11-14: `--self-host` — install the three that call only services a self-host has, create four as PAUSED examples, and
+  // create none of the rest (measured on a self-host: every other workflow failed with "Service not found"). It writes
+  // mcp_workflows and READS mcp_tools (to leave alone a workflow whose service the owner has registered). Never deletes.
+  ['Named workflows (three that run on a self-host, four paused examples)', 'npx ts-node -r tsconfig-paths/register scripts/seed-named-workflows.ts --self-host'],
   // E15 (devext clean-slate replay, 2026-09-08): a first install landed in a GUI with NO agent templates — db:seed
   // seeded protocols and prompts only, and the templates were an "optional next step" the install guide never named.
   // A complete install needs them; every seed is idempotent (findFirst → update/create) and prod never runs

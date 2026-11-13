@@ -1,0 +1,133 @@
+{
+  "_comment": "SELF-HOST overlay for scripts/named-workflows.json (owner decision 2026-11-14). Read only when seed-named-workflows.ts runs with --self-host (npm run db:seed passes it). `install`: full definitions that replace the snapshot's on a self-host - they call only services a self-host has. `examples`: snapshot workflows seeded PAUSED, each needing a service a self-host does not have. Every other snapshot workflow is NOT created on a self-host. The snapshot itself is untouched, so production's set is unchanged.",
+  "install": [
+    {
+      "name": "pov-status-report",
+      "category": "reporting",
+      "status": "ACTIVE",
+      "triggers": {},
+      "schedule": null,
+      "createdBy": null,
+      "description": "List the projects (POVs) that are In Progress.\n\nWHAT IT DOES:\n1. Lists up to 10 projects whose status is IN_PROGRESS, with title, customer, status and priority\n\nWHEN TO USE:\n- A quick status check before a meeting\n- Portfolio health check\n\nNOTE: a new project starts as PROJECTED. Set it to In Progress (Edit POV) for it to appear here. With none in progress the workflow completes with an empty list.\n\nEXAMPLE:\nservices({ action: \"workflow.execute\", workflowName: \"pov-status-report\" })",
+      "steps": {
+        "steps": [
+          {
+            "tool": "project",
+            "service": "paichart-project-service",
+            "arguments": {
+              "limit": 10,
+              "action": "pov.list",
+              "status": "IN_PROGRESS"
+            }
+          }
+        ],
+        "timeout": 60000,
+        "executionMode": "sequential",
+        "failureStrategy": "stop"
+      }
+    },
+    {
+      "name": "weekly-pov-digest",
+      "category": "reporting",
+      "status": "ACTIVE",
+      "triggers": {},
+      "schedule": null,
+      "createdBy": null,
+      "description": "Generate a digest of all projects (POVs) by status.\n\nWHAT IT DOES:\n1. Lists IN_PROGRESS projects\n2. Lists VALIDATION projects (ready to close)\n3. Lists STALLED projects (need attention)\n\nWHEN TO USE:\n- Weekly management reports\n- Monday morning status sync\n- Portfolio review meetings\n\nNOTE: a new project starts as PROJECTED and appears in none of the three lists until its status is changed (Edit POV).\n\nEXAMPLE:\nservices({ action: \"workflow.execute\", workflowName: \"weekly-pov-digest\" })",
+      "steps": {
+        "steps": [
+          {
+            "tool": "project",
+            "service": "paichart-project-service",
+            "arguments": {
+              "limit": 50,
+              "action": "pov.list",
+              "status": "IN_PROGRESS"
+            }
+          },
+          {
+            "tool": "project",
+            "service": "paichart-project-service",
+            "arguments": {
+              "limit": 20,
+              "action": "pov.list",
+              "status": "VALIDATION"
+            }
+          },
+          {
+            "tool": "project",
+            "service": "paichart-project-service",
+            "arguments": {
+              "limit": 20,
+              "action": "pov.list",
+              "status": "STALLED"
+            }
+          }
+        ],
+        "timeout": 180000,
+        "executionMode": "sequential",
+        "failureStrategy": "continue"
+      }
+    },
+    {
+      "name": "screenshot-documentation",
+      "category": "documentation",
+      "status": "ACTIVE",
+      "triggers": {},
+      "schedule": null,
+      "createdBy": null,
+      "description": "Capture a screenshot and a PDF of a web page.\n\nWHAT IT DOES:\n1. Takes a full-page screenshot of https://example.com\n2. Generates a PDF version of the page\n\nNEEDS: the Browser Automation Service (npm run seed:browser-service, and its container running).\n\nTO CAPTURE YOUR OWN PAGE: run the same two steps inline with your URL (services workflow.execute with `steps`). The page must be public: a page behind a login captures the login screen, and private-network addresses are refused.\n\nEXAMPLE:\nservices({ action: \"workflow.execute\", workflowName: \"screenshot-documentation\" })",
+      "steps": {
+        "steps": [
+          {
+            "tool": "take_screenshot",
+            "service": "browser-automation-service",
+            "arguments": {
+              "url": "https://example.com",
+              "fullPage": true
+            }
+          },
+          {
+            "tool": "generate_pdf",
+            "service": "browser-automation-service",
+            "arguments": {
+              "url": "https://example.com",
+              "pageSettings": {
+                "format": "A4",
+                "margin": {
+                  "top": "1cm",
+                  "left": "1cm",
+                  "right": "1cm",
+                  "bottom": "1cm"
+                },
+                "landscape": true
+              }
+            }
+          }
+        ],
+        "timeout": 120000,
+        "executionMode": "parallel",
+        "failureStrategy": "continue"
+      }
+    }
+  ],
+  "examples": {
+    "trust-level-basic-demo": {
+      "needs": "token-validator-service",
+      "tool": "verify_auth"
+    },
+    "jwks-validation-advanced-demo": {
+      "needs": "token-validator-service",
+      "tool": "verify_auth"
+    },
+    "token-troubleshooting-demo": {
+      "needs": "token-validator-service",
+      "tool": "verify_auth"
+    },
+    "task-completion-notify": {
+      "needs": "notification-service",
+      "tool": "broadcast",
+      "warning": "When it runs it COMPLETES the first In Progress task it finds."
+    }
+  }
+}

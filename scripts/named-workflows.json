@@ -230,7 +230,7 @@
       "manual": true
     },
     "schedule": null,
-    "createdBy": "cmh86xj81002tyxmi5k2qv1ls"
+    "createdBy": null
   },
   {
     "name": "eodhd-service-multi-step-workflow",
@@ -273,7 +273,7 @@
       "manual": true
     },
     "schedule": null,
-    "createdBy": "cmh86xj81002tyxmi5k2qv1ls"
+    "createdBy": null
   },
   {
     "name": "jwks-validation-advanced-demo",
@@ -326,7 +326,7 @@
   },
   {
     "name": "pov-status-report",
-    "description": "Generate and send a POV status report to stakeholders.\n\nWHAT IT DOES:\n1. Lists all active POVs (IN_PROGRESS status)\n2. Gets detailed information for the first POV found\n3. Sends a summary email notification to the team\n\nWHEN TO USE:\n- Weekly status updates to management\n- Client meeting preparation\n- Portfolio health check\n\nVARIABLE CHAINING:\n- Step 2 uses {{step.0.output.data[0].id}} to get POV details\n- Step 3 uses {{step.1.output.title}} for the email subject\n\nEXAMPLE:\nservices({ action: \"workflow.execute\", workflowName: \"pov-status-report\" })",
+    "description": "List the projects (POVs) that are In Progress.\n\nWHAT IT DOES:\n1. Lists up to 10 projects whose status is IN_PROGRESS, with title, customer, status and priority\n\nWHEN TO USE:\n- A quick status check before a meeting\n- Portfolio health check\n\nNOTE: a new project starts as PROJECTED. Set it to In Progress (Edit POV) for it to appear here. With none in progress the workflow completes with an empty list.\n\nEXAMPLE:\nservices({ action: \"workflow.execute\", workflowName: \"pov-status-report\" })",
     "category": "reporting",
     "status": "ACTIVE",
     "steps": {
@@ -339,39 +339,6 @@
             "action": "pov.list",
             "status": "IN_PROGRESS"
           }
-        },
-        {
-          "tool": "project",
-          "service": "paichart-project-service",
-          "arguments": {
-            "povId": "{{step.0.output.data[0].id}}",
-            "action": "pov.details"
-          },
-          "dependsOn": [
-            0
-          ]
-        },
-        {
-          "tool": "send",
-          "service": "notification-service",
-          "arguments": {
-            "channel": "email",
-            "message": {
-              "body": "POV: {{step.1.output.title}}\nCustomer: {{step.1.output.customerName}}\nStatus: {{step.1.output.status}}\nPriority: {{step.1.output.priority}}",
-              "subject": "POV Status Report: {{step.1.output.title}}",
-              "priority": "normal"
-            },
-            "recipients": [
-              {
-                "id": "stakeholder",
-                "name": "Team",
-                "address": "team@company.com"
-              }
-            ]
-          },
-          "dependsOn": [
-            1
-          ]
         }
       ],
       "timeout": 60000,
@@ -425,7 +392,7 @@
   },
   {
     "name": "snowflake-token-test",
-    "description": "The owner of the service is <maintainer-email> and is also the owner of Cybersafe Technologies Fortigate with povId cmgalsigt010wyx39k3xyde7y so to enable token passing assign team membership",
+    "description": "Single-step test of token passing to the Snowflake service. The caller must be on the team of the project (povId) they pass, so that the hub can forward their identity.",
     "category": "automation",
     "status": "ACTIVE",
     "steps": {
@@ -452,7 +419,7 @@
       "manual": true
     },
     "schedule": null,
-    "createdBy": "cmh86xj81002tyxmi5k2qv1ls"
+    "createdBy": null
   },
   {
     "name": "task-completion-notify",
@@ -600,7 +567,7 @@
   },
   {
     "name": "weekly-pov-digest",
-    "description": "Generate weekly digest of all POVs by status.\n\nWHAT IT DOES:\n1. Lists IN_PROGRESS POVs\n2. Lists VALIDATION POVs (ready to close)\n3. Lists STALLED POVs (need attention)\n4. Takes screenshot of dashboard\n5. Sends consolidated digest email\n\nWHEN TO USE:\n- Weekly management reports\n- Monday morning status sync\n- Portfolio review meetings\n\nEXECUTION MODE: Parallel for status queries, then sequential for report\n\nEXAMPLE:\nservices({ action: \"workflow.execute\", workflowName: \"weekly-pov-digest\" })",
+    "description": "Generate a digest of all projects (POVs) by status.\n\nWHAT IT DOES:\n1. Lists IN_PROGRESS projects\n2. Lists VALIDATION projects (ready to close)\n3. Lists STALLED projects (need attention)\n\nWHEN TO USE:\n- Weekly management reports\n- Monday morning status sync\n- Portfolio review meetings\n\nNOTE: a new project starts as PROJECTED and appears in none of the three lists until its status is changed (Edit POV).\n\nEXAMPLE:\nservices({ action: \"workflow.execute\", workflowName: \"weekly-pov-digest\" })",
     "category": "reporting",
     "status": "ACTIVE",
     "steps": {
@@ -631,41 +598,6 @@
             "action": "pov.list",
             "status": "STALLED"
           }
-        },
-        {
-          "tool": "take_screenshot",
-          "service": "browser-automation-service",
-          "arguments": {
-            "url": "https://paichart.app/dashboard",
-            "fullPage": true
-          },
-          "dependsOn": [
-            0,
-            1,
-            2
-          ]
-        },
-        {
-          "tool": "send",
-          "service": "notification-service",
-          "arguments": {
-            "channel": "email",
-            "message": {
-              "body": "Weekly POV Status Summary:\n\nIN_PROGRESS: Active POVs requiring attention\nVALIDATION: POVs ready to close\nSTALLED: POVs needing intervention\n\nDashboard screenshot attached. See pAIchart for full details.",
-              "subject": "Weekly POV Digest - Active Projects Report",
-              "priority": "normal"
-            },
-            "recipients": [
-              {
-                "id": "management",
-                "name": "Leadership Team",
-                "address": "leadership@company.com"
-              }
-            ]
-          },
-          "dependsOn": [
-            3
-          ]
         }
       ],
       "timeout": 180000,
@@ -714,7 +646,7 @@
       "manual": true
     },
     "schedule": null,
-    "createdBy": "cmh86xj81002tyxmi5k2qv1ls"
+    "createdBy": null
   },
   {
     "name": "browser-automation-service-multi-step-workflow",
@@ -773,7 +705,7 @@
       "manual": true
     },
     "schedule": null,
-    "createdBy": "cmh86xj81002tyxmi5k2qv1ls"
+    "createdBy": null
   },
   {
     "name": "browser-automation-service-to-task",
@@ -814,7 +746,7 @@
       "manual": true
     },
     "schedule": null,
-    "createdBy": "cmh86xj81002tyxmi5k2qv1ls"
+    "createdBy": null
   },
   {
     "name": "pov-workflow-showcase",

@@ -39,7 +39,10 @@ export async function handleListWorkflows(
   // NOTE: Added pagination params (api-efficiency review)
   const query = ListWorkflowsQuerySchema.safeParse({
     category: searchParams.get('category') || undefined,
-    status: searchParams.get('status') || 'ACTIVE',
+    // 2026-11-14 (owner): no status given ⇒ ALL statuses, as the schema's own comment has always said (schemas.ts:98-100).
+    // The `|| 'ACTIVE'` default here hid PAUSED and DEPRECATED workflows from the web list, so a paused example could be
+    // neither read nor re-activated. Pass ?status=ACTIVE for live-only.
+    status: searchParams.get('status') || undefined,
     limit: searchParams.get('limit') || 50,
     offset: searchParams.get('offset') || 0
   });
