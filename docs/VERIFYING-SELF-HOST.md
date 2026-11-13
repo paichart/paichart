@@ -73,7 +73,7 @@ ChatGPT follow — if it names another host, your users are sent to *that* host 
 
 ## 4. Tokens carry your issuer, and foreign tokens are rejected
 
-Log in, then the **pAIchart logo** (top-right) → **Profile Settings** → **MCP API Key** → **Generate New API Key**. Decode its payload (no verification needed — you only want
+Log in, then the **pAIchart logo** (top-right) → **Profile Settings** → **MCP API Key** (use the key you made in INSTALL step 8; generate a new one only if you no longer have it). Decode its payload (no verification needed — you only want
 to read the claims):
 
 ```bash

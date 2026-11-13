@@ -107,7 +107,7 @@ Type each call to Claude Code (any directory), or simply ask for it in plain wor
    ```
    → the reply names the gate. **Read the gate's status back** — `project(action: 'task.context', taskId: '<gate id>')` must
    show `Status: COMPLETED`. A release sent within seconds of the step before it finishing can be refused while the state
-   settles; send it again (it took up to five tries over about 50 seconds on a laptop).
+   settles; send it again (usually the first try works; on a slow machine it has taken up to five tries over about 50 seconds).
 
    **Finding the other two gates.** All three gates are tasks of type `APPROVAL` in the program's own stage (their titles
    usually start `APPROVE`): `project(action: 'task.list', povId: '<pov id>')` lists them with their ids and status. A gate can be released only when
@@ -146,6 +146,17 @@ is the pipeline working. [`walkthroughs/READING-A-RUN.md`](../.claude/knowledge/
 how to read one.
 
 ## 3. Things every run shares
+
+**What your run cost.** `npm run report:run-cost -- <pov id>` (run in `~/paichart`) prints the Anthropic cost of every agent run
+in the project, by model and by task. The run this guide was checked on, on a fresh install on 2026-11-13: USD 5.39, 17 agent
+runs, 21.5 minutes including the gates.
+
+**If a run stops for no visible reason** — a leg sits *In Progress* for more than ten minutes with nothing new, or Claude Code
+says the hub "needs you to sign in again" — the hub may have lost its database connection while still reporting healthy. Check:
+`sudo journalctl -u paichart-mcp --since -5min | grep -c 'Engine is not yet connected'`. A number above 0 means that is what
+happened: `sudo systemctl restart paichart-mcp`, reconnect Claude Code (`/mcp`), and launch the run again in a new stage (the
+stopped run cannot be resumed; you can delete its tasks in the web app or leave them). Please report it — it is a known defect
+being worked on.
 
 **Re-running a program** (an escalated leg, a corrected artifact): a finished program cannot be re-run in place.
 Create a fresh PIPELINE task in the same stage and stamp the prior program stage on it — the harness's pre-flight

@@ -80,9 +80,11 @@ async function planGate(tx: Tx, gate: T, architect: T) {
   const report = await latestArtifact(tx, architect.id, 'report.md');
   const i = report ? report.search(/^#+\s*Assumptions\s*&\s*Open Questions/im) : -1;
   if (i >= 0 && report) {
-    const rest = report.slice(i); const end = rest.slice(3).search(/\n#{1,2} /); const sec = (end > 0 ? rest.slice(0, end + 3) : rest).slice(0, 2500);
+    const rest = report.slice(i); const end = rest.slice(3).search(/\n#{1,2} /); const whole = end > 0 ? rest.slice(0, end + 3) : rest; const sec = whole.slice(0, 2500);
     console.log('  · the plan\'s Assumptions & Open Questions (the defaults that apply if you release):');
     sec.split('\n').slice(1).forEach(x => x.trim() && console.log(`      ${x}`));
+    // devext fresh install 2026-11-13: the section was cut at 2,500 characters with no marker — say so, and where the rest is
+    if (whole.length > sec.length) console.log(`      … TRIMMED here: ${whole.length - sec.length} more characters — read the rest in the Architect's report (agent.results on ${architect.id}, or the task's Artifacts in the web app)`);
   } else line(null, 'no "Assumptions & Open Questions" section found in the plan — read the Architect report directly');
 }
 
@@ -91,6 +93,10 @@ async function legChecks(tx: Tx, leg: T, kind: 'VALUE' | 'CHANGE') {
   console.log(`${kind} gate — leg ${leg.id} (protocol: ${tokenOf(leg.title)}) ${leg.title.slice(0, 70)}`);
   line(leg.status === 'COMPLETED', `leg status ${leg.status}`);
   line(qg.outcome === 'approved', `leg outcome ${String(qg.outcome ?? '—')} (reviewer score ${String(qg.reviewerScore ?? '—')}) — a needs-revision can be the pipeline working: read why`);
+  // devext fresh install 2026-11-13: run within seconds of the leg completing, this report read the leg's EARLIER pass (its final
+  // execution was still persisting) and printed two false ✗. Say so instead of printing facts from the wrong pass.
+  const busy = await tx.$queryRaw<Array<{ n: bigint }>>`SELECT count(*) AS n FROM agent_executions WHERE "taskId" = ${leg.id} AND status IN ('PENDING', 'RUNNING')`;
+  if (Number(busy[0]?.n ?? 0) > 0) line(null, 'the leg still has an execution running — its final facts are not stored yet; a ✗ below may be early. Re-run this in a minute.');
   const pi = parse(await latestArtifact(tx, leg.id, 'pipeline-index.json'));
   const dc = isObj(pi?.derivationContainment) ? (pi!.derivationContainment as Record<string, unknown>) : null;
   const disp = dc && isObj(dc.containmentDisposition) ? (dc.containmentDisposition as Record<string, unknown>) : null;

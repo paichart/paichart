@@ -2461,6 +2461,7 @@ scripts/test-service-call-args-coercion.ts
 scripts/test-session-store.ts
 scripts/test-settings-redaction.ts
 scripts/test-shared-pool-listen-replay.ts
+scripts/test-shared-prisma-disconnect.ts
 scripts/test-skip-path-honesty.ts
 scripts/test-sse-event-sequence.ts
 scripts/test-stage-metadata-merge.ts
