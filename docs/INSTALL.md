@@ -408,6 +408,20 @@ mkdir -p ~/.claude/agents && cp ~/paichart/.claude/agents/paichart-*.md ~/.claud
 ```
 Then, in Claude Code: *"use the paichart-operator agent to run my first program"*.
 
+**Optional: make Claude Code use the pAIchart tools first, in every directory.** The clone's `CLAUDE.md` tells Claude Code to use
+the hub's tools and not to query the database, but Claude Code reads that file only when you start it inside the clone. To give
+it the same instruction wherever you start it, add this to your own Claude Code memory file:
+```bash
+mkdir -p ~/.claude && cat >> ~/.claude/CLAUDE.md <<'EOF'
+
+## pAIchart
+For anything about pAIchart projects, tasks, runs, artifacts or workflows, use the pAIchart MCP tools (project, perform, template,
+services, registry, search, fetch, analytics). They may be loaded on demand: look them up by name before deciding one is missing.
+Do not query the pAIchart database with psql for something a tool can answer, and never write to it directly. If the tools are
+unavailable, say so and reconnect (/mcp) first.
+EOF
+```
+
 **Installing ends here.** The next thing is a separate step with its own cost, so **stop and decide** — and if an assistant
 has been following this guide for you, it must stop here too, tell you the install is complete, and ask before going further.
 

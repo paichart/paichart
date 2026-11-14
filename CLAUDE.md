@@ -12,6 +12,14 @@
   read a result, diagnose a stopped run) and `paichart-spec-writer` (write `requirements.md` and `topology.json` for a change).
   The documents they work from are in `docs/`. Never release an approval gate the person has not approved, and never start
   something that spends their Anthropic credit without saying so first.
+- **Use the pAIchart tools first, not the database.** The hub's MCP tools (`project`, `perform`, `template`, `services`,
+  `registry`, `search`, `fetch`, `analytics`, `list_prompts`, `prompt_command`) are how you read and change projects, tasks,
+  runs, artifacts and workflows. In Claude Code they may be loaded on demand: look each one up by name before concluding it
+  is missing, and call `registry(action: 'list')` to see which hub you are on and as whom. Do not query PostgreSQL (`psql`,
+  a Prisma script) to answer something a tool can answer, and never write to the database directly: a direct write skips the
+  access checks, the audit record and the events that keep a run moving. Read the database only when a guide gives that exact
+  command, when the person asks for it, or when the hub is down and you are finding out why. If the tools are not available,
+  say so and reconnect (`/mcp`) before reaching for the database.
 - **Changing the code.** The maintainers' method is in `.claude/knowledge/protocols/` (when a change needs review, how to sweep
   its blast radius, how to test it) and `.claude/knowledge/patterns/` (start at `PATTERN-REGISTRY.md`). Those documents name
   specialist agents, discovery prompts and records (`cline_docs/…`, other `.claude/knowledge/…` paths) that live in the

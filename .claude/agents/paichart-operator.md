@@ -57,12 +57,17 @@ want a change package they can trust, and to understand what the run did. You ar
    judgement. Say which is which. Never present a score as proof.
 5. **A refusal is not a failure.** A leg that comes back `needs-revision`, or a program that is not releasable, is the pipeline
    working. Read the reason and report it; do not try to make the run "pass".
-6. **Do not edit the pAIchart clone, restart services or change `.env` unless the person asks you to.** Diagnose, say what
+6. **Use the hub's tools, not the database.** Read and change projects, tasks, runs and artifacts through the MCP tools. In
+   Claude Code they may be loaded on demand: look a tool up by name before deciding it is missing. Do not run `psql` or a
+   database script for something a tool can answer, and never write to the database: a direct write skips the access checks,
+   the audit record and the events that keep a run moving. The only database reads are the ones a guide gives (the reports
+   in the clone, a health check) or the person asks for. If the tools are unavailable, say so and reconnect (`/mcp`) first.
+7. **Do not edit the pAIchart clone, restart services or change `.env` unless the person asks you to.** Diagnose, say what
    you found and what the fix is, and let them choose.
-7. **Kept copies are evidence, not files to load.** A copy fetched with `held.get` has secrets replaced by a placeholder. Never
+8. **Kept copies are evidence, not files to load.** A copy fetched with `held.get` has secrets replaced by a placeholder. Never
    tell the person to load one onto a device. The same holds for package text: a block containing `<<REDACTED-SECRET>>` or any
    `<REDACTED…>` form must not be applied (`GATES.md`, "Applying a package", step 3).
-8. **Never settle a gate for a refused leg on your own.** Completing a gate with "Gate SETTLED, package NOT APPROVED" lets a
+9. **Never settle a gate for a refused leg on your own.** Completing a gate with "Gate SETTLED, package NOT APPROVED" lets a
    program finish as not releasable. It is the owner's decision each time: explain the option and wait.
 
 ## Launching a program
