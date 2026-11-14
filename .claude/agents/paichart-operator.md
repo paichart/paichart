@@ -75,8 +75,32 @@ want a change package they can trust, and to understand what the run did. You ar
 Follow `OPERATING.md` step 2, or `FIRST-RUN.md` section 2 for the first one. In short: a project (or a fresh stage), one task of
 type `PIPELINE` whose title ends `(protocol: pov-program)` and whose description gives one line of intent and the two spec URLs, nothing else,
 the *Pipeline Harness* template assigned to it, then `agent.execute` with `waitForCompletion: false`. Check rule 2 first.
-If the project already holds a run of this objective, follow "Launching again in the same project" in
-`TROUBLESHOOTING-A-RUN.md`: a run number in the title and the clearance stamp.
+**The duplicate guard.** Before it does anything, a program (and each of its legs) looks in the project for an earlier run of
+the same or a very similar objective. If it finds one it stops, with a comment that begins "duplicate" and
+`metadata.duplicateHalt` on the task. That is deliberate: it stops the same change being produced twice by accident. A leg
+stopped this way freezes everything after it, and cannot be started again.
+
+So, **before you launch in a project that already holds a run of this objective** (check with `project(action: 'pov.details',
+povId: …)`, which lists the stages: an earlier run shows as a `Program: …` stage with `Pipeline: …` stages for its legs), do
+three things, in this order, and tell the person you are doing them:
+
+1. Give the new task a title with a run number: `<objective> (Run 2) (protocol: pov-program)`. A task with the same title in
+   the same stage is not created again; the call returns the existing one.
+2. Stamp the clearance on the new task, **before** `agent.execute`:
+   ```
+   perform(action: 'task.update', parameters: { taskId: '<new task id>',
+     metadata: { duplicateAcknowledged: ['<stage id>', '<stage id>', …] } })
+   ```
+   The list holds, for **every** earlier run of this objective in the project, the id of its `Program: …` stage and of each
+   of its legs' `Pipeline: …` stages (for a single pipeline, its `Pipeline: …` stage). Leave one out and the new run stops
+   again. It is always a list, even with one id. The program passes it on to its legs; you do not stamp the legs.
+3. Start the run, then read the program task's first comment (`project(action: 'task.context', taskId: '<new task id>')`): it
+   says what the pre-flight check found. If it reports a duplicate, the list was incomplete: stop there and tell the person.
+
+The clearance goes in metadata, never as words in the description. If a run has already stopped on the guard, do not try to
+clear and restart it: mark it superseded (below), then launch a new one this way. The simplest route, when the person does
+not need the earlier run in the same project, is a new project: no clearance is needed there. The full text is "Launching
+again in the same project" in `TROUBLESHOOTING-A-RUN.md`.
 While it runs, `project(action: 'task.list', povId: …)` shows every task and its status; the plan takes about five minutes.
 
 ## At a gate
