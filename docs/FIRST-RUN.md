@@ -48,8 +48,8 @@ from that repository and nothing else: no lab, no switches.
 
 **Before you start** ([INSTALL.md](INSTALL.md)):
 
-- step 7 — the account you are signed in with is a **System Admin** (or Super Admin). The Git file source is admin-only: with
-  an ordinary User account the run still works but keeps no copy of the switch file, and step 8 below has nothing to show;
+- step 7 — the account you are signed in with is a **System Admin**. The services this run reads through are admin-only: an
+  ordinary User account cannot complete it;
 - step 8 — your Anthropic key is saved and Claude Code is connected to your hub;
 - step 9b — the browser service is running and seeded (the plan step fetches the two input files through it);
 - step 9c — the GitHub file source is running and seeded, with `GIT_FILE_SOURCE_PIN=paichart/paichart-configs` (the default
@@ -86,8 +86,8 @@ Type each call to Claude Code (any directory), or simply ask for it in plain wor
    ```
    → `Stage ID: <stage id>`. Keep it.
 3. **The program task** — `type: 'PIPELINE'`, the protocol token in the title (the `(protocol: …)` text, which tells pAIchart
-   which set of rules to follow), and in the description one line of intent and the two spec URLs, nothing else
-   (the planner fetches only what the description names):
+   which set of rules to follow), and in the description the two spec URLs and nothing the planner should not read
+   (it fetches only what the description names; a first line stating the intent is fine and optional):
    ```
    perform(action: 'task.create', parameters: { povId: '<pov id>', stageId: '<stage id>', type: 'PIPELINE', priority: 'MEDIUM',
      title: 'Add a telemetry-exporter loopback to ceos2 on a free address (protocol: pov-program)',
@@ -112,8 +112,7 @@ Type each call to Claude Code (any directory), or simply ask for it in plain wor
    offers a `fetch(id: …)` line; on some versions that id does not resolve — use one of the two ways above.) The comment may
    say the gates are **unassigned, please reassign**: that is because the spec's approvers are placeholders. You do not need
    to reassign anything — as the project's owner you can release each gate yourself. The plan should show **two legs — a value leg and a
-   change leg — and three gates**. The approvers named in the spec are placeholders (`…@example.com`), so each gate falls to
-   you as the project's owner. `npm run report:gate -- <gate id>` (run in `~/paichart`) prints what to check, from stored facts. Then:
+   change leg — and three gates**. `npm run report:gate -- <gate id>` (run in `~/paichart`) prints what to check, from stored facts. Then:
    ```
    perform(action: 'task.complete', parameters: { taskId: '<plan gate id>' })
    ```
@@ -157,7 +156,7 @@ Type each call to Claude Code (any directory), or simply ask for it in plain wor
 
    The calls behind that request:
    ```
-   project(action: 'task.list', pov_name: 'First runs')                                   # the task whose title starts "Author config change-package"
+   project(action: 'task.list', pov_name: 'First runs')                                   # the task whose title starts "Author configs"
    perform(action: 'agent.results', parameters: { taskId: '<Author task id>', verbose: true })   # the execution id ("• ID: c…", 25 characters) and the edit receipt
    project(action: 'held.get', executionId: '<execution id>', handle: 'H1', kind: 'BASE')
    project(action: 'held.get', executionId: '<execution id>', handle: 'H1', kind: 'CANDIDATE')
@@ -216,7 +215,7 @@ the same project") and stamp the new task as described under "Re-running a progr
 **Re-running a program** (an escalated leg, a corrected artifact): a finished program cannot be re-run in place.
 Create a fresh PIPELINE task with a run number in its title (`… (Run 2) (protocol: pov-program)`) and stamp the prior program stage on it
 ([TROUBLESHOOTING-A-RUN.md](TROUBLESHOOTING-A-RUN.md), "Launching again in the same project") — the harness's pre-flight
-halts on a duplicate `Program: …` stage and accepts only a machine-checkable clearance, never prose in the description:
+halts on a duplicate `Program: …` stage; clear it with the metadata stamp, not with words in the description:
 ```
 perform(action: 'task.update', parameters: { taskId: '<new task id>', metadata: { duplicateAcknowledged: ['<stage id>', …] } })
 ```
@@ -241,12 +240,17 @@ one leg chooses being used, unchanged, by the next. Its `git-only` variant needs
 switch files from `paichart/paichart-configs`, so everything in section 2's "Before you start" is enough. It has released on
 both of its variants; its README says what a successful run looks like.
 
-Launch it exactly as in section 2, steps 2 to 4, with a new stage and these two URLs in the description:
+Launch it exactly as in section 2, steps 1 to 4, in a **new project** (repeat step 1 with another title: in the first run's
+project a leg can stop with a duplicate notice, because that project already holds a change to the same switch), with a title
+such as `Partner HTTPS through the edge and core switches (protocol: pov-program)` and these two URLs in the description:
 
 ```
 https://raw.githubusercontent.com/paichart/paichart-configs/main/usecases/firewall-partner-path-r2/git-only/topology.json
 https://raw.githubusercontent.com/paichart/paichart-configs/main/usecases/firewall-partner-path-r2/git-only/requirements.md
 ```
+
+It spends your Anthropic credit like the first run. No measured cost for it is published here; it has two change legs where the
+first run had one, so expect it to cost and take somewhat more. `npm run report:run-cost -- <pov id>` shows the figure afterwards.
 
 What differs from the first run:
 

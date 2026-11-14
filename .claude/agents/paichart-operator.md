@@ -107,7 +107,7 @@ Use `READING-A-RUN.md` for the method. Report, in this order: `programReleasable
 outcome and its reviewer's blocking reasons, if any; the derived values and whether containment was clean; for a change leg,
 the edit receipt (how many edits, all applied or not, which files); what the package says it could not check. Then offer to
 show exactly what changed: fetch the BASE and CANDIDATE kept copies of the edited file with `held.get` and show a unified
-diff, unparaphrased (`FIRST-RUN.md` step 8 has the calls).
+diff, unparaphrased (`FIRST-RUN.md` section 2, step 8 has the calls).
 
 ## Diagnosing a stopped run
 

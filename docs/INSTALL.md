@@ -1,7 +1,7 @@
 # Installing pAIchart — from a bare Ubuntu machine to Claude talking to your own pAIchart
 
 Every command, in order, as you would type it. `RUNNING.md` explains *why*; this guide is the *what*, verified on a
-fresh Ubuntu 24.04 laptop on a home LAN (2026-09-07). Replace `HOST` with the address other machines will use to
+fresh Ubuntu 24.04 laptop on a home LAN (2026-09-07) and again by a fresh install on 2026-11-13. Replace `HOST` with the address other machines will use to
 reach this one (`192.168.1.50`, a hostname, or `localhost` if only this machine will use it) — it becomes
 `APP_BASE_URL`, and **`APP_BASE_URL` is your install's identity** (see RUNNING.md).
 
@@ -65,6 +65,11 @@ ss -ltnp | grep -E ':(3000|8080|3100|3110)\b' || echo PORTS-FREE   # expect PORT
 ```
 
 ## 4. Configure
+**First set your machine's address, by itself.** Everything below uses it, and it becomes the install's own address:
+```bash
+HOST=192.168.1.50                        # ← CHANGE THIS to your machine's address, then run this one line
+```
+Then the rest, in the same terminal:
 ```bash
 cd ~/paichart
 npm ci                                   # 1–20 min depending on the box; npm reports about 1,000 packages. It also prints deprecation warnings and a
@@ -75,7 +80,7 @@ chmod 600 .env                           # DO NOT SKIP. .env holds DATABASE_URL 
                                          # (0002) makes this copy 0664 — group- AND world-readable. The only
                                          # thing containing it is your home directory being 0700, which is a
                                          # default you may not have.
-HOST=192.168.1.50                        # ← CHANGE THIS to your machine's address before you paste the rest of the block
+[ -n "$HOST" ] && [ "$HOST" != 192.168.1.50 ] || echo 'STOP: set HOST to your own address first (the line above this block)'
 sed -i "s#^DATABASE_URL=.*#DATABASE_URL=\"postgresql://paichart:$(cat ~/.paichart-dbpw)@localhost:5432/paichart\"#" .env
 sed -i "s#^APP_BASE_URL=.*#APP_BASE_URL=http://$HOST:3000#" .env
 sed -i "s#^OAUTH_STATE_SECRET=.*#OAUTH_STATE_SECRET=\"$(openssl rand -hex 32)\"#" .env
@@ -95,7 +100,8 @@ npm run db:seed 2>&1 | tee ~/paichart-seed.log   # ~1–2 min; prints its own st
                                          # after a git pull: every step is add-only (a re-run never deletes; --force-recreate on db:templates does)
                                          # (schema, grants, admin, protocols, hub prompts, named workflows, agent/harness/program/domain/phase templates)
                                          # Workflows: three run on a self-host (pov-status-report, weekly-pov-digest, screenshot-documentation);
-                                         # four more are installed PAUSED as examples that need a service you would register
+                                         # (the third needs the browser service, step 9b); four more are installed PAUSED as examples that need a
+                                         # service you would register
 grep -A1 'Generated password' ~/paichart-seed.log   # the admin password: store it, then `rm ~/paichart-seed.log`
                                          # lost it? npm run db:admin -- --reset-password
 ```
@@ -125,8 +131,8 @@ most common mistake with units, and it produces a box that looks configured and 
 
 Logs go to the journal, so they survive restarts and rotate themselves:
 ```bash
-journalctl -u paichart-mcp -e -f          # follow
-journalctl -u paichart-web --since -1h    # last hour, after something went wrong
+sudo journalctl -u paichart-mcp -e -f          # follow
+sudo journalctl -u paichart-web --since -1h    # last hour, after something went wrong
 ```
 One-time, so the journal cannot grow without bound (note: this caps the WHOLE machine's journal at 500 MB, not only pAIchart's):
 ```bash
@@ -185,9 +191,8 @@ Click the **pAIchart logo** (top-right corner) — its menu has **Profile Settin
 Choose **Admin Dashboard** (only a **Super Admin** sees this option — which is why this step is done now, before you switch
 accounts) → **User Management** → **Create User**
 → fill in email and name, set **System Role** to **System Admin** (the dialog defaults to *User* — check it before you
-save; a User cannot administer the hub, and the Git file source your first run reads through is admin-only, so a User's run keeps no copy of the files it edits), and **set a password** in the dialog (blank means
-"will sign in with OAuth", and an account without one cannot log in) → Create. (Choose **Super Admin** instead if you want
-your own account to see the Admin Dashboard too.)
+save; a User cannot administer the hub, and the Git file source your first run reads through is admin-only, so the first run needs a System Admin account), and **set a password** in the dialog (blank means
+"will sign in with OAuth", and an account without one cannot log in) → Create. (Keep **System Admin** for your own account: a Super Admin also sees the Admin Dashboard, but is left out of project teams, so it is for administration only.)
 
 ## 8. Your Anthropic key, an MCP API key, then connect Claude Code to your hub — required before your first project (a POV)
 Log out (**pAIchart logo** → **Logout**) and log in as yourself — the lock icon again, your email and the password you just
@@ -221,13 +226,15 @@ tools start `mcp__claude_ai_…` — those are the hosted site, not your install
 something. To see which hub a connection reaches, ask your AI client *"which pAIchart hub am I connected to, and as whom?"*:
 `registry(action: 'list')` returns the hub's own address (`hub.baseUrl`) and your account.) Next: your first run ([FIRST-RUN.md](FIRST-RUN.md)). The key is stored in plaintext in `~/.claude.json`; it expires on the date you chose.
 
-**Then prove the install owns its identity:** [VERIFYING-SELF-HOST.md](VERIFYING-SELF-HOST.md) with
+**Optional (not needed for your first run): prove the install owns its identity:** [VERIFYING-SELF-HOST.md](VERIFYING-SELF-HOST.md) with
 `BASE=http://HOST:3000; MCP=$BASE` (its step 4 uses the MCP API key you just made).
 
 Claude Desktop cannot send a header: use OAuth (`docs/OAUTH-SETUP.md` §B.1, callback `http://HOST:3000/oauth/callback`)
 or the `mcp-remote --header` stanza shown on the page you land on after signing in (`/auth/oauth/success`).
 
 ## 9. Your first external service — a remote MCP server, through the hub
+*Optional: not needed for your first run (steps 9b and 9c are). It shows how any MCP service is registered.*
+
 The hub's point is other MCP services: register them once, then every AI client reaches them through `${APP_BASE_URL}/mcp`
 with one identity. This repository ships a descriptor for a public, keyless one — Context7 (library documentation) —
 so you can see the whole path without running anything else. Because the endpoint is public HTTPS, no allowlist is
@@ -342,7 +349,7 @@ and limits are in [SELF-HOST-KEPT-FILES.md → Reading kept files from Git](SELF
 cd ~/paichart
 cp services/github-service/.env.example services/github-service/.env && chmod 600 services/github-service/.env
 ```
-**Stop and edit that file now** — `nano services/github-service/.env` — paste your token on its one line and save. The next
+**Stop and edit that file now** — `nano services/github-service/.env` — replace `github_pat_REPLACE_ME` with your token, keeping `GITHUB_PERSONAL_ACCESS_TOKEN=` in front of it, and save. The next
 commands fail (a `503` on `healthz`) if the placeholder is still there.
 ```bash
 docker compose -f docker-compose.self-host.yml --profile git up -d --build
@@ -410,9 +417,10 @@ Then, in Claude Code: *"use the paichart-operator agent to run my first program"
 
 **Optional: make Claude Code use the pAIchart tools first, in every directory.** The clone's `CLAUDE.md` tells Claude Code to use
 the hub's tools and not to query the database, but Claude Code reads that file only when you start it inside the clone. To give
-it the same instruction wherever you start it, add this to your own Claude Code memory file:
+it the same instruction wherever you start it, add this to your own Claude Code memory file (the `CLAUDE.md` in the `.claude`
+directory of your home; the command does nothing if the paragraph is already there):
 ```bash
-mkdir -p ~/.claude && cat >> ~/.claude/CLAUDE.md <<'EOF'
+mkdir -p ~/.claude && grep -qs '^## pAIchart' ~/.claude/CLAUDE.md || cat >> ~/.claude/CLAUDE.md <<'EOF'
 
 ## pAIchart
 For anything about pAIchart projects, tasks, runs, artifacts or workflows, use the pAIchart MCP tools (project, perform, template,
@@ -426,7 +434,7 @@ EOF
 has been following this guide for you, it must stop here too, tell you the install is complete, and ask before going further.
 
 **[FIRST-RUN.md](FIRST-RUN.md)** — look at a finished run on the hosted site, then run the same use case on this install
-(it needs only steps 8, 9b and 9c: no lab, no switches; about USD 5.50 of Anthropic usage and 25 minutes), then a bigger
+(it needs only steps 7, 8, 9b and 9c: no lab, no switches; about USD 5.50 of Anthropic usage and 25 minutes), then a bigger
 example that needs no lab either.
 
 **You are done installing when:** the four `curl` checks at the end of step 5 print `200`, `200`, your own origin and `401`;

@@ -48,7 +48,8 @@ its descriptor the same way and registers → reads → tears down the service b
 
 ## Run it — five hub calls
 
-The exact sequence, with the responses a working install returns, is `docs/FIRST-RUN.md` **§ 4**.
+The sequence is the same as in `docs/FIRST-RUN.md` section 2, steps 1 to 5, with this use case's two URLs. (FIRST-RUN section 4 now
+describes its successor, `firewall-partner-path-r2` in the `paichart-configs` repository, which needs no lab.)
 In short — from Claude Code inside your clone, or as direct tool calls:
 
 1. `perform(action: 'pov.create', …)` — a POV `pAIchart Use Cases` (country of your choice) with its phases named
