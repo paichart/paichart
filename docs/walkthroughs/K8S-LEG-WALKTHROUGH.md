@@ -1,5 +1,8 @@
 # The Kubernetes leg — walkthrough (kept-file telemetry program)
 
+> This tour follows a run from before 2026-11-11. Where it names the repository `paichart/paichart-lab-configs`, read `paichart/paichart-configs`: the older repository is retired and the same files are there.
+
+
 **Worked example:** leg task `cmvr9ru4e005ayxvtqf24dm6g` "Author Kubernetes NetworkPolicy admitting exporter-range CIDR (protocol:
 kubernetes-gitops)", inside program root `cmvr9hd78000uyxvn32ctl8xc`. Its own child stage is "Pipeline: K8s NetworkPolicy Exporter CIDR (Run
 20261027-2254)" (`cmvra9e6x00bdyxvtpzbi98fk`). kubernetes-gitops 1.18.0; Harvester, Architect and Reviewer on Sonnet 5, Author on Opus 5.5.

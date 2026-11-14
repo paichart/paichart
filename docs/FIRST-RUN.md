@@ -1,6 +1,6 @@
 # Your first run
 
-Look at a finished run (section 1), run the same one yourself (section 2), then try a bigger one (section 4); section 3 is reference for every run. Words used here (all of them, and more,
+Look at a finished run (section 1), run the same one yourself (section 2), then try a bigger one (section 4, no lab needed); section 3 is reference for every run. Words used here (all of them, and more,
 are in [GLOSSARY.md](GLOSSARY.md)): a **pipeline** is one
 chain of agents (harvest the current state → design → author → review) that produces one reviewed change package or one
 checked value. A **program** is several pipelines coordinated as one change; each pipeline in a program is called a **leg**. A
@@ -48,6 +48,8 @@ from that repository and nothing else: no lab, no switches.
 
 **Before you start** ([INSTALL.md](INSTALL.md)):
 
+- step 7 — the account you are signed in with is a **System Admin** (or Super Admin). The Git file source is admin-only: with
+  an ordinary User account the run still works but keeps no copy of the switch file, and step 8 below has nothing to show;
 - step 8 — your Anthropic key is saved and Claude Code is connected to your hub;
 - step 9b — the browser service is running and seeded (the plan step fetches the two input files through it);
 - step 9c — the GitHub file source is running and seeded, with `GIT_FILE_SOURCE_PIN=paichart/paichart-configs` (the default
@@ -117,15 +119,16 @@ Type each call to Claude Code (any directory), or simply ask for it in plain wor
    ```
    → the reply names the gate. **Read the gate's status back** — `project(action: 'task.context', taskId: '<gate id>')` must
    show `Status: COMPLETED`. A release sent within seconds of the step before it finishing can be refused while the state
-   settles; send it again (usually the first try works; on a slow machine it has taken up to five tries over about 50 seconds).
+   settles: the reply then says `DEPENDENCY_NOT_SATISFIED`, or the status still reads `IN_PROGRESS`. That is not a fault. Send
+   it again (usually the first try works; on a slow machine it has taken up to five tries over about 50 seconds).
 
-   **Finding the other two gates.** All three gates are tasks of type `APPROVAL` in the program's own stage (their titles
+   **5a. Finding the other two gates.** All three gates are tasks of type `APPROVAL` in the program's own stage (their titles
    usually start `APPROVE`): `project(action: 'task.list', povId: '<pov id>')` lists them with their ids and status. A gate can be released only when
    the step before it has finished.
    **Releasing the plan gate starts the first agent pipeline** — we call it a **leg**. Here it is the leg that works out the
    address; it takes a few minutes, and the next gate cannot be released until it has finished.
 
-   **From here you can hand the rest to Claude.** Say: *"Check if the leg is completed and, if it looks good, release the next
+   **5b. From here you can hand the rest to Claude.** Say: *"Check if the leg is completed and, if it looks good, release the next
    two approval gates."* Claude waits for each leg, reads its result, tells you what it found, and releases the address gate
    and then the network change gate. The program runs on until it finishes with **`programReleasable: true`** — every leg and
    the integration review approved — or stops with **needs-revision**, which names what was refused and why. On this small,
@@ -229,83 +232,42 @@ A failure at section 2, step 4 (the launch) with `llm_initialized` means the run
 Profile Settings → AI Provider Settings). A leg that escalates on its harvest usually means a rig service answered `initialize`
 but could not READ — check the rig README's readiness probes, not the container list.
 
-## 4. A bigger example, with its own lab
+## 4. A bigger example
 
-This section uses more of pAIchart's vocabulary than the first run did — [GLOSSARY.md](GLOSSARY.md) has every term.
+[`firewall-partner-path-r2`](https://github.com/paichart/paichart-configs/tree/main/usecases/firewall-partner-path-r2) is a
+program of **two change legs**, the second waiting for the first. An edge leg on `ceos1` lets partner traffic in, picks a free
+address pool to translate it to, and advertises that pool; a core leg on `ceos2` then admits exactly that pool. It shows a value
+one leg chooses being used, unchanged, by the next. Its `git-only` variant needs **no lab**: like the first run it reads the two
+switch files from `paichart/paichart-configs`, so everything in section 2's "Before you start" is enough. It has released on
+both of its variants; its README says what a successful run looks like.
 
+Launch it exactly as in section 2, steps 2 to 4, with a new stage and these two URLs in the description:
 
-`usecases/firewall-a3-partner-path/` is a complete program (three sequenced pipelines) with its rigs. With
-[INSTALL.md](INSTALL.md) step 9b done and the rigs up (that directory's README — the network lab is a recipe: you supply the
-switch image yourself, from a free vendor account), this is the whole launch — five hub calls, typed to Claude
-in `~/paichart` or issued directly. Each line's response is what a working install returns.
+```
+https://raw.githubusercontent.com/paichart/paichart-configs/main/usecases/firewall-partner-path-r2/git-only/topology.json
+https://raw.githubusercontent.com/paichart/paichart-configs/main/usecases/firewall-partner-path-r2/git-only/requirements.md
+```
 
-> **Status (2026-11-02): the corrected spec has not yet been re-run live as a full program.** A fresh-install run on
-> 2026-11-01 found three things, all fixed since: the edge leg read only the switch it changes and chose a NAT pool that
-> collided with the other switch (the program's integration review caught it, and the program correctly refused to release);
-> the Device sources block did not reach either network leg; and a kept copy of one switch was refused by an over-cautious
-> redaction check. The spec now declares both switches for both network legs, and the redaction check is fixed. Until the
-> next full live run, treat a refusal on this program as information to read, not as a broken install.
+What differs from the first run:
 
-> **Kept files are on by default (2026-11-01).** `.env.example` sets `HELD_BYTES_CAPTURE_ENABLED=true` with R9 and R10 on: the
-> network legs keep each switch's running configuration and edit it by reference. That is why the spec's network legs now carry a
-> `## Device sources` block (`ceos1` / `ceos2: device-read — service <descriptor>`): network-provisioning ≥ 1.23.0 refuses a network
-> change leg whose devices have no declared source. Read **[`SELF-HOST-KEPT-FILES.md`](SELF-HOST-KEPT-FILES.md)** — what is stored,
-> where, and who can read it — before you run this.
+- **Three gates again, but two change packages:** the plan gate, then a gate for the edge package, then one for the core
+  package. The core leg does not start until the edge leg has finished and its gate is released.
+- **Read the pool at the edge gate.** The edge leg states which pool it chose and why it is free. The core leg uses that pool
+  and may not choose another; the final review checks that both legs carry the same one.
+- **It reads Git files only,** so the pool is checked against the committed files, not against running switches. The package
+  says so. The `git-live` variant reads the running switches as well, and needs two switches and a read-only device service:
+  its README lists what must be running. The lab recipes are in this repository under `usecases/` (`network-lab`,
+  `kubernetes-lab`, `terraform-lab`, `observability-lab`).
+- **Run it in a project that is not marked as a demo:** a demo project does not show the switch files to the agent that
+  writes the change.
 
-1. **A POV to hold your use cases, with the phases named up front** (phases are created WITH the POV — there is no
-   `phase.create`; a POV created without `phases` gets the default Planning/Execution/Review three):
-   ```
-   perform(action: 'pov.create', parameters: { title: 'pAIchart Use Cases', countryName: 'Australia',
-     description: 'Runnable use cases for a self-hosted pAIchart …',
-     phases: [ { name: 'Firewall Rules Change', type: 'EXECUTION' },
-               { name: 'Network and Terraform', type: 'EXECUTION' },
-               { name: 'OSPF ISIS Migration',   type: 'EXECUTION' } ] })
-   ```
-   → `✅ POV Created` with the POV id, `Sales Theatre: APJ` (from the country), `Phases Created: 3` in that order,
-   dates spread across the POV's 90 days. Keep the POV id.
-2. **A stage for the run**, in the first phase:
-   ```
-   perform(action: 'stage.create', parameters: { povId: '<pov id>', phaseName: 'Firewall Rules Change', name: 'FW-A3 Program Run' })
-   ```
-   → `Stage ID: <stage id>`. Keep it.
-3. **The program task** — `type: 'PIPELINE'`, the protocol token in the title, and in the description one line of intent and the two spec URLs, nothing else
-   (the planner fetches only what the description names):
-   ```
-   perform(action: 'task.create', parameters: { povId: '<pov id>', stageId: '<stage id>', type: 'PIPELINE', priority: 'MEDIUM',
-     title: 'Partner-HTTPS security policy path with edge SNAT (protocol: pov-program)',
-     description: 'Program intent: end-to-end partner-HTTPS policy across ceos1 (edge, SNAT) -> LocalStack dmz-sg -> ceos2 (core), three sequenced pipelines with transitive chaining.\n\nDesign artifacts for the Program Architect (fetch ONLY these two URLs):\n- topology-as-code: https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/topology.json\n- requirements: https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/requirements.md' })
-   ```
-   → `Task ID: <task id>`, `Status: OPEN`.
-4. **Give it the harness.** The Pipeline Harness template was seeded by `db:seed`; `template(action: 'list')` shows its id.
-   ```
-   perform(action: 'agent.assign',  parameters: { taskId: '<task id>', agentTemplateId: '<Pipeline Harness template id>' })
-   perform(action: 'agent.execute', parameters: { taskId: '<task id>', waitForCompletion: false })
-   ```
-   → `Execution Status: RUNNING` with an execution id. The harness's first pass takes ~30 s: it creates a child stage
-   `Program: … (Run <timestamp>)` and spawns the **Program Architect** as the sole child of step PLAN — that is a
-   `task.comment` on your task, and the harness execution ends `SUCCESS` (it exits on purpose; the reactor re-triggers
-   it when the Architect finishes).
-5. **Read the plan, release the gate.** The Architect fetches the two URLs through your browser-automation service
-   (paging the 14 KB requirements with `read_more`), self-provisions nothing yet, and writes the program plan —
-   `## Interface Contract` first (real subnets, VLAN/ASN, tags — as ONE JSON block), the pipeline DAG, and
-   **Assumptions & open questions**. When it lands, the harness comments `⏸ PROGRAM PLAN AWAITING APPROVAL` with the
-   roster and the gate id. Read the assumptions — that list is your disambiguation checklist — then:
-   ```
-   perform(action: 'task.complete', parameters: { taskId: '<G0 gate id from the comment>' })
-   ```
-   Nothing runs before that. After it: the three legs in sequence (each self-provisions its rig service from the
-   descriptor, harvests read-only, designs, is reviewed, tears the registration down), one human gate per domain, the
-   producer's deliverable and Node C's verdict, and a final comment with the gate table and `programReleasable`.
-   `project(action: 'task.context', taskId: '<task id>')` at any time shows where it is.
-
-**What a finished run looks like** (Run 7 of this use case on one laptop hosting hub + both rigs, 2026-09-10 — `programReleasable: true` in ~42 minutes):
-Architect ~2 min → three legs of ~8–12 min each (harvest → design → author → review; each self-provisions its rig service
-at `127.0.0.1` and the reviewer approves or escalates) → Producer + Node C ~4 min → program synthesis. The stamp on the
-program task is the machine fact — `programReleasable`, `qualityGate.outcome`, and each leg's `containmentDisposition` —
-and the release is still your decision: a run can show every leg approved and Node C approved, and still stamp
-`programReleasable: false` on a mechanical containment conjunct. Read the facts, not the adjectives.
+The release is still your decision. A run can show every leg approved and the final review approved and still record
+`programReleasable: false` on a mechanical check. Read the facts ([READING-A-RUN.md](READING-A-RUN.md)), not the adjectives.
 
 ## Next
+
+- Two quick things to say to Claude Code, now that a project exists: *"Which pAIchart hub am I connected to, and as whom?"* and,
+  with the project set to **In Progress**, *"Run the weekly-pov-digest workflow"* (it lists your projects by status; no agent runs).
 
 - [Operator runbook](OPERATING.md) — running programs day to day.
 - [Program spec checklist](WRITING-A-SPEC.md) — writing the two input files for a

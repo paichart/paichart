@@ -1,5 +1,8 @@
 # The Terraform leg — walkthrough (kept-file telemetry program)
 
+> This tour follows a run from before 2026-11-11. Where it names the repository `paichart/paichart-lab-configs`, read `paichart/paichart-configs`: the older repository is retired and the same files are there.
+
+
 **Worked example:** leg task `cmvr9ru6c005hyxvtkv6qf1ey` "Author Terraform S3 bucket policy admitting exporter-range CIDR (protocol:
 terraform-iac)". Its child stage is "Pipeline: S3 Bucket Policy Exporter CIDR (Run 20261027-2254)" (`cmvra9h9700bpyxvtvlyks222`).
 terraform-iac 1.16.0; Harvester, Architect and Reviewer on Sonnet 5, Author on Opus 5.5.

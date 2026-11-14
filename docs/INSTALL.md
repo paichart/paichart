@@ -185,7 +185,7 @@ Click the **pAIchart logo** (top-right corner) — its menu has **Profile Settin
 Choose **Admin Dashboard** (only a **Super Admin** sees this option — which is why this step is done now, before you switch
 accounts) → **User Management** → **Create User**
 → fill in email and name, set **System Role** to **System Admin** (the dialog defaults to *User* — check it before you
-save; a User cannot administer the hub), and **set a password** in the dialog (blank means
+save; a User cannot administer the hub, and the Git file source your first run reads through is admin-only, so a User's run keeps no copy of the files it edits), and **set a password** in the dialog (blank means
 "will sign in with OAuth", and an account without one cannot log in) → Create. (Choose **Super Admin** instead if you want
 your own account to see the Admin Dashboard too.)
 
@@ -287,12 +287,12 @@ Then in Claude Code (`claude -c`), the same shape as step 9:
    → `registry(action: 'tools', service_name: 'Browser Automation Service')` → 7 tools with full schemas
    (`scrape_page`, `fill_form`, `click_element`, `take_screenshot`, `generate_pdf`, `run_script`, `trace_session`).
 2. *"Through the hub, ask the browser-automation-service to `scrape_page`
-   `https://raw.githubusercontent.com/paichart/paichart/main/usecases/firewall-a3-partner-path/requirements.md`
+   `https://raw.githubusercontent.com/paichart/paichart-configs/main/usecases/loopback-ceos2/git-only/requirements.md`
    with selectors `{doc: 'pre'}`, and show me the call and the result."*
    → `services(action: 'call', targetService: 'browser-automation-service', tool: 'scrape_page', …)` → `success: true`
    and the document's text, *through your hub* — exactly the call a program's Program Architect makes.
-   **Check the text contains the spec's `## Device sources` lines** (`ceos1: device-read — service …`, `ceos2: …`). They prove you
-   are reading the current spec, the one [FIRST-RUN.md](FIRST-RUN.md) § 4 launches; without them the network legs would stop.
+   **Check the text contains the spec's `## Device sources` lines** (`ceos1: git-file — service github-service ; …`, `ceos2: …`). They
+   prove you are reading the spec your first run launches ([FIRST-RUN.md](FIRST-RUN.md), section 2).
 
 The registry id is `browser-automation-service`, the display name `Browser Automation Service`: `services(action: 'call')`
 accepts either; `registry(action: 'tools')` wants the display name.
@@ -427,11 +427,18 @@ has been following this guide for you, it must stop here too, tell you the insta
 
 **[FIRST-RUN.md](FIRST-RUN.md)** — look at a finished run on the hosted site, then run the same use case on this install
 (it needs only steps 8, 9b and 9c: no lab, no switches; about USD 5.50 of Anthropic usage and 25 minutes), then a bigger
-example with its own lab.
+example that needs no lab either.
 
 **You are done installing when:** the four `curl` checks at the end of step 5 print `200`, `200`, your own origin and `401`;
 step 6's page shows `http://HOST:3000/mcp`; your Anthropic key is saved (step 8); `claude mcp list` shows
 `paichart … ✔ Connected`; and, for your first run, steps 9b and 9c ended with their checks passing.
+
+**Two things to say to Claude Code to see it working** (neither costs anything: no agent runs):
+
+- *"Which pAIchart hub am I connected to, and as whom?"* The answer should be your own address (`http://HOST:3000`) and your own
+  account. If it names `paichart.app`, the session used the hosted site's tools and not your install.
+- *"Run the weekly-pov-digest workflow."* It lists your projects by status, through the hub. On a new install the lists are
+  empty, because a new project starts as *Projected*: after your first run, set that project to **In Progress** and run it again.
 
 ## Things that will bite (each cost real time)
 - **Late bind** (the most repeatable false failure in this guide): both servers log "ready" 10–60 s before they listen.

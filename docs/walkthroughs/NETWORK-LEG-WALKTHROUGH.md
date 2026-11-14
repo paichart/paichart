@@ -1,5 +1,8 @@
 # The network legs — walkthrough (a value leg and a change leg)
 
+> This tour follows a run from before 2026-11-11. Where it names the repository `paichart/paichart-lab-configs`, read `paichart/paichart-configs`: the older repository is retired and the same files are there.
+
+
 Network appears in two shapes, so this walkthrough has two parts:
 - **Part A, the value leg** (`network-derivation`): reads the switches and **produces a value** for other legs. It changes nothing. Worked
   example: the fabric leg of the kept-file telemetry program, `cmvr9pl9s004yyxvtcnhqajy9` (2026-10-27).

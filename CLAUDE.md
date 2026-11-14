@@ -46,7 +46,7 @@
 - `npx prisma studio` - Open Prisma Studio (visual database browser)
 - `npx prisma db seed` - Seed database with sample data
 
-**Convention**: We use `db push` everywhere (development + production) to prevent drift.
+**Convention**: We use `db push` everywhere (development + production) to prevent drift (on an existing install through `npm run db:seed`, which runs the push after the indexes it needs).
 - Schema.prisma is single source of truth
 - No migration files to manage
 - Production and development use same command
