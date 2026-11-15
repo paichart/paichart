@@ -12,8 +12,11 @@ DECLARED field paths whose live value differs. Nothing else:
   - DECLARED paths only. A field the manifest does not state is never read out of the live object, so API-server
     defaults, status, managedFields and live-only annotations are not compared.
   - A `Secret` is never fetched and never compared (`secret-never-compared`), whatever the caller's RBAC allows.
-  - Anything that is not one rendered, allowlisted, namespaced object is `not-compared` with a named reason
-    (a kustomization, a Helm values file, a cluster-scoped kind, a `List`).
+  - Anything that is not one rendered, allowlisted object is `not-compared` with a named reason (a kustomization, a Helm values
+    file, a `List`, a kind the service does not allow).
+  - ONE cluster-scoped kind may be compared when the service passes it: `Namespace`, fetched BY NAME (the manifest supplies the
+    name). Its labels decide which NetworkPolicies select it and which Pod Security level applies, so drift there is real drift.
+    It is never listed — a service cannot enumerate namespaces through this tool.
 
 This module imports no Kubernetes client, so its tests run without a cluster (`test_declared_compare.py`).
 
@@ -247,10 +250,14 @@ def _load_documents(manifest: str) -> list:
 
 
 def compare_manifest(manifest: str, kinds: dict, get_live: GetLive,
-                     default_namespace: Optional[str] = None, redacted_marker: Optional[str] = None) -> dict:
+                     default_namespace: Optional[str] = None, redacted_marker: Optional[str] = None,
+                     cluster_kinds: Optional[dict] = None) -> dict:
     """Compare every object `manifest` declares against its live object.
 
-    `kinds` maps (apiVersion, kind) -> the service's resourceType (its CLOSED allowlist).
+    `kinds` maps (apiVersion, kind) -> the service's resourceType (its CLOSED allowlist of NAMESPACED kinds).
+    `cluster_kinds` maps (apiVersion, kind) -> resourceType for the CLUSTER-SCOPED kinds this compare may fetch BY NAME (the service
+        passes `Namespace` only). Such an object has no namespace: it is fetched with `namespace=None` and never listed. A caller
+        that passes none keeps the old behaviour (`kind-not-allowlisted`).
     `get_live(resource_type, api_version_kind_label, namespace, name)` performs ONE get and never raises.
     """
     if not isinstance(manifest, str) or not manifest.strip():
@@ -278,18 +285,23 @@ def compare_manifest(manifest: str, kinds: dict, get_live: GetLive,
         if kind == "Secret":
             objects.append({**entry, "state": "not-compared", "reason": "secret-never-compared"})
             continue
-        resource_type = kinds.get((api_version, kind))
+        cluster_type = (cluster_kinds or {}).get((api_version, kind))
+        resource_type = cluster_type or kinds.get((api_version, kind))
         if resource_type is None:
             objects.append({**entry, "state": "not-compared", "reason": "kind-not-allowlisted"})
             continue
         if not name:
             objects.append({**entry, "state": "not-compared", "reason": "no-name"})
             continue
-        namespace = md.get("namespace") if isinstance(md.get("namespace"), str) and md.get("namespace") else default_namespace
-        if not namespace:
-            objects.append({**entry, "state": "not-compared", "reason": "no-namespace"})
-            continue
-        entry["namespace"] = _clean(namespace, 253)
+        if cluster_type:
+            # A cluster-scoped object is named, never namespaced: ONE get by name. `defaultNamespace` does not apply to it.
+            namespace = None
+        else:
+            namespace = md.get("namespace") if isinstance(md.get("namespace"), str) and md.get("namespace") else default_namespace
+            if not namespace:
+                objects.append({**entry, "state": "not-compared", "reason": "no-namespace"})
+                continue
+            entry["namespace"] = _clean(namespace, 253)
         status, payload = get_live(resource_type, f"{api_version}/{kind}", namespace, name)
         if status == "invalid":
             objects.append({**entry, "state": "not-compared", "reason": "name-or-namespace-invalid"})

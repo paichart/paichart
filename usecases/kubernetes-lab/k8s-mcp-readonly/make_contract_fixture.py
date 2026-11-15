@@ -48,6 +48,12 @@ stringData: { p: x }
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources: [a.yaml]
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: trading
+  labels: { team: orders, pod-security.kubernetes.io/enforce: restricted }
 """
 LIVE = {
     ("deployments", "trading", "orders-api"): {
@@ -56,7 +62,11 @@ LIVE = {
             {"name": "orders-api", "image": "nginx:1.27-alpine", "ports": [{"containerPort": "80"}],
              "env": [{"name": "API_TOKEN", "value": "live"}]}]}}}},
     ("services", "trading", "orders-api"): {"spec": {"ports": [{"port": 80, "targetPort": 80}]}},
+    # cluster-scoped: fetched by name, no namespace — one declared label has drifted live
+    ("namespaces", None, "trading"): {"metadata": {"name": "trading", "labels": {"team": "orders", "pod-security.kubernetes.io/enforce": "baseline",
+                                                                                   "kubernetes.io/metadata.name": "trading"}}},
 }
+CLUSTER_KINDS = {("v1", "Namespace"): "namespaces"}
 
 
 def get(resource_type, _label, namespace, name):
@@ -66,7 +76,7 @@ def get(resource_type, _label, namespace, name):
 
 def build():
     return {"manifest": MANIFEST, "redactedMarker": "<<REDACTED-SECRET>>",
-            "result": compare_manifest(MANIFEST, KINDS, get, redacted_marker="<<REDACTED-SECRET>>")}
+            "result": compare_manifest(MANIFEST, KINDS, get, redacted_marker="<<REDACTED-SECRET>>", cluster_kinds=CLUSTER_KINDS)}
 
 
 def _fixture_path():

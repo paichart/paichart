@@ -1,9 +1,9 @@
 {
-  "manifest": "apiVersion: apps/v1\nkind: Deployment\nmetadata: { name: orders-api, namespace: trading, labels: { app.kubernetes.io/name: orders } }\nspec:\n  replicas: 2\n  template:\n    spec:\n      containers:\n        - name: orders-api\n          image: nginx:1.27-alpine\n          ports: [{ containerPort: 80 }]\n          env:\n            - { name: FEED_URL, value: \"http://feed:8080\" }\n            - { name: API_TOKEN, value: \"<<REDACTED-SECRET>>\" }\n---\napiVersion: v1\nkind: Service\nmetadata: { name: orders-api, namespace: trading }\nspec: { ports: [{ port: 80, targetPort: 80 }] }\n---\napiVersion: v1\nkind: ConfigMap\nmetadata: { name: gone, namespace: trading }\ndata: { k: v }\n---\napiVersion: v1\nkind: Secret\nmetadata: { name: s, namespace: trading }\nstringData: { p: x }\n---\napiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources: [a.yaml]\n",
+  "manifest": "apiVersion: apps/v1\nkind: Deployment\nmetadata: { name: orders-api, namespace: trading, labels: { app.kubernetes.io/name: orders } }\nspec:\n  replicas: 2\n  template:\n    spec:\n      containers:\n        - name: orders-api\n          image: nginx:1.27-alpine\n          ports: [{ containerPort: 80 }]\n          env:\n            - { name: FEED_URL, value: \"http://feed:8080\" }\n            - { name: API_TOKEN, value: \"<<REDACTED-SECRET>>\" }\n---\napiVersion: v1\nkind: Service\nmetadata: { name: orders-api, namespace: trading }\nspec: { ports: [{ port: 80, targetPort: 80 }] }\n---\napiVersion: v1\nkind: ConfigMap\nmetadata: { name: gone, namespace: trading }\ndata: { k: v }\n---\napiVersion: v1\nkind: Secret\nmetadata: { name: s, namespace: trading }\nstringData: { p: x }\n---\napiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources: [a.yaml]\n---\napiVersion: v1\nkind: Namespace\nmetadata:\n  name: trading\n  labels: { team: orders, pod-security.kubernetes.io/enforce: restricted }\n",
   "redactedMarker": "<<REDACTED-SECRET>>",
   "result": {
-    "documents": 5,
-    "manifestSha256": "35af4b6fda53e846e10efcf74995cf0e186f8f9fd480fa219671ee96124f1e3b",
+    "documents": 6,
+    "manifestSha256": "69ab276045a0cf4f2740a2fbbbe4ab26ff4483d52122f4fec808e195f4deb954",
     "method": "k8s-declared-field-compare/1",
     "objects": [
       {
@@ -72,8 +72,24 @@
         "kind": "Kustomization",
         "reason": "kind-not-allowlisted",
         "state": "not-compared"
+      },
+      {
+        "apiVersion": "v1",
+        "declaredPaths": 2,
+        "differing": [
+          {
+            "difference": "value-differs",
+            "path": "metadata.labels[\"pod-security.kubernetes.io/enforce\"]"
+          }
+        ],
+        "differingTotal": 1,
+        "index": 5,
+        "kind": "Namespace",
+        "name": "trading",
+        "redactedNotComparedTotal": 0,
+        "state": "compared"
       }
     ],
-    "objectsCompared": 2
+    "objectsCompared": 3
   }
 }

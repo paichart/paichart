@@ -155,17 +155,25 @@ def list_secret_names(namespace: str) -> dict:
 # (apiVersion, kind) -> resourceType, derived from the SAME closed allowlist; `Secret` is absent from it and is also
 # refused by name inside the compare, so a Secret manifest is never fetched.
 _KIND_TO_RESOURCE = {v: k for k, v in RESOURCE_MAP.items()}
+# The ONE cluster-scoped kind the compare may fetch, BY NAME (the manifest supplies it). Deliberately NOT in RESOURCE_MAP: the
+# agent-facing tools (list_resources / get_resource / list_resource_names) still cannot list or fetch a namespace, and nothing here
+# can enumerate them. The ServiceAccount needs `get` on namespaces for this — never `list` (readonly-rbac.yaml). Without it the API
+# answers 403 and the document is `not-compared: live-read-failed`, exactly as an un-allowlisted kind read before.
+_CLUSTER_COMPARE = {("v1", "Namespace"): "namespaces"}
 
 
 def _get_live(resource_type: str, _label: str, namespace: str, name: str):
     """ONE get for the compare. Never raises: ("found", obj) | ("absent", None) | ("invalid", None) | ("error", text)."""
-    if (not NS_RE.fullmatch(namespace or "") or len(namespace) > 253
-            or not NS_RE.fullmatch(name or "") or len(name) > 253):
+    if not NS_RE.fullmatch(name or "") or len(name) > 253:
         return ("invalid", None)
-    api_version, kind = RESOURCE_MAP[resource_type]
+    cluster = resource_type == "namespaces" and namespace is None
+    if not cluster and (not NS_RE.fullmatch(namespace or "") or len(namespace) > 253 or resource_type not in RESOURCE_MAP):
+        return ("invalid", None)
+    api_version, kind = ("v1", "Namespace") if cluster else RESOURCE_MAP[resource_type]
     try:
         res = _dyn.resources.get(api_version=api_version, kind=kind)
-        return ("found", _strip(res.get(name=name, namespace=namespace).to_dict()))
+        obj = res.get(name=name) if cluster else res.get(name=name, namespace=namespace)
+        return ("found", _strip(obj.to_dict()))
     except ApiException as e:
         if e.status == 404:
             return ("absent", None)
@@ -190,7 +198,8 @@ def compare_declared_fields(manifest: str, defaultNamespace: str | None = None,
         raise ToolError(f"defaultNamespace '{defaultNamespace}' is not a valid single RFC1123 name.")
     try:
         return compare_manifest(manifest, _KIND_TO_RESOURCE, _get_live,
-                                default_namespace=defaultNamespace, redacted_marker=redactedMarker)
+                                default_namespace=defaultNamespace, redacted_marker=redactedMarker,
+                                cluster_kinds=_CLUSTER_COMPARE)
     except CompareRefusal as e:
         raise ToolError(f"compare refused: {e}")  # §6.5: a denial is an isError RESULT, never a throw
     except Exception:  # noqa: BLE001 — sec-ops F1: nothing the manifest holds may escape as a transport error

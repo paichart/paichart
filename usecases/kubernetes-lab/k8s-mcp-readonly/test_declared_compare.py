@@ -175,6 +175,25 @@ r = run(m)
 case("a Helm values file, a kustomization and a cluster-scoped kind are not-compared with a reason",
      [o.get("reason") for o in r["objects"]] == ["not-an-object", "kind-not-allowlisted", "kind-not-allowlisted"] and r["objectsCompared"] == 0, json.dumps(r))
 
+# 12b — a Namespace is compared ONLY when the service passes it as a cluster-scoped kind: ONE get by name, no namespace, paths only
+NSM = "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: trading\n  labels: { team: orders, pod-security.kubernetes.io/enforce: restricted }\n"
+CK = {("v1", "Namespace"): "namespaces"}
+calls.clear()
+r = compare_manifest(NSM, KINDS, getter({("namespaces", None, "trading"): {"metadata": {"name": "trading", "labels": {"team": "orders", "pod-security.kubernetes.io/enforce": "baseline", "kubernetes.io/metadata.name": "trading"}}}}), cluster_kinds=CK)
+o0 = r["objects"][0]
+case("a Namespace is fetched by name with no namespace, and a drifted label is reported by path",
+     calls == [("namespaces", None, "trading")] and o0["state"] == "compared" and "namespace" not in o0
+     and paths(r) == [('metadata.labels["pod-security.kubernetes.io/enforce"]', "value-differs")] and "baseline" not in json.dumps(r) and "restricted" not in json.dumps(r), json.dumps(r))
+r = compare_manifest(NSM, KINDS, getter({}), default_namespace="other", cluster_kinds=CK)
+case("a Namespace absent live is absent-live; defaultNamespace does not apply to it", r["objects"][0]["state"] == "absent-live" and "namespace" not in r["objects"][0])
+r = compare_manifest(NSM, KINDS, getter({("namespaces", None, "trading"): "api status 403"}), cluster_kinds=CK)
+case("an account with no `get` on namespaces degrades to not-compared: live-read-failed (never a difference)",
+     r["objects"][0]["state"] == "not-compared" and r["objects"][0]["reason"] == "live-read-failed" and r["objectsCompared"] == 0)
+r = compare_manifest(NSM, KINDS, getter({}))
+case("a caller that passes no cluster kinds keeps the old behaviour (kind-not-allowlisted, nothing fetched)", r["objects"][0]["reason"] == "kind-not-allowlisted")
+r = compare_manifest("apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata: { name: admin }\nrules: []\n", KINDS, getter({}), cluster_kinds=CK)
+case("no OTHER cluster-scoped kind becomes comparable", r["objects"][0]["reason"] == "kind-not-allowlisted")
+
 # 13 — namespace handling
 m = "apiVersion: v1\nkind: Service\nmetadata: { name: orders-api }\nspec: { selector: { app: orders-api } }\n"
 r1 = run(m); r2 = run(m, default_namespace="trading")

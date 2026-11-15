@@ -33,6 +33,11 @@ rules:
   - apiGroups: ["policy"]
     resources: ["poddisruptionbudgets"]
     verbs: ["get", "list", "watch"]
+  # Namespaces: GET only, by name — for compare_declared_fields, which fetches the ONE Namespace a kept manifest names.
+  # NO `list` and NO `watch`: the service cannot enumerate namespaces (that would reveal the cluster's layout).
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get"]
   # Secrets: LIST only (for names/keys — server.py strips values). NO `get` (single-value fetch).
   - apiGroups: [""]
     resources: ["secrets"]

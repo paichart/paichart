@@ -2276,7 +2276,7 @@ const commitText = (name: string, commit: string): ProtocolText => {
       assert(r.calls![0].manifestSha256 === r.store!.refs[0].blobSha256 && (r.calls![0] as any).heldSha256 === undefined, 'the bytes "sent" are not the held bytes');
       assert(JSON.stringify(r.facts!.gitLiveDrift) === JSON.stringify(computeGitLiveDrift(r.calls)) && JSON.stringify(r.facts!.gitLiveDrift) === JSON.stringify(o.drift), 'gitLiveDrift ≠ computeGitLiveDrift(call record)');
       const f0 = (r.facts!.gitLiveDrift as any).files[0];
-      assert(f0.state === 'compared' && f0.summary === 'differences' && f0.differingTotal === 4 && f0.objects === 5 && f0.objectsCompared === 2, `the contract fixture's reading: ${JSON.stringify(f0).slice(0, 200)}`);
+      assert(f0.state === 'compared' && f0.summary === 'differences' && f0.differingTotal === 5 && f0.objects === 6 && f0.objectsCompared === 3, `the contract fixture's reading: ${JSON.stringify(f0).slice(0, 200)}`);
       const { h } = harvestOf(r.snap);
       const arts = r.snap.childArtifacts.filter((a) => a.executionId === h.executionId && a.name === 'result.json');
       assert(arts.length === r.report.copies && arts.every((a) => cs.CONFIG_FACT_KEYS.every((k) => JSON.stringify(JSON.parse(a.content)[k]) === JSON.stringify(r.facts![k]))), 'a stored copy of the Harvester result.json lacks a stamp');
@@ -2406,7 +2406,7 @@ const commitText = (name: string, commit: string): ProtocolText => {
       const snap = planted(); const o = await oracle(snap); const { h } = harvestOf(snap);
       const tr = (f: Record<string, unknown>) => ({ ...f, point: 'author-transcription', harvesterExecutionId: h.executionId });
       const liveLines = renderLiveEvidenceForPrompt(tr(o.live) as never)!; const driftLines = renderGitLiveDriftForPrompt(tr(o.drift) as never)!;
-      assert(liveLines.length === 3 && driftLines.length === 9, `oracle renders: ${liveLines.length}/${driftLines.length} lines`);
+      assert(liveLines.length === 3 && driftLines.length === 10, `oracle renders: ${liveLines.length}/${driftLines.length} lines`);
       const splice = (base: string, cand: string, want: string[], what: string) => {
         const b = base.split('\n'); const c = cand.split('\n');
         let i = 0; while (i < b.length && b[i] === c[i]) i++;
@@ -2452,7 +2452,7 @@ const commitText = (name: string, commit: string): ProtocolText => {
       assert(baseDelta.removed.length === 0 && baseDelta.added.every((l) => BLOCK.split('\n').includes(l)), `the levers moved the base arm beyond the planted block: +${JSON.stringify(baseDelta.added).slice(0, 200)} -${JSON.stringify(baseDelta.removed).slice(0, 200)}`);
       const d = delta(rd('X-CS', 'xhb', 'author.user.md'), rd('X-CS', 'xcs', 'author.user.md'));
       assert(d.removed.length === 0 && d.added.some((l) => l.startsWith('- **Live evidence — the platform\'s live-evidence fact**: `all-read`')) && d.added.some((l) => l.startsWith('- **Git vs live — the platform\'s Git-vs-live drift fact**'))
-        && d.added.some((l) => l.includes('`spec.replicas` (value-differs)')) && d.added.length === 12, `Architect delta: ${JSON.stringify(d).slice(0, 400)}`);
+        && d.added.some((l) => l.includes('`spec.replicas` (value-differs)')) && d.added.length === 13, `Architect delta: ${JSON.stringify(d).slice(0, 400)}`);
       const fake = path.join(root, 'fake');
       runLab(['run', '--experiment', exp, '--only', 'H-CS', '--fake-llm', 'persisted', '--n', '1', '--out', fake]);
       const s = (v: string) => JSON.parse(fs.readFileSync(path.join(fake, 'H-CS', v, 'sample-01', 'sample.json'), 'utf8'));

@@ -39,6 +39,8 @@ const DIFFERENCES = new Set(['value-differs', 'type-differs', 'missing-live']);
 const PATH_RE = /^[A-Za-z0-9_.\-\[\]="'/]{1,200}$/;
 const NAME_RE = /^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$/;
 const KIND_RE = /^[A-Za-z][A-Za-z0-9]{0,62}$/;
+/** The one cluster-scoped kind the compare tool fetches (by name; the service's `_CLUSTER_COMPARE`). It has no namespace. */
+const CLUSTER_SCOPED_KIND = 'Namespace';
 const SHA_RE = /^[0-9a-f]{64}$/;
 
 /** Why the platform made no call, or could not use what came back. A CLOSED set (the fact renders the word). */
@@ -80,7 +82,11 @@ export function validateCompareResult(raw: unknown, expectedSha: string): { ok: 
     const kind = str(o.kind, KIND_RE); const namespace = str(o.namespace, NAME_RE); const name = str(o.name, NAME_RE);
     // An object the tool did NOT fetch may echo a name the cluster would refuse; such an echo is dropped, never a shape failure.
     const fetched = o.state !== 'not-compared';
-    if (fetched && (kind === false || namespace === false || name === false || !kind || !namespace || !name)) return { ok: false, reason: 'result-shape' };
+    // A fetched object is named by kind + namespace + name. ONE exception: a `Namespace` is cluster-scoped, so it is fetched by name
+    // alone and must carry NO namespace (a Namespace that states one, or any other kind without one, is refused).
+    const clusterScoped = kind === CLUSTER_SCOPED_KIND;
+    if (fetched && (kind === false || namespace === false || name === false || !kind || !name
+      || (clusterScoped ? o.namespace !== undefined && o.namespace !== null : !namespace))) return { ok: false, reason: 'result-shape' };
     const base = { kind: kind || null, namespace: namespace || null, name: name || null };
     if (o.state === 'not-compared') {
       if (typeof o.reason !== 'string' || !NOT_COMPARED_REASONS.has(o.reason)) return { ok: false, reason: 'result-shape' };
@@ -112,7 +118,9 @@ export interface PlatformDriftCall {
   result?: unknown;
 }
 
-const objName = (o: ValidatedObject): string => `${o.kind ?? 'object'} ${o.namespace ?? '?'}/${o.name ?? '?'}`;
+const objName = (o: ValidatedObject): string => (o.kind === CLUSTER_SCOPED_KIND && !o.namespace
+  ? `${o.kind} ${o.name ?? '?'}`
+  : `${o.kind ?? 'object'} ${o.namespace ?? '?'}/${o.name ?? '?'}`);
 
 /** One held file's entry of the fact, from its call record. */
 export function driftFileFromCall(call: PlatformDriftCall): Obj {
@@ -179,7 +187,7 @@ const REASON_WORDS: Record<string, string> = {
 // that reaches the prompt is checked against this module's own sets and grammars; a file entry that fails any check renders as
 // `not-checked: the stored fact could not be read` — never its own words.
 const LABEL_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
-const OBJECT_RE = /^[A-Za-z][A-Za-z0-9]{0,62} [a-z0-9.?-]{1,253}\/[a-z0-9.?-]{1,253}$/;
+const OBJECT_RE = /^(?:[A-Za-z][A-Za-z0-9]{0,62} [a-z0-9.?-]{1,253}\/[a-z0-9.?-]{1,253}|Namespace [a-z0-9.?-]{1,253})$/;
 const SUMMARIES = new Set(['no-differences', 'differences', 'compared-with-gaps']);
 function renderableFile(f: unknown): Obj | null {
   if (!isObj(f) || typeof f.label !== 'string' || !LABEL_RE.test(f.label)) return null;
