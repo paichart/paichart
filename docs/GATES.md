@@ -44,6 +44,12 @@ Nothing is built yet, so this is the cheapest place to catch a mistake. Read the
    is a record for people; no agent reads it.
 5. **A configuration form you have not used on that platform before.** Try it on the device in a configuration session and abort
    the session: nothing changes, and you learn in seconds whether the platform accepts it.
+6. **Where the plan put each network leg's Device sources.** The platform reads a leg's Device sources from the plan only under
+   the leg's protocol name: `network-provisioning` for a change leg, `network-derivation` for a value leg. Lines the plan filed
+   under any other name (a leg's own name, for example) reach no leg. `npm run report:gate` marks this ✗. Without the report,
+   read a leg's stored facts (`project(action: 'task.context', taskId: '<a leg task id>')`): under
+   `interfaceContractSource.deviceSourcesKeys`, `notReadKeys` must be empty. A plan with no Device sources shows no
+   `deviceSourcesKeys` value, and so does a plan made before this fact was recorded.
 
 **If the plan is wrong, do not release.** A plan cannot be edited after the fact. Which fix depends on what is wrong:
 

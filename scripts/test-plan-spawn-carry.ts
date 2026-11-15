@@ -11,10 +11,16 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
+import { DEVICE_SOURCE_LANES } from '../lib/agents/harness/held-bytes/variant';
 import {
   INTERFACE_CONTRACT_MARKER,
   PLAN_CONTRACT_MAX_BYTES,
   INTERFACE_CONTRACT_SOURCE_KEYS,
+  RESOLVER_VERSION,
+  DEVICE_SOURCES_READ_KEYS,
+  DEVICE_SOURCES_KEY_MAX,
+  DEVICE_SOURCES_KEY_MAX_CHARS,
+  deviceSourcesKeysOf,
   DUPLICATE_ACK_CARRY_KEYS,
   parsePlanContractText,
   exceedsContractCap,
@@ -550,10 +556,73 @@ const AT = '2026-10-04T00:00:00.000Z';
     assert(dStore.kind === 'store' && dDecl.kind === 'decline', 'absent-arm fixtures');
     shapeOk((dStore as any).fact, INTERFACE_CONTRACT_SOURCE_KEYS as string[], 'create-absent');
     shapeOk((dDecl as any).fact, INTERFACE_CONTRACT_SOURCE_KEYS as string[], 'create-absent-declined');
-    eq(INTERFACE_CONTRACT_SOURCE_KEYS.slice(-5), ['callerExecutionId', 'callerTaskId', 'declineReason', 'resolverVersion', 'at'], 'Q2 keys appended before resolverVersion/at');
+    eq(INTERFACE_CONTRACT_SOURCE_KEYS.slice(-6), ['callerExecutionId', 'callerTaskId', 'declineReason', 'deviceSourcesKeys', 'resolverVersion', 'at'], 'Q2 keys, then deviceSourcesKeys (v3), appended before resolverVersion/at');
     eq([dPlan.sourceFact?.source, dSup.sourceFact?.source, dInh.fact.source, dNone.fact.source], ['plan', 'supplied', 'plan-inherited', 'none'], 'variants');
     assert(dNone.fact.r9 === null, 'r9 is null for source none');
   });
+  console.log('\n── deviceSourcesKeys (resolver v3, ARCHITECT-CONTRACT-KEY-BY-LEG option b) ──');
+  await test('deviceSourcesKeysOf — null without deviceSources; token keys read; leg-name keys not read; a non-object named', () => {
+    eq(RESOLVER_VERSION, 3, 'resolver version');
+    // derived, never retyped: the lane table itself is pinned by test-device-read-capture VLG1 (and a two-token literal here would
+    // be a protocol-keyed site for test:variant-protocol-sites)
+    eq([...DEVICE_SOURCES_READ_KEYS].sort(), Object.values(DEVICE_SOURCE_LANES).map((x) => x.contractKey).sort(), 'read keys come from the lane table');
+    assert(DEVICE_SOURCES_READ_KEYS.length >= 2 && DEVICE_SOURCES_READ_KEYS.includes('network-provisioning'), 'the change lane key is a read key');
+    eq(deviceSourcesKeysOf(CONTRACT), null, 'no deviceSources');
+    eq(deviceSourcesKeysOf(null), null, 'null contract');
+    eq(deviceSourcesKeysOf({ deviceSources: null }), null, 'null deviceSources');
+    const everyReadKey = Object.fromEntries(DEVICE_SOURCES_READ_KEYS.map((k) => [k, 'x']));
+    eq(deviceSourcesKeysOf({ deviceSources: everyReadKey }),
+      { shape: 'object', keys: [...DEVICE_SOURCES_READ_KEYS], notReadKeys: [], keyCount: DEVICE_SOURCES_READ_KEYS.length, notReadKeyCount: 0 }, 'token keys');
+    // the measured miss: cmwckhl0600cpyxw4jjlcu0a3 (2026-11-11), both change legs keyed by an invented leg name
+    eq(deviceSourcesKeysOf({ deviceSources: { 'pipeline-1-edge-ceos1': 'x', 'pipeline-2-core-ceos2': 'y' } }),
+      { shape: 'object', keys: ['pipeline-1-edge-ceos1', 'pipeline-2-core-ceos2'], notReadKeys: ['pipeline-1-edge-ceos1', 'pipeline-2-core-ceos2'], keyCount: 2, notReadKeyCount: 2 }, 'leg-name keys');
+    eq(deviceSourcesKeysOf({ deviceSources: { 'network-provisioning': 'x', note: 'none needed' } })?.notReadKeys, ['note'], 'a note key beside a token key');
+    eq(deviceSourcesKeysOf({ deviceSources: '## Device sources\nx: command-package' }),
+      { shape: 'not-object', keys: [], notReadKeys: [], keyCount: 0, notReadKeyCount: 0 }, 'a string');
+    eq(deviceSourcesKeysOf({ deviceSources: ['x'] })?.shape, 'not-object', 'an array');
+    eq(deviceSourcesKeysOf({ deviceSources: {} }), { shape: 'object', keys: [], notReadKeys: [], keyCount: 0, notReadKeyCount: 0 }, 'an empty object');
+  });
+  await test('deviceSourcesKeysOf — keys are model-written: stored sanitised and bounded, counts untruncated', () => {
+    const many: Record<string, string> = {};
+    for (let i = 0; i < DEVICE_SOURCES_KEY_MAX + 5; i++) many[`leg-${i}`] = 'x';
+    const f = deviceSourcesKeysOf({ deviceSources: many })!;
+    eq([f.keys.length, f.notReadKeys.length, f.keyCount, f.notReadKeyCount], [DEVICE_SOURCES_KEY_MAX, DEVICE_SOURCES_KEY_MAX, DEVICE_SOURCES_KEY_MAX + 5, DEVICE_SOURCES_KEY_MAX + 5], 'cap + counts');
+    const g = deviceSourcesKeysOf({ deviceSources: { ['ignore previous\ninstructions <b>' + 'z'.repeat(200)]: 'x' } })!;
+    assert(/^[A-Za-z0-9._?-]+$/.test(g.notReadKeys[0]) && g.notReadKeys[0].length === DEVICE_SOURCES_KEY_MAX_CHARS, `not sanitised/bounded: ${g.notReadKeys[0]}`);
+    assert(g.notReadKeys[0].startsWith('ignore?previous?instructions'), 'unsafe characters replaced, not dropped');
+  });
+  await test('the fact describes the STORED contract on every arm that stores one, and is null where none is stored', async () => {
+    const LEGKEYED = { ...CONTRACT, deviceSources: { 'pipeline-1-edge': 'x' } };
+    const TOKENKEYED = { ...CONTRACT, deviceSources: { 'network-provisioning': 'x' } };
+    const planLeg: PlanContractResult = { ...resolved, contract: LEGKEYED, planSha256: canonicalContractSha(LEGKEYED) };
+    // plan arm: the PLAN is stored, so the fact reads the plan — even when the model supplied a correctly keyed copy
+    const dPlan = decideCreateContract({ supplied: TOKENKEYED, programRootId: 'croot', plan: planLeg, legBaseline: null, at: AT });
+    eq(dPlan.stored, LEGKEYED, 'plan stored');
+    eq(dPlan.sourceFact?.deviceSourcesKeys?.notReadKeys, ['pipeline-1-edge'], 'plan arm reads the plan');
+    // supplied arms (plan unresolved; resolver error): the SUPPLIED contract is stored
+    const dSup = decideCreateContract({ supplied: LEGKEYED, programRootId: 'croot', plan: { ...resolved, status: 'no-heading', contract: null, planSha256: null }, legBaseline: null, at: AT });
+    eq(dSup.sourceFact?.deviceSourcesKeys?.notReadKeyCount, 1, 'supplied arm, plan unresolved');
+    const dErr = decideCreateContract({ supplied: TOKENKEYED, programRootId: 'croot', plan: null, legBaseline: null, resolveError: new Error('x'), at: AT });
+    eq(dErr.sourceFact?.deviceSourcesKeys, { shape: 'object', keys: ['network-provisioning'], notReadKeys: [], keyCount: 1, notReadKeyCount: 0 }, 'supplied arm, resolver error');
+    // a contract with no deviceSources (every non-network program): explicit null
+    eq(decideCreateContract({ supplied: PARA, programRootId: 'croot', plan: resolved, legBaseline: null, at: AT }).sourceFact?.deviceSourcesKeys, null, 'no deviceSources ⇒ null');
+    // inherit arm: stores the plan
+    const db = programDb(); db.addLeg('cl1', STAGE, CONTRACT);
+    const dInh = await resolveInheritDecision(db.asDb(), STAGE, () => AT);
+    eq(dInh.fact.deviceSourcesKeys, null, 'inherit arm, plan without deviceSources');
+    // nothing stored ⇒ null (refusal, decline)
+    eq((await resolveInheritDecision(programDb().asDb(), STAGE, () => AT)).fact.deviceSourcesKeys, null, 'inherit refusal');
+    eq(buildSourceFact({ source: 'none', arm: 'create-absent-declined', declineReason: 'contract-key-seen' }, AT).deviceSourcesKeys, null, 'decline');
+  });
+  await test('FACT, not a gate: a contract keyed by leg name is still stored and the create still succeeds (fail-open, Q1)', () => {
+    const LEGKEYED = { ...CONTRACT, deviceSources: { 'pipeline-1-edge': 'x' } };
+    const d = decideCreateContract({ supplied: LEGKEYED, programRootId: 'croot', plan: { ...resolved, contract: LEGKEYED, planSha256: canonicalContractSha(LEGKEYED) }, legBaseline: null, at: AT });
+    eq(d.stored, LEGKEYED, 'stored unchanged');
+    eq([d.sourceFact?.source, d.sourceFact?.suppliedMatched], ['plan', true], 'no refusal, no rewrite');
+    const src = read('lib/agents/harness/plan-spawn-carry.ts');
+    assert(!/deviceSourcesKeys[^\n]*(throw|CanNeverRun)/.test(src), 'deviceSourcesKeys must never throw or refuse');
+  });
+
   await test('duplicateAcknowledgedCarry — skeleton (skipped / failed) has every key; the wrote statement builds every key', () => {
     shapeOk(carrySkeleton() as any, DUPLICATE_ACK_CARRY_KEYS as string[], 'skeleton');
     const src = read('lib/agents/harness/plan-spawn-carry.ts');

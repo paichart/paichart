@@ -52,6 +52,7 @@ import { deepStripDangerousKeys } from '../../utils/sanitize-keys';
 import { sanitizeChainedOutput, isR9OperatorEvent } from './sanitize-chained-output';
 import { readAuthoritativeResultField } from './authoritative-result-read';
 import { findProgramParentForStage } from './program-protocol';
+import { DEVICE_SOURCE_LANES } from './held-bytes/variant';
 
 // ── Constants ───────────────────────────────────────────────────────────────────────────────────
 
@@ -74,7 +75,8 @@ export const PLAN_RESPONSE_MAX_BYTES = 262144;
 export const PLAN_CONTRACT_MAX_DEPTH = 20;
 /** 2 (2026-10-17, Q2 leg-contract heal): + `callerExecutionId` / `callerTaskId` / `declineReason`; arms `create-absent` /
  *  `create-absent-declined`; `planResolution` may be null (plan not read). */
-export const RESOLVER_VERSION = 2;
+export const RESOLVER_VERSION = 3;
+// 3 (2026-11-15, ARCHITECT-CONTRACT-KEY-BY-LEG option (b), owner "go ahead with step 1, the operator-only form"): + `deviceSourcesKeys`.
 /** Bound on every stage-scoped scan (a program stage holds ≤ 8 legs plus a handful of children; a phase holds
  *  tens of stages). Far above any real population, so it never truncates a measurement — it bounds a
  *  pathological one (pagination rule). */
@@ -165,6 +167,19 @@ export type DeclineReason =
   | 'stage-legs-plan-differs-from-legs'
   | 'resolver-error';
 
+/** A FACT about the stored contract's shape (Protocol 10), never a verdict on the plan: `notReadKeys` non-empty means those keys'
+ *  lines reach no leg through the contract (a leg may still carry a block in its own task text). Keys are model-written, so each is
+ *  stored sanitised and bounded (`DEVICE_SOURCES_KEY_*`); the counts are the untruncated totals. */
+export interface DeviceSourcesKeysFact {
+  shape: 'object' | 'not-object';
+  keys: string[];
+  notReadKeys: string[];
+  keyCount: number;
+  notReadKeyCount: number;
+}
+export const DEVICE_SOURCES_KEY_MAX = 12;
+export const DEVICE_SOURCES_KEY_MAX_CHARS = 64;
+
 export interface InterfaceContractSourceFact {
   source: 'plan' | 'supplied' | 'plan-inherited' | 'none';
   /** `create` — a contract was supplied at create; `inherit` — the reviewer arm at execution prep; `create-absent` — the platform
@@ -190,6 +205,9 @@ export interface InterfaceContractSourceFact {
   callerTaskId: string | null;
   /** Set only on `create-absent-declined`. */
   declineReason: DeclineReason | null;
+  /** The keys of the STORED contract's `deviceSources`, and which of them the platform does not read (it reads a leg's block only
+   *  at its protocol's key, `DEVICE_SOURCE_LANES`). Null when the stored contract carries no `deviceSources`, or none was stored. */
+  deviceSourcesKeys: DeviceSourcesKeysFact | null;
   resolverVersion: number;
   at: string;
 }
@@ -198,7 +216,7 @@ export interface InterfaceContractSourceFact {
 export const INTERFACE_CONTRACT_SOURCE_KEYS: ReadonlyArray<keyof InterfaceContractSourceFact> = [
   'source', 'arm', 'planResolution', 'architectTaskId', 'architectExecutionId', 'planSha256',
   'storedAtWriteSha256', 'suppliedSha256', 'suppliedMatched', 'suppliedDiffPaths', 'suppliedDiffPathCount',
-  'legBaseline', 'r9', 'callerExecutionId', 'callerTaskId', 'declineReason', 'resolverVersion', 'at',
+  'legBaseline', 'r9', 'callerExecutionId', 'callerTaskId', 'declineReason', 'deviceSourcesKeys', 'resolverVersion', 'at',
 ];
 
 export interface CarryAttempt {
@@ -564,10 +582,27 @@ export function buildSourceFact(
     callerExecutionId: p.callerExecutionId ?? null,
     callerTaskId: p.callerTaskId ?? null,
     declineReason: p.declineReason ?? null,
+    deviceSourcesKeys: p.deviceSourcesKeys ?? null,
     resolverVersion: RESOLVER_VERSION,
     at,
   };
 }
+
+/** The contract keys the platform reads `deviceSources` at — derived from the ONE lane table, never retyped. */
+export const DEVICE_SOURCES_READ_KEYS: readonly string[] = Object.freeze(Object.values(DEVICE_SOURCE_LANES).map((x) => x.contractKey));
+
+/** PURE. What `deviceSources` keys does this contract carry, and which does the platform not read? Null = no `deviceSources`. */
+export function deviceSourcesKeysOf(contract: unknown): DeviceSourcesKeysFact | null {
+  if (!contract || typeof contract !== 'object' || Array.isArray(contract)) return null;
+  const ds = (contract as Record<string, unknown>).deviceSources;
+  if (ds === undefined || ds === null) return null;
+  if (typeof ds !== 'object' || Array.isArray(ds)) return { shape: 'not-object', keys: [], notReadKeys: [], keyCount: 0, notReadKeyCount: 0 };
+  const all = Object.keys(ds as Record<string, unknown>);
+  const notRead = all.filter((k) => !DEVICE_SOURCES_READ_KEYS.includes(k));
+  const clean = (ks: string[]) => ks.slice(0, DEVICE_SOURCES_KEY_MAX).map((k) => k.replace(/[^A-Za-z0-9._-]/g, '?').slice(0, DEVICE_SOURCES_KEY_MAX_CHARS));
+  return { shape: 'object', keys: clean(all), notReadKeys: clean(notRead), keyCount: all.length, notReadKeyCount: notRead.length };
+}
+const safeDsKeys = (c: unknown): DeviceSourcesKeysFact | null => { try { return deviceSourcesKeysOf(c); } catch { return null; } };
 
 const safeSha = (v: unknown): string | null => { try { return canonicalContractSha(v); } catch { return null; } };
 const safeR9 = (c: Record<string, unknown>) => { try { return classifyRenderedContract(c); } catch { return null; } };
@@ -621,7 +656,7 @@ export function decideCreateContract(input: {
       stored: supplied,
       sourceFact: buildSourceFact({
         source: 'supplied', arm: 'create', planResolution: 'resolver-error',
-        storedAtWriteSha256: safeSha(supplied), suppliedSha256: safeSha(supplied), r9: r9Of(supplied), ...callerIds,
+        storedAtWriteSha256: safeSha(supplied), suppliedSha256: safeSha(supplied), r9: r9Of(supplied), deviceSourcesKeys: safeDsKeys(supplied), ...callerIds,
       }, at),
       signals,
     };
@@ -634,7 +669,7 @@ export function decideCreateContract(input: {
       sourceFact: buildSourceFact({
         source: 'supplied', arm: 'create', planResolution: plan?.status ?? 'resolver-error',
         architectTaskId: plan?.architectTaskId, architectExecutionId: plan?.architectExecutionId,
-        storedAtWriteSha256: safeSha(supplied), suppliedSha256: safeSha(supplied), r9: r9Of(supplied), ...callerIds,
+        storedAtWriteSha256: safeSha(supplied), suppliedSha256: safeSha(supplied), r9: r9Of(supplied), deviceSourcesKeys: safeDsKeys(supplied), ...callerIds,
       }, at),
       signals,
     };
@@ -676,7 +711,7 @@ export function buildPlanStoredFact(p: {
     architectTaskId: p.plan.architectTaskId, architectExecutionId: p.plan.architectExecutionId,
     planSha256: p.plan.planSha256, storedAtWriteSha256: p.plan.planSha256,
     ...(p.supplied ?? {}),
-    legBaseline: p.legBaseline, r9: p.r9,
+    legBaseline: p.legBaseline, r9: p.r9, deviceSourcesKeys: safeDsKeys(p.plan.contract),
     callerExecutionId: p.caller?.executionId ?? null, callerTaskId: p.caller?.taskId ?? null,
   }, at);
 }
@@ -835,6 +870,7 @@ export async function resolveInheritDecision(
       source: 'plan-inherited', arm: 'inherit', planResolution: 'resolved',
       architectTaskId: plan.architectTaskId, architectExecutionId: plan.architectExecutionId,
       planSha256: plan.planSha256, storedAtWriteSha256: plan.planSha256, legBaseline: baseline, r9: r9?.fact ?? null,
+      deviceSourcesKeys: safeDsKeys(plan.contract),
     }, now()),
   };
 }
