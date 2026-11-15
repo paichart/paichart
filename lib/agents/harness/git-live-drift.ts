@@ -21,7 +21,8 @@
 export const GIT_LIVE_DRIFT_VERSION = 1;
 export const GIT_LIVE_DRIFT_METHOD = 'k8s-declared-field-compare';
 /** The tool's own method string, version included — a result carrying any other is `result-shape`. */
-export const COMPARE_TOOL_METHOD = 'k8s-declared-field-compare/1';
+/** /2 (2026-11-16): quantities at quantity-typed paths compared by value. A /1 result is refused (`result-shape` ⇒ not-checked). */
+export const COMPARE_TOOL_METHOD = 'k8s-declared-field-compare/2';
 export const GIT_LIVE_DRIFT_RENDER_NAME = "the platform's Git-vs-live drift fact";
 export const DRIFT_PATHS_SHOWN_CAP = 40;       // differing paths kept per file (the total is always kept)
 export const DRIFT_OBJECTS_CAP = 50;           // the tool's own document cap

@@ -194,6 +194,55 @@ case("a caller that passes no cluster kinds keeps the old behaviour (kind-not-al
 r = compare_manifest("apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata: { name: admin }\nrules: []\n", KINDS, getter({}), cluster_kinds=CK)
 case("no OTHER cluster-scoped kind becomes comparable", r["objects"][0]["reason"] == "kind-not-allowlisted")
 
+# 12c — QUANTITIES are compared by value at quantity-typed paths only (method /2); a spelling that does not parse is compared as before
+QK = {("apps/v1", "Deployment"): "deployments", ("v1", "ResourceQuota"): "resourcequotas", ("v1", "LimitRange"): "limitranges",
+      ("autoscaling/v2", "HorizontalPodAutoscaler"): "horizontalpodautoscalers", ("v1", "ConfigMap"): "configmaps"}
+QDEP = """apiVersion: apps/v1
+kind: Deployment
+metadata: { name: q, namespace: t }
+spec:
+  template:
+    spec:
+      containers:
+        - name: c
+          resources:
+            requests: { cpu: 1000m, memory: 1Gi, ephemeral-storage: 1e3 }
+            limits: { cpu: 1, memory: 1G, nvidia.com/gpu: 1, other: lots }
+      volumes:
+        - name: v
+          emptyDir: { sizeLimit: 1024Mi }
+"""
+QLIVE = {"spec": {"template": {"spec": {
+    "containers": [{"name": "c", "resources": {"requests": {"cpu": "1", "memory": "1024Mi", "ephemeral-storage": "1k"},
+                                              "limits": {"cpu": "1", "memory": "1Gi", "nvidia.com/gpu": "1", "other": "1"}}}],
+    "volumes": [{"name": "v", "emptyDir": {"sizeLimit": "1Gi"}}]}}}}
+r = compare_manifest(QDEP, QK, getter({("deployments", "t", "q"): QLIVE}))
+case("equal quantities in different spellings are equal (1000m = 1; 1Gi = 1024Mi; 1e3 = 1k; cpu: 1 as a YAML number = \"1\"; 1024Mi = 1Gi in emptyDir.sizeLimit)",
+     sorted(paths(r)) == sorted([("spec.template.spec.containers[name=c].resources.limits.memory", "value-differs"),
+                                  ("spec.template.spec.containers[name=c].resources.limits.other", "value-differs")]), json.dumps(paths(r)))
+case("1G and 1Gi are different values, so still value-differs; a value the grammar does not parse (`lots`) falls back to the ordinary comparison",
+     ("spec.template.spec.containers[name=c].resources.limits.memory", "value-differs") in paths(r)
+     and ("spec.template.spec.containers[name=c].resources.limits.other", "value-differs") in paths(r))
+case("the result names the method /2 and carries no value", r["method"] == "k8s-declared-field-compare/2" and "1024Mi" not in json.dumps(r) and "lots" not in json.dumps(r))
+r = compare_manifest(QDEP.replace("cpu: 1000m", "cpu: 2"), QK, getter({("deployments", "t", "q"): QLIVE}))
+case("a quantity that really differs (2 vs 1) is value-differs", ("spec.template.spec.containers[name=c].resources.requests.cpu", "value-differs") in paths(r))
+r = compare_manifest("apiVersion: v1\nkind: ConfigMap\nmetadata: { name: m, namespace: t }\ndata: { cpu: 1000m }\n", QK,
+                     getter({("configmaps", "t", "m"): {"data": {"cpu": "1"}}}))
+case("OUTSIDE a quantity-typed path nothing is canonicalised (a ConfigMap value 1000m vs 1 still differs)", paths(r) == [("data.cpu", "value-differs")])
+r = compare_manifest("apiVersion: v1\nkind: ResourceQuota\nmetadata: { name: rq, namespace: t }\nspec: { hard: { requests.cpu: 2000m, pods: 10 } }\n", QK,
+                     getter({("resourcequotas", "t", "rq"): {"spec": {"hard": {"requests.cpu": "2", "pods": "10"}}}}))
+case("ResourceQuota spec.hard is a quantity field (2000m = 2; a dotted key; pods: 10 = \"10\")", paths(r) == [], json.dumps(paths(r)))
+r = compare_manifest("apiVersion: v1\nkind: LimitRange\nmetadata: { name: lr, namespace: t }\nspec: { limits: [ { type: Container, defaultRequest: { cpu: 100m }, max: { memory: 1Gi } } ] }\n", QK,
+                     getter({("limitranges", "t", "lr"): {"spec": {"limits": [{"type": "Container", "defaultRequest": {"cpu": "0.1"}, "max": {"memory": "1024Mi"}}]}}}))
+case("LimitRange limits are quantity fields (100m = 0.1; 1Gi = 1024Mi)", paths(r) == [], json.dumps(paths(r)))
+r = compare_manifest("apiVersion: autoscaling/v2\nkind: HorizontalPodAutoscaler\nmetadata: { name: h, namespace: t }\nspec: { maxReplicas: 5, metrics: [ { type: Resource, resource: { name: memory, target: { type: AverageValue, averageValue: 0.5Gi } } } ] }\n", QK,
+                     getter({("horizontalpodautoscalers", "t", "h"): {"spec": {"maxReplicas": 5, "metrics": [{"type": "Resource", "resource": {"name": "memory", "target": {"type": "AverageValue", "averageValue": "512Mi"}}}]}}}))
+case("an HPA metric target averageValue is a quantity field (0.5Gi = 512Mi)", paths(r) == [], json.dumps(paths(r)))
+from declared_compare import _quantity
+case("the parser refuses what it does not know rather than guess (an over-long exponent, a space, an unknown suffix, a boolean, over 64 characters)",
+     all(_quantity(x) is None for x in ["1e9999", "1 ", "1i", "1Ki2", True, "1" * 65, "", "m", "--1"]))
+case("the parser reads E alone as exa and E3 as an exponent, as Kubernetes does", _quantity("1E") == 10 ** 18 and _quantity("1E3") == 1000)
+
 # 13 — namespace handling
 m = "apiVersion: v1\nkind: Service\nmetadata: { name: orders-api }\nspec: { selector: { app: orders-api } }\n"
 r1 = run(m); r2 = run(m, default_namespace="trading")

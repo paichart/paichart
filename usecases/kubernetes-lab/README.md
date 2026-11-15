@@ -82,9 +82,12 @@ a cluster:
 python3 k8s-mcp-readonly/test_declared_compare.py     # needs PyYAML
 ```
 
-Known noise, reported as a difference although the cluster treats both sides as equal: a quantity the API server
-rewrites (`1000m` stored as `1`), a list whose items have no `name` (compared by position), and an unquoted
-number or date in a string field.
+Quantities are compared by value where the field is a quantity (resource requests and limits, pod overhead,
+`emptyDir.sizeLimit`, ResourceQuota `spec.hard`, LimitRange limits, HPA metric targets): `1000m` in the file equals `1`
+live, and `1Gi` equals `1024Mi`, but `1G` and `1Gi` differ. A value that is not a valid quantity is compared as written.
+
+Known noise, reported as a difference although the cluster treats both sides as equal: a list whose items have no
+`name` (compared by position), and an unquoted number or date in a string field.
 
 ## Run the service
 

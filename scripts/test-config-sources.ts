@@ -30,6 +30,8 @@ import { governingConfigSources, type LegConfigSourcesResolution } from '../lib/
 import { withConfigSourcesScope, configGitFileForce } from '../lib/agents/harness/held-bytes/config-source-scope';
 import type { ExtractResult } from '../lib/agents/harness/held-bytes/extract';
 import { computeConfigSourceReads, computeConfigLiveEvidence, computeConfigLiveEvidenceFromReadRecord } from '../lib/agents/harness/config-source-facts';
+import { computeConfigSourceReadsFact } from '../lib/agents/harness/config-source-facts-enrichment';
+import { NOT_STAMPED } from '../lib/agents/harness/net-registry';
 import { renderLiveEvidenceForPrompt, CONFIG_LIVE_EVIDENCE_SCOPE_CLAUSE, LIVE_EVIDENCE_RENDER_NAME, liveEvidenceVersionApplies } from '../lib/agents/harness/live-evidence';
 
 const eq = (a: unknown, b: unknown, what = '') => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${what}expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); };
@@ -495,5 +497,43 @@ test('REG1 registration: configSourceReads once, LAST, leaf-persist, conditional
   eq(liveEvidenceVersionApplies({ delta: { name: K8S, version: '1.19.0' } }), true, 'k8s 1.19.0: ');
 });
 
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed === 0 ? 0 : 1);
+// VER1 (owner decision 2026-11-15, G4-a): `configSourceReads` is version-keyed like `liveEvidence` — the shipping enrichment, run on a
+// DECLARED Config-sources leg (the declaration memo answers `ok`, i.e. what every k8s leg answers once kubernetes-gitops leaves
+// CONFIG_SOURCE_AWAITING_TEXT). Below 1.19.0, or with no stamped protocolInjection (every stored Harvester), nothing is stamped.
+(async () => {
+  try {
+    const declared = parsed([GIT, LIVE]);
+    eq(declared.state, 'parsed', 'the control leg is a declared Config-sources leg: ');
+    const toolCalls = [gitCall('k8s/sample-workloads.yaml', { ref: 'main' }), liveCall()];
+    let declarationReads = 0;
+    const run = (protocolInjection: unknown) => computeConfigSourceReadsFact({
+      prisma: {}, task: { id: 't', type: 'ACTION', metadata: null }, agentRole: 'infra_state_harvester', finalResponse: '', toolCalls,
+      configSources: async () => { declarationReads++; return declared; },
+      ...(protocolInjection !== undefined ? { protocolInjection } : {}),
+    } as never);
+    const PI = (version: string, name = K8S) => ({ mode: 'named', delta: { name, version } });
+    for (const [label, pi] of [['1.18.0', PI('1.18.0')], ['1.18.9', PI('1.18.9')], ['absent', undefined], ['degraded', { mode: 'named', delta: null }],
+      ['another protocol at a high version', PI('9.9.9', 'terraform-iac-protocol')]] as Array<[string, unknown]>) {
+      assert((await run(pi)) === NOT_STAMPED, `${label}: a declared leg below its Config-sources text version must be NOT_STAMPED`);
+    }
+    eq(declarationReads, 0, 'the version test runs first — no declaration read below the version: ');
+    for (const v of ['1.19.0', '1.19.1', '1.20.0']) {
+      const f = await run(PI(v));
+      assert(f !== NOT_STAMPED, `${v}: must stamp`);
+      eq([f.checked, f.notRead, itemsOf(f)], [true, 0, [['sample-workloads', 'git-file', 'read'], ['trading-cluster', 'live-read', 'read']]], `${v}: `);
+    }
+    // the other half of the population still holds at the version: an undeclared leg stamps nothing
+    const off = await computeConfigSourceReadsFact({ prisma: {}, task: { id: 't', type: 'ACTION', metadata: null }, toolCalls,
+      configSources: async () => ({ state: 'not-config-source-leg' }), protocolInjection: PI('1.19.0') } as never);
+    assert(off === NOT_STAMPED, 'not-config-source-leg at 1.19.0 must be NOT_STAMPED');
+    // one source of truth: the enrichment imports the shared test, and carries no version literal of its own
+    const src = fs.readFileSync(path.resolve(__dirname, '../lib/agents/harness/config-source-facts-enrichment.ts'), 'utf8');
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    assert(code.includes("import { liveEvidenceVersionApplies } from './live-evidence';") && code.includes('if (!liveEvidenceVersionApplies(ctx.protocolInjection)) return NOT_STAMPED;'),
+      'the enrichment does not call the shared version test');
+    assert(!/\d+\.\d+\.\d+/.test(code), 'a version literal in the enrichment — the table is LIVE_EVIDENCE_MIN_VERSIONS, never a second one');
+    passed++; console.log('✅ VER1 configSourceReads is version-keyed: NOT_STAMPED on a declared leg below kubernetes-gitops 1.19.0 or with no protocolInjection; stamps from 1.19.0; one version table');
+  } catch (e) { failed++; console.log(`❌ VER1 configSourceReads version test\n   ${(e as Error).message}`); }
+  console.log(`\n${passed} passed, ${failed} failed`);
+  process.exit(failed === 0 ? 0 : 1);
+})();

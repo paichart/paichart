@@ -1,14 +1,14 @@
 {
-  "manifest": "apiVersion: apps/v1\nkind: Deployment\nmetadata: { name: orders-api, namespace: trading, labels: { app.kubernetes.io/name: orders } }\nspec:\n  replicas: 2\n  template:\n    spec:\n      containers:\n        - name: orders-api\n          image: nginx:1.27-alpine\n          ports: [{ containerPort: 80 }]\n          env:\n            - { name: FEED_URL, value: \"http://feed:8080\" }\n            - { name: API_TOKEN, value: \"<<REDACTED-SECRET>>\" }\n---\napiVersion: v1\nkind: Service\nmetadata: { name: orders-api, namespace: trading }\nspec: { ports: [{ port: 80, targetPort: 80 }] }\n---\napiVersion: v1\nkind: ConfigMap\nmetadata: { name: gone, namespace: trading }\ndata: { k: v }\n---\napiVersion: v1\nkind: Secret\nmetadata: { name: s, namespace: trading }\nstringData: { p: x }\n---\napiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources: [a.yaml]\n---\napiVersion: v1\nkind: Namespace\nmetadata:\n  name: trading\n  labels: { team: orders, pod-security.kubernetes.io/enforce: restricted }\n",
+  "manifest": "apiVersion: apps/v1\nkind: Deployment\nmetadata: { name: orders-api, namespace: trading, labels: { app.kubernetes.io/name: orders } }\nspec:\n  replicas: 2\n  template:\n    spec:\n      containers:\n        - name: orders-api\n          image: nginx:1.27-alpine\n          ports: [{ containerPort: 80 }]\n          resources: { limits: { cpu: 1000m } }\n          env:\n            - { name: FEED_URL, value: \"http://feed:8080\" }\n            - { name: API_TOKEN, value: \"<<REDACTED-SECRET>>\" }\n---\napiVersion: v1\nkind: Service\nmetadata: { name: orders-api, namespace: trading }\nspec: { ports: [{ port: 80, targetPort: 80 }] }\n---\napiVersion: v1\nkind: ConfigMap\nmetadata: { name: gone, namespace: trading }\ndata: { k: v }\n---\napiVersion: v1\nkind: Secret\nmetadata: { name: s, namespace: trading }\nstringData: { p: x }\n---\napiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources: [a.yaml]\n---\napiVersion: v1\nkind: Namespace\nmetadata:\n  name: trading\n  labels: { team: orders, pod-security.kubernetes.io/enforce: restricted }\n",
   "redactedMarker": "<<REDACTED-SECRET>>",
   "result": {
     "documents": 6,
-    "manifestSha256": "69ab276045a0cf4f2740a2fbbbe4ab26ff4483d52122f4fec808e195f4deb954",
-    "method": "k8s-declared-field-compare/1",
+    "manifestSha256": "5c56b73b90b5525c5d38a3f93c2b9cd00938f1c026a34177b85d1d008e378886",
+    "method": "k8s-declared-field-compare/2",
     "objects": [
       {
         "apiVersion": "apps/v1",
-        "declaredPaths": 9,
+        "declaredPaths": 10,
         "differing": [
           {
             "difference": "value-differs",

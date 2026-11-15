@@ -67,7 +67,7 @@ console.log('── untrusted input: any shape failure is not-checked, never a p
 test('V1 a result for OTHER bytes is `sha-mismatch`; a malformed sha, a wrong method or a non-object is `result-shape`', () => {
   eq(validateCompareResult(FIX.result, 'a'.repeat(64)), { ok: false, reason: 'sha-mismatch' }, 'other bytes: ');
   eq(validateCompareResult({ ...FIX.result, manifestSha256: 'zz' }, SHA), { ok: false, reason: 'result-shape' }, 'bad sha: ');
-  eq(validateCompareResult({ ...FIX.result, method: 'k8s-declared-field-compare/2' }, SHA), { ok: false, reason: 'result-shape' }, 'method: ');
+  eq(validateCompareResult({ ...FIX.result, method: 'k8s-declared-field-compare/1' }, SHA), { ok: false, reason: 'result-shape' }, 'a /1 result (the old tool, no quantity rule) is refused: ');
   for (const bad of [null, 'text', [], { objects: 'x' }]) eq(validateCompareResult(bad, SHA), { ok: false, reason: 'result-shape' }, `${JSON.stringify(bad)}: `);
 });
 test('V2 a path, a state, a reason or a difference outside its closed set / grammar refuses the WHOLE result', () => {

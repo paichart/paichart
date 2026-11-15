@@ -560,6 +560,8 @@ export const MECHANICAL_NETS: readonly MechanicalNet[] = [
   // it? APPENDED (key order is the equivalence contract). CONDITIONAL: NOT_STAMPED unless the owning leg declares Config sources
   // today (CONFIG_SOURCE_PROTOCOLS — empty until a protocol's Config-sources text ships), so every stored leg and every other
   // domain replays byte-identical. An OPERATOR fact, never a gate; `liveEvidence`'s Config arm is computed from the same record.
+  // Version-keyed too (owner decision 2026-11-15, G4-a): NOT_STAMPED below the protocol's Config-sources text version
+  // (`liveEvidenceVersionApplies` — kubernetes-gitops 1.19.0), so a stored pre-1.19.0 Harvester never gains the key on a replay.
   {
     name: 'configSourceReads',
     point: 'leaf-persist',

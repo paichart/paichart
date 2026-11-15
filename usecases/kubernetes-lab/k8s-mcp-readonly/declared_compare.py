@@ -20,8 +20,13 @@ DECLARED field paths whose live value differs. Nothing else:
 
 This module imports no Kubernetes client, so its tests run without a cluster (`test_declared_compare.py`).
 
+QUANTITIES are compared by VALUE (method /2): at a quantity-typed path of an allowed kind (`_QUANTITY_PATHS` below — resource
+requests/limits, pod overhead, `emptyDir.sizeLimit`, ResourceQuota `spec.hard`, LimitRange limits, HPA metric targets) both sides
+are parsed with the Kubernetes Quantity grammar and compared as exact decimals, so `1000m` declared equals `1` live and `cpu: 1`
+(a YAML number) equals `"1"`; `1G` and `1Gi` still differ. If EITHER side does not parse, the ordinary comparison applies — a
+spelling the parser does not know is reported as a difference, never hidden.
+
 Named residual noise (reported as a difference although the cluster would treat both sides as equal):
-  - quantity spellings the API server canonicalises (`1000m` declared, `1` live);
   - a list whose items carry no `name` is compared by POSITION;
   - a string the manifest writes as a number or boolean without quotes in a string-typed field (`"80"` vs `80`) is
     `type-differs`; so is an unquoted date (YAML reads `2026-11-15` as a date, the cluster holds a string).
@@ -29,11 +34,13 @@ Named residual noise (reported as a difference although the cluster would treat 
 from __future__ import annotations
 
 import hashlib
+import re
+from decimal import Decimal, InvalidOperation, localcontext
 from typing import Any, Callable, Optional
 
 import yaml
 
-METHOD = "k8s-declared-field-compare/1"
+METHOD = "k8s-declared-field-compare/2"   # /2 (2026-11-16): quantities compared by value
 
 MAX_MANIFEST_BYTES = 262_144      # 256 KB of manifest text
 MAX_DOCUMENTS = 50                # objects per call (one GET each, at most)
@@ -84,6 +91,66 @@ def _same_scalar(declared: Any, live: Any) -> Optional[str]:
     return "type-differs"
 
 
+# ── Kubernetes quantities ──────────────────────────────────────────────────────────────────────────────────────────────
+# The grammar of k8s.io/apimachinery resource.Quantity: <sign><digits>[.<digits>]<suffix>, suffix = a binary SI suffix, a
+# decimal SI suffix, or a decimal exponent (e/E followed by a signed integer). "E" alone is exa; "E3" is an exponent.
+_QTY_NUMBER = re.compile(r"([+-]?)([0-9]+(?:\.[0-9]*)?|\.[0-9]+)(.*)")
+_QTY_EXPONENT = re.compile(r"[eE]([+-]?[0-9]{1,3})")
+_QTY_SUFFIX = {"": 1, "n": Decimal("1e-9"), "u": Decimal("1e-6"), "m": Decimal("1e-3"), "k": Decimal(10) ** 3,
+               "M": Decimal(10) ** 6, "G": Decimal(10) ** 9, "T": Decimal(10) ** 12, "P": Decimal(10) ** 15,
+               "E": Decimal(10) ** 18, "Ki": Decimal(2) ** 10, "Mi": Decimal(2) ** 20, "Gi": Decimal(2) ** 30,
+               "Ti": Decimal(2) ** 40, "Pi": Decimal(2) ** 50, "Ei": Decimal(2) ** 60}
+_QTY_MAX_CHARS = 64
+
+# Quantity-typed paths, per allowed kind (a path is matched whole; a key with dots or a slash is a ["..."] segment).
+_SEG = r'(?:\.[A-Za-z0-9_-]+|\["[^"\]]*"\])'
+_POD_QTY = (r"(?:^|\.)resources\.(?:requests|limits)" + _SEG + "$",      # containers, initContainers, pod-level, STS claims
+            r"(?:^|\.)overhead" + _SEG + "$",
+            r"\.emptyDir\.sizeLimit$")
+_QUANTITY_PATHS = {kind: tuple(re.compile(x) for x in pats) for kind, pats in {
+    "Pod": _POD_QTY, "Deployment": _POD_QTY, "ReplicaSet": _POD_QTY, "StatefulSet": _POD_QTY, "DaemonSet": _POD_QTY,
+    "ResourceQuota": (r"^spec\.hard" + _SEG + "$",),
+    "LimitRange": (r"^spec\.limits\[[0-9]+\]\.(?:max|min|default|defaultRequest|maxLimitRequestRatio)" + _SEG + "$",),
+    "HorizontalPodAutoscaler": (r"^spec\.metrics\[[0-9]+\]\.(?:resource|containerResource|pods|object|external)"
+                                r"\.target\.(?:value|averageValue)$",),
+}.items()}
+
+
+def _quantity(v: Any) -> Optional[Decimal]:
+    """The exact value of a Kubernetes quantity, or None when `v` is not one (the caller then compares as before)."""
+    if isinstance(v, bool) or not isinstance(v, (str, int, float)):
+        return None
+    text = v if isinstance(v, str) else repr(v)
+    if not text or len(text) > _QTY_MAX_CHARS:
+        return None
+    m = _QTY_NUMBER.fullmatch(text)
+    if not m:
+        return None
+    sign, number, suffix = m.groups()
+    with localcontext() as ctx:
+        ctx.prec = 80
+        try:
+            base = Decimal(number)
+        except InvalidOperation:
+            return None
+        if suffix in _QTY_SUFFIX:
+            value = base * _QTY_SUFFIX[suffix]
+        else:
+            e = _QTY_EXPONENT.fullmatch(suffix)
+            if not e:
+                return None
+            value = base.scaleb(int(e.group(1)))
+        return -value if sign == "-" else value
+
+
+def _same_quantity(declared: Any, live: Any) -> Optional[str]:
+    """None when equal by value; "value-differs" when both parse and differ; otherwise the ordinary comparison."""
+    d, l = _quantity(declared), _quantity(live)
+    if d is None or l is None:
+        return _same_scalar(declared, live)
+    return None if d == l else "value-differs"
+
+
 def _named(items: list) -> bool:
     """Every item is a mapping with a distinct string `name` — the merge key Kubernetes uses for containers, env, volumes."""
     if not items or not all(isinstance(i, dict) and isinstance(i.get("name"), str) and i["name"] for i in items):
@@ -105,8 +172,9 @@ def _join(base: str, key: str) -> str:
 
 
 class _Walk:
-    def __init__(self, redacted_marker: Optional[str]):
+    def __init__(self, redacted_marker: Optional[str], quantity_paths: tuple = ()):
         self.marker = redacted_marker
+        self.quantity_paths = quantity_paths
         self.declared = 0
         self.differing: list = []
         self.redacted: list = []
@@ -212,7 +280,10 @@ class _Walk:
             if not _empty(declared):
                 self._diff(path, "missing-live")
             return
-        kind = _same_scalar(declared, live)
+        if any(q.search(path) for q in self.quantity_paths):
+            kind = _same_quantity(declared, live)
+        else:
+            kind = _same_scalar(declared, live)
         if kind:
             self._diff(path, kind)
 
@@ -313,7 +384,7 @@ def compare_manifest(manifest: str, kinds: dict, get_live: GetLive,
             objects.append({**entry, "state": "not-compared", "reason": "live-read-failed",
                             **({"detail": _clean(payload, 60)} if payload else {})})
             continue
-        w = _Walk(redacted_marker)
+        w = _Walk(redacted_marker, _QUANTITY_PATHS.get(kind, ()))
         for key, value in doc.items():
             if key in ("apiVersion", "kind", "status"):
                 continue

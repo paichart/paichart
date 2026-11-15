@@ -26,6 +26,7 @@ spec:
         - name: orders-api
           image: nginx:1.27-alpine
           ports: [{ containerPort: 80 }]
+          resources: { limits: { cpu: 1000m } }
           env:
             - { name: FEED_URL, value: "http://feed:8080" }
             - { name: API_TOKEN, value: "<<REDACTED-SECRET>>" }
@@ -60,6 +61,7 @@ LIVE = {
         "metadata": {"labels": {"app.kubernetes.io/name": "orders-v2"}},
         "spec": {"replicas": 3, "template": {"spec": {"containers": [
             {"name": "orders-api", "image": "nginx:1.27-alpine", "ports": [{"containerPort": "80"}],
+             "resources": {"limits": {"cpu": "1"}},  # the API server's spelling of 1000m — equal by value (method /2)
              "env": [{"name": "API_TOKEN", "value": "live"}]}]}}}},
     ("services", "trading", "orders-api"): {"spec": {"ports": [{"port": 80, "targetPort": 80}]}},
     # cluster-scoped: fetched by name, no namespace — one declared label has drifted live

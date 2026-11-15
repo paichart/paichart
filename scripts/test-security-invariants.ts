@@ -2609,7 +2609,7 @@ async function platformDriftSection(): Promise<void> {
     };
     const h = new ServiceCallHandler(prisma, { checkServiceAccess: async () => true, trackServiceInteraction: async (_id: string, _t: string, r: Rec) => { tracked.push(r); } });
     h.connectionPool = {
-      getOrCreateClient: async () => ({ callTool: async (p: Rec) => { forwarded.push(p); return { content: [{ type: 'text', text: '{"method":"k8s-declared-field-compare/1"}' }] }; } }),
+      getOrCreateClient: async () => ({ callTool: async (p: Rec) => { forwarded.push(p); return { content: [{ type: 'text', text: '{"method":"k8s-declared-field-compare/2"}' }] }; } }),
       getPoolStats: () => ({ reuseRate: 0 }), stats: { retriesAttempted: 0, retriesSucceeded: 0 }, logger: { info() { return undefined; }, debug() { return undefined; } }, evictConnection: async () => undefined,
     };
     // The hub loggers share ONE pino destination (fd 2). Its write is replaced for the call — to prove nothing logs the manifest text —
