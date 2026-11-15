@@ -53,6 +53,38 @@ function makeDeps(overrides: Partial<Parameters<typeof executeToolTurn>[1]> = {}
     ok(typeof toolCallRecords[0].durationMs === 'number' && typeof toolCallRecords[0].timestamp === 'string', 'durationMs + timestamp present');
   }
 
+  // ── 1b. only OFFERED names execute (register HUB-GATELESS-EXTERNAL-ROUTES (b), 2026-11-16) ──
+  console.log('\n── 1b: a tool that was not offered is refused before any server lookup ──');
+  {
+    const looked: string[] = []; const ran: string[] = [];
+    const deps = makeDeps({
+      getToolDefinition: async (name: string) => { looked.push(name); return { serverName: name === 'Bash' ? 'claude-code' : 'paichart-embedded-mcp' }; },
+      executeToolOnServer: async (_s: string, t: string) => { ran.push(t); return { ok: true }; },
+    });
+    const offered = new Set(['perform', 'project', 'services', 'read_more']);
+    const calls = [
+      { id: 'tu_1', name: 'Bash', arguments: '{"command":"id"}' },        // a tool another connected server exposes
+      { id: 'tu_2', name: 'compare_declared_fields', arguments: '{}' },  // an external service tool named directly
+      { id: 'tu_3', name: 'perform', arguments: '{"action":"task.get"}' },
+    ];
+    const { toolResultBlocks, toolCallRecords } = await executeToolTurn(calls, deps, { ...ctx, offeredToolNames: offered });
+    ok(toolCallRecords[0].success === false && /was not offered to this agent/.test(String(toolCallRecords[0].error)), 'a name outside the offered set is refused with a named error');
+    ok(toolResultBlocks[0].is_error === true && toolResultBlocks[1].is_error === true, 'the refusal is an is_error block (the model can adapt; the turn goes on)');
+    ok(toolCallRecords[0].server === undefined && toolCallRecords[1].server === undefined, 'a refused call records no server');
+    ok(!looked.includes('Bash') && !looked.includes('compare_declared_fields'), 'a refused name is never looked up across servers');
+    ok(ran.length === 1 && ran[0] === 'perform', 'only the offered tool executes');
+    ok(toolCallRecords[2].success === true && toolCallRecords[2].server === 'paichart-embedded-mcp', 'an offered pAIchart tool runs as before');
+    const none = await executeToolTurn([{ id: 'tu_x', name: 'perform', arguments: '{}' }], deps, { ...ctx, offeredToolNames: new Set<string>() });
+    ok(none.toolCallRecords[0].success === false, 'an empty offered set refuses every name (a run offered no tools executes none)');
+    const legacy = await executeToolTurn([{ id: 'tu_y', name: 'Bash', arguments: '{}' }], makeDeps(), ctx);
+    ok(legacy.toolCallRecords[0].success === true, 'without offeredToolNames (unit-test callers) behaviour is unchanged');
+  }
+  {
+    const src = readFileSync(join(__dirname, '../lib/agents/harness/agentic-tool-loop.ts'), 'utf8');
+    ok(/new Set\(\(mcpFunctions \?\? \[\]\)\.map\(\(f\) => f\.name\)\)/.test(src) && /\{ executionId, userId, turn: turnCount, offeredToolNames \}/.test(src),
+      'the production loop passes the names of the functions it offered (mcpFunctions) to every tool turn');
+  }
+
   // ── 2. tool throws → is_error block, loop continues ──
   console.log('\n── 2: tool error path ──');
   {
@@ -486,7 +518,10 @@ function makeDeps(overrides: Partial<Parameters<typeof executeToolTurn>[1]> = {}
   };
   const signal = new AbortController().signal;
   const baseInput = {
-    prompt: 'do the task', cfg, mcpFunctions: [{ name: 't', description: 'x', parameters: {} }] as any,
+    prompt: 'do the task', cfg,
+    // Every name the scripted models below call is OFFERED (since 2026-11-16 the loop executes only offered names — test 1b).
+    mcpFunctions: ['t', 'alpha', 'beta', 'boom', 'fine', 'ghost', 'services', 'perform', 'agent_assign', 'read_more']
+      .map((name) => ({ name, description: 'x', parameters: {} })) as any,
     maxToolTurns: 30, signal, executionId: 'exec-loop-1', taskId: 'task-1', userId: 'user-a',
     // REQUIRED since 2026-09-25 (register E1): the watchdog deadline the R4 retry budgets against.
     // FAR, so every pre-existing fixture keeps its expectation (R4-1 still retries at 8192).
@@ -531,6 +566,26 @@ function makeDeps(overrides: Partial<Parameters<typeof executeToolTurn>[1]> = {}
     ok(r.assembledText === '## FINAL DELIVERABLE\n\nThe complete answer.', 'assembledText = final turn text verbatim');
     ok(!r.assembledText.includes('PREAMBLE') && !r.assembledText.includes('MIDDLE'), 'assembledText does NOT accumulate earlier turns');
     ok(r.assembledText === r.currentResponse.text, 'assembledText tracks currentResponse.text (single source both paths read)');
+  }
+
+  // ── L1b. through the WHOLE loop: a name the run did not offer is refused, never looked up (agent-execution review, 2026-11-16) ──
+  console.log('\n── L1b: an un-offered tool name is refused by the loop itself ──');
+  {
+    const looked: string[] = []; const ran: string[] = [];
+    const deps = {
+      getToolDefinition: async (name: string) => { looked.push(name); return { serverName: `srv-${name}` }; },
+      executeToolOnServer: async (_s: string, t: string) => { ran.push(t); return { echo: t }; },
+      generateText: scriptedLLM([
+        mkToolUse([{ id: 'tu_1', name: 'Bash', arguments: '{"command":"id"}' }, { id: 'tu_2', name: 't', arguments: '{}' }]),
+        mkResp(),
+      ]).generateText,
+      logger: silentFullLogger,
+    };
+    const r = await runAgenticToolLoop({ ...baseInput, mcpFunctions: [{ name: 't', description: 'x', parameters: {} }] as any }, deps as any);
+    const bash = r.toolCallResults.find((c) => c.tool === 'Bash');
+    ok(!!bash && bash.success === false && /was not offered to this agent/.test(String(bash.error)), 'the loop refuses the un-offered name with the named error');
+    ok(!looked.includes('Bash') && !ran.includes('Bash'), 'the un-offered name is never looked up and never executed');
+    ok(ran.length === 1 && ran[0] === 't', 'the offered tool in the same turn still runs');
   }
 
   // ── L2. tool_use → end_turn: threading + accumulation ──

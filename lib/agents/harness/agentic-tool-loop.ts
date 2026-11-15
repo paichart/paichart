@@ -771,6 +771,12 @@ export interface ToolTurnContext {
    *  hardening decision, do NOT widen. */
   userId?: string;
   turn: number;
+  /** The names of the functions OFFERED to the model this run (`mcpFunctions`). When present, a call of any other name is refused
+   *  through the ordinary unknown-tool error path, BEFORE a server is looked up — `getToolDefinition` resolves a name across EVERY
+   *  connected server, so without this an agent could call a tool it was never given (register HUB-GATELESS-EXTERNAL-ROUTES (b),
+   *  2026-11-16). Measured before it shipped: 0 of 26,836 stored calls named a tool outside the offered set. External services are
+   *  reached through the `services` tool (and its call gate), never by naming their tools. Absent = no check (unit tests only). */
+  offeredToolNames?: ReadonlySet<string>;
 }
 
 /**
@@ -819,7 +825,8 @@ export async function executeToolTurn(
       toolResultBlocks.push(block);
       continue;
     }
-    const toolDef = await deps.getToolDefinition(toolCall.name);
+    // Not looked up at all when the name was not offered (the refusal below names it; `server` stays undefined on the record).
+    const toolDef = ctx.offeredToolNames && !ctx.offeredToolNames.has(toolCall.name) ? undefined : await deps.getToolDefinition(toolCall.name);
     let toolResultContent: string;
     let success = true;
     let record: ToolCallRecord;
@@ -827,6 +834,9 @@ export async function executeToolTurn(
     const toolStartTime = Date.now();
 
     try {
+      if (ctx.offeredToolNames && !ctx.offeredToolNames.has(toolCall.name)) {
+        throw new Error(`Tool '${toolCall.name}' was not offered to this agent — use only the tools listed for this run`);
+      }
       if (!toolDef) throw new Error(`Tool '${toolCall.name}' not found in any server`);
       const parsedArgs = JSON.parse(toolCall.arguments);
       const toolResult = await deps.executeToolOnServer(
@@ -1498,6 +1508,8 @@ async function runAgenticToolLoopInner(
   track: LoopTrack,
 ): Promise<AgenticLoopResult> {
   const { prompt, cfg, mcpFunctions, maxToolTurns, signal, deadlineAt, agentRole, executionId, taskId, userId } = input;
+  // The names offered to the model — the ONLY names a tool turn will execute (read_more included when it was injected).
+  const offeredToolNames: ReadonlySet<string> = new Set((mcpFunctions ?? []).map((f) => f.name));
   const now = deps.now ?? Date.now;
 
   // R4 Layer 1 state — shared across the three 'full' call sites; the truncation retry fires (or is
@@ -1628,7 +1640,7 @@ async function runAgenticToolLoopInner(
     const { toolResultBlocks, toolCallRecords } = await executeToolTurn(
       turnFunctionCalls,
       { getToolDefinition: deps.getToolDefinition, executeToolOnServer: deps.executeToolOnServer, logger: deps.logger },
-      { executionId, userId, turn: turnCount },
+      { executionId, userId, turn: turnCount, offeredToolNames },
       observers,
       pager
     );

@@ -91,3 +91,7 @@ __pycache__/
 
 # --- merged from platform export ---
 *.tsbuildinfo
+
+# --- merged from platform export ---
+# Host-local external MCP server list (dev only; never deployed — 2026-11-16, register HUB-GATELESS-EXTERNAL-ROUTES).
+.mcp-servers.json

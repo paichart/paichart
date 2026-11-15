@@ -150,6 +150,33 @@ function registry(rows: Row[]) {
       o.success === false && o.error === GIT_FILE_SOURCE_WORKFLOW_REFUSAL, JSON.stringify(o).slice(0, 160));
   }
 
+  // ── 5. HUB-GATELESS-EXTERNAL-ROUTES (c), 2026-11-16: the admin "run workflow" route's caller meets the SAME call gate ──
+  // A caller WITHOUT the gate gets past it to the connection (127.0.0.1:9 ⇒ a connection failure or the 5 s race), so each refusal
+  // below is distinguishable from "it went on" (mutation-checked: deleting the gate block turns the three refusals into other errors).
+  const K8S: Row = { id: 'ck8sk8sk8sk8sk8sk8sk8sk8s', name: 'k8s-readonly', status: 'ACTIVE', capabilities: { tools: ['compare_declared_fields', 'get_resource'] },
+    configuration: { endpoint: 'https://127.0.0.1:9/mcp' }, permissions: { publicAccess: false }, isPublic: false, endpoint: null };
+  const regK = registry([K8S]);
+  prisma.mCPTool.findUnique = regK.findUnique; prisma.mCPTool.findFirst = regK.findFirst;
+  const ctxAdmin = { user: { id: 'u', email: 'u@example.invalid', role: 'ADMIN' }, execution: { requestId: 'r' } };
+  const viaAdmin = (tool: string, args: Record<string, unknown>) => raced(orchestrationServiceCaller.callService(ctxAdmin, 'k8s-readonly', tool, args)) as Promise<{ success: unknown; error?: string }>;
+  const cmp = await viaAdmin('compare_declared_fields', { manifest: '{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"x"}}' });
+  check('GATE service-caller: the compare tool (a JSON manifest, an admin caller) ⇒ refused PLATFORM_ONLY_TOOL by the call gate',
+    cmp.success === false && /^Service call blocked by compliance policy: .*called only by the platform/.test(String(cmp.error)), JSON.stringify(cmp).slice(0, 200));
+  const pat = await viaAdmin('get_resource', { namespace: 'x; rm -rf /' });
+  check('GATE service-caller: a blocked pattern in an argument ⇒ refused by the call gate', pat.success === false && /^Service call blocked by compliance policy/.test(String(pat.error)), JSON.stringify(pat).slice(0, 200));
+  for (const url of ['http://169.254.169.254/latest/meta-data/', 'http://2852039166/']) {
+    const ssrf = await viaAdmin('get_resource', { resourceType: 'configmaps', namespace: 'trading', url });
+    check(`GATE service-caller: an internal address in an argument (${url}) ⇒ refused by the call gate (SSRF)`,
+      ssrf.success === false && /^Service call blocked by compliance policy/.test(String(ssrf.error)), JSON.stringify(ssrf).slice(0, 200));
+  }
+  check('GATE service-caller: the refusal has the workflow-step shape (policy_blocked, not retryable — the engine never retries it)',
+    (cmp as { errorType?: string }).errorType === 'policy_blocked' && (cmp as { retryable?: boolean }).retryable === false, JSON.stringify(cmp).slice(0, 200));
+  const unreg = await viaAdmin('delete_everything', {});
+  check('GATE service-caller: a tool the service does not register ⇒ refused by the call gate (allowlist)', unreg.success === false && /^Service call blocked by compliance policy/.test(String(unreg.error)), JSON.stringify(unreg).slice(0, 200));
+  const ordinary = await viaAdmin('get_resource', { resourceType: 'deployments', namespace: 'trading' });
+  check('GATE service-caller NEGATIVE CONTROL: an ordinary call passes the gate (it fails later, at the connection, never as a policy refusal)',
+    !/compliance policy/.test(String(ordinary.error ?? ordinary.success)), JSON.stringify(ordinary).slice(0, 200));
+
   // ── sweep grep ─────────────────────────────────────────────────────────────────────────────────────────────────
   // Either field order (code review mcp-hub N-2): an OR list that starts with `id:`, or starts with `name:` and has `id:` later.
   const sweep = execSync(`grep -rnPzl 'OR:\\s*\\[\\s*\\{\\s*(id:|name:[^\\]]*\\{\\s*id:)' lib app || true`, { cwd: ROOT, encoding: 'utf8' }).split(/[\0\n]/).map((s) => s.trim()).filter(Boolean).sort();

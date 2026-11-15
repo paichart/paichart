@@ -2081,6 +2081,12 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
     sc.split('gitFileSourceWorkflowRefusal(serviceInfo)').length === 2
     && before(sc, 'gitFileSourceWorkflowRefusal(serviceInfo)', 'await determineTrustLevel(')
     && before(sc, 'gitFileSourceWorkflowRefusal(serviceInfo)', 'await mintMcpToken('));
+  check('R7b service-caller runs the CALL GATE on the resolved row after the Git refusal, before trust resolution and any mint (HUB-GATELESS-EXTERNAL-ROUTES (c))',
+    sc.split('validateServiceCall(').length === 2
+    && before(sc, 'gitFileSourceWorkflowRefusal(serviceInfo)', 'validateServiceCall(')
+    && before(sc, 'validateServiceCall(', 'await determineTrustLevel(')
+    && before(sc, 'validateServiceCall(', 'await mintMcpToken(')
+    && before(sc, 'validateServiceCall(', 'resilientServiceCall('));
   // R8 — held-k8s F2 (L-K1-FIXTURE.md): a private repo's directory listing carries a `?token=` on every download_url — a
   // credential past the pin and G-5. The hub rewrites every token VALUE in the result's TEXT items before delivery; a file's
   // resource text (the held base) is never touched.
@@ -2253,6 +2259,7 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
     // Config-sources push 0 (sec-ops PUSH0 S-3): the never-held predicate on an UNPINNED file read — both message variants.
     ['NEVER_READ_PATH (state path, unpinned)', () => policy.validateServiceCall('acme-github', 'get_file_contents', { owner: 'acme', repo: 'infra', path: 'terraform.tfstate' }, {}, ['get_file_contents'], 'acme-github')],
     ['NEVER_READ_PATH (device inventory, unpinned)', () => policy.validateServiceCall('acme-github', 'get_file_contents', { owner: 'acme', repo: 'infra', path: 'nornir/hosts.yaml' }, {}, ['get_file_contents'], 'acme-github')],
+    ['PLATFORM_ONLY_TOOL', () => policy.validateServiceCall('some-service', 'compare_declared_fields', { manifest: 'kind: ConfigMap' }, {}, ['compare_declared_fields'], 'some-service')],
     ['UNAPPROVED_TOOL', () => policy.validateServiceCall('some-service', 'frobnicate', {}, {}, [], 'some-service')],
     ['BLOCKED_PATTERN (tool name)', () => policy.validateServiceCall('some-service', 'netcat', {}, {}, ['netcat'], 'some-service')],
     ['BLOCKED_PATTERN (parameters)', () => policy.validateServiceCall('some-service', 'run', { cmd: 'rm -rf tmp' }, {}, ['run'], 'some-service')],
@@ -2273,7 +2280,7 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
       check(`F-T1 ${label}: ${x.type} reaches the agent byte-for-byte`, sanitizeForResponse(x.message) === x.message);
     }
   }
-  check('F-T1 every violation type the call gate can emit is exercised', ['PINNED_ARGUMENT', 'PINNED_SOURCE_BYPASS', 'NEVER_READ_PATH', 'UNAPPROVED_TOOL', 'BLOCKED_PATTERN', 'BLOCKED_URL', 'SIZE_LIMIT', 'CALL_DEPTH']
+  check('F-T1 every violation type the call gate can emit is exercised', ['PINNED_ARGUMENT', 'PINNED_SOURCE_BYPASS', 'NEVER_READ_PATH', 'PLATFORM_ONLY_TOOL', 'UNAPPROVED_TOOL', 'BLOCKED_PATTERN', 'BLOCKED_URL', 'SIZE_LIMIT', 'CALL_DEPTH']
     .every((t) => seenTypes.has(t)) && (pol.match(/\btype: '[A-Z_]+'/g) || []).filter((t) => !/SENSITIVE_DATA|RESPONSE_|HARMFUL|PROCESSING/.test(t)).every((t) => seenTypes.has(t.slice(7, -1))));
   for (const { desc: d, hint } of (policy as unknown as { BLOCKED_PATTERNS_WITH_DESC: Array<{ desc: string; hint: string }> }).BLOCKED_PATTERNS_WITH_DESC) {
     check(`F-T1 pattern text carries none of & < > " ' (${d})`, !ESC.test(d) && !ESC.test(hint));
@@ -2515,8 +2522,28 @@ async function platformDriftSection(): Promise<void> {
   const both = gate(DRIFT, TOOL, args());
   check('PD1 BOTH conditions (platform purpose + compare_declared_fields): the manifest passes the call gate', both.allowed === true, types(both));
   const noPurpose = gate(PLAIN, TOOL, args());
-  check('PD2 NEGATIVE CONTROL: the same manifest WITHOUT the purpose (an agent\'s own call of this tool) is refused BLOCKED_PATTERN',
-    noPurpose.allowed === false && noPurpose.violations.some((v) => v.type === 'BLOCKED_PATTERN'));
+  check('PD2 NEGATIVE CONTROL: the same manifest WITHOUT the purpose (an agent\'s own call of this tool) is refused PLATFORM_ONLY_TOOL',
+    noPurpose.allowed === false && noPurpose.violations.some((v) => v.type === 'PLATFORM_ONLY_TOOL'));
+  // 2026-11-16 (register CONFIG-SOURCES-K8S-COMPARE-AGENT-CALL, owner decision; sec-ops F-NS1): before this, PD2 passed only by an
+  // accident of the `data:` pattern — the same manifest as JSON, or any harmless YAML, reached the tool. Every shape is refused now.
+  const jsonManifest = JSON.stringify({ apiVersion: 'v1', kind: 'Namespace', metadata: { name: 'trading', labels: { team: 'orders' } } });
+  const harmless = 'apiVersion: v1\nkind: Namespace\nmetadata:\n  name: trading\n';
+  for (const [label, a] of [['a JSON manifest (passed every scan before)', { manifest: jsonManifest }], ['a harmless YAML Namespace', { manifest: harmless }],
+    ['no arguments at all', {}]] as Array<[string, unknown]>) {
+    const r = gate(PLAIN, TOOL, a);
+    check(`PD-AGENT the compare tool without the platform purpose is PLATFORM_ONLY_TOOL: ${label}`, r.allowed === false && r.violations.some((v) => v.type === 'PLATFORM_ONLY_TOOL'), types(r));
+  }
+  const agentMsg = gate(PLAIN, TOOL, { manifest: harmless }).violations.find((v) => v.type === 'PLATFORM_ONLY_TOOL')?.message || '';
+  check('PD-AGENT the refusal text is static and F-T1-safe (none of the five characters BC71 escapes)', agentMsg !== '' && !/[&<>"']/.test(agentMsg), agentMsg);
+  for (const [label, ctx] of [['a null context', null], ['an empty context', {}]] as Array<[string, unknown]>) {
+    check(`PD-AGENT ${label} ⇒ PLATFORM_ONLY_TOOL`, gate(ctx, TOOL, { manifest: harmless }).violations.some((v) => v.type === 'PLATFORM_ONLY_TOOL'));
+  }
+  check('PD-AGENT the refusal is HIGH, like UNAPPROVED_TOOL (a CRITICAL would count toward the CRITICAL-per-hour alert)',
+    (gate(PLAIN, TOOL, { manifest: harmless }).violations.find((v) => v.type === 'PLATFORM_ONLY_TOOL') as { severity?: string } | undefined)?.severity === 'HIGH');
+  check('PD-AGENT NEGATIVE CONTROL: the platform call of the same harmless manifest is allowed', gate(DRIFT, TOOL, { manifest: harmless, redactedMarker: MARKER }).allowed === true);
+  check('PD-AGENT another tool of the same service is NOT refused for being platform-only', !gate(PLAIN, 'get_resource', { namespace: 'trading' }, [TOOL, 'get_resource']).violations.some((v) => v.type === 'PLATFORM_ONLY_TOOL'));
+  check('PD-AGENT the workflow route reaches the same gate with the caller\'s context (no platform purpose is ever set there)',
+    /validateServiceCall\(\s*service,\s*tool,\s*args,\s*context,/.test(fs.readFileSync(path.join(__dirname, '../lib/mcp/server/tools/hub/workflow-tools-handler.js'), 'utf8')));
   const otherTool = gate(DRIFT, 'apply_manifest', args());
   check('PD3 NEGATIVE CONTROL: the purpose with ANOTHER tool carrying a `manifest` argument is refused BLOCKED_PATTERN',
     otherTool.allowed === false && otherTool.violations.some((v) => v.type === 'BLOCKED_PATTERN'));
@@ -2543,7 +2570,7 @@ async function platformDriftSection(): Promise<void> {
   check('PD7 only the TOP-LEVEL manifest is exempt: a nested one is still scanned',
     gate(DRIFT, TOOL, { manifest: 'kind: ConfigMap\n', inner: { manifest: MANIFEST }, redactedMarker: MARKER }).violations.some((v) => v.type === 'BLOCKED_PATTERN'));
   check('PD8 `platformPurpose` INSIDE the arguments is ignored (the purpose is context, never an argument)',
-    gate(PLAIN, TOOL, args({ platformPurpose: 'platform-drift' })).violations.some((v) => v.type === 'BLOCKED_PATTERN'));
+    gate(PLAIN, TOOL, args({ platformPurpose: 'platform-drift' })).violations.some((v) => v.type === 'PLATFORM_ONLY_TOOL'));
   check('PD9 an unregistered tool is still UNAPPROVED_TOOL at the gate (the exemption is a scan exemption only)',
     gate(DRIFT, TOOL, args(), ['get_resource']).violations.some((v) => v.type === 'UNAPPROVED_TOOL'));
   const atLimit = 'a: b\n'.repeat(1).padEnd(pd.PLATFORM_DRIFT_MANIFEST_MAX_BYTES, '#');
@@ -2552,10 +2579,45 @@ async function platformDriftSection(): Promise<void> {
     types(gate(DRIFT, TOOL, args({ manifest: atLimit + '#' }))) === 'SIZE_LIMIT'
     && types(gate(DRIFT, TOOL, args({ manifest: atLimit.slice(0, -1) + 'é' }))) === 'SIZE_LIMIT');
   check('PD10 NEGATIVE CONTROL: the other arguments keep the 100 KB limit', gate(DRIFT, TOOL, args({ note: 'n'.repeat(100 * 1024) })).violations.some((v) => v.type === 'SIZE_LIMIT'));
+  // 2026-11-16 the ONE deliberate pattern change: `data:` now matches the shape of a data URI, not the substring (it refused every
+  // YAML `metadata:`). Both directions, so a later edit that loosens it OR restores the false refusal is caught here.
+  const scriptRe = policy.BLOCKED_PATTERNS_WITH_DESC.find((p) => /javascript/.test(p.pattern.source))!.pattern;
+  for (const t of ['data:,hello', 'data:text/html,<b>x</b>', 'DATA:text/html;charset=utf-8,x', 'data:image/png;base64,AAAA', 'data:;base64,QQ==',
+    'data:text/html;charset=utf-8;foo=bar,x', '<script>', 'javascript:alert(1)', 'see metadata:text/html,x',
+    // sec-ops HUB-PLATFORM-ONLY F2: whitespace around the type (browsers accept it), raw and as a JSON escape
+    'data: text/html,x', 'data:text/html ,x', 'data:text/html\n,x', 'data:\ttext/html,x', 'data:text/html\\n,x',
+    // mcp-hub review S2: a hyphen in the type; \f and \v (raw and JSON-escaped) around it
+    'data:x-world/x-vrml,x', 'data:\ftext/html,x', 'data:\\ftext/html,x', 'data:\\u000btext/html,x']) {
+    check(`PD-DATA still blocked: ${JSON.stringify(t)}`, scriptRe.test(t));
+  }
+  for (const t of ['metadata:\n  name: x', 'metadata: { name: x }', '"metadata":{"name":"x"}', 'data: plain text', 'userdata: 1', 'data:text/plain']) {
+    check(`PD-DATA not a data URI, not blocked: ${JSON.stringify(t)}`, !scriptRe.test(t));
+  }
+  // PD-REDOS (sec-ops HUB-PLATFORM-ONLY F1, BLOCKER): the gate runs this pattern on the stringified arguments BEFORE the size check,
+  // for any signed-in caller. An unbounded `(?:;[^,\s]*)*` took 64 ms at 24 semicolons and did not finish at 50,000 (hub frozen).
+  // Every repetition is bounded now; each adversarial input must finish fast. (Mutation-checked: the unbounded form times out here.)
+  for (const [label, input] of [
+    ['data: + 50,000 semicolons', 'data:' + ';'.repeat(50000)], ['data:a/b + 25,000 ;x', 'data:a/b' + ';x'.repeat(25000)],
+    ['data: + 50,000 spaces', 'data:' + ' '.repeat(50000)], ['data: + 25,000 escaped newlines', 'data:' + '\\n'.repeat(25000)],
+    ['20,000 repeats of data:;', 'data:;'.repeat(20000)], ['data:a/ + 100,000 letters', 'data:a/' + 'a'.repeat(100000)],
+    ['data: + 500 x (; + 200 x)', 'data:' + (';' + 'x'.repeat(200)).repeat(500)],
+  ] as Array<[string, string]>) {
+    const t0 = process.hrtime.bigint(); const hit = scriptRe.test(input); const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+    check(`PD-REDOS ${label}: not a data URI, and decided in under 250 ms (${ms.toFixed(1)} ms)`, hit === false && ms < 250, `${ms.toFixed(1)} ms`);
+  }
+  check('PD-AGENT a case variant of the tool name is not the platform tool: refused UNAPPROVED_TOOL (the service looks tools up by exact name)',
+    gate(PLAIN, 'Compare_declared_fields', { manifest: 'kind: ConfigMap' }).violations.some((v) => v.type === 'UNAPPROVED_TOOL'));
+  // ACCEPTED RESIDUAL (mcp-hub review S2): the bounds that keep the pattern linear also leave these unmatched; pinned so a change is seen.
+  for (const t of ['data:' + ' '.repeat(9) + 'text/html,x', 'data:text/html' + ';a'.repeat(17) + ',x', 'data:text/html;' + 'a'.repeat(201) + ',x']) {
+    check(`PD-DATA accepted residual (bounded by design), not matched: ${JSON.stringify(t.slice(0, 40))}…`, !scriptRe.test(t));
+  }
+  check('PD-DATA a harmless YAML manifest sent to ANOTHER tool by a non-platform caller is no longer refused by the script pattern',
+    !gate(PLAIN, 'get_resource', { manifest: 'apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: x\n' }, ['get_resource']).violations.some((v) => v.type === 'BLOCKED_PATTERN'));
   // "Never loosen a pattern": the 18 blocked patterns, byte for byte. A deliberate pattern change moves this hash WITH a review.
+  // Moved 2026-11-16 (e243352c… → df31a254…): the `data:` alternative narrowed to a BOUNDED data-URI shape (PD-DATA + PD-REDOS above), sec-ops + mcp-hub reviewed.
   check('PD11 the blocked patterns are unchanged (18, sha256 of their sources)',
     policy.BLOCKED_PATTERNS_WITH_DESC.length === 18
-    && createHash('sha256').update(policy.BLOCKED_PATTERNS_WITH_DESC.map((p) => p.pattern.toString()).join('\n')).digest('hex') === 'e243352c8846e62e77330e7b1cbe2c39c1e8a831de6975869e411602a366e81a',
+    && createHash('sha256').update(policy.BLOCKED_PATTERNS_WITH_DESC.map((p) => p.pattern.toString()).join('\n')).digest('hex') === 'df31a2548ffcbc3e544998b18ebefd3dff79fd41ab239c467522b76bbd8167af',
     createHash('sha256').update(policy.BLOCKED_PATTERNS_WITH_DESC.map((p) => p.pattern.toString()).join('\n')).digest('hex'));
 
   // ── the summary (C4) ──
@@ -2641,10 +2703,15 @@ async function platformDriftSection(): Promise<void> {
     ok.activities[0].data.action === 'PLATFORM_SERVICE_CALL' && ok.activities[0].data.type === 'Integration' && ok.activities[0].data.metadata.purpose === 'platform-drift');
   check('PD16 no securityEvent is logged for a successful platform call', !/securityEvent/.test(ok.logged));
 
-  const plainOk = await run(row(), PLAIN, { manifest: 'kind: ConfigMap', redactedMarker: MARKER });
-  check('PD17 NEGATIVE CONTROL: an ordinary call of the same tool is stored and echoed as before (SERVICE_CALL, the argument text, no purpose key)',
+  // 2026-11-16: an ordinary call of the compare tool is now refused (PLATFORM_ONLY_TOOL, below), so the "stored as before" control
+  // moved to ANOTHER tool of the same service: an ordinary call is stored and echoed with its argument text and no purpose key.
+  const plainOk = await run(row(), PLAIN, { manifest: 'kind: ConfigMap' }, 'get_resource');
+  check('PD17 NEGATIVE CONTROL: an ordinary call of another tool of the service is stored and echoed as before (SERVICE_CALL, the argument text, no purpose key)',
     !!plainOk.result && plainOk.result.arguments.manifest === 'kind: ConfigMap' && plainOk.activities[0].data.action === 'SERVICE_CALL'
-    && plainOk.activities[0].data.metadata.arguments.manifest === 'kind: ConfigMap' && !('purpose' in plainOk.activities[0].data.metadata));
+    && plainOk.activities[0].data.metadata.arguments.manifest === 'kind: ConfigMap' && !('purpose' in plainOk.activities[0].data.metadata), plainOk.threw);
+  const plainCompare = await run(row(), PLAIN, { manifest: 'kind: ConfigMap', redactedMarker: MARKER });
+  check('PD17 an ordinary call of the COMPARE tool with a harmless manifest is refused PLATFORM_ONLY_TOOL (nothing forwarded, nothing stored)',
+    /blocked by compliance policy/.test(plainCompare.threw) && /called only by the platform/.test(plainCompare.threw) && plainCompare.forwarded.length === 0 && plainCompare.activities.length === 0, plainCompare.threw);
   const agentCall = await run(row(), PLAIN, args());
   check('PD17 NEGATIVE CONTROL: an agent\'s own call with a real manifest is refused by the call gate (nothing forwarded, nothing stored)',
     /blocked by compliance policy/.test(agentCall.threw) && agentCall.forwarded.length === 0 && agentCall.activities.length === 0 && /securityEvent/.test(agentCall.logged));

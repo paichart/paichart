@@ -32,7 +32,8 @@ from collections import Counter, defaultdict, deque
 ROOTS = ('.claude/', 'docs/', 'scripts/', 'lib/', 'app/', 'cline_docs/', 'prisma/', 'services/', 'usecases/', 'verification/',
          'tutorials/', 'protocols/', 'examples/', 'program-artifacts/', 'components/', 'tests/', 'test/', '.github/', 'pipelines/',
          'case-studies/', 'academic/', 'descriptors/', 'config/', 'types/', 'middleware/', 'public/', 'data/')
-TOKEN = re.compile(r'(?<![\w./@-])/?((?:' + '|'.join(re.escape(r) for r in ROOTS) + r')[\w./@+-]*[\w/])')
+# `~` in the lookbehind (2026-11-16): `~/.claude/CLAUDE.md` is a file in the user's HOME, not a path in this repository.
+TOKEN = re.compile(r'(?<![\w./@~-])/?((?:' + '|'.join(re.escape(r) for r in ROOTS) + r')[\w./@+-]*[\w/])')
 LINK = re.compile(r'\]\(([^)\s#]+)(?:#[^)]*)?\)')
 ROOT_FILES = re.compile(r'(?<![\w./-])(README\.md|CLAUDE\.md|CONTRIBUTING\.md|SECURITY\.md|NOTICE|LICENSE)(?![\w/-])')
 BARE_MD = re.compile(r'(?<![\w./-])([A-Za-z0-9][\w.-]*\.md)(?![\w/-])')
@@ -327,7 +328,7 @@ def self_test():
         ('R1 flags a stale path in a user doc', any(x.startswith('R1 docs/INSTALL.md') and 'lib/gone.ts' in x for x in f)),
         ('R3 flags a missing index and a README that does not link it', any('index' in x and 'does not exist' in x for x in f) and any('README.md does not link' in x for x in f)),
     ]
-    good = repo({'README.md': 'Docs: [index](docs/README.md).\n', 'docs/README.md': '[Install](INSTALL.md) [Ops](ops/RUN.md)\n', 'docs/INSTALL.md': 'See `lib/x.ts` and https://github.com/paichart/paichart/blob/main/lib/x.ts\n', 'docs/ops/RUN.md': 'run\n', 'lib/x.ts': 'x\n'})
+    good = repo({'README.md': 'Docs: [index](docs/README.md).\n', 'docs/README.md': '[Install](INSTALL.md) [Ops](ops/RUN.md)\n', 'docs/INSTALL.md': 'See `lib/x.ts` and https://github.com/paichart/paichart/blob/main/lib/x.ts and `~/.claude/CLAUDE.md` (a home-directory file)\n', 'docs/ops/RUN.md': 'run\n', 'lib/x.ts': 'x\n'})
     r2, b2, c2 = measure(good, priv)
     cases.append(('a clean user-docs set is green', user_docs_check(good, r2, b2, c2, None) == []))
     base = os.path.join(tempfile.mkdtemp(), 'b.json')

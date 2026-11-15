@@ -19,6 +19,10 @@ import { UserRole as AuthUserRole } from '@/lib/types/auth';
 
 const { audienceForService } = require('@/lib/mcp/server/tools/hub/audience-policy');
 const { findServiceByIdThenName } = require('@/lib/mcp/server/tools/hub/resolve-service-ref');
+// HUB-GATELESS-EXTERNAL-ROUTES (c), 2026-11-16: this route (the admin "run workflow" REST endpoint, via the workflow engine) now meets
+// the SAME call gate as services.call and workflow.execute steps — one gate, every route that calls an external service tool.
+const { validateServiceCall } = require('@/lib/mcp/server/config/service-call-policy');
+const { sanitizeForResponse } = require('@/lib/mcp/server/tools/response-sanitizer');
 
 const callerLogger = logger.child({ module: 'ServiceCaller' });
 
@@ -161,6 +165,8 @@ interface ServiceRecord {
   // standardization), not configuration — trust-level.js reads it there.
   /** WI-B10: the registrant declaration (row-aware Git pin). */
   heldFiles?: unknown;
+  /** The registered tools (the call gate's dynamic allowlist). */
+  capabilities?: unknown;
   permissions: {
     publicAccess?: boolean;
   };
@@ -177,14 +183,15 @@ interface ServiceRecord {
 async function resolveServiceEndpoint(serviceId: string): Promise<ServiceRecord | null> {
   // ID FIRST, then name (Stage B P1-5, resolve-service-ref.js); only ACTIVE services. An id hit is terminal whatever its
   // status: an INACTIVE id hit returns null and never falls through to a row NAMED after that id.
-  const service: { id: string; name: string; status: string; configuration: unknown; permissions: unknown; heldFiles?: unknown } | null =
+  const service: { id: string; name: string; status: string; configuration: unknown; permissions: unknown; heldFiles?: unknown; capabilities?: unknown } | null =
     await findServiceByIdThenName(prisma.mCPTool, serviceId, {
       id: true,
       name: true,
       status: true,
       configuration: true,
       permissions: true,  // F-SWEEP-2: trust-level reads permissions.publicAccess
-      heldFiles: true     // WI-B10: a declared Git file source is refused as a workflow step too
+      heldFiles: true,    // WI-B10: a declared Git file source is refused as a workflow step too
+      capabilities: true  // the registered tools — the call gate's dynamic allowlist (HUB-GATELESS-EXTERNAL-ROUTES (c))
     });
 
   if (!service || service.status !== 'ACTIVE') {
@@ -215,6 +222,7 @@ async function resolveServiceEndpoint(serviceId: string): Promise<ServiceRecord 
     configuration: config || {},
     permissions: (service.permissions as { publicAccess?: boolean } | null) || {},
     heldFiles: service.heldFiles ?? null,
+    capabilities: service.capabilities ?? null,
   };
 }
 
@@ -327,6 +335,47 @@ class OrchestrationServiceCaller {
         };
       }
 
+      // The CALL GATE (service-call-policy.js) — the same checks services.call and workflow.execute steps run: blocked patterns, URL
+      // checks, the registered-tool allowlist, the Git pins, never-read paths, the platform-only compare tool, call depth. Run on the
+      // RESOLVED row, before trust resolution, token minting or any network call. The refusal has the workflow-step shape
+      // (workflow-tools-handler.js), so both workflow routes return the same thing. No platform purpose is ever set on this route.
+      const caps = (serviceInfo.capabilities ?? {}) as { tools?: Array<string | { name?: string }> };
+      const registeredTools = (Array.isArray(caps.tools) ? caps.tools : [])
+        .map((t) => (typeof t === 'string' ? t : t?.name))
+        .filter((n): n is string => typeof n === 'string');
+      // ONE object: the arguments the gate checks are the arguments sent (sec-ops ADMIN-WORKFLOW-GATE F-1).
+      const callArguments = ensureObject(args, {}, 'ServiceCaller');
+      const policyCheck = validateServiceCall(
+        service, tool, callArguments,
+        { user: { id: context.user.id, email: context.user.email, role: context.user.role }, source: 'mcp_hub_workflow' },
+        registeredTools, serviceInfo.name, serviceInfo,
+      ) as { allowed: boolean; violations: Array<{ type: string; message?: string }> };
+      if (!policyCheck.allowed) {
+        const violationMessages = policyCheck.violations.map((v) => v.message || v.type).join('; ');
+        callerLogger.warn({ securityEvent: true, service, tool, resolvedService: serviceInfo.name,
+          violations: policyCheck.violations.map((v) => v.type), userId: context.user.id }, 'Workflow service call blocked by policy');
+        // The same compliance event services.call logs (sec-ops ADMIN-WORKFLOW-GATE F-4) — feeds the daily summary and alerts.
+        // Best-effort: a monitor failure never turns a refusal into a call.
+        try {
+          const { ComplianceMonitor } = require('@/lib/mcp/server/security/compliance-monitor');
+          await ComplianceMonitor.getInstance().logSecurityEvent('SERVICE_CALL_BLOCKED', {
+            targetService: service, tool, violations: policyCheck.violations, riskLevel: 'HIGH', route: 'admin-workflow-run',
+          }, { userId: context.user.id });
+        } catch (monitorError) {
+          callerLogger.warn({ err: monitorError, service, tool }, 'Compliance monitor event failed (the call stays refused)');
+        }
+        return {
+          success: false,
+          error: `Service call blocked by compliance policy: ${sanitizeForResponse(violationMessages)}`,
+          // The workflow-step refusal shape (workflow-tools-handler.js) — never retried by the engine (sec-ops F-5).
+          errorType: 'policy_blocked',
+          retryable: false,
+          executionTime: Date.now() - startTime,
+          service,
+          tool,
+        };
+      }
+
       // SECURITY: Determine trust level for this service
       // Controls whether JWT token is included in _context
       // See: lib/services/workflow/security/trust-level.js
@@ -395,8 +444,7 @@ class OrchestrationServiceCaller {
         });
       }
 
-      // Ensure arguments is a plain object (transport boundary guard)
-      const callArguments = ensureObject(args, {}, 'ServiceCaller');
+      // `callArguments` (a plain object) was built ONCE above and checked by the gate — it is what is sent.
 
       // Default timeout for orchestration calls (fixes P0: missing timeout bug)
       const maxExecutionTime = 30000;

@@ -80,6 +80,7 @@ a cluster:
 
 ```bash
 python3 k8s-mcp-readonly/test_declared_compare.py     # needs PyYAML
+python3 k8s-mcp-readonly/test_get_live.py             # the one live read; the Kubernetes and MCP libraries are stubbed
 ```
 
 Quantities are compared by value where the field is a quantity (resource requests and limits, pod overhead,
