@@ -38,8 +38,40 @@ export function listTotal(fact: Obj, key: string): number {
   return Array.isArray(fact[key]) ? (fact[key] as unknown[]).length : 0;
 }
 
+/** Config sources STEP 2: the population clause of the CONFIG arm (files and live systems, not devices). Pinned. */
+export const CONFIG_LIVE_EVIDENCE_SCOPE_CLAUSE = '(of the declared source lines; a source the declaration does not name is not counted)';
+
+/** The Config arm (`fact.lane === 'config'`, a Config-sources leg — Kubernetes from 1.19.0). Same heading and the same fact name;
+ *  its own words, because its items are source LINES (a kept Git file, a live system, a supplied state), not devices. */
+function renderConfigLiveEvidence(fact: Obj): string[] {
+  const head = `- **Live evidence — ${LIVE_EVIDENCE_RENDER_NAME}**:`;
+  if (fact.checked !== true) {
+    return [`${head} not checked — ${q(fact.reason ?? 'no reason recorded')} (the platform could not read a Config sources declaration for this leg, so it states nothing about which sources were read).`];
+  }
+  const out = [
+    `${head} \`${q(fact.summary)}\` ${CONFIG_LIVE_EVIDENCE_SCOPE_CLAUSE} — ${q(fact.items)} source line(s) declared; ${q(fact.liveDeclared)} declare a live read (\`live-read\`): ${q(fact.liveRead)} read, ${listTotal(fact, 'liveNotRead')} not read; ${q(fact.gitFileLines)} Git file line(s); ${q(fact.supplied)} supplied.`,
+  ];
+  if (Array.isArray(fact.liveNotRead) && fact.liveNotRead.length) {
+    out.push(`  - live read declared, not read: ${names(fact.liveNotRead, (x) => `\`${q(x.label)}\` (${q(x.state)})`)}${more(fact, 'liveNotRead', fact.liveNotRead)}`);
+  }
+  if (Array.isArray(fact.liveReadItems) && fact.liveReadItems.length) {
+    out.push(`  - live read: ${names(fact.liveReadItems, (x) => `\`${q(x.label)}\` (${q(x.calls)} successful call(s) to the declared service)`)}${more(fact, 'liveReadItems', fact.liveReadItems)}`);
+  }
+  if (Array.isArray(fact.gitFiles) && fact.gitFiles.length) {
+    out.push(`  - Git files: ${names(fact.gitFiles, (x) => `\`${q(x.label)}\` (${q(x.gitRead)})`)}${more(fact, 'gitFiles', fact.gitFiles)}`);
+  }
+  if (Array.isArray(fact.suppliedItems) && fact.suppliedItems.length) {
+    out.push(`  - supplied in the task, not read: ${names(fact.suppliedItems, (x) => `\`${q(x.label)}\``)}${more(fact, 'suppliedItems', fact.suppliedItems)}`);
+  }
+  if (typeof fact.undeclaredGitFileReads === 'number' && fact.undeclaredGitFileReads > 0) {
+    out.push(`  - Git file reads no declared line names (never held): ${fact.undeclaredGitFileReads}`);
+  }
+  return out;
+}
+
 export function renderLiveEvidenceForPrompt(fact: Obj | null | undefined): string[] | null {
   if (!fact || typeof fact !== 'object') return null;
+  if (fact.lane === 'config') return renderConfigLiveEvidence(fact);
   const head = `- **Live evidence — ${LIVE_EVIDENCE_RENDER_NAME}**:`;
   if (fact.checked !== true) {
     return [`${head} not checked — ${q(fact.reason ?? 'no reason recorded')} (the platform could not read a Device sources declaration for this leg, so it states nothing about which devices were read).`];

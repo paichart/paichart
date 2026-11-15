@@ -32,6 +32,7 @@ const { ProjectDispatcher } = require('./server/tools/dispatchers/project-dispat
 const { AnalyticsDispatcher } = require('./server/tools/dispatchers/analytics-dispatcher');
 const { TemplateDispatcher } = require('./server/tools/dispatchers/template-dispatcher');
 const { ServicesDispatcher } = require('./server/tools/dispatchers/services-dispatcher');
+const { splitServicesCallArguments } = require('./server/config/platform-drift-call');
 const { RegistryDispatcher } = require('./server/tools/dispatchers/registry-dispatcher');
 const { wrapWithSchema } = require('./server/tools/dispatchers/dispatch-with-schema');
 
@@ -137,7 +138,9 @@ export class EmbeddedMCPServer {
     args = ensureObject(args, {}, 'Embedded Server');
 
     this.logger.debug(`Executing tool: ${name}`);
-    this.logger.debug(`Arguments:`, args);
+    // sec-ops C4 (Config sources STEP 2): on the platform drift call the manifest text is never logged — its sha and length are.
+    const driftSplit = name === 'services' ? splitServicesCallArguments(args, context) : null;
+    this.logger.debug(`Arguments:`, driftSplit ? driftSplit.summarised : args);
 
     const implementation = this.toolImplementations.get(name);
     if (!implementation) {

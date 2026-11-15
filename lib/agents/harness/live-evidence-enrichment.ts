@@ -23,6 +23,8 @@ import { computeLiveEvidenceFromReadRecord, liveEvidenceVersionApplies, gitOnlyW
 import { readAuthoritativeResultField } from './authoritative-result-read';
 import { selectLegChildStamp, HELD_HARVESTER_ROLE } from './held-bytes-nets';
 import { resolveOwningLegProtocol, assertNeverLane, DEVICE_SOURCE_LANES, type DeviceSourceLane, type OwningLegResolution } from './held-bytes/variant';
+import { configDeclarationFor } from './config-source-facts-enrichment';
+import { computeConfigLiveEvidenceFromReadRecord, computeConfigSourceReads } from './config-source-facts';
 import { Prisma } from '@prisma/client';
 
 const STAGE_CHILD_SCAN_CAP = 50;
@@ -67,7 +69,12 @@ export function liveEvidenceOptionsFor(leg: OwningLegResolution | null, protocol
 export async function computeLiveEvidenceHarvesterFact(ctx: NetContext): Promise<Record<string, unknown>> {
   if (!liveEvidenceVersionApplies(ctx.protocolInjection)) return NOT_STAMPED;
   const src = await declarationFor(ctx);
-  if (src.state === 'not-device-source-leg') return NOT_STAMPED;
+  if (src.state === 'not-device-source-leg') {
+    // Config sources STEP 2: the CONFIG arm — a Config-sources leg (never both: the two lane tables share no protocol).
+    const cfg = await configDeclarationFor(ctx);
+    if (cfg.state === 'not-config-source-leg') return NOT_STAMPED;
+    return computeConfigLiveEvidenceFromReadRecord(ctx.configSourceReadRecord ? await ctx.configSourceReadRecord() : computeConfigSourceReads(cfg, ctx.toolCalls));
+  }
   const record = ctx.deviceSourceReadRecord ? await ctx.deviceSourceReadRecord() : computeDeviceSourceReads(src, ctx.toolCalls);
   if (record.checked !== true) return computeLiveEvidenceFromReadRecord(record);
   const c = await legInterfaceContract(ctx);
@@ -78,7 +85,8 @@ export async function computeLiveEvidenceHarvesterFact(ctx: NetContext): Promise
 export async function transcribeLiveEvidenceFact(ctx: NetContext): Promise<Record<string, unknown>> {
   if (!liveEvidenceVersionApplies(ctx.protocolInjection)) return NOT_STAMPED;
   const src = await declarationFor(ctx);
-  if (src.state === 'not-device-source-leg') return NOT_STAMPED;
+  // Config sources STEP 2: the Author of a Config-sources leg transcribes its Harvester's stamp the same way.
+  if (src.state === 'not-device-source-leg' && (await configDeclarationFor(ctx)).state === 'not-config-source-leg') return NOT_STAMPED;
   const base = { version: LIVE_EVIDENCE_VERSION, point: 'author-transcription' };
   const prisma = ctx.prisma as never as {
     task: {
@@ -108,7 +116,7 @@ export async function hoistLiveEvidenceFact(ctx: NetContext): Promise<Record<str
   if (!liveEvidenceVersionApplies(ctx.protocolInjection)) return NOT_STAMPED;
   const leg = ctx.owningLeg ? await ctx.owningLeg() : await resolveOwningLegProtocol(ctx.prisma as never, ctx.task as never);
   if (leg.kind === 'could-not-check') throw new Error(`owning-leg resolution: ${leg.reason}`);
-  if (leg.kind === 'no-leg' || leg.deviceSource !== true) return NOT_STAMPED;
+  if (leg.kind === 'no-leg' || (leg.deviceSource !== true && !leg.configSourceProtocol)) return NOT_STAMPED; // + the Config lane (STEP 2)
   const sel = await selectLegChildStamp(ctx.prisma as never, ctx.stageId, HELD_HARVESTER_ROLE, 'liveEvidence');
   if (sel.state === 'ok') return { ...sel.fact, point: 'leg', source: sel.taskId, harvesterExecutionId: sel.executionId };
   return {

@@ -5,6 +5,8 @@ K8S-SERVICE-INTEGRATION-SPEC.md (the customer-half contract):
   - R1: a CLOSED resourceType allowlist (bare kinds; no `secrets`, no subresource arg,
         no raw path, no exec/log/proxy/etc. — those tools simply do not exist here).
   - K1: secrets reachable ONLY via list_secret_names (names + key names, NEVER values).
+  - compare_declared_fields (Config sources STEP 2): GET only; returns differing declared field PATHS, never values;
+        a Secret manifest is never fetched. The pure logic is declared_compare.py (tested without a cluster).
   - §6.5 DENIAL CHANNEL: an out-of-policy request returns an MCP `isError:true` tool
         result (via ToolError), NOT a thrown/transport error — so a confined harvest
         stays success:true and the harness does not self-degrade.
@@ -27,6 +29,8 @@ from fastmcp.exceptions import ToolError
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 from kubernetes.dynamic import DynamicClient
+
+from declared_compare import CompareRefusal, compare_manifest
 
 # ── R1: the CLOSED resourceType allowlist (bare kinds → (api_version, kind)) ──
 # `secrets` is intentionally ABSENT (use list_secret_names). No subresources, no raw path.
@@ -70,9 +74,9 @@ def _validate(resource_type: str, namespace: str, name: str | None = None):
             f"Allowed: {sorted(RESOURCE_MAP)}. (secrets -> use list_secret_names; "
             f"no exec/log/proxy/raw/subresource access exists.)"
         )
-    if not NS_RE.match(namespace or "") or len(namespace) > 253:
+    if not NS_RE.fullmatch(namespace or "") or len(namespace) > 253:
         raise ToolError(f"namespace '{namespace}' is not a valid single RFC1123 name (no -A / wildcards).")
-    if name is not None and (not NS_RE.match(name) or len(name) > 253):
+    if name is not None and (not NS_RE.fullmatch(name) or len(name) > 253):
         raise ToolError(f"name '{name}' is not a valid RFC1123 name.")
 
 
@@ -145,6 +149,52 @@ def list_secret_names(namespace: str) -> dict:
             for s in secs.items]}
     except ApiException as e:
         raise ToolError(f"k8s API error ({e.status}): {e.reason}")
+
+
+# ── Config sources STEP 2 (Group K1): the declared-field compare. GET only — no list, no patch, no dry-run. ──
+# (apiVersion, kind) -> resourceType, derived from the SAME closed allowlist; `Secret` is absent from it and is also
+# refused by name inside the compare, so a Secret manifest is never fetched.
+_KIND_TO_RESOURCE = {v: k for k, v in RESOURCE_MAP.items()}
+
+
+def _get_live(resource_type: str, _label: str, namespace: str, name: str):
+    """ONE get for the compare. Never raises: ("found", obj) | ("absent", None) | ("invalid", None) | ("error", text)."""
+    if (not NS_RE.fullmatch(namespace or "") or len(namespace) > 253
+            or not NS_RE.fullmatch(name or "") or len(name) > 253):
+        return ("invalid", None)
+    api_version, kind = RESOURCE_MAP[resource_type]
+    try:
+        res = _dyn.resources.get(api_version=api_version, kind=kind)
+        return ("found", _strip(res.get(name=name, namespace=namespace).to_dict()))
+    except ApiException as e:
+        if e.status == 404:
+            return ("absent", None)
+        # sec-ops F5: only an HTTP status from the API server is passed on — never a client/TLS message (it can name the host)
+        status = e.status if isinstance(e.status, int) and 400 <= e.status <= 599 else None
+        return ("error", f"api status {status}" if status else None)
+    except Exception:  # noqa: BLE001 — the compare names the failure; it never becomes a difference
+        return ("error", None)
+
+
+@mcp.tool()
+def compare_declared_fields(manifest: str, defaultNamespace: str | None = None,
+                            redactedMarker: str | None = None) -> dict:
+    """Compare a manifest file's DECLARED fields with the live objects it names (read-only: one get per object).
+
+    Returns, per object, the declared field PATHS whose live value differs — never a value, declared or live.
+    Fields the manifest does not state are not read out. A Secret is never fetched. A kustomization, a Helm values
+    file or a non-allowlisted kind is `not-compared` with a reason. `redactedMarker`: a declared string containing
+    it is listed as `redactedNotCompared` instead of compared.
+    """
+    if defaultNamespace is not None and (not NS_RE.fullmatch(defaultNamespace) or len(defaultNamespace) > 253):
+        raise ToolError(f"defaultNamespace '{defaultNamespace}' is not a valid single RFC1123 name.")
+    try:
+        return compare_manifest(manifest, _KIND_TO_RESOURCE, _get_live,
+                                default_namespace=defaultNamespace, redacted_marker=redactedMarker)
+    except CompareRefusal as e:
+        raise ToolError(f"compare refused: {e}")  # §6.5: a denial is an isError RESULT, never a throw
+    except Exception:  # noqa: BLE001 — sec-ops F1: nothing the manifest holds may escape as a transport error
+        raise ToolError("compare refused: the manifest could not be compared")
 
 
 def _strip(obj):

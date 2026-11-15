@@ -19,6 +19,8 @@
  */
 import { Prisma } from '@prisma/client';
 import { extractDeclaredFiles, withDeviceEvidenceOnly, type ExtractedFile, type ExtractedRefusal } from '@/lib/agents/harness/held-bytes/extract';
+import { withConfigSourcesScope } from '@/lib/agents/harness/held-bytes/config-source-scope';
+import type { LegConfigSourcesResolution } from '@/lib/agents/harness/config-sources-read';
 import type { DeviceReadScope } from '@/lib/agents/harness/held-bytes/device-read-scope';
 import {
   checkLegacyText,
@@ -115,6 +117,9 @@ export function prepareHeldCapture(args: {
   /** held-network step 3 batch 2b (P3/P4): the device-read scope — present ⇔ the owning leg declares Device sources (built by
    *  device-read-scope.ts from the leg's declaration + these records). Absent ⇒ no device-read lane (every non-network capture). */
   deviceRead?: DeviceReadScope | null;
+  /** Config sources STEP 2: the leg's governing Config-sources declaration — present ⇔ the owning leg declares Config sources today.
+   *  A Git file is then held only when it is a declared `git-file` line (config-source-scope.ts). Absent ⇒ unchanged. */
+  configSources?: LegConfigSourcesResolution | null;
 }): HeldCapturePlan | null {
   if (!isHeldCaptureEnabled()) return null;
   const t0 = Date.now();
@@ -123,11 +128,11 @@ export function prepareHeldCapture(args: {
     if (!Array.isArray(records) || records.length === 0) return null;
     // held-network step 3 push 2 (owner Phase-0 §4b): ONE held base per device — a device whose declared Git file is held here
     // keeps its device read as evidence only (withDeviceEvidenceOnly; a no-op off a Device-sources leg).
-    const ex = withDeviceEvidenceOnly(extractDeclaredFiles(records, args.heldTable?.table ?? undefined, {
+    const ex = withConfigSourcesScope(withDeviceEvidenceOnly(extractDeclaredFiles(records, args.heldTable?.table ?? undefined, {
       gitFileSourceLeg: args.gitFileSourceLeg === true, live: args.live === true,
       unavailableShas: args.heldTable?.unavailableShas, invalidShas: args.heldTable?.invalidShas,
       ...(args.deviceRead ? { deviceRead: args.deviceRead } : {}),
-    }), args.deviceRead);
+    }), args.deviceRead), args.configSources);
     // held-network step 3 batch 2b: device-lane context counts — a journal fact only when non-zero (no other capture's lines move).
     if (ex.stats.notAConfigRead + ex.stats.deviceLaneFailed > 0) {
       args.logger.info?.({ stats: { notAConfigRead: ex.stats.notAConfigRead, deviceLaneFailed: ex.stats.deviceLaneFailed } },

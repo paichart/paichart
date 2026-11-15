@@ -51,6 +51,9 @@ import { computeSelfSupersession } from './execution-selection';
 import { stampExecutionNets } from './execution-nets';
 import { resolveOwningLegProtocol, heldCaptureTakesDeviceScope, type OwningLegResolution } from '@/lib/agents/harness/held-bytes/variant';
 import { readLegDeviceSources } from '@/lib/agents/harness/device-sources-read';
+import { readLegConfigSources } from '@/lib/agents/harness/config-sources-read';
+import { runLegPlatformDrift } from './platform-drift';
+import { liveEvidenceVersionApplies } from '@/lib/agents/harness/live-evidence';
 import { buildDeviceReadScope } from '@/lib/agents/harness/held-bytes/device-read-scope';
 import { runEditApplicationStep, recountEditApplication, resolveHeldFilesFromStore, isEditStepEligible, arbitrateReflectionPass, type EditStepResult } from './held-edit-step';
 import { collectR10EchoSources } from '@/lib/agents/harness/redact-artifact-secrets';
@@ -541,10 +544,23 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
       ? await readLegDeviceSources(prisma as never, owningLeg) : null;
     // VALUE-LEG-GIT (G2-b): a VALUE leg never holds — its declaration feeds the device facts (primed below), never capture's scope.
     const captureDeviceSources = legDeviceSources && heldCaptureTakesDeviceScope(owningLeg) ? legDeviceSources : null;
+    // Config sources STEP 2: the leg's declared Config sources — ONE read, only on a Config-sources leg (none until a protocol's
+    // Config-sources text ships: `configSourceProtocol` is absent on every resolution, so nothing is read and capture is unchanged).
+    const legConfigSources = (owningLeg?.kind === 'leg' || owningLeg?.kind === 'self') && owningLeg.configSourceProtocol
+      ? await readLegConfigSources(prisma as never, owningLeg) : null;
     const heldPlan = prepareHeldCapture({ toolCallResults, task: { id: task.id, povId: task.povId }, logger, heldTable, live: true,
       echoSourceText: finalResponse ?? null, // R10-V8-RESIDUALS (a): part of the persist's echo source
       ...(captureDeviceSources ? { deviceRead: buildDeviceReadScope(captureDeviceSources, toolCallResults) } : {}),
+      ...(legConfigSources ? { configSources: legConfigSources } : {}),
       gitFileSourceLeg: (owningLeg?.kind === 'leg' || owningLeg?.kind === 'self') && owningLeg.gitFileSource === true }); // held-k8s 1b-scope (SYNTHESIS v3 §6.2)
+    // Config sources STEP 2 slice 3b: the PLATFORM's Git-vs-live drift calls — only on a Harvester of a Config-sources leg with a
+    // parsed declaration (`undefined` everywhere else: nothing is called, nothing is stamped). After the capture is PLANNED (the
+    // held bytes are the plan's own strings), before the nets, outside any transaction. Never throws.
+    const platformDriftCalls = await runLegPlatformDrift({
+      sources: legConfigSources, isHarvester: task.type !== 'PIPELINE' && HARVEST_LEAF_ROLE_RE.test(agentRole ?? ''),
+      versionApplies: liveEvidenceVersionApplies(protocolInjection),
+      heldFiles: heldPlan?.files ?? [], toolCalls: toolCallResults, runOwnerId: userId, executionId, logger,
+    });
 
     // Token usage — 0.5b: computed AFTER the #90 retry fold so result.json / logs / persist agree.
     // Raw-sum semantic: 0 is a legitimate fact.
@@ -756,6 +772,8 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
       logger,
       owningLeg,
       ...(legDeviceSources ? { deviceSources: legDeviceSources } : {}),
+      ...(legConfigSources ? { configSources: legConfigSources } : {}),
+      ...(platformDriftCalls !== undefined ? { platformDriftCalls } : {}),
       ...(heldStamps ? { held: heldStamps } : {}),
     }, resultJson as Record<string, unknown>);
 

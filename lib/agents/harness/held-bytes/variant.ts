@@ -129,6 +129,54 @@ export function deviceSourceContractKeyOf(protocol: string | null | undefined): 
   return protocol ? DEVICE_SOURCE_LANES[canonicalProtocolName(protocol)]?.contractKey ?? null : null;
 }
 
+// ── Config sources STEP 2 (owner decision (b), 2026-11-15): Kubernetes — and later observability and Terraform — declare their sources
+// in a SEPARATE table under a SEPARATE contract field, `interfaceContract.configSources["<token>"]`. They are NEVER added to
+// DEVICE_SOURCE_LANES: membership there makes a protocol a network Device-sources leg everywhere (the network kinds, the device read
+// record, device-read capture, the lane forces, the device facts, the gate/canary/lab tooling). Steps 3 and 4 add rows HERE only.
+// Pinned by scripts/test-config-sources.ts: the two tables share no protocol and no contract key.
+export type ConfigSourceLane = 'change';
+/** The ONE table: protocol (canonical long form) → its lane and its key under `interfaceContract.configSources`. */
+export const CONFIG_SOURCE_LANES: Readonly<Record<string, { lane: ConfigSourceLane; contractKey: string }>> = Object.freeze({
+  [canonicalProtocolName('kubernetes-gitops')]: { lane: 'change', contractKey: 'kubernetes-gitops' },
+});
+/** Rows whose protocol TEXT does not carry the `## Config sources` section yet (the HELD_JOIN_AWAITING_TEXT pattern): the row exists
+ *  so the code can ship first, and every consumer treats the protocol as NOT a Config-sources protocol until its text commit removes it
+ *  from this list. kubernetes-gitops leaves at 1.19.0. */
+export const CONFIG_SOURCE_AWAITING_TEXT: readonly string[] = Object.freeze([canonicalProtocolName('kubernetes-gitops')]);
+/** The protocols whose legs declare a `## Config sources` block TODAY (the table minus the rows awaiting their text). */
+export const CONFIG_SOURCE_PROTOCOLS: readonly string[] = Object.freeze(
+  Object.keys(CONFIG_SOURCE_LANES).filter((p) => !CONFIG_SOURCE_AWAITING_TEXT.includes(p)));
+
+/** Exhaustiveness guard (LL-CS-05): a new lane added to `ConfigSourceLane` fails to compile at every switch that uses it. */
+export function assertNeverConfigLane(lane: never): never {
+  throw new Error(`config-source lane not handled: ${String(lane)}`);
+}
+
+/** The Config-sources lane of a protocol, or null when it declares none today (not in the table, or awaiting its text). */
+export function configSourceLaneOf(protocol: string | null | undefined): ConfigSourceLane | null {
+  if (!protocol) return null;
+  const p = canonicalProtocolName(protocol);
+  return CONFIG_SOURCE_PROTOCOLS.includes(p) ? CONFIG_SOURCE_LANES[p].lane : null;
+}
+
+/** The leg's key under `interfaceContract.configSources` (null when its protocol declares no Config sources today). */
+export function configSourceContractKeyOf(protocol: string | null | undefined): string | null {
+  if (!protocol) return null;
+  const p = canonicalProtocolName(protocol);
+  return CONFIG_SOURCE_PROTOCOLS.includes(p) ? CONFIG_SOURCE_LANES[p].contractKey : null;
+}
+
+/** Is this leg a Config-sources leg TODAY (its protocol is in the table and its text has shipped)? */
+export function isConfigSourceLeg(leg: { title?: string | null; metadata?: unknown }): boolean {
+  return configSourceLaneOf(resolveTaskProtocol(leg).protocol) !== null;
+}
+/** The Config-sources marker, spread into an owning-leg resolution: `{}` on every leg that is not one, so every existing
+ *  resolution keeps its exact shape (and the whole field is absent while every row awaits its text). */
+function configSourceField(leg: { title?: string | null; metadata?: unknown }): { configSourceProtocol?: string } {
+  const p = resolveTaskProtocol(leg).protocol;
+  return p && configSourceLaneOf(p) !== null ? { configSourceProtocol: canonicalProtocolName(p) } : {};
+}
+
 /** G4-c (inert by DECLARATION): a value leg is a Device-sources leg only when its first-execution snapshot exists — and the snapshot is
  *  taken for a value leg only when it declares a block (prepare-task-for-execution.ts). No snapshot ⇒ today's path, byte-identical. A
  *  change leg keeps its rule: its protocol decides (a missing snapshot there is a named fail-closed state, device-sources-read.ts). */
@@ -155,11 +203,13 @@ export function deviceSourceLaneOfLeg(leg: { title?: string | null; metadata?: u
 export type OwningLegResolution =
   | { kind: 'self'; legId: string; heldCapable: boolean; /** held-k8s 1b-scope; absent ⇒ false */ gitFileSource?: boolean;
       /** held-network step 3 batch 2b: the leg declares Device sources (DEVICE_SOURCE_PROTOCOLS); absent ⇒ false */ deviceSource?: boolean;
-      /** VALUE-LEG-GIT: present ONLY on a value-lane Device-sources leg (`'value'`); absent ⇒ the change lane */ deviceSourceLane?: 'value' }
+      /** VALUE-LEG-GIT: present ONLY on a value-lane Device-sources leg (`'value'`); absent ⇒ the change lane */ deviceSourceLane?: 'value';
+      /** Config sources STEP 2: present ⇔ the leg declares Config sources today — its protocol (canonical long name) */ configSourceProtocol?: string }
   | { kind: 'leg'; legId: string; heldCapable: boolean; /** the LEAF's own stage, read here (the step's binding check) */ ownStageId: string;
       /** held-k8s 1b-scope: the leg may read a Git file source; absent ⇒ false */ gitFileSource?: boolean;
       /** held-network step 3 batch 2b: the leg declares Device sources; absent ⇒ false */ deviceSource?: boolean;
-      /** VALUE-LEG-GIT: present ONLY on a value-lane Device-sources leg (`'value'`); absent ⇒ the change lane */ deviceSourceLane?: 'value' }
+      /** VALUE-LEG-GIT: present ONLY on a value-lane Device-sources leg (`'value'`); absent ⇒ the change lane */ deviceSourceLane?: 'value';
+      /** Config sources STEP 2: present ⇔ the leg declares Config sources today — its protocol (canonical long name) */ configSourceProtocol?: string }
   | { kind: 'no-leg'; reason: 'no-stage' | 'no-harness-task-id'; heldCapable: false }
   | { kind: 'could-not-check'; reason: 'read-threw' | 'leg-row-missing' | 'task-row-missing'; heldCapable: false };
 
@@ -184,7 +234,7 @@ export async function resolveOwningLegProtocol(
   db: Db,
   task: { id: string; type?: string | null; title?: string | null; metadata?: unknown },
 ): Promise<OwningLegResolution> {
-  if (task.type === 'PIPELINE') return { kind: 'self', legId: task.id, heldCapable: isHeldCapableLeg(task), gitFileSource: isGitFileSourceLeg(task), deviceSource: isDeviceSourceLeg(task), ...valueLaneField(task) };
+  if (task.type === 'PIPELINE') return { kind: 'self', legId: task.id, heldCapable: isHeldCapableLeg(task), gitFileSource: isGitFileSourceLeg(task), deviceSource: isDeviceSourceLeg(task), ...valueLaneField(task), ...configSourceField(task) };
   try {
     const own = (await db.task.findUnique({ where: { id: task.id }, select: { stageId: true } })) as { stageId: string | null } | null;
     if (!own) return { kind: 'could-not-check', reason: 'task-row-missing', heldCapable: false };
@@ -195,7 +245,7 @@ export async function resolveOwningLegProtocol(
     const leg = (await db.task.findUnique({ where: { id: legId }, select: { title: true, metadata: true } })) as
       { title: string | null; metadata: unknown } | null;
     if (!leg) return { kind: 'could-not-check', reason: 'leg-row-missing', heldCapable: false };
-    return { kind: 'leg', legId, heldCapable: isHeldCapableLeg(leg), ownStageId: own.stageId, gitFileSource: isGitFileSourceLeg(leg), deviceSource: isDeviceSourceLeg(leg), ...valueLaneField(leg) };
+    return { kind: 'leg', legId, heldCapable: isHeldCapableLeg(leg), ownStageId: own.stageId, gitFileSource: isGitFileSourceLeg(leg), deviceSource: isDeviceSourceLeg(leg), ...valueLaneField(leg), ...configSourceField(leg) };
   } catch {
     return { kind: 'could-not-check', reason: 'read-threw', heldCapable: false };
   }

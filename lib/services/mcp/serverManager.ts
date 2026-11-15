@@ -412,7 +412,11 @@ export class MCPServerManager extends EventEmitter {
     try {
       // Use MCP service to execute the tool
       const { mcpService } = await import('./mcpService');
-      const result = await mcpService.callTool(serverName, toolName, arguments_, options);
+      // sec-ops C7 (Config sources STEP 2): an EXPLICIT pick — this is the agent tool loop's route to mcpService, and it must
+      // never carry mcpService's platform-only `platformPurpose` option, whatever a caller's (structurally wider) object holds.
+      const result = await mcpService.callTool(serverName, toolName, arguments_, options
+        ? { sessionId: options.sessionId, userId: options.userId, timeout: options.timeout }
+        : undefined);
       
       // Update last activity
       serverInfo.lastActivity = new Date();

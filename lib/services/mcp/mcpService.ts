@@ -9,6 +9,7 @@ import { mcpLogger } from '@/lib/logger';
 import { attachGatewayMeta } from './gateway-meta';
 // WI-B10 (2026-10-23, design §10 A-1): the server-only held-eligibility fact rides beside the result like gateway meta.
 import * as heldEligibility from '../../mcp/server/config/held-eligibility';
+import { PLATFORM_DRIFT_PURPOSE, splitServicesCallArguments } from '../../mcp/server/config/platform-drift-call';
 
 // Dynamic imports for server-side only
 let Client: any = null;
@@ -365,6 +366,11 @@ export class MCPService {
        *  deliberately ignores it — an external SDK call has no toolContext, and a
        *  third-party server has no use for our execution id. Not a BC79 drop. */
       sessionId?: string;
+      /** PLATFORM CODE ONLY (Config sources STEP 2, sec-ops C7). Marks the one platform-initiated drift call
+       *  (`services` → `call` → `compare_declared_fields`, lib/mcp/server/config/platform-drift-call.js). EMBEDDED-ONLY, like
+       *  `sessionId`. Never set by the agent tool loop: serverManager.executeToolOnServer forwards an explicit pick of
+       *  `sessionId` / `userId` / `timeout` and nothing else. Never read from tool ARGUMENTS. Pinned: test-security-invariants §PD. */
+      platformPurpose?: 'platform-drift';
     }
   ): Promise<MCPToolResult> {
     try {
@@ -393,14 +399,25 @@ export class MCPService {
       userId?: string;
       timeout?: number;
       sessionId?: string;
+      platformPurpose?: 'platform-drift';
     }
   ): Promise<MCPToolResult> {
     try {
       mcpLogger.debug({ toolName }, 'Calling embedded tool');
 
+      // Config sources STEP 2 (sec-ops C7): the platform drift purpose exists on the tool context ONLY when platform code passed
+      // the option AND the whole call shape matches (services + action 'call' + the compare tool + a string manifest) — null
+      // otherwise, and then the call is an ordinary one. Read from `options`, never from `arguments_`.
+      const platformDriftSplit = options?.platformPurpose === PLATFORM_DRIFT_PURPOSE && toolName === 'services'
+        ? splitServicesCallArguments(arguments_, { platformPurpose: PLATFORM_DRIFT_PURPOSE })
+        : null;
+
       // Check token budget if user provided
       if (options?.userId) {
-        const estimatedTokens = this.estimateToolTokenUsage(toolName, arguments_);
+        // The per-request budget (MCP_WORKFLOW_MAX_TOKENS) is an LLM-context estimate of the ARGUMENTS; a held manifest above
+        // ~23 KB would be refused here with a throw. On the platform drift call the manifest is estimated as its summary
+        // (it is forwarded to a service, never read by a model). Every other call is estimated as before.
+        const estimatedTokens = this.estimateToolTokenUsage(toolName, platformDriftSplit ? platformDriftSplit.summarised : arguments_);
         const budgetCheck = tokenManager.checkBudget(
           estimatedTokens,
           options.userId,
@@ -468,6 +485,8 @@ export class MCPService {
         // options.sessionId (agentic-tool-loop :418 → serverManager → here). Surfacing it
         // lets agent.execute stamp retry provenance (triggeredBy.parentExecutionId).
         ...(options.sessionId ? { callingExecutionId: options.sessionId } : {}),
+        // sec-ops C7: server-set, beside callingExecutionId. The ONLY writer of `platformPurpose` on a tool context.
+        ...(platformDriftSplit ? { platformPurpose: PLATFORM_DRIFT_PURPOSE } : {}),
       } : undefined;
 
       const response = await embeddedMCPServer.callTool(toolName, arguments_, toolContext);

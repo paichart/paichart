@@ -1,6 +1,6 @@
 {
   "name": "k8s-rig-readonly",
-  "description": "Read-only Kubernetes state harvest for a kind cluster: list_resources / list_resource_names / get_resource (allowlisted kinds) + list_secret_names (metadata only, never values). Read-only by construction (verb-enum + RBAC). Out-of-policy calls return isError, not a throw. Rig service; static SA creds (not JWKS).",
+  "description": "Read-only Kubernetes state harvest for a kind cluster: list_resources / list_resource_names / get_resource (allowlisted kinds) + list_secret_names (metadata only, never values) + compare_declared_fields (differing declared field paths, never values; get only). Read-only by construction (verb-enum + RBAC). Out-of-policy calls return isError, not a throw. Rig service; static SA creds (not JWKS).",
   "endpoint": "https://k8s-lab.paichart.app/mcp",
   "category": "automation",
   "capabilities": {
@@ -146,6 +146,33 @@
               "type": "string",
               "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
               "maxLength": 253
+            }
+          }
+        }
+      },
+      {
+        "name": "compare_declared_fields",
+        "description": "Compare a manifest file's DECLARED fields with the live objects it names (read-only: one get per object, no list, no patch). Returns per object the declared field PATHS whose live value differs — never a value. Undeclared fields are not read out. A Secret is never fetched. A kustomization, Helm values file or non-allowlisted kind is not-compared with a reason. redactedMarker: a declared string containing it is listed as redactedNotCompared.",
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "manifest"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "manifest": {
+              "type": "string",
+              "maxLength": 262144
+            },
+            "defaultNamespace": {
+              "type": "string",
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+              "maxLength": 253
+            },
+            "redactedMarker": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 64
             }
           }
         }

@@ -240,6 +240,7 @@ export function buildReplayPrisma(snap: Snapshot, subs: ReplaySubstitution[] = [
     // raw tool results through it; without it both nets stamped their errorFact on every replayed Author (D1 went red).
     // `gitDeviceComparison` added 2026-10-26 (L-N2): the network Author TRANSCRIBES its Harvester's stamp through this read.
     // `liveEvidence` added 2026-11-04 (L-CS-a): the same transcription read for the Config-sources fact (inert until push 1a's enrichment).
+    // `gitLiveDrift` added 2026-11-15 (L-CS-K, Config sources STEP 2 slice 4): the Kubernetes Author TRANSCRIBES its Harvester's drift fact through this read.
     // `editApplication` / `reviewedEditDiff` added 2026-10-15 (Stage B G2): a held-variant leg's hoist and carrier read them; the lab
     // runs a variant arm's leg nets on the REBOUND leg, where they apply (same literal projection shape as the others).
     $queryRaw: async (stringsIn: TemplateStringsArray | { strings: readonly string[]; values: readonly unknown[] }, ...valuesIn: unknown[]) => {
@@ -265,7 +266,7 @@ export function buildReplayPrisma(snap: Snapshot, subs: ReplaySubstitution[] = [
           return [{ description: row.description ?? null, contract, snapshot: (row.metadata as any)?.deviceSourcesSnapshot ?? null }];
         }
       }
-      const m = sql.match(/^SELECT \(content::jsonb\)->>'(finalResponse|rollbackContainment|derivationContainment|reviewerVerdict|toolCalls|editApplication|reviewedEditDiff|gitDeviceComparison|liveEvidence)' AS v FROM agent_artifacts WHERE name = 'result\.json' AND content LIKE '\{%' AND "executionId" = \$\? ORDER BY "createdAt" DESC LIMIT 1$/);
+      const m = sql.match(/^SELECT \(content::jsonb\)->>'(finalResponse|rollbackContainment|derivationContainment|reviewerVerdict|toolCalls|editApplication|reviewedEditDiff|gitDeviceComparison|liveEvidence|gitLiveDrift)' AS v FROM agent_artifacts WHERE name = 'result\.json' AND content LIKE '\{%' AND "executionId" = \$\? ORDER BY "createdAt" DESC LIMIT 1$/);
       if (!m || values.length !== 1) throw new ReplayStubUnsupported(`$queryRaw ${sql.slice(0, 120)}`);
       queries.push(`$queryRaw ->>${m[1]} executionId=${String(values[0])}`);
       const art = order(artifacts.filter((a) => a.name === 'result.json' && a.executionId === values[0] && String(a.content).startsWith('{')), { createdAt: 'desc' })[0];

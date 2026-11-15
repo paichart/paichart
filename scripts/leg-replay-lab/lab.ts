@@ -20,7 +20,7 @@
  *   npm run lab:leg-replay -- vlg-score --run <runDir>[,<runDir>] [--experiment <dir>]   # VALUE-LEG-GIT readings + do-not-ship proxies, $0
  *   npm run lab:leg-replay -- vlg-fixtures                                             # VALUE-LEG-GIT: device pools + frozen harvest calls (cache/vlg/), cached snapshots only, $0
  *   npm run lab:leg-replay -- cs-fixtures --experiment <dir>                           # L-CS-N: PRE-redaction self-host device pool (rig per entry), identity + reversal + witness proved, $0
- *   npm run lab:leg-replay -- frozen-cmp --experiment <dir> --run <dryRunDir> [--only R] [--variants rb] [--dump]   # a base arm's Reviewer prompt = the frozen production rebuild, byte for byte, $0 (--dump: frozen.reviewer.*.md beside a differing cell)
+ *   npm run lab:leg-replay -- frozen-cmp --experiment <dir> --run <dryRunDir> [--only R] [--variants rb] [--dump] [--author]   # a base arm's Reviewer prompt = the frozen production rebuild, byte for byte, $0 (--dump: frozen.reviewer.*.md beside a differing cell)
  *   npm run lab:leg-replay -- csn-self-test [--experiment <dir>] [--mutate held-blind|held-loose|alloc-regex|alloc-blind|dv-regex|ref-blind|nopkg-blind|limit-blind|overlap-blind|reason-blind|void-blind|warn-blind]  # L-CS-N scorer, $0
  *   npm run lab:leg-replay -- csn-score --run <runDir>[,<runDir>] --experiment <dir>   # L-CS-N readings + do-not-ship proxies (score-csn.ts), $0
  *   npm run lab:leg-replay -- standing-self-test                                     # standing bench (golden/standing-bench.json): each frozen record reproduces its STORED (wrong) outcome, $0
@@ -107,6 +107,8 @@ import { heldVariantProtocolAt, snapshotWithVariantBinding, snapshotWithHeldJoin
 import { patchAuthorContext } from './chain';
 import { withComputedHarvesterComparison } from './device-comparison-patch';
 import { withComputedLiveEvidence, loadLiveEvidenceComputer } from './live-evidence-patch';
+import { withComputedConfigFacts, withFirstExecutionConfigSnapshot, configEntryFieldsFor, checkDriftPlantSpec, type DriftPlantSpec } from './config-sources-patch';
+import { armConfigSources } from './config-sources-arm';
 import { armKindGate, bindKindGate, resetKindGate, withArmKindGate, kindGateCheck, type ArmKindGate } from './kind-gate';
 import { buildEditApplicationFact } from '../../lib/agents/harness/held-bytes/edit-fact';
 import { editDiffEntryFields } from '../../lib/agents/harness/held-chain';
@@ -153,7 +155,7 @@ const RUNS_DIR = path.join(__dirname, 'runs');
  *  `scoring` on these nodes is score-k1.ts K1Scoring. */
 /** L-N1 (held-network step 2): `networkFixture` — the B4 device tier, B5 catalogue tier and B6 register refusal (network-fixtures.ts) in front of
  *  a HARVESTER node's recorded tier. */
-interface NodeSpec { /** GOLDEN-REVIEWER-BYTE-FIDELITY (a): this node's persisted held Author cells read its stored `editApplication` (the variant flag, per case; set by golden-build). */ persistedEditApplication?: boolean; /** VALUE-LEG-GIT L-VLG-a (value-lane.ts): simulate the Device-sources snapshot production's writer takes at the leg's FIRST execution, over the (input-edited) leg row. */ deviceSourcesSnapshot?: 'first-execution'; /** VALUE-LEG-GIT L-VLG-b: a frozen harvest (committed text + toolCalls) replaces a VALUE leg's stored Harvester, its device facts computed by the shipping nets. */ valueHarvest?: import('./value-lane').ValueHarvestSpec; /** L-CS-N (owner 2026-11-05): replace the frozen Harvester's calls by Git reads served from a fixture (git-harvest-plant.ts). */ harvestFromFixture?: import('./git-harvest-plant').HarvestFromFixture; /** L-CS-N ADDENDUM (h): replace the frozen Harvester's calls by a step-3 Harvester LAB SAMPLE's calls (git-harvest-plant.ts withSampleHarvest). */ harvestFromSample?: string; /** L-CS-N: re-stamp a PERSISTED (planted) Author purely over the arm's held files (the L-9 pure applier), as the edit step would. */ restampPersisted?: boolean; /** L-CS-N: score-csn.ts readings for this node (CsnScoring). */ csn?: import('./score-csn').CsnScoring; /** L-CS-N (ME-B3): the node's rows come from a self-host install — its cached snapshot must carry that provenance (and a node without it must not). */ provenance?: 'self-host'; /** L-CS-N: the stored verdict the provenance check must reproduce (R-FWA3: approved/92). */ provenanceExpect?: { approved: boolean; confidence: number }; /** ME-P2-6: arms of a planted node that DELIBERATELY run without the plant (named, never silent). */ unplantedArms?: string[]; networkFixture?: NetworkFixtureSpec; fileFixture?: string; fixturePlants?: string[]; harvesterSourceByVariant?: Record<string, string>; authorSourceByVariant?: Record<string, string>; reviewerBaseEdit?: string; diffMustShow?: string[]; architectOnly?: boolean; scoring?: import('./score-edits').NodeScoring | import('./score-k1').K1Scoring; id: string; authorExecutionId: string; kind: string; originalVersion?: string; variants: string[]; why?: string; authorPlant?: string; expect?: string; reviewerExecutionId?: string; ownerRowItemMap?: string; n?: number; nByVariant?: Record<string, number>; inputEdits?: string; harvesterOnly?: boolean; tools?: 'stub' | 'recorded' }
+interface NodeSpec { /** L-CS-K-a (Config sources STEP 2, config-sources-patch.ts): simulate the Config-sources snapshot production's writer takes at the leg's FIRST execution, over the (input-edited) leg row. Read only by an arm that composes the Config-sources text. */ configSourcesSnapshot?: 'first-execution'; /** L-CS-K-b: what the cluster service's compare tool ANSWERS the platform's drift call in this cell — a tool-shaped result file (the committed contract fixture by default) or a named call outcome. Never a fact: the call record and `gitLiveDrift` are computed by the shipping code. */ platformDrift?: DriftPlantSpec; /** GOLDEN-REVIEWER-BYTE-FIDELITY (a): this node's persisted held Author cells read its stored `editApplication` (the variant flag, per case; set by golden-build). */ persistedEditApplication?: boolean; /** VALUE-LEG-GIT L-VLG-a (value-lane.ts): simulate the Device-sources snapshot production's writer takes at the leg's FIRST execution, over the (input-edited) leg row. */ deviceSourcesSnapshot?: 'first-execution'; /** VALUE-LEG-GIT L-VLG-b: a frozen harvest (committed text + toolCalls) replaces a VALUE leg's stored Harvester, its device facts computed by the shipping nets. */ valueHarvest?: import('./value-lane').ValueHarvestSpec; /** L-CS-N (owner 2026-11-05): replace the frozen Harvester's calls by Git reads served from a fixture (git-harvest-plant.ts). */ harvestFromFixture?: import('./git-harvest-plant').HarvestFromFixture; /** L-CS-N ADDENDUM (h): replace the frozen Harvester's calls by a step-3 Harvester LAB SAMPLE's calls (git-harvest-plant.ts withSampleHarvest). */ harvestFromSample?: string; /** L-CS-N: re-stamp a PERSISTED (planted) Author purely over the arm's held files (the L-9 pure applier), as the edit step would. */ restampPersisted?: boolean; /** L-CS-N: score-csn.ts readings for this node (CsnScoring). */ csn?: import('./score-csn').CsnScoring; /** L-CS-N (ME-B3): the node's rows come from a self-host install — its cached snapshot must carry that provenance (and a node without it must not). */ provenance?: 'self-host'; /** L-CS-N: the stored verdict the provenance check must reproduce (R-FWA3: approved/92). */ provenanceExpect?: { approved: boolean; confidence: number }; /** ME-P2-6: arms of a planted node that DELIBERATELY run without the plant (named, never silent). */ unplantedArms?: string[]; networkFixture?: NetworkFixtureSpec; fileFixture?: string; fixturePlants?: string[]; harvesterSourceByVariant?: Record<string, string>; authorSourceByVariant?: Record<string, string>; reviewerBaseEdit?: string; diffMustShow?: string[]; architectOnly?: boolean; scoring?: import('./score-edits').NodeScoring | import('./score-k1').K1Scoring; id: string; authorExecutionId: string; kind: string; originalVersion?: string; variants: string[]; why?: string; authorPlant?: string; expect?: string; reviewerExecutionId?: string; ownerRowItemMap?: string; n?: number; nByVariant?: Record<string, number>; inputEdits?: string; harvesterOnly?: boolean; tools?: 'stub' | 'recorded' }
 interface Measure { name: string; kind: 'count' | 'expected-output-blocks'; regex?: string; flags?: string; contentRegex?: string; lineRegex?: string; why?: string }
 interface Experiment {
   label: string; n: number; flags: Record<string, string>;
@@ -395,6 +397,17 @@ async function applyValueLane(dir: string, node: NodeSpec, snap: Snapshot): Prom
   if (node.valueHarvest) { const r = await withValueHarvest(dir, s, node.valueHarvest); s = r.snap; report.valueHarvest = r.report; }
   return { snap: s, report };
 }
+/** L-CS-K-a: the node's first-execution Config-sources snapshot, on the snapshot copy, before every downstream build. Every arm
+ *  shares the copy: an arm below the Config-sources version never reads the snapshot key (config-sources-arm.ts), and the key is on
+ *  no prompt path (AUDIT_STRIP_KEYS) — pinned by LCK3 (the base arm's prompts are byte-identical with and without it). */
+function applyConfigSnapshot(node: NodeSpec, snap: Snapshot): { snap: Snapshot; report: Record<string, any> | null } {
+  if (node.platformDrift !== undefined) checkDriftPlantSpec(node.platformDrift, `${node.id}.platformDrift`);
+  if (!node.configSourcesSnapshot) return { snap, report: null };
+  if (node.configSourcesSnapshot !== 'first-execution') throw new Error(`${node.id}: configSourcesSnapshot must be 'first-execution'`);
+  const r = withFirstExecutionConfigSnapshot(snap);
+  if (r.report.state !== 'taken') throw new Error(`${node.id}: configSourcesSnapshot — ${r.report.state}`);
+  return { snap: r.snap, report: r.report };
+}
 export function armProtocolInjection(exp: Pick<Experiment, 'variants'>, v: string, protocol: { name: string; version: string | null }): { delta: { name: string; version: string } } {
   return { delta: armComposedProtocol(exp, v, protocol) };
 }
@@ -546,6 +559,7 @@ function persistedAuthorResult(snap: Snapshot, text: string, leafStamped: Record
     markerPresence: leafStamped.markerPresence ?? null, rollbackContainment: leafStamped.rollbackContainment ?? null, derivationContainment,
     toolLoop: { formCheck: ares.toolLoop?.formCheck ?? null },
     validationToolCalls: leafStamped.validationToolCalls, gitDeviceComparison: leafStamped.gitDeviceComparison, liveEvidence: leafStamped.liveEvidence,
+    gitLiveDrift: leafStamped.gitLiveDrift, // L-CS-K: the Author's transcription (undefined off a Config-sources arm ⇒ the frozen entry stands)
   };
 }
 
@@ -697,6 +711,8 @@ interface Job { node: NodeSpec; variant: string; protocol: ProtocolText; snap: S
   network?: LoadedNetworkFixture | null;
   /** L-CS-N: the arm's bound `live-read` kind gate (null ⇒ the tree's constant). */
   kindGate?: ArmKindGate | null;
+  /** L-CS-K: the experiment dir (a harvester node's `platformDrift` result files resolve against it). */
+  expDir?: string;
   /** O-2(a): the protocol injection production would stamp on this arm's executions (set for every job after prepare). */
   armProtocolInjection?: { delta: { name: string; version: string } };
   /** 2026-11-10 (objective-of-record.ts): a requirements Reviewer's objective fetch source (null ⇒ not a requirements Reviewer). */
@@ -724,7 +740,8 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
     const { snap: snapE0, report: inputEditReport } = snapshotWithInputEdits(dir, node, rawSnap);
     // VALUE-LEG-GIT: the first-execution snapshot + the frozen value harvest (value-lane.ts), before every downstream build.
     const valueLane = await applyValueLane(dir, node, snapE0);
-    const snap0 = valueLane.snap;
+    const configSnap = applyConfigSnapshot(node, valueLane.snap);
+    const snap0 = configSnap.snap;
     const vlOpts = { legReads: isValueLaneNode(node) };
     // L-CS-N (owner 2026-11-05): a Git-only re-cast of the node's harvest (git-harvest-plant.ts) — on the copy, before every downstream build.
     const gitHarvest = node.harvestFromFixture ? await (await import('./git-harvest-plant')).withGitHarvest(snap0, dir, node.harvestFromFixture) : null;
@@ -746,7 +763,19 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
     const ares = parsedResult(snap.author)!;
     const rres = parsedResult(snap.reviewer)!;
     const objective = objectiveOfRecordSource(snap, rawLegDescription);
-    const leaf = await runAuthorLeafNets(snap, ares.agentRole, ares.finalResponse, snap.author.exec.id);
+    // CONTROL-HELD (Config sources STEP 2 slice 4, plan §2.2a last paragraph): a persisted HELD Author's leaf nets were handed its
+    // `editApplication` stamp and the BASE-held handles by the core (execution-core.ts heldStamps), and rollbackContainment reads them
+    // (`restore-is-held-base`). The control ran without them, so it recomputed `no-restore-blocks` and printed ✗ on every held cell —
+    // a false alarm that taught readers to skip the line. It now hands the nets PRODUCTION's own record: the stored stamp, and the
+    // handles of the `heldView` production put on the Author's frozen Harvester entry (never the lab store's — a control compares
+    // with what ran). A cell with no stored stamp, or whose frozen entry carries no held view, runs exactly as before.
+    const frozenHeldView = (Array.isArray(snap.author.exec.config?.inputContext?.chainedFrom) ? snap.author.exec.config!.inputContext.chainedFrom : [])
+      .find((e: any) => e?.agentRole === 'infra_state_harvester')?.heldView;
+    // Only a RENDERED held file has a base (an item carrying a named `state` — `unheld`, `view-not-rendered` — holds none; TF-TL4).
+    const controlHandles = Array.isArray(frozenHeldView) ? frozenHeldView.filter((x: any) => x && !x.state).map((x: any) => x.handle).filter((x: unknown): x is string => typeof x === 'string') : [];
+    const controlHeld = ares.editApplication && typeof ares.editApplication === 'object' && Array.isArray(frozenHeldView)
+      ? { editApplication: ares.editApplication as Record<string, unknown>, baseHeldHandles: controlHandles } : undefined;
+    const leaf = await runAuthorLeafNets(snap, ares.agentRole, ares.finalResponse, snap.author.exec.id, undefined, controlHeld);
     // L-R2 (2026-10-09): a net that does not APPLY to this role (markerPresence / rollbackContainment exclude ^requirements_)
     // and that production did not stamp either is a PASS, reported as n/a — not a mismatch and not a silent null===null.
     // E1 (2026-10-13 02:56:30Z, VERBATIM-QUOTE-OMISSION): every checked rollbackContainment stamp gains `witness`, and its
@@ -797,6 +826,7 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
       controls: {
         leafNetsReproducePersisted: { markerPresence: factEq('markerPresence'), rollbackContainment: factEq('rollbackContainment'), errors: leaf.errors,
           rollbackContainmentPreE1: !!ares.rollbackContainment && !('witness' in ares.rollbackContainment),
+          heldAware: !!controlHeld,
           notApplicable: ['markerPresence', 'rollbackContainment'].filter(leafNa) },
         chainPatchIdentity: rFrozen.user === rPatched.user,
         shippingParserReproducesPersistedVerdict: !!rv && !!persistedVerdict && rv.approved === persistedVerdict.approved && JSON.stringify(rv.blocking) === JSON.stringify(persistedVerdict.blocking),
@@ -811,6 +841,7 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
       measuresOnPersisted: computeMeasures(ares.finalResponse, exp.measures),
       ...(gitHarvest ? { gitHarvest: gitHarvest.report } : {}), ...(sampleHarvest ? { sampleHarvest: sampleHarvest.report } : {}),
       ...(valueLane.report ? { valueLane: valueLane.report } : {}),
+      ...(configSnap.report ? { configSourcesSnapshot: configSnap.report } : {}),
       // 2026-11-10: the requirements Reviewer's objective fetch — served from its stored answer, or the stub with the reason BY NAME.
       objectiveOfRecord: objective.state === 'not-requirements-reviewer' ? null : objectiveSummary(objective),
       variants: {},
@@ -864,7 +895,9 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
       let heldReport: Record<string, any> | null = null;
       let heldItems: Array<Record<string, any>> = [];
       if (heldSpec) {
-        const store = buildLabHeldStore(snap);
+        // L-CS-K (Config sources STEP 2): on an arm that composes the Config-sources text the capture is scoped to the leg's DECLARED
+        // Git files (null on every other arm ⇒ the store exactly as before).
+        const store = buildLabHeldStore(snap, armConfigSources(snap.leg, armProtocolInjection(exp, v, protocol)));
         const heldFields = await labHeldViewFields(store);
         const bound0 = heldArmBinding(snap, heldArm!);
         // L-N2-c: a network leg whose stored Harvester predates gitDeviceComparison gets the stamp computed by the shipping function,
@@ -874,9 +907,14 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
         // and unchanged while lib/agents/harness/live-evidence.ts is absent — see live-evidence-patch.ts). Under the arm's kind gate.
         const le = withComputedLiveEvidence(cmp.snap, undefined, { protocol: armComposedProtocol(exp, v, protocol) });
         if (exp.requireLiveEvidence && le.report.state === 'not-built') throw new Error(`${node.id}/${v}: requireLiveEvidence — lib/agents/harness/live-evidence.ts is not in this tree (slot S-2: run on the merged push-1a tree)`);
-        const bound = { ...bound0, snap: le.snap };
+        // L-CS-K-c: a Config-sources leg's four Harvester stamps (configSourceReads, liveEvidence Config arm, platformDriftCalls,
+        // gitLiveDrift) from the SHIPPING nets, the drift call record made with a FIXTURE caller (no service is called). A no-op that
+        // returns the snapshot object itself off a Config-sources leg and on every arm below the Config-sources version.
+        const cs = await withComputedConfigFacts(le.snap, { protocol: armComposedProtocol(exp, v, protocol), drift: node.platformDrift ?? null, dir });
+        const bound = { ...bound0, snap: cs.snap };
         // L-CS-a: the Author chains the Harvester entry, and config_change_author ∈ LIVE_EVIDENCE_READERS — the computed stamp rides it.
-        const authorInputContext = patchAuthorContext(snap, le.fact ? { ...heldFields, liveEvidence: le.fact } : heldFields);
+        // L-CS-K: the Config arm's liveEvidence rides it the same way (gitLiveDrift never reaches the Author — the chainer's reader set).
+        const authorInputContext = patchAuthorContext(snap, { ...(le.fact ? { ...heldFields, liveEvidence: le.fact } : heldFields), ...configEntryFieldsFor('config_change_author', cs.facts) });
         const armFlag2 = heldSpec.heldEditCorrection;
         if (typeof armFlag2 === 'boolean' && exp.flags?.[HELD_EDIT_CORRECTION_FLAG] !== undefined) throw new Error(`variant ${v} sets heldEditCorrection while experiment.flags sets ${HELD_EDIT_CORRECTION_FLAG} — one lever, two sources`);
         held = { store, snapV: bound.snap, protocolName: bound.protocolName, authorInputContext,
@@ -886,7 +924,8 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
         heldItems = items;
         heldReport = { binding: bound.report as VariantBindingReport, harvesterExecutionId: store.harvesterExecutionId, refs: store.refs.length, refusals: store.refusals.map((r) => r.refusal),
           handles: items.map((i) => ({ handle: i.handle, path: i.path, lines: i.lineCount ?? null, state: i.state ?? 'rendered', viewChars: typeof i.viewText === 'string' ? i.viewText.length : null, rewrittenLines: i.rewrittenLines?.length ?? 0 })),
-          correction: typeof armFlag2 === 'boolean' ? `arm:${armFlag2 ? 'on' : 'off'}` : `env:${held.correctionEnabled ? 'on' : 'off'}`, gitDeviceComparison: cmp.report, liveEvidence: le.report };
+          correction: typeof armFlag2 === 'boolean' ? `arm:${armFlag2 ? 'on' : 'off'}` : `env:${held.correctionEnabled ? 'on' : 'off'}`, gitDeviceComparison: cmp.report, liveEvidence: le.report,
+          ...(cs.report.state !== 'not-config-source-leg' && cs.report.state !== 'not-stamped-version' ? { configSources: cs.report } : {}) };
         fs.mkdirSync(path.join(nodeDir, v), { recursive: true });
         // By HANDLE (the scorer reads them by handle): the held base (B) and the view the Author is shown (V).
         for (const it of items) {
@@ -952,6 +991,7 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
           markerPresence: leafS.stamped.markerPresence ?? null, rollbackContainment: leafS.stamped.rollbackContainment ?? null, derivationContainment: null,
           toolLoop: { formCheck: sa.formCheck ?? null }, editApplication: stamp.fact,
           validationToolCalls: leafS.stamped.validationToolCalls, gitDeviceComparison: leafS.stamped.gitDeviceComparison, liveEvidence: leafS.stamped.liveEvidence,
+          gitLiveDrift: leafS.stamped.gitLiveDrift,
         };
         const ctx = patchReviewerContext(held.snapV, { executionId: chainExecutionId, ...authorResult, editDiff } as any);
         const reviewer = withModel(await rebuildPrompt(held.snapV, 'reviewer', protocol, { inputContextOverride: ctx, templatePromptOverride: reviewerTemplate, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective }), reviewerModel, reviewerEffort);
@@ -1044,7 +1084,7 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
         // L-CS-a (golden companion, 2026-11-05): where the arm's Harvester carries the COMPUTED liveEvidence (only on a released-version
         // arm — every earlier experiment reads `not-built`/`not-stamped-version`, so its bytes stand), the persisted Author's leaf nets read
         // the bound snapshot that carries it, or the Author transcription reads `harvester-not-stamped` (found on the golden dry run).
-        const leSnap = heldReport?.liveEvidence?.state === 'computed' ? held!.snapV : snap;
+        const leSnap = heldReport?.liveEvidence?.state === 'computed' || heldReport?.configSources?.state === 'computed' ? held!.snapV : snap;
         const leafP = peaOpt
           ? await runAuthorLeafNets(held!.snapV, ares.agentRole, plant.text, chainExecutionId, undefined, { editApplication: ares.editApplication, baseHeldHandles: heldItems.map((it) => String(it.handle)) }, armProtocolInjection(exp, v, protocol))
           : await runAuthorLeafNets(leSnap, ares.agentRole, plant.text, chainExecutionId, undefined, undefined, armProtocolInjection(exp, v, protocol), vlOpts);
@@ -1108,6 +1148,7 @@ function harvesterNodeInputs(dir: string, node: NodeSpec): { snap: Snapshot; inp
     if (r.report.state === 'already-snapshotted' || r.report.state === 'no-leg' || r.report.state === 'not-device-source-protocol') throw new Error(`${node.id}: deviceSourcesSnapshot — ${r.report.state}`);
     snap = r.snap;
   }
+  snap = applyConfigSnapshot(node, snap).snap; // L-CS-K-a
   const bad = Object.keys(inputEditReport?.targets ?? {}).filter((t) => t === 'reviewer-task:description');
   if (bad.length) throw new Error(`${node.id}: a harvesterOnly node has no Reviewer — input edit target ${bad.join(', ')} refused`);
   const fixture = node.fileFixture ? loadFileFixture(path.resolve(dir, node.fileFixture), (node.fixturePlants ?? []).map((f) => path.resolve(dir, f))) : null;
@@ -1172,7 +1213,7 @@ async function prepareHarvester(exp: Experiment, dir: string, node: NodeSpec, va
       fidelityFailures: fid.filter((c) => c.ok === false && c.name !== 'protocolInjection.preambleChars' && c.name !== 'protocolInjection.delta').map((c) => `${c.name}: ${c.detail}`),
       notes: author.notes,
     };
-    jobs.push({ node, variant: v, protocol, snap, author, reviewerBase: null, reviewerTemplate: null, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective, reviewerModel: null, reviewerEffort: null,
+    jobs.push({ expDir: dir, node, variant: v, protocol, snap, author, reviewerBase: null, reviewerTemplate: null, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective, reviewerModel: null, reviewerEffort: null,
       persistedAuthor: null, requirementsFormCorrection: null, requirementsHarnessRow: null, checkAt: exp.variants[v]?.requirementsCheckAt ?? null,
       stored: node.tools === 'recorded' ? stored : null, held: null, authorOnly: false, fixture, network });
   }
@@ -1506,7 +1547,7 @@ async function run(args: Args) {
           markerPresence: leaf.stamped.markerPresence ?? null, rollbackContainment: leaf.stamped.rollbackContainment ?? null, derivationContainment: null,
           toolLoop: { formCheck: a.formCheck, ...(a.requirementsFormCheck ? { requirementsFormCheck: a.requirementsFormCheck } : {}) },
           ...(heldFact ? { editApplication: heldFact } : {}),
-          validationToolCalls: leaf.stamped.validationToolCalls, gitDeviceComparison: leaf.stamped.gitDeviceComparison, liveEvidence: leaf.stamped.liveEvidence,
+          validationToolCalls: leaf.stamped.validationToolCalls, gitDeviceComparison: leaf.stamped.gitDeviceComparison, liveEvidence: leaf.stamped.liveEvidence, gitLiveDrift: leaf.stamped.gitLiveDrift,
         };
         if (job.authorOnly) {
           // Stage B G1: the Author is scored mechanically; no Reviewer call, no chain.
@@ -1645,9 +1686,9 @@ export function sumSampleCosts(runDir: string): number {
  */
 async function architectHarvesterSource(exp: Experiment, dir: string, node: NodeSpec, snap: Snapshot, hsrc: string, opts: { heldArm?: boolean } = {}): Promise<{ ctx: Record<string, any>; report: Record<string, any>; sourceIsPersistedText: boolean;
   /** L-CS-N: a lab-sample harvest's served tool calls + its OWN leaf stamps (the held store and liveEvidence of a held Architect arm). */
-  sample?: { executionId: string; taskId: string; povId: string | null; toolCalls: unknown[]; liveEvidence: Record<string, unknown> | null; leg: Record<string, any> | null } }> {
+  sample?: { executionId: string; taskId: string; povId: string | null; toolCalls: unknown[]; liveEvidence: Record<string, unknown> | null; leg: Record<string, any> | null; text?: string; platformDrift?: DriftPlantSpec | null } }> {
   const frozenEntry = (snap.author.exec.config?.inputContext?.chainedFrom ?? []).find((e: any) => e?.agentRole === 'infra_state_harvester');
-  let sample: { executionId: string; taskId: string; povId: string | null; toolCalls: unknown[]; liveEvidence: Record<string, unknown> | null; leg: Record<string, any> | null } | undefined;
+  let sample: { executionId: string; taskId: string; povId: string | null; toolCalls: unknown[]; liveEvidence: Record<string, unknown> | null; leg: Record<string, any> | null; text?: string; platformDrift?: DriftPlantSpec | null } | undefined;
   if (!frozenEntry) throw new Error(`${node.id}: the Architect's frozen context has no Harvester entry`);
   let replayed: import('./chain').ReplayedAuthorResult;
   let report: Record<string, any>;
@@ -1671,7 +1712,7 @@ async function architectHarvesterSource(exp: Experiment, dir: string, node: Node
     // so its own stamp reads `device-sources-could-not-check`) — measured 2026-11-05 on the --fake-llm persisted run.
     const leSample = withComputedLiveEvidence({ ...hin.snap, childArtifacts: [] } as Snapshot, undefined, { protocol: armComposedProtocol(exp, hArm, hp) }, { toolCalls: (loaded.toolCalls ?? []) as unknown[] });
     sample = { executionId: loaded.sampleExecutionId, taskId: String(hin.snap.author.task.id), povId: (hin.snap.author.task.pov_id as string) ?? null,
-      toolCalls: (loaded.toolCalls ?? []) as unknown[], liveEvidence: leSample.fact, leg: hin.snap.leg };
+      toolCalls: (loaded.toolCalls ?? []) as unknown[], liveEvidence: leSample.fact, leg: hin.snap.leg, text: loaded.text, platformDrift: hNode.platformDrift ?? null };
     replayed = { executionId: loaded.sampleExecutionId, finalResponse: loaded.text, confidenceScore: loaded.confidenceScore,
       qualityMetrics: { totalTurns: loaded.turns ?? 0, hitMaxTurns: (loaded.turns ?? 0) >= ha.maxToolTurns, responseLength: loaded.text.length,
         toolCallSuccess: { total: loaded.toolCallCount, failed: loaded.toolCallFailed, succeeded: loaded.toolCallCount - loaded.toolCallFailed } },
@@ -1705,7 +1746,7 @@ async function prepareArchitect(exp: Experiment, dir: string, node: NodeSpec, va
   if (ares.agentRole !== 'infra_change_architect' && ares.agentRole !== 'derivation_architect') throw new Error(`${node.id}: architectOnly, but ${node.authorExecutionId} ran as ${ares.agentRole}`);
   if (ares.agentRole === 'derivation_architect' && node.harvesterSourceByVariant) throw new Error(`${node.id}: a value-leg Architect takes its harvest from valueHarvest, not harvesterSourceByVariant`);
   const vl = await applyValueLane(dir, node, snapE);
-  const snap = vl.snap;
+  const snap = applyConfigSnapshot(node, vl.snap).snap; // L-CS-K-a
   const nodeDir = path.join(out, node.id);
   fs.mkdirSync(nodeDir, { recursive: true });
   fs.writeFileSync(path.join(nodeDir, 'persisted.architect.md'), ares.finalResponse);
@@ -1753,21 +1794,29 @@ async function prepareArchitect(exp: Experiment, dir: string, node: NodeSpec, va
       const store = heldStore = buildLabHeldStoreFromResult({ executionId: sampleHarvest.executionId, taskId: sampleHarvest.taskId, povId: sampleHarvest.povId,
         resultJson: JSON.stringify({ toolCalls: sampleHarvest.toolCalls }), gitFileSourceLeg: !!snap.leg && isGitFileSourceLeg(snap.leg as never), deviceLeg: dl(snap.leg as never) });
       if (exp.requireLiveEvidence && !loadLiveEvidenceComputer()) throw new Error(`${node.id}/${v}: requireLiveEvidence — lib/agents/harness/live-evidence.ts is not in this tree`);
-      const fields: Record<string, unknown> = { ...labHeldIndexFields(store), ...(sampleHarvest.liveEvidence && typeof sampleHarvest.liveEvidence === 'object' ? { liveEvidence: sampleHarvest.liveEvidence } : {}) };
+      // L-CS-K: the sample's own Config stamps (its capture under the Config scope, the drift record by the H node's fixture caller).
+      if (JSON.stringify(sampleHarvest.platformDrift ?? null) !== JSON.stringify(node.platformDrift ?? null)) throw new Error(`${node.id}/${v}: platformDrift differs from the harvester node's — one harvest, one compare-tool answer`);
+      const csS = await withComputedConfigFacts(snap, { protocol: armComposedProtocol(exp, v, protocol), drift: node.platformDrift ?? null, dir },
+        { toolCalls: sampleHarvest.toolCalls, executionId: sampleHarvest.executionId, taskId: sampleHarvest.taskId, text: sampleHarvest.text ?? '' });
+      if (csS.store) heldStore = csS.store;
+      const fields: Record<string, unknown> = { ...labHeldIndexFields(csS.store ?? store), ...(sampleHarvest.liveEvidence && typeof sampleHarvest.liveEvidence === 'object' ? { liveEvidence: sampleHarvest.liveEvidence } : {}), ...configEntryFieldsFor(String(ares.agentRole), csS.facts) };
       asnap = heldArmBinding(snap, heldArm!).snap;
       ctx = { ...ctx!, chainedFrom: (ctx!.chainedFrom as any[]).map((e) => (e?.agentRole === 'infra_state_harvester' ? { ...e, ...fields } : e)) };
-      held = { harvesterExecutionId: store.harvesterExecutionId, index: fields.heldIndex, refusals: store.refusals.map((r) => r.refusal), liveEvidence: sampleHarvest.liveEvidence ? { state: 'sample-leaf-stamp', summary: (sampleHarvest.liveEvidence as any).summary ?? null } : { state: 'none' } };
+      held = { harvesterExecutionId: store.harvesterExecutionId, index: fields.heldIndex, refusals: (csS.store ?? store).refusals.map((r) => r.refusal), liveEvidence: sampleHarvest.liveEvidence ? { state: 'sample-leaf-stamp', summary: (sampleHarvest.liveEvidence as any).summary ?? null } : { state: 'none' },
+        ...(csS.facts ? { configSources: csS.report } : {}) };
     } else if (heldSpec) {
-      const store = heldStore = buildLabHeldStore(snap);
+      // L-CS-K: the Harvester's Config stamps (no-op off a Config-sources arm); its store is the capture under the Config scope.
+      const csA = await withComputedConfigFacts(snap, { protocol: armComposedProtocol(exp, v, protocol), drift: node.platformDrift ?? null, dir });
+      const store = heldStore = csA.store ?? buildLabHeldStore(snap);
       const cmp = withComputedHarvesterComparison(snap);
       // L-CS-a: infra_change_architect ∈ LIVE_EVIDENCE_READERS — the computed stamp rides the Harvester entry (context-chainer.ts).
       const le = withComputedLiveEvidence(snap, undefined, { protocol: armComposedProtocol(exp, v, protocol) });
       if (exp.requireLiveEvidence && le.report.state === 'not-built') throw new Error(`${node.id}/${v}: requireLiveEvidence — lib/agents/harness/live-evidence.ts is not in this tree (slot S-2)`);
       // L-N2-c: the chainer carries a CHECKED comparison to the Architect on the Harvester entry (context-chainer.ts GIT_DEVICE_COMPARISON_READERS).
-      const fields: Record<string, unknown> = { ...labHeldIndexFields(store), ...(cmp.fact && cmp.fact.checked === true ? { gitDeviceComparison: cmp.fact } : {}), ...(le.fact ? { liveEvidence: le.fact } : {}) };
+      const fields: Record<string, unknown> = { ...labHeldIndexFields(store), ...(cmp.fact && cmp.fact.checked === true ? { gitDeviceComparison: cmp.fact } : {}), ...(le.fact ? { liveEvidence: le.fact } : {}), ...configEntryFieldsFor(String(ares.agentRole), csA.facts) };
       asnap = heldArmBinding(snap, heldArm!).snap;
       ctx = patchHeldConsumerContext(snap.author.exec as any, fields);
-      held = { harvesterExecutionId: store.harvesterExecutionId, index: fields.heldIndex, gitDeviceComparison: cmp.report, liveEvidence: le.report } as any;
+      held = { harvesterExecutionId: store.harvesterExecutionId, index: fields.heldIndex, gitDeviceComparison: cmp.report, liveEvidence: le.report, ...(csA.facts ? { configSources: csA.report } : {}) } as any;
     }
     // NB1 blind-read fix (2026-11-07): the architect-only path applies the arm's templateEdits for its role, exactly as the normal path's
     // tplFor and the Harvester path do (it rendered the pinned template and dropped them — the derivation_architect BR-5 guidance never
@@ -1879,7 +1928,15 @@ async function runHarvesterSample(job: Job, i: number, sd: string, sample: Recor
     // logger that threw, so a Harvester sample reading a realistic large manifest would have errored instead of persisting.
     logger: LAB_PERSIST_LOGGER,
   } as any).toolCalls ?? []) as Array<Record<string, any>>;
-  const leaf = await runAuthorLeafNets(job.snap, job.author.role, a.finalResponse, hId, toolCalls, undefined, job.armProtocolInjection, { legReads: isValueLaneNode(job.node) });
+  // L-CS-K: on an arm that composes the Config-sources text, the platform's drift call record for THIS sample's own capture (the
+  // shipping capture under the Config scope + runPlatformDriftCalls with the node's fixture caller — no service is called), then the
+  // sample's four Config stamps from the shipping nets. Null facts on every other arm, and the leaf nets run exactly as before.
+  const cfg = await withComputedConfigFacts(job.snap, { protocol: job.armProtocolInjection?.delta ?? null, drift: job.node.platformDrift ?? null, dir: job.expDir ?? null },
+    { toolCalls, executionId: hId, taskId: String(job.snap.author.task.id), text: a.finalResponse });
+  const leaf = await runAuthorLeafNets(job.snap, job.author.role, a.finalResponse, hId, toolCalls, cfg.facts ? { platformDriftCalls: cfg.calls ?? null } : undefined, job.armProtocolInjection, { legReads: isValueLaneNode(job.node) });
+  if (cfg.facts) for (const k of ['liveEvidence', 'configSourceReads', 'platformDriftCalls', 'gitLiveDrift'] as const) {
+    if (JSON.stringify(leaf.stamped[k] ?? null) !== JSON.stringify(cfg.facts[k] ?? null)) throw new Error(`${job.node.id}/${job.variant} #${i}: the sample's ${k} stamp differs between the lever and the sample's own leaf nets`);
+  }
   const report = recorded ? recordedToolsReport(recorded.log, job.stored!) : null;
   const fixtureReport = fixtureServer ? fixtureToolsReport(fixtureServer.fixtureLog) : null;
   const networkReport = networkServer ? networkToolsReport(networkServer.netLog) : null;
@@ -1919,6 +1976,8 @@ async function runHarvesterSample(job: Job, i: number, sd: string, sample: Recor
     leafFacts: summarizeFacts(leaf.stamped), leafNetErrors: leaf.errors,
     // VALUE-LEG-GIT: the shipping device facts over this sample's calls (value lane: the leg row read through replay-prisma legReads).
     ...(isValueLaneNode(job.node) ? { deviceFacts: { deviceSourceReads: leaf.stamped.deviceSourceReads ?? null, gitDeviceComparison: leaf.stamped.gitDeviceComparison ?? null, liveEvidence: leaf.stamped.liveEvidence ?? null } } : {}),
+    // L-CS-K: the sample's Config-sources stamps + what the capture held and what the carrier would force (shipping functions only).
+    ...(cfg.facts ? { configFacts: { ...cfg.facts, report: cfg.report } } : {}),
     author: { confidence: a.confidenceScore, stopReason: a.finalStopReason, turns: a.turns, toolCalls: a.toolCalls, diagnosticRetryUsed: a.diagnosticRetryUsed, chars: a.finalResponse.length, durationMs: a.durationMs },
     calls: a.calls.map((c) => ({ role: 'harvester', ...c })),
     costUsd: a.costUsd,
@@ -2392,6 +2451,21 @@ if (require.main === module) {
           if ((!sys || !usr) && process.argv.includes('--dump')) { fs.writeFileSync(path.join(vd, 'frozen.reviewer.system.md'), fr.system); fs.writeFileSync(path.join(vd, 'frozen.reviewer.user.md'), fr.user); }
           console.log(`   ${sys && usr ? '✅' : '≠ '} ${nd.id}/${v}: reviewer.system.md ${sys ? 'identical' : 'differs'} · reviewer.user.md ${usr ? 'identical' : 'differs'} to the frozen production rebuild`);
         }
+        // --author (Config sources STEP 2 §2.2a, slice 4): the same proof for the cell's AUTHOR prompt — a persisted arm's saved
+        // author.system.md / author.user.md vs the frozen production rebuild of the Author (its stored inputContext, the arm's own
+        // protocol text). A lever that changes what the Author is shown (the held view, a Harvester-entry fact) where production
+        // does not is invisible in the Reviewer prompt; it is caught here. Printed on its own line so the Reviewer line is unchanged.
+        if (process.argv.includes('--author')) for (const v of (args.variants ?? nd.variants)) {
+          const vd = path.join(runDir, nd.id, v); if (!fs.existsSync(path.join(vd, 'author.user.md')) || !fs.existsSync(path.join(vd, 'protocol.md'))) continue;
+          if ((nd.authorSourceByVariant?.[v] ?? exp.variants[v]?.authorSource ?? 'live') !== 'persisted') continue; // a live arm's own levers (model, correction) are not production's Author
+          const pv = exp.variants[v]?.composedVersion ?? protocolFor(exp, dir, snap, 'baseline').version;
+          const fa = await rebuildPrompt(snap, 'author', { ...protocolFor(exp, dir, snap, 'baseline'), text: fs.readFileSync(path.join(vd, 'protocol.md'), 'utf8'), version: pv });
+          const asys = fs.readFileSync(path.join(vd, 'author.system.md'), 'utf8') === fa.system;
+          const ausr = fs.readFileSync(path.join(vd, 'author.user.md'), 'utf8') === fa.user;
+          if (!asys || !ausr) bad++;
+          if ((!asys || !ausr) && process.argv.includes('--dump')) { fs.writeFileSync(path.join(vd, 'frozen.author.system.md'), fa.system); fs.writeFileSync(path.join(vd, 'frozen.author.user.md'), fa.user); }
+          console.log(`   ${asys && ausr ? '✅' : '≠ '} ${nd.id}/${v}: author.system.md ${asys ? 'identical' : 'differs'} · author.user.md ${ausr ? 'identical' : 'differs'} to the frozen production rebuild`);
+        }
       }
       process.exitCode = bad ? 1 : 0; return;
     }
@@ -2690,6 +2764,7 @@ if (require.main === module) {
       const r = heldIdentityCheck(runReadOnlySql);
       console.log(`G-HOLD-ID: ${r.equal}/${r.refs} refs over ${r.executions} Harvester execution(s) reproduced (by redactorVersion: ${Object.entries(r.byVersion).map(([k, v]) => `${k} ${v}`).join(', ')})`);
       if (r.predatesDeviceLane.length) console.log(`ℹ named, not a mismatch (L-N2-a):\n   ${r.predatesDeviceLane.join('\n   ')}`);
+      if (r.pinViolationWarned.length) console.log(`ℹ named, not a mismatch (a Git read the pin refused — production held nothing for it):\n   ${r.pinViolationWarned.join('\n   ')}`);
       if (r.mismatches.length || r.refs === 0) { console.log(`❌ ${r.refs === 0 ? 'no held refs read — the check measured nothing' : r.mismatches.join('\n   ')}`); process.exit(1); }
       console.log('✅ G-HOLD-ID holds');
       return;

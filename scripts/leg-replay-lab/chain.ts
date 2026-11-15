@@ -44,6 +44,11 @@ export interface ReplayedAuthorResult {
    *  (cs-net-1a-facts a692e2542) carries it: from a leaf dependency that stamped it, to LIVE_EVIDENCE_READERS (the leg Reviewer is
    *  one), whatever `checked` says. Undefined ⇒ the frozen entry's value stands. */
   liveEvidence?: Record<string, unknown> | null;
+  /** L-CS-K (Config sources STEP 2, slice 4): the replayed dependency's `gitLiveDrift` — the Harvester's stamp (Architect cells) or
+   *  the Author's TRANSCRIPTION of it (the leg Reviewer) — carried as context-chainer.ts carries it: from a LEAF dependency, only
+   *  when `checked`, and only to the comparison's readers (the Architect and the leg Reviewer are the only consumers of a patched
+   *  entry here). Undefined ⇒ the frozen entry's value stands. */
+  gitLiveDrift?: Record<string, unknown> | null;
 }
 
 export function patchReviewerContext(snap: Snapshot, r: ReplayedAuthorResult): Record<string, any> {
@@ -92,6 +97,10 @@ export function chainEntryFromResult(old: Record<string, any>, r: ReplayedAuthor
   if (r.liveEvidence !== undefined) {
     delete entry.liveEvidence;
     if (r.liveEvidence && typeof r.liveEvidence === 'object' && !Array.isArray(r.liveEvidence)) entry.liveEvidence = r.liveEvidence;
+  }
+  if (r.gitLiveDrift !== undefined) {
+    delete entry.gitLiveDrift;
+    if (r.gitLiveDrift && typeof r.gitLiveDrift === 'object' && !Array.isArray(r.gitLiveDrift) && (r.gitLiveDrift as { checked?: unknown }).checked === true) entry.gitLiveDrift = r.gitLiveDrift;
   }
   for (const k of ['sanitized', 'rewritten', 'rewriteClasses', 'neutralizedCount', 'strippedControlChars']) delete entry[k];
   if (r9) Object.assign(entry, {

@@ -207,6 +207,15 @@ export function renderPipelineContextSection(inputContext: unknown, opts: Pipeli
           }
         }
       }
+      // Config sources STEP 2: the platform's Git-vs-live drift fact — a PURE function of the carried fact (validated on every
+      // read); the chainer carries it only to the Architect (Harvester entry) and the leg Reviewer (Author entry).
+      {
+        const gl = (prev as { gitLiveDrift?: Record<string, unknown> | null }).gitLiveDrift;
+        if (gl && typeof gl === 'object' && !isInherited(prev)) {
+          const glLines = renderGitLiveDriftForPrompt(gl);
+          if (glLines) parts.push(...glLines);
+        }
+      }
       // Net #1 (2026-09-17): the predecessor's DERIVATION CONTAINMENT disposition. Added last of the
       // three, and the reason it was missing is worth keeping: for SIBLING entries it is stamped at
       // the leg's SYNTHESIZE — AFTER the siblings have run — so it is empty 512 of 512 times, and in
@@ -398,6 +407,7 @@ import { renderRollbackContainmentForPrompt } from './render-rollback-containmen
 import { renderValidationToolCallsForPrompt } from './validation-tool-calls';
 import { renderGitDeviceComparisonForPrompt } from './git-device-comparison';
 import { renderHeldForEntry } from './held-bytes/render-held';
+import { renderGitLiveDriftForPrompt } from './git-live-drift'; // client-safe: no imports
 import { renderLiveEvidenceForPrompt } from './live-evidence-render'; // client-safe: no server imports (AgentBuilderPreview bundles this file)
 import { openFenceOf } from '../../utils/markdown-fence';
 

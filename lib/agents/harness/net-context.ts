@@ -18,6 +18,8 @@ import { findProgramParentForStage } from './program-protocol';
 import type { NetContext, Fact } from './net-registry';
 import { owningLegMemo, type OwningLegResolution } from './held-bytes/variant';
 import { legDeviceSourcesMemo, type LegDeviceSourcesResolution } from './device-sources-read';
+import { legConfigSourcesMemo, type LegConfigSourcesResolution } from './config-sources-read';
+import { computeConfigSourceReads } from './config-source-facts';
 import { computeDeviceSourceReads } from './device-source-facts';
 
 /** Mirrors the per-net cap; see `pagination-safety-cap-pattern` and the SEARCH-vs-AGGREGATE note. */
@@ -44,6 +46,10 @@ export interface BuildNetContextInput {
   held?: { editApplication?: Fact | null; heldBytes?: Fact | null; /** the handles whose BASE the package holds (V-8a; EF-P2-3) */ baseHeldHandles?: readonly string[] | null };
   /** held-network step 3 batch 2b: the core's one read of the leg's declared Device sources; absent ⇒ resolved lazily, once. */
   deviceSources?: LegDeviceSourcesResolution | null;
+  /** Config sources STEP 2: the core's one read of the leg's declared Config sources; absent ⇒ resolved lazily, once. */
+  configSources?: LegConfigSourcesResolution | null;
+  /** Config sources STEP 2: the platform's drift call record (null = no call was planned); absent ⇒ undefined. */
+  platformDriftCalls?: readonly unknown[] | null;
   /** Config-sources network push 1a: the persisting execution's own `protocolInjection` (result.json shape); absent ⇒ undefined. */
   protocolInjection?: unknown;
 }
@@ -57,6 +63,8 @@ export function buildNetContext(input: BuildNetContextInput): NetContext {
   const owningLeg = owningLegMemo(input.prisma as never, input.task as never, input.owningLeg ?? null);
   const deviceSources = legDeviceSourcesMemo(input.prisma as never, owningLeg, input.deviceSources ?? null);
   let readRecordPromise: Promise<Fact> | null = null;
+  const configSources = legConfigSourcesMemo(input.prisma as never, owningLeg, input.configSources ?? null);
+  let configRecordPromise: Promise<Fact> | null = null;
 
   return {
     prisma: input.prisma,
@@ -72,6 +80,9 @@ export function buildNetContext(input: BuildNetContextInput): NetContext {
     deviceSources,
     // Config-sources network push 1a: ONE read record per persist, shared by `deviceSourceReads` and `liveEvidence`.
     deviceSourceReadRecord: () => (readRecordPromise ??= deviceSources().then((src) => computeDeviceSourceReads(src, input.toolCalls ?? []))),
+    configSources,
+    ...(input.platformDriftCalls !== undefined ? { platformDriftCalls: input.platformDriftCalls } : {}),
+    configSourceReadRecord: () => (configRecordPromise ??= configSources().then((src) => computeConfigSourceReads(src, input.toolCalls ?? []))),
     ...(input.protocolInjection !== undefined ? { protocolInjection: input.protocolInjection } : {}),
     ...(input.held ? { held: input.held } : {}),
 

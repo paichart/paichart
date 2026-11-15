@@ -28,6 +28,7 @@ import type { Snapshot } from './snapshot';
 import { isGitFileSourceLeg, isDeviceSourceLeg } from '../../lib/agents/harness/held-bytes/variant';
 import { resolveLegDeviceSources, contractDeviceSourcesValue } from '../../lib/agents/harness/device-sources';
 import { buildDeviceReadScope } from '../../lib/agents/harness/held-bytes/device-read-scope';
+import type { LegConfigSourcesResolution } from '../../lib/agents/harness/config-sources-read';
 
 const HARVESTER_ROLE = 'infra_state_harvester';
 /** held-network step 3 batch 2b deploy (CLAUDE.md series cut): the device-read capture lane is live from here. */
@@ -68,7 +69,12 @@ export function deviceLegOf(leg: { title?: string | null; metadata?: unknown; de
   return { description: leg.description ?? null, contract: ic?.interfaceContract ?? null };
 }
 
-export function buildLabHeldStoreFromResult(h: { executionId: string; taskId: string; povId: string | null; resultJson: string; gitFileSourceLeg?: boolean; deviceLeg?: { description: string | null; contract: unknown } }): LabHeldStore {
+/** `configSources` (Config sources STEP 2, L-CS-K): the leg's GOVERNING Config-sources declaration on an arm that composes the
+ *  Config-sources text (config-sources-arm.ts `armConfigSources`) — handed to the SHIPPING capture exactly as execution-core hands
+ *  it (`prepareHeldCapture({ configSources })`), so a Git file no declared `git-file` line names is refused `git-file-not-declared`
+ *  and never held. Absent / null ⇒ nothing is passed: every store built before slice 4, and every base arm, is byte-identical. */
+export function buildLabHeldStoreFromResult(h: { executionId: string; taskId: string; povId: string | null; resultJson: string; gitFileSourceLeg?: boolean; deviceLeg?: { description: string | null; contract: unknown }; configSources?: LegConfigSourcesResolution | null },
+  opts: { /** told the count when production's capture warned of pin violations; absent ⇒ such a warning throws, as every warning does */ onPinViolationWarning?: (count: number) => void } = {}): LabHeldStore {
   const rj = JSON.parse(h.resultJson) as { toolCalls?: unknown[] };
   const toolCalls = Array.isArray(rj.toolCalls) ? rj.toolCalls : [];
   const cut = toolCalls.map((t: any, i) => ({ i, t })).filter(({ t }) => t?.result && typeof t.result === 'object' && t.result.truncated === true && typeof t.result.preview === 'string');
@@ -81,11 +87,18 @@ export function buildLabHeldStoreFromResult(h: { executionId: string; taskId: st
     const deviceRead = h.deviceLeg
       ? buildDeviceReadScope(resolveLegDeviceSources({ contractValue: contractDeviceSourcesValue(h.deviceLeg.contract), taskBody: h.deviceLeg.description }), toolCalls)
       : null;
-    plan = prepareHeldCapture({ toolCallResults: toolCalls, task: { id: h.taskId, povId: h.povId }, gitFileSourceLeg: h.gitFileSourceLeg === true, ...(deviceRead ? { deviceRead } : {}), logger: { info: () => undefined, warn: (o: any) => { warned.push(JSON.stringify(o)); } } });
+    plan = prepareHeldCapture({ toolCallResults: toolCalls, task: { id: h.taskId, povId: h.povId }, gitFileSourceLeg: h.gitFileSourceLeg === true, ...(deviceRead ? { deviceRead } : {}), ...(h.configSources ? { configSources: h.configSources } : {}), logger: { info: () => undefined, warn: (o: any) => { warned.push(JSON.stringify(o)); } } });
   } finally {
     if (prior === undefined) delete process.env.HELD_BYTES_CAPTURE_ENABLED; else process.env.HELD_BYTES_CAPTURE_ENABLED = prior;
   }
-  if (warned.length) throw new Error(`L-1: prepareHeldCapture warned on ${h.executionId}: ${warned.join('; ')}`);
+  // HELD-ID-CHECK-ABORTS-ON-A-PIN-VIOLATION (2026-11-15): ONE warning is a legitimate production event — a Git read the pin refused
+  // (`pinViolations`: the agent asked for another repo or ref; production refused it, logged it, and held nothing for it). A caller
+  // that opts in (`onPinViolationWarning` — the identity check, which walks EVERY production Harvester) is told and the build goes on.
+  // Every other warning, and a pin-violation warning with no opt-in (a lab building its store from ONE chosen Harvester), still throws.
+  const isPinViolation = (w: string): boolean => { try { const o = JSON.parse(w); return !!o && typeof o === 'object' && typeof o.pinViolations === 'number' && o.pinViolations > 0; } catch { return false; } };
+  const unexpected = warned.filter((w) => !(opts.onPinViolationWarning && isPinViolation(w)));
+  if (unexpected.length) throw new Error(`L-1: prepareHeldCapture warned on ${h.executionId}: ${unexpected.join('; ')}`);
+  for (const w of warned.filter(isPinViolation)) opts.onPinViolationWarning?.(Number(JSON.parse(w).pinViolations));
   const files = plan?.files ?? [];
   return {
     harvesterExecutionId: h.executionId, harvesterTaskId: h.taskId, scope: plan?.scope ?? h.povId,
@@ -99,12 +112,12 @@ export function buildLabHeldStoreFromResult(h: { executionId: string; taskId: st
 }
 
 /** The store for a node: its frozen Harvester, read from the snapshot's stage artifacts. */
-export function buildLabHeldStore(snap: Snapshot): LabHeldStore {
+export function buildLabHeldStore(snap: Snapshot, configSources?: LegConfigSourcesResolution | null): LabHeldStore {
   const e = frozenHarvesterEntry(snap);
   const art = snap.childArtifacts.find((a) => a.executionId === e.executionId && a.name === 'result.json');
   if (!art) throw new Error(`L-1: the snapshot carries no result.json for the frozen Harvester execution ${e.executionId}`);
   return buildLabHeldStoreFromResult({ executionId: e.executionId, taskId: e.taskId, povId: snap.author.task.pov_id ?? null, resultJson: art.content,
-    gitFileSourceLeg: !!snap.leg && isGitFileSourceLeg(snap.leg), deviceLeg: deviceLegOf(snap.leg as never) });
+    gitFileSourceLeg: !!snap.leg && isGitFileSourceLeg(snap.leg), deviceLeg: deviceLegOf(snap.leg as never), ...(configSources ? { configSources } : {}) });
 }
 
 export function labViewResolution(ref: { content: string }, r9Version: string): HeldViewResolution {
@@ -148,7 +161,7 @@ export function labResolveHeldFiles(store: LabHeldStore, r9Version = r9VersionIn
  * result.json, must reproduce the same (toolCallIndex, path, blobSha256) set. Keyed on the stored row's `redactorVersion`:
  * push 1's v2→v3 replay moved 0 held blobs, so a mismatch on either version is a lab (or capture) defect, never drift.
  */
-export function heldIdentityCheck(runSql: (sql: string) => string): { executions: number; refs: number; equal: number; byVersion: Record<string, number>; mismatches: string[]; predatesDeviceLane: string[] } {
+export function heldIdentityCheck(runSql: (sql: string) => string): { executions: number; refs: number; equal: number; byVersion: Record<string, number>; mismatches: string[]; predatesDeviceLane: string[]; pinViolationWarned: string[] } {
   // held-k8s (L-K-e): the owning leg (stage metadata harnessTaskId) decides the Git-source scope, as production's capture does.
   const rows = runSql(`SELECT json_build_object('executionId', r."executionId", 'startTime', e."startTime", 'taskId', e."taskId", 'povId', t.pov_id,
       'leg', (SELECT json_build_object('title', l.title, 'metadata', l.metadata, 'description', l.description, 'inputContext', l."inputContext") FROM stages s JOIN tasks l ON l.id = s.metadata->>'harnessTaskId' WHERE s.id = t.stage_id),
@@ -156,12 +169,18 @@ export function heldIdentityCheck(runSql: (sql: string) => string): { executions
       'refs', json_agg(json_build_object('toolCallIndex', r."toolCallIndex", 'path', r.path, 'blobSha256', r."blobSha256", 'redactorVersion', r."redactorVersion") ORDER BY r."toolCallIndex", r.path))
     FROM held_file_refs r JOIN agent_executions e ON e.id = r."executionId" JOIN tasks t ON t.id = e."taskId"
     WHERE r.kind = 'CAPTURE' GROUP BY r."executionId", e."taskId", e."startTime", t.pov_id, t.stage_id;`).split('\n').filter(Boolean);
-  const out = { executions: 0, refs: 0, equal: 0, byVersion: {} as Record<string, number>, mismatches: [] as string[], predatesDeviceLane: [] as string[] };
+  const out = { executions: 0, refs: 0, equal: 0, byVersion: {} as Record<string, number>, mismatches: [] as string[], predatesDeviceLane: [] as string[], pinViolationWarned: [] as string[] };
   for (const line of rows) {
     const r = JSON.parse(line) as { startTime?: string | null; executionId: string; taskId: string; povId: string | null; resultJson: string | null; leg: { title: string | null; metadata: unknown; description?: string | null; inputContext?: unknown } | null; refs: Array<{ toolCallIndex: number; path: string; blobSha256: string; redactorVersion: string }> };
     out.executions++;
     if (!r.resultJson) { out.mismatches.push(`${r.executionId}: no result.json`); continue; }
-    const store = buildLabHeldStoreFromResult({ executionId: r.executionId, taskId: r.taskId, povId: r.povId, resultJson: r.resultJson, gitFileSourceLeg: !!r.leg && isGitFileSourceLeg(r.leg), deviceLeg: deviceLegOf(r.leg as never) });
+    let store: LabHeldStore;
+    try {
+      store = buildLabHeldStoreFromResult({ executionId: r.executionId, taskId: r.taskId, povId: r.povId, resultJson: r.resultJson, gitFileSourceLeg: !!r.leg && isGitFileSourceLeg(r.leg), deviceLeg: deviceLegOf(r.leg as never) }, { onPinViolationWarning: (n) => out.pinViolationWarned.push(`${r.executionId}: ${n} Git read(s) the pin refused in production (held nothing for them)`) });
+    } catch (e) {
+      // one execution the lab cannot rebuild is a NAMED mismatch; the check goes on to the rest (it used to stop here)
+      out.mismatches.push(`${r.executionId}: ${(e as Error).message.slice(0, 200)}`); continue;
+    }
     const key = (x: { toolCallIndex: number | null; path: string | null; blobSha256: string }) => `${x.toolCallIndex}|${x.path}|${x.blobSha256}`;
     const lab = new Set(store.refs.map(key));
     for (const p of r.refs) {

@@ -21,6 +21,7 @@ import { buildNetContext } from '../../lib/agents/harness/net-context';
 import { isProgramHarnessTask } from '../../lib/agents/harness/program-protocol';
 import { buildReplayPrisma, taskRowToPrisma, type ReplaySubstitution, type ReplayPrismaOptions } from './replay-prisma';
 import type { Snapshot } from './snapshot';
+import { armConfigSources, armOwningLeg } from './config-sources-arm';
 
 export const LEG_NETS_EXCLUDED: Record<string, string> = {
   verdictFreshness: 'compares the Reviewer\'s frozen chained input with later production Author runs — not meaningful for a replay',
@@ -43,8 +44,13 @@ export interface NetRun {
 /** `protocolInjection` (L-CS-N O-2(a), 2026-11-05): the replayed execution's OWN composed protocol injection, as execution-nets.ts hands
  *  it (`resultJson.protocolInjection`) — `{delta: {name, version}}`. Read today only by liveEvidence's population rule (NOT_STAMPED below
  *  network-provisioning 1.26.0). Undefined ⇒ the net ctx carries none (every replay before this lever: NOT_STAMPED). */
+/** Config sources STEP 2 (L-CS-K, slice 4): on an arm that composes the Config-sources text (`armConfigSources` — null on every arm
+ *  below it, so nothing is passed and every earlier replay is byte-identical) the ctx is PRIMED with the leg's governing declaration,
+ *  the object production's core reads once and hands the nets (`buildNetContext({ configSources })`). `held.platformDriftCalls` is the
+ *  platform's drift call record the core builds BEFORE the Harvester's persist (config-sources-patch.ts makes it with a fixture
+ *  caller); absent ⇒ the ctx carries none, exactly as on every execution that is not a Config-sources Harvester. */
 export async function runAuthorLeafNets(snap: Snapshot, role: string, text: string, replayExecutionId: string, toolCalls?: unknown,
-  held?: { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: readonly string[] | null },
+  held?: { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: readonly string[] | null; platformDriftCalls?: readonly unknown[] | null },
   protocolInjection?: unknown, opts: ReplayPrismaOptions = {}): Promise<NetRun> {
   const { client, queries } = buildReplayPrisma(snap, [{ taskId: snap.author.task.id, executionId: replayExecutionId, resultJson: { finalResponse: text, ...(toolCalls !== undefined ? { toolCalls } : {}) } }], opts);
   const t = taskRowToPrisma(snap.author.task);
@@ -52,8 +58,9 @@ export async function runAuthorLeafNets(snap: Snapshot, role: string, text: stri
     prisma: client, task: { id: t.id, type: t.type, metadata: t.metadata, inputContext: snap.author.exec.config?.inputContext ?? t.inputContext },
     agentRole: role, harnessMode: null, finalResponse: text, programTier: false, executionId: replayExecutionId,
     ...(toolCalls !== undefined ? { toolCalls } : {}),
-    ...(held ? { held } : {}),
+    ...heldInput(held),
     ...(protocolInjection !== undefined ? { protocolInjection } : {}),
+    ...configInput(snap, protocolInjection, held?.platformDriftCalls),
   });
   return runPoint('leaf-persist', ctx, queries);
 }
@@ -62,7 +69,9 @@ export async function runAuthorLeafNets(snap: Snapshot, role: string, text: stri
  *  `author` is its Architect), the replayed text added as that task's newest SUCCESS execution. `legReads` lets the device-source facts
  *  and the value-leg containment net read the leg row (replay-prisma). Same buildNetContext + runNetsAtPoint as runAuthorLeafNets. */
 export async function runLeafNetsFor(snap: Snapshot, taskRow: Record<string, any>, role: string, text: string, replayExecutionId: string,
-  toolCalls: unknown | undefined, protocolInjection: unknown | undefined, opts: ReplayPrismaOptions = {}, inputContext?: unknown): Promise<NetRun> {
+  toolCalls: unknown | undefined, protocolInjection: unknown | undefined, opts: ReplayPrismaOptions = {}, inputContext?: unknown,
+  /** Config sources STEP 2: the platform's drift call record for a Config-sources Harvester (see runAuthorLeafNets). */
+  platformDriftCalls?: readonly unknown[] | null): Promise<NetRun> {
   const { client, queries } = buildReplayPrisma(snap, [{ taskId: String(taskRow.id), executionId: replayExecutionId, resultJson: { finalResponse: text, ...(toolCalls !== undefined ? { toolCalls } : {}) } }], opts);
   const t = taskRowToPrisma(taskRow);
   const ctx = buildNetContext({
@@ -70,6 +79,7 @@ export async function runLeafNetsFor(snap: Snapshot, taskRow: Record<string, any
     agentRole: role, harnessMode: null, finalResponse: text, programTier: false, executionId: replayExecutionId,
     ...(toolCalls !== undefined ? { toolCalls } : {}),
     ...(protocolInjection !== undefined ? { protocolInjection } : {}),
+    ...configInput(snap, protocolInjection, platformDriftCalls),
   });
   return runPoint('leaf-persist', ctx, queries);
 }
@@ -84,8 +94,28 @@ export async function runLegSynthesizeNets(snap: Snapshot, subs: ReplaySubstitut
     prisma: client, task: { id: leg.id, type: leg.type, metadata: leg.metadata, inputContext: leg.inputContext },
     agentRole: leg.agentRole, harnessMode: 'SYNTHESIZE', finalResponse: null, programTier, executionId: 'lab-leg-synthesize',
     ...(protocolInjection !== undefined ? { protocolInjection } : {}),
+    ...configInput(snap, protocolInjection, undefined, true),
   });
   return runPoint('leg-synthesize', ctx, queries);
+}
+
+/** The `held` object the core hands the nets, WITHOUT the lab-only carrier field (`platformDriftCalls` is its own ctx input). */
+function heldInput(held?: { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: readonly string[] | null; platformDriftCalls?: readonly unknown[] | null }): Record<string, unknown> {
+  if (!held) return {};
+  if (!('platformDriftCalls' in held)) return { held }; // every caller before slice 4: the object as passed
+  const { platformDriftCalls: _p, ...rest } = held; void _p;
+  return Object.keys(rest).length ? { held: rest } : {};
+}
+/** Config sources STEP 2: the ctx inputs production's core supplies on a Config-sources leg at its text version — `{}` on every
+ *  other arm (config-sources-arm.ts). `legPoint`: the leg's own SYNTHESIZE also gets the owning-leg resolution the hoist reads. */
+function configInput(snap: Snapshot, protocolInjection: unknown, platformDriftCalls?: readonly unknown[] | null, legPoint = false): Record<string, unknown> {
+  const configSources = armConfigSources(snap.leg, protocolInjection);
+  if (!configSources) {
+    if (platformDriftCalls !== undefined && platformDriftCalls !== null) throw new Error('lab nets: a platform drift call record was passed on an arm that does not read Config sources — production makes no call there');
+    return {};
+  }
+  const owningLeg = legPoint ? armOwningLeg(snap.leg, protocolInjection) : null;
+  return { configSources, ...(platformDriftCalls !== undefined ? { platformDriftCalls } : {}), ...(owningLeg ? { owningLeg } : {}) };
 }
 
 async function runPoint(point: 'leaf-persist' | 'leg-synthesize', ctx: ReturnType<typeof buildNetContext>, queries: string[]): Promise<NetRun> {

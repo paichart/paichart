@@ -50,6 +50,10 @@ Nothing is built yet, so this is the cheapest place to catch a mistake. Read the
    read a leg's stored facts (`project(action: 'task.context', taskId: '<a leg task id>')`): under
    `interfaceContractSource.deviceSourcesKeys`, `notReadKeys` must be empty. A plan with no Device sources shows no
    `deviceSourcesKeys` value, and so does a plan made before this fact was recorded.
+   The same check covers `configSources`, the separate field for a Kubernetes leg's Config sources (read from
+   `kubernetes-gitops` 1.19.0 on): under `interfaceContractSource.configSourcesKeys`, `notReadKeys` must be empty. A name filed
+   in the wrong field — a network name under `configSources`, or `kubernetes-gitops` under `deviceSources` — is listed there
+   too, because each field is checked against its own list of names.
 
 **If the plan is wrong, do not release.** A plan cannot be edited after the fact. Which fix depends on what is wrong:
 

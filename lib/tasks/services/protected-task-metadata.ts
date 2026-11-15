@@ -213,6 +213,9 @@ export const AUDIT_STRIP_KEYS = [
   // only for what THIS snapshot declares, so a client-writable copy would let an agent re-declare its own sources — the exact hole it
   // closes. Stripped on every client surface, MCP included; omission under merge semantics keeps the stored value.
   'deviceSourcesSnapshot',
+  // Config sources STEP 2 (2026-11-15): the same snapshot for a Config-sources leg (kubernetes-gitops from 1.19.0), written ONLY by the
+  // platform at the leg's first execution. Same reason: a client-writable copy would let an agent re-declare which Git file is held.
+  'configSourcesSnapshot',
 ] as const;
 
 export interface RunKeyDropOptions {

@@ -55,6 +55,9 @@ import { computeDeviceSourceReadsFact, computeGitDeviceComparisonHarvesterFact, 
 import { renderGitDeviceComparisonForPrompt } from './git-device-comparison';
 import { computeLiveEvidenceHarvesterFact, transcribeLiveEvidenceFact, hoistLiveEvidenceFact } from './live-evidence-enrichment';
 import { renderLiveEvidenceForPrompt } from './live-evidence';
+import { computeConfigSourceReadsFact } from './config-source-facts-enrichment';
+import { stampPlatformDriftCalls, computeGitLiveDriftHarvesterFact, transcribeGitLiveDriftFact } from './git-live-drift-enrichment';
+import { renderGitLiveDriftForPrompt } from './git-live-drift';
 import { resolveOwningLegProtocol, isHeldCapableLeg } from './held-bytes/variant';
 import { selectLegEditApplication, hoistedEditApplication, reviewedEditDiffFromContext, HELD_EDIT_REVIEWER_ROLE } from './held-bytes-nets';
 import { readChainedRecord } from './chained-record';
@@ -552,5 +555,66 @@ export const MECHANICAL_NETS: readonly MechanicalNet[] = [
     summaryExcludedReason:
       'owner decision 6 (2026-11-04): off the agent.results summary until the Node C batch — leg SYNTHESIZE and Node C read that '
       + 'summary and Node C cannot be lab-replayed; the fact stays in result.json (operator tail) and reaches the leg readers via §6.',
+  },
+  // ── Config sources STEP 2 (2026-11-15): `configSourceReads` — for each source line a Config-sources leg declares, which call read
+  // it? APPENDED (key order is the equivalence contract). CONDITIONAL: NOT_STAMPED unless the owning leg declares Config sources
+  // today (CONFIG_SOURCE_PROTOCOLS — empty until a protocol's Config-sources text ships), so every stored leg and every other
+  // domain replays byte-identical. An OPERATOR fact, never a gate; `liveEvidence`'s Config arm is computed from the same record.
+  {
+    name: 'configSourceReads',
+    point: 'leaf-persist',
+    conditionalStampReason: 'not-config-source-leg',
+    appliesTo: (ctx) => ctx.task.type !== 'PIPELINE' && HARVEST_LEAF_ROLE_RE.test(ctx.agentRole ?? '') && !SPECIFICATION_ROLE_RE.test(ctx.agentRole ?? ''),
+    enrich: async (ctx) => computeConfigSourceReadsFact(ctx),
+    errorFact: () => ({ version: 1, checked: false, reason: 'enrichment-error' }),
+    renderCard: null,
+    renderPrompt: null,
+    renderNullReason:
+      'Config sources STEP 2: an OPERATOR fact (did the Harvester read each declared source line?), read by MI-13 and the live '
+      + 'window. The agent-facing statement of the same record is `liveEvidence` (its Config arm), rendered in §6.',
+    summaryExcludedReason:
+      'an operator fact with no gate consumer; persisted in the operator tail (RESULT_JSON_OPERATOR_TAIL_KEYS) so the 8 KB head and '
+      + 'the finalResponse offset do not move. A verbose agent.results returns it.',
+  },
+  // ── Config sources STEP 2 slice 3b (2026-11-15): the PLATFORM's Git-vs-live drift check for a kept Kubernetes file. Two entries,
+  // APPENDED. `platformDriftCalls` is the stored record of the platform's own calls of the cluster service's compare tool (sha and
+  // length of the bytes sent, never the bytes; the tool's result as returned). `gitLiveDrift` is the fact computed FROM that record
+  // (validated on every read) — so a replay recomputes it without calling. Both NOT_STAMPED off a Config-sources leg at its text
+  // version. FACTS, never gates.
+  {
+    name: 'platformDriftCalls',
+    point: 'leaf-persist',
+    conditionalStampReason: 'not-config-source-leg',
+    appliesTo: (ctx) => ctx.task.type !== 'PIPELINE' && HARVEST_LEAF_ROLE_RE.test(ctx.agentRole ?? '') && !SPECIFICATION_ROLE_RE.test(ctx.agentRole ?? ''),
+    enrich: async (ctx) => stampPlatformDriftCalls(ctx),
+    errorFact: () => ({ version: 1, checked: false, reason: 'enrichment-error' }),
+    renderCard: null,
+    renderPrompt: null,
+    renderNullReason:
+      'Config sources STEP 2: the OPERATOR record of the platform\'s own service calls (which file, which service, the sha and length '
+      + 'sent, the result as returned). No agent reads it; the agent-facing statement is `gitLiveDrift`, computed from it.',
+    summaryExcludedReason:
+      'an operator record with no gate consumer; persisted in the operator tail (RESULT_JSON_OPERATOR_TAIL_KEYS) so the 8 KB head and '
+      + 'the finalResponse offset do not move. A verbose agent.results returns it.',
+  },
+  {
+    name: 'gitLiveDrift',
+    point: 'leaf-persist',
+    conditionalStampReason: 'not-config-source-leg',
+    appliesTo: (ctx) => ctx.task.type !== 'PIPELINE' && !SPECIFICATION_ROLE_RE.test(ctx.agentRole ?? '')
+      && (HARVEST_LEAF_ROLE_RE.test(ctx.agentRole ?? '') || ctx.agentRole === FORM_CHECK_ELIGIBLE_ROLE),
+    // Harvester: computed from the platform's call record. Author: the Harvester's stamp TRANSCRIBED (never recomputed), so the
+    // chainer carries one fact to both readers — the Architect (Harvester entry) and the leg Reviewer (Author entry).
+    enrich: async (ctx) => (HARVEST_LEAF_ROLE_RE.test(ctx.agentRole ?? '')
+      ? computeGitLiveDriftHarvesterFact(ctx) : transcribeGitLiveDriftFact(ctx)),
+    errorFact: () => ({ version: 1, checked: false, reason: 'enrichment-error' }),
+    renderCard: null,
+    renderPrompt: (fact) => renderGitLiveDriftForPrompt(fact),
+    renderNullReason:
+      'owner Group K1/K2 (2026-11-09): a fact for the Kubernetes Architect and the leg Reviewer only — rendered in §6 (the chainer '
+      + 'carries it to those two roles), never on the lean card, which feeds leg SYNTHESIZE and the program gate (gates nothing).',
+    summaryExcludedReason:
+      'kept off the lean card and the agent.results summary (no gate consumer); persisted in the operator tail so the 8 KB head and '
+      + 'the finalResponse offset do not move. The chainer reads the full result.json and carries it to the Architect and the Reviewer.',
   },
 ];

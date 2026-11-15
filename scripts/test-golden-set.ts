@@ -243,7 +243,7 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
   });
 
   console.log('GS6 end to end, $0 (--fake-llm persisted over the full companion)');
-  await t('31 cells (19 cases, both Author forms, all four domains + both value legs + both requirements legs, held binding) reproduce every stored outcome; a tampered sample ⇒ DO-NOT-SHIP', () => {
+  await t('31 cells (19 cases, both Author forms, all four domains + both value legs + both requirements legs, held binding) reproduce every stored outcome; frozen-cmp per cell incl. the Kubernetes §2.2a gate; the held-aware control line; a tampered sample ⇒ DO-NOT-SHIP', () => {
     const dir = scratchCopy('model-lab');
     const comp = buildGoldenCompanion(dir, gs).dir;
     const runDir = path.join(path.dirname(dir), 'run-fake');
@@ -279,6 +279,36 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
     const dl = cl.map((l, i) => (l !== fl[i] ? l.trim().slice(0, 4) : null)).filter((x) => x !== null);
     assert(fl.length === cl.length && dl.join() === '8.1 ,8.4 ', `REQ-LOGARCH-F1 system lines differing: ${dl.join(' | ')} (lengths ${fl.length}/${cl.length})`);
     assert(/≠ +GOLD-K8S-AK5\/\S+: reviewer\.system\.md differs · reviewer\.user\.md identical/.test(fc), 'K8S-AK5 differs in the system prompt only');
+    // Config sources STEP 2 §2.2a (code push slice 4, 2026-11-15) — the KUBERNETES frozen-cmp result, named cell by cell. The lab
+    // now carries levers for configSourceReads, the liveEvidence Config arm and gitLiveDrift (config-sources-patch.ts); all three are
+    // NOT_STAMPED below kubernetes-gitops 1.19.0, so at the golden pin (1.18.0) NOTHING may move: K8S-PROG and K8S-BK3 byte-identical
+    // on both prompts, K8S-AK5 the permanent pre-join exception (system prompt only, above). A lever that stamps where production does
+    // not (RED: drop the version test in config-sources-arm.ts armReadsConfigSources ⇒ K8S-PROG, K8S-BK3 and K8S-AK5's user prompt
+    // differ), or — after the 1.19.0 re-pin — a fact production renders that the lab does not reproduce, goes red here at $0.
+    for (const id of ['K8S-PROG', 'K8S-BK3']) assert(new RegExp(`✅ +GOLD-${id}/\\S+: reviewer\\.system\\.md identical · reviewer\\.user\\.md identical`).test(fc), `§2.2a: ${id} is not byte-identical to the frozen production rebuild`);
+    const man = JSON.parse(fs.readFileSync(path.join(runDir, 'manifest.json'), 'utf8'));
+    const k8sNodes = ce.nodes.filter((n: any) => /^GOLD-K8S-/.test(n.id));
+    assert(k8sNodes.map((n: any) => n.id).sort().join() === 'GOLD-K8S-AK5,GOLD-K8S-BK3,GOLD-K8S-PROG', `§2.2a: the Kubernetes golden cells changed (${k8sNodes.map((n: any) => n.id).join()}) — name each new cell's frozen-cmp result here`);
+    for (const n of k8sNodes) for (const v of n.variants) {
+      const up = path.join(runDir, n.id, v, 'reviewer.user.md');
+      if (fs.existsSync(up)) { const u = fs.readFileSync(up, 'utf8'); assert(!u.includes('the platform\'s Git-vs-live drift fact') && !u.includes('of the declared source lines'), `§2.2a: ${n.id}/${v} renders a Config-sources fact below 1.19.0`); }
+      assert(man.nodes[n.id].variants[v].held?.configSources === undefined, `§2.2a: ${n.id}/${v} carries the Config-sources lever's record below 1.19.0`);
+    }
+    // The AUTHOR side of the same gate (`frozen-cmp --author`, persisted arms): a Config-sources lever also decides what the Author
+    // is shown (the held view under the declared-files scope, the liveEvidence line on the Harvester entry), which no Reviewer prompt
+    // shows. K8S-PROG and K8S-BK3 byte-identical on both Author prompts; K8S-AK5 differs on both (pre-join: no held view, no held text).
+    // RED (run in a scratch worktree): the version test dropped + the lever stamping by itself ⇒ both cells' author.user.md differ.
+    let fa = '';
+    try { fa = lab(['frozen-cmp', '--experiment', comp, '--run', runDir, '--author', '--only', 'GOLD-K8S-PROG,GOLD-K8S-BK3,GOLD-K8S-AK5']); } catch (x: any) { fa = String(x.stdout ?? ''); }
+    for (const id of ['K8S-PROG', 'K8S-BK3']) assert(new RegExp(`✅ +GOLD-${id}/\\S+: author\\.system\\.md identical · author\\.user\\.md identical`).test(fa), `§2.2a: ${id}'s Author prompt is not byte-identical to the frozen production rebuild: ${fa}`);
+    assert(/≠ +GOLD-K8S-AK5\/\S+: author\.system\.md differs · author\.user\.md differs/.test(fa) && (fa.match(/author\.system\.md/g) ?? []).length === 3, `§2.2a: the Author lines: ${fa}`);
+    // No standing-bench case is a Kubernetes Reviewer cell today; one added later must be named in this gate.
+    const sb = JSON.parse(fs.readFileSync(path.join(GOLDEN_DIR, 'standing-bench.json'), 'utf8'));
+    assert(sb.cases.every((c: any) => c.protocol !== 'kubernetes-gitops-protocol'), '§2.2a: a Kubernetes standing case exists — add its Reviewer cell to the frozen-cmp gate above');
+    // CONTROL-HELD (plan §2.2a last paragraph, fixed in slice 4): the control pass hands the leaf nets the persisted held Author's own
+    // editApplication and the frozen held handles, so `rollbackContainment` reproduces on every held cell (it read ✗ on all of them).
+    const ctl = Object.entries(man.nodes as Record<string, any>).map(([id, n]) => [id, n.controls?.leafNetsReproducePersisted] as const).filter(([, c]) => c);
+    assert(ctl.filter(([, c]) => c.heldAware).length === 14 && ctl.every(([, c]) => c.rollbackContainment === true && c.markerPresence === true), `control pass: ${ctl.filter(([, c]) => !(c.rollbackContainment && c.markerPresence)).map(([id]) => id).join() || `held-aware ${ctl.filter(([, c]) => c.heldAware).length}`}`);
     // Mutation: one approved case's Reviewer now refuses — the scorer must catch it.
     const f = path.join(runDir, 'GOLD-OBS-PROG', 'gmxobservabilityr', 'sample-01', 'sample.json');
     const s = JSON.parse(fs.readFileSync(f, 'utf8')); s.verdict.approved = false; fs.writeFileSync(f, JSON.stringify(s));

@@ -19,6 +19,7 @@
 import 'dotenv/config';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { DEVICE_SOURCE_LANES, deviceSourceContractKeyOf } from '../lib/agents/harness/held-bytes/variant';
+import { CONFIG_SOURCES_READ_KEYS } from '../lib/agents/harness/plan-spawn-carry';
 
 type Tx = Prisma.TransactionClient;
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -57,6 +58,16 @@ async function planGate(tx: Tx, gate: T, architect: T) {
     else {
       const unknown = Object.keys(anyDs).filter(k => !knownKeys.includes(k));
       line(unknown.length === 0, `the contract's deviceSources keys: ${Object.keys(anyDs).join(', ') || 'none'}${unknown.length ? ` — NOT read by the platform: ${unknown.join(', ')} (it reads only ${knownKeys.join(', ')})` : ''}`);
+    }
+  }
+  // Config sources (STEP 2, owner decision (b) 2026-11-15): a SEPARATE field with its OWN keys. A network token under configSources,
+  // or a Config-sources token under deviceSources (caught above), is a key the platform does not read.
+  const anyCs = legs.map(contractOf).find(c => c && c.configSources !== undefined)?.configSources;
+  if (anyCs !== undefined) {
+    if (!isObj(anyCs)) line(false, `the contract's configSources is not an object keyed by protocol token — no leg will read Config sources from it`);
+    else {
+      const unknown = Object.keys(anyCs).filter(k => !CONFIG_SOURCES_READ_KEYS.includes(k));
+      line(unknown.length === 0, `the contract's configSources keys: ${Object.keys(anyCs).join(', ') || 'none'}${unknown.length ? ` — NOT read by the platform: ${unknown.join(', ')} (it reads only ${CONFIG_SOURCES_READ_KEYS.join(', ') || 'none yet'})` : ''}`);
     }
   }
   for (const l of legs) {

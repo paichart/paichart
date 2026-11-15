@@ -32,6 +32,16 @@ export const EXCLUSIONS: Readonly<Record<string, string>> = {
     'held-k8s 1b: scopes which legs may CAPTURE a Git file-source read (github-service) — a different question from held-capability; the retired obs variant reads no Git file source, and HELD_CAPABLE_PROTOCOLS is checked separately',
   'lib/agents/harness/held-bytes/variant.ts::DEVICE_SOURCE_LANES':
     'held-network step 3 batch 2b (+ VALUE-LEG-GIT 2026-11-06: the lane table DEVICE_SOURCE_PROTOCOLS is derived from): scopes which legs declare Device sources (the device-read capture lane, change lane only) — a capture-scope set like GIT_FILE_SOURCE_PROTOCOLS, a different question from held-capability; the retired obs variant declares no device sources',
+  'lib/agents/harness/held-bytes/variant.ts::CONFIG_SOURCE_LANES':
+    'Config sources STEP 2 (owner decision (b), 2026-11-15): the lane table of protocols that declare a `## Config sources` block (contract field configSources) — a declaration-scope set, not held-capability; kept SEPARATE from DEVICE_SOURCE_LANES on purpose (test-config-sources MIX1); the retired obs variant declares none',
+  'lib/agents/harness/held-bytes/variant.ts::CONFIG_SOURCE_AWAITING_TEXT':
+    'Config sources STEP 2: the subtraction from CONFIG_SOURCE_LANES for rows whose protocol text has not shipped (kubernetes-gitops until 1.19.0) — the HELD_JOIN_AWAITING_TEXT pattern; pinned to the seed text by test-config-sources MIX5',
+  'lib/agents/harness/config-sources.ts::CONFIG_SOURCE_KINDS_BY_PROTOCOL':
+    'Config sources STEP 2 (2026-11-15): the per-protocol KIND table of the `## Config sources` grammar — which line kinds a protocol\'s block admits, a different question from held-capability; the retired obs variant declares no Config sources (observability joins by its own row at step 3)',
+  'scripts/test-config-sources.ts::deviceSources':
+    'Config sources STEP 2 ML3 fixture (mixed program): an interfaceContract.deviceSources keyed by the network protocols\' own contract keys beside a configSources key — a contract shape proving the two fields do not mix, not a protocol selection; obs declares neither',
+  'scripts/test-config-sources.ts::test:CS4 a protocol with no kind table declares no Config sources':
+    'Config sources STEP 2 fixture: lists protocols that have NO Config-sources kind table today (network, and domains not built yet) to prove they parse as declaring none — not a protocol selection',
   'lib/agents/harness/held-bytes/variant.ts::HELD_JOIN_VERSIONS':
     'held-k8s 1g/step 3: this IS the held-capable table (HELD_CAPABLE_PROTOCOLS = its keys minus HELD_JOIN_AWAITING_TEXT); a domain joins by adding its row, and the retired variant is deliberately not a member (Phase 10 D4)',
   'scripts/test-leg-replay-lab.ts::mk':

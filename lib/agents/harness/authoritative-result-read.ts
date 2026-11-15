@@ -32,7 +32,7 @@ import type { Prisma } from '@prisma/client';
 import { selectAuthoritativeExecution, CHAIN_SELECTION_OPTIONS } from '../../services/execution-selection';
 
 export type ResultField = 'finalResponse' | 'rollbackContainment' | 'derivationContainment' | 'reviewerVerdict' | 'reviewerWarnings' | 'toolCalls'
-  | 'editApplication' | 'reviewedEditDiff' | 'heldBytes' | 'gitDeviceComparison' | 'liveEvidence';
+  | 'editApplication' | 'reviewedEditDiff' | 'heldBytes' | 'gitDeviceComparison' | 'liveEvidence' | 'gitLiveDrift';
 
 export type AuthoritativeReadClient = Pick<Prisma.TransactionClient, 'agentExecution' | 'agentArtifact' | '$queryRaw'>;
 
@@ -145,6 +145,15 @@ export async function readAuthoritativeResultField(
     case 'liveEvidence':
       rows = await client.$queryRaw<Array<{ v: string | null }>>`
         SELECT (content::jsonb)->>'liveEvidence' AS v FROM agent_artifacts
+        WHERE name = 'result.json' AND content LIKE '{%'
+          AND "executionId" = ${executionId}
+        ORDER BY "createdAt" DESC LIMIT 1`;
+      break;
+    // Config sources STEP 2: the Kubernetes Harvester's Git-vs-live drift fact — TRANSCRIBED at the Author's persist (the Reviewer
+    // chains the Author only), from the execution the chainer hands on.
+    case 'gitLiveDrift':
+      rows = await client.$queryRaw<Array<{ v: string | null }>>`
+        SELECT (content::jsonb)->>'gitLiveDrift' AS v FROM agent_artifacts
         WHERE name = 'result.json' AND content LIKE '{%'
           AND "executionId" = ${executionId}
         ORDER BY "createdAt" DESC LIMIT 1`;

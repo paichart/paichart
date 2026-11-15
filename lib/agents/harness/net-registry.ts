@@ -121,6 +121,13 @@ export interface NetContext {
    *  `toolCalls`), memoized — consumed by `deviceSourceReads` and `liveEvidence`, so both read ONE record (a derived value consumed
    *  by 2+ nets belongs on ctx). Optional so hand-built test contexts stay valid; `buildNetContext` always sets it. */
   deviceSourceReadRecord?: () => Promise<Fact>;
+  /** Config sources STEP 2: the leg's governing Config-sources declaration (memoized; `not-config-source-leg` on every leg that
+   *  declares none) and the ONE Config read record per persist, shared by `configSourceReads` and the `liveEvidence` config arm. */
+  configSources?: () => Promise<import('./config-sources-read').LegConfigSourcesResolution>;
+  configSourceReadRecord?: () => Promise<Fact>;
+  /** Config sources STEP 2: the PLATFORM's drift call record for this persist (platform-drift-run.ts) — present only on a
+   *  Config-sources Harvester whose core made (or decided not to make) the calls; a replay passes the STORED record, never calls. */
+  platformDriftCalls?: readonly unknown[] | null;
   /** Config-sources network push 1a (EF-S3): the persisting execution's OWN `protocolInjection` (result.json shape), read off the
    *  built resultJson in `stampExecutionNets` — the version key `liveEvidence` is stamped on. Absent ⇒ not a released version. */
   protocolInjection?: unknown;

@@ -58,7 +58,9 @@ const prisma = new PrismaClient();
  * (a lone UTF-16 surrogate, found on a 2026-09-25 pipeline-index.json) made every replay throw.
  */
 type StoredHeld = { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: string[] | null };
-type StoredExecution = { executionId: string | null; finalResponse: string | null; toolCalls: unknown; held: StoredHeld | null; heldNotice: string | null; protocolInjection?: unknown };
+type StoredExecution = { executionId: string | null; finalResponse: string | null; toolCalls: unknown; held: StoredHeld | null; heldNotice: string | null; protocolInjection?: unknown;
+  /** Config sources STEP 2 slice 3b: the STORED platform drift call record — a replay passes it to the nets and NEVER calls. */
+  platformDriftCalls?: readonly unknown[] };
 
 const isRec = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
@@ -134,7 +136,9 @@ async function finalResponseOf(taskId: string, taskType: string | null, db: Pris
     // (built resultJson, persist-truncated) — post-R10 here, pre-R10 at persist; quoteFidelity treats the R10
     // placeholder as a wildcard on both sides.
     // Config-sources push 1a: the STORED protocolInjection is what stampExecutionNets hands ctx (the liveEvidence version key).
-    return { executionId: execution.id, finalResponse: typeof fr === 'string' ? fr : null, toolCalls: parsed?.toolCalls ?? [], held, heldNotice, protocolInjection: parsed?.protocolInjection };
+    return { executionId: execution.id, finalResponse: typeof fr === 'string' ? fr : null, toolCalls: parsed?.toolCalls ?? [], held, heldNotice, protocolInjection: parsed?.protocolInjection,
+      // the stamp is `{ version, calls }`; absent on every execution that made no platform call (every stored one today)
+      ...(Array.isArray(parsed?.platformDriftCalls?.calls) ? { platformDriftCalls: parsed.platformDriftCalls.calls as unknown[] } : {}) };
   } catch { return { ...none, executionId: execution.id }; }
 }
 
@@ -174,7 +178,7 @@ export async function replay(taskId: string, onlyNet: string | null, contractFro
   // asserted rather than read, because a completed leg's mode is not on the row — replaying the
   // SYNTHESIZE view is the point.
   const point: StampPoint = task.type === 'PIPELINE' ? 'leg-synthesize' : 'leaf-persist';
-  const { executionId, finalResponse, toolCalls, held, heldNotice, protocolInjection } = await finalResponseOf(task.id, task.type, db);
+  const { executionId, finalResponse, toolCalls, held, heldNotice, protocolInjection, platformDriftCalls } = await finalResponseOf(task.id, task.type, db);
 
   console.log(`\n${'='.repeat(78)}`);
   console.log(`${task.id}  [${task.type}] ${task.title}`);
@@ -194,6 +198,7 @@ export async function replay(taskId: string, onlyNet: string | null, contractFro
     harnessMode: point === 'leg-synthesize' ? 'SYNTHESIZE' : null,
     finalResponse, programTier, toolCalls, executionId,
     ...(protocolInjection !== undefined ? { protocolInjection } : {}),
+    ...(platformDriftCalls !== undefined ? { platformDriftCalls } : {}),
     ...(held ? { held } : {}),
     onContractApplicabilityError: (e) => console.log(`  ⚠️  contractApplicability lookup failed: ${e}`),
   });

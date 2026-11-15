@@ -109,7 +109,7 @@ check('builder: absent when no record carries meta (every other result.json byte
 check('builder: no toolCalls[i] carries gatewayMeta', !JSON.stringify(withMeta.toolCalls).includes('targetServiceId'));
 const keys = Object.keys(orderResultJsonForPersist(withMeta));
 check('persist order: toolCallGatewayMeta is the LAST key (operator tail, after toolCalls)', keys[keys.length - 1] === 'toolCallGatewayMeta' && keys.indexOf('toolCalls') < keys.indexOf('toolCallGatewayMeta'));
-check('RESULT_JSON_OPERATOR_TAIL_KEYS carries it after applyBlockPlaceholder (validationToolCalls appended after it, 2026-10-23; deviceSourceReads + gitDeviceComparison, 2026-10-26; liveEvidence, 2026-11-04)', JSON.stringify(RESULT_JSON_OPERATOR_TAIL_KEYS) === JSON.stringify(['applyBlockPlaceholder', 'toolCallGatewayMeta', 'validationToolCalls', 'deviceSourceReads', 'gitDeviceComparison', 'liveEvidence']));
+check('RESULT_JSON_OPERATOR_TAIL_KEYS carries it after applyBlockPlaceholder (validationToolCalls appended after it, 2026-10-23; deviceSourceReads + gitDeviceComparison, 2026-10-26; liveEvidence, 2026-11-04)', JSON.stringify(RESULT_JSON_OPERATOR_TAIL_KEYS) === JSON.stringify(['applyBlockPlaceholder', 'toolCallGatewayMeta', 'validationToolCalls', 'deviceSourceReads', 'gitDeviceComparison', 'liveEvidence', 'configSourceReads', 'platformDriftCalls', 'gitLiveDrift'])); // + configSourceReads, then platformDriftCalls + gitLiveDrift (Config sources STEP 2, 2026-11-15, appended)
 check('collect: one entry per record with meta, in order', JSON.stringify(collectToolCallGatewayMeta([plain, rec, plain, rec]).map((e) => e.index)) === '[1,3]');
 
 // ── replay hydration ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -130,7 +130,9 @@ check('extractRawToolDocuments output identical with or without the record meta'
 const mcp = read('lib/services/mcp/mcpService.ts');
 const sm = read('lib/services/mcp/serverManager.ts');
 check('serverManager.executeToolOnServer hands back mcpService\'s result OBJECT unchanged (the map is keyed on it; BN-3)',
-  /const result = await mcpService\.callTool\(serverName, toolName, arguments_, options\);[\s\S]{0,200}return result;/.test(sm));
+  // §PD (2026-11-15): the options are an explicit pick (sessionId / userId / timeout) so the agent route never carries mcpService's
+  // platform-only option; the RESULT object is still handed back unchanged.
+  /const result = await mcpService\.callTool\(serverName, toolName, arguments_, options\s*\?\s*\{ sessionId: options\.sessionId, userId: options\.userId, timeout: options\.timeout \}\s*:\s*undefined\);[\s\S]{0,200}return result;/.test(sm));
 check('mcpService: attaches through the accessor, once, beside the rebuilt _meta (never merges it)',
   (mcp.match(/attachGatewayMeta\(result, toolName, response\._meta\)/g) || []).length === 1 && !/\.\.\.response\._meta/.test(mcp));
 const loop = read('lib/agents/harness/agentic-tool-loop.ts');

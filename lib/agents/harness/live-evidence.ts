@@ -51,6 +51,9 @@ export const LIVE_EVIDENCE_MIN_VERSIONS: Readonly<Record<string, string>> = Obje
   // VALUE-LEG-GIT (owner G1–G4, 2026-11-06): the value leg's own text version — keys the leg's SYNTHESIZE hoist (the leg composes
   // network-derivation). Its Harvester composes the network-provisioning text (1.26.0 above) and stamps only on a DECLARED value leg.
   [canonicalProtocolName('network-derivation')]: '1.3.0',
+  // Config sources STEP 2 (2026-11-15): the Kubernetes Config-sources text. Until it ships no leg composes 1.19.0, and until its row
+  // leaves CONFIG_SOURCE_AWAITING_TEXT no leg is a Config-sources leg — both must hold before a k8s stamp exists.
+  [canonicalProtocolName('kubernetes-gitops')]: '1.19.0',
 });
 
 const semver = (v: unknown): [number, number, number] | null => {
@@ -237,4 +240,4 @@ export function computeLiveEvidence(sources: LegDeviceSourcesResolution, toolCal
 }
 
 // §6 render: client-safe module (no server imports) — re-exported for callers and tests.
-export { renderLiveEvidenceForPrompt, listTotal, LIVE_EVIDENCE_RENDER_NAME, LIVE_EVIDENCE_SCOPE_CLAUSE, CONTRACT_NOT_DECLARED_LABEL } from './live-evidence-render';
+export { renderLiveEvidenceForPrompt, listTotal, LIVE_EVIDENCE_RENDER_NAME, LIVE_EVIDENCE_SCOPE_CLAUSE, CONTRACT_NOT_DECLARED_LABEL, CONFIG_LIVE_EVIDENCE_SCOPE_CLAUSE } from './live-evidence-render';

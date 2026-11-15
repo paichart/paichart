@@ -168,6 +168,12 @@ export interface ChainedContext {
      * is in LIVE_EVIDENCE_READERS, so every other entry and every other chain is byte-identical. Rendered in §6; never a gate input.
      */
     liveEvidence?: Record<string, unknown>;
+    /**
+     * Config sources STEP 2: the Kubernetes Harvester's Git-vs-live drift fact (or the Author's transcription of it). Carried ONLY
+     * from a LEAF dependency that stamped it checked (a Config-sources leg at its text version — NOT_STAMPED everywhere else) and
+     * ONLY to GIT_DEVICE_COMPARISON_READERS (Architect, leg Reviewer), so every other entry is byte-identical. Never a gate input.
+     */
+    gitLiveDrift?: Record<string, unknown>;
     finalResponse: string;
     executionId: string;
     // A1 truncation facts (Protocol-10 fact; pre-wires deferred D1 coverage signal)
@@ -680,6 +686,12 @@ export async function chainDependencyContext(
       const liveEvidence = !isPipelinePredecessor && stampedLive && typeof stampedLive === 'object' && !Array.isArray(stampedLive)
         && LIVE_EVIDENCE_READERS.has((consumerRole ??= await consumerRoleOf(db, taskId)) ?? '')
         ? (stampedLive as Record<string, unknown>) : null;
+      // Config sources STEP 2: the platform's Git-vs-live drift fact, from a LEAF dependency only, to the comparison's readers only.
+      const stampedDrift = (parsed as { gitLiveDrift?: unknown }).gitLiveDrift;
+      const gitLiveDrift = !isPipelinePredecessor && stampedDrift && typeof stampedDrift === 'object' && !Array.isArray(stampedDrift)
+        && (stampedDrift as { checked?: unknown }).checked === true
+        && GIT_DEVICE_COMPARISON_READERS.has((consumerRole ??= await consumerRoleOf(db, taskId)) ?? '')
+        ? (stampedDrift as Record<string, unknown>) : null;
       // PLATFORM-HELD-BYTES Stage B V-6: only a dependency carrying a variant stamp reaches any read here; {} otherwise.
       const heldFields = await heldEntryFields(db, {
         consumerTaskId: taskId, depExecutionId: latestExec.id, parsed: parsed as Record<string, unknown>,
@@ -726,6 +738,7 @@ export async function chainDependencyContext(
           ? { validationToolCalls: (parsed as { validationToolCalls: Record<string, unknown> }).validationToolCalls } : {}),
         ...(gitDeviceComparison ? { gitDeviceComparison } : {}),
         ...(liveEvidence ? { liveEvidence } : {}),
+        ...(gitLiveDrift ? { gitLiveDrift } : {}),
         finalResponse,
         executionId: latestExec.id,
         truncated,

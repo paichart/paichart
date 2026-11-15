@@ -53,6 +53,31 @@ Two independent limits are doing work here: the service exposes a **verb allowli
 `get_resource`, `list_secret_names` — there is no write, exec, log or secret-value verb to call), and
 the ServiceAccount behind it **cannot** write or read secret values even if the service had a bug.
 
+## The compare tool
+
+The service also offers `compare_declared_fields`. Give it the text of a manifest file and it reports, for each
+object the file names, which **declared** fields differ from the live object.
+
+- It makes one `get` per object. It does not list, patch or dry-run anything, so the ServiceAccount above needs no
+  new permission.
+- It returns field **paths** only (for example `spec.replicas`), never a value, declared or live.
+- A field the manifest does not state is not read out, so cluster defaults and status are not compared.
+- A `Secret` is never fetched. A kustomization, a Helm values file, or a kind the service does not allow is
+  reported as *not compared*, with the reason. A `Namespace` object is one of those: it is cluster-scoped.
+- Limits: 262,144 bytes of manifest, 50 objects, 200 differing paths per object. Anything over a limit is
+  refused or counted, never guessed.
+
+The logic is `k8s-mcp-readonly/declared_compare.py`, which imports no Kubernetes client, so its tests run without
+a cluster:
+
+```bash
+python3 k8s-mcp-readonly/test_declared_compare.py     # needs PyYAML
+```
+
+Known noise, reported as a difference although the cluster treats both sides as equal: a quantity the API server
+rewrites (`1000m` stored as `1`), a list whose items have no `name` (compared by position), and an unquoted
+number or date in a string field.
+
 ## Run the service
 
 ```bash

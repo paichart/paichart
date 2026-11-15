@@ -24,7 +24,10 @@
  * refs must name this leg (`legTaskId`, written at the Author's persist from its own stage back-pointer), or `author-not-of-leg`
  * — so a two-step re-point (re-point, then approve) also forces.
  */
-import { isHeldCapableLeg, carrierAppliesDeviceForce } from './held-bytes/variant';
+import { isHeldCapableLeg, carrierAppliesDeviceForce, isConfigSourceLeg } from './held-bytes/variant';
+import { readLegConfigSources } from './config-sources-read';
+import { configGitFileForce, type ConfigForce } from './held-bytes/config-source-scope';
+import { resolveTaskProtocol, canonicalProtocolName } from './program-protocol';
 import { readLegDeviceSources, type LegDeviceSourcesResolution } from './device-sources-read';
 import { isFileOfGitLine } from './held-bytes/device-read-scope';
 import { GIT_FILE_SOURCE_PINS } from '@/lib/mcp/server/config/git-file-source-pin';
@@ -156,6 +159,7 @@ export async function applyHeldEditCarrier(
   let author: ChildStamp | null = null; let reviewer: ChildStamp | null = null; let readError = false; let notOfLeg = false;
   let notPinned = false;
   let deviceForce: ReturnType<typeof deviceReadForce> = null;
+  let configForce: ConfigForce | null = null;
   try {
     // held-k8s step 3 (owner G-4, SYNTHESIS v3 §6.4): a Git read off the pin (another repo, another ref, a sha) is refused at call
     // time and recorded at capture as `source-not-pinned`. On a held-capable leg it leaves no base, so the package would read
@@ -178,6 +182,19 @@ export async function applyHeldEditCarrier(
         : { state: 'could-not-check' as const, grammarVersion: 1, reason: 'read-threw' as const };
       deviceForce = deviceReadForce(sources, refs, snapRefusal?.refusal ?? null);
     }
+    // Config sources STEP 2 (plan §3.8 rule 4, the D-1 force for a Config-sources leg): every declared `git-file` line must have a
+    // held CAPTURE ref in the authoritative Harvester's capture; a declaration that is not `parsed` forces by its own name. A no-op
+    // off a Config-sources leg (and on every leg while its protocol's row awaits its text).
+    if (isConfigSourceLeg({ title: task.title ?? null, metadata: task.metadata })) {
+      const proto = canonicalProtocolName(resolveTaskProtocol({ title: task.title ?? null, metadata: task.metadata }).protocol ?? '');
+      const refs = harvester.executionId
+        ? await db.heldFileRef.findMany({ where: { executionId: harvester.executionId, kind: 'CAPTURE' }, select: { target: true, path: true }, take: 1000 })
+        : [];
+      const sources = task.id
+        ? await readLegConfigSources(db as never, { kind: 'self', legId: task.id, heldCapable: true, configSourceProtocol: proto })
+        : { state: 'could-not-check' as const, grammarVersion: 1, reason: 'read-threw' as const };
+      configForce = configGitFileForce(sources, refs);
+    }
     author = await selectLegEditApplication(db, stageId);
     reviewer = await selectLegReviewedDiff(db, stageId);
     if (author.state === 'ok' && author.fact.state === 'applied') {
@@ -191,6 +208,7 @@ export async function applyHeldEditCarrier(
   const v: HeldEditVerdict = rebind ? { ...base, reason: 'stage-rebind' }
     : notPinned && !readError ? { ...base, reason: 'source-not-pinned' }
     : deviceForce && !readError ? { ...base, reason: deviceForce.reason }
+    : configForce && !readError ? { ...base, reason: configForce.reason }
     : notOfLeg && base.reason === null ? { ...base, reason: 'author-not-of-leg' } : base;
   const agentOutcome = qg.outcome as string;
   const forced = agentOutcome === 'approved' && v.reason !== null;
@@ -199,7 +217,10 @@ export async function applyHeldEditCarrier(
     ...(df.devicesNotHeld ? { devicesNotHeld: df.devicesNotHeld, devicesNotHeldTotal: df.devicesNotHeldTotal } : {}),
     ...(df.gitFileDevicesNotHeld ? { gitFileDevicesNotHeld: df.gitFileDevicesNotHeld, gitFileDevicesNotHeldTotal: df.gitFileDevicesNotHeldTotal } : {}),
   } : {};
-  qg.heldEdit = { state: v.state, reviewerSaw: v.reviewerSaw, agentOutcome, forced, inScope: v.inScope, ...(v.reason !== null ? { reason: v.reason } : {}), ...devicesNotHeld };
+  // Config sources: the labels of the declared Git files not held — present only when THAT force is the stamped reason.
+  const cf = configForce && !deviceForce && v.reason === configForce.reason && configForce.gitFilesNotHeld ? configForce : null;
+  const filesNotHeld = cf ? { gitFilesNotHeld: cf.gitFilesNotHeld, gitFilesNotHeldTotal: cf.gitFilesNotHeldTotal } : {};
+  qg.heldEdit = { state: v.state, reviewerSaw: v.reviewerSaw, agentOutcome, forced, inScope: v.inScope, ...(v.reason !== null ? { reason: v.reason } : {}), ...devicesNotHeld, ...filesNotHeld };
   if (forced) qg.outcome = 'needs-revision';
   return { applied: true, forced };
 }

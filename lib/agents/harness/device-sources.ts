@@ -129,6 +129,21 @@ function serviceProblem(svc: string): boolean {
 
 /** One line ⇒ one source, or the first problem. Never infers: every token must be where the grammar puts it. */
 export function parseDeviceSourceLine(raw: string): { ok: true; line: DeviceSourceLine } | { ok: false; problem: LineProblem } {
+  return parseSourceLineCore(raw, liveReadKindEnabled());
+}
+
+/** Config sources STEP 2 (2026-11-15): the `<label>: <kind><rest>` head of a line after the protocol's own presentation is stripped,
+ *  or null. Shared with `config-sources.ts` so the two grammars cannot disagree on what a head is. */
+export function sourceLineHead(raw: string): { label: string; kind: string; rest: string } | null {
+  const head = HEAD_RE.exec(unwrap(raw));
+  return head ? { label: head[1], kind: head[2], rest: head[3] } : null;
+}
+/** Is this a valid item label (a device, a file label, a cluster)? The ONE label grammar. */
+export function isSourceLabel(label: string): boolean { return DEVICE_RE.test(label); }
+
+/** The line grammar with the `live-read` gate passed in. `parseDeviceSourceLine` binds it to the network kind gate; the Config-sources
+ *  grammar (config-sources.ts) parses its `git-file` / `live-read` lines through THIS function, so those kinds have one grammar. */
+export function parseSourceLineCore(raw: string, liveReadOn: boolean): { ok: true; line: DeviceSourceLine } | { ok: false; problem: LineProblem } {
   const s = unwrap(raw);
   const head = HEAD_RE.exec(s);
   if (!head) return { ok: false, problem: 'not-a-source-line' };
@@ -137,7 +152,7 @@ export function parseDeviceSourceLine(raw: string): { ok: true; line: DeviceSour
   if (kind === 'command-package') {
     return rest === '' ? { ok: true, line: { device, kind } } : { ok: false, problem: 'trailing-text' };
   }
-  const liveRead = kind === 'live-read' && liveReadKindEnabled();
+  const liveRead = kind === 'live-read' && liveReadOn;
   if (kind !== 'git-file' && kind !== 'device-read' && !liveRead) return { ok: false, problem: 'unknown-kind' };
   const lead = `${SOURCE_SEPARATOR}service `;
   if (!rest.startsWith(lead)) return { ok: false, problem: 'separator-invalid' };

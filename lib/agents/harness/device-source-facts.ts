@@ -30,12 +30,12 @@ function argsOf(raw: unknown): Obj | null {
   return null;
 }
 
-interface CallView {
+export interface CallView {
   index: number; service: string | null; serviceId: string | null; tool: string | null; args: Obj; ok: boolean; truncated: boolean;
 }
 
 /** Every `services` call, with the resolved service (envelope first), the SERVICE's own arguments and whether it succeeded. */
-function serviceCalls(records: readonly unknown[]): CallView[] {
+export function serviceCalls(records: readonly unknown[]): CallView[] {
   const out: CallView[] = [];
   records.forEach((rec, index) => {
     if (!isObj(rec) || rec.tool !== 'services') return;
@@ -75,7 +75,7 @@ export function shownService(service: string): string {
 }
 
 /** The services a declared service string resolves to in THIS execution: the name itself, or the rows registered from the URL. */
-function serviceMatcher(records: readonly unknown[]) {
+export function serviceMatcher(records: readonly unknown[]) {
   const regs = registrationsByDescriptorUrl(records);
   return (declared: string, c: { service: string | null; serviceId: string | null }): boolean => {
     if (/^https?:\/\//i.test(declared)) {
@@ -95,7 +95,7 @@ function normalisedRef(ref: unknown): string {
   return r.startsWith('refs/heads/') ? r.slice('refs/heads/'.length) : r;
 }
 
-function gitArgsMatch(e: Extract<DeviceSourceLine, { kind: 'git-file' }>, args: Obj): boolean {
+export function gitArgsMatch(e: { owner: string; repo: string; path: string; ref: string | null }, args: Obj): boolean {
   const p = typeof args.path === 'string' ? args.path.replace(/^\/+/, '') : null;
   return args.owner === e.owner && args.repo === e.repo && p === e.path && normalisedRef(args.ref) === normalisedRef(e.ref);
 }

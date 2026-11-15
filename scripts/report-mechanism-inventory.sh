@@ -483,6 +483,15 @@ WITH f AS (SELECT min(c) f FROM (SELECT min("createdAt") c FROM held_file_refs U
 SELECT '⚪ held-bytes live since (derived: first held row; empty ⇒ nothing measured)' AS line, coalesce(to_char((SELECT f FROM f), 'YYYY-MM-DD HH24:MI'), '(empty)') AS value
 UNION ALL SELECT '⚪ refs by kind: ' || k.kind, (SELECT count(*) FROM held_file_refs r WHERE r.kind = k.kind)::text FROM (VALUES ('CAPTURE'), ('BASE'), ('CANDIDATE')) k(kind)
 UNION ALL SELECT '⚪ captures by tool: ' || "sourceTool", count(*)::text FROM held_file_refs WHERE kind = 'CAPTURE' GROUP BY "sourceTool"
+-- Config sources STEP 2 (owner decision 2026-11-15, operator-only — shown to no agent): one Git file held or edited by more than one leg
+-- of one program. Holding is expected (every leg of a protocol reads every declared file); EDITING by two legs is the spec-design case
+-- "one file, one leg" — the second package may not apply cleanly. Read each by hand.
+UNION ALL SELECT '⚪ Git files HELD (capture) by more than one leg of one program', count(*)::text FROM (
+  SELECT 1 FROM held_file_refs WHERE kind = 'CAPTURE' AND target LIKE 'github:%' AND "rootTaskId" IS NOT NULL AND "legTaskId" IS NOT NULL
+  GROUP BY "rootTaskId", target, path HAVING count(DISTINCT "legTaskId") > 1) x
+UNION ALL SELECT '· Git files EDITED (a held base) by more than one leg of one program — read each by hand', count(*)::text FROM (
+  SELECT 1 FROM held_file_refs WHERE kind = 'BASE' AND target LIKE 'github:%' AND "rootTaskId" IS NOT NULL AND "legTaskId" IS NOT NULL
+  GROUP BY "rootTaskId", target, path HAVING count(DISTINCT "legTaskId") > 1) x
 UNION ALL SELECT '⚪ captures by serviceId (a foreign id = a user-registered same-name service, sec-ops N-7): ' || "serviceId" || ' (' || "serviceName" || ')', count(*)::text FROM held_file_refs WHERE kind = 'CAPTURE' GROUP BY "serviceId", "serviceName"
 UNION ALL SELECT '· refusal ' || refusal || ' / identity ' || "identitySource", count(*)::text FROM held_capture_refusals GROUP BY refusal, "identitySource"
 UNION ALL SELECT '· refs with redactedCount > 0 (live: a redacted held file), kind ' || k.kind, (SELECT count(*) FROM held_file_refs r WHERE r.kind = k.kind AND r."redactedCount" > 0)::text FROM (VALUES ('CAPTURE'), ('BASE'), ('CANDIDATE')) k(kind)
@@ -707,12 +716,32 @@ UNION ALL SELECT '🔴 a live-read-evidence-only refusal on an execution whose o
 UNION ALL SELECT '⚪ liveEvidence stamps by point / summary — ' || coalesce(a.j->'liveEvidence'->>'point', '(none)') || ' / '
   || coalesce(a.j->'liveEvidence'->>'summary', 'not checked: ' || coalesce(a.j->'liveEvidence'->>'reason', '(none)')), count(*)::text
   FROM _a a WHERE a.name IN ('result.json', 'pipeline-index.json') AND a.j ? 'liveEvidence' GROUP BY 1
-UNION ALL SELECT '🔴 a liveEvidence stamp on an execution composed below network-provisioning 1.26.0 / network-derivation 1.3.0 (EF-S3: stored legs never stamp)', count(*)::text
+UNION ALL SELECT '🔴 a liveEvidence stamp on an execution composed below network-provisioning 1.26.0 / network-derivation 1.3.0 / kubernetes-gitops 1.19.0 (EF-S3: stored legs never stamp)', count(*)::text
   FROM _a a WHERE a.name IN ('result.json', 'pipeline-index.json') AND a.j ? 'liveEvidence'
    AND NOT ((a.j->'protocolInjection'->'delta'->>'name' = 'network-provisioning-protocol'
         AND coalesce(string_to_array(substring(a.j->'protocolInjection'->'delta'->>'version' FROM '^[0-9]+\.[0-9]+\.[0-9]+'), '.')::int[], '{0}') >= '{1,26,0}'::int[])
      OR (a.j->'protocolInjection'->'delta'->>'name' = 'network-derivation-protocol'
-        AND coalesce(string_to_array(substring(a.j->'protocolInjection'->'delta'->>'version' FROM '^[0-9]+\.[0-9]+\.[0-9]+'), '.')::int[], '{0}') >= '{1,3,0}'::int[]))
+        AND coalesce(string_to_array(substring(a.j->'protocolInjection'->'delta'->>'version' FROM '^[0-9]+\.[0-9]+\.[0-9]+'), '.')::int[], '{0}') >= '{1,3,0}'::int[])
+     OR (a.j->'protocolInjection'->'delta'->>'name' = 'kubernetes-gitops-protocol'
+        AND coalesce(string_to_array(substring(a.j->'protocolInjection'->'delta'->>'version' FROM '^[0-9]+\.[0-9]+\.[0-9]+'), '.')::int[], '{0}') >= '{1,19,0}'::int[]))
+-- Config sources STEP 2 (2026-11-15) — the Kubernetes Config-sources facts. All NOT_STAMPED until kubernetes-gitops 1.19.0 ships, so
+-- every count below is 0 on every stored leg; a non-zero count before that text is live is a stamp that should not exist.
+UNION ALL SELECT '⚪ configSourceReads stamps (Config-sources Harvesters): checked / not checked', count(*) FILTER (WHERE a.j->'configSourceReads'->>'checked' = 'true') || ' / '
+  || count(*) FILTER (WHERE a.j->'configSourceReads'->>'checked' = 'false') FROM _a a WHERE a.name = 'result.json' AND a.j ? 'configSourceReads'
+UNION ALL SELECT '· configSourceReads: stamps with a declared source line NOT read (read each by hand)', count(*)::text
+  FROM _a a WHERE a.name = 'result.json' AND (a.j->'configSourceReads'->>'notRead')::int > 0
+UNION ALL SELECT '· configSourceReads: stamps with a Git file read that no declared line names (never held)', count(*)::text
+  FROM _a a WHERE a.name = 'result.json' AND (a.j->'configSourceReads'->>'undeclaredGitFileReads')::int > 0
+UNION ALL SELECT '⚪ gitLiveDrift Harvester stamps: files compared / files not checked', coalesce(sum((a.j->'gitLiveDrift'->>'filesCompared')::int), 0) || ' / '
+  || coalesce(sum((a.j->'gitLiveDrift'->>'filesNotChecked')::int), 0) FROM _a a WHERE a.name = 'result.json' AND a.j->'gitLiveDrift'->>'point' = 'harvester'
+UNION ALL SELECT '· gitLiveDrift: files not checked, by reason: ' || coalesce(f->>'reason', '(none)'), count(*)::text
+  FROM _a a, jsonb_array_elements(CASE WHEN jsonb_typeof(a.j->'gitLiveDrift'->'files') = 'array' THEN a.j->'gitLiveDrift'->'files' ELSE '[]' END) f
+  WHERE a.name = 'result.json' AND a.j->'gitLiveDrift'->>'point' = 'harvester' AND f->>'state' = 'not-checked' GROUP BY f->>'reason'
+UNION ALL SELECT '· platformDriftCalls: platform calls of the compare tool, by outcome: ' || coalesce(c->>'outcome', '(none)'), count(*)::text
+  FROM _a a, jsonb_array_elements(CASE WHEN jsonb_typeof(a.j->'platformDriftCalls'->'calls') = 'array' THEN a.j->'platformDriftCalls'->'calls' ELSE '[]' END) c
+  WHERE a.name = 'result.json' GROUP BY c->>'outcome'
+UNION ALL SELECT '🔴 a platformDriftCalls record that carries a `manifest` key or a raw `detail` (the record stores a sha, a length and the validated projection only)', count(*)::text
+  FROM _a a WHERE a.name = 'result.json' AND a.j ? 'platformDriftCalls' AND ((a.j->'platformDriftCalls')::text LIKE '%"manifest":%' OR (a.j->'platformDriftCalls')::text LIKE '%"detail":%')
 -- held-network step 3 push 2 (O-2, the J1 entry gate): capture governs from the leg's FIRST-EXECUTION declaration snapshot
 -- (metadata.deviceSourcesSnapshot, prepare-task-for-execution.ts). The 🔴 is scoped to refs written after the first snapshot ever
 -- (a ref from a leg first executed before push 2 deployed predates the rule); while the ⚪ reads nothing it is unmeasured.

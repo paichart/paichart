@@ -38,7 +38,8 @@ import { resolveProtocolStamp, findProgramParentForStage, resolveOwningLeg } fro
 import type { LegInjection } from './context-chainer';
 import { recordFromChained, type ChainedRecord } from './chained-predecessors';
 import { interfaceContractMissingCause } from './interface-contract-missing';
-import { DEVICE_SOURCE_PROTOCOLS, deviceSourceContractKeyOf, deviceSourceLaneOf } from './held-bytes/variant';
+import { DEVICE_SOURCE_PROTOCOLS, deviceSourceContractKeyOf, deviceSourceLaneOf, configSourceLaneOf, configSourceContractKeyOf, assertNeverConfigLane } from './held-bytes/variant';
+import { CONFIG_SOURCES_SNAPSHOT_KEY, buildConfigSourcesSnapshot, contractConfigSourcesValue, resolveLegConfigSources } from './config-sources';
 import { buildDeviceSourcesSnapshot, contractDeviceSourcesValue, resolveLegDeviceSources, DEVICE_SOURCES_SNAPSHOT_KEY } from './device-sources';
 
 const log = logger.child({ module: 'PrepareTaskForExecution' });
@@ -348,11 +349,35 @@ export async function prepareTaskForExecutionWithRecord(
     const snapshot = laneResolution && (deviceSourceLaneOf(resolved.protocol) === 'change' || laneResolution.state !== 'absent')
       ? buildDeviceSourcesSnapshot(laneResolution, resolvedAt)
       : null;
+    // Config sources STEP 2 (owner decision (b)): the SAME snapshot rule for a Config-sources leg, under its OWN key and from its OWN
+    // contract field (`configSources["<token>"]`) — never the device lane. A change-lane leg is snapshotted whatever it resolves to
+    // (an `absent` block is a state the harness stops on, owner D1, and the carrier names). Null on every other leg — and on EVERY leg
+    // while the protocol's row awaits its text (configSourceLaneOf is null), so the stamp below is byte-identical until then.
+    const configLane = contractCheck.type === 'PIPELINE' ? configSourceLaneOf(resolved.protocol) : null;
+    let configSnapshot: ReturnType<typeof buildConfigSourcesSnapshot> | null = null;
+    if (configLane !== null && resolved.protocol) {
+      switch (configLane) {
+        case 'change':
+          configSnapshot = buildConfigSourcesSnapshot(resolved.protocol, resolveLegConfigSources({
+            protocol: resolved.protocol,
+            contractValue: contractConfigSourcesValue((contractCheck.inputContext as Record<string, unknown> | null)?.interfaceContract,
+              configSourceContractKeyOf(resolved.protocol) ?? ''),
+            taskBody: contractCheck.description,
+          }), resolvedAt);
+          break;
+        default: assertNeverConfigLane(configLane);
+      }
+    }
     const stampJson = JSON.stringify({
       protocol: resolved.protocol,
       protocolResolvedAt: resolvedAt,
       ...(snapshot ? { [DEVICE_SOURCES_SNAPSHOT_KEY]: snapshot } : {}),
+      ...(configSnapshot ? { [CONFIG_SOURCES_SNAPSHOT_KEY]: configSnapshot } : {}),
     });
+    if (configSnapshot) {
+      log.info({ taskId, state: configSnapshot.resolution.state, entries: configSnapshot.resolution.state === 'parsed' ? configSnapshot.resolution.entries.length : 0,
+        errorCode: 'CONFIG_SOURCES_SNAPSHOT_TAKEN' }, 'Config sources declaration snapshotted at the leg\'s first execution');
+    }
     if (snapshot) {
       log.info({ taskId, state: snapshot.resolution.state, entries: snapshot.resolution.state === 'parsed' ? snapshot.resolution.entries.length : 0,
         errorCode: 'DEVICE_SOURCES_SNAPSHOT_TAKEN' }, 'Device sources declaration snapshotted at the leg\'s first execution');

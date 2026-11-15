@@ -10,7 +10,7 @@ RUN useradd --create-home --shell /usr/sbin/nologin k8smcp
 WORKDIR /app
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
-COPY server.py /app/server.py
+COPY server.py declared_compare.py /app/
 ENV KUBECONFIG=/app/kubeconfig
 RUN chown -R k8smcp:k8smcp /app
 USER k8smcp

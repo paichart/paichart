@@ -1050,6 +1050,10 @@ lib/agents/harness/build-agent-prompt-body.ts
 lib/agents/harness/chained-predecessors.ts
 lib/agents/harness/chained-record.ts
 lib/agents/harness/config-hierarchy.ts
+lib/agents/harness/config-source-facts-enrichment.ts
+lib/agents/harness/config-source-facts.ts
+lib/agents/harness/config-sources-read.ts
+lib/agents/harness/config-sources.ts
 lib/agents/harness/context-chainer.ts
 lib/agents/harness/contract-propagation-enrichment.ts
 lib/agents/harness/derivation-containment-enrichment.ts
@@ -1065,11 +1069,14 @@ lib/agents/harness/evidence-grading.ts
 lib/agents/harness/execution-quality.ts
 lib/agents/harness/form-correction.ts
 lib/agents/harness/git-device-comparison.ts
+lib/agents/harness/git-live-drift-enrichment.ts
+lib/agents/harness/git-live-drift.ts
 lib/agents/harness/held-bytes-nets.ts
 lib/agents/harness/held-bytes/apply.ts
 lib/agents/harness/held-bytes/canonical-text.ts
 lib/agents/harness/held-bytes/caps.ts
 lib/agents/harness/held-bytes/clause.ts
+lib/agents/harness/held-bytes/config-source-scope.ts
 lib/agents/harness/held-bytes/descriptors.ts
 lib/agents/harness/held-bytes/device-read-scope.ts
 lib/agents/harness/held-bytes/diff.ts
@@ -1105,6 +1112,7 @@ lib/agents/harness/package-form-check.ts
 lib/agents/harness/parse-confidence.ts
 lib/agents/harness/parse-verdict.ts
 lib/agents/harness/plan-spawn-carry.ts
+lib/agents/harness/platform-drift-run.ts
 lib/agents/harness/prepare-task-for-execution.ts
 lib/agents/harness/program-protocol.ts
 lib/agents/harness/protocol-dependence-anchors.ts
@@ -1230,6 +1238,7 @@ lib/mcp/server/config/git-file-source-pin.js
 lib/mcp/server/config/held-eligibility.js
 lib/mcp/server/config/held-file-declaration.js
 lib/mcp/server/config/held-grant.js
+lib/mcp/server/config/platform-drift-call.js
 lib/mcp/server/config/server-config.js
 lib/mcp/server/config/service-approval-policy.js
 lib/mcp/server/config/service-call-policy.js
@@ -1485,6 +1494,7 @@ lib/services/mcpStorageMigration.ts
 lib/services/orchestrator-reexecution.ts
 lib/services/pipelineProtocolValidator.ts
 lib/services/pipelineRetriggerReactorService.ts
+lib/services/platform-drift.ts
 lib/services/reactor-budget-exhausted-persist.ts
 lib/services/reactor-skip-counter.ts
 lib/services/reaped-task-persist.ts
@@ -1693,6 +1703,7 @@ scripts/canary-req-sources.ts
 scripts/check-descriptor.ts
 scripts/check-field-limits-adoption.ts
 scripts/check-held-bytes-schema.sql
+scripts/check-held-capture-replay-diff.sh
 scripts/check-held-r10-lab-repo.ts
 scripts/check-held-variant-controls.ts
 scripts/check-mi13-held-git-control.sh
@@ -1762,6 +1773,7 @@ scripts/fixtures/form-check/f3-obs-prose-cmuwby460.md
 scripts/fixtures/form-check/f4-tf-rollback-elided-approved-cmu23zy5d.md
 scripts/fixtures/form-check/n10-net-same-span-elided-cmsb7rrm4005.md
 scripts/fixtures/form-check/n4-tf-unnumbered-nosource-cmul0cewg.md
+scripts/fixtures/git-live-drift/compare-result.json
 scripts/fixtures/held-bytes/decode-vectors.json
 scripts/fixtures/held-bytes/gen-legacy-python-text.py
 scripts/fixtures/held-edit-correction-golden.json
@@ -1813,11 +1825,14 @@ scripts/harness-phase0-execute.ts
 scripts/harness-phase0-setup.ts
 scripts/held-base-check.ts
 scripts/held-capture-compare.ts
+scripts/held-capture-replay-diff.sh
 scripts/init-llm-settings.js
 scripts/leg-replay-lab/.gitignore
 scripts/leg-replay-lab/batch-transport.ts
 scripts/leg-replay-lab/chain.ts
 scripts/leg-replay-lab/check-at.ts
+scripts/leg-replay-lab/config-sources-arm.ts
+scripts/leg-replay-lab/config-sources-patch.ts
 scripts/leg-replay-lab/derive-edits.py
 scripts/leg-replay-lab/device-comparison-patch.ts
 scripts/leg-replay-lab/edits.ts
@@ -1826,6 +1841,7 @@ scripts/leg-replay-lab/fixtures/l-k1-6d7d0c7/fixture.json
 scripts/leg-replay-lab/git-harvest-plant.ts
 scripts/leg-replay-lab/golden-set.ts
 scripts/leg-replay-lab/harvester-source.ts
+scripts/leg-replay-lab/held-id-check-both-pins.sh
 scripts/leg-replay-lab/held-store.ts
 scripts/leg-replay-lab/input-edits.ts
 scripts/leg-replay-lab/kind-gate.ts
@@ -1999,6 +2015,7 @@ scripts/test-compliance-monitor.ts
 scripts/test-confidence-parse-parity.ts
 scripts/test-config-hierarchy.ts
 scripts/test-config-prompt-no-template-fallback.ts
+scripts/test-config-sources.ts
 scripts/test-containment-enrichment-branches.ts
 scripts/test-containment-public-parity.ts
 scripts/test-context-builder-parity.ts
@@ -2050,6 +2067,7 @@ scripts/test-gateway-meta.ts
 scripts/test-geographical-seed-data.ts
 scripts/test-git-device-comparison.ts
 scripts/test-git-file-source-pin-env.ts
+scripts/test-git-live-drift.ts
 scripts/test-golden-set.ts
 scripts/test-harness-dispatch-fact.ts
 scripts/test-harness-mode-resolver.ts

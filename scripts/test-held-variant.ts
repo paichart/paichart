@@ -588,7 +588,8 @@ test('V-5 core: ONE owning-leg resolution; step after requirements & before onSt
   ok(at('editCorrection: editStep.correction') < at('const truncationStalled'), 'editCorrection threaded into buildExecutionResultJson');
   ok(at('prepareHeldPackage(') < at('await stampExecutionNets(') && at('variantLeaf ? await captureHeldFiles(') < at('await stampExecutionNets('), 'variant I/O before the nets');
   // held-network step 3 batch 2b: the core's ONE Device sources read rides between them (network leaves only)
-  ok(/owningLeg,\s*\n(\s*\.\.\.\(legDeviceSources \? \{ deviceSources: legDeviceSources \} : \{\}\),\s*\n)?\s*\.\.\.\(heldStamps \? \{ held: heldStamps \} : \{\}\)/.test(src), 'the nets receive the core\'s owningLeg and the built stamps');
+  // + Config sources STEP 2: the core's ONE Config sources read rides after it (a Config-sources leaf only)
+  ok(/owningLeg,\s*\n(\s*\.\.\.\(legDeviceSources \? \{ deviceSources: legDeviceSources \} : \{\}\),\s*\n)?(\s*\.\.\.\(legConfigSources \? \{ configSources: legConfigSources \} : \{\}\),\s*\n)?(\s*\.\.\.\(platformDriftCalls !== undefined \? \{ platformDriftCalls \} : \{\}\),\s*\n)?\s*\.\.\.\(heldStamps \? \{ held: heldStamps \} : \{\}\)/.test(src), 'the nets receive the core\'s owningLeg and the built stamps');
 });
 
 test('V-5c core: the held-edit block reassigns the deliverable ONLY when the correction was adopted (textSource edit-correction)', () => {

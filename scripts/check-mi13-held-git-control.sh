@@ -27,6 +27,7 @@ CREATE TEMP TABLE agent_artifacts (id text, name text, "executionId" text, "crea
 CREATE TEMP TABLE held_file_refs (id text, kind text, "executionId" text, "toolCallIndex" int, selector text, "sourceTool" text, "declaredBy" text,
   "serviceId" text, "serviceName" text, "blobSha256" text, scope text, "redactedCount" int DEFAULT 0, "redactorVersion" text DEFAULT 'paichart.r10/3',
   "fromRefId" text, "sourceRevision" text, "createdAt" timestamptz DEFAULT now(), "storedByteLength" int,
+  "legTaskId" text, "rootTaskId" text, -- Config sources STEP 2: MI-13's two cross-leg reads (held / edited by more than one leg) read them; without them this control aborted
   path text, target text DEFAULT 'file');  -- held-terraform step 2: MI-13's state/variables-path 🔴 line (step 1) reads it; without it this control aborted
 CREATE TEMP TABLE held_capture_refusals (id text, "executionId" text, "toolCallIndex" int, refusal text, "identitySource" text, "createdAt" timestamptz DEFAULT now());
 CREATE TEMP TABLE held_blobs (sha256 text, scope text, content bytea, "storedByteLength" int, "lastReferencedAt" timestamptz DEFAULT now());
@@ -93,6 +94,15 @@ INSERT INTO held_file_refs (id, kind, "executionId", "toolCallIndex", selector, 
  -- TF-PATH-RULE-GAPS (sec-ops review B-1): the two new arms of the widened line — a CLI credentials NAME and a .terraform.d SEGMENT
  ('tfc','CAPTURE','x1',11,'/content/1/resource/text','get_file_contents','platform-default','gh','github-service','x','s', NULL,'0ea432e751cc622ffab91d7a90386c66cadf8733'),
  ('tfd','CAPTURE','x1',12,'/content/1/resource/text','get_file_contents','platform-default','gh','github-service','x','s', NULL,'0ea432e751cc622ffab91d7a90386c66cadf8733');
+-- Config sources STEP 2 (operator-only cross-leg reads): one Git file HELD by two legs of one program, and one EDITED (a BASE) by two
+-- legs. A service name no other line keys on, so no existing expectation moves.
+INSERT INTO held_file_refs (id, kind, "executionId", "serviceId", "serviceName", "blobSha256", scope, "sourceRevision", "legTaskId", "rootTaskId", target, path) VALUES
+ ('xl1','CAPTURE','xl-e1','cfg','config-git','x','s','0ea432e751cc622ffab91d7a90386c66cadf8733','leg-1','root-1','github:acme:configs','/k8s/shared.yaml'),
+ ('xl2','CAPTURE','xl-e2','cfg','config-git','x','s','0ea432e751cc622ffab91d7a90386c66cadf8733','leg-2','root-1','github:acme:configs','/k8s/shared.yaml'),
+ ('xl3','CAPTURE','xl-e1','cfg','config-git','x','s','0ea432e751cc622ffab91d7a90386c66cadf8733','leg-1','root-1','github:acme:configs','/k8s/only-leg-1.yaml'),
+ ('xb1','BASE','xl-a1','cfg','config-git','x','s','0ea432e751cc622ffab91d7a90386c66cadf8733','leg-1','root-1','github:acme:configs','/k8s/shared.yaml'),
+ ('xb2','BASE','xl-a2','cfg','config-git','x','s','0ea432e751cc622ffab91d7a90386c66cadf8733','leg-2','root-1','github:acme:configs','/k8s/shared.yaml'),
+ ('xb3','BASE','xl-a3','cfg','config-git','x','s','0ea432e751cc622ffab91d7a90386c66cadf8733','leg-9','root-2','github:acme:configs','/k8s/shared.yaml');
 INSERT INTO held_capture_refusals VALUES ('rf1','x1',2,'source-not-pinned','envelope', now()), ('rf2','x1',5,'secret-manifest','envelope', now()),
  ('rf3','x1',13,'credentials-file','arguments', now());
 UPDATE held_file_refs SET path = '/terraform/terraform.tfstate' WHERE id = 'tfs';
@@ -135,6 +145,9 @@ expect '🔴 a ref whose sourceRevision is not 40 lowercase hex' 1
 expect '🔴 a BASE / CANDIDATE whose sourceRevision differs' 1
 expect '🔴 a github-service CAPTURE on an execution whose owning leg is not a Git file source' 1
 expect '⚪ secret-manifest refusals' 1
+# Config sources STEP 2: the shared file is held by two legs of root-1 (the single-leg file and another program's are not counted)
+expect '⚪ Git files HELD (capture) by more than one leg of one program' 1
+expect '· Git files EDITED (a held base) by more than one leg of one program' 1
 # 🔴 12 over the G-1-ELIDED stored record: the one real ref (ok1, positional /content/1/resource/text) resolves and its sha matches.
 # The three planted 🔴 rows (nul, bad, oos) point at call indices with no stored call, so they read unresolved — by construction here.
 expect '⚪ 12 control: refs compared' 1

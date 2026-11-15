@@ -15,6 +15,7 @@ process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://stub:stub@l
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import { sanitizePovMetadata } from '@/lib/pov/sanitize-metadata';
 import { parseEnumParam } from '@/lib/utils/parse-enum-param';
 import { sanitizeChainedOutput, isR9OperatorEvent, R9_OPERATOR_EVENT_CLASSES, R9_VERSION, R9_RULE_SOURCES, r9VersionInEffect } from '@/lib/agents/harness/sanitize-chained-output';
@@ -2213,10 +2214,13 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
     const handlerSrc = fs.readFileSync(path.join(__dirname, '../lib/mcp/server/tools/hub/service-call-handler.js'), 'utf8');
     const iReplace = handlerSrc.indexOf('if (policyCheck.gitArguments) validatedArgs.arguments = policyCheck.gitArguments;');
     const iForward = handlerSrc.indexOf("const callArguments = ensureObject(validatedArgs.arguments, {}, 'Service Call');");
-    const iEcho = handlerSrc.indexOf('          arguments: validatedArgs.arguments,\n          result: deliveredResponse,');
+    // §PD (2026-11-15): the echo reads `recordedArguments` — the SAME object as validatedArgs.arguments on every call but the
+    // platform drift call (PD12 pins that identity), built AFTER the replace, so forwarded = checked = echoed still holds for a Git read.
+    const iRecorded = handlerSrc.indexOf('const recordedArguments = platformDrift.withManifestSummarised(context, validatedArgs.tool, validatedArgs.arguments);');
+    const iEcho = handlerSrc.search(/ {10}arguments: recordedArguments,[^\n]*\n {10}result: deliveredResponse,/);
     const iPolicy = handlerSrc.indexOf('const policyCheck = validateServiceCall(');
     check('R-P0.12 handler order: policy check < replace-with-checked-args < forward < echo; the echo _meta carries refDefaulted',
-      iPolicy > 0 && iReplace > iPolicy && iForward > iReplace && iEcho > iForward && handlerSrc.includes('...(refDefaulted ? { refDefaulted: true } : {})'));
+      iPolicy > 0 && iReplace > iPolicy && iRecorded > iReplace && iForward > iRecorded && iEcho > iForward && handlerSrc.includes('...(refDefaulted ? { refDefaulted: true } : {})'));
     // R-P0.13 (replaces an inert literal control): the order rule above, applied to a MUTATED copy of the real handler source with
     // the replace moved after the forward, must fail — so R-P0.12 can go red on the shipped file.
     {
@@ -2457,11 +2461,279 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
   check('SEC-VIEWER-PINS next.config.js: no remote image patterns (next/image refuses remote URLs)', !/remotePatterns|domains\s*:/.test(rd('next.config.js')));
 }
 
+// ── §PD (Config sources STEP 2, slice 3b — sec-ops F2 / C4 / C6 / C7 / C8): the ONE platform-initiated service call ──
+// The platform (never an agent) calls `compare_declared_fields` with the REDACTED held bytes of a YAML manifest. The call gate's
+// text scans refuse almost every manifest, so there is ONE narrow exemption: context.platformPurpose === 'platform-drift' AND the
+// tool is exactly compare_declared_fields ⇒ the STRING VALUE of the top-level `manifest` argument is left out of the scans.
+// Every check below has its negative control. Async (the real handler + the real dispatch wrapper, stub dependencies; no DB, no
+// network) — the gate's summary runs after it.
+const checkWithDetail = (label: string, cond: boolean, detail = ''): void => check(!cond && detail ? `${label} — ${detail}` : label, cond);
+async function platformDriftSection(): Promise<void> {
+  const check = checkWithDetail; // this section states what it saw on a failure
+  process.env.PAICHART_SKIP_DB_CONNECT = 'true'; // tool-schemas.js / the handler reach lib/prisma; nothing here touches a DB
+  const pd = require('../lib/mcp/server/config/platform-drift-call.js') as {
+    PLATFORM_DRIFT_PURPOSE: string; PLATFORM_DRIFT_TOOL: string; PLATFORM_DRIFT_MANIFEST_MAX_BYTES: number; PLATFORM_DRIFT_ACTIVITY_ACTION: string;
+    PLATFORM_DRIFT_TOOL_NOT_REGISTERED: string; PLATFORM_DRIFT_INTERNAL_SERVICE: string;
+    isPlatformDriftCall: (c: unknown, t: unknown) => boolean;
+    manifestSummary: (m: string) => { manifestSha256: string; manifestLength: number };
+    withManifestSummarised: (c: unknown, t: unknown, a: unknown) => any;
+    splitServicesCallArguments: (a: unknown, c: unknown) => null | { summarised: any; restore: (d: any) => any };
+  };
+  const policy = require('../lib/mcp/server/config/service-call-policy.js') as {
+    validateServiceCall: (t: string, tool: string, p: unknown, c: unknown, reg?: string[], resolved?: string) => { allowed: boolean; violations: Array<{ type: string; message: string }> };
+    BLOCKED_PATTERNS_WITH_DESC: Array<{ pattern: RegExp }>;
+  };
+  const { wrapWithSchema } = require('../lib/mcp/server/tools/dispatchers/dispatch-with-schema.js') as {
+    wrapWithSchema: (n: string, h: (a: any, c: any) => Promise<any>) => (a: any, c: any) => Promise<any>;
+  };
+  const { ServiceCallHandler } = require('../lib/mcp/server/tools/hub/service-call-handler.js');
+  const { ComplianceMonitor } = require('../lib/mcp/server/security/compliance-monitor.js');
+  // The ONE destination every stderr hub logger (and its children — the handler's `log`) writes through.
+  const hubLogStream = require('../lib/mcp/server/mcp-logger').stderr.mcpLogger[require('pino').symbols.streamSym] as { write: (l: string) => unknown };
+
+  check('PD names: the purpose, the tool, the Activity action and the manifest limit are the documented literals',
+    pd.PLATFORM_DRIFT_PURPOSE === 'platform-drift' && pd.PLATFORM_DRIFT_TOOL === 'compare_declared_fields'
+    && pd.PLATFORM_DRIFT_ACTIVITY_ACTION === 'PLATFORM_SERVICE_CALL' && pd.PLATFORM_DRIFT_MANIFEST_MAX_BYTES === 262144);
+
+  const TOOL = pd.PLATFORM_DRIFT_TOOL;
+  const SVC = 'k8s-readonly';
+  const MARKER = '<<REDACTED-SECRET>>'; // R10's PLACEHOLDER — what the platform sends as redactedMarker (sec-ops C2)
+  // A realistic manifest: EVERY line below is refused by a text scan today (data:, $(VAR), ${X}, $HOME, ../, a private URL, file:).
+  const MANIFEST = [
+    'apiVersion: apps/v1', 'kind: Deployment', 'metadata:', '  name: orders-api', '  namespace: shop', 'spec:', '  template:', '    spec:',
+    '      securityContext:', '        seccompProfile:', '          type: RuntimeDefault', '      containers:', '        - name: orders-api',
+    '          image: registry.example.invalid/orders-api:1.4.2', '          args: ["--listen=$(POD_IP):8080", "--home=$HOME", "--cfg=${CFG_DIR}/../app.yaml"]',
+    '          env:', '            - name: UPSTREAM', '              value: http://10.0.0.5:8080/', `            - name: TOKEN`, `              value: ${MARKER}`, '',
+  ].join('\n');
+  const DRIFT = { platformPurpose: 'platform-drift', user: { id: 'owner-1', email: 'owner@example.invalid', role: 'USER' }, authenticated: true, callingExecutionId: 'exec-1' };
+  const PLAIN = { user: DRIFT.user, authenticated: true, callingExecutionId: 'exec-1' };
+  const args = (over: Record<string, unknown> = {}) => ({ manifest: MANIFEST, redactedMarker: MARKER, ...over });
+  const types = (r: { violations: Array<{ type: string }> }) => r.violations.map((v) => v.type).sort().join(',');
+  const gate = (ctx: unknown, tool: string, a: unknown, reg: string[] = [TOOL, 'apply_manifest']) => policy.validateServiceCall(SVC, tool, a, ctx, reg, SVC);
+
+  // ── the call gate (service-call-policy.js) ──
+  const both = gate(DRIFT, TOOL, args());
+  check('PD1 BOTH conditions (platform purpose + compare_declared_fields): the manifest passes the call gate', both.allowed === true, types(both));
+  const noPurpose = gate(PLAIN, TOOL, args());
+  check('PD2 NEGATIVE CONTROL: the same manifest WITHOUT the purpose (an agent\'s own call of this tool) is refused BLOCKED_PATTERN',
+    noPurpose.allowed === false && noPurpose.violations.some((v) => v.type === 'BLOCKED_PATTERN'));
+  const otherTool = gate(DRIFT, 'apply_manifest', args());
+  check('PD3 NEGATIVE CONTROL: the purpose with ANOTHER tool carrying a `manifest` argument is refused BLOCKED_PATTERN',
+    otherTool.allowed === false && otherTool.violations.some((v) => v.type === 'BLOCKED_PATTERN'));
+  for (const [label, ctx] of [
+    ['another purpose value', { ...DRIFT, platformPurpose: 'platform-other' }], ['purpose: true', { ...DRIFT, platformPurpose: true }],
+    ['a case variant', { ...DRIFT, platformPurpose: 'Platform-Drift' }], ['purpose nested under user', { ...PLAIN, user: { ...DRIFT.user, platformPurpose: 'platform-drift' } }],
+    ['no context', undefined], ['a string context', 'platform-drift'],
+  ] as Array<[string, unknown]>) {
+    check(`PD4 the purpose is the exact top-level string: ${label} ⇒ refused`, gate(ctx, TOOL, args()).allowed === false);
+  }
+  check('PD5 a blocked pattern in redactedMarker is still refused (purpose + tool)',
+    gate(DRIFT, TOOL, args({ redactedMarker: '$(id)-marker' })).violations.some((v) => v.type === 'BLOCKED_PATTERN'));
+  check('PD5 a blocked pattern in defaultNamespace is still refused (purpose + tool)',
+    gate(DRIFT, TOOL, args({ defaultNamespace: '../kube-system' })).violations.some((v) => v.type === 'BLOCKED_PATTERN'));
+  check('PD5 a blocked URL in another argument is still refused (purpose + tool)',
+    gate(DRIFT, TOOL, args({ defaultNamespace: 'http://169.254.169.254/latest' })).allowed === false);
+  check('PD5 any OTHER top-level argument is still scanned (purpose + tool)',
+    gate(DRIFT, TOOL, args({ note: 'x; rm -rf /' })).violations.some((v) => v.type === 'BLOCKED_PATTERN'));
+  const badTool = `${TOOL}$(id)`;
+  check('PD6 a blocked pattern in the TOOL NAME is still refused (and such a name is never the exempt tool)',
+    gate(DRIFT, badTool, args(), [badTool]).violations.some((v) => v.type === 'BLOCKED_PATTERN' && /tool name/.test(v.message)));
+  check('PD7 only a STRING manifest is exempt: an object-valued manifest is still scanned',
+    gate(DRIFT, TOOL, { manifest: { text: MANIFEST }, redactedMarker: MARKER }).violations.some((v) => v.type === 'BLOCKED_PATTERN'));
+  check('PD7 only the TOP-LEVEL manifest is exempt: a nested one is still scanned',
+    gate(DRIFT, TOOL, { manifest: 'kind: ConfigMap\n', inner: { manifest: MANIFEST }, redactedMarker: MARKER }).violations.some((v) => v.type === 'BLOCKED_PATTERN'));
+  check('PD8 `platformPurpose` INSIDE the arguments is ignored (the purpose is context, never an argument)',
+    gate(PLAIN, TOOL, args({ platformPurpose: 'platform-drift' })).violations.some((v) => v.type === 'BLOCKED_PATTERN'));
+  check('PD9 an unregistered tool is still UNAPPROVED_TOOL at the gate (the exemption is a scan exemption only)',
+    gate(DRIFT, TOOL, args(), ['get_resource']).violations.some((v) => v.type === 'UNAPPROVED_TOOL'));
+  const atLimit = 'a: b\n'.repeat(1).padEnd(pd.PLATFORM_DRIFT_MANIFEST_MAX_BYTES, '#');
+  check('PD10 a manifest AT the compare limit (262144 bytes — above the 100 KB parameter limit) passes', gate(DRIFT, TOOL, args({ manifest: atLimit })).allowed === true);
+  check('PD10 one byte over ⇒ SIZE_LIMIT (bytes, not characters: a multi-byte character counts)',
+    types(gate(DRIFT, TOOL, args({ manifest: atLimit + '#' }))) === 'SIZE_LIMIT'
+    && types(gate(DRIFT, TOOL, args({ manifest: atLimit.slice(0, -1) + 'é' }))) === 'SIZE_LIMIT');
+  check('PD10 NEGATIVE CONTROL: the other arguments keep the 100 KB limit', gate(DRIFT, TOOL, args({ note: 'n'.repeat(100 * 1024) })).violations.some((v) => v.type === 'SIZE_LIMIT'));
+  // "Never loosen a pattern": the 18 blocked patterns, byte for byte. A deliberate pattern change moves this hash WITH a review.
+  check('PD11 the blocked patterns are unchanged (18, sha256 of their sources)',
+    policy.BLOCKED_PATTERNS_WITH_DESC.length === 18
+    && createHash('sha256').update(policy.BLOCKED_PATTERNS_WITH_DESC.map((p) => p.pattern.toString()).join('\n')).digest('hex') === 'e243352c8846e62e77330e7b1cbe2c39c1e8a831de6975869e411602a366e81a',
+    createHash('sha256').update(policy.BLOCKED_PATTERNS_WITH_DESC.map((p) => p.pattern.toString()).join('\n')).digest('hex'));
+
+  // ── the summary (C4) ──
+  const sum = pd.manifestSummary(MANIFEST);
+  check('PD12 the summary is sha256 of the UTF-8 bytes sent, and their byte count',
+    sum.manifestSha256 === createHash('sha256').update(Buffer.from(MANIFEST, 'utf8')).digest('hex') && sum.manifestLength === Buffer.byteLength(MANIFEST, 'utf8')
+    && pd.manifestSummary('é').manifestLength === 2);
+  const a0 = args();
+  check('PD12 withManifestSummarised: the SAME object on any other call; a copy with the summary on the platform call (input never mutated)',
+    pd.withManifestSummarised(PLAIN, TOOL, a0) === a0 && pd.withManifestSummarised(DRIFT, 'apply_manifest', a0) === a0
+    && JSON.stringify(pd.withManifestSummarised(DRIFT, TOOL, a0).manifest) === JSON.stringify(sum) && a0.manifest === MANIFEST);
+
+  // ── L1, the dispatch schema (dispatch-with-schema.js): 25 KB arguments cap + the forwarded-arguments injection screen ──
+  let received: any = null;
+  const wrapped = wrapWithSchema('services', async (a) => { received = a; return { ok: true }; });
+  const big = MANIFEST + '# pad\n'.repeat(10000); // ~60 KB: over the 25 KB cap, and `seccompProfile:` matches the screen's `file:` arm
+  const callArgs = (over: Record<string, unknown> = {}) => ({ action: 'call', targetService: SVC, tool: TOOL, arguments: { manifest: big, redactedMarker: MARKER }, ...over });
+  received = null;
+  const l1ok = await wrapped(callArgs(), DRIFT);
+  check('PD13 L1: the platform call validates, and the handler receives the manifest text UNCHANGED',
+    l1ok && l1ok.ok === true && received && received.arguments.manifest === big && received.arguments.redactedMarker === MARKER && received.tool === TOOL);
+  received = null;
+  const l1plain = await wrapped(callArgs(), PLAIN);
+  check('PD13 NEGATIVE CONTROL L1: without the purpose the same call is refused at the schema (the handler never runs)', l1plain && l1plain.isError === true && received === null);
+  received = null;
+  const l1other = await wrapped(callArgs({ tool: 'apply_manifest' }), DRIFT);
+  check('PD13 NEGATIVE CONTROL L1: the purpose with another tool is refused at the schema', l1other && l1other.isError === true && received === null);
+  received = null;
+  const l1marker = await wrapped(callArgs({ arguments: { manifest: big, redactedMarker: '<script>x' } }), DRIFT);
+  check('PD13 L1: an injection pattern in redactedMarker is still refused on the platform call', l1marker && l1marker.isError === true && received === null);
+  received = null;
+  const l1wf = await wrapped({ action: 'workflow.execute', tool: TOOL, arguments: { manifest: big } }, DRIFT);
+  check('PD13 L1: only `action: call` is split — any other action with the purpose is validated whole', l1wf && l1wf.isError === true && received === null);
+  check('PD13 `platformPurpose` as a top-level TOOL argument or inside `arguments` never makes a split',
+    pd.splitServicesCallArguments({ ...callArgs(), platformPurpose: 'platform-drift' }, PLAIN) === null
+    && pd.splitServicesCallArguments(callArgs({ arguments: { manifest: big, platformPurpose: 'platform-drift' } }), PLAIN) === null
+    && pd.splitServicesCallArguments(callArgs(), DRIFT) !== null);
+
+  // ── the real handler (stub registry, stub pool; no network) ──
+  type Rec = Record<string, any>;
+  const row = (over: Rec = {}): Rec => ({
+    id: 'svc-k8s-1', name: SVC, status: 'ACTIVE', isPublic: false, endpoint: null,
+    capabilities: { tools: [{ name: TOOL, inputSchema: { type: 'object', required: ['manifest'], properties: { manifest: { type: 'string' } } } }, 'get_resource'] },
+    configuration: { endpoint: 'https://k8s-readonly.example.invalid/mcp', ownerId: 'owner-1' }, ...over,
+  });
+  const run = async (service: Rec, ctx: unknown, callArguments: Rec, tool = TOOL) => {
+    const activities: Rec[] = []; const tracked: Rec[] = []; const forwarded: Rec[] = []; const logged: string[] = [];
+    const prisma = {
+      mCPTool: { findUnique: async ({ where }: { where: Rec }) => ((where.id && where.id === service.id) || (where.name && where.name === service.name) ? service : null), findFirst: async () => service },
+      activity: { create: async (a: Rec) => { activities.push(a); return {}; } },
+    };
+    const h = new ServiceCallHandler(prisma, { checkServiceAccess: async () => true, trackServiceInteraction: async (_id: string, _t: string, r: Rec) => { tracked.push(r); } });
+    h.connectionPool = {
+      getOrCreateClient: async () => ({ callTool: async (p: Rec) => { forwarded.push(p); return { content: [{ type: 'text', text: '{"method":"k8s-declared-field-compare/1"}' }] }; } }),
+      getPoolStats: () => ({ reuseRate: 0 }), stats: { retriesAttempted: 0, retriesSucceeded: 0 }, logger: { info() { return undefined; }, debug() { return undefined; } }, evictConnection: async () => undefined,
+    };
+    // The hub loggers share ONE pino destination (fd 2). Its write is replaced for the call — to prove nothing logs the manifest text —
+    // and the compliance monitor (which writes an Activity row through the real prisma client on a refusal) is stubbed: no DB.
+    const realStreamWrite = hubLogStream.write;
+    hubLogStream.write = (line: string) => { logged.push(String(line)); return true; };
+    const realGetInstance = ComplianceMonitor.getInstance;
+    ComplianceMonitor.getInstance = () => ({ logSecurityEvent: async () => undefined });
+    let result: Rec | null = null; let threw = '';
+    try { result = await h.handle({ targetService: SVC, tool, arguments: callArguments }, ctx); }
+    catch (e) { threw = (e as Error).message; }
+    finally { hubLogStream.write = realStreamWrite; ComplianceMonitor.getInstance = realGetInstance; }
+    return { result, threw, activities, tracked, forwarded, logged: logged.join('') };
+  };
+  const NEEDLE = 'orders-api:1.4.2'; // a string only the manifest text carries
+
+  const ok = await run(row(), DRIFT, args());
+  check('PD14 the platform call succeeds through the real handler', !!ok.result && ok.result.success === true && ok.threw === '', ok.threw || JSON.stringify(ok.result).slice(0, 200));
+  check('PD14 the bytes FORWARDED to the service are the manifest, unchanged (and the marker)',
+    ok.forwarded.length === 1 && ok.forwarded[0].name === TOOL && ok.forwarded[0].arguments.manifest === MANIFEST && ok.forwarded[0].arguments.redactedMarker === MARKER);
+  const stored = JSON.stringify([ok.activities, ok.tracked, ok.result]);
+  check('PD15 C4: nothing STORED, ECHOED or LOGGED carries the manifest text (Activity row, interaction record, result, hub log)',
+    !stored.includes(NEEDLE) && !stored.includes('seccompProfile') && !ok.logged.includes(NEEDLE) && !ok.logged.includes('seccompProfile'));
+  check('PD15 the log capture is live (it holds the handler\'s own lines for this call)', ok.logged.includes('Getting pooled connection') && ok.logged.includes(SVC));
+  check('PD15 C4: the Activity row and the echo carry the sha and the length instead',
+    ok.activities.length === 1 && JSON.stringify(ok.activities[0].data.metadata.arguments.manifest) === JSON.stringify(sum)
+    && JSON.stringify(ok.result!.arguments.manifest) === JSON.stringify(sum) && JSON.stringify(ok.tracked[0].arguments.manifest) === JSON.stringify(sum));
+  check('PD16 the Activity line is PLATFORM_SERVICE_CALL, type Integration, purpose stated',
+    ok.activities[0].data.action === 'PLATFORM_SERVICE_CALL' && ok.activities[0].data.type === 'Integration' && ok.activities[0].data.metadata.purpose === 'platform-drift');
+  check('PD16 no securityEvent is logged for a successful platform call', !/securityEvent/.test(ok.logged));
+
+  const plainOk = await run(row(), PLAIN, { manifest: 'kind: ConfigMap', redactedMarker: MARKER });
+  check('PD17 NEGATIVE CONTROL: an ordinary call of the same tool is stored and echoed as before (SERVICE_CALL, the argument text, no purpose key)',
+    !!plainOk.result && plainOk.result.arguments.manifest === 'kind: ConfigMap' && plainOk.activities[0].data.action === 'SERVICE_CALL'
+    && plainOk.activities[0].data.metadata.arguments.manifest === 'kind: ConfigMap' && !('purpose' in plainOk.activities[0].data.metadata));
+  const agentCall = await run(row(), PLAIN, args());
+  check('PD17 NEGATIVE CONTROL: an agent\'s own call with a real manifest is refused by the call gate (nothing forwarded, nothing stored)',
+    /blocked by compliance policy/.test(agentCall.threw) && agentCall.forwarded.length === 0 && agentCall.activities.length === 0 && /securityEvent/.test(agentCall.logged));
+  const argPurpose = await run(row(), PLAIN, args({ platformPurpose: 'platform-drift' }));
+  check('PD17 `platformPurpose` inside the arguments is ignored by the handler (refused like any agent call)',
+    /blocked by compliance policy/.test(argPurpose.threw) && argPurpose.forwarded.length === 0);
+
+  const noTool = await run(row({ capabilities: { tools: ['get_resource', 'list_resources'] } }), DRIFT, args());
+  check('PD18 C8: a service that does not register the tool ⇒ a NAMED isError result (not a throw, no securityEvent, nothing forwarded or stored)',
+    noTool.threw === '' && !!noTool.result && noTool.result.isError === true && noTool.result._meta.errorType === 'PLATFORM_DRIFT_TOOL_NOT_REGISTERED'
+    && noTool.result.content[0].text.startsWith('PLATFORM_DRIFT_TOOL_NOT_REGISTERED') && noTool.forwarded.length === 0 && noTool.activities.length === 0
+    && !/securityEvent/.test(noTool.logged) && !JSON.stringify(noTool.result).includes(NEEDLE));
+  const internalRow = await run(row({ configuration: { endpoint: 'internal://paichart-project-service', type: 'internal' } }), DRIFT, args());
+  check('PD18 an internal service is refused by name for the platform call (never routed in-process)',
+    internalRow.threw === '' && !!internalRow.result && internalRow.result.isError === true && internalRow.result._meta.errorType === 'PLATFORM_DRIFT_INTERNAL_SERVICE' && internalRow.forwarded.length === 0);
+  // sec-ops slice-3b F2: the held bytes are never SENT to a row someone else owns — even a PUBLIC one the access check admits.
+  const foreign = await run(row({ isPublic: true, configuration: { endpoint: 'https://k8s-readonly.example.invalid/mcp', ownerId: 'someone-else' } }), DRIFT, args());
+  check('PD18b F2: a service row the run owner does not own ⇒ a NAMED isError result before the forward (no securityEvent, nothing forwarded or stored)',
+    foreign.threw === '' && !!foreign.result && foreign.result.isError === true && foreign.result._meta.errorType === 'PLATFORM_DRIFT_FOREIGN_SERVICE'
+    && foreign.result.content[0].text.startsWith('PLATFORM_DRIFT_FOREIGN_SERVICE') && foreign.forwarded.length === 0 && foreign.activities.length === 0
+    && !/securityEvent/.test(foreign.logged) && !JSON.stringify(foreign.result).includes(NEEDLE), foreign.threw || JSON.stringify(foreign.result).slice(0, 240));
+  check('PD18b NEGATIVE CONTROL: the SAME row is still forwarded for the run owner\'s own row (PD14) — the refusal is the ownership, not the call',
+    !!ok.result && ok.result.success === true && ok.forwarded.length === 1);
+  const limited = row({ configuration: { endpoint: 'https://k8s-readonly.example.invalid/mcp', ownerId: 'owner-1', rateLimit: { requests: 1, windowMs: 60000 } }, id: `svc-k8s-rl-${Date.now()}` });
+  const first = await run(limited, DRIFT, args());
+  const second = await run(limited, DRIFT, args());
+  check('PD19 the platform call counts against the run owner\'s (user, service) bucket: the second call is an isError RATE_LIMITED result',
+    !!first.result && first.result.success === true && second.threw === '' && !!second.result && second.result.isError === true
+    && second.result._meta.errorType === 'RATE_LIMITED' && second.forwarded.length === 0 && !JSON.stringify(second.result).includes(NEEDLE));
+
+  // ── C7: only platform code can set the purpose (static) ──
+  const rd = (f: string) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+  const noComments = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const svc = noComments(rd('lib/services/mcp/mcpService.ts'));
+  check('PD20 mcpService: the purpose reaches the tool context only from `options`, only for the matching call shape',
+    /options\?\.platformPurpose === PLATFORM_DRIFT_PURPOSE && toolName === 'services'\s*\?\s*splitServicesCallArguments\(arguments_, \{ platformPurpose: PLATFORM_DRIFT_PURPOSE \}\)/.test(svc)
+    && /\.\.\.\(platformDriftSplit \? \{ platformPurpose: PLATFORM_DRIFT_PURPOSE \} : \{\}\)/.test(svc)
+    && (svc.match(/platformPurpose: PLATFORM_DRIFT_PURPOSE/g) || []).length === 2
+    && !/arguments_\??\.platformPurpose|arguments_\[['"]platformPurpose/.test(svc));
+  const sm = noComments(rd('lib/services/mcp/serverManager.ts'));
+  check('PD20 serverManager (the agent tool loop\'s route) forwards an explicit pick and never the purpose',
+    /mcpService\.callTool\(serverName, toolName, arguments_, options\s*\?\s*\{ sessionId: options\.sessionId, userId: options\.userId, timeout: options\.timeout \}\s*:\s*undefined\)/.test(sm)
+    && !sm.includes('platformPurpose'));
+  check('PD20 the agent tool loop never names the purpose', !rd('lib/agents/harness/agentic-tool-loop.ts').includes('platformPurpose'));
+  check('PD20 no MCP transport sets it: the HTTP context is a two-key literal; neither server entry names the purpose',
+    /handler\(toolArgs, \{ user: usr, authenticated: !!usr \}\)/.test(rd('lib/mcp/server/mcp-core.ts'))
+    && !rd('lib/mcp/server/mcp-core.ts').includes('platformPurpose') && !rd('mcp-server-v5.js').includes('platformPurpose') && !rd('mcp-server-http-clean.js').includes('platformPurpose'));
+  // The sweep: every file that names `platformPurpose` at all. A new one turns this RED until it is reviewed and listed.
+  // The platform caller (execution-core.ts, and harness modules other than the tool loop) is the other half of this build.
+  const HUB_FILES = ['lib/mcp/embedded-server.ts', 'lib/mcp/server/config/platform-drift-call.js', 'lib/mcp/server/config/service-call-policy.js',
+    'lib/mcp/server/tools/dispatchers/dispatch-with-schema.js', 'lib/mcp/server/tools/hub/service-call-handler.js', 'lib/services/mcp/mcpService.ts', 'lib/services/mcp/serverManager.ts'];
+  // sec-ops slice-3b F7: the WHOLE repository's source, not only lib/ and app/ (scripts, the server entries, middleware, components,
+  // pages). The two test files that pin the purpose are the only non-product files allowed to name it.
+  // A plain recursive grep, NOT `git grep`: the public export is validated in a directory that is not a git repository (the first
+  // form of this sweep found nothing there and failed "the sweep is live" — caught by the ship's export dry run, 2026-11-15).
+  const named = execSync("grep -rl --include='*.ts' --include='*.tsx' --include='*.js' --include='*.mjs' --include='*.cjs' --exclude-dir=node_modules --exclude-dir=.next --exclude-dir=.git --exclude-dir=cline_docs --exclude-dir=.claude --exclude-dir=coverage --exclude-dir=dist platformPurpose . || true", { cwd: ROOT, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
+    .split('\n').map((l) => l.trim().replace(/^\.\//, '')).filter(Boolean)
+    .filter((f) => f !== 'scripts/test-security-invariants.ts' && f !== 'scripts/test-git-live-drift.ts');
+  // TIGHTENED when the platform half landed (2026-11-15): the ONE platform caller is `lib/services/platform-drift.ts` — an exact
+  // file, not "the core or any harness module" (the placeholder this sweep carried while that half was unbuilt).
+  const PLATFORM_CALLER = 'lib/services/platform-drift.ts';
+  const unexpected = named.filter((f) => !HUB_FILES.includes(f) && f !== PLATFORM_CALLER);
+  check('PD20 sweep: `platformPurpose` is named only by the hub files of this build and the platform caller', unexpected.length === 0, unexpected.join(', '));
+  check('PD20 sweep is live: it finds the writer and the one platform caller', named.includes('lib/services/mcp/mcpService.ts') && named.includes('lib/mcp/server/config/platform-drift-call.js') && named.includes(PLATFORM_CALLER));
+  const hubWriters = HUB_FILES.filter((f) => f !== 'lib/services/mcp/mcpService.ts' && /platformPurpose\s*:/.test(noComments(rd(f))));
+  check('PD20 mcpService is the ONLY hub file that writes a `platformPurpose` key', hubWriters.length === 0, hubWriters.join(', '));
+  // The gates read ONE predicate — never their own copy of the two conditions.
+  const pol = noComments(rd('lib/mcp/server/config/service-call-policy.js'));
+  check('PD21 the call gate scans `scanParams` (the pattern scan and the pinned-source text scan), built by the one predicate',
+    /const scanParams = withManifestSummarised\(context, tool, params\);/.test(pol)
+    && /const paramString = JSON\.stringify\(scanParams \|\| \{\}\);/.test(pol) && /namesPinnedRepoUrl\(JSON\.stringify\(scanParams \|\| \{\}\)\)/.test(pol)
+    && !/JSON\.stringify\(params \|\| \{\}\)/.test(pol) && /checkGitArguments\(resolvedRow \|\| resolvedServiceName, params\)/.test(pol));
+  const hs = noComments(rd('lib/mcp/server/tools/hub/service-call-handler.js'));
+  check('PD21 the handler stores and echoes `recordedArguments` (Activity + result), and forwards `validatedArgs.arguments`',
+    /const recordedArguments = platformDrift\.withManifestSummarised\(context, validatedArgs\.tool, validatedArgs\.arguments\);/.test(hs)
+    && (hs.match(/arguments: recordedArguments/g) || []).length === 2
+    && /const callArguments = ensureObject\(validatedArgs\.arguments, \{\}, 'Service Call'\);/.test(hs));
+}
+
+function finish(): never {
 if (fails.length) {
   console.error(`\n❌ security-invariants gate FAILED (${fails.length}/${passed + fails.length}) — a pentest-hardened invariant regressed:`);
   fails.forEach((f) => console.error('  - ' + f));
   console.error('\nSee memory project_prelaunch_pentest_2026_05_26 for the original finding before "fixing" the test.\n');
   process.exit(1);
 }
-console.log(`✅ security-invariants gate PASSED (${passed} invariants: SSRF, MA-1, M-2, JWT-alg, M-1, api-key-RS256, resource-authz, oauth-wave2, R9-sanitizer, R10-redactor(k8s+tf), K4-denial, identity-fact-fieldset, contract-inheritance-copy-site, X26-tag-scoped-handlers, X27-comment-trim, R-git-file-source-pin, IF-2 descriptor-URL, IF-3 shared eligibility, SF-1 run-provenance mutation guard, SEC-VIEWER-PINS, SEC-UPSTREAM-REPORT).`);
+console.log(`✅ security-invariants gate PASSED (${passed} invariants: SSRF, MA-1, M-2, JWT-alg, M-1, api-key-RS256, resource-authz, oauth-wave2, R9-sanitizer, R10-redactor(k8s+tf), K4-denial, identity-fact-fieldset, contract-inheritance-copy-site, X26-tag-scoped-handlers, X27-comment-trim, R-git-file-source-pin, IF-2 descriptor-URL, IF-3 shared eligibility, SF-1 run-provenance mutation guard, SEC-VIEWER-PINS, SEC-UPSTREAM-REPORT, PD platform-drift call exemption).`);
 process.exit(0);
+}
+
+platformDriftSection().then(finish, (e) => { console.error('❌ security-invariants §PD threw:', e); process.exit(1); });
+

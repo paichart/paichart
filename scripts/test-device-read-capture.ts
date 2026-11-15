@@ -319,7 +319,7 @@ const outcomes = (x: ReturnType<typeof extractDeclaredFiles>) =>
     assert(keptMixed.files.length === 1 && keptMixed.files[0].target === `device:${DEV}`, `per device, not per leg: ${JSON.stringify(outcomes(keptMixed))}`);
     // the FACTS read the extractor's own result, so the comparison still sees the device text
     const src = fs.readFileSync(path.join(__dirname, '../lib/services/held-bytes-capture.ts'), 'utf8');
-    assert(/const ex = withDeviceEvidenceOnly\(extractDeclaredFiles\(/.test(src), 'capture applies the one-base rule');
+    assert(/const ex = withConfigSourcesScope\(withDeviceEvidenceOnly\(extractDeclaredFiles\(/.test(src), 'capture applies the one-base rule'); // Config sources STEP 2: the Config scope wraps it (a no-op off a Config-sources leg, test-config-sources SC1)
     assert(!fs.readFileSync(path.join(__dirname, '../lib/agents/harness/device-source-facts.ts'), 'utf8').includes('withDeviceEvidenceOnly'), 'the facts never do');
   });
 
