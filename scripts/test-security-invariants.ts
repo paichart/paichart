@@ -867,6 +867,9 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
       // /11 (CEOS2-ECHO-SECRET-RESIDUAL, 2026-11-02): the echo pass matches only between placeholder spans; the plain arm's OUTPUTS are
       // unchanged — the row moves because the echo sources ride R10_RULE_SOURCES. May be re-pinned ONCE before /11 ships (a sec-ops fold-in).
       'paichart.r10/11': 'db50799ab967056743c8639da16370f9296a57060ae086796e060111ee9a7e92', // re-pinned ONCE (sec-ops v11 finding 1 fold-in: contained matches only); from the first deploy on the row is never edited
+      // /12 (R10-K8S-ENV-PAIRS, 2026-11-17): the plain arm's OUTPUTS are unchanged; the row moves because the env-pair / args-flag structured
+      // sources ride R10_RULE_SOURCES. May be re-pinned ONCE before /12 ships (a sec-ops fold-in); from the first deploy on the row is never edited.
+      'paichart.r10/12': '0c43d459d8458dca55e0b487b8145ae57db0d9d38c6261d990f059cdfe54c2ba',
     };
     // R10 v5: synthetic GitHub tokens built at runtime (a literal would trip the pre-commit secret scan).
     const GH5 = 'gh' + 'p_' + 'Synth3tic'.repeat(4);                    // 36 after the prefix
@@ -1155,6 +1158,7 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
       'paichart.r10/9': '3a60758f7b4e5919c00463d4680afecc0719f8773d194377e9b855f8f3c6f146', // pinned within the pre-ship sec-ops folds (review + post-fold item 6). v9: R10_STRUCTURED_RULE_SOURCES + the structured golden leaf (keys, community map, password field, kept shapes). May be re-pinned ONCE before ship (sec-ops fold-in)
       'paichart.r10/10': 'b71f8123f90d21e8c377e73f17afcc4aea6353114838c4c87eaedff6f1fc3551', // re-pinned ONCE (sec-ops push-2 SF-5 fold-in). v10 (O-3): the two username rules, derived. May be re-pinned ONCE before ship (sec-ops fold-in)
       'paichart.r10/11': 'ec138383af701893b8647b7d8c2dd9100ed709dcb143ef0d3133a2fc151b6a1d', // re-pinned ONCE (sec-ops v11 finding 1 fold-in). v11: no echo match contained in a placeholder span (R10_ECHO_RULE_SOURCES); arm-2 outputs unchanged
+      'paichart.r10/12': '46a409078e6de63e33ed885350f75b96e0b560738e60e60510f1eb473e72f1c4', // v12 (R10-K8S-ENV-PAIRS): env-pair + args-flag structured sources and the serialized k8s container leaf; may be re-pinned ONCE before ship (sec-ops fold-in)
     };
     const pad = 'x'.repeat(48);
     const leaves = [
@@ -1170,6 +1174,10 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
       // R10 v9 (R-2): a serialized STRUCTURED result through arm 1 — a command-as-key, a community map, a password field, and the kept shapes.
       JSON.stringify({ n: pad + '\n', cmds: { 'snmp-server community S3c9 ro': null }, community: { pub9x: { mode: 'ro' } }, u: { a: { password: '$6$a$b' } },
         properties: { community: { type: 'string' } }, k: { password: 'required' } }),   // R10 v7: type word kept, $9$ in a leaf   // R10 v6: escaped-quote token + resource ref, arm 2
+      // R10 v12 (R10-K8S-ENV-PAIRS): a serialized k8s container through arm 1 — env pairs (taken, kept) and args flags (taken, kept).
+      JSON.stringify({ n: pad + '\n', containers: [{ env: [{ name: 'PASSWORD', value: 'Synth3ticPw9' }, { name: 'LOG_LEVEL', value: 'debug' },
+        { name: 'AUTH_HEADER', value: 'Bear' + 'er eyJ.Synth3tic.Sig9' }, { name: 'P', valueFrom: { secretKeyRef: { name: 's', key: 'p' } } }],
+        args: ['--pass' + 'word=Synth3ticArg9', '--listen=:8080', '--password-file=/run/pw'] }] }), // runtime-built (pre-commit secret scan)
     ];
     const fp2 = createHash('sha256').update(JSON.stringify([R10_SERIALIZED_RULE_SOURCES, leaves.map((l) => redactSecretsDeep({ l }))])).digest('hex');
     check(`R10 v3: R10_VERSION (${R10_VERSION}) matches its pinned ARM-2 fingerprint (got ${fp2}) -- bump the version + add a row`,
@@ -1479,6 +1487,139 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
     for (let i = 0; i < 20000; i++) big[`interface Ethernet${i} description link-${i} to-peer`] = { mode: 'x' };
     const t0 = Date.now(); deep(big); const ms = Date.now() - t0;
     check(`R10 v9 R-2 (i) the key pass stays linear: 20,000 keys in < 5 s (took ${ms} ms)`, ms < 5000);
+  }
+
+  // ── R10 v12 (R10-K8S-ENV-PAIRS, 2026-11-17; REVIEW-sec-ops-R10-LAST-APPLIED §2/§6) — a Kubernetes env `{name, value}` pair and a
+  // credential-named `args`/`command` flag, in an object's spec AND in its `kubectl.kubernetes.io/last-applied-configuration`
+  // annotation (NORMAL: the annotation matches the spec; STALE: the spec moved every credential to secretKeyRef / --password-file, so
+  // the value lives ONLY in the annotation). Every envelope of the review's §2 table. Synthetic values only.
+  // MUTATION-CHECKED 2026-11-17 (build): deleting rule (v) (the env-pair branch in the walk) turns every env row red; deleting (v-b)
+  // (the auth-scheme sub-rule) turns the AUTH_HEADER rows red; deleting (vi) (the args branch) turns the args rows red.
+  {
+    const P12 = '<<REDACTED-SECRET>>';
+    // Synthetic values built at runtime where a literal would trip the pre-commit secret scan (the R10 v5 convention).
+    const S = {
+      pw: 'Synth3ticEnvPw9', apiKey: 'sk-' + 'Synth3ticApiKey42', jwt: ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiJzeW50aCJ9', 'Synth3ticSig12'].join('.'),
+      aws: 'wJalrXUtnFEMI' + '/K7MDENG/bPxRfiCYSynth3tic40', argPw: 'Synth3ticArgPw9', shPw: 'Synth3ticShPw9',
+      cmApiKey: 'Synth3tic' + 'CmKey9', dbPw: 'Synth3tic' + 'DbPw9', akia: 'AKIA' + 'SYNTH3TIC0000ABC', bearerYaml: 'Synth3tic' + 'YamlBearer9',
+      docker: Buffer.from('{"auths":{"r.example":{"auth":"' + Buffer.from('u:Synth3ticDocker9').toString('base64') + '"}}}').toString('base64'),
+    };
+    // every escape level a value can take in a persisted result.json (raw, then 1x, 2x, 3x JSON-escaped)
+    const forms = (v: string): string[] => { const out = [v]; let s = v; for (let i = 0; i < 3; i++) { s = JSON.stringify(s).slice(1, -1); out.push(s); } return out; };
+    const survives = (o: unknown, v: string): boolean => { const t = JSON.stringify(o); return forms(v).some((f) => t.includes(f)); };
+    const containerEnvNormal = [
+      { name: 'PASSWORD', value: S.pw }, { name: 'API_KEY', value: S.apiKey }, { name: 'AUTH_HEADER', value: `Bearer ${S.jwt}` },
+      { name: 'AWS_ACCESS_KEY_ID', value: S.akia }, { name: 'AWS_SECRET_ACCESS_KEY', value: S.aws }, { name: 'LOG_LEVEL', value: 'debug' },
+    ];
+    const ref = (n: string) => ({ name: n, valueFrom: { secretKeyRef: { name: 'api-creds', key: n.toLowerCase() } } });
+    const containerEnvStale = [ref('PASSWORD'), ref('API_KEY'), ref('AUTH_HEADER'), ref('AWS_ACCESS_KEY_ID'), ref('AWS_SECRET_ACCESS_KEY'), { name: 'LOG_LEVEL', value: 'debug' }];
+    const argsNormal = [`--password=${S.argPw}`, '--listen=:8080'];
+    const commandNormal = ['sh', '-c', `exec /app --db-password=${S.shPw} --verbose`];
+    const deployment = (stale: boolean) => {
+      const applied = { apiVersion: 'apps/v1', kind: 'Deployment', metadata: { name: 'api', namespace: 'trading' },
+        spec: { template: { spec: { containers: [{ name: 'api', image: 'r.example/api:1', env: containerEnvNormal, args: argsNormal, command: commandNormal }] } } } };
+      const live = stale
+        ? { ...applied, spec: { template: { spec: { containers: [{ name: 'api', image: 'r.example/api:1', env: containerEnvStale, args: ['--password-file=/run/pw', '--listen=:8080'], command: ['/app'] }] } } } }
+        : applied;
+      return { ...live, metadata: { ...live.metadata, annotations: { 'kubectl.kubernetes.io/last-applied-configuration': JSON.stringify(applied) + '\n' } } };
+    };
+    const cmApplied = { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name: 'app-config', namespace: 'trading' },
+      data: { 'app.yaml': `server:\n  port: 8080\nupstream:\n  bearer_token: ${S.bearerYaml}\n`, API_KEY: S.cmApiKey,
+        DATABASE_URL: `postgres://app:${S.dbPw}@db.trading:5432/app`, '.dockerconfigjson': S.docker } };
+    const configMap = { ...cmApplied, metadata: { ...cmApplied.metadata, annotations: { 'kubectl.kubernetes.io/last-applied-configuration': JSON.stringify(cmApplied) + '\n' } } };
+    const v12Taken = [S.pw, S.apiKey, S.jwt, S.aws, S.argPw, S.shPw];      // the v12 rows (were SURVIVES under v11)
+    const v11Taken = [S.akia, S.bearerYaml, S.cmApiKey, S.dbPw];           // already redacted under v11 — must stay so
+    for (const stale of [false, true]) {
+      const tag = stale ? 'STALE' : 'NORMAL';
+      const list = { items: [deployment(stale), configMap] };
+      const annotation = deployment(stale).metadata.annotations['kubectl.kubernetes.io/last-applied-configuration'];
+      const envelopes: Array<[string, unknown, string | null]> = [
+        ['structured + text (compact)', { toolCalls: [{ tool: 'services', result: { structuredContent: list, content: [{ type: 'text', text: JSON.stringify(list) }] } }] }, null],
+        ['text only (compact)', { toolCalls: [{ tool: 'services', result: { content: [{ type: 'text', text: JSON.stringify(list) }] } }] }, null],
+        ['text only (pretty)', { toolCalls: [{ tool: 'services', result: { content: [{ type: 'text', text: JSON.stringify(list, null, 2) }] } }] }, null],
+      ];
+      // read_more: the original call record holds the whole result (agentic-tool-loop persists it un-truncated); a window cut from the
+      // pretty text alone does not parse, so the env pair is closed there by the echo pass.
+      const pretty = JSON.stringify(list, null, 2);
+      const winAt = Math.max(0, pretty.indexOf('"env"') - 10);
+      const window = `[read_more ref=1 offset=${winAt}..${winAt + 1500} of ${pretty.length}]\n${pretty.slice(winAt, winAt + 1500)}`;
+      envelopes.push(['read_more window (with its original call in the same persist)',
+        { toolCalls: [{ tool: 'services', result: { content: [{ type: 'text', text: pretty }] } }, { tool: 'read_more', result: window }] }, null]);
+      // the Harvester's finalResponse quoting the annotation — escaped, decoded and re-pretty — beside the toolCalls copy (the FULL persist)
+      for (const [qtag, quote] of [['escaped', JSON.stringify(annotation)], ['decoded', annotation], ['re-pretty', JSON.stringify(JSON.parse(annotation), null, 2)]] as Array<[string, string]>) {
+        envelopes.push([`FULL persist, finalResponse quotes the annotation (${qtag})`,
+          { toolCalls: [{ tool: 'services', result: { structuredContent: list, content: [{ type: 'text', text: JSON.stringify(list) }] } }],
+            finalResponse: `The api Deployment's last-applied-configuration annotation reads:\n${quote}\nThe ConfigMap is unchanged.` },
+          `## Evidence\nlast-applied: ${quote}\n`]);
+      }
+      for (const [etag, rj, md] of envelopes) {
+        const p = redactArtifactsForPersist(rj, md);
+        const leaked = [...v12Taken, ...v11Taken].filter((v) => survives(p.resultJson, v) || (p.reportMd !== null && forms(v).some((f) => (p.reportMd as string).includes(f))));
+        check(`R10 v12 ${tag} — ${etag}: no env / args / Bearer / AWS secret survives in any escape form (leaked ${leaked.length})`, leaked.length === 0);
+        check(`R10 v12 ${tag} — ${etag}: the env NAMES, LOG_LEVEL=debug, the flags and the scheme are kept`,
+          ['AWS_SECRET_ACCESS_KEY', 'AUTH_HEADER', 'LOG_LEVEL', '--password=', '--db-password=', '--listen=:8080', 'Bearer'].every((t) => JSON.stringify(p.resultJson).includes(t))
+          && JSON.stringify(p.resultJson).includes('debug'));
+      }
+      // the priced residual (d): a base64 docker config under a ConfigMap key outside the vocabulary — value shape only, left priced
+      // (a real .dockerconfigjson lives in a Secret the service never returns, K1). A CONTROL: if this goes red, re-price it, don't delete it.
+      const dk = redactArtifactsForPersist({ toolCalls: [{ result: { structuredContent: list } }] }, null);
+      check(`R10 v12 ${tag} priced residual (d): the base64 docker config in a ConfigMap is NOT taken (documented)`, survives(dk.resultJson, S.docker));
+    }
+    // STALE specifics: the spec holds no literal, only the annotation does — and it is gone after the persist.
+    {
+      const staleObj = deployment(true);
+      const spec = JSON.stringify(staleObj.spec);
+      check('R10 v12 STALE fixture: the live spec carries none of the env/args secrets (only the annotation does)', !v12Taken.some((v) => spec.includes(v)));
+      const r = redactSecretsDeep(staleObj);
+      check('R10 v12 STALE: the annotation-only (rotated-out) values are redacted in the annotation string',
+        !v12Taken.some((v) => survives(r.value, v)) && JSON.stringify(r.value).includes('secretKeyRef'));
+    }
+    // Rule (v) in isolation, the pair shape.
+    const env1 = (o: Record<string, unknown>) => redactSecretsDeep({ env: [o] }).value as { env: Array<Record<string, unknown>> };
+    check('R10 v12 (v): {name: PASSWORD, value} → value redacted, name kept', env1({ name: 'PASSWORD', value: S.pw }).env[0].value === P12 && env1({ name: 'PASSWORD', value: S.pw }).env[0].name === 'PASSWORD');
+    check('R10 v12 (v): a PREFIXED password name (DB_PASSWORD) and a bare TOKEN name are taken (rule 23 vocabulary; no bare-token-field exclusion for a NAME)',
+      env1({ name: 'DB_PASSWORD', value: 'Synth3ticDb9' }).env[0].value === P12 && env1({ name: 'TOKEN', value: 'tok3nSynth3tic9' }).env[0].value === P12);
+    check('R10 v12 (v): an explicit null valueFrom / value_from (a client that emits every field) is still a literal pair',
+      env1({ name: 'PASSWORD', value: S.pw, valueFrom: null }).env[0].value === P12 && env1({ name: 'PASSWORD', value: S.pw, value_from: null }).env[0].value === P12);
+    check('R10 v12 (v-b): `Bearer <jwt>` / `Basic <b64>` under ANY name — token redacted, scheme kept',
+      env1({ name: 'UPSTREAM_AUTH', value: `Bearer ${S.jwt}` }).env[0].value === `Bearer ${P12}` && env1({ name: 'H', value: 'Basic dXNlcjpTeW50aDM=' }).env[0].value === `Basic ${P12}`);
+    check('R10 v12 (vi): `command` items too, and the dash-one form `-password:v`', (() => {
+      const r = redactSecretsDeep({ command: ['app', '-password:Synth3ticDash9', `--api-key=${S.apiKey}`] }).value as { command: string[] };
+      return r.command[1] === `-password:${P12}` && r.command[2] === `--api-key=${P12}` && r.command[0] === 'app';
+    })());
+    // Negative controls — must stay BYTE-IDENTICAL with a count of 0.
+    for (const [why, o] of [
+      ['LOG_LEVEL=debug', { env: [{ name: 'LOG_LEVEL', value: 'debug' }] }],
+      ['PASSWORD_FILE=/run/x (a path, not a credential name)', { env: [{ name: 'PASSWORD_FILE', value: '/run/x' }] }],
+      ['TOKEN_TTL=3600', { env: [{ name: 'TOKEN_TTL', value: '3600' }] }],
+      ['PASSWORD=required (the shape gate)', { env: [{ name: 'PASSWORD', value: 'required' }] }],
+      ['API_KEY=${env:X} (a reference)', { env: [{ name: 'API_KEY', value: '${env:X}' }] }],
+      ['PASSWORD=$(DB_PASS) (k8s dependent-variable expansion)', { env: [{ name: 'PASSWORD', value: '$(DB_PASS)' }] }],
+      ['a valueFrom.secretKeyRef entry', { env: [{ name: 'PASSWORD', valueFrom: { secretKeyRef: { name: 'db', key: 'password' } } }] }],
+      ['a pair with a value AND a non-null valueFrom (not a literal pair)', { env: [{ name: 'PASSWORD', value: S.pw, valueFrom: { secretKeyRef: { name: 'db', key: 'p' } } }] }],
+      ['a {name, value, unit} object (not the EnvVar shape)', { metrics: [{ name: 'api_key_rotations', value: '12', unit: 'count' }, { name: 'PASSWORD', value: S.pw, kind: 'x' }] }],
+      ['`Basic authentication` / `Bearer ${TOKEN}` / `Bearer $(TOK)` / a short bearer', { env: [{ name: 'MODE', value: 'Basic authentication' }, { name: 'A', value: 'Bearer ${TOKEN}' },
+        { name: 'B', value: 'Bearer $(TOK)' }, { name: 'C', value: 'Bearer ab1' }] }],
+      ['args --password-file / --listen / --token-ttl / --key=/tls.key / --token=$(TOK) / a space-separated pair (priced)', { args: ['--password-file=/run/pw', '--listen=:8080',
+        '--token-ttl=60', '--key=/etc/tls.key', '--token=$(TOK)', '--password', 'Synth3ticSpaced9'] }],
+      ['a credential flag OUTSIDE args/command (no structure anchor)', { flags: ['--password=Synth3ticOther9'], description: 'run with --password=Synth3ticOther9' }],
+      ['the platform\'s dialect-lint token facts (dialectLint.violations[].token)', { dialectLint: { violations: [{ token: 'ip ospf cost 10', line: 3, name: 'x', value: 'y' }] }, hits: [{ token: '10.0.0.0/24' }] }],
+    ] as Array<[string, unknown]>) {
+      const r = redactSecretsDeep(o);
+      check(`R10 v12 KEEPS ${why}`, JSON.stringify(r.value) === JSON.stringify(o) && r.redactedCount === 0);
+    }
+    // The plain arm (held bases) does not move: an env pair as JSON TEXT through redactArtifactSecrets alone is untouched.
+    check('R10 v12: the PLAIN arm output is unchanged (held bases move nothing)',
+      redactArtifactSecrets(JSON.stringify({ env: [{ name: 'PASSWORD', value: S.pw }], args: [`--password=${S.argPw}`] })).redactedCount === 0);
+    // Echo: a value the env-pair / args rule took is redacted where the finalResponse restates it bare.
+    const ech = redactArtifactsForPersist({ toolCalls: [{ result: { env: [{ name: 'PASSWORD', value: S.pw }], args: [`--password=${S.argPw}`] } }],
+      finalResponse: `PASSWORD is ${S.pw}; the flag carries ${S.argPw}.` }, null);
+    check('R10 v12 feeds the echo sink: both values restated in prose are redacted', !survives(ech.resultJson, S.pw) && !survives(ech.resultJson, S.argPw) && ech.echoRedactedCount === 2);
+    // Linear: 1 MB adversarial args items (many credential flags, and one huge flag-less run).
+    const t12 = Date.now();
+    redactSecretsDeep({ args: [' --password=a1'.repeat(70_000), '-'.repeat(1_000_000), ' -a'.repeat(330_000)], env: Array.from({ length: 20_000 }, (_, i) => ({ name: `PASSWORD_${i}`, value: `v${i}` })) });
+    const ms12 = Date.now() - t12;
+    check(`R10 v12: the env-pair and args rules stay linear on 1 MB adversarial input (took ${ms12} ms, < 5 s)`, ms12 < 5000);
   }
 
   // Linear time on adversarial 1 MB inputs (the F9-s2 class must not be re-created in R10).

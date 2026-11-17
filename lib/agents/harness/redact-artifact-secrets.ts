@@ -74,7 +74,7 @@
  *    of a cut (END-less) PEM key when it is shorter than 16 characters. From the pattern-attack review
  *    (REVIEW-P1-P2-PATTERNS.md, 2026-10-13), probed and NOT caught, priced: `export AWS_SECRET_ACCESS_KEY=…` and inline
  *    `-e KEY=…` flags (the line anchor; pre-existing for every key); k8s `- name: X` / `value: …` pairs incl. probe
- *    `httpHeaders`; a list-item `- bearer_token: …`; schemes other than Bearer/Basic (`ApiKey`, `Token`);
+ *    `httpHeaders` IN TEXT (YAML) — closed in STRUCTURED (JSON) results by R10 v12 (v)/(vi), env pairs and `args` flags; a list-item `- bearer_token: …`; schemes other than Bearer/Basic (`ApiKey`, `Token`);
  *    `grpc_set_header`, a commented-out `# proxy_set_header …`, or one not at line start; an `authorization:` parent
  *    with a trailing comment, capitalised, holding a list, or a folded scalar; PGP private key blocks and k8s
  *    `tls.key:` base64-of-PEM; a quoted credential with a space (only its first word goes); letters-only bearer
@@ -931,9 +931,15 @@ const R10_ECHO_RULE_SOURCES: readonly string[] = [
  * inside `<<REDACTED-SECRET>>`, so the persist stored garbled placeholders and canonicalBase refused a clean held file. The plain
  * arm's OUTPUT is unchanged (redactArtifactSecrets / B / held bases move nothing); persisted bytes move only where an echo overlapped
  * a placeholder, each back to a clean placeholder. A real secret echoed bare outside a placeholder is matched exactly as in v10.
+ * paichart.r10/12 = 2026-11-17 (R10-K8S-ENV-PAIRS, before any customer cluster is read; REVIEW-sec-ops-R10-LAST-APPLIED §6): two
+ * STRUCTURED-arm rules — (v) a Kubernetes EnvVar `{name, value}` with no `valueFrom`: `value` judged by the plain arm as `<name>: <value>`,
+ * plus `Bearer|Basic <token>` under any name (scheme kept); (vi) a credential-named `--flag=value` in an `args`/`command` string item (flag
+ * kept). Closes env/args secrets in a k8s object's spec AND its last-applied-configuration annotation (incl. a STALE rotated-out value).
+ * The plain arm's OUTPUT is unchanged (redactArtifactSecrets / B / held bases move nothing); a held ref keys on redactorVersion, so a
+ * capture straddling the deploy reads base-changed (the safe direction) although its bytes are identical.
  * Self-host with R10 switched off stamps `redactorVersion: "none"` (the P3 contract), never this constant.
  */
-export const R10_VERSION = 'paichart.r10/11';
+export const R10_VERSION = 'paichart.r10/12';
 
 /** R10 v9 (R-1): the longest lead a persisted read_more record carries before its window, back to the previous line start. A line
  *  whose directive starts more than this many characters before the boundary keeps its head in the previous record only — priced. */
@@ -1004,6 +1010,29 @@ const JSON_SCHEMA_KEYWORDS: ReadonlySet<string> = new Set(['type', 'items', 'pro
  *  `key[:=]` line rules can take (rule 23's set, the observability header keys, the bearer/aws/dsn shapes). Output-preserving:
  *  proved by the repo, lab and production replays reading identical counts with and without it (STEP3-BATCH2A-BUILD §3). */
 const STRUCTURED_RULE23_VOCAB_RE = /pass|token|key|secret|bearer|team|connection|dsn/i;
+// ── R10 v12 (R10-K8S-ENV-PAIRS, 2026-11-17; REVIEW-sec-ops-R10-LAST-APPLIED §6) — two Kubernetes-STRUCTURE-anchored rules ────────────
+// A k8s object read as JSON (its spec, and its `kubectl.kubernetes.io/last-applied-configuration` annotation, which the JSON-text
+// branch parses) keeps a credential in two shapes no key-anchored rule saw: an EnvVar `{name: "PASSWORD", value: "…"}` (the key is
+// `value`, the credential name a SIBLING value) and a container flag `args: ["--password=…"]`. Both stay key/structure-anchored,
+// never value-shape-only (the module's low-false-positive bias):
+//  (v)  ENV PAIR — an object whose keys are `name` + `value` (+ an ABSENT/null `valueFrom`/`value_from`, nothing else), both strings:
+//       `value` is judged BY the plain arm on the synthesised line `<name>: <value>` — rule 23's vocabulary, PREFIXED_PASSWORD, the
+//       secret-shape gate, the reference and expression exemptions, exactly as (ii). The bare-`token` FIELD exclusion of (ii) does not
+//       apply: here `TOKEN` is the NAME of a variable, not a field of a lint fact. Plus (v-b): a value `Bearer|Basic <token>` under ANY
+//       name — the HTTP auth scheme is the anchor — takes the token and keeps the scheme; the token is one run of 8+ non-space
+//       characters with a digit or one of . / = + _ - (a JWT, base64), never a reference (`$…`). `Basic authentication` stays.
+//  (vi) ARGS FLAG — a string item of an array under an `args` or `command` key: each `--<name>=<v>` / `-<name>:<v>` at the item start
+//       or after a space or tab (a shell `-c` string) whose `<name>: <v>` the plain arm takes — same vocabulary, gate and exemptions
+//       as (v). The value is redacted, the flag kept. `--password-file=/run/pw`, `--token-ttl=60`, `--key=/tls.key` stay (not the
+//       vocabulary's exact key). A space-separated pair (`["--password", "x"]`) is NOT taken — priced (two items, no anchor).
+// Both exempt a Kubernetes dependent-variable expansion `$(VAR)` (the value is a reference to another env var, resolved in-cluster).
+// Left priced: a base64 docker config in a ConfigMap (value shape only; a real one lives in a Secret the service never returns).
+const ENV_PAIR_ALLOWED_KEYS: ReadonlySet<string> = new Set(['name', 'value', 'valueFrom', 'value_from']);
+const K8S_VAR_REF_RE = /^\$\([A-Za-z_][A-Za-z0-9_]*\)$/;
+const ENV_PAIR_AUTH_SCHEME_RE = /^((?:bearer|basic)[ \t]+)(?![$\x60])(?=\S*[\d.\/=+_-])(\S{8,})$/i;
+const ARGS_FLAG_PARENT_RE = /^(?:args|command)$/;
+const ARGS_FLAG_RE = /(^|[ \t])(--?)([A-Za-z][A-Za-z0-9_.-]{0,63})([=:])([^\s]+)/g;
+
 /** B-1 (sec-ops batch-2a): the longest JSON TEXT leaf the structured arm parses (a held file is capped at 5 MB). */
 const STRUCTURED_JSON_TEXT_MAX = 8 * 1024 * 1024;
 /** A value the network field arm never takes: empty, already a placeholder, a reference (`${X}`, `{{ .x }}`), a boolean word. */
@@ -1020,6 +1049,10 @@ export const R10_STRUCTURED_RULE_SOURCES: readonly string[] = Object.freeze([
   `structured:json-text:max=${STRUCTURED_JSON_TEXT_MAX}:reserialize-only-on-redaction:keep-indent:text-rules-after`,
   'structured:key-collision:every-key',
   `pager:lead-to-line-start:max=${R10_PAGER_LEAD_MAX}`,
+  // R10 v12 (R10-K8S-ENV-PAIRS): the env pair (v), its auth-scheme sub-rule (v-b) and the args flag (vi).
+  `structured:env-pair:keys=${[...ENV_PAIR_ALLOWED_KEYS].join(',')}:valueFrom-absent:rule23-synth:no-bare-token-exclusion:not:/${K8S_VAR_REF_RE.source}/`,
+  `structured:env-pair:auth-scheme:/${ENV_PAIR_AUTH_SCHEME_RE.source}/${ENV_PAIR_AUTH_SCHEME_RE.flags}`,
+  `structured:args-flag:under:/${ARGS_FLAG_PARENT_RE.source}/:/${ARGS_FLAG_RE.source}/${ARGS_FLAG_RE.flags}:rule23-synth:not:/${K8S_VAR_REF_RE.source}/`,
 ]);
 
 /** (ii)/(iii): the redacted value of a credential FIELD, or null when neither arm takes it. Single-line values only. */
@@ -1040,6 +1073,45 @@ function redactStructuredField(key: string, value: string, sink?: Set<string>): 
   if (!r.redactedCount || !r.redacted.startsWith(`${key}: `)) return null;
   if (sink) for (const t of local) sink.add(t);
   return r.redacted.slice(key.length + 2);
+}
+
+/** R10 v12 (v): the `name` of a Kubernetes EnvVar-shaped object with a literal `value`, or undefined. */
+function envPairName(o: Record<string, unknown>): string | undefined {
+  if (typeof o.name !== 'string' || typeof o.value !== 'string') return undefined;
+  for (const k of Object.keys(o)) if (!ENV_PAIR_ALLOWED_KEYS.has(k)) return undefined;
+  if ((o.valueFrom !== undefined && o.valueFrom !== null) || (o.value_from !== undefined && o.value_from !== null)) return undefined;
+  return o.name;
+}
+
+/** R10 v12 (v)/(v-b): the redacted `value` of an env pair, or null when neither sub-rule takes it. Single-line values only. */
+function redactEnvPairValue(name: string, value: string, sink?: Set<string>): string | null {
+  if (!value || value.includes('\n') || value.includes(PLACEHOLDER) || K8S_VAR_REF_RE.test(value.trim())) return null;
+  const auth = ENV_PAIR_AUTH_SCHEME_RE.exec(value);
+  if (auth) { sink?.add(auth[2]); return auth[1] + PLACEHOLDER; }
+  if (!STRUCTURED_RULE23_KEY_RE.test(name) || !STRUCTURED_RULE23_VOCAB_RE.test(name)) return null;
+  const synth = `${name}: ${value}`;
+  const local = new Set<string>();
+  const r = redactArtifactSecrets(synth, local);
+  if (!r.redactedCount || !r.redacted.startsWith(`${name}: `)) return null;
+  if (sink) for (const t of local) sink.add(t);
+  return r.redacted.slice(name.length + 2);
+}
+
+/** R10 v12 (vi): an `args`/`command` item with every credential-named flag's value redacted (flag kept), or null when none. */
+function redactArgsFlags(item: string, sink?: Set<string>): { text: string; count: number } | null {
+  if (!item || item.includes('\n') || item.includes(PLACEHOLDER) || !item.includes('-')) return null;
+  let count = 0;
+  const text = item.replace(ARGS_FLAG_RE, (whole, lead: string, dashes: string, flag: string, sep: string, val: string) => {
+    if (!STRUCTURED_RULE23_VOCAB_RE.test(flag) || K8S_VAR_REF_RE.test(val)) return whole;
+    const synth = `${flag}: ${val}`;
+    const local = new Set<string>();
+    const r = redactArtifactSecrets(synth, local);
+    if (!r.redactedCount || !r.redacted.startsWith(`${flag}: `)) return whole;
+    if (sink) for (const t of local) sink.add(t);
+    count += 1;
+    return `${lead}${dashes}${flag}${sep}${r.redacted.slice(flag.length + 2)}`;
+  });
+  return count ? { text, count } : null;
 }
 
 /** (iv): a map under a `community` key whose values are ALL non-null, non-array objects (≥ 1 entry). */
@@ -1280,6 +1352,7 @@ export function redactSecretsDeep(value: unknown, sink?: Set<string>): { value: 
     if (v && typeof v === 'object') {
       const src = v as Record<string, unknown>;
       const communityMap = isCommunityMap(parentKey, src);
+      const envName = envPairName(src); // R10 v12 (v)
       const out: Record<string, unknown> = {};
       for (const k of Object.keys(src)) {
         // R10 v9 (R-2 (i) / (iv)): the KEY. A community-map key is the community itself; any other key goes through the plain arm.
@@ -1307,7 +1380,25 @@ export function redactSecretsDeep(value: unknown, sink?: Set<string>): { value: 
           });
           continue;
         }
+        // R10 v12 (vi): a string item under `args` / `command` carrying a credential-named flag.
+        if (Array.isArray(child) && ARGS_FLAG_PARENT_RE.test(k)) {
+          out[key] = child.map((x) => {
+            if (typeof x !== 'string') return walk(x, depth + 2);
+            const w = walk(x, depth + 2);
+            if (w !== x) return w;
+            const f = redactArgsFlags(x, sink);
+            if (f === null) return x;
+            redactedCount += f.count;
+            return f.text;
+          });
+          continue;
+        }
         const walked = walk(child, depth + 1, k);
+        // R10 v12 (v): an env pair's literal `value`, judged under its sibling `name`.
+        if (envName !== undefined && k === 'value' && typeof child === 'string' && walked === child) {
+          const f = redactEnvPairValue(envName, child, sink);
+          if (f !== null) { redactedCount += 1; out[key] = f; continue; }
+        }
         // R10 v9 (R-2 (ii) / (iii)): a credential FIELD's string value the text rules left whole (no directive in it).
         if (typeof child === 'string' && walked === child) {
           const f = redactStructuredField(k, child, sink);

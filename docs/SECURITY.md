@@ -43,13 +43,15 @@ Two things to know about the sanitizer:
 
 One thing to know about the redactor:
 
-- **Known limitation (Kubernetes, until the next redactor version):** a secret written as a plain value in a Kubernetes object
-  that is not a Secret is not yet redacted when a run reads it. That covers an environment variable with a literal value
-  (`PASSWORD`, `API_KEY`, a cloud secret key, an `Authorization`-style header) and a credential flag in a container's
-  arguments (`--password=…`), both in the object's spec and inside its `kubectl.kubernetes.io/last-applied-configuration`
-  annotation, which can still hold an old value after the spec moved to a Secret reference. Secret values themselves are never
-  returned by the read-only service. Until the fix ships, keep such values in Secrets (`valueFrom: secretKeyRef`) and remove
-  stale literals from the annotation (re-apply the object), or point Kubernetes legs at namespaces without them.
+- **Kubernetes values it redacts, and what it still does not:** in a Kubernetes object a run reads, the redactor removes the
+  value of an environment variable whose name marks it as a credential (`PASSWORD`, `API_KEY`, a cloud secret key…), the token
+  in a `Bearer` or `Basic` value under any name, and the value of a credential flag in a container's arguments
+  (`--password=…`, also inside a `sh -c "…"` string) — in the object's spec and in its
+  `kubectl.kubernetes.io/last-applied-configuration` annotation, which can still hold an old value after the spec moved to a
+  Secret reference. Still **not** redacted: a flag and its value given as two separate arguments (`"--password", "x"`), a
+  base64 registry credential stored in a ConfigMap, and a credential written in a manifest's raw YAML text rather than read as an
+  object. Secret values themselves are never returned by the read-only service. Keep credentials in Secrets
+  (`valueFrom: secretKeyRef`) and these residuals do not arise.
 
 The interface contract (the values every leg of a program must use exactly) is not sanitized or truncated, by design:
 section 2 below says why.

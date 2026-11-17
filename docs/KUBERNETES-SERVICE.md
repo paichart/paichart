@@ -44,10 +44,10 @@ current state.
   contents, so the service account does receive them; the service drops the values before anything leaves it, and only names
   and key names are returned. If you prefer not to grant this, remove the Secrets rule. The only loss is that pAIchart cannot see
   which secrets exist.
-  **Known limitation until the next redactor version:** a secret written as a plain value in an object that is NOT a Secret (an
-  environment variable's literal value, a `--password=…` argument), including an old copy inside the
-  `kubectl.kubernetes.io/last-applied-configuration` annotation, is read with that object and not yet redacted in what a run
-  keeps. See [SECURITY.md](SECURITY.md), "The two output guards".
+  **Credentials in objects that are not Secrets:** what a run keeps has the value of a credential-named environment
+  variable, a `Bearer`/`Basic` token and a `--password=…`-style argument redacted, in the object and in its
+  `kubectl.kubernetes.io/last-applied-configuration` annotation. A few shapes are still not redacted; see
+  [SECURITY.md](SECURITY.md), "The two output guards".
 - **Container logs, a shell inside a container, or a port-forward.** No operation exists for them, and the permissions file
   does not grant them.
 - **Your list of namespaces.** See the next section.
@@ -103,7 +103,7 @@ cluster: live-read — service https://<your host>/k8s-readonly-descriptor.json
 with `git-file` lines and no `live-read` line is a **Git-only** run: no cluster is read, there is no drift check, and the package
 says so. The topology file (`topology.json`) beside the spec holds facts only: the cluster, the namespace(s) the change touches,
 the workload, your repository and paths, and your service's descriptor URL. It needs no map of your cluster. A worked example:
-`usecases/telemetry-export-net-k8s-r2/` in the public configs repository (a `git-only/` and a `git-live/` variant).
+`usecases/telemetry-export-net-k8s-r2/` in the public configs repository [`paichart/paichart-configs`](https://github.com/paichart/paichart-configs/tree/main/usecases/telemetry-export-net-k8s-r2) (a `git-only/` and a `git-live/` variant).
 
 ## The drift check: what it is and what it tells you
 
