@@ -12,6 +12,7 @@ import { annotateQualityGateVerdictMismatch } from '../lib/agents/harness/verdic
 import { appendHeldEditOutcomeSection } from '../lib/services/report-warnings-section';
 import { authoritativeReadStub, type StubExecution } from './fixtures/authoritative-read-stub';
 import { buildDeviceSourcesSnapshot, resolveLegDeviceSources } from '../lib/agents/harness/device-sources';
+import { buildConfigSourcesSnapshot, resolveLegConfigSources, CONFIG_SOURCES_SNAPSHOT_KEY } from '../lib/agents/harness/config-sources';
 const SNAP_ABSENT = () => JSON.parse(JSON.stringify(buildDeviceSourcesSnapshot(resolveLegDeviceSources({ contractValue: undefined, taskBody: 'no block' }), 't')));
 
 let passed = 0; let failed = 0;
@@ -104,10 +105,21 @@ test('asymmetric: an agent needs-revision is recorded, never approved, forced:fa
   eq([m2.qualityGate.outcome, m2.qualityGate.heldEdit.forced, m2.qualityGate.heldEdit.reason], ['escalated', false, 'refused']);
 });
 
+// Config sources STEP 2 (kubernetes-gitops 1.19.0): a k8s leg is a Config-sources leg, so the carrier reads its GOVERNING declaration
+// (the first-execution snapshot checked against the live body). This leg declares a live read and NO `git-file` line — it keeps no
+// file, so the per-line Config force is silent and G-4 is what these cases test. `k8sWorld` answers the carrier's leg-row read.
+const K8S_BODY = '## Config sources\nprod: live-read — service k8s-readonly\n';
+const K8S_LIVE_ONLY = buildConfigSourcesSnapshot('kubernetes-gitops', resolveLegConfigSources({ protocol: 'kubernetes-gitops-protocol', contractValue: undefined, taskBody: K8S_BODY }), '2026-11-15T00:00:00.000Z');
+const k8sWorld = (...args: Parameters<typeof world>) => {
+  const w = world(...args);
+  const inner = w.db.$queryRaw;
+  w.db.$queryRaw = async (...q: unknown[]) => (JSON.stringify(q[0]).includes(CONFIG_SOURCES_SNAPSHOT_KEY) ? [{ description: K8S_BODY, contract: null, snapshot: K8S_LIVE_ONLY }] : inner(...q));
+  return w;
+};
 const K8SLEG = { id: 'leg-v', type: 'PIPELINE', title: 'Deploy (protocol: kubernetes-gitops)', metadata: { protocol: 'kubernetes-gitops-protocol', pipelineStageId: STAGE } };
 test('held-k8s step 3 (G-4): a source-not-pinned refusal on the leg\'s AUTHORITATIVE Harvester forces needs-revision — even when the package is out of scope', async () => {
   const noBase = { version: 1, state: 'no-base' };                                  // out of scope: the refused read left no base
-  const w = world(noBase, null, { harvester: { refusalsByExec: { 'ex-harv': 1 } } });
+  const w = k8sWorld(noBase, null, { harvester: { refusalsByExec: { 'ex-harv': 1 } } });
   const m = merge('approved');
   await applyHeldEditCarrier(w.db, K8SLEG, m);
   eq([m.qualityGate.outcome, m.qualityGate.heldEdit.reason, m.qualityGate.heldEdit.inScope, m.qualityGate.heldEdit.forced], ['needs-revision', 'source-not-pinned', false, true]);
@@ -115,12 +127,12 @@ test('held-k8s step 3 (G-4): a source-not-pinned refusal on the leg\'s AUTHORITA
   // a refusal on an OLDER Harvester execution (a re-run since) does not force; nor does none at all
   for (const refusalsByExec of [{ 'ex-harv-old': 2 }, {}] as Array<Record<string, number>>) {
     const m2 = merge('approved');
-    await applyHeldEditCarrier(world(noBase, null, { harvester: { refusalsByExec } }).db, K8SLEG, m2);
+    await applyHeldEditCarrier(k8sWorld(noBase, null, { harvester: { refusalsByExec } }).db, K8SLEG, m2);
     eq([m2.qualityGate.outcome, m2.qualityGate.heldEdit.forced, m2.qualityGate.heldEdit.inScope], ['approved', false, false], `${JSON.stringify(refusalsByExec)}: `);
   }
   // a stage rebind still wins (it is the stronger fact)
   const m3 = { pipelineStageId: 'stage-of-another-leg', qualityGate: { outcome: 'approved' } } as Record<string, any>;
-  await applyHeldEditCarrier(world(noBase, null, { harvester: { refusalsByExec: { 'ex-harv': 1 } } }).db, K8SLEG, m3);
+  await applyHeldEditCarrier(k8sWorld(noBase, null, { harvester: { refusalsByExec: { 'ex-harv': 1 } } }).db, K8SLEG, m3);
   eq(m3.qualityGate.heldEdit.reason, 'stage-rebind');
 });
 

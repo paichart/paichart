@@ -55,6 +55,7 @@
 .claude/knowledge/patterns/parallel-query-optimization-pattern.md
 .claude/knowledge/patterns/phased-security-deployment.md
 .claude/knowledge/patterns/pino-structured-logging-pattern.md
+.claude/knowledge/patterns/platform-derived-contract-field-pattern.md
 .claude/knowledge/patterns/post-change-specialist-review-pattern.md
 .claude/knowledge/patterns/prompt-library-gold-standard-pattern.md
 .claude/knowledge/patterns/prompt-section-ownership-pattern.md
@@ -1004,6 +1005,7 @@ docs/GATES.md
 docs/GLOSSARY.md
 docs/HOW-IT-WORKS.md
 docs/INSTALL.md
+docs/KUBERNETES-SERVICE.md
 docs/OAUTH-SETUP.md
 docs/OPERATING.md
 docs/PIPELINES.md
@@ -1077,6 +1079,7 @@ lib/agents/harness/held-bytes/canonical-text.ts
 lib/agents/harness/held-bytes/caps.ts
 lib/agents/harness/held-bytes/clause.ts
 lib/agents/harness/held-bytes/config-source-scope.ts
+lib/agents/harness/held-bytes/declared-descriptor-endpoints.ts
 lib/agents/harness/held-bytes/descriptors.ts
 lib/agents/harness/held-bytes/device-read-scope.ts
 lib/agents/harness/held-bytes/diff.ts
@@ -1138,6 +1141,7 @@ lib/agents/harness/reviewer-warnings.ts
 lib/agents/harness/rollback-containment-enrichment.ts
 lib/agents/harness/rollback-containment.ts
 lib/agents/harness/sanitize-chained-output.ts
+lib/agents/harness/service-descriptors-derivation.ts
 lib/agents/harness/strip-tool-call-results.ts
 lib/agents/harness/validation-tool-calls-enrichment.ts
 lib/agents/harness/validation-tool-calls.ts
@@ -1745,7 +1749,10 @@ scripts/fixtures/apply-block-placeholder/neg-tf-prose-cmuuygth6.json
 scripts/fixtures/apply-block-placeholder/pos-tf-desired-cmrmjpdt1.json
 scripts/fixtures/apply-block-placeholder/pos-tf-rollback-cmrmnhxhm.json
 scripts/fixtures/authoritative-read-stub.ts
+scripts/fixtures/canary/arch-text-2.json
+scripts/fixtures/canary/k8s-drift-record.json
 scripts/fixtures/containment-propagation-cases-2026-10-12.json
+scripts/fixtures/descriptor-registration-route/k8s-hand-registered-harvester.json
 scripts/fixtures/dialect-lint/PROVENANCE.md
 scripts/fixtures/dialect-lint/ef-dl1-obs-ingress-author-2026-09-26.md
 scripts/fixtures/dialect-lint/ef-dl1-obs-ingress-contract-2026-09-26.json
@@ -1815,6 +1822,7 @@ scripts/fixtures/rollback-containment/r3a3-author.md
 scripts/fixtures/rollback-containment/r3a3-harvest.md
 scripts/fixtures/rollback-containment/r3b2-author.md
 scripts/fixtures/rollback-containment/r3b2-harvest.md
+scripts/fixtures/service-descriptors/corpus-contracts.json
 scripts/fixtures/validation-tool-calls/network-legs-2026-10-23.json
 scripts/gate-check.ts
 scripts/generate-jwt-keys.sh
@@ -1844,6 +1852,9 @@ scripts/leg-replay-lab/harvester-source.ts
 scripts/leg-replay-lab/held-id-check-both-pins.sh
 scripts/leg-replay-lab/held-store.ts
 scripts/leg-replay-lab/input-edits.ts
+scripts/leg-replay-lab/k8s-cluster-fixture.py
+scripts/leg-replay-lab/k8s-drift-from-recorded.py
+scripts/leg-replay-lab/k8s-fixtures.ts
 scripts/leg-replay-lab/kind-gate.ts
 scripts/leg-replay-lab/lab-sample.ts
 scripts/leg-replay-lab/lab.ts
@@ -1858,6 +1869,7 @@ scripts/leg-replay-lab/recorded-tools.ts
 scripts/leg-replay-lab/render-requirements-texts.ts
 scripts/leg-replay-lab/render-tree-protocols.ts
 scripts/leg-replay-lab/replay-prisma.ts
+scripts/leg-replay-lab/score-csk.ts
 scripts/leg-replay-lab/score-csn.ts
 scripts/leg-replay-lab/score-edits.ts
 scripts/leg-replay-lab/score-g2.ts
@@ -2028,6 +2040,7 @@ scripts/test-db-push-data-loss-guard.ts
 scripts/test-demo-write-coverage.ts
 scripts/test-derivation-containment.ts
 scripts/test-descriptor-fetch.ts
+scripts/test-descriptor-registration-route.ts
 scripts/test-dev-mcp-proxy.ts
 scripts/test-device-read-capture.ts
 scripts/test-device-sources.ts
@@ -2211,6 +2224,7 @@ scripts/test-semantic-mapping-scope.ts
 scripts/test-serialization-retry-boundary.ts
 scripts/test-series-cut-paths.ts
 scripts/test-service-call-args-coercion.ts
+scripts/test-service-descriptors-derivation.ts
 scripts/test-session-store.ts
 scripts/test-settings-redaction.ts
 scripts/test-shared-pool-listen-replay.ts
@@ -2219,6 +2233,7 @@ scripts/test-skip-path-honesty.ts
 scripts/test-sse-event-sequence.ts
 scripts/test-stage-metadata-merge.ts
 scripts/test-stage-resolver.ts
+scripts/test-stamp-execution-nets-forward.ts
 scripts/test-step3-reexecution-prose.ts
 scripts/test-streaming-accumulate.ts
 scripts/test-surrogate-safe.ts
@@ -2242,6 +2257,7 @@ scripts/test-token-usage.ts
 scripts/test-truncation-incident-replay.ts
 scripts/test-truncation-tier-invariant.ts
 scripts/test-typed-error-contract.ts
+scripts/test-user-doc-numbers.ts
 scripts/test-validation-provenance.js
 scripts/test-validation-shape-contract.ts
 scripts/test-validation-tool-calls.ts

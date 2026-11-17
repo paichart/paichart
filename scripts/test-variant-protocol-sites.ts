@@ -26,6 +26,22 @@ const NAMES_VARIANT = /observability-config-held|HELD_VARIANT_(PROTOCOL|TOKEN)|H
 
 /** `file::anchor` → reason. The anchor is the enclosing declaration / property name (stable across line moves). */
 export const EXCLUSIONS: Readonly<Record<string, string>> = {
+  'scripts/test-plan-spawn-carry-behavioral.ts::deviceSources':
+    'ARCHITECT-COMPOSED-DESCRIPTOR real-create-path fixture (2026-11-17): a program plan whose deviceSources / serviceDescriptors are keyed by live leg protocol tokens; a contract shape, not a held-capability or protocol selection',
+  'scripts/test-plan-spawn-carry-behavioral.ts::serviceDescriptors':
+    'ARCHITECT-COMPOSED-DESCRIPTOR real-create-path fixture (2026-11-17): a program plan whose deviceSources / serviceDescriptors are keyed by live leg protocol tokens; a contract shape, not a held-capability or protocol selection',
+  'scripts/test-plan-spawn-carry-behavioral.ts::SD_EXPECTED':
+    'ARCHITECT-COMPOSED-DESCRIPTOR real-create-path fixture (2026-11-17): a program plan whose deviceSources / serviceDescriptors are keyed by live leg protocol tokens; a contract shape, not a held-capability or protocol selection',
+  'lib/agents/harness/service-descriptors-derivation.ts::DESCRIPTOR_ONLY_TOKENS':
+    'ARCHITECT-COMPOSED-DESCRIPTOR (2026-11-17): the live leg tokens with NO sources lane, whose serviceDescriptors entry the Architect still writes (rule 4); a contract-key set, not held-capability. The retired obs variant is not a live leg token, so a key under it is REPORTED as unknown, never derived',
+  'scripts/test-service-descriptors-derivation.ts::test:K1 equal to the derived value ⇒ the SAME object back (byte-i':
+    'ARCHITECT-COMPOSED-DESCRIPTOR fixture (2026-11-17): a contract serviceDescriptors / sources map keyed by live leg protocol tokens, proving the platform derivation; a contract shape, not a held-capability or protocol selection',
+  'scripts/test-service-descriptors-derivation.ts::test:K3 the Architect left the entry out ⇒ ADDED from the line (a':
+    'ARCHITECT-COMPOSED-DESCRIPTOR fixture (2026-11-17): a contract serviceDescriptors / sources map keyed by live leg protocol tokens, proving the platform derivation; a contract shape, not a held-capability or protocol selection',
+  'scripts/test-service-descriptors-derivation.ts::test:K4 the field absent altogether ⇒ created from the lines, app':
+    'ARCHITECT-COMPOSED-DESCRIPTOR fixture (2026-11-17): a contract serviceDescriptors / sources map keyed by live leg protocol tokens, proving the platform derivation; a contract shape, not a held-capability or protocol selection',
+  'scripts/test-service-descriptors-derivation.ts::serviceDescriptors':
+    'ARCHITECT-COMPOSED-DESCRIPTOR fixture (2026-11-17): a contract serviceDescriptors / sources map keyed by live leg protocol tokens, proving the platform derivation; a contract shape, not a held-capability or protocol selection',
   'lib/agents/harness/rollback-containment.ts::DESIRED_STATE_LANES':
     'held-capable legs are adjudicated by the held arm FIRST (V-8a restore-is-held-base, keyed on isHeldCapableProtocol); a held-capable desired-state lane never reaches the content arms (K-4, held-k8s 1f)',
   'lib/agents/harness/held-bytes/variant.ts::GIT_FILE_SOURCE_PROTOCOLS':
@@ -34,8 +50,6 @@ export const EXCLUSIONS: Readonly<Record<string, string>> = {
     'held-network step 3 batch 2b (+ VALUE-LEG-GIT 2026-11-06: the lane table DEVICE_SOURCE_PROTOCOLS is derived from): scopes which legs declare Device sources (the device-read capture lane, change lane only) — a capture-scope set like GIT_FILE_SOURCE_PROTOCOLS, a different question from held-capability; the retired obs variant declares no device sources',
   'lib/agents/harness/held-bytes/variant.ts::CONFIG_SOURCE_LANES':
     'Config sources STEP 2 (owner decision (b), 2026-11-15): the lane table of protocols that declare a `## Config sources` block (contract field configSources) — a declaration-scope set, not held-capability; kept SEPARATE from DEVICE_SOURCE_LANES on purpose (test-config-sources MIX1); the retired obs variant declares none',
-  'lib/agents/harness/held-bytes/variant.ts::CONFIG_SOURCE_AWAITING_TEXT':
-    'Config sources STEP 2: the subtraction from CONFIG_SOURCE_LANES for rows whose protocol text has not shipped (kubernetes-gitops until 1.19.0) — the HELD_JOIN_AWAITING_TEXT pattern; pinned to the seed text by test-config-sources MIX5',
   'lib/agents/harness/config-sources.ts::CONFIG_SOURCE_KINDS_BY_PROTOCOL':
     'Config sources STEP 2 (2026-11-15): the per-protocol KIND table of the `## Config sources` grammar — which line kinds a protocol\'s block admits, a different question from held-capability; the retired obs variant declares no Config sources (observability joins by its own row at step 3)',
   'scripts/test-config-sources.ts::deviceSources':

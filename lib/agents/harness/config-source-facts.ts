@@ -18,7 +18,7 @@ import { PLATFORM_DEFAULT_DESCRIPTORS } from './held-bytes/descriptors';
 import { withConfigSourcesScope } from './held-bytes/config-source-scope';
 import type { LegConfigSourcesResolution } from './config-sources-read';
 import { assertNeverConfigKind } from './config-sources';
-import { gitArgsMatch, serviceCalls, serviceMatcher, shownService } from './device-source-facts';
+import { endpointResolvedServices, gitArgsMatch, serviceCalls, serviceMatcher, shownService } from './device-source-facts';
 
 export const CONFIG_SOURCE_READS_VERSION = 1;
 export const CONFIG_LIVE_EVIDENCE_VERSION = 1;
@@ -80,7 +80,10 @@ export function computeConfigSourceReads(sources: LegConfigSourcesResolution, to
   // shipping extractor with the Config scope applied).
   const scoped = withConfigSourcesScope(extractDeclaredFiles(records, PLATFORM_DEFAULT_DESCRIPTORS, { gitFileSourceLeg: true, live: false }), sources);
   const undeclaredGitFileReads = scoped.refusals.filter((r) => r.refusal === 'git-file-not-declared').length;
-  return { version: CONFIG_SOURCE_READS_VERSION, checked: true, declaration, items, notRead, undeclaredGitFileReads };
+  // DESCRIPTOR-REGISTRATION-ROUTE: which declared descriptor URLs were tied to a hand registration by endpoint (absent when none).
+  const byEndpoint = endpointResolvedServices(records, sources.entries.flatMap((e) => ('service' in e ? [e.service] : [])));
+  return { version: CONFIG_SOURCE_READS_VERSION, checked: true, declaration, items, notRead, undeclaredGitFileReads,
+    ...(byEndpoint.length ? { resolvedByEndpoint: byEndpoint } : {}) };
 }
 
 function capped<T>(list: T[], name: string, cap: Obj): T[] {

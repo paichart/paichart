@@ -18,7 +18,8 @@ you do not launch anything.
   repository, ask them to make one (`git clone https://github.com/paichart/paichart-configs`).
 - **`docs/PROGRAM-SHAPES.md`** and **`docs/design/DESIGNING-A-PROGRAM.md`** before you discuss the shape (step 2), and
   `docs/design/FIREWALL-POLICY-USE-CASE.md` for one such decision worked through.
-- **`docs/GLOSSARY.md`** for every term (the four Device sources kinds are defined there), **`docs/OPERATING.md`** for what
+- **`docs/GLOSSARY.md`** for every term (the four Device sources kinds and the Config sources kinds are defined there),
+  **`docs/KUBERNETES-SERVICE.md`** for a Kubernetes leg, **`docs/OPERATING.md`** for what
   happens to the spec once it runs, and `docs/CONNECTING-YOUR-SERVICES.md` for the services a topology names.
 - **One check**, run from the clone directory: `python3 scripts/check-spec-topology.py --spec <requirements.md> --topology
   <topology.json>`. It warns where the two files disagree (devices, files, service addresses, addresses and ranges), where a
@@ -90,12 +91,23 @@ For a network leg, write its `## Device sources` block: one line per device, say
 Git file or from the running device, in the form the example uses. **Ask which devices the leg must *see*, not only which it
 changes**, and list them all: a device left out is not checked by that leg, and a value that collides there can be approved.
 A value leg has its own block.
+For a Kubernetes leg, write its `## Config sources` block instead: one line per manifest file it reads (`<label>: git-file —
+service github-service ; <owner>/<repo>/<path>`) and one for the cluster (`<cluster>: live-read — service <name or descriptor
+URL>`, or `<cluster>: supplied` when the person pastes its state). **A Kubernetes leg without the block stops** before it reads
+anything. One cluster per leg: two `live-read` lines mean no drift check for any file. Never declare `replicas` for a workload an
+autoscaler scales. The block's kinds and the drift check: `docs/KUBERNETES-SERVICE.md`.
+For M4 on a Kubernetes file, ask the person to run `kubectl diff -f <file>` against the cluster with their own credentials: a
+difference in a field the change does not touch will stop the leg, so it must be known (and fixed or declared) before launch.
+**Build every use case as twins** — a `git-only/` and a `git-live/` variant whose `requirements.md` files differ only in their
+sources blocks and "Connection surfaces" — and write every leg sentence without naming where it reads from ("from the sources its
+Device sources block declares", never "from the running switches"). Keep "Changes nothing." on one line.
 
 **6. Write `topology.json`.** Facts only: the systems in scope, where each one's configuration file lives, the read-only
 services to use. No rules, no decisions, no prose: the checklist's Part 1a gives the three rules. Describe a service, never
 what to do with it: a line about registering or removing a service has got a correct program refused.
 
-**7. Check.** Run the check above and read every warning to the person. Then read the spec once more against the checklist
+**7. Check.** Run the check above, and also `npx ts-node -r tsconfig-paths/register scripts/check-requirements-sources.ts --draft
+<requirements.md>` (it reads every sources block as the platform will), and read every warning to the person. Then read the spec once more against the checklist
 yourself and list: each Tier 1 question and the sentence that answers it; each one still open; anything in the spec that
 states current state (rule 2); any place the same rule appears twice (rule 3).
 

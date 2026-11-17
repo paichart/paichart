@@ -40,6 +40,7 @@ repository, and needs nothing but the files in that repository.
 |---|---|
 | [Operator runbook](OPERATING.md) | Run a program from start to finish: launch, check the plan, release gates, read the result. |
 | [Gates](GATES.md) | What to check before you release each kind of gate, and how to apply a change package. |
+| [Connecting a Kubernetes cluster](KUBERNETES-SERVICE.md) | What pAIchart reads in your cluster and never reads, the `## Config sources` block, the drift check and why a file is "not checked", and what your own Kubernetes service must offer. |
 | [Connecting your own services](CONNECTING-YOUR-SERVICES.md) | Register your team's device, Git and cloud services, share them, and name them in a task or a spec. |
 | [How a pipeline works](HOW-IT-WORKS.md) | A short account of how one pipeline runs, what cannot go wrong by construction, and what you can change without code. |
 | [Security](SECURITY.md) | What protects a run, the two output guards you control, and the security properties of agents handing work to each other. |

@@ -41,8 +41,8 @@ are in [`services/github-service/README.md`](../services/github-service/README.m
   names its own repo — set only by a human registrant. Never register the pinned repo as a second source: its files are kept
   only through the pin.
 - **Limits on a self-host.**
-  - There is no independent operator check of a kept file against Git: the base-check tool stays private. Compare a package's base
-    with the commit it names yourself before you apply it.
+  - Check a kept file against Git yourself. When `held.get` reports `redactedCount: 0` (and the file has Unix line endings), the BASE is
+    the file at the commit it names, byte for byte: `git show <sourceRevision>:<path> | sha256sum` must equal the BASE's `blobSha256`. Do it before you apply.
   - Changing the pin later governs **new reads only**: files already kept from the old repo stay usable (they are never re-checked
     against the pin) and still name the repo they came from. A new pin takes effect when the hub restarts, and a restart stops any
     run in flight — change it between runs.
@@ -81,6 +81,10 @@ processes after a change.
 package's **edits** to your own copy of the file instead, and before you apply, confirm that your live file still matches the stored
 **BASE**.
 
+**`mode: "replace-file"`** (with `applicable: true`) is the other case: the kept copy contains no placeholder, so the stored
+CANDIDATE is exactly the file to write. Either way, first confirm the file you are about to overwrite still matches the BASE
+(the same sha256 as its `blobSha256`): otherwise the candidate would silently undo a change made after the run read the file.
+
 ## Operator facts
 
 1. **With R10 off, every reader of the POV, and your model provider, sees the secrets in your kept files.** With R10 off, the stored
@@ -118,5 +122,8 @@ package's **edits** to your own copy of the file instead, and before you apply, 
 
 - After a pipeline that keeps a file, read its candidate:
   `project({ action: "held.get", executionId: "<author execution>", handle: "H1", kind: "CANDIDATE" })`.
+- **See exactly what changed, mechanically:** fetch the BASE and the CANDIDATE, save each body to a file by script (never retype
+  it), check each file's sha256 equals the `blobSha256` that `held.get` returned, then `diff -u base candidate`. When the hashes
+  match, the diff is exactly the change.
 - The response's `redactorVersion` should be a version (`paichart.r10/…`), **not `"none"`**. `"none"` means R10 was off when the file
   was kept: see operator fact 1.

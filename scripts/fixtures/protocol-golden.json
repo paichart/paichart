@@ -13,8 +13,8 @@
       "chars": 67673
     },
     "kubernetes-gitops-protocol": {
-      "sha256": "89c5e243487f0d15fa27738f40930e45535ae0ddbeddd757e0cb5df8e09ab0d9",
-      "chars": 51953
+      "sha256": "5f51e83c18488297130acf6647da6de0fb109ad8ab6f9edf4ec1a5ad30e0c57a",
+      "chars": 61218
     },
     "terraform-iac-protocol": {
       "sha256": "792d57331e8f726d5bb2f9ba3c6dea8fbda15578ff5a0bface4b23e124d36b09",
@@ -159,12 +159,12 @@
       "chars": 4812
     },
     "program_architect": {
-      "sha256": "7a78795860fc5a73b8f6a6bc74fd4040802a628062a47413ea0c0f37314c8b2b",
-      "chars": 21741
+      "sha256": "67b48bec68bfe9a26865b8da245b0a42e15370a99a9b0db10225a3745a612606",
+      "chars": 23896
     },
     "value_chain_architect": {
-      "sha256": "7a78795860fc5a73b8f6a6bc74fd4040802a628062a47413ea0c0f37314c8b2b",
-      "chars": 21741
+      "sha256": "67b48bec68bfe9a26865b8da245b0a42e15370a99a9b0db10225a3745a612606",
+      "chars": 23896
     },
     "derivation_architect": {
       "sha256": "4fb4c93a78ee0358ed8380b421452233c968007a9f5d38db96dec06d3e803401",

@@ -142,7 +142,7 @@ export const CONFIG_SOURCE_LANES: Readonly<Record<string, { lane: ConfigSourceLa
 /** Rows whose protocol TEXT does not carry the `## Config sources` section yet (the HELD_JOIN_AWAITING_TEXT pattern): the row exists
  *  so the code can ship first, and every consumer treats the protocol as NOT a Config-sources protocol until its text commit removes it
  *  from this list. kubernetes-gitops leaves at 1.19.0. */
-export const CONFIG_SOURCE_AWAITING_TEXT: readonly string[] = Object.freeze([canonicalProtocolName('kubernetes-gitops')]);
+export const CONFIG_SOURCE_AWAITING_TEXT: readonly string[] = Object.freeze([]);
 /** The protocols whose legs declare a `## Config sources` block TODAY (the table minus the rows awaiting their text). */
 export const CONFIG_SOURCE_PROTOCOLS: readonly string[] = Object.freeze(
   Object.keys(CONFIG_SOURCE_LANES).filter((p) => !CONFIG_SOURCE_AWAITING_TEXT.includes(p)));

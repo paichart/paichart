@@ -74,7 +74,20 @@ export function shownService(service: string): string {
   try { return maskQueryValues(new URL(service)); } catch { return '(unparseable descriptor URL)'; }
 }
 
-/** The services a declared service string resolves to in THIS execution: the name itself, or the rows registered from the URL. */
+/** DESCRIPTOR-REGISTRATION-ROUTE (2026-11-16): the declared descriptor URLs (shown, IF-2 masked) that THIS execution resolved through
+ *  a hand registration matched by ENDPOINT — a fact about HOW the line was tied to a service, stamped only when non-empty so a stamp
+ *  resolved by `descriptorUrl` (or declared by name) is byte-unchanged. */
+export function endpointResolvedServices(records: readonly unknown[], declared: readonly string[]): string[] {
+  const regs = registrationsByDescriptorUrl(records);
+  const out: string[] = [];
+  for (const d of new Set(declared)) {
+    if (/^https?:\/\//i.test(d) && (regs.get(d) ?? []).some((r) => r.resolvedBy === 'endpoint')) out.push(shownService(d));
+  }
+  return out;
+}
+
+/** The services a declared service string resolves to in THIS execution: the name itself, or the rows registered for the URL
+ *  (by `descriptorUrl`, or by hand at the URL's table endpoint — `registrationsByDescriptorUrl`). */
 export function serviceMatcher(records: readonly unknown[]) {
   const regs = registrationsByDescriptorUrl(records);
   return (declared: string, c: { service: string | null; serviceId: string | null }): boolean => {
@@ -158,10 +171,12 @@ export function computeDeviceSourceReads(sources: LegDeviceSourcesResolution, to
     if (read.state === 'not-read') notRead++;
   }
   const scope = buildDeviceReadScope(sources, records);
+  const byEndpoint = endpointResolvedServices(records, sources.entries.flatMap((e) => ('service' in e ? [e.service] : [])));
   return {
     version: DEVICE_SOURCE_READS_VERSION, checked: true, declaration, devices, notRead,
     undeclaredDeviceConfigReads: ex.refusals.filter((r) => r.refusal === 'device-not-declared' || r.refusal === 'device-service-not-declared').length,
     ...(scope.state === 'declared' && scope.unresolvedServices.length ? { unresolvedServices: scope.unresolvedServices.map(shownService) } : {}),
+    ...(byEndpoint.length ? { resolvedByEndpoint: byEndpoint } : {}),
   };
 }
 

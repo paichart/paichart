@@ -23,6 +23,9 @@
  *   npm run lab:leg-replay -- frozen-cmp --experiment <dir> --run <dryRunDir> [--only R] [--variants rb] [--dump] [--author]   # a base arm's Reviewer prompt = the frozen production rebuild, byte for byte, $0 (--dump: frozen.reviewer.*.md beside a differing cell)
  *   npm run lab:leg-replay -- csn-self-test [--experiment <dir>] [--mutate held-blind|held-loose|alloc-regex|alloc-blind|dv-regex|ref-blind|nopkg-blind|limit-blind|overlap-blind|reason-blind|void-blind|warn-blind]  # L-CS-N scorer, $0
  *   npm run lab:leg-replay -- csn-score --run <runDir>[,<runDir>] --experiment <dir>   # L-CS-N readings + do-not-ship proxies (score-csn.ts), $0
+ *   npm run lab:leg-replay -- csk-self-test [--mutate compare-blind|negation-loose|tool-blind|held-blind|halt-blind|noedit-blind|reason-blind|warn-blind]  # L-CS-K scorer (score-csk.ts), both directions, $0
+ *   npm run lab:leg-replay -- csk-score --run <runDir>[,<runDir>]                     # L-CS-K readings + do-not-ship proxies (score-csk.ts), $0
+ *   npm run lab:leg-replay -- csk-golden --run <runDir>[,<runDir>] --experiment <dir>/golden-v8   # owner D-1: targeted golden k8s cells read by reason, $0
  *   npm run lab:leg-replay -- standing-self-test                                     # standing bench (golden/standing-bench.json): each frozen record reproduces its STORED (wrong) outcome, $0
  *   npm run lab:leg-replay -- provenance-check --experiment <dir> --source local-db:<lab_db>  # L-CS-N: self-host nodes ran the pinned texts + tiers; persisted verdict reproduces, $0
  *   npm run lab:leg-replay -- n2-score --run <runs,> --experiment <dir>                  # L-N2 Author readings (score-n2) + the node-driven Reviewer bench (score-reviewer-bench); n2-self-test · bench-self-test
@@ -155,7 +158,7 @@ const RUNS_DIR = path.join(__dirname, 'runs');
  *  `scoring` on these nodes is score-k1.ts K1Scoring. */
 /** L-N1 (held-network step 2): `networkFixture` — the B4 device tier, B5 catalogue tier and B6 register refusal (network-fixtures.ts) in front of
  *  a HARVESTER node's recorded tier. */
-interface NodeSpec { /** L-CS-K-a (Config sources STEP 2, config-sources-patch.ts): simulate the Config-sources snapshot production's writer takes at the leg's FIRST execution, over the (input-edited) leg row. Read only by an arm that composes the Config-sources text. */ configSourcesSnapshot?: 'first-execution'; /** L-CS-K-b: what the cluster service's compare tool ANSWERS the platform's drift call in this cell — a tool-shaped result file (the committed contract fixture by default) or a named call outcome. Never a fact: the call record and `gitLiveDrift` are computed by the shipping code. */ platformDrift?: DriftPlantSpec; /** GOLDEN-REVIEWER-BYTE-FIDELITY (a): this node's persisted held Author cells read its stored `editApplication` (the variant flag, per case; set by golden-build). */ persistedEditApplication?: boolean; /** VALUE-LEG-GIT L-VLG-a (value-lane.ts): simulate the Device-sources snapshot production's writer takes at the leg's FIRST execution, over the (input-edited) leg row. */ deviceSourcesSnapshot?: 'first-execution'; /** VALUE-LEG-GIT L-VLG-b: a frozen harvest (committed text + toolCalls) replaces a VALUE leg's stored Harvester, its device facts computed by the shipping nets. */ valueHarvest?: import('./value-lane').ValueHarvestSpec; /** L-CS-N (owner 2026-11-05): replace the frozen Harvester's calls by Git reads served from a fixture (git-harvest-plant.ts). */ harvestFromFixture?: import('./git-harvest-plant').HarvestFromFixture; /** L-CS-N ADDENDUM (h): replace the frozen Harvester's calls by a step-3 Harvester LAB SAMPLE's calls (git-harvest-plant.ts withSampleHarvest). */ harvestFromSample?: string; /** L-CS-N: re-stamp a PERSISTED (planted) Author purely over the arm's held files (the L-9 pure applier), as the edit step would. */ restampPersisted?: boolean; /** L-CS-N: score-csn.ts readings for this node (CsnScoring). */ csn?: import('./score-csn').CsnScoring; /** L-CS-N (ME-B3): the node's rows come from a self-host install — its cached snapshot must carry that provenance (and a node without it must not). */ provenance?: 'self-host'; /** L-CS-N: the stored verdict the provenance check must reproduce (R-FWA3: approved/92). */ provenanceExpect?: { approved: boolean; confidence: number }; /** ME-P2-6: arms of a planted node that DELIBERATELY run without the plant (named, never silent). */ unplantedArms?: string[]; networkFixture?: NetworkFixtureSpec; fileFixture?: string; fixturePlants?: string[]; harvesterSourceByVariant?: Record<string, string>; authorSourceByVariant?: Record<string, string>; reviewerBaseEdit?: string; diffMustShow?: string[]; architectOnly?: boolean; scoring?: import('./score-edits').NodeScoring | import('./score-k1').K1Scoring; id: string; authorExecutionId: string; kind: string; originalVersion?: string; variants: string[]; why?: string; authorPlant?: string; expect?: string; reviewerExecutionId?: string; ownerRowItemMap?: string; n?: number; nByVariant?: Record<string, number>; inputEdits?: string; harvesterOnly?: boolean; tools?: 'stub' | 'recorded' }
+interface NodeSpec { /** L-CS-K (2026-11-16, owner stop item 3): a recorded CLUSTER STATE file (k8s-cluster-fixture.py) — every call to its read-only service is answered from it (k8s-fixtures.ts), never the lab notice. Path relative to the experiment. */ clusterFixture?: string; /** L-CS-K-a (Config sources STEP 2, config-sources-patch.ts): simulate the Config-sources snapshot production's writer takes at the leg's FIRST execution, over the (input-edited) leg row. Read only by an arm that composes the Config-sources text. */ configSourcesSnapshot?: 'first-execution'; /** L-CS-K-b: what the cluster service's compare tool ANSWERS the platform's drift call in this cell — a tool-shaped result file (the committed contract fixture by default) or a named call outcome. Never a fact: the call record and `gitLiveDrift` are computed by the shipping code. */ platformDrift?: DriftPlantSpec; /** GOLDEN-REVIEWER-BYTE-FIDELITY (a): this node's persisted held Author cells read its stored `editApplication` (the variant flag, per case; set by golden-build). */ persistedEditApplication?: boolean; /** VALUE-LEG-GIT L-VLG-a (value-lane.ts): simulate the Device-sources snapshot production's writer takes at the leg's FIRST execution, over the (input-edited) leg row. */ deviceSourcesSnapshot?: 'first-execution'; /** VALUE-LEG-GIT L-VLG-b: a frozen harvest (committed text + toolCalls) replaces a VALUE leg's stored Harvester, its device facts computed by the shipping nets. */ valueHarvest?: import('./value-lane').ValueHarvestSpec; /** L-CS-N (owner 2026-11-05): replace the frozen Harvester's calls by Git reads served from a fixture (git-harvest-plant.ts). */ harvestFromFixture?: import('./git-harvest-plant').HarvestFromFixture; /** L-CS-N ADDENDUM (h): replace the frozen Harvester's calls by a step-3 Harvester LAB SAMPLE's calls (git-harvest-plant.ts withSampleHarvest). */ harvestFromSample?: string; /** L-CS-N: re-stamp a PERSISTED (planted) Author purely over the arm's held files (the L-9 pure applier), as the edit step would. */ restampPersisted?: boolean; /** L-CS-N: score-csn.ts readings for this node (CsnScoring). */ csn?: import('./score-csn').CsnScoring; /** L-CS-N (ME-B3): the node's rows come from a self-host install — its cached snapshot must carry that provenance (and a node without it must not). */ provenance?: 'self-host'; /** L-CS-N: the stored verdict the provenance check must reproduce (R-FWA3: approved/92). */ provenanceExpect?: { approved: boolean; confidence: number }; /** ME-P2-6: arms of a planted node that DELIBERATELY run without the plant (named, never silent). */ unplantedArms?: string[]; networkFixture?: NetworkFixtureSpec; fileFixture?: string; fixturePlants?: string[]; harvesterSourceByVariant?: Record<string, string>; authorSourceByVariant?: Record<string, string>; reviewerBaseEdit?: string; diffMustShow?: string[]; architectOnly?: boolean; scoring?: import('./score-edits').NodeScoring | import('./score-k1').K1Scoring; id: string; authorExecutionId: string; kind: string; originalVersion?: string; variants: string[]; why?: string; authorPlant?: string; expect?: string; reviewerExecutionId?: string; ownerRowItemMap?: string; n?: number; nByVariant?: Record<string, number>; inputEdits?: string; harvesterOnly?: boolean; tools?: 'stub' | 'recorded' }
 interface Measure { name: string; kind: 'count' | 'expected-output-blocks'; regex?: string; flags?: string; contentRegex?: string; lineRegex?: string; why?: string }
 interface Experiment {
   label: string; n: number; flags: Record<string, string>;
@@ -1232,14 +1235,14 @@ function estimate(jobs: Job[], defaultN: number, nOverride?: number) {
       cptByNode.set(j.node.id, single ? promptChars(j.author) / single : DEFAULT_CHARS_PER_TOKEN);
     }
     const cpt = cptByNode.get(j.node.id)!;
-    const n = nOverride ?? j.node.nByVariant?.[j.variant] ?? j.node.n ?? defaultN;
+    const n = j.node.nByVariant?.[j.variant] === 0 ? 0 : (nOverride ?? j.node.nByVariant?.[j.variant] ?? j.node.n ?? defaultN);
     const aOut = j.snap.author.exec.outputTokens ?? 12000;
     if (!j.reviewerBase) {
       // A harvester node: one role, MANY turns (its calls are served). The single-call formula would undershoot by the
       // turn count, so the estimate is the PERSISTED execution's own token mix priced on the arm's model — per sample.
       const e = j.snap.author.exec;
       const per = costForExecution({ inputTokens: e.inputTokens ?? 0, outputTokens: e.outputTokens ?? aOut, cacheReadTokens: e.cacheReadTokens ?? 0, cacheCreationTokens: e.cacheCreationTokens ?? 0 }, j.author.model, new Date()).costUsd ?? 0;
-      const n = nOverride ?? j.node.nByVariant?.[j.variant] ?? j.node.n ?? defaultN;
+      const n = j.node.nByVariant?.[j.variant] === 0 ? 0 : (nOverride ?? j.node.nByVariant?.[j.variant] ?? j.node.n ?? defaultN);
       upper += n * per; expected += n * per; calls += n * Math.max(1, (parsedResult(j.snap.author)?.toolLoop?.totalTurns ?? 0) + 1);
       rows.push(`  ${j.node.id.padEnd(7)} ${j.variant.padEnd(9)} ${j.architectOnly ? 'architect' : 'harvester'}[${shortModel(j.author.model)}/${effortOf(j.author)}, tools ${j.stored ? `recorded (${j.stored.length} stored calls)` : 'stub'}] persisted mix ${e.inputTokens ?? 0} in/${e.cacheCreationTokens ?? 0} write/${e.cacheReadTokens ?? 0} read/${e.outputTokens ?? 0} out · ${n}× ≈ $${(n * per).toFixed(2)}`);
       continue;
@@ -1329,6 +1332,16 @@ async function run(args: Args) {
     }
   }
   const n = args.n ?? exp.n;
+  // L-CS-K three-leg cell (2026-11-16): an experiment whose Git reads are of a DIFFERENT repo than the lab scripts' pin declares the pin
+  // it needs. The pin is read at module load (lib/mcp/server/config/git-file-source-pin), so it must come from the SHELL
+  // (GIT_FILE_SOURCE_PIN=<owner/repo> npx ts-node … lab.ts run …); experiment.flags would set it too late. Refused before any build.
+  const needPin = (exp as any).requireGitFileSourcePin as string | undefined;
+  if (needPin) {
+    const { gitPinFor: pinOf } = require('../../lib/mcp/server/config/git-file-source-pin');
+    const pin = pinOf('github-service'); const got = pin ? `${pin.owner}/${pin.repo}` : '(none)';
+    if (got.toLowerCase() !== needPin.toLowerCase()) throw new Error(`${exp.label} requires the Git file source pin ${needPin}; this process runs ${got} — run it as GIT_FILE_SOURCE_PIN=${needPin} npx ts-node -r tsconfig-paths/register scripts/leg-replay-lab/lab.ts run --experiment …`);
+    console.log(`   Git file source pin ${got} (required by the experiment)`);
+  }
   for (const [k, v] of Object.entries(exp.flags)) process.env[k] = v;
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -1453,12 +1466,28 @@ async function run(args: Args) {
   if (transport) for (const j of jobs) if (j.requirementsHarnessRow && (j.architectOnly || j.reviewerBase)) throw new Error(`${j.node.id}: LAB-BATCH-TRANSPORT refuses a requirements_author node (its 2b time decision reads the wall clock)`);
   let spent = 0;
   let stopped = false;
+  // L-CS-K cap (2026-11-16): checked before EVERY model call (live.ts setLabCallGuard), not only when a sample starts.
+  const { setLabCallGuard, LabCapReached } = await import('./live');
+  let capHits = 0; let inFlight = 0; let largestCall = 0;
+  // A call is admitted only if the spend so far, plus one largest-call reserve for every call already in flight and for itself, stays
+  // within the cap. The reserve is the dearest call seen so far in this run (0 before the first answer).
+  setLabCallGuard({
+    before: () => {
+      const need = spent + (inFlight + 1) * largestCall;
+      if (spent >= maxUsd || need > maxUsd) { stopped = true; capHits++; throw new LabCapReached(`LAB CAP: $${spent.toFixed(3)} spent + ${inFlight + 1} x $${largestCall.toFixed(3)} reserve > --max-usd $${maxUsd}; no further model call is sent`); }
+      inFlight++;
+    },
+    after: () => { inFlight = Math.max(0, inFlight - 1); },
+  });
   const warmFirst = !args.noWarmFirst;
   const warm = warmGate<Job>();
   const samples: Array<{ job: Job; i: number }> = [];
   // A node may carry its own n (e.g. Z1 n=3), or one per variant (`nByVariant`, 2026-10-12 group 4: base TZ n=1 beside
   // g4 TZ n=3); --n on the command line overrides every node.
-  for (const job of jobs) for (let i = 1; i <= (args.n ?? job.node.nByVariant?.[job.variant] ?? job.node.n ?? n); i++) samples.push({ job, i });
+  // L-CS-K (2026-11-16: R-CONSISTENT/rb, `nByVariant: 0`, ran a $0.235 sample under `--n 1`): a per-variant 0 means "prompts only" and
+  // --n never overrides it. Any other count is overridden by --n, as before.
+  const nFor = (job: Job) => (job.node.nByVariant?.[job.variant] === 0 ? 0 : (args.n ?? job.node.nByVariant?.[job.variant] ?? job.node.n ?? n));
+  for (const job of jobs) for (let i = 1; i <= nFor(job); i++) samples.push({ job, i });
   // L-Z2: samples whose arms run different in-run check data never interleave — one data group at a time, HEAD's data
   // restored after each. Groups run in first-appearance order of their arms.
   const groups = new Map<string, Array<{ job: Job; i: number }>>();
@@ -1485,7 +1514,7 @@ async function run(args: Args) {
     const onCall = (c: { costUsd: number | null }) => {
       const x = c.costUsd ?? 0;
       if (process.env.LAB_TEST_SPEND_MUTATION === 'racy') return; // TEST ONLY (LK10): the racy form below, so the pin can fail on it
-      meter.usd += x; spent += x; meter.calls.push(c);
+      meter.usd += x; spent += x; meter.calls.push(c); if (x > largestCall) largestCall = x;
       if (i === 1) warm.open(job); // LAB-WARM-FIRST: the prefix is cached once the first call is answered
     };
     const failed = (e: unknown) => {
@@ -1652,7 +1681,7 @@ async function run(args: Args) {
   const sampleSum = sumSampleCosts(out);
   const spendMismatch = Math.abs(sampleSum - spent) > 0.005;
   if (spendMismatch) console.log(`   🔴 SPEND MISMATCH: the run's meter reads $${spent.toFixed(4)} but its sample.json files sum to $${sampleSum.toFixed(4)} — trust the SAMPLE SUM; the lab spend counter is wrong`);
-  fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify({ ...manifest, endedAt: new Date().toISOString(), spentUsd: Math.max(spent, sampleSum), meterUsd: spent, sampleSumUsd: sampleSum, spendMismatch, codeAtEnd: end, codeChangedDuringRun: drift, checkGroups }, null, 2));
+  fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify({ ...manifest, endedAt: new Date().toISOString(), spentUsd: Math.max(spent, sampleSum), meterUsd: spent, maxUsd, capRule: 'a model call is sent only if spent + (calls in flight + 1) x the largest call so far <= the cap; the only possible overrun is a call dearer than every earlier call of the run', capHits, overCapUsd: Math.max(0, Math.max(spent, sampleSum) - maxUsd), sampleSumUsd: sampleSum, spendMismatch, codeAtEnd: end, codeChangedDuringRun: drift, checkGroups }, null, 2));
   if (drift) console.log('   ⚠️ RULE 7: the code or a dirty tracked file CHANGED during the run — the results describe a moving target; re-run before quoting them.');
   summarize(out, exp.measures);
 }
@@ -1914,9 +1943,11 @@ async function runHarvesterSample(job: Job, i: number, sd: string, sample: Recor
   const recorded = job.stored ? createRecordedToolServer(job.stored, TOOL_STUB_RESULT) : null;
   // L-K-a: a file fixture answers the node's github-service reads; every other call goes to the recorded tier (or the stub).
   // L-N1: the network tiers (device pool / catalogue / register refusal) sit between the recorded tier and the Git fixture.
-  const networkServer = job.network ? createNetworkToolServer(job.network, recorded, TOOL_STUB_RESULT) : null;
-  const fixtureServer = job.fixture ? createFixtureToolServer(job.fixture, networkServer ?? recorded, TOOL_STUB_RESULT) : null;
-  const server = fixtureServer ?? networkServer ?? recorded;
+  // L-CS-K: the k8s cluster tier answers every call to the cluster's read-only service from the recorded cluster state; the rest falls through.
+  const clusterServer = job.node.clusterFixture ? (await import('./k8s-fixtures')).createK8sClusterServer((await import('./k8s-fixtures')).loadK8sClusterState(path.resolve(job.expDir ?? '.', job.node.clusterFixture)), recorded, TOOL_STUB_RESULT) : null;
+  const networkServer = job.network ? createNetworkToolServer(job.network, clusterServer ?? recorded, TOOL_STUB_RESULT) : null;
+  const fixtureServer = job.fixture ? createFixtureToolServer(job.fixture, networkServer ?? clusterServer ?? recorded, TOOL_STUB_RESULT) : null;
+  const server = fixtureServer ?? networkServer ?? clusterServer ?? recorded;
   const gen = fake ? (job.stored ? fakeReplayToolCalls(ares.toolCalls ?? [], ares.finalResponse, job.snap.author.exec.modelUsed) : fakeGenerateText(ares.finalResponse, job.snap.author.exec.modelUsed)) : undefined;
   const hId = `lab-${job.node.id}-${job.variant}-${i}-h`;
   const a = await runLive(job.author, { executionId: hId, taskId: job.snap.author.task.id, taskType: job.snap.author.task.type, apiKey, toolServer: server, generateTextOverride: gen, onCall });
@@ -1969,6 +2000,7 @@ async function runHarvesterSample(job: Job, i: number, sd: string, sample: Recor
     valid: report || fixtureReport || networkReport ? (report?.valid ?? true) && (fixtureReport?.valid ?? true) && (networkReport?.valid ?? true) : null,
     fixtureTools: fixtureReport ? { ...fixtureReport, digest: job.fixture!.digest } : null,
     networkTools: networkReport,
+    ...(clusterServer ? { clusterTools: { calls: clusterServer.clusterLog.length, served: clusterServer.clusterLog.filter((x) => x.outcome === "served").length, log: clusterServer.clusterLog } } : {}),
     recordedTools: report ? { ...report, log: report.log.map((e) => `${e.tool}${e.innerTool ? `.${e.innerTool}` : e.action ? `.${e.action}` : ''}:${e.tier}${e.storedIndex !== null ? `@${e.storedIndex}` : ''}`) } : null,
     servedBytes: recorded ? bytes : null,
     quoteFidelity: qf, quoteScore: score,
@@ -2485,6 +2517,37 @@ if (require.main === module) {
       if (!r.ok) { console.log(`❌ csn-self-test: ${r.failures.length} failure(s):\n  ${r.failures.join('\n  ')}`); process.exit(1); }
       console.log(`✅ csn-self-test: the L-CS-N scorer reads every case as pre-registered${candidateText ? ' (scope definition + warning id verbatim in the candidate)' : ''}`);
       return;
+    }
+    if (args.cmd === 'csk-golden') {
+      // owner D-1 (2026-11-16): the targeted golden Kubernetes cells, read by reason (score-csk.ts readGoldenTarget). golden-score still runs.
+      const sk = await import('./score-csk');
+      const rows = sk.scoreGoldenTargets(args.run!.split(',').map((x) => path.resolve(x)), path.resolve(args.experiment!));
+      for (const r of rows) console.log(`   ${r.status === 'DO-NOT-SHIP' || r.status === 'UNSCORED' ? '❌' : '✅'} ${r.case} ${r.cell} ${r.sample}: ${r.status}${r.why ? ` — ${r.why}` : ''}`);
+      const bad = rows.filter((r) => r.status === 'DO-NOT-SHIP' || r.status === 'UNSCORED');
+      console.log(bad.length ? `\n❌ D-1 golden targets: ${bad.length} sample(s) DO-NOT-SHIP / UNSCORED (hand-read each)` : `\n✅ D-1 golden targets: ${rows.length} sample(s), every refusal FOR the stale-chain rule`);
+      process.exitCode = bad.length ? 1 : 0; return;
+    }
+    if (args.cmd === 'csk-self-test' || args.cmd === 'csk-score') {
+      // L-CS-K scorer (score-csk.ts), $0: the self-test reads in-code cases only; the score reads run folders.
+      const sk = await import('./score-csk');
+      const mi = process.argv.indexOf('--mutate'); const mut = mi > 0 ? process.argv[mi + 1] as any : undefined;
+      if (args.cmd === 'csk-self-test') {
+        const r = sk.cskSelfTest(mut);
+        if (!r.ok) { console.log(`❌ csk-self-test${mut ? ` (--mutate ${mut})` : ''}: ${r.failures.length} failure(s):\n  ${r.failures.join('\n  ')}`); process.exit(1); }
+        console.log('✅ csk-self-test: the L-CS-K scorer reads every case as pre-registered'); return;
+      }
+      const r = sk.scoreCskRuns(args.run!.split(',').map((x) => path.resolve(x)), mut);
+      console.log('| node | arm | meets | bar | met | do-not-ship |'); console.log('|---|---|---|---|---|---|');
+      for (const c of r.cells) console.log(`| ${c.node} | ${c.arm} | ${c.meets}/${c.of} | ${c.bar ? c.bar.join('/') : '—'} | ${c.measured ? 'MEASURED' : c.met === null ? '—' : c.met ? '✅' : '❌'} | ${c.doNotShip.length ? c.doNotShip.join('; ') : '—'} |`);
+      for (const row of r.rows.filter((x) => !x.meets || x.doNotShip.length)) console.log(`   ${row.node}/${row.arm} ${row.sample}: ${[...row.misses, ...row.doNotShip].join(' · ')}`);
+      for (const row of r.rows.filter((x) => Array.isArray((x.detail as any).gitCross) && (x.detail as any).gitCross.length)) console.log(`   REPORTED (N2, not gated) ${row.node}/${row.arm} ${row.sample}: Git-to-Git cross-reference — "${String((row.detail as any).gitCross[0]).slice(0, 140)}"`);
+      // Re-read Q3 (2026-11-16, MEASURE, not a gate): each Harvester sample's finalResponse length, to see whether reporting annotations
+      // "as part of that object" grows the harvest. Compare across runs by passing the earlier runs in the same --run list.
+      const hl = r.rows.filter((x) => x.role === 'harvester');
+      if (hl.length) { console.log('\nHarvester finalResponse length (chars, Q3 measure):'); for (const x of hl) console.log(`   ${x.node} ${x.sample}: ${(x.detail as any).chars}`); }
+      const dns = r.cells.flatMap((c) => c.doNotShip.map((x) => `${c.node}/${c.arm}: ${x}`));
+      console.log(dns.length ? `\n❌ DO-NOT-SHIP (proxy — hand-read each):\n  - ${dns.join('\n  - ')}` : '\n✅ no do-not-ship proxy hit (the hand read still decides)');
+      process.exitCode = dns.length ? 1 : 0; return;
     }
     if (args.cmd === 'csn-score') {
       const { scoreCsnRuns } = await import('./score-csn');

@@ -1,0 +1,96 @@
+{
+ "_source": "production, Kubernetes Harvester execution cmwj8df8p0094yxvwu7m1j89t (root cmwj7vb53000kyxvwjoovypxa, 2026-11-16): the stored platformDriftCalls record and gitLiveDrift fact, verbatim",
+ "platformDriftCalls": {
+  "calls": [
+   {
+    "path": "k8s/sample-workloads.yaml",
+    "label": "sample-workloads",
+    "result": {
+     "method": "k8s-declared-field-compare/2",
+     "objects": [
+      {
+       "kind": "Namespace",
+       "name": "trading",
+       "state": "compared",
+       "differing": [],
+       "namespace": null,
+       "declaredPaths": 0,
+       "differingTotal": 0,
+       "redactedNotComparedTotal": 0
+      },
+      {
+       "kind": "Deployment",
+       "name": "orders-api",
+       "state": "compared",
+       "differing": [],
+       "namespace": "trading",
+       "declaredPaths": 11,
+       "differingTotal": 0,
+       "redactedNotComparedTotal": 0
+      },
+      {
+       "kind": "Service",
+       "name": "orders-api",
+       "state": "compared",
+       "differing": [],
+       "namespace": "trading",
+       "declaredPaths": 3,
+       "differingTotal": 0,
+       "redactedNotComparedTotal": 0
+      },
+      {
+       "kind": "ConfigMap",
+       "name": "orders-api-config",
+       "state": "compared",
+       "differing": [],
+       "namespace": "trading",
+       "declaredPaths": 2,
+       "differingTotal": 0,
+       "redactedNotComparedTotal": 0
+      },
+      {
+       "kind": "NetworkPolicy",
+       "name": "orders-api-ingress",
+       "state": "compared",
+       "differing": [],
+       "namespace": "trading",
+       "declaredPaths": 5,
+       "differingTotal": 0,
+       "redactedNotComparedTotal": 0
+      }
+     ],
+     "manifestSha256": "9452f51b4d06f9ac555dd98ad90046be3c39a9a2a863744fe83faae70dfbda57"
+    },
+    "outcome": "called",
+    "service": "k8s-rig-readonly",
+    "durationMs": 491,
+    "resultBytes": 1143,
+    "resultSha256": "3d9122f3c3d671c9b9db3e528780dfac35fc806a83395a19df4d6f48ac115cab",
+    "manifestLength": 1473,
+    "manifestSha256": "9452f51b4d06f9ac555dd98ad90046be3c39a9a2a863744fe83faae70dfbda57"
+   }
+  ],
+  "version": 1
+ },
+ "gitLiveDrift": {
+  "files": [
+   {
+    "path": "k8s/sample-workloads.yaml",
+    "label": "sample-workloads",
+    "state": "compared",
+    "objects": 5,
+    "summary": "no-differences",
+    "differing": [],
+    "differingTotal": 0,
+    "objectsCompared": 5,
+    "redactedNotCompared": 0
+   }
+  ],
+  "point": "harvester",
+  "method": "k8s-declared-field-compare",
+  "checked": true,
+  "version": 1,
+  "filesCompared": 1,
+  "filesNotChecked": 0
+ }
+}

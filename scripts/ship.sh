@@ -74,5 +74,5 @@ done
 [ -n "$RUN" ] || { echo "no Production Deploy run found for $HEAD_SHA after 3 min — check GitHub Actions (path filters may have skipped it)"; exit 0; }
 echo "── watching Production Deploy run $RUN …"
 if gh run watch "$RUN" --exit-status >/dev/null 2>&1; then echo "── deploy: SUCCESS"; else echo "── deploy: FAILED or cancelled — gh run view $RUN"; exit 4; fi
-ssh -o BatchMode=yes -o ConnectTimeout=10 "$PROD" 'echo "release: $(ls -1t /var/www/paichart-app/releases | head -1)"; pm2 jlist 2>/dev/null | python3 -W ignore -c "import json,sys,datetime; [print(\"restart:\", p[\"name\"], datetime.datetime.fromtimestamp(p[\"pm2_env\"][\"pm_uptime\"]/1000, datetime.timezone.utc).isoformat(timespec=\"milliseconds\").replace(\"+00:00\",\"Z\")) for p in json.load(sys.stdin)]"'
+ssh -o BatchMode=yes -o ConnectTimeout=10 "$PROD" 'echo "release: $(basename "$(readlink -f /var/www/paichart-app/current)")"; pm2 jlist 2>/dev/null | python3 -W ignore -c "import json,sys,datetime; [print(\"restart:\", p[\"name\"], datetime.datetime.fromtimestamp(p[\"pm2_env\"][\"pm_uptime\"]/1000, datetime.timezone.utc).isoformat(timespec=\"milliseconds\").replace(\"+00:00\",\"Z\")) for p in json.load(sys.stdin)]"'
 echo "── if this push changed what agents read or how a fact is computed: scripts/series-cut-draft.sh $PUSHED_AT"

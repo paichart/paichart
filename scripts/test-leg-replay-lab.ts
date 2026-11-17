@@ -2226,8 +2226,11 @@ const commitText = (name: string, commit: string): ProtocolText => {
     const FIXTURE_PLANT = { default: { caller: 'contract-fixture' as const } };
     const throws = async (fn: () => unknown, re: RegExp, what: string) => { let m = ''; try { await fn(); } catch (e) { m = (e as Error).message; } assert(re.test(m), `${what}: expected a refusal matching ${re}, got "${m.slice(0, 200)}"`); };
 
-    await test('LCK1 (config-sources-arm.ts) the per-arm switch: production today is INERT (kubernetes-gitops awaits its text); the lab arm reads Config sources only at the released version (shipping liveEvidenceVersionApplies) on a leg whose protocol is in the SHIPPING lane table — a 1.18.0 arm and a network leg read none, and every lever then returns the snapshot object it was given', async () => {
-      assert(CONFIG_SOURCE_AWAITING_TEXT.length === 1 && configSourceLaneOf('kubernetes-gitops') === null, 'production is no longer inert: kubernetes-gitops left the awaiting list — re-read this block (the lab arm and production now agree by construction)');
+    await test('LCK1 (config-sources-arm.ts) the per-arm switch: production reads Config sources from the 1.19.0 text commit on (the awaiting list is empty); the lab arm reads Config sources only at the released version (shipping liveEvidenceVersionApplies) on a leg whose protocol is in the SHIPPING lane table — a 1.18.0 arm and a network leg read none, and every lever then returns the snapshot object it was given', async () => {
+      // 1.19.0 TEXT COMMIT (branch cs-k8s-text, c55a26364): kubernetes-gitops has LEFT the awaiting list, so production and the lab arm
+      // agree by construction — production derives the lane from the list, the lab from the table + the version test. Below 1.19.0 the
+      // version test alone keeps every cell byte-identical (asserted next). Before the text commit this read: list length 1, lane null.
+      assert(CONFIG_SOURCE_AWAITING_TEXT.length === 0 && configSourceLaneOf('kubernetes-gitops') !== null, 'the 1.19.0 text commit empties CONFIG_SOURCE_AWAITING_TEXT (kubernetes-gitops is a Config-sources protocol) — re-read this block');
       const snap = planted();
       assert(arm.armConfigSources(snap.leg, { delta: P18 }) === null && arm.armConfigSources(snap.leg, undefined) === null && arm.armOwningLeg(snap.leg, { delta: P18 }) === null, 'a 1.18.0 arm must read no Config sources');
       const g = arm.armConfigSources(snap.leg, { delta: P19 });
@@ -2461,6 +2464,144 @@ const commitText = (name: string, commit: string): ProtocolText => {
         && cf.platformDriftCalls.calls[0].outcome === 'called' && cf.report.configForce === null && cf.report.platformDriftCalls.fixtureCalls[0].plant === 'contract-fixture', `Harvester sample: ${JSON.stringify(cf).slice(0, 400)}`);
       assert(s('hk2').configFacts === undefined && !Object.keys(s('hk2').leafFacts).includes('gitLiveDrift'), 'an arm below the Config-sources version must stamp none of the facts');
       assert(Object.keys(s('hcs').leafNetErrors ?? {}).filter((k) => (cs.CONFIG_FACT_KEYS as readonly string[]).includes(k)).length === 0, `a Config net errored: ${JSON.stringify(s('hcs').leafNetErrors)}`);
+    });
+
+    await test('LCK8 (L-CS-K, 2026-11-16) a drift answer for a STORED leg is the rig tool\'s own compare_manifest over the stored manifest + the Harvester\'s recorded live reads (k8s-drift-from-recorded.py): deterministic (the golden v8 files regenerate byte for byte), an unread object is live-read-failed (never absent, never equal), a live plant can change a recorded object and cannot create one; the lab\'s probed-shape check admits `namespace` on exactly the not-compared reasons the tool decides AFTER setting it (pinned to the tool\'s source order) and never `detail`; an input-edit file whose ops target several places applies each op only to its own target', async () => {
+      const { execFileSync } = await import('child_process');
+      const GEN = path.join(LAB, 'k8s-drift-from-recorded.py');
+      const tmp = path.join(out, 'lck8'); fs.mkdirSync(tmp, { recursive: true });
+      for (const [cse, id] of [['K8S-PROG', 'cmvsze85600boyxb3iipbdk3r'], ['K8S-BK3', 'cmveuxfhg0079yxdp63qsw0hc'], ['K8S-AK5', 'cmvdnl4tg00kqyxt00x6923yn']]) {
+        if (!fs.existsSync(snapshotPath(id))) throw new Error(`the lab cache has no snapshot ${id} (LAB-TEST-READS-PRODUCTION: fill the cache first)`);
+        const f = path.join(tmp, `${cse}.json`);
+        execFileSync('python3', ['-I', GEN, id, '--out', f]);
+        assert(fs.readFileSync(f, 'utf8') === fs.readFileSync(path.join(LAB, 'golden', 'config-sources', `${cse}.compare-result.json`), 'utf8'), `${cse}: the committed golden drift answer does not regenerate byte for byte`);
+        const r = JSON.parse(fs.readFileSync(f, 'utf8'));
+        const unknown = r.result.objects.filter((o: any) => o.state === 'not-compared');
+        assert(unknown.every((o: any) => o.reason === 'live-read-failed' && !('detail' in o)) && unknown.length === r.provenance.notReadByTheHarvest.length, `${cse}: an object with no recorded live copy must be live-read-failed with no detail, and only those`);
+        assert(r.provenance.namespaceExistenceWitnessed.join() === 'trading' && r.result.objects.find((o: any) => o.kind === 'Namespace')?.state === 'compared', `${cse}: the Namespace (it declares nothing but its name) is compared by existence`);
+        // blind-read F1: what the production tool would GET. A-K5's window has same-reset reads (shared UIDs) for the objects its own harvest skipped.
+        if (cse === 'K8S-AK5') assert(unknown.length === 0 && r.provenance.sameResetReads.map((b: any) => b.object).sort().join() === 'configmaps/trading/orders-api-config,networkpolicies/trading/orders-api-ingress' && r.provenance.sameResetLinks.length > 0, `K8S-AK5: same-reset reads ${JSON.stringify(r.provenance.sameResetReads)}`);
+        if (cse === 'K8S-PROG') assert(unknown.map((o: any) => o.kind).sort().join() === 'ConfigMap,Service' && r.provenance.sameResetReads.length === 0, `K8S-PROG: no same-reset copy exists for Service and ConfigMap`);
+        const own = JSON.parse(execFileSync('python3', ['-I', GEN, id, '--own-reads-only']).toString());
+        assert(own.result.objects.filter((o: any) => o.state === 'not-compared').length >= unknown.length && own.provenance.sameResetReads.length === 0, `${cse}: --own-reads-only must answer only the harvest's own reads`);
+        assert(!r.result.objects.some((o: any) => o.state === 'absent-live'), `${cse}: an unread object was answered absent`);
+      }
+      // A plant cannot create an object the harvest never read.
+      fs.writeFileSync(path.join(tmp, 'bad-plant.json'), JSON.stringify([{ object: 'configmaps/trading/orders-api-config', set: { 'data.LOG_LEVEL': 'debug' } }]));
+      let err = ''; try { execFileSync('python3', ['-I', GEN, 'cmvsze85600boyxb3iipbdk3r', '--live-plant', path.join(tmp, 'bad-plant.json')], { stdio: 'pipe' }); } catch (x: any) { err = String(x.stderr ?? '') + String(x.stdout ?? ''); }
+      assert(/never read that object \(a plant cannot create one\)/.test(err), `a plant on an unread object must be refused: ${err.slice(0, 200)}`);
+      // The shape allowance is the tool's source order: namespace is written before get_live, and the three reasons come after it.
+      const tool = fs.readFileSync(path.join(LAB, '..', '..', '.claude/knowledge/pipelines/kubernetes-gitops/phase4-kind-rig/k8s-mcp-readonly/declared_compare.py'), 'utf8');
+      const at = (needle: string) => { const i = tool.indexOf(needle); assert(i >= 0, `declared_compare.py no longer contains ${needle}`); return i; };
+      const nsSet = at('entry["namespace"] = _clean(namespace, 253)');
+      for (const reason of cs.NAMESPACED_NOT_COMPARED_REASONS) assert(at(`"reason": "${reason}"`) > nsSet, `${reason} is decided before the namespace is set — the probed-shape allowance is wrong`);
+      for (const reason of ['secret-never-compared', 'kind-not-allowlisted', 'no-namespace']) assert(at(`"reason": "${reason}"`) < nsSet, `${reason} moved after the namespace line — re-read NAMESPACED_NOT_COMPARED_REASONS`);
+      const FIXR = JSON.parse(fs.readFileSync(cs.CONTRACT_FIXTURE, 'utf8')).result;
+      const withObj = (o: Record<string, unknown>) => ({ ...FIXR, objects: [...FIXR.objects, o] });
+      assert(cs.probedShapeProblems(withObj({ index: 9, apiVersion: 'v1', kind: 'Service', name: 'x', namespace: 'trading', state: 'not-compared', reason: 'live-read-failed' })).length === 0, 'live-read-failed with namespace must be the tool\'s shape');
+      assert(cs.probedShapeProblems(withObj({ index: 9, apiVersion: 'v1', kind: 'Secret', name: 'x', namespace: 'trading', state: 'not-compared', reason: 'secret-never-compared' })).some((m: string) => /namespace/.test(m)), 'a Secret entry carrying namespace is not the tool\'s shape');
+      assert(cs.probedShapeProblems(withObj({ index: 9, apiVersion: 'v1', kind: 'Service', name: 'x', namespace: 'trading', state: 'not-compared', reason: 'live-read-failed', detail: 'api status 403' })).some((m: string) => /detail/.test(m)), '`detail` must never be admitted');
+      // A mixed-target input edit (leg + brief + a raw tool-call plant in ONE file) applies, and each target holds only its own ops.
+      const ie = await import('./leg-replay-lab/input-edits');
+      const E = path.join(LAB, 'inputs', '2026-11-16-config-sources-k8s-l-cs-k');
+      const spec = JSON.parse(fs.readFileSync(path.join(E, 'node-inputs', 'h-gitlive.json'), 'utf8'));
+      const hs0 = cached('cmvdnhwdx00jayxt0ub4o6gf4');
+      const r = ie.snapshotWithInputEdits(E, { id: 'LCK8', inputEdits: 'node-inputs/h-gitlive.json' }, hs0) as any;
+      assert(Object.keys(r.report.targets).sort().join() === 'author-task:description,harvester-toolcall:cmvdnhwdx00jayxt0ub4o6gf4:0,leg:description', `targets: ${Object.keys(r.report.targets).join()}`);
+      assert(String(r.snap.leg.description).endsWith('trading-cluster: live-read — service k8s-rig-readonly\n') && JSON.parse(r.snap.author.resultJson).toolCalls[0].result.content[0].data.result.content[0].text.includes('compare_declared_fields'), 'a target did not take its op');
+      assert(spec.ops.length === 3, 'h-gitlive carries three ops (leg, brief, descriptor)');
+      // fixture read D3: a cell built on one stored leg for ANOTHER objective patches the task TITLE and the stage NAME too.
+      const E3 = path.join(LAB, 'inputs', '2026-11-16-config-sources-k8s-l-cs-k-3leg');
+      const r3 = ie.snapshotWithInputEdits(E3, { id: 'LCK8-3', inputEdits: 'node-inputs/h3-flags.json' }, hs0) as any;
+      assert(r3.snap.author.task.title === 'Harvest current cluster state for the orders-api-flags ConfigMap (trading namespace)' && r3.snap.author.stage.name === 'Pipeline: orders-api-flags leg — FEATURE_X on'
+        && !String(r3.snap.author.task.description).includes('resources/HPA objective') && hs0.author.task.title !== r3.snap.author.task.title, 'h3-flags: title / stage name / objective-class sentence not patched (or the cached snapshot was written)');
+      // X-INSCOPE re-plant: the chained Harvester's taskTitle (the "### Previous Task" heading) is patched in every copy too.
+      const xs = ie.snapshotWithInputEdits(path.join(LAB, 'inputs', '2026-11-16-config-sources-k8s-l-cs-k'), { id: 'LCK8-X', inputEdits: 'node-inputs/x-inscope.json' }, cached('cmvdlhll500adyxt0kuhctd5y')) as any;
+      const ent = xs.snap.author.exec.config.inputContext.chainedFrom.find((e: any) => e.executionId === 'cmvdlfnpq005kyxt0c7jol17h');
+      assert(!/scraper/i.test(ent.taskTitle) && !/scraper/i.test(xs.snap.author.task.title) && !/scraper/i.test(xs.snap.author.stage.name) && /tier: web/.test(xs.snap.author.task.description), `x-inscope re-plant: ${ent.taskTitle} | ${xs.snap.author.task.title} | ${xs.snap.author.stage.name}`);
+    });
+
+    await test('LCK10 (L-CS-K first runs, 2026-11-16: --max-usd 2.96 spent $3.42; --max-usd 1.04 spent $1.47; the rb arm (nByVariant 0) ran under --n 1) the spend cap is checked BEFORE every model call — once the meter reaches it no further call is sent, so the overrun is bounded by the calls in flight (<= --concurrency, one call each) and the manifest records the cap and the rule; a per-variant n of 0 is never overridden by --n', async () => {
+      const K2 = path.join(LAB, 'inputs', '2026-10-19-held-k8s-l-k2');
+      const dir = path.join(out, 'lck10-cap');
+      const conc = 2;
+      let log = '';
+      try {
+        log = execFileSync('npx', ['ts-node', '-r', 'tsconfig-paths/register', path.join(LAB, 'lab.ts'), 'run', '--experiment', K2, '--only', 'H-CAUSE-WIT,X-K1,X-K2', '--variants', 'hk2,xhb',
+          '--n', '3', '--concurrency', String(conc), '--fake-llm', 'persisted', '--max-usd', '0.05', '--out', dir],
+          { cwd: path.join(__dirname, '..'), env: { ...process.env, ANTHROPIC_API_KEY: '', LAB_TEST_FAKE_OUTPUT_TOKENS: '1000' }, maxBuffer: 64 * 1024 * 1024 }).toString();
+      } catch (x: any) { log = String(x.stdout ?? '') + String(x.stderr ?? ''); }
+      const m = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
+      // The fake bills only output tokens: 1000 Sonnet 5 output tokens per call.
+      const perCall = Math.max(...fs.readdirSync(dir).flatMap((n) => fs.statSync(path.join(dir, n)).isDirectory() ? fs.readdirSync(path.join(dir, n)).filter((v) => fs.statSync(path.join(dir, n, v)).isDirectory()).flatMap((v) => fs.readdirSync(path.join(dir, n, v)).filter((x) => /^sample-/.test(x)).map((x) => {
+        const sj = JSON.parse(fs.readFileSync(path.join(dir, n, v, x, 'sample.json'), 'utf8')); return Math.max(0, ...(sj.calls ?? []).map((c: any) => c.costUsd ?? 0)); })) : []));
+      assert(m.maxUsd === 0.05 && /a model call is sent only if/.test(m.capRule) && m.capHits > 0, `manifest cap fields: ${JSON.stringify({ maxUsd: m.maxUsd, capRule: m.capRule, capHits: m.capHits })}`);
+      // Every fake call costs the same, so after the first answer the reserve is exact and the run never passes the cap.
+      assert(perCall > 0 && m.spentUsd <= m.maxUsd + 1e-9, `spent $${m.spentUsd} exceeds the cap $${m.maxUsd} (per call $${perCall.toFixed(4)}, concurrency ${conc})`);
+      assert(/LAB CAP/.test(log), 'no sample reports the cap');
+      // nByVariant 0 is prompts only, whatever --n says.
+      const E = path.join(LAB, 'inputs', '2026-11-16-config-sources-k8s-l-cs-k');
+      const d2 = path.join(out, 'lck10-n0');
+      execFileSync('npx', ['ts-node', '-r', 'tsconfig-paths/register', path.join(LAB, 'lab.ts'), 'run', '--experiment', E, '--only', 'R-CONSISTENT', '--n', '1', '--fake-llm', 'persisted', '--out', d2],
+        { cwd: path.join(__dirname, '..'), env: { ...process.env, ANTHROPIC_API_KEY: '' }, maxBuffer: 64 * 1024 * 1024 });
+      const rbSamples = fs.existsSync(path.join(d2, 'R-CONSISTENT', 'rb')) ? fs.readdirSync(path.join(d2, 'R-CONSISTENT', 'rb')).filter((x) => /^sample-/.test(x)) : [];
+      const rcSamples = fs.readdirSync(path.join(d2, 'R-CONSISTENT', 'rc')).filter((x) => /^sample-/.test(x));
+      assert(rbSamples.length === 0 && rcSamples.length === 1, `nByVariant 0 under --n 1: rb ${rbSamples.length} sample(s), rc ${rcSamples.length}`);
+    });
+
+    await test('LCK11 (L-CS-K stop item 3, LAB-UNSERVED-NOTICE-LEAK) the k8s cluster tier answers EVERY call to the read-only service from the recorded cluster state (k8s-cluster-fixture.py over the A-K5 harvest + its same-reset harvests): recorded objects and complete listings served (label selectors applied), an absent member 404, anything the state cannot establish 403, the service\'s own argument errors — never the lab notice; other services fall through to the recorded tier', async () => {
+      const { execFileSync } = await import('child_process');
+      const k8 = await import('./leg-replay-lab/k8s-fixtures');
+      const { TOOL_STUB_RESULT } = await import('./leg-replay-lab/live');
+      const f = path.join(out, 'lck11', 'state.json'); fs.mkdirSync(path.dirname(f), { recursive: true });
+      execFileSync('python3', ['-I', path.join(LAB, 'k8s-cluster-fixture.py'), 'cmvdnl4tg00kqyxt00x6923yn', '--out', f]);
+      const st = k8.loadK8sClusterState(f);
+      assert(st.harvesters!.length >= 2 && Object.keys(st.objects).length >= 4 && st.membership['pods/trading'], `state: ${st.harvesters?.length} harvests, ${Object.keys(st.objects).length} objects`);
+      const fallbackCalls: string[] = [];
+      const fallback = { log: [] as any[], async getToolDefinition(n: string) { return { serverName: 'x', tool: { name: n } }; }, async executeToolOnServer(_s: string, t: string) { fallbackCalls.push(t); return { content: [{ type: 'text', text: 'recorded' }] }; } };
+      const srv = k8.createK8sClusterServer(st, fallback as any, TOOL_STUB_RESULT);
+      const call = async (tool: string, args: Record<string, unknown>) => {
+        const r: any = await srv.executeToolOnServer('paichart-embedded-mcp', 'services', { action: 'call', targetService: 'k8s-rig-readonly', tool, arguments: JSON.stringify(args) });
+        const res = r.content[0].data.result; const text = JSON.stringify(r);
+        assert(!/LEG REPLAY LAB|not executed in an offline replay/.test(text), `${tool}: the lab notice leaked`);
+        return { isError: res.isError === true, text: res.content[0].text, sc: res.structuredContent };
+      };
+      const pods = await call('list_resource_names', { resourceType: 'pods', namespace: 'trading', labelSelector: 'app=orders-api' });
+      assert(!pods.isError && pods.sc.count === Object.keys(st.membership['pods/trading'].names).length && pods.sc.count > 0, `pods: ${pods.text.slice(0, 160)}`);
+      const none = await call('list_resource_names', { resourceType: 'pods', namespace: 'trading', labelSelector: 'app=no-such-app' });
+      assert(!none.isError && none.sc.count === 0, 'a selector that matches nothing must return an empty listing');
+      const dep = await call('get_resource', { resourceType: 'deployments', namespace: 'trading', name: 'orders-api' });
+      assert(!dep.isError && dep.sc.metadata.name === 'orders-api', 'a recorded object must be served');
+      const nps = await call('list_resources', { resourceType: 'networkpolicies', namespace: 'trading' });
+      assert(!nps.isError && nps.sc.items.length === 1, 'a complete listing with every object recorded must be served');
+      const pdb = await call('get_resource', { resourceType: 'poddisruptionbudgets', namespace: 'trading', name: 'orders-api' });
+      assert(pdb.isError && pdb.text === 'k8s API error (404): Not Found', `absent member: ${pdb.text}`);
+      const cms = await call('list_resources', { resourceType: 'configmaps', namespace: 'trading' });
+      assert(cms.isError && cms.text === 'k8s API error (403): Forbidden', `unknown membership: ${cms.text}`);
+      const podGet = await call('get_resource', { resourceType: 'pods', namespace: 'trading', name: Object.keys(st.membership['pods/trading'].names)[0] });
+      assert(podGet.isError && podGet.text === 'k8s API error (403): Forbidden', 'a member whose full object is not recorded is refused 403, never invented');
+      const bad = await call('list_resources', { resourceType: 'secrets', namespace: 'trading' });
+      assert(bad.isError && /is not in the read-only allowlist/.test(bad.text), 'the service\'s own allowlist text');
+      const cmp = await call('compare_declared_fields', { manifest: 'kind: Service' });
+      assert(cmp.isError && cmp.text === 'k8s API error (403): Forbidden', 'an agent call of the compare tool is refused (counted by NOTOOL)');
+      await srv.executeToolOnServer('x', 'services', { action: 'call', targetService: 'github-service', tool: 'get_file_contents', arguments: '{}' });
+      await srv.executeToolOnServer('x', 'registry', { action: 'register', name: 'k8s-rig-readonly' });
+      assert(fallbackCalls.join() === 'services,registry', `other calls must fall through: ${fallbackCalls.join()}`);
+      assert(srv.log.filter((e: any) => /^cluster-/.test(e.tier)).length === 9 && srv.log.every((e: any) => e.tier !== 'unserved'), `tiers: ${srv.log.map((e: any) => e.tier).join()}`);
+      for (const [sel, labels, want] of [['app=orders-api,tier!=frontend', { app: 'orders-api', tier: 'backend' }, true], ['tier in (backend,web)', { tier: 'backend' }, true], ['!tier', { tier: 'x' }, false]] as const)
+        assert(k8.selectorMatches(sel, labels as any) === want, `selector ${sel}`);
+    });
+
+    await test('LCK9 (score-csk.ts) the L-CS-K scorer reads every in-code case as pre-registered, and each of its eight mutations goes RED (compare-blind, negation-loose, tool-blind, held-blind, halt-blind, noedit-blind, reason-blind, warn-blind); the Reviewer verdict and the git-file-only warning are the shipping parsers\' readings', async () => {
+      const sk = await import('./leg-replay-lab/score-csk');
+      const base = sk.cskSelfTest();
+      assert(base.ok, `csk-self-test: ${base.failures.join(' | ')}`);
+      for (const m of ['compare-blind', 'negation-loose', 'tool-blind', 'held-blind', 'halt-blind', 'noedit-blind', 'reason-blind', 'force-blind', 'live-side-blind'] as const) assert(!sk.cskSelfTest(m).ok, `mutation ${m} stayed green`);
+      const rv = 'Review body.\nNON-BLOCKING WARNING (git-file-only): the package does not say it was checked against the Git file only.\n\n## VERDICT: APPROVED\n';
+      assert(sk.readReviewer(sk.CSK_CELLS['R-CONSISTENT'], { approved: true, blocking: [] }, rv).warnGitOnly === true, 'the shipping warnings parser must read the git-file-only id');
+      assert(sk.readReviewer(sk.CSK_CELLS['R-CONSISTENT'], { approved: true, blocking: [] }, rv, 'warn-blind').warnGitOnly === false, 'mutation warn-blind stayed green');
+      const src = fs.readFileSync(path.join(LAB, 'score-csk.ts'), 'utf8');
+      assert(/from '\.\.\/\.\.\/lib\/agents\/harness\/reviewer-warnings'/.test(src), 'the scorer must read warnings with the shipping parser');
     });
   }
 

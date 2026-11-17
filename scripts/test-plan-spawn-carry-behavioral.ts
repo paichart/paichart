@@ -172,6 +172,69 @@ async function main() {
       canonicalContractSha((await ic(repair))?.interfaceContract) === canonicalContractSha(PLAN_V2) && rm.interfaceContractSource?.source === 'plan'
       && rm.interfaceContractSource?.legBaseline?.equalsPlan === false, rm.interfaceContractSource);
 
+    // ── SD: serviceDescriptors derived at leg creation (ARCHITECT-COMPOSED-DESCRIPTOR, 2026-11-17) ──────────
+    // The REAL create path (router → task-create-handler → plan-spawn-carry) and the real Node C prep, not the helper alone (LL-CS-65).
+    // The plan carries a composed object under a token whose lines name a descriptor URL (⇒ replaced), a composed object under a
+    // Git-only token (⇒ removed) and a terraform URL (no sources lane ⇒ kept).
+    const prog3 = await mkStage(`Program: ${tag} three`, 8);
+    const root3 = await mkTask({ title: `${tag} root three (protocol: pov-program)`, type: 'PIPELINE', stage: { connect: { id: rootStage } },
+      agentTemplate: { connect: { id: harnessTmpl.id } }, metadata: { pipelineStageId: prog3 } });
+    const SD_URL = 'https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json';
+    const SD_TF = 'https://raw.githubusercontent.com/paichart/paichart/main/descriptors/terraform-readonly-descriptor.json';
+    const PLAN_SD = {
+      asn: 65010,
+      deviceSources: {
+        'network-provisioning': [`ceos1: device-read — service ${SD_URL}`],
+        'network-derivation': ['ceos1: git-file — service github-service ; paichart/paichart-configs/network/base/ceos1-startup.cfg'],
+      },
+      serviceDescriptors: {
+        'network-provisioning': { service: 'ceos-lab', descriptor: SD_URL },
+        'network-derivation': { service: 'github-service', owner: 'paichart', repo: 'paichart-configs', files: ['network/base/ceos1-startup.cfg'] },
+        'terraform-iac': SD_TF,
+      },
+    };
+    const SD_EXPECTED = { 'network-provisioning': SD_URL, 'terraform-iac': SD_TF };
+    const arch3 = await mkArchitect(prog3, `${tag} architect three`);
+    await addExec(arch3, planText(PLAN_SD), 40_000);
+    const archSha3 = canonicalContractSha(PLAN_SD);
+    const deliveredSha3 = canonicalContractSha({ ...PLAN_SD, serviceDescriptors: SD_EXPECTED });
+
+    const rs1 = await create(`${tag} sd leg (protocol: network-provisioning)`, 'PIPELINE', prog3, PLAN_SD);
+    const sdLeg = rs1?.result?.task?.id; cleanup.tasks.push(sdLeg);
+    const sdm = await meta(sdLeg); const sic = (await ic(sdLeg))?.interfaceContract;
+    check('SD1 supplied arm: the stored contract carries the DERIVED serviceDescriptors (composed → line URL; Git-only removed; terraform kept)',
+      canonicalContractSha(sic?.serviceDescriptors) === canonicalContractSha(SD_EXPECTED) && canonicalContractSha(sic) === deliveredSha3, sic?.serviceDescriptors);
+    const sf = sdm.interfaceContractSource?.serviceDescriptors;
+    check('SD2 supplied arm fact: replaced composed, removed no-read-line, kept terraform; planSha256 = the Architect\'s, storedAtWriteSha256 = delivered',
+      JSON.stringify(sf?.replaced) === '[{"token":"network-provisioning","reason":"composed"}]'
+      && JSON.stringify(sf?.removed) === '[{"token":"network-derivation","reason":"no-read-line"}]' && JSON.stringify(sf?.kept) === '["terraform-iac"]'
+      && sdm.interfaceContractSource?.planSha256 === archSha3 && sdm.interfaceContractSource?.storedAtWriteSha256 === deliveredSha3
+      && sdm.interfaceContractSource?.resolverVersion === 5, sdm.interfaceContractSource);
+    check('SD3 supplied arm: suppliedMatched measures TRANSCRIPTION (an exact Architect copy reads true, though the platform changed it)',
+      sdm.interfaceContractSource?.suppliedMatched === true && sdm.interfaceContractSource?.legBaseline?.legCount === 0, sdm.interfaceContractSource);
+    check('SD4 the task.create RESULT carries neither the fact nor the derived value', !JSON.stringify(rs1).includes('serviceDescriptors'));
+
+    // Absent arm: the program's own root harness, RUNNING, creates a leg with no contract.
+    const rootExec3 = await prisma.agentExecution.create({ data: { taskId: root3, status: 'RUNNING', config: {}, context: {}, startTime: new Date() } as any, select: { id: true } });
+    const rs2 = await router.route('task.create', { povId, phaseId: phase.id, stageId: prog3, title: `${tag} sd absent leg (protocol: network-provisioning)`,
+      description: 'C23 child', type: 'PIPELINE' }, token, `c23-sd-absent`, { callingExecutionId: rootExec3.id }) as any;
+    const sdAbsent = rs2?.result?.task?.id; cleanup.tasks.push(sdAbsent);
+    const am = await meta(sdAbsent); const aic = (await ic(sdAbsent))?.interfaceContract;
+    check('SD5 absent arm: stores the DELIVERED plan (Q5 against the delivered contract: legs equal, no decline)',
+      am.interfaceContractSource?.arm === 'create-absent' && canonicalContractSha(aic) === deliveredSha3
+      && am.interfaceContractSource?.legBaseline?.equalsPlan === true && am.interfaceContractSource?.serviceDescriptors?.replaced?.length === 1, am.interfaceContractSource);
+    check('SD6 absent arm: the read-back matched (the storage sentence names the DELIVERED sha)',
+      JSON.stringify(rs2).includes(`plan sha256 ${deliveredSha3.slice(0, 8)}`), JSON.stringify(rs2).slice(0, 400));
+
+    // Node C inherits — only when every leg holds the same plan (Q5). The legs hold the DELIVERED one.
+    const sdNodeC = await mkTask({ title: `${tag} sd Node C`, type: 'ACTION', stage: { connect: { id: prog3 } }, agentTemplate: { connect: { id: reviewerTmpl.id } }, agentRole: 'change_reviewer' });
+    await prepareTaskForExecution(sdNodeC);
+    const nm3 = await meta(sdNodeC); const nic3 = (await ic(sdNodeC))?.interfaceContract;
+    check('SD7 Node C inherits the DELIVERED contract (not refused plan-differs-from-legs), fact carries serviceDescriptors',
+      canonicalContractSha(nic3) === deliveredSha3 && nm3.interfaceContractSource?.source === 'plan-inherited'
+      && nm3.interfaceContractSource?.storedAtWriteSha256 === deliveredSha3 && Array.isArray(nm3.interfaceContractSource?.serviceDescriptors?.derived), nm3.interfaceContractSource);
+    await prisma.agentExecution.update({ where: { id: rootExec3.id }, data: { status: 'SUCCESS' } as any });
+
     // ── C3-a clearance carry ───────────────────────────────────────────────────────────────────
     await prepareTaskForExecution(leg1);
     const c1 = await meta(leg1);

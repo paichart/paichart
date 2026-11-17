@@ -43,7 +43,7 @@ examples name a retired configuration repository, so a run launched from one is 
 | What must happen | the change in plain words, the fixed values (names, pools, ports), and "Nothing else changes" |
 | Why this is a program | which value or result one leg makes that another leg depends on |
 | Approval gates | a table: gate, what it approves, what it runs after, what it blocks, approver by NAME AND EMAIL (the program matches approvers by email; a name alone gives an unassigned gate). Every approver must be on the project's team list in pAIchart. A placeholder address (as in the released examples) also gives an unassigned gate, which the project's owner can release: fine for a first run, not for a real change |
-| One section per leg | heading names the leg's protocol and type, e.g. `(network-derivation, value)` or `(network-provisioning, change)`. Copy these words exactly: the planner picks the leg's rules from them; what the leg does; "Changes nothing." on a leg that only works out a value; "depends on Pipeline N" where it does; the leg's `## Device sources` block, exactly as it must appear. **Put each rule in the section of the leg that applies it, and name the leg.** A rule stated in the general section without naming its leg was given to the wrong leg by the planner (2026-11-10) |
+| One section per leg | heading names the leg's protocol and type, e.g. `(network-derivation, value)` or `(network-provisioning, change)`. Copy these words exactly: the planner picks the leg's rules from them; what the leg does; "Changes nothing." on a leg that only works out a value; "depends on Pipeline N" where it does; the leg's sources block, exactly as it must appear: `## Device sources` for a network leg, `## Config sources` for a Kubernetes leg ([KUBERNETES-SERVICE.md](KUBERNETES-SERVICE.md)). **Put each rule in the section of the leg that applies it, and name the leg.** A rule stated in the general section without naming its leg was given to the wrong leg by the planner (2026-11-10) |
 | Integration review | numbered checks across legs, facts only; a new check is appended, never renumbered |
 | Validation shape | one sentence: governed by each leg's own protocol; this file does not restate or override it |
 | Connection surfaces | how each leg reaches what it reads |
@@ -52,7 +52,7 @@ Keep it short. Do not restate a leg protocol's rules. Do not copy device state i
 
 - **A `topology.json` goes beside the spec** (Part 1a). A spec without it does not plan.
 - **"Changes nothing." belongs to a value leg only.** The planner reads that phrase as the mark of a value leg, and the sources
-  check infers the leg's kind from it. In a change leg's section never write "changes nothing", even for a leg that makes no
+  check infers the leg's kind from it. Keep the two words on **one line**: a phrase split across a line break is not found. In a change leg's section never write "changes nothing", even for a leg that makes no
   edit: write "makes no edit".
 - **Do not write "if X, then Y" rules for a leg.** The planner copies each one into the plan as a branch the leg must
   evaluate, and a careless "if" becomes a rule nobody meant. Say it as one sentence with no "if".
@@ -64,7 +64,17 @@ Keep it short. Do not restate a leg protocol's rules. Do not copy device state i
   Do it straight after creating the project, and set the project's status to **In Progress** at the same time (a new project
   starts as **Projected**).
 - **Never word a check as something a leg must prove about itself,** and never ask a leg to report a difference between two
-  sources of one device (a Git file and a device read). The platform compares them.
+  sources of one device (a Git file and a device read), or between a Git file and the live cluster. The platform compares them.
+- **Build every use case as twins:** a `git-only/` variant (reads only the files in Git) and a `git-live/` variant (also reads the
+  running systems), from the first draft. Their two `requirements.md` files may differ **only** in their sources blocks and
+  "Connection surfaces", so write every leg sentence without naming where it reads from: "from the sources its Device sources
+  block declares", never "from the running switches". A sentence true for one variant only forces a second directory later.
+- **Kubernetes legs:**
+  - **One file, one leg.** Every leg of one protocol reads and keeps every `git-file` line of that protocol's block. List a file
+    only if a leg needs it.
+  - **One cluster per leg.** Two `live-read` lines in one block (two clusters) mean no drift check for any file in it.
+  - **Don't declare `replicas` for a workload an autoscaler scales.** The live count is the autoscaler's, so the drift check
+    reports it as a difference on every run.
 
 ---
 
@@ -94,7 +104,11 @@ It is written by hand, it repeats facts the spec states, and until now no check 
 
 ```
 python3 scripts/check-spec-topology.py --spec <requirements.md> --topology <topology.json>
+npx ts-node -r tsconfig-paths/register scripts/check-requirements-sources.ts --draft <requirements.md>
 ```
+
+The second check reads every `## Device sources` and `## Config sources` block exactly as the platform will, and refuses a block
+it cannot parse, one outside a fence, or two different blocks for one protocol.
 
 It warns and does not block; the one error is a topology that does not parse. It also warns on an address in the topology the
 spec never states, on a gate approver with no email, and where a leg's stated type and its wording disagree.
@@ -122,9 +136,9 @@ plan gate no leg has run yet, and you can still write an answer into a leg's des
 | # | Question | Applies to | Why it is here |
 |---|---|---|---|
 | M1 | **What exactly does the leg act on?** Name the device, file, bucket, namespace or policy | every leg | an unnamed target is right only while it is the only one |
-| M2 | **Which devices does the leg read, and where is each one's configuration?** List every device the leg **changes** and every device it only needs to **see** (for example the other switches that share an address pool). A device you leave out is not checked. For each: a Git file, the running device, or both; for a device the leg changes you may also say "no read" (kind `command-package`: the package then only writes commands). The four kinds are in [GLOSSARY.md](GLOSSARY.md), *Device sources*. All change legs in one program share one list. A leg that only works out a value has its own list. If a leg has only Git files, it claims nothing about live state. The exact line format is in [PIPELINES.md](PIPELINES.md), "Network: choosing each device's source" | every leg | a leg reads nothing it is not given; a device left off the list was not read and a colliding value was produced |
+| M2 | **Which devices does the leg read, and where is each one's configuration?** List every device the leg **changes** and every device it only needs to **see** (for example the other switches that share an address pool). A device you leave out is not checked. For each: a Git file, the running device, or both; for a device the leg changes you may also say "no read" (kind `command-package`: the package then only writes commands). The four kinds are in [GLOSSARY.md](GLOSSARY.md), *Device sources*. All change legs in one program share one list. A leg that only works out a value has its own list. If a leg has only Git files, it claims nothing about live state. The exact line format is in [PIPELINES.md](PIPELINES.md), "Network: choosing each device's source". **For a Kubernetes leg**, list each manifest file it reads (`git-file`) and the cluster (`live-read`, or `supplied` when you paste its state) in a `## Config sources` block instead; a Kubernetes leg without one stops ([KUBERNETES-SERVICE.md](KUBERNETES-SERVICE.md)) | every leg | a leg reads nothing it is not given; a device left off the list was not read and a colliding value was produced |
 | M3 | **What must not change?** ("nothing beyond …") | every leg that changes something | a widened change was refused at program review |
-| M4 | **Is there anything already on the target that looks wrong but is known and must be left alone?** A deliberate difference between the running device and its file, a planted test value, a setting someone else owns. Declare each by what it is (a property, not a copy of the value). Then say what the leg does with anything else it finds that this change does not touch: leave it, or stop for a person. This file cannot switch off a stop the leg's own rules require: on Kubernetes and Terraform legs, a difference outside the change's scope that you did not declare stops the leg for a person. Never ask a leg to report a difference between a device's Git file and the running device; the platform compares them | every leg | 3–5 runs stopped here with no answer in the spec |
+| M4 | **Is there anything already on the target that looks wrong but is known and must be left alone?** A deliberate difference between the running device and its file, a planted test value, a setting someone else owns. Declare each by what it is (a property, not a copy of the value). Then say what the leg does with anything else it finds that this change does not touch: leave it, or stop for a person. For a Kubernetes file, check it yourself before you launch: `kubectl diff -f <file>` against the cluster (with your own credentials) shows what differs today. This file cannot switch off a stop the leg's own rules require: on Kubernetes and Terraform legs, a difference outside the change's scope that you did not declare stops the leg for a person. Never ask a leg to report a difference between a device's Git file and the running device; the platform compares them | every leg | 3–5 runs stopped here with no answer in the spec |
 | M5 | **For each success check, which read proves it, and is that read one the leg has?** The reads a leg has are its Device sources (M2) and the tools listed in its read-only service's descriptor. A check on live behaviour (a session is up, traffic passes) cannot be proven from a Git file. A check on the whole fabric cannot be proven from one device. If no read the leg has proves a check, change the check or give the leg the read; do not launch with it. Never word a check as something a leg must prove about itself | every check | 3 runs (one campaign) stopped on a check that could not be proven or that the real state failed |
 | M6a | **Who is let in, and how does the thing that enforces the rule (a network policy, a bucket policy, a firewall, a proxy allowlist) tell them apart?** By sender address, by a named identity, by the network path they arrive on, or a combination (state each part) | a leg that grants or restricts access | authors chose differently when the spec was silent |
 | M6b | **Only if by sender address: how do their requests reach the enforcing point?** Directly; through a private endpoint; or through address translation (NAT, a proxy, a load balancer). Through a private endpoint the address arrives in a different field, and the rule must test that field. Through address translation the sender's own address never arrives: a list of sender addresses cannot be enforced there, and the leg will report that and change nothing | only when M6a says "by sender address" | 4 runs failed because the target could not tell senders apart by address |

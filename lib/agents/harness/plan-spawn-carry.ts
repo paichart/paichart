@@ -53,6 +53,7 @@ import { sanitizeChainedOutput, isR9OperatorEvent } from './sanitize-chained-out
 import { readAuthoritativeResultField } from './authoritative-result-read';
 import { findProgramParentForStage } from './program-protocol';
 import { CONFIG_SOURCE_LANES, CONFIG_SOURCE_PROTOCOLS, DEVICE_SOURCE_LANES } from './held-bytes/variant';
+import { deriveServiceDescriptors, type ServiceDescriptorsFact } from './service-descriptors-derivation';
 
 // ── Constants ───────────────────────────────────────────────────────────────────────────────────
 
@@ -75,9 +76,13 @@ export const PLAN_RESPONSE_MAX_BYTES = 262144;
 export const PLAN_CONTRACT_MAX_DEPTH = 20;
 /** 2 (2026-10-17, Q2 leg-contract heal): + `callerExecutionId` / `callerTaskId` / `declineReason`; arms `create-absent` /
  *  `create-absent-declined`; `planResolution` may be null (plan not read). */
-export const RESOLVER_VERSION = 4;
+export const RESOLVER_VERSION = 5;
 // 3 (2026-11-15, ARCHITECT-CONTRACT-KEY-BY-LEG option (b), owner "go ahead with step 1, the operator-only form"): + `deviceSourcesKeys`.
 // 4 (Config sources STEP 2, owner decision (b) 2026-11-15): + `configSourcesKeys` — the same fact for `configSources`, against its own table.
+// 5 (ARCHITECT-COMPOSED-DESCRIPTOR, owner 2026-11-17): the platform DERIVES `serviceDescriptors` on every contract it stores for a
+//   program child (service-descriptors-derivation.ts) + `serviceDescriptors` fact. `planSha256` stays the Architect's parse;
+//   `storedAtWriteSha256` is the contract as DELIVERED (they differ exactly when the derivation changed it), and the Q5 leg
+//   comparison is against the delivered contract.
 /** Bound on every stage-scoped scan (a program stage holds ≤ 8 legs plus a handful of children; a phase holds
  *  tens of stages). Far above any real population, so it never truncates a measurement — it bounds a
  *  pathological one (pagination rule). */
@@ -132,8 +137,15 @@ export type ContractParse =
 
 export interface PlanContractResult {
   status: PlanResolution;
+  /** The contract AS DELIVERED — the Architect's parse after `deriveServiceDescriptors`. Every arm that stores the plan stores THIS. */
   contract: Record<string, unknown> | null;
+  /** The canonical sha of the ARCHITECT's parse (unchanged meaning: what the plan said). */
   planSha256: string | null;
+  /** The Architect's parse before the derivation (the comparand for `suppliedMatched` — a transcription measure, not a platform one). */
+  architectContract: Record<string, unknown> | null;
+  /** The canonical sha of `contract` (= planSha256 when the derivation changed nothing). The Q5 / read-back comparand. */
+  deliveredSha256: string | null;
+  serviceDescriptors: ServiceDescriptorsFact | null;
   architectTaskId: string | null;
   architectExecutionId: string | null;
 }
@@ -213,6 +225,9 @@ export interface InterfaceContractSourceFact {
    *  has shipped). A key in the WRONG field — a Config-sources token under `deviceSources`, a network token under `configSources` —
    *  is in that field's `notReadKeys`, because each field is checked against its OWN table. Null when the contract carries none. */
   configSourcesKeys: DeviceSourcesKeysFact | null;
+  /** v5: what the platform did to `serviceDescriptors` in the STORED contract (rules 1-4, service-descriptors-derivation.ts). Null
+   *  when no contract was stored (a decline, a refusal). */
+  serviceDescriptors: ServiceDescriptorsFact | null;
   resolverVersion: number;
   at: string;
 }
@@ -221,7 +236,7 @@ export interface InterfaceContractSourceFact {
 export const INTERFACE_CONTRACT_SOURCE_KEYS: ReadonlyArray<keyof InterfaceContractSourceFact> = [
   'source', 'arm', 'planResolution', 'architectTaskId', 'architectExecutionId', 'planSha256',
   'storedAtWriteSha256', 'suppliedSha256', 'suppliedMatched', 'suppliedDiffPaths', 'suppliedDiffPathCount',
-  'legBaseline', 'r9', 'callerExecutionId', 'callerTaskId', 'declineReason', 'deviceSourcesKeys', 'configSourcesKeys', 'resolverVersion', 'at',
+  'legBaseline', 'r9', 'callerExecutionId', 'callerTaskId', 'declineReason', 'deviceSourcesKeys', 'configSourcesKeys', 'serviceDescriptors', 'resolverVersion', 'at',
 ];
 
 export interface CarryAttempt {
@@ -506,7 +521,7 @@ export async function findProgramArchitect(
  *  callers wrap it (resolver-error). */
 export async function resolvePlanContract(db: PlanDb, programStageId: string): Promise<PlanContractResult> {
   const empty = (status: PlanResolution, architectTaskId: string | null = null, architectExecutionId: string | null = null): PlanContractResult =>
-    ({ status, contract: null, planSha256: null, architectTaskId, architectExecutionId });
+    ({ status, contract: null, planSha256: null, architectContract: null, deliveredSha256: null, serviceDescriptors: null, architectTaskId, architectExecutionId });
   const arch = await findProgramArchitect(db, programStageId);
   if (arch.status !== 'resolved') return empty(arch.status);
   const read = await readAuthoritativeResultField(db, arch.taskId, 'finalResponse');
@@ -514,13 +529,31 @@ export async function resolvePlanContract(db: PlanDb, programStageId: string): P
   if (read.value === null) return empty('no-final-response', arch.taskId, read.executionId);
   const parsed = parsePlanContractText(read.value);
   if (!parsed.ok) return empty(parsed.reason, arch.taskId, read.executionId);
+  const delivered = deliverContract(parsed.contract);
+  const planSha256 = canonicalContractSha(parsed.contract);
   return {
     status: 'resolved',
-    contract: parsed.contract,
-    planSha256: canonicalContractSha(parsed.contract),
+    contract: delivered.contract,
+    planSha256,
+    architectContract: parsed.contract,
+    deliveredSha256: delivered.contract === parsed.contract ? planSha256 : canonicalContractSha(delivered.contract),
+    serviceDescriptors: delivered.fact,
     architectTaskId: arch.taskId,
     architectExecutionId: read.executionId,
   };
+}
+
+/**
+ * THE one place a program child's contract passes `deriveServiceDescriptors` (ARCHITECT-COMPOSED-DESCRIPTOR): the plan arms reach it
+ * through `resolvePlanContract`, the supplied fail-open arms through `decideCreateContract`. Fail-open: a derived contract that
+ * would break a storage bound the Architect's parse met (cap, jsonb) is not delivered — the input is, with `failed: true`.
+ */
+export function deliverContract(contract: Record<string, unknown>): { contract: Record<string, unknown>; fact: ServiceDescriptorsFact } {
+  const d = deriveServiceDescriptors(contract);
+  if (d.contract !== contract && (exceedsContractCap(d.contract) || hasUnstorableString(d.contract))) {
+    return { contract, fact: { ...d.fact, failed: true } };
+  }
+  return d;
 }
 
 // ── Q5 comparand: the legs' stored contracts ────────────────────────────────────────────────────
@@ -589,6 +622,7 @@ export function buildSourceFact(
     declineReason: p.declineReason ?? null,
     deviceSourcesKeys: p.deviceSourcesKeys ?? null,
     configSourcesKeys: p.configSourcesKeys ?? null,
+    serviceDescriptors: p.serviceDescriptors ?? null,
     resolverVersion: RESOLVER_VERSION,
     at,
   };
@@ -624,6 +658,9 @@ const safeDsKeys = (c: unknown): DeviceSourcesKeysFact | null => { try { return 
 const safeCsKeys = (c: unknown): DeviceSourcesKeysFact | null => { try { return configSourcesKeysOf(c); } catch { return null; } };
 
 const safeSha = (v: unknown): string | null => { try { return canonicalContractSha(v); } catch { return null; } };
+const safeDeliver = (c: Record<string, unknown>): { contract: Record<string, unknown>; fact: ServiceDescriptorsFact | null } => {
+  try { return deliverContract(c); } catch { return { contract: c, fact: null }; }
+};
 const safeR9 = (c: Record<string, unknown>) => { try { return classifyRenderedContract(c); } catch { return null; } };
 
 // ── C2 create site ──────────────────────────────────────────────────────────────────────────────
@@ -671,11 +708,14 @@ export function decideCreateContract(input: {
   };
 
   if (input.resolveError !== undefined && input.resolveError !== null) {
+    // A program stage was not established, but the derivation is pure and total: the stored contract is derived here too (one rule
+    // for every contract the platform stores on this path).
+    const d = safeDeliver(supplied);
     return {
-      stored: supplied,
+      stored: d.contract,
       sourceFact: buildSourceFact({
         source: 'supplied', arm: 'create', planResolution: 'resolver-error',
-        storedAtWriteSha256: safeSha(supplied), suppliedSha256: safeSha(supplied), r9: r9Of(supplied), deviceSourcesKeys: safeDsKeys(supplied), configSourcesKeys: safeCsKeys(supplied), ...callerIds,
+        storedAtWriteSha256: safeSha(d.contract), suppliedSha256: safeSha(supplied), r9: r9Of(d.contract), deviceSourcesKeys: safeDsKeys(d.contract), configSourcesKeys: safeCsKeys(d.contract), serviceDescriptors: d.fact, ...callerIds,
       }, at),
       signals,
     };
@@ -683,20 +723,23 @@ export function decideCreateContract(input: {
   if (!programRootId) return { stored: supplied, sourceFact: null, signals };
 
   if (!plan || plan.status !== 'resolved' || !plan.contract) {
+    const d = safeDeliver(supplied);
     return {
-      stored: supplied,
+      stored: d.contract,
       sourceFact: buildSourceFact({
         source: 'supplied', arm: 'create', planResolution: plan?.status ?? 'resolver-error',
         architectTaskId: plan?.architectTaskId, architectExecutionId: plan?.architectExecutionId,
-        storedAtWriteSha256: safeSha(supplied), suppliedSha256: safeSha(supplied), r9: r9Of(supplied), deviceSourcesKeys: safeDsKeys(supplied), configSourcesKeys: safeCsKeys(supplied), ...callerIds,
+        storedAtWriteSha256: safeSha(d.contract), suppliedSha256: safeSha(supplied), r9: r9Of(d.contract), deviceSourcesKeys: safeDsKeys(d.contract), configSourcesKeys: safeCsKeys(d.contract), serviceDescriptors: d.fact, ...callerIds,
       }, at),
       signals,
     };
   }
 
+  // `suppliedMatched` measures the PLAN-SPAWN model's TRANSCRIPTION of the Architect's plan, so it compares against the Architect's
+  // parse (`planSha256`, `architectContract`) — never the delivered contract, or a platform derivation would read as a model miss.
   const suppliedSha256 = canonicalContractSha(supplied);
   const matched = suppliedSha256 === plan.planSha256;
-  const diff = matched ? { paths: [], count: 0 } : diffContractPaths(deepStripDangerousKeys(supplied), plan.contract);
+  const diff = matched ? { paths: [], count: 0 } : diffContractPaths(deepStripDangerousKeys(supplied), plan.architectContract ?? plan.contract);
   signals.suppliedMismatch = !matched;
   const lb = input.legBaseline;
   signals.divergesFromLegs = !!lb && lb.legCount > 0 && lb.equalsPlan !== true;
@@ -728,9 +771,10 @@ export function buildPlanStoredFact(p: {
   return buildSourceFact({
     source: 'plan', arm: p.arm, planResolution: 'resolved',
     architectTaskId: p.plan.architectTaskId, architectExecutionId: p.plan.architectExecutionId,
-    planSha256: p.plan.planSha256, storedAtWriteSha256: p.plan.planSha256,
+    planSha256: p.plan.planSha256, storedAtWriteSha256: p.plan.deliveredSha256,
     ...(p.supplied ?? {}),
     legBaseline: p.legBaseline, r9: p.r9, deviceSourcesKeys: safeDsKeys(p.plan.contract), configSourcesKeys: safeCsKeys(p.plan.contract),
+    serviceDescriptors: p.plan.serviceDescriptors,
     callerExecutionId: p.caller?.executionId ?? null, callerTaskId: p.caller?.taskId ?? null,
   }, at);
 }
@@ -758,7 +802,7 @@ export async function resolveCreateContract(
       caller = { executionId: callingExecutionId, taskId: row?.taskId ?? null };
     }
     const plan = await resolvePlanContract(db, stageId);
-    const lb = plan.status === 'resolved' ? (await legBaseline(db, stageId, null, plan.planSha256)).baseline : null;
+    const lb = plan.status === 'resolved' ? (await legBaseline(db, stageId, null, plan.deliveredSha256)).baseline : null;
     return decideCreateContract({ supplied, programRootId, plan, legBaseline: lb, caller, at: now() });
   } catch (err) {
     return decideCreateContract({ supplied, programRootId: null, plan: null, legBaseline: null, resolveError: err ?? new Error('unknown'), at: now() });
@@ -818,12 +862,12 @@ export async function resolveAbsentLegContract(
     if (row.status !== 'RUNNING') return decline('caller-not-running');
     if (row.taskId !== programRootId) return decline('caller-not-program-root');
     const plan = await resolvePlanContract(db, stageId);
-    if (plan.status !== 'resolved' || !plan.contract || !plan.planSha256) {
+    if (plan.status !== 'resolved' || !plan.contract || !plan.planSha256 || !plan.deliveredSha256) {
       return decline('plan-unresolved', {
         planResolution: plan.status, architectTaskId: plan.architectTaskId, architectExecutionId: plan.architectExecutionId,
       });
     }
-    const lb = await legBaseline(db, stageId, null, plan.planSha256);
+    const lb = await legBaseline(db, stageId, null, plan.deliveredSha256);
     if (lb.comparand !== null && lb.comparand !== 'no-leg-baseline') {
       return decline(`stage-legs-${lb.comparand}` as DeclineReason, {
         planResolution: 'resolved', architectTaskId: plan.architectTaskId, architectExecutionId: plan.architectExecutionId,
@@ -832,7 +876,9 @@ export async function resolveAbsentLegContract(
     }
     const r = safeR9(plan.contract);
     return {
-      kind: 'store', contract: plan.contract, planSha256: plan.planSha256,
+      // `planSha256` here is the sha of the contract this arm STORES (the delivered plan): it is the read-back comparand and the
+      // result sentence's sha. Equal to the Architect's parse sha whenever the derivation changed nothing.
+      kind: 'store', contract: plan.contract, planSha256: plan.deliveredSha256,
       operatorEvent: r?.operatorEvent ? { matches: r.matches, classes: r.fact.wouldRewriteClasses } : null,
       fact: buildPlanStoredFact({ plan, legBaseline: lb.baseline, arm: 'create-absent', r9: r?.fact ?? null, caller, supplied: null }, now()),
     };
@@ -869,7 +915,7 @@ export async function resolveInheritDecision(
       }, now()),
     };
   }
-  const { baseline, comparand } = await legBaseline(db, programStageId, null, plan.planSha256);
+  const { baseline, comparand } = await legBaseline(db, programStageId, null, plan.deliveredSha256);
   if (comparand) {
     return {
       action: 'refuse', reason: comparand,
@@ -888,8 +934,8 @@ export async function resolveInheritDecision(
     fact: buildSourceFact({
       source: 'plan-inherited', arm: 'inherit', planResolution: 'resolved',
       architectTaskId: plan.architectTaskId, architectExecutionId: plan.architectExecutionId,
-      planSha256: plan.planSha256, storedAtWriteSha256: plan.planSha256, legBaseline: baseline, r9: r9?.fact ?? null,
-      deviceSourcesKeys: safeDsKeys(plan.contract), configSourcesKeys: safeCsKeys(plan.contract),
+      planSha256: plan.planSha256, storedAtWriteSha256: plan.deliveredSha256, legBaseline: baseline, r9: r9?.fact ?? null,
+      deviceSourcesKeys: safeDsKeys(plan.contract), configSourcesKeys: safeCsKeys(plan.contract), serviceDescriptors: plan.serviceDescriptors,
     }, now()),
   };
 }

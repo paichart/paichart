@@ -114,6 +114,16 @@ function labCallCost(u: { inputTokens?: number; outputTokens?: number; cacheRead
   return batchCostUsd(std, write, batchTtl());
 }
 
+/** L-CS-K cap overrun (2026-11-16: `--max-usd 2.96` spent $3.42, `--max-usd 1.04` spent $1.47): the cap was checked only when a SAMPLE
+ *  started, so every sample already in flight ran to the end (a Harvester is many calls). The run now installs a guard that throws before
+ *  any model call once the cap is reached; the overrun is then bounded by the calls ALREADY IN FLIGHT at that moment (at most the run's
+ *  concurrency, one call each). Refined the same day: a call is sent only when spent + (calls in flight + 1) x the largest call cost seen so far
+ *  stays within the cap, so the only possible overrun is a call dearer than every call before it. Module state, one run per process; null =
+ *  no guard (every caller outside `lab.ts run`). */
+let labCallGuard: { before: () => void; after: () => void } | null = null;
+export function setLabCallGuard(g: { before: () => void; after: () => void } | null): void { labCallGuard = g; }
+export class LabCapReached extends Error {}
+
 export async function runLive(p: RebuiltPrompt, ctx: { executionId: string; taskId: string; taskType: string | null; apiKey: string;
   /** requirements_author: the harness row the snapshot carries (`snap.leg`) — the objective + owner map, no DB read. */
   requirementsHarnessRow?: Record<string, any> | null;
@@ -138,7 +148,10 @@ export async function runLive(p: RebuiltPrompt, ctx: { executionId: string; task
   let purpose = 'loop';
   let corrCapture: { correctionPrompt: string | null; correctedRaw: string | null } | null = null;
   const generateText = async (prompt: string, options: any, userId?: string) => {
-    const resp: any = ctx.generateTextOverride ? await ctx.generateTextOverride(prompt, options, userId) : await llm!.generateText(prompt, options, userId);
+    labCallGuard?.before(); // L-CS-K (2026-11-16): the run's spend cap is checked BEFORE every model call — a call over the cap is never sent
+    let resp: any;
+    try { resp = ctx.generateTextOverride ? await ctx.generateTextOverride(prompt, options, userId) : await llm!.generateText(prompt, options, userId); }
+    finally { labCallGuard?.after(); }
     if (purpose === 'requirements-form-correction') {
       const last = Array.isArray(options?.messages) ? options.messages[options.messages.length - 1] : null;
       const lastText = Array.isArray(last?.content) ? last.content.map((b: any) => b?.text ?? '').join('') : (typeof last?.content === 'string' ? last.content : null);

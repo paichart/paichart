@@ -76,8 +76,9 @@ test('V-5a: resolveOwningLegProtocol — a present-null LEAF under a held-capabl
 test('held-k8s 1b-scope + step 3: a leaf under a kubernetes-gitops leg ⇒ gitFileSource true AND held-capable (the join); held-terraform step 3: a terraform leg ⇒ git-file-source AND held-capable (the join); obs ⇒ held-capable, not a git file source', async () => {
   const k = stubDb({ leaf: { stageId: 'st1' }, leg: { title: 'L (protocol: kubernetes-gitops)', metadata: { protocol: 'kubernetes-gitops-protocol' } } },
     { st1: { metadata: { harnessTaskId: 'leg' } } });
-  eq(await resolveOwningLegProtocol(k.db, { id: 'leaf', type: 'ACTION' }), { kind: 'leg', legId: 'leg', heldCapable: true, ownStageId: 'st1', gitFileSource: true, deviceSource: false });
-  eq(await resolveOwningLegProtocol(stubDb({}, {}).db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: kubernetes-gitops)' }), { kind: 'self', legId: 'L', heldCapable: true, gitFileSource: true, deviceSource: false });
+  // Config sources STEP 2 (kubernetes-gitops 1.19.0): a k8s leg is a Config-sources leg, and the resolution names its protocol.
+  eq(await resolveOwningLegProtocol(k.db, { id: 'leaf', type: 'ACTION' }), { kind: 'leg', legId: 'leg', heldCapable: true, ownStageId: 'st1', gitFileSource: true, deviceSource: false, configSourceProtocol: 'kubernetes-gitops-protocol' });
+  eq(await resolveOwningLegProtocol(stubDb({}, {}).db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: kubernetes-gitops)' }), { kind: 'self', legId: 'L', heldCapable: true, gitFileSource: true, deviceSource: false, configSourceProtocol: 'kubernetes-gitops-protocol' });
   eq(await resolveOwningLegProtocol(stubDb({}, {}).db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: terraform-iac)' }), { kind: 'self', legId: 'L', heldCapable: true, gitFileSource: true, deviceSource: false });
   eq([...GIT_FILE_SOURCE_PROTOCOLS], ['kubernetes-gitops-protocol', 'terraform-iac-protocol', 'network-provisioning-protocol']);
   // held-network step 3 batch 2b: a network leg declares Device sources (deviceSource true); push 3 (the join text): it is held-capable.
@@ -589,7 +590,8 @@ test('V-5 core: ONE owning-leg resolution; step after requirements & before onSt
   ok(at('prepareHeldPackage(') < at('await stampExecutionNets(') && at('variantLeaf ? await captureHeldFiles(') < at('await stampExecutionNets('), 'variant I/O before the nets');
   // held-network step 3 batch 2b: the core's ONE Device sources read rides between them (network leaves only)
   // + Config sources STEP 2: the core's ONE Config sources read rides after it (a Config-sources leaf only)
-  ok(/owningLeg,\s*\n(\s*\.\.\.\(legDeviceSources \? \{ deviceSources: legDeviceSources \} : \{\}\),\s*\n)?(\s*\.\.\.\(legConfigSources \? \{ configSources: legConfigSources \} : \{\}\),\s*\n)?(\s*\.\.\.\(platformDriftCalls !== undefined \? \{ platformDriftCalls \} : \{\}\),\s*\n)?\s*\.\.\.\(heldStamps \? \{ held: heldStamps \} : \{\}\)/.test(src), 'the nets receive the core\'s owningLeg and the built stamps');
+  // PLATFORM-DRIFT-CALLS-DROPPED (2026-11-16): plain properties, never conditional spreads (a spread escapes excess-property checks)
+  ok(/owningLeg,\s*\n(\s*\/\/[^\n]*\n)*\s*deviceSources: legDeviceSources,\s*\n\s*configSources: legConfigSources,\s*\n\s*platformDriftCalls,\s*\n\s*held: heldStamps,/.test(src), 'the nets receive the core\'s owningLeg and the built stamps');
 });
 
 test('V-5c core: the held-edit block reassigns the deliverable ONLY when the correction was adopted (textSource edit-correction)', () => {

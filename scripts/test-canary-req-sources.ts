@@ -9,7 +9,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { checkSources } from './check-requirements-sources';
-import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, CARD_WORD_RE, type Carrier } from './canary-req-sources';
+import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, CARD_WORD_RE, driftCallsOf, canonJson, archDescriptorsRespected, archFetchRoute, type Carrier } from './canary-req-sources';
+import { computeGitLiveDrift } from '../lib/agents/harness/git-live-drift';
 import { buildDeviceSourcesSnapshot, resolveLegDeviceSources, DEVICE_SOURCE_KINDS, SOURCE_SEPARATOR } from '../lib/agents/harness/device-sources';
 
 let pass = 0, fail = 0;
@@ -108,6 +109,35 @@ const canary = fs.readFileSync(path.join(__dirname, 'canary-check.ts'), 'utf8');
 t('the card regex is the one vlg-h4 reads the card with', canary.includes(`/${CARD_WORD_RE.source}/`));
 for (const n of ['req-src-contract-equals-spec', 'req-src-keys-parse', 'req-src-snapshot-contract', 'req-src-value-card-git-only']) {
   t(`canary-check.ts registers ${n}`, canary.includes(`'${n}': {`));
+}
+
+// ── csk-k8s-facts helpers (2026-11-16): recompute from the stored record's `.calls`, compare key-order-free. Fixture = a real
+// production record (Kubernetes Harvester cmwj8df8p0094yxvwu7m1j89t), both directions.
+{
+  const fx = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/canary/k8s-drift-record.json'), 'utf8'));
+  t('KF1 the stored fact equals a recompute from the record\'s calls (the control PASSES a correct record)',
+    canonJson(computeGitLiveDrift(driftCallsOf(fx.platformDriftCalls))) === canonJson(fx.gitLiveDrift));
+  t('KF2 the wrapper itself is not the calls (recomputing from it reads no-platform-call-record — the first-run false FINDING)',
+    canonJson(computeGitLiveDrift(fx.platformDriftCalls)) !== canonJson(fx.gitLiveDrift));
+  const tampered = JSON.parse(JSON.stringify(fx.gitLiveDrift)); tampered.files[0].summary = 'differences';
+  t('KF3 a stored fact that differs from its record is caught (the control FINDS a wrong record)',
+    canonJson(computeGitLiveDrift(driftCallsOf(fx.platformDriftCalls))) !== canonJson(tampered));
+  const reordered = Object.fromEntries(Object.entries(fx.gitLiveDrift).reverse());
+  t('KF4 key order does not matter', canonJson(reordered) === canonJson(fx.gitLiveDrift));
+  t('KF5 a bare calls array is accepted as-is', driftCallsOf(fx.platformDriftCalls.calls) === fx.platformDriftCalls.calls);
+}
+
+// ── arch-text-2 controls (2026-11-17): fixtures are tonight's real production records (both directions).
+{
+  const fx = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/canary/arch-text-2.json'), 'utf8'));
+  t('AT1 a leg whose descriptors the platform removed is a FINDING (tonight, before the text)', archDescriptorsRespected([{ id: 'L', fact: fx.legFact }]).verdict === 'FINDING');
+  const clean = { ...fx.legFact, removed: [], replaced: [], notDerived: fx.legFact.notDerived };
+  t('AT2 nothing removed or replaced is a PASS', archDescriptorsRespected([{ id: 'L', fact: clean }]).verdict === 'PASS');
+  t('AT3 no fact at all is UNEXERCISED, never a PASS', archDescriptorsRespected([{ id: 'L', fact: null }]).verdict === 'UNEXERCISED');
+  t('AT4 tonight\'s Architect (two refused scrape_page calls) is a FINDING', archFetchRoute(fx.architectServiceCalls).verdict === 'FINDING');
+  const gitOnly = fx.architectServiceCalls.filter((c: any) => !JSON.stringify(c.arguments ?? '').includes('scrape_page'));
+  t('AT5 Git-file reads only is a PASS', archFetchRoute(gitOnly).verdict === 'PASS');
+  t('AT6 no spec fetch at all is UNEXERCISED', archFetchRoute([]).verdict === 'UNEXERCISED');
 }
 
 console.log(`\n${fail ? '❌' : '✅'} canary-req-sources: ${pass} passed, ${fail} failed`);

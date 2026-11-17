@@ -17,6 +17,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { checkSources, LANE_SENTENCES, type SourcesResult } from './check-requirements-sources';
 import { DEVICE_SOURCE_KINDS, SOURCE_SEPARATOR } from '../lib/agents/harness/device-sources';
+import { CONFIG_SOURCE_KINDS } from '../lib/agents/harness/config-sources';
 
 const { PROTOCOLS } = require('./seed-protocol-prompts') as { PROTOCOLS: Array<{ name: string; promptText: string }> };
 
@@ -174,6 +175,61 @@ test('N10 S2: a block whose task-body copy and contract copy would differ (text 
   assert(r.errors.some((e) => e.rule === 'S2'), show(r));
 });
 
+// ── config sources (2026-11-16, kubernetes-gitops 1.19.0 prep): the same rules, read by config-sources.ts ──────────────────────
+const CFG_HEADING = '## Config sources';
+const CFG_LINES = [
+  'sample-workloads: git-file — service github-service ; acme/k8s-configs/k8s/sample-workloads.yaml',
+  'cluster: live-read — service https://raw.githubusercontent.com/acme/descriptors/main/k8s-readonly-descriptor.json',
+];
+const CFG_LINES_2 = [...CFG_LINES, 'trading-policy: git-file — service github-service ; acme/k8s-configs/k8s/trading-policy.yaml'];
+function kLeg(n: number, lines: string[] | null, token = 'kubernetes-gitops', extra = ''): string {
+  const parts = [`## Pipeline ${n} objective — Cluster ${n}`, '', `- Author the policy (row \`${token}.target\`).`];
+  if (lines) parts.push(`The leg's task description carries this \`${CFG_HEADING}\` block exactly:`, '', fence(lines, CFG_HEADING));
+  if (extra) parts.push(extra);
+  return parts.join('\n') + '\n';
+}
+const cItem = (n: number, lines: string[]) => item(n, lines, 'Config sources for the cluster leg:').replace(HEADING, CFG_HEADING);
+const cfg = (r: SourcesResult) => r.blocks.filter((b) => b.grammar === 'config');
+
+test('PC1 a kubernetes-gitops leg with its config-sources block and owner item is clean; protocol and lane come from the table', () => {
+  const r = checkSources(spec(kLeg(2, CFG_LINES)), objective(cItem(2, CFG_LINES)));
+  assert(r.errors.length === 0, show(r));
+  const b = cfg(r);
+  assert(b.length === 1 && b[0].grammar === 'config' && b[0].protocol === 'kubernetes-gitops' && b[0].lane === 'change' && b[0].laneSource === 'table', JSON.stringify(r.blocks));
+  assert(r.items.length === 1 && r.items[0].grammar === 'config' && r.items[0].state === 'parsed', JSON.stringify(r.items));
+});
+test('PC2 two kubernetes-gitops legs sharing ONE block pass S4; a network leg beside them keeps its own grammar', () => {
+  const r = checkSources(spec(leg(1, 'change', CHANGE_LINES), kLeg(2, CFG_LINES_2), kLeg(3, CFG_LINES_2)),
+    objective(item(1, CHANGE_LINES), cItem(2, CFG_LINES_2)));
+  assert(r.errors.length === 0, show(r));
+  assert(r.blocks.map((b) => b.grammar).join(',') === 'device,config,config', JSON.stringify(r.blocks));
+});
+test('NC1 S2: a config-sources line that does not parse (ASCII hyphen separator)', () => {
+  const r = checkSources(spec(kLeg(2, [CFG_LINES[0].replace(SOURCE_SEPARATOR, ' - '), CFG_LINES[1]])), objective(cItem(2, CFG_LINES)));
+  assert(rules(r) === 'S2,S3', show(r));
+  assert(r.errors.some((e) => e.rule === 'S2' && e.message.includes('kubernetes-gitops')), show(r));
+});
+test('NC2 S1: a config-sources heading outside a fence', () => {
+  const r = checkSources(spec(kLeg(2, null, 'kubernetes-gitops', `${CFG_HEADING}\n${CFG_LINES.join('\n')}`)), objective(cItem(2, CFG_LINES)));
+  assert(r.errors.some((e) => e.rule === 'S1' && e.message.includes('outside a fence')), show(r));
+});
+test('NC3 S4: two kubernetes-gitops legs with DIFFERENT blocks (one block per protocol token, owner 2026-11-15)', () => {
+  const r = checkSources(spec(kLeg(2, CFG_LINES), kLeg(3, CFG_LINES_2)), objective(cItem(2, CFG_LINES), cItem(3, CFG_LINES_2)));
+  assert(rules(r) === 'S4', show(r));
+});
+test('NC4 S1: a config-sources block on an observability-config leg names that leg and declares nothing', () => {
+  const r = checkSources(spec(kLeg(4, CFG_LINES, 'observability-config')));
+  assert(rules(r) === 'S1' && r.errors[0].message.includes('observability-config') && cfg(r).length === 0, show(r));
+});
+test('NC5 S1: a device-sources block and a config-sources block in one leg section', () => {
+  const r = checkSources(spec(kLeg(2, CFG_LINES, 'kubernetes-gitops', `${LANE_SENTENCES.change}\n\n${fence(CHANGE_LINES)}`)));
+  assert(r.errors.some((e) => e.rule === 'S1' && e.message.includes('one grammar')), show(r));
+});
+test('NC6 S3: a config file the owner gave is dropped from the spec block', () => {
+  const r = checkSources(spec(kLeg(2, CFG_LINES)), objective(cItem(2, CFG_LINES_2)));
+  assert(rules(r) === 'S3,S3', show(r));
+});
+
 // ── corpus ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 const CANARY = path.join(ROOT, 'cline_docs/reviews/value-leg-git-2026-11-06/canary-spec/held-network-window-p1-vlg/requirements.md');
 // cline_docs/ is private: the public export carries no copy of this spec (public-allowlist.rules), so C1 skips BY NAME there.
@@ -214,6 +270,19 @@ test('PIN1 one parser: the check imports device-sources.ts and holds no kind nam
   for (const k of DEVICE_SOURCE_KINDS) assert(!CHECK_SRC.includes(k), `the check names the kind "${k}" itself`);
   assert(!CHECK_SRC.includes(SOURCE_SEPARATOR.trim()), 'the check carries the separator character itself');
   assert(!/Device sources/.test(CHECK_SRC.replace(/^\s*\*.*$/gm, '').replace(/\/\/.*$/gm, '')), 'the check spells the heading itself (outside comments)');
+});
+test('PIN5 one parser for config sources too: the check imports config-sources.ts and spells no config heading or kind itself', () => {
+  assert(/from '\.\.\/lib\/agents\/harness\/config-sources'/.test(CHECK_SRC), 'the config-sources parser import is gone');
+  const code = CHECK_SRC.replace(/^\s*\*.*$/gm, '').replace(/\/\/.*$/gm, '');
+  assert(!/Config sources/.test(code), 'the check spells the config heading itself (outside comments)');
+  for (const k of CONFIG_SOURCE_KINDS) assert(!code.includes(`'${k}'`) && !code.includes(` ${k} `), `the check names the config kind "${k}" itself`);
+});
+// A live generated network+k8s spec (private configs checkout): its one config-sources block must read clean.
+const LIVE_R2 = path.join(os.homedir(), 'paichart-configs/usecases/telemetry-export-held-r2/requirements.program.md');
+if (!fs.existsSync(LIVE_R2)) skip('C3 the telemetry-export-held-r2 spec', `not present at ${LIVE_R2}`);
+else test('C3 the telemetry-export-held-r2 spec: one kubernetes-gitops config-sources block, clean', () => {
+  const r = checkSources(fs.readFileSync(LIVE_R2, 'utf8'));
+  assert(r.errors.length === 0 && cfg(r).length === 1 && r.blocks.length === 1, show(r) + JSON.stringify(r.blocks));
 });
 const PY = fs.readFileSync(path.join(__dirname, 'publish-generated-spec.py'), 'utf8');
 test('PIN2 the Python publish pass calls the check and parses no block itself', () => {

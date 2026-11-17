@@ -93,6 +93,13 @@ export interface GoldenCase {
   shape?: 'change' | 'value' | 'requirements';
   /** requirements (v7): the run's stored owner row→item map (a file under golden/), carried into the node for the form-check control. */
   ownerRowItemMap?: string;
+  /** v8 (owner 2026-11-15, Config sources STEP 2): the case's FROZEN Config-sources declaration — the `## Config sources` block a leg of
+   *  this case would carry from the protocol's Config-sources text on (`fromVersion`), and what the cluster service's compare tool
+   *  ANSWERS the platform's drift call (a tool-shaped result file under golden/, made by the tool's own `compare_manifest` over the
+   *  stored Harvester's recorded reads — k8s-drift-from-recorded.py). golden-build carries it onto every node whose cell composes the
+   *  protocol at ≥ `fromVersion` (block appended to the leg row, the first-execution snapshot, the drift plant); below it nothing is
+   *  carried and the cell is byte-identical to before. */
+  configSources?: GoldenConfigSources;
   runSheet: string; why: string; caveat?: string;
 }
 /** The two roles a case's node replays: the persisted/live "Author" slot and the Reviewer. */
@@ -100,6 +107,7 @@ export function caseRoles(c: Pick<GoldenCase, 'shape'>): { author: string; revie
   if (c.shape === 'requirements') return { author: 'requirements_author', reviewer: 'requirements_reviewer' };
   return c.shape === 'value' ? { author: 'derivation_architect', reviewer: 'derivation_reviewer' } : { author: 'config_change_author', reviewer: 'change_reviewer' };
 }
+export interface GoldenConfigSources { fromVersion: string; block: string[]; platformDrift: { default: { caller: 'result'; file: string } }; provenance: string }
 export interface GoldenSet {
   version: string; frozenAt: string; owner: string; rule: string;
   /** null = the protocol's legs are not held (a value leg): its cells carry no held binding. */
@@ -139,6 +147,14 @@ export function loadGoldenSet(dir = GOLDEN_DIR): GoldenSet {
     if (c.shape === 'requirements' && c.authorForms.join() !== 'persisted') throw new Error(`golden set: case ${c.id} — a requirements case is scored with the persisted Author only`);
     if (c.ownerRowItemMap && c.shape !== 'requirements') throw new Error(`golden set: case ${c.id} — ownerRowItemMap is for a requirements case only`);
     if (c.ownerRowItemMap && !fs.existsSync(path.join(dir, c.ownerRowItemMap))) throw new Error(`golden set: case ${c.id} owner map ${c.ownerRowItemMap} missing`);
+    if (c.configSources) {
+      const cs = c.configSources;
+      if (!gs.heldJoinSeedByProtocol[c.protocol]) throw new Error(`golden set: case ${c.id} carries configSources on ${c.protocol}, which has no held binding`);
+      if (!/^\d+\.\d+\.\d+$/.test(cs.fromVersion) || !Array.isArray(cs.block) || !cs.block.length || cs.block.some((l) => typeof l !== 'string' || !l.trim() || l.includes('\n'))) throw new Error(`golden set: case ${c.id} configSources needs fromVersion x.y.z and a non-empty block of single lines`);
+      const keys = Object.keys(cs.platformDrift ?? {});
+      if (keys.join() !== 'default' || cs.platformDrift.default.caller !== 'result' || !fs.existsSync(path.join(dir, cs.platformDrift.default.file))) throw new Error(`golden set: case ${c.id} configSources.platformDrift must be { default: { caller: 'result', file } } with the file under golden/`);
+      if (!cs.provenance || cs.provenance.length < 20) throw new Error(`golden set: case ${c.id} configSources needs its provenance in words`);
+    }
     const want: GoldenOutcome = c.expected.agentApproved && !c.expected.platformReason ? 'approved' : 'needs-revision';
     if (want !== c.expected.legOutcome) throw new Error(`golden set: case ${c.id} expects ${c.expected.legOutcome}, but its agent verdict + platform reason give ${want}`);
     if (c.authorForms.includes('live') && c.class === 'correct-refusal' && !isRunLevelReason(c.expected.platformReason)) {
@@ -334,7 +350,11 @@ export function buildGoldenCompanion(labDir: string, gs: GoldenSet = loadGoldenS
         // L-CS-N: the text's companion levers travel with it — the kind gate the text commit flips and the version the text ships as
         // (production's liveEvidence population rule reads it; L-CS-a computes the fact only at a released version).
         ...((v as any).liveReadKind ? { liveReadKind: (v as any).liveReadKind } : {}),
-        ...((v as any).composedVersion ? { composedVersion: (v as any).composedVersion } : {}),
+        // L-CS-K (2026-11-16): the composed version is the version of the EDITED protocol's text, so it travels only onto cells of a
+        // case whose protocol the arm's edits reach. Before this it travelled onto every cell the arm reached (a model lever reaches
+        // every domain): a network cell would have been stamped as composing network-provisioning "1.19.0" — below its own
+        // Config-sources version — and lost the liveEvidence line production renders (test:golden-set GS8 pins it).
+        ...((v as any).composedVersion && protoReach ? { composedVersion: (v as any).composedVersion } : {}),
         // NB1 (G15): `constraintsSeed` does NOT travel — a golden value cell is a persisted-Author Reviewer node (the Architect prompt is
         // never sent; the Reviewer's rows are unchanged), and the lever is built for architectOnly cells only.
       };
@@ -376,9 +396,32 @@ export function buildGoldenCompanion(labDir: string, gs: GoldenSet = loadGoldenS
   };
   // v7: a requirements case's stored owner map, copied beside the companion (the node path is relative to it).
   const copyOwnerMap = (f: string) => { const rel = `owner-maps/${path.basename(f)}`; fs.mkdirSync(path.join(out, 'owner-maps'), { recursive: true }); fs.copyFileSync(path.join(goldenDir, f), path.join(out, rel)); return rel; };
+  // v8 (owner 2026-11-15): a case's FROZEN Config-sources declaration travels onto its node when ANY of the node's cells composes the
+  // protocol at ≥ the declaration's version (the arm's `composedVersion`, the version production's population rule reads). The block
+  // is appended to the leg row (an input edit written here, against the cached leg description), the first-execution snapshot is
+  // simulated, and the drift plant is the case's tool-shaped result file. Below the version nothing is carried: the cells stay
+  // byte-identical to before (the levers return null below the version anyway; this keeps the companion itself unchanged).
+  const semverGte = (a: string, b: string) => { const x = a.split('.').map(Number); const y = b.split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0); } return true; };
+  const configCarry = (c: GoldenCase): Record<string, unknown> => {
+    const cs = c.configSources;
+    if (!cs) return {};
+    const reaching = (nodeVariants.get(c.id) ?? []).some((cell) => typeof variants[cell]?.composedVersion === 'string' && semverGte(variants[cell].composedVersion as string, cs.fromVersion));
+    if (!reaching) return {};
+    const { loadSnapshot } = require('./snapshot') as typeof import('./snapshot');
+    const desc = loadSnapshot(c.authorExecutionId, { reviewerExecutionId: c.reviewerExecutionId ?? null }).leg?.description;
+    if (typeof desc !== 'string' || !desc) throw new Error(`golden-build: case ${c.id} — the cached leg row has no description to carry its Config sources block onto`);
+    fs.mkdirSync(path.join(out, 'config-sources'), { recursive: true });
+    const editRel = `config-sources/${c.id}.block.json`;
+    fs.writeFileSync(path.join(out, editRel), JSON.stringify({ id: `golden-${gs.version}-${c.id}-config-sources`, appliesTo: ['leg:description'],
+      ops: [{ type: 'replace', old: desc, new: `${desc}\n\n## Config sources\n${cs.block.join('\n')}\n` }] }, null, 2) + '\n');
+    const resultRel = `config-sources/${path.basename(cs.platformDrift.default.file)}`;
+    fs.copyFileSync(path.join(goldenDir, cs.platformDrift.default.file), path.join(out, resultRel));
+    return { inputEdits: editRel, configSourcesSnapshot: 'first-execution', platformDrift: { default: { caller: 'result', file: resultRel } } };
+  };
   const nodes = gs.cases.filter((c) => nodeVariants.has(c.id)).map((c) => ({
     id: `GOLD-${c.id}`, authorExecutionId: c.authorExecutionId, reviewerExecutionId: c.reviewerExecutionId,
     ...(pea(c.authorExecutionId, c.reviewerExecutionId, gs.heldJoinSeedByProtocol[c.protocol] !== null) ? { persistedEditApplication: true } : {}),
+    ...configCarry(c),
     ...(c.ownerRowItemMap ? { ownerRowItemMap: copyOwnerMap(c.ownerRowItemMap) } : {}),
     kind: `golden ${c.class} (${c.domain}) — expect leg ${c.expected.legOutcome}`, variants: nodeVariants.get(c.id)!,
     expect: `${c.expected.legOutcome} (agent ${c.expected.agentApproved ? 'approved' : 'refused'}${c.expected.platformReason ? `, platform ${c.expected.platformReason}` : ''})`,
@@ -478,11 +521,19 @@ export function samplePlatformReason(c: GoldenCase, carrierModelled: boolean, ed
   return heldEditVerdict(author, reviewer).reason;
 }
 
-export function readGoldenSample(c: GoldenCase, carrierModelled: boolean, s: Record<string, any>, name: string): GoldenSampleRead {
+/** v8: the Config force a cell's leg would carry (`configGitFileForce` over the frozen declaration and the cell's held files, reported
+ *  by the lab per cell in the run manifest: `nodes[<node>].variants[<cell>].held.configSources.configForce`). It is a RUN-LEVEL reason
+ *  — decided by the declaration and the Harvester's reads, both inputs the cell holds fixed — so it outranks the package-level
+ *  recompute, as in the shipping carrier. Null when the cell does not read Config sources or nothing is forced. */
+export function cellConfigForce(manifest: Record<string, any> | null, node: string, cell: string): string | null {
+  const f = manifest?.nodes?.[node]?.variants?.[cell]?.held?.configSources?.configForce;
+  return f && typeof f === 'object' && typeof f.reason === 'string' ? f.reason : null;
+}
+export function readGoldenSample(c: GoldenCase, carrierModelled: boolean, s: Record<string, any>, name: string, configForce: string | null = null): GoldenSampleRead {
   if (s.error) return { sample: name, agentApproved: null, platformReason: null, legOutcome: null, error: String(s.error) };
   const approved = typeof s.verdict?.approved === 'boolean' ? s.verdict.approved as boolean : null;
   if (approved === null) return { sample: name, agentApproved: null, platformReason: null, legOutcome: null, error: 'no parseable verdict' };
-  const reason = samplePlatformReason(c, carrierModelled, s.editApplication ?? null, `lab-${s.node}-${s.variant}-${s.i}-a`);
+  const reason = configForce ?? samplePlatformReason(c, carrierModelled, s.editApplication ?? null, `lab-${s.node}-${s.variant}-${s.i}-a`);
   return { sample: name, agentApproved: approved, platformReason: reason, legOutcome: approved && !reason ? 'approved' : 'needs-revision', error: null };
 }
 
@@ -529,6 +580,8 @@ export function scoreGolden(runDirs: string[], companionDir: string, stored: (c:
     for (const rd of runDirs) {
       const d = path.join(rd, `GOLD-${c.id}`, cell.cell);
       if (!fs.existsSync(d)) continue;
+      const mf = path.join(rd, 'manifest.json');
+      const force = cellConfigForce(fs.existsSync(mf) ? JSON.parse(fs.readFileSync(mf, 'utf8')) : null, `GOLD-${c.id}`, cell.cell);
       for (const s of fs.readdirSync(d).filter((x) => x.startsWith('sample-')).sort()) {
         const f = path.join(d, s, 'sample.json');
         if (!fs.existsSync(f)) continue;
@@ -537,7 +590,7 @@ export function scoreGolden(runDirs: string[], companionDir: string, stored: (c:
         const ea = sample.editApplication ?? (fs.existsSync(eaFile) ? JSON.parse(fs.readFileSync(eaFile, 'utf8')).fact : null)
           ?? (cell.form === 'persisted' ? st.editApplication : null);
         const name = `${path.basename(rd)}/${s}`;
-        reads.push(readGoldenSample(c, carrier, { ...sample, editApplication: ea }, name));
+        reads.push(readGoldenSample(c, carrier, { ...sample, editApplication: ea }, name, force));
         const af = path.join(d, s, 'author.md');
         if (cell.form === 'live' && sample.verdict?.approved === false && fs.existsSync(af))
           pointsLiveOnly[name] = refusalPointsAtLiveOnly(sample.verdict?.blocking ?? [], fs.readFileSync(af, 'utf8'), st.authorText ?? null);

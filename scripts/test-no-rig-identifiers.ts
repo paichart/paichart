@@ -152,7 +152,7 @@ function scanFormCorrection(): Hit[] {
  */
 const ROLE_GUIDANCE_SERVICE_NAMES = ['browser-automation-service', 'Browser Automation Service', 'browser service', 'scrape_page', 'github-service'];
 const ROLE_GUIDANCE_SERVICE_EXEMPT: Record<string, string> = {
-  buildProgramArchitectGuidance: 'Program Architect URL fetch — owed by its own text batch (live-control gated; register ROLE-GUIDANCE-AGNOSTIC)',
+  buildProgramArchitectGuidance: 'Program Architect URL fetch — names the platform Git file source (github-service) and the browser service; owed by its own text batch (live-control gated; register ROLE-GUIDANCE-AGNOSTIC)',
 };
 function scanRoleGuidanceServiceNames(): { hits: Hit[]; exempted: string[] } {
   const file = 'lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts';
@@ -209,6 +209,27 @@ console.log(`✅ role guidance names no service (${ROLE_GUIDANCE_SERVICE_NAMES.l
     console.log('❌ program_architect deviceSources carry sentence missing');
     process.exit(1);
   }
+  // Config sources STEP 2 Architect batch (2026-11-16; ARCHITECT-CONTRACT-KEY-BY-LEG option (a) + ARCHITECT-COMPOSED-DESCRIPTOR +
+  // the configSources key): maps keyed by PROTOCOL token, never by leg; no descriptor assembled from source lines; Kubernetes lines
+  // under configSources["kubernetes-gitops"], never deviceSources; a shared token's block carries every leg's lines, read by every leg.
+  for (const want of [
+    'serviceDescriptors["<protocol token>"]\\`, keyed by the leg\'s PROTOCOL token',
+    'never by a leg name or a label of your own: each leg looks up its entry only at its token, and two legs of one token share ONE key',
+    'gets NO \\`serviceDescriptors\\` entry from you: the platform writes that leg\'s descriptor from the service its block\'s read lines name',
+    'Never write an object made of a service name, an owner, a repository or file paths: a Git file is not a service descriptor.',
+    'For a URL on \\`raw.githubusercontent.com\\`, read the file with the Git file service',
+    'no other route reads that file: escalate via \\`task.comment\\` and stop.',
+    'A value leg the requirements give no lines of its own is a leg with no sources block.',
+    'plus, for a leg with no sources block, its service-descriptor URL',
+    'The contract reaches every leg verbatim; a description is rewritten. Never compose one.',
+    'Where the inputs give two legs of one token different descriptors, emit neither: raise it under Assumptions & open questions.',
+    'under the other field: \\`configSources["kubernetes-gitops"]\\` (a Kubernetes leg without them stops) — never under \\`deviceSources\\`',
+    'Where two legs carry the same token in your DAG, its one block carries every line the requirements give either leg, once each; every leg receives all of them',
+  ]) {
+    if (!ug.includes(want)) { console.log('❌ program_architect Config-sources batch sentence missing: ' + want); process.exit(1); }
+  }
+  if (ug.includes('never assemble one from a source line')) { console.log('❌ program_architect: the process-worded descriptor rule is back (LL-CS-74: name the forbidden output)'); process.exit(1); }
+  if (ug.includes('serviceDescriptors["<leg token>"]')) { console.log('❌ program_architect: the leg-token descriptor key is back'); process.exit(1); }
 }
 
 const hits = [...scanSeed(), ...scanRoleGuidance(), ...scanFormCorrection()];

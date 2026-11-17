@@ -160,16 +160,29 @@ check that file by hand. The Git file source is admin-only, and reads only the o
 
 ### Kubernetes (GitOps): kept files from your config repo
 
-- **Name the file in the task.** One line per file, e.g. *"Config-repo file to read (Repo read): owner `acme`, repo
-  `cluster-config`, ref `main`, path `apps/orders/deploy.yaml`"*. Name the override values file (`values-prod.yaml`), never a
-  chart's default `values.yaml`. Only the **`main` branch** of the pinned repository is read (a read naming no branch is read as `main`); a task naming another branch,
-  repository or commit gets no read (the Harvester says so), and the package falls back to writing new files in full.
+- **Declare the leg's sources in a `## Config sources` block** (kubernetes-gitops 1.19.0 on). One line per source: `<label>:
+  git-file — service github-service ; <owner>/<repo>/<path>` for a manifest file, `<cluster>: live-read — service <name or
+  descriptor URL>` for the cluster, or `<cluster>: supplied` when you paste its state into the task. **A Kubernetes leg with no
+  block stops** before it reads anything. Name the override values file (`values-prod.yaml`), never a chart's default
+  `values.yaml`. Only the **`main` branch** of the pinned repository is read; a line naming another branch, repository or commit
+  gets no read. What each kind means, and what your cluster service must offer: [KUBERNETES-SERVICE.md](KUBERNETES-SERVICE.md).
+- **One file, one leg.** Every leg of a protocol reads and keeps every `git-file` line of that protocol's block. Put a file the
+  change does not touch in the block only if the leg needs to see it.
 - **What changes in the package.** The file you named is `H1`; the Author edits it in place (a new document can be appended to
   it). A brand-new file appears as `create H2 on H1 <path>` beside it. Rollback is `restore H1` for a kept file and a `git revert`
   of the adding commit only for a file the change created.
-- **The cluster is evidence, never the kept file.** Live objects are read to compare against the repo. A difference is reported
-  as drift with both values; when the change touches that field, the package reconciles it with a callout ("merging this
-  overwrites the live value"). A cause is stated only with the witness that shows it.
+- **The cluster is evidence, never the kept file.** With a `git-file` and a `live-read` line, **pAIchart itself** compares the
+  kept file with the cluster and records a **drift fact** per file: *compared — no differences*, *compared — differences* (the
+  differing field paths, never the values), *compared — with gaps*, or *not checked* with a reason. The agents read that fact and
+  never compare for themselves. A difference in a field the change touches is reconciled with a callout ("merging this overwrites
+  the live value"); a difference in a field it does not touch, in a file it edits, stops the leg for a person. With no `live-read`
+  line the run is **Git-only**: no cluster is read, drift is *not checked — no live-read source*, and the package says so. Every
+  state and reason, and the compare limits: [KUBERNETES-SERVICE.md](KUBERNETES-SERVICE.md) § "The drift check".
+- **One cluster per leg.** A block with two `live-read` lines (two clusters) gets no drift fact at all — every file reads *not
+  checked — more than one live-read source is declared*. Until pAIchart can label which file belongs to which cluster, give each
+  cluster its own leg.
+- **Don't declare `replicas` for a workload an autoscaler scales.** The live count is the autoscaler's, so the drift check would
+  report it as a difference on every run.
 - **Who can run it.** The Git file source is admin-only: a non-admin's run gets no kept file and is judged in full, as before
   (not forced).
 - **Apply** = merge the candidate as a pull request after the Git base check reads MATCH (above); re-run the check just before
@@ -332,15 +345,24 @@ Read-only harvest, change package only — nothing is applied by this run.
 - Size: every declared `git-file` is kept and shown to the Author. Two to a few switches is nothing; for a large fabric where the
   change touches a few switches, list the evidence devices anyway.
 
-### Kubernetes / Terraform: name the repo file
+### Kubernetes: a `## Config sources` block
 
 ```
 Set CPU and memory requests and limits on the web Deployment, leaving every other field unchanged.
 
-Source file to read (repo read): owner `acme`, repo `infra-live`, path `k8s/web/deployment.yaml`
+## Config sources
+web: git-file — service github-service ; acme/infra-live/k8s/web/deployment.yaml
+cluster: live-read — service https://example.com/k8s-readonly-descriptor.json
 ```
-`main` only (a read naming no branch is read as `main`); one line per file; for Terraform never name state, plan or variables files (`*.tfstate*`, `*.tfplan`, `*.tfvars*`,
-`.terraform/`). Live state comes from your read-only cluster / Terraform service (descriptor in the task) and is evidence, never the kept file.
+Leave out the `live-read` line for a Git-only run. Details: [KUBERNETES-SERVICE.md](KUBERNETES-SERVICE.md).
+
+### Terraform: name the repo file
+
+```
+Source file to read (repo read): owner `acme`, repo `infra-live`, path `terraform/main.tf`
+```
+`main` only (a read naming no branch is read as `main`); one line per file; never name state, plan or variables files (`*.tfstate*`, `*.tfplan`, `*.tfvars*`,
+`.terraform/`). Live state comes from your read-only Terraform service (descriptor in the task) and is evidence, never the kept file.
 
 ### Observability: the self-provisioned stack
 

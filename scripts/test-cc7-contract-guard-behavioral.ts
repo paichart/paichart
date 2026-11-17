@@ -52,7 +52,9 @@ async function main() {
     check('B1.1 program pipeline child w/ NO contract + NO flag → THROWS (structural arm)', threw.includes('INTERFACE_CONTRACT_MISSING'), threw.slice(0, 70));
     check('B1.2 error names the structural reason', threw.includes('structurally required'));
     // Promotion E (E4): no contract, no flag, no source fact = the dominant case; the cause says so FIRST.
-    check('B1.2b cause is the absence branch (no contract supplied at create)', threw.includes('no contract was supplied when this child was created'));
+    // Q2 (2026-10-17, 9dd89f506) reworded the absence cause; the unit twin test-cc7-contract-guard.ts E4.2 was updated then, this one
+    // was not (it is outside the battery) — CC7-GUARD-B1-2B-PREEXISTING, fixed 2026-11-17 to the same string E4.2 pins.
+    check('B1.2b cause is the absence branch (no contract stored at create, no reason recorded)', threw.includes('no contract was stored when this child was created, and the platform recorded no reason'));
 
     // control: a NON-program pipeline child (parent template has no pov-program protocol) → must NOT throw
     const plainStage = await prisma.stage.create({ data: { phaseId: phase!.id, name: `F12 plain stage ${Date.now()%100000}`, order: 9997, status: 'PENDING' }, select: { id: true } });

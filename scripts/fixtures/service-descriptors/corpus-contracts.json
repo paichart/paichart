@@ -1,0 +1,128 @@
+{
+ "source": "production stored leg contracts (inputContext.interfaceContract), corpus dump 2026-11-17 (CORPUS.md); trimmed to the three fields the derivation reads",
+ "programs": {
+  "cmwj9241a00fryxvwy3sk7kfh": {
+   "note": "git-only (W6, CORPUS #11-12): composed objects on git-file-only blocks",
+   "contract": {
+    "serviceDescriptors": {
+     "kubernetes-gitops": {
+      "repo": "paichart-configs",
+      "files": [
+       "k8s/sample-workloads.yaml"
+      ],
+      "owner": "paichart",
+      "service": "github-service"
+     },
+     "network-derivation": {
+      "repo": "paichart-configs",
+      "files": [
+       "network/base/ceos1-startup.cfg",
+       "network/base/ceos2-startup.cfg"
+      ],
+      "owner": "paichart",
+      "service": "github-service"
+     }
+    },
+    "deviceSources": {
+     "network-derivation": "## Device sources\nceos1: git-file — service github-service ; paichart/paichart-configs/network/base/ceos1-startup.cfg\nceos2: git-file — service github-service ; paichart/paichart-configs/network/base/ceos2-startup.cfg"
+    },
+    "configSources": {
+     "kubernetes-gitops": "## Config sources\nsample-workloads: git-file — service github-service ; paichart/paichart-configs/k8s/sample-workloads.yaml"
+    }
+   }
+  },
+  "cmwckhl0600cpyxw4jjlcu0a3": {
+   "note": "two legs one token (W5, CORPUS #6-7): deviceSources AND serviceDescriptors keyed by leg names",
+   "contract": {
+    "serviceDescriptors": {
+     "pipeline-1-edge-ceos1": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json",
+     "pipeline-2-core-ceos2": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json"
+    },
+    "deviceSources": {
+     "pipeline-1-edge-ceos1": "## Device sources\nceos1: git-file — service github-service ; paichart/paichart-configs/network/base/ceos1-startup.cfg\nceos1: device-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json\nceos2: git-file — service github-service ; paichart/paichart-configs/network/base/ceos2-startup.cfg\nceos2: device-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json",
+     "pipeline-2-core-ceos2": "## Device sources\nceos1: git-file — service github-service ; paichart/paichart-configs/network/base/ceos1-startup.cfg\nceos1: device-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json\nceos2: git-file — service github-service ; paichart/paichart-configs/network/base/ceos2-startup.cfg\nceos2: device-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json"
+    }
+   }
+  },
+  "cmwj7vb53000kyxvwjoovypxa": {
+   "note": "git-live net+k8s (W6): supplied URLs copied verbatim, derived from device-read / live-read lines",
+   "contract": {
+    "serviceDescriptors": {
+     "kubernetes-gitops": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json",
+     "network-derivation": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json"
+    },
+    "deviceSources": {
+     "network-derivation": [
+      "ceos1: git-file — service github-service ; paichart/paichart-configs/network/base/ceos1-startup.cfg",
+      "ceos1: device-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json",
+      "ceos2: git-file — service github-service ; paichart/paichart-configs/network/base/ceos2-startup.cfg",
+      "ceos2: device-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json"
+     ]
+    },
+    "configSources": {
+     "kubernetes-gitops": [
+      "sample-workloads: git-file — service github-service ; paichart/paichart-configs/k8s/sample-workloads.yaml",
+      "cluster: live-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json"
+     ]
+    }
+   }
+  },
+  "cmw4osbre000iyxm8ks28fred": {
+   "note": "value leg git-file-only + change leg device-read URL (W4, hand-adjudicated (e))",
+   "contract": {
+    "serviceDescriptors": {
+     "network-provisioning": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json"
+    },
+    "deviceSources": {
+     "network-derivation": [
+      "ceos1: git-file — service github-service ; paichart/paichart-lab-configs/network/base/ceos1-startup.cfg",
+      "ceos2: git-file — service github-service ; paichart/paichart-lab-configs/network/base/ceos2-startup.cfg"
+     ],
+     "network-provisioning": [
+      "ceos1: git-file — service github-service ; paichart/paichart-lab-configs/network/base/ceos1-startup.cfg",
+      "ceos1: device-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json",
+      "ceos2: device-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json"
+     ]
+    }
+   }
+  },
+  "cmvexqkdl00i3yxdo41l43dwn": {
+   "note": "k8s wrapper object around the correct URL, no configSources block (W2, CORPUS #1)",
+   "contract": {
+    "serviceDescriptors": {
+     "kubernetes-gitops": {
+      "configRepo": {
+       "ref": "main",
+       "path": "k8s/sample-workloads.yaml",
+       "repo": "paichart-lab-configs",
+       "owner": "paichart"
+      },
+      "clusterDescriptorUrl": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json"
+     }
+    }
+   }
+  },
+  "cmv4wfvnc005oyx9kljrpehw7": {
+   "note": "stray non-token key lifecycle (W2, CORPUS #2)",
+   "contract": {
+    "serviceDescriptors": {
+     "lifecycle": "each leg self-provisions its read-only MCP service from its own descriptor per its own active protocol, harvests read-only, then tears the registration down — on approval and on escalation alike",
+     "kubernetes-gitops": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json",
+     "observability-config": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/observability-readonly-descriptor.json"
+    }
+   }
+  },
+  "cmvvwh4kh000kyx91ek34a21n": {
+   "note": "deviceSources as a prose STRING (W3, CORPUS #4) + four supplied URLs",
+   "contract": {
+    "serviceDescriptors": {
+     "terraform-iac": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/terraform-readonly-descriptor.json",
+     "kubernetes-gitops": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json",
+     "network-derivation": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json",
+     "observability-config": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/observability-readonly-descriptor.json"
+    },
+    "deviceSources": "NOT APPLICABLE — the requirements document contains no '## Device sources' section; the fabric leg is a value leg (network-derivation, read-only harvest), so the network-provisioning device-sources convention does not apply to it."
+   }
+  }
+ }
+}

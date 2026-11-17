@@ -66,7 +66,11 @@ something. It is not a broken install.
    `perform(action: 'agent.results', parameters: { taskId: '<the leg's Review task id>' })`.
 2. Decide whether the refusal is right. [READING-A-RUN.md](READING-A-RUN.md) explains which statements are measured facts and
    which are an agent's judgement.
-3. If the spec was unclear or wrong, fix the spec ([WRITING-A-SPEC.md](WRITING-A-SPEC.md)) and launch a **new** run. A program
+3. **A Kubernetes leg** that stopped before reading anything usually has no `## Config sources` block; one that stopped for a
+   person after reading usually found a difference between your Git file and the cluster in a field the change does not touch.
+   Read the leg's drift fact; *not checked* always gives its reason ([KUBERNETES-SERVICE.md](KUBERNETES-SERVICE.md) § "The drift
+   check"). Check the file yourself with `kubectl diff -f <file>`, fix the file or the cluster, and launch again.
+4. If the spec was unclear or wrong, fix the spec ([WRITING-A-SPEC.md](WRITING-A-SPEC.md)) and launch a **new** run. A program
    that has had a leg refused cannot be turned releasable in place, by design: re-running one leg does not change the result.
 
 ## A task failed

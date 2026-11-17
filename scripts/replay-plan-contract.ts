@@ -22,7 +22,7 @@
  *   - `legBaseline` per root and the would-be Q5 outcome for every contract-LESS reviewer-set child.
  *
  * Live mode (`--root`) recomputes `planSha256` and each contract-bearing child's LIVE canonical sha, and checks
- * `storedAtWriteSha256 === planSha256 === live sha` and `source:'plan'` on every row. This is the PRIMARY live
+ * `storedAtWriteSha256 === planSha256 === live sha` (resolver v5+: the DELIVERED sha — serviceDescriptors derived) and `source:'plan'` on every row. This is the PRIMARY live
  * instrument; the forensics §4c SQL is an independent cross-check (it cannot reproduce these hashes from SQL —
  * jsonb orders keys by length then bytes).
  */
@@ -184,8 +184,11 @@ async function live(rootId: string) {
     // absent arm, arm create-absent) but which holds NO object contract now is a post-create loss — it FAILS. Before Q2 a
     // contract-less row passed unconditionally, which would have hidden exactly the loss the absent arm's flag guards.
     const factSaysStored = f?.source === 'plan' || f?.source === 'plan-inherited';
+    // resolver v5 (ARCHITECT-COMPOSED-DESCRIPTOR, 2026-11-17): the platform stores the plan AS DELIVERED (serviceDescriptors derived),
+    // so a v5 row is compared to the delivered sha; an older row stored the Architect's parse unchanged.
+    const expected = typeof f?.resolverVersion === 'number' && f.resolverVersion >= 5 ? p.deliveredSha256 : p.planSha256;
     const ok = isObj(c)
-      ? factSaysStored && f?.storedAtWriteSha256 === p.planSha256 && liveSha === p.planSha256
+      ? factSaysStored && f?.storedAtWriteSha256 === expected && liveSha === expected
       : !factSaysStored;
     if (!ok) bad++;
     console.log(`  ${ok ? '✅' : '❌'} ${k.id} ${k.type.padEnd(8)} ${(k.agentRole ?? '—').padEnd(22)} source=${f?.source ?? '—'} arm=${f?.arm ?? '—'}${f?.declineReason ? ` declineReason=${f.declineReason}` : ''} ` +

@@ -266,8 +266,8 @@ ANCHORS.push(
 ANCHORS.push(
   ['program_architect', 'BRANCH CONDITIONS ARE CONTRACT FIELDS, carried VERBATIM',
     'RPR 2a: the premise reached a leg Architect verbatim once (answered correctly) and was dropped/reworded three times (all misread)'],
-  ['program_architect', 'Each leg\'s service descriptor goes in the contract',
-    'PLAN-SPAWN-DESCRIPTOR B (2026-10-10): program run 1 spawned both legs without the descriptors the plan named; the contract is copied to every leg verbatim (C2-a)'],
+  ['program_architect', 'Service descriptors: only for a leg whose sources block you do not carry',
+    'PLAN-SPAWN-DESCRIPTOR B (2026-10-10): program run 1 spawned both legs without the descriptors the plan named; the contract is copied to every leg verbatim (C2-a). Narrowed 2026-11-17 (ARCHITECT-COMPOSED-DESCRIPTOR): the platform derives the descriptor for a leg whose sources block the plan carries (20f127cf0); the Architect still writes it for a leg with none'],
   ['program_architect', 'Acceptance checks are not a leg\'s job — keep them out of leg objectives entirely',
     'ACCEPT-SELFCHECK (Run 9): "Validate against Acceptance checks 1, 3" in a leg objective made a leg self-assess and blocked the program'],
   ['program_architect', 'State what the leg must ACHIEVE, as its objective',

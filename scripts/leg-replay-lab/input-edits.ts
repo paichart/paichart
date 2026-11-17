@@ -29,7 +29,9 @@ import * as path from 'path';
 import { applyEdits, type EditSpec } from './edits';
 import type { Snapshot } from './snapshot';
 
-export const INPUT_EDIT_TARGETS = ['leg:description', 'author-task:description', 'reviewer-task:description'] as const;
+/** L-CS-K (2026-11-16, fixture read D3): a cell built on one stored leg for ANOTHER objective also needs the task TITLE and the stage
+ *  NAME the prompt renders — `author-task:title`, `author-stage:name` (same exactly-once ops; the children list follows the title). */
+export const INPUT_EDIT_TARGETS = ['leg:description', 'author-task:description', 'reviewer-task:description', 'author-task:title', 'author-stage:name'] as const;
 /** L-7 (PLATFORM-HELD-BYTES Stage B): `harvester-toolcall:<executionId>:<index>` edits ONE string leaf of a stored Harvester tool
  *  result BEFORE capture — the raw bytes the shipping capture (L-1) then holds, redacts (R10) and views (R9). The leaf is the one
  *  string in that result containing the anchor; it must be exactly one leaf and exactly one occurrence. */
@@ -39,6 +41,9 @@ export const HARVESTER_TOOLCALL_TARGET_RE = /^harvester-toolcall:([a-z0-9]{20,40
  *  prompt rebuild reads, and `author.task.inputContext`) — then re-reads each copy. It stands in for upstream text the Author would
  *  receive if the persist redactor had not recognised a secret (named in the manifest); it never edits a tool result. */
 export const AUTHOR_CHAINED_TARGET_RE = /^author-chained:([a-z0-9]{20,40})$/;
+/** L-CS-K (2026-11-16, X-INSCOPE re-plant): `author-chained-title:<executionId>` edits the chained entry's `taskTitle` (rendered as the
+ *  "### Previous Task: …" heading) in every copy — a cell re-planted for another objective must not keep the old objective in a heading. */
+export const AUTHOR_CHAINED_TITLE_TARGET_RE = /^author-chained-title:([a-z0-9]{20,40})$/;
 /** L-CS-N ADDENDUM (e) (2026-11-05, owner's over-block cell): `contract:interfaceContract` edits the leg's stored PROGRAM INTERFACE
  *  CONTRACT — in EVERY copy the snapshot carries (`leg.inputContext`, the one the platform's live-evidence fact reads; the Author's and
  *  the Reviewer's task row and frozen `exec.config.inputContext`, the ones their prompts render). Each op is an exactly-once replace on
@@ -52,29 +57,33 @@ export interface InputEditReport { file: string; edit: string; targets: Record<s
 export function snapshotWithInputEdits(dir: string, node: { id: string; inputEdits?: string }, snap: Snapshot): { snap: Snapshot; report: InputEditReport | null } {
   if (!node.inputEdits) return { snap, report: null };
   const spec: EditSpec = JSON.parse(fs.readFileSync(path.join(dir, node.inputEdits), 'utf8'));
-  const unknown = spec.appliesTo.filter((t) => !(INPUT_EDIT_TARGETS as readonly string[]).includes(t) && !HARVESTER_TOOLCALL_TARGET_RE.test(t) && !AUTHOR_CHAINED_TARGET_RE.test(t) && t !== CONTRACT_TARGET);
+  const unknown = spec.appliesTo.filter((t) => !(INPUT_EDIT_TARGETS as readonly string[]).includes(t) && !HARVESTER_TOOLCALL_TARGET_RE.test(t) && !AUTHOR_CHAINED_TARGET_RE.test(t) && !AUTHOR_CHAINED_TITLE_TARGET_RE.test(t) && t !== CONTRACT_TARGET);
   if (unknown.length) throw new Error(`${node.id}: input edit ${node.inputEdits} targets ${unknown.join(', ')} — allowed: ${INPUT_EDIT_TARGETS.join(', ')}`);
   if (!spec.appliesTo.length) throw new Error(`${node.id}: input edit ${node.inputEdits} targets nothing`);
   const copy: Snapshot = JSON.parse(JSON.stringify(snap));
   const targets: InputEditReport['targets'] = {};
-  const patch = (target: InputEditTarget, holder: Record<string, any> | null | undefined, what: string) => {
+  const patch = (target: InputEditTarget, holder: Record<string, any> | null | undefined, what: string, field: 'description' | 'title' | 'name' = 'description') => {
     if (!holder) throw new Error(`${node.id}: input edit targets ${target} but the snapshot has no ${what}`);
-    const before = typeof holder.description === 'string' ? holder.description : '';
+    const before = typeof holder[field] === 'string' ? holder[field] : '';
     const r = applyEdits(before, [spec], target);
     if (!r.applied.length) throw new Error(`${node.id}: input edit ${spec.id} did not apply to ${target}`);
-    holder.description = r.text;
+    holder[field] = r.text;
     targets[target] = { beforeChars: before.length, afterChars: r.text.length };
     // Keep the snapshot's children list consistent with the patched task row.
-    for (const c of copy.children ?? []) if (c.id === holder.id) c.description = r.text;
+    for (const c of copy.children ?? []) if (c.id === holder.id && field !== 'name') (c as any)[field] = r.text;
   };
   for (const t of spec.appliesTo as InputEditTarget[]) {
     const hm = HARVESTER_TOOLCALL_TARGET_RE.exec(t);
     if (hm) { targets[t] = patchHarvesterToolCall(copy, hm[1], Number(hm[2]), spec, t, node.id); continue; }
     const cm = AUTHOR_CHAINED_TARGET_RE.exec(t);
     if (cm) { targets[t] = patchAuthorChained(copy, cm[1], spec, t, node.id); continue; }
+    const ct = AUTHOR_CHAINED_TITLE_TARGET_RE.exec(t);
+    if (ct) { targets[t] = patchAuthorChained(copy, ct[1], spec, t, node.id, 'taskTitle'); continue; }
     if ((t as string) === CONTRACT_TARGET) { targets[t] = patchInterfaceContract(copy, spec, t, node.id); continue; }
     if (t === 'leg:description') patch(t, copy.leg, 'harness (leg) row');
     else if (t === 'author-task:description') patch(t, copy.author?.task, 'Author task');
+    else if (t === 'author-task:title') patch(t, copy.author?.task, 'Author task', 'title');
+    else if (t === 'author-stage:name') patch(t, (copy.author as any)?.stage, 'Author stage', 'name');
     else patch(t, copy.reviewer?.task, 'Reviewer task');
   }
   return { snap: copy, report: { file: node.inputEdits, edit: spec.id, targets } };
@@ -96,7 +105,10 @@ function patchHarvesterToolCall(copy: Snapshot, executionId: string, index: numb
     if (b?.exec?.id === executionId && typeof b.resultJson === 'string') holders.push({ name: `${role}.resultJson`, get: () => b.resultJson, set: (t) => { b.resultJson = t; } });
   }
   if (!holders.length) throw new Error(`${nodeId}: ${target} — no stored result.json for ${executionId} in the snapshot`);
-  const anchors = spec.ops.map((o) => o.old);
+  // L-CS-K (2026-11-16): an input-edit file may carry ops for several targets (op-level `appliesTo`); each target reads only ITS ops —
+  // applyEdits already filters them, the anchor walk and the re-read below did not (a leg op's text was demanded inside a tool call).
+  const ownOps = spec.ops.filter((x) => !x.appliesTo || x.appliesTo.includes(target));
+  const anchors = ownOps.map((o) => o.old);
   let sizes: { beforeChars: number; afterChars: number } | null = null;
   for (const h of holders) {
     const rj = JSON.parse(h.get());
@@ -133,7 +145,7 @@ function patchHarvesterToolCall(copy: Snapshot, executionId: string, index: numb
   // Re-read every copy: the plant must be what each copy now holds (a copy the walk missed would serve the unplanted bytes).
   for (const h of holders) {
     const res = JSON.stringify(JSON.parse(h.get()).toolCalls[index].result);
-    for (const o of spec.ops) {
+    for (const o of ownOps) {
       const enc = (t: string) => JSON.stringify(t).slice(1, -1);
       if (!o.new.includes(o.old) && res.includes(enc(o.old))) throw new Error(`${nodeId}: ${target} — after the edit, ${h.name} still holds the op's old text (the plant did not take)`);
       // The mirror check: the op's old text, if it is a JSON fragment, must not survive as a key/value in a structured mirror either.
@@ -183,7 +195,7 @@ function patchInterfaceContract(copy: Snapshot, spec: EditSpec, target: string, 
 
 /** L-NB-b: patch the chained entry's `finalResponse` in every copy of the Author's input context; refuse a copy that does not take
  *  the edit exactly once, and re-read every copy afterwards (LK11: a missed copy would render the unplanted text). */
-function patchAuthorChained(copy: Snapshot, executionId: string, spec: EditSpec, target: string, nodeId: string): { beforeChars: number; afterChars: number; copies: string[] } {
+function patchAuthorChained(copy: Snapshot, executionId: string, spec: EditSpec, target: string, nodeId: string, field: 'finalResponse' | 'taskTitle' = 'finalResponse'): { beforeChars: number; afterChars: number; copies: string[] } {
   const a: any = (copy as any).author;
   const holders: Array<{ name: string; ctx: () => any; save: (c: any) => void }> = [];
   if (a?.exec?.config?.inputContext && typeof a.exec.config.inputContext === 'object') holders.push({ name: 'author.exec.config.inputContext', ctx: () => a.exec.config.inputContext, save: (c) => { a.exec.config.inputContext = c; } });
@@ -199,17 +211,17 @@ function patchAuthorChained(copy: Snapshot, executionId: string, spec: EditSpec,
     const c = h.ctx();
     const e = Array.isArray(c?.chainedFrom) ? c.chainedFrom.find((x: any) => x?.executionId === executionId) : null;
     if (!e) { if (h.name === 'author.exec.config.inputContext') throw new Error(`${nodeId}: ${target} — no chained entry for ${executionId} in ${h.name}`); continue; }
-    if (typeof e.finalResponse !== 'string') throw new Error(`${nodeId}: ${target} — the chained entry carries no finalResponse (${h.name})`);
-    const r = applyEdits(e.finalResponse, [spec], target);
+    if (typeof e[field] !== 'string') throw new Error(`${nodeId}: ${target} — the chained entry carries no ${field} (${h.name})`);
+    const r = applyEdits(e[field], [spec], target);
     if (!r.applied.length) throw new Error(`${nodeId}: input edit ${spec.id} did not apply to ${target} (${h.name})`);
-    sizes = sizes ?? { beforeChars: e.finalResponse.length, afterChars: r.text.length };
-    e.finalResponse = r.text;
+    sizes = sizes ?? { beforeChars: e[field].length, afterChars: r.text.length };
+    e[field] = r.text;
     h.save(c);
     done.push(h.name);
   }
   for (const h of holders.filter((x) => done.includes(x.name))) {
-    const fr: string = h.ctx().chainedFrom.find((x: any) => x?.executionId === executionId).finalResponse;
-    for (const o of spec.ops) {
+    const fr: string = h.ctx().chainedFrom.find((x: any) => x?.executionId === executionId)[field];
+    for (const o of spec.ops.filter((x) => !x.appliesTo || x.appliesTo.includes(target))) {
       if (!o.new.includes(o.old) && fr.includes(o.old)) throw new Error(`${nodeId}: ${target} — after the edit, ${h.name} still holds the op's old text`);
       if (o.new && !fr.includes(o.new)) throw new Error(`${nodeId}: ${target} — after the edit, ${h.name} does not hold the op's new text`);
     }

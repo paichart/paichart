@@ -46,6 +46,8 @@ export function specLaneBlocks(specText: string): { lanes: Partial<Record<Lane, 
   const lanes: Partial<Record<Lane, LegDeviceSources>> = {};
   const lines: string[] = [];
   for (const b of r.blocks) {
+    // A Config sources block (kubernetes-gitops, 2026-11-16) is not a device lane: listed, never compared here (csk-contract-carried checks it).
+    if (b.grammar !== 'device') { lines.push(`  spec "${b.section}" line ${b.line}: config ${b.protocol}, ${b.resolution.state} (not a device lane; see csk-contract-carried)`); continue; }
     lines.push(`  spec "${b.section}" line ${b.line}: lane ${b.lane ?? '?'} (${b.laneSource}), ${describe(b.resolution)}`);
     if (!b.lane) { problems.push(`spec block at line ${b.line} has no lane`); continue; }
     if (b.resolution.state === 'parsed' && !lanes[b.lane]) lanes[b.lane] = b.resolution;
@@ -140,3 +142,43 @@ export function valueCardGitOnly(cards: ReadonlyArray<{ legId: string; card: str
   if (!cards.length) return { verdict: 'UNEXERCISED', lines: ['  no declared value leg with a pipeline-index.json'] };
   return { verdict: finding ? 'FINDING' : 'PASS', lines };
 }
+
+// csk-k8s-facts (2026-11-16): its first live run reported a false FINDING because it recomputed from the stored WRAPPER
+// `{ version, calls }` and compared with key order significant. Pure helpers, tested in test:canary-req-sources.
+/** The calls array of a stored `platformDriftCalls` record (`{ version, calls }`); a bare array is accepted as-is. */
+export const driftCallsOf = (rec: unknown): unknown => (isObj(rec) && Array.isArray(rec.calls) ? rec.calls : rec);
+/** JSON with object keys sorted, so a recompute and a stored fact compare by content, not by key order. */
+export const canonJson = (o: unknown): string => JSON.stringify(o, (_k, v) => (isObj(v) ? Object.fromEntries(Object.entries(v).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))) : v));
+
+// arch-text-2 (2026-11-17, Architect step-back text: descriptors only for a leg without a sources block; Git-file fetch route). The
+// Program Architect is not lab-replayable, so these are its live controls. Pure, tested both ways in test:canary-req-sources (AT1-AT6).
+export interface ArchDescriptorLeg { id: string; fact: unknown }
+/** PASS when the platform had to remove or replace nothing (the Architect wrote no descriptor it should not); FINDING otherwise. */
+export function archDescriptorsRespected(legs: readonly ArchDescriptorLeg[]): { verdict: 'PASS' | 'FINDING' | 'UNEXERCISED'; lines: string[] } {
+  const lines: string[] = []; let finding = false, seen = 0;
+  for (const l of legs) {
+    if (!isObj(l.fact)) { lines.push(`  leg ${l.id}: no serviceDescriptors fact (created before the derivation)`); continue; }
+    seen++;
+    const removed = Array.isArray(l.fact.removed) ? l.fact.removed : []; const replaced = Array.isArray(l.fact.replaced) ? l.fact.replaced : [];
+    lines.push(`  leg ${l.id}: derived=${JSON.stringify(l.fact.derived ?? [])} removed=${JSON.stringify(removed)} replaced=${JSON.stringify(replaced)}`);
+    if (removed.length || replaced.length) { finding = true; lines.push('    the platform corrected an Architect descriptor: FINDING (the text did not hold)'); }
+  }
+  if (!seen) return { verdict: 'UNEXERCISED', lines };
+  return { verdict: finding ? 'FINDING' : 'PASS', lines };
+}
+/** PASS when the Architect read raw.githubusercontent.com URLs through the Git file service and made no scrape_page call for one. */
+export function archFetchRoute(calls: readonly unknown[]): { verdict: 'PASS' | 'FINDING' | 'UNEXERCISED'; lines: string[] } {
+  const argObj = (a: unknown): Record<string, unknown> => { if (isObj(a)) return a; if (typeof a === 'string') { try { const j = JSON.parse(a); return isObj(j) ? j : {}; } catch { return {}; } } return {}; };
+  let scrapes = 0, gitReads = 0;
+  for (const c of calls) {
+    if (!isObj(c)) continue;
+    const a = argObj(c.arguments); const tool = String(a.tool ?? c.tool ?? '');
+    const inner = argObj(a.arguments);
+    if (tool === 'scrape_page' && /raw\.githubusercontent\.com/.test(String(inner.url ?? ''))) scrapes++;
+    if (tool === 'get_file_contents') gitReads++;
+  }
+  const lines = [`  scrape_page calls on raw.githubusercontent.com: ${scrapes}; get_file_contents calls: ${gitReads}`];
+  if (!scrapes && !gitReads) return { verdict: 'UNEXERCISED', lines };
+  return { verdict: scrapes ? 'FINDING' : 'PASS', lines };
+}
+

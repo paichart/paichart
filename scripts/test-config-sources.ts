@@ -217,12 +217,12 @@ test('MIX1 disjoint tables: no protocol in both, no contract key in both', () =>
   }
 });
 test('MIX2 the plan-gate fact is derived from BOTH tables, never retyped; every read key reads as read in its own field', () => {
-  eq(RESOLVER_VERSION, 4, 'resolver version: ');
+  eq(RESOLVER_VERSION, 5, 'resolver version: '); // 5 = ARCHITECT-COMPOSED-DESCRIPTOR (serviceDescriptors derived, 2026-11-17)
   eq([...DEVICE_SOURCES_READ_KEYS].sort(), Object.values(DEVICE_SOURCE_LANES).map((x) => x.contractKey).sort(), 'device read keys: ');
   eq([...CONFIG_SOURCES_READ_KEYS].sort(), CONFIG_SOURCE_PROTOCOLS.map((p) => CONFIG_SOURCE_LANES[p].contractKey).sort(), 'config read keys: ');
   eq(deviceSourcesKeysOf({ deviceSources: Object.fromEntries(DEVICE_SOURCES_READ_KEYS.map((k) => [k, 'x'])) })?.notReadKeys, [], 'device: ');
   eq(configSourcesKeysOf({ configSources: Object.fromEntries(CONFIG_SOURCES_READ_KEYS.map((k) => [k, 'x'])) })?.notReadKeys, [], 'config: ');
-  eq(INTERFACE_CONTRACT_SOURCE_KEYS.slice(-4), ['deviceSourcesKeys', 'configSourcesKeys', 'resolverVersion', 'at'], 'fact key order: ');
+  eq(INTERFACE_CONTRACT_SOURCE_KEYS.slice(-5), ['deviceSourcesKeys', 'configSourcesKeys', 'serviceDescriptors', 'resolverVersion', 'at'], 'fact key order: ');
   eq(configSourcesKeysOf({ deviceSources: { 'network-provisioning': 'x' } }), null, 'no configSources ⇒ null: ');
   eq(configSourcesKeysOf({ configSources: 'lines' })?.shape, 'not-object');
 });

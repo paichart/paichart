@@ -1,0 +1,642 @@
+{
+ "source": "production Kubernetes Harvester execution cmwj3xa7v007dyxpd6b9i1gxn (root cmwj3dqfq000kyxpcwuqve31j), 2026-11-16; toolCalls as result.json stored them, service results trimmed (indices preserved)",
+ "executionId": "cmwj3xa7v007dyxpd6b9i1gxn",
+ "declaredLines": [
+  "sample-workloads: git-file — service github-service ; paichart/paichart-configs/k8s/sample-workloads.yaml",
+  "cluster: live-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json"
+ ],
+ "storedFacts": {
+  "configSourceReads": {
+   "items": [
+    {
+     "ref": null,
+     "kind": "git-file",
+     "path": "k8s/sample-workloads.yaml",
+     "read": {
+      "state": "read",
+      "toolCallIndex": 0
+     },
+     "label": "sample-workloads",
+     "service": "github-service"
+    },
+    {
+     "kind": "live-read",
+     "read": {
+      "state": "not-read"
+     },
+     "label": "cluster",
+     "service": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json"
+    }
+   ],
+   "checked": true,
+   "notRead": 1,
+   "version": 1,
+   "declaration": {
+    "lines": 2,
+    "state": "parsed",
+    "source": "contract",
+    "grammarVersion": 1
+   },
+   "undeclaredGitFileReads": 0
+  },
+  "liveEvidence": {
+   "lane": "config",
+   "items": 2,
+   "point": "harvester",
+   "checked": true,
+   "summary": "some-not-read",
+   "version": 1,
+   "gitFiles": [
+    {
+     "label": "sample-workloads",
+     "gitRead": "read"
+    }
+   ],
+   "liveRead": 0,
+   "supplied": 0,
+   "declaration": {
+    "lines": 2,
+    "state": "parsed",
+    "source": "contract",
+    "grammarVersion": 1
+   },
+   "liveNotRead": [
+    {
+     "label": "cluster",
+     "state": "not-read"
+    }
+   ],
+   "gitFileLines": 1,
+   "liveDeclared": 1,
+   "liveReadItems": [],
+   "suppliedItems": []
+  },
+  "gitLiveDrift": {
+   "files": [
+    {
+     "path": "k8s/sample-workloads.yaml",
+     "label": "sample-workloads",
+     "state": "not-checked",
+     "reason": "live-read-service-unresolved"
+    }
+   ],
+   "point": "harvester",
+   "method": "k8s-declared-field-compare",
+   "checked": true,
+   "version": 1,
+   "filesCompared": 0,
+   "filesNotChecked": 1
+  },
+  "platformDriftCalls": {
+   "calls": [
+    {
+     "path": "k8s/sample-workloads.yaml",
+     "label": "sample-workloads",
+     "outcome": "live-read-service-unresolved"
+    }
+   ],
+   "version": 1
+  }
+ },
+ "toolCalls": [
+  {
+   "tool": "services",
+   "turn": 1,
+   "result": {
+    "_meta": {
+     "toolName": "services",
+     "serverName": "paichart-embedded-mcp",
+     "executionTime": 1794824101440
+    },
+    "content": [
+     {
+      "data": {
+       "tool": "get_file_contents",
+       "_meta": {
+        "tool": "services",
+        "sdkNative": true,
+        "timestamp": "2026-11-16T10:15:01.423Z"
+       },
+       "result": {
+        "content": [
+         {
+          "text": "[platform: the file source status line was elided at persist (it carries a blob id)]",
+          "type": "text"
+         },
+         {
+          "type": "resource",
+          "resource": {
+           "uri": "repo://paichart/paichart-configs/sha/352cb6309382ecc04aae6d8ddbd2f8f439ca392a/contents/k8s/sample-workloads.yaml",
+           "text": "# Trading namespace: the orders-api workload, its service, configuration and ingress policy.\n# Applied with: kubectl apply -f sample-workloads.yaml\napiVersion: v1\nkind: Namespace\nmetadata:\n  name: trading\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: orders-api\n  namespace: trading\n  labels: { app: orders-api, tier: backend }\nspec:\n  replicas: 2\n  selector:\n    matchLabels: { app: orders-api }\n  template:\n    metadata:\n      labels: { app: orders-api, tier: backend }\n    spec:\n      containers:\n        - name: orders-api\n          image: nginx:1.27-alpine\n          ports: [{ containerPort: 80 }]\n          # NB: no resources.requests/limits set — the target gap for the demo change.\n          env:\n            - name: ORDERS_FEED_URL\n              value: \"http://market-data.trading.svc.cluster.local:8080\"\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: orders-api\n  namespace: trading\nspec:\n  selector: { app: orders-api }\n  ports: [{ port: 80, targetPort: 80 }]\n---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: orders-api-config\n  namespace: trading\ndata:\n  LOG_LEVEL: \"info\"\n  FEED_TIMEOUT_MS: \"2500\"\n---\napiVersion: networking.k8s.io/v1\nkind: NetworkPolicy\nmetadata:\n  name: orders-api-ingress\n  namespace: trading\nspec:\n  podSelector:\n    matchLabels: { app: orders-api }\n  policyTypes: [Ingress]\n  ingress:\n    - from:\n        - podSelector:\n            matchLabels: { tier: frontend }\n      ports:\n        - { protocol: TCP, port: 80 }\n",
+           "mimeType": "text/plain; charset=utf-8"
+          }
+         }
+        ]
+       },
+       "success": true,
+       "metadata": {
+        "endpoint": "http://localhost:3110/mcp",
+        "timestamp": "2026-11-16T10:15:01.423Z",
+        "sourceUser": "owner@example.invalid",
+        "executionTime": 552,
+        "timeoutClamped": false,
+        "targetServiceId": "github-service",
+        "effectiveTimeout": 30000,
+        "maxExecutionTime": 30000,
+        "requestedTimeout": null
+       },
+       "arguments": {
+        "ref": "main",
+        "path": "k8s/sample-workloads.yaml",
+        "repo": "paichart-configs",
+        "owner": "paichart"
+       },
+       "nextSteps": [
+        "✅ Service call completed",
+        "📝 Report results: perform(action: \"task.comment\", taskId: '...', comment: '| Tool | Status | Key Data | Notes |\\n|------|--------|----------|-------|')",
+        "Make another call (same service): services(action: \"call\", targetService: 'github-service', tool: '...', arguments: {...})",
+        "New service workflow: registry(action: \"tools\", service_name: '...') → services(action: \"health\", service_name: '...') → services(action: \"call\")"
+       ],
+       "targetService": "github-service"
+      },
+      "type": "data",
+      "annotations": {
+       "dataType": "object",
+       "itemCount": 8
+      }
+     }
+    ],
+    "isError": false
+   },
+   "server": "paichart-embedded-mcp",
+   "success": true,
+   "arguments": {
+    "tool": "get_file_contents",
+    "action": "call",
+    "arguments": "{\"owner\": \"paichart\", \"repo\": \"paichart-configs\", \"path\": \"k8s/sample-workloads.yaml\", \"ref\": \"main\"}",
+    "targetService": "github-service"
+   },
+   "rewritten": false,
+   "sanitized": false,
+   "timestamp": "2026-11-16T10:15:01.441Z",
+   "durationMs": 580,
+   "resultChars": 3779,
+   "rewriteClasses": [],
+   "neutralizedCount": 0,
+   "strippedControlChars": 0,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "turn": 1,
+   "result": {
+    "content": [
+     {
+      "type": "data",
+      "data": {
+       "tool": "scrape_page",
+       "success": true,
+       "targetService": "Browser Automation Service",
+       "arguments": {
+        "url": "https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json",
+        "selectors": {
+         "descriptor": "pre"
+        }
+       },
+       "metadata": {
+        "targetServiceId": "browser-automation-service"
+       },
+       "result": {
+        "content": [
+         {
+          "type": "text",
+          "text": "(trimmed in fixture)"
+         }
+        ]
+       }
+      }
+     }
+    ],
+    "isError": false
+   },
+   "server": "paichart-embedded-mcp",
+   "success": true,
+   "arguments": {
+    "tool": "scrape_page",
+    "action": "call",
+    "arguments": "{\"url\": \"https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json\", \"selectors\": {\"descriptor\": \"pre\"}}",
+    "targetService": "browser-automation-service"
+   },
+   "rewritten": false,
+   "sanitized": false,
+   "timestamp": "2026-11-16T10:15:02.510Z",
+   "durationMs": 1069,
+   "resultChars": 9584,
+   "rewriteClasses": [],
+   "neutralizedCount": 0,
+   "strippedControlChars": 0,
+   "resultTruncatedForLlm": true
+  },
+  {
+   "tool": "read_more",
+   "turn": 2,
+   "result": "(trimmed in fixture)",
+   "success": true,
+   "arguments": {
+    "ref": "1",
+    "offset": 8000
+   },
+   "timestamp": "2026-11-16T10:15:05.572Z",
+   "durationMs": 0,
+   "resultChars": 1644,
+   "persistLeadChars": 1,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "registry",
+   "turn": 3,
+   "result": {
+    "_meta": {
+     "toolName": "registry",
+     "serverName": "paichart-embedded-mcp",
+     "executionTime": 1794824111811
+    },
+    "content": [
+     {
+      "text": "❌ registry validation failed: description: description is required for registry(action: \"register\")",
+      "type": "text"
+     }
+    ],
+    "isError": true
+   },
+   "server": "paichart-embedded-mcp",
+   "success": true,
+   "arguments": {
+    "name": "k8s-rig-readonly",
+    "action": "register",
+    "category": "automation",
+    "endpoint": "https://k8s-lab.paichart.app/mcp",
+    "capabilities": "{\"tools\": [\"list_resources\", \"list_resource_names\", \"get_resource\", \"list_secret_names\", \"compare_declared_fields\"]}"
+   },
+   "timestamp": "2026-11-16T10:15:11.811Z",
+   "durationMs": 4,
+   "resultChars": 317,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "registry",
+   "turn": 4,
+   "result": {
+    "_meta": {
+     "toolName": "registry",
+     "serverName": "paichart-embedded-mcp",
+     "executionTime": 1794824115021
+    },
+    "content": [
+     {
+      "data": {
+       "_meta": {
+        "tool": "registry",
+        "sdkNative": true,
+        "timestamp": "2026-11-16T10:15:15.021Z"
+       },
+       "owner": "owner@example.invalid",
+       "status": "ACTIVE",
+       "message": "Service 'k8s-rig-readonly' registered successfully",
+       "success": true,
+       "endpoint": "https://k8s-lab.paichart.app/mcp",
+       "nextSteps": [
+        "✅ Your service is now discoverable via services(action: \"discover\")",
+        "✅ Other users can call your service via services(action: \"call\")",
+        "Monitor performance: services(action: 'health', service_name: 'k8s-rig-readonly')",
+        "Update configuration: registry(action: 'update', service_name: 'k8s-rig-readonly', ...)"
+       ],
+       "serviceId": "cmwj3xqh7008hyxpdkk689y2q",
+       "serviceName": "k8s-rig-readonly",
+       "verification": {
+        "action": "Try discovering your service",
+        "example": "services(action: \"discover\", capability: \"tools\")"
+       }
+      },
+      "type": "data",
+      "annotations": {
+       "dataType": "object",
+       "itemCount": 10
+      }
+     }
+    ],
+    "isError": false
+   },
+   "server": "paichart-embedded-mcp",
+   "success": true,
+   "arguments": {
+    "name": "k8s-rig-readonly",
+    "action": "register",
+    "category": "automation",
+    "endpoint": "https://k8s-lab.paichart.app/mcp",
+    "description": "Read-only Kubernetes state harvest for a kind cluster: list_resources / list_resource_names / get_resource (allowlisted kinds) + list_secret_names (metadata only, never values) + compare_declared_fields (differing declared field paths, never values; get only). Read-only by construction.",
+    "capabilities": "{\"tools\": [\"list_resources\", \"list_resource_names\", \"get_resource\", \"list_secret_names\", \"compare_declared_fields\"]}"
+   },
+   "timestamp": "2026-11-16T10:15:15.021Z",
+   "durationMs": 24,
+   "resultChars": 1326,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "turn": 5,
+   "result": {
+    "content": [
+     {
+      "type": "data",
+      "data": {
+       "tool": "list_resource_names",
+       "success": true,
+       "targetService": "k8s-rig-readonly",
+       "arguments": {
+        "namespace": "trading",
+        "resourceType": "pods",
+        "labelSelector": "app.kubernetes.io/component=telemetry-receiver"
+       },
+       "metadata": {
+        "targetServiceId": "cmwj3xqh7008hyxpdkk689y2q"
+       },
+       "result": {
+        "content": [
+         {
+          "type": "text",
+          "text": "(trimmed in fixture)"
+         }
+        ]
+       }
+      }
+     }
+    ],
+    "isError": false
+   },
+   "server": "paichart-embedded-mcp",
+   "success": true,
+   "arguments": {
+    "tool": "list_resource_names",
+    "action": "call",
+    "arguments": "{\"resourceType\": \"pods\", \"namespace\": \"trading\", \"labelSelector\": \"app.kubernetes.io/component=telemetry-receiver\"}",
+    "targetService": "k8s-rig-readonly"
+   },
+   "rewritten": false,
+   "sanitized": false,
+   "timestamp": "2026-11-16T10:15:24.505Z",
+   "durationMs": 1287,
+   "resultChars": 2129,
+   "rewriteClasses": [],
+   "neutralizedCount": 0,
+   "strippedControlChars": 0,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "turn": 5,
+   "result": {
+    "content": [
+     {
+      "type": "data",
+      "data": {
+       "tool": "list_resource_names",
+       "success": true,
+       "targetService": "k8s-rig-readonly",
+       "arguments": {
+        "namespace": "trading",
+        "resourceType": "networkpolicies"
+       },
+       "metadata": {
+        "targetServiceId": "cmwj3xqh7008hyxpdkk689y2q"
+       },
+       "result": {
+        "content": [
+         {
+          "type": "text",
+          "text": "(trimmed in fixture)"
+         }
+        ]
+       }
+      }
+     }
+    ],
+    "isError": false
+   },
+   "server": "paichart-embedded-mcp",
+   "success": true,
+   "arguments": {
+    "tool": "list_resource_names",
+    "action": "call",
+    "arguments": "{\"resourceType\": \"networkpolicies\", \"namespace\": \"trading\"}",
+    "targetService": "k8s-rig-readonly"
+   },
+   "rewritten": false,
+   "sanitized": false,
+   "timestamp": "2026-11-16T10:15:24.739Z",
+   "durationMs": 234,
+   "resultChars": 2251,
+   "rewriteClasses": [],
+   "neutralizedCount": 0,
+   "strippedControlChars": 0,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "turn": 5,
+   "result": {
+    "content": [
+     {
+      "type": "data",
+      "data": {
+       "tool": "list_resource_names",
+       "success": true,
+       "targetService": "k8s-rig-readonly",
+       "arguments": {
+        "namespace": "trading",
+        "resourceType": "limitranges"
+       },
+       "metadata": {
+        "targetServiceId": "cmwj3xqh7008hyxpdkk689y2q"
+       },
+       "result": {
+        "content": [
+         {
+          "type": "text",
+          "text": "(trimmed in fixture)"
+         }
+        ]
+       }
+      }
+     }
+    ],
+    "isError": false
+   },
+   "server": "paichart-embedded-mcp",
+   "success": true,
+   "arguments": {
+    "tool": "list_resource_names",
+    "action": "call",
+    "arguments": "{\"resourceType\": \"limitranges\", \"namespace\": \"trading\"}",
+    "targetService": "k8s-rig-readonly"
+   },
+   "rewritten": false,
+   "sanitized": false,
+   "timestamp": "2026-11-16T10:15:24.976Z",
+   "durationMs": 236,
+   "resultChars": 2072,
+   "rewriteClasses": [],
+   "neutralizedCount": 0,
+   "strippedControlChars": 0,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "turn": 5,
+   "result": {
+    "content": [
+     {
+      "type": "data",
+      "data": {
+       "tool": "list_resource_names",
+       "success": true,
+       "targetService": "k8s-rig-readonly",
+       "arguments": {
+        "namespace": "trading",
+        "resourceType": "resourcequotas"
+       },
+       "metadata": {
+        "targetServiceId": "cmwj3xqh7008hyxpdkk689y2q"
+       },
+       "result": {
+        "content": [
+         {
+          "type": "text",
+          "text": "(trimmed in fixture)"
+         }
+        ]
+       }
+      }
+     }
+    ],
+    "isError": false
+   },
+   "server": "paichart-embedded-mcp",
+   "success": true,
+   "arguments": {
+    "tool": "list_resource_names",
+    "action": "call",
+    "arguments": "{\"resourceType\": \"resourcequotas\", \"namespace\": \"trading\"}",
+    "targetService": "k8s-rig-readonly"
+   },
+   "rewritten": false,
+   "sanitized": false,
+   "timestamp": "2026-11-16T10:15:25.208Z",
+   "durationMs": 232,
+   "resultChars": 2081,
+   "rewriteClasses": [],
+   "neutralizedCount": 0,
+   "strippedControlChars": 0,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "turn": 5,
+   "result": {
+    "content": [
+     {
+      "type": "data",
+      "data": {
+       "tool": "list_resource_names",
+       "success": true,
+       "targetService": "k8s-rig-readonly",
+       "arguments": {
+        "namespace": "trading",
+        "resourceType": "poddisruptionbudgets"
+       },
+       "metadata": {
+        "targetServiceId": "cmwj3xqh7008hyxpdkk689y2q"
+       },
+       "result": {
+        "content": [
+         {
+          "type": "text",
+          "text": "(trimmed in fixture)"
+         }
+        ]
+       }
+      }
+     }
+    ],
+    "isError": false
+   },
+   "server": "paichart-embedded-mcp",
+   "success": true,
+   "arguments": {
+    "tool": "list_resource_names",
+    "action": "call",
+    "arguments": "{\"resourceType\": \"poddisruptionbudgets\", \"namespace\": \"trading\"}",
+    "targetService": "k8s-rig-readonly"
+   },
+   "rewritten": false,
+   "sanitized": false,
+   "timestamp": "2026-11-16T10:15:25.652Z",
+   "durationMs": 444,
+   "resultChars": 2099,
+   "rewriteClasses": [],
+   "neutralizedCount": 0,
+   "strippedControlChars": 0,
+   "resultTruncatedForLlm": false
+  },
+  {
+   "tool": "services",
+   "turn": 6,
+   "result": {
+    "content": [
+     {
+      "type": "data",
+      "data": {
+       "tool": "get_resource",
+       "success": true,
+       "targetService": "k8s-rig-readonly",
+       "arguments": {
+        "name": "orders-api-ingress",
+        "namespace": "trading",
+        "resourceType": "networkpolicies"
+       },
+       "metadata": {
+        "targetServiceId": "cmwj3xqh7008hyxpdkk689y2q"
+       },
+       "result": {
+        "content": [
+         {
+          "type": "text",
+          "text": "(trimmed in fixture)"
+         }
+        ]
+       }
+      }
+     }
+    ],
+    "isError": false
+   },
+   "server": "paichart-embedded-mcp",
+   "success": true,
+   "arguments": {
+    "tool": "get_resource",
+    "action": "call",
+    "arguments": "{\"resourceType\": \"networkpolicies\", \"namespace\": \"trading\", \"name\": \"orders-api-ingress\"}",
+    "targetService": "k8s-rig-readonly"
+   },
+   "rewritten": false,
+   "sanitized": false,
+   "timestamp": "2026-11-16T10:15:30.068Z",
+   "durationMs": 268,
+   "resultChars": 4678,
+   "rewriteClasses": [],
+   "neutralizedCount": 0,
+   "strippedControlChars": 0,
+   "resultTruncatedForLlm": false
+  }
+ ]
+}

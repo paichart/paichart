@@ -80,6 +80,15 @@ async function planGate(tx: Tx, gate: T, architect: T) {
     line(m.requiresInterfaceContract === true && !!ic, `      holds the interface contract (source: ${String(src.source ?? src.arm ?? '—')})`);
     const dsKey = deviceSourceContractKeyOf(tok), ds = ic && isObj(ic.deviceSources) ? ic.deviceSources : null;
     if (dsKey && ds) line(ds[dsKey] !== undefined || null, `      Device sources for this leg (key ${dsKey}): ${ds[dsKey] !== undefined ? 'present' : 'none — the leg reads no Git file or device by declaration; check that is intended'}`);
+    // ARCHITECT-COMPOSED-DESCRIPTOR (2026-11-17): what the platform did to the plan's serviceDescriptors when it stored this leg's
+    // contract (resolver v5+). A FACT: derived = taken from the declared read line; removed / replaced = the plan's value was not one.
+    const sdf = isObj(src.serviceDescriptors) ? (src.serviceDescriptors as Record<string, unknown>) : null;
+    if (sdf) {
+      const list = (v: unknown) => (Array.isArray(v) ? v.map((x) => (isObj(x) ? `${String(x.token)} (${String(x.reason)})` : String(x))).join(', ') : '') || 'none';
+      const unk = Array.isArray(sdf.unknownKeys) && sdf.unknownKeys.length > 0;
+      line(sdf.failed === true || unk ? false : null, `      service descriptors (platform-derived): from the read lines ${list(sdf.derived)} · replaced ${list(sdf.replaced)} · removed ${list(sdf.removed)}`
+        + `${unk ? ` · NOT a protocol name, left as written: ${list(sdf.unknownKeys)}` : ''}${sdf.failed === true ? ' · derivation FAILED — the plan\'s values were stored as written' : ''}`);
+    }
     if (kind === 'CHANGE') line(repos.length > 0 || null, `      config files named in its contract: ${repos.length ? repos.join(' · ') : 'none (a service-held or device leg — check its descriptor)'}`);
   }
   const deps = await tx.$queryRaw<Array<{ taskId: string; dependsOnId: string }>>`SELECT "taskId", "dependsOnId" FROM task_dependencies WHERE "taskId" = ANY(${siblings.map(s => s.id)})`;

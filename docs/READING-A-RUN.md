@@ -77,6 +77,9 @@ Where you see them:
 | **editDiff / reviewedEditDiff** | the Reviewer was shown the platform's own diff of the edited file, not the Author's description of it | that the Reviewer read every line (see R4 in the lab record) | the quality gate (`reviewerSaw: rendered`) |
 | **qualityGate.heldEdit** (`applied, inScope, forced: false`) | the package's kept-file edits applied, sit inside the leg's scope, and the Reviewer saw them | — | forces needs-revision if any of this fails |
 | **deviceSourceReads / gitDeviceComparison** (network) | each switch was read from its declared source; where both a Git file and the device exist, where they differ | which copy is right | the network Architect and Reviewer |
+| **configSourceReads / liveEvidence** (Kubernetes) | each `## Config sources` line was read (`all-read`, `some-not-read`, `git-only`). `resolvedByEndpoint` on a line means the Harvester registered your service by hand and pAIchart matched it to the declared descriptor by its address | that what was read is current | the Kubernetes Architect and Reviewer |
+| **gitLiveDrift — the drift fact** (Kubernetes) | pAIchart's own comparison of each kept file with the live cluster: *compared — no differences / differences / with gaps*, or *not checked* with a reason; differing field paths, never values | which side is right, or why it differs | the Kubernetes Architect (in-scope reconciled, out-of-scope stops the leg) and Reviewer |
+| **serviceDescriptors** (plan, `interfaceContractSource`) | which leg descriptors pAIchart derived from the sources blocks, and anything it replaced or removed from the plan | — | every leg; shown at the plan gate |
 
 ### Facts about values — is the number right, and used unchanged?
 

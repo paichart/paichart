@@ -76,24 +76,34 @@ def approver_marks(text):
 
 def spec_facts(text):
     """Devices, Git files, service addresses and CIDRs the spec states. Sources lines are read inside fenced blocks."""
+    # A fenced block is a Device sources block (network: each label is a DEVICE) or a Config sources block (Kubernetes: each
+    # label names a FILE or the cluster, never a device). Both declare Git files and service addresses, which are checked alike.
     devices, git_files, services = set(), set(), set()
-    in_fence = False
+    in_fence, block, source_lines = False, None, 0
     for line in text.splitlines():
         if line.strip().startswith('```'):
-            in_fence = not in_fence
+            in_fence, block = not in_fence, None
             continue
         if not in_fence:
+            continue
+        if re.match(r'^\s*##\s+Config sources\s*$', line):
+            block = 'config'
+            continue
+        if re.match(r'^\s*##\s+Device sources\s*$', line):
+            block = 'device'
             continue
         m = SOURCE_LINE.match(line)
         if not m:
             continue
+        source_lines += 1
         device, kind, service, locator = m.groups()
-        devices.add(device)
+        if block != 'config':
+            devices.add(device)
         if service.startswith('http'):
             services.add(service)
         if kind == 'git-file' and locator:
             git_files.add(locator.split('@')[0].strip())
-    return {'devices': devices, 'git_files': git_files, 'services': services,
+    return {'devices': devices, 'git_files': git_files, 'services': services, 'source_lines': source_lines,
             'cidrs': set(CIDR.findall(text)), 'urls': set(URL.findall(text))}
 
 
@@ -121,8 +131,8 @@ def compare(spec_text, topo_text):
     strings = [(p, k, v) for p, k, v in scalars if isinstance(v, str)]
     all_text = '\n'.join(v for _, _, v in strings)
 
-    if not spec['devices']:
-        notes.append('the spec has no Device sources line inside a fenced block: device, file and service checks were not run')
+    if not spec['source_lines']:
+        notes.append('the spec has no sources line inside a fenced block: device, file and service checks were not run')
 
     # 1. devices
     topo_devices = set()
@@ -146,14 +156,14 @@ def compare(spec_text, topo_text):
         for f in sorted(spec['git_files'] - topo_files):
             warnings.append(f'Git file "{f}" is declared in the spec but not listed under configRepo in the topology')
         for f in sorted(topo_files - spec['git_files']):
-            warnings.append(f'Git file "{f}" is listed in the topology but no Device sources line in the spec declares it')
+            warnings.append(f'Git file "{f}" is listed in the topology but no sources line in the spec declares it')
     elif spec['git_files']:
         notes.append('the topology has no configRepo object: Git file paths were not compared')
 
     # 3. service addresses
     topo_urls = set(URL.findall(all_text))
     for u in sorted(spec['services'] - topo_urls):
-        warnings.append(f'service address {u} is in a Device sources block but nowhere in the topology')
+        warnings.append(f'service address {u} is in a sources block but nowhere in the topology')
     for u in sorted(topo_urls - spec['urls']):
         warnings.append(f'address {u} is in the topology but nowhere in the spec')
 
@@ -236,6 +246,17 @@ def self_test():
     cases.append(('an address inside a URL is not a bare host address', len(run(t)[1]) == 1))
     gates = SELF_SPEC + '| gate | approves | approver |\n|---|---|---|\n| plan | the plan | Dana W, dana@example.com |\n| change | the change | Sam Ortega |\n'
     cases.append(('an approver with no email warns, one with an email does not', len(run(SELF_TOPO, gates)[1]) == 1))
+    # Config sources (Kubernetes): labels are files and the cluster, never devices; their Git files and services are still checked.
+    k8s = SELF_SPEC + '```\n## Config sources\nworkloads: git-file \u2014 service github-service ; org/repo/k8s/w.yaml\n' \
+        'cluster: live-read \u2014 service https://example.test/k.json\n```\n'
+    tk = json.loads(json.dumps(SELF_TOPO)); tk['configRepo']['paths'] = ['base/sw1.cfg', 'k8s/w.yaml']
+    tk['readOnlyServices']['clusterDescriptorUrl'] = 'https://example.test/k.json'
+    cases.append(('Config sources labels are not read as devices', run(tk, k8s) == ([], [], [])))
+    tk2 = json.loads(json.dumps(tk)); tk2['configRepo']['paths'] = ['base/sw1.cfg']
+    cases.append(('a Config sources Git file missing from the topology still warns', len(run(tk2, k8s)[1]) == 1))
+    k8s_only = '# t\n```\n## Config sources\nworkloads: git-file \u2014 service github-service ; org/repo/k8s/w.yaml\n```\n'
+    tk3 = {'configRepo': {'owner': 'org', 'repo': 'repo', 'paths': ['k8s/w.yaml']}}
+    cases.append(('a Kubernetes-only spec is checked (no "no sources line" note)', run(tk3, k8s_only) == ([], [], [])))
     failed = [name for name, ok in cases if not ok]
     for name, ok in cases:
         print(('PASS ' if ok else 'FAIL ') + name)

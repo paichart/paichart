@@ -7,12 +7,15 @@
  *   - a service declared BY NAME matches the call's RESOLVED service name (the gateway envelope's `data.targetService` — the row
  *     name, never the caller's spelling);
  *   - a service declared BY DESCRIPTOR URL matches the service THIS execution registered from exactly that URL (a successful
- *     `registry register` with `descriptorUrl` equal to the declared string; its result names the row id and name). Registered
- *     elsewhere, or not at all ⇒ that declaration resolves to nothing, and is named (`unresolvedServices`) — never guessed.
+ *     `registry register` with `descriptorUrl` equal to the declared string; its result names the row id and name) — or, since
+ *     DESCRIPTOR-REGISTRATION-ROUTE (2026-11-16), registered BY HAND at the endpoint the platform's table lists for that URL
+ *     (`registrationsByDescriptorUrl`, rule there). Registered elsewhere, or not at all ⇒ that declaration resolves to nothing, and
+ *     is named (`unresolvedServices`) — never guessed.
  * Anything short of a parsed declaration holds nothing on the device lane: `refuse` with the named reason.
  */
 import type { LegDeviceSourcesResolution } from '../device-sources-read';
 import { assertNeverKind } from '../device-sources';
+import { DECLARED_DESCRIPTOR_ENDPOINTS, descriptorUrlByEndpoint, normalisedEndpoint } from './declared-descriptor-endpoints';
 
 export type DeviceReadRefusal = 'device-sources-absent' | 'device-sources-unparseable' | 'device-sources-conflict' | 'device-sources-unresolved'
   // push 2 (O-2): the declaration that governs is the immutable snapshot taken at the leg's first execution (device-sources-read.ts)
@@ -58,13 +61,29 @@ function argsOf(raw: unknown): Obj | null {
   return null;
 }
 
-/** URL → the rows this execution registered from it (successful `registry register` calls only). */
-export function registrationsByDescriptorUrl(records: readonly unknown[]): Map<string, Array<{ serviceId: string | null; serviceName: string | null }>> {
-  const out = new Map<string, Array<{ serviceId: string | null; serviceName: string | null }>>();
+/** How a declared descriptor URL was tied to a registered row (a fact): `descriptor-url` — registered WITH that `descriptorUrl`;
+ *  `endpoint` — registered by hand (no `descriptorUrl`) at the endpoint the platform's table says that URL declares. */
+export type DescriptorRegistrationRoute = 'descriptor-url' | 'endpoint';
+export interface DescriptorRegistration { serviceId: string | null; serviceName: string | null; resolvedBy: DescriptorRegistrationRoute }
+
+/**
+ * URL → the rows this execution registered for it (successful `registry register` calls only). THE ONE resolver of a declared
+ * descriptor URL — capture scope, deviceSourceReads, configSourceReads and the platform drift call all read it; never a variant.
+ *   1. `descriptor-url` (unchanged): the call carries `descriptorUrl`; keyed by that exact string.
+ *   2. `endpoint` (DESCRIPTOR-REGISTRATION-ROUTE, 2026-11-16): the call carries NO `descriptorUrl`; the registered endpoint (the
+ *      result's `endpoint`, else the argument) equals — as an endpoint — the endpoint `DECLARED_DESCRIPTOR_ENDPOINTS` lists for
+ *      exactly ONE URL; keyed by that URL. A name the agent chose is never read. A URL not in the table, or an endpoint the table
+ *      lists twice, resolves nothing by this route (stays unresolved, named — never guessed). Pure over stored records: a replay
+ *      recomputes it with no network.
+ */
+export function registrationsByDescriptorUrl(records: readonly unknown[],
+  endpoints: Readonly<Record<string, string>> = DECLARED_DESCRIPTOR_ENDPOINTS): Map<string, DescriptorRegistration[]> {
+  const out = new Map<string, DescriptorRegistration[]>();
+  const byEndpoint = descriptorUrlByEndpoint(endpoints);
   for (const rec of records) {
     if (!isObj(rec) || rec.tool !== 'registry' || rec.success === false) continue;
     const a = argsOf(rec.arguments);
-    if (!a || a.action !== 'register' || typeof a.descriptorUrl !== 'string') continue;
+    if (!a || a.action !== 'register') continue;
     const res = isObj(rec.result) ? rec.result : null;
     if (!res || res.isError === true || !Array.isArray(res.content)) continue;
     const first = res.content[0];
@@ -73,7 +92,17 @@ export function registrationsByDescriptorUrl(records: readonly unknown[]): Map<s
     const serviceId = typeof data.serviceId === 'string' ? data.serviceId : null;
     const serviceName = typeof data.serviceName === 'string' ? data.serviceName : null;
     if (!serviceId && !serviceName) continue;
-    out.set(a.descriptorUrl, [...(out.get(a.descriptorUrl) ?? []), { serviceId, serviceName }]);
+    let url: string | undefined;
+    let resolvedBy: DescriptorRegistrationRoute;
+    if (typeof a.descriptorUrl === 'string') { url = a.descriptorUrl; resolvedBy = 'descriptor-url'; }
+    else if (a.descriptorUrl === undefined) {
+      const endpoint = typeof data.endpoint === 'string' ? data.endpoint : typeof a.endpoint === 'string' ? a.endpoint : null;
+      const n = endpoint ? normalisedEndpoint(endpoint) : null;
+      url = n ? byEndpoint.get(n) : undefined;
+      resolvedBy = 'endpoint';
+    } else continue;
+    if (!url) continue;
+    out.set(url, [...(out.get(url) ?? []), { serviceId, serviceName, resolvedBy }]);
   }
   return out;
 }

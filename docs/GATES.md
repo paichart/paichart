@@ -54,6 +54,12 @@ Nothing is built yet, so this is the cheapest place to catch a mistake. Read the
    `kubernetes-gitops` 1.19.0 on): under `interfaceContractSource.configSourcesKeys`, `notReadKeys` must be empty. A name filed
    in the wrong field — a network name under `configSources`, or `kubernetes-gitops` under `deviceSources` — is listed there
    too, because each field is checked against its own list of names.
+7. **Each leg's service descriptor.** For a leg whose sources block the plan carries, the platform writes the leg's service
+   descriptor itself, from the service the block's read lines name (none for a leg that reads only Git files), and replaces or
+   removes anything the plan wrote that differs. `npm run report:gate` prints one line per leg with what it derived, replaced or
+   removed; the same is under `interfaceContractSource.serviceDescriptors` in the leg's stored facts. Something *removed* means
+   the planner wrote a descriptor it should not have: harmless, because the platform corrected it, but worth knowing. A key that
+   is not a protocol name (a leg's own name, for example) is listed and left as the plan wrote it: check it.
 
 **If the plan is wrong, do not release.** A plan cannot be edited after the fact. Which fix depends on what is wrong:
 

@@ -4,7 +4,7 @@
 
 **Last Updated**: October 31, 2026
 
-**Total Patterns**: 71 documented patterns
+**Total Patterns**: 72 documented patterns
 
 ---
 
@@ -148,7 +148,13 @@
 
 ---
 
-## Architecture Patterns (13 patterns)
+## Architecture Patterns (14 patterns)
+
+### **platform-derived-contract-field-pattern.md** - 90% Confidence ✅ (NEW - Nov 2026)
+**When to use**: an agent restates, in a structured field, a value already present in a declared input — and its errors cluster where the input was silent
+**Results**: Program Architect contract errors 3/87 where the spec supplied the value vs 8/20 where silent; deriving `serviceDescriptors` removed the class live (5 of 163 stored contracts would change, 0 correct values); a $42 model lab parked
+**Key features**: derive only from what a declared line names · one function, one door · keep a well-formed agent value only where nothing is derivable · record a fact (derived / kept / replaced / removed) · replay over the corpus first
+**Anti-patterns**: another sentence after a failed sentence · a stronger model before measuring copy vs fill-silence · silent correction · per-path derivations
 
 ### **facts-only-tighten-pattern.md** - 92% Confidence ✅ (NEW - Oct 2026)
 **When to use**: Agents (or any judgement source) propose outcomes AND mechanical checks can see what the agent can't — and you are tempted to let the verdict decide, or a fact rescue a refusal

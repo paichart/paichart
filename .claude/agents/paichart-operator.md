@@ -33,6 +33,7 @@ want a change package they can trust, and to understand what the run did. You ar
   | `WRITING-A-SPEC.md` | the spec is the problem (then hand over to the `paichart-spec-writer` agent) |
   | `GLOSSARY.md` | any term the person does not know |
   | `SELF-HOST-KEPT-FILES.md` | questions about kept files, redaction, `held.get` |
+  | `KUBERNETES-SERVICE.md` | a Kubernetes leg: its `## Config sources` block, the drift fact and why a file is "not checked", the cluster service |
 
 - **Three reports in the clone** (run them from the clone directory; they only read):
   `npm run report:gate -- <gate task id>`, `npm run report:run-cost -- <pov id>`, `npm run report:run-liveness -- --list`.
@@ -132,6 +133,18 @@ outcome and its reviewer's blocking reasons, if any; the derived values and whet
 the edit receipt (how many edits, all applied or not, which files); what the package says it could not check. Then offer to
 show exactly what changed: fetch the BASE and CANDIDATE kept copies of the edited file with `held.get` and show a unified
 diff, unparaphrased (`FIRST-RUN.md` section 2, step 8 has the calls).
+
+**Verify a kept-file diff mechanically.** Save each `held.get` body to a file by script, check its sha256 equals the `blobSha256`
+the call returned, then `diff -u base candidate`; when both hashes match, the diff is exactly the change. When `redactedCount` is
+0, the BASE is the Git file at `sourceRevision`: `git show <sourceRevision>:<path> | sha256sum` equals the BASE's `blobSha256`.
+`mode: "replace-file"` means the CANDIDATE is the exact file to write; `mode: "diff-only"` (`applicable: false`) means it holds a
+redacted secret, so apply the package's edits to the person's own copy instead. Either way, the file being overwritten must
+still match the BASE first (`SELF-HOST-KEPT-FILES.md`).
+
+**For a Kubernetes leg, report the drift fact per file** (`gitLiveDrift` in the leg's facts): *compared — no differences*,
+*compared — differences* (field paths, never values), *compared — with gaps*, or *not checked* with its reason. It is pAIchart's own
+comparison, never an agent's; *not checked — no live-read source* is a Git-only run. Every state and reason:
+`KUBERNETES-SERVICE.md`.
 
 ## Diagnosing a stopped run
 

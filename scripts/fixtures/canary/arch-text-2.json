@@ -1,0 +1,76 @@
+{
+ "_source": "production 2026-11-17: Kubernetes leg cmwjvisl2001vyxej2j8427z4 interfaceContractSource.serviceDescriptors (root cmwjvcvxp0005yxejz2ukyvqd \u2014 the Architect composed, the platform removed) and the Program Architect cmwjvdd6d000ryxej4xj3jxt0 services calls (two refused scrape_page, then get_file_contents)",
+ "legFact": {
+  "kept": [],
+  "added": [],
+  "failed": false,
+  "derived": [],
+  "removed": [
+   {
+    "token": "network-derivation",
+    "reason": "no-read-line"
+   },
+   {
+    "token": "kubernetes-gitops",
+    "reason": "no-read-line"
+   }
+  ],
+  "version": 1,
+  "replaced": [],
+  "fieldShape": "object",
+  "notDerived": [
+   {
+    "token": "network-derivation",
+    "reason": "no-read-line"
+   },
+   {
+    "token": "kubernetes-gitops",
+    "reason": "no-read-line"
+   }
+  ],
+  "unknownKeys": [],
+  "unknownKeyCount": 0
+ },
+ "architectServiceCalls": [
+  {
+   "tool": "services",
+   "arguments": {
+    "tool": "scrape_page",
+    "action": "call",
+    "arguments": "{\"url\": \"https://raw.githubusercontent.com/paichart/paichart-configs/main/usecases/telemetry-export-net-k8s-r2/git-only/topology.json\", \"selectors\": {\"doc\": \"pre\"}}",
+    "targetService": "Browser Automation Service"
+   },
+   "isError": true
+  },
+  {
+   "tool": "services",
+   "arguments": {
+    "tool": "scrape_page",
+    "action": "call",
+    "arguments": "{\"url\": \"https://raw.githubusercontent.com/paichart/paichart-configs/main/usecases/telemetry-export-net-k8s-r2/git-only/requirements.md\", \"selectors\": {\"doc\": \"pre\"}}",
+    "targetService": "Browser Automation Service"
+   },
+   "isError": true
+  },
+  {
+   "tool": "services",
+   "arguments": {
+    "tool": "get_file_contents",
+    "action": "call",
+    "arguments": "{\"owner\": \"paichart\", \"repo\": \"paichart-configs\", \"path\": \"usecases/telemetry-export-net-k8s-r2/git-only/topology.json\"}",
+    "targetService": "github-service"
+   },
+   "isError": false
+  },
+  {
+   "tool": "services",
+   "arguments": {
+    "tool": "get_file_contents",
+    "action": "call",
+    "arguments": "{\"owner\": \"paichart\", \"repo\": \"paichart-configs\", \"path\": \"usecases/telemetry-export-net-k8s-r2/git-only/requirements.md\"}",
+    "targetService": "github-service"
+   },
+   "isError": false
+  }
+ ]
+}

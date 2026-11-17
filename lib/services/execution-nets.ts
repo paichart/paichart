@@ -19,24 +19,35 @@
 import type { PrismaClient, Prisma } from '@prisma/client';
 import { runNetsAtPoint } from '@/lib/agents/harness/net-registry';
 import { MECHANICAL_NETS } from '@/lib/agents/harness/mechanical-nets';
-import { buildNetContext } from '@/lib/agents/harness/net-context';
+import { buildNetContext, type BuildNetContextInput } from '@/lib/agents/harness/net-context';
 import { isProgramHarnessTask } from '@/lib/agents/harness/program-protocol';
 
-export interface StampExecutionNetsInput {
+/**
+ * The ctx inputs the core computes ONCE and hands the nets, forwarded to `buildNetContext` UNCHANGED (one rest-spread below, never a
+ * field-by-field copy). Typed as a Pick of `BuildNetContextInput`, so a field is either here — and then reaches the nets by
+ * construction — or absent, and then a caller passing it as a plain property is a compile error.
+ *
+ * PLATFORM-DRIFT-CALLS-DROPPED (2026-11-16, kubernetes-gitops 1.19.0 canary): `configSources` and `platformDriftCalls` were passed by the
+ * core as CONDITIONAL SPREADS (`...(x ? { x } : {})`), which TypeScript does not excess-property-check, while this input declared
+ * neither — so the platform's drift call was made and its record dropped here (`gitLiveDrift` read `no-platform-call-record`). Callers
+ * pass these as plain properties (null/undefined for "none"); `test:stamp-execution-nets-forward` drives a record through this hop.
+ *   owningLeg       — Stage B (A6): the core's one owning-leg resolution; absent (rescue, replays) ⇒ resolved lazily, same function.
+ *   deviceSources   — held-network step 3 batch 2b: the core's one read of the leg's declared Device sources; absent ⇒ lazy, same reader.
+ *   configSources   — Config sources STEP 2: the core's one read of the leg's declared Config sources; absent ⇒ lazy, same reader.
+ *   platformDriftCalls — Config sources STEP 2: the platform's drift call record (`undefined` = no call planned ⇒ NOT_STAMPED). The
+ *                     rescue never passes it (a PIPELINE task — no Harvester point applies, and it must never call); a replay passes
+ *                     the STORED record.
+ *   held            — Stage B: the variant stamps built pre-tx (V-5d/V-5g).
+ */
+export type NetContextPassThrough = Pick<BuildNetContextInput, 'owningLeg' | 'deviceSources' | 'configSources' | 'platformDriftCalls' | 'held'>;
+
+export interface StampExecutionNetsInput extends NetContextPassThrough {
   task: { id: string; type?: string | null; metadata: Prisma.JsonValue | null; inputContext?: unknown };
   agentRole: string | null;
   harnessMode: string | null;
   finalResponse: string | null | undefined;
   executionId: string;
   logger: { warn: (obj: Record<string, unknown>, msg: string) => void };
-  /** Stage B (A6): the core's one owning-leg resolution. Absent (rescue path, replays) ⇒ the net context resolves it
-   *  lazily through the same function, so both see the same value. */
-  owningLeg?: import('@/lib/agents/harness/held-bytes/variant').OwningLegResolution | null;
-  /** held-network step 3 batch 2b: the core's one read of the leg's declared Device sources (the same object capture used).
-   *  Absent ⇒ the net context resolves it lazily through the same reader. */
-  deviceSources?: import('@/lib/agents/harness/device-sources-read').LegDeviceSourcesResolution | null;
-  /** Stage B: the variant stamps built pre-tx (V-5d/V-5g). */
-  held?: { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: readonly string[] | null };
 }
 
 /** Stamp every applicable net onto `resultJson` (mutated in place). Resolves when both points have run. */
@@ -45,27 +56,31 @@ export async function stampExecutionNets(
   input: StampExecutionNetsInput,
   resultJson: Record<string, unknown>,
 ): Promise<void> {
-  const { task, executionId, logger } = input;
+  const { task, executionId, logger, agentRole, harnessMode, finalResponse, ...passThrough } = input;
+  // Exhaustiveness: everything left after the named fields IS the pass-through. A field added to the input that is neither named above
+  // nor a `buildNetContext` input makes this a compile error, never a silent drop.
+  const noUnforwardedField: Exclude<keyof typeof passThrough, keyof NetContextPassThrough> extends never ? true : never = true;
+  void noUnforwardedField;
   // TIER: resolved ONCE (the stamp-first predicate the completion core uses); every net's tier ARM lives inside its
   // own enrichment — the half a replay runner can exercise.
   const programTier = task.type === 'PIPELINE' && isProgramHarnessTask(task as never);
   const netCtx = buildNetContext({
     prisma: db,
     task: { id: task.id, type: task.type, metadata: task.metadata, inputContext: task.inputContext },
-    agentRole: input.agentRole ?? null,
-    harnessMode: input.harnessMode ?? null,
-    finalResponse: input.finalResponse,
+    agentRole: agentRole ?? null,
+    harnessMode: harnessMode ?? null,
+    finalResponse,
     programTier,
     executionId,
     // VERBATIM-QUOTE-OMISSION (2026-10-13): read off the BUILT resultJson, here, so the core and the rescue cannot hand
     // the nets different tool results (one chokepoint; the builder has already applied the persist truncation).
     toolCalls: resultJson.toolCalls,
-    owningLeg: input.owningLeg ?? null,
-    deviceSources: input.deviceSources ?? null,
+    // owningLeg / deviceSources / configSources / platformDriftCalls / held — the core's one reads and records, forwarded whole
+    // (buildNetContext normalises absent/null itself, so this is byte-equivalent to the old per-field `?? null` copies).
+    ...passThrough,
     // Config-sources network push 1a (EF-S3): the version key `liveEvidence` is stamped on — read off the BUILT resultJson, like
     // toolCalls, so the core and the rescue hand the nets the same value.
     protocolInjection: resultJson.protocolInjection,
-    ...(input.held ? { held: input.held } : {}),
     onContractApplicabilityError: (err) =>
       logger.warn({ executionId, err: err instanceof Error ? err.message : String(err) },
         'contract-applicability lookup failed — facts stamped without it'),

@@ -46,6 +46,8 @@ export type ServeTier = 'exact' | 'canonical' | 'services-tool' | 'repeat' | 'sa
   | 'fixture-file' | 'fixture-directory' | 'fixture-missing' | 'fixture-refused' | 'unserved-fixture'
   /** L-N1 network tiers (network-fixtures.ts) share this log too. */
   | 'device-pool' | 'device-failure' | 'unserved-device' | 'catalogue' | 'unserved-catalogue' | 'register-refused'
+  /** L-CS-K (2026-11-16): the k8s cluster tier (k8s-fixtures.ts) — a served read, or the service's own refusal of one. */
+  | 'cluster-state' | 'cluster-refused'
   /** A requirements Reviewer's objective fetch, served from its own stored answer (objective-of-record.ts, 2026-11-10). */
   | 'objective-of-record';
 export interface ServeLogEntry { tool: string; action: string | null; innerTool: string | null; fileTool: boolean; tier: ServeTier; storedIndex: number | null }

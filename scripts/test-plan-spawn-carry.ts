@@ -363,7 +363,7 @@ const AT = '2026-10-04T00:00:00.000Z';
   });
 
   console.log('\n── decideCreateContract (QS6 = option (ii) FACT-ONLY) ──');
-  const resolved: PlanContractResult = { status: 'resolved', contract: CONTRACT, planSha256: planSha, architectTaskId: 'carch', architectExecutionId: 'carch-e1' };
+  const resolved: PlanContractResult = { status: 'resolved', contract: CONTRACT, planSha256: planSha, architectContract: CONTRACT, deliveredSha256: planSha, serviceDescriptors: null, architectTaskId: 'carch', architectExecutionId: 'carch-e1' };
   await test('supplied = plan → plan stored, suppliedMatched true, no diff paths', () => {
     const d = decideCreateContract({ supplied: { ...CONTRACT }, programRootId: 'croot', plan: resolved, legBaseline: null, at: AT });
     eq([d.stored, d.sourceFact?.source, d.sourceFact?.suppliedMatched, d.sourceFact?.suppliedDiffPaths], [CONTRACT, 'plan', true, []], 'd');
@@ -556,13 +556,13 @@ const AT = '2026-10-04T00:00:00.000Z';
     assert(dStore.kind === 'store' && dDecl.kind === 'decline', 'absent-arm fixtures');
     shapeOk((dStore as any).fact, INTERFACE_CONTRACT_SOURCE_KEYS as string[], 'create-absent');
     shapeOk((dDecl as any).fact, INTERFACE_CONTRACT_SOURCE_KEYS as string[], 'create-absent-declined');
-    eq(INTERFACE_CONTRACT_SOURCE_KEYS.slice(-7), ['callerExecutionId', 'callerTaskId', 'declineReason', 'deviceSourcesKeys', 'configSourcesKeys', 'resolverVersion', 'at'], 'Q2 keys, then deviceSourcesKeys (v3) and configSourcesKeys (v4), appended before resolverVersion/at');
+    eq(INTERFACE_CONTRACT_SOURCE_KEYS.slice(-8), ['callerExecutionId', 'callerTaskId', 'declineReason', 'deviceSourcesKeys', 'configSourcesKeys', 'serviceDescriptors', 'resolverVersion', 'at'], 'Q2 keys, then deviceSourcesKeys (v3), configSourcesKeys (v4) and serviceDescriptors (v5), appended before resolverVersion/at');
     eq([dPlan.sourceFact?.source, dSup.sourceFact?.source, dInh.fact.source, dNone.fact.source], ['plan', 'supplied', 'plan-inherited', 'none'], 'variants');
     assert(dNone.fact.r9 === null, 'r9 is null for source none');
   });
   console.log('\n── deviceSourcesKeys (resolver v3, ARCHITECT-CONTRACT-KEY-BY-LEG option b) ──');
   await test('deviceSourcesKeysOf — null without deviceSources; token keys read; leg-name keys not read; a non-object named', () => {
-    eq(RESOLVER_VERSION, 4, 'resolver version'); // v4 (Config sources STEP 2): + configSourcesKeys — pinned in test-config-sources MIX2/MIX3
+    eq(RESOLVER_VERSION, 5, 'resolver version'); // v4 (Config sources STEP 2): + configSourcesKeys; v5 (2026-11-17): + serviceDescriptors (derived) — pinned in test-config-sources MIX2/MIX3
     // derived, never retyped: the lane table itself is pinned by test-device-read-capture VLG1 (and a two-token literal here would
     // be a protocol-keyed site for test:variant-protocol-sites)
     eq([...DEVICE_SOURCES_READ_KEYS].sort(), Object.values(DEVICE_SOURCE_LANES).map((x) => x.contractKey).sort(), 'read keys come from the lane table');

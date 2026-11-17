@@ -52,7 +52,7 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
 
   console.log('GS1 the frozen set');
   await t('loads, every pin unedited (sha256), v7 (+ the two requirements cases and their 3 pins): 19 cases, 6 protocols, 12 templates; the re-freeze record names every case', () => {
-    assert(gs.version === 'v7' && gs.cases.length === 19, `${gs.version} cases ${gs.cases.length}`);
+    assert(gs.version === 'v8' && gs.cases.length === 19, `${gs.version} cases ${gs.cases.length}`);
     assert(Object.keys(gs.pins.protocols).length === 6 && Object.keys(gs.pins.templates).length === 12, 'pins');
     const added = (gs.refreezes ?? []).flatMap((r) => r.added).sort().join();
     assert(added === gs.cases.map((c) => c.id).sort().join(), `refreezes added ≠ cases: ${added}`);
@@ -350,6 +350,72 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
     const e = buildGoldenCompanion(lab0, gs).experiment as any;
     const st = e.nodes.filter((n: any) => n.id.startsWith('STAND-'));
     assert(st.map((n: any) => n.id).sort().join() === 'STAND-NET-APPLY-WHOLE-FILE,STAND-NET-FWA3-EDGE' && st.every((n: any) => n.persistedEditApplication === true), JSON.stringify(st.map((n: any) => [n.id, n.persistedEditApplication])));
+  });
+
+  console.log('GS8 the v8 Kubernetes re-freeze (frozen Config-sources declarations; kubernetes-gitops 1.19.0 candidate, L-CS-K)');
+  await t('v8: a k8s 1.19.0 text lab carries each Kubernetes case\'s frozen declaration (block on the leg, first-execution snapshot, the tool-shaped drift answer) and nothing else moves; under --fake-llm persisted all 5 cells reproduce with the Config force read (null: each block names the file its stored Harvester read); frozen-cmp moves ONLY by the protocol text (system) and the Config-sources fact renders (user) — plus AK5\'s pre-join held view on the Author side; a block naming a second, unread git-file forces git-file-not-held and golden-score reads FLIPPED ⇒ DO-NOT-SHIP; a lab below 1.19.0 carries no declaration', () => {
+    const k8s = gs.cases.filter((c) => c.protocol === 'kubernetes-gitops-protocol');
+    assert(k8s.map((c) => c.id).sort().join() === 'K8S-AK5,K8S-BK3,K8S-PROG' && k8s.every((c) => c.configSources?.fromVersion === '1.19.0' && c.configSources.block.length === 2), 'v8: every Kubernetes case carries a 1.19.0 frozen declaration of two lines');
+    assert(gs.cases.filter((c) => c.configSources).length === 3, 'v8: only the Kubernetes cases carry a declaration');
+    // Below the version: the model lab (no composedVersion) carries nothing.
+    const below = buildGoldenCompanion(scratchCopy('model-lab'), gs).experiment as any;
+    assert(below.nodes.filter((n: any) => /^GOLD-K8S-/.test(n.id)).every((n: any) => !n.inputEdits && !n.configSourcesSnapshot && !n.platformDrift), 'a lab below 1.19.0 must carry no Config-sources declaration');
+    // composedVersion travels only onto cells of the EDITED protocol (golden-set.ts, L-CS-K): a text arm that also carries a model
+    // lever reaches every domain, and a network cell stamped as composing network-provisioning "1.19.0" would lose its liveEvidence line.
+    const mixed = scratchCopy('k8s-text-lab');
+    const me = JSON.parse(fs.readFileSync(path.join(mixed, 'experiment.json'), 'utf8')); me.variants.kt.reviewerModel = 'claude-sonnet-5'; me.variants.kt.reviewerEffort = 'high';
+    fs.writeFileSync(path.join(mixed, 'experiment.json'), JSON.stringify(me));
+    const mx = buildGoldenCompanion(mixed, gs).experiment as any;
+    const cellsOf = (re: RegExp) => Object.entries(mx.variants).filter(([k]) => re.test(k)).map(([, v]) => v as any);
+    assert(cellsOf(/k8s[ra]$/).length > 0 && cellsOf(/k8s[ra]$/).every((v) => v.composedVersion === '1.19.0'), 'the Kubernetes cells must carry composedVersion');
+    assert(cellsOf(/(network|netvalue|terraform|observability|requirements)[ra]$/).length >= 5 && cellsOf(/(network|netvalue|terraform|observability|requirements)[ra]$/).every((v) => v.composedVersion === undefined), 'composedVersion leaked onto a cell of a protocol the arm does not edit');
+    const dir = scratchCopy('k8s-text-lab');
+    const { dir: comp, report, experiment } = buildGoldenCompanion(dir, gs) as any;
+    assert(report.cells.map((c: any) => `${c.case}:${c.form}`).sort().join() === 'K8S-AK5:persisted,K8S-BK3:live,K8S-BK3:persisted,K8S-PROG:live,K8S-PROG:persisted', `cells: ${report.cells.map((c: any) => `${c.case}:${c.form}`).join()}`);
+    const kn = experiment.nodes.filter((n: any) => /^GOLD-K8S-/.test(n.id));
+    assert(kn.length === 3 && kn.every((n: any) => n.configSourcesSnapshot === 'first-execution' && /^config-sources\/K8S-[A-Z0-9]+\.block\.json$/.test(n.inputEdits) && n.platformDrift?.default?.caller === 'result'), 'the declaration does not travel onto every Kubernetes node');
+    assert(Object.values(experiment.variants).every((v: any) => v.composedVersion === '1.19.0'), 'composedVersion must travel onto the Kubernetes cells');
+    const runDir = path.join(path.dirname(dir), 'run-k8s');
+    lab(['run', '--experiment', comp, '--fake-llm', 'persisted', '--out', runDir, '--concurrency', '5']);
+    const man = JSON.parse(fs.readFileSync(path.join(runDir, 'manifest.json'), 'utf8'));
+    for (const n of kn) for (const v of n.variants) {
+      const cs = man.nodes[n.id].variants[v].held?.configSources;
+      assert(cs?.state === 'computed' && cs.declaration === 'parsed' && cs.configForce === null && cs.held?.refs === 1 && cs.platformDriftCalls?.outcomes?.join() === 'sample-workloads:called', `${n.id}/${v}: ${JSON.stringify(cs).slice(0, 300)}`);
+    }
+    const r = scoreGolden([runDir], comp, stored, gs);
+    assert(r.cells.length === 5 && r.cells.every((c) => c.status === 'REPRODUCED') && r.verdict.verdict === 'PASS', `${r.verdict.verdict}: ${r.cells.map((c) => `${c.case}/${c.cell} ${c.status}`).join(' | ')}`);
+    // frozen-cmp: what moved is the text, and the facts the 1.19.0 version makes production render — nothing else.
+    let fc = ''; try { fc = lab(['frozen-cmp', '--experiment', comp, '--run', runDir, '--author', '--dump']); } catch (x: any) { fc = String(x.stdout ?? ''); }
+    const base = fs.readFileSync(path.join(dir, 'protocols', 'kubernetes-gitops-protocol@1.18.0.baseline.md'), 'utf8').split('\n');
+    const cand = fs.readFileSync(path.join(comp, 'protocols', fs.readdirSync(path.join(comp, 'protocols')).find((f) => /kubernetes-gitops-protocol@1\.18\.0\.g\w+\.md$/.test(f))!), 'utf8').split('\n');
+    const protoAdded = new Set(cand.filter((l) => !base.includes(l))); const protoRemoved = new Set(base.filter((l) => !cand.includes(l)));
+    const FACT = /Live evidence — the platform's live-evidence fact|Git vs live — the platform's Git-vs-live drift fact|^\s+- live read: `trading-cluster`|^\s+- Git files: `sample-workloads`|^\s+- `sample-workloads`: `|^\s+- (Deployment|Service|NetworkPolicy|ConfigMap|Namespace) trading\/?|not compared \(live-read-failed\)/;
+    const delta = (a: string[], b: string[]) => ({ added: b.filter((l) => !a.includes(l)), removed: a.filter((l) => !b.includes(l)) });
+    for (const id of ['K8S-PROG', 'K8S-BK3', 'K8S-AK5']) {
+      const d = path.join(runDir, `GOLD-${id}`, fs.readdirSync(path.join(runDir, `GOLD-${id}`)).find((x) => /^g\w+k8sr$/.test(x))!);
+      const rd = (f: string) => fs.readFileSync(path.join(d, f), 'utf8').split('\n');
+      const sys = delta(rd('frozen.reviewer.system.md'), rd('reviewer.system.md'));
+      // K8S-AK5 (pre-join, the permanent exception): its frozen Reviewer lacked the held-join seed's constraint rows, so those rows show too.
+      const preJoin = (l: string) => id === 'K8S-AK5' && /^• \*\*Held /.test(l);
+      assert(sys.added.length > 0 && sys.added.every((l) => !l.trim() || protoAdded.has(l) || preJoin(l)) && sys.removed.every((l) => !l.trim() || protoRemoved.has(l)), `${id}: the Reviewer system prompt moved beyond the protocol text: ${JSON.stringify(sys.added.filter((l) => l.trim() && !protoAdded.has(l) && !preJoin(l)).slice(0, 3))}`);
+      const usr = delta(rd('frozen.reviewer.user.md'), rd('reviewer.user.md'));
+      assert(usr.removed.length === 0 && usr.added.length >= 4 && usr.added.every((l) => FACT.test(l)), `${id}: the Reviewer user prompt moved beyond the Config-sources facts: ${JSON.stringify(usr.added.filter((l) => !FACT.test(l)).slice(0, 3))} / removed ${usr.removed.length}`);
+      const au = delta(rd('frozen.author.user.md'), rd('author.user.md'));
+      const auOther = au.added.filter((l) => !FACT.test(l));
+      assert(au.removed.length === 0 && (id === 'K8S-AK5' ? auOther.some((l) => /^### Held file H1 — \/k8s\/sample-workloads\.yaml/.test(l)) : auOther.length === 0), `${id}: the Author user prompt moved beyond the facts${id === 'K8S-AK5' ? ' and the pre-join held view' : ''}: ${JSON.stringify(auOther.slice(0, 3))}`);
+      assert(id === 'K8S-AK5' || new RegExp(`GOLD-${id}/\\S+: author\\.system\\.md identical`).test(fc), `${id}: the persisted Author's system prompt moved`); // AK5: pre-join, differs at the 1.18.0 pin too (GS6)
+    }
+    // The other direction: a block naming a second git-file the stored Harvester never read is forced git-file-not-held.
+    const ef = path.join(comp, 'config-sources', 'K8S-PROG.block.json'); const blk = JSON.parse(fs.readFileSync(ef, 'utf8'));
+    blk.ops[0].new = blk.ops[0].new.replace(/\n$/, '\norders-hpa: git-file — service github-service ; paichart/paichart-lab-configs/k8s/orders-api-hpa.yaml\n');
+    fs.writeFileSync(ef, JSON.stringify(blk));
+    const run2 = path.join(path.dirname(dir), 'run-k8s-forced');
+    lab(['run', '--experiment', comp, '--fake-llm', 'persisted', '--out', run2, '--only', 'GOLD-K8S-PROG']);
+    const f2 = JSON.parse(fs.readFileSync(path.join(run2, 'manifest.json'), 'utf8')).nodes['GOLD-K8S-PROG'];
+    assert(Object.values(f2.variants).every((v: any) => v.held?.configSources?.configForce?.reason === 'git-file-not-held'), `forced: ${JSON.stringify(Object.values(f2.variants).map((v: any) => v.held?.configSources?.configForce))}`);
+    const r2 = scoreGolden([run2], comp, stored, gs);
+    const prog = r2.cells.filter((c) => c.case === 'K8S-PROG');
+    assert(prog.length === 2 && prog.every((c) => c.status === 'FLIPPED') && r2.verdict.verdict === 'DO-NOT-SHIP', `the Config force must flip an approved case: ${prog.map((c) => `${c.cell} ${c.status}`).join(' | ')} ${r2.verdict.verdict}`);
   });
 
   console.log('GS7 the spend gate');

@@ -32,11 +32,14 @@ import 'dotenv/config';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { computeLiveEvidenceFromReadRecord } from '../lib/agents/harness/live-evidence';
 import { parseDeviceSourceLine } from '../lib/agents/harness/device-sources';
+import { parseConfigSourcesContractValue, CONFIG_SOURCES_SNAPSHOT_KEY } from '../lib/agents/harness/config-sources';
+import { computeGitLiveDrift } from '../lib/agents/harness/git-live-drift';
+import { CONFIG_SOURCE_LANES } from '../lib/agents/harness/held-bytes/variant';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { leanFactsLine } = require('../lib/mcp/server/tools/advanced/lean-card-facts');
 import { pickResultJsonSummary } from '../lib/services/execution-artifacts';
 import * as fs from 'fs';
-import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, type Carrier } from './canary-req-sources';
+import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, driftCallsOf, canonJson, archDescriptorsRespected, archFetchRoute, type Carrier } from './canary-req-sources';
 
 type Tx = Prisma.TransactionClient;
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -70,7 +73,7 @@ async function executions(tx: Tx, taskIds: string[]): Promise<ExecRow[]> {
 }
 
 // ── pre-registered live controls (one per shipped change; add new ones here, never edit a used one) ─────────────
-interface Ctx { root: TaskRow; legs: TaskRow[]; nodeC: TaskRow[]; execs: ExecRow[]; legKids: TaskRow[] }
+interface Ctx { root: TaskRow; legs: TaskRow[]; nodeC: TaskRow[]; execs: ExecRow[]; legKids: TaskRow[]; children?: TaskRow[] }
 
 // VALUE-LEG-GIT (network-derivation 1.3.0, 2026-11-06; LAB-RESULT-VLG.md §4): shared helpers for the vlg-* controls.
 const VALUE_PROTOCOL = 'network-derivation-protocol';
@@ -445,6 +448,102 @@ const CONTROLS: Record<string, { what: string; run: (c: Ctx) => ControlResult }>
       return [{ legId: l.id, card, factSummary: isObj(idx.liveEvidence) ? idx.liveEvidence.summary : null }];
     })),
   },
+  // ── Config sources STEP 2 (kubernetes-gitops 1.19.0 + the Program Architect batch, 2026-11-16; TEXT-CANDIDATE-1.19.0.md §13,
+  // STEPS-2-4-PLAN §3.6). Pre-registered BEFORE the deploy. The Architect is not lab-replayable: these are its live controls.
+  'csk-contract-carried': {
+    what: 'program_architect batch — every kubernetes-gitops leg\'s contract carries configSources["kubernetes-gitops"] as source lines that parse; no Kubernetes key under deviceSources; configSources keys are lane tokens only. Prints the lines for a hand comparison with requirements.md',
+    run: ({ legs }) => {
+      const lines: string[] = []; let finding = false;
+      const k8s = legs.filter((l) => meta(l).protocol === 'kubernetes-gitops-protocol');
+      for (const l of legs) {
+        const c = isObj(l.contract) ? (l.contract as Record<string, unknown>) : {};
+        const cs = isObj(c.configSources) ? c.configSources : null; const ds = isObj(c.deviceSources) ? c.deviceSources : null;
+        const csKeys = cs ? Object.keys(cs) : [];
+        lines.push(`  leg ${l.id} (${String(meta(l).protocol ?? '?')}) configSources keys=[${csKeys.join(', ')}]`);
+        // CONFIG_SOURCE_LANES is keyed by protocol NAME (`kubernetes-gitops-protocol`); a contract key is the row's `contractKey`.
+        for (const k of csKeys) if (!Object.values(CONFIG_SOURCE_LANES).some((r) => r.contractKey === k)) { finding = true; lines.push(`    key "${k}" is not a config-source lane token — FINDING`); }
+        if (ds && ('kubernetes-gitops' in ds)) { finding = true; lines.push('    kubernetes-gitops under deviceSources — FINDING'); }
+        if (k8s.includes(l)) {
+          if (!cs || !('kubernetes-gitops' in cs)) { finding = true; lines.push('    Kubernetes leg WITHOUT configSources["kubernetes-gitops"] — FINDING (the leg stops at Phase 0)'); continue; }
+          const p = parseConfigSourcesContractValue(cs['kubernetes-gitops'], 'kubernetes-gitops') as { state: string; entries?: unknown[] };
+          lines.push(`    kubernetes-gitops: state=${p.state} entries=${Array.isArray(p.entries) ? p.entries.length : 0}`);
+          lines.push(`      ${JSON.stringify(cs['kubernetes-gitops']).slice(0, 600)}`);
+          if (p.state !== 'parsed') finding = true;
+        }
+      }
+      if (!k8s.length) return { verdict: 'UNEXERCISED', lines: [...lines, '  no kubernetes-gitops leg'] };
+      return { verdict: finding ? 'FINDING' : 'PASS', lines: [...lines, '  hand-compare each printed block with requirements.md: copied exactly, no merge, no drop'] };
+    },
+  },
+  'csk-keys-by-token': {
+    what: 'program_architect batch — every key of deviceSources / configSources / serviceDescriptors in every leg contract is a protocol token (never a leg name or own label), and no serviceDescriptors value was assembled from a source line (an object with owner/repo/path). Prints every descriptor value for a hand comparison with requirements.md',
+    run: ({ legs }) => {
+      const lines: string[] = []; let finding = false;
+      const tokens = new Set(legs.map((l) => String(meta(l).protocol ?? '').replace(/-protocol$/, '')).filter(Boolean));
+      for (const l of legs) {
+        const c = isObj(l.contract) ? (l.contract as Record<string, unknown>) : {};
+        for (const field of ['deviceSources', 'configSources', 'serviceDescriptors'] as const) {
+          const m = isObj(c[field]) ? (c[field] as Record<string, unknown>) : null; if (!m) continue;
+          for (const k of Object.keys(m)) {
+            const ok = tokens.has(k);
+            lines.push(`  leg ${l.id} ${field}["${k}"]${ok ? '' : ' — NOT a protocol token of this program — FINDING'}`);
+            if (!ok) finding = true;
+            if (field === 'serviceDescriptors') {
+              const v = m[k]; lines.push(`    ${JSON.stringify(v).slice(0, 300)}`);
+              if (isObj(v) && ('repo' in v || 'owner' in v || 'paths' in v || 'path' in v)) { finding = true; lines.push('    descriptor assembled from source-line fields — FINDING'); }
+            }
+          }
+        }
+      }
+      if (!legs.length) return { verdict: 'UNEXERCISED', lines };
+      return { verdict: finding ? 'FINDING' : 'PASS', lines: [...lines, '  hand-compare every descriptor value with requirements.md (exactly as given; none composed)'] };
+    },
+  },
+  'csk-k8s-facts': {
+    what: 'kubernetes-gitops 1.19.0 — the Kubernetes leg carries its configSourcesSnapshot; every execution with platformDriftCalls carries gitLiveDrift equal to a recompute from that record; configSourceReads and liveEvidence print beside it',
+    run: ({ legs, legKids, execs }) => {
+      const lines: string[] = []; let finding = false, drift = 0;
+      const k8s = legs.filter((l) => meta(l).protocol === 'kubernetes-gitops-protocol');
+      for (const l of k8s) {
+        const kids = kidsOf(l, legKids);
+        const snapOn = [l, ...kids].filter((t) => isObj(meta(t)[CONFIG_SOURCES_SNAPSHOT_KEY])).length;
+        lines.push(`  leg ${l.id}: ${CONFIG_SOURCES_SNAPSHOT_KEY} on ${snapOn} of ${kids.length + 1} task(s)`);
+        if (!snapOn) { finding = true; lines.push('    no configSourcesSnapshot — FINDING'); }
+        for (const k of kids) {
+          const j = latestResult(execs, k.id); if (!j) continue;
+          const has = (x: string) => (x in j ? 'yes' : 'no');
+          lines.push(`    ${String(k.agentRole ?? k.title).slice(0, 40)}: configSourceReads=${has('configSourceReads')} platformDriftCalls=${has('platformDriftCalls')} gitLiveDrift=${has('gitLiveDrift')} liveEvidence=${isObj(j.liveEvidence) ? String(j.liveEvidence.summary) : 'no'}`);
+          if ('platformDriftCalls' in j) {
+            drift++;
+            // The stored record is `{ version, calls }` (stampPlatformDriftCalls); the fact is computed from `.calls`. Compare key-order-free.
+            const want = canonJson(computeGitLiveDrift(driftCallsOf(j.platformDriftCalls))); const got = canonJson(j.gitLiveDrift ?? null);
+            const files = isObj(j.gitLiveDrift) && Array.isArray(j.gitLiveDrift.files) ? (j.gitLiveDrift.files as Record<string, unknown>[]) : [];
+            for (const f of files) lines.push(`      ${String(f.label)}: ${String(f.state)}${f.summary ? ' ' + String(f.summary) : ''}${f.reason ? ' reason=' + String(f.reason) : ''}`);
+            if (want !== got) { finding = true; lines.push('      gitLiveDrift ≠ recompute from platformDriftCalls — FINDING'); }
+          }
+        }
+      }
+      if (!k8s.length) return { verdict: 'UNEXERCISED', lines: [...lines, '  no kubernetes-gitops leg'] };
+      if (finding) return { verdict: 'FINDING', lines };
+      if (!drift) return { verdict: 'UNEXERCISED', lines: [...lines, '  no execution carried platformDriftCalls — an absence, not a pass (read why: a Git-only or not-live leg)'] };
+      return { verdict: 'PASS', lines: [...lines, `  ${drift} execution(s): gitLiveDrift equals the recompute`] };
+    },
+  },
+  // ── Architect step-back text (arch-text-2, 2026-11-17; register ARCHITECT-COMPOSED-DESCRIPTOR + ARCHITECT-FETCH-ROUTE). Pre-registered
+  // BEFORE the text deploys. Logic in canary-req-sources.ts, fixtures from production (test:canary-req-sources AT1-AT6).
+  'arch-text-2-descriptors': {
+    what: 'Architect text: no serviceDescriptors entry for a leg with a sources block (the platform derives it) — PASS when the platform removed or replaced nothing on any leg',
+    run: ({ legs }) => archDescriptorsRespected(legs.map((l) => ({ id: l.id, fact: isObj(meta(l).interfaceContractSource) ? (meta(l).interfaceContractSource as Record<string, unknown>).serviceDescriptors : null }))),
+  },
+  'arch-text-2-fetch': {
+    what: 'Architect text: spec URLs on raw.githubusercontent.com read with the Git file service — PASS when the Architect made no scrape_page call for one',
+    run: ({ children, execs }) => {
+      const arch = (children ?? []).find((t) => t.agentRole === 'program_architect');
+      if (!arch) return { verdict: 'UNEXERCISED', lines: ['  no program_architect child'] };
+      const j = latestResult(execs, arch.id);
+      return archFetchRoute(Array.isArray(j?.toolCalls) ? (j!.toolCalls as unknown[]) : []);
+    },
+  },
 };
 const carriersOf = (legs: TaskRow[], nodeC: TaskRow[]): Carrier[] => [
   ...legs.map((l) => ({ id: l.id, kind: 'leg' as const, protocol: typeof meta(l).protocol === 'string' ? (meta(l).protocol as string) : null, contract: l.contract, metadata: l.metadata })),
@@ -514,7 +613,7 @@ async function main() {
       console.log(`\nCANARY VERDICT: ${verdict}`);
 
       for (const name of CONTROL_NAMES) {
-        const r = CONTROLS[name].run({ root, legs, nodeC, execs, legKids });
+        const r = CONTROLS[name].run({ root, legs, nodeC, execs, legKids, children });
         console.log(`\nCONTROL ${name}: ${voidReason ? 'VOID (canary void)' : r.verdict}\n  ${CONTROLS[name].what}`);
         r.lines.forEach(x => console.log(x));
       }

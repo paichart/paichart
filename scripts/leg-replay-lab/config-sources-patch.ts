@@ -149,6 +149,12 @@ export function loadCompareResult(file: string): Obj {
  * — and must pass the SHIPPING validator once the sha echo is set. A file that is not is refused by name: a cell fed an invented
  * shape would measure a result the tool cannot return.
  */
+/** L-CS-K (2026-11-16): the not-compared reasons the tool decides AFTER it has set the object's `namespace` (declared_compare.py
+ *  `compare_manifest`: `entry["namespace"]` is written before `get_live`, so `name-or-namespace-invalid`, `live-read-failed` and
+ *  `too-many-declared-fields` carry it for a namespaced kind). The contract fixture shows only not-compared objects decided BEFORE
+ *  that line (a Secret, a non-allowlisted kind), so its key union lacks `namespace` for this state. Pinned to the tool's source
+ *  order in LCK8 — a reorder there turns this allowance red. `detail` is NOT allowed (it must never reach a render; sec-ops). */
+export const NAMESPACED_NOT_COMPARED_REASONS: readonly string[] = ['name-or-namespace-invalid', 'live-read-failed', 'too-many-declared-fields'];
 export function probedShapeProblems(result: Obj, contract: Obj = loadCompareResult(CONTRACT_FIXTURE)): string[] {
   const out: string[] = [];
   const keys = (o: Obj) => Object.keys(o).sort().join(',');
@@ -158,8 +164,9 @@ export function probedShapeProblems(result: Obj, contract: Obj = loadCompareResu
     const s = String(o.state); const set = byState.get(s) ?? new Set<string>(); for (const k of Object.keys(o)) set.add(k); byState.set(s, set);
   }
   (Array.isArray(result.objects) ? (result.objects as Obj[]) : []).forEach((o, i) => {
-    const known = byState.get(String(o?.state));
-    if (!known) { out.push(`objects[${i}]: state ${JSON.stringify(o?.state)} is not one the contract fixture shows`); return; }
+    const base = byState.get(String(o?.state));
+    if (!base) { out.push(`objects[${i}]: state ${JSON.stringify(o?.state)} is not one the contract fixture shows`); return; }
+    const known = o.state === 'not-compared' && NAMESPACED_NOT_COMPARED_REASONS.includes(String(o.reason)) ? new Set([...base, 'namespace']) : base;
     const stray = Object.keys(o).filter((k) => !known.has(k));
     if (stray.length) out.push(`objects[${i}] (${String(o.state)}): key(s) ${stray.join(', ')} the tool does not return for that state`);
     for (const d of (Array.isArray(o.differing) ? o.differing : []) as Obj[]) if (!isObj(d) || keys(d) !== 'difference,path') out.push(`objects[${i}].differing: an entry is not { difference, path }`);

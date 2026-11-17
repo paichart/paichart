@@ -23,6 +23,20 @@
  *       (DEVICE-SOURCES-MULTI-NETWORK-LEG / G1-a, plan limit L1).
  *   S5  printed as NOT CHECKED: device coverage of the leg's scope (L4), the ref vs the service pin, descriptor registration.
  *
+ * CONFIG SOURCES (2026-11-16, kubernetes-gitops 1.19.0 prep; STEP2-BUILD.md section 7.3). A leg whose protocol keeps a FILE declares a
+ * config-sources block instead, read ONLY by lib/agents/harness/config-sources.ts (block, contract value, resolveLegConfigSources,
+ * sameConfigDeclaration) with the protocol table CONFIG_SOURCE_LANES (held-bytes/variant.ts). The same rules apply by analogy:
+ *   S1  fenced, inside a leg section; a leg section holds at most ONE sources block of EITHER grammar (a leg has one protocol, and
+ *       the two tables share no protocol, so a section with both is wrong whichever it is). The leg's protocol is the ONE
+ *       config-sources protocol the section names (title or text outside fences); none named is an ERROR that lists the leg tokens
+ *       the section does name (only kubernetes-gitops legs declare config sources today), two named is an ERROR. No lane sentence:
+ *       the table has one lane (change), and a generated spec carries no config lane sentence yet.
+ *   S2  resolves `parsed` as the contract copy and the task-body copy (resolveLegConfigSources, same text both sides).
+ *   S3  transcription vs the owner's items (sameConfigDeclaration), both directions.
+ *   S4  every block of one protocol declares the same thing: the platform carries ONE block per protocol token and every leg of
+ *       that protocol reads and holds every declared file in it (owner 2026-11-15, multi-leg ADDENDUM 2).
+ *   S5  NOT CHECKED: a ref vs the service pin, descriptor registration, that the block covers the cluster the leg changes.
+ *
  * Lane. A generated spec (it has `## Design decisions`) states each leg's lane with one fixed sentence (LANE_SENTENCES). A
  * hand-written spec has no such sentence; there the lane is INFERRED from the phrase the Program Architect itself keys a value
  * leg on, "changes nothing" (pAIchartUniversalTemplate.ts token bullet), and the output says it was inferred.
@@ -34,6 +48,11 @@ import * as fs from 'fs';
 import {
   parseDeviceSourcesBlock, resolveLegDeviceSources, sameDeclaration, type LegDeviceSources,
 } from '../lib/agents/harness/device-sources';
+import {
+  parseConfigSourcesBlock, resolveLegConfigSources, sameConfigDeclaration, type LegConfigSources,
+} from '../lib/agents/harness/config-sources';
+import { CONFIG_SOURCE_LANES, DEVICE_SOURCE_LANES } from '../lib/agents/harness/held-bytes/variant';
+import { LEG_TOKENS } from '../lib/agents/harness/requirements-coverage';
 
 export type Lane = 'change' | 'value';
 /** The two fixed lane sentences a generated spec carries beside each block (plan section 4.3). */
@@ -46,19 +65,33 @@ const VALUE_PHRASE_RE = /\bchanges nothing\b/i;
 const LEG_SECTION_RE = /^Pipeline \d+ objective\b/;
 const DD_TITLE_RE = /^Design decisions\b/;
 
-export interface SourcesBlock {
-  section: string; line: number; lane: Lane | null; laneSource: 'sentence' | 'inferred' | 'none';
-  resolution: LegDeviceSources;
-}
+export type SourcesBlock =
+  | { grammar: 'device'; section: string; line: number; lane: Lane | null; laneSource: 'sentence' | 'inferred' | 'none';
+      resolution: LegDeviceSources }
+  /** A config-sources block: its protocol (contract key) and lane come from CONFIG_SOURCE_LANES, never from a sentence. */
+  | { grammar: 'config'; section: string; line: number; protocol: string; lane: Lane; laneSource: 'table';
+      resolution: LegConfigSources };
 export interface SourcesFinding { rule: 'S1' | 'S2' | 'S3' | 'S4'; section: string | null; message: string }
 export interface SourcesResult {
   mode: 'generated' | 'hand-written'; blocks: SourcesBlock[]; errors: SourcesFinding[]; notChecked: string[];
-  items: Array<{ item: number; state: LegDeviceSources['state'] }>;
+  items: Array<{ item: number; grammar: 'device' | 'config'; state: LegDeviceSources['state'] }>;
 }
 
 const isFence = (l: string) => l.trim().startsWith('```');
 /** A line the SHIPPING parser treats as a sources heading (asked of the parser, never of a local pattern). */
-const isSourcesHeading = (l: string) => parseDeviceSourcesBlock(l.trim()).state !== 'absent';
+const isDeviceHeading = (l: string) => parseDeviceSourcesBlock(l.trim()).state !== 'absent';
+/** The config-sources protocols (contract key = the token a spec names) and every leg token a spec may name. */
+const CONFIG_KEYS = Object.values(CONFIG_SOURCE_LANES).map((v) => v.contractKey);
+const KNOWN_LEG_TOKENS = [...new Set([...LEG_TOKENS, ...Object.values(DEVICE_SOURCE_LANES).map((v) => v.contractKey), ...CONFIG_KEYS])];
+/** The config heading is protocol-independent in the parser (the protocol only decides the kinds), so any table row asks it. */
+const isConfigHeading = (l: string) => parseConfigSourcesBlock(l.trim(), CONFIG_KEYS[0]).state !== 'absent';
+const isSourcesHeading = (l: string) => isDeviceHeading(l) || isConfigHeading(l);
+const tokenRe = (t: string) => new RegExp(`(?<![\\w-])${t.replace(/[-]/g, '\\-')}(?![\\w-])`);
+const configLaneOf = (key: string): Lane => {
+  const row = Object.values(CONFIG_SOURCE_LANES).find((v) => v.contractKey === key);
+  if (!row) throw new Error(`not a config-sources protocol: ${key}`);
+  return row.lane;
+};
 
 interface Fence { start: number; body: string[] }
 interface Section { title: string; start: number; lines: string[]; fences: Fence[]; outside: string[] }
@@ -112,11 +145,38 @@ export function checkSources(draft: string, objective?: string | null): SourcesR
     errors.push({ rule: 'S1', section: h.section, message: `line ${h.line}: a sources heading outside a fence (it would split the spec's sections) - put the block in a fence` });
   }
   for (const s of secs) {
-    const srcFences = s.fences.filter((f) => f.body.some(isSourcesHeading));
-    if (srcFences.length === 0) continue;
+    const srcFences = s.fences.filter((f) => f.body.some(isDeviceHeading));
+    const cfgFences = s.fences.filter((f) => !f.body.some(isDeviceHeading) && f.body.some(isConfigHeading));
+    if (srcFences.length + cfgFences.length === 0) continue;
     if (!LEG_SECTION_RE.test(s.title)) errors.push({ rule: 'S1', section: s.title, message: 'a sources block outside a leg\'s "Pipeline N objective" section' });
-    if (srcFences.length > 1) errors.push({ rule: 'S1', section: s.title, message: `${srcFences.length} sources blocks in one leg section (exactly one allowed)` });
+    if (srcFences.length + cfgFences.length > 1) {
+      const both = srcFences.length && cfgFences.length ? ' (a device-sources block AND a config-sources block: a leg has one protocol, so one grammar)' : '';
+      errors.push({ rule: 'S1', section: s.title, message: `${srcFences.length + cfgFences.length} sources blocks in one leg section (exactly one allowed)${both}` });
+    }
     const outside = s.outside.join('\n');
+    if (cfgFences.length) {
+      const named = `${s.title}\n${outside}`;
+      const keys = CONFIG_KEYS.filter((k) => tokenRe(k).test(named));
+      if (keys.length !== 1) {
+        const legs = KNOWN_LEG_TOKENS.filter((k) => tokenRe(k).test(named));
+        errors.push({ rule: 'S1', section: s.title, message: keys.length === 0
+          ? `a config-sources block on a leg that names no config-sources protocol (it names: ${legs.join(', ') || 'no leg protocol'}); only ${CONFIG_KEYS.join(', ')} legs declare config sources today`
+          : `a config-sources block on a leg that names several config-sources protocols (${keys.join(', ')}): the leg's protocol is ambiguous` });
+      } else {
+        for (const f of cfgFences) {
+          const body = f.body.join('\n');
+          const resolution = resolveLegConfigSources({ protocol: keys[0], contractValue: body, taskBody: body });
+          blocks.push({ grammar: 'config', section: s.title, line: f.start, protocol: keys[0], lane: configLaneOf(keys[0]), laneSource: 'table', resolution });
+          if (resolution.state !== 'parsed') {
+            const detail = resolution.state === 'unparseable'
+              ? `${resolution.problem}${resolution.lineIndex === null ? '' : ` at block line ${resolution.lineIndex + 1}`} (as the ${resolution.source === 'contract' ? 'contract copy' : 'task-body copy'})`
+              : resolution.state;
+            errors.push({ rule: 'S2', section: s.title, message: `config-sources block at line ${f.start} does not parse as the platform reads it for ${keys[0]}: ${detail}` });
+          }
+        }
+      }
+    }
+    if (srcFences.length === 0) continue;
     const said = (Object.keys(LANE_SENTENCES) as Lane[]).filter((k) => outside.includes(LANE_SENTENCES[k]));
     let lane: Lane | null = null; let laneSource: SourcesBlock['laneSource'] = 'none';
     if (said.length === 1) { lane = said[0]; laneSource = 'sentence'; }
@@ -126,7 +186,7 @@ export function checkSources(draft: string, objective?: string | null): SourcesR
     for (const f of srcFences) {
       const body = f.body.join('\n');
       const resolution = resolveLegDeviceSources({ contractValue: body, taskBody: body });
-      blocks.push({ section: s.title, line: f.start, lane, laneSource, resolution });
+      blocks.push({ grammar: 'device', section: s.title, line: f.start, lane, laneSource, resolution });
       if (resolution.state !== 'parsed') {
         const detail = resolution.state === 'unparseable'
           ? `${resolution.problem}${resolution.lineIndex === null ? '' : ` at block line ${resolution.lineIndex + 1}`} (as the ${resolution.source === 'contract' ? 'contract copy' : 'task-body copy'})`
@@ -145,17 +205,42 @@ export function checkSources(draft: string, objective?: string | null): SourcesR
   if (objective == null) notChecked.unshift('S3 transcription: no --objective given');
   else {
     const parsedItems: Array<{ item: number; res: LegDeviceSources }> = [];
+    const parsedCfgItems: Array<{ item: number; protocol: string; res: LegConfigSources }> = [];
     for (const it of objectiveItems(objective)) {
+      // A config-sources block in an owner item: parsed per config-sources protocol; one that parses for a protocol is that
+      // protocol's declaration (one protocol today, so this never has to choose).
+      const per = CONFIG_KEYS.map((k) => ({ k, res: resolveLegConfigSources({ protocol: k, contractValue: undefined, taskBody: unfenced(it.text) }) }));
+      const present = per.filter((x) => x.res.state !== 'absent');
+      if (present.length) {
+        const ok = present.filter((x) => x.res.state === 'parsed');
+        items.push({ item: it.item, grammar: 'config', state: ok.length ? 'parsed' : present[0].res.state });
+        if (!ok.length) {
+          const r0 = present[0].res;
+          errors.push({ rule: 'S3', section: null, message: `owner item ${it.item}: its config-sources block does not parse (${r0.state === 'unparseable' ? r0.problem : r0.state}) - fix the answer before the merge` });
+        }
+        for (const x of ok) parsedCfgItems.push({ item: it.item, protocol: x.k, res: x.res });
+      }
       const res = resolveLegDeviceSources({ contractValue: undefined, taskBody: unfenced(it.text) });
       if (res.state === 'absent') continue;
-      items.push({ item: it.item, state: res.state });
+      items.push({ item: it.item, grammar: 'device', state: res.state });
       if (res.state !== 'parsed') {
         errors.push({ rule: 'S3', section: null, message: `owner item ${it.item}: its sources block does not parse (${res.state === 'unparseable' ? res.problem : res.state}) - fix the answer before the merge` });
         continue;
       }
       parsedItems.push({ item: it.item, res });
     }
-    const good = blocks.filter((b) => b.resolution.state === 'parsed');
+    const good = blocks.filter((b): b is Extract<SourcesBlock, { grammar: 'device' }> => b.grammar === 'device' && b.resolution.state === 'parsed');
+    const goodCfg = blocks.filter((b): b is Extract<SourcesBlock, { grammar: 'config' }> => b.grammar === 'config' && b.resolution.state === 'parsed');
+    for (const it of parsedCfgItems) {
+      if (!goodCfg.some((b) => b.protocol === it.protocol && sameConfigDeclaration(b.resolution, it.res))) {
+        errors.push({ rule: 'S3', section: null, message: `owner item ${it.item}: no config-sources block in the spec declares what the item declares (dropped, retyped or partly carried)` });
+      }
+    }
+    for (const b of goodCfg) {
+      if (!parsedCfgItems.some((it) => it.protocol === b.protocol && sameConfigDeclaration(b.resolution, it.res))) {
+        errors.push({ rule: 'S3', section: b.section, message: `config-sources block at line ${b.line} matches no owner item (a block the owner never gave)` });
+      }
+    }
     for (const it of parsedItems) {
       if (!good.some((b) => sameDeclaration(b.resolution, it.res))) {
         errors.push({ rule: 'S3', section: null, message: `owner item ${it.item}: no block in the spec declares what the item declares (dropped, retyped or partly carried)` });
@@ -169,21 +254,34 @@ export function checkSources(draft: string, objective?: string | null): SourcesR
   }
 
   for (const lane of Object.keys(LANE_SENTENCES) as Lane[]) {
-    const ofLane = blocks.filter((b) => b.lane === lane && b.resolution.state === 'parsed');
+    const ofLane = blocks.filter((b): b is Extract<SourcesBlock, { grammar: 'device' }> => b.grammar === 'device' && b.lane === lane && b.resolution.state === 'parsed');
     for (const b of ofLane.slice(1)) {
       if (!sameDeclaration(b.resolution, ofLane[0].resolution)) {
         errors.push({ rule: 'S4', section: b.section, message: `the ${lane}-lane block at line ${b.line} differs from the one in "${ofLane[0].section}": the platform carries ONE block per lane, so every ${lane} leg in a program reads the same list (plan L1)` });
       }
     }
   }
+  for (const key of CONFIG_KEYS) {
+    const ofKey = blocks.filter((b): b is Extract<SourcesBlock, { grammar: 'config' }> => b.grammar === 'config' && b.protocol === key && b.resolution.state === 'parsed');
+    for (const b of ofKey.slice(1)) {
+      if (!sameConfigDeclaration(b.resolution, ofKey[0].resolution)) {
+        errors.push({ rule: 'S4', section: b.section, message: `the ${key} config-sources block at line ${b.line} differs from the one in "${ofKey[0].section}": the platform carries ONE block per protocol token and every ${key} leg reads and holds every file in it - give each leg the same block listing every leg's files (owner 2026-11-15)` });
+      }
+    }
+  }
+  if (blocks.some((b) => b.grammar === 'config')) {
+    notChecked.push('config sources: that a ref is inside the Git service\'s pin, that an evidence service or descriptor registers, and that the block covers the cluster each leg changes');
+  }
   return { mode, blocks, errors, notChecked, items };
 }
 
 export function renderSourcesCli(r: SourcesResult): string {
-  const out: string[] = [`requirements sources check (${r.mode} spec): ${r.blocks.length} block(s)`];
+  const dev = r.blocks.filter((b) => b.grammar === 'device').length;
+  const out: string[] = [`requirements sources check (${r.mode} spec): ${r.blocks.length} block(s) (device ${dev}, config ${r.blocks.length - dev})`];
   for (const b of r.blocks) {
     const n = b.resolution.state === 'parsed' ? `${b.resolution.entries.length} line(s)` : b.resolution.state;
-    out.push(`  - "${b.section}" line ${b.line}: lane ${b.lane ?? '?'} (${b.laneSource}), ${n}`);
+    const what = b.grammar === 'config' ? `config ${b.protocol}, lane ${b.lane} (${b.laneSource})` : `device, lane ${b.lane ?? '?'} (${b.laneSource})`;
+    out.push(`  - "${b.section}" line ${b.line}: ${what}, ${n}`);
   }
   if (r.errors.length === 0) out.push('OK: S1-S4 clean');
   for (const e of r.errors) out.push(`ERROR ${e.rule}${e.section ? ` [${e.section}]` : ''}: ${e.message}`);

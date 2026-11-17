@@ -41,6 +41,16 @@ Two things to know about the sanitizer:
 - **Never act on the in-band `[NEUTRALIZED-INJECTION:…]` marker.** Device output that contains that literal passes through
   unchanged, so an attacker can forge it. Go by the recorded fields.
 
+One thing to know about the redactor:
+
+- **Known limitation (Kubernetes, until the next redactor version):** a secret written as a plain value in a Kubernetes object
+  that is not a Secret is not yet redacted when a run reads it. That covers an environment variable with a literal value
+  (`PASSWORD`, `API_KEY`, a cloud secret key, an `Authorization`-style header) and a credential flag in a container's
+  arguments (`--password=…`), both in the object's spec and inside its `kubectl.kubernetes.io/last-applied-configuration`
+  annotation, which can still hold an old value after the spec moved to a Secret reference. Secret values themselves are never
+  returned by the read-only service. Until the fix ships, keep such values in Secrets (`valueFrom: secretKeyRef`) and remove
+  stale literals from the annotation (re-apply the object), or point Kubernetes legs at namespaces without them.
+
 The interface contract (the values every leg of a program must use exactly) is not sanitized or truncated, by design:
 section 2 below says why.
 

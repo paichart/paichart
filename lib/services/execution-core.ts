@@ -771,10 +771,13 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
       executionId,
       logger,
       owningLeg,
-      ...(legDeviceSources ? { deviceSources: legDeviceSources } : {}),
-      ...(legConfigSources ? { configSources: legConfigSources } : {}),
-      ...(platformDriftCalls !== undefined ? { platformDriftCalls } : {}),
-      ...(heldStamps ? { held: heldStamps } : {}),
+      // PLAIN properties, never conditional spreads: a spread is not excess-property-checked, which is how `configSources` and
+      // `platformDriftCalls` were dropped at this hop until 2026-11-16 (the drift call was made, its record never stamped).
+      // null/undefined mean "none" — buildNetContext treats them exactly as an absent key.
+      deviceSources: legDeviceSources,
+      configSources: legConfigSources,
+      platformDriftCalls,
+      held: heldStamps,
     }, resultJson as Record<string, unknown>);
 
     // ── Per-net operator telemetry. Deliberately OUTSIDE the registry: these lines are specific
