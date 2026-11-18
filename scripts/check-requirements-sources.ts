@@ -37,11 +37,20 @@
  *       that protocol reads and holds every declared file in it (owner 2026-11-15, multi-leg ADDENDUM 2).
  *   S5  NOT CHECKED: a ref vs the service pin, descriptor registration, that the block covers the cluster the leg changes.
  *
+ * OWNER ITEMS ARE KEYED ON THEIR TOKEN (2026-11-17, STEPS-2-4-PLAN section 3b item 6; record STEP4-REQ-CHECK-TOKEN-KEYING.md). An owner
+ * item's config-sources block is resolved under ONE protocol: the config-sources token that prefixes the item's rows in the owner's
+ * ROW-ITEM-MAP (answers.md, `--answers`; the rule check-requirements-clauses.py already uses: "an item governs the legs whose token
+ * prefixes its rows"). It is never resolved by trying every key: terraform-iac and kubernetes-gitops share their kinds, so the text
+ * alone cannot tell them apart. An item whose rows name no config-sources token, or several, is an S3 ERROR (fail closed). Without
+ * the map, the candidates are every config-sources protocol the check reads: exactly one (today) resolves as before; several is the
+ * same S3 ERROR, asking for the map. A block is compared only with items of its own leg's protocol; an item carried on a leg of
+ * another protocol is named.
+ *
  * Lane. A generated spec (it has `## Design decisions`) states each leg's lane with one fixed sentence (LANE_SENTENCES). A
  * hand-written spec has no such sentence; there the lane is INFERRED from the phrase the Program Architect itself keys a value
  * leg on, "changes nothing" (pAIchartUniversalTemplate.ts token bullet), and the output says it was inferred.
  *
- * Usage: npx ts-node -r tsconfig-paths/register scripts/check-requirements-sources.ts --draft <requirements.md> [--objective <objective.txt>] [--json]
+ * Usage: npx ts-node -r tsconfig-paths/register scripts/check-requirements-sources.ts --draft <requirements.md> [--objective <objective.txt>] [--answers <answers.md>] [--json]
  * Exit 0 clean, 1 any ERROR, 2 usage.
  */
 import * as fs from 'fs';
@@ -51,8 +60,9 @@ import {
 import {
   parseConfigSourcesBlock, resolveLegConfigSources, sameConfigDeclaration, type LegConfigSources,
 } from '../lib/agents/harness/config-sources';
-import { CONFIG_SOURCE_LANES, DEVICE_SOURCE_LANES } from '../lib/agents/harness/held-bytes/variant';
+import { CONFIG_SOURCE_LANES, CONFIG_SOURCE_PROTOCOLS, DEVICE_SOURCE_LANES } from '../lib/agents/harness/held-bytes/variant';
 import { LEG_TOKENS } from '../lib/agents/harness/requirements-coverage';
+import { rowItemMapFromAnswers, type RowItemMap } from '../lib/agents/harness/requirements-clauses';
 
 export type Lane = 'change' | 'value';
 /** The two fixed lane sentences a generated spec carries beside each block (plan section 4.3). */
@@ -74,17 +84,31 @@ export type SourcesBlock =
 export interface SourcesFinding { rule: 'S1' | 'S2' | 'S3' | 'S4'; section: string | null; message: string }
 export interface SourcesResult {
   mode: 'generated' | 'hand-written'; blocks: SourcesBlock[]; errors: SourcesFinding[]; notChecked: string[];
-  items: Array<{ item: number; grammar: 'device' | 'config'; state: LegDeviceSources['state'] }>;
+  /** `unkeyed`: a config-sources item whose protocol could not be named (no token, or several); it is an S3 ERROR. */
+  items: Array<{ item: number; grammar: 'device' | 'config'; state: LegDeviceSources['state'] | 'unkeyed' }>;
+}
+export interface SourcesCheckOptions {
+  /** The config-sources contract keys the check reads. Default: the protocols whose text has shipped (SHIPPED_CONFIG_KEYS). Tests
+   *  inject a row still awaiting its text to prove the check before that text ships; production callers never pass it. */
+  configKeys?: readonly string[];
+  /** The owner's item to rows map (answers.md ROW-ITEM-MAP). Given, it is the ONLY source of an owner item's protocol. */
+  rowItemMap?: RowItemMap | null;
 }
 
 const isFence = (l: string) => l.trim().startsWith('```');
 /** A line the SHIPPING parser treats as a sources heading (asked of the parser, never of a local pattern). */
 const isDeviceHeading = (l: string) => parseDeviceSourcesBlock(l.trim()).state !== 'absent';
 /** The config-sources protocols (contract key = the token a spec names) and every leg token a spec may name. */
-const CONFIG_KEYS = Object.values(CONFIG_SOURCE_LANES).map((v) => v.contractKey);
-const KNOWN_LEG_TOKENS = [...new Set([...LEG_TOKENS, ...Object.values(DEVICE_SOURCE_LANES).map((v) => v.contractKey), ...CONFIG_KEYS])];
+// Config sources STEP 4 (2026-11-17): only the protocols whose Config-sources TEXT has shipped (CONFIG_SOURCE_PROTOCOLS = the table minus
+// CONFIG_SOURCE_AWAITING_TEXT): a row awaiting its text declares nothing yet. Owner items are keyed on their token (header, section 3b
+// item 6), so a second protocol here no longer makes a Kubernetes owner item ambiguous (tests inject terraform-iac to prove it).
+export const SHIPPED_CONFIG_KEYS: readonly string[] = Object.freeze(CONFIG_SOURCE_PROTOCOLS.map((p) => CONFIG_SOURCE_LANES[p].contractKey));
+const knownLegTokens = (keys: readonly string[]) => [...new Set([...LEG_TOKENS, ...Object.values(DEVICE_SOURCE_LANES).map((v) => v.contractKey), ...keys])];
 /** The config heading is protocol-independent in the parser (the protocol only decides the kinds), so any table row asks it. */
-const isConfigHeading = (l: string) => parseConfigSourcesBlock(l.trim(), CONFIG_KEYS[0]).state !== 'absent';
+const isConfigHeading = (l: string) => parseConfigSourcesBlock(l.trim(), SHIPPED_CONFIG_KEYS[0]).state !== 'absent';
+/** The config-sources tokens an owner item's rows name (first segment of each row id, as check-requirements-clauses.py reads it). */
+const itemConfigTokens = (rows: ReadonlySet<string> | undefined, keys: readonly string[]) =>
+  [...new Set([...(rows ?? [])].map((r) => r.split('.')[0]))].filter((t) => keys.includes(t)).sort();
 const isSourcesHeading = (l: string) => isDeviceHeading(l) || isConfigHeading(l);
 const tokenRe = (t: string) => new RegExp(`(?<![\\w-])${t.replace(/[-]/g, '\\-')}(?![\\w-])`);
 const configLaneOf = (key: string): Lane => {
@@ -136,7 +160,10 @@ function objectiveItems(objective: string): Array<{ item: number; text: string }
 /** A fence line is presentation: it ends the block, exactly like the blank line the parser already stops at. */
 const unfenced = (t: string) => t.split(/\r?\n/).map((l) => (isFence(l) ? '' : l)).join('\n');
 
-export function checkSources(draft: string, objective?: string | null): SourcesResult {
+export function checkSources(draft: string, objective?: string | null, opts: SourcesCheckOptions = {}): SourcesResult {
+  // De-duplicated: a caller listing a protocol that has since shipped must not read as a leg naming it twice.
+  const CONFIG_KEYS: readonly string[] = [...new Set(opts.configKeys ?? SHIPPED_CONFIG_KEYS)];
+  const rowMap = opts.rowItemMap ?? null;
   const { sections: secs, strayHeadings } = sections(draft);
   const mode: SourcesResult['mode'] = secs.some((s) => DD_TITLE_RE.test(s.title)) ? 'generated' : 'hand-written';
   const errors: SourcesFinding[] = [];
@@ -158,7 +185,7 @@ export function checkSources(draft: string, objective?: string | null): SourcesR
       const named = `${s.title}\n${outside}`;
       const keys = CONFIG_KEYS.filter((k) => tokenRe(k).test(named));
       if (keys.length !== 1) {
-        const legs = KNOWN_LEG_TOKENS.filter((k) => tokenRe(k).test(named));
+        const legs = knownLegTokens(CONFIG_KEYS).filter((k) => tokenRe(k).test(named));
         errors.push({ rule: 'S1', section: s.title, message: keys.length === 0
           ? `a config-sources block on a leg that names no config-sources protocol (it names: ${legs.join(', ') || 'no leg protocol'}); only ${CONFIG_KEYS.join(', ')} legs declare config sources today`
           : `a config-sources block on a leg that names several config-sources protocols (${keys.join(', ')}): the leg's protocol is ambiguous` });
@@ -207,18 +234,26 @@ export function checkSources(draft: string, objective?: string | null): SourcesR
     const parsedItems: Array<{ item: number; res: LegDeviceSources }> = [];
     const parsedCfgItems: Array<{ item: number; protocol: string; res: LegConfigSources }> = [];
     for (const it of objectiveItems(objective)) {
-      // A config-sources block in an owner item: parsed per config-sources protocol; one that parses for a protocol is that
-      // protocol's declaration (one protocol today, so this never has to choose).
-      const per = CONFIG_KEYS.map((k) => ({ k, res: resolveLegConfigSources({ protocol: k, contractValue: undefined, taskBody: unfenced(it.text) }) }));
-      const present = per.filter((x) => x.res.state !== 'absent');
-      if (present.length) {
-        const ok = present.filter((x) => x.res.state === 'parsed');
-        items.push({ item: it.item, grammar: 'config', state: ok.length ? 'parsed' : present[0].res.state });
-        if (!ok.length) {
-          const r0 = present[0].res;
-          errors.push({ rule: 'S3', section: null, message: `owner item ${it.item}: its config-sources block does not parse (${r0.state === 'unparseable' ? r0.problem : r0.state}) - fix the answer before the merge` });
+      // A config-sources block in an owner item: resolved under the ONE protocol its token names (header), never under every key.
+      const cfgText = unfenced(it.text);
+      if (parseConfigSourcesBlock(cfgText, SHIPPED_CONFIG_KEYS[0]).state !== 'absent') {
+        const rows = rowMap ? rowMap.get(it.item) : undefined;
+        const cand = rowMap ? itemConfigTokens(rows, CONFIG_KEYS) : [...CONFIG_KEYS];
+        if (cand.length !== 1) {
+          items.push({ item: it.item, grammar: 'config', state: 'unkeyed' });
+          const named = rows && rows.size ? [...rows].sort().join(', ') : 'none';
+          errors.push({ rule: 'S3', section: null, message: !rowMap
+            ? `owner item ${it.item}: a config-sources block, but no row-item map names its protocol and the check reads ${cand.length} config-sources protocols (${cand.join(', ')}) - pass the owner's answers (--answers) so the item is keyed on its token`
+            : cand.length === 0
+              ? `owner item ${it.item}: a config-sources block, but its rows in the owner's map name no config-sources token (rows: ${named}; tokens read: ${CONFIG_KEYS.join(', ')}) - map the item to its leg's row before the merge`
+              : `owner item ${it.item}: a config-sources block whose rows name several config-sources tokens (${cand.join(', ')}; rows: ${named}): the item's protocol is ambiguous - one item per protocol` });
+        } else {
+          const res = resolveLegConfigSources({ protocol: cand[0], contractValue: undefined, taskBody: cfgText });
+          items.push({ item: it.item, grammar: 'config', state: res.state });
+          if (res.state !== 'parsed') {
+            errors.push({ rule: 'S3', section: null, message: `owner item ${it.item}: its config-sources block does not parse (${res.state === 'unparseable' ? res.problem : res.state}) - fix the answer before the merge` });
+          } else parsedCfgItems.push({ item: it.item, protocol: cand[0], res });
         }
-        for (const x of ok) parsedCfgItems.push({ item: it.item, protocol: x.k, res: x.res });
       }
       const res = resolveLegDeviceSources({ contractValue: undefined, taskBody: unfenced(it.text) });
       if (res.state === 'absent') continue;
@@ -233,12 +268,18 @@ export function checkSources(draft: string, objective?: string | null): SourcesR
     const goodCfg = blocks.filter((b): b is Extract<SourcesBlock, { grammar: 'config' }> => b.grammar === 'config' && b.resolution.state === 'parsed');
     for (const it of parsedCfgItems) {
       if (!goodCfg.some((b) => b.protocol === it.protocol && sameConfigDeclaration(b.resolution, it.res))) {
-        errors.push({ rule: 'S3', section: null, message: `owner item ${it.item}: no config-sources block in the spec declares what the item declares (dropped, retyped or partly carried)` });
+        const elsewhere = goodCfg.find((b) => b.protocol !== it.protocol && sameConfigDeclaration(b.resolution, it.res));
+        errors.push({ rule: 'S3', section: null, message: elsewhere
+          ? `owner item ${it.item} is a ${it.protocol} item, but the block that declares it sits on a ${elsewhere.protocol} leg ("${elsewhere.section}", line ${elsewhere.line}) - an item is carried only on a leg of its own protocol`
+          : `owner item ${it.item}: no config-sources block in the spec declares what the item declares (dropped, retyped or partly carried)` });
       }
     }
     for (const b of goodCfg) {
       if (!parsedCfgItems.some((it) => it.protocol === b.protocol && sameConfigDeclaration(b.resolution, it.res))) {
-        errors.push({ rule: 'S3', section: b.section, message: `config-sources block at line ${b.line} matches no owner item (a block the owner never gave)` });
+        const other = parsedCfgItems.find((it) => it.protocol !== b.protocol && sameConfigDeclaration(b.resolution, it.res));
+        errors.push({ rule: 'S3', section: b.section, message: other
+          ? `${b.protocol} config-sources block at line ${b.line} carries owner item ${other.item}, which is a ${other.protocol} item - no ${b.protocol} item declares it`
+          : `config-sources block at line ${b.line} matches no owner item (a block the owner never gave)` });
       }
     }
     for (const it of parsedItems) {
@@ -294,9 +335,11 @@ if (require.main === module) {
   const argv = process.argv.slice(2);
   const arg = (k: string) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : undefined; };
   const draftPath = arg('--draft');
-  if (!draftPath) { console.error('usage: check-requirements-sources.ts --draft <requirements.md> [--objective <objective.txt>] [--json]'); process.exit(2); }
+  if (!draftPath) { console.error('usage: check-requirements-sources.ts --draft <requirements.md> [--objective <objective.txt>] [--answers <answers.md>] [--json]'); process.exit(2); }
   const objPath = arg('--objective');
-  const r = checkSources(fs.readFileSync(draftPath, 'utf8'), objPath ? fs.readFileSync(objPath, 'utf8') : null);
+  const ansPath = arg('--answers');
+  const r = checkSources(fs.readFileSync(draftPath, 'utf8'), objPath ? fs.readFileSync(objPath, 'utf8') : null,
+    { rowItemMap: ansPath ? rowItemMapFromAnswers(fs.readFileSync(ansPath, 'utf8')) : null });
   process.stdout.write((argv.includes('--json') ? JSON.stringify(r, null, 2) : renderSourcesCli(r)) + '\n');
   process.exit(r.errors.length ? 1 : 0);
 }

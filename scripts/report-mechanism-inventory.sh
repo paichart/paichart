@@ -716,14 +716,16 @@ UNION ALL SELECT '🔴 a live-read-evidence-only refusal on an execution whose o
 UNION ALL SELECT '⚪ liveEvidence stamps by point / summary — ' || coalesce(a.j->'liveEvidence'->>'point', '(none)') || ' / '
   || coalesce(a.j->'liveEvidence'->>'summary', 'not checked: ' || coalesce(a.j->'liveEvidence'->>'reason', '(none)')), count(*)::text
   FROM _a a WHERE a.name IN ('result.json', 'pipeline-index.json') AND a.j ? 'liveEvidence' GROUP BY 1
-UNION ALL SELECT '🔴 a liveEvidence stamp on an execution composed below network-provisioning 1.26.0 / network-derivation 1.3.0 / kubernetes-gitops 1.19.0 (EF-S3: stored legs never stamp)', count(*)::text
+UNION ALL SELECT '🔴 a liveEvidence stamp on an execution composed below network-provisioning 1.26.0 / network-derivation 1.3.0 / kubernetes-gitops 1.19.0 / terraform-iac 1.17.0 (EF-S3: stored legs never stamp)', count(*)::text
   FROM _a a WHERE a.name IN ('result.json', 'pipeline-index.json') AND a.j ? 'liveEvidence'
    AND NOT ((a.j->'protocolInjection'->'delta'->>'name' = 'network-provisioning-protocol'
         AND coalesce(string_to_array(substring(a.j->'protocolInjection'->'delta'->>'version' FROM '^[0-9]+\.[0-9]+\.[0-9]+'), '.')::int[], '{0}') >= '{1,26,0}'::int[])
      OR (a.j->'protocolInjection'->'delta'->>'name' = 'network-derivation-protocol'
         AND coalesce(string_to_array(substring(a.j->'protocolInjection'->'delta'->>'version' FROM '^[0-9]+\.[0-9]+\.[0-9]+'), '.')::int[], '{0}') >= '{1,3,0}'::int[])
      OR (a.j->'protocolInjection'->'delta'->>'name' = 'kubernetes-gitops-protocol'
-        AND coalesce(string_to_array(substring(a.j->'protocolInjection'->'delta'->>'version' FROM '^[0-9]+\.[0-9]+\.[0-9]+'), '.')::int[], '{0}') >= '{1,19,0}'::int[]))
+        AND coalesce(string_to_array(substring(a.j->'protocolInjection'->'delta'->>'version' FROM '^[0-9]+\.[0-9]+\.[0-9]+'), '.')::int[], '{0}') >= '{1,19,0}'::int[])
+     OR (a.j->'protocolInjection'->'delta'->>'name' = 'terraform-iac-protocol'
+        AND coalesce(string_to_array(substring(a.j->'protocolInjection'->'delta'->>'version' FROM '^[0-9]+\.[0-9]+\.[0-9]+'), '.')::int[], '{0}') >= '{1,17,0}'::int[]))
 -- Config sources STEP 2 (2026-11-15) — the Kubernetes Config-sources facts. All NOT_STAMPED until kubernetes-gitops 1.19.0 ships, so
 -- every count below is 0 on every stored leg; a non-zero count before that text is live is a stamp that should not exist.
 UNION ALL SELECT '⚪ configSourceReads stamps (Config-sources Harvesters): checked / not checked', count(*) FILTER (WHERE a.j->'configSourceReads'->>'checked' = 'true') || ' / '
@@ -742,6 +744,25 @@ UNION ALL SELECT '· platformDriftCalls: platform calls of the compare tool, by 
   WHERE a.name = 'result.json' GROUP BY c->>'outcome'
 UNION ALL SELECT '🔴 a platformDriftCalls record that carries a `manifest` key or a raw `detail` (the record stores a sha, a length and the validated projection only)', count(*)::text
   FROM _a a WHERE a.name = 'result.json' AND a.j ? 'platformDriftCalls' AND ((a.j->'platformDriftCalls')::text LIKE '%"manifest":%' OR (a.j->'platformDriftCalls')::text LIKE '%"detail":%')
+-- terraform-witness step-back (2026-11-18) — `planWitness`: the platform's check of a Terraform Author's Plan witness block. NOT_STAMPED
+-- below terraform-iac 1.17.0, so every count below is 0 on every stored leg. The stop-sentence FORCE shows on the generic
+-- "heldEdit.forced on held legs (reason: stop-sentence-altered / stop-sentence-absent)" line of the HELD LEGS section.
+UNION ALL SELECT '⚪ planWitness stamps (Terraform Authors) by stop sentence / witness block — ' || coalesce(a.j->'planWitness'->>'stopSentence', 'not checked: ' || coalesce(a.j->'planWitness'->>'reason', '(none)'))
+  || ' / ' || coalesce(a.j->'planWitness'->>'witnessBlock', '-'), count(*)::text
+  FROM _a a WHERE a.name = 'result.json' AND a.j ? 'planWitness' GROUP BY 1
+UNION ALL SELECT '· planWitness: what the name lists cover — ' || coalesce(a.j->'planWitness'->>'listsCover', '(none)'), count(*)::text
+  FROM _a a WHERE a.name = 'result.json' AND a.j ? 'planWitness' GROUP BY 1
+UNION ALL SELECT '· planWitness: edits not read, by reason: ' || coalesce(e->>'reason', '(none)'), count(*)::text
+  FROM _a a, jsonb_array_elements(CASE WHEN jsonb_typeof(a.j->'planWitness'->'edits') = 'array' THEN a.j->'planWitness'->'edits' ELSE '[]' END) e
+  WHERE a.name = 'result.json' AND e->>'state' = 'unreadable' GROUP BY e->>'reason'
+UNION ALL SELECT '· planWitness: stamps with a name the witness block does not contain / an unchanged key it gives a value for (read each by hand)',
+  count(*) FILTER (WHERE jsonb_array_length(CASE WHEN jsonb_typeof(a.j->'planWitness'->'missing') = 'array' THEN a.j->'planWitness'->'missing' ELSE '[]' END) > 0) || ' / '
+  || count(*) FILTER (WHERE jsonb_array_length(CASE WHEN jsonb_typeof(a.j->'planWitness'->'wholeValueKeys') = 'array' THEN a.j->'planWitness'->'wholeValueKeys' ELSE '[]' END) > 0)
+  FROM _a a WHERE a.name = 'result.json' AND a.j ? 'planWitness'
+UNION ALL SELECT '🔴 a planWitness stamp on an execution composed below terraform-iac 1.17.0, or by another protocol (stored legs never stamp)', count(*)::text
+  FROM _a a WHERE a.name IN ('result.json', 'pipeline-index.json') AND a.j ? 'planWitness'
+   AND NOT (a.j->'protocolInjection'->'delta'->>'name' = 'terraform-iac-protocol'
+        AND coalesce(string_to_array(substring(a.j->'protocolInjection'->'delta'->>'version' FROM '^[0-9]+\.[0-9]+\.[0-9]+'), '.')::int[], '{0}') >= '{1,17,0}'::int[])
 -- held-network step 3 push 2 (O-2, the J1 entry gate): capture governs from the leg's FIRST-EXECUTION declaration snapshot
 -- (metadata.deviceSourcesSnapshot, prepare-task-for-execution.ts). The 🔴 is scoped to refs written after the first snapshot ever
 -- (a ref from a leg first executed before push 2 deployed predates the rule); while the ⚪ reads nothing it is unmeasured.

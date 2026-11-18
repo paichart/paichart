@@ -2230,7 +2230,9 @@ const commitText = (name: string, commit: string): ProtocolText => {
       // 1.19.0 TEXT COMMIT (branch cs-k8s-text, c55a26364): kubernetes-gitops has LEFT the awaiting list, so production and the lab arm
       // agree by construction — production derives the lane from the list, the lab from the table + the version test. Below 1.19.0 the
       // version test alone keeps every cell byte-identical (asserted next). Before the text commit this read: list length 1, lane null.
-      assert(CONFIG_SOURCE_AWAITING_TEXT.length === 0 && configSourceLaneOf('kubernetes-gitops') !== null, 'the 1.19.0 text commit empties CONFIG_SOURCE_AWAITING_TEXT (kubernetes-gitops is a Config-sources protocol) — re-read this block');
+      // Config sources STEP 4 (2026-11-17): terraform-iac now AWAITS its text (list length 1), so this pins the k8s PROPERTY, not the length;
+      // a tf arm reads no Config sources until a terraform-iac row exists in LIVE_EVIDENCE_MIN_VERSIONS (the lab's version test).
+      assert(!CONFIG_SOURCE_AWAITING_TEXT.includes('kubernetes-gitops-protocol') && configSourceLaneOf('kubernetes-gitops') !== null, 'the 1.19.0 text commit empties CONFIG_SOURCE_AWAITING_TEXT (kubernetes-gitops is a Config-sources protocol) — re-read this block');
       const snap = planted();
       assert(arm.armConfigSources(snap.leg, { delta: P18 }) === null && arm.armConfigSources(snap.leg, undefined) === null && arm.armOwningLeg(snap.leg, { delta: P18 }) === null, 'a 1.18.0 arm must read no Config sources');
       const g = arm.armConfigSources(snap.leg, { delta: P19 });
@@ -2602,6 +2604,362 @@ const commitText = (name: string, commit: string): ProtocolText => {
       assert(sk.readReviewer(sk.CSK_CELLS['R-CONSISTENT'], { approved: true, blocking: [] }, rv, 'warn-blind').warnGitOnly === false, 'mutation warn-blind stayed green');
       const src = fs.readFileSync(path.join(LAB, 'score-csk.ts'), 'utf8');
       assert(/from '\.\.\/\.\.\/lib\/agents\/harness\/reviewer-warnings'/.test(src), 'the scorer must read warnings with the shipping parser');
+    });
+
+    // ───────────── L-CS-T: Config sources STEP 4 (Terraform), code push slice 4 — the lab half (2026-11-17) ─────────────
+    // D-T1 (owner Tb = B2): terraform-iac has NO Git-vs-live method. Production (`runLegPlatformDrift`, platform-drift.ts) then makes no
+    // call and writes no record, and `gitLiveDrift` reads `no-git-vs-live-method` (method null). The lab cannot load that module (it
+    // loads the hub), so `labPlatformDriftCalls` takes the leg's protocol and decides with the SHIPPING `gitLiveDriftMethodOf`. These
+    // tests run on the cached Terraform golden leg TF-PROG (Harvester read terraform/main.tf @ main + the rig's state tools); never fetch.
+    const TF_PROG = 'cmvsze3ud00bfyxb377av3uny'; const TF_PROG_REVIEWER = 'cmvszht2500c2yxb3a82187r9';
+    const T16 = { name: 'terraform-iac-protocol', version: '1.16.0' }; const T17 = { name: 'terraform-iac-protocol', version: '1.17.0' };
+    const TF_GIT_LINE = 'main-tf: git-file — service github-service ; paichart/paichart-lab-configs/terraform/main.tf';
+    const TF_LIVE_LINE = 'prod-state: live-read — service terraform-rig-readonly';
+    const TF_BLOCK = block(TF_GIT_LINE, TF_LIVE_LINE);
+    const tfWithBlock = (b: string | null) => { const c = JSON.parse(JSON.stringify(cached(TF_PROG))); if (b) c.leg.description = `${c.leg.description}${b}`; return c; };
+    const tfPlanted = (b: string | null = TF_BLOCK) => cs.withFirstExecutionConfigSnapshot(tfWithBlock(b)).snap;
+    const NO_METHOD = { version: 1, method: null, point: 'harvester', checked: false, reason: 'no-git-vs-live-method' };
+    const { gitLiveDriftMethodOf } = await import('../lib/agents/harness/git-live-drift');
+
+    await test('LCT1 (config-sources-arm.ts, Terraform) at the 1.17.0 text commit terraform-iac is a live Config-sources protocol, and the lab arm reads Config sources on a Terraform leg only at 1.17.0 (the shipping table + version test); the shipping method table gives terraform-iac NO Git-vs-live method at either spelling and Kubernetes its compare tool', async () => {
+      // 1.17.0 TEXT COMMIT (cs-tf-text b36fc5812): terraform-iac has LEFT the awaiting list, so production and the lab arm agree by
+      // construction (production derives the lane from the list, the lab from the table + the version test). Before it this read "awaits".
+      assert(!CONFIG_SOURCE_AWAITING_TEXT.includes('terraform-iac-protocol') && configSourceLaneOf('terraform-iac') !== null, 'terraform-iac must be a live Config-sources protocol at the 1.17.0 text commit — re-read this block');
+      assert(gitLiveDriftMethodOf('terraform-iac') === null && gitLiveDriftMethodOf('terraform-iac-protocol') === null && gitLiveDriftMethodOf('kubernetes-gitops') === 'k8s-declared-field-compare', 'GIT_LIVE_DRIFT_METHODS changed (D-T1)');
+      assert(cs.noGitLiveMethod('terraform-iac-protocol') && !cs.noGitLiveMethod('kubernetes-gitops-protocol') && !cs.noGitLiveMethod(undefined) && !cs.noGitLiveMethod(''), 'noGitLiveMethod is not production\'s test (a non-empty protocol whose method is null)');
+      const snap = tfPlanted();
+      assert(arm.configLegOf(snap.leg)?.protocol === 'terraform-iac-protocol' && arm.configLegOf(snap.leg)?.contractKey === 'terraform-iac', `tf leg row: ${JSON.stringify(arm.configLegOf(snap.leg)).slice(0, 200)}`);
+      assert(arm.armConfigSources(snap.leg, { delta: T16 }) === null && arm.armOwningLeg(snap.leg, { delta: T16 }) === null, 'a 1.16.0 Terraform arm must read no Config sources');
+      const g = arm.armConfigSources(snap.leg, { delta: T17 });
+      assert(g?.state === 'parsed' && (g as any).entries.map((x: any) => x.kind).join() === 'git-file,live-read', `1.17.0 arm: ${JSON.stringify(g).slice(0, 200)}`);
+      assert((arm.armOwningLeg(snap.leg, { delta: T17 }) as any).configSourceProtocol === 'terraform-iac-protocol', 'owning leg protocol');
+      const base = await cs.withComputedConfigFacts(snap, { protocol: T16, drift: null });
+      assert(base.snap === snap && base.facts === null && base.report.state === 'not-stamped-version', `1.16.0 base arm: ${JSON.stringify(base.report)}`);
+    });
+
+    await test('LCT2 (L-CS-K-b on Terraform) a 1.17.0 Terraform arm NEVER makes a lab drift call or record: with http/https/net/child_process/fetch tripped, the Harvester is stamped liveEvidence + configSourceReads, NO platformDriftCalls, and gitLiveDrift = computeGitLiveDrift(undefined, terraform-iac) = not-checked no-git-vs-live-method (method null); the same inputs with the Kubernetes protocol (or none) DO reach the caller — the protocol alone decides; a platformDrift plant on a Terraform leg is refused by name', async () => {
+      const tripped: string[] = []; const patches: Array<[any, string, any]> = [];
+      const trip = (mod: any, key: string, name: string) => { patches.push([mod, key, mod[key]]); mod[key] = () => { tripped.push(name); throw new Error(`LCT2: ${name} was called`); }; };
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const http = require('http'), https = require('https'), net = require('net'), cp = require('child_process');
+      trip(http, 'request', 'http.request'); trip(https, 'request', 'https.request'); trip(net, 'connect', 'net.connect'); trip(net, 'createConnection', 'net.createConnection');
+      for (const k of ['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync', 'fork']) trip(cp, k, `child_process.${k}`);
+      trip(globalThis as any, 'fetch', 'fetch');
+      try {
+        for (const [what, b, liveSummary] of [['git+live', TF_BLOCK, 'all-read'], ['git-only', block(TF_GIT_LINE), 'git-only']] as const) {
+          const snap = tfPlanted(b);
+          // drift: null — had the lab planned a call, the fixture caller would refuse "names no platformDrift plant … never stubbed".
+          const r = await cs.withComputedConfigFacts(snap, { protocol: T17, drift: null });
+          assert(r.report.state === 'computed' && r.calls === undefined && r.facts!.platformDriftCalls === undefined && r.report.platformDriftCalls === null, `${what}: a call record exists ${JSON.stringify(r.report.platformDriftCalls)}`);
+          assert(JSON.stringify(r.facts!.gitLiveDrift) === JSON.stringify(NO_METHOD) && JSON.stringify(r.facts!.gitLiveDrift) === JSON.stringify(computeGitLiveDrift(undefined, 'terraform-iac-protocol')), `${what}: gitLiveDrift ${JSON.stringify(r.facts!.gitLiveDrift)}`);
+          assert(r.report.gitLiveDrift!.reason === 'no-git-vs-live-method' && r.report.gitLiveDrift!.checked === false, `${what}: report ${JSON.stringify(r.report.gitLiveDrift)}`);
+          const { result } = (() => { const h = hs.frozenHarvesterEntry(snap); return { result: JSON.parse(snap.childArtifacts.find((a: any) => a.executionId === h.executionId && a.name === 'result.json')!.content) }; })();
+          const gov = governingConfigSources({ description: snap.leg!.description as string, contract: null, snapshot: (snap.leg!.metadata as any).configSourcesSnapshot }, 'terraform-iac-protocol');
+          assert(JSON.stringify(r.facts!.liveEvidence) === JSON.stringify(computeConfigLiveEvidence(gov, result.toolCalls)) && r.facts!.liveEvidence!.summary === liveSummary, `${what}: liveEvidence ${JSON.stringify(r.facts!.liveEvidence).slice(0, 200)}`);
+          assert(JSON.stringify(r.facts!.configSourceReads) === JSON.stringify(computeConfigSourceReads(gov, result.toolCalls)), `${what}: configSourceReads`);
+          assert(r.report.configForce === null && r.report.held!.refs === 1 && r.store!.refs[0].path === '/terraform/main.tf', `${what}: held ${JSON.stringify([r.report.configForce, r.report.held])}`);
+          const back = JSON.parse(r.snap.childArtifacts.find((a: any) => a.executionId === r.report.harvesterExecutionId && a.name === 'result.json')!.content);
+          assert(!('platformDriftCalls' in back) && JSON.stringify(back.gitLiveDrift) === JSON.stringify(NO_METHOD), `${what}: the patched Harvester result.json carries a call record`);
+        }
+        // The protocol alone decides: the same parsed Terraform declaration, store and calls, with a plant.
+        const snap = tfPlanted(); const gov = arm.armConfigSources(snap.leg, { delta: T17 })!;
+        const h = hs.frozenHarvesterEntry(snap); const tc = JSON.parse(snap.childArtifacts.find((a: any) => a.executionId === h.executionId && a.name === 'result.json')!.content).toolCalls;
+        const call = (protocol?: string | null) => cs.labPlatformDriftCalls({ sources: gov, store: hs.buildLabHeldStore(snap, gov), toolCalls: tc, spec: FIXTURE_PLANT, dir: null, ...(protocol !== undefined ? { protocol } : {}) });
+        for (const p of ['terraform-iac-protocol', 'terraform-iac']) { const x = await call(p); assert(x.calls === undefined && x.log.length === 0, `${p}: the fixture caller ran (${x.log.length})`); }
+        for (const p of [undefined, null, '', 'kubernetes-gitops-protocol']) { const x = await call(p as any); assert(x.calls?.length === 1 && x.log.length === 1, `${String(p)}: the caller did not run — the method decision leaked beyond the protocol`); }
+        await throws(() => cs.withComputedConfigFacts(snap, { protocol: T17, drift: FIXTURE_PLANT }), /platformDrift refused — terraform-iac-protocol has no Git-vs-live method/, 'a drift plant on a Terraform leg');
+      } finally { for (const [mod, key, orig] of patches) mod[key] = orig; }
+      assert(tripped.length === 0, `a network or process call was attempted: ${tripped.join(', ')}`);
+      // The decision is the shipping table's, never a lab copy.
+      const src = fs.readFileSync(path.join(LAB, 'config-sources-patch.ts'), 'utf8');
+      assert(/import \{[^}]*\bgitLiveDriftMethodOf\b[^}]*\} from '\.\.\/\.\.\/lib\/agents\/harness\/git-live-drift'/.test(src) && !/terraform-iac/.test(src.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '')), 'config-sources-patch.ts must decide with the SHIPPING gitLiveDriftMethodOf and name no protocol in code');
+    });
+
+    await test('LCT3 (carry + bytes, $0 dry run through lab.ts) a persisted TERRAFORM Reviewer cell (GOLD-TF-PROG): the 1.16.0 base arm is byte-identical to the frozen production rebuild and to a node with no lever; the 1.17.0 arm\'s Reviewer AND Author prompts are the base plus EXACTLY the shipping liveEvidence render (the Reviewer\'s also the Plan-witness platform line, planWitness lever), and NO drift line (the chainer carries gitLiveDrift only when checked; the lab copy is pinned to it); the manifest records no call; a drift plant on the Terraform node stops the dry run', async () => {
+      const gsm = await import('./leg-replay-lab/golden-set');
+      const root = path.join(out, 'lct3'); fs.mkdirSync(root, { recursive: true });
+      fs.cpSync(path.join(gsm.GOLDEN_DIR, 'fixtures', 'model-lab'), path.join(root, 'model-lab'), { recursive: true });
+      const comp = gsm.buildGoldenCompanion(path.join(root, 'model-lab'), gsm.loadGoldenSet()).dir;
+      const ef = path.join(comp, 'experiment.json');
+      const e = JSON.parse(fs.readFileSync(ef, 'utf8'));
+      const g = e.nodes.find((n: any) => n.id === 'GOLD-TF-PROG');
+      assert(g && g.authorExecutionId === TF_PROG && g.reviewerExecutionId === TF_PROG_REVIEWER && e.variants.gmxterraformr, 'the golden companion no longer carries GOLD-TF-PROG / gmxterraformr');
+      const desc = cached(TF_PROG).leg!.description as string;
+      fs.mkdirSync(path.join(comp, 'edits'), { recursive: true });
+      fs.writeFileSync(path.join(comp, 'edits', 'tf-block.json'), JSON.stringify({ id: 'tf-block', appliesTo: ['leg:description'], ops: [{ type: 'replace', old: desc, new: `${desc}${TF_BLOCK}` }] }));
+      e.label = 'lct3'; delete e.standingBench;
+      e.variants = { b: { ...e.variants.gmxterraformr, comment: 'base: the golden pin (1.16.0)' }, c: { ...e.variants.gmxterraformr, composedVersion: '1.17.0', comment: 'the Config-sources version key (no text yet)' } };
+      const levers = { inputEdits: 'edits/tf-block.json', configSourcesSnapshot: 'first-execution' };
+      e.nodes = [{ ...g, id: 'T-BASE', variants: ['b'] }, { ...g, id: 'T-CS', variants: ['b', 'c'], ...levers }];
+      fs.writeFileSync(ef, JSON.stringify(e));
+      const dry = path.join(root, 'dry');
+      const log = runLab(['run', '--experiment', comp, '--out', dry]);
+      assert(/DRY RUN, \$0/.test(log) && /No model was called/.test(log), 'not a dry run');
+      const rd = (n: string, v: string, f: string) => fs.readFileSync(path.join(dry, n, v, f), 'utf8');
+      for (const f of ['reviewer.user.md', 'reviewer.system.md', 'author.user.md', 'author.system.md']) assert(rd('T-CS', 'b', f) === rd('T-BASE', 'b', f), `the levers moved the base arm's ${f}`);
+      let fc = ''; try { fc = runLab(['frozen-cmp', '--experiment', comp, '--run', dry]); } catch (x: any) { fc = String(x.stdout ?? ''); }
+      assert(/✅ T-BASE\/b: reviewer\.system\.md identical · reviewer\.user\.md identical/.test(fc) && /✅ T-CS\/b: reviewer\.system\.md identical · reviewer\.user\.md identical/.test(fc), `frozen-cmp base arms: ${fc}`);
+      assert(/≠ +T-CS\/c: reviewer\.system\.md identical · reviewer\.user\.md differs/.test(fc), `frozen-cmp candidate arm: ${fc}`);
+      let fa = ''; try { fa = runLab(['frozen-cmp', '--experiment', comp, '--run', dry, '--author']); } catch (x: any) { fa = String(x.stdout ?? ''); }
+      assert(/✅ T-BASE\/b: author\.system\.md identical · author\.user\.md identical/.test(fa) && /✅ T-CS\/b: author\.system\.md identical · author\.user\.md identical/.test(fa), `frozen-cmp --author base arms: ${fa}`);
+      // The forward pin, computed here with the shipping functions — never by the lever.
+      const snap = tfPlanted(); const h = hs.frozenHarvesterEntry(snap);
+      const tc = JSON.parse(snap.childArtifacts.find((a: any) => a.executionId === h.executionId && a.name === 'result.json')!.content).toolCalls;
+      const gov = governingConfigSources({ description: snap.leg!.description as string, contract: null, snapshot: (snap.leg!.metadata as any).configSourcesSnapshot }, 'terraform-iac-protocol');
+      const tr = (f: Record<string, unknown>) => ({ ...f, point: 'author-transcription', harvesterExecutionId: h.executionId });
+      const liveLines = renderLiveEvidenceForPrompt(tr(computeConfigLiveEvidence(gov, tc)) as never)!;
+      const driftLines = renderGitLiveDriftForPrompt(tr(computeGitLiveDrift(undefined, 'terraform-iac-protocol')) as never)!;
+      assert(driftLines.length === 1 && /not-checked/.test(driftLines[0]) && !/compared by the read-only service/.test(driftLines[0]), `the no-method render: ${JSON.stringify(driftLines)}`);
+      // PRODUCTION RENDERS NO DRIFT LINE on a Terraform leg: the chainer carries `gitLiveDrift` only when `checked === true`
+      // (context-chainer.ts), and §6 renders only a carried fact — so the slice-3 one-line render reaches no prompt today. The lab's
+      // carry (chain.ts, configEntryFieldsFor) copies that rule; this pin turns red if the shipping rule changes and the copy does not.
+      const chainerSrc = fs.readFileSync(path.join(__dirname, '..', 'lib', 'agents', 'harness', 'context-chainer.ts'), 'utf8');
+      const labChainSrc = fs.readFileSync(path.join(LAB, 'chain.ts'), 'utf8'); const patchSrc = fs.readFileSync(path.join(LAB, 'config-sources-patch.ts'), 'utf8');
+      assert(/const gitLiveDrift = !isPipelinePredecessor && stampedDrift[^;]*\(stampedDrift as \{ checked\?: unknown \}\)\.checked === true/.test(chainerSrc)
+        && /\(r\.gitLiveDrift as \{ checked\?: unknown \}\)\.checked === true\) entry\.gitLiveDrift/.test(labChainSrc) && /gl\.checked === true && GIT_DEVICE_COMPARISON_READERS\.has\(role\)/.test(patchSrc),
+        'the chainer\'s gitLiveDrift carry rule (checked === true) changed, or the lab copies (chain.ts, configEntryFieldsFor) no longer match it — re-derive both and LCT3\'s expected lines');
+      const splice = (base: string, cand: string, want: string[], what: string) => {
+        const b = base.split('\n'); const c = cand.split('\n');
+        let i = 0; while (i < b.length && b[i] === c[i]) i++;
+        assert(c.length === b.length + want.length && JSON.stringify(c.slice(i, i + want.length)) === JSON.stringify(want) && JSON.stringify(c.slice(i + want.length)) === JSON.stringify(b.slice(i)),
+          `${what}: the candidate prompt is not the base prompt plus exactly the ${want.length} rendered line(s) (first difference at line ${i + 1}: ${JSON.stringify(c[i]).slice(0, 160)})`);
+      };
+      // planWitness lever (2026-11-18): at 1.17.0 the leg Reviewer ALSO reads the platform's Plan-witness fact for the stored package — a
+      // 1.16.0 package, so no stop sentence and no block; its one held edit is read (the key read reached the net). These are the shipping §6
+      // lines (plan-witness.ts renderPlanWitnessForPrompt), pinned by literal. The Author reads none (PLAN_WITNESS_READERS).
+      const witnessLines = [
+        '- **Plan witness — platform check** (computed by the platform from the package text and its kept-file edits; no model checked it):',
+        "  - Result: 2 fault(s) found — listed below; the edits' names were not compared (there is no block).",
+        "  - Stop sentence: `absent` — the package does not contain the protocol's stop sentence.",
+        '  - `Plan witness` block: absent.',
+        '  - Edit block 1 (H1): read — `aws_s3_bucket.app_logs` edited; sets `policy`.',
+        '  - Names compared with the block: not compared — there is no `Plan witness` block.',
+        '  - The platform returns this package for revision on this ground, whatever the review concludes: `stop-sentence-absent`.',
+      ];
+      const inserted = (base: string, cand: string) => { const b = base.split('\n'); const c = cand.split('\n'); const ins: string[] = []; let j = 0;
+        for (const l of c) { if (j < b.length && l === b[j]) j++; else ins.push(l); } assert(j === b.length, 'the candidate prompt dropped or changed a base line'); return ins; };
+      const insR = inserted(rd('T-CS', 'b', 'reviewer.user.md'), rd('T-CS', 'c', 'reviewer.user.md'));
+      assert(JSON.stringify([...insR].sort()) === JSON.stringify([...liveLines, ...witnessLines].sort()) && insR.join('\n').includes(witnessLines.join('\n')) && insR.join('\n').includes(liveLines.join('\n')),
+        `Reviewer: the candidate prompt is not the base prompt plus exactly the liveEvidence render and the Plan-witness render: ${JSON.stringify(insR).slice(0, 900)}`);
+      assert(!rd('T-CS', 'c', 'author.user.md').includes('Plan witness — platform check'), 'the Author prompt carries the Plan-witness fact (reader set is the leg Reviewer only)');
+      splice(rd('T-CS', 'b', 'author.user.md'), rd('T-CS', 'c', 'author.user.md'), liveLines, 'Author');
+      for (const f of ['reviewer.user.md', 'author.user.md']) assert(!rd('T-CS', 'c', f).includes('Git-vs-live drift fact'), `${f}: a gitLiveDrift line was rendered on a Terraform leg (production carries only a checked fact)`);
+      assert(rd('T-CS', 'c', 'reviewer.system.md') === rd('T-CS', 'b', 'reviewer.system.md') && rd('T-CS', 'c', 'author.system.md') === rd('T-CS', 'b', 'author.system.md'), 'a system prompt moved');
+      const m = JSON.parse(fs.readFileSync(path.join(dry, 'manifest.json'), 'utf8'));
+      const hc = m.nodes['T-CS'].variants.c.held.configSources;
+      assert(hc.state === 'computed' && hc.configForce === null && hc.held.refs === 1 && hc.platformDriftCalls === null && hc.gitLiveDrift.reason === 'no-git-vs-live-method' && m.nodes['T-CS'].variants.b.held.configSources === undefined, `manifest: ${JSON.stringify(hc).slice(0, 300)}`);
+      // A drift plant on a Terraform node can never reach a prompt — refused before any build.
+      e.nodes[1].platformDrift = FIXTURE_PLANT; fs.writeFileSync(ef, JSON.stringify(e));
+      let refused = ''; try { runLab(['run', '--experiment', comp, '--out', path.join(root, 'dry-bad')]); } catch (x: any) { refused = String(x.stderr ?? '') + String(x.stdout ?? ''); }
+      assert(/platformDrift refused — terraform-iac-protocol has no Git-vs-live method/.test(refused), `a Terraform drift plant was not refused: ${refused.slice(-300)}`);
+    });
+
+    // ───────────── L-CS-T pre-registration levers (2026-11-17): the refused-ref cell, the planted-Author stamp rule, the scorer, the builder ─────────────
+    const CST = path.join(LAB, 'inputs', '2026-11-17-config-sources-tf-l-cs-t');
+    await test('LCT4 (H-REFUSED, C3) the pinned Git service REFUSES an agent-named ref through the shipping policy (fixture tier l-t1-592f0c2: terraform/main.tf @ v1.0 ⇒ fixture-refused, thrown as the hub throws it) and serves the default branch (@ main ⇒ the file) — so a v1.0 read in the paid cell meets a production-shaped refusal, never the lab notice', async () => {
+      const fxm = require('./leg-replay-lab/fixture-tools');
+      const fx = fxm.loadFileFixture(path.join(LAB, 'fixtures', 'l-t1-592f0c2'));
+      const srv = fxm.createFixtureToolServer(fx, null, { stub: true });
+      const call = (ref: string) => ({ action: 'call', targetService: 'github-service', tool: 'get_file_contents', arguments: { owner: 'paichart', repo: 'paichart-lab-configs', path: 'terraform/main.tf', ref } });
+      let msg = ''; try { await srv.executeToolOnServer('s', 'services', call('v1.0')); } catch (e) { msg = (e as Error).message; }
+      assert(/Service call blocked by compliance policy/.test(msg) && srv.fixtureLog.at(-1)?.tier === 'fixture-refused', `@ v1.0: ${msg} / ${JSON.stringify(srv.fixtureLog.at(-1))}`);
+      const ok = await srv.executeToolOnServer('s', 'services', call('main'));
+      const served = fs.readFileSync(path.join(LAB, 'fixtures', 'l-t1-592f0c2', 'files', 'terraform', 'main.tf'), 'utf8');
+      assert(srv.fixtureLog.at(-1)?.tier === 'fixture-file' && (ok as any).content[0].data.result.content[1].resource.text === served, `@ main: ${JSON.stringify(srv.fixtureLog.at(-1))}`);
+      const e = JSON.parse(fs.readFileSync(path.join(CST, 'experiment.json'), 'utf8'));
+      const n = e.nodes.find((x: any) => x.id === 'H-REFUSED');
+      assert(n.fileFixture === '../../fixtures/l-t1-592f0c2' && JSON.parse(fs.readFileSync(path.join(CST, n.inputEdits), 'utf8')).ops.some((o: any) => /terraform\/main\.tf @ v1\.0/.test(o.new)), 'H-REFUSED must declare @ v1.0 and read through the fixture tier');
+    });
+
+    await test('LCT5 (lab.ts, L-CS-T) a PLANTED persisted Author reads its stored editApplication only when the SHIPPING held-edit parse is unchanged (line numbers aside): the R-* plants (witness inserted, drift item re-cast) keep it; a plant that touches the H1 edit does not — the persistedEditApplication guard refuses it', async () => {
+      const { heldEditsSemantics } = await import('./leg-replay-lab/lab');
+      const { applyEdits: ae } = await import('./leg-replay-lab/edits');
+      const snap = cached(TF_PROG);
+      const stored = JSON.parse(snap.childArtifacts.find((a: any) => a.executionId === TF_PROG && a.name === 'result.json')!.content).finalResponse as string;
+      const sem0 = heldEditsSemantics(stored);
+      assert(JSON.parse(sem0).blocks.length === 1, 'the stored TF-PROG package carries one held edit');
+      for (const id of ['R-WITNESS-OK', 'R-NO-WITNESS', 'R-STOP-ALTERED', 'R-INCOMPLETE', 'R-NODRIFT', 'R-GITONLY-WARN', 'R-GITONLY-STMT']) {
+        const spec = JSON.parse(fs.readFileSync(path.join(CST, 'plants', `${id}.plant.json`), 'utf8'));
+        let t = stored; for (const op of spec.ops) { assert(t.split(op.old).length === 2, `${id}: an op is not exactly-once`); t = t.replace(op.old, op.new); }
+        assert(heldEditsSemantics(t) === sem0, `${id}: the plant moved the held edits (the stored stamp would describe another package)`);
+      }
+      const touched = stored.replace('Sid       = "AllowTelemetryExporterPutLogs"', 'Sid       = "AllowTelemetryExporterPut"');
+      assert(touched !== stored && heldEditsSemantics(touched) !== sem0, 'a plant inside the H1 REPLACE must change the parse');
+      void ae;
+      const src = fs.readFileSync(path.join(LAB, 'lab.ts'), 'utf8');
+      assert(/const peaPlantSafe = !plant\.editId \|\| heldEditsSemantics\(plant\.text\) === heldEditsSemantics\(String\(ares\.finalResponse \?\? ''\)\);/.test(src) && /peaWant && !!held && peaPlantSafe/.test(src), 'the guard must decide by the shipping parse');
+    });
+
+    await test('LCT6 (score-cst.ts) the L-CS-T scorer reads every in-code case as pre-registered and each of its ten mutations goes RED (warn-blind here: V1); on REAL bytes, both ways: the R-WITNESS-OK plant applied to the stored TF-PROG package meets every Author witness rule, R-STOP-ALTERED misses STOP, R-INCOMPLETE misses WITNESS, R-NO-WITNESS misses WITNESS, R-NODRIFT misses NOCOMPARE/POSITION; the stored 1.16.0 harvest is flagged NOCOMPARE', async () => {
+      const sc = await import('./leg-replay-lab/score-cst');
+      const base = sc.cstSelfTest(); assert(base.ok, `cst-self-test: ${base.failures.join(' | ')}`);
+      for (const m of sc.CST_MUTATIONS) assert(!sc.cstSelfTest(m).ok, `mutation ${m} stayed green`);
+      // The git-file-only warning, both ways, through the SHIPPING parser (needs a terminal verdict block — kept out of the lab's code, V1).
+      const verdictBlock = '\n\n## VERDICT: APPROVED\nBlocking issues: none\nConfidence: 88\n';
+      const warnText = 'Review body.\nNON-BLOCKING WARNING (git-file-only): the package does not say it was designed against the .tf files only.' + verdictBlock;
+      const RW = sc.CST_CELLS['R-GITONLY-WARN']; const RO = sc.CST_CELLS['R-WITNESS-OK'];
+      assert(sc.cstReviewerMeets(RW, sc.readCstReviewer(RW, { approved: true, blocking: [] }, warnText)).length === 0, 'R-GITONLY-WARN: approved with the warning meets');
+      assert(sc.cstReviewerMeets(RW, sc.readCstReviewer(RW, { approved: true, blocking: [] }, 'Review body.' + verdictBlock)).some((x) => /no git-file-only/.test(x)), 'R-GITONLY-WARN: approved without the warning misses');
+      assert(sc.cstReviewerMeets(RO, sc.readCstReviewer(RO, { approved: true, blocking: [] }, warnText)).some((x) => /where none is due/.test(x)), 'R-WITNESS-OK: a warning on a state run misses');
+      assert(sc.cstReviewerMeets(RW, sc.readCstReviewer(RW, { approved: true, blocking: [] }, warnText, 'warn-blind')).length > 0, 'mutation warn-blind stayed green');
+      assert(/from '\.\.\/\.\.\/lib\/agents\/harness\/reviewer-warnings'/.test(fs.readFileSync(path.join(LAB, 'score-cst.ts'), 'utf8')), 'the scorer must read warnings with the shipping parser');
+      const snap = cached(TF_PROG);
+      const stored = JSON.parse(snap.childArtifacts.find((a: any) => a.executionId === TF_PROG && a.name === 'result.json')!.content).finalResponse as string;
+      const planted = (id: string) => { let t = stored; for (const op of JSON.parse(fs.readFileSync(path.join(CST, 'plants', `${id}.plant.json`), 'utf8')).ops) t = t.replace(op.old, op.new); return t; };
+      const A = sc.CST_CELLS['A-STATEGIT'];
+      assert(sc.cstAuthorMeets(A, sc.readCstAuthor(planted('R-WITNESS-OK'))).length === 0, `R-WITNESS-OK as an Author output: ${sc.cstAuthorMeets(A, sc.readCstAuthor(planted('R-WITNESS-OK'))).join(' | ')}`);
+      assert(sc.cstAuthorMeets(A, sc.readCstAuthor(planted('R-STOP-ALTERED'))).some((x) => /^STOP/.test(x)), 'R-STOP-ALTERED must miss STOP');
+      assert(sc.cstAuthorMeets(A, sc.readCstAuthor(planted('R-INCOMPLETE'))).some((x) => /^WITNESS/.test(x)), 'R-INCOMPLETE must miss WITNESS');
+      assert(sc.cstAuthorMeets(A, sc.readCstAuthor(planted('R-NO-WITNESS'))).some((x) => /no Plan witness/.test(x)), 'R-NO-WITNESS must miss WITNESS');
+      assert(sc.cstAuthorMeets(A, sc.readCstAuthor(planted('R-NODRIFT'))).some((x) => /NOCOMPARE|POSITION/.test(x)), 'R-NODRIFT must miss NOCOMPARE/POSITION');
+      assert(sc.cstAuthorMeets(A, sc.readCstAuthor(stored)).some((x) => /no Plan witness/.test(x)), 'the stored 1.16.0 package has no Plan witness');
+      const hs = cached('cmvsz9zut003kyxb44xwia8kv');
+      const harvest = JSON.parse(hs.childArtifacts.find((a: any) => a.executionId === 'cmvsz9zut003kyxb44xwia8kv' && a.name === 'result.json')!.content).finalResponse as string;
+      assert(sc.compareSentences(harvest).length >= 1, 'the stored 1.16.0 harvest (file-vs-state table) must read NOCOMPARE');
+      assert(sc.STOP_SENTENCE.startsWith('If the team') && sc.STOP_SENTENCE.endsWith('merged change).') && fs.readFileSync(path.join(CST, 'candidate', 'terraform-iac-protocol@1.17.0.md'), 'utf8').includes(`word for word: *${sc.STOP_SENTENCE}*`), 'the scorer\'s stop sentence is the frozen text\'s, byte for byte');
+      // ADDENDUM (d): a cap-cut sample is not a sample (never scored); runs pool (a later run completes the cell).
+      const pr = path.join(out, 'lct6-pool');
+      const put = (run: string, node: string, s: string, j: Record<string, unknown>, h = '') => { const d = path.join(pr, run, node, 'hc', s); fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, 'sample.json'), JSON.stringify(j)); fs.writeFileSync(path.join(d, 'harvester.md'), h); fs.writeFileSync(path.join(d, 'toolCalls.json'), '[]'); };
+      put('r1', 'H-DRIFT', 'sample-01', { error: 'LAB CAP: $1.156 spent + 3 x $0.135 reserve > --max-usd $1.55; no further model call is sent' });
+      put('r2', 'H-DRIFT', 'sample-01', { verdict: null }, 'harvest');
+      const pooled = sc.scoreCstRuns([path.join(pr, 'r1'), path.join(pr, 'r2')]);
+      assert(pooled.capCut.length === 1 && pooled.rows.filter((r) => r.node === 'H-DRIFT').length === 1 && pooled.cells.find((c) => c.node === 'H-DRIFT')!.of === 1, `cap-cut skip + pooling: ${JSON.stringify({ capCut: pooled.capCut, of: pooled.cells.map((c) => [c.node, c.of]) })}`);
+      // ADDENDUM (g): a provider-layer failure (the model call never returned) is INVALID — skipped and listed, valid n reported; any other
+      // error is still a scored miss.
+      put('r3', 'H-STATEGIT', 'sample-01', { error: 'LLM call failed at provider layer: Connection error. (code: unknown_error). See pino logs for full error details.' });
+      put('r3', 'H-STATEGIT', 'sample-02', { error: 'fixture: the Harvester result could not be parsed' });
+      const pe = sc.scoreCstRuns([path.join(pr, 'r3')]);
+      const hsg = pe.cells.find((c) => c.node === 'H-STATEGIT')!;
+      assert(pe.providerError.length === 1 && /sample-01/.test(pe.providerError[0]) && hsg.of === 1 && hsg.meets === 0, `provider-error skip (valid n 1, the other error a miss): ${JSON.stringify({ pe: pe.providerError, of: hsg.of, meets: hsg.meets })}`);
+      assert(sc.isProviderError('TypeError: fetch failed') && !sc.isProviderError('no parseable verdict') && !sc.isProviderError('LAB CAP: $1 spent'), 'isProviderError must read transport failures only');
+    });
+
+    await test('LCT8 (NEVER-HELD-PATH, $0 platform level — not a model cell) a Terraform block naming a state, plan, variables or CLI-credentials path as a git-file line is unparseable `path-never-held` at resolution (the shipping parser behind the lab arm): the lab Harvester holds nothing and every fact and the force name the unparseable block — so the leg stops before any agent reads it', async () => {
+      for (const bad of ['terraform/terraform.tfstate', 'terraform/prod.tfplan', 'terraform/prod.tfvars', 'terraform/.terraform/credentials.tfrc.json']) {
+        const snap = tfPlanted(block(`state: git-file — service github-service ; paichart/paichart-lab-configs/${bad}`, TF_LIVE_LINE));
+        const g = arm.armConfigSources(snap.leg, { delta: T17 }) as any;
+        assert(g?.state === 'unparseable' && g.problem === 'path-never-held', `${bad}: ${JSON.stringify(g).slice(0, 200)}`);
+        const r = await cs.withComputedConfigFacts(snap, { protocol: T17, drift: null });
+        assert(r.report.declaration === 'unparseable' && r.report.held!.refs === 0 && r.calls === undefined && /unparseable/.test(String(r.report.configForce?.reason ?? '')), `${bad}: ${JSON.stringify(r.report).slice(0, 300)}`);
+      }
+      // A holdable look-alike stays holdable (the predicate is the shipping heldPathRefusal, never widened).
+      const ok = arm.armConfigSources(tfPlanted(block('vars: git-file — service github-service ; paichart/paichart-lab-configs/terraform/variables.tf', TF_LIVE_LINE)).leg, { delta: T17 }) as any;
+      assert(ok?.state === 'parsed', `variables.tf must stay holdable: ${JSON.stringify(ok).slice(0, 160)}`);
+    });
+
+    await test('LCT7 (build-inputs.py) the L-CS-T inputs are deterministic and proved: a re-run writes byte-identical files; apply(golden 1.16.0 pin, the 16 ops) == the frozen candidate (sha e601b4f4); every candidate arm materializes that sha', async () => {
+      const files = ['edits/terraform-iac-1.17.0.json', 'stop-sentence.txt', ...fs.readdirSync(path.join(CST, 'node-inputs')).map((f) => `node-inputs/${f}`), ...fs.readdirSync(path.join(CST, 'plants')).map((f) => `plants/${f}`)];
+      const before = files.map((f) => fs.readFileSync(path.join(CST, f), 'utf8'));
+      execFileSync('python3', ['-I', path.join(CST, 'build-inputs.py')], { cwd: path.join(__dirname, '..') });
+      files.forEach((f, i) => assert(fs.readFileSync(path.join(CST, f), 'utf8') === before[i], `${f} changed on a re-run (not deterministic)`));
+      const { createHash: ch } = await import('crypto');
+      const h = (t: string) => ch('sha256').update(t).digest('hex');
+      let t = fs.readFileSync(path.join(LAB, 'golden', 'protocols', 'terraform-iac-protocol@1.16.0.md'), 'utf8');
+      const ops = JSON.parse(fs.readFileSync(path.join(CST, 'edits', 'terraform-iac-1.17.0.json'), 'utf8')).ops;
+      assert(ops.length === 16, `ops ${ops.length}`);
+      for (const op of ops) { assert(t.split(op.old).length === 2, 'an op is not exactly-once'); t = t.replace(op.old, op.new); }
+      assert(h(t) === 'ed8bdb991631143cccccc933fae34bda130f1b8ac4b73b24ce846dbe80e14fca', `apply(base, ops) sha ${h(t)}`); // re-freeze 4 (f3fe3c36b)
+      for (const arm of ['hc', 'xc', 'ac', 'rc']) { const f = path.join(CST, 'protocols', `terraform-iac-protocol@1.16.0.${arm}.md`); if (fs.existsSync(f)) assert(h(fs.readFileSync(f, 'utf8')) === h(t), `${arm}: the materialized text is not the frozen candidate`); }
+      const E3 = `${CST}-3leg`;
+      assert(fs.readFileSync(path.join(E3, 'edits', 'terraform-iac-1.17.0.json'), 'utf8') === fs.readFileSync(path.join(CST, 'edits', 'terraform-iac-1.17.0.json'), 'utf8'), 'the three-leg experiment must carry the same 1.17.0 ops');
+    });
+
+    await test('LCT9 (ADDENDUM (a)+(b), owner D-1/D-2/D-4) on REAL bytes, both ways: the R-KEYS plant applied to the stored T-LQ package meets every A-DRIFT witness rule (KEY tags.owner, the stop sentence with "or map key", tier kept "cold"); R-WHOLE-MAP misses KEYS; the stored 1.15.0 package (tier written "warm", no witness) misses EDIT and WITNESS; both plants change the held edit (so the cells re-stamp, never reuse the stored stamp); the stored T-LQ harvest reads NOCOMPARE; the three-leg fixture serves exactly the probed blobs (git hash-object = the pipeline-harness production identity probe; the capture of all three is shown by the -3leg dry run under the production pin)', async () => {
+      const sc = await import('./leg-replay-lab/score-cst');
+      const { heldEditsSemantics } = await import('./leg-replay-lab/lab');
+      const TA = 'cmvinl5nn00jpyxwkapntn5dz'; const TH = 'cmvinisua00hbyxwk1mertk4u';
+      const res = (id: string, ex: string) => JSON.parse(cached(id).childArtifacts.find((a: any) => a.executionId === ex && a.name === 'result.json')!.content);
+      const stored = res(TA, TA).finalResponse as string;
+      const planted = (id: string) => { let t = stored; for (const op of JSON.parse(fs.readFileSync(path.join(CST, 'plants', `${id}.plant.json`), 'utf8')).ops) { assert(t.split(op.old).length === 2, `${id}: an op is not exactly-once`); t = t.replace(op.old, op.new); } return t; };
+      const AD = sc.CST_CELLS['A-DRIFT'];
+      const keys = sc.cstAuthorMeets(AD, sc.readCstAuthor(planted('R-KEYS'), undefined, AD.witness));
+      assert(keys.length === 0, `R-KEYS as an Author output: ${keys.join(' | ')}`);
+      assert(sc.cstAuthorMeets(AD, sc.readCstAuthor(planted('R-WHOLE-MAP'), undefined, AD.witness)).some((x) => /^KEYS/.test(x)), 'R-WHOLE-MAP must miss KEYS');
+      const st = sc.cstAuthorMeets(AD, sc.readCstAuthor(stored, undefined, AD.witness));
+      assert(st.some((x) => /^EDIT/.test(x)) && st.some((x) => /no Plan witness/.test(x)), `the stored 1.15.0 package: ${st.join(' | ')}`);
+      assert(heldEditsSemantics(planted('R-KEYS')) !== heldEditsSemantics(stored) && heldEditsSemantics(planted('R-WHOLE-MAP')) === heldEditsSemantics(planted('R-KEYS')), 'the T-LQ plants change the held edit identically (tier kept "cold") — restampPersisted, never the stored stamp');
+      const e = JSON.parse(fs.readFileSync(path.join(CST, 'experiment.json'), 'utf8'));
+      assert(['R-KEYS', 'R-WHOLE-MAP'].every((id) => e.nodes.find((n: any) => n.id === id)?.restampPersisted === true), 'the T-LQ Reviewer cells must re-stamp');
+      assert(sc.compareSentences(res(TH, TH).finalResponse).length >= 1, 'the stored T-LQ harvest (file-vs-state table) must read NOCOMPARE');
+      const FX3 = path.join(LAB, 'fixtures', 'cs-t-0b76f4c');
+      const blobs: Record<string, string> = { 'main.tf': '9064c9e34f3b45f17c873379a4cf8a799adc3852', 'archive.tf': 'efc667c2587d07e9552ea7917950021da6c92379', 'fixtures.tf': 'a7219bea1b4253bf6f15fc2e228e3e9998af5417' };
+      for (const [f, b] of Object.entries(blobs)) assert(execFileSync('git', ['hash-object', path.join(FX3, 'files', 'terraform', f)]).toString().trim() === b, `${f}: the fixture blob is not the probed one`);
+      assert(JSON.parse(fs.readFileSync(path.join(FX3, 'fixture.json'), 'utf8')).commit === '0b76f4c908bd604e6b98719f94f39c139e48f1c8', 'fixture commit');
+    });
+
+    await test('LCT10 (plan-witness-lever.ts, ADDENDUM (i)) the planWitness FACT LEVER: the key read is version-keyed exactly as the core keys it ({} below terraform-iac 1.17.0); the carry reaches the leg Reviewer only; the force composes the SHIPPING heldEditVerdict + planWitnessForceReason under the carrier\'s precedence (the copied line is pinned in the shipping source); and on REAL bytes ($0 dry run through lab.ts) every L-CS-T Reviewer prompt carries ONE `Plan witness — platform check` line with the state its plant implies, the 1.16.0 base arm none', async () => {
+      const lv = await import('./leg-replay-lab/plan-witness-lever');
+      const inj = (name: string, version: string) => ({ delta: { name, version } });
+      assert(Object.keys(lv.planWitnessHeldInput(inj('terraform-iac-protocol', '1.16.0'), null, [])).length === 0, 'below 1.17.0 the lever hands the nets nothing');
+      assert(Object.keys(lv.planWitnessHeldInput(inj('kubernetes-gitops-protocol', '1.19.0'), null, [])).length === 0, 'another protocol: nothing');
+      assert(Object.keys(lv.planWitnessHeldInput(undefined, null, [])).length === 0, 'no injection: nothing');
+      const k = lv.planWitnessHeldInput(inj('terraform-iac-protocol', '1.17.0'), null, []);
+      assert('planWitnessKeys' in k && k.planWitnessKeys === null, 'at 1.17.0 with no application the key read is null (the fact reads no-key-read), as the core hands it');
+      const fact = (stop: string, o: Record<string, unknown> = {}) => ({ version: 1, checked: true, stopSentence: stop, ...o });
+      assert(lv.planWitnessForEntry(fact('verbatim'), 'change_reviewer') !== null && lv.planWitnessForEntry(fact('verbatim'), 'config_change_author') === null
+        && lv.planWitnessForEntry(fact('verbatim'), 'infrastructure_architect') === null && lv.planWitnessForEntry(null, 'change_reviewer') === null, 'the carry reaches the leg Reviewer only, and only an object stamp');
+      assert(lv.planWitnessForEntry({ version: 1, checked: false, reason: 'enrichment-error' }, 'change_reviewer') !== null, 'a not-checked stamp is carried too (the Reviewer must see it)');
+      const applied = { state: 'applied', applied: 1, total: 1, candidateDigest8: 'abcd1234' };
+      const f1 = lv.planWitnessLegForce({ fact: fact('altered'), editApplication: applied, authorExecutionId: 'a1' });
+      assert(f1.reason === 'stop-sentence-altered' && f1.byWitnessFact && f1.leverVersion === 2 && f1.inScope, `altered on an applied package: ${JSON.stringify(f1)}`);
+      assert(lv.planWitnessLegForce({ fact: fact('absent'), editApplication: applied, authorExecutionId: 'a1' }).reason === 'stop-sentence-absent', 'absent forces');
+      // §8b (second build): where EVERY edit was read, a missing name forces witness-incomplete and a whole-value key witness-whole-value (in that order);
+      // under any other coverage, and for a missing RESOURCE or a re-spaced line, nothing forces.
+      const lf = (o: Record<string, unknown>) => lv.planWitnessLegForce({ fact: fact('verbatim', o), editApplication: applied, authorExecutionId: 'a1' });
+      assert(lf({ listsCover: 'all-edits', missing: ['x: policy'] }).reason === 'witness-incomplete' && lf({ listsCover: 'all-edits', missing: ['x: policy'] }).byWitnessFact, 'a missing name with every edit read forces witness-incomplete');
+      assert(lf({ listsCover: 'all-edits', wholeValueKeys: ['x: tags.tier'] }).reason === 'witness-whole-value', 'a whole-value key with every edit read forces witness-whole-value');
+      assert(lf({ listsCover: 'all-edits', missing: ['x: policy'], wholeValueKeys: ['x: tags.tier'] }).reason === 'witness-incomplete', 'both list faults: one reason, witness-incomplete');
+      assert(lf({ listsCover: 'read-edits-only', missing: ['x: policy'], wholeValueKeys: ['x: tags.tier'] }).reason === null && lf({ missing: ['x: policy'] }).reason === null, 'a list never forces unless every edit was read');
+      assert(lf({ listsCover: 'all-edits', missingResources: ['aws_s3_bucket.extra'], realigned: ['x: tags.team'] }).reason === null, 'a missing resource and a re-spaced line never force');
+      assert(lv.planWitnessLegForce({ fact: fact('altered', { listsCover: 'all-edits', missing: ['x: policy'] }), editApplication: applied, authorExecutionId: 'a1' }).reason === 'stop-sentence-altered', 'the stop sentence goes first');
+      assert(lv.planWitnessLegForce({ fact: fact('verbatim', { listsCover: 'all-edits', missing: ['x: policy'] }), editApplication: { state: 'refused', applied: 0, total: 1 }, authorExecutionId: 'a1' }).byWitnessFact === false, 'a list force never outranks the package\'s own reason');
+      assert(JSON.stringify(lv.readSampleForce({ reason: 'witness-incomplete', byWitnessFact: true, leverVersion: 2 })) === JSON.stringify({ reason: 'witness-incomplete', byFact: true, v2: true })
+        && JSON.stringify(lv.readSampleForce({ reason: 'stop-sentence-absent', byStopSentence: true })) === JSON.stringify({ reason: 'stop-sentence-absent', byFact: true, v2: false })
+        && lv.readSampleForce(undefined).reason === null, 'readSampleForce reads both lever versions');
+      assert(lv.planWitnessLegForce({ fact: { version: 1, checked: false, reason: 'enrichment-error' }, editApplication: applied, authorExecutionId: 'a1' }).reason === null, 'could-not-check never forces');
+      const f2 = lv.planWitnessLegForce({ fact: fact('altered'), editApplication: { state: 'refused', applied: 0, total: 1 }, authorExecutionId: 'a1' });
+      assert(f2.reason !== null && !f2.byWitnessFact && f2.witnessFactReason === 'stop-sentence-altered', `the package's own reason outranks the stop sentence: ${JSON.stringify(f2)}`);
+      const f3 = lv.planWitnessLegForce({ fact: fact('altered'), editApplication: applied, authorExecutionId: 'a1', runLevelReason: 'git-file-not-held' });
+      assert(f3.reason === 'git-file-not-held' && !f3.byWitnessFact, 'a run-level reason outranks the stop sentence');
+      // The drift point, pinned: the one precedence line the lever copies, and the two hand-overs it mirrors, in the SHIPPING source.
+      const src = (f: string) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+      assert(src('lib/agents/harness/held-edit-carrier.ts').includes('witnessReason && !readError && base.reason === null && base.inScope ? { ...base, reason: witnessReason } : base'), 'the carrier\'s stop-sentence precedence line moved — re-read plan-witness-lever.ts planWitnessLegForce');
+      assert(src('lib/services/execution-core.ts').includes('heldStamps.planWitnessKeys = planWitnessKeysOrNull(pkg.application, step.files)'), 'the core\'s key-read hand-over moved — re-read planWitnessHeldInput');
+      assert(src('lib/agents/harness/context-chainer.ts').includes('PLAN_WITNESS_READERS.has('), 'the chainer\'s carry rule moved — re-read planWitnessForEntry');
+      // REAL bytes: the nine Reviewer cells, $0 dry run.
+      const dry = path.join(out, 'lct10');
+      const cellsR = ['R-WITNESS-OK', 'R-NO-WITNESS', 'R-STOP-ALTERED', 'R-INCOMPLETE', 'R-NODRIFT', 'R-GITONLY-WARN', 'R-GITONLY-STMT', 'R-KEYS', 'R-WHOLE-MAP'];
+      const log = runLab(['run', '--experiment', CST, '--only', cellsR.join(','), '--out', dry]);
+      assert(/DRY RUN, \$0/.test(log) && /No model was called/.test(log), 'not a dry run');
+      const HEAD = '- **Plan witness — platform check**';
+      const block = (node: string, arm: string) => { const ls = fs.readFileSync(path.join(dry, node, arm, 'reviewer.user.md'), 'utf8').split('\n'); const i = ls.findIndex((l) => l.startsWith(HEAD));
+        const heads = ls.filter((l) => l.startsWith(HEAD)).length; if (i < 0) return { heads, body: '' }; let j = i + 1; while (j < ls.length && ls[j].startsWith('  - ')) j++; return { heads, body: ls.slice(i, j).join('\n') }; };
+      assert(block('R-WITNESS-OK', 'rb').heads === 0, 'the 1.16.0 base arm must carry no Plan-witness line');
+      // PLAN-WITNESS-BUILD.md §8b render: a Result line first, three counted lists, a closing line when the fault count is above 0.
+      const NONE3 = ['Resources the block does not name (0): none.', 'Missing from the block (0): none.', 'Unchanged keys the block gives a value for (0): none.'];
+      const CLEAN = ['Result: no fault found; every edit was read.', 'Stop sentence: `verbatim`', '`Plan witness` block: present.', ...NONE3];
+      const RETURNS = 'The platform returns this package for revision on this ground, whatever the review concludes: ';
+      const expect: Record<string, string[]> = {
+        'R-STOP-ALTERED': ['Result: 1 fault(s) found — listed below; every edit was read.', 'Stop sentence: `altered`', '`Plan witness` block: present.', ...NONE3, RETURNS + '`stop-sentence-altered`.'],
+        'R-NO-WITNESS': ["Result: 2 fault(s) found — listed below; the edits' names were not compared (there is no block).", 'Stop sentence: `absent`', '`Plan witness` block: absent.', 'not compared — there is no `Plan witness` block', RETURNS + '`stop-sentence-absent`.'],
+        'R-INCOMPLETE': ['Result: 1 fault(s) found — listed below; every edit was read.', 'Stop sentence: `verbatim`', 'Missing from the block (1): `aws_s3_bucket.app_logs: policy` — the edits set or remove each of these and the block does not contain it.',
+          'Resources the block does not name (0): none.', 'Unchanged keys the block gives a value for (0): none.', RETURNS + '`witness-incomplete`.'],
+        'R-WHOLE-MAP': ['Result: 2 fault(s) found — listed below; every edit was read.', 'Stop sentence: `verbatim`',
+          'Unchanged keys the block gives a value for (2): `aws_s3_bucket.archive: tags.team` (the edits leave its value unchanged — its line is only re-spaced; the block states a value for it), `aws_s3_bucket.archive: tags.tier` (the edits leave its value unchanged — its line is only re-spaced; the block states a value for it).',
+          'Missing from the block (0): none.', 're-spaced lines, which change no value: `tags.team`, `tags.tier`', RETURNS + '`witness-whole-value`.'],
+        'R-KEYS': [...CLEAN, 'sets `tags.owner`; re-spaced lines, which change no value: `tags.team`, `tags.tier`'],
+        'R-WITNESS-OK': [...CLEAN, 'sets `policy`'],
+        'R-NODRIFT': CLEAN, 'R-GITONLY-WARN': CLEAN, 'R-GITONLY-STMT': CLEAN,
+      };
+      const NO_RETURN = new Set(['R-KEYS', 'R-WITNESS-OK', 'R-NODRIFT', 'R-GITONLY-WARN', 'R-GITONLY-STMT']);
+      for (const [node, want] of Object.entries(expect)) {
+        const b = block(node, 'rc');
+        assert(b.heads === 1, `${node}: ${b.heads} Plan-witness line(s) in the Reviewer prompt`);
+        for (const w of want) assert(b.body.includes(w), `${node}: the platform line does not carry [${w}] — ${b.body.slice(0, 400)}`);
+        assert(!/NOT read|not read|no-key-read/.test(b.body), `${node}: the key read did not reach the net (the fact reads no-key-read)`);
+        assert(!/Coverage:|does not contain:|spacing-only/.test(b.body), `${node}: a string of the FIRST render (removed in §8b) is still in the prompt`);
+        if (NO_RETURN.has(node)) assert(!/The platform (?:returns|does not return) this package/.test(b.body), `${node}: a no-fault package must carry no closing return line`);
+      }
     });
   }
 

@@ -81,7 +81,8 @@ test('CS3 a NETWORK kind is unknown here, and `supplied` is unknown in a Device 
   eq(parseDeviceSourceLine('trading-cluster: supplied'), { ok: false, problem: 'unknown-kind' });
 });
 test('CS4 a protocol with no kind table declares no Config sources (network, and a not-yet-built domain)', () => {
-  for (const p of ['network-provisioning-protocol', 'network-derivation-protocol', 'observability-config-protocol', 'terraform-iac-protocol', 'nope']) {
+  // terraform-iac left this list at Config sources STEP 4 (2026-11-17): it has a kind table (TF1).
+  for (const p of ['network-provisioning-protocol', 'network-derivation-protocol', 'observability-config-protocol', 'nope']) {
     eq(parseConfigSourceLine(GIT, p), { ok: false, problem: 'unknown-kind' }, `${p}: `);
     eq(parseConfigSourceLines([GIT], p), { state: 'unparseable', problem: 'protocol-declares-no-config-sources', lineIndex: null }, `${p}: `);
   }
@@ -362,6 +363,109 @@ test('WR2 inert until the text: while kubernetes-gitops awaits its text, no leg 
   eq(V.isConfigSourceLeg({ title: 'x (protocol: network-provisioning)', metadata: { protocol: 'network-provisioning-protocol' } }), false, 'a network leg: ');
 });
 
+console.log('── Config sources STEP 4: Terraform (terraform-iac 1.17.0; inert until its text) ──');
+const TF = 'terraform-iac-protocol';
+const TF_GIT = (n: string, path: string) => `${n}: git-file — service github-service ; paichart/paichart-configs/${path}`;
+const TF_LIVE = 'prod-state: live-read — service terraform-rig-readonly';
+const TF_SUPPLIED = 'prod-state: supplied';
+test('TF1 the three Terraform kinds parse to their entries; a network kind is unknown', () => {
+  eq(parseConfigSourceLine(TF_GIT('app-logs', 'terraform/main.tf'), TF), { ok: true, line: { label: 'app-logs', kind: 'git-file', service: 'github-service', owner: 'paichart', repo: 'paichart-configs', path: 'terraform/main.tf', ref: null } });
+  eq(parseConfigSourceLine(TF_LIVE, TF), { ok: true, line: { label: 'prod-state', kind: 'live-read', service: 'terraform-rig-readonly' } });
+  eq(parseConfigSourceLine(TF_SUPPLIED, TF), { ok: true, line: { label: 'prod-state', kind: 'supplied' } });
+  eq(parseConfigSourceLine('prod-state: device-read — service terraform-rig-readonly', TF), { ok: false, problem: 'unknown-kind' });
+  eq(CONFIG_SOURCE_LANES[TF], { lane: 'change', contractKey: 'terraform-iac' }, 'the lane row: ');
+  assert(!(TF in DEVICE_SOURCE_LANES), 'terraform-iac must never be a Device-sources protocol (owner decision (b))');
+});
+test('TF2 path-never-held at resolution: every never-held class refused on a git-file line, for Terraform AND Kubernetes (D-T2)', () => {
+  const never = ['terraform/terraform.tfstate', 'terraform/prod.tfvars', 'terraform/secrets.tfvars.bak', 'terraform/.terraform/modules/x.tf',
+    'terraform/terraform.tfstate.d/prod/terraform.tfstate', 'terraform/tfplan', 'terraform/plan.out', 'terraform/tfplan.json',
+    'terraform/.terraformrc', 'terraform/credentials.tfrc.json', 'terraform/.terraform.d/credentials.tfrc.json', 'inventory/hosts.yaml'];
+  for (const proto of [TF, K8S]) {
+    for (const path of never) {
+      eq(parseConfigSourceLine(TF_GIT('f', path), proto), { ok: false, problem: 'path-never-held' }, `${proto} ${path}: `);
+      const b = parseConfigSourcesBlock(`## Config sources\n${TF_GIT('f', path)}\n${TF_LIVE.replace('prod-state', 'c')}\n`, proto);
+      eq(b, { state: 'unparseable', problem: 'path-never-held', lineIndex: 0 }, `${proto} block ${path}: `);
+    }
+  }
+  // holdable look-alikes stay holdable (the predicate's own negatives)
+  for (const ok of ['terraform/main.tf', 'terraform/tfstate-notes.md', 'k8s/hosts.yaml', 'terraform/variables.tf']) {
+    assert(parseConfigSourceLine(TF_GIT('f', ok), TF).ok, `${ok} must stay holdable`);
+  }
+});
+test('TF3 a stored snapshot whose git-file path is never-held is unreadable (the parser is the snapshot authority)', () => {
+  const good = buildConfigSourcesSnapshot(TF, resolveLegConfigSources({ protocol: TF, contractValue: undefined, taskBody: `## Config sources\n${TF_GIT('a', 'terraform/main.tf')}\n${TF_LIVE}\n` }), 't');
+  assert(readConfigSourcesSnapshot({ [CONFIG_SOURCES_SNAPSHOT_KEY]: good }) !== 'unreadable', 'a valid tf snapshot reads');
+  const forged = JSON.parse(JSON.stringify(good));
+  forged.resolution.entries[0].path = 'terraform/terraform.tfstate';
+  eq(readConfigSourcesSnapshot({ [CONFIG_SOURCES_SNAPSHOT_KEY]: forged }), 'unreadable', 'forged never-held path: ');
+});
+test('TF4 live from terraform-iac 1.17.0 (the text commit emptied the awaiting list): a tf leg IS a Config-sources leg, its contract key is read, and it joins the descriptor derivation', () => {
+  // Before the 1.17.0 text commit this pinned the INERT state (row awaiting its text, key not read, descriptor-only) — the code push shipped
+  // that way on 2026-11-17 (release_20261117_093725). The k8s precedent: WR2 / LCK1 pin the property, not the list length.
+  assert(!CONFIG_SOURCE_AWAITING_TEXT.includes(TF), 'terraform-iac still awaits its text after the 1.17.0 text commit');
+  eq(configSourceLaneOf(TF), 'change', 'lane: ');
+  eq(configSourceContractKeyOf(TF), 'terraform-iac', 'contract key: ');
+  assert(CONFIG_SOURCES_READ_KEYS.includes('terraform-iac'), 'the plan-gate fact must read terraform-iac');
+  eq(configSourcesKeysOf({ configSources: { 'terraform-iac': TF_LIVE } })?.notReadKeys, [], 'plan-gate fact: ');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const V = require('../lib/agents/harness/held-bytes/variant');
+  eq(V.isConfigSourceLeg({ title: 'x (protocol: terraform-iac)', metadata: { protocol: TF } }), true, 'isConfigSourceLeg: ');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const D = require('../lib/agents/harness/service-descriptors-derivation');
+  assert(!D.DESCRIPTOR_ONLY_TOKENS.includes('terraform-iac'), 'terraform-iac must leave DESCRIPTOR_ONLY_TOKENS with its sources lane');
+});
+const tfParsed = (lines: string[]) => governingConfigSources({ description: body(lines), contract: null,
+  snapshot: buildConfigSourcesSnapshot(TF, resolveLegConfigSources({ protocol: TF, contractValue: undefined, taskBody: `## Config sources\n${lines.join('\n')}\n` }), 't') }, TF);
+const legLineK8s = (i: number) => `k8s-leg${i}: git-file — service github-service ; paichart/paichart-configs/k8s/leg${i}.yaml`;
+const tfLegLine = (i: number) => TF_GIT(`leg${i}-tf`, `terraform/leg${i}.tf`);
+const tfRefs = (ids: number[]) => ids.map((i) => ({ target: TGT, path: `/terraform/leg${i}.tf` }));
+test('TFML1 one shared Terraform block at 2, 3, 4 and 8 legs: holding every declared file ⇒ not forced and exactly the declared set; missing any ⇒ forced naming it', () => {
+  for (const n of [2, 3, 4, 8]) {
+    const lines = [...Array.from({ length: n }, (_, i) => tfLegLine(i + 1)), TF_LIVE];
+    const res = tfParsed(lines);
+    const all = Array.from({ length: n }, (_, i) => i + 1);
+    for (let leg = 1; leg <= n; leg++) {
+      eq(configGitFileForce(res, tfRefs(all)), null, `${n} tf legs, leg ${leg}: `);
+      const out = withConfigSourcesScope(exOf([...all.map((i) => `/terraform/leg${i}.tf`), '/terraform/not-declared.tf']), res);
+      eq(out.files.map((f) => f.path), all.map((i) => `/terraform/leg${i}.tf`), `${n} tf legs, leg ${leg} holds: `);
+      eq(out.refusals.length, 1, `${n} tf legs, leg ${leg} undeclared refused: `);
+    }
+    for (let missing = 1; missing <= n; missing++) {
+      const held = all.filter((i) => i !== missing);
+      eq(configGitFileForce(res, tfRefs(held)), { reason: 'git-file-not-held', gitFilesNotHeld: [`leg${missing}-tf`], gitFilesNotHeldTotal: 1 }, `${n} tf legs, file ${missing} missing: `);
+    }
+  }
+});
+test('TFML2 one shared block never widens any leg\'s never-held predicate: a never-held line poisons the whole block (every leg stops at resolution), at every leg count', () => {
+  for (const n of [2, 3, 4, 8]) {
+    const lines = [...Array.from({ length: n }, (_, i) => tfLegLine(i + 1)), TF_GIT('state', 'terraform/terraform.tfstate'), TF_LIVE];
+    eq(parseConfigSourceLines(lines, TF), { state: 'unparseable', problem: 'path-never-held', lineIndex: n }, `${n} legs: `);
+    const r = tfParsed(lines);
+    eq(r.state, 'unparseable', `${n} legs governing: `);
+    // the forced outcome on every leg (the declaration did not parse)
+    assert(configGitFileForce(r, tfRefs(Array.from({ length: n }, (_, i) => i + 1))) !== null, `${n} legs: a never-held declaration must force`);
+  }
+});
+test('TFML3 legs declaring different estates: a Git-only leg and a state leg resolve their own blocks; a mixed program (tf beside k8s + network change + value) keeps the fields apart', () => {
+  const gitOnly = tfParsed([tfLegLine(1)]);
+  const withState = tfParsed([tfLegLine(2), TF_LIVE]);
+  eq(gitOnly.state === 'parsed' ? gitOnly.entries.map((e) => e.kind) : gitOnly.state, ['git-file'], 'git-only: ');
+  eq(withState.state === 'parsed' ? withState.entries.map((e) => e.kind) : withState.state, ['git-file', 'live-read'], 'with state: ');
+  const contract = {
+    deviceSources: { 'network-provisioning': 'ceos1: command-package', 'network-derivation': 'ceos1: command-package' },
+    configSources: { 'kubernetes-gitops': [legLineK8s(1), LIVE].join('\n'), 'terraform-iac': [tfLegLine(1), TF_LIVE].join('\n') },
+  };
+  const t = resolveLegConfigSources({ protocol: TF, contractValue: contractConfigSourcesValue(contract, 'terraform-iac'), taskBody: null });
+  eq(t.state === 'parsed' ? t.entries.map((e) => e.label) : t.state, ['leg1-tf', 'prod-state'], 'the tf leg reads its own key only: ');
+  const k = resolveLegConfigSources({ protocol: K8S, contractValue: contractConfigSourcesValue(contract, 'kubernetes-gitops'), taskBody: null });
+  eq(k.state === 'parsed' ? k.entries.map((e) => e.label) : k.state, ['k8s-leg1', 'trading-cluster'], 'the k8s leg reads its own key only: ');
+  // a tf block parsed under the k8s protocol's key is not read by the tf leg, and the tf key under deviceSources declares nothing
+  const wrong = { deviceSources: { 'terraform-iac': tfLegLine(1) } };
+  eq(resolveLegConfigSources({ protocol: TF, contractValue: contractConfigSourcesValue(wrong, 'terraform-iac'), taskBody: null }).state, 'absent', 'wrong field: ');
+  eq(deviceSourcesKeysOf(wrong)?.notReadKeys, ['terraform-iac'], 'plan-gate fact, deviceSources: ');
+  eq(deviceSourceLaneOf(TF), null, 'tf leg, device lane: ');
+});
+
 console.log('── multi-leg (owner decision 2026-11-15: every leg holds every declared file of its protocol\'s block) ──');
 const legLine = (i: number) => `leg${i}-file: git-file — service github-service ; paichart/paichart-configs/k8s/leg${i}.yaml`;
 const sharedBlock = (n: number) => [...Array.from({ length: n }, (_, i) => legLine(i + 1)), LIVE];
@@ -486,11 +590,11 @@ test('REG1 registration: configSourceReads once, LAST, leaf-persist, conditional
   const mine = MECHANICAL_NETS.filter((n) => n.name === 'configSourceReads');
   eq(mine.length, 1, 'registrations: ');
   // appended last when shipped; slice 3b appended the two drift entries after it (the exact tail is pinned in test-quote-fidelity)
-  eq(MECHANICAL_NETS.slice(-3).map((n) => n.name), ['configSourceReads', 'platformDriftCalls', 'gitLiveDrift'], 'the Config-sources tail: ');
+  eq(MECHANICAL_NETS.slice(-4).map((n) => n.name), ['configSourceReads', 'platformDriftCalls', 'gitLiveDrift', 'planWitness'], 'the Config-sources tail (+ planWitness, 2026-11-18, appended after it): ');
   eq([mine[0].point, mine[0].conditionalStampReason, mine[0].renderPrompt, mine[0].renderCard], ['leaf-persist', 'not-config-source-leg', null, null], 'shape: ');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const EA = require('../lib/services/execution-artifacts') as { RESULT_JSON_OPERATOR_TAIL_KEYS: readonly string[]; RESULT_JSON_SUMMARY_KEYS: readonly string[] };
-  eq(EA.RESULT_JSON_OPERATOR_TAIL_KEYS.slice(-3), ['configSourceReads', 'platformDriftCalls', 'gitLiveDrift'], 'operator tail, appended: ');
+  eq(EA.RESULT_JSON_OPERATOR_TAIL_KEYS.slice(-4), ['configSourceReads', 'platformDriftCalls', 'gitLiveDrift', 'planWitness'], 'operator tail, appended (+ planWitness, 2026-11-18): ');
   assert(!EA.RESULT_JSON_SUMMARY_KEYS.includes('gitLiveDrift') && !EA.RESULT_JSON_SUMMARY_KEYS.includes('platformDriftCalls'), 'a drift key is on the summary');
   assert(!EA.RESULT_JSON_SUMMARY_KEYS.includes('configSourceReads'), 'configSourceReads is on the summary');
   eq(liveEvidenceVersionApplies({ delta: { name: K8S, version: '1.18.0' } }), false, 'k8s 1.18.0: ');
@@ -513,7 +617,8 @@ test('REG1 registration: configSourceReads once, LAST, leaf-persist, conditional
     } as never);
     const PI = (version: string, name = K8S) => ({ mode: 'named', delta: { name, version } });
     for (const [label, pi] of [['1.18.0', PI('1.18.0')], ['1.18.9', PI('1.18.9')], ['absent', undefined], ['degraded', { mode: 'named', delta: null }],
-      ['another protocol at a high version', PI('9.9.9', 'terraform-iac-protocol')]] as Array<[string, unknown]>) {
+      // STEP 4 (2026-11-17): terraform-iac has its own version row (1.17.0) now — observability-config is the protocol with none.
+      ['another protocol at a high version', PI('9.9.9', 'observability-config-protocol')]] as Array<[string, unknown]>) {
       assert((await run(pi)) === NOT_STAMPED, `${label}: a declared leg below its Config-sources text version must be NOT_STAMPED`);
     }
     eq(declarationReads, 0, 'the version test runs first — no declaration read below the version: ');

@@ -32,7 +32,8 @@ import { readLegDeviceSources, type LegDeviceSourcesResolution } from './device-
 import { isFileOfGitLine } from './held-bytes/device-read-scope';
 import { GIT_FILE_SOURCE_PINS } from '@/lib/mcp/server/config/git-file-source-pin';
 import { heldPackageOutOfScope } from './held-bytes/scope';
-import { selectLegEditApplication, selectLegReviewedDiff, selectLegHarvesterHeldBytes, legEditApplicationState, type ChildStamp } from './held-bytes-nets';
+import { selectLegEditApplication, selectLegReviewedDiff, selectLegHarvesterHeldBytes, selectLegPlanWitness, legEditApplicationState, type ChildStamp } from './held-bytes-nets';
+import { planWitnessForceReason, planWitnessProtocolHasSentence } from './plan-witness';
 
 export type HeldEditReason = string;
 export interface HeldEditVerdict { state: string; reviewerSaw: string; reason: HeldEditReason | null; inScope: boolean }
@@ -160,6 +161,7 @@ export async function applyHeldEditCarrier(
   let notPinned = false;
   let deviceForce: ReturnType<typeof deviceReadForce> = null;
   let configForce: ConfigForce | null = null;
+  let witnessReason: string | null = null;
   try {
     // held-k8s step 3 (owner G-4, SYNTHESIS v3 §6.4): a Git read off the pin (another repo, another ref, a sha) is refused at call
     // time and recorded at capture as `source-not-pinned`. On a held-capable leg it leaves no base, so the package would read
@@ -197,6 +199,17 @@ export async function applyHeldEditCarrier(
     }
     author = await selectLegEditApplication(db, stageId);
     reviewer = await selectLegReviewedDiff(db, stageId);
+    // planWitness (owner W1, 2026-11-18): the SAME selected Author execution's Plan-witness fact. Stamped only by a terraform-iac
+    // ≥ 1.17.0 Author, so on every other leg this reads `no-stamp` and nothing follows. A stamp from another execution than the
+    // selected Author's, or one that is not `checked:true`, never forces ("could not read" is a named state, never a block).
+    // Read only on a leg whose protocol HAS a stop sentence (one extra read on a Terraform leg, none elsewhere), in its own
+    // try: a failed read of this fact leaves `witnessReason` null and the other reads' fail-closed handling untouched.
+    if (author.state === 'ok' && planWitnessProtocolHasSentence(resolveTaskProtocol({ title: task.title ?? null, metadata: task.metadata }).protocol)) {
+      try {
+        const witness = await selectLegPlanWitness(db, stageId);
+        if (witness.state === 'ok' && witness.executionId === author.executionId) witnessReason = planWitnessForceReason(witness.fact);
+      } catch { witnessReason = null; }
+    }
     if (author.state === 'ok' && author.fact.state === 'applied') {
       const bases = await db.heldFileRef.findMany({ where: { executionId: author.executionId, kind: 'BASE' }, select: { legTaskId: true } });
       notOfLeg = !task.id || bases.length === 0 || bases.some((b) => b.legTaskId !== task.id);
@@ -204,12 +217,18 @@ export async function applyHeldEditCarrier(
   } catch { readError = true; }
   const base = heldEditVerdict(author, reviewer, readError);
   // Precedence (push 2; push 3 D-1): stage-rebind > source-not-pinned > the device force (a capture snapshot refusal · device-sources-<state>
-  // incl. absent · git-file-not-held > device-read-not-held) > author-not-of-leg > the package's own reason.
+  // incl. absent · git-file-not-held > device-read-not-held) > author-not-of-leg > the package's own reason > the Plan-witness
+  // reasons, in `planWitnessForceReason`'s order: the stop sentence (`stop-sentence-altered` / `stop-sentence-absent`), then
+  // `witness-incomplete`, then `witness-whole-value` (owner 2026-11-18, after the re-lab; the two list reasons only where every edit
+  // was read). The Plan-witness reason is LAST and fires only where nothing else forces
+  // and the package is IN SCOPE — i.e. an applied held edit whose rendered diff the Reviewer saw: every other state already names
+  // its own reason, and an out-of-scope package (no held grammar) is never forced by a package-level check (Phase 10 scope rule).
   const v: HeldEditVerdict = rebind ? { ...base, reason: 'stage-rebind' }
     : notPinned && !readError ? { ...base, reason: 'source-not-pinned' }
     : deviceForce && !readError ? { ...base, reason: deviceForce.reason }
     : configForce && !readError ? { ...base, reason: configForce.reason }
-    : notOfLeg && base.reason === null ? { ...base, reason: 'author-not-of-leg' } : base;
+    : notOfLeg && base.reason === null ? { ...base, reason: 'author-not-of-leg' }
+    : witnessReason && !readError && base.reason === null && base.inScope ? { ...base, reason: witnessReason } : base;
   const agentOutcome = qg.outcome as string;
   const forced = agentOutcome === 'approved' && v.reason !== null;
   const df = deviceForce && v.reason === deviceForce.reason && DEVICE_NOT_HELD_REASONS.includes(v.reason) ? deviceForce : null;

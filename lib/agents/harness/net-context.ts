@@ -43,7 +43,8 @@ export interface BuildNetContextInput {
   /** Stage B (A6): the core's one owning-leg resolution; absent ⇒ resolved lazily, once, by the same function. */
   owningLeg?: OwningLegResolution | null;
   /** Stage B: the variant stamps the core built pre-tx. */
-  held?: { editApplication?: Fact | null; heldBytes?: Fact | null; /** the handles whose BASE the package holds (V-8a; EF-P2-3) */ baseHeldHandles?: readonly string[] | null };
+  held?: { editApplication?: Fact | null; heldBytes?: Fact | null; /** the handles whose BASE the package holds (V-8a; EF-P2-3) */ baseHeldHandles?: readonly string[] | null;
+    /** planWitness: the held-edit step's key read, built pre-tx where the held file text is in memory. */ planWitnessKeys?: unknown };
   /** held-network step 3 batch 2b: the core's one read of the leg's declared Device sources; absent ⇒ resolved lazily, once. */
   deviceSources?: LegDeviceSourcesResolution | null;
   /** Config sources STEP 2: the core's one read of the leg's declared Config sources; absent ⇒ resolved lazily, once. */

@@ -52,7 +52,7 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
 
   console.log('GS1 the frozen set');
   await t('loads, every pin unedited (sha256), v7 (+ the two requirements cases and their 3 pins): 19 cases, 6 protocols, 12 templates; the re-freeze record names every case', () => {
-    assert(gs.version === 'v8' && gs.cases.length === 19, `${gs.version} cases ${gs.cases.length}`);
+    assert(gs.version === 'v9' && gs.cases.length === 19, `${gs.version} cases ${gs.cases.length}`);
     assert(Object.keys(gs.pins.protocols).length === 6 && Object.keys(gs.pins.templates).length === 12, 'pins');
     const added = (gs.refreezes ?? []).flatMap((r) => r.added).sort().join();
     assert(added === gs.cases.map((c) => c.id).sort().join(), `refreezes added ≠ cases: ${added}`);
@@ -356,7 +356,7 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
   await t('v8: a k8s 1.19.0 text lab carries each Kubernetes case\'s frozen declaration (block on the leg, first-execution snapshot, the tool-shaped drift answer) and nothing else moves; under --fake-llm persisted all 5 cells reproduce with the Config force read (null: each block names the file its stored Harvester read); frozen-cmp moves ONLY by the protocol text (system) and the Config-sources fact renders (user) — plus AK5\'s pre-join held view on the Author side; a block naming a second, unread git-file forces git-file-not-held and golden-score reads FLIPPED ⇒ DO-NOT-SHIP; a lab below 1.19.0 carries no declaration', () => {
     const k8s = gs.cases.filter((c) => c.protocol === 'kubernetes-gitops-protocol');
     assert(k8s.map((c) => c.id).sort().join() === 'K8S-AK5,K8S-BK3,K8S-PROG' && k8s.every((c) => c.configSources?.fromVersion === '1.19.0' && c.configSources.block.length === 2), 'v8: every Kubernetes case carries a 1.19.0 frozen declaration of two lines');
-    assert(gs.cases.filter((c) => c.configSources).length === 3, 'v8: only the Kubernetes cases carry a declaration');
+    assert(gs.cases.filter((c) => c.configSources).length === 7 && gs.cases.filter((c) => c.configSources).every((c) => /^(kubernetes-gitops|terraform-iac)-protocol$/.test(c.protocol)), 'v8/v9: only the Kubernetes and Terraform cases carry a declaration');
     // Below the version: the model lab (no composedVersion) carries nothing.
     const below = buildGoldenCompanion(scratchCopy('model-lab'), gs).experiment as any;
     assert(below.nodes.filter((n: any) => /^GOLD-K8S-/.test(n.id)).every((n: any) => !n.inputEdits && !n.configSourcesSnapshot && !n.platformDrift), 'a lab below 1.19.0 must carry no Config-sources declaration');
@@ -415,6 +415,91 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
     assert(Object.values(f2.variants).every((v: any) => v.held?.configSources?.configForce?.reason === 'git-file-not-held'), `forced: ${JSON.stringify(Object.values(f2.variants).map((v: any) => v.held?.configSources?.configForce))}`);
     const r2 = scoreGolden([run2], comp, stored, gs);
     const prog = r2.cells.filter((c) => c.case === 'K8S-PROG');
+    assert(prog.length === 2 && prog.every((c) => c.status === 'FLIPPED') && r2.verdict.verdict === 'DO-NOT-SHIP', `the Config force must flip an approved case: ${prog.map((c) => `${c.cell} ${c.status}`).join(' | ')} ${r2.verdict.verdict}`);
+  });
+
+  console.log('GS9 the v9 Terraform re-freeze (frozen Config-sources declarations, NO drift plant; terraform-iac 1.17.0 candidate, L-CS-T)');
+  await t('v9: each Terraform case carries a 1.17.0 frozen declaration with NO platformDrift (TF-TL4 @ v1.0 as stored, owner); the validator FORBIDS a drift plant on terraform-iac and still REQUIRES one on Kubernetes; a tf 1.17.0 text lab carries the declaration (no drift plant) onto the Terraform cells only; under --fake-llm persisted all 8 cells reproduce with the Config force read (TF-TL4 forced git-file-not-held, the others null); frozen-cmp moves ONLY by the protocol text (Reviewer system) and the three live-evidence lines (user); a block naming a second, unread git-file forces git-file-not-held ⇒ FLIPPED ⇒ DO-NOT-SHIP; a lab below 1.17.0 carries nothing', () => {
+    const tf = gs.cases.filter((c) => c.protocol === 'terraform-iac-protocol');
+    assert(tf.map((c) => c.id).sort().join() === 'TF-C1,TF-PROG,TF-TL2,TF-TL4' && tf.every((c) => c.configSources?.fromVersion === '1.17.0' && c.configSources.block.length === 2 && c.configSources.platformDrift === undefined), 'v9: every Terraform case carries a two-line 1.17.0 declaration and no drift plant');
+    assert(tf.find((c) => c.id === 'TF-TL4')!.configSources!.block[0].endsWith('terraform/main.tf @ v1.0') && tf.filter((c) => c.id !== 'TF-TL4').every((c) => c.configSources!.block[0].endsWith('terraform/main.tf')), 'v9: TF-TL4 declares @ v1.0 as stored (owner); the others the default ref');
+    // The validator, both ways (a scratch copy of golden/ — the frozen set is never edited).
+    const vd = fs.mkdtempSync(path.join(os.tmpdir(), 'golden-set-')); fs.cpSync(GOLDEN_DIR, vd, { recursive: true });
+    const raw = JSON.parse(fs.readFileSync(path.join(vd, 'golden-set.json'), 'utf8'));
+    raw.cases.find((c: any) => c.id === 'TF-PROG').configSources.platformDrift = { default: { caller: 'result', file: 'config-sources/K8S-PROG.compare-result.json' } };
+    fs.writeFileSync(path.join(vd, 'golden-set.json'), JSON.stringify(raw));
+    let refused = ''; try { loadGoldenSet(vd); } catch (e) { refused = (e as Error).message; }
+    assert(/TF-PROG configSources\.platformDrift is forbidden on terraform-iac-protocol/.test(refused), `a drift plant on a Terraform case was not refused: ${refused.slice(0, 200)}`);
+    const raw2 = JSON.parse(fs.readFileSync(path.join(GOLDEN_DIR, 'golden-set.json'), 'utf8')); delete raw2.cases.find((c: any) => c.id === 'K8S-PROG').configSources.platformDrift;
+    fs.writeFileSync(path.join(vd, 'golden-set.json'), JSON.stringify(raw2));
+    refused = ''; try { loadGoldenSet(vd); } catch (e) { refused = (e as Error).message; }
+    assert(/K8S-PROG configSources\.platformDrift must be/.test(refused), `a Kubernetes case with no drift plant was not refused: ${refused.slice(0, 200)}`);
+    // Below the version: the model lab carries nothing onto the Terraform cells.
+    const below = buildGoldenCompanion(scratchCopy('model-lab'), gs).experiment as any;
+    assert(below.nodes.filter((n: any) => /^GOLD-TF-/.test(n.id)).every((n: any) => !n.inputEdits && !n.configSourcesSnapshot && !n.platformDrift), 'a lab below 1.17.0 must carry no Terraform declaration');
+    const dir = scratchCopy('tf-text-lab');
+    const { dir: comp, report, experiment } = buildGoldenCompanion(dir, gs) as any;
+    assert(report.cells.map((c: any) => `${c.case}:${c.form}`).sort().join() === 'TF-C1:live,TF-C1:persisted,TF-PROG:live,TF-PROG:persisted,TF-TL2:live,TF-TL2:persisted,TF-TL4:live,TF-TL4:persisted', `cells: ${report.cells.map((c: any) => `${c.case}:${c.form}`).join()}`);
+    const tn = experiment.nodes.filter((n: any) => /^GOLD-TF-/.test(n.id));
+    assert(tn.length === 4 && tn.every((n: any) => n.configSourcesSnapshot === 'first-execution' && /^config-sources\/TF-[A-Z0-9]+\.block\.json$/.test(n.inputEdits) && n.platformDrift === undefined), 'the declaration (and no drift plant) must travel onto every Terraform node');
+    assert(experiment.nodes.every((n: any) => /^GOLD-TF-/.test(n.id)) && Object.values(experiment.variants).every((v: any) => v.composedVersion === '1.17.0'), 'only Terraform cells, each composing 1.17.0');
+    const runDir = path.join(path.dirname(dir), 'run-tf');
+    lab(['run', '--experiment', comp, '--fake-llm', 'persisted', '--out', runDir, '--concurrency', '4']);
+    const man = JSON.parse(fs.readFileSync(path.join(runDir, 'manifest.json'), 'utf8'));
+    for (const n of tn) for (const v of n.variants) {
+      const cs = man.nodes[n.id].variants[v].held?.configSources;
+      const tl4 = n.id === 'GOLD-TF-TL4';
+      assert(cs?.state === 'computed' && cs.declaration === 'parsed' && cs.platformDriftCalls === null && cs.gitLiveDrift?.reason === 'no-git-vs-live-method'
+        && (tl4 ? cs.configForce?.reason === 'git-file-not-held' && cs.held?.refs === 0 : cs.configForce === null && cs.held?.refs === 1), `${n.id}/${v}: ${JSON.stringify(cs).slice(0, 300)}`);
+    }
+    const r = scoreGolden([runDir], comp, stored, gs);
+    // planWitness (2026-11-18): the three approve cases store a 1.16.0 package — no stop sentence — so at 1.17.0 the carrier's stop-sentence
+    // force (`stop-sentence-absent`, read from the SHIPPING net's fact on the stored text) turns the stored approval to needs-revision: the
+    // cell FLIPS by the platform, in both forms under the persisted fake (the fake Author returns the stored package). A lab that does not
+    // name them as targets is DO-NOT-SHIP; naming them (L-CS-T does) reads PASS. TF-TL4 keeps its run-level reason, which outranks.
+    const stopForced = (c: any) => c.status === 'FLIPPED' && c.samples.every((x: any) => x.agentApproved === true && x.platformReason === 'stop-sentence-absent' && x.legOutcome === 'needs-revision');
+    assert(r.cells.length === 8 && r.cells.filter((c) => c.case === 'TF-TL4').every((c) => c.status === 'REPRODUCED' && c.samples.every((x: any) => x.platformReason === 'git-file-not-held'))
+      && r.cells.filter((c) => c.case !== 'TF-TL4').length === 6 && r.cells.filter((c) => c.case !== 'TF-TL4').every(stopForced) && r.verdict.verdict === 'DO-NOT-SHIP',
+      `${r.verdict.verdict}: ${r.cells.map((c) => `${c.case}/${c.cell} ${c.status} ${c.samples.map((x: any) => x.platformReason).join()}`).join(' | ')}`);
+    const eT = JSON.parse(fs.readFileSync(path.join(comp, 'experiment.json'), 'utf8'));
+    eT.goldenCompanion.targets = ['TF-PROG', 'TF-TL2', 'TF-C1']; fs.writeFileSync(path.join(comp, 'experiment.json'), JSON.stringify(eT));
+    const rT = scoreGolden([runDir], comp, stored, gs);
+    assert(rT.verdict.verdict === 'PASS' && rT.cells.filter((c) => c.target).length === 6, `with the three stale-package cases named as targets: ${rT.verdict.verdict}`);
+    eT.goldenCompanion.targets = []; fs.writeFileSync(path.join(comp, 'experiment.json'), JSON.stringify(eT)); // back to the untargeted lab for the other direction below
+    let fc = ''; try { fc = lab(['frozen-cmp', '--experiment', comp, '--run', runDir, '--author', '--dump']); } catch (x: any) { fc = String(x.stdout ?? ''); }
+    const base = fs.readFileSync(path.join(dir, 'protocols', 'terraform-iac-protocol@1.16.0.baseline.md'), 'utf8').split('\n');
+    const cand = fs.readFileSync(path.join(comp, 'protocols', fs.readdirSync(path.join(comp, 'protocols')).find((f) => /terraform-iac-protocol@1\.16\.0\.g\w+\.md$/.test(f))!), 'utf8').split('\n');
+    const protoAdded = new Set(cand.filter((l) => !base.includes(l))); const protoRemoved = new Set(base.filter((l) => !cand.includes(l)));
+    const FACT = /Live evidence — the platform's live-evidence fact|^\s+- live read: `prod-state`|^\s+- Git files: `main-tf`/;
+    // The leg Reviewer also reads the Plan-witness platform line (the Author never does): head, stop sentence, block, [the edit], not compared.
+    // §8b render: a Result line first and a closing return line last (7 lines on a stored package with its edit read; 6 on TF-TL4, which holds no file).
+    const WITNESS = /^- \*\*Plan witness — platform check\*\*|^  - Result: 2 fault\(s\) found — listed below; |^  - Stop sentence: `absent`|^  - `Plan witness` block: absent\.|^  - Edit block 1 \(H1\): read — |^  - Names compared with the block: not compared|^  - Kept-file edits: |^  - The platform (?:returns|does not return) this package/;
+    const delta = (a: string[], b: string[]) => ({ added: b.filter((l) => !a.includes(l)), removed: a.filter((l) => !b.includes(l)) });
+    for (const id of ['TF-PROG', 'TF-TL2', 'TF-TL4', 'TF-C1']) {
+      const d = path.join(runDir, `GOLD-${id}`, fs.readdirSync(path.join(runDir, `GOLD-${id}`)).find((x) => /^g\w+terraformr$/.test(x))!);
+      const rd = (f: string) => fs.readFileSync(path.join(d, f), 'utf8').split('\n');
+      const sys = delta(rd('frozen.reviewer.system.md'), rd('reviewer.system.md'));
+      assert(sys.added.length > 0 && sys.added.every((l) => !l.trim() || protoAdded.has(l)) && sys.removed.every((l) => !l.trim() || protoRemoved.has(l)), `${id}: the Reviewer system prompt moved beyond the protocol text: ${JSON.stringify(sys.added.filter((l) => l.trim() && !protoAdded.has(l)).slice(0, 3))}`);
+      for (const f of ['reviewer.user.md', 'author.user.md']) {
+        const u = delta(rd(`frozen.${f}`), rd(f));
+        const rev = f === 'reviewer.user.md'; const added = u.added.filter((l) => l.trim());
+        assert(u.removed.length === 0 && added.filter((l) => FACT.test(l)).length === 3 && added.every((l) => FACT.test(l) || (rev && WITNESS.test(l)))
+          && added.filter((l) => WITNESS.test(l) && !FACT.test(l)).length === (rev ? (id === 'TF-TL4' ? 6 : 7) : 0),
+          `${id}: ${f} moved beyond the three live-evidence lines${rev ? ' and the Plan-witness platform line' : ''}: ${JSON.stringify(added.filter((l) => !FACT.test(l) && !WITNESS.test(l)).slice(0, 3))} / added ${added.length} / removed ${u.removed.length}`);
+        assert(!rd(f).join('\n').includes("Git-vs-live drift fact"), `${id}: ${f} renders a drift line (the chainer carries only a checked fact)`);
+      }
+      assert(new RegExp(`GOLD-${id}/\\S+: author\\.system\\.md identical`).test(fc), `${id}: the persisted Author's system prompt moved`);
+    }
+    // The other direction: a block naming a second git-file the stored Harvester never read is forced git-file-not-held.
+    const ef = path.join(comp, 'config-sources', 'TF-PROG.block.json'); const blk = JSON.parse(fs.readFileSync(ef, 'utf8'));
+    blk.ops[0].new = blk.ops[0].new.replace(/\n$/, '\narchive-tf: git-file — service github-service ; paichart/paichart-lab-configs/terraform/archive.tf\n');
+    fs.writeFileSync(ef, JSON.stringify(blk));
+    const run2 = path.join(path.dirname(dir), 'run-tf-forced');
+    lab(['run', '--experiment', comp, '--fake-llm', 'persisted', '--out', run2, '--only', 'GOLD-TF-PROG']);
+    const f2 = JSON.parse(fs.readFileSync(path.join(run2, 'manifest.json'), 'utf8')).nodes['GOLD-TF-PROG'];
+    assert(Object.values(f2.variants).every((v: any) => v.held?.configSources?.configForce?.reason === 'git-file-not-held'), `forced: ${JSON.stringify(Object.values(f2.variants).map((v: any) => v.held?.configSources?.configForce))}`);
+    const r2 = scoreGolden([run2], comp, stored, gs);
+    const prog = r2.cells.filter((c) => c.case === 'TF-PROG');
     assert(prog.length === 2 && prog.every((c) => c.status === 'FLIPPED') && r2.verdict.verdict === 'DO-NOT-SHIP', `the Config force must flip an approved case: ${prog.map((c) => `${c.cell} ${c.status}`).join(' | ')} ${r2.verdict.verdict}`);
   });
 

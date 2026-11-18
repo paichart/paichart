@@ -182,3 +182,34 @@ export function archFetchRoute(calls: readonly unknown[]): { verdict: 'PASS' | '
   return { verdict: scrapes ? 'FINDING' : 'PASS', lines };
 }
 
+// ── Terraform leg facts (cst-tf-facts, terraform-iac 1.17.0 + the Program Architect's configSources["terraform-iac"] sentence; pre-registered
+// 2026-11-19 BEFORE the Architect sentence deploys). Pure: the caller hands over, per Terraform leg, how many of its tasks carry the Config
+// sources snapshot and each child's role + stored result.json. FINDING is the hand-read trigger, never a verdict on the run.
+export type TfLegFacts = { id: string; tasks: number; snapshotOn: number; kids: ReadonlyArray<{ role: string; result: Record<string, unknown> | null }> };
+export function tfLegFacts(legs: readonly TfLegFacts[]): { verdict: 'PASS' | 'FINDING' | 'UNEXERCISED'; lines: string[] } {
+  const lines: string[] = []; let finding = false, witnesses = 0;
+  if (!legs.length) return { verdict: 'UNEXERCISED', lines: ['  no terraform-iac leg'] };
+  for (const l of legs) {
+    lines.push(`  leg ${l.id}: Config sources snapshot on ${l.snapshotOn} of ${l.tasks} task(s)`);
+    if (!l.snapshotOn) { finding = true; lines.push('    no snapshot: the leg received no `## Config sources` block (the contract carried none under configSources["terraform-iac"], or the leg stopped) : FINDING'); }
+    for (const k of l.kids) {
+      const j = k.result; if (!j) continue;
+      if ('platformDriftCalls' in j) { finding = true; lines.push(`    ${k.role}: platformDriftCalls present on a Terraform leg (no Git-vs-live method exists) : FINDING`); }
+      const d = isObj(j.gitLiveDrift) ? j.gitLiveDrift : null;
+      if (d) lines.push(`    ${k.role}: gitLiveDrift checked=${String(d.checked)} reason=${String(d.reason ?? '-')}`);
+      if (d && d.checked === true) { finding = true; lines.push('      gitLiveDrift reads checked on a Terraform leg : FINDING'); }
+      if (k.role !== 'config_change_author') continue;
+      const w = isObj(j.planWitness) ? j.planWitness : null;
+      if (!w) { finding = true; lines.push('    config_change_author: no planWitness fact : FINDING'); continue; }
+      witnesses++;
+      const n = (x: unknown) => (Array.isArray(x) ? x.length : 0);
+      lines.push(`    config_change_author: planWitness stopSentence=${String(w.stopSentence)} missing=${n(w.missing)} missingResources=${n(w.missingResources)} wholeValueKeys=${n(w.wholeValueKeys)} listsCover=${String(w.listsCover)}`);
+      if (w.stopSentence !== 'verbatim' || n(w.missing) || n(w.missingResources) || n(w.wholeValueKeys)) { finding = true; lines.push('      the witness check found a fault : FINDING (read the package; the leg should read needs-revision)'); }
+      else if (w.listsCover !== 'all-edits') lines.push('      not every edit was read by the platform ; the Reviewer checked those by eye (read its review)');
+    }
+  }
+  if (finding) return { verdict: 'FINDING', lines };
+  if (!witnesses) return { verdict: 'UNEXERCISED', lines: [...lines, '  no Author execution carried a result ; an absence, not a pass'] };
+  return { verdict: 'PASS', lines: [...lines, `  ${witnesses} Author execution(s): a clean planWitness; no drift call; every leg holds its declared sources`] };
+}
+

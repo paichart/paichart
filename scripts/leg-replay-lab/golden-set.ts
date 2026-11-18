@@ -73,6 +73,8 @@ import { applyEdits, type EditSpec } from './edits';
 import { sha256 } from './rebuild';
 import { AGENT_MODELS } from '../../lib/agents/model-tiers';
 import { heldEditVerdict } from '../../lib/agents/harness/held-edit-carrier';
+import { readSampleForce } from './plan-witness-lever';
+import { gitLiveDriftMethodOf } from '../../lib/agents/harness/git-live-drift';
 
 export const GOLDEN_DIR = path.join(__dirname, 'golden');
 /** v7: the one protocol a `requirements` case runs (no held binding). */
@@ -107,7 +109,10 @@ export function caseRoles(c: Pick<GoldenCase, 'shape'>): { author: string; revie
   if (c.shape === 'requirements') return { author: 'requirements_author', reviewer: 'requirements_reviewer' };
   return c.shape === 'value' ? { author: 'derivation_architect', reviewer: 'derivation_reviewer' } : { author: 'config_change_author', reviewer: 'change_reviewer' };
 }
-export interface GoldenConfigSources { fromVersion: string; block: string[]; platformDrift: { default: { caller: 'result'; file: string } }; provenance: string }
+/** v9 (Config sources STEP 4, owner 2026-11-17): `platformDrift` is REQUIRED for a protocol with a Git-vs-live method (Kubernetes) and
+ *  FORBIDDEN for one without (terraform-iac — the SHIPPING `gitLiveDriftMethodOf` decides): production makes no drift call there, so a
+ *  compare-tool answer could never reach a prompt, and the lab refuses such a plant (config-sources-patch.ts). */
+export interface GoldenConfigSources { fromVersion: string; block: string[]; platformDrift?: { default: { caller: 'result'; file: string } }; provenance: string }
 export interface GoldenSet {
   version: string; frozenAt: string; owner: string; rule: string;
   /** null = the protocol's legs are not held (a value leg): its cells carry no held binding. */
@@ -151,8 +156,12 @@ export function loadGoldenSet(dir = GOLDEN_DIR): GoldenSet {
       const cs = c.configSources;
       if (!gs.heldJoinSeedByProtocol[c.protocol]) throw new Error(`golden set: case ${c.id} carries configSources on ${c.protocol}, which has no held binding`);
       if (!/^\d+\.\d+\.\d+$/.test(cs.fromVersion) || !Array.isArray(cs.block) || !cs.block.length || cs.block.some((l) => typeof l !== 'string' || !l.trim() || l.includes('\n'))) throw new Error(`golden set: case ${c.id} configSources needs fromVersion x.y.z and a non-empty block of single lines`);
-      const keys = Object.keys(cs.platformDrift ?? {});
-      if (keys.join() !== 'default' || cs.platformDrift.default.caller !== 'result' || !fs.existsSync(path.join(dir, cs.platformDrift.default.file))) throw new Error(`golden set: case ${c.id} configSources.platformDrift must be { default: { caller: 'result', file } } with the file under golden/`);
+      if (gitLiveDriftMethodOf(c.protocol) === null) {
+        if (cs.platformDrift !== undefined) throw new Error(`golden set: case ${c.id} configSources.platformDrift is forbidden on ${c.protocol}: it has no Git-vs-live method (GIT_LIVE_DRIFT_METHODS), so production makes no drift call`);
+      } else {
+        const keys = Object.keys(cs.platformDrift ?? {});
+        if (keys.join() !== 'default' || cs.platformDrift!.default.caller !== 'result' || !fs.existsSync(path.join(dir, cs.platformDrift!.default.file))) throw new Error(`golden set: case ${c.id} configSources.platformDrift must be { default: { caller: 'result', file } } with the file under golden/`);
+      }
       if (!cs.provenance || cs.provenance.length < 20) throw new Error(`golden set: case ${c.id} configSources needs its provenance in words`);
     }
     const want: GoldenOutcome = c.expected.agentApproved && !c.expected.platformReason ? 'approved' : 'needs-revision';
@@ -414,6 +423,8 @@ export function buildGoldenCompanion(labDir: string, gs: GoldenSet = loadGoldenS
     const editRel = `config-sources/${c.id}.block.json`;
     fs.writeFileSync(path.join(out, editRel), JSON.stringify({ id: `golden-${gs.version}-${c.id}-config-sources`, appliesTo: ['leg:description'],
       ops: [{ type: 'replace', old: desc, new: `${desc}\n\n## Config sources\n${cs.block.join('\n')}\n` }] }, null, 2) + '\n');
+    // v9: no drift plant for a protocol with no Git-vs-live method (the validator guarantees `platformDrift` is absent there).
+    if (!cs.platformDrift) return { inputEdits: editRel, configSourcesSnapshot: 'first-execution' };
     const resultRel = `config-sources/${path.basename(cs.platformDrift.default.file)}`;
     fs.copyFileSync(path.join(goldenDir, cs.platformDrift.default.file), path.join(out, resultRel));
     return { inputEdits: editRel, configSourcesSnapshot: 'first-execution', platformDrift: { default: { caller: 'result', file: resultRel } } };
@@ -533,7 +544,13 @@ export function readGoldenSample(c: GoldenCase, carrierModelled: boolean, s: Rec
   if (s.error) return { sample: name, agentApproved: null, platformReason: null, legOutcome: null, error: String(s.error) };
   const approved = typeof s.verdict?.approved === 'boolean' ? s.verdict.approved as boolean : null;
   if (approved === null) return { sample: name, agentApproved: null, platformReason: null, legOutcome: null, error: 'no parseable verdict' };
-  const reason = configForce ?? samplePlatformReason(c, carrierModelled, s.editApplication ?? null, `lab-${s.node}-${s.variant}-${s.i}-a`);
+  // planWitness (2026-11-18): the carrier's LAST reason — the stop sentence (`stop-sentence-altered` / `stop-sentence-absent`), written on the
+  // sample by lab.ts from the shipping pieces (plan-witness-lever.ts). It fires only where nothing above it forces; absent on every sample
+  // below terraform-iac 1.17.0 and on every run before the lever, so their reading is unchanged.
+  // §8b: the fact's own reason is any of four (the stop sentence, `witness-incomplete`, `witness-whole-value`); `readSampleForce` reads both lever versions.
+  const pwf = readSampleForce(s.planWitnessForce);
+  const pw = carrierModelled && pwf.byFact ? pwf.reason : null;
+  const reason = configForce ?? samplePlatformReason(c, carrierModelled, s.editApplication ?? null, `lab-${s.node}-${s.variant}-${s.i}-a`) ?? pw;
   return { sample: name, agentApproved: approved, platformReason: reason, legOutcome: approved && !reason ? 'approved' : 'needs-revision', error: null };
 }
 

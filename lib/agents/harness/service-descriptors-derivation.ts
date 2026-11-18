@@ -16,7 +16,7 @@
  *     and the leg protocol reads `serviceDescriptors` as "a URL or an inline descriptor object" (never a name).
  *  3. The Architect's value: equal to the derived one ⇒ kept byte-unchanged; different / composed ⇒ replaced; present where the block
  *     derives none ⇒ removed. The platform never writes a value no declared line names.
- *  4. Nothing to derive FROM — a protocol without a sources lane (terraform-iac, observability-config today), or a lane token whose
+ *  4. Nothing to derive FROM — a protocol without a sources lane (observability-config today; terraform-iac joined at 1.17.0), or a lane token whose
  *     contract block is absent or unparseable (the leg may declare its block in its own task text, which this program-wide contract
  *     cannot see): the Architect's entry stands, except a value that is neither a string URL nor an object with a string `endpoint`
  *     (no leg can use it) ⇒ removed.
@@ -35,7 +35,7 @@ export const SERVICE_DESCRIPTORS_FACT_VERSION = 1;
 
 /** Leg protocol tokens with NO sources lane today: the Architect's descriptor is the only source (rule 4). Steps 3/4 of Config
  *  sources move a token from here into CONFIG_SOURCE_LANES (STEPS-2-4-PLAN §4.3 / §5.3); it must then leave this list (pinned). */
-export const DESCRIPTOR_ONLY_TOKENS: readonly string[] = Object.freeze(['terraform-iac', 'observability-config']);
+export const DESCRIPTOR_ONLY_TOKENS: readonly string[] = Object.freeze(['observability-config']); // terraform-iac joined CONFIG_SOURCE_LANES at 1.17.0 (STEP 4)
 
 type Lane = { field: 'deviceSources' | 'configSources'; protocol: string };
 /** token → the field + protocol its block is read with. Derived from the ONE lane tables, never retyped. */

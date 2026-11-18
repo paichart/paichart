@@ -79,7 +79,8 @@ test('held-k8s 1b-scope + step 3: a leaf under a kubernetes-gitops leg ⇒ gitFi
   // Config sources STEP 2 (kubernetes-gitops 1.19.0): a k8s leg is a Config-sources leg, and the resolution names its protocol.
   eq(await resolveOwningLegProtocol(k.db, { id: 'leaf', type: 'ACTION' }), { kind: 'leg', legId: 'leg', heldCapable: true, ownStageId: 'st1', gitFileSource: true, deviceSource: false, configSourceProtocol: 'kubernetes-gitops-protocol' });
   eq(await resolveOwningLegProtocol(stubDb({}, {}).db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: kubernetes-gitops)' }), { kind: 'self', legId: 'L', heldCapable: true, gitFileSource: true, deviceSource: false, configSourceProtocol: 'kubernetes-gitops-protocol' });
-  eq(await resolveOwningLegProtocol(stubDb({}, {}).db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: terraform-iac)' }), { kind: 'self', legId: 'L', heldCapable: true, gitFileSource: true, deviceSource: false });
+  // Config sources STEP 4 (terraform-iac 1.17.0): a tf resolution now names its Config-sources protocol (the k8s 1.19.0 precedent).
+  eq(await resolveOwningLegProtocol(stubDb({}, {}).db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: terraform-iac)' }), { kind: 'self', legId: 'L', heldCapable: true, gitFileSource: true, deviceSource: false, configSourceProtocol: 'terraform-iac-protocol' });
   eq([...GIT_FILE_SOURCE_PROTOCOLS], ['kubernetes-gitops-protocol', 'terraform-iac-protocol', 'network-provisioning-protocol']);
   // held-network step 3 batch 2b: a network leg declares Device sources (deviceSource true); push 3 (the join text): it is held-capable.
   eq(await resolveOwningLegProtocol(stubDb({}, {}).db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: network-provisioning)' }), { kind: 'self', legId: 'L', heldCapable: true, gitFileSource: true, deviceSource: true });

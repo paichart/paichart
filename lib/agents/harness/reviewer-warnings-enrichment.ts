@@ -60,7 +60,8 @@ export const LEG_SECTION_REVIEWER_ROLE = 'change_reviewer';
 export const REGISTERED_WARNING_IDS: Readonly<Record<string, readonly string[]>> = {
   // `git-file-only` (network-provisioning 1.26.0 R1 v2, Config sources): a derived value checked against a Git-only device, unstated.
   'network-provisioning-protocol': ['git-file-only', 'reachability-after-suppression', 'restated-conclusion'],
-  'terraform-iac-protocol': ['restated-conclusion'],
+  // `git-file-only` (terraform-iac 1.17.0, Config sources STEP 4 Ta): a Git-only run the package does not state as designed against the `.tf` files only.
+  'terraform-iac-protocol': ['git-file-only', 'restated-conclusion'],
   // `git-file-only` (kubernetes-gitops 1.19.0, Config sources K-R1): a Git-only run the package does not state as one.
   'kubernetes-gitops-protocol': ['git-file-only', 'restated-conclusion'],
   'observability-config-protocol': ['restated-conclusion'],

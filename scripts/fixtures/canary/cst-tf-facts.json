@@ -1,0 +1,60 @@
+{
+ "_source": "lab L-CS-T re-lab RL-3, A-DRIFT sample-01 (a live Author package on terraform-iac 1.17.0); the planWitness fact as the shipping net stamped it",
+ "planWitness": {
+  "version": 1,
+  "checked": true,
+  "protocol": "terraform-iac-protocol",
+  "sentenceVersion": "1.17.0",
+  "stopSentence": "verbatim",
+  "stopSentenceForm": "byte-exact",
+  "witnessBlock": "present",
+  "keys": {
+   "checked": true,
+   "reader": "paichart.hcl-keys/1",
+   "packageState": "applied",
+   "editsTotal": 1,
+   "editsRead": 1,
+   "editsUnreadable": 0
+  },
+  "edits": [
+   {
+    "block": 1,
+    "handle": "H1",
+    "state": "read",
+    "resources": [
+     {
+      "address": "aws_s3_bucket.archive",
+      "change": "edit",
+      "sets": [
+       "tags.owner"
+      ],
+      "removes": [],
+      "realigned": [
+       "tags.team",
+       "tags.tier"
+      ],
+      "unchanged": [
+       "tags.team",
+       "tags.tier"
+      ]
+     }
+    ]
+   }
+  ],
+  "listsCover": "all-edits",
+  "missing": [],
+  "missingResources": [],
+  "wholeValueKeys": [],
+  "realigned": [
+   "aws_s3_bucket.archive: tags.team",
+   "aws_s3_bucket.archive: tags.tier"
+  ]
+ },
+ "gitLiveDrift": {
+  "version": 1,
+  "method": null,
+  "point": "harvester",
+  "checked": false,
+  "reason": "no-git-vs-live-method"
+ }
+}

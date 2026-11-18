@@ -17,8 +17,8 @@
       "chars": 61218
     },
     "terraform-iac-protocol": {
-      "sha256": "792d57331e8f726d5bb2f9ba3c6dea8fbda15578ff5a0bface4b23e124d36b09",
-      "chars": 47226
+      "sha256": "ed8bdb991631143cccccc933fae34bda130f1b8ac4b73b24ce846dbe80e14fca",
+      "chars": 60109
     },
     "observability-config-protocol": {
       "sha256": "c0ad8475f34529305c93c1ca928b2450f5f86ccc9a6fbe7ba5e53b2a33875628",
@@ -159,12 +159,12 @@
       "chars": 4812
     },
     "program_architect": {
-      "sha256": "67b48bec68bfe9a26865b8da245b0a42e15370a99a9b0db10225a3745a612606",
-      "chars": 23896
+      "sha256": "1eb31d15b5d0e7c44842362bdc0840edc5b45c9e698cf5822f8f19f871c2b3be",
+      "chars": 23961
     },
     "value_chain_architect": {
-      "sha256": "67b48bec68bfe9a26865b8da245b0a42e15370a99a9b0db10225a3745a612606",
-      "chars": 23896
+      "sha256": "1eb31d15b5d0e7c44842362bdc0840edc5b45c9e698cf5822f8f19f871c2b3be",
+      "chars": 23961
     },
     "derivation_architect": {
       "sha256": "4fb4c93a78ee0358ed8380b421452233c968007a9f5d38db96dec06d3e803401",

@@ -216,6 +216,15 @@ export function renderPipelineContextSection(inputContext: unknown, opts: Pipeli
           if (glLines) parts.push(...glLines);
         }
       }
+      // planWitness (terraform-witness step-back, 2026-11-18): the platform's check of the Terraform Author's Plan witness block — a
+      // PURE function of the carried fact; the chainer carries it only from the Author entry to the leg Reviewer.
+      {
+        const pw = (prev as { planWitness?: Record<string, unknown> | null }).planWitness;
+        if (pw && typeof pw === 'object' && !isInherited(prev)) {
+          const pwLines = renderPlanWitnessForPrompt(pw);
+          if (pwLines) parts.push(...pwLines);
+        }
+      }
       // Net #1 (2026-09-17): the predecessor's DERIVATION CONTAINMENT disposition. Added last of the
       // three, and the reason it was missing is worth keeping: for SIBLING entries it is stamped at
       // the leg's SYNTHESIZE — AFTER the siblings have run — so it is empty 512 of 512 times, and in
@@ -409,5 +418,6 @@ import { renderGitDeviceComparisonForPrompt } from './git-device-comparison';
 import { renderHeldForEntry } from './held-bytes/render-held';
 import { renderGitLiveDriftForPrompt } from './git-live-drift'; // client-safe: no imports
 import { renderLiveEvidenceForPrompt } from './live-evidence-render'; // client-safe: no server imports (AgentBuilderPreview bundles this file)
+import { renderPlanWitnessForPrompt } from './plan-witness'; // client-safe: type imports only
 import { openFenceOf } from '../../utils/markdown-fence';
 

@@ -131,12 +131,16 @@ test('held-terraform step 3: terraform ≥ 1.15.0 carries the held-files section
   ok(TF.promptText.indexOf(HELD_FILES_HEADING) < TF.promptText.indexOf('## Validation = facts, not verdicts'), 'the section sits before ## Validation');
   for (const f of [HELD_AUTHOR_PACKAGE_FRAGMENT, HELD_AUTHOR_ROLLBACK_FRAGMENT, HELD_SYNTHESIZE_NEEDS_REVISION, HELD_SYNTHESIZE_OPERATOR_BYTES]) eq(count(TF.promptText, f), 1, `${f.slice(0, 40)}: `);
   for (const sx of ['a held file is a **`.tf` file of the configuration repository** the Harvester read', '<resource address> in H<n> (<path>)',
-    'A unified diff of a held file is not an edit', 'quote only its drifted or changed attributes — never the whole resource in its file layout',
+    'A unified diff of a held file is not an edit', 'quote only the attributes your change sets or the design names — never the whole resource in its file layout', // 1.17.0 (B2): no agent reads drift, so 'drifted' left this sentence (domain-carry-pins B3 pins its absence)
     'never copy a placeholder into an edit', 'An `unheld` handle with no path is not a file: write no edit or restore against it.',
     'are for files the platform does not hold']) ok(TF.promptText.includes(sx), `missing: ${sx}`);
 });
 test('held-terraform step 3 (the PC B2 rule, k8s precedent): no sentence offers a revert or a prior revision for a HELD file — only for files the platform does not hold', () => {
-  const sentences = TF.promptText.split(/(?<=[.;])\s+/).filter((x: string) => /revert|prior revision/.test(x));
+  // 1.17.0: the Plan witness speaks of a revert the team's CI PLAN would show ("a revert included", "a plan that would revert") — that is
+  // what the witness guards against, never a rollback route, so those sentences are outside this rule (and must exist: the witness is live).
+  const witnessRevert = (x: string) => /a revert included|a plan that would revert|name the KEYS your change sets/.test(x); // the three witness sentences, listed 2026-11-19
+  ok(TF.promptText.split(/(?<=[.;])\s+/).some(witnessRevert), 'the Plan witness sentences are present');
+  const sentences = TF.promptText.split(/(?<=[.;])\s+/).filter((x: string) => /revert|prior revision/.test(x) && !witnessRevert(x));
   ok(sentences.length > 0, 'the non-held rollback is still described');
   for (const x of sentences) ok(/any other file|never by reverting/.test(x), `a rollback sentence offers a revert without the non-held scope: ${x.slice(0, 200)}`);
 });

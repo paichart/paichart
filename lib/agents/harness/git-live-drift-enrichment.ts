@@ -12,12 +12,18 @@
 import type { NetContext } from './net-registry';
 import { NOT_STAMPED } from './net-registry';
 import { configDeclarationFor } from './config-source-facts-enrichment';
-import { computeGitLiveDrift, GIT_LIVE_DRIFT_METHOD, GIT_LIVE_DRIFT_VERSION } from './git-live-drift';
+import { computeGitLiveDrift, gitLiveDriftMethodOf, GIT_LIVE_DRIFT_VERSION } from './git-live-drift';
 import { liveEvidenceVersionApplies } from './live-evidence';
 import { readAuthoritativeResultField } from './authoritative-result-read';
 import { HELD_HARVESTER_ROLE } from './held-bytes-nets';
 
 const STAGE_CHILD_SCAN_CAP = 50;
+
+/** The persisting execution's composed protocol (`protocolInjection.delta.name`), or null. */
+function composedProtocol(ctx: NetContext): string | null {
+  const pi = ctx.protocolInjection as { delta?: { name?: unknown } } | null | undefined;
+  return pi && pi.delta && typeof pi.delta.name === 'string' ? pi.delta.name : null;
+}
 
 async function inPopulation(ctx: NetContext): Promise<boolean> {
   if (!liveEvidenceVersionApplies(ctx.protocolInjection)) return false;
@@ -33,12 +39,13 @@ export async function stampPlatformDriftCalls(ctx: NetContext): Promise<Record<s
 
 export async function computeGitLiveDriftHarvesterFact(ctx: NetContext): Promise<Record<string, unknown>> {
   if (!(await inPopulation(ctx))) return NOT_STAMPED;
-  return computeGitLiveDrift(Array.isArray(ctx.platformDriftCalls) ? ctx.platformDriftCalls : undefined);
+  return computeGitLiveDrift(Array.isArray(ctx.platformDriftCalls) ? ctx.platformDriftCalls : undefined, composedProtocol(ctx));
 }
 
 export async function transcribeGitLiveDriftFact(ctx: NetContext): Promise<Record<string, unknown>> {
   if (!(await inPopulation(ctx))) return NOT_STAMPED;
-  const base = { version: GIT_LIVE_DRIFT_VERSION, method: GIT_LIVE_DRIFT_METHOD, point: 'author-transcription' };
+  // STEP 4 D-T1: the method of the leg's protocol (Kubernetes: the compare tool, unchanged; Terraform: null).
+  const base = { version: GIT_LIVE_DRIFT_VERSION, method: gitLiveDriftMethodOf(composedProtocol(ctx)), point: 'author-transcription' };
   const prisma = ctx.prisma as never as {
     task: {
       findUnique: (a: unknown) => Promise<{ stageId: string | null } | null>;

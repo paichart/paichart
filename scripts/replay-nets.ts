@@ -45,6 +45,7 @@ import { runNetsAtPoint, type StampPoint } from '../lib/agents/harness/net-regis
 import { buildNetContext } from '../lib/agents/harness/net-context';
 import { isProgramHarnessTask } from '../lib/agents/harness/program-protocol';
 import { selectAuthoritativeExecution, CHAIN_SELECTION_OPTIONS } from '../lib/services/execution-selection';
+import { planWitnessKeysFromFact } from '../lib/agents/harness/plan-witness';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { leanFactsLine } = require('../lib/mcp/server/tools/advanced/lean-card-facts');
@@ -57,7 +58,7 @@ const prisma = new PrismaClient();
  * the old form cast every result/pipeline-index row in the table to jsonb, so ONE malformed artifact anywhere
  * (a lone UTF-16 surrogate, found on a 2026-09-25 pipeline-index.json) made every replay throw.
  */
-type StoredHeld = { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: string[] | null };
+type StoredHeld = { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: string[] | null; planWitnessKeys?: unknown };
 type StoredExecution = { executionId: string | null; finalResponse: string | null; toolCalls: unknown; held: StoredHeld | null; heldNotice: string | null; protocolInjection?: unknown;
   /** Config sources STEP 2 slice 3b: the STORED platform drift call record — a replay passes it to the nets and NEVER calls. */
   platformDriftCalls?: readonly unknown[] };
@@ -77,6 +78,9 @@ export function hydrateHeldCtx(parsed: unknown, manifestContent: string | null |
   const held: StoredHeld = {};
   let heldNotice: string | null = null;
   if (isRec(parsed.heldBytes)) held.heldBytes = parsed.heldBytes;
+  // planWitness (2026-11-18): the key read was stamped ON the fact (`keys` + `edits`), so a stored Terraform Author's fact hands the
+  // net back exactly what the held-edit step handed it — no held blob is read. Absent on every leaf below terraform-iac 1.17.0.
+  if (isRec(parsed.planWitness)) { const k = planWitnessKeysFromFact(parsed.planWitness); if (k) held.planWitnessKeys = k; }
   if (isRec(parsed.editApplication)) {
     held.editApplication = parsed.editApplication;
     let files: unknown = null;

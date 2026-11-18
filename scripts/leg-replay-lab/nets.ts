@@ -50,7 +50,7 @@ export interface NetRun {
  *  platform's drift call record the core builds BEFORE the Harvester's persist (config-sources-patch.ts makes it with a fixture
  *  caller); absent ⇒ the ctx carries none, exactly as on every execution that is not a Config-sources Harvester. */
 export async function runAuthorLeafNets(snap: Snapshot, role: string, text: string, replayExecutionId: string, toolCalls?: unknown,
-  held?: { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: readonly string[] | null; platformDriftCalls?: readonly unknown[] | null },
+  held?: { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: readonly string[] | null; platformDriftCalls?: readonly unknown[] | null; /** planWitness lever (plan-witness-lever.ts): the core's key read, absent below terraform-iac 1.17.0 */ planWitnessKeys?: unknown },
   protocolInjection?: unknown, opts: ReplayPrismaOptions = {}): Promise<NetRun> {
   const { client, queries } = buildReplayPrisma(snap, [{ taskId: snap.author.task.id, executionId: replayExecutionId, resultJson: { finalResponse: text, ...(toolCalls !== undefined ? { toolCalls } : {}) } }], opts);
   const t = taskRowToPrisma(snap.author.task);
@@ -100,7 +100,7 @@ export async function runLegSynthesizeNets(snap: Snapshot, subs: ReplaySubstitut
 }
 
 /** The `held` object the core hands the nets, WITHOUT the lab-only carrier field (`platformDriftCalls` is its own ctx input). */
-function heldInput(held?: { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: readonly string[] | null; platformDriftCalls?: readonly unknown[] | null }): Record<string, unknown> {
+function heldInput(held?: { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: readonly string[] | null; platformDriftCalls?: readonly unknown[] | null; /** planWitness lever (plan-witness-lever.ts): the core's key read, absent below terraform-iac 1.17.0 */ planWitnessKeys?: unknown }): Record<string, unknown> {
   if (!held) return {};
   if (!('platformDriftCalls' in held)) return { held }; // every caller before slice 4: the object as passed
   const { platformDriftCalls: _p, ...rest } = held; void _p;

@@ -112,6 +112,11 @@ export function authoritativeReadStub(executions: StubExecution[], opts: { deps?
         const f = sql.includes("->>'editApplication'") ? e.result.editApplication : e.result.reviewedEditDiff;
         return [{ v: f === undefined ? null : JSON.stringify(f) }];
       }
+      // planWitness (2026-11-18): the held-edit carrier reads the Terraform Author's Plan-witness fact.
+      if (sql.includes("->>'planWitness'")) {
+        const pw = e.result.planWitness;
+        return [{ v: pw === undefined || pw === null ? null : JSON.stringify(pw) }];
+      }
       // WARNINGS-INVISIBLE (2026-10-08): the reviewerWarnings net reads a reviewer's stamped verdict (result.json) and,
       // at a program root, each leg's stamped leg fact (pipeline-index.json — the stub models both as `result`).
       if (sql.includes("->>'reviewerVerdict'")) {

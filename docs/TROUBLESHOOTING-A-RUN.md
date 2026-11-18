@@ -164,7 +164,8 @@ then start that task again.)
 
 "No pAIchart tools", or "needs you to sign in again":
 
-- After a hub restart the client's session is gone: in Claude Code type `/mcp` and reconnect, or exit and run `claude -c`.
+- After a hub restart the client's session is gone: in Claude Code type `/mcp` and reconnect, or `/exit` and start a new
+  session with `claude`. (`claude -c` can re-open an old session still running in the background; see [INSTALL.md](INSTALL.md) step 8.)
 - If reconnecting fails and the same key still signs in to the web app, the key is fine and the hub is the problem: go to
   "Nothing is moving", step 1.
 - `claude mcp list` should show `paichart … ✔ Connected`. If it shows nothing, the connection was saved for a different

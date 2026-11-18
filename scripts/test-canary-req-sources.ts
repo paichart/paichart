@@ -9,7 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { checkSources } from './check-requirements-sources';
-import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, CARD_WORD_RE, driftCallsOf, canonJson, archDescriptorsRespected, archFetchRoute, type Carrier } from './canary-req-sources';
+import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, CARD_WORD_RE, driftCallsOf, canonJson, archDescriptorsRespected, archFetchRoute, tfLegFacts, type Carrier } from './canary-req-sources';
 import { computeGitLiveDrift } from '../lib/agents/harness/git-live-drift';
 import { buildDeviceSourcesSnapshot, resolveLegDeviceSources, DEVICE_SOURCE_KINDS, SOURCE_SEPARATOR } from '../lib/agents/harness/device-sources';
 
@@ -138,6 +138,20 @@ for (const n of ['req-src-contract-equals-spec', 'req-src-keys-parse', 'req-src-
   const gitOnly = fx.architectServiceCalls.filter((c: any) => !JSON.stringify(c.arguments ?? '').includes('scrape_page'));
   t('AT5 Git-file reads only is a PASS', archFetchRoute(gitOnly).verdict === 'PASS');
   t('AT6 no spec fetch at all is UNEXERCISED', archFetchRoute([]).verdict === 'UNEXERCISED');
+}
+{
+  // cst-tf-facts (terraform-iac 1.17.0 + the Architect's configSources["terraform-iac"] sentence) — a real 1.17.0 Author fact, both ways.
+  const fx = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/canary/cst-tf-facts.json'), 'utf8'));
+  const author = (pw: unknown) => ({ role: 'config_change_author', result: { planWitness: pw } as Record<string, unknown> });
+  const harv = { role: 'infra_state_harvester', result: { gitLiveDrift: fx.gitLiveDrift } as Record<string, unknown> };
+  const leg = (over: Record<string, unknown> = {}) => ({ id: 'L', tasks: 5, snapshotOn: 5, kids: [harv, author(fx.planWitness)], ...over });
+  t('TF1 a leg with its snapshot, a clean witness and no drift call is a PASS', tfLegFacts([leg()]).verdict === 'PASS');
+  t('TF2 a leg with no Config sources snapshot is a FINDING (the block did not reach it)', tfLegFacts([leg({ snapshotOn: 0 })]).verdict === 'FINDING');
+  t('TF3 an Author with no planWitness fact is a FINDING', tfLegFacts([leg({ kids: [harv, { role: 'config_change_author', result: {} }] })]).verdict === 'FINDING');
+  t('TF4 an altered stop sentence is a FINDING', tfLegFacts([leg({ kids: [harv, author({ ...fx.planWitness, stopSentence: 'altered' })] })]).verdict === 'FINDING');
+  t('TF5 a name missing from the block is a FINDING', tfLegFacts([leg({ kids: [harv, author({ ...fx.planWitness, missing: ['aws_s3_bucket.archive: tags.owner'] })] })]).verdict === 'FINDING');
+  t('TF6 a platform drift call on a Terraform leg is a FINDING', tfLegFacts([leg({ kids: [{ role: 'infra_state_harvester', result: { platformDriftCalls: { version: 1, calls: [] } } }, author(fx.planWitness)] })]).verdict === 'FINDING');
+  t('TF7 no Terraform leg, or no Author result yet, is UNEXERCISED, never a PASS', tfLegFacts([]).verdict === 'UNEXERCISED' && tfLegFacts([leg({ kids: [harv] })]).verdict === 'UNEXERCISED');
 }
 
 console.log(`\n${fail ? '❌' : '✅'} canary-req-sources: ${pass} passed, ${fail} failed`);

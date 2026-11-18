@@ -132,7 +132,8 @@ export interface NetContext {
    *  built resultJson in `stampExecutionNets` — the version key `liveEvidence` is stamped on. Absent ⇒ not a released version. */
   protocolInjection?: unknown;
   /** Stage B: the variant stamps the core BUILT pre-tx (V-5d/V-5g), transcribed by the held nets (AE S2: one object). */
-  held?: { editApplication?: Fact | null; heldBytes?: Fact | null; /** BASE-held handles (V-8a; EF-P2-3) */ baseHeldHandles?: readonly string[] | null };
+  held?: { editApplication?: Fact | null; heldBytes?: Fact | null; /** BASE-held handles (V-8a; EF-P2-3) */ baseHeldHandles?: readonly string[] | null;
+    /** planWitness (2026-11-18): the held-edit step's key read (plan-witness.ts `PlanWitnessKeys`), validated by the net on read. */ planWitnessKeys?: unknown };
 }
 
 export interface MechanicalNet {

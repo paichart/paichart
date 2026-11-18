@@ -51,6 +51,9 @@ const ROLLBACK_FACT_LANES: ReadonlySet<string> = new Set(
 // VALUE-LEG-GIT (2026-11-06): + the value leg's Architect and Reviewer (both chain the Harvester directly). Inert by declaration: a
 // value-leg Harvester stamps these facts only when its leg declares Device sources (variant.ts isDeviceSourceLeg, G4-c).
 export const GIT_DEVICE_COMPARISON_READERS: ReadonlySet<string> = new Set(['infra_change_architect', 'change_reviewer', 'derivation_architect', 'derivation_reviewer']);
+/** planWitness (terraform-witness step-back, 2026-11-18): the role the Terraform Author's Plan-witness fact is shown to — the leg
+ *  Reviewer, which chains the Author entry. Nobody else: the Author wrote the block, and Node C reads the leg card. */
+export const PLAN_WITNESS_READERS: ReadonlySet<string> = new Set(['change_reviewer']);
 /** Config-sources network push 1a (DESIGN v2 §1.4, EF-S4.3): the roles the live-evidence fact is shown to — the Architect and the
  *  Author (both chain the Harvester entry) and the leg Reviewer (chains the Author's TRANSCRIPTION). The Author also stamps the
  *  transcription; its own §6 holds only the Harvester entry, and the renderer prints one Harvester's fact once per §6. */
@@ -174,6 +177,13 @@ export interface ChainedContext {
      * ONLY to GIT_DEVICE_COMPARISON_READERS (Architect, leg Reviewer), so every other entry is byte-identical. Never a gate input.
      */
     gitLiveDrift?: Record<string, unknown>;
+    /**
+     * planWitness (2026-11-18): the Terraform Author's Plan-witness fact. Carried ONLY from a LEAF dependency that stamped it (a
+     * terraform-iac ≥ 1.17.0 Author — NOT_STAMPED everywhere else) and ONLY to PLAN_WITNESS_READERS (the leg Reviewer), so every
+     * other entry is byte-identical. A `checked:false` stamp is carried too: "the platform could not check" is a state the Reviewer
+     * must see. Rendered in §6; the Reviewer never gates on the entry — the held-edit carrier reads the Author's result.json.
+     */
+    planWitness?: Record<string, unknown>;
     finalResponse: string;
     executionId: string;
     // A1 truncation facts (Protocol-10 fact; pre-wires deferred D1 coverage signal)
@@ -692,6 +702,11 @@ export async function chainDependencyContext(
         && (stampedDrift as { checked?: unknown }).checked === true
         && GIT_DEVICE_COMPARISON_READERS.has((consumerRole ??= await consumerRoleOf(db, taskId)) ?? '')
         ? (stampedDrift as Record<string, unknown>) : null;
+      // planWitness: from a LEAF dependency only, to the leg Reviewer only; the role is read only when a stamp exists.
+      const stampedWitness = (parsed as { planWitness?: unknown }).planWitness;
+      const planWitness = !isPipelinePredecessor && stampedWitness && typeof stampedWitness === 'object' && !Array.isArray(stampedWitness)
+        && PLAN_WITNESS_READERS.has((consumerRole ??= await consumerRoleOf(db, taskId)) ?? '')
+        ? (stampedWitness as Record<string, unknown>) : null;
       // PLATFORM-HELD-BYTES Stage B V-6: only a dependency carrying a variant stamp reaches any read here; {} otherwise.
       const heldFields = await heldEntryFields(db, {
         consumerTaskId: taskId, depExecutionId: latestExec.id, parsed: parsed as Record<string, unknown>,
@@ -739,6 +754,7 @@ export async function chainDependencyContext(
         ...(gitDeviceComparison ? { gitDeviceComparison } : {}),
         ...(liveEvidence ? { liveEvidence } : {}),
         ...(gitLiveDrift ? { gitLiveDrift } : {}),
+        ...(planWitness ? { planWitness } : {}),
         finalResponse,
         executionId: latestExec.id,
         truncated,

@@ -30,6 +30,7 @@
  */
 import { isSourceLabel, parseSourceLineCore, sourceLineHead, type LineProblem } from './device-sources';
 import { canonicalProtocolName } from './program-protocol';
+import { heldPathRefusal } from '../../mcp/server/config/git-file-source-pin';
 
 export * from './device-sources';
 
@@ -43,6 +44,9 @@ export const CONFIG_SOURCE_KINDS: readonly ConfigSourceKind[] = Object.freeze(['
 /** The kinds each protocol's block admits (canonical long name). A protocol absent here declares no Config sources. */
 export const CONFIG_SOURCE_KINDS_BY_PROTOCOL: Readonly<Record<string, readonly ConfigSourceKind[]>> = Object.freeze({
   [canonicalProtocolName('kubernetes-gitops')]: Object.freeze(['git-file', 'live-read', 'supplied'] as ConfigSourceKind[]),
+  // Config sources STEP 4 (2026-11-17): Terraform — `git-file` = a kept `.tf` file; `live-read` = the state, read as evidence through the
+  // read-only service's render tools (never a state FILE); `supplied` = the engineer gave the state in the task.
+  [canonicalProtocolName('terraform-iac')]: Object.freeze(['git-file', 'live-read', 'supplied'] as ConfigSourceKind[]),
 });
 
 export type ConfigSourceLine =
@@ -56,7 +60,12 @@ export type ConfigSourceLine =
 /** Exhaustiveness helper for kind switches: a new kind that reaches this is a compile error and, at runtime, a throw. */
 export function assertNeverConfigKind(k: never): never { throw new Error(`unhandled config source kind: ${String(k)}`); }
 
-export type ConfigBlockProblem = LineProblem
+/** A `git-file` line whose path the ONE never-held predicate refuses (`heldPathRefusal`: state, plan, tfvars, CLI credentials, an
+ *  inventory). Config sources STEP 4 (plan §5.3, build decision D-T2): refused at RESOLUTION, for every Config-sources protocol, so the
+ *  harness stops the leg rather than letting capture refuse and the carrier force — the call gate refuses the read on any route too. */
+export type ConfigLineProblem = LineProblem | 'path-never-held';
+
+export type ConfigBlockProblem = ConfigLineProblem
   | 'multiple-blocks' | 'empty-block' | 'duplicate-label' | 'contract-value-not-lines' | 'too-many-lines' | 'protocol-declares-no-config-sources';
 
 export type ConfigSourcesParse =
@@ -77,7 +86,7 @@ function kindsOf(protocol: string): readonly ConfigSourceKind[] {
 }
 
 /** One line ⇒ one source, or the first problem. Never infers: every token must be where the grammar puts it. */
-export function parseConfigSourceLine(raw: string, protocol: string): { ok: true; line: ConfigSourceLine } | { ok: false; problem: LineProblem } {
+export function parseConfigSourceLine(raw: string, protocol: string): { ok: true; line: ConfigSourceLine } | { ok: false; problem: ConfigLineProblem } {
   const kinds = kindsOf(protocol);
   const head = sourceLineHead(raw);
   if (!head) return { ok: false, problem: 'not-a-source-line' };
@@ -94,7 +103,10 @@ export function parseConfigSourceLine(raw: string, protocol: string): { ok: true
       const p = parseSourceLineCore(raw, true);
       if (!p.ok) return p;
       const l = p.line;
-      if (l.kind === 'git-file') return { ok: true, line: { label: l.device, kind: 'git-file', service: l.service, owner: l.owner, repo: l.repo, path: l.path, ref: l.ref } };
+      if (l.kind === 'git-file') {
+        if (heldPathRefusal(l.path) !== null) return { ok: false, problem: 'path-never-held' };
+        return { ok: true, line: { label: l.device, kind: 'git-file', service: l.service, owner: l.owner, repo: l.repo, path: l.path, ref: l.ref } };
+      }
       if (l.kind === 'live-read') return { ok: true, line: { label: l.device, kind: 'live-read', service: l.service } };
       return { ok: false, problem: 'unknown-kind' };
     }

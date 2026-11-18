@@ -54,6 +54,9 @@ export const LIVE_EVIDENCE_MIN_VERSIONS: Readonly<Record<string, string>> = Obje
   // Config sources STEP 2 (2026-11-15): the Kubernetes Config-sources text. Until it ships no leg composes 1.19.0, and until its row
   // leaves CONFIG_SOURCE_AWAITING_TEXT no leg is a Config-sources leg — both must hold before a k8s stamp exists.
   [canonicalProtocolName('kubernetes-gitops')]: '1.19.0',
+  // Config sources STEP 4 (2026-11-17): the Terraform Config-sources text. Inert twice over, as for k8s: no leg composes 1.17.0 until
+  // it ships, and no tf leg is a Config-sources leg until its row leaves CONFIG_SOURCE_AWAITING_TEXT.
+  [canonicalProtocolName('terraform-iac')]: '1.17.0',
 });
 
 const semver = (v: unknown): [number, number, number] | null => {

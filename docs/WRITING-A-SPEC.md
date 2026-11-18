@@ -69,6 +69,10 @@ Keep it short. Do not restate a leg protocol's rules. Do not copy device state i
   running systems), from the first draft. Their two `requirements.md` files may differ **only** in their sources blocks and
   "Connection surfaces", so write every leg sentence without naming where it reads from: "from the sources its Device sources
   block declares", never "from the running switches". A sentence true for one variant only forces a second directory later.
+  **One exception — values that exist only in the running system.** When a leg works out a value that exists only live (an
+  address the cluster assigns, a node's range), there is no meaningful Git-only form. Ship `live/` (reads only the running
+  systems) with `git-live/` instead, or `live/` alone when no leg reads a Git file, and say why in the use case README. The same
+  rule applies to the pair: the two files differ only in their sources blocks and "Connection surfaces".
 - **Kubernetes legs:**
   - **One file, one leg.** Every leg of one protocol reads and keeps every `git-file` line of that protocol's block. List a file
     only if a leg needs it.

@@ -52,7 +52,7 @@ import {
 } from '../../lib/agents/harness/config-sources';
 import { governingConfigSources, type LegConfigSourcesResolution } from '../../lib/agents/harness/config-sources-read';
 import { computeConfigSourceReads, computeConfigLiveEvidence } from '../../lib/agents/harness/config-source-facts';
-import { computeGitLiveDrift, validateCompareResult, type PlatformDriftCall } from '../../lib/agents/harness/git-live-drift';
+import { computeGitLiveDrift, gitLiveDriftMethodOf, validateCompareResult, type PlatformDriftCall } from '../../lib/agents/harness/git-live-drift';
 import { runPlatformDriftCalls, type DriftCaller, type DriftCallOutcome, type HeldFileForDrift } from '../../lib/agents/harness/platform-drift-run';
 import { configGitFileForce, type ConfigForce } from '../../lib/agents/harness/held-bytes/config-source-scope';
 import { PLACEHOLDER, isR10Disabled } from '../../lib/agents/harness/redact-artifact-secrets';
@@ -201,16 +201,27 @@ export function driftCallerFor(spec: DriftPlantSpec, dir: string | null, labelOf
   };
 }
 
+/** Production's own test in `runLegPlatformDrift` (platform-drift.ts): a non-empty protocol whose SHIPPING method is null. */
+export function noGitLiveMethod(protocol: string | null | undefined): boolean {
+  return typeof protocol === 'string' && protocol !== '' && gitLiveDriftMethodOf(protocol) === null;
+}
+
 export function heldFilesForDrift(store: LabHeldStore): HeldFileForDrift[] {
   return store.refs.filter((r) => typeof r.target === 'string' && typeof r.path === 'string')
     .map((r) => ({ target: r.target as string, path: r.path as string, content: r.content, sha256: r.blobSha256 }));
 }
 
 /** The call record production's `runLegPlatformDrift` would build — `undefined` unless the declaration is `parsed` (nothing is
- *  called, nothing is stamped). The lab passes the SAME inputs; only `call` differs. */
-export async function labPlatformDriftCalls(input: { sources: LegConfigSourcesResolution; store: LabHeldStore; toolCalls: readonly unknown[]; spec: DriftPlantSpec | null; dir: string | null }):
+ *  called, nothing is stamped). The lab passes the SAME inputs; only `call` differs.
+ *  `protocol` (Config sources STEP 4 slice 4, D-T1): the OWNING LEG's Config-sources protocol — what the core passes
+ *  `runLegPlatformDrift` (`owningLeg.configSourceProtocol`). The method decision is the SHIPPING `gitLiveDriftMethodOf`, never a lab
+ *  copy: a protocol with no Git-vs-live method (terraform-iac) ⇒ `undefined`, in the same order production tests it (after the
+ *  parsed test, before any caller is built) — no fixture caller runs, no record exists, no held byte is "sent". Omitted ⇒ unchanged
+ *  (the Kubernetes behaviour, as production's omitted input). The lab cannot call `runLegPlatformDrift` itself: it loads the hub. */
+export async function labPlatformDriftCalls(input: { sources: LegConfigSourcesResolution; store: LabHeldStore; toolCalls: readonly unknown[]; spec: DriftPlantSpec | null; dir: string | null; protocol?: string | null }):
   Promise<{ calls: PlatformDriftCall[] | undefined; log: DriftCallerLog[] }> {
   if (input.sources.state !== 'parsed') return { calls: undefined, log: [] };
+  if (noGitLiveMethod(input.protocol)) return { calls: undefined, log: [] };
   const heldFiles = heldFilesForDrift(input.store);
   const log: DriftCallerLog[] = []; const problems: string[] = [];
   const bySha = new Map(heldFiles.map((f) => [sha(f.content), f]));
@@ -286,7 +297,10 @@ export async function withComputedConfigFacts(snap: Snapshot, opts: { protocol: 
         resultJson: JSON.stringify({ toolCalls }), gitFileSourceLeg: !!snap.leg && isGitFileSourceLeg(snap.leg as never), configSources: sources })
     : buildLabHeldStore(snap, sources);
   const drift = opts.drift ? checkDriftPlantSpec(opts.drift, 'platformDrift') : null;
-  const { calls, log } = await labPlatformDriftCalls({ sources, store, toolCalls, spec: drift, dir: opts.dir ?? null });
+  // STEP 4 D-T1: the leg's Config-sources protocol decides whether the platform calls at all (the core's `configSourceProtocol`).
+  const legProtocol = configLegOf(snap.leg)!.protocol;
+  if (drift && noGitLiveMethod(legProtocol)) throw new Error(`L-CS-K-b: platformDrift refused — ${legProtocol} has no Git-vs-live method (GIT_LIVE_DRIFT_METHODS), so production makes no drift call and a compare-tool answer can never reach a prompt (a plant that cannot reach its reader)`);
+  const { calls, log } = await labPlatformDriftCalls({ sources, store, toolCalls, spec: drift, dir: opts.dir ?? null, protocol: legProtocol });
 
   // The four stamps from the SHIPPING nets, their ctx primed as the core primes it.
   const leaf = await runLeafNetsFor(copy, hTask as never, role, text, h.executionId, toolCalls, injection, {}, undefined, calls);
@@ -298,7 +312,8 @@ export async function withComputedConfigFacts(snap: Snapshot, opts: { protocol: 
   const wantReads = computeConfigSourceReads(sources, toolCalls);
   if (!same(facts.configSourceReads, wantReads)) throw new Error('L-CS-K-c: configSourceReads from the shipping nets ≠ computeConfigSourceReads(sources, toolCalls)');
   if (!same(facts.liveEvidence, computeConfigLiveEvidence(sources, toolCalls))) throw new Error('L-CS-K-c: liveEvidence from the shipping nets ≠ computeConfigLiveEvidence(sources, toolCalls)');
-  if (!same(facts.gitLiveDrift, computeGitLiveDrift(calls))) throw new Error('L-CS-K-c: gitLiveDrift from the shipping nets ≠ computeGitLiveDrift(platformDriftCalls)');
+  // The shipping net passes the persisting execution's COMPOSED protocol (`protocolInjection.delta.name`) — so does the cross-check.
+  if (!same(facts.gitLiveDrift, computeGitLiveDrift(calls, opts.protocol?.name ?? null))) throw new Error('L-CS-K-c: gitLiveDrift from the shipping nets ≠ computeGitLiveDrift(platformDriftCalls, protocol)');
   if (calls === undefined ? facts.platformDriftCalls !== undefined : !same(facts.platformDriftCalls, { version: 1, calls })) throw new Error('L-CS-K-c: the stamped platformDriftCalls is not the call record');
 
   for (const a of arts) {

@@ -20,6 +20,7 @@
  * PINNED by the identity test (scripts/test-leg-replay-lab.ts): patching with the PERSISTED Author output and its
  * PERSISTED stamps must render a Reviewer prompt byte-identical to the one rebuilt from the frozen context.
  */
+import { planWitnessForEntry } from './plan-witness-lever';
 import { sanitizeChainedOutput } from '../../lib/agents/harness/sanitize-chained-output';
 import { PER_PREDECESSOR_SOFT_CAP } from '../../lib/agents/harness/context-chainer';
 import type { Snapshot } from './snapshot';
@@ -49,6 +50,10 @@ export interface ReplayedAuthorResult {
    *  when `checked`, and only to the comparison's readers (the Architect and the leg Reviewer are the only consumers of a patched
    *  entry here). Undefined ⇒ the frozen entry's value stands. */
   gitLiveDrift?: Record<string, unknown> | null;
+  /** planWitness lever (2026-11-18): the replayed Author's own `planWitness` leaf stamp — carried as context-chainer.ts carries it:
+   *  from the Author's LEAF entry, whatever `checked` says, and ONLY to PLAN_WITNESS_READERS (the leg Reviewer). Undefined ⇒ no
+   *  key (every arm below terraform-iac 1.17.0: the net does not stamp, so every earlier replay's entry is byte-identical). */
+  planWitness?: Record<string, unknown> | null;
 }
 
 export function patchReviewerContext(snap: Snapshot, r: ReplayedAuthorResult): Record<string, any> {
@@ -58,6 +63,12 @@ export function patchReviewerContext(snap: Snapshot, r: ReplayedAuthorResult): R
   if (idx < 0) throw new Error(`reviewer's frozen chainedFrom carries no entry for author execution ${snap.author.exec.id}`);
   const chainedFrom = [...frozen.chainedFrom];
   chainedFrom[idx] = chainEntryFromResult(frozen.chainedFrom[idx], r);
+  // planWitness: the shipping carry rule, keyed on the CONSUMER's role (this patch's consumer is the snapshot's Reviewer).
+  if (r.planWitness !== undefined) {
+    delete chainedFrom[idx].planWitness;
+    const carried = planWitnessForEntry(r.planWitness, (snap.reviewer?.task as { agentRole?: string } | undefined)?.agentRole ?? null);
+    if (carried) chainedFrom[idx].planWitness = carried;
+  }
   return { ...frozen, chainedFrom };
 }
 

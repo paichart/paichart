@@ -33,7 +33,7 @@ export type ChildStamp =
 
 /** The leg's child with the EXACT role, and its stamp `field`, from the execution the chainer hands on. Throws on a read
  *  error (the caller maps a throw to its could-not-check arm — never to "no stamp"). */
-export async function selectLegChildStamp(db: SelectorDb, legStageId: unknown, role: string, field: 'editApplication' | 'reviewedEditDiff' | 'heldBytes' | 'liveEvidence'): Promise<ChildStamp> {
+export async function selectLegChildStamp(db: SelectorDb, legStageId: unknown, role: string, field: 'editApplication' | 'reviewedEditDiff' | 'heldBytes' | 'liveEvidence' | 'planWitness'): Promise<ChildStamp> {
   if (typeof legStageId !== 'string' || !legStageId) return { state: 'no-child-stage' };
   const children = await db.task.findMany({ where: { stageId: legStageId }, select: { id: true, title: true, agentRole: true }, orderBy: { createdAt: 'asc' }, take: STAGE_CHILD_SCAN_CAP });
   const child = children.find((c) => c.agentRole === role);
@@ -47,6 +47,8 @@ export async function selectLegChildStamp(db: SelectorDb, legStageId: unknown, r
 }
 
 export const selectLegEditApplication = (db: SelectorDb, legStageId: unknown) => selectLegChildStamp(db, legStageId, 'config_change_author', 'editApplication');
+/** planWitness (2026-11-18): the SAME selected Author's Plan-witness fact (absent below terraform-iac 1.17.0 ⇒ `no-stamp`). */
+export const selectLegPlanWitness = (db: SelectorDb, legStageId: unknown) => selectLegChildStamp(db, legStageId, 'config_change_author', 'planWitness');
 export const selectLegReviewedDiff = (db: SelectorDb, legStageId: unknown) => selectLegChildStamp(db, legStageId, HELD_EDIT_REVIEWER_ROLE, 'reviewedEditDiff');
 /** held-k8s step 3 (G-4): the leg's AUTHORITATIVE Harvester execution, read through its `heldBytes` stamp (Harvesters of held-capable
  *  legs carry one). Its `executionId` scopes the carrier's `source-not-pinned` read to THIS run's harvest, never an older one. */

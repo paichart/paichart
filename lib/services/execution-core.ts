@@ -60,6 +60,7 @@ import { collectR10EchoSources } from '@/lib/agents/harness/redact-artifact-secr
 import { isHeldEditCorrectionEnabled } from '@/lib/agents/harness/held-edit-correction';
 import { prepareHeldPackage, type PreparedHeldPackage } from './held-package';
 import { buildEditApplicationFact } from '@/lib/agents/harness/held-bytes/edit-fact';
+import { planWitnessApplies, planWitnessKeysOrNull } from '@/lib/agents/harness/plan-witness';
 import { buildEditApplicationManifest, EDIT_APPLICATION_MANIFEST_NAME } from '@/lib/agents/harness/held-bytes/edit-manifest';
 import { buildHeldBytesDigest, buildHeldBytesManifest, HELD_BYTES_MANIFEST_NAME } from '@/lib/agents/harness/held-bytes/held-bytes-fact';
 import { r9VersionInEffect } from '@/lib/agents/harness/sanitize-chained-output';
@@ -560,6 +561,8 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
       sources: legConfigSources, isHarvester: task.type !== 'PIPELINE' && HARVEST_LEAF_ROLE_RE.test(agentRole ?? ''),
       versionApplies: liveEvidenceVersionApplies(protocolInjection),
       heldFiles: heldPlan?.files ?? [], toolCalls: toolCallResults, runOwnerId: userId, executionId, logger,
+      // STEP 4 D-T1: a protocol with no Git-vs-live method (Terraform) makes no call.
+      protocol: (owningLeg?.kind === 'leg' || owningLeg?.kind === 'self') ? owningLeg.configSourceProtocol ?? null : null,
     });
 
     // Token usage — 0.5b: computed AFTER the #90 retry fold so result.json / logs / persist agree.
@@ -731,7 +734,7 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
     // The variant stamps, built ONCE: the nets transcribe the 'committed' build; the persist picks committed / rolled-back
     // by what its savepoint did (AE S2: the same builder, the same inputs).
     let heldVariant: HeldVariantPersist | null = null;
-    let heldStamps: { editApplication?: Record<string, unknown>; heldBytes?: Record<string, unknown>; baseHeldHandles?: string[] } | undefined;
+    let heldStamps: { editApplication?: Record<string, unknown>; heldBytes?: Record<string, unknown>; baseHeldHandles?: string[]; planWitnessKeys?: unknown } | undefined;
     if (variantLeaf && editStep && heldPackage) {
       const step = editStep; const pkg = heldPackage;
       const hasRows = pkg.rows.length > 0;
@@ -746,6 +749,12 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
           baseRefId: pkg.baseRefIdByHandle[r.handle], candidateRefId: pkg.candidateRefIdByHandle[r.handle], r9Version: r.r9Version, viewVersion: r.viewVersion })) });
       // EF-P2-3: V-8a reads the BASE-held handles from here, never from the digest's `rollback` (the overflow fallback drops it).
       heldStamps = { editApplication: factFor('committed'), baseHeldHandles: Object.keys(pkg.baseRefIdByHandle) };
+      // planWitness (2026-11-18): which attributes each applied edit sets, read HERE because the held file text and the applier's
+      // hunks exist only in this step's memory. Version-keyed on the SAME value the net reads (the built resultJson's
+      // protocolInjection): below terraform-iac 1.17.0 nothing is read and the key is absent. Never throws (null = no key read).
+      if (planWitnessApplies((resultJson as Record<string, unknown>).protocolInjection)) {
+        heldStamps.planWitnessKeys = planWitnessKeysOrNull(pkg.application, step.files);
+      }
       heldVariant = { kind: 'package', overlay: (rw) => ({ editApplication: factFor(rw) }),
         manifests: [{ name: EDIT_APPLICATION_MANIFEST_NAME, build: manifestFor }], packageRows: pkg.rows };
     } else if (variantLeaf && heldCaptures && heldPlan && HARVEST_LEAF_ROLE_RE.test(agentRole ?? '')) {

@@ -26,6 +26,9 @@
  *   npm run lab:leg-replay -- csk-self-test [--mutate compare-blind|negation-loose|tool-blind|held-blind|halt-blind|noedit-blind|reason-blind|warn-blind]  # L-CS-K scorer (score-csk.ts), both directions, $0
  *   npm run lab:leg-replay -- csk-score --run <runDir>[,<runDir>]                     # L-CS-K readings + do-not-ship proxies (score-csk.ts), $0
  *   npm run lab:leg-replay -- csk-golden --run <runDir>[,<runDir>] --experiment <dir>/golden-v8   # owner D-1: targeted golden k8s cells read by reason, $0
+ *   npm run lab:leg-replay -- cst-self-test [--mutate compare-blind|negation-loose|stop-loose|alloc-blind|nolive-blind|subst-blind|reason-blind|warn-blind|witness-blind|statefile-blind|keys-loose|force-blind|witness-force-blind|fact-blind|w5-blind|agent-blind]  # L-CS-T scorer (score-cst.ts), both directions, $0
+ *   npm run lab:leg-replay -- cst-score --run <runDir>[,<runDir>]                     # L-CS-T readings + do-not-ship proxies (score-cst.ts), $0
+ *   npm run lab:leg-replay -- cst-golden --run <runDir>[,<runDir>] --experiment <dir>/golden-v9   # targeted golden Terraform cells read by reason, $0
  *   npm run lab:leg-replay -- standing-self-test                                     # standing bench (golden/standing-bench.json): each frozen record reproduces its STORED (wrong) outcome, $0
  *   npm run lab:leg-replay -- provenance-check --experiment <dir> --source local-db:<lab_db>  # L-CS-N: self-host nodes ran the pinned texts + tiers; persisted verdict reproduces, $0
  *   npm run lab:leg-replay -- n2-score --run <runs,> --experiment <dir>                  # L-N2 Author readings (score-n2) + the node-driven Reviewer bench (score-reviewer-bench); n2-self-test · bench-self-test
@@ -114,11 +117,22 @@ import { withComputedConfigFacts, withFirstExecutionConfigSnapshot, configEntryF
 import { armConfigSources } from './config-sources-arm';
 import { armKindGate, bindKindGate, resetKindGate, withArmKindGate, kindGateCheck, type ArmKindGate } from './kind-gate';
 import { buildEditApplicationFact } from '../../lib/agents/harness/held-bytes/edit-fact';
+import { parseHeldEdits } from '../../lib/agents/harness/held-bytes/edits';
+/** L-CS-T: what a held-edit stamp describes — the SHIPPING parse of the edits and restores, line numbers dropped (a plant above them
+ *  shifts lines without changing an edit). Exported for the LCT5 pin. */
+export function heldEditsSemantics(text: string): string {
+  const p = parseHeldEdits(text);
+  const LINE_KEYS = new Set(['line', 'openLine', 'closeLine', 'searchLines', 'replaceLines', 'markerLines', 'blockIndex']);
+  const noLines = (o: unknown) => JSON.parse(JSON.stringify(o, (k, val) => (LINE_KEYS.has(k) ? undefined : val)));
+  return JSON.stringify({ blocks: noLines(p.blocks), restores: noLines(p.restores), ambiguous: p.ambiguous.length, editsOutsideSection: p.editsOutsideSection, restoreOutsideRollback: p.restoreOutsideRollback });
+}
 import { editDiffEntryFields } from '../../lib/agents/harness/held-chain';
 import { r9VersionInEffect } from '../../lib/agents/harness/sanitize-chained-output';
 import { isHeldEditCorrectionEnabled, HELD_EDIT_CORRECTION_FLAG } from '../../lib/agents/harness/held-edit-correction';
 import type { OwningLegResolution } from '../../lib/agents/harness/held-bytes/variant';
 import { LAB_SAMPLE_PREFIX, loadLabSample, pureStamp, sampleReproduces } from './lab-sample';
+import { planWitnessHeldInput, planWitnessLegForce } from './plan-witness-lever';
+import { planWitnessApplies } from '../../lib/agents/harness/plan-witness';
 import { loadFileFixture, createFixtureToolServer, fixtureToolsReport, fixtureCaptureReadiness, LAB_PERSIST_LOGGER, type LoadedFixture } from './fixture-tools';
 import { loadHarvesterLabSample, loadFrozenHarvest, HARVESTER_SOURCE_FROZEN_PREFIX } from './harvester-source';
 import { loadNetworkFixture, createNetworkToolServer, networkToolsReport, type NetworkFixtureSpec, type LoadedNetworkFixture } from './network-fixtures';
@@ -563,6 +577,7 @@ function persistedAuthorResult(snap: Snapshot, text: string, leafStamped: Record
     toolLoop: { formCheck: ares.toolLoop?.formCheck ?? null },
     validationToolCalls: leafStamped.validationToolCalls, gitDeviceComparison: leafStamped.gitDeviceComparison, liveEvidence: leafStamped.liveEvidence,
     gitLiveDrift: leafStamped.gitLiveDrift, // L-CS-K: the Author's transcription (undefined off a Config-sources arm ⇒ the frozen entry stands)
+    planWitness: leafStamped.planWitness, // planWitness lever: the leaf net's own stamp (undefined below terraform-iac 1.17.0)
   };
 }
 
@@ -688,7 +703,9 @@ function codeState() {
 
 interface PersistedAuthor { text: string; plantId: string | null; chainExecutionId: string; leafStamped: Record<string, Record<string, unknown>>; reviewer: RebuiltPrompt;
   /** L-9: the chained Author result (with its pure `editApplication` stamp); absent ⇒ built from the persisted result. */
-  authorResult?: Record<string, any>; source?: string }
+  authorResult?: Record<string, any>; source?: string;
+  /** planWitness lever: a `persistedEditApplication` cell's STORED edit stamp (the force model reads it; plan-witness-lever.ts). */
+  storedEditApplication?: Record<string, unknown> }
 interface Job { node: NodeSpec; variant: string; protocol: ProtocolText; snap: Snapshot; author: RebuiltPrompt; reviewerBase: RebuiltPrompt | null; reviewerTemplate: string | null; dropTemplateDirective: boolean; reviewerModel: string | null; reviewerEffort: string | null;
   /** L0a: set when the variant's authorSource is 'persisted' — the package, its leaf stamps and the exact Reviewer prompt. */
   persistedAuthor: PersistedAuthor | null;
@@ -986,7 +1003,7 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
         const rFiles = reviewerSideFiles(dir, node, resolved.files);
         const editDiff = editDiffEntryFields({ authorExecutionId: chainExecutionId, stamped: stamp.fact, files: rFiles, r9Version: r9v, finalResponse: sp.text });
         // As the core hands it (EF-P2-3): the BASE-held handles = the verified refs' handles (one BASE row per ref).
-        const leafS = await runAuthorLeafNets(held.snapV, ares.agentRole, sp.text, chainExecutionId, undefined, { editApplication: stamp.fact, baseHeldHandles: resolved.refs.map((r) => r.handle) }, armProtocolInjection(exp, v, protocol));
+        const leafS = await runAuthorLeafNets(held.snapV, ares.agentRole, sp.text, chainExecutionId, undefined, { editApplication: stamp.fact, baseHeldHandles: resolved.refs.map((r) => r.handle), ...planWitnessHeldInput(armProtocolInjection(exp, v, protocol), stamp.app, resolved.files) }, armProtocolInjection(exp, v, protocol));
         const sa = loaded.sample.author ?? {};
         const authorResult: Record<string, any> = {
           finalResponse: sp.text, confidenceScore: sa.confidence ?? null,
@@ -994,7 +1011,7 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
           markerPresence: leafS.stamped.markerPresence ?? null, rollbackContainment: leafS.stamped.rollbackContainment ?? null, derivationContainment: null,
           toolLoop: { formCheck: sa.formCheck ?? null }, editApplication: stamp.fact,
           validationToolCalls: leafS.stamped.validationToolCalls, gitDeviceComparison: leafS.stamped.gitDeviceComparison, liveEvidence: leafS.stamped.liveEvidence,
-          gitLiveDrift: leafS.stamped.gitLiveDrift,
+          gitLiveDrift: leafS.stamped.gitLiveDrift, planWitness: leafS.stamped.planWitness,
         };
         const ctx = patchReviewerContext(held.snapV, { executionId: chainExecutionId, ...authorResult, editDiff } as any);
         const reviewer = withModel(await rebuildPrompt(held.snapV, 'reviewer', protocol, { inputContextOverride: ctx, templatePromptOverride: reviewerTemplate, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective }), reviewerModel, reviewerEffort);
@@ -1015,8 +1032,8 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
         let presence: ReturnType<typeof plantPresence> | null = null;
         if (sp.editId) {
           const twinDiff = editDiffEntryFields({ authorExecutionId: chainExecutionId, stamped: own.fact, files: rFiles, r9Version: r9v, finalResponse: loaded.text });
-          const twinLeaf = await runAuthorLeafNets(held.snapV, ares.agentRole, loaded.text, chainExecutionId, undefined, { editApplication: own.fact, baseHeldHandles: resolved.refs.map((r) => r.handle) }, armProtocolInjection(exp, v, protocol));
-          const twinCtx = patchReviewerContext(held.snapV, { executionId: chainExecutionId, ...authorResult, finalResponse: loaded.text, markerPresence: twinLeaf.stamped.markerPresence ?? null, rollbackContainment: twinLeaf.stamped.rollbackContainment ?? null, editApplication: own.fact, editDiff: twinDiff } as any);
+          const twinLeaf = await runAuthorLeafNets(held.snapV, ares.agentRole, loaded.text, chainExecutionId, undefined, { editApplication: own.fact, baseHeldHandles: resolved.refs.map((r) => r.handle), ...planWitnessHeldInput(armProtocolInjection(exp, v, protocol), own.app, resolved.files) }, armProtocolInjection(exp, v, protocol));
+          const twinCtx = patchReviewerContext(held.snapV, { executionId: chainExecutionId, ...authorResult, finalResponse: loaded.text, markerPresence: twinLeaf.stamped.markerPresence ?? null, rollbackContainment: twinLeaf.stamped.rollbackContainment ?? null, planWitness: twinLeaf.stamped.planWitness, editApplication: own.fact, editDiff: twinDiff } as any);
           const twin = await rebuildPrompt(held.snapV, 'reviewer', protocol, { inputContextOverride: twinCtx, templatePromptOverride: reviewerTemplate, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective });
           presence = plantPresence(JSON.parse(fs.readFileSync(path.join(dir, node.authorPlant!), 'utf8')), twin.user, reviewer.user, authorSrc);
           if (!presence.ok) throw new Error(`${node.id}/${v}: LAB-PLANT-PRESENCE-CHECK — plant ${node.authorPlant} does not reach the Reviewer prompt: ${presence.failures.join(' | ')}`);
@@ -1056,7 +1073,7 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
         const stamp = pureStamp(plant.text, resolved.files, resolved.refs, r9v);
         const chainExecutionId = `lab-${node.id}-${v}-a`;
         const editDiff = editDiffEntryFields({ authorExecutionId: chainExecutionId, stamped: stamp.fact, files: resolved.files, r9Version: r9v, finalResponse: plant.text });
-        const leafS = await runAuthorLeafNets(held.snapV, ares.agentRole, plant.text, chainExecutionId, undefined, { editApplication: stamp.fact, baseHeldHandles: resolved.refs.map((r) => r.handle) }, armProtocolInjection(exp, v, protocol));
+        const leafS = await runAuthorLeafNets(held.snapV, ares.agentRole, plant.text, chainExecutionId, undefined, { editApplication: stamp.fact, baseHeldHandles: resolved.refs.map((r) => r.handle), ...planWitnessHeldInput(armProtocolInjection(exp, v, protocol), stamp.app, resolved.files) }, armProtocolInjection(exp, v, protocol));
         const authorResult: Record<string, any> = { ...persistedAuthorResult(snap, plant.text, leafS.stamped), editApplication: stamp.fact };
         const ctx = patchReviewerContext(held.snapV, { executionId: chainExecutionId, ...authorResult, editDiff } as any);
         const reviewer = withModel(await rebuildPrompt(held.snapV, 'reviewer', protocol, { inputContextOverride: ctx, templatePromptOverride: reviewerTemplate, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective }), reviewerModel, reviewerEffort);
@@ -1082,29 +1099,59 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
         // GOLDEN-REVIEWER-BYTE-FIDELITY (a) (2026-11-09): also per NODE — golden-build sets it on each case whose stored Author has an
         // `editApplication` (a domain cell is shared by cases with and without one, e.g. K8S-AK5 pre-join, so never per arm there).
         const peaWant = !!exp.variants[v]?.persistedEditApplication || !!node.persistedEditApplication;
-        const peaOpt = peaWant && !!held && !plant.editId && ares.editApplication && typeof ares.editApplication === 'object';
-        if (peaWant && !peaOpt) throw new Error(`${node.id}/${v}: persistedEditApplication needs a held arm, an unplanted persisted Author and a stored editApplication`);
+        // L-CS-T (2026-11-17): a PLANTED persisted Author may also read the stored stamp when the plant leaves what the stamp describes
+        // untouched — the SHIPPING parser reads the same held edits and restores (line numbers aside) in the planted and the stored
+        // text. A plant that touches an edit or a restore is still refused (the stamp would describe another package).
+        const peaPlantSafe = !plant.editId || heldEditsSemantics(plant.text) === heldEditsSemantics(String(ares.finalResponse ?? ''));
+        const peaOpt = peaWant && !!held && peaPlantSafe && ares.editApplication && typeof ares.editApplication === 'object';
+        if (peaWant && !peaOpt) throw new Error(`${node.id}/${v}: persistedEditApplication needs a held arm, a persisted Author whose plant (if any) leaves its held edits and restores byte-identical, and a stored editApplication`);
         // L-CS-a (golden companion, 2026-11-05): where the arm's Harvester carries the COMPUTED liveEvidence (only on a released-version
         // arm — every earlier experiment reads `not-built`/`not-stamped-version`, so its bytes stand), the persisted Author's leaf nets read
         // the bound snapshot that carries it, or the Author transcription reads `harvester-not-stamped` (found on the golden dry run).
         const leSnap = heldReport?.liveEvidence?.state === 'computed' || heldReport?.configSources?.state === 'computed' ? held!.snapV : snap;
+        // planWitness lever (2026-11-18): production's core reads which names each applied edit sets from the edit step's own
+        // application and file views (execution-core.ts heldStamps.planWitnessKeys). A persisted package has only the stored
+        // FACT, so on an arm whose protocol has a stop sentence the lab re-applies the (planted) text PURELY over this arm's held
+        // files with the shipping applier and hands the key read of THAT application — but only when the re-application
+        // reproduces the stored stamp (state + candidateDigest8), i.e. it IS the application the stamp describes. Otherwise the
+        // key read is null and the fact reads `no-key-read`, named in the report; a PLANTED cell is refused (its fact would not be
+        // what production computes). No held file rendered ⇒ production's step makes no package and no key read: null.
+        const pwInj = armProtocolInjection(exp, v, protocol);
+        const pea = async (text: string, planted: boolean): Promise<{ held: { planWitnessKeys?: unknown }; report: Record<string, unknown> | null }> => {
+          if (!peaOpt || !planWitnessApplies(pwInj)) return { held: {}, report: null };
+          const rendered = heldItems.filter((it) => !it.state);
+          if (!rendered.length) return { held: { planWitnessKeys: null }, report: { source: 'no-held-file-rendered' } };
+          const r9v = r9VersionInEffect();
+          const resolved = await labResolveHeldFiles(held!.store, r9v)(rendered as any, { authorTaskId: String(snap.author.task.id), authorStageId: (snap.author.task.stage_id as string) ?? null,
+            scope: (snap.author.task.pov_id as string) ?? null, legTaskId: held!.owningLeg.kind === 'leg' ? held!.owningLeg.legId : null });
+          const re = pureStamp(text, resolved.files, resolved.refs, r9v);
+          const st = ares.editApplication as Record<string, unknown>;
+          const same = re.fact.state === st.state && re.fact.candidateDigest8 === st.candidateDigest8;
+          const report = { source: 're-applied', reproducesStoredStamp: same, stored: { state: st.state ?? null, candidateDigest8: st.candidateDigest8 ?? null }, reapplied: { state: re.fact.state, candidateDigest8: re.fact.candidateDigest8 ?? null } };
+          if (!same && planted) throw new Error(`${node.id}/${v}: planWitness lever — the planted persisted package does not re-apply to its stored stamp (${JSON.stringify(report)}); its fact would not be what production computes`);
+          return { held: same ? planWitnessHeldInput(pwInj, re.app, resolved.files) : { planWitnessKeys: null }, report };
+        };
+        const pwP = await pea(plant.text, !!plant.editId);
         const leafP = peaOpt
-          ? await runAuthorLeafNets(held!.snapV, ares.agentRole, plant.text, chainExecutionId, undefined, { editApplication: ares.editApplication, baseHeldHandles: heldItems.map((it) => String(it.handle)) }, armProtocolInjection(exp, v, protocol))
+          ? await runAuthorLeafNets(held!.snapV, ares.agentRole, plant.text, chainExecutionId, undefined, { editApplication: ares.editApplication, baseHeldHandles: heldItems.map((it) => String(it.handle)), ...pwP.held }, pwInj)
           : await runAuthorLeafNets(leSnap, ares.agentRole, plant.text, chainExecutionId, undefined, undefined, armProtocolInjection(exp, v, protocol), vlOpts);
         const ctx = patchReviewerContext(snap, { executionId: chainExecutionId, ...persistedAuthorResult(snap, plant.text, leafP.stamped) } as any);
         const reviewer = withModel(await rebuildPrompt(snap, 'reviewer', protocol, { inputContextOverride: ctx, templatePromptOverride: reviewerTemplate, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective }), reviewerModel, reviewerEffort);
         fs.writeFileSync(path.join(vd, 'reviewer.user.md'), reviewer.user);
-        persistedAuthor = { text: plant.text, plantId: plant.editId, chainExecutionId, leafStamped: leafP.stamped, reviewer };
+        persistedAuthor = { text: plant.text, plantId: plant.editId, chainExecutionId, leafStamped: leafP.stamped, reviewer, ...(peaOpt ? { storedEditApplication: ares.editApplication as Record<string, unknown> } : {}) };
         // LAB-PLANT-PRESENCE-CHECK: the unplanted twin is the persisted package under the persisted execution id.
         let presence: ReturnType<typeof plantPresence> | null = null;
         if (plant.editId) {
-          const twinLeaf = await runAuthorLeafNets(leSnap, ares.agentRole, ares.finalResponse, snap.author.exec.id, undefined, undefined, armProtocolInjection(exp, v, protocol), vlOpts);
+          const pwT = await pea(String(ares.finalResponse ?? ''), false);
+          const twinLeaf = pwT.report
+            ? await runAuthorLeafNets(held!.snapV, ares.agentRole, ares.finalResponse, snap.author.exec.id, undefined, { editApplication: ares.editApplication, baseHeldHandles: heldItems.map((it) => String(it.handle)), ...pwT.held }, pwInj)
+            : await runAuthorLeafNets(leSnap, ares.agentRole, ares.finalResponse, snap.author.exec.id, undefined, undefined, armProtocolInjection(exp, v, protocol), vlOpts);
           const twinCtx = patchReviewerContext(snap, { executionId: snap.author.exec.id, ...persistedAuthorResult(snap, ares.finalResponse, twinLeaf.stamped) } as any);
           const twin = await rebuildPrompt(snap, 'reviewer', protocol, { inputContextOverride: twinCtx, templatePromptOverride: reviewerTemplate, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective });
           presence = plantPresence(JSON.parse(fs.readFileSync(path.join(dir, node.authorPlant!), 'utf8')), twin.user, reviewer.user, `author:${node.authorExecutionId}`);
           if (!presence.ok) throw new Error(`${node.id}/${v}: LAB-PLANT-PRESENCE-CHECK — plant ${node.authorPlant} does not reach the Reviewer prompt: ${presence.failures.join(' | ')}`);
         }
-        nodeReports[node.id].variants[v].authorSource = { source: 'persisted', plant: plant.editId, plantPresence: presence ? { ok: presence.ok, outsidePlantLines: presence.outsidePlant.length, outsidePlant: presence.outsidePlant.slice(0, 40) } : null, leafFacts: summarizeFacts(leafP.stamped), leafNetErrors: leafP.errors, reviewerPromptSha: reviewer.hashes };
+        nodeReports[node.id].variants[v].authorSource = { source: 'persisted', plant: plant.editId, plantPresence: presence ? { ok: presence.ok, outsidePlantLines: presence.outsidePlant.length, outsidePlant: presence.outsidePlant.slice(0, 40) } : null, ...(pwP.report ? { planWitnessKeys: pwP.report } : {}), leafFacts: summarizeFacts(leafP.stamped), leafNetErrors: leafP.errors, reviewerPromptSha: reviewer.hashes };
       }
       jobs.push({ node, variant: v, protocol, snap, author, reviewerBase, reviewerTemplate, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective, reviewerModel, reviewerEffort, persistedAuthor,
         requirementsFormCorrection: typeof armFlag === 'boolean' ? armFlag : null, requirementsHarnessRow: reqRow, checkAt,
@@ -1569,20 +1616,21 @@ async function run(args: Args) {
           for (const f of a.editStep.application.files) if (f.state === 'applied' && typeof f.candidateText === 'string') fs.writeFileSync(path.join(sd, `candidate-${f.handle}.txt`), f.candidateText);
         }
         leaf = await runAuthorLeafNets(job.held?.snapV ?? job.snap, job.author.role, a.finalResponse, aId, undefined,
-          heldFact && a.editStep ? { editApplication: heldFact, baseHeldHandles: a.editStep.refs.map((r) => r.handle) } : undefined, job.armProtocolInjection);
+          heldFact && a.editStep ? { editApplication: heldFact, baseHeldHandles: a.editStep.refs.map((r) => r.handle), ...planWitnessHeldInput(job.armProtocolInjection, a.editStep.application, a.editStep.files) } : undefined, job.armProtocolInjection);
         authorResult = {
           finalResponse: a.finalResponse, confidenceScore: a.confidenceScore,
           qualityMetrics: { totalTurns: a.turns, hitMaxTurns: a.turns >= job.author.maxToolTurns, responseLength: a.finalResponse.length, toolCallSuccess: { total: a.toolCalls.length, failed: 0, succeeded: a.toolCalls.length } },
           markerPresence: leaf.stamped.markerPresence ?? null, rollbackContainment: leaf.stamped.rollbackContainment ?? null, derivationContainment: null,
           toolLoop: { formCheck: a.formCheck, ...(a.requirementsFormCheck ? { requirementsFormCheck: a.requirementsFormCheck } : {}) },
           ...(heldFact ? { editApplication: heldFact } : {}),
-          validationToolCalls: leaf.stamped.validationToolCalls, gitDeviceComparison: leaf.stamped.gitDeviceComparison, liveEvidence: leaf.stamped.liveEvidence, gitLiveDrift: leaf.stamped.gitLiveDrift,
+          validationToolCalls: leaf.stamped.validationToolCalls, gitDeviceComparison: leaf.stamped.gitDeviceComparison, liveEvidence: leaf.stamped.liveEvidence, gitLiveDrift: leaf.stamped.gitLiveDrift, planWitness: leaf.stamped.planWitness,
         };
         if (job.authorOnly) {
           // Stage B G1: the Author is scored mechanically; no Reviewer call, no chain.
           fs.writeFileSync(path.join(sd, 'author.md'), a.finalResponse);
           Object.assign(sample, {
             authorOnly: true, authorSource: { source: 'live' }, editApplication: heldFact,
+            ...(leaf.stamped.planWitness ? { planWitness: leaf.stamped.planWitness, planWitnessForce: planWitnessLegForce({ fact: leaf.stamped.planWitness, editApplication: heldFact, authorExecutionId: aId }) } : {}),
             author: { confidence: a.confidenceScore, stopReason: a.finalStopReason, turns: a.turns, toolCalls: a.toolCalls, diagnosticRetryUsed: a.diagnosticRetryUsed, formCheck: a.formCheck, chars: a.finalResponse.length, durationMs: a.durationMs },
             leafFacts: summarizeFacts(leaf.stamped), leafNetErrors: leaf.errors, measures: computeMeasures(a.finalResponse, exp.measures),
             // L-N2: the network Author facts score-n2 reads whole (summarizeFacts keeps one line).
@@ -1634,6 +1682,10 @@ async function run(args: Args) {
         verdict: verdict ? { approved: verdict.approved, blocking: verdict.blocking, warnings: rVerdict?.warnings ?? null, untranscribedLabelLines: rVerdict?.untranscribedLabelLines ?? null } : null,
         authorSource: pa ? { source: pa.source ?? 'persisted', plant: pa.plantId } : { source: 'live' },
         ...(pa?.authorResult?.editApplication ? { editApplication: pa.authorResult.editApplication } : {}),
+        // planWitness lever: the fact the Reviewer was shown (whole) and the carrier's package-level reason for THIS sample's Author
+        // (shipping heldEditVerdict + planWitnessForceReason; a run-level reason — the Config force — is added by the scorer from the manifest).
+        ...(leaf.stamped.planWitness ? { planWitness: leaf.stamped.planWitness, planWitnessForce: planWitnessLegForce({ fact: leaf.stamped.planWitness,
+          editApplication: (pa?.authorResult?.editApplication ?? pa?.storedEditApplication ?? heldFact) as Record<string, unknown> | null, authorExecutionId: aId }) } : {}),
         warningMeasures: wm,
         legReviewerWarnings: rwFact, legReviewerWarningsError: leg?.errors.reviewerWarnings ?? null,
         reachChainPass: reachChainPass(wm, rwFact, section),
@@ -2517,6 +2569,46 @@ if (require.main === module) {
       if (!r.ok) { console.log(`❌ csn-self-test: ${r.failures.length} failure(s):\n  ${r.failures.join('\n  ')}`); process.exit(1); }
       console.log(`✅ csn-self-test: the L-CS-N scorer reads every case as pre-registered${candidateText ? ' (scope definition + warning id verbatim in the candidate)' : ''}`);
       return;
+    }
+    if (args.cmd === 'cst-self-test' || args.cmd === 'cst-score' || args.cmd === 'cst-golden') {
+      // L-CS-T scorer (score-cst.ts), $0. Self-test: in-code cases both ways (each --mutate must go RED); score: run folders; golden: the
+      // targeted Terraform golden cells read by reason (stale 1.16.0 chain under the 1.17.0 Reviewer). golden-score still runs.
+      const sc = await import('./score-cst');
+      const mi = process.argv.indexOf('--mutate'); const mut = mi > 0 ? process.argv[mi + 1] as any : undefined;
+      if (args.cmd === 'cst-self-test') {
+        const r = sc.cstSelfTest(mut);
+        if (!r.ok) { console.log(`❌ cst-self-test${mut ? ` (--mutate ${mut})` : ''}: ${r.failures.length} failure(s):\n  ${r.failures.join('\n  ')}`); process.exit(1); }
+        console.log('✅ cst-self-test: the L-CS-T scorer reads every case as pre-registered'); return;
+      }
+      if (args.cmd === 'cst-golden') {
+        const rows = sc.scoreCstGoldenTargets(args.run!.split(',').map((x) => path.resolve(x)), path.resolve(args.experiment!), mut);
+        for (const r of rows) console.log(`   ${r.status === 'DO-NOT-SHIP' || r.status === 'UNSCORED' ? '❌' : '✅'} ${r.case} ${r.cell} ${r.sample}: ${r.status}${r.why ? ` — ${r.why}` : ''}`);
+        const bad = rows.filter((r) => r.status === 'DO-NOT-SHIP' || r.status === 'UNSCORED');
+        console.log(bad.length ? `\n❌ golden targets: ${bad.length} sample(s) DO-NOT-SHIP / UNSCORED (hand-read each)` : `\n✅ golden targets: ${rows.length} sample(s), every refusal FOR the stale-chain rule`);
+        process.exitCode = bad.length ? 1 : 0; return;
+      }
+      const r = sc.scoreCstRuns(args.run!.split(',').map((x) => path.resolve(x)), mut);
+      if (r.capCut.length) console.log(`cap-cut (not samples, never scored; completed by a later run): ${r.capCut.join(' · ')}\n`);
+      if (r.providerError.length) console.log(`provider-error (the model call never returned — INVALID, not samples, never scored; n below is VALID n): ${r.providerError.join(' · ')}\n`);
+      // ADDENDUM (i): the agent verdict and the platform force are separate columns (`agent approved` counts approvals by the Reviewer;
+      // `…platform forced` counts those the carrier's stop-sentence force turns to needs-revision); `cites fact` is a SUBCOUNT, not the score.
+      console.log('| node | arm | meets | bar | met | agent approved | …platform forced | cites fact | samples with the fact | do-not-ship |'); console.log('|---|---|---|---|---|---|---|---|---|---|');
+      for (const c of r.cells) console.log(`| ${c.node} | ${c.arm} | ${c.meets}/${c.of} | ${c.bar ? c.bar.join('/') : '—'} | ${c.measured ? 'MEASURED' : c.met === null ? '—' : c.met ? '✅' : '❌'} | ${c.agentApproved ?? '—'} | ${c.approvedForced ?? '—'} | ${c.citesFact ?? '—'} | ${c.withFact}/${c.of} | ${c.doNotShip.length ? c.doNotShip.join('; ') : '—'} |`);
+      for (const c of r.cells.filter((x) => x.retiredGate)) console.log(`   retired gate — ${c.node}: ${c.retiredGate}`);
+      for (const c of r.cells.filter((x) => x.agentBar)) console.log(`   G1b agent verdict — ${c.node}: the Reviewer itself refused for the plant in ${c.agentBlocked}/${c.of} (agent bar ${c.agentBar!.join('/')}: ${c.agentMet ? 'met' : 'MISSED'}); agent approved ${c.agentApproved}, of which the platform forced ${c.approvedForced}`);
+      for (const c of r.cells.filter((x) => x.override)) console.log(`   OWNER OVERRIDE beside the gate — ${c.node} (the gate reads ${c.meets}/${c.of} against ${c.bar ? c.bar.join('/') : '—'}: ${c.met ? 'met' : 'MISSED'}; unchanged): ${c.override}`);
+      for (const c of r.cells.filter((x) => x.warned !== null)) console.log(`   git-file-only warning — ${c.node}: ${c.warned}/${c.of} samples carry it (${c.warnRule})${c.warnMeasured ? ` — ${c.warnMeasured}` : ''}`);
+      const typo = r.cells.flatMap((c) => c.typography.map((x) => `${c.node}/${c.arm} ${x}`));
+      const liveA = r.cells.filter((c) => c.normalised !== null);
+      console.log(`\nTYPOGRAPHY WATCH (owner: STRICT) — live Author packages whose stop sentence the platform does not read \`verbatim\`: ${typo.length} of ${liveA.reduce((n, c) => n + c.withFact, 0)} with the fact` +
+        ` · read \`verbatim\` only after normalisation: ${liveA.reduce((n, c) => n + (c.normalised ?? 0), 0)}${typo.length ? `\n   ${typo.join('\n   ')}` : ''}`);
+      for (const row of r.rows.filter((x) => !x.meets || x.doNotShip.length)) console.log(`   ${row.node}/${row.arm} ${row.sample}: ${[...row.misses, ...row.doNotShip].join(' · ')}`);
+      const meas = r.rows.filter((x) => x.role === 'architect' || x.role === 'author' || (x.role === 'harvester' && x.node === 'H-OLDBRIEF'));
+      if (meas.length) { console.log('\nMEASURED readings (C1 syntax source, C6 expected-output fences, A-GITONLY statement, C2 registers, H-OLDBRIEF comparisons):');
+        for (const x of meas) { const d = x.detail as any; console.log(`   ${x.node} ${x.sample}: ${x.role === 'architect' ? `syntax ${d.syntaxSource} · drift line ${d.exactLine ? 'exact' : d.position ? 'paraphrased' : 'absent'}` : x.role === 'author' ? `predict ${d.predictFences} · gitOnlyStatement ${d.gitOnlyStatement} · designDeparture ${d.designDeparture}${d.designDeparture ? ` (creates ${(d.ownCreates ?? []).join(', ')})` : ''}` : `compare ${(d.compare ?? []).length} · registers ${d.registers}`}`); } }
+      const dns = r.cells.flatMap((c) => c.doNotShip.map((x) => `${c.node}/${c.arm}: ${x}`));
+      console.log(dns.length ? `\n❌ DO-NOT-SHIP (proxy — hand-read each):\n  - ${dns.join('\n  - ')}` : '\n✅ no do-not-ship proxy hit (the hand read still decides)');
+      process.exitCode = dns.length ? 1 : 0; return;
     }
     if (args.cmd === 'csk-golden') {
       // owner D-1 (2026-11-16): the targeted golden Kubernetes cells, read by reason (score-csk.ts readGoldenTarget). golden-score still runs.

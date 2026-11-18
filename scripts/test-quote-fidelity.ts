@@ -1086,7 +1086,9 @@ test('REGISTRY: APPENDED after every entry that predates it, so no existing entr
     // + configSourceReads (Config sources STEP 2, 2026-11-15 — appended last; pinned last in test-config-sources REG1)
     'configSourceReads@leaf-persist',
     // + platformDriftCalls, gitLiveDrift (STEP 2 slice 3b, 2026-11-15 — appended last)
-    'platformDriftCalls@leaf-persist', 'gitLiveDrift@leaf-persist']); // + validationToolCalls (2026-10-23, appended) + deviceSourceReads, gitDeviceComparison (2026-10-26, held-network step 3 batch 2b, appended)
+    'platformDriftCalls@leaf-persist', 'gitLiveDrift@leaf-persist',
+    // + planWitness (terraform-witness step-back, 2026-11-18 — appended last)
+    'planWitness@leaf-persist']); // + validationToolCalls (2026-10-23, appended) + deviceSourceReads, gitDeviceComparison (2026-10-26, held-network step 3 batch 2b, appended)
 });
 
 test('ERROR ARM: enrichment-error carries a named BLOCKING disposition (G3)', () => {

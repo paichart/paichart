@@ -24,6 +24,21 @@ export const GIT_LIVE_DRIFT_METHOD = 'k8s-declared-field-compare';
 /** /2 (2026-11-16): quantities at quantity-typed paths compared by value. A /1 result is refused (`result-shape` ⇒ not-checked). */
 export const COMPARE_TOOL_METHOD = 'k8s-declared-field-compare/2';
 export const GIT_LIVE_DRIFT_RENDER_NAME = "the platform's Git-vs-live drift fact";
+/** Config sources STEP 4 (2026-11-17, owner decision Tb = B2, build decision D-T1): the Git-vs-live METHOD of each Config-sources protocol
+ *  (canonical long names; this module has no imports). `null` = the protocol has NO method: the platform makes no call, writes no call
+ *  record and sends no held bytes anywhere, and `gitLiveDrift` reads `checked:false, reason:'no-git-vs-live-method', method:null`.
+ *  Terraform: a Git-vs-state answer needs a provider-running plan, which the zero-provider read-only service cannot make — the team's
+ *  own CI plan is the witness (the protocol text says so). A protocol absent from this table also has no method. */
+export const GIT_LIVE_DRIFT_METHODS: Readonly<Record<string, string | null>> = Object.freeze({
+  'kubernetes-gitops-protocol': GIT_LIVE_DRIFT_METHOD,
+  'terraform-iac-protocol': null,
+});
+/** The Git-vs-live method of a protocol (short token or long name), or null when it has none. */
+export function gitLiveDriftMethodOf(protocol: string | null | undefined): string | null {
+  if (typeof protocol !== 'string' || protocol === '') return null;
+  const p = protocol.endsWith('-protocol') ? protocol : `${protocol}-protocol`;
+  return Object.prototype.hasOwnProperty.call(GIT_LIVE_DRIFT_METHODS, p) ? GIT_LIVE_DRIFT_METHODS[p] : null;
+}
 export const DRIFT_PATHS_SHOWN_CAP = 40;       // differing paths kept per file (the total is always kept)
 export const DRIFT_OBJECTS_CAP = 50;           // the tool's own document cap
 export const DRIFT_FILES_CAP = 40;
@@ -62,7 +77,8 @@ export type DriftNotChecked =
   | 'sha-mismatch'                    // the service did not compare the bytes the platform holds
   | 'source-is-not-the-rendered-object' // every document is a kustomization / values file / non-allowlisted kind
   | 'per-leg-call-cap'
-  | 'no-platform-call-record';
+  | 'no-platform-call-record'
+  | 'no-git-vs-live-method';          // STEP 4 D-T1: the leg's protocol has no Git-vs-live method (Terraform) — nothing called, by design
 
 export interface ValidatedObject {
   kind: string | null; namespace: string | null; name: string | null;
@@ -149,8 +165,13 @@ export function driftFileFromCall(call: PlatformDriftCall): Obj {
   };
 }
 
-/** gitLiveDrift from the stored platform call record. `calls` not an array ⇒ `checked:false` (`no-platform-call-record`). */
-export function computeGitLiveDrift(calls: unknown): Obj {
+/** gitLiveDrift from the stored platform call record. `calls` not an array ⇒ `checked:false` (`no-platform-call-record`).
+ *  `protocol` (STEP 4 D-T1): when given and the protocol has NO Git-vs-live method, the fact says so whatever the record — and its
+ *  `method` is null, never the Kubernetes method. Omitted (every caller before STEP 4) ⇒ the output is unchanged. */
+export function computeGitLiveDrift(calls: unknown, protocol?: string | null): Obj {
+  if (typeof protocol === 'string' && protocol !== '' && gitLiveDriftMethodOf(protocol) === null) {
+    return { version: GIT_LIVE_DRIFT_VERSION, method: null, point: 'harvester', checked: false, reason: 'no-git-vs-live-method' };
+  }
   const base = { version: GIT_LIVE_DRIFT_VERSION, method: GIT_LIVE_DRIFT_METHOD, point: 'harvester' };
   if (!Array.isArray(calls)) return { ...base, checked: false, reason: 'no-platform-call-record' };
   const files = (calls as PlatformDriftCall[]).slice(0, DRIFT_FILES_CAP).map(driftFileFromCall);
@@ -182,6 +203,7 @@ const REASON_WORDS: Record<string, string> = {
   'source-is-not-the-rendered-object': 'source is not the rendered object',
   'per-leg-call-cap': 'the per-leg call limit was reached',
   'no-platform-call-record': 'no platform call was recorded',
+  'no-git-vs-live-method': 'this protocol has no Git-vs-live comparison method, so nothing was compared',
 };
 
 // sec-ops slice-3b F5: a STORED fact is re-read on every render (a chained copy can be edited by a human POV writer). Every field
@@ -213,6 +235,11 @@ function renderableFile(f: unknown): Obj | null {
 
 export function renderGitLiveDriftForPrompt(fact: Obj | null | undefined): string[] | null {
   if (!fact || typeof fact !== 'object') return null;
+  // STEP 4 D-T1: a protocol with no method (Terraform; `method: null`) — nothing was compared, so the header claims no comparison. The
+  // Kubernetes header below is unchanged byte for byte.
+  if (fact.method === null && fact.checked !== true && fact.reason === 'no-git-vs-live-method') {
+    return [`- **Git vs live — ${GIT_LIVE_DRIFT_RENDER_NAME}:** not-checked: ${REASON_WORDS['no-git-vs-live-method']}.`];
+  }
   const head = `- **Git vs live — ${GIT_LIVE_DRIFT_RENDER_NAME}** (declared fields only, compared by the read-only service at the platform's request; no model compared them):`;
   if (fact.checked !== true) return [`${head} not-checked: ${q(REASON_WORDS[String(fact.reason)] ?? 'no reason recorded')}.`];
   const files = Array.isArray(fact.files) ? (fact.files as Obj[]) : [];

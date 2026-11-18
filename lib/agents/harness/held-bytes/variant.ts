@@ -138,10 +138,13 @@ export type ConfigSourceLane = 'change';
 /** The ONE table: protocol (canonical long form) → its lane and its key under `interfaceContract.configSources`. */
 export const CONFIG_SOURCE_LANES: Readonly<Record<string, { lane: ConfigSourceLane; contractKey: string }>> = Object.freeze({
   [canonicalProtocolName('kubernetes-gitops')]: { lane: 'change', contractKey: 'kubernetes-gitops' },
+  // Config sources STEP 4 (2026-11-17, STEPS-2-4-PLAN §5): Terraform — `.tf` files kept from Git, state read as EVIDENCE through the
+  // read-only service (`live-read`), or supplied. Inert until terraform-iac 1.17.0 empties it from CONFIG_SOURCE_AWAITING_TEXT.
+  [canonicalProtocolName('terraform-iac')]: { lane: 'change', contractKey: 'terraform-iac' },
 });
 /** Rows whose protocol TEXT does not carry the `## Config sources` section yet (the HELD_JOIN_AWAITING_TEXT pattern): the row exists
  *  so the code can ship first, and every consumer treats the protocol as NOT a Config-sources protocol until its text commit removes it
- *  from this list. kubernetes-gitops leaves at 1.19.0. */
+ *  from this list. kubernetes-gitops left at 1.19.0; terraform-iac left at 1.17.0 (Config sources STEP 4). */
 export const CONFIG_SOURCE_AWAITING_TEXT: readonly string[] = Object.freeze([]);
 /** The protocols whose legs declare a `## Config sources` block TODAY (the table minus the rows awaiting their text). */
 export const CONFIG_SOURCE_PROTOCOLS: readonly string[] = Object.freeze(

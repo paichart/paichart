@@ -58,6 +58,7 @@ import { renderLiveEvidenceForPrompt } from './live-evidence';
 import { computeConfigSourceReadsFact } from './config-source-facts-enrichment';
 import { stampPlatformDriftCalls, computeGitLiveDriftHarvesterFact, transcribeGitLiveDriftFact } from './git-live-drift-enrichment';
 import { renderGitLiveDriftForPrompt } from './git-live-drift';
+import { computePlanWitness, planWitnessApplies, renderPlanWitnessForPrompt } from './plan-witness';
 import { resolveOwningLegProtocol, isHeldCapableLeg } from './held-bytes/variant';
 import { selectLegEditApplication, hoistedEditApplication, reviewedEditDiffFromContext, HELD_EDIT_REVIEWER_ROLE } from './held-bytes-nets';
 import { readChainedRecord } from './chained-record';
@@ -618,5 +619,35 @@ export const MECHANICAL_NETS: readonly MechanicalNet[] = [
     summaryExcludedReason:
       'kept off the lean card and the agent.results summary (no gate consumer); persisted in the operator tail so the 8 KB head and '
       + 'the finalResponse offset do not move. The chainer reads the full result.json and carries it to the Architect and the Reviewer.',
+  },
+  // ── terraform-witness step-back (owner W1/W2 + the four CORPUS-W2-W4 refinements, 2026-11-18): `planWitness` — the platform's
+  // check of a Terraform Author's `Plan witness` block: the stop sentence against the protocol's own constant, and which attributes
+  // the applied held edits set against what the block names. APPENDED (key order is the equivalence contract). CONDITIONAL and
+  // VERSION-KEYED on the persisting execution's OWN `protocolInjection.delta`: NOT_STAMPED below terraform-iac 1.17.0 and on every
+  // other protocol, so every stored leg replays byte-identical. The version test needs no read and is the only population test (a
+  // terraform-iac ≥ 1.17.0 Author is a held-capable leg's by construction; the stop sentence is a fact about the package text either
+  // way). The key read is TRANSCRIBED: the core built it pre-tx where the held file text is in memory (`ctx.held.planWitnessKeys`),
+  // and it is stamped on the fact (`edits`), so a replay recomputes the comparison from the stored fact and the stored package.
+  // The held-edit carrier FORCES needs-revision on `stopSentence` altered / absent only; every other field is a fact for the Reviewer.
+  {
+    name: 'planWitness',
+    point: 'leaf-persist',
+    conditionalStampReason: 'not-plan-witness-version',
+    appliesTo: (ctx) => ctx.task.type !== 'PIPELINE' && ctx.agentRole === FORM_CHECK_ELIGIBLE_ROLE,
+    enrich: async (ctx) => {
+      const entry = planWitnessApplies(ctx.protocolInjection);
+      if (!entry) return NOT_STAMPED;
+      return computePlanWitness(ctx.finalResponse ?? '', entry, ctx.held?.planWitnessKeys ?? null) as unknown as Fact;
+    },
+    errorFact: () => ({ version: 1, checked: false, reason: 'enrichment-error' }),
+    renderCard: null,
+    renderPrompt: (fact) => renderPlanWitnessForPrompt(fact),
+    renderNullReason:
+      'a fact for the leg Reviewer only — rendered in §6 from the Author entry the chainer carries to PLAN_WITNESS_READERS. No lean-card '
+      + 'segment: the card feeds leg SYNTHESIZE and the program gate, and when the stop sentence forces the leg the carrier\'s own '
+      + '"Platform outcome" line already names the reason.',
+    summaryExcludedReason:
+      'kept off the agent.results summary (its one gate use is the held-edit carrier, which reads the Author\'s result.json directly); '
+      + 'persisted in the operator tail so the 8 KB head and the finalResponse offset do not move. A verbose agent.results returns it.',
   },
 ];

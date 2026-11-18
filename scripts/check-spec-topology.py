@@ -28,6 +28,27 @@ LEG_HEADING = re.compile(r'^(#{2,4})\s.*\(([a-z0-9-]+),\s*(change|value)\)', re.
 VALUE_MARK = re.compile(r'changes nothing', re.I)
 
 
+PLAN_FILE_NAMES = ('tfplan', 'tfplan.out', 'plan.out', 'tfplan.json', 'tfplan.binary')
+CLI_CREDENTIALS_FILE_NAMES = ('.terraformrc', 'terraform.rc', 'credentials.tfrc.json')
+
+
+def never_held(path):
+    """The platform's never-held path rule, restated (lib/mcp/server/config/git-file-source-pin.js `heldPathRefusal`; the self-test
+    pins the same examples). A Terraform state, plan, variables or CLI-credentials path is never read or held: a `git-file` line
+    naming one is refused when the leg resolves its sources, and the leg stops. Returns the reason or None."""
+    segs = [x for x in path.replace('\\', '/').split('/') if x]
+    if not segs:
+        return None
+    name = segs[-1].lower()
+    if any(x in ('.terraform', 'terraform.tfstate.d') for x in segs) or '.tfstate' in name or '.tfplan' in name or name in PLAN_FILE_NAMES:
+        return 'a Terraform state or plan path'
+    if '.tfvars' in name:
+        return 'a Terraform variables file'
+    if '.terraform.d' in segs or name in CLI_CREDENTIALS_FILE_NAMES:
+        return 'a Terraform CLI credentials path'
+    return None
+
+
 def leg_type_marks(text):
     """Warnings where a leg section's stated type and the value-leg phrase disagree (2026-11-12). The planner reads "Changes
     nothing." as the mark of a value leg, so the phrase inside a change leg's section can turn it into a value leg, and a value leg
@@ -78,7 +99,7 @@ def spec_facts(text):
     """Devices, Git files, service addresses and CIDRs the spec states. Sources lines are read inside fenced blocks."""
     # A fenced block is a Device sources block (network: each label is a DEVICE) or a Config sources block (Kubernetes: each
     # label names a FILE or the cluster, never a device). Both declare Git files and service addresses, which are checked alike.
-    devices, git_files, services = set(), set(), set()
+    devices, git_files, services, config_git_files = set(), set(), set(), set()
     in_fence, block, source_lines = False, None, 0
     for line in text.splitlines():
         if line.strip().startswith('```'):
@@ -103,7 +124,10 @@ def spec_facts(text):
             services.add(service)
         if kind == 'git-file' and locator:
             git_files.add(locator.split('@')[0].strip())
+            if block == 'config':
+                config_git_files.add(locator.split('@')[0].strip())
     return {'devices': devices, 'git_files': git_files, 'services': services, 'source_lines': source_lines,
+            'config_git_files': config_git_files,
             'cidrs': set(CIDR.findall(text)), 'urls': set(URL.findall(text))}
 
 
@@ -187,6 +211,17 @@ def compare(spec_text, topo_text):
     warnings.extend(leg_type_marks(spec_text))
     # 7. a gate approver with no email (spec only)
     warnings.extend(approver_marks(spec_text))
+    # 8. a declared Git file the platform never reads or holds (spec only; Terraform state, plan, variables, CLI credentials)
+    for f in sorted(spec['git_files']):
+        why = never_held(f)
+        if why:
+            warnings.append(f'the spec declares "{f}" as a git-file: it is {why}, which the platform never reads or holds. '
+                            'The leg stops when it resolves its sources. Declare the .tf files; state is a live-read or supplied line')
+    # 9. a Terraform leg with no declared .tf file (spec only). From terraform-iac 1.17.0 a Terraform leg reads only what a
+    #    `## Config sources` block declares, and stops before it reads anything when its task carries no block.
+    if re.search(r'\bterraform-iac\b', spec_text) and not any(f.lower().endswith(('.tf', '.tf.json')) for f in spec['config_git_files']):
+        warnings.append('the spec names a terraform-iac leg, but no "## Config sources" block inside a fenced block declares a .tf file as a '
+                        'git-file line. That leg stops before it reads anything. Add the block (docs/WRITING-A-SPEC.md)')
     return errors, warnings, notes
 
 
@@ -257,6 +292,22 @@ def self_test():
     k8s_only = '# t\n```\n## Config sources\nworkloads: git-file \u2014 service github-service ; org/repo/k8s/w.yaml\n```\n'
     tk3 = {'configRepo': {'owner': 'org', 'repo': 'repo', 'paths': ['k8s/w.yaml']}}
     cases.append(('a Kubernetes-only spec is checked (no "no sources line" note)', run(tk3, k8s_only) == ([], [], [])))
+    # Terraform (terraform-iac 1.17.0): a Terraform leg needs a declared .tf file; a state, plan or variables path is never held.
+    tf_block = '```\n## Config sources\nmain-tf: git-file \u2014 service github-service ; org/repo/terraform/main.tf\n' \
+        'prod-state: live-read \u2014 service https://example.test/tf.json\n```\n'
+    ttf = {'configRepo': {'owner': 'org', 'repo': 'repo', 'paths': ['terraform/main.tf']}, 'readOnlyServices': {'tf': 'https://example.test/tf.json'}}
+    cases.append(('a Terraform leg with a declared .tf file gives no finding', run(ttf, '# t\nLeg token terraform-iac.\n' + tf_block) == ([], [], [])))
+    cases.append(('a Terraform leg with no Config sources block warns', sum('terraform-iac leg' in w for w in run(ttf, '# t\nLeg token terraform-iac.\n')[1]) == 1))
+    k8s_for_tf = '# t\nLeg token terraform-iac.\n```\n## Config sources\nworkloads: git-file \u2014 service github-service ; org/repo/k8s/w.yaml\n```\n'
+    cases.append(('a Kubernetes block does not satisfy a Terraform leg', len(run({'configRepo': {'owner': 'org', 'repo': 'repo', 'paths': ['k8s/w.yaml']}}, k8s_for_tf)[1]) == 1))
+    cases.append(('a spec that never names terraform-iac is not asked for a .tf file', run(tk3, k8s_only) == ([], [], [])))
+    state_line = tf_block.replace('prod-state: live-read \u2014 service https://example.test/tf.json', 'state: git-file \u2014 service github-service ; org/repo/terraform/terraform.tfstate')
+    tst = json.loads(json.dumps(ttf)); tst['configRepo']['paths'].append('terraform/terraform.tfstate'); del tst['readOnlyServices']
+    cases.append(('a state file declared as a git-file warns', len(run(tst, '# t\nLeg token terraform-iac.\n' + state_line)[1]) == 1))
+    held = [never_held(x) is None for x in ('terraform/main.tf', 'docs/tfstate-notes.md', 'modules/vpc/variables.tf')]
+    refused = [never_held(x) is not None for x in ('a/terraform.tfstate', 'a/terraform.tfstate-old', 'a/prod.tfvars.example', 'a/tfplan', 'a/plan.out',
+                                                    'a/.terraform/modules/x.tf', 'a/terraform.tfstate.d/prod/x', 'home/.terraformrc', 'a/.terraform.d/credentials.tfrc.json')]
+    cases.append(('the never-held rule: plain .tf paths are holdable; state, plan, variables and credentials paths are not', all(held) and all(refused)))
     failed = [name for name, ok in cases if not ok]
     for name, ok in cases:
         print(('PASS ' if ok else 'FAIL ') + name)

@@ -32,8 +32,8 @@ export const EXCLUSIONS: Readonly<Record<string, string>> = {
     'ARCHITECT-COMPOSED-DESCRIPTOR real-create-path fixture (2026-11-17): a program plan whose deviceSources / serviceDescriptors are keyed by live leg protocol tokens; a contract shape, not a held-capability or protocol selection',
   'scripts/test-plan-spawn-carry-behavioral.ts::SD_EXPECTED':
     'ARCHITECT-COMPOSED-DESCRIPTOR real-create-path fixture (2026-11-17): a program plan whose deviceSources / serviceDescriptors are keyed by live leg protocol tokens; a contract shape, not a held-capability or protocol selection',
-  'lib/agents/harness/service-descriptors-derivation.ts::DESCRIPTOR_ONLY_TOKENS':
-    'ARCHITECT-COMPOSED-DESCRIPTOR (2026-11-17): the live leg tokens with NO sources lane, whose serviceDescriptors entry the Architect still writes (rule 4); a contract-key set, not held-capability. The retired obs variant is not a live leg token, so a key under it is REPORTED as unknown, never derived',
+  // Config sources STEP 4 (terraform-iac 1.17.0): the DESCRIPTOR_ONLY_TOKENS exclusion was removed — with terraform-iac gone the list names
+  // one token and is no longer a protocol-keyed site; re-add the exclusion if a second descriptor-only token joins.
   'scripts/test-service-descriptors-derivation.ts::test:K1 equal to the derived value ⇒ the SAME object back (byte-i':
     'ARCHITECT-COMPOSED-DESCRIPTOR fixture (2026-11-17): a contract serviceDescriptors / sources map keyed by live leg protocol tokens, proving the platform derivation; a contract shape, not a held-capability or protocol selection',
   'scripts/test-service-descriptors-derivation.ts::test:K3 the Architect left the entry out ⇒ ADDED from the line (a':
@@ -50,6 +50,20 @@ export const EXCLUSIONS: Readonly<Record<string, string>> = {
     'held-network step 3 batch 2b (+ VALUE-LEG-GIT 2026-11-06: the lane table DEVICE_SOURCE_PROTOCOLS is derived from): scopes which legs declare Device sources (the device-read capture lane, change lane only) — a capture-scope set like GIT_FILE_SOURCE_PROTOCOLS, a different question from held-capability; the retired obs variant declares no device sources',
   'lib/agents/harness/held-bytes/variant.ts::CONFIG_SOURCE_LANES':
     'Config sources STEP 2 (owner decision (b), 2026-11-15): the lane table of protocols that declare a `## Config sources` block (contract field configSources) — a declaration-scope set, not held-capability; kept SEPARATE from DEVICE_SOURCE_LANES on purpose (test-config-sources MIX1); the retired obs variant declares none',
+  'scripts/test-git-live-drift.ts::test:TF1 the method table: Kubernetes = the compare tool; Terrafo':
+    'Config sources STEP 4 fixture: the expected GIT_LIVE_DRIFT_METHODS table, restated to pin it — not a protocol selection',
+  'scripts/test-git-live-drift.ts::<top>':
+    'Config sources STEP 4 TF4 fixture: the two spellings of the terraform-iac protocol a caller may pass (long name, short token) to prove neither makes a drift call — not a protocol selection',
+  'scripts/test-leg-replay-lab.ts::test:LCT2 (L-CS-K-b on Terraform) a 1.17.0 Terraform arm NEVER ma':
+    'Config sources STEP 4 slice 4 fixture: the protocol spellings a lab caller may pass (terraform long/short; k8s and none for the control) to prove the lab drift lever follows the shipping method table — not a protocol selection',
+  'scripts/test-requirements-sources.ts::configKeys':
+    'Config sources STEP 4 (requirements-authoring, terraform-iac 1.17.0): TK9 pins the PRE-1.17.0 Config-sources key set to prove the single-protocol no-map result — a fixture of the check\'s injectable key set, not a protocol selection',
+  'lib/agents/harness/git-live-drift.ts::GIT_LIVE_DRIFT_METHODS':
+    'Config sources STEP 4 (owner Tb = B2, D-T1, 2026-11-17): the Git-vs-live METHOD of each Config-sources protocol (Kubernetes: the compare tool; Terraform: none ⇒ no call, gitLiveDrift not-checked no-git-vs-live-method) — a drift-method key, not held-capability; the retired obs variant declares no Config sources',
+  // Config sources STEP 4 (terraform-iac 1.17.0): the CONFIG_SOURCE_AWAITING_TEXT exclusion was removed with terraform's entry (the list is
+  // empty, so no site); the next domain to join ahead of its text re-adds it (reason: the subtraction from CONFIG_SOURCE_LANES).
+  'scripts/test-config-sources.ts::configSources':
+    'Config sources STEP 4 TFML3 fixture (mixed program): an interfaceContract.configSources keyed by the k8s and terraform contract keys beside deviceSources — a contract shape proving the fields and keys do not mix, not a protocol selection',
   'lib/agents/harness/config-sources.ts::CONFIG_SOURCE_KINDS_BY_PROTOCOL':
     'Config sources STEP 2 (2026-11-15): the per-protocol KIND table of the `## Config sources` grammar — which line kinds a protocol\'s block admits, a different question from held-capability; the retired obs variant declares no Config sources (observability joins by its own row at step 3)',
   'scripts/test-config-sources.ts::deviceSources':

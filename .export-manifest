@@ -1115,6 +1115,8 @@ lib/agents/harness/package-form-check.ts
 lib/agents/harness/parse-confidence.ts
 lib/agents/harness/parse-verdict.ts
 lib/agents/harness/plan-spawn-carry.ts
+lib/agents/harness/plan-witness-stop-sentence.ts
+lib/agents/harness/plan-witness.ts
 lib/agents/harness/platform-drift-run.ts
 lib/agents/harness/prepare-task-for-execution.ts
 lib/agents/harness/program-protocol.ts
@@ -1750,6 +1752,7 @@ scripts/fixtures/apply-block-placeholder/pos-tf-desired-cmrmjpdt1.json
 scripts/fixtures/apply-block-placeholder/pos-tf-rollback-cmrmnhxhm.json
 scripts/fixtures/authoritative-read-stub.ts
 scripts/fixtures/canary/arch-text-2.json
+scripts/fixtures/canary/cst-tf-facts.json
 scripts/fixtures/canary/k8s-drift-record.json
 scripts/fixtures/containment-propagation-cases-2026-10-12.json
 scripts/fixtures/descriptor-registration-route/k8s-hand-registered-harvester.json
@@ -1863,6 +1866,7 @@ scripts/leg-replay-lab/live.ts
 scripts/leg-replay-lab/nets.ts
 scripts/leg-replay-lab/network-fixtures.ts
 scripts/leg-replay-lab/objective-of-record.ts
+scripts/leg-replay-lab/plan-witness-lever.ts
 scripts/leg-replay-lab/protocol-history.ts
 scripts/leg-replay-lab/rebuild.ts
 scripts/leg-replay-lab/recorded-tools.ts
@@ -1871,6 +1875,7 @@ scripts/leg-replay-lab/render-tree-protocols.ts
 scripts/leg-replay-lab/replay-prisma.ts
 scripts/leg-replay-lab/score-csk.ts
 scripts/leg-replay-lab/score-csn.ts
+scripts/leg-replay-lab/score-cst.ts
 scripts/leg-replay-lab/score-edits.ts
 scripts/leg-replay-lab/score-g2.ts
 scripts/leg-replay-lab/score-g3.ts
@@ -2158,6 +2163,7 @@ scripts/test-pipeline-protocol-validator.ts
 scripts/test-pipeline-stage-jsonb-index.ts
 scripts/test-plan-spawn-carry-behavioral.ts
 scripts/test-plan-spawn-carry.ts
+scripts/test-plan-witness.ts
 scripts/test-platform-run-keys.ts
 scripts/test-post-completion-rescue.ts
 scripts/test-pov-create-direct-path.ts

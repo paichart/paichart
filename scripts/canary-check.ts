@@ -34,12 +34,12 @@ import { computeLiveEvidenceFromReadRecord } from '../lib/agents/harness/live-ev
 import { parseDeviceSourceLine } from '../lib/agents/harness/device-sources';
 import { parseConfigSourcesContractValue, CONFIG_SOURCES_SNAPSHOT_KEY } from '../lib/agents/harness/config-sources';
 import { computeGitLiveDrift } from '../lib/agents/harness/git-live-drift';
-import { CONFIG_SOURCE_LANES } from '../lib/agents/harness/held-bytes/variant';
+import { CONFIG_SOURCE_LANES, CONFIG_SOURCE_PROTOCOLS } from '../lib/agents/harness/held-bytes/variant';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { leanFactsLine } = require('../lib/mcp/server/tools/advanced/lean-card-facts');
 import { pickResultJsonSummary } from '../lib/services/execution-artifacts';
 import * as fs from 'fs';
-import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, driftCallsOf, canonJson, archDescriptorsRespected, archFetchRoute, type Carrier } from './canary-req-sources';
+import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, driftCallsOf, canonJson, archDescriptorsRespected, tfLegFacts, archFetchRoute, type Carrier } from './canary-req-sources';
 
 type Tx = Prisma.TransactionClient;
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -460,8 +460,9 @@ const CONTROLS: Record<string, { what: string; run: (c: Ctx) => ControlResult }>
         const cs = isObj(c.configSources) ? c.configSources : null; const ds = isObj(c.deviceSources) ? c.deviceSources : null;
         const csKeys = cs ? Object.keys(cs) : [];
         lines.push(`  leg ${l.id} (${String(meta(l).protocol ?? '?')}) configSources keys=[${csKeys.join(', ')}]`);
-        // CONFIG_SOURCE_LANES is keyed by protocol NAME (`kubernetes-gitops-protocol`); a contract key is the row's `contractKey`.
-        for (const k of csKeys) if (!Object.values(CONFIG_SOURCE_LANES).some((r) => r.contractKey === k)) { finding = true; lines.push(`    key "${k}" is not a config-source lane token — FINDING`); }
+        // CONFIG_SOURCE_LANES is keyed by protocol NAME (`kubernetes-gitops-protocol`); a contract key is the row's `contractKey`. Only rows whose
+        // text has shipped (CONFIG_SOURCE_PROTOCOLS) count: a key of a row awaiting its text is still not read by the platform (STEP 4).
+        for (const k of csKeys) if (!CONFIG_SOURCE_PROTOCOLS.some((p) => CONFIG_SOURCE_LANES[p].contractKey === k)) { finding = true; lines.push(`    key "${k}" is not a config-source lane token — FINDING`); }
         if (ds && ('kubernetes-gitops' in ds)) { finding = true; lines.push('    kubernetes-gitops under deviceSources — FINDING'); }
         if (k8s.includes(l)) {
           if (!cs || !('kubernetes-gitops' in cs)) { finding = true; lines.push('    Kubernetes leg WITHOUT configSources["kubernetes-gitops"] — FINDING (the leg stops at Phase 0)'); continue; }
@@ -528,6 +529,16 @@ const CONTROLS: Record<string, { what: string; run: (c: Ctx) => ControlResult }>
       if (!drift) return { verdict: 'UNEXERCISED', lines: [...lines, '  no execution carried platformDriftCalls — an absence, not a pass (read why: a Git-only or not-live leg)'] };
       return { verdict: 'PASS', lines: [...lines, `  ${drift} execution(s): gitLiveDrift equals the recompute`] };
     },
+  },
+  // ── terraform-iac 1.17.0 + the Program Architect's configSources["terraform-iac"] sentence (pre-registered 2026-11-19, BEFORE the
+  // Architect sentence deploys). Logic in canary-req-sources.ts `tfLegFacts`, fixture from a real 1.17.0 Author package (TF1-TF7).
+  'cst-tf-facts': {
+    what: 'terraform-iac 1.17.0 — each Terraform leg carries its Config sources snapshot (the Architect carried the block under configSources["terraform-iac"]); the Author carries a clean planWitness; no drift call is made (gitLiveDrift not-checked, no-git-vs-live-method)',
+    run: ({ legs, legKids, execs }) => tfLegFacts(legs.filter((l) => meta(l).protocol === 'terraform-iac-protocol').map((l) => {
+      const kids = kidsOf(l, legKids);
+      return { id: l.id, tasks: kids.length + 1, snapshotOn: [l, ...kids].filter((t) => isObj(meta(t)[CONFIG_SOURCES_SNAPSHOT_KEY])).length,
+        kids: kids.map((k) => ({ role: String(k.agentRole ?? ''), result: latestResult(execs, k.id) ?? null })) };
+    })),
   },
   // ── Architect step-back text (arch-text-2, 2026-11-17; register ARCHITECT-COMPOSED-DESCRIPTOR + ARCHITECT-FETCH-ROUTE). Pre-registered
   // BEFORE the text deploys. Logic in canary-req-sources.ts, fixtures from production (test:canary-req-sources AT1-AT6).

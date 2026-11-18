@@ -18,7 +18,7 @@ process.env.PAICHART_SKIP_DB_CONNECT = 'true';
 import { outcomeOfHubResult, runLegPlatformDrift } from '../lib/services/platform-drift';
 import type { LegConfigSourcesResolution } from '../lib/agents/harness/config-sources-read';
 import {
-  validateCompareResult, driftFileFromCall, computeGitLiveDrift, renderGitLiveDriftForPrompt,
+  validateCompareResult, driftFileFromCall, computeGitLiveDrift, renderGitLiveDriftForPrompt, gitLiveDriftMethodOf, GIT_LIVE_DRIFT_METHODS,
   COMPARE_TOOL_METHOD, GIT_LIVE_DRIFT_METHOD, GIT_LIVE_DRIFT_RENDER_NAME, NOT_COMPARED_REASONS, DRIFT_PATHS_SHOWN_CAP,
   type PlatformDriftCall,
 } from '../lib/agents/harness/git-live-drift';
@@ -394,6 +394,50 @@ async function atest(name: string, fn: () => Promise<void>) {
     // Exactly two: the ONE caller that passes the option (platform-drift.ts) and the ONE place that copies it from `options` onto
     // the tool context (mcpService.ts — never from arguments; pinned in test-security-invariants §PD). A third file is a new way in.
     eq(setters.map((f) => path.basename(f)).sort(), ['mcpService.ts', 'platform-drift.ts'], 'files that set the platform purpose: ');
+  });
+
+  // ── Config sources STEP 4 (2026-11-17, owner Tb = B2, build decision D-T1): Terraform has NO Git-vs-live method ──
+  test('TF1 the method table: Kubernetes = the compare tool; Terraform = none; an unknown protocol = none; short tokens resolve', () => {
+    eq(GIT_LIVE_DRIFT_METHODS, { 'kubernetes-gitops-protocol': GIT_LIVE_DRIFT_METHOD, 'terraform-iac-protocol': null }, 'table: ');
+    eq([gitLiveDriftMethodOf('kubernetes-gitops-protocol'), gitLiveDriftMethodOf('kubernetes-gitops')], [GIT_LIVE_DRIFT_METHOD, GIT_LIVE_DRIFT_METHOD], 'k8s: ');
+    eq([gitLiveDriftMethodOf('terraform-iac-protocol'), gitLiveDriftMethodOf('terraform-iac'), gitLiveDriftMethodOf('observability-config-protocol'),
+      gitLiveDriftMethodOf(''), gitLiveDriftMethodOf(null), gitLiveDriftMethodOf('toString')], [null, null, null, null, null, null], 'no method: ');
+  });
+  test('TF2 the fact on a Terraform Harvester: not-checked, no-git-vs-live-method, method null — WHATEVER the record (none, empty, or calls); the Kubernetes output is byte-identical with or without the protocol', () => {
+    const want = { version: 1, method: null, point: 'harvester', checked: false, reason: 'no-git-vs-live-method' };
+    for (const rec of [undefined, [], [call()], [{ label: 'f', path: 'terraform/main.tf', outcome: 'file-not-held' }]]) {
+      eq(computeGitLiveDrift(rec, 'terraform-iac-protocol'), want, `tf ${JSON.stringify(rec)?.slice(0, 40)}: `);
+    }
+    for (const rec of [undefined, [], [call()], [{ label: 'f', path: 'k8s/f.yaml', outcome: 'no-live-read-source' }]]) {
+      eq(computeGitLiveDrift(rec, 'kubernetes-gitops-protocol'), computeGitLiveDrift(rec), `k8s unchanged ${JSON.stringify(rec)?.slice(0, 40)}: `);
+      eq(computeGitLiveDrift(rec, null), computeGitLiveDrift(rec), 'a missing protocol keeps today\'s output: ');
+      eq(computeGitLiveDrift(rec, ''), computeGitLiveDrift(rec), 'an empty protocol keeps today\'s output: ');
+    }
+  });
+  test('TF3 the render: one not-checked line in its own words, no verdict, no Kubernetes method named', () => {
+    const lines = renderGitLiveDriftForPrompt(computeGitLiveDrift(undefined, 'terraform-iac-protocol')) ?? [];
+    eq(lines.length, 1, 'one line: ');
+    assert(lines[0].endsWith('not-checked: this protocol has no Git-vs-live comparison method, so nothing was compared.'), lines[0]);
+    assert(!lines[0].includes(COMPARE_TOOL_METHOD) && !lines[0].includes(GIT_LIVE_DRIFT_METHOD), 'the k8s method is named');
+    eq(lines[0], `- **Git vs live — ${GIT_LIVE_DRIFT_RENDER_NAME}:** not-checked: this protocol has no Git-vs-live comparison method, so nothing was compared.`, 'exact line: ');
+    assert(!lines[0].includes('compared by the read-only service'), 'claims a comparison that was never made');
+    // a forged method:null on a Kubernetes-shaped fact with ANOTHER reason keeps the shared header (only the exact no-method fact branches)
+    const forged = { version: 1, method: null, point: 'harvester', checked: false, reason: 'no-live-read-source' };
+    assert((renderGitLiveDriftForPrompt(forged) ?? [''])[0].includes('compared by the read-only service'), 'only the no-method fact branches');
+  });
+  await atest('TF4 the core\'s entry on a Terraform leg: no call is made and no record is written (held .tf bytes go nowhere) — at every other gate value too; Kubernetes still calls', async () => {
+    seen.length = 0;
+    const base = { heldFiles: [heldOf('a')], toolCalls: [], runOwnerId: 'u1', executionId: 'e1', logger: { warn: () => undefined }, call: caller(), versionApplies: true, isHarvester: true };
+    for (const live of [[gitLine('a'), LIVE], [gitLine('a')]]) {
+      for (const protocol of ['terraform-iac-protocol', 'terraform-iac']) {
+        eq(await runLegPlatformDrift({ ...base, sources: src(live), protocol }), undefined, `tf ${protocol} ${live.length} lines: `);
+      }
+    }
+    eq(seen.length, 0, 'a Terraform leg made a call: ');
+    const k8s = await runLegPlatformDrift({ ...base, sources: src([gitLine('a'), LIVE]), protocol: 'kubernetes-gitops-protocol' });
+    assert(Array.isArray(k8s) && k8s.length === 1 && seen.length === 1, 'the Kubernetes leg must still call');
+    const core = fs.readFileSync(path.join(__dirname, '..', 'lib/services/execution-core.ts'), 'utf8');
+    assert(core.includes("protocol: (owningLeg?.kind === 'leg' || owningLeg?.kind === 'self') ? owningLeg.configSourceProtocol ?? null : null,"), 'the core does not pass the leg protocol');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

@@ -19,6 +19,7 @@ import { PLACEHOLDER, isR10Disabled } from '@/lib/agents/harness/redact-artifact
 import type { LegConfigSourcesResolution } from '@/lib/agents/harness/config-sources-read';
 import type { PlatformDriftCall } from '@/lib/agents/harness/git-live-drift';
 import { runPlatformDriftCalls, type DriftCaller, type DriftCallOutcome, type HeldFileForDrift } from '@/lib/agents/harness/platform-drift-run';
+import { gitLiveDriftMethodOf } from '@/lib/agents/harness/git-live-drift';
 
 import * as hub from '@/lib/mcp/server/config/platform-drift-call';
 
@@ -81,8 +82,12 @@ export async function runLegPlatformDrift(input: {
   logger: { info?: (o: Record<string, unknown>, m: string) => void; warn: (o: Record<string, unknown>, m: string) => void };
   /** Tests and the lab inject a caller; production passes none. */
   call?: DriftCaller;
+  /** STEP 4 D-T1: the owning leg's Config-sources protocol. A protocol with NO Git-vs-live method (Terraform) ⇒ no call, no record,
+   *  no held bytes sent anywhere; `gitLiveDrift` names it from the protocol. Omitted ⇒ unchanged (the Kubernetes behaviour). */
+  protocol?: string | null;
 }): Promise<PlatformDriftCall[] | undefined> {
   if (!input.isHarvester || !input.versionApplies || !input.sources || input.sources.state !== 'parsed') return undefined;
+  if (typeof input.protocol === 'string' && input.protocol !== '' && gitLiveDriftMethodOf(input.protocol) === null) return undefined;
   try {
     const calls = await runPlatformDriftCalls({
       sources: input.sources, heldFiles: input.heldFiles, toolCalls: input.toolCalls, redactedMarker: PLACEHOLDER,

@@ -291,9 +291,11 @@ def cmd_prepare(a):
     # STEP 1 Phase A (2026-11-09, owner G3-a/G3-b): the configuration-sources blocks, read by the SHIPPING parser
     # (lib/agents/harness/device-sources.ts) through a TS CLI. Python never parses a block. No waiver clears an ERROR: a block
     # that fails here would stop the leg, or be read differently, at run time.
+    # 2026-11-17 (STEPS-2-4-PLAN §3b item 6): --answers keys each config-sources owner item on the token that prefixes its rows in
+    # the ROW-ITEM-MAP (Kubernetes and Terraform share their kinds, so the item's text cannot say which protocol it is).
     root = os.path.dirname(HERE)
     src = run([os.path.join(root, 'node_modules', '.bin', 'ts-node'), '-r', 'tsconfig-paths/register',
-               os.path.join(HERE, 'check-requirements-sources.ts'), '--draft', req, '--objective', a.objective], cwd=root)
+               os.path.join(HERE, 'check-requirements-sources.ts'), '--draft', req, '--objective', a.objective, '--answers', a.answers], cwd=root)
     print(src.stdout.rstrip())
     if src.returncode == 1:
         die('configuration-sources check has ERRORS — regenerate (a published spec is never hand-edited); a waiver never clears these')

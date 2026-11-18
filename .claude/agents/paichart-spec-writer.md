@@ -100,7 +100,9 @@ For M4 on a Kubernetes file, ask the person to run `kubectl diff -f <file>` agai
 difference in a field the change does not touch will stop the leg, so it must be known (and fixed or declared) before launch.
 **Build every use case as twins** — a `git-only/` and a `git-live/` variant whose `requirements.md` files differ only in their
 sources blocks and "Connection surfaces" — and write every leg sentence without naming where it reads from ("from the sources its
-Device sources block declares", never "from the running switches"). Keep "Changes nothing." on one line.
+Device sources block declares", never "from the running switches"). Keep "Changes nothing." on one line. **Exception:** when a
+leg works out a value that exists only in the running system (an address a cluster assigns, a node's range), there is no
+meaningful Git-only form — build `live/` with `git-live/` (or `live/` alone when no leg reads a Git file) and say why in the README.
 
 **6. Write `topology.json`.** Facts only: the systems in scope, where each one's configuration file lives, the read-only
 services to use. No rules, no decisions, no prose: the checklist's Part 1a gives the three rules. Describe a service, never

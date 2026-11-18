@@ -32,7 +32,7 @@ import type { Prisma } from '@prisma/client';
 import { selectAuthoritativeExecution, CHAIN_SELECTION_OPTIONS } from '../../services/execution-selection';
 
 export type ResultField = 'finalResponse' | 'rollbackContainment' | 'derivationContainment' | 'reviewerVerdict' | 'reviewerWarnings' | 'toolCalls'
-  | 'editApplication' | 'reviewedEditDiff' | 'heldBytes' | 'gitDeviceComparison' | 'liveEvidence' | 'gitLiveDrift';
+  | 'editApplication' | 'reviewedEditDiff' | 'heldBytes' | 'gitDeviceComparison' | 'liveEvidence' | 'gitLiveDrift' | 'planWitness';
 
 export type AuthoritativeReadClient = Pick<Prisma.TransactionClient, 'agentExecution' | 'agentArtifact' | '$queryRaw'>;
 
@@ -154,6 +154,15 @@ export async function readAuthoritativeResultField(
     case 'gitLiveDrift':
       rows = await client.$queryRaw<Array<{ v: string | null }>>`
         SELECT (content::jsonb)->>'gitLiveDrift' AS v FROM agent_artifacts
+        WHERE name = 'result.json' AND content LIKE '{%'
+          AND "executionId" = ${executionId}
+        ORDER BY "createdAt" DESC LIMIT 1`;
+      break;
+    // planWitness (2026-11-18): the Terraform Author's Plan-witness fact, read by the held-edit carrier (the stop-sentence force)
+    // from the execution the chainer hands on — the same execution its `editApplication` read selects.
+    case 'planWitness':
+      rows = await client.$queryRaw<Array<{ v: string | null }>>`
+        SELECT (content::jsonb)->>'planWitness' AS v FROM agent_artifacts
         WHERE name = 'result.json' AND content LIKE '{%'
           AND "executionId" = ${executionId}
         ORDER BY "createdAt" DESC LIMIT 1`;

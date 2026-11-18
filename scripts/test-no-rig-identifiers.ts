@@ -223,7 +223,7 @@ console.log(`✅ role guidance names no service (${ROLE_GUIDANCE_SERVICE_NAMES.l
     'plus, for a leg with no sources block, its service-descriptor URL',
     'The contract reaches every leg verbatim; a description is rewritten. Never compose one.',
     'Where the inputs give two legs of one token different descriptors, emit neither: raise it under Assumptions & open questions.',
-    'under the other field: \\`configSources["kubernetes-gitops"]\\` (a Kubernetes leg without them stops) — never under \\`deviceSources\\`',
+    'under the other field at that leg\'s own token: \\`configSources["kubernetes-gitops"]\\`, \\`configSources["terraform-iac"]\\` (such a leg without them stops) — never under \\`deviceSources\\`', // terraform-iac joined at 1.17.0 (STEP 4)
     'Where two legs carry the same token in your DAG, its one block carries every line the requirements give either leg, once each; every leg receives all of them',
   ]) {
     if (!ug.includes(want)) { console.log('❌ program_architect Config-sources batch sentence missing: ' + want); process.exit(1); }

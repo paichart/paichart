@@ -137,9 +137,12 @@ const sumOf = (f: Rec) => f.liveRead + LE.listTotal(f, 'liveNotRead') + LE.listT
     // Config sources STEP 2 (2026-11-15): Kubernetes joins at ITS text version — below it every stored k8s leg still reads false.
     assert(LE.liveEvidenceVersionApplies(PI('kubernetes-gitops-protocol', '1.19.0')) && !LE.liveEvidenceVersionApplies(PI('kubernetes-gitops-protocol', '1.18.0')),
       'a k8s leg stamps only from kubernetes-gitops 1.19.0');
-    assert(!LE.liveEvidenceVersionApplies(PI('terraform-iac-protocol', '9.9.9')) && !LE.liveEvidenceVersionApplies(PI('observability-config-protocol', '9.9.9')), 'tf and obs join at their own steps');
+    // Config sources STEP 4 (2026-11-17): Terraform joins at ITS text version (inert until terraform-iac leaves CONFIG_SOURCE_AWAITING_TEXT).
+    assert(LE.liveEvidenceVersionApplies(PI('terraform-iac-protocol', '1.17.0')) && !LE.liveEvidenceVersionApplies(PI('terraform-iac-protocol', '1.16.0')),
+      'a tf leg stamps only from terraform-iac 1.17.0');
+    assert(!LE.liveEvidenceVersionApplies(PI('observability-config-protocol', '9.9.9')), 'obs joins at its own step');
     assert(!LE.liveEvidenceVersionApplies(undefined) && !LE.liveEvidenceVersionApplies({ mode: 'named', delta: null }), 'absent / degraded ⇒ false');
-    assert(JSON.stringify(LE.LIVE_EVIDENCE_MIN_VERSIONS) === JSON.stringify({ 'network-provisioning-protocol': '1.26.0', 'network-derivation-protocol': '1.3.0', 'kubernetes-gitops-protocol': '1.19.0' }), JSON.stringify(LE.LIVE_EVIDENCE_MIN_VERSIONS));
+    assert(JSON.stringify(LE.LIVE_EVIDENCE_MIN_VERSIONS) === JSON.stringify({ 'network-provisioning-protocol': '1.26.0', 'network-derivation-protocol': '1.3.0', 'kubernetes-gitops-protocol': '1.19.0', 'terraform-iac-protocol': '1.17.0' }), JSON.stringify(LE.LIVE_EVIDENCE_MIN_VERSIONS));
   });
 
   await test('LE7 the population (enrichment): below the version ⇒ NOT_STAMPED with NO read; off a Device-sources leg ⇒ NOT_STAMPED; at the version ⇒ computed through the ctx memo shared with deviceSourceReads', async () => {
@@ -425,7 +428,7 @@ const sumOf = (f: Rec) => f.liveRead + LE.listTotal(f, 'liveNotRead') + LE.listT
     const sh = fs.readFileSync(path.join(__dirname, 'report-mechanism-inventory.sh'), 'utf8');
     const line = sh.split('\n').findIndex((l) => l.includes('🔴 a liveEvidence stamp on an execution composed below'));
     assert(line >= 0, 'the 🔴 liveEvidence version line exists');
-    const block = sh.split('\n').slice(line, line + 8).join('\n'); // + the value leg's pair (VALUE-LEG-GIT), + the k8s pair (Config sources STEP 2): 8 lines
+    const block = sh.split('\n').slice(line, line + 10).join('\n'); // + the value leg's pair (VALUE-LEG-GIT), + the k8s pair (Config sources STEP 2), + the tf pair (STEP 4): 10 lines
     for (const [p, v] of Object.entries(LE.LIVE_EVIDENCE_MIN_VERSIONS)) {
       assert(block.includes(`'${p}'`) && block.includes(`'{${v.split('.').join(',')}}'::int[]`), `MI-13 must carry ${p} ≥ ${v}: ${block}`);
     }

@@ -216,15 +216,21 @@ ask; you do not need to know the command:
 projects: &lt;paste the key&gt;"* — Claude runs
 `claude mcp add --scope user --transport http paichart http://HOST:3000/mcp --header "X-API-Key: …"` for you. ("For all my
 projects" matters: without it the connection is saved only for the directory you are in, and Claude Code started anywhere
-else shows no pAIchart tools.) The connection only appears after a restart, so type `exit`, then at the shell:
+else shows no pAIchart tools.) The connection only reaches a **new** Claude Code session, so type `/exit`, then start one
+at the shell:
 ```bash
-claude -c                                             # -c continues the same conversation with the new connection loaded
-claude mcp list                                       # (from another shell) expect: paichart … ✔ Connected
+cd ~/paichart && claude                               # a NEW session: not -c or -r, which bring back the old one
 ```
-The hub's tools now appear as `mcp__paichart__*`. (If your Claude account also has the hosted paichart.app connector, its
-tools start `mcp__claude_ai_…` — those are the hosted site, not your install. Say "on my own install" when you ask for
-something. To see which hub a connection reaches, ask your AI client *"which pAIchart hub am I connected to, and as whom?"*:
-`registry(action: 'list')` returns the hub's own address (`hub.baseUrl`) and your account.) Next: your first run ([FIRST-RUN.md](FIRST-RUN.md)). The key is stored in plaintext in `~/.claude.json`; it expires on the date you chose.
+In the new session type `/mcp`: it must list **paichart** (✔ connected). If it does not, the session you are in is an old
+one: `claude -c` and `claude -r` re-open a conversation that may still be running in the background, started before the
+connection existed, and it never loads it. Type `/exit` and start plain `claude` again. From any shell, `claude mcp list` shows
+the saved connection: `paichart: http://HOST:3000/mcp (HTTP) - ✔ Connected`.
+
+The hub's tools now appear as `mcp__paichart__*`. Check which hub you reached: ask *"Which pAIchart hub am I connected to, and
+as whom?"* The answer must name `http://HOST:3000` and your new account (`registry(action: 'list')` returns the hub's own
+address, `hub.baseUrl`). (If your Claude account also has the hosted paichart.app connector, `/mcp` lists it as
+`claude.ai pAIchart` and its tools start `mcp__claude_ai_…`: those are the hosted site, not your install. To leave every
+claude.ai connector out of a session, start it with `ENABLE_CLAUDEAI_MCP_SERVERS=false claude`.) Next: your first run ([FIRST-RUN.md](FIRST-RUN.md)). The key is stored in plaintext in `~/.claude.json`; it expires on the date you chose.
 
 **Optional (not needed for your first run): prove the install owns its identity:** [VERIFYING-SELF-HOST.md](VERIFYING-SELF-HOST.md) with
 `BASE=http://HOST:3000; MCP=$BASE` (its step 4 uses the MCP API key you just made).
@@ -288,7 +294,7 @@ own host are exempt from the private-address guard. So there is no allowlist ste
 other case: its private address needs `HUB_PRIVATE_ENDPOINT_ALLOWLIST` — RUNNING.md → "Registering a service on your own
 network" (`services/weather-service` is the pattern; it needs a weather API key of your own).
 
-Then in Claude Code (`claude -c`), the same shape as step 9:
+Then in Claude Code, the same shape as step 9:
 
 1. *"Show me the tools of the Browser Automation Service as the hub reports them."*
    → `registry(action: 'tools', service_name: 'Browser Automation Service')` → 7 tools with full schemas
@@ -363,7 +369,7 @@ psql "$(grep ^DATABASE_URL .env | cut -d= -f2- | tr -d '"')" -At -c "select id, 
 ```
 Same rule as 9b: run the seed from the clone you are testing.
 
-**4. Prove the read and the pin** in Claude Code (`claude -c`):
+**4. Prove the read and the pin** in Claude Code:
 1. *"Through the hub, ask github-service to `get_file_contents` owner `<owner>`, repo `<repo>`, path `<a file in it>`, ref
    `main`."* (with the shipped pin: owner `paichart`, repo `paichart-configs`, path `network/base/ceos2-startup.cfg`) → the file's text and the commit it was read at.
 2. The same call with any other repo → refused: "repo is outside the file source pin" (logged as `PINNED_ARGUMENT`). That refusal is the pin working.

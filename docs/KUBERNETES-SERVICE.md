@@ -103,7 +103,7 @@ cluster: live-read — service https://<your host>/k8s-readonly-descriptor.json
 with `git-file` lines and no `live-read` line is a **Git-only** run: no cluster is read, there is no drift check, and the package
 says so. The topology file (`topology.json`) beside the spec holds facts only: the cluster, the namespace(s) the change touches,
 the workload, your repository and paths, and your service's descriptor URL. It needs no map of your cluster. A worked example:
-`usecases/telemetry-export-net-k8s-r2/` in the public configs repository [`paichart/paichart-configs`](https://github.com/paichart/paichart-configs/tree/main/usecases/telemetry-export-net-k8s-r2) (a `git-only/` and a `git-live/` variant).
+the `telemetry-export-net-k8s-r2` use case in the public configs repository [`paichart/paichart-configs`](https://github.com/paichart/paichart-configs/tree/main/usecases/telemetry-export-net-k8s-r2) (a `git-only/` and a `git-live/` variant).
 
 ## The drift check: what it is and what it tells you
 
@@ -143,6 +143,7 @@ running. A file the change does not edit is listed and does not stop the leg.
 | source is not the rendered object | the file is a kustomization, a Helm values file or a kind that is not compared |
 | the per-leg call limit was reached | more than 20 files in one leg; split the leg |
 | no platform call was recorded | no comparison was planned for this leg — usually a run from before your install had the drift check; launch again |
+| this protocol has no Git-vs-live comparison method, so nothing was compared | nothing to fix — shown on a Terraform leg, where pAIchart computes no drift; your team's CI `plan` is the witness |
 
 ## If you run your own Kubernetes service
 
