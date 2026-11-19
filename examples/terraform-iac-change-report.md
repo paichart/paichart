@@ -3,6 +3,11 @@
 > An **actual** output from pAIchart's Pipeline Harness (`protocol: terraform-iac`), run 2026-06-29 against
 > real Terraform state. Not a mockup. The objective, in one sentence of natural language:
 > *"Add versioning and a public-access-block (deny public ACLs) to the acme-app-logs S3 bucket in the prod workspace."*
+>
+> **This is an early run (2026-06-29), kept as it was produced.** A run today differs in three ways: the task declares what the
+> leg reads in a `## Config sources` block (the `.tf` file, and the state only if you want it read); pAIchart assesses no drift, so
+> step 3's "assessed drift (none)" is not something a current run says; and the package ends with a **Plan witness** that tells
+> you exactly what your CI plan should show. See [Terraform changes](../docs/TERRAFORM-SERVICE.md).
 
 **What the pipeline did, autonomously:**
 

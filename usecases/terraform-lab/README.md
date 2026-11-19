@@ -43,8 +43,11 @@ guarantee about what your service hands over. pAIchart does not verify that your
 
 ## Point a pipeline at it
 
-Copy `descriptors/terraform-readonly-descriptor.json`, set `endpoint` to wherever **your hub** can
-reach the service, and put that URL in the task description.
+Copy `descriptors/terraform-readonly-descriptor.json` and set `endpoint` to wherever **your hub** can
+reach the service. Then declare what the leg reads in the task, in a `## Config sources` block: the
+`.tf` file as a `git-file` line and, if you want the state read as evidence, this descriptor's URL as
+a `live-read` line. A Terraform leg with no block stops before it reads anything. The block's format,
+and how the package works with your CI plan, are in [Terraform changes](../../docs/TERRAFORM-SERVICE.md).
 
 A good first objective against this workspace: add versioning and a public-access-block to the bucket.
 The deliverable is an HCL change package — a PR — with `validate` / `plan` / `tflint` / OPA facts
