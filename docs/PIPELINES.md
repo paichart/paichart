@@ -113,6 +113,9 @@ The reasons, in precedence order (only the first that holds is recorded):
 | `device-sources-absent` / `-unparseable` / `-conflict` / `-unresolved`, `device-sources-snapshot-absent` / `-unreadable` / `-changed` | no `## Device sources` block, one the platform cannot parse, a task body that disagrees with the contract, a line it cannot resolve, or a declaration missing from / changed since the snapshot taken when the leg started | write one valid block (one line per device) and run a fresh leg |
 | `author-not-of-leg` | the package came from an Author outside this leg | run a fresh leg |
 | the package's own state (`editApplication` `refused` / `partial` / `unheld`, or `held-file-written-whole`) | an in-scope edit did not apply, or a kept file was written out whole | run a fresh leg |
+| `stop-sentence-altered` / `stop-sentence-absent` (Terraform) | the package's Plan witness does not carry the stop sentence word for word, or has none | run a fresh leg |
+| `witness-incomplete` (Terraform) | the Plan witness does not name an attribute or key the edits set (only where the platform read every edit) | run a fresh leg |
+| `witness-whole-value` (Terraform) | the Plan witness gives a value for a key the edits leave unchanged (only where the platform read every edit) | run a fresh leg |
 
 A completed leg cannot be re-run in place: create a fresh PIPELINE task (see "Re-running a pipeline and the duplicate check" below).
 
@@ -190,21 +193,23 @@ check that file by hand. The Git file source is admin-only, and reads only the o
 
 ### Terraform: kept `.tf` files from your config repo
 
-- **Name the file in the task.** One line per file, e.g. *"Source file to read (repo read): owner `acme`, repo `infra-live`, path
-  `terraform/storage.tf`"*. Only the **`main` branch** of the pinned repository is read (a read naming no branch is read as `main`). A task naming a branch, tag or commit is not
-  read: the leg returns `needs-revision` (the platform refused the read) or builds its package without that file. **Never name a state,
-  plan or variables file** (`*.tfstate*`, `*.tfplan`, `*.tfvars*`, `.terraform/`) — the platform refuses those reads; state comes from your
-  read-only Terraform service.
-- **What changes in the package.** The file you named is `H1`; the Author edits it in place by reference (an attribute changed, a block
-  added inside a resource), or adds new resources in a new file beside it. Rollback is `restore H1` for a kept file and a revert of the HCL
-  only for a file the change created. Your files that were not read are written as before (a new file, or a labelled complete block).
-- **State is evidence, never the kept file.** The Harvester compares every attribute the file declares with the state. A difference is
-  reported with both values and no cause unless a witness (a supplied plan) shows one; a value the file takes from a reference it did not
-  read (`local.*`, `var.*`) is not a difference. In scope ⇒ the package reconciles it with a callout; out of scope ⇒ the leg halts.
+- **Declare the file in a `## Config sources` block** (from terraform-iac 1.17.0; format under "Terraform: a `## Config sources`
+  block" below). A Terraform leg reads only what the block declares, and a task with no block stops before it reads anything.
+  A branch the Git source does not admit is refused and the leg returns `needs-revision`. **Never declare a state, plan or
+  variables file** (`*.tfstate*`, `*.tfplan`, `*.tfvars*`, `.terraform/`): the platform refuses those paths and the leg stops.
+- **What changes in the package.** The file you declared is `H1`; the Author edits it in place by reference (an attribute changed, a
+  block added inside a resource), or adds new resources in a new file beside it. Rollback is `restore H1` for a kept file and a revert of
+  the HCL only for a file the change created. Your files that were not read are written as before (a new file, or a labelled complete block).
+- **State is evidence, never the kept file, and no drift is computed.** No agent compares the file with the state, and the package
+  never says "no drift". The package ends with a **Plan witness**: the resources, actions and keys your CI plan should show, and a
+  sentence telling you to stop if the plan shows anything else. The platform checks that witness against the edits before the review.
+  Details: [TERRAFORM-SERVICE.md](TERRAFORM-SERVICE.md).
 - **Replacements are named.** A change that forces a replacement (e.g. `random_password` length) says so, with the plan's own
   `must be replaced` line as the check.
-- **Who can run it.** The Git file source is admin-only: a non-admin's run gets no kept file and is judged in full, as before (not forced).
-- **Apply** = merge the candidate as a pull request after the Git base check reads MATCH (above), then your governed `terraform apply`.
+- **Who can run it.** The Git file source is admin-only. A leg whose declared file the platform does not keep returns `needs-revision`
+  (`git-file-not-held`).
+- **Apply** = merge the candidate as a pull request after the Git base check reads MATCH (above); compare your pipeline's plan with the
+  Plan witness; then your governed `terraform apply`.
 
 ### Network: kept device configurations
 
@@ -356,13 +361,18 @@ cluster: live-read — service https://example.com/k8s-readonly-descriptor.json
 ```
 Leave out the `live-read` line for a Git-only run. Details: [KUBERNETES-SERVICE.md](KUBERNETES-SERVICE.md).
 
-### Terraform: name the repo file
+### Terraform: a `## Config sources` block
 
 ```
-Source file to read (repo read): owner `acme`, repo `infra-live`, path `terraform/main.tf`
+Add the tag owner = "data-platform" to the archive bucket, leaving every other tag unchanged.
+
+## Config sources
+archive-tf: git-file — service github-service ; acme/infra-live/terraform/archive.tf
+prod-state: live-read — service https://example.com/terraform-readonly-descriptor.json
 ```
-`main` only (a read naming no branch is read as `main`); one line per file; never name state, plan or variables files (`*.tfstate*`, `*.tfplan`, `*.tfvars*`,
-`.terraform/`). Live state comes from your read-only Terraform service (descriptor in the task) and is evidence, never the kept file.
+Leave out the `live-read` line for a Git-only run. One `git-file` line per `.tf` file; never a state, plan or variables file
+(`*.tfstate*`, `*.tfplan`, `*.tfvars*`, `.terraform/`). State is evidence, never the kept file. Details:
+[TERRAFORM-SERVICE.md](TERRAFORM-SERVICE.md).
 
 ### Observability: the self-provisioned stack
 

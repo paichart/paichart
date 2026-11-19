@@ -96,6 +96,13 @@ service github-service ; <owner>/<repo>/<path>`) and one for the cluster (`<clus
 URL>`, or `<cluster>: supplied` when the person pastes its state). **A Kubernetes leg without the block stops** before it reads
 anything. One cluster per leg: two `live-read` lines mean no drift check for any file. Never declare `replicas` for a workload an
 autoscaler scales. The block's kinds and the drift check: `docs/KUBERNETES-SERVICE.md`.
+
+For a Terraform leg, write the same `## Config sources` block: one `git-file` line per `.tf` file it reads, and, only if state is
+to be read, one line for the state (`<estate>: live-read — service <name or descriptor URL>`, or `<estate>: supplied`). **A
+Terraform leg without the block stops** before it reads anything. Never declare a state, plan or variables file as a Git file
+(`*.tfstate*`, `*.tfplan`, `*.tfvars*`, `.terraform/`): the leg stops. Do not ask the leg to compare the files with the state or
+to report drift: pAIchart computes none, and the package's Plan witness tells the person what their CI plan should show. The
+spec check warns on both mistakes. Details: `docs/TERRAFORM-SERVICE.md`.
 For M4 on a Kubernetes file, ask the person to run `kubectl diff -f <file>` against the cluster with their own credentials: a
 difference in a field the change does not touch will stop the leg, so it must be known (and fixed or declared) before launch.
 **Build every use case as twins** — a `git-only/` and a `git-live/` variant whose `requirements.md` files differ only in their

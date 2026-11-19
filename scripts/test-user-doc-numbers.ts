@@ -74,5 +74,27 @@ for (const w of words) t(`reason explained: "${w}"`, DOC.includes(`| ${w} |`));
 // ── the three compared summaries
 for (const s of ['compared — no differences', 'compared — differences', 'compared — with gaps']) t(`state named: ${s}`, DOC.includes(s));
 
+// ── docs/TERRAFORM-SERVICE.md vs the code (terraform-iac 1.17.0, 2026-11-19): the stop sentence is the platform's own constant, every
+// forced witness reason and every Config sources kind is named, and the never-held examples are refused by the one predicate.
+{
+  const TF = read('docs/TERRAFORM-SERVICE.md');
+  const PIPE = read('docs/PIPELINES.md');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { planWitnessStopSentenceFor } = require('../lib/agents/harness/plan-witness-stop-sentence');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { heldPathRefusal } = require('../lib/mcp/server/config/git-file-source-pin.js');
+  t('Terraform page: the stop sentence is the platform constant, byte for byte', TF.includes(`> ${planWitnessStopSentenceFor('terraform-iac', '1.17.0')}`));
+  const CARRIER = read('lib/agents/harness/plan-witness.ts');
+  for (const r of ['stop-sentence-altered', 'stop-sentence-absent', 'witness-incomplete', 'witness-whole-value']) {
+    t(`forced reason named on the Terraform page and in PIPELINES: ${r}`, TF.includes(`\`${r}\``) && PIPE.includes(`\`${r}\``) && CARRIER.includes(`'${r}'`));
+  }
+  for (const k of ['git-file', 'live-read', 'supplied']) t(`Config sources kind explained: ${k}`, TF.includes(`| \`${k}\` |`));
+  for (const p of ['terraform.tfstate', 'prod.tfvars', 'tfplan', '.terraform/x.tf', '.terraformrc', '.terraform.d/credentials.tfrc.json']) {
+    t(`never-read example is refused by the platform: ${p}`, heldPathRefusal(`a/${p}`) !== null);
+  }
+  t('Terraform page names the two state tools the descriptor offers', TF.includes('`state_list`') && TF.includes('`state_pull`'));
+  t('Terraform page: git-file-not-held is the unheld-file reason', TF.includes('`git-file-not-held`'));
+}
+
 console.log(`\n${fail ? '❌' : '✅'} user-doc-numbers: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

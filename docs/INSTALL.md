@@ -216,15 +216,14 @@ ask; you do not need to know the command:
 projects: &lt;paste the key&gt;"* — Claude runs
 `claude mcp add --scope user --transport http paichart http://HOST:3000/mcp --header "X-API-Key: …"` for you. ("For all my
 projects" matters: without it the connection is saved only for the directory you are in, and Claude Code started anywhere
-else shows no pAIchart tools.) The connection only reaches a **new** Claude Code session, so type `/exit`, then start one
-at the shell:
+else shows no pAIchart tools.) The connection only loads when Claude Code starts, so type `/exit`, then carry on the same conversation:
 ```bash
-cd ~/paichart && claude                               # a NEW session: not -c or -r, which bring back the old one
+cd ~/paichart && claude -c                            # -c continues this conversation, now with the connection
 ```
-In the new session type `/mcp`: it must list **paichart** (✔ connected). If it does not, the session you are in is an old
-one: `claude -c` and `claude -r` re-open a conversation that may still be running in the background, started before the
-connection existed, and it never loads it. Type `/exit` and start plain `claude` again. From any shell, `claude mcp list` shows
-the saved connection: `paichart: http://HOST:3000/mcp (HTTP) - ✔ Connected`.
+Type `/mcp`: it must list **paichart** (✔ connected). If it does not, the old session is still running in the background and
+`-c` has re-opened it, from before the connection existed. Type `/exit`, start plain `claude` (a new session), and say
+*"Continue ~/paichart/docs/INSTALL.md from step 9b."* Claude reads the guide again and checks what is already done. From any
+shell, `claude mcp list` shows the saved connection: `paichart: http://HOST:3000/mcp (HTTP) - ✔ Connected`.
 
 The hub's tools now appear as `mcp__paichart__*`. Check which hub you reached: ask *"Which pAIchart hub am I connected to, and
 as whom?"* The answer must name `http://HOST:3000` and your new account (`registry(action: 'list')` returns the hub's own

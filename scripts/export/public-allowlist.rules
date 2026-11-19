@@ -228,6 +228,7 @@
 # Config sources STEP 2 item 3 (2026-11-17): what pAIchart reads in a customer's Kubernetes cluster, the compare-tool contract,
 # the limits. Pinned to code constants by test:user-doc-numbers (which reads this file, so it MUST export).
 + docs/KUBERNETES-SERVICE.md
++ docs/TERRAFORM-SERVICE.md
 # Self-host systemd units, referenced by INSTALL.md. These MUST be above the
 # `- docs/**` line below: rules are ordered, first match wins, so without an explicit `+`
 # they silently never export and the install guide points at a file that does not exist in

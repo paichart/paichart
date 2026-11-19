@@ -1,5 +1,7 @@
 # The Terraform leg — walkthrough (kept-file telemetry program)
 
+> **This tour follows a run on terraform-iac 1.16.0.** From 1.17.0 a Terraform leg reads only what its `## Config sources` block declares, no agent compares the file with the state (so a package never says "no drift"), and every package ends with a Plan witness the platform checks. What is current: [TERRAFORM-SERVICE.md](../TERRAFORM-SERVICE.md).
+>
 > This tour follows a run from before 2026-11-11. Where it names the repository `paichart/paichart-lab-configs`, read `paichart/paichart-configs`: the older repository is retired and the same files are there.
 
 

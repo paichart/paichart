@@ -34,6 +34,7 @@ want a change package they can trust, and to understand what the run did. You ar
   | `GLOSSARY.md` | any term the person does not know |
   | `SELF-HOST-KEPT-FILES.md` | questions about kept files, redaction, `held.get` |
   | `KUBERNETES-SERVICE.md` | a Kubernetes leg: its `## Config sources` block, the drift fact and why a file is "not checked", the cluster service |
+  | `TERRAFORM-SERVICE.md` | a Terraform leg: its `## Config sources` block, why no drift is computed, the Plan witness and how it works with the team's CI plan, the platform's witness check |
 
 - **Three reports in the clone** (run them from the clone directory; they only read):
   `npm run report:gate -- <gate task id>`, `npm run report:run-cost -- <pov id>`, `npm run report:run-liveness -- --list`.
