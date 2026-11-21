@@ -212,7 +212,7 @@ export function renderPipelineContextSection(inputContext: unknown, opts: Pipeli
       {
         const gl = (prev as { gitLiveDrift?: Record<string, unknown> | null }).gitLiveDrift;
         if (gl && typeof gl === 'object' && !isInherited(prev)) {
-          const glLines = renderGitLiveDriftForPrompt(gl);
+          const glLines = renderGitLiveDriftForPrompt(gl, { quotable: quotableLine });
           if (glLines) parts.push(...glLines);
         }
       }
@@ -417,6 +417,7 @@ import { renderValidationToolCallsForPrompt } from './validation-tool-calls';
 import { renderGitDeviceComparisonForPrompt } from './git-device-comparison';
 import { renderHeldForEntry } from './held-bytes/render-held';
 import { renderGitLiveDriftForPrompt } from './git-live-drift'; // client-safe: no imports
+import { quotableLine } from './file-compare-quote-seam'; // client-safe: imports only the redactor, which imports nothing
 import { renderLiveEvidenceForPrompt } from './live-evidence-render'; // client-safe: no server imports (AgentBuilderPreview bundles this file)
 import { renderPlanWitnessForPrompt } from './plan-witness'; // client-safe: type imports only
 import { openFenceOf } from '../../utils/markdown-fence';

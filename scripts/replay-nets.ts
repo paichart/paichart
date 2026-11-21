@@ -58,12 +58,29 @@ const prisma = new PrismaClient();
  * the old form cast every result/pipeline-index row in the table to jsonb, so ONE malformed artifact anywhere
  * (a lone UTF-16 surrogate, found on a 2026-09-25 pipeline-index.json) made every replay throw.
  */
-type StoredHeld = { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: string[] | null; planWitnessKeys?: unknown };
+const isRec = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+type StoredHeld = { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: string[] | null; planWitnessKeys?: unknown;
+  /** Config sources STEP 3 P3: an observability Author's STORED per-label `baseMatch` / `editOverlap` (its `gitLiveDrift` of the
+   *  `file-ordered-lines/1` method). Nothing stored can rebuild the applier's hunk positions, so the replay hands these back and the
+   *  fact's reader re-validates them (plan §13 C2). */
+  storedEditFacts?: Map<string, { baseMatch?: unknown; editOverlap?: unknown }> };
 type StoredExecution = { executionId: string | null; finalResponse: string | null; toolCalls: unknown; held: StoredHeld | null; heldNotice: string | null; protocolInjection?: unknown;
   /** Config sources STEP 2 slice 3b: the STORED platform drift call record — a replay passes it to the nets and NEVER calls. */
-  platformDriftCalls?: readonly unknown[] };
+  platformDriftCalls?: readonly unknown[];
+  /** Config sources STEP 3 P3: the STORED file-comparison record — a replay hands it back and never recomputes (the served text is
+   *  stored nowhere). Absent on every execution with no such stamp: the facts then read `no-compare-record`, as production would. */
+  fileSourceCompare?: unknown };
 
-const isRec = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+/** STEP 3 P3 (exported for its pin): the per-label edit facts of a stored Author `gitLiveDrift` of the file method, or null. */
+export function storedEditFactsOf(parsed: unknown): Map<string, { baseMatch?: unknown; editOverlap?: unknown }> | null {
+  if (!isRec(parsed) || !isRec(parsed.gitLiveDrift) || parsed.gitLiveDrift.method !== 'file-ordered-lines/1' || !Array.isArray(parsed.gitLiveDrift.files)) return null;
+  const out = new Map<string, { baseMatch?: unknown; editOverlap?: unknown }>();
+  for (const f of parsed.gitLiveDrift.files) {
+    if (isRec(f) && typeof f.label === 'string' && ('baseMatch' in f || 'editOverlap' in f)) out.set(f.label, { ...('baseMatch' in f ? { baseMatch: f.baseMatch } : {}), ...('editOverlap' in f ? { editOverlap: f.editOverlap } : {}) });
+  }
+  return out.size ? out : null;
+}
+
 
 /**
  * PURE (EF-P2-8): the `held` ctx a stored execution's persist handed the nets, rebuilt from what was stored.
@@ -74,8 +91,10 @@ export function hydrateHeldCtx(parsed: unknown, manifestContent: string | null |
   // A LEAF only: production builds `held` for a variant leaf's own persist and never for a harness; a leg's
   // pipeline-index.json carries the HOISTED editApplication, which the leg-synthesize hoist re-reads from the Author.
   if (taskType === 'PIPELINE') return { held: null, heldNotice: null };
-  if (!isRec(parsed) || (!isRec(parsed.editApplication) && !isRec(parsed.heldBytes))) return { held: null, heldNotice: null };
+  const editFacts = storedEditFactsOf(parsed);
+  if (!isRec(parsed) || (!isRec(parsed.editApplication) && !isRec(parsed.heldBytes) && !editFacts)) return { held: null, heldNotice: null };
   const held: StoredHeld = {};
+  if (editFacts) held.storedEditFacts = editFacts;
   let heldNotice: string | null = null;
   if (isRec(parsed.heldBytes)) held.heldBytes = parsed.heldBytes;
   // planWitness (2026-11-18): the key read was stamped ON the fact (`keys` + `edits`), so a stored Terraform Author's fact hands the
@@ -142,7 +161,8 @@ async function finalResponseOf(taskId: string, taskType: string | null, db: Pris
     // Config-sources push 1a: the STORED protocolInjection is what stampExecutionNets hands ctx (the liveEvidence version key).
     return { executionId: execution.id, finalResponse: typeof fr === 'string' ? fr : null, toolCalls: parsed?.toolCalls ?? [], held, heldNotice, protocolInjection: parsed?.protocolInjection,
       // the stamp is `{ version, calls }`; absent on every execution that made no platform call (every stored one today)
-      ...(Array.isArray(parsed?.platformDriftCalls?.calls) ? { platformDriftCalls: parsed.platformDriftCalls.calls as unknown[] } : {}) };
+      ...(Array.isArray(parsed?.platformDriftCalls?.calls) ? { platformDriftCalls: parsed.platformDriftCalls.calls as unknown[] } : {}),
+      ...(isRec(parsed?.fileSourceCompare) ? { fileSourceCompare: parsed.fileSourceCompare } : {}) };
   } catch { return { ...none, executionId: execution.id }; }
 }
 
@@ -182,7 +202,7 @@ export async function replay(taskId: string, onlyNet: string | null, contractFro
   // asserted rather than read, because a completed leg's mode is not on the row — replaying the
   // SYNTHESIZE view is the point.
   const point: StampPoint = task.type === 'PIPELINE' ? 'leg-synthesize' : 'leaf-persist';
-  const { executionId, finalResponse, toolCalls, held, heldNotice, protocolInjection, platformDriftCalls } = await finalResponseOf(task.id, task.type, db);
+  const { executionId, finalResponse, toolCalls, held, heldNotice, protocolInjection, platformDriftCalls, fileSourceCompare } = await finalResponseOf(task.id, task.type, db);
 
   console.log(`\n${'='.repeat(78)}`);
   console.log(`${task.id}  [${task.type}] ${task.title}`);
@@ -203,6 +223,7 @@ export async function replay(taskId: string, onlyNet: string | null, contractFro
     finalResponse, programTier, toolCalls, executionId,
     ...(protocolInjection !== undefined ? { protocolInjection } : {}),
     ...(platformDriftCalls !== undefined ? { platformDriftCalls } : {}),
+    ...(fileSourceCompare !== undefined ? { fileSourceCompare } : {}),
     ...(held ? { held } : {}),
     onContractApplicabilityError: (e) => console.log(`  ⚠️  contractApplicability lookup failed: ${e}`),
   });

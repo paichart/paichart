@@ -17,7 +17,10 @@
 import type { NetContext } from './net-registry';
 import { NOT_STAMPED } from './net-registry';
 import { configDeclarationFor } from './config-source-facts-enrichment';
-import { computeGitLiveDrift, gitLiveDriftMethodOf, GIT_LIVE_DRIFT_VERSION } from './git-live-drift';
+import { computeGitLiveDrift, computeFileGitLiveDrift, gitLiveDriftMethodOf, gitLiveDriftPlatformCompares, validFileCompareRecord,
+  FILE_COMPARE_METHOD, GIT_LIVE_DRIFT_VERSION } from './git-live-drift';
+import { withAuthorEditFacts } from './file-source-compare';
+import { quotableLine } from './file-compare-quote-seam';
 import { liveEvidenceVersionApplies } from './live-evidence';
 import { readAuthoritativeResultField } from './authoritative-result-read';
 import { HELD_HARVESTER_ROLE } from './held-bytes-nets';
@@ -52,9 +55,25 @@ export async function stampPlatformDriftCalls(ctx: NetContext): Promise<Record<s
   return { version: 1, calls: ctx.platformDriftCalls };
 }
 
+/**
+ * STEP 3 P3 (plan W2, §5.2) — the STORED compare record, as the core built it (or as a replay handed it back), re-validated.
+ * NOT_STAMPED unless the leg's declaration is `parsed` (never on the presence of a Config-sources protocol, never on the version
+ * alone), its protocol is one the PLATFORM compares, and a record that passes validation reached this persist. A missing or invalid
+ * record stamps nothing here; the three facts then say `no-compare-record` by name.
+ */
+export async function stampFileSourceCompare(ctx: NetContext): Promise<Record<string, unknown>> {
+  if (!liveEvidenceVersionApplies(ctx.protocolInjection)) return NOT_STAMPED;
+  if ((await configDeclarationFor(ctx)).state !== 'parsed') return NOT_STAMPED;
+  if (!gitLiveDriftPlatformCompares(await methodProtocol(ctx))) return NOT_STAMPED;
+  return validFileCompareRecord(ctx.fileSourceCompare, quotableLine) ?? NOT_STAMPED;
+}
+
 export async function computeGitLiveDriftHarvesterFact(ctx: NetContext): Promise<Record<string, unknown>> {
   if (!(await inPopulation(ctx))) return NOT_STAMPED;
-  return computeGitLiveDrift(Array.isArray(ctx.platformDriftCalls) ? ctx.platformDriftCalls : undefined, await methodProtocol(ctx));
+  const protocol = await methodProtocol(ctx);
+  // STEP 3 P3: a protocol the PLATFORM compares — the fact is a pure function of the compare record and the declaration's state.
+  if (gitLiveDriftPlatformCompares(protocol)) return computeFileGitLiveDrift(ctx.fileSourceCompare, (await configDeclarationFor(ctx)).state, quotableLine);
+  return computeGitLiveDrift(Array.isArray(ctx.platformDriftCalls) ? ctx.platformDriftCalls : undefined, protocol);
 }
 
 export async function transcribeGitLiveDriftFact(ctx: NetContext): Promise<Record<string, unknown>> {
@@ -74,6 +93,23 @@ export async function transcribeGitLiveDriftFact(ctx: NetContext): Promise<Recor
   });
   const harvest = siblings.find((c) => c.agentRole === HELD_HARVESTER_ROLE);
   if (!harvest) return { ...base, checked: false, reason: 'no-harvester-sibling' };
+  // STEP 3 P3 (plan §13 C2): on a leg the PLATFORM compares, ONE read returns the Harvester's fact AND its compare record from the
+  // same artifact row — one execution id for the fact and for the ranges the overlap is computed on.
+  if (gitLiveDriftPlatformCompares(await methodProtocol(ctx))) {
+    const state = (await configDeclarationFor(ctx)).state;
+    if (state !== 'parsed') return { ...base, checked: false, reason: `config-sources-${state}` };
+    const both = await readAuthoritativeResultField(ctx.prisma as never, harvest.id, 'gitLiveDriftAndCompare');
+    let pair: unknown = null;
+    try { pair = both.value ? JSON.parse(both.value) : null; } catch { pair = null; }
+    const drift = pair && typeof pair === 'object' && !Array.isArray(pair) ? (pair as Record<string, unknown>).gitLiveDrift : null;
+    if (drift === null || drift === undefined) return { ...base, checked: false, reason: 'harvester-not-stamped', harvesterExecutionId: both.executionId };
+    if (typeof drift !== 'object' || Array.isArray(drift) || (drift as Record<string, unknown>).method !== FILE_COMPARE_METHOD) {
+      return { ...base, checked: false, reason: 'harvester-stamp-unreadable', harvesterExecutionId: both.executionId };
+    }
+    const withEdits = withAuthorEditFacts(drift as Record<string, unknown>, (pair as Record<string, unknown>).fileSourceCompare,
+      ctx.held?.editHunkFiles ?? null, ctx.held?.storedEditFacts ?? null);
+    return { ...withEdits, point: 'author-transcription', harvesterExecutionId: both.executionId };
+  }
   const read = await readAuthoritativeResultField(ctx.prisma as never, harvest.id, 'gitLiveDrift');
   if (!read.value) return { ...base, checked: false, reason: 'harvester-not-stamped', harvesterExecutionId: read.executionId };
   let parsed: unknown;

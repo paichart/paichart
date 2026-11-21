@@ -88,6 +88,10 @@ export function authoritativeReadStub(executions: StubExecution[], opts: { deps?
       }
       const e = byId.get(String(values[0]));
       if (!e?.result) return [];
+      // Config sources STEP 3 P3 (plan §13 C2): the Harvester's `gitLiveDrift` AND `fileSourceCompare`, from one artifact row.
+      if (sql.includes("jsonb_build_object('gitLiveDrift'")) {
+        return [{ v: JSON.stringify({ gitLiveDrift: e.result.gitLiveDrift ?? null, fileSourceCompare: e.result.fileSourceCompare ?? null }) }];
+      }
       if (sql.includes("->>'finalResponse'")) {
         const fr = e.result.finalResponse;
         return [{ v: typeof fr === 'string' ? fr : null }];
@@ -135,6 +139,11 @@ export function authoritativeReadStub(executions: StubExecution[], opts: { deps?
       // held-network step 3 batch 2b (P5): the network Author transcribes its Harvester's Git-file vs device comparison.
       if (sql.includes("->>'gitDeviceComparison'")) {
         const g = e.result.gitDeviceComparison;
+        return [{ v: g === undefined || g === null ? null : JSON.stringify(g) }];
+      }
+      // Config sources STEP 3 P3: the held-edit carrier reads the Author's transcribed `gitLiveDrift` (the base-sha count).
+      if (sql.includes("->>'gitLiveDrift'")) {
+        const g = e.result.gitLiveDrift;
         return [{ v: g === undefined || g === null ? null : JSON.stringify(g) }];
       }
       throw new Error(`authoritativeReadStub: unmodelled field in $queryRaw — ${sql.slice(0, 90)}`);

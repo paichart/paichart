@@ -1817,21 +1817,35 @@ export function redactExtraArtifactForPersist(text: string): { text: string; red
 // What IS pinned: every NAME of R10's closed lists (rule 23's keys, the nginx credential variables and headers, the scan contexts)
 // flags the line that carries it — generated from the lists themselves (R10_CLOSED_LIST_SOURCES), so a name added to a rule without
 // a matching entry here turns a test red; and two corpus checks (the v13 fixture, the §J golden corpus) as a second net.
-export const CREDENTIAL_LINE_VERSION = 'paichart.credline/1';
+// VERSION HISTORY — /2 (2026-11-22, sec-ops review of the Config-sources comparator, J3 / J5 / J6): more names (`pwd`, `cred`, `key`,
+// `sign`, `hmac`, `licen`, and `pass`, except the ONE leading word of a statement that starts with one of nginx's six `*_pass` routing directives), the Lua / njs marks (`lua`, `js_`), and a bare
+// `user:plaintext` pair after ONE leading `key: `. Broader only: every line /1 flags, /2 flags. No R10 rule, R10_VERSION or
+// fingerprint moves. The version is STAMPED on the comparator's record and facts, so a bump is a mover keyed on a stored field.
+export const CREDENTIAL_LINE_VERSION = 'paichart.credline/2';
 /** Case-insensitive substrings. Line 1 is sec-ops' list (condition 17); lines 2–3 are additions, each with its reason. */
 const CREDENTIAL_LINE_SUBSTRINGS: readonly string[] = Object.freeze([
   'auth', 'token', 'secret', 'passw', 'credential', 'api-key', 'apikey', 'api_key', 'bearer', 'basic ', 'cookie', '_key', '-key', 'key:', 'htpasswd',
   'snmp', 'community', 'key-string', 'key ', 'honeycomb', 'inline:', 'proc-type',                 // each needed by a corpus check (ablated one by one)
   'dek-info', 'private', 'secure_link', '$9$', 'dsn', 'connection', 'session', 'redacted-secret', // an R10 anchor or a credential mark with no other test; a line already holding a placeholder
   'passph', 'jwt', 'psk', 'radius', 'tacacs',                                                     // review F1 / sec-ops P1: words of R10's closed lists the list above missed (`passphrase`, `$…_jwt`), and three network marks
+  'pwd', 'cred', 'key', 'sign', 'hmac', 'licen',   // /2, sec-ops J3: names the list did not know (`db_pwd`, `creds`, `apiKey`, `signing_secret`, `hmac`, `license`)
+  'lua', 'js_',                                    // /2, sec-ops J6: a Lua / njs line — the caller withholds the line and the block it opens
 ]);
+/** `pass` as a name (/2, sec-ops J3; coordinator ruling 2026-11-22). ONE exemption: a line whose STATEMENT STARTS — after leading
+ *  blanks — with one of nginx's six routing directives (`proxy_pass`, `fastcgi_pass`, `uwsgi_pass`, `scgi_pass`, `grpc_pass`,
+ *  `memcached_pass`) followed by a blank. Such a directive names an upstream, not a secret, and a bare `pass` would flag every
+ *  proxied location line. The exemption covers that ONE leading word: the rest of the line is still searched for `pass`, and the
+ *  whole line by every other test (a URL with userinfo, `api_key=` in a query, a long token). It is NOT earned by the word anywhere
+ *  else in the line (`set $x proxy_pass_secret`, `if (...) { proxy_pass ...; }`) nor by a longer directive (`proxy_pass_header`). */
+const CREDENTIAL_LINE_PASS_DIRECTIVE = /^[ \t]*(?:proxy|fastcgi|uwsgi|scgi|grpc|memcached)_pass[ \t]/;
 /** A URL with userinfo (`@` before the next `/`). */
 const CREDENTIAL_LINE_URL_USERINFO = /:\/\/[^\s\/@]{1,512}@/;
 /** An htpasswd / crypt hash prefix anywhere on the line. */
 const CREDENTIAL_LINE_HASH_PREFIX = /\$(?:apr1|1|5|6|2[abxy])\$|\{S?SHA(?:256|512)?\}/;
 /** A line that STARTS `name:value` with nothing between the colon and the value and no `//` after the colon — the htpasswd line
- *  family (a bare `user:plaintext` cannot be told from `host:port`; both are withheld). */
-const CREDENTIAL_LINE_BARE_PAIR = /^[ \t]*(?:-[ \t]+)?[^\s:#]{1,255}:(?!\/\/)\S/;
+ *  family (a bare `user:plaintext` cannot be told from `host:port`; both are withheld). /2 (sec-ops J5): ONE optional leading
+ *  `key: ` before the pair (`users: ops:plaintext`), so `endpoint: host:4317` is withheld too. Anchored and bounded: linear. */
+const CREDENTIAL_LINE_BARE_PAIR = /^[ \t]*(?:-[ \t]+)?(?:[^\s:#]{1,255}:[ \t]+)?[^\s:#]{1,255}:(?!\/\/)\S/;
 /** A long unbroken token: 20+ characters of the base64 / hex / token alphabet carrying a letter AND a digit, or 40+ of any of it
  *  (a PEM body line, a key in a URL path, a literal inside a Lua block or a JWK). */
 const CREDENTIAL_LINE_LONG_TOKEN = /[A-Za-z0-9+\/=_.-]{20,}/g;
@@ -1840,7 +1854,8 @@ const CREDENTIAL_LINE_LONG_TOKEN = /[A-Za-z0-9+\/=_.-]{20,}/g;
 const CREDENTIAL_LINE_LONE_BASE64 = /^[ \t]*[A-Za-z0-9+\/=]{2,}[ \t\r]*$/;
 export const CREDENTIAL_LINE_SOURCES: readonly string[] = Object.freeze([
   `substrings:${CREDENTIAL_LINE_SUBSTRINGS.join('|')}`,
-  ...[CREDENTIAL_LINE_URL_USERINFO, CREDENTIAL_LINE_HASH_PREFIX, CREDENTIAL_LINE_BARE_PAIR, CREDENTIAL_LINE_LONE_BASE64, CREDENTIAL_LINE_LONG_TOKEN].map((re) => `/${re.source}/${re.flags}`),
+  'pass:not-the-leading-nginx-routing-directive',
+  ...[CREDENTIAL_LINE_PASS_DIRECTIVE, CREDENTIAL_LINE_URL_USERINFO, CREDENTIAL_LINE_HASH_PREFIX, CREDENTIAL_LINE_BARE_PAIR, CREDENTIAL_LINE_LONE_BASE64, CREDENTIAL_LINE_LONG_TOKEN].map((re) => `/${re.source}/${re.flags}`),
   'long-token:20+letter-and-digit|40+',
 ]);
 
@@ -1849,6 +1864,7 @@ export function isCredentialShapedLine(line: string): boolean {
   if (typeof line !== 'string' || line.length === 0) return false;
   const lower = line.toLowerCase();
   for (const s of CREDENTIAL_LINE_SUBSTRINGS) if (lower.includes(s)) return true;
+  { const d = CREDENTIAL_LINE_PASS_DIRECTIVE.exec(lower); if ((d ? lower.slice(d[0].length) : lower).includes('pass')) return true; }
   if (CREDENTIAL_LINE_URL_USERINFO.test(line) || CREDENTIAL_LINE_HASH_PREFIX.test(line) || CREDENTIAL_LINE_BARE_PAIR.test(line) || CREDENTIAL_LINE_LONE_BASE64.test(line)) return true;
   const runs = line.match(CREDENTIAL_LINE_LONG_TOKEN);
   if (runs) for (const r of runs) if (r.length >= 40 || (/[A-Za-z]/.test(r) && /\d/.test(r))) return true;

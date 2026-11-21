@@ -68,6 +68,25 @@ export const REGISTERED_WARNING_IDS: Readonly<Record<string, readonly string[]>>
   'observability-config-held-protocol': ['restated-conclusion'],
 };
 
+/**
+ * Config sources STEP 3 P3 (plan W5 row 21): warning ids a protocol registers ONLY on a leg whose Config-sources declaration is
+ * `parsed`. For a `runs-undeclared` protocol (observability) the Config-sources warning belongs to a DECLARED leg: a leg with no
+ * block runs exactly as it always did and keeps exactly the set above, so the id is asked through the leg's governing state, never
+ * added to the protocol's row for every leg.
+ *
+ * ⚠️ EMPTY UNTIL THE JOIN: the observability row is extended with `git-file-only` in the SAME commit that ships the 1.12.0 text
+ * (plan §9.3 item 3) — the id is registered when a Reviewer can be told to write it, not before. The mechanism is here so that the
+ * join is one line.
+ */
+export const DECLARED_LEG_WARNING_IDS: Readonly<Record<string, readonly string[]>> = Object.freeze({});
+
+/** The ids registered for a leg: its protocol's row, plus the declared-leg ids when `declared` (the governing state is `parsed`). */
+export function registeredWarningIdsFor(protocol: string | null, declared: boolean,
+  declaredTable: Readonly<Record<string, readonly string[]>> = DECLARED_LEG_WARNING_IDS): string[] {
+  if (!protocol) return [];
+  return [...(REGISTERED_WARNING_IDS[protocol] ?? []), ...(declared ? declaredTable[protocol] ?? [] : [])];
+}
+
 type Client = Pick<PrismaClient, 'task' | 'agentExecution'> & AuthoritativeReadClient;
 
 interface ReviewerEntry {
@@ -89,6 +108,7 @@ async function readReviewer(
   prisma: Client,
   t: { id: string; agentRole: string | null },
   protocol: string | null,
+  declared = false,
 ): Promise<ReviewerEntry> {
   const inFlight = (await prisma.agentExecution.count({
     where: { taskId: t.id, status: { in: ['PENDING', 'RUNNING'] } },
@@ -99,7 +119,7 @@ async function readReviewer(
   const verdict = parseJson(read.value);
   if (!verdict || typeof verdict !== 'object') return { ...base, reason: 'no-reviewer-verdict' };
   if (!Array.isArray(verdict.warnings)) return { ...base, reason: 'pre-feature' };
-  const registeredSet = new Set(protocol ? REGISTERED_WARNING_IDS[protocol] ?? [] : []);
+  const registeredSet = new Set(registeredWarningIdsFor(protocol, declared));
   const entry: ReviewerEntry = {
     ...base,
     warnings: verdict.warnings
@@ -123,16 +143,19 @@ function summarize(reviewers: ReviewerEntry[]): { checked: boolean; reason: stri
   return { checked: true, reason: 'transcribed', count, ids };
 }
 
-async function reviewersOf(prisma: Client, stageId: string, protocol: string | null): Promise<ReviewerEntry[]> {
+async function reviewersOf(prisma: Client, stageId: string, protocol: string | null, declared = false): Promise<ReviewerEntry[]> {
   const tasks = (await findLegReviewerTasks(prisma, stageId)).filter(t => !!t.agentRole && REVIEWER_ROLES.has(t.agentRole));
   const out: ReviewerEntry[] = [];
-  for (const t of tasks) out.push(await readReviewer(prisma, t, protocol));
+  for (const t of tasks) out.push(await readReviewer(prisma, t, protocol, declared));
   return out;
 }
 
 export async function computeReviewerWarningsFact(
   prisma: Client,
-  { stageId, programTier, protocol }: { stageId: unknown; programTier?: boolean; protocol: unknown },
+  { stageId, programTier, protocol, declaredConfigLeg }: { stageId: unknown; programTier?: boolean; protocol: unknown;
+    /** STEP 3 P3: is THIS leg's Config-sources declaration `parsed`? Asked by the registry entry only for a protocol that has
+     *  declared-leg ids (none until the observability join), so no other leg reads its row for this. Absent ⇒ false. */
+    declaredConfigLeg?: () => Promise<boolean> },
 ): Promise<Record<string, unknown>> {
   const proto = typeof protocol === 'string' ? protocol : null;
   const tier = programTier === true ? 'program' : 'leg';
@@ -144,7 +167,8 @@ export async function computeReviewerWarningsFact(
   }
 
   if (tier === 'leg') {
-    const reviewers = await reviewersOf(prisma, stageId, proto);
+    const declared = !!proto && (DECLARED_LEG_WARNING_IDS[proto]?.length ?? 0) > 0 && !!declaredConfigLeg && (await declaredConfigLeg().catch(() => false));
+    const reviewers = await reviewersOf(prisma, stageId, proto, declared);
     if (reviewers.length === 0) return { checked: false, reason: 'no-reviewer', tier, renderScope, count: 0, ids: [] };
     const s = summarize(reviewers);
     return { checked: s.checked, reason: s.reason, tier, renderScope, reviewers, count: s.count, ids: s.ids };

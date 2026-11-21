@@ -19,7 +19,7 @@
  */
 import { Prisma } from '@prisma/client';
 import { extractDeclaredFiles, withDeviceEvidenceOnly, type ExtractedFile, type ExtractedRefusal } from '@/lib/agents/harness/held-bytes/extract';
-import { withConfigSourcesScope, withDeclaredFilesScope, DECLARED_SCOPE_REFUSALS } from '@/lib/agents/harness/held-bytes/config-source-scope';
+import { withConfigSourcesScope, withDeclaredFilesScope, DECLARED_SCOPE_REFUSALS, SERVED_FILE_EVIDENCE_ONLY } from '@/lib/agents/harness/held-bytes/config-source-scope';
 import type { LegConfigSourcesResolution } from '@/lib/agents/harness/config-sources-read';
 import type { DeviceReadScope } from '@/lib/agents/harness/held-bytes/device-read-scope';
 import {
@@ -29,7 +29,8 @@ import {
   HASH_BASIS_LEGACY,
 } from '@/lib/agents/harness/held-bytes/canonical-text';
 import { isR10Disabled, collectR10EchoSources } from '@/lib/agents/harness/redact-artifact-secrets';
-import { HELD_FILE_CAP, HELD_EXECUTION_CAP, HELD_EXECUTION_FILE_CAP } from '@/lib/agents/harness/held-bytes/caps';
+import { HELD_FILE_CAP, HELD_EXECUTION_CAP, HELD_EXECUTION_FILE_CAP, COMPARE_SIDE_MAX_BYTES, COMPARE_PERSIST_MAX_FILES, COMPARE_PERSIST_EVIDENCE_MAX_BYTES } from '@/lib/agents/harness/held-bytes/caps';
+import type { CaptureEvidence, CaptureEvidenceItem } from '@/lib/agents/harness/file-source-compare';
 import { owningLegPredicate } from '@/lib/agents/harness/program-protocol';
 import { heldPathRefusal, hasPrivateKeyBlock } from '@/lib/mcp/server/config/git-file-source-pin';
 import {
@@ -79,6 +80,10 @@ const FILE_LEVEL = new Set(['raw-digest-present', 'descriptor-mismatch', 'path-i
  *  carrying the count (the `overCountByCall` shape), so a service returning thousands of undeclared files cannot fill the terminal
  *  transaction, and cannot push a declared file past the held caps either. */
 export const DECLARED_SCOPE_ROW_CAP = 40;
+/** STEP 3 P3 (ruling E4; P2 sec-ops F5 / architectural F4): EACH scope refusal name has its own bound, so forty undeclared siblings
+ *  from an earlier call cannot push a later declared pair's evidence row into the overflow row (which drops target and path). */
+const SCOPE_ROW_CAP_BY_NAME: Readonly<Record<string, number>> = Object.freeze({ [SERVED_FILE_EVIDENCE_ONLY]: COMPARE_PERSIST_MAX_FILES });
+const scopeRowCap = (refusal: string): number => SCOPE_ROW_CAP_BY_NAME[refusal] ?? DECLARED_SCOPE_ROW_CAP;
 
 /**
  * held-k8s G-5 (SYNTHESIS v3, sec-ops S1a): a held file must never contain a credential, and R10 misses plaintext Kubernetes
@@ -109,8 +114,36 @@ export function isTerraformStateOrPlanJson(text: string): boolean {
   return /"terraform_version"\s*:/.test(text) && /"(lineage|prior_state|planned_values|resource_changes)"\s*:/.test(text);
 }
 
-/** PURE half. Returns null when the switch is off, there is no record, or no call is a declared file lane. */
-export function prepareHeldCapture(args: {
+/** PURE half. Returns null when the switch is off, there is no record, or no call is a declared file lane. The plan it returns
+ *  carries NO evidence: the served-side evidence of a Config-sources comparison is a separate value (`prepareHeldCaptureWithEvidence`). */
+export function prepareHeldCapture(args: PrepareHeldCaptureArgs): HeldCapturePlan | null {
+  return prepare(args).plan;
+}
+
+/**
+ * Config sources STEP 3 P3 (plan §13 B2; sec-ops ruling on evidence caps) — the SAME pure half, returning the EVIDENCE beside the
+ * plan: for each served file the declared-files scope classified as evidence (a label with a `git-file` base and a `live-read`
+ * line), its canonical, redacted text `B` and its sha — through the SAME `canonicalBase` call, the same redact flag and the same
+ * echo sources as a held file, in the same persist. NEVER on the plan (so it cannot reach the write half, the nets or a manifest),
+ * never written, never logged, never in a thrown object. Its caller — the execution core, once — hands it to the comparison
+ * synchronously and drops the reference when the comparison returns.
+ *
+ * EVIDENCE HAS ITS OWN CAPS and never touches the held counters (ruling E1–E4):
+ *   E1  `COMPARE_SIDE_MAX_BYTES` on the RAW bytes, FIRST — before any check reads the text whole — and again on `B`. Over either
+ *       ⇒ `over-compare-cap`: no `B` kept, no sha.
+ *   E2  at most `COMPARE_PERSIST_MAX_FILES` items, and at most `COMPARE_PERSIST_EVIDENCE_MAX_BYTES` raw bytes, enter the chain in
+ *       one persist, kept or refused by it; the item that crosses either, and every later one, reads `comparison-budget` and
+ *       costs one length test.
+ *   E3  an evidence item never increments `seen` and never adds to `executionBytes`.
+ *   R10 off ⇒ no evidence is built and no sha is computed (`redaction-off`).
+ * The FIRST read of a file (target, path, service) decides its label; a later read of the same file is not processed again.
+ * `evidence` is null when there is no plan (the switch is off, capture caught, a POV-less task, nothing extracted).
+ */
+export function prepareHeldCaptureWithEvidence(args: PrepareHeldCaptureArgs): { plan: HeldCapturePlan | null; evidence: CaptureEvidence | null } {
+  return prepare(args);
+}
+
+export interface PrepareHeldCaptureArgs {
   toolCallResults: readonly unknown[] | null | undefined;
   task: { id: string; povId: string | null };
   logger: HeldCaptureLogger;
@@ -131,12 +164,16 @@ export function prepareHeldCapture(args: {
   /** STEP 3 P2 (plan W1 / W8): the protocol `configSources` belongs to (`captureScopesFor` returns the three values together).
    *  Capture is an allow-list of DECLARED files only when that protocol's block can name a service file. Absent ⇒ unchanged. */
   configSourceProtocol?: string | null;
-}): HeldCapturePlan | null {
-  if (!isHeldCaptureEnabled()) return null;
+}
+
+const NO_CAPTURE = Object.freeze({ plan: null, evidence: null });
+
+function prepare(args: PrepareHeldCaptureArgs): { plan: HeldCapturePlan | null; evidence: CaptureEvidence | null } {
+  if (!isHeldCaptureEnabled()) return NO_CAPTURE;
   const t0 = Date.now();
   try {
     const records = args.toolCallResults;
-    if (!Array.isArray(records) || records.length === 0) return null;
+    if (!Array.isArray(records) || records.length === 0) return NO_CAPTURE;
     // held-network step 3 push 2 (owner Phase-0 §4b): ONE held base per device — a device whose declared Git file is held here
     // keeps its device read as evidence only (withDeviceEvidenceOnly; a no-op off a Device-sources leg).
     // STEP 3 P2 (plan W8): then the SERVICE-file half of the Config scope — an allow-list on a declared leg of a protocol whose
@@ -194,7 +231,7 @@ export function prepareHeldCapture(args: {
       if (unidentified + undeclaredFailed + failedUnmatched + outOfScopeLane + notAFileRead > 0) {
         args.logger.info?.({ stats: { unidentified, undeclaredFailed, failedUnmatched, outOfScopeLane, notAFileRead } }, 'held-bytes: context counts (nothing held)');
       }
-      return null;
+      return NO_CAPTURE;
     }
     const scope = args.task.povId ?? null;
     const stats: Record<string, number> = {
@@ -241,20 +278,23 @@ export function prepareHeldCapture(args: {
       for (const { src, files: n } of perCall.values()) {
         refusals.push(refusalFrom({ ...src, selector: null, target: null, path: null }, null, 'no-scope', n > 0 ? { files: n } : undefined));
       }
-      return { scope, files, refusals, stats: { ...stats, refused: refusals.length, durationMs: Date.now() - t0 } };
+      return { plan: { scope, files, refusals, stats: { ...stats, refused: refusals.length, durationMs: Date.now() - t0 } }, evidence: null };
     }
     for (const r of callLevel) refusals.push(refusalFrom(r, scope, r.refusal, r.detail));
     // STEP 3 P2 (E3 / E4): the declared-files scope rows, in tool-call order, under their OWN bound — never `seen`, never
-    // `executionBytes`. Past the bound: ONE row per (call, refusal name) with the count, target and path dropped.
+    // `executionBytes`. Past the bound: ONE row per (call, refusal name) with the count, target and path dropped. P3: the bound is
+    // PER REFUSAL NAME (`scopeRowCap`), so evidence rows and undeclared-file rows cannot crowd each other out.
     {
       const ordered = [...scopeRows].sort((a, b) => a.toolCallIndex - b.toolCallIndex);
+      const kept = new Map<string, number>();
       const over = new Map<string, { src: ExtractedRefusal; files: number }>();
-      ordered.forEach((r, i) => {
-        if (i < DECLARED_SCOPE_ROW_CAP) { refusals.push(refusalFrom(r, scope, r.refusal, r.detail)); return; }
+      for (const r of ordered) {
+        const n = kept.get(r.refusal) ?? 0;
+        if (n < scopeRowCap(r.refusal)) { kept.set(r.refusal, n + 1); refusals.push(refusalFrom(r, scope, r.refusal, r.detail)); continue; }
         const k = `${r.toolCallIndex}\u0000${r.refusal}`;
         const e = over.get(k);
         if (e) e.files++; else over.set(k, { src: r, files: 1 });
-      });
+      }
       for (const { src, files: n } of over.values()) {
         refusals.push(refusalFrom({ ...src, selector: null, target: null, path: null }, scope, src.refusal, { files: n, capScope: 'declared-scope-rows' }));
       }
@@ -317,13 +357,53 @@ export function prepareHeldCapture(args: {
     for (const { src, files: n } of overCountByCall.values()) {
       refusals.push(refusalFrom(src, scope, 'over-cap', { capScope: 'count', files: n }));
     }
+    // STEP 3 P3 — THE EVIDENCE CHAIN (ruling E1–E4). Its own loop and its own counter: nothing here reads or writes `seen`,
+    // `executionBytes`, `files` or `refusals`, so the held set cannot depend on evidence. Nothing here is logged.
+    const evidenceItems: CaptureEvidenceItem[] = [];
+    let evidenceReached = 0; let evidenceBytes = 0; let evidenceBudgetGone = false;
+    if (ex.evidence && ex.evidence.length > 0) {
+      const first = new Set<string>();
+      for (const f of [...ex.evidence].sort((a, b) => a.toolCallIndex - b.toolCallIndex)) {
+        const k = `${f.target}\u0000${f.path}\u0000${f.serviceId ?? f.serviceName}`;
+        if (first.has(k)) continue;   // the FIRST read of a file decides
+        first.add(k);
+        const head = { target: f.target, path: f.path, toolCallIndex: f.toolCallIndex, serviceName: f.serviceName, serviceId: f.serviceId };
+        if (!redact) { evidenceItems.push({ ...head, state: 'redaction-off' }); continue; }   // R10 off: no evidence, no sha
+        const C = f.text;
+        // E1: the raw size, FIRST. `length` is a lower bound on the UTF-8 byte count, so a huge text is refused without being read.
+        const rawBytes = C.length > COMPARE_SIDE_MAX_BYTES ? C.length : Buffer.byteLength(C, 'utf8');
+        if (rawBytes > COMPARE_SIDE_MAX_BYTES) { evidenceItems.push({ ...head, state: 'over-compare-cap' }); continue; }
+        // E2: the count of items that ENTER the chain — counted before the content checks too (each is a scan of the whole text),
+        // so files that each fail inside the chain cannot buy unlimited synchronous work. And the BYTES that enter it (the timing
+        // pin): the file that crosses the byte budget, and every later one, never enters.
+        if (evidenceBudgetGone || evidenceReached >= COMPARE_PERSIST_MAX_FILES || evidenceBytes + rawBytes > COMPARE_PERSIST_EVIDENCE_MAX_BYTES) {
+          evidenceBudgetGone = true;
+          evidenceItems.push({ ...head, state: 'comparison-budget' }); continue;
+        }
+        evidenceReached++; evidenceBytes += rawBytes;
+        const refused = (detail: string) => { evidenceItems.push({ ...head, state: 'served-file-refused', detail }); };
+        if (isTerraformStateOrPlanJson(C)) { refused('state-file'); continue; }
+        if (hasPrivateKeyBlock(C)) { refused('key-material-file'); continue; }
+        if (isPlaintextSecretManifest(C)) { refused('secret-manifest'); continue; }
+        const legacy = checkLegacyText(C);
+        if (legacy) { refused(legacy); continue; }
+        const base = canonicalBase(C, { redact: true, echoTokens: echoSources() });
+        if (!base.ok) { refused(base.refusal); continue; }
+        if (Buffer.byteLength(base.B, 'utf8') > COMPARE_SIDE_MAX_BYTES) { evidenceItems.push({ ...head, state: 'over-compare-cap' }); continue; }   // E1, on B
+        evidenceItems.push({ ...head, state: 'evidence', B: base.B, sha256: base.baseHash, redactedCount: base.redactedCount });
+      }
+    }
     return {
-      scope, files, refusals,
-      stats: { ...stats, held: files.length, refused: refusals.length, heldBytes: executionBytes > HELD_EXECUTION_CAP ? -1 : executionBytes, durationMs: Date.now() - t0 },
+      plan: {
+        scope, files, refusals,
+        stats: { ...stats, held: files.length, refused: refusals.length, heldBytes: executionBytes > HELD_EXECUTION_CAP ? -1 : executionBytes, durationMs: Date.now() - t0 },
+      },
+      evidence: { items: evidenceItems, reached: evidenceReached, bytes: evidenceBytes },
     };
   } catch (err) {
+    // `errorFacts` carries name / code only — never a message, so no file text can reach the log through a thrown object.
     args.logger.warn({ ...errorFacts(err), durationMs: Date.now() - t0 }, 'held-bytes: prepareHeldCapture failed — nothing captured');
-    return null;
+    return NO_CAPTURE;
   }
 }
 

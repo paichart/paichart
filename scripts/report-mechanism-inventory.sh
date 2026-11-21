@@ -727,7 +727,7 @@ UNION ALL SELECT '🔴 a live-read-evidence-only refusal on an execution whose o
 UNION ALL SELECT '⚪ liveEvidence stamps by point / summary — ' || coalesce(a.j->'liveEvidence'->>'point', '(none)') || ' / '
   || coalesce(a.j->'liveEvidence'->>'summary', 'not checked: ' || coalesce(a.j->'liveEvidence'->>'reason', '(none)')), count(*)::text
   FROM _a a WHERE a.name IN ('result.json', 'pipeline-index.json') AND a.j ? 'liveEvidence' GROUP BY 1
-UNION ALL SELECT '🔴 a liveEvidence stamp on an execution composed below network-provisioning 1.26.0 / network-derivation 1.3.0 / kubernetes-gitops 1.19.0 / terraform-iac 1.17.0 (EF-S3: stored legs never stamp)', count(*)::text
+UNION ALL SELECT '🔴 a liveEvidence stamp on an execution composed below network-provisioning 1.26.0 / network-derivation 1.3.0 / kubernetes-gitops 1.19.0 / terraform-iac 1.17.0 / observability-config 1.12.0 (EF-S3: stored legs never stamp)', count(*)::text
   FROM _a a WHERE a.name IN ('result.json', 'pipeline-index.json') AND a.j ? 'liveEvidence'
    AND NOT ((a.j->'protocolInjection'->'delta'->>'name' = 'network-provisioning-protocol'
         AND coalesce(string_to_array(substring(a.j->'protocolInjection'->'delta'->>'version' FROM '^[0-9]+\.[0-9]+\.[0-9]+'), '.')::int[], '{0}') >= '{1,26,0}'::int[])
@@ -736,11 +736,21 @@ UNION ALL SELECT '🔴 a liveEvidence stamp on an execution composed below netwo
      OR (a.j->'protocolInjection'->'delta'->>'name' = 'kubernetes-gitops-protocol'
         AND coalesce(string_to_array(substring(a.j->'protocolInjection'->'delta'->>'version' FROM '^[0-9]+\.[0-9]+\.[0-9]+'), '.')::int[], '{0}') >= '{1,19,0}'::int[])
      OR (a.j->'protocolInjection'->'delta'->>'name' = 'terraform-iac-protocol'
-        AND coalesce(string_to_array(substring(a.j->'protocolInjection'->'delta'->>'version' FROM '^[0-9]+\.[0-9]+\.[0-9]+'), '.')::int[], '{0}') >= '{1,17,0}'::int[]))
+        AND coalesce(string_to_array(substring(a.j->'protocolInjection'->'delta'->>'version' FROM '^[0-9]+\.[0-9]+\.[0-9]+'), '.')::int[], '{0}') >= '{1,17,0}'::int[])
+     OR (a.j->'protocolInjection'->'delta'->>'name' = 'observability-config-protocol'
+        AND coalesce(string_to_array(substring(a.j->'protocolInjection'->'delta'->>'version' FROM '^[0-9]+\.[0-9]+\.[0-9]+'), '.')::int[], '{0}') >= '{1,12,0}'::int[]))
 -- Config sources STEP 2 (2026-11-15) — the Kubernetes Config-sources facts. All NOT_STAMPED until kubernetes-gitops 1.19.0 ships, so
 -- every count below is 0 on every stored leg; a non-zero count before that text is live is a stamp that should not exist.
-UNION ALL SELECT '⚪ configSourceReads stamps (Config-sources Harvesters): checked / not checked', count(*) FILTER (WHERE a.j->'configSourceReads'->>'checked' = 'true') || ' / '
-  || count(*) FILTER (WHERE a.j->'configSourceReads'->>'checked' = 'false') FROM _a a WHERE a.name = 'result.json' AND a.j ? 'configSourceReads'
+-- STEP 3 P3 (plan §13 A6): `checked:false, reason:'config-sources-absent'` has TWO meanings — a Kubernetes or Terraform leg whose
+-- block is absent (FORCED), and an observability leg that declares nothing and ran on the service's files. The line is split on the
+-- PRESENCE of the `undeclared` key, never on the reason string or on `declaration.state`.
+UNION ALL SELECT '⚪ configSourceReads stamps on DECLARED legs (no `undeclared` key): checked / not checked', count(*) FILTER (WHERE a.j->'configSourceReads'->>'checked' = 'true') || ' / '
+  || count(*) FILTER (WHERE a.j->'configSourceReads'->>'checked' = 'false') FROM _a a WHERE a.name = 'result.json' AND a.j ? 'configSourceReads' AND NOT (a.j->'configSourceReads' ? 'undeclared')
+UNION ALL SELECT '⚪ configSourceReads stamps on legs that declare NOTHING and ran on the service''s files (the `undeclared` key): with a file count / capture off or no digest',
+  count(*) FILTER (WHERE a.j->'configSourceReads'->'undeclared' ? 'files') || ' / ' || count(*) FILTER (WHERE a.j->'configSourceReads'->'undeclared' ? 'capture')
+  FROM _a a WHERE a.name = 'result.json' AND a.j->'configSourceReads' ? 'undeclared'
+UNION ALL SELECT '🔴 a configSourceReads stamp carrying the `undeclared` key that is NOT `checked:false` (the no-block arm checks nothing)', count(*)::text
+  FROM _a a WHERE a.name = 'result.json' AND a.j->'configSourceReads' ? 'undeclared' AND a.j->'configSourceReads'->>'checked' IS DISTINCT FROM 'false'
 UNION ALL SELECT '· configSourceReads: stamps with a declared source line NOT read (read each by hand)', count(*)::text
   FROM _a a WHERE a.name = 'result.json' AND (a.j->'configSourceReads'->>'notRead')::int > 0
 UNION ALL SELECT '· configSourceReads: stamps with a Git file read that no declared line names (never held)', count(*)::text
@@ -753,6 +763,17 @@ UNION ALL SELECT '· gitLiveDrift: files not checked, by reason: ' || coalesce(f
 UNION ALL SELECT '· platformDriftCalls: platform calls of the compare tool, by outcome: ' || coalesce(c->>'outcome', '(none)'), count(*)::text
   FROM _a a, jsonb_array_elements(CASE WHEN jsonb_typeof(a.j->'platformDriftCalls'->'calls') = 'array' THEN a.j->'platformDriftCalls'->'calls' ELSE '[]' END) c
   WHERE a.name = 'result.json' GROUP BY c->>'outcome'
+-- Config sources STEP 3 P3 (2026-11-21) — the PLATFORM's file comparison (observability, the `file-ordered-lines/1` method). All
+-- NOT_STAMPED until observability-config 1.12.0 ships, so every count below is 0 on every stored leg.
+UNION ALL SELECT '⚪ fileSourceCompare records (observability Harvesters): files by state — ' || coalesce(f->>'state', '(none)') || coalesce(' / ' || (f->>'reason'), ''), count(*)::text
+  FROM _a a, jsonb_array_elements(CASE WHEN jsonb_typeof(a.j->'fileSourceCompare'->'files') = 'array' THEN a.j->'fileSourceCompare'->'files' ELSE '[]' END) f
+  WHERE a.name = 'result.json' AND a.j ? 'fileSourceCompare' GROUP BY 1
+UNION ALL SELECT '🔴 a Harvester whose gitLiveDrift reads no-compare-record (the platform''s comparison record did not reach the fact on a DECLARED leg — READ BY HAND: also the visible sign of a failed owning-leg read, plan §13 A8)', count(*)::text
+  FROM _a a WHERE a.name = 'result.json' AND a.j->'gitLiveDrift'->>'point' = 'harvester' AND a.j->'gitLiveDrift'->>'reason' = 'no-compare-record'
+UNION ALL SELECT '🔴 a fileSourceCompare record that carries a file text or an evidence key (the record stores states, counts, shas, ranges and at most 40 quoted lines a file — never a text)', count(*)::text
+  FROM _a a WHERE a.name = 'result.json' AND a.j ? 'fileSourceCompare' AND ((a.j->'fileSourceCompare')::text LIKE '%"B":%' OR (a.j->'fileSourceCompare')::text LIKE '%"evidence":%' OR (a.j->'fileSourceCompare')::text LIKE '%"content":%' OR (a.j->'fileSourceCompare')::text LIKE '%"text":%')
+UNION ALL SELECT '🔴 a fileSourceCompare stamp on a leaf that is not an observability leaf (only a protocol whose method the PLATFORM computes has one)', count(*)::text
+  FROM _a a LEFT JOIN _execleg x ON x.eid = a.eid WHERE a.name = 'result.json' AND a.j ? 'fileSourceCompare' AND coalesce(x.legproto, '') <> 'observability-config-protocol'
 UNION ALL SELECT '🔴 a platformDriftCalls record that carries a `manifest` key or a raw `detail` (the record stores a sha, a length and the validated projection only)', count(*)::text
   FROM _a a WHERE a.name = 'result.json' AND a.j ? 'platformDriftCalls' AND ((a.j->'platformDriftCalls')::text LIKE '%"manifest":%' OR (a.j->'platformDriftCalls')::text LIKE '%"detail":%')
 -- terraform-witness step-back (2026-11-18) — `planWitness`: the platform's check of a Terraform Author's Plan witness block. NOT_STAMPED

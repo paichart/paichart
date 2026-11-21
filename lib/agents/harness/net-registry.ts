@@ -128,12 +128,23 @@ export interface NetContext {
   /** Config sources STEP 2: the PLATFORM's drift call record for this persist (platform-drift-run.ts) — present only on a
    *  Config-sources Harvester whose core made (or decided not to make) the calls; a replay passes the STORED record, never calls. */
   platformDriftCalls?: readonly unknown[] | null;
+  /** Config sources STEP 3 P3: the core's file-comparison record for this persist (file-source-compare.ts) — present only on a
+   *  Harvester of a declared leg whose protocol the PLATFORM compares; a replay passes the STORED record (it cannot be recomputed).
+   *  UNTRUSTED on read: every reader re-validates it (git-live-drift.ts `validFileCompareRecord`); absent or invalid ⇒ the named
+   *  state `no-compare-record`. */
+  fileSourceCompare?: unknown;
   /** Config-sources network push 1a (EF-S3): the persisting execution's OWN `protocolInjection` (result.json shape), read off the
    *  built resultJson in `stampExecutionNets` — the version key `liveEvidence` is stamped on. Absent ⇒ not a released version. */
   protocolInjection?: unknown;
   /** Stage B: the variant stamps the core BUILT pre-tx (V-5d/V-5g), transcribed by the held nets (AE S2: one object). */
   held?: { editApplication?: Fact | null; heldBytes?: Fact | null; /** BASE-held handles (V-8a; EF-P2-3) */ baseHeldHandles?: readonly string[] | null;
-    /** planWitness (2026-11-18): the held-edit step's key read (plan-witness.ts `PlanWitnessKeys`), validated by the net on read. */ planWitnessKeys?: unknown };
+    /** planWitness (2026-11-18): the held-edit step's key read (plan-witness.ts `PlanWitnessKeys`), validated by the net on read. */ planWitnessKeys?: unknown;
+    /** STEP 3 P3 (the OVERLAP fact): the held files the Author's edit step resolved, with the base line ranges of its applied hunks —
+     *  built pre-tx where the applier's hunks are in memory. Absent ⇒ no record of the edit (`no-edit-record`). */
+    editHunkFiles?: readonly import('./file-source-compare').EditHunkFile[] | null;
+    /** STEP 3 P3, REPLAY ONLY: the Author's STORED per-label `baseMatch` / `editOverlap` — nothing stored can rebuild the hunk
+     *  positions, so a replay hands these back and the fact's reader re-validates them (plan §13 C2). Production never sets it. */
+    storedEditFacts?: ReadonlyMap<string, { baseMatch?: unknown; editOverlap?: unknown }> | null };
 }
 
 export interface MechanicalNet {

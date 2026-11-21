@@ -517,7 +517,7 @@ const CONTROLS: Record<string, { what: string; run: (c: Ctx) => ControlResult }>
           if ('platformDriftCalls' in j) {
             drift++;
             // The stored record is `{ version, calls }` (stampPlatformDriftCalls); the fact is computed from `.calls`. Compare key-order-free.
-            const want = canonJson(computeGitLiveDrift(driftCallsOf(j.platformDriftCalls))); const got = canonJson(j.gitLiveDrift ?? null);
+            const want = canonJson(computeGitLiveDrift(driftCallsOf(j.platformDriftCalls), 'kubernetes-gitops-protocol')); const got = canonJson(j.gitLiveDrift ?? null);
             const files = isObj(j.gitLiveDrift) && Array.isArray(j.gitLiveDrift.files) ? (j.gitLiveDrift.files as Record<string, unknown>[]) : [];
             for (const f of files) lines.push(`      ${String(f.label)}: ${String(f.state)}${f.summary ? ' ' + String(f.summary) : ''}${f.reason ? ' reason=' + String(f.reason) : ''}`);
             if (want !== got) { finding = true; lines.push('      gitLiveDrift ≠ recompute from platformDriftCalls — FINDING'); }

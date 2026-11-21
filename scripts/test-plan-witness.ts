@@ -783,14 +783,15 @@ test('C11 end to end on real fact objects: the plant shapes force by name, the c
 });
 
 // ── P: pins ─────────────────────────────────────────────────────────────────────────────────────────────────────────
-test('P1 the registry: `planWitness` is the LAST entry, one leaf-persist point, conditional, with a §6 render and no card segment', () => {
-  const last = MECHANICAL_NETS[MECHANICAL_NETS.length - 1];
+test('P1 the registry: `planWitness` — appended last at its build, and since Config sources STEP 3 P3 (2026-11-21) followed ONLY by `fileSourceCompare`: one leaf-persist point, conditional, with a §6 render and no card segment', () => {
+  eq(MECHANICAL_NETS.slice(-2).map((n) => n.name), ['planWitness', 'fileSourceCompare']);
+  const last = MECHANICAL_NETS[MECHANICAL_NETS.length - 2];
   eq([last.name, last.point, last.conditionalStampReason, last.renderCard, typeof last.renderPrompt, typeof last.summaryExcludedReason], ['planWitness', 'leaf-persist', 'not-plan-witness-version', null, 'function', 'string']);
   eq(MECHANICAL_NETS.filter((n) => n.name === 'planWitness').length, 1);
   eq(last.errorFact(), { version: 1, checked: false, reason: 'enrichment-error' });
 });
 test('P2 placement: the operator tail, appended last; NOT on the summary whitelist (nor nested under editApplication)', () => {
-  eq(RESULT_JSON_OPERATOR_TAIL_KEYS[RESULT_JSON_OPERATOR_TAIL_KEYS.length - 1], 'planWitness');
+  eq(RESULT_JSON_OPERATOR_TAIL_KEYS.slice(-2), ['planWitness', 'fileSourceCompare']);   // + fileSourceCompare (STEP 3 P3), appended after it
   ok(!(RESULT_JSON_SUMMARY_KEYS as readonly string[]).includes('planWitness'), 'planWitness on the summary whitelist');
   ok(!fs.readFileSync(path.join(__dirname, '..', 'lib/agents/harness/held-bytes/edit-fact.ts'), 'utf8').includes('planWitness'), 'the editApplication fact must not carry it');
 });

@@ -20,6 +20,7 @@ import { CONFIG_SOURCE_AWAITING_TEXT, CONFIG_SOURCE_LANES, assertNeverConfigLane
   hasConfigSourcesSnapshotObject, type OwningLegResolution } from './held-bytes/variant';
 import { resolveConfigLabels } from './held-bytes/config-label';
 import { canonicalProtocolName } from './program-protocol';
+import { logger as defaultLogger } from '../../logger';
 
 export type LegConfigSourcesResolution =
   | LegConfigSources
@@ -104,24 +105,52 @@ export function governingConfigSourcesAsOf(row: GoverningConfigRow, protocol: st
   return governingConfigSources(row, protocol);
 }
 
-export async function readLegConfigSources(db: Db, owningLeg: OwningLegResolution | null, awaiting: readonly string[] = CONFIG_SOURCE_AWAITING_TEXT): Promise<LegConfigSourcesResolution> {
+/** How many times the leg-row read is made before the reader answers `could-not-check` (owner decision 2026-11-21): the read, and
+ *  ONE retry when it THROWS. A row that is simply not there (`leg-row-missing`) is not retried — a second read cannot find it. */
+export const LEG_ROW_READ_ATTEMPTS = 2;
+
+/**
+ * THE ONE READ of a leg's own row for its Config-sources declaration.
+ *
+ * FAIL-CLOSED, and it stays so (owner decision 2026-11-21, register CONFIG-SOURCES-OBS-JOIN-PRECONDITIONS item 6): when the row
+ * cannot be read the platform cannot know whether the leg declared sources, so the answer is `could-not-check` — capture holds
+ * nothing of the Config lane and the carrier forces by that name. Failing open would let a DECLARED leg run unscoped.
+ *
+ * Config sources STEP 3 P3 — two additions, LIVE for every Config-sources protocol (Kubernetes and Terraform today):
+ *   1. a read that THROWS is retried ONCE before the reader gives up (a transient database error no longer forces a leg);
+ *   2. each failed attempt writes a WARN log with the reason — the catch was silent before. Content-free: the leg id, the attempt,
+ *      the reason name and the error's class and code; never a description, a contract or an error message.
+ * `deps.warn` exists for the tests; production passes nothing and gets the platform logger.
+ */
+export async function readLegConfigSources(db: Db, owningLeg: OwningLegResolution | null, awaiting: readonly string[] = CONFIG_SOURCE_AWAITING_TEXT,
+  deps: { warn?: (obj: Record<string, unknown>, msg: string) => void } = {}): Promise<LegConfigSourcesResolution> {
   if (!owningLeg || owningLeg.kind === 'could-not-check') {
     return { state: 'could-not-check', grammarVersion: CONFIG_SOURCES_GRAMMAR_VERSION, reason: 'owning-leg-unresolved' };
   }
   if (owningLeg.kind === 'no-leg' || !owningLeg.configSourceProtocol) return { state: 'not-config-source-leg' };
-  try {
-    const rows = await db.$queryRaw<Array<GoverningConfigRow>>(Prisma.sql`
+  const warn = deps.warn ?? ((obj: Record<string, unknown>, msg: string) => defaultLogger.warn(obj, msg));
+  const errorFacts = (err: unknown) => ({ errorName: err instanceof Error ? err.name : typeof err,
+    ...(err && typeof err === 'object' && typeof (err as { code?: unknown }).code === 'string' ? { errorDbCode: (err as { code: string }).code } : {}) });
+  for (let attempt = 1; attempt <= LEG_ROW_READ_ATTEMPTS; attempt++) {
+    try {
+      const rows = await db.$queryRaw<Array<GoverningConfigRow>>(Prisma.sql`
       SELECT description, ("inputContext" -> 'interfaceContract') AS contract, (metadata -> 'configSourcesSnapshot') AS snapshot,
              (jsonb_typeof(metadata -> 'protocol') = 'string') AS "protocolStamped"
       FROM tasks WHERE id = ${owningLeg.legId}`);
-    if (!Array.isArray(rows) || rows.length !== 1) {
-      return { state: 'could-not-check', grammarVersion: CONFIG_SOURCES_GRAMMAR_VERSION, reason: 'leg-row-missing' };
+      if (!Array.isArray(rows) || rows.length !== 1) {
+        try { warn({ legTaskId: owningLeg.legId, attempt, reason: 'leg-row-missing', errorCode: 'CONFIG_SOURCES_LEG_ROW_READ_FAILED' },
+          'Config sources: the leg row was not found — the declaration could not be checked (fail closed)'); } catch { /* a logger must never change the answer */ }
+        return { state: 'could-not-check', grammarVersion: CONFIG_SOURCES_GRAMMAR_VERSION, reason: 'leg-row-missing' };
+      }
+      // `jsonb_typeof(NULL) = 'string'` is SQL NULL when the key is absent: only a real `true` counts as stamped.
+      return governingConfigSourcesAsOf({ ...rows[0], protocolStamped: rows[0].protocolStamped === true }, owningLeg.configSourceProtocol, awaiting);
+    } catch (err) {
+      const last = attempt === LEG_ROW_READ_ATTEMPTS;
+      try { warn({ legTaskId: owningLeg.legId, attempt, attempts: LEG_ROW_READ_ATTEMPTS, reason: 'read-threw', willRetry: !last, ...errorFacts(err), errorCode: 'CONFIG_SOURCES_LEG_ROW_READ_FAILED' },
+        last ? 'Config sources: the leg row read failed again — the declaration could not be checked (fail closed)' : 'Config sources: the leg row read failed — retrying once'); } catch { /* as above */ }
     }
-    // `jsonb_typeof(NULL) = 'string'` is SQL NULL when the key is absent: only a real `true` counts as stamped.
-    return governingConfigSourcesAsOf({ ...rows[0], protocolStamped: rows[0].protocolStamped === true }, owningLeg.configSourceProtocol, awaiting);
-  } catch {
-    return { state: 'could-not-check', grammarVersion: CONFIG_SOURCES_GRAMMAR_VERSION, reason: 'read-threw' };
   }
+  return { state: 'could-not-check', grammarVersion: CONFIG_SOURCES_GRAMMAR_VERSION, reason: 'read-threw' };
 }
 
 /**

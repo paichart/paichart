@@ -31,3 +31,29 @@ export const HELD_ROW_BINDS = 6;
  *  applier is linear in these (one indexOf scan per edit over the view), so the caps bound its time too (pinned). */
 export const HELD_EDIT_MAX_EDITS = 64;
 export const HELD_EDIT_MAX_BYTES = 256 * 1024;
+
+// ── Config sources STEP 3 P3: the file comparison's bounds (plan §5.4, §13.B; sec-ops ruling on evidence caps E1–E7) ─────────────
+// Dependency-free here so capture (lib/services/held-bytes-capture.ts) and the comparator (file-source-compare.ts) read ONE value.
+//
+// EVIDENCE — a served file kept in memory for the comparison and never stored — has its OWN caps and never touches the held
+// counters above: those bound what is STORED, and the served text comes from a registered service and from calls an agent chose
+// to make, so a chatty or hostile service must not be able to push a Git file past a held cap (ruling §3).
+
+/** One side of a comparison, in UTF-8 bytes. Tested on the served file's RAW bytes BEFORE `canonicalBase` (a 5 MB line is never
+ *  redacted or split), and again on its redacted text (a placeholder can lengthen a line). Over ⇒ `over-compare-cap`. */
+export const COMPARE_SIDE_MAX_BYTES = 262_144;
+/** One side of a comparison, in lines. Counted by index, stopping at the cap. Over ⇒ `over-compare-cap`. */
+export const COMPARE_SIDE_MAX_LINES = 5_000;
+/** Evidence items that may REACH `canonicalBase` in one persist, kept or refused by it (ruling E2). The next one never enters it
+ *  and reads `comparison-budget`. Also the bound on per-file `served-file-evidence-only` rows (ruling E4). */
+export const COMPARE_PERSIST_MAX_FILES = 40;
+/** RAW bytes of evidence that may enter the chain in one persist — the bound on what the evidence chain COSTS, which is time
+ *  (ruling §1: `canonicalBase` runs R10 synchronously on the process's one event loop, and the persist's echo-source walk reads
+ *  every tool record). Set by the timing pin (STEP3-P3-BUILD.md § timing): forty files AT the byte cap took 1.7 s on the build host
+ *  against a 1 s ceiling, so the WORK is bounded here rather than by cutting the file count to four — forty ordinary files of a few
+ *  kilobytes each still fit. The file that crosses it, and every later one, reads `comparison-budget` and costs one length test. */
+export const COMPARE_PERSIST_EVIDENCE_MAX_BYTES = 4 * COMPARE_SIDE_MAX_BYTES;
+/** Operations of the line comparison in one persist — every interned line, every trimmed line, every step of the search. A COUNT,
+ *  never a clock: the same input always reads the same state. The pair that crosses it, and every later one, reads
+ *  `comparison-budget`. Set by the timing pin (STEP3-P3-BUILD.md § timing); lowered to meet a ceiling, never raised past one. */
+export const COMPARE_PERSIST_OP_BUDGET = 10_000_000;

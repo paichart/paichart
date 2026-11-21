@@ -2747,6 +2747,25 @@ async function platformDriftSection(): Promise<void> {
   check('PD9 an unregistered tool is still UNAPPROVED_TOOL at the gate (the exemption is a scan exemption only)',
     gate(DRIFT, TOOL, args(), ['get_resource']).violations.some((v) => v.type === 'UNAPPROVED_TOOL'));
   const atLimit = 'a: b\n'.repeat(1).padEnd(pd.PLATFORM_DRIFT_MANIFEST_MAX_BYTES, '#');
+  // PD-W4 (Config sources STEP 3 P3, plan W4 / sec-ops F-7) — THE NO-CALL GUARD. The platform makes a service call carrying held
+  // bytes ONLY for a protocol whose method row says `by: 'service-call'`. That set is the literal below: a second member is a new
+  // place held bytes leave the platform, and needs its own security review before this line may change.
+  {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const gld = require('../lib/agents/harness/git-live-drift') as { GIT_LIVE_DRIFT_METHODS: Record<string, { method: string; by: string } | null>; gitLiveDriftCallsService: (p: unknown) => boolean };
+    check('PD-W4 the method rows that say `service-call` are exactly [kubernetes-gitops-protocol]',
+      JSON.stringify(Object.entries(gld.GIT_LIVE_DRIFT_METHODS).filter(([, r]) => r !== null && r.by === 'service-call').map(([p]) => p)) === JSON.stringify(['kubernetes-gitops-protocol']));
+    check('PD-W4 every other row is null or `platform-compare` (nothing is sent anywhere) — a third `by` value fails here',
+      Object.values(gld.GIT_LIVE_DRIFT_METHODS).every((r) => r === null || r.by === 'service-call' || r.by === 'platform-compare'));
+    check('PD-W4 the guard is false for a null, empty, unknown or prototype-named protocol and for observability',
+      [null, undefined, '', 'x', 'toString', '__proto__', 'constructor', 'observability-config-protocol', 'observability-config', 'terraform-iac-protocol'].every((p) => gld.gitLiveDriftCallsService(p) === false)
+      && gld.gitLiveDriftCallsService('kubernetes-gitops-protocol') === true);
+    const driftSrc = fs.readFileSync(path.join(__dirname, '..', 'lib/services/platform-drift.ts'), 'utf8');
+    check('PD-W4 the ONE call site asks the guard before any caller is built, and `protocol` is a REQUIRED input',
+      driftSrc.indexOf('if (!gitLiveDriftCallsService(input.protocol)) return undefined;') > 0
+      && driftSrc.indexOf('if (!gitLiveDriftCallsService(input.protocol)) return undefined;') < driftSrc.indexOf('hubDriftCaller(input.runOwnerId')
+      && /\n  protocol: string \| null;\n/.test(driftSrc));
+  }
   check('PD10 a manifest AT the compare limit (262144 bytes — above the 100 KB parameter limit) passes', gate(DRIFT, TOOL, args({ manifest: atLimit })).allowed === true);
   check('PD10 one byte over ⇒ SIZE_LIMIT (bytes, not characters: a multi-byte character counts)',
     types(gate(DRIFT, TOOL, args({ manifest: atLimit + '#' }))) === 'SIZE_LIMIT'

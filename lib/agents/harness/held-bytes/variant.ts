@@ -199,6 +199,25 @@ export function assertNeverConfigNoBlock(v: never): never {
   throw new Error(`config-source no-block rule not handled: ${String(v)}`);
 }
 
+/** Does this protocol's no-block rule say `runs-undeclared` (short token or long name; false for null, empty, or a protocol with no
+ *  row)? Exhaustive over the no-block column. */
+export function protocolRunsUndeclared(protocol: string | null | undefined): boolean {
+  if (!protocol) return false;
+  const row = CONFIG_SOURCE_LANES[canonicalProtocolName(protocol)];
+  if (!row) return false;
+  switch (row.noBlock) {
+    case 'forced': return false;
+    case 'runs-undeclared': return true;
+    default: return assertNeverConfigNoBlock(row.noBlock);
+  }
+}
+/** STEP 3 P3 (architectural F5) — THE ONE TEST for "a leg of a `runs-undeclared` protocol that declares NOTHING" (observability with
+ *  no block: it runs exactly as it did before the protocol had a Config lane). `declarationState` is the leg's governing
+ *  declaration state. The no-block arm of `configSourceReads` and the `liveEvidence` hoist both ask this; neither spells it. */
+export function isUndeclaredRunsLeg(protocol: string | null | undefined, declarationState: string): boolean {
+  return declarationState === 'not-config-source-leg' && protocolRunsUndeclared(protocol);
+}
+
 /** The Config-sources lane of a protocol, or null when it declares none today (not in the table, or awaiting its text). */
 export function configSourceLaneOf(protocol: string | null | undefined, awaiting: readonly string[] = CONFIG_SOURCE_AWAITING_TEXT): ConfigSourceLane | null {
   if (!protocol) return null;
@@ -375,7 +394,8 @@ export function heldCaptureTakesConfigScope(owningLeg: OwningLegResolution | nul
  * STEP 3 P2 (plan W1) — THE ONE answer to "what does held capture take from this leg": the Git-lane switch, the Config scope and
  * the protocol the scope belongs to, TOGETHER. Its production callers are the capture call in execution-core.ts and the rescue's
  * (execution-completion-anchored.ts); the capture replay (scripts/replay-held-capture.ts) calls it too. The leg replay lab's held
- * store does NOT yet — it still asks the metadata twin (`isGitFileSourceLeg`) and passes a scope without its protocol; it must
+ * store does NOT yet — it still asks the metadata twin (`isGitFileSourceLeg`) and passes a scope without its protocol (which
+ * capture judges as the STRICTEST protocol since STEP 3 P3: no served file is held under such a scope); it must
  * call this helper before any observability lab cell is built (a P3 condition, STEP3-P2-BUILD.md "Review fixes" group B).
  *
  * THE RULE (one wording):

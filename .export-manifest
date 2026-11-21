@@ -1070,10 +1070,13 @@ lib/agents/harness/dialect-lint-enrichment.ts
 lib/agents/harness/dialect-lint.ts
 lib/agents/harness/evidence-grading.ts
 lib/agents/harness/execution-quality.ts
+lib/agents/harness/file-compare-quote-seam.ts
+lib/agents/harness/file-source-compare.ts
 lib/agents/harness/form-correction.ts
 lib/agents/harness/git-device-comparison.ts
 lib/agents/harness/git-live-drift-enrichment.ts
 lib/agents/harness/git-live-drift.ts
+lib/agents/harness/git-only-statement-sentence.ts
 lib/agents/harness/held-bytes-nets.ts
 lib/agents/harness/held-bytes/apply.ts
 lib/agents/harness/held-bytes/canonical-text.ts
@@ -1466,6 +1469,7 @@ lib/services/execution-selection.ts
 lib/services/execution-system-prompt.ts
 lib/services/execution-terminal-persist.ts
 lib/services/executionOwnership.ts
+lib/services/file-source-compare-run.ts
 lib/services/geographicalService.ts
 lib/services/harness-dispatch-fact.ts
 lib/services/harnessModeResolver.ts
@@ -2081,6 +2085,7 @@ scripts/test-f16-frozen-cone-behavioral.ts
 scripts/test-failed-persist-cas.ts
 scripts/test-fallback-invariants.ts
 scripts/test-field-leakage-fix.ts
+scripts/test-file-source-compare.ts
 scripts/test-finalize-response.ts
 scripts/test-form-correction-core.ts
 scripts/test-form-correction.ts

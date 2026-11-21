@@ -22,9 +22,12 @@ import { computeDeviceSourceReads } from './device-source-facts';
 import { computeLiveEvidenceFromReadRecord, liveEvidenceVersionApplies, gitOnlyWordApplies, LIVE_EVIDENCE_VERSION, type LiveEvidenceOptions } from './live-evidence';
 import { readAuthoritativeResultField } from './authoritative-result-read';
 import { selectLegChildStamp, HELD_HARVESTER_ROLE } from './held-bytes-nets';
-import { resolveOwningLegProtocol, assertNeverLane, DEVICE_SOURCE_LANES, type DeviceSourceLane, type OwningLegResolution } from './held-bytes/variant';
+import { resolveOwningLegProtocol, assertNeverLane, protocolRunsUndeclared, isUndeclaredRunsLeg, DEVICE_SOURCE_LANES, type DeviceSourceLane, type OwningLegResolution } from './held-bytes/variant';
 import { configDeclarationFor } from './config-source-facts-enrichment';
-import { computeConfigLiveEvidenceFromReadRecord, computeConfigSourceReads } from './config-source-facts';
+import { computeConfigLiveEvidenceFromReadRecord, computeConfigSourceReads, computeFileConfigSourceReads, computeGitOnlyStatement } from './config-source-facts';
+import { protocolDeclaresServiceFiles } from './held-bytes/config-source-scope';
+import { gitOnlyStatementSentenceFor } from './git-only-statement-sentence';
+import { canonicalProtocolName } from './program-protocol';
 import { Prisma } from '@prisma/client';
 
 const STAGE_CHILD_SCAN_CAP = 50;
@@ -73,7 +76,11 @@ export async function computeLiveEvidenceHarvesterFact(ctx: NetContext): Promise
     // Config sources STEP 2: the CONFIG arm — a Config-sources leg (never both: the two lane tables share no protocol).
     const cfg = await configDeclarationFor(ctx);
     if (cfg.state === 'not-config-source-leg') return NOT_STAMPED;
-    return computeConfigLiveEvidenceFromReadRecord(ctx.configSourceReadRecord ? await ctx.configSourceReadRecord() : computeConfigSourceReads(cfg, ctx.toolCalls));
+    if (ctx.configSourceReadRecord) return computeConfigLiveEvidenceFromReadRecord(await ctx.configSourceReadRecord());
+    // A hand-built context with no memo: the SAME dispatch the memo makes (STEP 3 P3 — a files protocol reads the compare record).
+    const leg = ctx.owningLeg ? await ctx.owningLeg() : await resolveOwningLegProtocol(ctx.prisma as never, ctx.task as never);
+    const files = protocolDeclaresServiceFiles((leg.kind === 'self' || leg.kind === 'leg') ? leg.configSourceProtocol ?? null : null);
+    return computeConfigLiveEvidenceFromReadRecord(files ? computeFileConfigSourceReads(cfg, ctx.fileSourceCompare) : computeConfigSourceReads(cfg, ctx.toolCalls));
   }
   const record = ctx.deviceSourceReadRecord ? await ctx.deviceSourceReadRecord() : computeDeviceSourceReads(src, ctx.toolCalls);
   if (record.checked !== true) return computeLiveEvidenceFromReadRecord(record);
@@ -109,7 +116,19 @@ export async function transcribeLiveEvidenceFact(ctx: NetContext): Promise<Recor
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     return { ...base, checked: false, reason: 'harvester-stamp-unreadable', harvesterExecutionId: read.executionId };
   }
-  return { ...(parsed as Record<string, unknown>), point: 'author-transcription', harvesterExecutionId: read.executionId };
+  const stamp = parsed as Record<string, unknown>;
+  // STEP 3 P3 (plan W9, owner decision 2a — a FACT, no force): on a files fact that lists Git-only files, did the Author's package
+  // state the protocol's fixed sentence for each? Nested under its own key; the transcribed part is untouched. The sentence is the
+  // protocol text's constant for the version THIS Author composed (none registered ⇒ the check says so by name).
+  if (stamp.unit === 'files' && stamp.checked === true && Array.isArray(stamp.gitOnlyFiles) && stamp.gitOnlyFiles.length > 0) {
+    const pi = ctx.protocolInjection as { delta?: { name?: unknown; version?: unknown } } | null | undefined;
+    const name = pi?.delta && typeof pi.delta.name === 'string' ? canonicalProtocolName(pi.delta.name) : null;
+    const version = pi?.delta && typeof pi.delta.version === 'string' ? pi.delta.version : null;
+    const labels = (stamp.gitOnlyFiles as unknown[]).filter((l): l is string => typeof l === 'string');
+    return { ...stamp, point: 'author-transcription', harvesterExecutionId: read.executionId,
+      gitOnlyStatement: computeGitOnlyStatement(ctx.finalResponse, labels, gitOnlyStatementSentenceFor(name, version)) };
+  }
+  return { ...stamp, point: 'author-transcription', harvesterExecutionId: read.executionId };
 }
 
 export async function hoistLiveEvidenceFact(ctx: NetContext): Promise<Record<string, unknown>> {
@@ -117,6 +136,11 @@ export async function hoistLiveEvidenceFact(ctx: NetContext): Promise<Record<str
   const leg = ctx.owningLeg ? await ctx.owningLeg() : await resolveOwningLegProtocol(ctx.prisma as never, ctx.task as never);
   if (leg.kind === 'could-not-check') throw new Error(`owning-leg resolution: ${leg.reason}`);
   if (leg.kind === 'no-leg' || (leg.deviceSource !== true && !leg.configSourceProtocol)) return NOT_STAMPED; // + the Config lane (STEP 2)
+  // STEP 3 P3 (plan W5 row 9): on a `runs-undeclared` protocol a leg that declares NOTHING has no live-evidence fact — its Harvester
+  // stamped none, so a hoist would read "harvester not stamped" on a leg that runs exactly as it always did. The declaration is
+  // asked ONLY for such a protocol (one leg-row read at its SYNTHESIZE); a `forced` protocol's hoist is unchanged and reads nothing.
+  if (leg.deviceSource !== true && protocolRunsUndeclared(leg.configSourceProtocol)
+    && isUndeclaredRunsLeg(leg.configSourceProtocol, (await configDeclarationFor(ctx)).state)) return NOT_STAMPED;
   const sel = await selectLegChildStamp(ctx.prisma as never, ctx.stageId, HELD_HARVESTER_ROLE, 'liveEvidence');
   if (sel.state === 'ok') return { ...sel.fact, point: 'leg', source: sel.taskId, harvesterExecutionId: sel.executionId };
   return {

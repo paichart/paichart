@@ -17,8 +17,10 @@ import { extractDeclaredFiles } from './held-bytes/extract';
 import { PLATFORM_DEFAULT_DESCRIPTORS } from './held-bytes/descriptors';
 import { withConfigSourcesScope } from './held-bytes/config-source-scope';
 import type { LegConfigSourcesResolution } from './config-sources-read';
-import { assertNeverConfigKind } from './config-sources';
+import { assertNeverConfigKind, CONFIG_SOURCES_GRAMMAR_VERSION } from './config-sources';
 import { endpointResolvedServices, gitArgsMatch, serviceCalls, serviceMatcher, shownService } from './device-source-facts';
+import { validFileCompareRecord, FILE_RETURNED_KEYS_CAP } from './git-live-drift';
+import { quotableLine } from './file-compare-quote-seam';
 
 export const CONFIG_SOURCE_READS_VERSION = 1;
 export const CONFIG_LIVE_EVIDENCE_VERSION = 1;
@@ -99,6 +101,154 @@ export function computeConfigSourceReads(sources: LegConfigSourcesResolution, to
     ...(byEndpoint.length ? { resolvedByEndpoint: byEndpoint } : {}) };
 }
 
+// ── Config sources STEP 3 P3 — a protocol whose labels name FILES (observability): the read record comes from the compare record ──
+
+/** A capture outcome ⇒ the read state of its declared line. The file WAS returned whenever capture has an item for it — held, kept
+ *  as evidence, or refused by name — and the RECORD says so itself (`returned: true`, written by exactly those branches of the
+ *  builder): that is `read`. The "no file" outcomes and the whole-record outcomes are this table. An outcome that is neither —
+ *  a word this reader does not know, with no `returned` — is `unknown-outcome`, NEVER `read` (architectural F5: fail-closed; it
+ *  lands in `liveNotRead`). So "read" cannot mean "some call to the service succeeded" (plan W9, §13 B3). */
+const NO_FILE_STATES: Readonly<Record<string, string>> = Object.freeze({
+  'not-read': 'not-read', 'read-failed': 'read-failed', 'not-returned': 'answered-key-not-returned', 'result-not-readable': 'result-not-readable',
+  'no-capture-plan': 'no-capture-plan', 'compare-error': 'compare-error', 'label-not-resolved': 'label-not-resolved',
+});
+
+/**
+ * configSourceReads for a protocol whose labels name files — from the STORED compare record's `capture` list (what capture did for
+ * every declared line), re-validated here. `record` absent or not valid ⇒ `checked:false, reason:'no-compare-record'`: it NEVER
+ * falls back to a reading of the tool calls. A declaration that is not `parsed` is named, as for every protocol.
+ */
+export function computeFileConfigSourceReads(sources: LegConfigSourcesResolution, record: unknown): Obj {
+  const declaration = declarationOf(sources);
+  if (sources.state !== 'parsed') return { version: CONFIG_SOURCE_READS_VERSION, checked: false, reason: `config-sources-${sources.state}`, declaration, unit: 'files' };
+  const rec = validFileCompareRecord(record, quotableLine);
+  if (!rec) return { version: CONFIG_SOURCE_READS_VERSION, checked: false, reason: 'no-compare-record', declaration, unit: 'files' };
+  const returned = rec.returnedKeys as Record<string, string[]>;
+  let notRead = 0;
+  const items = (rec.capture as Obj[]).map((c) => {
+    const head = { label: c.label, kind: c.kind, ...(c.service !== undefined ? { service: c.service } : {}), ...(c.target !== undefined ? { target: c.target, path: c.path } : {}) };
+    if (c.kind === 'supplied') return head;
+    const outcome = String(c.outcome);
+    const state = NO_FILE_STATES[outcome] ?? (c.returned === true ? 'read' : 'unknown-outcome');
+    if (state === 'not-read') notRead++;
+    return { ...head, read: { state, outcome, ...(c.toolCallIndex !== undefined ? { toolCallIndex: c.toolCallIndex } : {}),
+      ...(state === 'answered-key-not-returned' && typeof c.target === 'string' ? { returnedKeys: (returned[c.target] ?? []).slice(0, FILE_RETURNED_KEYS_CAP) } : {}) } };
+  });
+  return { version: CONFIG_SOURCE_READS_VERSION, checked: true, declaration, unit: 'files', credentialLineVersion: rec.credentialLineVersion, harvesterExecutionId: rec.harvesterExecutionId, items, notRead };
+}
+
+/**
+ * THE NO-BLOCK ARM (plan §3.2, §13 A6) — a leg of a `runs-undeclared` protocol that declares nothing and ran on the service's files.
+ * A pure function the ENRICHMENT calls; it is NOT inside `computeConfigSourceReads` and NOT in the context memo, so the
+ * `liveEvidence` Config arm can never be handed it.
+ *
+ * ⚠️ `checked:false, reason:'config-sources-absent', declaration.state:'absent'` are ALSO the words of a Kubernetes or Terraform leg
+ * whose block is absent — and THAT leg is forced. The same declaration state keeps the same word; what followed is said by ONE key:
+ * `undeclared` is present ⇔ the leg's protocol is `runs-undeclared` and the leg ran on the service's files. NO TALLY MAY KEY ON THE
+ * REASON STRING ALONE — MI-13 splits on the PRESENCE of `undeclared`.
+ *
+ * `files` / `refusals` come from the `heldBytes` digest capture already made — never a re-extraction. No digest ⇒ `capture: 'off'`
+ * (the switch) or `'no-digest'` — never `files: 0`, which would read as "called nothing".
+ */
+export function undeclaredConfigSourceReads(heldBytes: unknown): Obj {
+  const d = heldBytes && typeof heldBytes === 'object' && !Array.isArray(heldBytes) ? (heldBytes as Obj) : null;
+  const refused = d && d.refused && typeof d.refused === 'object' && !Array.isArray(d.refused) ? (d.refused as Obj) : null;
+  const undeclared: Obj = d === null ? { heldFrom: 'service', capture: 'no-digest' }
+    : d.reason === 'capture-off' ? { heldFrom: 'service', capture: 'off' }
+      : typeof d.held === 'number' && refused
+        ? { heldFrom: 'service', files: d.held, refusals: Object.values(refused).reduce((n: number, v) => n + (typeof v === 'number' ? v : 0), 0) }
+        : { heldFrom: 'service', capture: 'no-digest' };
+  return { version: CONFIG_SOURCE_READS_VERSION, checked: false, reason: 'config-sources-absent',
+    declaration: { state: 'absent', grammarVersion: CONFIG_SOURCES_GRAMMAR_VERSION }, undeclared };
+}
+
+/**
+ * liveEvidence, Config arm, for a protocol whose labels name FILES (`unit: 'files'`). Its items are FILES (labels), and each lands in
+ * EXACTLY ONE bucket (the bucket-sum pin asserts it):
+ *   liveReadItems     a Git base with a `live-read` line whose served file capture has (read)
+ *   serviceHeldItems  a `service-held` base whose file capture has (read)
+ *   liveNotRead[]     either of those whose file capture does NOT have — the record's state verbatim (`not-read`, `read-failed`,
+ *                     `answered-key-not-returned` with the keys the service did return, …)
+ *   gitOnlyFiles[]    a Git base with NO `live-read` line — the same set as the comparison's `no-live-read-line` (pinned)
+ * SUMMARY, from the counts and nothing else, in this precedence: `no-items` · `some-not-read` · `all-git-only` (EVERY file is a Git
+ * base with no live read — a statement about the configuration FILES only) · `some-git-only` · `all-read`. The word `git-only` of
+ * the other Config-sources protocols is never used here: a file kept from the service is not a Git-only file.
+ */
+export function computeFileLiveEvidenceFromReadRecord(record: Obj): Obj {
+  const base = { version: CONFIG_LIVE_EVIDENCE_VERSION, lane: 'config', unit: 'files', point: 'harvester' };
+  if (record.checked !== true) return { ...base, checked: false, reason: record.reason, declaration: record.declaration };
+  const rows = Array.isArray(record.items) ? (record.items as Obj[]) : [];
+  const byLabel = new Map<string, { base: Obj | null; live: Obj | null }>();
+  for (const row of rows) {
+    const g = byLabel.get(String(row.label)) ?? { base: null, live: null };
+    if (row.kind === 'live-read') g.live = row; else if (row.kind === 'git-file' || row.kind === 'service-held') g.base = row;
+    else throw new Error(`liveEvidence (config files): a declared line with no classifiable kind (${String(row.kind)})`);
+    byLabel.set(String(row.label), g);
+  }
+  const liveReadItems: Obj[] = []; const serviceHeldItems: Obj[] = []; const liveNotRead: Obj[] = []; const gitOnlyFiles: string[] = [];
+  let gitFileLines = 0; let serviceHeld = 0; let liveDeclared = 0;
+  const readOf = (r: Obj) => (r.read && typeof r.read === 'object' ? (r.read as Obj) : {});
+  const notReadOf = (label: string, r: Obj): Obj => { const rd = readOf(r); return { label, kind: r.kind, state: rd.state, ...(Array.isArray(rd.returnedKeys) ? { returnedKeys: rd.returnedKeys } : {}) }; };
+  for (const [label, g] of byLabel) {
+    if (!g.base) throw new Error('liveEvidence (config files): a live-read line with no base line');
+    if (g.base.kind === 'service-held') {
+      serviceHeld++;
+      if (readOf(g.base).state === 'read') serviceHeldItems.push({ label }); else liveNotRead.push(notReadOf(label, g.base));
+      continue;
+    }
+    gitFileLines++;
+    if (!g.live) { gitOnlyFiles.push(label); continue; }
+    liveDeclared++;
+    if (readOf(g.live).state === 'read') liveReadItems.push({ label }); else liveNotRead.push(notReadOf(label, g.live));
+  }
+  const items = byLabel.size;
+  const summary = items === 0 ? 'no-items'
+    : liveNotRead.length > 0 ? 'some-not-read'
+      : gitOnlyFiles.length === items ? 'all-git-only'
+        : gitOnlyFiles.length > 0 ? 'some-git-only'
+          : 'all-read';
+  const cap: Obj = {};
+  return {
+    ...base, checked: true, declaration: record.declaration,
+    ...(typeof record.credentialLineVersion === 'string' ? { credentialLineVersion: record.credentialLineVersion } : {}),
+    summary,
+    items, gitFileLines, serviceHeld, liveDeclared, liveRead: liveReadItems.length, serviceHeldRead: serviceHeldItems.length,
+    liveNotRead: capped(liveNotRead, 'liveNotRead', cap),
+    liveReadItems: capped(liveReadItems, 'liveReadItems', cap),
+    serviceHeldItems: capped(serviceHeldItems, 'serviceHeldItems', cap),
+    gitOnlyFiles: capped(gitOnlyFiles, 'gitOnlyFiles', cap),
+    ...(Object.keys(cap).length ? { capped: cap } : {}),
+  };
+}
+
+/** Whitespace runs to one space; the Markdown emphasis marks (`*`, `_`, a backtick) dropped. A character loop — the Author's text is
+ *  model output, so no pattern runs over it. The ONLY normalisation the Git-only statement check makes. */
+export function normaliseForSentence(text: string): string {
+  let out = ''; let space = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c === 0x20 || c === 0x09 || c === 0x0a || c === 0x0d || c === 0xa0) { space = out.length > 0; continue; }
+    if (c === 0x2a || c === 0x5f || c === 0x60) continue;
+    if (space) { out += ' '; space = false; }
+    out += text[i];
+  }
+  return out;
+}
+
+/**
+ * Owner decision 2a — a FACT, no force: did the Author's package state, for each file the fact lists as Git-only, the protocol's
+ * fixed sentence? `sentence` is the protocol text's own constant with one `{label}` slot (git-only-statement-sentence.ts — the
+ * WORDS are prompt-construction's); null ⇒ no sentence is registered for the composed version, and the check says so by name.
+ * The sentence is searched once per listed label after `normaliseForSentence` on both sides, and nothing else.
+ */
+export function computeGitOnlyStatement(packageText: string | null | undefined, labels: readonly string[], sentence: string | null): Obj {
+  const listed = labels.length;
+  if (sentence === null || !sentence.includes('{label}')) return { listed, checked: false, reason: 'no-sentence-for-version' };
+  const hay = normaliseForSentence(packageText ?? '');
+  const missing = labels.filter((l) => !hay.includes(normaliseForSentence(sentence.split('{label}').join(l))));
+  return { listed, checked: true, stated: listed - missing.length, missing: missing.slice(0, CONFIG_LIVE_EVIDENCE_NAME_CAP), ...(missing.length > CONFIG_LIVE_EVIDENCE_NAME_CAP ? { missingTotal: missing.length } : {}) };
+}
+
 function capped<T>(list: T[], name: string, cap: Obj): T[] {
   if (list.length <= CONFIG_LIVE_EVIDENCE_NAME_CAP) return list;
   cap[name] = list.length;
@@ -116,6 +266,9 @@ function capped<T>(list: T[], name: string, cap: Obj): T[] {
  * · `all-read`. A NON-PARSED declaration is passed through by name: `checked:false, reason: config-sources-<state>`.
  */
 export function computeConfigLiveEvidenceFromReadRecord(record: Obj): Obj {
+  // STEP 3 P3: a read record of a protocol whose labels name FILES has its own buckets and words (below this arm THROWS on a
+  // `service-held` row by design — it has no bucket for one).
+  if (record.unit === 'files') return computeFileLiveEvidenceFromReadRecord(record);
   const base = { version: CONFIG_LIVE_EVIDENCE_VERSION, lane: 'config', point: 'harvester' };
   if (record.checked !== true) return { ...base, checked: false, reason: record.reason, declaration: record.declaration };
   const rows = Array.isArray(record.items) ? (record.items as Obj[]) : [];

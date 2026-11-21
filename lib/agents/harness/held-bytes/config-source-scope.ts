@@ -78,20 +78,31 @@ export function protocolDeclaresServiceFiles(protocol: string | null | undefined
   return !!protocol && (CONFIG_SOURCE_KINDS_BY_PROTOCOL[canonicalProtocolName(protocol)] ?? []).includes('service-held');
 }
 
+/** The KEY of a served file at (target, path) on a platform target whose path is a template over `{key}`, or null: the target is
+ *  not such a target, the path does not fit the template, or the key is not a legal label key. Derived by inverting the template —
+ *  plain string slicing, no pattern over service text. Exported for the comparison's `returnedKeys` (file-source-compare.ts). */
+export function servedKeyOf(target: string, path: string): string | null {
+  const spec = platformLabelTargets().get(target);
+  if (!spec || !('template' in spec.path)) return null;
+  const at = spec.path.template.indexOf('{key}');
+  if (at < 0) return null;
+  const pre = spec.path.template.slice(0, at); const post = spec.path.template.slice(at + '{key}'.length);
+  if (path.length < pre.length + post.length || !path.startsWith(pre) || !path.endsWith(post)) return null;
+  const key = path.slice(pre.length, path.length - post.length);
+  return isSourceLabel(`${target}.${key}`) ? key : null;
+}
+
 /** The label that WOULD name a served file at (target, path) on a platform target, or null when no label can: the target is not a
- *  platform target, or the key the service returned is not a legal label (a space, a slash, over-long, `.` / `..`). Derived by
- *  inverting the target's path template — plain string slicing, no pattern over service text. */
+ *  platform target, or the key the service returned is not a legal label (a space, a slash, over-long, `.` / `..`). */
 function labelForServedFile(target: string, path: string): string | null {
   const spec = platformLabelTargets().get(target);
   if (!spec) return null;
   let label: string;
   if ('const' in spec.path) { if (spec.path.const !== path) return null; label = target; }
   else if ('template' in spec.path) {
-    const at = spec.path.template.indexOf('{key}');
-    if (at < 0) return null;
-    const pre = spec.path.template.slice(0, at); const post = spec.path.template.slice(at + '{key}'.length);
-    if (path.length < pre.length + post.length || !path.startsWith(pre) || !path.endsWith(post)) return null;
-    label = `${target}.${path.slice(pre.length, path.length - post.length)}`;
+    const key = servedKeyOf(target, path);
+    if (key === null) return null;
+    label = `${target}.${key}`;
   } else return null;
   if (!isSourceLabel(label)) return null;
   const back = resolveConfigLabel(label);
@@ -121,7 +132,11 @@ function labelForServedFile(target: string, path: string): string | null {
  */
 export function withDeclaredFilesScope(ex: ExtractResult, sources: LegConfigSourcesResolution | null | undefined, toolCalls: readonly unknown[] | null | undefined,
   protocol: string | null | undefined): ExtractResult {
-  if (!sources || sources.state === 'not-config-source-leg' || !protocolDeclaresServiceFiles(protocol)) return ex;
+  // STEP 3 P3 (P2 sec-ops F4 / architectural F1 — LL-CS-116): a governing scope that arrives WITHOUT its protocol is judged as the
+  // strictest protocol — the allow-list is ON. Before P3 an absent protocol meant "no allow-list", so a caller that hand-rolled two
+  // of `captureScopesFor`'s three values held files production refuses. Production's two callers always pass all three.
+  const strict = protocol === null || protocol === undefined || protocol === '';
+  if (!sources || sources.state === 'not-config-source-leg' || (!strict && !protocolDeclaresServiceFiles(protocol))) return ex;
   const parsed = sources.state === 'parsed';
   const notParsedCase: DeclaredFileCase = sources.state === 'snapshot-text-reverted' ? 'text-reverted' : 'declaration-not-parsed';
   const gitLines = parsed ? declaredGitFiles(sources) : [];
@@ -140,6 +155,8 @@ export function withDeclaredFilesScope(ex: ExtractResult, sources: LegConfigSour
   const matches = serviceMatcher(Array.isArray(toolCalls) ? toolCalls : []);
   const fromService = (declared: string, f: ExtractedFile) => matches(declared, { service: f.serviceName, serviceId: f.serviceId });
   const files: ExtractedFile[] = []; const moved: ExtractedRefusal[] = []; let notALabel = 0;
+  // STEP 3 P3 (plan §13 B2): the evidence files WITH their text — in memory only, for the comparison (see ExtractResult.evidence).
+  const evidence: ExtractedFile[] = [];
   const refuse = (f: ExtractedFile, refusal: typeof SERVICE_FILE_NOT_DECLARED | typeof SERVED_FILE_EVIDENCE_ONLY, detail?: { case: DeclaredFileCase }) => {
     const { text: _t, sourceRevision: _r, ...rest } = f; void _t; void _r;
     moved.push({ ...rest, refusal, ...(detail ? { detail } : {}) });
@@ -152,26 +169,27 @@ export function withDeclaredFilesScope(ex: ExtractResult, sources: LegConfigSour
       continue;
     }
     if (heldPathRefusal(f.path.replace(/^\/+/, '')) !== null) { files.push(f); continue; }   // capture refuses it by its never-held name
+    // A served key that is not a legal label is DROPPED and COUNTED on EVERY governed leg — parsed or not (P3: P2 architectural F5;
+    // before, a not-parsed or text-reverted leg stored a row carrying the service's own key text in its path).
+    if (platformLabelTargets().has(f.target) && labelForServedFile(f.target, f.path) === null) { notALabel++; continue; }
     if (!parsed) { refuse(f, SERVICE_FILE_NOT_DECLARED, { case: notParsedCase }); continue; }
     const g = byPair.get(JSON.stringify([f.target, f.path]));
-    if (!g || !g.base) {
-      if (platformLabelTargets().has(f.target) && labelForServedFile(f.target, f.path) === null) { notALabel++; continue; }   // dropped, counted
-      refuse(f, SERVICE_FILE_NOT_DECLARED, { case: 'no-label' }); continue;
-    }
+    if (!g || !g.base) { refuse(f, SERVICE_FILE_NOT_DECLARED, { case: 'no-label' }); continue; }
     if (g.base.kind === 'service-held') {                               // rule 2
       if (fromService(g.base.service, f)) files.push(f); else refuse(f, SERVICE_FILE_NOT_DECLARED, { case: 'wrong-service' });
       continue;
     }
     if (g.base.kind === 'git-file') {                                   // rule 3
       if (!g.live) refuse(f, SERVICE_FILE_NOT_DECLARED, { case: 'label-has-git-base-no-live-read' });
-      else if (fromService(g.live.service, f)) refuse(f, SERVED_FILE_EVIDENCE_ONLY);
+      else if (fromService(g.live.service, f)) { refuse(f, SERVED_FILE_EVIDENCE_ONLY); evidence.push(f); }
       else refuse(f, SERVICE_FILE_NOT_DECLARED, { case: 'wrong-service' });
       continue;
     }
     refuse(f, SERVICE_FILE_NOT_DECLARED, { case: 'no-label' });        // a base of another kind names no file
   }
   if (!moved.length && !notALabel) return ex;
-  return { ...ex, files, refusals: [...ex.refusals, ...moved], stats: notALabel ? { ...ex.stats, serviceKeyNotALabel: notALabel } : ex.stats };
+  return { ...ex, files, refusals: [...ex.refusals, ...moved], stats: notALabel ? { ...ex.stats, serviceKeyNotALabel: notALabel } : ex.stats,
+    ...(evidence.length ? { evidence } : {}) };
 }
 
 export interface ConfigForce { reason: string; gitFilesNotHeld?: string[]; gitFilesNotHeldTotal?: number;

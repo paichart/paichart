@@ -28,7 +28,11 @@ import { prepareHeldCapture, DECLARED_SCOPE_ROW_CAP } from '../lib/services/held
 import { tableFromDeclarations } from '../lib/services/held-descriptor-table';
 import { runLegPlatformDrift } from '../lib/services/platform-drift';
 import { runPlatformDriftCalls } from '../lib/agents/harness/platform-drift-run';
-import { gitLiveDriftMethodOf } from '../lib/agents/harness/git-live-drift';
+import { gitLiveDriftMethodOf, gitLiveDriftCallsService } from '../lib/agents/harness/git-live-drift';
+import { runLegFileSourceCompare } from '../lib/services/file-source-compare-run';
+import { computeGitLiveDriftHarvesterFact, stampFileSourceCompare, stampPlatformDriftCalls } from '../lib/agents/harness/git-live-drift-enrichment';
+import { computeConfigSourceReadsFact } from '../lib/agents/harness/config-source-facts-enrichment';
+import { computeLiveEvidenceHarvesterFact } from '../lib/agents/harness/live-evidence-enrichment';
 import { LIVE_EVIDENCE_MIN_VERSIONS, liveEvidenceVersionApplies } from '../lib/agents/harness/live-evidence';
 
 const eq = (a: unknown, b: unknown, what = '') => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${what}expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); };
@@ -233,32 +237,52 @@ test('TR3 the resolution carries `configSourceProtocol` for a text-reverted leg,
   eq([(a as Rec).configSourceProtocol ?? null, (b as Rec).configSourceProtocol ?? null], [null, OBS], 'marker: ');
 });
 
-test('TR4 (coordinator ruling 6 — a SECURITY property): on a text-reverted leg the platform drift call is NOT made, and neither fact is stamped', async () => {
+test('TR4 (coordinator ruling 6 — a SECURITY property; RE-PROVEN at STEP 3 P3 with the observability version row present): on a text-reverted leg no held byte leaves the platform, nothing is compared, and every fact that stamps says so by the state\'s own name', async () => {
   const reverted = governed(DECL, SHIPPED);
   eq(reverted.state, 'snapshot-text-reverted', 'fixture: ');
-  // (1) the platform's compare call: every combination of the other inputs that could let it through — never called, no record
+  // (1) the platform's compare CALL: every combination of the other inputs that could let it through — never called, no record
   let called = 0;
   const call = async () => { called++; return { kind: 'refused' } as never; };
   const held = [{ target: OTLP[0], path: OTLP[1], content: 'server {}\n', sha256: 'a'.repeat(64) }];
-  for (const versionApplies of [true, false]) for (const protocol of [OBS, K8S, null, undefined]) {
+  for (const versionApplies of [true, false]) for (const protocol of [OBS, K8S, null]) {
     const out = await runLegPlatformDrift({ sources: reverted, isHarvester: true, versionApplies, heldFiles: held, toolCalls: [INGRESS, OTEL],
-      runOwnerId: 'u1', executionId: 'e1', logger, call, ...(protocol === undefined ? {} : { protocol }) });
+      runOwnerId: 'u1', executionId: 'e1', logger, call, protocol });
     eq([out ?? null, called], [null, 0], `versionApplies ${versionApplies}, protocol ${protocol}: `);
   }
-  // TWO layers hold this, each pinned on its own (a mutation of one alone cannot make a call — so each is asserted directly):
+  // THREE layers hold this, each pinned on its own (a mutation of one alone cannot make a call — so each is asserted directly):
   //   outer — `runLegPlatformDrift` returns before anything unless the declaration is `parsed` (the source line, since behaviour cannot show it);
+  //   guard — the no-call guard (P3, plan W4): a call is made only for a `service-call` protocol, and observability is not one;
   //   inner — `runPlatformDriftCalls` itself returns null on a declaration that is not `parsed`, with no call.
-  assert(fs.readFileSync(path.join(__dirname, '../lib/services/platform-drift.ts'), 'utf8')
-    .includes("if (!input.isHarvester || !input.versionApplies || !input.sources || input.sources.state !== 'parsed') return undefined;"), 'the outer guard of the platform drift call changed — re-read coordinator ruling 6');
+  const driftSrc = fs.readFileSync(path.join(__dirname, '../lib/services/platform-drift.ts'), 'utf8');
+  assert(driftSrc.includes("if (!input.isHarvester || !input.versionApplies || !input.sources || input.sources.state !== 'parsed') return undefined;"), 'the outer guard of the platform drift call changed — re-read coordinator ruling 6');
+  assert(driftSrc.includes('if (!gitLiveDriftCallsService(input.protocol)) return undefined;'), 'the no-call guard of the platform drift call changed — re-read plan W4');
   eq([await runPlatformDriftCalls({ sources: reverted, heldFiles: held, toolCalls: [INGRESS, OTEL], redactedMarker: '<<R>>', call }), called], [null, 0], 'the inner runner on a text-reverted declaration: ');
-  // and observability has no Git-vs-live method at all: a PARSED observability declaration makes no call either
-  eq(gitLiveDriftMethodOf(OBS), null, 'observability has a Git-vs-live method: ');
+  // a PARSED observability declaration makes no service call either: its method is one the platform computes itself
+  eq([gitLiveDriftMethodOf(OBS), gitLiveDriftCallsService(OBS), gitLiveDriftCallsService(K8S)], ['file-ordered-lines/1', false, true], 'the method rows: ');
   eq([await runLegPlatformDrift({ sources: PARSED, isHarvester: true, versionApplies: true, heldFiles: held, toolCalls: [], runOwnerId: 'u1', executionId: 'e1', logger, call, protocol: OBS }) ?? null, called], [null, 0], 'a parsed observability declaration: ');
-  // (2) the two facts are keyed on the composed protocol's VERSION first: no observability version stamps them (the text has not shipped)
-  assert(!(OBS in LIVE_EVIDENCE_MIN_VERSIONS), 'observability gained a liveEvidence version row — a text-reverted leg could then stamp; re-read ruling 6');
-  for (const version of ['1.10.0', '1.11.0', '1.12.0', '9.9.9']) {
-    eq(liveEvidenceVersionApplies({ delta: { name: OBS, version } }), false, `observability ${version}: `);
+  // (2) THE VERSION ROW IS PRESENT NOW (P3) — an execution composed at 1.12.0 can persist after a revert of the text. So the version is
+  // NOT what keeps this leg quiet: the declaration's STATE is. The platform's file comparison is made ONLY on `parsed`:
+  eq(LIVE_EVIDENCE_MIN_VERSIONS[OBS], '1.12.0', 'the observability version row: ');
+  eq([liveEvidenceVersionApplies({ delta: { name: OBS, version: '1.11.0' } }), liveEvidenceVersionApplies({ delta: { name: OBS, version: '1.12.0' } })], [false, true], 'version keying: ');
+  for (const state of [reverted, governed(DECL, NONE)]) {
+    const rec = runLegFileSourceCompare({ sources: state, protocol: OBS, isHarvester: true, versionApplies: true, plan: { files: [], refusals: [] }, evidence: null, toolCalls: [INGRESS, OTEL], executionId: 'e1', logger });
+    eq(rec === undefined, state.state !== 'parsed', `a compare record is built only on a parsed declaration (${state.state}): `);
   }
+  // …and the three facts, through the SHIPPING enrichments at 1.12.0 on the text-reverted leg: each stamps `checked:false` by the
+  // state's own name — no file entry, no quoted line, no sha — and the record net stamps nothing.
+  const ctx = { prisma: {} as never, task: { id: 't', type: 'ACTION', metadata: {}, inputContext: null }, agentRole: 'infra_state_harvester', harnessMode: null, finalResponse: '',
+    stageId: null, programTier: false, toolCalls: [INGRESS, OTEL], protocolInjection: { delta: { name: OBS, version: '1.12.0' } },
+    owningLeg: async () => legRes({ configSourceProtocol: OBS }), configSources: async () => reverted,
+    children: async () => [], contractApplicability: async () => null } as never;
+  const want = { checked: false, reason: 'config-sources-snapshot-text-reverted' };
+  const drift = await computeGitLiveDriftHarvesterFact(ctx) as Rec;
+  eq([drift.checked, drift.reason, drift.method, 'files' in drift], [want.checked, want.reason, 'file-ordered-lines/1', false], 'gitLiveDrift: ');
+  const reads = await computeConfigSourceReadsFact(ctx) as Rec;
+  eq([reads.checked, reads.reason, 'items' in reads, 'undeclared' in reads], [want.checked, want.reason, false, false], 'configSourceReads: ');
+  const live = await computeLiveEvidenceHarvesterFact(ctx) as Rec;
+  eq([live.checked, live.reason], [want.checked, want.reason], 'liveEvidence: ');
+  eq(Object.keys(await stampFileSourceCompare(ctx)).length, 0, 'the record net stamps nothing off a parsed declaration: ');
+  eq(Object.keys(await stampPlatformDriftCalls(ctx)).length, 0, 'no platform call record: ');
 });
 
 console.log('── W8: capture is an allow-list on a declared leg (the real prepareHeldCapture) ──');
@@ -280,7 +304,15 @@ test('AL1 a leg that declares nothing (and every leg of another protocol): the S
   for (const s of [null, undefined, { state: 'not-config-source-leg' } as LegConfigSourcesResolution]) assert(withDeclaredFilesScope(ex, s, RECORDS, OBS) === ex, 'no scope: a new object');
   // a Kubernetes or Terraform declaration: the protocol's block cannot name a service file ⇒ unchanged, whatever its state
   assert(!protocolDeclaresServiceFiles(K8S) && !protocolDeclaresServiceFiles('terraform-iac-protocol') && protocolDeclaresServiceFiles(OBS), 'which protocols name service files');
-  for (const proto of [K8S, 'terraform-iac-protocol', null, undefined]) assert(withDeclaredFilesScope(ex, PARSED, RECORDS, proto) === ex, `${proto}: a new object`);
+  for (const proto of [K8S, 'terraform-iac-protocol']) assert(withDeclaredFilesScope(ex, PARSED, RECORDS, proto) === ex, `${proto}: a new object`);
+  // STEP 3 P3 CHANGED THIS PIN DELIBERATELY (P2 reviews: sec-ops F4 / architectural F1; LL-CS-116).
+  //   BEFORE P3: a governing scope with NO protocol (null / undefined) was returned unchanged — "no protocol" meant "no allow-list", so
+  //              a caller that passed the scope and forgot its protocol held files production refuses.
+  //   AFTER  P3: a governing scope with no protocol is judged as the STRICTEST protocol — the allow-list is ON (fail closed).
+  for (const proto of [null, undefined]) {
+    const out = withDeclaredFilesScope(ex, PARSED, RECORDS, proto);
+    assert(out !== ex && out.files.every((f) => f.target.startsWith('github:') || PARSED.state !== 'parsed' || out.refusals.length > ex.refusals.length), `${proto}: a governing scope without its protocol must NOT pass unchanged`);
+  }
   // through capture: the three served files are held, the Git reads are outside every lane
   const c = capture(clone(RECORDS), scopesFor(null, false));
   eq([cell(c, OTLP), cell(c, OPER), cell(c, OTELF), cell(c, GITF), c.refusals.length], ['HELD', 'HELD', 'HELD', 'no row', 0], 'no block: ');
@@ -509,10 +541,16 @@ test('FO3 a mixed program: a Kubernetes leg and a no-block observability leg bes
   assert(k8s.state === 'parsed', `k8s fixture: ${k8s.state}`);
   const kg = { ...k8s, source: 'task' } as unknown as LegConfigSourcesResolution;
   const kScopes = captureScopesFor(legRes({ gitFileSource: true, configSourceProtocol: K8S }), kg) as Scopes;
-  const before = prepareHeldCapture({ toolCallResults: clone(RECORDS), task: TASK, logger, gitFileSourceLeg: true, configSources: kg });
+  // The Kubernetes leg's capture is what it was before the declared-files scope existed: that scope hands back the SAME object for a
+  // protocol whose block cannot name a service file. (Until STEP 3 P3 this case compared against a capture given the scope with NO
+  // protocol; such a call is now judged as the strictest protocol — see AL1 — so the "before" is stated as the identity it always was.)
+  const exK = withConfigSourcesScope(extractDeclaredFiles(clone(RECORDS), undefined, { gitFileSourceLeg: true }), kg);
+  assert(withDeclaredFilesScope(exK, kg, RECORDS, K8S) === exK, 'the declared-files scope changed a Kubernetes leg');
   const after = capture(clone(RECORDS), kScopes);
-  const strip = (p: unknown) => JSON.stringify(p, (k, v) => (k === 'durationMs' ? 0 : v));
-  eq(strip(after.plan), strip(before), 'a Kubernetes leg with the same records: ');
+  eq([cell(after, OTLP), cell(after, OPER), cell(after, OTELF), after.held.includes('github:paichart:paichart-configs /k8s/sample-workloads.yaml')], ['HELD', 'HELD', 'HELD', true], 'a Kubernetes leg with the same records holds what it held: ');
+  // …and the SAME scope handed over WITHOUT its protocol holds none of the served files (P3, fail closed)
+  const noProto = prepareHeldCapture({ toolCallResults: clone(RECORDS), task: TASK, logger, gitFileSourceLeg: true, configSources: kg });
+  eq((noProto?.files ?? []).filter((f) => !(f as unknown as { target: string }).target.startsWith('github:')).length, 0, 'a scope without its protocol: served files held: ');
   eq(configSourceForce(kg, [{ target: GITF[0], path: '/k8s/sample-workloads.yaml' }]), null, 'k8s force: ');
 });
 test('FO4 label collisions: two labels naming one file are reported; a clean block reports none', () => {

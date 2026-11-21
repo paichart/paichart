@@ -341,7 +341,7 @@ check('arm 2 — a mid-line-anchored rule derives its encoded-newline arm (the s
 }
 
 // ── 8. the credential-shaped line test: corpus checks over this fixture, and the GENERATED pin over R10's closed name lists ─────────────────────────────────────────────────
-check('CREDENTIAL_LINE_VERSION is its own version, not R10\'s', CREDENTIAL_LINE_VERSION === 'paichart.credline/1' && CREDENTIAL_LINE_SOURCES.length >= 5 && !R10_RULE_SOURCES.some((s) => CREDENTIAL_LINE_SOURCES.includes(s)));
+check('CREDENTIAL_LINE_VERSION is its own version, not R10\'s', CREDENTIAL_LINE_VERSION === 'paichart.credline/2' && CREDENTIAL_LINE_SOURCES.length >= 5 && !R10_RULE_SOURCES.some((s) => CREDENTIAL_LINE_SOURCES.includes(s)));
 {
   const texts: Array<[string, string, string[]]> = [
     ...fx.shapes.map((s) => [s.id, asm(s.text), s.secrets] as [string, string, string[]]),
@@ -359,6 +359,27 @@ check('CREDENTIAL_LINE_VERSION is its own version, not R10\'s', CREDENTIAL_LINE_
   check('corpus check (a): every line R10 changes in the v13 fixture and the exact cases is credential-shaped', missChanged.length === 0, missChanged.join(' '));
   check('corpus check (b): every line carrying a fixture secret is credential-shaped, whether or not R10 takes it', missSecret.length === 0, missSecret.join(' '));
   const ordinary = ['exporters:', '  otlphttp:', '    compression: gzip', 'server {', '    listen 4318;', '        proxy_pass http://otel-collector:4318;', '    timeout: 10s', '', '}'];
+  // credline/2 (sec-ops J3 / J5 / J6; coordinator ruling on `pass`, 2026-11-22) — every line has a STATED answer
+  const v2: Array<[string, boolean, string]> = [
+    ['        proxy_pass http://otel-collector:4318;', false, 'the routing directive at the start of its statement is ordinary'],
+    ['fastcgi_pass unix:/run/php.sock;', false, 'another of the six'],
+    ['grpc_pass grpc://otel-collector:4317;', false, 'another of the six'],
+    ['        proxy_pass http://user:hunter2@host;', true, 'still flagged: a URL with userinfo'],
+    ['        proxy_pass https://host/hook?api_key=abc;', true, 'still flagged: a credential name in the query'],
+    ['        proxy_pass http://bypass-upstream:4318;', true, 'the exemption covers the ONE leading word; `pass` later in the line flags it'],
+    ['    location / { proxy_pass http://otel-collector:4318; }', true, 'not at the start of the statement: no exemption (over-withheld, stated)'],
+    ['    set $x proxy_pass_upstream;', true, 'the word inside a value earns nothing'],
+    ['    proxy_pass_header X-Trace;', true, 'a longer directive is not one of the six'],
+    ['    proxy_pass_request_headers off;', true, 'a longer directive is not one of the six'],
+    ['    smtp_pass hunter2;', true, 'a credential name'], ['    db_pass: hunter2', true, 'a credential name'], ['pass: hunter2', true, 'a credential name'],
+    ['PGPASS=hunter2', true, 'a credential name, any case'], ['    compass_url example;', true, 'a substring test: over-withheld, stated'],
+    ['    db_pwd hunter2;', true, 'J3 pwd'], ['    creds hunter2;', true, 'J3 cred'], ['    apikey hunter2;', true, 'J3 key'], ['    signing hunter2;', true, 'J3 sign'],
+    ['    hmac hunter2;', true, 'J3 hmac'], ['    license hunter2;', true, 'J3 licen'],
+    ['users: ops:hunter2', true, 'J5 a bare pair after one key'], ['    endpoint: otel:4317', true, 'J5: a host:port after a key is withheld too (stated)'],
+    ['    endpoint: otel', false, 'J5: a plain value after a key is ordinary'], ['    endpoint: http://otel:4317', false, 'J5: a URL after a key is ordinary (the `//` exclusion applies to the FIRST colon only — stated)'],
+    ['    content_by_lua_block {', true, 'J6 Lua'], ['    js_set $t main.token;', true, 'J6 njs'], ['    evaluation_interval: 15s', true, 'J6: `lua` inside a word is over-withheld (stated)'],
+  ];
+  for (const [l, want, why] of v2) check(`credline/2 — ${JSON.stringify(l.trim())} is ${want ? 'credential-shaped' : 'ordinary'} (${why})`, isCredentialShapedLine(l) === want);
   check('the test is not "every line": ordinary structure lines are not credential-shaped', ordinary.every((l) => !isCredentialShapedLine(l)), ordinary.filter(isCredentialShapedLine).join(' | '));
 }
 

@@ -83,7 +83,7 @@ import { sha256 } from './rebuild';
 import { AGENT_MODELS } from '../../lib/agents/model-tiers';
 import { heldEditVerdict } from '../../lib/agents/harness/held-edit-carrier';
 import { readSampleForce } from './plan-witness-lever';
-import { gitLiveDriftMethodOf } from '../../lib/agents/harness/git-live-drift';
+import { gitLiveDriftCallsService } from '../../lib/agents/harness/git-live-drift';
 
 export const GOLDEN_DIR = path.join(__dirname, 'golden');
 /** v7: the one protocol a `requirements` case runs (no held binding). */
@@ -134,8 +134,8 @@ export function caseRoles(c: Pick<GoldenCase, 'shape'>): { author: string; revie
   if (c.shape === 'requirements') return { author: 'requirements_author', reviewer: 'requirements_reviewer' };
   return c.shape === 'value' ? { author: 'derivation_architect', reviewer: 'derivation_reviewer' } : { author: 'config_change_author', reviewer: 'change_reviewer' };
 }
-/** v9 (Config sources STEP 4, owner 2026-11-17): `platformDrift` is REQUIRED for a protocol with a Git-vs-live method (Kubernetes) and
- *  FORBIDDEN for one without (terraform-iac — the SHIPPING `gitLiveDriftMethodOf` decides): production makes no drift call there, so a
+/** v9 (Config sources STEP 4, owner 2026-11-17): `platformDrift` is REQUIRED for a protocol whose method is a service call (Kubernetes) and
+ *  FORBIDDEN for every other (terraform-iac: no method; observability-config: the platform compares — the SHIPPING `gitLiveDriftCallsService` decides): production makes no drift call there, so a
  *  compare-tool answer could never reach a prompt, and the lab refuses such a plant (config-sources-patch.ts). */
 export interface GoldenConfigSources { fromVersion: string; block: string[]; platformDrift?: { default: { caller: 'result'; file: string } }; provenance: string }
 export interface GoldenSet {
@@ -183,8 +183,8 @@ export function loadGoldenSet(dir = GOLDEN_DIR): GoldenSet {
       const cs = c.configSources;
       if (!gs.heldJoinSeedByProtocol[c.protocol]) throw new Error(`golden set: case ${c.id} carries configSources on ${c.protocol}, which has no held binding`);
       if (!/^\d+\.\d+\.\d+$/.test(cs.fromVersion) || !Array.isArray(cs.block) || !cs.block.length || cs.block.some((l) => typeof l !== 'string' || !l.trim() || l.includes('\n'))) throw new Error(`golden set: case ${c.id} configSources needs fromVersion x.y.z and a non-empty block of single lines`);
-      if (gitLiveDriftMethodOf(c.protocol) === null) {
-        if (cs.platformDrift !== undefined) throw new Error(`golden set: case ${c.id} configSources.platformDrift is forbidden on ${c.protocol}: it has no Git-vs-live method (GIT_LIVE_DRIFT_METHODS), so production makes no drift call`);
+      if (!gitLiveDriftCallsService(c.protocol)) {   // STEP 3 P3 (plan W4): the shipping no-call guard — no method, or one the platform computes itself
+        if (cs.platformDrift !== undefined) throw new Error(`golden set: case ${c.id} configSources.platformDrift is forbidden on ${c.protocol}: the platform makes no service call for it (GIT_LIVE_DRIFT_METHODS: no method, or one the platform computes itself)`);
       } else {
         const keys = Object.keys(cs.platformDrift ?? {});
         if (keys.join() !== 'default' || cs.platformDrift!.default.caller !== 'result' || !fs.existsSync(path.join(dir, cs.platformDrift!.default.file))) throw new Error(`golden set: case ${c.id} configSources.platformDrift must be { default: { caller: 'result', file } } with the file under golden/`);

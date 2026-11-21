@@ -192,6 +192,11 @@ export interface ExtractResult {
   };
   /** WI-B10: the bounded list of undeclared tool names on registrant services (diagnosis of a mis-declared descriptor). */
   registrantUndeclaredTools: string[];
+  /** Config sources STEP 3 P3 (plan §13 B2): set ONLY by the declared-files scope (config-source-scope.ts) — the served files it
+   *  classified as EVIDENCE for the Git-vs-served comparison, WITH their text. Each also has its `served-file-evidence-only` row in
+   *  `refusals`. In memory only: capture reads it once to build the evidence value it returns BESIDE the plan; it is never on the
+   *  plan, never written and never logged. Absent on every other execution. */
+  evidence?: ExtractedFile[];
 }
 
 type Obj = Record<string, unknown>;

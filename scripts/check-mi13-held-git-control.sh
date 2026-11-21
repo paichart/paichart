@@ -62,7 +62,11 @@ INSERT INTO agent_executions VALUES ('x1','H1','SUCCESS',NULL), ('x2','H2','SUCC
 -- x5 (another leaf of L3, with NO held ref): a result.json carrying a platformDriftCalls stamp ⇒ the 🔴 "stamp on an observability
 -- leaf". Kept OFF x4 on purpose: 🔴 12 joins every CAPTURE ref to its execution's result.json, and x4's planted ref points at a call
 -- index no stored record has — on x4 it would read "unresolved" and move that line's expectation for a reason unrelated to it.
-INSERT INTO agent_artifacts VALUES ('r5','result.json','x5', now() - interval '1 hour', '{"toolCalls":[],"platformDriftCalls":{"calls":[]}}');
+-- STEP 3 P3: the same artifact also plants (a) a no-block `configSourceReads` stamp that says `checked:true` beside the `undeclared`
+-- key, (b) a Harvester `gitLiveDrift` reading `no-compare-record`, (c) a `fileSourceCompare` record carrying an `evidence` key.
+-- x5 is a leaf of L3 (observability), so the "not an observability leaf" line reads 0 for it; r1 (the Kubernetes leaf x1's
+-- result.json, below) carries a bare `fileSourceCompare` key for that line.
+INSERT INTO agent_artifacts VALUES ('r5','result.json','x5', now() - interval '1 hour', '{"toolCalls":[],"platformDriftCalls":{"calls":[]},"configSourceReads":{"version":1,"checked":true,"reason":"config-sources-absent","undeclared":{"heldFrom":"service","files":2,"refusals":0}},"gitLiveDrift":{"version":1,"method":"file-ordered-lines/1","point":"harvester","checked":false,"reason":"no-compare-record"},"fileSourceCompare":{"version":1,"method":"file-ordered-lines/1","files":[{"label":"obs-otelcol","state":"differs"},{"label":"obs-ingress.a","state":"not-checked","reason":"compare-error"}],"evidence":"planted"}}');
 
 INSERT INTO agent_artifacts VALUES ('pi2','pipeline-index.json','xl2', now() - interval '3 hours',
   '{"protocolInjection":{"delta":{"name":"observability-config-protocol","version":"1.10.0"}}}');
@@ -73,7 +77,7 @@ INSERT INTO agent_artifacts VALUES ('pi2','pipeline-index.json','xl2', now() - i
 -- message in result.content (read off live leg T-W2) — and [4] the lab fixture tier — success:false, result:null, the message under the
 -- error key, in the pre-F-T1 escaped wording (L-T1 H-T-OFFREF sample-02). The earlier plant's text ("PINNED_ARGUMENT: refused") is a
 -- message no call ever carries, so the control passed while the real column read 0.
-INSERT INTO agent_artifacts VALUES ('r1','result.json','x1', now() - interval '2 hours', \$J\${"toolCalls":[
+INSERT INTO agent_artifacts VALUES ('r1','result.json','x1', now() - interval '2 hours', \$J\${"fileSourceCompare":{"version":1},"toolCalls":[
  {"tool":"services","success":true,"arguments":{"action":"call","targetService":"github-service","tool":"get_file_contents","arguments":{"owner":"paichart","repo":"paichart-lab-configs","path":"k8s/a.yaml"}},
   "result":{"content":[{"type":"data","data":{"targetService":"github-service","tool":"get_file_contents","arguments":{"owner":"paichart","repo":"paichart-lab-configs","path":"k8s/a.yaml"},
    "result":{"content":[{"type":"text","text":"[platform: the file source status line was elided at persist (it carries a blob id)]"},{"type":"resource","resource":{"uri":"repo://paichart/paichart-lab-configs/sha/0ea432e751cc622ffab91d7a90386c66cadf8733/contents/k8s/a.yaml","text":"kind: Namespace\n"}}]}}}]}},
@@ -198,6 +202,14 @@ expect '🔴 R5 a Config-sources snapshot whose protocol is not its leg' 2   # L
 expect '🔴 R1 a Config-sources snapshot whose takenAt is not the leg' 1
 expect '🔴 R2 a Config-sources snapshot taken AFTER an execution of its leg already existed' 1
 expect '🔴 a platformDriftCalls stamp on an observability leaf' 1
+# STEP 3 P3 — the file comparison's lines, each with its planted hit (r5)
+expect '⚪ configSourceReads stamps on legs that declare NOTHING and ran on the service' '1 / 0'
+expect '🔴 a configSourceReads stamp carrying the `undeclared` key that is NOT `checked:false`' 1
+expect '⚪ fileSourceCompare records (observability Harvesters): files by state — differs' 1
+expect '⚪ fileSourceCompare records (observability Harvesters): files by state — not-checked / compare-error' 1
+expect '🔴 a Harvester whose gitLiveDrift reads no-compare-record' 1
+expect '🔴 a fileSourceCompare record that carries a file text or an evidence key' 1
+expect '🔴 a fileSourceCompare stamp on a leaf that is not an observability leaf' 1
 expect '⚪ secret-manifest refusals' 1
 # Config sources STEP 2: the shared file is held by two legs of root-1 (the single-leg file and another program's are not counted)
 expect '⚪ Git files HELD (capture) by more than one leg of one program' 1

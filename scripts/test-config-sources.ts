@@ -670,11 +670,11 @@ test('REG1 registration: configSourceReads once, LAST, leaf-persist, conditional
   const mine = MECHANICAL_NETS.filter((n) => n.name === 'configSourceReads');
   eq(mine.length, 1, 'registrations: ');
   // appended last when shipped; slice 3b appended the two drift entries after it (the exact tail is pinned in test-quote-fidelity)
-  eq(MECHANICAL_NETS.slice(-4).map((n) => n.name), ['configSourceReads', 'platformDriftCalls', 'gitLiveDrift', 'planWitness'], 'the Config-sources tail (+ planWitness, 2026-11-18, appended after it): ');
+  eq(MECHANICAL_NETS.slice(-5).map((n) => n.name), ['configSourceReads', 'platformDriftCalls', 'gitLiveDrift', 'planWitness', 'fileSourceCompare'], 'the Config-sources tail (+ planWitness, 2026-11-18; + fileSourceCompare, STEP 3 P3 2026-11-21 — each appended after it): ');
   eq([mine[0].point, mine[0].conditionalStampReason, mine[0].renderPrompt, mine[0].renderCard], ['leaf-persist', 'not-config-source-leg', null, null], 'shape: ');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const EA = require('../lib/services/execution-artifacts') as { RESULT_JSON_OPERATOR_TAIL_KEYS: readonly string[]; RESULT_JSON_SUMMARY_KEYS: readonly string[] };
-  eq(EA.RESULT_JSON_OPERATOR_TAIL_KEYS.slice(-4), ['configSourceReads', 'platformDriftCalls', 'gitLiveDrift', 'planWitness'], 'operator tail, appended (+ planWitness, 2026-11-18): ');
+  eq(EA.RESULT_JSON_OPERATOR_TAIL_KEYS.slice(-5), ['configSourceReads', 'platformDriftCalls', 'gitLiveDrift', 'planWitness', 'fileSourceCompare'], 'operator tail, appended (+ planWitness, 2026-11-18; + fileSourceCompare, STEP 3 P3 2026-11-21): ');
   assert(!EA.RESULT_JSON_SUMMARY_KEYS.includes('gitLiveDrift') && !EA.RESULT_JSON_SUMMARY_KEYS.includes('platformDriftCalls'), 'a drift key is on the summary');
   assert(!EA.RESULT_JSON_SUMMARY_KEYS.includes('configSourceReads'), 'configSourceReads is on the summary');
   eq(liveEvidenceVersionApplies({ delta: { name: K8S, version: '1.18.0' } }), false, 'k8s 1.18.0: ');
@@ -718,8 +718,9 @@ test('REG1 registration: configSourceReads once, LAST, leaf-persist, conditional
     } as never);
     const PI = (version: string, name = K8S) => ({ mode: 'named', delta: { name, version } });
     for (const [label, pi] of [['1.18.0', PI('1.18.0')], ['1.18.9', PI('1.18.9')], ['absent', undefined], ['degraded', { mode: 'named', delta: null }],
-      // STEP 4 (2026-11-17): terraform-iac has its own version row (1.17.0) now — observability-config is the protocol with none.
-      ['another protocol at a high version', PI('9.9.9', 'observability-config-protocol')]] as Array<[string, unknown]>) {
+      // STEP 4 (2026-11-17): terraform-iac has its own version row (1.17.0); STEP 3 P3 (2026-11-21): so does observability-config
+      // (1.12.0). pov-program is a protocol with none.
+      ['another protocol at a high version', PI('9.9.9', 'pov-program-protocol')]] as Array<[string, unknown]>) {
       assert((await run(pi)) === NOT_STAMPED, `${label}: a declared leg below its Config-sources text version must be NOT_STAMPED`);
     }
     eq(declarationReads, 0, 'the version test runs first — no declaration read below the version: ');

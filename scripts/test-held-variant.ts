@@ -624,7 +624,7 @@ test('V-5 core: ONE owning-leg resolution; step after requirements & before onSt
   // held-network step 3 batch 2b: the core's ONE Device sources read rides between them (network leaves only)
   // + Config sources STEP 2: the core's ONE Config sources read rides after it (a Config-sources leaf only)
   // PLATFORM-DRIFT-CALLS-DROPPED (2026-11-16): plain properties, never conditional spreads (a spread escapes excess-property checks)
-  ok(/owningLeg,\s*\n(\s*\/\/[^\n]*\n)*\s*deviceSources: legDeviceSources,\s*\n\s*configSources: legConfigSources,\s*\n\s*platformDriftCalls,\s*\n\s*held: heldStamps,/.test(src), 'the nets receive the core\'s owningLeg and the built stamps');
+  ok(/owningLeg,\s*\n(\s*\/\/[^\n]*\n)*\s*deviceSources: legDeviceSources,\s*\n\s*configSources: legConfigSources,\s*\n\s*platformDriftCalls,\s*\n\s*fileSourceCompare,\s*\n\s*held: heldStamps,/.test(src), 'the nets receive the core\'s owningLeg and the built stamps');   // + fileSourceCompare (Config sources STEP 3 P3), a plain property
 });
 
 test('V-5c core: the held-edit block reassigns the deliverable ONLY when the correction was adopted (textSource edit-correction)', () => {

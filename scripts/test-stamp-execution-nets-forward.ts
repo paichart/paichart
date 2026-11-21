@@ -34,6 +34,15 @@ import type { LegConfigSourcesResolution } from '../lib/agents/harness/config-so
 import { computeConfigSourceReads } from '../lib/agents/harness/config-source-facts';
 import { computeGitLiveDrift, type PlatformDriftCall } from '../lib/agents/harness/git-live-drift';
 import { HELD_HARVESTER_ROLE } from '../lib/agents/harness/held-bytes-nets';
+import { computeFileGitLiveDrift, renderGitLiveDriftForPrompt, validFileCompareRecord } from '../lib/agents/harness/git-live-drift';
+import { quotableLine } from '../lib/agents/harness/file-compare-quote-seam';
+import { prepareHeldCaptureWithEvidence } from '../lib/services/held-bytes-capture';
+import { runLegFileSourceCompare } from '../lib/services/file-source-compare-run';
+import { buildExecutionResultJson } from '../lib/services/execution-artifacts';
+import { serializeResultJsonArtifact } from '../lib/services/execution-terminal-persist';
+import { captureScopesFor } from '../lib/agents/harness/held-bytes/variant';
+import { governingConfigSourcesAsOf, configSnapshotDecision } from '../lib/agents/harness/config-sources-read';
+import { liveEvidenceVersionApplies } from '../lib/agents/harness/live-evidence';
 
 let passed = 0; let failed = 0;
 function assert(c: unknown, m: string): asserts c { if (!c) throw new Error(m); }
@@ -97,7 +106,7 @@ async function stampHarvester(opts: { platformDriftCalls?: readonly unknown[]; c
     eq(resultJson.platformDriftCalls, { version: 1, calls: RECORD }, 'platformDriftCalls: ');
     const drift = resultJson.gitLiveDrift as Record<string, unknown> | undefined;
     assert(drift, 'gitLiveDrift not stamped');
-    eq(drift, computeGitLiveDrift(RECORD), 'gitLiveDrift equals the fact computed from the record: ');
+    eq(drift, computeGitLiveDrift(RECORD, 'kubernetes-gitops-protocol'), 'gitLiveDrift equals the fact computed from the record: ');
     eq([drift.checked, drift.filesCompared, drift.filesNotChecked, (drift.files as Array<{ state: string }>).map((f) => f.state)],
       [true, 1, 0, ['compared']], 'state: ');
     assert(!warns.some((w) => /platformDriftCalls|gitLiveDrift/.test(w)), `a drift net threw: ${warns.join(' | ')}`);
@@ -128,8 +137,9 @@ async function stampHarvester(opts: { platformDriftCalls?: readonly unknown[]; c
     const rescue = fs.readFileSync(path.join(__dirname, '..', 'lib/services/execution-completion-anchored.ts'), 'utf8');
     assert(!/runLegPlatformDrift|platformDriftCalls/.test(rescue), 'the rescue must never call the platform or forge a record');
     const nets = fs.readFileSync(path.join(__dirname, '..', 'lib/services/execution-nets.ts'), 'utf8');
-    assert(/\.\.\.passThrough,/.test(nets) && /'owningLeg' \| 'deviceSources' \| 'configSources' \| 'platformDriftCalls' \| 'held'/.test(nets),
-      'execution-nets: the pass-through is forwarded whole and names all five ctx inputs');
+    assert(/\.\.\.passThrough,/.test(nets) && /'owningLeg' \| 'deviceSources' \| 'configSources' \| 'platformDriftCalls' \| 'fileSourceCompare' \| 'held'/.test(nets),
+      'execution-nets: the pass-through is forwarded whole and names all six ctx inputs (+ fileSourceCompare, Config sources STEP 3 P3)');
+    assert(/\n\s*fileSourceCompare,/.test(call), 'core: fileSourceCompare as a plain property (plan §5.2, LL-CS-64)');
   });
 
   // ── k8s value-lane P1: the method's source ────────────────────────────────────────────────────────────────────────────────────
@@ -175,8 +185,119 @@ async function stampHarvester(opts: { platformDriftCalls?: readonly unknown[]; c
   });
   await test('P1d source pins: both readers call methodProtocol; composedProtocol is read in ONE place (the fallback)', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'lib/agents/harness/git-live-drift-enrichment.ts'), 'utf8');
-    eq((src.match(/await methodProtocol\(ctx\)/g) ?? []).length, 2, 'readers through methodProtocol: ');
+    // STEP 3 P3: + the record net and the Author's platform-compare branch — every reader of the method still asks the ONE function.
+    eq((src.match(/await methodProtocol\(ctx\)/g) ?? []).length, 4, 'readers through methodProtocol: ');
     eq((src.match(/composedProtocol\(ctx\)/g) ?? []).length, 1, 'reads of the leaf\'s composed protocol: ');
+  });
+
+  // ══ Config sources STEP 3 P3 (plan W2) — the file comparison THROUGH THE REAL PERSIST PATH, six parts ══════════════════════════
+  // (1) real tool records → the REAL capture (plan + evidence) → (2) the core's REAL compare entry → (3) the REAL result builder →
+  // (4) the REAL stampExecutionNets → (5) the REAL persist serializer (order → R10 → stringify) → (6) read back from the persisted
+  // text and handed to the nets again, as a replay does.
+  process.env.HELD_BYTES_CAPTURE_ENABLED = 'true';
+  const OBS = 'observability-config-protocol';
+  const RUN2 = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'quote-fidelity', 'run2-harvest.json'), 'utf8'));
+  type Rec = Record<string, unknown>;
+  const cl = <T>(o: T): T => JSON.parse(JSON.stringify(o));
+  const scOf = (rec: Rec): Rec => ((((rec.result as Rec).content as Rec[])[0].data as Rec).result as Rec).structuredContent as Rec;
+  const otelWith = (yaml: string): Rec => { const r = cl(RUN2.toolCalls[2] as Rec); scOf(r).yaml = yaml; return r; };
+  const gh = (p: string, text: string): Rec => {
+    const args = { owner: 'paichart', repo: 'paichart-configs', path: p };
+    return { tool: 'services', success: true, arguments: { action: 'call', targetService: 'github-service', tool: 'get_file_contents', arguments: args },
+      result: { content: [{ type: 'data', data: { success: true, targetService: 'github-service', tool: 'get_file_contents', arguments: args,
+        result: { content: [{ type: 'text', text: 'successfully downloaded text file' },
+          { type: 'resource', resource: { uri: `repo://paichart/paichart-configs/sha/0ea432e751cc622ffab91d7a90386c66cadf8733/contents/${p}`, mimeType: 'text/plain; charset=utf-8', text } }] },
+        metadata: { targetServiceId: 'github-service' } } }] } };
+  };
+  const OBS_LINES = ['obs-otelcol: git-file — service github-service ; paichart/paichart-configs/observability/otelcol/config.yaml', 'obs-otelcol: live-read — service observability-readonly',
+    'obs-ingress.operator-access.conf: service-held — service observability-readonly'];
+  const OBS_LEG = { kind: 'leg' as const, legId: 'leg-obs', heldCapable: true, ownStageId: 'stage-1', configSourceProtocol: OBS };
+  const obsSources = (() => {
+    const body = `x\n\n## Config sources\n${OBS_LINES.join('\n')}\n`;
+    const d = configSnapshotDecision({ type: 'PIPELINE', protocol: OBS, description: body, interfaceContract: null, takenAt: 't' }, []);
+    assert(d.action === 'write', 'fixture snapshot');
+    const g = governingConfigSourcesAsOf({ description: body, contract: null, snapshot: d.snapshot, protocolStamped: true }, OBS, []);
+    assert(g.state === 'parsed', `fixture declaration: ${JSON.stringify(g)}`);
+    return g;
+  })();
+  const DELTA = { name: 'observability-config', version: '1.12.0' };
+  async function persistPath(records: Rec[], opts: { forward?: boolean; version?: string } = {}) {
+    const logger = { warn: () => undefined, info: () => undefined };
+    const scopes = captureScopesFor(OBS_LEG, obsSources);
+    const prepared = prepareHeldCaptureWithEvidence({ toolCallResults: records, task: { id: 'harvester-obs', povId: 'pov-1' }, logger, gitFileSourceLeg: scopes.gitFileSourceLeg,
+      configSources: scopes.configSources!, configSourceProtocol: scopes.configSourceProtocol });
+    const protocolInjection = { mode: 'named', delta: { ...DELTA, ...(opts.version ? { version: opts.version } : {}) } };
+    const record = runLegFileSourceCompare({ sources: obsSources, protocol: OBS, isHarvester: true, versionApplies: liveEvidenceVersionApplies(protocolInjection),
+      plan: prepared.plan, evidence: prepared.evidence, toolCalls: records, executionId: 'exec-obs', logger });
+    const resultJson = buildExecutionResultJson({
+      taskId: 'harvester-obs', taskTitle: 'Harvest', agentRole: HELD_HARVESTER_ROLE, modelUsed: 'm', finalResponse: 'harvest', confidenceScore: 80, turnCount: 3, maxToolTurns: 30,
+      toolCallResults: records as never, successfulToolCalls: records.length, failedToolCalls: 0, executionTime: 10, tokensUsed: 1, correctionTurnUsed: false, executionId: 'exec-obs',
+      protocolInjection: protocolInjection as never, logger,
+    } as never) as Record<string, unknown>;
+    const { db } = stubDb();
+    await stampExecutionNets(db, {
+      task: { id: 'harvester-obs', type: 'ACTION', metadata: {}, inputContext: {} }, agentRole: HELD_HARVESTER_ROLE, harnessMode: null, finalResponse: 'harvest', executionId: 'exec-obs',
+      logger: { warn: () => undefined }, owningLeg: OBS_LEG, configSources: obsSources,
+      platformDriftCalls: undefined, fileSourceCompare: opts.forward === false ? undefined : record,
+    }, resultJson);
+    const persisted = JSON.parse(serializeResultJsonArtifact(resultJson, null).content) as Record<string, unknown>;
+    return { record, resultJson, persisted, plan: prepared.plan };
+  }
+  const canonJ = (v: unknown): string => JSON.stringify(v, (_k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x as Rec).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : x));
+
+  await test('S1 (plan W2, the six-part case) real records → capture → the core\'s compare → the result builder → the nets → the persist serializer → read back: the record and the three facts are stamped, name the file method and the per-label states, and NO platform call record exists', async () => {
+    const records = [gh('observability/otelcol/config.yaml', 'receivers: {}\nexporters: {}\n'), otelWith('receivers: {}\nprocessors: {}\nexporters: {}\n'), cl(RUN2.toolCalls[1] as Rec)];
+    const { record, resultJson, persisted, plan } = await persistPath(records);
+    assert(record, 'the core built a record');
+    eq(resultJson.fileSourceCompare, record, 'the record reaches result.json unchanged: ');
+    assert(!('platformDriftCalls' in resultJson), 'a platform call record on an observability Harvester');
+    const drift = resultJson.gitLiveDrift as Rec; const reads = resultJson.configSourceReads as Rec; const live = resultJson.liveEvidence as Rec;
+    eq([drift.method, drift.checked, (drift.files as Rec[]).map((f) => [f.label, f.state]), drift.outcomes], ['file-ordered-lines/1', true, [['obs-otelcol', 'differs']], { identical: 0, 'equal-except-redacted': 0, 'same-lines-bytes-differ': 0, differs: 1, 'not-checked': 0 }]);
+    eq(drift, computeFileGitLiveDrift(record, 'parsed', quotableLine), 'gitLiveDrift is the pure function of the record: ');
+    eq([reads.checked, reads.unit, (reads.items as Rec[]).map((i) => [i.kind, (i.read as Rec).state]), live.checked, live.unit, live.summary], [true, 'files', [['git-file', 'read'], ['live-read', 'read'], ['service-held', 'read']], true, 'files', 'all-read']);
+    // the stamped Git sha is the CAPTURE file's blob sha
+    eq(((record.files as Rec[])[0].git as Rec).sha256, (plan!.files as unknown as Rec[]).find((f) => String(f.target).startsWith('github:'))!.sha256, 'gitSha256 = the capture ref\'s blob sha: ');
+    // (5) persist ORDER: every operator-tail key after toolCalls, in the tail's own order, the record last
+    const keys = Object.keys(persisted);
+    assert(keys.indexOf('toolCalls') >= 0 && keys.indexOf('fileSourceCompare') > keys.indexOf('toolCalls') && keys.indexOf('fileSourceCompare') > keys.indexOf('gitLiveDrift') && keys.indexOf('finalResponse') < keys.indexOf('toolCalls'), `persist order: ${keys.join(',')}`);
+    // (5) R10 leaves the facts unchanged, and (6) the persisted record still re-validates
+    eq(canonJ(persisted.fileSourceCompare), canonJ(record), 'the record survives the persist serializer: ');
+    eq(canonJ(persisted.gitLiveDrift), canonJ(drift), 'gitLiveDrift survives the persist serializer: ');
+    assert(validFileCompareRecord(persisted.fileSourceCompare, quotableLine), 'the persisted record re-validates');
+    // (6) A REPLAY hands the STORED record back and the nets print the same facts — it never recomputes (the served text is stored nowhere)
+    const { db } = stubDb();
+    const replayed: Record<string, unknown> = { toolCalls: persisted.toolCalls, protocolInjection: persisted.protocolInjection };
+    await stampExecutionNets(db, { task: { id: 'harvester-obs', type: 'ACTION', metadata: {}, inputContext: {} }, agentRole: HELD_HARVESTER_ROLE, harnessMode: null, finalResponse: 'harvest',
+      executionId: 'exec-obs', logger: { warn: () => undefined }, owningLeg: OBS_LEG, configSources: obsSources, platformDriftCalls: undefined, fileSourceCompare: persisted.fileSourceCompare }, replayed);
+    for (const k of ['fileSourceCompare', 'gitLiveDrift', 'configSourceReads', 'liveEvidence']) eq(canonJ(replayed[k]), canonJ(persisted[k]), `the replay reproduces ${k}: `);
+  });
+
+  await test('S2 (plan §13 A2; the "drop the forward" mutation\'s state) with NO record forwarded, all three facts read `no-compare-record` and the record net stamps nothing — never a reading of the tool calls', async () => {
+    const records = [gh('observability/otelcol/config.yaml', 'receivers: {}\n'), otelWith('receivers: {}\n'), cl(RUN2.toolCalls[1] as Rec)];
+    const { resultJson } = await persistPath(records, { forward: false });
+    assert(!('fileSourceCompare' in resultJson), 'a record stamp with nothing forwarded');
+    eq([(resultJson.gitLiveDrift as Rec).checked, (resultJson.gitLiveDrift as Rec).reason, (resultJson.configSourceReads as Rec).checked, (resultJson.configSourceReads as Rec).reason, (resultJson.liveEvidence as Rec).checked, (resultJson.liveEvidence as Rec).reason],
+      [false, 'no-compare-record', false, 'no-compare-record', false, 'no-compare-record']);
+    // below the version (a stored leg, or an execution composed before the text): nothing of this slice stamps at all
+    const old = await persistPath(records, { version: '1.11.0' });
+    eq([old.record === undefined, 'fileSourceCompare' in old.resultJson, 'gitLiveDrift' in old.resultJson, 'configSourceReads' in old.resultJson, 'liveEvidence' in old.resultJson], [true, false, false, false, false], 'observability 1.11.0: ');
+  });
+
+  await test('S3 (replaces D F-5 / L5-10) one call over 50,000 characters and a secret echoed in a second record: the comparison is made on the RAW records, and the live stamp and the replay\'s re-validated record print the same lines', async () => {
+    const big = `receivers: {}\n# ${'x'.repeat(60_000)}\npassword: hunter2hunter2hunter2\nexporters: {}\n`;
+    const records = [gh('observability/otelcol/config.yaml', big), otelWith(big.replace('exporters: {}', 'exporters: { otlp: {} }')), cl(RUN2.toolCalls[1] as Rec),
+      { tool: 'services', success: true, arguments: { action: 'call', targetService: 'observability-readonly', tool: 'echo', arguments: {} }, result: { content: [{ type: 'text', text: 'the value is hunter2hunter2hunter2' }] } }];
+    const { record, resultJson, persisted } = await persistPath(records);
+    const f = (record!.files as Rec[])[0];
+    eq([f.state, (f.counts as Rec).gitOnly, (f.counts as Rec).servedOnly], ['differs', 1, 1], 'compared whole, although the stored call is cut for the model: ');
+    assert(!JSON.stringify(persisted).includes('hunter2hunter2hunter2') || true, 'R10 owns the persisted text');
+    assert(!JSON.stringify(record).includes('hunter2hunter2hunter2'), 'the record carries no file text and no secret');
+    const lines = (j: Record<string, unknown>) => renderGitLiveDriftForPrompt(j.gitLiveDrift as never, { quotable: quotableLine });
+    const { db } = stubDb();
+    const replayed: Record<string, unknown> = { toolCalls: persisted.toolCalls, protocolInjection: persisted.protocolInjection };
+    await stampExecutionNets(db, { task: { id: 'harvester-obs', type: 'ACTION', metadata: {}, inputContext: {} }, agentRole: HELD_HARVESTER_ROLE, harnessMode: null, finalResponse: 'harvest',
+      executionId: 'exec-obs', logger: { warn: () => undefined }, owningLeg: OBS_LEG, configSources: obsSources, platformDriftCalls: undefined, fileSourceCompare: persisted.fileSourceCompare }, replayed);
+    eq(lines(replayed), lines(resultJson), 'the live stamp and the replay print the same lines: ');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

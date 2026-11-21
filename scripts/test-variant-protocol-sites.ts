@@ -52,6 +52,12 @@ export const EXCLUSIONS: Readonly<Record<string, string>> = {
     'Config sources STEP 2 (owner decision (b), 2026-11-15): the lane table of protocols that declare a `## Config sources` block (contract field configSources) — a declaration-scope set, not held-capability; kept SEPARATE from DEVICE_SOURCE_LANES on purpose (test-config-sources MIX1); the retired obs variant declares none',
   'scripts/test-git-live-drift.ts::test:TF1 the method table: Kubernetes = the compare tool; Terrafo':
     'Config sources STEP 4 fixture: the expected GIT_LIVE_DRIFT_METHODS table, restated to pin it — not a protocol selection',
+  'scripts/test-file-source-compare.ts::test:W4a the rows that say `service-call` are exactly Kubernetes;':
+    'Config sources STEP 3 P3 fixture (plan W4): the protocol spellings — long names, short tokens, prototype names, none — handed to the shipping no-call guard to prove which make a service call (Kubernetes only); a guard truth table, not a protocol selection',
+  'scripts/test-file-source-compare.ts::test:F5 (architectural) ONE helper says "a leg of a runs-undeclar':
+    'Config sources STEP 3 P3 fix round (architectural F5): the protocol spellings handed to the shipping no-block helper to prove which protocol runs undeclared (observability only) — a helper truth table, not a protocol selection',
+  'scripts/test-security-invariants.ts::test:PD-W4 the guard is false for a null, empty, unknown or proto':
+    'Config sources STEP 3 P3 security pin (plan W4, sec-ops F-7): the protocol names for which the no-call guard must answer false (observability, Terraform, unknown and prototype names) — a guard truth table, not a protocol selection',
   'scripts/test-git-live-drift.ts::<top>':
     'Config sources STEP 4 TF4 fixture: the two spellings of the terraform-iac protocol a caller may pass (long name, short token) to prove neither makes a drift call — not a protocol selection',
   'scripts/test-leg-replay-lab.ts::test:LCT2 (L-CS-K-b on Terraform) a 1.17.0 Terraform arm NEVER ma':

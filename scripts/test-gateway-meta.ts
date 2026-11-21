@@ -109,7 +109,7 @@ check('builder: absent when no record carries meta (every other result.json byte
 check('builder: no toolCalls[i] carries gatewayMeta', !JSON.stringify(withMeta.toolCalls).includes('targetServiceId'));
 const keys = Object.keys(orderResultJsonForPersist(withMeta));
 check('persist order: toolCallGatewayMeta is the LAST key (operator tail, after toolCalls)', keys[keys.length - 1] === 'toolCallGatewayMeta' && keys.indexOf('toolCalls') < keys.indexOf('toolCallGatewayMeta'));
-check('RESULT_JSON_OPERATOR_TAIL_KEYS carries it after applyBlockPlaceholder (validationToolCalls appended after it, 2026-10-23; deviceSourceReads + gitDeviceComparison, 2026-10-26; liveEvidence, 2026-11-04)', JSON.stringify(RESULT_JSON_OPERATOR_TAIL_KEYS) === JSON.stringify(['applyBlockPlaceholder', 'toolCallGatewayMeta', 'validationToolCalls', 'deviceSourceReads', 'gitDeviceComparison', 'liveEvidence', 'configSourceReads', 'platformDriftCalls', 'gitLiveDrift', 'planWitness'])); // + planWitness (terraform-witness step-back, 2026-11-18, appended last) // + configSourceReads, then platformDriftCalls + gitLiveDrift (Config sources STEP 2, 2026-11-15, appended)
+check('RESULT_JSON_OPERATOR_TAIL_KEYS carries it after applyBlockPlaceholder (validationToolCalls appended after it, 2026-10-23; deviceSourceReads + gitDeviceComparison, 2026-10-26; liveEvidence, 2026-11-04)', JSON.stringify(RESULT_JSON_OPERATOR_TAIL_KEYS) === JSON.stringify(['applyBlockPlaceholder', 'toolCallGatewayMeta', 'validationToolCalls', 'deviceSourceReads', 'gitDeviceComparison', 'liveEvidence', 'configSourceReads', 'platformDriftCalls', 'gitLiveDrift', 'planWitness', 'fileSourceCompare'])); // + fileSourceCompare (Config sources STEP 3 P3, 2026-11-21, appended last) // + planWitness (terraform-witness step-back, 2026-11-18, appended last) // + configSourceReads, then platformDriftCalls + gitLiveDrift (Config sources STEP 2, 2026-11-15, appended)
 check('collect: one entry per record with meta, in order', JSON.stringify(collectToolCallGatewayMeta([plain, rec, plain, rec]).map((e) => e.index)) === '[1,3]');
 
 // ── replay hydration ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -140,8 +140,8 @@ check('loop: setRecordGatewayMeta(record, gatewayMetaOf(toolResult)) on the succ
 // BS-1: capture and the builder read the SAME records on both persist paths (the tail-key index = the refusal toolCallIndex).
 const core = read('lib/services/execution-core.ts');
 check('core: prepareHeldCapture and buildExecutionResultJson both take the loop\'s toolCallResults, never reassigned between',
-  /prepareHeldCapture\(\{ toolCallResults,/.test(core) && /buildExecutionResultJson\(\{[\s\S]{0,1200}\btoolCallResults,/.test(core)
-  && !/\btoolCallResults\s*=[^=]/.test(core.slice(core.indexOf('prepareHeldCapture('), core.indexOf('buildExecutionResultJson('))));
+  /prepareHeldCaptureWithEvidence\(\{ toolCallResults,/.test(core) && /buildExecutionResultJson\(\{[\s\S]{0,1200}\btoolCallResults,/.test(core)
+  && !/\btoolCallResults\s*=[^=]/.test(core.slice(core.indexOf('prepareHeldCaptureWithEvidence('), core.indexOf('buildExecutionResultJson('))));
 const anch = read('lib/services/execution-completion-anchored.ts');
 check('anchored rescue: capture reads input.partial.toolCallResults and the builder partial.toolCallResults (the same array)',
   /prepareHeldCapture\(\{\s*toolCallResults: input\.partial\?\.toolCallResults \?\? \[\]/.test(anch)

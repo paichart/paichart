@@ -2221,7 +2221,7 @@ const commitText = (name: string, commit: string): ProtocolText => {
       const calls = gov.state !== 'parsed' ? undefined : await runPlatformDriftCalls({ sources: gov, toolCalls: result.toolCalls, redactedMarker: PLACEHOLDER, maxManifestBytes: 262144,
         heldFiles: store.refs.map((r) => ({ target: r.target as string, path: r.path as string, content: r.content, sha256: r.blobSha256 })),
         call: async ({ manifest }) => { invoked++; return caller ? caller(manifest) : { kind: 'result', result: { ...FIX.result, manifestSha256: sha(manifest) } }; } });
-      return { gov, store, calls, invoked, reads: computeConfigSourceReads(gov, result.toolCalls), live: computeConfigLiveEvidence(gov, result.toolCalls), drift: computeGitLiveDrift(calls ?? undefined) };
+      return { gov, store, calls, invoked, reads: computeConfigSourceReads(gov, result.toolCalls), live: computeConfigLiveEvidence(gov, result.toolCalls), drift: computeGitLiveDrift(calls ?? undefined, 'kubernetes-gitops-protocol') };
     };
     const FIXTURE_PLANT = { default: { caller: 'contract-fixture' as const } };
     const throws = async (fn: () => unknown, re: RegExp, what: string) => { let m = ''; try { await fn(); } catch (e) { m = (e as Error).message; } assert(re.test(m), `${what}: expected a refusal matching ${re}, got "${m.slice(0, 200)}"`); };
@@ -2279,7 +2279,7 @@ const commitText = (name: string, commit: string): ProtocolText => {
       const strip = (c: any[]) => c.map(({ durationMs: _d, ...x }) => x);
       assert(JSON.stringify(strip(r.calls as any[])) === JSON.stringify(strip(o.calls as any[])) && o.invoked === 1 && r.calls![0].outcome === 'called', 'the call record is not runPlatformDriftCalls\' over the held file');
       assert(r.calls![0].manifestSha256 === r.store!.refs[0].blobSha256 && (r.calls![0] as any).heldSha256 === undefined, 'the bytes "sent" are not the held bytes');
-      assert(JSON.stringify(r.facts!.gitLiveDrift) === JSON.stringify(computeGitLiveDrift(r.calls)) && JSON.stringify(r.facts!.gitLiveDrift) === JSON.stringify(o.drift), 'gitLiveDrift ≠ computeGitLiveDrift(call record)');
+      assert(JSON.stringify(r.facts!.gitLiveDrift) === JSON.stringify(computeGitLiveDrift(r.calls, 'kubernetes-gitops-protocol')) && JSON.stringify(r.facts!.gitLiveDrift) === JSON.stringify(o.drift), 'gitLiveDrift ≠ computeGitLiveDrift(call record)');
       const f0 = (r.facts!.gitLiveDrift as any).files[0];
       assert(f0.state === 'compared' && f0.summary === 'differences' && f0.differingTotal === 5 && f0.objects === 6 && f0.objectsCompared === 3, `the contract fixture's reading: ${JSON.stringify(f0).slice(0, 200)}`);
       const { h } = harvestOf(r.snap);
@@ -2624,7 +2624,7 @@ const commitText = (name: string, commit: string): ProtocolText => {
     // ───────────── L-CS-T: Config sources STEP 4 (Terraform), code push slice 4 — the lab half (2026-11-17) ─────────────
     // D-T1 (owner Tb = B2): terraform-iac has NO Git-vs-live method. Production (`runLegPlatformDrift`, platform-drift.ts) then makes no
     // call and writes no record, and `gitLiveDrift` reads `no-git-vs-live-method` (method null). The lab cannot load that module (it
-    // loads the hub), so `labPlatformDriftCalls` takes the leg's protocol and decides with the SHIPPING `gitLiveDriftMethodOf`. These
+    // loads the hub), so `labPlatformDriftCalls` takes the leg's protocol and decides with the SHIPPING no-call guard `gitLiveDriftCallsService`. These
     // tests run on the cached Terraform golden leg TF-PROG (Harvester read terraform/main.tf @ main + the rig's state tools); never fetch.
     const TF_PROG = 'cmvsze3ud00bfyxb377av3uny'; const TF_PROG_REVIEWER = 'cmvszht2500c2yxb3a82187r9';
     const T16 = { name: 'terraform-iac-protocol', version: '1.16.0' }; const T17 = { name: 'terraform-iac-protocol', version: '1.17.0' };
@@ -2642,6 +2642,9 @@ const commitText = (name: string, commit: string): ProtocolText => {
       assert(!CONFIG_SOURCE_AWAITING_TEXT.includes('terraform-iac-protocol') && configSourceLaneOf('terraform-iac') !== null, 'terraform-iac must be a live Config-sources protocol at the 1.17.0 text commit — re-read this block');
       assert(gitLiveDriftMethodOf('terraform-iac') === null && gitLiveDriftMethodOf('terraform-iac-protocol') === null && gitLiveDriftMethodOf('kubernetes-gitops') === 'k8s-declared-field-compare', 'GIT_LIVE_DRIFT_METHODS changed (D-T1)');
       assert(cs.noGitLiveMethod('terraform-iac-protocol') && !cs.noGitLiveMethod('kubernetes-gitops-protocol') && !cs.noGitLiveMethod(undefined) && !cs.noGitLiveMethod(''), 'noGitLiveMethod is not production\'s test (a non-empty protocol whose method is null)');
+      // STEP 3 P3 fix round (model-evaluation item 16): observability HAS a method row, and the platform computes it — no service call.
+      // The lever must read the no-call guard, not `method === null` (which reads observability as a protocol that CALLS).
+      assert(cs.noGitLiveMethod('observability-config-protocol') === true && cs.noGitLiveMethod('observability-config') === true, 'noGitLiveMethod must be true for a platform-compare protocol (observability): the lever asks gitLiveDriftCallsService');
       const snap = tfPlanted();
       assert(arm.configLegOf(snap.leg)?.protocol === 'terraform-iac-protocol' && arm.configLegOf(snap.leg)?.contractKey === 'terraform-iac', `tf leg row: ${JSON.stringify(arm.configLegOf(snap.leg)).slice(0, 200)}`);
       assert(arm.armConfigSources(snap.leg, { delta: T16 }) === null && arm.armOwningLeg(snap.leg, { delta: T16 }) === null, 'a 1.16.0 Terraform arm must read no Config sources');
@@ -2682,12 +2685,12 @@ const commitText = (name: string, commit: string): ProtocolText => {
         const call = (protocol?: string | null) => cs.labPlatformDriftCalls({ sources: gov, store: hs.buildLabHeldStore(snap, gov), toolCalls: tc, spec: FIXTURE_PLANT, dir: null, ...(protocol !== undefined ? { protocol } : {}) });
         for (const p of ['terraform-iac-protocol', 'terraform-iac']) { const x = await call(p); assert(x.calls === undefined && x.log.length === 0, `${p}: the fixture caller ran (${x.log.length})`); }
         for (const p of [undefined, null, '', 'kubernetes-gitops-protocol']) { const x = await call(p as any); assert(x.calls?.length === 1 && x.log.length === 1, `${String(p)}: the caller did not run — the method decision leaked beyond the protocol`); }
-        await throws(() => cs.withComputedConfigFacts(snap, { protocol: T17, drift: FIXTURE_PLANT }), /platformDrift refused — terraform-iac-protocol has no Git-vs-live method/, 'a drift plant on a Terraform leg');
+        await throws(() => cs.withComputedConfigFacts(snap, { protocol: T17, drift: FIXTURE_PLANT }), /platformDrift refused — the platform makes no service call for terraform-iac-protocol/, 'a drift plant on a Terraform leg');
       } finally { for (const [mod, key, orig] of patches) mod[key] = orig; }
       assert(tripped.length === 0, `a network or process call was attempted: ${tripped.join(', ')}`);
       // The decision is the shipping table's, never a lab copy.
       const src = fs.readFileSync(path.join(LAB, 'config-sources-patch.ts'), 'utf8');
-      assert(/import \{[^}]*\bgitLiveDriftMethodOf\b[^}]*\} from '\.\.\/\.\.\/lib\/agents\/harness\/git-live-drift'/.test(src) && !/terraform-iac/.test(src.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '')), 'config-sources-patch.ts must decide with the SHIPPING gitLiveDriftMethodOf and name no protocol in code');
+      assert(/import \{[^}]*\bgitLiveDriftCallsService\b[^}]*\} from '\.\.\/\.\.\/lib\/agents\/harness\/git-live-drift'/.test(src) && !/terraform-iac/.test(src.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '')), 'config-sources-patch.ts must decide with the SHIPPING no-call guard (gitLiveDriftCallsService, STEP 3 P3) and name no protocol in code');
     });
 
     await test('LCT3 (carry + bytes, $0 dry run through lab.ts) a persisted TERRAFORM Reviewer cell (the cached TF-PROG leg — retired from the golden set at v10, still a lab input): the 1.16.0 base arm is byte-identical to the frozen production rebuild and to a node with no lever; the 1.17.0 arm\'s Reviewer AND Author prompts are the base plus EXACTLY the shipping liveEvidence render (the Reviewer\'s also the Plan-witness platform line, planWitness lever), and NO drift line (the chainer carries gitLiveDrift only when checked; the lab copy is pinned to it); the manifest records no call; a drift plant on the Terraform node stops the dry run', async () => {
@@ -2771,7 +2774,7 @@ const commitText = (name: string, commit: string): ProtocolText => {
       // A drift plant on a Terraform node can never reach a prompt — refused before any build.
       e.nodes[1].platformDrift = FIXTURE_PLANT; fs.writeFileSync(ef, JSON.stringify(e));
       let refused = ''; try { runLab(['run', '--experiment', comp, '--out', path.join(root, 'dry-bad')]); } catch (x: any) { refused = String(x.stderr ?? '') + String(x.stdout ?? ''); }
-      assert(/platformDrift refused — terraform-iac-protocol has no Git-vs-live method/.test(refused), `a Terraform drift plant was not refused: ${refused.slice(-300)}`);
+      assert(/platformDrift refused — the platform makes no service call for terraform-iac-protocol/.test(refused), `a Terraform drift plant was not refused: ${refused.slice(-300)}`);
     });
 
     // ───────────── L-CS-T pre-registration levers (2026-11-17): the refused-ref cell, the planted-Author stamp rule, the scorer, the builder ─────────────

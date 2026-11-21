@@ -34,10 +34,11 @@ const applied = { version: 1, state: 'applied', candidateDigest8: 'abcd1234' };
 const rendered = (o: Record<string, unknown> = {}) => ({ version: 1, state: 'rendered', authorExecutionId: AUTH_EXEC, candidateDigest8: 'abcd1234', ...o });
 
 /** A leg stage: an Author and a Reviewer child, each with one SUCCESS result.json carrying the stamps given. */
-function world(author: Record<string, unknown> | null, reviewer: Record<string, unknown> | null, o: { throwOnRead?: boolean; baseLegs?: Array<string | null>; harvester?: { refusalsByExec: Record<string, number> }; captureRefs?: Array<{ target: string; path: string }> } = {}) {
+function world(author: Record<string, unknown> | null, reviewer: Record<string, unknown> | null, o: { throwOnRead?: boolean; baseLegs?: Array<string | null>; harvester?: { refusalsByExec: Record<string, number> }; captureRefs?: Array<{ target: string; path: string }>;
+  /** STEP 3 P3: extra stamps on the Author's result.json (its transcribed gitLiveDrift). */ authorExtra?: Record<string, unknown> } = {}) {
   const reads: string[] = [];
   const execs: StubExecution[] = [
-    { id: AUTH_EXEC, taskId: 't-author', createdAt: new Date(1_700_000_000_000), result: { agentRole: 'config_change_author', finalResponse: 'pkg', ...(author ? { editApplication: author } : {}) } },
+    { id: AUTH_EXEC, taskId: 't-author', createdAt: new Date(1_700_000_000_000), result: { agentRole: 'config_change_author', finalResponse: 'pkg', ...(author ? { editApplication: author } : {}), ...(o.authorExtra ?? {}) } },
     { id: 'ex-rev', taskId: 't-rev', createdAt: new Date(1_700_000_001_000), result: { agentRole: 'change_reviewer', finalResponse: 'review', reviewerVerdict: { approved: true, blocking: [] }, ...(reviewer ? { reviewedEditDiff: reviewer } : {}) } },
   ];
   // held-k8s step 3 (G-4): an optional Harvester child — an OLDER execution and the authoritative (newest) one.
@@ -206,6 +207,26 @@ test('STEP 3 P2 (W10 / B6): a declared observability leg — a service-held file
   const mk = merge('approved');
   await applyHeldEditCarrier(k8sWorld(applied, rendered()).db, K8SLEG, mk);
   ok(!('captureExecutionId' in mk.qualityGate.heldEdit), 'a Kubernetes heldEdit stamp gained captureExecutionId');
+});
+test('STEP 3 P3 (architectural F4): the carrier keeps NO count of the overlap fact — `compareBaseDiffers` had no reader and was dropped; `baseMatch` lives on the Author\'s gitLiveDrift alone, and it never changes an outcome', async () => {
+  const lines = [OBS_GIT, 'obs-otelcol: live-read — service observability-readonly'];
+  const body = `Tune.\n\n## Config sources\n${lines.join('\n')}\n`;
+  const dec = configSnapshotDecision({ type: 'PIPELINE', protocol: 'observability-config-protocol', description: body, interfaceContract: null, takenAt: '2026-11-21T00:00:00.000Z' }, []);
+  if (dec.action !== 'write') throw new Error(`the fixture block did not snapshot: ${JSON.stringify(dec)}`);
+  const leg = { ...OBS_CONFIG_LEG, metadata: { ...OBS_CONFIG_LEG.metadata, [CONFIG_SOURCES_SNAPSHOT_KEY]: dec.snapshot } };
+  const GIT = { target: 'github:paichart:paichart-configs', path: '/observability/otelcol/config.yaml' };
+  const file = (baseMatch: string) => ({ label: 'obs-otelcol', git: { path: 'observability/otelcol/config.yaml', ref: null }, state: 'differs', baseMatch });
+  const run = async (authorExtra: Record<string, unknown> | undefined, awaiting: readonly string[] = []) => {
+    const w = obsWorld({ description: body, snapshot: dec.snapshot }, applied, rendered(), { harvester: { refusalsByExec: {} }, captureRefs: [GIT], ...(authorExtra ? { authorExtra } : {}) }); const m = merge('approved');
+    await applyHeldEditCarrier(w.db, leg, m, { configAwaiting: awaiting });
+    return m.qualityGate as Record<string, any>;
+  };
+  const differs = await run({ gitLiveDrift: { version: 1, method: 'file-ordered-lines/1', checked: true, files: [file('differs'), file('same'), { ...file('differs'), label: 'x' }] } });
+  eq([differs.outcome, differs.heldEdit.forced, 'reason' in differs.heldEdit, 'compareBaseDiffers' in differs.heldEdit], ['approved', false, false, false], 'two files edited on another read — NOT forced, and no count on the gate: ');
+  // a Kubernetes stamp never carries the key
+  const mk = merge('approved');
+  await applyHeldEditCarrier(k8sWorld(applied, rendered()).db, K8SLEG, mk);
+  ok(!('compareBaseDiffers' in mk.qualityGate.heldEdit), 'a Kubernetes heldEdit stamp gained compareBaseDiffers');
 });
 test('held-k8s step 3 (G-4): a source-not-pinned refusal on the leg\'s AUTHORITATIVE Harvester forces needs-revision — even when the package is out of scope', async () => {
   const noBase = { version: 1, state: 'no-base' };                                  // out of scope: the refused read left no base

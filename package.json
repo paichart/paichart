@@ -329,7 +329,7 @@
     "test:user-doc-numbers": "ts-node -r tsconfig-paths/register scripts/test-user-doc-numbers.ts",
     "test:spec-topology": "python3 scripts/check-spec-topology.py --self-test",
     "test:descriptor-registration-route": "ts-node -r tsconfig-paths/register scripts/test-descriptor-registration-route.ts",
-    "test:git-live-drift": "ts-node -r tsconfig-paths/register scripts/test-git-live-drift.ts",
+    "test:git-live-drift": "ts-node -r tsconfig-paths/register scripts/test-git-live-drift.ts && ts-node -r tsconfig-paths/register scripts/test-file-source-compare.ts",
     "test:stamp-execution-nets-forward": "ts-node -r tsconfig-paths/register scripts/test-stamp-execution-nets-forward.ts",
     "test:plan-witness": "ts-node -r tsconfig-paths/register scripts/test-plan-witness.ts",
     "test:held-capture-replay-diff": "bash scripts/check-held-capture-replay-diff.sh",

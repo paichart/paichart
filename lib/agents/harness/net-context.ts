@@ -19,7 +19,8 @@ import type { NetContext, Fact } from './net-registry';
 import { owningLegMemo, type OwningLegResolution } from './held-bytes/variant';
 import { legDeviceSourcesMemo, type LegDeviceSourcesResolution } from './device-sources-read';
 import { legConfigSourcesMemo, type LegConfigSourcesResolution } from './config-sources-read';
-import { computeConfigSourceReads } from './config-source-facts';
+import { computeConfigSourceReads, computeFileConfigSourceReads } from './config-source-facts';
+import { protocolDeclaresServiceFiles } from './held-bytes/config-source-scope';
 import { computeDeviceSourceReads } from './device-source-facts';
 
 /** Mirrors the per-net cap; see `pagination-safety-cap-pattern` and the SEARCH-vs-AGGREGATE note. */
@@ -43,16 +44,26 @@ export interface BuildNetContextInput {
   /** Stage B (A6): the core's one owning-leg resolution; absent ⇒ resolved lazily, once, by the same function. */
   owningLeg?: OwningLegResolution | null;
   /** Stage B: the variant stamps the core built pre-tx. */
-  held?: { editApplication?: Fact | null; heldBytes?: Fact | null; /** the handles whose BASE the package holds (V-8a; EF-P2-3) */ baseHeldHandles?: readonly string[] | null;
-    /** planWitness: the held-edit step's key read, built pre-tx where the held file text is in memory. */ planWitnessKeys?: unknown };
+  held?: NetContext['held'];
   /** held-network step 3 batch 2b: the core's one read of the leg's declared Device sources; absent ⇒ resolved lazily, once. */
   deviceSources?: LegDeviceSourcesResolution | null;
   /** Config sources STEP 2: the core's one read of the leg's declared Config sources; absent ⇒ resolved lazily, once. */
   configSources?: LegConfigSourcesResolution | null;
   /** Config sources STEP 2: the platform's drift call record (null = no call was planned); absent ⇒ undefined. */
   platformDriftCalls?: readonly unknown[] | null;
+  /** Config sources STEP 3 P3: the core's file-comparison record (null / undefined = none was made). A replay passes the STORED one. */
+  fileSourceCompare?: unknown;
   /** Config-sources network push 1a: the persisting execution's own `protocolInjection` (result.json shape); absent ⇒ undefined. */
   protocolInjection?: unknown;
+}
+
+/** The protocol that decides which read record a Config-sources leaf has: the OWNING LEG's Config-sources protocol, else — only when
+ *  the resolution carries none (a leg that could not be read, or a context primed with a declaration and no leg) — the leaf's own
+ *  composed protocol. The rule `gitLiveDrift`'s `methodProtocol` uses, so the facts of one persist cannot name two protocols. */
+function configFactProtocol(leg: OwningLegResolution, protocolInjection: unknown): string | null {
+  if ((leg.kind === 'self' || leg.kind === 'leg') && leg.configSourceProtocol) return leg.configSourceProtocol;
+  const pi = protocolInjection as { delta?: { name?: unknown } } | null | undefined;
+  return pi && pi.delta && typeof pi.delta.name === 'string' ? pi.delta.name : null;
 }
 
 export function buildNetContext(input: BuildNetContextInput): NetContext {
@@ -83,7 +94,15 @@ export function buildNetContext(input: BuildNetContextInput): NetContext {
     deviceSourceReadRecord: () => (readRecordPromise ??= deviceSources().then((src) => computeDeviceSourceReads(src, input.toolCalls ?? []))),
     configSources,
     ...(input.platformDriftCalls !== undefined ? { platformDriftCalls: input.platformDriftCalls } : {}),
-    configSourceReadRecord: () => (configRecordPromise ??= configSources().then((src) => computeConfigSourceReads(src, input.toolCalls ?? []))),
+    ...(input.fileSourceCompare !== undefined && input.fileSourceCompare !== null ? { fileSourceCompare: input.fileSourceCompare } : {}),
+    // STEP 3 P3 (plan §13 B3): for a protocol whose labels name FILES the read record is built from the compare record's capture
+    // list — what capture did — and, with no record, it is the named `no-compare-record`: it never falls back to "any call to the
+    // service succeeded". Every other protocol: the read of the tool calls, unchanged.
+    configSourceReadRecord: () => (configRecordPromise ??= (async () => {
+      const src = await configSources();
+      return protocolDeclaresServiceFiles(configFactProtocol(await owningLeg(), input.protocolInjection))
+        ? computeFileConfigSourceReads(src, input.fileSourceCompare) : computeConfigSourceReads(src, input.toolCalls ?? []);
+    })()),
     ...(input.protocolInjection !== undefined ? { protocolInjection: input.protocolInjection } : {}),
     ...(input.held ? { held: input.held } : {}),
 

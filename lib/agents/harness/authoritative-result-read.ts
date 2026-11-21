@@ -32,7 +32,8 @@ import type { Prisma } from '@prisma/client';
 import { selectAuthoritativeExecution, CHAIN_SELECTION_OPTIONS } from '../../services/execution-selection';
 
 export type ResultField = 'finalResponse' | 'rollbackContainment' | 'derivationContainment' | 'reviewerVerdict' | 'reviewerWarnings' | 'toolCalls'
-  | 'editApplication' | 'reviewedEditDiff' | 'heldBytes' | 'gitDeviceComparison' | 'liveEvidence' | 'gitLiveDrift' | 'planWitness';
+  | 'editApplication' | 'reviewedEditDiff' | 'heldBytes' | 'gitDeviceComparison' | 'liveEvidence' | 'gitLiveDrift' | 'planWitness'
+  | 'gitLiveDriftAndCompare';
 
 export type AuthoritativeReadClient = Pick<Prisma.TransactionClient, 'agentExecution' | 'agentArtifact' | '$queryRaw'>;
 
@@ -163,6 +164,16 @@ export async function readAuthoritativeResultField(
     case 'planWitness':
       rows = await client.$queryRaw<Array<{ v: string | null }>>`
         SELECT (content::jsonb)->>'planWitness' AS v FROM agent_artifacts
+        WHERE name = 'result.json' AND content LIKE '{%'
+          AND "executionId" = ${executionId}
+        ORDER BY "createdAt" DESC LIMIT 1`;
+      break;
+    // Config sources STEP 3 P3 (plan §13 C2): the observability Harvester's `gitLiveDrift` AND its `fileSourceCompare` record, from
+    // the SAME artifact row — the Author's transcription needs the fact and the ranges its overlap is computed on under ONE
+    // execution id. A JSON object with those two keys (either may be null).
+    case 'gitLiveDriftAndCompare':
+      rows = await client.$queryRaw<Array<{ v: string | null }>>`
+        SELECT jsonb_build_object('gitLiveDrift', (content::jsonb)->'gitLiveDrift', 'fileSourceCompare', (content::jsonb)->'fileSourceCompare')::text AS v FROM agent_artifacts
         WHERE name = 'result.json' AND content LIKE '{%'
           AND "executionId" = ${executionId}
         ORDER BY "createdAt" DESC LIMIT 1`;

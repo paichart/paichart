@@ -67,7 +67,10 @@ t('time per leg = PLATFORM_DRIFT_LEG_BUDGET_MS',
   row('time per leg for all comparisons').includes(`| ${PLATFORM_DRIFT_LEG_BUDGET_MS / 1000} seconds |`), row('time per leg for all comparisons'));
 
 // ── every "not checked" reason the platform can show is explained, in the platform's own words
-const words = [...DRIFT_SRC.matchAll(/^\s+'[a-z-]+': '((?:[^'\\]|\\.)+)',$/gm)].map((m) => m[1].replace(/\\'/g, "'"));
+// The KUBERNETES method's table only (`REASON_WORDS`): since Config sources STEP 3 P3 the module also holds the file method's
+// words (observability, unreachable before 1.12.0 — its user page is the S7 row's), which are not this page's.
+const K8S_WORDS_SRC = DRIFT_SRC.slice(DRIFT_SRC.indexOf('const REASON_WORDS: Record<string, string> = {'), DRIFT_SRC.indexOf('\n};', DRIFT_SRC.indexOf('const REASON_WORDS: Record<string, string> = {')));
+const words = [...K8S_WORDS_SRC.matchAll(/^\s+'[a-z-]+': '((?:[^'\\]|\\.)+)',$/gm)].map((m) => m[1].replace(/\\'/g, "'"));
 t('REASON_WORDS read from the source', words.length >= 15, String(words.length));
 for (const w of words) t(`reason explained: "${w}"`, DOC.includes(`| ${w} |`));
 

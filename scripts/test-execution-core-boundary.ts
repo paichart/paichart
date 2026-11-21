@@ -235,8 +235,25 @@ test('CTF-SEAM-6 (PLATFORM-HELD-BYTES Stage A): the capture halves sit where the
   const pos = (src: string, needle: string) => src.indexOf(needle);
   const count = (src: string, re: RegExp) => (src.match(re) || []).length;
   // core: ONE pure call after `const executionTime` and before every reader of toolCallResults
-  assert(count(coreSrc, /prepareHeldCapture\(/g) === 1, 'core: exactly one prepareHeldCapture(');
-  const prep = pos(coreSrc, 'prepareHeldCapture(');
+  // Config sources STEP 3 P3: the core's ONE capture call is the entry that returns the evidence BESIDE the plan.
+  assert(count(coreSrc, /prepareHeldCaptureWithEvidence\(/g) === 1 && count(coreSrc, /prepareHeldCapture\(/g) === 0, 'core: exactly one prepareHeldCaptureWithEvidence( and no bare prepareHeldCapture(');
+  const prep = pos(coreSrc, 'prepareHeldCaptureWithEvidence(');
+  // ── plan §13 B4 (the core hop of the file comparison, pinned) + sec-ops ruling E5 ──
+  //   - the comparison call appears ONCE in the core, after the capture call and before the nets;
+  //   - nothing is awaited between the capture call and the comparison (the served-side evidence is text that is never stored: it
+  //     exists only between those two statements), and both sit in ONE block that the evidence cannot leave;
+  //   - the record reaches the nets as a PLAIN property, and is finalised after the capture write, before the nets.
+  assert(count(coreSrc, /runLegFileSourceCompare\(/g) === 1, 'core: exactly one runLegFileSourceCompare(');
+  const cmpAt = pos(coreSrc, 'runLegFileSourceCompare(');
+  assert(cmpAt > prep && cmpAt < pos(coreSrc, 'await stampExecutionNets('), 'core: the comparison is after the capture call and before the nets');
+  assert(!/\bawait\b/.test(coreSrc.slice(prep, cmpAt)), 'core: an `await` between the capture call and the comparison (ruling E5 — the evidence must not outlive one synchronous step)');
+  const block = coreSrc.slice(coreSrc.lastIndexOf('\n    {\n', prep), coreSrc.indexOf('\n    }\n', cmpAt));
+  assert(block.includes('const prepared = prepareHeldCaptureWithEvidence(') && block.includes('evidence: prepared.evidence') && block.includes('heldPlan = prepared.plan;'), 'core: the capture call and the comparison share one block');
+  assert(count(coreSrc, /prepared\.evidence/g) === 1 && count(coreSrc, /\bprepared\b/g) === 4, 'core: the evidence is read ONCE, by the comparison, and `prepared` does not leave its block');
+  assert(/\n\s*fileSourceCompare,\n/.test(coreSrc.slice(pos(coreSrc, 'await stampExecutionNets('))), 'core: fileSourceCompare is passed to the nets as a plain property');
+  const fin = pos(coreSrc, 'finaliseFileSourceCompare(fileSourceCompare, heldCaptures)');
+  assert(fin > pos(coreSrc, 'let heldCaptures = variantLeaf ? await captureHeldFiles(') && fin < pos(coreSrc, 'await stampExecutionNets('), 'core: the record is finalised after the capture write and before the nets (plan §13 A3)');
+  assert(coreSrc.includes('harvesterCompareOverlay(resultJson as Record<string, unknown>, rw === \'rolled-back\')'), 'core: the record joins the capture overlay (plan §13 A3)');
   assert(prep > pos(coreSrc, 'const executionTime') && prep < pos(coreSrc, 'buildSuccessLogs(')
     && prep < pos(coreSrc, 'assessExecutionQuality(') && prep < pos(coreSrc, 'buildExecutionResultJson('),
     'core: the pure half is after the duration and before buildSuccessLogs / assessExecutionQuality / buildExecutionResultJson');

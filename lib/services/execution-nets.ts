@@ -37,9 +37,13 @@ import { isProgramHarnessTask } from '@/lib/agents/harness/program-protocol';
  *   platformDriftCalls — Config sources STEP 2: the platform's drift call record (`undefined` = no call planned ⇒ NOT_STAMPED). The
  *                     rescue never passes it (a PIPELINE task — no Harvester point applies, and it must never call); a replay passes
  *                     the STORED record.
+ *   fileSourceCompare — Config sources STEP 3 P3: the core's file-comparison record (`undefined` = none was made ⇒ the record net is
+ *                     NOT_STAMPED and the three facts read `no-compare-record` on a declared leg). The rescue never passes it (a
+ *                     PIPELINE task — no Harvester point applies); a replay passes the STORED record (it cannot be recomputed: the
+ *                     served text is stored nowhere).
  *   held            — Stage B: the variant stamps built pre-tx (V-5d/V-5g).
  */
-export type NetContextPassThrough = Pick<BuildNetContextInput, 'owningLeg' | 'deviceSources' | 'configSources' | 'platformDriftCalls' | 'held'>;
+export type NetContextPassThrough = Pick<BuildNetContextInput, 'owningLeg' | 'deviceSources' | 'configSources' | 'platformDriftCalls' | 'fileSourceCompare' | 'held'>;
 
 export interface StampExecutionNetsInput extends NetContextPassThrough {
   task: { id: string; type?: string | null; metadata: Prisma.JsonValue | null; inputContext?: unknown };
@@ -75,7 +79,7 @@ export async function stampExecutionNets(
     // VERBATIM-QUOTE-OMISSION (2026-10-13): read off the BUILT resultJson, here, so the core and the rescue cannot hand
     // the nets different tool results (one chokepoint; the builder has already applied the persist truncation).
     toolCalls: resultJson.toolCalls,
-    // owningLeg / deviceSources / configSources / platformDriftCalls / held — the core's one reads and records, forwarded whole
+    // owningLeg / deviceSources / configSources / platformDriftCalls / fileSourceCompare / held — the core's one reads and records, forwarded whole
     // (buildNetContext normalises absent/null itself, so this is byte-equivalent to the old per-field `?? null` copies).
     ...passThrough,
     // Config-sources network push 1a (EF-S3): the version key `liveEvidence` is stamped on — read off the BUILT resultJson, like

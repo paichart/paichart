@@ -43,7 +43,11 @@ import { llmService } from './llm/llm-service';
 import { finalizeTextForStopReason } from './llm/finalize-response';
 import { buildExecutionResultJson, deriveChainedContextSignal } from './execution-artifacts';
 import { persistTerminalSuccess } from './execution-terminal-persist';
-import { prepareHeldCapture, captureHeldFiles, isHeldCaptureEnabled } from './held-bytes-capture';
+import { prepareHeldCaptureWithEvidence, captureHeldFiles, isHeldCaptureEnabled } from './held-bytes-capture';
+import type { HeldCapturePlan } from './held-bytes-store';
+import { runLegFileSourceCompare, harvesterCompareOverlay, authorDriftOverlay, editHunkFilesOrNull } from './file-source-compare-run';
+import { finaliseFileSourceCompare, type EditHunkFile } from '@/lib/agents/harness/file-source-compare';
+import { gitLiveDriftPlatformCompares } from '@/lib/agents/harness/git-live-drift';
 import { buildHeldDescriptorTable } from './held-descriptor-table';
 import { computeSelfSupersession } from './execution-selection';
 // The five facts are no longer imported one by one: they are ENTRIES in the shared registry, and
@@ -555,20 +559,36 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
     // nets below still receive `legConfigSources` on every lane — the facts read the declaration whatever the lane.
     // STEP 3 P2 (plan W1): the Git-lane switch and the Config scope are decided TOGETHER, by the one helper (the rescue calls it too).
     const captureScopes = captureScopesFor(owningLeg, legConfigSources);
-    const heldPlan = prepareHeldCapture({ toolCallResults, task: { id: task.id, povId: task.povId }, logger, heldTable, live: true,
-      echoSourceText: finalResponse ?? null, // R10-V8-RESIDUALS (a): part of the persist's echo source
-      ...(captureDeviceSources ? { deviceRead: buildDeviceReadScope(captureDeviceSources, toolCallResults) } : {}),
-      ...(captureScopes.configSources ? { configSources: captureScopes.configSources, configSourceProtocol: captureScopes.configSourceProtocol } : {}),
-      gitFileSourceLeg: captureScopes.gitFileSourceLeg }); // held-k8s 1b-scope (SYNTHESIS v3 §6.2); STEP 3 P2: via captureScopesFor
+    const isHarvesterLeaf = task.type !== 'PIPELINE' && HARVEST_LEAF_ROLE_RE.test(agentRole ?? '');
+    const legConfigProtocol = (owningLeg?.kind === 'leg' || owningLeg?.kind === 'self') ? owningLeg.configSourceProtocol ?? null : null;
+    let heldPlan: HeldCapturePlan | null;
+    // Config sources STEP 3 P3 (plan W2, §13 B2 / B4; sec-ops ruling E5): the PLATFORM's file comparison — the held Git file against
+    // the served file, for a protocol whose method is `platform-compare` (observability). SYNCHRONOUS, in THIS block, with no
+    // `await` between the capture plan and the record: the served-side evidence is text that is never stored, so it exists only
+    // between these two statements and is unreachable after the block. `undefined` everywhere else (nothing compared, nothing stamped).
+    let fileSourceCompare: Record<string, unknown> | undefined;
+    {
+      const prepared = prepareHeldCaptureWithEvidence({ toolCallResults, task: { id: task.id, povId: task.povId }, logger, heldTable, live: true,
+        echoSourceText: finalResponse ?? null, // R10-V8-RESIDUALS (a): part of the persist's echo source
+        ...(captureDeviceSources ? { deviceRead: buildDeviceReadScope(captureDeviceSources, toolCallResults) } : {}),
+        ...(captureScopes.configSources ? { configSources: captureScopes.configSources, configSourceProtocol: captureScopes.configSourceProtocol } : {}),
+        gitFileSourceLeg: captureScopes.gitFileSourceLeg }); // held-k8s 1b-scope (SYNTHESIS v3 §6.2); STEP 3 P2: via captureScopesFor
+      heldPlan = prepared.plan;
+      fileSourceCompare = runLegFileSourceCompare({
+        sources: platformDriftAppliesToLane(owningLeg) ? legConfigSources : null, protocol: legConfigProtocol, isHarvester: isHarvesterLeaf,
+        versionApplies: liveEvidenceVersionApplies(protocolInjection), plan: prepared.plan, evidence: prepared.evidence,
+        toolCalls: toolCallResults, executionId, logger });
+    }
     // Config sources STEP 2 slice 3b: the PLATFORM's Git-vs-live drift calls — only on a Harvester of a Config-sources leg with a
     // parsed declaration (`undefined` everywhere else: nothing is called, nothing is stamped). After the capture is PLANNED (the
     // held bytes are the plan's own strings), before the nets, outside any transaction. Never throws.
     const platformDriftCalls = await runLegPlatformDrift({
-      sources: platformDriftAppliesToLane(owningLeg) ? legConfigSources : null, isHarvester: task.type !== 'PIPELINE' && HARVEST_LEAF_ROLE_RE.test(agentRole ?? ''),
+      sources: platformDriftAppliesToLane(owningLeg) ? legConfigSources : null, isHarvester: isHarvesterLeaf,
       versionApplies: liveEvidenceVersionApplies(protocolInjection),
       heldFiles: heldPlan?.files ?? [], toolCalls: toolCallResults, runOwnerId: userId, executionId, logger,
-      // STEP 4 D-T1: a protocol with no Git-vs-live method (Terraform) makes no call.
-      protocol: (owningLeg?.kind === 'leg' || owningLeg?.kind === 'self') ? owningLeg.configSourceProtocol ?? null : null,
+      // STEP 4 D-T1 / STEP 3 P3 (plan W4): REQUIRED. A call is made only for a protocol whose method row says `by: 'service-call'`
+      // (Kubernetes); no method (Terraform), a `platform-compare` method (observability) or no resolved leg makes no call.
+      protocol: legConfigProtocol,
     });
 
     // Token usage — 0.5b: computed AFTER the #90 retry fold so result.json / logs / persist agree.
@@ -728,6 +748,9 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
     // change (CTF-SEAM-6). A non-variant execution keeps every Stage A position and statement.
     const variantLeaf = owningLeg?.heldCapable === true; // Phase 10: a held-capable leaf (glossary: held-bytes/variant.ts)
     let heldCaptures = variantLeaf ? await captureHeldFiles(prisma, { executionId, taskId: task.id, plan: heldPlan, logger }) : null;
+    // STEP 3 P3 (plan §13 A3, first route): the compare record states what was WRITTEN — a declared file the I/O half refused
+    // (a failed blob upsert, a dropped row) reads that refusal, and its label `git-file-not-held`, before the nets see the record.
+    if (fileSourceCompare && variantLeaf) fileSourceCompare = finaliseFileSourceCompare(fileSourceCompare, heldCaptures);
     let heldPackage: PreparedHeldPackage | null = null;
     // BC-P2-4: the package and its stamps exist ONLY on a resolved variant leaf. On `could-not-check` the step still runs (it
     // computes the named state) but nothing is written or overlaid: the net's errorFact stands (V-5a), the carrier forces.
@@ -740,7 +763,8 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
     // The variant stamps, built ONCE: the nets transcribe the 'committed' build; the persist picks committed / rolled-back
     // by what its savepoint did (AE S2: the same builder, the same inputs).
     let heldVariant: HeldVariantPersist | null = null;
-    let heldStamps: { editApplication?: Record<string, unknown>; heldBytes?: Record<string, unknown>; baseHeldHandles?: string[]; planWitnessKeys?: unknown } | undefined;
+    let heldStamps: { editApplication?: Record<string, unknown>; heldBytes?: Record<string, unknown>; baseHeldHandles?: string[]; planWitnessKeys?: unknown;
+      editHunkFiles?: EditHunkFile[] } | undefined;
     if (variantLeaf && editStep && heldPackage) {
       const step = editStep; const pkg = heldPackage;
       const hasRows = pkg.rows.length > 0;
@@ -761,7 +785,14 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
       if (planWitnessApplies((resultJson as Record<string, unknown>).protocolInjection)) {
         heldStamps.planWitnessKeys = planWitnessKeysOrNull(pkg.application, step.files);
       }
-      heldVariant = { kind: 'package', overlay: (rw) => ({ editApplication: factFor(rw) }),
+      // STEP 3 P3 (plan §3.4, §13 C2): the applied hunks' base line ranges per held file, for the OVERLAP fact — read HERE because
+      // the applier's hunks exist only in this step's memory. Only on a leg whose protocol the platform compares (observability);
+      // every other Author's `held` is byte-identical. Never throws (null = no record of the edit: the fact says so by name).
+      if (gitLiveDriftPlatformCompares(legConfigProtocol)) heldStamps.editHunkFiles = editHunkFilesOrNull(pkg.application, step.refs, pkg.baseShaByHandle) ?? undefined;
+      // The package overlay also carries the Author's `gitLiveDrift` when it has an overlap: on a rolled-back package no edit was
+      // written, so every `editOverlap` reads `package-rolled-back` (§13 C2). Read off the BUILT resultJson at persist time (the net
+      // stamps it after this closure is made); absent on every Author with no such stamp, so their overlay is unchanged.
+      heldVariant = { kind: 'package', overlay: (rw) => ({ editApplication: factFor(rw), ...authorDriftOverlay(resultJson as Record<string, unknown>, rw === 'rolled-back' && hasRows) }),
         manifests: [{ name: EDIT_APPLICATION_MANIFEST_NAME, build: manifestFor }], packageRows: pkg.rows };
     } else if (variantLeaf && heldCaptures && heldPlan && HARVEST_LEAF_ROLE_RE.test(agentRole ?? '')) {
       // AE-P2-1: the capture ROWS are written for any role (Stage A), but the heldBytes stamp + manifest are the HARVESTER's
@@ -769,7 +800,9 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
       const batch = heldCaptures; const storedBytes = heldPlan.files.reduce((n, f) => n + f.storedByteLength, 0);
       const digestFor = (rw: 'committed' | 'rolled-back') => buildHeldBytesDigest({ refs: batch.refs, refusals: batch.refusals, storedBytes }, undefined, { refWrite: rw }) as unknown as Record<string, unknown>;
       heldStamps = { heldBytes: digestFor('committed') };
-      heldVariant = { kind: 'capture', overlay: (rw) => ({ heldBytes: digestFor(rw) }),
+      // STEP 3 P3 (plan §13 A3, second route): the compare record and the Harvester's `gitLiveDrift` join the SAME committed /
+      // rolled-back overlay — on a rolled-back savepoint the persisted record claims no held base and no Git sha.
+      heldVariant = { kind: 'capture', overlay: (rw) => ({ heldBytes: digestFor(rw), ...harvesterCompareOverlay(resultJson as Record<string, unknown>, rw === 'rolled-back') }),
         manifests: [{ name: HELD_BYTES_MANIFEST_NAME, build: (rw) => ({ refWrite: rw, ...buildHeldBytesManifest({ refs: batch.refs, refusals: batch.refusals, storedBytes }) }) }] };
     } else if (variantLeaf && !heldPlan && HARVEST_LEAF_ROLE_RE.test(agentRole ?? '')) {
       // PC-P2-3 (G3 entry, 2026-10-16): a variant HARVESTER with no capture plan names WHY — the switch was off, or no as-deployed
@@ -792,6 +825,7 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
       deviceSources: legDeviceSources,
       configSources: legConfigSources,
       platformDriftCalls,
+      fileSourceCompare,
       held: heldStamps,
     }, resultJson as Record<string, unknown>);
 

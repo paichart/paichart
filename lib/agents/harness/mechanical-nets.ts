@@ -56,7 +56,8 @@ import { renderGitDeviceComparisonForPrompt } from './git-device-comparison';
 import { computeLiveEvidenceHarvesterFact, transcribeLiveEvidenceFact, hoistLiveEvidenceFact } from './live-evidence-enrichment';
 import { renderLiveEvidenceForPrompt } from './live-evidence';
 import { computeConfigSourceReadsFact } from './config-source-facts-enrichment';
-import { stampPlatformDriftCalls, computeGitLiveDriftHarvesterFact, transcribeGitLiveDriftFact } from './git-live-drift-enrichment';
+import { stampPlatformDriftCalls, computeGitLiveDriftHarvesterFact, transcribeGitLiveDriftFact, stampFileSourceCompare } from './git-live-drift-enrichment';
+import { quotableLine } from './file-compare-quote-seam';
 import { renderGitLiveDriftForPrompt } from './git-live-drift';
 import { computePlanWitness, planWitnessApplies, renderPlanWitnessForPrompt } from './plan-witness';
 import { resolveOwningLegProtocol, isHeldCapableLeg } from './held-bytes/variant';
@@ -311,6 +312,8 @@ export const MECHANICAL_NETS: readonly MechanicalNet[] = [
       stageId: (ctx.task.metadata as Record<string, unknown> | null)?.pipelineStageId,
       programTier: ctx.programTier,
       protocol: (ctx.task.metadata as Record<string, unknown> | null)?.protocol,
+      // STEP 3 P3 (plan W5 row 21): asked only for a protocol with declared-leg warning ids (none until the observability join).
+      declaredConfigLeg: async () => (ctx.configSources ? (await ctx.configSources()).state === 'parsed' : false),
     }),
     errorFact: () => ({ checked: false, reason: 'enrichment-error', count: 0, ids: [] }),
     renderCard: 'lean-card-facts',
@@ -560,7 +563,11 @@ export const MECHANICAL_NETS: readonly MechanicalNet[] = [
   // ── Config sources STEP 2 (2026-11-15): `configSourceReads` — for each source line a Config-sources leg declares, which call read
   // it? APPENDED (key order is the equivalence contract). CONDITIONAL: NOT_STAMPED unless the owning leg declares Config sources
   // today (CONFIG_SOURCE_PROTOCOLS — the lane rows whose Config-sources text has shipped: Kubernetes, Terraform), so every stored leg and every other
-  // domain replays byte-identical. An OPERATOR fact, never a gate; `liveEvidence`'s Config arm is computed from the same record.
+  // domain replays byte-identical.
+  // STEP 3 P3 (plan §3.2, review AR C-4): the population is no longer "a declared leg" alone. On a `runs-undeclared` protocol
+  // (observability, from 1.12.0) a RESOLVED leg that declares NOTHING is stamped too — the no-block arm (`checked:false`, the
+  // `undeclared` key). `conditionalStampReason` keeps its token (`not-config-source-leg`): the replay prints it on every stored
+  // leaf, so renaming it would move every stored replay line; it now means "not a leg this fact stamps". An OPERATOR fact, never a gate; `liveEvidence`'s Config arm is computed from the same record.
   // Version-keyed too (owner decision 2026-11-15, G4-a): NOT_STAMPED below the protocol's Config-sources text version
   // (`liveEvidenceVersionApplies` — kubernetes-gitops 1.19.0), so a stored pre-1.19.0 Harvester never gains the key on a replay.
   {
@@ -612,7 +619,7 @@ export const MECHANICAL_NETS: readonly MechanicalNet[] = [
       ? computeGitLiveDriftHarvesterFact(ctx) : transcribeGitLiveDriftFact(ctx)),
     errorFact: () => ({ version: 1, checked: false, reason: 'enrichment-error' }),
     renderCard: null,
-    renderPrompt: (fact) => renderGitLiveDriftForPrompt(fact),
+    renderPrompt: (fact) => renderGitLiveDriftForPrompt(fact, { quotable: quotableLine }),
     renderNullReason:
       'owner Group K1/K2 (2026-11-09): a fact for the Kubernetes Architect and the leg Reviewer only — rendered in §6 (the chainer '
       + 'carries it to those two roles), never on the lean card, which feeds leg SYNTHESIZE and the program gate (gates nothing).',
@@ -649,5 +656,32 @@ export const MECHANICAL_NETS: readonly MechanicalNet[] = [
     summaryExcludedReason:
       'kept off the agent.results summary (its one gate use is the held-edit carrier, which reads the Author\'s result.json directly); '
       + 'persisted in the operator tail so the 8 KB head and the finalResponse offset do not move. A verbose agent.results returns it.',
+  },
+  // ── Config sources STEP 3 P3 (plan W2, §5.2; 2026-11-21): `fileSourceCompare` — the STORED record of the PLATFORM's own comparison
+  // of a held Git file with the served file (observability: the `file-ordered-lines/1` method). The comparison is made in the
+  // execution core, synchronously, from capture's own canonical and redacted text of both files; this net only TRANSCRIBES the
+  // record the core hands the context (re-validated), so a replay carries the stored record back and never recomputes — the served
+  // text is stored nowhere. `gitLiveDrift`, `configSourceReads` and `liveEvidence` are computed FROM it. APPENDED (key order is the
+  // equivalence contract). CONDITIONAL and VERSION-KEYED: NOT_STAMPED unless the persisting Harvester composed its protocol at the
+  // Config-sources text version, its leg's declaration is `parsed`, and its protocol is one the platform compares — so every
+  // stored leg and every other domain replays byte-identical. Carries what capture did for every declared line, the two shas, the
+  // counts, at most 20 + 20 quoted lines a file and the FULL differing line ranges (the overlap fact reads those; they are never
+  // chained and never rendered). A FACT, never a gate.
+  {
+    name: 'fileSourceCompare',
+    point: 'leaf-persist',
+    conditionalStampReason: 'not-file-compare-leg',
+    appliesTo: (ctx) => ctx.task.type !== 'PIPELINE' && HARVEST_LEAF_ROLE_RE.test(ctx.agentRole ?? '') && !SPECIFICATION_ROLE_RE.test(ctx.agentRole ?? ''),
+    enrich: async (ctx) => stampFileSourceCompare(ctx),
+    errorFact: () => ({ version: 1, checked: false, reason: 'enrichment-error' }),
+    renderCard: null,
+    renderPrompt: null,
+    renderNullReason:
+      'Config sources STEP 3 P3: the OPERATOR record of the platform\'s file comparison (what capture did for each declared line, the '
+      + 'counts, the differing line ranges). No agent reads it: it is never chained. The agent-facing statement is `gitLiveDrift`, '
+      + 'computed from it and rendered in §6 without any range.',
+    summaryExcludedReason:
+      'an operator record with no gate consumer; persisted in the operator tail (RESULT_JSON_OPERATOR_TAIL_KEYS) so the 8 KB head and '
+      + 'the finalResponse offset do not move. A verbose agent.results returns it.',
   },
 ];

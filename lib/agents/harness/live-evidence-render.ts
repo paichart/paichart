@@ -69,8 +69,50 @@ function renderConfigLiveEvidence(fact: Obj): string[] {
   return out;
 }
 
+/** Config sources STEP 3 P3: the population clause of the FILES arm. Pinned. */
+export const FILES_LIVE_EVIDENCE_SCOPE_CLAUSE = '(of the declared configuration files; a file the declaration does not name is not counted)';
+/** Review AR C-1: what `all-git-only` is a statement ABOUT. The fact is execution-facts'; these WORDS are prompt-construction's to
+ *  change with the protocol text, and are pinned (LE-F5). */
+export const ALL_GIT_ONLY_FILES_NOTE = '`all-git-only` is a statement about the configuration FILES: no served copy of any declared file was read. It says nothing about the live service\'s targets and rules: this fact does not cover them.';
+const LABEL_SHOWN_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const label = (v: unknown): string => (typeof v === 'string' && LABEL_SHOWN_RE.test(v) ? `\`${v}\`` : '(one file)');
+
+/** The FILES arm (`fact.lane === 'config'`, `fact.unit === 'files'` — observability from 1.12.0): the items are configuration FILES,
+ *  each kept from Git or from the read-only service; a Git file may also declare a live read of the served copy. Its own words. */
+function renderFilesLiveEvidence(fact: Obj): string[] {
+  const head = `- **Live evidence — ${LIVE_EVIDENCE_RENDER_NAME}**:`;
+  if (fact.checked !== true) {
+    const why = fact.reason === 'no-compare-record'
+      ? "the platform's comparison record did not reach this fact, so it states nothing about which declared files were read"
+      : 'the platform could not read a Config sources declaration for this leg, so it states nothing about which sources were read';
+    return [`${head} not checked — ${q(fact.reason ?? 'no reason recorded')} (${why}).`];
+  }
+  const out = [
+    `${head} \`${q(fact.summary)}\` ${FILES_LIVE_EVIDENCE_SCOPE_CLAUSE} — ${q(fact.items)} configuration file(s) declared: ${q(fact.gitFileLines)} kept from Git, ${q(fact.serviceHeld)} kept from the read-only service (${q(fact.serviceHeldRead)} returned); ${q(fact.liveDeclared)} of the Git files also declare a live read of the served copy: ${q(fact.liveRead)} returned, ${listTotal(fact, 'liveNotRead')} declared file(s) not returned.`,
+  ];
+  if (fact.summary === 'all-git-only') out.push(`  - ${ALL_GIT_ONLY_FILES_NOTE}`);
+  if (Array.isArray(fact.gitOnlyFiles) && fact.gitOnlyFiles.length) {
+    out.push(`  - kept from Git, no live read of the served copy declared: ${(fact.gitOnlyFiles as unknown[]).map(label).join(', ')}${more(fact, 'gitOnlyFiles', fact.gitOnlyFiles)}`);
+  }
+  if (Array.isArray(fact.liveNotRead) && fact.liveNotRead.length) {
+    out.push(`  - declared, not returned by the declared service: ${names(fact.liveNotRead, (x) => {
+      const keys = Array.isArray(x.returnedKeys) ? (x.returnedKeys as unknown[]).filter((k) => typeof k === 'string' && LABEL_SHOWN_RE.test(k)).slice(0, 20) : null;
+      return `${label(x.label)} (${q(x.kind)}: ${q(x.state)}${keys ? `; the service returned: ${keys.length ? keys.map((k) => `\`${k}\``).join(', ') : 'no file'}` : ''})`;
+    })}${more(fact, 'liveNotRead', fact.liveNotRead)}`);
+  }
+  const gs = fact.gitOnlyStatement && typeof fact.gitOnlyStatement === 'object' ? (fact.gitOnlyStatement as Obj) : null;
+  // No sentence registered for the composed version (the table is EMPTY until the 1.12.0 text ships) ⇒ NOTHING is rendered: the
+  // stamp keeps the named state for the operator, and an agent is told nothing about a check the platform cannot make yet.
+  if (gs && !(gs.checked !== true && gs.reason === 'no-sentence-for-version')) {
+    if (gs.checked !== true) out.push(`  - the package's Git-only statement: not checked (${q(gs.reason ?? 'no reason recorded')}).`);
+    else out.push(`  - the package's Git-only statement: stated for ${q(gs.stated)} of ${q(gs.listed)} listed file(s)${Array.isArray(gs.missing) && gs.missing.length ? `; not stated for: ${(gs.missing as unknown[]).map(label).join(', ')}` : ''}.`);
+  }
+  return out;
+}
+
 export function renderLiveEvidenceForPrompt(fact: Obj | null | undefined): string[] | null {
   if (!fact || typeof fact !== 'object') return null;
+  if (fact.lane === 'config' && fact.unit === 'files') return renderFilesLiveEvidence(fact);
   if (fact.lane === 'config') return renderConfigLiveEvidence(fact);
   const head = `- **Live evidence — ${LIVE_EVIDENCE_RENDER_NAME}**:`;
   if (fact.checked !== true) {

@@ -15,8 +15,10 @@
 import type { NetContext } from './net-registry';
 import { NOT_STAMPED } from './net-registry';
 import { readLegConfigSources, type LegConfigSourcesResolution } from './config-sources-read';
-import { resolveOwningLegProtocol } from './held-bytes/variant';
-import { computeConfigSourceReads } from './config-source-facts';
+import { resolveOwningLegProtocol, isUndeclaredRunsLeg } from './held-bytes/variant';
+import { computeConfigSourceReads, computeFileConfigSourceReads, undeclaredConfigSourceReads } from './config-source-facts';
+import { protocolDeclaresServiceFiles } from './held-bytes/config-source-scope';
+import { canonicalProtocolName } from './program-protocol';
 import { liveEvidenceVersionApplies } from './live-evidence';
 
 export async function configDeclarationFor(ctx: NetContext): Promise<LegConfigSourcesResolution> {
@@ -29,6 +31,18 @@ export async function computeConfigSourceReadsFact(ctx: NetContext): Promise<Rec
   // The version test first: a population answer that needs no read (the order `gitLiveDrift`'s inPopulation uses).
   if (!liveEvidenceVersionApplies(ctx.protocolInjection)) return NOT_STAMPED;
   const src = await configDeclarationFor(ctx);
-  if (src.state === 'not-config-source-leg') return NOT_STAMPED;
-  return ctx.configSourceReadRecord ? ctx.configSourceReadRecord() : computeConfigSourceReads(src, ctx.toolCalls);
+  // Resolved only where it is needed (the memo is already primed in production; a declared Kubernetes or Terraform Harvester with a
+  // memoised read record never asks).
+  const legProtocolOf = async (): Promise<string | null> => {
+    const leg = ctx.owningLeg ? await ctx.owningLeg() : await resolveOwningLegProtocol(ctx.prisma as never, ctx.task as never);
+    return (leg.kind === 'self' || leg.kind === 'leg') && leg.configSourceProtocol ? canonicalProtocolName(leg.configSourceProtocol) : null;
+  };
+  if (src.state === 'not-config-source-leg') {
+    // STEP 3 P3 (plan §3.2, W5 row 7): the NO-BLOCK arm. Only a RESOLVED leg (a leaf with no leg also reads `not-config-source-leg`
+    // and must stamp nothing) whose protocol says `runs-undeclared` — the one helper (variant.ts). Every other leg: NOT_STAMPED.
+    return isUndeclaredRunsLeg(await legProtocolOf(), src.state) ? undeclaredConfigSourceReads(ctx.held?.heldBytes ?? null) : NOT_STAMPED;
+  }
+  if (ctx.configSourceReadRecord) return ctx.configSourceReadRecord();
+  // A hand-built context with no memo: the SAME dispatch the memo makes (net-context.ts) — a files protocol reads the compare record.
+  return protocolDeclaresServiceFiles(await legProtocolOf()) ? computeFileConfigSourceReads(src, ctx.fileSourceCompare) : computeConfigSourceReads(src, ctx.toolCalls);
 }

@@ -116,12 +116,12 @@ for (const n of ['req-src-contract-equals-spec', 'req-src-keys-parse', 'req-src-
 {
   const fx = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/canary/k8s-drift-record.json'), 'utf8'));
   t('KF1 the stored fact equals a recompute from the record\'s calls (the control PASSES a correct record)',
-    canonJson(computeGitLiveDrift(driftCallsOf(fx.platformDriftCalls))) === canonJson(fx.gitLiveDrift));
+    canonJson(computeGitLiveDrift(driftCallsOf(fx.platformDriftCalls), 'kubernetes-gitops-protocol')) === canonJson(fx.gitLiveDrift));
   t('KF2 the wrapper itself is not the calls (recomputing from it reads no-platform-call-record — the first-run false FINDING)',
-    canonJson(computeGitLiveDrift(fx.platformDriftCalls)) !== canonJson(fx.gitLiveDrift));
+    canonJson(computeGitLiveDrift(fx.platformDriftCalls, 'kubernetes-gitops-protocol')) !== canonJson(fx.gitLiveDrift));
   const tampered = JSON.parse(JSON.stringify(fx.gitLiveDrift)); tampered.files[0].summary = 'differences';
   t('KF3 a stored fact that differs from its record is caught (the control FINDS a wrong record)',
-    canonJson(computeGitLiveDrift(driftCallsOf(fx.platformDriftCalls))) !== canonJson(tampered));
+    canonJson(computeGitLiveDrift(driftCallsOf(fx.platformDriftCalls), 'kubernetes-gitops-protocol')) !== canonJson(tampered));
   const reordered = Object.fromEntries(Object.entries(fx.gitLiveDrift).reverse());
   t('KF4 key order does not matter', canonJson(reordered) === canonJson(fx.gitLiveDrift));
   t('KF5 a bare calls array is accepted as-is', driftCallsOf(fx.platformDriftCalls.calls) === fx.platformDriftCalls.calls);
