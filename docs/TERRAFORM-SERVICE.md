@@ -24,7 +24,17 @@ State is optional. A run can read your `.tf` files only.
 
 - **State, plan and variables files in Git.** A path such as `terraform.tfstate`, `prod.tfvars`, `tfplan`, or anything under
   `.terraform/` is refused, on every route. If a spec names one as a Git file, the leg stops before it reads anything.
+  Why: a state file is the one file in a Terraform repository that is almost guaranteed to contain secrets, and a raw file
+  cannot be reliably scrubbed. If a run needs state, it reads it through your read-only service (above), which is where
+  state should be redacted (see "Secret values in state" below).
 - **Terraform CLI credentials** (`.terraformrc`, `terraform.rc`, anything under `.terraform.d/`).
+- **Password and key files in Git** (since 2026-11-21): a name containing `htpasswd`; a name ending `.key`, `.pem`, `.p12`,
+  `.pfx`, `.jks` or `.keystore`; an SSH identity file (`id_rsa`, `id_dsa`, `id_ecdsa`, `id_ed25519`). The read is refused on
+  every route. If a spec's `## Config sources` block names one as a Git file, the block is unreadable and the leg ends
+  `needs-revision` with the reason `config-sources-unparseable` (problem `path-never-held`). The rule goes by the file NAME:
+  a public certificate saved as `.pem` is refused too — keep certificates the change must edit under another name, or leave
+  them out of the block. A `.tf` file whose text carries a private-key block is read but never kept, so a leg that declares it
+  ends `needs-revision` (`git-file-not-held`).
 - **Secret values in state.** Your read-only service should redact by the state's own sensitive markers and never return raw
   state. pAIchart does not verify that it does; its own redaction is a coarse backstop that runs when output is saved.
 

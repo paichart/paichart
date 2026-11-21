@@ -79,6 +79,15 @@ platform keeps (holds) its files only for the owner — unless you grant a POV:
   *Network legs (since network-provisioning 1.24.0/1.25.0):* a refused ref does not stop the leg — that device is HELD (listed first,
   nothing packaged) and the leg's outcome is needs-revision (platform-forced if needed; since 1.27.0 the change Reviewer also refuses it,
   naming the device); on an unpinned customer Git service the ref in the declared line is read as named.
+- **Password and key files are never read or kept (since 2026-11-21):** a file whose name contains `htpasswd`, ends `.key`,
+  `.pem`, `.p12`, `.pfx`, `.jks` or `.keystore`, or is an SSH identity file (`id_rsa`, `id_dsa`, `id_ecdsa`, `id_ed25519`) is
+  refused on a `get_file_contents` call (`NEVER_READ_KEY_FILE`, logged as a blocked call). Who is refused depends on the service:
+  through the platform's Git file source, **every caller** — a run, a workflow, and you in chat; through your own file service,
+  an agent in a run and every caller of the admin "run workflow" page, while your own file service used in chat is not
+  affected. The rule goes by the NAME, so a public certificate saved as `.pem` is refused too. In a run, a path that cannot be
+  read as a plain path (a broken or repeated percent-escape, or not text) is refused as well (`UNJUDGEABLE_FILE_PATH`). Such a
+  file is also never kept by the platform, whichever service served it, and neither is any file whose text carries a
+  private-key block.
 
 ## 4. Self-host operator settings (all off by default)
 

@@ -19,7 +19,7 @@
  */
 import { Prisma } from '@prisma/client';
 import { extractDeclaredFiles, withDeviceEvidenceOnly, type ExtractedFile, type ExtractedRefusal } from '@/lib/agents/harness/held-bytes/extract';
-import { withConfigSourcesScope } from '@/lib/agents/harness/held-bytes/config-source-scope';
+import { withConfigSourcesScope, withDeclaredFilesScope, DECLARED_SCOPE_REFUSALS } from '@/lib/agents/harness/held-bytes/config-source-scope';
 import type { LegConfigSourcesResolution } from '@/lib/agents/harness/config-sources-read';
 import type { DeviceReadScope } from '@/lib/agents/harness/held-bytes/device-read-scope';
 import {
@@ -31,7 +31,7 @@ import {
 import { isR10Disabled, collectR10EchoSources } from '@/lib/agents/harness/redact-artifact-secrets';
 import { HELD_FILE_CAP, HELD_EXECUTION_CAP, HELD_EXECUTION_FILE_CAP } from '@/lib/agents/harness/held-bytes/caps';
 import { owningLegPredicate } from '@/lib/agents/harness/program-protocol';
-import { heldPathRefusal } from '@/lib/mcp/server/config/git-file-source-pin';
+import { heldPathRefusal, hasPrivateKeyBlock } from '@/lib/mcp/server/config/git-file-source-pin';
 import {
   upsertHeldBlobs,
   validateHeldRow,
@@ -70,7 +70,15 @@ const FILE_LEVEL = new Set(['raw-digest-present', 'descriptor-mismatch', 'path-i
   // held-network step 3 batch 2b (P3/P4): per-device refusals on the device-read lane (file level: one per host)
   'device-not-declared', 'device-config-empty',
   // push 2: P8 (a Git file that is not a declared line) and the one-base-per-device rule (a device read kept as evidence)
-  'git-file-not-declared', 'device-read-evidence-only', 'live-read-evidence-only']);
+  'git-file-not-declared', 'device-read-evidence-only', 'live-read-evidence-only',
+  // Config sources STEP 3 P2 (plan W8): the two declared-files scope refusals — file level (they keep target and path)
+  ...DECLARED_SCOPE_REFUSALS]);
+
+/** STEP 3 P2 (sec-ops ruling on evidence caps, E3 / E4): the declared-files scope rows are NOT held candidates — they never enter
+ *  the per-execution file count or byte count. Their own bound: at most this many per-file rows a persist, then ONE row per call
+ *  carrying the count (the `overCountByCall` shape), so a service returning thousands of undeclared files cannot fill the terminal
+ *  transaction, and cannot push a declared file past the held caps either. */
+export const DECLARED_SCOPE_ROW_CAP = 40;
 
 /**
  * held-k8s G-5 (SYNTHESIS v3, sec-ops S1a): a held file must never contain a credential, and R10 misses plaintext Kubernetes
@@ -120,6 +128,9 @@ export function prepareHeldCapture(args: {
   /** Config sources STEP 2: the leg's governing Config-sources declaration — present ⇔ the owning leg declares Config sources today.
    *  A Git file is then held only when it is a declared `git-file` line (config-source-scope.ts). Absent ⇒ unchanged. */
   configSources?: LegConfigSourcesResolution | null;
+  /** STEP 3 P2 (plan W1 / W8): the protocol `configSources` belongs to (`captureScopesFor` returns the three values together).
+   *  Capture is an allow-list of DECLARED files only when that protocol's block can name a service file. Absent ⇒ unchanged. */
+  configSourceProtocol?: string | null;
 }): HeldCapturePlan | null {
   if (!isHeldCaptureEnabled()) return null;
   const t0 = Date.now();
@@ -128,11 +139,22 @@ export function prepareHeldCapture(args: {
     if (!Array.isArray(records) || records.length === 0) return null;
     // held-network step 3 push 2 (owner Phase-0 §4b): ONE held base per device — a device whose declared Git file is held here
     // keeps its device read as evidence only (withDeviceEvidenceOnly; a no-op off a Device-sources leg).
-    const ex = withConfigSourcesScope(withDeviceEvidenceOnly(extractDeclaredFiles(records, args.heldTable?.table ?? undefined, {
+    // STEP 3 P2 (plan W8): then the SERVICE-file half of the Config scope — an allow-list on a declared leg of a protocol whose
+    // block can name service files; the SAME object back on every other execution. The extractor's own target and path checks have
+    // already run (sec-ops (d): the scope's rows keep `target` and `path` only because the file passed those first).
+    const ex = withDeclaredFilesScope(withConfigSourcesScope(withDeviceEvidenceOnly(extractDeclaredFiles(records, args.heldTable?.table ?? undefined, {
       gitFileSourceLeg: args.gitFileSourceLeg === true, live: args.live === true,
       unavailableShas: args.heldTable?.unavailableShas, invalidShas: args.heldTable?.invalidShas,
       ...(args.deviceRead ? { deviceRead: args.deviceRead } : {}),
-    }), args.deviceRead), args.configSources);
+    }), args.deviceRead), args.configSources), args.configSources, records, args.configSourceProtocol);
+    // Names and counts only — never a key, a path or a service string (the dropped keys are service text).
+    const scopeRows = ex.refusals.filter((r) => DECLARED_SCOPE_REFUSALS.has(r.refusal));
+    if (scopeRows.length > 0 || (ex.stats.serviceKeyNotALabel ?? 0) > 0) {
+      const byName: Record<string, number> = {};
+      for (const r of scopeRows) { const k = `${r.refusal}${r.detail && typeof r.detail.case === 'string' ? `:${r.detail.case}` : ''}`; byName[k] = (byName[k] ?? 0) + 1; }
+      args.logger.info?.({ taskId: args.task.id, declaredFilesScope: byName, serviceKeyNotALabel: ex.stats.serviceKeyNotALabel ?? 0 },
+        'held-bytes: declared-files scope — served files not held on a Config-sources leg (names and counts)');
+    }
     // held-network step 3 batch 2b: device-lane context counts — a journal fact only when non-zero (no other capture's lines move).
     if (ex.stats.notAConfigRead + ex.stats.deviceLaneFailed > 0) {
       args.logger.info?.({ stats: { notAConfigRead: ex.stats.notAConfigRead, deviceLaneFailed: ex.stats.deviceLaneFailed } },
@@ -181,6 +203,8 @@ export function prepareHeldCapture(args: {
       // held-k8s: present only when non-zero, so an observability capture's stats line is unchanged.
       ...(ex.stats.outOfScopeLane ? { outOfScopeLane: ex.stats.outOfScopeLane } : {}),
       ...(ex.stats.notAFileRead ? { notAFileRead: ex.stats.notAFileRead } : {}),
+      // STEP 3 P2: served keys dropped on a declared leg because they are not a legal label — the operator's count (never the key)
+      ...(ex.stats.serviceKeyNotALabel ? { serviceKeyNotALabel: ex.stats.serviceKeyNotALabel } : {}),
       ...(ex.stats.pinViolations ? { pinViolations: ex.stats.pinViolations } : {}),
       // WI-B10: present only when non-zero, so an existing capture's stats line is unchanged.
       ...(ex.stats.foreignRowNotHeld ? { foreignRowNotHeld: ex.stats.foreignRowNotHeld } : {}),
@@ -189,11 +213,12 @@ export function prepareHeldCapture(args: {
       ...(args.heldTable?.stats?.descriptorLookupFailed ? { descriptorLookupFailed: args.heldTable.stats.descriptorLookupFailed } : {}),
     };
     const callLevel = ex.refusals.filter((r) => !FILE_LEVEL.has(r.refusal));
-    // File-level items in tool-call order (held candidates and file-level refusals both count toward the file cap).
+    // File-level items in tool-call order (held candidates and file-level refusals both count toward the file cap) — EXCEPT the
+    // declared-files scope rows (STEP 3 P2, E3): those are not held candidates and are emitted below under their own bound.
     type Item = { kind: 'file'; f: ExtractedFile } | { kind: 'refusal'; r: ExtractedRefusal };
     const items: Item[] = [
       ...ex.files.map((f) => ({ kind: 'file' as const, f })),
-      ...ex.refusals.filter((r) => FILE_LEVEL.has(r.refusal)).map((r) => ({ kind: 'refusal' as const, r })),
+      ...ex.refusals.filter((r) => FILE_LEVEL.has(r.refusal) && !DECLARED_SCOPE_REFUSALS.has(r.refusal)).map((r) => ({ kind: 'refusal' as const, r })),
     ];
     const idx = (it: Item) => (it.kind === 'file' ? it.f.toolCallIndex : it.r.toolCallIndex);
     items.sort((a, b) => idx(a) - idx(b)); // stable: within a call, held candidates first
@@ -208,8 +233,7 @@ export function prepareHeldCapture(args: {
     if (scope === null) {
       const perCall = new Map<number, { src: Source; files: number }>();
       for (const r of callLevel) perCall.set(r.toolCallIndex, { src: r, files: perCall.get(r.toolCallIndex)?.files ?? 0 });
-      for (const it of items) {
-        const src: Source = it.kind === 'file' ? it.f : it.r;
+      for (const src of [...items.map((it): Source => (it.kind === 'file' ? it.f : it.r)), ...scopeRows]) {
         const e = perCall.get(src.toolCallIndex);
         if (e) e.files++;
         else perCall.set(src.toolCallIndex, { src, files: 1 });
@@ -220,6 +244,21 @@ export function prepareHeldCapture(args: {
       return { scope, files, refusals, stats: { ...stats, refused: refusals.length, durationMs: Date.now() - t0 } };
     }
     for (const r of callLevel) refusals.push(refusalFrom(r, scope, r.refusal, r.detail));
+    // STEP 3 P2 (E3 / E4): the declared-files scope rows, in tool-call order, under their OWN bound — never `seen`, never
+    // `executionBytes`. Past the bound: ONE row per (call, refusal name) with the count, target and path dropped.
+    {
+      const ordered = [...scopeRows].sort((a, b) => a.toolCallIndex - b.toolCallIndex);
+      const over = new Map<string, { src: ExtractedRefusal; files: number }>();
+      ordered.forEach((r, i) => {
+        if (i < DECLARED_SCOPE_ROW_CAP) { refusals.push(refusalFrom(r, scope, r.refusal, r.detail)); return; }
+        const k = `${r.toolCallIndex}\u0000${r.refusal}`;
+        const e = over.get(k);
+        if (e) e.files++; else over.set(k, { src: r, files: 1 });
+      });
+      for (const { src, files: n } of over.values()) {
+        refusals.push(refusalFrom({ ...src, selector: null, target: null, path: null }, scope, src.refusal, { files: n, capScope: 'declared-scope-rows' }));
+      }
+    }
 
     // File-count cap (OA-23): past it, ONE over-cap row per call.
     const overCountByCall = new Map<number, { src: Source; files: number }>();
@@ -245,6 +284,9 @@ export function prepareHeldCapture(args: {
       const byPath = heldPathRefusal(f.path); // held-terraform T-3/T-4: before every text check (a state file may be huge)
       if (byPath) { refusals.push(refusalFrom(f, scope, byPath)); continue; }
       if (isTerraformStateOrPlanJson(C)) { refusals.push(refusalFrom(f, scope, 'state-file')); continue; } // SF-2 content half
+      // Config sources STEP 3 P1 (plan §7): a private-key block is key material whatever the file is called — refused whole, never
+      // held with the key replaced by a placeholder. On the SERVED text, before redaction.
+      if (hasPrivateKeyBlock(C)) { refusals.push(refusalFrom(f, scope, 'key-material-file')); continue; }
       if (isPlaintextSecretManifest(C)) { refusals.push(refusalFrom(f, scope, 'secret-manifest')); continue; }
       const rawBytes = Buffer.byteLength(C, 'utf8');
       if (rawBytes > HELD_FILE_CAP) { refusals.push(refusalFrom(f, scope, 'over-cap', { capScope: 'file', bytes: rawBytes })); continue; }

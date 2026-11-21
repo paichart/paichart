@@ -135,8 +135,8 @@ const CONTROLS: Record<string, { what: string; run: (c: Ctx) => ControlResult }>
         if (!isObj(le)) { finding = true; lines.push(`  task ${e.taskId} exec ${e.id}: deviceSourceReads present, liveEvidence ABSENT — FINDING`); continue; }
         if (le.checked !== true) { lines.push(`  task ${e.taskId}: liveEvidence checked:false reason=${String(le.reason)} (read it)`); if (dsr.checked === true) finding = true; continue; }
         const want = computeLiveEvidenceFromReadRecord(dsr) as Record<string, unknown>;
-        const diffs = (['summary', 'items', 'liveDeclared', 'liveRead', 'notApplicable'] as const).filter((k) => want[k] !== le[k])
-          .concat((['gitOnly', 'liveNotRead', 'liveReadDevices'] as const).filter((k) => devs(want[k]) !== devs(le[k])));
+        const diffs: string[] = (['summary', 'items', 'liveDeclared', 'liveRead', 'notApplicable'] as string[]).filter((k) => want[k] !== le[k])
+          .concat((['gitOnly', 'liveNotRead', 'liveReadDevices'] as string[]).filter((k) => devs(want[k]) !== devs(le[k])));
         lines.push(`  task ${e.taskId}: summary=${String(le.summary)} items=${String(le.items)} liveRead=${String(le.liveRead)} gitOnly=[${devs(le.gitOnly)}] liveNotRead=[${devs(le.liveNotRead)}] contractDevices=${JSON.stringify(le.contractDevices ?? null).slice(0, 80)}${diffs.length ? `  ≠ recompute on [${diffs.join(',')}] — FINDING` : ''}`);
         if (diffs.length) finding = true;
       }

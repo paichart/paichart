@@ -38,6 +38,13 @@ test('agent-read refusal text (the Git pin, the call policy) and the device-sour
   const missing = must.filter((f) => !CUT.test(f));
   if (missing.length) throw new Error(`not covered: ${missing.join(', ')}`);
 });
+test('the stamp writer that takes the declaration snapshots, and the nets\' input builder, are covered (Config sources STEP 3 P0)', () => {
+  const must = ['lib/agents/harness/prepare-task-for-execution.ts', 'lib/agents/harness/net-context.ts', 'lib/services/execution-nets.ts', 'lib/services/execution-core.ts'];
+  const absent = must.filter((f) => !fs.existsSync(path.join(root, f)));
+  if (absent.length) throw new Error(`named here but not in the tree (a moved file is a silent hole in the list): ${absent.join(', ')}`);
+  const missing = must.filter((f) => !CUT.test(f));
+  if (missing.length) throw new Error(`not covered: ${missing.join(', ')}`);
+});
 test('NEGATIVE CONTROL: an unrelated file is not a cut path (the pattern is not a match-everything)', () => {
   for (const f of ['lib/utils/graph.ts', 'components/Button.tsx', 'cline_docs/x.md', 'lib/agents/harness/held-bytes']) if (CUT.test(f)) throw new Error(`matched ${f}`);
 });

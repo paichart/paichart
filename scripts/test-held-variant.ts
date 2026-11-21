@@ -86,6 +86,38 @@ test('held-k8s 1b-scope + step 3: a leaf under a kubernetes-gitops leg ⇒ gitFi
   eq(await resolveOwningLegProtocol(stubDb({}, {}).db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: network-provisioning)' }), { kind: 'self', legId: 'L', heldCapable: true, gitFileSource: true, deviceSource: true });
 });
 
+test('V-5a (Config sources STEP 3, plan W5 row 19): the resolution SHAPE as a property, in BOTH awaiting states — `configSourceProtocol` is present ⇔ the leg\'s protocol has a Config lane in that state, and nothing else on the resolution moves', async () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const V = require('../lib/agents/harness/held-bytes/variant') as typeof import('../lib/agents/harness/held-bytes/variant');
+  const table = Object.keys(V.CONFIG_SOURCE_LANES);
+  const protocols = [...new Set([...table, ...Object.keys(V.DEVICE_SOURCE_LANES), V.HELD_VARIANT_PROTOCOL, 'no-such-protocol'])];
+  const lists: Array<readonly string[] | undefined> = [undefined, [], table, [table[0]]];   // as shipped · none awaiting · all awaiting · one awaiting
+  let checked = 0; let withField = 0;
+  for (const p of protocols) for (const aw of lists) {
+    const awaiting = aw ?? V.CONFIG_SOURCE_AWAITING_TEXT;
+    const want = table.includes(p) && !awaiting.includes(p);
+    const leg = { title: 'x', metadata: { protocol: p } };
+    // a PIPELINE leg (`self`) and a leaf under it (`leg`) — every shape production hands a reader
+    const self = await resolveOwningLegProtocol(stubDb({}, {}).db, { id: 'L', type: 'PIPELINE', ...leg }, aw);
+    const leaf = await resolveOwningLegProtocol(stubDb({ leaf: { stageId: 'st' }, L: leg }, { st: { metadata: { harnessTaskId: 'L' } } }).db, { id: 'leaf', type: 'ACTION' }, aw);
+    for (const r of [self, leaf]) {
+      const o = r as Record<string, unknown>;
+      eq('configSourceProtocol' in o, want, `${p} awaiting ${JSON.stringify(awaiting)} (${r.kind}): the field's presence — `);
+      if (want) { eq(o.configSourceProtocol, p, 'its value is the canonical protocol name: '); withField++; }
+      // every OTHER key is what the SAME leg resolves to with every row awaiting (the Config lane switched off): the field is the only thing the lane adds
+      const off = (r.kind === 'self' ? await resolveOwningLegProtocol(stubDb({}, {}).db, { id: 'L', type: 'PIPELINE', ...leg }, table)
+        : await resolveOwningLegProtocol(stubDb({ leaf: { stageId: 'st' }, L: leg }, { st: { metadata: { harnessTaskId: 'L' } } }).db, { id: 'leaf', type: 'ACTION' }, table)) as Record<string, unknown>;
+      const { configSourceProtocol: _c, ...rest } = o; void _c;
+      eq(rest, off, `${p} awaiting ${JSON.stringify(awaiting)} (${r.kind}): a key other than configSourceProtocol moved — `);
+      checked++;
+    }
+  }
+  eq([checked > 40, withField > 0], [true, true], 'the property was exercised: ');
+  // as shipped today: observability resolves WITHOUT the field (its row awaits its text); with no row awaiting it carries it
+  eq('configSourceProtocol' in ((await resolveOwningLegProtocol(stubDb({}, {}).db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: observability-config)' })) as object), false, 'observability as shipped: ');
+  eq(((await resolveOwningLegProtocol(stubDb({}, {}).db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: observability-config)' }, [])) as Record<string, unknown>).configSourceProtocol, 'observability-config-protocol', 'observability with its text shipped: ');
+});
+
 test('V-5a: a PIPELINE task is its own leg (no read); no stage / no harnessTaskId ⇒ no-leg (positive non-variant)', async () => {
   const none = stubDb({}, {});
   eq(await resolveOwningLegProtocol(none.db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: observability-config)' }), { kind: 'self', legId: 'L', heldCapable: true, gitFileSource: false, deviceSource: false });

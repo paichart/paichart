@@ -11,16 +11,20 @@ in presentation + a few documented per-adapter facts.
 **What replaced this pattern — the ADAPTER-RENDER discipline** (the only thing left to keep straight):
 - The shared **core** owns every execution OUTCOME. Change an outcome once, in `execution-core.ts` (or the
   modules it calls: `execution-artifacts.ts`, `execution-terminal-persist.ts`, `execution-quality.ts`,
-  `diagnostic-retry.ts`, `parse-confidence.ts`, `agentic-tool-loop.ts`, `execution-selection.ts`).
+  `diagnostic-retry.ts`, `parse-confidence.ts`, `agentic-tool-loop.ts`, `execution-selection.ts`, and — added since —
+  `execution-nets.ts` and `execution-completion-anchored.ts`). "ONCE in the core" means one core with one rescue builder beside it:
+  `buildExecutionResultJson` has a second call site in `execution-completion-anchored.ts` (the 2026-10-05 completion-anchored
+  rescue, called from the core).
 - Each **adapter** owns only PRESENTATION + prep: the engine's EventEmitter progress; the stream's ~30 SSE
   emissions (pinned in source order by `test:sse-event-sequence`). These legitimately differ — do NOT sync them.
 - **Permanent per-adapter forks (NOT drift)**: the stream's `tool_result_card`/`function_call`/web-search SSE
   + `result.json.extensions` (N-6, stream-only — the engine yields `undefined`); the prompt HEADS (six axes,
   per-adapter policy — prompt-construction signoff §2a; head convergence is separate post-6b work).
 - **`fireReactors` CONVERGED (Flip 1, 2026-07-06)**: both adapters `true` — GUI-triggered runs now fire the
-  post-commit reactors like the engine (cascade pipeline children + queue ready dependents). `prune` is the ONE
-  remaining transitional core param — engine `true`, stream `false` (Flip 2, still Steve-gated). Both pinned by
-  `test:execution-core-boundary` (the stream assert is split: `fireReactors:true` / `prune:false`).
+  post-commit reactors like the engine (cascade pipeline children + queue ready dependents). **`prune` CONVERGED too
+  (Flip 2, 2026-07-06)**: engine and stream both pass `prune: true`. Both pinned by `test:execution-core-boundary`
+  (the stream assert requires `fireReactors:true` and `prune:true`, and refuses `prune:false`). *(Corrected 2026-11-21: this
+  bullet still said `prune` was transitional — "engine `true`, stream `false`" — contradicting the table row below.)*
 
 **Shipped timeline**: Phase 0.5 (`e5086b92`…`00d2e5da`, 6 live-drift hotfixes) → Phases 1–5 (analyzers;
 **last-turn deliverable text — NOT accumulate-prose**; #90 retry; terminal persist; system-prompt/hydration)
@@ -112,7 +116,10 @@ Both paths create `result.json` + `report.md`, update `task.executionStatus`, wr
 | **Confidence cap** | `agentExecutionEngine.ts` (calls shared) | `stream/route.ts` (calls shared) | ✅ Via shared `applyConfidenceCap` (`lib/agents/harness/parse-confidence.ts`, A 2026-06-09 — pure: counts in → `{score,capped,original}`, caller logs). Closes BC75 #5 (the cap was the part that drifted — stream had skipped it). Earlier the doc claimed "via shared helper" but it was INLINE-MIRRORED until A landed. |
 | Diagnostic-retry control-flow | `agentExecutionEngine.ts:~981+` | `stream/route.ts:~896+` | ⚠ Inline-mirrored in both (impure — LLM call + SSE + state). Its confidence RE-PARSE now routes through the shared `parseConfidenceScore` (A 2026-06-09); the band/guard control-flow stays inline. |
 
-## Checklist (copy-paste for PRs)
+## Checklist (HISTORICAL — do not use; was "copy-paste for PRs")
+
+*Retired with the pattern: an outcome changes once, in the core (see the banner). The two ⚠ "inline in both" rows in the table
+above (report.md content, diagnostic-retry control-flow) are also pre-convergence — both run once in the core today.*
 
 When modifying agent execution outcomes:
 - [ ] Changed in `agentExecutionEngine.ts`
@@ -127,3 +134,29 @@ Apr 2026 — During artifact restructure, auto-comment addition, confidence pars
 ## Future Fix
 
 Extract shared logic into a common module (e.g., `lib/services/execution-artifacts.ts`) that both paths import. This eliminates the parity concern entirely. Until then, this pattern serves as the manual guard.
+
+---
+
+## 2026-11-21 — drift sweep (Protocol 11): what was corrected, and how to check it stays true
+
+The pattern stays RETIRED; the historical record below the banner is unchanged. Corrected against the tree:
+
+- **The banner said `prune` was still transitional** ("engine `true`, stream `false`"). Flip 2 shipped 2026-07-06; both callers
+  pass `prune: true`, and the boundary test pins it. The banner now agrees with the file's own table row.
+- **The module list** gained `execution-nets.ts` and `execution-completion-anchored.ts`; "ONCE in the core" now names the one
+  rescue builder beside it.
+- **The PR checklist** is retitled HISTORICAL, with a note that the two "inline in both" table rows are pre-convergence.
+
+Every expectation below was run before it was written:
+
+```bash
+grep -c "prune: true" lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts    # expect 1 and 1
+grep -c "prune: false" lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts   # expect 0 and 0
+grep -c "buildExecutionResultJson(" lib/services/execution-core.ts lib/services/execution-completion-anchored.ts   # expect 1 and 1 — the core and the rescue builder
+grep -c "runDiagnosticRetry(" lib/services/execution-core.ts                                             # expect 1 — the retry runs in the core
+```
+
+**Not re-verified in this sweep:** the `file:line` refs in the historical table (left as dated 2026-08-21; the banner says not to
+use them); the commit hashes in the shipped timeline; whether the three named gates pass today (no test battery was run). Two code
+comments still say "prune stays false" (`stream/route.ts`, `scripts/test-execution-core-boundary.ts`) — recorded for the register
+in `cline_docs/reviews/pattern-drift-2026-11-21/SWEEP-RECORD.md`, not edited here.

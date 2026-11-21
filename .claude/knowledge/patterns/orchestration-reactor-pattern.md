@@ -112,7 +112,7 @@ maybeReactTo<Event>(id).catch(() => {});  // Internal errors already logged
 
 ## Canonical Example: `pipelineRetriggerReactorService`
 
-**File:** `lib/services/pipelineRetriggerReactorService.ts` (168 lines)
+**File:** `lib/services/pipelineRetriggerReactorService.ts`
 
 **What it reacts to:** A child task transitions to terminal state (COMPLETED via `status`, or FAILED via `executionStatus`)
 
@@ -125,20 +125,34 @@ maybeReactTo<Event>(id).catch(() => {});  // Internal errors already logged
 | # | Guard | Why |
 |---|---|---|
 | 1 | Event entity loaded + has a stage | Can't retrigger without context |
-| 2 | Event entity is NOT itself a PIPELINE task | Prevents self-loop |
-| 3 | A PIPELINE harness exists whose metadata.pipelineStageId matches AND it's IN_PROGRESS | No harness owns this child stage / already complete → nothing to do |
-| 4 | All tasks in the child stage are terminal (status=COMPLETED OR executionStatus=FAILED) | Pipeline not ready yet |
+| 2 | **RETIRED 2026-07-15** — was "event entity is NOT itself a PIPELINE task". Do NOT restore it: a completing child PIPELINE must retrigger its parent program harness, and the blanket type-skip would stop every program | (history) prevented self-loop; replaced by 2' |
+| 3 | A PIPELINE harness exists whose metadata.pipelineStageId matches the completed task's stage | No harness owns this child stage → nothing to do |
+| 2' | The harness found by Guard 3 is not the completing task itself (`harness.id === completedTaskId` → warn, return) | The true self-trigger guard since 2026-07-15 |
+| 3b | The harness is IN_PROGRESS (any other status is logged — warn, or debug when COMPLETED — and returns) | Already complete / not mid-flight; loud so a stuck SYNTHESIZE is visible |
+| 3.5 | The child stage's metadata points back at this harness (pointer integrity, 2026-04-25) | A clobbered `pipelineStageId` never queues a SYNTHESIZE; fail closed |
+| 4 | No unsettled child in the child stage (`countUnsettledChildren`, `lib/services/child-stage-settled.ts` — the shared settledness predicate; a COMPLETED child with a PENDING/RUNNING execution is not settled) | Pipeline not ready yet |
 | 5 | Child stage has ≥ 1 task | Misconfigured harness — don't retry an empty pipeline |
 | 6 | No existing PENDING/RUNNING execution for the harness | Don't stack duplicate runs |
-| 7 | No execution created within last 30s (debounce) | Absorb near-simultaneous child completions |
+| 7 | No execution created within last 30s (debounce) — skipped only when the caller passes `bypassDebounce` (the lost-wakeup self-check in `harness-dispatch-fact.ts`) | Absorb near-simultaneous child completions |
+| 8 | Reactor-generation budget not exhausted (default 10 for a leg, 25 for a program root; exhaustion terminalizes through `reactor-budget-exhausted-persist.ts`) | Guards 1-7 bound one retrigger; this bounds the chain |
 
-**Call sites (hooks):**
+**Call sites (hooks)** — corrected 2026-11-21. Until the execution-path convergence (2026-07-05) and the
+completion-path unification (2026-07-24) this table named the engine's success and failure paths and
+`task-complete-handler.ts`; none of those holds a hook today. No line numbers: grep the function name.
 
-| Location | Line | When |
+| File | Fires | When |
 |---|---|---|
-| `lib/services/agentExecutionEngine.ts` | ~1073 | After successful task completion transaction commits |
-| `lib/services/agentExecutionEngine.ts` | ~1175 | After failed-execution transaction commits |
-| `lib/mcp/tasks/action/handlers/task/task-complete-handler.ts` | ~199 | After MCP task.complete path updates status |
+| `lib/services/execution-terminal-persist.ts` | retrigger + ready-dependents | Every agent execution, success and failure (`persistTerminalSuccess` / `persistTerminalFailure`), behind `fireReactors` — engine and stream both pass `true` |
+| `lib/tasks/services/complete-task-terminally.ts` | retrigger + ready-dependents | Every human completion (MCP `task.complete`, `task.update` to COMPLETED, the REST/GUI task service, the kanban move route), behind `fireReactors`; bulk fires one post-batch pass through the same file's `fireCompletionReactors` |
+| `lib/services/task-can-never-run-persist.ts` | retrigger | A task that can never run was marked FAILED (with its forward cone) before any execution row existed |
+| `lib/services/reactor-budget-exhausted-persist.ts` | retrigger | A harness's re-entry budget (Guard 8) ran out and it was marked FAILED — the owning program is retriggered so it can escalate |
+| `lib/services/harness-dispatch-fact.ts` | retrigger (`bypassDebounce`) | Lost-wakeup self-check after a harness run |
+| `lib/services/agentExecutionEngine.ts` | both | Safety nets ONLY — the startup orphan reaper and the stale-execution sweep (both bypass `persistTerminalFailure`), and the fallback when the failure persist itself throws |
+| `lib/mcp/tasks/action/handlers/agent/agent-execute-handler.ts` | ready-dependents | Safety net after a background dispatch's failure persist |
+
+Agent executions fire from the shared terminal persist; human completions fire from `complete-task-terminally.ts`.
+`task-complete-handler.ts`, `task-update-handler.ts` and the stream route are adapters and hold NO hook — finding
+nothing there is correct, not a fault. `maybeQueueIfDepFree` (the kickstart) has its own three doors, listed below.
 
 All hooks use `.catch(() => {})` fire-and-forget — the reactor's internal error handling already logs failures.
 
@@ -154,12 +168,15 @@ All hooks use `.catch(() => {})` fire-and-forget — the reactor's internal erro
 
 ```
 maybeQueueReadyDependents(completedTaskId)
-  ↳ Called from task-COMPLETED hooks (engine + MCP path)
+  ↳ Called from the terminal hooks in the call-site table above
+    (shared terminal persist + complete-task-terminally + safety nets)
   ↳ Finds dependents in the same stage whose remaining deps are now
     all COMPLETED, queues PENDING executions for each
 
 maybeQueueIfDepFree(taskId)
-  ↳ Called from BOTH task.create AND agent.assign
+  ↳ Called from task.create, agent.assign AND task.update (three doors:
+    task-create-handler, agent-assign-handler, task-update-handler —
+    the last for non-PIPELINE tasks only)
   ↳ If the task is OPEN, dep-free, has a template, and has no existing
     execution, queues a PENDING execution
   ↳ Agent.assign is the common path (harness creates task first,
@@ -175,7 +192,10 @@ maybeQueueIfDepFree(taskId)
 
 - Task is OPEN
 - Task has agentTemplateId
-- ALL direct dependencies are `status=COMPLETED` (NOT EXISTS any upstream != COMPLETED)
+- Task's own `executionStatus` is not FAILED
+- No unsatisfied direct dependency, per the shared `unsatisfiedDepExistsSql` predicate (COMPLETED and settled —
+  the same definition the born-ready check below uses)
+- Dependent is in the same stage as the completed task
 - No existing PENDING/RUNNING execution
 - No execution created within 30s (debounce)
 
@@ -339,15 +359,17 @@ Reactors commonly use `prisma.$queryRaw` for compound queries (dependent-task lo
 
 ### Multiple-execution-path drift
 
-The reactor pattern relies on hooks at the event-emitting site. If two code paths independently handle the same event (e.g., `agentExecutionEngine.ts` and `app/api/pov/agent/execute/stream/route.ts` both handle task-completed transitions), you need hooks in BOTH. Missing one creates a bypass — the reactor appears to work most of the time and mysteriously fails when the bypass path runs.
+The reactor pattern relies on hooks at the event-emitting site. If two code paths independently handle the same event, you need hooks in BOTH. Missing one creates a bypass — the reactor appears to work most of the time and mysteriously fails when the bypass path runs. This rule still holds for paths that are genuinely separate.
 
-**Audit checklist when adding a reactor hook** — trace "who sets this state?" across the codebase with `grep` before deciding call sites are complete. Two common places for the same event to fire:
+**The engine and the stream route are no longer such a pair.** Until 2026-07-05 this paragraph named them as the example and said to hook both; since the execution-path convergence both delegate to `runExecutionCore` and share one terminal persist. Add a hook ONCE, in `lib/services/execution-terminal-persist.ts`, behind `fireReactors` — a hook added in both callers sits at the wrong layer and fires twice per completion. Likewise every human completion goes through `lib/tasks/services/complete-task-terminally.ts` (since 2026-07-24).
 
-| Event | Likely call sites |
+**Audit checklist when adding a reactor hook** — trace "who sets this state?" across the codebase with `grep` before deciding call sites are complete. Where each event is written today:
+
+| Event | Where it is written |
 |---|---|
-| Task status transitions | Engine + Stream route + MCP handler + direct Prisma updates in bulk ops |
-| Execution terminal states | Engine success path + Engine failure path + stale-cleanup sweeper |
-| Task creation | Direct MCP handler + bulk import + workflow-engine spawns |
+| Task status transitions to COMPLETED | `execution-terminal-persist.ts` (agent executions) + `complete-task-terminally.ts` (every human completion) |
+| Execution terminal states | `persistTerminalSuccess` / `persistTerminalFailure` + the engine's two reapers and its persist-threw fallback (which do not go through the failure persist and carry their own safety nets) + `task-can-never-run-persist.ts` + `reactor-budget-exhausted-persist.ts` |
+| Task creation | Direct MCP handler + bulk import + workflow-engine spawns (not re-verified 2026-11-21) |
 
 ### Don't duplicate resource limits across execution paths
 
@@ -383,10 +405,12 @@ The 2026-04-15 reactor-userId drift: `agent_executions.context.triggeredBy` had 
 **Grep audit for reactor-boundary drift risk**:
 
 ```bash
-# JSONB context fields without typed shape
-grep -rn "context: {" lib/services/*ReactorService.ts
+# Extra context a reactor passes to createAgentExecution (reactors no longer write a `context: {` literal —
+# that grep returns 0 and proves nothing)
+grep -rn "contextExtras" lib/services/*ReactorService.ts
 
-# Bare `triggeredBy:` writes (must be an object, never a string)
+# `triggeredBy:` writes (must be an object, never a string). Hits inside a log call's field object
+# (`triggeredBy: completedTaskId`) are log fields and are expected; read each hit, do not count them.
 grep -rn "triggeredBy:" lib/services/*Reactor* lib/services/agent-execution-create.ts
 
 # Raw prisma.agentExecution.create outside the wrapper
@@ -424,7 +448,7 @@ Pattern users: don't pre-optimize. Stay with direct imports until we hit the spr
 - **Two canonical impls deployed** (2026-04-14):
   - `pipelineRetriggerReactorService.ts` — metadata-based detection; handles CHILD-TERMINAL → HARNESS-SYNTHESIZE loop
   - `taskReadyReactorService.ts` — task-dependency cascade + dep-free kickstart; handles OPEN → PENDING execution loop
-- **4 call sites across the codebase** — engine success/failure paths, task-complete handler, task-create handler, agent-assign handler
+- **Call sites** — see the call-site table under Canonical Example 1 (seven firing files plus three kickstart doors at 2026-11-21; the "4 call sites" stated here in April 2026 named places that no longer hold a hook)
 - **End-to-end validation (2026-04-14)**: first Pipeline Harness run with both reactors live — CREATE mode completed cleanly, Task 1 auto-queued via `maybeQueueIfDepFree` on agent.assign, engine ran it, task COMPLETED. Raw-SQL column-name bug in the completion hooks (documented under Common Pitfalls) caught before the cascade fired — fix shipped same session.
 - **Next validations:** quality-gate reactor, next-stage auto-fire reactor (both roadmap priority 1-2)
 
@@ -440,3 +464,39 @@ Confidence will climb to 95%+ once 3+ reactors using this shape are in productio
 - Related TODOs: `TODO-EVENT-DRIVEN-PIPELINES.md`, `TODO-CASCADING-PIPELINES.md`
 - Pattern registry: `.claude/knowledge/patterns/PATTERN-REGISTRY.md` (Pattern #46)
 - **Protocol 13 (Program Workflow Evolution)**: `.claude/knowledge/protocols/program-workflow-evolution-protocol.md` — this pattern is the required implementation shape when its finding→fix loop classifies a fix to the **platform-code, event-driven** layer (born-ready and cascade-miss fixes were this shape).
+
+---
+
+## 2026-11-21 — drift sweep (Protocol 11): what was corrected, and how to check it stays true
+
+The required shape, the guard primitives, the pitfalls and the dated validation history are unchanged. Corrected against the tree:
+
+- **The call-site table** named the engine's success and failure paths and `task-complete-handler.ts`. None holds a hook today;
+  the table now lists the seven firing files, and says the handlers and the stream route are adapters.
+- **"Hooks in BOTH" (engine + stream)** was the stated example of path drift. Since the 2026-07-05 convergence there is one
+  terminal persist; a hook goes there once. The general rule is kept for paths that are genuinely separate.
+- **The audit checklist** now names where each event is written (the two cores, the engine's safety nets, the two terminalizing persists).
+- **Guard 2 is RETIRED** (2026-07-15) and marked "do not restore" — the blanket PIPELINE skip would stop every program. Guards
+  2', 3b, 3.5 and 8 added; Guard 4 reworded to the shared settledness predicate; `bypassDebounce` named on Guard 7.
+- **`maybeQueueIfDepFree`** has three doors (task.update was missing); **`maybeQueueReadyDependents`** guards gained the
+  dependent's own FAILED check and the shared unsatisfied-dependency predicate.
+- **Two audit greps** fixed: `context: {` returned 0 by shape (now `contextExtras`); the `triggeredBy:` grep says log-field
+  hits are expected.
+
+Every expectation below was run before it was written:
+
+```bash
+grep -rl "maybeRetriggerPipelineHarness(\|maybeQueueReadyDependents(" lib app --include=*.ts | grep -v "test\|ReactorService" | wc -l   # expect 7 — the firing files in the call-site table (a new one must be added to the table)
+grep -c "maybeRetriggerPipelineHarness(\|maybeQueueReadyDependents(" lib/mcp/tasks/action/handlers/task/task-complete-handler.ts lib/mcp/tasks/action/handlers/task/task-update-handler.ts app/api/pov/agent/execute/stream/route.ts   # expect 0, 0 and 0 — adapters hold no hook
+grep -rl "maybeQueueIfDepFree(" lib app --include=*.ts | grep -v "test\|ReactorService" | wc -l   # expect 3 — the kickstart doors
+grep -c "fireReactors: true" lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts   # expect >=1 in each (2 and 2 on 2026-11-21)
+grep -c "Guard 2 REMOVED" lib/services/pipelineRetriggerReactorService.ts            # expect 1 — the retirement is recorded in the code
+grep -c "harness.id === completedTaskId" lib/services/pipelineRetriggerReactorService.ts   # expect 1 — Guard 2', the self-trigger check
+grep -rn "prisma\.agentExecution\.create\s*(" lib/ app/ --include="*.ts" | grep -v "agent-execution-create.ts" | wc -l   # expect 0 — the wrapper rule holds
+```
+
+**Not re-verified in this sweep:** the "Task creation" row of the audit checklist (bulk import, workflow-engine spawns); the
+`maybeQueueIfDepFree` guard list line by line (a claimed-task guard exists in the code and is not listed); the Testing section's
+example; the 90% confidence figure and the "Next validations" roadmap; the MAX_TOOL_TURNS paragraph (history — the tool loop
+has one copy since 2026-06-10). The header comments of both reactor services still list the old call sites — code comments,
+recorded for the register in `cline_docs/reviews/pattern-drift-2026-11-21/SWEEP-RECORD.md`, not edited here.

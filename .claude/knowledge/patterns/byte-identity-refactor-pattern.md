@@ -47,7 +47,9 @@ needs pausing and a 3,087-task pass takes minutes, not an hour; a table outside 
 fails the pass (fail loud); a base pass is cached per commit + ids + snapshot; `--ids` / `--scope` narrow it; the snapshot expires
 after 24 h (NETS-REPLAY-SNAPSHOT-RETENTION). It builds the population and prints the removed / unexplained-added / allowed-added
 accounting (how to read it: forensics guide §7h). It is a dry run of the shipping code: it shows what WOULD be stamped and writes nothing; it
-cannot exercise a shape production does not have yet.
+cannot exercise a shape production does not have yet. **It replays the NETS (stored facts) only.** For capture-side code (what the
+platform holds) the harness is `scripts/replay-held-capture.sh --compare-all` (base against new: `--compare-base`); read the LIMITS
+block in `scripts/replay-held-capture.ts` first *(added 2026-11-21)*.
 
 ## Pitfalls (each observed)
 
@@ -66,3 +68,22 @@ cannot exercise a shape production does not have yet.
 
 Greenfield text with nothing live reading it; a deliberate behaviour change to the original (that is a version bump
 with its own review, not a refactor).
+
+---
+
+## 2026-11-21 — drift sweep (Protocol 11): what was corrected, and how to check it stays true
+
+Checked against the tree and found current. One addition:
+
+- **Proof 4** named only the nets replay. It now says that replay covers stored facts only, and names the capture replay
+  (`scripts/replay-held-capture.sh`) for capture-side code, with its LIMITS.
+
+Every expectation below was run before it was written:
+
+```bash
+test -x scripts/replay-nets-byte-identity.sh && test -e scripts/replay-held-capture.sh && echo both || echo missing   # expect both
+grep -c "LIMITS (read before trusting a number)" scripts/replay-held-capture.ts                                       # expect 1
+```
+
+**Not re-verified in this sweep:** the replay figures quoted (1,731 added lines, 3,087 tasks); the snapshot retention and
+read-only behaviour of the nets replay (the audit read the script; nothing was run against production).

@@ -14,6 +14,15 @@
  *   npm run lab:leg-replay -- golden-self-test                              # $0: the stored outcomes recompute from the stored stamps
  *   npm run lab:leg-replay -- golden-pin                                    # owner re-freeze only: re-pin today's texts (read-only)
  *
+ * ONE COMPANION PER GIT PIN (v10, 2026-11-19). `golden-build` writes `<lab dir>/golden-v<N>/` for the cases that ran under the lab
+ * scripts' Git pin and `<lab dir>/golden-v<N>-pin-<owner>-<repo>/` for each other pin a reached case declares (`gitFileSourcePin`).
+ * Each companion carries `requireGitFileSourcePin` and runs in its OWN process under that pin (`GIT_FILE_SOURCE_PIN=<pin> npx ts-node
+ * -r tsconfig-paths/register scripts/leg-replay-lab/lab.ts run …` — the npm script always sets the lab pin). `golden-score` takes the
+ * run folders of all of them and ANY one companion folder; a companion with no run reads INCOMPLETE, never PASS. The pin check
+ * itself is unchanged. See GOLDEN_DEFAULT_GIT_PIN below.
+ * `golden-pin` re-pins EVERY protocol and template that moved in production. A re-freeze that is approved for one domain keeps only
+ * that domain's move and names the others it left stale in `refreezes.pinsMoved` (v10 left kubernetes-gitops and requirements-authoring).
+ *
  * WHICH CELLS RUN. For each candidate arm of the lab (an arm with any lever: protocol edits, template edits, a model or an
  * effort) and each golden case, the companion carries:
  *   - a REVIEWER cell (`g-<arm>-<domain>-r`): the persisted Author, the arm's Reviewer — when the arm's lever reaches the
@@ -80,6 +89,20 @@ export const GOLDEN_DIR = path.join(__dirname, 'golden');
 /** v7: the one protocol a `requirements` case runs (no held binding). */
 export const REQUIREMENTS_PROTOCOL = 'requirements-authoring-protocol';
 
+/** v10 (2026-11-19): THE GIT FILE SOURCE PIN OF A CASE. Production's pin moved from `paichart/paichart-lab-configs` to
+ *  `paichart/paichart-configs` on 2026-11-11 and is not stored per execution; the lab's held store is rebuilt from a stored Harvester's own
+ *  reads and checks each against the ONE pin the process loads (read at module load from GIT_FILE_SOURCE_PIN) — so no single process
+ *  replays cases from both sides of that cut (proved at $0: either pin aborts on the other side's Harvester with `pinViolations`).
+ *  The pin check is NOT relaxed. Instead a case DECLARES the pin in force when its leg ran (`gitFileSourcePin`; absent = the default,
+ *  the lab scripts' own pin), `golden-build` writes ONE COMPANION PER PIN, each carrying `requireGitFileSourcePin` (lab.ts refuses to
+ *  run it under another pin), each companion runs in its own process, and `golden-score` reads every companion of the lab: a
+ *  companion with no run leaves its cells UNSCORED ⇒ INCOMPLETE, never PASS. A declaration is DERIVED-AND-COMPARED at build
+ *  (`derivedCasePin`): a wrong one fails at golden-build, not at replay. */
+export const GOLDEN_DEFAULT_GIT_PIN = 'paichart/paichart-lab-configs';
+export const casePin = (c: Pick<GoldenCase, 'gitFileSourcePin'>): string => c.gitFileSourcePin ?? GOLDEN_DEFAULT_GIT_PIN;
+/** The companion folder of one pin: the default pin keeps `golden-<version>` (every earlier path stands). */
+export const companionDirName = (version: string, pin: string): string => (pin === GOLDEN_DEFAULT_GIT_PIN ? `golden-${version}` : `golden-${version}-pin-${pin.replace(/[^A-Za-z0-9]+/g, '-')}`);
+
 export type GoldenOutcome = 'approved' | 'needs-revision';
 export interface GoldenCase {
   id: string; domain: string; protocol: string; legTaskId: string; authorExecutionId: string; reviewerExecutionId: string;
@@ -102,6 +125,8 @@ export interface GoldenCase {
    *  protocol at ≥ `fromVersion` (block appended to the leg row, the first-execution snapshot, the drift plant); below it nothing is
    *  carried and the cell is byte-identical to before. */
   configSources?: GoldenConfigSources;
+  /** v10: the Git file source pin in force when this leg ran (`owner/repo`); absent = GOLDEN_DEFAULT_GIT_PIN. Derived-and-compared at build. */
+  gitFileSourcePin?: string;
   runSheet: string; why: string; caveat?: string;
 }
 /** The two roles a case's node replays: the persisted/live "Author" slot and the Reviewer. */
@@ -127,7 +152,7 @@ export interface GoldenSet {
   notReplayable: Array<{ id: string; what: string; why: string; followUp: string }>;
   costBasis: Record<string, unknown>;
   /** Owner re-freezes, newest last: what each version added or left out, and the decision that made it. */
-  refreezes?: Array<{ version: string; date: string; decision: string; added: string[]; excluded: Array<{ leg: string; why: string }>; pinsMoved: string[]; /** v6: a companion-only change (no case or pin moved) */ companion?: string[]; /** v7: the $0 proof recorded with the decision */ proof?: string[] }>;
+  refreezes?: Array<{ version: string; date: string; decision: string; added: string[]; /** v10: cases a re-freeze REMOVED from the set (each explained in `excluded`) */ retired?: string[]; /** v10: shapes with no case yet */ owedShapes?: string[]; excluded: Array<{ leg: string; why: string }>; pinsMoved: string[]; /** v6: a companion-only change (no case or pin moved) */ companion?: string[]; /** v7: the $0 proof recorded with the decision */ proof?: string[] }>;
 }
 /** The declaration every agent-text / model lab's experiment.json carries (refused at --spend without it). */
 export interface GoldenDeclaration { version: string; targets?: Array<{ case: string; reason: string }>; optOut?: Array<{ case: string; reason: string }> }
@@ -152,6 +177,8 @@ export function loadGoldenSet(dir = GOLDEN_DIR): GoldenSet {
     if (c.shape === 'requirements' && c.authorForms.join() !== 'persisted') throw new Error(`golden set: case ${c.id} — a requirements case is scored with the persisted Author only`);
     if (c.ownerRowItemMap && c.shape !== 'requirements') throw new Error(`golden set: case ${c.id} — ownerRowItemMap is for a requirements case only`);
     if (c.ownerRowItemMap && !fs.existsSync(path.join(dir, c.ownerRowItemMap))) throw new Error(`golden set: case ${c.id} owner map ${c.ownerRowItemMap} missing`);
+    if (c.gitFileSourcePin !== undefined && (!/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(c.gitFileSourcePin) || c.gitFileSourcePin === GOLDEN_DEFAULT_GIT_PIN)) throw new Error(`golden set: case ${c.id} gitFileSourcePin must be "owner/repo" and is written only when it is NOT the default ${GOLDEN_DEFAULT_GIT_PIN}`);
+    if (c.gitFileSourcePin !== undefined && gs.heldJoinSeedByProtocol[c.protocol] === null) throw new Error(`golden set: case ${c.id} declares a Git pin on ${c.protocol}, which holds no file`);
     if (c.configSources) {
       const cs = c.configSources;
       if (!gs.heldJoinSeedByProtocol[c.protocol]) throw new Error(`golden set: case ${c.id} carries configSources on ${c.protocol}, which has no held binding`);
@@ -252,18 +279,89 @@ export function validateGoldenDeclaration(exp: LabExperiment, gs: GoldenSet): st
 }
 
 export interface CompanionCell { case: string; arm: string; cell: string; form: 'persisted' | 'live'; reach: string[] }
-export interface CompanionReport { lab: string; labLabel: string; goldenVersion: string; cells: CompanionCell[]; unreached: Array<{ case: string; arm: string; why: string }>; optedOut: string[]; targets: string[]; /** B12: the standing cases carried as nodes (case → node id) */ standing?: Array<{ case: string; node: string }> }
+export interface CompanionSibling { dir: string; pin: string; cells: number }
+export interface CompanionReport { /** v10: this companion's Git pin and EVERY companion of the lab (itself included), by folder name beside it */ pin?: string; companions?: CompanionSibling[];
+  /** v10: standing cases this companion's arms reach but cannot run (their legs ran under another pin) — carried by the named sibling, checked by the lock */ standingCoveredBy?: Array<{ case: string; companion: string }>;
+  lab: string; labLabel: string; goldenVersion: string; cells: CompanionCell[]; unreached: Array<{ case: string; arm: string; why: string }>; optedOut: string[]; targets: string[]; /** B12: the standing cases carried as nodes (case → node id) */ standing?: Array<{ case: string; node: string }> }
 
 /**
  * Build the golden COMPANION of a lab: `<labDir>/golden-<version>/experiment.json` plus its pinned baselines, the lab's edit files
  * and the materialized variant texts. Deterministic for a given lab + golden set (a re-build is byte-identical).
  */
-export function buildGoldenCompanion(labDir: string, gs: GoldenSet = loadGoldenSet(), goldenDir = GOLDEN_DIR): { dir: string; report: CompanionReport; experiment: Record<string, any> } {
+export function buildGoldenCompanion(labDir: string, gs: GoldenSet = loadGoldenSet(), goldenDir = GOLDEN_DIR): { dir: string; report: CompanionReport; experiment: Record<string, any>;
+  /** v10: every companion written, one per Git pin (the first entry is `dir`) */ companions: Array<{ pin: string; dir: string; report: CompanionReport; experiment: Record<string, any> }> } {
   const lab = JSON.parse(fs.readFileSync(path.join(labDir, 'experiment.json'), 'utf8')) as LabExperiment;
   if (lab.goldenCompanion) throw new Error(`${labDir} is itself a golden companion`);
   const problems = validateGoldenDeclaration(lab, gs);
   if (problems.length) throw new Error(`golden-build refused:\n  - ${problems.join('\n  - ')}`);
-  const out = path.join(labDir, `golden-${gs.version}`);
+  // Stale companions of this version (a pin that no longer has a reached case) never survive a rebuild.
+  for (const f of fs.readdirSync(labDir)) if (f === `golden-${gs.version}` || f.startsWith(`golden-${gs.version}-pin-`)) fs.rmSync(path.join(labDir, f), { recursive: true, force: true });
+  // One companion per pin, the default pin first; a pin whose cases the lab does not reach writes nothing.
+  const pins = [GOLDEN_DEFAULT_GIT_PIN, ...[...new Set(gs.cases.map(casePin))].filter((x) => x !== GOLDEN_DEFAULT_GIT_PIN).sort()];
+  const built: Array<{ pin: string; dir: string; report: CompanionReport; experiment: Record<string, any> }> = [];
+  const droppedUnreached: CompanionReport['unreached'] = []; // a pin whose cases the lab does not reach writes no companion; its UNREACHED rows are still reported
+  for (const pin of pins) {
+    const sub = { ...gs, cases: gs.cases.filter((c) => casePin(c) === pin) };
+    if (!sub.cases.length) continue;
+    const one = buildOneCompanion(labDir, lab, sub, goldenDir, path.join(labDir, companionDirName(gs.version, pin)), pin);
+    if (!one.report.cells.length) { fs.rmSync(one.dir, { recursive: true, force: true }); droppedUnreached.push(...one.report.unreached); continue; }
+    built.push({ pin, ...one });
+  }
+  if (!built.length) throw new Error(`golden-build: the lab reaches no golden case under any pin`);
+  built[0].report.unreached.push(...droppedUnreached);
+  // DERIVE-AND-COMPARE (v10): the pin a reached case declares must be the pin its stored Harvester's own reads name.
+  for (const b of built) for (const id of new Set(b.report.cells.map((x) => x.case))) {
+    const c = gs.cases.find((x) => x.id === id)!;
+    const d = derivedCasePin(c);
+    if (d.pin !== null && d.pin !== casePin(c)) throw new Error(`golden-build: case ${c.id} declares the Git pin ${casePin(c)}${c.gitFileSourcePin ? '' : ' (the default)'}, but its stored Harvester's ${d.evidence} name ${d.pin} — set "gitFileSourcePin": "${d.pin}" on the case (the pin in force when the leg ran), or the cell would abort at replay`);
+  }
+  // Every companion names its pin, requires it at run time, and lists the whole family (so a missing run reads INCOMPLETE at score).
+  const family: CompanionSibling[] = built.map((b) => ({ dir: path.basename(b.dir), pin: b.pin, cells: b.report.cells.length }));
+  const standingHome = built.find((b) => b.pin === GOLDEN_DEFAULT_GIT_PIN);
+  for (const b of built) {
+    b.report.pin = b.pin; b.report.companions = family;
+    // A standing case this companion's arms reach but could not carry (its leg ran under the default pin): covered by the default-pin
+    // companion, where golden-build carried it on an arm with the same Reviewer-side levers — standing-bench.ts checks exactly that.
+    if (b.pin !== GOLDEN_DEFAULT_GIT_PIN) {
+      const sbm = require('./standing-bench') as typeof import('./standing-bench');
+      const reached = sbm.loadStandingBench().cases.filter((sc) => sbm.reachingArms(b.experiment as any, b.dir, sc).length);
+      const missing = reached.filter((sc) => !standingHome?.report.standing?.some((x) => x.case === sc.id));
+      if (missing.length) throw new Error(`golden-build: the ${b.pin} companion reaches standing case(s) ${missing.map((x) => x.id).join(', ')}, and no ${GOLDEN_DEFAULT_GIT_PIN} companion of this lab carries them`);
+      if (reached.length) b.report.standingCoveredBy = reached.map((sc) => ({ case: sc.id, companion: path.basename(standingHome!.dir) }));
+    }
+    b.experiment.requireGitFileSourcePin = b.pin; b.experiment.goldenCompanion = b.report;
+    fs.writeFileSync(path.join(b.dir, 'experiment.json'), JSON.stringify(b.experiment, null, 2) + '\n');
+  }
+  return { dir: built[0].dir, report: built[0].report, experiment: built[0].experiment, companions: built };
+}
+
+/** The pin a case's STORED leg names (v10): the `github:<owner>:<repo>` targets of its Harvester's held rows; where it held no Git file
+ *  (a refused read), the repo its Git reads asked for; `null` when the leg read no Git file at all (no evidence — any pin replays it).
+ *  Read from the cached snapshot only. Two different repos in one leg is an error (no single pin could have been in force). */
+export function derivedCasePin(c: GoldenCase): { pin: string | null; evidence: string } {
+  if (c.shape === 'value' || c.shape === 'requirements') return { pin: null, evidence: 'no held binding' };
+  const { loadSnapshot } = require('./snapshot') as typeof import('./snapshot');
+  const snap = loadSnapshot(c.authorExecutionId, { reviewerExecutionId: c.reviewerExecutionId ?? null }) as any;
+  const chain = snap.author?.exec?.config?.inputContext?.chainedFrom;
+  const h = (Array.isArray(chain) ? chain : []).find((e: any) => typeof e?.agentRole === 'string' && /harvester$/.test(e.agentRole));
+  if (!h) return { pin: null, evidence: 'no Harvester entry' };
+  const art = (snap.childArtifacts ?? []).find((a: any) => a.executionId === h.executionId && a.name === 'result.json');
+  if (!art) throw new Error(`golden set: case ${c.id} — the cached snapshot carries no result.json for its Harvester ${h.executionId}`);
+  const res = JSON.parse(art.content);
+  const held = new Set<string>();
+  for (const r of (res.heldBytes?.rows ?? []) as Array<{ target?: unknown }>) { const m = /^github:([^:]+):([^:]+)$/.exec(String(r.target ?? '')); if (m) held.add(`${m[1]}/${m[2]}`); }
+  const asked = new Set<string>();
+  for (const tc of (res.toolCalls ?? []) as Array<{ arguments?: any }>) {
+    const a = tc.arguments ?? {}; if (a.targetService !== 'github-service') continue;
+    let inner = a.arguments; if (typeof inner === 'string') { try { inner = JSON.parse(inner); } catch { inner = null; } }
+    if (inner && typeof inner.owner === 'string' && typeof inner.repo === 'string') asked.add(`${inner.owner}/${inner.repo}`);
+  }
+  const set = held.size ? held : asked; const evidence = held.size ? 'held Git refs' : 'Git reads (none held)';
+  if (set.size > 1) throw new Error(`golden set: case ${c.id} — its stored Harvester's ${evidence} name ${[...set].join(' and ')}; no single pin was in force`);
+  return { pin: set.size ? [...set][0] : null, evidence };
+}
+
+function buildOneCompanion(labDir: string, lab: LabExperiment, gs: GoldenSet, goldenDir: string, out: string, pin: string): { dir: string; report: CompanionReport; experiment: Record<string, any> } {
   fs.rmSync(out, { recursive: true, force: true });
   for (const d of ['protocols', 'templates', 'edits']) fs.mkdirSync(path.join(out, d), { recursive: true });
 
@@ -414,7 +512,12 @@ export function buildGoldenCompanion(labDir: string, gs: GoldenSet = loadGoldenS
   const configCarry = (c: GoldenCase): Record<string, unknown> => {
     const cs = c.configSources;
     if (!cs) return {};
-    const reaching = (nodeVariants.get(c.id) ?? []).some((cell) => typeof variants[cell]?.composedVersion === 'string' && semverGte(variants[cell].composedVersion as string, cs.fromVersion));
+    // v10: a cell with no `composedVersion` of its own composes the golden PIN of the protocol (today's production text), so the pin's
+    // version decides for it. Before v10 no pin was at or above a declaration's version, so this changes no earlier companion; from the
+    // terraform-iac 1.17.0 pin on, a model-lever cell of TF-TL4 carries its declaration too — without it the cell read
+    // `config-sources-snapshot-absent` (a leg that declares nothing), not the stored leg's refused read.
+    const pinVersion = gs.pins.protocols[c.protocol].version;
+    const reaching = (nodeVariants.get(c.id) ?? []).some((cell) => semverGte(typeof variants[cell]?.composedVersion === 'string' ? variants[cell].composedVersion as string : pinVersion, cs.fromVersion));
     if (!reaching) return {};
     const { loadSnapshot } = require('./snapshot') as typeof import('./snapshot');
     const desc = loadSnapshot(c.authorExecutionId, { reviewerExecutionId: c.reviewerExecutionId ?? null }).leg?.description;
@@ -446,7 +549,9 @@ export function buildGoldenCompanion(labDir: string, gs: GoldenSet = loadGoldenS
   const standingNodes: Array<Record<string, unknown>> = [];
   const standingDecl: Array<{ case: string; node: string }> = [];
   const pre = { variants, nodes, standingBench: [] as Array<{ case: string; node: string }> };
-  for (const sc of sbm.loadStandingBench().cases) {
+  // v10: the standing cases' legs ran under the default pin, so only the default-pin companion can carry them; another pin's companion
+  // names the sibling that covers it (buildGoldenCompanion) and the lock verifies the cover.
+  for (const sc of pin === GOLDEN_DEFAULT_GIT_PIN ? sbm.loadStandingBench().cases : []) {
     // Carry it on a persisted-Author cell of the case's OWN protocol (the domain binding the node needs), one per distinct Reviewer-side
     // lever set; every other reaching cell is covered by the lock's same-lever rule.
     const reaching = sbm.reachingArms(pre as any, out, sc);
@@ -486,7 +591,7 @@ export function buildGoldenCompanion(labDir: string, gs: GoldenSet = loadGoldenS
     ...(standingDecl.length ? { standingBench: standingDecl } : {}),
     goldenCompanion: report,
   };
-  fs.writeFileSync(path.join(out, 'experiment.json'), JSON.stringify(experiment, null, 2) + '\n');
+  // experiment.json is written by buildGoldenCompanion, once the companion family is known.
   return { dir: out, report, experiment };
 }
 
@@ -578,13 +683,29 @@ export function goldenVerdict(cells: GoldenCellScore[]): { verdict: 'PASS' | 'DO
   return { verdict: 'PASS', reasons: [] };
 }
 
+/** v10: the report of the WHOLE companion family of a lab, read from any one of its companions: the cells and unreached lists of every
+ *  companion (one per Git pin) joined. A sibling folder that is missing on disk is an error (rebuild); a sibling with no RUN simply has no
+ *  samples, so its cells read UNSCORED and the verdict INCOMPLETE — a lab can never PASS on one pin's companion alone. */
+export function companionFamilyReport(companionDir: string): CompanionReport {
+  const read = (d: string): CompanionReport => {
+    const f = path.join(d, 'experiment.json');
+    if (!fs.existsSync(f)) throw new Error(`golden-score: the companion ${d} is missing — run golden-build again (a lab's golden set is every companion it lists)`);
+    const r = JSON.parse(fs.readFileSync(f, 'utf8')).goldenCompanion as CompanionReport | undefined;
+    if (!r) throw new Error(`${d} is not a golden companion`);
+    return r;
+  };
+  const own = read(companionDir);
+  const fam = own.companions?.length ? own.companions : [{ dir: path.basename(companionDir), pin: own.pin ?? GOLDEN_DEFAULT_GIT_PIN, cells: own.cells.length }];
+  const all = fam.map((x) => read(path.join(path.dirname(companionDir), x.dir)));
+  for (const r of all) if (r.goldenVersion !== own.goldenVersion || r.lab !== own.lab) throw new Error(`golden-score: the companions beside ${companionDir} are not one family (${r.lab} ${r.goldenVersion} vs ${own.lab} ${own.goldenVersion})`);
+  return { ...own, cells: all.flatMap((r) => r.cells), unreached: all.flatMap((r) => r.unreached), standing: all.flatMap((r) => r.standing ?? []) };
+}
+
 /** Score one or more run folders of a companion. `stored(case)` returns the stored leg's qualityGate (carrier modelled iff it
  *  carries `heldEdit`) and the stored Author's `editApplication` (the fact a PERSISTED-Author sample carries: the lab re-uses the
  *  stored package, so its stamp is the stored one). A live sample's own stamp is its `editApplication.json` (written by the run). */
 export function scoreGolden(runDirs: string[], companionDir: string, stored: (c: GoldenCase) => { qualityGate: Record<string, any> | null; editApplication: Record<string, any> | null; authorText?: string | null }, gs: GoldenSet = loadGoldenSet()): { cells: GoldenCellScore[]; unreached: CompanionReport['unreached']; verdict: ReturnType<typeof goldenVerdict> } {
-  const exp = JSON.parse(fs.readFileSync(path.join(companionDir, 'experiment.json'), 'utf8'));
-  const report = exp.goldenCompanion as CompanionReport;
-  if (!report) throw new Error(`${companionDir} is not a golden companion`);
+  const report = companionFamilyReport(companionDir);
   if (report.goldenVersion !== gs.version) throw new Error(`companion built for golden ${report.goldenVersion}, the set is ${gs.version}`);
   const targets = new Set(report.targets);
   const cells: GoldenCellScore[] = [];

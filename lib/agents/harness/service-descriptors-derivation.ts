@@ -27,26 +27,32 @@
  * did to the contract and why, by named reason.
  */
 
-import { CONFIG_SOURCE_LANES, CONFIG_SOURCE_PROTOCOLS, DEVICE_SOURCE_LANES } from './held-bytes/variant';
+import { CONFIG_SOURCE_AWAITING_TEXT, CONFIG_SOURCE_LANES, DEVICE_SOURCE_LANES, configSourceProtocolsFor } from './held-bytes/variant';
 import { contractDeviceSourcesValue, isDescriptorUrlService, parseDeviceSourcesContractValue } from './device-sources';
 import { contractConfigSourcesValue, parseConfigSourcesContractValue } from './config-sources';
 
 export const SERVICE_DESCRIPTORS_FACT_VERSION = 1;
 
-/** Leg protocol tokens with NO sources lane today: the Architect's descriptor is the only source (rule 4). Steps 3/4 of Config
- *  sources move a token from here into CONFIG_SOURCE_LANES (STEPS-2-4-PLAN §4.3 / §5.3); it must then leave this list (pinned). */
-export const DESCRIPTOR_ONLY_TOKENS: readonly string[] = Object.freeze(['observability-config']); // terraform-iac joined CONFIG_SOURCE_LANES at 1.17.0 (STEP 4)
-
 type Lane = { field: 'deviceSources' | 'configSources'; protocol: string };
-/** token → the field + protocol its block is read with. Derived from the ONE lane tables, never retyped. */
-const SOURCE_LANE_TOKENS: ReadonlyMap<string, Lane> = new Map<string, Lane>([
-  ...Object.entries(DEVICE_SOURCE_LANES).map(([protocol, l]) => [l.contractKey, { field: 'deviceSources', protocol }] as [string, Lane]),
-  ...CONFIG_SOURCE_PROTOCOLS.map((protocol) => [CONFIG_SOURCE_LANES[protocol].contractKey, { field: 'configSources', protocol }] as [string, Lane]),
-]);
+/** Leg protocol tokens with NO sources lane today: the Architect's descriptor is the only source (rule 4). DERIVED since Config
+ *  sources STEP 3 (plan W5 row 12; it was a hand-kept list): the contract keys of the Config lane rows still AWAITING their text —
+ *  membership comes from the ONE table and the ONE awaiting list, so a token cannot be in this list and in the sources lane at once,
+ *  and it leaves here the moment its text ships. Today: `observability-config`. */
+export function descriptorOnlyTokens(awaiting: readonly string[] = CONFIG_SOURCE_AWAITING_TEXT): readonly string[] {
+  return Object.keys(CONFIG_SOURCE_LANES).filter((p) => awaiting.includes(p)).map((p) => CONFIG_SOURCE_LANES[p].contractKey);
+}
+/** token → the field + protocol its block is read with. Derived from the ONE lane tables, never retyped; a function of the awaiting list. */
+function sourceLaneTokens(awaiting: readonly string[] = CONFIG_SOURCE_AWAITING_TEXT): ReadonlyMap<string, Lane> {
+  return new Map<string, Lane>([
+    ...Object.entries(DEVICE_SOURCE_LANES).map(([protocol, l]) => [l.contractKey, { field: 'deviceSources', protocol }] as [string, Lane]),
+    ...configSourceProtocolsFor(awaiting).map((protocol) => [CONFIG_SOURCE_LANES[protocol].contractKey, { field: 'configSources', protocol }] as [string, Lane]),
+  ]);
+}
 
 /** Every key the platform recognises as a leg protocol token under `serviceDescriptors`. */
-export function knownDescriptorTokens(): string[] {
-  return [...SOURCE_LANE_TOKENS.keys(), ...DESCRIPTOR_ONLY_TOKENS.filter((t) => !SOURCE_LANE_TOKENS.has(t))];
+export function knownDescriptorTokens(awaiting: readonly string[] = CONFIG_SOURCE_AWAITING_TEXT): string[] {
+  const lanes = sourceLaneTokens(awaiting);
+  return [...lanes.keys(), ...descriptorOnlyTokens(awaiting).filter((t) => !lanes.has(t))];
 }
 
 export type NotDerivedReason =
@@ -95,8 +101,8 @@ export function isUsableDescriptorValue(v: unknown): boolean {
 type Derivation = { kind: 'value'; service: string } | { kind: 'none'; reason: NotDerivedReason };
 
 /** What the token's contract block derives (rules 1-2). PURE. */
-export function deriveForToken(contract: unknown, token: string): Derivation | null {
-  const lane = SOURCE_LANE_TOKENS.get(token);
+export function deriveForToken(contract: unknown, token: string, awaiting: readonly string[] = CONFIG_SOURCE_AWAITING_TEXT): Derivation | null {
+  const lane = sourceLaneTokens(awaiting).get(token);
   if (!lane) return null;
   let services: string[];
   if (lane.field === 'deviceSources') {
@@ -126,9 +132,9 @@ const emptyFact = (fieldShape: ServiceDescriptorsFact['fieldShape']): ServiceDes
  * Apply rules 1-4 to one contract. Returns the contract to STORE and the fact. The same object comes back when nothing changed.
  * Top-level key order is kept; inside `serviceDescriptors` a replaced value keeps its position and an added one is appended.
  */
-export function deriveServiceDescriptors(contract: Record<string, unknown>): { contract: Record<string, unknown>; fact: ServiceDescriptorsFact } {
+export function deriveServiceDescriptors(contract: Record<string, unknown>, awaiting: readonly string[] = CONFIG_SOURCE_AWAITING_TEXT): { contract: Record<string, unknown>; fact: ServiceDescriptorsFact } {
   try {
-    return derive(contract);
+    return derive(contract, awaiting);
   } catch {
     const fact = emptyFact('absent');
     fact.failed = true;
@@ -136,12 +142,12 @@ export function deriveServiceDescriptors(contract: Record<string, unknown>): { c
   }
 }
 
-function derive(contract: Record<string, unknown>): { contract: Record<string, unknown>; fact: ServiceDescriptorsFact } {
+function derive(contract: Record<string, unknown>, awaiting: readonly string[]): { contract: Record<string, unknown>; fact: ServiceDescriptorsFact } {
   const raw = contract.serviceDescriptors;
   const fieldShape: ServiceDescriptorsFact['fieldShape'] = raw === undefined ? 'absent' : isObj(raw) ? 'object' : 'not-object';
   const fact = emptyFact(fieldShape);
   const architect: Record<string, unknown> = isObj(raw) ? raw : {};
-  const known = new Set(knownDescriptorTokens());
+  const known = new Set(knownDescriptorTokens(awaiting));
 
   const unknown = Object.keys(architect).filter((k) => !known.has(k));
   fact.unknownKeyCount = unknown.length;
@@ -152,7 +158,7 @@ function derive(contract: Record<string, unknown>): { contract: Record<string, u
   // 1. The Architect's entries, in its order.
   for (const [k, v] of Object.entries(architect)) {
     if (!known.has(k)) { out[k] = v; continue; }
-    const d = deriveForToken(contract, k);
+    const d = deriveForToken(contract, k, awaiting);
     if (d && d.kind === 'value') {
       fact.derived.push(k);
       if (v === d.service) { fact.kept.push(k); out[k] = v; }
@@ -171,9 +177,9 @@ function derive(contract: Record<string, unknown>): { contract: Record<string, u
     else { fact.removed.push({ token: k, reason: 'not-a-descriptor' }); changed = true; }
   }
   // 2. Lane tokens the Architect left out.
-  for (const token of SOURCE_LANE_TOKENS.keys()) {
+  for (const token of sourceLaneTokens(awaiting).keys()) {
     if (Object.prototype.hasOwnProperty.call(architect, token)) continue;
-    const d = deriveForToken(contract, token);
+    const d = deriveForToken(contract, token, awaiting);
     if (!d) continue;
     if (d.kind === 'value') { fact.derived.push(token); fact.added.push(token); out[token] = d.service; changed = true; }
     else if (d.reason !== 'block-absent') fact.notDerived.push({ token, reason: d.reason });

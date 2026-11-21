@@ -21,7 +21,7 @@ const { audienceForService } = require('@/lib/mcp/server/tools/hub/audience-poli
 const { findServiceByIdThenName } = require('@/lib/mcp/server/tools/hub/resolve-service-ref');
 // HUB-GATELESS-EXTERNAL-ROUTES (c), 2026-11-16: this route (the admin "run workflow" REST endpoint, via the workflow engine) now meets
 // the SAME call gate as services.call and workflow.execute steps — one gate, every route that calls an external service tool.
-const { validateServiceCall } = require('@/lib/mcp/server/config/service-call-policy');
+const { validateServiceCall, ADMIN_WORKFLOW_ROUTE } = require('@/lib/mcp/server/config/service-call-policy');
 const { sanitizeForResponse } = require('@/lib/mcp/server/tools/response-sanitizer');
 
 const callerLogger = logger.child({ module: 'ServiceCaller' });
@@ -347,7 +347,9 @@ class OrchestrationServiceCaller {
       const callArguments = ensureObject(args, {}, 'ServiceCaller');
       const policyCheck = validateServiceCall(
         service, tool, callArguments,
-        { user: { id: context.user.id, email: context.user.email, role: context.user.role }, source: 'mcp_hub_workflow' },
+        // `route`: this route's own marker on the context it BUILDS for the gate (Config sources STEP 3 P1, plan §7). The context
+        // carries no execution id by construction, so the gate applies the key-named never-read names to EVERY caller of this route.
+        { user: { id: context.user.id, email: context.user.email, role: context.user.role }, source: 'mcp_hub_workflow', route: ADMIN_WORKFLOW_ROUTE },
         registeredTools, serviceInfo.name, serviceInfo,
       ) as { allowed: boolean; violations: Array<{ type: string; message?: string }> };
       if (!policyCheck.allowed) {

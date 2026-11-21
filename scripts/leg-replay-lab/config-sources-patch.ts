@@ -89,7 +89,7 @@ export function withFirstExecutionConfigSnapshot(snap: Snapshot): { snap: Snapsh
   cl.metadata = { ...(cl.metadata ?? {}), [CONFIG_SOURCES_SNAPSHOT_KEY]: buildConfigSourcesSnapshot(c.protocol, resolution, meta.protocolResolvedAt) };
   const back = readConfigSourcesSnapshot(cl.metadata);
   if (!back || back === 'unreadable') throw new Error(`L-CS-K-a: the simulated snapshot does not read back (${String(back)})`);
-  const gov = governingConfigSources({ description: c.description, contract: c.contract, snapshot: cl.metadata[CONFIG_SOURCES_SNAPSHOT_KEY] }, c.protocol);
+  const gov = governingConfigSources({ description: c.description, contract: c.contract, snapshot: cl.metadata[CONFIG_SOURCES_SNAPSHOT_KEY], protocolStamped: true /* the lab's leg models a stamped leg (STEP 3 A9) */ }, c.protocol);
   if (gov.state === 'not-config-source-leg' || gov.state === 'could-not-check' || gov.state.startsWith('snapshot-')) throw new Error(`L-CS-K-a: governing declaration reads ${gov.state} right after the snapshot`);
   if (!sameConfigDeclaration(gov as never, resolution)) throw new Error('L-CS-K-a: governing declaration differs from the snapshot');
   return { snap: copy, report: { state: 'taken', protocol: c.protocol, contractKey: c.contractKey, resolution: resolution.state,
@@ -312,8 +312,8 @@ export async function withComputedConfigFacts(snap: Snapshot, opts: { protocol: 
   const wantReads = computeConfigSourceReads(sources, toolCalls);
   if (!same(facts.configSourceReads, wantReads)) throw new Error('L-CS-K-c: configSourceReads from the shipping nets ≠ computeConfigSourceReads(sources, toolCalls)');
   if (!same(facts.liveEvidence, computeConfigLiveEvidence(sources, toolCalls))) throw new Error('L-CS-K-c: liveEvidence from the shipping nets ≠ computeConfigLiveEvidence(sources, toolCalls)');
-  // The shipping net passes the persisting execution's COMPOSED protocol (`protocolInjection.delta.name`) — so does the cross-check.
-  if (!same(facts.gitLiveDrift, computeGitLiveDrift(calls, opts.protocol?.name ?? null))) throw new Error('L-CS-K-c: gitLiveDrift from the shipping nets ≠ computeGitLiveDrift(platformDriftCalls, protocol)');
+  // The shipping net passes the OWNING LEG's Config-sources protocol (k8s value-lane P1, git-live-drift-enrichment.ts `methodProtocol`) — so does the cross-check.
+  if (!same(facts.gitLiveDrift, computeGitLiveDrift(calls, legProtocol))) throw new Error('L-CS-K-c: gitLiveDrift from the shipping nets ≠ computeGitLiveDrift(platformDriftCalls, protocol)');
   if (calls === undefined ? facts.platformDriftCalls !== undefined : !same(facts.platformDriftCalls, { version: 1, calls })) throw new Error('L-CS-K-c: the stamped platformDriftCalls is not the call record');
 
   for (const a of arts) {

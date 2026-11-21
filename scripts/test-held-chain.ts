@@ -221,7 +221,10 @@ test('F-N2-1 (b): an evidence-only device read gets no handle; numbering is unch
   }
   // Config-sources network step (execution-facts B2 fix 3, 2026-11-04): `live-read-evidence-only` added BY DECISION — a declared evidence read is
   // never an unheld item shown to the Author. A third member is again a decision, never a sweep.
-  eq([...HANDLELESS_CAPTURE_REFUSALS], ['device-read-evidence-only', 'live-read-evidence-only'], 'two members, by decision: ');
+  // Config sources STEP 3 P2 (plan W8 / W10; coordinator ruling 4, 2026-11-21): + `served-file-evidence-only` and
+  // `service-file-not-declared`, BY DECISION. BEFORE: two members. AFTER: four. The two new ones keep target and path in their
+  // stored row; `harvesterHandles` ignores that identity for a handle-less row, so the older members (identity already null) do not move.
+  eq([...HANDLELESS_CAPTURE_REFUSALS], ['device-read-evidence-only', 'live-read-evidence-only', 'served-file-evidence-only', 'service-file-not-declared'], 'four members, by decision: ');
   // through the chainer (the production read): Author heldView and Architect heldIndex both omit it
   for (const role of ['config_change_author', 'infra_change_architect']) {
     const w = world({ consumerRole: role, refs: [git, dev2], views: { [GITSHA]: VIEW.viewText, [SHA]: VIEW.viewText }, blobs: { [GITSHA]: BASE, [SHA]: BASE } });

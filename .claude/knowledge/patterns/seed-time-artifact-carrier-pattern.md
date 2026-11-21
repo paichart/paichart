@@ -26,7 +26,7 @@ Do not re-derive these. Each was verified independently, by a different speciali
 | route | why it dies | mechanism |
 |---|---|---|
 | **Harness writes it into the child's task description** | an **LLM transcribes it** | measured: **3 of 4** authoring passes altered text they were told to reproduce — numbering lost twice, one rule's permitted forms loosened, one acceptance check deleted, and one asserted verbatim splicing of text it had retyped |
-| **§6 chained context** | crosses **R9**, which rewrites while reporting it did not | `sanitizeChainedOutput` NFKC-normalizes (`…` → `...`) and stamps **`sanitized: false`** — so a byte-exact payload is silently altered *and* the fact says otherwise |
+| **§6 chained context** | crosses **R9**, which rewrites while reporting it did not | `sanitizeChainedOutput` NFKC-normalizes (`…` → `...`), so a byte-exact payload is altered. *When this was written the fact also said otherwise (**`sanitized: false`**); the rewrite is now recorded beside it (`rewritten`, `rewriteClasses` — class `nfkc`), and the legacy `sanitized` stays false. The route is still dead: the bytes still change.* |
 | **MCP resource** | **not on the engine surface at all** | `resources/read` is a transport *method*, not a tool, so it can never become a function definition; the embedded server registers exactly six tools and `callTool` throws for anything else |
 | **Artifact store** | **no input mode** | artifacts cannot exist without an execution (FK-required, all write sites post-LLM), agents have no artifact-read tool, and the one channel that carries artifact content into a prompt carries an LLM's `finalResponse` — and rewrites it in transit |
 
@@ -121,7 +121,7 @@ surface at all**, and are spliced into the finished product at publish time: the
 `<!-- WRITING-RULES -->` and a human runs `--insert`.
 
 ⚠️ **Sizes are deliberately not written here.** They moved on the first maintenance pass and an
-exact literal rots as a direct consequence of healthy work (CLAUDE.md's floors rule). Re-measure:
+exact literal rots as a direct consequence of healthy work (CLAUDE.md: "exact counts drift as suites grow"). Re-measure:
 
 ```bash
 # template / skeleton / rules / protocol-body sizes, all four, current
@@ -154,7 +154,7 @@ protocol, and every consequence follows from that one fact.
 | 2 | regenerate the vendored skeleton — `python3 ~/paichart/scripts/requirements-rules.py --skeleton > scripts/seed-data/requirements-skeleton.tmpl` | the seed reads the VENDORED file, not the template |
 | 3 | `npm run test:requirements-skeleton-parity` | proves the vendored copy is byte-identical to a fresh emit, and re-checks the invariants (no author-addressed blocks, no generic placeholders, no front matter, NFKC-stable, the three-way marker pin, and the canonical rules file) |
 | 4 | **bump the protocol version** in `scripts/seed-protocol-prompts.ts` | the protocol's text changed; a content change under an unchanged version is how a consumer concludes nothing moved |
-| 5 | local reseed — `npx ts-node --transpile-only scripts/seed-protocol-prompts.ts` | the DB row is the source of truth for the public render, and the render script FAILS if the seed file is newer than the row |
+| 5 | local reseed — `npm run seed:protocols` (the typed seed path; never `--transpile-only` — see Common pitfalls) | the local rows are what `test:protocol-golden --db` and the labs read. *(Corrected 2026-11-21: this step named `--transpile-only`, which the pitfalls below forbid, and gave the public render as the reason — retired, step 6.)* |
 | 6 | ~~re-render the public mirror~~ — RETIRED 2026-11-13: the public repository no longer carries a `protocols/` mirror (the texts are public in the seed script) | nothing to do; the renderer skips out loud |
 | 7 | `npm run test:protocol-dependence-anchors` + `npm run test:protocol-stamp-guards` | textual dependences between base and delta are pinned; a skeleton edit can cross one |
 
@@ -187,12 +187,15 @@ version line before it needs anything else.
 - **The artifact does not need to be verbatim.** If semantic delivery suffices, role guidance is
   simpler and has no cross-repo pin.
 - **The artifact is per-run data**, not a stable reference. This bakes at seed time; anything that
-  varies per execution belongs in the task's own channels.
+  varies per execution belongs in the task's own channels. For per-run FILE bytes the platform now has carried channels with no
+  model in the path — see `kept-file-edit-by-reference-pattern.md` (the kept-file view) and the platform's copy of the plan
+  contract to every leg (`plan-spawn-carry.ts`).
 - **You would be the second copy.** If the content already exists verbatim in N protocols, adding an
   N+1st is a duplication problem, not a delivery problem.
 - **It is large enough to move published cost numbers.** Protocol bodies are the prompt preamble;
-  measured production range is ~24–60 KB, and an edit silently changes the published
-  cache-cost figures. Re-measure if you approach the top of that range.
+  the leg and program protocol bodies measured ~27–68 K characters on 2026-11-21 (`scripts/fixtures/protocol-golden.json`;
+  it was ~24–60 KB when this was written), and an edit silently changes the published cache-cost figures. The limit that binds
+  today is each text's size ceiling (Protocol 16 § "When a text reaches its size ceiling"; `test:protocol-golden` warns at 2% headroom).
 
 ---
 
@@ -244,3 +247,30 @@ Record: `cline_docs/follow-ups/requirements-generator-v3-fixes-2026-09-21.md` ·
   them; the seed path typechecks and will catch it, but only if you run it.
 - **Forgetting the manual reseed.** Protocols auto-reseed on deploy; **role guidance does not.** A
   correct fix can sit in the library while agents run the old text.
+
+---
+
+## 2026-11-21 — drift sweep (Protocol 11): what was corrected, and how to check it stays true
+
+The elimination chain's conclusions, the routing principle and the pitfalls are unchanged. Corrected against the tree:
+
+- **Maintenance step 5** told the reader to seed with `--transpile-only`, which this file's own pitfalls forbid. It now names
+  `npm run seed:protocols`, and the reason no longer cites the retired public render.
+- **The R9 row** said the fact "says otherwise". The rewrite is now recorded (`rewritten`, `rewriteClasses`); the route is still
+  dead because the bytes still change.
+- **The size range** (~24–60 KB) was re-measured: ~27–68 K characters; the binding limit is Protocol 16's size ceiling.
+- **"When NOT to use"** now points per-run file bytes at the kept-file pattern (which already linked here).
+- "CLAUDE.md's floors rule" cited text that is not in CLAUDE.md; the nearest line is quoted instead.
+
+Every expectation below was run before it was written:
+
+```bash
+grep -c '"seed:protocols": "npx ts-node --project prisma/tsconfig.seed.json scripts/seed-protocol-prompts.ts"' package.json   # expect 1 — the typed seed path, no --transpile-only
+grep -c "rewriteClasses: r9.rewriteClasses" lib/agents/harness/context-chainer.ts      # expect >=1 — R9's rewrite is recorded
+grep -c "step('nfkc'" lib/agents/harness/sanitize-chained-output.ts                    # expect 1 — R9 still NFKC-normalizes
+python3 -c "import json;p=json.load(open('scripts/fixtures/protocol-golden.json'))['protocols'];print(max(v['chars'] for k,v in p.items() if k.endswith('-protocol')))"   # 67673 on 2026-11-21 — a measurement, not a pin
+```
+
+**Not re-verified in this sweep:** the 2026-09-22 size figures (dated); the embedded-server tool count and the artifact-store
+claims of the elimination chain (the audit checked them; this sweep did not repeat it); the public-repo template paths in the
+re-measure command.

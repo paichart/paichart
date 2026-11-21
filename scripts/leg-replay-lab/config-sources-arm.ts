@@ -55,7 +55,7 @@ export function armReadsConfigSources(leg: LegRow, protocolInjection: unknown): 
 export function armConfigSources(leg: LegRow, protocolInjection: unknown): LegConfigSourcesResolution | null {
   if (!armReadsConfigSources(leg, protocolInjection)) return null;
   const c = configLegOf(leg)!;
-  return governingConfigSources({ description: c.description, contract: c.contract, snapshot: c.snapshot }, c.protocol);
+  return governingConfigSources({ description: c.description, contract: c.contract, snapshot: c.snapshot, protocolStamped: true /* the lab's leg models a stamped leg (STEP 3 A9) */ }, c.protocol);
 }
 
 /** The owning-leg resolution production would hand the LEG's own nets once the text has shipped: `variant.ts` builds

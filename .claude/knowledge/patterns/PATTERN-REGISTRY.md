@@ -2,7 +2,7 @@
 
 **Purpose**: Quick reference for all proven implementation patterns in pAIchart knowledge library
 
-**Last Updated**: October 31, 2026
+**Last Updated**: November 21, 2026
 
 **Total Patterns**: 72 documented patterns
 
@@ -134,7 +134,7 @@
 
 ### **dual-execution-path-parity-pattern.md** - ✅ RETIRED 2026-07-06 (convergence complete)
 **Status**: RETIRED to adapter-render guidance. Engine + stream are now ONE shared core (`lib/services/execution-core.ts` `runExecutionCore`) + two thin presentation adapters — cross-path output drift is structurally impossible.
-**When to use**: No longer a two-file sync checklist. To change an execution OUTCOME, change it once in the core (or the modules it calls: execution-artifacts/terminal-persist/quality/diagnostic-retry/parse-confidence/agentic-tool-loop). Adapters own only presentation (engine EventEmitter progress / stream SSE) + documented per-adapter facts (extensions N-6, prompt heads, `prune` transitional — Flip 2 gated; `fireReactors` CONVERGED both-true via Flip 1).
+**When to use**: No longer a two-file sync checklist. To change an execution OUTCOME, change it once in the core (or the modules it calls: execution-artifacts/terminal-persist/quality/diagnostic-retry/parse-confidence/agentic-tool-loop). Adapters own only presentation (engine EventEmitter progress / stream SSE) + documented per-adapter facts (extensions N-6, prompt heads, `prune` and `fireReactors` both CONVERGED both-true — Flips 1 and 2, 2026-07-06).
 **Shipped**: Phase 6 core extraction — engine `ef768e7a`, stream `200dd0e7` (both UAT-banked). Drift-locked by `test:execution-core-boundary`, `test:sse-event-sequence`, `test:terminal-persist-ponr`, + retargeted single-core parity pins.
 **History**: 4 parity fixes (Apr) → 5-site extraction (May) → tool-loop extraction (Jun) → Phase 0.5–6 convergence (Jul). Authoritative per-adapter record: `cline_docs/reviews/execution-path-convergence-2026-07-04/divergence-manifest.md`.
 
@@ -253,13 +253,13 @@
 **Production use**: Mar 2026 tool consolidation (22 legacy -> 6 consolidated tools). Agent knowledge base (Category 5) discovered as largest category (~90 files, ~1400+ refs).
 **Referenced by**: `mcp-tool-architecture-specialist` agent
 
-### **two-execution-path-drift-pattern.md** - 60% Confidence ⚠️ DRAFT (Apr 2026)
+### **two-execution-path-drift-pattern.md** - 75% Confidence ✅ CONFIRMED (Apr 2026; second instance May 2026; swept 2026-11-21)
 **When to use**: Detecting + remediating silent drift between two code paths that independently handle the same domain concern (tool loop, validation rule, dedup check)
 **Results**: Caught `MAX_TOOL_TURNS` drift (engine read template metadata up to 100, stream route hardcoded 10 — 95% of harness runs silently starved); caught PIPELINE auto-complete skip missing in stream path
-**Key features**: Grep-for-constant detection; mirror-change remediation with cross-reference comments; shared-extraction long-term fix; audit checklist when adding behavior near drift-prone paths
-**Canonical instance**: Engine vs stream-route agentic tool loops (2026-04-14, fixed in `e008aba2`)
-**Known latent sites**: Task-completion handling, execution terminal states, task creation — two+ call sites each
-**Status**: Draft — one confirmed instance, 2-3 more needed before promoting above 60%. Related: `orchestration-reactor-pattern.md` §Common Pitfalls ("Multiple-execution-path drift")
+**Key features**: Grep-for-constant detection; shared extraction is the fix; mirror-change with cross-reference comments is a stop-gap only for paths still genuinely separate (the engine/stream pair no longer is — one core since 2026-07-05); phantom-canonical checklist (grep the runtime query across `lib/`, not only the schema file)
+**Canonical instances**: Engine vs stream-route agentic tool loops (2026-04-14, fixed in `e008aba2`; since extracted); POV select phantom canonical (2026-05-02, `8d256992`)
+**Known latent sites**: task creation, validation rules stated at several layers. Task completion is RESOLVED (two cores: `execution-terminal-persist.ts`, `complete-task-terminally.ts`); execution failure = the shared failure persist vs the engine reapers that bypass it
+**Status**: Confirmed — two observed instances. Related: `orchestration-reactor-pattern.md` §Common Pitfalls ("Multiple-execution-path drift")
 
 ---
 
@@ -434,14 +434,14 @@
 ### **kept-file-edit-by-reference-pattern.md** - 95% Confidence ✅ (NEW - Oct 2026; PRODUCTION since 2026-10-19; 95% at TF-CLOSEOUT 2026-10-22 — four domains since the network close-out 2026-10-27, G-4 live)
 **When to use**: A pipeline agent must CHANGE a file an operator owns and the changed file is what gets deployed — and a read-only source can return THE FILE the operator writes (never a rendering, a live object or Terraform state)
 **Results**: observability (2026-10-14 → 10-17) — lab 25/25 edits applied; every live leg's operator base check MATCH; the same objective twice ⇒ a byte-identical candidate; an applied edit released inside a program. **kubernetes-gitops on a Git file source (2026-10-19)** — L-K2 SHIP (Reviewer caught the other-document defect 5/5 vs base 0/5); live window 7 legs, both scope directions + one-object-with-drift + non-admin + program leg PASS, every Git base check MATCH, 0 wrongly forced. Removes the retyping class (28 of 42 harvests had dropped lines from a "verbatim" quote) **terraform-iac on the same Git file source (2026-10-21/22)** — L-T2 every gate; live window 5 legs + a releasable program, 3/3 in-scope edits applied first time, a one-resource held file with drift applied, the G-4 force fired live, every base check MATCH.
-**Key features**: the model writes SEARCH/REPLACE edits against a handle, never the file · the platform keeps the bytes, applies (exactly-once match or refused), and shows the Reviewer ITS diff · ONE scope predicate (`held-bytes/scope.ts`) with six readers · a carrier forces needs-revision on an unapplied in-scope edit · held is a CAPABILITY (`HELD_CAPABLE_PROTOCOLS`), not a variant · an 8-item domain-join procedure · Addendum A: the GitHub file source's checkable properties (two-layer read-only, token-less server, 200/503 health on `healthCheckPath`, select by `type:'resource'`, owner/repo pinned in the descriptor)
+**Key features**: the model writes SEARCH/REPLACE edits against a handle, never the file · the platform keeps the bytes, applies (exactly-once match or refused), and shows the Reviewer ITS diff · ONE scope predicate (`held-bytes/scope.ts`) with six readers · a carrier forces needs-revision on an unapplied in-scope edit · held is a CAPABILITY (`HELD_CAPABLE_PROTOCOLS`), not a variant · a numbered domain-join procedure (24 items) · Config sources: on Kubernetes and Terraform legs a Git file is held only when declared (Addendum C) · Addendum A: the GitHub file source's checkable properties (two-layer read-only, token-less server, 200/503 health on `healthCheckPath`, select by `type:'resource'`, owner/repo pinned in the descriptor)
 **Anti-patterns**: retyping "verbatim" · holding a rendering or state · several in-scope rules · selecting by position · a variant protocol · unscoped series
 
 ### **seed-time-artifact-carrier-pattern.md** - 85% Confidence ✅ (NEW - Sep 2026)
 **When to use**: An agent must receive a VERBATIM artifact it fills, transcribes or checks against — a template, schema, canonical stanza or reference document — whose exact bytes matter and which is authored elsewhere (often another repo)
 **Results**: Delivers byte-exact content to a model with no sanitizer, renderer, truncator or LLM in the path; a rule that had failed 3 of 4 hand tests passed on its first live outing
 **Key features**: Split the artifact by PROPERTY — structure → protocol body (auto-reseeds, parity-pinned) · obligations → role guidance (measured by freshness) · text that must reach the PRODUCT byte-identically → no agent surface at all, spliced deterministically at publish time. Vendor a GENERATED file (never hand-maintained), `.tmpl` not `.md` where CI ignores markdown, read at seed time
-**The transferable half — the ELIMINATION CHAIN**: task description dies to LLM transcription (3 of 4 passes altered what they retyped) · §6 chained context dies to R9 (NFKC-rewrites while stamping `sanitized: false`) · MCP resource dies because `resources/read` is a transport method, never a tool · artifact store dies because it has no input mode. Do not re-derive these
+**The transferable half — the ELIMINATION CHAIN**: task description dies to LLM transcription (3 of 4 passes altered what they retyped) · §6 chained context dies to R9 (NFKC-rewrites the bytes; the rewrite is now recorded as `rewritten` / `rewriteClasses`, the legacy `sanitized` stays false) · MCP resource dies because `resources/read` is a transport method, never a tool · artifact store dies because it has no input mode. Do not re-derive these
 **Production use**: `requirements-authoring-protocol` v1.0.0 (Sep 2026) — 370-line template → 19,730-char vendored skeleton → 33,933-char protocol body
 **Routing principle**: the thing that can go stale-against-a-source goes where it is auto-reseeded; the thing that cannot goes where it is measured
 **✅ Gap VALIDATED 2026-09-22 (one run)**: the targeted defect went 33 occurrences → 0 and the SUBSTITUTE appeared in its place — absence alone would only mean the document got vaguer. Reads as *the defect did not recur under the new guidance*, never as *the guidance prevents it*. 🔴 **The same run showed the fix was PARTIAL**: a second obligation moved in the same batch was violated on 2 of 4 sections — the one written as a PREFERENCE rather than an obligation. **Measured lesson — and it REFUTES the obvious fix: the violated rule already carried a clean MUST with a discriminator in an injected protocol, while the obeyed rule had no MUST anywhere. FORCE is not the binding mechanism; TRIGGER + SUBSTITUTE is. 'Write MUST everywhere' is the remedy the evidence does not support. Audit for trigger and substitute, never bulk-pass the non-proof-case rules** — the obligations split is the only half that cannot be checked mechanically
@@ -452,7 +452,7 @@
 **When to use**: A domain event (task completes, artifact created, milestone reached) should trigger orchestration action in another component — without coupling or polling
 **Results**: Closes automation loops without LLM agents polling; reactor coverage = automation coverage
 **Key features**: Event hook + guard chain + fire-and-forget queue action + structured logs; guard primitives library (status gate, in-flight, debounce, completeness, sanity)
-**Production use**: pipelineRetriggerReactorService (Apr 2026) — queues harness SYNTHESIZE when last sibling terminal
+**Production use**: pipelineRetriggerReactorService (Apr 2026) — queues harness SYNTHESIZE when last sibling terminal; taskReadyReactorService — queues a task when its dependencies are satisfied, plus the dep-free kickstart. Hooks fire from the shared terminal persist and `complete-task-terminally.ts` (handlers hold none) — see the pattern's call-site table
 **Strategic doc**: `.claude/knowledge/domain/harness/automation-loop-closure-architecture.md` (event catalogue + roadmap of 7 future reactors)
 **Anti-patterns**: Not a handler, not a cron, not a workflow step — use only for async loop closure after tx commit
 **Common pitfalls**: Context field shape drift across reactor boundary (see boundary-contract-wrapper-enforcement-pattern) — reactors amplify this class because read site is temporally far from the reactor
@@ -466,14 +466,14 @@
 **Companion patterns**: orchestration-reactor-pattern (reactors are a common source of N-writer drift); fire-and-forget-activity-logging-pattern (audit writes use it); field-leakage-prevention-pattern (sibling "validate at boundary")
 **Anti-patterns**: Documentation-only shape rules; per-writer soft-parse; joining audit-log write to create transaction; using `'system'` enum as silent fallback
 
-### **agent-output-trustworthiness-defense-stack-pattern.md** - 91% Confidence ✅ (NEW - Apr 2026)
+### **agent-output-trustworthiness-defense-stack-pattern.md** - 91% Confidence ✅ (NEW - Apr 2026; swept 2026-11-21)
 **When to use**: Agent execution can produce SUCCESS that masks structural defects (failed tools, fabricated success narratives, wrong template assigned, harness skipped a step, budget rejection silently absorbed)
-**Results**: 7 detection signals + 1 anti-fabrication correction turn; would have caught 2026-04-16 artifact-synthesis incident across 3 independent dimensions (BUDGET_EXHAUSTED, PROTOCOL_STEP_SKIPPED, narrative correction); zero control-flow changes; 23 unit tests; engine + stream-route parity
-**Key features**: Additive signals (no SUCCESS/FAILED reclassification); single `errorCategory` cascade with co-occurring evidence fields (`protocolValidation`, `templateScopeMismatch`, `executionDegradation`); pure-function validators in `lib/services/*Matcher.ts`/`*Validator.ts`; anti-fabrication correction turn with `functions: []` to structurally prevent tool re-entry
+**Results**: 7 detection signals + 1 anti-fabrication correction turn; would have caught 2026-04-16 artifact-synthesis incident across 3 independent dimensions (BUDGET_EXHAUSTED, PROTOCOL_STEP_SKIPPED, narrative correction); zero control-flow changes; 23 unit tests at ship (61 validator checks today); ONE shared home for every signal since the 2026-07-05 convergence (at ship: mirrored in the engine and the stream route)
+**Key features**: Additive signals (no SUCCESS/FAILED reclassification); single `errorCategory` cascade with co-occurring evidence fields (`protocolValidation`, `executionDegradation`; `templateScopeMismatch` retired 2026-07-17); pure-function validator `lib/services/pipelineProtocolValidator.ts` (the matcher is deleted); anti-fabrication correction turn with `functions: []` to structurally prevent tool re-entry
 **Signal cascade** (priority): TEMPLATE_MISMATCH_SELF_REPORTED (overrides) → BUDGET_EXHAUSTED → TOOL_LOOP_DEGRADED → TOOL_FAILURES → SILENT_REFUSAL → PROTOCOL_STEP_SKIPPED → ~~TEMPLATE_SCOPE_MISMATCH~~ (P9 RETIRED 2026-07-17: ~60 firings / 0 true positives; historical artifacts only)
-**Production use**: `lib/services/agentExecutionEngine.ts` (engine path) + `app/api/pov/agent/execute/stream/route.ts` (stream path) — task #84 umbrella, tasks #82/87/88/89/90/91
-**Companion patterns**: boundary-contract-wrapper-enforcement (sibling — additive signals at data boundaries vs execution outputs); orchestration-reactor-pattern (the reactor system this stack defends); dual-execution-path-parity (the parity discipline this stack obeys)
-**Anti-patterns**: Don't make signals blocking; don't overload `executionDegradation` (use co-occurring fields); don't skip stream-route mirror; don't ship a detector without a regression test using the canonical incident shape
+**Production use**: `lib/agents/harness/execution-quality.ts` (the cascade), `lib/agents/harness/agentic-tool-loop.ts` (the correction turn), `lib/services/execution-artifacts.ts` (result.json), all reached by both callers through `runExecutionCore` — the engine and stream-route files contain no detector — task #84 umbrella, tasks #82/87/88/89/90/91
+**Companion patterns**: boundary-contract-wrapper-enforcement (sibling — additive signals at data boundaries vs execution outputs); orchestration-reactor-pattern (the reactor system this stack defends); dual-execution-path-parity (satisfied structurally since the convergence); facts-only-tighten (#71 — the boundary: gate-input facts may tighten an outcome; this cascade never blocks)
+**Anti-patterns**: Don't make signals blocking; don't overload `executionDegradation` (use co-occurring fields); don't re-inline a signal into either caller (the old "mirror in both files" rule is retired); don't ship a detector without a regression test using the canonical incident shape
 
 ### **in-run-facts-only-correction-pattern.md** - 75% (regression guard) / 80% (provenance guard) ⚠️ (NEW - 2026-10-10; corrected after post-work review)
 **When to use**: An agent's deliverable fails a MECHANICALLY checkable rule (size, form, a missing line, a citation) that is otherwise only found after the run, forcing a full regeneration (an open loop)

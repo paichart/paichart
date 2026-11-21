@@ -6,6 +6,7 @@
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://stub:stub@localhost:5432/stub';
 import * as fs from 'fs';
 import * as path from 'path';
+import { configSnapshotDecision } from '../lib/agents/harness/config-sources-read';
 import { applyHeldEditCarrier, heldEditVerdict, heldEditWouldForce, heldEditOutcomeLine, HELD_OUT_OF_SCOPE_STATES } from '../lib/agents/harness/held-edit-carrier';
 import { heldPackageOutOfScope } from '../lib/agents/harness/held-bytes/scope';
 import { annotateQualityGateVerdictMismatch } from '../lib/agents/harness/verdict-mismatch-guard';
@@ -113,10 +114,99 @@ const K8S_LIVE_ONLY = buildConfigSourcesSnapshot('kubernetes-gitops', resolveLeg
 const k8sWorld = (...args: Parameters<typeof world>) => {
   const w = world(...args);
   const inner = w.db.$queryRaw;
-  w.db.$queryRaw = async (...q: unknown[]) => (JSON.stringify(q[0]).includes(CONFIG_SOURCES_SNAPSHOT_KEY) ? [{ description: K8S_BODY, contract: null, snapshot: K8S_LIVE_ONLY }] : inner(...q));
+  w.db.$queryRaw = async (...q: unknown[]) => (JSON.stringify(q[0]).includes(CONFIG_SOURCES_SNAPSHOT_KEY) ? [{ description: K8S_BODY, contract: null, snapshot: K8S_LIVE_ONLY, protocolStamped: true }] : inner(...q));
   return w;
 };
 const K8SLEG = { id: 'leg-v', type: 'PIPELINE', title: 'Deploy (protocol: kubernetes-gitops)', metadata: { protocol: 'kubernetes-gitops-protocol', pipelineStageId: STAGE } };
+
+// Config sources STEP 3 P1 (plan W5, W7; §9.2 "a Kubernetes or Terraform carrier fixture changing its reason in either awaiting state"
+// is a stop): the carrier takes the Config-sources awaiting list as a fixtures-only parameter, so each case below runs through the
+// SAME function in both states.
+const OBS_CONFIG_LEG = { id: 'leg-v', type: 'PIPELINE', title: 'Tune the collector (protocol: observability-config)', metadata: { protocol: 'observability-config-protocol', pipelineStageId: STAGE } };
+const OBS_GIT = 'obs-otelcol: git-file — service github-service ; paichart/paichart-configs/observability/otelcol/config.yaml';
+const obsWorld = (legRow: { description: string | null; snapshot: unknown; protocolStamped?: boolean }, ...args: Parameters<typeof world>) => {
+  const w = world(...args); const inner = w.db.$queryRaw; let legRowReads = 0;
+  w.db.$queryRaw = async (...q: unknown[]) => (JSON.stringify(q[0]).includes(CONFIG_SOURCES_SNAPSHOT_KEY)
+    ? (legRowReads++, [{ description: legRow.description, contract: null, snapshot: legRow.snapshot, protocolStamped: legRow.protocolStamped ?? true }]) : inner(...q));
+  return { ...w, legRowReads: () => legRowReads };
+};
+test('STEP 3 P1: the Kubernetes carrier fixture reads the SAME reason in both awaiting states (as shipped, and with no row awaiting)', async () => {
+  for (const [name, configAwaiting] of [['as shipped', undefined], ['no row awaiting', []]] as Array<[string, readonly string[] | undefined]>) {
+    const noBase = { version: 1, state: 'no-base' };
+    const m = merge('approved');
+    await applyHeldEditCarrier(k8sWorld(noBase, null, { harvester: { refusalsByExec: { 'ex-harv': 1 } } }).db, K8SLEG, m, configAwaiting ? { configAwaiting } : {});
+    eq([m.qualityGate.outcome, m.qualityGate.heldEdit.reason, m.qualityGate.heldEdit.forced], ['needs-revision', 'source-not-pinned', true], `${name}, off-pin read: `);
+    const m2 = merge('approved');
+    await applyHeldEditCarrier(k8sWorld(applied, rendered()).db, K8SLEG, m2, configAwaiting ? { configAwaiting } : {});
+    eq([m2.qualityGate.outcome, m2.qualityGate.heldEdit.forced, 'reason' in m2.qualityGate.heldEdit], ['approved', false, false], `${name}, a live-read-only declaration (keeps no file): `);
+  }
+});
+test('STEP 3 P1 (runs-undeclared at the carrier): an observability leg that declares NOTHING is never forced by the Config lane — as shipped (no read at all) and with its text shipped (the per-leg rule)', async () => {
+  // as shipped: the row awaits its text — the carrier makes NO declaration read and the leg behaves exactly as before the row existed
+  const a = obsWorld({ description: 'Tune the collector.', snapshot: null }, applied, rendered()); const ma = merge('approved');
+  await applyHeldEditCarrier(a.db, OBS_CONFIG_LEG, ma);
+  eq([ma.qualityGate.outcome, ma.qualityGate.heldEdit.forced, 'reason' in ma.qualityGate.heldEdit, a.legRowReads()], ['approved', false, false, 0], 'as shipped: ');
+  // the text shipped: ONE read, the rule answers not-config-source-leg, no force — the same verdict object as shipped
+  const b = obsWorld({ description: 'Tune the collector.', snapshot: null }, applied, rendered()); const mb = merge('approved');
+  await applyHeldEditCarrier(b.db, OBS_CONFIG_LEG, mb, { configAwaiting: [] });
+  eq([mb.qualityGate.outcome, mb.qualityGate.heldEdit.forced, 'reason' in mb.qualityGate.heldEdit, b.legRowReads()], ['approved', false, false, 1], 'text shipped, no block: ');
+  eq(mb.qualityGate.heldEdit, ma.qualityGate.heldEdit, 'the stamp of a no-block leg is the same in both states: ');
+});
+test('STEP 3 P1: with its text shipped, an observability leg that DECLARES is judged like any Config-sources leg — a block with no snapshot, an unstamped snapshot (A9) and a declared Git file not held each force by name', async () => {
+  // the WRITER's snapshot (it carries the label check — a parsed observability snapshot without one is unreadable, fail closed)
+  const dec = configSnapshotDecision({ type: 'PIPELINE', protocol: 'observability-config-protocol', description: `## Config sources\n${OBS_GIT}\n`, interfaceContract: null, takenAt: '2026-11-21T00:00:00.000Z' }, []);
+  if (dec.action !== 'write') throw new Error(`the fixture block did not snapshot: ${JSON.stringify(dec)}`);
+  const snap = dec.snapshot;
+  const body = `Tune the collector.\n\n## Config sources\n${OBS_GIT}\n`;
+  // the carrier is handed the leg ROW, so the leg's metadata carries whatever snapshot the row has (as production's does)
+  const legOf = (legRow: Parameters<typeof obsWorld>[0]) => (legRow.snapshot === null ? OBS_CONFIG_LEG
+    : { ...OBS_CONFIG_LEG, metadata: { ...OBS_CONFIG_LEG.metadata, [CONFIG_SOURCES_SNAPSHOT_KEY]: legRow.snapshot } });
+  const run = async (legRow: Parameters<typeof obsWorld>[0], configAwaiting?: readonly string[]) => {
+    const w = obsWorld(legRow, applied, rendered()); const m = merge('approved');
+    await applyHeldEditCarrier(w.db, legOf(legRow), m, configAwaiting ? { configAwaiting } : {});
+    return [m.qualityGate.outcome, m.qualityGate.heldEdit.reason ?? null, w.legRowReads()];
+  };
+  eq(await run({ description: body, snapshot: null }, []), ['needs-revision', 'config-sources-snapshot-absent', 1], 'a block added to a leg with no snapshot (plan §9.4 populations A-C): ');
+  eq(await run({ description: body, snapshot: snap, protocolStamped: false }, []), ['needs-revision', 'config-sources-snapshot-unreadable', 1], 'a snapshot on an unstamped leg (A9): ');
+  eq(await run({ description: body, snapshot: snap }, []), ['needs-revision', 'git-file-not-held', 1], 'a declared Git file with no held capture: ');
+  // AS SHIPPED (the row awaits its text). STEP 3 P2 changed this pin DELIBERATELY (plan §13 A7, the rollback hole):
+  //   BEFORE P2: all three legs read ['approved', null, 0] — "an awaiting row is inert even with a snapshot".
+  //   AFTER  P2: a leg with NO snapshot is still not read and not forced (the leg runs on the service's files, as today);
+  //              a leg that CARRIES a snapshot object declared sources under a text that is not live — it is read once and forced
+  //              `config-sources-snapshot-text-reverted`, whatever the snapshot says (stamped or not, valid or not).
+  eq(await run({ description: body, snapshot: null }), ['approved', null, 0], 'as shipped, no snapshot — unchanged: ');
+  eq(await run({ description: body, snapshot: snap, protocolStamped: false }), ['needs-revision', 'config-sources-snapshot-text-reverted', 1], 'as shipped, a snapshot on an unstamped leg (was approved / null / 0): ');
+  eq(await run({ description: body, snapshot: snap }), ['needs-revision', 'config-sources-snapshot-text-reverted', 1], 'as shipped, a valid snapshot (was approved / null / 0): ');
+  eq(await run({ description: null, snapshot: snap }), ['needs-revision', 'config-sources-snapshot-text-reverted', 1], 'as shipped, a snapshot whose block was removed since: ');
+});
+test('STEP 3 P2 (W10 / B6): a declared observability leg — a service-held file not held forces by its own name, BOTH lists are stamped, and the stamp names the Harvester execution whose capture was read', async () => {
+  const OBS_HELD = 'obs-ingress.otlp-ingress.conf: service-held — service observability-readonly';
+  const lines = [OBS_GIT, 'obs-otelcol: live-read — service observability-readonly', OBS_HELD];
+  const body = `Tune.\n\n## Config sources\n${lines.join('\n')}\n`;
+  const dec = configSnapshotDecision({ type: 'PIPELINE', protocol: 'observability-config-protocol', description: body, interfaceContract: null, takenAt: '2026-11-21T00:00:00.000Z' }, []);
+  if (dec.action !== 'write') throw new Error(`the fixture block did not snapshot: ${JSON.stringify(dec)}`);
+  const leg = { ...OBS_CONFIG_LEG, metadata: { ...OBS_CONFIG_LEG.metadata, [CONFIG_SOURCES_SNAPSHOT_KEY]: dec.snapshot } };
+  const GIT = { target: 'github:paichart:paichart-configs', path: '/observability/otelcol/config.yaml' };
+  const SVC = { target: 'obs-ingress', path: '/etc/nginx/conf.d/otlp-ingress.conf' };
+  const run = async (captureRefs: Array<{ target: string; path: string }>) => {
+    const w = obsWorld({ description: body, snapshot: dec.snapshot }, applied, rendered(), { harvester: { refusalsByExec: {} }, captureRefs }); const m = merge('approved');
+    await applyHeldEditCarrier(w.db, leg, m, { configAwaiting: [] });
+    return m.qualityGate as Record<string, any>;
+  };
+  const none = await run([]);
+  eq([none.outcome, none.heldEdit.reason, none.heldEdit.gitFilesNotHeld, none.heldEdit.serviceFilesNotHeld, none.heldEdit.serviceFilesNotHeldTotal],
+    ['needs-revision', 'git-file-not-held', ['obs-otelcol'], ['obs-ingress.otlp-ingress.conf'], 1], 'nothing held — the Git reason first, both lists: ');
+  const gitOnly = await run([GIT]);
+  eq([gitOnly.outcome, gitOnly.heldEdit.reason, 'gitFilesNotHeld' in gitOnly.heldEdit, gitOnly.heldEdit.serviceFilesNotHeld],
+    ['needs-revision', 'service-held-not-held', false, ['obs-ingress.otlp-ingress.conf']], 'the service file missing: ');
+  const both = await run([GIT, SVC]);
+  eq([both.outcome, 'reason' in both.heldEdit, both.heldEdit.forced], ['approved', false, false], 'a leg that read every declared line is not forced: ');
+  for (const q of [none, gitOnly, both]) eq(q.heldEdit.captureExecutionId, 'ex-harv', 'the capture the carrier read (B6): ');
+  // a Kubernetes stamp never carries the id (the stated departure from plan B6 — coordinator ruling 3)
+  const mk = merge('approved');
+  await applyHeldEditCarrier(k8sWorld(applied, rendered()).db, K8SLEG, mk);
+  ok(!('captureExecutionId' in mk.qualityGate.heldEdit), 'a Kubernetes heldEdit stamp gained captureExecutionId');
+});
 test('held-k8s step 3 (G-4): a source-not-pinned refusal on the leg\'s AUTHORITATIVE Harvester forces needs-revision — even when the package is out of scope', async () => {
   const noBase = { version: 1, state: 'no-base' };                                  // out of scope: the refused read left no base
   const w = k8sWorld(noBase, null, { harvester: { refusalsByExec: { 'ex-harv': 1 } } });

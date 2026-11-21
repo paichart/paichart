@@ -52,7 +52,7 @@ import { deepStripDangerousKeys } from '../../utils/sanitize-keys';
 import { sanitizeChainedOutput, isR9OperatorEvent } from './sanitize-chained-output';
 import { readAuthoritativeResultField } from './authoritative-result-read';
 import { findProgramParentForStage } from './program-protocol';
-import { CONFIG_SOURCE_LANES, CONFIG_SOURCE_PROTOCOLS, DEVICE_SOURCE_LANES } from './held-bytes/variant';
+import { CONFIG_SOURCE_AWAITING_TEXT, CONFIG_SOURCE_LANES, DEVICE_SOURCE_LANES, configSourceProtocolsFor } from './held-bytes/variant';
 import { deriveServiceDescriptors, type ServiceDescriptorsFact } from './service-descriptors-derivation';
 
 // ── Constants ───────────────────────────────────────────────────────────────────────────────────
@@ -632,17 +632,19 @@ export function buildSourceFact(
 export const DEVICE_SOURCES_READ_KEYS: readonly string[] = Object.freeze(Object.values(DEVICE_SOURCE_LANES).map((x) => x.contractKey));
 
 /** The contract keys the platform reads `configSources` at — derived from the ONE config lane table, never retyped; a row still
- *  awaiting its protocol text is NOT read yet, and says so here. */
-export const CONFIG_SOURCES_READ_KEYS: readonly string[] = Object.freeze(
-  CONFIG_SOURCE_PROTOCOLS.map((p) => CONFIG_SOURCE_LANES[p].contractKey));
+ *  awaiting its protocol text is NOT read yet, and says so here. A FUNCTION of the awaiting list since Config sources STEP 3
+ *  (plan W5 row 11; it was a module constant): production passes nothing, the tests ask both awaiting states. */
+export function configSourcesReadKeys(awaiting: readonly string[] = CONFIG_SOURCE_AWAITING_TEXT): readonly string[] {
+  return configSourceProtocolsFor(awaiting).map((p) => CONFIG_SOURCE_LANES[p].contractKey);
+}
 
 /** PURE. What `deviceSources` keys does this contract carry, and which does the platform not read? Null = no `deviceSources`. */
 export function deviceSourcesKeysOf(contract: unknown): DeviceSourcesKeysFact | null {
   return sourcesKeysOf(contract, 'deviceSources', DEVICE_SOURCES_READ_KEYS);
 }
 /** PURE. The same for `configSources`, against ITS table. */
-export function configSourcesKeysOf(contract: unknown): DeviceSourcesKeysFact | null {
-  return sourcesKeysOf(contract, 'configSources', CONFIG_SOURCES_READ_KEYS);
+export function configSourcesKeysOf(contract: unknown, awaiting: readonly string[] = CONFIG_SOURCE_AWAITING_TEXT): DeviceSourcesKeysFact | null {
+  return sourcesKeysOf(contract, 'configSources', configSourcesReadKeys(awaiting));
 }
 function sourcesKeysOf(contract: unknown, field: 'deviceSources' | 'configSources', readKeys: readonly string[]): DeviceSourcesKeysFact | null {
   if (!contract || typeof contract !== 'object' || Array.isArray(contract)) return null;

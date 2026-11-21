@@ -38,8 +38,9 @@ import { resolveProtocolStamp, findProgramParentForStage, resolveOwningLeg } fro
 import type { LegInjection } from './context-chainer';
 import { recordFromChained, type ChainedRecord } from './chained-predecessors';
 import { interfaceContractMissingCause } from './interface-contract-missing';
-import { DEVICE_SOURCE_PROTOCOLS, deviceSourceContractKeyOf, deviceSourceLaneOf, configSourceLaneOf, configSourceContractKeyOf, assertNeverConfigLane } from './held-bytes/variant';
-import { CONFIG_SOURCES_SNAPSHOT_KEY, buildConfigSourcesSnapshot, contractConfigSourcesValue, resolveLegConfigSources } from './config-sources';
+import { DEVICE_SOURCE_PROTOCOLS, deviceSourceContractKeyOf, deviceSourceLaneOf } from './held-bytes/variant';
+import { CONFIG_SOURCES_SNAPSHOT_KEY } from './config-sources';
+import { configSnapshotDecision } from './config-sources-read';
 import { buildDeviceSourcesSnapshot, contractDeviceSourcesValue, resolveLegDeviceSources, DEVICE_SOURCES_SNAPSHOT_KEY } from './device-sources';
 
 const log = logger.child({ module: 'PrepareTaskForExecution' });
@@ -353,21 +354,12 @@ export async function prepareTaskForExecutionWithRecord(
     // contract field (`configSources["<token>"]`) — never the device lane. A change-lane leg is snapshotted whatever it resolves to
     // (an `absent` block is a state the harness stops on, owner D1, and the carrier names). Null on every other leg — and on EVERY leg
     // while the protocol's row awaits its text (configSourceLaneOf is null), so the stamp below is byte-identical until then.
-    const configLane = contractCheck.type === 'PIPELINE' ? configSourceLaneOf(resolved.protocol) : null;
-    let configSnapshot: ReturnType<typeof buildConfigSourcesSnapshot> | null = null;
-    if (configLane !== null && resolved.protocol) {
-      switch (configLane) {
-        case 'change':
-          configSnapshot = buildConfigSourcesSnapshot(resolved.protocol, resolveLegConfigSources({
-            protocol: resolved.protocol,
-            contractValue: contractConfigSourcesValue((contractCheck.inputContext as Record<string, unknown> | null)?.interfaceContract,
-              configSourceContractKeyOf(resolved.protocol) ?? ''),
-            taskBody: contractCheck.description,
-          }), resolvedAt);
-          break;
-        default: assertNeverConfigLane(configLane);
-      }
-    }
+    // Config sources STEP 3 (plan W5 row 1, W7): the decision is ONE pure function (`configSnapshotDecision`) shared with the lab.
+    // `write` for a `forced` protocol whatever it resolves to, and for a `runs-undeclared` one that declares a block; `remove` for a
+    // `runs-undeclared` leg that declares none (see below); `none` everywhere else.
+    const configDecision = configSnapshotDecision({ type: contractCheck.type, protocol: resolved.protocol, description: contractCheck.description,
+      interfaceContract: (contractCheck.inputContext as Record<string, unknown> | null)?.interfaceContract, takenAt: resolvedAt });
+    const configSnapshot = configDecision.action === 'write' ? configDecision.snapshot : null;
     const stampJson = JSON.stringify({
       protocol: resolved.protocol,
       protocolResolvedAt: resolvedAt,
@@ -382,9 +374,24 @@ export async function prepareTaskForExecutionWithRecord(
       log.info({ taskId, state: snapshot.resolution.state, entries: snapshot.resolution.state === 'parsed' ? snapshot.resolution.entries.length : 0,
         errorCode: 'DEVICE_SOURCES_SNAPSHOT_TAKEN' }, 'Device sources declaration snapshotted at the leg\'s first execution');
     }
-    await prisma.$executeRaw`
-      UPDATE tasks SET metadata = COALESCE(metadata, '{}'::jsonb) || ${stampJson}::jsonb
-      WHERE id = ${taskId}`;
+    if (configDecision.action === 'remove') {
+      // W7 (sec-ops S F-2): a `runs-undeclared` leg that declares NO block must not carry a snapshot. The platform takes one only
+      // here, and this is the leg's first stamp — so a `configSourcesSnapshot` already on the row was put there by something else
+      // (a create path that did not strip the audit keys). The SAME statement removes it and writes the stamp; a security event says so.
+      if (CONFIG_SOURCES_SNAPSHOT_KEY in taskMeta) {
+        log.warn({ taskId, securityEvent: true, errorCode: 'CONFIG_SOURCES_SNAPSHOT_REMOVED' },
+          'a configSourcesSnapshot was present on a leg that declares no Config sources at its first stamp — removed (the platform did not take it)');
+      }
+      // The key is a LITERAL in the statement (a bound parameter leaves `jsonb - ?` ambiguous between the text, integer and text[]
+      // operators); scripts/test-config-sources.ts pins it equal to CONFIG_SOURCES_SNAPSHOT_KEY.
+      await prisma.$executeRaw`
+        UPDATE tasks SET metadata = (COALESCE(metadata, '{}'::jsonb) - 'configSourcesSnapshot') || ${stampJson}::jsonb
+        WHERE id = ${taskId}`;
+    } else {
+      await prisma.$executeRaw`
+        UPDATE tasks SET metadata = COALESCE(metadata, '{}'::jsonb) || ${stampJson}::jsonb
+        WHERE id = ${taskId}`;
+    }
     taskMeta.protocol = resolved.protocol;
   } else if (contractCheck && typeof taskMeta.protocol === 'string') {
     // Title/stamp disagreement warn (Phase-E live observable): a rename after consumption is

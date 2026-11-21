@@ -4,6 +4,7 @@
 **Created**: 2026-04-16
 **Confidence**: 91% ✅ (multi-specialist reviewed: agent-execution + template-system + pipeline-harness)
 **Status**: Production-shipped (task #84 umbrella; tasks #82, #87, #88, #89, #90, #91)
+**Swept**: 2026-11-21 (Protocol 11) — file map, path-parity rule, test references, retired field and coverage row brought to the tree; record at the end of this file
 
 ---
 
@@ -22,15 +23,15 @@ A layered defense stack of **additive detection signals** that surface structura
 Three structural pillars:
 
 1. **Additive signals, not control flow** — every detector adds metadata; none reject the execution. Downstream consumers (GUI, harness chainer, reactor) decide what to do with the signals.
-2. **Single `errorCategory` + co-occurring evidence fields** — `errorCategory` holds the most-specific category (cascade order); fields like `protocolValidation`, `templateScopeMismatch`, `executionDegradation` populate independently and can all be present.
+2. **Single `errorCategory` + co-occurring evidence fields** — `errorCategory` holds the most-specific category (cascade order); fields like `protocolValidation` and `executionDegradation` populate independently and can all be present (`templateScopeMismatch` was a third until its detector was retired on 2026-07-17).
 3. **Anti-fabrication correction turn** — when end_turn fires with failed tool calls, inject one correction turn (no tools available) so the LLM rewrites its narrative against ground truth before the response is persisted.
 
 ### Results
 
 - **Would have caught the artifact-synthesis incident across 3 independent dimensions**: BUDGET_EXHAUSTED (P5), PROTOCOL_STEP_SKIPPED (P8), and the correction turn (#89) would have rewritten the fabricated success narrative.
 - **Zero control-flow changes** — no executions reclassified from SUCCESS to FAILED; signals are purely additive metadata.
-- **23 unit tests** across the 2 pure-function helpers (12 protocol validator + 11 template scope matcher), all passing.
-- **Two-execution-path parity** maintained — every signal mirrored in `agentExecutionEngine.ts` AND `app/api/pov/agent/execute/stream/route.ts`.
+- **Tests.** At ship: 23 unit tests across two pure-function helpers. Today: `npm run test:pipeline-protocol-validator` runs 61 checks; the template-scope matcher and its 11 tests were deleted with the retired detector (2026-07-17).
+- **One home for every signal** (since the 2026-07-05 execution-path convergence): the cascade, the validators, the correction turn and the `result.json` builder live in shared modules that both callers reach through `runExecutionCore`; `agentExecutionEngine.ts` and the stream route contain none of them. At ship (April 2026) there were two implementations and parity was kept by mirroring every signal in both files — that rule is RETIRED; see File Architecture.
 - **Zero regressions** across the existing 13-test agent-execution security suite.
 
 ---
@@ -47,7 +48,7 @@ Three structural pillars:
 
 | Mechanism | Trigger | Source file |
 |-----------|---------|-------------|
-| **#89** Anti-fabrication correction turn | `end_turn` + `failedToolCalls > 0` + non-empty text + NOT `BUDGET_EXHAUSTED` | `agentExecutionEngine.ts` ~line 895; stream route ~line 752 |
+| **#89** Anti-fabrication correction turn | `end_turn` + `failedToolCalls > 0` + non-empty text + NOT `BUDGET_EXHAUSTED` | `lib/agents/harness/agentic-tool-loop.ts` — ONE shared module since 2026-06-10 (at ship it was mirrored in the engine and the stream route) |
 
 The correction turn appends a user-role message with `functions: []` (structurally prevents tool re-entry), asks the LLM to rewrite its response against the actual tool outcomes, and replaces `currentResponse` with the corrected text. Existing stopReason branching processes the corrected response — same code path, no duplicated logic. Counts tokens against `totalUsage` but exempt from `MAX_TOOL_TURNS`. Tracked via `toolLoop.correctionTurnUsed: true` in result.json.
 
@@ -67,7 +68,7 @@ Cascade fires top-to-bottom; first match sets `errorCategory`. Evidence fields p
 
 ### Co-occurring evidence fields in `result.json`
 
-**Happy-path property — important for consumers:** A clean execution produces a `result.json` with NONE of the signal fields below populated. Only `toolLoop.correctionTurnUsed: false` is added unconditionally — that field is the "code path executed" canary. Consumers (GUI, harness chainer, reactor) MUST treat absence of `errorCategory` / `executionDegradation` / `protocolValidation` / `templateScopeMismatch` as "no issues detected", not as "fields missing — error in detector."
+**Happy-path property — important for consumers:** A clean execution produces a `result.json` with NONE of the signal fields below populated. Only `toolLoop.correctionTurnUsed: false` is added unconditionally — that field is the "code path executed" canary. Consumers (GUI, harness chainer, reactor) MUST treat absence of `errorCategory` / `executionDegradation` / `protocolValidation` as "no issues detected", not as "fields missing — error in detector." (Artifacts written before 2026-07-17 may also carry the retired `templateScopeMismatch`.)
 
 ⚠️ **The converse is NOT true for `protocolValidation` (2026-09-15).** Presence no longer implies a problem: a **sanctioned halt** (`haltExempt: true`, `haltReason`, empty `missingSteps`) emits the block as a POSITIVE fact and raises no degradation. Gate on `missingSteps.length > 0`, never on presence. This exists because the null-means-omitted convention above, combined with "absence = no issues", made a harness that correctly REFUSED to act (e.g. declining to spawn a duplicate program) indistinguishable from a flawless run — trading a false accusation for a false all-clear. Protocol 10: ship the fact; silence is a verdict nobody can audit.
 
@@ -79,36 +80,42 @@ Always populated when the underlying signal fires, regardless of which cascade w
 |-------|--------|------------------|
 | `executionDegradation` | P3/P4/P5/P7 | `{ errorCategory, degradationReason, consecutiveTailFailures, toolFailureRate, budgetError? }` |
 | `protocolValidation` | P8 | `{ mode, missingSteps[], toolCallSummary, expectedChildCount?, actualAssignedCount? }` |
-| `templateScopeMismatch` | P9 | `{ match: false, templateType, templateName, reason, expectedVerbs[], taskKeywords[] }` |
-| `confidenceCapped` + `originalConfidence` | Confidence cap (engine line 1040) | When LLM-stated confidence > 60 but tool failure rate > 50%, cap at 60 and record original |
+| ~~`templateScopeMismatch`~~ | ~~P9~~ | **RETIRED 2026-07-17 — no longer written.** Artifacts from before that date still carry `{ match: false, templateType, templateName, reason, expectedVerbs[], taskKeywords[] }` |
+| `confidenceCapped` + `originalConfidence` | Confidence cap (`lib/agents/harness/parse-confidence.ts`, applied in `lib/services/execution-core.ts`) | When LLM-stated confidence > 60 but tool failure rate > 50%, cap at 60 and record original |
 | `toolLoop.correctionTurnUsed` | #89 | Boolean flag — was an anti-fabrication turn fired? |
-| `chainedContext` | D1 (2026-06-08) | **Coverage signal — NOT a cascade detector** (does not set `errorCategory`). `{ predecessors, expectedPredecessors, totalChars, anyTruncated }` — pipeline input coverage so a consumer can tell full-input from clipped-input runs (`predecessors < expectedPredecessors` ⇒ an upstream was silently dropped: missing result.json / 5MB-skip / parse failure); ⚠️ since program gates became dependency nodes this holds only against `chainCapablePredecessors` — `expectedPredecessors` counts never-executing gates, so compare against the former, as the program gate does). Emit-only; derived from `task.inputContext.pipelineMetadata` (context-chainer) via `deriveChainedContextSignal`, on BOTH execution paths (`execution-artifacts.ts`). Present only when predecessors were chained (happy-path-clean). |
+| `chainedContext` | D1 (2026-06-08) | **Coverage signal — NOT a cascade detector** (does not set `errorCategory`). `{ predecessors, expectedPredecessors, chainCapablePredecessors, degradedPredecessors, notChained?, totalChars, anyTruncated, … }` — the `ChainedContextSignal` interface in `execution-artifacts.ts` is the list; it has grown several times, so read it rather than this row — pipeline input coverage so a consumer can tell full-input from clipped-input runs (`predecessors < expectedPredecessors` ⇒ an upstream was silently dropped: missing result.json / 5MB-skip / parse failure); ⚠️ since program gates became dependency nodes this holds only against `chainCapablePredecessors` — `expectedPredecessors` counts never-executing gates, so compare against the former, as the program gate does). Emit-only; derived from `task.inputContext.pipelineMetadata` (context-chainer) via `deriveChainedContextSignal`, derived ONCE in the shared core (`execution-artifacts.ts`, called from `execution-core.ts`). Present only when predecessors were chained (happy-path-clean). |
 
 ---
 
 ## File Architecture
 
+**Rewritten 2026-11-21.** At ship (April 2026) the whole stack sat inside `agentExecutionEngine.ts`, mirrored by hand in the
+stream route, and this section listed eight line numbers in the engine file. The execution-path convergence (2026-07-05) moved
+all of it into shared modules. Both callers now only delegate.
+
 ```
+lib/agents/harness/
+├── execution-quality.ts          # THE cascade — assessExecutionQuality(): P3/P4/P5, P7, P8 gating, P10 override
+├── agentic-tool-loop.ts          # #89 anti-fabrication correction turn (one module since 2026-06-10)
+└── parse-confidence.ts           # the confidence cap
+
 lib/services/
-├── agentExecutionEngine.ts          # Engine path — owns the cascade orchestration
-│   ├── ~ line 615  : P9 pre-flight scope check (logs, sets templateScopeSignal)
-│   ├── ~ line 895  : #89 anti-fabrication correction turn
-│   ├── ~ line 1180 : P3/P4/P5 detection block
-│   ├── ~ line 1239 : P7 silent refusal detection
-│   ├── ~ line 1278 : P9 promotion to errorCategory
-│   ├── ~ line 1292 : P10 escape-hatch marker detection (overrides cascade)
-│   ├── ~ line 1340 : P8 protocol validator invocation (PIPELINE only)
-│   └── ~ line 1380 : result.json assembly with all signals/fields
-├── pipelineProtocolValidator.ts     # P8 — pure function, validates harness step signature
+├── execution-core.ts             # runExecutionCore(): loop → post-loop → quality → result.json; BOTH callers enter here
+├── execution-artifacts.ts        # buildExecutionResultJson() + deriveChainedContextSignal(): every field of result.json
+├── pipelineProtocolValidator.ts  # P8 — pure function, validates the harness step signature per mode
+├── execution-terminal-persist.ts # the ONE terminal persist both paths converge on
+├── agentExecutionEngine.ts       # caller (engine path) — contains NO detector, NO cascade, NO result.json assembly
 └── (templateScopeMatcher.ts DELETED 2026-07-17 — P9 retired, 0 true positives ever)
 
-app/api/pov/agent/execute/stream/route.ts  # Stream path — mirror of engine cascade
-                                             (parity required by Pattern #46 + this pattern)
+app/api/pov/agent/execute/stream/route.ts   # caller (stream path) — the same: delegates to runExecutionCore
 
 scripts/
-├── test-pipeline-protocol-validator.ts   # 12 unit tests for P8
-└── test-template-scope-matcher.ts        # 11 unit tests for P9 (incl. the artifact-synthesis regression test)
+├── test-pipeline-protocol-validator.ts     # P8 (61 checks, incl. the artifact-synthesis regression)
+└── (test-template-scope-matcher.ts DELETED 2026-07-17 with its detector)
 ```
+
+A detector, a cascade branch or a `result.json` field appearing in either CALLER file is a regression (a re-inlined copy), not
+parity. See `two-execution-path-drift-pattern.md` and the pipeline-harness discovery prompt, Phase 9.
 
 ---
 
@@ -131,7 +138,7 @@ scripts/
 
 | Phase | Cost | Notes |
 |---|---|---|
-| Pre-execution scope check (P9) | ~1ms | Tokenize + verb scan; runs once per execution |
+| ~~Pre-execution scope check (P9)~~ | — | RETIRED 2026-07-17; no longer runs |
 | Detection cascade (P3-P5, P7-P10) | ~2ms | Pure operations on already-collected toolCallResults; no I/O |
 | Protocol validator (P8) | ~1ms | Tally + signature compare; only fires on PIPELINE tasks |
 | Correction turn (#89) | One LLM call | Only fires on a narrow trigger (~5% of executions); same model, same apiKey |
@@ -143,7 +150,7 @@ The correction turn is the only meaningful cost. It fires only on the narrow tri
 
 ## Real-World Results
 
-**Scope**: 7 detection signals + 1 correction turn + 2 pure-function helpers + 23 unit tests + engine/stream-route parity.
+**Scope (as shipped, April 2026)**: 7 detection signals + 1 correction turn + 2 pure-function helpers + 23 unit tests + engine/stream-route parity. **Today**: 6 live categories (P9 retired), one shared home for all of them, 61 validator checks.
 
 **The 2026-04-16 artifact-synthesis incident** would have produced this `result.json` on a re-run with the full stack:
 
@@ -185,7 +192,7 @@ End-to-end pipeline run on Meridian Health POV (task `cmo10k1cp0001yxlgn6b61ll6`
 - Zero spurious `errorCategory` / `executionDegradation` / `protocolValidation` / `templateScopeMismatch` fields on the clean run
 - Confirms the conditional-fields design: detectors run, find nothing, contribute nothing — exactly as intended
 
-**Debugging gap discovered during smoke test:** `agent_executions.config.systemPrompt` stores the BASE template prompt (assembled by `agentExecutionConfigBuilder` at task-config time), NOT the runtime prompt assembled by `buildSystemPrompt` at execution time. The P10 escape hatch (and any other runtime appends) are NOT visible in the persisted config. To verify "what did the LLM actually see," inspect pino logs at the time of execution OR trust the code path. This is a known visibility limitation, not a bug — but worth noting for any future GUI feature that wants to show "exact prompt sent."
+**Debugging gap discovered during smoke test:** `agent_executions.config.systemPrompt` stores the BASE template prompt (assembled by `agentExecutionConfigBuilder` at task-config time), NOT the runtime prompt assembled by `buildSystemPrompt` at execution time. The P10 escape hatch (and any other runtime appends) are NOT visible in the persisted config. To verify "what did the LLM actually see," inspect pino logs at the time of execution OR trust the code path. This is a known visibility limitation, not a bug — but worth noting for any future GUI feature that wants to show "exact prompt sent." *(Note 2026-11-21: since this was written each execution records `protocolInjection` — which protocol and version were injected — in its artifact, and the leg replay lab rebuilds a composed prompt from stored rows. Whether `config.systemPrompt` itself is still base-only was NOT re-verified in this sweep.)*
 
 ---
 
@@ -207,7 +214,7 @@ When extending this stack with a new detector:
 - [ ] If signal can have evidence beyond the category alone, add a co-occurring field (don't overload `executionDegradation`)
 - [ ] Pure-function helper in `lib/services/<name>.ts` — testable in isolation
 - [ ] Unit test file in `scripts/test-<name>.ts` — include a regression test for the canonical incident
-- [ ] Wire into both engine path AND stream route (path parity discipline)
+- [ ] Put it in the SHARED modules — `lib/agents/harness/execution-quality.ts` for a cascade signal, `lib/services/execution-artifacts.ts` for a `result.json` field — and NEVER in `agentExecutionEngine.ts` or the stream route. Both callers must stay at zero; a signal appearing in either is a re-inline regression. *(Until 2026-07-05 this line said the opposite: wire it into both files.)*
 - [ ] Add to `npm run test:all-validation` chain
 - [ ] Update this pattern doc's signal table
 - [ ] Update agent-execution-specialist Core Knowledge section if cascade priority changed
@@ -224,7 +231,7 @@ grep -rn "status: 'SUCCESS'" lib/services/ app/api/ --include="*.ts" | grep -v t
 grep -rn "finalResponse" lib/services/ app/api/ --include="*.ts" | grep -v "result.json"
 
 # Find detection signals you might be missing — check for new failure modes
-grep -rn "errorCategory:" lib/services/ app/api/ --include="*.ts"
+grep -rn "errorCategory:" lib/services/ lib/agents/harness/ app/api/ --include="*.ts"
 ```
 
 ---
@@ -235,10 +242,10 @@ grep -rn "errorCategory:" lib/services/ app/api/ --include="*.ts"
 ✅ **GOOD**: Always additive. Status stays SUCCESS; downstream decides whether to act on the signal.
 
 ❌ **Overload `executionDegradation` with multiple co-occurring signals** — only one cascade winner can hold the field cleanly
-✅ **GOOD**: Add separate evidence fields (`protocolValidation`, `templateScopeMismatch`, etc.) for co-occurring signals. Cascade winner gets `errorCategory`; everyone else gets their own field.
+✅ **GOOD**: Add separate evidence fields (`protocolValidation`, `chainedContext`, etc.) for co-occurring signals. Cascade winner gets `errorCategory`; everyone else gets their own field.
 
-❌ **Skip the stream-route mirror** — creates two-execution-path drift, the exact class Pattern #46's pitfall warns against
-✅ **GOOD**: Every signal in both paths. Both `agentExecutionEngine.ts` AND `app/api/pov/agent/execute/stream/route.ts`.
+❌ **Re-inline a signal into a caller** — both callers delegate to `runExecutionCore`; a detector copied into `agentExecutionEngine.ts` or the stream route recreates the two-path drift this stack once had to police by hand (the class Pattern #46's pitfall warns against)
+✅ **GOOD**: One home in the shared modules; both callers at zero. *(At ship the rule was the reverse — mirror every signal in both files — because there were two implementations. Retired by the 2026-07-05 convergence.)*
 
 ❌ **Hardcode regex/threshold without a regression test** — the artifact-synthesis case proved that intuitive heuristics false-positive on real data
 ✅ **GOOD**: Every detector ships with a unit test using the canonical incident's actual shape (or a similar shape) as the regression case.
@@ -255,18 +262,20 @@ grep -rn "errorCategory:" lib/services/ app/api/ --include="*.ts"
 
 - **`boundary-contract-wrapper-enforcement-pattern.md`** — sibling pattern. That one validates DATA at boundaries (write-strict, read-soft); this one validates EXECUTION outputs (additive signals, no control flow). Same philosophical framing.
 - **`orchestration-reactor-pattern.md`** (Pattern #46) — the reactor system this stack defends. P8 specifically validates harness protocol steps that the reactor depends on.
-- **`dual-execution-path-parity-pattern.md`** — the parity discipline this stack must obey across engine + stream route.
+- **`dual-execution-path-parity-pattern.md`** and **`two-execution-path-drift-pattern.md`** — the parity discipline. Since the 2026-07-05 convergence this stack satisfies it STRUCTURALLY (one shared core), not by mirroring.
+- **`facts-only-tighten-pattern.md`** (Pattern #71) — the OTHER half of the trust machinery, and the boundary of this pattern. "Always additive, never blocking" is a rule of THIS cascade only. Platform FACTS that feed a gate (the mechanical nets, a reviewer's transcribed verdict, the held-edit carrier's forced outcomes) follow Pattern #71: a fact may only tighten an outcome, never loosen it. Do not read this pattern as saying the platform never forces an outcome.
+- **Mechanical nets and the output guards** — `.claude/knowledge/domain/execution-facts/execution-facts-library.md` (how facts are produced and stamped; owner `execution-facts-specialist`) and `.claude/knowledge/domain/harness/harness-output-guards.md` (R9 sanitize, R10 redact).
 - **`fire-and-forget-activity-logging-pattern.md`** — used by the audit log writes throughout the cascade detection.
 - **Protocol 10 (Signal Design — Fact vs. Verdict)**: `.claude/knowledge/protocols/signal-design-protocol.md` — the design lens this stack embodies. Every signal here is a **fact** (additive metadata, never control flow); a detector that wanted to *judge* rather than *report* would be a verdict, subject to that protocol's "earn it" bar before it could gate.
 
 **Use Together**:
 - This pattern + boundary-contract-wrapper = additive-signals at both data boundaries and execution boundaries
 - This pattern + orchestration-reactor = reactor knows when to skip a degraded execution vs retry
-- This pattern + dual-execution-path-parity = invariant: signals must be path-symmetric
+- This pattern + dual-execution-path-parity = invariant: one shared home, so the two paths cannot differ
 
 ---
 
-**Pattern Status**: Production ✅ | **Confidence**: 91% | **Failure Modes Detected**: 7 distinct categories where executions previously stored as opaque SUCCESS now surface structured signals. Zero regressions.
+**Pattern Status**: Production ✅ | **Confidence**: 91% | **Failure Modes Detected**: 7 distinct categories at ship (6 live since P9's retirement on 2026-07-17) where executions previously stored as opaque SUCCESS now surface structured signals. Zero regressions.
 
 ---
 
@@ -306,3 +315,34 @@ one-document §6).
 would *do* with the payload — not merely whether it is entitled to it. This exclusion came from
 asking that question of a role that had no case either way, and it was invisible to three review
 panels that asked only about delivery.
+
+---
+
+## 2026-11-21 — drift sweep (Protocol 11): what was corrected, and how to check it stays true
+
+The principle, the incident history and the two dated sections above are unchanged. Corrected against the tree:
+
+- **The path rule was backwards.** Five places said "mirror every signal in the engine AND the stream route". Since the 2026-07-05
+  convergence every signal has ONE home and both callers contain none; the checklist and an anti-pattern entry now say so. Following
+  the old text would have re-introduced the regression the convergence removed.
+- **The file map** listed eight line numbers in `agentExecutionEngine.ts`; none of that code is there. Rewritten.
+- **Tests**: "23 unit tests" and a listed `test-template-scope-matcher.ts` (deleted). Now 61 validator checks, one file.
+- **`templateScopeMismatch`** was still described as a live field in three places. It is retired; old artifacts carry it.
+- **The `chainedContext` row** listed four of its fields; the interface is now the reference.
+- **Added**: the boundary with Pattern #71 (facts that feed a gate may tighten an outcome), and pointers to the mechanical nets
+  and the output guards.
+
+Every expectation below was run before it was written:
+
+```bash
+grep -c "BUDGET_EXHAUSTED\|SILENT_REFUSAL\|executionDegradation = {" lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts   # expect 0 and 0 — no detector in either caller
+grep -c "^export function assessExecutionQuality" lib/agents/harness/execution-quality.ts   # expect 1 — the cascade's one home
+grep -c "_failedToolCallsForCorrection" lib/agents/harness/agentic-tool-loop.ts            # expect >=1 — the correction turn's trigger lives in the shared loop
+grep -c "^export function buildExecutionResultJson\|^export function deriveChainedContextSignal" lib/services/execution-artifacts.ts   # expect 2
+test -e scripts/test-template-scope-matcher.ts && echo present || echo deleted              # expect deleted
+npm run -s test:pipeline-protocol-validator | grep -c "Passed: "                            # expect 1 (61 checks on 2026-11-21 — a floor, not an exact count)
+```
+
+**Not re-verified in this sweep:** the exact trigger regexes in the signal tables (P7's inability pattern, P10's first-300-chars
+anchor); the ~5 ms performance figures; whether `agent_executions.config.systemPrompt` is still the base template only.
+

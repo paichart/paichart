@@ -20,9 +20,11 @@ import * as net from '../lib/agents/harness/device-sources';
 import {
   CONFIG_SOURCE_LANES, CONFIG_SOURCE_PROTOCOLS, CONFIG_SOURCE_AWAITING_TEXT, DEVICE_SOURCE_LANES, DEVICE_SOURCE_PROTOCOLS,
   configSourceLaneOf, configSourceContractKeyOf, deviceSourceLaneOf, deviceSourceContractKeyOf,
+  configSourceLaneOfLeg, configSourceLaneOfResolution, legProtocolHasConfigLane, heldCaptureTakesConfigScope, carrierAppliesConfigForce, platformDriftAppliesToLane,
+  resolveOwningLegProtocol, type OwningLegResolution,
 } from '../lib/agents/harness/held-bytes/variant';
 import {
-  CONFIG_SOURCES_READ_KEYS, DEVICE_SOURCES_READ_KEYS, configSourcesKeysOf, deviceSourcesKeysOf, RESOLVER_VERSION,
+  configSourcesReadKeys, DEVICE_SOURCES_READ_KEYS, configSourcesKeysOf, deviceSourcesKeysOf, RESOLVER_VERSION,
   INTERFACE_CONTRACT_SOURCE_KEYS,
 } from '../lib/agents/harness/plan-spawn-carry';
 import { AUDIT_STRIP_KEYS, stripAuditFacts } from '../lib/tasks/services/protected-task-metadata';
@@ -81,14 +83,15 @@ test('CS3 a NETWORK kind is unknown here, and `supplied` is unknown in a Device 
   eq(parseDeviceSourceLine('trading-cluster: supplied'), { ok: false, problem: 'unknown-kind' });
 });
 test('CS4 a protocol with no kind table declares no Config sources (network, and a not-yet-built domain)', () => {
-  // terraform-iac left this list at Config sources STEP 4 (2026-11-17): it has a kind table (TF1).
-  for (const p of ['network-provisioning-protocol', 'network-derivation-protocol', 'observability-config-protocol', 'nope']) {
+  // terraform-iac left this list at Config sources STEP 4 (2026-11-17): it has a kind table (TF1). observability-config left it at
+  // STEP 3 P1 (2026-11-21): it has a kind table too (OB1) — whether its legs DECLARE anything is the lane table's answer (OB-L1).
+  for (const p of ['network-provisioning-protocol', 'network-derivation-protocol', 'nope']) {
     eq(parseConfigSourceLine(GIT, p), { ok: false, problem: 'unknown-kind' }, `${p}: `);
     eq(parseConfigSourceLines([GIT], p), { state: 'unparseable', problem: 'protocol-declares-no-config-sources', lineIndex: null }, `${p}: `);
   }
 });
 test('CS5 the kind-exhaustiveness walk: every kind of every protocol table parses from its template line', () => {
-  const template: Record<string, string> = { 'git-file': GIT, 'live-read': LIVE, supplied: SUPPLIED };
+  const template: Record<string, string> = { 'git-file': GIT, 'live-read': LIVE, supplied: SUPPLIED, 'service-held': 'obs-otelcol: service-held — service observability-readonly' };
   eq([...CONFIG_SOURCE_KINDS].sort(), Object.keys(template).sort(), 'a kind without a template line: ');
   for (const [protocol, kinds] of Object.entries(CONFIG_SOURCE_KINDS_BY_PROTOCOL)) {
     for (const k of kinds) {
@@ -220,9 +223,9 @@ test('MIX1 disjoint tables: no protocol in both, no contract key in both', () =>
 test('MIX2 the plan-gate fact is derived from BOTH tables, never retyped; every read key reads as read in its own field', () => {
   eq(RESOLVER_VERSION, 5, 'resolver version: '); // 5 = ARCHITECT-COMPOSED-DESCRIPTOR (serviceDescriptors derived, 2026-11-17)
   eq([...DEVICE_SOURCES_READ_KEYS].sort(), Object.values(DEVICE_SOURCE_LANES).map((x) => x.contractKey).sort(), 'device read keys: ');
-  eq([...CONFIG_SOURCES_READ_KEYS].sort(), CONFIG_SOURCE_PROTOCOLS.map((p) => CONFIG_SOURCE_LANES[p].contractKey).sort(), 'config read keys: ');
+  eq([...configSourcesReadKeys()].sort(), CONFIG_SOURCE_PROTOCOLS.map((p) => CONFIG_SOURCE_LANES[p].contractKey).sort(), 'config read keys: ');
   eq(deviceSourcesKeysOf({ deviceSources: Object.fromEntries(DEVICE_SOURCES_READ_KEYS.map((k) => [k, 'x'])) })?.notReadKeys, [], 'device: ');
-  eq(configSourcesKeysOf({ configSources: Object.fromEntries(CONFIG_SOURCES_READ_KEYS.map((k) => [k, 'x'])) })?.notReadKeys, [], 'config: ');
+  eq(configSourcesKeysOf({ configSources: Object.fromEntries(configSourcesReadKeys().map((k) => [k, 'x'])) })?.notReadKeys, [], 'config: ');
   eq(INTERFACE_CONTRACT_SOURCE_KEYS.slice(-5), ['deviceSourcesKeys', 'configSourcesKeys', 'serviceDescriptors', 'resolverVersion', 'at'], 'fact key order: ');
   eq(configSourcesKeysOf({ deviceSources: { 'network-provisioning': 'x' } }), null, 'no configSources ⇒ null: ');
   eq(configSourcesKeysOf({ configSources: 'lines' })?.shape, 'not-object');
@@ -242,7 +245,7 @@ test('MIX4 a row awaiting its text is inert: no lane, no contract key, not read 
     eq(configSourceLaneOf(p), null, `${p} lane: `);
     eq(configSourceContractKeyOf(p), null, `${p} key: `);
     const k = CONFIG_SOURCE_LANES[p].contractKey;
-    assert(!CONFIG_SOURCES_READ_KEYS.includes(k), `${k} is read before its text shipped`);
+    assert(!configSourcesReadKeys().includes(k), `${k} is read before its text shipped`);
     eq(configSourcesKeysOf({ configSources: { [k]: 'x' } })?.notReadKeys, [k], `${k} before its text: `);
   }
   eq([...CONFIG_SOURCE_PROTOCOLS].sort(), Object.keys(CONFIG_SOURCE_LANES).filter((p) => !CONFIG_SOURCE_AWAITING_TEXT.includes(p)).sort());
@@ -273,7 +276,7 @@ console.log('── slice 2: the governing declaration, what a leg may hold, wha
 const TGT = 'github:paichart:paichart-configs';
 const snapOf = (lines: string[]) => buildConfigSourcesSnapshot(K8S, resolveLegConfigSources({ protocol: K8S, contractValue: undefined, taskBody: `## Config sources\n${lines.join('\n')}\n` }), 't');
 const body = (lines: string[]) => `Change the workloads.\n\n## Config sources\n${lines.join('\n')}\n\n## Notes\nx\n`;
-const parsed = (lines: string[]) => governingConfigSources({ description: body(lines), contract: null, snapshot: snapOf(lines) }, K8S);
+const parsed = (lines: string[]) => governingConfigSources({ description: body(lines), contract: null, snapshot: snapOf(lines), protocolStamped: true }, K8S);
 const exOf = (paths: string[], extra: Array<{ target: string; path: string }> = []): ExtractResult => ({
   files: [...paths.map((p) => ({ target: TGT, path: p })), ...extra].map((f, i) => ({ ...f, toolCallIndex: i, serviceName: 'github-service', serviceId: null,
     identitySource: 'envelope', sourceTool: 'get_file_contents', selector: 's', text: 'kind: X\n', declaredBy: 'platform-default', declarationSha256: null,
@@ -283,19 +286,19 @@ const exOf = (paths: string[], extra: Array<{ target: string; path: string }> = 
 
 test('RD1 the snapshot governs: parsed when the live text still resolves to it; absent / unreadable / changed are named', () => {
   eq(parsed([GIT, LIVE]).state, 'parsed', 'unchanged: ');
-  eq(governingConfigSources({ description: body([GIT]), contract: null, snapshot: null }, K8S), { state: 'snapshot-absent', grammarVersion: 1 }, 'no snapshot: ');
-  eq(governingConfigSources({ description: body([GIT]), contract: null, snapshot: { version: 9 } }, K8S).state, 'snapshot-unreadable', 'bad snapshot: ');
-  eq(governingConfigSources({ description: body([GIT.replace('sample-workloads.yaml', 'other.yaml')]), contract: null, snapshot: snapOf([GIT]) }, K8S).state,
+  eq(governingConfigSources({ description: body([GIT]), contract: null, snapshot: null, protocolStamped: true }, K8S), { state: 'snapshot-absent', grammarVersion: 1 }, 'no snapshot: ');
+  eq(governingConfigSources({ description: body([GIT]), contract: null, snapshot: { version: 9 }, protocolStamped: true }, K8S).state, 'snapshot-unreadable', 'bad snapshot: ');
+  eq(governingConfigSources({ description: body([GIT.replace('sample-workloads.yaml', 'other.yaml')]), contract: null, snapshot: snapOf([GIT]), protocolStamped: true }, K8S).state,
     'snapshot-changed', 'an edit after the first execution is never adopted: ');
-  eq(governingConfigSources({ description: body([GIT]), contract: null, snapshot: snapOf([GIT]) }, 'network-provisioning-protocol'), { state: 'not-config-source-leg' }, 'a network leg: ');
+  eq(governingConfigSources({ description: body([GIT]), contract: null, snapshot: snapOf([GIT]), protocolStamped: true }, 'network-provisioning-protocol'), { state: 'not-config-source-leg' }, 'a network leg: ');
   // no block at all is a snapshot of `absent` — the governing state is `absent` (the harness stops, the carrier forces)
   const none = buildConfigSourcesSnapshot(K8S, resolveLegConfigSources({ protocol: K8S, contractValue: undefined, taskBody: 'no block' }), 't');
-  eq(governingConfigSources({ description: 'no block', contract: null, snapshot: none }, K8S).state, 'absent', 'no block: ');
+  eq(governingConfigSources({ description: 'no block', contract: null, snapshot: none, protocolStamped: true }, K8S).state, 'absent', 'no block: ');
 });
 test('RD2 the contract value is read ONLY at configSources["kubernetes-gitops"] — a block under deviceSources is not this leg\'s', () => {
   const snap = buildConfigSourcesSnapshot(K8S, resolveLegConfigSources({ protocol: K8S, contractValue: `${GIT}\n${LIVE}`, taskBody: null }), 't');
-  eq(governingConfigSources({ description: null, contract: { configSources: { 'kubernetes-gitops': `${GIT}\n${LIVE}` } }, snapshot: snap }, K8S).state, 'parsed', 'own field: ');
-  eq(governingConfigSources({ description: null, contract: { deviceSources: { 'kubernetes-gitops': `${GIT}\n${LIVE}` } }, snapshot: snap }, K8S).state, 'snapshot-changed', 'wrong field reads as no declaration: ');
+  eq(governingConfigSources({ description: null, contract: { configSources: { 'kubernetes-gitops': `${GIT}\n${LIVE}` } }, snapshot: snap, protocolStamped: true }, K8S).state, 'parsed', 'own field: ');
+  eq(governingConfigSources({ description: null, contract: { deviceSources: { 'kubernetes-gitops': `${GIT}\n${LIVE}` } }, snapshot: snap, protocolStamped: true }, K8S).state, 'snapshot-changed', 'wrong field reads as no declaration: ');
 });
 test('SC1 a leg that is not a Config-sources leg: capture is the SAME object (byte-identical by construction)', () => {
   const ex = exOf(['/k8s/sample-workloads.yaml', '/k8s/other.yaml']);
@@ -344,23 +347,100 @@ test('FC2 a declaration that is not parsed forces by its own name; a non-Config-
 test('WR1 wiring: ONE snapshot write (prepare), the scope at capture, the force in the carrier — and each is keyed on the Config lane, never the device lane', () => {
   const rd = (f: string) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
   const prep = rd('lib/agents/harness/prepare-task-for-execution.ts');
-  eq((prep.match(/CONFIG_SOURCES_SNAPSHOT_KEY/g) ?? []).length, 2, 'the import + the one write: ');
-  assert(/const configLane = contractCheck\.type === 'PIPELINE' \? configSourceLaneOf\(resolved\.protocol\) : null;/.test(prep), 'the snapshot is not gated on the config lane');
-  assert(/default: assertNeverConfigLane\(configLane\);/.test(prep), 'the lane switch is not exhaustive');
+  // STEP 3 P1 (plan W5 row 1, W7): the decision is ONE pure function; the prepare step only applies it. The key appears at the import,
+  // the one write, the removal's "was one there" test and its comment — and the removal statement names it as a LITERAL equal to the constant.
+  const prepCode = prep.replace(/\/\/.*$/gm, '');
+  eq((prepCode.match(/CONFIG_SOURCES_SNAPSHOT_KEY/g) ?? []).length, 3, 'the import + the one write + the removal test: ');
+  eq((prepCode.match(/configSnapshotDecision\(/g) ?? []).length, 1, 'ONE call of the decision: ');
+  assert(!/configSourceLaneOf|resolveLegConfigSources|buildConfigSourcesSnapshot/.test(prepCode), 'the prepare step decides the snapshot itself — the rule must live in configSnapshotDecision only');
+  assert(prepCode.includes(`(COALESCE(metadata, '{}'::jsonb) - '${CONFIG_SOURCES_SNAPSHOT_KEY}') || \${stampJson}::jsonb`), 'the removal statement does not name the snapshot key');
+  const read = rd('lib/agents/harness/config-sources-read.ts');
+  assert(/const lane = configSourceLaneOf\(input\.protocol, awaiting\);\s*\n\s*if \(lane === null\) return \{ action: 'none' \};/.test(read), 'the snapshot decision is not gated on the config lane');
+  assert(/default: return assertNeverConfigLane\(lane\);/.test(read) && /default: return assertNeverConfigNoBlock\(row\.noBlock\);/.test(read), 'the lane / no-block switches are not exhaustive');
   const cap = rd('lib/services/held-bytes-capture.ts');
-  assert(cap.includes('withConfigSourcesScope(withDeviceEvidenceOnly(') && cap.includes('}), args.deviceRead), args.configSources);'), 'capture does not apply the scope');
+  // STEP 3 P2 (plan W8): the service-file half of the scope is chained AFTER the Git half, over the same declaration
+  assert(cap.includes('withDeclaredFilesScope(withConfigSourcesScope(withDeviceEvidenceOnly(')
+    && cap.includes('}), args.deviceRead), args.configSources), args.configSources, records, args.configSourceProtocol);'), 'capture does not apply the scope');
   const core = rd('lib/services/execution-core.ts');
   assert(core.includes('owningLeg.configSourceProtocol\n      ? await readLegConfigSources(prisma as never, owningLeg) : null;'), 'the core does not read the declaration on a Config-sources leg only');
   const car = rd('lib/agents/harness/held-edit-carrier.ts');
-  assert(car.includes('if (isConfigSourceLeg({ title: task.title ?? null, metadata: task.metadata })) {') && car.includes('configForce = configGitFileForce(sources, refs);'), 'the carrier does not apply the force');
+  // k8s value-lane P1 (2026-11-20): the three decisions go through the lane helpers, never a presence test (the device precedent's shape).
+  // STEP 3 P2 (plan W1): the core asks the ONE helper for both capture switches; the lane gate it replaced lives inside the helper
+  const variantSrc = rd('lib/agents/harness/held-bytes/variant.ts');
+  assert(core.includes('const captureScopes = captureScopesFor(owningLeg, legConfigSources);')
+    && core.includes('...(captureScopes.configSources ? { configSources: captureScopes.configSources, configSourceProtocol: captureScopes.configSourceProtocol } : {}),')
+    && !core.includes('...(legConfigSources ?')
+    && variantSrc.includes('const configSources = legConfigSources && heldCaptureTakesConfigScope(owningLeg) ? legConfigSources : null;'), 'capture scope is not gated by the lane helper');
+  assert(core.includes('sources: platformDriftAppliesToLane(owningLeg) ? legConfigSources : null, isHarvester:') && !core.includes('sources: legConfigSources,'), 'the platform drift call is not gated by the lane helper');
+  assert(car.includes('if (carrierAppliesConfigForce({ title: task.title ?? null, metadata: task.metadata }, deps.configAwaiting)) {') && !/legProtocolHasConfigLane\(/.test(car)
+    && car.includes('configForce = configSourceForce(sources, refs);'), 'the carrier does not apply the force through the lane helper');
   assert(/: deviceForce && !readError \? \{ \.\.\.base, reason: deviceForce\.reason \}\s*\n\s*: configForce && !readError/.test(car), 'precedence: the config force must follow the device force');
 });
 test('WR2 inert until the text: while kubernetes-gitops awaits its text, no leg resolves as a Config-sources leg', () => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const V = require('../lib/agents/harness/held-bytes/variant');
   const leg = { title: 'x (protocol: kubernetes-gitops)', metadata: { protocol: K8S } };
-  eq(V.isConfigSourceLeg(leg), !CONFIG_SOURCE_AWAITING_TEXT.includes(K8S), 'isConfigSourceLeg: ');
-  eq(V.isConfigSourceLeg({ title: 'x (protocol: network-provisioning)', metadata: { protocol: 'network-provisioning-protocol' } }), false, 'a network leg: ');
+  eq(V.legProtocolHasConfigLane(leg), !CONFIG_SOURCE_AWAITING_TEXT.includes(K8S), 'legProtocolHasConfigLane: ');
+  eq(V.legProtocolHasConfigLane({ title: 'x (protocol: network-provisioning)', metadata: { protocol: 'network-provisioning-protocol' } }), false, 'a network leg: ');
+});
+
+console.log('── k8s value-lane P1: the lane helpers (behaviour-neutral; the type is still one lane) ──');
+// Every protocol the platform knows a lane for, plus two that have none. Each in STAMP form and in TITLE-only form.
+// STEP 3 P1: observability-config is IN the table now (awaiting its text) — the set keeps it once.
+const P1_PROTOCOLS = [...new Set([...Object.keys(CONFIG_SOURCE_LANES), ...Object.keys(DEVICE_SOURCE_LANES), 'observability-config-protocol', 'no-such-protocol'])];
+const P1_TF = 'terraform-iac-protocol';
+const p1Legs = P1_PROTOCOLS.flatMap((p) => [
+  { title: 'x', metadata: { protocol: p } as Record<string, unknown> },
+  { title: `x (protocol: ${p.replace(/-protocol$/, '')})`, metadata: null as Record<string, unknown> | null },
+]);
+test('P1-1 the leg classifier: configSourceLaneOfLeg is the table lane for a Config-sources protocol and null for every other; legProtocolHasConfigLane is its null test', () => {
+  eq(p1Legs.length, 12, 'legs under test (6 protocols × stamp, title): ');
+  for (const leg of p1Legs) {
+    const proto = String(leg.metadata?.protocol ?? `${/protocol: ([a-z-]+)/.exec(leg.title)![1]}-protocol`);
+    const want = CONFIG_SOURCE_PROTOCOLS.includes(proto) ? CONFIG_SOURCE_LANES[proto].lane : null;
+    eq(configSourceLaneOfLeg(leg), want, `${proto} ${leg.metadata ? 'stamp' : 'title'}: `);
+    eq(legProtocolHasConfigLane(leg), want !== null, `${proto} legProtocolHasConfigLane: `);
+  }
+  eq(P1_PROTOCOLS.filter((p) => configSourceLaneOfLeg({ title: 'x', metadata: { protocol: p } }) !== null).sort(), [K8S, P1_TF].sort(), 'the Config-sources legs today: ');
+});
+test('P1-2 the carrier site: carrierAppliesConfigForce(leg) equals the presence test it replaced (legProtocolHasConfigLane) on every leg — true on both shipped lanes', () => {
+  for (const leg of p1Legs) eq(carrierAppliesConfigForce(leg), legProtocolHasConfigLane(leg), `${JSON.stringify(leg)}: `);
+  eq([carrierAppliesConfigForce({ title: 'x', metadata: { protocol: K8S } }), carrierAppliesConfigForce({ title: 'x', metadata: { protocol: P1_TF } }),
+    carrierAppliesConfigForce({ title: 'x', metadata: { protocol: 'network-provisioning-protocol' } }), carrierAppliesConfigForce({ title: 'x', metadata: null })],
+    [true, true, false, false], 'both directions: ');
+});
+test('P1-3 the two core sites over hand-built resolutions of every kind: each helper equals the presence test it replaced', () => {
+  // The two expressions P1 replaced in execution-core.ts, verbatim: both were `legConfigSources` being non-null, i.e. this test.
+  const oldPresence = (o: OwningLegResolution | null | undefined) => !!((o?.kind === 'leg' || o?.kind === 'self') && o.configSourceProtocol);
+  const kinds: Array<OwningLegResolution | null | undefined> = [null, undefined,
+    { kind: 'no-leg', reason: 'no-stage', heldCapable: false }, { kind: 'no-leg', reason: 'no-harness-task-id', heldCapable: false },
+    { kind: 'could-not-check', reason: 'read-threw', heldCapable: false }, { kind: 'could-not-check', reason: 'leg-row-missing', heldCapable: false },
+    { kind: 'self', legId: 'L', heldCapable: true }, { kind: 'leg', legId: 'L', heldCapable: true, ownStageId: 's' },
+    { kind: 'self', legId: 'L', heldCapable: false, deviceSource: true, deviceSourceLane: 'value' },
+    ...Object.keys(CONFIG_SOURCE_LANES).flatMap((p): OwningLegResolution[] => [
+      { kind: 'self', legId: 'L', heldCapable: true, gitFileSource: true, configSourceProtocol: p },
+      { kind: 'leg', legId: 'L', heldCapable: true, ownStageId: 's', gitFileSource: true, configSourceProtocol: p },
+      { kind: 'leg', legId: 'L', heldCapable: false, ownStageId: 's', configSourceProtocol: p.replace(/-protocol$/, '') }, // the short token resolves too
+    ])];
+  let yes = 0;
+  for (const o of kinds) {
+    eq(heldCaptureTakesConfigScope(o), oldPresence(o), `capture scope ${JSON.stringify(o)}: `);
+    eq(platformDriftAppliesToLane(o), oldPresence(o), `platform drift ${JSON.stringify(o)}: `);
+    eq(configSourceLaneOfResolution(o), oldPresence(o) ? 'change' : null, `lane ${JSON.stringify(o)}: `);
+    if (oldPresence(o)) yes++;
+  }
+  eq([kinds.length, yes], [9 + 3 * Object.keys(CONFIG_SOURCE_LANES).length, 3 * Object.keys(CONFIG_SOURCE_LANES).length], 'both directions exercised (total, true): ');
+});
+test('P1-4 exhaustiveness is in the source: each of the three helpers switches on the lane and ends in assertNeverConfigLane; the resolution gained no stored lane field', () => {
+  const v = fs.readFileSync(path.join(__dirname, '..', 'lib/agents/harness/held-bytes/variant.ts'), 'utf8');
+  for (const fn of ['heldCaptureTakesConfigScope', 'carrierAppliesConfigForce', 'platformDriftAppliesToLane']) {
+    const at = v.indexOf(`export function ${fn}(`);
+    assert(at > 0, `${fn} is not exported`);
+    const body = v.slice(at, v.indexOf('\n}\n', at));
+    assert(/switch \(lane\) \{\s*case 'change': return true;\s*default: return assertNeverConfigLane\(lane\);\s*\}/.test(body), `${fn} is not an exhaustive switch over the lane`);
+  }
+  assert(/export type ConfigSourceLane = 'change';/.test(v), 'P1 is behaviour-neutral: the lane type is still one member');
+  assert(!/configSourceLane\??:/.test(v), 'the lane is DERIVED (configSourceLaneOfResolution), never a stored field on the resolution');
 });
 
 console.log('── Config sources STEP 4: Terraform (terraform-iac 1.17.0; inert until its text) ──');
@@ -373,7 +453,7 @@ test('TF1 the three Terraform kinds parse to their entries; a network kind is un
   eq(parseConfigSourceLine(TF_LIVE, TF), { ok: true, line: { label: 'prod-state', kind: 'live-read', service: 'terraform-rig-readonly' } });
   eq(parseConfigSourceLine(TF_SUPPLIED, TF), { ok: true, line: { label: 'prod-state', kind: 'supplied' } });
   eq(parseConfigSourceLine('prod-state: device-read — service terraform-rig-readonly', TF), { ok: false, problem: 'unknown-kind' });
-  eq(CONFIG_SOURCE_LANES[TF], { lane: 'change', contractKey: 'terraform-iac' }, 'the lane row: ');
+  eq(CONFIG_SOURCE_LANES[TF], { lane: 'change', contractKey: 'terraform-iac', noBlock: 'forced' }, 'the lane row: ');
   assert(!(TF in DEVICE_SOURCE_LANES), 'terraform-iac must never be a Device-sources protocol (owner decision (b))');
 });
 test('TF2 path-never-held at resolution: every never-held class refused on a git-file line, for Terraform AND Kubernetes (D-T2)', () => {
@@ -405,17 +485,17 @@ test('TF4 live from terraform-iac 1.17.0 (the text commit emptied the awaiting l
   assert(!CONFIG_SOURCE_AWAITING_TEXT.includes(TF), 'terraform-iac still awaits its text after the 1.17.0 text commit');
   eq(configSourceLaneOf(TF), 'change', 'lane: ');
   eq(configSourceContractKeyOf(TF), 'terraform-iac', 'contract key: ');
-  assert(CONFIG_SOURCES_READ_KEYS.includes('terraform-iac'), 'the plan-gate fact must read terraform-iac');
+  assert(configSourcesReadKeys().includes('terraform-iac'), 'the plan-gate fact must read terraform-iac');
   eq(configSourcesKeysOf({ configSources: { 'terraform-iac': TF_LIVE } })?.notReadKeys, [], 'plan-gate fact: ');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const V = require('../lib/agents/harness/held-bytes/variant');
-  eq(V.isConfigSourceLeg({ title: 'x (protocol: terraform-iac)', metadata: { protocol: TF } }), true, 'isConfigSourceLeg: ');
+  eq(V.legProtocolHasConfigLane({ title: 'x (protocol: terraform-iac)', metadata: { protocol: TF } }), true, 'legProtocolHasConfigLane: ');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const D = require('../lib/agents/harness/service-descriptors-derivation');
-  assert(!D.DESCRIPTOR_ONLY_TOKENS.includes('terraform-iac'), 'terraform-iac must leave DESCRIPTOR_ONLY_TOKENS with its sources lane');
+  assert(!D.descriptorOnlyTokens().includes('terraform-iac'), 'terraform-iac must leave the descriptor-only tokens with its sources lane');
 });
 const tfParsed = (lines: string[]) => governingConfigSources({ description: body(lines), contract: null,
-  snapshot: buildConfigSourcesSnapshot(TF, resolveLegConfigSources({ protocol: TF, contractValue: undefined, taskBody: `## Config sources\n${lines.join('\n')}\n` }), 't') }, TF);
+  snapshot: buildConfigSourcesSnapshot(TF, resolveLegConfigSources({ protocol: TF, contractValue: undefined, taskBody: `## Config sources\n${lines.join('\n')}\n` }), 't'), protocolStamped: true }, TF);
 const legLineK8s = (i: number) => `k8s-leg${i}: git-file — service github-service ; paichart/paichart-configs/k8s/leg${i}.yaml`;
 const tfLegLine = (i: number) => TF_GIT(`leg${i}-tf`, `terraform/leg${i}.tf`);
 const tfRefs = (ids: number[]) => ids.map((i) => ({ target: TGT, path: `/terraform/leg${i}.tf` }));
@@ -504,7 +584,7 @@ test('ML3 a mixed program: k8s legs beside network change + value legs — the t
   eq(resolveLegDeviceSources({ contractValue: contractDeviceSourcesValue(contract), taskBody: null }).state, 'parsed', 'the network change leg: ');
   eq(resolveLegDeviceSources({ contractValue: contractDeviceSourcesValue(contract, 'network-derivation'), taskBody: null }).state, 'parsed', 'the network value leg: ');
   // a network leg is never a Config-sources leg, and a k8s leg is never a Device-sources leg
-  eq(governingConfigSources({ description: null, contract, snapshot: null }, 'network-provisioning-protocol'), { state: 'not-config-source-leg' }, 'network leg, config lane: ');
+  eq(governingConfigSources({ description: null, contract, snapshot: null, protocolStamped: true }, 'network-provisioning-protocol'), { state: 'not-config-source-leg' }, 'network leg, config lane: ');
   eq(deviceSourceLaneOf(K8S), null, 'k8s leg, device lane: ');
   // the k8s block under the WRONG field declares nothing for the k8s leg; the network key under configSources declares nothing either
   const wrong = { deviceSources: { 'kubernetes-gitops': sharedBlock(2).join('\n') }, configSources: { 'network-provisioning': 'ceos1: supplied' } };
@@ -605,6 +685,27 @@ test('REG1 registration: configSourceReads once, LAST, leaf-persist, conditional
 // DECLARED Config-sources leg (the declaration memo answers `ok`, i.e. what every k8s leg answers once kubernetes-gitops leaves
 // CONFIG_SOURCE_AWAITING_TEXT). Below 1.19.0, or with no stamped protocolInjection (every stored Harvester), nothing is stamped.
 (async () => {
+  try {
+    // k8s value-lane P1: the same equivalence over resolutions the REAL resolver builds — a PIPELINE leg (`self`) and a leaf under
+    // it (`leg`), for every protocol, in stamp and title form. This is every shape production can hand the two core sites.
+    const oldPresence = (o: OwningLegResolution) => !!((o.kind === 'leg' || o.kind === 'self') && o.configSourceProtocol);
+    let n = 0; let yes = 0;
+    for (const leg of p1Legs) {
+      const db = {
+        task: { findUnique: async (a: { where: { id: string } }) => (a.where.id === 'leaf' ? { stageId: 'st' } : { title: leg.title, metadata: leg.metadata }) },
+        stage: { findUnique: async () => ({ metadata: { harnessTaskId: 'L' } }) },
+      };
+      for (const o of [await resolveOwningLegProtocol(db as never, { id: 'L', type: 'PIPELINE', title: leg.title, metadata: leg.metadata }),
+        await resolveOwningLegProtocol(db as never, { id: 'leaf', type: 'ACTION' })]) {
+        eq([o.kind === 'self' || o.kind === 'leg', heldCaptureTakesConfigScope(o), platformDriftAppliesToLane(o)], [true, oldPresence(o), oldPresence(o)], `${JSON.stringify(leg)} → ${JSON.stringify(o)}: `);
+        eq(oldPresence(o), legProtocolHasConfigLane(leg), `the resolution and the leg classifier disagree for ${JSON.stringify(leg)}: `);
+        eq('configSourceLane' in o, false, 'a stored lane field on the resolution: ');
+        n++; if (oldPresence(o)) yes++;
+      }
+    }
+    eq([n, yes], [24, 8], 'resolver-built resolutions (total, Config-sources): ');
+    passed++; console.log('✅ P1-5 over every resolution the real resolver builds (12 legs × self + leaf): the two core helpers equal the presence test they replaced — 8 true, 16 false');
+  } catch (e) { failed++; console.log(`❌ P1-5 resolver-built equivalence\n   ${(e as Error).message}`); }
   try {
     const declared = parsed([GIT, LIVE]);
     eq(declared.state, 'parsed', 'the control leg is a declared Config-sources leg: ');

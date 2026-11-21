@@ -197,6 +197,10 @@ check that file by hand. The Git file source is admin-only, and reads only the o
   block" below). A Terraform leg reads only what the block declares, and a task with no block stops before it reads anything.
   A branch the Git source does not admit is refused and the leg returns `needs-revision`. **Never declare a state, plan or
   variables file** (`*.tfstate*`, `*.tfplan`, `*.tfvars*`, `.terraform/`): the platform refuses those paths and the leg stops.
+  The same holds, since 2026-11-21, for a **password or key file**: a name containing `htpasswd`, a name ending `.key`, `.pem`,
+  `.p12`, `.pfx`, `.jks` or `.keystore`, or an SSH identity file (`id_rsa`, `id_dsa`, `id_ecdsa`, `id_ed25519`). A `git-file`
+  line naming one makes the whole block unreadable and the leg ends `needs-revision` with the reason
+  `config-sources-unparseable` (problem `path-never-held`). It goes by the name: a public certificate saved as `.pem` is refused too.
 - **What changes in the package.** The file you declared is `H1`; the Author edits it in place by reference (an attribute changed, a
   block added inside a resource), or adds new resources in a new file beside it. Rollback is `restore H1` for a kept file and a revert of
   the HCL only for a file the change created. Your files that were not read are written as before (a new file, or a labelled complete block).
@@ -371,7 +375,9 @@ archive-tf: git-file — service github-service ; acme/infra-live/terraform/arch
 prod-state: live-read — service https://example.com/terraform-readonly-descriptor.json
 ```
 Leave out the `live-read` line for a Git-only run. One `git-file` line per `.tf` file; never a state, plan or variables file
-(`*.tfstate*`, `*.tfplan`, `*.tfvars*`, `.terraform/`). State is evidence, never the kept file. Details:
+(`*.tfstate*`, `*.tfplan`, `*.tfvars*`, `.terraform/`), and never a password or key file (`htpasswd`, `.key`, `.pem`, `.p12`,
+`.pfx`, `.jks`, `.keystore`, an SSH identity file — a public `.pem` certificate included): the leg ends `needs-revision`,
+reason `config-sources-unparseable`. State is evidence, never the kept file. Details:
 [TERRAFORM-SERVICE.md](TERRAFORM-SERVICE.md).
 
 ### Observability: the self-provisioned stack

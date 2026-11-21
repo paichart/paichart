@@ -2212,7 +2212,7 @@ const commitText = (name: string, commit: string): ProtocolText => {
     const planted = (b: string | null = BLOCK) => cs.withFirstExecutionConfigSnapshot(withBlock(b)).snap;
     const FIX = JSON.parse(fs.readFileSync(cs.CONTRACT_FIXTURE, 'utf8')) as { result: Record<string, any> };
     const harvestOf = (snap: any) => { const h = hs.frozenHarvesterEntry(snap); return { h, result: JSON.parse(snap.childArtifacts.find((a: any) => a.executionId === h.executionId && a.name === 'result.json').content) }; };
-    const govOf = (snap: any) => governingConfigSources({ description: snap.leg.description, contract: null, snapshot: snap.leg.metadata.configSourcesSnapshot ?? null }, P19.name);
+    const govOf = (snap: any) => governingConfigSources({ description: snap.leg.description, contract: null, snapshot: snap.leg.metadata.configSourcesSnapshot ?? null, protocolStamped: true }, P19.name);
     /** The test's own oracle: the shipping functions, the test's own caller (the contract fixture with the sha echo). */
     const oracle = async (snap: any, caller?: (manifest: string) => any) => {
       const gov = govOf(snap); const { result } = harvestOf(snap);
@@ -2388,13 +2388,22 @@ const commitText = (name: string, commit: string): ProtocolText => {
       const comp = gsm.buildGoldenCompanion(path.join(root, 'model-lab'), gsm.loadGoldenSet()).dir;
       const ef = path.join(comp, 'experiment.json');
       const e = JSON.parse(fs.readFileSync(ef, 'utf8'));
-      const g = e.nodes.find((n: any) => n.id === 'GOLD-K8S-PROG');
-      assert(g && g.authorExecutionId === K8S_PROG && g.reviewerExecutionId === K8S_PROG_REVIEWER && e.variants.gmxk8sr, 'the golden companion no longer carries GOLD-K8S-PROG / gmxk8sr');
+      // golden v12 (2026-11-19): K8S-PROG is retired from the golden set and the golden pin is 1.19.0. This test keeps measuring the
+      // 1.18.0 → 1.19.0 version key on the same cached leg, so it builds its own node and pins the 1.18.0 text from the closed
+      // L-CS-K experiment's baseline; the companion supplies only the persisted Reviewer arm shape (gmxk8sr).
+      assert(e.variants.gmxk8sr && !e.nodes.some((n: any) => n.id === 'GOLD-K8S-PROG'), 'the golden companion no longer carries the gmxk8sr arm (or K8S-PROG is back: use it)');
+      const g = { id: 'K8S-PROG', authorExecutionId: K8S_PROG, reviewerExecutionId: K8S_PROG_REVIEWER, persistedEditApplication: true, kind: 'LCK6', expect: 'approved', n: 1 };
+      const B18 = 'kubernetes-gitops-protocol@1.18.0.baseline.md';
+      fs.copyFileSync(path.join(LAB, 'inputs', '2026-11-16-config-sources-k8s-l-cs-k', 'protocols', B18), path.join(comp, 'protocols', B18));
+      const b18 = fs.readFileSync(path.join(comp, 'protocols', B18), 'utf8');
+      assert(sha(b18).startsWith('89c5e243487f'), 'the L-CS-K 1.18.0 baseline moved');
+      e.baseline.protocols['kubernetes-gitops-protocol'] = { file: `protocols/${B18}`, version: '1.18.0', sha256: sha(b18) };
+      delete e.goldenSet;
       const desc = cached(K8S_PROG).leg!.description as string;
       fs.mkdirSync(path.join(comp, 'edits'), { recursive: true });
       fs.writeFileSync(path.join(comp, 'edits', 'cs-block.json'), JSON.stringify({ id: 'cs-block', appliesTo: ['leg:description'], ops: [{ type: 'replace', old: desc, new: `${desc}${BLOCK}` }] }));
       e.label = 'lck6'; delete e.standingBench;
-      e.variants = { b: { ...e.variants.gmxk8sr, comment: 'base: the golden pin (1.18.0)' }, c: { ...e.variants.gmxk8sr, composedVersion: '1.19.0', comment: 'the Config-sources version key (no text yet)' } };
+      e.variants = { b: { ...e.variants.gmxk8sr, comment: 'base: kubernetes-gitops 1.18.0 (the L-CS-K baseline)' }, c: { ...e.variants.gmxk8sr, composedVersion: '1.19.0', comment: 'the Config-sources version key (no text yet)' } };
       const levers = { inputEdits: 'edits/cs-block.json', configSourcesSnapshot: 'first-execution', platformDrift: FIXTURE_PLANT };
       e.nodes = [{ ...g, id: 'R-BASE', variants: ['b'] }, { ...g, id: 'R-CS', variants: ['b', 'c'], ...levers }];
       fs.writeFileSync(ef, JSON.stringify(e));
@@ -2476,7 +2485,13 @@ const commitText = (name: string, commit: string): ProtocolText => {
         if (!fs.existsSync(snapshotPath(id))) throw new Error(`the lab cache has no snapshot ${id} (LAB-TEST-READS-PRODUCTION: fill the cache first)`);
         const f = path.join(tmp, `${cse}.json`);
         execFileSync('python3', ['-I', GEN, id, '--out', f]);
-        assert(fs.readFileSync(f, 'utf8') === fs.readFileSync(path.join(LAB, 'golden', 'config-sources', `${cse}.compare-result.json`), 'utf8'), `${cse}: the committed golden drift answer does not regenerate byte for byte`);
+        // golden v12 (2026-11-19, register LAB-DRIFT-GEN-CACHE-DEPENDENT): the generator looks for same-reset harvests in WHATEVER the lab cache holds, so a
+        // newly cached snapshot of the same cluster state adds a `sameResetLinks` entry (caching K8S-R3 linked it to K8S-PROG by a shared UID) without lending a
+        // single read. A link that lent nothing is dropped from BOTH sides before comparing; the answer itself (`result`) and every lent read must still match exactly.
+        const lentNothing = (t: string) => { const j = JSON.parse(t); if (j.provenance.sameResetReads.length === 0) j.provenance.sameResetLinks = []; return JSON.stringify(j); };
+        const committed = fs.readFileSync(path.join(LAB, 'golden', 'config-sources', `${cse}.compare-result.json`), 'utf8');
+        assert(lentNothing(fs.readFileSync(f, 'utf8')) === lentNothing(committed), `${cse}: the committed golden drift answer does not regenerate`);
+        assert(JSON.stringify(JSON.parse(fs.readFileSync(f, 'utf8')).result) === JSON.stringify(JSON.parse(committed).result), `${cse}: the drift ANSWER moved`);
         const r = JSON.parse(fs.readFileSync(f, 'utf8'));
         const unknown = r.result.objects.filter((o: any) => o.state === 'not-compared');
         assert(unknown.every((o: any) => o.reason === 'live-read-failed' && !('detail' in o)) && unknown.length === r.provenance.notReadByTheHarvest.length, `${cse}: an object with no recorded live copy must be live-read-failed with no detail, and only those`);
@@ -2654,7 +2669,7 @@ const commitText = (name: string, commit: string): ProtocolText => {
           assert(JSON.stringify(r.facts!.gitLiveDrift) === JSON.stringify(NO_METHOD) && JSON.stringify(r.facts!.gitLiveDrift) === JSON.stringify(computeGitLiveDrift(undefined, 'terraform-iac-protocol')), `${what}: gitLiveDrift ${JSON.stringify(r.facts!.gitLiveDrift)}`);
           assert(r.report.gitLiveDrift!.reason === 'no-git-vs-live-method' && r.report.gitLiveDrift!.checked === false, `${what}: report ${JSON.stringify(r.report.gitLiveDrift)}`);
           const { result } = (() => { const h = hs.frozenHarvesterEntry(snap); return { result: JSON.parse(snap.childArtifacts.find((a: any) => a.executionId === h.executionId && a.name === 'result.json')!.content) }; })();
-          const gov = governingConfigSources({ description: snap.leg!.description as string, contract: null, snapshot: (snap.leg!.metadata as any).configSourcesSnapshot }, 'terraform-iac-protocol');
+          const gov = governingConfigSources({ description: snap.leg!.description as string, contract: null, snapshot: (snap.leg!.metadata as any).configSourcesSnapshot, protocolStamped: true }, 'terraform-iac-protocol');
           assert(JSON.stringify(r.facts!.liveEvidence) === JSON.stringify(computeConfigLiveEvidence(gov, result.toolCalls)) && r.facts!.liveEvidence!.summary === liveSummary, `${what}: liveEvidence ${JSON.stringify(r.facts!.liveEvidence).slice(0, 200)}`);
           assert(JSON.stringify(r.facts!.configSourceReads) === JSON.stringify(computeConfigSourceReads(gov, result.toolCalls)), `${what}: configSourceReads`);
           assert(r.report.configForce === null && r.report.held!.refs === 1 && r.store!.refs[0].path === '/terraform/main.tf', `${what}: held ${JSON.stringify([r.report.configForce, r.report.held])}`);
@@ -2675,20 +2690,25 @@ const commitText = (name: string, commit: string): ProtocolText => {
       assert(/import \{[^}]*\bgitLiveDriftMethodOf\b[^}]*\} from '\.\.\/\.\.\/lib\/agents\/harness\/git-live-drift'/.test(src) && !/terraform-iac/.test(src.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '')), 'config-sources-patch.ts must decide with the SHIPPING gitLiveDriftMethodOf and name no protocol in code');
     });
 
-    await test('LCT3 (carry + bytes, $0 dry run through lab.ts) a persisted TERRAFORM Reviewer cell (GOLD-TF-PROG): the 1.16.0 base arm is byte-identical to the frozen production rebuild and to a node with no lever; the 1.17.0 arm\'s Reviewer AND Author prompts are the base plus EXACTLY the shipping liveEvidence render (the Reviewer\'s also the Plan-witness platform line, planWitness lever), and NO drift line (the chainer carries gitLiveDrift only when checked; the lab copy is pinned to it); the manifest records no call; a drift plant on the Terraform node stops the dry run', async () => {
-      const gsm = await import('./leg-replay-lab/golden-set');
+    await test('LCT3 (carry + bytes, $0 dry run through lab.ts) a persisted TERRAFORM Reviewer cell (the cached TF-PROG leg — retired from the golden set at v10, still a lab input): the 1.16.0 base arm is byte-identical to the frozen production rebuild and to a node with no lever; the 1.17.0 arm\'s Reviewer AND Author prompts are the base plus EXACTLY the shipping liveEvidence render (the Reviewer\'s also the Plan-witness platform line, planWitness lever), and NO drift line (the chainer carries gitLiveDrift only when checked; the lab copy is pinned to it); the manifest records no call; a drift plant on the Terraform node stops the dry run', async () => {
+      // golden v10 (2026-11-19): TF-PROG was RETIRED from the golden set (a package composed below terraform-iac 1.17.0 is forced
+      // `stop-sentence-absent` at the 1.17.0 pin) and the golden pin itself is now 1.17.0, so this test no longer builds from a golden
+      // companion. It builds from the closed L-CS-T experiment's own inputs — the 1.16.0 baseline the leg ran on, its pinned templates
+      // and its persisted Reviewer base arm `rb` — and TF-PROG stays a cached LAB INPUT (never a golden case).
       const root = path.join(out, 'lct3'); fs.mkdirSync(root, { recursive: true });
-      fs.cpSync(path.join(gsm.GOLDEN_DIR, 'fixtures', 'model-lab'), path.join(root, 'model-lab'), { recursive: true });
-      const comp = gsm.buildGoldenCompanion(path.join(root, 'model-lab'), gsm.loadGoldenSet()).dir;
+      const CSTX = path.join(LAB, 'inputs', '2026-11-17-config-sources-tf-l-cs-t');
+      const comp = path.join(root, 'exp'); fs.mkdirSync(comp, { recursive: true });
+      for (const d of ['protocols', 'templates']) fs.cpSync(path.join(CSTX, d), path.join(comp, d), { recursive: true });
       const ef = path.join(comp, 'experiment.json');
-      const e = JSON.parse(fs.readFileSync(ef, 'utf8'));
-      const g = e.nodes.find((n: any) => n.id === 'GOLD-TF-PROG');
-      assert(g && g.authorExecutionId === TF_PROG && g.reviewerExecutionId === TF_PROG_REVIEWER && e.variants.gmxterraformr, 'the golden companion no longer carries GOLD-TF-PROG / gmxterraformr');
+      const e = JSON.parse(fs.readFileSync(path.join(CSTX, 'experiment.json'), 'utf8'));
+      assert(e.variants.rb && (e.variants.rb.edits ?? []).length === 0 && e.variants.rb.authorSource === 'persisted' && e.baseline.protocols['terraform-iac-protocol'].version === '1.16.0', 'the L-CS-T experiment no longer carries its persisted 1.16.0 Reviewer base arm rb');
+      const g = { authorExecutionId: TF_PROG, reviewerExecutionId: TF_PROG_REVIEWER, persistedEditApplication: true, kind: 'LCT3: the cached TF-PROG leg', n: 1 };
+      delete e.goldenSet; delete e.requireGitFileSourcePin;
       const desc = cached(TF_PROG).leg!.description as string;
       fs.mkdirSync(path.join(comp, 'edits'), { recursive: true });
       fs.writeFileSync(path.join(comp, 'edits', 'tf-block.json'), JSON.stringify({ id: 'tf-block', appliesTo: ['leg:description'], ops: [{ type: 'replace', old: desc, new: `${desc}${TF_BLOCK}` }] }));
       e.label = 'lct3'; delete e.standingBench;
-      e.variants = { b: { ...e.variants.gmxterraformr, comment: 'base: the golden pin (1.16.0)' }, c: { ...e.variants.gmxterraformr, composedVersion: '1.17.0', comment: 'the Config-sources version key (no text yet)' } };
+      e.variants = { b: { ...e.variants.rb, comment: 'base: terraform-iac 1.16.0, the text the leg ran on' }, c: { ...e.variants.rb, composedVersion: '1.17.0', comment: 'the Config-sources version key (no text change)' } };
       const levers = { inputEdits: 'edits/tf-block.json', configSourcesSnapshot: 'first-execution' };
       e.nodes = [{ ...g, id: 'T-BASE', variants: ['b'] }, { ...g, id: 'T-CS', variants: ['b', 'c'], ...levers }];
       fs.writeFileSync(ef, JSON.stringify(e));
@@ -2705,7 +2725,7 @@ const commitText = (name: string, commit: string): ProtocolText => {
       // The forward pin, computed here with the shipping functions — never by the lever.
       const snap = tfPlanted(); const h = hs.frozenHarvesterEntry(snap);
       const tc = JSON.parse(snap.childArtifacts.find((a: any) => a.executionId === h.executionId && a.name === 'result.json')!.content).toolCalls;
-      const gov = governingConfigSources({ description: snap.leg!.description as string, contract: null, snapshot: (snap.leg!.metadata as any).configSourcesSnapshot }, 'terraform-iac-protocol');
+      const gov = governingConfigSources({ description: snap.leg!.description as string, contract: null, snapshot: (snap.leg!.metadata as any).configSourcesSnapshot, protocolStamped: true }, 'terraform-iac-protocol');
       const tr = (f: Record<string, unknown>) => ({ ...f, point: 'author-transcription', harvesterExecutionId: h.executionId });
       const liveLines = renderLiveEvidenceForPrompt(tr(computeConfigLiveEvidence(gov, tc)) as never)!;
       const driftLines = renderGitLiveDriftForPrompt(tr(computeGitLiveDrift(undefined, 'terraform-iac-protocol')) as never)!;

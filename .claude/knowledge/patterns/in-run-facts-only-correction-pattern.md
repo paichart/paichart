@@ -1,6 +1,9 @@
 # In-run facts-only correction — pattern
 
 **Status:** 2 production instances (2026-10-06 terraform `config_change_author`; 2026-10-09 `requirements_author`).
+A third turn of the same shape exists in code — the held-edit correction (`lib/agents/harness/held-edit-correction.ts`, one
+tool-less reflection turn behind `HELD_EDIT_CORRECTION_ENABLED`, adoption rule v1, reusing the requirements time budget). Noted
+2026-11-21; whether it met the ten preconditions below was not traced, so it is not counted as an instance here.
 **Confidence, stated per guard (the instances do not share one):**
 - **80% for the provenance-guard variant (terraform).** Live: 9 of 9 attempts adopted, 0 collateral changes (A.5).
   Its scope is approved latent truncation, so it fixes packages, not refusals.
@@ -64,7 +67,9 @@ agent loop ends (end_turn) ─► CHECK (pure, deterministic) ─► stamp FACT 
 2. **Fact** — stamped on every eligible execution whatever the flag says (shadow mode first: real trigger rates with
    zero behaviour change). Nested under `toolLoop.*` (E3b) — no whitelist edit; ahead of `finalResponse`.
 3. **Decision** — first matching reason wins, every skip named. **Common prefix:** `not-checked` →
-   `no-trigger-hit`/`no-failing-check` → prior reflection pass used → budget self-flag → `flag-off`. **Then the
+   `no-trigger-hit`/`no-failing-check` → prior reflection pass used → budget self-flag → `flag-off`. (Three corrections now compete for the one pass: `arbitrateReflectionPass`,
+   `lib/services/held-edit-step.ts`, decides between the form and held-edit corrections, and `reflectionPassSpentBy`,
+   `lib/services/execution-artifacts.ts`, names the spender.) **Then the
    instance's own gates:** terraform — `hits-include-non-undercount` (scope); requirements — missing inputs →
    `insufficient-time`.
 4. **The turn** — ONE reflection-mode call, no tools (`tool_choice none`; preserved-thinking models keep the tool
@@ -117,11 +122,11 @@ through it.
 | Check | `package-form-check.ts`: diff hunk headers vs bodies | `requirements-form-check.ts` (TS port of the publish checks): size/program view, stray rule citations, coverage, citations, clauses, lint, residue |
 | Trigger | hunk-header undercount only (narrow, by design) | every failing trigger check; registry-caused coverage findings EXCLUDED (the agent does not own them). Lint is a pre-filter and should be guard-only (G3) |
 | Adoption guard | **per-line provenance** — every changed line must come from a named source (`content-not-from-named-source`, `header-start-changed`) | **regression-based** — no measured check worsens + one improves; headings/placeholders/confidence structural guards. **Rule v2 (G1 A, built 2026-10-10):** frozen before-map, citations/clauses-checked may not fall, all coverage findings guarded, clause findings by identity; probes P0–P6 pinned (P2–P4 still adopted — the measured blind spot). **Rule v3 (2026-10-12, panel `cline_docs/reviews/correction-adoption-severity-2026-10-11/`):** size cleared to 0 adopts over ≤ 1 newly flagged clause (`unwaivable-cleared` arm, owner P1 = C); the read is enforced at publish, never by a waiver |
-| Flag + eligibility | `FORM_CORRECTION_ENABLED` (ON 2026-10-06 23:52:54Z). **One global flag; eligibility is role-wide, so it covers all four domains that share the role**, though only terraform triggers today *(2026-10-19: no longer — k8s 1.17.0 makes the k8s Author write unified diffs, and a k8s correction was attempted and adopted (A-K1); owner decision KC4 accepts k8s into scope and kill criterion 4 now watches every domain OUTSIDE {terraform, kubernetes-gitops}; `hunk-side-overflow` stays a non-trigger until measured — register K8S-HUNK-COUNT)* | `REQUIREMENTS_FORM_CORRECTION_ENABLED` (ON 2026-10-09 04:00:17Z, before run 1 of the three-run test). **Hold on new generations until G1 A ships** |
+| Flag + eligibility | `FORM_CORRECTION_ENABLED` (ON 2026-10-06 23:52:54Z). **One global flag; eligibility is role-wide, so it covers all four domains that share the role**, though only terraform triggers today *(2026-10-19: no longer — k8s 1.17.0 makes the k8s Author write unified diffs, and a k8s correction was attempted and adopted (A-K1); owner decision KC4 accepts k8s into scope and kill criterion 4 now watches every domain OUTSIDE {terraform, kubernetes-gitops}; `hunk-side-overflow` stays a non-trigger until measured — register K8S-HUNK-COUNT)* | `REQUIREMENTS_FORM_CORRECTION_ENABLED` (ON 2026-10-09 04:00:17Z, before run 1 of the three-run test). *(The hold on new generations "until G1 A ships" ended when G1 A was built, 2026-10-10 — see the adoption-guard row.)* |
 | Time bound | fixed 600 s abort; no deadline check | R4-derived budget, `insufficient-time` skip |
 | Original kept? | the package by reference; on adoption the changed lines are on the fact (`edits`, ≤ 8) | `requirements.pre-correction.md` on every attempt + sha pointer + before-lists (G1 B, built 2026-10-10); since rule 3 the NOT-adopted correction too (`requirements.correction-not-adopted.md`) + after-lists; both hashed on the persisted (post-R10) bytes. Before G1 B: not persisted |
 | **Gates actually run** | live shadow + Protocol 16 lab | stage A replay of stored drafts + the three-run go/no-go. **No live shadow window (<2 h), no lab, no blind read of adopted vs original** |
-| Envelope surfaces | kill criteria, MI-13 rows, card line, prompt sha pin | **none of those four yet** (G5) |
+| Envelope surfaces | kill criteria, MI-13 rows, card line, prompt sha pin | MI-13 section present (`REQUIREMENTS FORM CORRECTION`, `scripts/report-mechanism-inventory.sh`); **no kill criteria yet** (G5); card line and prompt sha pin not established in the 2026-11-21 sweep |
 | Records | `cline_docs/reviews/mechanical-reflection-trigger-2026-10-07/` | `cline_docs/reviews/requirements-author-retrospective-2026-10-09/` (WIRING-NOTE-2B, SYNTHESIS) |
 
 **The regression guard is weaker by construction.** A whole-document re-emission can change wording no check
@@ -165,7 +170,8 @@ review plus a full replay of stored attempts before deploy. Records: `cline_docs
 7. Envelope checklist complete: time budget, kill-criteria rows (including a join of Reviewer blocking items to
    changed lines or sections — the attribution criterion), MI-13 row, card decision recorded, check suites in CI.
 8. Protocol-keyed eligibility and per-domain series cuts for roles shared across domains.
-9. A step registry with a surface-coverage test, and a `reflectionPassSpentBy` slot naming who spent the pass (G6).
+9. A step registry with a surface-coverage test, and a `reflectionPassSpentBy` slot naming who spent the pass (G6) — the slot is built
+   (`lib/services/execution-artifacts.ts`, five spenders); the step registry was not re-verified 2026-11-21.
 10. Fix at the layer that owns the defect (see anti-patterns).
 
 ## How to add a new instance (do not skip steps)
@@ -176,7 +182,7 @@ review plus a full replay of stored attempts before deploy. Records: `cline_docs
 3. **Protocol 16 lab gate** — replay refused cases with the turn on, rule pre-registered (refusals fall; no approved
    control regresses; no adopted text worse on a blind read).
 4. **Flag on** — per domain where the flag allows it (terraform's does not), with kill criteria and a series cut in
-   CLAUDE.md.
+   the series-cut ledger (`.claude/knowledge/pipelines/SERIES-CUT-LEDGER.md`; CLAUDE.md keeps only the index since 2026-10-29).
 
 The requirements instance did not follow steps 2 and 3. That was a recorded owner decision: the role has no other
 user, and the three-run test stood in. It is not a precedent. See "Gates actually run" above.
@@ -202,11 +208,40 @@ user, and the three-run test stood in. It is not a precedent. See "Gates actuall
 
 `test:package-form-check`, `test:form-correction`, `test:form-correction-core`, `test:requirements-form-correction`
 (all in `test:all-validation`). The requirements check's own suites (`test:requirements-form-check`, `-parity`,
-`-data`) are NOT in CI. **Terraform (and kubernetes-gitops since KC4, 2026-10-19):** kill criteria `scripts/report-form-correction-kill-criteria.sh` (prices
+`-data`) are in `test:all-validation` too (corrected 2026-11-21 — this said "NOT in CI"). **Terraform (and kubernetes-gitops since KC4, 2026-10-19):** kill criteria `scripts/report-form-correction-kill-criteria.sh` (prices
 attempts at Sonnet rates; the terraform Author is on Opus 5.5 since 2026-10-07, so cost is under-stated about 2×),
-MI-13 rows `PACKAGE FORM CHECK` / `PACKAGE FORM CORRECTION`. The requirements instance has no kill criteria and no
-MI-13 row yet (G5). **Owed:** a pin that no `qualityGate` or gate conjunct reads `toolLoop.*Check.correction`. Today
+MI-13 rows `PACKAGE FORM CHECK` / `PACKAGE FORM CORRECTION`. The requirements instance has no kill criteria yet (G5); its MI-13 section
+exists (`REQUIREMENTS FORM CORRECTION`). **Owed:** a pin that no `qualityGate` or gate conjunct reads `toolLoop.*Check.correction`. Today
 that holds by grep, with nothing enforcing it.
 
 **Companions:** agent-output-trustworthiness-defense-stack (the anti-fabrication correction turn is the ancestor);
 pre-registered lab gate (Protocol 16); signal design (Protocol 10).
+
+---
+
+## 2026-11-21 — drift sweep (Protocol 11): what was corrected, and how to check it stays true
+
+The shape, the four conditions, the two-instance table's measurements and the anti-patterns are unchanged. Corrected against the tree:
+
+- **"The requirements check's own suites are NOT in CI"** — all three are steps of `test:all-validation`.
+- **"No MI-13 row yet"** for the requirements instance — the section exists. "No kill criteria" is still true.
+- **"Hold on new generations until G1 A ships"** — G1 A was built 2026-10-10 (the same table says so); the hold is marked ended.
+- **The held-edit correction** is named as a third turn of this shape, not counted as an instance; the "one reflection pass"
+  sentence now points at the arbitration and at `reflectionPassSpentBy` (precondition 9's slot is built).
+- **"A series cut in CLAUDE.md"** → the series-cut ledger.
+
+Every expectation below was run before it was written:
+
+```bash
+node -e 'const s=require("./package.json").scripts["test:all-validation"]; console.log(["test:requirements-form-check","test:requirements-form-check-parity","test:requirements-form-check-data","test:package-form-check","test:form-correction","test:form-correction-core","test:requirements-form-correction"].filter(n=>new RegExp("npm run "+n+"( |$|&)").test(s)).length)'   # expect 7 — every pin named under Pins is a battery step
+grep -c "REQUIREMENTS FORM CORRECTION" scripts/report-mechanism-inventory.sh           # expect 1 — the MI-13 section
+grep -ci "requirements" scripts/report-form-correction-kill-criteria.sh                # expect 0 — still no kill criteria for the requirements instance (a non-zero count means this file's "no kill criteria" lines are stale)
+grep -c "^export function reflectionPassSpentBy" lib/services/execution-artifacts.ts   # expect 1
+grep -c "^export async function arbitrateReflectionPass" lib/services/held-edit-step.ts   # expect 1
+grep -c "^export const HELD_EDIT_CORRECTION_FLAG = 'HELD_EDIT_CORRECTION_ENABLED'" lib/agents/harness/held-edit-correction.ts   # expect 1
+```
+
+**Not re-verified in this sweep:** whether the three flags are on in production and every live figure quoted (adoption counts,
+shrink percentages) — no production access; whether the held-edit correction met the ten preconditions; a card line and a prompt
+hash pin for the requirements correction (not found, not proven absent); the owed pin that no gate reads
+`toolLoop.*Check.correction` (still owed — nothing found that enforces it).

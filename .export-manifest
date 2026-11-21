@@ -1079,6 +1079,7 @@ lib/agents/harness/held-bytes/apply.ts
 lib/agents/harness/held-bytes/canonical-text.ts
 lib/agents/harness/held-bytes/caps.ts
 lib/agents/harness/held-bytes/clause.ts
+lib/agents/harness/held-bytes/config-label.ts
 lib/agents/harness/held-bytes/config-source-scope.ts
 lib/agents/harness/held-bytes/declared-descriptor-endpoints.ts
 lib/agents/harness/held-bytes/descriptors.ts
@@ -2033,6 +2034,8 @@ scripts/test-compliance-monitor.ts
 scripts/test-confidence-parse-parity.ts
 scripts/test-config-hierarchy.ts
 scripts/test-config-prompt-no-template-fallback.ts
+scripts/test-config-sources-p2.ts
+scripts/test-config-sources-step3.ts
 scripts/test-config-sources.ts
 scripts/test-containment-enrichment-branches.ts
 scripts/test-containment-public-parity.ts
@@ -2097,6 +2100,7 @@ scripts/test-held-bytes-store.ts
 scripts/test-held-capture-compare.ts
 scripts/test-held-chain.ts
 scripts/test-held-edit-carrier.ts
+scripts/test-held-edits-obs-git.ts
 scripts/test-held-edits.ts
 scripts/test-held-file-declaration.ts
 scripts/test-held-get.ts
@@ -2144,6 +2148,7 @@ scripts/test-model-capabilities.ts
 scripts/test-model-resolution-parity.ts
 scripts/test-net-registry-equivalence.ts
 scripts/test-net-registry.ts
+scripts/test-never-read-key-files.ts
 scripts/test-next15-guards.ts
 scripts/test-no-rig-identifiers.ts
 scripts/test-nonterminal-family-pins.ts

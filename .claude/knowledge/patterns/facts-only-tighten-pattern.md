@@ -30,7 +30,8 @@ outcome = AND( agent verdict == approved,          // transcribed, never rephras
 
 platform overrides:   approved → needs-revision   ✅ allowed (a fact contradicts it; stamp WHY)
                       needs-revision → approved   ❌ never
-confidence scores:    recorded as facts about the run, never a conjunct, at any tier
+confidence scores:    recorded as facts about the run, never a conjunct of `approved`, at any tier
+                      (a low non-reviewer child score may still trigger a re-run or an escalation — tighten-only)
 release:              a person, after reading — the AND is a precondition, not the decision
 ```
 
@@ -62,7 +63,8 @@ Three properties make it hold:
    never reads as passed.
 2. Wire it as a **conjunct** (veto only). If it can only ever say "fine", it is not a gate — it is context.
 3. Stamp the **reason** on every forced outcome, so a refusal is explainable from the record.
-4. **Never** add a confidence threshold as a conjunct; never add a branch that upgrades an outcome.
+4. **Never** add a confidence threshold as a conjunct of `approved`; never add a branch that upgrades an outcome. (The orchestrator
+   protocol's Step 3 still acts on a non-reviewer child's score — 50–69 flags a re-run, below 50 escalates. Both only tighten.)
 5. Measure the veto rate before and after (series-cut ledger), and hand-read each forced outcome in the first window: a fact that
    vetoes correct work is a bug in the fact, fixed in the fact — never by adding an approve-path override.
 
@@ -79,4 +81,27 @@ Three properties make it hold:
 - A wrong fact vetoes correct work (a false refusal). The defence is the replay-before-ship discipline and hand reads, not an
   override — see the 2026-10-31 quote-check replay (2 false positives caught before ship).
 - The asymmetric *fail-closed veto* by a reviewer (`approved:false` vetoing an `approved` stamp) is itself a verdict and has
-  NOT been earned; it is filed, not shipped (CLAUDE.md § harness Phase-2 verdict consumption).
+  NOT been earned; it is filed, not shipped (`.claude/knowledge/guides/HEALTH-RUN.md` § "harness Phase-2 verdict consumption" — moved
+  there from CLAUDE.md on 2026-11-01).
+
+---
+
+## 2026-11-21 — drift sweep (Protocol 11): what was corrected, and how to check it stays true
+
+The rule and its anti-patterns are unchanged. Corrected against the tree:
+
+- **"Confidence … never a conjunct, at any tier"** overstated. It is never a conjunct of `approved`; the orchestrator protocol's
+  Step 3 still flags a re-run (50–69) or escalates (below 50) on a non-reviewer child's score. Both only tighten.
+- The Phase-2 verdict-consumption reference now points at HEALTH-RUN.md (moved out of CLAUDE.md on 2026-11-01).
+
+Every expectation below was run before it was written:
+
+```bash
+grep -rn "outcome = 'approved'\|outcome: 'approved'" lib app --include=*.ts | wc -l   # expect 0 — no code path writes an approved outcome
+grep -c "if (forced) qg.outcome = 'needs-revision'" lib/agents/harness/held-edit-carrier.ts   # expect 1 — the carrier's only outcome write tightens
+grep -c "the confidence NUMBER is a recorded fact, not a gate input" scripts/seed-protocol-prompts.ts   # expect >=1
+grep -c "Phase-2 verdict consumption" .claude/knowledge/guides/HEALTH-RUN.md                  # expect >=1
+```
+
+**Not re-verified in this sweep:** the tutorial directory, golden case TF-TL4 and `ARCHITECTURE.md` Invariant 6 references (the
+audit found them present); the 2026-10-31 quote-check replay figures.

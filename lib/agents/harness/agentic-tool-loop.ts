@@ -1508,6 +1508,12 @@ async function runAgenticToolLoopInner(
   track: LoopTrack,
 ): Promise<AgenticLoopResult> {
   const { prompt, cfg, mcpFunctions, maxToolTurns, signal, deadlineAt, agentRole, executionId, taskId, userId } = input;
+  // Config sources STEP 3 P1 (plan §7): a loop NEVER starts without its own execution id. Every tool call carries it as
+  // `sessionId`, and mcpService turns it into the server-set `callingExecutionId` only when it is truthy — so an empty id would
+  // make an agent's call look like a chat client's to every agent-vs-human rule (the never-read key names among them).
+  if (typeof executionId !== 'string' || executionId.length === 0) {
+    throw new Error('AGENT_LOOP_NO_EXECUTION_ID: the agent tool loop was started without an execution id');
+  }
   // The names offered to the model — the ONLY names a tool turn will execute (read_more included when it was injected).
   const offeredToolNames: ReadonlySet<string> = new Set((mcpFunctions ?? []).map((f) => f.name));
   const now = deps.now ?? Date.now;

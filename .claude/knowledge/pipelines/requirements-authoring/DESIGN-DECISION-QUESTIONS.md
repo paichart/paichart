@@ -43,7 +43,7 @@ the owner or OPEN, with no default.
   | gate | every approval gate | `approver`, `position` (not for the program plan gate) |
   | auth | a leg that grants or removes access | `receiver`, `admitted-principal`, `request-path` (only when it admits by address), `principal-unseen`, `granted-action`, `existing-grant`, `target-empty`, `enforcer-absent`, `target-absent`, `collateral`, `enforcer-scope` |
   | routing | a leg that advertises a covering route or suppresses routes | `covered-routes`, `must-stay-reachable` |
-  | sources | a leg on a token whose protocol reads a declared configuration-sources block (`network-provisioning` today) — the one class keyed on the token | `sources` |
+  | sources | a leg on the `network-provisioning` token (its `## Device sources` block) — the one class keyed on the token. Kubernetes and Terraform legs read a declared `## Config sources` block and are NOT in this class (see the row's note below) | `sources` |
 
 - **Every key records the run that earned it** (the table's last column): a run where that decision was made
   silently and went wrong. That is the admission rule (§ Adding or changing a question).
@@ -98,7 +98,7 @@ same observability leg). Gates use `approver.<gate>` and `gate.<gate>.position`.
 | `<token>.must-stay-reachable` | routing | which destinations must stay reachable after the change, and from where | — (a list or rule) | declared · OPEN — never derived, never forced | program control 2 (2026-10-05): the package proved the covered routes were gone and never established which destinations had to stay reachable, or from where — nobody asked. Consumer reference (not evidence): network-provisioning 1.19.0 Author (b2) |
 | `<token>.sources` | sources | which devices the leg reads — the ones it changes and the ones it only needs to see — and where each one's configuration is read from (Git file, running device, both, or for a changed device no read) | — (the owner's item IS the block; one block per lane: every change leg shares one, a value leg has its own or none) | declared · OPEN — never derived (a harvest cannot choose a source of truth), never forced, never not-applicable on a network leg | firewall-a3, 2026-11-01 (devext): a hand-written block named only the changed switch, the other went unread, and the leg produced a colliding pool; the same program lost both legs' blocks to a per-leg contract key the platform does not read (DEVICE-SOURCES-MULTI-NETWORK-LEG). No generated spec could ask it (Z71, proposed 2026-10-24 without a miss). Admitted by the owner 2026-11-09 (step-1 plan G2-a) |
 
-**Which legs get which rows.** Every leg: `target`. A **sources leg** — any leg on the `network-provisioning` token, value or change, whatever its work: `sources` (never deleted on it; never asked on another token until that domain's protocol reads a declared block, plan §6). A producing leg: `population`, `representation`, `inputs-empty`.
+**Which legs get which rows.** Every leg: `target`. A **sources leg** — any leg on the `network-provisioning` token, value or change, whatever its work: `sources` (never deleted on it; never asked on another token — a `sources` row there is a coverage ERROR. Kubernetes and Terraform read a declared block since kubernetes-gitops 1.19.0 and terraform-iac 1.17.0 and did not join: their block is an owner item keyed `<token>.item-<N>`). A producing leg: `population`, `representation`, `inputs-empty`.
 Every gate: `approver`; every gate except the program plan gate: `position` (the platform fixes the plan gate's
 position). An **authorisation leg** — one that consumes a chained value into a source, allow, admit, policy or
 selector field, or whose work adds, removes, allows, denies or restricts a sender or principal — carries the whole
@@ -140,8 +140,12 @@ the answer. A network value leg carries the token `network-provisioning` here to
 `network-provisioning.*` apply to the network leg whichever token the Program Architect gives it), so the row is asked on
 both lanes. The answer is a numbered owner item whose text IS the block; the leg's *Device sources* slot carries it in a
 fence with one lane sentence, and the publish check (`scripts/check-requirements-sources.ts`, the shipping parser) proves
-the transcription. Each other domain joins this class only with its own text batch (Kubernetes `## Config sources` at
-kubernetes-gitops 1.19.0, observability per held target, Terraform after the owner's review — plan §6). **Not this row:**
+the transcription. No other domain has joined this class (corrected 2026-11-21; the plan had each joining with its own text batch). Kubernetes
+(kubernetes-gitops 1.19.0) and Terraform (terraform-iac 1.17.0) shipped their `## Config sources` text without joining: a
+generated spec carries their block as an added owner item keyed `<token>.item-<N>`, and the sources check keys the item on
+that token through the ROW-ITEM-MAP. Joining a domain later means `SOURCES_TOKENS` in both coverage checks, the skeleton
+slot, Author and Reviewer text and a lab; `SOURCES_TOKENS` is code outside the hashed registry, so key that series on the
+protocol version, not on `registrySha256`. Observability is not decided here. **Not this row:**
 whether the leg changes anything (the objective's "changes nothing" phrase, which the Architect quotes for `leg type: value`).
 
 **Why a rule-defined `population` must also require the leg to REPORT the literal criterion it applied.** When the owner

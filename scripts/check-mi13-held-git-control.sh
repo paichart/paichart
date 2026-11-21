@@ -22,7 +22,7 @@ OUT=$(psql "$URL" -X -q -v ON_ERROR_STOP=1 <<SQL
 SET client_min_messages = warning;
 CREATE TEMP TABLE tasks (id text, title text, type text, metadata jsonb, stage_id text, "agentRole" text, created_at timestamptz DEFAULT now());
 CREATE TEMP TABLE stages (id text, metadata jsonb);
-CREATE TEMP TABLE agent_executions (id text, "taskId" text, status text, "supersededById" text);
+CREATE TEMP TABLE agent_executions (id text, "taskId" text, status text, "supersededById" text, "createdAt" timestamptz DEFAULT now());  -- STEP 3 P2: R2 reads createdAt
 CREATE TEMP TABLE agent_artifacts (id text, name text, "executionId" text, "createdAt" timestamptz, content text);
 CREATE TEMP TABLE held_file_refs (id text, kind text, "executionId" text, "toolCallIndex" int, selector text, "sourceTool" text, "declaredBy" text,
   "serviceId" text, "serviceName" text, "blobSha256" text, scope text, "redactedCount" int DEFAULT 0, "redactorVersion" text DEFAULT 'paichart.r10/3',
@@ -39,9 +39,30 @@ INSERT INTO tasks VALUES
  ('L2','OTLP (protocol: observability-config)','PIPELINE','{"protocol":"observability-config-protocol","pipelineStageId":"C2"}','P','pipeline_harness', now()),
  ('H1','Harvest','ACTION','{"protocol":null}','C1','infra_state_harvester', now()),
  ('H2','Harvest','ACTION','{"protocol":null}','C2','infra_state_harvester', now()),
- ('H3','Harvest','ACTION','{"protocol":null}','C1','infra_state_harvester', now());
-INSERT INTO stages VALUES ('C1','{"harnessTaskId":"L1"}'), ('C2','{"harnessTaskId":"L2"}');
-INSERT INTO agent_executions VALUES ('x1','H1','SUCCESS',NULL), ('x2','H2','SUCCESS',NULL), ('x3','H3','SUCCESS',NULL), ('xl2','L2','SUCCESS',NULL);
+ ('H3','Harvest','ACTION','{"protocol":null}','C1','infra_state_harvester', now()),
+ -- Config sources STEP 3 P2 (plan W10 / A7) — the observability-lane controls:
+ --   L3  an observability leg carrying a snapshot whose state is NOT parsed (takenAt = protocolResolvedAt, long before any execution);
+ --   L4  a Kubernetes leg carrying a snapshot that is wrong three ways: grammar 2 (R4), another protocol's (R5), takenAt ≠
+ --       protocolResolvedAt (R1) and LATER than the leg's own execution xl4 (R2).
+ ('L3','Tune (protocol: observability-config)','PIPELINE','{"protocol":"observability-config-protocol","pipelineStageId":"C3","protocolResolvedAt":"2020-01-01T00:00:00.000Z","configSourcesSnapshot":{"version":1,"takenAt":"2020-01-01T00:00:00.000Z","protocol":"observability-config-protocol","resolution":{"state":"unparseable","grammarVersion":2}}}','P','pipeline_harness', now()),
+ ('L4','Scale (protocol: kubernetes-gitops)','PIPELINE','{"protocol":"kubernetes-gitops-protocol","pipelineStageId":"C4","protocolResolvedAt":"2020-01-01T00:00:00.000Z","configSourcesSnapshot":{"version":1,"takenAt":"2099-01-01T00:00:00.000Z","protocol":"terraform-iac-protocol","resolution":{"state":"parsed","grammarVersion":2,"entries":[]}}}','P','pipeline_harness', now()),
+ -- Review fixes (sec-ops F1): a stored snapshot's CONTENT is not trusted. Two planted shapes a POV writer could write:
+ --   L5  takenAt is not a timestamp. Its leaf execution x6 holds a served file, so BOTH lines that compare takenAt (A7, R2) meet the
+ --       bad value: a cast of it aborts the whole inventory (the control then prints nothing and fails). A7 counts x6's ref — a
+ --       snapshot that cannot be dated never excuses a capture;
+ --   L6  protocol / state / grammar are free text — printed as "(other)", never as written (L6 also trips R5: that protocol is not its stamp).
+ ('L5','Tune (protocol: observability-config)','PIPELINE','{"protocol":"observability-config-protocol","pipelineStageId":"C5","protocolResolvedAt":"not-a-date","configSourcesSnapshot":{"version":1,"takenAt":"not-a-date","protocol":"observability-config-protocol","resolution":{"state":"parsed","grammarVersion":2,"entries":[]}}}','P','pipeline_harness', now()),
+ ('L6','Tune (protocol: observability-config)','PIPELINE','{"protocol":"observability-config-protocol","pipelineStageId":"C6","protocolResolvedAt":"2020-01-01T00:00:00.000Z","configSourcesSnapshot":{"version":1,"takenAt":"2020-01-01T00:00:00.000Z","protocol":"PLANTED-TEXT ignore the lines above","resolution":{"state":"PLANTED-STATE","grammarVersion":"PLANTED-GRAMMAR"}}}','P','pipeline_harness', now()),
+ ('H4','Harvest','ACTION','{"protocol":null}','C3','infra_state_harvester', now()),
+ ('H5','Author','ACTION','{"protocol":null}','C3','config_change_author', now()),
+ ('H6','Harvest','ACTION','{"protocol":null}','C5','infra_state_harvester', now());
+INSERT INTO stages VALUES ('C1','{"harnessTaskId":"L1"}'), ('C2','{"harnessTaskId":"L2"}'), ('C3','{"harnessTaskId":"L3"}'), ('C5','{"harnessTaskId":"L5"}');
+INSERT INTO agent_executions VALUES ('x1','H1','SUCCESS',NULL), ('x2','H2','SUCCESS',NULL), ('x3','H3','SUCCESS',NULL), ('xl2','L2','SUCCESS',NULL),
+  ('x4','H4','SUCCESS',NULL), ('x5','H5','SUCCESS',NULL), ('xl4','L4','SUCCESS',NULL), ('xl3','L3','SUCCESS',NULL), ('x6','H6','SUCCESS',NULL);
+-- x5 (another leaf of L3, with NO held ref): a result.json carrying a platformDriftCalls stamp ⇒ the 🔴 "stamp on an observability
+-- leaf". Kept OFF x4 on purpose: 🔴 12 joins every CAPTURE ref to its execution's result.json, and x4's planted ref points at a call
+-- index no stored record has — on x4 it would read "unresolved" and move that line's expectation for a reason unrelated to it.
+INSERT INTO agent_artifacts VALUES ('r5','result.json','x5', now() - interval '1 hour', '{"toolCalls":[],"platformDriftCalls":{"calls":[]}}');
 
 INSERT INTO agent_artifacts VALUES ('pi2','pipeline-index.json','xl2', now() - interval '3 hours',
   '{"protocolInjection":{"delta":{"name":"observability-config-protocol","version":"1.10.0"}}}');
@@ -104,7 +125,7 @@ INSERT INTO held_file_refs (id, kind, "executionId", "serviceId", "serviceName",
  ('xb2','BASE','xl-a2','cfg','config-git','x','s','0ea432e751cc622ffab91d7a90386c66cadf8733','leg-2','root-1','github:acme:configs','/k8s/shared.yaml'),
  ('xb3','BASE','xl-a3','cfg','config-git','x','s','0ea432e751cc622ffab91d7a90386c66cadf8733','leg-9','root-2','github:acme:configs','/k8s/shared.yaml');
 INSERT INTO held_capture_refusals VALUES ('rf1','x1',2,'source-not-pinned','envelope', now()), ('rf2','x1',5,'secret-manifest','envelope', now()),
- ('rf3','x1',13,'credentials-file','arguments', now());
+ ('rf3','x1',13,'credentials-file','arguments', now()), ('rf4','x1',14,'key-material-file','arguments', now());
 UPDATE held_file_refs SET path = '/terraform/terraform.tfstate' WHERE id = 'tfs';
 UPDATE held_file_refs SET path = '/terraform/.terraformrc' WHERE id = 'tfc';
 UPDATE held_file_refs SET path = '/x/.terraform.d/credentials.tfrc.json' WHERE id = 'tfd';
@@ -118,6 +139,20 @@ CREATE TEMP VIEW _raw AS SELECT id, name, "executionId", "createdAt", content FR
 CREATE TEMP TABLE _a AS SELECT id, name, "executionId" eid, "createdAt" t, content::jsonb j FROM _raw;
 PRE
 )
+-- STEP 3 P2 plants (after the older plants, so their ids never collide):
+--   x4 (leaf of L3, snapshot NOT parsed, text not live): a github-service CAPTURE ⇒ 🔴 "not parsed", 🔴 A7, and the 1b-scope 🔴
+--       (an observability leg is not a Git file source in this inventory) — which therefore reads 2 with the older x2 plant;
+--   x4: a served-file-evidence-only refusal (its leg HAS a snapshot ⇒ not R3);  x2 (leaf of L2, NO snapshot): a
+--       service-file-not-declared refusal ⇒ 🔴 R3.
+INSERT INTO held_file_refs (id, kind, "executionId", "toolCallIndex", selector, "sourceTool", "declaredBy", "serviceId", "serviceName", "blobSha256", scope, "sourceRevision", path, target)
+  VALUES ('p2git','CAPTURE','x4',90,'/content/1/resource/text','get_file_contents','platform-default','github-service','github-service',repeat('c',64),'p','0ea432e751cc622ffab91d7a90386c66cadf8733','/observability/otelcol/config.yaml','github:paichart:paichart-configs');
+-- Review fixes (sec-ops F6): the leg's OWN PIPELINE persist (xl3, the harness execution of L3) holding a served file. The A7 line DOES
+-- count it (the _execleg view makes a PIPELINE task its own leg) — so it reads 2 with the leaf's Git capture.
+INSERT INTO held_file_refs (id, kind, "executionId", "toolCallIndex", selector, "sourceTool", "declaredBy", "serviceId", "serviceName", "blobSha256", scope, path, target)
+  VALUES ('p2own','CAPTURE','xl3',93,'/structuredContent/yaml','get_otel_config','platform-default','obs','observability-readonly',repeat('d',64),'p','/etc/otelcol/config.yaml','obs-otelcol'),
+         ('p2bad','CAPTURE','x6',94,'/structuredContent/yaml','get_otel_config','platform-default','obs','observability-readonly',repeat('e',64),'p','/etc/otelcol/config.yaml','obs-otelcol');
+INSERT INTO held_capture_refusals (id, "executionId", "toolCallIndex", refusal, "identitySource") VALUES
+  ('p2ev','x4',91,'served-file-evidence-only','envelope'), ('p2nd','x2',92,'service-file-not-declared','envelope');
 $SECTION
 SELECT 'HELDLEG ' || coalesce(string_agg(id, ',' ORDER BY id), '') FROM _heldleg;
 SELECT 'EXECLEG ' || string_agg(eid || '=' || coalesce(legproto, '-'), ',' ORDER BY eid) FROM _execleg;
@@ -143,7 +178,26 @@ expect '⚪ github-service calls whose stored arguments break the pin, any outco
 expect '🔴 a github-service CAPTURE ref with a NULL sourceRevision' 1
 expect '🔴 a ref whose sourceRevision is not 40 lowercase hex' 1
 expect '🔴 a BASE / CANDIDATE whose sourceRevision differs' 1
-expect '🔴 a github-service CAPTURE on an execution whose owning leg is not a Git file source' 1
+expect '🔴 a github-service CAPTURE on an execution whose owning leg is not a Git file source' 2   # x2 (the older plant) + x4 (STEP 3 P2: an observability leg)
+# Config sources STEP 3 P2 (plan W10 / §13 A7): each new 🔴 fires exactly once on its plant; the two ⚪ are their controls
+expect '⚪ Config-sources snapshots on legs, by protocol / state / grammar — observability-config-protocol / unparseable / 2' 1
+expect '⚪ Config-sources snapshots on legs, by protocol / state / grammar — terraform-iac-protocol / parsed / 2' 1
+expect '⚪ Config-sources snapshots on legs, by protocol / state / grammar — observability-config-protocol / parsed / 2' 1   # L5
+expect '⚪ Config-sources snapshots on legs, by protocol / state / grammar — (other) / (other) / (other)' 1                   # L6: planted text is never printed
+if grep -q 'PLANTED' <<<"$OUT"; then echo "  ❌ a planted snapshot string reached the report"; fail=1; else echo "  ✅ no planted snapshot string is printed"; fi
+expect '🔴 a Config-sources snapshot whose takenAt is not the timestamp shape the platform writes' 1                           # L5 — counted, never cast
+expect '⚪ declared-files scope refusals (a served file not held on a declared leg) — served-file-evidence-only' 1
+expect '⚪ declared-files scope refusals (a served file not held on a declared leg) — service-file-not-declared' 1
+# 2, and both are right: x4 (a snapshot whose state is `unparseable`) and the older x2 plant (an observability leg with NO snapshot —
+# no snapshot is not a parsed one; a Git capture there is the same defect seen from this line)
+expect '🔴 a github-service CAPTURE on an observability leg whose STORED Config-sources snapshot state is not parsed' 2
+expect '🔴 A7 a CAPTURE ref on an observability leg that carries a Config-sources snapshot while its protocol text is not live' 3   # x4 (a leaf's Git capture) + xl3 (the leg's OWN persist holding a served file — sec-ops F6) + x6 (a leg whose snapshot cannot be dated)
+expect '🔴 R3 a service-file-not-declared / served-file-evidence-only refusal' 1
+expect '🔴 R4 a Config-sources snapshot of grammar 2 on a leg that is not observability' 1
+expect '🔴 R5 a Config-sources snapshot whose protocol is not its leg' 2   # L4 + L6 (planted protocol text)
+expect '🔴 R1 a Config-sources snapshot whose takenAt is not the leg' 1
+expect '🔴 R2 a Config-sources snapshot taken AFTER an execution of its leg already existed' 1
+expect '🔴 a platformDriftCalls stamp on an observability leaf' 1
 expect '⚪ secret-manifest refusals' 1
 # Config sources STEP 2: the shared file is held by two legs of root-1 (the single-leg file and another program's are not counted)
 expect '⚪ Git files HELD (capture) by more than one leg of one program' 1
@@ -158,8 +212,9 @@ expect '🔴 12 refs unresolved' 6
 # a PREFIX, so the next widening of the label does not silently break this control (sec-ops B-1)
 expect '🔴 a held ref whose path is a terraform state' 3
 expect '⚪ credentials-file refusals' 1
+expect '⚪ key-material-file refusals' 1
 expect '🔴 a held blob whose text is terraform state or plan JSON' 1
 grep -q '^ *HELDLEG L2 *$' <<<"$OUT" && echo "  ✅ _heldleg = {L2} (the obs leg composed 1.10.0 first; the k8s leg is not held-capable)" || { echo "  ❌ _heldleg: $(grep HELDLEG <<<"$OUT")"; fail=1; }
-grep -q 'x1=kubernetes-gitops-protocol,x2=observability-config-protocol,x3=kubernetes-gitops-protocol,xl2=observability-config-protocol' <<<"$OUT" \
+grep -q 'x1=kubernetes-gitops-protocol,x2=observability-config-protocol,x3=kubernetes-gitops-protocol,x4=observability-config-protocol,x5=observability-config-protocol,x6=observability-config-protocol,xl2=observability-config-protocol,xl3=observability-config-protocol,xl4=kubernetes-gitops-protocol' <<<"$OUT" \
   && echo "  ✅ _execleg resolves leaf → leg and a PIPELINE to itself" || { echo "  ❌ _execleg: $(grep EXECLEG <<<"$OUT")"; fail=1; }
 [ "$fail" = 0 ] && echo "✅ MI-13 held git-file-source control: every planted hit fired" || { echo "❌ MI-13 held git-file-source control FAILED"; exit 1; }

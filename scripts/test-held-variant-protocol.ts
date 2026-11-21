@@ -321,6 +321,22 @@ test('EF-P2-3: restore H1 beside an UNHELD restore H9 is NOT restore-is-held-bas
   eq([f.heldRestores, (f.excluded as any)['held-restore-directive']], [1, 2]);
 });
 
+// Config sources STEP 3 P2 (plan §9.2 applier fixtures, OBS-GIT-9): a declared observability leg's package edits a GIT-held file (H1)
+// and a SERVICE-held file (H3) and rolls both back by directive. The rule is the same for both kinds of base — the net keys on the
+// HANDLE's base being held, never on the target: `restore-is-held-base` only when EVERY directive names a base-held handle.
+test('OBS-GIT-9: rollback directives for a Git-held and a service-held file ⇒ restore-is-held-base only when every directive is base-held', async () => {
+  const doc = ['## Held File Edits', '', '<<<<<<< SEARCH H1', '    timeout: 5s', '=======', '    timeout: 10s', '>>>>>>> REPLACE', '',
+    '<<<<<<< SEARCH H3', '    listen 4318;', '=======', '    listen 4319;', '>>>>>>> REPLACE', '', '## Held File Rollback', '', 'restore H1', 'restore H3', ''].join('\n');
+  const both = await computeRollbackContainmentFact(rbDb(OBS_P), { taskId: 'author', deliverable: doc, heldRollbackHandles: ['H1', 'H3'] });
+  eq([both.reason, both.heldRestores, (both.rollbackDisposition as any).disposition], ['restore-is-held-base', 2, 'benign'], 'both held: ');
+  // the Git base held, the service file NOT (e.g. its capture was refused): not held-base — and the reverse
+  for (const handles of [['H1'], ['H3']]) {
+    const f = await computeRollbackContainmentFact(rbDb(OBS_P), { taskId: 'author', deliverable: doc, heldRollbackHandles: handles });
+    ok(f.reason !== 'restore-is-held-base', `${handles}: ${f.reason}`);
+    eq(f.heldRestores, 1, `${handles} heldRestores: `);
+  }
+});
+
 test('EF-P2-3: an INDENTED restore the parser never records is adjudicated as content, never silently excluded', async () => {
   const doc = FENCED.replace('restore H1\n```', '  restore H1\n```');
   const f = await computeRollbackContainmentFact(rbDb(VARIANT), { taskId: 'author', deliverable: doc, heldRollbackHandles: ['H1'] });

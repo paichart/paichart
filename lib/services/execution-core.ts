@@ -49,7 +49,7 @@ import { computeSelfSupersession } from './execution-selection';
 // The five facts are no longer imported one by one: they are ENTRIES in the shared registry, and
 // the point of the registry is that this file cannot know one of them and forget another.
 import { stampExecutionNets } from './execution-nets';
-import { resolveOwningLegProtocol, heldCaptureTakesDeviceScope, type OwningLegResolution } from '@/lib/agents/harness/held-bytes/variant';
+import { resolveOwningLegProtocol, heldCaptureTakesDeviceScope, captureScopesFor, platformDriftAppliesToLane, type OwningLegResolution } from '@/lib/agents/harness/held-bytes/variant';
 import { readLegDeviceSources } from '@/lib/agents/harness/device-sources-read';
 import { readLegConfigSources } from '@/lib/agents/harness/config-sources-read';
 import { runLegPlatformDrift } from './platform-drift';
@@ -545,20 +545,26 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
       ? await readLegDeviceSources(prisma as never, owningLeg) : null;
     // VALUE-LEG-GIT (G2-b): a VALUE leg never holds — its declaration feeds the device facts (primed below), never capture's scope.
     const captureDeviceSources = legDeviceSources && heldCaptureTakesDeviceScope(owningLeg) ? legDeviceSources : null;
-    // Config sources STEP 2: the leg's declared Config sources — ONE read, only on a Config-sources leg (none until a protocol's
-    // Config-sources text ships: `configSourceProtocol` is absent on every resolution, so nothing is read and capture is unchanged).
+    // Config sources STEP 2: the leg's declared Config sources — ONE read, only on a leg whose PROTOCOL has a Config lane today
+    // (Kubernetes, Terraform; `configSourceProtocol` is absent on a resolution whose protocol's row still awaits its text —
+    // observability until 1.12.0 — so nothing is read there and capture is unchanged; the ONE exception, STEP 3 P2 / plan A7: an
+    // observability leg that carries a snapshot while the row awaits is read, and governs as `snapshot-text-reverted`).
     const legConfigSources = (owningLeg?.kind === 'leg' || owningLeg?.kind === 'self') && owningLeg.configSourceProtocol
       ? await readLegConfigSources(prisma as never, owningLeg) : null;
+    // k8s value-lane P1: capture takes the declaration as its Git scope only on a lane that holds (exhaustive over the lane); the
+    // nets below still receive `legConfigSources` on every lane — the facts read the declaration whatever the lane.
+    // STEP 3 P2 (plan W1): the Git-lane switch and the Config scope are decided TOGETHER, by the one helper (the rescue calls it too).
+    const captureScopes = captureScopesFor(owningLeg, legConfigSources);
     const heldPlan = prepareHeldCapture({ toolCallResults, task: { id: task.id, povId: task.povId }, logger, heldTable, live: true,
       echoSourceText: finalResponse ?? null, // R10-V8-RESIDUALS (a): part of the persist's echo source
       ...(captureDeviceSources ? { deviceRead: buildDeviceReadScope(captureDeviceSources, toolCallResults) } : {}),
-      ...(legConfigSources ? { configSources: legConfigSources } : {}),
-      gitFileSourceLeg: (owningLeg?.kind === 'leg' || owningLeg?.kind === 'self') && owningLeg.gitFileSource === true }); // held-k8s 1b-scope (SYNTHESIS v3 §6.2)
+      ...(captureScopes.configSources ? { configSources: captureScopes.configSources, configSourceProtocol: captureScopes.configSourceProtocol } : {}),
+      gitFileSourceLeg: captureScopes.gitFileSourceLeg }); // held-k8s 1b-scope (SYNTHESIS v3 §6.2); STEP 3 P2: via captureScopesFor
     // Config sources STEP 2 slice 3b: the PLATFORM's Git-vs-live drift calls — only on a Harvester of a Config-sources leg with a
     // parsed declaration (`undefined` everywhere else: nothing is called, nothing is stamped). After the capture is PLANNED (the
     // held bytes are the plan's own strings), before the nets, outside any transaction. Never throws.
     const platformDriftCalls = await runLegPlatformDrift({
-      sources: legConfigSources, isHarvester: task.type !== 'PIPELINE' && HARVEST_LEAF_ROLE_RE.test(agentRole ?? ''),
+      sources: platformDriftAppliesToLane(owningLeg) ? legConfigSources : null, isHarvester: task.type !== 'PIPELINE' && HARVEST_LEAF_ROLE_RE.test(agentRole ?? ''),
       versionApplies: liveEvidenceVersionApplies(protocolInjection),
       heldFiles: heldPlan?.files ?? [], toolCalls: toolCallResults, runOwnerId: userId, executionId, logger,
       // STEP 4 D-T1: a protocol with no Git-vs-live method (Terraform) makes no call.

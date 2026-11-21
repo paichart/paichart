@@ -473,12 +473,22 @@ CREATE TEMP VIEW _execleg AS
 SELECT e.id AS eid, lg.id AS legid,
   CASE WHEN lg.metadata->>'protocol' IS NOT NULL
          THEN CASE WHEN lg.metadata->>'protocol' LIKE '%-protocol' THEN lg.metadata->>'protocol' ELSE (lg.metadata->>'protocol') || '-protocol' END
-       ELSE (SELECT m[1] || '-protocol' FROM regexp_matches(lg.title, '\(protocol: ([A-Za-z0-9-]+)\)') m LIMIT 1) END AS legproto
+       ELSE (SELECT m[1] || '-protocol' FROM regexp_matches(lg.title, '\(protocol: ([A-Za-z0-9-]+)\)') m LIMIT 1) END AS legproto,
+  lg.metadata->'configSourcesSnapshot' AS legsnap   -- Config sources STEP 3 P2: the owning leg's Config-sources snapshot (NULL ⇒ none)
 FROM agent_executions e JOIN tasks c ON c.id = e."taskId"
 LEFT JOIN stages s ON s.id = c.stage_id
 LEFT JOIN tasks lg ON lg.id = CASE WHEN c.type = 'PIPELINE' THEN c.id ELSE s.metadata->>'harnessTaskId' END;
--- held-k8s 1g: the protocols whose legs may capture a Git file source — MUST equal variant.ts GIT_FILE_SOURCE_PROTOCOLS (pinned).
-CREATE TEMP VIEW _gitsrcleg AS SELECT * FROM (VALUES ('kubernetes-gitops-protocol'), ('terraform-iac-protocol'), ('network-provisioning-protocol')) v(name);
+-- held-k8s 1g: the protocols whose legs may capture a Git file source — TWO columns since Config sources STEP 3 P2 (plan W1):
+--   rule 'by-name'          every leg of the protocol (MUST equal variant.ts GIT_FILE_SOURCE_PROTOCOLS — pinned);
+--   rule 'snapshot-object'  a leg of the protocol ONLY when it carries a Config-sources snapshot OBJECT — a `runs-undeclared` row of
+--                           CONFIG_SOURCE_LANES whose text HAS SHIPPED (MUST equal that set — pinned; EMPTY while observability
+--                           awaits its text; the row is added here in the commit that takes it off CONFIG_SOURCE_AWAITING_TEXT).
+-- The SQL twin of variant.ts isGitFileSourceLeg. The snapshot test is jsonb_typeof(...) = 'object', never the `?` operator.
+CREATE TEMP VIEW _gitsrcleg AS SELECT * FROM (VALUES ('kubernetes-gitops-protocol', 'by-name'), ('terraform-iac-protocol', 'by-name'), ('network-provisioning-protocol', 'by-name')) v(name, rule);
+-- The executions whose OWNING LEG is a Git file source under that rule.
+CREATE TEMP VIEW _gitsrcexec AS
+SELECT x.eid FROM _execleg x JOIN _gitsrcleg g ON g.name = x.legproto
+ WHERE g.rule = 'by-name' OR (g.rule = 'snapshot-object' AND jsonb_typeof(x.legsnap) = 'object');
 WITH f AS (SELECT min(c) f FROM (SELECT min("createdAt") c FROM held_file_refs UNION ALL SELECT min("createdAt") FROM held_capture_refusals) x)
 SELECT '⚪ held-bytes live since (derived: first held row; empty ⇒ nothing measured)' AS line, coalesce(to_char((SELECT f FROM f), 'YYYY-MM-DD HH24:MI'), '(empty)') AS value
 UNION ALL SELECT '⚪ refs by kind: ' || k.kind, (SELECT count(*) FROM held_file_refs r WHERE r.kind = k.kind)::text FROM (VALUES ('CAPTURE'), ('BASE'), ('CANDIDATE')) k(kind)
@@ -555,7 +565,7 @@ gitc AS (
                    THEN fc.v#>'{result,content,0,data,result,content}' ELSE '[]' END) x WHERE x->>'type' = 'resource')
      AND (fc.v#>>'{result,content,0,data,result,content,0,text}' = '[platform: the file source directory listing was elided at persist (it carries blob ids)]'
           OR ltrim(coalesce(fc.v#>>'{result,content,0,data,result,content,0,text}', '')) LIKE '[%')) AS dir,
-    coalesce((SELECT x.legproto FROM _execleg x WHERE x.eid = fc.eid), '') NOT IN (SELECT name FROM _gitsrcleg) AS oos
+    fc.eid NOT IN (SELECT eid FROM _gitsrcexec) AS oos
   FROM file_calls fc WHERE fc.svc IN (SELECT svc FROM declared) AND fc.svc = 'github-service'),
 judged AS (
   SELECT fc.* FROM file_calls fc JOIN declared d ON d.svc = fc.svc AND d.tool = fc.args->>'tool'
@@ -639,8 +649,8 @@ UNION ALL SELECT '⚪ github-service calls examined: all / successful / refused 
     ~ 'outside the file source|never read through the Git file source') FROM gp
 UNION ALL SELECT '⚪ github-service calls whose stored arguments break the pin, any outcome (the gate''s own refusals land here)', count(*) FILTER (WHERE violates)::text FROM gp
 UNION ALL SELECT '🔴 a github-service CAPTURE on an execution whose owning leg is not a Git file source (1b-scope)', count(*)::text
-  FROM held_file_refs r LEFT JOIN _execleg x ON x.eid = r."executionId"
- WHERE r.kind = 'CAPTURE' AND r."serviceName" = 'github-service' AND coalesce(x.legproto, '') NOT IN (SELECT name FROM _gitsrcleg)
+  FROM held_file_refs r
+ WHERE r.kind = 'CAPTURE' AND r."serviceName" = 'github-service' AND r."executionId" NOT IN (SELECT eid FROM _gitsrcexec)
 UNION ALL SELECT '⚪ secret-manifest refusals (G-5: a plaintext Secret was never stored)', count(*)::text FROM held_capture_refusals WHERE refusal = 'secret-manifest'
 UNION ALL SELECT '🔴 a held ref whose path is a terraform state, plan, variables or CLI credentials file (held-terraform T-3/T-4 + TF-PATH-RULE-GAPS: capture refuses each by path; re-derived from heldPathRefusal)', count(*)::text
   FROM held_file_refs WHERE lower(coalesce(path, '')) ~ '(^|/)(\.terraform|terraform\.tfstate\.d|\.terraform\.d)(/|$)' OR lower(regexp_replace(coalesce(path, ''), '^.*/', '')) ~ '\.(tfstate|tfplan|tfvars)'
@@ -651,7 +661,8 @@ UNION ALL SELECT '🔴 a held blob whose text is terraform state or plan JSON (s
   FROM held_blobs WHERE convert_from(content, 'UTF8') ~ '"terraform_version"\s*:' AND convert_from(content, 'UTF8') ~ '"(lineage|prior_state|planned_values|resource_changes)"\s*:'
 UNION ALL SELECT '⚪ state-file refusals (held-terraform T-3: a terraform state path was never stored)', count(*)::text FROM held_capture_refusals WHERE refusal = 'state-file'
 UNION ALL SELECT '⚪ tfvars-file refusals (held-terraform T-4: a variables file was never stored)', count(*)::text FROM held_capture_refusals WHERE refusal = 'tfvars-file'
-UNION ALL SELECT '⚪ credentials-file refusals (TF-PATH-RULE-GAPS: a Terraform CLI credentials file was never stored)', count(*)::text FROM held_capture_refusals WHERE refusal = 'credentials-file';
+UNION ALL SELECT '⚪ credentials-file refusals (TF-PATH-RULE-GAPS: a Terraform CLI credentials file was never stored)', count(*)::text FROM held_capture_refusals WHERE refusal = 'credentials-file'
+UNION ALL SELECT '⚪ key-material-file refusals (Config sources STEP 3 P1: key material — by file name, or a private-key block in the text — was never stored)', count(*)::text FROM held_capture_refusals WHERE refusal = 'key-material-file';
 -- held-k8s 1g: the sourceRevision lines need the K-3 column (schema commit 44c51e63f). Before the step-1 deploy it is absent on prod:
 -- say so and continue, never abort the inventory (ON_ERROR_STOP would end every later section).
 SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'held_file_refs' AND column_name = 'sourceRevision') AS held_srcrev \gset
@@ -782,6 +793,58 @@ UNION ALL SELECT '🔴 a declared-git-line CAPTURE ref on an execution whose own
   FROM held_file_refs r LEFT JOIN _execleg x ON x.eid = r."executionId"
  WHERE r.kind = 'CAPTURE' AND r.target LIKE 'github:%' AND r."serviceName" <> 'github-service' AND r."declaredBy" = 'platform-default'
    AND coalesce(x.legproto, '') NOT IN (SELECT name FROM _devsrcleg)
+-- Config sources STEP 3 P2 (plan W10, §13 A7) — the observability lane. Each 🔴 has a positive control in
+-- scripts/check-mi13-held-git-control.sh; the ⚪ lines are their controls (while they read nothing, the 🔴 beside them are unmeasured —
+-- no observability leg declares Config sources until observability-config 1.12.0).
+-- WHICH LINES ARE "0 BY CONSTRUCTION" (review, architectural F6): R1, R2, R4, R5, the takenAt-shape line and the drift-stamp line.
+-- THREE ARE NOT, and say so in their label:
+--   R3 also fires for a leg that has a block and no snapshot (plan §9.4 populations A-C) and for a capture whose leg-row read
+--      failed — legitimate rows; READ BY HAND.
+--   A7 also fires, after a REVERT of the text, for every capture taken while the text was live (createdAt >= takenAt cannot see the
+--      revert time) — READ BY HAND against the revert's deploy time.
+--   "not parsed" reads the STORED snapshot state. It MISSES a snapshot that reads `parsed` and no longer governs (snapshot-changed,
+--      the unstamped-leg case, a label-check problem) — those are found by `replay-held-capture.sh --config-lane`, not here.
+-- THE SNAPSHOT'S CONTENT IS NOT TRUSTED (review, sec-ops F1 — a POV writer can plant one): no value read from it is CAST (a cast
+-- that fails aborts the whole inventory) and none is printed unless it is in a known set. `takenAt` is compared AS TEXT, only when
+-- it has the exact shape the platform writes (^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$ — fixed-width, so text order is time order); any other
+-- shape is counted on its own line and never compared.
+UNION ALL SELECT '⚪ Config-sources snapshots on legs, by protocol / state / grammar — '
+  || CASE WHEN t.metadata->'configSourcesSnapshot'->>'protocol' IN ('kubernetes-gitops-protocol', 'terraform-iac-protocol', 'observability-config-protocol') THEN t.metadata->'configSourcesSnapshot'->>'protocol' ELSE '(other)' END || ' / '
+  || CASE WHEN t.metadata->'configSourcesSnapshot'->'resolution'->>'state' IN ('parsed', 'unparseable', 'conflict', 'absent') THEN t.metadata->'configSourcesSnapshot'->'resolution'->>'state' ELSE '(other)' END || ' / '
+  || CASE WHEN t.metadata->'configSourcesSnapshot'->'resolution'->>'grammarVersion' IN ('1', '2') THEN t.metadata->'configSourcesSnapshot'->'resolution'->>'grammarVersion' ELSE '(other)' END, count(*)::text
+  FROM tasks t WHERE jsonb_typeof(t.metadata->'configSourcesSnapshot') = 'object' GROUP BY 1
+UNION ALL SELECT '⚪ declared-files scope refusals (a served file not held on a declared leg) — ' || r.refusal, count(*)::text
+  FROM held_capture_refusals r WHERE r.refusal IN ('service-file-not-declared', 'served-file-evidence-only') GROUP BY r.refusal
+UNION ALL SELECT '🔴 a Config-sources snapshot whose takenAt is not the timestamp shape the platform writes (planted or corrupt — it is never compared; read the leg by hand)', count(*)::text
+  FROM tasks t WHERE jsonb_typeof(t.metadata->'configSourcesSnapshot') = 'object'
+   AND coalesce(t.metadata->'configSourcesSnapshot'->>'takenAt', '') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$'
+UNION ALL SELECT '🔴 a github-service CAPTURE on an observability leg whose STORED Config-sources snapshot state is not parsed (misses a parsed snapshot that no longer governs — see --config-lane)', count(*)::text
+  FROM held_file_refs r JOIN _execleg x ON x.eid = r."executionId"
+ WHERE r.kind = 'CAPTURE' AND r."serviceName" = 'github-service' AND x.legproto = 'observability-config-protocol'
+   AND coalesce(x.legsnap->'resolution'->>'state', '') <> 'parsed'
+UNION ALL SELECT '🔴 A7 a CAPTURE ref on an observability leg that carries a Config-sources snapshot while its protocol text is not live — READ BY HAND (after a revert this also counts captures taken while the text was live)', count(*)::text
+  FROM held_file_refs r JOIN _execleg x ON x.eid = r."executionId"
+ WHERE r.kind = 'CAPTURE' AND x.legproto = 'observability-config-protocol' AND jsonb_typeof(x.legsnap) = 'object'
+   AND NOT EXISTS (SELECT 1 FROM _gitsrcleg g WHERE g.name = 'observability-config-protocol')
+   AND (coalesce(x.legsnap->>'takenAt', '') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$' OR to_char(r."createdAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') >= x.legsnap->>'takenAt')
+UNION ALL SELECT '🔴 R3 a service-file-not-declared / served-file-evidence-only refusal on an execution whose owning leg carries no Config-sources snapshot — READ BY HAND (a block on a leg with no snapshot, or a failed leg-row read, lands here too)', count(*)::text
+  FROM held_capture_refusals r LEFT JOIN _execleg x ON x.eid = r."executionId"
+ WHERE r.refusal IN ('service-file-not-declared', 'served-file-evidence-only') AND coalesce(jsonb_typeof(x.legsnap), '') <> 'object'
+UNION ALL SELECT '🔴 R4 a Config-sources snapshot of grammar 2 on a leg that is not observability (only that protocol has the service-held kind)', count(*)::text
+  FROM tasks t WHERE jsonb_typeof(t.metadata->'configSourcesSnapshot') = 'object' AND t.metadata->'configSourcesSnapshot'->'resolution'->>'grammarVersion' = '2'
+   AND coalesce(t.metadata->>'protocol', '') NOT IN ('observability-config-protocol', 'observability-config')
+UNION ALL SELECT '🔴 R5 a Config-sources snapshot whose protocol is not its leg''s protocol stamp', count(*)::text
+  FROM tasks t WHERE jsonb_typeof(t.metadata->'configSourcesSnapshot') = 'object'
+   AND coalesce(t.metadata->'configSourcesSnapshot'->>'protocol', '') <> CASE WHEN t.metadata->>'protocol' LIKE '%-protocol' THEN t.metadata->>'protocol' ELSE coalesce(t.metadata->>'protocol', '') || '-protocol' END
+UNION ALL SELECT '🔴 R1 a Config-sources snapshot whose takenAt is not the leg''s protocolResolvedAt (the snapshot is taken by the statement that stamps the protocol)', count(*)::text
+  FROM tasks t WHERE jsonb_typeof(t.metadata->'configSourcesSnapshot') = 'object'
+   AND t.metadata->'configSourcesSnapshot'->>'takenAt' IS DISTINCT FROM t.metadata->>'protocolResolvedAt'
+UNION ALL SELECT '🔴 R2 a Config-sources snapshot taken AFTER an execution of its leg already existed (it governs from the first execution, or not at all)', count(*)::text
+  FROM tasks t WHERE jsonb_typeof(t.metadata->'configSourcesSnapshot') = 'object'
+   AND t.metadata->'configSourcesSnapshot'->>'takenAt' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$'
+   AND t.metadata->'configSourcesSnapshot'->>'takenAt' > (SELECT to_char(min(e."createdAt") AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') FROM agent_executions e JOIN _execleg x ON x.eid = e.id WHERE x.legid = t.id)
+UNION ALL SELECT '🔴 a platformDriftCalls stamp on an observability leaf (the platform compare call does not exist for observability — no held bytes leave the platform there)', count(*)::text
+  FROM _a a JOIN _execleg x ON x.eid = a.eid WHERE a.name = 'result.json' AND a.j ? 'platformDriftCalls' AND x.legproto = 'observability-config-protocol'
 UNION ALL SELECT '🔴 a declared-git-line CAPTURE ref with no sourceRevision (mcp-hub push-2 SF-1: a read with no served URI holds nothing)', count(*)::text
   FROM held_file_refs WHERE kind = 'CAPTURE' AND target LIKE 'github:%' AND "serviceName" <> 'github-service' AND "declaredBy" = 'platform-default' AND "sourceRevision" IS NULL;
 -- WI-B10 (2026-10-23, design §9.1 J): REGISTRANT file declarations. Every 🔴 is 0 by construction on correct code; each ⚪ is its

@@ -24,9 +24,9 @@
  * refs must name this leg (`legTaskId`, written at the Author's persist from its own stage back-pointer), or `author-not-of-leg`
  * — so a two-step re-point (re-point, then approve) also forces.
  */
-import { isHeldCapableLeg, carrierAppliesDeviceForce, isConfigSourceLeg } from './held-bytes/variant';
+import { isHeldCapableLeg, carrierAppliesDeviceForce, carrierAppliesConfigForce } from './held-bytes/variant';
 import { readLegConfigSources } from './config-sources-read';
-import { configGitFileForce, type ConfigForce } from './held-bytes/config-source-scope';
+import { configSourceForce, protocolDeclaresServiceFiles, type ConfigForce } from './held-bytes/config-source-scope';
 import { resolveTaskProtocol, canonicalProtocolName } from './program-protocol';
 import { readLegDeviceSources, type LegDeviceSourcesResolution } from './device-sources-read';
 import { isFileOfGitLine } from './held-bytes/device-read-scope';
@@ -148,7 +148,10 @@ export async function applyHeldEditCarrier(
   db: CarrierDb,
   task: { id?: string | null; type?: string | null; title?: string | null; metadata?: unknown } | null | undefined,
   pendingMerge: Record<string, unknown>,
-  deps: { isHeldCapableLeg?: (l: { title?: string | null; metadata?: unknown }) => boolean } = {},
+  deps: { isHeldCapableLeg?: (l: { title?: string | null; metadata?: unknown }) => boolean;
+    /** Config sources STEP 3 (plan W5): the Config-sources awaiting list — for the fixtures only, so a carrier case runs in BOTH
+     *  awaiting states through this function. Production passes nothing (the shipped list). */
+    configAwaiting?: readonly string[] } = {},
 ): Promise<{ applied: boolean; forced: boolean }> {
   const qg = pendingMerge?.qualityGate as Record<string, unknown> | undefined;
   if (qg && typeof qg === 'object' && 'heldEdit' in qg) delete qg.heldEdit; // the carrier is the only writer (BC-P2-1)
@@ -161,6 +164,7 @@ export async function applyHeldEditCarrier(
   let notPinned = false;
   let deviceForce: ReturnType<typeof deviceReadForce> = null;
   let configForce: ConfigForce | null = null;
+  let configCaptureRead: { captureExecutionId: string | null } | null = null;
   let witnessReason: string | null = null;
   try {
     // held-k8s step 3 (owner G-4, SYNTHESIS v3 §6.4): a Git read off the pin (another repo, another ref, a sha) is refused at call
@@ -187,15 +191,20 @@ export async function applyHeldEditCarrier(
     // Config sources STEP 2 (plan §3.8 rule 4, the D-1 force for a Config-sources leg): every declared `git-file` line must have a
     // held CAPTURE ref in the authoritative Harvester's capture; a declaration that is not `parsed` forces by its own name. A no-op
     // off a Config-sources leg (and on every leg while its protocol's row awaits its text).
-    if (isConfigSourceLeg({ title: task.title ?? null, metadata: task.metadata })) {
+    if (carrierAppliesConfigForce({ title: task.title ?? null, metadata: task.metadata }, deps.configAwaiting)) { // k8s value-lane P1: exhaustive over the lane
       const proto = canonicalProtocolName(resolveTaskProtocol({ title: task.title ?? null, metadata: task.metadata }).protocol ?? '');
       const refs = harvester.executionId
         ? await db.heldFileRef.findMany({ where: { executionId: harvester.executionId, kind: 'CAPTURE' }, select: { target: true, path: true }, take: 1000 })
         : [];
       const sources = task.id
-        ? await readLegConfigSources(db as never, { kind: 'self', legId: task.id, heldCapable: true, configSourceProtocol: proto })
+        ? await readLegConfigSources(db as never, { kind: 'self', legId: task.id, heldCapable: true, configSourceProtocol: proto }, deps.configAwaiting)
         : { state: 'could-not-check' as const, grammarVersion: 1, reason: 'read-threw' as const };
-      configForce = configGitFileForce(sources, refs);
+      // STEP 3 P2 (plan W10): ONE force — the declaration's state > git-file-not-held > service-held-not-held. A declaration state
+      // includes `snapshot-text-reverted` (plan A7: a force on a governing STATE the platform holds, not on a new fact).
+      configForce = configSourceForce(sources, refs);
+      // §13 B6: the Harvester execution whose capture was read — stamped on a leg whose block can name SERVICE files, and only when
+      // the declaration governs (a Kubernetes or Terraform stamp is byte-identical to before; the id is null when no Harvester ran).
+      if (protocolDeclaresServiceFiles(proto) && sources.state !== 'not-config-source-leg') configCaptureRead = { captureExecutionId: harvester.executionId ?? null };
     }
     author = await selectLegEditApplication(db, stageId);
     reviewer = await selectLegReviewedDiff(db, stageId);
@@ -237,9 +246,13 @@ export async function applyHeldEditCarrier(
     ...(df.gitFileDevicesNotHeld ? { gitFileDevicesNotHeld: df.gitFileDevicesNotHeld, gitFileDevicesNotHeldTotal: df.gitFileDevicesNotHeldTotal } : {}),
   } : {};
   // Config sources: the labels of the declared Git files not held — present only when THAT force is the stamped reason.
-  const cf = configForce && !deviceForce && v.reason === configForce.reason && configForce.gitFilesNotHeld ? configForce : null;
-  const filesNotHeld = cf ? { gitFilesNotHeld: cf.gitFilesNotHeld, gitFilesNotHeldTotal: cf.gitFilesNotHeldTotal } : {};
-  qg.heldEdit = { state: v.state, reviewerSaw: v.reviewerSaw, agentOutcome, forced, inScope: v.inScope, ...(v.reason !== null ? { reason: v.reason } : {}), ...devicesNotHeld, ...filesNotHeld };
+  // STEP 3 P2 (plan W10): BOTH lists whenever non-empty (the service labels too).
+  const cf = configForce && !deviceForce && v.reason === configForce.reason && (configForce.gitFilesNotHeld || configForce.serviceFilesNotHeld) ? configForce : null;
+  const filesNotHeld = cf ? {
+    ...(cf.gitFilesNotHeld ? { gitFilesNotHeld: cf.gitFilesNotHeld, gitFilesNotHeldTotal: cf.gitFilesNotHeldTotal } : {}),
+    ...(cf.serviceFilesNotHeld ? { serviceFilesNotHeld: cf.serviceFilesNotHeld, serviceFilesNotHeldTotal: cf.serviceFilesNotHeldTotal } : {}),
+  } : {};
+  qg.heldEdit = { state: v.state, reviewerSaw: v.reviewerSaw, agentOutcome, forced, inScope: v.inScope, ...(v.reason !== null ? { reason: v.reason } : {}), ...devicesNotHeld, ...filesNotHeld, ...(configCaptureRead && !readError ? configCaptureRead : {}) };
   if (forced) qg.outcome = 'needs-revision';
   return { applied: true, forced };
 }

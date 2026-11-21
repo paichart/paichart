@@ -2326,12 +2326,15 @@ if (require.main === module) {
       return;
     }
     if (args.cmd === 'golden-build') {
-      const { dir, report } = (await import('./golden-set')).buildGoldenCompanion(path.resolve(args.experiment!));
-      console.log(`🥇 golden companion → ${path.relative(REPO, dir)}: ${report.cells.length} cell(s) [${report.cells.map((c) => `${c.case}:${c.cell}`).join(', ')}]`);
+      const gsm = await import('./golden-set');
+      const { dir, report, companions } = gsm.buildGoldenCompanion(path.resolve(args.experiment!));
+      // v10: one companion per Git pin. Each runs in its OWN process under its own pin; golden-score reads them together.
+      for (const c of companions) console.log(`🥇 golden companion [pin ${c.pin}] → ${path.relative(REPO, c.dir)}: ${c.report.cells.length} cell(s) [${c.report.cells.map((x) => `${x.case}:${x.cell}`).join(', ')}]`);
       if (report.unreached.length) console.log(`   unreached (today's production text, $0): ${report.unreached.map((u) => `${u.case}×${u.arm}`).join(', ')}`);
       if (report.optedOut.length) console.log(`   opted out by pre-registration: ${report.optedOut.join(', ')}`);
       if (report.targets.length) console.log(`   targets (a flip is the intended change): ${report.targets.join(', ')}`);
-      console.log(`   next: run --experiment ${path.relative(REPO, dir)} (dry) · --fake-llm persisted ($0) · --spend --max-usd <cap>; then golden-score`);
+      for (const c of companions) console.log(`   next [${c.pin}]: ${c.pin === gsm.GOLDEN_DEFAULT_GIT_PIN ? 'npm run lab:leg-replay --' : `GIT_FILE_SOURCE_PIN=${c.pin} npx ts-node -r tsconfig-paths/register scripts/leg-replay-lab/lab.ts`} run --experiment ${path.relative(REPO, c.dir)} (dry) · --fake-llm persisted ($0) · --spend --max-usd <cap>`);
+      console.log(`   then: golden-score --run <${companions.length > 1 ? 'every run folder, comma-separated' : 'run folder'}> --experiment ${path.relative(REPO, dir)}${companions.length > 1 ? `   (ALL ${companions.length} companions must have run: a missing one reads INCOMPLETE, never PASS)` : ''}`);
       return;
     }
     if (args.cmd === 'golden-score') {
@@ -2339,7 +2342,8 @@ if (require.main === module) {
       const r = g.scoreGolden(args.run!.split(',').map((x) => path.resolve(x)), path.resolve(args.experiment!), (c) => { const sn = loadSnapshot(c.authorExecutionId); return { qualityGate: sn.leg?.metadata?.qualityGate ?? null, editApplication: parsedResult(sn.author)?.editApplication ?? null, authorText: (parsedResult(sn.author)?.finalResponse as string | undefined) ?? null }; });
       g.printGoldenScore(r);
       // B12: the standing nodes golden-build carried (read by each case's gate; a miss is do-not-ship, a missing sample incomplete).
-      const sbs = (await import('./standing-bench')).scoreStandingInRuns(args.run!.split(',').map((x) => path.resolve(x)), JSON.parse(fs.readFileSync(path.join(path.resolve(args.experiment!), 'experiment.json'), 'utf8')));
+      // v10: the standing nodes of EVERY companion of the lab (they sit in the default-pin companion; the family report joins them).
+      const sbs = (await import('./standing-bench')).scoreStandingInRuns(args.run!.split(',').map((x) => path.resolve(x)), { goldenCompanion: g.companionFamilyReport(path.resolve(args.experiment!)) });
       for (const row of sbs.rows) console.log(`   ${row.met ? '✅' : '❌'} STANDING ${row.case} ${row.sample}: ${row.why}`);
       if (sbs.doNotShip.length) console.log(`\n❌ STANDING: DO-NOT-SHIP —\n  - ${sbs.doNotShip.join('\n  - ')}`);
       if (sbs.incomplete.length) console.log(`\n⚠️ STANDING: INCOMPLETE —\n  - ${sbs.incomplete.join('\n  - ')}`);

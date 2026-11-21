@@ -15,6 +15,12 @@
  *   F4  source pins: the core passes both as plain properties (excess-property-checked); the rescue never calls the platform.
  * Mutation-checked at build: dropping the `...passThrough` forward in execution-nets.ts reds F1 and F3.
  *
+ * k8s value-lane P1 (2026-11-20) — `gitLiveDrift` takes its METHOD from the OWNING LEG's protocol at both readers:
+ *   P1a the 18 stored stamps' shape (leaf protocol = leg protocol) reads exactly as before, at both points;
+ *   P1b a leaf that composed one protocol under a leg of another reads the LEG's method — Harvester compute and Author transcription;
+ *   P1c a leg that could not be resolved keeps the leaf's composed protocol (the value every stamp had before P1).
+ * Seen RED at build against the pre-P1 enrichment: P1b only (P1a and P1c are the neutrality claims and stay green on both trees).
+ *
  * Run: npx ts-node -r tsconfig-paths/register scripts/test-stamp-execution-nets-forward.ts
  */
 import * as fs from 'fs';
@@ -124,6 +130,53 @@ async function stampHarvester(opts: { platformDriftCalls?: readonly unknown[]; c
     const nets = fs.readFileSync(path.join(__dirname, '..', 'lib/services/execution-nets.ts'), 'utf8');
     assert(/\.\.\.passThrough,/.test(nets) && /'owningLeg' \| 'deviceSources' \| 'configSources' \| 'platformDriftCalls' \| 'held'/.test(nets),
       'execution-nets: the pass-through is forwarded whole and names all five ctx inputs');
+  });
+
+  // ── k8s value-lane P1: the method's source ────────────────────────────────────────────────────────────────────────────────────
+  const TF = 'terraform-iac-protocol';
+  const TF_SOURCES = resolveLegConfigSources({ protocol: TF, taskBody: null, contractValue: 'state: live-read — service tf-rig-readonly' }) as LegConfigSourcesResolution;
+  const K8S_DELTA = { name: 'kubernetes-gitops', version: '1.19.0' }; const TF_DELTA = { name: 'terraform-iac', version: '1.17.0' };
+  const legOf = (protocol: string) => ({ ...OWNING_LEG, configSourceProtocol: protocol });
+  const UNRESOLVED = { kind: 'could-not-check' as const, reason: 'read-threw' as const, heldCapable: false as const };
+  /** One leaf through the REAL stampExecutionNets; returns its gitLiveDrift stamp. No call record is passed (the method is the subject). */
+  async function driftOf(role: string, delta: { name: string; version: string }, owningLeg: unknown, configSources: LegConfigSourcesResolution) {
+    const { db } = stubDb();
+    const resultJson: Record<string, unknown> = { toolCalls: [], protocolInjection: { delta } };
+    await stampExecutionNets(db, {
+      task: { id: 'leaf-1', type: 'ACTION', metadata: { pipelineStageId: 'stage-1' }, inputContext: {} },
+      agentRole: role, harnessMode: null, finalResponse: 'x', executionId: 'exec-1', logger: { warn: () => undefined },
+      owningLeg: owningLeg as never, configSources,
+    }, resultJson);
+    const g = resultJson.gitLiveDrift as Record<string, unknown> | undefined;
+    return g ? [g.point, g.method, g.reason] : null;
+  }
+  const AUTHOR = 'config_change_author';
+  const K8S_H = ['harvester', 'k8s-declared-field-compare', 'no-platform-call-record']; const TF_H = ['harvester', null, 'no-git-vs-live-method'];
+  // The Author stub has no stage row, so the transcription stops at `no-stage` — the branch that shows the method it would name.
+  const K8S_A = ['author-transcription', 'k8s-declared-field-compare', 'no-stage']; const TF_A = ['author-transcription', null, 'no-stage'];
+
+  await test('P1a leaf protocol = leg protocol (every stored stamp): the same method as before, at both points', async () => {
+    eq(await driftOf(HELD_HARVESTER_ROLE, K8S_DELTA, legOf(K8S), SOURCES), K8S_H, 'k8s harvester: ');
+    eq(await driftOf(HELD_HARVESTER_ROLE, TF_DELTA, legOf(TF), TF_SOURCES), TF_H, 'tf harvester: ');
+    eq(await driftOf(AUTHOR, K8S_DELTA, legOf(K8S), SOURCES), K8S_A, 'k8s author: ');
+    eq(await driftOf(AUTHOR, TF_DELTA, legOf(TF), TF_SOURCES), TF_A, 'tf author: ');
+  });
+  await test('P1b a leaf that composed ANOTHER protocol reads the LEG\'s method — the Harvester compute and the Author transcription both', async () => {
+    eq(await driftOf(HELD_HARVESTER_ROLE, K8S_DELTA, legOf(TF), TF_SOURCES), TF_H, 'k8s leaf under a tf leg, harvester: ');
+    eq(await driftOf(HELD_HARVESTER_ROLE, TF_DELTA, legOf(K8S), SOURCES), K8S_H, 'tf leaf under a k8s leg, harvester: ');
+    eq(await driftOf(AUTHOR, K8S_DELTA, legOf(TF), TF_SOURCES), TF_A, 'k8s leaf under a tf leg, author: ');
+    eq(await driftOf(AUTHOR, TF_DELTA, legOf(K8S), SOURCES), K8S_A, 'tf leaf under a k8s leg, author: ');
+  });
+  await test('P1c a leg that could not be resolved: the leaf\'s own composed protocol still decides (no moved fact on the could-not-check path)', async () => {
+    eq(await driftOf(HELD_HARVESTER_ROLE, TF_DELTA, UNRESOLVED, TF_SOURCES), TF_H, 'tf harvester, leg unresolved: ');
+    eq(await driftOf(HELD_HARVESTER_ROLE, K8S_DELTA, UNRESOLVED, SOURCES), K8S_H, 'k8s harvester, leg unresolved: ');
+    eq(await driftOf(AUTHOR, TF_DELTA, UNRESOLVED, TF_SOURCES), TF_A, 'tf author, leg unresolved: ');
+    eq(await driftOf(AUTHOR, K8S_DELTA, UNRESOLVED, SOURCES), K8S_A, 'k8s author, leg unresolved: ');
+  });
+  await test('P1d source pins: both readers call methodProtocol; composedProtocol is read in ONE place (the fallback)', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'lib/agents/harness/git-live-drift-enrichment.ts'), 'utf8');
+    eq((src.match(/await methodProtocol\(ctx\)/g) ?? []).length, 2, 'readers through methodProtocol: ');
+    eq((src.match(/composedProtocol\(ctx\)/g) ?? []).length, 1, 'reads of the leaf\'s composed protocol: ');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

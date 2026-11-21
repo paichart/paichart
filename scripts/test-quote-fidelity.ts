@@ -1096,6 +1096,30 @@ test('ERROR ARM: enrichment-error carries a named BLOCKING disposition (G3)', ()
   eq([e.checked, e.reason, e.quoteFidelityDisposition.disposition], [false, 'enrichment-error', 'blocking']);
 });
 
+// ── Config sources STEP 3 P2 (plan §9.2 applier fixtures, OBS-GIT-10): quoteFidelity's FILE lane on the Git target of an observability
+// leg. A declared observability leg reads its collector config through the pinned Git file source; the Harvester's verbatim quote of
+// it is judged against THAT file, on the file-artifact lane — complete ⇒ benign; a line cut ⇒ the finding names the Git file.
+const OBS_GIT_YAML = ['receivers:', '  otlp:', '    protocols:', '      grpc:', '        endpoint: 0.0.0.0:4317', 'processors:', '  batch:', '    timeout: 5s',
+  'exporters:', '  debug: {}', 'service:', '  pipelines:', '    traces:', '      receivers: [otlp]', '      processors: [batch]', '      exporters: [debug]'];
+const obsGitCall = (text: string) => ({ tool: 'services',
+  arguments: { action: 'call', targetService: 'github-service', tool: 'get_file_contents', arguments: { owner: 'paichart', repo: 'paichart-configs', path: 'observability/otelcol/config.yaml' } },
+  result: { content: [{ type: 'data', data: { targetService: 'github-service', tool: 'get_file_contents',
+    result: { content: [{ type: 'resource', resource: { uri: 'repo://paichart/paichart-configs/sha/0ea432e751cc622ffab91d7a90386c66cadf8733/contents/observability/otelcol/config.yaml', text } }] } } }] } });
+const obsQuote = (body: string[]) => `## Harvest\n\n**observability/otelcol/config.yaml (Git file, verbatim):**\n\n\`\`\`yaml\n${body.join('\n')}\n\`\`\`\n`;
+test('OBS-GIT-10: the Git file source is on the FILE lane for an observability file — a complete verbatim quote is benign', () => {
+  eq(laneOf({ tool: 'github-service.get_file_contents', resolvedService: 'github-service' }), 'file-artifact', 'lane: ');
+  const f = qf(obsQuote(OBS_GIT_YAML), [obsGitCall(OBS_GIT_YAML.join('\n') + '\n')]);
+  eq([f.checked, disp(f)], [true, 'benign/all-quotes-complete']);
+});
+test('OBS-GIT-10: a verbatim quote of the Git-held collector config with one line cut ⇒ the finding names the Git file, on the file lane', () => {
+  const cut = OBS_GIT_YAML.filter((l) => l !== '    timeout: 5s');
+  const f = qf(obsQuote(cut), [obsGitCall(OBS_GIT_YAML.join('\n') + '\n')]);
+  eq(disp(f), 'needs-node-c/quote-omits-or-changes-lines');
+  const x = findings(f)[0] as unknown as { source: { tool: string; lane: string }; omitted: { content: string[] } };
+  ok(x, 'no finding');
+  eq([x.source.tool, x.source.lane, x.omitted.content], ['github-service.get_file_contents', 'file-artifact', ['timeout: 5s']], 'source / lane / omitted: ');
+});
+
 void Promise.all(pending).then(() => {
   console.log(`\n${'='.repeat(60)}\n✅ Passed: ${passed}\n❌ Failed: ${failed}\n${'='.repeat(60)}`);
   process.exit(failed > 0 ? 1 : 0);

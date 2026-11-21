@@ -19,7 +19,7 @@
 import 'dotenv/config';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { DEVICE_SOURCE_LANES, deviceSourceContractKeyOf } from '../lib/agents/harness/held-bytes/variant';
-import { CONFIG_SOURCES_READ_KEYS } from '../lib/agents/harness/plan-spawn-carry';
+import { configSourcesReadKeys } from '../lib/agents/harness/plan-spawn-carry';
 
 type Tx = Prisma.TransactionClient;
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -66,8 +66,8 @@ async function planGate(tx: Tx, gate: T, architect: T) {
   if (anyCs !== undefined) {
     if (!isObj(anyCs)) line(false, `the contract's configSources is not an object keyed by protocol token — no leg will read Config sources from it`);
     else {
-      const unknown = Object.keys(anyCs).filter(k => !CONFIG_SOURCES_READ_KEYS.includes(k));
-      line(unknown.length === 0, `the contract's configSources keys: ${Object.keys(anyCs).join(', ') || 'none'}${unknown.length ? ` — NOT read by the platform: ${unknown.join(', ')} (it reads only ${CONFIG_SOURCES_READ_KEYS.join(', ') || 'none yet'})` : ''}`);
+      const unknown = Object.keys(anyCs).filter(k => !configSourcesReadKeys().includes(k));
+      line(unknown.length === 0, `the contract's configSources keys: ${Object.keys(anyCs).join(', ') || 'none'}${unknown.length ? ` — NOT read by the platform: ${unknown.join(', ')} (it reads only ${configSourcesReadKeys().join(', ') || 'none yet'})` : ''}`);
     }
   }
   for (const l of legs) {

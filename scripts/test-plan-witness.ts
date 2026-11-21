@@ -38,7 +38,7 @@ import { PLAN_WITNESS_READERS } from '../lib/agents/harness/context-chainer';
 import { renderPipelineContextSection } from '../lib/agents/harness/render-pipeline-context';
 import { applyHeldEditCarrier, heldEditOutcomeLine } from '../lib/agents/harness/held-edit-carrier';
 import { buildConfigSourcesSnapshot, resolveLegConfigSources, CONFIG_SOURCES_SNAPSHOT_KEY } from '../lib/agents/harness/config-sources';
-import { isConfigSourceLeg } from '../lib/agents/harness/held-bytes/variant';
+import { legProtocolHasConfigLane } from '../lib/agents/harness/held-bytes/variant';
 import { authoritativeReadStub, type StubExecution } from './fixtures/authoritative-read-stub';
 
 let passed = 0; let failed = 0;
@@ -609,7 +609,7 @@ function world(author: Record<string, unknown> | null, reviewer: Record<string, 
     $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
       // the carrier's read of the leg's governing Config-sources declaration (made only once terraform-iac is a Config-sources
       // protocol). It arrives as ONE Prisma.sql object, not a template-strings array — answer it before treating the call as one.
-      if (JSON.stringify(strings).includes(CONFIG_SOURCES_SNAPSHOT_KEY)) { legRowReads++; return [{ description: TF_BODY, contract: null, snapshot: TF_SNAPSHOT }]; }
+      if (JSON.stringify(strings).includes(CONFIG_SOURCES_SNAPSHOT_KEY)) { legRowReads++; return [{ description: TF_BODY, contract: null, snapshot: TF_SNAPSHOT, protocolStamped: true }]; }
       const sql = strings.join('?'); sqls.push(sql);
       if (o.throwOnWitness && sql.includes("->>'planWitness'")) throw new Error('db down');
       return stub.$queryRaw(strings, ...values);
@@ -683,7 +683,7 @@ test('C7 precedence, stated: a force above the stop sentence keeps its own reaso
   eq([await applyHeldEditCarrier(p.db, TFLEG, mp, deps), mp.qualityGate.outcome, mp.qualityGate.heldEdit.reason], [{ applied: true, forced: true }, 'needs-revision', 'source-not-pinned']);
   // (b) the declared Git file is NOT held. Where terraform-iac is a Config-sources protocol the Config force names it and wins; while
   // terraform-iac still awaits its text the carrier reads no declaration, so the stop sentence is the reason. Both arms are pinned.
-  const live = isConfigSourceLeg({ title: TFLEG.title, metadata: TFLEG.metadata });
+  const live = legProtocolHasConfigLane({ title: TFLEG.title, metadata: TFLEG.metadata });
   const c = world(applied, rendered, witnessFact('absent'), { captureRefs: [] }); const mc = merge();
   await applyHeldEditCarrier(c.db, TFLEG, mc, deps);
   if (live) eq([mc.qualityGate.outcome, mc.qualityGate.heldEdit.reason, mc.qualityGate.heldEdit.gitFilesNotHeld, c.legRowReads()], ['needs-revision', 'git-file-not-held', ['main-tf'], 1]);
@@ -693,6 +693,28 @@ test('C7 precedence, stated: a force above the stop sentence keeps its own reaso
   await applyHeldEditCarrier(h.db, TFLEG, mh, deps);
   eq([mh.qualityGate.heldEdit.reason, h.legRowReads()], ['stop-sentence-absent', live ? 1 : 0]);
   console.log(`   (C7 ran with terraform-iac ${live ? 'LIVE as a Config-sources protocol' : 'AWAITING its Config-sources text'})`);
+});
+
+test('C7b (Config sources STEP 3 P1) the same carrier fixture in BOTH awaiting states of the Terraform row, through the carrier\'s own parameter — neither reason moved with the observability row', async () => {
+  const TFP = 'terraform-iac-protocol';
+  // every awaiting list a tree can ship: the one shipped today (observability awaiting), none awaiting, Terraform awaiting, both awaiting
+  const lists: Array<[string, readonly string[] | undefined, boolean]> = [
+    ['as shipped', undefined, true], ['no row awaiting', [], true], ['Terraform awaiting', [TFP], false], ['Terraform and observability awaiting', [TFP, 'observability-config-protocol'], false]];
+  for (const [name, configAwaiting, tfLive] of lists) {
+    const d = { ...deps, ...(configAwaiting ? { configAwaiting } : {}) };
+    // the declared Git file NOT held
+    const c = world(applied, rendered, witnessFact('absent'), { captureRefs: [] }); const mc = merge();
+    await applyHeldEditCarrier(c.db, TFLEG, mc, d);
+    eq([mc.qualityGate.outcome, mc.qualityGate.heldEdit.reason, c.legRowReads()], tfLive ? ['needs-revision', 'git-file-not-held', 1] : ['needs-revision', 'stop-sentence-absent', 0], `${name}, file not held: `);
+    // the file held: the declaration read is silent and the stop sentence is the reason, in every state
+    const h = world(applied, rendered, witnessFact('absent')); const mh = merge();
+    await applyHeldEditCarrier(h.db, TFLEG, mh, d);
+    eq([mh.qualityGate.heldEdit.reason, h.legRowReads()], ['stop-sentence-absent', tfLive ? 1 : 0], `${name}, file held: `);
+    // a refused off-pin read outranks both, in every state
+    const p = world(applied, rendered, witnessFact('absent'), { notPinned: 1 }); const mp = merge();
+    await applyHeldEditCarrier(p.db, TFLEG, mp, d);
+    eq(mp.qualityGate.heldEdit.reason, 'source-not-pinned', `${name}, off-pin read: `);
+  }
 });
 
 test('C8 the list forces (owner 2026-11-18): every edit read + a missing name ⇒ `witness-incomplete`; + a whole-value key ⇒ `witness-whole-value`', async () => {

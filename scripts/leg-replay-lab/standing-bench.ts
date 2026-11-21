@@ -126,6 +126,19 @@ export function reviewerLeverKey(exp: StandingExperiment, dir: string, arm: stri
 }
 export const reachingArms = (exp: StandingExperiment, dir: string, c: StandingCase): string[] => reachingArmsWhy(exp, dir, c).map((x) => x.arm);
 
+/** golden v10: null when the sibling companion `name` (a folder beside `dir`) carries standing case `c` on arms whose Reviewer-side lever
+ *  keys include every reaching arm's key; otherwise what is wrong. */
+function siblingCoverProblem(exp: StandingExperiment, dir: string, c: StandingCase, name: string, reachingArmNames: string[]): string | null {
+  const sdir = path.join(path.dirname(dir), name); const f = path.join(sdir, 'experiment.json');
+  if (!fs.existsSync(f)) return `the companion it names as carrying it (${name}) is missing`;
+  const sib = JSON.parse(fs.readFileSync(f, 'utf8')) as StandingExperiment;
+  const d = declared(sib).find((x) => x.case === c.id); const nd = d ? sib.nodes.find((n) => n.id === d.node) : undefined;
+  if (!nd || nd.authorExecutionId !== c.authorExecutionId || nd.reviewerExecutionId !== c.reviewerExecutionId) return `the companion it names as carrying it (${name}) does not carry it`;
+  const keys = new Set(nd.variants.filter((a) => sib.variants[a]).map((a) => reviewerLeverKey(sib, sdir, a)));
+  const missing = reachingArmNames.filter((a) => !keys.has(reviewerLeverKey(exp, dir, a)));
+  return missing.length ? `${name} carries it on no arm with the Reviewer-side levers of ${missing.join(', ')}` : null;
+}
+
 export function standingBenchProblems(exp: StandingExperiment, dir: string, bench: StandingBench = loadStandingBench()): string[] {
   const out: string[] = [];
   const decl = declared(exp);
@@ -134,7 +147,15 @@ export function standingBenchProblems(exp: StandingExperiment, dir: string, benc
     const reaching = reachingArmsWhy(exp, dir, c);
     if (!reaching.length) continue;
     const d = decl.find((x) => x.case === c.id);
-    if (!d) { out.push(`standing case ${c.id} is reached (${reaching.map((x) => `${x.arm}: ${x.why}`).join('; ')}) but not declared in "standingBench"`); continue; }
+    // golden v10: a companion of ANOTHER Git pin cannot run this case (its leg ran under the default pin). It is covered only when the
+    // sibling companion it names carries the case on an arm with byte-identical Reviewer-side levers for EVERY reaching arm — the same
+    // B12 rule, read across the two companions of one lab. Anything less is the usual problem.
+    if (!d) {
+      const cover = ((exp as any).goldenCompanion?.standingCoveredBy as Array<{ case: string; companion: string }> | undefined)?.find((x) => x.case === c.id);
+      const why = cover ? siblingCoverProblem(exp, dir, c, cover.companion, reaching.map((x) => x.arm)) : 'not declared in "standingBench"';
+      if (why) out.push(`standing case ${c.id} is reached (${reaching.map((x) => `${x.arm}: ${x.why}`).join('; ')}) but ${why}`);
+      continue;
+    }
     const nd = exp.nodes.find((n) => n.id === d.node);
     if (!nd) { out.push(`standingBench ${c.id} names node ${d.node}, which the experiment does not carry`); continue; }
     if (nd.authorExecutionId !== c.authorExecutionId || nd.reviewerExecutionId !== c.reviewerExecutionId) out.push(`${d.node} is not ${c.id} (Author/Reviewer executions differ)`);

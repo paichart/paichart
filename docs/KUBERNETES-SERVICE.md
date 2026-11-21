@@ -48,6 +48,12 @@ current state.
   variable, a `Bearer`/`Basic` token and a `--password=…`-style argument redacted, in the object and in its
   `kubectl.kubernetes.io/last-applied-configuration` annotation. A few shapes are still not redacted; see
   [SECURITY.md](SECURITY.md), "The two output guards".
+- **Password and key files in Git** (since 2026-11-21). A file whose name contains `htpasswd`, ends `.key`, `.pem`, `.p12`,
+  `.pfx`, `.jks` or `.keystore`, or is an SSH identity file (`id_rsa`, `id_dsa`, `id_ecdsa`, `id_ed25519`) is never read from
+  your Git repository and never kept. If a `git-file` line of the `## Config sources` block names one, the block is unreadable
+  and the leg ends `needs-revision` with the reason `config-sources-unparseable` (problem `path-never-held`). The rule goes by
+  the file NAME: a public certificate saved as `.pem` is refused too. A manifest whose text carries a private-key block is
+  read but never kept, so a leg that declares it ends `needs-revision` (`git-file-not-held`).
 - **Container logs, a shell inside a container, or a port-forward.** No operation exists for them, and the permissions file
   does not grant them.
 - **Your list of namespaces.** See the next section.

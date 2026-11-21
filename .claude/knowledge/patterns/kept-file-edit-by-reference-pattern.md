@@ -71,14 +71,14 @@ Reference source: **Addendum A (GitHub)**.
 | View + handles shown to the Author | `held-bytes/view.ts`, `handles.ts`, `render-held.ts` | the Author edits against a handle, never retypes |
 | Edit grammar + applier + whole-file detector | `held-bytes/edits.ts`, `apply.ts`, `whole-file.ts` | SEARCH matches exactly once or is refused; a fenced block covering ≥ 0.90 of a held file and adding a line is refused (`held-file-written-whole`) |
 | The ONE scope predicate | `held-bytes/scope.ts` | which packages are held-in-scope; SIX readers, one rule |
-| Carrier (sole writer of `qualityGate.heldEdit`) | `lib/agents/harness/held-edit-carrier.ts` (+ `lib/services/held-edit-step.ts`) | forces needs-revision on an in-scope package whose held edit was not applied |
-| Held-capable set | `held-bytes/variant.ts` `HELD_JOIN_VERSIONS` (→ `HELD_CAPABLE_PROTOCOLS` = its keys; MI-13 `_heldjoin` mirrors it, CI-pinned) | held is a CAPABILITY of a protocol, not a variant protocol |
+| Carrier (sole writer of `qualityGate.heldEdit`) | `lib/agents/harness/held-edit-carrier.ts` (+ `lib/services/held-edit-step.ts`) | forces needs-revision on an in-scope package whose held edit was not applied — and, in this precedence, on: `stage-rebind` > `source-not-pinned` > the device force (`device-sources-<state>`, `git-file-not-held` > `device-read-not-held`) > the Config-sources force (`git-file-not-held`, `config-sources-<state>`) > `author-not-of-leg` > the package's own reason > the four Plan-witness reasons (`stop-sentence-altered` / `stop-sentence-absent`, `witness-incomplete`, `witness-whole-value`). Every arm only writes the stricter value; the precedence comment in `held-edit-carrier.ts` is the reference |
+| Held-capable set | `held-bytes/variant.ts` `HELD_JOIN_VERSIONS` (→ `HELD_CAPABLE_PROTOCOLS` = its keys minus `HELD_JOIN_AWAITING_TEXT`, which is empty today; MI-13 `_heldjoin` mirrors it, CI-pinned) | held is a CAPABILITY of a protocol, not a variant protocol |
 | Selector grammar | `descriptors.ts` `FileSpec.select`: `seg ('.' seg)* ('.*')?`, a seg is a key or **`name[field=literal]`** (exactly ONE matching element; 0 ⇒ `directoryWhenNone`, ≥ 2 ⇒ ambiguous) | a file inside an array (an MCP resource item) is selected by TYPE; the stored ref keeps the resolved positional JSON Pointer |
-| Git file source (held-k8s) | descriptor `gitPin` + `legScope: 'git-file-source'`; `variant.ts` `GIT_FILE_SOURCE_PROTOCOLS`; ONE pin module `lib/mcp/server/config/git-file-source-pin.js` used at BOTH gates (call time `PINNED_ARGUMENT`, capture `source-not-pinned`) | a Git read is held only on a leg allowed to read one, only from the pinned repo/ref/path, with its commit in `held_file_refs.sourceRevision` |
+| Git file source (held-k8s) | descriptor `gitPin` + `legScope: 'git-file-source'`; `variant.ts` `GIT_FILE_SOURCE_PROTOCOLS`; ONE pin module `lib/mcp/server/config/git-file-source-pin.js` used at BOTH gates (call time `PINNED_ARGUMENT`, capture `source-not-pinned`) | a Git read is held only on a leg allowed to read one, only from the pinned repo/ref/path, with its commit in `held_file_refs.sourceRevision` — and, on a Config-sources leg (kubernetes-gitops ≥ 1.19.0, terraform-iac ≥ 1.17.0), only when a `git-file` line of the leg's `## Config sources` block declares it (`held-bytes/config-source-scope.ts`; pinned but undeclared ⇒ the handleless refusal `git-file-not-declared`). See Addendum C |
 | Persist hygiene (held-k8s G-1) | `held-bytes/git-status-elision.ts`, first step of the result.json toolCalls builder | a Git source's blob ids (status line, directory listing) never persist; replaced in place so positional selectors still resolve |
-| Operator base check | `scripts/held-base-check.ts` (private): host-file mode, and `--git` mode (operator's own `gh`; blob id at the recorded commit, ancestor of head, unchanged at head / PR base) | the held base is what is deployed — checked independently of the capture path |
+| Operator base check | `scripts/held-base-check.ts` (exported to the public repository; cited in its `docs/PIPELINES.md`): host-file mode, `--git` mode (operator's own `gh`; blob id at the recorded commit, ancestor of head, unchanged at head / PR base), and `--device` mode (a device's running config) | the held base is what is deployed — checked independently of the capture path |
 
-### 3. Joining a new domain (the procedure — PHASE10-PLAN §10.6 / architectural-review "lens 1" items 1–13)
+### 3. Joining a new domain (the procedure — began as PHASE10-PLAN §10.6 / architectural-review "lens 1" items 1–13; later joins added the rest)
 
 Run a Phase 0 inventory first (the stop rule applies: > 5 h, > 4 specialists, > 5 files). Check each item against the CURRENT tree
 — some were folded in Phase 10, so the list is a checklist, not a backlog. **Re-verify the inventory after the PREVIOUS domain closes and grep
@@ -87,7 +87,8 @@ gaps were found only in code *(LL-T-36)*. **Keep a learnings ledger and append a
 `held-terraform-2026-10-19/LEARNINGS-LEDGER.md`)*:
 1. **File source + descriptor** for that service; for terraform a TEST that no descriptor ever names `state_pull` / `state_list`.
 2. **ONE row in `HELD_JOIN_VERSIONS`** (canonical protocol name → the version that carries the held text; `HELD_CAPABLE_PROTOCOLS`
-   is derived from its keys) **plus the same pair as a literal in MI-13's `_heldjoin`** — `test-held-bytes-store` fails if they differ.
+   is derived from its keys minus `HELD_JOIN_AWAITING_TEXT` — a domain that ships its join row ahead of its text is listed there until the
+   text commit removes it) **plus the same pair as a literal in MI-13's `_heldjoin`** — `test-held-bytes-store` fails if they differ.
    *(corrected by the k8s join: it was "add the name to `HELD_CAPABLE_PROTOCOLS`")*
 3. **Protocol text** via the SHARED held constants (`HELD_FILES_SECTION`, `HELD_EDIT_CLAUSE`, the SYNTHESIZE/Author fragments) —
    never re-authored inline; its worked example must not be another domain's file. Text change ⇒ Protocol 16 lab. The example anchors its SEARCH
@@ -144,6 +145,10 @@ gaps were found only in code *(LL-T-36)*. **Keep a learnings ledger and append a
     cut *(LL-T-06)*.
 23. **One code commit for the join**, so the rollback is a single revert; rehearse it on the local DB over every prompt row and the domain's
     template rows, and compare prod's pre-state rows to the rehearsed pre-state before the push *(LL-T-15)*.
+24. **A behaviour that differs by lane goes through an exhaustive helper in `variant.ts`**, never an inline protocol or lane test
+    (`heldCaptureTakesConfigScope`, `carrierAppliesConfigForce`, `platformDriftAppliesToLane`, and the device pair
+    `heldCaptureTakesDeviceScope` / `carrierAppliesDeviceForce`): a new lane then fails to compile until each is answered. The lane is
+    derived from the protocol, never stored. *(added 2026-11-21 from the 2026-11-20 lane refactor `c9ce0e157`; Addendum C)*
 
 ### 4. Proof gates (in order)
 
@@ -153,6 +158,12 @@ gaps were found only in code *(LL-T-36)*. **Keep a learnings ledger and append a
    construction (held capability keys on the protocol name; terraform: 12 of 158 tasks, all terraform); read the diff per task; after a later
    shared-code change the new pass must equal the previous new pass *(LL-T-14)*. *(The k8s join replayed at step 1 only; its step 3 —
    carrier, rollback lanes, grammar, all shared with obs — was first replayed 2026-10-20.)*
+0b. **Capture replay for a change to CAPTURE code** (`scripts/replay-held-capture.sh --compare-all`, base against new with
+   `--compare-base`; read-only): the nets replay proves stored FACTS, not what the platform holds. Read the runner's LIMITS block
+   (`scripts/replay-held-capture.ts`) before trusting a number — archive leaves are already redacted, so the archive pass proves R10
+   idempotence, not capture fidelity; a leg that ran before its protocol's Config-sources text has no snapshot and reads as history
+   under today's rule. It applies the Config-sources capture scope since 2026-11-20 (`HELD_REPLAY_CONFIG_SCOPE=off` is the
+   "nothing else moved" compare) and production's device-scope gate since 2026-11-21 (`HELD_REPLAY_DEVICE_SCOPE_GATE=off`).
 1. **Lab** (Protocol 16, pre-registered rule) — edits applied rate, refusals read by hand.
 2. **Live window** with the **operator base check** (`scripts/held-base-check.ts`): the held base still equals what is deployed
    (MATCH) and the candidate is applicable with 0 placeholders — before anyone applies it.
@@ -208,7 +219,7 @@ states only the PROPERTIES a GitHub (or any Git) file source must have, so a rev
 | A3 | **Per-request configuration headers stripped** (`X-MCP-*`, `Mcp-Param-*`); only `/livez`, GET `/healthz`, `/mcp` routed | flags cap the surface today; stripping keeps flags the only configuration a caller reaches |
 | A4 | **Health maps to 200/503**, never passes a 4xx through, and the seed sets **`healthCheckPath`** | the Hub reads any status < 500 as healthy and never reads `healthCheck` — a revoked token would read green |
 | A5 | **Select the file by `type === 'resource'`** (`resource.text`), never by position; a directory returns a listing, no resource item | probed: `content[1]` today, a status line in `content[0]` |
-| A6 | **Pin owner + repo in the DESCRIPTOR and refuse capture on mismatch; record the commit sha** from `repo://…/sha/<commit>/…` | the token reads ANY public repo and the server does NOT enforce an `Mcp-Param-*` pin — otherwise a prompt-injected Harvester makes an attacker's file the held base |
+| A6 | **Pin owner + repo and refuse capture on mismatch; record the commit sha** from `repo://…/sha/<commit>/…`. *The platform pin lives in the ONE pin module (`git-file-source-pin.js`, env `GIT_FILE_SOURCE_PIN`, default `paichart/paichart-configs`); the platform descriptor only marks the file `gitPin: true`. A registrant's own descriptor may still carry `{ owner, repo }`.* | the token reads ANY public repo and the server does NOT enforce an `Mcp-Param-*` pin — otherwise a prompt-injected Harvester makes an attacker's file the held base |
 | A7 | **Never read held files through `workflow.execute`** | `validateServiceResponse` runs only there and can alter the text |
 | A8 | **`publicAccess` is a decision, not a default** (seeded admin-only) | true admits every account incl. demo users to public GitHub on one shared 5,000/h quota |
 | A9 | **Repo is the source of truth; rigs deploy from it**, real credentials stripped before the first commit, gitleaks with named bait as the only expected findings | otherwise the base check reads drift as MISMATCH |
@@ -222,7 +233,7 @@ states only the PROPERTIES a GitHub (or any Git) file source must have, so a rev
 | A17 | **A non-admin's read is refused** (`publicAccess:false`): `isError` "Access Denied", one `is-error` refusal row, 0 CAPTURE, drift not-performed | shadow window CTRL *(K-10)* |
 | A18 | **The Git base check MATCHes when the held blob = the committed bytes** (one blob shared by every leg that read the file at one commit) | shadow window wave 1 |
 | A19 | **Concurrent legs share one self-provisioned registration**; the first teardown deletes it | shadow window wave 1 *(LL-13)* |
-| A20 | **A Git-sourced desired-state leg performs real drift** on DECLARED fields; a live-object annotation (`last-applied-configuration`) can show the cause | shadow window A-K5 *(LL-12)* |
+| A20 | **A Git-sourced desired-state leg performs real drift** on DECLARED fields; a live-object annotation (`last-applied-configuration`) can show the cause. *Since kubernetes-gitops 1.19.0 the comparison is the PLATFORM's (`gitLiveDrift`), and a Terraform leg computes none (terraform-iac 1.17.0: the CI plan is the witness, `planWitness`).* | shadow window A-K5 *(LL-12)* |
 
 ---
 
@@ -258,13 +269,15 @@ Live-window operations for a join (POV, rig reset, distinct objectives, role fli
 ## Addendum B — Network devices (held-network join, steps 0–3, 2026-10-22…27; LIVE since 2026-10-27, 1.25.0)
 
 - **Declare the source per device, never infer it:** `## Device sources` — `git-file` (a Git file is the base), `device-read` (the
-  device's running config, read whole once), `command-package` (no held source). A missing declaration stops the leg at the harness.
+  device's running config, read whole once), `command-package` (no held source), and — since network-provisioning 1.26.0, grammar v2 —
+  `live-read` (evidence only, never a base). A missing declaration stops the leg at the harness. `network-derivation` declares Device
+  sources too, as a VALUE lane: it never holds anything and the carrier never forces on it (`DEVICE_SOURCE_LANES`, `variant.ts`).
   In a program, the interface contract carries `deviceSources[...]`; a mismatch with the task body stops the leg.
 - **A Git file and a device read are both evidence; the model never compares them** — the platform compares mechanically (step 3,
   parent-context aware). Most customers have only the file.
 - **A device whose declared source cannot be read is HELD:** listed first, nothing packaged, leg outcome needs-revision.
 - **The harness brief must carry a positive whole-config instruction per device-read device** — a negative rule did not survive the brief.
-- **Secrets:** inside any quote a secret is `<value>`; R10 v8 (keyed + echo) is the persisting control; network secret families are R10 v7 (current version `paichart.r10/10`, + login username).
+- **Secrets:** inside any quote a secret is `<value>`; R10 v8 (keyed + echo) is the persisting control; network secret families are R10 v7 (+ login username). The current redactor version is `R10_VERSION` in `lib/agents/harness/redact-artifact-secrets.ts` — read it there; a literal here went stale twice in four weeks.
 - **Platform guards the join needed:** the register-schema check for descriptors (≤ 500-char tool descriptions), run-scope stamping so an
   agent can only delete its own leg's service (SF-1), R10 echo redaction, and the internal-setup rules (IF-2/IF-3).
 - **Step 3 (live 2026-10-27):** the declaration is snapshotted at the leg's first execution (an agent cannot rewrite its own declaration);
@@ -279,6 +292,25 @@ Live-window operations for a join (POV, rig reset, distinct objectives, role fli
   (register NETWORK-APPLY-MODEL-DECLARED). Vendor-general claim waits on a second platform family (NETWORK-SECOND-VENDOR-RIG).
   Ledger: `cline_docs/reviews/held-network-2026-10-22/LEARNINGS-LEDGER.md` (LL-N-01…44).
 
+## Addendum C — Config sources (kubernetes-gitops 1.19.0, terraform-iac 1.17.0; added 2026-11-21 by the drift sweep)
+
+What a reader planning a Kubernetes or Terraform leg must know, stated from the code (records: `SERIES-CUT-LEDGER.md` entries
+2026-11-15 … 2026-11-20; the Config-sources learnings ledger, LL-CS ids):
+
+- **Declare the sources, or the leg is forced.** A leg of either protocol carries a `## Config sources` block: `git-file` (kept from
+  Git — the only kind that is held), `live-read` (evidence only), `supplied`. A declaration that is not parsed — no block,
+  unparseable, conflict, a missing or changed snapshot — forces needs-revision by its own name (`config-sources-<state>`).
+- **Undeclared is never held.** A pinned Git read is held only when a `git-file` line declares it; pinned but undeclared ⇒ refusal
+  `git-file-not-declared` (no base, no handle). Every declared `git-file` line must be held by the leg's authoritative Harvester,
+  else `git-file-not-held`. `live-read` and `supplied` lines never hold and never force (`held-bytes/config-source-scope.ts`).
+- **One table, three exhaustive helpers.** `CONFIG_SOURCE_LANES` (`variant.ts`) maps protocol → lane and contract key
+  (`interfaceContract.configSources[...]`); `CONFIG_SOURCE_AWAITING_TEXT` holds a row whose text has not shipped (empty today).
+  Lane behaviour is asked only through `heldCaptureTakesConfigScope`, `carrierAppliesConfigForce` and `platformDriftAppliesToLane`
+  (since `c9ce0e157`, 2026-11-20). The lane is derived from the protocol on the resolution, never stored.
+- **Drift is the platform's, per protocol.** Kubernetes: the platform computes the Git-vs-live fact (`gitLiveDrift`). Terraform: no
+  drift is computed — the CI plan is the witness (`planWitness` fact), and four carrier reasons can force on it (section 2, carrier row).
+- **Proof.** Capture changes on these legs are replayed with gate 0b (the capture replay passes the Config scope since `c5ab93cdf`).
+
 ## Related Patterns
 
 - `seed-time-artifact-carrier-pattern.md` — delivering VERBATIM text TO an agent (the other half of the verbatim problem).
@@ -291,3 +323,37 @@ Live-window operations for a join (POV, rig reset, distinct objectives, role fli
 phase10-panel), the live controls in PHASE10-PLAN §10.10–10.14, the GitHub file-source review + prod probe (2026-10-18), and the held-k8s
 steps 1–2 records + learnings ledger (`cline_docs/reviews/held-k8s-2026-10-18/LEARNINGS-LEDGER.md`, LL ids cited above; 2026-10-19),
 and the held-k8s step-3 build + L-K2 result + step-4 live window (`STEP3-BUILD.md`, `LAB-RESULT-L-K2.md`, `WINDOW-RUN-SHEET.md`).
+
+---
+
+## 2026-11-21 — drift sweep (Protocol 11): what was corrected, and how to check it stays true
+
+The pattern, the join procedure's items 1–23, the anti-patterns and the dated join/window learnings are unchanged. Corrected against the tree:
+
+- **Config sources was absent.** On a Kubernetes (≥ 1.19.0) or Terraform (≥ 1.17.0) leg a pinned Git read is held only when the leg
+  declares it. The Git-file-source row now says so; **Addendum C** and join item 24 (lane helpers) are new.
+- **The carrier row** listed one force; it now lists the families and their precedence.
+- **`HELD_CAPABLE_PROTOCOLS`** is the join table's keys MINUS `HELD_JOIN_AWAITING_TEXT` (two places).
+- **Proof gate 0b** added: the capture replay, with its LIMITS. The nets replay (gate 0) proves facts, not what is held.
+- **The R10 version literal** (`paichart.r10/10`) was two versions behind; the file now points at `R10_VERSION`.
+- **Device sources** has four kinds (`live-read` since network 1.26.0) and a value lane (`network-derivation`).
+- **`held-base-check.ts`** is not private (it is in the public export) and has a `--device` mode.
+- **A6**: the platform pin lives in the pin module (env `GIT_FILE_SOURCE_PIN`), not in the descriptor.
+
+Every expectation below was run before it was written:
+
+```bash
+grep -c "^export function heldCaptureTakesConfigScope\|^export function carrierAppliesConfigForce\|^export function platformDriftAppliesToLane" lib/agents/harness/held-bytes/variant.ts   # expect 3 — the Config-lane helpers
+grep -c "^export const HELD_JOIN_AWAITING_TEXT: readonly string\[\] = Object.freeze(\[\]);" lib/agents/harness/held-bytes/variant.ts     # expect 1 — empty today; 0 means a domain is awaiting its text
+grep -c "^export const CONFIG_SOURCE_AWAITING_TEXT: readonly string\[\] = Object.freeze(\[\]);" lib/agents/harness/held-bytes/variant.ts # expect 1 — empty today
+grep -c "git-file-not-declared" lib/agents/harness/held-bytes/config-source-scope.ts   # expect >=1 — undeclared is never held
+grep -c "witness-whole-value" lib/agents/harness/held-edit-carrier.ts                  # expect >=1 — the precedence comment names the Plan-witness reasons
+grep -c "^export const R10_VERSION = " lib/agents/harness/redact-artifact-secrets.ts   # expect 1 — the one place to read the version
+grep -c "'live-read'" lib/agents/harness/device-sources.ts                             # expect >=1
+grep -c "LIMITS (read before trusting a number)" scripts/replay-held-capture.ts        # expect 1
+grep -c "\-\-device" scripts/held-base-check.ts                                        # expect >=1
+```
+
+**Not re-verified in this sweep:** Addendum A rows A1–A3 and A8 (token scope, proxy header stripping, `publicAccess` — they live on
+the service host); every "pinned by a test" claim (the tests exist; nothing was mutated to prove they fail); the live-run figures
+in the status block and the window learnings; whether the capture replay is clean on production today (no production access).

@@ -309,9 +309,25 @@ test('static (held-k8s 1g, EF B-2): every MI-13 literal table equals its TypeScr
   const sqlDeclared = [...dc.matchAll(/\('([^']+)', '([^']+)'\)/g)].map((m) => `${m[1]}.${m[2]}`).sort();
   const tsDeclared = PLATFORM_DEFAULT_DESCRIPTORS.filter((d: any) => (d.files?.length ?? 0) > 0 && !d.notAFile).map((d: any) => `${d.service}.${d.tool}`).sort();
   eq(sqlDeclared, tsDeclared, 'declared pairs vs the descriptor table ');
-  // _gitsrcleg ≡ GIT_FILE_SOURCE_PROTOCOLS
-  const gs = block('CREATE TEMP VIEW _gitsrcleg', ') v(name)');
-  eq([...gs.matchAll(/\('([a-z0-9-]+)'\)/g)].map((m) => m[1]).sort(), [...GIT_FILE_SOURCE_PROTOCOLS].sort(), '_gitsrcleg vs GIT_FILE_SOURCE_PROTOCOLS ');
+  // _gitsrcleg ≡ the Git-lane twin, on NAME AND RULE (Config sources STEP 3 P2, plan W1): every GIT_FILE_SOURCE_PROTOCOLS member
+  // `by-name`, plus every `runs-undeclared` row of CONFIG_SOURCE_LANES whose text has SHIPPED as `snapshot-object` (none while
+  // observability awaits its text — the row joins the view in the commit that takes it off the awaiting list).
+  const { CONFIG_SOURCE_LANES, CONFIG_SOURCE_AWAITING_TEXT, isGitFileSourceLeg } = require('../lib/agents/harness/held-bytes/variant');
+  const gs = block('CREATE TEMP VIEW _gitsrcleg', ') v(name, rule)');
+  const sqlRows = [...gs.matchAll(/\('([a-z0-9-]+)', '([a-z-]+)'\)/g)].map((m) => `${m[1]}:${m[2]}`).sort();
+  const tsRows = [...(GIT_FILE_SOURCE_PROTOCOLS as string[]).map((p) => `${p}:by-name`),
+    ...Object.entries(CONFIG_SOURCE_LANES as Record<string, { noBlock: string }>)
+      .filter(([p, r]) => r.noBlock === 'runs-undeclared' && !CONFIG_SOURCE_AWAITING_TEXT.includes(p)).map(([p]) => `${p}:snapshot-object`)].sort();
+  eq(sqlRows, tsRows, '_gitsrcleg vs the Git-lane twin (name and rule) ');
+  // the twin itself, row by row: by-name ⇒ any leg; snapshot-object ⇒ only a leg carrying a snapshot OBJECT
+  for (const row of sqlRows) {
+    const [p, rule] = row.split(':');
+    eq([isGitFileSourceLeg({ title: 'x', metadata: { protocol: p } }), isGitFileSourceLeg({ title: 'x', metadata: { protocol: p, configSourcesSnapshot: { version: 1 } } })],
+      rule === 'by-name' ? [true, true] : [false, true], `${row}: `);
+  }
+  ok(inv.includes(" WHERE g.rule = 'by-name' OR (g.rule = 'snapshot-object' AND jsonb_typeof(x.legsnap) = 'object');") && !/legsnap \?/.test(inv),
+    '_gitsrcexec must apply the rule: by-name, or snapshot-object with jsonb_typeof(...) = \'object\' (never the ? operator)');
+  ok(!/NOT IN \(SELECT name FROM _gitsrcleg\)/.test(inv), 'a line still decides "Git file source leg" by NAME alone — it must read _gitsrcexec (name and rule)');
   // the SQL pin re-derivation ≡ GIT_FILE_SOURCE_PINS (one Git source today; a second needs its own SQL arm)
   const pins = Object.entries(GIT_FILE_SOURCE_PINS) as Array<[string, any]>;
   eq(pins.length, 1, 'one Git file source — MI-13 re-derives exactly one pin ');

@@ -33,7 +33,8 @@ function declarationOf(sources: LegConfigSourcesResolution): Obj {
     case 'conflict': return { state: 'conflict', grammarVersion: sources.grammarVersion };
     case 'absent': return { state: 'absent', grammarVersion: sources.grammarVersion };
     case 'could-not-check': return { state: 'could-not-check', grammarVersion: sources.grammarVersion, reason: sources.reason };
-    case 'snapshot-absent': case 'snapshot-unreadable': case 'snapshot-changed': return { state: sources.state, grammarVersion: sources.grammarVersion };
+    case 'snapshot-absent': case 'snapshot-unreadable': case 'snapshot-changed': case 'snapshot-text-reverted':
+      return { state: sources.state, grammarVersion: sources.grammarVersion };
     default: return { state: 'not-config-source-leg' };
   }
 }
@@ -71,6 +72,18 @@ export function computeConfigSourceReads(sources: LegConfigSourcesResolution, to
             : mine.length ? { state: 'read-failed', toolCallIndex: mine[0].index, failedCalls: mine.length } : { state: 'not-read' };
         if (read.state === 'not-read') notRead++;
         items.push({ label: e.label, kind: 'live-read', service: shownService(e.service), read });
+        break;
+      }
+      case 'service-held': {
+        // Config sources STEP 3 P1 (grammar only): a `service-held` line is recorded with the same read record as a live read of
+        // its service — counts, never coverage. No stamp carries it yet: the kind exists only in an observability block, that
+        // protocol's row awaits its text, and this fact is version-keyed. The fact's final words for this kind, and the
+        // `liveEvidence` Config arm (which REFUSES a kind it cannot classify, by design), are slice P3's (plan W9, §3.2).
+        const mine = calls.filter((c) => matches(e.service, c));
+        const ok = mine.filter((c) => c.ok);
+        const read: Obj = ok.length ? { state: 'read', calls: ok.length } : mine.length ? { state: 'read-failed', toolCallIndex: mine[0].index, failedCalls: mine.length } : { state: 'not-read' };
+        if (read.state === 'not-read') notRead++;
+        items.push({ label: e.label, kind: 'service-held', service: shownService(e.service), read });
         break;
       }
       default: return assertNeverConfigKind(e);

@@ -2347,6 +2347,11 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
     check('R-P0.8b percent-encoded and ./-prefixed forms are refused too (S-1: the pinned gate refuses any %, this gate decodes ≤ 2 rounds)',
       ['terraform%2Etfstate', 'terraform%252Etfstate', './terraform.tfstate', 'env/prod%2etfvars', '%2Eterraformrc'].every((p) => pm0.unpinnedFileReadPathRefusal('get_file_contents', { path: p }) !== null)
       && pm0.unpinnedFileReadPathRefusal('get_file_contents', { path: 'bad%zz/main.tf' }) === null);
+    check('R-P0.8c (STEP 3 P1 review, sec-ops F1) the OLDER names can no longer be evaded at the unpinned gate, for any caller: dot segments, a trailing space / ? / # / ; / NUL / backslash, a third encoding round, a malformed escape elsewhere, fullwidth and zero-width characters',
+      ['terraform.tfstate/.', 'terraform.tfstate/x/..', 'x.tfstate ', 'prod.tfvars?x', '.terraformrc#a', 'terraform.tfstate;v', 'terraform.tfstate%00', 'terraform.tfstate\\', 'terraform%25252Etfstate',
+        'terraform%2Etfstate%ZZ', 'terraform\uFF0Etfstate', 'terraform\u200B.tfstate', 'nornir/hosts.yaml/.']
+        .every((p) => pm0.unpinnedFileReadPathRefusal('get_file_contents', { path: p }) !== null)
+      && ['a/b/../main.tf', 'main.tf/.', 'docs/tfstate-notes.md ', 'main.tf?ref=main'].every((p) => pm0.unpinnedFileReadPathRefusal('get_file_contents', { path: p }) === null));
     check('R-P0.9 … tfvars and CLI credentials too; a Nornir inventory gets its own message',
       pm0.unpinnedFileReadPathRefusal('get_file_contents', { path: '/env/prod.tfvars' })?.pathRefusal === 'tfvars-file'
       && pm0.unpinnedFileReadPathRefusal('get_file_contents', { path: '.terraformrc' })?.pathRefusal === 'credentials-file'
@@ -2400,6 +2405,11 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
     // Config-sources push 0 (sec-ops PUSH0 S-3): the never-held predicate on an UNPINNED file read — both message variants.
     ['NEVER_READ_PATH (state path, unpinned)', () => policy.validateServiceCall('acme-github', 'get_file_contents', { owner: 'acme', repo: 'infra', path: 'terraform.tfstate' }, {}, ['get_file_contents'], 'acme-github')],
     ['NEVER_READ_PATH (device inventory, unpinned)', () => policy.validateServiceCall('acme-github', 'get_file_contents', { owner: 'acme', repo: 'infra', path: 'nornir/hosts.yaml' }, {}, ['get_file_contents'], 'acme-github')],
+    // Config sources STEP 3 P1 (plan §7): the key-named class — its own type and static message, at the pinned gate (every caller)
+    // and at the unpinned gate (an agent run). Route coverage: scripts/test-never-read-key-files.ts.
+    ['NEVER_READ_KEY_FILE (pinned, a key file)', () => policy.validateServiceCall(GH, 'get_file_contents', { ...good, path: 'observability/nginx/tls/server.key' }, {}, ['get_file_contents'], GH)],
+    ['NEVER_READ_KEY_FILE (unpinned, a password file, an agent run)', () => policy.validateServiceCall('acme-github', 'get_file_contents', { owner: 'acme', repo: 'infra', path: 'nginx/.htpasswd' }, { callingExecutionId: 'exec-1' }, ['get_file_contents'], 'acme-github')],
+    ['UNJUDGEABLE_FILE_PATH (unpinned, a malformed escape, an agent run)', () => policy.validateServiceCall('acme-github', 'get_file_contents', { owner: 'acme', repo: 'infra', path: 'tls/server%2ekey%ZZ' }, { callingExecutionId: 'exec-1' }, ['get_file_contents'], 'acme-github')],
     ['PLATFORM_ONLY_TOOL', () => policy.validateServiceCall('some-service', 'compare_declared_fields', { manifest: 'kind: ConfigMap' }, {}, ['compare_declared_fields'], 'some-service')],
     ['UNAPPROVED_TOOL', () => policy.validateServiceCall('some-service', 'frobnicate', {}, {}, [], 'some-service')],
     ['BLOCKED_PATTERN (tool name)', () => policy.validateServiceCall('some-service', 'netcat', {}, {}, ['netcat'], 'some-service')],
@@ -2421,7 +2431,7 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
       check(`F-T1 ${label}: ${x.type} reaches the agent byte-for-byte`, sanitizeForResponse(x.message) === x.message);
     }
   }
-  check('F-T1 every violation type the call gate can emit is exercised', ['PINNED_ARGUMENT', 'PINNED_SOURCE_BYPASS', 'NEVER_READ_PATH', 'PLATFORM_ONLY_TOOL', 'UNAPPROVED_TOOL', 'BLOCKED_PATTERN', 'BLOCKED_URL', 'SIZE_LIMIT', 'CALL_DEPTH']
+  check('F-T1 every violation type the call gate can emit is exercised', ['PINNED_ARGUMENT', 'PINNED_SOURCE_BYPASS', 'NEVER_READ_PATH', 'NEVER_READ_KEY_FILE', 'UNJUDGEABLE_FILE_PATH', 'PLATFORM_ONLY_TOOL', 'UNAPPROVED_TOOL', 'BLOCKED_PATTERN', 'BLOCKED_URL', 'SIZE_LIMIT', 'CALL_DEPTH']
     .every((t) => seenTypes.has(t)) && (pol.match(/\btype: '[A-Z_]+'/g) || []).filter((t) => !/SENSITIVE_DATA|RESPONSE_|HARMFUL|PROCESSING/.test(t)).every((t) => seenTypes.has(t.slice(7, -1))));
   for (const { desc: d, hint } of (policy as unknown as { BLOCKED_PATTERNS_WITH_DESC: Array<{ desc: string; hint: string }> }).BLOCKED_PATTERNS_WITH_DESC) {
     check(`F-T1 pattern text carries none of & < > " ' (${d})`, !ESC.test(d) && !ESC.test(hint));

@@ -131,8 +131,13 @@ export type HeldViewResolution = { state: 'rendered'; view: { viewText: string; 
 export function harvesterHandles(refs: readonly HeldCaptureRefLike[], refusals: readonly HeldRefusalLike[]) {
   const objs: Array<HandleObject & { handleless?: boolean }> = [
     ...refs.map((r) => ({ toolCallIndex: r.toolCallIndex as number, selector: r.selector, target: r.target, path: r.path, held: true, blobSha256: r.blobSha256, refId: r.id })),
-    ...refusals.map((r) => ({ toolCallIndex: r.toolCallIndex, selector: r.selector, target: r.target, path: r.path, held: false,
-      handleless: typeof r.refusal === 'string' && HANDLELESS_CAPTURE_REFUSALS.has(r.refusal) })),
+    ...refusals.map((r) => {
+      const handleless = typeof r.refusal === 'string' && HANDLELESS_CAPTURE_REFUSALS.has(r.refusal);
+      // STEP 3 P2 (plan W8): the two declared-files scope refusals are handle-less AND keep their target and path in the stored row
+      // (the comparison and the operator need them). For HANDLE assignment a handle-less row has no identity — so it never joins a
+      // held capture's pair, and is dropped below exactly as the older members (whose stored target and path are already null).
+      return { toolCallIndex: r.toolCallIndex, selector: r.selector, target: handleless ? null : r.target, path: handleless ? null : r.path, held: false, handleless };
+    }),
   ];
   // F-N2-1 (b): a handleless refusal still CONSUMES its number (the numbering never shifts — handles.ts), it just gets no handle. It
   // carries no identity (target/path null), so `assignHandles` makes it its own handle at its own index in the order; drop exactly that.
@@ -156,7 +161,13 @@ export function harvesterHandles(refs: readonly HeldCaptureRefLike[], refusals: 
  */
 // Config-sources network step: + `live-read-evidence-only` — a deliberate membership decision (execution-facts B2 fix 3): a declared
 // evidence read is never an unheld item the Author is shown, exactly as `device-read-evidence-only`.
-export const HANDLELESS_CAPTURE_REFUSALS: ReadonlySet<string> = new Set(['device-read-evidence-only', 'live-read-evidence-only']);
+// Config sources STEP 3 P2 (plan W8 / W10, a deliberate membership decision, not a sweep): + `served-file-evidence-only` (a served
+// file kept as evidence beside its Git base — the `live-read-evidence-only` reasoning) and + `service-file-not-declared` (a file the
+// service returned that the leg's block does not name: on a declared leg the Author is shown ONLY the files the block names; an
+// undeclared sibling shown as an unheld item would invite retyping it whole. The row, with its target, path and `detail.case`, is
+// the operator's record — MI-13 counts it). Unlike the older members these rows KEEP target and path (see `harvesterHandles`).
+export const HANDLELESS_CAPTURE_REFUSALS: ReadonlySet<string> = new Set(['device-read-evidence-only', 'live-read-evidence-only',
+  'served-file-evidence-only', 'service-file-not-declared']);
 
 /** Harvester → Architect: handles, paths, line counts. Never the file. */
 export function heldIndexEntryFields(handles: ReturnType<typeof harvesterHandles>, refs: readonly HeldCaptureRefLike[]): Record<string, unknown> {

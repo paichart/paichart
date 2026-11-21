@@ -42,7 +42,8 @@ at the one point the platform writes the field (one function, one door):
   derived = f(declared inputs)                 // only from what a declared line names
   if derivable:   field = derived              // replace / remove an agent value that differs
   else:           keep the agent value only if it is well-formed, else remove
-  record a FACT: { derived, kept, replaced, removed:[{ key, reason }] }   // visible at the gate
+  record a FACT: { derived, kept, replaced, removed:[{ token, reason }] }   // visible at the gate
+                                               // (the shipped fact also carries added / notDerived / unknownKeys / failed)
 ```
 
 - **Never write a value no declared input names** — the platform derives, it does not invent.
@@ -63,3 +64,23 @@ at the one point the platform writes the field (one function, one door):
 - `lib/agents/harness/service-descriptors-derivation.ts` (`deriveServiceDescriptors`) via `lib/agents/harness/plan-spawn-carry.ts`;
   fact `interfaceContractSource.serviceDescriptors`; plan-gate line in `scripts/gate-check.ts`; canary control `arch-text-2-descriptors`.
 - Earlier instance of the same idea: the platform COPIES the plan's contract to every leg rather than asking the harness to transcribe it (C2/C3, `plan-spawn-carry.ts`).
+
+---
+
+## 2026-11-21 — drift sweep (Protocol 11): what was corrected, and how to check it stays true
+
+Checked against the tree and found current. One correction:
+
+- **The schematic fact shape** said `removed:[{ key, reason }]`; the code field is `token`, and the shipped fact also carries
+  `added`, `notDerived`, `unknownKeys` and `failed`.
+
+Every expectation below was run before it was written:
+
+```bash
+grep -c "removed: Array<{ token: string; reason: RemovedReason }>" lib/agents/harness/service-descriptors-derivation.ts   # expect 1
+grep -rn "deriveServiceDescriptors(" lib app --include=*.ts | grep -v "export function\|test" | wc -l                     # expect 1 — one door (plan-spawn-carry.ts)
+grep -c "RESOLVER_VERSION = 5" lib/agents/harness/plan-spawn-carry.ts                                                     # expect 1 (a later resolver version means re-read "Production use")
+```
+
+**Not re-verified in this sweep:** the replay figures (5 of 163 contracts, 0 of 58 correct URLs); the canary control and the
+gate-check line (the audit found them present).

@@ -60,6 +60,9 @@ export type ExtractRefusal = 'not-declared' | 'is-error' | 'raw-digest-present' 
   | 'state-file' | 'tfvars-file'
   /** TF-PATH-RULE-GAPS: the pin refused a Terraform CLI credentials path (`.terraformrc`, `terraform.rc`, `.terraform.d/…`). */
   | 'credentials-file'
+  /** Config sources STEP 3 P1 (plan §7): key material by file name (`.key`, `.pem`, `.p12`, `.pfx`, `.jks`, `.keystore`, an SSH
+   *  identity file), or a private-key block in the file's text. Never holdable. */
+  | 'key-material-file'
   /** WI-B10: the call was stamped with a registrant declaration sha whose snapshot could not be loaded (never a silent name fallback). */
   | 'declaration-unavailable'
   /** WI-B10: the stamped snapshot fails the grammar under its own grammarVersion. */
@@ -82,7 +85,13 @@ export type ExtractRefusal = 'not-declared' | 'is-error' | 'raw-digest-present' 
   /** Config-sources network step (grammar v2): a device declared `live-read` — its running config is EVIDENCE only, never a held base
    *  (file level, no blob, no handle — HANDLELESS_CAPTURE_REFUSALS); the read record and the comparison still read the extractor's own
    *  result, so the read is counted. */
-  | 'live-read-evidence-only';
+  | 'live-read-evidence-only'
+  /** Config sources STEP 3 P2 (plan W8): on a DECLARED leg of a protocol whose block can name service files, a file the service
+   *  returned that no line declares (`detail.case` says why — a closed set, config-source-scope.ts). File level, handle-less. */
+  | 'service-file-not-declared'
+  /** STEP 3 P2 (plan W8 / W10): a served file whose label has a `git-file` base and a `live-read` line — EVIDENCE for the
+   *  Git-vs-served comparison, never a held base. File level, handle-less; target and path kept. */
+  | 'served-file-evidence-only';
 
 interface CallIdentity {
   serviceName: string;
@@ -158,6 +167,9 @@ export interface ExtractResult {
     outOfScopeLane: number;
     /** held-k8s R4: a directory listing from a Git file source (no resource item, content[0].text a JSON array) — no row. */
     notAFileRead: number;
+    /** STEP 3 P2 (plan W8): on a declared leg, served files on a platform target whose KEY is not a legal label — dropped and
+     *  counted, never a row and never a logged value (the key is service text). Absent unless the declared-files scope set it. */
+    serviceKeyNotALabel?: number;
     /** held-k8s: pin violations; `OnSuccess` = the call itself succeeded (the call-time gate did not stop it) — capture logs a
      *  securityEvent only for those (SYNTHESIS v3 note 23: the call-time gate already logged the others). */
     pinViolations: number;

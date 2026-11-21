@@ -56,14 +56,21 @@ export const EXCLUSIONS: Readonly<Record<string, string>> = {
     'Config sources STEP 4 TF4 fixture: the two spellings of the terraform-iac protocol a caller may pass (long name, short token) to prove neither makes a drift call — not a protocol selection',
   'scripts/test-leg-replay-lab.ts::test:LCT2 (L-CS-K-b on Terraform) a 1.17.0 Terraform arm NEVER ma':
     'Config sources STEP 4 slice 4 fixture: the protocol spellings a lab caller may pass (terraform long/short; k8s and none for the control) to prove the lab drift lever follows the shipping method table — not a protocol selection',
+  'scripts/test-config-sources-step3.ts::mixed':
+    'Config sources STEP 3 P1 fixture (GV4): a mixed program\'s interface contract whose configSources is keyed by two leg protocol tokens, proving each leg resolves only its own key — a contract shape, not a protocol selection',
   'scripts/test-requirements-sources.ts::configKeys':
     'Config sources STEP 4 (requirements-authoring, terraform-iac 1.17.0): TK9 pins the PRE-1.17.0 Config-sources key set to prove the single-protocol no-map result — a fixture of the check\'s injectable key set, not a protocol selection',
   'lib/agents/harness/git-live-drift.ts::GIT_LIVE_DRIFT_METHODS':
     'Config sources STEP 4 (owner Tb = B2, D-T1, 2026-11-17): the Git-vs-live METHOD of each Config-sources protocol (Kubernetes: the compare tool; Terraform: none ⇒ no call, gitLiveDrift not-checked no-git-vs-live-method) — a drift-method key, not held-capability; the retired obs variant declares no Config sources',
-  // Config sources STEP 4 (terraform-iac 1.17.0): the CONFIG_SOURCE_AWAITING_TEXT exclusion was removed with terraform's entry (the list is
-  // empty, so no site); the next domain to join ahead of its text re-adds it (reason: the subtraction from CONFIG_SOURCE_LANES).
+  // Config sources STEP 3 P1 (2026-11-21): re-added with observability-config's entry (it was removed at STEP 4 when the list emptied).
+  'lib/agents/harness/held-bytes/variant.ts::CONFIG_SOURCE_AWAITING_TEXT':
+    'Config sources STEP 3 P1: the rows of CONFIG_SOURCE_LANES whose protocol text has not shipped its Config sources section (observability-config until 1.12.0) — a subtraction from that lane table, not held-capability; the retired obs variant is never a Config-sources protocol',
+  'lib/agents/harness/config-sources.ts::CONFIG_LABEL_TABLE_BY_PROTOCOL':
+    'Config sources STEP 3 P1: which Config-sources protocols check their block labels against the platform file targets (observability-config) — a grammar property, not held-capability; the retired obs variant declares no Config sources',
   'scripts/test-config-sources.ts::configSources':
     'Config sources STEP 4 TFML3 fixture (mixed program): an interfaceContract.configSources keyed by the k8s and terraform contract keys beside deviceSources — a contract shape proving the fields and keys do not mix, not a protocol selection',
+  'lib/agents/harness/config-sources.ts::CONFIG_SOURCE_PAIRING_BY_PROTOCOL':
+    'Config sources STEP 3 P1 (2026-11-21): how a protocol\'s `## Config sources` lines may share a label (the pair rule keys on this) — a grammar property per Config-sources protocol, not held-capability; the retired obs variant declares no Config sources',
   'lib/agents/harness/config-sources.ts::CONFIG_SOURCE_KINDS_BY_PROTOCOL':
     'Config sources STEP 2 (2026-11-15): the per-protocol KIND table of the `## Config sources` grammar — which line kinds a protocol\'s block admits, a different question from held-capability; the retired obs variant declares no Config sources (observability joins by its own row at step 3)',
   'scripts/test-config-sources.ts::deviceSources':

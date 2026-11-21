@@ -9,7 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-  deriveServiceDescriptors, deriveForToken, knownDescriptorTokens, isUsableDescriptorValue, DESCRIPTOR_ONLY_TOKENS,
+  deriveServiceDescriptors, deriveForToken, knownDescriptorTokens, isUsableDescriptorValue, descriptorOnlyTokens,
 } from '../lib/agents/harness/service-descriptors-derivation';
 import { deliverContract, canonicalContractSha, PLAN_CONTRACT_MAX_BYTES, decideCreateContract, type PlanContractResult } from '../lib/agents/harness/plan-spawn-carry';
 import { CONFIG_SOURCE_LANES, CONFIG_SOURCE_PROTOCOLS, DEVICE_SOURCE_LANES } from '../lib/agents/harness/held-bytes/variant';
@@ -37,8 +37,8 @@ const GIT = (dev: string) => `${dev}: git-file — service github-service ; paic
 console.log('── the token table is DERIVED from the lane tables, never retyped ──');
 test('T1 known tokens = DEVICE_SOURCE_LANES keys ∪ CONFIG_SOURCE_PROTOCOLS keys ∪ the descriptor-only tokens; no overlap', () => {
   const lanes = [...Object.values(DEVICE_SOURCE_LANES).map((l) => l.contractKey), ...CONFIG_SOURCE_PROTOCOLS.map((p) => CONFIG_SOURCE_LANES[p].contractKey)];
-  eq([...knownDescriptorTokens()].sort(), [...lanes, ...DESCRIPTOR_ONLY_TOKENS].sort());
-  assert(DESCRIPTOR_ONLY_TOKENS.every((t) => !lanes.includes(t)), 'a descriptor-only token gained a sources lane: move it out of DESCRIPTOR_ONLY_TOKENS (Config sources steps 3/4)');
+  eq([...knownDescriptorTokens()].sort(), [...lanes, ...descriptorOnlyTokens()].sort());
+  assert(descriptorOnlyTokens().every((t) => !lanes.includes(t)), 'a descriptor-only token gained a sources lane: move it out of descriptorOnlyTokens (Config sources steps 3/4)');
 });
 
 console.log('\n── rule 2 + 3: Git-only blocks — a composed descriptor is REMOVED (root cmwj9241a, CORPUS #11-12) ──');

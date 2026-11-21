@@ -13,7 +13,7 @@
 
 **Detection**: Grep a concern-indicative constant/field name across the repo. If it appears in two files that both claim to handle "the same thing," they've either drifted already or will.
 
-**Remediation**: Extract a shared function both paths call. Short-term mitigation: mirror the change in both paths and add a comment in each pointing at the other.
+**Remediation**: Extract a shared function both paths call. Short-term mitigation, only for paths that are still genuinely separate: mirror the change in both paths and add a comment in each pointing at the other. The engine/stream pair below is no longer such a pair — it was extracted (tool loop 2026-06-10, execution core 2026-07-05); change an outcome once, in the core.
 
 ---
 
@@ -37,7 +37,7 @@
 
 **Time spent diagnosing**: ~8 iteration cycles attributing "agent hit max turns" to protocol/agent-behavior issues before grepping for `MAX_TOOL_TURNS` and finding the second definition.
 
-**Fix applied**: Mirror the stream route's `MAX_TOOL_TURNS` read from template metadata (commit `e008aba2`). A shared extraction is a future-target, not today's work — the mirror keeps both paths correct until then.
+**Fix applied** (April 2026): Mirror the stream route's `MAX_TOOL_TURNS` read from template metadata (commit `e008aba2`). At the time a shared extraction was a future target. **It has since been done**: the tool loop is `runAgenticToolLoop` (`lib/agents/harness/agentic-tool-loop.ts`, 2026-06-10) and both callers delegate to `runExecutionCore` (`lib/services/execution-core.ts`, 2026-07-05). What each caller still owns is its own clamp of the turn limit from the shared `RUNTIME_LIMITS`, which it passes to the core.
 
 ---
 
@@ -47,7 +47,7 @@
 
 **Two paths**:
 - `lib/pov/prisma/select.ts:fullPOV` — exported, named "full", uses `taskFullSelect` which includes `dependencies` and `dependents`. Looks canonical.
-- `lib/pov/services/pov.ts:23 PoVService.get()` — runtime production path. Was rewritten as an N+1 optimization (1000ms → 200ms per its own comment). Replaced `include: fullPOV.include` with a hand-rolled `select` that omits dependency/dependent edges entirely.
+- `lib/pov/services/pov.ts` `PoVService.get()` — runtime production path. Was rewritten as an N+1 optimization (1000ms → 200ms per its own comment). Replaced `include: fullPOV.include` with a hand-rolled `select` that omits dependency/dependent edges entirely.
 
 **The new failure mode**: *one path masquerades as the source of truth while the production path is elsewhere*. This is structurally distinct from the agent-execution case because both paths there were real. Here, `fullPOV` is **phantom canonical** — exported, imported into the service file (line 7), and accurate-looking, but its `.include` is never actually invoked at runtime in `.get()`.
 
@@ -62,9 +62,9 @@
 | types-system | `EntityTypes.ts`, `taskFullSelect` | "Type matches API contract" | Checked the named contract, not the runtime query |
 | mcp-hub | Federation surface | "Domain orthogonal" | Correct |
 
-All six audited the schema file. None grepped `prisma.task.findMany` or `prisma.pOV.findUnique` in the service layer to confirm the schema's `fullPOV` was actually used. The optimization comment at `pov.ts:19-22` even *cites the OLD code* ("`include: fullPOV.include`") — visible documentation that the canonical was deliberately bypassed.
+All six audited the schema file. None grepped `prisma.task.findMany` or `prisma.pOV.findUnique` in the service layer to confirm the schema's `fullPOV` was actually used. The `// OLD CODE (commented for rollback)` comment inside `get()` even *cites the OLD code* ("`include: fullPOV.include`") — visible documentation that the canonical was deliberately bypassed.
 
-**Time spent diagnosing**: 4 iteration cycles. Two prior commits shipped client-side fixes that couldn't help because the wire never carried the data. A single grep of `prisma.task.findMany` in `lib/services/` would have surfaced the bypass immediately.
+**Time spent diagnosing**: 4 iteration cycles. Two prior commits shipped client-side fixes that couldn't help because the wire never carried the data. A single grep of `prisma.pOV.findUnique` in `lib/pov/services/` would have surfaced the bypass immediately. (Until 2026-11-21 this sentence named `prisma.task.findMany` in `lib/services/` — a directory the service file is not in, so the command returned nothing for its own case.)
 
 **Fix applied**: Extract `taskDepsSelect` constant in `lib/tasks/prisma/select.ts`. Both `taskFullSelect` and the optimized service select spread it. Drift on the dep-edge shape becomes structurally impossible (commit `8d256992`).
 
@@ -81,20 +81,19 @@ All six audited the schema file. None grepped `prisma.task.findMany` or `prisma.
 
 If the pattern name is correct, other places likely have the same hazard. Scan these:
 
-### Task completion logic
+### Task completion logic — RESOLVED (two cores since 2026-07-24)
 
-- `agentExecutionEngine.ts` — task.update on successful execution
-- `app/api/pov/agent/execute/stream/route.ts` — task.update on successful execution
-- `lib/mcp/tasks/action/handlers/task/task-complete-handler.ts` — MCP perform(task.complete)
-- `lib/mcp/tasks/action/handlers/task/task-update-handler.ts` — MCP perform(task.update) with status
+Until the execution-path convergence (2026-07-05) and the completion-path unification (2026-07-24) this section listed four files (`agentExecutionEngine.ts`, the stream route, `task-complete-handler.ts`, `task-update-handler.ts`) and said a PIPELINE rule "needs consistency across ALL four". Do not follow that today — none of the four is where the rule is enforced:
 
-Any PIPELINE-type rule (or future composite-task-type rule) needs consistency across ALL four. Missing one creates a bypass.
+- `lib/services/execution-terminal-persist.ts` — the one task write for agent executions (engine and stream both reach it through `runExecutionCore`)
+- `lib/tasks/services/complete-task-terminally.ts` — every human terminal transition, and the ONE copy of the PIPELINE 4-point completion invariant
+
+A PIPELINE-type rule (or a future composite-task-type rule) goes in `complete-task-terminally.ts`. The four files above are adapters; the two handlers carry only a pointer comment.
 
 ### Execution failure logic
 
-- `agentExecutionEngine.ts` failure path (try/catch around agent execution)
-- `agentExecutionEngine.ts` stale-execution cleanup sweeper (every poll cycle)
-- `app/api/pov/agent/execute/stream/route.ts` — its own failure handling
+- `persistTerminalFailure` (`lib/services/execution-terminal-persist.ts`) — shared by the engine and the stream route
+- The startup orphan reaper and the stale-execution sweep in `agentExecutionEngine.ts` — these BYPASS `persistTerminalFailure` and carry their own reactor safety nets (as does the fallback when the failure persist itself throws); this is the live drift risk (corrected 2026-11-21 — this list used to name an engine failure path and a separate stream failure path)
 
 ### Task creation
 
@@ -125,11 +124,11 @@ If the rule is applied in two places, the drift clock has started.
 
 When a "canonical" schema/select/config file looks like the source of truth, ALSO run:
 
-- [ ] Grep for the actual runtime call: `grep -rn 'prisma\.<model>\.\(findUnique\|findMany\|findFirst\|update\|create\)' lib/services/` — does it use the canonical's `include`/`select` or hand-roll its own?
-- [ ] Search for optimization markers: `grep -rn '// OLD CODE\|// commented for rollback\|// rollback\|N+1' lib/services/ lib/handlers/` — these are the giveaway that a canonical was deliberately bypassed
+- [ ] Grep for the actual runtime call: `grep -rn 'prisma\.<model>\.\(findUnique\|findMany\|findFirst\|update\|create\)' lib/ --include=*.ts` — does it use the canonical's `include`/`select` or hand-roll its own?
+- [ ] Search for optimization markers: `grep -rn '// OLD CODE\|// commented for rollback\|// rollback\|N+1' lib/ --include=*.ts` — these are the giveaway that a canonical was deliberately bypassed
 - [ ] Check imports: `grep -rn 'import.*<canonicalName>' lib/` — if the canonical is imported but its `.include` / `.select` is not used in the same file, it's phantom canonical
 - [ ] When auditing data-shape bugs, grep BOTH the schema file AND the service: `grep -rn '<fieldName>' lib/<domain>/prisma/ lib/<domain>/services/` — discrepancies surface immediately
-- [ ] If the schema file is the only thing auditors are looking at, expand the audit perimeter to include `lib/services/<domain>/*.ts` — the production query likely lives there
+- [ ] If the schema file is the only thing auditors are looking at, expand the audit perimeter to include `lib/<domain>/services/*.ts` and `lib/services/` — the production query likely lives there (search all of `lib/`: the 2026-05-02 instance sat in `lib/pov/services/`, outside the directories this checklist used to name)
 
 **Heuristic**: any service file whose top has `import { fullX } from '../prisma/select'` BUT whose body uses `prisma.X.findUnique({ select: { id: true, ... } })` (literal-object select, not `fullX.include`) is a candidate for phantom-canonical drift.
 
@@ -139,23 +138,24 @@ When a "canonical" schema/select/config file looks like the source of truth, ALS
 
 ### Short-term: Mirror + cross-reference comment
 
-Apply the change to both paths. Add a comment in each pointing at the other:
+For paths that are still genuinely separate: apply the change to both paths and add a comment in each pointing at the other. Do NOT use this for an execution outcome on the engine/stream pair — that has one home (`execution-core.ts`, `execution-terminal-persist.ts`). A pair that still exists is each caller's clamp of the turn limit before it calls the core:
 
 ```ts
-// MIRROR of agentExecutionEngine.ts:650 — MAX_TOOL_TURNS must read from
-// the same config source. If you change this, update there too.
+// MIRROR of the MAX_TOOL_TURNS clamp in agentExecutionEngine.ts — both callers
+// must clamp from the same RUNTIME_LIMITS. If you change this, update there too.
 // @see .claude/knowledge/patterns/two-execution-path-drift-pattern.md
-const MAX_TOOL_TURNS = templateMetadata?.modelParameters?.maxToolTurns ?? 30;
+const MAX_TOOL_TURNS = Math.min(requestedToolTurns, RUNTIME_LIMITS.MAX_TOOL_TURNS);
 ```
 
-Cheap, doesn't require refactoring. The comment is a tripwire for future edits.
+Cheap, doesn't require refactoring. The comment is a tripwire for future edits. Name the thing mirrored, not a line number — the old example here cited `agentExecutionEngine.ts:650`, which stopped being the turn limit.
 
 ### Medium-term: Extract shared function
 
 If the concern is more than a single constant — a whole loop, a multi-step validation chain, a state machine — extract a shared module both paths call. The shared module is a single truth for the rule:
 
 ```ts
-// lib/services/agentToolLoop.ts (future)
+// Illustrative shape. The real extraction is lib/agents/harness/agentic-tool-loop.ts
+// (runAgenticToolLoop, 2026-06-10); lib/services/agentToolLoop.ts was never created.
 export async function runAgentToolLoop({
   execution,
   template,
@@ -182,7 +182,7 @@ A custom ESLint rule or grep-driven CI check could flag "two files importing the
 
 ### Don't: fix only the path exercised in your current test
 
-If a bug manifests in the stream path but you fix only the stream path, you've created new drift relative to the engine path. Either:
+If a bug manifests in the stream path but you fix only the stream path, you've created new drift relative to the engine path (for execution outcomes this pair no longer arises — one core since 2026-07-05; the rule stands for any pair still separate). Either:
 - Confirm the engine path is structurally immune (it doesn't implement this concern at all), OR
 - Apply the same fix to both.
 
@@ -209,3 +209,37 @@ You've successfully navigated this pattern when:
 - **First canonical example commit**: `e008aba2` (fix(stream-execute): read maxToolTurns from template metadata)
 - **Second canonical example commits**: `0215b8c0` + `d5d5b617` (client-side fixes that couldn't help) and `8d256992` (the actual root-cause fix in the service layer)
 - **Pattern registry**: `.claude/knowledge/patterns/PATTERN-REGISTRY.md` — eligible for promotion now that two instances are confirmed
+
+---
+
+## 2026-11-21 — drift sweep (Protocol 11): what was corrected, and how to check it stays true
+
+The two instances, their lessons and the anti-patterns are unchanged. Corrected against the tree:
+
+- **"Mirror in both paths"** is now scoped to paths that are still separate. The engine/stream pair this file is built on was
+  extracted (tool loop 2026-06-10, execution core 2026-07-05); an outcome changes once, in the core. The mirror example now
+  shows a pair that still exists (each caller's turn-limit clamp) and no line number.
+- **Latent site "Task completion logic"** said a PIPELINE rule must be consistent across four files. The rule has one copy
+  (`complete-task-terminally.ts`, since 2026-07-24); the four files are adapters. Marked RESOLVED, old text kept as history.
+- **Latent site "Execution failure logic"** now names the shared failure persist and the reapers that bypass it.
+- **The phantom-canonical checklist** searched `lib/services/` and `lib/handlers/` (which does not exist) and so returned
+  nothing for its own canonical case in `lib/pov/services/`. All three commands now search `lib/`.
+- **"Shared extraction is a future target"** and the `lib/services/agentToolLoop.ts (future)` sketch: the extraction is done,
+  under a different file name.
+- Two stale line numbers in `lib/pov/services/pov.ts` dropped.
+
+Every expectation below was run before it was written:
+
+```bash
+grep -c "task\.update(\|task\.updateMany(" lib/services/agentExecutionEngine.ts          # expect 0 — the engine writes no task completion
+grep -c "runExecutionCore(" lib/services/agentExecutionEngine.ts app/api/pov/agent/execute/stream/route.ts   # expect 1 and 1 — both callers delegate
+grep -c "ONE copy of the PIPELINE 4-point completion invariant" lib/tasks/services/complete-task-terminally.ts   # expect 1
+grep -c "invariant clone was deleted" lib/mcp/tasks/action/handlers/task/task-update-handler.ts   # expect 1 — the handler carries a pointer comment only
+grep -c "bypasses persistTerminalFailure" lib/services/agentExecutionEngine.ts              # expect 1 — the reaper's own statement
+grep -rn '// OLD CODE' lib/ --include=*.ts | grep -c "lib/pov/services/pov.ts"              # expect 1 — the checklist finds its own canonical case
+test -e lib/handlers && echo present || echo absent                                         # expect absent
+test -e lib/services/agentToolLoop.ts && echo present || echo absent                        # expect absent
+```
+
+**Not re-verified in this sweep:** the "Task creation" and "Validation rules" latent sites; the commit hashes in References;
+the 75% confidence figure; the six-specialist table of the second instance (dated history).
