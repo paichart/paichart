@@ -117,6 +117,25 @@ function walkPair(pop: string, id: string, b: unknown, c: unknown, where: string
   return 0;
 }
 
+// R10 v13 (R10-LINE-SEPARATOR-QUADRATIC): a census of the INPUT text — how many stored string leaves carry a bare CR (not before
+// LF), U+2028 or U+2029 at all, and on how many of those the plain arm's output differs between base and current. The six rules
+// fixed in v13 can change output only on a line that carries one of these between its directive and its keyword.
+const sepCensus: Record<string, { leaves: number; bareCR: number; u2028: number; u2029: number; movedUnderPlainArm: number }> = {};
+const BARE_CR = /\r(?!\n)/;
+function censusLeaf(pop: string, t: string, base: R10): void {
+  const s = (sepCensus[pop] ??= { leaves: 0, bareCR: 0, u2028: 0, u2029: 0, movedUnderPlainArm: 0 });
+  s.leaves++;
+  const cr = BARE_CR.test(t); const a = t.includes('\u2028'); const b = t.includes('\u2029');
+  if (cr) s.bareCR++; if (a) s.u2028++; if (b) s.u2029++;
+  if ((cr || a || b) && base.redactArtifactSecrets(t).redacted !== CUR.redactArtifactSecrets(t).redacted) s.movedUnderPlainArm++;
+}
+function censusWalk(pop: string, v: unknown, base: R10, depth = 0): void {
+  if (depth > 200) return;
+  if (typeof v === 'string') { censusLeaf(pop, v, base); return; }
+  if (Array.isArray(v)) { for (const x of v) censusWalk(pop, x, base, depth + 1); return; }
+  if (v && typeof v === 'object') for (const k of Object.keys(v as object)) { censusLeaf(pop, k, base); censusWalk(pop, (v as Record<string, unknown>)[k], base, depth + 1); }
+}
+
 async function page(c: Client, sql: string, fn: (r: Record<string, unknown>) => void): Promise<void> {
   let after = '';
   for (;;) {
@@ -173,12 +192,14 @@ async function main(): Promise<void> {
     if (ONLY && !ONLY.has(String(r.k))) return;
     byPop['result.json'].rows++;
     let j: unknown; try { j = JSON.parse(String(r.content ?? '')); } catch { return; }
+    censusWalk('result.json', j, BASE);
     const b = BASE.redactSecretsDeep(j).value; const cur = CUR.redactSecretsDeep(j).value;
     if (walkPair('result.json', String(r.k), b, cur, '$')) byPop['result.json'].movedRows++;
   });
   await page(c, `SELECT id k, content FROM agent_artifacts WHERE name = 'report.md' AND id > $1 ORDER BY id LIMIT 200`, (r) => {
     byPop['report.md'].rows++;
     const t = String(r.content ?? '');
+    censusLeaf('report.md', t, BASE);
     counts.leaves++;
     if (compareText('report.md', String(r.k), '', BASE.redactArtifactSecrets(t).redacted, CUR.redactArtifactSecrets(t).redacted)) { byPop['report.md'].movedRows++; counts.movedLeaves++; }
   });
@@ -245,12 +266,13 @@ async function main(): Promise<void> {
     await page(c, `SELECT scope || '/' || sha256 k, convert_from(content, 'UTF8') t FROM held_blobs WHERE scope || '/' || sha256 > $1 ORDER BY 1 LIMIT 200`, (r) => {
       byPop.held_blobs.rows++;
       const t = String(r.t ?? '');
+      censusLeaf('held_blobs', t, BASE);
       counts.leaves++;
       if (compareText('held_blobs', String(r.k).slice(-12), '', BASE.redactArtifactSecrets(t).redacted, CUR.redactArtifactSecrets(t).redacted)) { byPop.held_blobs.movedRows++; counts.movedLeaves++; }
     });
   }
   await c.end();
-  console.log(JSON.stringify({ totals: counts, byPopulation: byPop }, null, 2));
+  console.log(JSON.stringify({ totals: counts, byPopulation: byPop, lineSeparatorCensus: sepCensus }, null, 2));
   for (const s of shown) console.log(s);
   console.log(`NEW-MISS ${counts.newMiss} (must be 0)`);
   if (counts.newMiss > 0) process.exit(1);

@@ -43,6 +43,10 @@ are in [`services/github-service/README.md`](../services/github-service/README.m
 - **Limits on a self-host.**
   - Check a kept file against Git yourself. When `held.get` reports `redactedCount: 0` (and the file has Unix line endings), the BASE is
     the file at the commit it names, byte for byte: `git show <sourceRevision>:<path> | sha256sum` must equal the BASE's `blobSha256`. Do it before you apply.
+  - After an upgrade that brings a new redactor version, a kept file captured under the previous version reports
+    `redactor-version-mismatch` in `scripts/held-base-check.ts` until its leg is run again (the version a copy was kept under is its
+    `redactorVersion`; the upgrade that brought `paichart.r10/13` is one such case). That is expected — the copy is not corrupt. Relaunch the leg so the
+    file is kept again; do not edit the copy.
   - Changing the pin later governs **new reads only**: files already kept from the old repo stay usable (they are never re-checked
     against the pin) and still name the repo they came from. A new pin takes effect when the hub restarts, and a restart stops any
     run in flight — change it between runs.

@@ -1,0 +1,893 @@
+{
+  "about": "R10 v13 (register R10-COLLECTOR-NGINX-SHAPES): 32 fake collector / nginx / htpasswd credential shapes and the negative cases. Spec: cline_docs/reviews/r10-v13-2026-11-21/SHAPES.md. Every value is invented (named Synth3tic); none is a credential.",
+  "measuredAt": "paichart.r10/12",
+  "placeholder": "<<REDACTED-SECRET>>",
+  "assemble": {
+    "@@PEM_BEGIN@@": [
+      "-----BEGIN ",
+      "PRIVATE",
+      " KEY-----"
+    ],
+    "@@PEM_END@@": [
+      "-----END ",
+      "PRIVATE",
+      " KEY-----"
+    ]
+  },
+  "shapes": [
+    {
+      "id": "C01",
+      "kind": "collector-yaml",
+      "family": "exporter header, scheme word",
+      "text": "exporters:\n  otlphttp:\n    endpoint: https://otlp.example.invalid:4318\n    headers:\n      Authorization: \"Bearer Synth3ticTok9aB7cD2eF5gH8\"\n",
+      "secrets": [
+        "Synth3ticTok9aB7cD2eF5gH8"
+      ],
+      "keep": [
+        "      Authorization: \"Bearer ",
+        "headers:"
+      ],
+      "v12": "redacted",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "C02",
+      "kind": "collector-yaml",
+      "family": "exporter header, scheme word",
+      "text": "exporters:\n  otlphttp:\n    endpoint: https://otlp.example.invalid:4318\n    headers:\n      authorization: Basic Y29sbGVjdG9yOlN5bnRoM3RpY1B3OXhLMg==\n",
+      "secrets": [
+        "Y29sbGVjdG9yOlN5bnRoM3RpY1B3OXhLMg=="
+      ],
+      "keep": [
+        "      authorization: Basic "
+      ],
+      "v12": "redacted",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "C03",
+      "kind": "collector-yaml",
+      "family": "exporter header, key-named",
+      "text": "exporters:\n  otlphttp:\n    endpoint: https://otlp.example.invalid:4318\n    headers:\n      api-key: Synth3ticKey9aB7cD2eF5gH8\n",
+      "secrets": [
+        "Synth3ticKey9aB7cD2eF5gH8"
+      ],
+      "keep": [
+        "      api-key: "
+      ],
+      "v12": "redacted",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "C04",
+      "kind": "collector-yaml",
+      "family": "exporter header, key-named",
+      "text": "exporters:\n  otlphttp:\n    endpoint: https://otlp.example.invalid:4318\n    headers:\n      x-honeycomb-team: Synth3ticHny9aB7cD2eF5gH8\n",
+      "secrets": [
+        "Synth3ticHny9aB7cD2eF5gH8"
+      ],
+      "keep": [
+        "      x-honeycomb-team: "
+      ],
+      "v12": "redacted",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "C05",
+      "kind": "collector-yaml",
+      "family": "exporter header, key-named",
+      "text": "exporters:\n  otlphttp:\n    endpoint: https://otlp.example.invalid:4318\n    headers:\n      DD-API-KEY: 0123456789abcdefSynth3tic0123456\n",
+      "secrets": [
+        "0123456789abcdefSynth3tic0123456"
+      ],
+      "keep": [
+        "      DD-API-KEY: "
+      ],
+      "v12": "redacted",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "C06",
+      "kind": "collector-yaml",
+      "family": "extension credential key",
+      "text": "extensions:\n  basicauth/client:\n    client_auth:\n      username: collector\n      password: Synth3ticPw9xK2\n",
+      "secrets": [
+        "Synth3ticPw9xK2"
+      ],
+      "keep": [
+        "      username: collector",
+        "      password: "
+      ],
+      "v12": "redacted",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "C07",
+      "kind": "collector-yaml",
+      "family": "extension credential key",
+      "text": "extensions:\n  bearertokenauth:\n    token: Synth3ticTok9aB7cD2eF5gH8\n",
+      "secrets": [
+        "Synth3ticTok9aB7cD2eF5gH8"
+      ],
+      "keep": [
+        "    token: "
+      ],
+      "v12": "redacted",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "C08",
+      "kind": "collector-yaml",
+      "family": "extension credential key",
+      "text": "extensions:\n  oauth2client:\n    client_id: otel-collector\n    client_secret: Synth3ticSec9aB7cD2eF5\n    token_url: https://idp.example.invalid/oauth2/token\n",
+      "secrets": [
+        "Synth3ticSec9aB7cD2eF5"
+      ],
+      "keep": [
+        "    client_id: otel-collector",
+        "    client_secret: ",
+        "    token_url: https://idp.example.invalid/oauth2/token"
+      ],
+      "v12": "redacted",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "C09",
+      "kind": "collector-yaml",
+      "family": "exporter credential key",
+      "text": "exporters:\n  datadog:\n    api:\n      site: datadoghq.com\n      key: 0123456789abcdefSynth3tic0123456\n",
+      "secrets": [
+        "0123456789abcdefSynth3tic0123456"
+      ],
+      "keep": [
+        "      site: datadoghq.com",
+        "      key: "
+      ],
+      "v12": "redacted",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "C10",
+      "kind": "collector-yaml",
+      "family": "exporter credential key",
+      "text": "exporters:\n  splunk_hec:\n    token: Synth3ticTok9aB7cD2eF5gH8\n    endpoint: https://splunk.example.invalid:8088/services/collector\n",
+      "secrets": [
+        "Synth3ticTok9aB7cD2eF5gH8"
+      ],
+      "keep": [
+        "    token: ",
+        "    endpoint: https://splunk.example.invalid:8088/services/collector"
+      ],
+      "v12": "redacted",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "C11",
+      "kind": "collector-yaml",
+      "family": "exporter credential key",
+      "text": "exporters:\n  signalfx:\n    access_token: Synth3ticTok9aB7cD2eF5gH8\n    realm: us1\n",
+      "secrets": [
+        "Synth3ticTok9aB7cD2eF5gH8"
+      ],
+      "keep": [
+        "    access_token: ",
+        "    realm: us1"
+      ],
+      "v12": "redacted",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "C12",
+      "kind": "collector-yaml",
+      "family": "exporter credential key",
+      "text": "exporters:\n  kafka:\n    brokers: [kafka.example.invalid:9092]\n    auth:\n      plain_text:\n        username: collector\n        password: Synth3ticPw9xK2\n",
+      "secrets": [
+        "Synth3ticPw9xK2"
+      ],
+      "keep": [
+        "        username: collector",
+        "        password: "
+      ],
+      "v12": "redacted",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "C13",
+      "kind": "collector-yaml",
+      "family": "exporter credential key",
+      "text": "exporters:\n  awss3:\n    s3uploader:\n      region: us-east-1\n      s3_bucket: otel-archive\n      secret_key: Synth3ticSec9aB7cD2eF5\n",
+      "secrets": [
+        "Synth3ticSec9aB7cD2eF5"
+      ],
+      "keep": [
+        "      s3_bucket: otel-archive",
+        "      secret_key: "
+      ],
+      "v12": "redacted",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "C14",
+      "kind": "collector-yaml",
+      "family": "URL userinfo",
+      "text": "exporters:\n  otlphttp:\n    endpoint: https://collector:Synth3ticPw9xK2@otlp.example.invalid:4318\n",
+      "secrets": [
+        "Synth3ticPw9xK2"
+      ],
+      "keep": [
+        "    endpoint: https://collector:",
+        "@otlp.example.invalid:4318"
+      ],
+      "v12": "redacted",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "N15",
+      "kind": "nginx-conf",
+      "family": "URL userinfo",
+      "text": "server {\n    listen 4318;\n    location /v1/ {\n        proxy_pass https://collector:Synth3ticPw9xK2@upstream.example.invalid;\n    }\n}\n",
+      "secrets": [
+        "Synth3ticPw9xK2"
+      ],
+      "keep": [
+        "        proxy_pass https://collector:",
+        "@upstream.example.invalid;"
+      ],
+      "v12": "redacted",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "C16",
+      "kind": "collector-yaml",
+      "family": "inline private key",
+      "text": "exporters:\n  otlp:\n    tls:\n      key_pem: |\n        @@PEM_BEGIN@@\n        MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSynth3ticSynth3\n        ticSynth3ticSynth3ticSynth3ticSynth3ticSynth3ticSynth3ticSynth3t9\n        @@PEM_END@@\n      insecure: false\n",
+      "secrets": [
+        "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSynth3ticSynth3",
+        "ticSynth3ticSynth3ticSynth3ticSynth3ticSynth3ticSynth3ticSynth3t9"
+      ],
+      "keep": [
+        "      key_pem: |",
+        "      insecure: false"
+      ],
+      "note": "the loader replaces @@PEM_BEGIN@@ / @@PEM_END@@ with the assembled marker lines (never written whole in a committed file)",
+      "v12": "redacted",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "N17",
+      "kind": "nginx-conf",
+      "family": "nginx header directive, scheme word",
+      "text": "server {\n    listen 4318;\n    location /v1/ {\n        proxy_set_header Authorization \"Bearer Synth3ticTok9aB7cD2eF5gH8\";\n        proxy_pass http://otel-collector:4318;\n    }\n}\n",
+      "secrets": [
+        "Synth3ticTok9aB7cD2eF5gH8"
+      ],
+      "keep": [
+        "        proxy_set_header Authorization \"Bearer ",
+        "        proxy_pass http://otel-collector:4318;"
+      ],
+      "v12": "redacted",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "C18",
+      "kind": "collector-yaml",
+      "family": "YAML flow map",
+      "text": "exporters:\n  otlphttp:\n    endpoint: https://otlp.example.invalid:4318\n    headers: { api-key: Synth3ticKey9aB7cD2eF5gH8, x-scope-orgid: tenant-a }\n",
+      "secrets": [
+        "Synth3ticKey9aB7cD2eF5gH8"
+      ],
+      "keep": [
+        "    headers: { api-key: ",
+        "x-scope-orgid: tenant-a }"
+      ],
+      "v12": "missed",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "C19",
+      "kind": "collector-yaml",
+      "family": "htpasswd inline block",
+      "text": "extensions:\n  basicauth/server:\n    htpasswd:\n      inline: |\n        operator:Synth3ticPw9xK2\n        reader:$apr1$Synth3ti$Synth3ticSynth3ticSyn9.\n",
+      "secrets": [
+        "Synth3ticPw9xK2",
+        "$apr1$Synth3ti$Synth3ticSynth3ticSyn9."
+      ],
+      "keep": [
+        "      inline: |",
+        "        operator:",
+        "        reader:"
+      ],
+      "v12": "missed",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "C20",
+      "kind": "collector-yaml",
+      "family": "exporter header, generic name",
+      "text": "exporters:\n  otlphttp:\n    endpoint: https://otlp.example.invalid:4318\n    headers:\n      X-Token: Synth3ticTok9aB7cD2eF5gH8\n",
+      "secrets": [
+        "Synth3ticTok9aB7cD2eF5gH8"
+      ],
+      "keep": [
+        "      X-Token: "
+      ],
+      "v12": "missed",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "N21",
+      "kind": "nginx-conf",
+      "family": "nginx header directive, no scheme word",
+      "text": "server {\n    listen 4318;\n    location /v1/ {\n        proxy_set_header Authorization Synth3ticTok9aB7cD2eF5gH8;\n        proxy_pass http://otel-collector:4318;\n    }\n}\n",
+      "secrets": [
+        "Synth3ticTok9aB7cD2eF5gH8"
+      ],
+      "keep": [
+        "        proxy_set_header Authorization ",
+        ";"
+      ],
+      "v12": "missed",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "N22",
+      "kind": "nginx-conf",
+      "family": "nginx header directive, key-named header",
+      "text": "server {\n    listen 4318;\n    location /v1/ {\n        proxy_set_header X-API-Key Synth3ticKey9aB7cD2eF5gH8;\n        proxy_pass http://otel-collector:4318;\n    }\n}\n",
+      "secrets": [
+        "Synth3ticKey9aB7cD2eF5gH8"
+      ],
+      "keep": [
+        "        proxy_set_header X-API-Key "
+      ],
+      "v12": "missed",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "N23",
+      "kind": "nginx-conf",
+      "family": "nginx header directive, grpc",
+      "text": "server {\n    listen 4318;\n    location /v1/ {\n        grpc_set_header authorization \"Bearer Synth3ticTok9aB7cD2eF5gH8\";\n        proxy_pass http://otel-collector:4318;\n    }\n}\n",
+      "secrets": [
+        "Synth3ticTok9aB7cD2eF5gH8"
+      ],
+      "keep": [
+        "        grpc_set_header authorization \"Bearer "
+      ],
+      "v12": "missed",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "N24",
+      "kind": "nginx-conf",
+      "family": "nginx variable assignment",
+      "text": "server {\n    listen 4318;\n    location /v1/ {\n        set $api_token \"Synth3ticTok9aB7cD2eF5gH8\";\n        proxy_pass http://otel-collector:4318;\n    }\n}\n",
+      "secrets": [
+        "Synth3ticTok9aB7cD2eF5gH8"
+      ],
+      "keep": [
+        "        set $api_token \""
+      ],
+      "v12": "missed",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "N25",
+      "kind": "nginx-conf",
+      "family": "nginx secret directive",
+      "text": "server {\n    listen 4318;\n    location /v1/ {\n        secure_link_secret Synth3ticSec9aB7cD2eF5;\n        proxy_pass http://otel-collector:4318;\n    }\n}\n",
+      "secrets": [
+        "Synth3ticSec9aB7cD2eF5"
+      ],
+      "keep": [
+        "        secure_link_secret "
+      ],
+      "v12": "missed",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "N26",
+      "kind": "nginx-conf",
+      "family": "nginx map entry",
+      "text": "map $http_authorization $otlp_ok {\n    default 0;\n    \"Bearer Synth3ticTok9aB7cD2eF5gH8\" 1;\n}\n",
+      "secrets": [
+        "Synth3ticTok9aB7cD2eF5gH8"
+      ],
+      "keep": [
+        "map $http_authorization $otlp_ok {",
+        "    default 0;",
+        " 1;"
+      ],
+      "v12": "missed",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "N27",
+      "kind": "nginx-conf",
+      "family": "nginx if comparison",
+      "text": "server {\n    listen 4318;\n    location /v1/ {\n        if ($http_x_api_key != \"Synth3ticKey9aB7cD2eF5gH8\") { return 401; }\n        proxy_pass http://otel-collector:4318;\n    }\n}\n",
+      "secrets": [
+        "Synth3ticKey9aB7cD2eF5gH8"
+      ],
+      "keep": [
+        "        if ($http_x_api_key != \"",
+        "\") { return 401; }"
+      ],
+      "v12": "missed",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "N28",
+      "kind": "nginx-conf",
+      "family": "nginx header directive, cookie",
+      "text": "server {\n    listen 4318;\n    location /v1/ {\n        proxy_set_header Cookie \"session=Synth3ticSess9aB7cD2eF5gH8\";\n        proxy_pass http://otel-collector:4318;\n    }\n}\n",
+      "secrets": [
+        "Synth3ticSess9aB7cD2eF5gH8"
+      ],
+      "keep": [
+        "        proxy_set_header Cookie \""
+      ],
+      "v12": "missed",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "H29",
+      "kind": "htpasswd-line",
+      "family": "htpasswd hash",
+      "text": "operator:$apr1$Synth3ti$Synth3ticSynth3ticSyn9.\n",
+      "secrets": [
+        "$apr1$Synth3ti$Synth3ticSynth3ticSyn9."
+      ],
+      "keep": [
+        "operator:"
+      ],
+      "v12": "missed",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "H30",
+      "kind": "htpasswd-line",
+      "family": "htpasswd hash",
+      "text": "operator:$2y$05$Synth3ticSynth3ticSynth.Synth3ticSynth3ticSynth3ticSy9\n",
+      "secrets": [
+        "$2y$05$Synth3ticSynth3ticSynth.Synth3ticSynth3ticSynth3ticSy9"
+      ],
+      "keep": [
+        "operator:"
+      ],
+      "v12": "missed",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "H31",
+      "kind": "htpasswd-line",
+      "family": "htpasswd hash",
+      "text": "operator:{SHA}U3ludGgzdGljU3ludGgzdGljOTk=\n",
+      "secrets": [
+        "U3ludGgzdGljU3ludGgzdGljOTk="
+      ],
+      "keep": [
+        "operator:"
+      ],
+      "v12": "missed",
+      "v13Expect": "redact"
+    },
+    {
+      "id": "H32",
+      "kind": "htpasswd-line",
+      "family": "htpasswd plaintext",
+      "text": "operator:Synth3ticPw9xK2\n",
+      "secrets": [
+        "Synth3ticPw9xK2"
+      ],
+      "keep": [
+        "operator:"
+      ],
+      "v12": "missed",
+      "v13Expect": "residual-by-design"
+    }
+  ],
+  "negatives": [
+    {
+      "id": "X01",
+      "kind": "collector-yaml",
+      "why": "an ordinary endpoint, no userinfo",
+      "text": "exporters:\n  otlphttp:\n    endpoint: https://otlp.example.invalid:4318\n    compression: gzip\n"
+    },
+    {
+      "id": "X02",
+      "kind": "nginx-conf",
+      "why": "header set from a built-in variable",
+      "text": "server {\n    listen 4318;\n    location /v1/ {\n        proxy_set_header Host $host;\n        proxy_pass http://otel-collector:4318;\n    }\n}\n"
+    },
+    {
+      "id": "X03",
+      "kind": "nginx-conf",
+      "why": "forwarding headers set from variables",
+      "text": "server {\n    listen 4318;\n    location /v1/ {\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_pass http://otel-collector:4318;\n    }\n}\n"
+    },
+    {
+      "id": "X04",
+      "kind": "nginx-conf",
+      "why": "set of a non-secret variable",
+      "text": "server {\n    listen 4318;\n    location /v1/ {\n        set $upstream \"otel-collector:4318\";\n        proxy_pass http://otel-collector:4318;\n    }\n}\n"
+    },
+    {
+      "id": "X05",
+      "kind": "nginx-conf",
+      "why": "a map with no secret",
+      "text": "map $http_upgrade $connection_upgrade {\n    default upgrade;\n    '' close;\n}\n"
+    },
+    {
+      "id": "X06",
+      "kind": "collector-yaml",
+      "why": "header values that are environment references",
+      "text": "exporters:\n  otlphttp:\n    endpoint: https://otlp.example.invalid:4318\n    headers:\n      Authorization: ${env:OTLP_AUTH}\n      api-key: ${env:OTLP_API_KEY}\n      x-honeycomb-team: ${HONEYCOMB_KEY}\n"
+    },
+    {
+      "id": "X07",
+      "kind": "nginx-conf",
+      "why": "credential headers passed through from the request",
+      "text": "server {\n    listen 4318;\n    location /v1/ {\n        proxy_set_header Authorization $http_authorization;\n        proxy_set_header X-API-Key $http_x_api_key;\n        proxy_set_header Cookie $http_cookie;\n        grpc_set_header authorization $http_authorization;\n        proxy_pass http://otel-collector:4318;\n    }\n}\n"
+    },
+    {
+      "id": "X08",
+      "kind": "nginx-conf",
+      "why": "comments that mention header and directive names",
+      "text": "server {\n    listen 4318;\n    location /v1/ {\n        # proxy_set_header X-API-Key is set by the gateway, not here\n        # the Authorization header is checked upstream (secure_link_secret is not used)\n        proxy_pass http://otel-collector:4318;\n    }\n}\n"
+    },
+    {
+      "id": "X09",
+      "kind": "collector-yaml",
+      "why": "a hashed-looking public value (an image digest, a config checksum)",
+      "text": "service:\n  image: otel/opentelemetry-collector-contrib@sha256:3f5a9c1e7b2d4f6a8c0e1b3d5f7a9c2e4b6d8f0a1c3e5b7d9f2a4c6e8b0d1f3a\n  config_sha256: 3f5a9c1e7b2d4f6a8c0e1b3d5f7a9c2e4b6d8f0a1c3e5b7d9f2a4c6e8b0d1f3a\n"
+    },
+    {
+      "id": "X10",
+      "kind": "nginx-conf",
+      "why": "path-only directives that name key and password files",
+      "text": "server {\n    listen 4318;\n    location /v1/ {\n        ssl_certificate /etc/nginx/tls/server.crt;\n        ssl_certificate_key /etc/nginx/tls/server.key;\n        ssl_trusted_certificate /etc/nginx/tls/ca.pem;\n        auth_basic \"OTLP ingest\";\n        auth_basic_user_file /etc/nginx/conf.d/.htpasswd;\n        proxy_pass http://otel-collector:4318;\n    }\n}\n"
+    },
+    {
+      "id": "X11",
+      "kind": "collector-yaml",
+      "why": "TLS file paths and booleans",
+      "text": "exporters:\n  otlp:\n    tls:\n      insecure: false\n      ca_file: /etc/otel/ca.pem\n      cert_file: /etc/otel/cert.pem\n      key_file: /etc/otel/key.pem\n"
+    },
+    {
+      "id": "X12",
+      "kind": "nginx-conf",
+      "why": "set of a token-named variable FROM a variable",
+      "text": "server {\n    listen 4318;\n    location /v1/ {\n        set $api_token $arg_token;\n        set $auth_header $http_authorization;\n        proxy_pass http://otel-collector:4318;\n    }\n}\n"
+    },
+    {
+      "id": "X13",
+      "kind": "nginx-conf",
+      "why": "an if that compares a credential header with the empty string or a variable",
+      "text": "server {\n    listen 4318;\n    location /v1/ {\n        if ($http_x_api_key = \"\") { return 401; }\n        if ($http_authorization != $expected_auth) { return 403; }\n        proxy_pass http://otel-collector:4318;\n    }\n}\n"
+    },
+    {
+      "id": "X14",
+      "kind": "collector-yaml",
+      "why": "a flow map with no secret",
+      "text": "exporters:\n  otlphttp:\n    endpoint: https://otlp.example.invalid:4318\n    headers: { x-scope-orgid: tenant-a, x-team: platform }\n"
+    },
+    {
+      "id": "X15",
+      "kind": "collector-yaml",
+      "why": "an authenticator REFERENCE and a token FILE path",
+      "text": "exporters:\n  otlphttp:\n    auth:\n      authenticator: bearertokenauth\n    endpoint: https://otlp.example.invalid:4318\nextensions:\n  bearertokenauth:\n    filename: /var/run/secrets/otel/token\n"
+    },
+    {
+      "id": "X16",
+      "kind": "collector-yaml",
+      "why": "host:port and time values shaped like user:password",
+      "text": "receivers:\n  otlp:\n    protocols:\n      grpc:\n        endpoint: 0.0.0.0:4317\n      http:\n        endpoint: localhost:4318\nprocessors:\n  batch:\n    timeout: 10s\n    send_batch_size: 1024\n"
+    },
+    {
+      "id": "X17",
+      "kind": "nginx-conf",
+      "why": "a map keyed on a credential header whose entries are not secrets",
+      "text": "map $http_authorization $has_auth {\n    default 1;\n    \"\" 0;\n}\nmap $http_x_tenant $tenant_pool {\n    default pool_default;\n    \"tenant-a\" pool_a;\n}\n"
+    },
+    {
+      "id": "X18",
+      "kind": "collector-yaml",
+      "why": "key-named settings whose values are not credentials",
+      "text": "processors:\n  attributes:\n    actions:\n      - key: http.request.header.authorization\n        action: delete\n      - key: api_key\n        action: hash\nexporters:\n  kafka:\n    partition_traces_by_id: true\n    auth:\n      tls:\n        insecure: true\n"
+    },
+    {
+      "id": "X19",
+      "kind": "nginx-conf",
+      "why": "secure_link wiring with variables only",
+      "text": "server {\n    listen 4318;\n    location /v1/ {\n        secure_link $arg_md5,$arg_expires;\n        proxy_pass http://otel-collector:4318;\n    }\n}\n"
+    },
+    {
+      "id": "X20",
+      "kind": "collector-yaml",
+      "why": "a header with a generic name and an ordinary value",
+      "text": "exporters:\n  otlphttp:\n    endpoint: https://otlp.example.invalid:4318\n    headers:\n      X-Scope-OrgID: tenant-a\n      X-Token-Type: bearer\n      Content-Type: application/x-protobuf\n"
+    }
+  ],
+  "extraProbes": [
+    {
+      "id": "E01",
+      "what": "collector header, scheme ApiKey",
+      "text": "    headers:\n      Authorization: \"ApiKey Synth3ticTok9aB7cD2eF5gH8\"\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E02",
+      "what": "collector header as a list item (key / value)",
+      "text": "    headers:\n      - key: X-API-Key\n        value: Synth3ticTok9aB7cD2eF5gH8\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E03",
+      "what": "headers_setter value",
+      "text": "  headers_setter:\n    headers:\n      - action: upsert\n        key: X-Scope-OrgID\n        value: Synth3ticTok9aB7cD2eF5gH8\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E04",
+      "what": "azuremonitor connection_string",
+      "text": "  azuremonitor:\n    connection_string: InstrumentationKey=Synth3ticTok9aB7cD2eF5gH8;IngestionEndpoint=https://x.example.invalid/\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "redacted"
+    },
+    {
+      "id": "E05",
+      "what": "instrumentation_key",
+      "text": "  azuremonitor:\n    instrumentation_key: Synth3ticTok9aB7cD2eF5gH8\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E06",
+      "what": "elasticsearch api_key",
+      "text": "  elasticsearch:\n    api_key: Synth3ticTok9aB7cD2eF5gH8\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "redacted"
+    },
+    {
+      "id": "E07",
+      "what": "sentry dsn (key as userinfo, no password)",
+      "text": "  sentry:\n    dsn: https://Synth3ticTok9aB7cD2eF5gH8@sentry.example.invalid/42\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "redacted"
+    },
+    {
+      "id": "E08",
+      "what": "logzio account_token",
+      "text": "  logzio:\n    account_token: Synth3ticTok9aB7cD2eF5gH8\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E09",
+      "what": "coralogix private_key",
+      "text": "  coralogix:\n    private_key: Synth3ticTok9aB7cD2eF5gH8\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "redacted"
+    },
+    {
+      "id": "E10",
+      "what": "endpoint URL, token in the query",
+      "text": "  otlphttp:\n    endpoint: https://otlp.example.invalid/v1?api_key=Synth3ticTok9aB7cD2eF5gH8\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E11",
+      "what": "webhook URL, token in the path",
+      "text": "  webhook:\n    url: https://hooks.example.invalid/services/T000/B000/Synth3ticTok9aB7cD2eF5gH8\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E12",
+      "what": "kafka sasl password",
+      "text": "  kafka:\n    auth:\n      sasl:\n        username: c\n        password: Synth3ticPw9xK2\n        mechanism: SCRAM-SHA-512\n",
+      "mustGo": "Synth3ticPw9xK2",
+      "v12": "redacted"
+    },
+    {
+      "id": "E14",
+      "what": "env-file line OTEL_EXPORTER_OTLP_HEADERS",
+      "text": "OTEL_EXPORTER_OTLP_HEADERS=api-key=Synth3ticTok9aB7cD2eF5gH8\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E15",
+      "what": "YAML env value OTEL_EXPORTER_OTLP_HEADERS",
+      "text": "      OTEL_EXPORTER_OTLP_HEADERS: \"api-key=Synth3ticTok9aB7cD2eF5gH8,x-team=a\"\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E16",
+      "what": "header with a quoted key",
+      "text": "    headers:\n      \"api-key\": \"Synth3ticTok9aB7cD2eF5gH8\"\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "redacted"
+    },
+    {
+      "id": "E17",
+      "what": "header, single-quoted Bearer",
+      "text": "    headers:\n      Authorization: 'Bearer Synth3ticTok9aB7cD2eF5gH8'\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "redacted"
+    },
+    {
+      "id": "E18",
+      "what": "header after a comment line",
+      "text": "    headers:\n      # tenant auth\n      api-key: Synth3ticTok9aB7cD2eF5gH8\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "redacted"
+    },
+    {
+      "id": "E19",
+      "what": "header as a folded scalar",
+      "text": "    headers:\n      Authorization: >-\n        Bearer Synth3ticTok9aB7cD2eF5gH8\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E20",
+      "what": "nginx Authorization \"Basic b64\"",
+      "text": "        proxy_set_header Authorization \"Basic YzpTeW50aDN0aWNQdzl4SzI=\";\n",
+      "mustGo": "YzpTeW50aDN0aWNQdzl4SzI=",
+      "v12": "redacted"
+    },
+    {
+      "id": "E21",
+      "what": "nginx Authorization \"ApiKey x\"",
+      "text": "        proxy_set_header Authorization \"ApiKey Synth3ticTok9aB7cD2eF5gH8\";\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E22",
+      "what": "nginx Authorization, single-quoted Bearer",
+      "text": "        proxy_set_header Authorization 'Bearer Synth3ticTok9aB7cD2eF5gH8';\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "redacted"
+    },
+    {
+      "id": "E23",
+      "what": "nginx secure_link_md5 with a literal secret",
+      "text": "        secure_link_md5 \"$secure_link_expires$uri$remote_addr Synth3ticSec9aB7cD2eF5\";\n",
+      "mustGo": "Synth3ticSec9aB7cD2eF5",
+      "v12": "missed"
+    },
+    {
+      "id": "E24",
+      "what": "nginx fastcgi_param",
+      "text": "        fastcgi_param API_TOKEN Synth3ticTok9aB7cD2eF5gH8;\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E25",
+      "what": "nginx add_header Set-Cookie",
+      "text": "        add_header Set-Cookie \"session=Synth3ticTok9aB7cD2eF5gH8; Path=/\";\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E26",
+      "what": "nginx proxy_pass, token in the query",
+      "text": "        proxy_pass https://up.example.invalid/ingest?token=Synth3ticTok9aB7cD2eF5gH8;\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E27",
+      "what": "nginx set_by_lua_block literal",
+      "text": "        set_by_lua_block $tok { return \"Synth3ticTok9aB7cD2eF5gH8\" }\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E28",
+      "what": "nginx more_set_input_headers",
+      "text": "        more_set_input_headers \"Authorization: Bearer Synth3ticTok9aB7cD2eF5gH8\";\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E29",
+      "what": "nginx proxy_set_header not at line start",
+      "text": "    location / { proxy_set_header Authorization \"Bearer Synth3ticTok9aB7cD2eF5gH8\"; }\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E30",
+      "what": "nginx if with a regex compare",
+      "text": "        if ($arg_token ~ \"^Synth3ticTok9aB7cD2eF5gH8$\") { set $ok 1; }\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E31",
+      "what": "nginx set of an inline JWK",
+      "text": "        set $jwk '{\"k\":\"Synth3ticTok9aB7cD2eF5gH8\",\"kty\":\"oct\"}';\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E32",
+      "what": "htpasswd crypt(3), 13 characters",
+      "text": "operator:Sy9nth3ticAbc\n",
+      "mustGo": "Sy9nth3ticAbc",
+      "v12": "missed"
+    },
+    {
+      "id": "E33",
+      "what": "htpasswd SHA-512 crypt",
+      "text": "operator:$6$Synth3ticSalt$Synth3ticSynth3ticSynth3ticSynth3ticSynth3ticSynth3ticSynth3ticSynth3ticSynth3tic99999\n",
+      "mustGo": "Synth3ticSynth3ticSynth3ticSynth3ticSynth3ticSynth3ticSynth3ticSynth3ticSynth3tic",
+      "v12": "missed"
+    },
+    {
+      "id": "E34",
+      "what": "htpasswd hash inside a block scalar of another file",
+      "text": "data:\n  auth: |\n    operator:$apr1$Synth3ti$Synth3ticSynth3ticSyn9.\n",
+      "mustGo": "$apr1$Synth3ti$Synth3ticSynth3ticSyn9.",
+      "v12": "missed"
+    },
+    {
+      "id": "E35",
+      "what": "client_auth as a flow map",
+      "text": "    client_auth: { username: c, password: Synth3ticPw9xK2 }\n",
+      "mustGo": "Synth3ticPw9xK2",
+      "v12": "missed"
+    },
+    {
+      "id": "E36",
+      "what": "prometheus receiver authorization credentials",
+      "text": "          authorization:\n            type: Bearer\n            credentials: Synth3ticTok9aB7cD2eF5gH8\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "redacted"
+    },
+    {
+      "id": "E37",
+      "what": "prometheus receiver basic_auth password",
+      "text": "          basic_auth:\n            username: c\n            password: Synth3ticPw9xK2\n",
+      "mustGo": "Synth3ticPw9xK2",
+      "v12": "redacted"
+    },
+    {
+      "id": "E38",
+      "what": "nginx Authorization bare token, quoted",
+      "text": "        proxy_set_header Authorization \"Synth3ticTok9aB7cD2eF5gH8\";\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E39",
+      "what": "nginx proxy_set_header X-Auth-Token",
+      "text": "        proxy_set_header X-Auth-Token Synth3ticTok9aB7cD2eF5gH8;\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    },
+    {
+      "id": "E40",
+      "what": "nginx grpc_set_header x-api-key",
+      "text": "        grpc_set_header x-api-key Synth3ticTok9aB7cD2eF5gH8;\n",
+      "mustGo": "Synth3ticTok9aB7cD2eF5gH8",
+      "v12": "missed"
+    }
+  ],
+  "fields": {
+    "shapes": "the 32 shapes of the finding. text: the whole fake file fragment (apply `assemble` first). secrets: strings that must NOT appear in the redacted text. keep: strings that MUST still appear (key names, directives, structure). v12: what paichart.r10/12 did, measured 2026-11-21. v13Expect: redact, or residual-by-design (SHAPES.md says why).",
+    "negatives": "text that must come back byte-identical with redactedCount 0.",
+    "extraProbes": "shapes tried beyond the 32, with the v12 result (mustGo: the string a redaction would remove). No v13 expectation is set here: SHAPES.md section 4 says which families v13 should take.",
+    "invariant": "for every text in this file: the redacted text has the same number of lines as the input."
+  }
+}

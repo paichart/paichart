@@ -496,7 +496,8 @@ removes them before anything is saved:
 - **What is redacted before saving** (every artifact, comment and kept file): values under credential keys (password, secret, key,
   token, community, pre-shared key, SNMPv3 auth/priv, TACACS/RADIUS keys, Junos `$9$`, IOS type-7 …), the login **username** on a line that
   carries its credential, credential-named fields and keys in structured results (e.g. an SNMP community used as a map key), and any
-  later bare repeat of a value already redacted in the same run (echo redaction).
+  later bare repeat of a value already redacted in the same run (echo redaction). [SECURITY.md](SECURITY.md) names the collector,
+  nginx and htpasswd values the redactor takes and the ones it still does not.
 - **What a redacted value looks like:** `<<REDACTED-SECRET>>` in saved output (a terraform harvest may show `<REDACTED-SECRET>`); inside
   a quoted config line an agent writes `<value>`. Both are placeholders, not values.
 - **Never apply a line that contains a placeholder** — devices accept it as a literal (a community literally set to

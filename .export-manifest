@@ -1815,6 +1815,7 @@ scripts/fixtures/quote-fidelity/run2-harvest.json
 scripts/fixtures/quote-fidelity/tf-r9-harvest.json
 scripts/fixtures/quote-fidelity/tf-r9r10-harvest.json
 scripts/fixtures/quote-fidelity/tie-net-harvest.json
+scripts/fixtures/r10-v13/collector-nginx-shapes.json
 scripts/fixtures/requirements-coverage/telemetry-export-t1zero-run2-draft.md
 scripts/fixtures/rollback-containment/PROVENANCE.md
 scripts/fixtures/rollback-containment/fw-author.md
@@ -2192,6 +2193,8 @@ scripts/test-protocol-stamp-guards.ts
 scripts/test-public-base-url.ts
 scripts/test-publish-generated-spec.py
 scripts/test-quote-fidelity.ts
+scripts/test-r10-v13-shapes.ts
+scripts/test-r9-linear.ts
 scripts/test-reactor-budget-exhausted.ts
 scripts/test-reactor-race-guard.ts
 scripts/test-read-json-body.ts

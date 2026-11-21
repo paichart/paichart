@@ -19,7 +19,7 @@ import { execSync } from 'child_process';
 import { sanitizePovMetadata } from '@/lib/pov/sanitize-metadata';
 import { parseEnumParam } from '@/lib/utils/parse-enum-param';
 import { sanitizeChainedOutput, isR9OperatorEvent, R9_OPERATOR_EVENT_CLASSES, R9_VERSION, R9_RULE_SOURCES, r9VersionInEffect } from '@/lib/agents/harness/sanitize-chained-output';
-import { redactSerializedLeaf, redactArtifactSecrets, redactSecretsDeep, R10_VERSION, R10_RULE_SOURCES, R10_SERIALIZED_RULE_SOURCES, redactArtifactsForPersist, redactExtraArtifactForPersist, echoEligible, buildEchoMatcher, redactEchoes, ECHO_MAX_LENGTH, ECHO_MAX_LITERALS, ECHO_MAX_TRIES, redactEchoesDeep, pagerPersistLead, R10_PAGER_LEAD_MAX } from '@/lib/agents/harness/redact-artifact-secrets';
+import { redactSerializedLeaf, redactArtifactSecrets, redactSecretsDeep, R10_VERSION, R10_RULE_SOURCES, R10_SERIALIZED_RULE_SOURCES, redactArtifactsForPersist, redactExtraArtifactForPersist, echoEligible, buildEchoMatcher, redactEchoes, ECHO_MAX_LENGTH, ECHO_MAX_LITERALS, ECHO_MAX_TRIES, redactEchoesDeep, pagerPersistLead, R10_PAGER_LEAD_MAX, isCredentialShapedLine, CREDENTIAL_LINE_VERSION } from '@/lib/agents/harness/redact-artifact-secrets';
 import { createHash } from 'crypto';
 const { validateUrlSafety } = require('@/lib/utils/url-safety') as {
   validateUrlSafety: (u: string) => { safe: boolean; reason?: string };
@@ -870,6 +870,11 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
       // /12 (R10-K8S-ENV-PAIRS, 2026-11-17): the plain arm's OUTPUTS are unchanged; the row moves because the env-pair / args-flag structured
       // sources ride R10_RULE_SOURCES. May be re-pinned ONCE before /12 ships (a sec-ops fold-in); from the first deploy on the row is never edited.
       'paichart.r10/12': '0c43d459d8458dca55e0b487b8145ae57db0d9d38c6261d990f059cdfe54c2ba',
+      // /13 (R10-COLLECTOR-NGINX-SHAPES, 2026-11-21): PLAIN-arm rules (the nginx directive families, the htpasswd hash, rule 23's three names,
+      // the three block scans) over the corpus INCLUDING the v13 golden text appended below — held bases move for a file carrying a new shape.
+      // Also R10-LINE-SEPARATOR-QUADRATIC: six older rules' class stops at CR / U+2028 / U+2029 (their sources move; no golden output does).
+      // May be re-pinned ONCE before /13 ships (a sec-ops review fold-in); from the first deploy on the row is never edited.
+      'paichart.r10/13': 'b07143fbd9c598258cd3f7072d5ad605aae6619975a5218d6e551973bd7976a1', // re-pinned ONCE before ship (sec-ops / architectural review fold-in: M1 quoted regex map entries, S1 hash after a key, S2 URL exemption, S3 cookie-value echo source)
     };
     // R10 v5: synthetic GitHub tokens built at runtime (a literal would trip the pre-commit secret scan).
     const GH5 = 'gh' + 'p_' + 'Synth3tic'.repeat(4);                    // 36 after the prefix
@@ -896,7 +901,10 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
       // R10 v6 (R10-V6-TERRAFORM, 2026-10-21): prefixed password keys + `_wo`, a one-line HCL object, the resource-reference exemption.
       'master_password = "Synth3ticPw9"\nDB_PASSWORD=Synth3ticPw9\n  password_wo = "Synth3ticPw9"\n  secret_string = jsonencode({ password = "Synth3ticPw9" })\n  password = random_password.this.result\npassword: random_password.this.result\nmin_password_length = 12\nmax_token: 4000\n  password_wo = "UberSecretPassword"\n  password = "changeme"\n  create_random_password = try(each.value.c, false)\n  password_wo = !local.r && var.m ? null : var.p',
       // R10 v7 (2026-10-23, R10-V7-BRIEF): the network families, the partial-redaction fix, and the kept shapes beside them.
-      '  pre-shared-key ascii-text "$9$Synth3ticPsk9";\nsnmp-server user u1 g1 v3 auth sha Synth3tic9 priv aes 128 Synth3tic8\nsnmp-server host 10.9.9.9 version 2c Synth3ticC\n   isis authentication key 0 Synth3ticI\nntp authentication-key 1 md5 Synth3ticN 7\nvrrp 1 authentication text Synth3ticV\n  authentication-key "$9$Synth3ticAk9";\n  encrypted-password "$6$salt$Synth3ticHash";\nset snmp community Synth3ticJ authorization read-only\ntacacs server T1\n address ipv4 10.1.1.1\n key Synth3ticT\nsnmp {\n    community Synth3ticS {\n        authorization read-only;\n    }\n}\nsnmp-server host 192.0.2.1 source-interface loopback 0\n  pre-shared-key ckn 99887766554433221100\nthe "$9$…" form\n   isis authentication mode md5\n  pre-shared-key local 6 FakeLocalPsk\nradius-server host 10.1.1.1 vrf MGMT key 7 0207165218\nsnmp {\n    community FakeA;\n    community FakeB;\n}\nmac security\n   profile P\n      key 1234abcd 7 FakeCak01\n area-password FakeAreaPw\n authentication remote pre-share key FakeIk'];
+      '  pre-shared-key ascii-text "$9$Synth3ticPsk9";\nsnmp-server user u1 g1 v3 auth sha Synth3tic9 priv aes 128 Synth3tic8\nsnmp-server host 10.9.9.9 version 2c Synth3ticC\n   isis authentication key 0 Synth3ticI\nntp authentication-key 1 md5 Synth3ticN 7\nvrrp 1 authentication text Synth3ticV\n  authentication-key "$9$Synth3ticAk9";\n  encrypted-password "$6$salt$Synth3ticHash";\nset snmp community Synth3ticJ authorization read-only\ntacacs server T1\n address ipv4 10.1.1.1\n key Synth3ticT\nsnmp {\n    community Synth3ticS {\n        authorization read-only;\n    }\n}\nsnmp-server host 192.0.2.1 source-interface loopback 0\n  pre-shared-key ckn 99887766554433221100\nthe "$9$…" form\n   isis authentication mode md5\n  pre-shared-key local 6 FakeLocalPsk\nradius-server host 10.1.1.1 vrf MGMT key 7 0207165218\nsnmp {\n    community FakeA;\n    community FakeB;\n}\nmac security\n   profile P\n      key 1234abcd 7 FakeCak01\n area-password FakeAreaPw\n authentication remote pre-share key FakeIk',
+      // R10 v13 (2026-11-21, R10-COLLECTOR-NGINX-SHAPES): the nginx directive families, the htpasswd hash and inline block, the flow map,
+      // the generic x- header and the two key names — and the kept shapes beside them (a reference, a bare user:plaintext line, X-Token-Type).
+      '    location / { proxy_set_header Authorization "ApiKey Synth3tic9"; grpc_set_header x-api-key Synth3tic8; }\n        proxy_set_header Cookie "session=Synth3tic7";\n        proxy_set_header Authorization $http_authorization;\n        set $api_token "Synth3ticSet9";\n        set $api_token $arg_token;\n        secure_link_secret Synth3ticL9;\n        if ($http_x_api_key != "Synth3ticIf9") { return 401; }\nmap $http_authorization $ok {\n    default 0;\n    "Bearer Synth3ticMap9" 1;\n}\noperator:$apr1$Synth3ti$Synth3ticSynth3ticSyn9.\noperator:Synth3ticPw9\n    htpasswd:\n      inline: |\n        operator:Synth3ticPw9\n    headers: { api-key: Synth3ticFlow9, x-scope-orgid: tenant-a }\n      X-Token: Synth3ticX9\n      X-Token-Type: bearer\n    instrumentation_key: Synth3ticI9\n    account_token: Synth3ticA9\n'];
     // R10 v4 (R10-CODE-ASSIGN; sec-ops REVIEW-sec-ops-R10v4 B-1/B-2/SF-1/SF-2): EXACT outputs, both directions. null = byte-identical.
     const P10 = '<<REDACTED-SECRET>>';
     for (const [line, want] of [
@@ -1145,6 +1153,17 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
     check('R10 P3-B4: R10_VERSION is a non-empty paichart.r10/<n> string, never "none" (that value is the R10-off stamp)',
       /^paichart\.r10\/\d+$/.test(R10_VERSION));
     check('R10 P3-B4: no two versions share a fingerprint', new Set(Object.values(R10_FINGERPRINTS)).size === Object.keys(R10_FINGERPRINTS).length);
+    // R10 v13 build (SHAPES condition 16): a CORPUS CHECK of the comparator's credential-shaped line test — every line the plain arm
+    // changes in THIS golden corpus is flagged. Not a guarantee for every text (a block-context secret cannot be judged from one line — the
+    // function's contract); the pin that survives a new rule is the generated one in test-r10-v13-shapes.ts.
+    {
+      const notShaped: string[] = [];
+      golden.forEach((g, gi) => {
+        const a = g.split('\n'); const b = redactArtifactSecrets(g).redacted.split('\n');
+        a.forEach((l, i) => { if (l !== b[i] && !isCredentialShapedLine(l)) notShaped.push(`golden[${gi}] line ${i + 1}`); });
+      });
+      check(`credential-shaped line (${CREDENTIAL_LINE_VERSION}): every line R10 changes in the golden corpus is credential-shaped (missing: ${notShaped.join(', ') || 'none'})`, notShaped.length === 0);
+    }
 
     // SECOND fingerprint (R10 v3, sec-ops v2 S-2): arm 2 -- the derived SERIALIZED_PATTERNS sources, the looksSerialized
     // rule, and golden leaves through redactSecretsDeep (both arms). An arm-2-only change moves THIS row; bump the version.
@@ -1159,6 +1178,7 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
       'paichart.r10/10': 'b71f8123f90d21e8c377e73f17afcc4aea6353114838c4c87eaedff6f1fc3551', // re-pinned ONCE (sec-ops push-2 SF-5 fold-in). v10 (O-3): the two username rules, derived. May be re-pinned ONCE before ship (sec-ops fold-in)
       'paichart.r10/11': 'ec138383af701893b8647b7d8c2dd9100ed709dcb143ef0d3133a2fc151b6a1d', // re-pinned ONCE (sec-ops v11 finding 1 fold-in). v11: no echo match contained in a placeholder span (R10_ECHO_RULE_SOURCES); arm-2 outputs unchanged
       'paichart.r10/12': '46a409078e6de63e33ed885350f75b96e0b560738e60e60510f1eb473e72f1c4', // v12 (R10-K8S-ENV-PAIRS): env-pair + args-flag structured sources and the serialized k8s container leaf; may be re-pinned ONCE before ship (sec-ops fold-in)
+      'paichart.r10/13': 'ccd427177f5fc89276d1e634598f0a463151605078bcc68cf6d2f98554ea5d8a', // re-pinned ONCE before ship (review fold-in, as the plain row) // v13 (R10-COLLECTOR-NGINX-SHAPES + R10-LINE-SEPARATOR-QUADRATIC: six older rules stop at CR / U+2028 / U+2029): the derived nginx / htpasswd-hash / rule-23 line rules (a mid-line-anchored rule gets its encoded-newline arm), the vocabulary + auth|credential, and the v13 truncated leaf; may be re-pinned ONCE before ship (sec-ops fold-in)
     };
     const pad = 'x'.repeat(48);
     const leaves = [
@@ -1178,6 +1198,8 @@ check('Web phantom-user guard: verify-by-id after lookup, force-create on phanto
       JSON.stringify({ n: pad + '\n', containers: [{ env: [{ name: 'PASSWORD', value: 'Synth3ticPw9' }, { name: 'LOG_LEVEL', value: 'debug' },
         { name: 'AUTH_HEADER', value: 'Bear' + 'er eyJ.Synth3tic.Sig9' }, { name: 'P', valueFrom: { secretKeyRef: { name: 's', key: 'p' } } }],
         args: ['--pass' + 'word=Synth3ticArg9', '--listen=:8080', '--password-file=/run/pw'] }] }), // runtime-built (pre-commit secret scan)
+      // R10 v13: the new LINE rules in a truncated leaf (arm 2) — and a flow map, which arm 2 keeps (the block scans are plain-arm only).
+      '{"cfg": "' + pad + '\\n  proxy_set_header X-API-Key Synth3ticK9;\\n  set $api_token \\"Synth3ticSet9\\";\\noperator:$apr1$Synth3ti$Synth3ticSynth3ticSyn9.\\n      X-Token: Synth3ticX9\\n    headers: { api-key: Synth3ticFlow9 }\\n',
     ];
     const fp2 = createHash('sha256').update(JSON.stringify([R10_SERIALIZED_RULE_SOURCES, leaves.map((l) => redactSecretsDeep({ l }))])).digest('hex');
     check(`R10 v3: R10_VERSION (${R10_VERSION}) matches its pinned ARM-2 fingerprint (got ${fp2}) -- bump the version + add a row`,

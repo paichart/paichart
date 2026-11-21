@@ -52,6 +52,26 @@ One thing to know about the redactor:
   base64 registry credential stored in a ConfigMap, and a credential written in a manifest's raw YAML text rather than read as an
   object. Secret values themselves are never returned by the read-only service. Keep credentials in Secrets
   (`valueFrom: secretKeyRef`) and these residuals do not arise.
+- **Collector, nginx and htpasswd values it redacts (redactor version `paichart.r10/13` and later), and what it still does not:**
+  these rules are not limited to collector or nginx files — they apply to every text the redactor sees (a kept file, a tool
+  result, a report; a Kubernetes ConfigMap or ingress snippet that carries nginx lines is treated the same). The redactor removes the value of a credential header set by `proxy_set_header` or
+  `grpc_set_header` (`Authorization`, `Cookie`, `X-API-Key`, an `X-…-Token` name; the scheme word such as `Bearer` stays), a
+  literal assigned to a credential-named nginx variable (`set $api_token "…"`), `secure_link_secret`, a literal a credential
+  variable is compared with (`if ($http_x_api_key != "…")`, the entries of a `map $http_authorization … { }` block), an htpasswd
+  hash after `user:` (`$apr1$`, bcrypt, `{SHA}` …), every entry of a collector `htpasswd:` → `inline:` block, a credential in a
+  one-line YAML map (`headers: { api-key: … }`), and the collector keys `instrumentation_key` and `account_token`. The directive,
+  the header or key name and the rest of the line stay in the kept copy, so you can still see what the line is. A line whose
+  value was redacted **cannot be changed by a pipeline edit at all** — not its value, not its header name: the package is refused
+  (`touches-redacted-line`) and that line is yours to change by hand. Redaction can also hit a line that holds no secret (for
+  example a non-secret literal under a credential-named header or variable): the kept copy then shows the placeholder, edits to
+  that line are refused in the same way, and the rest of the file is unaffected — make that one change yourself, or write the
+  value as a reference. Still **not** redacted: a bare
+  `user:password` line outside that `inline:` block (it looks like `host:port`; a file *named* `htpasswd` is never read or kept),
+  a token inside a URL path or query (`?api_key=…`), a literal inside a Lua or njs block or a `secure_link_md5` expression,
+  `fastcgi_param` / `add_header Set-Cookie` values, a commented-out directive, and a short or letters-only literal (under eight
+  characters, or with no digit or symbol) in a `set`, `if` or `map`, and the entries of a `map` block that come AFTER a line
+  containing a brace (a quoted regex entry with a `{n}` quantifier ends the block for the redactor). Reference a secret
+  (`$variable`, `${env:NAME}`) instead of writing it and none of these arise.
 
 The interface contract (the values every leg of a program must use exactly) is not sanitized or truncated, by design:
 section 2 below says why.

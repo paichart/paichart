@@ -225,12 +225,23 @@ export function sanitizeChainedOutput(raw: string): SanitizeChainedResult {
     .map((p) => ({ start: p.position, end: p.position + p.match.length, category: p.category, match: p.match }))
     .filter((s) => s.match.length > 0)
     .sort((a, b) => b.start - a.start);
+  // ONE assembly, never a splice per span: `text = text.slice(0, start) + marker + text.slice(end)` copied the whole
+  // text once per match (2.4 s at 400,000 characters of matching lines, register R9-SANITIZER-MATCH-QUADRATIC). The
+  // spans, the overlap rule, the order of `neutralizedInjections` and the resulting text are unchanged: the pieces
+  // are collected right-to-left (kept text after the span, then its marker) and joined once.
+  const pieces: string[] = [];
+  let keptFrom = text.length; // everything from here to the end is already in `pieces`
   let lastStart = Number.POSITIVE_INFINITY;
   for (const s of spans) {
     if (s.end > lastStart) continue; // overlaps an already-neutralized (rightmost) span
-    text = text.slice(0, s.start) + `[NEUTRALIZED-INJECTION:${s.category}]` + text.slice(s.end);
+    pieces.push(text.slice(s.end, keptFrom), `[NEUTRALIZED-INJECTION:${s.category}]`);
     neutralizedInjections.push({ category: s.category, match: s.match });
     lastStart = s.start;
+    keptFrom = s.start;
+  }
+  if (pieces.length > 0) {
+    pieces.push(text.slice(0, keptFrom));
+    text = pieces.reverse().join('');
   }
 
   if (neutralizedInjections.length > 0) classes.add('injection-pattern');

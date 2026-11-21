@@ -66,6 +66,13 @@ regexes = [
   # L-K2 (held-k8s step 3 lab) canary plant in LAB-PREREG-L-K2.md + its experiment: an invented value named "LK2CANARY", planted to prove
   # R10 redacts it at capture and it never reaches an agent prompt; not a credential (inspected 2026-10-19).
   '''^LK2CANARYw8Rq4Zt1Xm6$''',
+  # R10 v13 (register R10-COLLECTOR-NGINX-SHAPES) must-redact fixtures in scripts/fixtures/r10-v13/collector-nginx-shapes.json and
+  # cline_docs/reviews/r10-v13-2026-11-21/SHAPES.md: invented values named "Synth3tic", placed after collector / nginx credential
+  # keys so the v13 rules are exercised; not credentials (written and inspected by sec-ops 2026-11-21).
+  '''^Synth3ticTok9aB7cD2eF5gH8$''',
+  '''^Synth3ticKey9aB7cD2eF5gH8$''',
+  '''^Synth3ticSec9aB7cD2eF5$''',
+  '''^Synth3ticPw9xK2$''',
 ]
 paths = [
   '''node_modules''',

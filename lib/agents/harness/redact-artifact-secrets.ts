@@ -68,14 +68,14 @@
  *    `authorization:` block, `Authorization: Bearer|Basic` under a YAML `headers:` map, nginx
  *    `proxy_set_header Authorization "Bearer|Basic …"`, prefixed `aws_secret_access_key`, and PEM
  *    `-----BEGIN … PRIVATE KEY-----` blocks are now caught. Still residual, priced: a scheme-less header value
- *    (`x-api-key: …`, `Authorization: <token>` with no scheme), a flow-style map (`headers: {Authorization: …}`),
+ *    (`x-api-key: …`, `Authorization: <token>` with no scheme), a flow-style map (`headers: {Authorization: …}` — closed by R10 v13 for a one-line map after a key),
  *    a credential after a blank line or more than 32 lines inside its block, the block-context forms on a
  *    TRUNCATED serialized leaf (arm 2 has no `\n` to anchor them), `aws_session_token`, and the last body line
  *    of a cut (END-less) PEM key when it is shorter than 16 characters. From the pattern-attack review
  *    (REVIEW-P1-P2-PATTERNS.md, 2026-10-13), probed and NOT caught, priced: `export AWS_SECRET_ACCESS_KEY=…` and inline
  *    `-e KEY=…` flags (the line anchor; pre-existing for every key); k8s `- name: X` / `value: …` pairs incl. probe
- *    `httpHeaders` IN TEXT (YAML) — closed in STRUCTURED (JSON) results by R10 v12 (v)/(vi), env pairs and `args` flags; a list-item `- bearer_token: …`; schemes other than Bearer/Basic (`ApiKey`, `Token`);
- *    `grpc_set_header`, a commented-out `# proxy_set_header …`, or one not at line start; an `authorization:` parent
+ *    `httpHeaders` IN TEXT (YAML) — closed in STRUCTURED (JSON) results by R10 v12 (v)/(vi), env pairs and `args` flags; a list-item `- bearer_token: …`; schemes other than Bearer/Basic (`ApiKey`, `Token` — closed by R10 v13, V13_SCHEME; a scheme outside that list stays);
+ *    `grpc_set_header`, a commented-out `# proxy_set_header …`, or one not at line start (the grpc, scheme-word, scheme-less and mid-line forms are CLOSED by R10 v13 — see the COLLECTOR / NGINX entry below; the commented-out one stays); an `authorization:` parent
  *    with a trailing comment, capitalised, holding a list, or a folded scalar; PGP private key blocks and k8s
  *    `tls.key:` base64-of-PEM; a quoted credential with a space (only its first word goes); letters-only bearer
  *    tokens (the shape gate, deliberate).
@@ -112,6 +112,33 @@
  *    community); arm 2 words separated by an ENCODED tab; a quoted SNMP community name with a space keeps its tail; in arm 2 an escape
  *    between `set` and the keyword (a quoted description first) hides `pre-shared-key` / `encrypted-password` (the SF-1 linearity price). PRE-EXISTING, not v7's: an older rule whose directive ends a line can take the next line's first word (`\s+`
  *    crosses the newline) — over-redaction only; every v7 rule is line-bound (`[ \t]`).
+ *  - COLLECTOR / NGINX / HTPASSWD (R10 v13, 2026-11-21, R10-COLLECTOR-NGINX-SHAPES; spec cline_docs/reviews/r10-v13-2026-11-21/SHAPES.md,
+ *    record R10-V13-BUILD.md beside it). Now caught: a credential header set by `proxy_set_header` / `grpc_set_header` (any scheme word of
+ *    a closed list kept; a bare or quoted literal; also after `{` / `;` on the line), `set $<credential variable> <literal>`,
+ *    `secure_link_secret`, `if ($<credential variable> = "<literal>")`, the entries of a `map $<credential variable> … {` block, an
+ *    htpasswd / crypt hash after `<name>:` at any indent, the collector `htpasswd:` → `inline:` block (plaintext too), a one-line YAML
+ *    flow map after a key (`headers: { api-key: … }`), a generic `x-…-token` header key, `instrumentation_key`, `account_token`, and the
+ *    `ApiKey` / `Token` / `Splunk` / `Api-Token` scheme words. Priced residuals, register R10-V13-RESIDUALS (trigger: before the first
+ *    customer collector or nginx file is held):
+ *      · H32 — a STANDALONE `user:plaintext` htpasswd line, and a 13-character crypt(3) hash (no prefix): cannot be told from
+ *        `host:port` or any `word:word` pair. A file NAMED htpasswd is refused at the gate, at capture and at resolution; the inline
+ *        block is caught. BY DESIGN.
+ *      · a token in a URL path or query (`?api_key=…`, a webhook path) — open-ended names; a candidate for a closed parameter list.
+ *      · embedded languages and expressions: `set_by_lua_block`, njs, an inline JWK, an `if` REGEX compare (`~`), `secure_link_md5`
+ *        with a literal inside its expression, a value mixing a variable and a literal under a NON-credential name.
+ *      · other directives: `fastcgi_param`, `uwsgi_param`, `add_header Set-Cookie`, `more_set_input_headers`, `auth_jwt_key`.
+ *      · `OTEL_EXPORTER_OTLP_HEADERS=k=v,…` (an env line's value is a header list), a header given as a list item
+ *        (`- key: X-API-Key` / `value: …`), a folded or literal scalar whose value is on the next line, a commented-out directive.
+ *      · gates: `set` / `if` / `map` need a secret-shaped value of 8+ characters (a short or letters-only literal stays, count 0);
+ *        a quoted nginx value containing `\` or longer than 512 characters; a `map` written on one line; an nginx variable name or
+ *        header name outside the closed lists (`$auth_header`, `X-Cache-Key`, `X-Hub-Signature`).
+ *      · in a collector YAML `headers:` block: a scheme-less `Authorization: <token>` and a `Cookie:` value (the nginx directives
+ *        take both; the YAML block rule still needs a scheme word — pre-existing).
+ *      · ARM 2 (a truncated serialized leaf): the three BLOCK scans (flow map, htpasswd inline, nginx map) do not run there — as
+ *        every block-context rule; the v13 LINE rules do. A JSON-structured `headers` object with a generic `x-…-token` key IS taken
+ *        (the structured arm judges it through rule 23).
+ *      · over-redaction, priced: a credential header / variable set to a value that mixes a literal with a variable goes whole
+ *        (`"session=$cookie_x"`); `/etc/shadow`-style lines lose their hash (a hash is a dictionary oracle, as `secret sha512 $6$…`).
  *  - An inline mid-sentence secret mention in prose (not at a line start) is not redacted.
  *  - Non-plain objects (e.g. Date) flatten to `{}` via the object branch in redactSecretsDeep
  *    (harmless: result.json is JSON-serialized anyway).
@@ -202,6 +229,9 @@ function ci(src: string): string {
 }
 
 // Each regex: group 1 = preserved prefix (line indent + directive), group 2 = secret token.
+// A RULE WRITER'S TRAP (R10-LINE-SEPARATOR-QUADRATIC, fixed in v13): under /m, `^` matches after `\n`, a bare `\r`, U+2028 and U+2029.
+// A class meant to stay on the line must exclude all four — write `[^\n\r\u2028\u2029]`, never `[^\n]`, in any rule that can
+// scan (`+`, `*`, `*?`) from a `^` anchor; `[^\n]` alone rescans to the end of the text from every such line start (quadratic).
 // Lowercase + line-anchored (/gm) so prose/headings don't collide. Token `\S+` redacts to the next
 // whitespace (no `"`/`\` exclusion needed: these run on PARSED string values / markdown text, never
 // on a serialized-JSON blob, so there is no delimiter to over-grab — and excluding `"`/`\` would
@@ -211,6 +241,54 @@ function ci(src: string): string {
 // the execution and refuse a held edit that touches it). NOT_ECHO_SOURCE (below) carries these and their arm-2 variants.
 const LOGIN_NAME_RULE = /^([ \t]*username[ \t]+)(?!<<REDACTED-SECRET>>)(\S+)(?=(?:[ \t]+(?:privilege[ \t]+\d+|role[ \t]+\S+|nopassword|algorithm-type[ \t]+\S+))*[ \t]+(?:secret|password)(?:[ \t]+(?:\d+|sha512|sha256|md5))?[ \t]+\S)/gm;
 const JUNOS_LOGIN_NAME_RULE = /^([ \t]*set[ \t]+system[ \t]+login[ \t]+user[ \t]+)(?!<<REDACTED-SECRET>>)(\S+)(?=[ \t]+authentication[ \t]+(?:encrypted-password|plain-text-password)[ \t]+\S)/gm;
+
+// ── R10 v13 (2026-11-21, R10-COLLECTOR-NGINX-SHAPES; spec cline_docs/reviews/r10-v13-2026-11-21/SHAPES.md) — CLOSED word lists ─────
+// Every v13 rule is built from these lists (sec-ops condition 6: a list, never "any name containing `secret`"), is LINE-BOUND
+// (`[ \t]`, never `\s`; no token crosses a newline) and has every quantifier bounded. Where a NAME TEST is needed (a generic
+// `x-…-token` header, a credential-named nginx variable) it is a bounded sequence of name segments ending in a word of a closed list.
+/** HTTP auth scheme words kept in the prefix (the token is what follows). v12 knew `bearer|basic`. */
+const V13_SCHEME = String.raw`(?:bearer|basic|apikey|api-token|token|splunk)`;
+/** A generic credential header: `x-` + at most three name segments + a closed credential word (`X-Token`, `X-Auth-Token`,
+ *  `x-amz-security-token`). `X-Token-Type`, `X-Scope-OrgID`, `X-Cache-Key`, `X-Hub-Signature` are not credential headers. */
+const V13_X_HEADER = String.raw`x-(?:[A-Za-z0-9]{1,24}-){0,3}(?:token|secret|password|passwd|auth|api-?key|access-?key|credentials?)`;
+/** The header names the nginx header directives are read for (case-insensitive). */
+const V13_NGX_CRED_HEADER = String.raw`(?:(?:proxy-)?authorization|cookie|api-?key|access-?token|auth-?token|private-token|dd-api-key|dd-application-key|x-honeycomb-team|ocp-apim-subscription-key|x-functions-key|x-instana-key|lightstep-access-token|${V13_X_HEADER})`;
+/** A credential-named nginx variable (without its `$`): an optional request-part prefix, at most six name segments, a closed
+ *  credential word — `http_authorization`, `http_x_api_key`, `arg_token`, `api_token`, `cookie_session_token`; or `http_cookie`. */
+const V13_NGX_CRED_VAR = String.raw`(?:http_cookie|(?:(?:http|sent_http|upstream_http|arg|cookie)_)?(?:[a-z0-9]{1,32}_){0,6}(?:token|secret|password|passwd|passphrase|api_?key|access_key|secret_key|private_key|signing_key|credentials?|auth|authorization|jwt|bearer))`;
+/** A value that is WHOLLY nginx variables (`$http_authorization`, `${tok}`, `$scheme$host`) is a reference, not a secret — exempt
+ *  only as the whole token followed by its own terminator (condition 5). A value mixing a literal and a variable is not exempt. */
+const V13_NGX_REF = String.raw`(?:\$(?:\{\w{1,128}\}|\w{1,128})){1,16}`;
+const V13_NGX_REF_EXEMPT = `(?!${V13_NGX_REF}` + String.raw`(?:\\?["'])?[ \t]*(?:[;)]|$))`;
+/** A value that is wholly an absolute path names a FILE (`set $jwt_secret /etc/keys/jwt;`), not a secret. */
+const V13_NGX_NOT_PATH = String.raw`(?!\/[\w.\/-]{0,255}(?:\\?["'])?[ \t]*(?:;|$))`;
+/** A value that is wholly a URL with NO userinfo names an endpoint (`set $upstream_auth http://oauth2-proxy.auth.svc:4180;` — sec-ops
+ *  review S2), not a secret. A URL carrying `@` is NOT exempt: the set rule takes it whole (over-redaction, never a leak). */
+const V13_NGX_NOT_URL = String.raw`(?![a-z][a-z0-9+.-]{0,31}:\/\/[^\s"'\\;@]{1,512}(?:\\?["'])?[ \t]*(?:;|$))`;
+/** An nginx literal: QUOTED — everything up to the closing quote (so `"a=1; s=SECRET"` never loses only its first word — the
+ *  self-masking class); UNQUOTED — one run up to whitespace, `;` or `)`. Stops at `\` (arm 2's escaped quote). `gated`: the module's
+ *  secret-shape gate (a digit or one of $ . / = +) inside the token, and at least 8 characters. */
+function v13NgxToken(gated: boolean): string {
+  const n = gated ? '{8,512}' : '{1,512}';
+  const g = (cls: string): string => (gated ? `(?=${cls}{0,511}[\\d$.\\/=+])` : '');
+  const dq = String.raw`[^"\n\\]`; const sq = String.raw`[^'\n\\]`; const bare = String.raw`[^\s"'\\;)]`;
+  return `(?:(?<=")${g(dq)}${dq}${n}` + String.raw`(?=\\?")` + `|(?<=')${g(sq)}${sq}${n}(?=')|(?<!["'])${g(bare)}${bare}${n})`;
+}
+/** An htpasswd / crypt(3)-family HASH, recognised by ITS OWN PREFIX (condition 9): `$apr1$`, bcrypt `$2a$|$2b$|$2x$|$2y$`, `$1$`,
+ *  `$5$`, `$6$` (salt, then a hash of 16+), `{SHA}` / `{SSHA}` (+ the 256/512 forms). Case-sensitive. */
+const V13_HTPASSWD_HASH = String.raw`(?:\$apr1\$[A-Za-z0-9.\/]{1,16}\$[A-Za-z0-9.\/]{16,128}|\$2[abxy]\$\d\d\$[A-Za-z0-9.\/]{22,128}|\$[156]\$(?:rounds=\d{1,9}\$)?[A-Za-z0-9.\/]{1,32}\$[A-Za-z0-9.\/]{16,128}|\{S?SHA(?:256|512)?\}[A-Za-z0-9+\/]{16,256}={0,2})`;
+/** Rule 23's key names (the k8s / cloud family). ONE list: rule 23 spells it through `ci`, the v13 flow-map scan reads it /i.
+ *  R10 v13 added the last three: `instrumentation[_-]?key`, `account[_-]?token` (collector exporters) and V13_X_HEADER. */
+const RULE23_KEY_NAMES = String.raw`(?:${PREFIXED_PASSWORD}|password|passwd|passphrase|token|api[_-]?token|api[_-]?key|apikey|client[_-]?secret|(?:aws[_-]?)?secret[_-]?access[_-]?key|secret[_-]?key|access[_-]?key|access[_-]?token|private[_-]?key|privatekey|bearer(?:[_-]?token)?|auth[_-]?token|x-honeycomb-team|x-sf-token|dd-api-key|x-api-key|connection[_-]?string|connectionstring|dsn|secret|instrumentation[_-]?key|account[_-]?token|${V13_X_HEADER})`;
+/** The closed NAME lists as regex sources — read by the test that pins isCredentialShapedLine against them (one generated line per
+ *  name: a rule that gains a name the line test does not know turns red). Not rule sources: nothing here feeds a fingerprint. */
+export const R10_CLOSED_LIST_SOURCES: Readonly<Record<'rule23KeyNames' | 'ngxCredentialVariable' | 'ngxCredentialHeader', string>> = Object.freeze({
+  rule23KeyNames: RULE23_KEY_NAMES, ngxCredentialVariable: V13_NGX_CRED_VAR, ngxCredentialHeader: V13_NGX_CRED_HEADER,
+});
+
+/** The nginx literal-header rule (v13 (1)), named because its token may be a COOKIE string: the echo pass also takes each cookie's
+ *  VALUE (the part after `=`) as a literal — a model restates `<v>`, not `session=<v>` (sec-ops review S3). */
+const V13_NGX_HEADER_LITERAL_RULE = new RegExp(String.raw`((?:^|[{;])[ \t]*(?:proxy|grpc)_set_header[ \t]+${V13_NGX_CRED_HEADER}[ \t]+(?:\\?["'])?)(?!${V13_SCHEME}(?:[ \t]|\\?["']|;|$))${V13_NGX_REF_EXEMPT}(${v13NgxToken(false)})`, 'gim');
 
 const PATTERNS: RegExp[] = [
   // R10 v7 (2026-10-23): IOS-XE `enable algorithm-type scrypt secret X` / `username u algorithm-type sha256 secret X` (the modern
@@ -255,7 +333,7 @@ const PATTERNS: RegExp[] = [
   // `password` is priced (refused).
   // Junos MACsec: `pre-shared-key cak <k>` (the secret — `cak` is a type word like `ascii-text`; the draft took it as the
   // key, found on the public corpus) and `pre-shared-key ckn <hex>` (the key NAME, not a secret — refused, the line is kept).
-  /^([ \t]*(?:set[ \t]+[^\n]+[ \t])?pre-shared-key(?:[ \t]+(?:local|remote))?(?:[ \t]+password)?(?:[ \t]+(?:address|hostname)[ \t]+(?:ipv6[ \t]+)?\S+(?:[ \t]+\d{1,3}(?:\.\d{1,3}){3})?)?(?:[ \t]+key)?(?:[ \t]+(?:ascii-text|hexadecimal|cak|[06](?=[ \t]+\S)))?[ \t]+(?:\\?")?)((?!(?:ckn|ascii-text|hexadecimal|cak|local|remote|password|address|hostname|ipv6)\b)(?![06][ \t]+\S)(?!\{)(?:(?<=")[^"\n\\]+|(?<!")\S+))/gm,
+  /^([ \t]*(?:set[ \t]+[^\n\r\u2028\u2029]+[ \t])?pre-shared-key(?:[ \t]+(?:local|remote))?(?:[ \t]+password)?(?:[ \t]+(?:address|hostname)[ \t]+(?:ipv6[ \t]+)?\S+(?:[ \t]+\d{1,3}(?:\.\d{1,3}){3})?)?(?:[ \t]+key)?(?:[ \t]+(?:ascii-text|hexadecimal|cak|[06](?=[ \t]+\S)))?[ \t]+(?:\\?")?)((?!(?:ckn|ascii-text|hexadecimal|cak|local|remote|password|address|hostname|ipv6)\b)(?![06][ \t]+\S)(?!\{)(?:(?<=")[^"\n\\]+|(?<!")\S+))/gm,
   // R10 v7 (sec-ops SF-6): IOS-XE IKEv2 profile inline PSK — ` authentication local|remote pre-share key [0|6] <k>`.
   /^([ \t]*authentication[ \t]+(?:local|remote)[ \t]+pre-share[ \t]+key(?:[ \t]+[06](?=[ \t]+\S))?[ \t]+)((?![06][ \t]+\S)\S+)/gm,
   // R10 v7 (sec-ops N-12): EOS IPsec IKE `shared-key <0|7> <k>`. The TYPE is REQUIRED: a typeless form matched wrapped markdown prose
@@ -280,8 +358,8 @@ const PATTERNS: RegExp[] = [
   /^([ \t]*isis\s+password(?:\s+\d+)?\s+)(\S+)/gm,
   // SNMPv3 (EOS-style): `snmp-server user bob v3 auth md5 auth-password X … priv-password Y` —
   // two separate patterns so BOTH tokens on one line are redacted. `[^\n]*?` keeps it one line.
-  /^([ \t]*snmp-server\s+user\s+[^\n]*?\bauth-password\s+)(\S+)/gm,
-  /^([ \t]*snmp-server\s+user\s+[^\n]*?\bpriv-password\s+)(\S+)/gm,
+  /^([ \t]*snmp-server\s+user\s+[^\n\r\u2028\u2029]*?\bauth-password\s+)(\S+)/gm,
+  /^([ \t]*snmp-server\s+user\s+[^\n\r\u2028\u2029]*?\bpriv-password\s+)(\S+)/gm,
   // ── R10 v7 network families (2026-10-23, R10-V7-BRIEF; held-network precondition N-1) ─────────────────────────────────────────
   // Each is directive-anchored and line-anchored, like its siblings above; the type/algorithm words a device prints between the
   // keyword and the value are consumed by the PREFIX, never by the token (the item-12 lesson: a value-position error reports
@@ -289,8 +367,8 @@ const PATTERNS: RegExp[] = [
   // SNMPv3, IOS / NX-OS / EOS spelling: `snmp-server user u g v3 [localized <id>] auth sha <k> priv aes 128 <k>` (also `sha256`,
   // `md5`, NX-OS `priv <k>` with no algorithm, `aes-128`; sec-ops SF-5: NX-OS 10 hyphenates `sha-256` — both spellings). Two rules so BOTH keys go. The token never takes an `auth-password` /
   // `priv-password` / `localizedkey` keyword (the EOS form above, and NX-OS's trailing flag) or an algorithm word.
-  /^([ \t]*snmp-server[ \t]+user[ \t]+[^\n]*?\bauth[ \t]+(?:md5|sha(?:-?(?:224|256|384|512))?)[ \t]+)((?!auth-password\b|priv-password\b|localizedkey\b)\S+)/gm,
-  /^([ \t]*snmp-server[ \t]+user[ \t]+[^\n]*?\bpriv[ \t]+(?:(?:des|3des|aes(?:-?(?:128|192|256))?)(?:[ \t]+(?:128|192|256))?[ \t]+)?)((?!priv-password\b|localizedkey\b|des\b|3des\b|aes(?:-?(?:128|192|256))?\b)\S+)/gm,
+  /^([ \t]*snmp-server[ \t]+user[ \t]+[^\n\r\u2028\u2029]*?\bauth[ \t]+(?:md5|sha(?:-?(?:224|256|384|512))?)[ \t]+)((?!auth-password\b|priv-password\b|localizedkey\b)\S+)/gm,
+  /^([ \t]*snmp-server[ \t]+user[ \t]+[^\n\r\u2028\u2029]*?\bpriv[ \t]+(?:(?:des|3des|aes(?:-?(?:128|192|256))?)(?:[ \t]+(?:128|192|256))?[ \t]+)?)((?!priv-password\b|localizedkey\b|des\b|3des\b|aes(?:-?(?:128|192|256))?\b)\S+)/gm,
   // SNMP trap/inform host community: `snmp-server host <ip> [vrf X] [informs|traps] [version 1|2c] <community> [udp-port …]`. Never
   // after `version 3` (that word is a USER name, not a secret) — the token refuses the keywords, so a v3 line does not match. It also refuses
   // `source-interface` / `use-vrf` / `filter-vrf` / `poll` and an IPv4 address (NX-OS `snmp-server host <ip> source-interface lo0`, ASA
@@ -322,7 +400,7 @@ const PATTERNS: RegExp[] = [
   // R10 v7: also the `$1$` / `$5$` / `$6$` crypt hashes (a dictionary oracle — redacted like `secret sha512 $6$…` already is).
   // sec-ops R10v7 SF-3(b): Junos always QUOTES it, so in a serialized leaf the prefix must take `\"` (and `\\\"` at level 2) — the
   // `$1$`/`$5$`/`$6$` extension was plain-text only; line-bound, and the token stops at `\`.
-  /^([ \t]*(?:set[ \t]+[^\n]+[ \t])?encrypted-password[ \t]+(?:\\*")?)(\$[1569]\$[^"\s\\]+)/gm,
+  /^([ \t]*(?:set[ \t]+[^\n\r\u2028\u2029]+[ \t])?encrypted-password[ \t]+(?:\\*")?)(\$[1569]\$[^"\s\\]+)/gm,
   // R10 v7: a QUOTED Junos `$9$` value under ANY key (`authentication-key`, `hello-authentication-key`, `secret`, `pre-shared-key
   // ascii-text`, `authentication-password` …). `$9$` is a REVERSIBLE obfuscation, not a hash, so a quoted `"$9$…"` is never config
   // data. Not line-anchored (brace, set and prose spellings all quote it), so BOUNDED: the opening quote by lookbehind, 4-512 characters
@@ -343,7 +421,9 @@ const PATTERNS: RegExp[] = [
   // `count.` / `self.` / `path.` / `terraform.`, Python `os.environ` / `os.getenv`, JS `process.env.`, GitHub Actions
   // `${{ secrets.|vars.|env.|inputs.|steps.|needs.|github. }}`. Exempt only UNQUOTED (a quoted `"var.x"` is a literal string)
   // and only when the WHOLE token is the expression (sec-ops R10v5 B-2). Rule 23 is case-SENSITIVE from v5 (B-1): `ci` spells its keys.
-  new RegExp(String.raw`^([ \t]*(?:-[ \t]+)?` + ci(String.raw`(?:${PREFIXED_PASSWORD}|password|passwd|passphrase|token|api[_-]?token|api[_-]?key|apikey|client[_-]?secret|(?:aws[_-]?)?secret[_-]?access[_-]?key|secret[_-]?key|access[_-]?key|access[_-]?token|private[_-]?key|privatekey|bearer(?:[_-]?token)?|auth[_-]?token|x-honeycomb-team|x-sf-token|dd-api-key|x-api-key|connection[_-]?string|connectionstring|dsn|secret)${WRITE_ONLY_SUFFIX}`) + String.raw`[ \t]*[:=](?!:?=(?:\s|$))[ \t]*)(` + refExempt(TERM_PLAIN) + EXPR_RHS_EXEMPT + String.raw`(?=\S*[\d$.\/=+])"?\S+)`, 'gm'),
+  // R10 v13: + `instrumentation[_-]?key`, `account[_-]?token` (SHAPES E05 / E08) and a generic credential HEADER name `x-…-token|secret|
+  // password|auth|api-key|access-key|credentials` (C20 `X-Token: <v>`; V13_X_HEADER). Same shape gate and exemptions; the list is RULE23_KEY_NAMES.
+  new RegExp(String.raw`^([ \t]*(?:-[ \t]+)?` + ci(RULE23_KEY_NAMES + WRITE_ONLY_SUFFIX) + String.raw`[ \t]*[:=](?!:?=(?:\s|$))[ \t]*)(` + refExempt(TERM_PLAIN) + EXPR_RHS_EXEMPT + String.raw`(?=\S*[\d$.\/=+])"?\S+)`, 'gm'),
   // R10 v4 (R10-CODE-ASSIGN, 2026-10-19): `:=` is a CODE assignment (Go, Rego), never YAML `:` + a value — the rule above no longer
   // matches it (`[:=](?!=)`), because it ate the `=` as the 'secret' and corrupted every Rego/Go line whose LHS is credential-named
   // (`key := sprintf(...)`, `api_key := input.x`). A code assignment's secret is a hard-coded QUOTED literal, so this rule redacts only
@@ -376,7 +456,29 @@ const PATTERNS: RegExp[] = [
   // `(?!\$)` leaves `$http_authorization` / `"Bearer $token"` intact. `\\?"?` and the `\\`-free token let the
   // derived serialized variant match `\"Bearer x\";` without eating the escape. Case-insensitive: header
   // names and schemes are case-insensitive in HTTP; the directive keeps the line anchored.
-  /^([ \t]*proxy_set_header[ \t]+authorization[ \t]+(?:\\?["'])?(?:bearer|basic)[ \t]+)((?!\$)[^\s"'\\;]+)/gim,
+  // R10 v13: the directive is `proxy_set_header` OR `grpc_set_header` (N23), also AFTER `{` or `;` on the same line (E29: `location / {
+  // proxy_set_header … }`), the header any CREDENTIAL header (V13_NGX_CRED_HEADER), the scheme any word of V13_SCHEME (E21 `ApiKey`).
+  new RegExp(String.raw`((?:^|[{;])[ \t]*(?:proxy|grpc)_set_header[ \t]+${V13_NGX_CRED_HEADER}[ \t]+(?:\\?["'])?${V13_SCHEME}[ \t]+)((?!\$)[^\s"'\\;]+)`, 'gim'),
+  // R10 v13 — the nginx families (SHAPES N21 N22 N24 N25 N27 N28, E38 E39 E40). Each anchors on a CLOSED directive list at line start or
+  // after `{` / `;`, keeps the directive, the header / variable name, the quotes and the `;`, and exempts a value that is wholly nginx
+  // variables. (1) a credential header set to a LITERAL with no scheme word — bare or quoted (a quoted value goes whole: a Cookie
+  // `"a=1; session=<v>"`). No shape gate: the directive + header name pin the meaning, like the scheme rule above. A value that starts with
+  // a scheme word belongs to the rule above (or is a reference after a scheme) and is never taken here.
+  V13_NGX_HEADER_LITERAL_RULE,
+  // (2) `set $<credential-named variable> <literal>;` (N24). A variable name is a weaker anchor than a header directive, so the value
+  // must be secret-shaped and 8+ characters (`set $require_auth 1;`, `set $auth "off";` stay); a wholly-path value names a file and a
+  // wholly-URL value with no userinfo names an endpoint (the forward-auth endpoint of an SSO proxy, quoted or not).
+  new RegExp(String.raw`((?:^|[{;])[ \t]*set[ \t]+\$${V13_NGX_CRED_VAR}[ \t]+(?:\\?["'])?)${V13_NGX_REF_EXEMPT}${V13_NGX_NOT_PATH}${V13_NGX_NOT_URL}(${v13NgxToken(true)})`, 'gim'),
+  // (3) a directive whose ARGUMENT is the secret (N25). Closed list; `secure_link` / `secure_link_md5` are other directives.
+  new RegExp(String.raw`((?:^|[{;])[ \t]*(?:secure_link_secret|encrypted_session_key)[ \t]+(?:\\?["'])?)${V13_NGX_REF_EXEMPT}(${v13NgxToken(false)})`, 'gim'),
+  // (4) `if ($<credential variable> = "<literal>")` / `!=` (N27). Gated like (2); a scheme word is kept; a `~` regex compare is a residual.
+  new RegExp(String.raw`((?:^|[{;])[ \t]*if[ \t]*\([ \t]*\$${V13_NGX_CRED_VAR}[ \t]*!?=[ \t]*(?:\\?["'])?(?:${V13_SCHEME}[ \t]+)?)(?!${V13_SCHEME}[ \t])${V13_NGX_REF_EXEMPT}(${v13NgxToken(true)})`, 'gim'),
+  // R10 v13 — an htpasswd HASH after `<name>:` at any indent (H29 H30 H31, C19's hash line, E33 E34; also Prometheus
+  // `basic_auth_users`, an `/etc/shadow` line). Keyed on the hash's own prefix, so `host:port`, `key: value` and an image digest never
+  // match. The name, the colon and anything after the hash stay. A bare `user:plaintext` line (H32) is the named residual.
+  // sec-ops review S1: also after a KEY on the same line (`auth: admin:$apr1$…`, `htpasswd: "admin:$2y$05$…"` — the Helm values form
+  // of a registry / ingress basic-auth entry): one optional `<key>: ` (YAML's colon + space) and an optional quote before `<name>:`.
+  new RegExp(String.raw`^([ \t]*(?:-[ \t]+)?(?:[^\s:#"']{1,255}:[ \t]{1,8}(?:\\?["'])?)?[^\s:#"']{1,255}:[ \t]{0,8}(?:\\?["'])?)(${V13_HTPASSWD_HASH})`, 'gm'),
   // AWS access key id — distinctive (AKIA + 16 upper/digit), redact inline wherever it appears.
   /()(AKIA[0-9A-Z]{16})/g,
   // R10 v5 (SF-6, 2026-10-19): GitHub tokens -- distinctive prefixes, redact inline wherever they appear (a Helm
@@ -429,7 +531,7 @@ const BLOCK_CONTEXT_PATTERNS: RegExp[] = [
   // YAML `headers:` map (OTel exporters, Prometheus remote_write) — `Authorization: "Bearer x"` / `Basic x`.
   // Scheme required (the brief's shape; a scheme-less header value is a residual). A `${env:X}` value is a reference
   // and survives; a bare `$…` value is redacted since v3. Case-insensitive for the header name and scheme.
-  new RegExp(String.raw`^(([ \t]*)(?:-[ \t]+)?headers:[ \t]*\r?\n(?:\2[ \t][^\n]*\n){0,32}?\2[ \t]+["']?authorization["']?[ \t]*:[ \t]*["']?(?:bearer|basic)[ \t]+)(` + refExempt(TERM_BLOCK) + String.raw`[^\s"'\\]+)`, 'gim'),
+  new RegExp(String.raw`^(([ \t]*)(?:-[ \t]+)?headers:[ \t]*\r?\n(?:\2[ \t][^\n]*\n){0,32}?\2[ \t]+["']?authorization["']?[ \t]*:[ \t]*["']?${V13_SCHEME}[ \t]+)(` + refExempt(TERM_BLOCK) + String.raw`[^\s"'\\]+)`, 'gim'),
   // Datadog exporter `api:` block -- `key: <api key>` (R10 v3, P1-3; sec-ops v2 S-3(b)). BLOCK-context only: a bare
   // `key:` is k8s `secretKeyRef.key`, a reference. Lowercase (Datadog keys are). Secret-shape gate as the k8s family
   // (a Datadog key is 32 hex characters). A `key:` outside an `api:` parent is a named residual.
@@ -468,6 +570,152 @@ function redactJunosSnmpCommunities(text: string, sink?: Set<string>): RedactArt
     }
     const open = SNMP_BLOCK_OPEN.exec(l);
     if (open) indent = open[1];
+  }
+  return redactedCount ? { redacted: lines.join('\n'), redactedCount } : { redacted: text, redactedCount: 0 };
+}
+
+// ── R10 v13 BLOCK SCANS (2026-11-21, R10-COLLECTOR-NGINX-SHAPES) — three block-context kinds, ONE linear pass over the lines ────────
+// Like the Junos `snmp {` scan above: a BLOCK_CONTEXT regex stops after its first match, and these contexts hold several entries.
+// Plain arm only (arm 2 has no real newlines — a truncated serialized leaf carrying one of these is a named residual). Every
+// replacement is INSIDE one line: the line count and every line's position are unchanged.
+//  (a) YAML FLOW MAP on one line (SHAPES C18, E35): `headers: { api-key: <v>, x-scope-orgid: tenant-a }`. Bound three ways (sec-ops
+//      condition 8): the line must START with an UNQUOTED YAML key followed by `{` (a JSON line or prose never does), the pass never
+//      leaves that line, and an entry's key must be one of RULE23_KEY_NAMES or `authorization` (after `{` or `,`; quoted or not; an
+//      unquoted key needs YAML's `: `). Value: quoted (inner text) or one unquoted run up to whitespace `,` `}` (a leading `${…}` is
+//      read whole, so `${X}` is seen as a reference and `${X:literal}` is redacted whole, never cut at its brace). Rule 23's shape gate;
+//      a whole-token reference stays; under `authorization` a scheme word is kept and the token after it is gated; an UNQUOTED value
+//      that is code (a member access, a call) stays — a one-line JS object literal has the same shape as a flow map.
+//  (b) the collector basicauth `htpasswd:` → `inline:` block (C19): everything after `<user>:` on each entry line (a hash was already
+//      taken by the hash rule; the PLAINTEXT form is taken only here — condition 9). Also the one-line `inline: user:pw` form.
+//  (c) an nginx `map $<credential variable> $x {` block (N26): an entry's SOURCE value (`"Bearer <v>" 1;`) — gated (secret-shaped, 8+),
+//      a scheme word kept, `default` / a regex entry (`~…`, bare OR QUOTED — sec-ops review M1: `"~*PHPSESSID=.+" 1;` in the standard
+//      cache-bypass map on `$http_cookie` is a pattern, never a secret) / a wholly-variable entry untouched. The block ends at `}` or at any line
+//      carrying `{` (a map holds no nested block). A map written on ONE line is a named residual.
+const V13_FLOW_HEAD = /^[ \t]*(?:-[ \t]+)?[A-Za-z_][\w.\/-]{0,127}:[ \t]*\{/;
+const V13_FLOW_KEY = `(?:authorization|${RULE23_KEY_NAMES})`;
+const V13_FLOW_ENTRY = new RegExp(String.raw`([{,][ \t]*(?:${V13_FLOW_KEY}[ \t]*:[ \t]+|"${V13_FLOW_KEY}"[ \t]*:[ \t]*|'${V13_FLOW_KEY}'[ \t]*:[ \t]*))(?:"([^"\n\\]{1,512})"|'([^'\n\\]{1,512})'|((?:\$\{[^\s{}"'\\,]{1,256}\}[^\s,{}\[\]"'\\]{0,256}|[^\s,{}\[\]"'\\]{1,512})))`, 'gi');
+const V13_FLOW_AUTH_KEY = /^[{,][ \t]*["']?authorization["']?[ \t]*:/i;
+const V13_SCHEME_SPLIT = new RegExp(String.raw`^(${V13_SCHEME}[ \t]+)(\S[^\n]{0,511})$`, 'i');
+const V13_WHOLE_REF = new RegExp(`^${REF}$`);
+const V13_SHAPE_GATE = /[\d$.\/=+]/;
+const V13_FLOW_CODE = /[()]|=>|\|\||&&/;
+const V13_HTPASSWD_OPEN = /^([ \t]*)(?:-[ \t]+)?htpasswd:[ \t]*\r?$/;
+const V13_HTPASSWD_INLINE_BLOCK = /^([ \t]+)inline:[ \t]*[|>][+\-0-9]{0,2}[ \t]*\r?$/;
+const V13_HTPASSWD_INLINE_ONE = /^([ \t]+inline:[ \t]+["']?[^\s:#"']{1,255}:)([^\s"']{1,512})/;
+const V13_HTPASSWD_ENTRY = /^[ \t]+[^\s:#]{1,255}:/;
+const V13_MAP_OPEN = new RegExp(String.raw`^[ \t]*map[ \t]+\$\{?${V13_NGX_CRED_VAR}\}?[ \t]+\$\w{1,128}[ \t]*\{[ \t]*\r?$`, 'i');
+const V13_MAP_ENTRY_QUOTED = new RegExp(String.raw`^([ \t]*(["'])(?!~)(?:${V13_SCHEME}[ \t]+)?)(?!${V13_SCHEME}[ \t])([^"'\n\\]{8,512})(?=\2[ \t]+\S)`, 'i');
+const V13_MAP_ENTRY_BARE = /^([ \t]*)([^\s"';{}~\\]{8,512})(?=[ \t]+\S)/;
+const V13_WHOLE_NGX_REF = new RegExp(`^${V13_NGX_REF}$`);
+const V13_SCAN_SOURCES: readonly string[] = [
+  ...[V13_FLOW_HEAD, V13_FLOW_ENTRY, V13_FLOW_AUTH_KEY, V13_SCHEME_SPLIT, V13_WHOLE_REF, V13_SHAPE_GATE, V13_FLOW_CODE].map((re) => `scan:v13-flow-map:/${re.source}/${re.flags}`),
+  ...[V13_HTPASSWD_OPEN, V13_HTPASSWD_INLINE_BLOCK, V13_HTPASSWD_INLINE_ONE, V13_HTPASSWD_ENTRY].map((re) => `scan:v13-htpasswd-inline:/${re.source}/${re.flags}`),
+  ...[V13_MAP_OPEN, V13_MAP_ENTRY_QUOTED, V13_MAP_ENTRY_BARE, V13_WHOLE_NGX_REF].map((re) => `scan:v13-nginx-map:/${re.source}/${re.flags}`),
+  'scan:v13:one-line-per-replacement;htpasswd-block-ends-at-indent;map-block-ends-at-brace;flow-unquoted-code-kept(member-access<=1-digit|call);flow-scheme-token-gated',
+];
+
+/** (a) one flow-map line. Returns the line (changed or not) and how many values went. */
+function redactV13FlowLine(line: string, sink?: Set<string>): { out: string; count: number } {
+  let count = 0;
+  V13_FLOW_ENTRY.lastIndex = 0;
+  const out = line.replace(V13_FLOW_ENTRY, (whole: string, prefix: string, dq?: string, sq?: string, bare?: string) => {
+    const value = dq ?? sq ?? bare ?? '';
+    const quote = dq !== undefined ? '"' : sq !== undefined ? "'" : '';
+    if (!value || value.includes('<<REDACTED') || V13_WHOLE_REF.test(value)) return whole;
+    // An UNQUOTED value that is CODE is not a literal: a one-line JS / TS object (`headers: { 'api-key': this.apiKey }`) reads exactly
+    // like a YAML flow map. A member access with at most one digit (the echo guard's rule) or a call is left alone — measured on the
+    // repo corpus (R10-V13-BUILD §5): the three code lines the draft redacted.
+    if (bare !== undefined && (V13_FLOW_CODE.test(value) || (ECHO_MEMBER_ACCESS.test(value) && (value.match(/\d/g) ?? []).length <= ECHO_MEMBER_ACCESS_MAX_DIGITS))) return whole;
+    if (V13_FLOW_AUTH_KEY.test(prefix)) {
+      // `authorization`: a scheme word is kept, the rest of a QUOTED value goes (an unquoted `Bearer` is the whole run: left alone).
+      // The token after the scheme must be secret-shaped here (a documentation line `Authorization: 'Bearer token'` stays).
+      const m = V13_SCHEME_SPLIT.exec(value);
+      if (m) {
+        if (V13_WHOLE_REF.test(m[2]) || !V13_SHAPE_GATE.test(m[2])) return whole;
+        sink?.add(m[2]); count += 1;
+        return `${prefix}${quote}${m[1]}${PLACEHOLDER}${quote}`;
+      }
+    }
+    if (!V13_SHAPE_GATE.test(value)) return whole;
+    sink?.add(value); count += 1;
+    return `${prefix}${quote}${PLACEHOLDER}${quote}`;
+  });
+  return { out, count };
+}
+
+/** Leading spaces/tabs of a line. */
+function v13Indent(l: string): number {
+  let i = 0;
+  while (i < l.length && (l[i] === ' ' || l[i] === '\t')) i += 1;
+  return i;
+}
+
+function redactV13Blocks(text: string, sink?: Set<string>): RedactArtifactResult {
+  const hasBrace = text.includes('{');
+  const hasHtpasswd = text.includes('htpasswd:');
+  if (!hasBrace && !hasHtpasswd) return { redacted: text, redactedCount: 0 };
+  const lines = text.split('\n');
+  let redactedCount = 0;
+  let ht: { indent: number; inline: number | null } | null = null;
+  let inMap = false;
+  for (let k = 0; k < lines.length; k++) {
+    let l = lines[k];
+    // (c) nginx map entries
+    if (inMap) {
+      if (l.includes('}') || l.includes('{')) { inMap = false; } else {
+        const q = V13_MAP_ENTRY_QUOTED.exec(l);
+        const b = q ? null : V13_MAP_ENTRY_BARE.exec(l);
+        const prefix = q ? q[1] : b ? b[1] : null;
+        const token = q ? q[3] : b ? b[2] : null;
+        if (prefix !== null && token !== null && !token.includes('<<REDACTED') && V13_SHAPE_GATE.test(token) && !V13_WHOLE_NGX_REF.test(token)) {
+          sink?.add(token);
+          l = lines[k] = prefix + PLACEHOLDER + l.slice(prefix.length + token.length);
+          redactedCount += 1;
+        }
+        continue;
+      }
+    }
+    if (hasBrace && l.includes('{')) {
+      if (V13_MAP_OPEN.test(l)) { inMap = true; continue; }
+      // (a) flow map
+      if (V13_FLOW_HEAD.test(l)) {
+        const r = redactV13FlowLine(l, sink);
+        if (r.count) { l = lines[k] = r.out; redactedCount += r.count; }
+      }
+    }
+    // (b) htpasswd inline
+    if (!hasHtpasswd) continue;
+    const blank = /^[ \t\r]*$/.test(l);
+    if (ht && !blank) {
+      const ind = v13Indent(l);
+      if (ind <= ht.indent) ht = null;
+      else if (ht.inline !== null && ind > ht.inline) {
+        const m = V13_HTPASSWD_ENTRY.exec(l);
+        if (m) {
+          let j = l.length;
+          while (j > m[0].length && (l[j - 1] === ' ' || l[j - 1] === '\t' || l[j - 1] === '\r')) j -= 1;
+          const core = l.slice(m[0].length, j);
+          if (core.length > 0 && !core.includes('<<REDACTED')) {
+            sink?.add(core);
+            lines[k] = m[0] + PLACEHOLDER + l.slice(j);
+            redactedCount += 1;
+          }
+        }
+        continue;
+      } else {
+        ht.inline = null;
+        const ib = V13_HTPASSWD_INLINE_BLOCK.exec(l);
+        if (ib) { ht.inline = ib[1].length; continue; }
+        const io = V13_HTPASSWD_INLINE_ONE.exec(l);
+        if (io && !io[2].includes('<<REDACTED')) {
+          sink?.add(io[2]);
+          lines[k] = io[1] + PLACEHOLDER + l.slice(io[0].length);
+          redactedCount += 1;
+        }
+        continue;
+      }
+    }
+    if (!ht) { const o = V13_HTPASSWD_OPEN.exec(l); if (o) ht = { indent: o[1].length, inline: null }; }
   }
   return redactedCount ? { redacted: lines.join('\n'), redactedCount } : { redacted: text, redactedCount: 0 };
 }
@@ -632,7 +880,11 @@ function applyPatterns(text: string, patterns: RegExp[], sink?: Set<string>): Re
       // line's first word — the header's named over-redaction residual). Echoing such a token amplified one over-redaction into a
       // whole public-key / certificate body (Batfish cisco_crypto `key-string` + `56789ABC`: 1 → 256 placeholders, measured).
       // A block-context prefix spans lines BY DESIGN, but its last line carries the key (`credentials: `), so it still feeds.
-      if (sink && !NOT_ECHO_SOURCE.has(re) && !(prefix.includes('\n') && /^[ \t\r]*$/.test(prefix.slice(prefix.lastIndexOf('\n') + 1)))) sink.add(token);
+      if (sink && !NOT_ECHO_SOURCE.has(re) && !(prefix.includes('\n') && /^[ \t\r]*$/.test(prefix.slice(prefix.lastIndexOf('\n') + 1)))) {
+        sink.add(token);
+        // R10 v13 (sec-ops S3): a cookie string `a=1; session=<v>` — each pair's VALUE is an echo literal too (echoEligible still judges it).
+        if (ECHO_COOKIE_VALUE_SOURCE.has(re) && token.includes('=')) for (const pair of token.split(';')) { const eq = pair.indexOf('='); if (eq >= 0 && eq < pair.length - 1) sink.add(pair.slice(eq + 1).trim()); }
+      }
       redactedCount += 1;
       return prefix + PLACEHOLDER;
     });
@@ -866,6 +1118,7 @@ const R10_ECHO_RULE_SOURCES: readonly string[] = [
   `echo:member-access-max-digits=${ECHO_MEMBER_ACCESS_MAX_DIGITS}`,
   'echo:source:not-a-line-crossing-token',
   'echo:source:not-a-login-name',
+  'echo:source:cookie-pair-values-of-the-nginx-literal-header-rule', // R10 v13 (sec-ops S3)
   `echo:not-contained-in-placeholder-span:/${PLACEHOLDER_ANY.source}/`, // R10 v11 (sec-ops finding 1: contained matches only)
   `echo:stop:${[...ECHO_STOPWORDS].sort().join(',')}`,
 ];
@@ -937,9 +1190,27 @@ const R10_ECHO_RULE_SOURCES: readonly string[] = [
  * kept). Closes env/args secrets in a k8s object's spec AND its last-applied-configuration annotation (incl. a STALE rotated-out value).
  * The plain arm's OUTPUT is unchanged (redactArtifactSecrets / B / held bases move nothing); a held ref keys on redactorVersion, so a
  * capture straddling the deploy reads base-changed (the safe direction) although its bytes are identical.
+ * paichart.r10/13 = 2026-11-21 (R10-COLLECTOR-NGINX-SHAPES, before the observability 1.12.0 text and before any customer collector or
+ * nginx file is held; SHAPES.md by sec-ops, 15 of 32 shapes missed by v12). PLAIN-arm rules — held bases MOVE for a file carrying one
+ * of these shapes: the nginx header directives (`proxy_set_header` | `grpc_set_header`, any credential header of a closed list, a scheme
+ * word kept or a bare / quoted literal, also after `{` / `;`), `set $<credential variable>`, `secure_link_secret`, `if ($<credential
+ * variable> = "…")`, `map $<credential variable> … {` entries (a scan), an htpasswd / crypt hash keyed on its own prefix, the collector
+ * `htpasswd:` → `inline:` block (a scan), a one-line YAML flow map after a key (a scan), rule 23's generic `x-…-token` header name and
+ * `instrumentation_key` / `account_token`, and four more scheme words. Every new rule is line-bound, from closed word lists, bounded
+ * and timed on 1 MB of its own shape (test-r10-v13-shapes.ts). Arm 2 derives the line rules (a mid-line-anchored rule gets its encoded
+ * newline: toSerializedVariant); the scans are plain-arm only. The structured vocabulary gains `auth|credential` (output-preserving for
+ * every earlier name). A ref keys on redactorVersion, so a capture straddling the deploy reads base-changed (the safe direction).
+ * ALSO IN /13 — R10-LINE-SEPARATOR-QUADRATIC (pre-existing since the 2026-08-16 SNMPv3 rules and v7; found by v13's timing pins): under
+ * the `m` flag `^` also matches after a bare CR, U+2028 and U+2029, while the class `[^\n]` ran across them to the end of the text, so
+ * six rules (`set … pre-shared-key`, `set … encrypted-password`, the four `snmp-server user …`) rescanned the whole text from every such
+ * "line" start: about 120 s for 1 MB, 4 s for 200 KB, synchronously on the persist path. Their class is now `[^\n\r\u2028\u2029]`
+ * (arm 2: the same plus `\\`, by a second rewrite in toSerializedVariant). Output changes only on a line that carries one of those
+ * three characters between the directive and its keyword (none in stored text: 0 of 768,385 stored leaves carry one at all). Pinned per
+ * rule and per separator in a killable child, and by a sweep of every rule source against its own words (test-r10-v13-shapes.ts).
+ * NOT part of the version: isCredentialShapedLine (its own CREDENTIAL_LINE_VERSION — it changes no persisted or held byte).
  * Self-host with R10 switched off stamps `redactorVersion: "none"` (the P3 contract), never this constant.
  */
-export const R10_VERSION = 'paichart.r10/12';
+export const R10_VERSION = 'paichart.r10/13';
 
 /** R10 v9 (R-1): the longest lead a persisted read_more record carries before its window, back to the previous line start. A line
  *  whose directive starts more than this many characters before the boundary keeps its head in the previous record only — priced. */
@@ -1009,7 +1280,7 @@ const JSON_SCHEMA_KEYWORDS: ReadonlySet<string> = new Set(['type', 'items', 'pro
 /** sec-ops batch-2a SF-5: (ii) synthesises `<key>: <value>` only for a key containing one of these — a SUPERSET of every name the
  *  `key[:=]` line rules can take (rule 23's set, the observability header keys, the bearer/aws/dsn shapes). Output-preserving:
  *  proved by the repo, lab and production replays reading identical counts with and without it (STEP3-BATCH2A-BUILD §3). */
-const STRUCTURED_RULE23_VOCAB_RE = /pass|token|key|secret|bearer|team|connection|dsn/i;
+const STRUCTURED_RULE23_VOCAB_RE = /pass|token|key|secret|bearer|team|connection|dsn|auth|credential/i; // R10 v13: + auth|credential (V13_X_HEADER's words)
 // ── R10 v12 (R10-K8S-ENV-PAIRS, 2026-11-17; REVIEW-sec-ops-R10-LAST-APPLIED §6) — two Kubernetes-STRUCTURE-anchored rules ────────────
 // A k8s object read as JSON (its spec, and its `kubectl.kubernetes.io/last-applied-configuration` annotation, which the JSON-text
 // branch parses) keeps a credential in two shapes no key-anchored rule saw: an EnvVar `{name: "PASSWORD", value: "…"}` (the key is
@@ -1131,6 +1402,7 @@ export const R10_RULE_SOURCES: readonly string[] = Object.freeze([
   ...PATTERNS.map((re) => `line:/${re.source}/${re.flags}`),
   ...BLOCK_CONTEXT_PATTERNS.map((re) => `block:/${re.source}/${re.flags}`),
   ...[SNMP_BLOCK_OPEN, SNMP_COMMUNITY_LINE].map((re) => `scan:junos-snmp:/${re.source}/${re.flags}`),
+  ...V13_SCAN_SOURCES, // R10 v13: the three block scans (plain arm only)
   ...R10_ECHO_RULE_SOURCES,
   ...R10_STRUCTURED_RULE_SOURCES, // R10 v9: the plain arm's outputs are unchanged; the persist's are not (R-1, R-2)
 ]);
@@ -1147,7 +1419,8 @@ export function redactArtifactSecrets(text: string, sink?: Set<string>): RedactA
   const line = applyPatterns(pem.redacted, PATTERNS, sink);
   const block = applyPatterns(line.redacted, BLOCK_CONTEXT_PATTERNS, sink);
   const snmp = redactJunosSnmpCommunities(block.redacted, sink);
-  return { redacted: snmp.redacted, redactedCount: pem.redactedCount + line.redactedCount + block.redactedCount + snmp.redactedCount };
+  const v13 = redactV13Blocks(snmp.redacted, sink); // R10 v13: flow map, htpasswd inline block, nginx map entries
+  return { redacted: v13.redacted, redactedCount: pem.redactedCount + line.redactedCount + block.redactedCount + snmp.redactedCount + v13.redactedCount };
 }
 
 /**
@@ -1215,11 +1488,16 @@ function toSerializedVariant(re: RegExp): RegExp {
     // with the encoded newline eaten — no leak, correct count, and a corrupted string. That is
     // exactly the byte-identity break this design rejected normalize-then-map to avoid.
     .replace(/^\^\(/, `((?:^|${ESCAPED_NL})`)
+    // R10 v13: a rule that ALSO anchors mid-line after `{` / `;` is written `((?:^|[{;])…` — its line-start arm gets the same encoded
+    // newline, inside group 1 like the rewrite above (pinned through SERIALIZED_PATTERNS: a source rewrite can silently stop applying).
+    .replace(/^\(\(\?:\^\|/, `((?:^|${ESCAPED_NL}|`)
     // R10 v7 (sec-ops R10v7 SF-1): `[^\n]` stops at an ESCAPE too — a leaf has no real newlines, so `(?:set …[^\n]+…)?pre-shared-key`,
     // `encrypted-password` and the `snmp-server user [^\n]*?` rules scanned to the END OF THE LEAF from every encoded `\nset` /
     // `\nsnmp-server user` (quadratic: 1 MB 95 s in the v7 draft, 5.3 s at 512 KB in v6). An escape between `set` and the keyword (a
     // quoted description first) is now missed in arm 2 — priced. Pinned by the arm-2 1 MB timing pins.
     .split('[^\\n]').join('[^\\n\\\\]')
+    // R10 v13: the same for the class that also stops at CR / U+2028 / U+2029 (the six rules a `^` can re-anchor inside — see PATTERNS).
+    .split('[^\\n\\r\\u2028\\u2029]').join('[^\\n\\r\\u2028\\u2029\\\\]')
     // the indent class additionally accepts the encoded tab at ANY escape level -- source `(?:[ \t]|\\+t)*`: one
     // or more backslashes then `t` (level 1, 2, 4, 8 = 1, 2, 4, 8 backslashes). R10 v3 (R10-ESCAPED-TAB-INDENT):
     // until v3 the class matched exactly TWO backslashes, so a level-1 `\n\tpassword X` leaf was missed. The
@@ -1251,6 +1529,8 @@ function toSerializedVariant(re: RegExp): RegExp {
 const SERIALIZED_PATTERNS: RegExp[] = PATTERNS.map(toSerializedVariant);
 /** R10 v10 (sec-ops push-2 SF-5): rules whose token never feeds the echo sink — the two login-name rules, plain and arm 2. */
 const NOT_ECHO_SOURCE: ReadonlySet<RegExp> = new Set(PATTERNS.flatMap((re, i) => (re === LOGIN_NAME_RULE || re === JUNOS_LOGIN_NAME_RULE ? [re, SERIALIZED_PATTERNS[i]] : [])));
+/** R10 v13 (sec-ops S3): the rule whose token may be a cookie string — its `name=value` pairs' values feed the echo sink too (plain and arm 2). */
+const ECHO_COOKIE_VALUE_SOURCE: ReadonlySet<RegExp> = new Set(PATTERNS.flatMap((re, i) => (re === V13_NGX_HEADER_LITERAL_RULE ? [re, SERIALIZED_PATTERNS[i]] : [])));
 
 /** ARM 2 — redact a pre-serialized string leaf in place. Never used on the markdown path. */
 export function redactSerializedLeaf(text: string, sink?: Set<string>): RedactArtifactResult {
@@ -1515,4 +1795,62 @@ export function redactExtraArtifactForPersist(text: string): { text: string; red
   const r = redactArtifactSecrets(text, sink);
   const e = redactEchoes(r.redacted, buildEchoMatcher(sink));
   return { text: e.redacted, redactedCount: r.redactedCount + e.redactedCount };
+}
+
+// ── THE CREDENTIAL-SHAPED LINE TEST (R10 v13 build, 2026-11-21; SHAPES.md conditions 15–18) ──────────────────────────────────────
+// For a consumer that QUOTES lines to an agent and must decide which lines it may quote (the Config-sources Git-vs-service
+// comparison: a differing line that is credential-shaped is COUNTED, never quoted). ONE definition, here, beside the redactor, so a
+// comparator never keeps a second list. It is NOT a redaction rule: it changes no persisted or held byte and is not part of
+// R10_RULE_SOURCES — it carries its OWN version, and a change to it bumps CREDENTIAL_LINE_VERSION, never R10_VERSION.
+// BROAD ON PURPOSE (condition 17): substring tests with no shape gate and no reference exemption — over-withholding costs detail and
+// nothing else.
+// THE CONTRACT — read before calling (architectural review F1). This function judges ONE line and is NOT, on its own, a superset of
+// R10: a secret that only a BLOCK context marks cannot be seen from its own line (an entry `"abcd1234efgh" 1;` of a
+// `map $http_authorization … {` block, a body line of a private key, a `user:pw` entry of an `htpasswd:` → `inline:` block). A
+// caller that must never quote a credential therefore does THREE things, of which this is the last:
+//   1. it works on REDACTED text (R10's output), never on raw text;
+//   2. it withholds every line R10 CHANGED anywhere in the whole text (compare input and output line by line — R10 is
+//      line-preserving), and after a flagged line that OPENS a block (`{`, a YAML key ending `:` or `|`) every line up to the
+//      block's end;
+//   3. it withholds every remaining line this function flags — the lines R10 does NOT take (H32's bare `user:plaintext`, a token in a
+//      URL path, a Lua / JWK literal …).
+// What IS pinned: every NAME of R10's closed lists (rule 23's keys, the nginx credential variables and headers, the scan contexts)
+// flags the line that carries it — generated from the lists themselves (R10_CLOSED_LIST_SOURCES), so a name added to a rule without
+// a matching entry here turns a test red; and two corpus checks (the v13 fixture, the §J golden corpus) as a second net.
+export const CREDENTIAL_LINE_VERSION = 'paichart.credline/1';
+/** Case-insensitive substrings. Line 1 is sec-ops' list (condition 17); lines 2–3 are additions, each with its reason. */
+const CREDENTIAL_LINE_SUBSTRINGS: readonly string[] = Object.freeze([
+  'auth', 'token', 'secret', 'passw', 'credential', 'api-key', 'apikey', 'api_key', 'bearer', 'basic ', 'cookie', '_key', '-key', 'key:', 'htpasswd',
+  'snmp', 'community', 'key-string', 'key ', 'honeycomb', 'inline:', 'proc-type',                 // each needed by a corpus check (ablated one by one)
+  'dek-info', 'private', 'secure_link', '$9$', 'dsn', 'connection', 'session', 'redacted-secret', // an R10 anchor or a credential mark with no other test; a line already holding a placeholder
+  'passph', 'jwt', 'psk', 'radius', 'tacacs',                                                     // review F1 / sec-ops P1: words of R10's closed lists the list above missed (`passphrase`, `$…_jwt`), and three network marks
+]);
+/** A URL with userinfo (`@` before the next `/`). */
+const CREDENTIAL_LINE_URL_USERINFO = /:\/\/[^\s\/@]{1,512}@/;
+/** An htpasswd / crypt hash prefix anywhere on the line. */
+const CREDENTIAL_LINE_HASH_PREFIX = /\$(?:apr1|1|5|6|2[abxy])\$|\{S?SHA(?:256|512)?\}/;
+/** A line that STARTS `name:value` with nothing between the colon and the value and no `//` after the colon — the htpasswd line
+ *  family (a bare `user:plaintext` cannot be told from `host:port`; both are withheld). */
+const CREDENTIAL_LINE_BARE_PAIR = /^[ \t]*(?:-[ \t]+)?[^\s:#]{1,255}:(?!\/\/)\S/;
+/** A long unbroken token: 20+ characters of the base64 / hex / token alphabet carrying a letter AND a digit, or 40+ of any of it
+ *  (a PEM body line, a key in a URL path, a literal inside a Lua block or a JWK). */
+const CREDENTIAL_LINE_LONG_TOKEN = /[A-Za-z0-9+\/=_.-]{20,}/g;
+/** A line that is ONE bare run of the base64 alphabet and nothing else — the short last line of a PEM key body (`AQAB`), which
+ *  carries no other mark. A config line has a `:`, a `;`, a `{` or a second word, so little else is withheld by it. */
+const CREDENTIAL_LINE_LONE_BASE64 = /^[ \t]*[A-Za-z0-9+\/=]{2,}[ \t\r]*$/;
+export const CREDENTIAL_LINE_SOURCES: readonly string[] = Object.freeze([
+  `substrings:${CREDENTIAL_LINE_SUBSTRINGS.join('|')}`,
+  ...[CREDENTIAL_LINE_URL_USERINFO, CREDENTIAL_LINE_HASH_PREFIX, CREDENTIAL_LINE_BARE_PAIR, CREDENTIAL_LINE_LONE_BASE64, CREDENTIAL_LINE_LONG_TOKEN].map((re) => `/${re.source}/${re.flags}`),
+  'long-token:20+letter-and-digit|40+',
+]);
+
+/** True when `line` (ONE line, no newline) may carry a credential and must not be quoted. Pure; linear in the line. */
+export function isCredentialShapedLine(line: string): boolean {
+  if (typeof line !== 'string' || line.length === 0) return false;
+  const lower = line.toLowerCase();
+  for (const s of CREDENTIAL_LINE_SUBSTRINGS) if (lower.includes(s)) return true;
+  if (CREDENTIAL_LINE_URL_USERINFO.test(line) || CREDENTIAL_LINE_HASH_PREFIX.test(line) || CREDENTIAL_LINE_BARE_PAIR.test(line) || CREDENTIAL_LINE_LONE_BASE64.test(line)) return true;
+  const runs = line.match(CREDENTIAL_LINE_LONG_TOKEN);
+  if (runs) for (const r of runs) if (r.length >= 40 || (/[A-Za-z]/.test(r) && /\d/.test(r))) return true;
+  return false;
 }

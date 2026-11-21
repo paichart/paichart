@@ -275,6 +275,123 @@ export const INJECTION_PATTERNS: readonly InjectionPattern[] = [
   }
 ];
 
+// -------------------------------------------------------------------------------------------------------------
+// LINEAR SEARCH for the patterns that can START inside a whitespace run (R9-SANITIZER-MATCH-QUADRATIC, 2026-11-22).
+//
+// Two INJECTION_PATTERNS entries open with something a run of whitespace is full of:
+//   `(?:^|[.?!\n]\s+)ignore…`   -- every `\n` of a run is a start, and `\s+` then walks the REST of the run
+//   `\n\n[\s]*(?:ignore|…)`     -- every `\n\n` of a run is a start, and `[\s]*` then walks the rest of the run
+// so a run of k newlines costs k² with NO match at all: a text of only `\n` took 436 ms at 25,000 characters,
+// 1,762 ms at 50,000 and 7,410 ms at 100,000. `detectPromptInjection` is synchronous; the whole process waits.
+//
+// The patterns are NOT changed (source, flags, order -- R9's version fingerprint reads them). Only HOW they are
+// searched changes, and the result is the same list of (position, matched text) for every input:
+//   1. find every place the pattern's first KEYWORD could begin (a plain literal search, same `i` flag);
+//   2. from the keyword at j, compute the ONE leftmost start the pattern could match from -- the text between a
+//      start and its keyword is whitespace only, so the candidates are inside the whitespace run that ends at j
+//      (never before the previous match's end: a global search resumes there);
+//   3. run the ORIGINAL pattern, sticky, at that start. The match text and position come from the unmodified regex.
+// Why step 3 at the leftmost start is enough: whether the pattern matches from a start depends only on what follows
+// the run (the keyword and its tail), so if the leftmost start fails every later start in the same run fails too.
+// Each whitespace run belongs to at most one keyword position, so the walk over runs is linear in the text.
+//
+// The table is keyed on the exact `/source/flags`. A pattern edited without updating its row falls back to the
+// plain search (correct, possibly slow) and `test:injection-patterns` goes red: the row no longer names a pattern.
+// A NEW pattern whose first atom can sit inside a whitespace run needs a row here -- the same suite refuses it.
+// -------------------------------------------------------------------------------------------------------------
+
+/** `\s` exactly (ECMAScript WhiteSpace + LineTerminator), as a code-unit test. Pinned against `/\s/` over all 65,536
+ *  code units in test:injection-patterns. */
+export function isRegexWhitespace(c: number): boolean {
+  return (c >= 0x09 && c <= 0x0D) || c === 0x20 || c === 0xA0 || c === 0x1680 || (c >= 0x2000 && c <= 0x200A)
+    || c === 0x2028 || c === 0x2029 || c === 0x202F || c === 0x205F || c === 0x3000 || c === 0xFEFF;
+}
+
+const LF = 0x0A;
+
+interface LinearSearch {
+  /** Every position the pattern's keyword can begin at is a match of this (searched with the pattern's own flags). */
+  keyword: string;
+  /**
+   * The leftmost index the pattern could match from when its keyword begins at `j`, or -1. `runStart` is the start
+   * of the whitespace run that ends at `j` (already clamped to the previous match's end, `floor`).
+   */
+  startFor: (text: string, j: number, runStart: number, floor: number) => number;
+}
+
+/** `(?:^|[.?!\n]\s+)KEYWORD`: index 0 when the keyword is there; else the `.`/`?`/`!` just before the run (at least one
+ *  whitespace character must follow it); else the first `\n` of the run that still leaves one whitespace after it. */
+function startAfterSentenceBreak(text: string, j: number, runStart: number, floor: number): number {
+  if (j === 0) return 0;
+  if (runStart === j) return -1;
+  const before = runStart - 1;
+  if (before >= floor) {
+    const c = text.charCodeAt(before);
+    if (c === 0x2E || c === 0x3F || c === 0x21) return before; // . ? !   (a `\n` there would be part of the run)
+  }
+  for (let k = runStart; k <= j - 2; k++) if (text.charCodeAt(k) === LF) return k;
+  return -1;
+}
+
+/** `\n\n[\s]*KEYWORD`: the first `\n\n` inside the run. */
+function startAtBlankLine(text: string, j: number, runStart: number): number {
+  for (let k = runStart; k <= j - 2; k++) {
+    if (text.charCodeAt(k) === LF && text.charCodeAt(k + 1) === LF) return k;
+  }
+  return -1;
+}
+
+const LINEAR_SEARCHES: ReadonlyMap<string, LinearSearch> = new Map<string, LinearSearch>([
+  ['/(?:^|[.?!\\n]\\s+)ignore\\s+(?:the\\s+)?(?:above|previous|prior|earlier|everything)\\b/gi',
+    { keyword: 'ignore', startFor: startAfterSentenceBreak }],
+  ['/\\n\\n[\\s]*(?:ignore|you\\s+are|act\\s+as|disregard|system\\s*:|system\\s+(?:prompt|message|instructions?|override))/gi',
+    { keyword: 'ignore|you|act|disregard|system', startFor: startAtBlankLine }],
+]);
+
+/** The `/source/flags` of every pattern searched linearly (read-only; for the pins). */
+export const LINEAR_SEARCH_PATTERN_KEYS: readonly string[] = Object.freeze([...LINEAR_SEARCHES.keys()]);
+
+/** True when `pattern` (by its exact `/source/flags`) is searched linearly; false = the plain `matchAll` search. A pattern
+ *  whose source was edited without its row reads false here -- correct results, possibly slow, and test:r9-linear red. */
+export function isLinearlySearched(pattern: RegExp): boolean {
+  return LINEAR_SEARCHES.has(`/${pattern.source}/${pattern.flags}`);
+}
+
+export interface InjectionMatch { index: number; text: string }
+
+/**
+ * Every match of `pattern` in `text`, in order -- the same (index, text) list as `text.matchAll(new RegExp(pattern))`
+ * for every input, in time linear in the text (see LINEAR SEARCH above).
+ */
+export function findInjectionMatches(text: string, pattern: RegExp): InjectionMatch[] {
+  const out: InjectionMatch[] = [];
+  const linear = LINEAR_SEARCHES.get(`/${pattern.source}/${pattern.flags}`);
+  if (!linear) {
+    for (const m of text.matchAll(new RegExp(pattern))) out.push({ index: m.index || 0, text: m[0] });
+    return out;
+  }
+  const flags = pattern.flags.replace(/[gy]/g, '');
+  const keyword = new RegExp(linear.keyword, flags + 'g');
+  const anchored = new RegExp(pattern.source, flags + 'y');
+  let floor = 0; // the previous match's end: a global search never starts before it
+  let k: RegExpExecArray | null;
+  while ((k = keyword.exec(text)) !== null) {
+    const j = k.index;
+    keyword.lastIndex = j + 1; // every position, overlapping ones included
+    if (j < floor) continue;
+    let runStart = j;
+    while (runStart > floor && isRegexWhitespace(text.charCodeAt(runStart - 1))) runStart--;
+    const start = linear.startFor(text, j, runStart, floor);
+    if (start < 0) continue;
+    anchored.lastIndex = start;
+    const m = anchored.exec(text);
+    if (m === null || m[0].length === 0) continue;
+    out.push({ index: start, text: m[0] });
+    floor = start + m[0].length;
+  }
+  return out;
+}
+
 export interface InjectionDetectionResult {
   isSafe: boolean;
   riskScore: number; // 0-100
@@ -317,15 +434,16 @@ export function detectPromptInjection(text: string): InjectionDetectionResult {
 
   // Check against all patterns
   for (const { pattern, severity, category, description } of INJECTION_PATTERNS) {
-    const matches = text.matchAll(new RegExp(pattern));
+    const matches = findInjectionMatches(text, pattern);
+    const patternText = pattern.toString(); // once per pattern: it was rebuilt for every match (a million strings on a dense text)
 
     for (const match of matches) {
       detectedPatterns.push({
-        pattern: pattern.toString(),
+        pattern: patternText,
         category,
         severity,
-        match: match[0],
-        position: match.index || 0
+        match: match.text,
+        position: match.index
       });
 
       // Calculate risk score
