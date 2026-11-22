@@ -421,51 +421,100 @@ test('SN3 the removal statement: ONE statement removes a snapshot the platform d
   // the writer runs once: under the write-if-absent test on the stamp
   assert(/if \(contractCheck && !\('protocol' in taskMeta\)\) \{/.test(code), 'the stamp writer is no longer write-if-absent');
 });
-test('SN4 (W7 gate) every task-create path strips the audit keys, builds metadata from platform values only, or writes no metadata — there is NO unstripped class', () => {
+test('SN4 (W7 gate) every task-create SITE strips the platform-only keys, builds metadata from platform values only, or writes no metadata — there is NO unstripped class', () => {
   // The plan's gate: "every task-create path strips audit keys or builds metadata from platform values only". It was NOT true of the
   // tree until 2026-11-22 (STEP3-P1-BUILD.md finding W7-1; register TASK-CREATE-AUDIT-KEYS-UNSTRIPPED): four paths wrote caller- or
-  // template-supplied metadata as given. They now strip at the seam (`stripAuditFactsAtCreate`). This pin goes red when a NEW
-  // create path appears (it must be classified here, and there is no class for "writes caller metadata unstripped"), or when a
-  // listed path stops stripping.
+  // template-supplied metadata as given. They strip at the seam — the audit keys since `5438ee586`, and the run keys and the two
+  // stamp keys since TASK-CREATE-BIRTH-KEYS (`stripPlatformKeysAtCreate`).
+  //
+  // HARDENED 2026-11-22 (sec-ops LOW 2 on `5438ee586`). The first form saw only `tx|prisma|db|client .task.create(` in lib/ and app/,
+  // and asked of an already-classified file only that it strip SOMEWHERE. It now sees: any receiver (`this.x.task.create`,
+  // `(tx as any).Task.create`); `createMany` / `createManyAndReturn` / `upsert`; a NESTED create (`tasks: { create`,
+  // `task: { create`); raw `INSERT INTO tasks`; and the deployed files outside lib/ and app/ (`server.ts`,
+  // `mcp-server-http-clean.js`, `services/`). Every create SITE is counted per file and judged on its own — a third create in
+  // `put.ts`, or a second in any other file, turns it red.
   const ROOT = path.join(__dirname, '..');
   // A plain directory walk, NOT `git grep`: the public export is validated in a directory that is not a git repository (plan §9.5;
   // the first form of this pin called git and the ship's export dry run refused the push, 2026-11-21 — the second time this class
   // was caught there, after test-security-invariants PD20 on 2026-11-15).
   const walkSource = (dir: string, out: string[] = []): string[] => {
+    if (!fs.existsSync(path.join(ROOT, dir))) return out;
     for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
-      if (e.name === 'node_modules' || e.name === '.next' || e.name.startsWith('.git')) continue;
+      if (e.name === 'node_modules' || e.name === '.next' || e.name === 'dist' || e.name.startsWith('.git')) continue;
       const rel = `${dir}/${e.name}`;
       if (e.isDirectory()) walkSource(rel, out);
       else if (/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(e.name)) out.push(rel);
     }
     return out;
   };
-  const CREATE_RE = /\b(tx|prisma|db|client)\.task\.(create|createMany|upsert)\(/;
-  const files = [...walkSource('lib'), ...walkSource('app')]
-    .filter((f) => !/\.test\.|__tests__/.test(f) && CREATE_RE.test(fs.readFileSync(path.join(ROOT, f), 'utf8'))).sort();
-  const CLASS: Record<string, 'strips' | 'platform-values' | 'no-metadata'> = {
-    'lib/mcp/tasks/action/handlers/task/task-create-handler.ts': 'platform-values',
-    'lib/tasks/services/task.ts': 'strips',
-    'lib/pov/handlers/put.ts': 'strips',
-    'lib/tasks/handlers/post.ts': 'no-metadata',
-    'app/api/pov/[povId]/phase/[phaseId]/stage/[stageId]/task/route.ts': 'strips',
-    'lib/pov/services/phase.ts': 'strips',
-    'lib/pov/services/phaseTemplate.ts': 'strips',
-    'lib/pov/phase-templates/storage.ts': 'strips',
-  };
-  eq(files, Object.keys(CLASS).sort(), 'the task-create paths (a new one must be classified here): ');
-  const SEAMS_2026_11_22 = ['app/api/pov/[povId]/phase/[phaseId]/stage/[stageId]/task/route.ts', 'lib/pov/services/phase.ts', 'lib/pov/services/phaseTemplate.ts', 'lib/pov/phase-templates/storage.ts'];
-  const rd = (f: string) => fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
-  for (const [f, c] of Object.entries(CLASS)) {
-    const s = rd(f);
-    const strips = /stripAuditFacts(AtCreate)?\(/.test(s);
-    if (c === 'strips') assert(strips, `${f}: classified "strips" but calls no stripAuditFacts / stripAuditFactsAtCreate`);
-    // the four seams closed on 2026-11-22: the strip wraps the metadata VALUE the create writes (a call elsewhere in the file is not enough)
-    if (SEAMS_2026_11_22.includes(f)) assert(/\bmetadata:\s*(?:data\.metadata\s*\?\s*)?stripAuditFactsAtCreate\(/.test(s) && (s.match(/\.task\.create\(/g) ?? []).length === 1,
-      `${f}: its one task create no longer writes metadata through stripAuditFactsAtCreate`);
-    if (c === 'no-metadata') assert(!/task\.create\(\{[\s\S]{0,900}?\bmetadata\b/.test(s), `${f}: classified "no-metadata" but its create writes metadata`);
-    if (c === 'platform-values') assert(/const created = await tx\.task\.create\(\{[\s\S]{0,1500}?\.\.\.contractWrite/.test(s) && !/metadata: (parameters|validatedParams|params)\./.test(s), `${f}: its create no longer builds metadata from the platform's contract write only`);
+  const DIRECT = /\.task\.(?:create|createMany|createManyAndReturn|upsert)\s*\(/gi;
+  const NESTED = /\btasks?\s*:\s*\{\s*(?:create|createMany|connectOrCreate|upsert)\s*:/g; // a nested WRITE (`create:`); a query-extension hook is a method (`create(`), see lib/database/task-completed-at-extension.ts
+  const RAW = /INSERT\s+INTO\s+(?:"?public"?\.)?"?tasks"?(?![\w"])/gi;
+  const noComments = (t: string) => t.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+  const sitesOf = (t: string): number[] => [DIRECT, NESTED, RAW].flatMap((re) => [...t.matchAll(re)].map((m) => m.index ?? 0)).sort((a, b) => a - b);
+  // the finder itself: each form it must see, and the look-alikes it must not count
+  for (const form of ['await this.db.task.create({', 'await (tx as any).Task.create({', 'tx.task.createMany({', 'repo.task.createManyAndReturn({', 'prisma.task.upsert({',
+    'stage: { create: { tasks: { create: [', 'tasks: { createMany: {', 'task: { create: {', 'await prisma.$executeRaw`INSERT INTO tasks (id) VALUES', 'INSERT INTO "tasks" (', 'insert into public.tasks(']) {
+    eq(sitesOf(form).length, 1, `the create-site finder on \`${form}\`: `);
   }
+  for (const form of ['tx.taskActivity.create({', 'tx.task.update({', 'tx.task.findMany({', 'INSERT INTO tasks_archive (', 'subtasks: { create: [', 'tasks: { connect: [', 'query: { task: { create({ args, query }) { return query(args); } } }']) {
+    eq(sitesOf(form).length, 0, `the create-site finder must not count \`${form}\`: `);
+  }
+  const DEPLOYED_ROOT_FILES = ['server.ts', 'mcp-server-http-clean.js'].filter((f) => fs.existsSync(path.join(ROOT, f)));
+  const sources = [...walkSource('lib'), ...walkSource('app'), ...walkSource('services'), ...DEPLOYED_ROOT_FILES].filter((f) => !/\.test\.|__tests__/.test(f));
+  assert(sources.length > 500 && sources.some((f) => f.startsWith('lib/mcp/')) && sources.some((f) => f.startsWith('app/api/')), `the walk found only ${sources.length} source files`);
+  const text = new Map(sources.map((f) => [f, noComments(fs.readFileSync(path.join(ROOT, f), 'utf8'))] as const));
+  const found = Object.fromEntries(sources.map((f) => [f, sitesOf(text.get(f) as string).length] as const).filter(([, n]) => n > 0));
+  /** Every file with a task-create site, its class, and HOW MANY sites it has. */
+  const CLASS: Record<string, { cls: 'strips' | 'platform-values' | 'no-metadata'; sites: number }> = {
+    'lib/mcp/tasks/action/handlers/task/task-create-handler.ts': { cls: 'platform-values', sites: 1 },
+    'lib/tasks/services/task.ts': { cls: 'strips', sites: 1 },
+    'lib/pov/handlers/put.ts': { cls: 'strips', sites: 2 },
+    'lib/tasks/handlers/post.ts': { cls: 'no-metadata', sites: 1 },
+    'app/api/pov/[povId]/phase/[phaseId]/stage/[stageId]/task/route.ts': { cls: 'strips', sites: 1 },
+    'lib/pov/services/phase.ts': { cls: 'strips', sites: 1 },
+    'lib/pov/services/phaseTemplate.ts': { cls: 'strips', sites: 1 },
+    'lib/pov/phase-templates/storage.ts': { cls: 'strips', sites: 1 },
+  };
+  const byName = (o: Record<string, number>) => Object.entries(o).sort(([x], [y]) => (x < y ? -1 : 1));
+  eq(byName(found), byName(Object.fromEntries(Object.entries(CLASS).map(([f, c]) => [f, c.sites]))), 'the task-create sites per file (a new file, or a new site in a listed file, must be classified here): ');
+  /** For each site of a file: the text from the previous site (or the file start) to it, and the text from it to the next. */
+  const windows = (f: string): Array<{ before: string; after: string }> => {
+    const t = text.get(f) as string; const at = sitesOf(t);
+    return at.map((i, n) => ({ before: t.slice(n ? at[n - 1] : 0, i), after: t.slice(i, n + 1 < at.length ? at[n + 1] : t.length) }));
+  };
+  const SEAMS = ['app/api/pov/[povId]/phase/[phaseId]/stage/[stageId]/task/route.ts', 'lib/pov/services/phase.ts', 'lib/pov/services/phaseTemplate.ts', 'lib/pov/phase-templates/storage.ts'];
+  for (const f of SEAMS) {
+    // the seam helper wraps the metadata VALUE the create writes (a call elsewhere in the file is not enough)
+    for (const w of windows(f)) assert(/^[\s\S]{0,1200}?\bmetadata:\s*(?:data\.metadata\s*\?\s*)?stripPlatformKeysAtCreate\(/.test(w.after), `${f}: a task create no longer writes metadata through stripPlatformKeysAtCreate`);
+  }
+  // the helper drops all three classes, and never throws
+  const helper = /export function stripPlatformKeysAtCreate[\s\S]*?\n\}/.exec(text.get('lib/tasks/services/protected-task-metadata.ts') as string)?.[0] ?? '';
+  assert(/stripAuditFacts\(copy,/.test(helper) && /dropPlatformRunKeys\(copy, null,/.test(helper) && /enforceProtocolStampImmutable\(copy, null, [\s\S]{0,80}onViolation: 'strip-warn'/.test(helper) && !/\bthrow\b|onViolation: 'throw'/.test(helper),
+    'stripPlatformKeysAtCreate no longer drops the audit keys, the run keys and the stamp keys (strip-warn, never a throw)');
+  // put.ts: EACH of its two create branches runs the three calls on the object it then writes
+  for (const w of windows('lib/pov/handlers/put.ts')) {
+    assert(/stripAuditFacts\(taskMetadata\)/.test(w.before) && /enforceProtocolStampImmutable\(taskMetadata, null,[\s\S]{0,160}onViolation: 'strip-warn'/.test(w.before) && /dropPlatformRunKeys\(taskMetadata, null,/.test(w.before)
+      && /^[\s\S]{0,1600}?\bmetadata: taskMetadata\b/.test(w.after), 'lib/pov/handlers/put.ts: a create branch does not strip the audit, stamp and run keys from the metadata it writes');
+  }
+  // TaskService.createTask: its one create runs the three calls on the copy it writes
+  for (const w of windows('lib/tasks/services/task.ts')) {
+    assert(/^[\s\S]{0,4000}?\bmetadata: taskData\.metadata \? \(\(\) => \{[\s\S]{0,900}?stripAuditFacts\(incoming, warn,[\s\S]{0,500}?enforceProtocolStampImmutable\(incoming, null,[\s\S]{0,120}?onViolation: 'strip-warn'[\s\S]{0,200}?dropPlatformRunKeys\(incoming, null,[\s\S]{0,200}?return incoming/.test(w.after),
+      'lib/tasks/services/task.ts: its create no longer strips the audit, run and stamp keys from the metadata copy it writes');
+  }
+  assert(!/task\.create\(\{[\s\S]{0,900}?\bmetadata\b/.test(text.get('lib/tasks/handlers/post.ts') as string), 'lib/tasks/handlers/post.ts: classified "no-metadata" but its create writes metadata');
+  // The MCP create handler builds metadata from the platform's contract write only — and is NOT a seam: it legitimately writes
+  // `requiresInterfaceContract` (a run key) and `interfaceContractSource` (an audit key). A "consistency" edit adding a drop there
+  // would erase the platform's own facts.
+  const mcp = text.get('lib/mcp/tasks/action/handlers/task/task-create-handler.ts') as string;
+  assert(/const created = await tx\.task\.create\(\{[\s\S]{0,1500}?\.\.\.contractWrite/.test(mcp) && !/metadata: (parameters|validatedParams|params)\./.test(mcp), 'the MCP create handler no longer builds metadata from the platform\'s contract write only');
+  assert(!/\b(stripPlatformKeysAtCreate|dropPlatformRunKeys|stripAuditFacts|enforceProtocolStampImmutable)\(/.test(mcp) && /requiresInterfaceContract: true/.test(mcp) && /interfaceContractSource:/.test(mcp),
+    'the MCP create handler must keep writing requiresInterfaceContract / interfaceContractSource and must NOT run a create-seam drop');
+  // The two service methods that drop at birth are reached from CLIENT surfaces only. A new caller — a platform writer above all —
+  // must be classified here before it can rely on, or be surprised by, the drop.
+  const callers = (re: RegExp, self: string) => sources.filter((f) => f !== self && re.test(text.get(f) as string)).sort();
+  eq(callers(/\bTaskService\.createTask\(/, 'lib/tasks/services/task.ts'), ['lib/tasks/handlers/task.ts'], 'the callers of TaskService.createTask (client-facing REST handler only): ');
+  eq(callers(/\b[pP]haseService\.createTask\(/, 'lib/pov/services/phase.ts'), ['lib/pov/handlers/put.ts'], 'the callers of PhaseService.createTask (the POV editor save only): ');
 });
 
 Promise.all(pending).then(() => {

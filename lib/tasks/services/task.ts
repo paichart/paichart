@@ -9,7 +9,7 @@ import { NotificationType } from '@/lib/notifications/types';
 import { stringToTaskType } from '@/lib/utils/taskTypes';
 import { createQueryTimer, logOptimizationResult } from '@/lib/database/dev-query-logger';
 import { createTaskActivity } from './taskActivityService';
-import { enforceProtocolStampImmutable, dropPlatformRunKeys, stripAuditFacts } from './protected-task-metadata';
+import { enforceProtocolStampImmutable, dropPlatformRunKeys, stripAuditFacts, atCreateWarn, AUDIT_KEY_STRIPPED_AT_CREATE } from './protected-task-metadata';
 import { taskLogger } from '@/lib/logger';
 import { NON_SELECTABLE_ROLES, SYSTEM_ACCOUNT_EMAIL_SUFFIX } from '@/lib/utils/team-member-guard';
 
@@ -516,9 +516,18 @@ export class TaskService {
           // task.update, bulk, POV PUT ×3); this create spread did not, so a POV writer could create a
           // task already carrying a forged AUDIT_STRIP key. Stripped here, at the SERVICE layer, so every
           // caller of createTask is covered. Copy first — never mutate the caller's object.
+          // BIRTH KEYS (TASK-CREATE-BIRTH-KEYS, 2026-11-22): a task is not BORN with platform run state (qualityGate,
+          // programReleasable, cannotRun, pipelineStageId, …) or with a platform stamp — the same two calls, in the same
+          // order, as lib/pov/handlers/put.ts's create branches. One warn per key (the key NAME, never a value); never a
+          // throw. This method's ONE caller is the REST create handler (lib/tasks/handlers/task.ts), whose schema already
+          // refuses a stamp key; the caller list is pinned (test:config-sources SN4) — a PLATFORM caller that must
+          // write a run key at create has to be classified there first, not routed through this drop.
           metadata: taskData.metadata ? (() => {
             const incoming: Record<string, unknown> = { ...taskData.metadata, type: undefined };
-            stripAuditFacts(incoming);
+            const warn = atCreateWarn((f, m) => taskLogger.warn({ ...f, stageId: taskData.stageId ?? null }, m));
+            stripAuditFacts(incoming, warn, { surface: 'task-service-create', errorCode: AUDIT_KEY_STRIPPED_AT_CREATE });
+            enforceProtocolStampImmutable(incoming, null, '(new)', { surface: 'task-service-create', onViolation: 'strip-warn', warn });
+            dropPlatformRunKeys(incoming, null, '(new)', { surface: 'task-service-create', warn });
             return incoming as Prisma.InputJsonValue;
           })() : undefined,
         },

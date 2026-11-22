@@ -31,6 +31,10 @@
  * engine writer: the harness writes qualityGate/pipelineStageId/etc THROUGH the MCP path — a
  * "consistency" edit adding the drop there breaks every pipeline (mutation-pinned in
  * scripts/test-platform-run-keys.ts P4).
+ * CREATE SEAMS (TASK-CREATE-BIRTH-KEYS, 2026-11-22): every create path that writes caller- or template-supplied metadata drops
+ * the run keys and the stamp keys at BIRTH through `stripPlatformKeysAtCreate` (the REST stage-task route,
+ * `PhaseService.createTask`, the phase-template service, the template storage) or the same two calls inline
+ * (`TaskService.createTask`, put.ts's two create branches). The MCP `task.create` handler is NOT one of them.
  *
  * EXCLUDED from PLATFORM_RUN_KEYS, deliberately (each would break a legitimate writer):
  *   - duplicateAcknowledged — HUMAN operator clearance at the root, EXTENDED by a named rule at execution
@@ -221,29 +225,62 @@ export const AUDIT_STRIP_KEYS = [
 /** The error code of the create-surface strip's warn (one per removed key; the KEY NAME and the surface — never a value). */
 export const AUDIT_KEY_STRIPPED_AT_CREATE = 'AUDIT_KEY_STRIPPED_AT_CREATE';
 
+/** The task id the two shared guards are given at a create seam (the row does not exist yet). */
+const NEW_TASK = '(new)';
+
+type WarnSink = (fields: Record<string, unknown>, message: string) => void;
+
 /**
- * TASK-CREATE-AUDIT-KEYS-UNSTRIPPED (2026-11-22; owner decision O28) — the strip at a task-CREATE seam, for a path that writes
- * caller- or template-supplied metadata. Four create paths wrote it as given (the REST stage-task route, `PhaseService.createTask`,
- * the phase-template service, the template storage), so a create surface could plant a platform-only key — a
- * `configSourcesSnapshot`, a `completedByExecutionId`. Each now passes the metadata object it is ABOUT TO WRITE through this.
- *
- * Returns a COPY with every `AUDIT_STRIP_KEYS` member removed (the caller's object is never mutated). A value that is not a plain
- * object is returned AS GIVEN (there is no key to strip, and the create writes exactly what it wrote before). For a metadata
- * object carrying none of the keys the copy has the same keys in the same order with the same values: the created row is
- * byte-identical to before. One warn per removed key, naming the surface and the KEY — never the value. No error: the create
- * proceeds without the key.
- *
- * NOT stripped here: `protocol` / `protocolResolvedAt` (they are not audit keys; the first-stamp write-if-absent and the
- * governing read's own checks are their control — see the build record for what a planted stamp can and cannot do).
+ * The warn sink of a BIRTH drop. The create seams reuse the shared guards and so their error codes
+ * (`AUDIT_KEY_STRIPPED_AT_CREATE`, `PLATFORM_RUN_KEY_STALE_DROP`, `PROTOCOL_STAMP_IMMUTABLE`) — the existing greps see births. What
+ * tells a birth from an editor drop is the structured field `atCreate: true`, never the text; and the text says what happened
+ * at a create (nothing is stored yet, so "value differed from stored" would be untrue).
  */
-export function stripAuditFactsAtCreate<T>(
+export function atCreateWarn(warn: WarnSink | undefined): WarnSink | undefined {
+  if (!warn) return undefined;
+  return (fields) => warn({ ...fields, atCreate: true },
+    `Dropped platform-only key "${String(fields.key)}" at create on ${String(fields.surface)} — a task is not born with it`);
+}
+
+/**
+ * THE task-CREATE seam strip, for a path that writes caller- or template-supplied metadata. A task is never BORN with a
+ * platform-only key. One function, called on the metadata object each path is ABOUT TO WRITE:
+ *
+ *   1. `AUDIT_STRIP_KEYS` (TASK-CREATE-AUDIT-KEYS-UNSTRIPPED, 2026-11-22, owner decision O28) — a planted
+ *      `configSourcesSnapshot`, `completedByExecutionId`, …; warn code `AUDIT_KEY_STRIPPED_AT_CREATE`.
+ *   2. `PLATFORM_RUN_KEYS` (TASK-CREATE-BIRTH-KEYS, 2026-11-22) — "a task must not be BORN with qualityGate / pipelineStageId /
+ *      etc" was enforced at `lib/pov/handlers/put.ts`'s two create branches only. A born `qualityGate` / `programReleasable`
+ *      shows a task approved and releasable before anything ran; a born `cannotRun` stops it. Dropped through
+ *      `dropPlatformRunKeys(copy, null, …)`, the call `put.ts` makes: with nothing stored, any present key differs ⇒ one warn,
+ *      code `PLATFORM_RUN_KEY_STALE_DROP` (the editor's code, so one grep sees editor drops and births).
+ *   3. `PLATFORM_STAMP_KEYS` (`protocol`, `protocolResolvedAt`; same register entry) — "a task must not be born with a platform
+ *      stamp" was enforced by the REST schema only (`lib/validation/task-validation.ts`, a 400). A planted stamp is
+ *      authoritative over the title (`resolveTaskProtocol`, `protocol: null` included). Dropped through
+ *      `enforceProtocolStampImmutable(copy, null, …, 'strip-warn')`, as `put.ts` does; warn code `PROTOCOL_STAMP_IMMUTABLE`.
+ *      The first execution then stamps from the title, as for any unstamped task (`prepare-task-for-execution.ts`).
+ *
+ * Returns a COPY (the caller's object is never mutated). A value that is not a plain object is returned AS GIVEN. For a metadata
+ * object carrying none of the keys the copy has the same keys in the same order with the same values: the created row is
+ * byte-identical to before. One warn per removed key, naming the surface and the KEY — never the value — and carrying
+ * `atCreate: true` (`atCreateWarn`: the field, not the text, tells a birth from an editor drop). It NEVER THROWS and
+ * returns no error: a throw inside the phase-template transaction would abort a whole new POV, and the editor's template-task
+ * loop (`put.ts` ~:233) catches and would silently not create the task.
+ *
+ * ⚠️ NOT for the MCP `task.create` handler, and never for an update path: that handler builds its metadata from platform values
+ * (`requiresInterfaceContract`, `interfaceContractSource`) and the harness writes run keys through MCP `task.update` — both must
+ * keep working (pinned: `test:config-sources` SN4, `test:platform-run-keys` P4).
+ */
+export function stripPlatformKeysAtCreate<T>(
   metadata: T,
   surface: string,
   warn?: (fields: Record<string, unknown>, message: string) => void
 ): T {
   if (metadata === null || typeof metadata !== 'object' || Array.isArray(metadata)) return metadata;
   const copy: Record<string, unknown> = { ...(metadata as Record<string, unknown>) };
-  stripAuditFacts(copy, warn, { surface, errorCode: AUDIT_KEY_STRIPPED_AT_CREATE });
+  const birth = atCreateWarn(warn);
+  stripAuditFacts(copy, birth, { surface, errorCode: AUDIT_KEY_STRIPPED_AT_CREATE });
+  enforceProtocolStampImmutable(copy, null, NEW_TASK, { surface, onViolation: 'strip-warn', warn: birth });
+  dropPlatformRunKeys(copy, null, NEW_TASK, { surface, warn: birth });
   return copy as T;
 }
 

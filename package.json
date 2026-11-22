@@ -313,6 +313,7 @@
     "test:verdict-mismatch-guard": "ts-node -r tsconfig-paths/register scripts/test-verdict-mismatch-guard.ts",
     "test:nonterminal-family": "ts-node -r tsconfig-paths/register scripts/test-nonterminal-family-pins.ts",
     "test:cc7-contract-guard-behavioral": "ts-node -r tsconfig-paths/register scripts/test-cc7-contract-guard-behavioral.ts",
+    "test:phase-template-routes-role-behavioral": "ts-node -r tsconfig-paths/register --transpile-only scripts/test-phase-template-routes-role-behavioral.ts",
     "test:task-create-audit-strip-behavioral": "ts-node -r tsconfig-paths/register --transpile-only scripts/test-task-create-audit-strip-behavioral.ts",
     "test:config-snapshot-removal-behavioral": "ts-node -r tsconfig-paths/register --transpile-only scripts/test-config-snapshot-removal-behavioral.ts",
     "test:admin-workflow-route-behavioral": "ts-node -r tsconfig-paths/register --transpile-only scripts/test-admin-workflow-route-behavioral.ts",

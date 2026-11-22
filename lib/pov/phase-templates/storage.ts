@@ -3,7 +3,7 @@ import { PhaseTemplate } from './types';
 import { schemaValidator } from './validator';
 import { ApiError } from '@/lib/errors';
 import { povLogger } from '@/lib/logger';
-import { stripAuditFactsAtCreate } from '@/lib/tasks/services/protected-task-metadata';
+import { stripPlatformKeysAtCreate } from '@/lib/tasks/services/protected-task-metadata';
 
 const localLogger = povLogger.child({ module: 'TemplateStorageService' });
 
@@ -222,8 +222,8 @@ export class TemplateStorageService {
               order: j,
               status: 'OPEN',
               priority: (taskConfig.priority || 'MEDIUM') as any,
-              // TASK-CREATE-AUDIT-KEYS-UNSTRIPPED (2026-11-22): platform-only keys are never taken from a stored template.
-              metadata: stripAuditFactsAtCreate({
+              // TASK-CREATE-AUDIT-KEYS-UNSTRIPPED + TASK-CREATE-BIRTH-KEYS (2026-11-22): platform-only keys (audit, run, stamp) are never taken from a stored template.
+              metadata: stripPlatformKeysAtCreate({
                 ...taskConfig.metadata,
                 required: taskConfig.required,
                 id: taskConfig.id,

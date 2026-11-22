@@ -2983,6 +2983,69 @@ async function platformDriftSection(): Promise<void> {
     && /const callArguments = ensureObject\(validatedArgs\.arguments, \{\}, 'Service Call'\);/.test(hs));
 }
 
+// ── TPL. Template routes: every MUTATING handler is ADMIN-only (PHASE-TEMPLATE-ROUTES-NO-ROLE-CHECK, 2026-11-22) ──
+// A PhaseTemplate / POVTemplate has no owner column and is listed to every signed-in user, so its mutation is ADMIN / SUPER_ADMIN
+// only. Until 2026-11-22 `POST /api/phase-templates` and `POST /api/phase-templates/import` checked only that a user was signed in
+// (any registered user could plant a template another user would instantiate, or overwrite an existing one through the import).
+// This pin is an INVENTORY: every exported handler of every route file under the two trees is classified; a new handler, a new
+// route file, or a mutating handler that loses its role check turns it red. The behavioural twin (real handlers, real tokens,
+// needs a database) is `npm run test:phase-template-routes-role-behavioral`.
+{
+  const walkRoutes = (dir: string, out: string[] = []): string[] => {
+    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${e.name}`;
+      if (e.isDirectory()) walkRoutes(rel, out);
+      else if (e.name === 'route.ts') out.push(rel);
+    }
+    return out;
+  };
+  const TPL_CLASS: Record<string, 'admin' | 'read-only'> = {
+    'app/api/phase-templates/route.ts GET': 'read-only',
+    'app/api/phase-templates/route.ts POST': 'admin',
+    'app/api/phase-templates/import/route.ts POST': 'admin',
+    'app/api/phase-templates/export/route.ts GET': 'read-only',
+    'app/api/phase-templates/validate/route.ts POST': 'read-only', // validates a body against a schema; writes nothing
+    'app/api/phase-templates/[id]/route.ts GET': 'read-only',
+    'app/api/phase-templates/[id]/route.ts PUT': 'admin',
+    'app/api/phase-templates/[id]/route.ts DELETE': 'admin',
+    'app/api/phase-templates/schema-registry/route.ts GET': 'admin',
+    'app/api/phase-templates/schema-registry/route.ts POST': 'admin',
+    'app/api/phase-templates/schema-registry/[id]/route.ts GET': 'read-only',
+    'app/api/phase-templates/schema-registry/[id]/route.ts DELETE': 'admin',
+    'app/api/pov-templates/route.ts GET': 'read-only',
+    'app/api/pov-templates/route.ts POST': 'admin',
+    'app/api/pov-templates/[id]/route.ts GET': 'read-only',
+    'app/api/pov-templates/[id]/route.ts PUT': 'admin',
+    'app/api/pov-templates/[id]/route.ts DELETE': 'admin',
+    'app/api/pov-templates/[id]/phase-templates/route.ts GET': 'read-only',
+    'app/api/pov-templates/[id]/phase-templates/route.ts POST': 'admin',
+  };
+  const ROLE_CHECK = /if \(user\.role !== 'ADMIN' && user\.role !== 'SUPER_ADMIN'\) \{[\s\S]{0,400}?status: 403/;
+  const WRITE = /\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\(|\b(registerSchema|removeSchema|createTemplate|updateTemplate|deleteTemplate|saveTemplate)\(/;
+  const found: string[] = [];
+  for (const f of [...walkRoutes('app/api/phase-templates'), ...walkRoutes('app/api/pov-templates')].sort()) {
+    const src = fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    const heads = [...src.matchAll(/^\s*export\s+(?:async\s+function\s+|const\s+)(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/gm)];
+    heads.forEach((m, i) => {
+      const key = `${f} ${m[1]}`;
+      found.push(key);
+      const body = src.slice(m.index ?? 0, i + 1 < heads.length ? heads[i + 1].index : src.length);
+      const cls = TPL_CLASS[key];
+      if (cls === 'admin') {
+        check(`TPL ${key}: a mutating template handler carries the ADMIN / SUPER_ADMIN check with a 403`, ROLE_CHECK.test(body));
+        // the check comes before the body is read and before any write
+        const at = body.search(ROLE_CHECK);
+        const firstUse = body.search(/readJsonBody\(|request\.json\(\)|prisma\.|templateService\.|povTemplateService\.|schemaRegistry\./);
+        check(`TPL ${key}: the role check runs before the body is read and before any database call`, at >= 0 && (firstUse < 0 || at < firstUse));
+      }
+      if (cls === 'read-only') check(`TPL ${key}: classified read-only, so it writes nothing`, !WRITE.test(body));
+    });
+  }
+  const want = Object.keys(TPL_CLASS).sort();
+  check(`TPL the template route handlers are exactly the classified ones (a new handler must be classified): found [${found.filter((k) => !want.includes(k)).join(', ')}] unclassified, [${want.filter((k) => !found.includes(k)).join(', ')}] gone`,
+    JSON.stringify([...found].sort()) === JSON.stringify(want));
+}
+
 function finish(): never {
 if (fails.length) {
   console.error(`\n❌ security-invariants gate FAILED (${fails.length}/${passed + fails.length}) — a pentest-hardened invariant regressed:`);

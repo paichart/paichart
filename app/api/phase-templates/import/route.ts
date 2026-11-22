@@ -18,6 +18,17 @@ import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-bod
        );
      }
 
+     // Phase templates are global resources (no owner column) and this route both CREATES and, with `overwrite`,
+     // UPDATES them — mutation is ADMIN-only, the same gate and the same 403 body as /api/phase-templates/[id]
+     // (PHASE-TEMPLATE-ROUTES-NO-ROLE-CHECK, 2026-11-22). Checked before the body is read, so `validateOnly` is
+     // admin-only here too; POST /api/phase-templates/validate stays open to every signed-in user.
+     if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+       return NextResponse.json(
+         { error: 'Forbidden: admin role required' },
+         { status: 403 }
+       );
+     }
+
      const body = await readJsonBody(request, { maxBytes: 10 * 1024 * 1024 }) /* large bodies are legitimate here (base64 file / template import); Next's own cap is 10 MB; the 20k value cap still applies */;
 
      // ✅ SECURITY: Centralized validation with .safeParse() and injection detection

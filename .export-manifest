@@ -2174,6 +2174,7 @@ scripts/test-parse-verdict.ts
 scripts/test-perform-template-surface.ts
 scripts/test-permission-cache-role-key.ts
 scripts/test-phase-3a-credential-protection.ts
+scripts/test-phase-template-routes-role-behavioral.ts
 scripts/test-phase-template-seed-idempotent.ts
 scripts/test-pipeline-context-render.ts
 scripts/test-pipeline-context-ui.ts

@@ -76,6 +76,16 @@ import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-bod
          { status: 401 }
        );
      }
+
+     // Phase templates are global resources (no owner column, listed to every user, the caller chooses isDefault) —
+     // mutation is ADMIN-only, the same gate and the same 403 body as /api/phase-templates/[id]
+     // (PHASE-TEMPLATE-ROUTES-NO-ROLE-CHECK, 2026-11-22). Checked before the body is read.
+     if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+       return NextResponse.json(
+         { error: 'Forbidden: admin role required' },
+         { status: 403 }
+       );
+     }
  
      const data = await readJsonBody(request);
 

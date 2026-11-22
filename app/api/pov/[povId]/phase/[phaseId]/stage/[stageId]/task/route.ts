@@ -5,7 +5,7 @@ import { withPOVAccess } from '@/lib/auth/validate-pov-access';
 import { CreateTaskSchema } from '@/lib/validation/task-validation';
 import { povLogger } from '@/lib/logger';
 import { readJsonBody } from '@/lib/utils/read-json-body';
-import { stripAuditFactsAtCreate } from '@/lib/tasks/services/protected-task-metadata';
+import { stripPlatformKeysAtCreate } from '@/lib/tasks/services/protected-task-metadata';
 
 /**
  * POST /api/pov/[povId]/phase/[phaseId]/stage/[stageId]/task
@@ -95,8 +95,8 @@ export const POST = withPOVAccess(async (
           phaseId,
           stageId,
           order: nextOrder,
-          // TASK-CREATE-AUDIT-KEYS-UNSTRIPPED (2026-11-22): platform-only keys are never taken from a request body.
-          metadata: stripAuditFactsAtCreate(metadata || {}, 'rest-stage-task-create', (f, m) => povLogger.warn({ ...f, stageId }, m)),
+          // TASK-CREATE-AUDIT-KEYS-UNSTRIPPED + TASK-CREATE-BIRTH-KEYS (2026-11-22): platform-only keys (audit, run, stamp) are never taken from a request body.
+          metadata: stripPlatformKeysAtCreate(metadata || {}, 'rest-stage-task-create', (f, m) => povLogger.warn({ ...f, stageId }, m)),
         },
       });
     });

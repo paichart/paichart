@@ -151,7 +151,7 @@ await test('P9 (C2/C3, register AUDIT-STRIP GAP): TaskService.createTask strips 
   assert(start > 0 && end > start, 'createTask not found');
   const metaIdx = body.indexOf('metadata: taskData.metadata ?');
   assert(metaIdx > 0, 'createTask metadata write not found');
-  assert(/stripAuditFacts\(incoming\)/.test(body.slice(metaIdx, metaIdx + 400)),
+  assert(/stripAuditFacts\(incoming[,)]/.test(body.slice(metaIdx, metaIdx + 500)),
     'createTask writes taskData.metadata without stripAuditFacts — a POV writer can create a task with forged audit facts');
 });
 await test('P6: stripAuditFacts removes completedWithDependencyOverride; no inline deletes remain outside the module', () => {
@@ -169,9 +169,9 @@ await test('P6: stripAuditFacts removes completedWithDependencyOverride; no inli
 });
 
 // ── Wiring pins: exact drop-call counts per surface file ────────────────────────────────────
-await test('WIRING: dropPlatformRunKeys called at exactly the five editor seams (task.ts 1, put.ts 3, bulk 1)', () => {
+await test('WIRING: dropPlatformRunKeys called at exactly the five editor seams + the REST create (task.ts 2, put.ts 3, bulk 1)', () => {
   const counts: Array<[string, number]> = [
-    ['lib/tasks/services/task.ts', 1],
+    ['lib/tasks/services/task.ts', 2], // the update funnel + createTask (TASK-CREATE-BIRTH-KEYS, 2026-11-22: a task is not born with run state)
     ['lib/pov/handlers/put.ts', 3],
     ['lib/services/taskBulkService.ts', 1],
   ];

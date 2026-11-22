@@ -139,7 +139,7 @@ test('LAYERING (deliberate): UpdateTaskSchema does NOT schema-reject the stamp �
 // ═══ SOURCE-TEXT WIRING (every surface, so a new/missed surface fails the test) ═════════════
 test('WIRING: all four update surfaces call the ONE shared guard (no per-site hand copies — the wave-3 lesson)', () => {
   const sites: Array<[string, number]> = [
-    ['lib/tasks/services/task.ts', 1],
+    ['lib/tasks/services/task.ts', 2], // the update funnel + createTask's strip-warn (TASK-CREATE-BIRTH-KEYS, 2026-11-22)
     ['lib/mcp/tasks/action/handlers/task/task-update-handler.ts', 1],
     ['lib/pov/handlers/put.ts', 3], // update branch + 2 create branches
     ['lib/services/taskBulkService.ts', 1],

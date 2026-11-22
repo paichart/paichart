@@ -41,6 +41,13 @@ KEY_MATERIAL_FILE_SUFFIXES = ('.key', '.pem', '.p12', '.pfx', '.jks', '.keystore
 SSH_IDENTITY_FILE_NAMES = ('id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519')
 
 
+def repo_path(locator):
+    """The path inside the repository of an `owner/repo/path` git-file locator (the part the platform's never-held rule judges).
+    A locator with fewer than three segments has no owner and repository to drop and is returned as given."""
+    segs = [x for x in locator.split('/') if x]
+    return '/'.join(segs[2:]) if len(segs) >= 3 else locator
+
+
 def never_held(path):
     """The platform's never-held path rule, restated (lib/mcp/server/config/git-file-source-pin.js `heldPathRefusal`). A Terraform
     state, plan, variables or CLI-credentials path, a device inventory, and a password or key file are never read or held: a
@@ -230,10 +237,13 @@ def compare(spec_text, topo_text):
     warnings.extend(approver_marks(spec_text))
     # 8. a declared Git file the platform never reads or holds (spec only; Terraform state, plan, variables, CLI credentials)
     for f in sorted(spec['git_files']):
-        why = never_held(f)
+        # The platform judges the PATH inside the repository, never the owner or the repository name (a repository named
+        # `inventory` holding `hosts.yaml` at its root is held). A locator is `owner/repo/path`.
+        why = never_held(repo_path(f))
         if why:
             warnings.append(f'the spec declares "{f}" as a git-file: it is {why}, which the platform never reads or holds. '
-                            'The leg stops when it resolves its sources. Declare the configuration files; Terraform state is a live-read or supplied line, and a secret is referenced, never kept in a file the leg reads')
+                            'A Config sources leg stops when it resolves its sources; on a network Device sources line the read of that file is refused. '
+                            'Declare the configuration files; Terraform state is a live-read or supplied line, and a secret is referenced, never kept in a file the leg reads')
     # 9. a Terraform leg with no declared .tf file (spec only). From terraform-iac 1.17.0 a Terraform leg reads only what a
     #    `## Config sources` block declares, and stops before it reads anything when its task carries no block.
     if re.search(r'\bterraform-iac\b', spec_text) and not any(f.lower().endswith(('.tf', '.tf.json')) for f in spec['config_git_files']):
@@ -328,6 +338,17 @@ def self_test():
     keys = [never_held(x) for x in ('nginx/.htpasswd', 'tls/server.key', 'a/cert.PEM', '.ssh/id_ed25519', 'nornir/hosts.yaml', 'inventory/x/defaults.yml')]
     plain = [never_held(x) for x in ('nginx/otlp-ingress.conf', 'helm/defaults.yaml', 'docs/keys.md', 'k8s/hosts.yaml')]
     cases.append(('the never-held rule: password, key and device-inventory files are not holdable; a look-alike name outside those rules is', all(keys) and not any(plain)))
+    # The rule judges the path INSIDE the repository: a repository named `inventory` with `hosts.yaml` at its root is held; the
+    # same file under an `inventory/` directory of any repository is not. The warning names what happens for both block kinds.
+    def nh(locator):
+        spec = '# t\n```\n## Device sources\nsw1: git-file \u2014 service github-service ; ' + locator + '\n```\n'
+        return [w for w in compare(spec, json.dumps({}))[1] if 'never reads or holds' in w]
+    inside = nh('org/repo/inventory/hosts.yaml')
+    cases.append(('a repository NAMED inventory (or nornir) is not a never-held path; an inventory/ directory inside a repository is',
+                  nh('org/inventory/hosts.yaml') == [] and nh('nornir/inventory/hosts.yaml') == [] and len(inside) == 1
+                  and repo_path('org/repo/a/b.tf') == 'a/b.tf' and repo_path('b.tf') == 'b.tf'))
+    cases.append(('the never-held warning says what happens for a Config sources leg and for a network Device sources line',
+                  len(inside) == 1 and 'Config sources leg stops' in inside[0] and 'Device sources line the read of that file is refused' in inside[0]))
     held_line = '# t\n```\n## Config sources\nobs-ingress.otlp-ingress.conf: service-held \u2014 service https://example.test/obs.json\n```\n'
     cases.append(('a service-held line is read as a source line (its service is compared with the topology)', 'https://example.test/obs.json' in spec_facts(held_line)['services']))
     failed = [name for name, ok in cases if not ok]

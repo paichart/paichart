@@ -19,7 +19,7 @@ import { UpdatePOVSchemaComprehensive } from '@/lib/validation/pov';
 import { povLogger } from '@/lib/logger';
 import { logStageFieldChange, TaskActivityAction } from '@/lib/pov/services/stageActivityService';
 import { applyTeamUpdate } from '@/lib/pov/services/team';
-import { enforceProtocolStampImmutable, dropPlatformRunKeys, stripAuditFacts } from '@/lib/tasks/services/protected-task-metadata';
+import { enforceProtocolStampImmutable, dropPlatformRunKeys, stripAuditFacts, atCreateWarn } from '@/lib/tasks/services/protected-task-metadata';
 import { readJsonBody, payloadTooLargeResponse } from '@/lib/utils/read-json-body';
 
 // Helper function to ensure phases are created from templates
@@ -736,13 +736,13 @@ export async function updatePoVHandler(
             // WS2 Phase A: a task must not be BORN with a forged protocol stamp (create-forgery
             // channel, panel B1b/B-3) — the platform stamps at first execution.
             enforceProtocolStampImmutable(taskMetadata, null, task.id ?? '(new)', {
-              surface: 'pov-bulk-create', onViolation: 'strip-warn', warn: (f, m) => povLogger.warn(f, m),
+              surface: 'pov-bulk-create', onViolation: 'strip-warn', warn: atCreateWarn((f, m) => povLogger.warn(f, m)),
             });
             // Platform-run-keys panel 2026-08-19: birth-forgery closure — a task must not be
             // BORN with qualityGate/pipelineStageId/etc (existing=null ⇒ any present run key
             // differs ⇒ one warn, then dropped).
             dropPlatformRunKeys(taskMetadata, null, task.id ?? '(new)', {
-              surface: 'pov-bulk-create', warn: (f, m) => povLogger.warn(f, m),
+              surface: 'pov-bulk-create', warn: atCreateWarn((f, m) => povLogger.warn(f, m)),
             });
             if (task.type === 'PIPELINE' && task.status === 'COMPLETED') {
               throw new Error('PIPELINE tasks cannot be created already COMPLETED (anti-fabrication invariant).');
@@ -798,13 +798,13 @@ export async function updatePoVHandler(
             // WS2 Phase A: a task must not be BORN with a forged protocol stamp (create-forgery
             // channel, panel B1b/B-3) — the platform stamps at first execution.
             enforceProtocolStampImmutable(taskMetadata, null, task.id ?? '(new)', {
-              surface: 'pov-bulk-create', onViolation: 'strip-warn', warn: (f, m) => povLogger.warn(f, m),
+              surface: 'pov-bulk-create', onViolation: 'strip-warn', warn: atCreateWarn((f, m) => povLogger.warn(f, m)),
             });
             // Platform-run-keys panel 2026-08-19: birth-forgery closure — a task must not be
             // BORN with qualityGate/pipelineStageId/etc (existing=null ⇒ any present run key
             // differs ⇒ one warn, then dropped).
             dropPlatformRunKeys(taskMetadata, null, task.id ?? '(new)', {
-              surface: 'pov-bulk-create', warn: (f, m) => povLogger.warn(f, m),
+              surface: 'pov-bulk-create', warn: atCreateWarn((f, m) => povLogger.warn(f, m)),
             });
             if (task.type === 'PIPELINE' && task.status === 'COMPLETED') {
               throw new Error('PIPELINE tasks cannot be created already COMPLETED (anti-fabrication invariant).');
