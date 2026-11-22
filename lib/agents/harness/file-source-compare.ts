@@ -25,17 +25,17 @@
  * A FACT, never a gate: nothing in qualityGate or programReleasable reads it, and no force reads the overlap (owner decision 2b).
  */
 import type { ConfigSourceLine, LegConfigSources } from './config-sources';
-import { resolveConfigLabel } from './held-bytes/config-label';
+import { resolveConfigLabel, platformLabelTargetServices } from './held-bytes/config-label';
 import { isFileOfGitLine } from './held-bytes/device-read-scope';
-import { configPinRefusesRef, servedKeyOf, DECLARED_SCOPE_REFUSALS, GIT_TARGET_PREFIX } from './held-bytes/config-source-scope';
+import { configPinRefusesRef, servedKeyOf, DECLARED_SCOPE_REFUSALS, SERVICE_FILE_NOT_DECLARED, GIT_TARGET_PREFIX } from './held-bytes/config-source-scope';
 import { COMPARE_SIDE_MAX_BYTES, COMPARE_SIDE_MAX_LINES, COMPARE_PERSIST_MAX_FILES, COMPARE_PERSIST_OP_BUDGET, COMPARE_PERSIST_EVIDENCE_MAX_BYTES } from './held-bytes/caps';
-import { gitArgsMatch, serviceCalls, serviceMatcher, shownService } from './device-source-facts';
+import { gitArgsMatch, serviceCalls, serviceMatcher, shownService, unresolvedDescriptorServices, type CallView } from './device-source-facts';
 import { PLACEHOLDER, CREDENTIAL_LINE_VERSION } from './redact-artifact-secrets';
 import { sanitizeChainedOutput } from './sanitize-chained-output';
 import { quotableLine, quoteSeamOpen } from './file-compare-quote-seam';
 import {
   FILE_COMPARE_METHOD, FILE_COMPARE_RECORD_VERSION, FILE_COMPARE_DETAILS, FILE_LINES_QUOTED_CAP, FILE_FACT_QUOTED_CAP, FILE_LINE_SCAN_UNITS,
-  FILE_RETURNED_KEYS_CAP, FILE_COMPARE_FILES_CAP, QUOTES_WITHHELD_NO_LIST, fileCompareStateOf, sanitizeQuotedLine, validFileCompareRecord,
+  FILE_RETURNED_KEYS_CAP, FILE_COMPARE_FILES_CAP, FILE_UNRESOLVED_SERVICES_CAP, QUOTES_WITHHELD_NO_LIST, fileCompareStateOf, sanitizeQuotedLine, validFileCompareRecord,
   type FileNotCheckedReason,
 } from './git-live-drift';
 
@@ -202,26 +202,62 @@ export interface LineWithholder { withheld(i: number): boolean }
  * line test says credential-shaped). A line is withheld when:
  *   1. it is flagged itself;
  *   2. it sits in a block a flagged line opened (`scanBlocks`: brace, YAML, a same-indent YAML list — J1);
- *   3. the line before it (blank and comment lines skipped) is flagged and does not END its statement — a directive continued on
- *      the next line, `set $api_token` / `"<secret>";` (sec-ops J4);
- *   4. it sits in a YAML list item with a flagged line: any line of its innermost item, or any EARLIER line of an item that
- *      encloses it — `- key: X-API-Key` / `  value: <secret>` (sec-ops J2). A very long item spends the line tester's bound, past which every line reads flagged.
- * Rules 3 and 4 are asked lazily, of the few lines a quote is tried on; rule 2 is one pass. All share one bounded line tester.
+ *   3. it CONTINUES a statement that has a flagged line: blank and comment lines skipped, some line between it and the last line
+ *      that ENDED its statement (`;` `{` `}`) is flagged — `set $api_token` / `"<secret>";` (sec-ops J4), and over any number of
+ *      lines, `proxy_set_header X-API-Key` / `"a"` / `"<secret>";` (STEP 3 P5, FILE-COMPARE-QUOTE-RESIDUALS variant 2). The walk
+ *      back is made on a side that HAS statement syntax (some compared line carries a `;`, anywhere). On a side with no `;` at
+ *      all — YAML, where no line ends a statement and a walk would withhold every line below the first flagged one — it looks
+ *      ONE line back, as before. A side that MIXES the two syntaxes is walked (toward withholding);
+ *   4. it sits in a YAML list item with a flagged line: ANY line of ANY item that encloses it, before or after it —
+ *      `- key: X-API-Key` / `  value: <secret>` (sec-ops J2), and `- spec:` / `    - v: <secret>` / `  name: api-token`, where the
+ *      naming line comes LATER in the enclosing item (P5, variant 1). So one flagged line withholds its whole OUTERMOST item.
+ *      A very long item spends the line tester's bound, past which every line reads flagged.
+ * Rules 3 and 4 are asked lazily, of the few lines a quote is tried on, and memoised (each line is walked once); rule 2 is one
+ * pass. All share one bounded line tester. Over-withholding costs detail and nothing else.
  */
 export function lineWithholder(all: readonly string[], flagged: (line: string) => boolean, maxTests: number = LINE_TESTS_PER_SIDE): LineWithholder {
   const flaggedAt = lineTester(all, flagged, maxTests);
   const blocks = scanBlocks(all, flaggedAt);
   const skipped = (line: string): boolean => { const n = indentOf(line); return n === line.length || line.charCodeAt(n) === 0x23; };
+  // Does this side have statement syntax? YES when ANY compared line carries a `;` ANYWHERE — not only at its end: a file whose
+  // every `;` is followed by a comment (`…; # note`) must not switch the walk back off. Asked once, lazily (one `indexOf` a line).
+  // The test errs toward the walk: a YAML file with one `;` in a value is walked (more is withheld). It can be answered NO only
+  // by a side with no `;` at all — where no statement can end, and the rule is the one-line look-back it was before P5.
+  let statements: boolean | null = null;
+  const hasStatements = (): boolean => {
+    if (statements === null) {
+      statements = false;
+      for (const line of all) { if (!skipped(line) && line.indexOf(';') >= 0) { statements = true; break; } }
+    }
+    return statements;
+  };
+  // `cont[k]`: 0 not asked · 1 the unfinished statement BEFORE line k has a flagged line · 2 it has none. Every line of one walk
+  // back shares the answer, so each line is walked at most once however many quotes are tried.
+  const cont = new Int8Array(all.length);
   const continuesFlagged = (i: number): boolean => {
+    if (!hasStatements()) {
+      for (let p = i - 1; p >= 0; p--) {
+        if (skipped(all[p])) continue;
+        return !endsStatement(all[p]) && flaggedAt(p);
+      }
+      return false;
+    }
+    if (cont[i] !== 0) return cont[i] === 1;
+    const chain: number[] = [i];
+    let found = false;
     for (let p = i - 1; p >= 0; p--) {
       if (skipped(all[p])) continue;
-      return !endsStatement(all[p]) && flaggedAt(p);
+      if (endsStatement(all[p])) break;
+      if (flaggedAt(p)) { found = true; break; }
+      if (cont[p] !== 0) { found = cont[p] === 1; break; }
+      chain.push(p);
     }
-    return false;
+    for (const k of chain) cont[k] = found ? 1 : 2;
+    return found;
   };
-  // The list items that enclose each line, by ONE pass over an indent stack (exact, linear): `top[i]` = the first line of the
-  // OUTERMOST enclosing item, `inner[i]` = of the innermost (a `- ` line is its own innermost item); -1 = in no list item.
-  const top = new Int32Array(all.length).fill(-1); const inner = new Int32Array(all.length).fill(-1);
+  // The OUTERMOST list item that encloses each line, by ONE pass over an indent stack (exact, linear): `top[i]` = the first line
+  // of that item (a `- ` line in no other item is its own); -1 = in no list item.
+  const top = new Int32Array(all.length).fill(-1);
   {
     const sIndent: number[] = []; const sDash: number[] = [];   // the stack: an indent, and the line index when it is a `- ` line (else -1)
     for (let i = 0; i < all.length; i++) {
@@ -229,22 +265,27 @@ export function lineWithholder(all: readonly string[], flagged: (line: string) =
       if (n === all[i].length) continue;
       while (sIndent.length > 0 && sIndent[sIndent.length - 1] >= n) { sIndent.pop(); sDash.pop(); }
       const dash = isDashLine(all[i]);
-      for (let k = 0; k < sDash.length; k++) if (sDash[k] >= 0) { if (top[i] < 0) top[i] = sDash[k]; inner[i] = sDash[k]; }
-      if (dash) { if (top[i] < 0) top[i] = i; inner[i] = i; }
+      for (let k = 0; k < sDash.length && top[i] < 0; k++) if (sDash[k] >= 0) top[i] = sDash[k];
+      if (dash && top[i] < 0) top[i] = i;
       sIndent.push(n); sDash.push(dash ? i : -1);
     }
   }
+  // `item[t]` for the first line t of an OUTERMOST item: 0 not asked · 1 some line of the item is flagged · 2 none is. The lines
+  // of one outermost item are exactly the non-blank lines that share its `top` (they are consecutive, blank lines aside).
+  const item = new Int8Array(all.length);
   const inFlaggedItem = (i: number): boolean => {
-    if (top[i] < 0) return false;
-    for (let j = top[i]; j < i; j++) if (all[j].length > 0 && flaggedAt(j)) return true;   // an earlier line of an item that encloses it
-    const base = indentOf(all[inner[i]]);
-    for (let j = i + 1; j < all.length; j++) {                            // the rest of its innermost item
-      const n = indentOf(all[j]);
-      if (n === all[j].length) continue;
-      if (n <= base) break;
-      if (flaggedAt(j)) return true;
+    const t = top[i];
+    if (t < 0) return false;
+    if (item[t] === 0) {
+      let found = false;
+      for (let j = t; j < all.length; j++) {
+        if (indentOf(all[j]) === all[j].length) continue;   // a blank line is in no item and ends none
+        if (top[j] !== t) break;
+        if (flaggedAt(j)) { found = true; break; }
+      }
+      item[t] = found ? 1 : 2;
     }
-    return false;
+    return item[t] === 1;
   };
   return { withheld: (i) => flaggedAt(i) || blocks[i] === 1 || continuesFlagged(i) || inFlaggedItem(i) };
 }
@@ -445,18 +486,67 @@ function labelsOf(sources: ParsedSources): Array<{ label: string; base: ConfigSo
   return [...out.values()];
 }
 
+// ── STEP 3 P5 (join preconditions 16, 17): what a declared SERVICE line's own calls and registrations say ──────────────────────
+// Two CONDITIONS a line with no captured file can be in, each with ONE word, and one record-level list. None changes what is held
+// or forced: the leg is forced `service-held-not-held` / `git-file-not-held` exactly as before — these say WHY in the fact.
+
+/** A capture outcome: a file at the line's (target, path) WAS returned — by a call the line's declared service is not tied to
+ *  (capture refused it `service-file-not-declared`, case `wrong-service`). Never `returned: true`: "read" means the DECLARED
+ *  service returned it. */
+export const CAPTURE_FILE_FROM_OTHER_SERVICE = 'file-from-other-service';
+/** A capture outcome: the declared service WAS called successfully, every such call under a registered NAME the platform's file
+ *  table for the label's target is not keyed on, and capture extracted nothing from those calls (a row of another name is no file
+ *  lane). */
+export const CAPTURE_REGISTERED_UNDER_OTHER_NAME = 'registered-under-other-name';
+
+/** The record's `unresolvedServices`: the declared service lines' descriptor URLs no registration of this execution is tied to
+ *  (device-source-facts.ts `unresolvedDescriptorServices` — the one resolver, the IF-2 masker), capped. */
+function unresolvedServicesOf(sources: ParsedSources, toolCalls: readonly unknown[]): string[] {
+  return unresolvedDescriptorServices(toolCalls, sources.entries.flatMap((e) => ('service' in e ? [e.service] : []))).slice(0, FILE_UNRESOLVED_SERVICES_CAP);
+}
+
+/** The index of the first successful call to `service` when the OTHER-NAME condition holds for a label of `target`, else null.
+ *  `extractedFrom` — the tool-call indices capture has any item for (a file, a refusal, an evidence item): a call capture DID
+ *  extract from was a file lane, whatever its name, so the condition does not hold. */
+function otherNameCall(service: string, target: string | null, calls: readonly CallView[],
+  matches: (declared: string, c: { service: string | null; serviceId: string | null }) => boolean, extractedFrom: ReadonlySet<number>): number | null {
+  if (!target) return null;
+  const names = platformLabelTargetServices(target);
+  if (names.size === 0) return null;
+  const ok = calls.filter((c) => c.ok && matches(service, c));
+  if (ok.length === 0) return null;
+  if (ok.some((c) => (c.service !== null && names.has(c.service)) || extractedFrom.has(c.index))) return null;
+  return ok[0].index;
+}
+
 /** A record with every label not-checked for ONE reason (`no-capture-plan`, `compare-error`) — built from the declaration alone, by
- *  code simple enough that it cannot fail the way the comparison did. */
-function recordForAll(sources: ParsedSources, harvesterExecutionId: string | null, reason: 'no-capture-plan' | 'compare-error'): Obj {
+ *  code simple enough that it cannot fail the way the comparison did. `toolCalls` (the `no-capture-plan` caller only): a service
+ *  line in the OTHER-NAME condition reads that word instead — with no plan nothing was extracted from any call, and the condition
+ *  is a statement about the calls and the registrations, true whatever the capture switch says. */
+function recordForAll(sources: ParsedSources, harvesterExecutionId: string | null, reason: 'no-capture-plan' | 'compare-error', toolCalls?: readonly unknown[]): Obj {
   const labels = labelsOf(sources).slice(0, FILE_COMPARE_FILES_CAP);
+  const calls = toolCalls ? serviceCalls(toolCalls) : [];
+  const matches = toolCalls ? serviceMatcher(toolCalls) : null;
+  const NONE: ReadonlySet<number> = new Set();
+  const other = (service: string, label: string): number | null =>
+    (matches ? otherNameCall(service, labels.find((l) => l.label === label)?.target ?? null, calls, matches, NONE) : null);
+  const unresolved = toolCalls ? unresolvedServicesOf(sources, toolCalls) : [];
   return {
     version: FILE_COMPARE_RECORD_VERSION, method: FILE_COMPARE_METHOD, credentialLineVersion: CREDENTIAL_LINE_VERSION, harvesterExecutionId,
-    capture: sources.entries.slice(0, FILE_COMPARE_FILES_CAP).map((e) => ({ label: e.label, kind: e.kind, outcome: reason })),
+    capture: sources.entries.slice(0, FILE_COMPARE_FILES_CAP).map((e) => {
+      if (e.kind !== 'service-held' && e.kind !== 'live-read') return { label: e.label, kind: e.kind, outcome: reason };
+      const at = other(e.service, e.label);
+      return at === null ? { label: e.label, kind: e.kind, outcome: reason }
+        : { label: e.label, kind: e.kind, service: shownService(e.service), outcome: CAPTURE_REGISTERED_UNDER_OTHER_NAME, toolCallIndex: at };
+    }),
     returnedKeys: {},
     files: labels.filter((l) => l.base?.kind === 'git-file').map((l) => {
       const b = l.base as GitLine;
-      return notChecked(l.label, { path: b.path, ref: b.ref }, l.live && l.target && l.path ? { target: l.target, path: l.path } : null, reason);
+      const at = l.live ? other(l.live.service, l.label) : null;
+      return notChecked(l.label, { path: b.path, ref: b.ref }, l.live && l.target && l.path ? { target: l.target, path: l.path } : null,
+        at === null ? reason : 'service-registered-under-other-name');
     }),
+    ...(unresolved.length ? { unresolvedServices: unresolved } : {}),
     budget: { opsUsed: 0, opsLimit: COMPARE_PERSIST_OP_BUDGET, filesOverBudget: 0, evidenceReached: 0, evidenceLimit: COMPARE_PERSIST_MAX_FILES, evidenceBytes: 0, evidenceBytesLimit: COMPARE_PERSIST_EVIDENCE_MAX_BYTES },
   };
 }
@@ -494,13 +584,14 @@ export function buildFileSourceCompare(input: BuildFileSourceCompareInput): Obj 
 
 function build(input: BuildFileSourceCompareInput): Obj {
   const { sources, plan } = input;
-  if (!plan) return recordForAll(sources, input.harvesterExecutionId, 'no-capture-plan');
+  if (!plan) return recordForAll(sources, input.harvesterExecutionId, 'no-capture-plan', input.toolCalls);
   const compare = input.compare ?? compareOrderedLines;
   const ops: OpBudget = { used: 0, limit: input.opsLimit ?? COMPARE_PERSIST_OP_BUDGET };
   const calls = serviceCalls(input.toolCalls);
   const matches = serviceMatcher(input.toolCalls);
   const evidence = input.evidence?.items ?? [];
   const labels = labelsOf(sources).slice(0, FILE_COMPARE_FILES_CAP);
+  const unresolved = unresolvedServicesOf(sources, input.toolCalls);
 
   const refusalAt = (target: string, path: string): string | null =>
     plan.refusals.find((r) => r.target === target && r.path === path && !DECLARED_SCOPE_REFUSALS.has(r.refusal))?.refusal ?? null;
@@ -514,6 +605,16 @@ function build(input: BuildFileSourceCompareInput): Obj {
     const unreadable = plan.refusals.find((r) => idx.has(r.toolCallIndex) && r.target === null && !DECLARED_SCOPE_REFUSALS.has(r.refusal));
     return unreadable ? { outcome: 'result-not-readable', detail: unreadable.refusal } : { outcome: 'not-returned' };
   };
+  // STEP 3 P5 — the two conditions above, asked BEFORE `serviceState` (which would read `not-read` / `not-returned`: true of the
+  // declared service's calls, silent on what happened to the file).
+  /** Precondition 16: the file at (target, path) was returned and refused `service-file-not-declared` / `wrong-service`. */
+  const fromOtherService = (target: string, path: string): number | null => {
+    const r = plan.refusals.find((x) => x.target === target && x.path === path && x.refusal === SERVICE_FILE_NOT_DECLARED && x.detail?.case === 'wrong-service');
+    return r ? r.toolCallIndex : null;
+  };
+  /** Precondition 17: the declared service answered under a name the file table is not keyed on, and nothing was extracted from it. */
+  const extractedFrom: ReadonlySet<number> = new Set<number>([...plan.files.map((f) => f.toolCallIndex), ...plan.refusals.map((r) => r.toolCallIndex), ...evidence.map((x) => x.toolCallIndex)]);
+  const underOtherName = (service: string, target: string): number | null => otherNameCall(service, target, calls, matches, extractedFrom);
   const gitHeld = (l: GitLine) => (configPinRefusesRef(l) ? undefined : plan.files.find((f) => isFileOfGitLine(f, l)));
   const gitTargetOf = (l: GitLine) => `${GIT_TARGET_PREFIX}${l.owner.toLowerCase()}:${l.repo.toLowerCase()}`;
 
@@ -541,6 +642,10 @@ function build(input: BuildFileSourceCompareInput): Obj {
       if (held) { capture.push({ ...head, outcome: 'held', returned: true, sha256: held.sha256, toolCallIndex: held.toolCallIndex }); continue; }
       const refused = refusalAt(lab.target, lab.path);
       if (refused) { capture.push({ ...head, outcome: refused, returned: true }); continue; }
+      const otherSvc = fromOtherService(lab.target, lab.path);
+      if (otherSvc !== null) { capture.push({ ...head, outcome: CAPTURE_FILE_FROM_OTHER_SERVICE, toolCallIndex: otherSvc }); continue; }
+      const otherName = underOtherName(e.service, lab.target);
+      if (otherName !== null) { capture.push({ ...head, outcome: CAPTURE_REGISTERED_UNDER_OTHER_NAME, toolCallIndex: otherName }); continue; }
       const st = serviceState(e.service);
       capture.push({ ...head, outcome: st.outcome, ...(st.detail && FILE_COMPARE_DETAILS.has(st.detail) ? { detail: st.detail } : {}) });
       continue;
@@ -552,6 +657,10 @@ function build(input: BuildFileSourceCompareInput): Obj {
         ...(ev.detail && FILE_COMPARE_DETAILS.has(ev.detail) ? { detail: ev.detail } : {}) });
       continue;
     }
+    const otherSvc = fromOtherService(lab.target, lab.path);
+    if (otherSvc !== null) { capture.push({ ...head, outcome: CAPTURE_FILE_FROM_OTHER_SERVICE, toolCallIndex: otherSvc }); continue; }
+    const otherName = underOtherName(e.service, lab.target);
+    if (otherName !== null) { capture.push({ ...head, outcome: CAPTURE_REGISTERED_UNDER_OTHER_NAME, toolCallIndex: otherName }); continue; }
     const st = serviceState(e.service);
     capture.push({ ...head, outcome: st.outcome, ...(st.detail && FILE_COMPARE_DETAILS.has(st.detail) ? { detail: st.detail } : {}) });
   }
@@ -582,6 +691,8 @@ function build(input: BuildFileSourceCompareInput): Obj {
     const live = l.live;
     const ev = evidence.find((x) => x.target === l.target && x.path === l.path && matches(live.service, { service: x.serviceName, serviceId: x.serviceId }));
     if (!ev) {
+      if (fromOtherService(servedHead.target, servedHead.path) !== null) { files.push(notChecked(l.label, git, servedHead, 'served-file-from-other-service')); continue; }
+      if (underOtherName(live.service, servedHead.target) !== null) { files.push(notChecked(l.label, git, servedHead, 'service-registered-under-other-name')); continue; }
       const st = serviceState(live.service);
       const reason: FileNotCheckedReason = st.outcome === 'not-read' ? 'live-read-not-read' : st.outcome === 'read-failed' ? 'live-read-failed'
         : st.outcome === 'result-not-readable' ? 'served-result-not-readable' : 'served-file-not-returned';
@@ -617,6 +728,7 @@ function build(input: BuildFileSourceCompareInput): Obj {
   return {
     version: FILE_COMPARE_RECORD_VERSION, method: FILE_COMPARE_METHOD, credentialLineVersion: CREDENTIAL_LINE_VERSION, harvesterExecutionId: input.harvesterExecutionId,
     capture, returnedKeys, files,
+    ...(unresolved.length ? { unresolvedServices: unresolved } : {}),
     budget: { opsUsed: Math.min(ops.used, ops.limit), opsLimit: ops.limit, filesOverBudget, evidenceReached: input.evidence?.reached ?? 0, evidenceLimit: COMPARE_PERSIST_MAX_FILES,
       evidenceBytes: input.evidence?.bytes ?? 0, evidenceBytesLimit: COMPARE_PERSIST_EVIDENCE_MAX_BYTES },
     ...((input.seam ?? SHIPPING_SEAM).open ? {} : { quotesWithheld: QUOTES_WITHHELD_NO_LIST }),

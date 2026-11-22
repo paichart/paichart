@@ -218,6 +218,35 @@ export const AUDIT_STRIP_KEYS = [
   'configSourcesSnapshot',
 ] as const;
 
+/** The error code of the create-surface strip's warn (one per removed key; the KEY NAME and the surface — never a value). */
+export const AUDIT_KEY_STRIPPED_AT_CREATE = 'AUDIT_KEY_STRIPPED_AT_CREATE';
+
+/**
+ * TASK-CREATE-AUDIT-KEYS-UNSTRIPPED (2026-11-22; owner decision O28) — the strip at a task-CREATE seam, for a path that writes
+ * caller- or template-supplied metadata. Four create paths wrote it as given (the REST stage-task route, `PhaseService.createTask`,
+ * the phase-template service, the template storage), so a create surface could plant a platform-only key — a
+ * `configSourcesSnapshot`, a `completedByExecutionId`. Each now passes the metadata object it is ABOUT TO WRITE through this.
+ *
+ * Returns a COPY with every `AUDIT_STRIP_KEYS` member removed (the caller's object is never mutated). A value that is not a plain
+ * object is returned AS GIVEN (there is no key to strip, and the create writes exactly what it wrote before). For a metadata
+ * object carrying none of the keys the copy has the same keys in the same order with the same values: the created row is
+ * byte-identical to before. One warn per removed key, naming the surface and the KEY — never the value. No error: the create
+ * proceeds without the key.
+ *
+ * NOT stripped here: `protocol` / `protocolResolvedAt` (they are not audit keys; the first-stamp write-if-absent and the
+ * governing read's own checks are their control — see the build record for what a planted stamp can and cannot do).
+ */
+export function stripAuditFactsAtCreate<T>(
+  metadata: T,
+  surface: string,
+  warn?: (fields: Record<string, unknown>, message: string) => void
+): T {
+  if (metadata === null || typeof metadata !== 'object' || Array.isArray(metadata)) return metadata;
+  const copy: Record<string, unknown> = { ...(metadata as Record<string, unknown>) };
+  stripAuditFacts(copy, warn, { surface, errorCode: AUDIT_KEY_STRIPPED_AT_CREATE });
+  return copy as T;
+}
+
 export interface RunKeyDropOptions {
   /** Surface label for the warn (e.g. 'web-funnel', 'pov-bulk-save', 'pov-bulk-create', 'bulk-update'). */
   surface: string;

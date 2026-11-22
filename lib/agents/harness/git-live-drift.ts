@@ -1,6 +1,7 @@
 /**
- * Config sources STEP 2 (2026-11-15; plan §3.3, owner Group K1/K2) — `gitLiveDrift`, PURE and CLIENT-SAFE (no imports: the §6
- * render is reachable from a client component, the `live-evidence-render.ts` rule).
+ * Config sources STEP 2 (2026-11-15; plan §3.3, owner Group K1/K2) — `gitLiveDrift`, PURE and CLIENT-SAFE (the §6 render is
+ * reachable from a client component, the `live-evidence-render.ts` rule: its ONE import is source-field-bounds.ts, which imports
+ * nothing — pinned, test-git-live-drift R3).
  *
  * QUESTION (one): for each Git file a Kubernetes leg KEEPS, which DECLARED fields differ between the file and the live objects it
  * names? The comparison is not made by a model and not made here. The PLATFORM calls the read-only cluster service's
@@ -18,6 +19,7 @@
  * A FACT, never a gate: no qualityGate / programReleasable input. Rendered to the Architect and the leg Reviewer (the readers of the
  * network Git-vs-device comparison), who decide what a difference means.
  */
+import { SOURCE_LABEL_RE, GIT_OWNER_REPO_RE, GIT_REF_RE, SERVICE_SHOWN_MAX_CHARS, isDeclaredGitPath, isReturnedKeyOf } from './source-field-bounds';
 export const GIT_LIVE_DRIFT_VERSION = 1;
 export const GIT_LIVE_DRIFT_METHOD = 'k8s-declared-field-compare';
 /** The tool's own method string, version included — a result carrying any other is `result-shape`. */
@@ -239,7 +241,7 @@ const NO_COMPARE_RECORD_WORDS = "the platform's comparison record did not reach 
 // sec-ops slice-3b F5: a STORED fact is re-read on every render (a chained copy can be edited by a human POV writer). Every field
 // that reaches the prompt is checked against this module's own sets and grammars; a file entry that fails any check renders as
 // `not-checked: the stored fact could not be read` — never its own words.
-const LABEL_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const LABEL_RE = SOURCE_LABEL_RE;
 const OBJECT_RE = /^(?:[A-Za-z][A-Za-z0-9]{0,62} [a-z0-9.?-]{1,253}\/[a-z0-9.?-]{1,253}|Namespace [a-z0-9.?-]{1,253})$/;
 const SUMMARIES = new Set(['no-differences', 'differences', 'compared-with-gaps']);
 function renderableFile(f: unknown): Obj | null {
@@ -324,6 +326,10 @@ export const FILE_NOT_CHECKED_REASONS = Object.freeze([
   'no-live-read-line', 'git-file-not-held', 'live-read-not-read', 'live-read-failed', 'served-file-not-returned',
   'served-result-not-readable', 'served-file-refused', 'over-compare-cap', 'comparison-budget', 'redaction-off',
   'no-capture-plan', 'compare-error',
+  // STEP 3 P5 (join preconditions 16, 17) — two CONDITIONS that before read `live-read-not-read` / `served-file-not-returned` /
+  // `no-capture-plan`: the file came back from a call the line's declared service is not tied to; the declared service answered
+  // under a registered name the platform's file table is not keyed on. Appended (no stored record carries either: none exists).
+  'served-file-from-other-service', 'service-registered-under-other-name',
 ] as const);
 export type FileNotCheckedReason = (typeof FILE_NOT_CHECKED_REASONS)[number];
 /** `detail` on a not-checked entry: the NAME of the capture-chain step or extractor check that refused the served file. Closed. */
@@ -343,14 +349,24 @@ export const FILE_LINES_QUOTED_CAP = 20;       // per side, per file
 export const FILE_FACT_QUOTED_CAP = 200;       // per fact
 export const FILE_COMPARE_FILES_CAP = 256;     // the grammar's own line bound
 export const FILE_RETURNED_KEYS_CAP = 20;
+/** Declared descriptor-URL services with no registration in the execution, named on the record (STEP 3 P5). */
+export const FILE_UNRESOLVED_SERVICES_CAP = 20;
 /** Why no line is quoted at all (the credential-shaped list is not wired — file-compare-quote-seam.ts). */
 export const QUOTES_WITHHELD_NO_LIST = 'credential-list-not-wired';
 
 const FILE_NOT_CHECKED_SET: ReadonlySet<string> = new Set(FILE_NOT_CHECKED_REASONS);
 const FILE_STATE_SET: ReadonlySet<string> = new Set(FILE_COMPARE_STATES);
-const GIT_PATH_RE = /^[A-Za-z0-9][A-Za-z0-9._/@+-]{0,299}$/;
-const GIT_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/;
-const SERVED_PATH_RE = /^\/[A-Za-z0-9._/@+-]{1,299}$/;
+// STEP 3 P5 (register item 21): every DECLARED field is re-validated with the GRAMMAR's own shape (source-field-bounds.ts) — a
+// reader narrower than the writer voided the whole record for a legal declaration. A served path is a platform target's path
+// (a constant, or a template over a label key): `/` + segments of the Git path alphabet.
+const isServedPath = (p: unknown): p is string => typeof p === 'string' && p.charCodeAt(0) === 0x2f && isDeclaredGitPath(p.slice(1));
+/** A (target) string of a capture entry: a platform label target, or `github:<owner>:<repo>` in the grammar's own shapes. */
+const isCaptureTarget = (t: unknown): t is string => {
+  if (typeof t !== 'string') return false;
+  if (SOURCE_LABEL_RE.test(t)) return true;
+  const parts = t.split(':');
+  return parts.length === 3 && parts[0] === 'github' && GIT_OWNER_REPO_RE.test(parts[1]) && GIT_OWNER_REPO_RE.test(parts[2]);
+};
 const COUNT_KEYS = Object.freeze(['gitOnly', 'servedOnly', 'redactedGit', 'redactedServed', 'ignoredGit', 'ignoredServed', 'withheldCredential', 'withheldInstruction', 'notQuoted'] as const);
 
 /** Is this code unit one a quoted line never carries? Control (C0, DEL, C1), the line and paragraph separators, bidi controls,
@@ -427,10 +443,10 @@ function validEditOverlap(v: unknown): boolean {
 export function renderableCompareFile(f: unknown, quotable: (line: string) => boolean = () => false): Obj | null {
   if (!isObj(f) || typeof f.label !== 'string' || !LABEL_RE.test(f.label)) return null;
   const git = f.git;
-  if (!isObj(git) || typeof git.path !== 'string' || !GIT_PATH_RE.test(git.path) || !(git.ref === null || (typeof git.ref === 'string' && GIT_REF_RE.test(git.ref)))) return null;
+  if (!isObj(git) || !isDeclaredGitPath(git.path) || !(git.ref === null || (typeof git.ref === 'string' && GIT_REF_RE.test(git.ref)))) return null;
   if (git.sha256 !== undefined && !(typeof git.sha256 === 'string' && SHA_RE.test(git.sha256))) return null;
   const served = f.served;
-  if (served !== undefined && !(isObj(served) && typeof served.target === 'string' && LABEL_RE.test(served.target) && typeof served.path === 'string' && SERVED_PATH_RE.test(served.path))) return null;
+  if (served !== undefined && !(isObj(served) && typeof served.target === 'string' && LABEL_RE.test(served.target) && isServedPath(served.path))) return null;
   if (typeof f.state !== 'string' || !FILE_STATE_SET.has(f.state)) return null;
   if (f.baseMatch !== undefined && !(typeof f.baseMatch === 'string' && (BASE_MATCH_STATES as readonly string[]).includes(f.baseMatch))) return null;
   if (f.editOverlap !== undefined && !validEditOverlap(f.editOverlap)) return null;
@@ -455,7 +471,12 @@ const EXEC_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const CAPTURE_OUTCOME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const CREDENTIAL_LINE_VERSION_RE = /^paichart\.credline\/[0-9]{1,4}$/;
 const CAPTURE_KINDS: ReadonlySet<string> = new Set(['git-file', 'service-held', 'live-read', 'supplied']);
-const SERVICE_SHOWN_MAX = 300;
+const SERVICE_SHOWN_MAX = SERVICE_SHOWN_MAX_CHARS;
+/** No control, separator, bidi or zero-width character (a character test — the string is operator-read). */
+function isPrintableServiceString(s: string): boolean {
+  for (let i = 0; i < s.length; i++) if (forbiddenQuotedUnit(s.charCodeAt(i))) return false;
+  return true;
+}
 function validRanges(v: unknown, pair: boolean): boolean {
   return Array.isArray(v) && v.length <= 500 && v.every((r) => (pair
     ? Array.isArray(r) && r.length === 2 && isCount(r[0]) && isCount(r[1]) && (r[0] as number) >= 1 && (r[0] as number) <= (r[1] as number)
@@ -480,8 +501,8 @@ export function validFileCompareRecord(raw: unknown, quotable: (line: string) =>
     if (!isObj(c) || typeof c.label !== 'string' || !LABEL_RE.test(c.label) || typeof c.kind !== 'string' || !CAPTURE_KINDS.has(c.kind)) return null;
     if (typeof c.outcome !== 'string' || !CAPTURE_OUTCOME_RE.test(c.outcome)) return null;
     if (c.returned !== undefined && c.returned !== true) return null;
-    if (c.target !== undefined && !(typeof c.target === 'string' && c.target.length <= 300)) return null;
-    if (c.path !== undefined && !(typeof c.path === 'string' && c.path.length <= 300)) return null;
+    if (c.target !== undefined && !isCaptureTarget(c.target)) return null;
+    if (c.path !== undefined && !isServedPath(c.path)) return null;
     if (c.sha256 !== undefined && !isSha(c.sha256)) return null;
     if (!isIdx(c.toolCallIndex) || !isIdx(c.calls)) return null;
     if (c.service !== undefined && !(typeof c.service === 'string' && c.service.length <= SERVICE_SHOWN_MAX)) return null;
@@ -490,14 +511,14 @@ export function validFileCompareRecord(raw: unknown, quotable: (line: string) =>
   const rk = raw.returnedKeys;
   if (!isObj(rk) || Object.keys(rk).length > 64) return null;
   for (const [t, keys] of Object.entries(rk)) {
-    if (!LABEL_RE.test(t) || !Array.isArray(keys) || keys.length > FILE_RETURNED_KEYS_CAP || !keys.every((k) => typeof k === 'string' && LABEL_RE.test(k))) return null;
+    if (!LABEL_RE.test(t) || !Array.isArray(keys) || keys.length > FILE_RETURNED_KEYS_CAP || !keys.every((k) => isReturnedKeyOf(t, k))) return null;
   }
   let quoted = 0; let ranges = 0;
   for (const f of raw.files) {
     const ok = renderableCompareFile(f, quotable);
     if (!ok) return null;
     const git = ok.git as Obj; const served = ok.served as Obj | undefined;
-    if (!isIdx(git.toolCallIndex) || (git.target !== undefined && !(typeof git.target === 'string' && git.target.length <= 300))) return null;
+    if (!isIdx(git.toolCallIndex) || (git.target !== undefined && !isCaptureTarget(git.target))) return null;
     if (served && (!isIdx(served.toolCallIndex) || (served.sha256 !== undefined && !isSha(served.sha256))
       || (served.service !== undefined && !(typeof served.service === 'string' && served.service.length <= SERVICE_SHOWN_MAX)))) return null;
     if (ok.state !== 'not-checked') {
@@ -517,6 +538,11 @@ export function validFileCompareRecord(raw: unknown, quotable: (line: string) =>
   if (!isObj(b) || !isOps(b.opsUsed) || !isOps(b.opsLimit) || !isCount(b.filesOverBudget) || !isCount(b.evidenceReached) || !isCount(b.evidenceLimit)
     || !isOps(b.evidenceBytes) || !isOps(b.evidenceBytesLimit)) return null;
   if (raw.quotesWithheld !== undefined && raw.quotesWithheld !== QUOTES_WITHHELD_NO_LIST) return null;
+  // STEP 3 P5: the declared descriptor URLs no registration was tied to — masked strings the builder wrote (`shownService`); present
+  // only when non-empty. Shape-checked: a list, capped, each a bounded string with no control character.
+  const us = raw.unresolvedServices;
+  if (us !== undefined && !(Array.isArray(us) && us.length >= 1 && us.length <= FILE_UNRESOLVED_SERVICES_CAP
+    && us.every((x) => typeof x === 'string' && x.length >= 1 && x.length <= SERVICE_SHOWN_MAX && isPrintableServiceString(x)))) return null;
   return raw;
 }
 
@@ -568,6 +594,8 @@ const FILE_REASON_WORDS: Record<FileNotCheckedReason, string> = {
   'redaction-off': 'secret redaction is switched off on this install, so nothing is compared or quoted',
   'no-capture-plan': 'the platform made no capture for this run, so there was nothing to compare',
   'compare-error': 'the comparison failed',
+  'served-file-from-other-service': 'a file at this name was returned by a call the platform could not tie to the declared service, so it was not used',
+  'service-registered-under-other-name': 'the declared service answered under a registered name the platform reads no files from',
 };
 const EDIT_OVERLAP_WORDS: Record<string, string> = {
   'base-differs': 'the edit was made on another read of this file',

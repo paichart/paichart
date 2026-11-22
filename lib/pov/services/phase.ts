@@ -4,6 +4,7 @@ import { Phase, PhaseTemplate, PhaseType, Prisma, StageStatus } from "@prisma/cl
 import { PhaseTemplateCreateInput, PhaseTemplateUpdateInput, WorkflowStage, PhaseDetails } from "../types/phase"
 import { povLogger } from "@/lib/logger"
 import { logStageFieldChange, TaskActivityAction } from "./stageActivityService"
+import { stripAuditFactsAtCreate } from "@/lib/tasks/services/protected-task-metadata"
 
 const localLogger = povLogger.child({ module: 'PhaseService' })
 
@@ -578,7 +579,10 @@ export class PhaseService {
           order: atomicOrder,
           status: 'OPEN',
           type: data.type || 'ACTION',
-          metadata: data.metadata ? JSON.parse(JSON.stringify(data.metadata)) as Prisma.InputJsonValue : undefined,
+          // TASK-CREATE-AUDIT-KEYS-UNSTRIPPED (2026-11-22): platform-only keys are never taken from a caller's or a template's metadata.
+          metadata: data.metadata
+            ? stripAuditFactsAtCreate(JSON.parse(JSON.stringify(data.metadata)), 'phase-service-create-task', (f, m) => localLogger.warn({ ...f, stageId }, m)) as Prisma.InputJsonValue
+            : undefined,
         },
       });
     });

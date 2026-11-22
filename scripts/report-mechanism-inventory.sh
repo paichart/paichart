@@ -774,6 +774,28 @@ UNION ALL SELECT '🔴 a fileSourceCompare record that carries a file text or an
   FROM _a a WHERE a.name = 'result.json' AND a.j ? 'fileSourceCompare' AND ((a.j->'fileSourceCompare')::text LIKE '%"B":%' OR (a.j->'fileSourceCompare')::text LIKE '%"evidence":%' OR (a.j->'fileSourceCompare')::text LIKE '%"content":%' OR (a.j->'fileSourceCompare')::text LIKE '%"text":%')
 UNION ALL SELECT '🔴 a fileSourceCompare stamp on a leaf that is not an observability leaf (only a protocol whose method the PLATFORM computes has one)', count(*)::text
   FROM _a a LEFT JOIN _execleg x ON x.eid = a.eid WHERE a.name = 'result.json' AND a.j ? 'fileSourceCompare' AND coalesce(x.legproto, '') <> 'observability-config-protocol'
+-- STEP 3 P5 (whole-diff review F8): the Author-side facts of the file comparison had no inventory line. `baseMatch` and
+-- `editOverlap` ride on the files of an AUTHOR's transcribed gitLiveDrift (plan §3.4, §13 C); `gitOnlyStatement` rides on an
+-- Author's liveEvidence (owner decision 2a). All ⚪ 0 until observability-config 1.12.0; no force reads any of them.
+UNION ALL SELECT '⚪ Author gitLiveDrift file entries (file comparison) by baseMatch — ' || coalesce(f->>'baseMatch', '(none)'), count(*)::text
+  FROM _a a, jsonb_array_elements(CASE WHEN jsonb_typeof(a.j->'gitLiveDrift'->'files') = 'array' THEN a.j->'gitLiveDrift'->'files' ELSE '[]' END) f
+  WHERE a.name = 'result.json' AND a.j->'gitLiveDrift'->>'method' = 'file-ordered-lines/1' AND a.j->'gitLiveDrift'->>'point' IS DISTINCT FROM 'harvester' GROUP BY 1
+UNION ALL SELECT '⚪ Author gitLiveDrift file entries by editOverlap — ' || coalesce(f->'editOverlap'->>'state', '(none)') || coalesce(' / ' || (f->'editOverlap'->>'reason'), ''), count(*)::text
+  FROM _a a, jsonb_array_elements(CASE WHEN jsonb_typeof(a.j->'gitLiveDrift'->'files') = 'array' THEN a.j->'gitLiveDrift'->'files' ELSE '[]' END) f
+  WHERE a.name = 'result.json' AND a.j->'gitLiveDrift'->>'method' = 'file-ordered-lines/1' AND a.j->'gitLiveDrift'->>'point' IS DISTINCT FROM 'harvester' GROUP BY 1
+UNION ALL SELECT '⚪ editOverlap / baseMatch entries in all (a named zero: the two grouped lines above print nothing while there is none)', count(*)::text
+  FROM _a a, jsonb_array_elements(CASE WHEN jsonb_typeof(a.j->'gitLiveDrift'->'files') = 'array' THEN a.j->'gitLiveDrift'->'files' ELSE '[]' END) f
+  WHERE a.name = 'result.json' AND (f ? 'editOverlap' OR f ? 'baseMatch')
+UNION ALL SELECT '🔴 an editOverlap or baseMatch key on a gitLiveDrift that is not the file comparison''s, or on a Harvester''s (they are an Author''s transcription only)', count(*)::text
+  FROM _a a, jsonb_array_elements(CASE WHEN jsonb_typeof(a.j->'gitLiveDrift'->'files') = 'array' THEN a.j->'gitLiveDrift'->'files' ELSE '[]' END) f
+  WHERE a.name = 'result.json' AND (f ? 'editOverlap' OR f ? 'baseMatch')
+    AND (a.j->'gitLiveDrift'->>'method' IS DISTINCT FROM 'file-ordered-lines/1' OR a.j->'gitLiveDrift'->>'point' = 'harvester')
+UNION ALL SELECT '⚪ liveEvidence stamps carrying gitOnlyStatement: checked / not checked (no sentence registered for the version)',
+  count(*) FILTER (WHERE a.j->'liveEvidence'->'gitOnlyStatement'->>'checked' = 'true') || ' / ' || count(*) FILTER (WHERE a.j->'liveEvidence'->'gitOnlyStatement'->>'checked' = 'false')
+  FROM _a a WHERE a.name = 'result.json' AND a.j->'liveEvidence' ? 'gitOnlyStatement'
+UNION ALL SELECT '· gitOnlyStatement: stamps where a listed Git-only file is NOT stated by the package (read each by hand; a fact, no force)', count(*)::text
+  FROM _a a WHERE a.name = 'result.json' AND a.j->'liveEvidence'->'gitOnlyStatement'->>'checked' = 'true'
+    AND jsonb_array_length(CASE WHEN jsonb_typeof(a.j->'liveEvidence'->'gitOnlyStatement'->'missing') = 'array' THEN a.j->'liveEvidence'->'gitOnlyStatement'->'missing' ELSE '[]' END) > 0
 UNION ALL SELECT '🔴 a platformDriftCalls record that carries a `manifest` key or a raw `detail` (the record stores a sha, a length and the validated projection only)', count(*)::text
   FROM _a a WHERE a.name = 'result.json' AND a.j ? 'platformDriftCalls' AND ((a.j->'platformDriftCalls')::text LIKE '%"manifest":%' OR (a.j->'platformDriftCalls')::text LIKE '%"detail":%')
 -- terraform-witness step-back (2026-11-18) — `planWitness`: the platform's check of a Terraform Author's Plan witness block. NOT_STAMPED
@@ -1050,15 +1072,39 @@ UNION ALL SELECT '⚪ heldEdit.forced on held legs (reason: ' || coalesce(vleg.m
 -- held-network push 3 (owner D-1, 2026-10-26): the carrier's device-force family, named so a 0 is printed (the GROUP BY line above omits it).
 UNION ALL SELECT '⚪ held legs forced git-file-not-held (a declared Git file not held; D-1)', count(*)::text FROM vleg WHERE vleg.metadata->'qualityGate'->'heldEdit'->>'reason' = 'git-file-not-held'
 UNION ALL SELECT '⚪ held legs forced device-sources-absent (the snapshot declares no block; D-1)', count(*)::text FROM vleg WHERE vleg.metadata->'qualityGate'->'heldEdit'->>'reason' = 'device-sources-absent'
+-- STEP 3 P5 (whole-diff review F5): `git-file-not-held` has been TWO forces since 2026-11-15 — the Device-sources one (its stamp
+-- carries `gitFileDevicesNotHeld`) and the Config-sources one (its stamp carries `gitFilesNotHeld`; Kubernetes and Terraform
+-- today). The two 🔴 lines below date from 2026-10-26 and counted every leg with that reason name, so a correctly forced
+-- Config-sources leg read as a Device-sources fault (twice). They are now scoped by what each stamp CARRIES: a
+-- `git-file-not-held` with its Config file list is the Config force and is counted on its own lines.
+UNION ALL SELECT '⚪ held legs forced git-file-not-held by the CONFIG-sources force (the stamp carries gitFilesNotHeld)', count(*)::text FROM vleg
+  WHERE vleg.metadata->'qualityGate'->'heldEdit'->>'reason' = 'git-file-not-held' AND jsonb_typeof(vleg.metadata->'qualityGate'->'heldEdit'->'gitFilesNotHeld') = 'array'
 UNION ALL SELECT '🔴 a device-force reason (git-file-not-held / device-read-not-held / device-sources-*) on a held leg that is not a Device-sources leg',
   count(*)::text FROM vleg JOIN tasks t ON t.id = vleg.id WHERE (vleg.metadata->'qualityGate'->'heldEdit'->>'reason' IN ('git-file-not-held', 'device-read-not-held')
       OR vleg.metadata->'qualityGate'->'heldEdit'->>'reason' LIKE 'device-sources-%')
     AND coalesce(t.metadata->>'protocol', '') NOT IN (SELECT name FROM _devsrcleg)
+    AND (vleg.metadata->'qualityGate'->'heldEdit'->>'reason' <> 'git-file-not-held' OR jsonb_typeof(vleg.metadata->'qualityGate'->'heldEdit'->'gitFilesNotHeld') IS DISTINCT FROM 'array')
 UNION ALL SELECT '🔴 git-file-not-held / device-read-not-held stamped without its device list (gitFileDevicesNotHeld / devicesNotHeld non-empty)',
   count(*)::text FROM vleg WHERE (vleg.metadata->'qualityGate'->'heldEdit'->>'reason' = 'git-file-not-held'
+      AND jsonb_typeof(vleg.metadata->'qualityGate'->'heldEdit'->'gitFilesNotHeld') IS DISTINCT FROM 'array'
       AND jsonb_array_length(CASE WHEN jsonb_typeof(vleg.metadata->'qualityGate'->'heldEdit'->'gitFileDevicesNotHeld') = 'array' THEN vleg.metadata->'qualityGate'->'heldEdit'->'gitFileDevicesNotHeld' ELSE '[]' END) = 0)
     OR (vleg.metadata->'qualityGate'->'heldEdit'->>'reason' = 'device-read-not-held'
       AND jsonb_array_length(CASE WHEN jsonb_typeof(vleg.metadata->'qualityGate'->'heldEdit'->'devicesNotHeld') = 'array' THEN vleg.metadata->'qualityGate'->'heldEdit'->'devicesNotHeld' ELSE '[]' END) = 0)
+UNION ALL SELECT '🔴 git-file-not-held by the CONFIG-sources force with an EMPTY file list, or on a Device-sources leg (the two lists never share a stamp)',
+  count(*)::text FROM vleg JOIN tasks t ON t.id = vleg.id WHERE vleg.metadata->'qualityGate'->'heldEdit'->>'reason' = 'git-file-not-held'
+    AND jsonb_typeof(vleg.metadata->'qualityGate'->'heldEdit'->'gitFilesNotHeld') = 'array'
+    AND (jsonb_array_length(vleg.metadata->'qualityGate'->'heldEdit'->'gitFilesNotHeld') = 0
+      OR jsonb_typeof(vleg.metadata->'qualityGate'->'heldEdit'->'gitFileDevicesNotHeld') = 'array')
+-- STEP 3 P5 (whole-diff review F8): `heldEdit.captureExecutionId` (plan §13 B6 — the Harvester execution whose capture the Config
+-- force was judged against; stamped only on a leg whose block can name service files) had no reader. These two lines are it.
+UNION ALL SELECT '⚪ heldEdit.captureExecutionId on held legs: an execution id / null (no Harvester had run)',
+  count(*) FILTER (WHERE jsonb_typeof(vleg.metadata->'qualityGate'->'heldEdit'->'captureExecutionId') = 'string') || ' / '
+  || count(*) FILTER (WHERE jsonb_typeof(vleg.metadata->'qualityGate'->'heldEdit'->'captureExecutionId') = 'null')
+  FROM vleg WHERE vleg.metadata->'qualityGate'->'heldEdit' ? 'captureExecutionId'
+UNION ALL SELECT '🔴 a heldEdit.captureExecutionId that is not an execution of a task in that leg''s own stage (the force was judged against another leg''s capture)',
+  count(*)::text FROM vleg WHERE jsonb_typeof(vleg.metadata->'qualityGate'->'heldEdit'->'captureExecutionId') = 'string'
+    AND NOT EXISTS (SELECT 1 FROM agent_executions e JOIN tasks c ON c.id = e."taskId"
+      WHERE e.id = vleg.metadata->'qualityGate'->'heldEdit'->>'captureExecutionId' AND c.stage_id = vleg.ps)
 UNION ALL SELECT '⚪ held views (all states rendered by construction; count)', (SELECT count(*) FROM held_views)::text
 UNION ALL SELECT '⚪ dangling BASE fromRefId (the CAPTURE it copied is gone — GC order context)', (SELECT count(*) FROM held_file_refs b WHERE b.kind = 'BASE' AND b."fromRefId" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM held_file_refs c WHERE c.id = b."fromRefId"))::text;
 \endif

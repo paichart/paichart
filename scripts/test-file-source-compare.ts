@@ -50,7 +50,7 @@ import { withDeclaredFilesScope, servedKeyOf, protocolDeclaresServiceFiles, SERV
 import { extractDeclaredFiles } from '../lib/agents/harness/held-bytes/extract';
 import { HELD_EXECUTION_FILE_CAP } from '../lib/agents/harness/held-bytes/caps';
 import { computeFileConfigSourceReads, computeFileLiveEvidenceFromReadRecord, computeConfigLiveEvidenceFromReadRecord, undeclaredConfigSourceReads,
-  computeGitOnlyStatement, normaliseForSentence } from '../lib/agents/harness/config-source-facts';
+  computeGitOnlyStatement, normaliseForSentence, computeConfigSourceReads } from '../lib/agents/harness/config-source-facts';
 import { computeGitLiveDriftHarvesterFact, transcribeGitLiveDriftFact, stampFileSourceCompare } from '../lib/agents/harness/git-live-drift-enrichment';
 import { computeConfigSourceReadsFact } from '../lib/agents/harness/config-source-facts-enrichment';
 import { computeLiveEvidenceHarvesterFact, hoistLiveEvidenceFact } from '../lib/agents/harness/live-evidence-enrichment';
@@ -58,6 +58,8 @@ import { renderLiveEvidenceForPrompt, ALL_GIT_ONLY_FILES_NOTE } from '../lib/age
 import { gitOnlyStatementSentenceFor, GIT_ONLY_STATEMENT_SENTENCES } from '../lib/agents/harness/git-only-statement-sentence';
 import { DECLARED_LEG_WARNING_IDS, REGISTERED_WARNING_IDS, registeredWarningIdsFor } from '../lib/agents/harness/reviewer-warnings-enrichment';
 import { PLACEHOLDER, isCredentialShapedLine, CREDENTIAL_LINE_VERSION } from '../lib/agents/harness/redact-artifact-secrets';
+import { DECLARED_DESCRIPTOR_ENDPOINTS } from '../lib/agents/harness/held-bytes/declared-descriptor-endpoints';
+import { SERVICE_SHOWN_MAX_CHARS } from '../lib/agents/harness/source-field-bounds';
 import { authoritativeReadStub } from './fixtures/authoritative-read-stub';
 import { storedEditFactsOf } from './replay-nets';
 
@@ -372,6 +374,63 @@ test('QUO6 (sec-ops J1–J6, LOW) a secret ROTATED between the two sides is neve
   assert(Date.now() - t < 1000, `a differing line at the byte cap took ${Date.now() - t} ms`);
 });
 
+test('QUO7 (STEP 3 P5 — FILE-COMPARE-QUOTE-RESIDUALS variants 1 and 2) a rotated secret is never quoted when the line that names it comes LATER in an enclosing list item, or when its statement runs over three or more lines', () => {
+  const A = 's3cr3tA'; const B = 's3cr3tB';
+  const cases: Array<[string, (secret: string) => string]> = [
+    ['V1 the naming line LATER in the enclosing item', (x) => `rules:\n- spec:\n    - v: ${x}\n  name: api-token\n`],
+    ['V1 two levels down, the naming line last in the outermost item', (x) => `rules:\n  - a:\n      - b:\n          - v: ${x}\n    name: api-token\n`],
+    ['V1 the naming line in a LATER sibling item of the same outermost item', (x) => `rules:\n  - a:\n      - v: ${x}\n    b:\n      - name: api-token\n`],
+    ['V1 a blank line inside the item', (x) => `rules:\n  - spec:\n      - v: ${x}\n\n    name: api-token\n`],
+    ['V2 a statement continued over three lines', (x) => `server {\n  proxy_set_header X-API-Key\n      "a"\n      "${x}";\n}\n`],
+    ['V2 over five lines', (x) => `server {\n  set $api_token\n      "a"\n      "b"\n      "c"\n      "${x}";\n}\n`],
+    ['V2 a blank and a comment line inside the statement', (x) => `server {\n  set $api_token\n      "a"\n\n      # note\n      "${x}";\n}\n`],
+    ['V2 the secret in the MIDDLE of the statement', (x) => `server {\n  set $api_token\n      "${x}"\n      "tail";\n}\n`],
+  ];
+  for (const [name, mk] of cases) {
+    const r = cmp(`level: info\n${mk(A)}`, `level: debug\n${mk(B)}`);
+    const quoted = [...r.gitOnlyLines, ...r.servedOnlyLines];
+    assert(!quoted.some((l) => l.includes(A) || l.includes(B)), `${name}: a rotated secret was QUOTED: ${JSON.stringify(quoted)}`);
+    eq([r.gitOnlyLines, r.servedOnlyLines, r.counts.withheldCredential >= 2], [['level: info'], ['level: debug'], true], `${name} — the ordinary line is quoted, the secret lines are counted: `);
+  }
+  // ── what the two rules do NOT withhold (each a stated answer) ──
+  const q = (git: string, served: string) => { const r = cmp(git, served); return [r.gitOnlyLines, r.servedOnlyLines, r.counts.withheldCredential]; };
+  // rule 4: an item with NO flagged line is quoted although its sibling item has one
+  eq(q('items:\n  - name: token-check\n    size: 1\n  - name: plain\n    size: 1\n', 'items:\n  - name: token-check\n    size: 1\n  - name: plain\n    size: 2\n'),
+    [['    size: 1'], ['    size: 2'], 0], 'a sibling item: ');
+  // rule 4: a line AFTER the outermost item ended is quoted
+  eq(q('items:\n  - name: token-check\n    size: 1\nafter: 1\n', 'items:\n  - name: token-check\n    size: 1\nafter: 2\n'), [['after: 1'], ['after: 2'], 0], 'after the item: ');
+  // rule 3, statement syntax: a statement that ENDED is not carried into the next one, however that one is broken over lines
+  eq(q('server {\n  set $api_token "fixed";\n  proxy_buffers 4\n      8k;\n}\n', 'server {\n  set $api_token "fixed";\n  proxy_buffers 4\n      16k;\n}\n'),
+    [['      8k;'], ['      16k;'], 0], 'the statement after a flagged one: ');
+  // rule 3, NO statement syntax (YAML): ONE line back, as before — the second line below a flagged line is quoted
+  const yaml = (n: number) => `password: fixed\nalpha: 1\nbeta: ${n}\n`;
+  eq(q(yaml(1), yaml(2)), [['beta: 1'], ['beta: 2'], 0], 'YAML, two lines below a flagged line: ');
+  // …and the SAME lines on a side that has a `;` line are withheld: the walk back finds the flagged line (over-withholding, stated)
+  eq(q(`${yaml(1)}tail;\n`, `${yaml(2)}tail;\n`), [[], [], 2], 'the same lines on a side with statement syntax: ');
+  // ── FOR SEC-OPS: can a file switch the walk back OFF? Only by carrying no `;` at all. ──
+  // (a) every `;` followed by a comment, so NO line ENDS with `;`: the side still has statement syntax — withheld
+  const commented = (x: string) => `server { # s\n  listen 4318; # port\n  set $api_token # t\n      "a" # one\n      "${x}"; # two\n} # end\n`;
+  const rc = cmp(`level: info\n${commented(A)}`, `level: debug\n${commented(B)}`);
+  eq([[...rc.gitOnlyLines, ...rc.servedOnlyLines].filter((l) => l.includes(A) || l.includes(B)), rc.gitOnlyLines, rc.servedOnlyLines], [[], ['level: info'], ['level: debug']], 'every `;` behind a comment: ');
+  // (b) ONE side has a `;`, the other has none: each side is judged on its own text — the side with the `;` is walked
+  const oneSided = cmp(`set $api_token\n"a"\n"${A}";\n`, `set $api_token\n"a"\n"${B}"\n`);
+  eq([oneSided.gitOnlyLines, oneSided.servedOnlyLines], [[], [`"${B}"`]], 'the side with statement syntax is withheld; the side with none falls to the one-line rule: ');
+  // (c) THE STATED LIMIT — a side with NO `;` anywhere: the rule is the one-line look-back of before P5. The line directly after a
+  // flagged line is withheld; the THIRD line of such a "statement" is quoted. No valid nginx statement is in this state (it ends
+  // `;`), and in YAML a value under a credential-named key is a block (rule 2) or a list item (rule 4) — QUO6. Pinned so a change
+  // to this answer is seen.
+  const none = (x: string) => `set $api_token\n"a"\n"${x}"\n`;
+  eq(q(none(A), none(B)), [[`"${A}"`], [`"${B}"`], 0], 'no `;` on either side — the residual, as before P5: ');
+  // (d) a side that MIXES syntaxes (YAML above an nginx block): walked — the YAML lines below a flagged one are withheld too
+  const mixedSide = (n: number) => `password: fixed\nalpha: 1\nbeta: ${n}\nserver {\n  listen 4318;\n}\n`;
+  eq(q(mixedSide(1), mixedSide(2)), [[], [], 2], 'a mixed side fails toward withholding: ');
+  // bounded: 4,000 continuation lines, a quote tried on a hundred of them — each line is walked once
+  const long = (x: string) => `server {\n  set $api_token\n${Array.from({ length: 4000 }, (_, i) => `      "p${i}${x}"`).join('\n')}\n      "end";\n}\n`;
+  const t = Date.now();
+  const big = cmp(long('a'), long('b'));
+  assert(Date.now() - t < 1000 && big.gitOnlyLines.length === 0 && big.servedOnlyLines.length === 0, `a 4,000-line statement: ${Date.now() - t} ms, quoted ${big.gitOnlyLines.length + big.servedOnlyLines.length}`);
+});
+
 console.log('── REC: the stored record through the real capture ──');
 const PAIR = parsed([O_GIT, O_LIVE, O_HELD]);
 test('REC1 identical files: sha equality, zero redacted lines, both shas stamped; the plan carries NO evidence and the held file is the Git one', () => {
@@ -419,6 +478,18 @@ test('REC2 every not-checked reason has a fixture, a state name and its words', 
   check(thrown, 'obs-otelcol', 'compare-error');
   // the two this suite cannot produce from a stored record shape without a failing call — built from a FAILED call:
   check(recordOf([GIT_OTEL(), failed_(OTEL)], PAIR), 'obs-otelcol', 'live-read-failed');
+  // STEP 3 P5 (join preconditions 16, 17): the file came back from a call the declared service is not tied to; the declared
+  // service answered under a registered name the platform's file table is not keyed on.
+  // (the line declares a service of another name; the file came back from `observability-readonly`, and capture refused it by name)
+  const elsewhere = recordOf([GIT_OTEL(), OTEL], parsed([O_GIT, liveLine('obs-otelcol', 'obs-elsewhere')]));
+  check(elsewhere, 'obs-otelcol', 'served-file-from-other-service');
+  eq(captureOf(elsewhere, 'obs-otelcol', 'live-read'), { label: 'obs-otelcol', kind: 'live-read', target: 'obs-otelcol', path: '/etc/otelcol/config.yaml', service: 'obs-elsewhere', outcome: 'file-from-other-service', toolCallIndex: 1 }, 'the capture entry: no `returned`, the call that returned the file: ');
+  eq(elsewhere.unresolvedServices, undefined, 'a NAME-declared service is never listed as unresolved: ');
+  const URL_ = 'https://raw.githubusercontent.com/paichart/paichart/main/descriptors/observability-readonly-descriptor.json';
+  const handReg = (name: string, endpoint: string): Rec => ({ tool: 'registry', success: true, arguments: { action: 'register', name, endpoint, description: 'd' },
+    result: { content: [{ type: 'data', data: { success: true, serviceId: `id-${name}`, serviceName: name, endpoint } }], isError: false } });
+  const urlPair = parsed([O_GIT, liveLine('obs-otelcol', URL_), O_HELD]);
+  check(recordOf([GIT_OTEL(), handReg('obs-mine', DECLARED_DESCRIPTOR_ENDPOINTS[URL_]), fromService(OTEL, 'obs-mine')], urlPair), 'obs-otelcol', 'service-registered-under-other-name');
   const missing = FILE_NOT_CHECKED_REASONS.filter((r) => !seen.has(r));
   eq(missing, ['served-result-not-readable'], 'reasons with no fixture here (served-result-not-readable is shown at the builder, REC3): ');
 });
@@ -431,6 +502,27 @@ test('REC3 the builder alone: a call-level extractor refusal on a successful cal
   const rec = buildFileSourceCompare({ sources: PAIR, harvesterExecutionId: 'exH', plan: view as never, evidence: { items: [], reached: 0, bytes: 0 }, toolCalls: calls, redactionOff: false });
   eq([fileOf(rec, 'obs-otelcol').reason, fileOf(rec, 'obs-otelcol').detail], ['served-result-not-readable', 'descriptor-mismatch']);
   assert(validFileCompareRecord(rec, quotableLine), 're-validates');
+});
+test('REC3b (STEP 3 P5) the other-name condition needs BOTH halves: a call under another name that capture DID extract from is not it; neither is a call under the table\'s own name', () => {
+  const URL_ = 'https://raw.githubusercontent.com/paichart/paichart/main/descriptors/observability-readonly-descriptor.json';
+  const handReg = (name: string): Rec => ({ tool: 'registry', success: true, arguments: { action: 'register', name, endpoint: DECLARED_DESCRIPTOR_ENDPOINTS[URL_], description: 'd' },
+    result: { content: [{ type: 'data', data: { success: true, serviceId: `id-${name}`, serviceName: name, endpoint: DECLARED_DESCRIPTOR_ENDPOINTS[URL_] } }], isError: false } });
+  const src = parsed([O_GIT, liveLine('obs-otelcol', URL_)]);
+  const calls = [GIT_OTEL(), handReg('obs-mine'), fromService(OTEL, 'obs-mine')];
+  const { plan } = capture(calls, src);
+  assert(plan, 'plan');
+  const build = (refusals: Rec[]) => buildFileSourceCompare({ sources: src, harvesterExecutionId: 'exH', plan: { files: plan.files as never, refusals: refusals as never }, evidence: { items: [], reached: 0, bytes: 0 }, toolCalls: calls, redactionOff: false });
+  // nothing extracted from the other-name call ⇒ the condition
+  eq([fileOf(build([]), 'obs-otelcol').reason, captureOf(build([]), 'obs-otelcol', 'live-read').outcome, captureOf(build([]), 'obs-otelcol', 'live-read').toolCallIndex],
+    ['service-registered-under-other-name', 'registered-under-other-name', 2]);
+  // capture HAS an item for that call (a registrant's declaration it could not use): the call was a file lane — not this condition
+  const withItem = build([{ target: null, path: null, refusal: 'descriptor-mismatch', toolCallIndex: 2, serviceName: 'obs-mine', serviceId: 'id-obs-mine' }]);
+  eq([fileOf(withItem, 'obs-otelcol').reason, fileOf(withItem, 'obs-otelcol').detail, captureOf(withItem, 'obs-otelcol', 'live-read').outcome], ['served-result-not-readable', 'descriptor-mismatch', 'result-not-readable']);
+  // the declared service answered under the TABLE's name and returned no file at this name: `served-file-not-returned`, as before
+  const table = [GIT_OTEL(), handReg('observability-readonly'), fromService(INGRESS, 'observability-readonly')];
+  const t = buildFileSourceCompare({ sources: src, harvesterExecutionId: 'exH', plan: capture(table, src).plan as never, evidence: { items: [], reached: 0, bytes: 0 }, toolCalls: table, redactionOff: false });
+  eq(fileOf(t, 'obs-otelcol').reason, 'served-file-not-returned', 'the table\'s name: ');
+  for (const r of [build([]), withItem, t]) assert(validFileCompareRecord(r, quotableLine), 're-validates');
 });
 test('REC4 (plan §13 A4) the comparison never throws: an injected throwing comparator ⇒ a record with compare-error on EVERY label, and one content-free log line; the core\'s entry returns it', () => {
   const two = parsed([O_GIT, O_LIVE, N_GIT, N_LIVE]);
@@ -476,6 +568,72 @@ test('REC7 returnedKeys: the keys the service DID return for a target, validated
   const rec = recordOf([GIT_OTLP(), ingressWith({ 'operator-access.conf': 'server {}\n', 'other.conf': 'x\n', 'bad key!.conf': 'y\n' })], parsed([N_GIT, N_LIVE]));
   eq(rec.returnedKeys, { 'obs-ingress': ['operator-access.conf', 'other.conf'] });
   eq([servedKeyOf('obs-ingress', '/etc/nginx/conf.d/a.conf'), servedKeyOf('obs-ingress', '/etc/nginx/conf.d/a b.conf'), servedKeyOf('obs-otelcol', '/etc/otelcol/config.yaml'), servedKeyOf('nope', '/x')], ['a.conf', null, null, null]);
+});
+
+test('REC7b (STEP 3 P5, register item 21) the stored-record VALIDATOR accepts everything the GRAMMAR can declare: extremes of every declared field go through the BUILDER and then re-validate, and all three facts read them', () => {
+  const seg255 = 'a'.repeat(255);
+  const paths = [
+    '.config/_underscore/@scope/+plus/-dash/config.yaml',          // a segment starting with each of `.` `_` `@` `+` `-`
+    `${seg255}/${seg255}/${seg255}/config.yaml`,                    // 780 characters: the grammar bounds a SEGMENT, never the path
+    Array.from({ length: 120 }, (_, i) => `d${i}`).join('/'),       // 120 segments
+  ];
+  const ref255 = `r${'e'.repeat(254)}`;
+  const name512 = `n${'x'.repeat(511)}`;
+  // a 512-character descriptor URL with a character outside ASCII in every path unit and a query: its SHOWN (masked) form is longer
+  const urlHead = 'https://example.com/'; const urlTail = '?token=abc';
+  const url512 = `${urlHead}${'é'.repeat(512 - urlHead.length - urlTail.length)}${urlTail}`;
+  eq([seg255.length, ref255.length, name512.length, url512.length], [255, 255, 512, 512], 'the extremes are AT the grammar\'s bounds: ');
+  const longKey = `k${'e'.repeat(115)}`;                             // `obs-ingress.<key>` is a 128-character label
+  eq(`obs-ingress.${longKey}`.length, 128, 'the label extreme: ');
+  const check = (what: string, lines: string[], records: Rec[]) => {
+    const src = governed(lines);
+    assert(src.state === 'parsed', `${what}: the GRAMMAR refuses this declaration (${JSON.stringify(src).slice(0, 200)}) — the case is not a legal extreme`);
+    const rec = recordOf(records, src as Parsed);
+    assert(validFileCompareRecord(rec, quotableLine), `${what}: a legal declaration built a record the validator refuses`);
+    const reads = computeFileConfigSourceReads(src, rec);
+    const drift = computeFileGitLiveDrift(rec, 'parsed', quotableLine);
+    eq([reads.checked, drift.checked, computeConfigLiveEvidenceFromReadRecord(reads).checked], [true, true, true], `${what} — all three facts read the record: `);
+    const text = renderGitLiveDriftForPrompt(drift, { quotable: quotableLine })!.join('\n');
+    assert(!text.includes('could not be read') && !text.includes('undefined'), `${what}: the render refuses its own fact: ${text.slice(0, 300)}`);
+    return { rec, reads };
+  };
+  for (const p of paths) {
+    const line = (ref: string | null) => `obs-otelcol: git-file — service github-service ; paichart/paichart-configs/${p}${ref ? ` @ ${ref}` : ''}`;
+    check(`path ${p.slice(0, 40)}… (${p.length} chars), held`, [line(null), O_LIVE], [ghRecord(p, 'a: 1\n'), otelWith('a: 2\n')]);
+    check(`path ${p.slice(0, 40)}… with a 255-character ref`, [line(ref255), O_LIVE], [ghRecord(p, 'a: 1\n'), OTEL]);
+  }
+  for (const [what, service] of [['a 512-character service name', name512], ['a 512-character descriptor URL', url512]] as Array<[string, string]>) {
+    const { rec } = check(what, [O_GIT, liveLine('obs-otelcol', service), heldLine('obs-ingress.operator-access.conf', service)], [GIT_OTEL(), OTEL, INGRESS]);
+    const shown = captureOf(rec, 'obs-otelcol', 'live-read').service as string;
+    assert(shown.length >= 512 && shown.length <= SERVICE_SHOWN_MAX_CHARS, `${what}: shown length ${shown.length}`);
+    if (service === url512) {
+      assert(shown.length > 512 && !shown.includes('abc') && Array.isArray(rec.unresolvedServices) && (rec.unresolvedServices as string[])[0] === shown, `the masked URL is longer than the declared one and is what the record lists: ${shown.length}`);
+      assert(512 * 9 + urlHead.length < SERVICE_SHOWN_MAX_CHARS, 'the shown bound is above the worst percent-encoding of a legal service');
+    }
+  }
+  // returned keys that are NOT labels on their own (they start `.` `_` `-`), and one at the label's length bound
+  const odd = { '.htpasswd': 'u:x\n', '_default.conf': 'server {}\n', '-dash.conf': 'server {}\n', [longKey]: 'server {}\n' };
+  const { rec, reads } = check('returned keys starting `.` `_` `-`, and one of 116 characters', [N_GIT, N_LIVE, heldLine(`obs-ingress.${longKey}`)], [GIT_OTLP(), ingressWith(odd)]);
+  eq(rec.returnedKeys, { 'obs-ingress': Object.keys(odd).sort() }, 'every key the service returned is on the record: ');
+  eq(((reads.items as Rec[]).find((i) => i.kind === 'live-read')!.read as Rec).returnedKeys, Object.keys(odd).sort(), 'and on the read record: ');
+  const shownKeys = renderLiveEvidenceForPrompt(computeConfigLiveEvidenceFromReadRecord(reads))!.join('\n');
+  for (const k of Object.keys(odd)) assert(shownKeys.includes(`\`${k}\``), `the render drops the returned key ${k.slice(0, 20)}: ${shownKeys.slice(0, 400)}`);
+  // the validator still REFUSES what the grammar refuses (it did not become a pass-through)
+  const good = recordOf([GIT_OTEL(), OTEL], PAIR);
+  const forged = (f: (r: Rec) => void) => { const r = clone(good); f(r); return validFileCompareRecord(r, quotableLine); };
+  eq([forged((r) => { ((r.files as Rec[])[0].git as Rec).path = 'a/../b'; }), forged((r) => { ((r.files as Rec[])[0].git as Rec).path = 'a b'; }), forged((r) => { ((r.files as Rec[])[0].git as Rec).path = `${'a'.repeat(256)}/x`; }),
+    forged((r) => { ((r.files as Rec[])[0].git as Rec).ref = 'r'.repeat(256); }), forged((r) => { (r.capture as Rec[])[1].service = 'x'.repeat(SERVICE_SHOWN_MAX_CHARS + 1); }),
+    forged((r) => { r.returnedKeys = { 'obs-ingress': ['a b'] }; }), forged((r) => { r.returnedKeys = { 'obs-ingress': ['k'.repeat(120)] }; }),
+    forged((r) => { (r.capture as Rec[])[0].target = 'github:a b:c'; }), forged((r) => { (r.capture as Rec[])[0].path = 'no-leading-slash'; })],
+    [null, null, null, null, null, null, null, null, null], 'a `..` segment, a space, a 256-character segment, a 256-character ref, an over-long service, a key with a space, a key that makes the label 132 characters, a target that is no Git target, a path with no leading slash: ');
+});
+
+test('KD1 (STEP 3 P5, dead code made loud) the CALL-based read record refuses a `service-held` line: a files protocol reads the compare record, never a call count', () => {
+  let threw = '';
+  try { computeConfigSourceReads(PAIR, [GIT_OTEL(), OTEL, INGRESS]); } catch (e) { threw = (e as Error).message; }
+  assert(threw.includes('service-held line reached the call-based read record'), `it answered instead of throwing: ${threw}`);
+  // a block of the same protocol with NO service-held line still computes (the arm, not the function, is what is refused)
+  eq(computeConfigSourceReads(parsed([O_GIT, O_LIVE]), [GIT_OTEL(), OTEL]).checked, true, 'no service-held line: ');
 });
 
 console.log('── EV: the ruling on evidence caps ──');
@@ -611,6 +769,20 @@ test('WRT2 a rolled-back savepoint: the persisted record claims no held base and
   eq(canon(over.gitLiveDrift), canon(computeFileGitLiveDrift(rolledBackFileSourceCompare(rec), 'parsed', quotableLine)));
   assert(validFileCompareRecord(over.fileSourceCompare, quotableLine), 'the rolled-back record re-validates');
   eq(harvesterCompareOverlay({ heldBytes: {} }, true), {}, 'an execution with no record: the overlay adds nothing: ');
+  // STEP 3 P5 (whole-diff review F9): the FOUR stamps of a rolled-back Harvester agree. The read record is re-computed from the
+  // rolled-back record (no `held` outcome survives); liveEvidence is computed from read STATES and is byte-identical either way.
+  const reads = computeFileConfigSourceReads(PAIR, rec);
+  const live = computeConfigLiveEvidenceFromReadRecord(reads);
+  const all = harvesterCompareOverlay({ ...resultJson, configSourceReads: reads, liveEvidence: live }, true) as { fileSourceCompare: Rec; configSourceReads: Rec };
+  const outcomes = (r: Rec) => (r.items as Rec[]).map((i) => `${i.kind}:${(i.read as Rec).state}/${(i.read as Rec).outcome}`);
+  eq([outcomes(reads), outcomes(all.configSourceReads)],
+    [['git-file:read/held', 'live-read:read/evidence', 'service-held:read/held'], ['git-file:read/not-written', 'live-read:read/evidence', 'service-held:read/not-written']], 'the read record before and after the rollback: ');
+  eq(JSON.stringify(all.configSourceReads), JSON.stringify(computeFileConfigSourceReads(PAIR, all.fileSourceCompare)), 'the overlaid read record IS the fact of the persisted record, byte for byte (a replay reproduces it): ');
+  eq(JSON.stringify(computeConfigLiveEvidenceFromReadRecord(all.configSourceReads)), JSON.stringify(live), 'liveEvidence is the same fact before and after — it needs no overlay: ');
+  assert(!('liveEvidence' in all), 'the overlay does not rewrite liveEvidence');
+  // a committed savepoint, a Kubernetes read record (no `unit: files`) and a not-checked one are never touched
+  eq([harvesterCompareOverlay({ ...resultJson, configSourceReads: reads }, false), 'configSourceReads' in harvesterCompareOverlay({ ...resultJson, configSourceReads: { checked: true, items: [] } }, true),
+    'configSourceReads' in harvesterCompareOverlay({ ...resultJson, configSourceReads: { unit: 'files', checked: false, reason: 'no-compare-record', declaration: {} } }, true)], [{}, false, false], 'not this overlay\'s: ');
 });
 
 console.log('── FACT: the three facts, from the record ──');

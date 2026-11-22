@@ -53,6 +53,14 @@ export interface PrepareTaskOptions {
    * override was supplied by the caller, do not clobber it with dependency context).
    */
   skipChaining?: boolean;
+  /**
+   * The Config-sources awaiting list the snapshot decision is asked with (held-bytes/variant.ts `CONFIG_SOURCE_AWAITING_TEXT`).
+   * PRODUCTION PASSES NONE — the decision then reads the shipping list, as it did before this option existed. It exists so the
+   * snapshot arms of a protocol whose row still awaits its text (the removal arm and its security event — STEP 3 P5, join
+   * precondition 4) can be driven through THIS function before the join, the way every other awaiting-list reader is tested.
+   * It reaches `configSnapshotDecision` and nothing else.
+   */
+  configSourceAwaiting?: readonly string[];
 }
 
 /**
@@ -358,7 +366,8 @@ export async function prepareTaskForExecutionWithRecord(
     // `write` for a `forced` protocol whatever it resolves to, and for a `runs-undeclared` one that declares a block; `remove` for a
     // `runs-undeclared` leg that declares none (see below); `none` everywhere else.
     const configDecision = configSnapshotDecision({ type: contractCheck.type, protocol: resolved.protocol, description: contractCheck.description,
-      interfaceContract: (contractCheck.inputContext as Record<string, unknown> | null)?.interfaceContract, takenAt: resolvedAt });
+      interfaceContract: (contractCheck.inputContext as Record<string, unknown> | null)?.interfaceContract, takenAt: resolvedAt },
+      opts.configSourceAwaiting);
     const configSnapshot = configDecision.action === 'write' ? configDecision.snapshot : null;
     const stampJson = JSON.stringify({
       protocol: resolved.protocol,

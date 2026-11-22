@@ -11,10 +11,17 @@
  * platform target contains a `.` (pinned by scripts/test-config-sources.ts) — the longest-match resolver the plan first proposed
  * was cut (§13 E). ONE function (`configLabelKeyProblem`) refuses an empty key, `.` and `..`.
  *
- * WHERE THIS IS CONSULTED: ONCE, at block level, when the leg's snapshot is taken (`configSnapshotDecision`,
- * config-sources-read.ts). Its outcome is stored beside the snapshot's resolution as `labelCheck`; the governing read returns a
- * named problem from that field. The line parser and the snapshot READER never call this, so a later edit of the descriptor table
- * cannot move a stored snapshot. The requirements publish check calls the SAME function at $0.
+ * WHERE THIS IS CONSULTED. The BLOCK check (`resolveConfigLabels`): ONCE, when the leg's snapshot is taken
+ * (`configSnapshotDecision`, config-sources-read.ts). Its outcome is stored beside the snapshot's resolution as `labelCheck`; the
+ * governing read returns a named problem from that field. The line parser and the snapshot READER never call it, so a later edit of
+ * the descriptor table cannot move a stored snapshot's STATE.
+ * ⚠️ But `resolveConfigLabel` (one label ⇒ its target and path) is ALSO called LIVE, on every persist, by capture's declared-files
+ * scope, the Config force, the label-collision check (held-bytes/config-source-scope.ts) and the file comparison
+ * (file-source-compare.ts). So an edit of the platform file-target table changes what a STORED declared leg holds, is forced for and
+ * is compared on — treat any such edit as a series cut (whole-diff review 2026-11-22; register item 25).
+ * NOT called by the requirements publish check (corrected 2026-11-22, STEP 3 P5: this comment said it was; no script calls it).
+ * `scripts/check-requirements-sources.ts` is requirements-authoring's; wiring the label check in at $0 is owed with the 1.12.0
+ * text, when a spec's observability block starts to be read — register CONFIG-SOURCES-OBS-JOIN-PRECONDITIONS.
  *
  * PURE: no prisma, no logger, no I/O.
  */
@@ -42,6 +49,18 @@ export function platformLabelTargets(descriptors: readonly Descriptor[] = PLATFO
   const out = new Map<string, FileSpec>();
   for (const d of descriptors) for (const f of d.files ?? []) {
     if ('const' in f.target && !out.has(f.target.const)) out.set(f.target.const, f);
+  }
+  return out;
+}
+
+/** The service NAMES the platform's file table is keyed on for one label target (STEP 3 P5, join precondition 17). The table is
+ *  name-keyed (extract.ts: a call to a row of ANOTHER name is no file lane and extracts nothing), so a file at a label of this
+ *  target can be captured only from a call made under one of these names. Empty for a target the table does not have. */
+export function platformLabelTargetServices(target: string, descriptors: readonly Descriptor[] = PLATFORM_DEFAULT_DESCRIPTORS): ReadonlySet<string> {
+  const out = new Set<string>();
+  for (const d of descriptors) {
+    if (d.declaredBy === 'registrant') continue;
+    if ((d.files ?? []).some((f) => 'const' in f.target && f.target.const === target)) out.add(d.service);
   }
   return out;
 }

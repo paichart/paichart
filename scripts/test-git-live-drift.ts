@@ -215,9 +215,12 @@ test('R4 a TAMPERED stored fact never prints its own words (sec-ops slice-3b F5)
   // the untampered fact still renders (the check is not a blanket refusal)
   assert(renderGitLiveDriftForPrompt({ method: GIT_LIVE_DRIFT_METHOD, checked: true, files: [good] })!.join('\n').includes('`sample-workloads`: `differences`'), 'the good fact');
 });
-test('R3 the module is client-safe: it imports nothing', () => {
+test('R3 the module is client-safe: its ONE import is source-field-bounds.ts (the field shapes shared with the grammar — STEP 3 P5), which imports nothing', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'lib/agents/harness/git-live-drift.ts'), 'utf8');
-  assert(!/^import /m.test(src) && !/require\(/.test(src), 'git-live-drift.ts has an import');
+  const imports = (src.match(/^import .*$/gm) ?? []);
+  assert(imports.length === 1 && /^import \{[^}]+\} from '\.\/source-field-bounds';$/.test(imports[0]) && !/require\(/.test(src), `git-live-drift.ts may import only ./source-field-bounds: ${JSON.stringify(imports)}`);
+  const bounds = fs.readFileSync(path.join(__dirname, '..', 'lib/agents/harness/source-field-bounds.ts'), 'utf8');
+  assert(!/^\s*import\s/m.test(bounds) && !/require\(/.test(bounds), 'source-field-bounds.ts has an import');
 });
 
 console.log('── which calls the platform makes (sec-ops C1–C3, C8) ──');

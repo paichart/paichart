@@ -27,7 +27,10 @@ import { computeDeviceSourceReads } from '../lib/agents/harness/device-source-fa
 import { computeConfigSourceReads, computeConfigLiveEvidence } from '../lib/agents/harness/config-source-facts';
 import { runPlatformDriftCalls, type DriftCaller } from '../lib/agents/harness/platform-drift-run';
 // Config sources STEP 3 slice P4 (plan §6 / mcp-hub F-L10-1): the six registration rows for an OBSERVABILITY block.
-import { computeFileConfigSourceReads } from '../lib/agents/harness/config-source-facts';
+import { computeFileConfigSourceReads, computeConfigLiveEvidenceFromReadRecord } from '../lib/agents/harness/config-source-facts';
+import { computeFileGitLiveDrift, renderGitLiveDriftForPrompt, validFileCompareRecord } from '../lib/agents/harness/git-live-drift';
+import { quotableLine } from '../lib/agents/harness/file-compare-quote-seam';
+import { SERVICE_SHOWN_MAX_CHARS } from '../lib/agents/harness/source-field-bounds';
 import { buildFileSourceCompare } from '../lib/agents/harness/file-source-compare';
 import { configSourceForce } from '../lib/agents/harness/held-bytes/config-source-scope';
 import { captureScopesFor, type OwningLegResolution } from '../lib/agents/harness/held-bytes/variant';
@@ -262,6 +265,7 @@ const CEOS_LINE = `${DEV}: device-read — service ${CEOS_URL}`;
       resolves: (c: { service: string; serviceId: string }) => serviceMatcher(records)(service, c),
       held: files.some((f) => f.target === 'obs-ingress' && f.path === '/etc/nginx/conf.d/otlp-ingress.conf'), heldCount: files.length, refusals,
       read: item ? `${item.read.state} (${item.read.outcome})` : `no item (${String(reads.reason)})`, notRead: reads.notRead,
+      readIndex: item?.read?.toolCallIndex ?? null, unresolved: reads.unresolvedServices ?? null, record, reads,
       force: configSourceForce(sources, files),
     };
   };
@@ -272,19 +276,22 @@ const CEOS_LINE = `${DEV}: device-read — service ${CEOS_URL}`;
   const FORCED = { reason: 'service-held-not-held', serviceFilesNotHeld: [LABEL], serviceFilesNotHeldTotal: 1 };
   const OWN = { service: OBS_NAME, serviceId: OBS_ID };
   type Row = { name: string; service: string; records: Rec[]; who: { service: string; serviceId: string }; resolves: boolean; held: boolean; read: string; force: unknown };
-  const HELD_READ = 'read (held)'; const OTHER_NAME_READ = 'no-capture-plan (no-capture-plan)';
+  // STEP 3 P5 (join preconditions 16, 17): the fact now says WHAT HAPPENED. Before P5 row 2 read `no-capture-plan` and rows 3, 5, 6
+  // read `not-read` — the leg was (and is) forced; only the words moved.
+  const HELD_READ = 'read (held)'; const OTHER_NAME_READ = 'registered-under-other-name (registered-under-other-name)';
+  const OTHER_SERVICE_READ = 'file-from-other-service (file-from-other-service)'; const NO_PLAN_READ = 'no-capture-plan (no-capture-plan)';
   const ROWS: Row[] = [
     { name: '1 hand registration at the table\'s endpoint, success', service: OBS_URL, records: [handAt(OBS_EP), INGRESS], who: OWN, resolves: true, held: true, read: HELD_READ, force: null },
     // the URL line DOES resolve to the row the Harvester registered — but the platform's held-file table for this service is keyed
     // on the name `observability-readonly`, so a call to a row of another name extracts no file: nothing held, the leg forced.
-    // MEASURED, not assumed: with no other capturable call in the execution there is no capture plan at all, so the read state is
-    // `no-capture-plan` — a word that does not name THIS cause (recorded in STEP3-P4-BUILD.md as a finding for the text and the docs).
+    // With no other capturable call in the execution there is no capture plan at all. Until P5 the read state was `no-capture-plan`,
+    // a word that names the capture switch or a failure; it now names THIS cause (`registered-under-other-name`).
     { name: '2 hand registration at the table\'s endpoint, ANOTHER NAME', service: OBS_URL, records: [handAt(OBS_EP, { serviceName: 'obs-mine', serviceId: 'svc-mine' }), callTo('obs-mine', 'svc-mine')],
       who: { service: 'obs-mine', serviceId: 'svc-mine' }, resolves: true, held: false, read: OTHER_NAME_READ, force: FORCED },
-    { name: '3 hand registration REFUSED (the name is already registered)', service: OBS_URL, records: [refused(), INGRESS], who: OWN, resolves: false, held: false, read: 'not-read (not-read)', force: FORCED },
+    { name: '3 hand registration REFUSED (the name is already registered)', service: OBS_URL, records: [refused(), INGRESS], who: OWN, resolves: false, held: false, read: OTHER_SERVICE_READ, force: FORCED },
     { name: '4 registration by descriptorUrl, ADOPTED', service: OBS_URL, records: [adopted(), INGRESS], who: OWN, resolves: true, held: true, read: HELD_READ, force: null },
-    { name: '5 hand registration at an endpoint that is NOT the table\'s', service: OBS_URL, records: [handAt('https://obs.example.com/mcp'), INGRESS], who: OWN, resolves: false, held: false, read: 'not-read (not-read)', force: FORCED },
-    { name: '6 any hand registration, the line names a CUSTOMER URL', service: CUSTOMER_URL, records: [handAt(OBS_EP), INGRESS], who: OWN, resolves: false, held: false, read: 'not-read (not-read)', force: FORCED },
+    { name: '5 hand registration at an endpoint that is NOT the table\'s', service: OBS_URL, records: [handAt('https://obs.example.com/mcp'), INGRESS], who: OWN, resolves: false, held: false, read: OTHER_SERVICE_READ, force: FORCED },
+    { name: '6 any hand registration, the line names a CUSTOMER URL', service: CUSTOMER_URL, records: [handAt(OBS_EP), INGRESS], who: OWN, resolves: false, held: false, read: OTHER_SERVICE_READ, force: FORCED },
   ];
   for (const r of ROWS) {
     await test(`DR-P4-${r.name}: URL line resolves ${r.resolves ? 'YES' : 'NO'} · held ${r.held ? 'YES' : 'NO'} · read ${r.read} · ${r.force ? 'FORCED service-held-not-held' : 'not forced'}`, () => {
@@ -297,12 +304,92 @@ const CEOS_LINE = `${DEV}: device-read — service ${CEOS_URL}`;
     for (const r of ROWS) {
       const got = run(OBS_NAME, r.records);
       const other = r.name.startsWith('2 ');
-      eq([got.resolves(r.who), got.held, got.read, got.force], other ? [false, false, OTHER_NAME_READ, FORCED] : [true, true, HELD_READ, null], `${r.name}: `);
+      // row 2 with a NAME-declared line: the declared service (`observability-readonly`) was never called — the call went to a row
+      // of another name — and nothing was captured, so there is no plan: `no-capture-plan`, as before P5 (the other-name word is for
+      // a declared service that DID answer).
+      eq([got.resolves(r.who), got.held, got.read, got.force], other ? [false, false, NO_PLAN_READ, FORCED] : [true, true, HELD_READ, null], `${r.name}: `);
     }
   });
   await test('DR-P4-W an unresolved URL line never holds the file: the served file is refused BY NAME (service-file-not-declared: wrong-service), never dropped', () => {
     eq(run(OBS_URL, [refused(), INGRESS]).refusals.filter((x) => x.startsWith('service-file-not-declared')), ['service-file-not-declared:no-label', 'service-file-not-declared:wrong-service']);
     eq(run(OBS_URL, [handAt(OBS_EP), INGRESS]).refusals.filter((x) => x.startsWith('service-file-not-declared')), ['service-file-not-declared:no-label'], 'resolved: only the undeclared sibling is refused: ');
+  });
+
+  // ══ STEP 3 slice P5 — join preconditions 16 and 17: the FACT says what happened; the force is untouched ══
+  const ghRecord = (p: string, text: string): Rec => {
+    const args = { owner: 'paichart', repo: 'paichart-configs', path: p };
+    return { tool: 'services', success: true, arguments: { action: 'call', targetService: 'github-service', tool: 'get_file_contents', arguments: args },
+      result: { content: [{ type: 'data', data: { success: true, targetService: 'github-service', tool: 'get_file_contents', arguments: args,
+        result: { content: [{ type: 'text', text: 'successfully downloaded text file' },
+          { type: 'resource', resource: { uri: `repo://paichart/paichart-configs/sha/0ea432e751cc622ffab91d7a90386c66cadf8733/contents/${p}`, mimeType: 'text/plain; charset=utf-8', text } }] },
+        metadata: { targetServiceId: 'github-service' } } }] } };
+  };
+  const GIT_OTEL_LINE = 'obs-otelcol: git-file — service github-service ; paichart/paichart-configs/observability/otelcol/config.yaml';
+  const GIT_OTEL_REC = ghRecord('observability/otelcol/config.yaml', 'receivers: {}\n');
+  const OBS_URL_SHOWN = OBS_URL;   // no query, no userinfo: the IF-2 masker shows it as written
+  await test('DR-P5-16 an unresolved URL line whose file WAS returned: the read record says `file-from-other-service` with that call\'s index — never `not-read`, never `read` — and names the unresolved service; the leg is forced exactly as before', () => {
+    for (const r of ROWS.filter((x) => /^[356] /.test(x.name))) {
+      const got = run(r.service, r.records);
+      eq([got.read, got.readIndex, got.notRead, got.force], [OTHER_SERVICE_READ, 1, 0, FORCED], `${r.name}: `);
+      eq(got.unresolved, [r.service], `${r.name} — the declared URL no registration is tied to: `);
+      // the record never says the DECLARED service returned the file: no `returned` on the entry (the reader's `read` comes from it)
+      eq((got.record.capture as Rec[]).map((c) => [c.outcome, 'returned' in c, c.toolCallIndex]), [['file-from-other-service', false, 1]], `${r.name} — the capture entry: `);
+      const live = computeConfigLiveEvidenceFromReadRecord(got.reads);
+      eq([live.summary, live.serviceHeldRead, (live.liveNotRead as Rec[]).map((x) => x.state)], ['some-not-read', 0, ['file-from-other-service']], `${r.name} — liveEvidence: `);
+    }
+    // a RESOLVED line names no unresolved service, and a name-declared line never does
+    eq([run(OBS_URL, [handAt(OBS_EP), INGRESS]).unresolved, run(OBS_NAME, [INGRESS]).unresolved], [null, null], 'resolved: ');
+    // the same condition on a Git-plus-live label: the comparison says so too (before P5: "the declared service was not called")
+    const pair = run(OBS_URL, [refused(), ghRecord('observability/nginx/otlp-ingress.conf', 'server {}\n'), INGRESS],
+      [`${LABEL}: git-file — service github-service ; paichart/paichart-configs/observability/nginx/otlp-ingress.conf`, `${LABEL}: live-read — service ${OBS_URL}`]);
+    const f = (pair.record.files as Rec[])[0];
+    eq([f.state, f.reason, (pair.record.capture as Rec[]).map((c) => c.outcome), pair.unresolved], ['not-checked', 'served-file-from-other-service', ['held', 'file-from-other-service'], [OBS_URL_SHOWN]], 'Git + live: ');
+    const text = renderGitLiveDriftForPrompt(computeFileGitLiveDrift(pair.record, 'parsed', quotableLine), { quotable: quotableLine })!.join('\n');
+    assert(text.includes('a file at this name was returned by a call the platform could not tie to the declared service') && !text.includes('undefined'), text);
+  });
+  await test('DR-P5-17 a service registered under ANOTHER NAME reads `registered-under-other-name` — with no other capture (before P5: `no-capture-plan`) AND in a mixed block with a Git file held (before P5: `answered-key-not-returned`); every other line keeps its own word; the force is untouched', () => {
+    const otherName = [handAt(OBS_EP, { serviceName: 'obs-mine', serviceId: 'svc-mine' }), callTo('obs-mine', 'svc-mine')];
+    const alone = run(OBS_URL, otherName);
+    eq([alone.read, alone.readIndex, alone.unresolved, alone.force], [OTHER_NAME_READ, 1, null, FORCED], 'nothing else captured: ');
+    eq((alone.record.capture as Rec[]).map((c) => [c.outcome, 'returned' in c]), [['registered-under-other-name', false]], 'no `returned` on the entry: ');
+    const mixedLines = [GIT_OTEL_LINE, `${LABEL}: service-held — service ${OBS_URL}`];
+    const mixed = run(OBS_URL, [GIT_OTEL_REC, ...otherName], mixedLines);
+    eq([mixed.read, mixed.readIndex, mixed.heldCount, (mixed.record.capture as Rec[]).map((c) => c.outcome), mixed.force],
+      [OTHER_NAME_READ, 2, 1, ['held', 'registered-under-other-name'], FORCED], 'a Git file held beside it: ');
+    // the Git-only file of the mixed block keeps its own reason; a no-plan record keeps `no-capture-plan` on every OTHER line
+    eq((mixed.record.files as Rec[]).map((x) => x.reason), ['no-live-read-line'], 'mixed, files: ');
+    const noPlanMixed = run(OBS_URL, otherName, mixedLines);
+    eq([(noPlanMixed.record.capture as Rec[]).map((c) => c.outcome), (noPlanMixed.record.files as Rec[]).map((x) => x.reason)],
+      [['no-capture-plan', 'registered-under-other-name'], ['no-capture-plan']], 'no plan, two lines: ');
+    // NOT this condition: the declared service answered under the TABLE's name and returned another file ⇒ `answered-key-not-returned`
+    const tableName = clone(INGRESS); tableName.result.content[0].data.result.structuredContent.files = { 'something-else.conf': 'x\n' };
+    eq(run(OBS_URL, [handAt(OBS_EP), tableName]).read, 'answered-key-not-returned (not-returned)', 'the table\'s name, another file: ');
+    // NOT this condition: the TABLE's name, and the call returned NO file at all (nothing for capture to extract — so only the
+    // name test separates it from the other-name case): `no-capture-plan` with no plan, `answered-key-not-returned` beside a held Git file
+    const empty = clone(INGRESS); empty.result.content[0].data.result.structuredContent.files = {};
+    eq([run(OBS_URL, [handAt(OBS_EP), empty]).read, run(OBS_URL, [GIT_OTEL_REC, handAt(OBS_EP), empty], mixedLines).read], [NO_PLAN_READ, 'answered-key-not-returned (not-returned)'], 'the table\'s name, no file returned: ');
+    // NOT this condition: the call under the other name FAILED ⇒ `read-failed` in a mixed block, `no-capture-plan` with no plan
+    const failedCall = callTo('obs-mine', 'svc-mine'); failedCall.success = false; failedCall.result.isError = true;
+    eq([run(OBS_URL, [GIT_OTEL_REC, otherName[0], failedCall], mixedLines).read, run(OBS_URL, [otherName[0], failedCall]).read], ['read-failed (read-failed)', NO_PLAN_READ], 'a failed call: ');
+    // a Git-plus-live label on that service: the comparison names the condition (before P5: "returned no file at this name")
+    const pairLines = [`${LABEL}: git-file — service github-service ; paichart/paichart-configs/observability/nginx/otlp-ingress.conf`, `${LABEL}: live-read — service ${OBS_URL}`];
+    const pair = run(OBS_URL, [ghRecord('observability/nginx/otlp-ingress.conf', 'server {}\n'), ...otherName], pairLines);
+    eq((pair.record.files as Rec[]).map((x) => [x.state, x.reason]), [['not-checked', 'service-registered-under-other-name']], 'Git + live: ');
+    const text = renderGitLiveDriftForPrompt(computeFileGitLiveDrift(pair.record, 'parsed', quotableLine), { quotable: quotableLine })!.join('\n');
+    assert(text.includes('the declared service answered under a registered name the platform reads no files from') && !text.includes('undefined'), text);
+  });
+  await test('DR-P5-V the record re-validates with the new words and the list; a forged `unresolvedServices` (not a list, over the cap, a control character) voids the whole record', () => {
+    const got = run(OBS_URL, [refused(), INGRESS]);
+    assert(validFileCompareRecord(got.record, quotableLine), 'the record re-validates');
+    for (const [what, forged] of [['a string', 'x'], ['an empty list', []], ['over the cap', Array.from({ length: 21 }, (_, i) => `https://e.example/${i}`)], ['a control character', ['https://e.example/\u001b[31m']],
+      ['a bidi override', ['https://e.example/‮']], ['a number', [1]], ['over-long', [`https://e.example/${'a'.repeat(SERVICE_SHOWN_MAX_CHARS)}`]]] as Array<[string, unknown]>) {
+      const bad = clone(got.record); bad.unresolvedServices = forged;
+      eq([validFileCompareRecord(bad, quotableLine), computeFileConfigSourceReads(declared(OBS_URL), bad).reason], [null, 'no-compare-record'], `${what}: `);
+    }
+    // a declared URL with a query: the value is MASKED before it is stored (the IF-2 masker), never as written
+    const q = 'https://example.com/d.json?token=abc123';
+    const masked = run(q, [handAt(OBS_EP), INGRESS]).unresolved as string[];
+    assert(masked.length === 1 && !masked[0].includes('abc123'), `a query value on the record: ${JSON.stringify(masked)}`);
   });
 
   // Coordinator ruling 5 (P4): the derivation's KEEP arm (a Git-only observability block keeps the Architect's descriptor URL) must

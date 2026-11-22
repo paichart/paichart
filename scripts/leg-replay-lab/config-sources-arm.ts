@@ -1,9 +1,11 @@
 /**
  * Leg replay lab — L-CS-K-arm (Config sources STEP 2, code push slice 4; plan §2.2a): WHICH arm of a cell reads Config sources.
  *
- * Production today is INERT twice over: `CONFIG_SOURCE_AWAITING_TEXT` (held-bytes/variant.ts) holds `kubernetes-gitops`, so no
- * owning-leg resolution carries `configSourceProtocol`, and `LIVE_EVIDENCE_MIN_VERSIONS` keys Kubernetes at 1.19.0, which no released
- * text carries. A lab runs the 1.18.0 base arm and a 1.19.0 candidate arm on ONE tree, so the lab needs a per-arm answer:
+ * WHEN THIS WAS WRITTEN (2026-11-15) production was inert twice over for Kubernetes: `CONFIG_SOURCE_AWAITING_TEXT`
+ * (held-bytes/variant.ts) held `kubernetes-gitops`, and `LIVE_EVIDENCE_MIN_VERSIONS` keyed it at 1.19.0, which no released text
+ * carried. Kubernetes left the list at 1.19.0 (2026-11-16) and Terraform at 1.17.0 (2026-11-18); the list holds
+ * `observability-config` today, until its 1.12.0 text. The need is unchanged: a lab runs a base arm and a candidate arm of
+ * different text versions on ONE tree, so it needs a per-arm answer:
  *
  *   armConfigSources(leg, protocolInjection)
  *     null                      ⇔ production's answer for this arm TODAY: the leg's protocol has no row in `CONFIG_SOURCE_LANES`, or

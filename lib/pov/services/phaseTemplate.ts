@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { PhaseService } from "./phase";
 import { PhaseType, StageStatus } from "@prisma/client";
 import { povLogger } from "@/lib/logger";
+import { stripAuditFactsAtCreate } from "@/lib/tasks/services/protected-task-metadata";
 
 export class PhaseTemplateService {
   private phaseService: PhaseService;
@@ -116,10 +117,11 @@ export class PhaseTemplateService {
                 type: taskData.type || 'ACTION',
                 status: 'OPEN',
                 order: (taskIndex + 1) * 1000,
-                metadata: {
+                // TASK-CREATE-AUDIT-KEYS-UNSTRIPPED (2026-11-22): platform-only keys are never taken from a stored template.
+                metadata: stripAuditFactsAtCreate({
                   ...taskData.metadata,
                   dependencies: taskData.dependencies || [],
-                },
+                }, 'phase-template-create', (f, m) => povLogger.warn({ ...f, templateId: template.id, stageId: stage.id }, m)),
               }
             });
           }

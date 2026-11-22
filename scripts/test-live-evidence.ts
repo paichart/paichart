@@ -213,7 +213,11 @@ const sumOf = (f: Rec) => f.liveRead + LE.listTotal(f, 'liveNotRead') + LE.listT
     const fsx = require('fs') as typeof import('fs'); const px = require('path') as typeof import('path');
     const render = fsx.readFileSync(px.join(__dirname, '../lib/agents/harness/live-evidence-render.ts'), 'utf8');
     const rpc = fsx.readFileSync(px.join(__dirname, '../lib/agents/harness/render-pipeline-context.ts'), 'utf8');
-    assert(!/^\s*import\s/m.test(render), 'live-evidence-render.ts must import nothing');
+    // STEP 3 P5: ONE import is allowed — source-field-bounds.ts (the field shapes shared with the grammar), which itself imports nothing.
+    const bounds = fsx.readFileSync(px.join(__dirname, '../lib/agents/harness/source-field-bounds.ts'), 'utf8');
+    const imports = (render.match(/^\s*import\s.*$/gm) ?? []).map((l: string) => l.trim());
+    assert(imports.length === 1 && /^import \{[^}]+\} from '\.\/source-field-bounds';$/.test(imports[0]) && !/require\(/.test(render), `live-evidence-render.ts may import only ./source-field-bounds: ${JSON.stringify(imports)}`);
+    assert(!/^\s*import\s/m.test(bounds) && !/require\(/.test(bounds), 'source-field-bounds.ts must import nothing');
     assert(rpc.includes("from './live-evidence-render'") && !/from '\.\/live-evidence'/.test(rpc), 'render-pipeline-context must import the client-safe module');
     // NEGATIVE CONTROL: the old import line is detected
     assert(/from '\.\/live-evidence'/.test("import { renderLiveEvidenceForPrompt } from './live-evidence';"), 'control');

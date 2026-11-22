@@ -52,7 +52,7 @@ import { deepStripDangerousKeys } from '../../utils/sanitize-keys';
 import { sanitizeChainedOutput, isR9OperatorEvent } from './sanitize-chained-output';
 import { readAuthoritativeResultField } from './authoritative-result-read';
 import { findProgramParentForStage } from './program-protocol';
-import { CONFIG_SOURCE_AWAITING_TEXT, CONFIG_SOURCE_LANES, DEVICE_SOURCE_LANES, configSourceProtocolsFor } from './held-bytes/variant';
+import { CONFIG_SOURCE_AWAITING_TEXT, DEVICE_SOURCE_LANES, configSourceContractKeyOf, configSourceProtocolsFor } from './held-bytes/variant';
 import { deriveServiceDescriptors, type ServiceDescriptorsFact } from './service-descriptors-derivation';
 
 // ── Constants ───────────────────────────────────────────────────────────────────────────────────
@@ -635,7 +635,8 @@ export const DEVICE_SOURCES_READ_KEYS: readonly string[] = Object.freeze(Object.
  *  awaiting its protocol text is NOT read yet, and says so here. A FUNCTION of the awaiting list since Config sources STEP 3
  *  (plan W5 row 11; it was a module constant): production passes nothing, the tests ask both awaiting states. */
 export function configSourcesReadKeys(awaiting: readonly string[] = CONFIG_SOURCE_AWAITING_TEXT): readonly string[] {
-  return configSourceProtocolsFor(awaiting).map((p) => CONFIG_SOURCE_LANES[p].contractKey);
+  // STEP 3 P5: through the ONE per-protocol key helper (it had no production caller; the map below read the table itself).
+  return configSourceProtocolsFor(awaiting).map((p) => configSourceContractKeyOf(p, awaiting)).filter((k): k is string => k !== null);
 }
 
 /** PURE. What `deviceSources` keys does this contract carry, and which does the platform not read? Null = no `deviceSources`. */

@@ -76,18 +76,13 @@ export function computeConfigSourceReads(sources: LegConfigSourcesResolution, to
         items.push({ label: e.label, kind: 'live-read', service: shownService(e.service), read });
         break;
       }
-      case 'service-held': {
-        // Config sources STEP 3 P1 (grammar only): a `service-held` line is recorded with the same read record as a live read of
-        // its service — counts, never coverage. No stamp carries it yet: the kind exists only in an observability block, that
-        // protocol's row awaits its text, and this fact is version-keyed. The fact's final words for this kind, and the
-        // `liveEvidence` Config arm (which REFUSES a kind it cannot classify, by design), are slice P3's (plan W9, §3.2).
-        const mine = calls.filter((c) => matches(e.service, c));
-        const ok = mine.filter((c) => c.ok);
-        const read: Obj = ok.length ? { state: 'read', calls: ok.length } : mine.length ? { state: 'read-failed', toolCallIndex: mine[0].index, failedCalls: mine.length } : { state: 'not-read' };
-        if (read.state === 'not-read') notRead++;
-        items.push({ label: e.label, kind: 'service-held', service: shownService(e.service), read });
-        break;
-      }
+      case 'service-held':
+        // A `service-held` line belongs to a protocol whose labels name FILES, and that protocol's read record is built from the
+        // stored compare record (`computeFileConfigSourceReads`, below) — never here: "a call to the service succeeded" is not "the
+        // file was returned" (plan W9, §13 B3). Every production caller routes on `protocolDeclaresServiceFiles` first, so this arm
+        // is unreachable; it throws rather than answer (STEP 3 P5: until now it computed a call-count record nothing could reach,
+        // under a comment promising slice P3 would replace it). The registry turns a throw into the net's named error fact.
+        throw new Error('configSourceReads: a service-held line reached the call-based read record — its protocol reads the compare record');
       default: return assertNeverConfigKind(e);
     }
   }
@@ -111,6 +106,10 @@ export function computeConfigSourceReads(sources: LegConfigSourcesResolution, to
 const NO_FILE_STATES: Readonly<Record<string, string>> = Object.freeze({
   'not-read': 'not-read', 'read-failed': 'read-failed', 'not-returned': 'answered-key-not-returned', 'result-not-readable': 'result-not-readable',
   'no-capture-plan': 'no-capture-plan', 'compare-error': 'compare-error', 'label-not-resolved': 'label-not-resolved',
+  // STEP 3 P5 (join preconditions 16, 17): the file is NOT read from the declared service, and the record says which condition —
+  // a file at this name came back from a call the declared service is not tied to; the declared service answered under a
+  // registered name the platform's file table is not keyed on. Neither is `not-read` (a call was made), neither is `read`.
+  'file-from-other-service': 'file-from-other-service', 'registered-under-other-name': 'registered-under-other-name',
 });
 
 /**
@@ -121,6 +120,17 @@ const NO_FILE_STATES: Readonly<Record<string, string>> = Object.freeze({
 export function computeFileConfigSourceReads(sources: LegConfigSourcesResolution, record: unknown): Obj {
   const declaration = declarationOf(sources);
   if (sources.state !== 'parsed') return { version: CONFIG_SOURCE_READS_VERSION, checked: false, reason: `config-sources-${sources.state}`, declaration, unit: 'files' };
+  return fileConfigSourceReadsOf(declaration, record);
+}
+
+/**
+ * The files read record of a PARSED declaration, from the compare record — the body of `computeFileConfigSourceReads`, taking the
+ * `declaration` object itself. STEP 3 P5 (whole-diff review F9): the rolled-back overlay (file-source-compare-run.ts) re-computes
+ * a Harvester's `configSourceReads` from the record AS PERSISTED with the declaration object its stamp already carries, so the
+ * stamp never says `held` for a file the store did not take — and a replay of that Harvester (which reads the persisted record)
+ * reproduces the stamp.
+ */
+export function fileConfigSourceReadsOf(declaration: Obj, record: unknown): Obj {
   const rec = validFileCompareRecord(record, quotableLine);
   if (!rec) return { version: CONFIG_SOURCE_READS_VERSION, checked: false, reason: 'no-compare-record', declaration, unit: 'files' };
   const returned = rec.returnedKeys as Record<string, string[]>;
@@ -134,7 +144,10 @@ export function computeFileConfigSourceReads(sources: LegConfigSourcesResolution
     return { ...head, read: { state, outcome, ...(c.toolCallIndex !== undefined ? { toolCallIndex: c.toolCallIndex } : {}),
       ...(state === 'answered-key-not-returned' && typeof c.target === 'string' ? { returnedKeys: (returned[c.target] ?? []).slice(0, FILE_RETURNED_KEYS_CAP) } : {}) } };
   });
-  return { version: CONFIG_SOURCE_READS_VERSION, checked: true, declaration, unit: 'files', credentialLineVersion: rec.credentialLineVersion, harvesterExecutionId: rec.harvesterExecutionId, items, notRead };
+  // The declared descriptor URLs no registration of the execution was tied to (the record's list, re-validated above) — the
+  // network read record's `unresolvedServices`, absent when none.
+  return { version: CONFIG_SOURCE_READS_VERSION, checked: true, declaration, unit: 'files', credentialLineVersion: rec.credentialLineVersion, harvesterExecutionId: rec.harvesterExecutionId, items, notRead,
+    ...(Array.isArray(rec.unresolvedServices) ? { unresolvedServices: rec.unresolvedServices } : {}) };
 }
 
 /**

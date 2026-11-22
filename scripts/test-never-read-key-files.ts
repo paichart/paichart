@@ -369,6 +369,104 @@ const unpinnedCall = (p: unknown, ctx: unknown) => policy.validateServiceCall('a
     check('KN7 control: an empty session id yields NO callingExecutionId (the reason for the loop\'s guard)', seenContexts.length === 1 && !('callingExecutionId' in seenContexts[0]), JSON.stringify(seenContexts[0])?.slice(0, 200));
   }
 
+  // ══ Config sources STEP 3 slice P5 — join precondition 5: two of the three call-chain links sec-ops proved BY READING (P1) ══
+  // KN6 drove the routes with a stand-in for `serverManager.executeToolOnServer` and a hand-written `services` switch in place of
+  // the dispatcher. Here the SAME calls go through the REAL ones, wired as production wires them:
+  //   the loop's tool turn → the REAL `mcpServerManager.executeToolOnServer` (as execution-core.ts passes it) → the real
+  //   `mcpService.callTool` → the embedded server's `services` tool = the REAL `wrapWithSchema('services', …)` over the REAL
+  //   `ServicesDispatcher` over a REAL `HubToolsHandler` (as embedded-server.ts registers it) → the real gateway / workflow handlers.
+  // What is still a stub: the database (the same stub registry row as KN6), the hub's access check and its interaction tracker,
+  // and the user fields the stub database cannot give — the same three things KN6 states. The third link (the web route above
+  // `orchestrationServiceCaller.callService`) needs a real session and a real database: scripts/test-admin-workflow-route-behavioral.ts.
+  console.log('── KN8: the real server manager and the real services dispatcher (join precondition 5) ──');
+  {
+    /* eslint-disable @typescript-eslint/no-var-requires */
+    const { mcpServerManager, MCPServerStatus } = require('../lib/services/mcp/serverManager');
+    const { HubToolsHandler } = require('../lib/mcp/server/tools/hub-tools-handler');
+    const { ServicesDispatcher } = require('../lib/mcp/server/tools/dispatchers/services-dispatcher');
+    const { wrapWithSchema } = require('../lib/mcp/server/tools/dispatchers/dispatch-with-schema');
+    /* eslint-enable @typescript-eslint/no-var-requires */
+    const EMBEDDED = 'paichart-embedded-mcp';
+    const hub = new HubToolsHandler(wfPrisma);
+    hub.utilities.checkServiceAccess = async () => true; hub.utilities.trackServiceInteraction = async () => undefined;
+    const dispatcher = new ServicesDispatcher(hub);
+    const realServices = wrapWithSchema('services', dispatcher.handle.bind(dispatcher));
+    const dispatched: Array<{ action: unknown; ctx: Rec }> = [];
+    const priorImpl = emb.toolImplementations.get('services') as Function;
+    emb.toolImplementations.set('services', async (a: Rec, ctx: Rec) => {
+      dispatched.push({ action: a.action, ctx });
+      return realServices(a, { ...ctx, user: { ...(ctx?.user as Rec), id: 'user-test', email: 'owner@example.invalid', role: 'ADMIN' } });
+    });
+    // The real manager, with ONE connected server planted in its map (it holds no connection: the embedded server is in-process).
+    const servers = (mcpServerManager as unknown as { servers: Map<string, Rec> }).servers;
+    const hadServer = servers.has(EMBEDDED); const priorServer = servers.get(EMBEDDED);
+    servers.set(EMBEDDED, { name: EMBEDDED, status: MCPServerStatus.CONNECTED, errorCount: 0, lastActivity: new Date(0) });
+    const forwarded: Rec[] = [];
+    const origCallTool = (mcpService as unknown as { callTool: Function }).callTool.bind(mcpService);
+    (mcpService as unknown as { callTool: Function }).callTool = (s: string, t: string, a: unknown, o: Rec) => { forwarded.push({ server: s, tool: t, options: o }); return origCallTool(s, t, a, o); };
+    /** The loop's tool turn, with execution-core's own wiring of the manager — on a WIDER options object than the loop builds (two
+     *  extra fields), so the test can see that the manager forwards its three-field pick and nothing else. (The platform-only
+     *  option that pick exists to keep out is pinned by name in test-security-invariants PD20; this file does not name it — PD20's
+     *  sweep lists every file that does.) */
+    const viaManager = async (args: Rec, executionId: string): Promise<string> => {
+      const { toolCallRecords } = await executeToolTurn(
+        [{ id: 'tu_8', name: 'services', arguments: JSON.stringify(args) }],
+        { getToolDefinition: async () => ({ serverName: EMBEDDED }),
+          executeToolOnServer: (srv: string, t: string, a: unknown, o: { sessionId: string; userId: string; timeout: number }) =>
+            mcpServerManager.executeToolOnServer(srv, t, a as Record<string, unknown>, { ...o, anExtraOption: 'x', callingExecutionId: 'forged-by-the-caller' } as never),
+          logger: { warn: () => undefined } } as never,
+        { executionId, turn: 1 } as never);
+      return JSON.stringify(toolCallRecords[0]);
+    };
+    try {
+      // Link 1 + link 2, route 1 (services.call)
+      dispatched.length = 0; forwarded.length = 0;
+      const k1 = await raced(viaManager(KEYCALL, 'exec-kn8-1'));
+      check('KN8 link 1 — the REAL serverManager.executeToolOnServer forwards the loop\'s execution id to mcpService as sessionId, and ONLY its three-field pick (every other field of the caller\'s object is dropped)',
+        forwarded.length === 1 && forwarded[0].server === EMBEDDED && forwarded[0].tool === 'services'
+        && JSON.stringify(Object.keys(forwarded[0].options as Rec).sort()) === JSON.stringify(['sessionId', 'timeout', 'userId']) && (forwarded[0].options as Rec).sessionId === 'exec-kn8-1',
+        JSON.stringify(forwarded).slice(0, 300));
+      check('KN8 link 1 — the tool context the embedded server receives is exactly { user, authenticated, callingExecutionId }: the loop\'s id, never a field the caller added',
+        dispatched.length === 1 && dispatched[0].ctx.callingExecutionId === 'exec-kn8-1'
+        && JSON.stringify(Object.keys(dispatched[0].ctx).sort()) === JSON.stringify(['authenticated', 'callingExecutionId', 'user']), JSON.stringify(dispatched[0]?.ctx)?.slice(0, 200));
+      check('KN8 link 2 — through the REAL ServicesDispatcher (schema wrapper, CUID check, action switch) and the real HubToolsHandler the context reaches the gate: the key file is refused with the class\'s message',
+        sawKeyMsg(k1), String(k1).slice(0, 400));
+      const k1conf = await raced(viaManager(CONFCALL, 'exec-kn8-1'));
+      check('KN8 link 2 — the same route, a configuration file: NOT refused by this rule (it goes on to the service and fails there)', !sawKeyMsg(k1conf) && !String(k1conf).includes('Invalid action'), String(k1conf).slice(0, 300));
+      // route 2 (a workflow step) through the same two real links
+      dispatched.length = 0;
+      const k2 = await raced(viaManager(WFKEY, 'exec-kn8-2'));
+      check('KN8 links 1 + 2, route 2 (workflow.execute): the id reaches the step\'s gate through the real dispatcher and the key file is refused',
+        sawKeyMsg(k2) && dispatched[0]?.action === 'workflow.execute' && dispatched[0]?.ctx.callingExecutionId === 'exec-kn8-2', `${String(k2).slice(0, 400)} | ${JSON.stringify(dispatched[0]?.ctx)?.slice(0, 160)}`);
+      const k2conf = await raced(viaManager(WFCONF, 'exec-kn8-2'));
+      check('KN8 links 1 + 2, route 2, a configuration file: not refused by this rule', !sawKeyMsg(k2conf), String(k2conf).slice(0, 300));
+      // a CHAT call through the same real dispatcher: no execution id on the context ⇒ not an agent ⇒ not refused by this rule
+      const chat = await raced(realServices(KEYCALL, CHAT_USER) as Promise<unknown>);
+      check('KN8 link 2 — a chat client through the real dispatcher: NOT refused by this rule', !sawKeyMsg(chat), String(JSON.stringify(chat)).slice(0, 300));
+      // the dispatcher hands the handler the context OBJECT it was given (it never rebuilds it)
+      const seen: unknown[] = [];
+      const probe = new ServicesDispatcher({ handleCallService: async (_a: unknown, c: unknown) => { seen.push(c); return { content: [] }; }, handleExecuteWorkflow: async (_a: unknown, c: unknown) => { seen.push(c); return { content: [] }; } });
+      const ctxObj = { user: { id: 'u' }, callingExecutionId: 'exec-x' };
+      await probe.handle({ action: 'call', targetService: 's', tool: 't' }, ctxObj); await probe.handle({ action: 'workflow.execute', steps: [] }, ctxObj);
+      check('KN8 link 2 — the dispatcher passes the SAME context object to the gateway and the workflow handler', seen.length === 2 && seen[0] === ctxObj && seen[1] === ctxObj);
+      // a server that is NOT connected: the manager refuses before mcpService is asked
+      servers.set(EMBEDDED, { name: EMBEDDED, status: MCPServerStatus.DISCONNECTED, errorCount: 0, lastActivity: new Date(0) });
+      forwarded.length = 0;
+      const down = await raced(viaManager(CONFCALL, 'exec-kn8-3'));
+      check('KN8 link 1 — a server that is not connected: the manager throws and mcpService is never called', forwarded.length === 0 && String(down).includes('not connected'), String(down).slice(0, 200));
+    } finally {
+      (mcpService as unknown as { callTool: Function }).callTool = origCallTool;
+      if (hadServer) servers.set(EMBEDDED, priorServer as Rec); else servers.delete(EMBEDDED);
+      emb.toolImplementations.set('services', priorImpl);
+    }
+    const ROOT = path.join(__dirname, '..');
+    const strip = (f: string) => fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    check('KN8 static — execution-core hands the loop the manager\'s own method with the loop\'s options object; the embedded server registers `services` as the wrapped dispatcher',
+      /executeToolOnServer: \(s: string, t: string, a: unknown, o: \{ sessionId: string; userId: string; timeout: number \}\) =>\s*mcpServerManager\.executeToolOnServer\(s, t, a as Record<string, any>, o\),/.test(strip('lib/services/execution-core.ts'))
+      && strip('lib/mcp/embedded-server.ts').includes("services: wrapWithSchema('services', servicesDispatcher.handle.bind(servicesDispatcher)),")
+      && strip('lib/mcp/embedded-server.ts').includes('const servicesDispatcher = new ServicesDispatcher(hubTools);'));
+  }
+
   console.log(`\n${passed} passed, ${fails.length} failed`);
   process.exit(fails.length === 0 ? 0 : 1);
 })().catch((e) => { console.error('❌ test-never-read-key-files threw:', e); process.exit(1); });

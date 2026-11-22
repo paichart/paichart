@@ -1149,6 +1149,7 @@ lib/agents/harness/rollback-containment-enrichment.ts
 lib/agents/harness/rollback-containment.ts
 lib/agents/harness/sanitize-chained-output.ts
 lib/agents/harness/service-descriptors-derivation.ts
+lib/agents/harness/source-field-bounds.ts
 lib/agents/harness/strip-tool-call-results.ts
 lib/agents/harness/validation-tool-calls-enrichment.ts
 lib/agents/harness/validation-tool-calls.ts
@@ -1719,6 +1720,7 @@ scripts/check-held-capture-replay-diff.sh
 scripts/check-held-r10-lab-repo.ts
 scripts/check-held-variant-controls.ts
 scripts/check-mi13-held-git-control.sh
+scripts/check-mi13-held-legs-force-control.sh
 scripts/check-mi13-if3-control.sh
 scripts/check-mi13-wib10-control.sh
 scripts/check-naming.mjs
@@ -1995,6 +1997,7 @@ scripts/ship.sh
 scripts/start-mcp-hub.sh
 scripts/test-active-execution-unique-constraint.ts
 scripts/test-admin-audit-coverage.ts
+scripts/test-admin-workflow-route-behavioral.ts
 scripts/test-agent-configure-leg-child.ts
 scripts/test-agent-cross-tenant.ts
 scripts/test-agent-execute-authz-order.ts
@@ -2041,6 +2044,7 @@ scripts/test-compliance-monitor.ts
 scripts/test-confidence-parse-parity.ts
 scripts/test-config-hierarchy.ts
 scripts/test-config-prompt-no-template-fallback.ts
+scripts/test-config-snapshot-removal-behavioral.ts
 scripts/test-config-sources-p2.ts
 scripts/test-config-sources-step3.ts
 scripts/test-config-sources.ts
@@ -2253,6 +2257,7 @@ scripts/test-settings-redaction.ts
 scripts/test-shared-pool-listen-replay.ts
 scripts/test-shared-prisma-disconnect.ts
 scripts/test-skip-path-honesty.ts
+scripts/test-spec-topology-parity.ts
 scripts/test-sse-event-sequence.ts
 scripts/test-stage-metadata-merge.ts
 scripts/test-stage-resolver.ts
@@ -2265,6 +2270,7 @@ scripts/test-system-prompt-constraints.ts
 scripts/test-system-prompt-injections.ts
 scripts/test-task-completed-at.ts
 scripts/test-task-context-completion-render.ts
+scripts/test-task-create-audit-strip-behavioral.ts
 scripts/test-task-create-boundary-behavioral.ts
 scripts/test-task-dependencies.ts
 scripts/test-task-handler-bc76.ts

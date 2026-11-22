@@ -1,8 +1,9 @@
 /**
- * PLATFORM-HELD-BYTES — the G3 operator base check (GO-MINIMAL determination §2a, 2026-10-16). PRIVATE: not exported (an
- * explicit `-` rule in scripts/export/public-allowlist.rules), not published. The public operator tool is O14's PROMOTION
- * deliverable, deferred with its trigger; G3 needs only this CHECK, and importing the platform's own canonical decode + R10
- * plain arm is parity by construction.
+ * PLATFORM-HELD-BYTES — the G3 operator base check (GO-MINIMAL determination §2a, 2026-10-16). It was private then; it has since
+ * been EXPORTED to the public repository (scripts/export/public-allowlist.rules: the tool ships, its fixture test
+ * scripts/test-held-base-check.ts stays private by an explicit `-` rule, so that test has no npm script) and docs/PIPELINES.md
+ * cites it (header corrected 2026-11-22, STEP 3 P5 — it still said "PRIVATE: not exported"). Importing the platform's own
+ * canonical decode + R10 plain arm is parity by construction.
  *
  * Inputs (operator-run): the LIVE file path; the BASE ref's `held.get` metadata block saved as JSON; optionally the CANDIDATE
  * ref's metadata JSON + its verbatim text block saved as a file.
@@ -37,6 +38,11 @@
  *       held-k8s step 3 (SF-5): repo + path DEFAULT from the held ref (held.get emits `target`/`path` on a Git ref); a typed one must
  *       agree (STOP repo-not-held-target / path-not-held-path); a set GH_TOKEN warns (use your own credential).
  * --base is held.get's metadata block (it carries sourceRevision on a Git ref); --held-text is held.get's text block, verbatim.
+ *       WHICH MODE FOR AN OBSERVABILITY FILE (Config sources STEP 3): a collector or ingress file the leg kept from a `git-file` line
+ *       (observability-config from 1.12.0) is a blob in a repository — THIS mode, with the coordinates the kept file carries
+ *       (target `github:<owner>:<repo>`, its path). A file kept from the read-only SERVICE (a `service-held` line, or a leg that
+ *       declares nothing) names no repository and no commit: this mode stops `no-coordinates` before any call — its check is the
+ *       host-file mode (`--live`). Pinned by scripts/test-held-base-check.ts "git (observability, P5)".
  *
  * ── DEVICE MODE (held-network step 3 batch 2b, P10, 2026-10-26) ─────────────────────────────────────────────────────────────
  * For a held base captured from a device's structured config getter (the device-read lane: target `device:<name>`, path

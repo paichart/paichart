@@ -34,7 +34,9 @@ import type { ExtractResult } from '../lib/agents/harness/held-bytes/extract';
 import { computeConfigSourceReads, computeConfigLiveEvidence, computeConfigLiveEvidenceFromReadRecord } from '../lib/agents/harness/config-source-facts';
 import { computeConfigSourceReadsFact } from '../lib/agents/harness/config-source-facts-enrichment';
 import { NOT_STAMPED } from '../lib/agents/harness/net-registry';
-import { renderLiveEvidenceForPrompt, CONFIG_LIVE_EVIDENCE_SCOPE_CLAUSE, LIVE_EVIDENCE_RENDER_NAME, liveEvidenceVersionApplies } from '../lib/agents/harness/live-evidence';
+import { DECLARED_LEG_WARNING_IDS } from '../lib/agents/harness/reviewer-warnings-enrichment';
+import { gitOnlyStatementSentenceFor } from '../lib/agents/harness/git-only-statement-sentence';
+import { renderLiveEvidenceForPrompt, CONFIG_LIVE_EVIDENCE_SCOPE_CLAUSE, LIVE_EVIDENCE_RENDER_NAME, liveEvidenceVersionApplies, LIVE_EVIDENCE_MIN_VERSIONS } from '../lib/agents/harness/live-evidence';
 
 const eq = (a: unknown, b: unknown, what = '') => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${what}expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); };
 let passed = 0; let failed = 0;
@@ -250,15 +252,55 @@ test('MIX4 a row awaiting its text is inert: no lane, no contract key, not read 
   }
   eq([...CONFIG_SOURCE_PROTOCOLS].sort(), Object.keys(CONFIG_SOURCE_LANES).filter((p) => !CONFIG_SOURCE_AWAITING_TEXT.includes(p)).sort());
 });
-test('MIX5 awaiting-text ⇔ the seed text carries no `## Config sources` section (the J1 pin, for this table)', () => {
+test('MIX5 awaiting-text ⇔ the seed text carries no `## Config sources` section AND its seed version is below the released Config-sources version (the J1 pin, for this table)', () => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { PROTOCOLS } = require('./seed-protocol-prompts') as { PROTOCOLS: Array<{ name: string; promptText: string }> };
+  const { PROTOCOLS } = require('./seed-protocol-prompts') as { PROTOCOLS: Array<{ name: string; promptText: string; version: string }> };
   for (const p of Object.keys(CONFIG_SOURCE_LANES)) {
     const row = PROTOCOLS.find((x) => x.name === p);
     assert(row, `${p} has no seed row`);
     const carries = /^## Config sources\b/m.test(row.promptText);
     eq(CONFIG_SOURCE_AWAITING_TEXT.includes(p), !carries, `${p}: awaiting-text must equal "the text has no Config sources section" — `);
+    // STEP 3 P5 (whole-diff review F4): the section alone is not the join. The facts are keyed on the composed VERSION
+    // (`LIVE_EVIDENCE_MIN_VERSIONS`): a text that carries the section under a version BELOW its row stamps nothing on any leg, and a
+    // seed version AT the row while the list still holds the protocol is half a join. Both go red here.
+    const min = LIVE_EVIDENCE_MIN_VERSIONS[p];
+    assert(typeof min === 'string', `${p} has no released Config-sources version row (LIVE_EVIDENCE_MIN_VERSIONS)`);
+    eq(CONFIG_SOURCE_AWAITING_TEXT.includes(p), !liveEvidenceVersionApplies({ delta: { name: p, version: row.version } }),
+      `${p}: seed version ${row.version}, version row ${min} — awaiting-text must equal "the seeded version is below the row" — `);
   }
+});
+test('MIX5b TRIPWIRE for the join (whole-diff review F4, 2026-11-22): a protocol whose DECLARED legs get their own warning and their own Git-only sentence must have both rows the moment it leaves the awaiting list — and neither before', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { PROTOCOLS } = require('./seed-protocol-prompts') as { PROTOCOLS: Array<{ name: string; version: string }> };
+  // Both tables are EMPTY until the join on purpose (their own header comments). Plan §9.3 item 3 names the wrong table for the
+  // warning id (`REGISTERED_WARNING_IDS`); it is `DECLARED_LEG_WARNING_IDS`. The sentence is keyed on the EXACT text version, so
+  // every LATER version bump of such a protocol needs a row too — this pin reads the seed's own version, so it catches that as well.
+  /** What the join owes, as a function of the state — so both directions can be shown without editing the tables. */
+  const owed = (awaiting: readonly string[], declaredIds: Readonly<Record<string, readonly string[]>>, sentenceFor: (p: string, v: string) => string | null): string[] => {
+    const out: string[] = [];
+    for (const [p, lane] of Object.entries(CONFIG_SOURCE_LANES)) {
+      if (lane.noBlock !== 'runs-undeclared') continue;            // a `forced` protocol's warnings are on its protocol row, for every leg
+      const version = PROTOCOLS.find((x) => x.name === p)?.version ?? '(no seed row)';
+      const hasIds = (declaredIds[p] ?? []).length > 0; const hasSentence = sentenceFor(p, version) !== null;
+      if (awaiting.includes(p)) {
+        if (hasIds) out.push(`${p}: a declared-leg warning id is registered while the row awaits its text`);
+        if (hasSentence) out.push(`${p}: a Git-only sentence is registered for ${version} while the row awaits its text`);
+      } else {
+        if (!hasIds) out.push(`${p}: off the awaiting list with NO row in DECLARED_LEG_WARNING_IDS`);
+        if (!hasSentence) out.push(`${p}: off the awaiting list with NO Git-only sentence for the seeded version ${version}`);
+      }
+    }
+    return out;
+  };
+  eq(owed(CONFIG_SOURCE_AWAITING_TEXT, DECLARED_LEG_WARNING_IDS, gitOnlyStatementSentenceFor), [], 'THE TREE AS IT IS: ');
+  // the pin is live in both directions (shown on the tables as they are, with the list moved)
+  const OBS = 'observability-config-protocol';
+  const seeded = PROTOCOLS.find((x) => x.name === OBS)!.version;
+  eq(owed([], {}, () => null), [`${OBS}: off the awaiting list with NO row in DECLARED_LEG_WARNING_IDS`, `${OBS}: off the awaiting list with NO Git-only sentence for the seeded version ${seeded}`], 'a join that forgot both: ');
+  eq(owed([], { [OBS]: ['git-file-only'] }, (p, v) => (p === OBS && v === seeded ? 'x {label}' : null)), [], 'a complete join: ');
+  eq(owed([], { [OBS]: ['git-file-only'] }, (p, v) => (p === OBS && v === '1.12.0' && seeded !== '1.12.0' ? 'x {label}' : null)).length, seeded === '1.12.0' ? 0 : 1, 'a sentence for ANOTHER version than the seeded one does not count: ');
+  eq(owed([OBS], { [OBS]: ['git-file-only'] }, () => null), [`${OBS}: a declared-leg warning id is registered while the row awaits its text`], 'registered early: ');
+  eq(Object.entries(CONFIG_SOURCE_LANES).filter(([, l]) => l.noBlock === 'runs-undeclared').map(([p]) => p), [OBS], 'the protocols this pin covers today: ');
 });
 test('MIX6 every table row has a kind table, and every kind table has a row', () => {
   eq(Object.keys(CONFIG_SOURCE_KINDS_BY_PROTOCOL).sort(), Object.keys(CONFIG_SOURCE_LANES).sort());

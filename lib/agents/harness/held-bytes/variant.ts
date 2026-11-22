@@ -291,7 +291,7 @@ function configSourceField(leg: { title?: string | null; metadata?: unknown }, a
  *  holds nothing and the carrier forces by that name. A `forced` protocol's awaiting row is unchanged (existing behaviour, outside
  *  this step — a register candidate, plan A7 "scope limit"). */
 export function legHasConfigDeclarationToGovern(leg: { title?: string | null; metadata?: unknown }, awaiting: readonly string[] = CONFIG_SOURCE_AWAITING_TEXT): boolean {
-  if (configSourceLaneOfLeg(leg, awaiting) !== null) return true;
+  if (legProtocolHasConfigLane(leg, awaiting)) return true;
   const p = resolveTaskProtocol(leg).protocol;
   const row = p ? CONFIG_SOURCE_LANES[canonicalProtocolName(p)] : undefined;
   if (!row) return false;

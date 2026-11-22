@@ -23,6 +23,7 @@ import { gitLiveDriftPlatformCompares, computeFileGitLiveDrift, FILE_COMPARE_MET
 import { buildFileSourceCompare, rolledBackFileSourceCompare, rolledBackEditOverlap,
   type CaptureEvidence, type Comparator, type ComparePlanView, type EditHunkFile } from '@/lib/agents/harness/file-source-compare';
 import { quotableLine } from '@/lib/agents/harness/file-compare-quote-seam';
+import { fileConfigSourceReadsOf } from '@/lib/agents/harness/config-source-facts';
 import { isR10Disabled } from '@/lib/agents/harness/redact-artifact-secrets';
 
 type Logger = { info?: (o: Record<string, unknown>, m: string) => void; warn: (o: Record<string, unknown>, m: string) => void };
@@ -79,8 +80,15 @@ export function harvesterCompareOverlay(resultJson: Record<string, unknown>, rol
   if (!rolledBack || !isObj(rec) || rec.method !== FILE_COMPARE_METHOD) return {};
   const rb = rolledBackFileSourceCompare(rec);
   const drift = resultJson.gitLiveDrift;
+  // STEP 3 P5 (whole-diff review F9): the read record is a function of the SAME record, so it is re-computed from the rolled-back one
+  // too — else it kept `outcome: 'held'` for a file the store did not take, beside a record and a `gitLiveDrift` that say it is not
+  // held, and a replay of this Harvester (it reads the persisted record) would not reproduce the stamp. `liveEvidence` is NOT
+  // rewritten: it is computed from the read STATES (`read` — the service returned the file — is unchanged by a rollback), never
+  // from an outcome word; pinned equal (WRT2).
+  const reads = resultJson.configSourceReads;
   return { fileSourceCompare: rb,
-    ...(isObj(drift) && drift.method === FILE_COMPARE_METHOD && drift.checked === true ? { gitLiveDrift: computeFileGitLiveDrift(rb, 'parsed', quotableLine) } : {}) };
+    ...(isObj(drift) && drift.method === FILE_COMPARE_METHOD && drift.checked === true ? { gitLiveDrift: computeFileGitLiveDrift(rb, 'parsed', quotableLine) } : {}),
+    ...(isObj(reads) && reads.unit === 'files' && reads.checked === true && isObj(reads.declaration) ? { configSourceReads: fileConfigSourceReadsOf(reads.declaration, rb) } : {}) };
 }
 
 /** Plan §13 C2 — what an Author's PACKAGE overlay adds on a rolled-back package: its transcribed `gitLiveDrift` with every

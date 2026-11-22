@@ -421,11 +421,12 @@ test('SN3 the removal statement: ONE statement removes a snapshot the platform d
   // the writer runs once: under the write-if-absent test on the stamp
   assert(/if \(contractCheck && !\('protocol' in taskMeta\)\) \{/.test(code), 'the stamp writer is no longer write-if-absent');
 });
-test('SN4 (W7 gate) every task-create path is CLASSIFIED: strips the audit keys, builds metadata from platform values, or is listed as carrying caller metadata UNSTRIPPED', () => {
-  // The plan's gate reads "every task-create path strips audit keys or builds metadata from platform values only". That is NOT true
-  // of the tree (STEP3-P1-BUILD.md, finding W7-1): the paths marked UNSTRIPPED below write caller- or template-supplied metadata as
-  // given. This pin records the truth and goes red when a path is added or one changes class; A9 and the first-stamp removal are the
-  // controls that do not depend on it.
+test('SN4 (W7 gate) every task-create path strips the audit keys, builds metadata from platform values only, or writes no metadata — there is NO unstripped class', () => {
+  // The plan's gate: "every task-create path strips audit keys or builds metadata from platform values only". It was NOT true of the
+  // tree until 2026-11-22 (STEP3-P1-BUILD.md finding W7-1; register TASK-CREATE-AUDIT-KEYS-UNSTRIPPED): four paths wrote caller- or
+  // template-supplied metadata as given. They now strip at the seam (`stripAuditFactsAtCreate`). This pin goes red when a NEW
+  // create path appears (it must be classified here, and there is no class for "writes caller metadata unstripped"), or when a
+  // listed path stops stripping.
   const ROOT = path.join(__dirname, '..');
   // A plain directory walk, NOT `git grep`: the public export is validated in a directory that is not a git repository (plan §9.5;
   // the first form of this pin called git and the ship's export dry run refused the push, 2026-11-21 — the second time this class
@@ -442,23 +443,26 @@ test('SN4 (W7 gate) every task-create path is CLASSIFIED: strips the audit keys,
   const CREATE_RE = /\b(tx|prisma|db|client)\.task\.(create|createMany|upsert)\(/;
   const files = [...walkSource('lib'), ...walkSource('app')]
     .filter((f) => !/\.test\.|__tests__/.test(f) && CREATE_RE.test(fs.readFileSync(path.join(ROOT, f), 'utf8'))).sort();
-  const CLASS: Record<string, 'strips' | 'platform-values' | 'no-metadata' | 'UNSTRIPPED'> = {
+  const CLASS: Record<string, 'strips' | 'platform-values' | 'no-metadata'> = {
     'lib/mcp/tasks/action/handlers/task/task-create-handler.ts': 'platform-values',
     'lib/tasks/services/task.ts': 'strips',
     'lib/pov/handlers/put.ts': 'strips',
     'lib/tasks/handlers/post.ts': 'no-metadata',
-    'app/api/pov/[povId]/phase/[phaseId]/stage/[stageId]/task/route.ts': 'UNSTRIPPED',
-    'lib/pov/services/phase.ts': 'UNSTRIPPED',
-    'lib/pov/services/phaseTemplate.ts': 'UNSTRIPPED',
-    'lib/pov/phase-templates/storage.ts': 'UNSTRIPPED',
+    'app/api/pov/[povId]/phase/[phaseId]/stage/[stageId]/task/route.ts': 'strips',
+    'lib/pov/services/phase.ts': 'strips',
+    'lib/pov/services/phaseTemplate.ts': 'strips',
+    'lib/pov/phase-templates/storage.ts': 'strips',
   };
   eq(files, Object.keys(CLASS).sort(), 'the task-create paths (a new one must be classified here): ');
+  const SEAMS_2026_11_22 = ['app/api/pov/[povId]/phase/[phaseId]/stage/[stageId]/task/route.ts', 'lib/pov/services/phase.ts', 'lib/pov/services/phaseTemplate.ts', 'lib/pov/phase-templates/storage.ts'];
   const rd = (f: string) => fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
   for (const [f, c] of Object.entries(CLASS)) {
     const s = rd(f);
-    const strips = /stripAuditFacts\(/.test(s);
-    if (c === 'strips') assert(strips, `${f}: classified "strips" but calls no stripAuditFacts`);
-    if (c === 'UNSTRIPPED') assert(!strips, `${f}: now strips the audit keys — move it to "strips" (and re-read finding W7-1)`);
+    const strips = /stripAuditFacts(AtCreate)?\(/.test(s);
+    if (c === 'strips') assert(strips, `${f}: classified "strips" but calls no stripAuditFacts / stripAuditFactsAtCreate`);
+    // the four seams closed on 2026-11-22: the strip wraps the metadata VALUE the create writes (a call elsewhere in the file is not enough)
+    if (SEAMS_2026_11_22.includes(f)) assert(/\bmetadata:\s*(?:data\.metadata\s*\?\s*)?stripAuditFactsAtCreate\(/.test(s) && (s.match(/\.task\.create\(/g) ?? []).length === 1,
+      `${f}: its one task create no longer writes metadata through stripAuditFactsAtCreate`);
     if (c === 'no-metadata') assert(!/task\.create\(\{[\s\S]{0,900}?\bmetadata\b/.test(s), `${f}: classified "no-metadata" but its create writes metadata`);
     if (c === 'platform-values') assert(/const created = await tx\.task\.create\(\{[\s\S]{0,1500}?\.\.\.contractWrite/.test(s) && !/metadata: (parameters|validatedParams|params)\./.test(s), `${f}: its create no longer builds metadata from the platform's contract write only`);
   }

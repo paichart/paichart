@@ -27,6 +27,8 @@
  * own template lines (placeholders substituted), so a protocol rewording reds the test instead of drifting from it.
  */
 
+import { SOURCE_LABEL_RE, GIT_OWNER_REPO_RE, GIT_PATH_SEGMENT_RE, GIT_REF_RE, SERVICE_DECLARED_MAX_CHARS } from './source-field-bounds';
+
 export const DEVICE_SOURCES_GRAMMAR_VERSION = 1;
 /**
  * Config-sources network step (DESIGN v2 §1.2, §3.1; owner G3-a, 2026-11-04): grammar v2 adds ONE kind, `live-read` — the device's
@@ -106,10 +108,11 @@ export type LegDeviceSources =
   | { state: 'parsed'; grammarVersion: number; source: 'contract' | 'task-body'; entries: DeviceSourceLine[] };
 
 const MAX_LINES = 256;
-const DEVICE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
-const OWNER_REPO_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
-const PATH_SEG_RE = /^[A-Za-z0-9._@+-]{1,255}$/;
-const REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$/;
+// STEP 3 P5: the field shapes are ONE definition shared with every reader that re-validates a stored fact (source-field-bounds.ts).
+const DEVICE_RE = SOURCE_LABEL_RE;
+const OWNER_REPO_RE = GIT_OWNER_REPO_RE;
+const PATH_SEG_RE = GIT_PATH_SEGMENT_RE;
+const REF_RE = GIT_REF_RE;
 const HEAD_RE = /^([^\s:]+):[ ]([a-z-]+)(.*)$/;
 // eslint-disable-next-line no-control-regex
 const CONTROL_RE = /[\u0000-\u001f\u007f]/;
@@ -123,7 +126,7 @@ function unwrap(raw: string): string {
 }
 
 function serviceProblem(svc: string): boolean {
-  return svc.length === 0 || svc.length > 512 || svc !== svc.trim() || CONTROL_RE.test(svc) || svc.includes('`') || svc.includes(';')
+  return svc.length === 0 || svc.length > SERVICE_DECLARED_MAX_CHARS || svc !== svc.trim() || CONTROL_RE.test(svc) || svc.includes('`') || svc.includes(';')
     || svc.includes(SOURCE_SEPARATOR.trim());
 }
 

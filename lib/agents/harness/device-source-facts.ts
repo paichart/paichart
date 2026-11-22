@@ -86,6 +86,21 @@ export function endpointResolvedServices(records: readonly unknown[], declared: 
   return out;
 }
 
+/** Config sources STEP 3 P5 (join precondition 16): the declared descriptor URLs (shown, IF-2 masked, in declaration order, each
+ *  once) that NO registration of THIS execution is tied to — by `descriptorUrl` or by endpoint. A service declared by NAME is never
+ *  listed (a name needs no registration). The files read record's `unresolvedServices`; the network record's own list is built by
+ *  `buildDeviceReadScope` from the same resolver. */
+export function unresolvedDescriptorServices(records: readonly unknown[], declared: readonly string[]): string[] {
+  const regs = registrationsByDescriptorUrl(records);
+  const out: string[] = [];
+  for (const d of declared) {
+    if (!/^https?:\/\//i.test(d) || (regs.get(d) ?? []).length > 0) continue;
+    const shown = shownService(d);
+    if (!out.includes(shown)) out.push(shown);
+  }
+  return out;
+}
+
 /** The services a declared service string resolves to in THIS execution: the name itself, or the rows registered for the URL
  *  (by `descriptorUrl`, or by hand at the URL's table endpoint — `registrationsByDescriptorUrl`). */
 export function serviceMatcher(records: readonly unknown[]) {

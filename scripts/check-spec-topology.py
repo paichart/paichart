@@ -17,7 +17,11 @@ import json
 import re
 import sys
 
-SOURCE_LINE = re.compile(r'^\s*([A-Za-z0-9_.-]+):\s*(git-file|device-read|live-read|command-package)\s+—\s+service\s+(\S+)(?:\s*;\s*(\S+))?')
+# Every source-line KIND the platform's two source grammars know (the Device and the Config one) — pinned EQUAL to the shipping kind
+# tables by scripts/test-spec-topology-parity.ts (STEP 3 P5: this list had no `service-held` and nothing compared it with the tables).
+# A `supplied` line names no service, so the line pattern below never matches it; it is listed because it is a kind.
+SOURCE_KINDS = ('git-file', 'device-read', 'live-read', 'command-package', 'service-held', 'supplied')
+SOURCE_LINE = re.compile(r'^\s*([A-Za-z0-9_.-]+):\s*(' + '|'.join(k for k in SOURCE_KINDS if k != 'supplied') + r')\s+—\s+service\s+(\S+)(?:\s*;\s*(\S+))?')
 CIDR = re.compile(r'\b\d{1,3}(?:\.\d{1,3}){3}/\d{1,2}\b')
 HOST = re.compile(r'(?<![\w./-])\d{1,3}(?:\.\d{1,3}){3}(?![\w/-]|\.\d)')  # not a version (4.32.2.1F), not a CIDR
 EMAIL = re.compile(r'[^\s|@]+@[^\s|@]+\.[^\s|@]+')
@@ -30,22 +34,35 @@ VALUE_MARK = re.compile(r'changes nothing', re.I)
 
 PLAN_FILE_NAMES = ('tfplan', 'tfplan.out', 'plan.out', 'tfplan.json', 'tfplan.binary')
 CLI_CREDENTIALS_FILE_NAMES = ('.terraformrc', 'terraform.rc', 'credentials.tfrc.json')
+NORNIR_INVENTORY_FILE_NAMES = ('hosts.yaml', 'hosts.yml', 'groups.yaml', 'groups.yml', 'defaults.yaml', 'defaults.yml')
+NORNIR_INVENTORY_DIRS = ('nornir', 'inventory')
+# Password and key files — never read or kept since Config sources STEP 3 P1 (2026-11-21).
+KEY_MATERIAL_FILE_SUFFIXES = ('.key', '.pem', '.p12', '.pfx', '.jks', '.keystore')
+SSH_IDENTITY_FILE_NAMES = ('id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519')
 
 
 def never_held(path):
-    """The platform's never-held path rule, restated (lib/mcp/server/config/git-file-source-pin.js `heldPathRefusal`; the self-test
-    pins the same examples). A Terraform state, plan, variables or CLI-credentials path is never read or held: a `git-file` line
-    naming one is refused when the leg resolves its sources, and the leg stops. Returns the reason or None."""
-    segs = [x for x in path.replace('\\', '/').split('/') if x]
+    """The platform's never-held path rule, restated (lib/mcp/server/config/git-file-source-pin.js `heldPathRefusal`). A Terraform
+    state, plan, variables or CLI-credentials path, a device inventory, and a password or key file are never read or held: a
+    `git-file` line naming one is refused when the leg resolves its sources, and the leg stops. Returns the reason or None.
+    PINNED EQUAL to the shipping function, path by path, by scripts/test-spec-topology-parity.ts — every list above included
+    (STEP 3 P5: this restatement lacked the inventory rule of 2026-10-23 and the key-file names of 2026-11-21, and nothing noticed)."""
+    segs = [x for x in path.lower().split('/') if x]
     if not segs:
         return None
-    name = segs[-1].lower()
+    name = segs[-1]
     if any(x in ('.terraform', 'terraform.tfstate.d') for x in segs) or '.tfstate' in name or '.tfplan' in name or name in PLAN_FILE_NAMES:
         return 'a Terraform state or plan path'
     if '.tfvars' in name:
         return 'a Terraform variables file'
     if '.terraform.d' in segs or name in CLI_CREDENTIALS_FILE_NAMES:
         return 'a Terraform CLI credentials path'
+    if name in NORNIR_INVENTORY_FILE_NAMES and any(x in NORNIR_INVENTORY_DIRS for x in segs[:-1]):
+        return 'a device inventory file'
+    if 'htpasswd' in name:
+        return 'a password file'
+    if name.endswith(KEY_MATERIAL_FILE_SUFFIXES) or name in SSH_IDENTITY_FILE_NAMES:
+        return 'a key file'
     return None
 
 
@@ -216,7 +233,7 @@ def compare(spec_text, topo_text):
         why = never_held(f)
         if why:
             warnings.append(f'the spec declares "{f}" as a git-file: it is {why}, which the platform never reads or holds. '
-                            'The leg stops when it resolves its sources. Declare the .tf files; state is a live-read or supplied line')
+                            'The leg stops when it resolves its sources. Declare the configuration files; Terraform state is a live-read or supplied line, and a secret is referenced, never kept in a file the leg reads')
     # 9. a Terraform leg with no declared .tf file (spec only). From terraform-iac 1.17.0 a Terraform leg reads only what a
     #    `## Config sources` block declares, and stops before it reads anything when its task carries no block.
     if re.search(r'\bterraform-iac\b', spec_text) and not any(f.lower().endswith(('.tf', '.tf.json')) for f in spec['config_git_files']):
@@ -308,6 +325,11 @@ def self_test():
     refused = [never_held(x) is not None for x in ('a/terraform.tfstate', 'a/terraform.tfstate-old', 'a/prod.tfvars.example', 'a/tfplan', 'a/plan.out',
                                                     'a/.terraform/modules/x.tf', 'a/terraform.tfstate.d/prod/x', 'home/.terraformrc', 'a/.terraform.d/credentials.tfrc.json')]
     cases.append(('the never-held rule: plain .tf paths are holdable; state, plan, variables and credentials paths are not', all(held) and all(refused)))
+    keys = [never_held(x) for x in ('nginx/.htpasswd', 'tls/server.key', 'a/cert.PEM', '.ssh/id_ed25519', 'nornir/hosts.yaml', 'inventory/x/defaults.yml')]
+    plain = [never_held(x) for x in ('nginx/otlp-ingress.conf', 'helm/defaults.yaml', 'docs/keys.md', 'k8s/hosts.yaml')]
+    cases.append(('the never-held rule: password, key and device-inventory files are not holdable; a look-alike name outside those rules is', all(keys) and not any(plain)))
+    held_line = '# t\n```\n## Config sources\nobs-ingress.otlp-ingress.conf: service-held \u2014 service https://example.test/obs.json\n```\n'
+    cases.append(('a service-held line is read as a source line (its service is compared with the topology)', 'https://example.test/obs.json' in spec_facts(held_line)['services']))
     failed = [name for name, ok in cases if not ok]
     for name, ok in cases:
         print(('PASS ' if ok else 'FAIL ') + name)
@@ -320,9 +342,14 @@ def main():
     ap.add_argument('--topology')
     ap.add_argument('--strict', action='store_true')
     ap.add_argument('--self-test', action='store_true')
+    ap.add_argument('--rules-json', action='store_true', help='print this check\'s own source kinds and its never-held verdict for each path given as a JSON list on stdin (the parity test reads it)')
     a = ap.parse_args()
     if a.self_test:
         sys.exit(self_test())
+    if a.rules_json:
+        paths = json.load(sys.stdin)
+        print(json.dumps({'kinds': sorted(SOURCE_KINDS), 'neverHeld': {x: never_held(x) is not None for x in paths}}))
+        sys.exit(0)
     if not a.spec or not a.topology:
         ap.error('--spec and --topology are required')
     with open(a.spec, encoding='utf-8') as f:

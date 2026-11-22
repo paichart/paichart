@@ -2,9 +2,12 @@
  * The §6 render of `liveEvidence`, split out (2026-11-05) so it is CLIENT-SAFE: `render-pipeline-context.ts` is reachable from a
  * client component (AgentBuilderPreview → build-agent-prompt-body), and importing it from `live-evidence.ts` pulled the read
  * record → extractor → descriptor-fetch (`dns`) into the browser bundle (`npm run build` failed on push 1a's clean-copy gate). PURE:
- * no imports. `live-evidence.ts` re-exports everything here, so callers and tests are unchanged. The `gitDeviceComparison` render
- * follows the same split (git-device-comparison.ts holds no server imports).
+ * its ONE import is source-field-bounds.ts, which imports nothing (STEP 3 P5 — the field shapes shared with the grammar; pinned).
+ * `live-evidence.ts` re-exports everything here, so callers and tests are unchanged. The `gitDeviceComparison` render follows the
+ * same split (git-device-comparison.ts holds no server imports).
  */
+import { SOURCE_LABEL_RE, RETURNED_KEY_RE } from './source-field-bounds';
+
 type Obj = Record<string, unknown>;
 
 /** F8 (SYNTHESIS §5): the §6 heading names the fact exactly as the network text (R1 v2) names it. Pinned. */
@@ -74,7 +77,7 @@ export const FILES_LIVE_EVIDENCE_SCOPE_CLAUSE = '(of the declared configuration 
 /** Review AR C-1: what `all-git-only` is a statement ABOUT. The fact is execution-facts'; these WORDS are prompt-construction's to
  *  change with the protocol text, and are pinned (LE-F5). */
 export const ALL_GIT_ONLY_FILES_NOTE = '`all-git-only` is a statement about the configuration FILES: no served copy of any declared file was read. It says nothing about the live service\'s targets and rules: this fact does not cover them.';
-const LABEL_SHOWN_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const LABEL_SHOWN_RE = SOURCE_LABEL_RE;
 const label = (v: unknown): string => (typeof v === 'string' && LABEL_SHOWN_RE.test(v) ? `\`${v}\`` : '(one file)');
 
 /** The FILES arm (`fact.lane === 'config'`, `fact.unit === 'files'` — observability from 1.12.0): the items are configuration FILES,
@@ -96,7 +99,7 @@ function renderFilesLiveEvidence(fact: Obj): string[] {
   }
   if (Array.isArray(fact.liveNotRead) && fact.liveNotRead.length) {
     out.push(`  - declared, not returned by the declared service: ${names(fact.liveNotRead, (x) => {
-      const keys = Array.isArray(x.returnedKeys) ? (x.returnedKeys as unknown[]).filter((k) => typeof k === 'string' && LABEL_SHOWN_RE.test(k)).slice(0, 20) : null;
+      const keys = Array.isArray(x.returnedKeys) ? (x.returnedKeys as unknown[]).filter((k) => typeof k === 'string' && RETURNED_KEY_RE.test(k)).slice(0, 20) : null;
       return `${label(x.label)} (${q(x.kind)}: ${q(x.state)}${keys ? `; the service returned: ${keys.length ? keys.map((k) => `\`${k}\``).join(', ') : 'no file'}` : ''})`;
     })}${more(fact, 'liveNotRead', fact.liveNotRead)}`);
   }
