@@ -6,7 +6,8 @@
  *   <file label>: git-file — service <registered name> ; <owner>/<repo>/<path> [@ <branch>]
  *   <cluster>: live-read — service <name | descriptor URL>
  *   <cluster>: supplied
- *   <file label>: service-held — service <registered name>          (STEP 3: a file kept from the read-only service, not from Git)
+ *   <file label>: service-held — service <name | descriptor URL>   (STEP 3: a file kept from the read-only service, not from Git;
+ *                                                                    the service is written as on a `live-read` line)
  *
  * WHAT IS SHARED, WHAT IS SEPARATE:
  *   - A `git-file` or `live-read` line is parsed by the SAME function as a network line (`parseSourceLineCore`), so the two grammars

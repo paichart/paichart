@@ -20,6 +20,19 @@
  *     contract block is absent or unparseable (the leg may declare its block in its own task text, which this program-wide contract
  *     cannot see): the Architect's entry stands, except a value that is neither a string URL nor an object with a string `endpoint`
  *     (no leg can use it) ⇒ removed.
+ *  2b. (Config sources STEP 3 slice P4, plan §6 — mcp-hub's five cases; owner decision E, sec-ops F-9.) Two per-protocol points of the
+ *     Config arm, both read from the lane tables and never from a protocol name:
+ *       - the SERVICE LINES of a block are its `live-read` lines AND its `service-held` lines (a kind only observability-config has):
+ *         a block whose one service is named only on `service-held` lines derives that service like any other (rule 1);
+ *       - a parsed block with NO service line on a protocol whose lane row says `descriptorWithoutServiceLine: 'keep'`
+ *         (observability-config: the leg still reads its read-only service for targets and rules) is NOT a removing case: the
+ *         Architect's value is KEPT when it is a string descriptor URL, and removed (`not-a-descriptor`) when it is anything else —
+ *         an object too, even one with an `endpoint` (the composed-descriptor case this module exists to stop), and a string that is
+ *         not ONE WHOLE URL token (`isWholeTokenDescriptorUrl`). The fact names the CONDITION, `no-service-line`, with the lane's
+ *         rule beside it (`rule: 'keep'`); whether a value was kept is said only by the `kept` list (a removed value and a token the
+ *         Architect left out carry the same condition). A `remove` row (Kubernetes, Terraform) keeps rule 2 exactly (`no-read-line`).
+ *     Rule 4 (block absent / unparseable) is NOT narrowed: a usable inline object still stands there.
+ *     INERT for observability-config while it is on CONFIG_SOURCE_AWAITING_TEXT (the token is rule 4 until its text ships).
  *  Keys that are not a leg protocol token are REPORTED (`unknownKeys`) and left untouched (owner decision owed before removing).
  *
  * PURE and TOTAL: never throws (a throw inside is caught and the input is returned unchanged, `failed: true`). When nothing changes the
@@ -27,9 +40,12 @@
  * did to the contract and why, by named reason.
  */
 
-import { CONFIG_SOURCE_AWAITING_TEXT, CONFIG_SOURCE_LANES, DEVICE_SOURCE_LANES, configSourceProtocolsFor } from './held-bytes/variant';
+import {
+  CONFIG_SOURCE_AWAITING_TEXT, CONFIG_SOURCE_LANES, DEVICE_SOURCE_LANES, assertNeverConfigDescriptorRule, configSourceProtocolsFor, descriptorWithoutServiceLineOf,
+  type ConfigDescriptorWithoutServiceLine,
+} from './held-bytes/variant';
 import { contractDeviceSourcesValue, isDescriptorUrlService, parseDeviceSourcesContractValue } from './device-sources';
-import { contractConfigSourcesValue, parseConfigSourcesContractValue } from './config-sources';
+import { assertNeverConfigKind, contractConfigSourcesValue, parseConfigSourcesContractValue, type ConfigSourceLine } from './config-sources';
 
 export const SERVICE_DESCRIPTORS_FACT_VERSION = 1;
 
@@ -57,12 +73,14 @@ export function knownDescriptorTokens(awaiting: readonly string[] = CONFIG_SOURC
 
 export type NotDerivedReason =
   | 'no-read-line'          // the block parses and names no device-read / live-read service (Git-only, supplied, command-package)
+  | 'no-service-line'       // the same CONDITION on a protocol whose lane row says `keep` (stamped with `rule: 'keep'`): the Architect's
+                            // value is not removed FOR THIS REASON — `kept` says whether it stood, `removed` whether it was not a URL
   | 'multiple-services'     // two or more distinct read services (owner A4)
   | 'registered-service'    // the one read service is named by registration, not a descriptor URL
   | 'block-absent'          // a lane token with no block in the contract (rule 4 applies)
   | 'block-unparseable';    // a lane token whose contract block does not parse (rule 4 applies)
 
-export type RemovedReason = Exclude<NotDerivedReason, 'block-absent' | 'block-unparseable'> | 'not-a-descriptor' | 'field-not-object';
+export type RemovedReason = Exclude<NotDerivedReason, 'block-absent' | 'block-unparseable' | 'no-service-line'> | 'not-a-descriptor' | 'field-not-object';
 
 export interface ServiceDescriptorsFact {
   version: number;
@@ -70,7 +88,8 @@ export interface ServiceDescriptorsFact {
   fieldShape: 'absent' | 'object' | 'not-object';
   /** Tokens whose STORED value is the service their declared read line names (kept-equal, added or replaced). */
   derived: string[];
-  /** Tokens whose Architect value is stored byte-unchanged (equal to the derived value, or rule 4 with a usable value). */
+  /** Tokens whose Architect value is stored byte-unchanged (equal to the derived value, rule 4 with a usable value, or rule 2b with a
+   *  descriptor URL). */
   kept: string[];
   /** Tokens the Architect left out and the platform wrote. */
   added: string[];
@@ -78,8 +97,9 @@ export interface ServiceDescriptorsFact {
   replaced: Array<{ token: string; reason: 'differs' | 'composed' }>;
   /** Architect entries the platform removed, with why. */
   removed: Array<{ token: string; reason: RemovedReason }>;
-  /** Lane tokens with a block (or an Architect entry) from which nothing was derived, with why. */
-  notDerived: Array<{ token: string; reason: NotDerivedReason }>;
+  /** Lane tokens with a block (or an Architect entry) from which nothing was derived, with why. `rule` is present only beside
+   *  `no-service-line`: the lane row's rule for that condition (today always `keep`). */
+  notDerived: Array<{ token: string; reason: NotDerivedReason; rule?: ConfigDescriptorWithoutServiceLine }>;
   /** Keys that are not a leg protocol token — left untouched (sanitised, capped; the count is untruncated). */
   unknownKeys: string[];
   unknownKeyCount: number;
@@ -98,13 +118,48 @@ export function isUsableDescriptorValue(v: unknown): boolean {
   return isObj(v) && typeof v.endpoint === 'string' && v.endpoint.trim() !== '';
 }
 
-type Derivation = { kind: 'value'; service: string } | { kind: 'none'; reason: NotDerivedReason };
+export const KEPT_DESCRIPTOR_URL_MAX_CHARS = 2048;
+/** ONE WHOLE URL TOKEN (sec-ops, P4 review LOW 1 and its re-check): a string of at most 2,048 characters, every one of them
+ *  PRINTABLE ASCII (0x21–0x7E) — so no whitespace, no control character, and no non-ASCII character at all: a descriptor URL needs
+ *  none (an international host is written in punycode), and one rule removes bidirectional and zero-width characters, the soft
+ *  hyphen, the Arabic letter mark, the Mongolian vowel separator, variation selectors and Unicode tag characters together — that
+ *  parses as an http or https URL with a host and no userinfo. Stricter than
+ *  `isDescriptorUrlService` (a scheme test, live for every protocol and NOT changed here): that test passes `https://a b`, a URL
+ *  followed by prose, and `https://user:pass@host`. Used by the keep arm only; never throws. */
+export function isWholeTokenDescriptorUrl(v: unknown): boolean {
+  if (typeof v !== 'string' || v.length === 0 || v.length > KEPT_DESCRIPTOR_URL_MAX_CHARS) return false;
+  if (!/^[\u0021-\u007e]+$/.test(v)) return false;
+  try {
+    const u = new URL(v);
+    return (u.protocol === 'https:' || u.protocol === 'http:') && u.hostname !== '' && u.username === '' && u.password === '';
+  } catch { return false; }
+}
+/** Rule 2b's keep arm: ONLY one whole descriptor URL token stands (an object is the composed case — sec-ops F-9; a string with
+ *  anything beside the URL is not a descriptor). Narrower than rule 4 on purpose. */
+export function isKeptWithoutServiceLine(v: unknown): boolean {
+  return typeof v === 'string' && isDescriptorUrlService(v) && isWholeTokenDescriptorUrl(v);
+}
+
+/** The service a Config-sources line names ON A SERVICE LINE, or null (a `git-file` line names the Git file service, which is never a
+ *  leg's descriptor; `supplied` names none). Exhaustive over the kinds: a new kind fails to compile here. */
+export function configLineService(e: ConfigSourceLine): string | null {
+  switch (e.kind) {
+    case 'live-read': return e.service;
+    case 'service-held': return e.service;
+    case 'git-file': return null;
+    case 'supplied': return null;
+    default: return assertNeverConfigKind(e);
+  }
+}
+
+type Derivation = { kind: 'value'; service: string } | { kind: 'none'; reason: NotDerivedReason; rule?: ConfigDescriptorWithoutServiceLine };
 
 /** What the token's contract block derives (rules 1-2). PURE. */
 export function deriveForToken(contract: unknown, token: string, awaiting: readonly string[] = CONFIG_SOURCE_AWAITING_TEXT): Derivation | null {
   const lane = sourceLaneTokens(awaiting).get(token);
   if (!lane) return null;
   let services: string[];
+  let noServiceLine: { reason: NotDerivedReason; rule?: ConfigDescriptorWithoutServiceLine } = { reason: 'no-read-line' };
   if (lane.field === 'deviceSources') {
     const p = parseDeviceSourcesContractValue(contractDeviceSourcesValue(contract, token));
     if (p.state === 'absent') return { kind: 'none', reason: 'block-absent' };
@@ -114,10 +169,16 @@ export function deriveForToken(contract: unknown, token: string, awaiting: reado
     const p = parseConfigSourcesContractValue(contractConfigSourcesValue(contract, token), lane.protocol);
     if (p.state === 'absent') return { kind: 'none', reason: 'block-absent' };
     if (p.state === 'unparseable') return { kind: 'none', reason: 'block-unparseable' };
-    services = p.entries.flatMap((e) => (e.kind === 'live-read' ? [e.service] : []));
+    services = p.entries.flatMap((e) => { const s = configLineService(e); return s === null ? [] : [s]; });
+    const rule = descriptorWithoutServiceLineOf(lane.protocol);
+    switch (rule) {
+      case 'keep': noServiceLine = { reason: 'no-service-line', rule }; break;
+      case 'remove': case null: break;
+      default: assertNeverConfigDescriptorRule(rule);
+    }
   }
   const distinct = Array.from(new Set(services));
-  if (distinct.length === 0) return { kind: 'none', reason: 'no-read-line' };
+  if (distinct.length === 0) return { kind: 'none', ...noServiceLine };
   if (distinct.length > 1) return { kind: 'none', reason: 'multiple-services' };
   if (!isDescriptorUrlService(distinct[0])) return { kind: 'none', reason: 'registered-service' };
   return { kind: 'value', service: distinct[0] };
@@ -171,6 +232,13 @@ function derive(contract: Record<string, unknown>, awaiting: readonly string[]):
       changed = true;
       continue;
     }
+    // Rule 2b's keep arm: a parsed block with no service line on a `keep` protocol — a descriptor URL stands, nothing else does.
+    if (d && d.reason === 'no-service-line') {
+      fact.notDerived.push({ token: k, reason: d.reason, ...(d.rule ? { rule: d.rule } : {}) });
+      if (isKeptWithoutServiceLine(v)) { fact.kept.push(k); out[k] = v; }
+      else { fact.removed.push({ token: k, reason: 'not-a-descriptor' }); changed = true; }
+      continue;
+    }
     // Rule 4: nothing to derive from (no sources lane, or the block is absent / unparseable).
     if (d) fact.notDerived.push({ token: k, reason: d.reason });
     if (isUsableDescriptorValue(v)) { fact.kept.push(k); out[k] = v; }
@@ -182,7 +250,7 @@ function derive(contract: Record<string, unknown>, awaiting: readonly string[]):
     const d = deriveForToken(contract, token, awaiting);
     if (!d) continue;
     if (d.kind === 'value') { fact.derived.push(token); fact.added.push(token); out[token] = d.service; changed = true; }
-    else if (d.reason !== 'block-absent') fact.notDerived.push({ token, reason: d.reason });
+    else if (d.reason !== 'block-absent') fact.notDerived.push({ token, reason: d.reason, ...(d.rule ? { rule: d.rule } : {}) });
   }
 
   if (fieldShape === 'not-object') {

@@ -1834,6 +1834,7 @@ scripts/fixtures/rollback-containment/r3b2-author.md
 scripts/fixtures/rollback-containment/r3b2-harvest.md
 scripts/fixtures/service-descriptors/corpus-contracts.json
 scripts/fixtures/validation-tool-calls/network-legs-2026-10-23.json
+scripts/gate-check-spec.ts
 scripts/gate-check.ts
 scripts/generate-jwt-keys.sh
 scripts/generate-requirements-form-check-data.ts
@@ -1953,6 +1954,7 @@ scripts/replay-r10-versions.ts
 scripts/replay-report-preload.js
 scripts/replay-reviewer-warnings.ts
 scripts/replay-rollback-containment.ts
+scripts/replay-service-descriptors.ts
 scripts/replay-snapshot-gc.sh
 scripts/report-form-correction-kill-criteria.sh
 scripts/report-mechanism-inventory.sh
@@ -2090,6 +2092,7 @@ scripts/test-finalize-response.ts
 scripts/test-form-correction-core.ts
 scripts/test-form-correction.ts
 scripts/test-form-field-patterns.ts
+scripts/test-gate-check-spec.ts
 scripts/test-gateway-id-first.ts
 scripts/test-gateway-meta.ts
 scripts/test-geographical-seed-data.ts

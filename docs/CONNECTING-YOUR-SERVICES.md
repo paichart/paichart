@@ -49,6 +49,17 @@ platform keeps (holds) its files only for the owner — unless you grant a POV:
 - **Name the service** your pipeline should read — by its registered name (used as-is: the run never registers, updates or
   deletes it) or by descriptor URL (registered for that run and removed at its end). A pipeline never chooses the source of
   your configuration for you.
+- **Which form to use.** Both are accepted on every line that names your read-only service.
+  - **Prefer the descriptor URL** in a spec you will share or run again: the spec carries everything the run needs, the run
+    removes its own registration at the end, and in a program the platform fills in that leg's service descriptor from the
+    line itself (it keeps a matching one, replaces a different one, and adds a missing one).
+  - **Use a registered name** for a standing service whose descriptor you cannot publish, or whose registration a run must
+    never touch. The platform then writes no descriptor for the leg, so the run depends on a service of exactly that name
+    existing in the hub it runs on; the spec does not work on another install until that service is registered there.
+  - **Write one service the same way on every line.** The same service given once as a URL and once as a name counts as two
+    services, and the platform then fills in no descriptor for that leg.
+  - This is about the lines that read your live system. On a `git-file` line the service is the hub's Git file source,
+    which the published examples name `github-service`.
 - **Network change pipelines (from network-provisioning 1.23.0):** declare each device's source in a `## Device sources`
   block, one line per device:
   - `<device>: git-file — service <name | descriptor URL> ; <owner>/<repo>/<path> [@ <branch|tag|commit>]`

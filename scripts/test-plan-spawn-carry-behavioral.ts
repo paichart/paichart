@@ -176,13 +176,19 @@ async function main() {
     // The REAL create path (router → task-create-handler → plan-spawn-carry) and the real Node C prep, not the helper alone (LL-CS-65).
     // The plan carries a composed object under a token whose lines name a descriptor URL (⇒ replaced), a composed object under a
     // Git-only token (⇒ removed) and a terraform URL (no sources lane ⇒ kept).
+    // Config sources STEP 3 slice P4: it ALSO carries an observability block whose one service line (`service-held`) names a DIFFERENT
+    // descriptor URL than the Architect wrote. At the join that is rule 1 (replaced); AS SHIPPED — which is what this real create path
+    // runs, it passes no awaiting list — the row awaits its text, so the Architect's URL must stand untouched and the fact must name
+    // nothing for it. This is the INERT claim through the real path, not the helper (the joined half: test:service-descriptors-derivation P2b).
     const prog3 = await mkStage(`Program: ${tag} three`, 8);
     const root3 = await mkTask({ title: `${tag} root three (protocol: pov-program)`, type: 'PIPELINE', stage: { connect: { id: rootStage } },
       agentTemplate: { connect: { id: harnessTmpl.id } }, metadata: { pipelineStageId: prog3 } });
     const SD_URL = 'https://raw.githubusercontent.com/paichart/paichart/main/descriptors/ceos-lab-readonly-descriptor.json';
     const SD_TF = 'https://raw.githubusercontent.com/paichart/paichart/main/descriptors/terraform-readonly-descriptor.json';
+    const SD_OBS = 'https://raw.githubusercontent.com/paichart/paichart/main/descriptors/observability-readonly-descriptor.json';
     const PLAN_SD = {
       asn: 65010,
+      configSources: { 'observability-config': ['obs-ingress.otlp-ingress.conf: service-held — service https://example.test/descriptors/other-obs.json'] },
       deviceSources: {
         'network-provisioning': [`ceos1: device-read — service ${SD_URL}`],
         'network-derivation': ['ceos1: git-file — service github-service ; paichart/paichart-configs/network/base/ceos1-startup.cfg'],
@@ -191,9 +197,10 @@ async function main() {
         'network-provisioning': { service: 'ceos-lab', descriptor: SD_URL },
         'network-derivation': { service: 'github-service', owner: 'paichart', repo: 'paichart-configs', files: ['network/base/ceos1-startup.cfg'] },
         'terraform-iac': SD_TF,
+        'observability-config': SD_OBS,
       },
     };
-    const SD_EXPECTED = { 'network-provisioning': SD_URL, 'terraform-iac': SD_TF };
+    const SD_EXPECTED = { 'network-provisioning': SD_URL, 'terraform-iac': SD_TF, 'observability-config': SD_OBS };
     const arch3 = await mkArchitect(prog3, `${tag} architect three`);
     await addExec(arch3, planText(PLAN_SD), 40_000);
     const archSha3 = canonicalContractSha(PLAN_SD);
@@ -207,9 +214,13 @@ async function main() {
     const sf = sdm.interfaceContractSource?.serviceDescriptors;
     check('SD2 supplied arm fact: replaced composed, removed no-read-line, kept terraform; planSha256 = the Architect\'s, storedAtWriteSha256 = delivered',
       JSON.stringify(sf?.replaced) === '[{"token":"network-provisioning","reason":"composed"}]'
-      && JSON.stringify(sf?.removed) === '[{"token":"network-derivation","reason":"no-read-line"}]' && JSON.stringify(sf?.kept) === '["terraform-iac"]'
+      && JSON.stringify(sf?.removed) === '[{"token":"network-derivation","reason":"no-read-line"}]' && JSON.stringify(sf?.kept) === '["terraform-iac","observability-config"]'
       && sdm.interfaceContractSource?.planSha256 === archSha3 && sdm.interfaceContractSource?.storedAtWriteSha256 === deliveredSha3
       && sdm.interfaceContractSource?.resolverVersion === 5, sdm.interfaceContractSource);
+    check('SD2b P4 INERT through the real create path: the observability block is not read as shipped — its token is not derived, not replaced, not named in notDerived',
+      !sf?.derived?.includes('observability-config') && !JSON.stringify(sf?.replaced).includes('observability-config')
+      && !JSON.stringify(sf?.notDerived).includes('observability-config') && sic?.serviceDescriptors?.['observability-config'] === SD_OBS
+      && JSON.stringify(sdm.interfaceContractSource?.configSourcesKeys?.notReadKeys) === '["observability-config"]', sdm.interfaceContractSource);
     check('SD3 supplied arm: suppliedMatched measures TRANSCRIPTION (an exact Architect copy reads true, though the platform changed it)',
       sdm.interfaceContractSource?.suppliedMatched === true && sdm.interfaceContractSource?.legBaseline?.legCount === 0, sdm.interfaceContractSource);
     check('SD4 the task.create RESULT carries neither the fact nor the derived value', !JSON.stringify(rs1).includes('serviceDescriptors'));

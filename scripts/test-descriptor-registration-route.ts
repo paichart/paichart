@@ -26,6 +26,14 @@ import type { LegDeviceSourcesResolution } from '../lib/agents/harness/device-so
 import { computeDeviceSourceReads } from '../lib/agents/harness/device-source-facts';
 import { computeConfigSourceReads, computeConfigLiveEvidence } from '../lib/agents/harness/config-source-facts';
 import { runPlatformDriftCalls, type DriftCaller } from '../lib/agents/harness/platform-drift-run';
+// Config sources STEP 3 slice P4 (plan §6 / mcp-hub F-L10-1): the six registration rows for an OBSERVABILITY block.
+import { computeFileConfigSourceReads } from '../lib/agents/harness/config-source-facts';
+import { buildFileSourceCompare } from '../lib/agents/harness/file-source-compare';
+import { configSourceForce } from '../lib/agents/harness/held-bytes/config-source-scope';
+import { captureScopesFor, type OwningLegResolution } from '../lib/agents/harness/held-bytes/variant';
+import { configSnapshotDecision, governingConfigSourcesAsOf } from '../lib/agents/harness/config-sources-read';
+import { serviceMatcher } from '../lib/agents/harness/device-source-facts';
+import { prepareHeldCaptureWithEvidence } from '../lib/services/held-bytes-capture';
 
 let passed = 0; let failed = 0;
 async function test(name: string, fn: () => void | Promise<void>) {
@@ -205,6 +213,124 @@ const CEOS_LINE = `${DEV}: device-read — service ${CEOS_URL}`;
     eq([(await drift(two)).map((c) => c.outcome), seen.length], [['live-read-service-unresolved'], 0], 'two names: ');
     const twoSame = [...clone(FX.toolCalls), byHand(K8S_EP, { serviceId: 'svc-2', serviceName: 'k8s-rig-readonly' })];
     eq((await drift(twoSame)).map((c) => c.outcome), ['called'], 'two registrations of ONE name: ');
+  });
+
+  // ══ Config sources STEP 3 slice P4 (plan §6; mcp-hub F-L10-1) — the six registration rows for an OBSERVABILITY block ══
+  // A `service-held` line names its service by a descriptor URL or by a registered name. Each row is one way a Harvester can have
+  // registered (or failed to register) the read-only service in its own execution; for each, through the REAL chain — the one
+  // resolver (`registrationsByDescriptorUrl` inside `serviceMatcher`), the real capture (`prepareHeldCaptureWithEvidence` with the
+  // declared-files scope), the real compare record and the real force — the suite states: does the URL line resolve, is the file
+  // held, what does `configSourceReads` say, is the leg forced. The same six with the line naming the service BY NAME are the control.
+  // The served files are the stored run-2 harvest's own records. Reached only at the join (the row awaits its text): every helper is
+  // asked with an EMPTY awaiting list.
+  console.log('── P4: the six registration rows, an observability service-held line (URL-declared, then name-declared) ──');
+  process.env.HELD_BYTES_CAPTURE_ENABLED = 'true';
+  const OBS = 'observability-config-protocol';
+  const OBS_URL = `${PUB}observability-readonly-descriptor.json`;
+  const OBS_EP = DECLARED_DESCRIPTOR_ENDPOINTS[OBS_URL];
+  const CUSTOMER_URL = 'https://example.com/descriptors/my-observability.json';
+  const RUN2 = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'quote-fidelity', 'run2-harvest.json'), 'utf8')) as { toolCalls: Rec[] };
+  const INGRESS = RUN2.toolCalls[1];
+  const dataOf = (rec: Rec): Rec => rec.result.content[0].data;
+  const OBS_NAME = String(dataOf(INGRESS).targetService); const OBS_ID = String(dataOf(INGRESS).metadata.targetServiceId);
+  /** The stored call, as made to a service registered under another name and id. */
+  const callTo = (name: string, id: string): Rec => { const r = clone(INGRESS); r.arguments.targetService = name; dataOf(r).targetService = name; dataOf(r).metadata.targetServiceId = id; return r; };
+  const LABEL = 'obs-ingress.otlp-ingress.conf';
+  const NONE: readonly string[] = [];
+  const declared = (service: string) => declaredLines([`${LABEL}: service-held — service ${service}`]);
+  const declaredLines = (lines: string[]) => {
+    const description = `Change it.\n\n## Config sources\n${lines.join('\n')}\n\n## Notes\nx\n`;
+    const d = configSnapshotDecision({ type: 'PIPELINE', protocol: OBS, description, interfaceContract: null, takenAt: 't' }, NONE);
+    assert(d.action === 'write', `the fixture block did not snapshot: ${JSON.stringify(d)}`);
+    return governingConfigSourcesAsOf({ description, contract: null, snapshot: d.snapshot, protocolStamped: true }, OBS, NONE) as LegConfigSourcesResolution;
+  };
+  const logger = { warn: () => undefined, info: () => undefined };
+  /** One row through the real chain. */
+  const run = (service: string, records: Rec[], lines?: string[]) => {
+    const sources = lines ? declaredLines(lines) : declared(service);
+    assert(sources.state === 'parsed', `the declaration does not govern as parsed: ${JSON.stringify(sources)}`);
+    const leg = { kind: 'leg', legId: 'leg1', heldCapable: true, ownStageId: 's1', configSourceProtocol: OBS } as OwningLegResolution;
+    const sc = captureScopesFor(leg, sources);
+    const { plan, evidence } = prepareHeldCaptureWithEvidence({ toolCallResults: records, task: { id: 'cmtaskP4', povId: 'cmpovP4' }, logger, gitFileSourceLeg: sc.gitFileSourceLeg,
+      ...(sc.configSources ? { configSources: sc.configSources, configSourceProtocol: sc.configSourceProtocol } : {}) });
+    const files = ((plan?.files ?? []) as unknown as Array<{ target: string; path: string }>).map((f) => ({ target: f.target, path: f.path }));
+    const refusals = ((plan?.refusals ?? []) as unknown as Array<{ refusal: string; detail?: Rec }>).map((r) => `${r.refusal}${r.detail?.case ? `:${r.detail.case}` : ''}`).sort();
+    const record = buildFileSourceCompare({ sources: sources as never, harvesterExecutionId: 'exH', plan, evidence, toolCalls: records, redactionOff: false });
+    const reads = computeFileConfigSourceReads(sources, record) as Rec;
+    const item = (reads.items as Rec[] | undefined)?.find((i) => i.label === LABEL);
+    return {
+      resolves: (c: { service: string; serviceId: string }) => serviceMatcher(records)(service, c),
+      held: files.some((f) => f.target === 'obs-ingress' && f.path === '/etc/nginx/conf.d/otlp-ingress.conf'), heldCount: files.length, refusals,
+      read: item ? `${item.read.state} (${item.read.outcome})` : `no item (${String(reads.reason)})`, notRead: reads.notRead,
+      force: configSourceForce(sources, files),
+    };
+  };
+  const obsReg = (args: Rec, data: Rec = {}) => reg(args, { serviceId: OBS_ID, serviceName: OBS_NAME, ...data });
+  const handAt = (endpoint: string, data: Rec = {}) => obsReg({ name: data.serviceName ?? OBS_NAME, endpoint, description: 'd' }, { endpoint, ...data });
+  const refused = (): Rec => { const r = handAt(OBS_EP); r.result = { content: [{ type: 'text', text: `❌ A service named '${OBS_NAME}' is already registered` }], isError: true }; return r; };
+  const adopted = (): Rec => obsReg({ descriptorUrl: OBS_URL }, { adopted: true, status: 'ACTIVE' });
+  const FORCED = { reason: 'service-held-not-held', serviceFilesNotHeld: [LABEL], serviceFilesNotHeldTotal: 1 };
+  const OWN = { service: OBS_NAME, serviceId: OBS_ID };
+  type Row = { name: string; service: string; records: Rec[]; who: { service: string; serviceId: string }; resolves: boolean; held: boolean; read: string; force: unknown };
+  const HELD_READ = 'read (held)'; const OTHER_NAME_READ = 'no-capture-plan (no-capture-plan)';
+  const ROWS: Row[] = [
+    { name: '1 hand registration at the table\'s endpoint, success', service: OBS_URL, records: [handAt(OBS_EP), INGRESS], who: OWN, resolves: true, held: true, read: HELD_READ, force: null },
+    // the URL line DOES resolve to the row the Harvester registered — but the platform's held-file table for this service is keyed
+    // on the name `observability-readonly`, so a call to a row of another name extracts no file: nothing held, the leg forced.
+    // MEASURED, not assumed: with no other capturable call in the execution there is no capture plan at all, so the read state is
+    // `no-capture-plan` — a word that does not name THIS cause (recorded in STEP3-P4-BUILD.md as a finding for the text and the docs).
+    { name: '2 hand registration at the table\'s endpoint, ANOTHER NAME', service: OBS_URL, records: [handAt(OBS_EP, { serviceName: 'obs-mine', serviceId: 'svc-mine' }), callTo('obs-mine', 'svc-mine')],
+      who: { service: 'obs-mine', serviceId: 'svc-mine' }, resolves: true, held: false, read: OTHER_NAME_READ, force: FORCED },
+    { name: '3 hand registration REFUSED (the name is already registered)', service: OBS_URL, records: [refused(), INGRESS], who: OWN, resolves: false, held: false, read: 'not-read (not-read)', force: FORCED },
+    { name: '4 registration by descriptorUrl, ADOPTED', service: OBS_URL, records: [adopted(), INGRESS], who: OWN, resolves: true, held: true, read: HELD_READ, force: null },
+    { name: '5 hand registration at an endpoint that is NOT the table\'s', service: OBS_URL, records: [handAt('https://obs.example.com/mcp'), INGRESS], who: OWN, resolves: false, held: false, read: 'not-read (not-read)', force: FORCED },
+    { name: '6 any hand registration, the line names a CUSTOMER URL', service: CUSTOMER_URL, records: [handAt(OBS_EP), INGRESS], who: OWN, resolves: false, held: false, read: 'not-read (not-read)', force: FORCED },
+  ];
+  for (const r of ROWS) {
+    await test(`DR-P4-${r.name}: URL line resolves ${r.resolves ? 'YES' : 'NO'} · held ${r.held ? 'YES' : 'NO'} · read ${r.read} · ${r.force ? 'FORCED service-held-not-held' : 'not forced'}`, () => {
+      const got = run(r.service, r.records);
+      eq([got.resolves(r.who), got.held, got.read, got.force], [r.resolves, r.held, r.read, r.force]);
+      if (!r.held) eq(got.heldCount, 0, 'nothing else may be held on the leg: ');
+    });
+  }
+  await test('DR-P4-N the same six registrations with the line naming the service BY NAME: rows 1, 3, 4, 5, 6 resolve and hold with no registration needed; row 2 (a row of another name) does not', () => {
+    for (const r of ROWS) {
+      const got = run(OBS_NAME, r.records);
+      const other = r.name.startsWith('2 ');
+      eq([got.resolves(r.who), got.held, got.read, got.force], other ? [false, false, OTHER_NAME_READ, FORCED] : [true, true, HELD_READ, null], `${r.name}: `);
+    }
+  });
+  await test('DR-P4-W an unresolved URL line never holds the file: the served file is refused BY NAME (service-file-not-declared: wrong-service), never dropped', () => {
+    eq(run(OBS_URL, [refused(), INGRESS]).refusals.filter((x) => x.startsWith('service-file-not-declared')), ['service-file-not-declared:no-label', 'service-file-not-declared:wrong-service']);
+    eq(run(OBS_URL, [handAt(OBS_EP), INGRESS]).refusals.filter((x) => x.startsWith('service-file-not-declared')), ['service-file-not-declared:no-label'], 'resolved: only the undeclared sibling is refused: ');
+  });
+
+  // Coordinator ruling 5 (P4): the derivation's KEEP arm (a Git-only observability block keeps the Architect's descriptor URL) must
+  // not be a route around the checks every other descriptor meets. The kept value lives ONLY in `serviceDescriptors[token]`, which
+  // no platform code reads to decide anything: resolution, capture and the force read the DECLARED LINES and the execution's own
+  // registration records. So a kept URL — the published one or a customer's — holds no file and resolves no line.
+  await test('DR-P4-K a Git-only block with a KEPT descriptor URL: the kept URL resolves nothing and holds nothing — every served file is refused by name, whatever was registered', () => {
+    const GIT_ONLY = ['obs-otelcol: git-file — service github-service ; paichart/paichart-configs/observability/otelcol/config.yaml'];
+    for (const [what, records] of [['hand at the table endpoint', [handAt(OBS_EP), INGRESS, RUN2.toolCalls[2]]], ['by descriptorUrl', [adopted(), INGRESS, RUN2.toolCalls[2]]],
+      ['a customer URL registered by descriptorUrl', [obsReg({ descriptorUrl: CUSTOMER_URL }), INGRESS, RUN2.toolCalls[2]]]] as Array<[string, Rec[]]>) {
+      const got = run('', records, GIT_ONLY);
+      eq(got.heldCount, 0, `${what}: a served file was held on a Git-only declaration: `);
+      assert(got.refusals.length > 0 && got.refusals.every((x) => x.startsWith('service-file-not-declared')), `${what}: ${JSON.stringify(got.refusals)}`);
+      // the declared Git file was not read in this execution, so the leg is forced by THAT name — the kept URL changes nothing
+      eq(got.force, { reason: 'git-file-not-held', gitFilesNotHeld: ['obs-otelcol'], gitFilesNotHeldTotal: 1 }, `${what}: `);
+      for (const url of [OBS_URL, CUSTOMER_URL]) assert(!got.resolves({ service: url, serviceId: url }), 'a URL is never a service identity');
+    }
+  });
+  await test('DR-P4-K2 no platform code reads `serviceDescriptors` to decide anything: its only readers are the derivation, its one door, and the Architect\'s text', () => {
+    const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? (e.name === 'node_modules' || e.name.startsWith('.') ? [] : walk(path.join(d, e.name)))
+      : /\.(ts|tsx|js)$/.test(e.name) ? [path.join(d, e.name)] : []);
+    const root = path.join(__dirname, '..');
+    const readers = ['lib', 'app'].flatMap((d) => walk(path.join(root, d))).filter((f) => fs.readFileSync(f, 'utf8').includes('serviceDescriptors')).map((f) => path.relative(root, f)).sort();
+    eq(readers, ['lib/agents/harness/held-bytes/variant.ts', 'lib/agents/harness/plan-spawn-carry.ts', 'lib/agents/harness/service-descriptors-derivation.ts',
+      'lib/services/agentTemplateBuilder/pAIchartUniversalTemplate.ts'], 'a NEW reader of serviceDescriptors: if it resolves, registers or holds anything from the value, the keep arm needs the same check there: ');
+    // variant.ts only DESCRIBES the column in comments
+    const v = fs.readFileSync(path.join(root, 'lib/agents/harness/held-bytes/variant.ts'), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    assert(!v.includes('serviceDescriptors'), 'variant.ts reads serviceDescriptors in code');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

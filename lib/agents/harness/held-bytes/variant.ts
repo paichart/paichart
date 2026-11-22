@@ -162,18 +162,32 @@ export type ConfigSourceLane = 'change';
  *  The per-leg answer is given by ONE function, `governingConfigSources` (config-sources-read.ts). The Kubernetes value lane adds a
  *  third value at its own P2 — this column is the one written rule both plans share. */
 export type ConfigNoBlock = 'forced' | 'runs-undeclared';
-/** The ONE table: protocol (canonical long form) → its lane, its key under `interfaceContract.configSources`, and its no-block rule. */
-export const CONFIG_SOURCE_LANES: Readonly<Record<string, { lane: ConfigSourceLane; contractKey: string; noBlock: ConfigNoBlock }>> = Object.freeze({
-  [canonicalProtocolName('kubernetes-gitops')]: { lane: 'change', contractKey: 'kubernetes-gitops', noBlock: 'forced' },
+/** Config sources STEP 3 slice P4 (plan §6 row 3, owner decision E, sec-ops F-9): what the platform does with the Program Architect's
+ *  `serviceDescriptors[token]` when the protocol's contract block PARSES and names NO service on a service line (only `git-file` /
+ *  `supplied` lines).
+ *    'remove'  no declared line names a service, so no descriptor is stored (Kubernetes, Terraform — the rule since 2026-11-17: a
+ *              Git-only leg reads no service).
+ *    'keep'    the leg still reads its read-only service for things the block does not declare (observability: targets and rules),
+ *              so the Architect's value is KEPT — a string descriptor URL only; anything else is removed.
+ *  Read through `descriptorWithoutServiceLineOf`, never by a protocol name. */
+export type ConfigDescriptorWithoutServiceLine = 'keep' | 'remove';
+/** The ONE table: protocol (canonical long form) → its lane, its key under `interfaceContract.configSources`, its no-block rule, and
+ *  what happens to the Architect's descriptor when the block names no service. */
+export const CONFIG_SOURCE_LANES: Readonly<Record<string, { lane: ConfigSourceLane; contractKey: string; noBlock: ConfigNoBlock; descriptorWithoutServiceLine: ConfigDescriptorWithoutServiceLine }>> = Object.freeze({
+  [canonicalProtocolName('kubernetes-gitops')]: { lane: 'change', contractKey: 'kubernetes-gitops', noBlock: 'forced', descriptorWithoutServiceLine: 'remove' },
   // Config sources STEP 4 (2026-11-17, STEPS-2-4-PLAN §5): Terraform — `.tf` files kept from Git, state read as EVIDENCE through the
   // read-only service (`live-read`), or supplied.
-  [canonicalProtocolName('terraform-iac')]: { lane: 'change', contractKey: 'terraform-iac', noBlock: 'forced' },
+  [canonicalProtocolName('terraform-iac')]: { lane: 'change', contractKey: 'terraform-iac', noBlock: 'forced', descriptorWithoutServiceLine: 'remove' },
   // Config sources STEP 3 (2026-11-21, slice P1): observability — the collector and nginx files kept from Git (`git-file`) or from
   // the read-only service (`service-held`), the served file read as evidence (`live-read`). `runs-undeclared`: a leg with no block
   // behaves as it does today. ⚠️ THE ROW AND THAT RULE ARE ONE EDIT: this row with `noBlock: 'forced'` would turn 74 of the 79
   // stored observability legs into `snapshot-absent` and forced once the text ships (measured by the P0 red control).
   // INERT until observability-config 1.12.0 removes it from CONFIG_SOURCE_AWAITING_TEXT.
-  [canonicalProtocolName('observability-config')]: { lane: 'change', contractKey: 'observability-config', noBlock: 'runs-undeclared' },
+  // `descriptorWithoutServiceLine: 'keep'` (slice P4): a Git-only observability block still leaves the leg reading its read-only
+  // service for targets and rules, so the Architect's descriptor URL stands. ⚠️ THIS VALUE AND THE JOIN ARE ONE RULE: with `remove`
+  // here, taking the row off the awaiting list deletes the descriptor of every Git-only observability leg (register
+  // CONFIG-SOURCES-OBS-JOIN-PRECONDITIONS item 3).
+  [canonicalProtocolName('observability-config')]: { lane: 'change', contractKey: 'observability-config', noBlock: 'runs-undeclared', descriptorWithoutServiceLine: 'keep' },
 });
 /** Rows whose protocol TEXT does not carry the `## Config sources` section yet (the HELD_JOIN_AWAITING_TEXT pattern): the row exists
  *  so the code can ship first, and every consumer treats the protocol as NOT a Config-sources protocol until its text commit removes it
@@ -197,6 +211,23 @@ export function assertNeverConfigLane(lane: never): never {
 /** The same guard for the no-block column. */
 export function assertNeverConfigNoBlock(v: never): never {
   throw new Error(`config-source no-block rule not handled: ${String(v)}`);
+}
+
+/** The same guard for the descriptor-without-a-service-line column. */
+export function assertNeverConfigDescriptorRule(v: never): never {
+  throw new Error(`config-source descriptor rule not handled: ${String(v)}`);
+}
+/** Slice P4 — THE ONE reader of the `descriptorWithoutServiceLine` column (short token or long name). Null for a protocol with no row:
+ *  the caller has no Config lane to derive from. Exhaustive over the column, so a third value fails to compile here. */
+export function descriptorWithoutServiceLineOf(protocol: string | null | undefined): ConfigDescriptorWithoutServiceLine | null {
+  if (!protocol) return null;
+  const row = CONFIG_SOURCE_LANES[canonicalProtocolName(protocol)];
+  if (!row) return null;
+  switch (row.descriptorWithoutServiceLine) {
+    case 'keep': return 'keep';
+    case 'remove': return 'remove';
+    default: return assertNeverConfigDescriptorRule(row.descriptorWithoutServiceLine);
+  }
 }
 
 /** Does this protocol's no-block rule say `runs-undeclared` (short token or long name; false for null, empty, or a protocol with no

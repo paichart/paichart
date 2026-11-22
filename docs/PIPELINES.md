@@ -299,7 +299,8 @@ Read-only harvest, change package only — nothing is applied by this run.
 | `<device>: command-package` (alone — no other line for that device) | nothing (no kept file) | **the original method**: candidate configuration as commands, validation steps and a per-device rollback, with no platform-applied edits or rendered diff |
 
 - **Service** — a name uses a service already registered in your hub as-is (never changed or deleted by the run); a descriptor URL is
-  registered for the run and removed at the end.
+  registered for the run and removed at the end. For your own read-only service, prefer the descriptor URL — see
+  [Connecting your own services](#connecting-your-own-services) for which to choose and why.
 - **When to use `command-package`:** a device with no file source and no readable configuration getter, or a change you want written as
   commands. You lose the kept-file guarantees (the platform does not apply the edits or show you the diff), so prefer `git-file` or
   `device-read` where you can.
@@ -516,6 +517,17 @@ pipeline that service:
 | **Name a pre-registered service** (in Device sources, or the task) | your team registered it once in the hub | uses it **as-is**; never registers, updates or deletes it |
 | **Give a descriptor URL** (or the descriptor inline) | a one-off, or no shared registration | registers it for the run from the descriptor alone, uses it read-only, **deletes its own registration** at the end (on every outcome) |
 
+- **Which to choose.** Both forms are accepted on every line that names your read-only service.
+  - **Prefer the descriptor URL** in a spec you will share or run again. The spec then carries everything the run needs, the run
+    removes its own registration at the end, and in a program the platform fills in that leg's service descriptor from the line
+    itself (it keeps a matching one, replaces a different one, and adds a missing one).
+  - **Use a registered name** for a standing service whose descriptor you cannot publish, or whose registration a run must never
+    touch. The platform then writes no descriptor for the leg, so the run depends on a service of exactly that name existing in
+    the hub it runs on; a spec written this way does not work on another install until that service is registered there.
+  - **Write one service the same way on every line.** The same service given once as a URL and once as a name counts as two
+    services, and the platform then fills in no descriptor for that leg.
+  - This is about the lines that read your live system. On a `git-file` line the service is the hub's Git file source,
+    which the published examples name `github-service`.
 - **An agent can only change a registration its own run created** — never one a person registered, never another run's, and only rows
   owned by the user who launched the run. A pre-registered service is safe from teardown.
 - **Descriptors must pass the hub's register check** (e.g. each tool description ≤ 500 characters) — check one before use with

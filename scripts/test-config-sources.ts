@@ -453,7 +453,7 @@ test('TF1 the three Terraform kinds parse to their entries; a network kind is un
   eq(parseConfigSourceLine(TF_LIVE, TF), { ok: true, line: { label: 'prod-state', kind: 'live-read', service: 'terraform-rig-readonly' } });
   eq(parseConfigSourceLine(TF_SUPPLIED, TF), { ok: true, line: { label: 'prod-state', kind: 'supplied' } });
   eq(parseConfigSourceLine('prod-state: device-read — service terraform-rig-readonly', TF), { ok: false, problem: 'unknown-kind' });
-  eq(CONFIG_SOURCE_LANES[TF], { lane: 'change', contractKey: 'terraform-iac', noBlock: 'forced' }, 'the lane row: ');
+  eq(CONFIG_SOURCE_LANES[TF], { lane: 'change', contractKey: 'terraform-iac', noBlock: 'forced', descriptorWithoutServiceLine: 'remove' }, 'the lane row: ');
   assert(!(TF in DEVICE_SOURCE_LANES), 'terraform-iac must never be a Device-sources protocol (owner decision (b))');
 });
 test('TF2 path-never-held at resolution: every never-held class refused on a git-file line, for Terraform AND Kubernetes (D-T2)', () => {

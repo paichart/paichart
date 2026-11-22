@@ -3,6 +3,7 @@
  * gate-check.ts — print what to check before releasing a program GATE, from stored facts. READ-ONLY.
  *
  *   npm run report:gate -- <gate task id>
+ *   npm run report:gate -- <gate task id> --spec <requirements.md>     # PLAN gate: also compare the spec's sources blocks with the plan's contract
  *
  * The operator runbook (`docs/OPERATING.md` Step 3) lists what to check at each gate; this prints those
  * checks with the facts behind them, so anyone can release a gate with the same evidence the coordinator uses. It decides nothing:
@@ -13,13 +14,21 @@
  *   VALUE gate  — depends on a value leg (network-derivation): its outcome, the derived values, containment, the reviewer;
  *   CHANGE gate — depends on a change leg: outcome, the kept-file receipt, what the reviewer saw, consumed vs upstream, the reviewer.
  *
+ * `--spec <requirements.md>` (Config sources STEP 3 slice P4, plan W11): at a PLAN gate, also print — per protocol token — whether the
+ * spec declares a sources block and whether the plan's stored contract carries that token's key, with the differing tokens marked ✗
+ * (scripts/gate-check-spec.ts). A block the planner dropped stops a Kubernetes, Terraform or network change leg by name, but an
+ * observability leg (from 1.12.0) would RUN without its declared sources; this line is where a person sees it before releasing. Like
+ * every other line it stops nothing and changes no exit code. Without the option the output is unchanged.
+ *
  * Every query runs inside ONE transaction set READ ONLY. Point DATABASE_URL at production from the server (`cd current && source
  * .env.production`) or at a read-only connection.
  */
 import 'dotenv/config';
+import * as fs from 'fs';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { DEVICE_SOURCE_LANES, deviceSourceContractKeyOf } from '../lib/agents/harness/held-bytes/variant';
 import { configSourcesReadKeys } from '../lib/agents/harness/plan-spawn-carry';
+import { compareSpecToContract, printable } from './gate-check-spec';
 
 type Tx = Prisma.TransactionClient;
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -27,7 +36,7 @@ const parse = (s: string | null | undefined): Record<string, unknown> | null => 
 interface T { id: string; title: string; type: string; status: string; agentRole: string | null; metadata: unknown; inputContext: unknown; stage_id: string | null }
 const meta = (t: T) => (isObj(t.metadata) ? t.metadata : {});
 let holds = 0, fails = 0;
-const line = (ok: boolean | null, s: string) => { if (ok === true) holds++; if (ok === false) fails++; console.log(`  ${ok === true ? '✓' : ok === false ? '✗' : '·'} ${s}`); };
+const line = (ok: boolean | null, s: string) => { if (ok === true) holds++; if (ok === false) fails++; console.log(`  ${ok === true ? '✓' : ok === false ? '✗' : '·'} ${printable(s)}`); };
 
 async function task(tx: Tx, id: string): Promise<T | undefined> {
   return (await tx.$queryRaw<T[]>`SELECT id, title, type::text AS type, status::text AS status, "agentRole", metadata, "inputContext", stage_id FROM tasks WHERE id = ${id}`)[0];
@@ -43,7 +52,7 @@ async function latestArtifact(tx: Tx, taskId: string, name: string): Promise<str
 }
 const tokenOf = (title: string) => (title.match(/\(protocol:\s*([a-z0-9-]+)\)/i)?.[1] ?? '?');
 
-async function planGate(tx: Tx, gate: T, architect: T) {
+async function planGate(tx: Tx, gate: T, architect: T, spec: { path: string; text: string } | null) {
   console.log(`PLAN gate — the Architect's plan (${architect.id})`);
   const siblings = await stageTasks(tx, gate.stage_id);
   const legs = siblings.filter(t => t.type === 'PIPELINE');
@@ -90,6 +99,14 @@ async function planGate(tx: Tx, gate: T, architect: T) {
         + `${unk ? ` · NOT a protocol name, left as written: ${list(sdf.unknownKeys)}` : ''}${sdf.failed === true ? ' · derivation FAILED — the plan\'s values were stored as written' : ''}`);
     }
     if (kind === 'CHANGE') line(repos.length > 0 || null, `      config files named in its contract: ${repos.length ? repos.join(' · ') : 'none (a service-held or device leg — check its descriptor)'}`);
+  }
+  if (spec) {
+    // Plan W11 (warn, not block): the spec's sources blocks against the contract each leg holds. The legs' own task text is read too
+    // (the platform reads a block there when the contract has none) — one more column, selected only on this option.
+    const desc = legs.length ? await tx.$queryRaw<Array<{ id: string; description: string | null }>>`SELECT id, description FROM tasks WHERE id = ANY(${legs.map(l => l.id)})` : [];
+    const cmp = compareSpecToContract({ spec: spec.text, legs: legs.map(l => ({ token: tokenOf(l.title), contract: contractOf(l), description: desc.find(d => d.id === l.id)?.description ?? null })) });
+    console.log(printable(`  · the spec's sources blocks against the plan's contract (--spec ${spec.path}):`));
+    for (const ln of cmp.lines) line(ln.mark, `    ${ln.text}`);
   }
   const deps = await tx.$queryRaw<Array<{ taskId: string; dependsOnId: string }>>`SELECT "taskId", "dependsOnId" FROM task_dependencies WHERE "taskId" = ANY(${siblings.map(s => s.id)})`;
   const legIds = new Set(legs.map(l => l.id)), gateIds = new Set(siblings.filter(s => s.type === 'APPROVAL').map(s => s.id));
@@ -152,8 +169,17 @@ async function legChecks(tx: Tx, leg: T, kind: 'VALUE' | 'CHANGE') {
 }
 
 async function main() {
-  const gateId = process.argv.slice(2).find(a => !a.startsWith('-'));
-  if (!gateId) { console.error('usage: gate-check.ts <gate task id>'); process.exit(2); }
+  const argv = process.argv.slice(2);
+  const si = argv.indexOf('--spec');
+  const specPath = si >= 0 ? argv[si + 1] : undefined;
+  const gateId = argv.find((a, i) => !a.startsWith('-') && !(si >= 0 && i === si + 1));
+  if (!gateId || (si >= 0 && (!specPath || specPath.startsWith('-')))) { console.error('usage: gate-check.ts <gate task id> [--spec <requirements.md>]'); process.exit(2); }
+  // Read BEFORE any query: an unreadable file is a usage error, never a report with the comparison silently missing.
+  let spec: { path: string; text: string } | null = null;
+  if (specPath) {
+    try { spec = { path: specPath, text: fs.readFileSync(specPath, 'utf8') }; } catch (e) { console.error(`--spec ${specPath}: cannot read the file (${(e as Error).message})`); process.exit(2); }
+  }
+  let specUsed = false;
   const prisma = new PrismaClient();
   try {
     await prisma.$transaction(async (tx) => {
@@ -166,9 +192,10 @@ async function main() {
       if (!dep.length) { console.error('this gate depends on nothing — cannot tell what it gates'); process.exit(2); }
       for (const id of dep) {
         const up = await task(tx, id); if (!up) continue;
-        if (up.type !== 'PIPELINE') await planGate(tx, gate, up);
+        if (up.type !== 'PIPELINE') { await planGate(tx, gate, up, spec); specUsed = true; }
         else await legChecks(tx, up, tokenOf(up.title).includes('derivation') ? 'VALUE' : 'CHANGE');
       }
+      if (spec && !specUsed) console.log('  · --spec was given, but this is not a PLAN gate: the spec comparison is made at the plan gate only (nothing compared)');
       console.log(`\n${holds} check(s) hold · ${fails} do not${fails ? ' — read each ✗ before releasing' : ''}. Releasing is your decision (task.complete with a note of what you checked).`);
     }, { timeout: 120_000 });
   } finally { await prisma.$disconnect(); }

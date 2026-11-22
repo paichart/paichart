@@ -60,6 +60,20 @@ Nothing is built yet, so this is the cheapest place to catch a mistake. Read the
    removed; the same is under `interfaceContractSource.serviceDescriptors` in the leg's stored facts. Something *removed* means
    the planner wrote a descriptor it should not have: harmless, because the platform corrected it, but worth knowing. A key that
    is not a protocol name (a leg's own name, for example) is listed and left as the plan wrote it: check it.
+8. **That the plan carries each sources block of your spec, line for line.** A `## Device sources` or `## Config sources` block
+   reaches a leg only when the planner copies it into the plan. Give the report your requirements file and it compares the two:
+   `npm run report:gate -- <gate task id> --spec <path to requirements.md>` prints one line per protocol name, *spec declares
+   lines: yes / no — contract carries the key: yes / no*. A ✓ means the plan carries the same set of lines your spec declares
+   (*lines equal: yes*). A ✗ means one of: the block did not reach the plan under its protocol's name; the plan carries a key but its lines differ; the plan
+   carries a block your spec does not declare; the block was filed under the wrong field (`deviceSources` is for network legs,
+   `configSources` for Kubernetes and Terraform legs); or your spec gives two legs of one protocol different blocks, which one
+   plan entry cannot carry. A network change leg, a Kubernetes leg or a Terraform leg with no block is forced to needs-revision by
+   name, so its package is not approved; a network value leg runs without it. If every leg of that protocol carries the block in
+   its own task description, the difference is shown without a ✗: the platform reads a block there too. When the spec's own check
+   reports a problem, the line says *no block attributed to this protocol* and lists the problems: fix the spec before reading
+   that as "not declared". The lines are compared as written: a branch added or dropped (`@ main`), or an owner or repository
+   name that differs only in letter case, reads as *lines differ* — the block is there, its text is not the same. The option
+   reads only, stops nothing, and without it the report prints what it printed before.
 
 **If the plan is wrong, do not release.** A plan cannot be edited after the fact. Which fix depends on what is wrong:
 

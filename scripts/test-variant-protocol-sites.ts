@@ -42,6 +42,16 @@ export const EXCLUSIONS: Readonly<Record<string, string>> = {
     'ARCHITECT-COMPOSED-DESCRIPTOR fixture (2026-11-17): a contract serviceDescriptors / sources map keyed by live leg protocol tokens, proving the platform derivation; a contract shape, not a held-capability or protocol selection',
   'scripts/test-service-descriptors-derivation.ts::serviceDescriptors':
     'ARCHITECT-COMPOSED-DESCRIPTOR fixture (2026-11-17): a contract serviceDescriptors / sources map keyed by live leg protocol tokens, proving the platform derivation; a contract shape, not a held-capability or protocol selection',
+  'scripts/test-service-descriptors-derivation.ts::test:P0 descriptorWithoutServiceLine: observability keep; Kuberne':
+    'Config sources STEP 3 slice P4 (2026-11-22): the pin of the lane table\'s descriptorWithoutServiceLine column, one value per Config-sources protocol row; which rows exist is the table\'s question (CONFIG_SOURCE_LANES), not a held-capability selection',
+  'scripts/test-service-descriptors-derivation.ts::configSources':
+    'Config sources STEP 3 slice P4 fixture (2026-11-22): a contract serviceDescriptors / configSources map keyed by live leg protocol tokens, proving the five cases of the platform derivation in both awaiting states; a contract shape, not a held-capability or protocol selection',
+  'scripts/test-service-descriptors-derivation.ts::test:P8 a four-domain contract: the observability arm changes ONL':
+    'Config sources STEP 3 slice P4 fixture (2026-11-22): a contract serviceDescriptors / configSources map keyed by live leg protocol tokens, proving the five cases of the platform derivation in both awaiting states; a contract shape, not a held-capability or protocol selection',
+  'scripts/test-gate-check-spec.ts::deviceSources':
+    'Config sources STEP 3 slice P4 fixture (2026-11-22, plan W11): a plan contract deviceSources / configSources map keyed by live leg protocol tokens, compared with a spec by the --spec option of the gate report; a contract shape, not a held-capability or protocol selection',
+  'scripts/test-gate-check-spec.ts::configSources':
+    'Config sources STEP 3 slice P4 fixture (2026-11-22, plan W11): a plan contract deviceSources / configSources map keyed by live leg protocol tokens, compared with a spec by the --spec option of the gate report; a contract shape, not a held-capability or protocol selection',
   'lib/agents/harness/rollback-containment.ts::DESIRED_STATE_LANES':
     'held-capable legs are adjudicated by the held arm FIRST (V-8a restore-is-held-base, keyed on isHeldCapableProtocol); a held-capable desired-state lane never reaches the content arms (K-4, held-k8s 1f)',
   'lib/agents/harness/held-bytes/variant.ts::GIT_FILE_SOURCE_PROTOCOLS':

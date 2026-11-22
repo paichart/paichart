@@ -63,6 +63,10 @@ at the one point the platform writes the field (one function, one door):
 
 - `lib/agents/harness/service-descriptors-derivation.ts` (`deriveServiceDescriptors`) via `lib/agents/harness/plan-spawn-carry.ts`;
   fact `interfaceContractSource.serviceDescriptors`; plan-gate line in `scripts/gate-check.ts`; canary control `arch-text-2-descriptors`.
+- 2026-11-22 (Config sources STEP 3 slice P4): the same function gained a per-protocol column on the lane row
+  (`descriptorWithoutServiceLine`) — a Git-only observability block keeps the Architect's descriptor URL, because that leg still reads
+  its service. "Replay first" is now a script: `scripts/replay-service-descriptors.ts` (base tree against new tree over every stored
+  contract; 0 of 1,631 moved).
 - Earlier instance of the same idea: the platform COPIES the plan's contract to every leg rather than asking the harness to transcribe it (C2/C3, `plan-spawn-carry.ts`).
 
 ---

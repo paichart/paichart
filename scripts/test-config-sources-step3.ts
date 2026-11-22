@@ -63,7 +63,7 @@ const snapObs = (lines: string[]): ConfigSourcesSnapshot => {
 
 console.log('── W5: the lane row, its no-block rule, and the awaiting list as a parameter ──');
 test('OL1 the table: observability is a row, `runs-undeclared`, awaiting its text; Kubernetes and Terraform are `forced` and shipped', () => {
-  eq(CONFIG_SOURCE_LANES[OBS], { lane: 'change', contractKey: 'observability-config', noBlock: 'runs-undeclared' }, 'the observability row: ');
+  eq(CONFIG_SOURCE_LANES[OBS], { lane: 'change', contractKey: 'observability-config', noBlock: 'runs-undeclared', descriptorWithoutServiceLine: 'keep' }, 'the observability row: ');
   eq([CONFIG_SOURCE_LANES[K8S].noBlock, CONFIG_SOURCE_LANES[TF].noBlock], ['forced', 'forced'], 'the older rows: ');
   eq([...CONFIG_SOURCE_AWAITING_TEXT], [OBS], 'the awaiting list: ');
   // the column is read from the table ROW at its two sites (the per-leg rule, the snapshot decision); no accessor exists until a
