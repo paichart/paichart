@@ -90,6 +90,8 @@ That's also why there is no separate scheduler to operate, and why forensics com
 
 ## Get Started
 
+**Watch first — two videos.** [What pAIchart does](https://www.youtube.com/watch?v=JZ_MSWYvOnc) (6 min: one sentence to a reviewed switch change) · [Install it and run your first change package](https://www.youtube.com/watch?v=ytUNK9_xPwQ) (18 min, following [docs/INSTALL.md](docs/INSTALL.md) and [docs/FIRST-RUN.md](docs/FIRST-RUN.md)).
+
 **See it first — nothing to install.** Sign in at [paichart.app](https://paichart.app), in the web app or from your AI client:
 
 - Hub: `https://paichart.app/mcp`
