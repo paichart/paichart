@@ -35,6 +35,7 @@
 .claude/knowledge/patterns/identity-preserving-token-forwarding-pattern.md
 .claude/knowledge/patterns/in-run-facts-only-correction-pattern.md
 .claude/knowledge/patterns/inherited-context-chain-state-pattern.md
+.claude/knowledge/patterns/instruction-beside-its-subject-pattern.md
 .claude/knowledge/patterns/internal-service-gold-standard-pattern.md
 .claude/knowledge/patterns/kept-file-edit-by-reference-pattern.md
 .claude/knowledge/patterns/mcp-api-context-differences.md
@@ -68,6 +69,7 @@
 .claude/knowledge/patterns/shadow-validation-observation-window.md
 .claude/knowledge/patterns/shared-list-page-primitives-pattern.md
 .claude/knowledge/patterns/specialist-knowledge-propagation-pattern.md
+.claude/knowledge/patterns/staged-lab-registration-pattern.md
 .claude/knowledge/patterns/time-bomb-detection-pattern.md
 .claude/knowledge/patterns/toolkit-execution-pattern.md
 .claude/knowledge/patterns/transaction-atomicity-pattern.md
@@ -1055,6 +1057,7 @@ lib/agents/harness/chained-record.ts
 lib/agents/harness/config-hierarchy.ts
 lib/agents/harness/config-source-facts-enrichment.ts
 lib/agents/harness/config-source-facts.ts
+lib/agents/harness/config-sources-read-rule.ts
 lib/agents/harness/config-sources-read.ts
 lib/agents/harness/config-sources.ts
 lib/agents/harness/context-chainer.ts
@@ -1856,6 +1859,7 @@ scripts/leg-replay-lab/config-sources-arm.ts
 scripts/leg-replay-lab/config-sources-patch.ts
 scripts/leg-replay-lab/derive-edits.py
 scripts/leg-replay-lab/device-comparison-patch.ts
+scripts/leg-replay-lab/edit-overlap-lever.ts
 scripts/leg-replay-lab/edits.ts
 scripts/leg-replay-lab/fixture-tools.ts
 scripts/leg-replay-lab/fixtures/l-k1-6d7d0c7/fixture.json
@@ -1885,6 +1889,7 @@ scripts/leg-replay-lab/render-tree-protocols.ts
 scripts/leg-replay-lab/replay-prisma.ts
 scripts/leg-replay-lab/score-csk.ts
 scripts/leg-replay-lab/score-csn.ts
+scripts/leg-replay-lab/score-cso.ts
 scripts/leg-replay-lab/score-cst.ts
 scripts/leg-replay-lab/score-edits.ts
 scripts/leg-replay-lab/score-g2.ts
@@ -1908,6 +1913,7 @@ scripts/leg-replay-lab/self-host-provenance.ts
 scripts/leg-replay-lab/snapshot.ts
 scripts/leg-replay-lab/standing-bench.ts
 scripts/leg-replay-lab/text-reach.ts
+scripts/leg-replay-lab/upstream-samples.ts
 scripts/leg-replay-lab/value-lane-fixtures.ts
 scripts/leg-replay-lab/value-lane.ts
 scripts/leg-replay-lab/variant-binding.ts
@@ -1965,6 +1971,7 @@ scripts/report-run-liveness.ts
 scripts/report-template-freshness.ts
 scripts/requirements-adoption-probes.ts
 scripts/requirements-form-check-parity-driver.py
+scripts/requirements-sources-fix-text.ts
 scripts/run-baseline.sh
 scripts/run-gates-clean.sh
 scripts/seed-agent-templates.ts
@@ -2046,6 +2053,7 @@ scripts/test-config-hierarchy.ts
 scripts/test-config-prompt-no-template-fallback.ts
 scripts/test-config-snapshot-removal-behavioral.ts
 scripts/test-config-sources-p2.ts
+scripts/test-config-sources-read-rule.ts
 scripts/test-config-sources-step3.ts
 scripts/test-config-sources.ts
 scripts/test-containment-enrichment-branches.ts

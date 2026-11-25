@@ -11,6 +11,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { compareSpecToContract, printable, specTokens, SPEC_FINDER_ERROR_CAP, type SpecLeg } from './gate-check-spec';
+import { obsNoPlaceholderKey } from './canary-req-sources';
 import { CONFIG_SOURCE_AWAITING_TEXT, CONFIG_SOURCE_LANES, DEVICE_SOURCE_LANES } from '../lib/agents/harness/held-bytes/variant';
 import { configSourcesReadKeys } from '../lib/agents/harness/plan-spawn-carry';
 import { CONFIG_SOURCE_KINDS } from '../lib/agents/harness/config-sources';
@@ -24,6 +25,9 @@ function assert(c: unknown, m: string): asserts c { if (!c) throw new Error(m); 
 const eq = (a: unknown, b: unknown, what = '') => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${what}expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); };
 
 const NONE: readonly string[] = [];
+// observability's row awaiting its text: the tree before the 1.12.0 join (2026-11-23) and the state a revert of it returns to. The
+// tree's own list is EMPTY since the join, so "as shipped" (no list passed) is the NONE state; the awaiting cases pass this.
+const AWAITING: readonly string[] = Object.freeze(['observability-config-protocol']);
 const K_GIT = 'sample-workloads: git-file — service github-service ; paichart/paichart-configs/k8s/sample-workloads.yaml';
 const K_LIVE = 'cluster: live-read — service k8s-readonly';
 const T_GIT = 'main-tf: git-file — service github-service ; paichart/paichart-configs/terraform/main.tf';
@@ -43,10 +47,20 @@ const leg = (token: string, contract: unknown, description: string | null = 'Mak
 const marks = (c: ReturnType<typeof compareSpecToContract>) => c.rows.map((r) => [r.token, r.specDeclares, r.contractCarriesKey, r.differs, r.mark]);
 
 console.log('── the plan\'s two gates ──');
-test('G1 a spec with NO block and a contract with no sources key ⇒ clean: no row, one informational line, no ✗', () => {
-  const c = compareSpecToContract({ spec: spec(cfgLeg(1, 'kubernetes-gitops', null).replace('(protocol: kubernetes-gitops)', '')), legs: [leg('observability-config', { serviceDescriptors: {} })] });
+test('G1 a spec with NO block and a contract with no sources key ⇒ clean: no row, one informational line, no ✗ — for a leg of a protocol with no sources lane; a no-block OBSERVABILITY leg has ONE unmarked row since the 1.12.0 join (and none with its row awaiting)', () => {
+  const noBlock = spec(cfgLeg(1, 'kubernetes-gitops', null).replace('(protocol: kubernetes-gitops)', ''));
+  // a leg whose protocol has no sources lane (until the join this fixture used an observability leg — the one such protocol then)
+  const c = compareSpecToContract({ spec: noBlock, legs: [leg('requirements-authoring', { serviceDescriptors: {} })] });
   eq([c.rows, c.finderErrors, c.unattributedBlocks], [[], [], 0]);
   eq(c.lines, [{ mark: null, text: 'the spec declares no sources block and the plan\'s contract carries no sources key' }]);
+  // the same spec and an observability leg, with its row awaiting (before the join; after a revert): identical — no row
+  const before = compareSpecToContract({ spec: noBlock, legs: [leg('observability-config', { serviceDescriptors: {} })], awaiting: AWAITING });
+  eq([before.rows, before.finderErrors, before.unattributedBlocks, before.lines], [[], [], 0, c.lines]);
+  // AS SHIPPED since the join: the token has a leg, so it has a row — it says "no / no", carries NO mark, and nothing differs
+  const now = compareSpecToContract({ spec: noBlock, legs: [leg('observability-config', { serviceDescriptors: {} })] });
+  eq(marks(now), [['observability-config', false, false, false, null]]);
+  eq(now.rows[0].line, 'observability-config (configSources): spec declares lines: no — contract carries the key: no');
+  assert(!now.lines.some((l) => l.mark === false), 'a no-block observability leg must never read ✗');
 });
 test('G2 a fixture contract that LACKS the key ⇒ the report shows the difference, marked ✗, and names the token and the field', () => {
   const c = compareSpecToContract({ spec: spec(cfgLeg(1, 'kubernetes-gitops', [K_GIT, K_LIVE])), legs: [leg('kubernetes-gitops', { serviceDescriptors: {} })] });
@@ -172,7 +186,8 @@ test('U1 the finder reported a problem or a block with no lane ⇒ the row says 
   const clean = compareSpecToContract({ spec: spec(cfgLeg(1, 'terraform-iac', null)), legs: [leg('terraform-iac', {})] });
   assert(/spec declares lines: no/.test(clean.rows[0].line) && clean.rows[0].specUncertain === false, clean.rows[0].line);
   // no row at all + an unattributed block: the clean sentence is NOT printed
-  const none = compareSpecToContract({ spec: spec(cfgLeg(1, 'observability-config', [O_GIT])), legs: [leg('observability-config', {})] });
+  // (an observability block is unattributed only while its row awaits its text — since the 1.12.0 join that state is passed explicitly)
+  const none = compareSpecToContract({ spec: spec(cfgLeg(1, 'observability-config', [O_GIT])), legs: [leg('observability-config', {})], awaiting: AWAITING });
   eq(none.lines[0].text, 'no sources block was attributed to a protocol and the plan\'s contract carries no sources key');
 });
 
@@ -228,16 +243,24 @@ test('O1 the token list is the platform\'s read keys for the awaiting list (deri
   const dev = Object.values(DEVICE_SOURCE_LANES).map((l) => l.contractKey);
   eq(specTokens().map((t) => t.token), [...dev, ...configSourcesReadKeys()], 'as shipped: ');
   eq(specTokens(NONE).map((t) => t.token), [...dev, ...Object.values(CONFIG_SOURCE_LANES).map((l) => l.contractKey)], 'every row shipped: ');
-  assert(!specTokens().some((t) => t.token === 'observability-config') && specTokens(NONE).some((t) => t.token === 'observability-config'),
-    'observability must be absent as shipped and present when no row awaits its text');
-  eq(CONFIG_SOURCE_AWAITING_TEXT.length, 1, 'this test states the shipped list has one awaiting row (observability) — re-read O1-O3 at the join: ');
+  assert(!specTokens(AWAITING).some((t) => t.token === 'observability-config') && specTokens(NONE).some((t) => t.token === 'observability-config'),
+    'observability must be absent while its row awaits and present when no row awaits its text');
+  // RE-READ AT THE JOIN (2026-11-23), as this line asked: the shipped list is EMPTY, so the report has an observability row with no
+  // edit to the tool — as shipped is the every-row-shipped state.
+  eq(CONFIG_SOURCE_AWAITING_TEXT.length, 0, 'the shipped list has no awaiting row since the observability 1.12.0 join: ');
+  eq(specTokens().map((t) => t.token), specTokens(NONE).map((t) => t.token), 'as shipped ≡ every row shipped: ');
 });
-test('O2 AS SHIPPED: an observability block in the spec has NO row (the platform does not read the key yet); the finder says why', () => {
+test('O2 WITH ITS ROW AWAITING (before the join; after a revert): an observability block in the spec has NO row (the platform does not read the key); the finder says why. AS SHIPPED since the 1.12.0 join the same dropped block is ✗', () => {
   const s = spec(cfgLeg(1, 'observability-config', [O_GIT, O_HELD]));
-  const c = compareSpecToContract({ spec: s, legs: [leg('observability-config', { serviceDescriptors: {} })] });
+  const c = compareSpecToContract({ spec: s, legs: [leg('observability-config', { serviceDescriptors: {} })], awaiting: AWAITING });
   eq(c.rows, []);
   assert(c.finderErrors.length === 1 && /names no config-sources protocol/.test(c.finderErrors[0]), JSON.stringify(c.finderErrors));
   assert(!c.lines.some((l) => l.mark === false), 'no ✗ for a protocol whose text has not shipped');
+  // as shipped (no list passed — what `npm run report:gate -- <gate> --spec` does): the block is read, and a plan that dropped it is ✗
+  const now = compareSpecToContract({ spec: s, legs: [leg('observability-config', { serviceDescriptors: {} })] });
+  eq(marks(now), [['observability-config', true, false, true, false]]);
+  eq(now.finderErrors, [], 'the finder attributes the block: ');
+  assert(/RUNS, on the files its read-only service returns, and nothing stops it/.test(now.rows[0].line), now.rows[0].line);
 });
 test('O3 EVERY ROW SHIPPED: the dropped observability block is ✗ and says the leg RUNS undeclared; carried ⇒ ✓; a key with no block ⇒ ✗', () => {
   const s = spec(cfgLeg(1, 'observability-config', [O_GIT, O_HELD]));
@@ -248,6 +271,81 @@ test('O3 EVERY ROW SHIPPED: the dropped observability block is ✗ and says the 
   eq(marks(carried), [['observability-config', true, true, false, true]]);
   const invented = compareSpecToContract({ spec: spec(cfgLeg(1, 'observability-config', null)), legs: [leg('observability-config', { configSources: { 'observability-config': [O_GIT] } })], awaiting: NONE });
   eq(marks(invented), [['observability-config', false, true, true, false]]);
+});
+// ── The 1.12.0 join (owner decision 2026-11-23): the placeholder exception must be VISIBLE at the plan gate. The SAME 13 shapes as the
+// live control `cso-obs-no-placeholder-key` (test:canary-req-sources CSO2 / CSO3) — the report and the control are pinned to agree.
+const K_BLOCK = [K_GIT];
+const SAFE_SHAPES: Array<[string, unknown]> = [['no configSources', { serviceDescriptors: {} }], ['an empty object', { configSources: {} }], ['another protocol\'s key only', { configSources: { 'kubernetes-gitops': K_BLOCK } }],
+  ['configSources null', { configSources: null }], ['the key null', { configSources: { 'observability-config': null } }], ['a leg-name key', { configSources: { 'pipeline-4-observability': K_BLOCK } }]];
+const KEY_PLACEHOLDERS: Array<[string, unknown]> = [['an empty string', { configSources: { 'observability-config': '' } }], ['a note', { configSources: { 'observability-config': 'no block — runs undeclared' } }],
+  ['an empty list', { configSources: { 'observability-config': [] } }], ['an object', { configSources: { 'observability-config': {} } }], ['["none"]', { configSources: { 'observability-config': ['none'] } }]];
+const FIELD_NOT_OBJECT: Array<[string, unknown]> = [['configSources a sentence', { configSources: 'none for observability' }], ['configSources a list', { configSources: K_BLOCK }]];
+const obsNoBlock = (contract: unknown) => compareSpecToContract({ spec: spec(cfgLeg(1, 'observability-config', null)), legs: [leg('observability-config', contract)] });
+/** The ✗ lines that concern the observability leg: its own row, or a field line (a ✗ on ANOTHER protocol's row — a Kubernetes key
+ *  the spec does not declare — is that protocol's finding, true and unrelated). */
+const obsX = (c: ReturnType<typeof compareSpecToContract>) => c.lines.filter((l) => l.mark === false && (l.text.startsWith('observability-config ') || l.text.startsWith('configSources: ')));
+const STOP_WORDS = 'the platform will stop every leg of this protocol by name (config-sources-unparseable), a leg that declares nothing included. Re-plan before releasing the gate';
+test('PH1 a no-block observability leg, the 6 SAFE contract shapes ⇒ no ✗ anywhere, no stop sentence', () => {
+  for (const [name, contract] of SAFE_SHAPES) {
+    const c = obsNoBlock(contract);
+    assert(obsX(c).length === 0 && c.fieldsNotObject.length === 0 && !c.lines.some((l) => /will stop/.test(l.text)), `${name}: ${JSON.stringify(c.lines)}`);
+  }
+});
+test('PH2 a placeholder under configSources["observability-config"] (5 shapes) ⇒ ✗, and the row says the leg WILL BE STOPPED by name although it declared nothing, and to re-plan', () => {
+  for (const [name, contract] of KEY_PLACEHOLDERS) {
+    const c = obsNoBlock(contract);
+    eq(marks(c), [['observability-config', false, true, true, false]], `${name}: `);
+    assert(c.rows[0].line.includes('DIFFERS: the spec declares no block, and the contract carries a value under this key') && c.rows[0].line.includes(STOP_WORDS), `${name}: ${c.rows[0].line}`);
+    assert(!/a block the spec does not declare/.test(c.rows[0].line), `${name}: a placeholder is not "a block"`);
+  }
+  // a spec that DOES declare, a contract placeholder: the existing "cannot read the carried value" words, plus the stop sentence
+  const d = compareSpecToContract({ spec: spec(cfgLeg(1, 'observability-config', [O_GIT])), legs: [leg('observability-config', { configSources: { 'observability-config': '' } })] });
+  assert(d.rows[0].mark === false && /cannot read the carried value as lines/.test(d.rows[0].line) && d.rows[0].line.includes(STOP_WORDS), d.rows[0].line);
+});
+test('PH3 a `forced` protocol keeps its existing wording: a placeholder under a Kubernetes key prints no stop sentence of this kind (its legs stop without a block anyway)', () => {
+  const c = compareSpecToContract({ spec: spec(cfgLeg(1, 'kubernetes-gitops', null)), legs: [leg('kubernetes-gitops', { configSources: { 'kubernetes-gitops': '' } })] });
+  eq(marks(c), [['kubernetes-gitops', false, true, true, false]]);
+  assert(/DIFFERS: the contract carries a block the spec does not declare/.test(c.rows[0].line) && !/will stop every leg/.test(c.rows[0].line), c.rows[0].line);
+});
+test('PH4 a sources FIELD that is not an object (2 shapes, and deviceSources likewise) ⇒ ONE ✗ line per field naming every protocol with a leg and what the platform does to it; the clean sentence is not printed', () => {
+  for (const [name, contract] of FIELD_NOT_OBJECT) {
+    const c = obsNoBlock(contract);
+    eq(c.fieldsNotObject, ['configSources'], `${name}: `);
+    const bad = c.lines.filter((l) => l.mark === false);
+    assert(bad.length === 1 && bad[0].text.startsWith('configSources: the plan\'s contract carries this field as ') && bad[0].text.includes('not as an object keyed by protocol name')
+      && bad[0].text.includes('it will stop every leg of these protocols by name, a leg that declares nothing included: observability-config (config-sources-unparseable)')
+      && bad[0].text.endsWith('. Re-plan before releasing the gate'), `${name}: ${JSON.stringify(c.lines)}`);
+  }
+  // every protocol of the field that has a leg is named — Kubernetes and Terraform beside observability; a protocol with no leg is not
+  const three = compareSpecToContract({ spec: spec(cfgLeg(1, 'kubernetes-gitops', null), cfgLeg(2, 'observability-config', null)),
+    legs: [leg('kubernetes-gitops', { configSources: 'x' }), leg('observability-config', { configSources: 'x' })] });
+  const t3 = three.lines.find((l) => l.text.startsWith('configSources: '))!.text;
+  assert(t3.includes('kubernetes-gitops (config-sources-unparseable), observability-config (config-sources-unparseable)') && !t3.includes('terraform-iac') && t3.includes('on 2 of 2 leg(s)'), t3);
+  // deviceSources: the change lane is stopped by its own name; the value lane is named as NOT stopped
+  const dev = compareSpecToContract({ spec: spec(netLeg(1, 'change', null), netLeg(2, 'value', null)), legs: [leg('network-provisioning', { deviceSources: ['x'] }), leg('network-derivation', { deviceSources: ['x'] })] });
+  const td = dev.lines.find((l) => l.text.startsWith('deviceSources: '))!;
+  assert(td.mark === false && td.text.includes('network-provisioning (device-sources-unparseable)') && td.text.includes('not stopped, its declaration reads unparseable: network-derivation') && td.text.includes('a list'), td.text);
+  // a program with no leg of a stopped protocol says so, and no clean sentence is printed beside a ✗
+  const none = compareSpecToContract({ spec: spec(cfgLeg(1, 'kubernetes-gitops', null).replace('(protocol: kubernetes-gitops)', '')), legs: [leg('requirements-authoring', { configSources: 'x' })] });
+  assert(none.lines.length === 1 && none.lines[0].mark === false && none.lines[0].text.includes('no leg of this program has a protocol the platform stops for it'), JSON.stringify(none.lines));
+});
+test('PH5 THE REPORT AND THE LIVE CONTROL AGREE on all 13 shapes: `cso-obs-no-placeholder-key` reads FINDING exactly where the report prints a ✗', () => {
+  const all = [...SAFE_SHAPES.map((x) => [...x, false] as const), ...KEY_PLACEHOLDERS.map((x) => [...x, true] as const), ...FIELD_NOT_OBJECT.map((x) => [...x, true] as const)];
+  eq(all.length, 13, 'the shapes under test: ');
+  for (const [name, contract, stops] of all) {
+    const report = obsX(obsNoBlock(contract)).length > 0;
+    const control = obsNoPlaceholderKey([{ id: 'L', description: 'Make the change.', contract }]).verdict === 'FINDING';
+    eq([report, control], [stops, stops], `${name} (report ✗, control FINDING): `);
+  }
+});
+test('PH6 every new line is stripped of control characters (a planted escape under the token name of a leg never reaches the line)', () => {
+  const c = compareSpecToContract({ spec: spec(cfgLeg(1, 'observability-config', null)), legs: [leg('observability-config', { configSources: 'x\u001b[31m' })] });
+  for (const l of c.lines) eq(l.text, printable(l.text), 'a line that printable() would change: ');
+  assert(c.lines.every((l) => !/[\u0000-\u001f\u007f\u202e]/.test(l.text)), JSON.stringify(c.lines));
+  // The field line carries no text from a spec or a contract today (fixed words, platform tokens, counts, a shape word), so no input
+  // can show a missing wrap by behaviour — the wrap is pinned on the line itself, for the day a value is added to it.
+  const src = fs.readFileSync(path.join(__dirname, 'gate-check-spec.ts'), 'utf8');
+  assert(src.includes("lines.push({ mark: false, text: printable(`${field}: the plan's contract carries this field as "), 'the field-not-object line is no longer wrapped in printable()');
 });
 test('O4 a four-domain program: each token is compared with ITS legs\' contract only', () => {
   const s = spec(netLeg(1, 'change', [N_READ('ceos1')]), cfgLeg(2, 'kubernetes-gitops', [K_GIT]), cfgLeg(3, 'terraform-iac', [T_GIT]), cfgLeg(4, 'observability-config', [O_GIT]));

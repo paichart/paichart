@@ -2,9 +2,9 @@
 
 **Purpose**: Quick reference for all proven implementation patterns in pAIchart knowledge library
 
-**Last Updated**: November 21, 2026
+**Last Updated**: November 23, 2026
 
-**Total Patterns**: 72 documented patterns
+**Total Patterns**: 74 documented patterns
 
 ---
 
@@ -401,7 +401,7 @@
 
 ---
 
-## Agent Template Patterns (2 patterns)
+## Agent Template Patterns (3 patterns)
 
 ### **agent-template-gold-standard-pattern.md** - 95% Confidence ✅ (NEW - Apr 2026)
 **When to use**: Creating, reviewing, or rationalizing agent templates
@@ -420,6 +420,12 @@
 **Companion to**: agent-template-gold-standard-pattern.md (Pattern #44 for templates)
 **Specialist**: prompt-construction-specialist has Handlebars limitation + protocol creation guidance
 
+
+### **instruction-beside-its-subject-pattern.md** - 85% Confidence ⚠️ (NEW - 2026-11-26)
+**When to use**: a platform rule must override a more specific instruction an agent receives (brief, task body, contract note)
+**Results**: lab L-OBS-MLH — the same rule text held 2 of 5 at the end of the system prompt and 5 of 5 placed directly after the block it governs; every compliant sample cited it, every miss never mentioned it; live canary passed after the ship
+**Key features**: render at a fixed anchor beside the governed text (both prompt copies), narrow gate with 0 bytes elsewhere, labelled paragraph not a heading, measure compliance by citation, no-regression control
+**Production use**: `lib/agents/harness/config-sources-read-rule.ts` (observability Harvesters, cut 2026-11-25T11:11:47.804Z)
 ---
 
 ## Automation Patterns (9 patterns)
@@ -505,7 +511,7 @@
 
 ---
 
-## Process & Workflow Patterns (10 patterns)
+## Process & Workflow Patterns (11 patterns)
 
 ### **owner-decision-elicitation-pattern.md** - 80% Confidence ⚠️ (NEW - 2026-10-10; promoted from the requirements owner-answer session)
 **When to use**: An agent produces a design artifact whose choices belong to an owner, and those choices recur across objectives (so a fixed, earned question list can exist)
@@ -578,6 +584,15 @@
 **Promotion condition**: 90%+ once a trigger line catches a genuine regression and its control proves the catch real.
 **Candidate follow-ons (not yet patterns)**: a re-open trigger written at the field it guards (EF-DL2's `HARVESTED_STATE_PROSE`); a version integer on a stamped fact so series breaks are visible (`dialectLint.classifier`).
 **Companion**: Protocol 14 (`evidence-graded-panel-review-protocol.md`); Protocol 10 denominator axis
+
+### **staged-lab-registration-pattern.md** - 80% Confidence ⚠️ (NEW - 2026-11-23)
+**When to use**: A lab measures a text or model change across roles that feed each other, and the change alters the shape of what the earlier role produces, so no stored output has that shape.
+**Results**: Lab L-CS-O (2026-11-23) — a hand-built Author cell that no production run could produce, found by blind readers at $0 before any sample was bought; the lab was then registered stage by stage. First full use: no stage has completed yet.
+**Key features**: earliest role's cells first · every sample hand-read · one hand-read sample planted into the next role's cell · each stage registered by a dated addendum with caps from its own dry run · one owner sign-off per stage, the whole-lab planning cost shown each time · unavoidable hand-built parts listed and blind-read.
+**Production use**: the planting lever — an Author sample into a Reviewer cell (2026-10-15), a Harvester sample into downstream cells (2026-10-18); every role on an observability text lab (2026-11-23).
+**Anti-patterns**: re-stamping a stored output to fit a new cell; one sign-off for cells that do not exist yet; rewriting a registered gate after a stage's result.
+**Promotion condition**: 90%+ once one lab has run every stage this way and no cell had to be rebuilt after a paid sample.
+**Companion**: Protocol 16 § "Optional blind reads"; `pipelines/LAB-USER-GUIDE.md` § 5a
 
 ---
 

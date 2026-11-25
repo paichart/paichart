@@ -17,7 +17,11 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { checkSources, LANE_SENTENCES, SHIPPED_CONFIG_KEYS, type SourcesResult } from './check-requirements-sources';
 import { DEVICE_SOURCE_KINDS, SOURCE_SEPARATOR } from '../lib/agents/harness/device-sources';
-import { CONFIG_SOURCE_KINDS, CONFIG_SOURCE_KINDS_BY_PROTOCOL } from '../lib/agents/harness/config-sources';
+import { CONFIG_SOURCE_KINDS, CONFIG_SOURCE_KINDS_BY_PROTOCOL, CONFIG_LABEL_PROBLEMS, configLabelTableOf } from '../lib/agents/harness/config-sources';
+import { configSnapshotDecision } from '../lib/agents/harness/config-sources-read';
+import { platformLabelTargets } from '../lib/agents/harness/held-bytes/config-label';
+import { renderSourcesCli } from './check-requirements-sources';
+import { configFixTable, deviceFixTable, supportedLabelShapes } from './requirements-sources-fix-text';
 import { CONFIG_SOURCE_LANES } from '../lib/agents/harness/held-bytes/variant';
 import { canonicalProtocolName } from '../lib/agents/harness/program-protocol';
 import { rowItemMapFromAnswers, type RowItemMap } from '../lib/agents/harness/requirements-clauses';
@@ -225,9 +229,193 @@ test('NC3 S4: two kubernetes-gitops legs with DIFFERENT blocks (one block per pr
   const r = checkSources(spec(kLeg(2, CFG_LINES), kLeg(3, CFG_LINES_2)), objective(cItem(2, CFG_LINES), cItem(3, CFG_LINES_2)), k8sMap(2, 3));
   assert(rules(r) === 'S4', show(r));
 });
-test('NC4 S1: a config-sources block on an observability-config leg names that leg and declares nothing', () => {
-  const r = checkSources(spec(kLeg(4, CFG_LINES, 'observability-config')));
-  assert(rules(r) === 'S1' && r.errors[0].message.includes('observability-config') && cfg(r).length === 0, show(r));
+test('NC4 an observability-config leg: its config-sources block is READ, with observability\'s grammar, since the 1.12.0 join (Kubernetes-shaped lines ⇒ S2 by the pair rule; observability lines ⇒ one block, clean); with the key not read (before the join; after a revert) it is an S1 that names the leg and declares nothing', () => {
+  // Restated by execution-facts at the join; the suite is requirements-authoring's — it reviews this. (2026-11-23) The check's key list follows the platform's awaiting list
+  // (`SHIPPED_CONFIG_KEYS`), so this pin moved with the one-line switch; requirements-authoring owns the suite and the label check
+  // that is wired in after it (register CONFIG-SOURCES-OBS-JOIN-PRECONDITIONS item 29).
+  assert(SHIPPED_CONFIG_KEYS.includes('observability-config'), JSON.stringify(SHIPPED_CONFIG_KEYS));
+  // before the join / after a revert: the key is not read ⇒ the old answer, unchanged
+  const before = checkSources(spec(kLeg(4, CFG_LINES, 'observability-config')), null, { configKeys: SHIPPED_CONFIG_KEYS.filter((k) => k !== 'observability-config') });
+  assert(rules(before) === 'S1' && before.errors[0].message.includes('observability-config') && cfg(before).length === 0, show(before));
+  // as shipped: a `live-read` line with no `git-file` line of the same label is refused by observability's pair rule, by name
+  const k8sShaped = checkSources(spec(kLeg(4, CFG_LINES, 'observability-config')));
+  assert(rules(k8sShaped) === 'S2' && /for observability-config: live-read-without-base/.test(k8sShaped.errors[0].message), show(k8sShaped));
+  // Reviewed by requirements-authoring (2026-11-23): right as restated. Added: the message also says what to DO (it named the protocol,
+  // the line and the problem word, and stopped there).
+  assert(k8sShaped.errors[0].message.endsWith(` - ${configFixTable('observability-config')['live-read-without-base']}`), show(k8sShaped));
+  // as shipped: observability's own lines (a Git file, its served copy as evidence, a file kept from the service) ⇒ clean, one block
+  const OBS_LINES = ['obs-otelcol: git-file — service github-service ; acme/obs-configs/observability/otelcol/config.yaml',
+    'obs-otelcol: live-read — service observability-readonly', 'obs-ingress.otlp-ingress.conf: service-held — service observability-readonly'];
+  const own = checkSources(spec(kLeg(4, OBS_LINES, 'observability-config')));
+  assert(own.errors.length === 0 && cfg(own).length === 1 && cfg(own)[0].protocol === 'observability-config' && cfg(own)[0].resolution.state === 'parsed', show(own) + JSON.stringify(own.blocks));
+  // an observability leg with NO block is clean and declares nothing (the block is optional for this protocol)
+  const noBlock = checkSources(spec(kLeg(4, null, 'observability-config')));
+  assert(noBlock.errors.length === 0 && cfg(noBlock).length === 0, show(noBlock));
+});
+// ── The LABEL check (2026-11-23, the observability-config 1.12.0 join) ──────────────────────────────────────────────────────────────
+// On a protocol with a label table the platform resolves EVERY label of a parsed block when it takes the leg's snapshot; a label it
+// cannot resolve forces the leg `config-sources-unparseable`. The publish check asks the same shipping function, so it is an S2 here.
+const OBS = 'observability-config';
+const OBS_GIT = 'git-file — service github-service ; acme/obs-configs/observability';
+const OBS_SVC = 'observability-readonly';
+const OBS_OK = [`obs-otelcol: ${OBS_GIT}/otelcol/config.yaml`, `obs-otelcol: live-read — service ${OBS_SVC}`,
+  `obs-ingress.otlp-ingress.conf: service-held — service ${OBS_SVC}`];
+const oLeg = (n: number, lines: string[] | null) => kLeg(n, lines, OBS);
+const obsMap = (...ns: number[]) => ({ rowItemMap: new Map(ns.map((n) => [n, new Set([`${OBS}.item-${n}`])])) as Map<number, Set<string>> });
+const LABEL_NOT_CHECKED = /config sources \(observability-config\): each label names a platform file target \(checked\), but NOT that the Git path/;
+/** What the PLATFORM decides for the same block text at the leg's first execution (the snapshot's `labelCheck`). */
+const platformLabelProblem = (lines: string[]): string | null => {
+  const d = configSnapshotDecision({ type: 'PIPELINE', protocol: OBS, description: [CFG_HEADING, ...lines].join('\n'), interfaceContract: null, takenAt: '2026-11-23T00:00:00.000Z' });
+  if (d.action !== 'write' || d.snapshot.resolution.state !== 'parsed') throw new Error(`the platform took no snapshot of a parsed block: ${JSON.stringify(d)}`);
+  const lc = d.snapshot.labelCheck;
+  return lc && lc.state === 'problem' ? lc.problem : null;
+};
+const labelErrors = (r: SourcesResult) => r.errors.filter((e) => e.rule === 'S2' && /is not one the platform can resolve/.test(e.message));
+
+test('OL1 supported labels on all three observability kinds: clean, labels resolved, and the CLI says what resolving a label does NOT prove', () => {
+  const r = checkSources(spec(oLeg(4, OBS_OK)), objective(cItem(4, OBS_OK)), obsMap(4));
+  assert(r.errors.length === 0, show(r));
+  const b = cfg(r)[0] as { labelCheck: { state: string } | null };
+  assert(b.labelCheck !== null && b.labelCheck.state === 'resolved', JSON.stringify(r.blocks));
+  assert(r.notChecked.some((n) => LABEL_NOT_CHECKED.test(n)), JSON.stringify(r.notChecked));
+  assert(/config observability-config, lane change \(table\), 3 line\(s\), labels resolved/.test(renderSourcesCli(r)), renderSourcesCli(r));
+  assert(platformLabelProblem(OBS_OK) === null, 'the platform refuses a label this fixture calls supported');
+});
+test('OL2 an unsupported label on a service line: S2 naming the protocol, the label, its line, the problem word and the supported labels', () => {
+  const lines = [OBS_OK[0], `obs-ingres.otlp-ingress.conf: service-held — service ${OBS_SVC}`];
+  const r = checkSources(spec(oLeg(4, lines)));
+  assert(rules(r) === 'S2' && labelErrors(r).length === 1, show(r));
+  const m = r.errors[0].message;
+  assert(m.includes('label "obs-ingres.otlp-ingress.conf" (source line 2 of the block)') && m.includes(`for ${OBS}: label-target-not-supported - `), m);
+  for (const shape of supportedLabelShapes()) assert(m.includes(shape), `the fix does not list the supported label "${shape}": ${m}`);
+  assert(platformLabelProblem(lines) === 'label-target-not-supported', 'the platform does not refuse this label: the check would be stricter than the leg');
+});
+test('OL3 a GIT-ONLY block: its labels ARE checked (the platform resolves every line, whatever its kind) - good labels clean, a misspelt one S2', () => {
+  const good = [`obs-otelcol: ${OBS_GIT}/otelcol/config.yaml`, `obs-ingress.otlp-ingress.conf: ${OBS_GIT}/nginx/otlp-ingress.conf`];
+  const ok = checkSources(spec(oLeg(4, good)));
+  assert(ok.errors.length === 0 && ok.notChecked.some((n) => LABEL_NOT_CHECKED.test(n)), show(ok) + JSON.stringify(ok.notChecked));
+  const bad = [`obs-otelcoll: ${OBS_GIT}/otelcol/config.yaml`];
+  const r = checkSources(spec(oLeg(4, bad)));
+  assert(rules(r) === 'S2' && labelErrors(r).length === 1 && r.errors[0].message.includes('label "obs-otelcoll" (source line 1 of the block)'), show(r));
+  assert(platformLabelProblem(good) === null && platformLabelProblem(bad) === 'label-target-not-supported', 'the platform disagrees about a Git-only block');
+});
+test('OL4 the key rule: a key on a one-file target, and no key on a several-file target, are each S2 label-key-invalid', () => {
+  for (const lines of [[`obs-otelcol.extra: ${OBS_GIT}/otelcol/config.yaml`], [`obs-ingress: service-held — service ${OBS_SVC}`]]) {
+    const r = checkSources(spec(oLeg(4, lines)));
+    assert(rules(r) === 'S2' && /label-key-invalid - a one-file target takes no/.test(r.errors[0].message), show(r));
+    assert(platformLabelProblem(lines) === 'label-key-invalid', `the platform does not refuse ${lines[0]}`);
+  }
+});
+test('OL5 a never-held file: by LABEL (a key naming a password file) and by PATH (a key file in Git) are each S2 path-never-held, with the fix', () => {
+  const byLabel = [`obs-ingress..htpasswd: service-held — service ${OBS_SVC}`];
+  const a = checkSources(spec(oLeg(4, byLabel)));
+  assert(rules(a) === 'S2' && labelErrors(a).length === 1 && /path-never-held - the path names a file the platform never reads or keeps/.test(a.errors[0].message), show(a));
+  assert(platformLabelProblem(byLabel) === 'path-never-held', 'the platform does not refuse the label');
+  const byPath = checkSources(spec(oLeg(4, [`obs-otelcol: ${OBS_GIT}/tls/server.pem`])));
+  assert(rules(byPath) === 'S2' && labelErrors(byPath).length === 0 && /path-never-held at block line 2 .* - the path names a file the platform never reads or keeps/.test(byPath.errors[0].message), show(byPath));
+  // the same key-file path on a Kubernetes leg: refused there too (the line parser's rule, every protocol), with the same fix
+  const k8s = checkSources(spec(kLeg(2, ['tls: git-file — service github-service ; acme/k8s-configs/k8s/tls/server.pem'])));
+  assert(rules(k8s) === 'S2' && /for kubernetes-gitops: path-never-held .* - the path names a file/.test(k8s.errors[0].message), show(k8s));
+});
+test('OL6 `supplied` is not an observability kind: S2 unknown-kind, and the message lists the kinds the SHIPPING table admits there', () => {
+  const kinds = CONFIG_SOURCE_KINDS_BY_PROTOCOL[canonicalProtocolName(OBS)];
+  assert(kinds.length === 3 && !kinds.includes('supplied'), `the shipping table changed: ${kinds.join(', ')}`);
+  const r = checkSources(spec(oLeg(4, ['obs-otelcol: supplied'])));
+  assert(rules(r) === 'S2', show(r));
+  const m = r.errors[0].message;
+  assert(m.includes(`for ${OBS}: unknown-kind at block line 2`) && m.includes(`the kinds ${OBS} admits in a block are: ${kinds.join(', ')} - a kind another protocol admits is refused here`), m);
+  assert(!/admits in a block are:[^-]*supplied/.test(m), m);
+  // and where it IS a kind, the same line is clean
+  assert(checkSources(spec(kLeg(2, ['cluster: supplied']))).errors.length === 0, 'a supplied line on a Kubernetes leg is no longer clean');
+});
+test('OL7 an OWNER ITEM whose block names an unsupported label: S3 naming the item, once (found at the answer, before the merge)', () => {
+  const bad = [`obs-otelcoll: ${OBS_GIT}/otelcol/config.yaml`];
+  const r = checkSources(spec(oLeg(4, OBS_OK)), objective(cItem(4, bad)), obsMap(4));
+  const own = r.errors.filter((e) => e.rule === 'S3' && /owner item 4: its config-sources block: label "obs-otelcoll"/.test(e.message));
+  assert(own.length === 1 && /label-target-not-supported - .* - fix the answer before the merge$/.test(own[0].message), show(r));
+  // the same wrong label in the item AND the spec: the spec's S2 and the item's S3, and no transcription error (they agree)
+  const both = checkSources(spec(oLeg(4, bad)), objective(cItem(4, bad)), obsMap(4));
+  assert(rules(both) === 'S2,S3', show(both));
+});
+test('OL8 a protocol with NO label table (every shipped config-sources key but observability today): no label is resolved, nothing is printed about labels, a free label stays clean', () => {
+  // Derived from the shipping tables, never typed: every config-sources key the check reads whose protocol has no label table. A
+  // protocol that gains a table leaves this list by itself (and OL1-OL7 are then the cases to copy for it).
+  const noTable = SHIPPED_CONFIG_KEYS.filter((k) => configLabelTableOf(k) === null);
+  assert(noTable.length >= 2 && noTable.length === SHIPPED_CONFIG_KEYS.length - 1, `expected every shipped key but one to have no label table; without one: ${noTable.join(', ')} of ${SHIPPED_CONFIG_KEYS.join(', ')}`);
+  for (const token of noTable) {
+    const r = checkSources(spec(kLeg(2, CFG_LINES, token)));
+    assert(r.errors.length === 0, show(r));
+    assert((cfg(r)[0] as { labelCheck: unknown }).labelCheck === null, JSON.stringify(r.blocks));
+    assert(!r.notChecked.some((n) => /each label names a platform file target/.test(n)) && !/labels /.test(renderSourcesCli(r)), renderSourcesCli(r));
+  }
+  assert(configLabelTableOf(OBS) !== null, 'observability lost its label table');
+});
+test('OL9 the check and the PLATFORM agree on every label problem word (one block per word the shipping function can return from a label)', () => {
+  const cases: Array<[string, string[]]> = [
+    ['label-target-not-supported', [`nope: service-held — service ${OBS_SVC}`]],
+    ['label-key-invalid', [`obs-ingress...: service-held — service ${OBS_SVC}`]],
+    ['path-never-held', [`obs-ingress.server.key: service-held — service ${OBS_SVC}`]],
+  ];
+  // a target whose path cannot be known from a label: taken from the shipping table, so the case exists exactly while such a target does
+  const unresolvable = [...platformLabelTargets()].find(([t, f]) => !('const' in f.path) && !('template' in f.path) && /^[A-Za-z0-9_.-]+$/.test(t));
+  if (unresolvable) cases.push(['label-path-not-resolvable', [`${unresolvable[0]}: service-held — service ${OBS_SVC}`]]);
+  for (const [word, lines] of cases) {
+    const r = checkSources(spec(oLeg(4, lines)));
+    const said = labelErrors(r).map((e) => /: ([a-z-]+) - /.exec(e.message.split(`for ${OBS}`)[1] ?? '')?.[1]);
+    assert(said.length === 1 && said[0] === word && platformLabelProblem(lines) === word, `${word}: the check said ${JSON.stringify(said)}, the platform ${platformLabelProblem(lines)}; ${show(r)}`);
+  }
+  const reached = new Set(cases.map(([w]) => w));
+  for (const w of CONFIG_LABEL_PROBLEMS) if (!reached.has(w)) console.log(`  · OL9: no label in today's platform table can produce "${w}" (its fix sentence is still pinned by FX1)`);
+});
+test('FX1 every fix sentence: non-empty, and every kind it names in backticks is a kind of the shipping tables (both grammars, every config protocol)', () => {
+  const known = new Set<string>([...DEVICE_SOURCE_KINDS, ...CONFIG_SOURCE_KINDS]);
+  const tables: Array<[string, Record<string, string>]> = [['device', deviceFixTable()], ...Object.keys(CONFIG_SOURCE_KINDS_BY_PROTOCOL).map((p): [string, Record<string, string>] => [p, configFixTable(p)])];
+  let named = 0;
+  for (const [name, table] of tables) for (const [word, text] of Object.entries(table)) {
+    assert(typeof text === 'string' && text.trim().length > 20, `${name}/${word}: no fix sentence`);
+    for (const m of text.matchAll(/`([a-z-]+)`/g)) { named++; assert(known.has(m[1]), `${name}/${word} names \`${m[1]}\`, which is no kind of the shipping tables`); }
+  }
+  assert(named >= 8, `the fix sentences name only ${named} kinds: the backtick convention was dropped, so this pin sees nothing`);
+  for (const w of CONFIG_LABEL_PROBLEMS) assert(configFixTable(OBS)[w], `no fix sentence for the label problem ${w}`);
+});
+test('FX3 the supported labels a fix sentence lists ARE the platform table\'s: one per target a label can name, and each one resolves on the platform', () => {
+  const writable = [...platformLabelTargets()].filter(([, f]) => 'const' in f.path || 'template' in f.path).map(([t]) => t).sort();
+  const shapes = supportedLabelShapes();
+  assert(shapes.map((x) => x.split(/[ .]/)[0]).sort().join(',') === writable.join(',') && writable.length >= 2, `listed: ${shapes.join(' | ')}; the table's: ${writable.join(', ')}`);
+  for (const x of shapes) {
+    const label = x.split(' (')[0].replace('<file name>', 'a.conf');
+    assert(platformLabelProblem([`${label}: service-held — service ${OBS_SVC}`]) === null, `the listed label shape "${x}" does not resolve on the platform (as ${label})`);
+  }
+});
+test('FX4 at RUNTIME: every problem word the shipping parsers can return has a fix sentence, and no sentence is for a word they cannot return (scripts/ is not typechecked by the build)', () => {
+  // The unions are types, so the words are read from the shipping SOURCE: every `problem: '<word>'` a parser returns, plus the label list.
+  const src = (f: string) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+  const words = (text: string) => new Set([...text.matchAll(/problem: '([a-z-]+)'/g)].map((m) => m[1]));
+  const device = words(src('lib/agents/harness/device-sources.ts'));
+  const config = new Set([...words(src('lib/agents/harness/config-sources.ts')), ...words(src('lib/agents/harness/held-bytes/config-label.ts')), ...CONFIG_LABEL_PROBLEMS]);
+  assert(device.size >= 12 && config.size >= 8, `the source scan found too few problem words (device ${device.size}, config ${config.size}): the parsers no longer write \`problem: '<word>'\``);
+  const dev = deviceFixTable();
+  const missingDev = [...device].filter((w) => !(w in dev));
+  assert(missingDev.length === 0, `device problem words with no fix sentence: ${missingDev.join(', ')}`);
+  for (const p of Object.keys(CONFIG_SOURCE_KINDS_BY_PROTOCOL)) {
+    const table = configFixTable(p);
+    // a config block is parsed by the shared line core too, so a device LINE word can reach it; the device-only BLOCK words cannot
+    const missing = [...config].filter((w) => !(w in table));
+    assert(missing.length === 0, `${p}: config problem words with no fix sentence: ${missing.join(', ')}`);
+    const extra = Object.keys(table).filter((w) => !config.has(w) && !device.has(w));
+    assert(extra.length === 0, `${p}: fix sentences for words no shipping parser returns: ${extra.join(', ')}`);
+  }
+  const extraDev = Object.keys(dev).filter((w) => !device.has(w));
+  assert(extraDev.length === 0, `device fix sentences for words the device parser never returns: ${extraDev.join(', ')}`);
+});
+test('FX2 every S2 a spec writer can get ends with the fix: a device block, a Kubernetes block, an observability block', () => {
+  const dev = checkSources(spec(leg(1, 'change', [CHANGE_LINES[0].replace(SOURCE_SEPARATOR, ' - ')])));
+  const k8s = checkSources(spec(kLeg(2, [CFG_LINES[0].replace(SOURCE_SEPARATOR, ' - '), CFG_LINES[1]])));
+  const obs = checkSources(spec(oLeg(4, [OBS_OK[2], `obs-ingress.otlp-ingress.conf: live-read — service ${OBS_SVC}`])));
+  for (const [r, fix] of [[dev, deviceFixTable()['separator-invalid']], [k8s, configFixTable('kubernetes-gitops')['separator-invalid']], [obs, configFixTable(OBS)['redundant-live-read']]] as const) {
+    const s2 = r.errors.filter((e) => e.rule === 'S2');
+    assert(s2.length === 1 && s2[0].message.endsWith(` - ${fix}`), show(r));
+  }
 });
 test('NC5 S1: a device-sources block and a config-sources block in one leg section', () => {
   const r = checkSources(spec(kLeg(2, CFG_LINES, 'kubernetes-gitops', `${LANE_SENTENCES.change}\n\n${fence(CHANGE_LINES)}`)));
@@ -317,7 +505,10 @@ test('TK8 fail CLOSED: an item naming no config-sources token, naming two, or (t
   const two = checkSources(spec(kLeg(2, CFG_LINES)), objective(cItem(2, CFG_LINES)), { configKeys: TF_KEYS, rowItemMap: rmap({ 2: [K8S(2), TFR(2)] }) });
   assert(two.errors.some((e) => e.rule === 'S3' && /several config-sources tokens \(kubernetes-gitops, terraform-iac/.test(e.message)), show(two));
   const nomap = checkSources(spec(kLeg(2, CFG_LINES)), objective(cItem(2, CFG_LINES)), { configKeys: TF_KEYS });
-  assert(nomap.errors.some((e) => e.rule === 'S3' && /no row-item map names its protocol .* 2 config-sources protocols .*\(--answers\)/.test(e.message)), show(nomap));
+  // Restated by execution-facts at the join; the suite is requirements-authoring's — it reviews this. The count is the injected key
+  // set's: 2 until observability-config joined the shipped keys at its 1.12.0 join, 3 since.
+  assert(nomap.errors.some((e) => e.rule === 'S3' && new RegExp(`no row-item map names its protocol .* ${TF_KEYS.length} config-sources protocols .*\\(--answers\\)`).test(e.message)), show(nomap));
+  assert(TF_KEYS.length >= 2, 'the fail-closed case needs at least two protocols read');
   // an unkeyed item is never matched, so the leg's block is also reported as carrying no owner item
   assert(rules(nomap) === 'S3,S3', show(nomap));
 });

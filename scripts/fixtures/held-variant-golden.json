@@ -1,9 +1,9 @@
 {
   "base": {
     "name": "observability-config-protocol",
-    "version": "1.11.0",
-    "sha256": "c0ad8475f34529305c93c1ca928b2450f5f86ccc9a6fbe7ba5e53b2a33875628",
-    "chars": 41368
+    "version": "1.12.0",
+    "sha256": "4d62c5232e2fa71bbb0be9371fe0b84371aefd0ae8d59074cd8d8b1b11071078",
+    "chars": 54799
   },
   "roles": {
     "config_change_author": {
@@ -37,7 +37,7 @@
       ]
     },
     "Observability Change Architect": {
-      "sha256": "8d461e87166bf5d7777b211c6c92bcf64055499ad04d8de7d4ec9b7622522a5d",
+      "sha256": "6b0bafcf8cfae77c378569c00d335a15651079ead674bc52a73d981ec881a8ff",
       "promptTemplateSha256": "a2c2be990bf2ba6b90968a06aa3f1924533f0ef6e4f373053fc06b51063338a5",
       "model": "claude-sonnet-5",
       "maxTokens": 48000,
@@ -45,7 +45,8 @@
       "constraints": [
         "Protocol First",
         "Stay in Phase",
-        "Read-Only Stack Contact"
+        "Read-Only Stack Contact",
+        "Served-Only Lines: Say What Applying Does"
       ]
     },
     "Observability Config Rollback Author": {
@@ -108,8 +109,8 @@
     "version": "1.0.0",
     "sha256": "bd6179d6cd136abe360472336b01e7528dde51ca036c95d3201f70b477f110c3",
     "chars": 254,
-    "baseSha256": "c0ad8475f34529305c93c1ca928b2450f5f86ccc9a6fbe7ba5e53b2a33875628",
-    "deltaChars": -41114,
+    "baseSha256": "4d62c5232e2fa71bbb0be9371fe0b84371aefd0ae8d59074cd8d8b1b11071078",
+    "deltaChars": -54545,
     "templates": {
       "Observability Held State Harvester": {
         "sha256": "da0782abd5f78a16d8f82f7f644e04c32335405aae15cd99d6303f80711122af",
@@ -124,7 +125,7 @@
         ]
       },
       "Observability Held Change Architect": {
-        "sha256": "79e41f6ba52e3d63b0b2239f54c27231c65f078dabfeb92edefcc61e2680a289",
+        "sha256": "8616f84cdd28d782e5a47930f553a5e1f78aa726c75190780b92ac6c4c730d10",
         "promptTemplateSha256": "a2c2be990bf2ba6b90968a06aa3f1924533f0ef6e4f373053fc06b51063338a5",
         "model": "claude-sonnet-5",
         "maxTokens": 48000,
@@ -132,7 +133,8 @@
         "constraints": [
           "Protocol First",
           "Stay in Phase",
-          "Read-Only Stack Contact"
+          "Read-Only Stack Contact",
+          "Served-Only Lines: Say What Applying Does"
         ]
       },
       "Observability Held Config Rollback Author": {

@@ -9,7 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { checkSources } from './check-requirements-sources';
-import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, CARD_WORD_RE, driftCallsOf, canonJson, archDescriptorsRespected, archFetchRoute, tfLegFacts, type Carrier } from './canary-req-sources';
+import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, CARD_WORD_RE, driftCallsOf, canonJson, archDescriptorsRespected, archFetchRoute, tfLegFacts, obsNoPlaceholderKey, obsUndeclaredLeg, obsDeclaredFacts, type Carrier } from './canary-req-sources';
 import { computeGitLiveDrift } from '../lib/agents/harness/git-live-drift';
 import { buildDeviceSourcesSnapshot, resolveLegDeviceSources, DEVICE_SOURCE_KINDS, SOURCE_SEPARATOR } from '../lib/agents/harness/device-sources';
 
@@ -152,6 +152,62 @@ for (const n of ['req-src-contract-equals-spec', 'req-src-keys-parse', 'req-src-
   t('TF5 a name missing from the block is a FINDING', tfLegFacts([leg({ kids: [harv, author({ ...fx.planWitness, missing: ['aws_s3_bucket.archive: tags.owner'] })] })]).verdict === 'FINDING');
   t('TF6 a platform drift call on a Terraform leg is a FINDING', tfLegFacts([leg({ kids: [{ role: 'infra_state_harvester', result: { platformDriftCalls: { version: 1, calls: [] } } }, author(fx.planWitness)] })]).verdict === 'FINDING');
   t('TF7 no Terraform leg, or no Author result yet, is UNEXERCISED, never a PASS', tfLegFacts([]).verdict === 'UNEXERCISED' && tfLegFacts([leg({ kids: [harv] })]).verdict === 'UNEXERCISED');
+}
+{
+  // ── observability-config 1.12.0, the join (pre-registered 2026-11-23). Both directions and the absence, per control. ──
+  const GIT = 'obs-otelcol: git-file — service github-service ; paichart/paichart-configs/observability/otelcol/config.yaml';
+  const LIVE = 'obs-otelcol: live-read — service https://example.test/descriptors/obs.json';
+  const body = (lines: string[] | null) => `Tune the collector.${lines ? `\n\n## Config sources\n${lines.join('\n')}\n` : ''}`;
+  const K8 = ['sample: git-file — service github-service ; paichart/paichart-configs/k8s/sample-workloads.yaml'];
+  const cl = (contract: unknown, lines: string[] | null = null) => ({ id: 'L', description: body(lines), contract });
+  // cso-obs-no-placeholder-key
+  t('CSO1 no observability leg is UNEXERCISED, never a PASS', obsNoPlaceholderKey([]).verdict === 'UNEXERCISED');
+  for (const [name, contract] of [['no configSources', { serviceDescriptors: {} }], ['an empty object', { configSources: {} }], ['another protocol\'s key only', { configSources: { 'kubernetes-gitops': K8 } }],
+    ['configSources null', { configSources: null }], ['the key null', { configSources: { 'observability-config': null } }], ['a leg-name key', { configSources: { 'pipeline-4-observability': K8 } }]] as Array<[string, unknown]>) {
+    t(`CSO2 a leg that declares nothing, ${name} ⇒ PASS`, obsNoPlaceholderKey([cl(contract)]).verdict === 'PASS');
+  }
+  for (const [name, contract] of [['an empty string', { configSources: { 'observability-config': '' } }], ['a note', { configSources: { 'observability-config': 'no block — runs undeclared' } }],
+    ['an empty list', { configSources: { 'observability-config': [] } }], ['an object', { configSources: { 'observability-config': {} } }], ['["none"]', { configSources: { 'observability-config': ['none'] } }],
+    ['configSources a sentence', { configSources: 'none for observability' }], ['configSources a list', { configSources: K8 }]] as Array<[string, unknown]>) {
+    t(`CSO3 a placeholder — ${name} ⇒ FINDING`, obsNoPlaceholderKey([cl(contract)]).verdict === 'FINDING');
+  }
+  t('CSO4 a DECLARED leg (the block under the key parses; or in its own task text) ⇒ PASS, counted as declared',
+    obsNoPlaceholderKey([cl({ configSources: { 'observability-config': [GIT, LIVE] } })]).verdict === 'PASS' && obsNoPlaceholderKey([cl({}, [GIT])]).lines.join('\n').includes('1 declare a block that parses'));
+  t('CSO5 one clean leg and one placeholder leg ⇒ FINDING (every leg is read)', obsNoPlaceholderKey([cl({}), cl({ configSources: { 'observability-config': '' } })]).verdict === 'FINDING');
+  // cso-obs-undeclared-leg
+  const UND = { version: 1, checked: false, reason: 'config-sources-absent', declaration: { state: 'absent', grammarVersion: 1 }, undeclared: { heldFrom: 'service', files: 3, refusals: 0 } };
+  const fl = (over: Record<string, unknown> = {}) => ({ id: 'L', description: body(null), contract: {}, snapshot: false, heldEdit: { state: 'applied', forced: false }, harvester: { configSourceReads: UND } as Record<string, unknown> | null, ...over });
+  t('CSO6 a no-block leg: no snapshot, no Config-lane reason, the undeclared stamp ⇒ PASS', obsUndeclaredLeg([fl()]).verdict === 'PASS');
+  t('CSO7 forced by the Config lane (could-not-check; unparseable) ⇒ FINDING', obsUndeclaredLeg([fl({ heldEdit: { forced: true, reason: 'config-sources-could-not-check' } })]).verdict === 'FINDING'
+    && obsUndeclaredLeg([fl({ heldEdit: { forced: true, reason: 'config-sources-unparseable' } })]).verdict === 'FINDING');
+  t('CSO8 a reason that is NOT the Config lane\'s (partial) is not this control\'s finding', obsUndeclaredLeg([fl({ heldEdit: { forced: true, reason: 'partial' } })]).verdict === 'PASS');
+  t('CSO9 no undeclared stamp, a snapshot, or a comparison record on a no-block leg ⇒ FINDING', obsUndeclaredLeg([fl({ harvester: {} })]).verdict === 'FINDING'
+    && obsUndeclaredLeg([fl({ snapshot: true })]).verdict === 'FINDING' && obsUndeclaredLeg([fl({ harvester: { configSourceReads: UND, fileSourceCompare: {} } })]).verdict === 'FINDING');
+  t('CSO10 no such leg, or no Harvester result yet ⇒ UNEXERCISED', obsUndeclaredLeg([]).verdict === 'UNEXERCISED' && obsUndeclaredLeg([fl({ harvester: null })]).verdict === 'UNEXERCISED'
+    && obsUndeclaredLeg([fl({ description: body([GIT]) })]).verdict === 'UNEXERCISED');
+  // cso-obs-declared-facts
+  const reads = (items: unknown[], extra: Record<string, unknown> = {}) => ({ version: 1, checked: true, unit: 'files', items, notRead: 0, ...extra });
+  const item = (kind: string, state: string) => ({ label: 'obs-otelcol', kind, read: { state } });
+  const dh = (r: unknown) => ({ fileSourceCompare: { version: 1 }, configSourceReads: r, liveEvidence: { summary: 'all-read' }, gitLiveDrift: { checked: true } });
+  const dl = (over: Record<string, unknown> = {}) => ({ id: 'D', description: body([GIT, LIVE]), contract: {}, snapshot: true, heldEdit: null, harvester: dh(reads([item('git-file', 'read'), item('live-read', 'read')])) as Record<string, unknown> | null, ...over });
+  t('CSO11 a declared leg with its snapshot, the record and the three facts, every line tied ⇒ PASS', obsDeclaredFacts([dl()]).verdict === 'PASS');
+  t('CSO12 a line reading file-from-other-service / registered-under-other-name, or an unresolved service ⇒ FINDING (the Harvester left the descriptor-URL route)',
+    obsDeclaredFacts([dl({ harvester: dh(reads([item('live-read', 'file-from-other-service')])) })]).verdict === 'FINDING'
+    && obsDeclaredFacts([dl({ harvester: dh(reads([item('service-held', 'registered-under-other-name')])) })]).verdict === 'FINDING'
+    && obsDeclaredFacts([dl({ harvester: dh(reads([item('git-file', 'read')], { unresolvedServices: ['https://…'] })) })]).verdict === 'FINDING');
+  t('CSO13 a missing record or fact, no snapshot, or the undeclared stamp on a declared leg ⇒ FINDING', obsDeclaredFacts([dl({ harvester: { configSourceReads: reads([]) } })]).verdict === 'FINDING'
+    && obsDeclaredFacts([dl({ snapshot: false })]).verdict === 'FINDING' && obsDeclaredFacts([dl({ harvester: dh({ ...UND }) })]).verdict === 'FINDING');
+  {
+    // sec-ops (join review): stored strings are printed through printable() — an escape sequence in a reason, a label, a kind or a summary never reaches a line
+    const ESC = '\u001b[31mRED\u001b[0m\u202e'; const bad = (ls: string[]) => ls.some((l) => /[\u0000-\u001f\u007f\u202e]/.test(l));
+    const a = obsUndeclaredLeg([fl({ heldEdit: { forced: true, reason: `config-sources-${ESC}` }, harvester: { configSourceReads: { ...UND, reason: ESC } } })]);
+    const b = obsDeclaredFacts([dl({ harvester: { fileSourceCompare: {}, configSourceReads: reads([{ label: ESC, kind: ESC, read: { state: ESC } }]), liveEvidence: { summary: ESC }, gitLiveDrift: { checked: false, reason: ESC } } })]);
+    const c = obsNoPlaceholderKey([{ id: `L${ESC}`, description: 'x', contract: { configSources: { 'observability-config': '' } } }]);
+    t('CSO15 an escape sequence in a stored reason, label, kind, state, summary or id never reaches a printed line (all three controls)',
+      !bad(a.lines) && !bad(b.lines) && !bad(c.lines) && a.lines.join('').includes('RED') && b.lines.join('').includes('RED') && a.verdict === 'FINDING' && c.verdict === 'FINDING');
+  }
+  t('CSO14 no declared leg, or no Harvester result yet ⇒ UNEXERCISED; a plain not-read line is NOT a registration finding', obsDeclaredFacts([fl()]).verdict === 'UNEXERCISED'
+    && obsDeclaredFacts([dl({ harvester: null })]).verdict === 'UNEXERCISED' && obsDeclaredFacts([dl({ harvester: dh(reads([item('live-read', 'not-read')])) })]).verdict === 'PASS');
 }
 
 console.log(`\n${fail ? '❌' : '✅'} canary-req-sources: ${pass} passed, ${fail} failed`);

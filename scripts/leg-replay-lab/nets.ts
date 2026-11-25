@@ -21,7 +21,19 @@ import { buildNetContext } from '../../lib/agents/harness/net-context';
 import { isProgramHarnessTask } from '../../lib/agents/harness/program-protocol';
 import { buildReplayPrisma, taskRowToPrisma, type ReplaySubstitution, type ReplayPrismaOptions } from './replay-prisma';
 import type { Snapshot } from './snapshot';
-import { armConfigSources, armOwningLeg } from './config-sources-arm';
+import { armConfigSources, armOwningLeg, armLeafOwningLeg } from './config-sources-arm';
+
+/** What a lab caller hands a leaf's nets beside the text. `platformDriftCalls` and `fileSourceCompare` are lab-only CARRIER fields
+ *  (each is its own ctx input in production, never inside `held`); every other field is the core's `held` object.
+ *  `fileSourceCompare` (STEP 3 slice L): the platform's file-comparison record for a Harvester of a `platform-compare` protocol —
+ *  the record the lab made with the SHIPPING `runLegFileSourceCompare`, or the STORED record of a persisted Harvester (a replay hands
+ *  it back and never recomputes it, plan §5.2). `editHunkFiles` / `storedEditFacts`: the Author point's inputs for `baseMatch` and
+ *  the overlap fact (net-registry.ts `held`). */
+export interface LabNetHeld { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: readonly string[] | null;
+  platformDriftCalls?: readonly unknown[] | null; fileSourceCompare?: unknown;
+  editHunkFiles?: readonly unknown[] | null; storedEditFacts?: ReadonlyMap<string, { baseMatch?: unknown; editOverlap?: unknown }> | null;
+  /** planWitness lever (plan-witness-lever.ts): the core's key read, absent below terraform-iac 1.17.0 */ planWitnessKeys?: unknown }
+const CARRIER_KEYS = ['platformDriftCalls', 'fileSourceCompare'] as const;
 
 export const LEG_NETS_EXCLUDED: Record<string, string> = {
   verdictFreshness: 'compares the Reviewer\'s frozen chained input with later production Author runs — not meaningful for a replay',
@@ -50,7 +62,7 @@ export interface NetRun {
  *  platform's drift call record the core builds BEFORE the Harvester's persist (config-sources-patch.ts makes it with a fixture
  *  caller); absent ⇒ the ctx carries none, exactly as on every execution that is not a Config-sources Harvester. */
 export async function runAuthorLeafNets(snap: Snapshot, role: string, text: string, replayExecutionId: string, toolCalls?: unknown,
-  held?: { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: readonly string[] | null; platformDriftCalls?: readonly unknown[] | null; /** planWitness lever (plan-witness-lever.ts): the core's key read, absent below terraform-iac 1.17.0 */ planWitnessKeys?: unknown },
+  held?: LabNetHeld,
   protocolInjection?: unknown, opts: ReplayPrismaOptions = {}): Promise<NetRun> {
   const { client, queries } = buildReplayPrisma(snap, [{ taskId: snap.author.task.id, executionId: replayExecutionId, resultJson: { finalResponse: text, ...(toolCalls !== undefined ? { toolCalls } : {}) } }], opts);
   const t = taskRowToPrisma(snap.author.task);
@@ -60,7 +72,7 @@ export async function runAuthorLeafNets(snap: Snapshot, role: string, text: stri
     ...(toolCalls !== undefined ? { toolCalls } : {}),
     ...heldInput(held),
     ...(protocolInjection !== undefined ? { protocolInjection } : {}),
-    ...configInput(snap, protocolInjection, held?.platformDriftCalls),
+    ...labNetConfigInput(snap, protocolInjection, held?.platformDriftCalls, false, held?.fileSourceCompare),
   });
   return runPoint('leaf-persist', ctx, queries);
 }
@@ -71,7 +83,9 @@ export async function runAuthorLeafNets(snap: Snapshot, role: string, text: stri
 export async function runLeafNetsFor(snap: Snapshot, taskRow: Record<string, any>, role: string, text: string, replayExecutionId: string,
   toolCalls: unknown | undefined, protocolInjection: unknown | undefined, opts: ReplayPrismaOptions = {}, inputContext?: unknown,
   /** Config sources STEP 2: the platform's drift call record for a Config-sources Harvester (see runAuthorLeafNets). */
-  platformDriftCalls?: readonly unknown[] | null): Promise<NetRun> {
+  platformDriftCalls?: readonly unknown[] | null,
+  /** STEP 3 slice L: the Harvester's `fileSourceCompare` record and its `heldBytes` digest (the no-block arm's file count). */
+  extra?: { fileSourceCompare?: unknown; heldBytes?: Record<string, unknown> | null }): Promise<NetRun> {
   const { client, queries } = buildReplayPrisma(snap, [{ taskId: String(taskRow.id), executionId: replayExecutionId, resultJson: { finalResponse: text, ...(toolCalls !== undefined ? { toolCalls } : {}) } }], opts);
   const t = taskRowToPrisma(taskRow);
   const ctx = buildNetContext({
@@ -79,7 +93,8 @@ export async function runLeafNetsFor(snap: Snapshot, taskRow: Record<string, any
     agentRole: role, harnessMode: null, finalResponse: text, programTier: false, executionId: replayExecutionId,
     ...(toolCalls !== undefined ? { toolCalls } : {}),
     ...(protocolInjection !== undefined ? { protocolInjection } : {}),
-    ...configInput(snap, protocolInjection, platformDriftCalls),
+    ...(extra?.heldBytes ? { held: { heldBytes: extra.heldBytes } } : {}),
+    ...labNetConfigInput(snap, protocolInjection, platformDriftCalls, false, extra?.fileSourceCompare),
   });
   return runPoint('leaf-persist', ctx, queries);
 }
@@ -94,28 +109,37 @@ export async function runLegSynthesizeNets(snap: Snapshot, subs: ReplaySubstitut
     prisma: client, task: { id: leg.id, type: leg.type, metadata: leg.metadata, inputContext: leg.inputContext },
     agentRole: leg.agentRole, harnessMode: 'SYNTHESIZE', finalResponse: null, programTier, executionId: 'lab-leg-synthesize',
     ...(protocolInjection !== undefined ? { protocolInjection } : {}),
-    ...configInput(snap, protocolInjection, undefined, true),
+    ...labNetConfigInput(snap, protocolInjection, undefined, true),
   });
   return runPoint('leg-synthesize', ctx, queries);
 }
 
 /** The `held` object the core hands the nets, WITHOUT the lab-only carrier field (`platformDriftCalls` is its own ctx input). */
-function heldInput(held?: { editApplication?: Record<string, unknown> | null; heldBytes?: Record<string, unknown> | null; baseHeldHandles?: readonly string[] | null; platformDriftCalls?: readonly unknown[] | null; /** planWitness lever (plan-witness-lever.ts): the core's key read, absent below terraform-iac 1.17.0 */ planWitnessKeys?: unknown }): Record<string, unknown> {
+function heldInput(held?: LabNetHeld): Record<string, unknown> {
   if (!held) return {};
-  if (!('platformDriftCalls' in held)) return { held }; // every caller before slice 4: the object as passed
-  const { platformDriftCalls: _p, ...rest } = held; void _p;
+  if (!CARRIER_KEYS.some((k) => k in held)) return { held }; // every caller before slice 4: the object as passed
+  const rest: Record<string, unknown> = { ...held };
+  for (const k of CARRIER_KEYS) delete rest[k];
   return Object.keys(rest).length ? { held: rest } : {};
 }
 /** Config sources STEP 2: the ctx inputs production's core supplies on a Config-sources leg at its text version — `{}` on every
  *  other arm (config-sources-arm.ts). `legPoint`: the leg's own SYNTHESIZE also gets the owning-leg resolution the hoist reads. */
-function configInput(snap: Snapshot, protocolInjection: unknown, platformDriftCalls?: readonly unknown[] | null, legPoint = false): Record<string, unknown> {
+/** STEP 3 slice L — THE LEAF POINT'S OWNING LEG (P3-BUILD §8a item 11): production resolves the owning leg for EVERY leaf, and since
+ *  this slice so does the lab, on every arm that reads Config sources: `{ kind: 'leg', …, configSourceProtocol }` at a leaf point,
+ *  `{ kind: 'self', … }` at the leg's own. A `runs-undeclared` leg with no block NEEDS it (the no-block arm of `configSourceReads`
+ *  and the `liveEvidence` hoist stamp only for a RESOLVED leg). For a `forced` protocol it names the protocol the leaf's composed
+ *  protocol named before ("a declaration and no leg" — the fallback of `methodProtocol` / `configFactProtocol`), so no earlier cell
+ *  moves: MEASURED at the slice (LCK / LCT 21 of 21, and every golden prompt and protocol file byte-identical to `main`). */
+export function labNetConfigInput(snap: Snapshot, protocolInjection: unknown, platformDriftCalls?: readonly unknown[] | null, legPoint = false, fileSourceCompare?: unknown): Record<string, unknown> {
   const configSources = armConfigSources(snap.leg, protocolInjection);
   if (!configSources) {
     if (platformDriftCalls !== undefined && platformDriftCalls !== null) throw new Error('lab nets: a platform drift call record was passed on an arm that does not read Config sources — production makes no call there');
+    if (fileSourceCompare !== undefined && fileSourceCompare !== null) throw new Error('lab nets: a file-comparison record was passed on an arm that does not read Config sources — production makes none there');
     return {};
   }
-  const owningLeg = legPoint ? armOwningLeg(snap.leg, protocolInjection) : null;
-  return { configSources, ...(platformDriftCalls !== undefined ? { platformDriftCalls } : {}), ...(owningLeg ? { owningLeg } : {}) };
+  const owningLeg = legPoint ? armOwningLeg(snap.leg, protocolInjection) : armLeafOwningLeg(snap.leg, protocolInjection, snap.author.task.stage_id as string | null);
+  return { configSources, ...(platformDriftCalls !== undefined ? { platformDriftCalls } : {}),
+    ...(fileSourceCompare !== undefined && fileSourceCompare !== null ? { fileSourceCompare } : {}), ...(owningLeg ? { owningLeg } : {}) };
 }
 
 async function runPoint(point: 'leaf-persist' | 'leg-synthesize', ctx: ReturnType<typeof buildNetContext>, queries: string[]): Promise<NetRun> {

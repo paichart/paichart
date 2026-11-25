@@ -37,6 +37,17 @@
  *       that protocol reads and holds every declared file in it (owner 2026-11-15, multi-leg ADDENDUM 2).
  *   S5  NOT CHECKED: a ref vs the service pin, descriptor registration, that the block covers the cluster the leg changes.
  *
+ * LABELS (2026-11-23, the observability-config 1.12.0 join). On a protocol with a label table (`configLabelTableOf`: observability;
+ * Kubernetes and Terraform have none, so nothing changes for them) every label of a PARSED block must name one of the platform's
+ * file targets. The check asks the SHIPPING block-level function (`resolveConfigLabels`, held-bytes/config-label.ts) - the one the
+ * platform runs when it takes the leg's snapshot - so an unsupported label is an S2 ERROR at publish rather than a leg forced
+ * `config-sources-unparseable`. It applies to EVERY line, whatever its kind: the platform checks a Git-only block's labels too.
+ * An owner item's block gets the same check (S3: fix the answer before the merge). Printed NOT CHECKED: that the Git path written
+ * beside a label is the file that label's target serves, and that the named service is the one the platform's file table is keyed on.
+ *
+ * WHAT TO DO. Every S2 (and an owner item's "does not parse") ends with the fix: scripts/requirements-sources-fix-text.ts, one
+ * sentence per problem word, typed on the shipping problem unions. That file words; it answers no grammar question.
+ *
  * OWNER ITEMS ARE KEYED ON THEIR TOKEN (2026-11-17, STEPS-2-4-PLAN section 3b item 6; record STEP4-REQ-CHECK-TOKEN-KEYING.md). An owner
  * item's config-sources block is resolved under ONE protocol: the config-sources token that prefixes the item's rows in the owner's
  * ROW-ITEM-MAP (answers.md, `--answers`; the rule check-requirements-clauses.py already uses: "an item governs the legs whose token
@@ -58,8 +69,10 @@ import {
   parseDeviceSourcesBlock, resolveLegDeviceSources, sameDeclaration, type LegDeviceSources,
 } from '../lib/agents/harness/device-sources';
 import {
-  parseConfigSourcesBlock, resolveLegConfigSources, sameConfigDeclaration, type LegConfigSources,
+  configLabelTableOf, parseConfigSourcesBlock, resolveLegConfigSources, sameConfigDeclaration, type ConfigLabelCheck, type LegConfigSources,
 } from '../lib/agents/harness/config-sources';
+import { resolveConfigLabels } from '../lib/agents/harness/held-bytes/config-label';
+import { configFix, deviceFix } from './requirements-sources-fix-text';
 import { CONFIG_SOURCE_LANES, CONFIG_SOURCE_PROTOCOLS, DEVICE_SOURCE_LANES } from '../lib/agents/harness/held-bytes/variant';
 import { LEG_TOKENS } from '../lib/agents/harness/requirements-coverage';
 import { rowItemMapFromAnswers, type RowItemMap } from '../lib/agents/harness/requirements-clauses';
@@ -80,7 +93,9 @@ export type SourcesBlock =
       resolution: LegDeviceSources }
   /** A config-sources block: its protocol (contract key) and lane come from CONFIG_SOURCE_LANES, never from a sentence. */
   | { grammar: 'config'; section: string; line: number; protocol: string; lane: Lane; laneSource: 'table';
-      resolution: LegConfigSources };
+      resolution: LegConfigSources;
+      /** The platform's block-level label check, for a PARSED block of a protocol with a label table; null otherwise (not asked). */
+      labelCheck: ConfigLabelCheck | null };
 export interface SourcesFinding { rule: 'S1' | 'S2' | 'S3' | 'S4'; section: string | null; message: string }
 export interface SourcesResult {
   mode: 'generated' | 'hand-written'; blocks: SourcesBlock[]; errors: SourcesFinding[]; notChecked: string[];
@@ -111,6 +126,19 @@ const itemConfigTokens = (rows: ReadonlySet<string> | undefined, keys: readonly 
   [...new Set([...(rows ?? [])].map((r) => r.split('.')[0]))].filter((t) => keys.includes(t)).sort();
 const isSourcesHeading = (l: string) => isDeviceHeading(l) || isConfigHeading(l);
 const tokenRe = (t: string) => new RegExp(`(?<![\\w-])${t.replace(/[-]/g, '\\-')}(?![\\w-])`);
+/** The label check the platform runs at the snapshot (config-sources-read.ts `configSnapshotDecision`): asked only of a PARSED block
+ *  of a protocol with a label table. Null = not asked (no table, or the block did not parse). */
+function labelCheckOf(protocol: string, resolution: LegConfigSources): ConfigLabelCheck | null {
+  const table = configLabelTableOf(protocol);
+  return table !== null && resolution.state === 'parsed' ? resolveConfigLabels(resolution.entries, table) : null;
+}
+/** A label problem, said for a spec writer: the label itself (greppable), its place among the block's source lines, the word, the fix. */
+function labelProblemText(protocol: string, resolution: LegConfigSources, check: ConfigLabelCheck): string | null {
+  if (check.state !== 'problem' || resolution.state !== 'parsed') return null;
+  const at = check.lineIndex;
+  const where = at === null ? 'a label' : `label "${resolution.entries[at]?.label ?? '?'}" (source line ${at + 1} of the block)`;
+  return `${where} is not one the platform can resolve for ${protocol}: ${check.problem} - ${configFix(check.problem, protocol)}`;
+}
 const configLaneOf = (key: string): Lane => {
   const row = Object.values(CONFIG_SOURCE_LANES).find((v) => v.contractKey === key);
   if (!row) throw new Error(`not a config-sources protocol: ${key}`);
@@ -193,13 +221,16 @@ export function checkSources(draft: string, objective?: string | null, opts: Sou
         for (const f of cfgFences) {
           const body = f.body.join('\n');
           const resolution = resolveLegConfigSources({ protocol: keys[0], contractValue: body, taskBody: body });
-          blocks.push({ grammar: 'config', section: s.title, line: f.start, protocol: keys[0], lane: configLaneOf(keys[0]), laneSource: 'table', resolution });
+          const labelCheck = labelCheckOf(keys[0], resolution);
+          blocks.push({ grammar: 'config', section: s.title, line: f.start, protocol: keys[0], lane: configLaneOf(keys[0]), laneSource: 'table', resolution, labelCheck });
           if (resolution.state !== 'parsed') {
             const detail = resolution.state === 'unparseable'
-              ? `${resolution.problem}${resolution.lineIndex === null ? '' : ` at block line ${resolution.lineIndex + 1}`} (as the ${resolution.source === 'contract' ? 'contract copy' : 'task-body copy'})`
+              ? `${resolution.problem}${resolution.lineIndex === null ? '' : ` at block line ${resolution.lineIndex + 1}`} (as the ${resolution.source === 'contract' ? 'contract copy' : 'task-body copy'}) - ${configFix(resolution.problem, keys[0])}`
               : resolution.state;
             errors.push({ rule: 'S2', section: s.title, message: `config-sources block at line ${f.start} does not parse as the platform reads it for ${keys[0]}: ${detail}` });
           }
+          const labelText = labelCheck ? labelProblemText(keys[0], resolution, labelCheck) : null;
+          if (labelText) errors.push({ rule: 'S2', section: s.title, message: `config-sources block at line ${f.start}: ${labelText}` });
         }
       }
     }
@@ -216,7 +247,7 @@ export function checkSources(draft: string, objective?: string | null, opts: Sou
       blocks.push({ grammar: 'device', section: s.title, line: f.start, lane, laneSource, resolution });
       if (resolution.state !== 'parsed') {
         const detail = resolution.state === 'unparseable'
-          ? `${resolution.problem}${resolution.lineIndex === null ? '' : ` at block line ${resolution.lineIndex + 1}`} (as the ${resolution.source === 'contract' ? 'contract copy' : 'task-body copy'})`
+          ? `${resolution.problem}${resolution.lineIndex === null ? '' : ` at block line ${resolution.lineIndex + 1}`} (as the ${resolution.source === 'contract' ? 'contract copy' : 'task-body copy'}) - ${deviceFix(resolution.problem)}`
           : resolution.state;
         errors.push({ rule: 'S2', section: s.title, message: `block at line ${f.start} does not parse as the platform reads it: ${detail}` });
       }
@@ -251,15 +282,22 @@ export function checkSources(draft: string, objective?: string | null, opts: Sou
           const res = resolveLegConfigSources({ protocol: cand[0], contractValue: undefined, taskBody: cfgText });
           items.push({ item: it.item, grammar: 'config', state: res.state });
           if (res.state !== 'parsed') {
-            errors.push({ rule: 'S3', section: null, message: `owner item ${it.item}: its config-sources block does not parse (${res.state === 'unparseable' ? res.problem : res.state}) - fix the answer before the merge` });
-          } else parsedCfgItems.push({ item: it.item, protocol: cand[0], res });
+            errors.push({ rule: 'S3', section: null, message: `owner item ${it.item}: its config-sources block does not parse (${res.state === 'unparseable' ? `${res.problem} - ${configFix(res.problem, cand[0])}` : res.state}) - fix the answer before the merge` });
+          } else {
+            // The same label check the spec's block gets: a label the platform cannot resolve is the OWNER's answer to fix, and it is
+            // cheaper found here than after the merge. The item still takes part in transcription (it parsed), so one fault is one error.
+            const itemLabels = labelCheckOf(cand[0], res);
+            const itemLabelText = itemLabels ? labelProblemText(cand[0], res, itemLabels) : null;
+            if (itemLabelText) errors.push({ rule: 'S3', section: null, message: `owner item ${it.item}: its config-sources block: ${itemLabelText} - fix the answer before the merge` });
+            parsedCfgItems.push({ item: it.item, protocol: cand[0], res });
+          }
         }
       }
       const res = resolveLegDeviceSources({ contractValue: undefined, taskBody: unfenced(it.text) });
       if (res.state === 'absent') continue;
       items.push({ item: it.item, grammar: 'device', state: res.state });
       if (res.state !== 'parsed') {
-        errors.push({ rule: 'S3', section: null, message: `owner item ${it.item}: its sources block does not parse (${res.state === 'unparseable' ? res.problem : res.state}) - fix the answer before the merge` });
+        errors.push({ rule: 'S3', section: null, message: `owner item ${it.item}: its sources block does not parse (${res.state === 'unparseable' ? `${res.problem} - ${deviceFix(res.problem)}` : res.state}) - fix the answer before the merge` });
         continue;
       }
       parsedItems.push({ item: it.item, res });
@@ -313,6 +351,10 @@ export function checkSources(draft: string, objective?: string | null, opts: Sou
   if (blocks.some((b) => b.grammar === 'config')) {
     notChecked.push('config sources: that a ref is inside the Git service\'s pin, that an evidence service or descriptor registers, and that the block covers the cluster each leg changes');
   }
+  // A protocol whose labels were resolved: say what resolving a label does NOT prove (AU-12: a label beside the wrong Git path).
+  for (const p of [...new Set(blocks.flatMap((b) => (b.grammar === 'config' && b.labelCheck !== null ? [b.protocol] : [])))]) {
+    notChecked.push(`config sources (${p}): each label names a platform file target (checked), but NOT that the Git path written beside a label is the file that target serves, and NOT that the named service is the one the platform keeps that file from (the run reports a difference or a file it could not keep; it does not refuse the pairing)`);
+  }
   return { mode, blocks, errors, notChecked, items };
 }
 
@@ -322,7 +364,8 @@ export function renderSourcesCli(r: SourcesResult): string {
   for (const b of r.blocks) {
     const n = b.resolution.state === 'parsed' ? `${b.resolution.entries.length} line(s)` : b.resolution.state;
     const what = b.grammar === 'config' ? `config ${b.protocol}, lane ${b.lane} (${b.laneSource})` : `device, lane ${b.lane ?? '?'} (${b.laneSource})`;
-    out.push(`  - "${b.section}" line ${b.line}: ${what}, ${n}`);
+    const labels = b.grammar === 'config' && b.labelCheck !== null ? `, labels ${b.labelCheck.state === 'resolved' ? 'resolved' : b.labelCheck.problem}` : '';
+    out.push(`  - "${b.section}" line ${b.line}: ${what}, ${n}${labels}`);
   }
   if (r.errors.length === 0) out.push('OK: S1-S4 clean');
   for (const e of r.errors) out.push(`ERROR ${e.rule}${e.section ? ` [${e.section}]` : ''}: ${e.message}`);

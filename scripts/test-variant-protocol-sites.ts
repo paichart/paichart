@@ -78,9 +78,9 @@ export const EXCLUSIONS: Readonly<Record<string, string>> = {
     'Config sources STEP 4 (requirements-authoring, terraform-iac 1.17.0): TK9 pins the PRE-1.17.0 Config-sources key set to prove the single-protocol no-map result — a fixture of the check\'s injectable key set, not a protocol selection',
   'lib/agents/harness/git-live-drift.ts::GIT_LIVE_DRIFT_METHODS':
     'Config sources STEP 4 (owner Tb = B2, D-T1, 2026-11-17): the Git-vs-live METHOD of each Config-sources protocol (Kubernetes: the compare tool; Terraform: none ⇒ no call, gitLiveDrift not-checked no-git-vs-live-method) — a drift-method key, not held-capability; the retired obs variant declares no Config sources',
-  // Config sources STEP 3 P1 (2026-11-21): re-added with observability-config's entry (it was removed at STEP 4 when the list emptied).
-  'lib/agents/harness/held-bytes/variant.ts::CONFIG_SOURCE_AWAITING_TEXT':
-    'Config sources STEP 3 P1: the rows of CONFIG_SOURCE_LANES whose protocol text has not shipped its Config sources section (observability-config until 1.12.0) — a subtraction from that lane table, not held-capability; the retired obs variant is never a Config-sources protocol',
+  // (`variant.ts::CONFIG_SOURCE_AWAITING_TEXT` — removed at the observability-config 1.12.0 join, 2026-11-23: the list is empty again,
+  // so it names no protocol and the exclusion matched no site. It was here from STEP 3 P1; before that it was removed at STEP 4.
+  // Re-add it with its reason if a row is ever put back on the list.)
   'lib/agents/harness/config-sources.ts::CONFIG_LABEL_TABLE_BY_PROTOCOL':
     'Config sources STEP 3 P1: which Config-sources protocols check their block labels against the platform file targets (observability-config) — a grammar property, not held-capability; the retired obs variant declares no Config sources',
   'scripts/test-config-sources.ts::configSources':

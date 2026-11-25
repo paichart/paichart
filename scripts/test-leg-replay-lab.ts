@@ -117,6 +117,15 @@ async function test(name: string, fn: () => Promise<void> | void) {
   try { await fn(); pass++; console.log(`  ✅ ${name}`); } catch (e) { fail++; console.log(`  ❌ ${name}\n     ${(e as Error).message}`); }
 }
 function assert(c: unknown, m: string): asserts c { if (!c) throw new Error(m); }
+/** THE TESTS' OWN ORACLE STORE (STEP 3 slice L): the shipping capture under scopes the TEST states — the Git lane on, the governing
+ *  declaration the test computed, its protocol — never through the lab's `labCaptureScopes`, so an oracle built on it stays
+ *  independent of the helper it checks. (Before slice L the oracles passed the declaration to `buildLabHeldStore`, which now takes the ARM.) */
+function oracleStore(hs: any, snap: any, gov: any, protocolName: string): any {
+  const h = hs.frozenHarvesterEntry(snap);
+  const art = snap.childArtifacts.find((a: any) => a.executionId === h.executionId && a.name === 'result.json');
+  return hs.buildLabHeldStoreFromResult({ executionId: h.executionId, taskId: h.taskId, povId: snap.author.task.pov_id ?? null, resultJson: art.content,
+    scopes: { gitFileSourceLeg: true, configSources: gov, configSourceProtocol: protocolName } });
+}
 
 const EXACT = ['protocolInjection.mode', 'protocolInjection.delta', 'protocolInjection.protocolNames', 'protocolInjection.stampSource',
   'protocolInjection.preambleChars', 'agentRole', 'toolNames', 'model'];
@@ -868,7 +877,14 @@ const commitText = (name: string, commit: string): ProtocolText => {
     runLab(['run', '--experiment', G1, '--out', dir, '--only', 'X-R3', '--n', '1', '--fake-llm', 'persisted']);
     const xb = fs.readFileSync(path.join(dir, 'X-R3', 'xbase', 'author.user.md'), 'utf8').split('\n');
     const xh = fs.readFileSync(path.join(dir, 'X-R3', 'xhb', 'author.user.md'), 'utf8').split('\n');
-    const added = xh.filter((l) => !xb.includes(l)).filter((l) => l.trim());
+    // 2026-11-23 (text `19451df3c`, L-CS-O stage 2): the held join binds the observability seed's Architect row, which now carries ONE
+    // constraint (OBS_ARCHITECT_SERVED_ONLY_CONSTRAINT). It reaches the held arm's user prompt as exactly one line; the rest of the
+    // delta is still the handle index and nothing else.
+    const SERVED_ONLY = '• **Served-Only Lines: Say What Applying Does:**';
+    const addedAll = xh.filter((l) => !xb.includes(l)).filter((l) => l.trim());
+    const seedLines = addedAll.filter((l) => l.startsWith(SERVED_ONLY));
+    const added = addedAll.filter((l) => !l.startsWith(SERVED_ONLY));
+    assert(seedLines.length === 1, `xhb: the seed's Architect constraint line should appear exactly once, got ${seedLines.length}`);
     assert(xb.every((l) => xh.includes(l)) && added.length === 4 && added[0] === '### Held files (by handle)' && added.slice(1).every((l) => /^- H[123] — \/etc\/\S+ · \d+ lines$/.test(l)), `xhb delta: ${added.join(' | ')}`);
     const { scoreArchitect } = await import('./leg-replay-lab/score-edits');
     const legacy = scoreArchitect(path.join(dir, 'X-R3', 'xhb', 'sample-01'), path.join(dir, 'X-R3', 'xhb'));
@@ -897,6 +913,7 @@ const commitText = (name: string, commit: string): ProtocolText => {
       assert(a.diffMustShow.every((x: any) => x.inDiff), `${id}: plant not verbatim in the diff ${JSON.stringify(a.diffMustShow)}`);
       assert(a.leverDelta.removed.length === 0 && a.leverDelta.addedOutsideHeldBlock.length === 0, `${id}: lever delta ${JSON.stringify(a.leverDelta)}`);
       // Since e574210d7 (G3-entry decision 1) the variant Reviewer row adds exactly ONE constraint, rendered in the user prompt.
+      // (d57e5ff8f added a second for a day; reverted at 736f1b746, owner option B.)
       assert(a.leverDelta.addedTemplateConstraint.length === 1 && a.leverDelta.addedTemplateConstraint[0].startsWith('• **Held Diff: Unaccounted Lines Block:** '), `${id}: template-constraint delta ${JSON.stringify(a.leverDelta.addedTemplateConstraint)}`);
       if (id === 'R-STATE') assert(a.editDiff.state === 'diff-recompute-mismatch' && a.namedStateHeadersInPrompt === 1 && a.renderedDiffHeadersInPrompt === 0, `R-STATE ${JSON.stringify(a.editDiff)}`);
       // PC-P2-1 (e574210d7): a package with no applied edit (R-NOOP, 0 edits ⇒ empty diff) is headed "no held-file edit was applied".
@@ -2216,10 +2233,10 @@ const commitText = (name: string, commit: string): ProtocolText => {
     /** The test's own oracle: the shipping functions, the test's own caller (the contract fixture with the sha echo). */
     const oracle = async (snap: any, caller?: (manifest: string) => any) => {
       const gov = govOf(snap); const { result } = harvestOf(snap);
-      const store = hs.buildLabHeldStore(snap, gov as never);
+      const store = oracleStore(hs, snap, gov, P19.name);
       let invoked = 0;
       const calls = gov.state !== 'parsed' ? undefined : await runPlatformDriftCalls({ sources: gov, toolCalls: result.toolCalls, redactedMarker: PLACEHOLDER, maxManifestBytes: 262144,
-        heldFiles: store.refs.map((r) => ({ target: r.target as string, path: r.path as string, content: r.content, sha256: r.blobSha256 })),
+        heldFiles: store.refs.map((r: any) => ({ target: r.target as string, path: r.path as string, content: r.content, sha256: r.blobSha256 })),
         call: async ({ manifest }) => { invoked++; return caller ? caller(manifest) : { kind: 'result', result: { ...FIX.result, manifestSha256: sha(manifest) } }; } });
       return { gov, store, calls, invoked, reads: computeConfigSourceReads(gov, result.toolCalls), live: computeConfigLiveEvidence(gov, result.toolCalls), drift: computeGitLiveDrift(calls ?? undefined, 'kubernetes-gitops-protocol') };
     };
@@ -2348,7 +2365,7 @@ const commitText = (name: string, commit: string): ProtocolText => {
         assert(Array.isArray(lo.calls) && lo.calls.length === 0 && lo.report.held!.refs === 0 && lo.report.held!.notDeclared === 1 && lo.report.configForce === null && lo.facts!.liveEvidence!.summary === 'all-read', `live-only: ${JSON.stringify(lo.report).slice(0, 300)}`);
         // R10 off: the held bytes are raw, so nothing is "sent" (sec-ops F4).
         process.env.ARTIFACT_SECRET_REDACT_ENABLED = 'false';
-        const off = await cs.labPlatformDriftCalls({ sources: govOf(snap) as never, store: hs.buildLabHeldStore(snap, govOf(snap) as never), toolCalls: harvestOf(snap).result.toolCalls, spec: FIXTURE_PLANT, dir: null });
+        const off = await cs.labPlatformDriftCalls({ sources: govOf(snap) as never, store: oracleStore(hs, snap, govOf(snap), P19.name), toolCalls: harvestOf(snap).result.toolCalls, spec: FIXTURE_PLANT, dir: null });
         assert(off.calls![0].outcome === 'redaction-off' && off.log.length === 0, `R10 off: ${JSON.stringify(off.calls)}`);
       } finally {
         if (priorR10 === undefined) delete process.env.ARTIFACT_SECRET_REDACT_ENABLED; else process.env.ARTIFACT_SECRET_REDACT_ENABLED = priorR10;
@@ -2641,10 +2658,10 @@ const commitText = (name: string, commit: string): ProtocolText => {
       // construction (production derives the lane from the list, the lab from the table + the version test). Before it this read "awaits".
       assert(!CONFIG_SOURCE_AWAITING_TEXT.includes('terraform-iac-protocol') && configSourceLaneOf('terraform-iac') !== null, 'terraform-iac must be a live Config-sources protocol at the 1.17.0 text commit — re-read this block');
       assert(gitLiveDriftMethodOf('terraform-iac') === null && gitLiveDriftMethodOf('terraform-iac-protocol') === null && gitLiveDriftMethodOf('kubernetes-gitops') === 'k8s-declared-field-compare', 'GIT_LIVE_DRIFT_METHODS changed (D-T1)');
-      assert(cs.noGitLiveMethod('terraform-iac-protocol') && !cs.noGitLiveMethod('kubernetes-gitops-protocol') && !cs.noGitLiveMethod(undefined) && !cs.noGitLiveMethod(''), 'noGitLiveMethod is not production\'s test (a non-empty protocol whose method is null)');
+      assert(cs.noDriftServiceCall('terraform-iac-protocol') && !cs.noDriftServiceCall('kubernetes-gitops-protocol') && !cs.noDriftServiceCall(undefined) && !cs.noDriftServiceCall(''), 'noDriftServiceCall is not production\'s test (a non-empty protocol whose method is null)');
       // STEP 3 P3 fix round (model-evaluation item 16): observability HAS a method row, and the platform computes it — no service call.
       // The lever must read the no-call guard, not `method === null` (which reads observability as a protocol that CALLS).
-      assert(cs.noGitLiveMethod('observability-config-protocol') === true && cs.noGitLiveMethod('observability-config') === true, 'noGitLiveMethod must be true for a platform-compare protocol (observability): the lever asks gitLiveDriftCallsService');
+      assert(cs.noDriftServiceCall('observability-config-protocol') === true && cs.noDriftServiceCall('observability-config') === true, 'noDriftServiceCall must be true for a platform-compare protocol (observability): the lever asks gitLiveDriftCallsService');
       const snap = tfPlanted();
       assert(arm.configLegOf(snap.leg)?.protocol === 'terraform-iac-protocol' && arm.configLegOf(snap.leg)?.contractKey === 'terraform-iac', `tf leg row: ${JSON.stringify(arm.configLegOf(snap.leg)).slice(0, 200)}`);
       assert(arm.armConfigSources(snap.leg, { delta: T16 }) === null && arm.armOwningLeg(snap.leg, { delta: T16 }) === null, 'a 1.16.0 Terraform arm must read no Config sources');
@@ -2682,7 +2699,7 @@ const commitText = (name: string, commit: string): ProtocolText => {
         // The protocol alone decides: the same parsed Terraform declaration, store and calls, with a plant.
         const snap = tfPlanted(); const gov = arm.armConfigSources(snap.leg, { delta: T17 })!;
         const h = hs.frozenHarvesterEntry(snap); const tc = JSON.parse(snap.childArtifacts.find((a: any) => a.executionId === h.executionId && a.name === 'result.json')!.content).toolCalls;
-        const call = (protocol?: string | null) => cs.labPlatformDriftCalls({ sources: gov, store: hs.buildLabHeldStore(snap, gov), toolCalls: tc, spec: FIXTURE_PLANT, dir: null, ...(protocol !== undefined ? { protocol } : {}) });
+        const call = (protocol?: string | null) => cs.labPlatformDriftCalls({ sources: gov, store: oracleStore(hs, snap, gov, 'terraform-iac-protocol'), toolCalls: tc, spec: FIXTURE_PLANT, dir: null, ...(protocol !== undefined ? { protocol } : {}) });
         for (const p of ['terraform-iac-protocol', 'terraform-iac']) { const x = await call(p); assert(x.calls === undefined && x.log.length === 0, `${p}: the fixture caller ran (${x.log.length})`); }
         for (const p of [undefined, null, '', 'kubernetes-gitops-protocol']) { const x = await call(p as any); assert(x.calls?.length === 1 && x.log.length === 1, `${String(p)}: the caller did not run — the method decision leaked beyond the protocol`); }
         await throws(() => cs.withComputedConfigFacts(snap, { protocol: T17, drift: FIXTURE_PLANT }), /platformDrift refused — the platform makes no service call for terraform-iac-protocol/, 'a drift plant on a Terraform leg');
@@ -2985,6 +3002,696 @@ const commitText = (name: string, commit: string): ProtocolText => {
       }
     });
   }
+
+  // ───────────────────── Config sources STEP 3 slice L (observability-config 1.12.0): the lab levers ─────────────────────
+  // $0, no model call, no service call. Stored input: the OBS-PROG leg (golden case, 1.11.0, no block) from the lab CACHE — never a
+  // production read. Every "declared" leg below is HAND-BUILT on a copy of it: a `## Config sources` block appended to the leg's
+  // description and Git reads ADDED to the stored Harvester's calls by the lab's own Git fixture tier, from a fixture written to a
+  // TEMP folder (the Git bytes are the served bytes of the stored harvest — cache data, so never committed). The repository named is
+  // the suite's own Git pin (the lab pin); the real observability files live in the production pin's repository.
+  {
+    const cs = await import('./leg-replay-lab/config-sources-patch');
+    const arm = await import('./leg-replay-lab/config-sources-arm');
+    const hs = await import('./leg-replay-lab/held-store');
+    const nets = await import('./leg-replay-lab/nets');
+    const eol = await import('./leg-replay-lab/edit-overlap-lever');
+    const gs = await import('./leg-replay-lab/golden-set');
+    const ghp = await import('./leg-replay-lab/git-harvest-plant');
+    const { governingConfigSources, configSnapshotDecision } = await import('../lib/agents/harness/config-sources-read');
+    const { captureScopesFor, isGitFileSourceLeg, isHeldCapableLeg, CONFIG_SOURCE_AWAITING_TEXT } = await import('../lib/agents/harness/held-bytes/variant');
+    const { prepareHeldCaptureWithEvidence } = await import('../lib/services/held-bytes-capture');
+    const { buildFileSourceCompare } = await import('../lib/agents/harness/file-source-compare');
+    const { undeclaredConfigSourceReads, computeFileConfigSourceReads } = await import('../lib/agents/harness/config-source-facts');
+    const { configSourceForce } = await import('../lib/agents/harness/held-bytes/config-source-scope');
+    const { validFileCompareRecord, gitLiveDriftCallsService, gitLiveDriftPlatformCompares } = await import('../lib/agents/harness/git-live-drift');
+    const { quotableLine } = await import('../lib/agents/harness/file-compare-quote-seam');
+    const { isR10Disabled } = await import('../lib/agents/harness/redact-artifact-secrets');
+    const { readAuthoritativeResultField } = await import('../lib/agents/harness/authoritative-result-read');
+    const { buildReplayPrisma } = await import('./leg-replay-lab/replay-prisma');
+    const OBS_PROG = 'cmvsze23g008syxb41csr6quu';
+    const OBS = 'observability-config-protocol';
+    const O11 = { name: OBS, version: '1.11.0' }; const O12 = { name: OBS, version: '1.12.0' };
+    const INJ12 = { delta: O12 }; const INJ11 = { delta: O11 };
+    const PIN = String(process.env.GIT_FILE_SOURCE_PIN ?? '');
+    const [PIN_OWNER, PIN_REPO] = PIN.split('/');
+    const cachedObs = () => {
+      if (!fs.existsSync(snapshotPath(OBS_PROG))) throw new Error(`the lab cache has no snapshot ${OBS_PROG} — this test never fetches from production (LAB-TEST-READS-PRODUCTION); fill the cache first (lab:leg-replay -- snapshot)`);
+      return JSON.parse(fs.readFileSync(snapshotPath(OBS_PROG), 'utf8'));
+    };
+    const clone = <T,>(o: T): T => JSON.parse(JSON.stringify(o));
+    const harvestOf = (snap: any) => { const h = hs.frozenHarvesterEntry(snap); const art = snap.childArtifacts.find((a: any) => a.executionId === h.executionId && a.name === 'result.json'); return { h, art, result: JSON.parse(art.content) }; };
+    /** The first object under `v` that has the key — the stored gateway envelope is walked, never indexed by position. */
+    const dig = (v: any, key: string): any => { if (!v || typeof v !== 'object') return undefined; if (key in v) return v[key]; for (const x of Object.values(v)) { const r = dig(x, key); if (r !== undefined) return r; } return undefined; };
+    const servedCall = (snap: any, tool: string) => { const { result } = harvestOf(snap); const i = (result.toolCalls as any[]).findIndex((t) => t?.arguments?.tool === tool); assert(i >= 0, `the stored OBS-PROG Harvester made no ${tool} call`); return { i, call: result.toolCalls[i] }; };
+    const OTEL_YAML: string = dig(servedCall(cachedObs(), 'get_otel_config').call.result, 'yaml');
+    const INGRESS_FILES: Record<string, string> = dig(servedCall(cachedObs(), 'get_ingress_config').call.result, 'files');
+    assert(typeof OTEL_YAML === 'string' && OTEL_YAML.length > 50 && typeof INGRESS_FILES?.['otlp-ingress.conf'] === 'string' && typeof INGRESS_FILES?.['operator-access.conf'] === 'string', 'the stored served files are not where the descriptor reads them');
+    const GIT_OTEL = 'observability/otelcol/config.yaml'; const GIT_OTLP = 'observability/nginx/otlp-ingress.conf';
+    const gitLine = (label: string, p: string) => `${label}: git-file — service github-service ; ${PIN}/${p}`;
+    const liveLine = (label: string) => `${label}: live-read — service observability-readonly`;
+    const heldLine = (label: string) => `${label}: service-held — service observability-readonly`;
+    const O_GIT = gitLine('obs-otelcol', GIT_OTEL); const O_LIVE = liveLine('obs-otelcol');
+    const N_GIT = gitLine('obs-ingress.otlp-ingress.conf', GIT_OTLP); const N_LIVE = liveLine('obs-ingress.otlp-ingress.conf');
+    const A_HELD = heldLine('obs-ingress.operator-access.conf');
+    const FULL = [O_GIT, O_LIVE, N_GIT, N_LIVE, A_HELD];
+    const withBlock = (lines: string[] | null) => { const c = cachedObs(); if (lines) c.leg.description = `${c.leg.description}\n\n## Config sources\n${lines.join('\n')}\n`; return c; };
+    /** A temp Git fixture in the suite's pinned repository: the Git bytes given (default: the served bytes — "identical"). */
+    const fixtureDir = (files: Record<string, string>): string => {
+      const d = fs.mkdtempSync(path.join(out, 'obs-fx-'));
+      fs.writeFileSync(path.join(d, 'fixture.json'), JSON.stringify({ owner: PIN_OWNER, repo: PIN_REPO, commit: 'c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00', source: 'HAND-BUILT in a temp folder by test-leg-replay-lab LCO — not a probe of any repository' }));
+      for (const [p, text] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(d, 'files', p)), { recursive: true }); fs.writeFileSync(path.join(d, 'files', p), text); }
+      return d;
+    };
+    /** The hand-built DECLARED leg: block + snapshot (the lever under test) + the Git reads ADDED to the stored calls. */
+    const declared = async (lines: string[] = FULL, git: Record<string, string> = { [GIT_OTEL]: OTEL_YAML, [GIT_OTLP]: INGRESS_FILES['otlp-ingress.conf'] }) => {
+      const planted = cs.withFirstExecutionConfigSnapshot(withBlock(lines));
+      const paths = Object.keys(git);
+      if (!paths.length) return planted.snap;
+      const d = fixtureDir(git);
+      return (await ghp.withGitHarvest(planted.snap, path.dirname(d), { fixture: path.basename(d), paths, mode: 'add' })).snap;
+    };
+    const govOf = (snap: any) => governingConfigSources({ description: snap.leg.description, contract: snap.leg.inputContext?.interfaceContract ?? null, snapshot: snap.leg.metadata.configSourcesSnapshot ?? null, protocolStamped: true }, OBS);
+    /** THE TEST'S OWN ORACLE for the comparison record: the shipping capture and builder, with scopes the test states itself. */
+    const oracleRecord = (snap: any, gitLane = true) => {
+      const gov = govOf(snap); const { h, result } = harvestOf(snap);
+      const prior = process.env.HELD_BYTES_CAPTURE_ENABLED; process.env.HELD_BYTES_CAPTURE_ENABLED = 'true';
+      try {
+        const { plan, evidence } = prepareHeldCaptureWithEvidence({ toolCallResults: result.toolCalls, task: { id: h.taskId, povId: snap.author.task.pov_id ?? null }, logger: { info: () => undefined, warn: () => undefined },
+          gitFileSourceLeg: gitLane, configSources: gov, configSourceProtocol: OBS });
+        return { gov, plan, record: buildFileSourceCompare({ sources: gov as never, harvesterExecutionId: h.executionId, plan: plan as never, evidence, toolCalls: result.toolCalls, redactionOff: isR10Disabled() }) };
+      } finally { if (prior === undefined) delete process.env.HELD_BYTES_CAPTURE_ENABLED; else process.env.HELD_BYTES_CAPTURE_ENABLED = prior; }
+    };
+    const throws = async (fn: () => unknown, re: RegExp, what: string) => { let m = ''; try { await fn(); } catch (e) { m = (e as Error).message; } assert(re.test(m), `${what}: expected ${re}, got "${m.slice(0, 300)}"`); };
+    const heldKey = (s: any) => JSON.stringify(s.refs.map((r: any) => [r.target, r.path, r.blobSha256]));
+
+    await test('LCO1 (slice L item 1, precondition 8) the lab\'s capture scopes ARE the shipping captureScopesFor\'s three values, one object, fail closed: a base arm by name; a 1.12.0 no-block observability arm reads NO Git lane and passes its not-config-source-leg resolution through; a DECLARED observability arm has the Git lane ON although the leg is no Git-source leg by name; a scope without its protocol is refused', async () => {
+      assert(!!PIN_OWNER && !!PIN_REPO, 'the suite runs under a Git pin (GIT_FILE_SOURCE_PIN)');
+      // The lab NEVER reads the awaiting list: its answer is the same whether the shipped list is empty (after the 1.12.0 join) or
+      // holds the protocol (before it). Asked of the shipping functions both ways, and of the lab's own helper (which takes no list).
+      void CONFIG_SOURCE_AWAITING_TEXT;
+      for (const awaiting of [[], [OBS]] as string[][]) {
+        const d = configSnapshotDecision({ type: 'PIPELINE', protocol: OBS, description: withBlock(FULL).leg.description, interfaceContract: null, takenAt: 't' }, awaiting);
+        assert((d.action === 'write') === (awaiting.length === 0), `the shipping snapshot decision reads the awaiting list (${JSON.stringify(awaiting)} ⇒ ${d.action}) — the lab passes [] on purpose`);
+      }
+      assert(arm.configLegOf(cachedObs().leg)?.protocol === OBS, 'the lab reads the lane TABLE: an observability leg is a Config leg to its levers whatever the awaiting list holds');
+      const none = cachedObs();
+      assert(isGitFileSourceLeg(none.leg) === false && isHeldCapableLeg(none.leg) === true, 'the stored observability leg is held-capable and not a Git-source leg by name');
+      // base arm (1.11.0) and no arm: by name, no scope, no protocol — the store the lab built before this slice
+      for (const inj of [undefined, INJ11]) assert(JSON.stringify(arm.labCaptureScopes(none.leg, inj)) === JSON.stringify({ gitFileSourceLeg: false, configSources: null, configSourceProtocol: null }), `base arm scopes: ${JSON.stringify(arm.labCaptureScopes(none.leg, inj))}`);
+      assert(heldKey(hs.buildLabHeldStore(none, { protocolInjection: INJ11 })) === heldKey(hs.buildLabHeldStore(none)) && hs.buildLabHeldStore(none).refs.length === 3, 'the base-arm store must hold the three service files, as before');
+      // 1.12.0, no block: production's own answer, computed by the test
+      const noBlock = arm.labCaptureScopes(none.leg, INJ12);
+      const wantNoBlock = captureScopesFor({ kind: 'leg', legId: 'x', heldCapable: true, ownStageId: 's', configSourceProtocol: OBS } as never, { state: 'not-config-source-leg' });
+      assert(JSON.stringify(noBlock) === JSON.stringify(wantNoBlock) && noBlock.gitFileSourceLeg === false && noBlock.configSources?.state === 'not-config-source-leg' && noBlock.configSourceProtocol === OBS, `no-block scopes: ${JSON.stringify(noBlock)}`);
+      assert(heldKey(hs.buildLabHeldStore(none, { protocolInjection: INJ12 })) === heldKey(hs.buildLabHeldStore(none)), 'a no-block observability leg must hold exactly what it held before the protocol had a Config lane');
+      // 1.12.0, declared: the Git lane is ON by the declaration, not by name (the "second gap" of P3-BUILD §8a)
+      const dec = await declared();
+      const sc = arm.labCaptureScopes(dec.leg, INJ12);
+      assert(sc.gitFileSourceLeg === true && sc.configSources?.state === 'parsed' && sc.configSourceProtocol === OBS, `declared scopes: ${JSON.stringify({ g: sc.gitFileSourceLeg, s: sc.configSources?.state, p: sc.configSourceProtocol })}`);
+      const store = hs.buildLabHeldStore(dec, { protocolInjection: INJ12 });
+      const targets = store.refs.map((r: any) => `${r.target}|${r.path}`).sort();
+      assert(store.refs.length === 3 && targets.filter((t: string) => t.startsWith('github:')).length === 2 && targets.includes('obs-ingress|/etc/nginx/conf.d/operator-access.conf'), `a declared leg holds its two Git files and its one service-held file: ${targets.join(', ')}`);
+      assert(store.refusals.filter((r: any) => r.refusal === 'served-file-evidence-only').length === 2, `the two served copies of the Git-based labels are evidence, never held: ${JSON.stringify(store.refusals.map((r: any) => r.refusal))}`);
+      // the same declared leg on the BASE arm (an artificial cell: a declared leg never ran 1.11.0): no Config scope and no protocol, the
+      // Git lane by the SHIPPING by-name predicate — which, once the protocol has joined, reads a leg carrying a snapshot as a Git
+      // source leg. Stated tree-independently: the lab's answer is that predicate's, never its own.
+      const baseSc = arm.labCaptureScopes(dec.leg, INJ11);
+      assert(baseSc.configSources === null && baseSc.configSourceProtocol === null && baseSc.gitFileSourceLeg === isGitFileSourceLeg(dec.leg as never), `the base arm of a declared leg: ${JSON.stringify(baseSc)}`);
+      // fail closed
+      const { h, art } = harvestOf(dec);
+      const base = { executionId: h.executionId, taskId: h.taskId, povId: dec.author.task.pov_id ?? null, resultJson: art.content };
+      await throws(() => hs.buildLabHeldStoreFromResult({ ...base, scopes: { gitFileSourceLeg: true, configSources: sc.configSources, configSourceProtocol: null } }), /a Config scope with NO protocol/, 'a scope without its protocol');
+      await throws(() => hs.buildLabHeldStoreFromResult({ ...base, scopes: { gitFileSourceLeg: true, configSources: null, configSourceProtocol: OBS } }), /a protocol with NO Config scope/, 'a protocol without its scope');
+      await throws(() => hs.buildLabHeldStoreFromResult({ ...base, configSources: sc.configSources } as never), /`configSources` is no longer a store input/, 'the old loose field');
+      await throws(() => hs.buildLabHeldStoreFromResult({ ...base, scopes: sc, gitFileSourceLeg: true }), /one lever, two sources/, 'scopes and the by-name flag together');
+      await throws(() => hs.buildLabHeldStore(dec, sc.configSources as never), /takes the ARM/, 'a governing declaration passed as the arm');
+      // no lab file decides the Git lane by name any more, except the two named places
+      const src = (f: string) => fs.readFileSync(path.join(LAB, f), 'utf8');
+      // (review F2) the production identity check takes its scopes the same way — from the leg row and the Harvester's own stored injection
+      assert(JSON.stringify(hs.identityScopes(dec.leg, JSON.stringify({ protocolInjection: INJ12 }))) === JSON.stringify(sc) && JSON.stringify(hs.identityScopes(dec.leg, JSON.stringify({ protocolInjection: INJ11 }))) === JSON.stringify(baseSc)
+        && hs.identityScopes(dec.leg, '{not json').configSources === null && hs.identityScopes(null, '{}').gitFileSourceLeg === false, 'identityScopes: a declared 1.12.0 Harvester gets the Git lane by its declaration; below the version, unparseable, or with no leg: by name, no scope');
+      for (const f of ['held-store.ts', 'config-sources-patch.ts', 'lab.ts', 'nets.ts']) assert(!/isGitFileSourceLeg\(/.test(src(f)), `${f} decides the Git lane by name — it must ask labCaptureScopes`);
+      assert((src('config-sources-arm.ts').match(/captureScopesFor</g) ?? []).length === 2, 'config-sources-arm.ts: labCaptureScopes asks the shipping captureScopesFor (the no-leg answer and the leg answer)');
+    });
+
+    await test('LCO2 (slice L item 2, P3-BUILD §8a items 9 + 10) the snapshot lever asks the shipping configSnapshotDecision and carries its labelCheck; a no-block observability leg gets NO snapshot (it threw before); protocolStamped is derived from the leg\'s metadata, never a constant', async () => {
+      const none = cachedObs();
+      const r0 = cs.withFirstExecutionConfigSnapshot(none);
+      assert(r0.report.state === 'not-taken-undeclared' && r0.snap === none && (none.leg.metadata.configSourcesSnapshot ?? null) === null, `a no-block observability node: ${JSON.stringify(r0.report)}`);
+      assert(arm.armConfigSources(none.leg, INJ12)?.state === 'not-config-source-leg' && arm.armConfigSources(none.leg, INJ11) === null, 'a no-block leg governs not-config-source-leg at 1.12.0 and reads nothing at 1.11.0');
+      const blocked = withBlock(FULL);
+      const r1 = cs.withFirstExecutionConfigSnapshot(blocked);
+      const want = configSnapshotDecision({ type: 'PIPELINE', protocol: OBS, description: blocked.leg.description, interfaceContract: blocked.leg.inputContext?.interfaceContract ?? null, takenAt: blocked.leg.metadata.protocolResolvedAt }, []);
+      assert(want.action === 'write' && r1.report.state === 'taken' && JSON.stringify((r1.snap.leg as any).metadata.configSourcesSnapshot) === JSON.stringify(want.snapshot), 'the planted snapshot is not the shipping decision\'s own object');
+      assert(want.snapshot.labelCheck?.state === 'resolved' && r1.report.labelCheck === 'resolved' && r1.report.entries === 5, `the label check must be carried: ${JSON.stringify(r1.report)}`);
+      assert(arm.armConfigSources(r1.snap.leg, INJ12)?.state === 'parsed' && cs.withFirstExecutionConfigSnapshot(r1.snap).report.state === 'already-snapshotted', 'the declared leg governs parsed; a second snapshot is refused');
+      // a label the platform's file table does not know: the STORED label check names it and the leg governs unparseable (rule A1)
+      const bad = cs.withFirstExecutionConfigSnapshot(withBlock([heldLine('obs-nosuch')]));
+      const g = arm.armConfigSources(bad.snap.leg, INJ12) as any;
+      assert(bad.report.state === 'taken' && bad.report.labelCheck === 'problem' && g.state === 'unparseable' && typeof g.problem === 'string', `an unknown label: ${JSON.stringify({ r: bad.report, g })}`);
+      // protocolStamped: production's own test (metadata.protocol is a string)
+      assert(arm.legProtocolStamped(r1.snap.leg) === true && arm.legProtocolStamped({ metadata: { protocol: 7 } }) === false && arm.legProtocolStamped({ metadata: {} }) === false && arm.legProtocolStamped(null) === false, 'legProtocolStamped');
+      const unstamped: any = clone(r1.snap); delete unstamped.leg.metadata.protocol;
+      assert(arm.configLegOf(unstamped.leg) !== null, 'the title fallback still resolves the unstamped leg\'s protocol (the precondition of this case)');
+      assert(arm.armConfigSources(unstamped.leg, INJ12)?.state === 'snapshot-unreadable', `a snapshot on a leg with no protocol stamp must read snapshot-unreadable (rule A9), got ${arm.armConfigSources(unstamped.leg, INJ12)?.state}`);
+      const blockedUnstamped = withBlock(FULL); delete blockedUnstamped.leg.metadata.protocol;
+      await throws(() => cs.withFirstExecutionConfigSnapshot(blockedUnstamped), /carries no metadata\.protocol stamp/, 'a first-execution snapshot on an unstamped leg');
+    });
+
+    await test('LCO3 (slice L item 3, P3-BUILD §8a item 11 as corrected) a no-block observability leg on a 1.12.0 arm: capture gets captureScopesFor\'s three values (Git lane OFF), the nets a RESOLVED owning leg carrying configSourceProtocol, and the ONE stamp equals the shipping nets\' — configSourceReads with the `undeclared` key; nothing else is stamped, nothing is forced, the held files are unchanged; every Config arm\'s leaf point carries production\'s resolved owning leg', async () => {
+      const none = cachedObs();
+      const base = await cs.withComputedConfigFacts(none, { protocol: O11 });
+      assert(base.report.state === 'not-stamped-version' && base.snap === none && base.facts === null, 'a 1.11.0 arm must stamp nothing and return the snapshot object itself');
+      const r = await cs.withComputedConfigFacts(none, { protocol: O12 });
+      assert(r.report.state === 'computed' && r.report.undeclared === true && r.report.declaration === 'not-config-source-leg', `report: ${JSON.stringify(r.report)}`);
+      assert(Object.keys(r.facts!).join() === 'configSourceReads', `a no-block leg stamps configSourceReads ONLY, got ${Object.keys(r.facts!).join()}`);
+      const reads = r.facts!.configSourceReads as any;
+      assert(JSON.stringify(reads) === JSON.stringify(undeclaredConfigSourceReads(r.heldBytes)), 'the stamp is not undeclaredConfigSourceReads(heldBytes)');
+      assert(reads.checked === false && reads.reason === 'config-sources-absent' && reads.undeclared?.heldFrom === 'service' && reads.undeclared.files === 3 && reads.undeclared.refusals === 0, `undeclared: ${JSON.stringify(reads)}`);
+      // the digest the lab built is the one production stamped on this very Harvester (same capture, same redactor)
+      const storedDigest = harvestOf(none).result.heldBytes;
+      assert((r.heldBytes as any).held === storedDigest.held && JSON.stringify((r.heldBytes as any).refused) === JSON.stringify(storedDigest.refused), `the lab digest differs from the stored one: ${JSON.stringify(r.heldBytes)} vs ${JSON.stringify(storedDigest)}`);
+      assert(r.report.configForce === null && r.store!.refs.length === 3 && heldKey(r.store) === heldKey(hs.buildLabHeldStore(none)) && r.fileSourceCompare === undefined && r.calls === undefined, 'no force, no record, no call, the same three held files');
+      const { h } = harvestOf(r.snap);
+      for (const a of r.snap.childArtifacts.filter((x: any) => x.executionId === h.executionId && x.name === 'result.json')) {
+        const back = JSON.parse(a.content);
+        assert(JSON.stringify(back.configSourceReads) === JSON.stringify(reads) && ['liveEvidence', 'gitLiveDrift', 'fileSourceCompare', 'platformDriftCalls'].every((k) => back[k] === undefined), 'a stored copy of the Harvester carries more, or less, than the one stamp');
+      }
+      // idempotent: the patched Harvester now carries production's own kind of stamp
+      assert((await cs.withComputedConfigFacts(r.snap, { protocol: O12 })).report.state === 'already-stamped', 'a stamped no-block Harvester must be left alone');
+      // the leaf point carries production's resolved leg on every arm that reads Config sources (kind 'leg'); the leg point its own (kind 'self')
+      const obsIn = nets.labNetConfigInput(none, INJ12) as any;
+      assert(obsIn.owningLeg?.kind === 'leg' && obsIn.owningLeg.configSourceProtocol === OBS && obsIn.owningLeg.legId === String(none.leg.id) && obsIn.owningLeg.ownStageId === String(none.author.task.stage_id), `observability leaf ctx: ${JSON.stringify(obsIn.owningLeg)}`);
+      assert(Object.keys(nets.labNetConfigInput(none, INJ11)).length === 0, 'a 1.11.0 arm primes nothing');
+      const K8S_R3 = 'cmwmxep5y00hdyxykvf4y3n11';
+      if (fs.existsSync(snapshotPath(K8S_R3))) {
+        const k = JSON.parse(fs.readFileSync(snapshotPath(K8S_R3), 'utf8'));
+        const kin = nets.labNetConfigInput(k, { delta: { name: 'kubernetes-gitops-protocol', version: '1.19.0' } }) as any;
+        assert(kin.configSources && kin.owningLeg?.kind === 'leg' && kin.owningLeg.configSourceProtocol === 'kubernetes-gitops-protocol' && kin.owningLeg.gitFileSource === true, `a forced protocol's leaf point carries its resolved leg too: ${JSON.stringify(kin.owningLeg)}`);
+        assert((nets.labNetConfigInput(k, { delta: { name: 'kubernetes-gitops-protocol', version: '1.19.0' } }, undefined, true) as any).owningLeg?.kind === 'self', 'the leg point keeps its self resolution');
+      } else throw new Error(`the lab cache has no snapshot ${K8S_R3} (K8S-R3) — needed for the forced-protocol half of this pin`);
+    });
+
+    await test('LCO4 (slice L item 4, plan row L "five lab sites", precondition 30) a DECLARED observability Harvester: the lab carries fileSourceCompare — made by the shipping runLegFileSourceCompare over the shipping capture WITH its evidence — and the nets compute gitLiveDrift, configSourceReads and liveEvidence FROM it; no service is called, no platformDriftCalls exists, a platformDrift plant is refused; two labels on ONE service are both compared (F-TWO-LIVE-ONE-SERVICE through the lab); one live-read line builds no caller (F-NOCALL-ONE-LIVE)', async () => {
+      assert(gitLiveDriftPlatformCompares(OBS) && !gitLiveDriftCallsService(OBS) && cs.noDriftServiceCall(OBS) && cs.noDriftServiceCall('observability-config'), 'observability: the platform compares, and calls no service');
+      assert((cs.CONFIG_FACT_KEYS as readonly string[]).join() === 'liveEvidence,configSourceReads,platformDriftCalls,gitLiveDrift,fileSourceCompare', 'CONFIG_FACT_KEYS');
+      const dec = await declared();
+      const r = await cs.withComputedConfigFacts(dec, { protocol: O12 });
+      assert(r.report.state === 'computed' && r.report.declaration === 'parsed' && r.report.lines === 5 && !r.report.undeclared, `report: ${JSON.stringify(r.report)}`);
+      assert(Object.keys(r.facts!).sort().join() === 'configSourceReads,fileSourceCompare,gitLiveDrift,liveEvidence', `the stamps of a platform-compare Harvester: ${Object.keys(r.facts!).sort().join()}`);
+      assert(r.calls === undefined && r.report.platformDriftCalls === null, 'an observability leaf must never carry a platform drift call record');
+      // the record is the shipping builder's, by the test's own capture
+      const o = oracleRecord(dec);
+      const want = validFileCompareRecord(o.record, quotableLine);
+      assert(!!want && JSON.stringify(r.facts!.fileSourceCompare) === JSON.stringify(want) && JSON.stringify(r.fileSourceCompare) === JSON.stringify(o.record), 'the lab\'s record is not the shipping builder\'s over the shipping capture');
+      const files = (r.fileSourceCompare!.files as any[]).map((f) => [f.label, f.state]);
+      assert(JSON.stringify(files) === JSON.stringify([['obs-otelcol', 'identical'], ['obs-ingress.otlp-ingress.conf', 'identical']]), `F-TWO-LIVE-ONE-SERVICE through the lab: ${JSON.stringify(files)}`);
+      // LAB-HELDBYTES-DIGEST-DECLARED-CELLS (2026-11-23): a declared cell hands the nets the capture's digest too — the leaf `heldBytes` is the
+      // shipping builder's over the lab store (it read the net's `no-capture` fallback beside three held files on the first paid samples)
+      assert(!!r.heldBytes && typeof r.heldBytes === 'object' && (r.heldBytes as any).held === r.store!.refs.length && r.store!.refs.length > 0 && (r.heldBytes as any).reason !== 'no-capture', `a declared cell's heldBytes digest: ${JSON.stringify(r.heldBytes)} beside ${r.store!.refs.length} held file(s)`);
+      const drift = r.facts!.gitLiveDrift as any; const reads = r.facts!.configSourceReads as any; const le = r.facts!.liveEvidence as any;
+      assert(drift.checked === true && drift.method === 'file-ordered-lines/1' && reads.checked === true && reads.unit === 'files' && reads.notRead === 0 && le.checked === true, `the three facts: ${JSON.stringify({ d: [drift.checked, drift.method], r: [reads.checked, reads.unit, reads.notRead], l: [le.checked, le.summary] })}`);
+      assert(JSON.stringify(reads) === JSON.stringify(computeFileConfigSourceReads(o.gov as never, o.record)), 'configSourceReads is not the pure function of the record');
+      assert(r.report.configForce === null && r.report.held?.refs === 3 && r.report.held?.evidenceOnly === 2 && r.report.held?.notDeclared === 0, `held / force: ${JSON.stringify({ h: r.report.held, f: r.report.configForce })}`);
+      const { h } = harvestOf(r.snap);
+      for (const a of r.snap.childArtifacts.filter((x: any) => x.executionId === h.executionId && x.name === 'result.json')) {
+        const back = JSON.parse(a.content);
+        assert(['liveEvidence', 'configSourceReads', 'gitLiveDrift', 'fileSourceCompare'].every((k) => JSON.stringify(back[k]) === JSON.stringify((r.facts as any)[k])) && back.platformDriftCalls === undefined, 'a stored copy of the Harvester does not carry the four stamps (or carries a call record)');
+      }
+      // a persisted Harvester hands its STORED record back; nothing is recomputed over it
+      const again = await cs.withComputedConfigFacts(r.snap, { protocol: O12 });
+      assert(again.report.state === 'already-stamped' && again.snap === r.snap && JSON.stringify(again.fileSourceCompare) === JSON.stringify(r.facts!.fileSourceCompare), 'a stamped Harvester must hand its stored record back');
+      // a compare-tool answer can never reach a prompt here
+      await throws(() => cs.withComputedConfigFacts(dec, { protocol: O12, drift: { default: { caller: 'contract-fixture' } } }), /platformDrift refused — the platform makes no service call for observability-config-protocol/, 'a platformDrift plant on an observability node');
+      // F-NOCALL-ONE-LIVE: exactly ONE live-read line (a block with several is blocked by the one-live-source rule, not by the guard)
+      const one = await declared([O_GIT, O_LIVE], { [GIT_OTEL]: OTEL_YAML });
+      const gov1 = arm.armConfigSources(one.leg, INJ12)!;
+      const off = await cs.labPlatformDriftCalls({ sources: gov1, store: hs.buildLabHeldStore(one, { protocolInjection: INJ12 }), toolCalls: harvestOf(one).result.toolCalls, spec: { default: { caller: 'contract-fixture' } }, dir: null, protocol: OBS });
+      assert(off.calls === undefined && off.log.length === 0, 'F-NOCALL-ONE-LIVE: the lever built a caller for a protocol the platform compares itself');
+      const r1 = await cs.withComputedConfigFacts(one, { protocol: O12 });
+      assert(JSON.stringify((r1.fileSourceCompare!.files as any[]).map((f) => [f.label, f.state])) === JSON.stringify([['obs-otelcol', 'identical']]) && r1.calls === undefined, 'one pair: compared, no call');
+      // the base arm of the SAME hand-built leg: nothing stamped, the snapshot object itself
+      const b = await cs.withComputedConfigFacts(dec, { protocol: O11 });
+      assert(b.report.state === 'not-stamped-version' && b.snap === dec, 'a 1.11.0 arm of a declared leg must stamp nothing');
+    });
+
+    await test('LCO5 (slice L item 5) a "Git differs from the served file" cell is a plant on the SERVED-FILE READ (harvester-toolcall), and it reaches the platform\'s comparison: the unplanted twin reads identical, the planted cell reads differs with one served-only line — and the plant is in the copy the recorded tier serves; the Git plant mode "add" keeps every stored call at its index', async () => {
+      const { snapshotWithInputEdits } = await import('./leg-replay-lab/input-edits');
+      const dec = await declared();
+      const { h, result } = harvestOf(dec);
+      const stored = harvestOf(cachedObs()).result.toolCalls as any[];
+      assert(JSON.stringify(result.toolCalls.slice(0, stored.length)) === JSON.stringify(stored) && result.toolCalls.length === stored.length + 2, 'mode "add": the stored calls keep their indices and the two Git reads follow them');
+      await throws(() => ghp.withGitHarvest(dec, out, { fixture: 'x', paths: [], mode: 'merge' as never }), /mode must be "replace" or "add"/, 'an unknown plant mode');
+      const { i } = servedCall(dec, 'get_ingress_config');
+      const text = INGRESS_FILES['otlp-ingress.conf'];
+      // The plant edits ONE string leaf of the stored result: the anchor must sit in the otlp-ingress.conf text and nowhere else in the call.
+      const anchor = text.split('\n').find((l) => /^\s*grpc_pass\s/.test(l));
+      assert(!!anchor && text.split(anchor!).length === 2 && !INGRESS_FILES['operator-access.conf'].includes(anchor!), 'the stored otlp-ingress.conf has exactly one `grpc_pass` line, and the sibling file none, to plant before');
+      const dir = fs.mkdtempSync(path.join(out, 'obs-plant-'));
+      fs.mkdirSync(path.join(dir, 'edits'), { recursive: true });
+      const indent = /^\s*/.exec(anchor!)![0];
+      // new text = one more line in the SERVED file only (a documentation address, RFC 5737)
+      fs.writeFileSync(path.join(dir, 'edits', 'served-plant.json'), JSON.stringify({ id: 'LCO5-served-differs', appliesTo: [`harvester-toolcall:${h.executionId}:${i}`],
+        ops: [{ type: 'replace', old: anchor, new: `${indent}allow 198.51.100.77;\n${anchor}` }] }));
+      const planted = snapshotWithInputEdits(dir, { id: 'LCO5', inputEdits: 'edits/served-plant.json' }, dec);
+      assert(planted.report !== null && planted.snap !== dec, 'the plant was not applied');
+      const twin = await cs.withComputedConfigFacts(dec, { protocol: O12 });
+      const diff = await cs.withComputedConfigFacts(planted.snap, { protocol: O12 });
+      const stateOf = (x: any, label: string) => (x.fileSourceCompare.files as any[]).find((f) => f.label === label);
+      assert(stateOf(twin, 'obs-ingress.otlp-ingress.conf').state === 'identical', 'the unplanted twin must read identical');
+      const f = stateOf(diff, 'obs-ingress.otlp-ingress.conf');
+      assert(f.state === 'differs' && f.counts.servedOnly === 1 && f.counts.gitOnly === 0, `the planted cell: ${JSON.stringify({ s: f.state, c: f.counts })}`);
+      assert(stateOf(diff, 'obs-otelcol').state === 'identical', 'the plant must touch one label only');
+      assert((diff.facts!.gitLiveDrift as any).checked === true && diff.report.configForce === null, 'a difference is a fact; nothing is forced by it');
+      // the Git side is unchanged by a served-side plant (the held base is the Git file)
+      assert(heldKey(diff.store) === heldKey(twin.store), 'a served-side plant must not move a held file');
+    });
+
+    await test('LCO6 (slice L item 4: the force and the run-level word) a declared service-held file the Harvester did not read forces service-held-not-held by label; a missing Git file precedes it and carries both lists; golden-score reads the force from the run manifest and treats the new word as run-level', async () => {
+      const dropCall = (snap: any, tool: string) => { const c = clone(snap); const hh = harvestOf(c); const calls = (hh.result.toolCalls as any[]).filter((t) => t?.arguments?.tool !== tool); for (const a of c.childArtifacts.filter((x: any) => x.executionId === hh.h.executionId && x.name === 'result.json')) a.content = JSON.stringify({ ...JSON.parse(a.content), toolCalls: calls }); return c; };
+      const noIngress = dropCall(await declared(), 'get_ingress_config');
+      const r = await cs.withComputedConfigFacts(noIngress, { protocol: O12 });
+      assert(r.report.configForce?.reason === 'service-held-not-held' && JSON.stringify(r.report.configForce.serviceFilesNotHeld) === JSON.stringify(['obs-ingress.operator-access.conf']) && r.report.configForce.gitFilesNotHeld === undefined, `service-held force: ${JSON.stringify(r.report.configForce)}`);
+      assert(JSON.stringify(r.report.configForce) === JSON.stringify(configSourceForce(arm.armConfigSources(noIngress.leg, INJ12)!, r.store!.refs.map((x: any) => ({ target: x.target, path: x.path })))), 'the reported force is not the shipping function\'s');
+      // both missing: the Git reason wins and both lists ride on it
+      const noGit = dropCall(cs.withFirstExecutionConfigSnapshot(withBlock(FULL)).snap, 'get_ingress_config');
+      const r2 = await cs.withComputedConfigFacts(noGit, { protocol: O12 });
+      assert(r2.report.configForce?.reason === 'git-file-not-held' && r2.report.configForce.gitFilesNotHeldTotal === 2 && r2.report.configForce.serviceFilesNotHeldTotal === 1, `precedence: ${JSON.stringify(r2.report.configForce)}`);
+      // golden-score: the manifest's force, and the run-level list
+      assert(gs.isRunLevelReason('service-held-not-held') && gs.isRunLevelReason('git-file-not-held') && !gs.isRunLevelReason('held-file-written-whole'), 'isRunLevelReason');
+      const manifest = { nodes: { N: { variants: { c: { held: { configSources: r.report } } } } } };
+      assert(gs.cellConfigForce(manifest, 'N', 'c') === 'service-held-not-held' && gs.cellConfigForce({ nodes: { N: { variants: { c: { held: { configSources: { configForce: null } } } } } } }, 'N', 'c') === null, 'cellConfigForce');
+    });
+
+    await test('LCO7 (slice L item 4, the Author point) the Author\'s transcription reads its Harvester\'s gitLiveDrift AND fileSourceCompare in ONE paired read through the replay client; editHunkFiles from the shipping editHunkFilesOrNull give baseMatch + editOverlap; without it the fact says no-edit-record; off a platform-compare arm the lever passes nothing', async () => {
+      const dec = await declared();
+      const r = await cs.withComputedConfigFacts(dec, { protocol: O12 });
+      const { h } = harvestOf(r.snap);
+      // the paired read, by the SHIPPING reader over the lab's replay client
+      const { client } = buildReplayPrisma(r.snap, []);
+      const both = await readAuthoritativeResultField(client as never, h.taskId, 'gitLiveDriftAndCompare');
+      const pair = JSON.parse(String(both.value));
+      // jsonb re-orders keys (by length, then bytes), as Postgres does — the two stamps are compared by value
+      const canon = (v: unknown): string => JSON.stringify(v, (_k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : x));
+      assert(both.executionId === h.executionId && canon(pair.gitLiveDrift) === canon(r.facts!.gitLiveDrift) && canon(pair.fileSourceCompare) === canon(r.facts!.fileSourceCompare), `the paired read does not return the Harvester's two stamps (execution ${both.executionId} vs ${h.executionId})`);
+      const role = String(parsedResult(r.snap.author)?.agentRole ?? '');
+      const text = String(parsedResult(r.snap.author)?.finalResponse ?? '');
+      assert(role === 'config_change_author' && text.length > 200, `the stored Author: ${role}, ${text.length} chars`);
+      const noEdit = await nets.runAuthorLeafNets(r.snap, role, text, 'lab-lco7-a', undefined, undefined, INJ12);
+      const d0 = noEdit.stamped.gitLiveDrift as any;
+      assert(!noEdit.errors.gitLiveDrift && d0?.point === 'author-transcription' && d0.harvesterExecutionId === h.executionId && d0.checked === true, `the Author transcription: ${JSON.stringify({ e: noEdit.errors.gitLiveDrift, p: d0?.point, c: d0?.checked, r: d0?.reason })}`);
+      assert((d0.files as any[]).every((f) => f.baseMatch === 'no-base' && f.editOverlap?.reason === 'no-edit-record'), `with no edit record every file says so: ${JSON.stringify((d0.files as any[]).map((f) => [f.label, f.baseMatch, f.editOverlap]))}`);
+      // the lever: the shipping editHunkFilesOrNull over an application of the lab's own store
+      const store = r.store!;
+      const gitRef = store.refs.find((x: any) => String(x.target).startsWith('github:') && String(x.path).endsWith('otlp-ingress.conf'))!;
+      const app = { files: [{ handle: 'H1', op: 'edit' as const, state: 'applied', hunks: [{ start: 2, searchLen: 1 }] }] };
+      const refs = [{ handle: 'H1', refId: gitRef.id, blobSha256: gitRef.blobSha256, row: { path: gitRef.path } }];
+      const input = eol.editHunkHeldInput(r.snap.leg, INJ12, app, refs, store);
+      assert(JSON.stringify(input.editHunkFiles) === JSON.stringify([{ target: gitRef.target, path: gitRef.path, baseSha256: gitRef.blobSha256, op: 'edit', applied: true, hunks: [[2, 2]] }]), `editHunkFiles: ${JSON.stringify(input)}`);
+      const withEdit = await nets.runAuthorLeafNets(r.snap, role, text, 'lab-lco7-b', undefined, input, INJ12);
+      const f1 = ((withEdit.stamped.gitLiveDrift as any).files as any[]).find((f) => f.label === 'obs-ingress.otlp-ingress.conf');
+      assert(f1.baseMatch === 'same' && f1.editOverlap?.state === 'no-overlap', `an edit of an identical file: ${JSON.stringify([f1.baseMatch, f1.editOverlap])}`);
+      const differs = eol.editHunkHeldInput(r.snap.leg, INJ12, app, refs, store, { H1: 'f'.repeat(64) });
+      const f2 = ((await nets.runAuthorLeafNets(r.snap, role, text, 'lab-lco7-c', undefined, differs, INJ12)).stamped.gitLiveDrift as any).files.find((f: any) => f.label === 'obs-ingress.otlp-ingress.conf');
+      assert(f2.baseMatch === 'differs', `a base read apart from the compared one: ${JSON.stringify(f2.baseMatch)}`);
+      // off the arm, and off the protocol: nothing is passed
+      assert(Object.keys(eol.editHunkHeldInput(r.snap.leg, INJ11, app, refs, store)).length === 0 && Object.keys(eol.editHunkHeldInput(r.snap.leg, INJ12, null, refs, store)).length === 0, 'the lever must pass nothing below the version or with no application');
+      assert(eol.armPlatformCompares(r.snap.leg, INJ12) === true && eol.armPlatformCompares(r.snap.leg, INJ11) === false, 'armPlatformCompares');
+      await throws(() => eol.editHunkHeldInput(r.snap.leg, INJ12, app, [{ ...refs[0], refId: 'nope' }], store), /is not a ref of the lab store/, 'a ref the store does not hold');
+      // a persisted Author's stored per-label facts are handed back
+      const sf = eol.storedEditFactsInput(r.snap.leg, INJ12, { gitLiveDrift: { files: [{ label: 'obs-otelcol', baseMatch: 'same', editOverlap: { state: 'no-overlap' } }] } });
+      assert(sf.storedEditFacts?.get('obs-otelcol')?.baseMatch === 'same' && Object.keys(eol.storedEditFactsInput(r.snap.leg, INJ11, { gitLiveDrift: { files: [] } })).length === 0 && Object.keys(eol.storedEditFactsInput(r.snap.leg, INJ12, {})).length === 0, 'storedEditFactsInput');
+    });
+
+    await test('LCO9 (the join\'s wording, $0) a declared service-held file that ANOTHER service returned: capture names it file-from-other-service, the leg is forced service-held-not-held, and the Reviewer-side live-evidence lines — the SHIPPING render of the Author\'s transcribed fact — carry the join\'s heading over that label, never the old words', async () => {
+      const { renderLiveEvidenceForPrompt, FILES_NOT_TAKEN_HEADING } = await import('../lib/agents/harness/live-evidence-render');
+      assert(FILES_NOT_TAKEN_HEADING === 'declared, no file taken from the declared service:', `the heading constant: ${FILES_NOT_TAKEN_HEADING}`);
+      // the operator-access file is declared kept from a service that did NOT return it (the stored run's read-only service did)
+      const other = `obs-ingress.operator-access.conf: service-held — service some-other-readonly`;
+      const snap = await declared([O_GIT, O_LIVE, N_GIT, N_LIVE, other]);
+      const r = await cs.withComputedConfigFacts(snap, { protocol: O12 });
+      const cap = (r.fileSourceCompare!.capture as any[]).find((c) => c.label === 'obs-ingress.operator-access.conf');
+      assert(cap?.outcome === 'file-from-other-service', `capture outcome: ${JSON.stringify(cap)}`);
+      assert(r.report.configForce?.reason === 'service-held-not-held' && JSON.stringify(r.report.configForce.serviceFilesNotHeld) === JSON.stringify(['obs-ingress.operator-access.conf']), `force: ${JSON.stringify(r.report.configForce)}`);
+      assert(r.store!.refs.every((x: any) => x.path !== '/etc/nginx/conf.d/operator-access.conf'), 'a file from another service must not be held');
+      // Harvester point, then the Author's transcription (what the chainer carries to the leg Reviewer's §6)
+      const hLines = renderLiveEvidenceForPrompt(r.facts!.liveEvidence as never) ?? [];
+      const role = String(parsedResult(r.snap.author)?.agentRole ?? ''); const text = String(parsedResult(r.snap.author)?.finalResponse ?? '');
+      const a = await nets.runAuthorLeafNets(r.snap, role, text, 'lab-lco9-a', undefined, undefined, INJ12);
+      assert(!a.errors.liveEvidence && a.stamped.liveEvidence, `the Author's liveEvidence transcription: ${a.errors.liveEvidence ?? 'not stamped'}`);
+      const aLines = renderLiveEvidenceForPrompt(a.stamped.liveEvidence as never) ?? [];
+      for (const [who, lines] of [['Harvester', hLines], ['Author transcription', aLines]] as Array<[string, string[]]>) {
+        const line = lines.find((l) => l.includes(FILES_NOT_TAKEN_HEADING));
+        assert(!!line && line.includes('obs-ingress.operator-access.conf'), `${who}: no line carries the heading over the label — ${JSON.stringify(lines).slice(0, 600)}`);
+        assert(!lines.join('\n').includes('declared, not returned by the declared service'), `${who}: the pre-join heading is still rendered`);
+      }
+    });
+
+    await test('LCO10 (independent review F1 — F-HANDREG, $0) a DESCRIPTOR-URL service line: the lab\'s force equals the shipping resolver\'s answer over the same tool records — registered with descriptorUrl ⇒ held; by hand at the descriptor\'s own endpoint (the stored run) ⇒ held, tied by endpoint; by hand at ANOTHER endpoint ⇒ nothing tied, forced service-held-not-held; and the recorded tier\'s faithful registration route never serves the stored registration for arguments it does not fit', async () => {
+      const { registrationsByDescriptorUrl } = await import('../lib/agents/harness/held-bytes/device-read-scope');
+      const URL_ = 'https://raw.githubusercontent.com/paichart/paichart/main/descriptors/observability-readonly-descriptor.json';
+      const urlHeld = (label: string) => `${label}: service-held — service ${URL_}`;
+      const lines = [urlHeld('obs-otelcol'), urlHeld('obs-ingress.otlp-ingress.conf'), urlHeld('obs-ingress.operator-access.conf')];
+      const withRegister = (snap: any, mut: (call: any) => void) => { const c = clone(snap); const hh = harvestOf(c); const calls = hh.result.toolCalls as any[]; const i = calls.findIndex((t) => t?.tool === 'registry' && t?.arguments?.action === 'register'); assert(i >= 0, 'the stored Harvester made no registry register call'); mut(calls[i]);
+        for (const a of c.childArtifacts.filter((x: any) => x.executionId === hh.h.executionId && x.name === 'result.json')) a.content = JSON.stringify({ ...JSON.parse(a.content), toolCalls: calls }); return c; };
+      const planted = cs.withFirstExecutionConfigSnapshot(withBlock(lines)).snap;
+      const rows: Array<[string, any, 'descriptor-url' | 'endpoint' | null]> = [
+        ['by hand at the descriptor\'s own endpoint (the stored run, unchanged)', planted, 'endpoint'],
+        ['with descriptorUrl alone', withRegister(planted, (call) => { call.arguments = { action: 'register', descriptorUrl: URL_ }; }), 'descriptor-url'],
+        ['by hand at another endpoint', withRegister(planted, (call) => { call.arguments = { ...call.arguments, endpoint: 'http://127.0.0.1:3999/mcp' }; call.result.content[0].data.endpoint = 'http://127.0.0.1:3999/mcp'; }), null],
+      ];
+      for (const [what, snap, route] of rows) {
+        const tied = registrationsByDescriptorUrl(harvestOf(snap).result.toolCalls).get(URL_) ?? [];
+        assert(route === null ? tied.length === 0 : tied.length === 1 && tied[0].resolvedBy === route, `${what}: the shipping resolver ties ${JSON.stringify(tied)}`);
+        const r = await cs.withComputedConfigFacts(snap, { protocol: O12 });
+        const want = configSourceForce(arm.armConfigSources(snap.leg, INJ12)!, r.store!.refs.map((x: any) => ({ target: x.target, path: x.path })));
+        assert(JSON.stringify(r.report.configForce) === JSON.stringify(want), `${what}: the lab's force is not the shipping function's`);
+        if (route) assert(r.report.configForce === null && r.store!.refs.length === 3, `${what}: three files held and nothing forced, got ${JSON.stringify({ f: r.report.configForce, n: r.store!.refs.length })}`);
+        else assert(r.report.configForce?.reason === 'service-held-not-held' && r.report.configForce.serviceFilesNotHeldTotal === 3 && r.store!.refs.length === 0, `${what}: forced with all three labels, nothing held, got ${JSON.stringify({ f: r.report.configForce, n: r.store!.refs.length })}`);
+      }
+      // the recorded tier, per SAMPLE call: what a lab Harvester's own register call is answered with
+      const stored = storedCallsOf({ resultJson: JSON.stringify(harvestOf(planted).result) } as never);
+      const reg = stored.find((x) => x.tool === 'registry')!;
+      // `stored`: the answer is the stored registration's (for a descriptorUrl registration: a copy with the handler's one extra field)
+      const sansFlag = (x: any) => { const c = JSON.parse(JSON.stringify(x)); if (c?.content?.[0]?.data) delete c.content[0].data.registeredFromDescriptor; return JSON.stringify(c); };
+      const serveOf = async (args: any, faithful: boolean) => { const srv = createRecordedToolServer(stored, TOOL_STUB_RESULT, faithful ? { registerRoute: 'faithful' } : {}); const res = await srv.executeToolOnServer('lab', 'registry', args); return { tier: srv.log[0].tier, stored: res !== TOOL_STUB_RESULT && sansFlag(res) === sansFlag(reg.result) }; };
+      const hand = reg.args as any;
+      assert(JSON.stringify(await serveOf({ action: 'register', descriptorUrl: URL_ }, true)) === JSON.stringify({ tier: 'register-descriptor', stored: true }), `descriptorUrl: ${JSON.stringify(await serveOf({ action: 'register', descriptorUrl: URL_ }, true))}`);
+      assert(JSON.stringify(await serveOf({ ...hand, description: 'worded differently' }, true)) === JSON.stringify({ tier: 'register-endpoint', stored: true }), 'a hand registration with the stored name and endpoint');
+      for (const [what, args] of [['another endpoint', { ...hand, endpoint: 'http://127.0.0.1:3999/mcp' }], ['another name', { ...hand, name: 'obs-mine' }], ['another descriptor URL', { action: 'register', descriptorUrl: URL_.replace('observability', 'k8s') }]] as Array<[string, any]>) {
+        const got = await serveOf(args, true);
+        assert(got.tier === 'unserved-register' && !got.stored, `${what}: the faithful route must answer the stub, got ${JSON.stringify(got)}`);
+      }
+      // the divergence the option closes, shown on the DEFAULT tier (unchanged for every earlier experiment): the stored result for arguments it does not fit
+      const dflt = await serveOf({ ...hand, endpoint: 'http://127.0.0.1:3999/mcp' }, false);
+      assert(dflt.tier === 'same-action' && dflt.stored, `the default tier (before this option): ${JSON.stringify(dflt)}`);
+    });
+
+    await test('LCO11 (found on the first observability 1.12.0 render, $0 dry run through lab.ts) a Git harvest plant on an ARCHITECT cell reaches the platform\'s comparison (it was silently ignored: the cell read git-file-not-held); the same plant on a HARVESTER cell is refused by name; and the replay client serves the shipping read of a leg\'s own Config-sources row (the control pass read could-not-check, with two warnings a net)', async () => {
+      const ARCH = 'cmvszbxhe00anyxb3pjj9p19n'; const HARV = 'cmvsza24w003uyxb4ekjx8rvp';
+      for (const id of [ARCH, HARV]) if (!fs.existsSync(snapshotPath(id))) throw new Error(`the lab cache has no snapshot ${id} — this test never fetches from production (LAB-TEST-READS-PRODUCTION)`);
+      const { readLegConfigSources } = await import('../lib/agents/harness/config-sources-read');
+      // the leg-row read, by the SHIPPING reader over the lab's replay client
+      const planted = cs.withFirstExecutionConfigSnapshot(withBlock(FULL)).snap;
+      for (const [what, snap, want] of [['a stored leg with no block', cachedObs(), 'not-config-source-leg'], ['a declared leg', planted, 'parsed']] as Array<[string, any, string]>) {
+        const { client, queries } = buildReplayPrisma(snap, []);
+        const warned: string[] = [];
+        const got = await readLegConfigSources(client as never, { kind: 'leg', legId: String(snap.leg.id), heldCapable: true, ownStageId: 's', configSourceProtocol: OBS } as never, [], { warn: (o) => { warned.push(JSON.stringify(o)); } });
+        assert(got.state === want && warned.length === 0 && queries.some((q: string) => q.startsWith('$queryRaw leg-config-declaration')), `${what}: ${got.state}, ${warned.length} warning(s)`);
+      }
+      // the plant on an Architect cell and on a Harvester cell, through a dry run
+      const exp = fs.mkdtempSync(path.join(out, 'obs-arch-'));
+      fs.mkdirSync(path.join(exp, 'protocols')); fs.mkdirSync(path.join(exp, 'node-inputs'));
+      const baseFile = 'observability-config-protocol@1.11.0.baseline.md';
+      fs.copyFileSync(path.join(LAB, 'golden', 'fixtures', 'obs-text-lab', 'protocols', baseFile), path.join(exp, 'protocols', baseFile));
+      const fx = fixtureDir({ [GIT_OTEL]: OTEL_YAML, [GIT_OTLP]: INGRESS_FILES['otlp-ingress.conf'] });
+      const legDesc: string = cachedObs().leg.description;
+      fs.writeFileSync(path.join(exp, 'node-inputs', 'leg.json'), JSON.stringify({ id: 'leg-declared', appliesTo: ['leg:description'], ops: [{ type: 'replace', old: legDesc, new: `${legDesc}\n\n## Config sources\n${FULL.join('\n')}\n` }] }));
+      const node = (id: string, over: Record<string, unknown>) => ({ id, variants: ['xc'], inputEdits: 'node-inputs/leg.json', configSourcesSnapshot: 'first-execution', harvestFromFixture: { fixture: fx, paths: [GIT_OTEL, GIT_OTLP], mode: 'add' }, expect: 'render only', ...over });
+      const write = (nodes: unknown[]) => fs.writeFileSync(path.join(exp, 'experiment.json'), JSON.stringify({ label: 'lco11', purpose: 'TEST FIXTURE, $0, never spent.', n: 1,
+        flags: { CONNECTED_OUTPUT_SANITIZE_ENABLED: 'true', FORM_CORRECTION_ENABLED: 'true', HELD_BYTES_CAPTURE_ENABLED: 'true' },
+        baseline: { protocols: { [OBS]: { file: `protocols/${baseFile}`, version: '1.11.0', sha256: 'c0ad8475f34529305c93c1ca928b2450f5f86ccc9a6fbe7ba5e53b2a33875628' } } },
+        variants: { xc: { edits: [], heldJoinSeed: 'seed-observability-templates', dropTemplateDirective: true, composedVersion: '1.12.0' } }, measures: [], nodes }));
+      write([node('X', { authorExecutionId: ARCH, architectOnly: true })]);
+      const rd = path.join(out, 'lco11-run');
+      runLab(['run', '--experiment', exp, '--out', rd]);
+      const m = JSON.parse(fs.readFileSync(path.join(rd, 'manifest.json'), 'utf8'));
+      const csx = m.nodes.X.variants.xc.held.configSources;
+      assert(m.nodes.X.gitHarvest?.mode === 'add' && m.nodes.X.gitHarvest.calls === 2, `the plant was not applied on the Architect node: ${JSON.stringify(m.nodes.X.gitHarvest)}`);
+      assert(JSON.stringify(csx.fileSourceCompare.files.map((f: any) => [f.label, f.state])) === JSON.stringify([['obs-otelcol', 'identical'], ['obs-ingress.otlp-ingress.conf', 'identical']]) && csx.configForce === null, `the Architect cell's comparison: ${JSON.stringify({ f: csx.fileSourceCompare, force: csx.configForce })}`);
+      const prompt = fs.readFileSync(path.join(rd, 'X', 'xc', 'author.user.md'), 'utf8');
+      assert(/the platform's comparison of the Git file with the served file[^\n]*: 2 `identical`\./.test(prompt) && !prompt.includes('the Git file is not held'), 'the Architect prompt does not carry the comparison of the planted reads');
+      write([node('H', { authorExecutionId: HARV, harvesterOnly: true, tools: 'recorded', variants: ['xc'] })]);
+      await throws(() => runLab(['run', '--experiment', exp, '--out', path.join(out, 'lco11-run-h')]), /a plant that cannot reach its reader/, 'a harvest plant on a Harvester node');
+    });
+
+    await test('LMLH1 (L-OBS-MLH sibling pool, $0) a FILE read the node never made is served from a sibling Harvester\'s stored call; a shared key with different CONTENT, or two siblings that disagree, refuses the pool; the call envelope (`_meta`, gateway metadata time) is ignored; a non-file call is never pooled', async () => {
+      const rt = await import('./leg-replay-lab/recorded-tools');
+      const call = (index: number, inner: string, args: unknown, payload: string, when = '2026-11-24T22:00:00Z', tool = 'services', action = 'call') => ({
+        index, tool, server: null, args: JSON.stringify({ action, targetService: 'observability-readonly', tool: inner, arguments: JSON.stringify(args) }),
+        result: { _meta: { executionTime: index }, content: [{ type: 'data', data: { _meta: { timestamp: when }, metadata: { executionTime: index, timestamp: when }, result: payload } }] },
+        error: null, success: true, truncatedAtPersist: false });
+      const own = [call(0, 'get_ingress_config', {}, 'INGRESS-A'), call(1, 'stack_health', {}, 'up')];
+      const sib = [call(0, 'get_ingress_config', {}, 'INGRESS-A', '2026-11-24T20:00:00Z'), call(1, 'get_otel_config', {}, 'OTEL-A'), call(2, 'stack_health', {}, 'DIFFERENT')];
+      const ok = rt.poolSiblingCalls(own as any, [{ executionId: 'sib1', calls: sib as any }]);
+      assert(ok.calls.length === 3 && ok.report.added.length === 1 && ok.report.added[0].key.includes('get_otel_config') && ok.report.added[0].index === 10001, `pool ${JSON.stringify(ok.report)}`);
+      assert(ok.report.crossChecked.length === 1, 'the shared ingress read (envelope-only difference) must be cross-checked and accepted');
+      const refused = (f: () => unknown, re: RegExp, what: string) => { let m = ''; try { f(); } catch (e) { m = String((e as Error).message); } assert(re.test(m), `${what}: ${m || 'not refused'}`); };
+      refused(() => rt.poolSiblingCalls(own as any, [{ executionId: 'sib1', calls: [call(0, 'get_ingress_config', {}, 'INGRESS-B')] as any }]), /answered .* differently from this node's own record/, 'a shared key with different content');
+      refused(() => rt.poolSiblingCalls(own as any, [{ executionId: 'sib1', calls: [call(0, 'get_otel_config', {}, 'OTEL-A')] as any }, { executionId: 'sib2', calls: [call(0, 'get_otel_config', {}, 'OTEL-B')] as any }]), /sib1 and sib2 answered .* differently/, 'two siblings that disagree');
+      const none = rt.poolSiblingCalls(own as any, [{ executionId: 'sib1', calls: [call(0, 'stack_health', {}, 'up2'), call(1, 'get_otel_config', {}, 'W', undefined, 'registry', 'register')] as any }]);
+      assert(none.report.added.length === 0, `a non-file or non-call read was pooled: ${JSON.stringify(none.report.added)}`);
+    });
+    await test('LMLH2 (L-OBS-MLH H-1 fault, $0) the served-bytes check finds a SIBLING-POOLED call by its index (10000 × k + i), never by array position — the exact path that threw "reading \'success\'" on H-B-NORESTRICT #1 — and compares R9 facts with that call\'s own record; a pooled read is not counted as this execution\'s production file tool', async () => {
+      const rt = await import('./leg-replay-lab/recorded-tools');
+      const mk = (index: number, inner: string, payload: string) => ({ tool: 'services', arguments: JSON.stringify({ action: 'call', targetService: 'observability-readonly', tool: inner, arguments: '{}' }),
+        result: { content: [{ type: 'data', data: { result: payload } }] }, success: true, rewritten: false, resultChars: payload.length, resultTruncatedForLlm: false, _i: index });
+      const ownBlock = { resultJson: JSON.stringify({ toolCalls: [mk(0, 'get_ingress_config', 'ING'), mk(1, 'stack_health', 'up')] }) } as any;
+      const sibBlock = { resultJson: JSON.stringify({ toolCalls: [mk(0, 'get_ingress_config', 'ING'), mk(1, 'get_otel_config', 'OTEL')] }) } as any;
+      const pooled = rt.poolSiblingCalls(rt.storedCallsOf(ownBlock), [{ executionId: 'sibC', calls: rt.storedCallsOf(sibBlock) }]);
+      const otel = pooled.calls.find((c) => c.pooledFrom === 'sibC')!;
+      assert(otel && otel.index === 10001 && otel.raw && otel.raw._i === 1, `pooled call ${JSON.stringify(otel)}`);
+      const log = [{ tool: 'services', action: 'call', innerTool: 'get_ingress_config', fileTool: true, tier: 'exact', storedIndex: 0 },
+        { tool: 'services', action: 'call', innerTool: 'get_otel_config', fileTool: true, tier: 'exact', storedIndex: 10001 }] as any;
+      const recs = [{ result: pooled.calls[0].result, rewritten: false, resultChars: 3, resultTruncatedForLlm: false }, { result: otel.result, rewritten: false, resultChars: 4, resultTruncatedForLlm: false }];
+      const b = rt.servedBytesCheck(log, recs, pooled.calls);
+      assert(b.served === 2 && b.identical === 2 && b.pooledServed === 1 && b.r9Compared === 2 && b.r9Equal === 2 && b.mismatches.length === 0, `bytes ${JSON.stringify(b)}`);
+      let threw = ''; try { rt.servedBytesCheck([{ ...log[1], storedIndex: 99999 }], recs.slice(1), pooled.calls); } catch (e) { threw = String((e as Error).message); }
+      assert(/names stored call 99999, which the record does not hold/.test(threw), `a missing stored call must fail by name: ${threw}`);
+      const rep = rt.recordedToolsReport([log[0]], pooled.calls);
+      assert(rep.productionFileToolsNotCalled.length === 0, `a pooled tool counted as this execution's production read: ${JSON.stringify(rep.productionFileToolsNotCalled)}`);
+      const rep2 = rt.recordedToolsReport([log[1]], pooled.calls);
+      assert(JSON.stringify(rep2.productionFileToolsNotCalled) === JSON.stringify(['get_ingress_config']), `own production file tools: ${JSON.stringify(rep2.productionFileToolsNotCalled)}`);
+    });
+    await test('LMLH3 (L-OBS-MLH ADDENDUM B, $0) the two platform calls a Harvester may make that touch nothing scored — project pov.details, perform task.comment — are pooled from the FIRST sibling that holds one when the node\'s own record has none, never when it has one, and never any other platform call', async () => {
+      const rt = await import('./leg-replay-lab/recorded-tools');
+      const pc = (index: number, tool: string, action: string, payload: string) => ({ index, tool, server: null, args: JSON.stringify({ action }), result: { content: [{ type: 'text', text: payload }] }, error: null, success: true, truncatedAtPersist: false });
+      const own = [pc(0, 'perform', 'task.comment', 'own-ack')];
+      const s1 = [pc(0, 'project', 'pov.details', 'POV-1'), pc(1, 'perform', 'task.comment', 's1-ack'), pc(2, 'registry', 'tools', 'list')];
+      const s2 = [pc(0, 'project', 'pov.details', 'POV-2')];
+      const r = rt.poolSiblingCalls(own as any, [{ executionId: 's1', calls: s1 as any }, { executionId: 's2', calls: s2 as any }]);
+      assert(JSON.stringify(r.report.platformAdded) === JSON.stringify([{ from: 's1', key: 'project|pov.details', index: 10000 }]), `platform pool ${JSON.stringify(r.report.platformAdded)}`);
+      assert(r.calls.length === 2 && r.calls[1].pooledFrom === 's1', 'exactly one platform call appended (task.comment is the node\'s own; registry never pooled)');
+    });
+    await test('LCO16 (L-CS-O S4R, $0) on a held arm the Reviewer\'s system AND user prompts both carry the owning seed\'s Reviewer constraints — the persisted-Author path included (it rebuilt the user prompt from the stored template row, so a candidate Reviewer constraint reached the system prompt only). A PROBE constraint is added to the seed\'s Reviewer row by a preload, so the test bites whatever the seed carries today', async () => {
+      const CSO = path.join(LAB, 'inputs', '2026-11-23-config-sources-obs-l-cs-o');
+      const dir = path.join(out, 'lco16-dry'); const pre = path.join(out, 'lco16-preload.js');
+      const KEY = 'LCO16 Probe Constraint';
+      const revName = String(cachedObs().reviewer.template.name);
+      assert(!JSON.stringify(cachedObs().reviewer.template.constraints ?? {}).includes(KEY), 'the stored Reviewer row already carries the probe key');
+      fs.writeFileSync(pre, `const M = require('module'); const orig = M._load; M._load = function (req) { const m = orig.apply(this, arguments);
+        if (/seed-observability-templates$/.test(req) && m && !m.__lco16) { const b = m.buildTemplateRow; m.buildTemplateRow = (t) => { const r = b(t);
+          if (t.name === ${JSON.stringify(revName)}) r.constraints = { ...(r.constraints || {}), ${JSON.stringify(KEY)}: 'probe text for LCO16' }; return r; }; m.__lco16 = true; }
+        return m; };\n`);
+      execFileSync('npx', ['ts-node', '-r', 'tsconfig-paths/register', path.join(LAB, 'lab.ts'), 'run', '--experiment', CSO, '--out', dir, '--only', 'R-SVCHELD-OK,R-DIFF-CLEAN'],
+        { cwd: path.join(__dirname, '..'), env: { ...process.env, ANTHROPIC_API_KEY: '', GIT_FILE_SOURCE_PIN: 'paichart/paichart-configs', NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require ${pre}`.trim() }, maxBuffer: 64 * 1024 * 1024 });
+      for (const [cell, arm] of [['R-SVCHELD-OK', 'rc'], ['R-DIFF-CLEAN', 'rs']] as const) {
+        for (const part of ['system', 'user'] as const) {
+          const t = fs.readFileSync(path.join(dir, cell, arm, `reviewer.${part}.md`), 'utf8');
+          assert(t.split(KEY).length - 1 === 1, `${cell}/${arm} reviewer.${part}.md carries the seed's probe Reviewer constraint ${t.split(KEY).length - 1} times (want 1)`);
+        }
+      }
+    });
+    await test('LCO15 (L-S3-b, L-CS-O stage 4, $0) a REVIEWER cell takes its Author as a stage-3 lab sample produced over the SAME upstream samples it binds (refused by name otherwise), plants that sample, and in a dry run the sample reproduces its own stamp, the plant reaches the Reviewer prompt, and the unplanted control carries the sample text', async () => {
+      const up = await import('./leg-replay-lab/upstream-samples');
+      const RUNS = path.join(LAB, 'runs'); const ARUN = '2026-11-23T22-19-18-config-sources-obs-l-cs-o';
+      assert(fs.existsSync(path.join(RUNS, ARUN)), `stage-3 run folder missing (kept locally): ${ARUN}`);
+      const am = JSON.parse(fs.readFileSync(path.join(RUNS, ARUN, 'manifest.json'), 'utf8'));
+      const U = { harvester: 'lab-sample:2026-11-23T09-00-17-config-sources-obs-l-cs-o/H-GITLIVE-DIFF/hc/2', architect: 'lab-sample:2026-11-23T19-57-59-config-sources-obs-l-cs-o/X-DIFF-CLEAN/xc/1' };
+      up.checkAuthorSampleUpstream(am, 'A-DIFF-CLEAN', 'ac', U, 'src');
+      const refused = (f: () => unknown, re: RegExp, what: string) => { let m = ''; try { f(); } catch (e) { m = String((e as Error).message); } assert(re.test(m), `${what}: ${m || 'not refused'}`); };
+      refused(() => up.checkAuthorSampleUpstream(am, 'A-DIFF-CLEAN', 'ac', { ...U, harvester: 'lab-sample:2026-11-23T09-00-17-config-sources-obs-l-cs-o/H-GITLIVE-DIFF/hc/5' }, 'src'), /its Author read harvest .* this cell binds/, 'another harvest');
+      refused(() => up.checkAuthorSampleUpstream(am, 'A-DIFF-CLEAN', 'ac', { ...U, architect: 'lab-sample:2026-11-23T19-57-59-config-sources-obs-l-cs-o/X-DIFF-COMPARING/xc/1' }, 'src'), /its Author read design .* this cell binds/, 'another design');
+      refused(() => up.checkAuthorSampleUpstream({ nodes: { 'A-X': { variants: { ac: { held: {} } } } } }, 'A-X', 'ac', U, 'src'), /recorded no upstream binding/, 'a sample with no upstream record');
+      const CSO = path.join(LAB, 'inputs', '2026-11-23-config-sources-obs-l-cs-o');
+      const dir = path.join(out, 'lco15-dry');
+      execFileSync('npx', ['ts-node', '-r', 'tsconfig-paths/register', path.join(LAB, 'lab.ts'), 'run', '--experiment', CSO, '--out', dir, '--only', 'R-DIFF-CLEAN,R-DIFF-DENIED'],
+        { cwd: path.join(__dirname, '..'), env: { ...process.env, ANTHROPIC_API_KEY: '', GIT_FILE_SOURCE_PIN: 'paichart/paichart-configs' }, maxBuffer: 64 * 1024 * 1024 });
+      const m = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
+      const c = m.nodes['R-DIFF-CLEAN'].variants.rs.authorSource; const d = m.nodes['R-DIFF-DENIED'].variants.rs.authorSource;
+      assert(c.reproducesOwnStamp?.ok === true && d.reproducesOwnStamp?.ok === true, 'a lab-sample Author does not reproduce its own stamp');
+      assert(d.plant?.presence?.ok === true && c.plant === null, `plant report ${JSON.stringify(d.plant).slice(0, 200)}`);
+      const ru = (cell: string) => fs.readFileSync(path.join(dir, cell, 'rs', 'reviewer.user.md'), 'utf8');
+      const sampleLine = 'The Phase 1 design (§2) records the platform\'s evidence about the deployed copy and leaves one operator decision open.';
+      assert(ru('R-DIFF-CLEAN').includes(sampleLine) && !ru('R-DIFF-DENIED').includes(sampleLine), 'the control must carry the sample line and the plant must replace it');
+      assert(ru('R-DIFF-DENIED').includes('matches what is deployed at `/etc/nginx/conf.d/otlp-ingress.conf`'), 'the plant does not reach the Reviewer prompt');
+      // Fixture fix (blind fixture read 2026-11-24): the Reviewer's §6 carries the BOUND harvest's stamps, transcribed by the Author's nets —
+      // never "harvester-not-stamped" from the production 1.11.0 Harvester the snapshot stores.
+      assert(!ru('R-DIFF-CLEAN').includes('harvester-not-stamped') && /differs` — 0 line\(s\) only in the Git file, 1 only in the served file/.test(ru('R-DIFF-CLEAN')), 'the Reviewer does not see the bound harvest\'s live evidence and comparison');
+    });
+    await test('LCO14 (L-S3-a, L-CS-O stage 3, $0) an AUTHOR cell binds its Harvester AND Architect entries from lab samples: the Architect sample is refused unless it is an architectOnly sample of the same production Architect, written over the SAME bound harvest, with its saved Architect prompt byte-identical to the render NOW; the patch replaces exactly the one Architect entry; and in a dry run both bound texts reach the Author prompt while the stored Architect text does not', async () => {
+      const up = await import('./leg-replay-lab/upstream-samples');
+      const RUNS = path.join(LAB, 'runs');
+      const XRUN = '2026-11-23T19-57-59-config-sources-obs-l-cs-o'; const HRUN = '2026-11-23T09-00-17-config-sources-obs-l-cs-o';
+      assert(fs.existsSync(path.join(RUNS, XRUN)) && fs.existsSync(path.join(RUNS, HRUN)), `stage-2 / stage-1 run folders missing (kept locally): ${XRUN}, ${HRUN}`);
+      const tmpRuns = fs.mkdtempSync(path.join(out, 'lco14-runs-'));
+      fs.cpSync(path.join(RUNS, XRUN), path.join(tmpRuns, XRUN), { recursive: true });
+      const xdir = path.join(tmpRuns, XRUN, 'X-DIFF-CLEAN', 'xc');
+      const saved = { system: fs.readFileSync(path.join(xdir, 'author.system.md'), 'utf8'), user: fs.readFileSync(path.join(xdir, 'author.user.md'), 'utf8') };
+      const SRC = `lab-sample:${XRUN}/X-DIFF-CLEAN/xc/1`; const HSRC = `lab-sample:${HRUN}/H-GITLIVE-DIFF/hc/2`; const XEXEC = 'cmvszbxhe00anyxb3pjj9p19n';
+      const ok = up.loadArchitectLabSample(SRC, { architectExecutionId: XEXEC, harvesterSource: HSRC, renderedPrompt: saved }, tmpRuns);
+      assert(ok.text === fs.readFileSync(path.join(xdir, 'sample-01', 'author.md'), 'utf8') && ok.sampleExecutionId === 'lab-X-DIFF-CLEAN-xc-1-x', 'the accepted sample is not the saved design');
+      const refused = (f: () => unknown, re: RegExp, what: string) => { let m = ''; try { f(); } catch (e) { m = String((e as Error).message); } assert(re.test(m), `${what}: ${m || 'not refused'}`); };
+      refused(() => up.loadArchitectLabSample(SRC, { architectExecutionId: XEXEC, harvesterSource: `lab-sample:${HRUN}/H-GITLIVE-DIFF/hc/5`, renderedPrompt: saved }, tmpRuns), /one harvest, one design/, 'a design over another harvest');
+      refused(() => up.loadArchitectLabSample(SRC, { architectExecutionId: XEXEC, harvesterSource: HSRC, renderedPrompt: { ...saved, user: saved.user + ' ' } }, tmpRuns), /user prompt .* differs from today's render/, 'a moved Architect user prompt');
+      refused(() => up.loadArchitectLabSample(SRC, { architectExecutionId: XEXEC, harvesterSource: HSRC, renderedPrompt: { ...saved, system: saved.system + ' ' } }, tmpRuns), /system prompt .* differs from today's render/, 'a moved Architect system prompt');
+      refused(() => up.loadArchitectLabSample(SRC, { architectExecutionId: 'other-exec', harvesterSource: HSRC, renderedPrompt: saved }, tmpRuns), /this Author chains other-exec/, 'another production Architect');
+      const sj = path.join(xdir, 'sample-01', 'sample.json'); const sjv = JSON.parse(fs.readFileSync(sj, 'utf8'));
+      fs.writeFileSync(sj, JSON.stringify({ ...sjv, architectOnly: false }));
+      refused(() => up.loadArchitectLabSample(SRC, { architectExecutionId: XEXEC, harvesterSource: HSRC, renderedPrompt: saved }, tmpRuns), /not an Architect sample/, 'a non-Architect sample');
+      fs.writeFileSync(sj, JSON.stringify({ ...sjv, error: 'boom' }));
+      refused(() => up.loadArchitectLabSample(SRC, { architectExecutionId: XEXEC, harvesterSource: HSRC, renderedPrompt: saved }, tmpRuns), /errored/, 'an errored sample');
+      refused(() => up.checkUpstreamSpec('N', 'ac', { harvester: HSRC, architect: 'frozen:x' }), /must be lab-sample/, 'a non-lab-sample source');
+      const ctx = { chainedFrom: [{ agentRole: 'infra_state_harvester', finalResponse: 'h' }, { agentRole: 'infra_change_architect', finalResponse: 'old' }] };
+      const pat = up.patchArchitectEntry(ctx, (old) => ({ ...old, finalResponse: 'new' }));
+      assert(pat.chainedFrom[1].finalResponse === 'new' && pat.chainedFrom[0] === ctx.chainedFrom[0] && ctx.chainedFrom[1].finalResponse === 'old', 'the patch must replace exactly the one Architect entry, on a copy');
+      refused(() => up.patchArchitectEntry({ chainedFrom: [ctx.chainedFrom[0]] }, (o) => o), /no Architect entry/, 'no Architect entry');
+      refused(() => up.patchArchitectEntry({ chainedFrom: [ctx.chainedFrom[1], ctx.chainedFrom[1]] }, (o) => o), /more than one Architect entry/, 'two Architect entries');
+      // Integration: the dry run of a bound Author cell.
+      const CSO = path.join(LAB, 'inputs', '2026-11-23-config-sources-obs-l-cs-o');
+      const dir = path.join(out, 'lco14-dry');
+      execFileSync('npx', ['ts-node', '-r', 'tsconfig-paths/register', path.join(LAB, 'lab.ts'), 'run', '--experiment', CSO, '--out', dir, '--only', 'A-DIFF-CLEAN'],
+        { cwd: path.join(__dirname, '..'), env: { ...process.env, ANTHROPIC_API_KEY: '', GIT_FILE_SOURCE_PIN: 'paichart/paichart-configs' }, maxBuffer: 64 * 1024 * 1024 });
+      const m = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
+      const u = m.nodes['A-DIFF-CLEAN'].variants.ac.held.upstream;
+      assert(u.inPrompt.harvester === true && u.inPrompt.architect === true && u.architect.sampleSha256 === ok.textSha256, `upstream report ${JSON.stringify(u).slice(0, 300)}`);
+      const user = fs.readFileSync(path.join(dir, 'A-DIFF-CLEAN', 'ac', 'author.user.md'), 'utf8');
+      const stored = (cachedObs().author.exec.config.inputContext.chainedFrom as Array<Record<string, any>>).find((e) => e.agentRole === 'infra_change_architect')!;
+      const storedLine = String(stored.finalResponse).split('\n').find((l: string) => l.trim().length >= 40)!;
+      assert(!user.includes(storedLine), 'the STORED Architect design still reaches the Author prompt');
+      assert(user.includes('Served-only line disposition (role constraint'), 'the bound design (X-DIFF-CLEAN #1) does not reach the Author prompt');
+    });
+    await test('LCO13 (fixture blind read F1, $0) a PRE-REGISTERED catalogue service is a row of the prompt\'s services list, built by the SHIPPING builder: with hubListsCatalogueServices the list names observability-readonly and its 10 tools once, in name order; without the field the SAME array comes back (older labs render as they did); a service that only joins on register is never listed; a name the snapshot already lists is refused', async () => {
+      const nf = await import('./leg-replay-lab/network-fixtures');
+      const { buildHubToolGuidance } = await import('../lib/services/execution-hub-guidance');
+      const NB2 = path.join(LAB, 'inputs', '2026-10-25-network-text-batch-2');
+      const rows = cachedObs().mcpTools as Array<{ name: string; capabilities: unknown }>;
+      assert(rows.length > 0 && !rows.some((r) => r.name === 'observability-readonly'), 'the stored snapshot already lists the service — the test needs another case');
+      const render = async (r: Array<{ name: string; capabilities: unknown }>) => buildHubToolGuidance(['services'], { mCPTool: { findMany: async () => r } }, { warn: () => {} });
+      const off = nf.loadNetworkFixture(NB2, { catalogue: 'fixtures/catalogue.json', catalogueServices: ['observability-readonly'] } as never);
+      assert(nf.hubRowsWithCatalogueServices(rows, off) === rows && nf.hubRowsWithCatalogueServices(rows, null) === rows, 'without the field the rows must be the same array');
+      const on = nf.loadNetworkFixture(NB2, { catalogue: 'fixtures/catalogue.json', catalogueServices: ['observability-readonly'], hubListsCatalogueServices: true } as never);
+      const withRow = nf.hubRowsWithCatalogueServices(rows, on);
+      assert(withRow.length === rows.length + 1 && JSON.stringify(withRow.map((r) => r.name)) === JSON.stringify([...withRow.map((r) => r.name)].sort()), 'the added row is not in name order');
+      const before = await render(rows); const after = await render(withRow);
+      const line = after.split('\n').filter((l) => l.startsWith('- observability-readonly: '));
+      assert(line.length === 1 && line[0].split(': ')[1].split(', ').length === 10 && /get_otel_config/.test(line[0]) && /get_ingress_config/.test(line[0]), `the services list line: ${JSON.stringify(line)}`);
+      assert(!before.includes('observability-readonly') && after.replace(line[0] + '\n', '') === before, 'the list moved by more than the one added line');
+      const onReg = nf.loadNetworkFixture(NB2, { catalogue: 'fixtures/catalogue.json', catalogueServices: [], catalogueOnRegister: { 'https://x.example/d.json': 'observability-readonly' }, hubListsCatalogueServices: true } as never);
+      let threw = ''; try { nf.hubRowsWithCatalogueServices(rows, onReg); } catch (e) { threw = String((e as Error).message); }
+      assert(/needs catalogueServices/.test(threw), `a register-only service must not be listed: ${threw}`);
+      threw = ''; try { nf.hubRowsWithCatalogueServices(withRow, on); } catch (e) { threw = String((e as Error).message); }
+      assert(/already lists a service named observability-readonly/.test(threw), `a duplicate name must be refused: ${threw}`);
+    });
+    await test('LCO12 (the 1.12.0 text no longer lets the Harvester fetch the descriptor, $0) the registration and the hub\'s LISTING are served: register with descriptorUrl ⇒ the handler\'s result shape with registeredFromDescriptor, serviceName intact, NO tool names in it; then registry tools / services discover / registry list / services health answer for that service (10 tools from the public descriptor); a listing call BEFORE the registration, or naming another service, is counted unserved, never silently stubbed; a registration whose typed name disagrees with the descriptor is refused by the shipping check', async () => {
+      const nf = await import('./leg-replay-lab/network-fixtures');
+      const rt = await import('./leg-replay-lab/recorded-tools');
+      const URL_ = 'https://raw.githubusercontent.com/paichart/paichart/main/descriptors/observability-readonly-descriptor.json';
+      const NB2 = path.join(LAB, 'inputs', '2026-10-25-network-text-batch-2');
+      const spec = { catalogue: 'fixtures/catalogue.json', catalogueServices: [], catalogueOnRegister: { [URL_]: 'observability-readonly' },
+        descriptorFiles: { [URL_]: '../2026-10-25-network-text-batch-1/fixtures/descriptors/observability-readonly-descriptor.json' } };
+      const fx = nf.loadNetworkFixture(NB2, spec as never);
+      const stored = storedCallsOf({ resultJson: JSON.stringify(harvestOf(cachedObs()).result) } as never);
+      const server = () => nf.createNetworkToolServer(fx, createRecordedToolServer(stored, TOOL_STUB_RESULT, { registerRoute: 'faithful' }), TOOL_STUB_RESULT);
+      const dataOf = (res: any) => res?.content?.[0]?.data ?? null;
+      // the handler's own line for the one field the lab adds (a drift point, pinned)
+      const handler = fs.readFileSync(path.join(__dirname, '..', 'lib', 'mcp', 'server', 'tools', 'hub', 'service-registration-handler.js'), 'utf8');
+      assert(handler.includes('...(descriptorProvenance ? { registeredFromDescriptor: true } : {}),'), 'the shipping handler no longer adds registeredFromDescriptor as the lab copies it — re-read its result builder');
+      // 1. a listing call before any registration: counted, never silent
+      const s0 = server();
+      const early = await s0.executeToolOnServer('lab', 'registry', { action: 'tools', service_name: 'observability-readonly' });
+      assert(early === TOOL_STUB_RESULT && s0.log[0].tier === 'unserved-catalogue', `a listing before the registration: ${s0.log[0].tier}`);
+      // 2. register with descriptorUrl alone, then every listing call a Harvester could use
+      const s1 = server();
+      const reg = dataOf(await s1.executeToolOnServer('lab', 'registry', { action: 'register', descriptorUrl: URL_ }));
+      assert(reg?.success === true && reg.serviceName === 'observability-readonly' && reg.registeredFromDescriptor === true && reg.status === 'ACTIVE', `the registration result: ${JSON.stringify(reg).slice(0, 300)}`);
+      assert(!/get_otel_config|get_ingress_config/.test(JSON.stringify(reg)), 'the registration result names tools — the shipping result does not');
+      const tools = dataOf(await s1.executeToolOnServer('lab', 'registry', { action: 'tools', service_name: 'observability-readonly' }));
+      const names = (tools?.tools ?? []).map((t: any) => t.name);
+      assert(names.length === 10 && names.includes('get_otel_config') && names.includes('get_ingress_config') && tools.service?.name === 'observability-readonly', `registry tools: ${JSON.stringify(names)}`);
+      const disc = dataOf(await s1.executeToolOnServer('lab', 'services', { action: 'discover' }));
+      const row = (disc?.services ?? []).find((x: any) => x.name === 'observability-readonly');
+      assert(!!row && row._schemaInfo?.toolCount === 10 && row.capabilities?.tools?.includes('get_ingress_config'), `services discover: ${JSON.stringify(disc?.services?.map((x: any) => x.name))}`);
+      const list = dataOf(await s1.executeToolOnServer('lab', 'registry', { action: 'list' }));
+      assert((list?.services ?? []).some((x: any) => x.name === 'observability-readonly'), 'registry list does not show the service the run registered');
+      const health = dataOf(await s1.executeToolOnServer('lab', 'services', { action: 'health', service_name: 'observability-readonly' }));
+      assert(health?.serviceName === 'observability-readonly', 'services health');
+      assert(JSON.stringify(s1.log.map((e) => e.tier)) === JSON.stringify(['register-descriptor', 'catalogue', 'catalogue', 'catalogue', 'catalogue']), `the serve log: ${JSON.stringify(s1.log.map((e) => e.tier))}`);
+      // 3. a listing naming a service the run did not register: counted
+      await s1.executeToolOnServer('lab', 'registry', { action: 'tools', service_name: 'k8s-rig-readonly' });
+      assert(s1.log[s1.log.length - 1].tier === 'unserved-catalogue', 'a listing of another service must be counted unserved');
+      // 4. the shipping descriptor check: a typed name that disagrees with the descriptor is refused
+      await throws(() => server().executeToolOnServer('lab', 'registry', { action: 'register', descriptorUrl: URL_, name: 'obs-mine' }), /DESCRIPTOR_FIELD_DISAGREES|disagree/i, 'a registration whose name disagrees with the descriptor');
+      // 5. the descriptor copy the lever reads is the public one (10 tools; sha pinned so a moved descriptor is seen)
+      const dfile = path.join(NB2, spec.descriptorFiles[URL_]);
+      assert(sha256(fs.readFileSync(dfile, 'utf8')).startsWith('d3d8cb9724b6'), `the descriptor copy moved: ${sha256(fs.readFileSync(dfile, 'utf8')).slice(0, 12)}`);
+      assert(typeof rt.asDescriptorRegistration === 'function', 'asDescriptorRegistration');
+    });
+
+    await test('LCO8 (slice L item 6, plan W23 / §11.1) cso-self-test: the no-compare scorer reads every hand-written case, each mutation RED; and on the stored 1.11.0 Harvester (which read no Git file) it flags nothing', async () => {
+      const cso = await import('./leg-replay-lab/score-cso');
+      const ok = cso.csoSelfTest();
+      assert(ok.ok, `cso-self-test: ${ok.failures.join('; ')}`);
+      for (const mutate of cso.CSO_MUTATIONS) assert(!cso.csoSelfTest({ mutate }).ok, `mutation ${mutate} not caught`);
+      const { resolveConfigLabel } = await import('../lib/agents/harness/held-bytes/config-label');
+      const dec = await declared();
+      const gov = arm.armConfigSources(dec.leg, INJ12) as any;
+      const pairs = cso.pairsOf(gov.entries, (l: string) => { const x = resolveConfigLabel(l) as any; return x.ok ? x.path : null; });
+      assert(JSON.stringify(pairs) === JSON.stringify([{ label: 'obs-otelcol', gitPath: GIT_OTEL, servedPath: '/etc/otelcol/config.yaml' }, { label: 'obs-ingress.otlp-ingress.conf', gitPath: GIT_OTLP, servedPath: '/etc/nginx/conf.d/otlp-ingress.conf' }]), `pairs from the shipping label table: ${JSON.stringify(pairs)}`);
+      const before = String(harvestOf(cachedObs()).result.finalResponse ?? '');
+      const c = cso.countPairSentences(before, pairs); const own = cso.ownComparisonReading(before, pairs);
+      assert(before.length > 200 && c.sentences === 0 && own.flagged === 0, `the stored 1.11.0 Harvester output must read 0 (it read no Git file): ${JSON.stringify({ c, own })}`);
+      // the label-keyed predicate (review F3), calibrated on the same stored output: it compared nothing, so it must flag nothing
+      const byLabel = cso.ownComparisonByLabel(before, gov.entries.map((e: any) => e.label));
+      assert(byLabel.flagged === 0, `the label-keyed predicate flags the stored 1.11.0 Harvester output: ${JSON.stringify(byLabel.examples)}`);
+    });
+  }
+
+  // ── LRR1 Config sources read rule (2026-11-25): the lab rebuild asks the SHIPPING gate; as run by default, force-on only where the gate is ON ──
+  await test('LRR1 read rule: a stored pre-ship obs Harvester replays as run (no rule, gate ON, note); force-on inserts the 732-char rule right after the brief\'s block in BOTH copies (user §3 + system HEAD) and nothing else; refused on an Author, a k8s leg and a non-harvester node', async () => {
+    const ING = 'cmwvchlf6010dyxx0khb2f9ml';
+    if (!fs.existsSync(snapshotPath(ING))) { console.log(`     (skipped: snapshot ${ING} not in the local cache)`); return; }
+    const { CONFIG_SOURCES_READ_RULE_PARAGRAPH: PARA } = await import('../lib/agents/harness/config-sources-read-rule');
+    const { assertReadRuleNodeOption } = await import('./leg-replay-lab/lab');
+    const snap = loadSnapshot(ING);
+    const text: ProtocolText = { name: 'observability-config-protocol', version: '1.12.0', text: 'PROTOCOL TEXT (LRR1 stand-in)', source: 'test' };
+    const asRun = await rebuildPrompt(snap, 'author', text);
+    assert(asRun.configSourcesReadRule.gate.on && asRun.configSourcesReadRule.gate.reason === 'on', `gate: ${JSON.stringify(asRun.configSourcesReadRule.gate)}`);
+    assert(!asRun.configSourcesReadRule.rendered && !asRun.system.includes(PARA) && !asRun.user.includes(PARA) && !('configSourcesReadRule' in asRun.fact), 'as run: the stored execution ran without the rule — it must replay without it');
+    assert(asRun.notes.some((n) => n.includes("force with configSourcesReadRule: 'force-on'")), 'as run: the gate-ON note');
+    const fc = fidelityChecks(snap, 'author', asRun).find((c) => c.name === 'protocolInjection.configSourcesReadRule');
+    assert(fc && fc.ok === null, `fidelity: a pre-ship execution with the gate ON is not checkable: ${JSON.stringify(fc)}`);
+    const forced = await rebuildPrompt(snap, 'author', text, { configSourcesReadRule: 'force-on' });
+    const LAST = 'obs-ingress.operator-access.conf: live-read — service observability-readonly';
+    const NEXT = "Read only the files this leg's own objective concerns";
+    for (const [n, a, f] of [['user', asRun.user, forced.user], ['system', asRun.system, forced.system]] as const) {
+      assert(f.split(PARA).length === 2, `${n}: the rule must render exactly once`);
+      assert(f.includes(`${LAST}\n\n${PARA}\n\n${NEXT}`), `${n}: the rule sits directly after the block's last line, before the stored narrowing sentence`);
+      assert(f.replace(`\n\n${PARA}`, '') === a, `${n}: every other byte as run`);
+    }
+    assert(forced.configSourcesReadRule.anchor === 'after-block' && forced.fact.configSourcesReadRule === true && forced.fact.preambleChars === asRun.fact.preambleChars, 'force-on: anchor, fact key, preamble unchanged');
+    // refused: an Author on the same declared leg; a Kubernetes leg's Author; a node that is not harvesterOnly
+    const author = JSON.parse(JSON.stringify(snap));
+    author.author.exec.config = { ...(author.author.exec.config ?? {}), agentRole: 'config_change_author' };
+    let threw = '';
+    try { await rebuildPrompt(author, 'author', text, { configSourcesReadRule: 'force-on' }); } catch (e) { threw = (e as Error).message; }
+    assert(/force-on' refused .*not-a-harvester/.test(threw), `an Author must be refused: ${threw || 'no throw'}`);
+    const k8s = 'cmwmxep5y00hdyxykvf4y3n11';
+    if (fs.existsSync(snapshotPath(k8s))) {
+      threw = '';
+      try { await rebuildPrompt(loadSnapshot(k8s), 'author', { ...text, name: 'kubernetes-gitops-protocol' }, { configSourcesReadRule: 'force-on' }); } catch (e) { threw = (e as Error).message; }
+      assert(/force-on' refused/.test(threw), `a Kubernetes Author must be refused: ${threw || 'no throw'}`);
+    }
+    const k8sLeg = JSON.parse(JSON.stringify(snap));
+    k8sLeg.leg.metadata = { ...k8sLeg.leg.metadata, protocol: 'kubernetes-gitops-protocol' };
+    threw = '';
+    try { await rebuildPrompt(k8sLeg, 'author', text, { configSourcesReadRule: 'force-on' }); } catch (e) { threw = (e as Error).message; }
+    assert(/protocol-not-on-allow-list/.test(threw), `a Harvester of a Kubernetes leg must be refused by the allow-list: ${threw || 'no throw'}`);
+    const nodeThrows = (n: any) => { try { assertReadRuleNodeOption(n); return ''; } catch (e) { return (e as Error).message; } };
+    assert(nodeThrows({ id: 'A', configSourcesReadRule: 'force-on' }).includes('not harvesterOnly'), 'a non-harvester node is refused');
+    assert(nodeThrows({ id: 'H', harvesterOnly: true, configSourcesReadRule: 'on' }).includes("must be 'force-on'"), 'a bad value is refused');
+    assert(nodeThrows({ id: 'H', harvesterOnly: true, configSourcesReadRule: 'force-on' }) === '' && nodeThrows({ id: 'A' }) === '', 'harvester force-on and absent pass');
+  });
 
   fs.rmSync(out, { recursive: true, force: true });
   console.log(`\n${fail === 0 ? '✅' : '❌'} ${pass} passed, ${fail} failed`);

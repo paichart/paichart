@@ -93,6 +93,13 @@ export interface SystemPromptInjectionContext {
    * title function the stamp writer ran.
    */
   taskProtocol?: TaskProtocolResolution | null;
+  /**
+   * Config sources read rule (2026-11-25): `true` when the CALLER rendered the read rule into the brief (beside its
+   * `## Config sources` block, in the task description both builders render — `withConfigSourcesReadRule`,
+   * lib/agents/harness/config-sources-read-rule.ts). This module renders NOTHING for it (no tail block — the lab measured a
+   * tail block failing, ADDENDUM B); it only stamps `configSourcesReadRule: true` on the fact. Absent / false ⇒ no key.
+   */
+  configSourcesReadRule?: boolean;
 }
 
 /** The four injection modes. Parsed EXPLICITLY — an unrecognised truthy `loadProtocols` THROWS. */
@@ -119,6 +126,9 @@ export interface ProtocolInjectionFact {
   preambleChars: number;
   /** Set when injection degraded below the configured mode (transient DB blip / leg-tier non-ACTIVE row). */
   degraded?: string;
+  /** Present (true) ONLY when the Config sources read rule was rendered into this execution's brief (both copies). Absent on every other execution,
+   *  so every stored fact from before 2026-11-25 reads as "not rendered" — the series-cut key. */
+  configSourcesReadRule?: true;
 }
 
 /**
@@ -131,6 +141,7 @@ export interface InjectionBlock {
   kind: 'rules' | 'protocols' | 'base' | 'delta' | 'harness' | 'basePrompt' | 'constraints' | 'scopeSelfCheck';
   text: string;
 }
+
 
 // P10 (task #82): TEMPLATE_MISMATCH escape hatch — appended to EVERY agent
 // system prompt regardless of template/protocol. Lets an agent self-identify
@@ -579,6 +590,7 @@ export async function buildSystemPromptInjectionBlocks(
   ];
 
   fact.preambleChars = preambleBlocks.reduce((n, b) => n + b.text.length, 0);
+  if (ctx.configSourcesReadRule === true) fact.configSourcesReadRule = true;
   // The per-execution observability line (B2) — fires in ALL FOUR modes, one line, structured.
   // Call sites bind execution identity via logger.child({executionId, taskId, templateId}).
   logger.info({ protocolInjection: fact as unknown as Record<string, unknown> }, 'Protocol injection resolved');

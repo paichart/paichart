@@ -97,6 +97,16 @@ function budgetCheck(): number {
   const POV_PROGRAM_CEILING = 68000;
   if (pov) headroom('pov-program', pov.length, POV_PROGRAM_CEILING);
   if (pov) check(pov.length <= POV_PROGRAM_CEILING, `pov-program ${pov.length} ≤ ${POV_PROGRAM_CEILING.toLocaleString()} (ND7)`);
+  // Config sources STEP 3: the observability protocol text has a ceiling. Owner decision 9 (2026-11-20, step3-panel/SYNTHESIS-v2.md:353)
+  // set 52,000 before the 1.12.0 draft (41,368 at 1.11.0). RAISED 52,000 → 57,000 by explicit owner decision 2026-11-23 ("1. agree
+  // 2. agree", on the measured table): the 1.12.0 candidate is VARIANT B, measured 52,927 at the decision — the draft plus four passages
+  // and three clauses first cut for size, restored whole rather than compressed. 57,000 leaves about 4,070 for lab rounds (the 2%
+  // warning fires above 55,860); Terraform's lab rounds added about 6,300. The rule is unchanged: at the ceiling a text is cut or
+  // moved, never compressed, or goes back to the owner. The other three domain change protocols still have no ceiling.
+  const obs = text('observability-config-protocol');
+  const OBSERVABILITY_CEILING = 57000;
+  if (obs) headroom('observability-config', obs.length, OBSERVABILITY_CEILING);
+  if (obs) check(obs.length <= OBSERVABILITY_CEILING, `observability-config ${obs.length} ≤ ${OBSERVABILITY_CEILING.toLocaleString()} (owner decision 9, raised 2026-11-23)`);
   if (nd) {
     headroom('network-derivation', nd.length, 30000);
     check(nd.length <= 30000, `network-derivation ${nd.length} ≤ 30,000`);
@@ -150,8 +160,8 @@ function budgetCheck(): number {
   // became strict equality — replaced in the SAME commit that deleted auditValueChainVocabulary, so nothing in CI loses
   // coverage of value_chain_architect. A fork of either key fails here.
   check(!!pa && !!vca && vca === pa, `value_chain_architect === program_architect (${vca?.length} vs ${pa?.length} chars; one constant)`);
-  headroom('program_architect', pa?.length, 24000);
-  check(!!pa && pa.length <= 24000, `program_architect ≤ 24,000 chars (${pa?.length}) — absolute ceiling (E3 review PC-L3 / AR-F5; raised 21,304 → 21,500 by owner 2026-10-24 for the held-network deviceSources sentence; 21,500 → 21,800 by owner 2026-11-06 for the VALUE-LEG-GIT "no key unless lines" sentence — canary B found the compressed form wrote a prose note under the key; 21,800 → 22,500 by owner 2026-11-07 to make room so the next sentence is never compressed — Protocol 16 § size ceiling step 5); 22,500 → 22,800 by owner 2026-11-16 ("i approve expanding the architect limit as needed / do not compress the architect prose") for the Config sources STEP 2 Architect batch — protocol-token keys, no assembled descriptor, configSources["kubernetes-gitops"], A4 two-descriptor clause, N1; 22,800 → 23,700 by owner standing approval 2026-11-16 ("i approve expanding the architect limit as needed / do not compress the architect prose") for the Architect step-back text (descriptor rule for legs without a sources block; Git-file fetch route); 23,700 → 24,000 for the review folds F1-F4 (prompt-construction: no cut keeps every condition a full clause)`);
+  headroom('program_architect', pa?.length, 26500);
+  check(!!pa && pa.length <= 26500, `program_architect ≤ 26,500 chars (${pa?.length}) — absolute ceiling (E3 review PC-L3 / AR-F5; raised 21,304 → 21,500 by owner 2026-10-24 for the held-network deviceSources sentence; 21,500 → 21,800 by owner 2026-11-06 for the VALUE-LEG-GIT "no key unless lines" sentence — canary B found the compressed form wrote a prose note under the key; 21,800 → 22,500 by owner 2026-11-07 to make room so the next sentence is never compressed — Protocol 16 § size ceiling step 5); 22,500 → 22,800 by owner 2026-11-16 ("i approve expanding the architect limit as needed / do not compress the architect prose") for the Config sources STEP 2 Architect batch — protocol-token keys, no assembled descriptor, configSources["kubernetes-gitops"], A4 two-descriptor clause, N1; 22,800 → 23,700 by owner standing approval 2026-11-16 ("i approve expanding the architect limit as needed / do not compress the architect prose") for the Architect step-back text (descriptor rule for legs without a sources block; Git-file fetch route); 23,700 → 24,000 for the review folds F1-F4 (prompt-construction: no cut keeps every condition a full clause); 24,000 → 26,500 by explicit owner decision 2026-11-23 ("1. agree 2. agree", on the measured table) for the Config sources STEP 3 sentences shipping with observability-config 1.12.0 — the observability-config descriptor exception and the configSources["observability-config"] key sentence, at natural length: measured 24,820 at the decision, leaving 1,680 (the Kubernetes value lane's later sentences were sized at +1,394). Unchanged rule: at the ceiling, cut or move, never compress, or back to the owner`);
   headroom('derivation_architect', da?.length, 6000);
   headroom('derivation_reviewer', dr?.length, 6000);
   if (da) check(da.length <= 6000, `derivation_architect ${da.length} ≤ 6,000 (raised 4,500 → 6,000 by owner 2026-11-07: a soft AU-3 budget for a small role read whole; no head-keep reason; matches derivation_reviewer — Protocol 16 § size ceiling step 5)`);

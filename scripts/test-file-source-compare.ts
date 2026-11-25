@@ -44,7 +44,7 @@ import { CREDENTIAL_LINE_SEAM, credentialLineCheck, quotableLine, quoteSeamOpen 
 import { prepareHeldCapture, prepareHeldCaptureWithEvidence, DECLARED_SCOPE_ROW_CAP } from '../lib/services/held-bytes-capture';
 import { runLegFileSourceCompare, harvesterCompareOverlay, authorDriftOverlay, editHunkFilesOrNull } from '../lib/services/file-source-compare-run';
 import { runLegPlatformDrift } from '../lib/services/platform-drift';
-import { captureScopesFor, CONFIG_SOURCE_AWAITING_TEXT, CONFIG_SOURCE_LANES, protocolRunsUndeclared, isUndeclaredRunsLeg, type OwningLegResolution } from '../lib/agents/harness/held-bytes/variant';
+import { captureScopesFor, CONFIG_SOURCE_LANES, protocolRunsUndeclared, isUndeclaredRunsLeg, type OwningLegResolution } from '../lib/agents/harness/held-bytes/variant';
 import { governingConfigSourcesAsOf, configSnapshotDecision, readLegConfigSources, LEG_ROW_READ_ATTEMPTS, type GoverningConfigRow, type LegConfigSourcesResolution } from '../lib/agents/harness/config-sources-read';
 import { withDeclaredFilesScope, servedKeyOf, protocolDeclaresServiceFiles, SERVED_FILE_EVIDENCE_ONLY, SERVICE_FILE_NOT_DECLARED } from '../lib/agents/harness/held-bytes/config-source-scope';
 import { extractDeclaredFiles } from '../lib/agents/harness/held-bytes/extract';
@@ -54,7 +54,7 @@ import { computeFileConfigSourceReads, computeFileLiveEvidenceFromReadRecord, co
 import { computeGitLiveDriftHarvesterFact, transcribeGitLiveDriftFact, stampFileSourceCompare } from '../lib/agents/harness/git-live-drift-enrichment';
 import { computeConfigSourceReadsFact } from '../lib/agents/harness/config-source-facts-enrichment';
 import { computeLiveEvidenceHarvesterFact, hoistLiveEvidenceFact } from '../lib/agents/harness/live-evidence-enrichment';
-import { renderLiveEvidenceForPrompt, ALL_GIT_ONLY_FILES_NOTE } from '../lib/agents/harness/live-evidence';
+import { renderLiveEvidenceForPrompt, ALL_GIT_ONLY_FILES_NOTE, FILES_NOT_TAKEN_HEADING, FILES_NOT_TAKEN_COUNT_WORDS } from '../lib/agents/harness/live-evidence';
 import { gitOnlyStatementSentenceFor, GIT_ONLY_STATEMENT_SENTENCES } from '../lib/agents/harness/git-only-statement-sentence';
 import { DECLARED_LEG_WARNING_IDS, REGISTERED_WARNING_IDS, registeredWarningIdsFor } from '../lib/agents/harness/reviewer-warnings-enrichment';
 import { PLACEHOLDER, isCredentialShapedLine, CREDENTIAL_LINE_VERSION } from '../lib/agents/harness/redact-artifact-secrets';
@@ -537,7 +537,7 @@ test('REC4 (plan §13 A4) the comparison never throws: an injected throwing comp
   // the population: every gate that says "no record" returns undefined and compares nothing
   const base = { sources: two as LegConfigSourcesResolution | null, protocol: OBS as string | null, isHarvester: true, versionApplies: true, plan, evidence, toolCalls: [], executionId: 'exH', logger };
   for (const [what, over] of [['not a Harvester', { isHarvester: false }], ['below the version', { versionApplies: false }], ['no declaration', { sources: null }],
-    ['a declaration that is not parsed', { sources: governed([O_GIT, O_LIVE], CONFIG_SOURCE_AWAITING_TEXT.length ? CONFIG_SOURCE_AWAITING_TEXT : [OBS]) }],
+    ['a declaration that is not parsed', { sources: governed([O_GIT, O_LIVE], [OBS]) }],   // observability's row awaiting ⇒ `snapshot-text-reverted` (the tree's own list is empty since the 1.12.0 join)
     ['a service-call protocol', { protocol: K8S }], ['a protocol with no method', { protocol: 'terraform-iac-protocol' }], ['no protocol', { protocol: null }]] as Array<[string, Rec]>) {
     eq(runLegFileSourceCompare({ ...base, ...over } as never), undefined, `${what}: `);
   }
@@ -892,9 +892,43 @@ test('FACT5 the files summary: a pinned truth table over every combination of th
   const allGit = renderLiveEvidenceForPrompt(mk(['g', 'g']).live)!.join('\n');
   assert(allGit.includes(ALL_GIT_ONLY_FILES_NOTE) && /configuration FILES/.test(ALL_GIT_ONLY_FILES_NOTE) && ALL_GIT_ONLY_FILES_NOTE.endsWith('this fact does not cover them.') && !/still reads/.test(ALL_GIT_ONLY_FILES_NOTE), `review AR C-1 / F6 (the note claims nothing about what the leg reads): ${allGit}`);
   assert(!renderLiveEvidenceForPrompt(mk(['g', 'gl']).live)!.join('\n').includes('all-git-only'), 'the note rides the all-git-only summary only');
+  // The 1.12.0 join (coordinator ruling on register item 31): the note says what the PLATFORM did (kept or compared no served copy),
+  // never what was "read" — on a partly declared directory the Harvester's call returns the file anyway.
+  assert(ALL_GIT_ONLY_FILES_NOTE.includes('no served copy of any declared file was kept or compared.') && !/was read/.test(ALL_GIT_ONLY_FILES_NOTE), `the note claims a file was not READ: ${ALL_GIT_ONLY_FILES_NOTE}`);
 });
-test('FACT6 (owner decision 2a — a fact, no force) the Git-only statement: no sentence is registered yet, so the check says so by name; with a sentence it is searched once per listed label after whitespace and emphasis normalisation only', () => {
-  eq([Object.keys(GIT_ONLY_STATEMENT_SENTENCES).length, gitOnlyStatementSentenceFor(OBS, '1.12.0'), gitOnlyStatementSentenceFor('toString', '1.12.0'), gitOnlyStatementSentenceFor(OBS, null)], [0, null, null, null]);
+test('FACT5b (the 1.12.0 join, register item 31) the heading over the files with no file from their declared service is TRUE of every state listed under it: "no file taken", never "not returned" — a file another service returned, a service under another name, a plain not-read', () => {
+  eq([FILES_NOT_TAKEN_HEADING, FILES_NOT_TAKEN_COUNT_WORDS], ['declared, no file taken from the declared service:', 'declared file(s) with no file taken from the declared service.']);
+  const fact = { lane: 'config', unit: 'files', checked: true, summary: 'some-not-read', items: 3, gitFileLines: 1, serviceHeld: 2, serviceHeldRead: 0, liveDeclared: 1, liveRead: 0, gitOnlyFiles: [],
+    liveNotRead: [{ label: 'obs-otelcol', kind: 'live-read', state: 'file-from-other-service' }, { label: 'obs-ingress.a.conf', kind: 'service-held', state: 'registered-under-other-name' },
+      { label: 'obs-ingress.b.conf', kind: 'service-held', state: 'not-read' }] };
+  const out = renderLiveEvidenceForPrompt(fact)!;
+  const head = out[0]; const row = out.find((l) => l.includes(FILES_NOT_TAKEN_HEADING));
+  assert(head.endsWith(`3 ${FILES_NOT_TAKEN_COUNT_WORDS}`), head);
+  assert(!!row && row.startsWith(`  - ${FILES_NOT_TAKEN_HEADING} `), out.join('\n'));
+  for (const state of ['file-from-other-service', 'registered-under-other-name', 'not-read']) assert(row!.includes(`: ${state}`), `${state} is not listed under the heading: ${row}`);
+  // the words that were false for two of those states are gone from the whole render
+  assert(!/not returned by the declared service|declared file\(s\) not returned/.test(out.join('\n')), out.join('\n'));
+  // the render source carries each string ONCE, as the constant (a second literal would be a second wording)
+  const src = fs.readFileSync(path.join(__dirname, '../lib/agents/harness/live-evidence-render.ts'), 'utf8');
+  eq([src.split(FILES_NOT_TAKEN_HEADING).length - 1, src.split(FILES_NOT_TAKEN_COUNT_WORDS).length - 1], [1, 1], 'literal occurrences in the render module: ');
+});
+test('FACT6 (owner decision 2a — a fact, no force) the Git-only statement: ONE sentence is registered, for observability-config at EXACTLY 1.12.0 (the join); for any other version the check says so by name; a sentence is searched once per listed label after whitespace and emphasis normalisation only', () => {
+  // The 1.12.0 join (2026-11-23): the table carries the one row the 1.12.0 text needs. Keyed on the EXACT version — a later text
+  // version reads `no-sentence-for-version` until its own row is added (test:config-sources MIX5b reds a seed bump without one).
+  const REGISTERED = 'For the file {label} this package relies on the Git file only';
+  eq(GIT_ONLY_STATEMENT_SENTENCES, { [OBS]: { '1.12.0': REGISTERED } }, 'the whole table: ');
+  eq([gitOnlyStatementSentenceFor(OBS, '1.12.0'), gitOnlyStatementSentenceFor(OBS, '1.11.0'), gitOnlyStatementSentenceFor(OBS, '1.12.1'), gitOnlyStatementSentenceFor(OBS, '1.13.0'),
+    gitOnlyStatementSentenceFor(K8S, '1.12.0'), gitOnlyStatementSentenceFor('toString', '1.12.0'), gitOnlyStatementSentenceFor(OBS, 'toString'), gitOnlyStatementSentenceFor(OBS, null)],
+    [REGISTERED, null, null, null, null, null, null, null]);
+  // the registered sentence, through the shipping check: with and without the full stop the text shows the Author, with emphasis,
+  // wrapped; a label that is the TAIL of a listed label is not read as stated (the reason the label sits between fixed words)
+  const reg = gitOnlyStatementSentenceFor(OBS, '1.12.0');
+  eq(computeGitOnlyStatement('For the file `obs-otelcol` this package relies on the Git file only.\n\nFor the file **obs-ingress.a.conf** this package relies\non the Git file only', ['obs-otelcol', 'obs-ingress.a.conf'], reg),
+    { listed: 2, checked: true, stated: 2, missing: [] }, 'the registered sentence, both forms: ');
+  eq(computeGitOnlyStatement('For the file obs-otelcol this package relies on the Git file only.', ['otelcol', 'obs-otelcol'], reg),
+    { listed: 2, checked: true, stated: 1, missing: ['otelcol'] }, 'a label that is the tail of another: ');
+  eq(computeGitOnlyStatement('This package relies on the Git file only for obs-otelcol. The file obs-otelcol was checked against Git only.', ['obs-otelcol'], reg),
+    { listed: 1, checked: true, stated: 0, missing: ['obs-otelcol'] }, 'another wording is not the sentence: ');
   eq(computeGitOnlyStatement('anything', ['a', 'b'], null), { listed: 2, checked: false, reason: 'no-sentence-for-version' });
   const S = 'The file {label} is designed against its Git copy only.';
   const pkg = 'Intro.\n\nThe file **`obs-otelcol`** is   designed against its\nGit copy only.\n\nThe file obs-ingress.a.conf is designed against its Git copy.';
@@ -904,14 +938,22 @@ test('FACT6 (owner decision 2a — a fact, no force) the Git-only statement: no 
   const line = renderLiveEvidenceForPrompt({ lane: 'config', unit: 'files', checked: true, summary: 'all-git-only', items: 1, gitFileLines: 1, serviceHeld: 0, serviceHeldRead: 0, liveDeclared: 0, liveRead: 0, liveNotRead: [], gitOnlyFiles: ['obs-otelcol'],
     gitOnlyStatement: { listed: 1, checked: true, stated: 0, missing: ['obs-otelcol'] } })!.join('\n');
   assert(line.includes('stated for 0 of 1 listed file(s); not stated for: `obs-otelcol`'), line);
-  // the EMPTY table renders NOTHING: the stamp keeps its named state, and no line about the statement reaches an agent
+  // a version with NO row renders NOTHING: the stamp keeps its named state, and no line about the statement reaches an agent
   const base = { lane: 'config', unit: 'files', checked: true, summary: 'all-git-only', items: 1, gitFileLines: 1, serviceHeld: 0, serviceHeldRead: 0, liveDeclared: 0, liveRead: 0, liveNotRead: [], gitOnlyFiles: ['obs-otelcol'] };
-  eq(renderLiveEvidenceForPrompt({ ...base, gitOnlyStatement: computeGitOnlyStatement('x', ['obs-otelcol'], gitOnlyStatementSentenceFor(OBS, '1.12.0')) }), renderLiveEvidenceForPrompt(base), 'no sentence registered: the render is the one with no statement at all: ');
+  eq(renderLiveEvidenceForPrompt({ ...base, gitOnlyStatement: computeGitOnlyStatement('x', ['obs-otelcol'], gitOnlyStatementSentenceFor(OBS, '1.12.1')) }), renderLiveEvidenceForPrompt(base), 'no sentence registered for the version: the render is the one with no statement at all: ');
+  // …and at 1.12.0 the line IS rendered (the Reviewer's `git-file-only` warning keys on its "not stated for:" words)
+  assert(renderLiveEvidenceForPrompt({ ...base, gitOnlyStatement: computeGitOnlyStatement('x', ['obs-otelcol'], reg) })!.join('\n').includes('the package\'s Git-only statement: stated for 0 of 1 listed file(s); not stated for: `obs-otelcol`'), 'the registered version renders the statement line');
   assert(!renderLiveEvidenceForPrompt(base)!.join('\n').includes('Git-only statement'), 'no statement line');
 });
-test('FACT7 (plan W5 row 21) the declared-leg warning ids: the mechanism exists and is EMPTY until the join, so every leg keeps exactly today\'s registered set', () => {
-  eq(Object.keys(DECLARED_LEG_WARNING_IDS).length, 0, 'the table is filled in the join commit, not before: ');
-  for (const p of Object.keys(REGISTERED_WARNING_IDS)) for (const declared of [true, false]) eq(registeredWarningIdsFor(p, declared), REGISTERED_WARNING_IDS[p], `${p} declared=${declared}: `);
+test('FACT7 (plan W5 row 21) the declared-leg warning ids: ONE row since the 1.12.0 join — a DECLARED observability leg registers `git-file-only`; a leg that declares nothing, and every leg of every other protocol, keeps exactly the all-legs set', () => {
+  eq(DECLARED_LEG_WARNING_IDS, { [OBS]: ['git-file-only'] }, 'the whole table (the join commit added the observability row): ');
+  for (const p of Object.keys(REGISTERED_WARNING_IDS)) {
+    eq(registeredWarningIdsFor(p, false), REGISTERED_WARNING_IDS[p], `${p}, a leg that declares nothing: `);
+    eq(registeredWarningIdsFor(p, true), p === OBS ? [...REGISTERED_WARNING_IDS[p], 'git-file-only'] : REGISTERED_WARNING_IDS[p], `${p}, a declared leg: `);
+  }
+  // as shipped (the table's own row, no table passed): the observability pair, and the id is NOT in the all-legs row
+  eq([registeredWarningIdsFor(OBS, true), registeredWarningIdsFor(OBS, false)], [['restated-conclusion', 'git-file-only'], ['restated-conclusion']], 'as shipped: ');
+  assert(!REGISTERED_WARNING_IDS[OBS].includes('git-file-only'), 'git-file-only is in observability\'s ALL-LEGS row: a leg with no block would have it registered');
   const at = { [OBS]: ['git-file-only'] };
   eq([registeredWarningIdsFor(OBS, true, at), registeredWarningIdsFor(OBS, false, at), registeredWarningIdsFor(K8S, true, at), registeredWarningIdsFor(null, true, at)],
     [['restated-conclusion', 'git-file-only'], ['restated-conclusion'], REGISTERED_WARNING_IDS[K8S], []], 'at the join: a declared observability leg gains the id, a no-block leg keeps today\'s set: ');

@@ -9,7 +9,12 @@
  * `liveEvidence` over these calls (gitOnly […]), and a persisted Author's package is re-stamped PURELY over the new held files
  * (`restampPersisted`). The Harvester's TEXT is not rewritten (the Reviewer never reads it; named in the report).
  *
- *   node.harvestFromFixture: { fixture: "<dir relative to the experiment>", paths: ["network/base/ceos1-startup.cfg", …], ref?: "main" }
+ *   node.harvestFromFixture: { fixture: "<dir relative to the experiment>", paths: ["network/base/ceos1-startup.cfg", …], ref?: "main", mode?: "add" }
+ *
+ * `mode: "add"` (Config sources STEP 3 slice L, LANE-L9 §3 item 4): the Git reads are APPENDED to the stored calls instead of
+ * taking their place — a leg that read its files from the read-only SERVICE and is re-cast as one that ALSO read them from Git (an
+ * observability `git-file` + `live-read` label: the platform compares the two texts). The stored calls keep their indices, so a raw
+ * plant on a served read (`harvester-toolcall:<executionId>:<i>`) still names the same call. Default: the calls are replaced.
  */
 import * as path from 'path';
 import * as fs from 'fs';
@@ -20,8 +25,8 @@ import { buildExecutionResultJson } from '../../lib/services/execution-artifacts
 import { frozenHarvesterEntry } from './held-store';
 import type { Snapshot } from './snapshot';
 
-export interface HarvestFromFixture { fixture: string; paths: string[]; ref?: string }
-export interface GitHarvestReport { harvesterExecutionId: string; calls: number; copies: number; commit: string; paths: string[]; textUnchanged: true }
+export interface HarvestFromFixture { fixture: string; paths: string[]; ref?: string; /** STEP 3 slice L: append the Git reads to the stored calls (default: replace them) */ mode?: 'replace' | 'add' }
+export interface GitHarvestReport { harvesterExecutionId: string; calls: number; copies: number; commit: string; paths: string[]; mode: 'replace' | 'add'; storedCallsKept: number; textUnchanged: true }
 
 export async function gitHarvestCalls(dir: string, spec: HarvestFromFixture): Promise<{ toolCalls: unknown[]; commit: string }> {
   const fx = loadFileFixture(path.resolve(dir, spec.fixture));
@@ -42,7 +47,10 @@ export async function gitHarvestCalls(dir: string, spec: HarvestFromFixture): Pr
 }
 
 export async function withGitHarvest(snap: Snapshot, dir: string, spec: HarvestFromFixture): Promise<{ snap: Snapshot; report: GitHarvestReport }> {
-  const { toolCalls, commit } = await gitHarvestCalls(dir, spec);
+  if (spec.mode !== undefined && spec.mode !== 'replace' && spec.mode !== 'add') throw new Error(`git-harvest-plant: mode must be "replace" or "add" (got ${JSON.stringify(spec.mode)})`);
+  const mode = spec.mode ?? 'replace';
+  const { toolCalls: gitCalls, commit } = await gitHarvestCalls(dir, spec);
+  let kept = 0;
   const h = frozenHarvesterEntry(snap);
   const copy: Snapshot = JSON.parse(JSON.stringify(snap));
   const arts = copy.childArtifacts.filter((a) => a.executionId === h.executionId && a.name === 'result.json');
@@ -51,10 +59,13 @@ export async function withGitHarvest(snap: Snapshot, dir: string, spec: HarvestF
     const r = JSON.parse(a.content) as Record<string, unknown>;
     // The device-lane facts the stored harvest carried describe the OLD calls — drop them (recomputed downstream where the lab does).
     for (const k of ['deviceSourceReads', 'gitDeviceComparison', 'liveEvidence', 'heldBytes']) delete r[k];
+    const before = Array.isArray(r.toolCalls) ? (r.toolCalls as unknown[]) : [];
+    const toolCalls = mode === 'add' ? [...before, ...gitCalls] : gitCalls;
+    kept = mode === 'add' ? before.length : 0;
     a.content = JSON.stringify({ ...r, toolCalls });
     if (JSON.stringify((JSON.parse(a.content) as { toolCalls: unknown }).toolCalls) !== JSON.stringify(toolCalls)) throw new Error('git-harvest-plant: re-read mismatch');
   }
-  return { snap: copy, report: { harvesterExecutionId: h.executionId, calls: toolCalls.length, copies: arts.length, commit, paths: spec.paths, textUnchanged: true } };
+  return { snap: copy, report: { harvesterExecutionId: h.executionId, calls: gitCalls.length, copies: arts.length, commit, paths: spec.paths, mode, storedCallsKept: kept, textUnchanged: true } };
 }
 
 /**

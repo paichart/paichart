@@ -15,7 +15,9 @@
  * answered from memory. G-HOLD-ID pins that the lab's base hashes equal production `held_blobs.sha256` on live Harvesters.
  */
 import { createHash } from 'crypto';
-import { prepareHeldCapture } from '../../lib/services/held-bytes-capture';
+import { prepareHeldCaptureWithEvidence } from '../../lib/services/held-bytes-capture';
+import type { HeldCapturePlan } from '../../lib/services/held-bytes-store';
+import type { CaptureEvidence } from '../../lib/agents/harness/file-source-compare';
 import { buildView } from '../../lib/agents/harness/held-bytes/view';
 import { r9VersionInEffect } from '../../lib/agents/harness/sanitize-chained-output';
 import {
@@ -25,10 +27,10 @@ import {
 import type { ResolveHeldFiles, ResolvedHeldRef } from '../../lib/services/held-edit-step';
 import type { HeldFileInput } from '../../lib/agents/harness/held-bytes/apply';
 import type { Snapshot } from './snapshot';
-import { isGitFileSourceLeg, isDeviceSourceLeg } from '../../lib/agents/harness/held-bytes/variant';
+import { isDeviceSourceLeg } from '../../lib/agents/harness/held-bytes/variant';
 import { resolveLegDeviceSources, contractDeviceSourcesValue } from '../../lib/agents/harness/device-sources';
 import { buildDeviceReadScope } from '../../lib/agents/harness/held-bytes/device-read-scope';
-import type { LegConfigSourcesResolution } from '../../lib/agents/harness/config-sources-read';
+import { labCaptureScopes, assertCaptureScopes, type LabCaptureScopes } from './config-sources-arm';
 
 const HARVESTER_ROLE = 'infra_state_harvester';
 /** held-network step 3 batch 2b deploy (CLAUDE.md series cut): the device-read capture lane is live from here. */
@@ -45,7 +47,13 @@ export interface LabHeldStore {
   refs: LabHeldRef[];
   refusals: Array<HeldRefusalLike & { refusal: string }>;
   stats: Record<string, number>;
+  /** STEP 3 slice L: Σ the held files' stored byte lengths — the `storedBytes` input of the shipping `buildHeldBytesDigest`. */
+  storedBytes: number;
 }
+/** STEP 3 slice L: the store WITH what the file comparison reads — the capture plan (strings and numbers) and the served-side
+ *  EVIDENCE (text that production never stores). The evidence is returned BESIDE the store, never on it: a store is carried into
+ *  manifests and reports, the evidence lives only until the comparison is made (the core's own rule, execution-core.ts). */
+export interface LabCapture { store: LabHeldStore; plan: HeldCapturePlan | null; evidence: CaptureEvidence | null }
 
 /** The Author's frozen Harvester entry: exactly one chained entry whose role is the Harvester's. */
 export function frozenHarvesterEntry(snap: Snapshot): { executionId: string; taskId: string } {
@@ -69,25 +77,36 @@ export function deviceLegOf(leg: { title?: string | null; metadata?: unknown; de
   return { description: leg.description ?? null, contract: ic?.interfaceContract ?? null };
 }
 
-/** `configSources` (Config sources STEP 2, L-CS-K): the leg's GOVERNING Config-sources declaration on an arm that composes the
- *  Config-sources text (config-sources-arm.ts `armConfigSources`) — handed to the SHIPPING capture exactly as execution-core hands
- *  it (`prepareHeldCapture({ configSources })`), so a Git file no declared `git-file` line names is refused `git-file-not-declared`
- *  and never held. Absent / null ⇒ nothing is passed: every store built before slice 4, and every base arm, is byte-identical. */
-export function buildLabHeldStoreFromResult(h: { executionId: string; taskId: string; povId: string | null; resultJson: string; gitFileSourceLeg?: boolean; deviceLeg?: { description: string | null; contract: unknown }; configSources?: LegConfigSourcesResolution | null },
-  opts: { /** told the count when production's capture warned of pin violations; absent ⇒ such a warning throws, as every warning does */ onPinViolationWarning?: (count: number) => void } = {}): LabHeldStore {
+/** `scopes` (Config sources STEP 2 L-CS-K; STEP 3 slice L, register CONFIG-SOURCES-OBS-JOIN-PRECONDITIONS item 8): what held
+ *  capture takes from the leg on this ARM — the Git-lane switch, the Config scope and the protocol the scope belongs to, as ONE
+ *  object from the SHIPPING `captureScopesFor` (config-sources-arm.ts `labCaptureScopes`), handed to the SHIPPING capture exactly
+ *  as execution-core hands them. A scope without its protocol (or the reverse) is REFUSED — never judged as "the strictest
+ *  protocol" by accident. `gitFileSourceLeg` (held-k8s L-K-e) is the older, scope-less form, kept for the production identity
+ *  check and the callers that hold no leg; naming BOTH is refused (one lever, two sources). Neither ⇒ the Git lane off, no scope. */
+export function buildLabCaptureFromResult(h: { executionId: string; taskId: string; povId: string | null; resultJson: string; gitFileSourceLeg?: boolean; deviceLeg?: { description: string | null; contract: unknown }; scopes?: LabCaptureScopes | null },
+  opts: { /** told the count when production's capture warned of pin violations; absent ⇒ such a warning throws, as every warning does */ onPinViolationWarning?: (count: number) => void } = {}): LabCapture {
+  if ('configSources' in (h as Record<string, unknown>)) throw new Error('L-1: `configSources` is no longer a store input — pass `scopes` (labCaptureScopes: the Config scope travels with its protocol and the Git-lane switch)');
+  if (h.scopes && h.gitFileSourceLeg !== undefined) throw new Error('L-1: both `scopes` and `gitFileSourceLeg` were passed — one lever, two sources');
+  const scopes = h.scopes ? assertCaptureScopes(h.scopes, `L-1 (${h.executionId})`) : null;
   const rj = JSON.parse(h.resultJson) as { toolCalls?: unknown[] };
   const toolCalls = Array.isArray(rj.toolCalls) ? rj.toolCalls : [];
   const cut = toolCalls.map((t: any, i) => ({ i, t })).filter(({ t }) => t?.result && typeof t.result === 'object' && t.result.truncated === true && typeof t.result.preview === 'string');
   if (cut.length) throw new Error(`L-1 refused: Harvester ${h.executionId} has ${cut.length} tool result(s) truncated at persist (calls ${cut.map((c) => c.i).join(', ')}) — not the bytes production held`);
   const prior = process.env.HELD_BYTES_CAPTURE_ENABLED;
   process.env.HELD_BYTES_CAPTURE_ENABLED = 'true';
-  let plan: ReturnType<typeof prepareHeldCapture>;
+  let plan: HeldCapturePlan | null;
+  let evidence: CaptureEvidence | null;
   const warned: string[] = [];
   try {
     const deviceRead = h.deviceLeg
       ? buildDeviceReadScope(resolveLegDeviceSources({ contractValue: contractDeviceSourcesValue(h.deviceLeg.contract), taskBody: h.deviceLeg.description }), toolCalls)
       : null;
-    plan = prepareHeldCapture({ toolCallResults: toolCalls, task: { id: h.taskId, povId: h.povId }, gitFileSourceLeg: h.gitFileSourceLeg === true, ...(deviceRead ? { deviceRead } : {}), ...(h.configSources ? { configSources: h.configSources } : {}), logger: { info: () => undefined, warn: (o: any) => { warned.push(JSON.stringify(o)); } } });
+    // The SAME argument shape as execution-core.ts: the Config scope and its protocol are spread together, or not at all.
+    const prepared = prepareHeldCaptureWithEvidence({ toolCallResults: toolCalls, task: { id: h.taskId, povId: h.povId },
+      gitFileSourceLeg: scopes ? scopes.gitFileSourceLeg : h.gitFileSourceLeg === true, ...(deviceRead ? { deviceRead } : {}),
+      ...(scopes && scopes.configSources ? { configSources: scopes.configSources, configSourceProtocol: scopes.configSourceProtocol } : {}),
+      logger: { info: () => undefined, warn: (o: any) => { warned.push(JSON.stringify(o)); } } });
+    plan = prepared.plan; evidence = prepared.evidence;
   } finally {
     if (prior === undefined) delete process.env.HELD_BYTES_CAPTURE_ENABLED; else process.env.HELD_BYTES_CAPTURE_ENABLED = prior;
   }
@@ -100,7 +119,7 @@ export function buildLabHeldStoreFromResult(h: { executionId: string; taskId: st
   if (unexpected.length) throw new Error(`L-1: prepareHeldCapture warned on ${h.executionId}: ${unexpected.join('; ')}`);
   for (const w of warned.filter(isPinViolation)) opts.onPinViolationWarning?.(Number(JSON.parse(w).pinViolations));
   const files = plan?.files ?? [];
-  return {
+  const store: LabHeldStore = {
     harvesterExecutionId: h.executionId, harvesterTaskId: h.taskId, scope: plan?.scope ?? h.povId,
     // A lab ref id is deterministic and NOT a cuid (it can never be mistaken for a production row).
     refs: files.map((f, i) => ({ id: `labref${i}_${f.sha256.slice(0, 12)}`, scope: plan!.scope ?? '', blobSha256: f.sha256, toolCallIndex: f.toolCallIndex,
@@ -108,16 +127,33 @@ export function buildLabHeldStoreFromResult(h: { executionId: string; taskId: st
       redactedCount: f.redactedCount, sourceTool: f.sourceTool, serviceName: f.serviceName })),
     refusals: (plan?.refusals ?? []).map((r) => ({ toolCallIndex: r.toolCallIndex, selector: r.selector, target: r.target, path: r.path, refusal: r.refusal })),
     stats: plan?.stats ?? {},
+    storedBytes: files.reduce((n, f) => n + f.storedByteLength, 0),
   };
+  return { store, plan, evidence };
+}
+/** The store alone (every caller that makes no file comparison). */
+export function buildLabHeldStoreFromResult(h: Parameters<typeof buildLabCaptureFromResult>[0], opts: Parameters<typeof buildLabCaptureFromResult>[1] = {}): LabHeldStore {
+  return buildLabCaptureFromResult(h, opts).store;
 }
 
-/** The store for a node: its frozen Harvester, read from the snapshot's stage artifacts. */
-export function buildLabHeldStore(snap: Snapshot, configSources?: LegConfigSourcesResolution | null): LabHeldStore {
+/** The ARM a node's store is built for: its composed protocol injection (`armProtocolInjection`). Absent ⇒ an arm that reads no
+ *  Config sources (every store built before L-CS-K, and every base arm): the Git lane by name, no scope — byte-identical to before. */
+export interface LabStoreArm { protocolInjection: unknown }
+function armOf(arm: LabStoreArm | null | undefined): unknown {
+  if (arm && typeof arm === 'object' && 'state' in (arm as unknown as Record<string, unknown>)) throw new Error('L-1: buildLabHeldStore takes the ARM ({ protocolInjection }), not a governing declaration — the scopes are derived by labCaptureScopes (captureScopesFor), never passed loose');
+  return arm ? arm.protocolInjection : undefined;
+}
+/** The capture for a node: its frozen Harvester, read from the snapshot's stage artifacts, under the arm's capture scopes. */
+export function buildLabCapture(snap: Snapshot, arm?: LabStoreArm | null): LabCapture {
   const e = frozenHarvesterEntry(snap);
   const art = snap.childArtifacts.find((a) => a.executionId === e.executionId && a.name === 'result.json');
   if (!art) throw new Error(`L-1: the snapshot carries no result.json for the frozen Harvester execution ${e.executionId}`);
-  return buildLabHeldStoreFromResult({ executionId: e.executionId, taskId: e.taskId, povId: snap.author.task.pov_id ?? null, resultJson: art.content,
-    gitFileSourceLeg: !!snap.leg && isGitFileSourceLeg(snap.leg), deviceLeg: deviceLegOf(snap.leg as never), ...(configSources ? { configSources } : {}) });
+  return buildLabCaptureFromResult({ executionId: e.executionId, taskId: e.taskId, povId: snap.author.task.pov_id ?? null, resultJson: art.content,
+    scopes: labCaptureScopes(snap.leg, armOf(arm)), deviceLeg: deviceLegOf(snap.leg as never) });
+}
+/** The store for a node (see `buildLabCapture`). */
+export function buildLabHeldStore(snap: Snapshot, arm?: LabStoreArm | null): LabHeldStore {
+  return buildLabCapture(snap, arm).store;
 }
 
 export function labViewResolution(ref: { content: string }, r9Version: string): HeldViewResolution {
@@ -156,6 +192,14 @@ export function labResolveHeldFiles(store: LabHeldStore, r9Version = r9VersionIn
   };
 }
 
+/** The capture scopes of a STORED production Harvester (see `heldIdentityCheck`): `labCaptureScopes` over its leg row and its own
+ *  stored protocol injection. A result.json that does not parse, or carries no injection, reads as an arm with no Config sources. */
+export function identityScopes(leg: { id?: string; title?: string | null; metadata?: unknown; description?: string | null; inputContext?: unknown } | null, resultJson: string): LabCaptureScopes {
+  let injection: unknown;
+  try { injection = (JSON.parse(resultJson) as { protocolInjection?: unknown }).protocolInjection; } catch { injection = undefined; }
+  return labCaptureScopes(leg as never, injection);
+}
+
 /**
  * G-HOLD-ID ($0, read-only): every Harvester execution production holds CAPTURE refs for, rebuilt through L-1 from its STORED
  * result.json, must reproduce the same (toolCallIndex, path, blobSha256) set. Keyed on the stored row's `redactorVersion`:
@@ -164,7 +208,7 @@ export function labResolveHeldFiles(store: LabHeldStore, r9Version = r9VersionIn
 export function heldIdentityCheck(runSql: (sql: string) => string): { executions: number; refs: number; equal: number; byVersion: Record<string, number>; mismatches: string[]; predatesDeviceLane: string[]; pinViolationWarned: string[] } {
   // held-k8s (L-K-e): the owning leg (stage metadata harnessTaskId) decides the Git-source scope, as production's capture does.
   const rows = runSql(`SELECT json_build_object('executionId', r."executionId", 'startTime', e."startTime", 'taskId', e."taskId", 'povId', t.pov_id,
-      'leg', (SELECT json_build_object('title', l.title, 'metadata', l.metadata, 'description', l.description, 'inputContext', l."inputContext") FROM stages s JOIN tasks l ON l.id = s.metadata->>'harnessTaskId' WHERE s.id = t.stage_id),
+      'leg', (SELECT json_build_object('id', l.id, 'title', l.title, 'metadata', l.metadata, 'description', l.description, 'inputContext', l."inputContext") FROM stages s JOIN tasks l ON l.id = s.metadata->>'harnessTaskId' WHERE s.id = t.stage_id),
       'resultJson', (SELECT a.content FROM agent_artifacts a WHERE a."executionId" = r."executionId" AND a.name = 'result.json' ORDER BY a."createdAt" DESC LIMIT 1),
       'refs', json_agg(json_build_object('toolCallIndex', r."toolCallIndex", 'path', r.path, 'blobSha256', r."blobSha256", 'redactorVersion', r."redactorVersion") ORDER BY r."toolCallIndex", r.path))
     FROM held_file_refs r JOIN agent_executions e ON e.id = r."executionId" JOIN tasks t ON t.id = e."taskId"
@@ -176,7 +220,13 @@ export function heldIdentityCheck(runSql: (sql: string) => string): { executions
     if (!r.resultJson) { out.mismatches.push(`${r.executionId}: no result.json`); continue; }
     let store: LabHeldStore;
     try {
-      store = buildLabHeldStoreFromResult({ executionId: r.executionId, taskId: r.taskId, povId: r.povId, resultJson: r.resultJson, gitFileSourceLeg: !!r.leg && isGitFileSourceLeg(r.leg), deviceLeg: deviceLegOf(r.leg as never) }, { onPinViolationWarning: (n) => out.pinViolationWarned.push(`${r.executionId}: ${n} Git read(s) the pin refused in production (held nothing for them)`) });
+      // STEP 3 slice L (independent review F2): the scopes PRODUCTION took for this Harvester — the shipping `captureScopesFor`, asked
+      // with the leg row and the Harvester's OWN stored `protocolInjection` (the version key production read). A Harvester composed
+      // below its protocol's Config-sources version, or of a protocol with no Config lane, gets the Git lane by name and no scope —
+      // exactly what this check passed before. A DECLARED 1.12.0 observability Harvester gets the Git lane by its declaration (the
+      // leg is no Git-source leg by name), so the rebuild holds the Git files production held; without this the first live declared
+      // run would turn this check, and the lab suite, red.
+      store = buildLabHeldStoreFromResult({ executionId: r.executionId, taskId: r.taskId, povId: r.povId, resultJson: r.resultJson, scopes: identityScopes(r.leg, r.resultJson), deviceLeg: deviceLegOf(r.leg as never) }, { onPinViolationWarning: (n) => out.pinViolationWarned.push(`${r.executionId}: ${n} Git read(s) the pin refused in production (held nothing for them)`) });
     } catch (e) {
       // one execution the lab cannot rebuild is a NAMED mismatch; the check goes on to the rest (it used to stop here)
       out.mismatches.push(`${r.executionId}: ${(e as Error).message.slice(0, 200)}`); continue;

@@ -8,8 +8,9 @@ pov-program 2.2.0; every program-tier agent is on Sonnet 5.
 that change real config files), approved at five human gates, checked across the legs by a program reviewer, and released only if every fact
 the program gate reads is true.
 
-**The legs are walked separately:** `K8S-LEG-WALKTHROUGH.md`, `TERRAFORM-LEG-WALKTHROUGH.md`, `OBSERVABILITY-LEG-WALKTHROUGH.md`, and (for
-a value leg in depth) `NETWORK-LEG-WALKTHROUGH.md`. This walkthrough is everything around them.
+**The legs are walked separately:** `K8S-LEG-WALKTHROUGH.md`, `TERRAFORM-LEG-WALKTHROUGH.md`, and (for a value leg in depth)
+`NETWORK-LEG-WALKTHROUGH.md`. `OBSERVABILITY-LEG-WALKTHROUGH.md` walks the observability legs of a later program (2026-11-25). This
+walkthrough is everything around them.
 
 ## The map (what talks to what)
 

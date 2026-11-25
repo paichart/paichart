@@ -182,18 +182,23 @@ export const CONFIG_SOURCE_LANES: Readonly<Record<string, { lane: ConfigSourceLa
   // the read-only service (`service-held`), the served file read as evidence (`live-read`). `runs-undeclared`: a leg with no block
   // behaves as it does today. ⚠️ THE ROW AND THAT RULE ARE ONE EDIT: this row with `noBlock: 'forced'` would turn 74 of the 79
   // stored observability legs into `snapshot-absent` and forced once the text ships (measured by the P0 red control).
-  // INERT until observability-config 1.12.0 removes it from CONFIG_SOURCE_AWAITING_TEXT.
+  // LIVE since the 1.12.0 join (2026-11-23): the row left CONFIG_SOURCE_AWAITING_TEXT in the commit that follows the 1.12.0 text.
   // `descriptorWithoutServiceLine: 'keep'` (slice P4): a Git-only observability block still leaves the leg reading its read-only
   // service for targets and rules, so the Architect's descriptor URL stands. ⚠️ THIS VALUE AND THE JOIN ARE ONE RULE: with `remove`
-  // here, taking the row off the awaiting list deletes the descriptor of every Git-only observability leg (register
+  // here the platform deletes the descriptor of every Git-only observability leg (register
   // CONFIG-SOURCES-OBS-JOIN-PRECONDITIONS item 3).
   [canonicalProtocolName('observability-config')]: { lane: 'change', contractKey: 'observability-config', noBlock: 'runs-undeclared', descriptorWithoutServiceLine: 'keep' },
 });
 /** Rows whose protocol TEXT does not carry the `## Config sources` section yet (the HELD_JOIN_AWAITING_TEXT pattern): the row exists
  *  so the code can ship first, and every consumer treats the protocol as NOT a Config-sources protocol until its text commit removes it
  *  from this list. kubernetes-gitops left at 1.19.0; terraform-iac left at 1.17.0 (Config sources STEP 4); observability-config
- *  leaves at 1.12.0 (STEP 3 — the join). */
-export const CONFIG_SOURCE_AWAITING_TEXT: readonly string[] = Object.freeze([canonicalProtocolName('observability-config')]);
+ *  left at 1.12.0 (STEP 3 — the join, 2026-11-23). EMPTY today: every row's text has shipped.
+ *
+ *  ⚠️ PUTTING A PROTOCOL BACK HERE IS NOT A ROLLBACK BY ITSELF (plan §9.4 with its 2026-11-22 corrections): a `runs-undeclared` leg
+ *  that carries a snapshot is then stopped by name (`snapshot-text-reverted`) and holds nothing; the join's other obligations are
+ *  pinned to this list by tripwires — MIX5 (the seed text and version), MIX5b (the declared-leg warning id and the Git-only
+ *  sentence), P9 (the descriptor fact version) and the `_gitsrcleg` row of the operator inventory. */
+export const CONFIG_SOURCE_AWAITING_TEXT: readonly string[] = Object.freeze([]);
 /** The protocols whose legs declare a `## Config sources` block for a given awaiting list (the table minus the rows awaiting their
  *  text). EVERY reader of the awaiting list takes it as a DEFAULTED parameter (plan W5): production passes nothing and gets the
  *  shipped list; the tests, the corpus replay and the lab pass `[]` to ask "as if every row's text had shipped" through the SAME

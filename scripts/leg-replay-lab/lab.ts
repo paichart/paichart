@@ -29,6 +29,7 @@
  *   npm run lab:leg-replay -- cst-self-test [--mutate compare-blind|negation-loose|stop-loose|alloc-blind|nolive-blind|subst-blind|reason-blind|warn-blind|witness-blind|statefile-blind|keys-loose|force-blind|witness-force-blind|fact-blind|w5-blind|agent-blind]  # L-CS-T scorer (score-cst.ts), both directions, $0
  *   npm run lab:leg-replay -- cst-score --run <runDir>[,<runDir>]                     # L-CS-T readings + do-not-ship proxies (score-cst.ts), $0
  *   npm run lab:leg-replay -- cst-golden --run <runDir>[,<runDir>] --experiment <dir>/golden-v9   # targeted golden Terraform cells read by reason, $0
+ *   npm run lab:leg-replay -- cso-self-test                                          # L-CS-O no-compare scorer (score-cso.ts: W23 countPairSentences + the own-comparison proxy), each mutation RED, $0
  *   npm run lab:leg-replay -- standing-self-test                                     # standing bench (golden/standing-bench.json): each frozen record reproduces its STORED (wrong) outcome, $0
  *   npm run lab:leg-replay -- provenance-check --experiment <dir> --source local-db:<lab_db>  # L-CS-N: self-host nodes ran the pinned texts + tiers; persisted verdict reproduces, $0
  *   npm run lab:leg-replay -- n2-score --run <runs,> --experiment <dir>                  # L-N2 Author readings (score-n2) + the node-driven Reviewer bench (score-reviewer-bench); n2-self-test · bench-self-test
@@ -113,8 +114,9 @@ import { heldVariantProtocolAt, snapshotWithVariantBinding, snapshotWithHeldJoin
 import { patchAuthorContext } from './chain';
 import { withComputedHarvesterComparison } from './device-comparison-patch';
 import { withComputedLiveEvidence, loadLiveEvidenceComputer } from './live-evidence-patch';
-import { withComputedConfigFacts, withFirstExecutionConfigSnapshot, configEntryFieldsFor, checkDriftPlantSpec, type DriftPlantSpec } from './config-sources-patch';
-import { armConfigSources } from './config-sources-arm';
+import { withComputedConfigFacts, withFirstExecutionConfigSnapshot, configEntryFieldsFor, checkDriftPlantSpec, CONFIG_FACT_KEYS, type DriftPlantSpec } from './config-sources-patch';
+import { labCaptureScopes } from './config-sources-arm';
+import { editHunkHeldInput, storedEditFactsInput } from './edit-overlap-lever';
 import { armKindGate, bindKindGate, resetKindGate, withArmKindGate, kindGateCheck, type ArmKindGate } from './kind-gate';
 import { buildEditApplicationFact } from '../../lib/agents/harness/held-bytes/edit-fact';
 import { parseHeldEdits } from '../../lib/agents/harness/held-bytes/edits';
@@ -135,7 +137,7 @@ import { planWitnessHeldInput, planWitnessLegForce } from './plan-witness-lever'
 import { planWitnessApplies } from '../../lib/agents/harness/plan-witness';
 import { loadFileFixture, createFixtureToolServer, fixtureToolsReport, fixtureCaptureReadiness, LAB_PERSIST_LOGGER, type LoadedFixture } from './fixture-tools';
 import { loadHarvesterLabSample, loadFrozenHarvest, HARVESTER_SOURCE_FROZEN_PREFIX } from './harvester-source';
-import { loadNetworkFixture, createNetworkToolServer, networkToolsReport, type NetworkFixtureSpec, type LoadedNetworkFixture } from './network-fixtures';
+import { loadNetworkFixture, hubRowsWithCatalogueServices, createNetworkToolServer, networkToolsReport, type NetworkFixtureSpec, type LoadedNetworkFixture } from './network-fixtures';
 import { objectiveOfRecordSource, createObjectiveToolServer, objectiveSummary, type ObjectiveSource } from './objective-of-record';
 export { applyEdits };
 
@@ -172,7 +174,7 @@ const RUNS_DIR = path.join(__dirname, 'runs');
  *  `scoring` on these nodes is score-k1.ts K1Scoring. */
 /** L-N1 (held-network step 2): `networkFixture` — the B4 device tier, B5 catalogue tier and B6 register refusal (network-fixtures.ts) in front of
  *  a HARVESTER node's recorded tier. */
-interface NodeSpec { /** L-CS-K (2026-11-16, owner stop item 3): a recorded CLUSTER STATE file (k8s-cluster-fixture.py) — every call to its read-only service is answered from it (k8s-fixtures.ts), never the lab notice. Path relative to the experiment. */ clusterFixture?: string; /** L-CS-K-a (Config sources STEP 2, config-sources-patch.ts): simulate the Config-sources snapshot production's writer takes at the leg's FIRST execution, over the (input-edited) leg row. Read only by an arm that composes the Config-sources text. */ configSourcesSnapshot?: 'first-execution'; /** L-CS-K-b: what the cluster service's compare tool ANSWERS the platform's drift call in this cell — a tool-shaped result file (the committed contract fixture by default) or a named call outcome. Never a fact: the call record and `gitLiveDrift` are computed by the shipping code. */ platformDrift?: DriftPlantSpec; /** GOLDEN-REVIEWER-BYTE-FIDELITY (a): this node's persisted held Author cells read its stored `editApplication` (the variant flag, per case; set by golden-build). */ persistedEditApplication?: boolean; /** VALUE-LEG-GIT L-VLG-a (value-lane.ts): simulate the Device-sources snapshot production's writer takes at the leg's FIRST execution, over the (input-edited) leg row. */ deviceSourcesSnapshot?: 'first-execution'; /** VALUE-LEG-GIT L-VLG-b: a frozen harvest (committed text + toolCalls) replaces a VALUE leg's stored Harvester, its device facts computed by the shipping nets. */ valueHarvest?: import('./value-lane').ValueHarvestSpec; /** L-CS-N (owner 2026-11-05): replace the frozen Harvester's calls by Git reads served from a fixture (git-harvest-plant.ts). */ harvestFromFixture?: import('./git-harvest-plant').HarvestFromFixture; /** L-CS-N ADDENDUM (h): replace the frozen Harvester's calls by a step-3 Harvester LAB SAMPLE's calls (git-harvest-plant.ts withSampleHarvest). */ harvestFromSample?: string; /** L-CS-N: re-stamp a PERSISTED (planted) Author purely over the arm's held files (the L-9 pure applier), as the edit step would. */ restampPersisted?: boolean; /** L-CS-N: score-csn.ts readings for this node (CsnScoring). */ csn?: import('./score-csn').CsnScoring; /** L-CS-N (ME-B3): the node's rows come from a self-host install — its cached snapshot must carry that provenance (and a node without it must not). */ provenance?: 'self-host'; /** L-CS-N: the stored verdict the provenance check must reproduce (R-FWA3: approved/92). */ provenanceExpect?: { approved: boolean; confidence: number }; /** ME-P2-6: arms of a planted node that DELIBERATELY run without the plant (named, never silent). */ unplantedArms?: string[]; networkFixture?: NetworkFixtureSpec; fileFixture?: string; fixturePlants?: string[]; harvesterSourceByVariant?: Record<string, string>; authorSourceByVariant?: Record<string, string>; reviewerBaseEdit?: string; diffMustShow?: string[]; architectOnly?: boolean; scoring?: import('./score-edits').NodeScoring | import('./score-k1').K1Scoring; id: string; authorExecutionId: string; kind: string; originalVersion?: string; variants: string[]; why?: string; authorPlant?: string; expect?: string; reviewerExecutionId?: string; ownerRowItemMap?: string; n?: number; nByVariant?: Record<string, number>; inputEdits?: string; harvesterOnly?: boolean; tools?: 'stub' | 'recorded' }
+interface NodeSpec { /** L-OBS-MLH: sibling Harvester execution ids whose stored FILE reads serve the calls this node's record lacks (pinned both ways). */ recordedToolsFrom?: string[]; /** Config sources read rule (2026-11-25, L-OBS-MLH): `'force-on'` inserts the platform read rule beside the `## Config sources` block of a STORED Harvester's brief (both copies) that ran without it (rebuild.ts `configSourcesReadRule`). harvesterOnly nodes only; the rebuild refuses it unless the shipping gate answers ON. Absent ⇒ as run. */ configSourcesReadRule?: 'force-on'; /** STEP 3 slice L (independent review F1): `registerRoute: 'faithful'` — on a `tools: 'recorded'` node, a `registry register` is served only where the stored registration is the one the platform would make for the sample's own arguments (recorded-tools.ts `RecordedServeOptions`); else the stub, named `unserved-register`. Opt-in: absent ⇒ every earlier experiment serves as before. */ registerRoute?: 'faithful'; /** L-CS-K (2026-11-16, owner stop item 3): a recorded CLUSTER STATE file (k8s-cluster-fixture.py) — every call to its read-only service is answered from it (k8s-fixtures.ts), never the lab notice. Path relative to the experiment. */ clusterFixture?: string; /** L-CS-K-a (Config sources STEP 2, config-sources-patch.ts): simulate the Config-sources snapshot production's writer takes at the leg's FIRST execution, over the (input-edited) leg row. Read only by an arm that composes the Config-sources text. */ configSourcesSnapshot?: 'first-execution'; /** L-CS-K-b: what the cluster service's compare tool ANSWERS the platform's drift call in this cell — a tool-shaped result file (the committed contract fixture by default) or a named call outcome. Never a fact: the call record and `gitLiveDrift` are computed by the shipping code. */ platformDrift?: DriftPlantSpec; /** GOLDEN-REVIEWER-BYTE-FIDELITY (a): this node's persisted held Author cells read its stored `editApplication` (the variant flag, per case; set by golden-build). */ persistedEditApplication?: boolean; /** VALUE-LEG-GIT L-VLG-a (value-lane.ts): simulate the Device-sources snapshot production's writer takes at the leg's FIRST execution, over the (input-edited) leg row. */ deviceSourcesSnapshot?: 'first-execution'; /** VALUE-LEG-GIT L-VLG-b: a frozen harvest (committed text + toolCalls) replaces a VALUE leg's stored Harvester, its device facts computed by the shipping nets. */ valueHarvest?: import('./value-lane').ValueHarvestSpec; /** L-CS-N (owner 2026-11-05): replace the frozen Harvester's calls by Git reads served from a fixture (git-harvest-plant.ts). */ harvestFromFixture?: import('./git-harvest-plant').HarvestFromFixture; /** L-CS-N ADDENDUM (h): replace the frozen Harvester's calls by a step-3 Harvester LAB SAMPLE's calls (git-harvest-plant.ts withSampleHarvest). */ harvestFromSample?: string; /** L-CS-N: re-stamp a PERSISTED (planted) Author purely over the arm's held files (the L-9 pure applier), as the edit step would. */ restampPersisted?: boolean; /** L-CS-N: score-csn.ts readings for this node (CsnScoring). */ csn?: import('./score-csn').CsnScoring; /** L-CS-N (ME-B3): the node's rows come from a self-host install — its cached snapshot must carry that provenance (and a node without it must not). */ provenance?: 'self-host'; /** L-CS-N: the stored verdict the provenance check must reproduce (R-FWA3: approved/92). */ provenanceExpect?: { approved: boolean; confidence: number }; /** ME-P2-6: arms of a planted node that DELIBERATELY run without the plant (named, never silent). */ unplantedArms?: string[]; networkFixture?: NetworkFixtureSpec; fileFixture?: string; fixturePlants?: string[]; harvesterSourceByVariant?: Record<string, string>; authorSourceByVariant?: Record<string, string>; /** L-S3-a (L-CS-O stage 3, upstream-samples.ts): an AUTHOR cell's Harvester AND Architect entries from lab samples, per arm. */ upstreamFromSamplesByVariant?: Record<string, { harvester: string; architect: string }>; reviewerBaseEdit?: string; diffMustShow?: string[]; architectOnly?: boolean; scoring?: import('./score-edits').NodeScoring | import('./score-k1').K1Scoring; id: string; authorExecutionId: string; kind: string; originalVersion?: string; variants: string[]; why?: string; authorPlant?: string; expect?: string; reviewerExecutionId?: string; ownerRowItemMap?: string; n?: number; nByVariant?: Record<string, number>; inputEdits?: string; harvesterOnly?: boolean; tools?: 'stub' | 'recorded' }
 interface Measure { name: string; kind: 'count' | 'expected-output-blocks'; regex?: string; flags?: string; contentRegex?: string; lineRegex?: string; why?: string }
 interface Experiment {
   label: string; n: number; flags: Record<string, string>;
@@ -240,7 +242,14 @@ export function withModel(p: RebuiltPrompt, model: string | null, effort: string
 function effortOf(p: RebuiltPrompt): string { return ((p.llmConfigSource as any)?.effort as string) ?? 'high'; }
 function shortModel(m: string | null | undefined): string { return (m ?? '?').replace(/^claude-/, ''); }
 
-function loadExperiment(dir: string): Experiment { return JSON.parse(fs.readFileSync(path.join(dir, 'experiment.json'), 'utf8')); }
+/** A node id becomes part of every lab execution id (`lab-<node>-<arm>-<i>-h`), which the shipping fact validators check against
+ *  `^[A-Za-z0-9_-]{1,64}$` (git-live-drift.ts EXEC_ID_RE). An id with any other character (L-OBS-MLH 2026-11-25: `H-B-STORED+RULE`)
+ *  made every Config-sources stamp fail its validator, so such an id is refused when the experiment loads. */
+export function assertLabNodeIds(exp: Pick<Experiment, 'nodes'>): void {
+  const bad = (exp.nodes ?? []).map((n) => n.id).filter((id) => !/^[A-Za-z0-9_-]{1,40}$/.test(id));
+  if (bad.length) throw new Error(`node id(s) ${bad.map((x) => JSON.stringify(x)).join(', ')}: only letters, digits, '-' and '_' (≤ 40) — the id is part of every lab execution id, which the shipping validators check`);
+}
+function loadExperiment(dir: string): Experiment { const e = JSON.parse(fs.readFileSync(path.join(dir, 'experiment.json'), 'utf8')) as Experiment; assertLabNodeIds(e); return e; }
 
 function variantFile(exp: Experiment, name: string, variant: string): string {
   const b = exp.baseline.protocols[name];
@@ -422,7 +431,9 @@ function applyConfigSnapshot(node: NodeSpec, snap: Snapshot): { snap: Snapshot; 
   if (!node.configSourcesSnapshot) return { snap, report: null };
   if (node.configSourcesSnapshot !== 'first-execution') throw new Error(`${node.id}: configSourcesSnapshot must be 'first-execution'`);
   const r = withFirstExecutionConfigSnapshot(snap);
-  if (r.report.state !== 'taken') throw new Error(`${node.id}: configSourcesSnapshot — ${r.report.state}`);
+  // STEP 3 slice L: `not-taken-undeclared` is production's own answer for a `runs-undeclared` leg (observability) with no block —
+  // the shipping decision takes NO snapshot and the leg governs `not-config-source-leg`. Reported, never refused.
+  if (r.report.state !== 'taken' && r.report.state !== 'not-taken-undeclared') throw new Error(`${node.id}: configSourcesSnapshot — ${r.report.state}`);
   return { snap: r.snap, report: r.report };
 }
 export function armProtocolInjection(exp: Pick<Experiment, 'variants'>, v: string, protocol: { name: string; version: string | null }): { delta: { name: string; version: string } } {
@@ -441,6 +452,12 @@ function heldArmOf(exp: Experiment, v: string): { kind: 'variant' | 'join'; spec
 }
 function heldArmProtocol(exp: Experiment, dir: string, snap: Snapshot, v: string, arm: NonNullable<ReturnType<typeof heldArmOf>>): ProtocolText {
   return arm.kind === 'variant' ? heldProtocolFor(exp, dir, arm.spec) : protocolFor(exp, dir, snap, v);
+}
+/** The frozen Harvester execution id an Author's context chains (one entry, by role). */
+function frozenHarvesterEntryOf(snap: Snapshot): string {
+  const e = (snap.author.exec.config?.inputContext?.chainedFrom ?? []).filter((x: any) => x?.agentRole === 'infra_state_harvester');
+  if (e.length !== 1) throw new Error(`expected one frozen Harvester entry, found ${e.length}`);
+  return String(e[0].executionId);
 }
 function heldArmBinding(snap: Snapshot, arm: NonNullable<ReturnType<typeof heldArmOf>>): { snap: Snapshot; report: VariantBindingReport; protocolName: string } {
   if (arm.kind === 'variant') return { ...snapshotWithVariantBinding(snap, arm.spec.protocolName!), protocolName: arm.spec.protocolName! };
@@ -744,6 +761,7 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
   for (const node of nodes) {
     if ((node.fileFixture || node.fixturePlants?.length) && !node.harvesterOnly) throw new Error(`${node.id}: fileFixture/fixturePlants serve a HARVESTER's reads — this node is not harvesterOnly`);
     if (node.fixturePlants?.length && !node.fileFixture) throw new Error(`${node.id}: fixturePlants without a fileFixture`);
+    assertReadRuleNodeOption(node);
     if (node.harvesterSourceByVariant && !node.architectOnly) throw new Error(`${node.id}: harvesterSourceByVariant feeds an ARCHITECT cell — this node is not architectOnly`);
     if (node.architectOnly) {
       const x = await prepareArchitect(exp, dir, node, variants, out);
@@ -751,6 +769,8 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
       continue;
     }
     if (node.harvesterOnly) {
+      // A Harvester cell's reads are its OWN (the recorded and fixture tiers serve them): a harvest plant cannot reach it — refused by name.
+      if (node.harvestFromFixture || node.harvestFromSample) throw new Error(`${node.id}: harvestFromFixture / harvestFromSample on a harvesterOnly node — a plant that cannot reach its reader (the Harvester makes its own reads)`);
       const h = await prepareHarvester(exp, dir, node, variants, out);
       jobs.push(...h.jobs); nodeReports[node.id] = h.report;
       continue;
@@ -914,10 +934,94 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
       let held: Job['held'] = null;
       let heldReport: Record<string, any> | null = null;
       let heldItems: Array<Record<string, any>> = [];
-      if (heldSpec) {
+      const upstream = node.upstreamFromSamplesByVariant?.[v] ? (await import('./upstream-samples')).checkUpstreamSpec(node.id, v, node.upstreamFromSamplesByVariant[v]) : null;
+      if (upstream) {
+        if (!heldSpec) throw new Error(`${node.id}/${v}: upstreamFromSamplesByVariant needs a held arm (the Author's held view is built from the bound harvest)`);
+        // L-S3-b (stage 4): a REVIEWER cell may take its Author as a lab sample produced over the SAME upstream (byte-identity on the
+        // Author prompt, plus the explicit upstream check below), and plant that sample. Any other Harvester source is still refused.
+        const aSrc = node.authorSourceByVariant?.[v];
+        if (aSrc && !aSrc.startsWith(LAB_SAMPLE_PREFIX)) throw new Error(`${node.id}/${v}: upstreamFromSamplesByVariant with a non-lab-sample Author source — one upstream, two sources`);
+        if (node.authorPlant && !aSrc) throw new Error(`${node.id}/${v}: upstreamFromSamplesByVariant with a plant needs a lab-sample Author (the plant edits that sample)`);
+        if (node.harvestFromSample || node.harvestFromFixture) throw new Error(`${node.id}/${v}: upstreamFromSamplesByVariant with another Harvester source on the same node — one upstream, two sources`);
+      }
+      if (heldSpec && upstream) {
+        // L-S3-a (upstream-samples.ts): the Harvester half is L-K-c with the AUTHOR as the consumer (its identity checks, its entry
+        // rebuild); the held store is the shipping capture over the SAMPLE's served calls under this arm's scopes, as the Architect arm
+        // builds it; the Architect half is the bound design, accepted only if its run bound the same harvest and its saved Architect
+        // prompt equals the X node's render NOW.
+        const up = await import('./upstream-samples');
+        const { chainEntryFromResult } = await import('./chain');
+        const { buildLabHeldStoreFromResult, deviceLegOf: dl } = await import('./held-store');
+        const x = await architectHarvesterSource(exp, dir, node, snap, upstream.harvester, { heldArm: true });
+        const sh = x.sample!;
+        const bound0 = heldArmBinding(snap, heldArm!);
+        let store = buildLabHeldStoreFromResult({ executionId: sh.executionId, taskId: sh.taskId, povId: sh.povId, resultJson: JSON.stringify({ toolCalls: sh.toolCalls }),
+          scopes: labCaptureScopes(snap.leg, armProtocolInjection(exp, v, protocol)), deviceLeg: dl(snap.leg as never) });
+        if (JSON.stringify(sh.platformDrift ?? null) !== JSON.stringify(node.platformDrift ?? null)) throw new Error(`${node.id}/${v}: platformDrift differs from the harvester node's — one harvest, one compare-tool answer`);
+        const csS = await withComputedConfigFacts(bound0.snap, { protocol: armComposedProtocol(exp, v, protocol), drift: node.platformDrift ?? null, dir },
+          { toolCalls: sh.toolCalls, executionId: sh.executionId, taskId: sh.taskId, text: sh.text ?? '' });
+        if (csS.store) store = csS.store;
+        const heldFields = await labHeldViewFields(store);
+        const entryFields: Record<string, unknown> = { ...heldFields, ...(sh.liveEvidence && typeof sh.liveEvidence === 'object' ? { liveEvidence: sh.liveEvidence } : {}), ...configEntryFieldsFor('config_change_author', csS.facts) };
+        let ctxU: Record<string, any> = { ...x.ctx, chainedFrom: (x.ctx.chainedFrom as any[]).map((e) => (e?.agentRole === 'infra_state_harvester' ? { ...e, ...entryFields } : e)) };
+        // The Architect half.
+        const aref = (await import('./lab-sample')).parseLabSampleSource(upstream.architect);
+        const xNode = exp.nodes.find((n) => n.id === aref.node);
+        if (!xNode?.architectOnly) throw new Error(`${node.id}/${v}: ${upstream.architect} names ${aref.node}, which is not an architectOnly node of this experiment`);
+        if (xNode.harvesterSourceByVariant?.[aref.arm] !== upstream.harvester) throw new Error(`${node.id}/${v}: ${aref.node}/${aref.arm} binds ${xNode.harvesterSourceByVariant?.[aref.arm] ?? 'persisted'}, this Author binds ${upstream.harvester} — one harvest, one design`);
+        const frozenX = (ctxU.chainedFrom as any[]).find((e) => e?.agentRole === 'infra_change_architect');
+        if (!frozenX) throw new Error(`${node.id}/${v}: the Author's frozen context has no Architect entry`);
+        if (xNode.authorExecutionId !== frozenX.executionId) throw new Error(`${node.id}/${v}: ${aref.node} replays Architect ${xNode.authorExecutionId}; this Author chains ${frozenX.executionId}`);
+        const xr = await prepareArchitect(exp, dir, xNode, [aref.arm], path.join(nodeDir, v, 'upstream-architect-render'));
+        const xjob = xr.jobs.find((j) => j.variant === aref.arm);
+        if (!xjob) throw new Error(`${node.id}/${v}: ${aref.node} renders no ${aref.arm} arm`);
+        const ax = up.loadArchitectLabSample(upstream.architect, { architectExecutionId: frozenX.executionId, harvesterSource: upstream.harvester, renderedPrompt: { system: xjob.author.system, user: xjob.author.user } });
+        const xsnap = snapshotWithInputEdits(dir, xNode, loadSnapshot(xNode.authorExecutionId)).snap;
+        const aleaf = await runAuthorLeafNets(xsnap, 'infra_change_architect', ax.text, ax.sampleExecutionId, ax.toolCalls);
+        ctxU = up.patchArchitectEntry(ctxU, (old) => chainEntryFromResult(old, { executionId: ax.sampleExecutionId, finalResponse: ax.text, confidenceScore: parseConfidenceScore(ax.text) ?? ax.confidenceScore,
+          qualityMetrics: { totalTurns: ax.turns ?? 0, hitMaxTurns: false, responseLength: ax.text.length, toolCallSuccess: { total: ax.toolCalls.length, failed: 0, succeeded: ax.toolCalls.length } },
+          markerPresence: aleaf.stamped.markerPresence ?? null, rollbackContainment: aleaf.stamped.rollbackContainment ?? null, derivationContainment: aleaf.stamped.derivationContainment ?? null }));
+        const armFlagU = heldSpec.heldEditCorrection;
+        if (typeof armFlagU === 'boolean' && exp.flags?.[HELD_EDIT_CORRECTION_FLAG] !== undefined) throw new Error(`variant ${v} sets heldEditCorrection while experiment.flags sets ${HELD_EDIT_CORRECTION_FLAG} — one lever, two sources`);
+        // L-S3-b fixture fix (blind fixture read 2026-11-24, 2 of 2 readers): the Author's leaf nets TRANSCRIBE the leg Harvester's stamps
+        // (liveEvidence, gitLiveDrift) by reading the Harvester sibling's stored result.json — which, in the snapshot, is still the
+        // production 1.11.0 harvest (unstamped: "harvester-not-stamped" in the Reviewer's §6). Production's Harvester would carry its OWN
+        // stamps; so the Reviewer-side snapshot's Harvester result now carries the BOUND sample's tool calls and the stamps the shipping
+        // nets computed over them (csS.facts), in every stored copy, re-read. The Author's own prompt is unchanged (built from ctxU).
+        const snapU: Snapshot = JSON.parse(JSON.stringify(csS.snap));
+        const hEntry = frozenHarvesterEntryOf(snapU);
+        const hArts = snapU.childArtifacts.filter((a) => a.executionId === hEntry && a.name === 'result.json');
+        if (!hArts.length) throw new Error(`${node.id}/${v}: L-S3-b — no stored result.json for the frozen Harvester ${hEntry}`);
+        const stampsU: Record<string, unknown> = { ...(csS.facts ?? {}), ...(sh.liveEvidence && typeof sh.liveEvidence === 'object' && !(csS.facts as any)?.liveEvidence ? { liveEvidence: sh.liveEvidence } : {}) };
+        for (const art of hArts) {
+          const r0 = JSON.parse(art.content) as Record<string, unknown>;
+          for (const k of [...CONFIG_FACT_KEYS, 'deviceSourceReads', 'gitDeviceComparison', 'heldBytes']) delete r0[k];
+          art.content = JSON.stringify({ ...r0, toolCalls: sh.toolCalls, finalResponse: sh.text ?? r0.finalResponse, ...stampsU });
+          const back = JSON.parse(art.content) as Record<string, unknown>;
+          for (const k of Object.keys(stampsU)) if (JSON.stringify(back[k]) !== JSON.stringify(stampsU[k])) throw new Error(`${node.id}/${v}: L-S3-b — re-read of the Harvester result does not carry ${k}`);
+        }
+        held = { store, snapV: snapU, protocolName: bound0.protocolName, authorInputContext: ctxU,
+          owningLeg: { kind: 'leg', legId: String(bound0.snap.leg!.id), heldCapable: true, ownStageId: String(bound0.snap.author.task.stage_id) },
+          correctionEnabled: typeof armFlagU === 'boolean' ? armFlagU : isHeldEditCorrectionEnabled() };
+        const items = (heldFields.heldView as Array<Record<string, any>>) ?? [];
+        heldItems = items;
+        heldReport = { binding: bound0.report as VariantBindingReport, harvesterExecutionId: store.harvesterExecutionId, refs: store.refs.length, refusals: store.refusals.map((r) => r.refusal),
+          handles: items.map((i) => ({ handle: i.handle, path: i.path, lines: i.lineCount ?? null, state: i.state ?? 'rendered', viewChars: typeof i.viewText === 'string' ? i.viewText.length : null, rewrittenLines: i.rewrittenLines?.length ?? 0 })),
+          correction: typeof armFlagU === 'boolean' ? `arm:${armFlagU ? 'on' : 'off'}` : `env:${held.correctionEnabled ? 'on' : 'off'}`,
+          upstream: { harvester: { ...x.report, probe: undefined }, harvesterProbe: x.report.probe, architect: { source: upstream.architect, sampleSha256: ax.textSha256, sampleExecutionId: ax.sampleExecutionId,
+            identity: 'node/arm/i · same production Architect · same bound harvest · Architect prompt byte-identical to the X node render now', leafFacts: summarizeFacts(aleaf.stamped) } },
+          ...(csS.report.state !== 'not-config-source-leg' && csS.report.state !== 'not-stamped-version' ? { configSources: csS.report } : {}) };
+        fs.mkdirSync(path.join(nodeDir, v), { recursive: true });
+        for (const it of items) {
+          const ref = store.refs.find((r) => r.id === it.refId);
+          if (ref) fs.writeFileSync(path.join(nodeDir, v, `held-base-${it.handle}.txt`), ref.content);
+          if (typeof it.viewText === 'string') fs.writeFileSync(path.join(nodeDir, v, `held-view-${it.handle}.txt`), it.viewText);
+        }
+      } else if (heldSpec) {
         // L-CS-K (Config sources STEP 2): on an arm that composes the Config-sources text the capture is scoped to the leg's DECLARED
-        // Git files (null on every other arm ⇒ the store exactly as before).
-        const store = buildLabHeldStore(snap, armConfigSources(snap.leg, armProtocolInjection(exp, v, protocol)));
+        // files. STEP 3 slice L: the scopes are the SHIPPING `captureScopesFor`'s three values for this arm (held-store.ts
+        // `buildLabCapture` → `labCaptureScopes`); an arm that reads no Config sources gets the store exactly as before.
+        const store = buildLabHeldStore(snap, { protocolInjection: armProtocolInjection(exp, v, protocol) });
         const heldFields = await labHeldViewFields(store);
         const bound0 = heldArmBinding(snap, heldArm!);
         // L-N2-c: a network leg whose stored Harvester predates gitDeviceComparison gets the stamp computed by the shipping function,
@@ -958,6 +1062,15 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
       const author = withModel(await rebuildPrompt(asnap, 'author', protocol, { templatePromptOverride: authorTemplate, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective,
         ...(held ? { inputContextOverride: held.authorInputContext } : {}) }), authorModel, authorEffort);
       const reviewerBase = withModel(await rebuildPrompt(asnap, 'reviewer', protocol, { templatePromptOverride: reviewerTemplate, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective }), reviewerModel, reviewerEffort);
+      if (upstream && heldReport?.upstream) {
+        // L-S3-a: both bound upstream texts must reach the Author's rendered prompt (after the chainer's sanitiser).
+        const hp = String(heldReport.upstream.harvesterProbe ?? '');
+        const xEntry = (held!.authorInputContext.chainedFrom as any[]).find((e) => e?.agentRole === 'infra_change_architect');
+        const ap = String(xEntry?.finalResponse ?? '').split('\n').find((l: string) => l.trim().length >= 20) ?? '';
+        heldReport.upstream.inPrompt = { harvester: !!hp && author.user.includes(hp), architect: !!ap && author.user.includes(ap) };
+        delete heldReport.upstream.harvesterProbe;
+        if (!heldReport.upstream.inPrompt.harvester || !heldReport.upstream.inPrompt.architect) throw new Error(`${node.id}/${v}: a bound upstream text does not reach the Author's rendered prompt (${JSON.stringify(heldReport.upstream.inPrompt)})`);
+      }
       const vd = path.join(nodeDir, v);
       fs.mkdirSync(vd, { recursive: true });
       fs.writeFileSync(path.join(vd, 'author.system.md'), author.system);
@@ -990,6 +1103,12 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
         if (!held) throw new Error(`${node.id}/${v}: a lab-sample Author needs a held-variant arm (L-9 re-stamps over the arm's held files)`);
         const r9v = r9VersionInEffect();
         const loaded = loadLabSample(authorSrc, { authorExecutionId: snap.author.exec.id, protocolSha256: sha256(protocol.text), authorPrompt: { system: author.system, user: author.user } });
+        if (upstream) {
+          // L-S3-b: the Author sample's run bound the SAME upstream samples as this Reviewer cell (also implied by the byte-identical
+          // Author prompt; checked by name so a mismatch reads as what it is).
+          const sm = JSON.parse(fs.readFileSync(path.join(path.dirname(path.dirname(path.dirname(loaded.dir))), 'manifest.json'), 'utf8'));
+          (await import('./upstream-samples')).checkAuthorSampleUpstream(sm, loaded.ref.node, loaded.ref.arm, upstream, authorSrc);
+        }
         const named = heldItems.filter((it) => it.state);
         if (named.length) throw new Error(`${node.id}/${v}: L-9 needs every held file rendered; ${named.map((it) => `${it.handle} ${it.state}`).join(', ')}`);
         const resolved = await labResolveHeldFiles(held.store, r9v)(heldItems as any, { authorTaskId: String(snap.author.task.id), authorStageId: (snap.author.task.stage_id as string) ?? null,
@@ -1003,7 +1122,7 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
         const rFiles = reviewerSideFiles(dir, node, resolved.files);
         const editDiff = editDiffEntryFields({ authorExecutionId: chainExecutionId, stamped: stamp.fact, files: rFiles, r9Version: r9v, finalResponse: sp.text });
         // As the core hands it (EF-P2-3): the BASE-held handles = the verified refs' handles (one BASE row per ref).
-        const leafS = await runAuthorLeafNets(held.snapV, ares.agentRole, sp.text, chainExecutionId, undefined, { editApplication: stamp.fact, baseHeldHandles: resolved.refs.map((r) => r.handle), ...planWitnessHeldInput(armProtocolInjection(exp, v, protocol), stamp.app, resolved.files) }, armProtocolInjection(exp, v, protocol));
+        const leafS = await runAuthorLeafNets(held.snapV, ares.agentRole, sp.text, chainExecutionId, undefined, { editApplication: stamp.fact, baseHeldHandles: resolved.refs.map((r) => r.handle), ...planWitnessHeldInput(armProtocolInjection(exp, v, protocol), stamp.app, resolved.files), ...editHunkHeldInput(held.snapV.leg, armProtocolInjection(exp, v, protocol), stamp.app, resolved.refs, held.store) }, armProtocolInjection(exp, v, protocol));
         const sa = loaded.sample.author ?? {};
         const authorResult: Record<string, any> = {
           finalResponse: sp.text, confidenceScore: sa.confidence ?? null,
@@ -1032,7 +1151,7 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
         let presence: ReturnType<typeof plantPresence> | null = null;
         if (sp.editId) {
           const twinDiff = editDiffEntryFields({ authorExecutionId: chainExecutionId, stamped: own.fact, files: rFiles, r9Version: r9v, finalResponse: loaded.text });
-          const twinLeaf = await runAuthorLeafNets(held.snapV, ares.agentRole, loaded.text, chainExecutionId, undefined, { editApplication: own.fact, baseHeldHandles: resolved.refs.map((r) => r.handle), ...planWitnessHeldInput(armProtocolInjection(exp, v, protocol), own.app, resolved.files) }, armProtocolInjection(exp, v, protocol));
+          const twinLeaf = await runAuthorLeafNets(held.snapV, ares.agentRole, loaded.text, chainExecutionId, undefined, { editApplication: own.fact, baseHeldHandles: resolved.refs.map((r) => r.handle), ...planWitnessHeldInput(armProtocolInjection(exp, v, protocol), own.app, resolved.files), ...editHunkHeldInput(held.snapV.leg, armProtocolInjection(exp, v, protocol), own.app, resolved.refs, held.store) }, armProtocolInjection(exp, v, protocol));
           const twinCtx = patchReviewerContext(held.snapV, { executionId: chainExecutionId, ...authorResult, finalResponse: loaded.text, markerPresence: twinLeaf.stamped.markerPresence ?? null, rollbackContainment: twinLeaf.stamped.rollbackContainment ?? null, planWitness: twinLeaf.stamped.planWitness, editApplication: own.fact, editDiff: twinDiff } as any);
           const twin = await rebuildPrompt(held.snapV, 'reviewer', protocol, { inputContextOverride: twinCtx, templatePromptOverride: reviewerTemplate, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective });
           presence = plantPresence(JSON.parse(fs.readFileSync(path.join(dir, node.authorPlant!), 'utf8')), twin.user, reviewer.user, authorSrc);
@@ -1073,7 +1192,7 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
         const stamp = pureStamp(plant.text, resolved.files, resolved.refs, r9v);
         const chainExecutionId = `lab-${node.id}-${v}-a`;
         const editDiff = editDiffEntryFields({ authorExecutionId: chainExecutionId, stamped: stamp.fact, files: resolved.files, r9Version: r9v, finalResponse: plant.text });
-        const leafS = await runAuthorLeafNets(held.snapV, ares.agentRole, plant.text, chainExecutionId, undefined, { editApplication: stamp.fact, baseHeldHandles: resolved.refs.map((r) => r.handle), ...planWitnessHeldInput(armProtocolInjection(exp, v, protocol), stamp.app, resolved.files) }, armProtocolInjection(exp, v, protocol));
+        const leafS = await runAuthorLeafNets(held.snapV, ares.agentRole, plant.text, chainExecutionId, undefined, { editApplication: stamp.fact, baseHeldHandles: resolved.refs.map((r) => r.handle), ...planWitnessHeldInput(armProtocolInjection(exp, v, protocol), stamp.app, resolved.files), ...editHunkHeldInput(held.snapV.leg, armProtocolInjection(exp, v, protocol), stamp.app, resolved.refs, held.store) }, armProtocolInjection(exp, v, protocol));
         const authorResult: Record<string, any> = { ...persistedAuthorResult(snap, plant.text, leafS.stamped), editApplication: stamp.fact };
         const ctx = patchReviewerContext(held.snapV, { executionId: chainExecutionId, ...authorResult, editDiff } as any);
         const reviewer = withModel(await rebuildPrompt(held.snapV, 'reviewer', protocol, { inputContextOverride: ctx, templatePromptOverride: reviewerTemplate, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective }), reviewerModel, reviewerEffort);
@@ -1133,10 +1252,15 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
         };
         const pwP = await pea(plant.text, !!plant.editId);
         const leafP = peaOpt
-          ? await runAuthorLeafNets(held!.snapV, ares.agentRole, plant.text, chainExecutionId, undefined, { editApplication: ares.editApplication, baseHeldHandles: heldItems.map((it) => String(it.handle)), ...pwP.held }, pwInj)
+          ? await runAuthorLeafNets(held!.snapV, ares.agentRole, plant.text, chainExecutionId, undefined, { editApplication: ares.editApplication, baseHeldHandles: heldItems.map((it) => String(it.handle)), ...pwP.held, ...storedEditFactsInput(held!.snapV.leg, pwInj, ares) }, pwInj)
           : await runAuthorLeafNets(leSnap, ares.agentRole, plant.text, chainExecutionId, undefined, undefined, armProtocolInjection(exp, v, protocol), vlOpts);
         const ctx = patchReviewerContext(snap, { executionId: chainExecutionId, ...persistedAuthorResult(snap, plant.text, leafP.stamped) } as any);
-        const reviewer = withModel(await rebuildPrompt(snap, 'reviewer', protocol, { inputContextOverride: ctx, templatePromptOverride: reviewerTemplate, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective }), reviewerModel, reviewerEffort);
+        // L-CS-O S4R (2026-11-24): on a held arm the Reviewer's TEMPLATE is the held binding's (the owning seed's constraints, this
+        // tree) — the same row the system prompt is built from, as production renders both from one template row. Before, this
+        // persisted-Author path rebuilt the user prompt from the stored row, so a candidate Reviewer constraint reached the system
+        // prompt only (found by the S4R dry run on R-SVCHELD-OK and the golden companion). Only the Reviewer template is taken.
+        const rsnap: Snapshot = held && held.snapV.reviewer?.template ? { ...snap, reviewer: { ...snap.reviewer, template: held.snapV.reviewer.template } } : snap;
+        const reviewer = withModel(await rebuildPrompt(rsnap, 'reviewer', protocol, { inputContextOverride: ctx, templatePromptOverride: reviewerTemplate, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective }), reviewerModel, reviewerEffort);
         fs.writeFileSync(path.join(vd, 'reviewer.user.md'), reviewer.user);
         persistedAuthor = { text: plant.text, plantId: plant.editId, chainExecutionId, leafStamped: leafP.stamped, reviewer, ...(peaOpt ? { storedEditApplication: ares.editApplication as Record<string, unknown> } : {}) };
         // LAB-PLANT-PRESENCE-CHECK: the unplanted twin is the persisted package under the persisted execution id.
@@ -1144,7 +1268,7 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
         if (plant.editId) {
           const pwT = await pea(String(ares.finalResponse ?? ''), false);
           const twinLeaf = pwT.report
-            ? await runAuthorLeafNets(held!.snapV, ares.agentRole, ares.finalResponse, snap.author.exec.id, undefined, { editApplication: ares.editApplication, baseHeldHandles: heldItems.map((it) => String(it.handle)), ...pwT.held }, pwInj)
+            ? await runAuthorLeafNets(held!.snapV, ares.agentRole, ares.finalResponse, snap.author.exec.id, undefined, { editApplication: ares.editApplication, baseHeldHandles: heldItems.map((it) => String(it.handle)), ...pwT.held, ...storedEditFactsInput(held!.snapV.leg, pwInj, ares) }, pwInj)
             : await runAuthorLeafNets(leSnap, ares.agentRole, ares.finalResponse, snap.author.exec.id, undefined, undefined, armProtocolInjection(exp, v, protocol), vlOpts);
           const twinCtx = patchReviewerContext(snap, { executionId: snap.author.exec.id, ...persistedAuthorResult(snap, ares.finalResponse, twinLeaf.stamped) } as any);
           const twin = await rebuildPrompt(snap, 'reviewer', protocol, { inputContextOverride: twinCtx, templatePromptOverride: reviewerTemplate, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective });
@@ -1168,9 +1292,16 @@ async function prepare(exp: Experiment, dir: string, nodes: NodeSpec[], variants
  * and the lab's quote score must read the persisted harvest. The record a recorded-tools sample is served from is
  * summarised (calls, file calls, any persist-truncated result, which cannot be served).
  */
+/** Config sources read rule (2026-11-25): the node option is `'force-on'` or absent, and only on a harvesterOnly node — refused by name
+ *  before any prompt is built (the rebuild then refuses it again unless the shipping gate answers ON). Exported for the lab tests. */
+export function assertReadRuleNodeOption(node: Pick<NodeSpec, 'id' | 'harvesterOnly' | 'configSourcesReadRule'>): void {
+  if (node.configSourcesReadRule === undefined) return;
+  if (node.configSourcesReadRule !== 'force-on') throw new Error(`${node.id}: configSourcesReadRule must be 'force-on' (absent ⇒ as run), got ${JSON.stringify(node.configSourcesReadRule)}`);
+  if (!node.harvesterOnly) throw new Error(`${node.id}: configSourcesReadRule 'force-on' is a HARVESTER option — this node is not harvesterOnly (the rule is inserted only into a declared Harvester's brief)`);
+}
 /** The Harvester prompt one arm builds for a (possibly input-edited) Harvester snapshot — shared by prepareHarvester and L-K-c,
  *  which must rebuild the SAME bytes to prove a lab sample is the H node's. */
-async function harvesterArmPrompt(exp: Experiment, dir: string, snap: Snapshot, v: string): Promise<{ protocol: ProtocolText; author: RebuiltPrompt }> {
+async function harvesterArmPrompt(exp: Experiment, dir: string, snap: Snapshot, v: string, node: NodeSpec): Promise<{ protocol: ProtocolText; author: RebuiltPrompt }> {
   const protocol = protocolFor(exp, dir, snap, v);
   // L-N1 (2026-10-24): a variant's templateEdits (role guidance) apply to a Harvester's pinned template too, exactly once, as on an
   // Author/Reviewer node (tplFor). A Harvester node whose template the experiment does not pin cannot take them (refused).
@@ -1182,7 +1313,9 @@ async function harvesterArmPrompt(exp: Experiment, dir: string, snap: Snapshot, 
     const r = applyEdits(tpl, tEdits.map((f) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')) as EditSpec), `role:${role}`);
     if (r.applied.length) tpl = r.text;
   }
-  const author = withModel(await rebuildPrompt(snap, 'author', protocol, { templatePromptOverride: tpl, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective }),
+  assertReadRuleNodeOption(node);
+  const author = withModel(await rebuildPrompt(snap, 'author', protocol, { templatePromptOverride: tpl, dropTemplateDirective: !!exp.variants[v]?.dropTemplateDirective,
+    ...(node.configSourcesReadRule ? { configSourcesReadRule: node.configSourcesReadRule } : {}) }),
     exp.variants[v]?.authorModel ?? null, exp.variants[v]?.authorEffort ?? null);
   return { protocol, author };
 }
@@ -1203,6 +1336,9 @@ function harvesterNodeInputs(dir: string, node: NodeSpec): { snap: Snapshot; inp
   if (bad.length) throw new Error(`${node.id}: a harvesterOnly node has no Reviewer — input edit target ${bad.join(', ')} refused`);
   const fixture = node.fileFixture ? loadFileFixture(path.resolve(dir, node.fileFixture), (node.fixturePlants ?? []).map((f) => path.resolve(dir, f))) : null;
   const network = node.networkFixture ? loadNetworkFixture(dir, node.networkFixture) : null;
+  // L-CS-O (fixture blind read F1): a pre-registered catalogue service is a row of the prompt's services list, as in production.
+  const hubRows = hubRowsWithCatalogueServices(snap.mcpTools, network);
+  if (hubRows !== snap.mcpTools) snap = { ...snap, mcpTools: hubRows as Snapshot['mcpTools'] };
   return { snap, inputEditReport, fixture, network };
 }
 
@@ -1217,13 +1353,25 @@ async function prepareHarvester(exp: Experiment, dir: string, node: NodeSpec, va
   if (!/harvester$/.test(ares.agentRole ?? '')) throw new Error(`${node.id}: harvesterOnly, but ${node.authorExecutionId} ran as ${ares.agentRole}`);
   const nodeDir = path.join(out, node.id);
   fs.mkdirSync(nodeDir, { recursive: true });
-  const stored = storedCallsOf(snap.author);
+  // L-OBS-MLH (2026-11-25): `recordedToolsFrom` — FILE reads this Harvester's own record lacks are served from SIBLING Harvester
+  // executions' stored calls, pinned both ways (recorded-tools.ts poolSiblingCalls; a differing shared key refuses the pool).
+  if (node.recordedToolsFrom?.length && node.tools !== 'recorded') throw new Error(`${node.id}: recordedToolsFrom needs tools: 'recorded'`);
+  const pooled = node.recordedToolsFrom?.length
+    ? (await import('./recorded-tools')).poolSiblingCalls(storedCallsOf(snap.author), node.recordedToolsFrom.map((id) => {
+        if (id === snap.author.exec.id) throw new Error(`${node.id}: recordedToolsFrom names the node's own execution`);
+        const sb = loadSnapshot(id); const sr = parsedResult(sb.author);
+        if (!/harvester$/.test(sr?.agentRole ?? '')) throw new Error(`${node.id}: recordedToolsFrom ${id} is not a Harvester execution`);
+        return { executionId: id, calls: storedCallsOf(sb.author) };
+      }))
+    : null;
+  const stored = pooled ? pooled.calls : storedCallsOf(snap.author);
+  if (pooled) console.log(`   ${node.id} sibling pool: +${pooled.report.platformAdded.length} platform call(s) [${pooled.report.platformAdded.map((x) => x.key).join(', ')}] · +${pooled.report.added.length} file read(s) [${pooled.report.added.map((x) => x.key.split('|').slice(0, 2).join('.')).join(', ')}] · ${pooled.report.crossChecked.length} shared key(s) byte-identical`);
   const leaf = await runAuthorLeafNets(snap, ares.agentRole, ares.finalResponse, snap.author.exec.id, ares.toolCalls ?? [], undefined, undefined, { legReads: isValueLaneNode(node) });
   const qf = (leaf.stamped.quoteFidelity ?? null) as Record<string, any> | null;
   const score = scoreHarvesterQuotes(ares.finalResponse, ares.toolCalls ?? []);
   fs.writeFileSync(path.join(nodeDir, 'persisted.harvester.md'), ares.finalResponse);
   const report: Record<string, any> = {
-    authorExecutionId: snap.author.exec.id, reviewerExecutionId: null, kind: node.kind, harvesterOnly: true, tools: node.tools ?? 'stub',
+    authorExecutionId: snap.author.exec.id, reviewerExecutionId: null, kind: node.kind, harvesterOnly: true, tools: node.tools ?? 'stub', ...(pooled ? { siblingPool: pooled.report } : {}),
     persisted: { approved: null, blocking: null, authorOutputTokens: snap.author.exec.outputTokens, reviewerOutputTokens: null, chars: ares.finalResponse.length, stopReason: ares.toolLoop?.finalStopReason ?? null },
     controls: {
       leafNetsReproducePersisted: { markerPresence: JSON.stringify(leaf.stamped.markerPresence ?? null) === JSON.stringify(ares.markerPresence ?? null), rollbackContainment: true, errors: leaf.errors, notApplicable: leaf.notApplicable },
@@ -1245,7 +1393,7 @@ async function prepareHarvester(exp: Experiment, dir: string, node: NodeSpec, va
   for (const v of node.variants.filter((x) => !variants || variants.includes(x))) {
     bindKindGate(armKindGate(exp.variants[v], v)); // L-CS-N
     if (exp.variants[v]?.authorSource === 'persisted' || exp.variants[v]?.reviewerModel) throw new Error(`${node.id}/${v}: a harvester node takes protocol/template edits and an authorModel/authorEffort only`);
-    const { protocol, author } = await harvesterArmPrompt(exp, dir, snap, v);
+    const { protocol, author } = await harvesterArmPrompt(exp, dir, snap, v, node);
     // L-K1: the brief the harness would write must reach the rendered prompt verbatim, or the input edit measures nothing.
     const unseen = briefOps.filter((o) => !author.user.includes(o.new));
     if (unseen.length) throw new Error(`${node.id}/${v}: input edit ${node.inputEdits} does not reach the rendered Harvester prompt verbatim (${unseen.length} op(s)): ${unseen[0].new.slice(0, 80)}…`);
@@ -1616,7 +1764,8 @@ async function run(args: Args) {
           for (const f of a.editStep.application.files) if (f.state === 'applied' && typeof f.candidateText === 'string') fs.writeFileSync(path.join(sd, `candidate-${f.handle}.txt`), f.candidateText);
         }
         leaf = await runAuthorLeafNets(job.held?.snapV ?? job.snap, job.author.role, a.finalResponse, aId, undefined,
-          heldFact && a.editStep ? { editApplication: heldFact, baseHeldHandles: a.editStep.refs.map((r) => r.handle), ...planWitnessHeldInput(job.armProtocolInjection, a.editStep.application, a.editStep.files) } : undefined, job.armProtocolInjection);
+          heldFact && a.editStep ? { editApplication: heldFact, baseHeldHandles: a.editStep.refs.map((r) => r.handle), ...planWitnessHeldInput(job.armProtocolInjection, a.editStep.application, a.editStep.files),
+            ...(job.held ? editHunkHeldInput(job.held.snapV.leg, job.armProtocolInjection, a.editStep.application, a.editStep.refs as never, job.held.store) : {}) } : undefined, job.armProtocolInjection);
         authorResult = {
           finalResponse: a.finalResponse, confidenceScore: a.confidenceScore,
           qualityMetrics: { totalTurns: a.turns, hitMaxTurns: a.turns >= job.author.maxToolTurns, responseLength: a.finalResponse.length, toolCallSuccess: { total: a.toolCalls.length, failed: 0, succeeded: a.toolCalls.length } },
@@ -1783,7 +1932,7 @@ async function architectHarvesterSource(exp: Experiment, dir: string, node: Node
     if (!hNode.variants.includes(hArm) || !exp.variants[hArm]) throw new Error(`${node.id}: ${hsrc} names arm ${hArm}, which ${hId} does not run`);
     if (hNode.authorExecutionId !== frozenEntry.executionId) throw new Error(`${node.id}: the Architect chains Harvester ${frozenEntry.executionId}; ${hId} replays ${hNode.authorExecutionId}`);
     const hin = harvesterNodeInputs(dir, hNode);
-    const { protocol: hp, author: ha } = await harvesterArmPrompt(exp, dir, hin.snap, hArm);
+    const { protocol: hp, author: ha } = await harvesterArmPrompt(exp, dir, hin.snap, hArm, hNode);
     const loaded = loadHarvesterLabSample(hsrc, { harvesterExecutionId: hNode.authorExecutionId, protocolSha256: sha256(hp.text),
       harvesterPrompt: { system: ha.system, user: ha.user }, fixtureDigest: hin.fixture?.digest ?? null });
     const hres = parsedResult(hin.snap.author)!;
@@ -1827,14 +1976,20 @@ async function prepareArchitect(exp: Experiment, dir: string, node: NodeSpec, va
   if (ares.agentRole !== 'infra_change_architect' && ares.agentRole !== 'derivation_architect') throw new Error(`${node.id}: architectOnly, but ${node.authorExecutionId} ran as ${ares.agentRole}`);
   if (ares.agentRole === 'derivation_architect' && node.harvesterSourceByVariant) throw new Error(`${node.id}: a value-leg Architect takes its harvest from valueHarvest, not harvesterSourceByVariant`);
   const vl = await applyValueLane(dir, node, snapE);
-  const snap = applyConfigSnapshot(node, vl.snap).snap; // L-CS-K-a
+  const snap0 = applyConfigSnapshot(node, vl.snap).snap; // L-CS-K-a
+  // STEP 3 slice L (found on the first observability 1.12.0 render, 2026-11-23): a Git harvest plant on an Architect cell was SILENTLY
+  // ignored (this function returned before the plant was applied), so the cell read `git-file-not-held` for files the node said were
+  // read. It is applied here as on an Author / Reviewer node; `harvestFromSample` has no Architect form and is refused.
+  if (node.harvestFromSample) throw new Error(`${node.id}: harvestFromSample on an architectOnly node — an Architect takes a lab-sample harvest through harvesterSourceByVariant`);
+  const gitHarvestX = node.harvestFromFixture ? await (await import('./git-harvest-plant')).withGitHarvest(snap0, dir, node.harvestFromFixture) : null;
+  const snap = gitHarvestX ? gitHarvestX.snap : snap0;
   const nodeDir = path.join(out, node.id);
   fs.mkdirSync(nodeDir, { recursive: true });
   fs.writeFileSync(path.join(nodeDir, 'persisted.architect.md'), ares.finalResponse);
   const report: Record<string, any> = { authorExecutionId: snap.author.exec.id, reviewerExecutionId: null, kind: node.kind, architectOnly: true,
     persisted: { approved: null, blocking: null, authorOutputTokens: snap.author.exec.outputTokens, reviewerOutputTokens: null },
     controls: { leafNetsReproducePersisted: { markerPresence: true, rollbackContainment: true, errors: {}, notApplicable: [] }, chainPatchIdentity: null, shippingParserReproducesPersistedVerdict: null, legReviewerWarningsComputes: null, legReviewerWarningsNotApplicable: null, requirementsFormCheckComputes: null },
-    measuresOnPersisted: {}, variants: {}, ...(vl.report ? { valueLane: vl.report } : {}) };
+    measuresOnPersisted: {}, variants: {}, ...(vl.report ? { valueLane: vl.report } : {}), ...(gitHarvestX ? { gitHarvest: gitHarvestX.report } : {}) };
   if (ares.agentRole === 'derivation_architect') {
     // L-VLG-c control: the PERSISTED Architect text through the shipping containment net on THIS (possibly re-harvested) snapshot.
     const { valueArchitectContainment, containmentLine } = await import('./value-lane');
@@ -1871,9 +2026,9 @@ async function prepareArchitect(exp: Experiment, dir: string, node: NodeSpec, va
     }
     if (heldSpec && sampleHarvest) {
       const { buildLabHeldStoreFromResult, deviceLegOf: dl } = await import('./held-store');
-      const { isGitFileSourceLeg } = await import('../../lib/agents/harness/held-bytes/variant');
+      // STEP 3 slice L: the sample's capture under THIS arm's scopes (the shipping `captureScopesFor`, one object) — never by name.
       const store = heldStore = buildLabHeldStoreFromResult({ executionId: sampleHarvest.executionId, taskId: sampleHarvest.taskId, povId: sampleHarvest.povId,
-        resultJson: JSON.stringify({ toolCalls: sampleHarvest.toolCalls }), gitFileSourceLeg: !!snap.leg && isGitFileSourceLeg(snap.leg as never), deviceLeg: dl(snap.leg as never) });
+        resultJson: JSON.stringify({ toolCalls: sampleHarvest.toolCalls }), scopes: labCaptureScopes(snap.leg, armProtocolInjection(exp, v, protocol)), deviceLeg: dl(snap.leg as never) });
       if (exp.requireLiveEvidence && !loadLiveEvidenceComputer()) throw new Error(`${node.id}/${v}: requireLiveEvidence — lib/agents/harness/live-evidence.ts is not in this tree`);
       // L-CS-K: the sample's own Config stamps (its capture under the Config scope, the drift record by the H node's fixture caller).
       if (JSON.stringify(sampleHarvest.platformDrift ?? null) !== JSON.stringify(node.platformDrift ?? null)) throw new Error(`${node.id}/${v}: platformDrift differs from the harvester node's — one harvest, one compare-tool answer`);
@@ -1992,7 +2147,8 @@ async function runArchitectSample(job: Job, i: number, sd: string, sample: Recor
 async function runHarvesterSample(job: Job, i: number, sd: string, sample: Record<string, any>, apiKey: string, fake: boolean, onCall?: (c: any) => void): Promise<number> {
   const { runLive, fakeGenerateText, fakeReplayToolCalls, TOOL_STUB_RESULT } = await import('./live');
   const ares = parsedResult(job.snap.author)!;
-  const recorded = job.stored ? createRecordedToolServer(job.stored, TOOL_STUB_RESULT) : null;
+  if (job.node.registerRoute !== undefined && job.node.registerRoute !== 'faithful') throw new Error(`${job.node.id}: registerRoute must be 'faithful'`);
+  const recorded = job.stored ? createRecordedToolServer(job.stored, TOOL_STUB_RESULT, job.node.registerRoute ? { registerRoute: job.node.registerRoute } : {}) : null;
   // L-K-a: a file fixture answers the node's github-service reads; every other call goes to the recorded tier (or the stub).
   // L-N1: the network tiers (device pool / catalogue / register refusal) sit between the recorded tier and the Git fixture.
   // L-CS-K: the k8s cluster tier answers every call to the cluster's read-only service from the recorded cluster state; the rest falls through.
@@ -2003,6 +2159,9 @@ async function runHarvesterSample(job: Job, i: number, sd: string, sample: Recor
   const gen = fake ? (job.stored ? fakeReplayToolCalls(ares.toolCalls ?? [], ares.finalResponse, job.snap.author.exec.modelUsed) : fakeGenerateText(ares.finalResponse, job.snap.author.exec.modelUsed)) : undefined;
   const hId = `lab-${job.node.id}-${job.variant}-${i}-h`;
   const a = await runLive(job.author, { executionId: hId, taskId: job.snap.author.task.id, taskType: job.snap.author.task.type, apiKey, toolServer: server, generateTextOverride: gen, onCall });
+  // 2026-11-25 (L-OBS-MLH H-1): the paid output is written FIRST, so a fault in any check below never loses a sample.
+  fs.writeFileSync(path.join(sd, 'harvester.md'), a.finalResponse);
+  fs.writeFileSync(path.join(sd, 'toolCallRecords.json'), JSON.stringify(a.toolCallRecords, null, 2));
   const toolCalls = (buildExecutionResultJson({
     taskId: job.snap.author.task.id, taskTitle: 'lab', agentRole: job.author.role, modelUsed: job.author.model, finalResponse: a.finalResponse, confidenceScore: a.confidenceScore,
     turnCount: a.turns, maxToolTurns: job.author.maxToolTurns, toolCallResults: a.toolCallRecords as any, successfulToolCalls: a.toolCallRecords.filter((t) => t.success).length,
@@ -2016,8 +2175,11 @@ async function runHarvesterSample(job: Job, i: number, sd: string, sample: Recor
   // sample's four Config stamps from the shipping nets. Null facts on every other arm, and the leaf nets run exactly as before.
   const cfg = await withComputedConfigFacts(job.snap, { protocol: job.armProtocolInjection?.delta ?? null, drift: job.node.platformDrift ?? null, dir: job.expDir ?? null },
     { toolCalls, executionId: hId, taskId: String(job.snap.author.task.id), text: a.finalResponse });
-  const leaf = await runAuthorLeafNets(job.snap, job.author.role, a.finalResponse, hId, toolCalls, cfg.facts ? { platformDriftCalls: cfg.calls ?? null } : undefined, job.armProtocolInjection, { legReads: isValueLaneNode(job.node) });
-  if (cfg.facts) for (const k of ['liveEvidence', 'configSourceReads', 'platformDriftCalls', 'gitLiveDrift'] as const) {
+  // STEP 3 slice L: the comparison record (a protocol the platform compares) and the capture's digest (the no-block arm) ride with it.
+  const leaf = await runAuthorLeafNets(job.snap, job.author.role, a.finalResponse, hId, toolCalls,
+    cfg.facts ? { platformDriftCalls: cfg.calls ?? null, ...(cfg.fileSourceCompare ? { fileSourceCompare: cfg.fileSourceCompare } : {}), ...(cfg.heldBytes ? { heldBytes: cfg.heldBytes } : {}) } : undefined,
+    job.armProtocolInjection, { legReads: isValueLaneNode(job.node) });
+  if (cfg.facts) for (const k of CONFIG_FACT_KEYS) {
     if (JSON.stringify(leaf.stamped[k] ?? null) !== JSON.stringify(cfg.facts[k] ?? null)) throw new Error(`${job.node.id}/${job.variant} #${i}: the sample's ${k} stamp differs between the lever and the sample's own leaf nets`);
   }
   const report = recorded ? recordedToolsReport(recorded.log, job.stored!) : null;
@@ -2026,21 +2188,7 @@ async function runHarvesterSample(job: Job, i: number, sd: string, sample: Recor
   // Bytes check: served entries are matched to the loop records in call order (one log entry per executeToolOnServer call;
   // read_more never reaches the server, so it is skipped on the record side).
   const recs = (a.toolCallRecords as Array<Record<string, any>>).filter((t) => t.tool !== 'read_more');
-  const bytes = { served: 0, identical: 0, r9Compared: 0, r9Equal: 0, mismatches: [] as string[] };
-  if (recorded) recorded.log.forEach((e, k) => {
-    if (e.storedIndex === null || e.tier === 'unserved-truncated') return;
-    const st = job.stored![e.storedIndex]; const rec = recs[k];
-    if (!st.success) return;
-    bytes.served++;
-    if (rec && JSON.stringify(rec.result) === JSON.stringify(st.result)) bytes.identical++; else bytes.mismatches.push(`call ${k} ← stored ${e.storedIndex}: result differs`);
-    const prodRec = (ares.toolCalls ?? [])[e.storedIndex];
-    if (rec && typeof prodRec?.rewritten === 'boolean') {
-      bytes.r9Compared++;
-      if (rec.rewritten === prodRec.rewritten && JSON.stringify(rec.rewriteClasses ?? []) === JSON.stringify(prodRec.rewriteClasses ?? [])
-        && rec.resultTruncatedForLlm === prodRec.resultTruncatedForLlm && rec.resultChars === prodRec.resultChars) bytes.r9Equal++;
-      else bytes.mismatches.push(`call ${k} ← stored ${e.storedIndex}: R9/LLM-cap facts differ (rewritten ${rec.rewritten}/${prodRec.rewritten}, chars ${rec.resultChars}/${prodRec.resultChars})`);
-    }
-  });
+  const bytes = recorded ? (await import('./recorded-tools')).servedBytesCheck(recorded.log, recs, job.stored!) : { served: 0, identical: 0, r9Compared: 0, r9Equal: 0, pooledServed: 0, mismatches: [] as string[] };
   const score = scoreHarvesterQuotes(a.finalResponse, toolCalls);
   const qf = (leaf.stamped.quoteFidelity ?? null) as Record<string, any> | null;
   const prodChars = ares.finalResponse.length;
@@ -2356,6 +2504,15 @@ if (require.main === module) {
       const bad = rows.filter((r) => !r.ok).length;
       console.log(bad ? `❌ golden self-test: ${bad} case(s) do not recompute their stored outcome` : `✅ golden self-test: all ${rows.length} cases recompute their stored outcome`);
       process.exit(bad ? 1 : 0);
+    }
+    if (args.cmd === 'cso-self-test') {
+      // STEP 3 slice L (plan W23): the L-CS-O no-compare scorer — hand-written both-direction cases, each mutation RED.
+      const { csoSelfTest, CSO_MUTATIONS } = await import('./score-cso');
+      const r = csoSelfTest();
+      const caught = CSO_MUTATIONS.filter((m) => !csoSelfTest({ mutate: m }).ok);
+      if (!r.ok || caught.length !== CSO_MUTATIONS.length) { console.log(`❌ cso-self-test: ${r.failures.join('; ')} · mutations caught ${caught.length}/${CSO_MUTATIONS.length} (missed: ${CSO_MUTATIONS.filter((m) => !caught.includes(m)).join(', ') || 'none'})`); process.exit(1); }
+      console.log(`✅ cso-self-test: the L-CS-O no-compare scorer (W23 countPairSentences + the own-comparison proxy) reads every case as written; ${caught.length}/${CSO_MUTATIONS.length} mutations RED`);
+      return;
     }
     if (args.cmd === 'n2-self-test') {
       const { n2SelfTest, N2_MUTATIONS } = await import('./score-n2');

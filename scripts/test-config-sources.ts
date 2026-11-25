@@ -241,7 +241,17 @@ test('MIX3 a key in the WRONG field is in that field\'s notReadKeys', () => {
   }
   eq(configSourcesKeysOf({ configSources: { 'pipeline-1-k8s': 'x' } })?.notReadKeys, ['pipeline-1-k8s'], 'a leg-name key: ');
 });
-test('MIX4 a row awaiting its text is inert: no lane, no contract key, not read at the plan gate — and says so', () => {
+test('MIX4 a row awaiting its text is inert: no lane, no contract key, not read at the plan gate — and says so (asked with observability\'s row awaiting: the tree\'s own list is EMPTY since the 1.12.0 join)', () => {
+  // Since the join (2026-11-23) the tree's own list is empty, so a loop over it would assert nothing. The rule is asked through the
+  // SAME functions with a row put back on the list (what a revert of the join does), and the tree's own state is pinned beside it.
+  eq([...CONFIG_SOURCE_AWAITING_TEXT], [], 'the tree\'s awaiting list (every row\'s text has shipped): ');
+  for (const p of ['observability-config-protocol']) {
+    const aw = [p]; const k0 = CONFIG_SOURCE_LANES[p].contractKey;
+    eq([configSourceLaneOf(p, aw), configSourceContractKeyOf(p, aw), configSourcesReadKeys(aw).includes(k0), configSourcesKeysOf({ configSources: { [k0]: 'x' } }, aw)?.notReadKeys],
+      [null, null, false, [k0]], `${p} with its row awaiting: `);
+    eq([configSourceLaneOf(p), configSourceContractKeyOf(p), configSourcesReadKeys().includes(k0), configSourcesKeysOf({ configSources: { [k0]: 'x' } })?.notReadKeys],
+      ['change', k0, true, []], `${p} as shipped (no list passed): `);
+  }
   for (const p of CONFIG_SOURCE_AWAITING_TEXT) {
     assert(p in CONFIG_SOURCE_LANES, `${p} awaits text but has no row`);
     eq(configSourceLaneOf(p), null, `${p} lane: `);
@@ -251,6 +261,19 @@ test('MIX4 a row awaiting its text is inert: no lane, no contract key, not read 
     eq(configSourcesKeysOf({ configSources: { [k]: 'x' } })?.notReadKeys, [k], `${k} before its text: `);
   }
   eq([...CONFIG_SOURCE_PROTOCOLS].sort(), Object.keys(CONFIG_SOURCE_LANES).filter((p) => !CONFIG_SOURCE_AWAITING_TEXT.includes(p)).sort());
+  // THE POSITIVE FORM (coordinator ruling at the join — the loop above is empty when no row awaits, so it asserts nothing per
+  // protocol): EVERY shipped Config-sources protocol is off the awaiting list AND its seed text carries the section AND it has a
+  // lane, a contract key and is read at the plan gate. A row shipped without its section, or a section with its row still awaiting,
+  // is red here as well as in MIX5.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { PROTOCOLS } = require('./seed-protocol-prompts') as { PROTOCOLS: Array<{ name: string; promptText: string }> };
+  assert(CONFIG_SOURCE_PROTOCOLS.length > 0, 'no shipped Config-sources protocol: the positive form would assert nothing');
+  for (const p of CONFIG_SOURCE_PROTOCOLS) {
+    const text = PROTOCOLS.find((x) => x.name === p)?.promptText ?? '';
+    const k = CONFIG_SOURCE_LANES[p].contractKey;
+    eq([CONFIG_SOURCE_AWAITING_TEXT.includes(p), /^## Config sources\b/m.test(text), configSourceLaneOf(p), configSourceContractKeyOf(p), configSourcesReadKeys().includes(k)],
+      [false, true, CONFIG_SOURCE_LANES[p].lane, k, true], `${p} (shipped): `);
+  }
 });
 test('MIX5 awaiting-text ⇔ the seed text carries no `## Config sources` section AND its seed version is below the released Config-sources version (the J1 pin, for this table)', () => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -298,7 +321,14 @@ test('MIX5b TRIPWIRE for the join (whole-diff review F4, 2026-11-22): a protocol
   const seeded = PROTOCOLS.find((x) => x.name === OBS)!.version;
   eq(owed([], {}, () => null), [`${OBS}: off the awaiting list with NO row in DECLARED_LEG_WARNING_IDS`, `${OBS}: off the awaiting list with NO Git-only sentence for the seeded version ${seeded}`], 'a join that forgot both: ');
   eq(owed([], { [OBS]: ['git-file-only'] }, (p, v) => (p === OBS && v === seeded ? 'x {label}' : null)), [], 'a complete join: ');
-  eq(owed([], { [OBS]: ['git-file-only'] }, (p, v) => (p === OBS && v === '1.12.0' && seeded !== '1.12.0' ? 'x {label}' : null)).length, seeded === '1.12.0' ? 0 : 1, 'a sentence for ANOTHER version than the seeded one does not count: ');
+  // Fixed at the 1.12.0 join (2026-11-23): this line built its probe as "a sentence for 1.12.0, unless 1.12.0 is the seeded
+  // version" and expected 0 once the seed WAS 1.12.0 — but the probe then returns no sentence at all, so one item is owed and the
+  // tripwire stayed red after a correct join. The probe is now a sentence for a version that is NEVER a seeded one, and the answer
+  // is 1 whatever the seed says.
+  const OTHER_VERSION = '0.0.0';
+  assert(seeded !== OTHER_VERSION, `the seeded version is ${OTHER_VERSION}: this line needs another probe version`);
+  eq(owed([], { [OBS]: ['git-file-only'] }, (p, v) => (p === OBS && v === OTHER_VERSION ? 'x {label}' : null)),
+    [`${OBS}: off the awaiting list with NO Git-only sentence for the seeded version ${seeded}`], 'a sentence for ANOTHER version than the seeded one does not count: ');
   eq(owed([OBS], { [OBS]: ['git-file-only'] }, () => null), [`${OBS}: a declared-leg warning id is registered while the row awaits its text`], 'registered early: ');
   eq(Object.entries(CONFIG_SOURCE_LANES).filter(([, l]) => l.noBlock === 'runs-undeclared').map(([p]) => p), [OBS], 'the protocols this pin covers today: ');
 });
@@ -443,13 +473,16 @@ test('P1-1 the leg classifier: configSourceLaneOfLeg is the table lane for a Con
     eq(configSourceLaneOfLeg(leg), want, `${proto} ${leg.metadata ? 'stamp' : 'title'}: `);
     eq(legProtocolHasConfigLane(leg), want !== null, `${proto} legProtocolHasConfigLane: `);
   }
-  eq(P1_PROTOCOLS.filter((p) => configSourceLaneOfLeg({ title: 'x', metadata: { protocol: p } }) !== null).sort(), [K8S, P1_TF].sort(), 'the Config-sources legs today: ');
+  // Exact list. Observability joined at 1.12.0 (2026-11-23): a leg of that PROTOCOL has a Config lane — which is NOT "this leg
+  // declared a block" (a no-block leg's governing state is `not-config-source-leg`; test-config-sources-step3.ts, per-leg rule).
+  eq(P1_PROTOCOLS.filter((p) => configSourceLaneOfLeg({ title: 'x', metadata: { protocol: p } }) !== null).sort(), [K8S, P1_TF, 'observability-config-protocol'].sort(), 'the protocols whose legs have a Config lane today: ');
 });
-test('P1-2 the carrier site: carrierAppliesConfigForce(leg) equals the presence test it replaced (legProtocolHasConfigLane) on every leg — true on both shipped lanes', () => {
+test('P1-2 the carrier site: carrierAppliesConfigForce(leg) equals the presence test it replaced (legProtocolHasConfigLane) on every leg — true on the three shipped lanes (observability since the 1.12.0 join: the carrier READS its declaration; whether it forces is the governing state\'s answer)', () => {
   for (const leg of p1Legs) eq(carrierAppliesConfigForce(leg), legProtocolHasConfigLane(leg), `${JSON.stringify(leg)}: `);
   eq([carrierAppliesConfigForce({ title: 'x', metadata: { protocol: K8S } }), carrierAppliesConfigForce({ title: 'x', metadata: { protocol: P1_TF } }),
+    carrierAppliesConfigForce({ title: 'x', metadata: { protocol: 'observability-config-protocol' } }),
     carrierAppliesConfigForce({ title: 'x', metadata: { protocol: 'network-provisioning-protocol' } }), carrierAppliesConfigForce({ title: 'x', metadata: null })],
-    [true, true, false, false], 'both directions: ');
+    [true, true, true, false, false], 'both directions: ');
 });
 test('P1-3 the two core sites over hand-built resolutions of every kind: each helper equals the presence test it replaced', () => {
   // The two expressions P1 replaced in execution-core.ts, verbatim: both were `legConfigSources` being non-null, i.e. this test.
@@ -745,8 +778,9 @@ test('REG1 registration: configSourceReads once, LAST, leaf-persist, conditional
         n++; if (oldPresence(o)) yes++;
       }
     }
-    eq([n, yes], [24, 8], 'resolver-built resolutions (total, Config-sources): ');
-    passed++; console.log('✅ P1-5 over every resolution the real resolver builds (12 legs × self + leaf): the two core helpers equal the presence test they replaced — 8 true, 16 false');
+    // 12 since the 1.12.0 join (was 8): the two forms × self + leaf of observability carry `configSourceProtocol` too.
+    eq([n, yes], [24, 12], 'resolver-built resolutions (total, Config-sources): ');
+    passed++; console.log('✅ P1-5 over every resolution the real resolver builds (12 legs × self + leaf): the two core helpers equal the presence test they replaced — 12 true, 12 false');
   } catch (e) { failed++; console.log(`❌ P1-5 resolver-built equivalence\n   ${(e as Error).message}`); }
   try {
     const declared = parsed([GIT, LIVE]);

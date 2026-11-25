@@ -58,8 +58,23 @@ platform keeps (holds) its files only for the owner — unless you grant a POV:
     existing in the hub it runs on; the spec does not work on another install until that service is registered there.
   - **Write one service the same way on every line.** The same service given once as a URL and once as a name counts as two
     services, and the platform then fills in no descriptor for that leg.
-  - This is about the lines that read your live system. On a `git-file` line the service is the hub's Git file source,
+  - **Except: two or more observability legs in one program name a pre-registered service.** With a URL, each leg registers the
+    service and deletes its own registration at its end, so the leg that finishes first removes the service under a leg still
+    running. Name the service by its registered name on the lines, and give the spec's README one setup step: register the
+    service once before launching. A spec with one observability leg keeps the descriptor URL.
+  - This is about the lines that read your live system: `live-read`, `device-read`, and an observability `service-held` line,
+    which names its service the same two ways. On a `git-file` line the service is the hub's Git file source,
     which the published examples name `github-service`.
+- **Observability pipelines (from observability-config 1.12.0):** a `## Config sources` block is optional; with one, the leg
+  keeps only the files it names. Three kinds of line, one file per label:
+  - `<file>: git-file — service <name> ; <owner>/<repo>/<path> [@ <branch>]` — kept from Git
+  - `<file>: service-held — service <name | descriptor URL>` — kept as your service returns it (as deployed); your service's
+    copy is then the base the Author edits
+  - `<file>: live-read — service <name | descriptor URL>` — only under a `git-file` line of the same label: the served copy,
+    read as evidence and compared with the Git file by pAIchart
+
+  There is no `supplied` line on an observability leg. Labels and what each kind does: [PIPELINES.md](PIPELINES.md),
+  "Observability: kept files from Git or from your service".
 - **Network change pipelines (from network-provisioning 1.23.0):** declare each device's source in a `## Device sources`
   block, one line per device:
   - `<device>: git-file — service <name | descriptor URL> ; <owner>/<repo>/<path> [@ <branch|tag|commit>]`

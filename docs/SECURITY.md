@@ -73,6 +73,13 @@ One thing to know about the redactor:
   containing a brace (a quoted regex entry with a `{n}` quantifier ends the block for the redactor). Reference a secret
   (`$variable`, `${env:NAME}`) instead of writing it and none of these arise.
 
+**What a file comparison can quote** (observability, from observability-config 1.12.0). When a leg keeps a config file from Git
+and also reads its served copy, the platform compares the two and shows the leg's Architect and Reviewer the lines that differ
+(at most 20 a side for each file). Before a line is shown the platform redacts the secret shapes it knows and withholds any line
+that looks like a credential. It cannot recognise a secret kept under a name that does not look like one: a line such as
+`region_code: s3cr3t` is shown as written and is stored with the run. Keep secrets out of config files. Reference them (an
+environment variable, a secret store) and do not write their values.
+
 The interface contract (the values every leg of a program must use exactly) is not sanitized or truncated, by design:
 section 2 below says why.
 

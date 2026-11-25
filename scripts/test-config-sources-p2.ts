@@ -52,7 +52,11 @@ process.env.HELD_BYTES_CAPTURE_ENABLED = 'true';
 const OBS = 'observability-config-protocol';
 const K8S = 'kubernetes-gitops-protocol';
 const NONE: readonly string[] = [];              // "every table row's text has shipped"
-const SHIPPED = CONFIG_SOURCE_AWAITING_TEXT;     // what production passes today
+// observability's row AWAITING its text. Until the 1.12.0 join (2026-11-23) this was the tree's own list (and was called AWAITING,
+// "what production passes today"); the join emptied that list, so the text-reverted state (plan §13 A7) is what a REVERT of the
+// join produces. Every case below asks it through the same functions with the row put back on the list.
+const AWAITING: readonly string[] = Object.freeze([OBS]);
+if (CONFIG_SOURCE_AWAITING_TEXT.length !== 0) throw new Error(`this suite states the tree's awaiting list is EMPTY (the 1.12.0 join) — got ${JSON.stringify(CONFIG_SOURCE_AWAITING_TEXT)}: re-read every AWAITING case`);
 
 const O_GIT = 'obs-otelcol: git-file — service github-service ; paichart/paichart-configs/observability/otelcol/config.yaml';
 const O_LIVE = 'obs-otelcol: live-read — service observability-readonly';
@@ -130,12 +134,12 @@ test('CS1 captureScopesFor: no resolved leg takes nothing; a name-list protocol 
 test('CS2 the metadata twin: observability is a Git file source only when its text has shipped AND the leg carries a snapshot OBJECT', () => {
   const snap = snapOf(DECL);
   eq([isGitFileSourceLeg(obsLeg(), NONE), isGitFileSourceLeg(obsLeg({ configSourcesSnapshot: snap }), NONE)], [false, true], 'shipped: ');
-  eq([isGitFileSourceLeg(obsLeg(), SHIPPED), isGitFileSourceLeg(obsLeg({ configSourcesSnapshot: snap }), SHIPPED)], [false, false], 'awaiting: ');
+  eq([isGitFileSourceLeg(obsLeg(), AWAITING), isGitFileSourceLeg(obsLeg({ configSourcesSnapshot: snap }), AWAITING)], [false, false], 'awaiting: ');
   for (const v of [null, 'x', 1, true, [], [snap]]) {
     eq(hasConfigSourcesSnapshotObject({ configSourcesSnapshot: v }), false, `${JSON.stringify(v)}: `);
     eq(isGitFileSourceLeg(obsLeg({ configSourcesSnapshot: v }), NONE), false, `twin, ${JSON.stringify(v)}: `);
   }
-  for (const aw of [NONE, SHIPPED]) eq(isGitFileSourceLeg({ title: 'x', metadata: { protocol: K8S } }, aw), true, 'k8s by name: ');
+  for (const aw of [NONE, AWAITING]) eq(isGitFileSourceLeg({ title: 'x', metadata: { protocol: K8S } }, aw), true, 'k8s by name: ');
 });
 test('CS3 both capture call sites ask the helper, and neither decides a switch by hand', () => {
   const core = fs.readFileSync(path.join(__dirname, '../lib/services/execution-core.ts'), 'utf8');
@@ -155,11 +159,11 @@ test('CS4 (review, architectural F2 — plan §13.D AR C-3 as reworded after A7)
   type RowC = { name: string; metadata: Rec; awaiting: readonly string[]; row: Partial<GoverningConfigRow> | 'unread' | 'no-leg' };
   const rows: RowC[] = [
     { name: 'no block', metadata: {}, awaiting: NONE, row: {} },
-    { name: 'no block, row awaiting', metadata: {}, awaiting: SHIPPED, row: {} },
+    { name: 'no block, row awaiting', metadata: {}, awaiting: AWAITING, row: {} },
     { name: 'a parsed declaration', metadata: { configSourcesSnapshot: snap }, awaiting: NONE, row: { description: block(DECL), snapshot: snap } },
     { name: 'not parsed (snapshot-changed)', metadata: { configSourcesSnapshot: snap }, awaiting: NONE, row: { description: block([O_HELD]), snapshot: snap } },
     { name: 'a block added to a leg with no snapshot', metadata: {}, awaiting: NONE, row: { description: block(DECL) } },
-    { name: 'a snapshot with the protocol awaiting its text', metadata: { configSourcesSnapshot: snap }, awaiting: SHIPPED, row: { description: block(DECL), snapshot: snap } },
+    { name: 'a snapshot with the protocol awaiting its text', metadata: { configSourcesSnapshot: snap }, awaiting: AWAITING, row: { description: block(DECL), snapshot: snap } },
     { name: 'could-not-check (the leg row could not be read)', metadata: { configSourcesSnapshot: snap }, awaiting: NONE, row: 'unread' },
     { name: 'the owning-leg read failed (A8)', metadata: { configSourcesSnapshot: snap }, awaiting: NONE, row: 'no-leg' },
   ];
@@ -185,7 +189,7 @@ test('CS4 (review, architectural F2 — plan §13.D AR C-3 as reworded after A7)
     if (helper.gitFileSourceLeg && !twin) assert(helper.configSources !== null && helper.configSources.state !== 'parsed', `${r.name}: the helper's lane is on, the twin is off, and the scope is ${helper.configSources?.state} — a Git file could be HELD on a leg MI-13 does not count as a Git file source`);
   }
   // Kubernetes (a name-list protocol): twin and helper agree whatever the scope
-  for (const aw of [NONE, SHIPPED]) {
+  for (const aw of [NONE, AWAITING]) {
     const k = { title: 'x', metadata: { protocol: K8S } };
     const res = await resolveOwningLegProtocol(db as never, { id: 'K', type: 'PIPELINE', ...k } as never, aw);
     eq([isGitFileSourceLeg(k, aw), captureScopesFor(res, null).gitFileSourceLeg], [true, true], 'kubernetes: ');
@@ -211,12 +215,12 @@ test('CS5 (review, architectural F8) no lib/ module asks the bare shipped-text r
 console.log('── A7: a snapshot on a leg whose text is not live ──');
 test('TR1 governing state: awaiting row + a snapshot object ⇒ `snapshot-text-reverted`, whatever the snapshot or the description says', () => {
   const snap = snapOf(DECL);
-  eq(governingConfigSourcesAsOf(row({ description: block(DECL), snapshot: snap }), OBS, SHIPPED), { state: 'snapshot-text-reverted', grammarVersion: CONFIG_SOURCES_GRAMMAR_VERSION }, 'a valid snapshot: ');
-  eq(governingConfigSourcesAsOf(row({ description: null, snapshot: snap }), OBS, SHIPPED).state, 'snapshot-text-reverted', 'the block was removed since: ');
-  eq(governingConfigSourcesAsOf(row({ description: block(DECL), snapshot: { junk: 1 } }), OBS, SHIPPED).state, 'snapshot-text-reverted', 'an unreadable snapshot object: ');
-  eq(governingConfigSourcesAsOf(row({ description: block(DECL), snapshot: snap, protocolStamped: false }), OBS, SHIPPED).state, 'snapshot-text-reverted', 'no protocol stamp: ');
+  eq(governingConfigSourcesAsOf(row({ description: block(DECL), snapshot: snap }), OBS, AWAITING), { state: 'snapshot-text-reverted', grammarVersion: CONFIG_SOURCES_GRAMMAR_VERSION }, 'a valid snapshot: ');
+  eq(governingConfigSourcesAsOf(row({ description: null, snapshot: snap }), OBS, AWAITING).state, 'snapshot-text-reverted', 'the block was removed since: ');
+  eq(governingConfigSourcesAsOf(row({ description: block(DECL), snapshot: { junk: 1 } }), OBS, AWAITING).state, 'snapshot-text-reverted', 'an unreadable snapshot object: ');
+  eq(governingConfigSourcesAsOf(row({ description: block(DECL), snapshot: snap, protocolStamped: false }), OBS, AWAITING).state, 'snapshot-text-reverted', 'no protocol stamp: ');
   // no snapshot object ⇒ the leg is not governed at all while the row awaits (today's behaviour for all 79 stored legs)
-  for (const s of [null, undefined, 'x', []]) eq(governingConfigSourcesAsOf(row({ description: block(DECL), snapshot: s }), OBS, SHIPPED), { state: 'not-config-source-leg' }, `${JSON.stringify(s)}: `);
+  for (const s of [null, undefined, 'x', []]) eq(governingConfigSourcesAsOf(row({ description: block(DECL), snapshot: s }), OBS, AWAITING), { state: 'not-config-source-leg' }, `${JSON.stringify(s)}: `);
   // a `forced` protocol's awaiting row is unchanged: not governed (the recorded scope limit)
   eq(governingConfigSourcesAsOf(row({ description: block(DECL), snapshot: snap }), K8S, [K8S]), { state: 'not-config-source-leg' }, 'a forced row awaiting: ');
   // with the text shipped the same row governs normally
@@ -224,21 +228,21 @@ test('TR1 governing state: awaiting row + a snapshot object ⇒ `snapshot-text-r
 });
 test('TR2 the leg is READ and FORCED in the awaiting state: the resolution marker, the carrier gate, the force name', () => {
   const snap = snapOf(DECL);
-  eq([legHasConfigDeclarationToGovern(obsLeg(), SHIPPED), legHasConfigDeclarationToGovern(obsLeg({ configSourcesSnapshot: snap }), SHIPPED)], [false, true], 'governed: ');
-  eq([carrierAppliesConfigForce(obsLeg(), SHIPPED), carrierAppliesConfigForce(obsLeg({ configSourcesSnapshot: snap }), SHIPPED)], [false, true], 'carrier gate: ');
+  eq([legHasConfigDeclarationToGovern(obsLeg(), AWAITING), legHasConfigDeclarationToGovern(obsLeg({ configSourcesSnapshot: snap }), AWAITING)], [false, true], 'governed: ');
+  eq([carrierAppliesConfigForce(obsLeg(), AWAITING), carrierAppliesConfigForce(obsLeg({ configSourcesSnapshot: snap }), AWAITING)], [false, true], 'carrier gate: ');
   eq(legHasConfigDeclarationToGovern({ title: 'x', metadata: { protocol: K8S, configSourcesSnapshot: snap } }, [K8S]), false, 'a forced row awaiting is not governed: ');
   eq(configSourceForce({ state: 'snapshot-text-reverted', grammarVersion: 2 }, [{ target: 'obs-ingress', path: '/etc/nginx/conf.d/otlp-ingress.conf' }]),
     { reason: 'config-sources-snapshot-text-reverted' }, 'the force: ');
 });
 test('TR3 the resolution carries `configSourceProtocol` for a text-reverted leg, and not for an undeclared one', async () => {
   const db = { task: { findUnique: async () => null }, stage: { findUnique: async () => null } };
-  const self = async (metadata: Rec) => resolveOwningLegProtocol(db as never, { id: 't1', type: 'PIPELINE', title: 'x', metadata: { protocol: OBS, ...metadata }, stage_id: null } as never, SHIPPED);
+  const self = async (metadata: Rec) => resolveOwningLegProtocol(db as never, { id: 't1', type: 'PIPELINE', title: 'x', metadata: { protocol: OBS, ...metadata }, stage_id: null } as never, AWAITING);
   const a = await self({}); const b = await self({ configSourcesSnapshot: snapOf(DECL) });
   eq([(a as Rec).configSourceProtocol ?? null, (b as Rec).configSourceProtocol ?? null], [null, OBS], 'marker: ');
 });
 
 test('TR4 (coordinator ruling 6 — a SECURITY property; RE-PROVEN at STEP 3 P3 with the observability version row present): on a text-reverted leg no held byte leaves the platform, nothing is compared, and every fact that stamps says so by the state\'s own name', async () => {
-  const reverted = governed(DECL, SHIPPED);
+  const reverted = governed(DECL, AWAITING);
   eq(reverted.state, 'snapshot-text-reverted', 'fixture: ');
   // (1) the platform's compare CALL: every combination of the other inputs that could let it through — never called, no record
   let called = 0;
@@ -351,7 +355,7 @@ test('AL4 a declaration that is not `parsed` holds NOTHING, by name; text-revert
     ['unparseable', governingConfigSourcesAsOf(row({ description: block(['obs-otelcol: nonsense']) }), OBS, NONE), 'declaration-not-parsed'],
     ['snapshot-changed', governingConfigSourcesAsOf(row({ description: block([O_HELD]), snapshot: snapOf(DECL) }), OBS, NONE), 'declaration-not-parsed'],
     ['could-not-check', { state: 'could-not-check', grammarVersion: 2, reason: 'read-threw' }, 'declaration-not-parsed'],
-    ['snapshot-text-reverted', governed(DECL, SHIPPED), 'text-reverted'],
+    ['snapshot-text-reverted', governed(DECL, AWAITING), 'text-reverted'],
   ];
   for (const [name, g, kase] of states) {
     assert(g.state !== 'parsed' && g.state !== 'not-config-source-leg', `${name}: the fixture governs as ${g.state}`);
@@ -449,7 +453,7 @@ test('AL10 the two REGISTRANT columns through the real capture: a customer servi
       const refusals = (plan?.refusals ?? []) as unknown as Array<{ target: string | null; refusal: string; detail?: Rec }>;
       return files.length ? `HELD ${files[0].target}` : refusals.map((r) => `${r.refusal}${r.detail && typeof r.detail.case === 'string' ? ` (${r.detail.case})` : ''}`).join(',') || 'no row';
     };
-    return { undeclared: run(scopesFor(null, false)), declared: run(scopesFor(PARSED)), reverted: run(scopesFor(governed(DECL, SHIPPED))) };
+    return { undeclared: run(scopesFor(null, false)), declared: run(scopesFor(PARSED)), reverted: run(scopesFor(governed(DECL, AWAITING))) };
   };
   // (a) a `device:` target — held on a leg that declares nothing (as today), never on a declared one
   eq(mk({ const: 'device:ceos1' }, { const: '/running-config' }, 'k'),
@@ -568,7 +572,7 @@ const LEG_STATES: Array<[string, Scopes]> = [
   ['no block (declares nothing)', scopesFor(null, false)],
   ['a parsed declaration', scopesFor(PARSED)],
   ['a declaration that is not parsed (snapshot-changed)', scopesFor(governingConfigSourcesAsOf(row({ description: block([O_HELD]), snapshot: snapOf(DECL) }), OBS, NONE))],
-  ['a snapshot with the protocol awaiting its text', scopesFor(governed(DECL, SHIPPED))],
+  ['a snapshot with the protocol awaiting its text', scopesFor(governed(DECL, AWAITING))],
   ['could-not-check (the leg row could not be read)', scopesFor({ state: 'could-not-check', grammarVersion: 2, reason: 'read-threw' })],
   ['the owning-leg read failed (A8: no leg resolved)', captureScopesFor({ kind: 'could-not-check' } as OwningLegResolution, null) as Scopes],
   // review, sec-ops F6: the leg's OWN PIPELINE persist — the core resolves NO owning leg for a PIPELINE task, so a harness execution

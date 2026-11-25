@@ -41,7 +41,13 @@ const VARIANT_NAMES = Object.values(HELD_VARIANT_TEMPLATE_NAMES);
 // ─── Phase 10: the fold ───────────────────────────────────────────────────────────────────────────────────────────
 test('fold: obs ≥ 1.10.0 carries the shared held section and the clause exactly once; names only its BASE templates', () => {
   ok(/^1\.(1[0-9]|[2-9][0-9])\./.test(OBS.version), `obs version ${OBS.version}`);
-  eq([count(OBS.promptText, HELD_FILES_SECTION), count(OBS.promptText, HELD_EDIT_CLAUSE)], [1, 1]);
+  // 1.12.0 (Config sources STEP 3, S5): observability passes its OWN intro at the call site — a held file is a file read from the
+  // service as deployed OR a file a Config sources line keeps from Git — so the text no longer equals the default HELD_FILES_SECTION.
+  // The SHARED section is still unedited: everything but the intro is the shared function's output, byte for byte (proved below).
+  eq([count(OBS.promptText, HELD_FILES_HEADING), count(OBS.promptText, HELD_EDIT_CLAUSE), count(OBS.promptText, HELD_FILES_SECTION), count(OBS.promptText, OBS_HELD_FILES_INTRO)], [1, 1, 0, 0]);
+  const obsIntro = OBS.promptText.split(`${HELD_FILES_HEADING}\n\n`)[1].split('\n\n')[0];
+  ok(obsIntro.includes('a file read from the read-only service as deployed, or, where a Config sources line keeps it from Git, the Git file — the declared file, which may differ from what is deployed'), 'the obs intro names both kinds of held file');
+  eq(count(OBS.promptText, heldFilesSection(undefined, obsIntro)), 1, 'the section is the shared function over the obs example and the obs intro: ');
   for (const v of VARIANT_NAMES) eq(count(OBS.promptText, v), 0, `${v} occurrences: `);
   const rows = OBS.promptText.split('\n').filter((l: string) => /^\| [0-3] \|/.test(l));
   eq(rows.map((l: string) => /`([^`]+)`/.exec(l)?.[1]), BASE_NAMES);
@@ -92,6 +98,17 @@ test('templates (W6): the BASE obs Author carries the held Author constraint, th
     eq([Object.keys(row.constraints).includes('Held Files: Edits Only'), Object.keys(row.constraints).includes('Held Diff: Unaccounted Lines Block')],
       [t.defaultRole === 'config_change_author', t.defaultRole === 'change_reviewer'], `${t.name}: `);
     eq(row.metadata?.protocol, 'observability-config-protocol', `${t.name} binds obs: `);
+  }
+});
+
+test('templates (L-CS-O stage 2, owner 2026-11-23): the served-only-lines constraint is on the obs ARCHITECT row only, under 500 chars, no angle brackets', () => {
+  const K = 'Served-Only Lines: Say What Applying Does';
+  const v = (baseTpl as any).OBS_ARCHITECT_SERVED_ONLY_CONSTRAINT[K] as string;
+  ok(typeof v === 'string' && v.length < 500 && !/[<>]/.test(v), 'sentence < 500 chars, no angle brackets');
+  ok(/they are removed/.test(v) && /Name no cause/.test(v) && /to a person/.test(v), 'states the behaviour: removed, no cause, a person decides');
+  for (const t of baseTpl.TEMPLATES) {
+    const row = baseTpl.buildTemplateRow(t);
+    eq(Object.keys(row.constraints).includes(K), t.defaultRole === 'infra_change_architect', `${t.name}: `);
   }
 });
 

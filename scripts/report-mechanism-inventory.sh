@@ -481,10 +481,12 @@ LEFT JOIN tasks lg ON lg.id = CASE WHEN c.type = 'PIPELINE' THEN c.id ELSE s.met
 -- held-k8s 1g: the protocols whose legs may capture a Git file source — TWO columns since Config sources STEP 3 P2 (plan W1):
 --   rule 'by-name'          every leg of the protocol (MUST equal variant.ts GIT_FILE_SOURCE_PROTOCOLS — pinned);
 --   rule 'snapshot-object'  a leg of the protocol ONLY when it carries a Config-sources snapshot OBJECT — a `runs-undeclared` row of
---                           CONFIG_SOURCE_LANES whose text HAS SHIPPED (MUST equal that set — pinned; EMPTY while observability
---                           awaits its text; the row is added here in the commit that takes it off CONFIG_SOURCE_AWAITING_TEXT).
+--                           CONFIG_SOURCE_LANES whose text HAS SHIPPED (MUST equal that set — pinned by test:held-bytes-store).
+--                           observability-config joined at 1.12.0 (2026-11-23), in the commit that took it off
+--                           CONFIG_SOURCE_AWAITING_TEXT: an observability leg WITH a snapshot object may capture a Git file; one
+--                           with none may not (a leg that declares nothing reads no Git lane).
 -- The SQL twin of variant.ts isGitFileSourceLeg. The snapshot test is jsonb_typeof(...) = 'object', never the `?` operator.
-CREATE TEMP VIEW _gitsrcleg AS SELECT * FROM (VALUES ('kubernetes-gitops-protocol', 'by-name'), ('terraform-iac-protocol', 'by-name'), ('network-provisioning-protocol', 'by-name')) v(name, rule);
+CREATE TEMP VIEW _gitsrcleg AS SELECT * FROM (VALUES ('kubernetes-gitops-protocol', 'by-name'), ('terraform-iac-protocol', 'by-name'), ('network-provisioning-protocol', 'by-name'), ('observability-config-protocol', 'snapshot-object')) v(name, rule);
 -- The executions whose OWNING LEG is a Git file source under that rule.
 CREATE TEMP VIEW _gitsrcexec AS
 SELECT x.eid FROM _execleg x JOIN _gitsrcleg g ON g.name = x.legproto
@@ -763,11 +765,28 @@ UNION ALL SELECT '· gitLiveDrift: files not checked, by reason: ' || coalesce(f
 UNION ALL SELECT '· platformDriftCalls: platform calls of the compare tool, by outcome: ' || coalesce(c->>'outcome', '(none)'), count(*)::text
   FROM _a a, jsonb_array_elements(CASE WHEN jsonb_typeof(a.j->'platformDriftCalls'->'calls') = 'array' THEN a.j->'platformDriftCalls'->'calls' ELSE '[]' END) c
   WHERE a.name = 'result.json' GROUP BY c->>'outcome'
--- Config sources STEP 3 P3 (2026-11-21) — the PLATFORM's file comparison (observability, the `file-ordered-lines/1` method). All
--- NOT_STAMPED until observability-config 1.12.0 ships, so every count below is 0 on every stored leg.
+-- Config sources STEP 3 P3 (2026-11-21) — the PLATFORM's file comparison (observability, the `file-ordered-lines/1` method).
+-- Stamped only on a Harvester of a DECLARED observability leg composed at observability-config 1.12.0 or later (the join,
+-- 2026-11-23): 0 on every leg stored before it; a non-zero count on an execution composed below 1.12.0 is a stamp that should not exist.
 UNION ALL SELECT '⚪ fileSourceCompare records (observability Harvesters): files by state — ' || coalesce(f->>'state', '(none)') || coalesce(' / ' || (f->>'reason'), ''), count(*)::text
   FROM _a a, jsonb_array_elements(CASE WHEN jsonb_typeof(a.j->'fileSourceCompare'->'files') = 'array' THEN a.j->'fileSourceCompare'->'files' ELSE '[]' END) f
   WHERE a.name = 'result.json' AND a.j ? 'fileSourceCompare' GROUP BY 1
+-- The 1.12.0 join (2026-11-23; register CONFIG-SOURCES-OBS-JOIN-PRECONDITIONS item 28): what CAPTURE did with each declared line,
+-- by the line's kind and the record's outcome word — the only tally of `file-from-other-service` and `registered-under-other-name`
+-- (STEP 3 P5: the file came back from a call the declared service is not tied to / the declared service answered under a name the
+-- platform's file table is not keyed on). Neither is a fault of the platform: each means the leg's agent left the decided
+-- registration route (register by descriptor URL), and a leg that declared a kept file from such a service is forced. READ BY HAND.
+-- The second line is the named zero for the first (a grouped line prints nothing while there is none) and counts the records that
+-- carry `unresolvedServices` (declared descriptor URLs no registration of the execution was tied to; masked, at most 20 a record).
+UNION ALL SELECT '⚪ fileSourceCompare capture entries (what capture did with each declared line), by kind / outcome — ' || coalesce(c->>'kind', '(none)') || ' / ' || coalesce(c->>'outcome', '(none)'), count(*)::text
+  FROM _a a, jsonb_array_elements(CASE WHEN jsonb_typeof(a.j->'fileSourceCompare'->'capture') = 'array' THEN a.j->'fileSourceCompare'->'capture' ELSE '[]' END) c
+  WHERE a.name = 'result.json' AND a.j ? 'fileSourceCompare' GROUP BY 1
+UNION ALL SELECT '⚪ fileSourceCompare capture entries in all / with outcome file-from-other-service or registered-under-other-name / records carrying unresolvedServices (a named zero for the grouped line above)',
+  (SELECT count(*) FROM _a a, jsonb_array_elements(CASE WHEN jsonb_typeof(a.j->'fileSourceCompare'->'capture') = 'array' THEN a.j->'fileSourceCompare'->'capture' ELSE '[]' END) c
+     WHERE a.name = 'result.json' AND a.j ? 'fileSourceCompare') || ' / '
+  || (SELECT count(*) FROM _a a, jsonb_array_elements(CASE WHEN jsonb_typeof(a.j->'fileSourceCompare'->'capture') = 'array' THEN a.j->'fileSourceCompare'->'capture' ELSE '[]' END) c
+     WHERE a.name = 'result.json' AND a.j ? 'fileSourceCompare' AND c->>'outcome' IN ('file-from-other-service', 'registered-under-other-name')) || ' / '
+  || (SELECT count(*) FROM _a a WHERE a.name = 'result.json' AND jsonb_typeof(a.j->'fileSourceCompare'->'unresolvedServices') = 'array' AND jsonb_array_length(a.j->'fileSourceCompare'->'unresolvedServices') > 0)
 UNION ALL SELECT '🔴 a Harvester whose gitLiveDrift reads no-compare-record (the platform''s comparison record did not reach the fact on a DECLARED leg — READ BY HAND: also the visible sign of a failed owning-leg read, plan §13 A8)', count(*)::text
   FROM _a a WHERE a.name = 'result.json' AND a.j->'gitLiveDrift'->>'point' = 'harvester' AND a.j->'gitLiveDrift'->>'reason' = 'no-compare-record'
 UNION ALL SELECT '🔴 a fileSourceCompare record that carries a file text or an evidence key (the record stores states, counts, shas, ranges and at most 40 quoted lines a file — never a text)', count(*)::text

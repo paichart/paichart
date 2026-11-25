@@ -550,9 +550,10 @@ export async function runExecutionCore(input: ExecutionCoreInput, observers: Exe
     // VALUE-LEG-GIT (G2-b): a VALUE leg never holds — its declaration feeds the device facts (primed below), never capture's scope.
     const captureDeviceSources = legDeviceSources && heldCaptureTakesDeviceScope(owningLeg) ? legDeviceSources : null;
     // Config sources STEP 2: the leg's declared Config sources — ONE read, only on a leg whose PROTOCOL has a Config lane today
-    // (Kubernetes, Terraform; `configSourceProtocol` is absent on a resolution whose protocol's row still awaits its text —
-    // observability until 1.12.0 — so nothing is read there and capture is unchanged; the ONE exception, STEP 3 P2 / plan A7: an
-    // observability leg that carries a snapshot while the row awaits is read, and governs as `snapshot-text-reverted`).
+    // (Kubernetes, Terraform, and observability since its 1.12.0 join: an observability leg that declares nothing reads
+    // `not-config-source-leg` here and capture is unchanged for it. `configSourceProtocol` is absent on a resolution whose
+    // protocol's row awaits its text — none today — so nothing is read there; the ONE exception, STEP 3 P2 / plan A7: a
+    // `runs-undeclared` leg that carries a snapshot while its row awaits is read, and governs as `snapshot-text-reverted`).
     const legConfigSources = (owningLeg?.kind === 'leg' || owningLeg?.kind === 'self') && owningLeg.configSourceProtocol
       ? await readLegConfigSources(prisma as never, owningLeg) : null;
     // k8s value-lane P1: capture takes the declaration as its Git scope only on a lane that holds (exhaustive over the lane); the

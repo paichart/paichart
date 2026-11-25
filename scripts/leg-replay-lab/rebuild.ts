@@ -36,6 +36,8 @@ import { READ_MORE_FUNCTION_DEF } from '../../lib/agents/harness/agentic-tool-lo
 import { stripAgentForbiddenActions } from '../../lib/services/mcp/agent-tool-strip';
 import { RUNTIME_LIMITS } from '../../lib/validation/runtime-limits';
 import type { ExecBlock, Snapshot } from './snapshot';
+import { labLeafConfigSourcesReadRule } from './config-sources-arm';
+import { briefTaskFor, insertConfigSourcesReadRule, type ConfigSourcesReadRuleDecision, type ReadRuleAnchor } from '../../lib/agents/harness/config-sources-read-rule';
 const { CONSOLIDATED_SCHEMAS, TOOL_SCHEMAS } = require('../../lib/mcp/server/config/tool-schemas');
 const { zodToJsonSchema } = require('zod-to-json-schema');
 
@@ -63,6 +65,11 @@ export interface RebuildOptions {
    *  does. The SYSTEM prompt is unchanged. A no-op on post-fix and own-prompt nodes (they already replay that way).
    *  Default (false) = AS-RUN fidelity: a pre-fix node replays with the Directive it actually ran under. */
   dropTemplateDirective?: boolean;
+  /** Config sources read rule (2026-11-25). Default 'as-run': the rule is inserted into the brief iff the stored execution's own
+   *  `protocolInjection.configSourcesReadRule` is true — an execution from before the ship replays without it, byte for byte.
+   *  'force-on': render it on a stored execution that ran without it — REFUSED (thrown, by the gate's reason) unless the SHIPPING
+   *  gate answers ON for this node (a declared observability Harvester), so it can never put the line where production would not. */
+  configSourcesReadRule?: 'as-run' | 'force-on';
 }
 
 export interface RebuiltPrompt {
@@ -82,6 +89,8 @@ export interface RebuiltPrompt {
   inputContextSource: 'config.inputContext' | 'task.inputContext' | 'override' | 'none';
   hashes: { system: string; user: string; tools: string; protocol: string | null };
   notes: string[];
+  /** Config sources read rule: the shipping gate's answer for this node, whether the rule was inserted into the brief, where, and why. */
+  configSourcesReadRule: { gate: ConfigSourcesReadRuleDecision; rendered: boolean; source: 'as-run' | 'force-on'; anchor: ReadRuleAnchor | null };
 }
 
 /**
@@ -185,11 +194,29 @@ export async function rebuildPrompt(snap: Snapshot, which: 'author' | 'reviewer'
     templateType: template.templateType, outputSchema: template.outputSchema,
   };
   const enhancedContext = { ...(b.exec.context ?? {}), agentTemplate: resolvedTemplate };
-  const user = buildAgentPromptBody(task, enhancedConfig, enhancedContext);
+  // ── Config sources read rule (2026-11-25): the SHIPPING gate, from the snapshot; as-run unless forced (see RebuildOptions). ON ⇒
+  //    the rule is inserted beside the brief's `## Config sources` block in the description BOTH builders render (§3 + HEAD) ──
+  const ruleGate = labLeafConfigSourcesReadRule(snap.leg, { type: task.type, stage_id: b.task.stage_id ?? null }, resolveAgentRole(config.agentRole, template.defaultRole, task.agentRole));
+  const ruleSource = opts.configSourcesReadRule ?? 'as-run';
+  if (ruleSource !== 'as-run' && ruleSource !== 'force-on') throw new Error(`${which}: configSourcesReadRule must be 'as-run' or 'force-on', got ${JSON.stringify(ruleSource)}`);
+  const ruleStored = parsedResult(b)?.protocolInjection?.configSourcesReadRule === true;
+  let ruleOn: boolean;
+  if (ruleSource === 'force-on') {
+    if (!ruleGate.on) throw new Error(`${which} ${b.exec.id}: configSourcesReadRule 'force-on' refused — the shipping gate answers OFF for this node (${ruleGate.reason}${ruleGate.sourcesState ? `, declaration ${ruleGate.sourcesState}` : ''}); the rule renders only for a declared observability Harvester`);
+    ruleOn = true;
+    notes.push(ruleStored ? 'configSourcesReadRule force-on: the stored execution already ran with the rule (a no-op)' : 'configSourcesReadRule FORCED ON: the stored execution ran without the rule; it is inserted into the brief as production now would');
+  } else {
+    ruleOn = ruleStored;
+    if (ruleGate.on && !ruleStored) notes.push('configSourcesReadRule: the gate answers ON, the stored execution ran without the rule — replayed as run (off); force with configSourcesReadRule: \'force-on\'');
+  }
+  const briefTask = briefTaskFor(task, { on: ruleOn });
+  const ruleAnchor = ruleOn ? insertConfigSourcesReadRule(task.description).anchor : null;
+  if (ruleAnchor) notes.push(`configSourcesReadRule inserted ${ruleAnchor === 'after-block' ? 'after the brief\'s ## Config sources block' : 'after the description (the brief carries no ## Config sources heading line)'}`);
+  const user = buildAgentPromptBody(briefTask, enhancedConfig, enhancedContext);
 
   // ── buildSystemPrompt (engine :1046-1085) ──
   const role = resolveAgentRole(config.agentRole, template.defaultRole, task.agentRole);
-  let base = resolvePromptPlaceholders(promptTemplate, role, buildContextSummary(task as any));
+  let base = resolvePromptPlaceholders(promptTemplate, role, buildContextSummary(briefTask as any));
   if (mcpToolNames.includes('services')) {
     base += await buildHubToolGuidance(mcpToolNames, { mCPTool: { findMany: async () => snap.mcpTools } }, { warn: () => {} });
     notes.push(`hub guidance built from the CURRENT ACTIVE mcp_tools rows (${snap.mcpTools.length}), not the rows at run time`);
@@ -214,6 +241,7 @@ export async function rebuildPrompt(snap: Snapshot, which: 'author' | 'reviewer'
     templateMetadata: (template.metadata as Record<string, unknown>) ?? null,
     constraints: template.constraints ?? null,
     taskProtocol: resolveTaskProtocol({ title: task.title, metadata: task.metadata }),
+    configSourcesReadRule: ruleOn,
   }, db, { info: () => {}, warn: (o, m) => warns.push(`${m} ${JSON.stringify(o)}`) });
   for (const w of warns) notes.push(`injection warn: ${w}`);
   const system = blocks.map((x) => x.text).join('');
@@ -229,6 +257,7 @@ export async function rebuildPrompt(snap: Snapshot, which: 'author' | 'reviewer'
     maxTokens: config.maxTokens, temperature: config.temperature, llmConfigSource: { ...(b.exec.config ?? {}) }, maxToolTurns, inputContextSource,
     hashes: { system: sha256(system), user: sha256(user), tools: sha256(JSON.stringify(tools)), protocol: protocol ? sha256(protocol.text) : null },
     notes,
+    configSourcesReadRule: { gate: ruleGate, rendered: ruleOn, source: ruleSource, anchor: ruleAnchor },
   };
 }
 
@@ -257,6 +286,13 @@ export function fidelityChecks(snap: Snapshot, which: 'author' | 'reviewer', r: 
     same('protocolNames', pi.protocolNames, r.fact.protocolNames);
     same('stampSource', pi.stampSource, r.fact.stampSource);
     same('preambleChars', pi.preambleChars, r.fact.preambleChars);
+    // Config sources read rule: what the stored execution ran with against the shipping gate's answer today. A stored execution
+    // WITHOUT the rule where the gate answers ON is not checkable (it ran before 2026-11-25, or its gate answered off then);
+    // one WITH the rule where the gate answers OFF is a failure.
+    const storedRule = pi.configSourcesReadRule === true;
+    const gateOn = r.configSourcesReadRule.gate.on;
+    out.push({ name: 'protocolInjection.configSourcesReadRule', ok: storedRule === gateOn ? true : storedRule ? false : null,
+      detail: `persisted ${storedRule} · gate ${gateOn} (${r.configSourcesReadRule.gate.reason}) · rendered ${r.configSourcesReadRule.rendered}${r.configSourcesReadRule.source === 'force-on' ? ' (forced)' : ''}` });
   }
   out.push({ name: 'agentRole', ok: res?.agentRole ? res.agentRole === r.role : null, detail: `persisted ${res?.agentRole ?? '—'} · rebuilt ${r.role}` });
   out.push({ name: 'toolNames', ok: Array.isArray(res?.mcpToolsProvided) ? JSON.stringify(res!.mcpToolsProvided) === JSON.stringify(r.toolNames) : null,

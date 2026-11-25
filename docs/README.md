@@ -42,6 +42,7 @@ repository, and needs nothing but the files in that repository.
 | [Gates](GATES.md) | What to check before you release each kind of gate, and how to apply a change package. |
 | [Connecting a Kubernetes cluster](KUBERNETES-SERVICE.md) | What pAIchart reads in your cluster and never reads, the `## Config sources` block, the drift check and why a file is "not checked", and what your own Kubernetes service must offer. |
 | [Terraform changes](TERRAFORM-SERVICE.md) | What pAIchart reads and never reads for Terraform, the `## Config sources` block, why it computes no drift, and how the package's Plan witness works with your CI plan (Atlantis and others). |
+| [Connecting an observability stack](OBSERVABILITY-SERVICE.md) | What pAIchart reads in your monitoring stack and never reads, the ten read tools, how to name the service for one leg or several, the optional `## Config sources` block, and the Git-versus-deployed comparison. |
 | [Connecting your own services](CONNECTING-YOUR-SERVICES.md) | Register your team's device, Git and cloud services, share them, and name them in a task or a spec. |
 | [How a pipeline works](HOW-IT-WORKS.md) | A short account of how one pipeline runs, what cannot go wrong by construction, and what you can change without code. |
 | [Security](SECURITY.md) | What protects a run, the two output guards you control, and the security properties of agents handing work to each other. |

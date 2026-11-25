@@ -21,8 +21,8 @@
       "chars": 60109
     },
     "observability-config-protocol": {
-      "sha256": "c0ad8475f34529305c93c1ca928b2450f5f86ccc9a6fbe7ba5e53b2a33875628",
-      "chars": 41368
+      "sha256": "4d62c5232e2fa71bbb0be9371fe0b84371aefd0ae8d59074cd8d8b1b11071078",
+      "chars": 54799
     },
     "pov-program-protocol": {
       "sha256": "aa7c48b33af1d0abd49b2c1a8365067272260b56867337da1d98ca8df3e8b0cc",
@@ -41,8 +41,8 @@
       "chars": 52647
     },
     "HOWTO-use-pipeline-harness": {
-      "sha256": "a129eb1b32f9717538708e5e7ade93f77473e2ce22332d1b0c83fe9cbc3af77f",
-      "chars": 72935
+      "sha256": "6cc7944552db9a4304b8a794314d7267a469b1bdede20e4feed363fd59a0f8cf",
+      "chars": 75297
     },
     "HOWTO-use-program-harness": {
       "sha256": "ed90f544c4f94bf83738550dc8ea44c2ecb543083b077c527114b00b04e334eb",
@@ -159,12 +159,12 @@
       "chars": 4812
     },
     "program_architect": {
-      "sha256": "1eb31d15b5d0e7c44842362bdc0840edc5b45c9e698cf5822f8f19f871c2b3be",
-      "chars": 23961
+      "sha256": "a292beb7151842ffff1e3ecdca6cb167a861c48cc706b2748c4398b8ab78e1ac",
+      "chars": 24820
     },
     "value_chain_architect": {
-      "sha256": "1eb31d15b5d0e7c44842362bdc0840edc5b45c9e698cf5822f8f19f871c2b3be",
-      "chars": 23961
+      "sha256": "a292beb7151842ffff1e3ecdca6cb167a861c48cc706b2748c4398b8ab78e1ac",
+      "chars": 24820
     },
     "derivation_architect": {
       "sha256": "4fb4c93a78ee0358ed8380b421452233c968007a9f5d38db96dec06d3e803401",

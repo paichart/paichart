@@ -3,7 +3,7 @@
  * section renderer (WARNINGS-INVISIBLE, 2026-10-08; SYNTHESIS v0.3 P2/P3, owner decisions O1/O2).
  * Pure: a stub Prisma (scripts/fixtures/authoritative-read-stub.ts), no DB.
  */
-import { computeReviewerWarningsFact, REGISTERED_WARNING_IDS, LEG_SECTION_PROTOCOLS } from '@/lib/agents/harness/reviewer-warnings-enrichment';
+import { computeReviewerWarningsFact, REGISTERED_WARNING_IDS, DECLARED_LEG_WARNING_IDS, LEG_SECTION_PROTOCOLS } from '@/lib/agents/harness/reviewer-warnings-enrichment';
 import { appendReviewerWarningsSection, WARNINGS_SECTION_HEADING } from '@/lib/services/report-warnings-section';
 import { authoritativeReadStub } from './fixtures/authoritative-read-stub';
 import { MECHANICAL_NETS } from '@/lib/agents/harness/mechanical-nets';
@@ -113,7 +113,7 @@ const V = (warnings?: unknown[]) => ({ finalResponse: 'review text', reviewerVer
     eq((n!.errorFact as any)(), { checked: false, reason: 'enrichment-error', count: 0, ids: [] });
   });
 
-  await t('N9 registered ids == the ids the TEXT names, per leg protocol (protocol text + the shared change_reviewer role)', () => {
+  await t('N9 registered ids == the ids the TEXT names, per leg protocol (protocol text + the shared change_reviewer role); the registered ids are the all-legs row PLUS the declared-leg row, and no id is in both', () => {
     // DATABASE_URL stub BEFORE the requires: both modules reach lib/prisma transitively (CI has no DB).
     process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://stub:stub@localhost:5432/stub';
     const LABEL = /NON-BLOCKING WARNING \(([a-z0-9-]+)\):/g;
@@ -124,12 +124,21 @@ const V = (warnings?: unknown[]) => ({ finalResponse: 'review text', reviewerVer
     for (const p of LEG_SECTION_PROTOCOLS) {
       const text = PROTOCOLS.find((x: any) => x.name === p).promptText as string;
       const want = new Set([...[...text.matchAll(LABEL)].map(m => m[1]), ...roleIds]);
-      eq([...(REGISTERED_WARNING_IDS[p] ?? [])].sort(), [...want].sort(), p);
+      // Config sources STEP 3, the 1.12.0 join (2026-11-23): a protocol's text may name an id that is registered ONLY on a leg
+      // whose Config-sources declaration is parsed (DECLARED_LEG_WARNING_IDS — observability's `git-file-only`). The text names it
+      // once, for every reader; the registration is split over the two tables. What the text names must equal their UNION.
+      const allLegs = [...(REGISTERED_WARNING_IDS[p] ?? [])]; const declaredOnly = [...(DECLARED_LEG_WARNING_IDS[p] ?? [])];
+      eq([...allLegs, ...declaredOnly].sort(), [...want].sort(), p);
+      // …and an id is in ONE table: in both, a no-block leg would have it registered (the all-legs row) while the declared row
+      // says it is a declared leg's — the very thing the second table exists to prevent.
+      for (const id of declaredOnly) ok(!allLegs.includes(id), `${p}: ${id} is in BOTH REGISTERED_WARNING_IDS and DECLARED_LEG_WARNING_IDS — it would be registered on a leg with no block`);
+      // a declared-leg id that the SHARED role names would reach every leg of every protocol through the role text
+      for (const id of declaredOnly) ok(!roleIds.includes(id), `${p}: ${id} is a declared-leg id but the shared change_reviewer role names it`);
     }
     const seed = fs.readFileSync(path.join(__dirname, 'seed-protocol-prompts.ts'), 'utf8');
-    const registered = new Set(Object.values(REGISTERED_WARNING_IDS).flat());
+    const registered = new Set([...Object.values(REGISTERED_WARNING_IDS).flat(), ...Object.values(DECLARED_LEG_WARNING_IDS).flat()]);
     for (const m of seed.matchAll(LABEL)) ok(registered.has(m[1]), `${m[1]} is named in the seed but registered nowhere`);
-    for (const k of Object.keys(REGISTERED_WARNING_IDS)) ok(LEG_SECTION_PROTOCOLS.has(k), `${k} is not a leg-section protocol`);
+    for (const k of [...Object.keys(REGISTERED_WARNING_IDS), ...Object.keys(DECLARED_LEG_WARNING_IDS)]) ok(LEG_SECTION_PROTOCOLS.has(k), `${k} is not a leg-section protocol`);
   });
 
   await t('N11 terraform leg: a restated-conclusion line is registered, counted once, rendered without the label prefix', async () => {

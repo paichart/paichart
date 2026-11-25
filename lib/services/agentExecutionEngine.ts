@@ -17,6 +17,7 @@ import { writeReapedTaskStatuses } from './reaped-task-persist';
 // This adapter keeps prep + the failure catch (persistTerminalFailure + F-1 rethrow).
 import { runExecutionCore } from './execution-core';
 import { deriveMcpToolNames, buildHubToolGuidance } from './execution-hub-guidance';
+import { resolveConfigSourcesReadRule, briefTaskFor } from '@/lib/agents/harness/config-sources-read-rule';
 import { persistTerminalFailure, buildErrorJson, resolveAgentRole, writeTerminatedExecutionTaskStatus, readPostCompletionRescue } from './execution-terminal-persist';
 import { applySystemPromptInjectionsWithFact, type ProtocolInjectionFact } from './execution-system-prompt';
 import { resolveTaskProtocol } from '../agents/harness/program-protocol';
@@ -665,8 +666,16 @@ export class AgentExecutionEngine extends EventEmitter {
         hasTemplate: !!resolvedTemplate
       });
 
+      // Config sources read rule (2026-11-25): the ONE gate (config-sources-read-rule.ts) — a declared observability Harvester
+      // only; never throws; reads nothing for a PIPELINE task or a non-harvest role. ON ⇒ the rule is inserted beside the brief's
+      // `## Config sources` block in a COPY of the task that BOTH builders render (user §3 and the system HEAD's "Your Context");
+      // the stored row is untouched. The role is the SAME canonical chain as `agentRole` below.
+      const readRule = await resolveConfigSourcesReadRule(prisma as never, { id: task.id, type: task.type, title: task.title, metadata: task.metadata },
+        resolveAgentRole(config.agentRole, resolvedTemplate?.defaultRole, task.agentRole));
+      const promptTask = briefTaskFor(task, readRule);
+
       // Build the prompt using enhanced config
-      const prompt = this.buildAgentPrompt(task, enhancedConfig, enhancedContext);
+      const prompt = this.buildAgentPrompt(promptTask, enhancedConfig, enhancedContext);
       await this.streamExecutionProgress(execution.id, 'prompt_generated', 50, { 
         promptLength: prompt.length,
         preview: prompt.substring(0, 100) + '...'
@@ -761,7 +770,7 @@ export class AgentExecutionEngine extends EventEmitter {
       // that resurrects a dead branch and changes engine output; an engine stored-prompt read is
       // a flagged 5b+ decision. Same dead-by-data-shape class as the removed Priority-3.
       // Pinned by test:system-prompt-injections (E-guard).
-      const { prompt: systemPrompt, protocolInjection } = await this.buildSystemPrompt(agentRole, task, resolvedTemplate, task.modelParameters?.systemPrompt, enhancedConfig.mcpTools, harnessContext, execution.id);
+      const { prompt: systemPrompt, protocolInjection } = await this.buildSystemPrompt(agentRole, promptTask, resolvedTemplate, task.modelParameters?.systemPrompt, enhancedConfig.mcpTools, harnessContext, execution.id, readRule.on);
       await this.streamExecutionProgress(execution.id, 'system_prompt_built', 70, {
         systemPromptLength: systemPrompt.length,
         source: resolvedTemplate?.promptTemplate ? 'template' : 'default'
@@ -1026,6 +1035,8 @@ export class AgentExecutionEngine extends EventEmitter {
     mcpTools?: string[],
     harnessContext?: ResolvedHarnessContext | null,
     executionId?: string,
+    /** Config sources read rule: the caller inserted it into `task.description` (stamps the fact only). */
+    configSourcesReadRule: boolean = false,
   ): Promise<{ prompt: string; protocolInjection: ProtocolInjectionFact }> {
 
     let prompt: string;
@@ -1080,6 +1091,7 @@ export class AgentExecutionEngine extends EventEmitter {
       templateMetadata,
       constraints: agentTemplate?.constraints ?? null,
       taskProtocol,
+      configSourcesReadRule: configSourcesReadRule === true,
     }, prisma, injectionLogger);
   }
 

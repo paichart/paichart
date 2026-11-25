@@ -249,6 +249,21 @@ export function buildReplayPrisma(snap: Snapshot, subs: ReplaySubstitution[] = [
       const strings = isSql ? (stringsIn as any).strings as readonly string[] : (stringsIn as TemplateStringsArray);
       const values = isSql ? [...(stringsIn as any).values] as unknown[] : valuesIn;
       const sql = Array.from(strings ?? []).join('$?').replace(/\s+/g, ' ').trim();
+      // STEP 3 slice L (found on the first observability 1.12.0 render): the shipping read of a leg's OWN row for its Config-sources
+      // declaration (config-sources-read.ts `readLegConfigSources`). A net ctx the lab does not prime — the CONTROL pass of a stored
+      // package, which carries no version injection — resolves the owning leg lazily, and once the leg's protocol has joined the
+      // Config lane the shipping code reads this row. Unserved, the read threw twice (two WARN lines per net) and the declaration read
+      // `could-not-check`. Served from the snapshot's leg row, it reads what production's reader reads: description, contract,
+      // snapshot, and whether `metadata.protocol` is a string. Always on (not behind `legReads`): it is a read of the row the
+      // snapshot already holds, and every arm that reads Config sources is primed and never reaches it.
+      if (/^SELECT description, \("inputContext" -> 'interfaceContract'\) AS contract, \(metadata -> 'configSourcesSnapshot'\) AS snapshot, \(jsonb_typeof\(metadata -> 'protocol'\) = 'string'\) AS "protocolStamped" FROM tasks WHERE id = \$\?$/.test(sql)) {
+        if (values.length !== 1) throw new ReplayStubUnsupported(`$queryRaw leg-config-declaration with ${values.length} values`);
+        queries.push(`$queryRaw leg-config-declaration ${String(values[0])}`);
+        const row = tasks.find((t) => t.id === values[0]);
+        if (!row) return [];
+        const meta = (row.metadata && typeof row.metadata === 'object' ? row.metadata : {}) as Record<string, unknown>;
+        return [{ description: row.description ?? null, contract: (row.inputContext as any)?.interfaceContract ?? null, snapshot: meta.configSourcesSnapshot ?? null, protocolStamped: typeof meta.protocol === 'string' }];
+      }
       if (opts.legReads) {
         const shape = LEG_READ_SHAPES.find((x) => x.re.test(sql));
         if (shape) {
@@ -265,6 +280,18 @@ export function buildReplayPrisma(snap: Snapshot, subs: ReplaySubstitution[] = [
           if (shape.name === 'leg-contract') return [{ contract }];
           return [{ description: row.description ?? null, contract, snapshot: (row.metadata as any)?.deviceSourcesSnapshot ?? null }];
         }
+      }
+      // STEP 3 slice L: the Author's ONE paired read of its Harvester's `gitLiveDrift` AND `fileSourceCompare` (authoritative-result-read.ts
+      // `gitLiveDriftAndCompare`; a protocol the platform compares — observability). `jsonb_build_object(...)::text`: either key may be
+      // JSON null (`->` gives SQL NULL for an absent key), and the text is jsonb's own (keys by length, then bytes — `jsonbText`).
+      if (/^SELECT jsonb_build_object\('gitLiveDrift', \(content::jsonb\)->'gitLiveDrift', 'fileSourceCompare', \(content::jsonb\)->'fileSourceCompare'\)::text AS v FROM agent_artifacts WHERE name = 'result\.json' AND content LIKE '\{%' AND "executionId" = \$\? ORDER BY "createdAt" DESC LIMIT 1$/.test(sql)) {
+        if (values.length !== 1) throw new ReplayStubUnsupported(`$queryRaw gitLiveDriftAndCompare with ${values.length} values`);
+        queries.push(`$queryRaw gitLiveDriftAndCompare executionId=${String(values[0])}`);
+        const art = order(artifacts.filter((a) => a.name === 'result.json' && a.executionId === values[0] && String(a.content).startsWith('{')), { createdAt: 'desc' })[0];
+        if (!art) return [];
+        let parsed: any;
+        try { parsed = JSON.parse(art.content); } catch { throw new ReplayStubUnsupported('result.json that JSON.parse rejects (Postgres would cast or error differently)'); }
+        return [{ v: jsonbText({ gitLiveDrift: parsed.gitLiveDrift ?? null, fileSourceCompare: parsed.fileSourceCompare ?? null }) }];
       }
       const m = sql.match(/^SELECT \(content::jsonb\)->>'(finalResponse|rollbackContainment|derivationContainment|reviewerVerdict|toolCalls|editApplication|reviewedEditDiff|gitDeviceComparison|liveEvidence|gitLiveDrift)' AS v FROM agent_artifacts WHERE name = 'result\.json' AND content LIKE '\{%' AND "executionId" = \$\? ORDER BY "createdAt" DESC LIMIT 1$/);
       if (!m || values.length !== 1) throw new ReplayStubUnsupported(`$queryRaw ${sql.slice(0, 120)}`);

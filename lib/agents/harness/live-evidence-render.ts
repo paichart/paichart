@@ -76,7 +76,15 @@ function renderConfigLiveEvidence(fact: Obj): string[] {
 export const FILES_LIVE_EVIDENCE_SCOPE_CLAUSE = '(of the declared configuration files; a file the declaration does not name is not counted)';
 /** Review AR C-1: what `all-git-only` is a statement ABOUT. The fact is execution-facts'; these WORDS are prompt-construction's to
  *  change with the protocol text, and are pinned (LE-F5). */
-export const ALL_GIT_ONLY_FILES_NOTE = '`all-git-only` is a statement about the configuration FILES: no served copy of any declared file was read. It says nothing about the live service\'s targets and rules: this fact does not cover them.';
+export const ALL_GIT_ONLY_FILES_NOTE = '`all-git-only` is a statement about the configuration FILES: no served copy of any declared file was kept or compared. It says nothing about the live service\'s targets and rules: this fact does not cover them.';
+/** The 1.12.0 join (2026-11-23; register CONFIG-SOURCES-OBS-JOIN-PRECONDITIONS item 31, coordinator ruling): the heading over the
+ *  declared files the platform took NO file for from the line's declared service, and the same words in the head line. "Not returned
+ *  by the declared service" was false for two of the states listed under it — `file-from-other-service` and
+ *  `registered-under-other-name` (a file DID come back; the platform could not tie it to the declared service) — and for a file the
+ *  platform refused. These words are true of every state: no file was TAKEN. Changed before the first render (the arm is reached
+ *  only by a declared observability leg at 1.12.0); the protocol text does not quote either string (test:domain-carry-pins OBS-CS #5). */
+export const FILES_NOT_TAKEN_HEADING = 'declared, no file taken from the declared service:';
+export const FILES_NOT_TAKEN_COUNT_WORDS = 'declared file(s) with no file taken from the declared service.';
 const LABEL_SHOWN_RE = SOURCE_LABEL_RE;
 const label = (v: unknown): string => (typeof v === 'string' && LABEL_SHOWN_RE.test(v) ? `\`${v}\`` : '(one file)');
 
@@ -91,21 +99,22 @@ function renderFilesLiveEvidence(fact: Obj): string[] {
     return [`${head} not checked — ${q(fact.reason ?? 'no reason recorded')} (${why}).`];
   }
   const out = [
-    `${head} \`${q(fact.summary)}\` ${FILES_LIVE_EVIDENCE_SCOPE_CLAUSE} — ${q(fact.items)} configuration file(s) declared: ${q(fact.gitFileLines)} kept from Git, ${q(fact.serviceHeld)} kept from the read-only service (${q(fact.serviceHeldRead)} returned); ${q(fact.liveDeclared)} of the Git files also declare a live read of the served copy: ${q(fact.liveRead)} returned, ${listTotal(fact, 'liveNotRead')} declared file(s) not returned.`,
+    `${head} \`${q(fact.summary)}\` ${FILES_LIVE_EVIDENCE_SCOPE_CLAUSE} — ${q(fact.items)} configuration file(s) declared: ${q(fact.gitFileLines)} kept from Git, ${q(fact.serviceHeld)} kept from the read-only service (${q(fact.serviceHeldRead)} returned); ${q(fact.liveDeclared)} of the Git files also declare a live read of the served copy: ${q(fact.liveRead)} returned, ${listTotal(fact, 'liveNotRead')} ${FILES_NOT_TAKEN_COUNT_WORDS}`,
   ];
   if (fact.summary === 'all-git-only') out.push(`  - ${ALL_GIT_ONLY_FILES_NOTE}`);
   if (Array.isArray(fact.gitOnlyFiles) && fact.gitOnlyFiles.length) {
     out.push(`  - kept from Git, no live read of the served copy declared: ${(fact.gitOnlyFiles as unknown[]).map(label).join(', ')}${more(fact, 'gitOnlyFiles', fact.gitOnlyFiles)}`);
   }
   if (Array.isArray(fact.liveNotRead) && fact.liveNotRead.length) {
-    out.push(`  - declared, not returned by the declared service: ${names(fact.liveNotRead, (x) => {
+    out.push(`  - ${FILES_NOT_TAKEN_HEADING} ${names(fact.liveNotRead, (x) => {
       const keys = Array.isArray(x.returnedKeys) ? (x.returnedKeys as unknown[]).filter((k) => typeof k === 'string' && RETURNED_KEY_RE.test(k)).slice(0, 20) : null;
       return `${label(x.label)} (${q(x.kind)}: ${q(x.state)}${keys ? `; the service returned: ${keys.length ? keys.map((k) => `\`${k}\``).join(', ') : 'no file'}` : ''})`;
     })}${more(fact, 'liveNotRead', fact.liveNotRead)}`);
   }
   const gs = fact.gitOnlyStatement && typeof fact.gitOnlyStatement === 'object' ? (fact.gitOnlyStatement as Obj) : null;
-  // No sentence registered for the composed version (the table is EMPTY until the 1.12.0 text ships) ⇒ NOTHING is rendered: the
-  // stamp keeps the named state for the operator, and an agent is told nothing about a check the platform cannot make yet.
+  // No sentence registered for the composed version (the table has a row per text version: observability-config 1.12.0 today, and
+  // a later bump with no row of its own lands here) ⇒ NOTHING is rendered: the stamp keeps the named state for the operator, and
+  // an agent is told nothing about a check the platform cannot make for that version.
   if (gs && !(gs.checked !== true && gs.reason === 'no-sentence-for-version')) {
     if (gs.checked !== true) out.push(`  - the package's Git-only statement: not checked (${q(gs.reason ?? 'no reason recorded')}).`);
     else out.push(`  - the package's Git-only statement: stated for ${q(gs.stated)} of ${q(gs.listed)} listed file(s)${Array.isArray(gs.missing) && gs.missing.length ? `; not stated for: ${(gs.missing as unknown[]).map(label).join(', ')}` : ''}.`);

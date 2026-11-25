@@ -39,7 +39,7 @@ import { CONFIG_SOURCE_LANES, CONFIG_SOURCE_PROTOCOLS } from '../lib/agents/harn
 const { leanFactsLine } = require('../lib/mcp/server/tools/advanced/lean-card-facts');
 import { pickResultJsonSummary } from '../lib/services/execution-artifacts';
 import * as fs from 'fs';
-import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, driftCallsOf, canonJson, archDescriptorsRespected, tfLegFacts, archFetchRoute, type Carrier } from './canary-req-sources';
+import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, driftCallsOf, canonJson, archDescriptorsRespected, tfLegFacts, archFetchRoute, obsNoPlaceholderKey, obsUndeclaredLeg, obsDeclaredFacts, type Carrier, type ObsFactsLeg } from './canary-req-sources';
 
 type Tx = Prisma.TransactionClient;
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -88,6 +88,13 @@ const gitFileOnlyWarnings = (rv: unknown): string[] => (isObj(rv) && Array.isArr
   ? (rv.warnings as unknown[]).filter((w) => isObj(w) && w.id === 'git-file-only').map((w) => String((w as Record<string, unknown>).text ?? '')) : []);
 const devNames = (v: unknown): string[] => (Array.isArray(v) ? v.map((x) => String(isObj(x) ? x.device : x)) : []);
 type ControlResult = { verdict: 'PASS' | 'PASS-DECLINED' | 'UNEXERCISED' | 'FINDING'; lines: string[] };
+const obsLegs = (legs: TaskRow[]) => legs.filter((l) => meta(l).protocol === 'observability-config-protocol');
+const obsFactsLegs = (legs: TaskRow[], legKids: TaskRow[], execs: ExecRow[]): ObsFactsLeg[] => obsLegs(legs).map((l) => {
+  const harvester = kidsOf(l, legKids).find((k) => k.agentRole === 'infra_state_harvester');
+  const qg = isObj(meta(l).qualityGate) ? (meta(l).qualityGate as Record<string, unknown>) : {};
+  return { id: l.id, description: l.description ?? null, contract: l.contract, snapshot: isObj(meta(l)[CONFIG_SOURCES_SNAPSHOT_KEY]), heldEdit: qg.heldEdit ?? null,
+    harvester: harvester ? latestResult(execs, harvester.id) : null };
+});
 const CONTROLS: Record<string, { what: string; run: (c: Ctx) => ControlResult }> = {
   // Wave 3 D2 (pov-program 2.2.1, 2026-10-31): PLAN-SPAWN Step 4 now states the create-absent heal truthfully.
   'd2-contract-omission': {
@@ -554,6 +561,21 @@ const CONTROLS: Record<string, { what: string; run: (c: Ctx) => ControlResult }>
       const j = latestResult(execs, arch.id);
       return archFetchRoute(Array.isArray(j?.toolCalls) ? (j!.toolCalls as unknown[]) : []);
     },
+  },
+  // ── observability-config 1.12.0, THE JOIN (pre-registered 2026-11-23, BEFORE the deploy; logic in canary-req-sources.ts, cases
+  // CSO1-CSO14 of test:canary-req-sources). `cso-obs-no-placeholder-key` is the watch the owner asked for on the recorded exception
+  // (a placeholder under the observability key stops a leg that declares nothing).
+  'cso-obs-no-placeholder-key': {
+    what: 'observability-config 1.12.0 — on every observability leg the plan\'s contract carries `configSources` as an object or not at all, and under "observability-config" nothing or lines that parse (a placeholder there stops even a leg that declares nothing). UNEXERCISED only when the program has no observability leg',
+    run: ({ legs }) => obsNoPlaceholderKey(obsLegs(legs).map((l) => ({ id: l.id, description: l.description ?? null, contract: l.contract }))),
+  },
+  'cso-obs-undeclared-leg': {
+    what: 'observability-config 1.12.0 — an observability leg that declares nothing runs as before: no Config-sources snapshot, no Config-lane reason on its quality gate, and its Harvester carries configSourceReads.undeclared and no comparison record',
+    run: ({ legs, legKids, execs }) => obsUndeclaredLeg(obsFactsLegs(legs, legKids, execs)),
+  },
+  'cso-obs-declared-facts': {
+    what: 'observability-config 1.12.0 — a DECLARED observability leg carries its snapshot; its Harvester carries fileSourceCompare, configSourceReads, liveEvidence and gitLiveDrift; every declared service line was tied to a registration (the Harvester registered with the descriptor URL alone)',
+    run: ({ legs, legKids, execs }) => obsDeclaredFacts(obsFactsLegs(legs, legKids, execs)),
   },
 };
 const carriersOf = (legs: TaskRow[], nodeC: TaskRow[]): Carrier[] => [

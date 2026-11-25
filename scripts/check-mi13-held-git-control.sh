@@ -18,7 +18,12 @@ SQLALL=$(awk '/^SQL=\$\(cat <<'"'"'SQL'"'"'/{f=1;next} f&&/^SQL$/{exit} f' "$INV
 SECTION=$(awk '/^\\echo ============ HELD LEGS/{exit} /^\\echo ============ HELD BYTES/{f=1} f{print}' <<<"$SQLALL")
 [ -n "$SECTION" ] || { echo "could not extract the HELD BYTES section"; exit 2; }
 
-OUT=$(psql "$URL" -X -q -v ON_ERROR_STOP=1 <<SQL
+# The 1.12.0 join (2026-11-23): the planted world is run TWICE — against the section as it is (observability's `_gitsrcleg` row
+# present: its text is live) and against the same section with that ONE row removed (the text reverted). `run_control` reads $SECTION.
+# QUOTED heredocs (sec-ops, join review): the SQL below is passed to psql byte for byte — the shell expands nothing in it. It was one
+# UNQUOTED heredoc, so a backtick in an SQL comment was executed as a command ("command not found" on stderr at best). The section
+# under test is the one thing that varies; it is printed between the two literal parts.
+run_control() { { cat <<'SQL_SETUP'
 SET client_min_messages = warning;
 CREATE TEMP TABLE tasks (id text, title text, type text, metadata jsonb, stage_id text, "agentRole" text, created_at timestamptz DEFAULT now());
 CREATE TEMP TABLE stages (id text, metadata jsonb);
@@ -66,7 +71,7 @@ INSERT INTO agent_executions VALUES ('x1','H1','SUCCESS',NULL), ('x2','H2','SUCC
 -- key, (b) a Harvester `gitLiveDrift` reading `no-compare-record`, (c) a `fileSourceCompare` record carrying an `evidence` key.
 -- x5 is a leaf of L3 (observability), so the "not an observability leaf" line reads 0 for it; r1 (the Kubernetes leaf x1's
 -- result.json, below) carries a bare `fileSourceCompare` key for that line.
-INSERT INTO agent_artifacts VALUES ('r5','result.json','x5', now() - interval '1 hour', '{"toolCalls":[],"platformDriftCalls":{"calls":[]},"configSourceReads":{"version":1,"checked":true,"reason":"config-sources-absent","undeclared":{"heldFrom":"service","files":2,"refusals":0}},"gitLiveDrift":{"version":1,"method":"file-ordered-lines/1","point":"harvester","checked":false,"reason":"no-compare-record"},"fileSourceCompare":{"version":1,"method":"file-ordered-lines/1","files":[{"label":"obs-otelcol","state":"differs"},{"label":"obs-ingress.a","state":"not-checked","reason":"compare-error"}],"evidence":"planted"}}');
+INSERT INTO agent_artifacts VALUES ('r5','result.json','x5', now() - interval '1 hour', '{"toolCalls":[],"platformDriftCalls":{"calls":[]},"configSourceReads":{"version":1,"checked":true,"reason":"config-sources-absent","undeclared":{"heldFrom":"service","files":2,"refusals":0}},"gitLiveDrift":{"version":1,"method":"file-ordered-lines/1","point":"harvester","checked":false,"reason":"no-compare-record"},"fileSourceCompare":{"version":1,"method":"file-ordered-lines/1","files":[{"label":"obs-otelcol","state":"differs"},{"label":"obs-ingress.a","state":"not-checked","reason":"compare-error"}],"capture":[{"label":"obs-otelcol","kind":"git-file","outcome":"held"},{"label":"obs-otelcol","kind":"live-read","outcome":"file-from-other-service"},{"label":"obs-ingress.a","kind":"service-held","outcome":"registered-under-other-name"}],"unresolvedServices":["https://example.invalid/descriptor.json"],"evidence":"planted"}}');
 
 INSERT INTO agent_artifacts VALUES ('pi2','pipeline-index.json','xl2', now() - interval '3 hours',
   '{"protocolInjection":{"delta":{"name":"observability-config-protocol","version":"1.10.0"}}}');
@@ -77,7 +82,7 @@ INSERT INTO agent_artifacts VALUES ('pi2','pipeline-index.json','xl2', now() - i
 -- message in result.content (read off live leg T-W2) — and [4] the lab fixture tier — success:false, result:null, the message under the
 -- error key, in the pre-F-T1 escaped wording (L-T1 H-T-OFFREF sample-02). The earlier plant's text ("PINNED_ARGUMENT: refused") is a
 -- message no call ever carries, so the control passed while the real column read 0.
-INSERT INTO agent_artifacts VALUES ('r1','result.json','x1', now() - interval '2 hours', \$J\${"fileSourceCompare":{"version":1},"toolCalls":[
+INSERT INTO agent_artifacts VALUES ('r1','result.json','x1', now() - interval '2 hours', $J${"fileSourceCompare":{"version":1},"toolCalls":[
  {"tool":"services","success":true,"arguments":{"action":"call","targetService":"github-service","tool":"get_file_contents","arguments":{"owner":"paichart","repo":"paichart-lab-configs","path":"k8s/a.yaml"}},
   "result":{"content":[{"type":"data","data":{"targetService":"github-service","tool":"get_file_contents","arguments":{"owner":"paichart","repo":"paichart-lab-configs","path":"k8s/a.yaml"},
    "result":{"content":[{"type":"text","text":"[platform: the file source status line was elided at persist (it carries a blob id)]"},{"type":"resource","resource":{"uri":"repo://paichart/paichart-lab-configs/sha/0ea432e751cc622ffab91d7a90386c66cadf8733/contents/k8s/a.yaml","text":"kind: Namespace\n"}}]}}}]}},
@@ -92,21 +97,21 @@ INSERT INTO agent_artifacts VALUES ('r1','result.json','x1', now() - interval '2
  {"tool":"services","success":false,"arguments":{"action":"call","targetService":"github-service","tool":"get_file_contents","arguments":{"owner":"paichart","repo":"paichart-lab-configs","path":"k8s/a.yaml","ref":"v1"}},
   "error":"Service call blocked by compliance policy: Blocked: &#039;ref&#039; is outside the file source&#039;s pin (read-only Git file source: the pinned repository, default branch, a relative path, no sha)","result":null}
 ]}
-\$J\$);
+$J$);
 -- x2 (obs leaf): [0] a github file read ⇒ OUT OF SCOPE (no row by design) — plus a PLANTED github CAPTURE row (🔴 non-k8s leg)
-INSERT INTO agent_artifacts VALUES ('r2','result.json','x2', now() - interval '90 minutes', \$J\${"toolCalls":[
+INSERT INTO agent_artifacts VALUES ('r2','result.json','x2', now() - interval '90 minutes', $J${"toolCalls":[
  {"tool":"services","success":true,"arguments":{"action":"call","targetService":"github-service","tool":"get_file_contents","arguments":{"owner":"paichart","repo":"paichart-lab-configs","path":"k8s/a.yaml"}},
   "result":{"content":[{"type":"data","data":{"targetService":"github-service","tool":"get_file_contents","arguments":{"owner":"paichart","repo":"paichart-lab-configs","path":"k8s/a.yaml"},
    "result":{"content":[{"type":"text","text":"s"},{"type":"resource","resource":{"uri":"repo://paichart/paichart-lab-configs/sha/0ea432e751cc622ffab91d7a90386c66cadf8733/contents/k8s/a.yaml","text":"kind: Namespace\n"}}]}}}]}}
 ]}
-\$J\$);
+$J$);
 -- x3 (k8s leaf): [0] an in-scope github file read with NO held row ⇒ 🔴 9 and 🔴 10 (a capture miss)
-INSERT INTO agent_artifacts VALUES ('r3','result.json','x3', now() - interval '100 minutes', \$J\${"toolCalls":[
+INSERT INTO agent_artifacts VALUES ('r3','result.json','x3', now() - interval '100 minutes', $J${"toolCalls":[
  {"tool":"services","success":true,"arguments":{"action":"call","targetService":"github-service","tool":"get_file_contents","arguments":{"owner":"paichart","repo":"paichart-lab-configs","path":"k8s/b.yaml"}},
   "result":{"content":[{"type":"data","data":{"targetService":"github-service","tool":"get_file_contents","arguments":{"owner":"paichart","repo":"paichart-lab-configs","path":"k8s/b.yaml"},
    "result":{"content":[{"type":"text","text":"s"},{"type":"resource","resource":{"uri":"repo://paichart/paichart-lab-configs/sha/0ea432e751cc622ffab91d7a90386c66cadf8733/contents/k8s/b.yaml","text":"kind: Service\n"}}]}}}]}}
 ]}
-\$J\$);
+$J$);
 
 INSERT INTO held_file_refs (id, kind, "executionId", "toolCallIndex", selector, "sourceTool", "declaredBy", "serviceId", "serviceName", "blobSha256", scope, "fromRefId", "sourceRevision") VALUES
  ('ok1','CAPTURE','x1',0,'/content/1/resource/text','get_file_contents','platform-default','gh','github-service', encode(sha256(convert_to(E'kind: Namespace\n','UTF8')),'hex'),'s', NULL,'0ea432e751cc622ffab91d7a90386c66cadf8733'),
@@ -137,12 +142,9 @@ UPDATE held_file_refs SET path = '/x/.terraform.d/credentials.tfrc.json' WHERE i
 INSERT INTO held_blobs (sha256, scope, content, "storedByteLength") VALUES
  ('tfstateblob', 's', convert_to('{"version": 4, "terraform_version": "1.9.0", "lineage": "00000000-0000-0000-0000-000000000000", "resources": []}', 'UTF8'), 101);
 
-$( cat <<'PRE'
 CREATE TEMP VIEW _raw AS SELECT id, name, "executionId", "createdAt", content FROM agent_artifacts
   WHERE name IN ('result.json','pipeline-index.json') AND content LIKE '{%';
 CREATE TEMP TABLE _a AS SELECT id, name, "executionId" eid, "createdAt" t, content::jsonb j FROM _raw;
-PRE
-)
 -- STEP 3 P2 plants (after the older plants, so their ids never collide):
 --   x4 (leaf of L3, snapshot NOT parsed, text not live): a github-service CAPTURE ⇒ 🔴 "not parsed", 🔴 A7, and the 1b-scope 🔴
 --       (an observability leg is not a Git file source in this inventory) — which therefore reads 2 with the older x2 plant;
@@ -157,11 +159,14 @@ INSERT INTO held_file_refs (id, kind, "executionId", "toolCallIndex", selector, 
          ('p2bad','CAPTURE','x6',94,'/structuredContent/yaml','get_otel_config','platform-default','obs','observability-readonly',repeat('e',64),'p','/etc/otelcol/config.yaml','obs-otelcol');
 INSERT INTO held_capture_refusals (id, "executionId", "toolCallIndex", refusal, "identitySource") VALUES
   ('p2ev','x4',91,'served-file-evidence-only','envelope'), ('p2nd','x2',92,'service-file-not-declared','envelope');
-$SECTION
+SQL_SETUP
+printf '%s\n' "$SECTION"
+cat <<'SQL_TAIL'
 SELECT 'HELDLEG ' || coalesce(string_agg(id, ',' ORDER BY id), '') FROM _heldleg;
 SELECT 'EXECLEG ' || string_agg(eid || '=' || coalesce(legproto, '-'), ',' ORDER BY eid) FROM _execleg;
-SQL
-)
+SQL_TAIL
+} | psql "$URL" -X -q -v ON_ERROR_STOP=1; }
+OUT=$(run_control)
 
 fail=0
 expect() { # $1 = line prefix (fixed string), $2 = expected value
@@ -182,7 +187,10 @@ expect '⚪ github-service calls whose stored arguments break the pin, any outco
 expect '🔴 a github-service CAPTURE ref with a NULL sourceRevision' 1
 expect '🔴 a ref whose sourceRevision is not 40 lowercase hex' 1
 expect '🔴 a BASE / CANDIDATE whose sourceRevision differs' 1
-expect '🔴 a github-service CAPTURE on an execution whose owning leg is not a Git file source' 2   # x2 (the older plant) + x4 (STEP 3 P2: an observability leg)
+# 1 since the 1.12.0 join: x2 (a leaf of L2 — an observability leg with NO snapshot is not a Git file source: a leg that declares
+# nothing reads no Git lane). x4 (a leaf of L3, which CARRIES a snapshot object) is a Git file source now that the text is live, and
+# is counted by the "snapshot state is not parsed" line below instead. The reverted view at the end of this file shows 2 again.
+expect '🔴 a github-service CAPTURE on an execution whose owning leg is not a Git file source' 1
 # Config sources STEP 3 P2 (plan W10 / §13 A7): each new 🔴 fires exactly once on its plant; the two ⚪ are their controls
 expect '⚪ Config-sources snapshots on legs, by protocol / state / grammar — observability-config-protocol / unparseable / 2' 1
 expect '⚪ Config-sources snapshots on legs, by protocol / state / grammar — terraform-iac-protocol / parsed / 2' 1
@@ -195,7 +203,9 @@ expect '⚪ declared-files scope refusals (a served file not held on a declared 
 # 2, and both are right: x4 (a snapshot whose state is `unparseable`) and the older x2 plant (an observability leg with NO snapshot —
 # no snapshot is not a parsed one; a Git capture there is the same defect seen from this line)
 expect '🔴 a github-service CAPTURE on an observability leg whose STORED Config-sources snapshot state is not parsed' 2
-expect '🔴 A7 a CAPTURE ref on an observability leg that carries a Config-sources snapshot while its protocol text is not live' 3   # x4 (a leaf's Git capture) + xl3 (the leg's OWN persist holding a served file — sec-ops F6) + x6 (a leg whose snapshot cannot be dated)
+# 0 since the 1.12.0 join, BY CONSTRUCTION: the line is keyed on observability having no `_gitsrcleg` row (its text not live). It
+# can fire only after a REVERT of the join — proven by the reverted view at the end of this file (3).
+expect '🔴 A7 a CAPTURE ref on an observability leg that carries a Config-sources snapshot while its protocol text is not live' 0
 expect '🔴 R3 a service-file-not-declared / served-file-evidence-only refusal' 1
 expect '🔴 R4 a Config-sources snapshot of grammar 2 on a leg that is not observability' 1
 expect '🔴 R5 a Config-sources snapshot whose protocol is not its leg' 2   # L4 + L6 (planted protocol text)
@@ -207,6 +217,12 @@ expect '⚪ configSourceReads stamps on legs that declare NOTHING and ran on the
 expect '🔴 a configSourceReads stamp carrying the `undeclared` key that is NOT `checked:false`' 1
 expect '⚪ fileSourceCompare records (observability Harvesters): files by state — differs' 1
 expect '⚪ fileSourceCompare records (observability Harvesters): files by state — not-checked / compare-error' 1
+# The 1.12.0 join (register item 28): the capture-outcome tally and its named zero — r5 plants three capture entries (one held, one
+# of each P5 word) and one unresolved service.
+expect '⚪ fileSourceCompare capture entries (what capture did with each declared line), by kind / outcome — live-read / file-from-other-service' 1
+expect '⚪ fileSourceCompare capture entries (what capture did with each declared line), by kind / outcome — service-held / registered-under-other-name' 1
+expect '⚪ fileSourceCompare capture entries (what capture did with each declared line), by kind / outcome — git-file / held' 1
+expect '⚪ fileSourceCompare capture entries in all / with outcome file-from-other-service or registered-under-other-name / records carrying unresolvedServices' '3 / 2 / 1'
 expect '🔴 a Harvester whose gitLiveDrift reads no-compare-record' 1
 expect '🔴 a fileSourceCompare record that carries a file text or an evidence key' 1
 expect '🔴 a fileSourceCompare stamp on a leaf that is not an observability leaf' 1
@@ -229,4 +245,15 @@ expect '🔴 a held blob whose text is terraform state or plan JSON' 1
 grep -q '^ *HELDLEG L2 *$' <<<"$OUT" && echo "  ✅ _heldleg = {L2} (the obs leg composed 1.10.0 first; the k8s leg is not held-capable)" || { echo "  ❌ _heldleg: $(grep HELDLEG <<<"$OUT")"; fail=1; }
 grep -q 'x1=kubernetes-gitops-protocol,x2=observability-config-protocol,x3=kubernetes-gitops-protocol,x4=observability-config-protocol,x5=observability-config-protocol,x6=observability-config-protocol,xl2=observability-config-protocol,xl3=observability-config-protocol,xl4=kubernetes-gitops-protocol' <<<"$OUT" \
   && echo "  ✅ _execleg resolves leaf → leg and a PIPELINE to itself" || { echo "  ❌ _execleg: $(grep EXECLEG <<<"$OUT")"; fail=1; }
+# ── THE REVERTED VIEW (the 1.12.0 join, 2026-11-23): the same planted world, the section with observability's `_gitsrcleg` row
+# removed — what an operator reads after the join is reverted. A7 must fire on its three plants and the 1b-scope line must count
+# the observability leg's Git capture again. Without this pass A7's positive control would have ended at the join.
+SECTION_JOINED=$SECTION
+SECTION=$(sed "s/, ('observability-config-protocol', 'snapshot-object')) v(name, rule);/) v(name, rule);/" <<<"$SECTION_JOINED")
+[ "$SECTION" != "$SECTION_JOINED" ] || { echo "could not remove observability's _gitsrcleg row for the reverted view"; exit 2; }
+OUT=$(run_control)
+echo "  — the reverted view (observability's _gitsrcleg row removed) —"
+expect '🔴 A7 a CAPTURE ref on an observability leg that carries a Config-sources snapshot while its protocol text is not live' 3   # x4 (a leaf's Git capture) + xl3 (the leg's OWN persist holding a served file — sec-ops F6) + x6 (a leg whose snapshot cannot be dated)
+expect '🔴 a github-service CAPTURE on an execution whose owning leg is not a Git file source' 2   # x2 (the older plant) + x4 (an observability leg, text not live)
+SECTION=$SECTION_JOINED
 [ "$fail" = 0 ] && echo "✅ MI-13 held git-file-source control: every planted hit fired" || { echo "❌ MI-13 held git-file-source control FAILED"; exit 1; }

@@ -70,6 +70,10 @@ something. It is not a broken install.
    person after reading usually found a difference between your Git file and the cluster in a field the change does not touch.
    Read the leg's drift fact; *not checked* always gives its reason ([KUBERNETES-SERVICE.md](KUBERNETES-SERVICE.md) § "The drift
    check"). Check the file yourself with `kubectl diff -f <file>`, fix the file or the cluster, and launch again.
+   **An observability leg** with a `## Config sources` block that ended `needs-revision` usually declared a file the platform
+   did not keep (`git-file-not-held`, `service-held-not-held`); its Harvester's `configSourceReads` says why per line, including
+   `file-from-other-service`, `registered-under-other-name` and `unresolvedServices` ([PIPELINES.md](PIPELINES.md),
+   "Observability: kept files from Git or from your service").
 4. If the spec was unclear or wrong, fix the spec ([WRITING-A-SPEC.md](WRITING-A-SPEC.md)) and launch a **new** run. A program
    that has had a leg refused cannot be turned releasable in place, by design: re-running one leg does not change the result.
 
@@ -87,6 +91,7 @@ perform(action: 'agent.results', parameters: { taskId: '<the failed task id>' })
 | `Agent template not found: "…"` | a template the run needs was never installed | in the pAIchart directory: `npm run db:seed` (it adds what is missing and changes nothing else), then launch a new run |
 | the harvest step could not read a file or a device | a service the run reads through is down or refusing | check the service: `curl -s localhost:3100/health` (browser service), `curl -s -o /dev/null -w '%{http_code}\n' localhost:3110/healthz` (Git file source: 503 means its token is missing or expired). Then run the task again. |
 | "repo is outside the file source pin" | the spec names a Git repository other than the one your install is pinned to | either change the spec's file lines to the pinned repository, or change `GIT_FILE_SOURCE_PIN` in `.env` and restart the hub |
+| "ref is outside the file source pin" on the program's first step (the planner reads nothing and stops) | the two spec URLs in the program task name a commit SHA; the Git file source serves the pinned repository's branch only | write the spec URLs with `main` (`https://raw.githubusercontent.com/<owner>/<repo>/main/…`), as the examples do, and launch a new run |
 | a provider error with no clear cause ("terminated", "overloaded", a timeout) | the model call failed on Anthropic's side | run the task again |
 
 **To run a failed task again:**
@@ -144,6 +149,9 @@ tell it the earlier run is known. Two ways:
   The list names, for **every** earlier run of this objective in the project, its `Program: …` stage and each of its legs'
   `Pipeline: …` stages (for a single pipeline: its `Pipeline: …` stage). `project(action: 'pov.details', povId: '<pov id>')`
   lists the stages. A list that leaves one out stops the new run again. The program passes the list on to its legs.
+
+If you deleted an earlier run's tasks, its `Program: …` stage is still there, empty, and still counts as an earlier run: delete
+that stage as well, or name it in the list.
 
 This is the one rule for running again; the other guides point here. **Keep a stopped run; do not delete it.** It is the record of what went wrong, and the place to look when you want to improve
 a spec. Mark it instead, so that neither you nor your AI client mistakes it for a run that still needs help. Ask your AI

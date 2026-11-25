@@ -687,7 +687,8 @@ test('CLAUSE-F DEMOTED #13: label carriers are exactly network + change_reviewer
   // VALUE-LEG-GIT (2026-11-06): + network-derivation, which carries ONLY `git-file-only` (pinned in LAYERING) — never restated-conclusion.
   // Config sources STEP 2 (kubernetes-gitops 1.19.0, K-R1): + kubernetes-gitops, which carries ONLY `git-file-only` too.
   // Config sources STEP 4 (terraform-iac 1.17.0, Ta): + terraform-iac, which carries ONLY `git-file-only` too (restated-conclusion stays off it).
-  const wantLabel = JSON.stringify(['protocols/kubernetes-gitops-protocol', 'protocols/network-derivation-protocol', 'protocols/network-provisioning-protocol', 'protocols/terraform-iac-protocol', 'roles/change_reviewer']);
+  // Config sources STEP 3 (observability-config 1.12.0 CANDIDATE): + observability-config, which carries ONLY `git-file-only` too, per FILE.
+  const wantLabel = JSON.stringify(['protocols/kubernetes-gitops-protocol', 'protocols/network-derivation-protocol', 'protocols/network-provisioning-protocol', 'protocols/observability-config-protocol', 'protocols/terraform-iac-protocol', 'roles/change_reviewer']);
   assert(JSON.stringify(carriers(/NON-BLOCKING WARNING \(/)) === wantLabel, `label carriers: ${carriers(/NON-BLOCKING WARNING \(/).join(', ')}`);
   assert(JSON.stringify(carriers(/restated-conclusion/)) === want, `restated-conclusion carriers: ${carriers(/restated-conclusion/).join(', ')}`);
   const reblock = (t: string) => /derivation restated|restated-conclusion|verification table/i.test(t) && /needs-revision/i.test(t);
@@ -922,6 +923,157 @@ test('DA-CHOOSE-ANCHOR / GIT-ONLY-COVERED (derivation_architect, blind re-read D
   // D3: the Git-only line has its place in the deliverable order, before the Derived Values block.
   const order = DA.indexOf('where any device was read from its Git file only, the one line saying the value rests on Git files only for those devices');
   assert(order > 0 && order < DA.indexOf('→ the `## Derived Values` block'), 'derivation_architect (D3): Git-only line missing from, or misplaced in, the deliverable order');
+});
+
+// ── OBSERVABILITY 1.12.0 CANDIDATE (Config sources STEP 3, S5; record cline_docs/reviews/config-sources-plans-2026-11-09/TEXT-CANDIDATE-1.12.0.md) ──
+// Every string a platform reader depends on is pinned against the code that reads it, not against a copy typed here.
+const OBS_CS = (() => { const i = OBS.indexOf('\n## Config sources'); const j = OBS.indexOf('\n## ', i + 5); return i < 0 ? '' : OBS.slice(i, j); })();
+const OBS_GIT_ONLY_SENTENCE_CANDIDATE = 'For the file {label} this package relies on the Git file only';
+test('OBS-CS #1 (1.12.0): one Config sources section, optional; the label is defined ONCE as a held FILE; three kinds and no `supplied`', () => {
+  assert(OBS.split('\n## Config sources').length === 2 && OBS_CS.startsWith('\n## Config sources — optional; declared, never inferred\n'), 'the section heading (test-config-sources MIX5 keys on `^## Config sources`)');
+  assert(OBS.split('**Every label names one held FILE — `<target>`, or `<target>.<key>` for one file of a target that serves several — on all three kinds, never a system.**').length === 2, 'the label definition must appear exactly once (panel L7-18)');
+  has(OBS_CS, ['A leg MAY declare where its config files come from', 'A leg with no block is complete as it is: the files the read-only service returns as deployed are its held files, as before.',
+    '`<file label>: git-file — service <registered name> ; <owner>/<repo>/<path> [@ <branch>]`', '`<file label>: service-held — service <name | descriptor URL>`', '`<file label>: live-read — service <name | descriptor URL>`',
+    'under `configSources["observability-config"]`', 'With a block, the platform holds ONLY the files its lines name.',
+    '**A Git-only file** has a `git-file` line and no `live-read` line of the same label; a `service-held` file is never one.'], 'observability Config sources');
+  // The grammar admits no `supplied` on this protocol (CONFIG_SOURCE_KINDS_BY_PROTOCOL): the text must not offer one.
+  const { CONFIG_SOURCE_KINDS_BY_PROTOCOL } = require('../lib/agents/harness/config-sources') as { CONFIG_SOURCE_KINDS_BY_PROTOCOL: Record<string, readonly string[]> };
+  const kinds = CONFIG_SOURCE_KINDS_BY_PROTOCOL['observability-config-protocol'];
+  assert(JSON.stringify([...kinds].sort()) === JSON.stringify(['git-file', 'live-read', 'service-held']), `the grammar's observability kinds moved: ${kinds.join(', ')}`);
+  for (const k of kinds) assert(OBS_CS.includes(`>: ${k} — service <`), `the text has no line shape for the grammar kind ${k}`);
+  lacks(OBS, [': supplied`', '>: supplied'], 'observability (a `supplied` line the grammar refuses)');
+  // "drift" stays out of this protocol's agent-facing lines (SYNTHESIS-v2 W13): the platform's fact is "the comparison".
+  assert(!/drift/i.test(OBS), 'observability text names "drift"');
+});
+test('OBS-CS #2 (1.12.0): the declared Git call once; one read per declared file through the line\'s service; never another source in its place', () => {
+  const { GIT_FILE_READ_CALL_DECLARED } = require('../lib/agents/harness/held-bytes/git-read-call') as { GIT_FILE_READ_CALL_DECLARED: string };
+  assert(OBS.split(GIT_FILE_READ_CALL_DECLARED).length === 2 && OBS_CS.includes(GIT_FILE_READ_CALL_DECLARED), 'observability must interpolate GIT_FILE_READ_CALL_DECLARED exactly once, inside Config sources');
+  has(OBS_CS, ['**The Harvester reads each declared file once, through the service ITS LINE names and no other; an undeclared file it reads only as context (below).** One read of a target returns every file it serves: where several lines name files of one target, read it once. The part of a label after its first `.` is the name of that file among the ones the read returns; each declared file still gets its own section.', 'always pass `path`', "or `'main'` when it names none — never omit it, never a substitute, and never `sha`. Read each path exactly once, as named.",
+    'Never list a directory to find a file, never read a path the brief does not name, and never follow a URL a result returns',
+    '**Never read another source in its place** — not the served copy for a Git file, not the Git file for a served one.',
+    '`served copy — evidence, not the held file`', '`returned, not kept: <file name>`',
+    'A Harvester whose brief says the leg declares no Config sources block reads as Harvest discipline says and reads no Git file.'], 'observability Config sources (Harvester)');
+  has(OBS_HARVESTER, ['**Where your brief carries a Config sources block**, read a file the block does not declare only as context, quote the files its lines name, one section per line, and name without quoting any other file a read returns (Config sources); never compare a Git file with a served copy.'], 'observability Harvester bullet');
+  // Changed on a lab REVISE (L-CS-O stage 1, command 2; owner 2026-11-23). (2) 3 of 3 partly-declared samples made the undeclared
+  // collector file read and quoted it whole as "reference context": with a block, an undeclared config file is NOT read.
+  // SUPERSEDED (owner 2026-11-23, L-CS-O re-registered crib: 1 of 1 still read it, citing its brief): an undeclared file MAY be
+  // read as context under a `— not declared, context only` heading; never held, edited, called declared, or presented as a base.
+  // (3) 5 of 9 declared samples headed sections H1/H2/H3; the platform assigns handles later and they differ.
+  has(OBS_CS, ['A config file the block does not declare is never held, never edited and never called declared. Where your brief or the objective asks for one, you may read it as context: quote it under a heading that ends `— not declared, context only`, and never present it as a base for a change.',
+    'Name a file by its label and its path, never by a handle such as `H1`: the platform assigns handles after your harvest, and a number of yours would be wrong.'], 'observability Config sources (lab REVISE: undeclared read; handles)');
+});
+test('OBS-CS #3 (1.12.0): the Phase 0 premise is per file (the old sentence is gone), and the brief-writing passage exists with its fixed no-block sentence', () => {
+  lacks(OBS, ['its running state is the only witnessed authority'], 'observability (the 1.11.0 premise, false for a file kept from Git)');
+  assert(OBS.split('A file that a Config sources line keeps from Git is witnessed as DECLARED, by its Git read (Config sources).').length === 2, 'the per-file premise sentence must appear exactly once');
+  has(OBS, ['**Phase 0 is UNCONDITIONAL.**', 'Always create Phase 0.', 'copy the whole block into the Phase 0 brief character for character',
+    'a leg with no block is complete as it is, and you never stop a leg for a missing block'], 'observability Decomposition');
+  assert(OBS.split('`This leg declares no Config sources block. Read no Git file.`').length === 2, 'the no-block brief sentence must appear exactly once, as a string to copy');
+  has(OBS, ['**A file that a Config sources line keeps from Git is witnessed as DECLARED:** for that file the Git file is the artifact the platform holds, the change edits and a rollback restores, and its deployed copy is evidence only (Config sources).',
+    "A refused read of a declared Git file is the platform's repository pin working: handle it as Config sources says.",
+    "A declared Git file's text is the declared state of that one file, never the current state of the stack."], 'observability (variant B passages, owner decision 2026-11-23)');
+  has(OBS_ARCHITECT, ["carry it into the design as Config sources says: quoted, with nothing added."], 'observability Architect bullet');
+  lacks(OBS, ['You (the harness) stop the leg when the task has no Config sources block'], 'observability (the Kubernetes / Terraform stop — a no-block observability leg RUNS)');
+});
+test('OBS-CS #4 (1.12.0, register item 14): the protocol registers with the descriptor URL alone and no longer names another route; a named service is never registered or deleted', () => {
+  has(OBS, ["register with that URL alone: `registry(action:'register', descriptorUrl:'<url>')`", 'Only for a descriptor carried inline, with no URL, register from its values',
+    'an observability service a line names by its registered NAME. Call it as it is — never register, update or delete it.',
+    'A program with two or more observability legs names a pre-registered service on its lines',
+    'this run registered nothing: step (1) is then the `**Teardown:**` line saying so, and no delete.'], 'observability lifecycle');
+  lacks(OBS, ["2. **Register** from the descriptor's values"], 'observability (1.11.0 step 2 named the by-values route, which overrode the shared role guidance)');
+  // Blind contradiction read 2026-11-23 (10 readers, both string-tested; owner "yes to both"): step 1 no longer orders a browser
+  // fetch of a descriptor URL — the platform fetches it at step 2 and its result returns the service name (service-registration-handler.js)
+  // — and the Harvester registers ONCE per URL (a second registration is ADOPTED, "do not tear it down").
+  has(OBS, ['A descriptor URL is never fetched by you: step 2 hands it to the platform. If the task body contains the descriptor JSON inline, use its values directly.',
+    "Register once for that URL, however many lines name it; the result gives the service's name, which is the `<descriptor.name>` of the steps below. The result names no tool: list them with `registry(action:'tools', service_name:'<that name>')` and call only the read-only tools it lists.",
+    'A line that gives a URL always means this registration: you are not asked to find out first whether a service of that name exists.',
+    "Where the registration is refused, report its named reason and stop that source — never register the descriptor's values by hand instead.",
+    '3. **Update** (only after a registration from inline values that did not attach the tools; a registration from a URL takes its tools from the descriptor and needs no update) —',
+    'tool:<a read-only tool of that service: from the listing of step 2 after a URL registration, from the descriptor when it was inline>',
+    '(an inline object is used directly; a URL goes to the platform at step 2). Never compose a descriptor or a URL yourself.'], 'observability lifecycle (no step-1 fetch; register once; the tool listing; both routes)');
+  // Second blind round (2026-11-23; owner "yes, approve the batch"). The listing call is written in the tool schema's OWN shape:
+  // `tools` is a registry action and the schema's example is `registry(action: 'tools', service_name: '…')`. No `adopted` sentence
+  // (it would promise a teardown behaviour the harness text does not have — register OBS-TEXT-BATCH-NEXT).
+  const schemas = readFileSync(join(__dirname, '..', 'lib', 'mcp', 'server', 'config', 'tool-schemas.js'), 'utf8');
+  assert(schemas.includes("z.enum(['register', 'list', 'update', 'delete', 'tools'])") && schemas.includes("registry(action: 'tools', service_name: '"), 'the registry tools action or its service_name parameter moved — re-read step 2');
+  assert(schemas.includes("data.action === 'tools' && !data.serviceId && !data.service_name"), 'the tools action no longer requires service_name or serviceId — re-read step 2');
+  lacks(OBS, ['a URL is fetched as below', '`adopted`', 'adopted: true', '<a read-only tool from the descriptor>', '(only if register did not attach the tools)'], 'observability lifecycle (pre-batch wording)');
+  // The shared helper's default is untouched: the other three lifecycles still carry the standing words (their goldens prove the bytes).
+  for (const other of [text('network-provisioning-protocol'), K8S, text('terraform-iac-protocol')]) assert(other.includes('(an inline object is used directly; a URL is fetched as below)'), 'a one-argument caller of descriptorFromContract lost the default clause');
+  lacks(OBS, ['fetch it first', "tool:'scrape_page'"], 'observability (the step-1 browser fetch of a descriptor URL)');
+  const handler = readFileSync(join(__dirname, '..', 'lib', 'mcp', 'server', 'tools', 'hub', 'service-registration-handler.js'), 'utf8');
+  assert(handler.includes('serviceName: validatedArgs.name') && handler.includes('adopted: true'), 'the register result no longer returns serviceName, or a repeat registration is no longer adopted — re-read step 2');
+  // Same read, finding 1: a declared file that returns nothing — the released Kubernetes / Terraform clauses, restored.
+  has(OBS_CS, ["An unread declared file is not a harvest failure — including when no declared file could be read: complete, and say so beside each line's heading. The leg then stops for a person, which is the intended result and not a failure of yours."], 'observability Config sources (nothing read)');
+  assert(ROLE_GUIDANCE_LIBRARY['infra_state_harvester'].includes('with `descriptorUrl` alone'), 'the shared Harvester role no longer names the descriptor-URL route the protocol repeats');
+});
+test('OBS-CS #5 (1.12.0): every platform line the text quotes is a line the shipping render prints', () => {
+  const le = readFileSync(join(__dirname, '..', 'lib', 'agents', 'harness', 'live-evidence-render.ts'), 'utf8');
+  const { FILE_COMPARE_RENDER_NAME, FILE_COMPARE_STATES } = require('../lib/agents/harness/git-live-drift') as { FILE_COMPARE_RENDER_NAME: string; FILE_COMPARE_STATES: readonly string[] };
+  const gl = readFileSync(join(__dirname, '..', 'lib', 'agents', 'harness', 'git-live-drift.ts'), 'utf8');
+  for (const [quoted, src, where] of [
+    ['kept from Git, no live read of the served copy declared:', le, 'Author (h)'],
+    ["the package's Git-only statement", le, 'Reviewer'], ['not stated for:', le, 'Reviewer'],
+    // The heading over the not-taken files is NOT quoted by the text: its wording is pending with execution-facts (register item 31).
+    ['of the declared configuration files', le, 'Reviewer (what marks the fact)'],
+    ["'git-file-not-held': 'the Git file is not held'", gl, 'Reviewer (the not-held reason words)'],
+  ] as Array<[string, string, string]>) assert(src.includes(quoted), `${where}: the render no longer prints "${quoted}"`);
+  has(OBS_AUTHOR, ['a line beginning `kept from Git, no live read of the served copy declared:`'], 'observability Author (h)');
+  lacks(OBS, ['not returned by the declared service', 'no file taken from the declared service'], 'observability (a render heading whose wording is pending)');
+  has(OBS_REVIEWER, ['A `service-held` file that fact lists with no file from its declared service', '`not-checked: the Git file is not held`', "`the package's Git-only statement`", '`not stated for:`',
+    "live-evidence fact for declared configuration files", FILE_COMPARE_RENDER_NAME], 'observability Reviewer');
+  assert(OBS_CS.includes(`in §6 as ${FILE_COMPARE_RENDER_NAME}`), 'Config sources names the comparison by another name than the render heading');
+  for (const st of ['differs', 'equal-except-redacted', 'same-lines-bytes-differ']) assert(FILE_COMPARE_STATES.includes(st) && OBS_REVIEWER.includes(`\`${st}\``), `outcome word ${st}: text and code disagree`);
+});
+test('OBS-CS #6 (1.12.0, owner decision 2a): the Author\'s Git-only sentence is the string the platform check matches — tolerant of emphasis and a full stop, exact on the label', () => {
+  const { computeGitOnlyStatement } = require('../lib/agents/harness/config-source-facts') as { computeGitOnlyStatement: (t: string, l: readonly string[], s: string | null) => { checked: boolean; stated?: number; missing?: string[] } };
+  const { gitOnlyStatementSentenceFor } = require('../lib/agents/harness/git-only-statement-sentence') as { gitOnlyStatementSentenceFor: (p: string, v: string) => string | null };
+  const shown = OBS_GIT_ONLY_SENTENCE_CANDIDATE.replace('{label}', '<label>');
+  assert(OBS_AUTHOR.includes(`exactly: \`${shown}.\``), 'the Author bullet no longer shows the sentence the candidate constant holds');
+  // The registered row (the join commit, 2026-11-23) IS this string — an EQUALITY since the join review (architectural): until then
+  // a null row was accepted ("empty until the join"), so a forgotten row passed here. Changed by execution-facts; the pin is
+  // prompt-construction's. The shipping check below runs on the REGISTERED string, not on the text's copy of it.
+  const row = gitOnlyStatementSentenceFor('observability-config-protocol', '1.12.0');
+  assert(row === OBS_GIT_ONLY_SENTENCE_CANDIDATE, `the registered sentence is not the text's: ${JSON.stringify(row)}`);
+  const S = row;
+  const stated = (pkg: string, labels: string[]) => computeGitOnlyStatement(pkg, labels, S);
+  for (const pkg of ['For the file obs-otelcol this package relies on the Git file only.', 'For the file `obs-otelcol` this package relies on the Git file only.',
+    '**For the file `obs-otelcol` this package relies on the Git file only.**', '- For the file obs-otelcol this package\n  relies on the Git file only']) {
+    assert(stated(pkg, ['obs-otelcol']).stated === 1, `a shape the text allows reads as not stated: ${pkg}`);
+  }
+  // A label that is the TAIL of the stated one must not read as stated (why the label sits between fixed words on both sides).
+  assert(JSON.stringify(stated('For the file obs-otelcol this package relies on the Git file only.', ['otelcol']).missing) === '["otelcol"]', 'a label that is the tail of another reads as stated');
+  assert(JSON.stringify(stated('For the file obs-ingress.a.conf.bak this package relies on the Git file only.', ['obs-ingress.a.conf']).missing) === '["obs-ingress.a.conf"]', 'a label that is the head of another reads as stated');
+  assert(stated('obs-otelcol was checked against the Git file only.', ['obs-otelcol']).stated === 0, 'another wording reads as stated');
+});
+test('OBS-CS #7 (1.12.0): the git-file-only warning is per FILE, keyed on the platform\'s own line, and written in a shape the parser transcribes', () => {
+  has(OBS_REVIEWER, ['A Git-only file is not a finding.', 'record one line beginning exactly `NON-BLOCKING WARNING (git-file-only):` that names them, above the `## VERDICT:` block, never inside it.',
+    'The label starts its own line, after at most one list marker such as `- `, never inside another bullet, a sentence, a table or a code block.',
+    'It never blocks; where no file is named there, write no such warning.'], 'observability Reviewer (warning)');
+  assert(OBS.split('NON-BLOCKING WARNING (').length === 2, 'observability names more than one warning label (no second id — panel L7 §9)');
+  const { computeReviewerWarnings } = require('../lib/agents/harness/reviewer-warnings') as { computeReviewerWarnings: (t: string) => { warnings: Array<{ id: string }> } };
+  const v = '\n## VERDICT: APPROVED\nBlocking issues: none\nConfidence: 90\n';
+  for (const okShape of ['NON-BLOCKING WARNING (git-file-only): obs-otelcol', '- NON-BLOCKING WARNING (git-file-only): obs-otelcol']) {
+    assert(computeReviewerWarnings(okShape + v).warnings.length === 1, `the parser rejects a shape the text asks for: ${okShape}`);
+  }
+  assert(computeReviewerWarnings('- Coverage is complete. NON-BLOCKING WARNING (git-file-only): obs-otelcol' + v).warnings.length === 0, 'the parser now accepts the mid-line shape the text forbids — re-read the text');
+});
+test('OBS-CS #8 (1.12.0): no specialist compares — a positive output shape per role, the Author told it receives no comparison, an absent comparison stated', () => {
+  has(OBS_CS, ['**The platform compares; no specialist does.**', // Changed on a lab REVISE (L-CS-O stage 1, command 2): 2 of 7 Harvesters that held a Git + served pair stated a match — in a
+    // findings table's SOURCE column ("H2 (git + live, identical)") and in a hand-off sentence ("each with a verified served copy").
+    // The rule moved to the output-shape paragraph and names the citing form: one section per finding, the Git file's where both hold it.
+    '**Cite one copy, never two.** Wherever you say where a finding or a value came from — a table\'s source column, a summary, a hand-off sentence, a confidence line — name ONE section, by its label and kind: the one you read it in. Where you read it in both the Git file and the served copy of one file, cite the Git file\'s section only.',
+    'Words that cover both copies ("git + live", "in both", "identical", "a verified served copy") state a match, and you made none: state no match and no difference between any two things you read, anywhere, whatever you call it. You may say, once, that the comparison is the platform\'s.',
+    '- **Harvester:** cite one copy, never two (above). Your summary names what you read, what you could not read and where each value came from.',
+    '- **Reviewer:** judge a package statement about a Git file and its served copy against the comparison in your §6 and nothing else (Phase 3).',
+    'name no cause, and state no difference it does not list', '- **Author:** you receive no comparison.',
+    'Take every existing line of a held file from its held block, never from a served copy.',
+    'stop for that file and say that a Config sources line for it is missing: the platform holds no base for it.',
+    '- **Where your §6 shows no such comparison,** no Git file was compared with a served copy: say exactly that if you speak of it, and never state or imply a match.'], 'observability Config sources (comparison)');
+  has(OBS_REVIEWER, ['a match or a difference the comparison does not print for that file is a **blocking finding**, and a package that says nothing about the pair is correct — the Author receives no comparison.',
+    'never ask the package to quote or explain one, and never work out a difference yourself'], 'observability Reviewer (comparison)');
+  // The force is the platform's; SYNTHESIZE names both base kinds in an observability-only sentence beside the SHARED held sentence.
+  has(OBS, ['A declared `git-file` or `service-held` line whose file the platform does not hold stops approval: list each such label first, and the leg\'s outcome is needs-revision — the platform enforces it.',
+    'Where that held file is kept from Git, these are the Git file\'s values, and so is the already-refuses branch below'], 'observability SYNTHESIZE / sender restriction');
 });
 
 test('HOWTO-MIRROR-NB1 (HOWTO-use-pipeline-harness 2.8.16, Protocol 11 Pass 5): the operator HOWTO mirrors network-provisioning 1.27.0 + network-derivation 1.3.1', () => {

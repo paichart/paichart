@@ -103,6 +103,13 @@ Terraform leg without the block stops** before it reads anything. Never declare 
 (`*.tfstate*`, `*.tfplan`, `*.tfvars*`, `.terraform/`): the leg stops. Do not ask the leg to compare the files with the state or
 to report drift: pAIchart computes none, and the package's Plan witness tells the person what their CI plan should show. The
 spec check warns on both mistakes. Details: `docs/TERRAFORM-SERVICE.md`.
+For an observability leg the block is optional. Each label names a file — the target, or `target.file-name` — never a system; a
+`live-read` line is written only under a `git-file` line of the same label; there is no `supplied` line. Every observability leg
+reads every line of the shared block, so each leg's title and objective name the one file that leg changes; with two or more
+observability legs, name a pre-registered service and add the README step "register the service once before launching".
+Never list a password, key or device-inventory file (`htpasswd`, `.key`, `.pem`, `.p12`, `.pfx`, `.jks`, `.keystore`, an SSH
+identity file, a hosts/groups/defaults file under `nornir/` or `inventory/`). Details: `docs/PIPELINES.md`, "Observability:
+kept files from Git or from your service".
 For M4 on a Kubernetes file, ask the person to run `kubectl diff -f <file>` against the cluster with their own credentials: a
 difference in a field the change does not touch will stop the leg, so it must be known (and fixed or declared) before launch.
 **Build every use case as twins** — a `git-only/` and a `git-live/` variant whose `requirements.md` files differ only in their

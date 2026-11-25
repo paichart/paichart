@@ -159,9 +159,13 @@ export interface GoldenDeclaration { version: string; targets?: Array<{ case: st
 
 /** A carrier reason that the run's INPUTS decide (the authoritative Harvester's capture, the declaration, a stage write) — the lab
  *  replays no Harvester and writes no stage, so the stored reason is carried. Mirrors the precedence in applyHeldEditCarrier. */
+/** STEP 3 slice L (P3-BUILD §8a item 13): `service-held-not-held` is the Config force's reason when ONLY declared `service-held`
+ *  files are missing (`configSourceForce`; `git-file-not-held` precedes it and then carries both lists). It is decided by the
+ *  Harvester's capture — a run input — so it joins the list: without it a golden refusal case expecting it with a live Author form
+ *  is refused as "a refusal of one Author's package". */
 export function isRunLevelReason(r: string | null): boolean {
   if (!r) return false;
-  return r === 'stage-rebind' || r === 'source-not-pinned' || r === 'git-file-not-held' || r === 'device-read-not-held' || r.startsWith('device-sources-');
+  return r === 'stage-rebind' || r === 'source-not-pinned' || r === 'git-file-not-held' || r === 'service-held-not-held' || r === 'device-read-not-held' || r.startsWith('device-sources-');
 }
 
 export function loadGoldenSet(dir = GOLDEN_DIR): GoldenSet {
@@ -637,7 +641,8 @@ export function samplePlatformReason(c: GoldenCase, carrierModelled: boolean, ed
   return heldEditVerdict(author, reviewer).reason;
 }
 
-/** v8: the Config force a cell's leg would carry (`configGitFileForce` over the frozen declaration and the cell's held files, reported
+/** v8: the Config force a cell's leg would carry (the shipping `configSourceForce` — `git-file-not-held`, then `service-held-not-held`
+ *  (STEP 3 slice L), or the declaration's own state — over the frozen declaration and the cell's held files, reported
  *  by the lab per cell in the run manifest: `nodes[<node>].variants[<cell>].held.configSources.configForce`). It is a RUN-LEVEL reason
  *  — decided by the declaration and the Harvester's reads, both inputs the cell holds fixed — so it outranks the package-level
  *  recompute, as in the shipping carrier. Null when the cell does not read Config sources or nothing is forced. */

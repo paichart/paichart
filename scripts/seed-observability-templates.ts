@@ -46,6 +46,13 @@
  */
 
 import { HELD_AUTHOR_CONSTRAINT, HELD_REVIEWER_CONSTRAINT } from '../lib/agents/harness/held-bytes/variant-protocol';
+
+// Lab L-CS-O stage-2 crib (owner, 2026-11-23): an Architect named the served-only line "drift" (a cause the platform cannot
+// know). States the wanted behaviour instead of banning a word. OBSERVABILITY ARCHITECT ONLY, so the Harvester's prompt (and
+// the lab's stage-1 bindings) stay byte-identical; < 500 chars and no angle brackets (the system-prompt copy strips them).
+export const OBS_ARCHITECT_SERVED_ONLY_CONSTRAINT = {
+  'Served-Only Lines: Say What Applying Does': "Where the platform's comparison of a Git file with its served copy lists lines only in the served file, say what applying the held file does to them: they are removed. Name no cause for the difference. Leave whether to keep those lines to a person, and say so in the design.",
+} as const;
 import { PrismaClient, AgentCategory, AgentPriority, TemplateType } from '@prisma/client';
 import {
   PAICHART_UNIVERSAL_BASE_TEMPLATE,
@@ -187,7 +194,8 @@ export function buildTemplateRow(template: TemplateSeed) {
       // PLATFORM-HELD-BYTES Phase 10 W6 (the fold): the held template constraints the G3 variant templates carried, now on the BASE
       // Author and Reviewer. Text unchanged (G3-measured); the Reviewer's speaks only of diff lines, so it is inert without a diff.
       ...(template.defaultRole === 'config_change_author' ? HELD_AUTHOR_CONSTRAINT
-        : template.defaultRole === 'change_reviewer' ? HELD_REVIEWER_CONSTRAINT : {}),
+        : template.defaultRole === 'change_reviewer' ? HELD_REVIEWER_CONSTRAINT
+        : template.defaultRole === 'infra_change_architect' ? OBS_ARCHITECT_SERVED_ONLY_CONSTRAINT : {}),
     },
     maxRetries: 2,
     timeout: template.timeout,

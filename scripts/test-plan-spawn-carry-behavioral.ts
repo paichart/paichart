@@ -177,9 +177,11 @@ async function main() {
     // The plan carries a composed object under a token whose lines name a descriptor URL (⇒ replaced), a composed object under a
     // Git-only token (⇒ removed) and a terraform URL (no sources lane ⇒ kept).
     // Config sources STEP 3 slice P4: it ALSO carries an observability block whose one service line (`service-held`) names a DIFFERENT
-    // descriptor URL than the Architect wrote. At the join that is rule 1 (replaced); AS SHIPPED — which is what this real create path
-    // runs, it passes no awaiting list — the row awaits its text, so the Architect's URL must stand untouched and the fact must name
-    // nothing for it. This is the INERT claim through the real path, not the helper (the joined half: test:service-descriptors-derivation P2b).
+    // descriptor URL than the Architect wrote. SINCE THE 1.12.0 JOIN (2026-11-23) that is rule 1 through this real create path (it
+    // passes no awaiting list, so it runs the tree as shipped): the Architect's URL is REPLACED by the line's, the fact names the
+    // token as derived and replaced (`differs`), the key is read at the plan gate, and the fact carries version 2. Until the join
+    // this case pinned the opposite — the row awaited its text and the Architect's URL stood untouched (the row-awaiting half is
+    // still proven by the helper: test:service-descriptors-derivation P2c).
     const prog3 = await mkStage(`Program: ${tag} three`, 8);
     const root3 = await mkTask({ title: `${tag} root three (protocol: pov-program)`, type: 'PIPELINE', stage: { connect: { id: rootStage } },
       agentTemplate: { connect: { id: harnessTmpl.id } }, metadata: { pipelineStageId: prog3 } });
@@ -200,7 +202,8 @@ async function main() {
         'observability-config': SD_OBS,
       },
     };
-    const SD_EXPECTED = { 'network-provisioning': SD_URL, 'terraform-iac': SD_TF, 'observability-config': SD_OBS };
+    const SD_OBS_LINE = 'https://example.test/descriptors/other-obs.json';   // the URL the observability block's service-held line names
+    const SD_EXPECTED = { 'network-provisioning': SD_URL, 'terraform-iac': SD_TF, 'observability-config': SD_OBS_LINE };
     const arch3 = await mkArchitect(prog3, `${tag} architect three`);
     await addExec(arch3, planText(PLAN_SD), 40_000);
     const archSha3 = canonicalContractSha(PLAN_SD);
@@ -213,14 +216,15 @@ async function main() {
       canonicalContractSha(sic?.serviceDescriptors) === canonicalContractSha(SD_EXPECTED) && canonicalContractSha(sic) === deliveredSha3, sic?.serviceDescriptors);
     const sf = sdm.interfaceContractSource?.serviceDescriptors;
     check('SD2 supplied arm fact: replaced composed, removed no-read-line, kept terraform; planSha256 = the Architect\'s, storedAtWriteSha256 = delivered',
-      JSON.stringify(sf?.replaced) === '[{"token":"network-provisioning","reason":"composed"}]'
-      && JSON.stringify(sf?.removed) === '[{"token":"network-derivation","reason":"no-read-line"}]' && JSON.stringify(sf?.kept) === '["terraform-iac","observability-config"]'
+      JSON.stringify(sf?.replaced) === '[{"token":"network-provisioning","reason":"composed"},{"token":"observability-config","reason":"differs"}]'
+      && JSON.stringify(sf?.removed) === '[{"token":"network-derivation","reason":"no-read-line"}]' && JSON.stringify(sf?.kept) === '["terraform-iac"]'
       && sdm.interfaceContractSource?.planSha256 === archSha3 && sdm.interfaceContractSource?.storedAtWriteSha256 === deliveredSha3
       && sdm.interfaceContractSource?.resolverVersion === 5, sdm.interfaceContractSource);
-    check('SD2b P4 INERT through the real create path: the observability block is not read as shipped — its token is not derived, not replaced, not named in notDerived',
-      !sf?.derived?.includes('observability-config') && !JSON.stringify(sf?.replaced).includes('observability-config')
-      && !JSON.stringify(sf?.notDerived).includes('observability-config') && sic?.serviceDescriptors?.['observability-config'] === SD_OBS
-      && JSON.stringify(sdm.interfaceContractSource?.configSourcesKeys?.notReadKeys) === '["observability-config"]', sdm.interfaceContractSource);
+    check('SD2b the 1.12.0 join, LIVE through the real create path: the observability block IS read — its token is derived from the service-held line, the Architect\'s differing URL is replaced, the key is read at the plan gate, and the fact carries version 2 (the series-cut key)',
+      sf?.derived?.includes('observability-config') === true && JSON.stringify(sf?.replaced).includes('{"token":"observability-config","reason":"differs"}')
+      && !JSON.stringify(sf?.notDerived).includes('observability-config') && sic?.serviceDescriptors?.['observability-config'] === SD_OBS_LINE
+      && sic?.serviceDescriptors?.['observability-config'] !== SD_OBS && sf?.version === 2
+      && JSON.stringify(sdm.interfaceContractSource?.configSourcesKeys?.notReadKeys) === '[]', sdm.interfaceContractSource);
     check('SD3 supplied arm: suppliedMatched measures TRANSCRIPTION (an exact Architect copy reads true, though the platform changed it)',
       sdm.interfaceContractSource?.suppliedMatched === true && sdm.interfaceContractSource?.legBaseline?.legCount === 0, sdm.interfaceContractSource);
     check('SD4 the task.create RESULT carries neither the fact nor the derived value', !JSON.stringify(rs1).includes('serviceDescriptors'));
@@ -233,7 +237,7 @@ async function main() {
     const am = await meta(sdAbsent); const aic = (await ic(sdAbsent))?.interfaceContract;
     check('SD5 absent arm: stores the DELIVERED plan (Q5 against the delivered contract: legs equal, no decline)',
       am.interfaceContractSource?.arm === 'create-absent' && canonicalContractSha(aic) === deliveredSha3
-      && am.interfaceContractSource?.legBaseline?.equalsPlan === true && am.interfaceContractSource?.serviceDescriptors?.replaced?.length === 1, am.interfaceContractSource);
+      && am.interfaceContractSource?.legBaseline?.equalsPlan === true && am.interfaceContractSource?.serviceDescriptors?.replaced?.length === 2, am.interfaceContractSource);   // 2 since the 1.12.0 join: the network token (composed) and the observability token (differs); it was 1
     check('SD6 absent arm: the read-back matched (the storage sentence names the DELIVERED sha)',
       JSON.stringify(rs2).includes(`plan sha256 ${deliveredSha3.slice(0, 8)}`), JSON.stringify(rs2).slice(0, 400));
 

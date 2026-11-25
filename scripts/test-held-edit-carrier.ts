@@ -33,9 +33,16 @@ const AUTH_EXEC = 'ex-author';
 const applied = { version: 1, state: 'applied', candidateDigest8: 'abcd1234' };
 const rendered = (o: Record<string, unknown> = {}) => ({ version: 1, state: 'rendered', authorExecutionId: AUTH_EXEC, candidateDigest8: 'abcd1234', ...o });
 
+/** The observability 1.12.0 join (2026-11-23): the carrier READS the leg's own row for its Config-sources declaration on EVERY
+ *  observability leg (the protocol has a Config lane), so the fixture world must HAVE that row — production's always does. The
+ *  default is the row of a leg that declares NOTHING (no block, no snapshot, stamped): it governs as `not-config-source-leg` and the
+ *  Config lane forces nothing, which is what every pre-join fixture below means. `legRow: 'unreadable'` makes that read throw (the
+ *  recorded exception: a no-block leg whose row cannot be read is forced `config-sources-could-not-check`). */
+const NO_BLOCK_LEG_ROW = { description: 'Tune the ingress.', contract: null, snapshot: null, protocolStamped: true };
 /** A leg stage: an Author and a Reviewer child, each with one SUCCESS result.json carrying the stamps given. */
 function world(author: Record<string, unknown> | null, reviewer: Record<string, unknown> | null, o: { throwOnRead?: boolean; baseLegs?: Array<string | null>; harvester?: { refusalsByExec: Record<string, number> }; captureRefs?: Array<{ target: string; path: string }>;
-  /** STEP 3 P3: extra stamps on the Author's result.json (its transcribed gitLiveDrift). */ authorExtra?: Record<string, unknown> } = {}) {
+  /** STEP 3 P3: extra stamps on the Author's result.json (its transcribed gitLiveDrift). */ authorExtra?: Record<string, unknown>;
+  /** The join: the leg's own row for the Config-sources read; `'unreadable'` ⇒ the read throws; a number ⇒ it throws that many times first. */ legRow?: typeof NO_BLOCK_LEG_ROW | 'unreadable'; legRowThrowsFirst?: number } = {}) {
   const reads: string[] = [];
   const execs: StubExecution[] = [
     { id: AUTH_EXEC, taskId: 't-author', createdAt: new Date(1_700_000_000_000), result: { agentRole: 'config_change_author', finalResponse: 'pkg', ...(author ? { editApplication: author } : {}), ...(o.authorExtra ?? {}) } },
@@ -58,6 +65,14 @@ function world(author: Record<string, unknown> | null, reviewer: Record<string, 
     heldFileRef: { findMany: async (a: { where: { executionId: string; kind: string } }) => { reads.push(`heldFileRef.findMany:${a.where.executionId}:${a.where.kind}`);
       if (a.where.kind === 'CAPTURE') return o.captureRefs ?? [];
       return (o.baseLegs ?? ['leg-v']).map((legTaskId) => ({ legTaskId })); } },
+  };
+  const innerRaw = db.$queryRaw as ((...q: unknown[]) => Promise<unknown>) | undefined;
+  let legRowThrows = o.legRowThrowsFirst ?? 0;
+  db.$queryRaw = async (...q: unknown[]) => {
+    if (!JSON.stringify(q[0]).includes(CONFIG_SOURCES_SNAPSHOT_KEY)) { if (!innerRaw) throw new TypeError('the stub has no $queryRaw'); return innerRaw(...q); }
+    reads.push('legRow');
+    if (o.legRow === 'unreadable' || legRowThrows-- > 0) throw new Error('leg row read failed');
+    return [o.legRow ?? NO_BLOCK_LEG_ROW];
   };
   return { db, reads };
 }
@@ -142,16 +157,36 @@ test('STEP 3 P1: the Kubernetes carrier fixture reads the SAME reason in both aw
     eq([m2.qualityGate.outcome, m2.qualityGate.heldEdit.forced, 'reason' in m2.qualityGate.heldEdit], ['approved', false, false], `${name}, a live-read-only declaration (keeps no file): `);
   }
 });
-test('STEP 3 P1 (runs-undeclared at the carrier): an observability leg that declares NOTHING is never forced by the Config lane — as shipped (no read at all) and with its text shipped (the per-leg rule)', async () => {
-  // as shipped: the row awaits its text — the carrier makes NO declaration read and the leg behaves exactly as before the row existed
+test('STEP 3 P1 (runs-undeclared at the carrier): an observability leg that declares NOTHING is never forced by the Config lane — with its row awaiting (no read at all) and with its text shipped (the per-leg rule: ONE read); AS SHIPPED since the 1.12.0 join is the text-shipped state', async () => {
+  // with the row awaiting its text (before the join; after a revert): the carrier makes NO declaration read and the leg behaves
+  // exactly as before the row existed
   const a = obsWorld({ description: 'Tune the collector.', snapshot: null }, applied, rendered()); const ma = merge('approved');
-  await applyHeldEditCarrier(a.db, OBS_CONFIG_LEG, ma);
-  eq([ma.qualityGate.outcome, ma.qualityGate.heldEdit.forced, 'reason' in ma.qualityGate.heldEdit, a.legRowReads()], ['approved', false, false, 0], 'as shipped: ');
-  // the text shipped: ONE read, the rule answers not-config-source-leg, no force — the same verdict object as shipped
+  await applyHeldEditCarrier(a.db, OBS_CONFIG_LEG, ma, { configAwaiting: ['observability-config-protocol'] });
+  eq([ma.qualityGate.outcome, ma.qualityGate.heldEdit.forced, 'reason' in ma.qualityGate.heldEdit, a.legRowReads()], ['approved', false, false, 0], 'row awaiting: ');
+  // the text shipped: ONE read, the rule answers not-config-source-leg, no force — the same verdict object as with the row awaiting
   const b = obsWorld({ description: 'Tune the collector.', snapshot: null }, applied, rendered()); const mb = merge('approved');
   await applyHeldEditCarrier(b.db, OBS_CONFIG_LEG, mb, { configAwaiting: [] });
   eq([mb.qualityGate.outcome, mb.qualityGate.heldEdit.forced, 'reason' in mb.qualityGate.heldEdit, b.legRowReads()], ['approved', false, false, 1], 'text shipped, no block: ');
   eq(mb.qualityGate.heldEdit, ma.qualityGate.heldEdit, 'the stamp of a no-block leg is the same in both states: ');
+  // AS SHIPPED (no list passed — production): the joined state. THE OWNER'S RULE, pinned on the stamp itself: the `heldEdit` object of
+  // a no-block observability leg is byte-equal to the one it had before the join (the row-awaiting stamp above).
+  const c = obsWorld({ description: 'Tune the collector.', snapshot: null }, applied, rendered()); const mc = merge('approved');
+  await applyHeldEditCarrier(c.db, OBS_CONFIG_LEG, mc);
+  eq([mc.qualityGate.outcome, c.legRowReads(), JSON.stringify(mc.qualityGate.heldEdit)], ['approved', 1, JSON.stringify(ma.qualityGate.heldEdit)], 'as shipped (the join): ');
+});
+test('the 1.12.0 join — the recorded exception (owner decision 2026-11-21, register item 6): an observability leg that declares NOTHING whose own row cannot be read is forced `config-sources-could-not-check` (fail closed); ONE failed read is retried and forces nothing', async () => {
+  const dead = world(applied, rendered(), { legRow: 'unreadable' }); const md = merge('approved');
+  await applyHeldEditCarrier(dead.db, OBS_CONFIG_LEG, md);
+  eq([md.qualityGate.outcome, md.qualityGate.heldEdit.forced, md.qualityGate.heldEdit.reason, dead.reads.filter((r) => r === 'legRow').length],
+    ['needs-revision', true, 'config-sources-could-not-check', 2], 'the row read fails twice: ');
+  const once = world(applied, rendered(), { legRowThrowsFirst: 1 }); const mo = merge('approved');
+  await applyHeldEditCarrier(once.db, OBS_CONFIG_LEG, mo);
+  eq([mo.qualityGate.outcome, mo.qualityGate.heldEdit.forced, 'reason' in mo.qualityGate.heldEdit, once.reads.filter((r) => r === 'legRow').length],
+    ['approved', false, false, 2], 'the row read fails once, the retry succeeds: ');
+  // with the row awaiting (before the join; after a revert) the same dead read is never made — the leg is not forced
+  const before = world(applied, rendered(), { legRow: 'unreadable' }); const mb = merge('approved');
+  await applyHeldEditCarrier(before.db, OBS_CONFIG_LEG, mb, { configAwaiting: ['observability-config-protocol'] });
+  eq([mb.qualityGate.outcome, 'reason' in mb.qualityGate.heldEdit, before.reads.filter((r) => r === 'legRow').length], ['approved', false, 0], 'row awaiting: ');
 });
 test('STEP 3 P1: with its text shipped, an observability leg that DECLARES is judged like any Config-sources leg — a block with no snapshot, an unstamped snapshot (A9) and a declared Git file not held each force by name', async () => {
   // the WRITER's snapshot (it carries the label check — a parsed observability snapshot without one is unreadable, fail closed)
@@ -170,15 +205,20 @@ test('STEP 3 P1: with its text shipped, an observability leg that DECLARES is ju
   eq(await run({ description: body, snapshot: null }, []), ['needs-revision', 'config-sources-snapshot-absent', 1], 'a block added to a leg with no snapshot (plan §9.4 populations A-C): ');
   eq(await run({ description: body, snapshot: snap, protocolStamped: false }, []), ['needs-revision', 'config-sources-snapshot-unreadable', 1], 'a snapshot on an unstamped leg (A9): ');
   eq(await run({ description: body, snapshot: snap }, []), ['needs-revision', 'git-file-not-held', 1], 'a declared Git file with no held capture: ');
-  // AS SHIPPED (the row awaits its text). STEP 3 P2 changed this pin DELIBERATELY (plan §13 A7, the rollback hole):
+  // AS SHIPPED since the 1.12.0 join (no list passed — production): the three cases above read the same with no list at all.
+  eq([await run({ description: body, snapshot: null }), await run({ description: body, snapshot: snap, protocolStamped: false }), await run({ description: body, snapshot: snap })],
+    [['needs-revision', 'config-sources-snapshot-absent', 1], ['needs-revision', 'config-sources-snapshot-unreadable', 1], ['needs-revision', 'git-file-not-held', 1]], 'as shipped (the join): ');
+  // WITH THE ROW AWAITING ITS TEXT (the tree before the join; the state a REVERT of the join returns to). STEP 3 P2 changed this pin
+  // DELIBERATELY (plan §13 A7, the rollback hole):
   //   BEFORE P2: all three legs read ['approved', null, 0] — "an awaiting row is inert even with a snapshot".
-  //   AFTER  P2: a leg with NO snapshot is still not read and not forced (the leg runs on the service's files, as today);
+  //   AFTER  P2: a leg with NO snapshot is still not read and not forced (the leg runs on the service's files);
   //              a leg that CARRIES a snapshot object declared sources under a text that is not live — it is read once and forced
   //              `config-sources-snapshot-text-reverted`, whatever the snapshot says (stamped or not, valid or not).
-  eq(await run({ description: body, snapshot: null }), ['approved', null, 0], 'as shipped, no snapshot — unchanged: ');
-  eq(await run({ description: body, snapshot: snap, protocolStamped: false }), ['needs-revision', 'config-sources-snapshot-text-reverted', 1], 'as shipped, a snapshot on an unstamped leg (was approved / null / 0): ');
-  eq(await run({ description: body, snapshot: snap }), ['needs-revision', 'config-sources-snapshot-text-reverted', 1], 'as shipped, a valid snapshot (was approved / null / 0): ');
-  eq(await run({ description: null, snapshot: snap }), ['needs-revision', 'config-sources-snapshot-text-reverted', 1], 'as shipped, a snapshot whose block was removed since: ');
+  const AW = ['observability-config-protocol'];
+  eq(await run({ description: body, snapshot: null }, AW), ['approved', null, 0], 'row awaiting, no snapshot — unchanged: ');
+  eq(await run({ description: body, snapshot: snap, protocolStamped: false }, AW), ['needs-revision', 'config-sources-snapshot-text-reverted', 1], 'row awaiting, a snapshot on an unstamped leg (was approved / null / 0): ');
+  eq(await run({ description: body, snapshot: snap }, AW), ['needs-revision', 'config-sources-snapshot-text-reverted', 1], 'row awaiting, a valid snapshot (was approved / null / 0): ');
+  eq(await run({ description: null, snapshot: snap }, AW), ['needs-revision', 'config-sources-snapshot-text-reverted', 1], 'row awaiting, a snapshot whose block was removed since: ');
 });
 test('STEP 3 P2 (W10 / B6): a declared observability leg — a service-held file not held forces by its own name, BOTH lists are stamped, and the stamp names the Harvester execution whose capture was read', async () => {
   const OBS_HELD = 'obs-ingress.otlp-ingress.conf: service-held — service observability-readonly';
@@ -432,9 +472,16 @@ test('SEC-P2-1: the selected Author\'s BASE refs must name THIS leg (a two-step 
     await applyHeldEditCarrier(world(applied, rendered(), { baseLegs }).db, VLEG, m);
     eq([m.qualityGate.outcome, m.qualityGate.heldEdit.reason], ['needs-revision', 'author-not-of-leg'], `${name}: `);
   }
-  const m = merge('approved'); // a task row without an id cannot be bound ⇒ forces
+  // A task row without an id cannot be bound ⇒ FORCED. The NAME moved at the 1.12.0 join (listed for review): the leg's protocol has
+  // a Config lane, the declaration read needs the leg id, and a Config-lane reason outranks `author-not-of-leg` (the precedence a
+  // Kubernetes or Terraform leg has had since 2026-11-15). Not a production shape — a stored task always has an id. With the row
+  // awaiting (before the join; after a revert) the name is the old one.
+  const m = merge('approved');
   await applyHeldEditCarrier(world(applied, rendered()).db, { ...VLEG, id: undefined } as any, m);
-  eq(m.qualityGate.heldEdit.reason, 'author-not-of-leg');
+  eq([m.qualityGate.outcome, m.qualityGate.heldEdit.forced, m.qualityGate.heldEdit.reason], ['needs-revision', true, 'config-sources-could-not-check']);
+  const m0 = merge('approved');
+  await applyHeldEditCarrier(world(applied, rendered()).db, { ...VLEG, id: undefined } as any, m0, { configAwaiting: ['observability-config-protocol'] });
+  eq([m0.qualityGate.outcome, m0.qualityGate.heldEdit.forced, m0.qualityGate.heldEdit.reason], ['needs-revision', true, 'author-not-of-leg']);
 });
 
 test('BC-P2-N2: an absent digest on either side is could-not-check, never a pass', async () => {

@@ -31,8 +31,26 @@
  *             through replay-prisma; chain.ts `chainEntryFromResult` carries both facts by the chainer's own rules; lab.ts puts the
  *             Harvester stamps on the Architect's and the Author's Harvester entry.
  *
- * The force (`configForce`) reported per cell is the SHIPPING `configGitFileForce` over the lab store's capture refs — what the
+ * The force (`configForce`) reported per cell is the SHIPPING `configSourceForce` over the lab store's capture refs — what the
  * carrier would decide for this leg (a leg holding every declared file is not forced; a leg missing one is, by label).
+ *
+ * STEP 3 SLICE L (2026-11-23, observability-config 1.12.0 — a protocol the PLATFORM compares, `gitLiveDriftPlatformCompares`):
+ *   - L-CS-K-a asks the SHIPPING `configSnapshotDecision` (none / write / remove) and writes the snapshot IT returns, `labelCheck`
+ *     included. A `runs-undeclared` leg with no block gets NO snapshot (`not-taken-undeclared`) and governs `not-config-source-leg`.
+ *   - the capture is taken under `labCaptureScopes` (the SHIPPING `captureScopesFor`: Git lane, Config scope and its protocol as ONE
+ *     object) WITH its served-side evidence (`prepareHeldCaptureWithEvidence`); the evidence never leaves this function.
+ *   - L-CS-O-b  the comparison RECORD `fileSourceCompare` is made by the SHIPPING `runLegFileSourceCompare` with the inputs the core
+ *     passes, then `finaliseFileSourceCompare` over the lab store. No service is called and no fixture caller is built: the
+ *     platform compares two texts it holds. A `platformDrift` plant on such a leg is refused (it can never reach a prompt), and an
+ *     observability leaf must never carry `platformDriftCalls` (asserted).
+ *   - L-CS-O-c  `gitLiveDrift`, `configSourceReads`, `liveEvidence` and the stamped `fileSourceCompare` come from the SHIPPING nets,
+ *     handed the record, and are cross-checked against `computeFileGitLiveDrift`, `computeFileConfigSourceReads`,
+ *     `computeConfigLiveEvidenceFromReadRecord` and `validFileCompareRecord`. NEVER `computeConfigLiveEvidence(sources, toolCalls)`
+ *     on such a leg — it throws on a `service-held` row by design (register CONFIG-SOURCES-OBS-JOIN-PRECONDITIONS item 30).
+ *   - the NO-BLOCK arm (`isUndeclaredRunsLeg`): the leg's `not-config-source-leg` resolution is passed THROUGH as production passes
+ *     it (every consumer keys on the STATE, never on truthiness); the Git lane is OFF; the nets get a RESOLVED owning leg and the
+ *     capture's `heldBytes` digest, and stamp `configSourceReads` with the `undeclared` key and NOTHING else — cross-checked against
+ *     `undeclaredConfigSourceReads`.
  *
  * BASE ARM = PRODUCTION TODAY: `armConfigSources` is null below the released Config-sources version, and every function here then
  * returns the snapshot object it was given (`not-stamped-version`), so a base arm's bytes cannot move.
@@ -41,20 +59,24 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'crypto';
 import type { Snapshot } from './snapshot';
-import { buildLabHeldStore, frozenHarvesterEntry, type LabHeldStore } from './held-store';
+import { buildLabHeldStore, buildLabCapture, buildLabCaptureFromResult, frozenHarvesterEntry, type LabHeldStore } from './held-store';
 import { runLeafNetsFor } from './nets';
-import { armConfigSources, configLegOf } from './config-sources-arm';
-import { isGitFileSourceLeg } from '../../lib/agents/harness/held-bytes/variant';
+import { armConfigSources, configLegOf, labCaptureScopes, legProtocolStamped } from './config-sources-arm';
+import { isHeldCapableLeg, isUndeclaredRunsLeg } from '../../lib/agents/harness/held-bytes/variant';
 import { LIVE_EVIDENCE_READERS, GIT_DEVICE_COMPARISON_READERS } from '../../lib/agents/harness/context-chainer';
-import {
-  buildConfigSourcesSnapshot, contractConfigSourcesValue, readConfigSourcesSnapshot, resolveLegConfigSources, sameConfigDeclaration,
-  CONFIG_SOURCES_SNAPSHOT_KEY,
-} from '../../lib/agents/harness/config-sources';
-import { governingConfigSources, type LegConfigSourcesResolution } from '../../lib/agents/harness/config-sources-read';
-import { computeConfigSourceReads, computeConfigLiveEvidence } from '../../lib/agents/harness/config-source-facts';
-import { computeGitLiveDrift, gitLiveDriftCallsService, validateCompareResult, type PlatformDriftCall } from '../../lib/agents/harness/git-live-drift';
+import { readConfigSourcesSnapshot, sameConfigDeclaration, CONFIG_SOURCES_SNAPSHOT_KEY } from '../../lib/agents/harness/config-sources';
+import { governingConfigSources, configSnapshotDecision, type LegConfigSourcesResolution } from '../../lib/agents/harness/config-sources-read';
+import { computeConfigSourceReads, computeConfigLiveEvidence, computeFileConfigSourceReads, computeConfigLiveEvidenceFromReadRecord,
+  undeclaredConfigSourceReads } from '../../lib/agents/harness/config-source-facts';
+import { computeGitLiveDrift, computeFileGitLiveDrift, gitLiveDriftCallsService, gitLiveDriftPlatformCompares, validFileCompareRecord,
+  validateCompareResult, type PlatformDriftCall } from '../../lib/agents/harness/git-live-drift';
+import { finaliseFileSourceCompare } from '../../lib/agents/harness/file-source-compare';
+import { quotableLine } from '../../lib/agents/harness/file-compare-quote-seam';
+import { runLegFileSourceCompare } from '../../lib/services/file-source-compare-run';
+import { liveEvidenceVersionApplies } from '../../lib/agents/harness/live-evidence';
+import { buildHeldBytesDigest } from '../../lib/agents/harness/held-bytes/held-bytes-fact';
 import { runPlatformDriftCalls, type DriftCaller, type DriftCallOutcome, type HeldFileForDrift } from '../../lib/agents/harness/platform-drift-run';
-import { configGitFileForce, type ConfigForce } from '../../lib/agents/harness/held-bytes/config-source-scope';
+import { configSourceForce, type ConfigForce } from '../../lib/agents/harness/held-bytes/config-source-scope';
 import { PLACEHOLDER, isR10Disabled } from '../../lib/agents/harness/redact-artifact-secrets';
 // The hub's manifest limit — a constants-only module (requires `crypto` alone); the lab never loads the hub or its caller.
 import * as hubDriftConfig from '../../lib/mcp/server/config/platform-drift-call';
@@ -62,17 +84,29 @@ const PLATFORM_DRIFT_MANIFEST_MAX_BYTES: number = hubDriftConfig.PLATFORM_DRIFT_
 
 const sha = (t: string) => createHash('sha256').update(Buffer.from(t, 'utf8')).digest('hex');
 const HARVESTER_ROLE = 'infra_state_harvester';
-/** The four stamps a Config-sources Harvester gets, in the registry's order. */
-export const CONFIG_FACT_KEYS = ['liveEvidence', 'configSourceReads', 'platformDriftCalls', 'gitLiveDrift'] as const;
+/** The stamps a Config-sources Harvester gets, in the registry's order: four for a protocol whose drift method is a service call
+ *  or none (Kubernetes, Terraform), and `fileSourceCompare` — the platform's own comparison record — in place of
+ *  `platformDriftCalls` for a protocol the platform compares (observability; STEP 3 slice L, P3-BUILD §8a item 12). */
+export const CONFIG_FACT_KEYS = ['liveEvidence', 'configSourceReads', 'platformDriftCalls', 'gitLiveDrift', 'fileSourceCompare'] as const;
 export type ConfigFactKey = typeof CONFIG_FACT_KEYS[number];
 /** The committed contract fixture: one REAL result of the compare tool (make_contract_fixture.py; checked by the tool's own tests). */
 export const CONTRACT_FIXTURE = path.join(__dirname, '..', 'fixtures', 'git-live-drift', 'compare-result.json');
 
 // ───────────────────────────── L-CS-K-a: the first-execution snapshot ─────────────────────────────
 
-export interface ConfigSnapshotReport { state: 'taken' | 'no-leg' | 'not-config-source-protocol' | 'already-snapshotted';
-  protocol?: string; contractKey?: string; resolution?: string; source?: string; entries?: number; takenAt?: string }
+export interface ConfigSnapshotReport { state: 'taken' | 'no-leg' | 'not-config-source-protocol' | 'already-snapshotted' | 'not-taken-undeclared';
+  protocol?: string; contractKey?: string; resolution?: string; source?: string; entries?: number; takenAt?: string;
+  /** the stored label check's state (`resolved` / `problem`), when the protocol has a label table and the block parsed */ labelCheck?: string | null }
 
+/**
+ * STEP 3 slice L (P3-BUILD §8a item 9): the snapshot is production's — the SHIPPING `configSnapshotDecision` decides
+ * (none / write / remove) and builds the snapshot object, `labelCheck` included; the lab copies no rule. It is asked with an EMPTY
+ * awaiting list ("as if the row's text had shipped" — the defaulted parameter every reader of the list takes), because the node
+ * exists to model the leg's first execution UNDER the Config-sources text; an arm below that text never reads the key.
+ *   write   ⇒ `taken` (the decision's own snapshot, read back through the shipping reader and governing rule)
+ *   remove  ⇒ `not-taken-undeclared`: a `runs-undeclared` leg (observability) with no block gets NO snapshot and governs
+ *             `not-config-source-leg` — it runs as it did before the protocol had a Config lane. The snapshot is returned unchanged.
+ */
 export function withFirstExecutionConfigSnapshot(snap: Snapshot): { snap: Snapshot; report: ConfigSnapshotReport } {
   const leg = snap.leg as Record<string, any> | null;
   if (!leg || leg.type !== 'PIPELINE') return { snap, report: { state: 'no-leg' } };
@@ -81,19 +115,30 @@ export function withFirstExecutionConfigSnapshot(snap: Snapshot): { snap: Snapsh
   if (c.snapshot !== undefined && c.snapshot !== null) return { snap, report: { state: 'already-snapshotted', protocol: c.protocol } };
   const meta = (leg.metadata ?? {}) as Record<string, any>;
   if (typeof meta.protocolResolvedAt !== 'string') throw new Error(`L-CS-K-a: leg ${leg.id} has no stamped protocolResolvedAt (the snapshot's takenAt)`);
-  // prepare-task-for-execution.ts, the `change` lane: the snapshot is taken whatever the block resolves to (an `absent` block is a
-  // state the harness stops on and the carrier names) — unlike the network VALUE lane, which takes none on `absent`.
-  const resolution = resolveLegConfigSources({ protocol: c.protocol, contractValue: contractConfigSourcesValue(c.contract, c.contractKey), taskBody: c.description });
+  const decision = configSnapshotDecision({ type: leg.type, protocol: c.protocol, description: c.description, interfaceContract: c.contract, takenAt: meta.protocolResolvedAt }, []);
+  if (decision.action === 'none') throw new Error(`L-CS-K-a: configSnapshotDecision answers "none" for ${c.protocol} on leg ${leg.id} — the lane table and the decision disagree`);
+  if (decision.action === 'remove') {
+    const gov = governingConfigSources({ description: c.description, contract: c.contract, snapshot: null, protocolStamped: legProtocolStamped(leg) }, c.protocol);
+    if (gov.state !== 'not-config-source-leg') throw new Error(`L-CS-K-a: an undeclared leg must govern not-config-source-leg, it reads ${gov.state}`);
+    return { snap, report: { state: 'not-taken-undeclared', protocol: c.protocol, contractKey: c.contractKey, resolution: 'absent' } };
+  }
+  const resolution = decision.snapshot.resolution;
   const copy: Snapshot = JSON.parse(JSON.stringify(snap));
   const cl = copy.leg as Record<string, any>;
-  cl.metadata = { ...(cl.metadata ?? {}), [CONFIG_SOURCES_SNAPSHOT_KEY]: buildConfigSourcesSnapshot(c.protocol, resolution, meta.protocolResolvedAt) };
+  cl.metadata = { ...(cl.metadata ?? {}), [CONFIG_SOURCES_SNAPSHOT_KEY]: decision.snapshot };
   const back = readConfigSourcesSnapshot(cl.metadata);
   if (!back || back === 'unreadable') throw new Error(`L-CS-K-a: the simulated snapshot does not read back (${String(back)})`);
-  const gov = governingConfigSources({ description: c.description, contract: c.contract, snapshot: cl.metadata[CONFIG_SOURCES_SNAPSHOT_KEY], protocolStamped: true /* the lab's leg models a stamped leg (STEP 3 A9) */ }, c.protocol);
-  if (gov.state === 'not-config-source-leg' || gov.state === 'could-not-check' || gov.state.startsWith('snapshot-')) throw new Error(`L-CS-K-a: governing declaration reads ${gov.state} right after the snapshot`);
-  if (!sameConfigDeclaration(gov as never, resolution)) throw new Error('L-CS-K-a: governing declaration differs from the snapshot');
+  const stamped = legProtocolStamped(cl);
+  const gov = governingConfigSources({ description: c.description, contract: c.contract, snapshot: cl.metadata[CONFIG_SOURCES_SNAPSHOT_KEY], protocolStamped: stamped }, c.protocol);
+  if (gov.state === 'not-config-source-leg' || gov.state === 'could-not-check' || gov.state.startsWith('snapshot-')) {
+    throw new Error(`L-CS-K-a: governing declaration reads ${gov.state} right after the snapshot${stamped ? '' : ` — leg ${leg.id} carries no metadata.protocol stamp, so production reads a snapshot on it as unreadable (rule A9); a first-execution snapshot is modelled only on a stamped leg`}`);
+  }
+  // A stored label check that names a problem governs as `unparseable` with THAT problem (rule A1) — the governing rule's answer, not a lab fault.
+  const labelProblem = decision.snapshot.labelCheck?.state === 'problem' && resolution.state === 'parsed';
+  if (!labelProblem && !sameConfigDeclaration(gov as never, resolution)) throw new Error('L-CS-K-a: governing declaration differs from the snapshot');
   return { snap: copy, report: { state: 'taken', protocol: c.protocol, contractKey: c.contractKey, resolution: resolution.state,
-    source: (resolution as { source?: string }).source, entries: resolution.state === 'parsed' ? resolution.entries.length : 0, takenAt: meta.protocolResolvedAt } };
+    source: (resolution as { source?: string }).source, entries: resolution.state === 'parsed' ? resolution.entries.length : 0, takenAt: meta.protocolResolvedAt,
+    ...(decision.snapshot.labelCheck ? { labelCheck: decision.snapshot.labelCheck.state } : {}) } };
 }
 
 // ───────────────────────────── L-CS-K-b: the platform drift call record, fixture caller ─────────────────────────────
@@ -201,11 +246,13 @@ export function driftCallerFor(spec: DriftPlantSpec, dir: string | null, labelOf
   };
 }
 
-/** Production's own test in `runLegPlatformDrift` (platform-drift.ts), by the SHIPPING no-call guard (`gitLiveDriftCallsService`,
+/** (Named `noGitLiveMethod` until STEP 3 slice L: observability HAS a method — one the platform computes itself — and still makes
+ *  no service call, so the old name said the wrong thing.)
+ *  Production's own test in `runLegPlatformDrift` (platform-drift.ts), by the SHIPPING no-call guard (`gitLiveDriftCallsService`,
  *  Config sources STEP 3 P3 / plan W4): a NAMED protocol for which the platform makes no service call — one with no Git-vs-live
  *  method (terraform-iac) or one whose method the platform computes itself (observability-config: `platform-compare`). An omitted
  *  or empty protocol keeps the lab's older meaning (the Kubernetes arm), unlike production, where the protocol is now required. */
-export function noGitLiveMethod(protocol: string | null | undefined): boolean {
+export function noDriftServiceCall(protocol: string | null | undefined): boolean {
   return typeof protocol === 'string' && protocol !== '' && !gitLiveDriftCallsService(protocol);
 }
 
@@ -224,7 +271,7 @@ export function heldFilesForDrift(store: LabHeldStore): HeldFileForDrift[] {
 export async function labPlatformDriftCalls(input: { sources: LegConfigSourcesResolution; store: LabHeldStore; toolCalls: readonly unknown[]; spec: DriftPlantSpec | null; dir: string | null; protocol?: string | null }):
   Promise<{ calls: PlatformDriftCall[] | undefined; log: DriftCallerLog[] }> {
   if (input.sources.state !== 'parsed') return { calls: undefined, log: [] };
-  if (noGitLiveMethod(input.protocol)) return { calls: undefined, log: [] };
+  if (noDriftServiceCall(input.protocol)) return { calls: undefined, log: [] };
   const heldFiles = heldFilesForDrift(input.store);
   const log: DriftCallerLog[] = []; const problems: string[] = [];
   const bySha = new Map(heldFiles.map((f) => [sha(f.content), f]));
@@ -246,10 +293,15 @@ export interface ConfigFactsReport {
   protocol?: { name: string; version: string } | null;
   harvesterExecutionId?: string; copies?: number;
   declaration?: string; lines?: number;
+  /** STEP 3 slice L: the leg is a `runs-undeclared` leg that declares nothing (`isUndeclaredRunsLeg`) — it stamps `configSourceReads`
+   *  with the `undeclared` key and nothing else, and nothing is forced. */
+  undeclared?: boolean;
   liveEvidence?: { checked: boolean; summary: string | null; reason: string | null };
   gitLiveDrift?: { checked: boolean; reason: string | null; filesCompared: number | null; filesNotChecked: number | null };
   platformDriftCalls?: { outcomes: string[]; fixtureCalls: DriftCallerLog[] } | null;
-  held?: { refs: number; notDeclared: number };
+  /** STEP 3 slice L: the platform's file comparison, per declared label — state and reason only (never a line, a path or a sha). */
+  fileSourceCompare?: { files: Array<{ label: string; state: string; reason: string | null }>; capture: Array<{ label: string; outcome: string }> } | null;
+  held?: { refs: number; notDeclared: number; serviceNotDeclared?: number; evidenceOnly?: number };
   configForce?: ConfigForce | null;
 }
 export interface ConfigFactsResult {
@@ -261,9 +313,23 @@ export interface ConfigFactsResult {
   store: LabHeldStore | null;
   /** the platform call record the stamps were computed from (undefined: nothing was planned — the declaration is not `parsed`) */
   calls?: PlatformDriftCall[];
+  /** STEP 3 slice L: the comparison record the stamps were computed from (undefined: none was made) — the nets' `fileSourceCompare` input */
+  fileSourceCompare?: Record<string, unknown>;
+  /** STEP 3 slice L: the capture's `heldBytes` digest — the nets' `held.heldBytes` input. On EVERY arm since 2026-11-23
+   *  (LAB-HELDBYTES-DIGEST-DECLARED-CELLS): it was passed on a no-block `runs-undeclared` leg only, so a declared cell's leaf
+   *  `heldBytes` read the net's own `no-capture` fallback beside a capture that held files. The net stamps it only on a held-capable leg. */
+  heldBytes?: Record<string, unknown>;
 }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const isRec = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+
+/** STEP 3 slice L: the `heldBytes` digest of a lab capture, by the SHIPPING builder — what the core stamps on a held-capable
+ *  Harvester (execution-core.ts `digestFor('committed')`), or the named no-capture stamp when nothing was planned. */
+export function labHeldBytesDigest(store: LabHeldStore, planned: boolean): Record<string, unknown> {
+  if (!planned) return { held: 0, refused: {}, reason: 'no-files' };
+  return buildHeldBytesDigest({ refs: store.refs as never, refusals: store.refusals as never, storedBytes: store.storedBytes }, undefined, { refWrite: 'committed' }) as unknown as Record<string, unknown>;
+}
 
 /**
  * `opts.protocol` — the ARM's composed protocol (every lab.ts call site passes it). `opts.drift` — the node's `platformDrift` plant
@@ -276,6 +342,12 @@ export async function withComputedConfigFacts(snap: Snapshot, opts: { protocol: 
   const injection = opts.protocol ? { delta: { name: opts.protocol.name, version: opts.protocol.version } } : undefined;
   const sources = armConfigSources(snap.leg, injection);
   if (!sources) return { snap, report: { state: 'not-stamped-version', protocol: opts.protocol }, facts: null, sources: null, store: null };
+  // STEP 4 D-T1: the leg's Config-sources protocol decides whether the platform calls at all (the core's `configSourceProtocol`).
+  const legProtocol = configLegOf(snap.leg)!.protocol;
+  // STEP 3 slice L: the two per-protocol answers, each the SHIPPING predicate — never truthiness of `sources`, never a lab table.
+  const platformCompares = gitLiveDriftPlatformCompares(legProtocol);
+  const undeclared = isUndeclaredRunsLeg(legProtocol, sources.state);
+  const arm = { protocolInjection: injection };
 
   const h = direct ? { executionId: direct.executionId, taskId: direct.taskId } : frozenHarvesterEntry(snap);
   const hTask = (snap.children ?? []).find((c) => c.id === h.taskId) ?? (direct && snap.author.task.id === h.taskId ? snap.author.task : undefined);
@@ -285,39 +357,76 @@ export async function withComputedConfigFacts(snap: Snapshot, opts: { protocol: 
   if (!direct && !arts.length) throw new Error(`L-CS-K-c: the snapshot carries no result.json for the frozen Harvester ${h.executionId}`);
   const stored = direct ? null : JSON.parse(arts[0].content) as Record<string, any>;
   if (stored && CONFIG_FACT_KEYS.some((k) => k !== 'liveEvidence' && stored[k] !== undefined && stored[k] !== null)) {
-    // A leg that ran on the Config-sources text carries production's own stamps: left alone, never recomputed over.
+    // A leg that ran on the Config-sources text carries production's own stamps: left alone, never recomputed over. That holds for the
+    // comparison record too (plan §5.2: a replay and the lab hand the STORED record back; neither recomputes it).
     const facts = Object.fromEntries(CONFIG_FACT_KEYS.filter((k) => stored[k] && typeof stored[k] === 'object').map((k) => [k, stored[k]]));
-    return { snap, report: { state: 'already-stamped', protocol: opts.protocol, harvesterExecutionId: h.executionId }, facts, sources, store: buildLabHeldStore(snap, sources) };
+    return { snap, report: { state: 'already-stamped', protocol: opts.protocol, harvesterExecutionId: h.executionId, ...(undeclared ? { undeclared: true } : {}) }, facts, sources, store: buildLabHeldStore(snap, arm),
+      ...(isRec(stored.fileSourceCompare) ? { fileSourceCompare: stored.fileSourceCompare } : {}), ...(isRec(stored.heldBytes) ? { heldBytes: stored.heldBytes } : {}) };
   }
   const toolCalls: unknown[] = direct ? direct.toolCalls : (Array.isArray(stored!.toolCalls) ? stored!.toolCalls : []);
   const text: string = direct ? direct.text : String(stored!.finalResponse ?? '');
   const role = direct ? HARVESTER_ROLE : (typeof stored!.agentRole === 'string' ? stored!.agentRole : HARVESTER_ROLE);
   if (role !== HARVESTER_ROLE) throw new Error(`L-CS-K-c: the Harvester ran as ${role}`);
 
-  // The capture under the Config scope (the SHIPPING capture: an undeclared Git file is refused, never held).
-  const store = direct
-    ? (await import('./held-store')).buildLabHeldStoreFromResult({ executionId: h.executionId, taskId: h.taskId, povId: (snap.author.task.pov_id as string | null) ?? null,
-        resultJson: JSON.stringify({ toolCalls }), gitFileSourceLeg: !!snap.leg && isGitFileSourceLeg(snap.leg as never), configSources: sources })
-    : buildLabHeldStore(snap, sources);
+  // The capture under the arm's scopes (the SHIPPING capture and the SHIPPING `captureScopesFor`: an undeclared Git file is refused,
+  // never held; a served file of a Git-based label is evidence, never held; a no-block `runs-undeclared` leg reads no Git lane).
+  const cap = direct
+    ? buildLabCaptureFromResult({ executionId: h.executionId, taskId: h.taskId, povId: (snap.author.task.pov_id as string | null) ?? null,
+        resultJson: JSON.stringify({ toolCalls }), scopes: labCaptureScopes(snap.leg, injection) })
+    : buildLabCapture(snap, arm);
+  const store = cap.store;
   const drift = opts.drift ? checkDriftPlantSpec(opts.drift, 'platformDrift') : null;
-  // STEP 4 D-T1: the leg's Config-sources protocol decides whether the platform calls at all (the core's `configSourceProtocol`).
-  const legProtocol = configLegOf(snap.leg)!.protocol;
-  if (drift && noGitLiveMethod(legProtocol)) throw new Error(`L-CS-K-b: platformDrift refused — the platform makes no service call for ${legProtocol} (GIT_LIVE_DRIFT_METHODS: no method, or one the platform computes itself), so a compare-tool answer can never reach a prompt (a plant that cannot reach its reader)`);
+  if (drift && noDriftServiceCall(legProtocol)) throw new Error(`L-CS-K-b: platformDrift refused — the platform makes no service call for ${legProtocol} (GIT_LIVE_DRIFT_METHODS: no method, or one the platform computes itself), so a compare-tool answer can never reach a prompt (a plant that cannot reach its reader)`);
   const { calls, log } = await labPlatformDriftCalls({ sources, store, toolCalls, spec: drift, dir: opts.dir ?? null, protocol: legProtocol });
 
-  // The four stamps from the SHIPPING nets, their ctx primed as the core primes it.
-  const leaf = await runLeafNetsFor(copy, hTask as never, role, text, h.executionId, toolCalls, injection, {}, undefined, calls);
+  // L-CS-O-b: the platform's OWN comparison (no service, no caller) — the SHIPPING entry, the inputs the core passes it, then the
+  // core's finalise step over what the (lab) store took. `undefined` unless the declaration is `parsed` and the protocol's method is
+  // `platform-compare` (the entry's own population test). A warning from it is a lab fault, never swallowed.
+  let fileSourceCompare: Record<string, unknown> | undefined;
+  if (platformCompares) {
+    const warned: string[] = [];
+    fileSourceCompare = runLegFileSourceCompare({ sources, protocol: legProtocol, isHarvester: true, versionApplies: liveEvidenceVersionApplies(injection),
+      plan: cap.plan as never, evidence: cap.evidence, toolCalls, executionId: h.executionId, logger: { warn: (o) => { warned.push(JSON.stringify(o)); } } });
+    if (warned.length) throw new Error(`L-CS-O-b: the shipping file comparison warned on ${h.executionId} — never stubbed: ${warned.join('; ')}`);
+    if (fileSourceCompare && isHeldCapableLeg(snap.leg as never)) fileSourceCompare = finaliseFileSourceCompare(fileSourceCompare, cap.plan ? { refs: store.refs, refusals: store.refusals } : null);
+    if (sources.state === 'parsed' && !fileSourceCompare) throw new Error(`L-CS-O-b: a parsed ${legProtocol} declaration at its Config-sources version produced no comparison record`);
+  }
+  // The capture's `heldBytes` digest, as the core stamps it on a held-capable Harvester (execution-core.ts `digestFor('committed')`).
+  // The no-block arm reads its file count from it (never a re-extraction); a declared arm's leaf `heldBytes` is now this digest too.
+  const heldBytes = labHeldBytesDigest(store, cap.plan !== null);
+
+  // The stamps from the SHIPPING nets, their ctx primed as the core primes it.
+  const leaf = await runLeafNetsFor(copy, hTask as never, role, text, h.executionId, toolCalls, injection, {}, undefined, calls,
+    { ...(fileSourceCompare ? { fileSourceCompare } : {}), ...(heldBytes ? { heldBytes } : {}) });
   const bad = CONFIG_FACT_KEYS.filter((k) => leaf.errors[k]);
   if (bad.length) throw new Error(`L-CS-K-c: the shipping Harvester nets errored on ${bad.map((k) => `${k} (${leaf.errors[k]})`).join(', ')} — never stubbed`);
   const facts: Partial<Record<ConfigFactKey, Record<string, unknown>>> = {};
   for (const k of CONFIG_FACT_KEYS) if (leaf.stamped[k] !== undefined) facts[k] = leaf.stamped[k];
   // Cross-check: each stamp IS the shipping pure function's answer over these inputs (a lever that drifted from it throws).
-  const wantReads = computeConfigSourceReads(sources, toolCalls);
-  if (!same(facts.configSourceReads, wantReads)) throw new Error('L-CS-K-c: configSourceReads from the shipping nets ≠ computeConfigSourceReads(sources, toolCalls)');
-  if (!same(facts.liveEvidence, computeConfigLiveEvidence(sources, toolCalls))) throw new Error('L-CS-K-c: liveEvidence from the shipping nets ≠ computeConfigLiveEvidence(sources, toolCalls)');
-  // The shipping net passes the OWNING LEG's Config-sources protocol (k8s value-lane P1, git-live-drift-enrichment.ts `methodProtocol`) — so does the cross-check.
-  if (!same(facts.gitLiveDrift, computeGitLiveDrift(calls, legProtocol))) throw new Error('L-CS-K-c: gitLiveDrift from the shipping nets ≠ computeGitLiveDrift(platformDriftCalls, protocol)');
-  if (calls === undefined ? facts.platformDriftCalls !== undefined : !same(facts.platformDriftCalls, { version: 1, calls })) throw new Error('L-CS-K-c: the stamped platformDriftCalls is not the call record');
+  if (undeclared) {
+    // L-CS-O (the no-block arm): ONE stamp, with the `undeclared` key, and nothing else — as a resolved `runs-undeclared` leg stamps.
+    if (!same(facts.configSourceReads, undeclaredConfigSourceReads(heldBytes))) throw new Error('L-CS-O-c: configSourceReads from the shipping nets ≠ undeclaredConfigSourceReads(heldBytes) on a no-block runs-undeclared leg (is the owning leg resolved at the leaf point?)');
+    if (!isRec(facts.configSourceReads) || !isRec(facts.configSourceReads.undeclared)) throw new Error('L-CS-O-c: the no-block stamp carries no `undeclared` key');
+    const extra = CONFIG_FACT_KEYS.filter((k) => k !== 'configSourceReads' && facts[k] !== undefined);
+    if (extra.length) throw new Error(`L-CS-O-c: a no-block runs-undeclared leg stamped ${extra.join(', ')} — production stamps configSourceReads only`);
+  } else if (platformCompares) {
+    const wantReads = computeFileConfigSourceReads(sources, fileSourceCompare);
+    if (!same(facts.configSourceReads, wantReads)) throw new Error('L-CS-O-c: configSourceReads from the shipping nets ≠ computeFileConfigSourceReads(sources, fileSourceCompare)');
+    if (!same(facts.liveEvidence, computeConfigLiveEvidenceFromReadRecord(wantReads))) throw new Error('L-CS-O-c: liveEvidence from the shipping nets ≠ computeConfigLiveEvidenceFromReadRecord(the files read record)');
+    if (!same(facts.gitLiveDrift, computeFileGitLiveDrift(fileSourceCompare, sources.state, quotableLine))) throw new Error('L-CS-O-c: gitLiveDrift from the shipping nets ≠ computeFileGitLiveDrift(fileSourceCompare, state)');
+    const wantRecord = sources.state === 'parsed' ? validFileCompareRecord(fileSourceCompare, quotableLine) ?? undefined : undefined;
+    if (!same(facts.fileSourceCompare, wantRecord)) throw new Error('L-CS-O-c: the stamped fileSourceCompare is not the validated comparison record');
+    if (sources.state === 'parsed' && !wantRecord) throw new Error('L-CS-O-c: the comparison record does not pass the shipping validator (validFileCompareRecord)');
+    if (facts.platformDriftCalls !== undefined || calls !== undefined) throw new Error(`L-CS-O-c: ${legProtocol} carries a platformDriftCalls record — the platform makes no service call for it`);
+  } else {
+    const wantReads = computeConfigSourceReads(sources, toolCalls);
+    if (!same(facts.configSourceReads, wantReads)) throw new Error('L-CS-K-c: configSourceReads from the shipping nets ≠ computeConfigSourceReads(sources, toolCalls)');
+    if (!same(facts.liveEvidence, computeConfigLiveEvidence(sources, toolCalls))) throw new Error('L-CS-K-c: liveEvidence from the shipping nets ≠ computeConfigLiveEvidence(sources, toolCalls)');
+    // The shipping net passes the OWNING LEG's Config-sources protocol (k8s value-lane P1, git-live-drift-enrichment.ts `methodProtocol`) — so does the cross-check.
+    if (!same(facts.gitLiveDrift, computeGitLiveDrift(calls, legProtocol))) throw new Error('L-CS-K-c: gitLiveDrift from the shipping nets ≠ computeGitLiveDrift(platformDriftCalls, protocol)');
+    if (calls === undefined ? facts.platformDriftCalls !== undefined : !same(facts.platformDriftCalls, { version: 1, calls })) throw new Error('L-CS-K-c: the stamped platformDriftCalls is not the call record');
+    if (facts.fileSourceCompare !== undefined) throw new Error(`L-CS-K-c: ${legProtocol} stamped a fileSourceCompare record — only a protocol the platform compares has one`);
+  }
 
   for (const a of arts) {
     const parsed = JSON.parse(a.content) as Record<string, unknown>;
@@ -326,16 +435,24 @@ export async function withComputedConfigFacts(snap: Snapshot, opts: { protocol: 
     for (const k of CONFIG_FACT_KEYS) if (!same(back[k], facts[k])) throw new Error(`L-CS-K-c: re-read of ${h.executionId} result.json does not carry the computed ${k}`);
   }
   const le = (facts.liveEvidence ?? {}) as Record<string, any>; const gl = (facts.gitLiveDrift ?? {}) as Record<string, any>;
+  const count = (name: string) => store.refusals.filter((r) => r.refusal === name).length;
+  const recFiles = isRec(fileSourceCompare) && Array.isArray(fileSourceCompare.files) ? (fileSourceCompare.files as Array<Record<string, unknown>>) : null;
+  const recCapture = isRec(fileSourceCompare) && Array.isArray(fileSourceCompare.capture) ? (fileSourceCompare.capture as Array<Record<string, unknown>>) : [];
   return {
-    snap: copy, facts, sources, store, ...(calls ? { calls } : {}),
+    snap: copy, facts, sources, store, ...(calls ? { calls } : {}), ...(fileSourceCompare ? { fileSourceCompare } : {}), ...(heldBytes ? { heldBytes } : {}),
     report: {
       state: 'computed', protocol: opts.protocol, harvesterExecutionId: h.executionId, copies: arts.length,
-      declaration: sources.state, lines: sources.state === 'parsed' ? sources.entries.length : 0,
+      declaration: sources.state, lines: sources.state === 'parsed' ? sources.entries.length : 0, ...(undeclared ? { undeclared: true } : {}),
       liveEvidence: { checked: le.checked === true, summary: le.summary ?? null, reason: le.reason ?? null },
       gitLiveDrift: { checked: gl.checked === true, reason: gl.reason ?? null, filesCompared: gl.filesCompared ?? null, filesNotChecked: gl.filesNotChecked ?? null },
       platformDriftCalls: calls ? { outcomes: calls.map((c) => `${c.label}:${c.outcome}`), fixtureCalls: log } : null,
-      held: { refs: store.refs.length, notDeclared: store.refusals.filter((r) => r.refusal === 'git-file-not-declared').length },
-      configForce: configGitFileForce(sources, store.refs.map((r) => ({ target: r.target ?? undefined, path: r.path ?? undefined }))),
+      ...(platformCompares ? { fileSourceCompare: recFiles ? { files: recFiles.map((f) => ({ label: String(f.label), state: String(f.state), reason: typeof f.reason === 'string' ? f.reason : null })),
+        capture: recCapture.map((c) => ({ label: String(c.label), outcome: String(c.outcome ?? c.kind) })) } : null } : {}),
+      held: { refs: store.refs.length, notDeclared: count('git-file-not-declared'),
+        ...(platformCompares ? { serviceNotDeclared: count('service-file-not-declared'), evidenceOnly: count('served-file-evidence-only') } : {}) },
+      // THE Config-sources force (the SHIPPING `configSourceForce`, both lists): `git-file-not-held` precedes `service-held-not-held`;
+      // null on a leg that declares nothing.
+      configForce: configSourceForce(sources, store.refs.map((r) => ({ target: r.target ?? undefined, path: r.path ?? undefined }))),
     },
   };
 }

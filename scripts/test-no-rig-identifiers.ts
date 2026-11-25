@@ -225,6 +225,11 @@ console.log(`✅ role guidance names no service (${ROLE_GUIDANCE_SERVICE_NAMES.l
     'Where the inputs give two legs of one token different descriptors, emit neither: raise it under Assumptions & open questions.',
     'under the other field at that leg\'s own token: \\`configSources["kubernetes-gitops"]\\`, \\`configSources["terraform-iac"]\\` (such a leg without them stops) — never under \\`deviceSources\\`', // terraform-iac joined at 1.17.0 (STEP 4)
     'Where two legs carry the same token in your DAG, its one block carries every line the requirements give either leg, once each; every leg receives all of them',
+    // Config sources STEP 3 (observability-config 1.12.0 CANDIDATE; owner decision 11 — the UNCONDITIONAL rule; SYNTHESIS-v2 §13.1): the exception names the
+    // protocol TOKEN, never a property, and sits directly after the Git-files sentence; the key sentence is the VALUE-LEG-GIT form that held (LL-CS-74).
+    'and a leg whose lines are all Git files needs none. The one exception is an \\`observability-config\\` leg: with or without a block of its own, always put the descriptor the inputs give for it in \\`serviceDescriptors["observability-config"]\\`, exactly as they give it.',
+    'The platform replaces or removes that entry where the leg\'s block names a service on its own lines; that is the platform\'s to decide, never yours. Where the inputs give that leg no descriptor, emit no entry and say so under Assumptions & open questions.',
+    'An observability leg\'s \\`## Config sources\\` lines go the same way under \\`configSources["observability-config"]\\`, ONLY when the requirements give that leg lines of its own. Otherwise emit no \\`configSources["observability-config"]\\` key at all — never a note, a reason or an empty value in its place: that leg runs without a sources block, which is valid for it, and it keeps its descriptor entry.',
   ]) {
     if (!ug.includes(want)) { console.log('❌ program_architect Config-sources batch sentence missing: ' + want); process.exit(1); }
   }

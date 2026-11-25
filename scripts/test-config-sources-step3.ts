@@ -2,8 +2,14 @@
  * Config sources STEP 3, slice P1 (observability-config, plan v2.1 W5 rows 1 / 11-13 / 19, W6, W7, §13 A1 / A6 / A9 / D / E) — the lane
  * row and its no-block rule, grammar 2 (the `service-held` kind and the pair rule), labels, the snapshot decision.
  *
- * EVERYTHING HERE RUNS IN BOTH AWAITING STATES through the real functions: the awaiting list is a defaulted parameter, so `SHIPPED`
- * (what production passes — nothing) and `NONE` (`[]`, "every row's text has shipped") go through the same code. No rule is copied.
+ * EVERYTHING HERE RUNS IN BOTH AWAITING STATES through the real functions: the awaiting list is a defaulted parameter, so `AWAITING`
+ * (observability's row awaiting its text), `NONE` (`[]`, "every row's text has shipped") and `SHIPPED` (what production passes —
+ * nothing) go through the same code. No rule is copied.
+ *
+ * THE 1.12.0 JOIN (2026-11-23): observability left the awaiting list, so the tree's own list IS `NONE`. Until then `SHIPPED` was the
+ * awaiting state and these cases read "as shipped … inert"; they now ask the same thing with the row put back on the list
+ * (`AWAITING` — what the tree was before the join and what a revert of the join returns to), and OL2 pins that passing no list
+ * (`SHIPPED`) equals `NONE`.
  * PURE: no DB.
  *
  * Run: npm run test:config-sources   (it runs scripts/test-config-sources.ts, then this file)
@@ -41,9 +47,10 @@ function assert(c: unknown, m: string): asserts c { if (!c) throw new Error(m); 
 const OBS = 'observability-config-protocol';
 const K8S = 'kubernetes-gitops-protocol';
 const TF = 'terraform-iac-protocol';
-const SHIPPED = undefined;                       // what production passes: the shipped awaiting list
+const SHIPPED = undefined;                       // what production passes: the shipped awaiting list (EMPTY since the 1.12.0 join)
 const NONE: readonly string[] = [];              // "every table row's text has shipped"
-const STATES: Array<[string, readonly string[] | undefined]> = [['as shipped', SHIPPED], ['all rows shipped', NONE]];
+const AWAITING: readonly string[] = Object.freeze([OBS]);   // observability's row awaiting its text: before the join; after a revert
+const STATES: Array<[string, readonly string[] | undefined]> = [['row awaiting', AWAITING], ['all rows shipped', NONE], ['as shipped (no list passed)', SHIPPED]];
 
 // The observability lines (the published files of paichart/paichart-configs, plan §9.5; the rig's service name).
 const O_GIT = 'obs-otelcol: git-file — service github-service ; paichart/paichart-configs/observability/otelcol/config.yaml';
@@ -62,25 +69,27 @@ const snapObs = (lines: string[]): ConfigSourcesSnapshot => {
 };
 
 console.log('── W5: the lane row, its no-block rule, and the awaiting list as a parameter ──');
-test('OL1 the table: observability is a row, `runs-undeclared`, awaiting its text; Kubernetes and Terraform are `forced` and shipped', () => {
+test('OL1 the table: observability is a row, `runs-undeclared`, its text SHIPPED (no row awaits since the 1.12.0 join); Kubernetes and Terraform are `forced` and shipped', () => {
   eq(CONFIG_SOURCE_LANES[OBS], { lane: 'change', contractKey: 'observability-config', noBlock: 'runs-undeclared', descriptorWithoutServiceLine: 'keep' }, 'the observability row: ');
   eq([CONFIG_SOURCE_LANES[K8S].noBlock, CONFIG_SOURCE_LANES[TF].noBlock], ['forced', 'forced'], 'the older rows: ');
-  eq([...CONFIG_SOURCE_AWAITING_TEXT], [OBS], 'the awaiting list: ');
+  eq([...CONFIG_SOURCE_AWAITING_TEXT], [], 'the awaiting list (empty since the 1.12.0 join): ');
   // the column is read from the table ROW at its two sites (the per-leg rule, the snapshot decision); no accessor exists until a
   // third reader does (review: `configNoBlockOf` was removed — it had no caller)
   assert(!/configNoBlockOf/.test(fs.readFileSync(path.join(__dirname, '../lib/agents/harness/held-bytes/variant.ts'), 'utf8')), 'an unused no-block accessor is back');
-  eq([...CONFIG_SOURCE_PROTOCOLS].sort(), [K8S, TF].sort(), 'the protocols that declare Config sources as shipped: ');
+  eq([...CONFIG_SOURCE_PROTOCOLS].sort(), [K8S, OBS, TF].sort(), 'the protocols that declare Config sources as shipped: ');
   eq([...configSourceProtocolsFor(NONE)].sort(), [K8S, OBS, TF].sort(), '… with every row shipped: ');
+  eq([...configSourceProtocolsFor(AWAITING)].sort(), [K8S, TF].sort(), '… with observability\'s row awaiting (before the join; after a revert): ');
   // the retired held variant is NOT a row: a leg stamped with it never has a Config lane, in either state
   for (const [, aw] of STATES) eq(configSourceLaneOfLeg({ title: 'x', metadata: { protocol: HELD_VARIANT_PROTOCOL } }, aw), null, 'the retired variant: ');
   eq(HELD_OBS_PROTOCOL, OBS, 'the row is keyed by the observability protocol name: ');
 });
-test('OL2 INERT as shipped, a Config protocol with every row shipped — every reader of the awaiting list, through its own parameter', async () => {
+test('OL2 INERT while its row awaits, a Config protocol with every row shipped — every reader of the awaiting list, through its own parameter; and AS SHIPPED (no list passed) is the every-row-shipped state', async () => {
   const noDb = { task: { findUnique: async () => null }, stage: { findUnique: async () => null } } as never;
   const want: Record<string, { lane: string | null; key: string | null; has: boolean; force: boolean; res: boolean; read: boolean; only: string[] }> = {
-    'as shipped': { lane: null, key: null, has: false, force: false, res: false, read: false, only: ['observability-config'] },
+    'row awaiting': { lane: null, key: null, has: false, force: false, res: false, read: false, only: ['observability-config'] },
     'all rows shipped': { lane: 'change', key: 'observability-config', has: true, force: true, res: true, read: true, only: [] },
   };
+  want['as shipped (no list passed)'] = want['all rows shipped'];   // the join: production passes nothing and gets the joined state
   for (const [name, aw] of STATES) {
     const r = await resolveOwningLegProtocol(noDb, { id: 'L', type: 'PIPELINE', ...obsLeg }, aw);
     const got = { lane: configSourceLaneOf(OBS, aw), key: configSourceContractKeyOf(OBS, aw), has: legProtocolHasConfigLane(obsLeg, aw),
@@ -208,8 +217,12 @@ test('GV5 the FIVE shapes the Program Architect might write under the key (plan 
     eq([dv.fact.kept, dv.fact.removed, dv.fact.notDerived.filter((x) => x.token === 'observability-config'), dv.fact.notDerived.length],
       [['observability-config'], [], [{ token: 'observability-config', reason: 'block-unparseable' }], typeof cs === 'string' ? 3 : 1], `${name} derivation: `);
     assert(dv.contract === contract, `${name}: the derivation rewrote a contract it derived nothing from`);
-    // AS SHIPPED none of this is read: the leg has no Config lane and nothing is snapshotted
-    eq(configSnapshotDecision({ type: 'PIPELINE', protocol: OBS, description: 'Tune the collector.', interfaceContract: contract, takenAt: 't' }), { action: 'none' }, `${name} as shipped: `);
+    // WITH THE ROW AWAITING (before the join; after a revert) none of this is read: the leg has no Config lane and nothing is
+    // snapshotted. AS SHIPPED (no list passed) it IS read — the same answer as NONE above. LIVE since the 1.12.0 join: a program
+    // whose plan writes one of these five shapes forces every observability leg of it, a leg that declares nothing included
+    // (register CONFIG-SOURCES-OBS-JOIN-PRECONDITIONS item 26 — a recorded exception to "a no-block leg runs as before").
+    eq(configSnapshotDecision({ type: 'PIPELINE', protocol: OBS, description: 'Tune the collector.', interfaceContract: contract, takenAt: 't' }, AWAITING), { action: 'none' }, `${name} with the row awaiting: `);
+    eq(configSnapshotDecision({ type: 'PIPELINE', protocol: OBS, description: 'Tune the collector.', interfaceContract: contract, takenAt: 't' }), d, `${name} as shipped (no list passed): `);
   }
   // the string-valued form hits EVERY leg of the program that reads configSources — Kubernetes too (existing behaviour, restated)
   eq(resolveLegConfigSources({ protocol: K8S, contractValue: { configSourcesNotKeyedByToken: true }, taskBody: null }).state, 'unparseable');
@@ -381,9 +394,11 @@ console.log('── W5 row 1 / W7: the snapshot decision ──');
 test('SN1 configSnapshotDecision: none while the row awaits its text; write for a forced protocol whatever it resolves to; runs-undeclared writes a block and REMOVES on absent', () => {
   const d = (protocol: string | null, description: string | null, aw: readonly string[] | undefined, type = 'PIPELINE', interfaceContract: unknown = null) =>
     configSnapshotDecision({ type, protocol, description, interfaceContract, takenAt: 'T' }, aw);
-  // as shipped: observability is inert — the stamp statement is the one before Config sources
-  eq(d(OBS, block([O_GIT]), SHIPPED), { action: 'none' }, 'observability as shipped, a block: ');
-  eq(d(OBS, 'no block', SHIPPED), { action: 'none' }, 'observability as shipped, no block: ');
+  // with its row awaiting (before the join; after a revert): observability is inert — the stamp statement is the one before Config sources
+  eq(d(OBS, block([O_GIT]), AWAITING), { action: 'none' }, 'observability with its row awaiting, a block: ');
+  eq(d(OBS, 'no block', AWAITING), { action: 'none' }, 'observability with its row awaiting, no block: ');
+  // AS SHIPPED since the 1.12.0 join (no list passed — what the prepare step does): a block is snapshotted, no block is `remove`
+  eq([d(OBS, block([O_GIT]), SHIPPED).action, d(OBS, 'no block', SHIPPED)], ['write', { action: 'remove' }], 'observability as shipped: ');
   // not a leg, no protocol, a protocol with no row
   eq([d(OBS, block([O_GIT]), NONE, 'ACTION'), d(null, 'x', NONE), d('network-provisioning-protocol', 'x', NONE)], [{ action: 'none' }, { action: 'none' }, { action: 'none' }]);
   // forced: unchanged in both states — a snapshot whatever the block resolves to, no labelCheck

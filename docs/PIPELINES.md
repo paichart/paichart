@@ -215,6 +215,73 @@ check that file by hand. The Git file source is admin-only, and reads only the o
 - **Apply** = merge the candidate as a pull request after the Git base check reads MATCH (above); compare your pipeline's plan with the
   Plan witness; then your governed `terraform apply`.
 
+### Observability: kept files from Git or from your service
+
+- **The block is optional** (from observability-config 1.12.0; format under "Observability: a `## Config sources` block" below). A
+  leg with no `## Config sources` block runs as before: the collector and ingress files your read-only service returns as deployed
+  are kept and edited by reference. With a block, the platform keeps **only** the files its lines name. There are three kinds of
+  line — `git-file`, `service-held` and `live-read` — and no `supplied` line on an observability leg.
+- **Each label names one file, never a system.** Today a label names a file of pAIchart's reference observability service:
+  `obs-otelcol` (the collector's config) or `obs-ingress.<file name>` (one file of the ingress in front of it, for example
+  `obs-ingress.otlp-ingress.conf`). Another label stops the leg (`config-sources-unparseable`). Prometheus config, targets, rules
+  and dashboards are never declared: every leg reads them as before.
+- **`service-held`** — the file is kept as your service returns it (as deployed) and edited by reference. Your service's copy is
+  then the base the Author edits, so the package is only as right as that copy: use a service you govern, and run the base check
+  (`--live`) before you apply.
+- **`git-file`** — the file is kept from Git and edited by reference; apply it as a pull request after the Git base check reads
+  MATCH. A `live-read` line of the same label adds the served copy **as evidence only**: **pAIchart itself** compares the two,
+  line by line after secret redaction, and shows the result to the leg's Architect and Reviewer. It reads `identical`,
+  `equal-except-redacted`, `same-lines-bytes-differ`, `differs` (with up to 20 differing lines a side), or `not-checked` with a
+  reason; it is the Harvester's `gitLiveDrift` fact. No agent compares. Lines that are only in the served copy are removed when
+  you apply the Git file: the design says so, names no cause, and leaves keeping them to you. What a comparison can show of
+  your file: [SECURITY.md](SECURITY.md), "What a file comparison can quote".
+- **Git-only.** A `git-file` line with no `live-read` line means the leg relies on the Git file only. The package says so for that
+  file ("For the file <label> this package relies on the Git file only."); where it does not, the Reviewer records a
+  `NON-BLOCKING WARNING (git-file-only)`. It never blocks.
+- **A declared file that cannot be read.** A `git-file` or `service-held` file the platform does not keep stops approval: it is
+  listed first, nothing is packaged for it, and the leg ends `needs-revision` (forced `git-file-not-held` or
+  `service-held-not-held` if the agents did not say so). A `live-read` copy that cannot be read only means that file was not
+  compared.
+- **Declare every file the change modifies.** On a leg with a block, a file the block does not name is never kept or edited (a
+  file your service returns anyway is listed as `returned, not kept`). If the change must modify it, the leg stops for that file
+  and says a line is missing.
+- **Several observability legs in one program.** Every observability leg reads and keeps **every** line of the program's shared
+  block, so put a file in it only if a leg needs it. Give each leg a title and an objective that name the **one** file that leg
+  changes: in our test lab, a leg left with another leg's title harvested for the other leg's change. With two or more
+  observability legs, name a **pre-registered** service on the lines (see [Connecting your own services](#connecting-your-own-services)).
+  The platform also places a short read rule directly after the block in each observability Harvester's brief: the brief may limit
+  what a leg changes, never which declared lines it reads. A brief that said otherwise made the Harvester skip the other legs' files
+  in our test lab.
+- **The service.** A line that gives a descriptor URL makes the run register the service from that URL alone. Register it no other
+  way: the platform cannot tie a hand registration to the line, keeps no file from it, and the leg cannot be approved. What you
+  may see on the Harvester's `configSourceReads` when that happens:
+
+  | You see | It means | What to do |
+  |---|---|---|
+  | `file-from-other-service` | the file came back, but from a call the platform could not tie to the service the line declares, so it was not used | let the run register the service by the line's descriptor URL, or name the registered service on the line |
+  | `registered-under-other-name` | the declared service answered under a registered name the platform reads no files from | register it from its descriptor (its name is then `observability-readonly`), or name that service on the line |
+  | `unresolvedServices` | the declared descriptor URLs no registration in that run was tied to | the same two fixes; a leg that declared a file from such a service is stopped, which is the intended result |
+- **A leg with no block** runs as before, with these exceptions. (1) If the platform cannot read the leg's own record when a result
+  is saved, it tries once more and then stops the leg by name (`config-sources-could-not-check`) rather than guess whether the
+  leg declared sources. (2) Its harvest records one extra fact saying the leg ran undeclared. (3) In a program, a plan that puts
+  anything other than source lines under `configSources["observability-config"]` stops every observability leg of that program,
+  including a leg that declares nothing: an empty text, a note, an empty list, an empty object or a placeholder such as
+  `["none"]` all do it, and so does a `configSources` that is not a set of named blocks. No key at all, or `null`, is safe. The
+  leg stops as `config-sources-unparseable` (a leg that first ran before this release: `config-sources-snapshot-absent`). Re-plan;
+  the gate report's `--spec` option shows the fault before you release the gate ([GATES.md](GATES.md), item 8).
+- **A block with only `git-file` lines** still reads the stack through the read-only service, so the platform keeps the descriptor
+  URL the planner wrote for that leg. It stores that URL unchanged and does not check it then; it is checked where it is used,
+  when the descriptor is fetched and when the service is called. Only one plain URL is kept; an inline descriptor or any other
+  text there is removed.
+
+  > ⚠️ **Known limitation — a false "matches what is deployed" in the apply notes can be approved.** A package must not say a Git
+  > file matches its served copy, or differs from it, unless the platform's comparison says so, and the change Reviewer refuses
+  > such a statement. Measured in our test lab, it misses one place: a false statement that the Git file "matches what is
+  > deployed", written as an item of a list in the package's apply notes, was approved in 4 of 6 samples (the same statement
+  > elsewhere in the package was refused 15 of 15 times). **Before you apply, read the package's apply notes against the
+  > platform's comparison yourself** (the Harvester's `gitLiveDrift` fact, the same one the Reviewer is shown): any match or
+  > difference it does not show is wrong. A platform check that points the Reviewer at such statements is planned (no date).
+
 ### Network: kept device configurations
 
 - **Declare each device's source** in a `## Device sources` block ("Network: choosing each device's source" below): `git-file` (your config file in a Git
@@ -394,6 +461,20 @@ Descriptor (verbatim):
 The collector and ingress files the service returns as deployed are kept and edited by reference; Prometheus rules and dashboards are
 written in full.
 
+### Observability: a `## Config sources` block (optional, 1.12.0)
+
+```
+In the collector's config, cap the OTLP gRPC receiver's maximum receive message size at 8 MiB, leaving every other setting unchanged.
+
+## Config sources
+obs-otelcol: git-file — service github-service ; acme/infra-live/observability/otelcol/config.yaml
+obs-otelcol: live-read — service https://example.com/observability-readonly-descriptor.json
+obs-ingress.otlp-ingress.conf: service-held — service https://example.com/observability-readonly-descriptor.json
+```
+Leave out the `live-read` line for a Git-only file. A `live-read` line goes only under a `git-file` line of the same label. Never
+declare a password or key file (`htpasswd`, `.key`, `.pem`, …): the leg ends `needs-revision`, reason
+`config-sources-unparseable`. Details: "Observability: kept files from Git or from your service" above.
+
 ### A program (several pipelines that depend on each other)
 
 ```
@@ -526,8 +607,17 @@ pipeline that service:
     the hub it runs on; a spec written this way does not work on another install until that service is registered there.
   - **Write one service the same way on every line.** The same service given once as a URL and once as a name counts as two
     services, and the platform then fills in no descriptor for that leg.
-  - This is about the lines that read your live system. On a `git-file` line the service is the hub's Git file source,
-    which the published examples name `github-service`.
+  - **Except: two or more observability legs in one program name a pre-registered service.** With a URL, each leg registers the
+    service and deletes its own registration at its end, so the leg that finishes first removes the service under a leg still
+    running. Name the service by its registered name on the lines, and give the spec's README one setup step: register the
+    service once before launching (`registry(action:'register', descriptorUrl:'<url>')`). A spec with one observability leg
+    keeps the descriptor URL.
+  - This is about the lines that read your live system: `live-read`, `device-read`, and an observability `service-held` line,
+    which names its service the same two ways. On a `git-file` line the service is the hub's Git file source, which the
+    published examples name `github-service`.
+- **A descriptor URL the platform keeps is not vetted when it is kept** (an observability leg whose block has only `git-file`
+  lines keeps the planner's URL unchanged): it is checked where it is used, when the descriptor is fetched and when the service
+  is called.
 - **An agent can only change a registration its own run created** — never one a person registered, never another run's, and only rows
   owned by the user who launched the run. A pre-registered service is safe from teardown.
 - **Descriptors must pass the hub's register check** (e.g. each tool description ≤ 500 characters) — check one before use with

@@ -21,7 +21,7 @@
 | Env config | Root `.env` | Service-specific `.env` via `env_file` |
 | Retry logic | None | Exponential backoff with retryable error detection |
 | Third-party auth | Not supported | External OAuth (Snowflake pattern) |
-| Registration path | MCP `registry.register` or seed | **Seed script ONLY** for localhost endpoints (May 2026 — SSRF gate now blocks user-facing registration of private-IP endpoints; `SSRF_EXEMPT_SERVICES` exempts the seeded list at update time but `registry.register` has no exemption since no DB record exists yet) |
+| Registration path | MCP `registry.register` or seed | **Seed script ONLY** for localhost endpoints (May 2026 — SSRF gate now blocks user-facing registration of private-IP endpoints; `SSRF_EXEMPT_SERVICES` exempts the seeded list at update time but `registry.register` has no exemption since no DB record exists yet). **Second route (added 2026-11-26):** an operator-allowlisted private endpoint (`HUB_PRIVATE_ENDPOINT_ALLOWLIST`, `host:port`) registers through `registry.register` / a `descriptorUrl` — the tunnel-backed rig rows use it (see Step 10) |
 
 ---
 
@@ -468,6 +468,24 @@ npx ts-node scripts/seed-service-name.ts
 After the seed script runs once, the service is in the DB and in
 `SSRF_EXEMPT_SERVICES`. Future updates via `registry(action: 'update')` MCP
 tool work fine — the exempt check matches the existing record.
+
+> **Second route — the operator allowlist (added 2026-11-26; the seed route above is unchanged).** Since the self-host
+> work, `registry.register` (by fields or by `descriptorUrl`) ACCEPTS a private endpoint whose `host:port` the operator
+> lists in `HUB_PRIVATE_ENDPOINT_ALLOWLIST` (comma-separated; `lib/utils/endpoint-allowlist`, approval check
+> `OPERATOR_ALLOWLIST` in `service-approval-policy.js`; pinned by `test:hub-endpoint-allowlist`). The same list admits the
+> endpoint at health-check and call time, so no `SSRF_EXEMPT_SERVICES` entry is needed. Production's list (2026-11-26):
+> `127.0.0.1:3114,127.0.0.1:3107,127.0.0.1:3113,127.0.0.1:3112`.
+>
+> **Tunnel-backed rig rows.** A rig service does NOT run on prod: prod's loopback port is an `sshd` reverse-tunnel
+> listener (`ssh -N -R 127.0.0.1:PORT:127.0.0.1:PORT root@prod` from the rig host; prod 2026-11-26: sshd on 3112, 3113,
+> 3114), the container runs on the rig host bound to its own `127.0.0.1`. Of the public descriptors only
+> `observability-readonly` names a tunnel endpoint (`http://127.0.0.1:3114/mcp`); the k8s and terraform descriptors name
+> `https://k8s-lab.paichart.app/mcp` / `https://tf-lab.paichart.app/mcp`. A tunnel-backed row registers from its public
+> descriptor, is user-owned (`createdBy: user_registration`, not normalized by a seed), and is NOT TRUSTED (no token
+> forwarded). Rig rows self-provision per run, except `observability-readonly`: a STANDING row on production (register
+> OBS-READONLY-STANDING-ROW — do not delete). The registration's "unencrypted http://" warning is not a real risk on
+> this path (loopback → SSH-encrypted tunnel → loopback). Use the seed route for a first-party container ON prod; use the
+> allowlist route for a private endpoint you register as a user (self-host, or a tunnel to a rig).
 
 ### Seed script template — `findFirst` + update/create pattern
 
@@ -1017,6 +1035,8 @@ writes via `prisma.mCPTool.upsert()` directly and bypasses the SSRF gate.
 See Step 10 for full operational guidance. This is **intentional** — the
 registration path has no exemption since no DB record exists yet to match
 against `SSRF_EXEMPT_SERVICES`.
+**Or (added 2026-11-26)**: list the endpoint's `host:port` in `HUB_PRIVATE_ENDPOINT_ALLOWLIST` and restart the MCP server;
+`registry.register` then accepts it (the tunnel-backed rig rows' route — Step 10, "Second route").
 
 ### 3. Snowflake Account Format
 **Symptom**: "Incorrect username or password"

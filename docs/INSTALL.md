@@ -5,6 +5,9 @@ fresh Ubuntu 24.04 laptop on a home LAN (2026-09-07) and again by a fresh instal
 reach this one (`192.168.1.50`, a hostname, or `localhost` if only this machine will use it) — it becomes
 `APP_BASE_URL`, and **`APP_BASE_URL` is your install's identity** (see RUNNING.md).
 
+**Prefer to watch first?** [The install and first run on video](https://www.youtube.com/watch?v=ytUNK9_xPwQ) (18 min) follows this guide and
+[FIRST-RUN.md](FIRST-RUN.md) on a fresh machine.
+
 **Before you start, have:**
 - a machine: Ubuntu 24.04 (or similar) with about **16 GB RAM, 8 vCPU and 200 GB disk**, a user with `sudo`, outbound internet.
   A 2–4 GB machine will fail at the build in step 5;

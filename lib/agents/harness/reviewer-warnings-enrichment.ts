@@ -74,11 +74,17 @@ export const REGISTERED_WARNING_IDS: Readonly<Record<string, readonly string[]>>
  * block runs exactly as it always did and keeps exactly the set above, so the id is asked through the leg's governing state, never
  * added to the protocol's row for every leg.
  *
- * ⚠️ EMPTY UNTIL THE JOIN: the observability row is extended with `git-file-only` in the SAME commit that ships the 1.12.0 text
- * (plan §9.3 item 3) — the id is registered when a Reviewer can be told to write it, not before. The mechanism is here so that the
- * join is one line.
+ * The observability row was added in the 1.12.0 join (2026-11-23), with the text that tells a Reviewer to write the label — the id
+ * is registered when a Reviewer can be told to write it, not before. It must NEVER also be added to the protocol's row in
+ * `REGISTERED_WARNING_IDS` above (plan §9.3 item 3 names that table, wrongly): there it would be registered on a leg with no block.
+ * Pinned by `test:reviewer-warnings-net` N9 (text ids == the two tables together; no id in both) and `test:config-sources` MIX5b
+ * (a `runs-undeclared` protocol off the awaiting list has a row here; one still awaiting has none).
  */
-export const DECLARED_LEG_WARNING_IDS: Readonly<Record<string, readonly string[]>> = Object.freeze({});
+export const DECLARED_LEG_WARNING_IDS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  // `git-file-only` (observability-config 1.12.0, Config sources STEP 3): a file kept from Git with no live read of the served copy
+  // that the package does not state — keyed by the Reviewer on the platform's own "not stated for:" line.
+  'observability-config-protocol': Object.freeze(['git-file-only']),
+});
 
 /** The ids registered for a leg: its protocol's row, plus the declared-leg ids when `declared` (the governing state is `parsed`). */
 export function registeredWarningIdsFor(protocol: string | null, declared: boolean,

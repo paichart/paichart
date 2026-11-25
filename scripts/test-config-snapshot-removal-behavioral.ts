@@ -104,11 +104,15 @@ async function main() {
       !!snap4 && snap4.takenAt === m4.protocolResolvedAt && snap4.takenAt !== 'PLANTED' && (snap4.resolution as Rec)?.state === 'parsed'
       && eventsFor(r4, 'CONFIG_SOURCES_SNAPSHOT_REMOVED').length === 0 && eventsFor(r4, 'CONFIG_SOURCES_SNAPSHOT_TAKEN').length === 1, JSON.stringify(m4).slice(0, 400));
 
-    // ── R5: AS SHIPPED (no option): the row awaits its text, the decision is `none`, the arm is NOT reached ──
+    // ── R5: AS SHIPPED (no option). Since the observability 1.12.0 join (2026-11-23) the default list no longer holds the row, so
+    //    this case IS the removal arm, driven exactly as production drives it (no option at all). Before the join — and after a
+    //    revert of it — the row awaits its text, the decision is `none` and the arm is NOT reached; the check below states both. ──
     const r5 = await mk(OBS_TITLE('R5'), NO_BLOCK, { [CONFIG_SOURCES_SNAPSHOT_KEY]: PLANTED });
     await prepareTaskForExecution(r5);
     const m5 = await meta(r5);
-    check('R5 as shipped (observability on the awaiting list): the stamp is written, the planted key is UNTOUCHED and no event is logged — what a deploy of this slice does',
+    check(CONFIG_SOURCE_AWAITING_TEXT.includes(OBS)
+      ? 'R5 as shipped (observability on the awaiting list): the stamp is written, the planted key is UNTOUCHED and no event is logged'
+      : 'R5 as shipped (the 1.12.0 join — no row awaits): the stamp is written, the planted key is REMOVED by the same statement and ONE removal event is logged',
       CONFIG_SOURCE_AWAITING_TEXT.includes(OBS) ? (m5.protocol === OBS && canon(m5[CONFIG_SOURCES_SNAPSHOT_KEY]) === canon(PLANTED) && eventsFor(r5, 'CONFIG_SOURCES_SNAPSHOT_REMOVED').length === 0)
         // after the join this case IS the arm (the default list no longer holds the row): the key is removed and the event logged
         : (m5.protocol === OBS && !(CONFIG_SOURCES_SNAPSHOT_KEY in m5) && eventsFor(r5, 'CONFIG_SOURCES_SNAPSHOT_REMOVED').length === 1), JSON.stringify(m5).slice(0, 300));

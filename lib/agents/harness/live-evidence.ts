@@ -57,9 +57,9 @@ export const LIVE_EVIDENCE_MIN_VERSIONS: Readonly<Record<string, string>> = Obje
   // Config sources STEP 4 (2026-11-17): the Terraform Config-sources text. Inert twice over, as for k8s: no leg composes 1.17.0 until
   // it ships, and no tf leg is a Config-sources leg until its row leaves CONFIG_SOURCE_AWAITING_TEXT.
   [canonicalProtocolName('terraform-iac')]: '1.17.0',
-  // Config sources STEP 3 P3 (2026-11-21): the observability Config-sources text. Inert twice over until the join, as k8s and tf
-  // were: no leaf composes 1.12.0 until it ships, and no observability leg is a Config-sources leg while its row is on
-  // CONFIG_SOURCE_AWAITING_TEXT. ⚠️ The version is NOT the population: an execution composed at 1.12.0 can persist after a revert
+  // Config sources STEP 3 P3 (2026-11-21): the observability Config-sources text. LIVE since the join (2026-11-23: the row left
+  // CONFIG_SOURCE_AWAITING_TEXT with the 1.12.0 text); an execution composed BELOW 1.12.0 — every stored observability execution —
+  // still stamps nothing. ⚠️ The version is NOT the population: an execution composed at 1.12.0 can persist after a revert
   // of the text, so every observability arm also asks the governing declaration's STATE (`parsed`, or the named no-block arm).
   [canonicalProtocolName('observability-config')]: '1.12.0',
 });
@@ -249,4 +249,4 @@ export function computeLiveEvidence(sources: LegDeviceSourcesResolution, toolCal
 
 // §6 render: client-safe module (no server imports) — re-exported for callers and tests.
 export { renderLiveEvidenceForPrompt, listTotal, LIVE_EVIDENCE_RENDER_NAME, LIVE_EVIDENCE_SCOPE_CLAUSE, CONTRACT_NOT_DECLARED_LABEL, CONFIG_LIVE_EVIDENCE_SCOPE_CLAUSE,
-  FILES_LIVE_EVIDENCE_SCOPE_CLAUSE, ALL_GIT_ONLY_FILES_NOTE } from './live-evidence-render';
+  FILES_LIVE_EVIDENCE_SCOPE_CLAUSE, ALL_GIT_ONLY_FILES_NOTE, FILES_NOT_TAKEN_HEADING, FILES_NOT_TAKEN_COUNT_WORDS } from './live-evidence-render';

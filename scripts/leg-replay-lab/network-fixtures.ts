@@ -46,6 +46,12 @@ export interface NetworkFixtureSpec {
   /** B4 failure mode: hosts whose every device call returns the pool's verbatim failed result */ deviceFailureHosts?: string[];
   /** fixture file: the catalogue (B5) */ catalogue?: string;
   /** B5: the services this node's catalogue holds (a subset of the catalogue file's) */ catalogueServices?: string[];
+  /** L-CS-O (fixture blind read F1, 2026-11-23): `true` ⇒ the `catalogueServices` (services that exist BEFORE the run: pre-registered)
+   *  are also rows of the prompt's "Available services and tools" list. Production builds that list from EVERY ACTIVE mcp_tools row
+   *  (`buildHubToolGuidance`, un-scoped by design), so a service the owner pre-registered is in it; the lab builds it from the
+   *  snapshot's rows of the day it was taken, where a service registered for one cell does not exist. Opt-in: a lab registered before
+   *  this field renders as it did. A `catalogueOnRegister` service is never added (it does not exist when the prompt is built). */
+  hubListsCatalogueServices?: boolean;
   /** B5 (crib fix, ADDENDUM (c)): descriptor URL → catalogue service that joins the catalogue (tools / health / discover / list) once a
    *  `registry register descriptorUrl` of that URL SUCCEEDS — the platform registers the descriptor's service, so production would then
    *  answer its tools. Without it the crib's descriptor cells read `unserved-catalogue` right after a successful register. */
@@ -64,6 +70,22 @@ export interface NetServeEntry { tier: NetTier; tool: string; action: string | n
 
 const parseMaybe = (v: unknown): unknown => { if (typeof v !== 'string') return v; try { return JSON.parse(v); } catch { return v; } };
 const asObj = (v: unknown): Record<string, any> | null => { const p = parseMaybe(v); return p && typeof p === 'object' && !Array.isArray(p) ? p as Record<string, any> : null; };
+
+/** L-CS-O: the snapshot's service rows with the fixture's pre-registered catalogue services added, in the snapshot's own name order
+ *  (snapshot.ts orders by name). Refuses a name the snapshot already carries (two rows of one name would list it twice). Returns the
+ *  SAME array when the fixture does not ask for it. */
+export function hubRowsWithCatalogueServices<T extends { name: string; capabilities: unknown }>(rows: T[], fx: LoadedNetworkFixture | null): Array<T | { name: string; capabilities: unknown }> {
+  if (!fx?.spec.hubListsCatalogueServices) return rows;
+  const names = fx.spec.catalogueServices ?? [];
+  if (!names.length || !fx.catalogue) throw new Error('L-CS-O: hubListsCatalogueServices needs catalogueServices and a catalogue file');
+  const added = names.map((n) => {
+    if (rows.some((r) => r.name === n)) throw new Error(`L-CS-O: hubListsCatalogueServices — the snapshot already lists a service named ${n}`);
+    const tools = (fx.catalogue!.services[n] as any)?.tools?.tools;
+    if (!Array.isArray(tools) || !tools.length || tools.some((t: any) => typeof t?.name !== 'string')) throw new Error(`L-CS-O: catalogue service ${n} carries no tools listing`);
+    return { name: n, capabilities: { tools: tools.map((t: any) => ({ name: t.name })) } };
+  });
+  return [...rows, ...added].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
 
 export function loadNetworkFixture(dir: string, spec: NetworkFixtureSpec): LoadedNetworkFixture {
   const read = (f?: string) => (f ? JSON.parse(fs.readFileSync(path.resolve(dir, f), 'utf8')) : null);

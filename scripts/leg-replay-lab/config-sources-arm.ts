@@ -1,10 +1,10 @@
 /**
  * Leg replay lab — L-CS-K-arm (Config sources STEP 2, code push slice 4; plan §2.2a): WHICH arm of a cell reads Config sources.
  *
- * WHEN THIS WAS WRITTEN (2026-11-15) production was inert twice over for Kubernetes: `CONFIG_SOURCE_AWAITING_TEXT`
- * (held-bytes/variant.ts) held `kubernetes-gitops`, and `LIVE_EVIDENCE_MIN_VERSIONS` keyed it at 1.19.0, which no released text
- * carried. Kubernetes left the list at 1.19.0 (2026-11-16) and Terraform at 1.17.0 (2026-11-18); the list holds
- * `observability-config` today, until its 1.12.0 text. The need is unchanged: a lab runs a base arm and a candidate arm of
+ * WHY: a protocol's Config-sources code ships before its text. While its row is on `CONFIG_SOURCE_AWAITING_TEXT`
+ * (held-bytes/variant.ts) production treats no leg of it as a Config-sources leg, and `LIVE_EVIDENCE_MIN_VERSIONS` keys the facts
+ * at a version no released text carries yet. (History: Kubernetes left the list at 1.19.0, 2026-11-16; Terraform at 1.17.0,
+ * 2026-11-18; the list holds `observability-config` until its 1.12.0 text.) A lab runs a base arm and a candidate arm of
  * different text versions on ONE tree, so it needs a per-arm answer:
  *
  *   armConfigSources(leg, protocolInjection)
@@ -24,8 +24,9 @@
  *
  * PURE. No service, no database, no model.
  */
-import { CONFIG_SOURCE_LANES, isHeldCapableLeg, isGitFileSourceLeg, isDeviceSourceLeg, type OwningLegResolution } from '../../lib/agents/harness/held-bytes/variant';
+import { CONFIG_SOURCE_LANES, isHeldCapableLeg, isGitFileSourceLeg, isDeviceSourceLeg, captureScopesFor, type OwningLegResolution } from '../../lib/agents/harness/held-bytes/variant';
 import { governingConfigSources, type LegConfigSourcesResolution } from '../../lib/agents/harness/config-sources-read';
+import { configSourcesReadRuleDecision, type ConfigSourcesReadRuleDecision } from '../../lib/agents/harness/config-sources-read-rule';
 import { CONFIG_SOURCES_SNAPSHOT_KEY } from '../../lib/agents/harness/config-sources';
 import { liveEvidenceVersionApplies } from '../../lib/agents/harness/live-evidence';
 import { canonicalProtocolName, resolveTaskProtocol } from '../../lib/agents/harness/program-protocol';
@@ -57,7 +58,18 @@ export function armReadsConfigSources(leg: LegRow, protocolInjection: unknown): 
 export function armConfigSources(leg: LegRow, protocolInjection: unknown): LegConfigSourcesResolution | null {
   if (!armReadsConfigSources(leg, protocolInjection)) return null;
   const c = configLegOf(leg)!;
-  return governingConfigSources({ description: c.description, contract: c.contract, snapshot: c.snapshot, protocolStamped: true /* the lab's leg models a stamped leg (STEP 3 A9) */ }, c.protocol);
+  return governingConfigSources({ description: c.description, contract: c.contract, snapshot: c.snapshot, protocolStamped: legProtocolStamped(leg) }, c.protocol);
+}
+
+/**
+ * STEP 3 slice L (P3-BUILD §8a item 10) — `protocolStamped` as PRODUCTION derives it (`config-sources-read.ts`:
+ * `jsonb_typeof(metadata -> 'protocol') = 'string'`): did the leg ever reach the stamp writer. Never a constant: `configLegOf`
+ * accepts a protocol resolved by the TITLE fallback, so a hand-built leg carrying a snapshot and no `metadata.protocol` must read
+ * `snapshot-unreadable` here as it does in production (rule A9). Only a real string counts.
+ */
+export function legProtocolStamped(leg: LegRow): boolean {
+  const meta = leg && leg.metadata && typeof leg.metadata === 'object' && !Array.isArray(leg.metadata) ? (leg.metadata as Record<string, unknown>) : null;
+  return !!meta && typeof meta.protocol === 'string';
 }
 
 /** The owning-leg resolution production would hand the LEG's own nets once the text has shipped: `variant.ts` builds
@@ -69,4 +81,69 @@ export function armOwningLeg(leg: LegRow, protocolInjection: unknown): OwningLeg
   const c = configLegOf(leg)!;
   const l = leg as { title?: string | null; metadata?: unknown };
   return { kind: 'self', legId: c.legId, heldCapable: isHeldCapableLeg(l), gitFileSource: isGitFileSourceLeg(l), deviceSource: isDeviceSourceLeg(l), configSourceProtocol: c.protocol } as OwningLegResolution;
+}
+
+/**
+ * STEP 3 slice L (P3-BUILD §8a item 11, as corrected): the owning-leg resolution production hands a LEAF's nets on this arm —
+ * `{ kind: 'leg', legId, heldCapable, ownStageId, gitFileSource, deviceSource, configSourceProtocol }` (variant.ts
+ * `resolveOwningLegProtocol` for a child of the leg's stage). The facts of a `runs-undeclared` leg with no block need a RESOLVED
+ * leg carrying `configSourceProtocol`: the no-block arm of `configSourceReads` stamps only for one (a leaf with no leg also reads
+ * `not-config-source-leg`, and must stamp nothing). Null when the arm does not read Config sources.
+ */
+export function armLeafOwningLeg(leg: LegRow, protocolInjection: unknown, ownStageId: string | null | undefined): OwningLegResolution | null {
+  if (!armReadsConfigSources(leg, protocolInjection)) return null;
+  const c = configLegOf(leg)!;
+  const l = leg as { title?: string | null; metadata?: unknown };
+  return { kind: 'leg', legId: c.legId, heldCapable: isHeldCapableLeg(l), ownStageId: String(ownStageId ?? ''), gitFileSource: isGitFileSourceLeg(l), deviceSource: isDeviceSourceLeg(l), configSourceProtocol: c.protocol } as OwningLegResolution;
+}
+
+/** What held capture takes from a leg: the Git-lane switch, the Config scope and the protocol the scope belongs to — ONE object. */
+export interface LabCaptureScopes { gitFileSourceLeg: boolean; configSources: LegConfigSourcesResolution | null; configSourceProtocol: string | null }
+
+/**
+ * STEP 3 slice L (register CONFIG-SOURCES-OBS-JOIN-PRECONDITIONS item 8; P3-BUILD §8 item 1) — THE ONE lab answer to "what does
+ * held capture take from this leg on this arm": the SHIPPING `captureScopesFor`, asked with the arm's owning-leg resolution and the
+ * arm's governing declaration. No lab file decides the Git lane or the Config scope any other way.
+ *
+ *   - An arm that reads Config sources (`armReadsConfigSources`): production's three values, as they come. For a `runs-undeclared`
+ *     protocol (observability) the Git lane is ON only for a declaration that is not `not-config-source-leg`; a leg that declares
+ *     nothing reads no Git lane and passes its `not-config-source-leg` resolution through as the scope (production's shape).
+ *   - Every other arm: production's answer for a leg with NO Config-sources protocol on its resolution — the Git lane by name
+ *     (`isGitFileSourceLeg`), no scope, no protocol. This is `captureScopesFor` too (asked with a resolution carrying no
+ *     `configSourceProtocol`), so a base arm's store is byte-identical to the one the lab built before this helper.
+ *   - No leg: nothing (the Git lane off, no scope) — `captureScopesFor(null, null)`.
+ */
+export function labCaptureScopes(leg: LegRow, protocolInjection: unknown): LabCaptureScopes {
+  if (!leg) return captureScopesFor<LegConfigSourcesResolution>(null, null);
+  const l = leg as { title?: string | null; metadata?: unknown };
+  const reads = armReadsConfigSources(leg, protocolInjection);
+  const owning = { kind: 'self', legId: String(leg.id ?? ''), heldCapable: isHeldCapableLeg(l), gitFileSource: isGitFileSourceLeg(l), deviceSource: isDeviceSourceLeg(l),
+    ...(reads ? { configSourceProtocol: configLegOf(leg)!.protocol } : {}) } as OwningLegResolution;
+  return captureScopesFor<LegConfigSourcesResolution>(owning, reads ? armConfigSources(leg, protocolInjection) : null);
+}
+
+/** Fail closed (precondition 8): a Config scope travels WITH its protocol, or the store is not built. `captureScopesFor` returns
+ *  them together; a hand-built object that carries one without the other is refused by name. */
+export function assertCaptureScopes(scopes: LabCaptureScopes, where: string): LabCaptureScopes {
+  if ((scopes.configSources === null) !== (scopes.configSourceProtocol === null)) {
+    throw new Error(`${where}: capture scopes carry ${scopes.configSources ? 'a Config scope with NO protocol' : 'a protocol with NO Config scope'} — the scope and its protocol travel as ONE object (captureScopesFor), never apart`);
+  }
+  return scopes;
+}
+
+/**
+ * Config sources read rule (2026-11-25) — the lab's answer to the SHIPPING gate (`configSourcesReadRuleDecision`,
+ * lib/agents/harness/config-sources-read-rule.ts) for a LEAF of this leg, from the snapshot alone (no DB). The owning-leg resolution
+ * is the one `resolveOwningLegProtocol` builds for a child of the leg's stage with today's (empty) awaiting list — the protocol from
+ * the leg's stamp, present only when its protocol has a Config lane — and the declaration is the SHIPPING pure rule
+ * `governingConfigSources` over the stored leg row, as `readLegConfigSources` reads it. Independent of the arm's text version: the
+ * production gate has no version test either.
+ */
+export function labLeafConfigSourcesReadRule(leg: LegRow, task: { type?: string | null; stage_id?: string | null }, agentRole: string | null | undefined): ConfigSourcesReadRuleDecision {
+  const c = configLegOf(leg);
+  const l = (leg ?? {}) as { title?: string | null; metadata?: unknown };
+  const owningLeg = c ? ({ kind: 'leg', legId: c.legId, heldCapable: isHeldCapableLeg(l), ownStageId: String(task.stage_id ?? ''), gitFileSource: isGitFileSourceLeg(l),
+    deviceSource: isDeviceSourceLeg(l), configSourceProtocol: c.protocol } as OwningLegResolution) : null;
+  const sources = c ? governingConfigSources({ description: c.description, contract: c.contract, snapshot: c.snapshot, protocolStamped: legProtocolStamped(leg) }, c.protocol) : null;
+  return configSourcesReadRuleDecision({ taskType: task.type, agentRole, owningLeg, sources });
 }

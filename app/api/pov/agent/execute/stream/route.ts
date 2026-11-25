@@ -13,6 +13,7 @@ import { validatePOVAccess } from '@/lib/auth/validate-pov-access';
 import { agentExecutionLimiter } from '@/lib/middleware/rate-limit';
 import { mcpLogger } from '@/lib/logger';
 import { applySystemPromptInjectionsWithFact } from '@/lib/services/execution-system-prompt';
+import { resolveConfigSourcesReadRule, briefTaskFor } from '@/lib/agents/harness/config-sources-read-rule';
 import { resolveTaskProtocol } from '@/lib/agents/harness/program-protocol';
 import { EXECUTION_TASK_CONTEXT_INCLUDE, EXECUTION_TEMPLATE_SELECT } from '@/lib/services/execution-hydration';
 import { persistTerminalFailure, resolveAgentRole } from '@/lib/services/execution-terminal-persist';
@@ -464,6 +465,12 @@ export const POST = createHandler(
           (task as any).agentTemplate?.defaultRole,
           (task as any).agentRole,
         );
+        // Config sources read rule (2026-11-25): the SAME gate as the engine (config-sources-read-rule.ts); never throws. ON ⇒ the
+        // rule is inserted beside the brief's `## Config sources` block in the description BOTH builders render below (the system
+        // HEAD's buildContextSummary and the user §3 via promptTask); the stored row is untouched.
+        const readRuleOn = (await resolveConfigSourcesReadRule(prisma as never,
+          { id: task.id, type: task.type, title: task.title, metadata: task.metadata }, resolvedAgentRole)).on === true;
+        const briefTask = briefTaskFor(task, { on: readRuleOn });
 
         // 2026-04-18 (Concern B, stream-route parity): enforce template-ownership
         // invariant BEFORE the three-branch prompt resolution below. The ad-hoc
@@ -492,7 +499,7 @@ export const POST = createHandler(
           // @see agent-prompt-assembly-pattern.md
           const template = task.agentTemplate;
           const templateRole = resolvedAgentRole; // Axis 4: engine-canonical (was `template.defaultRole || 'AI Assistant'` — dropped config + task)
-          const contextualInfo = buildContextSummary(task);
+          const contextualInfo = buildContextSummary(briefTask);
           const resolvedTemplate = resolvePromptPlaceholders(
             template.promptTemplate || '',
             templateRole,
@@ -543,6 +550,8 @@ export const POST = createHandler(
           templateMetadata: task.agentTemplate?.metadata as Record<string, any> | null,
           constraints: (task.agentTemplate as any)?.constraints ?? null,
           taskProtocol: resolveTaskProtocol({ title: task.title, metadata: task.metadata }),
+          // Config sources read rule (2026-11-25): the SAME gate as the engine (config-sources-read-rule.ts); never throws.
+          configSourcesReadRule: readRuleOn,
         }, prisma, mcpLogger.child({ executionId: execution.id, taskId: task.id, templateId: task.agentTemplate?.id }));
         systemPrompt = injectionResult.prompt;
         const protocolInjection = injectionResult.protocolInjection;
@@ -561,7 +570,7 @@ export const POST = createHandler(
         // ships). POV/phase keep the nested stage.phase precedence (full-row
         // superset the access gate guarantees) with the direct canonical relations
         // as fallback. workflow/successMetrics still skip (not on GUI AgentConfig).
-        const promptTask = { ...task, pov: task.stage?.phase?.pov ?? task.pov, phase: task.stage?.phase ?? task.phase };
+        const promptTask = { ...briefTask, pov: task.stage?.phase?.pov ?? task.pov, phase: task.stage?.phase ?? task.phase };
         const promptConfig = {
           prompt: task.prompt || body.agentConfig.prompt,
           // Axis 4c (2026-07-06): pass RAW body.agentConfig?.role — buildAgentPromptBody resolves the canonical

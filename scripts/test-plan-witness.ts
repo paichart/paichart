@@ -586,7 +586,7 @@ const rendered = { version: 1, state: 'rendered', authorExecutionId: AUTH_EXEC, 
 const TF_BODY = '## Config sources\nmain-tf: git-file — service github-service ; paichart/paichart-configs/terraform/main.tf\n';
 const TF_SNAPSHOT = buildConfigSourcesSnapshot('terraform-iac', resolveLegConfigSources({ protocol: 'terraform-iac-protocol', contractValue: undefined, taskBody: TF_BODY }), '2026-11-18T00:00:00.000Z');
 const TF_HELD_REFS = [{ target: 'github:paichart:paichart-configs', path: '/terraform/main.tf' }];
-function world(author: Record<string, unknown> | null, reviewer: Record<string, unknown> | null, witness: unknown, o: { olderAuthorWitness?: unknown; throwOnWitness?: boolean; newerAuthorAfterFirstRead?: unknown; captureRefs?: Array<{ target: string; path: string }>; notPinned?: number } = {}) {
+function world(author: Record<string, unknown> | null, reviewer: Record<string, unknown> | null, witness: unknown, o: { /** the 1.12.0 join: the leg row of a leg that declares NOTHING (an observability leg's carrier read) instead of the Terraform one */ noBlockLegRow?: boolean; olderAuthorWitness?: unknown; throwOnWitness?: boolean; newerAuthorAfterFirstRead?: unknown; captureRefs?: Array<{ target: string; path: string }>; notPinned?: number } = {}) {
   const sqls: string[] = [];
   const execs: StubExecution[] = [
     { id: AUTH_EXEC, taskId: 't-author', createdAt: new Date(1_700_000_000_000), result: { agentRole: 'config_change_author', finalResponse: 'pkg', ...(author ? { editApplication: author } : {}), ...(witness !== undefined ? { planWitness: witness } : {}) } },
@@ -609,7 +609,7 @@ function world(author: Record<string, unknown> | null, reviewer: Record<string, 
     $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
       // the carrier's read of the leg's governing Config-sources declaration (made only once terraform-iac is a Config-sources
       // protocol). It arrives as ONE Prisma.sql object, not a template-strings array — answer it before treating the call as one.
-      if (JSON.stringify(strings).includes(CONFIG_SOURCES_SNAPSHOT_KEY)) { legRowReads++; return [{ description: TF_BODY, contract: null, snapshot: TF_SNAPSHOT, protocolStamped: true }]; }
+      if (JSON.stringify(strings).includes(CONFIG_SOURCES_SNAPSHOT_KEY)) { legRowReads++; return [o.noBlockLegRow ? { description: 'Tune the ingress.', contract: null, snapshot: null, protocolStamped: true } : { description: TF_BODY, contract: null, snapshot: TF_SNAPSHOT, protocolStamped: true }]; }
       const sql = strings.join('?'); sqls.push(sql);
       if (o.throwOnWitness && sql.includes("->>'planWitness'")) throw new Error('db down');
       return stub.$queryRaw(strings, ...values);
@@ -665,7 +665,10 @@ test('C5 scope: an out-of-scope package (no held grammar) is not forced by the s
   eq([await applyHeldEditCarrier(w2.db, TFLEG, m2, deps), m2.qualityGate.heldEdit.forced, m2.qualityGate.heldEdit.reason], [{ applied: true, forced: false }, false, 'stop-sentence-altered']);
 });
 test('C6 population: a leg of another protocol never reads the fact; the fact must be the SELECTED Author execution\'s own', async () => {
-  const k = world(applied, rendered, witnessFact('absent')); const m = merge();
+  // (the 1.12.0 join, 2026-11-23: the carrier reads an observability leg's own row for its Config-sources declaration, so the
+  // fixture gives that leg the row of a leg that declares nothing — production's always has one. The subject is unchanged: the
+  // Plan-witness fact is never read off a Terraform leg.)
+  const k = world(applied, rendered, witnessFact('absent'), { noBlockLegRow: true }); const m = merge();
   eq([await applyHeldEditCarrier(k.db, OBSLEG, m, deps), m.qualityGate.outcome, k.witnessReads()], [{ applied: true, forced: false }, 'approved', 0]);
   const t = world(applied, rendered, witnessFact('altered')); await applyHeldEditCarrier(t.db, TFLEG, merge(), deps);
   eq(t.witnessReads(), 1, 'one read on a Terraform leg: ');
@@ -697,7 +700,7 @@ test('C7 precedence, stated: a force above the stop sentence keeps its own reaso
 
 test('C7b (Config sources STEP 3 P1) the same carrier fixture in BOTH awaiting states of the Terraform row, through the carrier\'s own parameter — neither reason moved with the observability row', async () => {
   const TFP = 'terraform-iac-protocol';
-  // every awaiting list a tree can ship: the one shipped today (observability awaiting), none awaiting, Terraform awaiting, both awaiting
+  // every awaiting list a tree can ship: the one shipped today (none awaiting since the observability 1.12.0 join), none awaiting, Terraform awaiting, both awaiting
   const lists: Array<[string, readonly string[] | undefined, boolean]> = [
     ['as shipped', undefined, true], ['no row awaiting', [], true], ['Terraform awaiting', [TFP], false], ['Terraform and observability awaiting', [TFP, 'observability-config-protocol'], false]];
   for (const [name, configAwaiting, tfLive] of lists) {
@@ -758,7 +761,7 @@ test('C10 the list forces keep the stop sentence\'s scope and place: out-of-scop
     eq([mx.qualityGate.outcome, mx.qualityGate.heldEdit.reason], ['needs-revision', reason], `${reason}: `);
   }
   // a leg of another protocol never reads the fact
-  const k = world(applied, rendered, w); const mk = merge();
+  const k = world(applied, rendered, w, { noBlockLegRow: true }); const mk = merge();   // (the join: an observability leg's own no-block row — see C6)
   eq([await applyHeldEditCarrier(k.db, OBSLEG, mk, deps), mk.qualityGate.outcome, k.witnessReads()], [{ applied: true, forced: false }, 'approved', 0]);
   // a needs-revision write names the reason and is not "forced"
   const n2 = world(applied, rendered, w); const mn2 = merge('needs-revision');

@@ -22,7 +22,7 @@ retired; the same files are now in `paichart/paichart-configs`.
 | `PROGRAM-WALKTHROUGH.md` | requirements.md, the program task (3 runs), Program Architect and plan, gates, the value leg, producer, Node C, program synthesis and the release AND; leg task vs the agents inside it | done (draft 2026-10-28) |
 | `K8S-LEG-WALKTHROUGH.md` | the kubernetes-gitops leg: harness, Harvester, Architect, Author, Reviewer, leg synthesis | done (draft 2026-10-28) |
 | `TERRAFORM-LEG-WALKTHROUGH.md` | the terraform-iac leg (state never held, planted artifacts and injection, plan-based validation) | done (draft 2026-10-28) |
-| `OBSERVABILITY-LEG-WALKTHROUGH.md` | the observability-config leg (service-held files, not Git; existing grant replaced; a non-blocking warning) | done (draft 2026-10-28) |
+| `OBSERVABILITY-LEG-WALKTHROUGH.md` | a later run (root `cmww10alv000kyxuysy9wyzct`, 2026-11-25, observability-config 1.12.0): three observability legs sharing one `## Config sources` block, the read rule, the Git-versus-served comparison, the gates and the facts to check | done (rewritten 2026-11-26) |
 | `NETWORK-LEG-WALKTHROUGH.md` | the network legs: A. value (derivation, arithmetic, containment); B. change (Device sources, Git and device bases, redaction, apply procedure, forced outcomes, Git-vs-device comparison) | done (draft 2026-10-28) |
 
 **Start here for the idea underneath every tour:** [`READING-A-RUN.md`](../READING-A-RUN.md) — facts versus verdicts, the list of signals a run records (what each proves and cannot prove), how a release is composed, the hand-read checklist, and what nothing checks.

@@ -32,7 +32,8 @@
  *         rule beside it (`rule: 'keep'`); whether a value was kept is said only by the `kept` list (a removed value and a token the
  *         Architect left out carry the same condition). A `remove` row (Kubernetes, Terraform) keeps rule 2 exactly (`no-read-line`).
  *     Rule 4 (block absent / unparseable) is NOT narrowed: a usable inline object still stands there.
- *     INERT for observability-config while it is on CONFIG_SOURCE_AWAITING_TEXT (the token is rule 4 until its text ships).
+ *     LIVE for observability-config since the 1.12.0 join (2026-11-23): the token is a lane token — a contract with NO block for it
+ *     keeps the Architect's entry exactly as rule 4 does, and the fact then names `block-absent` for the token.
  *  Keys that are not a leg protocol token are REPORTED (`unknownKeys`) and left untouched (owner decision owed before removing).
  *
  * PURE and TOTAL: never throws (a throw inside is caught and the input is returned unchanged, `failed: true`). When nothing changes the
@@ -47,7 +48,12 @@ import {
 import { contractDeviceSourcesValue, isDescriptorUrlService, parseDeviceSourcesContractValue } from './device-sources';
 import { assertNeverConfigKind, contractConfigSourcesValue, parseConfigSourcesContractValue, type ConfigSourceLine } from './config-sources';
 
-export const SERVICE_DESCRIPTORS_FACT_VERSION = 1;
+/** The version stamped on `interfaceContractSource.serviceDescriptors.version`, on every NEW contract of EVERY protocol.
+ *  2 since the observability-config 1.12.0 join (2026-11-23; decided 2026-11-22 by three reviews, STEP3-P4-BUILD.md §9a): it is the
+ *  SERIES-CUT KEY for the contracts the changed derivation writes (rule 2b's two points are live from this version). A stored fact
+ *  at version 1 was written before the join. `RESOLVER_VERSION` (plan-spawn-carry.ts) did NOT move — its next number is reserved.
+ *  Pinned by test:service-descriptors-derivation P9: a `runs-undeclared` protocol off the awaiting list with a version below 2 is red. */
+export const SERVICE_DESCRIPTORS_FACT_VERSION = 2;
 
 type Lane = { field: 'deviceSources' | 'configSources'; protocol: string };
 /** Leg protocol tokens with NO sources lane today: the Architect's descriptor is the only source (rule 4). DERIVED since Config

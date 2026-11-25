@@ -23,6 +23,8 @@ import {
   contractDeviceSourcesValue, readDeviceSourcesSnapshot, resolveLegDeviceSources, sameDeclaration, type LegDeviceSources,
 } from '../lib/agents/harness/device-sources';
 import { DEVICE_SOURCE_LANES, deviceSourceLaneOf } from '../lib/agents/harness/held-bytes/variant';
+import { contractConfigSourcesValue, resolveLegConfigSources } from '../lib/agents/harness/config-sources';
+import { printable } from './gate-check-spec';
 
 export type ReqSrcVerdict = 'PASS' | 'UNEXERCISED' | 'FINDING';
 export interface ReqSrcResult { verdict: ReqSrcVerdict; lines: string[] }
@@ -211,5 +213,108 @@ export function tfLegFacts(legs: readonly TfLegFacts[]): { verdict: 'PASS' | 'FI
   if (finding) return { verdict: 'FINDING', lines };
   if (!witnesses) return { verdict: 'UNEXERCISED', lines: [...lines, '  no Author execution carried a result ; an absence, not a pass'] };
   return { verdict: 'PASS', lines: [...lines, `  ${witnesses} Author execution(s): a clean planWitness; no drift call; every leg holds its declared sources`] };
+}
+
+// ── observability-config 1.12.0, the join (pre-registered 2026-11-23, BEFORE the deploy; owner decision of the same day on the
+// placeholder exception). Three controls, each decided from STORED facts only. A leg "declares" when the platform's own resolver
+// (`resolveLegConfigSources`, the shipping function) reads a block for it ; from its task text or from the contract key.
+/** Every line of the three controls passes through the gate report's `printable()` (sec-ops, join review): a stored string (a
+ *  reason, a label, a kind, a summary) is written by a run and can carry terminal escape sequences or control characters. */
+const cso = (verdict: ReqSrcVerdict, lines: string[]): ReqSrcResult => ({ verdict, lines: lines.map((l) => printable(l)) });
+const OBS_PROTOCOL = 'observability-config-protocol';
+const OBS_KEY = 'observability-config';
+const FORCE_OF_THE_CONFIG_LANE = (reason: unknown): boolean => typeof reason === 'string'
+  && (reason.startsWith('config-sources-') || reason === 'git-file-not-held' || reason === 'service-held-not-held');
+const REGISTRATION_STATES = new Set(['file-from-other-service', 'registered-under-other-name']);
+
+export interface ObsContractLeg { id: string; description: string | null; contract: unknown }
+/**
+ * cso-obs-no-placeholder-key (owner decision 2026-11-23: the exception ships as is and is watched). On every observability leg the
+ * plan's contract must carry `configSources` as an OBJECT (or not at all) and, under `observability-config`, either nothing / null
+ * or lines that PARSE. A placeholder there (an empty string, a note, an empty list, an object) or a non-object `configSources`
+ * stops the leg by name (`config-sources-unparseable`; `config-sources-snapshot-absent` on a leg first stamped before the join) ;
+ * a leg that declares nothing included. PASS needs at least one observability leg; with none the control is UNEXERCISED.
+ */
+export function obsNoPlaceholderKey(legs: readonly ObsContractLeg[]): ReqSrcResult {
+  if (!legs.length) return cso('UNEXERCISED', ['  no observability-config leg']);
+  const lines: string[] = []; let finding = false; let declared = 0; let undeclared = 0;
+  for (const l of legs) {
+    const c = isObj(l.contract) ? l.contract : {};
+    const cs = c.configSources;
+    const shape = cs === undefined || cs === null ? 'absent' : isObj(cs) ? 'object' : Array.isArray(cs) ? 'ARRAY' : typeof cs;
+    const hasKey = isObj(cs) && Object.prototype.hasOwnProperty.call(cs, OBS_KEY) && cs[OBS_KEY] !== null && cs[OBS_KEY] !== undefined;
+    const r = resolveLegConfigSources({ protocol: OBS_PROTOCOL, contractValue: contractConfigSourcesValue(l.contract, OBS_KEY), taskBody: l.description });
+    lines.push(`  leg ${l.id}: configSources ${shape}; ${OBS_KEY} key ${hasKey ? 'present' : 'absent'}; the platform reads: ${r.state}${'source' in r ? ` (${r.source})` : ''}${'problem' in r ? ` : ${r.problem}` : ''}`);
+    if (shape !== 'absent' && shape !== 'object') { finding = true; lines.push('    `configSources` is not an object: every observability leg of the program is stopped (config-sources-unparseable) : FINDING'); continue; }
+    if (r.state === 'absent') { undeclared++; continue; }
+    if (r.state === 'parsed') { declared++; continue; }
+    finding = true;
+    lines.push(hasKey && r.state === 'unparseable'
+      ? `    a value under configSources["${OBS_KEY}"] that is not source lines (a placeholder, a note, an empty value): the leg is stopped by name : FINDING ; the plan must carry NO key for a leg with no block`
+      : `    the leg's declaration reads ${r.state}: the leg is stopped by name : FINDING`);
+  }
+  if (finding) return cso('FINDING', lines);
+  return cso('PASS', [...lines, `  ${legs.length} observability leg(s): ${undeclared} declare nothing and carry no key, ${declared} declare a block that parses; no placeholder`]);
+}
+
+export interface ObsFactsLeg { id: string; description: string | null; contract: unknown; snapshot: boolean; heldEdit: unknown; harvester: Record<string, unknown> | null }
+const declares = (l: ObsFactsLeg): boolean => resolveLegConfigSources({ protocol: OBS_PROTOCOL, contractValue: contractConfigSourcesValue(l.contract, OBS_KEY), taskBody: l.description }).state !== 'absent';
+/**
+ * cso-obs-undeclared-leg: an observability leg that declares NOTHING runs as before ; no Config-sources snapshot, no Config-lane
+ * force on its quality gate, and its Harvester carries the `configSourceReads.undeclared` stamp and no comparison record.
+ * UNEXERCISED when the program has no such leg, or none has a Harvester result yet.
+ */
+export function obsUndeclaredLeg(legs: readonly ObsFactsLeg[]): ReqSrcResult {
+  const mine = legs.filter((l) => !declares(l));
+  if (!mine.length) return cso('UNEXERCISED', [`  no observability leg that declares nothing (${legs.length} observability leg(s))`]);
+  const lines: string[] = []; let finding = false; let seen = 0;
+  for (const l of mine) {
+    const he = isObj(l.heldEdit) ? l.heldEdit : null;
+    lines.push(`  leg ${l.id}: snapshot ${l.snapshot ? 'PRESENT' : 'none'}; heldEdit ${he ? `forced=${String(he.forced)} reason=${String(he.reason ?? '-')}` : 'not stamped yet'}`);
+    if (l.snapshot) { finding = true; lines.push('    a Config-sources snapshot on a leg that declares nothing : FINDING'); }
+    if (he && FORCE_OF_THE_CONFIG_LANE(he.reason)) { finding = true; lines.push('    the Config lane names a reason on a leg that declares nothing : FINDING (a failed read of the leg\'s own row reads config-sources-could-not-check ; read the platform log line CONFIG_SOURCES_LEG_ROW_READ_FAILED)'); }
+    const j = l.harvester; if (!j) continue;
+    seen++;
+    const r = isObj(j.configSourceReads) ? j.configSourceReads : null;
+    lines.push(`    Harvester: configSourceReads ${r ? `checked=${String(r.checked)} reason=${String(r.reason ?? '-')} undeclared=${isObj(r.undeclared) ? JSON.stringify(r.undeclared) : 'ABSENT'}` : 'ABSENT'}; fileSourceCompare ${'fileSourceCompare' in j ? 'PRESENT' : 'absent'}`);
+    if (!r || !isObj(r.undeclared) || r.checked !== false) { finding = true; lines.push('    no `undeclared` stamp on the Harvester of a leg that declares nothing (composed below 1.12.0, or the stamp is missing) : FINDING'); }
+    if ('fileSourceCompare' in j || 'gitLiveDrift' in j) { finding = true; lines.push('    a comparison record or a Git-vs-live fact on a leg that declares nothing : FINDING'); }
+  }
+  if (finding) return cso('FINDING', lines);
+  if (!seen) return cso('UNEXERCISED', [...lines, '  no Harvester result yet ; an absence, not a pass']);
+  return cso('PASS', [...lines, `  ${seen} Harvester(s) of ${mine.length} leg(s) that declare nothing: stamped undeclared, nothing compared, nothing forced by the Config lane`]);
+}
+/**
+ * cso-obs-declared-facts: a DECLARED observability leg carries its snapshot; its Harvester carries the platform's comparison record
+ * and the three facts computed from it; and every declared service line was tied to a registration (the Harvester registered with
+ * the descriptor URL alone): no `unresolvedServices`, no line reading `file-from-other-service` / `registered-under-other-name`.
+ * UNEXERCISED when the program has no declared observability leg, or none has a Harvester result yet.
+ */
+export function obsDeclaredFacts(legs: readonly ObsFactsLeg[]): ReqSrcResult {
+  const mine = legs.filter(declares);
+  if (!mine.length) return cso('UNEXERCISED', [`  no DECLARED observability leg (${legs.length} observability leg(s)) ; an absence, not a pass`]);
+  const lines: string[] = []; let finding = false; let seen = 0;
+  for (const l of mine) {
+    lines.push(`  leg ${l.id}: Config sources snapshot ${l.snapshot ? 'present' : 'ABSENT'}`);
+    if (!l.snapshot) { finding = true; lines.push('    a declared leg with no snapshot (it is stopped: config-sources-snapshot-absent) : FINDING'); }
+    const j = l.harvester; if (!j) continue;
+    seen++;
+    const has = (k: string) => (isObj(j[k]) ? 'yes' : 'NO');
+    lines.push(`    Harvester: fileSourceCompare=${has('fileSourceCompare')} configSourceReads=${has('configSourceReads')} liveEvidence=${isObj(j.liveEvidence) ? String(j.liveEvidence.summary ?? j.liveEvidence.reason) : 'NO'} gitLiveDrift=${isObj(j.gitLiveDrift) ? `checked=${String(j.gitLiveDrift.checked)}${j.gitLiveDrift.reason ? ` reason=${String(j.gitLiveDrift.reason)}` : ''}` : 'NO'}`);
+    for (const k of ['fileSourceCompare', 'configSourceReads', 'liveEvidence', 'gitLiveDrift']) if (!isObj(j[k])) { finding = true; lines.push(`    ${k} is not stamped on the Harvester of a declared leg : FINDING`); }
+    const r = isObj(j.configSourceReads) ? j.configSourceReads : null;
+    if (r && isObj(r.undeclared)) { finding = true; lines.push('    the `undeclared` stamp on a leg that declares a block : FINDING'); }
+    const items = r && Array.isArray(r.items) ? (r.items as unknown[]).filter(isObj) : [];
+    for (const it of items) {
+      const state = isObj(it.read) ? String(it.read.state) : '?';
+      lines.push(`      ${String(it.label)} (${String(it.kind)}): ${state}`);
+      if (REGISTRATION_STATES.has(state)) { finding = true; lines.push('        the file was not tied to the declared service: the Harvester did not register with the descriptor URL alone : FINDING'); }
+    }
+    const unresolved = r && Array.isArray(r.unresolvedServices) ? r.unresolvedServices.length : 0;
+    if (unresolved) { finding = true; lines.push(`    ${unresolved} declared descriptor URL(s) no registration of the run was tied to : FINDING`); }
+  }
+  if (finding) return cso('FINDING', lines);
+  if (!seen) return cso('UNEXERCISED', [...lines, '  no Harvester result yet ; an absence, not a pass']);
+  return cso('PASS', [...lines, `  ${seen} Harvester(s) of ${mine.length} declared leg(s): the comparison record and its three facts are stamped; every declared service line was tied to a registration`]);
 }
 

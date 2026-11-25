@@ -72,6 +72,8 @@ export interface SpecComparison {
   /** Device blocks whose lane the finder could not tell (no lane sentence): attributed to no token. */
   unattributedBlocks: number;
   lines: Array<{ mark: boolean | null; text: string }>;
+  /** The 1.12.0 join (2026-11-23): the sources FIELDS a leg's contract carries as something other than an object of protocol keys. */
+  fieldsNotObject: SourcesField[];
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -145,6 +147,33 @@ function droppedMeans(t: { token: string; field: SourcesField }): string {
   }
 }
 
+/** The 1.12.0 join (owner decision 2026-11-23: the placeholder exception ships as is and must be VISIBLE at the plan gate).
+ *  What the platform does to a leg of this token whose contract value is NOT source lines — asked of the lane helpers, never of a
+ *  protocol name. Null = the platform does not stop such a leg (a network value leg: its declaration reads unparseable, no force). */
+function notLinesStops(t: { token: string; field: SourcesField }): string | null {
+  if (t.field === 'configSources') return 'config-sources-unparseable';
+  const lane = deviceSourceLaneOf(t.token);
+  if (lane === null) return null;
+  switch (lane) {
+    case 'change': return 'device-sources-unparseable';
+    case 'value': return null;
+    default: return assertNeverLane(lane);
+  }
+}
+/** The tail of a row whose key holds a value that is not source lines, for a protocol whose legs RUN with no block: such a leg is
+ *  stopped although it declared nothing. A `forced` protocol keeps its existing wording (its legs stop without a block anyway). */
+function placeholderTail(t: { token: string; field: SourcesField }): string {
+  if (t.field !== 'configSources' || !protocolRunsUndeclared(t.token)) return '';
+  return ` — the value under this key is not source lines: the platform will stop every leg of this protocol by name (${notLinesStops(t)}), a leg that declares nothing included. Re-plan before releasing the gate: for a leg with no block the plan carries no key for it`;
+}
+const shapeOf = (v: unknown): string => (Array.isArray(v) ? 'a list' : typeof v === 'string' ? 'text' : typeof v);
+/** Is the field present on the contract and NOT an object (a sentence, a list, a number)? `null` and absent are "no field". */
+function fieldNotObject(contract: unknown, field: SourcesField): string | null {
+  if (!isObj(contract)) return null;
+  const v = contract[field];
+  return v === undefined || v === null || isObj(v) ? null : shapeOf(v);
+}
+
 /** The declaration the contract carries for a token, read as the platform reads it (contract value only). */
 function contractDeclaration(contract: unknown, t: { token: string; field: SourcesField; protocol: string | null }) {
   return t.field === 'deviceSources'
@@ -209,7 +238,7 @@ export function compareSpecToContract(input: { spec: string; legs: readonly Spec
       if (!specDeclares) tail = '';
       else if (specBlocksDiffer) tail = ' — but the spec gives legs of this protocol DIFFERENT blocks: the contract has one key per protocol and cannot carry both (every leg of the protocol reads the one block)';
       else if (!specParsed) tail = ' — lines not compared: the spec\'s block does not parse as the platform reads it';
-      else if (contractState === 'unparseable') tail = ' — but the platform cannot read the carried value as lines';
+      else if (contractState === 'unparseable') tail = ` — but the platform cannot read the carried value as lines${placeholderTail(t)}`;
       else if (linesEqual === false) tail = ' — it carries a key, but the LINES DIFFER from the spec\'s block (compared as declarations: the same set of lines)';
       else tail = ' — lines equal: yes';
       if (specDeclares && own.length > 0 && carrying < own.length) { mark = false; tail += ` — only ${carrying} of ${own.length} leg(s) of this protocol carry it`; }
@@ -223,7 +252,10 @@ export function compareSpecToContract(input: { spec: string; legs: readonly Spec
       mark = false;
       tail = specUncertain
         ? ' — the contract carries a key and no spec block was attributed to this protocol (read the spec check\'s problems below before reading this as "the spec does not declare it")'
-        : ' — DIFFERS: the contract carries a block the spec does not declare (check where the planner took it from)';
+        : contractState === 'unparseable' && placeholderTail(t)
+          ? ' — DIFFERS: the spec declares no block, and the contract carries a value under this key'
+          : ' — DIFFERS: the contract carries a block the spec does not declare (check where the planner took it from)';
+      if (contractState === 'unparseable') tail += placeholderTail(t);
     }
     if (keyInWrongField) {
       // Reported as what it is — never as "carries the key: yes", and always ✗: the platform reads this protocol only under `field`.
@@ -240,17 +272,33 @@ export function compareSpecToContract(input: { spec: string; legs: readonly Spec
   }
   const finderErrors = found.errors.map((e) => printable(`${e.rule}${e.section ? ` [${e.section}]` : ''}: ${e.message}`));
   const lines: SpecComparison['lines'] = [];
-  if (rows.length === 0) {
+  if (rows.length === 0 && !input.legs.some((l) => fieldNotObject(l.contract, 'deviceSources') !== null || fieldNotObject(l.contract, 'configSources') !== null)) {
     lines.push({ mark: null, text: specUncertain
       ? 'no sources block was attributed to a protocol and the plan\'s contract carries no sources key'
       : 'the spec declares no sources block and the plan\'s contract carries no sources key' });
   }
   for (const r of rows) lines.push({ mark: r.mark, text: r.line });
+  // The 1.12.0 join: a sources FIELD that is not an object carries no key the platform can read, so the rows above say "carries the
+  // key: no" — and the platform still reads the field's value as an unparseable block for EVERY protocol of that field. Said once
+  // per field, always ✗, naming each protocol that has a leg and what the platform does to it.
+  const fieldsNotObject: SourcesField[] = [];
+  for (const field of ['deviceSources', 'configSources'] as const) {
+    const bad = input.legs.map((l) => fieldNotObject(l.contract, field)).filter((x): x is string => x !== null);
+    if (!bad.length) continue;
+    fieldsNotObject.push(field);
+    const affected = tokens.filter((t) => t.field === field && input.legs.some((l) => l.token === t.token));
+    const stopped = affected.filter((t) => notLinesStops(t) !== null).map((t) => `${t.token} (${notLinesStops(t)})`);
+    const notStopped = affected.filter((t) => notLinesStops(t) === null).map((t) => t.token);
+    lines.push({ mark: false, text: printable(`${field}: the plan's contract carries this field as ${[...new Set(bad)].join(' / ')} on ${bad.length} of ${input.legs.length} leg(s), not as an object keyed by protocol name — the platform reads no block from it`
+      + (stopped.length ? `; it will stop every leg of these protocols by name, a leg that declares nothing included: ${stopped.join(', ')}` : '; no leg of this program has a protocol the platform stops for it')
+      + (notStopped.length ? `; not stopped, its declaration reads unparseable: ${notStopped.join(', ')}` : '')
+      + '. Re-plan before releasing the gate') });
+  }
   if (unattributed > 0) lines.push({ mark: null, text: `${unattributed} Device sources block(s) in the spec state no lane (change or value), so they are counted under no protocol above` });
   if (finderErrors.length) {
     lines.push({ mark: null, text: `the spec's own check reports ${finderErrors.length} problem(s) — a block it could not attribute is counted in no row above:` });
     for (const e of finderErrors.slice(0, SPEC_FINDER_ERROR_CAP)) lines.push({ mark: null, text: `    ${e.slice(0, 300)}` });
     if (finderErrors.length > SPEC_FINDER_ERROR_CAP) lines.push({ mark: null, text: `    … ${finderErrors.length - SPEC_FINDER_ERROR_CAP} more (run the spec check itself for the full list)` });
   }
-  return { rows, finderErrors, unattributedBlocks: unattributed, lines };
+  return { rows, finderErrors, unattributedBlocks: unattributed, lines, fieldsNotObject };
 }

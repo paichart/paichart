@@ -308,6 +308,32 @@ OFFERS it, it does not run it, after any change to what an agent reads (CLAUDE.m
 - *Promotion:* it becomes guidance only after at least 2 more confirming cases and no contradicting one. It is never evidence that a
   text works.
 
+**When to run the contradiction review, and when it ends (added 2026-11-23, owner: "yes that sounds great"; from lab L-CS-O).**
+- **Render first, bind later.** Run Use 2 on a small $0 render of the composed prompts — one cell per role and per shape the
+  change creates (for example a leg that declares sources and one that does not) — BEFORE any experiment folder binds the text's
+  hash. A text fix made after binding re-binds every cell.
+- **A CANDIDATE text may be fixed before its lab.** Step 6's rule ("the finding is not acted on before the lab") protects a text
+  that is already shipped or already measured. For a candidate that no lab has measured and nothing has bound, a confirmed finding
+  may be fixed first, when the owner says go: the text's owner rules "change" (with the exact edit and its size) or "leave" (with
+  why), the owner approves the batch, and the lab then measures the fixed text. The finding is still not evidence that the fix
+  works. Two conditions: the pre-registration lists each such fix as "changed on a blind finding; never measured against the
+  earlier wording", so the lab's pass is not read as proof the fix was needed; and the size-ceiling rule still applies to the
+  batch (cut or move, never compress) — blind readers are stricter than the model, so this route only ever adds words. A finding in a SHARED text (a role or helper several domains read) is filed, not fixed in one domain's batch.
+- **Follow each change through.** After a batch of fixes, re-render and re-read the prompts the batch touched. In L-CS-O, removing
+  one step left two later steps naming a thing the agent no longer held; only the second round found it.
+- **The stopping rule.** The read is closed by a round that confirms nothing new in the changed text. What remains is filed with
+  an owner or belongs to stored inputs. Blind readers are stricter than the real model (calibration above), so a recurring
+  unconfirmed finding is a counted READING for the lab, not a reason for another edit.
+- **Expect lab faults as well as text faults.** A reader cannot tell a fault in the text from a fault in the cell it was shown.
+  String-test first, then route: text → the text's owner; cell, plant or render → the lab's owner; platform behaviour → the
+  register. In L-CS-O, 20 contradiction readers over three rounds gave six text changes and two lab faults; the lab's owner found
+  three more lab faults while preparing the renders the readers were shown. Preparing the render is part of the yield.
+- **A sentence about what one call does is approved on a RUN.** When a proposed fix states platform behaviour ("one read serves
+  both labels"), run the shipping functions on a recorded call before it goes into the text. A reading of the code called a
+  second identical read harmless; the run showed it holds the file twice.
+- **Report to a file.** Step 4's "nothing else" allows one added line telling the reader where to write its report (it names no
+  cell and no expectation). Reports returned as messages were cut off in transit.
+
 **Review:** after 5 uses of Use 1 or Use 2, keep or drop each one on its tally of confirmed findings against false alarms.
 
 ## Outcome
@@ -331,3 +357,14 @@ OFFERS it, it does not run it, after any change to what an agent reads (CLAUDE.m
 - **Platform defects found by reading samples, not by gates:** two. A label form the parser dropped, and an empty
   `## VERDICT:` line that made the production verdict parser return null. Both were fixed with mutation-proven
   tests and a 0-change corpus check.
+
+## Lessons carried in from labs L-CS-O and L-OBS-MLH (2026-11-26)
+- **Position is a variable.** The same rule text can pass or fail by where it sits; when a rule must override a more specific
+  instruction, test it beside the governed text (`patterns/instruction-beside-its-subject-pattern.md`), and count whether outputs
+  cite it.
+- **A validity rule must say which unserved calls invalidate.** Count file and service reads; a platform call that touches nothing
+  scored (e.g. a task comment) is recorded, not invalidating — or the gate needs an owner override (OVR-L-OBS-MLH-VALIDITY).
+- **Write gate arithmetic once.** "Fails at ≥ 2 misses in 5" and "3 of 5 fires neither" contradict at n 5; settle such clauses
+  before the deciding run (owner ruling 2026-11-25).
+- **Inventory every run folder** before a decision (an unread second crib run changed a figure), and **never symlink run folders**
+  into another worktree (a suite case wrote through the link into a stored sample, twice).

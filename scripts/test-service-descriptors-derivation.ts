@@ -258,9 +258,12 @@ test('A2 NOT a program stage ⇒ the supplied contract stored as it is, no fact 
 });
 
 // ══ Config sources STEP 3 slice P4 (plan §6): mcp-hub's five cases for the observability token, in BOTH awaiting states ══
-// `SHIPPED` = the list as it ships (observability awaits its text: rule 4, the Architect's value stands). `JOINED` = no row awaiting
-// (what the join switches on). Every row states both, so "inert as shipped" is a test, not a sentence.
-const SHIPPED = CONFIG_SOURCE_AWAITING_TEXT; const JOINED: readonly string[] = [];
+// `JOINED` = no row awaiting — THE TREE AS IT SHIPS since the observability-config 1.12.0 join (2026-11-23; P0 pins that the tree's
+// own list is this one, and that a call passing no list behaves as JOINED). `AWAITING` = observability's row awaiting its text
+// (rule 4, the Architect's value stands): the state BEFORE the join and the state a REVERT of the join returns to. Until the join
+// this constant was the tree's own list and was called AWAITING; every row still states both, through the same functions, so what a
+// revert does to a contract is a test, not a sentence.
+const AWAITING: readonly string[] = Object.freeze(['observability-config-protocol']); const JOINED: readonly string[] = [];
 const OBS = 'observability-config';
 const OBS_URL = 'https://raw.githubusercontent.com/paichart/paichart/main/descriptors/observability-readonly-descriptor.json';
 const OTHER_URL = 'https://example.test/descriptors/other-obs.json';
@@ -275,11 +278,16 @@ const obs = (block: unknown, architect?: unknown): Record<string, unknown> => ({
 const INLINE = { name: 'obs-ro', endpoint: 'http://127.0.0.1:3114/mcp' };
 
 console.log('\n── P4: the lane table\'s column, read through ONE helper ──');
-test('P0 descriptorWithoutServiceLine: observability keep; Kubernetes and Terraform remove; no row ⇒ null; the shipped list still has observability awaiting', () => {
+test('P0 descriptorWithoutServiceLine: observability keep; Kubernetes and Terraform remove; no row ⇒ null; the shipped list is the JOINED one (no row awaits), and a call that passes no list is the joined derivation', () => {
   eq(Object.fromEntries(Object.entries(CONFIG_SOURCE_LANES).map(([, r]) => [r.contractKey, r.descriptorWithoutServiceLine])),
     { 'kubernetes-gitops': 'remove', 'terraform-iac': 'remove', 'observability-config': 'keep' });
   eq(['observability-config', 'kubernetes-gitops', 'terraform-iac', 'network-provisioning', '', null].map((p) => descriptorWithoutServiceLineOf(p)), ['keep', 'remove', 'remove', null, null, null]);
-  assert(descriptorOnlyTokens(SHIPPED).includes(OBS) && !descriptorOnlyTokens(JOINED).includes(OBS), 'observability is rule 4 as shipped and a lane token at the join');
+  assert(descriptorOnlyTokens(AWAITING).includes(OBS) && !descriptorOnlyTokens(JOINED).includes(OBS), 'observability is rule 4 while its row awaits and a lane token at the join');
+  // the join (2026-11-23): the tree's own list is empty, and production — which passes NO list — gets the joined derivation
+  eq([...CONFIG_SOURCE_AWAITING_TEXT], [...JOINED], 'the tree\'s awaiting list: ');
+  assert(!descriptorOnlyTokens().includes(OBS), 'with no list passed, observability must be a lane token');
+  eq(deriveForToken(obs([O_HELD(OBS_URL)]), OBS), { kind: 'value', service: OBS_URL }, 'no list passed (production): ');
+  eq(deriveServiceDescriptors(obs([O_GIT], OBS_URL)).fact.notDerived, [{ token: OBS, reason: 'no-service-line', rule: 'keep' }], 'no list passed (production), the keep arm: ');
   // the derivation asks the helper — it types no protocol name (the keep arm must not be a name test)
   const der = fs.readFileSync(path.join(__dirname, '../lib/agents/harness/service-descriptors-derivation.ts'), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
   assert(/descriptorWithoutServiceLineOf\(lane\.protocol\)/.test(der) && !/['"]observability-config['"]|['"]kubernetes-gitops['"]|['"]terraform-iac['"]/.test(der), 'the keep arm must be switched by the lane row, never by a protocol name');
@@ -296,7 +304,7 @@ test('P0b the service a line names: live-read and service-held name one, git-fil
 
 console.log('\n── P4 row 1: block absent or unparseable ⇒ rule 4, untouched in both states (owner decision B) ──');
 test('P1 absent: a URL kept, an inline object with an endpoint KEPT, an object with no endpoint and a non-URL string removed — the same in both states', () => {
-  for (const aw of [SHIPPED, JOINED]) {
+  for (const aw of [AWAITING, JOINED]) {
     assert(DA(obs(undefined, OBS_URL), aw).same, 'URL');
     assert(DA(obs(undefined, INLINE), aw).same, 'an inline object with an endpoint stands under rule 4 — rule 4 is NOT narrowed by the keep arm');
     eq(DA(obs(undefined, { service: 'obs' }), aw).fact.removed, [{ token: OBS, reason: 'not-a-descriptor' }]);
@@ -305,11 +313,11 @@ test('P1 absent: a URL kept, an inline object with an endpoint KEPT, an object w
 });
 test('P1b unparseable (a bad line; a value that is not lines): the Architect\'s URL and inline object stand in both states; JOINED names block-unparseable', () => {
   for (const block of [[O_GIT, 'not a line'], { note: 'none' }, [O_GIT, O_GIT]]) for (const v of [OBS_URL, INLINE]) {
-    for (const aw of [SHIPPED, JOINED]) {
+    for (const aw of [AWAITING, JOINED]) {
       const d = DA(obs(block, v), aw);
       assert(d.same, `${JSON.stringify(block)} / ${JSON.stringify(v)}: rewritten`);
       eq([d.fact.kept, d.fact.removed], [[OBS], []]);
-      eq(d.fact.notDerived, aw === JOINED ? [{ token: OBS, reason: 'block-unparseable' }] : [], `${aw === JOINED ? 'joined' : 'shipped'}: `);
+      eq(d.fact.notDerived, aw === JOINED ? [{ token: OBS, reason: 'block-unparseable' }] : [], `${aw === JOINED ? 'joined' : 'awaiting'}: `);
     }
   }
 });
@@ -319,7 +327,7 @@ test('P2 a service-held line may name a descriptor URL (the parser\'s own answer
   eq(deriveForToken(obs([O_HELD(OBS_URL)]), OBS, JOINED), { kind: 'value', service: OBS_URL }, 'service-held alone: ');
   eq(deriveForToken(obs([O_GIT, O_LIVE(OBS_URL)]), OBS, JOINED), { kind: 'value', service: OBS_URL }, 'live-read alone: ');
   eq(deriveForToken(obs([O_GIT, O_LIVE(OBS_URL), O_HELD(OBS_URL)]), OBS, JOINED), { kind: 'value', service: OBS_URL }, 'both, one distinct service: ');
-  eq(deriveForToken(obs([O_HELD(OBS_URL)]), OBS, SHIPPED), null, 'as shipped the token has no lane: ');
+  eq(deriveForToken(obs([O_HELD(OBS_URL)]), OBS, AWAITING), null, 'with the row awaiting the token has no lane: ');
 });
 test('P2b JOINED, a block whose ONLY service line is service-held: equal ⇒ kept (same object); differing ⇒ REPLACED (differs); an object ⇒ REPLACED (composed); left out ⇒ ADDED', () => {
   const block = [O_HELD(OBS_URL)];
@@ -334,10 +342,10 @@ test('P2b JOINED, a block whose ONLY service line is service-held: equal ⇒ kep
   const out = DA(obs(block), JOINED);
   eq([out.contract.serviceDescriptors, out.fact.added, out.fact.derived], [{ [OBS]: OBS_URL }, [OBS], [OBS]]);
 });
-test('P2c AS SHIPPED the same four contracts are rule 4: the Architect\'s value stands, nothing is added, the fact names nothing derived', () => {
+test('P2c WITH THE ROW AWAITING (before the join; after a revert) the same four contracts are rule 4: the Architect\'s value stands, nothing is added, the fact names nothing derived', () => {
   const block = [O_HELD(OBS_URL)];
-  for (const v of [OBS_URL, OTHER_URL, INLINE]) { const d = DA(obs(block, v), SHIPPED); assert(d.same, JSON.stringify(v)); eq([d.fact.derived, d.fact.kept, d.fact.notDerived], [[], [OBS], []]); }
-  const out = DA(obs(block), SHIPPED);
+  for (const v of [OBS_URL, OTHER_URL, INLINE]) { const d = DA(obs(block, v), AWAITING); assert(d.same, JSON.stringify(v)); eq([d.fact.derived, d.fact.kept, d.fact.notDerived], [[], [OBS], []]); }
+  const out = DA(obs(block), AWAITING);
   assert(out.same && out.fact.added.length === 0, 'nothing may be written for a token with no lane');
 });
 
@@ -386,7 +394,7 @@ test('P3f JOINED, the keep arm keeps ONE WHOLE URL TOKEN only (sec-ops LOW 1): a
 test('P3g the tight test is the KEEP ARM\'s only: rule 4 and the lane arms are unchanged (a value the tight test refuses still stands under rule 4, in both states)', () => {
   const loose = 'https://user@example.test/d.json';
   assert(isUsableDescriptorValue(loose) && !isWholeTokenDescriptorUrl(loose), 'the fixture must separate the two predicates');
-  for (const aw of [SHIPPED, JOINED]) {
+  for (const aw of [AWAITING, JOINED]) {
     assert(DA(obs(undefined, loose), aw).same, 'rule 4, observability, no block');
     assert(DA({ serviceDescriptors: { 'network-derivation': loose } }, aw).same, 'rule 4, a lane token with no block');
   }
@@ -414,15 +422,15 @@ test('P3c JOINED, the Architect left the entry out ⇒ nothing is written (the p
   assert(d.same, 'unchanged');
   eq([d.fact.added, d.fact.notDerived], [[], [{ token: OBS, reason: 'no-service-line', rule: 'keep' }]]);
 });
-test('P3d AS SHIPPED the same block is rule 4: a URL and an inline object stand, a non-URL string is removed — exactly today', () => {
-  assert(DA(obs([O_GIT], OBS_URL), SHIPPED).same && DA(obs([O_GIT], INLINE), SHIPPED).same, 'stands');
-  eq(DA(obs([O_GIT], 'observability-readonly'), SHIPPED).fact.removed, [{ token: OBS, reason: 'not-a-descriptor' }]);
-  eq(DA(obs([O_GIT], OBS_URL), SHIPPED).fact.notDerived, [], 'no lane ⇒ nothing named: ');
+test('P3d WITH THE ROW AWAITING (before the join; after a revert) the same block is rule 4: a URL and an inline object stand, a non-URL string is removed — exactly today', () => {
+  assert(DA(obs([O_GIT], OBS_URL), AWAITING).same && DA(obs([O_GIT], INLINE), AWAITING).same, 'stands');
+  eq(DA(obs([O_GIT], 'observability-readonly'), AWAITING).fact.removed, [{ token: OBS, reason: 'not-a-descriptor' }]);
+  eq(DA(obs([O_GIT], OBS_URL), AWAITING).fact.notDerived, [], 'no lane ⇒ nothing named: ');
 });
 test('P3e the keep arm is OBSERVABILITY\'s only: a Git-only Kubernetes or Terraform block still REMOVES the Architect\'s URL (no-read-line), in both states', () => {
   for (const [tok, line, url] of [['kubernetes-gitops', 'sample-workloads: git-file — service github-service ; paichart/paichart-configs/k8s/sample-workloads.yaml', K8S],
     ['terraform-iac', 'main-tf: git-file — service github-service ; paichart/paichart-configs/terraform/main.tf', TF]] as const) {
-    for (const aw of [SHIPPED, JOINED]) {
+    for (const aw of [AWAITING, JOINED]) {
       const d = DA({ configSources: { [tok]: [line] }, serviceDescriptors: { [tok]: url } }, aw);
       eq([d.contract.serviceDescriptors, d.fact.removed, d.fact.notDerived], [{}, [{ token: tok, reason: 'no-read-line' }], [{ token: tok, reason: 'no-read-line' }]], `${tok}: `);
     }
@@ -441,8 +449,8 @@ test('P4 JOINED: a service-held (or live-read) line naming a REGISTERED service 
     eq(out.fact.notDerived, [{ token: OBS, reason: 'registered-service' }]);
   }
 });
-test('P4b AS SHIPPED the same contract keeps the Architect\'s URL (rule 4)', () => {
-  const d = DA(obs([O_HELD('observability-readonly')], OBS_URL), SHIPPED);
+test('P4b WITH THE ROW AWAITING (before the join; after a revert) the same contract keeps the Architect\'s URL (rule 4)', () => {
+  const d = DA(obs([O_HELD('observability-readonly')], OBS_URL), AWAITING);
   assert(d.same, 'unchanged'); eq(d.fact.kept, [OBS]);
 });
 
@@ -453,13 +461,13 @@ test('P5 JOINED: two URLs, and ONE service written once as a URL and once as its
     eq([d.contract.serviceDescriptors, d.fact.removed], [{}, [{ token: OBS, reason: 'multiple-services' }]], `${JSON.stringify(block)}: `);
   }
 });
-test('P5b AS SHIPPED the same contracts keep the Architect\'s URL (rule 4)', () => {
-  assert(DA(obs([O_GIT, O_LIVE(OBS_URL), O_HELD(OTHER_URL)], OBS_URL), SHIPPED).same, 'unchanged');
+test('P5b WITH THE ROW AWAITING (before the join; after a revert) the same contracts keep the Architect\'s URL (rule 4)', () => {
+  assert(DA(obs([O_GIT, O_LIVE(OBS_URL), O_HELD(OTHER_URL)], OBS_URL), AWAITING).same, 'unchanged');
 });
 
 console.log('\n── P4: nothing else moves ──');
 test('P6 unknownKeys are reported and left in place identically in both states, whatever the observability arm does', () => {
-  for (const aw of [SHIPPED, JOINED]) {
+  for (const aw of [AWAITING, JOINED]) {
     const c = { configSources: { [OBS]: [O_GIT] }, serviceDescriptors: { 'pipeline-4-observability': OBS_URL, [OBS]: OBS_URL, lifecycle: 'registered per leg' } };
     const d = DA(c, aw);
     assert(d.same, 'unchanged');
@@ -472,12 +480,12 @@ test('P6 unknownKeys are reported and left in place identically in both states, 
 test('P7 the stored observability values of the fixture corpus are BYTE-UNCHANGED in both states (same object, same sha), and every corpus contract is identical between the states', () => {
   let obsValues = 0;
   for (const root of Object.keys(FIX)) {
-    const shipped = DA(C(root), SHIPPED), joined = DA(C(root), JOINED);
-    eq(JSON.stringify(joined.contract), JSON.stringify(shipped.contract), `${root}: the stored contract differs between the awaiting states: `);
+    const awaitingRow = DA(C(root), AWAITING), joined = DA(C(root), JOINED);
+    eq(JSON.stringify(joined.contract), JSON.stringify(awaitingRow.contract), `${root}: the stored contract differs between the awaiting states: `);
     const sd = FIX[root].contract.serviceDescriptors;
     if (sd && typeof sd === 'object' && OBS in sd) {
       obsValues++;
-      for (const d of [shipped, joined]) {
+      for (const d of [awaitingRow, joined]) {
         assert(d.same, `${root}: a contract carrying a stored observability value was rewritten`);
         eq(d.contract.serviceDescriptors[OBS], sd[OBS]);
         assert(d.fact.kept.includes(OBS), `${root}: not kept`);
@@ -493,8 +501,8 @@ test('P8 a four-domain contract: the observability arm changes ONLY the observab
     configSources: { 'kubernetes-gitops': ['cluster: live-read — service ' + K8S], 'terraform-iac': ['main-tf: git-file — service github-service ; paichart/paichart-configs/terraform/main.tf'], [OBS]: [O_GIT] },
     serviceDescriptors: { 'network-provisioning': CEOS, 'kubernetes-gitops': K8S, 'terraform-iac': TF, [OBS]: INLINE },
   });
-  const s = DA(c(), SHIPPED), j = DA(c(), JOINED);
-  eq(s.contract.serviceDescriptors, { 'network-provisioning': CEOS, 'kubernetes-gitops': K8S, [OBS]: INLINE }, 'shipped: ');
+  const s = DA(c(), AWAITING), j = DA(c(), JOINED);
+  eq(s.contract.serviceDescriptors, { 'network-provisioning': CEOS, 'kubernetes-gitops': K8S, [OBS]: INLINE }, 'awaiting: ');
   eq(j.contract.serviceDescriptors, { 'network-provisioning': CEOS, 'kubernetes-gitops': K8S }, 'joined: ');
   const rest = (f: typeof s.fact) => [f.derived, f.replaced, f.removed.filter((r) => r.token !== OBS), f.notDerived.filter((r) => r.token !== OBS)];
   eq(rest(j.fact), rest(s.fact), 'the other tokens: ');

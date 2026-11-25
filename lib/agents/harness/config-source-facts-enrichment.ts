@@ -2,7 +2,7 @@
  * Config sources STEP 2 — the IMPURE half of `configSourceReads` (config-source-facts.ts).
  *
  * Population: a Harvester leaf whose owning leg declares Config sources today (variant.ts CONFIG_SOURCE_PROTOCOLS — the lane rows
- * whose Config-sources text has shipped: Kubernetes and Terraform; a row awaiting its text, observability until 1.12.0, is not in it). Every other leaf gets NOT_STAMPED (a population answer), so every stored and every
+ * whose Config-sources text has shipped: Kubernetes, Terraform, and observability since its 1.12.0 join; a row awaiting its text is not in it). Every other leaf gets NOT_STAMPED (a population answer), so every stored and every
  * non-Config-sources result.json is byte-identical. The declaration is the net context's memo — PRIMED with the same object capture
  * used (execution-core), or read lazily once through the same reader.
  *

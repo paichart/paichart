@@ -69,8 +69,14 @@ function stubDb(tasks: Record<string, Row>, stages: Record<string, Row>, throwOn
 test('V-5a: resolveOwningLegProtocol — a present-null LEAF under a held-capable leg ⇒ heldCapable; the leaf\'s stage_id is READ, not threaded', async () => {
   const s = stubDb({ leaf: { stageId: 'st1' }, leg: { title: 'L (protocol: observability-config)', metadata: { protocol: 'observability-config-protocol' } } },
     { st1: { metadata: { harnessTaskId: 'leg' } } });
-  eq(await resolveOwningLegProtocol(s.db, { id: 'leaf', type: 'ACTION', metadata: { protocol: null } }), { kind: 'leg', legId: 'leg', heldCapable: true, ownStageId: 'st1', gitFileSource: false, deviceSource: false });
+  // The 1.12.0 join (2026-11-23): an observability resolution carries `configSourceProtocol` (its PROTOCOL has a Config lane — not
+  // "this leg declared a block"); `gitFileSource` stays false on a leg with no snapshot object. Nothing else on the shape moved.
+  eq(await resolveOwningLegProtocol(s.db, { id: 'leaf', type: 'ACTION', metadata: { protocol: null } }), { kind: 'leg', legId: 'leg', heldCapable: true, ownStageId: 'st1', gitFileSource: false, deviceSource: false, configSourceProtocol: 'observability-config-protocol' });
   eq(s.reads, ['task:leaf', 'stage:st1', 'task:leg']);
+  // …and with its row awaiting (before the join; after a revert) the same leaf resolves to the shape this pin held until the join
+  const aw = stubDb({ leaf: { stageId: 'st1' }, leg: { title: 'L (protocol: observability-config)', metadata: { protocol: 'observability-config-protocol' } } },
+    { st1: { metadata: { harnessTaskId: 'leg' } } });
+  eq(await resolveOwningLegProtocol(aw.db, { id: 'leaf', type: 'ACTION', metadata: { protocol: null } }, ['observability-config-protocol']), { kind: 'leg', legId: 'leg', heldCapable: true, ownStageId: 'st1', gitFileSource: false, deviceSource: false });
 });
 
 test('held-k8s 1b-scope + step 3: a leaf under a kubernetes-gitops leg ⇒ gitFileSource true AND held-capable (the join); held-terraform step 3: a terraform leg ⇒ git-file-source AND held-capable (the join); obs ⇒ held-capable, not a git file source', async () => {
@@ -113,15 +119,21 @@ test('V-5a (Config sources STEP 3, plan W5 row 19): the resolution SHAPE as a pr
     }
   }
   eq([checked > 40, withField > 0], [true, true], 'the property was exercised: ');
-  // as shipped today: observability resolves WITHOUT the field (its row awaits its text); with no row awaiting it carries it
-  eq('configSourceProtocol' in ((await resolveOwningLegProtocol(stubDb({}, {}).db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: observability-config)' })) as object), false, 'observability as shipped: ');
+  // as shipped since the 1.12.0 join (2026-11-23): observability resolves WITH the field (no list passed ≡ no row awaiting); with its
+  // row awaiting (before the join; after a revert) it resolves without it
+  eq(((await resolveOwningLegProtocol(stubDb({}, {}).db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: observability-config)' })) as Record<string, unknown>).configSourceProtocol, 'observability-config-protocol', 'observability as shipped: ');
   eq(((await resolveOwningLegProtocol(stubDb({}, {}).db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: observability-config)' }, [])) as Record<string, unknown>).configSourceProtocol, 'observability-config-protocol', 'observability with its text shipped: ');
+  eq('configSourceProtocol' in ((await resolveOwningLegProtocol(stubDb({}, {}).db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: observability-config)' }, ['observability-config-protocol'])) as object), false, 'observability with its row awaiting: ');
 });
 
 test('V-5a: a PIPELINE task is its own leg (no read); no stage / no harnessTaskId ⇒ no-leg (positive non-variant)', async () => {
   const none = stubDb({}, {});
-  eq(await resolveOwningLegProtocol(none.db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: observability-config)' }), { kind: 'self', legId: 'L', heldCapable: true, gitFileSource: false, deviceSource: false });
+  // (the 1.12.0 join: the resolution names the leg's Config-sources protocol; still NO read, and no Git lane without a snapshot object)
+  eq(await resolveOwningLegProtocol(none.db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: observability-config)' }), { kind: 'self', legId: 'L', heldCapable: true, gitFileSource: false, deviceSource: false, configSourceProtocol: 'observability-config-protocol' });
   eq(none.reads, []);
+  // a snapshot OBJECT on the leg turns the Git lane's metadata twin on (the text has shipped); a null / array / scalar does not
+  eq((await resolveOwningLegProtocol(none.db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: observability-config)', metadata: { configSourcesSnapshot: { version: 1 } } }) as Record<string, unknown>).gitFileSource, true, 'a snapshot object: ');
+  for (const v of [null, [], 'x']) eq((await resolveOwningLegProtocol(none.db, { id: 'L', type: 'PIPELINE', title: 'x (protocol: observability-config)', metadata: { configSourcesSnapshot: v } }) as Record<string, unknown>).gitFileSource, false, `not an object (${JSON.stringify(v)}): `);
   eq((await resolveOwningLegProtocol(stubDb({ leaf: { stageId: null } }, {}).db, { id: 'leaf', type: 'ACTION' })).kind, 'no-leg');
   eq(await resolveOwningLegProtocol(stubDb({ leaf: { stageId: 'st' } }, { st: { metadata: {} } }).db, { id: 'leaf', type: 'ACTION' }),
     { kind: 'no-leg', reason: 'no-harness-task-id', heldCapable: false });

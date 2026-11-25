@@ -66,13 +66,21 @@ Nothing is built yet, so this is the cheapest place to catch a mistake. Read the
    lines: yes / no — contract carries the key: yes / no*. A ✓ means the plan carries the same set of lines your spec declares
    (*lines equal: yes*). A ✗ means one of: the block did not reach the plan under its protocol's name; the plan carries a key but its lines differ; the plan
    carries a block your spec does not declare; the block was filed under the wrong field (`deviceSources` is for network legs,
-   `configSources` for Kubernetes and Terraform legs); or your spec gives two legs of one protocol different blocks, which one
-   plan entry cannot carry. A network change leg, a Kubernetes leg or a Terraform leg with no block is forced to needs-revision by
-   name, so its package is not approved; a network value leg runs without it. If every leg of that protocol carries the block in
+   `configSources` for Kubernetes, Terraform and observability legs); or your spec gives two legs of one protocol different
+   blocks, which one plan entry cannot carry. A network change leg, a Kubernetes leg or a Terraform leg with no block is forced
+   to needs-revision by name, so its package is not approved; a network value leg runs without it. For an observability leg the
+   block is optional: a spec that declares one and a plan that does not carry it is a ✗ (that leg would run undeclared and keep
+   the files its service returns), and a leg with no block in the spec still has a row, unmarked —
+   `observability-config (configSources): spec declares lines: no — contract carries the key: no` — which is the correct
+   reading for such a leg. If every leg of that protocol carries the block in
    its own task description, the difference is shown without a ✗: the platform reads a block there too. When the spec's own check
    reports a problem, the line says *no block attributed to this protocol* and lists the problems: fix the spec before reading
    that as "not declared". The lines are compared as written: a branch added or dropped (`@ main`), or an owner or repository
-   name that differs only in letter case, reads as *lines differ* — the block is there, its text is not the same. The option
+   name that differs only in letter case, reads as *lines differ* — the block is there, its text is not the same. Two more ✗
+   lines name a plan that will stop a leg: a `deviceSources` or `configSources` field written as anything but a set of named
+   blocks (a sentence, a list) is printed once, with each protocol whose legs the platform will stop; and for an observability
+   leg, which runs without a block, a value under its name that is not source lines (an empty value, a note) stops the leg by
+   name (`config-sources-unparseable`) although it declared nothing. Re-plan before you release the gate. The option
    reads only, stops nothing, and without it the report prints what it printed before.
 
 **If the plan is wrong, do not release.** A plan cannot be edited after the fact. Which fix depends on what is wrong:
