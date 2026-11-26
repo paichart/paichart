@@ -40,6 +40,7 @@ repository, and needs nothing but the files in that repository.
 |---|---|
 | [Operator runbook](OPERATING.md) | Run a program from start to finish: launch, check the plan, release gates, read the result. |
 | [Gates](GATES.md) | What to check before you release each kind of gate, and how to apply a change package. |
+| [Connecting network devices](NETWORK-SERVICE.md) | What pAIchart reads on your switches, routers and firewalls and never does, the three read tools, the `## Device sources` block, working from Git files only, and what the Git-against-device comparison tells you |
 | [Connecting a Kubernetes cluster](KUBERNETES-SERVICE.md) | What pAIchart reads in your cluster and never reads, the `## Config sources` block, the drift check and why a file is "not checked", and what your own Kubernetes service must offer. |
 | [Terraform changes](TERRAFORM-SERVICE.md) | What pAIchart reads and never reads for Terraform, the `## Config sources` block, why it computes no drift, and how the package's Plan witness works with your CI plan (Atlantis and others). |
 | [Connecting an observability stack](OBSERVABILITY-SERVICE.md) | What pAIchart reads in your monitoring stack and never reads, the ten read tools, how to name the service for one leg or several, the optional `## Config sources` block, and the Git-versus-deployed comparison. |

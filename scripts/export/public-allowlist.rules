@@ -229,6 +229,10 @@
 # the limits. Pinned to code constants by test:user-doc-numbers (which reads this file, so it MUST export).
 + docs/KUBERNETES-SERVICE.md
 + docs/TERRAFORM-SERVICE.md
+# Observability service page (2026-11-26): the observability counterpart of the two above; docs/README.md and the
+# observability walkthrough link it, so it MUST export.
++ docs/OBSERVABILITY-SERVICE.md
++ docs/NETWORK-SERVICE.md
 # Self-host systemd units, referenced by INSTALL.md. These MUST be above the
 # `- docs/**` line below: rules are ordered, first match wins, so without an explicit `+`
 # they silently never export and the install guide points at a file that does not exist in

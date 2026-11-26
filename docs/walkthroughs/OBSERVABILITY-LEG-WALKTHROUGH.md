@@ -3,7 +3,7 @@
 **Worked example:** program root `cmww10alv000kyxuysy9wyzct` "Restrict the OTLP ingress to the exporter range, tune the collector batch
 processor and raise the operator listener body size (protocol: pov-program)", POV "OTLP Ingress, Collector and Operator Changes"
 (`cmww102tl0005yxuy5w54tdfz`, a demo POV: a demo account can open it), run 2026-11-25. Its spec is the released use case
-`usecases/otlp-ingress-three-leg/git-live` in `paichart/paichart-configs`. observability-config 1.12.0; Harvester, Architect and Reviewer on
+[`otlp-ingress-three-leg/git-live`](https://github.com/paichart/paichart-configs/tree/main/usecases/otlp-ingress-three-leg/git-live) in the configs repository. observability-config 1.12.0; Harvester, Architect and Reviewer on
 Sonnet 5, Author on Opus 5.5.
 
 **The run in one sentence:** a value leg works out the exporter range, then three observability legs each change **one** file of the
