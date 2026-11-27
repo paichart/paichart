@@ -1,27 +1,28 @@
-# Dockerized sydasif/nornir-mcp-server for the Phase-4 cEOS validation rig.
-# Serves the read-only NAPALM getter surface as streamable-http on :3107, non-root, isolated.
-# Isolation rationale (Steve, 2026-06-26): run this unaudited third-party dep tree in a capped,
-# non-root container rather than as a host process next to live paichart.
-FROM python:3.12-slim
+# pAIchart's read-only network reference service (server.py) for the Phase-4 cEOS validation rig.
+# Serves list_devices / fetch_data / show_commands as streamable-http on :3107 (/mcp), non-root.
+# Replaces the third-party server the image used to pip-install from a GitHub tarball (that account is gone, so the
+# image could no longer be built). Same Python and the same library pins as the image it replaces, so NAPALM/Nornir/
+# netmiko answer with the same bytes (proven by replaying recorded calls against both).
+#
+# Build context = this folder plus the four inventory files from ../nornir/ (or a variant's ./nornir/):
+#   cp ../nornir/{config,hosts,groups,defaults}.yaml . && docker build -t nornir-mcp-rig:<tag> .
+FROM python:3.12.14-slim
 
 RUN useradd --create-home --shell /usr/sbin/nologin nornir
 
 WORKDIR /app
 
-# Install the third-party MCP server + deps from a source tarball (no git needed in the image).
-# Pinned to main for this lab; pin a commit SHA for anything longer-lived.
-RUN pip install --no-cache-dir \
-    "https://github.com/sydasif/nornir-mcp-server/archive/refs/heads/main.tar.gz"
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt && pip check
 
-# streamable-http launcher (repo defaults to stdio; this overrides transport without editing the repo)
-COPY run_http.py /app/run_http.py
+COPY server.py /app/server.py
 
-# Nornir inventory — _get_nornir() reads `config.yaml` from the process CWD (/app);
-# hosts/groups/defaults are referenced relatively from it.
+# Nornir inventory: server.py reads `config.yaml` from the process CWD (/app); hosts/groups/defaults are relative to it.
 COPY config.yaml hosts.yaml groups.yaml defaults.yaml /app/
 
-RUN chown -R nornir:nornir /app
+# Root-owned and read-only to the service user: the process writes nothing (Nornir logging is off).
+RUN chmod -R a-w /app
 USER nornir
 
 EXPOSE 3107
-CMD ["python", "/app/run_http.py"]
+CMD ["python", "/app/server.py"]

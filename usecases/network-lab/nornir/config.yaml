@@ -1,5 +1,5 @@
 ---
-# Nornir loader config consumed by sydasif/nornir-mcp-server.
+# Nornir loader config consumed by the device service (nornir-mcp-docker/server.py, pAIchart's own since 2026-11-26).
 # Verified format (repo README, 2026-06-25): SimpleInventory over hosts/groups/defaults.
 inventory:
   plugin: SimpleInventory

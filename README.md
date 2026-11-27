@@ -225,7 +225,7 @@ registry(action: "register", {
 
 ## Credits
 
-Device harvesting builds on [`nornir-napalm-mcp`](https://github.com/sydasif/nornir-napalm-mcp) by [@sydasif](https://github.com/sydasif), used under the MIT licence, in a modified form.
+The network lab's device service uses [Nornir](https://github.com/nornir-automation/nornir) and [NAPALM](https://github.com/napalm-automation/napalm). Until 2026-11-26 it was built on `nornir-mcp-server` by Syed Asif (MIT licence); that project is no longer published, and the service is now pAIchart's own.
 
 ## Keywords
 

@@ -112,8 +112,8 @@ sudo bash -c "$(curl -sL https://get.containerlab.dev)"            # containerla
 # (Support → Software Downloads → cEOS-lab; a free account is required), copy it to this host, then:
 xz -d cEOS64-lab-4.32.2.1F.tar.xz && docker import cEOS64-lab-4.32.2.1F.tar ceos:4.32.2.1F   # tag must match topology.clab.yml
 cd rigs/network && sudo containerlab deploy -t topology.clab.yml     # ~3 min; both nodes "running"
-cd nornir-mcp && cp ../nornir/*.yaml . && docker build -t nornir-mcp-rig .
-docker run -d --name nornir-mcp --restart unless-stopped --network clab-np -p 127.0.0.1:3107:3107 nornir-mcp-rig
+cd nornir-mcp && cp ../nornir/*.yaml . && docker build -t nornir-mcp-rig:latest .
+./run-hardened.sh            # hardened: read-only root, no capabilities, CPU/memory caps, rotated logs, healthcheck
 ```
 Wait a few minutes after deploy — EOS boots slowly. The rig is ready when ceos1 shows its eBGP peer
 `Established` with prefixes received (`show ip bgp summary` via the switch's eAPI, `admin`/`paichartlab` —

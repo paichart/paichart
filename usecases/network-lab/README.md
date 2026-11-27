@@ -50,9 +50,10 @@ all three files.
 
 ## What makes the service read-only
 
-The upstream server registers mutating tools too (`apply_config`, `backup_configs`). The wrapper in
-`nornir-mcp-docker/run_http.py` deletes every tool except three before the server starts, so a mutating call
-**does not exist to be called** — it is not refused at runtime, it is simply not there:
+The service (`nornir-mcp-docker/server.py`, pAIchart's own small server on `nornir` and `napalm`) has exactly three
+tools, all reads, so a mutating call **does not exist to be called** — it is not refused at runtime, it is simply not
+there. `show_commands` runs only the nine allowlisted commands and refuses any other before a device is contacted
+(`command_not_allowed`):
 
 - `list_devices` — the inventory;
 - `fetch_data` — NAPALM getters (`facts`, `interfaces`, `interfaces_ip`, `bgp_config`, `config`, …);

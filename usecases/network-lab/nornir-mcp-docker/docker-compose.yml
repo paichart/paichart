@@ -1,0 +1,44 @@
+# The cEOS rig's device service, hardened like obs-mcp (observability rig, commit bdf54e5c2).
+# Joins the containerlab management network (clab-np, created by `containerlab deploy`) so it reaches the switches.
+# Build first (see Dockerfile header), then: docker compose -f docker-compose.yml up -d
+# Equivalent docker run (same flags), if compose is not used:
+#   docker run -d --name nornir-mcp --restart unless-stopped --network clab-np -p 127.0.0.1:3107:3107 \
+#     --read-only --tmpfs /tmp:size=16m,mode=1777 --security-opt no-new-privileges:true --cap-drop ALL \
+#     --cpus 0.5 --memory 256m --log-opt max-size=10m --log-opt max-file=3 \
+#     --health-cmd "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:3107/health', timeout=5).status == 200 else 1)\"" \
+#     --health-interval 30s --health-timeout 10s --health-retries 3 --health-start-period 15s \
+#     nornir-mcp-rig:latest
+services:
+  nornir-mcp:
+    image: nornir-mcp-rig:latest
+    container_name: nornir-mcp
+    ports:
+      - "127.0.0.1:3107:3107"   # the cloudflared route ceos-lab.paichart.app/mcp lands here
+    networks: [clab-np]
+    mem_limit: 256m
+    # The service writes nothing; /tmp is the only writable path (a capped tmpfs). No capability, no privilege gain,
+    # a CPU cap and rotated logs.
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Process liveness only (GET /health contacts no device).
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:3107/health', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+networks:
+  clab-np:
+    external: true

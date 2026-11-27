@@ -25,9 +25,12 @@ Transport: streamable-http on 3107 (container-internal). Host maps 127.0.0.1:311
 import os
 import re
 
+import anyio
 import httpx
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus:9090")
 GRAFANA_URL = os.environ.get("GRAFANA_URL", "http://grafana:3000")
@@ -75,9 +78,14 @@ def _redact(obj):
     return obj
 
 
-@mcp.tool()
-def stack_health() -> dict:
-    """Liveness of all three stack components (read-only)."""
+# SURFACE VERSION (2026-11-27): 2 = stack_health returns isError when a
+# component is DOWN, and GET /health answers 503 then. It rides on every stack_health result so a stored result says
+# which surface answered it — version 1 results carry no field.
+SURFACE_VERSION = 2
+
+
+def _stack_status() -> dict:
+    """One check of all three stack components; shared by stack_health and GET /health."""
     out = {}
     for name, url in (
         ("prometheus", f"{PROMETHEUS_URL}/-/ready"),
@@ -89,7 +97,31 @@ def stack_health() -> dict:
             out[name] = "up"
         except ToolError as e:
             out[name] = f"DOWN ({e})"
-    return {"stack": out}
+    return out
+
+
+@mcp.tool()
+def stack_health() -> dict:
+    """Liveness of all three stack components (read-only)."""
+    out = _stack_status()
+    down = [n for n, s in out.items() if s != "up"]
+    if down:
+        # A DOWN component is an error result (isError: true), not a success that says DOWN: a caller that checks
+        # isError sees the failure. The text names every component's state.
+        states = "; ".join(f"{n}: {s}" for n, s in out.items())
+        raise ToolError(f"stack component(s) DOWN: {', '.join(down)} — {states} (surfaceVersion {SURFACE_VERSION})")
+    return {"stack": out, "surfaceVersion": SURFACE_VERSION}
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health(request: Request) -> JSONResponse:
+    """The hub's health probe (it GETs <endpoint origin>/health): 200 when all three components are up, 503 when any is
+    down — the hub counts any status below 500 as responding, so only a 5xx reports this service unhealthy. Component
+    states only; no configuration, no credential."""
+    out = await anyio.to_thread.run_sync(_stack_status)
+    healthy = all(s == "up" for s in out.values())
+    return JSONResponse({"status": "healthy" if healthy else "unhealthy", "stack": out,
+                         "surfaceVersion": SURFACE_VERSION}, status_code=200 if healthy else 503)
 
 
 @mcp.tool()
