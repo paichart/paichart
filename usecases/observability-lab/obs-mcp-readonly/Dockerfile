@@ -2,7 +2,7 @@
 # Same isolation rationale as the nornir/tf rigs: capped, non-root container.
 # Hardening (2026-11-27): exact pins (requirements.txt = the running
 # image's pip freeze); the read-only root, tmpfs, capabilities, CPU cap, logs and healthcheck are in docker-compose.yml.
-FROM python:3.12-slim
+FROM python:3.12.16-slim
 RUN useradd --create-home --shell /usr/sbin/nologin obs
 WORKDIR /app
 COPY requirements.txt /app/requirements.txt

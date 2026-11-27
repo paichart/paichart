@@ -29,6 +29,8 @@ import anyio
 import httpx
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
+from fastmcp.tools import ToolResult
+from mcp.types import TextContent
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -50,11 +52,16 @@ PLACEHOLDER = "<<REDACTED-SENSITIVE>>"
 # TWIN SUPPRESSION (r10-serialized-leaf-blindness follow-up, 2026-08-31): FastMCP duplicates every
 # structured tool result into a serialized content[0].text block (~30% of payload, most Tier-1
 # truncations). Suppress at the producer from day one; structuredContent keeps the full payload.
-def _stub_serializer(data) -> str:
-    return "(full payload in structuredContent; serialized text twin suppressed)"
+# fastmcp 3 dropped `tool_serializer`: each tool returns _result(payload), the payload as structuredContent with this
+# fixed stub as the text twin (byte-identical to what the serializer produced).
+TEXT_TWIN_STUB = "(full payload in structuredContent; serialized text twin suppressed)"
 
 
-mcp = FastMCP("observability-readonly", tool_serializer=_stub_serializer)
+def _result(payload: dict) -> ToolResult:
+    return ToolResult(content=[TextContent(type="text", text=TEXT_TWIN_STUB)], structured_content=payload)
+
+
+mcp = FastMCP("observability-readonly")
 
 
 def _get(url: str, auth=None, timeout: float = 10.0):
@@ -110,7 +117,7 @@ def stack_health() -> dict:
         # isError sees the failure. The text names every component's state.
         states = "; ".join(f"{n}: {s}" for n, s in out.items())
         raise ToolError(f"stack component(s) DOWN: {', '.join(down)} — {states} (surfaceVersion {SURFACE_VERSION})")
-    return {"stack": out, "surfaceVersion": SURFACE_VERSION}
+    return _result({"stack": out, "surfaceVersion": SURFACE_VERSION})
 
 
 @mcp.custom_route("/health", methods=["GET"])
@@ -132,11 +139,11 @@ def get_prometheus_config() -> dict:
     (the rendering alone never named its file)."""
     data = _get(f"{PROMETHEUS_URL}/api/v1/status/config").json()
     flags = _get(f"{PROMETHEUS_URL}/api/v1/status/flags").json().get("data", {})
-    return {
+    return _result({
         "yaml": data.get("data", {}).get("yaml", ""),
         "configFile": flags.get("config.file"),
         "configFileSource": "/api/v1/status/flags --config.file (witnessed)",
-    }
+    })
 
 
 @mcp.tool()
@@ -153,7 +160,7 @@ def get_scrape_targets() -> dict:
         }
         for t in data.get("activeTargets", [])
     ]
-    return {"activeTargets": targets, "droppedTargetCount": len(data.get("droppedTargets", []))}
+    return _result({"activeTargets": targets, "droppedTargetCount": len(data.get("droppedTargets", []))})
 
 
 @mcp.tool()
@@ -176,7 +183,7 @@ def get_rules() -> dict:
         }
         for g in data.get("groups", [])
     ]
-    return {"groups": groups}
+    return _result({"groups": groups})
 
 
 @mcp.tool()
@@ -192,25 +199,25 @@ def query_metric(query: str) -> dict:
         raise ToolError(f"query rejected: HTTP {r.status_code}: {r.text[:200]}")
     body = r.json()
     result = body.get("data", {}).get("result", [])
-    return {"resultType": body.get("data", {}).get("resultType"), "result": result[:50],
-            "truncatedTo50": len(result) > 50}
+    return _result({"resultType": body.get("data", {}).get("resultType"), "result": result[:50],
+            "truncatedTo50": len(result) > 50})
 
 
 @mcp.tool()
 def get_grafana_datasources() -> dict:
     """Provisioned Grafana datasources (credentials deep-redacted by key)."""
     data = _get(f"{GRAFANA_URL}/api/datasources", auth=GRAFANA_AUTH).json()
-    return {"datasources": _redact(data)}
+    return _result({"datasources": _redact(data)})
 
 
 @mcp.tool()
 def list_grafana_dashboards() -> dict:
     """Dashboard inventory (uid, title, folder)."""
     data = _get(f"{GRAFANA_URL}/api/search?type=dash-db", auth=GRAFANA_AUTH).json()
-    return {"dashboards": [
+    return _result({"dashboards": [
         {"uid": d.get("uid"), "title": d.get("title"), "folder": d.get("folderTitle") or "General"}
         for d in data
-    ]}
+    ]})
 
 
 @mcp.tool()
@@ -219,8 +226,8 @@ def get_grafana_dashboard(uid: str) -> dict:
     if not UID_RE.match(uid or ""):
         raise ToolError("uid must match ^[A-Za-z0-9_-]{1,64}$")
     data = _get(f"{GRAFANA_URL}/api/dashboards/uid/{uid}", auth=GRAFANA_AUTH).json()
-    return {"dashboard": _redact(data.get("dashboard", {})),
-            "meta": {"provisioned": data.get("meta", {}).get("provisioned")}}
+    return _result({"dashboard": _redact(data.get("dashboard", {})),
+            "meta": {"provisioned": data.get("meta", {}).get("provisioned")}})
 
 
 @mcp.tool()
@@ -229,7 +236,7 @@ def get_otel_config() -> dict:
     API). This is the witnessed artifact for collector-change packages."""
     try:
         with open(OTEL_CONFIG_PATH, "r", encoding="utf-8") as f:
-            return {"yaml": f.read(), "source": "as-deployed file (ro mount)"}
+            return _result({"yaml": f.read(), "source": "as-deployed file (ro mount)"})
     except OSError as e:
         raise ToolError(f"otel config unreadable: {e}") from e
 
@@ -245,8 +252,8 @@ def get_ingress_config() -> dict:
         for n in names:
             with open(os.path.join(INGRESS_CONFIG_DIR, n), "r", encoding="utf-8") as f:
                 files[n] = f.read()
-        return {"files": files, "source": "as-deployed files (ro mount)",
-                "fronts": "otel-collector OTLP gRPC :4317 and OTLP/http :4318"}
+        return _result({"files": files, "source": "as-deployed files (ro mount)",
+                "fronts": "otel-collector OTLP gRPC :4317 and OTLP/http :4318"})
     except OSError as e:
         raise ToolError(f"ingress config unreadable: {e}") from e
 

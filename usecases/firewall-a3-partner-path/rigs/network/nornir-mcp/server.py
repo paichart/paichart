@@ -1,8 +1,8 @@
 """pAIchart's read-only network reference service: a minimal MCP server over Nornir + NAPALM.
 
 Written for pAIchart (2026-11-27) to replace a third-party server whose source can no longer be fetched.
-It was built from the replaced service's observable interface only (its tools/list and recorded responses),
-and answers every call with the same structuredContent and isError, byte for byte (proven by replaying recorded calls).
+It was built from the replaced service's observable interface only (its tools/list and recorded responses,
+see parity/), and must answer every call with the same structuredContent and isError, byte for byte.
 
 Exactly three tools, all reads:
   list_devices   the Nornir inventory (no device contact)
@@ -20,6 +20,8 @@ import traceback
 from typing import Annotated, Any, Literal
 
 from fastmcp import FastMCP
+from fastmcp.tools import ToolResult
+from mcp.types import TextContent
 from nornir import InitNornir
 from nornir.core.task import Result, Task
 from nornir_napalm.plugins.tasks import napalm_get
@@ -43,11 +45,12 @@ SHOW_ALLOWLIST = (
 )
 
 
-def _stub_serializer(data: Any) -> str:
-    return TEXT_TWIN_STUB
+def _result(payload: dict[str, Any]) -> ToolResult:
+    """The payload as structuredContent, with the fixed stub as the text twin (fastmcp 3 dropped tool_serializer)."""
+    return ToolResult(content=[TextContent(type="text", text=TEXT_TWIN_STUB)], structured_content=payload)
 
 
-mcp = FastMCP("Nornir Network Automation", tool_serializer=_stub_serializer)
+mcp = FastMCP("Nornir Network Automation")
 
 FilterName = Annotated[str | None, Field(description="Filter by device name in inventory")]
 FilterHostname = Annotated[str | None, Field(description="Filter by specific hostname or IP")]
@@ -144,7 +147,7 @@ def list_network_devices(
     filtered = _filtered(nr, filter_name, filter_hostname, filter_group, filter_platform)
     hosts = list(filtered.inventory.hosts.values())
     if not hosts:
-        return _filter_error(len(nr.inventory.hosts))
+        return _result(_filter_error(len(nr.inventory.hosts)))
 
     out: dict[str, Any] = {}
     if query_type in ("devices", "all"):
@@ -169,7 +172,7 @@ def list_network_devices(
                 entry["count"] += 1
                 entry["members"].append(h.name)
         out["groups"] = {"groups": groups}
-    return out
+    return _result(out)
 
 
 @mcp.tool(
@@ -194,11 +197,11 @@ def get_structured_data(
     nr = _nornir()
     filtered = _filtered(nr, filter_name, filter_hostname, filter_group, filter_platform)
     if not filtered.inventory.hosts:
-        return {"__global__": _filter_error(len(nr.inventory.hosts))}
+        return _result({"__global__": _filter_error(len(nr.inventory.hosts))})
     kwargs: dict[str, Any] = {"getters": getters}
     if getters_options:
         kwargs["getters_options"] = getters_options
-    return _run(filtered, task=napalm_get, **kwargs)
+    return _result(_run(filtered, task=napalm_get, **kwargs))
 
 
 def send_commands(task: Task, commands: list[str]) -> Result:
@@ -230,21 +233,21 @@ def run_show_commands(
     filter_platform: FilterPlatform = None,
 ) -> dict[str, Any]:
     if not commands:
-        return {"error": True, "code": "empty_commands", "message": "Command list cannot be empty"}
+        return _result({"error": True, "code": "empty_commands", "message": "Command list cannot be empty"})
     refused = [c for c in commands if c not in SHOW_ALLOWLIST]
     if refused:
-        return {
+        return _result({
             "error": True,
             "code": "command_not_allowed",
             "message": "Only the allowlisted read-only show commands are accepted; no device was contacted.",
             "refused": refused,
             "allowed": list(SHOW_ALLOWLIST),
-        }
+        })
     nr = _nornir()
     filtered = _filtered(nr, filter_name, filter_hostname, filter_group, filter_platform)
     if not filtered.inventory.hosts:
-        return {"__global__": _filter_error(len(nr.inventory.hosts))}
-    return _run(filtered, task=send_commands, commands=commands)
+        return _result({"__global__": _filter_error(len(nr.inventory.hosts))})
+    return _result(_run(filtered, task=send_commands, commands=commands))
 
 
 @mcp.custom_route("/health", methods=["GET"])
