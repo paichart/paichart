@@ -36,7 +36,7 @@ import { READ_MORE_FUNCTION_DEF } from '../../lib/agents/harness/agentic-tool-lo
 import { stripAgentForbiddenActions } from '../../lib/services/mcp/agent-tool-strip';
 import { RUNTIME_LIMITS } from '../../lib/validation/runtime-limits';
 import type { ExecBlock, Snapshot } from './snapshot';
-import { labLeafConfigSourcesReadRule } from './config-sources-arm';
+import { labLeafConfigSourcesReadRule, labLeafConfigSourcesReadRulePastAllowList } from './config-sources-arm';
 import { briefTaskFor, insertConfigSourcesReadRule, type ConfigSourcesReadRuleDecision, type ReadRuleAnchor } from '../../lib/agents/harness/config-sources-read-rule';
 const { CONSOLIDATED_SCHEMAS, TOOL_SCHEMAS } = require('../../lib/mcp/server/config/tool-schemas');
 const { zodToJsonSchema } = require('zod-to-json-schema');
@@ -68,8 +68,13 @@ export interface RebuildOptions {
   /** Config sources read rule (2026-11-25). Default 'as-run': the rule is inserted into the brief iff the stored execution's own
    *  `protocolInjection.configSourcesReadRule` is true — an execution from before the ship replays without it, byte for byte.
    *  'force-on': render it on a stored execution that ran without it — REFUSED (thrown, by the gate's reason) unless the SHIPPING
-   *  gate answers ON for this node (a declared observability Harvester), so it can never put the line where production would not. */
-  configSourcesReadRule?: 'as-run' | 'force-on';
+   *  gate answers ON for this node (a declared observability Harvester), so it can never put the line where production would not.
+   *  'force-on-unlisted' (2026-11-26, the read-rule WIDENING CONTROLS, schedule item 7) — MEASUREMENT ONLY: render it on a Harvester
+   *  whose shipping gate refuses it for exactly ONE reason, `protocol-not-on-allow-list`; every other gate condition must still answer
+   *  ON (config-sources-arm.ts `labLeafConfigSourcesReadRulePastAllowList`). REFUSED where the gate answers ON (use 'force-on') or
+   *  refuses for any other reason. A separate value, never a flag on 'force-on', so no record can read a forced-past-the-allow-list
+   *  prompt as one production would render: production renders no rule for an unlisted protocol. */
+  configSourcesReadRule?: 'as-run' | 'force-on' | 'force-on-unlisted';
 }
 
 export interface RebuiltPrompt {
@@ -90,7 +95,9 @@ export interface RebuiltPrompt {
   hashes: { system: string; user: string; tools: string; protocol: string | null };
   notes: string[];
   /** Config sources read rule: the shipping gate's answer for this node, whether the rule was inserted into the brief, where, and why. */
-  configSourcesReadRule: { gate: ConfigSourcesReadRuleDecision; rendered: boolean; source: 'as-run' | 'force-on'; anchor: ReadRuleAnchor | null };
+  configSourcesReadRule: { gate: ConfigSourcesReadRuleDecision; rendered: boolean; source: 'as-run' | 'force-on' | 'force-on-unlisted'; anchor: ReadRuleAnchor | null;
+    /** 'force-on-unlisted' only: the shipping decision asked again with the allow-list set aside (ON — every other condition held). */
+    pastAllowList?: ConfigSourcesReadRuleDecision & { unlistedProtocol: string } };
 }
 
 /**
@@ -198,10 +205,21 @@ export async function rebuildPrompt(snap: Snapshot, which: 'author' | 'reviewer'
   //    the rule is inserted beside the brief's `## Config sources` block in the description BOTH builders render (§3 + HEAD) ──
   const ruleGate = labLeafConfigSourcesReadRule(snap.leg, { type: task.type, stage_id: b.task.stage_id ?? null }, resolveAgentRole(config.agentRole, template.defaultRole, task.agentRole));
   const ruleSource = opts.configSourcesReadRule ?? 'as-run';
-  if (ruleSource !== 'as-run' && ruleSource !== 'force-on') throw new Error(`${which}: configSourcesReadRule must be 'as-run' or 'force-on', got ${JSON.stringify(ruleSource)}`);
+  if (ruleSource !== 'as-run' && ruleSource !== 'force-on' && ruleSource !== 'force-on-unlisted') throw new Error(`${which}: configSourcesReadRule must be 'as-run', 'force-on' or 'force-on-unlisted', got ${JSON.stringify(ruleSource)}`);
   const ruleStored = parsedResult(b)?.protocolInjection?.configSourcesReadRule === true;
   let ruleOn: boolean;
-  if (ruleSource === 'force-on') {
+  let pastAllowList: (ConfigSourcesReadRuleDecision & { unlistedProtocol: string }) | undefined;
+  if (ruleSource === 'force-on-unlisted') {
+    // MEASUREMENT ONLY (widening controls): exactly one shipping refusal is set aside — the allow-list — and nothing else.
+    if (ruleGate.on) throw new Error(`${which} ${b.exec.id}: configSourcesReadRule 'force-on-unlisted' refused — the shipping gate already answers ON for this node; use 'force-on'`);
+    const past = labLeafConfigSourcesReadRulePastAllowList(snap.leg, { type: task.type, stage_id: b.task.stage_id ?? null }, resolveAgentRole(config.agentRole, template.defaultRole, task.agentRole));
+    if (!past.applies) throw new Error(`${which} ${b.exec.id}: configSourcesReadRule 'force-on-unlisted' refused — the shipping gate answers OFF for a reason other than the allow-list (${ruleGate.reason}${ruleGate.sourcesState ? `, declaration ${ruleGate.sourcesState}` : ''}); only protocol-not-on-allow-list may be set aside`);
+    if (!past.decision.on) throw new Error(`${which} ${b.exec.id}: configSourcesReadRule 'force-on-unlisted' refused — with the allow-list set aside the shipping gate still answers OFF (${past.decision.reason}${past.decision.sourcesState ? `, declaration ${past.decision.sourcesState}` : ''})`);
+    if (ruleStored) throw new Error(`${which} ${b.exec.id}: configSourcesReadRule 'force-on-unlisted' refused — the stored execution of an unlisted protocol carries the rule (production could not have rendered it)`);
+    ruleOn = true;
+    pastAllowList = { ...past.decision, unlistedProtocol: past.unlistedProtocol! };
+    notes.push(`configSourcesReadRule FORCED ON PAST THE ALLOW-LIST — MEASUREMENT ONLY: the shipping gate answers protocol-not-on-allow-list for ${past.unlistedProtocol}; with that one refusal set aside every other condition answers ON (declaration ${past.decision.sourcesState}); production renders NO rule for this protocol. The rule is inserted into the brief as production would if the protocol were listed`);
+  } else if (ruleSource === 'force-on') {
     if (!ruleGate.on) throw new Error(`${which} ${b.exec.id}: configSourcesReadRule 'force-on' refused — the shipping gate answers OFF for this node (${ruleGate.reason}${ruleGate.sourcesState ? `, declaration ${ruleGate.sourcesState}` : ''}); the rule renders only for a declared observability Harvester`);
     ruleOn = true;
     notes.push(ruleStored ? 'configSourcesReadRule force-on: the stored execution already ran with the rule (a no-op)' : 'configSourcesReadRule FORCED ON: the stored execution ran without the rule; it is inserted into the brief as production now would');
@@ -257,7 +275,7 @@ export async function rebuildPrompt(snap: Snapshot, which: 'author' | 'reviewer'
     maxTokens: config.maxTokens, temperature: config.temperature, llmConfigSource: { ...(b.exec.config ?? {}) }, maxToolTurns, inputContextSource,
     hashes: { system: sha256(system), user: sha256(user), tools: sha256(JSON.stringify(tools)), protocol: protocol ? sha256(protocol.text) : null },
     notes,
-    configSourcesReadRule: { gate: ruleGate, rendered: ruleOn, source: ruleSource, anchor: ruleAnchor },
+    configSourcesReadRule: { gate: ruleGate, rendered: ruleOn, source: ruleSource, anchor: ruleAnchor, ...(pastAllowList ? { pastAllowList } : {}) },
   };
 }
 
@@ -292,7 +310,7 @@ export function fidelityChecks(snap: Snapshot, which: 'author' | 'reviewer', r: 
     const storedRule = pi.configSourcesReadRule === true;
     const gateOn = r.configSourcesReadRule.gate.on;
     out.push({ name: 'protocolInjection.configSourcesReadRule', ok: storedRule === gateOn ? true : storedRule ? false : null,
-      detail: `persisted ${storedRule} · gate ${gateOn} (${r.configSourcesReadRule.gate.reason}) · rendered ${r.configSourcesReadRule.rendered}${r.configSourcesReadRule.source === 'force-on' ? ' (forced)' : ''}` });
+      detail: `persisted ${storedRule} · gate ${gateOn} (${r.configSourcesReadRule.gate.reason}) · rendered ${r.configSourcesReadRule.rendered}${r.configSourcesReadRule.source === 'force-on' ? ' (forced)' : r.configSourcesReadRule.source === 'force-on-unlisted' ? ' (FORCED PAST THE ALLOW-LIST, measurement only)' : ''}` });
   }
   out.push({ name: 'agentRole', ok: res?.agentRole ? res.agentRole === r.role : null, detail: `persisted ${res?.agentRole ?? '—'} · rebuilt ${r.role}` });
   out.push({ name: 'toolNames', ok: Array.isArray(res?.mcpToolsProvided) ? JSON.stringify(res!.mcpToolsProvided) === JSON.stringify(r.toolNames) : null,

@@ -66,6 +66,7 @@ const NON_PROGRAM_LEG_PROTOCOLS: Record<string, string> = {
     'Program tier, same reason. DB-only row that may be absent from the seed entirely — its ' +
     'stale-entry warning below is expected, not a finding.',
   'requirements-authoring-protocol':
+    'RETIRED 2026-11-27 (DEPRECATED tombstone; the Author is retired, specs are hand-written). While live it: ' +
     'Generates the SPECIFICATION a program is graded against — it cannot be a leg OF that program. ' +
     'D2 of its design rejects the recursion outright (a program generating a program\'s spec is ' +
     'recursive complexity for no benefit), and D3 makes it OPTIONAL and off the critical path: it ' +

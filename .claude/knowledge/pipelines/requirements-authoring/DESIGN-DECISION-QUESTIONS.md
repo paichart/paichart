@@ -1,5 +1,11 @@
 # Design-decision questions: the registry
 
+> ⚠️ **RETIRED 2026-11-27 (owner, schedule item 10).** The requirements Author is retired: its protocol is a DEPRECATED
+> tombstone, its three templates are DEPRECATED, and specs are written by hand (`docs/WRITING-A-SPEC.md`, starting from a
+> released use case). This document is kept as a REFERENCE record only — do not run, extend or add rows to it. Paths it names
+> (the vendored skeleton, `test:requirements-skeleton-parity`) may no longer exist. Record:
+> `cline_docs/reviews/author-sunset-2026-11-27/INVENTORY.md`.
+
 > **Canonical.** This is the one place the requirements generator's design-decision QUESTIONS are maintained: what
 > each one asks, which answers it may take, why it exists, and how to add or change one. Every other copy is
 > derived from, or checked against, this file. **`npm run test:requirements-guidance-anchors` fails if the key table

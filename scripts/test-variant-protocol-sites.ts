@@ -133,6 +133,16 @@ export const EXCLUSIONS: Readonly<Record<string, string>> = {
     'first generated network spec canary (2026-11-10) fixture: an interfaceContract.deviceSources keyed by the network protocols\' own contract keys - a contract shape, not a protocol selection; obs declares no device sources',
   'scripts/test-canary-req-sources.ts::<top>':
     'first generated network spec canary (2026-11-10) fixtures: leg carriers stamped with the network protocols (value and change lane) and contracts keyed by their contract keys - a contract shape, not a protocol selection; obs declares no device sources',
+  'lib/agents/harness/config-sources-read-rule.ts::CONFIG_SOURCES_READ_RULE_PROTOCOLS':
+    'the Config sources READ RULE allow-list (which declared Harvesters get the read-rule paragraph; widened to kubernetes-gitops + terraform-iac 2026-11-26 after the widening controls) — a Config-sources prompt property, not held-capability; the retired obs variant declares no Config sources',
+  'scripts/canary-req-sources.ts::READ_RULE_WIDENED_PROTOCOLS':
+    'canary control rrw-k8s-tf-read-rule (2026-11-26): the two protocols the read rule was widened to — the Config sources READ RULE allow-list (which declared Harvesters get the read-rule paragraph; widened to kubernetes-gitops + terraform-iac 2026-11-26 after the widening controls) — a Config-sources prompt property, not held-capability; the retired obs variant declares no Config sources',
+  'scripts/test-config-sources-read-rule.ts::test:RR2 the allow-list is observability-config, kubernetes-gitop':
+    'pins CONFIG_SOURCES_READ_RULE_PROTOCOLS (excluded above for the same reason: a Config-sources prompt property, not held-capability)',
+  'scripts/test-config-sources-read-rule.ts::blocks':
+    'RR5c fixture (2026-11-26): a declared Kubernetes and a declared Terraform leg with their `## Config sources` blocks, proving the widened read rule renders after the block — a fixture, not a protocol selection; the retired obs variant declares no Config sources',
+  'scripts/test-leg-replay-lab.ts::test:LRR2 widened: on the stored K8S-R3 / TF-R3 Harvesters the sh':
+    'LRR2 (2026-11-26): pins the lab against the widened read-rule allow-list on the stored Kubernetes and Terraform Harvesters — a lab fixture over CONFIG_SOURCES_READ_RULE_PROTOCOLS (excluded above: a Config-sources prompt property, not held-capability)',
   'scripts/leg-replay-lab/render-tree-protocols.ts::<top>':
     'lab render tool (L-CS-N S-1 re-pin): writes the named protocol texts of a tree to disk to compare render shas; it never selects or composes a protocol for a run, so no held-variant decision applies',
 };

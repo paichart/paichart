@@ -467,6 +467,58 @@ await test('NAMED miss on a NONEXISTENT name with rows-mode mock → generic mes
   assert(threw.startsWith('NAMED_PROTOCOL_NOT_FOUND:') && threw.endsWith('Fix the binding or activate the protocol.'), threw);
 });
 
+// ── Requirements Author retired (2026-11-27, owner: schedule item 10; INVENTORY.md § A) ─────────────────────────────────
+// requirements-authoring-protocol is a LEG-tier DEPRECATED tombstone. It fails loud ONLY because `requirements-authoring`
+// is in RETIRED_LEG_PROTOCOL_NAMES — remove it and the row takes the LEG branch (base-only) and THIS case goes red.
+const RETIRED_REQ_DESC = 'Retired 2026-11. pAIchart no longer generates a requirements.md: write one by hand with docs/WRITING-A-SPEC.md, starting from a released use case. A task stamped with this protocol cannot be re-routed (the stamp is fixed at first execution) and is not relaunched.';
+await test('RETIRED leg protocol: DEPRECATED requirements-authoring-protocol on a composed stamp → THROWS PROTOCOL_ROW_NOT_ACTIVE, never degrades, carries the row description', async () => {
+  logs.length = 0;
+  let threw = '';
+  let out: unknown = undefined;
+  try {
+    out = await applySystemPromptInjectionsWithFact(BASE,
+      composedCtx({ taskProtocol: { protocol: 'requirements-authoring-protocol', source: 'stamp' } }),
+      composedDb({ rows: { 'requirements-authoring-protocol': { promptText: 'TOMBSTONE', status: 'DEPRECATED', version: '2.0.0', description: RETIRED_REQ_DESC } } }), logger);
+  } catch (e) { threw = (e as Error).message; }
+  assert(out === undefined, 'a DEPRECATED retired-leg row must NOT compose base-only');
+  assert(threw.startsWith('PROTOCOL_ROW_NOT_ACTIVE:'), `pinned prefix, got: ${threw || 'no throw'}`);
+  assert(threw.includes('"requirements-authoring-protocol" is DEPRECATED (retired)'), threw);
+  assert(threw.includes('cannot be re-routed in place'), threw);
+  assert(threw.endsWith(`Protocol row description: ${RETIRED_REQ_DESC}`), `carries the seeded description verbatim: ${threw}`);
+  assert(!threw.includes('program-tier') && !threw.includes('Activate the protocol'), threw);
+  assert(logs.some(l => l.level === 'warn' && (l.data as any).errorCode === 'PROTOCOL_ROW_NOT_ACTIVE'), 'grep key logged');
+});
+await test('RETIRED leg protocol, row has NO description → no HOWTO pointer (that one is program-only), still throws', async () => {
+  let threw = '';
+  try {
+    await applySystemPromptInjections(BASE,
+      composedCtx({ taskProtocol: { protocol: 'requirements-authoring-protocol', source: 'stamp' } }),
+      composedDb({ rows: { 'requirements-authoring-protocol': { promptText: 'TOMBSTONE', status: 'DEPRECATED', version: '2.0.0', description: null } } }), logger);
+  } catch (e) { threw = (e as Error).message; }
+  assert(threw.startsWith('PROTOCOL_ROW_NOT_ACTIVE:') && threw.endsWith('cannot be re-routed in place.'), threw);
+});
+await test('a listed retired-leg name whose row is DRAFT (not DEPRECATED) keeps the base-only degradation', async () => {
+  const { protocolInjection: f } = await applySystemPromptInjectionsWithFact(BASE,
+    composedCtx({ taskProtocol: { protocol: 'requirements-authoring-protocol', source: 'stamp' } }),
+    composedDb({ rows: { 'requirements-authoring-protocol': { promptText: 'X', status: 'DRAFT', version: '2.0.0' } } }), logger);
+  assert(f.degraded === 'PROTOCOL_ROW_NOT_ACTIVE_LEG_BASE_ONLY', 'DRAFT degrades as before');
+});
+await test('an UNLISTED DEPRECATED leg row (the retired held variant) still composes base-only — the default is unchanged', async () => {
+  const { protocolInjection: f } = await applySystemPromptInjectionsWithFact(BASE,
+    composedCtx({ taskProtocol: { protocol: 'observability-config-held-protocol', source: 'stamp' } }),
+    composedDb({ rows: { 'observability-config-held-protocol': { promptText: 'T', status: 'DEPRECATED', version: '1.0.0' } } }), logger);
+  assert(f.degraded === 'PROTOCOL_ROW_NOT_ACTIVE_LEG_BASE_ONLY', 'unlisted retired leg degrades');
+});
+await test('RETIRED leg protocol on the NAMED path (the three templates) → NAMED_PROTOCOL_NOT_FOUND with the retired wording', async () => {
+  let threw = '';
+  try {
+    await applySystemPromptInjections(BASE, { ...noCtx, templateMetadata: { protocol: 'requirements-authoring-protocol' } },
+      mockDb({ rows: { 'requirements-authoring-protocol': { promptText: 'TOMBSTONE', status: 'DEPRECATED', version: '2.0.0', description: RETIRED_REQ_DESC } } }), logger);
+  } catch (e) { threw = (e as Error).message; }
+  assert(threw.startsWith('NAMED_PROTOCOL_NOT_FOUND:') && threw.includes('which is DEPRECATED (retired)'), threw);
+  assert(threw.endsWith(`Protocol row description: ${RETIRED_REQ_DESC}`), threw);
+});
+
 await test('TIER-SPLIT leg: terraform row DRAFT → base-only + warn + degraded FACT (never a throw)', async () => {
   logs.length = 0;
   const { prompt, protocolInjection: f } = await applySystemPromptInjectionsWithFact(

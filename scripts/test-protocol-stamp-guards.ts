@@ -201,14 +201,14 @@ test('WIRING: engine writers stay guard-EXEMPT by construction (no guard import 
 // Mutation-proven 2026-09-22 — sever the JOB half → red; drop the close → red; delete the clause
 // → red; reword "WHEN or HOW MANY" → stays green.
 // (String-pinned per feedback_string_pinned_tests: a future seed reword updates this test.)
-test('PRECEDENCE: requirements-authoring keeps the SITUATION/JOB split intact (both halves)', () => {
+// 2026-11-27: requirements-authoring-protocol is RETIRED (a DEPRECATED tombstone, owner schedule item 10), so the
+// SITUATION/JOB precedence clause it carried is gone with its body. Pinned instead: the row is the tombstone, not the old text.
+test('RETIRED: requirements-authoring-protocol is a DEPRECATED tombstone (the precedence clause left with its body)', () => {
   const body = read('scripts/seed-protocol-prompts.ts');
-  assert(/re-binds your role guidance.?s SITUATION[\s\S]{0,400}?no standing to change it/.test(body),
-    'the SITUATION/JOB precedence split is severed or gone — a protocol may re-bind a role\'s SITUATION, ' +
-    'never its JOB, and the disclaimer half is the load-bearing one');
-  assert(body.includes('in your role guidance applies unchanged'),
-    'the re-binding must close with the applies-unchanged clause — an enumerated re-binding that ' +
-    'does not say what SURVIVES reads as a wholesale replacement of the role guidance');
+  assert(body.includes('const REQUIREMENTS_AUTHORING_TOMBSTONE = `# requirements-authoring-protocol — RETIRED'),
+    'the tombstone body is missing');
+  assert(!body.includes('const PIPELINE_REQUIREMENTS_AUTHORING_PROTOCOL'), 'the retired protocol body is back in the seed');
+  assert(/name: 'requirements-authoring-protocol',[\s\S]{0,1200}?status: 'DEPRECATED'/.test(body), 'the row is not DEPRECATED');
 });
 
 console.log(`\n📊 Results: ${passed} passed, ${failed} failed`);

@@ -42,6 +42,14 @@
  * Protocol ref: requirements-authoring-protocol in agent_prompt_library (seed-protocol-prompts.ts)
  * Shape ref:    scripts/seed-observability-templates.ts (this mirrors it)
  *
+ * RETIREMENT (2026-11-27, owner: schedule item 10; cline_docs/reviews/author-sunset-2026-11-27/INVENTORY.md): the
+ * requirements Author is retired. requirements-authoring-protocol is a DEPRECATED tombstone, so each of these three
+ * templates (named binding) throws NAMED_PROTOCOL_NOT_FOUND at execution. As for the retired Value-Chain Program
+ * Architect (seed-value-chain-templates.ts), each row is kept, set DEPRECATED (an ACTIVE label on a row that always fails
+ * would contradict its behaviour, and DEPRECATED keeps it out of listings) and given a RETIRED description — the signal
+ * at assignment, since template status is not enforced there. The role keys stay in ROLE_GUIDANCE_LIBRARY (dormant).
+ * `infra_state_harvester` is SHARED and live for four domains: this seed only bakes it, never edits it.
+ *
  * Run locally:  npx ts-node --project prisma/tsconfig.seed.json scripts/seed-requirements-authoring-templates.ts
  * Run on prod:  NODE_ENV=production npx ts-node --project prisma/tsconfig.seed.json scripts/seed-requirements-authoring-templates.ts
  */
@@ -83,10 +91,13 @@ const MODEL_PARAMS = (tier: 'infra' | 'synthesis' | 'requirementsAuthor', timeou
   timeout,
 });
 
+/** Every row this seed writes is retired (2026-11-27): it never re-asserts ACTIVE. */
+const RETIRED_STATUS = 'DEPRECATED' as const;
+
 const TEMPLATES: TemplateSeed[] = [
   {
     name: 'Requirements State Harvester',
-    description: 'Phase 0 of the requirements-authoring-protocol (CONDITIONAL — skipped when the task supplies the infrastructure state inline). Self-provisions the read-only service from EACH descriptor the task carries (register → read-only call → teardown), then performs a READ-ONLY harvest via narrow scoped reads of the surfaces the stated objective touches, emitting one clearly labelled section per domain. Unlike every prior use of this role the task may name SEVERAL descriptors from DIFFERENT domains; the protocol re-binds the lifecycle to repeat per descriptor and re-binds the consumer to the Requirements Author (this pipeline has no design phase). Harvests secret metadata, never values. Read-only only — never a mutating or privilege-escalating verb. Reads requirements-authoring-protocol before beginning work.',
+    description: 'RETIRED 2026-11: bound to a DEPRECATED protocol (requirements-authoring-protocol); assigning it fails at execution. pAIchart no longer generates a requirements.md: write one by hand with docs/WRITING-A-SPEC.md. History: Phase 0 of the requirements-authoring-protocol (CONDITIONAL — skipped when the task supplies the infrastructure state inline). Self-provisions the read-only service from EACH descriptor the task carries (register → read-only call → teardown), then performs a READ-ONLY harvest via narrow scoped reads of the surfaces the stated objective touches, emitting one clearly labelled section per domain. Unlike every prior use of this role the task may name SEVERAL descriptors from DIFFERENT domains; the protocol re-binds the lifecycle to repeat per descriptor and re-binds the consumer to the Requirements Author (this pipeline has no design phase). Harvests secret metadata, never values. Read-only only — never a mutating or privilege-escalating verb. Reads requirements-authoring-protocol before beginning work.',
     category: AgentCategory.AUTOMATION,
     templateType: TemplateType.ORCHESTRATOR,
     defaultRole: 'infra_state_harvester', // REUSED, UNEDITED — see the header note; editing it is a 5-template edit
@@ -105,7 +116,7 @@ const TEMPLATES: TemplateSeed[] = [
   },
   {
     name: 'Requirements Author',
-    description: 'Phase 1 of the requirements-authoring-protocol — THE deliverable producer. Authors a complete candidate requirements.md for a pov-program run by filling the program-artifacts template from the harvested state (§6) plus the stated objective: every placeholder resolved, every strip-register authoring note removed, requirements stated as testable properties rather than task lists, and every acceptance criterion that can carry a command and an expected output carrying them. Emits the Writing rules section as its marker ONLY — the rules are spliced in mechanically afterwards, because every authoring pass that transcribed them altered them. Never synthesizes an absence claim from harvest silence: absences are human declarations and are named as gaps. Produces a DRAFT SPECIFICATION for human review — never an approved document and never a launched program. Reads requirements-authoring-protocol before beginning work.',
+    description: 'RETIRED 2026-11: bound to a DEPRECATED protocol (requirements-authoring-protocol); assigning it fails at execution. pAIchart no longer generates a requirements.md: write one by hand with docs/WRITING-A-SPEC.md. History: Phase 1 of the requirements-authoring-protocol — THE deliverable producer. Authors a complete candidate requirements.md for a pov-program run by filling the program-artifacts template from the harvested state (§6) plus the stated objective: every placeholder resolved, every strip-register authoring note removed, requirements stated as testable properties rather than task lists, and every acceptance criterion that can carry a command and an expected output carrying them. Emits the Writing rules section as its marker ONLY — the rules are spliced in mechanically afterwards, because every authoring pass that transcribed them altered them. Never synthesizes an absence claim from harvest silence: absences are human declarations and are named as gaps. Produces a DRAFT SPECIFICATION for human review — never an approved document and never a launched program. Reads requirements-authoring-protocol before beginning work.',
     category: AgentCategory.AUTOMATION,
     templateType: TemplateType.DOCUMENTER,
     defaultRole: 'requirements_author', // MINT
@@ -123,7 +134,7 @@ const TEMPLATES: TemplateSeed[] = [
   },
   {
     name: 'Requirements Reviewer',
-    description: 'Phase 2 of the requirements-authoring-protocol — independent QA gate (not the deliverable; the harness sets suppressDefaultReportMd on it, so it produces result.json only). Grades the drafted requirements.md against the TEMPLATE CONTRACT rather than against prose taste: no surviving placeholders, no surviving strip-register notes, the Writing rules section carrying its marker and not retyped rules, every acceptance criterion checkable by someone who did not write the document, every absence claim declared as a declaration or named as a gap rather than inferred from harvest silence, the described decomposition coherent, and the document specifying a program without smuggling in its execution. Holds no mechanical conformance checker and says so rather than claiming a check it could not run. Ends with the terminal VERDICT block. Does not soften ratings. Reads requirements-authoring-protocol before beginning work.',
+    description: 'RETIRED 2026-11: bound to a DEPRECATED protocol (requirements-authoring-protocol); assigning it fails at execution. pAIchart no longer generates a requirements.md: write one by hand with docs/WRITING-A-SPEC.md. History: Phase 2 of the requirements-authoring-protocol — independent QA gate (not the deliverable; the harness sets suppressDefaultReportMd on it, so it produces result.json only). Grades the drafted requirements.md against the TEMPLATE CONTRACT rather than against prose taste: no surviving placeholders, no surviving strip-register notes, the Writing rules section carrying its marker and not retyped rules, every acceptance criterion checkable by someone who did not write the document, every absence claim declared as a declaration or named as a gap rather than inferred from harvest silence, the described decomposition coherent, and the document specifying a program without smuggling in its execution. Holds no mechanical conformance checker and says so rather than claiming a check it could not run. Ends with the terminal VERDICT block. Does not soften ratings. Reads requirements-authoring-protocol before beginning work.',
     category: AgentCategory.AUTOMATION,
     templateType: TemplateType.REVIEWER,
     defaultRole: 'requirements_reviewer', // MINT — also added to REVIEWER_ROLES (parse-verdict.ts),
@@ -201,7 +212,7 @@ async function main() {
         where: { id: existing.id },
         data: {
           ...data,
-          status: 'ACTIVE',
+          status: RETIRED_STATUS,
           version: '1.0.0',
           updatedAt: new Date(),
         },
@@ -212,7 +223,7 @@ async function main() {
       const created = await prisma.agentTemplate.create({
         data: {
           ...data,
-          status: 'ACTIVE',
+          status: RETIRED_STATUS,
           version: '1.0.0',
           usageCount: 0,
           createdBy,

@@ -9,7 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { checkSources } from './check-requirements-sources';
-import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, CARD_WORD_RE, driftCallsOf, canonJson, archDescriptorsRespected, archFetchRoute, tfLegFacts, obsNoPlaceholderKey, obsUndeclaredLeg, obsDeclaredFacts, type Carrier } from './canary-req-sources';
+import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, CARD_WORD_RE, driftCallsOf, canonJson, archDescriptorsRespected, archFetchRoute, tfLegFacts, obsNoPlaceholderKey, obsUndeclaredLeg, obsDeclaredFacts, type Carrier , readRuleWidened } from './canary-req-sources';
 import { computeGitLiveDrift } from '../lib/agents/harness/git-live-drift';
 import { buildDeviceSourcesSnapshot, resolveLegDeviceSources, DEVICE_SOURCE_KINDS, SOURCE_SEPARATOR } from '../lib/agents/harness/device-sources';
 
@@ -208,6 +208,24 @@ for (const n of ['req-src-contract-equals-spec', 'req-src-keys-parse', 'req-src-
   }
   t('CSO14 no declared leg, or no Harvester result yet ⇒ UNEXERCISED; a plain not-read line is NOT a registration finding', obsDeclaredFacts([fl()]).verdict === 'UNEXERCISED'
     && obsDeclaredFacts([dl({ harvester: null })]).verdict === 'UNEXERCISED' && obsDeclaredFacts([dl({ harvester: dh(reads([item('live-read', 'not-read')])) })]).verdict === 'PASS');
+}
+
+{ // RRW1-RRW4 — the read rule widened to kubernetes-gitops / terraform-iac (pre-registered 2026-11-26)
+  const h = (rule: boolean, states: string[], tools: string[] = []) => ({ protocolInjection: { configSourcesReadRule: rule },
+    configSourceReads: { items: states.map((s, i) => ({ label: `l${i}`, kind: i ? 'live-read' : 'git-file', read: { state: s } })) },
+    toolCalls: tools.map((x) => ({ tool: 'services', arguments: { action: 'call', targetService: 's', tool: x } })) });
+  const leg = (o: any = {}) => ({ id: 'L', protocol: 'kubernetes-gitops-protocol', snapshot: true, heldEdit: null, harvesters: [h(true, ['read', 'read'], ['list_resources'])], ...o });
+  const ok = readRuleWidened([leg(), leg({ protocol: 'terraform-iac-protocol' })]);
+  t('RRW1 declared k8s + tf Harvesters with the rule, every line read, no force ⇒ PASS; the WATCH line prints the services calls', ok.verdict === 'PASS' && ok.lines.some((l) => l.includes('WATCH services calls: list_resources×1')), JSON.stringify(ok));
+  t('RRW2 the rule absent, a declared line not read, or a git-file-not-held force ⇒ FINDING',
+    readRuleWidened([leg({ harvesters: [h(false, ['read'])] })]).verdict === 'FINDING'
+    && readRuleWidened([leg({ harvesters: [h(true, ['read', 'not-read'])] })]).verdict === 'FINDING'
+    && readRuleWidened([leg({ heldEdit: { forced: true, reason: 'git-file-not-held' } })]).verdict === 'FINDING');
+  t('RRW3 extra live reads incl. list_secret_names are a WATCH, never a finding',
+    (() => { const r = readRuleWidened([leg({ harvesters: [h(true, ['read', 'read'], ['list_resources', 'list_secret_names'])] })]); return r.verdict === 'PASS' && r.lines.some((l) => l.includes('list_secret_names present')); })());
+  t('RRW4 an undeclared leg, an observability leg, or no Harvester result yet ⇒ UNEXERCISED',
+    readRuleWidened([leg({ snapshot: false })]).verdict === 'UNEXERCISED' && readRuleWidened([leg({ protocol: 'observability-config-protocol' })]).verdict === 'UNEXERCISED'
+    && readRuleWidened([leg({ harvesters: [null] })]).verdict === 'UNEXERCISED');
 }
 
 console.log(`\n${fail ? '❌' : '✅'} canary-req-sources: ${pass} passed, ${fail} failed`);

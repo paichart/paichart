@@ -61,8 +61,8 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
   const GV = `golden-${gs.version}`; const GVP = `${GV}-pin-paichart-paichart-configs`; // the two companion folders of this version
 
   console.log('GS1 the frozen set');
-  await t('loads, every pin unedited (sha256), v12 (v10: the terraform-iac 1.17.0 canary in, three pre-1.17.0 Terraform approve cases retired; v11: + the four-domain program\'s Terraform leg TF-R3; v12: kubernetes-gitops pinned at 1.19.0, K8S-R3 in, K8S-PROG and K8S-BK3 retired): 17 cases, 6 protocols, 12 templates; the re-freeze record names every case and every retirement; terraform-iac is pinned at 1.17.0, kubernetes-gitops at 1.19.0, requirements-authoring still at its OLD version on purpose', () => {
-    assert(gs.version === 'v12' && gs.cases.length === 17, `${gs.version} cases ${gs.cases.length}`);
+  await t('loads, every pin unedited (sha256), v13 (v10: the terraform-iac 1.17.0 canary in, three pre-1.17.0 Terraform approve cases retired; v11: + the four-domain program\'s Terraform leg TF-R3; v12: kubernetes-gitops pinned at 1.19.0, K8S-R3 in, K8S-PROG and K8S-BK3 retired; v13: observability-config pinned at 1.12.0, no case moved): 17 cases, 6 protocols, 12 templates; the re-freeze record names every case and every retirement; terraform-iac is pinned at 1.17.0, kubernetes-gitops at 1.19.0, requirements-authoring still at its OLD version on purpose', () => {
+    assert(gs.version === 'v13' && gs.cases.length === 17, `${gs.version} cases ${gs.cases.length}`);
     assert(gs.pins.protocols['terraform-iac-protocol'].version === '1.17.0' && gs.pins.protocols['terraform-iac-protocol'].sha256.startsWith('ed8bdb991631'), 'the terraform-iac pin is the live 1.17.0 text');
     assert(gs.pins.protocols['kubernetes-gitops-protocol'].version === '1.19.0' && gs.pins.protocols['kubernetes-gitops-protocol'].sha256.startsWith('5f51e83c1848'), 'the kubernetes-gitops pin is the live 1.19.0 text (v12)');
     assert(gs.pins.protocols['requirements-authoring-protocol'].version === '1.10.1', 'the requirements pin stays at 1.10.1 ON PURPOSE (the re-pin is NOT planned: owner 2026-11-19, GOLDEN-REQ-PIN-STALE) — re-pinning it is a new version and an owner decision');
@@ -74,7 +74,10 @@ const stored = (c: GoldenCase) => { const sn = loadSnapshot(c.authorExecutionId)
     const added = (gs.refreezes ?? []).flatMap((r) => r.added).filter((id) => !retired.has(id)).sort().join();
     assert(added === gs.cases.map((c) => c.id).sort().join(), `refreezes added ≠ cases: ${added}`);
     assert(gs.refreezes!.at(-1)!.version === gs.version, 'the newest re-freeze names the current version');
-    const v12 = gs.refreezes!.at(-1)!; const why = (id: string) => v12.excluded.find((x) => x.leg.startsWith(`${id} `))?.why ?? '';
+    const v13 = gs.refreezes!.at(-1)!;
+    assert(v13.version === 'v13' && !v13.added.length && !(v13.retired ?? []).length && !v13.excluded.length && /observability-config-protocol 1\.11\.0 → 1\.12\.0 \(4d62c5232e2f\)/.test(v13.pinsMoved[0]), 'v13: the observability re-pin only — no case added, retired or excluded');
+    assert(gs.pins.protocols['observability-config-protocol'].version === '1.12.0' && gs.pins.protocols['observability-config-protocol'].sha256.startsWith('4d62c5232e2f'), 'the observability pin is the live 1.12.0 text (v13)');
+    const v12 = gs.refreezes!.find((r) => r.version === 'v12')!; const why = (id: string) => v12.excluded.find((x) => x.leg.startsWith(`${id} `))?.why ?? '';
     assert(v12.added.join() === 'K8S-R3' && (v12.retired ?? []).join() === 'K8S-PROG,K8S-BK3' && v12.excluded.length === 3, 'v12: K8S-R3 in, two retired, the 2026-11-16 canary leg excluded');
     assert(/did NOT flip/.test(why('K8S-PROG')) && /WEAKER DUPLICATE, NOT AS A STALE CHAIN/.test(why('K8S-PROG')), 'K8S-PROG is recorded as retired as a weaker duplicate — it did not flip in L-CS-K');
     assert(/STALE-CHAIN EVIDENCE/.test(why('K8S-BK3')) && /change leg whose package carries no edit/.test(why('K8S-BK3')) && /no run is owed/.test(why('K8S-BK3')) && /VALUE LANE/.test(why('K8S-BK3')) && !/value-only/i.test(JSON.stringify(v12)), 'K8S-BK3: retired on the stale-chain evidence; its coverage returns with the Kubernetes value lane; no run is owed');

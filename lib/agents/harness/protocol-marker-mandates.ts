@@ -43,7 +43,6 @@ export const PROTOCOL_MARKER_MANDATES: Readonly<Record<string, MarkerMandate>> =
   'observability-config-protocol': ['Consumed Values'],
   'pov-program-protocol': 'none',
   'network-derivation-protocol': ['Harvested Allocations', 'Derived Values'],
-  'requirements-authoring-protocol': 'none',
   'HOWTO-use-pipeline-harness': 'none',
   'HOWTO-use-program-harness': 'none',
   'HOWTO-program-workflow': 'none',

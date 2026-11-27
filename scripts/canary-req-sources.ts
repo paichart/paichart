@@ -318,3 +318,50 @@ export function obsDeclaredFacts(legs: readonly ObsFactsLeg[]): ReqSrcResult {
   return cso('PASS', [...lines, `  ${seen} Harvester(s) of ${mine.length} declared leg(s): the comparison record and its three facts are stamped; every declared service line was tied to a registration`]);
 }
 
+
+// ── The Config sources READ RULE widened to kubernetes-gitops and terraform-iac (pre-registered 2026-11-26, BEFORE the deploy; lab
+// widening controls 3/3 each, cline_docs/reviews/config-sources-plans-2026-11-09/WIDENING-CONTROLS-BUILD-NOTE-DRAFT.md). Control
+// `rrw-k8s-tf-read-rule`. A DECLARED Kubernetes or Terraform leg (its Config sources snapshot is present): every Harvester result
+// carries `protocolInjection.configSourcesReadRule: true`, every declared line is `read`, and the leg is not forced `git-file-not-held`.
+// The extra live reads the lab saw (8 of 8 samples; the stored runs 0) are printed as a WATCH, never a finding: they are harmless to the
+// facts. An undeclared leg (no snapshot) gets no rule and is not checked here.
+export interface RrwLeg { id: string; protocol: string; snapshot: boolean; heldEdit: unknown; harvesters: ReadonlyArray<Record<string, unknown> | null> }
+export const READ_RULE_WIDENED_PROTOCOLS: readonly string[] = Object.freeze(['kubernetes-gitops-protocol', 'terraform-iac-protocol']);
+const innerToolsOf = (j: Record<string, unknown>): string[] => (Array.isArray(j.toolCalls) ? j.toolCalls : []).flatMap((c) => {
+  if (!isObj(c) || c.tool !== 'services') return [];
+  const a = isObj(c.arguments) ? c.arguments : isObj(c.input) ? c.input : null;
+  return a && a.action === 'call' && typeof a.tool === 'string' ? [a.tool] : [];
+});
+export function readRuleWidened(legs: readonly RrwLeg[]): ReqSrcResult {
+  const mine = legs.filter((l) => READ_RULE_WIDENED_PROTOCOLS.includes(l.protocol) && l.snapshot);
+  if (!mine.length) return cso('UNEXERCISED', [`  no DECLARED kubernetes-gitops / terraform-iac leg (${legs.length} leg(s) of those protocols) ; an absence, not a pass`]);
+  const lines: string[] = []; let finding = false; let seen = 0;
+  for (const l of mine) {
+    const he = isObj(l.heldEdit) ? l.heldEdit : null;
+    const forced = !!he && he.forced === true;
+    lines.push(`  leg ${l.id} (${l.protocol})${forced ? ` FORCED(${String(he!.reason)})` : ''}`);
+    if (forced && String(he!.reason) === 'git-file-not-held') { finding = true; lines.push('    forced git-file-not-held : FINDING'); }
+    for (const j of l.harvesters) {
+      if (!j) continue;
+      seen++;
+      const pi = isObj(j.protocolInjection) ? j.protocolInjection : {};
+      const rule = pi.configSourcesReadRule === true;
+      lines.push(`    Harvester: configSourcesReadRule=${rule ? 'true' : 'ABSENT'}`);
+      if (!rule) { finding = true; lines.push('      the read rule was not rendered on a declared Harvester of a widened protocol : FINDING'); }
+      const r = isObj(j.configSourceReads) ? j.configSourceReads : null;
+      const items = r && Array.isArray(r.items) ? (r.items as unknown[]).filter(isObj) : [];
+      if (!r) { finding = true; lines.push('      configSourceReads not stamped : FINDING'); }
+      for (const it of items) {
+        const state = isObj(it.read) ? String(it.read.state) : '?';
+        lines.push(`      ${String(it.label)} (${String(it.kind)}): ${state}`);
+        if (state !== 'read') { finding = true; lines.push('        a declared line not read : FINDING'); }
+      }
+      const tools = innerToolsOf(j);
+      const counts = tools.reduce<Record<string, number>>((m, x) => ({ ...m, [x]: (m[x] ?? 0) + 1 }), {});
+      lines.push(`      WATCH services calls: ${Object.entries(counts).map(([k, n]) => `${k}×${n}`).join(', ') || 'none'}${counts.list_secret_names ? ' (list_secret_names present)' : ''}`);
+    }
+  }
+  if (finding) return cso('FINDING', lines);
+  if (!seen) return cso('UNEXERCISED', [...lines, '  no Harvester result yet ; an absence, not a pass']);
+  return cso('PASS', [...lines, `  ${seen} Harvester(s) of ${mine.length} declared leg(s): the rule rendered, every declared line read, no git-file-not-held force (hand-compare the WATCH line with the stored pre-widening runs)`]);
+}

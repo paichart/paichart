@@ -25,12 +25,12 @@ So there are two limits, and you own both:
 
 - **The account the service uses on the devices:** the hard boundary. Give it a read-only role on the device, and the device
   itself refuses a configuration command, whoever sends it.
-- **The service's own tool list:** a second layer. Our reference service removes every tool that can change a device before it
-  starts, so a write does not exist to be called.
+- **The service's own tool list:** a second layer. Our reference service has no tool that can change a device, so a write does
+  not exist to be called.
 
 Our reference service, its lab and its descriptor are in the public repository: `usecases/network-lab/` (the service is
-`nornir-mcp-docker/`) and `descriptors/ceos-lab-readonly-descriptor.json`. It builds on the open-source
-[`nornir-napalm-mcp`](https://github.com/sydasif/nornir-napalm-mcp) project. Your team can read exactly what each tool does.
+`nornir-mcp-docker/`) and `descriptors/ceos-lab-readonly-descriptor.json`. It is pAIchart's own small server on the open-source
+`nornir` and `napalm` libraries, with only the three read tools. Your team can read exactly what each tool does.
 
 ## What it reads
 
@@ -45,8 +45,7 @@ A leg reads only the devices your spec declares (next section). It does not swee
 ## What it never does
 
 - **It never configures a device.** No tool on the reference service can apply, commit, load, replace or save a configuration,
-  or reload a device. The upstream project has such tools (`apply_config`, `backup_configs`); the reference service's wrapper
-  deletes them before the server starts. They are not refused at run time: they are not there.
+  or reload a device. Such tools are not refused at run time: they are not in the code.
 - **It never opens a configuration session**, not even to check a candidate and abort. Checks that need one are written into
   the package for your engineers to run.
 - **It never keeps a device credential.** The credential stays in your service.
@@ -55,10 +54,10 @@ A leg reads only the devices your spec declares (next section). It does not swee
 
 Two things to know, stated plainly:
 
-- **The `show` command list is enforced by the descriptor, at the hub.** The reference service's `show_commands` tool will run
-  any `show` string sent to it directly; the list of nine commands in the descriptor is what the hub offers agents. Anyone who
-  can reach the service's port directly is limited only by the device account. So keep the port private to your hub, and make
-  the device account read-only.
+- **The `show` command list is enforced by the service.** The reference service runs only the nine `show` commands its
+  descriptor lists and refuses any other before contacting a device (`command_not_allowed`). The hub does not check the list
+  itself, so a service you run yourself must enforce its own. Anyone who can reach the service's port directly can still read
+  what those nine commands and the getters show, so keep the port private to your hub, and make the device account read-only.
 - **The reference service signs in to devices with one static service credential**, not with the identity of the person who
   started the run. It is a lab service. For production, run your own service with the credential handling your policy requires.
 
@@ -83,7 +82,7 @@ edge-fw:  live-read — service <your device service's name, or its descriptor U
 | `git-file` | reads the file from your Git repository and **keeps** it; the change is written as edits to that kept copy | a device whose configuration of record is in Git (most teams, most devices) |
 | `device-read` | reads the whole running configuration from the device and **keeps** it; the change is written as edits to that copy | a device with no file in Git |
 | `git-file` and `device-read` together | the Git file is the base; the device read is evidence, and the platform compares the two (below) | a device you want checked against what is actually running |
-| `live-read` | reads the running configuration as **evidence only**: never kept, never edited | a device the change must see and does not touch |
+| `live-read` | reads the running configuration as **evidence only**: never kept, never edited. It must be that device's only line | a device the change must see and does not touch |
 | `command-package` | reads nothing; the change is written as commands | a device with no file and no readable configuration |
 
 **List every device the leg must see, not only the ones it changes.** If the change picks a value that must not clash with
@@ -109,8 +108,9 @@ under the same block.
 - **Some listed lines are rendering differences**, not real ones: a device prints its configuration in its own order and style,
   and a default may be shown or left out. pAIchart does not guess which is which, and names no cause.
 - **It changes how the package tells you to apply.** Since network-provisioning 1.27.0, when the fact lists any line for a
-  device, the package applies that device **incrementally**: only the changed lines, in a configuration session, never a
-  whole-file load. Loading the whole Git file onto a device that differs from it could remove something the device needs.
+  device, the package applies that device **incrementally** (only the changed lines, in a configuration session), or first
+  brings the Git file in line with the device; never a whole-file load. Loading the whole Git file onto a device that differs
+  from it could remove something the device needs, and the change reviewer refuses a package that does.
 
 ## What you get back
 
@@ -157,7 +157,7 @@ The reference service answers with exactly `list_devices`, `fetch_data` and `sho
 - **Scoped by you:** the device account sets the hard limit, and your `## Device sources` block sets which devices are read.
 - **Never:** a configuration change, a configuration session, a reload, or a kept copy of something you pasted.
 - **The Git-against-device comparison is pAIchart's own code.** It warns, names no cause, and makes the package apply that
-  device incrementally.
+  device incrementally, never as a whole-file load.
 - **You stay in control of the change:** pAIchart hands you reviewed edits, the checks and a rollback, and your engineers apply
   them.
 

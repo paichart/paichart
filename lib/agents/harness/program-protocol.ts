@@ -165,6 +165,28 @@ export function isProgramProtocol(name: string | null | undefined): boolean {
 }
 
 /**
+ * SHORT names of RETIRED LEG-tier protocols that must FAIL LOUD when a task stamped with them runs (2026-11-27,
+ * owner: schedule item 10; cline_docs/reviews/author-sunset-2026-11-27/INVENTORY.md § A). A leg-tier stamp whose row is
+ * not ACTIVE normally DEGRADES to base-only (execution-system-prompt.ts LEG branch: task-authored state, failing would
+ * punish the wrong author). That default stays for every other leg name — the retired held-variant token deliberately
+ * composes base-only (held-bytes/variant.ts). A name here instead throws PROTOCOL_ROW_NOT_ACTIVE when its row is
+ * DEPRECATED: a requirements-authoring harness on the base alone would plan an unguided pipeline rather than stop.
+ * NOT program tier: membership changes ONLY that throw (no F12 belt, no programConfidence, no title-disjunct).
+ * KEPT PERMANENTLY — removing a name turns its loud failure back into a base-only run. Pinned in
+ * test-system-prompt-injections.ts.
+ */
+export const RETIRED_LEG_PROTOCOL_NAMES: readonly string[] = [
+  'requirements-authoring',
+];
+
+/** True if `name` (short or long form) is a retired leg protocol that hard-fails instead of composing base-only. */
+export function isRetiredLegProtocol(name: string | null | undefined): boolean {
+  if (!name || typeof name !== 'string' || !PROTOCOL_NAME_RE.test(name)) return false;
+  const canonical = canonicalProtocolName(name);
+  return RETIRED_LEG_PROTOCOL_NAMES.some((n) => canonicalProtocolName(n) === canonical);
+}
+
+/**
  * Does this task title mark a PROGRAM harness? TRANSITIONAL — the title half of the
  * stamp-OR-title disjunct (see the header). Anchored on both sides by construction.
  */

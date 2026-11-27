@@ -9,7 +9,7 @@
  *  M3  `protocolMandatesNoMarkers` is true ONLY for a known `'none'` protocol (unknown/absent ⇒ false).
  *  R1  renderPipelineContextSection: a 'none' protocol drops ONLY the marker line; every other line is identical.
  *  R2  a marker-mandating protocol, an unknown protocol, null, and no options all render BYTE-IDENTICALLY.
- *  W1  buildAgentPromptBody wires the template's binding (engine + stream share it): requirements-authoring drops
+ *  W1  buildAgentPromptBody wires the template's binding (engine + stream share it): artifact-synthesis drops
  *      the line; terraform keeps it; a composed template keeps it.
  *
  * Mutation-checked: deleting the `!markersNotMandated` guard turns R1/W1 red; forcing the predicate true turns
@@ -59,7 +59,9 @@ ok(namedProtocolOfTemplate({ metadata: {} }) === null && namedProtocolOfTemplate
 ok(namedProtocolOfTemplate({ metadata: { protocol: 7 } }) === null && namedProtocolOfTemplate({ metadata: { protocol: '' } }) === null, 'M2d malformed ⇒ null');
 
 // ── M3 ─────────────────────────────────────────────────────────────────────────────────────────
-ok(protocolMandatesNoMarkers('requirements-authoring-protocol') && protocolMandatesNoMarkers('artifact-synthesis-protocol'), 'M3a known none ⇒ true');
+ok(protocolMandatesNoMarkers('artifact-synthesis-protocol') && protocolMandatesNoMarkers('pov-program-protocol'), 'M3a known none ⇒ true');
+// The requirements Author was retired 2026-11-27: its DEPRECATED row is not projected, so it reads as unknown ⇒ renders.
+ok(!protocolMandatesNoMarkers('requirements-authoring-protocol'), 'M3c retired (DEPRECATED) requirements-authoring ⇒ unknown ⇒ false');
 ok(!['network-provisioning-protocol', 'kubernetes-gitops-protocol', 'terraform-iac-protocol', 'observability-config-protocol', 'network-derivation-protocol']
   .some(protocolMandatesNoMarkers), 'M3b every marker-mandating infra protocol ⇒ false');
 ok(!protocolMandatesNoMarkers('no-such-protocol') && !protocolMandatesNoMarkers(null) && !protocolMandatesNoMarkers(undefined)
@@ -77,7 +79,7 @@ const IC = {
 const LINE = '- **Machine-parsed blocks (platform fact)**: Harvested Allocations ✗ · Derived Values ✗ · Consumed Values ✗';
 {
   const base = renderPipelineContextSection(IC);
-  const none = renderPipelineContextSection(IC, { boundProtocol: 'requirements-authoring-protocol' });
+  const none = renderPipelineContextSection(IC, { boundProtocol: 'artifact-synthesis-protocol' });
   ok(base.includes(LINE) && !none.includes(LINE), 'R1a a none protocol drops the marker line');
   ok(norm(base.filter(l => l !== LINE)) === norm(none), 'R1b … and ONLY that line (every other line identical, in order)');
   const variants: Array<[string, string | null | undefined]> = [
@@ -94,9 +96,9 @@ const LINE = '- **Machine-parsed blocks (platform fact)**: Harvested Allocations
 {
   const task = { title: 'T', description: 'd', inputContext: IC, type: 'ACTION', status: 'TODO', priority: 'MEDIUM' };
   const body = (metadata: unknown) => buildAgentPromptBody(task, {}, { agentTemplate: { metadata } });
-  ok(!body({ protocol: 'requirements-authoring-protocol' }).includes(LINE), 'W1a requirements-authoring template ⇒ no marker line');
+  ok(!body({ protocol: 'artifact-synthesis-protocol' }).includes(LINE), 'W1a artifact-synthesis template ⇒ no marker line');
   ok(body({ protocol: 'terraform-iac-protocol' }).includes(LINE), 'W1b terraform template ⇒ marker line');
-  ok(body({ protocol: 'requirements-authoring-protocol', loadProtocols: 'composed' }).includes(LINE), 'W1c composed template ⇒ marker line (not named ⇒ unknown)');
+  ok(body({ protocol: 'artifact-synthesis-protocol', loadProtocols: 'composed' }).includes(LINE), 'W1c composed template ⇒ marker line (not named ⇒ unknown)');
   ok(buildAgentPromptBody(task, {}, {}).includes(LINE), 'W1d no template ⇒ marker line');
 }
 

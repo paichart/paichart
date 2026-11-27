@@ -1,5 +1,10 @@
 # requirements-spec — findings register
 
+> **CLOSED 2026-11-27 (owner, schedule item 10).** The requirements Author is retired. Every item still open below
+> (`- [ ]`) is WON'T-DO from this date: none will be worked, and none is a live defect, because nothing generates a spec any
+> more. Kept as the record (exported test suites also read this folder as fixtures). Record:
+> `cline_docs/reviews/author-sunset-2026-11-27/INVENTORY.md`.
+
 The skill's own register (Steve, 2026-10-09: the skill files into its working directory). Indexed from the open register
 (`cline_docs/follow-ups/OPEN-REGISTER-*.md`, entry REQ-SPEC-STREAMLINE), so an entry here IS filed.
 

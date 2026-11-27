@@ -1828,6 +1828,7 @@ scripts/fixtures/quote-fidelity/tf-r9r10-harvest.json
 scripts/fixtures/quote-fidelity/tie-net-harvest.json
 scripts/fixtures/r10-v13/collector-nginx-shapes.json
 scripts/fixtures/requirements-coverage/telemetry-export-t1zero-run2-draft.md
+scripts/fixtures/requirements-skeleton-1.11.0.tmpl
 scripts/fixtures/rollback-containment/PROVENANCE.md
 scripts/fixtures/rollback-containment/fw-author.md
 scripts/fixtures/rollback-containment/fw-harvest.md
@@ -1860,6 +1861,7 @@ scripts/leg-replay-lab/check-at.ts
 scripts/leg-replay-lab/config-sources-arm.ts
 scripts/leg-replay-lab/config-sources-patch.ts
 scripts/leg-replay-lab/derive-edits.py
+scripts/leg-replay-lab/descriptor-fetch.ts
 scripts/leg-replay-lab/device-comparison-patch.ts
 scripts/leg-replay-lab/edit-overlap-lever.ts
 scripts/leg-replay-lab/edits.ts
@@ -1980,7 +1982,6 @@ scripts/seed-agent-templates.ts
 scripts/seed-artifact-synthesis-templates.ts
 scripts/seed-browser-automation-service.ts
 scripts/seed-data/github-service-tools.json
-scripts/seed-data/requirements-skeleton.tmpl
 scripts/seed-database.ts
 scripts/seed-example-workflows.ts
 scripts/seed-geographical-data.js
@@ -2239,7 +2240,6 @@ scripts/test-requirements-form-check-parity.ts
 scripts/test-requirements-form-check.ts
 scripts/test-requirements-form-correction.ts
 scripts/test-requirements-guidance-anchors.ts
-scripts/test-requirements-skeleton-parity.ts
 scripts/test-requirements-sources.ts
 scripts/test-resolve-owning-leg.ts
 scripts/test-resource-authz-coverage.ts

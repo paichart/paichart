@@ -114,6 +114,10 @@ so a reviewer judges a stated reason rather than an unstated one.
 
 ## Canonical example — `requirements-authoring-protocol` (2026-09-21)
 
+> **Retired 2026-11-27**: the requirements Author and its protocol are retired (DEPRECATED tombstone); the vendored
+> skeleton is now a frozen test fixture (`scripts/fixtures/requirements-skeleton-1.11.0.tmpl`) and its parity test is gone.
+> The example below is kept as the record of how the pattern worked; its paths and commands are historical.
+
 Template (public repo) → `--skeleton` strips author-addressed blocks → vendored
 `scripts/seed-data/requirements-skeleton.tmpl` → `readFileSync` at seed → protocol body. The
 canonical **writing rules live in a SIBLING FILE** (`_TEMPLATE/writing-rules.md`), reach **no agent

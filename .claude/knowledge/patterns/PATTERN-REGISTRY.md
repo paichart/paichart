@@ -421,7 +421,7 @@
 **Specialist**: prompt-construction-specialist has Handlebars limitation + protocol creation guidance
 
 
-### **instruction-beside-its-subject-pattern.md** - 85% Confidence ⚠️ (NEW - 2026-11-26)
+### **instruction-beside-its-subject-pattern.md** - 90% Confidence ✅ (NEW - 2026-11-26; 85→90 after the K8S/TF widening controls passed)
 **When to use**: a platform rule must override a more specific instruction an agent receives (brief, task body, contract note)
 **Results**: lab L-OBS-MLH — the same rule text held 2 of 5 at the end of the system prompt and 5 of 5 placed directly after the block it governs; every compliant sample cited it, every miss never mentioned it; live canary passed after the ship
 **Key features**: render at a fixed anchor beside the governed text (both prompt copies), narrow gate with 0 bytes elsewhere, labelled paragraph not a heading, measure compliance by citation, no-regression control

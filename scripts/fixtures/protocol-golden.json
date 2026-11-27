@@ -37,16 +37,16 @@
       "chars": 26979
     },
     "requirements-authoring-protocol": {
-      "sha256": "50a548c3c2d7a18eedc049e07104febe3bbffbfd19d42d6621efb9b1fcc9a979",
-      "chars": 52647
+      "sha256": "bda2ad1b351189fda3e48bdc67ce384cc98e58ec685ab22c49123ee52cae3b3a",
+      "chars": 557
     },
     "HOWTO-use-pipeline-harness": {
       "sha256": "6cc7944552db9a4304b8a794314d7267a469b1bdede20e4feed363fd59a0f8cf",
       "chars": 75297
     },
     "HOWTO-use-program-harness": {
-      "sha256": "ed90f544c4f94bf83738550dc8ea44c2ecb543083b077c527114b00b04e334eb",
-      "chars": 39940
+      "sha256": "f81385af47753cf9bf562ce1b32d2e4045162696e2122a4ea94a279131ebe877",
+      "chars": 35144
     },
     "HOWTO-program-workflow": {
       "sha256": "06c5ad3f771b9685d4af140c0bdc333b87fff8fba9ff7cda72cad7abc44283ea",

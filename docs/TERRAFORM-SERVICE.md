@@ -58,7 +58,8 @@ Leave out the `live-read` line for a Git-only run. The package then says it was 
 that existing infrastructure was not read.
 
 In a program, every Terraform leg receives the same block and reads every file it lists. If a declared file could not be read
-and kept, the leg returns `needs-revision` with the reason `git-file-not-held`.
+and kept, the leg returns `needs-revision` with the reason `git-file-not-held`. The platform places a short read rule directly
+after the block in the Harvester's brief: the brief may limit what a leg changes, never which declared lines it reads.
 
 ## Why there is no drift check
 

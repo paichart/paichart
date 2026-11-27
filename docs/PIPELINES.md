@@ -249,9 +249,8 @@ check that file by hand. The Git file source is admin-only, and reads only the o
   block, so put a file in it only if a leg needs it. Give each leg a title and an objective that name the **one** file that leg
   changes: in our test lab, a leg left with another leg's title harvested for the other leg's change. With two or more
   observability legs, name a **pre-registered** service on the lines (see [Connecting your own services](#connecting-your-own-services)).
-  The platform also places a short read rule directly after the block in each observability Harvester's brief: the brief may limit
-  what a leg changes, never which declared lines it reads. A brief that said otherwise made the Harvester skip the other legs' files
-  in our test lab.
+  The platform also places a short read rule directly after the block in each observability, Kubernetes and Terraform
+  Harvester's brief: the brief may limit what a leg changes, never which declared lines it reads. A brief that said otherwise made the Harvester skip the other legs' files in our test lab.
 - **The service.** A line that gives a descriptor URL makes the run register the service from that URL alone. Register it no other
   way: the platform cannot tie a hand registration to the line, keeps no file from it, and the leg cannot be approved. What you
   may see on the Harvester's `configSourceReads` when that happens:

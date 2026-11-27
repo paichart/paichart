@@ -20,7 +20,7 @@
  *
  * SCOPE. Agent-facing bodies ONLY. Operator-facing HOWTO/GUIDE prompts are EXEMPT by design: a
  * worked example naming a real rig is exactly what an operator needs, and that audience split is
- * the same one `test-requirements-skeleton-parity.ts` enforces for the splice instruction.
+ * the same one the retired `test-requirements-skeleton-parity.ts` enforced for the splice instruction.
  */
 import { readFileSync } from 'fs';
 import { join } from 'path';

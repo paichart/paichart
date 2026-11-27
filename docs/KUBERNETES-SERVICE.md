@@ -111,6 +111,9 @@ says so. The topology file (`topology.json`) beside the spec holds facts only: t
 the workload, your repository and paths, and your service's descriptor URL. It needs no map of your cluster. A worked example:
 the `telemetry-export-net-k8s-r2` use case in the public configs repository [`paichart/paichart-configs`](https://github.com/paichart/paichart-configs/tree/main/usecases/telemetry-export-net-k8s-r2) (a `git-only/` and a `git-live/` variant).
 
+The platform places a short read rule directly after the block in the Harvester's brief: the brief may limit what a leg
+changes, never which declared lines it reads. A declared Git file that is not read stops the leg's approval.
+
 ## The drift check: what it is and what it tells you
 
 When a leg declares both a `git-file` and a `live-read` line, **pAIchart itself** (never an agent) sends your kept file to your

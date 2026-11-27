@@ -26,7 +26,7 @@
  */
 import { CONFIG_SOURCE_LANES, isHeldCapableLeg, isGitFileSourceLeg, isDeviceSourceLeg, captureScopesFor, type OwningLegResolution } from '../../lib/agents/harness/held-bytes/variant';
 import { governingConfigSources, type LegConfigSourcesResolution } from '../../lib/agents/harness/config-sources-read';
-import { configSourcesReadRuleDecision, type ConfigSourcesReadRuleDecision } from '../../lib/agents/harness/config-sources-read-rule';
+import { configSourcesReadRuleDecision, CONFIG_SOURCES_READ_RULE_PROTOCOLS, type ConfigSourcesReadRuleDecision } from '../../lib/agents/harness/config-sources-read-rule';
 import { CONFIG_SOURCES_SNAPSHOT_KEY } from '../../lib/agents/harness/config-sources';
 import { liveEvidenceVersionApplies } from '../../lib/agents/harness/live-evidence';
 import { canonicalProtocolName, resolveTaskProtocol } from '../../lib/agents/harness/program-protocol';
@@ -146,4 +146,38 @@ export function labLeafConfigSourcesReadRule(leg: LegRow, task: { type?: string 
     deviceSource: isDeviceSourceLeg(l), configSourceProtocol: c.protocol } as OwningLegResolution) : null;
   const sources = c ? governingConfigSources({ description: c.description, contract: c.contract, snapshot: c.snapshot, protocolStamped: legProtocolStamped(leg) }, c.protocol) : null;
   return configSourcesReadRuleDecision({ taskType: task.type, agentRole, owningLeg, sources });
+}
+
+/**
+ * Read rule WIDENING CONTROLS (2026-11-26, LAB-PREREG-L-OBS-MLH ADDENDUM B, schedule item 7) — MEASUREMENT ONLY. The shipping gate's
+ * answer for a leaf of this leg with exactly ONE of its refusals set aside: `protocol-not-on-allow-list`. Everything else is still the
+ * SHIPPING decision: it is asked a second time with the owning leg's protocol replaced by the first allow-listed protocol
+ * (`CONFIG_SOURCES_READ_RULE_PROTOCOLS[0]`, read from lib, never a lab copy) and every other input unchanged — the leg's governing
+ * declaration is still the one `governingConfigSources` resolves under the leg's OWN protocol. So the Harvester role, the declared
+ * Config-source leg and the `parsed` declaration still decide; only the allow-list does not.
+ *   `applies: false` — the first answer was not `protocol-not-on-allow-list` (ON already, or another refusal): nothing is set aside.
+ *   `applies: true`  — `decision` is the second answer; ON means every other condition holds.
+ * The shipping allow-list and gate are never edited; production renders no rule for an unlisted protocol.
+ */
+export function labLeafConfigSourcesReadRulePastAllowList(leg: LegRow, task: { type?: string | null; stage_id?: string | null }, agentRole: string | null | undefined):
+  { first: ConfigSourcesReadRuleDecision; applies: boolean; decision: ConfigSourcesReadRuleDecision; unlistedProtocol: string | null } {
+  const first = labLeafConfigSourcesReadRule(leg, task, agentRole);
+  if (first.reason !== 'protocol-not-on-allow-list') return { first, applies: false, decision: first, unlistedProtocol: null };
+  const c = configLegOf(leg)!; // the first answer passed condition 3, so the leg has a Config-sources protocol
+  const l = (leg ?? {}) as { title?: string | null; metadata?: unknown };
+  const listed = CONFIG_SOURCES_READ_RULE_PROTOCOLS[0];
+  const owningLeg = { kind: 'leg', legId: c.legId, heldCapable: isHeldCapableLeg(l), ownStageId: String(task.stage_id ?? ''), gitFileSource: isGitFileSourceLeg(l),
+    deviceSource: isDeviceSourceLeg(l), configSourceProtocol: listed } as OwningLegResolution;
+  const sources = governingConfigSources({ description: c.description, contract: c.contract, snapshot: c.snapshot, protocolStamped: legProtocolStamped(leg) }, c.protocol);
+  return { first, applies: true, decision: configSourcesReadRuleDecision({ taskType: task.type, agentRole, owningLeg, sources }), unlistedProtocol: c.protocol };
+}
+
+/** 2026-11-26 (descriptor-fetch.ts): the `service` of every DECLARED live-read line of this leg's governing declaration (empty when the
+ *  leg declares nothing or the declaration does not parse). The same resolution the read-rule answer uses. */
+export function declaredLiveReadServices(leg: LegRow): string[] {
+  const c = configLegOf(leg);
+  if (!c) return [];
+  const g = governingConfigSources({ description: c.description, contract: c.contract, snapshot: c.snapshot, protocolStamped: legProtocolStamped(leg) }, c.protocol) as LegConfigSourcesResolution & { entries?: Array<{ kind: string; service?: string }> };
+  if (g.state !== 'parsed') return [];
+  return ((g.entries ?? []) as Array<{ kind: string; service?: unknown }>).filter((e) => e.kind === 'live-read' && typeof e.service === 'string').map((e) => e.service as string);
 }

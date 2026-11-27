@@ -38,8 +38,9 @@ import { CONFIG_SOURCE_LANES, CONFIG_SOURCE_PROTOCOLS } from '../lib/agents/harn
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { leanFactsLine } = require('../lib/mcp/server/tools/advanced/lean-card-facts');
 import { pickResultJsonSummary } from '../lib/services/execution-artifacts';
+import { HARVEST_LEAF_ROLE_RE } from '../lib/agents/harness/mechanical-nets';
 import * as fs from 'fs';
-import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, driftCallsOf, canonJson, archDescriptorsRespected, tfLegFacts, archFetchRoute, obsNoPlaceholderKey, obsUndeclaredLeg, obsDeclaredFacts, type Carrier, type ObsFactsLeg } from './canary-req-sources';
+import { contractEqualsSpec, keysParse, snapshotContract, valueCardGitOnly, driftCallsOf, canonJson, archDescriptorsRespected, tfLegFacts, archFetchRoute, obsNoPlaceholderKey, obsUndeclaredLeg, obsDeclaredFacts, type Carrier, type ObsFactsLeg , readRuleWidened , READ_RULE_WIDENED_PROTOCOLS } from './canary-req-sources';
 
 type Tx = Prisma.TransactionClient;
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -576,6 +577,16 @@ const CONTROLS: Record<string, { what: string; run: (c: Ctx) => ControlResult }>
   'cso-obs-declared-facts': {
     what: 'observability-config 1.12.0 — a DECLARED observability leg carries its snapshot; its Harvester carries fileSourceCompare, configSourceReads, liveEvidence and gitLiveDrift; every declared service line was tied to a registration (the Harvester registered with the descriptor URL alone)',
     run: ({ legs, legKids, execs }) => obsDeclaredFacts(obsFactsLegs(legs, legKids, execs)),
+  },
+  // ── The Config sources read rule widened to kubernetes-gitops + terraform-iac (pre-registered 2026-11-26, BEFORE the deploy; logic
+  // in canary-req-sources.ts `readRuleWidened`, cases RRW1-RRW4 of test:canary-req-sources).
+  'rrw-k8s-tf-read-rule': {
+    what: 'read rule widened — on every DECLARED kubernetes-gitops / terraform-iac leg, each Harvester result carries protocolInjection.configSourcesReadRule: true and reads every declared line, and the leg is not forced git-file-not-held; the services calls print as a WATCH (extra live reads, list_secret_names)',
+    run: ({ legs, legKids, execs }) => readRuleWidened(legs.filter((l) => READ_RULE_WIDENED_PROTOCOLS.includes(String(meta(l).protocol))).map((l) => {
+      const kids = kidsOf(l, legKids); const qg = isObj(meta(l).qualityGate) ? (meta(l).qualityGate as Record<string, unknown>) : {};
+      return { id: l.id, protocol: String(meta(l).protocol), snapshot: [l, ...kids].some((t) => isObj(meta(t)[CONFIG_SOURCES_SNAPSHOT_KEY])), heldEdit: qg.heldEdit ?? null,
+        harvesters: kids.filter((k) => HARVEST_LEAF_ROLE_RE.test(String(k.agentRole ?? ''))).map((k) => latestResult(execs, k.id) ?? null) };
+    })),
   },
 };
 const carriersOf = (legs: TaskRow[], nodeC: TaskRow[]): Carrier[] => [

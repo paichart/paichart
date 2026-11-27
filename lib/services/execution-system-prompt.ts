@@ -34,7 +34,7 @@
 
 import type { ResolvedHarnessContext } from './harnessModeResolver';
 import { UNIVERSAL_AGENT_RULES } from '../agents/universal-agent-rules';
-import { isProgramProtocol, type TaskProtocolResolution } from '../agents/harness/program-protocol';
+import { isProgramProtocol, isRetiredLegProtocol, type TaskProtocolResolution } from '../agents/harness/program-protocol';
 
 
 export interface SystemPromptInjectionLogger {
@@ -410,6 +410,19 @@ export async function buildSystemPromptInjectionBlocks(
                 `A program harness composed on the base alone would silently synthesize a malformed program ` +
                 `(the base carries no PLAN-SPAWN mechanics). ${remedy}`
               );
+            }
+            // RETIRED LEG protocol (2026-11-27, RETIRED_LEG_PROTOCOL_NAMES): a DEPRECATED row of a name on that list
+            // hard-fails like the program tier — its harness on the base alone would plan an unguided pipeline. Every
+            // other leg name (and a DRAFT/INACTIVE row of a listed name) keeps the base-only degradation below.
+            if (deltaRow.status === 'DEPRECATED' && isRetiredLegProtocol(deltaName)) {
+              logger.warn({ protocol: deltaName, status: deltaRow.status, errorCode: 'PROTOCOL_ROW_NOT_ACTIVE' },
+                'Retired leg protocol row is DEPRECATED — hard-failing rather than base-only composition');
+              throw new Error((
+                `PROTOCOL_ROW_NOT_ACTIVE: protocol "${deltaName}" is DEPRECATED (retired), not ACTIVE. ` +
+                `A harness composed on the base alone would run an unguided pipeline. A task's protocol stamp is fixed ` +
+                `at its first execution (resolved here from: ${fact.stampSource}), so this task cannot be re-routed in place. ` +
+                deprecatedRowPointer(deltaRow.description, false)
+              ).trimEnd());
             }
             // LEG tier: task-authored state — degrade to base-only, loudly, with the fact +
             // the misroute guard (## Active Protocol absence) as the agent-side observable.

@@ -320,30 +320,16 @@ ANCHORS.push(
   ['program_architect', E6_GATE_HOLDS, 'E6 C1-a: the cause was reading "blocks program completion" as an edge; the gate needs none to hold completion'],
   ['value_chain_architect', E6_GATE_HOLDS, 'E6 C1-a: same rule through the one constant (alias key)'],
 );
-const SEED = readFileSync(join(__dirname, 'seed-protocol-prompts.ts'), 'utf8');
-const reqStart = SEED.indexOf('const PIPELINE_REQUIREMENTS_AUTHORING_PROTOCOL');
-const reqEnd = SEED.indexOf('## The template to fill', reqStart);
-const REQ_PROTOCOL = reqStart >= 0 && reqEnd > reqStart ? SEED.slice(reqStart, reqEnd) : '';
-const PROTOCOL_ANCHORS: Array<[phrase: string, why: string]> = [
-  ["The Reviewer's brief names YOUR pipeline task id",
-    'Rev 23 (2026-09-29): the Reviewer checks citations against the objective of record, and needs the id to fetch it'],
-  ["*Decisions needed from the owner* block, copied VERBATIM",
-    'M6 surface 6: the owner answers everything in ONE edit from the harness comment, without opening the draft'],
-  ["Keep the objective's decision NUMBERS exactly as it numbers them",
-    'M4: (declared — item N) only works if the brief keeps the objective\'s numbering'],
-  ["A NEEDS-REVISION that rests on an OPEN row is the owner's to answer, never the Author's",
-    'RWF note (register GS-R5-M): a re-run makes the Author invent the decision the row asks for'],
-  ["An objective line that applies to every leg (absent enforcers, for one) is a numbered item like any other",
-    'S-12: the grammar has no source form for an unnumbered line — enforcer-absent could only be invented or left OPEN'],
-];
-
+// The protocol half (PROTOCOL_ANCHORS, phrases in requirements-authoring-protocol) was REMOVED 2026-11-27: the protocol is a
+// DEPRECATED tombstone (Author retired, cline_docs/reviews/author-sunset-2026-11-27/INVENTORY.md). The role-guidance anchors
+// below stay: the Program Architect ones guard live text, and the requirements roles stay dormant in the library.
 let passed = 0, failed = 0;
 // Negative pins (RPR 2b): the act-regardless premise sentence must not carry the gap outcome's name.
 {
   const OLD = "names it in the leg's gap report";
   const sources: Array<[string, string]> = [
     ['requirements_author guidance', ROLE_GUIDANCE_LIBRARY['requirements_author'] || ''],
-    ['vendored skeleton', readFileSync(join(__dirname, 'seed-data', 'requirements-skeleton.tmpl'), 'utf8')],
+    ['vendored skeleton', readFileSync(join(__dirname, 'fixtures', 'requirements-skeleton-1.11.0.tmpl'), 'utf8')],
   ];
   for (const [where, text] of sources) {
     const ok = text.length > 0 && !text.includes(OLD);
@@ -371,11 +357,6 @@ for (const [role, phrase, why] of ANCHORS) {
   const ok = typeof text === 'string' && text.includes(phrase);
   if (ok) { console.log(`✅ ${role} carries "${phrase}"`); passed++; }
   else { console.log(`❌ ${role} is missing "${phrase}"\n   why it matters: ${why}`); failed++; }
-}
-if (!REQ_PROTOCOL) { console.log('❌ could not locate the requirements-authoring protocol body in the seed'); failed++; }
-for (const [phrase, why] of PROTOCOL_ANCHORS) {
-  if (REQ_PROTOCOL.includes(phrase)) { console.log(`✅ requirements-authoring-protocol carries "${phrase}"`); passed++; }
-  else { console.log(`❌ requirements-authoring-protocol is missing "${phrase}"\n   why it matters: ${why}`); failed++; }
 }
 
 // ── Question-key parity across the three copies (reconciliation 2026-09-28) ──────────────────────────────────────
@@ -428,7 +409,7 @@ function keysFromSkeleton(tmpl: string): KeyClasses | string {
   }
   return finish(c);
 }
-const TMPL = readFileSync(join(__dirname, 'seed-data', 'requirements-skeleton.tmpl'), 'utf8');
+const TMPL = readFileSync(join(__dirname, 'fixtures', 'requirements-skeleton-1.11.0.tmpl'), 'utf8');
 // The fourth copy: the maintainers' registry (DESIGN-DECISION-QUESTIONS.md, 2026-09-29). It carries a `class` cell
 // per key, so it is compared per class like the others — a registry that lags a key added elsewhere fails here.
 function keysFromRegistry(doc: string): KeyClasses | string {

@@ -1,6 +1,7 @@
 # Instruction Beside Its Subject — an agent follows a rule only where it reads it
 
-**Confidence**: 85% ⚠️ (one pre-registered lab with a same-text position contrast, one live canary; one domain)
+**Confidence**: 90% ✅ (one pre-registered lab with a same-text position contrast, one live canary; widened to three domains on
+registered no-regression controls, 2026-11-26)
 **Category**: Agent Template / Prompt construction
 **Added**: 2026-11-26 (pipeline-harness, from lab L-OBS-MLH; owner-approved schedule item 1)
 **Related**: `prompt-library-gold-standard-pattern.md` (#45, GS4 protocol rules) · `agent-template-gold-standard-pattern.md` (#44) ·
@@ -57,6 +58,8 @@ blocking finding; a claim in an apply-note list was approved 4 of 6 times (the s
 
 ## Limits (why 85%)
 
-One domain (observability), one model (Sonnet 5), one kind of conflicting instruction. Widening to Kubernetes/Terraform is
-registered (LAB-PREREG-L-OBS-MLH widening controls, n 3 each). Promotion to 90%+: the widening controls pass, or a second
-rule moved beside its subject measures the same contrast.
+One model (Sonnet 5), one kind of conflicting instruction. The position CONTRAST was measured in one domain (observability). The
+registered widening controls (K8S-R3 and TF-R3 Harvesters + the rule, n 3 each, 2026-11-26) passed 3/3 each, which met this
+pattern's stated promotion bar (90%); they measured NO-REGRESSION on good briefs (the rule placed beside the block moved no
+declared read), not the override on a narrowing brief in those domains. Next: a second rule moved beside its subject measuring
+the same contrast. Record: `cline_docs/reviews/config-sources-plans-2026-11-09/WIDENING-CONTROLS-BUILD-NOTE-DRAFT.md`.

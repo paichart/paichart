@@ -14,8 +14,9 @@
  *   1. the task is not a PIPELINE row (a leaf of a leg);
  *   2. its resolved role is a harvest leaf (`HARVEST_LEAF_ROLE_RE`, the role test the execution core's Config-sources facts use);
  *   3. its owning leg declares Config sources today (`OwningLegResolution.configSourceProtocol`);
- *   4. that protocol is on `CONFIG_SOURCES_READ_RULE_PROTOCOLS` (observability-config only — widening to Kubernetes or Terraform
- *      is a one-line reviewed change, after a Harvester control on that domain; the golden set holds no Harvester cell);
+ *   4. that protocol is on `CONFIG_SOURCES_READ_RULE_PROTOCOLS` (observability-config since 2026-11-25; kubernetes-gitops and
+ *      terraform-iac since the widening controls passed 3/3 each, 2026-11-26 — LAB-PREREG-L-OBS-MLH widening controls; the golden set
+ *      holds no Harvester cell, so a further domain needs its own Harvester control first);
  *   5. the leg's GOVERNING declaration (the snapshot rule, `readLegConfigSources`) is `parsed`.
  * Architect, Author, Reviewer, Node C, a no-block leg, a leg whose declaration could not be checked, and every network or artifact
  * Harvester get nothing (0 bytes).
@@ -37,9 +38,12 @@ import { resolveOwningLegProtocol, type OwningLegResolution } from './held-bytes
 import { readLegConfigSources, type LegConfigSourcesResolution } from './config-sources-read';
 import { canonicalProtocolName } from './program-protocol';
 
-/** The protocols whose declared Harvesters receive the read rule. ONE entry by owner decision (2026-11-25, option A): pinned by
- *  scripts/test-config-sources-read-rule.ts. */
-export const CONFIG_SOURCES_READ_RULE_PROTOCOLS: readonly string[] = Object.freeze(['observability-config-protocol']);
+/** The protocols whose declared Harvesters receive the read rule: observability-config (owner option A, 2026-11-25) and, after the
+ *  registered widening controls passed (K8S-R3 and TF-R3 Harvesters + the rule, 3/3 each, 2026-11-26), kubernetes-gitops and
+ *  terraform-iac. Pinned by scripts/test-config-sources-read-rule.ts. */
+export const CONFIG_SOURCES_READ_RULE_PROTOCOLS: readonly string[] = Object.freeze([
+  'observability-config-protocol', 'kubernetes-gitops-protocol', 'terraform-iac-protocol',
+]);
 
 export type ConfigSourcesReadRuleReason =
   | 'on'

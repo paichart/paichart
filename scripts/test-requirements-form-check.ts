@@ -114,7 +114,7 @@ t('section attribution names the program view\'s largest sections (gen 9)', () =
 });
 
 // 4. residue
-const SKELETON = readFileSync(join(__dirname, 'seed-data', 'requirements-skeleton.tmpl'), 'utf8');
+const SKELETON = readFileSync(join(__dirname, 'fixtures', 'requirements-skeleton-1.11.0.tmpl'), 'utf8');
 t('every author-addressed opening is found in the REAL skeleton (the list matches the text it names)', () => {
   const r = countResidue(SKELETON);
   const found = new Set(r.hits.filter(h => h.what === 'author-addressed').map(h => h.id));

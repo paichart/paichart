@@ -45,6 +45,11 @@ test('the stamp writer that takes the declaration snapshots, and the nets\' inpu
   const missing = must.filter((f) => !CUT.test(f));
   if (missing.length) throw new Error(`not covered: ${missing.join(', ')}`);
 });
+test('the Config sources READ RULE (an agent read surface: a paragraph in a Harvester brief) is covered — it shipped twice unflagged (2026-11-25, 2026-11-26)', () => {
+  const f = 'lib/agents/harness/config-sources-read-rule.ts';
+  if (!fs.existsSync(path.join(root, f))) throw new Error(`${f} moved: re-point this pin`);
+  if (!CUT.test(f)) throw new Error(`not covered: ${f}`);
+});
 test('NEGATIVE CONTROL: an unrelated file is not a cut path (the pattern is not a match-everything)', () => {
   for (const f of ['lib/utils/graph.ts', 'components/Button.tsx', 'cline_docs/x.md', 'lib/agents/harness/held-bytes']) if (CUT.test(f)) throw new Error(`matched ${f}`);
 });

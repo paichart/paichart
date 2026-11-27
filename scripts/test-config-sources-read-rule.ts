@@ -30,6 +30,7 @@ import {
 import { buildAgentPromptBody } from '../lib/agents/harness/build-agent-prompt-body';
 import { buildContextSummary } from '../lib/services/agentTemplateBuilder/pAIchartUniversalTemplate';
 import { configSnapshotDecision } from '../lib/agents/harness/config-sources-read';
+import { CONFIG_SOURCE_LANES } from '../lib/agents/harness/held-bytes/variant';
 
 let passed = 0;
 let failed = 0;
@@ -111,9 +112,10 @@ const OBS_LEG = () => legFixture({ protocol: 'observability-config-protocol', de
     for (const w of ['returned, not kept', 'context only', 'observability']) assert(!LINE.includes(w), `the line names domain-only wording: ${w}`);
   });
 
-  await test('RR2 the allow-list is observability-config ONLY', () => {
-    eq([...CONFIG_SOURCES_READ_RULE_PROTOCOLS], ['observability-config-protocol'], 'allow-list');
+  await test('RR2 the allow-list is observability-config, kubernetes-gitops and terraform-iac (widened 2026-11-26), nothing else', () => {
+    eq([...CONFIG_SOURCES_READ_RULE_PROTOCOLS], ['observability-config-protocol', 'kubernetes-gitops-protocol', 'terraform-iac-protocol'], 'allow-list');
     assert(Object.isFrozen(CONFIG_SOURCES_READ_RULE_PROTOCOLS), 'the allow-list must be frozen');
+    for (const p of CONFIG_SOURCES_READ_RULE_PROTOCOLS) assert(Object.prototype.hasOwnProperty.call(CONFIG_SOURCE_LANES, p), `${p} is not a Config-sources lane (a typo would silently never render)`);
   });
 
   await test('RR3 the injection tail renders nothing for the rule: on/off prompts byte-identical, kinds unchanged; the flag only stamps the fact', async () => {
@@ -158,9 +160,11 @@ const OBS_LEG = () => legFixture({ protocol: 'observability-config-protocol', de
     eq(dec({ sources: null }).reason, 'declaration-not-parsed', 'no read');
   });
 
-  await test('RR4c the pure gate: Kubernetes and Terraform OFF under the allow-list; a network Harvester OFF', () => {
-    eq(dec({ owningLeg: { ...obsLeg, configSourceProtocol: 'kubernetes-gitops-protocol' } }).reason, 'protocol-not-on-allow-list', 'k8s parsed');
-    eq(dec({ owningLeg: { ...obsLeg, configSourceProtocol: 'terraform-iac-protocol' } }).reason, 'protocol-not-on-allow-list', 'tf parsed');
+  await test('RR4c the pure gate: Kubernetes and Terraform ON (widened); a protocol off the list OFF; a network Harvester OFF', () => {
+    eq(dec({ owningLeg: { ...obsLeg, configSourceProtocol: 'kubernetes-gitops-protocol' } }), { on: true, reason: 'on', sourcesState: 'parsed' }, 'k8s parsed');
+    eq(dec({ owningLeg: { ...obsLeg, configSourceProtocol: 'terraform-iac-protocol' } }), { on: true, reason: 'on', sourcesState: 'parsed' }, 'tf parsed');
+    eq(dec({ owningLeg: { ...obsLeg, configSourceProtocol: 'kubernetes-gitops' } }).on, true, 'the short k8s name canonicalises');
+    eq(dec({ owningLeg: { ...obsLeg, configSourceProtocol: 'unlisted-config-protocol' } }).reason, 'protocol-not-on-allow-list', 'a protocol off the list');
     eq(dec({ agentRole: 'network_state_harvester', owningLeg: { kind: 'leg', legId: 'l', heldCapable: true, ownStageId: 's', deviceSource: true } }).reason, 'no-config-source-leg', 'network Harvester');
     eq(dec({ owningLeg: { ...obsLeg, configSourceProtocol: 'observability-config' } }).on, true, 'the short protocol name canonicalises');
   });
@@ -174,7 +178,25 @@ const OBS_LEG = () => legFixture({ protocol: 'observability-config-protocol', de
     eq(reads, ['task:child1', 'stage', 'task:leg1', 'legRow'], 'reads');
   });
 
-  await test('RR5b the resolver: no read for a non-harvest role or a PIPELINE task; no leg-row read for k8s / tf / a no-block leg', async () => {
+  await test('RR5c the resolver: ON for a declared Kubernetes and a declared Terraform Harvester through the shipping reads (widened 2026-11-26)', async () => {
+    const blocks: Array<[string, string, string]> = [
+      ['kubernetes-gitops-protocol', 'kubernetes-gitops', '## Config sources\nsample-workloads: git-file — service github-service ; paichart/paichart-configs/k8s/sample-workloads.yaml\ncluster: live-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json'],
+      ['terraform-iac-protocol', 'terraform-iac', '## Config sources\nmain-tf: git-file — service github-service ; paichart/paichart-configs/terraform/main.tf\nprod-state: live-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/terraform-readonly-descriptor.json'],
+    ];
+    for (const [protocol, key, block] of blocks) {
+      const leg = legFixture({ protocol, description: `Leg body.\n\n${block}\n`, contract: { configSources: { [key]: block } }, withSnapshot: true });
+      assert(leg.snapshot, `fixture: the shipping snapshot decision must write a snapshot for the ${key} block`);
+      const { db, reads } = stubDb(leg);
+      eq(await resolveConfigSourcesReadRule(db, CHILD, 'infra_state_harvester'), { on: true, reason: 'on', sourcesState: 'parsed' }, `declared ${key} Harvester`);
+      eq(reads, ['task:child1', 'stage', 'task:leg1', 'legRow'], `${key} reads`);
+      const brief = `Harvest.\n\n${block}\n\nRead only what this leg changes.`;
+      const ins = insertConfigSourcesReadRule(brief);
+      eq(ins.anchor, 'after-block', `${key}: the rule anchors after the block`);
+      assert(ins.text === brief.replace(block, `${block}\n\n${PARA}`), `${key}: inserted directly after the block's last line, the brief otherwise unchanged`);
+    }
+  });
+
+  await test('RR5b the resolver: no read for a non-harvest role or a PIPELINE task; no leg-row read for an unlisted protocol / a no-block leg', async () => {
     for (const role of ['infra_change_architect', 'config_change_author', 'change_reviewer']) {
       const { db, reads } = stubDb(OBS_LEG());
       eq((await resolveConfigSourcesReadRule(db, CHILD, role)).reason, 'not-a-harvester', role);
@@ -184,11 +206,12 @@ const OBS_LEG = () => legFixture({ protocol: 'observability-config-protocol', de
     const offAllowList = async (protocol: string) => {
       const leg = { title: 'Pipeline: leg', metadata: { protocol }, description: 'x', contract: null, snapshot: null };
       const { db, reads } = stubDb(leg as any);
-      eq((await resolveConfigSourcesReadRule(db, CHILD, 'infra_state_harvester')).reason, 'protocol-not-on-allow-list', protocol);
+      // since the 2026-11-26 widening every Config-sources lane protocol is listed, so through the resolver a protocol off the list has
+      // no lane and stops one step earlier; the pure gate's 'protocol-not-on-allow-list' (RR4c) guards a FUTURE lane added unlisted.
+      eq((await resolveConfigSourcesReadRule(db, CHILD, 'infra_state_harvester')).reason, 'no-config-source-leg', protocol);
       assert(!reads.includes('legRow'), `${protocol}: the leg row was read`);
     };
-    await offAllowList('kubernetes-gitops-protocol');
-    await offAllowList('terraform-iac-protocol');
+    await offAllowList('unlisted-config-protocol');
     // an observability leg that declares nothing (no snapshot, no block): runs-undeclared ⇒ OFF, without its row
     const none = legFixture({ protocol: 'observability-config-protocol', description: 'Leg body, no block.', contract: null, withSnapshot: false });
     const { db, reads } = stubDb(none);
@@ -281,7 +304,7 @@ const OBS_LEG = () => legFixture({ protocol: 'observability-config-protocol', de
     const task = { id: 'h', title: 'Harvest', description: INGRESS_BRIEF, other: 1 };
     for (const o of [{ agentRole: 'config_change_author' }, { agentRole: 'change_reviewer' }, { agentRole: 'infra_change_architect' }, { taskType: 'PIPELINE' },
       { owningLeg: { kind: 'leg', legId: 'l', heldCapable: false, ownStageId: 's' } }, { sources: { state: 'could-not-check' } }, { sources: { state: 'snapshot-absent' } },
-      { owningLeg: { ...obsLeg, configSourceProtocol: 'kubernetes-gitops-protocol' } }, { owningLeg: { ...obsLeg, configSourceProtocol: 'terraform-iac-protocol' } },
+      { owningLeg: { ...obsLeg, configSourceProtocol: 'unlisted-config-protocol' } },
       { agentRole: 'network_state_harvester', owningLeg: { kind: 'leg', legId: 'l', heldCapable: true, ownStageId: 's', deviceSource: true } }] as any[]) {
       const d = dec(o);
       assert(!d.on, `expected OFF for ${JSON.stringify(o)}`);

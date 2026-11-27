@@ -34,10 +34,8 @@ const PROTOCOLS = [
   'terraform-iac-protocol',
   'observability-config-protocol', // added 2026-09-10 with the row's 1.0.0 birth — a name absent here is silently excluded from the public parity set
   'pov-program-protocol',
-  // added 2026-09-21 with the row's 1.0.0 birth. MANDATORY the moment the row went ACTIVE: the
-  // PUBLICATION-COMPLETENESS GUARD below inspects ACTIVE protocol-tagged rows, and an ACTIVE row
-  // in neither list makes this script refuse to render ANY protocol.
-  'requirements-authoring-protocol',
+  // requirements-authoring-protocol: REMOVED 2026-11-27 — the Author is retired and its row is a DEPRECATED tombstone; the
+  // guard below inspects ACTIVE rows only (same treatment as value-chain-program-protocol).
   // added at promotion E (E7, 2026-10-06): the value-leg protocol, published with pov-program 2.0.0, which offers value legs.
   // E-3 held it back until promotion; the public render + code export happen together after control 3 (ND4).
   'network-derivation-protocol',

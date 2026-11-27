@@ -53,7 +53,10 @@ export type ServeTier = 'exact' | 'canonical' | 'services-tool' | 'repeat' | 'sa
   /** A requirements Reviewer's objective fetch, served from its own stored answer (objective-of-record.ts, 2026-11-10). */
   | 'objective-of-record'
   /** STEP 3 slice L (independent review F1): the faithful registration route — see `RecordedServeOptions.registerRoute`. */
-  | 'register-descriptor' | 'register-endpoint' | 'unserved-register';
+  | 'register-descriptor' | 'register-endpoint' | 'unserved-register'
+  /** Read-rule widening controls (2026-11-26, owner option (c)): a declared live-read line's descriptor fetch the record does not hold,
+   *  answered from the descriptor's pinned published bytes (descriptor-fetch.ts). */
+  | 'descriptor-fixture';
 export interface ServeLogEntry { tool: string; action: string | null; innerTool: string | null; fileTool: boolean; tier: ServeTier; storedIndex: number | null }
 export interface StoredCall { index: number; tool: string; server: string | null; args: unknown; result: unknown; error: string | null; success: boolean; truncatedAtPersist: boolean;
   /** The execution's own persisted tool-call record (R9 / LLM-cap facts). */ raw?: Record<string, any>; /** L-OBS-MLH: the sibling execution a pooled call came from. */ pooledFrom?: string }
@@ -200,7 +203,10 @@ export interface RecordedToolServer {
  *                         successful registration, so the shipping resolver ties nothing and the lab's force reads as production's
  *                         would for a registration that did not resolve. The Harvester's ROUTE is scored from its ARGUMENTS.
  */
-export interface RecordedServeOptions { registerRoute?: 'faithful' }
+export interface RecordedServeOptions { registerRoute?: 'faithful';
+  /** 2026-11-26 (descriptor-fetch.ts): answers a declared descriptor's `scrape_page` that NO stored call serves (tier `descriptor-fixture`);
+   *  null ⇒ unserved, as before. Absent ⇒ every earlier experiment serves exactly as it did. */
+  descriptorFetch?: (tool: string, args: unknown) => unknown | null }
 
 /** The ONE field the shipping registration handler adds to its success result for a registration FROM a descriptor URL
  *  (service-registration-handler.js: `...(descriptorProvenance ? { registeredFromDescriptor: true } : {})`; pinned to that source
@@ -279,6 +285,10 @@ export function createRecordedToolServer(stored: StoredCall[], stub: unknown, op
         if (again.truncatedAtPersist) { entry.tier = 'unserved-truncated'; entry.storedIndex = again.index; return stub; }
         entry.tier = 'repeat'; entry.storedIndex = again.index;
         return serve(again);
+      }
+      if (opts.descriptorFetch && tool === 'services') {
+        const answer = opts.descriptorFetch(tool, args);
+        if (answer !== null) { entry.tier = 'descriptor-fixture'; return answer; }
       }
       if (tool !== 'services') {
         const act = actionOf(args);

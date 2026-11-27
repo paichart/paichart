@@ -112,7 +112,7 @@ test('P5 hand-written mode (no Design decisions): the lane is inferred from "cha
 });
 
 test('P6 the SKELETON\'s own Device sources slot, filled as its placeholders say, passes S1-S4 (template ↔ check, requirements-authoring >= 1.11.0)', () => {
-  const tmpl = fs.readFileSync(path.join(__dirname, 'seed-data', 'requirements-skeleton.tmpl'), 'utf8');
+  const tmpl = fs.readFileSync(path.join(__dirname, 'fixtures', 'requirements-skeleton-1.11.0.tmpl'), 'utf8');
   const i = tmpl.indexOf('### Device sources — a network leg only');
   if (i < 0) { skip('P6', 'the skeleton carries no Device sources slot (requirements-authoring < 1.11.0)'); return; }
   const j = tmpl.indexOf('\n## ', i);

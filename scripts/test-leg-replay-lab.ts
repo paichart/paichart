@@ -3402,8 +3402,8 @@ const commitText = (name: string, commit: string): ProtocolText => {
       // the plant on an Architect cell and on a Harvester cell, through a dry run
       const exp = fs.mkdtempSync(path.join(out, 'obs-arch-'));
       fs.mkdirSync(path.join(exp, 'protocols')); fs.mkdirSync(path.join(exp, 'node-inputs'));
-      const baseFile = 'observability-config-protocol@1.11.0.baseline.md';
-      fs.copyFileSync(path.join(LAB, 'golden', 'fixtures', 'obs-text-lab', 'protocols', baseFile), path.join(exp, 'protocols', baseFile));
+      const baseFile = 'observability-config-protocol@1.11.0.baseline.md'; // the 1.11.0 text (c0ad8475): the golden fixture moved to 1.12.0 at golden v13, so it is read from the closed L-CS-O experiment
+      fs.copyFileSync(path.join(LAB, 'inputs', '2026-11-23-config-sources-obs-l-cs-o', 'protocols', baseFile), path.join(exp, 'protocols', baseFile));
       const fx = fixtureDir({ [GIT_OTEL]: OTEL_YAML, [GIT_OTLP]: INGRESS_FILES['otlp-ingress.conf'] });
       const legDesc: string = cachedObs().leg.description;
       fs.writeFileSync(path.join(exp, 'node-inputs', 'leg.json'), JSON.stringify({ id: 'leg-declared', appliesTo: ['leg:description'], ops: [{ type: 'replace', old: legDesc, new: `${legDesc}\n\n## Config sources\n${FULL.join('\n')}\n` }] }));
@@ -3682,15 +3682,124 @@ const commitText = (name: string, commit: string): ProtocolText => {
       try { await rebuildPrompt(loadSnapshot(k8s), 'author', { ...text, name: 'kubernetes-gitops-protocol' }, { configSourcesReadRule: 'force-on' }); } catch (e) { threw = (e as Error).message; }
       assert(/force-on' refused/.test(threw), `a Kubernetes Author must be refused: ${threw || 'no throw'}`);
     }
-    const k8sLeg = JSON.parse(JSON.stringify(snap));
-    k8sLeg.leg.metadata = { ...k8sLeg.leg.metadata, protocol: 'kubernetes-gitops-protocol' };
-    threw = '';
-    try { await rebuildPrompt(k8sLeg, 'author', text, { configSourcesReadRule: 'force-on' }); } catch (e) { threw = (e as Error).message; }
-    assert(/protocol-not-on-allow-list/.test(threw), `a Harvester of a Kubernetes leg must be refused by the allow-list: ${threw || 'no throw'}`);
+    // (2026-11-26) the allow-list now carries kubernetes-gitops and terraform-iac (widening controls 3/3 each): a Kubernetes / Terraform
+    // Harvester is no longer refused by it — the new truth is pinned on the stored K8S-R3 / TF-R3 Harvesters in LRR2.
     const nodeThrows = (n: any) => { try { assertReadRuleNodeOption(n); return ''; } catch (e) { return (e as Error).message; } };
     assert(nodeThrows({ id: 'A', configSourcesReadRule: 'force-on' }).includes('not harvesterOnly'), 'a non-harvester node is refused');
     assert(nodeThrows({ id: 'H', harvesterOnly: true, configSourcesReadRule: 'on' }).includes("must be 'force-on'"), 'a bad value is refused');
     assert(nodeThrows({ id: 'H', harvesterOnly: true, configSourcesReadRule: 'force-on' }) === '' && nodeThrows({ id: 'A' }) === '', 'harvester force-on and absent pass');
+  });
+
+  // ── LRR2 read rule after the WIDENING (2026-11-26, allow-list = observability + kubernetes-gitops + terraform-iac) ──
+  await test('LRR2 widened: on the stored K8S-R3 / TF-R3 Harvesters the shipping gate answers ON; as run renders nothing (the stored run ran without the rule, with the gate-ON note); plain force-on renders the rule once per brief copy right after the block; force-on-unlisted is REFUSED (the gate is already ON), as it is on an Author and on an unparsed declaration (another refusal)', async () => {
+    const CELLS: Array<[string, string, string]> = [
+      ['cmwmxbmqg00f3yxykmzlp9f2w', 'kubernetes-gitops-protocol', 'cluster: live-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json'],
+      ['cmwmx9d0p00bjyxyk9drkpgdf', 'terraform-iac-protocol', 'prod-state: live-read — service https://raw.githubusercontent.com/paichart/paichart/main/descriptors/terraform-readonly-descriptor.json'],
+    ];
+    const missing = CELLS.map((c) => c[0]).filter((id) => !fs.existsSync(snapshotPath(id)));
+    if (missing.length) { console.log(`     (skipped: snapshot(s) ${missing.join(', ')} not in the local cache)`); return; }
+    const { CONFIG_SOURCES_READ_RULE_PARAGRAPH: PARA, CONFIG_SOURCES_READ_RULE_PROTOCOLS: LIST } = await import('../lib/agents/harness/config-sources-read-rule');
+    const { labLeafConfigSourcesReadRulePastAllowList } = await import('./leg-replay-lab/config-sources-arm');
+    const { assertReadRuleNodeOption } = await import('./leg-replay-lab/lab');
+    assert(['observability-config-protocol', 'kubernetes-gitops-protocol', 'terraform-iac-protocol'].every((p) => LIST.includes(p)), `the shipping allow-list: ${JSON.stringify(LIST)}`);
+    const refusal = async (snap: any, text: ProtocolText, mode: 'force-on' | 'force-on-unlisted') => { try { await rebuildPrompt(snap, 'author', text, { configSourcesReadRule: mode }); return ''; } catch (e) { return (e as Error).message; } };
+    for (const [id, proto, LAST] of CELLS) {
+      const snap = loadSnapshot(id);
+      const text: ProtocolText = { name: proto, version: 'x', text: 'PROTOCOL TEXT (LRR2 stand-in)', source: 'test' };
+      const asRun = await rebuildPrompt(snap, 'author', text);
+      assert(asRun.configSourcesReadRule.gate.on && asRun.configSourcesReadRule.gate.reason === 'on' && !asRun.configSourcesReadRule.rendered, `${id}: the gate answers ON, as run renders nothing: ${JSON.stringify(asRun.configSourcesReadRule)}`);
+      assert(!asRun.system.includes(PARA) && !asRun.user.includes(PARA) && !('configSourcesReadRule' in asRun.fact), `${id}: as run carries no rule and no fact key`);
+      assert(asRun.notes.some((n) => n.includes("force with configSourcesReadRule: 'force-on'")), `${id}: the gate-ON note`);
+      const forced = await rebuildPrompt(snap, 'author', text, { configSourcesReadRule: 'force-on' });
+      for (const [n, a, f] of [['user', asRun.user, forced.user], ['system', asRun.system, forced.system]] as const) {
+        assert(f.split(PARA).length === 2, `${id} ${n}: the rule must render exactly once`);
+        assert(f.includes(`${LAST}\n\n${PARA}`), `${id} ${n}: the rule sits directly after the block's last line`);
+        assert(f.replace(`\n\n${PARA}`, '') === a, `${id} ${n}: every other byte as run`);
+      }
+      const r = forced.configSourcesReadRule;
+      assert(r.rendered && r.source === 'force-on' && r.anchor === 'after-block' && r.gate.on && r.pastAllowList === undefined, `${id}: record ${JSON.stringify(r)}`);
+      assert(forced.fact.configSourcesReadRule === true && forced.fact.preambleChars === asRun.fact.preambleChars, `${id}: fact key set, preamble unchanged`);
+      assert(!forced.notes.some((x) => x.includes('PAST THE ALLOW-LIST')), `${id}: no measurement-only note on a listed protocol`);
+      assert(/force-on-unlisted' refused .*already answers ON .*use 'force-on'/.test(await refusal(snap, text, 'force-on-unlisted')), `${id}: force-on-unlisted must be refused (the gate is ON)`);
+      const author = JSON.parse(JSON.stringify(snap));
+      author.author.exec.config = { ...(author.author.exec.config ?? {}), agentRole: 'config_change_author' };
+      assert(/force-on' refused .*not-a-harvester/.test(await refusal(author, text, 'force-on')), `${id}: force-on on an Author is refused`);
+      assert(/force-on-unlisted' refused .*other than the allow-list \(not-a-harvester/.test(await refusal(author, text, 'force-on-unlisted')), `${id}: force-on-unlisted on an Author is refused`);
+      const unparsed = JSON.parse(JSON.stringify(snap));
+      unparsed.leg.metadata.configSourcesSnapshot.resolution = { state: 'malformed', lines: [] };
+      assert(/force-on' refused .*declaration-not-parsed/.test(await refusal(unparsed, text, 'force-on')), `${id}: force-on on an unparsed declaration is refused`);
+      assert(/force-on-unlisted' refused .*other than the allow-list \(declaration-not-parsed/.test(await refusal(unparsed, text, 'force-on-unlisted')), `${id}: force-on-unlisted on an unparsed declaration is refused`);
+      const past = labLeafConfigSourcesReadRulePastAllowList(snap.leg, { type: snap.author.task.type, stage_id: snap.author.task.stage_id }, 'infra_state_harvester');
+      assert(!past.applies && past.first.on, `${id}: nothing to set aside on a listed protocol: ${JSON.stringify(past)}`);
+    }
+    // NOT PINNED, named: the lever's rendering path past `protocol-not-on-allow-list` can no longer be reached — every protocol with a
+    // Config-sources lane (CONFIG_SOURCE_LANES: kubernetes-gitops, terraform-iac, observability-config) is now on the allow-list, and the
+    // lane table and the allow-list are frozen lib constants this lab file does not patch. Its render was pinned by this test before the
+    // widening (commit 6bc12edb0) and measured by the paid W runs; a future unlisted lane re-pins it here.
+    const nodeThrows = (n: any) => { try { assertReadRuleNodeOption(n); return ''; } catch (e) { return (e as Error).message; } };
+    assert(nodeThrows({ id: 'H', harvesterOnly: true, configSourcesReadRule: 'force-on-unlisted' }) === '', 'a harvester node may carry force-on-unlisted (the rebuild decides)');
+    assert(nodeThrows({ id: 'A', configSourcesReadRule: 'force-on-unlisted' }).includes('not harvesterOnly'), 'a non-harvester node is refused');
+  });
+
+  // ── LDF1 descriptor-fetch tier (2026-11-26, widening controls, owner option (c)) ──
+  await test('LDF1 descriptor-fixture: a declared descriptor URL\'s scrape_page the record lacks is served with the stored browser envelope and the pinned bytes; any other URL / selector form / service stays unserved; the node\'s own record still serves first; a pin or declaration mismatch is refused at load', async () => {
+    const TF = 'cmwmx9d0p00bjyxyk9drkpgdf'; const K8S = 'cmwmxbmqg00f3yxykmzlp9f2w';
+    if (![TF, K8S].every((id) => fs.existsSync(snapshotPath(id)))) { console.log('     (skipped: the K8S-R3 / TF-R3 Harvester snapshots are not in the local cache)'); return; }
+    const df = await import('./leg-replay-lab/descriptor-fetch');
+    const { loadNodeDescriptorFetch } = await import('./leg-replay-lab/lab');
+    const EXP = path.join(LAB, 'inputs', '2026-11-26-read-rule-widening');
+    const exp = JSON.parse(fs.readFileSync(path.join(EXP, 'experiment.json'), 'utf8'));
+    const node = exp.nodes.find((n: any) => n.id === 'TF-R3-RULE');
+    const URL_TF = 'https://raw.githubusercontent.com/paichart/paichart/main/descriptors/terraform-readonly-descriptor.json';
+    const tfSnap = loadSnapshot(TF);
+    const d = loadNodeDescriptorFetch(node, EXP, tfSnap);
+    const bytes = fs.readFileSync(path.join(EXP, node.descriptorFetch.files[URL_TF].file));
+    assert(df.gitBlobSha1(bytes) === '7531d0aa9de6558cf76844a8ff57f94886c1acd6', 'the committed descriptor copy is the pinned blob');
+    // the envelope source's own answer IS its descriptor's published bytes (the k8s blob at the same commit, 9f54432e)
+    const k8sStored = storedCallsOf(loadSnapshot(K8S).author)[d.envelopeIndex];
+    const k8sText = JSON.parse((k8sStored.result as any).content[0].data.result.content[0].text).data[0].descriptor as string;
+    assert(df.gitBlobSha1(Buffer.from(k8sText, 'utf8')) === '9f54432e5761ca7215d5bcc63869992be1df4101', 'the browser service returned the k8s descriptor byte for byte (its git blob)');
+    const call = (url: string, selectors: unknown = { descriptor: 'pre' }, target = 'browser-automation-service') =>
+      ({ action: 'call', targetService: target, tool: 'scrape_page', arguments: JSON.stringify({ url, selectors }) });
+    const server = () => createRecordedToolServer(storedCallsOf(tfSnap.author), TOOL_STUB_RESULT, { registerRoute: 'faithful', descriptorFetch: (t, a) => df.descriptorFetchAnswer(d, t, a) });
+    const s1 = server();
+    const got = await s1.executeToolOnServer('lab', 'services', call(URL_TF)) as any;
+    assert(s1.log[0].tier === 'descriptor-fixture' && s1.log[0].storedIndex === null, `tier: ${JSON.stringify(s1.log[0])}`);
+    const strip = (r: any) => { const c = JSON.parse(JSON.stringify(r)); const x = c.content[0].data; delete x.arguments; const t = JSON.parse(x.result.content[0].text); delete t.data; x.result.content[0].text = JSON.stringify(t); return c; };
+    assert(JSON.stringify(strip(got)) === JSON.stringify(strip(k8sStored.result)), 'every envelope byte but the arguments and data[0] is the stored browser answer');
+    const inner = JSON.parse(got.content[0].data.result.content[0].text);
+    assert(inner.data.length === 1 && inner.data[0].descriptor === bytes.toString('utf8') && JSON.stringify(got.content[0].data.arguments) === JSON.stringify({ url: URL_TF, selectors: { descriptor: 'pre' } }), 'the pinned bytes under the sample\'s own key, its own arguments echoed');
+    const keyed = await server().executeToolOnServer('lab', 'services', call(URL_TF, { body: 'pre' })) as any;
+    assert(Object.keys(JSON.parse(keyed.content[0].data.result.content[0].text).data[0])[0] === 'body', 'the selector key is the sample\'s own');
+    for (const [why, args] of [
+      ['a non-declared descriptor URL', call('https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json')],
+      ['a non-descriptor URL', call('https://example.com/x.json')],
+      ['a non-pre selector', call(URL_TF, { descriptor: 'body' })],
+      ['two selectors', call(URL_TF, { a: 'pre', b: 'pre' })],
+      ['no selectors', { action: 'call', targetService: 'browser-automation-service', tool: 'scrape_page', arguments: JSON.stringify({ url: URL_TF }) }],
+      ['another service', call(URL_TF, { descriptor: 'pre' }, 'github-service')],
+    ] as const) {
+      const s = server(); const r = await s.executeToolOnServer('lab', 'services', args);
+      assert(s.log[0].tier === 'unserved' && r === TOOL_STUB_RESULT, `${why} must stay unserved: ${s.log[0].tier}`);
+    }
+    const k8sServer = createRecordedToolServer(storedCallsOf(loadSnapshot(K8S).author), TOOL_STUB_RESULT, { descriptorFetch: () => { throw new Error('reached the descriptor tier'); } });
+    await k8sServer.executeToolOnServer('lab', 'services', JSON.parse(JSON.stringify(k8sStored.args)));
+    assert(k8sServer.log[0].tier === 'exact', `the record serves first: ${k8sServer.log[0].tier}`);
+    const refuse = (mut: (s: any) => void) => { const n = JSON.parse(JSON.stringify(node)); mut(n.descriptorFetch); try { loadNodeDescriptorFetch(n, EXP, tfSnap); return ''; } catch (e) { return (e as Error).message; } };
+    assert(/≠ the pinned/.test(refuse((s) => { s.files[URL_TF].blobSha1 = '0'.repeat(40); })), 'a moved blob pin is refused');
+    assert(/not the service of a declared live-read line/.test(refuse((s) => { s.files = { 'https://raw.githubusercontent.com/paichart/paichart/main/descriptors/k8s-readonly-descriptor.json': s.files[URL_TF] }; })), 'an undeclared URL is refused');
+    assert(/own execution/.test(refuse((s) => { s.envelopeFrom = TF; })), 'the node\'s own record as envelope source is refused');
+    // offline re-score of the two samples ruled INVALID (W-4 #2, W-5): their own tool sequences through the new tier
+    for (const [run, smp] of [['2026-11-26T02-45-57-read-rule-widening', 'sample-02'], ['2026-11-26T03-09-56-read-rule-widening', 'sample-01']]) {
+      const f = path.join(LAB, 'runs', run, 'TF-R3-RULE', 'baseline', smp, 'toolCalls.json');
+      if (!fs.existsSync(f)) { console.log(`     (re-score of ${run}/${smp} skipped: run folder not in this tree)`); continue; }
+      const s = server();
+      for (const tc of JSON.parse(fs.readFileSync(f, 'utf8'))) await s.executeToolOnServer('lab', tc.tool, tc.arguments);
+      const scrape = s.log.filter((e) => e.innerTool === 'scrape_page');
+      const unserved = s.log.filter((e) => e.tool === 'services' && e.tier.startsWith('unserved')).map((e) => e.innerTool);
+      console.log(`     re-score ${run}/${smp}: scrape ${scrape.map((e) => e.tier).join(',')} · unserved services calls [${unserved.join(', ')}]`);
+      assert(scrape.length === 1 && scrape[0].tier === 'descriptor-fixture', `${run}/${smp}: the descriptor fetch is now served: ${JSON.stringify(scrape)}`);
+    }
   });
 
   fs.rmSync(out, { recursive: true, force: true });
